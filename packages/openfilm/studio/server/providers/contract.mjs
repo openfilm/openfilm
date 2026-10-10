@@ -1,7 +1,7 @@
 // @ts-check
 /**
- * Where `openfilm get` gets media from. One OpenFilm account pays for everything (credits), with the model the person
- * chose for each kind of media; a person's own key for a service pays that service directly. Each provider is a module
+ * Where `openfilm get` gets media from: services the person connects with their own key, each paid directly, with the
+ * model the person chose for each kind of media. Each provider is a module
  * whose default export is a `Provider`; `get.mjs` picks one per verb (`--via`, else the person's choice in Settings;
  * nothing is picked for them) and lands what it returns in the project.
  *
@@ -27,7 +27,7 @@
  */
 
 /**
- * What a run says about a file it made or heard, as `/v1/media/run` returns them: `{ src, kind, text?, dur?, words?:
+ * What a run says about a file it made or heard: `{ src, kind, text?, dur?, words?:
  * [{ token, start, end }], cast?, voice?, ... }`. Speech whose words are timed gets its transcript from it (get.mjs).
  * @typedef {Record<string, unknown> & { src: string }} IndexRow
  */
@@ -75,22 +75,15 @@
  *   env: string,
  *   keysUrl: string,
  *   billingUrl: string,
- *   limitUrl?: string,
  *   verbs: Verb[],
  *   models?: Partial<Record<Verb, { id: string, name: string }[]>>,
  *   run: (verb: Verb, args: Record<string, unknown>, ctx: RunContext) => Promise<RunResult>,
- *   quote?: (verb: Verb, args: Record<string, unknown>, ctx: RunContext) => Promise<{ credits: number, seconds?: number } | null>,
- *   connected?: () => Promise<boolean>,
  * }} Provider
  * `models`: the models it can make each kind of media with, its default first, each with the name people know it by
  * (Settings → Models shows "ElevenLabs · Multilingual v2").
  * `billingUrl`: the provider's own page where the person tops up its balance. A run that fails because the account has
  * no balance left throws an Error with `code: 'balance'` (common.mjs `noBalance`), the same for every provider: the
- * person is told in Studio, with this page, and the agent is told to stop. `limitUrl` (the OpenFilm account): where the
- * person changes its daily spending limit; a run over it throws `code: 'daily-limit'` (common.mjs `dailyLimit`), told
- * the same way.
- * `quote`: what a run would cost at most, before it is made. `connected`: for a provider paid without a key of its own
- * (the OpenFilm account), whether it can be used now.
+ * person is told in Studio, with this page, and the agent is told to stop.
  */
 
 export {};

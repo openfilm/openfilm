@@ -1,13 +1,11 @@
 /**
- * Settings → Models: which connected provider, and which of its models, makes each kind of media. One of the OpenFilm
- * account's models ("OpenFilm · ElevenLabs Eleven v4"), one of the models of a provider the person has a key for
- * ("ElevenLabs · Eleven v3"), or none, listed by the providers' names, none put first. Connecting a provider fills the kinds that have none, with its
- * first model; the person changes any here. Any other service is the agent's to use, told about it in the chat.
+ * Settings → Models: which connected provider, and which of its models, makes each kind of media. One of the models of
+ * a provider the person has a key for ("ElevenLabs · Eleven v3"), or none, listed by the providers' names, none put
+ * first. Connecting a provider fills the kinds that have none, with its first model; the person changes any here. Any other service is the agent's to use, told about it in the chat.
  */
 import React from 'react';
 import { Check, ChevronDown, ChevronRight } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
-import type { OpenFilmAccountState } from '@/lib/openfilm-account';
 import { USE_VERBS, couldMake, offered, useProviders, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
 import { Popover } from '@/components/Popover';
 import { ProviderMark } from './ProviderMark';
@@ -22,11 +20,11 @@ interface Choice {
   pick: { model?: string };
 }
 
-export function ModelsSection({ state, onConnect }: { state: OpenFilmAccountState; onConnect: () => void }) {
+export function ModelsSection({ onConnect }: { onConnect: () => void }) {
   const t = useT();
-  const hook = useProviders(state.account?.connected);
+  const hook = useProviders();
   const providers = hook.state;
-  const anything = Boolean(providers && (providers.openfilm.connected || providers.providers.some((p) => p.source)));
+  const anything = Boolean(providers?.providers.some((p) => p.source));
 
   return (
     <SettingsPage note={t('settings.models.desc')}>
@@ -54,16 +52,13 @@ function ModelRow({ verb, hook, onConnect }: { verb: ProviderVerb; hook: Provide
   const chosen = state.use[verb] ?? '';
 
   const choices: Choice[] = [];
-  if (state.openfilm.connected || chosen === 'openfilm') {
-    for (const m of state.openfilm.models[verb] ?? []) choices.push({ value: `openfilm:${m.id}`, provider: 'openfilm', providerName: 'OpenFilm', name: m.name, pick: { model: m.id } });
-  }
   for (const p of state.providers) {
     if (!((p.source && p.verbs.includes(verb)) || p.id === chosen)) continue;
     for (const m of p.models[verb] ?? []) choices.push({ value: `${p.id}:${m.id}`, provider: p.id, providerName: p.name, name: m.name, pick: { model: m.id } });
   }
   /* by the providers' names; each provider's models stay in its own order (the sort is stable) */
   choices.sort((a, b) => a.providerName.localeCompare(b.providerName));
-  const firstOf = (id: string) => (id === 'openfilm' ? state.openfilm.models[verb] : state.providers.find((p) => p.id === id)?.models[verb])?.[0]?.id;
+  const firstOf = (id: string) => state.providers.find((p) => p.id === id)?.models[verb]?.[0]?.id;
   const value = chosen ? `${chosen}:${state.model[verb] ?? firstOf(chosen) ?? ''}` : '';
   const current = choices.find((c) => c.value === value);
   /* nothing connected makes it: the providers that would, once connected */

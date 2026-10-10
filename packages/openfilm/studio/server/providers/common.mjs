@@ -49,12 +49,6 @@ export function outOfBalance(status, text) {
  */
 export const noBalance = (service) => Object.assign(new Error(`${service} doesn't have enough balance for this.`), { code: 'balance' });
 
-/**
- * What the OpenFilm account throws when it has reached the daily spending limit the person set on its account page
- * (402 `daily_limit`): said like an empty balance, with that page.
- */
-export const dailyLimit = () => Object.assign(new Error('The OpenFilm account has reached its daily spending limit.'), { code: 'daily-limit' });
-
 /** The human part of a service's error body (each service nests it its own way). */
 function reasonOf(/** @type {string} */ text) {
   let body;

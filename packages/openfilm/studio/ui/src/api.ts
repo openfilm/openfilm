@@ -98,8 +98,6 @@ export const api = {
   answerAsk: (askId: string, allow: boolean) => call<{ answered: boolean }>(`get/asks/${encodeURIComponent(askId)}`, { method: 'POST', json: { allow } }),
   /** the provider's own page for its balance, opened in the person's browser */
   openBilling: (providerId: string) => call<Record<string, never>>(`providers/${encodeURIComponent(providerId)}/billing`, { method: 'POST' }),
-  /** where the OpenFilm account's daily spending limit is changed, opened in the person's browser */
-  openLimit: (providerId: string) => call<Record<string, never>>(`providers/${encodeURIComponent(providerId)}/limit`, { method: 'POST' }),
 };
 
 /** What an agent's `openfilm get` asks the person before it spends (studio/server/get.mjs). */
@@ -107,11 +105,8 @@ export type SpendAsk = {
   id: string; kind: 'video'; provider: string; model?: string; seconds?: number; prompt?: string;
 };
 
-/**
- * What the person is told without a question (studio/server/get.mjs): a provider with no balance left for a run, or the
- * OpenFilm account at the daily spending limit the person set.
- */
-export type StudioNotice = { id: string; kind: 'balance' | 'daily-limit'; provider: string; providerId: string };
+/** What the person is told without a question (studio/server/get.mjs): a provider with no balance left for a run. */
+export type StudioNotice = { id: string; kind: 'balance'; provider: string; providerId: string };
 
 export type FolderEvent = { type: 'film'; rev: string } | { type: 'files'; paths?: string[] } | { type: 'history' } | { type: 'export'; job: ExportJob } | { type: 'open'; to: string }
   | { type: 'history-progress'; op: string; phase: string; done: number; total: number }

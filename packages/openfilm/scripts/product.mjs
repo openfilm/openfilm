@@ -1,15 +1,12 @@
 #!/usr/bin/env node
 // @ts-check
 /**
- * Which build this package is. product.json says where the OpenFilm account service is, and where the desktop app
- * looks for updates: empty in the repository, so a checkout connects to no account service and a build of it updates
- * from nowhere; the official values (public hostnames and a public OAuth client id) are in product.official.json and
- * go into the package npm publishes and into the official desktop app (apps/desktop/scripts/release.mjs --official):
+ * Which build this package is. product.json says where the desktop app looks for updates: empty in the repository, so
+ * a build of a checkout updates from nowhere; the official feed is in product.official.json and goes into the package
+ * npm publishes and into the official desktop app (apps/desktop/scripts/release.mjs --official):
  *
  *   node scripts/product.mjs official   (prepack) keeps product.json aside and writes the official one in its place
  *   node scripts/product.mjs restore    (postpack) puts the kept product.json back
- *
- * OPENFILM_ACCOUNT_URL, _ISSUER and _CLIENT_ID still override it when the package runs (studio/server/account.mjs).
  */
 import { copyFileSync, existsSync, mkdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';

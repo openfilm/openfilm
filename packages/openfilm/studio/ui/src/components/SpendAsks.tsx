@@ -4,8 +4,7 @@
  * project gets it; the first answer wins and the others drop it.
  *
  * And what it tells the person: a provider whose account has no balance left for a run, the same for every provider,
- * with its own page to top it up ("Manage"), or the OpenFilm account at the daily spending limit the person set, with
- * where to change it. Nothing here shows an amount: that is on each provider's page.
+ * with its own page to top it up ("Manage"). Nothing here shows an amount: that is on each provider's page.
  *
  * In an app with a chat (lib/host.ts `asks`) these are the chat's to show, above its composer, where the person talks
  * to the agent: Studio words them and leaves the rest of the window free.
@@ -35,8 +34,8 @@ export function SpendAsks({ projectId }: { projectId: string }) {
     const one = shown.current.find((a) => a.id === id);
     setAsks((list) => list.filter((a) => a.id !== id));
     /* a notice: "Manage" opens the provider's page, "Close" only closes it */
-    if (one?.kind === 'balance' || one?.kind === 'daily-limit') {
-      if (allow) void (one.kind === 'daily-limit' ? api.openLimit(one.providerId) : api.openBilling(one.providerId)).catch(() => {});
+    if (one?.kind === 'balance') {
+      if (allow) void api.openBilling(one.providerId).catch(() => {});
       return;
     }
     /* answered elsewhere already, or Studio gone: the command has its answer either way */
@@ -73,9 +72,6 @@ export function SpendAsks({ projectId }: { projectId: string }) {
 
 /** A question about spending, or a notice, in the person's words. */
 function worded(ask: SpendAsk | StudioNotice, t: (path: string) => string): HostAsk {
-  if (ask.kind === 'daily-limit') {
-    return { id: ask.id, title: t('asks.limitTitle'), body: t('asks.limitBody'), allowLabel: t('asks.manage'), denyLabel: t('asks.close') };
-  }
   if (ask.kind !== 'video') {
     return {
       id: ask.id,
@@ -85,7 +81,7 @@ function worded(ask: SpendAsk | StudioNotice, t: (path: string) => string): Host
       denyLabel: t('asks.close'),
     };
   }
-  /* "a slow push…" · OpenFilm · Seedance 2.0 Mini · 5s, as Settings → Models names a model */
+  /* "a slow push…" · fal.ai · Seedance 2.0 · 5s, as Settings → Models names a model */
   const by = ask.model ? `${ask.provider} · ${ask.model}` : ask.provider;
   const facts = [ask.prompt ? `“${ask.prompt}”` : null, by, ask.seconds ? `${ask.seconds}s` : null].filter(Boolean).join(' · ');
   return { id: ask.id, title: t('asks.videoTitle'), body: `${facts}. ${t('asks.videoNote')}`, allowLabel: t('asks.make'), denyLabel: t('asks.skip') };

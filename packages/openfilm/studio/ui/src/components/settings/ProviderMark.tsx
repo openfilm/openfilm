@@ -1,9 +1,8 @@
 /**
  * Each provider's mark, one color (the text's), as Settings → Providers lists them (and Settings → Agents its agents).
  * The marks of other services are from Lobe Icons (https://github.com/lobehub/lobe-icons, MIT), Claude's, Cursor's,
- * Copilot's and OpenCode's from Simple Icons (CC0); OpenFilm's is its logo.
+ * Copilot's and OpenCode's from Simple Icons (CC0).
  */
-import { BrandLogo } from '@/components/BrandLogo';
 
 const MARKS: Record<string, { viewBox: string; d: string }> = {
   elevenlabs: { viewBox: '0 0 24 24', d: 'M5 0h5v24H5V0zM14 0h5v24h-5V0z' },
@@ -23,7 +22,7 @@ export function ProviderMark({ id, size = 18 }: { id: string; size?: number }) {
   const mark = MARKS[id];
   return (
     <span className="inline-flex shrink-0 items-center justify-center text-[var(--text)]" style={{ width: size, height: size }} aria-hidden>
-      {id === 'openfilm' ? <BrandLogo size={size} /> : mark ? (
+      {mark ? (
         <svg width={size} height={size} viewBox={mark.viewBox} fill="currentColor" fillRule="evenodd" className="block">
           <path d={mark.d} />
         </svg>

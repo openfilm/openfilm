@@ -10,68 +10,99 @@ import { fileURLToPath } from 'node:url';
 import { filmCaptions, translateFilmSubtitles } from './captions.mjs';
 import { readTranscript } from './transcripts.mjs';
 import { VERBS, WEB_VERBS, WHERE_TO_CONNECT, catalog, flagHelp, runGet, services, subtitleTranslator } from './get.mjs';
-import { changeSettings, providersFile } from './keys.mjs';
+import { changeSettings, kindOf, providersFile } from './keys.mjs';
 import { listProviders } from './providers/index.mjs';
 import { startStudio } from './server.mjs';
 import { filmHtml } from '../../src/film-doc.mjs';
 
 /**
- * A fake OpenFilm service on 127.0.0.1: minting and raising agent keys (with the account's token), and `/v1/media/*`
- * answering what each test puts in `answers` (one per run call, in order). `calls` records every request.
+ * A fake ElevenLabs, fal.ai and OpenAI on 127.0.0.1 (each provider's OPENFILM_<NAME>_URL points here), answering as
+ * each service does. `refuse`, when set, answers every request instead. `calls` records every request.
  */
 let service, base, scratch;
 const calls = [];
-let answers = [];
-/** Runs answered 202: what each one's result fetch answers, by Idempotency-Key. */
-const pending = new Map();
-let minted = 0;
+/** @type {((call: object) => [number, unknown]) | null} */
+let refuse = null;
+
+const SAID = 'Hello there. How are you?';
+const WORDS = [{ token: 'Hello', start: 0, end: 0.4 }, { token: 'there.', start: 0.45, end: 0.9 }, { token: 'How', start: 1.8, end: 2 }, { token: 'are', start: 2.05, end: 2.2 }, { token: 'you?', start: 2.25, end: 2.6 }];
+/** constant 128 kbps MP3, so its length is known from its size */
+const mp3 = (seconds) => Buffer.alloc(Math.round(seconds * 16000), 1);
+/** SAID timed per character, as ElevenLabs times it */
+const ALIGNMENT = (() => {
+  const characters = [], starts = [], ends = [];
+  WORDS.forEach((w, i) => {
+    if (i) { characters.push(' '); starts.push(WORDS[i - 1].end); ends.push(w.start); }
+    for (const ch of w.token) { characters.push(ch); starts.push(w.start); ends.push(w.end); }
+  });
+  return { characters, character_start_times_seconds: starts, character_end_times_seconds: ends };
+})();
+const FRENCH = { 'Hello there.': 'Bonjour.', 'How are you?': 'Comment ça va ?' };
+
+function answer(call) {
+  const json = () => JSON.parse(call.body.toString('utf8'));
+  if (call.path.startsWith('/v1/text-to-speech/')) return [200, { audio_base64: mp3(2.8).toString('base64'), alignment: ALIGNMENT }];
+  if (call.path === '/v1/sound-generation' || call.path === '/v1/music') return [200, mp3(1)];
+  if (call.path === '/v2/voices') return [200, { voices: [{ voice_id: 'v-1', name: 'Ada', labels: { gender: 'female' } }] }];
+  if (call.path === '/v1/speech-to-text') {
+    return [200, { text: 'One two.', words: [{ type: 'word', text: 'One', start: 0.1, end: 0.4 }, { type: 'spacing', text: ' ', start: 0.4, end: 0.5 }, { type: 'word', text: 'two.', start: 0.5, end: 0.9 }] }];
+  }
+  if (call.path === '/v1/responses') {
+    const { lines } = JSON.parse(json().input);
+    return [200, { output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify({ lines: lines.map((l) => FRENCH[l] ?? l) }) }] }] }];
+  }
+  /* fal's queue: a request in, asked after, its result, then the file it made */
+  if (call.path === '/queue/status') return [200, { status: 'COMPLETED' }];
+  if (call.path === '/queue/result') return [200, { video: { url: `${base}/files/shot.mp4` } }];
+  if (call.path === '/files/shot.mp4') return [200, Buffer.from('mp4')];
+  if (call.method === 'POST' && /^\/(bytedance|fal-ai)\//.test(call.path)) return [200, { status_url: `${base}/queue/status`, response_url: `${base}/queue/result` }];
+  return [404, {}];
+}
 
 before(async () => {
   scratch = mkdtempSync(join(tmpdir(), 'of-get-'));
   service = createServer(async (req, res) => {
-    let raw = '';
-    for await (const c of req) raw += c;
-    const body = raw ? JSON.parse(raw) : null;
-    const call = { path: req.url, auth: req.headers.authorization, idem: req.headers['idempotency-key'], prefer: req.headers.prefer, body };
+    const chunks = [];
+    for await (const c of req) chunks.push(c);
+    const url = new URL(req.url, 'http://x');
+    const call = { method: req.method, path: url.pathname, headers: req.headers, body: Buffer.concat(chunks) };
     calls.push(call);
-    const send = (status, value) => res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(value));
-    if (req.url === '/api/desktop/agent-key') {
-      if (call.auth !== 'Bearer account-token') return send(401, { error: 'unauthorized' });
-      minted += 1;
-      return send(200, { id: `k${minted}`, token: `ask_${minted}`, label: body.label, cap: 500, expiresAt: new Date(Date.now() + 86_400_000).toISOString() });
-    }
-    if (req.url.startsWith('/api/desktop/agent-key/')) return send(200, { id: req.url.split('/').pop(), spent: 480, cap: 480 + body.add });
-    if (req.url === '/v1/media/quote') return send(200, { quote: { command: body.command, credits: 240, basis: '5s of generated video' }, budget: null });
-    if (req.url.startsWith('/v1/media/run?key=')) {
-      const next = pending.get(decodeURIComponent(req.url.split('=')[1]));
-      return next ? next(call, send) : send(404, { error: 'unknown_run' });
-    }
-    if (req.url === '/v1/media/run') {
-      if (!call.idem) return send(400, { message: 'Idempotency-Key header is required' });
-      const next = answers.shift();
-      if (!next) return send(500, { error: 'no answer set' });
-      return typeof next === 'function' ? next(call, send) : send(next.status ?? 200, next.body);
-    }
-    send(404, {});
+    const [status, body] = (refuse ?? answer)(call);
+    if (Buffer.isBuffer(body)) res.writeHead(status, { 'content-type': 'application/octet-stream' }).end(body);
+    else res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(body));
   });
   await new Promise((done) => service.listen(0, '127.0.0.1', done));
   base = `http://127.0.0.1:${service.address().port}`;
   Object.assign(process.env, {
     OPENFILM_HOME: join(scratch, 'home'), OPENFILM_LIBRARY: join(scratch, 'library'),
-    OPENFILM_ACCOUNT_URL: base, OPENFILM_POLL_MS: '20', OPENFILM_ACCOUNT_ISSUER: base, OPENFILM_ACCOUNT_CLIENT_ID: 'test-client',
+    OPENFILM_ELEVENLABS_URL: base, OPENFILM_FAL_URL: base, OPENFILM_OPENAI_URL: base,
   });
-  for (const p of [...listProviders(), { env: 'OPENFILM_API_KEY' }, { env: 'GOOGLE_API_KEY' }]) delete process.env[p.env];
+  for (const p of [...listProviders(), { env: 'GOOGLE_API_KEY' }]) delete process.env[p.env];
 });
 after(() => service.close());
 
-/** The account connected on this machine, with a token that is good for an hour. */
-function connect() {
-  mkdirSync(process.env.OPENFILM_HOME, { recursive: true });
-  writeFileSync(join(process.env.OPENFILM_HOME, 'account.json'), JSON.stringify({
-    issuer: base, clientId: 'test-client', access_token: 'account-token', refresh_token: 'refresh', expiresAt: Date.now() + 3_600_000,
-  }), { mode: 0o600 });
+/** Whether any provider makes `verb`, connected or not. */
+const made = (verb) => listProviders().some((p) => p.verbs.includes(verb));
+/** A kind that is not connected, as the note names it: with the services that make it. */
+const unconnected = (verb) => {
+  const names = listProviders().filter((p) => p.verbs.includes(verb)).map((p) => p.name).sort((a, b) => a.localeCompare(b));
+  return `${verb} (${names.length > 1 ? `${names.slice(0, -1).join(', ')} or ${names.at(-1)}` : names[0]})`;
+};
+const CONNECT_ONE = `Each works only once the person connects a service that makes it. ${WHERE_TO_CONNECT}`;
+/** The kinds the fake answers, and who makes them here; every other kind goes to the first provider that makes it. */
+const CHOSEN = { tts: 'elevenlabs', sfx: 'elevenlabs', music: 'elevenlabs', asr: 'elevenlabs', image: 'fal', video: 'fal', translate: 'openai' };
+
+/** Every provider connected (a key each), and a choice for every kind something makes. */
+function connectAll() {
+  return changeSettings((s) => {
+    for (const p of listProviders()) s.keys[p.id] = `${p.id}-test-0123456789`;
+    for (const verb of [...Object.keys(VERBS), 'translate'].filter(made)) {
+      const kind = kindOf(verb);
+      s.use[kind] ??= CHOSEN[kind] ?? listProviders().find((p) => p.verbs.includes(kind)).id;
+    }
+  });
 }
-beforeEach(() => { calls.length = 0; answers = []; pending.clear(); connect(); rmSync(providersFile(), { force: true }); });
+beforeEach(async () => { calls.length = 0; refuse = null; rmSync(providersFile(), { force: true }); await connectAll(); });
 
 let projects = 0;
 function project(film = { stage: { w: 1920, h: 1080 }, tracks: [] }) {
@@ -80,48 +111,38 @@ function project(film = { stage: { w: 1920, h: 1080 }, tracks: [] }) {
   writeFileSync(join(root, 'film.html'), filmHtml(film));
   return root;
 }
-const runs = () => calls.filter((c) => c.path === '/v1/media/run');
 const b64 = (text) => Buffer.from(text).toString('base64');
-
-const SAID = 'Hello there. How are you?';
-const WORDS = [{ token: 'Hello', start: 0, end: 0.4 }, { token: 'there.', start: 0.45, end: 0.9 }, { token: 'How', start: 1.8, end: 2 }, { token: 'are', start: 2.05, end: 2.2 }, { token: 'you?', start: 2.25, end: 2.6 }];
-const TTS = {
-  receipt: { src: 'assets/audio/vo/intro.mp3', dur: 2.8, voiceId: 'v-1', costUsd: 0.01 },
-  files: [{ path: 'assets/audio/vo/intro.mp3', base64: b64('mp3 bytes'), bytes: 9 }],
-  index: [{ src: 'assets/audio/vo/intro.mp3', kind: 'audio', dur: 2.8, text: SAID, words: WORDS, role: 'host', voiceId: 'v-1', from: { mode: 'synth', voice: 'v-1' } }],
-  credits: { quoted: 3, charged: 2, metered: 2, refunded: 1, cost: 0.01 }, budget: { spent: 2, cap: 500 }, balance: 98, idempotent_replay: false,
-};
+/** A multipart request's form, as the fake got it. */
+const formOf = (call) => new Request('http://x', { method: 'POST', headers: { 'content-type': call.headers['content-type'] }, body: call.body }).formData();
 
 test('tts: the file lands, its timed words a WebVTT beside it, and the receipt says what landed, not what it cost', async () => {
   const root = project();
-  answers.push({ body: TTS });
   const text = await runGet(root, 'tts', { out: 'intro', text: SAID, voice: 'v-1' });
   const receipt = JSON.parse(text);
   assert.deepEqual(receipt, { src: 'assets/audio/vo/intro.mp3', dur: 2.8, voiceId: 'v-1', transcript: 'assets/audio/vo/intro.vtt' });
-  assert.equal(readFileSync(join(root, 'assets/audio/vo/intro.mp3'), 'utf8'), 'mp3 bytes');
+  assert.equal(readFileSync(join(root, 'assets/audio/vo/intro.mp3')).length, mp3(2.8).length);
 
-  const [mint, run] = calls;
-  assert.equal(mint.path, '/api/desktop/agent-key');
-  assert.equal(run.auth, 'Bearer ask_1');
-  assert.ok(run.idem);
-  assert.deepEqual(run.body, { command: 'audio tts', args: { out: 'intro', text: SAID, voice: 'v-1' }, inputs: [], context: { contentLocale: 'en-US' }, model: 'inworld-tts-2-flash' });
+  const [run] = calls;
+  assert.equal(run.path, '/v1/text-to-speech/v-1/with-timestamps');
+  assert.equal(run.headers['xi-api-key'], 'elevenlabs-test-0123456789');
+  assert.deepEqual(JSON.parse(run.body), { text: SAID, model_id: 'eleven_multilingual_v2' });
 
   assert.match(readFileSync(join(root, 'assets/audio/vo/intro.vtt'), 'utf8'), /00:00:01\.800 --> 00:00:02\.800\nHow <00:00:02\.050>are <00:00:02\.250>you\?/);
   const transcript = await readTranscript(root, 'assets/audio/vo/intro.mp3');
   assert.deepEqual(transcript.lines.map((l) => l.text), ['Hello there.', 'How are you?']);
   assert.ok(!existsSync(join(root, 'assets/index.jsonl')), 'no ledger');
 
-  /* a service that does not time the words: no transcript, and the receipt says how to get one */
-  answers.push({ body: { ...TTS, index: [{ ...TTS.index[0], src: 'assets/audio/vo/two.mp3', words: undefined }], files: [{ ...TTS.files[0], path: 'assets/audio/vo/two.mp3' }], receipt: { ...TTS.receipt, src: 'assets/audio/vo/two.mp3' } } });
+  /* a voice-over without word times: no transcript, and the receipt says how to get one */
+  refuse = () => [200, { audio_base64: mp3(1).toString('base64') }];
   const untimed = JSON.parse(await runGet(root, 'tts', { out: 'two', text: SAID, voice: 'v-1' }));
   assert.match(untimed.transcript, /^none: .*get asr/);
   assert.ok(!existsSync(join(root, 'assets/audio/vo/two.vtt')));
+  refuse = null;
 
-  /* the agent key is kept: the next call mints none */
-  answers.push({ body: { ...TTS, index: [], files: [], receipt: { results: [] } } });
-  await runGet(root, 'voice', {});
-  assert.equal(calls.filter((c) => c.path === '/api/desktop/agent-key').length, 1);
-  assert.deepEqual(runs().at(-1).body.args, { limit: '5' });
+  /* voices come from the provider that speaks */
+  const voices = JSON.parse(await runGet(root, 'voice', {}));
+  assert.deepEqual(voices.voices.map((v) => v.voiceId), ['v-1']);
+  assert.equal(calls.at(-1).path, '/v2/voices');
 });
 
 test('a file is never written through a link the project brings under assets/', { skip: process.platform === 'win32' }, async () => {
@@ -129,7 +150,6 @@ test('a file is never written through a link the project brings under assets/', 
   const elsewhere = mkdtempSync(join(tmpdir(), 'of-elsewhere-'));
   mkdirSync(join(root, 'assets'), { recursive: true });
   symlinkSync(elsewhere, join(root, 'assets/audio'));
-  answers.push({ body: TTS });
   await runGet(root, 'tts', { out: 'intro', text: SAID, voice: 'v-1' }).catch(() => {});
   assert.ok(!existsSync(join(elsewhere, 'vo/intro.mp3')), 'nothing landed outside the project');
 });
@@ -151,108 +171,60 @@ test('wrong options are refused before anything is sent (exit 2)', async () => {
   await refused('asr', { src: 'note.txt' }, /wants a sound or video file/);
   await refused('video', { out: 'shot', prompt: 'p', 'last-frame': 'note.txt' }, /wants a picture/);
   await refused('dance', {}, /there is no dance/);
-  assert.equal(runs().length, 0);
-});
-
-test('a long run answers at once and its result is fetched until it is there (the proxy drops a request after 100 s)', async () => {
-  const root = project();
-  let asked = 0;
-  answers.push((call, send) => {
-    assert.equal(call.prefer, 'respond-async');
-    pending.set(call.idem, (_poll, reply) => (++asked < 3 ? reply(202, { status: 'running' }) : reply(200, TTS)));
-    send(202, { status: 'running', idempotency_key: call.idem });
-  });
-  const receipt = JSON.parse(await runGet(root, 'tts', { out: 'intro', text: SAID, voice: 'v-1' }));
-  assert.equal(receipt.src, 'assets/audio/vo/intro.mp3');
-  assert.equal(asked, 3);
-  const polls = calls.filter((c) => c.path.startsWith('/v1/media/run?key='));
-  assert.deepEqual(polls.map((c) => [c.path, c.auth]), Array(3).fill([`/v1/media/run?key=${encodeURIComponent(runs()[0].idem)}`, 'Bearer ask_1']));
-
-  /* the service restarted mid-run and forgot it: the same call again, with the same key */
-  answers.push((call, send) => send(202, { status: 'running' }), { body: TTS });
-  await runGet(root, 'tts', { out: 'intro', text: SAID, voice: 'v-1' });
-  const [first, again] = runs().slice(-2);
-  assert.equal(first.idem, again.idem);
+  assert.equal(calls.length, 0);
 });
 
 test('not enough balance: the agent is told to stop and where the person tops it up, the person is told in Studio, nothing landed', async () => {
   const root = project();
-  answers.push({ status: 402, body: { error: 'insufficient_credits', message: 'Not enough credits', balance: 3, needed: 12 } });
+  refuse = () => [402, { detail: { status: 'quota_exceeded', message: 'This request exceeds your quota.' } }];
   const told = [];
   const asked = [];
   await assert.rejects(runGet(root, 'music', { out: 'bed', prompt: 'calm pad', sec: '30' }, { tell: (n) => told.push(n), ask: async (s) => { asked.push(s); return 'allow'; } }), {
-    message: `This did not run: OpenFilm doesn't have enough balance. The person can top it up at ${base}/account, or switch to another service. `
+    message: 'This did not run: ElevenLabs doesn\'t have enough balance. The person can top it up at https://elevenlabs.io/app/subscription, or switch to another service. '
       + 'Nothing was made. Stop and tell them; do not run it again until they say so.',
   });
-  assert.deepEqual(told, [{ kind: 'balance', provider: 'OpenFilm', providerId: 'openfilm' }]);
-  assert.deepEqual(asked, [], 'nothing to allow: only the account can be topped up');
-  assert.equal(runs().length, 1, 'not tried again');
+  assert.deepEqual(told, [{ kind: 'balance', provider: 'ElevenLabs', providerId: 'elevenlabs' }]);
+  assert.deepEqual(asked, [], 'nothing to allow');
+  assert.equal(calls.length, 1, 'not tried again');
   assert.ok(!existsSync(join(root, 'assets')));
-  assert.equal(runs()[0].body.args.sec, '30');
+  assert.equal(JSON.parse(calls[0].body).music_length_ms, 30_000);
 });
 
-test('the daily spending limit the person set: its own outcome, told like an empty balance, with where to change it', async () => {
+test('the model: the person\'s choice for each kind of media, the provider\'s first otherwise, --model for one run', async () => {
   const root = project();
-  answers.push({ status: 402, body: { error: 'daily_limit', message: 'The OpenFilm account has reached its daily spending limit. Change it at openfilm.dev/account.' } });
-  const told = [];
-  await assert.rejects(runGet(root, 'sfx', { out: 'ding', prompt: 'a chime' }, { tell: (n) => told.push(n) }), {
-    message: `This did not run: the OpenFilm account reached its daily spending limit. The person can change it at ${base}/account, or switch to another service. `
-      + 'Nothing was made. Stop and tell them; do not run it again until they say so.',
-  });
-  assert.deepEqual(told, [{ kind: 'daily-limit', provider: 'OpenFilm', providerId: 'openfilm' }]);
-  assert.equal(runs().length, 1, 'not tried again');
-  assert.ok(!existsSync(join(root, 'assets')));
-});
-
-test('the model: the person\'s choice for each kind of media, voices with voice-over\'s, --model (or an older --tier) for one run', async () => {
-  const root = project();
-  await changeSettings((s) => { s.model = { tts: 'cartesia-sonic-3.6', music: 'elevenlabs-music-v2' }; });
-  const result = { body: { ...TTS, receipt: {}, files: [], index: [] } };
+  await changeSettings((s) => { s.model = { tts: 'eleven_v4', music: 'music_v2' }; });
   const modelOf = async (verb, args, options) => {
-    answers.push(result);
     await runGet(root, verb, args, options);
-    return runs().at(-1).body.model;
+    return JSON.parse(calls.at(-1).body).model_id;
   };
-  assert.equal(await modelOf('tts', { out: 'intro', text: SAID, voice: 'v-1' }), 'cartesia-sonic-3.6');
-  assert.equal(await modelOf('voice', {}), 'cartesia-sonic-3.6', 'voices are found with the model that speaks them');
-  assert.equal(await modelOf('music', { out: 'bed', prompt: 'calm pad' }), 'elevenlabs-music-v2');
-  assert.equal(await modelOf('sfx', { out: 'ding', prompt: 'a chime' }), 'library-sfx', 'the first, the cheapest');
-  assert.equal(await modelOf('music', { out: 'bed', prompt: 'calm pad' }, { model: 'library-music' }), 'library-music');
-  assert.equal(await modelOf('voice', {}, { tier: 'ultra' }), 'elevenlabs-v4', 'an older agent\'s tier is the model it made');
-  await assert.rejects(runGet(root, 'sfx', { out: 'ding', prompt: 'a chime' }, { model: 'seedance-2.5' }), (e) => e.code === 2 && /--model is one of library-sfx, elevenlabs-sfx/.test(e.message));
-  await assert.rejects(runGet(root, 'sfx', { out: 'ding', prompt: 'a chime' }, { tier: 'max' }), (e) => e.code === 2 && /--tier is one of flash, pro, ultra/.test(e.message));
-});
-
-test('a model the account cannot use: said plainly, without its plan', async () => {
-  const root = project();
-  answers.push({ status: 403, body: { error: 'tier_not_allowed', message: 'GPT Image 2.5 Sunburst needs a paid plan. Use GPT Image 2.5 Flare, or upgrade the plan.' } });
-  await assert.rejects(runGet(root, 'image', { out: 'hero', prompt: 'a key' }, { model: 'gpt-image-2.5-sunburst' }), {
-    message: `This did not run: the OpenFilm account can’t use this model. Try another (--model), or the person can manage the account at ${new URL(base).host}/account. Nothing was charged.`,
-  });
-  assert.equal(runs()[0].body.model, 'gpt-image-2.5-sunburst');
+  assert.equal(await modelOf('tts', { out: 'intro', text: SAID, voice: 'v-1' }), 'eleven_v4');
+  assert.equal(await modelOf('music', { out: 'bed', prompt: 'calm pad' }), 'music_v2');
+  assert.equal(await modelOf('sfx', { out: 'ding', prompt: 'a chime' }), 'eleven_text_to_sound_v2', 'the first');
+  assert.equal(await modelOf('music', { out: 'bed', prompt: 'calm pad' }, { model: 'music_v2_5' }), 'music_v2_5');
+  await assert.rejects(runGet(root, 'sfx', { out: 'ding', prompt: 'a chime' }, { model: 'seedance-2.0' }), (e) => e.code === 2 && /--model is one of eleven_text_to_sound_v2 with ElevenLabs/.test(e.message));
 });
 
 test('video: the person confirms what will be made first, without amounts; no page means ask them and run again with --yes', async () => {
   const root = project();
   writeFileSync(join(root, 'first.png'), 'png');
-  const clip = { body: { ...TTS, receipt: { src: 'assets/video/shot.mp4', dur: 5 }, files: [{ path: 'assets/video/shot.mp4', base64: b64('mp4') }], index: [{ src: 'assets/video/shot.mp4', kind: 'video', dur: 5 }] } };
   const args = { out: 'shot', prompt: 'a slow push into a glowing triangle', 'first-frame': 'first.png' };
 
   await assert.rejects(runGet(root, 'video', args, { ask: async () => null }), (e) => e.code === 1 && /expensive.*--yes/.test(e.message) && !/credit|\d/.test(e.message.replace('--yes', '')));
-  assert.equal(runs().length, 0, 'nothing made');
+  assert.equal(calls.length, 0, 'nothing made');
 
   const asked = [];
-  answers.push(clip);
-  await runGet(root, 'video', args, { ask: async (spend) => { asked.push(spend); return 'allow'; } });
-  assert.deepEqual(asked, [{ kind: 'video', provider: 'OpenFilm', model: 'Seedance 2.0 Mini', seconds: 5, prompt: args.prompt }]);
-  assert.deepEqual(runs()[0].body.inputs, [{ path: 'first.png', base64: b64('png') }]);
-  assert.equal(runs()[0].body.args.duration, '5');
+  const receipt = JSON.parse(await runGet(root, 'video', args, { ask: async (spend) => { asked.push(spend); return 'allow'; } }));
+  assert.deepEqual(asked, [{ kind: 'video', provider: 'fal.ai', model: 'Seedance 2.0', seconds: 5, prompt: args.prompt }]);
+  assert.equal(calls[0].path, '/bytedance/seedance-2.0/image-to-video');
+  const sent = JSON.parse(calls[0].body);
+  assert.deepEqual([sent.image_url, sent.duration], [`data:image/png;base64,${b64('png')}`, '5']);
+  assert.equal(receipt.src, 'assets/video/shot.mp4');
+  assert.equal(readFileSync(join(root, 'assets/video/shot.mp4'), 'utf8'), 'mp4');
 
   await assert.rejects(runGet(root, 'video', args, { ask: async () => 'deny' }), /chose not to make this video clip/);
-  calls.length = 0;
-  answers.push(clip);
-  await runGet(root, 'video', args, { yes: true });
-  assert.deepEqual(calls.map((c) => c.path), ['/v1/media/run'], 'with --yes: no quote, no question');
+  asked.length = 0;
+  await runGet(root, 'video', args, { yes: true, ask: async (spend) => { asked.push(spend); return 'allow'; } });
+  assert.deepEqual(asked, [], 'with --yes: no question');
 });
 
 test('asr: the speech alone is sent, its transcript lands beside the recording, and is not made twice', async () => {
@@ -260,66 +232,58 @@ test('asr: the speech alone is sent, its transcript lands beside the recording, 
   mkdirSync(join(root, 'assets/upload'), { recursive: true });
   const wav = join(root, 'assets/upload/talk.wav');
   execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1:sample_rate=48000', '-ac', '2', wav]);
-  const heard = (call, send) => {
-    const [input] = call.body.inputs;
-    const proxy = Buffer.from(input.base64, 'base64');
-    assert.equal(input.path, 'assets/upload/talk.wav');
-    assert.equal(proxy.readUInt16LE(22), 1, 'mono');
-    assert.equal(proxy.readUInt32LE(24), 16000, '16 kHz');
-    send(200, { ...TTS, receipt: { asr: 'assets/upload/talk.wav', dur: 1, text: 'One two.' }, files: [],
-      index: [{ src: 'assets/upload/talk.wav', kind: 'audio', bytes: proxy.length, dur: 1.01, text: 'One two.', transcribed: true, words: [{ token: 'One', start: 0.1, end: 0.4 }, { token: 'two.', start: 0.5, end: 0.9 }] }] });
-  };
-  answers.push(heard);
   const receipt = JSON.parse(await runGet(root, 'asr', { src: 'assets/upload/talk.wav' }));
-  assert.deepEqual(receipt, { src: 'assets/upload/talk.wav', dur: 1, text: 'One two.', transcript: 'assets/upload/talk.vtt' });
+  assert.deepEqual(receipt, { src: 'assets/upload/talk.wav', text: 'One two.', transcript: 'assets/upload/talk.vtt' });
   assert.match(readFileSync(join(root, 'assets/upload/talk.vtt'), 'utf8'), /^WEBVTT\n\n00:00:00\.100 --> .*\nOne <00:00:00\.500>two\./);
+  const file = (await formOf(calls[0])).get('file');
+  const proxy = Buffer.from(await file.arrayBuffer());
+  assert.equal(file.name, 'talk.wav');
+  assert.equal(proxy.readUInt16LE(22), 1, 'mono');
+  assert.equal(proxy.readUInt32LE(24), 16000, '16 kHz');
 
   const again = JSON.parse(await runGet(root, 'asr', { src: 'assets/upload/talk.wav' }));
   assert.equal(again.skip, true);
   assert.equal(again.text, 'One two.');
-  assert.equal(runs().length, 1, 'transcribed once');
-  answers.push(heard);
+  const transcribed = () => calls.filter((c) => c.path === '/v1/speech-to-text').length;
+  assert.equal(transcribed(), 1, 'transcribed once');
   await runGet(root, 'asr', { src: 'assets/upload/talk.wav', force: true });
-  assert.equal(runs().length, 2, '--force transcribes again');
+  assert.equal(transcribed(), 2, '--force transcribes again');
 });
 
-test('what lands stays in assets/: no file outside it', async () => {
+test('what lands stays in assets/, and the receipt leaves out what it cost', async (t) => {
   const root = project();
-  answers.push({ body: { ...TTS, receipt: { images: [] }, files: [
-    { path: '../escape.txt', base64: b64('x') }, { path: 'assets/../../escape2.txt', base64: b64('x') }, { path: 'film.html', base64: b64('{}') },
-    { path: '/tmp/abs.txt', base64: b64('x') }, { path: 'assets/image/ok.png', base64: b64('png') },
-  ], index: [{ src: '../escape.txt', kind: 'file' }] } });
+  const fal = listProviders().find((p) => p.id === 'fal');
+  t.mock.method(fal, 'run', async () => ({
+    files: [
+      { path: '../escape.txt', bytes: Buffer.from('x') }, { path: 'assets/../../escape2.txt', bytes: Buffer.from('x') }, { path: 'film.html', bytes: Buffer.from('{}') },
+      { path: '/tmp/abs.txt', bytes: Buffer.from('x') }, { path: 'assets/image/ok.png', bytes: Buffer.from('png') },
+    ],
+    index: [{ src: '../escape.txt', kind: 'file' }],
+    receipt: { images: [{ src: 'assets/image/ok.png' }], costUsd: 0.04, balance: 12 },
+  }));
   const text = await runGet(root, 'image', { out: 'ok', prompt: 'a key' });
   assert.ok(existsSync(join(root, 'assets/image/ok.png')));
   assert.ok(!existsSync(join(scratch, 'escape.txt')) && !existsSync(join(root, '..', 'escape2.txt')));
   assert.notEqual(readFileSync(join(root, 'film.html'), 'utf8'), '{}');
-  assert.ok(JSON.parse(text));
+  assert.deepEqual(JSON.parse(text), { images: [{ src: 'assets/image/ok.png' }] });
 });
 
-test('subtitles translate through the account: each line gets the line that starts with it, kept beside the transcript', async () => {
+test('subtitles translate through the provider chosen for it: each line its own, kept beside the transcript', async () => {
   const root = project({ stage: { w: 1920, h: 1080 }, tracks: [{ clips: [{ id: 'vo', src: 'assets/audio/vo/intro.mp3' }] }] });
-  answers.push({ body: TTS });
   await runGet(root, 'tts', { out: 'intro', text: SAID, voice: 'v-1' });
-  answers.push((call, send) => {
-    const input = JSON.parse(Buffer.from(call.body.inputs[0].base64, 'base64').toString('utf8'));
-    assert.equal(call.body.inputs[0].path, 'assets/data/translate/audio/vo/intro.mp3.speech.json');
-    assert.deepEqual(call.body.args, { src: 'assets/audio/vo/intro.mp3', to: 'fr' });
-    assert.equal(input.text, SAID);
-    assert.equal(input.words.length, 5);
-    send(200, { ...TTS, receipt: { lines: 2 }, files: [], index: [{ src: 'assets/audio/vo/intro.mp3', translations: { fr: [
-      { startSec: 0, endSec: 1.6, text: 'Bonjour.' }, { startSec: 1.8, endSec: 2.8, text: 'Comment ça va ?' },
-    ] } }] });
-  });
   const translate = await subtitleTranslator(root);
   const result = await translateFilmSubtitles(root, 'fr', { translate });
   assert.deepEqual(result, { language: 'fr', translated: ['assets/audio/vo/intro.mp3'], already: 0, same: 0, failed: [] });
+  const sent = JSON.parse(calls.at(-1).body);
+  assert.equal(calls.at(-1).headers.authorization, 'Bearer openai-test-0123456789');
+  assert.deepEqual(JSON.parse(sent.input), { language: 'fr', lines: ['Hello there.', 'How are you?'] });
   const { cues, languages } = await filmCaptions(root, { duration: async () => 2.8 });
   assert.deepEqual(languages, ['fr']);
   assert.deepEqual(cues.map((c) => [c.text, c.alt?.fr]), [['Hello there.', 'Bonjour.'], ['How are you?', 'Comment ça va ?']]);
   assert.ok(existsSync(join(root, 'assets/audio/vo/intro.fr.vtt')));
 
-  /* no account and no key: nothing can translate, and the route says to connect one */
-  rmSync(join(process.env.OPENFILM_HOME, 'account.json'));
+  /* its key gone: nothing translates, and the route says to connect one */
+  await changeSettings((s) => { delete s.keys.openai; });
   assert.equal(await subtitleTranslator(root), null);
 });
 
@@ -328,14 +292,13 @@ test('Studio: GET /api/get lists what can be got, never who makes it; a video ru
   try {
     const api = (path, init = {}) => fetch(`${studio.origin}${path}`, { ...init, headers: { 'x-studio-key': studio.key, 'content-type': 'application/json', ...init.headers } });
     const { verbs, note } = await (await api('/api/get')).json();
-    const media = Object.entries(VERBS).filter(([verb]) => !WEB_VERBS.includes(verb));
+    const media = Object.entries(VERBS).filter(([verb]) => !WEB_VERBS.includes(verb) && made(verb));
     assert.deepEqual(verbs.map((v) => Object.keys(v)), media.map(([, spec]) => ['verb', 'help', ...(spec.dir ? ['dir'] : []), 'options']));
     assert.equal(note, null);
-    /* web search and web pages, for an agent without its own */
-    assert.deepEqual((await (await api('/api/get?web=1')).json()).verbs.map((v) => v.verb), Object.keys(VERBS));
+    /* web search and web pages too, for an agent without its own, when something makes them */
+    assert.deepEqual((await (await api('/api/get?web=1')).json()).verbs.map((v) => v.verb), Object.keys(VERBS).filter(made));
     assert.equal(verbs.find((v) => v.verb === 'tts').options.out.required, true);
     assert.equal((await api('/api/get?verb=dance')).status, 400);
-
 
     const { project: opened } = await (await api('/api/projects', { method: 'POST', body: JSON.stringify({ path: join(scratch, 'Shown') }) })).json();
     const stream = new WebSocket(`${studio.origin.replace(/^http/, 'ws')}/api/projects/${opened.id}/events`, { headers: { 'x-studio-key': studio.key } });
@@ -348,10 +311,9 @@ test('Studio: GET /api/get lists what can be got, never who makes it; a video ru
       waiting.add(check);
       check();
     });
-    answers.push({ body: { ...TTS, receipt: { src: 'assets/video/shot.mp4', dur: 5 }, files: [{ path: 'assets/video/shot.mp4', base64: b64('mp4') }], index: [] } });
     const running = api('/api/get', { method: 'POST', body: JSON.stringify({ folder: opened.path, verb: 'video', args: { out: 'shot', prompt: 'p' } }) }).then((r) => r.json());
     const { ask } = await next('ask');
-    assert.deepEqual([ask.kind, ask.model, 'credits' in ask], ['video', 'Seedance 2.0 Mini', false]);
+    assert.deepEqual([ask.kind, ask.provider, ask.model, ask.seconds], ['video', 'fal.ai', 'Seedance 2.0', 5]);
     assert.deepEqual(await (await api(`/api/get/asks/${ask.id}`, { method: 'POST', body: JSON.stringify({ allow: true }) })).json(), { answered: true });
     assert.equal((await next('asked')).id, ask.id);
     const answer = await running;
@@ -359,12 +321,12 @@ test('Studio: GET /api/get lists what can be got, never who makes it; a video ru
     assert.equal(JSON.parse(answer.text).src, 'assets/video/shot.mp4');
 
     /* no balance: the page is told, with the provider to top up, and nothing waits for an answer */
-    answers.push({ status: 402, body: { error: 'insufficient_credits' } });
+    refuse = () => [402, { detail: { status: 'quota_exceeded' } }];
     const failed = await (await api('/api/get', { method: 'POST', body: JSON.stringify({ folder: opened.path, verb: 'sfx', args: { out: 'ding', prompt: 'a chime' } }) })).json();
     assert.deepEqual([failed.ok, failed.code], [false, 1]);
-    assert.match(failed.text, /OpenFilm doesn't have enough balance/);
+    assert.match(failed.text, /ElevenLabs doesn't have enough balance/);
     const { notice } = await next('notice');
-    assert.deepEqual({ ...notice, id: typeof notice.id }, { id: 'string', kind: 'balance', provider: 'OpenFilm', providerId: 'openfilm' });
+    assert.deepEqual({ ...notice, id: typeof notice.id }, { id: 'string', kind: 'balance', provider: 'ElevenLabs', providerId: 'elevenlabs' });
     stream.close();
 
     const notProject = await (await api('/api/get', { method: 'POST', body: JSON.stringify({ folder: scratch, verb: 'tts', args: {} }) })).json();
@@ -394,60 +356,52 @@ test('openfilm get: what can be got here, connected, partly or not at all; wrong
         `${' '.repeat(width + 4)}${Object.entries(spec.options).map(([n, o]) => flagHelp(n, o)).join(' ')}`];
     }),
   ];
+  const media = Object.keys(VERBS).filter((verb) => !WEB_VERBS.includes(verb) && made(verb));
   try {
     /* everything connected: the verbs, and nothing else */
     const listed = get(scratch);
     assert.equal(listed.status, 0, listed.stderr);
-    const media = Object.keys(VERBS).filter((verb) => !WEB_VERBS.includes(verb));
     assert.equal(listed.stdout, `${[...listing(media), '', services()].join('\n')}\n`);
     const one = get(root, 'image', '--help');
     assert.equal(one.status, 0);
     assert.match(one.stdout, /--ratio <16:9\|9:16/);
     assert.doesNotMatch(one.stdout, /--voice/);
 
-    /* --model: this run with another model than the person's choice; an older agent's --tier is the model it made */
-    answers.push({ body: { ...TTS, receipt: { src: 'assets/audio/sfx/ding.mp3', dur: 0.9 }, files: [], index: [] } });
-    const modelled = await run(root, 'sfx', '--model', 'elevenlabs-sfx', '--out', 'ding', '--prompt', 'a chime');
+    /* --model: this run with another model than the person's choice */
+    const modelled = await run(root, 'music', '--model', 'music_v2', '--out', 'bed', '--prompt', 'calm pad');
     assert.equal(modelled.status, 0, modelled.stdout);
-    assert.equal(runs().at(-1).body.model, 'elevenlabs-sfx');
+    assert.equal(JSON.parse(calls.at(-1).body).model_id, 'music_v2');
 
-    /* web search and web pages: listed for an agent without its own (OPENFILM_GET_WEB=1), run like any other media */
+    /* web search and web pages: listed for an agent without its own (OPENFILM_GET_WEB=1), when something makes them */
     const withWeb = spawnSync(process.execPath, [bin, 'get'], { cwd: scratch, env: { ...env, OPENFILM_GET_WEB: '1' }, encoding: 'utf8' });
-    assert.equal(withWeb.stdout, `${[...listing(Object.keys(VERBS)), '', services()].join('\n')}\n`);
-    answers.push({ body: { ...TTS, receipt: { query: 'blender', hits: [{ title: 'Blender', url: 'https://www.blender.org', excerpt: '5.2' }] }, files: [], index: [] } });
-    const searched = await run(root, 'web-search', '--query', 'blender');
-    assert.equal(searched.status, 0, searched.stdout);
-    assert.equal(JSON.parse(searched.stdout).hits[0].url, 'https://www.blender.org');
-    assert.deepEqual([runs().at(-1).body.command, runs().at(-1).body.model, runs().at(-1).body.args], ['web search', 'web-search', { query: ['blender'] }]);
-    answers.push({ body: { ...TTS, receipt: { src: 'assets/fetch/blender.md', title: 'Blender' }, files: [{ path: 'assets/fetch/blender.md', base64: b64('# Blender') }], index: [] } });
-    const read = await run(root, 'web-fetch', '--url', 'https://www.blender.org');
-    assert.equal(read.status, 0, read.stdout);
-    assert.deepEqual([runs().at(-1).body.command, runs().at(-1).body.model], ['web fetch', undefined], 'reading a page takes no model');
-    assert.equal(readFileSync(join(root, 'assets/fetch/blender.md'), 'utf8'), '# Blender');
+    assert.equal(withWeb.stdout, `${[...listing(Object.keys(VERBS).filter(made)), '', services()].join('\n')}\n`);
 
     /* nothing connected: no verbs, what to do instead */
-    rmSync(join(process.env.OPENFILM_HOME, 'account.json'));
+    rmSync(providersFile());
     const nothing = get(scratch);
     assert.equal(nothing.status, 0);
-    assert.equal(nothing.stdout, 'Nothing is connected for media here. '
+    assert.equal(nothing.stdout, 'Nothing is connected for media here: each kind works only once the person connects a service that makes it (below). '
       + 'Until then, make sound and pictures in code, or use a service the person has a key for (with its API docs), and save them under assets/. '
-      + `\`openfilm get <what> --help\` shows what one kind takes (voice, tts, sfx, music, asr, image-search, image, video).\n\n${services()}\n`);
-    assert.match(services(), /: ElevenLabs \(voice-over, sound effects, music, transcripts\), fal\.ai \(images, video\), .*, the OpenFilm account \(all of these\)\. In Studio, the OpenFilm logo at the top left opens Settings/);
+      + `\`openfilm get <what> --help\` shows what one kind takes (${media.join(', ')}).\n\n${services()}\n`);
+    assert.match(services(), /^Media services, each used with the person's own key: ElevenLabs \(voice-over, sound effects, music, transcripts\), fal\.ai \(images, video\), .*\. In Studio, the OpenFilm logo at the top left opens Settings/);
 
-    /* partly: what is connected, then one line for the rest, then the services there are; never who makes what now */
+    /* partly: what is connected, then one line for the rest with the services that make each, then the services there
+       are; never who makes what is connected */
     await changeSettings((s) => { s.keys.elevenlabs = 'xi-test-0123456789'; for (const v of ['tts', 'sfx', 'music', 'asr']) s.use[v] = 'elevenlabs'; });
+    const spoken = ['voice', 'tts', 'sfx', 'music', 'asr'];
+    const rest = media.filter((v) => !spoken.includes(v));
     const partly = get(scratch);
-    assert.equal(partly.stdout, `${[...listing(['voice', 'tts', 'sfx', 'music', 'asr']), '',
-      `Not connected here: image-search, image, video. The person can connect them. ${WHERE_TO_CONNECT}`, '', services()].join('\n')}\n`);
-    assert.doesNotMatch(partly.stdout.replace(services(), ''), /ElevenLabs|made by|flash|ultra/i);
+    assert.equal(partly.stdout, `${[...listing(spoken), '',
+      `Not connected here: ${rest.map(unconnected).join(', ')}. ${CONNECT_ONE}`, '', services()].join('\n')}\n`);
+    assert.doesNotMatch(partly.stdout.replace(services(), ''), /ElevenLabs|made by/i);
     const image = get(root, 'image', '--help');
     assert.equal(image.stdout, `${[...listing(['image']), '',
-      `Not connected here: image. The person can connect it. ${WHERE_TO_CONNECT}`].join('\n')}\n`);
+      `Not connected here: ${unconnected('image')}. ${CONNECT_ONE}`].join('\n')}\n`);
     const unavailable = get(root, 'image', '--out', 'hero', '--prompt', 'a key');
     assert.equal(unavailable.status, 1);
-    assert.equal(unavailable.stdout, `Not connected here: image. The person can connect it. ${WHERE_TO_CONNECT} `
+    assert.match(unavailable.stdout, /^Not connected here: image \(fal\.ai, Google Gemini or OpenAI\)\. .*with the person's own key/);
+    assert.equal(unavailable.stdout, `Not connected here: ${unconnected('image')}. ${CONNECT_ONE} Tell the person. `
       + 'Until then, make it in code, or use a service the person has a key for (with its API docs), and save it under assets/.\n');
-    assert.equal(get(root, 'sfx', '--tier', 'max', '--out', 'x', '--prompt', 'p').status, 2);
 
     assert.equal(get(scratch, 'tts', '--out', 'x').status, 2, 'not in a project');
     assert.match(get(scratch, 'tts').stdout, /is not in a project; `openfilm open` makes one/);
@@ -462,16 +416,12 @@ test('openfilm get: what can be got here, connected, partly or not at all; wrong
   }
 });
 
-test('a build without an account service never mentions it, and lists only what the services make', async () => {
-  const saved = { ...process.env };
-  for (const name of ['OPENFILM_ACCOUNT_URL', 'OPENFILM_ACCOUNT_ISSUER', 'OPENFILM_ACCOUNT_CLIENT_ID']) delete process.env[name];
-  try {
-    assert.doesNotMatch(services(), /OpenFilm account/);
-    const { verbs, note } = await catalog();
-    assert.deepEqual(verbs, []);
-    assert.doesNotMatch(note, /image-search/);
-    assert.match(note, /voice, tts, sfx, music, asr, image, video/);
-  } finally {
-    Object.assign(process.env, saved);
-  }
+test('nothing connected: no verbs, and a note naming only what the services make', async () => {
+  rmSync(providersFile());
+  const { verbs, note } = await catalog();
+  assert.deepEqual(verbs, []);
+  assert.match(note, new RegExp(`\\(${Object.keys(VERBS).filter((v) => !WEB_VERBS.includes(v) && made(v)).join(', ')}\\)`));
+  assert.doesNotMatch(note, /account/i);
+  /* one kind: which services make it, and where the person connects one */
+  assert.equal((await catalog('video')).note, `Not connected here: ${unconnected('video')}. ${CONNECT_ONE}`);
 });

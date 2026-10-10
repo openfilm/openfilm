@@ -1,10 +1,4 @@
 {
-  "account": {
-    "url": "",
-    "issuer": "",
-    "clientId": "",
-    "sites": []
-  },
   "desktop": {
     "updates": "https://openfilm.dev/download/desktop"
   }

@@ -98,21 +98,20 @@ export interface StudioHost {
 /** A question about spending, worded for the person (see `asks`). */
 export interface HostAsk { id: string; title: string; body: string | null; allowLabel: string; denyLabel: string }
 
-export type HostAgentId = 'codex' | 'claude' | 'gemini' | 'copilot' | 'cursor' | 'opencode' | 'codebuddy' | 'qwen' | 'kimi' | 'openfilm' | 'byok';
+export type HostAgentId = 'codex' | 'claude' | 'gemini' | 'copilot' | 'cursor' | 'opencode' | 'codebuddy' | 'qwen' | 'kimi' | 'byok';
 /** The API a person's own key is for: OpenAI's Responses or Chat Completions, or Anthropic's Messages. */
 export type HostByokFormat = 'responses' | 'chat' | 'anthropic';
 
 /**
  * One agent as the app has it. `status`: ready · off (disconnected in the app; its own sign-in is kept) · sign-in (its
  * own sign-in is needed) · waiting (signing in, in Terminal) · missing (not installed: `install` says where from) ·
- * account (the OpenFilm account is not connected) · key (no key set up) · unavailable (not offered yet) · unconfigured
- * (the app is a build with no account service) · checking.
+ * key (no key set up) · unavailable (not offered yet) · checking.
  */
 export interface HostAgent {
   id: HostAgentId;
   name: string;
   shown: boolean;
-  status: 'ready' | 'off' | 'sign-in' | 'waiting' | 'missing' | 'account' | 'key' | 'unavailable' | 'unconfigured' | 'checking';
+  status: 'ready' | 'off' | 'sign-in' | 'waiting' | 'missing' | 'key' | 'unavailable' | 'checking';
   install?: string | null;
   /** What installing it takes, when `install` is not a download: 'code-tab', Claude Code comes with the Claude app (its Code tab). */
   setupRequired?: string | null;

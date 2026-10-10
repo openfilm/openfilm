@@ -39,7 +39,6 @@ import { installedFonts } from './fonts.mjs';
 import { projectFonts, resolveIn } from './project-fonts.mjs';
 import { FILM_PAGE, PageFrameError, closePageFrames, filmPoster, pageFacts, pageFrame, warmFilmPoster } from './pageframes.mjs';
 import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
-import { accountRoute } from './account.mjs';
 import { providersRoute } from './providers/index.mjs';
 import { captionRoutes } from './captions.mjs';
 import { projectSettingsRoute } from './project-settings.mjs';
@@ -54,6 +53,8 @@ import { createAsks, getRoute, subtitleTranscriber, subtitleTranslator } from '.
 const cookieName = (/** @type {number} */ port) => `openfilm_studio_${port}`;
 /** How long `/open` waits, after a restart, for the pages of the Studio before to come back (they retry every second). */
 const PAGES_BACK_MS = 3000;
+/** The project's website (package.json `homepage`). */
+const HOMEPAGE = (() => { try { return String(JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).homepage ?? ''); } catch { return ''; } })();
 
 /**
  * Start Studio. `port` 0 picks a free one. `advertise`:
@@ -189,9 +190,11 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* the fonts installed here (what a web page can draw with, in the preview and the export alike) */
     if (parts[0] === 'fonts' && parts.length === 1 && req.method === 'GET') return json(res, 200, { fonts: await installedFonts() });
 
-    /* ── the OpenFilm account (Settings → Providers): its state for the page, never its token; see account.mjs ── */
-    /* `app`: the caller holds the launch key itself (the desktop app, the CLI), not the editor page by its cookie */
-    if (parts[0] === 'account') return accountRoute(req, res, parts.slice(1), { openBrowser, app: sameKey(/** @type {string | undefined} */ (req.headers['x-studio-key'])) });
+    /* the website, where the desktop app's download is, opened in the person's browser (the top bar's Desktop button) */
+    if (parts[0] === 'desktop' && parts.length === 1 && req.method === 'POST') {
+      if (HOMEPAGE) openBrowser(HOMEPAGE);
+      return json(res, 200, {});
+    }
     /* ── own keys and who makes each kind of media (Settings → Providers): never a key back; see providers/index.mjs ── */
     if (parts[0] === 'providers') return providersRoute(req, res, parts.slice(1), { openBrowser });
     /* ── `openfilm get`: media from a provider, landed in the project; spending is asked here first (see get.mjs) ── */
