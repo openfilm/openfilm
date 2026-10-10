@@ -1,5 +1,13 @@
 # openfilm
 
+## 0.1.4
+
+### Patch Changes
+
+- f486188: Windows: an ffmpeg that is stopped (a cancelled render or export, a mix that runs too long) ends with the real ffmpeg
+  behind a Chocolatey or Scoop shim; a name with a `:` is cleaned on import, rename and new folders as on macOS and
+  Linux, not refused; Studio's supervisor opens the null device by its Windows name.
+
 ## 0.1.3
 
 The first release from the open-source repository: the CLI, Studio and the desktop app share this version.
