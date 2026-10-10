@@ -362,6 +362,8 @@ test('watched, a film shows the video on at the moment first asked for, sought o
     for (const [t, id, want] of [[0, 'first', 0], [2.5, 'later', 1.5]]) {
       /* a page just loaded, as Studio's preview comes up: nothing drawn yet, the first moment asked for by a person */
       await s.film.page.reload();
+      /* window.film may not be there yet when the reload resolves */
+      await s.film.page.waitForFunction(() => Boolean(window.film));
       await s.film.page.evaluate(() => window.film.ready);
       const seen = await s.film.page.evaluate(async ([t, id]) => {
         const v = document.getElementById(id);
