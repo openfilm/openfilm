@@ -610,7 +610,9 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
   filmOrigin = pages.origin;
   if (advertise) {
     mkdirSync(studioHome(), { recursive: true });
-    writeFileSync(runFile(), `${JSON.stringify({ pid: process.pid, origin, filmOrigin: pages.origin, key })}\n`, { mode: 0o600 });
+    /* `supervisor`: the process that starts this one again if it ends unexpectedly (main.mjs), stopped with it */
+    const supervisor = Number(process.env.OPENFILM_STUDIO_SUPERVISOR) || undefined;
+    writeFileSync(runFile(), `${JSON.stringify({ pid: process.pid, ...(supervisor ? { supervisor } : {}), origin, filmOrigin: pages.origin, key })}\n`, { mode: 0o600 });
   }
 
   /** @type {Promise<void> | null} */

@@ -15,7 +15,7 @@ import { studioHome, studioKey } from './server/projects.mjs';
 const MAIN = fileURLToPath(new URL('./server/main.mjs', import.meta.url));
 const VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 
-/** @typedef {{ pid?: number, origin: string, filmOrigin: string, key: string, version?: string }} Running */
+/** @typedef {{ pid?: number, supervisor?: number, origin: string, filmOrigin: string, key: string, version?: string }} Running */
 
 /** What a Studio says about itself, or null when nothing (or something else) answers at `origin`. */
 async function health(/** @type {string} */ origin, ms = 1500) {
@@ -44,6 +44,27 @@ async function running() {
   /* it says which home it serves as a hash of the path (the path itself is not told to anyone who asks) */
   if (said?.home !== createHash('sha256').update(studioHome()).digest('hex') || !said.filmOrigin) return null;
   return { origin, filmOrigin: said.filmOrigin, key: studioKey(), version: said.version };
+}
+
+/**
+ * The Studio its supervisor is starting again after it ended (main.mjs): run.json names a supervisor still alive. It is
+ * waited for (a few seconds), so a second Studio is not started beside it; null when there is none, or it is not back.
+ * @returns {Promise<Running | null>}
+ */
+async function restarting() {
+  /** @type {Running | null} */
+  let run = null;
+  try { run = JSON.parse(readFileSync(join(studioHome(), 'run.json'), 'utf8')); } catch { return null; }
+  const supervisor = run?.supervisor;
+  if (!supervisor) return null;
+  try { process.kill(supervisor, 0); } catch { return null; }
+  const deadline = Date.now() + 8000;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 300));
+    const up = await running();
+    if (up) return up;
+  }
+  return null;
 }
 
 /** Whether `version` (x.y.z) is older than this package's: an older Studio is replaced. */
@@ -115,7 +136,8 @@ async function replace(/** @type {Running} */ old) {
   if (res && !res.ok) return { stays: said?.error ?? `it answered ${res.status}` };
   const pages = Number(said?.pages) || 0;
   if (await gone(old.origin, 10_000)) return { pages };
-  if (old.pid) { try { process.kill(old.pid, 'SIGKILL'); } catch { /* gone meanwhile */ } }
+  /* the supervisor first, or it would start the stuck one again */
+  for (const pid of [old.supervisor, old.pid]) if (pid) { try { process.kill(pid, 'SIGKILL'); } catch { /* gone meanwhile */ } }
   return (await gone(old.origin, 3000)) ? { pages } : { stays: 'it did not stop' };
 }
 
@@ -126,7 +148,7 @@ async function replace(/** @type {Running} */ old) {
  * @param {(line: string) => void} [say] @param {{ fresh?: boolean }} [options] @returns {Promise<Running & { pages?: number }>}
  */
 export async function ensureStudio(say = () => {}, { fresh = false } = {}) {
-  const found = await running();
+  const found = (await running()) ?? (await restarting());
   if (found && !fresh && !olderThanThis(found.version)) return found;
   let pages = 0;
   if (found) {
@@ -152,7 +174,7 @@ export async function ensureStudio(say = () => {}, { fresh = false } = {}) {
     const up = await running();
     /* the one just started, by the run.json it writes once it listens: the run.json of the one before (stopped for
        good, never cleaning up) names the same address with an older key */
-    if (up && up.pid === child.pid) return { ...up, pages };
+    if (up && (up.pid === child.pid || up.supervisor === child.pid)) return { ...up, pages };
     if (exited != null) {
       const last = readFileSync(join(logs, 'studio.log'), 'utf8').trim().split('\n').pop();
       throw new Error(`Studio did not start: ${last}`);
