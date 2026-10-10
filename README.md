@@ -148,6 +148,11 @@ pnpm test
 what they say.
 [CONTRIBUTING.md](CONTRIBUTING.md) has the details of each package.
 
+## Community
+
+Questions, ideas and films you made go to [Discussions](https://github.com/openfilm/openfilm/discussions): ask in
+Q&A, share your film in Show and tell. Bugs go to [Issues](https://github.com/openfilm/openfilm/issues).
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). To report a security issue, see [SECURITY.md](SECURITY.md).

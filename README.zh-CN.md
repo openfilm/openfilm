@@ -142,6 +142,11 @@ pnpm test
 `pnpm dev:desktop` 从源码运行桌面版；`pnpm typecheck`、`pnpm build` 和 `pnpm audit:public` 分别是类型检查、构建和
 公开内容审计。各个包的详细说明见 [CONTRIBUTING.md](CONTRIBUTING.md)（英文）。
 
+## 社区
+
+提问、想法和你做的片子，都欢迎发到 [Discussions](https://github.com/openfilm/openfilm/discussions)：问题发在 Q&A，
+作品发在 Show and tell。发现 bug 请提 [Issue](https://github.com/openfilm/openfilm/issues)。
+
 ## 参与贡献
 
 见 [CONTRIBUTING.md](CONTRIBUTING.md)（英文）。报告安全问题见 [SECURITY.md](SECURITY.md)。
