@@ -33,6 +33,7 @@ import {
 import { FetchError, createFetches } from './fetch-repo.mjs';
 import { BrowseError, browseFolder, browsePlaces } from './browse.mjs';
 import { listExamples } from './examples.mjs';
+import { npmOpenfilm, olderThanThis } from '../client.mjs';
 import { writeAtomic } from './atomic.mjs';
 import { createWatchers } from './watch.mjs';
 import { installedFonts } from './fonts.mjs';
@@ -201,6 +202,12 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       return json(res, 200, { project, url: address, pages: open });
     }
 
+    /* this Studio's version, and the latest on npm (Settings → General; `?check=1` asks npm now) */
+    if (parts[0] === 'version' && parts.length === 1 && req.method === 'GET') {
+      const now = url.searchParams.get('check') === '1';
+      const { latest, checkedAt } = await npmOpenfilm({ force: now, waitMs: 4000 });
+      return json(res, 200, { version: VERSION, latest, newer: Boolean(latest && olderThanThis(VERSION, latest)), checkedAt, checking: !process.env.OPENFILM_NO_UPDATE_CHECK });
+    }
     /* the fonts installed here (what a web page can draw with, in the preview and the export alike) */
     if (parts[0] === 'fonts' && parts.length === 1 && req.method === 'GET') return json(res, 200, { fonts: await installedFonts() });
 

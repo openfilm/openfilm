@@ -11,11 +11,12 @@ import { LANGUAGES, phrasesUnder, useLanguage, useLanguageChoice, useT, type Lan
 import { shortcutHint } from '@/lib/shortcut-hint';
 import { SHORTCUTS, type ShortcutKey } from '@/lib/timeline-keys';
 import { studioHost } from '@/lib/host';
+import { api, type StudioVersion } from '@/api';
 import { AgentsSection } from './AgentsSection';
 import { ModelsSection } from './ModelsSection';
 import { ProvidersSection } from './ProvidersSection';
 import { SettingsSelect } from './SettingsSelect';
-import { SettingsGroup, SettingsItem, SettingsPage, SettingsSegmented, SettingsSwitch } from './ui';
+import { SettingsButton, SettingsGroup, SettingsItem, SettingsPage, SettingsSegmented, SettingsSwitch } from './ui';
 import { useThemeMode, type ThemeMode } from './theme';
 
 export type SettingsSection = 'general' | 'agents' | 'providers' | 'models' | 'developer' | 'shortcuts';
@@ -221,7 +222,52 @@ function GeneralSection() {
           )}
         />
       </SettingsGroup>
+      <AboutGroup />
     </SettingsPage>
+  );
+}
+
+/**
+ * This Studio's version and whether npm has a newer openfilm. In the desktop app, Studio comes with the app and is
+ * updated with it; anywhere else the person (or their agent) runs the latest, and the CLI restarts Studio on it.
+ */
+function AboutGroup() {
+  const t = useT();
+  const [info, setInfo] = React.useState<StudioVersion | null>(null);
+  const [state, setState] = React.useState<'idle' | 'checking' | 'failed'>('idle');
+  React.useEffect(() => { void api.version().then(setInfo).catch(() => {}); }, []);
+  const inApp = Boolean(studioHost);
+  const check = () => {
+    setState('checking');
+    const before = info?.checkedAt ?? null;
+    void api.version(true)
+      .then((v) => { setInfo(v); setState(v.checkedAt != null && v.checkedAt !== before ? 'idle' : 'failed'); })
+      .catch(() => setState('failed'));
+  };
+  const status = inApp ? t('settings.about.inApp')
+    : info && !info.checking ? t('settings.about.off')
+    : state === 'checking' ? t('settings.about.checking')
+    : state === 'failed' ? t('settings.about.failed')
+    : info?.newer ? t('settings.about.newer').replace('{version}', info.latest ?? '')
+    : info?.latest ? t('settings.about.upToDate')
+    : t('settings.about.never');
+  return (
+    <SettingsGroup title={t('settings.about.group')}>
+      <SettingsItem
+        title={info ? `OpenFilm ${info.version}` : 'OpenFilm'}
+        description={status}
+        control={inApp || !info?.checking ? null : (
+          <SettingsButton disabled={state === 'checking'} onClick={check}>{t('settings.about.check')}</SettingsButton>
+        )}
+      />
+      {!inApp && info?.newer ? (
+        <SettingsItem
+          title={t('settings.about.howTitle')}
+          description={t('settings.about.how')}
+          control={<code className="select-all rounded-md bg-[var(--surface-2)] px-2 py-1 font-mono text-[12px] text-[var(--text)]">npx -y openfilm@latest open</code>}
+        />
+      ) : null}
+    </SettingsGroup>
   );
 }
 

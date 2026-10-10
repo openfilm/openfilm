@@ -325,6 +325,12 @@ test('the Desktop button opens the installer for this computer, or the project\'
   assert.equal(desktopInstaller('mac', 'arm64', ''), null);
 });
 
+test('Settings → General: this Studio\'s version, and whether npm has a newer one', async () => {
+  const v = await (await api('/api/version')).json();
+  assert.equal(v.version, JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version);
+  assert.equal(typeof v.newer, 'boolean');
+});
+
 test('the fonts installed here, for the inspector\'s font menu', async () => {
   const { fonts } = await (await api('/api/fonts')).json();
   assert.ok(Array.isArray(fonts));

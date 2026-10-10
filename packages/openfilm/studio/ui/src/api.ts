@@ -6,6 +6,9 @@ import type { ExportJob } from '@/lib/export-jobs';
 import { watchStudioVersion } from '@/lib/studio-version';
 
 /** `working`: an agent of the app's chat is working in it right now (it cannot be deleted meanwhile). */
+/** GET /api/version: this Studio's, and npm's latest (null when never learnt; `checking` false: never asked). */
+export interface StudioVersion { version: string; latest: string | null; newer: boolean; checkedAt: number | null; checking: boolean }
+
 export type Project = { id: string; path: string; name: string; openedAt: number; missing: boolean; working?: boolean };
 export type Clip = { src: string; id: string; at?: number; time?: [number] | [number, number];
   box?: { x: number; y: number; w?: number; h?: number; r?: number }; volume?: number; speed?: number; overrides?: unknown[];
@@ -69,6 +72,8 @@ async function call<T>(path: string, init: RequestInit & { json?: unknown } = {}
 const p = (id: string) => `projects/${encodeURIComponent(id)}`;
 
 export const api = {
+  /** this Studio's version and the latest openfilm on npm; `check`: ask npm now */
+  version: (check = false) => call<StudioVersion>(`version${check ? '?check=1' : ''}`),
   projects: () => call<{ projects: Project[] }>('projects').then((r) => r.projects),
   newProject: (name?: string) => call<{ project: Project }>('projects', { method: 'POST', json: { name } }).then((r) => r.project),
   /** open a folder (its full path) as a project: made one when it is not yet */

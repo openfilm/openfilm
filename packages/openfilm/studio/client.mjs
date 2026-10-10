@@ -56,18 +56,20 @@ export function olderThanThis(/** @type {string | undefined} */ version, mine = 
 }
 
 /**
- * A newer openfilm on npm than this one, or null: asked of the registry at most once a day (the answer kept in
- * Studio's folder), never for more than `waitMs`, and never with `network` false (only what was learnt before). A
- * check that fails is no answer, and nothing else waits on it. OPENFILM_NO_UPDATE_CHECK=1: never asked.
- * @param {{ network?: boolean, waitMs?: number }} [options]
+ * What npm has: the latest openfilm (null when it was never learnt) and when it was asked. Asked of the registry at
+ * most once a day (the answer kept in Studio's folder) unless `force`, never for more than `waitMs`, and never with
+ * `network` false (only what was learnt before). A check that fails is no answer, and nothing else waits on it.
+ * OPENFILM_NO_UPDATE_CHECK=1: never asked.
+ * @param {{ network?: boolean, waitMs?: number, force?: boolean }} [options]
+ * @returns {Promise<{ latest: string | null, checkedAt: number | null }>}
  */
-export async function newerOpenfilm({ network = true, waitMs = 1500 } = {}) {
-  if (process.env.OPENFILM_NO_UPDATE_CHECK) return null;
+export async function npmOpenfilm({ network = true, waitMs = 1500, force = false } = {}) {
+  if (process.env.OPENFILM_NO_UPDATE_CHECK) return { latest: null, checkedAt: null };
   const file = join(studioHome(), 'update.json');
   /** @type {{ checkedAt?: number, latest?: string }} */
   let known = {};
   try { known = JSON.parse(readFileSync(file, 'utf8')); } catch { /* never asked */ }
-  if (network && !(Date.now() - (known.checkedAt ?? 0) < 24 * 3_600_000)) {
+  if (network && (force || !(Date.now() - (known.checkedAt ?? 0) < 24 * 3_600_000))) {
     try {
       const res = await fetch('https://registry.npmjs.org/openfilm/latest', { signal: AbortSignal.timeout(waitMs), headers: { accept: 'application/json' } });
       const latest = res.ok ? String((await res.json()).version ?? '') : '';
@@ -78,7 +80,13 @@ export async function newerOpenfilm({ network = true, waitMs = 1500 } = {}) {
       }
     } catch { /* offline, or slow: asked again next time */ }
   }
-  return known.latest && olderThanThis(VERSION, known.latest) ? known.latest : null;
+  return { latest: known.latest ?? null, checkedAt: known.checkedAt ?? null };
+}
+
+/** A newer openfilm on npm than this one, or null (see npmOpenfilm). @param {{ network?: boolean, waitMs?: number }} [options] */
+export async function newerOpenfilm(options) {
+  const { latest } = await npmOpenfilm(options);
+  return latest && olderThanThis(VERSION, latest) ? latest : null;
 }
 
 /** Whether the Studio at `origin` stops answering within `ms`. */
