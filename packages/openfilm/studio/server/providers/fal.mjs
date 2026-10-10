@@ -1,11 +1,13 @@
 // @ts-check
 /**
- * fal.ai with the person's own key: pictures (FLUX.2) and video (Seedance 2.0, Kling 3.0). Every model runs through fal's
- * queue (https://fal.ai/docs/model-apis/model-endpoints/queue), key as `Authorization: Key …`: a request is submitted,
- * asked after until it is done, then its result fetched; results are files on fal's servers, downloaded here. Pictures
- * a model is given go inline, as data: URIs.
+ * fal.ai with the person's own key: pictures (FLUX.2), video (Seedance 2.0, Kling 3.0), music (Stable Audio 2.5, Lyria 2)
+ * and sound effects (ElevenLabs Sound Effects v2, Stable Audio 2.5). Every model runs through fal's queue
+ * (https://fal.ai/docs/model-apis/model-endpoints/queue), key as `Authorization: Key …`: a request is submitted, asked
+ * after until it is done, then its result fetched; results are files on fal's servers, downloaded here. Pictures a
+ * model is given go inline, as data: URIs.
  */
-import { RATIO_SIZE, billedBy, call, clamp, dataUri, download, extOf, landing, list, madePicture, modelOf, needed, notes, number, ownAddress, serviceUrl, sleep, text } from './common.mjs';
+import { extname } from 'node:path';
+import { RATIO_SIZE, billedBy, call, clamp, dataUri, download, extOf, landing, list, madePicture, modelOf, mp3Seconds, needed, notes, number, ownAddress, round, serviceUrl, sleep, text, wavSeconds } from './common.mjs';
 
 /** @typedef {import('./contract.mjs').Provider} Provider @typedef {import('./contract.mjs').RunContext} RunContext */
 
@@ -19,7 +21,26 @@ const MODELS = {
     { id: 'kling-3.0-pro', name: 'Kling 3.0 Pro' },
     { id: 'kling-3.0-standard', name: 'Kling 3.0 Standard' },
   ],
+  music: [{ id: 'fal-ai/stable-audio-25/text-to-audio', name: 'Stable Audio 2.5' }, { id: 'fal-ai/lyria2', name: 'Lyria 2' }],
+  sfx: [{ id: 'fal-ai/elevenlabs/sound-effects/v2', name: 'ElevenLabs Sound Effects v2' }, { id: 'fal-ai/stable-audio-25/text-to-audio', name: 'Stable Audio 2.5' }],
 };
+
+/**
+ * Each sound model's input for a prompt and a length, and the lengths it makes: `seconds`, a range (`whole`: in whole
+ * seconds), or `fixed`. `chooses`: with no length asked, it chooses one. `mp3`: it answers with 128 kbps MP3, whose
+ * length is known from its size.
+ * @type {Record<string, { name: string, seconds?: [number, number], whole?: boolean, fixed?: number, chooses?: boolean, mp3?: boolean, input: (prompt: string, sec: number | null) => Record<string, unknown> }>}
+ */
+const AUDIO = {
+  'fal-ai/stable-audio-25/text-to-audio': { name: 'Stable Audio 2.5', seconds: [1, 190], whole: true, input: (prompt, sec) => ({ prompt, seconds_total: sec }) },
+  'fal-ai/lyria2': { name: 'Lyria 2', fixed: 30, input: (prompt) => ({ prompt }) },
+  'fal-ai/elevenlabs/sound-effects/v2': {
+    name: 'ElevenLabs Sound Effects', seconds: [0.5, 22], chooses: true, mp3: true,
+    input: (prompt, sec) => ({ text: prompt, ...(sec !== null ? { duration_seconds: sec } : {}), output_format: 'mp3_44100_128' }),
+  },
+};
+/** the length asked of a model that needs one when none is given */
+const LENGTH = { music: 60, sfx: 5 };
 
 /**
  * Each video model's endpoints (from a prompt, from a first frame, from reference pictures when it takes them), the
@@ -46,7 +67,7 @@ const VIDEO = {
 };
 
 /** How long to wait between asking after a request (tests make it short). */
-export const polling = { ms: { image: 1000, video: 5000 } };
+export const polling = { ms: { image: 1000, audio: 2000, video: 5000 } };
 
 /** @type {Provider} */
 export default {
@@ -55,7 +76,7 @@ export default {
   env: 'FAL_KEY',
   keysUrl: 'https://fal.ai/dashboard/keys',
   billingUrl: 'https://fal.ai/dashboard/billing',
-  verbs: ['image', 'video'],
+  verbs: ['image', 'video', 'music', 'sfx'],
   models: MODELS,
   async run(verb, args, ctx) {
     if (verb === 'image') {
@@ -73,6 +94,7 @@ export default {
       return { ...madePicture({ path, bytes, prompt, provider: 'fal', model, notes: said }), cost: billedBy(NAME) };
     }
     if (verb === 'video') return video(args, ctx);
+    if (verb === 'music' || verb === 'sfx') return sound(verb, args, ctx);
     throw new Error(`${NAME} does not do ${verb}.`);
   },
 };
@@ -122,6 +144,38 @@ async function video(args, ctx) {
       ...(first ? { firstFrame: first } : {}), ...(last ? { lastFrame: last } : {}), ...(refs.length ? { refs } : {}),
     } }],
     receipt: { provider: 'fal', model: endpoint, src: path, dur: seconds, hasAudio: true, ...resolution, ...notes(said) },
+    cost: billedBy(NAME),
+  };
+}
+
+/**
+ * Music or a sound effect from a prompt, as long as asked within what the chosen model makes. Its length is measured
+ * from the file (WAV, or the MP3's size); else it is the length the model was asked for.
+ * @param {'music' | 'sfx'} verb @param {Record<string, unknown>} args @param {RunContext} ctx
+ */
+async function sound(verb, args, ctx) {
+  const prompt = needed(args, 'prompt');
+  const dir = verb === 'sfx' ? 'audio/sfx' : 'audio/music';
+  landing(dir, args.out, 'wav');
+  const model = modelOf(MODELS, verb, ctx);
+  const spec = AUDIO[model];
+  const said = [];
+  const asked = number(args.sec);
+  const within = (/** @type {number} */ v) => { const s = clamp(v, ...(spec.seconds ?? [v, v])); return spec.whole ? Math.round(s) : round(s); };
+  const sec = spec.fixed ?? (asked === null ? (spec.chooses ? null : LENGTH[verb]) : within(asked));
+  if (asked !== null && sec !== asked) said.push(spec.fixed ? `${spec.name} makes ${spec.fixed} s tracks` : `${spec.name} makes ${spec.seconds?.[0]} to ${spec.seconds?.[1]} s: ${sec} s`);
+  const result = await queued(model, spec.input(prompt, sec), ctx, polling.ms.audio);
+  const audio = result?.audio;
+  if (!text(audio?.url)) throw new Error(`${NAME} answered without audio.`);
+  const { bytes, type } = await download(NAME, audio.url, ctx);
+  /* a type it does not say plainly: the file's own extension, when it is one */
+  const named = extname(text(audio.file_name)).slice(1).toLowerCase();
+  const path = landing(dir, args.out, extOf(audio.content_type ?? type, /^[a-z0-9]{2,4}$/.test(named) ? named : 'wav'));
+  const dur = wavSeconds(bytes) ?? (spec.mp3 && path.endsWith('.mp3') ? mp3Seconds(bytes) : sec);
+  return {
+    files: [{ path, bytes }],
+    index: [{ src: path, kind: 'audio', ...(dur !== null ? { dur } : {}), from: { mode: 'generate', prompt, ...(asked !== null ? { sec: asked } : {}), provider: 'fal', model } }],
+    receipt: { provider: 'fal', model, src: path, dur, ...notes(said) },
     cost: billedBy(NAME),
   };
 }

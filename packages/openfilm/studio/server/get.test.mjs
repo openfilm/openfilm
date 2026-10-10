@@ -432,7 +432,7 @@ test('openfilm get: what can be got here, connected, partly or not at all; wrong
     assert.equal(nothing.stdout, 'Nothing is connected for media here. '
       + 'Until then, make sound and pictures in code, or use a service the person has a key for (with its API docs), and save them under assets/. '
       + `\`openfilm get <what> --help\` shows what one kind takes (voice, tts, sfx, music, asr, image-search, image, video).\n\n${services()}\n`);
-    assert.match(services(), /: ElevenLabs \(voice-over, sound effects, music, transcripts\), fal\.ai \(images, video\), .*, the OpenFilm account \(all of these\)\. In Studio, the OpenFilm logo at the top left opens Settings/);
+    assert.match(services(), /: Brave Search \(web search\), ElevenLabs \(voice-over, sound effects, music, transcripts\), fal\.ai \(images, video, music, sound effects\), .*, the OpenFilm account \(all of these\), .*, Tavily \(web search\)\. In Studio, the OpenFilm logo at the top left opens Settings/);
 
     /* partly: what is connected, then one line for the rest, then the services there are; never who makes what now */
     await changeSettings((s) => { s.keys.elevenlabs = 'xi-test-0123456789'; for (const v of ['tts', 'sfx', 'music', 'asr']) s.use[v] = 'elevenlabs'; });
@@ -469,8 +469,8 @@ test('a build without an account service never mentions it, and lists only what 
     assert.doesNotMatch(services(), /OpenFilm account/);
     const { verbs, note } = await catalog();
     assert.deepEqual(verbs, []);
-    assert.doesNotMatch(note, /image-search/);
-    assert.match(note, /voice, tts, sfx, music, asr, image, video/);
+    /* every kind a service makes (image search: Pexels, Pixabay) */
+    assert.match(note, /voice, tts, sfx, music, asr, image-search, image, video\)/);
   } finally {
     Object.assign(process.env, saved);
   }

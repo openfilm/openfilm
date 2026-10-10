@@ -1,10 +1,11 @@
 /**
- * Settings → Providers: the services `openfilm get` gets voices, music, sound effects, transcripts, images and video
- * from, one list in the order of their names, none put first.
+ * Settings → Providers: the services `openfilm get` gets voices, music, sound effects, transcripts, images, video and
+ * web searches from, one list in the order of their names, none put first.
  *
  * The OpenFilm account connects by signing in in the person's browser; plan, billing and the account itself are on the
- * website ("Manage account"), never on this localhost page. ElevenLabs, OpenAI, Google Gemini and fal.ai connect with
- * the person's own key, which pays that service directly (a key in the environment shows as such and stays there).
+ * website ("Manage account"), never on this localhost page. ElevenLabs, OpenAI, Google Gemini, fal.ai, Groq, Pexels,
+ * Pixabay, Brave Search and Tavily connect with the person's own key, which pays that service directly when it charges
+ * (a key in the environment shows as such and stays there).
  * Which of them makes each kind of media, and with which model, is Settings → Models.
  */
 import React from 'react';

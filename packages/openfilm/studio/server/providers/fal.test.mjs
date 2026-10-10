@@ -2,6 +2,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import fal, { polling } from './fal.mjs';
+import { wav } from './common.mjs';
 
 const KEY = 'fal-test-key:0123456789';
 /** A fake fal queue on 127.0.0.1: `reply` answers each request; `seen` keeps them. */
@@ -21,7 +22,7 @@ before(async () => {
   await new Promise((done) => server.listen(0, '127.0.0.1', done));
   base = `http://127.0.0.1:${server.address().port}`;
   process.env.OPENFILM_FAL_URL = base;
-  polling.ms = { image: 5, video: 5 };
+  polling.ms = { image: 5, audio: 5, video: 5 };
 });
 after(() => server.close());
 
@@ -41,6 +42,9 @@ function queue(model, result, ready = 2) {
     if (call.url.pathname === '/app/requests/r1') return [200, result];
     if (call.url.pathname === '/files/out.png') return [200, png(1536, 864), 'image/png'];
     if (call.url.pathname === '/files/out.mp4') return [200, Buffer.from('mp4'), 'video/mp4'];
+    /* two seconds of 16-bit mono WAV at 8 kHz; one second of 128 kbps MP3 */
+    if (call.url.pathname === '/files/out.wav') return [200, Buffer.from(wav(new Uint8Array(32000), 8000)), 'audio/wav'];
+    if (call.url.pathname === '/files/out.mp3') return [200, Buffer.alloc(16000, 1), 'audio/mpeg'];
     return [404, {}];
   };
 }
@@ -98,6 +102,41 @@ test('the model the person chose: its own endpoints and fields (Kling: start_ima
   reply = queue('fal-ai/flux-2-pro', { images: [{ url: `${base}/files/out.png`, content_type: 'image/png' }] });
   await fal.run('image', { out: 'x', prompt: 'y' }, { ...ctx(), model: 'fal-ai/gone' });
   assert.equal(seen[0].url.pathname, '/fal-ai/flux-2-pro');
+});
+
+test('music: Stable Audio 2.5 by default, the length asked in whole seconds within what it makes, measured from the WAV', async () => {
+  seen.length = 0;
+  reply = queue('fal-ai/stable-audio-25/text-to-audio', { audio: { url: `${base}/files/out.wav`, content_type: 'audio/wav' }, seed: 1 });
+  const result = await fal.run('music', { out: 'theme', prompt: 'warm synth pad', sec: 300 }, ctx());
+  assert.deepEqual(JSON.parse(seen.find((c) => c.method === 'POST').body), { prompt: 'warm synth pad', seconds_total: 190 });
+  assert.equal(result.files[0].path, 'assets/audio/music/theme.wav');
+  assert.deepEqual(result.index[0], { src: 'assets/audio/music/theme.wav', kind: 'audio', dur: 2, from: { mode: 'generate', prompt: 'warm synth pad', sec: 300, provider: 'fal', model: 'fal-ai/stable-audio-25/text-to-audio' } });
+  assert.match(result.receipt.notes[0], /1 to 190 s: 190 s/);
+  /* no length asked: one a film can use */
+  seen.length = 0;
+  await fal.run('music', { out: 'theme', prompt: 'x' }, ctx());
+  assert.equal(JSON.parse(seen.find((c) => c.method === 'POST').body).seconds_total, 60);
+});
+
+test('music from Lyria 2: its tracks are 30 s, said when another length was asked', async () => {
+  seen.length = 0;
+  reply = queue('fal-ai/lyria2', { audio: { url: `${base}/files/out.wav` } });
+  const result = await fal.run('music', { out: 'bed', prompt: 'lofi', sec: 12 }, { ...ctx(), model: 'fal-ai/lyria2' });
+  assert.deepEqual(JSON.parse(seen.find((c) => c.method === 'POST').body), { prompt: 'lofi' });
+  assert.match(result.receipt.notes[0], /30 s tracks/);
+});
+
+test('a sound effect: ElevenLabs Sound Effects through fal as 128 kbps MP3, its length from its size', async () => {
+  seen.length = 0;
+  reply = queue('fal-ai/elevenlabs/sound-effects/v2', { audio: { url: `${base}/files/out.mp3`, content_type: 'audio/mpeg', file_name: 'out.mp3' } });
+  const result = await fal.run('sfx', { out: 'whoosh', prompt: 'a fast whoosh', sec: 1.5 }, ctx());
+  assert.deepEqual(JSON.parse(seen.find((c) => c.method === 'POST').body), { text: 'a fast whoosh', duration_seconds: 1.5, output_format: 'mp3_44100_128' });
+  assert.equal(result.files[0].path, 'assets/audio/sfx/whoosh.mp3');
+  assert.equal(result.index[0].dur, 1);
+  /* no length asked: the model chooses */
+  seen.length = 0;
+  await fal.run('sfx', { out: 'whoosh', prompt: 'x' }, ctx());
+  assert.equal('duration_seconds' in JSON.parse(seen.find((c) => c.method === 'POST').body), false);
 });
 
 test('a cancelled video run cancels the queued request too', async () => {

@@ -10,14 +10,14 @@ import openfilm from './openfilm.mjs';
 before(() => {
   /* this machine's own keys and account must not decide these */
   process.env.OPENFILM_HOME = mkdtempSync(join(tmpdir(), 'of-routing-'));
-  for (const name of ['ELEVENLABS_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'FAL_KEY', 'OPENFILM_API_KEY']) delete process.env[name];
+  for (const name of ['ELEVENLABS_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'FAL_KEY', 'PEXELS_API_KEY', 'PIXABAY_API_KEY', 'BRAVE_API_KEY', 'TAVILY_API_KEY', 'GROQ_API_KEY', 'OPENFILM_API_KEY']) delete process.env[name];
 });
 
 const settings = (keys = {}, use = {}) => ({ keys, use, tier: {}, model: {}, seen: {} });
 const id = async (promise) => (await promise)?.id ?? null;
 
 test('the own-key providers, in the order Settings lists them', () => {
-  assert.deepEqual(listProviders().map((p) => p.id), ['elevenlabs', 'openai', 'google', 'fal']);
+  assert.deepEqual(listProviders().map((p) => p.id), ['elevenlabs', 'openai', 'google', 'fal', 'pexels', 'pixabay', 'brave', 'tavily', 'groq']);
 });
 
 test('nothing serves a kind of media nobody chose, even with a key that could', async () => {

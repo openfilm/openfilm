@@ -33,12 +33,14 @@ export async function call(service, url, init, ctx) {
 
 /**
  * Whether a service's error says its account has no balance left for this, as each says it: 402 Payment Required;
- * OpenAI's `insufficient_quota` (a 429); ElevenLabs' `quota_exceeded` (a 401); fal's "Exhausted balance" (a 403, the
+ * Tavily's 432 and 433; OpenAI's `insufficient_quota` (a 429); ElevenLabs' `quota_exceeded` (a 401); fal's "Exhausted balance" (a 403, the
  * account locked until it is topped up); Gemini's depleted prepayment credits (a 429). A plain rate limit is not one.
  * @param {number} status @param {string} text the error's body
  */
 export function outOfBalance(status, text) {
   if (status === 402) return true;
+  /* Tavily's plan and pay-as-you-go limits */
+  if (status === 432 || status === 433) return true;
   return /insufficient_quota|quota_exceeded|insufficient_credits|insufficient[ _]balance|exhausted balance|credit balance is too low|credits are depleted/i.test(text);
 }
 
@@ -239,6 +241,39 @@ export function madePicture(/** @type {{ path: string, bytes: Uint8Array, prompt
     files: [{ path: p.path, bytes: p.bytes }],
     index: [{ src: p.path, kind: 'image', ...(size ? { w: size.w, h: size.h } : {}), from: { mode: 'generate', prompt: p.prompt, provider: p.provider, model: p.model } }],
     receipt: { provider: p.provider, model: p.model, images: [{ src: p.path, width: size?.w ?? null, height: size?.h ?? null, alpha }], ...notes(p.notes) },
+  };
+}
+
+/**
+ * Pictures found on the web, downloaded and landed as `assets/image/<out>.<ext>`, `<out>_2.<ext>`, ...: as many as were
+ * asked, from the hits in order (one that cannot be downloaded is skipped). Each says who made it and its page, the
+ * credit a film gives it. Throws a sentence when none landed.
+ * @param {{ service: string, provider: string, args: Record<string, unknown>, hits: { url: string, page: string, credit: string }[], notes: string[] }} p
+ * @param {RunContext} ctx
+ */
+export async function foundPictures({ service, provider, args, hits, notes: said }, ctx) {
+  const prompt = needed(args, 'prompt');
+  const asked = Math.round(number(args.n) ?? 1);
+  /** @type {{ path: string, bytes: Uint8Array }[]} */
+  const files = [];
+  const index = [];
+  const images = [];
+  for (const hit of hits) {
+    if (files.length >= asked) break;
+    const got = await download(service, hit.url, ctx).catch((e) => { if (ctx.signal.aborted) throw e; return null; });
+    if (!got) continue;
+    const name = files.length ? `${text(args.out).replace(/\.[a-z0-9]{2,4}$/i, '')}_${files.length + 1}` : args.out;
+    const path = landing('image', name, extOf(got.type, 'jpg'));
+    const size = imageSize(got.bytes);
+    files.push({ path, bytes: got.bytes });
+    index.push({ src: path, kind: 'image', ...(size ? { w: size.w, h: size.h } : {}), from: { mode: 'search', prompt, provider, sourceUrl: hit.page, credit: hit.credit } });
+    images.push({ src: path, width: size?.w ?? null, height: size?.h ?? null, source: 'web', alpha: false, credit: hit.credit, page: hit.page });
+  }
+  if (!files.length) throw new Error(`${service} found no pictures for "${prompt}". Try other words.`);
+  return {
+    files,
+    index,
+    receipt: { provider, images, asked, landed: files.length, ...notes(said) },
   };
 }
 
