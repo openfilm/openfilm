@@ -8,6 +8,8 @@
 
 <p align="center">One HTML file, one function, one real editor.</p>
 
+<p align="center"><b>English</b> · <a href="README.zh-CN.md">简体中文</a></p>
+
 ## About
 
 OpenFilm lets your coding agent make videos, and lets you edit them.
