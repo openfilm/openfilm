@@ -20,6 +20,8 @@ const env = {
   OPENFILM_EXPORTS: join(DEV, 'exports'),
   OPENFILM_STUDIO_PORT: process.env.OPENFILM_STUDIO_PORT || '4848',
   OPENFILM_NO_UPDATE_CHECK: '1',
+  /* Studio itself, without the supervisor `openfilm open` gives it: this script starts it again when its code changes */
+  OPENFILM_STUDIO_WORKER: '1',
 };
 
 /* a small film to open: one page, drawn by frame(t) */
