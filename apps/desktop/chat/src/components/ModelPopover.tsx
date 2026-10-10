@@ -17,10 +17,9 @@ import { keepFocus, Popover } from './Popover';
 import { useT } from '@/i18n';
 import { Tooltip } from '@/components/Tooltip';
 import { AgentIcon } from '@/components/AgentIcons';
-import { BrandLogo } from '@/components/BrandLogo';
 import { POPOVER_CHROME } from '@/components/ComposerCard';
 import { desktopBridge, type LocalAgentId, type RosterAgent } from '@/lib/desktop-bridge';
-import { EFFORT_KEYS, agentModelSummary, currentAgent, effectivePrefs, fixedModel, offeredOption, optionLabel, optionValue, shownAgents, useLocalAgents } from '@/state/local-agent-store';
+import { agentModelSummary, currentAgent, effectivePrefs, fixedModel, offeredOption, optionLabel, optionValue, shownAgents, useLocalAgents } from '@/state/local-agent-store';
 import { chatLayer } from '@/lib/chat-layer';
 
 /** the card, wider when it lists the agents; the side menu's least width; the gap between them; the window's margin */
@@ -48,7 +47,6 @@ function menuOptions(options: Option[] | undefined): Option[] {
 }
 
 export function ChatAgentIcon({ id, size = 14 }: { id: LocalAgentId; size?: number }) {
-  if (id === 'openfilm') return <BrandLogo size={size} />;
   if (id === 'byok') return <KeyRound size={size} />;
   return <AgentIcon id={id} size={size} />;
 }
@@ -111,8 +109,6 @@ export function ModelPopover({ placement = 'bottom', align = 'start' }: { placem
     if (a.status === 'ready') return null;
     if (a.status === 'checking') return t('composer.agentLoading');
     if (a.status === 'missing') return t('composer.agentNotFound');
-    if (a.status === 'unavailable') return t('composer.agentUnavailable');
-    if (a.status === 'unconfigured') return t('composer.agentNotInBuild');
     if (a.status === 'sign-in' || a.status === 'off') return t('composer.agentConnect');
     if (a.status === 'waiting') return t('composer.agentWaiting');
     return t('composer.agentSetUp');
@@ -126,32 +122,15 @@ export function ModelPopover({ placement = 'bottom', align = 'start' }: { placem
       void desktopBridge()?.agents?.connect(a.id).then((r) => { if (!r.ok) setNote(r.error ?? t('composer.agentConnectFailed')); });
       return;
     }
-    if (a.status === 'checking' || a.status === 'waiting' || a.status === 'unavailable' || a.status === 'unconfigured') return;
+    if (a.status === 'checking' || a.status === 'waiting') return;
     setOpen(false);
     desktopBridge()?.openSettings?.('agents');
   };
   const openSettings = () => { setOpen(false); desktopBridge()?.openSettings?.('agents'); };
   const current = shown.find((a) => a.id === agent);
-  /* OpenFilm's models are the service's, kept by the app (not the harness's own option list) */
-  const openfilmModels = agent === 'openfilm' && current?.status === 'ready' ? current.models ?? [] : [];
-  const modelsOption: Option | null = openfilmModels.length
-    ? { id: '__openfilm-model', name: t('composer.model'), category: 'model', options: openfilmModels.map((m) => ({ value: m.id, name: m.name })) }
-    : null;
-  /* and how hard it thinks: the efforts its model has (or thinking on / off), as the service lists them */
-  const openfilmEfforts = agent === 'openfilm' && current?.status === 'ready' ? current.efforts ?? [] : [];
-  const effortName = (e: string) => (EFFORT_KEYS[e] ? t(EFFORT_KEYS[e]) : e);
-  const effortOption: Option | null = openfilmEfforts.length
-    ? { id: '__openfilm-effort', name: t('composer.effort'), category: 'thought_level', options: openfilmEfforts.map((e) => ({ value: e, name: effortName(e) })) }
-    : null;
-  const shownRows = [modelsOption, effortOption, ...rows].filter((o): o is Option => Boolean(o));
-  const shownEffort = effortOption ? effortName(current?.effort ?? '') : triggerEffort;
-  const choosing = side ? shownRows.find((o) => o.id === side) : undefined;
-  const chosenValue = (o: Option) => (o.id === modelsOption?.id ? current?.model : o.id === effortOption?.id ? current?.effort : optionValue(options, prefs, o.id));
-  const pickChoice = (o: Option, value: unknown) => {
-    if (o.id === modelsOption?.id) void desktopBridge()?.agents?.setModel?.('openfilm', String(value));
-    else if (o.id === effortOption?.id) void desktopBridge()?.agents?.setEffort?.('openfilm', String(value));
-    else la.setPref(agent, o.id, value);
-  };
+  const choosing = side ? rows.find((o) => o.id === side) : undefined;
+  const chosenValue = (o: Option) => optionValue(options, prefs, o.id);
+  const pickChoice = (o: Option, value: unknown) => la.setPref(agent, o.id, value);
 
   /* the side menu beside its row: on the right of the card, the card sliding left when the window is too narrow for
      both, and over the card's right edge only when it cannot slide far enough; measured again once it is drawn */
@@ -177,7 +156,7 @@ export function ModelPopover({ placement = 'bottom', align = 'start' }: { placem
     let top = row.getBoundingClientRect().top - 4;
     if (top + h > height - EDGE) top = Math.max(EDGE, height - EDGE - h);
     setSideStyle({ position: 'fixed', left, top, zIndex: 10001, minWidth: Math.min(SIDE_MIN_W, sideMax), width: 'max-content', maxWidth: sideMax, maxHeight: height - 2 * EDGE });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by the open row: the OpenFilm model row is made anew each render
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by the open row
   }, [open, choosing?.id, cardShift, sidePainted, room]);
 
   const sideMenu = open && choosing && typeof document !== 'undefined' ? createPortal(
@@ -216,7 +195,7 @@ export function ModelPopover({ placement = 'bottom', align = 'start' }: { placem
               <span className="truncate text-[var(--text-dim)] transition group-hover:text-[var(--text)]">
                 {(ready(agent) && triggerModel) || (current ? nameOf(current) : t('composer.agentNone'))}
               </span>
-              {ready(agent) && shownEffort ? <span className="text-[var(--text-muted)] transition group-hover:text-[var(--text-dim)]">{shownEffort}</span> : null}
+              {ready(agent) && triggerEffort ? <span className="text-[var(--text-muted)] transition group-hover:text-[var(--text-dim)]">{triggerEffort}</span> : null}
             </span>
           </button>
         </Tooltip>
@@ -253,13 +232,13 @@ export function ModelPopover({ placement = 'bottom', align = 'start' }: { placem
                 {current ? `${nameOf(current)}: ${statusOf(current) ?? ''}` : t('composer.agentLoading')}{' '}
                 <button type="button" onMouseDown={keepFocus} onClick={openSettings} className="text-[var(--text)] underline underline-offset-2">{t('composer.openSettings')}</button>
               </div>
-            ) : shownRows.length === 0 ? (
+            ) : rows.length === 0 ? (
               <p className="px-2.5 py-1.5 text-[12px] leading-relaxed text-[var(--text-muted)]">
                 {la.optionsError[agent]
                   ? <>{t('composer.agentOptionsFailed')} <button type="button" onMouseDown={keepFocus} onClick={() => void la.ensureOptions(agent)} className="text-[var(--text)] underline underline-offset-2">{t('project.retry')}</button></>
                   : t('composer.agentLoading')}
               </p>
-            ) : shownRows.map((o, i) => (
+            ) : rows.map((o, i) => (
               <React.Fragment key={o.id}>
                 {i > 0 ? <div className="mx-1 my-0.5 h-px bg-[var(--border)]" /> : null}
                 <button type="button" ref={(el) => { rowRefs.current[o.id] = el; }} aria-haspopup="menu" aria-expanded={side === o.id}
@@ -267,7 +246,7 @@ export function ModelPopover({ placement = 'bottom', align = 'start' }: { placem
                   onClick={() => showSide(o.id)}
                   className={`${ROW_BASE} ${side === o.id ? 'bg-[var(--bg-hover)]' : 'hover:bg-[var(--bg-hover)]'}`}>
                   <span className="shrink-0 text-[var(--text)]">{rowLabel(o)}</span>
-                  <span className="min-w-0 flex-1 truncate text-right text-[var(--text-dim)]">{o === modelsOption ? triggerModel : o === effortOption ? effortName(current?.effort ?? '') : valueOf(o)}</span>
+                  <span className="min-w-0 flex-1 truncate text-right text-[var(--text-dim)]">{valueOf(o)}</span>
                   <ChevronRight size={12} className="shrink-0 text-[var(--text-faint)]" />
                 </button>
               </React.Fragment>

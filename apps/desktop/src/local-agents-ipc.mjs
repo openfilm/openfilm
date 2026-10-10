@@ -52,8 +52,8 @@ function imageBlocks(images) {
 
 /**
  * @param {import('electron').IpcMain} ipcMain
- * `harness(id)` gives the app's own agents ('openfilm', 'byok') what they run with (agent-roster.mjs), resolved as
- * each session starts (the OpenFilm agent's key is short-lived).
+ * `harness(id)` gives the app's own agent ('byok') what it runs with (agent-roster.mjs), resolved as
+ * each session starts.
  * `onWorking` hears the folders agents are working in (a turn running there) each time they change.
  * @param {{ trusted: (event: any) => boolean, binDir?: string | null, env?: Record<string, string>,
  *           harness?: (id: string) => Promise<any>, onWorking?: (folders: string[]) => void }} opts

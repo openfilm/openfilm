@@ -2,7 +2,7 @@
 
 /**
  * A small popover opened from a button: closes on an outside click or Esc, portalled so no overflow clips it.
- * Its own file: several places use it, and it shouldn't pull in the model menu (with its sign-in and balance).
+ * Its own file: several places use it, and it shouldn't pull in the model menu.
  */
 import React from 'react';
 import { createPortal } from 'react-dom';

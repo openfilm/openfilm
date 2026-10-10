@@ -22,7 +22,7 @@ export type AgentPick = LocalAgentId;
 
 type ConfigOptions = NonNullable<LocalAgentSessionInfo['configOptions']>;
 
-const AGENT_IDS: readonly LocalAgentId[] = ['codex', 'claude', 'gemini', 'copilot', 'cursor', 'opencode', 'codebuddy', 'qwen', 'kimi', 'openfilm', 'byok'];
+const AGENT_IDS: readonly LocalAgentId[] = ['codex', 'claude', 'gemini', 'copilot', 'cursor', 'opencode', 'codebuddy', 'qwen', 'kimi', 'byok'];
 const isAgent = (v: unknown): v is LocalAgentId => AGENT_IDS.includes(v as LocalAgentId);
 
 interface Persisted {
@@ -74,35 +74,24 @@ function save(s: Persisted): void {
 }
 
 /**
- * What an agent's model is called, when Settings sets it rather than the agent: the own key's model, OpenFilm's.
- * Null for the person's own agents, whose own option list says.
+ * What an agent's model is called, when Settings sets it rather than the agent: the own key's model. Null for the
+ * person's own agents, whose own option list says.
  */
 export function fixedModel(agent: LocalAgentId, roster: RosterAgent[] | null): string | null {
-  if (agent === 'openfilm') {
-    const of = roster?.find((a) => a.id === 'openfilm');
-    return of?.models?.find((m) => m.id === of.model)?.name ?? 'OpenFilm';
-  }
   if (agent === 'byok') return roster?.find((a) => a.id === 'byok')?.byok?.model ?? null;
   return null;
 }
 
-/** The words for each effort the app's own agents name (the service's effort names, or thinking on / off), as i18n keys. */
-export const EFFORT_KEYS: Record<string, string> = {
-  low: 'composer.effortLow', medium: 'composer.effortMedium', high: 'composer.effortHigh', xhigh: 'composer.effortXhigh',
-  max: 'composer.effortMax', off: 'composer.effortOff', on: 'composer.effortOn',
-};
-
 /**
- * Which of an agent's options the menu offers. The app's own agents run the model Settings names (Codex would list
+ * Which of an agent's options the menu offers. The app's own agent runs the model Settings names (Codex would list
  * OpenAI's, which the person's service may not have), and no OpenAI fast mode; through the Chat Completions
  * translator, no reasoning effort either (it does not carry it).
  */
 export function offeredOption(agent: LocalAgentId, roster: RosterAgent[] | null, option: { id: string; category?: string; name: string }): boolean {
-  if (agent !== 'byok' && agent !== 'openfilm') return true;
+  if (agent !== 'byok') return true;
   if (option.category === 'model') return false;
   if (/^(fast|fast-mode|speed)$/i.test(option.id) || option.category === 'speed') return false;
-  /* the OpenFilm agent's effort is the app's own choice (see ModelPopover), not the harness's */
-  if (option.category === 'thought_level') return agent !== 'openfilm' && !(agent === 'byok' && roster?.find((a) => a.id === 'byok')?.byok?.format === 'chat');
+  if (option.category === 'thought_level') return roster?.find((a) => a.id === 'byok')?.byok?.format !== 'chat';
   return true;
 }
 
@@ -139,8 +128,8 @@ export const useLocalAgents = create<LocalAgentStore>((set, get) => ({
         for (const before of get().roster ?? []) {
           const now = roster.find((a) => a.id === before.id);
           if (before.status === 'ready' && now?.status !== 'ready') forgetLocalAgentSessions(before.id);
-          /* another model (OpenFilm's, the own key's): its sessions were closed for the next one to use it */
-          else if ((before.model ?? before.byok?.model) !== (now?.model ?? now?.byok?.model)) forgetLocalAgentSessions(before.id);
+          /* another model (the own key's): its sessions were closed for the next one to use it */
+          else if (before.byok?.model !== now?.byok?.model) forgetLocalAgentSessions(before.id);
         }
         set({ roster });
       });
@@ -191,7 +180,6 @@ const AGENT_FORCED_PREFS: Partial<Record<LocalAgentId, Record<string, unknown>>>
   claude: { mode: 'bypassPermissions' },
   codex: { mode: 'agent-full-access' },
   kimi: { mode: 'yolo' },
-  openfilm: { mode: 'agent-full-access' },
   byok: { mode: 'agent-full-access' },
 };
 

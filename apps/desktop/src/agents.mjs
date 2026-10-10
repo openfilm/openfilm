@@ -72,8 +72,8 @@ export const AGENTS = Object.freeze({
 
 export const isAgentId = (id) => typeof id === 'string' && Object.hasOwn(AGENTS, id);
 
-/** The app's own agents: Pi (pi-agent.mjs), on OpenFilm's models or the person's own key (agent-roster.mjs). */
-export const HARNESS_AGENTS = Object.freeze(['openfilm', 'byok']);
+/** The app's own agent: Pi (pi-agent.mjs), on the person's own key (agent-roster.mjs). */
+export const HARNESS_AGENTS = Object.freeze(['byok']);
 export const isChatAgent = (id) => isAgentId(id) || HARNESS_AGENTS.includes(id);
 
 /** What the agent is told about where it is, on top of its own instructions. */
@@ -93,21 +93,14 @@ In your replies you can point at things in Studio for the person: [[clip:ID]] (a
 [[file:PATH]] (a file of the project). They show as links that open it in Studio.`;
 
 /**
- * For the app's own agent, which has no web tools of its own: OpenFilm's web search and web pages, a media service
- * like the others (`openfilm get` lists them for an agent with OPENFILM_GET_WEB=1).
- */
-export const WEB_INSTRUCTIONS = `To search the web, run \`openfilm get web-search --query "…"\`; to read a page, \`openfilm get web-fetch --url …\`
-(it saves the page's text in the project).`;
-
-/**
  * The app's own agent's whole system prompt, in place of Pi's (a coding assistant's, with Pi's own docs): who it is
- * and how it works with the person (agent-prompt.md), where it is (INSTRUCTIONS, WEB_INSTRUCTIONS), and the manual
+ * and how it works with the person (agent-prompt.md), where it is (INSTRUCTIONS), and the manual
  * `openfilm` prints, so it starts knowing it.
  */
 export function ownAgentPrompt() {
   const prompt = readFileSync(new URL('./agent-prompt.md', import.meta.url), 'utf8').trim();
   const manual = readFileSync(join(dirname(require.resolve('openfilm/package.json')), 'MANUAL.md'), 'utf8').replaceAll('npx openfilm', 'openfilm').trim();
-  return `${prompt}\n\n## Where you are\n\n${INSTRUCTIONS}\n\n${WEB_INSTRUCTIONS}\n\n<manual>\n${manual}\n</manual>`;
+  return `${prompt}\n\n## Where you are\n\n${INSTRUCTIONS}\n\n<manual>\n${manual}\n</manual>`;
 }
 
 /** The person's program for this agent, on their login shell's PATH or inside the maker's app. */
@@ -353,8 +346,7 @@ export function legacyOptions(session) {
  */
 export class AgentSession {
   /**
-   * `harness` (for 'openfilm' and 'byok'): agent-roster.mjs's `harness(id)`, Pi's folder and its service, and
-   * `current()`, the model and effort chosen now (each prompt says them: the person may change them meanwhile).
+   * `harness` (for 'byok'): agent-roster.mjs's `harness(id)`, Pi's folder, its service and its model.
    * @param {{ agent: string, cwd: string, resume?: string | null, binDir?: string | null,
    *           harness?: any,
    *           env?: Record<string, string>,
@@ -366,8 +358,8 @@ export class AgentSession {
     if (!isChatAgent(opts.agent)) throw new Error(`Unknown agent: ${String(opts.agent)}`);
     if (HARNESS_AGENTS.includes(opts.agent) && !opts.harness) throw Object.assign(new Error('Connect this agent in Settings → Agents first.'), { code: 'not-ready' });
     this.opts = opts;
-    /* the app's own agents run Pi (pi-agent.mjs), the person's their own program through its adapter */
-    this.spec = HARNESS_AGENTS.includes(opts.agent) ? { label: opts.agent === 'openfilm' ? 'OpenFilm' : 'Own key', env: () => ({}) } : AGENTS[opts.agent];
+    /* the app's own agent runs Pi (pi-agent.mjs), the person's their own program through its adapter */
+    this.spec = HARNESS_AGENTS.includes(opts.agent) ? { label: 'Own key', env: () => ({}) } : AGENTS[opts.agent];
     this.sessionId = null;
     this.info = null;
     this.stderr = '';
@@ -384,12 +376,10 @@ export class AgentSession {
     const node = nodeRuntime();
     const path = [this.opts.binDir, shell.PATH].filter(Boolean).join(PATH_SEP);
     const instructions = INSTRUCTIONS;
-    /* the app's own agent: what Pi runs with (its whole system prompt is ours), and the web search of `openfilm get`
-       (OPENFILM_GET_WEB lists it) */
+    /* the app's own agent: what Pi runs with (its whole system prompt is ours) */
     const own = !harness ? {} : {
       ...harness.env,
-      OPENFILM_GET_WEB: '1',
-      OPENFILM_PI: JSON.stringify({ agentDir: harness.home, provider: harness.provider, model: harness.model, effort: harness.effort ?? null, systemPrompt: ownAgentPrompt() }),
+      OPENFILM_PI: JSON.stringify({ agentDir: harness.home, provider: harness.provider, model: harness.model, systemPrompt: ownAgentPrompt() }),
     };
     /* an agent that speaks ACP itself: its own program, started as the registry starts it */
     const native = cli && !this.spec.adapter ? starting(cli.path, this.spec.args) : null;
@@ -481,8 +471,7 @@ export class AgentSession {
    */
   async prompt(blocks, { turnId } = {}) {
     if (!this.sessionId) throw new Error('The session has not started.');
-    const now = this.opts.harness?.current?.() ?? null;
-    const meta = now ? { _meta: { openfilm: { ...now, ...(turnId ? { turnId, cwd: this.opts.cwd } : {}) } } } : {};
+    const meta = this.opts.harness && turnId ? { _meta: { openfilm: { turnId, cwd: this.opts.cwd } } } : {};
     const told = this.instructions ? [{ type: 'text', text: this.instructions }] : [];
     this.instructions = null;
     const r = await this.conn.agent.request(acp.methods.agent.session.prompt, { sessionId: this.sessionId, prompt: [...told, ...blocks], ...meta })

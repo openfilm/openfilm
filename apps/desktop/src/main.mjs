@@ -5,9 +5,7 @@
  * window's page: Studio's editor, built together with the chat beside it (shell/), on Studio's own origin, so the
  * editor works as it does in a browser and the chat is a column of the same page. What happens between them happens
  * in the page (shell/bridge.ts); this process does what only the app can: the window, the agents, files on the disk,
- * ffmpeg, updates (preload.cjs).
- *
- * Nothing here needs an account: the window opens straight into the last project.
+ * ffmpeg, updates (preload.cjs). The window opens straight into the last project.
  */
 import { BaseWindow, Menu, WebContentsView, app, dialog, ipcMain, nativeTheme, safeStorage, screen, shell } from 'electron';
 import { appendFileSync, createReadStream, mkdirSync, statSync } from 'node:fs';
@@ -27,7 +25,6 @@ import { installOpenfilmCommand } from './openfilm-command.mjs';
 import { startUpdates } from './updates.mjs';
 import { ensureFfmpeg, ffmpegDir, ffmpegDownloadable, ffmpegOnPath } from './ffmpeg-runtime.mjs';
 import { PATH_SEP } from './environment.mjs';
-import { accountService, chooseAccountSite, cloudLabel } from './account-site.mjs';
 
 const here = (path) => fileURLToPath(new URL(path, import.meta.url));
 const mac = process.platform === 'darwin';
@@ -156,12 +153,6 @@ const unseal = (data) => {
   const kind = data.subarray(0, 4).toString();
   return kind === 'enc:' ? safeStorage.decryptString(data.subarray(4)) : data.subarray(4).toString();
 };
-/** where the account service is, for Studio and the OpenFilm agent's model calls: the build's product.json (of its
-    sites, whichever answered first), or, run from source, OPENFILM_ACCOUNT_URL (account-site.mjs); null in a build
-    with none. Chosen as the app starts */
-const service = accountService({ env: process.env, flavor: FLAVOR });
-let accountUrl = service?.sites[0] ?? null;
-const accountSite = () => accountUrl;
 
 /** The page's theme (Studio's), for the window behind it and the system's menus and dialogs. */
 function setTheme(next) {
@@ -208,19 +199,12 @@ async function runStudio(env) {
 }
 
 async function start() {
-  const [shellEnv, account] = await Promise.all([loginShellEnvironment(), chooseAccountSite({ dir: DATA, log, sites: service?.sites })]);
-  accountUrl = account.site;
-  if (!accountUrl) log('no account service in this build: the OpenFilm account is not available\n');
-  /* a service the environment chose is said where it shows: the window's name and the Dock */
-  const cloud = cloudLabel(service, accountUrl);
-  if (cloud) { log(`account service: ${accountUrl}\n`); if (mac) app.dock?.setBadge(cloud); }
+  const shellEnv = await loginShellEnvironment();
   const env = childEnvironment({
     shell: shellEnv,
     extra: {
       OPENFILM_HOME: IDENTITY.studioHome ?? process.env.OPENFILM_HOME ?? join(app.getPath('home'), '.openfilm'),
       ...((IDENTITY.library ?? process.env.OPENFILM_LIBRARY) ? { OPENFILM_LIBRARY: IDENTITY.library ?? process.env.OPENFILM_LIBRARY } : {}),
-      /* the account service Studio uses (its account.mjs), the one the app's own OpenFilm agent uses too; none, none */
-      ...(service && accountUrl ? { OPENFILM_ACCOUNT_URL: accountUrl, OPENFILM_ACCOUNT_ISSUER: service.issuer, OPENFILM_ACCOUNT_CLIENT_ID: service.clientId } : {}),
     },
   });
 
@@ -241,7 +225,7 @@ async function start() {
     minWidth: WINDOW_MIN.width,
     minHeight: WINDOW_MIN.height,
     show: false,
-    title: cloud ? `${PRODUCT_NAME} (${cloud})` : PRODUCT_NAME,
+    title: PRODUCT_NAME,
     backgroundColor: BACKGROUND[theme],
     ...(mac ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 14, y: 10 } } : {}),
     /* Windows: no title bar either; its own buttons drawn over Studio's top bar, at its right, in its colors */
@@ -310,13 +294,7 @@ async function start() {
     /* the `openfilm` command, and the app's ffmpeg when the computer has none (several folders, PATH-joined) */
     binDir: [installOpenfilmCommand(DATA), ...(needFfmpeg ? [ffmpegDir(DATA)] : [])].join(PATH_SEP),
     env: { OPENFILM_HOME: env.OPENFILM_HOME, ...(env.OPENFILM_LIBRARY ? { OPENFILM_LIBRARY: env.OPENFILM_LIBRARY } : {}) },
-    harness: async (id) => {
-      const harness = await roster?.harness(id);
-      if (!harness || id !== 'openfilm') return harness ?? null;
-      /* a short-lived key the account mints for this machine (Studio holds the account; the app never sees its token) */
-      const { token } = await studioApi('/api/account/agent-key', 'POST');
-      return { ...harness, env: { OPENFILM_AGENT_KEY: token } };
-    },
+    harness: async (id) => roster?.harness(id) ?? null,
   });
   /* Settings → Agents (in Studio's page) and the chat's agent menu: one roster, both told of every change */
   roster = createRoster({
@@ -324,24 +302,6 @@ async function start() {
     localAgents: listAgents,
     openSignIn: openAgentSignIn,
     closeSessions: (id) => localAgents?.closeAgent(id),
-    accountConfigured: () => Boolean(accountUrl),
-    accountConnected: async () => Boolean(studio) && (await studioApi('/api/account')).connected === true,
-    /* where the OpenFilm agent's model calls go: the account's site, which relays them */
-    openfilmAddress: () => `${accountSite()}/v1/agent`,
-    /* what the account service offers the OpenFilm agent (its models), or null while it does not */
-    openfilmService: async () => {
-      const { token } = await studioApi('/api/account/agent-key', 'POST');
-      const res = await fetch(`${accountSite()}/v1/agent/models`, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000) });
-      if (!res.ok) return null;
-      const body = await res.json();
-      const models = (Array.isArray(body?.data) ? body.data : []).filter((m) => typeof m?.id === 'string').map((m) => {
-        /* how hard it can think (its efforts, or on / off) and its maker's default */
-        const efforts = Array.isArray(m.efforts) ? m.efforts.filter((e) => typeof e === 'string') : [];
-        const context = Number.isInteger(m.context_length) ? m.context_length : undefined;
-        return { id: m.id, name: String(m.name ?? m.id), efforts, effort: efforts.includes(m.default_effort) ? m.default_effort : efforts[0] ?? null, context };
-      });
-      return models.length ? { models, default: models.some((m) => m.id === body.default) ? body.default : models[0].id } : null;
-    },
     seal,
     unseal,
     onChange: (list) => view?.webContents.send('desktop:agents', list),
@@ -354,8 +314,6 @@ async function start() {
   agentHandle('desktop:agents:connect', ({ id }) => roster.connect(String(id)));
   agentHandle('desktop:agents:disconnect', ({ id }) => { roster.disconnect(String(id)); return { ok: true }; });
   agentHandle('desktop:agents:shown', ({ id, shown }) => { roster.setShown(String(id), shown === true); return { ok: true }; });
-  agentHandle('desktop:agents:model', ({ id, model }) => { roster.setModel(String(id), String(model)); return { ok: true }; });
-  agentHandle('desktop:agents:effort', ({ id, effort }) => { roster.setEffort(String(id), String(effort)); return { ok: true }; });
   agentHandle('desktop:agents:byok', ({ config }) => roster.configureByok(config));
   /* a file on the disk brought into the chat goes into the project the page names, through Studio's own import (it
      shows in Studio's media at once, and the import is in the project's history); one without a path the page sends

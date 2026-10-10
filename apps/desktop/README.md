@@ -13,9 +13,7 @@ npm run typecheck
 Run from source, the app is its own "OpenFilm Dev": its own name, data folder, Studio home and port, so it never
 shares anything with an installed OpenFilm. Its renamed copy of Electron lives in `.dev/` (git-ignored).
 
-Codex, Claude Code, the other agents, your own key, and Studio with your own media keys all work. The `openfilm`
-package's `product.json` names no account service; to connect to one, set `OPENFILM_ACCOUNT_URL`,
-`OPENFILM_ACCOUNT_ISSUER` and `OPENFILM_ACCOUNT_CLIENT_ID` before `npm start`.
+Codex, Claude Code, the other agents, your own key, and Studio with your own media keys all work.
 
 ## Builds
 

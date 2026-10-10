@@ -4,15 +4,15 @@
  * (agents.mjs starts it with Electron as Node).
  *
  * What it runs with comes in OPENFILM_PI (JSON; pi-config.mjs): its own folder (`agentDir`: Pi's models and settings,
- * never the person's ~/.pi), the service (`provider`), its model and thinking, and its whole system prompt (agents.mjs
+ * never the person's ~/.pi), the service (`provider`), its model, and its whole system prompt (agents.mjs
  * ownAgentPrompt), in place of Pi's. Of the project's instructions only its own AGENTS.md (or CLAUDE.md) is read, not
  * the folders above it; no skills, no SYSTEM.md. Besides Pi's read, bash, edit and write it has `ask`: questions for
  * the person, with options, shown in the chat as Claude Code's and Codex's are (an ACP form).
  *
  * A conversation's session is kept with the project it is about (chat-store.mjs: `.film/chat/agent/`), so it goes
- * where the project goes. Each prompt may say, in `_meta.openfilm`, the model and thinking the person has chosen since, and
- * the turn's log: each request to the model (its whole context, as Pi sends it, and the answer) is written there
- * (chat-store.mjs's `<turn>.model.jsonl`), only what is new since the request before.
+ * where the project goes. Each prompt may name, in `_meta.openfilm`, the turn's log: each request to the model (its whole
+ * context, as Pi sends it, and the answer) is written there (chat-store.mjs's `<turn>.model.jsonl`), only what is new
+ * since the request before.
  *
  * What Pi does goes to the chat as ACP session updates: its words and thinking as they stream, each tool call (its
  * kind, title and input) and its result, and after each answer how full the context is.
@@ -23,7 +23,7 @@ import { Readable, Writable } from 'node:stream';
 import * as acp from '@agentclientprotocol/sdk';
 import { DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager, createAgentSession } from '@earendil-works/pi-coding-agent';
 import { agentSessionsDir, openLog } from './chat-store.mjs';
-import { contextUsed, modelsJson, stopReason, thinkingLevel, toolCall, toolContent } from './pi-config.mjs';
+import { contextUsed, modelsJson, stopReason, toolCall, toolContent } from './pi-config.mjs';
 
 /* stdout is the protocol's: anything else Pi or a library prints goes to stderr */
 console.log = console.info = console.warn = console.debug = (...args) => process.stderr.write(`${args.map(String).join(' ')}\n`);
@@ -33,9 +33,8 @@ const VERSION = '1.1.0';
 
 mkdirSync(config.agentDir, { recursive: true });
 const modelsPath = join(config.agentDir, 'models.json');
-writeFileSync(modelsPath, JSON.stringify(modelsJson(config.provider), null, 2));
+writeFileSync(modelsPath, JSON.stringify(modelsJson(config.provider, config.model), null, 2));
 const modelRuntime = await ModelRuntime.create({ authPath: join(config.agentDir, 'auth.json'), modelsPath });
-const modelOf = (id) => modelRuntime.getModel(config.provider.id, id);
 
 /** Each open session: Pi's, and the turn being logged. */
 const sessions = new Map();
@@ -89,11 +88,10 @@ async function open(client, cwd, resumeId) {
     ],
   });
   await resourceLoader.reload();
-  const model = modelOf(config.model);
+  const model = modelRuntime.getModel(config.provider.id, config.model);
   if (!model) throw new Error(`No model ${config.model} at ${config.provider.id}.`);
-  const level = thinkingLevel(config.effort);
   const { session } = await createAgentSession({
-    cwd, agentDir: config.agentDir, modelRuntime, model, ...(level ? { thinkingLevel: level } : {}),
+    cwd, agentDir: config.agentDir, modelRuntime, model,
     resourceLoader, sessionManager, settingsManager, tools: ['read', 'bash', 'edit', 'write', 'ask'],
   });
   const entry = { session, log: null };
@@ -227,13 +225,6 @@ const connection = new acp.AgentSideConnection((client) => ({
     if (!entry) throw new Error('This conversation has ended.');
     const { session } = entry;
     const meta = params._meta?.openfilm ?? {};
-    /* the model and thinking the person has chosen since the session began */
-    if (typeof meta.model === 'string' && meta.model !== session.model?.id) {
-      const model = modelOf(meta.model);
-      if (model) await session.setModel(model);
-    }
-    const level = thinkingLevel(meta.effort);
-    if (level && level !== session.thinkingLevel) session.setThinkingLevel(level);
     entry.log = typeof meta.turnId === 'string' && typeof meta.cwd === 'string' ? modelLog(meta.cwd, meta.turnId) : null;
     try {
       const { text, images } = promptOf(params.prompt);

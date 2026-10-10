@@ -32,8 +32,6 @@ contextBridge.exposeInMainWorld('openfilmNative', {
     connect: (id) => ipcRenderer.invoke('desktop:agents:connect', { id }),
     disconnect: (id) => ipcRenderer.invoke('desktop:agents:disconnect', { id }),
     setShown: (id, shown) => ipcRenderer.invoke('desktop:agents:shown', { id, shown: shown === true }),
-    setModel: (id, model) => ipcRenderer.invoke('desktop:agents:model', { id, model }),
-    setEffort: (id, effort) => ipcRenderer.invoke('desktop:agents:effort', { id, effort }),
     configureByok: (config) => ipcRenderer.invoke('desktop:agents:byok', { config }),
     onChange: on('desktop:agents'),
   },

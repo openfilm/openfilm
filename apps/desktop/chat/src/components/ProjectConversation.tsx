@@ -793,7 +793,7 @@ function formatClock(ms: number): string {
 }
 
 const AGENT_NAMES: Record<string, string> = {
-  openfilm: 'OpenFilm', codex: 'Codex', claude: 'Claude Code', gemini: 'Gemini CLI', copilot: 'GitHub Copilot', cursor: 'Cursor',
+  codex: 'Codex', claude: 'Claude Code', gemini: 'Gemini CLI', copilot: 'GitHub Copilot', cursor: 'Cursor',
   opencode: 'OpenCode', codebuddy: 'CodeBuddy', qwen: 'Qwen Code', kimi: 'Kimi',
 };
 
@@ -848,9 +848,7 @@ function TurnFooter({ entry, items }: { entry: ProjectVersion; items: Transcript
   const when = relativeTime(entry.settledAt, locale, now);
   const outcome = entry.outcome === 'stopped' ? t('turnFrame.stopped')
     : entry.outcome === 'failed' ? t('turnFrame.failed')
-      : entry.outcome === 'balance'
-        ? (entry.balance?.kind === 'daily-limit' ? t('balance.limitTitle')
-          : entry.balance ? t('turnFrame.balance').replaceAll('{provider}', entry.balance.provider) : t('turnFrame.noBalance'))
+      : entry.outcome === 'balance' && entry.balance ? t('turnFrame.balance').replaceAll('{provider}', entry.balance.provider)
         : null;
 
   const developer = useDeveloperMode();

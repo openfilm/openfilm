@@ -125,7 +125,7 @@ export function loginShellEnvironment({ source = process.env, timeoutMs = 5000 }
 }
 
 /** What scripts/start.mjs passes on to Electron besides the OS identity: this app's own switches. */
-export const LAUNCHER_FLAGS = ['OPENFILM_DESKTOP_FLAVOR', 'OPENFILM_DESKTOP_CAPTURE', 'OPENFILM_ACCOUNT_URL', 'OPENFILM_ACCOUNT_ISSUER', 'OPENFILM_ACCOUNT_CLIENT_ID', 'ELECTRON_ENABLE_LOGGING', 'ELECTRON_ENABLE_STACK_DUMPING'];
+export const LAUNCHER_FLAGS = ['OPENFILM_DESKTOP_FLAVOR', 'OPENFILM_DESKTOP_CAPTURE', 'ELECTRON_ENABLE_LOGGING', 'ELECTRON_ENABLE_STACK_DUMPING'];
 
 /** Electron's environment when run from source: the OS identity, the login shell's PATH, LAUNCHER_FLAGS. */
 export function launcherEnvironment(source, path) {
