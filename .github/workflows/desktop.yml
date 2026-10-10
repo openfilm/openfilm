@@ -1,39 +1,25 @@
 name: desktop
-# The official desktop app (CONTRIBUTING.md, Releases).
+# The official desktop app (CONTRIBUTING.md, Releases): push the tag v<version> (the version every package has), or run
+# it by hand for an existing tag. Each target is built (the Macs signed and notarized), and a draft GitHub release gets
+# the installers and the update feeds. Publishing that release makes it the latest: the website's download links and
+# the apps' update checks go to the latest release's files (openfilm.dev/download/… redirects there).
 #
-#   push a tag desktop-v<version>         build, sign and notarize; a draft GitHub release with the installers and
-#                                         feeds; the download mirror gets the build on the beta channel
-#   run it by hand, channel beta          the same, for an existing tag
-#   run it by hand, channel stable        promote: the build beta has for that tag goes to stable (no new build:
-#                                         the same bytes), the download links move, the GitHub release is published
-#
-# The secrets are in the `desktop-release` environment (Settings → Environments; deployments limited to desktop-v*
-# tags and main):
+# The secrets are in the `desktop-release` environment (Settings → Environments; deployments limited to v* tags):
 #   OPENFILM_SIGN_IDENTITY         the Developer ID Application identity, "Name (TEAMID)"
 #   APPLE_TEAM_ID                  its team
 #   MACOS_CERTIFICATE_P12_BASE64   that certificate with its private key, exported as .p12, base64
 #   MACOS_CERTIFICATE_PASSWORD     the .p12's password
 #   APPLE_API_KEY_BASE64           an App Store Connect API key (.p8, base64) for notarization
 #   APPLE_API_KEY_ID, APPLE_API_ISSUER_ID   its key id and issuer id
-#   MIRROR_S3_ENDPOINT, MIRROR_S3_BUCKET, MIRROR_S3_ACCESS_KEY_ID, MIRROR_S3_SECRET_ACCESS_KEY
-#                                  the S3-compatible bucket served at product.official.json's desktop.updates
-# and its variables (optional): MIRROR_S3_PREFIX (the bucket's key prefix for that address, default download/desktop),
-# MIRROR_S3_REGION (default auto).
 on:
   push:
-    tags: ['desktop-v*']
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       tag:
-        description: The release's tag (desktop-v<version>)
+        description: The release's tag (v<version>)
         required: true
         type: string
-      channel:
-        description: beta builds and publishes to beta; stable promotes what beta has
-        required: true
-        default: beta
-        type: choice
-        options: [beta, stable]
 permissions:
   contents: read
 concurrency:
@@ -46,7 +32,6 @@ jobs:
     outputs:
       tag: ${{ steps.plan.outputs.tag }}
       version: ${{ steps.plan.outputs.version }}
-      channel: ${{ steps.plan.outputs.channel }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -54,19 +39,17 @@ jobs:
       - id: plan
         env:
           TAG: ${{ inputs.tag || github.ref_name }}
-          CHANNEL: ${{ inputs.channel || 'beta' }}
         run: |
-          VERSION="${TAG#desktop-v}"
+          VERSION="${TAG#v}"
           PACKAGE="$(node -p "require('./apps/desktop/package.json').version")"
           if [ "$VERSION" != "$PACKAGE" ]; then
             echo "::error::$TAG does not match apps/desktop/package.json ($PACKAGE)"
             exit 1
           fi
-          { echo "tag=$TAG"; echo "version=$VERSION"; echo "channel=$CHANNEL"; } >> "$GITHUB_OUTPUT"
+          { echo "tag=$TAG"; echo "version=$VERSION"; } >> "$GITHUB_OUTPUT"
 
   build:
     needs: plan
-    if: needs.plan.outputs.channel == 'beta'
     name: build (${{ matrix.target }})
     runs-on: macos-14
     environment: desktop-release
@@ -183,77 +166,11 @@ jobs:
           done
           ls -l upload
           # the changelog's entry for this version, if there is one
-          awk -v v="## $VERSION" '$0 == v { on = 1; next } /^## / { on = 0 } on' apps/desktop/CHANGELOG.md > notes.md 2>/dev/null || true
-          [ -s notes.md ] || echo "OpenFilm for desktop $VERSION." > notes.md
+          awk -v v="## $VERSION" '$0 == v { on = 1; next } /^## / { on = 0 } on' packages/openfilm/CHANGELOG.md > notes.md 2>/dev/null || true
+          [ -s notes.md ] || echo "OpenFilm $VERSION." > notes.md
           if gh release view "$TAG" > /dev/null 2>&1; then
             gh release upload "$TAG" upload/* --clobber
           else
-            gh release create "$TAG" upload/* --draft --verify-tag --title "OpenFilm desktop $VERSION" --notes-file notes.md
+            gh release create "$TAG" upload/* --draft --verify-tag --title "OpenFilm $VERSION" --notes-file notes.md
           fi
 
-  mirror:
-    needs: [plan, build, github-release]
-    runs-on: ubuntu-latest
-    environment: desktop-release
-    env:
-      MIRROR_S3_ENDPOINT: ${{ secrets.MIRROR_S3_ENDPOINT }}
-      MIRROR_S3_BUCKET: ${{ secrets.MIRROR_S3_BUCKET }}
-      MIRROR_S3_PREFIX: ${{ vars.MIRROR_S3_PREFIX }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.MIRROR_S3_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.MIRROR_S3_SECRET_ACCESS_KEY }}
-      AWS_DEFAULT_REGION: ${{ vars.MIRROR_S3_REGION || 'auto' }}
-      # S3-compatible stores (R2 among them) take checksums only when the request needs one
-      AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
-      AWS_RESPONSE_CHECKSUM_VALIDATION: WHEN_REQUIRED
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.plan.outputs.tag }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: desktop-*
-          path: artifacts
-      - name: Upload, verify, and switch the beta feeds
-        run: |
-          for target in mac-arm64 mac-x64 win-x64; do
-            node apps/desktop/scripts/mirror.mjs publish --from "artifacts/desktop-$target" --target "$target"
-          done
-
-  promote:
-    needs: plan
-    if: needs.plan.outputs.channel == 'stable'
-    runs-on: ubuntu-latest
-    environment: desktop-release
-    permissions:
-      contents: write
-    env:
-      MIRROR_S3_ENDPOINT: ${{ secrets.MIRROR_S3_ENDPOINT }}
-      MIRROR_S3_BUCKET: ${{ secrets.MIRROR_S3_BUCKET }}
-      MIRROR_S3_PREFIX: ${{ vars.MIRROR_S3_PREFIX }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.MIRROR_S3_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.MIRROR_S3_SECRET_ACCESS_KEY }}
-      AWS_DEFAULT_REGION: ${{ vars.MIRROR_S3_REGION || 'auto' }}
-      AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
-      AWS_RESPONSE_CHECKSUM_VALIDATION: WHEN_REQUIRED
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.plan.outputs.tag }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Beta's build to stable, and the download links
-        env:
-          VERSION: ${{ needs.plan.outputs.version }}
-        run: |
-          for target in mac-arm64 mac-x64 win-x64; do
-            node apps/desktop/scripts/mirror.mjs promote --target "$target" --version "$VERSION"
-          done
-      - name: Publish the GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.plan.outputs.tag }}
-        run: gh release edit "$TAG" --draft=false --latest

@@ -50,5 +50,7 @@ jobs:
           publish: pnpm changeset publish
           title: Version packages
           commit: Version packages
+          # the release on GitHub is the tag v<version>'s, with the desktop installers (desktop.yml)
+          createGithubReleases: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

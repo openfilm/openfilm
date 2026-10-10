@@ -110,7 +110,7 @@ await builder.build({
       icon: join(desktop, 'build/icon.ico'),
       /* resedit writes the icon and version (afterPack); rcedit would need wine on this Mac */
       signAndEditExecutable: false,
-      artifactName: 'OpenFilm-Setup-${version}-${arch}.${ext}',
+      artifactName: 'OpenFilm-Setup-${arch}.${ext}',
     },
     nsis: {
       oneClick: true,
@@ -119,7 +119,7 @@ await builder.build({
       uninstallerIcon: join(desktop, 'build/icon.ico'),
       shortcutName: 'OpenFilm',
       deleteAppDataOnUninstall: false,
-      artifactName: 'OpenFilm-Setup-${version}-${arch}.${ext}',
+      artifactName: 'OpenFilm-Setup-${arch}.${ext}',
     },
     appId: 'dev.openfilm.desktop',
     productName: 'OpenFilm',
@@ -153,7 +153,8 @@ await builder.build({
       entitlementsInherit: join(desktop, 'build/entitlements.mac.plist'),
       ...(unsigned ? { identity: null } : { identity: IDENTITY, notarize: true }),
     },
-    dmg: { title: 'OpenFilm', artifactName: 'OpenFilm-${version}-${arch}.${ext}' },
+    /* the downloads keep one name from version to version: the website links the latest release's by it */
+    dmg: { title: 'OpenFilm', artifactName: 'OpenFilm-${arch}.${ext}' },
   },
 });
 
@@ -162,7 +163,7 @@ if (!unsigned && !win && FEED) {
   run('/usr/bin/codesign', ['--verify', '--deep', '--strict', app]);
   run('/usr/bin/xcrun', ['stapler', 'validate', app]);
   /* 4. the download */
-  const dmg = join(out, `OpenFilm-${pkg.version}-${arch}.dmg`);
+  const dmg = join(out, `OpenFilm-${arch}.dmg`);
   run('/usr/bin/codesign', ['--sign', `Developer ID Application: ${IDENTITY}`, '--timestamp', dmg]);
   run('/usr/bin/xcrun', ['notarytool', 'submit', dmg, '--keychain-profile', NOTARY_PROFILE, '--wait']);
   run('/usr/bin/xcrun', ['stapler', 'staple', dmg]);

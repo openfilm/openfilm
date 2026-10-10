@@ -120,11 +120,11 @@ packages it changes (`openfilm`, `@openfilm/desktop`, `@openfilm/shared`) and ho
 for something new; `major` only by agreement), and write a line for the changelog, as a user would read it. Commit the
 file it writes in `.changeset/`. A change to tests, docs or CI alone needs none (`pnpm changeset --empty` says so).
 
-The packages are versioned on their own. When changesets reach `main`, the release workflow opens a "Version
-packages" pull request that bumps the versions and writes the changelogs; merging it publishes `openfilm` to npm
-(with provenance, from CI only); `@openfilm/shared` is only versioned. `@openfilm/desktop` is versioned the same way but not
-published to npm: a maintainer releases the app by pushing the tag `desktop-v<version>`, which builds it, signs it,
-and puts it on the beta channel; promoting it to stable is a second step.
+All the packages share one version. When changesets reach `main`, the release workflow opens a "Version packages"
+pull request that bumps it and writes the changelogs; merging it publishes `openfilm` to npm (with provenance, from CI
+only). Then a maintainer pushes the tag `v<version>`: the desktop workflow builds the app, signs and notarizes it, and
+makes a draft GitHub release with the installers. Publishing that release makes it the latest, which the website's
+download links and the apps' update checks follow.
 
 ## Where to start
 
