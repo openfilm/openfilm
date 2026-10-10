@@ -1,7 +1,8 @@
 /**
  * The contents of the Projects popover (see ProjectsLibrary): a compact header (title, search, sort, view, new folder,
- * close), the folders and the projects as cards or a list, with "New project" as the first cell. Inside a folder a
- * breadcrumb leads back to all. Data and actions come from the popover.
+ * close), the folders and the projects as cards or a list, with "New project" as the first cell (and, under it, "Open
+ * folder…" and "Get from GitHub…": an existing film), then the examples. Inside a folder a breadcrumb leads back to
+ * all. Data and actions come from the popover.
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
@@ -12,6 +13,8 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
+  FolderSearch,
+  Github,
   LayoutGrid,
   List,
   MoreHorizontal,
@@ -23,6 +26,8 @@ import {
   Video,
   X,
 } from 'lucide-react';
+import type { Example } from '@/lib/project-sources';
+import { ExamplesSection } from './ProjectSources';
 import { useLanguage, useT, type Language } from '@/i18n';
 import { limitTitleWidth, TITLE_MAX_WIDTH } from '@/lib/title';
 import type { Project } from '@/api';
@@ -44,6 +49,12 @@ export function ProjectsView({
   creating = false,
   onNewProject,
   onOpenFolder,
+  onGetFromGitHub,
+  onLocate,
+  examples = [],
+  examplesCollapsed = false,
+  onToggleExamples,
+  onOpenExample,
   onOpen,
   onRename,
   onDelete,
@@ -58,8 +69,17 @@ export function ProjectsView({
   /** A project is being created or opened; "New project" does not take a second click meanwhile. */
   creating?: boolean;
   onNewProject: () => void;
-  /** "Open…": a folder anywhere, opened as a project (only where the app can pick one: lib/host.ts `folders`). */
-  onOpenFolder?: () => void;
+  /** "Open folder…": a folder anywhere, opened as a project (the app's own dialog, else Studio's folder browser). */
+  onOpenFolder: () => void;
+  /** "Get from GitHub…": a repository or a folder in one, copied into the library and opened. */
+  onGetFromGitHub: () => void;
+  /** A project whose folder is gone: pick the folder it is in now. */
+  onLocate: (project: LibraryProject) => void;
+  /** The example films (none: the section is not shown), folded away or not, and opening one. */
+  examples?: Example[];
+  examplesCollapsed?: boolean;
+  onToggleExamples?: () => void;
+  onOpenExample?: (example: Example) => void;
   onOpen: (project: LibraryProject) => void;
   /** A new name for the project (its folder is renamed). Never empty. */
   onRename: (projectId: string, name: string) => void;
@@ -210,6 +230,7 @@ export function ProjectsView({
       onCancelRename: () => setRenamingId((current) => (current === project.id ? null : current)),
       onStartSelect: () => startSelecting(project),
       onMoveToFolder: () => setMoving(project),
+      onLocate: () => onLocate(project),
       onDelete: () => onDelete([project.id]),
     };
   }
@@ -240,18 +261,6 @@ export function ProjectsView({
                 <ViewButton active={view === 'cards'} label={t('library.viewCards')} onClick={() => setView('cards')} icon={<LayoutGrid size={14} />} />
                 <ViewButton active={view === 'list'} label={t('library.viewList')} onClick={() => setView('list')} icon={<List size={14} />} />
               </div>
-              {onOpenFolder ? (
-                <Tooltip label={t('projects.openFolder')} side="bottom">
-                  <button
-                    type="button"
-                    aria-label={t('projects.openFolder')}
-                    onClick={onOpenFolder}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
-                  >
-                    <FolderOpen size={15} strokeWidth={1.9} />
-                  </button>
-                </Tooltip>
-              ) : null}
               {folderId === null ? (
                 <Tooltip label={t('projects.newFolder')} side="bottom">
                   <button
@@ -297,17 +306,20 @@ export function ProjectsView({
             </div>
           ) : view === 'cards' ? (
             <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4">
-              {showNew ? <NewProjectCard creating={creating} onNewProject={onNewProject} /> : null}
+              {showNew ? <NewProjectCard creating={creating} onNewProject={onNewProject} onOpenFolder={onOpenFolder} onGetFromGitHub={onGetFromGitHub} /> : null}
               {showFolders ? folders.map((folder) => <FolderCard key={`folder:${folder.id}`} {...folderProps(folder)} />) : null}
               {visible.map((project) => <ProjectCard key={project.id} {...itemProps(project)} />)}
             </div>
           ) : (
             <div className="flex flex-col divide-y divide-[var(--border)]">
-              {showNew ? <NewProjectListRow creating={creating} onNewProject={onNewProject} /> : null}
+              {showNew ? <NewProjectListRow creating={creating} onNewProject={onNewProject} onOpenFolder={onOpenFolder} onGetFromGitHub={onGetFromGitHub} /> : null}
               {showFolders ? folders.map((folder) => <FolderListRow key={`folder:${folder.id}`} {...folderProps(folder)} />) : null}
               {visible.map((project) => <ProjectListRow key={project.id} {...itemProps(project)} />)}
             </div>
           )}
+          {showNew && onOpenExample ? (
+            <ExamplesSection examples={examples} collapsed={examplesCollapsed} onToggle={() => onToggleExamples?.()} onOpen={onOpenExample} />
+          ) : null}
         </div>
 
         {selecting ? (
@@ -387,6 +399,7 @@ interface ItemProps {
   onCancelRename: () => void;
   onStartSelect: () => void;
   onMoveToFolder: () => void;
+  onLocate: () => void;
   onDelete: () => void;
 }
 
@@ -526,41 +539,53 @@ function ProjectCardTitle({
   );
 }
 
-/** The grid's first cell: start a new project. Card-sized, so "new ones start here" reads at a glance. */
-function NewProjectCard({
-  creating,
-  onNewProject,
-}: {
+type NewProjectProps = {
   creating: boolean;
   onNewProject: () => void;
-}) {
+  onOpenFolder: () => void;
+  onGetFromGitHub: () => void;
+};
+
+/**
+ * The grid's first cell: start a new project, card-sized, so "new ones start here" reads at a glance. Under it, the
+ * two ways to start from a film that exists: a folder on this computer, a repository on GitHub.
+ */
+function NewProjectCard({ creating, onNewProject, onOpenFolder, onGetFromGitHub }: NewProjectProps) {
   const t = useT();
+  /* one row each, full width: their labels stay whole in every language */
+  const secondary = 'flex h-7 w-full shrink-0 items-center justify-center gap-1.5 border-t border-dashed border-[var(--border-strong)] px-2 text-[11.5px] font-medium text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-60';
   return (
-    <article className="group min-w-0">
-      <button
-        type="button"
-        onClick={onNewProject}
-        disabled={creating}
-        aria-busy={creating}
-        className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--border-strong)] text-[var(--text-muted)] transition hover:border-[var(--text-faint)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-60"
-      >
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--surface-2)] text-[var(--text)] transition group-hover:scale-105">
-          <Plus size={18} strokeWidth={2.2} />
-        </span>
-        <span className="text-[13px] font-medium">{t('projects.newProject')}</span>
-      </button>
+    <article className="min-w-0">
+      <div className="flex aspect-video w-full flex-col overflow-hidden rounded-lg border border-dashed border-[var(--border-strong)] transition hover:border-[var(--text-faint)]">
+        <button
+          type="button"
+          onClick={onNewProject}
+          disabled={creating}
+          aria-busy={creating}
+          className="group flex min-h-0 flex-1 flex-col items-center justify-center gap-1.5 text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-60"
+        >
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--surface-2)] text-[var(--text)] transition group-hover:scale-105">
+            <Plus size={18} strokeWidth={2.2} />
+          </span>
+          <span className="text-[13px] font-medium">{t('projects.newProject')}</span>
+        </button>
+        <div className="flex shrink-0 flex-col" role="group" aria-label={t('projects.startFrom')}>
+          <button type="button" onClick={onOpenFolder} disabled={creating} className={secondary}>
+            <FolderOpen size={13} className="shrink-0" />
+            <span className="truncate">{t('projects.openFolder')}</span>
+          </button>
+          <button type="button" onClick={onGetFromGitHub} disabled={creating} className={secondary}>
+            <Github size={13} className="shrink-0" />
+            <span className="truncate">{t('projects.getFromGitHub')}</span>
+          </button>
+        </div>
+      </div>
     </article>
   );
 }
 
-/** "New project" in the list view: the same entry, as a row. */
-function NewProjectListRow({
-  creating,
-  onNewProject,
-}: {
-  creating: boolean;
-  onNewProject: () => void;
-}) {
+/** "New project" in the list view: the same entries, as a row. */
+function NewProjectListRow({ creating, onNewProject, onOpenFolder, onGetFromGitHub }: NewProjectProps) {
   const t = useT();
   return (
     <article className="group flex min-w-0 items-center gap-3 py-4 sm:gap-4">
@@ -586,6 +611,16 @@ function NewProjectListRow({
           {t('projects.newProject')}
         </button>
       </div>
+      <div className="flex shrink-0 items-center gap-1" role="group" aria-label={t('projects.startFrom')}>
+        <button type="button" onClick={onOpenFolder} disabled={creating} className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-60">
+          <FolderOpen size={14} />
+          {t('projects.openFolder')}
+        </button>
+        <button type="button" onClick={onGetFromGitHub} disabled={creating} className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-60">
+          <Github size={14} />
+          {t('projects.getFromGitHub')}
+        </button>
+      </div>
     </article>
   );
 }
@@ -603,6 +638,7 @@ function ProjectCard({
   onCancelRename,
   onStartSelect,
   onMoveToFolder,
+  onLocate,
   onDelete,
 }: ItemProps) {
   const t = useT();
@@ -621,7 +657,8 @@ function ProjectCard({
           aria-pressed={selecting ? selected : undefined}
         >
           <PosterMedia project={project} shade />
-          {project.duration ? (
+          {project.missing ? <span aria-hidden className="absolute inset-0 bg-black/45" /> : null}
+          {project.duration && !project.missing ? (
             <div className="absolute bottom-2 right-2 text-[10.5px] font-medium text-white/80">
               <span className="flex items-center gap-1 rounded bg-black/40 px-1.5 py-0.5 tabular-nums backdrop-blur-sm">
                 <Clock3 size={10} />
@@ -631,6 +668,7 @@ function ProjectCard({
           ) : null}
         </button>
         <SelectToggle selecting={selecting} selected={selected} onToggle={onToggleSelect} label={t('library.toggleSelect')} />
+        {project.missing && !selecting ? <MissingActions onLocate={onLocate} onRemove={onDelete} /> : null}
       </div>
 
       <div className="mt-2 flex min-w-0 items-start gap-1.5">
@@ -655,23 +693,51 @@ function ProjectCard({
             {project.working ? <span className="truncate text-[var(--accent)]">· {t('projects.agentRunning')}</span> : null}
           </button>
         </div>
-        {!selecting ? <ItemMenu project={project} onOpen={onOpen} onStartRename={onStartRename} onStartSelect={onStartSelect} onMoveToFolder={onMoveToFolder} onDelete={onDelete} size={14} /> : null}
+        {!selecting ? <ItemMenu project={project} onOpen={onOpen} onStartRename={onStartRename} onStartSelect={onStartSelect} onMoveToFolder={onMoveToFolder} onLocate={onLocate} onDelete={onDelete} size={14} /> : null}
       </div>
     </article>
   );
 }
 
-/** A card's or row's "…". A project whose folder is gone can only leave the list: there is nothing to open or rename. */
+/**
+ * On the cover of a project whose folder is gone: "Folder not found", and the two things to do about it: point it at
+ * the folder it is in now (it keeps its place, and its history goes with the folder), or take it off the list.
+ */
+function MissingActions({ onLocate, onRemove, compact = false }: { onLocate: () => void; onRemove: () => void; compact?: boolean }) {
+  const t = useT();
+  const button = 'inline-flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-[12px] font-medium transition';
+  return (
+    <div className={compact ? 'flex items-center gap-1' : 'pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 p-2'}>
+      {compact ? null : <span className="text-[12px] font-semibold text-white drop-shadow">{t('projects.missing')}</span>}
+      <div className="pointer-events-auto flex items-center gap-1.5">
+        <button type="button" onClick={onLocate} className={`${button} bg-[var(--surface)] text-[var(--text)] shadow hover:brightness-95`}>
+          <FolderSearch size={13} />
+          {t('projects.locate')}
+        </button>
+        <button
+          type="button"
+          onClick={onRemove}
+          className={`${button} ${compact ? 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]' : 'bg-black/40 text-white backdrop-blur-sm hover:bg-black/55'}`}
+        >
+          {t('projects.removeFromList')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** A card's or row's "…". A project whose folder is gone can be located or leave the list: there is nothing to open or rename. */
 function ItemMenu({
   project,
   onOpen,
   onStartRename,
   onStartSelect,
   onMoveToFolder,
+  onLocate,
   onDelete,
   size,
-}: Pick<ItemProps, 'project' | 'onOpen' | 'onStartRename' | 'onStartSelect' | 'onMoveToFolder' | 'onDelete'> & { size: number }) {
-  if (project.missing) return <ProjectMenu onRemove={onDelete} size={size} />;
+}: Pick<ItemProps, 'project' | 'onOpen' | 'onStartRename' | 'onStartSelect' | 'onMoveToFolder' | 'onLocate' | 'onDelete'> & { size: number }) {
+  if (project.missing) return <ProjectMenu onLocate={onLocate} onRemove={onDelete} size={size} />;
   return (
     <ProjectMenu
       onOpen={onOpen}
@@ -698,6 +764,7 @@ function ProjectListRow({
   onCancelRename,
   onStartSelect,
   onMoveToFolder,
+  onLocate,
   onDelete,
 }: ItemProps) {
   const t = useT();
@@ -739,7 +806,8 @@ function ProjectListRow({
           </p>
         </button>
       </div>
-      {!selecting ? <ItemMenu project={project} onOpen={onOpen} onStartRename={onStartRename} onStartSelect={onStartSelect} onMoveToFolder={onMoveToFolder} onDelete={onDelete} size={15} /> : null}
+      {project.missing && !selecting ? <MissingActions compact onLocate={onLocate} onRemove={onDelete} /> : null}
+      {!selecting ? <ItemMenu project={project} onOpen={onOpen} onStartRename={onStartRename} onStartSelect={onStartSelect} onMoveToFolder={onMoveToFolder} onLocate={onLocate} onDelete={onDelete} size={15} /> : null}
     </article>
   );
 }

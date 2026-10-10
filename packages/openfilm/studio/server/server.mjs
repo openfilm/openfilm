@@ -27,9 +27,12 @@ import { ownHost, startPages } from './pages.mjs';
 import { HttpError, cookie, json, readJson } from './http.mjs';
 import { acceptWebSocket } from './websocket.mjs';
 import {
-  ProjectError, createFolder, createProject, deleteFolder, deleteProject, listFolders, listProjects, markOpened, moveProjectToFolder,
-  openProject, projectById, renameFolder, renameProject, studioHome, studioKey, TOOL_DIR,
+  ProjectError, createFolder, createProject, deleteFolder, deleteProject, libraryRoot, listFolders, listProjects, locateProject, markOpened,
+  moveProjectToFolder, openProject, projectById, renameFolder, renameProject, studioHome, studioKey, TOOL_DIR,
 } from './projects.mjs';
+import { FetchError, createFetches } from './fetch-repo.mjs';
+import { BrowseError, browseFolder, browsePlaces } from './browse.mjs';
+import { listExamples } from './examples.mjs';
 import { writeAtomic } from './atomic.mjs';
 import { createWatchers } from './watch.mjs';
 import { installedFonts } from './fonts.mjs';
@@ -87,6 +90,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
   /** where each project's exports report their progress: the pages watching it */
   const exportRoots = new Map();
   const exports = createExports({ onChange: (job) => { const root = exportRoots.get(job.project); if (root) watchers.emit(root, { type: 'export', job }); } });
+  /** films fetched from GitHub into the library (fetch-repo.mjs), each opened as a project when it lands */
+  const fetches = createFetches({ library: libraryRoot, open: (folder) => openProject(folder) });
 
   const sameKey = (/** @type {string | null | undefined} */ given) => typeof given === 'string' && given.length === key.length
     && timingSafeEqual(Buffer.from(given), Buffer.from(key));
@@ -195,13 +200,30 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       try { return await getRoute(req, res, parts.slice(1), asks); } finally { making -= req.method === 'POST' ? 1 : 0; }
     }
 
+    /* the web editor's folder browser (browse.mjs): `path`'s folders, only under the home folder, and where to start */
+    if (parts[0] === 'browse' && parts.length === 1 && req.method === 'GET') {
+      const listing = await browseFolder(url.searchParams.get('path'));
+      const places = await browsePlaces({ library: libraryRoot(), recent: (await listProjects()).filter((p) => !p.missing).map((p) => p.path) });
+      return json(res, 200, { ...listing, ...places });
+    }
+    /* the example films (examples.mjs): none when the index cannot be read */
+    if (parts[0] === 'examples' && parts.length === 1 && req.method === 'GET') return json(res, 200, { examples: await listExamples() });
+
     if (parts[0] !== 'projects') throw new HttpError(404, 'no such API');
     if (parts.length === 1) {
       if (req.method === 'GET') return json(res, 200, { projects: (await listProjects()).map((p) => (agentIn(p.path) ? { ...p, working: true } : p)) });
+      /* `create` false: only a folder holding a film opens (the editor asks before starting one in a folder) */
       if (req.method === 'POST') {
-        const body = /** @type {{ path?: string, name?: string }} */ (await readJson(req));
-        return json(res, 200, { project: body.path ? await openProject(body.path) : await createProject(body.name) });
+        const body = /** @type {{ path?: string, name?: string, create?: boolean }} */ (await readJson(req));
+        return json(res, 200, { project: body.path ? await openProject(body.path, { create: body.create !== false }) : await createProject(body.name) });
       }
+    }
+    /* a film from GitHub (fetch-repo.mjs): POST { url } `projects/fetch` starts it → { job }; GET `projects/fetch/:id`
+       says how it goes (`project` once it is opened); DELETE stops it */
+    if (parts[1] === 'fetch') {
+      if (parts.length === 2 && req.method === 'POST') return json(res, 200, { job: fetches.start(/** @type {{ url?: string }} */ (await readJson(req)).url) });
+      if (parts.length === 3 && req.method === 'GET') return json(res, 200, { job: fetches.get(parts[2]) });
+      if (parts.length === 3 && req.method === 'DELETE') { fetches.cancel(parts[2]); return json(res, 200, {}); }
     }
     /* the Projects list's folders (projects.mjs): GET / POST { name } `projects/folders`, PATCH { name } / DELETE
        `projects/folders/:id` (DELETE answers the ids of the projects that were in it), PUT { folderId }
@@ -215,6 +237,12 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (parts.length === 3 && parts[2] === 'folder' && req.method === 'PUT') {
       const { folderId = null } = /** @type {{ folderId?: string | null }} */ (await readJson(req));
       return json(res, 200, { project: await moveProjectToFolder(parts[1], folderId || null) });
+    }
+    /* a project whose folder was moved: the folder it is in now (projects.mjs locateProject) */
+    if (parts.length === 3 && parts[2] === 'locate' && req.method === 'POST') {
+      const { path: folder } = /** @type {{ path?: string }} */ (await readJson(req));
+      if (typeof folder !== 'string' || !isAbsolute(folder)) throw new HttpError(400, 'the folder\'s full path, please');
+      return json(res, 200, { project: await locateProject(parts[1], folder) });
     }
     const project = await projectById(parts[1]);
     const rest = parts.slice(2).join('/');
@@ -494,10 +522,12 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
   const editor = createServer((req, res) => {
     if (!ownHost(req, /** @type {import('node:net').AddressInfo} */ (editor.address()).port)) { json(res, 403, { error: 'not this address' }); return; }
     route(req, res).catch((/** @type {unknown} */ e) => {
-      const status = e instanceof HttpError || e instanceof ProjectError || e instanceof FileError || e instanceof HistoryError || e instanceof MediaError || e instanceof ExportError ? e.status : 500;
+      const status = e instanceof HttpError || e instanceof ProjectError || e instanceof FileError || e instanceof HistoryError || e instanceof MediaError || e instanceof ExportError
+        || e instanceof FetchError || e instanceof BrowseError ? e.status : 500;
       if (status === 500) console.error(e);
       if (res.headersSent) return res.end();
       json(res, status, { error: e instanceof Error ? e.message : String(e), ...(e instanceof HttpError ? e.extra : {}),
+        ...((e instanceof ProjectError || e instanceof FetchError || e instanceof BrowseError) && e.code ? { code: e.code } : {}),
         ...(e instanceof HistoryError && e.code ? { code: e.code, ...('commits' in e ? { commits: e.commits } : {}) } : {}) });
     });
   });
@@ -569,6 +599,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* the file is ours unless a later Studio has written its own (with the same key: it is the machine's) */
     if (advertise && advertised()?.pid === process.pid) rmSync(runFile(), { force: true });
     exports.stopAll();
+    fetches.stopAll();
     await closePageFrames();
     watchers.closeAll();
     await pages.close();

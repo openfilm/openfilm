@@ -1,9 +1,9 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createProject, forgetProject, listProjects, openProject, projectById, renameProject, ProjectError } from './projects.mjs';
+import { createProject, forgetProject, listProjects, locateProject, openProject, projectById, renameProject, ProjectError } from './projects.mjs';
 import { readFilmFile } from '../../src/film-doc.mjs';
 
 let scratch;
@@ -99,4 +99,40 @@ test('the disk root, the home folder and files are not projects', async () => {
   await assert.rejects(openProject(homedir()), ProjectError);
   writeFileSync(join(scratch, 'a.txt'), '');
   await assert.rejects(openProject(join(scratch, 'a.txt')), /is a file/);
+});
+
+test('opened only when there is a film (create false): a folder without one is said, and nothing is written', async () => {
+  const empty = join(scratch, 'plain');
+  mkdirSync(empty);
+  await assert.rejects(openProject(empty, { create: false }), (e) => e instanceof ProjectError && e.code === 'no-film');
+  assert.ok(!existsSync(join(empty, '.film')) && !existsSync(join(empty, 'film.html')));
+  await assert.rejects(openProject(join(scratch, 'nowhere'), { create: false }), (e) => e.code === 'not-found');
+  assert.ok(!existsSync(join(scratch, 'nowhere')));
+  writeFileSync(join(empty, 'film.html'), '<!doctype html>');
+  assert.equal((await openProject(empty, { create: false })).name, 'plain');
+});
+
+test('a moved project is located: same id and place in the list, its history with it; a wrong folder is refused', async () => {
+  const p = await openProject(join(scratch, 'before'));
+  const other = await openProject(join(scratch, 'other'));
+  mkdirSync(join(scratch, 'moved'));
+  renameSync(p.path, join(scratch, 'moved', 'after'));
+  assert.equal((await listProjects()).find((x) => x.id === p.id).missing, true);
+  /* not a film; another project of the list */
+  mkdirSync(join(scratch, 'not-a-film'));
+  await assert.rejects(locateProject(p.id, join(scratch, 'not-a-film')), (e) => e.code === 'no-film');
+  await assert.rejects(locateProject(p.id, join(scratch, 'other')), (e) => e.code === 'listed');
+  await assert.rejects(locateProject(p.id, join(scratch, 'nowhere')), (e) => e.code === 'not-found');
+  const found = await locateProject(p.id, join(scratch, 'moved', 'after'));
+  assert.equal(found.id, p.id);
+  assert.equal(found.missing, false);
+  assert.equal(found.path, realpathSync(join(scratch, 'moved', 'after')));
+  assert.deepEqual((await listProjects()).map((x) => x.id), [other.id, p.id], 'its place in the list stays');
+  /* a folder that lost its .film/id (copied without it) gets the project's */
+  const q = await openProject(join(scratch, 'q'));
+  renameSync(q.path, join(scratch, 'q2'));
+  (await import('node:fs')).rmSync(join(scratch, 'q2', '.film'), { recursive: true });
+  await locateProject(q.id, join(scratch, 'q2'));
+  assert.equal(readFileSync(join(scratch, 'q2', '.film', 'id'), 'utf8').trim(), q.id);
+  assert.equal((await openProject(join(scratch, 'q2'))).id, q.id, 'opened again, it is the same project');
 });

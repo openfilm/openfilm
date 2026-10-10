@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckSquare, Download, FolderInput, FolderOpen, ListX, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { CheckSquare, Download, FolderInput, FolderOpen, FolderSearch, ListX, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import { Tooltip } from './Tooltip';
 import { useT } from '@/i18n';
@@ -8,7 +8,7 @@ import { useT } from '@/i18n';
  * A project's "…" menu.
  *
  * Each item shows only when its callback is passed: the editor's top bar passes Export and Reveal in Finder; a card in
- * the Projects popover passes Open / Rename / Select / Move to folder / Delete, or only Remove from list when the
+ * the Projects popover passes Open / Rename / Select / Move to folder / Delete, or Locate… and Remove from list when the
  * project's folder is gone. The order is fixed here, not by the props, so the same menu looks the same wherever it
  * appears. It is a ContextMenu hanging from the button: it flips above it near the bottom of the window, and Esc
  * closes only the menu.
@@ -20,6 +20,7 @@ export function ProjectMenu({
   onMoveToFolder,
   onExport,
   onReveal,
+  onLocate,
   onRemove,
   onDelete,
   size = 18,
@@ -35,6 +36,8 @@ export function ProjectMenu({
   onExport?: () => void;
   /** Show the project's folder in Finder / Explorer. */
   onReveal?: () => void;
+  /** Pick the folder a project whose folder is gone is in now. */
+  onLocate?: () => void;
   /** Take it off the list (a project whose folder is gone: there is nothing to delete). */
   onRemove?: () => void;
   onDelete?: () => void;
@@ -62,6 +65,7 @@ export function ProjectMenu({
   add('move', <FolderInput size={15} />, t('projects.moveToFolder'), onMoveToFolder);
   add('export', <Download size={15} />, t('projectMenu.export'), onExport);
   add('reveal', <FolderOpen size={15} />, t('projects.revealFolder'), onReveal);
+  add('locate', <FolderSearch size={15} />, t('projects.locate'), onLocate);
   add('remove', <ListX size={15} />, t('projects.removeFromList'), onRemove);
   if (onDelete) {
     /* a separator only when something is above it */

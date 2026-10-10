@@ -29,10 +29,11 @@ export const TOOL_DIR = '.film';
 export const PROJECT_PARTS = /** @type {const} */ (['history', 'chat', 'logs']);
 
 export class ProjectError extends Error {
-  /** @param {string} message @param {number} status */
-  constructor(message, status = 400) {
+  /** `code`, when the editor says it in its own words ('not-found', 'no-film', 'listed'). @param {string} message @param {number} status @param {string} [code] */
+  constructor(message, status = 400, code) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -121,12 +122,16 @@ async function folderId(/** @type {string} */ folder, /** @type {StudioState} */
 /**
  * Open a folder as a project: it is made when missing; an empty film.html goes in when there is none (an existing one
  * is never touched); `.film/` keeps itself out of the folder's own git. Returns the project and puts it first in the list.
- * @param {string} path
+ * `create` false: only a folder that is there and holds a film opens (else 'not-found' or 'no-film', and nothing is
+ * written), so the editor can ask before it starts a film in a folder.
+ * @param {string} path @param {{ create?: boolean }} [options]
  */
-export async function openProject(path) {
+export async function openProject(path, { create = true } = {}) {
   const asked = resolve(path);
   refuse(asked);
   if (existsSync(asked) && !statSync(asked).isDirectory()) throw new ProjectError(`${asked} is a file; a project is a folder`);
+  if (!create && !existsSync(asked)) throw new ProjectError('That folder does not exist.', 404, 'not-found');
+  if (!create && !existsSync(join(asked, FILM_FILE))) throw new ProjectError('There is no film.html in that folder.', 409, 'no-film');
   await mkdir(join(asked, TOOL_DIR), { recursive: true });
   /* one folder is one project however it is reached (through a link; /var and /private/var on macOS) */
   const folder = realpathSync(asked);
@@ -273,6 +278,35 @@ export async function markOpened(/** @type {string} */ id) {
   if (!entry) throw new ProjectError('no such project', 404);
   entry.openedAt = Date.now();
   state.recent = [entry, ...state.recent.filter((r) => r !== entry)];
+  await writeState(state);
+  return describe(entry);
+}
+
+/**
+ * A project whose folder was moved or renamed outside Studio, found again: the list points at `path` from now on,
+ * with the same id, so its place in the list stays (its history is in the folder, and follows it: history.mjs). The
+ * folder must hold a film, and not be another project of the list.
+ * @param {string} id @param {string} path
+ */
+export async function locateProject(id, path) {
+  const state = await readState();
+  const entry = state.recent.find((r) => r.id === id);
+  if (!entry) throw new ProjectError('no such project', 404);
+  const asked = resolve(path);
+  refuse(asked);
+  if (!existsSync(asked) || !statSync(asked).isDirectory()) throw new ProjectError('That folder does not exist.', 404, 'not-found');
+  const folder = realpathSync(asked);
+  refuse(folder);
+  if (!existsSync(join(folder, FILM_FILE))) throw new ProjectError('There is no film.html in that folder.', 409, 'no-film');
+  const other = state.recent.find((r) => r.id !== id && (r.path === folder || sameFolder(r.path, folder)));
+  if (other) throw new ProjectError(`That folder is already in the list, as “${basename(other.path)}”.`, 409, 'listed');
+  await mkdir(join(folder, TOOL_DIR), { recursive: true });
+  await writeFile(join(folder, TOOL_DIR, '.gitignore'), '*\n');
+  /* the folder carries the project's id: a copy made of it later is told apart from it (folderId) */
+  let had = '';
+  try { had = (await readFile(join(folder, TOOL_DIR, 'id'), 'utf8')).trim(); } catch { /* none yet */ }
+  if (had !== id) await writeFile(join(folder, TOOL_DIR, 'id'), `${id}\n`);
+  entry.path = folder;
   await writeState(state);
   return describe(entry);
 }

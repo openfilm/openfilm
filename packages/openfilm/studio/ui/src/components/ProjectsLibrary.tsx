@@ -1,10 +1,14 @@
 /**
  * The Projects popover (the top bar's Projects button): a large centered dialog to switch project, start one, open a
- * folder, rename, delete, or file projects in folders of the list. Its contents are ProjectsView; this file holds the
- * data and actions.
+ * folder, get a film from GitHub or the examples, rename, delete, or file projects in folders of the list. Its
+ * contents are ProjectsView; this file holds the data and actions.
  *
  * Studio's projects are folders on disk: deleting one moves its folder to the system's Trash. One whose folder is gone
- * (moved, renamed or deleted outside Studio: `missing`) cannot be opened; it can only be taken off the list.
+ * (moved, renamed or deleted outside Studio: `missing`) cannot be opened; it can be located (the folder it is in now)
+ * or taken off the list.
+ *
+ * A folder is picked with the app's own dialog where there is an app (lib/host.ts `folders`), else with Studio's
+ * folder browser; one without a film is opened only once the person agrees to start a film in it.
  *
  *   GET /api/projects → { projects }; POST /api/projects { name } | { path } → { project };
  *   PATCH /api/projects/:id { name } → { project } (renames the folder); DELETE /api/projects/:id (to the Trash);
@@ -17,8 +21,13 @@ import { api, ApiError } from '@/api';
 import { useT } from '@/i18n';
 import { folderApi, type ProjectFolder } from '@/lib/project-folders';
 import { studioHost } from '@/lib/host';
+import { SourceError, examplesCollapsed, setExamplesCollapsed, sourcesApi, type Example } from '@/lib/project-sources';
 import { ConfirmDialog } from './ConfirmDialog';
 import { ProjectsView, type LibraryProject } from './ProjectsView';
+import { FolderBrowserDialog, GitHubDialog } from './ProjectSources';
+
+/** This browser's storage, when the page may use it. */
+const storage = () => { try { return localStorage; } catch { return null; } };
 
 /* each card's picture: the film's middle frame, drawn by Studio (cached until film.html changes); none for a project
    whose folder is gone (its card shows its color) */
@@ -146,7 +155,7 @@ function useProjectLibrary(open: boolean) {
     }
   }
 
-  return { projects, folders, loaded, error, flash, agentRunning, workingIn, deleteProjects, renameProject, createFolder, renameFolder, moveProject, deleteFolder };
+  return { projects, folders, loaded, error, flash, reload: reloadFolders, agentRunning, workingIn, deleteProjects, renameProject, createFolder, renameFolder, moveProject, deleteFolder };
 }
 
 export function ProjectsPopover({
@@ -174,14 +183,28 @@ export function ProjectsPopover({
   const [pendingDelete, setPendingDelete] = React.useState<string[] | null>(null);
   const [pendingFolder, setPendingFolder] = React.useState<ProjectFolder | null>(null);
   const [busy, setBusy] = React.useState<'creating' | 'opening' | null>(null);
+  /* Studio's folder browser (no app to pick folders), "Get from GitHub", and a folder without a film to start one in */
+  const [browser, setBrowser] = React.useState<{ mode: 'open' } | { mode: 'locate'; project: LibraryProject } | null>(null);
+  const [github, setGithub] = React.useState<{ url?: string; start?: boolean; title?: string } | null>(null);
+  const [askStart, setAskStart] = React.useState<string | null>(null);
+  const [examples, setExamples] = React.useState<Example[]>([]);
+  const [examplesFolded, setExamplesFolded] = React.useState(() => examplesCollapsed(storage()));
   const close = React.useCallback(() => onClose?.(), [onClose]);
 
   React.useEffect(() => {
     if (!open) return undefined;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented && !pendingDelete && !pendingFolder) close(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented && !pendingDelete && !pendingFolder && !askStart) close(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, close, pendingDelete, pendingFolder]);
+  }, [open, close, pendingDelete, pendingFolder, askStart]);
+
+  /* the examples, read on each open (none when the index cannot be read: the section stays hidden) */
+  React.useEffect(() => {
+    if (!open) return undefined;
+    let alive = true;
+    void sourcesApi.examples().then((list) => { if (alive) setExamples(list); });
+    return () => { alive = false; };
+  }, [open]);
 
   const go = (projectId: string, kind: 'creating' | 'opening') => {
     /* the project already open: nowhere to go, and an "Opening" that would never end */
@@ -213,18 +236,63 @@ export function ProjectsPopover({
     }
   }
 
-  /** Open a folder as a project: the one dropped, else the one the app asks the person for. */
+  const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+  /**
+   * Open a folder as a project: the one dropped, else the one the app asks the person for, else (no app) Studio's
+   * folder browser.
+   */
   async function openFolder(path?: string) {
+    if (!path && !studioHost?.folders) { setBrowser({ mode: 'open' }); return; }
     const folder = path ?? await studioHost?.folders?.pick();
     if (!folder) return;
+    try {
+      await openPicked(folder, false);
+    } catch (e) {
+      lib.flash(t('projects.openFolderFailed').replace('{error}', message(e)));
+    }
+  }
+
+  /**
+   * A folder picked: opened when it holds a film; one without is asked about first (`start`: the person already chose
+   * to start a film there). Throws what to say.
+   */
+  async function openPicked(folder: string, start: boolean) {
+    let project: { id: string };
     setBusy('opening');
     try {
-      const project = await api.openFolder(folder);
-      go(project.id, 'opening');
+      project = start ? await api.openFolder(folder) : await sourcesApi.openExisting(folder);
     } catch (e) {
       setBusy(null);
-      lib.flash(t('projects.openFolderFailed').replace('{error}', e instanceof Error ? e.message : String(e)));
+      if (e instanceof SourceError && e.code === 'no-film') { setAskStart(folder); return; }
+      if (e instanceof SourceError && e.code === 'not-found') throw new Error(t('projects.browse.error.notFound'));
+      throw e;
     }
+    setBrowser(null);
+    go(project.id, 'opening');
+  }
+
+  /** A project whose folder is gone, pointed at the folder it is in now: the app's dialog, else Studio's browser. */
+  async function locate(project: LibraryProject) {
+    if (!studioHost?.folders) { setBrowser({ mode: 'locate', project }); return; }
+    const folder = await studioHost.folders.pick();
+    if (!folder) return;
+    try {
+      await locateTo(project, folder);
+    } catch (e) {
+      lib.flash(t('projects.locateFailed').replace('{error}', message(e)));
+    }
+  }
+
+  async function locateTo(project: LibraryProject, folder: string) {
+    try {
+      await sourcesApi.locate(project.id, folder);
+    } catch (e) {
+      if (e instanceof SourceError && e.code === 'no-film') throw new Error(t('projects.locateNoFilm'));
+      throw e;
+    }
+    setBrowser(null);
+    lib.reload();
   }
 
   /* a folder dropped on the list is opened (where the app can tell where it is) */
@@ -275,7 +343,13 @@ export function ProjectsPopover({
               projects={lib.projects}
               creating={busy !== null}
               onNewProject={() => void newProject()}
-              onOpenFolder={studioHost?.folders ? () => void openFolder() : undefined}
+              onOpenFolder={() => void openFolder()}
+              onGetFromGitHub={() => setGithub({})}
+              onLocate={(project) => void locate(project)}
+              examples={examples}
+              examplesCollapsed={examplesFolded}
+              onToggleExamples={() => setExamplesFolded((folded) => { setExamplesCollapsed(storage(), !folded); return !folded; })}
+              onOpenExample={(example) => setGithub({ url: example.url, start: true, title: example.title })}
               /* its folder is gone: there is nothing to open, and the editor would only say so */
               onOpen={(project) => (project.missing ? lib.flash(t('projects.missingOpen')) : go(project.id, 'opening'))}
               onRename={(projectId, name) => void lib.renameProject(projectId, name)}
@@ -331,6 +405,37 @@ export function ProjectsPopover({
           void lib.deleteProjects(ids).then((deleted) => {
             if (deleted.has(currentProjectId)) onCurrentRemoved();
           });
+        }}
+      />
+      {browser ? (
+        <FolderBrowserDialog
+          mode={browser.mode}
+          title={browser.mode === 'locate' ? t('projects.locateTitle').replace('{name}', browser.project.name) : t('projects.browse.title')}
+          subtitle={browser.mode === 'locate' ? browser.project.path : undefined}
+          onPick={(path, start) => (browser.mode === 'locate' ? locateTo(browser.project, path) : openPicked(path, start))}
+          onClose={() => setBrowser(null)}
+        />
+      ) : null}
+      {github ? (
+        <GitHubDialog
+          url={github.url}
+          start={github.start}
+          title={github.title}
+          onDone={(projectId) => { setGithub(null); go(projectId, 'opening'); }}
+          onClose={() => setGithub(null)}
+        />
+      ) : null}
+      <ConfirmDialog
+        open={!!askStart}
+        title={t('projects.startFilmTitle')}
+        description={t('projects.startFilmDesc').replace('{name}', (askStart ?? '').split(/[\\/]/).filter(Boolean).pop() ?? '')}
+        confirmLabel={t('projects.startFilm')}
+        cancelLabel={t('confirm.cancel')}
+        onCancel={() => setAskStart(null)}
+        onConfirm={() => {
+          const folder = askStart;
+          setAskStart(null);
+          if (folder) void openPicked(folder, true).catch((e) => lib.flash(t('projects.openFolderFailed').replace('{error}', message(e))));
         }}
       />
       <ConfirmDialog

@@ -3,7 +3,7 @@ import { parseArgs } from 'node:util';
 
 const USAGE = `openfilm — a film is a function of time: given t, it draws that moment
 
-  openfilm open   [folder]            start or open a project; Studio shows it to the person
+  openfilm open   [folder | url]      start or open a project; Studio shows it to the person
   openfilm look   [what] [t | a-b]    check the film and draw it: a contact sheet with its sound and loudness
   openfilm render [a-b]               the MP4, saved beside film.html
   openfilm get    [what] [--options]  voice-over, music, sound effects, transcripts, images, video, from a connected service
@@ -14,12 +14,14 @@ const USAGE = `openfilm — a film is a function of time: given t, it draws that
 
 /* one command's help: what it does, what it takes, where its output goes */
 const COMMAND_HELP = {
-  open: `openfilm open [folder]
+  open: `openfilm open [folder | url]
 
   folder   a new film: a folder named after it (made if missing); or an existing project
            A folder that is not a project yet gets an empty film.html, 1920 × 1080 (its viewport <meta>) with no
            tracks; nothing else is created. Not a code project
            (package.json, Cargo.toml, go.mod, pyproject.toml…): the film gets a folder of its own inside it.
+  url      a film on GitHub or GitLab: a repository (https://github.com/owner/repo) or a folder in one
+           (…/tree/main/<folder>), copied into the projects library without its git history, then opened
   without  the project around the current folder, else the one opened last, else Studio's projects (where the
            person can start one). The current folder is never made a project: name it (.) for that.
 
@@ -129,6 +131,12 @@ const commands = {
  * @param {string | null} folder
  */
 async function open(folder) {
+  /* a film on GitHub: copied into the library first, then opened as any folder */
+  if (folder != null && /^(https?:\/\/|(www\.)?(github|gitlab)\.com\/)/i.test(folder)) {
+    const fetched = await fetchFilm(folder);
+    if (!fetched.ok) return fetched;
+    folder = fetched.path;
+  }
   const { openInStudio } = await import('../studio/client.mjs');
   const { existsSync, mkdirSync, statSync, writeFileSync } = await import('node:fs');
   const { dirname, join, resolve } = await import('node:path');
@@ -165,6 +173,31 @@ async function open(folder) {
           : fallback ? `         open this address in your built-in browser now; with none, it opens in the person's browser in ${fallback} s`
             : '         open this address in your built-in browser now, or give it to the person'] };
   } catch (e) { return { ok: false, lines: [`${RUN} open: ${e.message}`] }; }
+}
+/**
+ * `openfilm open <url>`: the repository or folder fetched into the projects library (studio/server/fetch-repo.mjs),
+ * its progress on stderr.
+ * @param {string} url
+ */
+async function fetchFilm(url) {
+  const { FetchError, fetchFilm: fetchInto, parseRepoUrl } = await import('../studio/server/fetch-repo.mjs');
+  const { libraryRoot } = await import('../studio/server/projects.mjs');
+  let source;
+  try { source = parseRepoUrl(url); } catch (e) { return { ok: false, usage: true, lines: [`${RUN} open: ${e.message}`] }; }
+  const mb = (bytes) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  let said = '';
+  try {
+    const path = await fetchInto(source, {
+      library: libraryRoot(),
+      onProgress: ({ phase, bytes }) => {
+        const line = phase === 'lookup' ? `Looking up ${source.web}…` : phase === 'copy' ? `Fetched ${mb(bytes)}` : null;
+        if (line && line !== said) console.error((said = line));
+      },
+    });
+    return { ok: true, path };
+  } catch (e) {
+    return { ok: false, usage: e instanceof FetchError && ['url', 'host'].includes(e.code), lines: [`${RUN} open: ${e.message}`] };
+  }
 }
 if (!commands[cmd]) { console.error(`${RUN}: no command ${cmd}\n\n${HELP}`); process.exit(2); }
 
