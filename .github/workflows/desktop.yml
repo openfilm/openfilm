@@ -1,0 +1,259 @@
+name: desktop
+# The official desktop app (CONTRIBUTING.md, Releases).
+#
+#   push a tag desktop-v<version>         build, sign and notarize; a draft GitHub release with the installers and
+#                                         feeds; the download mirror gets the build on the beta channel
+#   run it by hand, channel beta          the same, for an existing tag
+#   run it by hand, channel stable        promote: the build beta has for that tag goes to stable (no new build:
+#                                         the same bytes), the download links move, the GitHub release is published
+#
+# The secrets are in the `desktop-release` environment (Settings → Environments; deployments limited to desktop-v*
+# tags and main):
+#   OPENFILM_SIGN_IDENTITY         the Developer ID Application identity, "Name (TEAMID)"
+#   APPLE_TEAM_ID                  its team
+#   MACOS_CERTIFICATE_P12_BASE64   that certificate with its private key, exported as .p12, base64
+#   MACOS_CERTIFICATE_PASSWORD     the .p12's password
+#   APPLE_API_KEY_BASE64           an App Store Connect API key (.p8, base64) for notarization
+#   APPLE_API_KEY_ID, APPLE_API_ISSUER_ID   its key id and issuer id
+#   MIRROR_S3_ENDPOINT, MIRROR_S3_BUCKET, MIRROR_S3_ACCESS_KEY_ID, MIRROR_S3_SECRET_ACCESS_KEY
+#                                  the S3-compatible bucket served at product.official.json's desktop.updates
+# and its variables (optional): MIRROR_S3_PREFIX (the bucket's key prefix for that address, default download/desktop),
+# MIRROR_S3_REGION (default auto).
+on:
+  push:
+    tags: ['desktop-v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release's tag (desktop-v<version>)
+        required: true
+        type: string
+      channel:
+        description: beta builds and publishes to beta; stable promotes what beta has
+        required: true
+        default: beta
+        type: choice
+        options: [beta, stable]
+permissions:
+  contents: read
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
+jobs:
+  plan:
+    if: github.repository == 'openfilm/openfilm'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.plan.outputs.tag }}
+      version: ${{ steps.plan.outputs.version }}
+      channel: ${{ steps.plan.outputs.channel }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - id: plan
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+          CHANNEL: ${{ inputs.channel || 'beta' }}
+        run: |
+          VERSION="${TAG#desktop-v}"
+          PACKAGE="$(node -p "require('./apps/desktop/package.json').version")"
+          if [ "$VERSION" != "$PACKAGE" ]; then
+            echo "::error::$TAG does not match apps/desktop/package.json ($PACKAGE)"
+            exit 1
+          fi
+          { echo "tag=$TAG"; echo "version=$VERSION"; echo "channel=$CHANNEL"; } >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: plan
+    if: needs.plan.outputs.channel == 'beta'
+    name: build (${{ matrix.target }})
+    runs-on: macos-14
+    environment: desktop-release
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { target: mac-arm64, args: --arch=arm64, out: arm64, sign: true }
+          - { target: mac-x64, args: --arch=x64, out: x64, sign: true }
+          # NSIS, built on macOS as scripts/release.mjs expects; not code-signed yet
+          - { target: win-x64, args: --platform=win --arch=x64, out: win-x64, sign: false }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.tag }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Signing and notarization credentials, in a keychain of this run
+        if: matrix.sign
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/openfilm-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          # the Developer ID Application certificate and its private key
+          echo "$MACOS_CERTIFICATE_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security import "$RUNNER_TEMP/certificate.p12" -k "$KEYCHAIN" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          rm -f "$RUNNER_TEMP/certificate.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+          # this keychain first, and the default: codesign finds the identity, notarytool the profile
+          # shellcheck disable=SC2046 # the keychains already listed, one word each
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          security default-keychain -d user -s "$KEYCHAIN"
+          # notarytool's credentials (an App Store Connect API key) as the keychain profile release.mjs names
+          echo "$APPLE_API_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+          xcrun notarytool store-credentials openfilm-notary --key "$RUNNER_TEMP/AuthKey.p8" \
+            --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER_ID" --keychain "$KEYCHAIN"
+          rm -f "$RUNNER_TEMP/AuthKey.p8"
+          echo "APPLE_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+
+      - name: Build (npm run release -- --official ${{ matrix.args }})
+        working-directory: apps/desktop
+        env:
+          OPENFILM_SIGN_IDENTITY: ${{ matrix.sign && secrets.OPENFILM_SIGN_IDENTITY || '' }}
+          APPLE_TEAM_ID: ${{ matrix.sign && secrets.APPLE_TEAM_ID || '' }}
+          OPENFILM_NOTARY_PROFILE: openfilm-notary
+          SIGN: ${{ matrix.sign }}
+        run: |
+          # an official Mac build is signed and notarized, or not made
+          if [ "$SIGN" = "true" ] && { [ -z "$OPENFILM_SIGN_IDENTITY" ] || [ -z "$APPLE_TEAM_ID" ]; }; then
+            echo "::error::OPENFILM_SIGN_IDENTITY and APPLE_TEAM_ID are not set in the desktop-release environment"
+            exit 1
+          fi
+          npm run release -- --official ${{ matrix.args }}
+
+      - name: Remove the keychain
+        if: always() && matrix.sign
+        run: security delete-keychain "$RUNNER_TEMP/openfilm-signing.keychain-db" || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.target }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            apps/desktop/.release/${{ matrix.out }}/out/*.dmg
+            apps/desktop/.release/${{ matrix.out }}/out/*.zip
+            apps/desktop/.release/${{ matrix.out }}/out/*.exe
+            apps/desktop/.release/${{ matrix.out }}/out/*.blockmap
+            apps/desktop/.release/${{ matrix.out }}/out/latest*.yml
+
+  github-release:
+    needs: [plan, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.tag }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          path: artifacts
+      - name: A draft release with the installers and the feeds
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          mkdir upload
+          for dir in artifacts/desktop-*; do
+            target="${dir#artifacts/desktop-}"
+            for f in "$dir"/*; do
+              case "$f" in
+                # each target has its own feed: latest-mac.yml becomes latest-mac-arm64.yml, latest.yml latest-win-x64.yml
+                */latest-mac.yml) cp "$f" "upload/latest-mac-${target#mac-}.yml" ;;
+                */latest.yml) cp "$f" "upload/latest-${target}.yml" ;;
+                *) cp "$f" upload/ ;;
+              esac
+            done
+          done
+          ls -l upload
+          # the changelog's entry for this version, if there is one
+          awk -v v="## $VERSION" '$0 == v { on = 1; next } /^## / { on = 0 } on' apps/desktop/CHANGELOG.md > notes.md 2>/dev/null || true
+          [ -s notes.md ] || echo "OpenFilm for desktop $VERSION." > notes.md
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" upload/* --clobber
+          else
+            gh release create "$TAG" upload/* --draft --verify-tag --title "OpenFilm desktop $VERSION" --notes-file notes.md
+          fi
+
+  mirror:
+    needs: [plan, build, github-release]
+    runs-on: ubuntu-latest
+    environment: desktop-release
+    env:
+      MIRROR_S3_ENDPOINT: ${{ secrets.MIRROR_S3_ENDPOINT }}
+      MIRROR_S3_BUCKET: ${{ secrets.MIRROR_S3_BUCKET }}
+      MIRROR_S3_PREFIX: ${{ vars.MIRROR_S3_PREFIX }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.MIRROR_S3_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.MIRROR_S3_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ${{ vars.MIRROR_S3_REGION || 'auto' }}
+      # S3-compatible stores (R2 among them) take checksums only when the request needs one
+      AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
+      AWS_RESPONSE_CHECKSUM_VALIDATION: WHEN_REQUIRED
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          path: artifacts
+      - name: Upload, verify, and switch the beta feeds
+        run: |
+          for target in mac-arm64 mac-x64 win-x64; do
+            node apps/desktop/scripts/mirror.mjs publish --from "artifacts/desktop-$target" --target "$target"
+          done
+
+  promote:
+    needs: plan
+    if: needs.plan.outputs.channel == 'stable'
+    runs-on: ubuntu-latest
+    environment: desktop-release
+    permissions:
+      contents: write
+    env:
+      MIRROR_S3_ENDPOINT: ${{ secrets.MIRROR_S3_ENDPOINT }}
+      MIRROR_S3_BUCKET: ${{ secrets.MIRROR_S3_BUCKET }}
+      MIRROR_S3_PREFIX: ${{ vars.MIRROR_S3_PREFIX }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.MIRROR_S3_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.MIRROR_S3_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ${{ vars.MIRROR_S3_REGION || 'auto' }}
+      AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
+      AWS_RESPONSE_CHECKSUM_VALIDATION: WHEN_REQUIRED
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Beta's build to stable, and the download links
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          for target in mac-arm64 mac-x64 win-x64; do
+            node apps/desktop/scripts/mirror.mjs promote --target "$target" --version "$VERSION"
+          done
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: gh release edit "$TAG" --draft=false --latest

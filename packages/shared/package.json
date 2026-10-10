@@ -1,7 +1,7 @@
 {
   "name": "@openfilm/shared",
   "version": "0.0.1",
-  "private": true,
+  "private": false,
   "type": "module",
   "license": "MIT",
   "description": "What OpenFilm's clients and the OpenFilm service share: a chat turn and its public events, the agent's activity, prompt references, titles, Markdown parsing, and the public API contract.",
@@ -41,17 +41,51 @@
     "./api/error-codes": {
       "types": "./src/api/error-codes.d.mts",
       "default": "./src/api/error-codes.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./markdown": {
+        "types": "./dist/markdown-blocks.d.ts",
+        "default": "./dist/markdown-blocks.js"
+      },
+      "./api": {
+        "types": "./dist/api/index.d.ts",
+        "default": "./dist/api/index.js"
+      },
+      "./api/errors": {
+        "types": "./dist/api/errors.d.ts",
+        "default": "./dist/api/errors.js"
+      },
+      "./api/error-codes": {
+        "types": "./dist/api/error-codes.d.mts",
+        "default": "./dist/api/error-codes.mjs"
+      },
+      "./package.json": "./package.json"
     }
   },
   "files": [
+    "dist",
     "src",
     "!src/**/*.test.ts",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
+    "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test \"src/**/*.test.ts\""
+    "test": "node --import tsx --test \"src/**/*.test.ts\"",
+    "prepack": "node scripts/build.mjs",
+    "prepublishOnly": "npm test"
   },
   "dependencies": {
     "zod": "^3.23.0"

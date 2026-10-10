@@ -26,6 +26,8 @@ From the root:
 | `pnpm typecheck` | every package's types |
 | `pnpm build` | Studio's editor and the desktop app's window |
 | `pnpm audit:public` | what must not be in a public repository: secrets (gitleaks), home folders, paths out of the repository, prose in another language than English outside the translations, dependencies outside this workspace |
+| `pnpm check:pack` | packs `openfilm` and `@openfilm/shared` as npm would get them, lists their files and checks them |
+| `pnpm changeset` | adds a changeset to your pull request (below, Releases) |
 
 `pnpm --filter <package> <script>` runs one package's script; the packages are `openfilm`, `@openfilm/shared` and
 `@openfilm/desktop`.
@@ -49,7 +51,7 @@ apps/desktop/        the desktop app (Electron)
   chat/                the chat (React)
   scripts/             start (from source) and release (a build)
 skills/              the skill that points coding agents to the manual
-scripts/             the public audit
+scripts/             the public audit, the package check
 docs/                pictures for the README
 ```
 
@@ -85,7 +87,10 @@ and error codes of `/v1/media/*`, `/v1/agent/*` and `/api/desktop/*`, in zod). T
 against these schemas, so they change only by adding: a field or an error code is never renamed or removed.
 `src/api/error-codes.mjs` is the list of error codes as plain JavaScript, for the desktop app's main process.
 
-`pnpm --filter @openfilm/shared test`, `pnpm --filter @openfilm/shared typecheck`.
+`pnpm --filter @openfilm/shared test`, `pnpm --filter @openfilm/shared typecheck`. In the repository its
+package.json points at the TypeScript in `src/`, which the workspace reads as it is; `pnpm --filter @openfilm/shared
+build` compiles the JavaScript and declarations npm gets into `dist/` (packing runs it, and the published
+package.json points there).
 
 ## apps/desktop: the desktop app
 
@@ -116,6 +121,19 @@ publishes and the official desktop app carry them.
 To connect to an account service, yours or a local one, set `OPENFILM_ACCOUNT_URL`, `OPENFILM_ACCOUNT_ISSUER` and
 `OPENFILM_ACCOUNT_CLIENT_ID` before `pnpm dev` or `pnpm dev:desktop`; they override `product.json`.
 
+## Releases
+
+Every pull request that changes what a package's users get carries a **changeset**: run `pnpm changeset`, pick the
+packages it changes (`openfilm`, `@openfilm/shared`, `@openfilm/desktop`) and how much (`patch` for a fix, `minor`
+for something new; `major` only by agreement), and write a line for the changelog, as a user would read it. Commit the
+file it writes in `.changeset/`. A change to tests, docs or CI alone needs none (`pnpm changeset --empty` says so).
+
+The packages are versioned on their own. When changesets reach `main`, the release workflow opens a "Version
+packages" pull request that bumps the versions and writes the changelogs; merging it publishes `openfilm` and
+`@openfilm/shared` to npm (with provenance, from CI only). `@openfilm/desktop` is versioned the same way but not
+published to npm: a maintainer releases the app by pushing the tag `desktop-v<version>`, which builds it, signs it,
+and puts it on the beta channel; promoting it to stable is a second step.
+
 ## Where to start
 
 Issues labeled `good first issue` are small and say what is needed; `help wanted` ones are bigger. Say on the issue
@@ -138,7 +156,8 @@ that you are taking it, and open one before starting a large change, so nobody d
 Keep each one to one change, with a test when it fixes a bug. `pnpm test` and `pnpm typecheck` must pass on macOS,
 Windows and Linux (CI runs all three, and all three must pass), and `pnpm audit:public` must find nothing. A
 maintainer reviews every pull request, and may ask for changes. It is squash-merged, so its title becomes the
-commit's: name the part and the change, as the history does (`Studio: …`, `CLI: …`, `Desktop: …`).
+commit's: name the part and the change, as the history does (`Studio: …`, `CLI: …`, `Desktop: …`). Add a changeset
+when the change ships (above, Releases).
 
 ## License
 
