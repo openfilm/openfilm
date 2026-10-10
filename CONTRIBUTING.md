@@ -71,13 +71,15 @@ node --test --test-name-pattern="split" studio/server/film.test.mjs
 
 ### Trying a change with a coding agent
 
-In `packages/openfilm`, `npm link` makes `openfilm` run your checkout (`npm unlink -g openfilm` undoes it). Then ask
-Claude Code, Codex or any coding agent for a film, telling it to run `openfilm` and follow the manual it prints:
-`npx -y openfilm@latest`, which the skill uses, fetches the release instead. You can also run the command yourself
-with `node packages/openfilm/bin/openfilm.mjs <command>`.
+While `pnpm dev` runs, `packages/openfilm/.dev/bin/openfilm` (`openfilm.cmd` on Windows) is your checkout's command
+on that Studio: `pnpm dev` prints its path. Ask Claude Code, Codex or any coding agent for a film, telling it to run
+that command and follow the manual it prints (the manual names the same command, so the agent keeps using it). Your
+films appear in the Studio `pnpm dev` opened, and an installed OpenFilm, its Studio on port 4747 and `~/.openfilm`
+are left alone. (`npx -y openfilm@latest`, which the skill uses, fetches the release instead.)
 
-The command shares `~/.openfilm` and port 4747 with an installed OpenFilm, and the newer of two Studios replaces the
-older one: to keep them apart, set `OPENFILM_HOME` and `OPENFILM_STUDIO_PORT` while you work.
+To make your checkout the `openfilm` your agents use everywhere, `npm link` in `packages/openfilm` (`npm unlink -g
+openfilm` undoes it). That one shares `~/.openfilm` and port 4747 with an installed OpenFilm; of two Studios, the
+newer version replaces the older.
 
 ## packages/shared: what the clients share
 

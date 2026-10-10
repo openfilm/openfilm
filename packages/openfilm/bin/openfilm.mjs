@@ -56,9 +56,10 @@ const COMMAND_HELP = {
 /* `openfilm` alone: the manual, the whole of what an agent needs to know. `get` takes any options its verb has,
    so it goes to Studio (studio/client.mjs) before the fixed options below are parsed. */
 const RAW = process.argv.slice(2);
-/* the command as the agent can type it here: through npx, always the newest (npx keeps the first one it fetched for
-   a bare name), else `openfilm` where it is installed */
-const RUN = process.env.npm_command === 'exec' ? 'npx -y openfilm@latest' : 'openfilm';
+/* the command as the agent can type it here: the one that ran it when it says so (OPENFILM_RUN: the development
+   checkout's .dev/bin/openfilm), through npx always the newest (npx keeps the first one it fetched for a bare name),
+   else `openfilm` where it is installed */
+const RUN = process.env.OPENFILM_RUN || (process.env.npm_command === 'exec' ? 'npx -y openfilm@latest' : 'openfilm');
 /**
  * A newer openfilm, said once in a line before what the command prints: looked up on npm (at most daily, briefly) when
  * a session starts (the manual, open), else only as learnt before, so look, render and get never wait for it.

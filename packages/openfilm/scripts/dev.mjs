@@ -5,9 +5,12 @@
  * .dev/ (git-ignored), and it listens on port 4848 (OPENFILM_STUDIO_PORT for another). The editor is rebuilt when
  * studio/ui changes (reload the page); Studio restarts when studio/server or src change. It opens a sample project in
  * your browser (OPENFILM_NO_BROWSER=1: it only prints the address). Ctrl+C stops it all.
+ *
+ * It also writes .dev/bin/openfilm (and openfilm.cmd on Windows): this checkout's command on this Studio, for your own
+ * agent to try your changes with.
  */
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, watch, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, watch, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -23,6 +26,18 @@ const env = {
   /* Studio itself, without the supervisor `openfilm open` gives it: this script starts it again when its code changes */
   OPENFILM_STUDIO_WORKER: '1',
 };
+
+/* this checkout's `openfilm` on this Studio, for your agent: the same environment, and it names itself in the manual */
+const BIN = join(DEV, 'bin');
+mkdirSync(BIN, { recursive: true });
+const CLI = join(ROOT, 'bin', 'openfilm.mjs');
+const SHARED = ['OPENFILM_HOME', 'OPENFILM_LIBRARY', 'OPENFILM_EXPORTS', 'OPENFILM_STUDIO_PORT', 'OPENFILM_NO_UPDATE_CHECK'];
+const sh = join(BIN, 'openfilm');
+writeFileSync(sh, `#!/bin/sh\n${SHARED.map((k) => `export ${k}='${env[k]}'`).join('\n')}\nOPENFILM_RUN="${sh}" exec '${process.execPath}' '${CLI}' "$@"\n`);
+chmodSync(sh, 0o755);
+if (process.platform === 'win32') {
+  writeFileSync(join(BIN, 'openfilm.cmd'), `@echo off\r\n${SHARED.map((k) => `set "${k}=${env[k]}"`).join('\r\n')}\r\nset "OPENFILM_RUN=%~f0"\r\n"${process.execPath}" "${CLI}" %*\r\n`);
+}
 
 /* a small film to open: one page, drawn by frame(t) */
 const SAMPLE = join(DEV, 'projects', 'Sample');
@@ -94,7 +109,8 @@ for (const end = Date.now() + 30_000; Date.now() < end; await new Promise((r) =>
     body: JSON.stringify({ path: SAMPLE, now: !quiet, fallback: 0 }),
   }).catch((e) => ({ ok: false, json: async () => ({ error: e.message }) }));
   const said = await res.json();
-  console.log(res.ok ? `\nStudio (dev)  ${said.url}\nhome          ${env.OPENFILM_HOME}\n` : `\ncould not open the sample: ${said.error}\n`);
+  const command = process.platform === 'win32' ? join(BIN, 'openfilm.cmd') : sh;
+  console.log(res.ok ? `\nStudio (dev)  ${said.url}\nhome          ${env.OPENFILM_HOME}\nyour agent    tell it to run ${command} instead of npx openfilm: this checkout, on this Studio\n` : `\ncould not open the sample: ${said.error}\n`);
   break;
 }
 
