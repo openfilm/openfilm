@@ -116,31 +116,6 @@ and text cut off by the frame.
 [MANUAL.md](packages/openfilm/MANUAL.md) is what `openfilm` tells your agent; [SPEC.md](packages/openfilm/SPEC.md)
 is for anyone building a player, renderer or editor.
 
-## Settings
-
-| Variable | What it does |
-| --- | --- |
-| `OPENFILM_HOME` | Where OpenFilm keeps its state (default `~/.openfilm`): the projects list, provider keys, the browser it draws with. |
-| `OPENFILM_STUDIO_PORT` | Studio's port (default 4747). |
-| `OPENFILM_LIBRARY` | Where new projects go (default `~/Movies/OpenFilm/Projects`, `~/Videos/…` off macOS). |
-| `OPENFILM_EXPORTS` | Where Studio saves exports (default `~/Movies/OpenFilm/Exports`). |
-| `OPENFILM_NO_BROWSER=1` | Studio never opens your browser by itself. |
-| `OPENFILM_NO_UPDATE_CHECK=1` | No daily check for a newer `openfilm` on npm. |
-| `ELEVENLABS_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `FAL_KEY`, `GROQ_API_KEY`, `PEXELS_API_KEY`, `PIXABAY_API_KEY`, `BRAVE_API_KEY`, `TAVILY_API_KEY` | Keys for `openfilm get`, instead of keeping them in Studio. |
-
-OpenFilm talks to the network only to download the browser it draws with, to check npm for a newer version once a
-day, and for the media services you connect (and the web pages they are asked to read).
-
-## This repository
-
-| Folder | What it is |
-| --- | --- |
-| [packages/openfilm](packages/openfilm) | npm `openfilm`: the film format ([SPEC.md](packages/openfilm/SPEC.md)), the manual for agents, the `openfilm` command, and Studio (its server and its editor) |
-| [packages/shared](packages/shared) | npm `@openfilm/shared`: what the clients share (a chat turn, the agent's activity, Markdown parsing) |
-| [apps/desktop](apps/desktop) | the desktop app (Electron): Studio, a chat beside it, and its own agent |
-| [skills](skills) | the skill that points coding agents to the manual (`npx skills add openfilm/openfilm`) |
-| [docs](docs) | pictures for this README |
-
 ## From source
 
 You need Node 22.18 or later, pnpm 9 (`corepack enable` gives you the version this repository names), ffmpeg on the
