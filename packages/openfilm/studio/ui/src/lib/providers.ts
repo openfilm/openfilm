@@ -46,6 +46,10 @@ export function couldMake(state: ProvidersState, verb: ProviderVerb): string[] {
   ].sort((a, b) => a.localeCompare(b));
 }
 
+/** Whether anything here, connected or not, can make `verb` (a build without an account service has no OpenFilm). */
+export const offered = (state: ProvidersState, verb: ProviderVerb) =>
+  state.openfilm.verbs.includes(verb) || state.providers.some((p) => p.verbs.includes(verb));
+
 /** The kinds of media the person chooses a provider for, in the order they are listed. */
 export const USE_VERBS: ProviderVerb[] = ['tts', 'music', 'sfx', 'asr', 'image', 'image-search', 'video', 'translate', 'web-search'];
 

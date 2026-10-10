@@ -32,6 +32,7 @@ import { lstat, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from '
 import { tmpdir } from 'node:os';
 import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 import { FILM_FILE, clipKind } from '../../src/film-doc.mjs';
+import { accountConfig } from './account.mjs';
 import { spokenLines } from './captions.mjs';
 import { readTranscript, transcriptIsCurrent, transcriptPath, writeTranscript } from './transcripts.mjs';
 import { inside } from './files.mjs';
@@ -128,10 +129,14 @@ export const WHERE_TO_CONNECT = 'In Studio, the OpenFilm logo at the top left op
 const CONNECT = `The person can connect it. ${WHERE_TO_CONNECT}`;
 /** What is not connected here, and where the person connects it. @param {string[]} verbs */
 const notConnected = (verbs) => `Not connected here: ${verbs.join(', ')}. The person can connect ${verbs.length > 1 ? 'them' : 'it'}. ${WHERE_TO_CONNECT}`;
+/** A build without an account service (run from source, or a release without one) never mentions it. */
+const withAccount = () => accountConfig().configured;
+/** Whether anything here, connected or not, can make `verb`: one of the services, or the account when there is one. */
+const offered = (/** @type {string} */ verb) => withAccount() || listProviders().some((p) => /** @type {readonly string[]} */ (p.verbs).includes(verb));
 /** The whole of `openfilm get` when nothing is connected. */
-const NOTHING = 'Nothing is connected for media here. '
+const nothing = () => 'Nothing is connected for media here. '
   + 'Until then, make sound and pictures in code, or use a service the person has a key for (with its API docs), and save them under assets/. '
-  + `\`openfilm get <what> --help\` shows what one kind takes (${Object.keys(VERBS).filter((v) => !WEB_VERBS.includes(v)).join(', ')}).`;
+  + `\`openfilm get <what> --help\` shows what one kind takes (${Object.keys(VERBS).filter((v) => !WEB_VERBS.includes(v) && offered(v)).join(', ')}).`;
 
 /** Each kind of media, in words (finding voices is part of voice-over). */
 const WORDS = /** @type {Record<string, string>} */ ({
@@ -139,9 +144,9 @@ const WORDS = /** @type {Record<string, string>} */ ({
   video: 'video', translate: 'subtitle translation', 'web-search': 'web search',
 });
 /** The media services `get` can use, by name (none comes first), what each makes, and where the person connects them. */
-export const SERVICES = `Media services, each used with the person's own key, or with a connected OpenFilm account: ${[
+export const services = () => `Media services, each used with the person's own key${withAccount() ? ', or with a connected OpenFilm account' : ''}: ${[
   ...listProviders().map((p) => ({ name: p.name, makes: p.verbs.filter((v) => WORDS[v]).map((v) => WORDS[v]).join(', ') })),
-  { name: 'the OpenFilm account', makes: 'all of these' },
+  ...(withAccount() ? [{ name: 'the OpenFilm account', makes: 'all of these' }] : []),
 ].sort((a, b) => a.name.replace(/^the /, '').localeCompare(b.name.replace(/^the /, ''))).map((p) => `${p.name} (${p.makes})`).join(', ')}. ${WHERE_TO_CONNECT}`;
 
 /** How long the person has to answer a question about spending. */
@@ -492,23 +497,23 @@ function show(receipt) {
  * connected (null: everything is). With nothing connected, no verbs and a note saying what to do instead. `only`: that
  * one verb, connected or not. `web`: with web search and reading web pages (WEB_VERBS), for an agent without its own.
  * @param {string} [only] @param {{ web?: boolean }} [options]
- * `services`: the services there are and where the person connects them (SERVICES).
+ * `services`: the services there are and where the person connects them (services()).
  * @returns {Promise<{ verbs: { verb: string, help: string, dir?: string, options: Record<string, Option> }[], note: string | null, services: string }>}
  */
 export async function catalog(only, { web = false } = {}) {
   if (only !== undefined && !VERBS[only]) throw new HttpError(400, `there is no ${only}; there is ${Object.keys(VERBS).join(', ')}`);
   const settings = await providerSettings();
-  const listed = Object.entries(VERBS).filter(([verb]) => (only === undefined ? web || !WEB_VERBS.includes(verb) : verb === only));
+  const listed = Object.entries(VERBS).filter(([verb]) => (only === undefined ? (web || !WEB_VERBS.includes(verb)) && offered(verb) : verb === only));
   const all = await Promise.all(listed.map(async ([verb, spec]) => ({
     verb, help: spec.help, ...(spec.dir ? { dir: spec.dir } : {}), options: spec.options,
     usable: Boolean(await chooseProvider(/** @type {Verb} */ (verb), { settings })),
   })));
   const missing = all.filter((v) => !v.usable).map((v) => v.verb);
-  if (only === undefined && missing.length === all.length) return { verbs: [], note: NOTHING, services: SERVICES };
+  if (only === undefined && missing.length === all.length) return { verbs: [], note: nothing(), services: services() };
   return {
     verbs: all.filter((v) => only !== undefined || v.usable).map(({ usable: _, ...v }) => v),
     note: missing.length ? notConnected(missing) : null,
-    services: SERVICES,
+    services: services(),
   };
 }
 

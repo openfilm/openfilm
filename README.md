@@ -127,7 +127,6 @@ is for anyone building a player, renderer or editor.
 | `OPENFILM_NO_BROWSER=1` | Studio never opens your browser by itself. |
 | `OPENFILM_NO_UPDATE_CHECK=1` | No daily check for a newer `openfilm` on npm. |
 | `ELEVENLABS_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `FAL_KEY` | Keys for `openfilm get`, instead of keeping them in Studio. |
-| `OPENFILM_API_KEY` | An OpenFilm account key, for a machine with no browser to sign in. |
 
 OpenFilm talks to the network only to download the browser it draws with, to check npm for a newer version once a
 day, and for the media services you connect.
@@ -155,7 +154,7 @@ pnpm test
 ```
 
 `pnpm dev:desktop` runs the desktop app from source, and `pnpm typecheck`, `pnpm build` and `pnpm audit:public` do
-what they say. Run from source, nothing connects to an OpenFilm account service: everything works with your own keys.
+what they say.
 [CONTRIBUTING.md](CONTRIBUTING.md) has the details of each package.
 
 ## Contributing

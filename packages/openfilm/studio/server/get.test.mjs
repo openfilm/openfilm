@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { filmCaptions, translateFilmSubtitles } from './captions.mjs';
 import { readTranscript } from './transcripts.mjs';
-import { SERVICES, VERBS, WEB_VERBS, WHERE_TO_CONNECT, flagHelp, runGet, subtitleTranslator } from './get.mjs';
+import { VERBS, WEB_VERBS, WHERE_TO_CONNECT, catalog, flagHelp, runGet, services, subtitleTranslator } from './get.mjs';
 import { changeSettings, providersFile } from './keys.mjs';
 import { listProviders } from './providers/index.mjs';
 import { startStudio } from './server.mjs';
@@ -399,7 +399,7 @@ test('openfilm get: what can be got here, connected, partly or not at all; wrong
     const listed = get(scratch);
     assert.equal(listed.status, 0, listed.stderr);
     const media = Object.keys(VERBS).filter((verb) => !WEB_VERBS.includes(verb));
-    assert.equal(listed.stdout, `${[...listing(media), '', SERVICES].join('\n')}\n`);
+    assert.equal(listed.stdout, `${[...listing(media), '', services()].join('\n')}\n`);
     const one = get(root, 'image', '--help');
     assert.equal(one.status, 0);
     assert.match(one.stdout, /--ratio <16:9\|9:16/);
@@ -413,7 +413,7 @@ test('openfilm get: what can be got here, connected, partly or not at all; wrong
 
     /* web search and web pages: listed for an agent without its own (OPENFILM_GET_WEB=1), run like any other media */
     const withWeb = spawnSync(process.execPath, [bin, 'get'], { cwd: scratch, env: { ...env, OPENFILM_GET_WEB: '1' }, encoding: 'utf8' });
-    assert.equal(withWeb.stdout, `${[...listing(Object.keys(VERBS)), '', SERVICES].join('\n')}\n`);
+    assert.equal(withWeb.stdout, `${[...listing(Object.keys(VERBS)), '', services()].join('\n')}\n`);
     answers.push({ body: { ...TTS, receipt: { query: 'blender', hits: [{ title: 'Blender', url: 'https://www.blender.org', excerpt: '5.2' }] }, files: [], index: [] } });
     const searched = await run(root, 'web-search', '--query', 'blender');
     assert.equal(searched.status, 0, searched.stdout);
@@ -431,15 +431,15 @@ test('openfilm get: what can be got here, connected, partly or not at all; wrong
     assert.equal(nothing.status, 0);
     assert.equal(nothing.stdout, 'Nothing is connected for media here. '
       + 'Until then, make sound and pictures in code, or use a service the person has a key for (with its API docs), and save them under assets/. '
-      + `\`openfilm get <what> --help\` shows what one kind takes (voice, tts, sfx, music, asr, image-search, image, video).\n\n${SERVICES}\n`);
-    assert.match(SERVICES, /: ElevenLabs \(voice-over, sound effects, music, transcripts\), fal\.ai \(images, video\), .*, the OpenFilm account \(all of these\)\. In Studio, the OpenFilm logo at the top left opens Settings/);
+      + `\`openfilm get <what> --help\` shows what one kind takes (voice, tts, sfx, music, asr, image-search, image, video).\n\n${services()}\n`);
+    assert.match(services(), /: ElevenLabs \(voice-over, sound effects, music, transcripts\), fal\.ai \(images, video\), .*, the OpenFilm account \(all of these\)\. In Studio, the OpenFilm logo at the top left opens Settings/);
 
     /* partly: what is connected, then one line for the rest, then the services there are; never who makes what now */
     await changeSettings((s) => { s.keys.elevenlabs = 'xi-test-0123456789'; for (const v of ['tts', 'sfx', 'music', 'asr']) s.use[v] = 'elevenlabs'; });
     const partly = get(scratch);
     assert.equal(partly.stdout, `${[...listing(['voice', 'tts', 'sfx', 'music', 'asr']), '',
-      `Not connected here: image-search, image, video. The person can connect them. ${WHERE_TO_CONNECT}`, '', SERVICES].join('\n')}\n`);
-    assert.doesNotMatch(partly.stdout.replace(SERVICES, ''), /ElevenLabs|made by|flash|ultra/i);
+      `Not connected here: image-search, image, video. The person can connect them. ${WHERE_TO_CONNECT}`, '', services()].join('\n')}\n`);
+    assert.doesNotMatch(partly.stdout.replace(services(), ''), /ElevenLabs|made by|flash|ultra/i);
     const image = get(root, 'image', '--help');
     assert.equal(image.stdout, `${[...listing(['image']), '',
       `Not connected here: image. The person can connect it. ${WHERE_TO_CONNECT}`].join('\n')}\n`);
@@ -459,5 +459,19 @@ test('openfilm get: what can be got here, connected, partly or not at all; wrong
   } finally {
     const run = JSON.parse(readFileSync(join(process.env.OPENFILM_HOME, 'run.json'), 'utf8'));
     await fetch(`${run.origin}/api/quit`, { method: 'POST', headers: { 'x-studio-key': run.key } });
+  }
+});
+
+test('a build without an account service never mentions it, and lists only what the services make', async () => {
+  const saved = { ...process.env };
+  for (const name of ['OPENFILM_ACCOUNT_URL', 'OPENFILM_ACCOUNT_ISSUER', 'OPENFILM_ACCOUNT_CLIENT_ID']) delete process.env[name];
+  try {
+    assert.doesNotMatch(services(), /OpenFilm account/);
+    const { verbs, note } = await catalog();
+    assert.deepEqual(verbs, []);
+    assert.doesNotMatch(note, /image-search/);
+    assert.match(note, /voice, tts, sfx, music, asr, image, video/);
+  } finally {
+    Object.assign(process.env, saved);
   }
 });

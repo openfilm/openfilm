@@ -12,6 +12,7 @@
  * Listing voices is part of voice-over: the provider that speaks finds the voices, so they never differ. Reading a web
  * page is part of web search the same way.
  */
+import { accountConfig } from '../account.mjs';
 import { HttpError, json, readJson } from '../http.mjs';
 import { changeSettings, cleanKey, kindOf, modelFor, providerKey, readSettings } from '../keys.mjs';
 import { MODELS as OPENFILM_MODELS } from './openfilm.mjs';
@@ -128,8 +129,9 @@ async function state() {
       const provider = settings.use[v] === 'openfilm' ? await openfilm() : OWN.find((p) => p.id === settings.use[v]);
       return [v, (provider && modelFor(settings, provider, v)) ?? null];
     }))),
-    /* `verbs`: what the account makes, connected or not (a kind only it makes says so); `models`: with what */
-    openfilm: { connected: await connected, verbs: (await openfilm()).verbs, models: OPENFILM_MODELS },
+    /* `verbs`: what the account makes, connected or not (a kind only it makes says so), none in a build without an
+       account service; `models`: with what */
+    openfilm: { connected: await connected, verbs: accountConfig().configured ? (await openfilm()).verbs : [], models: OPENFILM_MODELS },
   };
 }
 

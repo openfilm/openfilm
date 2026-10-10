@@ -70,7 +70,6 @@ export function AgentsSection({ account }: { account: OpenFilmAccountState }) {
   const notConfigured = account.account?.configured === false;
 
   const statusLine = (agent: HostAgent) => {
-    if (agent.id === 'openfilm' && (notConfigured || agent.status === 'unconfigured')) return t('settings.agents.notConfigured');
     switch (agent.status) {
       case 'off': return t('settings.agents.off');
       case 'sign-in': return t('settings.agents.signedOut');
@@ -94,7 +93,6 @@ export function AgentsSection({ account }: { account: OpenFilmAccountState }) {
       return agent.install ? <SettingsLinkButton href={agent.install}><Download size={16} />{t('settings.agents.install')}</SettingsLinkButton> : null;
     }
     if (agent.id === 'openfilm') {
-      if (notConfigured || agent.status === 'unconfigured') return null;
       /* one sign-in with Providers: connect signs in on the website, disconnect signs out */
       if (signedIn && agent.status !== 'off') {
         return chosen ? <SettingsButton variant="quiet" disabled={account.busy} onClick={() => void account.disconnect()}>{t('settings.agents.disconnect')}</SettingsButton> : null;
@@ -173,7 +171,8 @@ export function AgentsSection({ account }: { account: OpenFilmAccountState }) {
     );
   };
 
-  const list = agents ?? [];
+  /* a build with no account service doesn't list the OpenFilm agent */
+  const list = (agents ?? []).filter((a) => a.id !== 'openfilm' || !(notConfigured || a.status === 'unconfigured'));
   const byId = (id: HostAgentId) => list.find((a) => a.id === id);
   /* always yours: Codex, Claude Code, OpenFilm and your own key; then the others switched on, the rest under "More" */
   const always = (['codex', 'claude', 'openfilm', 'byok'] as const).map(byId).filter((a): a is HostAgent => Boolean(a));

@@ -1,9 +1,9 @@
 {
   "account": {
-    "url": "https://openfilm.dev",
-    "issuer": "https://clerk.openfilm.dev",
-    "clientId": "S4TIKnQISWVYOKZR",
-    "sites": ["https://openfilm.dev", "https://cn.openfilm.dev"]
+    "url": "",
+    "issuer": "",
+    "clientId": "",
+    "sites": []
   },
   "desktop": {
     "updates": "https://openfilm.dev/download/desktop"

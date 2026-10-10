@@ -47,7 +47,7 @@ import { replaceFile } from './atomic.mjs';
 const UNAVAILABLE = 'The OpenFilm account service can’t be reached right now. Studio works without it; try again later.';
 const SIGN_IN_WAIT_MS = 5 * 60_000;
 
-const NOT_CONFIGURED = 'This build of OpenFilm has no account service. Official builds include it; to use another, set OPENFILM_ACCOUNT_URL, OPENFILM_ACCOUNT_ISSUER and OPENFILM_ACCOUNT_CLIENT_ID.';
+const NOT_CONFIGURED = 'This build of OpenFilm has no account service. To use one, set OPENFILM_ACCOUNT_URL, OPENFILM_ACCOUNT_ISSUER and OPENFILM_ACCOUNT_CLIENT_ID.';
 
 /** @type {{ url: string, issuer: string, clientId: string, homepage: string } | null} */
 let product = null;

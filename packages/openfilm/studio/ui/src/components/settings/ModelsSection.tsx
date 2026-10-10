@@ -8,7 +8,7 @@ import React from 'react';
 import { Check, ChevronDown, ChevronRight } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import type { OpenFilmAccountState } from '@/lib/openfilm-account';
-import { USE_VERBS, couldMake, useProviders, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
+import { USE_VERBS, couldMake, offered, useProviders, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
 import { Popover } from '@/components/Popover';
 import { ProviderMark } from './ProviderMark';
 import { SettingsButton, SettingsGroup, SettingsItem, SettingsPage, settingsError } from './ui';
@@ -38,7 +38,7 @@ export function ModelsSection({ state, onConnect }: { state: OpenFilmAccountStat
       ) : null}
       {providers ? (
         <SettingsGroup footnote={t('settings.models.otherBody')}>
-          {USE_VERBS.map((verb) => <ModelRow key={verb} verb={verb} hook={hook} onConnect={onConnect} />)}
+          {USE_VERBS.filter((verb) => offered(providers, verb)).map((verb) => <ModelRow key={verb} verb={verb} hook={hook} onConnect={onConnect} />)}
         </SettingsGroup>
       ) : null}
       {hook.problem ? <p className={settingsError}>{hook.problem}</p> : null}

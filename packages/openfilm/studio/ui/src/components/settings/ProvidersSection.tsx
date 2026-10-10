@@ -23,7 +23,8 @@ export function ProvidersSection({ state }: { state: OpenFilmAccountState }) {
   const t = useT();
   const providers = useProviders(state.account?.connected);
   const rows = [
-    { name: 'OpenFilm', row: <OpenFilmRow key="openfilm" state={state} /> },
+    /* a build with no account service (run from source, or a release without one) doesn't list it */
+    ...(state.account?.configured === false ? [] : [{ name: 'OpenFilm', row: <OpenFilmRow key="openfilm" state={state} /> }]),
     ...(providers.state?.providers ?? []).map((provider) => ({ name: provider.name, row: <KeyRow key={provider.id} provider={provider} hook={providers} /> })),
   ].sort((a, b) => a.name.localeCompare(b.name));
 
@@ -75,15 +76,6 @@ function OpenFilmRow({ state }: { state: OpenFilmAccountState }) {
   const { account, busy } = state;
   const connected = Boolean(account?.connected);
   const waiting = Boolean(account?.pending);
-
-  /* a build with no account service (run from source): said, with how to get one; nothing to connect */
-  if (account?.configured === false) {
-    return (
-      <Row id="openfilm" name="OpenFilm" action={<span className="text-[15px] text-[var(--text-muted)]">{t('settings.providers.notConfigured')}</span>}>
-        {t('settings.providers.notConfiguredHint')}
-      </Row>
-    );
-  }
 
   return (
     <Row
