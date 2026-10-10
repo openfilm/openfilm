@@ -6,8 +6,9 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const MAIN = new URL('./main.mjs', import.meta.url).pathname;
+const MAIN = fileURLToPath(new URL('./main.mjs', import.meta.url));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const freePort = () => new Promise((done) => { const s = createServer().listen(0, '127.0.0.1', () => { const { port } = /** @type {import('node:net').AddressInfo} */ (s.address()); s.close(() => done(port)); }); });
 
@@ -51,6 +52,8 @@ test('a Studio that ends unexpectedly is started again on the same address; one 
     assert.equal(await Promise.race([ended, sleep(15_000).then(() => 'still running')]), 0);
   } finally {
     if (supervisor.exitCode === null) supervisor.kill('SIGKILL');
+    /* its Studio too, when the test failed before it quit: a killed supervisor leaves it running */
+    try { process.kill(JSON.parse(readFileSync(join(home, 'run.json'), 'utf8')).pid, 'SIGKILL'); } catch { /* gone */ }
     rmSync(home, { recursive: true, force: true });
   }
 });

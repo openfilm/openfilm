@@ -4,7 +4,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { availableParallelism, totalmem } from 'node:os';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { FilmPage } from './host.mjs';
-import { ffmpeg, filmSound, fmt, mix, open, outDir, parseTarget, shown, UsageError, write } from './shared.mjs';
+import { ffmpeg, filmSound, fmt, kill, mix, open, outDir, parseTarget, shown, UsageError, write } from './shared.mjs';
 
 const BT709 = ['-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv'];
 const TAG_709 = ['-bsf:v', 'h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0'];
@@ -133,7 +133,7 @@ async function encode({ film, a, b, file }, { fps, samples, shutter, duration, f
     '-vf', blur + format.pix, '-r', String(fps), ...format.video, file], { input: true });
   /* a cancelled render stops its encoder at once: the frames ffmpeg still holds are thrown away, not encoded (a 4K
      encode takes seconds to drain); the parts folder goes with it (see render's finally) */
-  const stop = () => enc.proc.kill('SIGKILL');
+  const stop = () => kill(enc.proc);
   enc.proc.stdin.on('error', () => {});
   signal?.addEventListener('abort', stop, { once: true });
   try {
