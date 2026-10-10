@@ -2,28 +2,26 @@
 /**
  * `pnpm --filter @openfilm/shared build`: the package as npm publishes it, in dist/ (git-ignored). The JavaScript and
  * type declarations are compiled from src/ (tsconfig.build.json); their relative imports get the extension Node needs
- * (`./contract` → `./contract.js`); the error codes, already JavaScript, are copied as they are. It ends by importing
+ * (`./contract` → `./contract.js`). It ends by importing
  * every entry of the package, so a build Node cannot load fails here and not in someone's install.
  *
- * Packing runs it (prepack). In the repository, package.json points at src/: the workspace and the service's checkout
- * read the TypeScript as it is. Its publishConfig points the published package at dist/ (pnpm applies it when it
+ * Packing runs it (prepack). In the repository, package.json points at src/: the workspace
+ * reads the TypeScript as it is. Its publishConfig points the published package at dist/ (pnpm applies it when it
  * packs: `pnpm publish`, `pnpm pack`).
  */
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const ROOT = resolve(import.meta.dirname, '..');
-const SRC = join(ROOT, 'src');
 const DIST = join(ROOT, 'dist');
 const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
 
 rmSync(DIST, { recursive: true, force: true });
 const tsc = createRequire(join(ROOT, 'package.json')).resolve('typescript/bin/tsc');
 execFileSync(process.execPath, [tsc, '-p', join(ROOT, 'tsconfig.build.json')], { stdio: 'inherit' });
-for (const file of ['error-codes.mjs', 'error-codes.d.mts']) copyFileSync(join(SRC, 'api', file), join(DIST, 'api', file));
 
 /** A relative specifier with the extension Node resolves: `./x` → `./x.js`, `./dir` → `./dir/index.js`. */
 function withExtension(from, spec) {

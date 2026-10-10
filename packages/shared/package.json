@@ -4,7 +4,7 @@
   "private": false,
   "type": "module",
   "license": "MIT",
-  "description": "What OpenFilm's clients and the OpenFilm service share: a chat turn and its public events, the agent's activity, prompt references, titles, Markdown parsing, and the public API contract.",
+  "description": "What OpenFilm's clients share: a chat turn and its public events, the agent's activity, prompt references, titles and Markdown parsing.",
   "homepage": "https://openfilm.dev",
   "repository": {
     "type": "git",
@@ -28,20 +28,6 @@
       "import": "./src/markdown-blocks.ts",
       "default": "./src/markdown-blocks.ts"
     },
-    "./api": {
-      "types": "./src/api/index.ts",
-      "import": "./src/api/index.ts",
-      "default": "./src/api/index.ts"
-    },
-    "./api/errors": {
-      "types": "./src/api/errors.ts",
-      "import": "./src/api/errors.ts",
-      "default": "./src/api/errors.ts"
-    },
-    "./api/error-codes": {
-      "types": "./src/api/error-codes.d.mts",
-      "default": "./src/api/error-codes.mjs"
-    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -57,18 +43,6 @@
       "./markdown": {
         "types": "./dist/markdown-blocks.d.ts",
         "default": "./dist/markdown-blocks.js"
-      },
-      "./api": {
-        "types": "./dist/api/index.d.ts",
-        "default": "./dist/api/index.js"
-      },
-      "./api/errors": {
-        "types": "./dist/api/errors.d.ts",
-        "default": "./dist/api/errors.js"
-      },
-      "./api/error-codes": {
-        "types": "./dist/api/error-codes.d.mts",
-        "default": "./dist/api/error-codes.mjs"
       },
       "./package.json": "./package.json"
     }

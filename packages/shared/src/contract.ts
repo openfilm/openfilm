@@ -94,8 +94,8 @@ export type GenResult = z.infer<typeof genResultSchema>;
 //  The events a client sees while a turn runs
 // ──────────────────────────────────────────────────────────────
 
-/** Why a turn stopped: the person stopped it, or the account ran out of credits. Absent means `user`. */
-export const cancelReasonSchema = z.enum(['user', 'credits_exhausted']);
+/** Why a turn stopped: the person stopped it. Absent means `user`. */
+export const cancelReasonSchema = z.enum(['user']);
 export type CancelReason = z.infer<typeof cancelReasonSchema>;
 
 /** The most an agent's message may say in one event; longer text is clipped by the server. */
@@ -121,7 +121,7 @@ export const agentAskSchema = z.object({
 
 /**
  * The events a turn's owner sees. A projection: the agent's words as they are, its tool calls as closed-set actions
- * (see agent-activity), and a bare "thinking" signal. Tool names, arguments, outputs, paths and costs are not in it.
+ * (see agent-activity), and a bare "thinking" signal. Tool names, arguments, outputs and paths are not in it.
  * There is no progress percentage: the actions themselves are the progress.
  */
 export const publicGenerationEventSchema = z.discriminatedUnion('type', [
@@ -138,22 +138,19 @@ export const publicGenerationEventSchema = z.discriminatedUnion('type', [
     type: z.literal('failed'),
     message: z.string(),
   }),
-  /** Stopped; `reason` decides what the chat says (`credits_exhausted` offers a way to add credits). */
+  /** Stopped. */
   z.object({
     type: z.literal('cancelled'),
-    chargedCredits: z.number().int().nonnegative(),
     reason: cancelReasonSchema.optional(),
   }),
-  /** Paused, and can resume. `budget`: the turn reached the spending cap the person set for it. */
-  z.object({ type: z.literal('paused'), reason: z.literal('budget').optional() }),
-  /** An expensive step waits for the person's yes: its estimated credits (an upper bound), seconds, tier and prompt. */
+  /** Paused, and can resume. */
+  z.object({ type: z.literal('paused') }),
+  /** An expensive step waits for the person's yes: how long it would be, and its prompt. */
   z.object({
     type: z.literal('confirm'),
     id: z.string().max(64),
     command: z.string().max(40),
-    credits: z.number().int().nonnegative(),
     seconds: z.number().positive().optional(),
-    tier: z.string().max(16).optional(),
     prompt: z.string().max(240).optional(),
   }),
   z.object({ type: z.literal('confirm-settled'), id: z.string().max(64), decision: z.enum(['allow', 'deny', 'timeout']).optional() }),
@@ -212,11 +209,6 @@ export const publicGenerationEventSchema = z.discriminatedUnion('type', [
     callId: z.string().optional(),
     /** The media it made (see agent-activity's publicActivityResult). */
     asset: agentActAssetSchema.optional(),
-  }),
-  /** Credits spent so far; it grows while the turn runs. */
-  z.object({
-    type: z.literal('spend'),
-    credits: z.number().int().nonnegative(),
   }),
   /**
    * How full the conversation's context is, as a percentage, and what fills it (`parts` add up to `percent`).

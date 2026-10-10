@@ -136,7 +136,7 @@ day, and for the media services you connect (and the web pages they are asked to
 | Folder | What it is |
 | --- | --- |
 | [packages/openfilm](packages/openfilm) | npm `openfilm`: the film format ([SPEC.md](packages/openfilm/SPEC.md)), the manual for agents, the `openfilm` command, and Studio (its server and its editor) |
-| [packages/shared](packages/shared) | npm `@openfilm/shared`: what the clients share with the OpenFilm service, the public API contract among it |
+| [packages/shared](packages/shared) | npm `@openfilm/shared`: what the clients share (a chat turn, the agent's activity, Markdown parsing) |
 | [apps/desktop](apps/desktop) | the desktop app (Electron): Studio, a chat beside it, and its own agent |
 | [skills](skills) | the skill that points coding agents to the manual (`npx skills add openfilm/openfilm`) |
 | [docs](docs) | pictures for this README |

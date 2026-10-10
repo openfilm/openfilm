@@ -59,10 +59,8 @@ export interface Turn {
   /** When a stop was asked for, and when it stopped. */
   cancelRequestedAt?: string | null;
   cancelledAt?: string | null;
-  /** Why it stopped; null means `'user'`. `'credits_exhausted'`: the account ran out of credits. */
+  /** Why it stopped; null means `'user'`. */
   cancelReason?: CancelReason | null;
-  /** Credits the turn spent. */
-  chargedCredits?: number | null;
   /** When it was removed from recents (the film stays in the library); absent while it is shown. */
   removedFromRecentsAt?: string | null;
   createdAt: string;

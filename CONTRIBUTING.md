@@ -44,7 +44,7 @@ packages/openfilm/   npm `openfilm`: the format, the CLI and Studio
   studio/client.mjs    how the command finds or starts Studio
   test/                pages the tests draw
   scripts/             `pnpm dev`; product.mjs (which build the package is, below)
-packages/shared/     npm `@openfilm/shared`: what the clients and the OpenFilm service share, the API contract
+packages/shared/     npm `@openfilm/shared`: what the clients share
 apps/desktop/        the desktop app (Electron)
   src/                 the main process: windows, Studio, the agents, updates
   shell/               the window's page: Studio's editor (from packages/openfilm) with the chat beside it
@@ -79,13 +79,10 @@ with `node packages/openfilm/bin/openfilm.mjs <command>`.
 The command shares `~/.openfilm` and port 4747 with an installed OpenFilm, and the newer of two Studios replaces the
 older one: to keep them apart, set `OPENFILM_HOME` and `OPENFILM_STUDIO_PORT` while you work.
 
-## packages/shared: the contract with the OpenFilm service
+## packages/shared: what the clients share
 
-`@openfilm/shared` holds what the desktop app and the OpenFilm service both read: a chat turn and its events, how an
-agent's activity reads, prompt references, Markdown parsing, and the public API (`src/api/`: the requests, responses
-and error codes of `/v1/media/*`, `/v1/agent/*` and `/api/desktop/*`, in zod). The service checks its answers
-against these schemas, so they change only by adding: a field or an error code is never renamed or removed.
-`src/api/error-codes.mjs` is the list of error codes as plain JavaScript, for the desktop app's main process.
+`@openfilm/shared` holds what the desktop app's chat reads: a chat turn and its events, how an agent's activity
+reads, prompt references, title limits and Markdown parsing.
 
 `pnpm --filter @openfilm/shared test`, `pnpm --filter @openfilm/shared typecheck`. In the repository its
 package.json points at the TypeScript in `src/`, which the workspace reads as it is; `pnpm --filter @openfilm/shared
