@@ -93,7 +93,7 @@ export const es: Words = {
     removeDesc: 'Su carpeta ya no existe, así que solo se quita de la lista. No cambia nada en el disco.',
     removeAlso: 'Los proyectos cuya carpeta ya no existe solo se quitan de la lista.',
     getFromGitHub: 'Obtener de GitHub…',
-    startFrom: 'O empieza desde una película existente',
+    importFrom: 'Importar desde',
     locate: 'Localizar…',
     locateTitle: 'Localizar «{name}»',
     locateFailed: 'No se pudo usar esa carpeta: {error}',

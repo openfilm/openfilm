@@ -93,7 +93,7 @@ export const ko: Words = {
     removeDesc: '폴더가 더 이상 없으므로 목록에서만 제거됩니다. 디스크에는 아무 변화가 없습니다.',
     removeAlso: '폴더가 없어진 프로젝트는 목록에서만 제거됩니다.',
     getFromGitHub: 'GitHub에서 가져오기…',
-    startFrom: '또는 기존 필름에서 시작하기',
+    importFrom: '가져오기',
     locate: '위치 찾기…',
     locateTitle: '“{name}” 위치 찾기',
     locateFailed: '이 폴더를 사용할 수 없습니다: {error}',

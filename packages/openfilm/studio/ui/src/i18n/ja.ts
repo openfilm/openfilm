@@ -93,7 +93,7 @@ export const ja: Words = {
     removeDesc: 'フォルダーがすでに存在しないため、リストから外すだけです。ディスク上のものは何も変わりません。',
     removeAlso: 'フォルダーがなくなったプロジェクトは、リストから外すだけです。',
     getFromGitHub: 'GitHub から取得…',
-    startFrom: 'または既存のフィルムから始める',
+    importFrom: 'インポート元',
     locate: '場所を指定…',
     locateTitle: '「{name}」の場所を指定',
     locateFailed: 'このフォルダーは使えませんでした：{error}',

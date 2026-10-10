@@ -9,6 +9,7 @@ import { createPortal } from 'react-dom';
 import {
   ArrowLeft,
   Check,
+  ChevronDown,
   Clock3,
   Folder,
   FolderOpen,
@@ -546,39 +547,26 @@ type NewProjectProps = {
   onGetFromGitHub: () => void;
 };
 
-/**
- * The grid's first cell: start a new project, card-sized, so "new ones start here" reads at a glance. Under it, the
- * two ways to start from a film that exists: a folder on this computer, a repository on GitHub.
- */
+/** The grid's first cell: start a new project, card-sized, so "new ones start here" reads at a glance. */
 function NewProjectCard({ creating, onNewProject, onOpenFolder, onGetFromGitHub }: NewProjectProps) {
   const t = useT();
-  /* one row each, full width: their labels stay whole in every language */
-  const secondary = 'flex h-7 w-full shrink-0 items-center justify-center gap-1.5 border-t border-dashed border-[var(--border-strong)] px-2 text-[11.5px] font-medium text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-60';
   return (
-    <article className="min-w-0">
-      <div className="flex aspect-video w-full flex-col overflow-hidden rounded-lg border border-dashed border-[var(--border-strong)] transition hover:border-[var(--text-faint)]">
-        <button
-          type="button"
-          onClick={onNewProject}
-          disabled={creating}
-          aria-busy={creating}
-          className="group flex min-h-0 flex-1 flex-col items-center justify-center gap-1.5 text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-60"
-        >
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--surface-2)] text-[var(--text)] transition group-hover:scale-105">
-            <Plus size={18} strokeWidth={2.2} />
-          </span>
-          <span className="text-[13px] font-medium">{t('projects.newProject')}</span>
-        </button>
-        <div className="flex shrink-0 flex-col" role="group" aria-label={t('projects.startFrom')}>
-          <button type="button" onClick={onOpenFolder} disabled={creating} className={secondary}>
-            <FolderOpen size={13} className="shrink-0" />
-            <span className="truncate">{t('projects.openFolder')}</span>
-          </button>
-          <button type="button" onClick={onGetFromGitHub} disabled={creating} className={secondary}>
-            <Github size={13} className="shrink-0" />
-            <span className="truncate">{t('projects.getFromGitHub')}</span>
-          </button>
-        </div>
+    <article className="group min-w-0">
+      <button
+        type="button"
+        onClick={onNewProject}
+        disabled={creating}
+        aria-busy={creating}
+        className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--border-strong)] text-[var(--text-muted)] transition hover:border-[var(--text-faint)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-60"
+      >
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--surface-2)] text-[var(--text)] transition group-hover:scale-105">
+          <Plus size={18} strokeWidth={2.2} />
+        </span>
+        <span className="text-[13px] font-medium">{t('projects.newProject')}</span>
+      </button>
+      {/* where the other cards have their name: starting from a film that exists */}
+      <div className="mt-2 flex">
+        <ImportMenu creating={creating} onOpenFolder={onOpenFolder} onGetFromGitHub={onGetFromGitHub} className="-ml-1.5 h-7 px-1.5 text-[12.5px]" />
       </div>
     </article>
   );
@@ -611,17 +599,47 @@ function NewProjectListRow({ creating, onNewProject, onOpenFolder, onGetFromGitH
           {t('projects.newProject')}
         </button>
       </div>
-      <div className="flex shrink-0 items-center gap-1" role="group" aria-label={t('projects.startFrom')}>
-        <button type="button" onClick={onOpenFolder} disabled={creating} className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-60">
-          <FolderOpen size={14} />
-          {t('projects.openFolder')}
-        </button>
-        <button type="button" onClick={onGetFromGitHub} disabled={creating} className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-60">
-          <Github size={14} />
-          {t('projects.getFromGitHub')}
-        </button>
-      </div>
+      <ImportMenu creating={creating} onOpenFolder={onOpenFolder} onGetFromGitHub={onGetFromGitHub} className="h-8 px-2.5 text-[12.5px]" />
     </article>
+  );
+}
+
+/** "Import from ⌄": the ways to start from a film that exists, a folder on this computer or a repository on GitHub. */
+function ImportMenu({ creating, onOpenFolder, onGetFromGitHub, className }: Omit<NewProjectProps, 'onNewProject'> & { className: string }) {
+  const t = useT();
+  const [anchor, setAnchor] = React.useState<{ x: number; y: number; top: number } | null>(null);
+  const button = React.useRef<HTMLButtonElement>(null);
+  return (
+    <>
+      <button
+        ref={button}
+        type="button"
+        disabled={creating}
+        aria-expanded={anchor != null}
+        aria-haspopup="menu"
+        onClick={(event) => {
+          const box = event.currentTarget.getBoundingClientRect();
+          setAnchor((cur) => (cur ? null : { x: box.left, y: box.bottom + 4, top: box.top - 4 }));
+        }}
+        className={`inline-flex shrink-0 items-center gap-1 rounded-md text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-60 ${className}`}
+      >
+        {t('projects.importFrom')}
+        <ChevronDown size={13} />
+      </button>
+      {anchor ? (
+        <ContextMenu
+          x={anchor.x}
+          y={anchor.y}
+          flipTo={anchor.top}
+          trigger={button}
+          onClose={() => setAnchor(null)}
+          items={[
+            { id: 'folder', icon: <FolderOpen size={14} />, label: t('projects.openFolder'), onSelect: onOpenFolder },
+            { id: 'github', icon: <Github size={14} />, label: t('projects.getFromGitHub'), onSelect: onGetFromGitHub },
+          ]}
+        />
+      ) : null}
+    </>
   );
 }
 

@@ -94,7 +94,7 @@ export const en = {
     removeDesc: 'Its folder is no longer there, so it is only taken off the list. Nothing on disk changes.',
     removeAlso: 'Projects whose folder is gone are only taken off the list.',
     getFromGitHub: 'Get from GitHub…',
-    startFrom: 'Or start from an existing film',
+    importFrom: 'Import from',
     locate: 'Locate…',
     locateTitle: 'Locate “{name}”',
     locateFailed: 'Couldn’t use that folder: {error}',

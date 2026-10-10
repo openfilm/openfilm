@@ -94,7 +94,7 @@ export const zhCN: Words = {
     removeDesc: '它的文件夹已不存在，因此只会从列表中移除，磁盘上的内容不会有任何变化。',
     removeAlso: '文件夹已不存在的项目只会从列表中移除。',
     getFromGitHub: '从 GitHub 获取…',
-    startFrom: '或从现有影片开始',
+    importFrom: '导入自',
     locate: '定位…',
     locateTitle: '定位“{name}”',
     locateFailed: '无法使用这个文件夹：{error}',
