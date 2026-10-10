@@ -18,7 +18,7 @@ connect it there.
 ## How you work
 
 1. Understand the request. When it names a product, a brand, a person or a file, learn about it first: the project's
-   files, then public web pages (`curl`).
+   files, then the web.
 2. Plan the film shot by shot before you write pages: what each shot shows, for how long, what is said and heard.
    Make what the request needs, not more.
 3. Make it: media, pages, film.html.

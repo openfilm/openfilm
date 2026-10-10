@@ -93,14 +93,22 @@ In your replies you can point at things in Studio for the person: [[clip:ID]] (a
 [[file:PATH]] (a file of the project). They show as links that open it in Studio.`;
 
 /**
+ * For the app's own agent, which has no web tools of its own: web search and web pages from a service the person
+ * connected (Brave Search or Tavily), like any other media (`openfilm get` lists them for an agent with OPENFILM_GET_WEB=1).
+ */
+export const WEB_INSTRUCTIONS = `To search the web, run \`openfilm get web-search --query "…"\`; to read a page, \`openfilm get web-fetch --url …\`
+(it saves the page's text in the project). Both work once the person has connected a web search service (Brave Search
+or Tavily) with their own key; until then, read public pages with \`curl\`.`;
+
+/**
  * The app's own agent's whole system prompt, in place of Pi's (a coding assistant's, with Pi's own docs): who it is
- * and how it works with the person (agent-prompt.md), where it is (INSTRUCTIONS), and the manual
+ * and how it works with the person (agent-prompt.md), where it is (INSTRUCTIONS, WEB_INSTRUCTIONS), and the manual
  * `openfilm` prints, so it starts knowing it.
  */
 export function ownAgentPrompt() {
   const prompt = readFileSync(new URL('./agent-prompt.md', import.meta.url), 'utf8').trim();
   const manual = readFileSync(join(dirname(require.resolve('openfilm/package.json')), 'MANUAL.md'), 'utf8').replaceAll('npx openfilm', 'openfilm').trim();
-  return `${prompt}\n\n## Where you are\n\n${INSTRUCTIONS}\n\n<manual>\n${manual}\n</manual>`;
+  return `${prompt}\n\n## Where you are\n\n${INSTRUCTIONS}\n\n${WEB_INSTRUCTIONS}\n\n<manual>\n${manual}\n</manual>`;
 }
 
 /** The person's program for this agent, on their login shell's PATH or inside the maker's app. */
@@ -376,9 +384,11 @@ export class AgentSession {
     const node = nodeRuntime();
     const path = [this.opts.binDir, shell.PATH].filter(Boolean).join(PATH_SEP);
     const instructions = INSTRUCTIONS;
-    /* the app's own agent: what Pi runs with (its whole system prompt is ours) */
+    /* the app's own agent: what Pi runs with (its whole system prompt is ours), and the web search of `openfilm get`
+       (OPENFILM_GET_WEB lists it) */
     const own = !harness ? {} : {
       ...harness.env,
+      OPENFILM_GET_WEB: '1',
       OPENFILM_PI: JSON.stringify({ agentDir: harness.home, provider: harness.provider, model: harness.model, systemPrompt: ownAgentPrompt() }),
     };
     /* an agent that speaks ACP itself: its own program, started as the registry starts it */
