@@ -47,7 +47,7 @@ Your agent runs them; so can you, with `npx -y openfilm@latest <command>` or `np
 
 ```sh
 openfilm                          # the manual: all an agent needs to know
-openfilm open   [folder]          # show a film in Studio: a new one, an existing one, else this one or the last
+openfilm open   [folder | url]    # show a film in Studio: a new one, an existing one, one from GitHub, else this one or the last
 openfilm look   [what] [t | a-b]  # check the film, a page or a media file: a contact sheet, one frame, or a range
 openfilm render [a-b]             # the MP4; --4k, --blur (motion blur), --alpha (.webm / .mov)
 openfilm get    [what]            # voice-over, music, sound effects, transcripts, images, video, from your services
