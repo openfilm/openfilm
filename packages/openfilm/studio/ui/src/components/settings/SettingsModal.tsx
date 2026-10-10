@@ -245,6 +245,7 @@ function AboutGroup() {
       .catch(() => setState('failed'));
   };
   const status = inApp ? t('settings.about.inApp')
+    : info?.source ? t('settings.about.source')
     : info && !info.checking ? t('settings.about.off')
     : state === 'checking' ? t('settings.about.checking')
     : state === 'failed' ? t('settings.about.failed')
@@ -260,7 +261,7 @@ function AboutGroup() {
           <SettingsButton disabled={state === 'checking'} onClick={check}>{t('settings.about.check')}</SettingsButton>
         )}
       />
-      {!inApp && info?.newer ? (
+      {!inApp && !info?.source && info?.newer ? (
         <SettingsItem
           title={t('settings.about.howTitle')}
           description={t('settings.about.how')}

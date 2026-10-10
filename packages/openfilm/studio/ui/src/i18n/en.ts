@@ -1273,6 +1273,7 @@ export const en = {
       failed: 'Couldn’t reach npm. Try again later.',
       newer: 'OpenFilm {version} is out.',
       upToDate: 'Up to date.',
+      source: 'Running from source: git pull updates it.',
       off: 'Update checks are off here (OPENFILM_NO_UPDATE_CHECK).',
       never: 'Not checked yet.',
       inApp: 'Updates come with the desktop app: OpenFilm → Check for Updates…',
@@ -1394,7 +1395,7 @@ export const en = {
       save: 'Save',
       cancel: 'Cancel',
       keyEnding: 'Key ending in {last4}',
-      fromEnv: 'From ${env}',
+      useEnv: 'Use the key in ${env}',
       verbs: {
         tts: 'Voice-over',
         voice: 'Voices',

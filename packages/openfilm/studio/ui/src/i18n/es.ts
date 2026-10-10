@@ -1272,6 +1272,7 @@ export const es: Words = {
       failed: 'No se pudo contactar con npm. Inténtalo más tarde.',
       newer: 'Ya está disponible OpenFilm {version}.',
       upToDate: 'Está al día.',
+      source: 'Se ejecuta desde el código fuente: git pull lo actualiza.',
       off: 'Aquí no se buscan actualizaciones (OPENFILM_NO_UPDATE_CHECK).',
       never: 'Aún no se ha comprobado.',
       inApp: 'Studio se actualiza con la app de escritorio: OpenFilm → Check for Updates…',
@@ -1393,7 +1394,7 @@ export const es: Words = {
       save: 'Guardar',
       cancel: 'Cancelar',
       keyEnding: 'Clave terminada en {last4}',
-      fromEnv: 'Desde ${env}',
+      useEnv: 'Usar la clave de ${env}',
       verbs: {
         tts: 'Locución',
         voice: 'Voces',

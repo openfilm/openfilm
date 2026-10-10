@@ -19,8 +19,10 @@ export interface OwnProvider {
   keysUrl: string;
   /** the environment variable a key is (or would be) read from */
   env: string;
-  /** where its key comes from: kept by Studio, the environment, or none yet */
+  /** where its key comes from: kept by Studio, the environment, or none (not connected) */
   source: 'file' | 'env' | null;
+  /** the environment has a key for it, connected or not: connecting can use that one */
+  envKey: boolean;
   last4: string | null;
 }
 
@@ -63,6 +65,7 @@ export interface ProvidersHook {
   /** keep a key; resolves whether it was kept */
   saveKey: (id: string, key: string) => Promise<boolean>;
   removeKey: (id: string) => Promise<void>;
+  useEnvKey: (id: string) => Promise<boolean>;
   /** who makes that kind of media: a provider id with its model, or '' (none) */
   choose: (verb: ProviderVerb, provider: string, pick?: { model?: string }) => Promise<void>;
 }
@@ -103,6 +106,7 @@ export function useProviders(): ProvidersHook {
     state, problem, busy,
     saveKey: (id, key) => change(id, `/${encodeURIComponent(id)}/key`, { method: 'PUT', json: { key } }),
     removeKey: async (id) => { await change(id, `/${encodeURIComponent(id)}/key`, { method: 'DELETE' }); },
+    useEnvKey: (id) => change(id, `/${encodeURIComponent(id)}/key`, { method: 'PUT', json: { env: true } }),
     choose: async (verb, provider, pick) => { await change(verb, '/use', { method: 'PUT', json: { verb, provider: provider || null, ...pick } }); },
   };
 }

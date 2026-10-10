@@ -1273,6 +1273,7 @@ export const zhCN: Words = {
       failed: '连不上 npm，请稍后再试。',
       newer: 'OpenFilm {version} 已发布。',
       upToDate: '已是最新版本。',
+      source: '从源码运行：用 git pull 更新。',
       off: '这里关闭了更新检查（OPENFILM_NO_UPDATE_CHECK）。',
       never: '还没有检查过。',
       inApp: 'Studio 随桌面端一起更新：OpenFilm → Check for Updates…',
@@ -1394,7 +1395,7 @@ export const zhCN: Words = {
       save: '保存',
       cancel: '取消',
       keyEnding: '尾号为 {last4} 的密钥',
-      fromEnv: '来自 ${env}',
+      useEnv: '使用环境变量 ${env} 里的 key',
       verbs: {
         tts: '配音',
         voice: '音色',

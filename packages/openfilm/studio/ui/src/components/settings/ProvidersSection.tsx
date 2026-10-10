@@ -85,9 +85,7 @@ function KeyRow({ provider, hook }: { provider: OwnProvider; hook: ProvidersHook
           </span>
         </Connected>
       ) : null}
-      action={provider.source === 'env' ? (
-        <span className="text-[15px] text-[var(--text-muted)]">{t('settings.providers.fromEnv').replaceAll('{env}', provider.env)}</span>
-      ) : provider.source === 'file' ? (
+      action={provider.source ? (
         <SettingsButton variant="quiet" disabled={saving} onClick={() => void hook.removeKey(provider.id)}>{t('settings.providers.disconnect')}</SettingsButton>
       ) : adding ? null : (
         <SettingsButton onClick={() => setAdding(true)}>
@@ -113,6 +111,12 @@ function KeyRow({ provider, hook }: { provider: OwnProvider; hook: ProvidersHook
               <SettingsButton variant="quiet" onClick={close}>{t('settings.providers.cancel')}</SettingsButton>
               <SettingsButton type="submit" variant="primary" disabled={!draft.trim() || saving}>{t('settings.providers.save')}</SettingsButton>
             </div>
+            {/* the environment has a key for it: connect with that one, nothing to paste */}
+            {provider.envKey ? (
+              <button type="button" disabled={saving} onClick={() => void hook.useEnvKey(provider.id).then((ok) => { if (ok) close(); })} className={`${settingsLink} self-start text-[14.5px]`}>
+                {t('settings.providers.useEnv').replaceAll('{env}', provider.env)}
+              </button>
+            ) : null}
             <a href={provider.keysUrl} target="_blank" rel="noreferrer" className={`${settingsLink} text-[14.5px]`}>
               {t('settings.providers.getKey').replaceAll('{name}', provider.name)}<ExternalLink size={12} />
             </a>

@@ -13,7 +13,7 @@
  * page is part of web search the same way.
  */
 import { HttpError, json, readJson } from '../http.mjs';
-import { changeSettings, cleanKey, kindOf, modelFor, providerKey, readSettings } from '../keys.mjs';
+import { changeSettings, cleanKey, envKey, kindOf, modelFor, providerKey, readSettings } from '../keys.mjs';
 import elevenlabs from './elevenlabs.mjs';
 import openai from './openai.mjs';
 import google from './google.mjs';
@@ -91,7 +91,9 @@ async function state() {
   return {
     providers: OWN.map((p) => {
       const key = providerKey(p, settings);
-      return { id: p.id, name: p.name, verbs: p.verbs, models: p.models ?? {}, keysUrl: p.keysUrl, env: key?.env ?? p.env, source: key?.source ?? null, last4: key ? key.key.slice(-4) : null };
+      /* `envKey`: the environment has one (connected or not), so connecting can use it */
+      const inEnv = envKey(p);
+      return { id: p.id, name: p.name, verbs: p.verbs, models: p.models ?? {}, keysUrl: p.keysUrl, env: key?.env ?? inEnv?.env ?? p.env, envKey: Boolean(inEnv), source: key?.source ?? null, last4: key ? key.key.slice(-4) : null };
     }),
     use: Object.fromEntries(USE_VERBS.map((v) => [v, settings.use[v] ?? null])),
     /* the model each kind of media is made with, whoever makes it */
@@ -109,7 +111,9 @@ async function state() {
  *                                       use: { verb: provider id | null },
  *                                       model: { verb: model id | null } }
  *   PUT    /api/providers/:id/key   { key }               the key kept for that provider
- *   DELETE /api/providers/:id/key                         the kept key forgotten (one in the environment stays)
+ *   PUT    /api/providers/:id/key   { env: true }         the environment's key used for it again
+ *   DELETE /api/providers/:id/key                         disconnected: the kept key forgotten, the environment's
+ *                                                         not used (until it is connected again)
  *   PUT    /api/providers/use       { verb, provider, model? }  who serves that kind of media (an id, or null: none),
  *                                       and with which of its models (its first when none is given)
  *   POST   /api/providers/:id/billing → {}, the provider's own page for its balance opened in the person's browser
@@ -128,15 +132,23 @@ export async function providersRoute(req, res, parts, { openBrowser }) {
     const provider = OWN.find((p) => p.id === parts[0]);
     if (!provider) throw new HttpError(404, 'no such provider');
     if (req.method === 'PUT') {
+      const body = /** @type {{ key?: unknown, env?: unknown }} */ (await readJson(req));
+      const on = (/** @type {import('../keys.mjs').ProviderSettings} */ s) => { s.off = s.off.filter((id) => id !== provider.id); };
+      if (body.env === true) {
+        if (!envKey(provider)) throw new HttpError(400, `${provider.env} is not set here`);
+        await changeSettings((s) => { on(s); fill(s); });
+        return json(res, 200, await state());
+      }
       let key;
-      try { key = cleanKey(/** @type {{ key?: unknown }} */ (await readJson(req)).key); } catch (e) { throw new HttpError(400, /** @type {Error} */ (e).message); }
-      await changeSettings((s) => { s.keys[provider.id] = key; fill(s); });
+      try { key = cleanKey(body.key); } catch (e) { throw new HttpError(400, /** @type {Error} */ (e).message); }
+      await changeSettings((s) => { s.keys[provider.id] = key; on(s); fill(s); });
       return json(res, 200, await state());
     }
     if (req.method === 'DELETE') {
       await changeSettings((s) => {
         delete s.keys[provider.id];
-        /* what a provider that can no longer be used made goes to what else makes it (a key in the environment stays) */
+        if (envKey(provider) && !s.off.includes(provider.id)) s.off.push(provider.id);
+        /* what a provider that can no longer be used made goes to what else makes it */
         if (!providerKey(provider, s)) for (const [verb, id] of Object.entries(s.use)) if (id === provider.id) delete s.use[verb];
         fill(s);
       });

@@ -1271,6 +1271,7 @@ export const ko: Words = {
       failed: 'npm에 연결할 수 없습니다. 잠시 후 다시 시도하세요.',
       newer: 'OpenFilm {version}이(가) 나왔습니다.',
       upToDate: '최신 버전입니다.',
+      source: '소스에서 실행 중입니다. git pull로 업데이트하세요.',
       off: '여기서는 업데이트 확인이 꺼져 있습니다(OPENFILM_NO_UPDATE_CHECK).',
       never: '아직 확인하지 않았습니다.',
       inApp: 'Studio는 데스크톱 앱과 함께 업데이트됩니다: OpenFilm → Check for Updates…',
@@ -1392,7 +1393,7 @@ export const ko: Words = {
       save: '저장',
       cancel: '취소',
       keyEnding: '{last4}(으)로 끝나는 키',
-      fromEnv: '${env}에서 가져옴',
+      useEnv: '환경 변수 ${env}의 키 사용',
       verbs: {
         tts: '보이스오버',
         voice: '음성',

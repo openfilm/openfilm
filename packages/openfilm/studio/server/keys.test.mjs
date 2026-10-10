@@ -39,12 +39,13 @@ test('keys are kept in a file only this user can read, in a folder only this use
   assert.deepEqual((await readSettings()).use, { tts: 'elevenlabs', sfx: 'elevenlabs' });
 });
 
-test('a key in the environment wins over a kept one; Google\'s goes by either name', () => {
-  const kept = { keys: { elevenlabs: 'kept-key-12345678', google: 'kept-google-1234' }, use: {} };
+test('a key pasted in Studio wins over the environment\'s, which counts unless disconnected; Google\'s goes by either name', () => {
+  const kept = { keys: { elevenlabs: 'kept-key-12345678' }, use: {}, model: {}, off: [] };
   assert.deepEqual(providerKey(elevenlabs, kept, {}), { key: 'kept-key-12345678', source: 'file', env: 'ELEVENLABS_API_KEY' });
-  assert.deepEqual(providerKey(elevenlabs, kept, { ELEVENLABS_API_KEY: ' env-key-123456 ' }), { key: 'env-key-123456', source: 'env', env: 'ELEVENLABS_API_KEY' });
+  assert.deepEqual(providerKey(elevenlabs, kept, { ELEVENLABS_API_KEY: ' env-key-123456 ' }), { key: 'kept-key-12345678', source: 'file', env: 'ELEVENLABS_API_KEY' });
   assert.deepEqual(providerKey(google, kept, { GOOGLE_API_KEY: 'env-google-1234' }), { key: 'env-google-1234', source: 'env', env: 'GOOGLE_API_KEY' });
-  assert.equal(providerKey(google, { keys: {}, use: {} }, {}), null);
+  assert.equal(providerKey(google, { ...kept, off: ['google'] }, { GOOGLE_API_KEY: 'env-google-1234' }), null);
+  assert.equal(providerKey(google, { keys: {}, use: {}, model: {}, off: [] }, {}), null);
 });
 
 test('a pasted key is trimmed, and refused when it is not one key', () => {
@@ -59,21 +60,26 @@ test('the providers API: keys go in and never come back out; choices for each ki
   assert.ok(!text.includes('sk-test-ABCDEFGH9876') && !text.includes(KEY));
   let state = JSON.parse(text);
   const openai = state.providers.find((p) => p.id === 'openai');
-  assert.deepEqual(openai, { id: 'openai', name: 'OpenAI', verbs: ['voice', 'tts', 'image', 'asr', 'translate'], models: listProviders().find((p) => p.id === 'openai').models, keysUrl: 'https://platform.openai.com/api-keys', env: 'OPENAI_API_KEY', source: 'file', last4: '9876' });
+  assert.deepEqual(openai, { id: 'openai', name: 'OpenAI', verbs: ['voice', 'tts', 'image', 'asr', 'translate'], models: listProviders().find((p) => p.id === 'openai').models, keysUrl: 'https://platform.openai.com/api-keys', env: 'OPENAI_API_KEY', envKey: false, source: 'file', last4: '9876' });
   /* a new key takes the kinds nothing serves yet, and only those it can do */
   assert.equal(state.use.image, 'openai');
   assert.equal(state.use['image-search'], null);
   assert.equal(JSON.parse(readFileSync(providersFile(), 'utf8')).keys.openai, 'sk-test-ABCDEFGH9876');
 
-  /* a key in the environment shows where it is from, and stays when the kept one is removed */
+  /* a key in the environment connects its provider; disconnecting it there means it is not used, until connected again */
   process.env.FAL_KEY = 'fal-env-key-00001111';
   try {
     text = await (await api('/api/providers')).text();
     assert.ok(!text.includes('fal-env-key-00001111'));
-    assert.deepEqual(JSON.parse(text).providers.find((p) => p.id === 'fal'), { id: 'fal', name: 'fal.ai', verbs: ['image', 'video', 'music', 'sfx'], models: listProviders().find((p) => p.id === 'fal').models, keysUrl: 'https://fal.ai/dashboard/keys', env: 'FAL_KEY', source: 'env', last4: '1111' });
+    assert.deepEqual(JSON.parse(text).providers.find((p) => p.id === 'fal'), { id: 'fal', name: 'fal.ai', verbs: ['image', 'video', 'music', 'sfx'], models: listProviders().find((p) => p.id === 'fal').models, keysUrl: 'https://fal.ai/dashboard/keys', env: 'FAL_KEY', envKey: true, source: 'env', last4: '1111' });
+    let fal = (await (await api('/api/providers/fal/key', { method: 'DELETE' })).json()).providers.find((p) => p.id === 'fal');
+    assert.deepEqual([fal.source, fal.envKey], [null, true]);
+    fal = (await (await api('/api/providers/fal/key', { method: 'PUT', body: { env: true } })).json()).providers.find((p) => p.id === 'fal');
+    assert.equal(fal.source, 'env');
   } finally {
     delete process.env.FAL_KEY;
   }
+  assert.equal((await api('/api/providers/fal/key', { method: 'PUT', body: { env: true } })).status, 400);
 
   assert.equal((await api('/api/providers/use', { method: 'PUT', body: { verb: 'image', provider: 'fal' } })).status, 200);
   assert.equal((await api('/api/providers/use', { method: 'PUT', body: { verb: 'video', provider: 'openai' } })).status, 400);

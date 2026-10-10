@@ -1272,6 +1272,7 @@ export const ja: Words = {
       failed: 'npm に接続できません。しばらくしてからもう一度お試しください。',
       newer: 'OpenFilm {version} が公開されています。',
       upToDate: '最新の状態です。',
+      source: 'ソースから実行中です。git pull で更新します。',
       off: 'ここではアップデートの確認がオフです（OPENFILM_NO_UPDATE_CHECK）。',
       never: 'まだ確認していません。',
       inApp: 'Studio はデスクトップアプリと一緒に更新されます：OpenFilm → Check for Updates…',
@@ -1393,7 +1394,7 @@ export const ja: Words = {
       save: '保存',
       cancel: 'キャンセル',
       keyEnding: '末尾が {last4} のキー',
-      fromEnv: '${env} から',
+      useEnv: '環境変数 ${env} のキーを使う',
       verbs: {
         tts: 'ナレーション',
         voice: 'ボイス',

@@ -206,7 +206,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (parts[0] === 'version' && parts.length === 1 && req.method === 'GET') {
       const now = url.searchParams.get('check') === '1';
       const { latest, checkedAt } = await npmOpenfilm({ force: now, waitMs: 4000 });
-      return json(res, 200, { version: VERSION, latest, newer: Boolean(latest && olderThanThis(VERSION, latest)), checkedAt, checking: !process.env.OPENFILM_NO_UPDATE_CHECK });
+      return json(res, 200, { version: VERSION, latest, newer: Boolean(latest && olderThanThis(VERSION, latest)), checkedAt, checking: !process.env.OPENFILM_NO_UPDATE_CHECK && !FROM_SOURCE, source: FROM_SOURCE });
     }
     /* the fonts installed here (what a web page can draw with, in the preview and the export alike) */
     if (parts[0] === 'fonts' && parts.length === 1 && req.method === 'GET') return json(res, 200, { fonts: await installedFonts() });
@@ -638,6 +638,9 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
   }
   return studio;
 }
+
+/** Run from a checkout of the repository (the editor's source is beside its build), not from an installed package. */
+const FROM_SOURCE = existsSync(new URL('../ui/src', import.meta.url));
 
 /** This package's version: the CLI replaces a Studio older than itself. */
 export const VERSION = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version;

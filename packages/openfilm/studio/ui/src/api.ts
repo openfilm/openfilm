@@ -7,7 +7,7 @@ import { watchStudioVersion } from '@/lib/studio-version';
 
 /** `working`: an agent of the app's chat is working in it right now (it cannot be deleted meanwhile). */
 /** GET /api/version: this Studio's, and npm's latest (null when never learnt; `checking` false: never asked). */
-export interface StudioVersion { version: string; latest: string | null; newer: boolean; checkedAt: number | null; checking: boolean }
+export interface StudioVersion { version: string; latest: string | null; newer: boolean; checkedAt: number | null; checking: boolean; source: boolean }
 
 export type Project = { id: string; path: string; name: string; openedAt: number; missing: boolean; working?: boolean };
 export type Clip = { src: string; id: string; at?: number; time?: [number] | [number, number];

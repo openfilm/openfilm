@@ -19,7 +19,10 @@ import { studioHome } from './projects.mjs';
 import { replaceFile } from './atomic.mjs';
 
 /** @typedef {import('./providers/contract.mjs').Provider} Provider */
-/** @typedef {{ keys: Record<string, string>, use: Record<string, string>, model: Record<string, string> }} ProviderSettings */
+/**
+ * `off`: the providers disconnected while the environment has a key for them (that key is not used).
+ * @typedef {{ keys: Record<string, string>, use: Record<string, string>, model: Record<string, string>, off: string[] }} ProviderSettings
+ */
 
 /** Where the keys and choices are kept: ~/.openfilm/providers.json. */
 export const providersFile = () => join(studioHome(), 'providers.json');
@@ -39,8 +42,9 @@ export async function readSettings(file = providersFile()) {
     const raw = plain(JSON.parse(await readFile(file, 'utf8')));
     /* 'auto' was a choice once: it means none now */
     const use = Object.fromEntries(Object.entries(strings(raw.use)).filter(([, id]) => id !== 'auto'));
-    return /** @type {ProviderSettings} */ ({ keys: strings(raw.keys), use, model: strings(raw.model) });
-  } catch { return /** @type {ProviderSettings} */ ({ keys: {}, use: {}, model: {} }); }
+    const off = Array.isArray(raw.off) ? raw.off.filter((id) => typeof id === 'string') : [];
+    return /** @type {ProviderSettings} */ ({ keys: strings(raw.keys), use, model: strings(raw.model), off });
+  } catch { return /** @type {ProviderSettings} */ ({ keys: {}, use: {}, model: {}, off: [] }); }
 }
 
 /**
@@ -79,17 +83,25 @@ export function changeSettings(/** @type {(s: ProviderSettings) => void} */ edit
 }
 
 /**
- * A provider's key and where it comes from: the environment first, then the file. null: no key.
+ * A provider's key and where it comes from: the one pasted in Studio (the person's choice), else the environment's
+ * unless the person disconnected it there. null: no key.
  * @param {Provider} provider @param {ProviderSettings} settings
  * @returns {{ key: string, source: 'env' | 'file', env: string } | null}
  */
 export function providerKey(provider, settings, env = process.env) {
+  const kept = settings.keys[provider.id];
+  if (kept) return { key: kept, source: 'file', env: provider.env };
+  if (settings.off?.includes(provider.id)) return null;
+  return envKey(provider, env);
+}
+
+/** The environment's key for a provider, connected or not, or null. @param {Provider} provider */
+export function envKey(provider, env = process.env) {
   for (const name of [provider.env, ...(ALSO[provider.env] ?? [])]) {
     const key = env[name]?.trim();
-    if (key) return { key, source: 'env', env: name };
+    if (key) return { key, source: /** @type {const} */ ('env'), env: name };
   }
-  const key = settings.keys[provider.id];
-  return key ? { key, source: 'file', env: provider.env } : null;
+  return null;
 }
 
 /** A pasted key as it is kept: trimmed, one line, of a plausible length. Throws a sentence the page can show. */
