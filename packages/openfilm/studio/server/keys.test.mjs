@@ -14,7 +14,7 @@ before(async () => {
   const scratch = mkdtempSync(join(tmpdir(), 'of-keys-'));
   process.env.OPENFILM_HOME = join(scratch, 'home');
   process.env.OPENFILM_LIBRARY = join(scratch, 'library');
-  for (const name of ['ELEVENLABS_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'FAL_KEY']) delete process.env[name];
+  for (const name of ['ELEVENLABS_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'FAL_KEY', 'PEXELS_API_KEY', 'PIXABAY_API_KEY', 'BRAVE_API_KEY', 'TAVILY_API_KEY', 'GROQ_API_KEY']) delete process.env[name];
   studio = await startStudio({ port: 0, openBrowser: (url) => opened.push(url) });
 });
 after(() => studio.close());
@@ -70,7 +70,7 @@ test('the providers API: keys go in and never come back out; choices for each ki
   try {
     text = await (await api('/api/providers')).text();
     assert.ok(!text.includes('fal-env-key-00001111'));
-    assert.deepEqual(JSON.parse(text).providers.find((p) => p.id === 'fal'), { id: 'fal', name: 'fal.ai', verbs: ['image', 'video'], models: listProviders().find((p) => p.id === 'fal').models, keysUrl: 'https://fal.ai/dashboard/keys', env: 'FAL_KEY', source: 'env', last4: '1111' });
+    assert.deepEqual(JSON.parse(text).providers.find((p) => p.id === 'fal'), { id: 'fal', name: 'fal.ai', verbs: ['image', 'video', 'music', 'sfx'], models: listProviders().find((p) => p.id === 'fal').models, keysUrl: 'https://fal.ai/dashboard/keys', env: 'FAL_KEY', source: 'env', last4: '1111' });
   } finally {
     delete process.env.FAL_KEY;
   }

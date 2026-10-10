@@ -52,12 +52,14 @@ test('translation: one string per line asked, in order; anything else is refused
 });
 
 test('no balance, as each service says it, is one error for all; a plain rate limit is not one', async () => {
-  /* OpenAI, ElevenLabs, fal, Gemini, and any 402 */
+  /* OpenAI, ElevenLabs, fal, Gemini, Tavily, and any 402 */
   assert.ok(outOfBalance(429, JSON.stringify({ error: { message: 'You exceeded your current quota, please check your plan and billing details.', type: 'insufficient_quota', code: 'insufficient_quota' } })));
   assert.ok(outOfBalance(401, JSON.stringify({ detail: { status: 'quota_exceeded', message: 'This request exceeds your quota.' } })));
   assert.ok(outOfBalance(403, JSON.stringify({ detail: 'User is locked. Reason: Exhausted balance. Top up your balance at fal.ai/dashboard/billing.' })));
   assert.ok(outOfBalance(429, JSON.stringify({ error: { code: 429, message: 'Your prepayment credits are depleted.', status: 'RESOURCE_EXHAUSTED' } })));
   assert.ok(outOfBalance(402, ''));
+  /* Tavily's plan and pay-as-you-go limits */
+  assert.ok(outOfBalance(432, '') && outOfBalance(433, ''));
   assert.ok(!outOfBalance(429, JSON.stringify({ error: { message: 'Rate limit reached for requests', type: 'requests', code: 'rate_limit_exceeded' } })));
   assert.ok(!outOfBalance(429, JSON.stringify({ error: { code: 429, message: 'Resource has been exhausted (e.g. check quota).', status: 'RESOURCE_EXHAUSTED' } })));
   assert.ok(!outOfBalance(401, JSON.stringify({ error: { message: 'Incorrect API key provided' } })));

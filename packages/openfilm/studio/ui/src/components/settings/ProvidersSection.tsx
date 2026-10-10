@@ -1,9 +1,10 @@
 /**
- * Settings → Providers: the services `openfilm get` gets voices, music, sound effects, transcripts, images and video
- * from, one list in the order of their names, none put first.
+ * Settings → Providers: the services `openfilm get` gets voices, music, sound effects, transcripts, images, video and
+ * web searches from, one list in the order of their names, none put first.
  *
- * Each connects with the person's own key, which pays that service directly (a key in the environment shows as such
- * and stays there). Which of them makes each kind of media, and with which model, is Settings → Models.
+ * ElevenLabs, OpenAI, Google Gemini, fal.ai, Groq, Pexels, Pixabay, Brave Search and Tavily connect with the person's
+ * own key, which pays that service directly when it charges (a key in the environment shows as such and stays there).
+ * Which of them makes each kind of media, and with which model, is Settings → Models.
  */
 import React from 'react';
 import { ExternalLink, Plus } from 'lucide-react';

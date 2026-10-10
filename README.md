@@ -126,10 +126,10 @@ is for anyone building a player, renderer or editor.
 | `OPENFILM_EXPORTS` | Where Studio saves exports (default `~/Movies/OpenFilm/Exports`). |
 | `OPENFILM_NO_BROWSER=1` | Studio never opens your browser by itself. |
 | `OPENFILM_NO_UPDATE_CHECK=1` | No daily check for a newer `openfilm` on npm. |
-| `ELEVENLABS_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `FAL_KEY` | Keys for `openfilm get`, instead of keeping them in Studio. |
+| `ELEVENLABS_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `FAL_KEY`, `GROQ_API_KEY`, `PEXELS_API_KEY`, `PIXABAY_API_KEY`, `BRAVE_API_KEY`, `TAVILY_API_KEY` | Keys for `openfilm get`, instead of keeping them in Studio. |
 
 OpenFilm talks to the network only to download the browser it draws with, to check npm for a newer version once a
-day, and for the media services you connect.
+day, and for the media services you connect (and the web pages they are asked to read).
 
 ## This repository
 
