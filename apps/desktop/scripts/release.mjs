@@ -4,8 +4,8 @@
  * `--official` for the project's own build).
  *
  * Which build it is comes from the `openfilm` package's product files: a build of this source uses product.json,
- * empty in the repository (no account service, no update feed: the app never looks for updates); `--official` uses
- * product.official.json (the OpenFilm account service, and the update feed under its `desktop.updates`).
+ * empty in the repository (no update feed: the app never looks for updates); `--official` uses product.official.json
+ * (the update feed under its `desktop.updates`).
  *
  *   1. the window's page (shell/: Studio's editor with the chat beside it) and Studio's editor on its own (the
  *      `openfilm` package's UI) are built;
@@ -13,7 +13,7 @@
  *      and `@openfilm/shared` packages as `npm pack` makes them (what npm would publish), the agents' ACP adapters
  *      and the updater. Optional dependencies are left out: the adapters would bring the makers' own Claude Code and
  *      Codex programs (200–330 MB each), and the app uses the person's own installation instead (src/agents.mjs).
- *      The staged `openfilm` package gets the build's product.json: the account service the app connects to;
+ *      The staged `openfilm` package gets the build's product.json;
  *   3. electron-builder makes the .dmg (to download) and the .zip (for updates), signed with the Developer ID
  *      OPENFILM_SIGN_IDENTITY ("Name (TEAMID)") and notarized (APPLE_TEAM_ID, the `openfilm-notary` keychain profile or
  *      OPENFILM_NOTARY_PROFILE), with the update feed written in (none without one). Without OPENFILM_SIGN_IDENTITY
@@ -54,7 +54,7 @@ if (unsigned && !win && !process.argv.includes('--unsigned')) {
   console.warn('OPENFILM_SIGN_IDENTITY and APPLE_TEAM_ID are not set: building an unsigned app (not notarized). Official builds are signed by the release pipeline.');
 }
 
-/* this build's product: its account service and update feed (see the header) */
+/* this build's product: its update feed (see the header) */
 const official = process.argv.includes('--official');
 const productFile = join(protocol, official ? 'product.official.json' : 'product.json');
 const product = JSON.parse(readFileSync(productFile, 'utf8'));
@@ -92,7 +92,7 @@ writeFileSync(join(stage, 'package.json'), `${JSON.stringify({
   dependencies,
 }, null, 2)}\n`);
 run('npm', ['install', '--omit=dev', '--omit=optional', '--no-audit', '--no-fund', '--no-package-lock', '--loglevel=error'], { cwd: stage });
-/* the build's account service and update feed */
+/* the build's product file */
 cpSync(productFile, join(stage, 'node_modules/openfilm/product.json'));
 
 /* 3. the app */

@@ -12,25 +12,19 @@ import type { Balance } from './balance';
 /** The coding agents the shell can connect to its MCP endpoint. */
 export type DesktopAgentId = 'claude' | 'codex' | 'cursor' | 'copilot' | 'gemini' | 'opencode' | 'codebuddy' | 'devin';
 
-/** The chat's agents: the person's own (Codex, Claude Code, Gemini CLI, …), and the app's own (OpenFilm, their own key). */
-export type LocalAgentId = 'claude' | 'codex' | 'gemini' | 'copilot' | 'cursor' | 'opencode' | 'codebuddy' | 'qwen' | 'kimi' | 'openfilm' | 'byok';
+/** The chat's agents: the person's own (Codex, Claude Code, Gemini CLI, …), and the app's own on their own key. */
+export type LocalAgentId = 'claude' | 'codex' | 'gemini' | 'copilot' | 'cursor' | 'opencode' | 'codebuddy' | 'qwen' | 'kimi' | 'byok';
 
 /** One agent as the app's roster has it (apps/desktop/src/agent-roster.mjs; Studio's lib/host.ts HostAgent). */
 export interface RosterAgent {
   id: LocalAgentId;
   name: string;
   shown: boolean;
-  status: 'ready' | 'off' | 'sign-in' | 'waiting' | 'missing' | 'account' | 'key' | 'unavailable' | 'unconfigured' | 'checking';
+  status: 'ready' | 'off' | 'sign-in' | 'waiting' | 'missing' | 'key' | 'checking';
   install?: string | null;
   setupRequired?: string | null;
   error?: string;
   byok?: { format: 'responses' | 'chat' | 'anthropic'; baseUrl: string; model: string; last4: string };
-  /** OpenFilm: the models it offers, and the one it uses */
-  models?: Array<{ id: string; name: string }>;
-  model?: string | null;
-  /** the OpenFilm agent's reasoning efforts and the one chosen */
-  efforts?: string[];
-  effort?: string;
 }
 
 export interface LocalAgentState {
@@ -112,13 +106,6 @@ export interface DesktopBridge {
   version: string;
   /** IPC contract version; separate from the installed application's version. */
   bridgeVersion?: string;
-  account?: {
-    signIn(strategy?: 'oauth_google' | 'oauth_github' | 'email', email?: string): Promise<{ ok: boolean; error?: string }>;
-    signOut(): Promise<{ ok: boolean }>;
-    onChange(cb: () => void): () => void;
-    /** The browser handed the sign-in back and the app is finishing it (older shells lack it). */
-    onCompleting?(cb: () => void): () => void;
-  };
   /** darwin / win32 / linux. */
   platform: string;
   /** Opens the system folder picker. null if the user cancels. */
@@ -150,17 +137,7 @@ export interface DesktopBridge {
   libraryRoot?(): Promise<string | null>;
   /** The menu's File → Open Folder… was clicked. Returns an unsubscribe function. */
   onOpenLocalFolder?(cb: () => void): () => void;
-  onMenuAction?(cb: (action: 'settings' | 'sign-out') => void): () => void;
-  /**
-   * Third-party sign-in in the system browser, returning a one-time sign-in ticket.
-   *
-   * Embedded sign-in in a native app is an anti-pattern (RFC 8252): the window is the app's, so the user
-   * cannot check who they are talking to; Google blocks it too. The caller exchanges the ticket for a
-   * session; the shell never holds it.
-   */
-  signIn?(strategy: 'oauth_google' | 'oauth_github'): Promise<{ ok: true; ticket: string } | { ok: false; error: string }>;
-  /** The user closed the sign-in screen: close the loopback port still waiting for the ticket. */
-  cancelSignIn?(): Promise<void>;
+  onMenuAction?(cb: (action: 'settings') => void): () => void;
   /**
    * The absolute path on disk of a browser File (dragged in, or chosen with `<input type=file>`).
    * A pasted file has no path and gives an empty string; then its bytes can only be uploaded.
@@ -191,9 +168,6 @@ export interface DesktopBridge {
   agents?: {
     list(): Promise<RosterAgent[]>;
     connect(id: LocalAgentId): Promise<{ ok: boolean; error?: string }>;
-    /** OpenFilm's model, one it offers */
-    setModel?(id: LocalAgentId, model: string): Promise<{ ok: boolean }>;
-    setEffort?(id: LocalAgentId, effort: string): Promise<{ ok: boolean }>;
     onChange(listener: (agents: RosterAgent[]) => void): () => void;
   };
   /** Studio's Settings, on Agents (or Providers). */
@@ -241,14 +215,7 @@ export interface DesktopBridge {
    * `configured` still holds, since it reads files on disk.
    */
   agentStatus?(): Promise<DesktopAgentStatus | null>;
-  /**
-   * The tool tier (flash / pro / ultra) external agents ask for. Only a preference: the server decides
-   * what applies.
-   */
-  setAgentTier?(tier: AgentToolTier): Promise<{ ok: true; tier: AgentToolTier } | { ok: false; error: string }>;
 }
-
-export type AgentToolTier = 'flash' | 'pro' | 'ultra';
 
 export interface DesktopAgentStatus {
   /** Executable/app detection; leftover configuration is not installation evidence. */
@@ -256,8 +223,6 @@ export interface DesktopAgentStatus {
   url: string;
   /** Whether the MCP endpoint is open (off by default; Connect opens it). */
   enabled?: boolean;
-  /** The tool tier chosen now; older versions lack it. */
-  tier?: AgentToolTier;
   sessions: Array<{
     id: string;
     clientName: string;
@@ -267,8 +232,6 @@ export interface DesktopAgentStatus {
     /** How it got in: the shell's pairing secret / approved in a dialog / test pass-through. */
     paired?: 'secret' | 'dialog' | 'auto';
     projectId?: string;
-    /** The session's key on the account (only once it has used paid tools); `cap` is its limit, enforced by the server. */
-    agentKey?: { id: string; label: string; cap: number; expiresAt: string };
   }>;
   trusted: Array<{ name: string; approvedAt: number; expiresAt: number; secret?: true }>;
   audit: string;

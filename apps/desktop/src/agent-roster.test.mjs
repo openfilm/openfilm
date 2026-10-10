@@ -10,9 +10,6 @@ const roster = (dataDir, fetch, extra = {}) => createRoster({
   localAgents: async () => [],
   openSignIn: async () => ({ ok: true }),
   closeSessions: () => {},
-  accountConnected: async () => false,
-  openfilmService: async () => null,
-  openfilmAddress: () => 'https://openfilm.test/v1/agent',
   seal: (text) => Buffer.from(`sealed:${text}`),
   unseal: (data) => data.toString().replace(/^sealed:/, ''),
   onChange: () => {},
@@ -58,7 +55,8 @@ test('each format is Pi\'s provider on that API, the key in its own variable', a
   const r = roster(dir, ok);
   await r.configureByok({ format: 'responses', baseUrl: '', model: 'gpt-x', key: 'sk-a' });
   let h = r.harness('byok');
-  assert.deepEqual(h.provider, { id: 'byok', api: 'openai-responses', baseUrl: 'https://api.openai.com/v1', apiKeyEnv: 'OPENFILM_BYOK_KEY', models: [{ id: 'gpt-x' }] }, 'the official address when none is given');
+  assert.deepEqual(h.provider, { id: 'byok', api: 'openai-responses', baseUrl: 'https://api.openai.com/v1', apiKeyEnv: 'OPENFILM_BYOK_KEY' }, 'the official address when none is given');
+  assert.equal(h.model, 'gpt-x');
   assert.deepEqual(h.env, { OPENFILM_BYOK_KEY: 'sk-a' });
   assert.equal(h.home, join(dir, 'agents', 'byok', 'pi'), 'its own folder, never the person\'s ~/.pi');
 
@@ -72,32 +70,7 @@ test('each format is Pi\'s provider on that API, the key in its own variable', a
   h = r.harness('byok');
   assert.equal(h.provider.api, 'anthropic-messages');
   assert.equal(h.provider.baseUrl, 'https://api.anthropic.com');
-  assert.deepEqual(h.current(), { model: 'claude-x' });
-});
-
-test('each OpenFilm model thinks as it can: its maker\'s default until the person chooses, kept by model', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'of-roster-'));
-  const models = [
-    { id: 'deepseek/deepseek-v4.1-flash', name: 'DeepSeek V4.1 Flash', efforts: ['low', 'high', 'max'], effort: 'high' },
-    { id: 'xiaomi/mimo-v2.6-pro', name: 'MiMo V2.6 Pro', efforts: ['off', 'on'], effort: 'on' },
-  ];
-  const r = roster(dir, async () => new Response('{}'), { accountConnected: async () => true, openfilmService: async () => ({ models, default: models[0].id }) });
-  await r.refresh();
-  const h = r.harness('openfilm');
-  const now = () => h.current().effort;
-  assert.equal(h.provider.baseUrl, 'https://openfilm.test/v1/agent');
-  assert.equal(h.provider.openrouter, true, 'its thinking in the format the service takes');
-  assert.equal(now(), 'high');
-  r.setEffort('openfilm', 'max');
-  assert.equal(now(), 'max', 'the next message says it');
-  r.setEffort('openfilm', 'medium');
-  assert.equal(now(), 'max', 'DeepSeek has no medium');
-  r.setModel('openfilm', 'xiaomi/mimo-v2.6-pro');
-  assert.deepEqual(h.current(), { model: 'xiaomi/mimo-v2.6-pro', effort: 'on' }, 'another model, the same session: its own default');
-  r.setEffort('openfilm', 'off');
-  r.setModel('openfilm', 'deepseek/deepseek-v4.1-flash');
-  assert.equal(now(), 'max', 'each model keeps its own');
-  assert.deepEqual(readChoices(dir).openfilmEffort, { 'deepseek/deepseek-v4.1-flash': 'max', 'xiaomi/mimo-v2.6-pro': 'off' });
+  assert.equal(h.model, 'claude-x');
 });
 
 test("Codex and Claude Code are shown in the chat from the start, the person's other agents once connected or switched on", async () => {
@@ -114,14 +87,4 @@ test("Codex and Claude Code are shown in the chat from the start, the person's o
   assert.equal(r.list().find((a) => a.id === 'gemini').shown, true, 'connected: chosen');
   r.setShown('kimi', true);
   assert.equal(readChoices(dir).shown.kimi, true);
-});
-
-test('a build with no account service: the OpenFilm agent is unconfigured and the service is never asked', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'of-roster-'));
-  let asked = 0;
-  const r = roster(dir, undefined, { accountConfigured: () => false, openfilmService: async () => { asked += 1; return null; } });
-  assert.equal((await r.refresh()).find((a) => a.id === 'openfilm').status, 'unconfigured');
-  await r.connect('openfilm');
-  assert.equal(r.list().find((a) => a.id === 'openfilm').status, 'unconfigured');
-  assert.equal(asked, 0);
 });

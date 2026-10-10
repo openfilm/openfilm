@@ -97,7 +97,7 @@ const press = async (page, code, key) => {
 async function useFakeAgent(studio, chat, model) {
   const done = await studio.evaluate((baseUrl) => window.openfilmHost.agents.configureByok({ format: 'responses', baseUrl, model: 'bench', key: 'bench-key' }), model.baseUrl);
   if (!done?.ok) throw new Error(`setting up the agent: ${done?.error ?? 'no answer'}`);
-  for (const id of ['codex', 'claude', 'openfilm']) await studio.evaluate((x) => window.openfilmHost.agents.setShown(x, false), id);
+  for (const id of ['codex', 'claude']) await studio.evaluate((x) => window.openfilmHost.agents.setShown(x, false), id);
   await until('the own-key agent ready', () => studio.evaluate(async () => (await window.openfilmHost.agents.list()).find((a) => a.id === 'byok')?.status === 'ready'), 120_000, 500);
   await chat.evaluate(() => localStorage.setItem('openfilm.local-agents.v2', JSON.stringify({ picked: 'byok', prefs: {}, options: {} })));
   await chat.reload();

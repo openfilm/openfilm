@@ -47,7 +47,7 @@ import { readBalance, type TurnBalance } from '@/lib/balance';
 import { BalanceNotice } from '@/components/BalanceNotice';
 import { readStudioFilm } from '@/lib/studio-film';
 import { studioRefsFromTransfer, transferHasStudioRefs } from '@/lib/studio-transfer';
-import { EFFORT_KEYS, agentModelSummary, currentAgent, effectivePrefs, fixedModel, offeredOption, useLocalAgents } from '@/state/local-agent-store';
+import { agentModelSummary, currentAgent, effectivePrefs, fixedModel, offeredOption, useLocalAgents } from '@/state/local-agent-store';
 import { useLiveActivityFromStore } from '@/lib/live-activity';
 import { loadLastSession, loadSessions, newSession, saveLastSession, saveSessions } from '@/lib/local-sessions';
 import type { ProjectSessionItem } from '@/lib/project-sessions';
@@ -415,11 +415,9 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     const prefs = effectivePrefs(agentStore.prefs, agent, agentStore.roster, agentStore.options[agent]);
     const summary = agentModelSummary(agentStore.options[agent], prefs);
     const fixed = fixedModel(agent, agentStore.roster);
-    /* how hard it thinks, as the menu offers it: the OpenFilm agent's is the app's own choice */
-    const openfilmEffort = agent === 'openfilm' ? agentStore.roster?.find((a) => a.id === 'openfilm')?.effort ?? null : null;
+    /* how hard it thinks, as the menu offers it */
     const effortOption = agentStore.options[agent]?.find((o) => o.category === 'thought_level');
-    const effort = openfilmEffort ? (EFFORT_KEYS[openfilmEffort] ? t(EFFORT_KEYS[openfilmEffort]) : openfilmEffort)
-      : effortOption && offeredOption(agent, agentStore.roster, effortOption) ? summary.effort : null;
+    const effort = effortOption && offeredOption(agent, agentStore.roster, effortOption) ? summary.effort : null;
     const modelLabel = [fixed ?? summary.model, effort].filter(Boolean).join(' · ');
     const started: Turn = {
       ...makePlaceholder(id, 'video', instruction, { projectId: projectKey, sessionId }),

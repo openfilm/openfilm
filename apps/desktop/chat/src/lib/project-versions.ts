@@ -36,7 +36,7 @@ export interface ProjectVersionEntry {
   durationMs?: number;
   /** How the turn stopped when it didn't finish normally. Empty when it did. */
   outcome?: 'stopped' | 'failed' | 'balance';
-  /** outcome 'balance': which service had no balance left, and its page (older turns: not known) */
+  /** outcome 'balance': which service had no balance left, and its page */
   balance?: Balance;
   /** When the message was sent (ISO). Hovering under the bubble says "N minutes ago". */
   createdAt?: string;
@@ -53,10 +53,9 @@ function frameOf(asset: Turn): Pick<ProjectVersionEntry, 'agent' | 'model' | 'du
   const settled = asset.status === 'ready' || asset.status === 'error' || asset.status === 'cancelled';
   const ms = Date.parse(asset.updatedAt) - Date.parse(asset.createdAt);
   const model = asset.localAgent?.model ?? null;
-  /* no balance left: said by the service's name, the same for every one (older turns stopped "out of credits") */
+  /* no balance left: said by the service's name, the same for every one */
   const balance = asset.status === 'error' ? readBalance((asset as Turn & TurnBalance).balance) : null;
-  const outcome = asset.status === 'cancelled'
-    ? (asset.cancelReason === 'credits_exhausted' ? 'balance' as const : 'stopped' as const)
+  const outcome = asset.status === 'cancelled' ? 'stopped' as const
     : balance ? 'balance' as const : asset.status === 'error' ? 'failed' as const : null;
   /* a turn saved before turns named their agent: which one is not known */
   const agent = asset.localAgent?.id ?? null;

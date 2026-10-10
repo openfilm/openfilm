@@ -24,7 +24,7 @@ interface Native {
   revealPath(path: string): Promise<void>;
   pickFolder(): Promise<string | null>;
   capture(rect: { x: number; y: number; width: number; height: number }): Promise<string | null>;
-  agents: StudioHost['agents'] & { setModel(id: string, model: string): Promise<unknown>; setEffort(id: string, effort: string): Promise<unknown> };
+  agents: NonNullable<StudioHost['agents']>;
   localAgents: Record<string, unknown>;
   importFile(request: { projectId: string; path: string; name: string }): Promise<{ ok: true; path: string } | { ok: false; error: string }>;
   chat: Record<string, (...args: never[]) => Promise<unknown>>;
@@ -279,11 +279,9 @@ const uploadName = (name: string) => name.split(/[\\/]/).pop()!.replace(/[\u0000
   pathForFile: native.pathForFile,
   revealPath: native.revealPath,
   agents: {
-    list: native.agents!.list,
-    connect: native.agents!.connect,
-    setModel: native.agents.setModel,
-    setEffort: native.agents.setEffort,
-    onChange: native.agents!.onChange,
+    list: native.agents.list,
+    connect: native.agents.connect,
+    onChange: native.agents.onChange,
   },
   localAgents: native.localAgents,
   openSettings: (section: string) => command?.({ type: 'settings', section: section === 'providers' ? 'providers' : 'agents' }),

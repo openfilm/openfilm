@@ -7,9 +7,7 @@
  *     not signed in; disconnecting only stops OpenFilm using them (their sign-in is shared with the makers' own apps,
  *     and stays). Codex and Claude Code are shown in the chat's menu from the start; the others once the person
  *     connects one or switches it on.
- *   · openfilm — the app's own agent (Pi, pi-agent.mjs) on the account service's models, paid from the OpenFilm
- *     account's balance like any service's.
- *   · byok — the app's own agent on the person's own key, on a standard API in one of three formats: the OpenAI
+ *   · byok — the app's own agent (Pi, pi-agent.mjs) on the person's own key, on a standard API in one of three formats: the OpenAI
  *     Responses API (…/v1/responses), the OpenAI Chat Completions API (…/v1/chat/completions) or the Anthropic Messages
  *     API (…/v1/messages); Pi speaks each. The model has to read pictures (the agent looks at its own frames): setting
  *     it up sends one small request with a picture, and a model that cannot take it is refused.
@@ -18,9 +16,7 @@
  * byok.key (the key, sealed with the system's keychain by the caller's `seal`/`unseal`).
  *
  * State per agent: ready · off (disconnected here) · sign-in (its own sign-in is needed) · waiting (signing in, in
- * Terminal) · missing (not installed; `install` says where from) · account (the OpenFilm account is not connected) ·
- * key (no key set up) · unavailable (the account service does not serve the OpenFilm agent yet) · unconfigured (this
- * build has no account service: the OpenFilm agent has nothing to run on) · checking (not known yet).
+ * Terminal) · missing (not installed; `install` says where from) · key (no key set up) · checking (not known yet).
  *
  * Reads no Electron module, so `node --test` can use it.
  */
@@ -30,10 +26,10 @@ import { PI_APIS } from './pi-config.mjs';
 
 /** The person's own agents, as agents.mjs AGENTS has them. */
 export const OWN_AGENT_IDS = Object.freeze(['codex', 'claude', 'gemini', 'copilot', 'cursor', 'opencode', 'codebuddy', 'qwen', 'kimi']);
-export const AGENT_IDS = Object.freeze([...OWN_AGENT_IDS, 'openfilm', 'byok']);
+export const AGENT_IDS = Object.freeze([...OWN_AGENT_IDS, 'byok']);
 export const AGENT_NAMES = Object.freeze({
   codex: 'Codex', claude: 'Claude Code', gemini: 'Gemini CLI', copilot: 'GitHub Copilot', cursor: 'Cursor', opencode: 'OpenCode',
-  codebuddy: 'CodeBuddy', qwen: 'Qwen Code', kimi: 'Kimi', openfilm: 'OpenFilm', byok: 'Own key',
+  codebuddy: 'CodeBuddy', qwen: 'Qwen Code', kimi: 'Kimi', byok: 'Own key',
 });
 const isOwn = (id) => OWN_AGENT_IDS.includes(id);
 
@@ -45,7 +41,7 @@ export const BYOK_FORMATS = Object.freeze({
 });
 
 /* the person's other agents: not shown until connected or switched on */
-const DEFAULT_SHOWN = { codex: true, claude: true, openfilm: true, byok: false };
+const DEFAULT_SHOWN = { codex: true, claude: true, byok: false };
 /** How long a sign-in in Terminal is waited for, asked about every few seconds. */
 const SIGN_IN_WAIT_MS = 5 * 60_000;
 const SIGN_IN_POLL_MS = 3000;
@@ -70,11 +66,6 @@ export function readChoices(dataDir) {
     shown,
     disconnected: Array.isArray(raw.disconnected) ? raw.disconnected.filter((id) => AGENT_IDS.includes(id)) : [],
     byok,
-    ...(typeof raw.openfilmModel === 'string' ? { openfilmModel: raw.openfilmModel } : {}),
-    /* how hard each model thinks, as the person chose it (by model: each has its own efforts) */
-    ...(raw.openfilmEffort && typeof raw.openfilmEffort === 'object' && !Array.isArray(raw.openfilmEffort)
-      ? { openfilmEffort: Object.fromEntries(Object.entries(raw.openfilmEffort).filter(([, v]) => typeof v === 'string')) }
-      : {}),
   };
 }
 
@@ -133,7 +124,7 @@ export async function probeModel({ format, baseUrl, key, model, fetch: fetchImpl
 }
 
 /**
- * The roster: the four agents' state, the person's choices, and the actions Settings and the chat take on them.
+ * The roster: the agents' state, the person's choices, and the actions Settings and the chat take on them.
  * `onChange(list)` hears every change (Settings and the chat both redraw from it).
  *
  * @param {{
@@ -141,10 +132,6 @@ export async function probeModel({ format, baseUrl, key, model, fetch: fetchImpl
  *   localAgents: () => Promise<Array<{ id: string, cli: unknown, signedIn: boolean | null, install: string | null, setupRequired: string | null }>>,
  *   openSignIn: (id: string) => Promise<{ ok: boolean, error?: string }>,
  *   closeSessions: (id: string) => void,
- *   accountConfigured?: () => boolean,
- *   accountConnected: () => Promise<boolean>,
- *   openfilmService: () => Promise<{ models: Array<{ id: string, name: string, context?: number, efforts?: string[] }>, default: string } | null>,
- *   openfilmAddress: () => string,
  *   seal: (text: string) => Buffer, unseal: (data: Buffer) => string,
  *   onChange: (list: any[]) => void,
  *   fetch?: typeof fetch,
@@ -156,9 +143,6 @@ export function createRoster(deps) {
   /** what is happening now, beyond what is kept: a sign-in waited for, an error to show */
   const live = { waiting: {}, errors: {} };
   let local = null;
-  let account = null;
-  /** what the account service serves the OpenFilm agent (its models), false when it does not yet; asked once the account is connected */
-  let service = null;
 
   const keyFile = join(dataDir, 'byok.key');
   const byokKey = () => {
@@ -174,12 +158,8 @@ export function createRoster(deps) {
       if (found.signedIn === false) return { status: live.waiting[id] ? 'waiting' : 'sign-in' };
       return { status: 'ready' };
     }
-    if (id === 'openfilm' && deps.accountConfigured?.() === false) return { status: 'unconfigured' };
     if (choices.disconnected.includes(id)) return { status: 'off' };
-    if (id === 'openfilm' && account === null) return { status: 'checking' };
-    if (id === 'openfilm' && !account) return { status: 'account' };
-    if (id === 'openfilm' && service === false) return { status: 'unavailable' };
-    if (id === 'byok' && (!choices.byok || !byokKey())) return { status: 'key' };
+    if (!choices.byok || !byokKey()) return { status: 'key' };
     return { status: 'ready' };
   }
 
@@ -191,31 +171,15 @@ export function createRoster(deps) {
       ...stateOf(id),
       ...(live.errors[id] ? { error: live.errors[id] } : {}),
       ...(id === 'byok' && choices.byok ? { byok: { format: choices.byok.format, baseUrl: choices.byok.baseUrl, model: choices.byok.model, last4: choices.byok.last4 } } : {}),
-      ...(id === 'openfilm' && service ? { models: service.models.map(({ id: model, name }) => ({ id: model, name })), model: openfilmModel(), efforts: openfilmInfo()?.efforts ?? [], effort: openfilmEffort() } : {}),
     }));
   }
 
-  /** the OpenFilm agent's model: the person's choice while it is offered, else the service's default */
-  const openfilmModel = () => (service && service.models.some((m) => m.id === choices.openfilmModel) ? choices.openfilmModel : service?.default ?? null);
-  const openfilmInfo = () => service?.models.find((m) => m.id === openfilmModel()) ?? null;
-  /** how hard the OpenFilm agent's model thinks: the person's choice for that model while it takes it, else its default */
-  const openfilmEffort = () => {
-    const info = openfilmInfo();
-    if (!info?.efforts?.length) return null;
-    const chosen = choices.openfilmEffort?.[info.id];
-    return info.efforts.includes(chosen) ? chosen : info.effort ?? info.efforts[0];
-  };
   const changed = () => deps.onChange(list());
   const save = (next) => { choices = next; writeChoices(dataDir, choices); changed(); };
 
   async function refresh() {
-    const [found, connected] = await Promise.all([
-      deps.localAgents().catch(() => null),
-      deps.accountConnected().catch(() => false),
-    ]);
+    const found = await deps.localAgents().catch(() => null);
     local = found ?? local ?? [];
-    account = connected;
-    if (connected && !service) service = (await deps.openfilmService().catch(() => null)) ?? false;
     changed();
     return list();
   }
@@ -270,19 +234,6 @@ export function createRoster(deps) {
       save({ ...choices, disconnected: [...new Set([...choices.disconnected, id])] });
     },
 
-    /** The OpenFilm agent's model (one the service offers): the next message goes to it (sessions go on). */
-    setModel(id, model) {
-      if (id !== 'openfilm' || !service || !service.models.some((m) => m.id === model)) return;
-      save({ ...choices, openfilmModel: model });
-    },
-
-    /** How hard the OpenFilm agent's model thinks: from the next message on. */
-    setEffort(id, effort) {
-      const info = openfilmInfo();
-      if (id !== 'openfilm' || !info?.efforts?.includes(effort)) return;
-      save({ ...choices, openfilmEffort: { ...choices.openfilmEffort, [info.id]: effort } });
-    },
-
     setShown(id, shown) {
       if (!AGENT_IDS.includes(id)) return;
       save({ ...choices, shown: { ...choices.shown, [id]: shown === true } });
@@ -320,23 +271,15 @@ export function createRoster(deps) {
 
     /**
      * What a session of the app's own agent runs with (pi-agent.mjs): Pi's own folder, the service (Pi's provider:
-     * its API, address, the variable its key is in, its models), the model and effort, the key itself (`env`), and
-     * `current()`: the model and effort chosen now, which each message says.
+     * its API, address and the variable its key is in), the model, and the key itself (`env`).
      */
     harness(id) {
-      if (id !== 'openfilm' && id !== 'byok') return null;
-      const home = join(dataDir, 'agents', id, 'pi');
-      if (id === 'openfilm') {
-        if (!service) return null;
-        const models = service.models.map(({ id: model, name, context, efforts }) => ({ id: model, name, context, efforts }));
-        const provider = { id: 'openfilm', api: PI_APIS.chat, baseUrl: deps.openfilmAddress(), apiKeyEnv: 'OPENFILM_AGENT_KEY', models, openrouter: true };
-        return { home, provider, model: openfilmModel(), effort: openfilmEffort(), env: {}, current: () => ({ model: openfilmModel(), effort: openfilmEffort() }) };
-      }
+      if (id !== 'byok') return null;
       const key = byokKey();
       if (!choices.byok || !key) return null;
       const { format, baseUrl, model } = choices.byok;
-      const provider = { id: 'byok', api: PI_APIS[format], baseUrl, apiKeyEnv: 'OPENFILM_BYOK_KEY', models: [{ id: model }] };
-      return { home, provider, model, effort: null, env: { OPENFILM_BYOK_KEY: key }, current: () => ({ model }) };
+      const provider = { id: 'byok', api: PI_APIS[format], baseUrl, apiKeyEnv: 'OPENFILM_BYOK_KEY' };
+      return { home: join(dataDir, 'agents', 'byok', 'pi'), provider, model, env: { OPENFILM_BYOK_KEY: key } };
     },
   };
 }

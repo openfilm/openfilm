@@ -6,10 +6,6 @@
  * (shell/) is built first (`--no-build` skips it). Electron gets a clean environment: run from inside Claude Code or Codex, this
  * process carries their variables, which the app's agents would inherit (src/environment.mjs). Arguments after the
  * script go to Electron as they are (e.g. --remote-debugging-port=9333).
- *
- * It connects to no account service (the `openfilm` package's product.json is empty in the repository) unless
- * OPENFILM_ACCOUNT_URL, OPENFILM_ACCOUNT_ISSUER and OPENFILM_ACCOUNT_CLIENT_ID name one; they are passed on as they
- * are (src/account-site.mjs). A packaged release never runs this and uses only its own product.json.
  */
 import { execFileSync, spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -24,9 +20,6 @@ const identity = FLAVORS.dev;
 const require = createRequire(import.meta.url);
 const desktop = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2).filter((a) => a !== '--no-build');
-
-const site = process.env.OPENFILM_ACCOUNT_URL?.trim();
-console.log(site ? `OpenFilm Dev, account service: ${site}` : 'OpenFilm Dev, no account service (OPENFILM_ACCOUNT_URL names one)');
 
 if (!process.argv.includes('--no-build')) {
   const vite = join(dirname(require.resolve('vite/package.json')), 'bin', 'vite.js');
