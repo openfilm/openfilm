@@ -7,6 +7,9 @@
 - f486188: Windows: an ffmpeg that is stopped (a cancelled render or export, a mix that runs too long) ends with the real ffmpeg
   behind a Chocolatey or Scoop shim; a name with a `:` is cleaned on import, rename and new folders as on macOS and
   Linux, not refused; Studio's supervisor opens the null device by its Windows name.
+- A render or `look` frame of a video clip woken ahead of its cut waits for the seek it was woken with before its own:
+  on a slow machine the frame showed the clip's first second instead of the one asked for, and `look` said the same t
+  drew two pictures.
 
 ## 0.1.3
 
