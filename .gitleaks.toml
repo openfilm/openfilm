@@ -1,0 +1,13 @@
+# gitleaks: its default rules, less the made-up values the tests use. Read by CI (`gitleaks git`) and by
+# `pnpm audit:public` (`gitleaks dir`). Each allowance names the files it covers and what the values look like.
+title = "openfilm"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "made-up provider keys Studio's tests set and read back, and RFC 6455's sample Sec-WebSocket-Key"
+condition = "AND"
+paths = ['''(^|/)packages/openfilm/studio/server/(providers/)?[\w-]+\.test\.mjs$''']
+regexTarget = "secret"
+regexes = ['''0123456789|12345678|123456|abcdef1234|ABCDEFGH9876''', '''^dGhlIHNhbXBsZSBub25jZQ==$''']

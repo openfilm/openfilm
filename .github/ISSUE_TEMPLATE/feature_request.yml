@@ -1,0 +1,18 @@
+name: Feature request
+description: An idea for OpenFilm.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you were trying to do, and what got in the way.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      description: What would solve it. Anything you tried instead is welcome too.
+    validations:
+      required: true

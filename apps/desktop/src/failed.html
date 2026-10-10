@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>OpenFilm</title>
+<style>
+  :root { color-scheme: light dark; }
+  html, body { height: 100%; margin: 0; }
+  body { display: grid; place-items: center; background: #f2f2f2; color: #1f1f1f; font: 14px/1.6 -apple-system, system-ui, sans-serif; -webkit-app-region: drag; }
+  @media (prefers-color-scheme: dark) { body { background: #111; color: #dadada; } }
+  main { max-width: 460px; padding: 24px; }
+  h1 { font-size: 16px; margin: 0 0 8px; }
+  p { margin: 0 0 8px; opacity: .8; }
+  code { font: 12px/1.5 ui-monospace, monospace; word-break: break-word; }
+</style>
+</head>
+<body>
+<!-- Studio did not start, so there is no page to show: what went wrong, and where the log is (src/main.mjs) -->
+<main>
+  <h1>OpenFilm could not start its editor</h1>
+  <p><code id="message"></code></p>
+  <p>Quit OpenFilm and open it again. If it happens again, the details are in the app's logs folder (studio.log).</p>
+</main>
+<script>document.getElementById('message').textContent = new URLSearchParams(location.search).get('message') || '';</script>
+</body>
+</html>

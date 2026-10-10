@@ -1,0 +1,25 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#0b2a3a;font:800 110px system-ui;color:#f4efe6}
+.line{position:absolute;left:160px;perspective:800px}.w{display:inline-block;margin-right:28px}
+.label{position:absolute;left:160px;top:120px;font:600 28px ui-monospace,monospace;letter-spacing:.2em;background:#0006;padding:6px 14px}
+</style></head><body>
+<div class="label">FACT 01 · THE DEEP</div>
+<div class="line" style="top:300px"><span class="w">Most</span><span class="w">of</span><span class="w">the</span><span class="w">ocean</span></div>
+<div class="line" style="top:450px"><span class="w">is</span><span class="w">still</span><span class="w">unexplored.</span></div>
+<script>
+// 3D perspective, blur and a translucent label: compositor layers that must not make the same t look different
+const ease = (x) => 1 - Math.pow(1 - Math.min(Math.max(x, 0), 1), 3);
+const words = [...document.querySelectorAll('.w')];
+const label = document.querySelector('.label');
+window.film = { duration: 4, width: 1920, height: 1080, frame(t) {
+  words.forEach((w, i) => {
+    const p = ease((t - 0.2 - i * 0.12) / 0.7);
+    w.style.opacity = p;
+    w.style.transform = `translateY(${60 * (1 - p)}px) rotateX(${-70 * (1 - p)}deg)`;
+    w.style.filter = `blur(${12 * (1 - p)}px)`;
+  });
+  const q = Math.min(t / 0.6, 1);
+  label.style.opacity = q;
+  label.style.filter = `blur(${8 * (1 - q)}px)`;
+} };
+</script></body></html>

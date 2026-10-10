@@ -1,0 +1,7 @@
+node_modules/
+.film/
+*.mp4
+.DS_Store
+studio/ui/dist/
+/film.html
+.dev/

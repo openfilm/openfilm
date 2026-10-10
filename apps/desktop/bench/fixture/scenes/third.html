@@ -1,0 +1,45 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=960, height=240">
+<style>
+  html, body { margin: 0; width: 960px; height: 240px; overflow: hidden; background: transparent; font-family: system-ui, sans-serif; }
+  #card { position: absolute; left: 0; top: 0; width: 960px; height: 240px; border-radius: 28px; background: rgba(255,255,255,.94); box-shadow: 0 20px 60px -20px rgba(0,0,0,.5); overflow: hidden; }
+  #km { position: absolute; left: 40px; top: 36px; font: 800 96px/1 system-ui, sans-serif; color: #111; font-variant-numeric: tabular-nums; }
+  #label { position: absolute; left: 44px; top: 150px; font: 500 22px/1 ui-monospace, monospace; letter-spacing: .3em; color: #777; }
+  svg { position: absolute; right: 36px; top: 30px; }
+  #strip { position: absolute; left: 0; bottom: 0; width: 960px; height: 18px; object-fit: cover; opacity: .35; }
+</style>
+</head>
+<body>
+<div id="card"><img id="strip" src="../assets/strip.jpg" alt=""><div id="km">0.0</div><div id="label">KILOMETRES TODAY</div>
+<svg width="420" height="180" viewBox="0 0 420 180"><path id="route" d="M10 160 C 80 150, 110 60, 180 76 S 280 160, 320 100 S 390 30, 410 20" fill="none" stroke="#e5432d" stroke-width="8" stroke-linecap="round"/><circle id="dot" r="12" fill="#e5432d" stroke="#fff" stroke-width="5"/></svg></div>
+<script>
+  /* a lower third: a card slides in, a number counts, a route draws itself (DOM, text and SVG on every frame). It is
+     ready once its picture is decoded, as many pages are: a host that does not draw a page it keeps out of sight
+     would never see it ready */
+  const clamp = (x) => Math.max(0, Math.min(1, x));
+  const out3 = (x) => 1 - Math.pow(1 - clamp(x), 3);
+  const route = document.getElementById('route'), dot = document.getElementById('dot');
+  const len = route.getTotalLength();
+  route.style.strokeDasharray = `${len} ${len}`;
+  window.film = {
+    duration: 6, width: 960, height: 240,
+    ready: Promise.all([document.fonts.ready, document.getElementById('strip').decode().catch(() => {})]),
+    frame(t) {
+      const k = out3(t / 0.6), o = 1 - clamp((t - 5.4) / 0.5);
+      const card = document.getElementById('card');
+      card.style.transform = `translateX(${(1 - k) * -120}px)`;
+      card.style.opacity = String(k * o);
+      const p = out3((t - 0.4) / 4);
+      document.getElementById('km').textContent = (142 * p).toFixed(1);
+      route.style.strokeDashoffset = String(len * (1 - p));
+      const at = route.getPointAtLength(len * p);
+      dot.setAttribute('cx', at.x); dot.setAttribute('cy', at.y);
+    },
+  };
+  if (!window.filmHost) { const t0 = performance.now(); const loop = () => { window.film.frame(((performance.now() - t0) / 1000) % 6); requestAnimationFrame(loop); }; requestAnimationFrame(loop); }
+</script>
+</body>
+</html>

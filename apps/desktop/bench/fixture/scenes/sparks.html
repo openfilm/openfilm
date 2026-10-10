@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1920, height=1080">
+<style>html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: transparent; } canvas { display: block; }</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+  /* snow: 2,000 flakes drawn on a canvas each frame, each where t puts it (a canvas page that costs real work) */
+  const c = document.getElementById('c');
+  const W = innerWidth, H = innerHeight, D = devicePixelRatio || 1;
+  c.width = W * D; c.height = H * D; c.style.width = `${W}px`; c.style.height = `${H}px`;
+  const g = c.getContext('2d');
+  let seed = 7;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  const flakes = Array.from({ length: 2000 }, () => ({ x: rnd(), y: rnd(), r: 1 + rnd() * 3, v: 0.05 + rnd() * 0.15, w: rnd() * 6.28 }));
+  window.film = {
+    duration: 6, width: 1920, height: 1080,
+    ready: Promise.resolve(),
+    frame(t) {
+      g.setTransform(D, 0, 0, D, 0, 0);
+      g.clearRect(0, 0, W, H);
+      const fade = Math.min(1, t / 0.5) * Math.min(1, (6 - t) / 0.5);
+      g.fillStyle = `rgba(255,255,255,${0.9 * fade})`;
+      for (const f of flakes) {
+        const y = ((f.y + f.v * t) % 1) * H;
+        const x = (f.x * W + Math.sin(f.w + t * 1.3) * 30 + W) % W;
+        g.beginPath(); g.arc(x, y, f.r, 0, 6.2832); g.fill();
+      }
+    },
+  };
+  if (!window.filmHost) { const t0 = performance.now(); const loop = () => { window.film.frame(((performance.now() - t0) / 1000) % 6); requestAnimationFrame(loop); }; requestAnimationFrame(loop); }
+</script>
+</body>
+</html>

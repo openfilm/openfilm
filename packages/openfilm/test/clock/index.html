@@ -1,0 +1,25 @@
+<!doctype html><html><head><style>
+  body { margin: 0; background: #0b0d12; width: 640px; height: 360px; overflow: hidden; font: 600 28px system-ui; color: #fff }
+  /* left to the clock: CSS keyframes that start with the page */
+  .bar { position: absolute; left: 40px; top: 60px; height: 30px; background: #4af; animation: grow 4s linear forwards }
+  @keyframes grow { from { width: 0 } to { width: 560px } }
+  .fade { position: absolute; left: 40px; top: 120px; opacity: 0; animation: show 1s ease 1.5s forwards }
+  @keyframes show { to { opacity: 1 } }
+  .dot { position: absolute; width: 12px; height: 12px; border-radius: 50%; background: #fb5 }
+</style></head><body>
+<div class="bar"></div><div class="fade">appears at 1.5 s</div><canvas id="c" width="640" height="120" style="position:absolute;top:200px"></canvas>
+<script>
+// A page written the way people write web animation, not the film way: CSS keyframes, a requestAnimationFrame loop
+// timed by performance.now(), and particles placed with Math.random() while loading. Its frame() does nothing.
+const ctx = document.getElementById('c').getContext('2d');
+const dots = Array.from({ length: 40 }, () => ({ x: Math.random() * 640, y: Math.random() * 120, s: 20 + Math.random() * 60 }));
+function loop() {
+  const s = performance.now() / 1000;
+  ctx.clearRect(0, 0, 640, 120);
+  ctx.fillStyle = '#fb5';
+  for (const d of dots) { ctx.beginPath(); ctx.arc((d.x + d.s * s) % 640, d.y, 4, 0, 7); ctx.fill(); }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+window.film = { duration: 4, width: 640, height: 360, frame() {} };
+</script></body></html>

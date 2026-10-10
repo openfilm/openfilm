@@ -1,0 +1,8 @@
+<!doctype html><html><body style="margin:0"><canvas id="c" width="640" height="360"></canvas><script>
+const ctx = document.getElementById('c').getContext('2d'); let x = 0;
+window.film = { duration: 4, width: 640, height: 360, frame(t) {
+  x += 7; // state carried between calls: the classic mistake
+  ctx.fillStyle = '#111'; ctx.fillRect(0, 0, 640, 360);
+  ctx.fillStyle = '#4af'; ctx.beginPath(); ctx.arc(40 + x % 560, 180, 30, 0, 7); ctx.fill();
+} };
+</script></body></html>
