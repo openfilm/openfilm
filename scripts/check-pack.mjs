@@ -1,17 +1,15 @@
 #!/usr/bin/env node
 /**
- * `pnpm check:pack`: packs the packages npm gets (`openfilm`, `@openfilm/shared`) as the release publishes them,
+ * `pnpm check:pack`: packs the package npm gets (`openfilm`) as the release publishes it,
  * lists every file in each tarball, and fails when one holds what it must not or lacks what it needs.
  *
  * It packs with `pnpm pack`, not `npm pack --dry-run`: the release publishes with `pnpm publish` (changesets uses the
- * workspace's package manager), which packs the same way: it runs prepack and postpack, applies publishConfig (the
- * built dist/ of @openfilm/shared) and replaces `workspace:` ranges.
+ * workspace's package manager), which packs the same way: it runs prepack and postpack and replaces `workspace:` ranges.
  *
  *   every package   no tests, fixtures, tsconfigs, dev state or scripts; no `workspace:` range; not private; every
  *                   file its package.json points at (main, types, bin, exports) is in the tarball
  *   openfilm        product.json is the official one (prepack), and the checkout's own is back afterwards (postpack);
  *                   Studio's built editor is in
- *   @openfilm/shared  its entries are the compiled JavaScript and declarations in dist/
  *
  *   node scripts/check-pack.mjs
  */
@@ -24,7 +22,6 @@ import { join } from 'node:path';
 const ROOT = join(import.meta.dirname, '..');
 const PACKAGES = [
   { name: 'openfilm', dir: 'packages/openfilm' },
-  { name: '@openfilm/shared', dir: 'packages/shared' },
 ];
 
 /** What a published package never holds. */
@@ -88,11 +85,6 @@ try {
       else console.log(`  product.json: official (updates ${packed.desktop.updates})`);
       if (!readFileSync(join(pkgDir, 'product.json')).equals(productBefore)) problem(name, "the checkout's product.json was not restored after packing");
       if (!listed.has('studio/ui/dist/index.html')) problem(name, "Studio's editor is not built (studio/ui/dist)");
-    }
-    if (name === '@openfilm/shared') {
-      const entries = [...pointedAt(manifest)].filter((f) => f !== 'package.json');
-      const outside = entries.filter((f) => !f.startsWith('dist/'));
-      if (outside.length) problem(name, `entries outside dist/: ${outside.join(', ')}`);
     }
   }
 } finally {

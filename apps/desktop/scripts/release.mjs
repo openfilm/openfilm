@@ -8,9 +8,9 @@
  * (the update feed under its `desktop.updates`).
  *
  *   1. the window's page (shell/: Studio's editor with the chat beside it) and Studio's editor on its own (the
- *      `openfilm` package's UI) are built;
+ *      `openfilm` package's UI) are built (the chat's `@openfilm/shared` is bundled into the page);
  *   2. a stage folder gets the app's own files and a plain npm install of what it needs at run time: the `openfilm`
- *      and `@openfilm/shared` packages as `npm pack` makes them (what npm would publish), the agents' ACP adapters
+ *      package as `npm pack` makes it (what npm would publish), the agents' ACP adapters
  *      and the updater. Optional dependencies are left out: the adapters would bring the makers' own Claude Code and
  *      Codex programs (200–330 MB each), and the app uses the person's own installation instead (src/agents.mjs).
  *      The staged `openfilm` package gets the build's product.json;
@@ -37,9 +37,8 @@ import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const desktop = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-/* the `openfilm` package (Studio, the CLI) and `@openfilm/shared`, where node finds them */
+/* the `openfilm` package (Studio, the CLI), where node finds it */
 const protocol = dirname(require.resolve('openfilm/package.json'));
-const shared = dirname(require.resolve('@openfilm/shared/package.json'));
 const asked = process.argv.find((a) => a.startsWith('--arch='))?.slice('--arch='.length);
 const arch = asked === 'x64' || asked === 'arm64' ? asked : process.arch === 'arm64' ? 'arm64' : 'x64';
 const win = process.argv.includes('--platform=win');
@@ -78,7 +77,7 @@ mkdirSync(stage, { recursive: true });
 cpSync(join(desktop, 'src'), join(stage, 'src'), { recursive: true, filter: (from) => !from.endsWith('.test.mjs') });
 cpSync(join(desktop, 'shell/dist'), join(stage, 'shell/dist'), { recursive: true });
 const pack = (dir) => execFileSync('npm', ['pack', '--ignore-scripts', '--pack-destination', work, '--silent'], { cwd: dir, encoding: 'utf8' }).trim().split('\n').pop();
-const dependencies = { ...pkg.dependencies, openfilm: `file:../${pack(protocol)}`, '@openfilm/shared': `file:../${pack(shared)}` };
+const dependencies = { ...pkg.dependencies, openfilm: `file:../${pack(protocol)}` };
 writeFileSync(join(stage, 'package.json'), `${JSON.stringify({
   name: 'openfilm-desktop',
   productName: 'OpenFilm',

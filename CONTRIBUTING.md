@@ -26,7 +26,7 @@ From the root:
 | `pnpm typecheck` | every package's types |
 | `pnpm build` | Studio's editor and the desktop app's window |
 | `pnpm audit:public` | what must not be in a public repository: secrets (gitleaks), home folders, paths out of the repository, prose in another language than English outside the translations, dependencies outside this workspace |
-| `pnpm check:pack` | packs `openfilm` and `@openfilm/shared` as npm would get them, lists their files and checks them |
+| `pnpm check:pack` | packs `openfilm` as npm would get it, lists its files and checks them |
 | `pnpm changeset` | adds a changeset to your pull request (below, Releases) |
 
 `pnpm --filter <package> <script>` runs one package's script; the packages are `openfilm`, `@openfilm/shared` and
@@ -44,7 +44,7 @@ packages/openfilm/   npm `openfilm`: the format, the CLI and Studio
   studio/client.mjs    how the command finds or starts Studio
   test/                pages the tests draw
   scripts/             `pnpm dev`; product.mjs (which build the package is, below)
-packages/shared/     npm `@openfilm/shared`: what the clients share
+packages/shared/     `@openfilm/shared`: what the desktop app's chat shares with its main process (not published)
 apps/desktop/        the desktop app (Electron)
   src/                 the main process: windows, Studio, the agents, updates
   shell/               the window's page: Studio's editor (from packages/openfilm) with the chat beside it
@@ -84,10 +84,8 @@ older one: to keep them apart, set `OPENFILM_HOME` and `OPENFILM_STUDIO_PORT` wh
 `@openfilm/shared` holds what the desktop app's chat reads: a chat turn and its events, how an agent's activity
 reads, prompt references, title limits and Markdown parsing.
 
-`pnpm --filter @openfilm/shared test`, `pnpm --filter @openfilm/shared typecheck`. In the repository its
-package.json points at the TypeScript in `src/`, which the workspace reads as it is; `pnpm --filter @openfilm/shared
-build` compiles the JavaScript and declarations npm gets into `dist/` (packing runs it, and the published
-package.json points there).
+`pnpm --filter @openfilm/shared test`, `pnpm --filter @openfilm/shared typecheck`. It is not published: the
+workspace reads its TypeScript in `src/` as it is, and the desktop app bundles it.
 
 ## apps/desktop: the desktop app
 
@@ -111,18 +109,18 @@ distribute one, read [TRADEMARK.md](TRADEMARK.md): a fork published as its own n
 `packages/openfilm/product.json` says where the desktop app looks for updates. It is empty in the repository, so a
 desktop build of your own never looks for them. The official feed is in `product.official.json`; the package npm
 publishes and the official desktop app carry it. Media services are connected with your own keys: in Studio,
-Settings → Providers, or the variables in the README's [Settings](README.md#settings).
+Settings → Providers, or each service's variable in the environment (`ELEVENLABS_API_KEY`, `OPENAI_API_KEY`, …).
 
 ## Releases
 
 Every pull request that changes what a package's users get carries a **changeset**: run `pnpm changeset`, pick the
-packages it changes (`openfilm`, `@openfilm/shared`, `@openfilm/desktop`) and how much (`patch` for a fix, `minor`
+packages it changes (`openfilm`, `@openfilm/desktop`, `@openfilm/shared`) and how much (`patch` for a fix, `minor`
 for something new; `major` only by agreement), and write a line for the changelog, as a user would read it. Commit the
 file it writes in `.changeset/`. A change to tests, docs or CI alone needs none (`pnpm changeset --empty` says so).
 
 The packages are versioned on their own. When changesets reach `main`, the release workflow opens a "Version
-packages" pull request that bumps the versions and writes the changelogs; merging it publishes `openfilm` and
-`@openfilm/shared` to npm (with provenance, from CI only). `@openfilm/desktop` is versioned the same way but not
+packages" pull request that bumps the versions and writes the changelogs; merging it publishes `openfilm` to npm
+(with provenance, from CI only); `@openfilm/shared` is only versioned. `@openfilm/desktop` is versioned the same way but not
 published to npm: a maintainer releases the app by pushing the tag `desktop-v<version>`, which builds it, signs it,
 and puts it on the beta channel; promoting it to stable is a second step.
 
@@ -141,7 +139,6 @@ that you are taking it, and open one before starting a large change, so nobody d
 - **The format** ([SPEC.md](packages/openfilm/SPEC.md)): a new attribute of `film.html` is read in one place,
   [src/film-doc.mjs](packages/openfilm/src/film-doc.mjs), and described in the spec in the same pull request.
 - **No adapters.** Pages use the web as it is; libraries load from pinned public CDNs.
-- **The contract** ([packages/shared/src/api](packages/shared/src/api)): only added to.
 
 ## Pull requests
 

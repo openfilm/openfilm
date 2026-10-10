@@ -37,8 +37,8 @@ jobs:
         if: runner.os == 'Windows'
       - run: pnpm test
 
-  # what npm would get: the tarballs of openfilm and @openfilm/shared, listed in the log and checked (no tests,
-  # fixtures or dev files; the official product.json in openfilm; dist/ in @openfilm/shared)
+  # what npm would get: the tarball of openfilm, listed in the log and checked (no tests, fixtures or dev files; the
+  # official product.json)
   pack:
     runs-on: ubuntu-latest
     env:

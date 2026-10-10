@@ -19,13 +19,13 @@
     "@agentclientprotocol/codex-acp": "^1.13.1",
     "@agentclientprotocol/sdk": "1.5.0",
     "@earendil-works/pi-coding-agent": "1.1.0",
-    "@openfilm/shared": "workspace:*",
     "electron-updater": "6.8.9",
     "openfilm": "workspace:*"
   },
   "devDependencies": {
     "@fontsource-variable/inter": "^5.3.0",
     "@lexical/react": "^0.49.0",
+    "@openfilm/shared": "workspace:*",
     "@tailwindcss/vite": "^4.3.3",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

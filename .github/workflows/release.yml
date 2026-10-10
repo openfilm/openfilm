@@ -1,14 +1,13 @@
 name: release
-# npm releases of `openfilm` and `@openfilm/shared` (CONTRIBUTING.md, Releases). On every push to main, with the
+# npm releases of `openfilm` (CONTRIBUTING.md, Releases). On every push to main, with the
 # changesets merged since the last release, changesets/action opens or updates the "Version packages" pull request;
 # merging it publishes the packages whose versions changed. npm trusted publishing: npm takes this workflow's OIDC
 # token instead of a stored token, and adds provenance once the repository is public.
 #
 # Set up once, by a maintainer:
-#   - npmjs.com: each package (`openfilm`, `@openfilm/shared`) → Settings → Trusted publishing → GitHub Actions:
+#   - npmjs.com: the package `openfilm` → Settings → Trusted publishing → GitHub Actions:
 #     openfilm / openfilm, workflow release.yml, no environment, publish allowed (or, npm 11.15+:
-#     `npm trust github <package> --file release.yml --repo openfilm/openfilm --allow-publish`). A package must be on
-#     npm before it can trust a workflow: its first version is published by hand. Then Settings → Publishing access:
+#     `npm trust github openfilm --file release.yml --repo openfilm/openfilm --allow-publish`). Then Settings → Publishing access:
 #     "Require two-factor authentication and disallow tokens".
 #   - GitHub: Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests".
 on:
@@ -43,7 +42,7 @@ jobs:
       - run: pnpm --filter openfilm exec playwright-core install --with-deps chromium-headless-shell
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: pnpm test
-      - name: What the packages hold (the official product.json in openfilm, dist/ in @openfilm/shared)
+      - name: What the package holds (the official product.json)
         run: pnpm check:pack
       - uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
         with:
