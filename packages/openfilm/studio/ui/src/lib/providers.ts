@@ -1,6 +1,5 @@
 /**
- * The person's own keys for media services and who makes each kind of media, with which model ("OpenFilm · Seedance 2.5",
- * "fal.ai · Seedance 2.0"), as Settings → Providers and Models show them.
+ * The person's own keys for media services and who makes each kind of media, with which model ("fal.ai · Seedance 2.0"), as Settings → Providers and Models show them.
  *
  * Studio's server keeps the keys (studio/server/keys.mjs): this page sends a key once, when it is added, and only ever
  * gets back where a key comes from and its last four characters.
@@ -27,28 +26,19 @@ export interface OwnProvider {
 
 export interface ProvidersState {
   providers: OwnProvider[];
-  /** the person's choice for each kind of media: a provider id, 'openfilm', or null (none) */
+  /** the person's choice for each kind of media: a provider id, or null (none) */
   use: Record<string, string | null>;
-  /** the model each kind of media is made with when one of the person's keys makes it */
+  /** the model each kind of media is made with */
   model: Record<string, string | null>;
-  /** `verbs`: what the OpenFilm account makes; `models`: with what, by kind of media, the default first */
-  openfilm: { connected: boolean; verbs: ProviderVerb[]; models: Partial<Record<ProviderVerb, Array<{ id: string; name: string }>>> };
 }
 
-/**
- * The providers, not connected, that would make `verb` once connected, by name (as every list of providers is): the
- * OpenFilm account among them.
- */
+/** The providers, not connected, that would make `verb` once connected, by name (as every list of providers is). */
 export function couldMake(state: ProvidersState, verb: ProviderVerb): string[] {
-  return [
-    ...(!state.openfilm.connected && state.openfilm.verbs.includes(verb) ? ['OpenFilm'] : []),
-    ...state.providers.filter((p) => !p.source && p.verbs.includes(verb)).map((p) => p.name),
-  ].sort((a, b) => a.localeCompare(b));
+  return state.providers.filter((p) => !p.source && p.verbs.includes(verb)).map((p) => p.name).sort((a, b) => a.localeCompare(b));
 }
 
-/** Whether anything here, connected or not, can make `verb` (a build without an account service has no OpenFilm). */
-export const offered = (state: ProvidersState, verb: ProviderVerb) =>
-  state.openfilm.verbs.includes(verb) || state.providers.some((p) => p.verbs.includes(verb));
+/** Whether any provider here, connected or not, can make `verb`. */
+export const offered = (state: ProvidersState, verb: ProviderVerb) => state.providers.some((p) => p.verbs.includes(verb));
 
 /** The kinds of media the person chooses a provider for, in the order they are listed. */
 export const USE_VERBS: ProviderVerb[] = ['tts', 'music', 'sfx', 'asr', 'image', 'image-search', 'video', 'translate', 'web-search'];
@@ -73,12 +63,12 @@ export interface ProvidersHook {
   /** keep a key; resolves whether it was kept */
   saveKey: (id: string, key: string) => Promise<boolean>;
   removeKey: (id: string) => Promise<void>;
-  /** who makes that kind of media: a provider id ('openfilm' too) with its model, or '' (none) */
+  /** who makes that kind of media: a provider id with its model, or '' (none) */
   choose: (verb: ProviderVerb, provider: string, pick?: { model?: string }) => Promise<void>;
 }
 
-/** The providers while Settings → Providers is shown; asked again when the OpenFilm account's state changes. */
-export function useProviders(accountConnected: boolean | undefined): ProvidersHook {
+/** The providers while Settings → Providers or Models is shown. */
+export function useProviders(): ProvidersHook {
   const [state, setState] = React.useState<ProvidersState | null>(null);
   const [problem, setProblem] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState<string | null>(null);
@@ -99,7 +89,7 @@ export function useProviders(accountConnected: boolean | undefined): ProvidersHo
     };
     load(0);
     return () => { live = false; window.clearTimeout(timer); };
-  }, [accountConnected]);
+  }, []);
 
   const change = React.useCallback(async (what: string, path: string, init: { method: string; json?: unknown }) => {
     setBusy(what);

@@ -313,6 +313,11 @@ test('an export is shown in the file manager only while it is there', async () =
   assert.equal(res.status, 404);
 });
 
+test('the Desktop button opens the project\'s website, where the download is, in the person\'s browser', async () => {
+  assert.equal((await api('/api/desktop', { method: 'POST' })).status, 200);
+  assert.equal(opened.at(-1), JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).homepage);
+});
+
 test('the fonts installed here, for the inspector\'s font menu', async () => {
   const { fonts } = await (await api('/api/fonts')).json();
   assert.ok(Array.isArray(fonts));

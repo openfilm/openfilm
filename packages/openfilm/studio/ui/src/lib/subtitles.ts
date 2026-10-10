@@ -162,7 +162,7 @@ export type FilmCaptions = {
   untranscribed: string[];
 };
 
-/** How a translation went: `needsTranslator` when the OpenFilm account is not connected (the error says so). */
+/** How a translation went: `needsTranslator` when no service that translates is connected (the error says so). */
 export type SubtitleTranslateResult = { ok: boolean; error?: string; needsTranslator?: boolean };
 
 const subtitlesApi = (projectId: string, rest: string) => `/api/projects/${encodeURIComponent(projectId)}/${rest}`;

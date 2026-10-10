@@ -1,14 +1,13 @@
 // @ts-check
 /**
  * `openfilm get`: media for a project (voice-over, music, sound effects, transcripts, pictures, video) from a provider
- * the person connected (providers/): a service with their own key, or the OpenFilm account. The CLI sends
- * the verb and its options to Studio (`/api/get`); here they are checked, a provider is picked (`--via`, else the
- * person's choice in Studio's Settings; none chosen, nothing runs), it runs, and what comes back lands in
- * the project: files under assets/ only, and timed speech's transcript beside it (transcripts.mjs). The answer is the
- * receipt the agent reads, without what it cost.
+ * the person connected with their own key (providers/). The CLI sends the verb and its options to Studio (`/api/get`);
+ * here they are checked, a provider is picked (`--via`, else the person's choice in Studio's Settings; none chosen,
+ * nothing runs), it runs, and what comes back lands in the project: files under assets/ only, and timed speech's
+ * transcript beside it (transcripts.mjs). The answer is the receipt the agent reads, without what it cost.
  *
  * Who makes the media, with which model and for what price is the person's business, chosen in Studio: the agent is
- * told only what it can get here now, and what is not connected.
+ * told what it can get here now, and for what is not connected, which services make it.
  *
  * A video clip spends a lot, so the person confirms it first, in the Studio page showing the project (an `ask` event on
  * its stream, answered with POST /api/get/asks/:id) while the CLI waits. With no page open, the agent is told to ask
@@ -16,8 +15,7 @@
  *
  * A provider whose account has no balance left for a run (code 'balance', the same for every provider) is said once to
  * the person, in the Studio pages showing the project (a `notice` event, with where to top it up), and to the agent,
- * which stops. The OpenFilm account's daily spending limit, set by the person on its account page (code 'daily-limit'),
- * is said the same way. Nothing anyone reads here carries an amount: that is on each provider's own page.
+ * which stops. Nothing anyone reads here carries an amount: that is on each provider's own page.
  *
  * Subtitle translation goes through the provider chosen for `translate` too (`subtitleTranslator`, for captions.mjs).
  *
@@ -32,13 +30,11 @@ import { lstat, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from '
 import { tmpdir } from 'node:os';
 import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 import { FILM_FILE, clipKind } from '../../src/film-doc.mjs';
-import { accountConfig } from './account.mjs';
 import { spokenLines } from './captions.mjs';
 import { readTranscript, transcriptIsCurrent, transcriptPath, writeTranscript } from './transcripts.mjs';
 import { inside } from './files.mjs';
 import { HttpError, json, readJson } from './http.mjs';
 import { kindOf, modelFor, providerKey } from './keys.mjs';
-import { modelOfTier } from './providers/openfilm.mjs';
 import { chooseProvider, listProviders, providerSettings } from './providers/index.mjs';
 
 /**
@@ -125,16 +121,19 @@ export const WEB_VERBS = ['web-search', 'web-fetch'];
 
 /** Where the person connects a service and picks its models, said the same way everywhere. */
 export const WHERE_TO_CONNECT = 'In Studio, the OpenFilm logo at the top left opens Settings: connect a service under Providers, '
-  + 'then choose the model for each kind of media under Models.';
-const CONNECT = `The person can connect it. ${WHERE_TO_CONNECT}`;
-/** What is not connected here, and where the person connects it. @param {string[]} verbs */
-const notConnected = (verbs) => `Not connected here: ${verbs.join(', ')}. The person can connect ${verbs.length > 1 ? 'them' : 'it'}. ${WHERE_TO_CONNECT}`;
-/** A build without an account service (run from source, or a release without one) never mentions it. */
-const withAccount = () => accountConfig().configured;
-/** Whether anything here, connected or not, can make `verb`: one of the services, or the account when there is one. */
-const offered = (/** @type {string} */ verb) => withAccount() || listProviders().some((p) => /** @type {readonly string[]} */ (p.verbs).includes(verb));
+  + 'with the person\'s own key, then choose the model for each kind of media under Models.';
+/** The services that make `verb`, by name: "fal.ai, Google or OpenAI". @param {string} verb */
+const makers = (verb) => {
+  const names = listProviders().filter((p) => /** @type {readonly string[]} */ (p.verbs).includes(verb)).map((p) => p.name).sort((a, b) => a.localeCompare(b));
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} or ${names.at(-1)}` : names[0] ?? 'no service here makes it yet';
+};
+/** What is not connected here, which services make each, and where the person connects one. @param {string[]} verbs */
+const notConnected = (verbs) => `Not connected here: ${verbs.map((v) => `${v} (${makers(v)})`).join(', ')}. `
+  + `Each works only once the person connects a service that makes it. ${WHERE_TO_CONNECT}`;
+/** Whether any of the services, connected or not, can make `verb`. */
+const offered = (/** @type {string} */ verb) => listProviders().some((p) => /** @type {readonly string[]} */ (p.verbs).includes(verb));
 /** The whole of `openfilm get` when nothing is connected. */
-const nothing = () => 'Nothing is connected for media here. '
+const nothing = () => 'Nothing is connected for media here: each kind works only once the person connects a service that makes it (below). '
   + 'Until then, make sound and pictures in code, or use a service the person has a key for (with its API docs), and save them under assets/. '
   + `\`openfilm get <what> --help\` shows what one kind takes (${Object.keys(VERBS).filter((v) => !WEB_VERBS.includes(v) && offered(v)).join(', ')}).`;
 
@@ -144,18 +143,16 @@ const WORDS = /** @type {Record<string, string>} */ ({
   video: 'video', translate: 'subtitle translation', 'web-search': 'web search',
 });
 /** The media services `get` can use, by name (none comes first), what each makes, and where the person connects them. */
-export const services = () => `Media services, each used with the person's own key${withAccount() ? ', or with a connected OpenFilm account' : ''}: ${[
-  ...listProviders().map((p) => ({ name: p.name, makes: p.verbs.filter((v) => WORDS[v]).map((v) => WORDS[v]).join(', ') })),
-  ...(withAccount() ? [{ name: 'the OpenFilm account', makes: 'all of these' }] : []),
-].sort((a, b) => a.name.replace(/^the /, '').localeCompare(b.name.replace(/^the /, ''))).map((p) => `${p.name} (${p.makes})`).join(', ')}. ${WHERE_TO_CONNECT}`;
+export const services = () => `Media services, each used with the person's own key: ${listProviders()
+  .map((p) => ({ name: p.name, makes: p.verbs.filter((v) => WORDS[v]).map((v) => WORDS[v]).join(', ') }))
+  .sort((a, b) => a.name.localeCompare(b.name)).map((p) => `${p.name} (${p.makes})`).join(', ')}. ${WHERE_TO_CONNECT}`;
 
 /** How long the person has to answer a question about spending. */
 const ASK_WAIT_MS = 15 * 60_000;
 /** The most a file sent to a provider may be (a recording's speech, a frame). */
 const MAX_INPUT_BYTES = 48 << 20;
-/** Receipt fields about money: the person sees what was spent in their account, the agent sees what landed. */
-const BILLING = new Set(['credits', 'creditBalance', 'budget', 'balance', 'spent', 'plan', 'planName', 'tier', 'tiers', 'price', 'prices', 'usd', 'cost',
-  'costUsd', 'quoted', 'charged', 'metered', 'refunded']);
+/** Receipt fields about money: the person sees what was spent on the provider's own page, the agent sees what landed. */
+const BILLING = new Set(['budget', 'balance', 'spent', 'plan', 'planName', 'price', 'prices', 'usd', 'cost', 'costUsd', 'charged']);
 
 /** Why a get did not run; `code` is the CLI's exit status (2: not a project or a wrong command, 1: it did not run). */
 export class GetError extends Error {
@@ -245,23 +242,20 @@ async function projectFile(root, rel, name, want) {
  */
 
 /**
- * What the person is told in Studio, without a question: a provider whose account has no balance left for a run, or the
- * OpenFilm account at the daily spending limit the person set.
- * @typedef {{ kind: 'balance' | 'daily-limit', provider: string, providerId: string }} Notice
+ * What the person is told in Studio, without a question: a provider whose account has no balance left for a run.
+ * @typedef {{ kind: 'balance', provider: string, providerId: string }} Notice
  */
 
 /**
  * Run `verb` for the project at `root` and land what it makes. Resolves with the receipt for the agent; throws a
  * GetError (or a provider's own Error) saying why it did not run.
- * `model`: the provider's model for this run, instead of the person's choice for this kind of media. `tier` (an older
- * agent's flash, pro or ultra) is the OpenFilm model that tier made.
+ * `model`: the provider's model for this run, instead of the person's choice for this kind of media.
  * @param {string} root @param {string} verb @param {Record<string, unknown>} given
  * `tell`: says a Notice to the person in Studio.
- * @param {{ via?: string, model?: string, tier?: string, yes?: boolean, ask?: Ask, tell?: (notice: Notice) => void, signal?: AbortSignal }} [options]
+ * @param {{ via?: string, model?: string, yes?: boolean, ask?: Ask, tell?: (notice: Notice) => void, signal?: AbortSignal }} [options]
  */
-export async function runGet(root, verb, given, { via, model, tier, yes = false, ask, tell, signal = new AbortController().signal } = {}) {
+export async function runGet(root, verb, given, { via, model, yes = false, ask, tell, signal = new AbortController().signal } = {}) {
   const args = await checkArgs(root, verb, given);
-  if (tier !== undefined && !modelOfTier(verb, tier)) throw usage('--tier is one of flash, pro, ultra (an OpenFilm model: --model names it)');
   if (verb === 'asr' && args.force !== true && await transcriptIsCurrent(root, String(args.src))) {
     return show(await speechReceipt(root, 'asr', String(args.src), { skip: true, note: 'It has a transcript already, made since the file last changed (--force makes it again).' }));
   }
@@ -269,7 +263,7 @@ export async function runGet(root, verb, given, { via, model, tier, yes = false,
   /* `--via` names one: when it cannot, it says why (no such provider, not this verb, no key) */
   const provider = await chooseProvider(/** @type {Verb} */ (verb), { via: via ?? null, settings }).catch((e) => { throw usage(e.message); });
   if (!provider) {
-    throw new GetError(`${notConnected([verb])} Until then, make it in code, or use a service the person has a key for (with its API docs), and save it under assets/.`);
+    throw new GetError(`${notConnected([verb])} Tell the person. Until then, make it in code, or use a service the person has a key for (with its API docs), and save it under assets/.`);
   }
 
   /* the model named for this run: one the provider has for this kind of media */
@@ -278,7 +272,7 @@ export async function runGet(root, verb, given, { via, model, tier, yes = false,
   if (model !== undefined && !offered.some((m) => m.id === model)) {
     throw usage(offered.length ? `--model is one of ${offered.map((m) => m.id).join(', ')} with ${provider.name}` : `${provider.name} names no models for ${verb}`);
   }
-  const runModel = model ?? (tier !== undefined && provider.id === 'openfilm' ? modelOfTier(verb, tier) : modelFor(settings, provider, verb));
+  const runModel = model ?? modelFor(settings, provider, verb);
 
   const spec = VERBS[verb];
   const said = /** @type {string[]} */ ([]);
@@ -299,13 +293,9 @@ export async function runGet(root, verb, given, { via, model, tier, yes = false,
   };
   try {
     if (verb === 'video' && !yes) {
-      const quote = await provider.quote?.(/** @type {Verb} */ (verb), args, ctx).catch((e) => {
-        if (/** @type {{ code?: string }} */ (e)?.code === 'not-connected') throw e;
-        return null;
-      });
       const words = typeof args.prompt === 'string' ? args.prompt : '';
       const named = offered.find((m) => m.id === runModel)?.name ?? runModel;
-      await approve({ kind: 'video', provider: provider.name, ...(named ? { model: named } : {}), seconds: quote?.seconds ?? Number(args.duration),
+      await approve({ kind: 'video', provider: provider.name, ...(named ? { model: named } : {}), seconds: Number(args.duration),
         ...(words ? { prompt: words.length > 200 ? `${words.slice(0, 199).trimEnd()}…` : words } : {}) });
     }
     const result = await provider.run(/** @type {Verb} */ (verb), args, ctx);
@@ -313,15 +303,9 @@ export async function runGet(root, verb, given, { via, model, tier, yes = false,
     return [...said, show(await receiptFor(root, verb, args, result.receipt))].join('\n');
   } catch (e) {
     if (clock.timedOut()) throw new GetError(`${provider.name} did not finish within ${spec.timeoutSec + 60} s, so Studio stopped waiting. Nothing landed in the project; try again later.`);
-    if (/** @type {{ code?: string }} */ (e)?.code === 'not-connected') throw new GetError(`${/** @type {Error} */ (e).message} ${CONNECT}`);
     if (/** @type {{ code?: string }} */ (e)?.code === 'balance') {
       tell?.({ kind: 'balance', provider: provider.name, providerId: provider.id });
       throw new GetError(`This did not run: ${provider.name} doesn't have enough balance. The person can top it up at ${provider.billingUrl}, `
-        + 'or switch to another service. Nothing was made. Stop and tell them; do not run it again until they say so.');
-    }
-    if (/** @type {{ code?: string }} */ (e)?.code === 'daily-limit') {
-      tell?.({ kind: 'daily-limit', provider: provider.name, providerId: provider.id });
-      throw new GetError(`This did not run: the OpenFilm account reached its daily spending limit. The person can change it at ${provider.billingUrl}, `
         + 'or switch to another service. Nothing was made. Stop and tell them; do not run it again until they say so.');
     }
     throw e;
@@ -532,9 +516,6 @@ export async function subtitleTranslator(root) {
     }).catch((e) => {
       /* the person asked for it in Studio: said to them, with where to top it up */
       if (e?.code === 'balance') throw new Error(`${provider.name} doesn't have enough balance for this. Top it up at ${provider.billingUrl}, or switch to another service, then try again.`);
-      if (e?.code === 'daily-limit') {
-        throw new Error(`Your OpenFilm account has reached the daily spending limit you set. Change it at ${provider.limitUrl ?? provider.billingUrl}, or switch to another service, then try again.`);
-      }
       throw e;
     });
     const lines = result.receipt?.lines;
@@ -618,7 +599,7 @@ export function createAsks(pages) {
  * Studio's `/api/get` (the CLI, with the launch key; a page answers asks with its cookie):
  *   GET  /api/get[?verb=][&web=1] → { verbs: [{ verb, help, dir?, options }], note, services }: what can be got here now
  *                           (see catalog; `web=1` for an agent without web tools of its own)
- *   POST /api/get           { folder, verb, args, via?, model?, tier?, yes? } → { ok: true, text } once it is done, or
+ *   POST /api/get           { folder, verb, args, via?, model?, yes? } → { ok: true, text } once it is done, or
  *                           { ok: false, code, text }: code 2, not a project or a wrong command; 1, it did not run
  *   POST /api/get/asks/:id  { allow } → { answered }: the person's answer to a question about spending
  * @param {Req} req @param {Res} res @param {string[]} parts the path after /api/get @param {ReturnType<typeof createAsks>} asks
@@ -633,7 +614,7 @@ export async function getRoute(req, res, parts, asks) {
     return json(res, 200, { answered: asks.answer(parts[1], allow === true) });
   }
   if (parts.length || req.method !== 'POST') throw new HttpError(404, 'no such API');
-  const body = /** @type {{ folder?: unknown, verb?: unknown, args?: unknown, via?: unknown, model?: unknown, tier?: unknown, yes?: unknown }} */ (await readJson(req));
+  const body = /** @type {{ folder?: unknown, verb?: unknown, args?: unknown, via?: unknown, model?: unknown, yes?: unknown }} */ (await readJson(req));
   /* the CLI gone (Ctrl-C): the run stops with it */
   const controller = new AbortController();
   res.once('close', () => { if (!res.writableEnded) controller.abort(); });
@@ -644,7 +625,6 @@ export async function getRoute(req, res, parts, asks) {
     const text = await runGet(root, String(body.verb ?? ''), given, {
       ...(typeof body.via === 'string' && body.via ? { via: body.via } : {}),
       ...(typeof body.model === 'string' && body.model ? { model: body.model } : {}),
-      ...(typeof body.tier === 'string' && body.tier ? { tier: body.tier } : {}),
       yes: body.yes === true,
       ask: (spend) => asks.ask(root, spend, controller.signal),
       tell: (notice) => asks.tell(root, notice),

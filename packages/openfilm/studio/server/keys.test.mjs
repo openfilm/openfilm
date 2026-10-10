@@ -14,7 +14,7 @@ before(async () => {
   const scratch = mkdtempSync(join(tmpdir(), 'of-keys-'));
   process.env.OPENFILM_HOME = join(scratch, 'home');
   process.env.OPENFILM_LIBRARY = join(scratch, 'library');
-  for (const name of ['ELEVENLABS_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'FAL_KEY', 'OPENFILM_API_KEY']) delete process.env[name];
+  for (const name of ['ELEVENLABS_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'FAL_KEY']) delete process.env[name];
   studio = await startStudio({ port: 0, openBrowser: (url) => opened.push(url) });
 });
 after(() => studio.close());
@@ -60,7 +60,6 @@ test('the providers API: keys go in and never come back out; choices for each ki
   let state = JSON.parse(text);
   const openai = state.providers.find((p) => p.id === 'openai');
   assert.deepEqual(openai, { id: 'openai', name: 'OpenAI', verbs: ['voice', 'tts', 'image', 'asr', 'translate'], models: listProviders().find((p) => p.id === 'openai').models, keysUrl: 'https://platform.openai.com/api-keys', env: 'OPENAI_API_KEY', source: 'file', last4: '9876' });
-  assert.equal(state.openfilm.connected, false);
   /* a new key takes the kinds nothing serves yet, and only those it can do */
   assert.equal(state.use.image, 'openai');
   assert.equal(state.use['image-search'], null);
@@ -94,20 +93,12 @@ test('the providers API: keys go in and never come back out; choices for each ki
 });
 
 test('a provider\'s own page for its balance opens in the person\'s browser, for every provider alike', async () => {
-  /* a build with no account service has no OpenFilm page to open */
-  assert.equal((await api('/api/providers/openfilm/billing', { method: 'POST' })).status, 404);
-  Object.assign(process.env, { OPENFILM_ACCOUNT_URL: 'https://openfilm.dev', OPENFILM_ACCOUNT_ISSUER: 'https://clerk.openfilm.dev', OPENFILM_ACCOUNT_CLIENT_ID: 'test-client' });
   for (const [id, page] of [['openai', 'https://platform.openai.com/settings/organization/billing'], ['fal', 'https://fal.ai/dashboard/billing'],
-    ['elevenlabs', 'https://elevenlabs.io/app/subscription'], ['openfilm', 'https://openfilm.dev/account']]) {
+    ['elevenlabs', 'https://elevenlabs.io/app/subscription']]) {
     assert.equal((await api(`/api/providers/${id}/billing`, { method: 'POST' })).status, 200);
     assert.equal(opened.at(-1), page);
   }
   assert.equal((await api('/api/providers/acme/billing', { method: 'POST' })).status, 404);
-  /* the OpenFilm account's daily spending limit is changed on its account page; no other provider has one here */
-  assert.equal((await api('/api/providers/openfilm/limit', { method: 'POST' })).status, 200);
-  assert.equal(opened.at(-1), 'https://openfilm.dev/account#billing');
-  assert.equal((await api('/api/providers/openai/limit', { method: 'POST' })).status, 404);
-  for (const k of ['OPENFILM_ACCOUNT_URL', 'OPENFILM_ACCOUNT_ISSUER', 'OPENFILM_ACCOUNT_CLIENT_ID']) delete process.env[k];
 });
 
 test('a key removed: what it made goes to another key that makes it, else to nothing', async () => {
@@ -119,29 +110,6 @@ test('a key removed: what it made goes to another key that makes it, else to not
   assert.equal(state.use.image, 'google', 'Google makes images too');
   state = await (await api('/api/providers/google/key', { method: 'DELETE' })).json();
   assert.equal(state.use.image, null);
-});
-
-test('OpenFilm comes with its models like any provider: its first unless chosen; a tier kept from before is its model', async () => {
-  let state = await (await api('/api/providers')).json();
-  assert.equal(state.openfilm.models.tts[0].id, 'inworld-tts-2-flash', 'the cheapest first');
-  assert.deepEqual(state.openfilm.models.video.map((m) => m.id), ['seedance-2.0-mini', 'hailuo-3', 'seedance-2.5']);
-  state = await (await api('/api/providers/use', { method: 'PUT', body: { verb: 'tts', provider: 'openfilm', model: 'elevenlabs-v4' } })).json();
-  assert.equal(state.use.tts, 'openfilm');
-  assert.equal(state.model.tts, 'elevenlabs-v4');
-  assert.equal((await api('/api/providers/use', { method: 'PUT', body: { verb: 'tts', provider: 'openfilm', model: 'hailuo-3' } })).status, 400, 'not a voice-over model');
-  state = await (await api('/api/providers/use', { method: 'PUT', body: { verb: 'video', provider: 'openfilm' } })).json();
-  assert.equal(state.model.video, 'seedance-2.0-mini');
-  const settings = await readSettings();
-  const openfilm = (await import('./providers/openfilm.mjs')).default;
-  assert.equal(modelFor(settings, openfilm, 'voice'), 'elevenlabs-v4', 'voices go with voice-over');
-
-  /* providers.json from when OpenFilm had tiers: each kind it made is the model its tier made */
-  await changeSettings((s) => { s.use.video = 'openfilm'; s.use.image = 'openfilm'; delete s.model.tts; Object.assign(s, { tier: { tts: 'pro', video: 'ultra', image: 'ultra' } }); });
-  const kept = await readSettings();
-  assert.equal(kept.model.tts, 'cartesia-sonic-3.6');
-  assert.equal(kept.model.video, 'seedance-2.5');
-  assert.equal(kept.model.image, 'gpt-image-2.5-flare', 'an image at Ultra was Flare unless asked for high quality');
-  assert.equal('tier' in kept, false);
 });
 
 test('an own key comes with its model: the provider\'s first unless chosen, kept only when it is not; voices go with voice-over', async () => {
@@ -157,10 +125,9 @@ test('an own key comes with its model: the provider\'s first unless chosen, kept
   assert.equal(JSON.parse(readFileSync(providersFile(), 'utf8')).model.tts, second.id);
   assert.equal(modelFor(await readSettings(), provider, 'voice'), second.id);
   assert.equal((await api('/api/providers/use', { method: 'PUT', body: { verb: 'tts', provider: 'elevenlabs', model: 'eleven_nope' } })).status, 400);
-  assert.equal((await api('/api/providers/use', { method: 'PUT', body: { verb: 'tts', provider: 'openfilm', model: second.id } })).status, 400, 'a model is an own key\'s');
   /* back to the first, or another provider: nothing kept */
   await api('/api/providers/use', { method: 'PUT', body: { verb: 'tts', provider: 'elevenlabs', model: first.id } });
   assert.equal(JSON.parse(readFileSync(providersFile(), 'utf8')).model.tts, undefined);
   /* a model the provider no longer has is its first */
-  assert.equal(modelFor({ keys: {}, use: {}, tier: {}, model: { tts: 'gone' }, seen: {} }, provider, 'tts'), first.id);
+  assert.equal(modelFor({ keys: {}, use: {}, model: { tts: 'gone' } }, provider, 'tts'), first.id);
 });

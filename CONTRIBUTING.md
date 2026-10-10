@@ -1,7 +1,7 @@
 # Contributing
 
-Thanks for helping. Issues and pull requests are welcome. Everything here runs with your own keys: you need no
-OpenFilm account or server to run it, change it or test it.
+Thanks for helping. Issues and pull requests are welcome. Everything here runs on your machine with your own keys:
+nothing else is needed to run it, change it or test it.
 
 ## Quick start
 
@@ -109,18 +109,12 @@ from `packages/openfilm` as source, so a change to Studio shows in the app at it
 unsigned unless `OPENFILM_SIGN_IDENTITY` and `APPLE_TEAM_ID` are set. A build you make is yours to try; before you
 distribute one, read [TRADEMARK.md](TRADEMARK.md): a fork published as its own needs its own name and icon.
 
-## Accounts and product.json
+## The update feed and product.json
 
-`packages/openfilm/product.json` says which build this is: where the OpenFilm account service is, and where the
-desktop app looks for updates. It is empty in the repository, so Studio and the desktop app run from source connect
-to no account service (nothing in Studio or the desktop app mentions one) and a desktop build never looks for
-updates. Everything else works with your own keys: in Studio, Settings → Providers, or the variables in the
-README's [Settings](README.md#settings). The official values are in `product.official.json`; the package npm
-publishes and the official desktop app carry them. Official releases have no account service either, for now: only
-the desktop app's update feed.
-
-To connect to an account service, yours or a local one, set `OPENFILM_ACCOUNT_URL`, `OPENFILM_ACCOUNT_ISSUER` and
-`OPENFILM_ACCOUNT_CLIENT_ID` before `pnpm dev` or `pnpm dev:desktop`; they override `product.json`.
+`packages/openfilm/product.json` says where the desktop app looks for updates. It is empty in the repository, so a
+desktop build of your own never looks for them. The official feed is in `product.official.json`; the package npm
+publishes and the official desktop app carry it. Media services are connected with your own keys: in Studio,
+Settings → Providers, or the variables in the README's [Settings](README.md#settings).
 
 ## Releases
 

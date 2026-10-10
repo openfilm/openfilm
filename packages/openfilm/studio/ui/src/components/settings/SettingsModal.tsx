@@ -1,15 +1,13 @@
 /**
  * Settings, opened from the logo at the top left: a search and the sections in groups on the left, the section on the
  * right as a page of titled groups. General (the theme and the language), Agents (in an app with a chat: the agents
- * it can use), Providers (the OpenFilm account and the person's own keys, connected alike), Models (which provider and
- * model makes each kind of media) and the keyboard shortcuts; the search finds a section by any phrase on it. Everything an account owns (plan, billing, the account itself) is on the website, which Providers
- * links to: a localhost page an agent's browser drives is no place for payments.
+ * it can use), Providers (the person's own keys for media services), Models (which provider and model makes each kind
+ * of media) and the keyboard shortcuts; the search finds a section by any phrase on it.
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { X, Settings2, Keyboard, Sun, Moon, Monitor, Plug, Boxes, Bot, Search, SquareTerminal } from 'lucide-react';
 import { LANGUAGES, phrasesUnder, useLanguage, useLanguageChoice, useT, type LanguageChoice } from '@/i18n';
-import { useOpenFilmAccount } from '@/lib/openfilm-account';
 import { shortcutHint } from '@/lib/shortcut-hint';
 import { SHORTCUTS, type ShortcutKey } from '@/lib/timeline-keys';
 import { studioHost } from '@/lib/host';
@@ -64,7 +62,6 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
   const [shown, setShown] = React.useState(false);
   const dialog = React.useRef<HTMLDivElement>(null);
   const search = React.useRef<HTMLInputElement>(null);
-  const account = useOpenFilmAccount(open);
   /* the latest onClose without re-running the effect below: the page re-renders every frame while it plays, and
      re-running it would fade the dialog out and in and take the focus back each time */
   const close = React.useRef(onClose);
@@ -170,9 +167,9 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
           <div key={showing ?? 'none'} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-10 pb-12 pt-9">
             {showing ? <h2 id="settings-title" className="mb-7 text-[22px] font-semibold tracking-[-0.015em] text-[var(--text)]">{t(`settings.sections.${showing}`)}</h2> : null}
             {showing === 'general' && <GeneralSection />}
-            {showing === 'agents' && <AgentsSection account={account} />}
-            {showing === 'providers' && <ProvidersSection state={account} />}
-            {showing === 'models' && <ModelsSection state={account} onConnect={() => { setQuery(''); setSection('providers'); }} />}
+            {showing === 'agents' && <AgentsSection />}
+            {showing === 'providers' && <ProvidersSection />}
+            {showing === 'models' && <ModelsSection onConnect={() => { setQuery(''); setSection('providers'); }} />}
             {showing === 'developer' && <DeveloperSection />}
             {showing === 'shortcuts' && <ShortcutsSection />}
           </div>

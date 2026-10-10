@@ -91,7 +91,7 @@ export default {
     if (verb === 'asr') {
       const src = needed(args, 'src');
       const upload = await speechUpload(src, ctx);
-      if (upload.size > MAX_UPLOAD) throw new Error(`OpenAI transcribes files up to 25 MB and this speech is ${Math.ceil(upload.size / 1048576)} MB: use ElevenLabs or OpenFilm for it.`);
+      if (upload.size > MAX_UPLOAD) throw new Error(`OpenAI transcribes files up to 25 MB and this speech is ${Math.ceil(upload.size / 1048576)} MB: use ElevenLabs for it.`);
       const model = modelOf(MODELS, 'asr', ctx);
       const form = new FormData();
       form.set('model', model);

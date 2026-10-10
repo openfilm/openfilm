@@ -5,16 +5,13 @@
  * Codex, Claude Code, Gemini CLI and the others are the person's own programs, with their own sign-in: connecting
  * uses it as it is and opens their own sign-in only when they are signed out (the app waits for it); disconnecting
  * stops the app using them and leaves their sign-in alone, since the makers' own apps share it. Codex and Claude Code
- * are always listed under the person's agents, with OpenFilm and the person's own key; the others there once switched
- * on (connecting one does), else under "More agents", with where to get them when they are not installed. OpenFilm runs on the OpenFilm account,
- * the same sign-in as Settings → Providers: connecting it here signs in on the website, disconnecting signs out, for both.
- * The person's own key is on a service of theirs, with a model that reads pictures (the agent looks at its own frames).
+ * are always listed under the person's agents, with the person's own key; the others there once switched on (connecting
+ * one does), else under "More agents", with where to get them when they are not installed. The person's own key is on a service of theirs, with a model that reads pictures (the agent looks at its own frames).
  */
 import React from 'react';
 import { Download, KeyRound, Loader2 } from 'lucide-react';
 import { useT } from '@/i18n';
 import { studioHost, type HostAgent, type HostAgentId, type HostByokFormat } from '@/lib/host';
-import type { OpenFilmAccountState } from '@/lib/openfilm-account';
 import { ProviderMark } from './ProviderMark';
 import { SettingsSelect } from './SettingsSelect';
 import { SettingsButton, SettingsField, SettingsGroup, SettingsInset, SettingsItem, SettingsLinkButton, SettingsPage, SettingsStatus, SettingsSwitch, settingsError } from './ui';
@@ -44,14 +41,10 @@ function AgentMark({ id }: { id: HostAgentId }) {
   return id === 'byok' ? <KeyRound size={16} /> : <ProviderMark id={MARK_OF[id] ?? id} size={17} />;
 }
 
-export function AgentsSection({ account }: { account: OpenFilmAccountState }) {
+export function AgentsSection() {
   const t = useT();
   const agents = useHostAgents();
   const host = studioHost?.agents;
-  const signedIn = Boolean(account.account?.connected);
-  const signingIn = Boolean(account.account?.pending);
-  /* the account signed in or out (here or in Providers): the OpenFilm agent's row follows */
-  React.useEffect(() => { void host?.list().catch(() => {}); }, [host, signedIn]);
   const [busy, setBusy] = React.useState<HostAgentId | null>(null);
   const [error, setError] = React.useState<{ id: HostAgentId; text: string } | null>(null);
   const [keyOpen, setKeyOpen] = React.useState(false);
@@ -66,16 +59,12 @@ export function AgentsSection({ account }: { account: OpenFilmAccountState }) {
       .finally(() => setBusy(null));
   };
 
-  /* a build with no account service: the OpenFilm agent has nothing to run on */
-  const notConfigured = account.account?.configured === false;
-
   const statusLine = (agent: HostAgent) => {
     switch (agent.status) {
       case 'off': return t('settings.agents.off');
       case 'sign-in': return t('settings.agents.signedOut');
       case 'waiting': return t('settings.agents.waiting');
       case 'missing': return agent.setupRequired === 'code-tab' ? t('settings.agents.claudeSetup') : t('settings.agents.missing');
-      case 'account': return t('settings.agents.needsAccount');
       case 'key': return t('settings.agents.needsKey');
       case 'unavailable': return t('settings.agents.unavailable');
       case 'checking': return t('settings.agents.checking');
@@ -92,20 +81,6 @@ export function AgentsSection({ account }: { account: OpenFilmAccountState }) {
     if (agent.status === 'missing') {
       return agent.install ? <SettingsLinkButton href={agent.install}><Download size={16} />{t('settings.agents.install')}</SettingsLinkButton> : null;
     }
-    if (agent.id === 'openfilm') {
-      /* one sign-in with Providers: connect signs in on the website, disconnect signs out */
-      if (signedIn && agent.status !== 'off') {
-        return chosen ? <SettingsButton variant="quiet" disabled={account.busy} onClick={() => void account.disconnect()}>{t('settings.agents.disconnect')}</SettingsButton> : null;
-      }
-      if (agent.status === 'unavailable' || agent.status === 'checking') return null;
-      return (
-        <SettingsButton disabled={account.busy || signingIn || !account.loaded}
-          onClick={() => { void (signedIn ? Promise.resolve() : account.connect()).then(() => act(agent.id, () => host.connect(agent.id))); }}>
-          {account.busy || signingIn ? <Loader2 size={16} className="animate-spin" aria-hidden /> : null}
-          {t('settings.agents.connect')}
-        </SettingsButton>
-      );
-    }
     if (agent.status === 'key') return <SettingsButton onClick={() => setKeyOpen(true)}>{t('settings.agents.setUpKey')}</SettingsButton>;
     if (agent.status === 'unavailable') return null;
     if (agent.status === 'checking') return <Loader2 size={16} className="animate-spin text-[var(--text-muted)]" aria-hidden />;
@@ -119,8 +94,7 @@ export function AgentsSection({ account }: { account: OpenFilmAccountState }) {
 
   const row = (agent: HostAgent, chosen = true) => {
     const ownKey = agent.id === 'byok' && agent.byok;
-    const said = error?.id === agent.id ? error.text : agent.id === 'openfilm' && account.problem ? account.problem : agent.error;
-    const accountWaiting = agent.id === 'openfilm' && signingIn;
+    const said = error?.id === agent.id ? error.text : agent.error;
     const open = agent.id === 'byok' && keyOpen;
     return (
       <SettingsItem
@@ -149,18 +123,12 @@ export function AgentsSection({ account }: { account: OpenFilmAccountState }) {
           </>
         )}
       >
-        {agent.status === 'waiting' || accountWaiting || open || said ? (
+        {agent.status === 'waiting' || open || said ? (
           <div className="flex flex-col gap-1.5 pl-[34px]">
             {agent.status === 'waiting' ? (
               <p className="text-[14.5px] leading-relaxed text-[var(--text-muted)]">
                 {t('settings.agents.waitingHint')}{' '}
                 <button type="button" onClick={() => act(agent.id, () => host.connect(agent.id))} className="underline underline-offset-2 hover:text-[var(--text)]">{t('settings.agents.startAgain')}</button>
-              </p>
-            ) : null}
-            {accountWaiting ? (
-              <p className="text-[14.5px] leading-relaxed text-[var(--text-muted)]">
-                {t('settings.agents.accountWaitingHint')}{' '}
-                <button type="button" onClick={() => void account.connect()} className="underline underline-offset-2 hover:text-[var(--text)]">{t('settings.agents.startAgain')}</button>
               </p>
             ) : null}
             {open ? <ByokForm agent={agent} onDone={() => setKeyOpen(false)} /> : null}
@@ -171,11 +139,10 @@ export function AgentsSection({ account }: { account: OpenFilmAccountState }) {
     );
   };
 
-  /* a build with no account service doesn't list the OpenFilm agent */
-  const list = (agents ?? []).filter((a) => a.id !== 'openfilm' || !(notConfigured || a.status === 'unconfigured'));
+  const list = agents ?? [];
   const byId = (id: HostAgentId) => list.find((a) => a.id === id);
-  /* always yours: Codex, Claude Code, OpenFilm and your own key; then the others switched on, the rest under "More" */
-  const always = (['codex', 'claude', 'openfilm', 'byok'] as const).map(byId).filter((a): a is HostAgent => Boolean(a));
+  /* always yours: Codex, Claude Code and your own key; then the others switched on, the rest under "More" */
+  const always = (['codex', 'claude', 'byok'] as const).map(byId).filter((a): a is HostAgent => Boolean(a));
   const others = list.filter((a) => OWN.includes(a.id) && !always.includes(a));
   const more = others.filter((a) => !a.shown);
   return (

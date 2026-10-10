@@ -54,7 +54,7 @@ openfilm get    [what]            # voice-over, music, sound effects, transcript
 ```
 
 `openfilm <command> --help` lists a command's options; `openfilm get` alone lists what can be made and how to
-connect a service in Studio.
+connect a service in Studio with your own key.
 
 ## Studio
 

@@ -231,18 +231,16 @@ export async function getMedia(argv, say) {
     const had = flags[name];
     flags[name] = had === undefined ? value : [...[had].flat(), value];
   }
-  /* `--tier` is an older agent's way to name an OpenFilm model (flash, pro or ultra) */
-  const { help, via, model, tier, yes, ...args } = flags;
-  if (via !== undefined && typeof via !== 'string') return { code: 2, lines: ['openfilm get: --via names a provider, e.g. --via openfilm'] };
-  if (model !== undefined && typeof model !== 'string') return { code: 2, lines: ['openfilm get: --model names a model, e.g. --model elevenlabs-v4'] };
-  if (tier !== undefined && typeof tier !== 'string') return { code: 2, lines: ['openfilm get: --tier is one of flash, pro, ultra'] };
+  const { help, via, model, yes, ...args } = flags;
+  if (via !== undefined && typeof via !== 'string') return { code: 2, lines: ['openfilm get: --via names a provider, e.g. --via elevenlabs'] };
+  if (model !== undefined && typeof model !== 'string') return { code: 2, lines: ['openfilm get: --model names a model, e.g. --model eleven_v4'] };
   const listing = !verb || verb === 'help' || help !== undefined;
   const folder = projectAround('.');
   if (!folder && !listing) return { code: 2, lines: [`openfilm get: ${resolve('.')} is not in a project; \`openfilm open\` makes one`] };
   /* the listing is read from a Studio already running, else here: asking what there is starts nothing */
   const run = listing ? await running() : await ensureStudio(say);
   if (!listing && run) {
-    const answer = await post(run, '/api/get', { folder, verb, args, ...(via ? { via } : {}), ...(model ? { model } : {}), ...(tier ? { tier } : {}), yes: yes === true });
+    const answer = await post(run, '/api/get', { folder, verb, args, ...(via ? { via } : {}), ...(model ? { model } : {}), yes: yes === true });
     if (typeof answer?.text !== 'string') return { code: 1, lines: [`openfilm get: ${answer?.error ?? 'Studio did not say how it went'}`] };
     return { code: answer.ok ? 0 : answer.code === 2 ? 2 : 1, lines: [answer.text] };
   }

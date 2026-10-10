@@ -54,7 +54,7 @@ export function DesktopDialog({ open, onClose }: { open: boolean; onClose: () =>
   }, [open]);
 
   const openDownload = () => {
-    void fetch('/api/account/desktop', { method: 'POST' }).catch(() => { /* Studio is gone: nothing to open */ });
+    void fetch('/api/desktop', { method: 'POST' }).catch(() => { /* Studio is gone: nothing to open */ });
     onClose();
   };
 

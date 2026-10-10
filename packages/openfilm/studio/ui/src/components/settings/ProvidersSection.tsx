@@ -2,15 +2,12 @@
  * Settings → Providers: the services `openfilm get` gets voices, music, sound effects, transcripts, images and video
  * from, one list in the order of their names, none put first.
  *
- * The OpenFilm account connects by signing in in the person's browser; plan, billing and the account itself are on the
- * website ("Manage account"), never on this localhost page. ElevenLabs, OpenAI, Google Gemini and fal.ai connect with
- * the person's own key, which pays that service directly (a key in the environment shows as such and stays there).
- * Which of them makes each kind of media, and with which model, is Settings → Models.
+ * Each connects with the person's own key, which pays that service directly (a key in the environment shows as such
+ * and stays there). Which of them makes each kind of media, and with which model, is Settings → Models.
  */
 import React from 'react';
 import { ExternalLink, Plus } from 'lucide-react';
 import { useT } from '@/i18n';
-import type { OpenFilmAccountState } from '@/lib/openfilm-account';
 import { useProviders, type OwnProvider, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
 import { ProviderMark } from './ProviderMark';
 import { SettingsButton, SettingsField, SettingsGroup, SettingsInset, SettingsItem, SettingsPage, SettingsStatus, settingsError, settingsLink } from './ui';
@@ -19,21 +16,16 @@ import { SettingsButton, SettingsField, SettingsGroup, SettingsInset, SettingsIt
 const ABILITY_ORDER: ProviderVerb[] = ['tts', 'music', 'sfx', 'asr', 'image', 'image-search', 'video', 'translate', 'web-search'];
 
 
-export function ProvidersSection({ state }: { state: OpenFilmAccountState }) {
+export function ProvidersSection() {
   const t = useT();
-  const providers = useProviders(state.account?.connected);
-  const rows = [
-    /* a build with no account service (run from source, or a release without one) doesn't list it */
-    ...(state.account?.configured === false ? [] : [{ name: 'OpenFilm', row: <OpenFilmRow key="openfilm" state={state} /> }]),
-    ...(providers.state?.providers ?? []).map((provider) => ({ name: provider.name, row: <KeyRow key={provider.id} provider={provider} hook={providers} /> })),
-  ].sort((a, b) => a.name.localeCompare(b.name));
+  const providers = useProviders();
+  const rows = [...(providers.state?.providers ?? [])].sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <SettingsPage note={t('settings.providers.desc')}>
       <SettingsGroup footnote={t('settings.providers.keyNote')}>
-        {rows.map((r) => r.row)}
+        {rows.map((provider) => <KeyRow key={provider.id} provider={provider} hook={providers} />)}
       </SettingsGroup>
-      {state.problem ? <p className={settingsError}>{state.problem}</p> : null}
       {providers.problem ? <p className={settingsError}>{providers.problem}</p> : null}
     </SettingsPage>
   );
@@ -65,48 +57,6 @@ function Connected({ children }: { children?: React.ReactNode }) {
 function abilityPhrase(verbs: readonly ProviderVerb[], t: (key: string) => string) {
   const words = verbs.map((v, i) => (i ? t(`settings.providers.verbs.${v}`).toLowerCase() : t(`settings.providers.verbs.${v}`)));
   return words.length > 1 ? `${words.slice(0, -1).join(', ')} ${t('settings.providers.and')} ${words.at(-1)}` : words[0] ?? '';
-}
-
-/**
- * The OpenFilm account: connected by signing in in the browser; connected, who it is and where it is managed (what it
- * has left is there, never here). It makes every kind of media.
- */
-function OpenFilmRow({ state }: { state: OpenFilmAccountState }) {
-  const t = useT();
-  const { account, busy } = state;
-  const connected = Boolean(account?.connected);
-  const waiting = Boolean(account?.pending);
-
-  return (
-    <Row
-      id="openfilm"
-      name="OpenFilm"
-      action={connected ? (
-        <SettingsButton variant="quiet" disabled={busy} onClick={() => void state.disconnect()}>{t('settings.providers.disconnect')}</SettingsButton>
-      ) : (
-        <SettingsButton disabled={busy || waiting || !state.loaded} onClick={() => void state.connect()}>
-          {busy || waiting ? t('settings.providers.connecting') : <><Plus size={15} strokeWidth={2} />{t('settings.providers.connect')}</>}
-        </SettingsButton>
-      )}
-    >
-      {connected && account ? (
-        <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-          <span>{t('settings.providers.connectedAs').replaceAll('{email}', account.email || '—')}</span>
-          <a href={account.manageUrl} target="_blank" rel="noreferrer" onClick={(e) => { e.preventDefault(); state.manage(); }} className={settingsLink}>
-            {t('settings.providers.manage')}<ExternalLink size={12} />
-          </a>
-        </span>
-      ) : abilityPhrase(ABILITY_ORDER, t)}
-      {waiting ? (
-        <span className="mt-1 block">
-          {t('settings.providers.waitingHint')}{' '}
-          <button type="button" onClick={() => void state.connect()} className="underline underline-offset-2 hover:text-[var(--text)]">
-            {t('settings.providers.startAgain')}
-          </button>
-        </span>
-      ) : null}
-    </Row>
-  );
 }
 
 /** A service paid with the person's own key: connected by pasting one (kept here, or read from the environment). */

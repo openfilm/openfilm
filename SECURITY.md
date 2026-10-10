@@ -1,8 +1,7 @@
 # Security
 
-Studio is a server on your machine: it reads and writes your projects, keeps the keys of the media services you
-connect, and holds your OpenFilm account's sign-in. It listens on 127.0.0.1 only, and answers the CLI and its own
-pages with a key it makes at launch.
+Studio is a server on your machine: it reads and writes your projects and keeps the keys of the media services you
+connect. It listens on 127.0.0.1 only, and answers the CLI and its own pages with a key it makes at launch.
 
 ## Reporting
 
