@@ -7,7 +7,7 @@ import { BrowseError, browseFolder, browsePlaces, within } from './browse.mjs';
 
 let root, outside;
 before(() => {
-  const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'of-browse-')));
+  const scratch = realpathSync.native(mkdtempSync(join(tmpdir(), 'of-browse-')));
   root = join(scratch, 'home');
   outside = join(scratch, 'elsewhere');
   mkdirSync(join(root, 'Films', 'Launch'), { recursive: true });

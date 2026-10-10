@@ -55,7 +55,7 @@ import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FilmPage, launch } from '../../src/host.mjs';
-import { filmSound, mix, open } from '../../src/shared.mjs';
+import { filmSound, kill as killProcess, mix, open } from '../../src/shared.mjs';
 import { FILM_FILE, clipFade, filmHtml, fittedFade, kindOf, pictureRect, readFilmFile } from '../../src/film-doc.mjs';
 import { NLE_FPS, nleFps, planNleTimeline, probeSource, soundStem, xmemlDocument } from './nle.mjs';
 import { slidesPdf, writePptx } from './slides.mjs';
@@ -371,7 +371,7 @@ function run(args, signal, input) {
     const proc = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-loglevel', 'error', '-y', ...args], { stdio: [input ? 'pipe' : 'ignore', 'ignore', 'pipe'], windowsHide: true });
     let err = '';
     proc.stderr?.on('data', (d) => { err += d; });
-    const kill = () => proc.kill('SIGKILL');
+    const kill = () => killProcess(proc);
     signal.addEventListener('abort', kill, { once: true });
     proc.on('error', (e) => { signal.removeEventListener('abort', kill); fail(new Error(`ffmpeg: ${/** @type {NodeJS.ErrnoException} */ (e).code === 'ENOENT' ? 'not found on the PATH' : e.message}`)); });
     proc.on('close', (code) => {

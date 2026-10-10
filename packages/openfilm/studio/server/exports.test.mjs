@@ -4,6 +4,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createExports, exportCapabilities, exportsRoot, ExportError, frameBox, dimsForShortEdge, projectFiles, projectSizes } from './exports.mjs';
 import { allocateLanes, containMotion, fadeKeyframes, frameSpan, nleRate, planNleTimeline, xmemlDocument } from './nle.mjs';
 import { pptxParts } from './slides.mjs';
@@ -481,7 +482,7 @@ test('editing software: an xmeml folder; pages rendered with alpha, footage plac
   assert.deepEqual(sounds, [['shot', 'TRUE', 0, 40], ['slow', 'TRUE', 40, 60], ['voice', 'TRUE', 5, 25], ['bed', 'FALSE', 0, 25]]);
   /* every clip's media is there for all of its frames; a sound at another speed is made as long as its clip, slowed or
      sped as the film plays it (an editor plays it at its own speed: shorter, it would stop halfway through its clip) */
-  const paths = new Map(found.video.flat().concat(found.audio.flat()).filter((c) => c.path).map((c) => [c.file, decodeURIComponent(c.path.replace(/^file:\/\/localhost/, ''))]));
+  const paths = new Map(found.video.flat().concat(found.audio.flat()).filter((c) => c.path).map((c) => [c.file, fileURLToPath(c.path.replace(/^file:\/\/localhost\//, 'file:///'))]));
   for (const c of [...found.video.flat(), ...found.audio.flat()]) {
     const media = paths.get(c.file);
     if (/\.png$/.test(media)) continue;

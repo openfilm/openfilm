@@ -2,12 +2,13 @@ import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, statSync, utimesSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   checkout, commitChanges, deleteBranch, discardChanges, historyFiles, log, mergeBranch, renameBranch, restoreCommit, status,
 } from './history.mjs';
+import { replaceFile } from './atomic.mjs';
 
 let trash;
 before(() => {
@@ -334,7 +335,8 @@ test('a project moved or renamed keeps its history: every call names the folder 
   /* as git init wrote it, and as an earlier Studio left it: where the folder was */
   execFileSync('git', ['--git-dir', gitDir(before), 'config', 'core.worktree', before]);
   const root = join(before, '..', `${before.split(/[\\/]/).pop()}-moved`);
-  renameSync(before, root);
+  /* the commit's tidy-up (git gc --auto) may still be running in the folder: Windows refuses the move for a moment */
+  await replaceFile(before, root);
   assert.equal(worktree(root), before, 'the history still says the old folder');
   assert.deepEqual((await log(root)).map((c) => c.message), ['First cut']);
   assert.equal(worktree(root), root, 'and says the new one once used');

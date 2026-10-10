@@ -16,5 +16,7 @@ export declare function open(target: string, opts?: { root?: string }): Promise<
 /** The film's sound from `from` seconds on, as clips to mix: its sound clips and its videos' own sound. */
 export declare function filmSound(s: OpenFilm, from: number): Promise<MixClip[]>;
 export declare class UsageError extends Error {}
+/** Stop a process at once, with its children on Windows. */
+export declare function kill(proc: import('node:child_process').ChildProcess): void;
 /** Run ffmpeg (`-nostdin`, errors only) with `args`; rejects with its error, or when it runs past `timeoutMs`. */
 export declare function ffmpeg(args: string[], opts?: { input?: boolean; timeoutMs?: number; what?: string }): { proc: import('node:child_process').ChildProcess; done: Promise<void> };

@@ -105,6 +105,17 @@ export function shown(path) {
 export const fmt = (t) => `${Number(t.toFixed(3))}s`;
 export const hash = (buf) => createHash('sha1').update(buf).digest('hex').slice(0, 12);
 
+/**
+ * Stop a process at once. On Windows ffmpeg is often a shim (Chocolatey, Scoop) that runs the real one as its child:
+ * the whole tree goes, or the real one runs on and holds the pipes open.
+ * @param {import('node:child_process').ChildProcess} proc
+ */
+export function kill(proc) {
+  if (proc.exitCode !== null || proc.signalCode !== null) return;
+  if (process.platform === 'win32' && proc.pid) spawn('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true }).on('error', () => proc.kill());
+  else proc.kill('SIGKILL');
+}
+
 /** Run ffmpeg; `timeoutMs`: stop it and fail with `what` when it has not finished by then. */
 export function ffmpeg(args, { input = false, timeoutMs = 0, what = 'ffmpeg' } = {}) {
   /* -nostdin: ffmpeg never reads keys from a terminal it was started in (an agent's shell is one) */
@@ -112,7 +123,7 @@ export function ffmpeg(args, { input = false, timeoutMs = 0, what = 'ffmpeg' } =
   let err = '';
   proc.stderr.on('data', (d) => { err += d; });
   let late = false;
-  const timer = timeoutMs > 0 ? setTimeout(() => { late = true; proc.kill('SIGKILL'); }, timeoutMs) : null;
+  const timer = timeoutMs > 0 ? setTimeout(() => { late = true; kill(proc); }, timeoutMs) : null;
   timer?.unref();
   const done = new Promise((ok, fail) => {
     proc.on('error', (e) => fail(new Error(`ffmpeg: ${e.code === 'ENOENT' ? 'not found on the PATH' : e.message}`)));

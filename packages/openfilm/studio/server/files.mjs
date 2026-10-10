@@ -110,6 +110,16 @@ export function cleanName(name) {
   return `${clean.slice(0, 120 - ext.length).trimEnd()}${ext}`;
 }
 
+/**
+ * A path as a person asked for it, before its name is cleaned: refused when it leaves the project or reaches into
+ * `.film/`. The name is checked up to a `:`, which cleaning takes out (on Windows it would name a stream of a file).
+ * @param {string} root @param {string} rel
+ */
+function askedInside(root, rel) {
+  const cut = typeof rel === 'string' ? rel.lastIndexOf('/') : -1;
+  inside(root, typeof rel === 'string' ? `${rel.slice(0, cut + 1)}${rel.slice(cut + 1).split(':')[0]}` : rel);
+}
+
 /** A project-relative path with its last part cleaned (cleanName); the folders before it are where it goes, as they are. */
 function cleanLast(/** @type {string} */ rel) {
   const cut = typeof rel === 'string' ? rel.lastIndexOf('/') : -1;
@@ -189,7 +199,7 @@ let imports = 0;
  * @returns {Promise<{ path: string, reused: boolean }>}
  */
 export async function importFile(root, rel, body) {
-  inside(root, rel);
+  askedInside(root, rel);
   const asked = cleanLast(rel);
   const dir = dirname(inside(root, asked));
   await mkdir(dir, { recursive: true });
@@ -223,7 +233,7 @@ export async function importFile(root, rel, body) {
 
 /** Make a folder under assets/ (a person's folder shows even while empty). */
 export async function makeFolder(/** @type {string} */ root, /** @type {string} */ asked) {
-  inside(root, asked);
+  askedInside(root, asked);
   const rel = cleanLast(asked);
   const abs = inside(root, rel);
   if (existsSync(abs)) throw new FileError(`${rel} is already there`, 409);
@@ -239,7 +249,7 @@ export async function makeFolder(/** @type {string} */ root, /** @type {string} 
  */
 export async function moveFile(root, from, asked) {
   const src = inside(root, from);
-  inside(root, asked);
+  askedInside(root, asked);
   const to = cleanLast(asked);
   const dst = inside(root, to);
   if (!existsSync(src)) throw new FileError(`${from} is not there`, 404);

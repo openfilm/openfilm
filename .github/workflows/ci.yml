@@ -16,6 +16,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    # a test that hangs ends the job, not hours later
+    timeout-minutes: 45
     env:
       # the tests never start Electron: no need for its 100 MB download
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'

@@ -12,14 +12,14 @@
  */
 import { spawn } from 'node:child_process';
 import { fstatSync, openSync, readFileSync } from 'node:fs';
-import { setPriority } from 'node:os';
+import { devNull, setPriority } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /* fds 0–2 open before anything else is: a launcher that closed one (a detached shell, a service) would make every
    spawn of ffmpeg, ffprobe or git fail with EBADF from then on, while the page still says Studio is up */
 for (const fd of [0, 1, 2]) {
-  try { fstatSync(fd); } catch { openSync('/dev/null', fd === 0 ? 'r' : 'a'); }
+  try { fstatSync(fd); } catch { openSync(devNull, fd === 0 ? 'r' : 'a'); }
 }
 /* below the person's own apps: an export or a poster never takes the computer from them, and what Studio starts
    (its browsers, ffmpeg) runs at this priority too */
