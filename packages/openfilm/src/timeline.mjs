@@ -183,6 +183,9 @@ const SAME_TIME = 1e-4; // s: a video's currentTime is kept to the microsecond, 
  * moment the new frame is presented.
  */
 async function showVideoAt(v, t) {
+  /* a seek still under way (the start a video was woken at, see wake): its `seeked` and its frame would be taken for
+     this one's, and the picture captured was the earlier time's */
+  if (v.seeking) await new Promise((done) => { v.addEventListener('seeked', done, { once: true }); setTimeout(done, 10000); });
   /* the same time again (to the microsecond the element keeps): no seek, nothing new to present (a seek there would
      present nothing, and the wait would run out) */
   if (!v.seeking && Math.abs(v.currentTime - t) < SAME_TIME && v.readyState >= 2) return;
