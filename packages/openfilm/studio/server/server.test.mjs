@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { request } from 'node:http';
 import { connect } from 'node:net';
-import { opener, startStudio } from './server.mjs';
+import { desktopInstaller, opener, startStudio } from './server.mjs';
 import { filmHtml } from '../../src/film-doc.mjs';
 
 let studio, scratch, opened;
@@ -313,9 +313,16 @@ test('an export is shown in the file manager only while it is there', async () =
   assert.equal(res.status, 404);
 });
 
-test('the Desktop button opens the project\'s website, where the download is, in the person\'s browser', async () => {
-  assert.equal((await api('/api/desktop', { method: 'POST' })).status, 200);
+test('the Desktop button opens the installer for this computer, or the project\'s website, in the person\'s browser', async () => {
+  /* a build from source names no place for installers: the website */
+  assert.equal((await api('/api/desktop', { method: 'POST', body: { os: 'mac', arch: 'arm64' } })).status, 200);
   assert.equal(opened.at(-1), JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).homepage);
+  const base = 'https://example.com/download/desktop';
+  assert.equal(desktopInstaller('mac', 'arm64', base), `${base}/mac/arm64/OpenFilm-arm64.dmg`);
+  assert.equal(desktopInstaller('win', 'x64', base), `${base}/win/x64/OpenFilm-Setup-x64.exe`);
+  assert.equal(desktopInstaller('linux', 'x64', base), null);
+  assert.equal(desktopInstaller('mac', 'ppc', base), null);
+  assert.equal(desktopInstaller('mac', 'arm64', ''), null);
 });
 
 test('the fonts installed here, for the inspector\'s font menu', async () => {

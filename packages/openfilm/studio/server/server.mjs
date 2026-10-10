@@ -55,6 +55,20 @@ const cookieName = (/** @type {number} */ port) => `openfilm_studio_${port}`;
 const PAGES_BACK_MS = 3000;
 /** The project's website (package.json `homepage`). */
 const HOMEPAGE = (() => { try { return String(JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).homepage ?? ''); } catch { return ''; } })();
+/** Where the desktop app's installers are (product.json `desktop.updates`): empty in a build from source. */
+const DESKTOP_FILES = (() => { try { return String(JSON.parse(readFileSync(new URL('../../product.json', import.meta.url), 'utf8')).desktop?.updates ?? '').replace(/\/+$/, ''); } catch { return ''; } })();
+
+/**
+ * The desktop app's installer for a system and chip, as the release publishes it, or null: an unknown system or chip,
+ * or a build that names no place for installers.
+ * @param {unknown} os @param {unknown} arch @param {string} [base]
+ */
+export function desktopInstaller(os, arch, base = DESKTOP_FILES) {
+  if (!base || (arch !== 'arm64' && arch !== 'x64')) return null;
+  if (os === 'mac') return `${base}/mac/${arch}/OpenFilm-${arch}.dmg`;
+  if (os === 'win') return `${base}/win/${arch}/OpenFilm-Setup-${arch}.exe`;
+  return null;
+}
 
 /**
  * Start Studio. `port` 0 picks a free one. `advertise`:
@@ -190,9 +204,12 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* the fonts installed here (what a web page can draw with, in the preview and the export alike) */
     if (parts[0] === 'fonts' && parts.length === 1 && req.method === 'GET') return json(res, 200, { fonts: await installedFonts() });
 
-    /* the website, where the desktop app's download is, opened in the person's browser (the top bar's Desktop button) */
+    /* the top bar's Desktop button: the installer for this computer ({ os, arch }) opened in the person's browser,
+       else the website, where the download is */
     if (parts[0] === 'desktop' && parts.length === 1 && req.method === 'POST') {
-      if (HOMEPAGE) openBrowser(HOMEPAGE);
+      const { os, arch } = /** @type {{ os?: unknown, arch?: unknown }} */ (await readJson(req).catch(() => ({})) ?? {});
+      const to = desktopInstaller(os, arch) ?? HOMEPAGE;
+      if (to) openBrowser(to);
       return json(res, 200, {});
     }
     /* ── own keys and who makes each kind of media (Settings → Providers): never a key back; see providers/index.mjs ── */
