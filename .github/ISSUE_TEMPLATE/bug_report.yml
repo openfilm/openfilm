@@ -1,0 +1,62 @@
+name: Bug report
+description: Something in OpenFilm does not work as it should.
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: OpenFilm version
+      description: What `openfilm --version` prints.
+      placeholder: 0.1.2
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: macOS 15.5, Windows 11, Ubuntu 24.04…
+    validations:
+      required: true
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Agent
+      description: Which coding agent ran OpenFilm, if any.
+      options:
+        - None (Studio or the command by hand)
+        - Claude Code
+        - Codex
+        - Cursor
+        - Gemini CLI
+        - Other (say which below)
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. openfilm open demo
+        2. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      description: The command's output or the error, as text.
+    validations:
+      required: true
+  - type: textarea
+    id: film
+    attributes:
+      label: The film or logs
+      description: |
+        If you can, attach the film folder (zipped, without large media) or the smallest film.html that shows the bug,
+        and Studio's log (~/.openfilm/logs/studio.log). Leave out anything private, such as keys.

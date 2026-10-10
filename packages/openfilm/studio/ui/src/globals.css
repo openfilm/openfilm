@@ -1,0 +1,544 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/inter';
+
+/* `dark:` follows the app's theme (`<html data-theme>`, set at startup from the saved choice), not the system's
+   directly: when the two differ, a system-driven `dark:` would paint the wrong side. */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/* ── Design system: restrained, light by default ─────────────────────────────────────────────────────────────── */
+
+:root {
+  --font-cjk-sans: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', 'Source Han Sans SC',
+    'Heiti SC', sans-serif;
+  --font-sans: 'Inter Variable', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, var(--font-cjk-sans);
+  --font-mono: ui-monospace, 'SFMono-Regular', 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  --radius-lg: 16px;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.05);
+
+  /* a host window's controls (lib/host.ts); nothing to make room for in a browser */
+  --titlebar-logo-x: 6px;
+  --titlebar-right-x: 0px;
+}
+
+/* ── Light (default): paper is 252, the board panes sit on is 242, every other gray lies between ── */
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+
+  --bg: #fcfcfc;
+  --canvas: #f2f2f2;
+  --panel: #fcfcfc;
+  --surface: #fcfcfc;
+  --surface-2: #f2f2f2;
+  --surface-3: #e8e8e8;
+  --bg-surface: var(--surface);
+
+  --border: rgba(0, 0, 0, 0.08);
+  --border-soft: rgba(0, 0, 0, 0.05);
+  --border-strong: rgba(0, 0, 0, 0.16);
+
+  --text: #1f1f1f;
+  --text-dim: #4b4b4b;
+  --text-muted: #666666;
+  --text-faint: #a9a9a9;
+
+  --card-bg: #fcfcfc;
+  --card-border: rgba(0, 0, 0, 0.08);
+  --fill-tsp: rgba(0, 0, 0, 0.05);
+
+  --tooltip-bg: #ffffff;
+  --tooltip-text: #1f1f1f;
+  --tooltip-border: rgba(0, 0, 0, 0.14);
+
+  /* the main action is ink, not a color; selected and hover are neutral grays */
+  --accent: #1a1a1a;
+  --accent-soft: rgba(26, 26, 26, 0.06);
+  --on-accent: #ffffff;
+
+  --ok: #16a34a;
+  --warn: #d97706;
+  --err: #dc2626;
+
+  --bg-hover: rgba(0, 0, 0, 0.045);
+  --bg-active: rgba(0, 0, 0, 0.08);
+
+  --app-content-bg: #fcfcfc;
+
+  /* the docked layout: panes float on a board one step darker; the seams are that board showing through */
+  --dock-shell: #f2f2f2;
+  --dock-pane: #fcfcfc;
+
+  --folder-back: #cbcbcb;
+  --folder-front: #e0e0e0;
+  --folder-front-hi: #ededed;
+
+  --brand-wind-from: #2f9e63;
+  --brand-wind-mid: #3cbc93;
+  --brand-wind-to: #55bfd0;
+
+  /* The timeline. The track area is light like the rest of the screen, but blocks are dark enough to carry white
+     text and waveforms. Toolbar, track heads and ruler are the pane's own color (its rounded corners show through
+     that); only the lanes step half a shade darker. */
+  --tl-lane: #efefef;
+  --tl-lane-on: #f5f5f5;
+  --tl-head: #fcfcfc;
+  --tl-ruler: #fcfcfc;
+  --tl-line: #e2e2e2;
+  --tl-text: #4a4a4a;
+  --tl-faint: #8a8a8a;
+  /* playhead, selection and the zoom slider's traveled part: the brand teal, "the thing you are moving" */
+  --tl-playhead: #1f8a86;
+  --tl-accent: #1f8a86;
+  --tl-select: var(--tl-accent);
+  --tl-tick: rgba(0, 0, 0, 0.16);
+  /* waveforms on blocks (canvas reads these back from the element) */
+  --tl-wave: rgba(0, 110, 108, 0.82);
+  --tl-wave-band: rgba(0, 96, 102, 0.8);
+  --tl-scene: #3f9b9b;
+  --tl-video: #5385bd;
+  --tl-voice: #6f62b0;
+  --tl-sfx: #5192c4;
+  --tl-music: #3f9a90;
+  --tl-caption: #7c8797;
+}
+
+/* ── Dark ── */
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #1a1a1a;
+  --canvas: #1f1f1f;
+  --panel: #181818;
+  --surface: #202020;
+  --surface-2: #2a2a2a;
+  --surface-3: #313131;
+
+  --border: rgba(255, 255, 255, 0.06);
+  --border-soft: rgba(255, 255, 255, 0.04);
+  --border-strong: rgba(255, 255, 255, 0.12);
+
+  --text: #dadada;
+  --text-dim: #b0b0b0;
+  --text-muted: #959595;
+  --text-faint: #646464;
+
+  --card-bg: #202020;
+  --card-border: rgba(255, 255, 255, 0.06);
+  --fill-tsp: rgba(255, 255, 255, 0.06);
+
+  --tooltip-bg: rgb(20, 20, 20);
+  --tooltip-text: rgb(240, 240, 240);
+  --tooltip-border: rgba(255, 255, 255, 0.16);
+
+  --accent: #1a93fe;
+  --accent-soft: rgba(26, 147, 254, 0.12);
+  --on-accent: #ffffff;
+
+  --ok: #5eb92d;
+  --warn: #ffbf36;
+  --err: #eb4d4d;
+
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-active: rgba(255, 255, 255, 0.1);
+
+  --app-content-bg: rgb(17, 17, 17);
+
+  /* panes one step lighter than the near-black board, so they read as boards laid on it */
+  --dock-shell: #111111;
+  --dock-pane: #181818;
+
+  --folder-back: #3a3a3a;
+  --folder-front: #4d4d4d;
+  --folder-front-hi: #5a5a5a;
+
+  --brand-wind-from: #5ecb92;
+  --brand-wind-mid: #66d8b8;
+  --brand-wind-to: #7fd3e4;
+
+  --tl-lane: #1e1e1e;
+  --tl-lane-on: #272727;
+  --tl-head: #181818;
+  --tl-ruler: #181818;
+  --tl-line: #252525;
+  --tl-text: rgba(255, 255, 255, 0.7);
+  --tl-faint: rgba(255, 255, 255, 0.4);
+  /* white playhead on near black; selection white too (teal disappears on the darkened blocks) */
+  --tl-playhead: #ffffff;
+  --tl-accent: #45c2b4;
+  --tl-select: #ffffff;
+  --tl-wave: rgba(12, 168, 164, 0.9);
+  --tl-wave-band: rgba(0, 119, 125, 0.85);
+  --tl-tick: rgba(255, 255, 255, 0.12);
+  --tl-scene: #1d5c60;
+  --tl-video: #2d4f7c;
+  --tl-voice: #003a4c;
+  --tl-sfx: #084254;
+  --tl-music: #00323f;
+  --tl-caption: #434a55;
+}
+
+* {
+  border-color: var(--border);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+html {
+  background: #f2f2f2;
+}
+html[data-theme='dark'] {
+  background: #141414;
+}
+
+body {
+  color: var(--text);
+  background: var(--canvas);
+  font-family: var(--font-sans);
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  letter-spacing: -0.006em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* The editor is the whole screen: fixed, so the document itself never scrolls (100vw overflow, rubber banding). */
+.workspace-shell {
+  position: fixed;
+  inset: 0;
+  overscroll-behavior: none;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
+  background-clip: padding-box;
+}
+
+/* ── keyframes ── */
+/* the desktop dialog's drawn window: its playhead walks the timeline */
+@keyframes openfilm-desktop-playhead {
+  from { left: 8%; }
+  to { left: 92%; }
+}
+.openfilm-desktop-playhead {
+  animation: openfilm-desktop-playhead 7s linear infinite;
+}
+/* the selected clip and its reference in the chat glow together: the one is the other */
+@keyframes openfilm-desktop-pulse {
+  0%, 100% { filter: none; }
+  50% { filter: drop-shadow(0 0 5px var(--tl-accent)); }
+}
+.openfilm-desktop-pulse {
+  animation: openfilm-desktop-pulse 2.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .openfilm-desktop-playhead { animation: none; left: 46%; }
+  .openfilm-desktop-pulse { animation: none; }
+}
+
+@keyframes openfilm-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes openfilm-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+/* with background-size 200% the offset runs backwards: 150% → −50% sweeps the light left to right */
+@keyframes openfilm-text-sweep {
+  from { background-position: 150% 0; }
+  to { background-position: -50% 0; }
+}
+@keyframes openfilm-pop {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes openfilm-loading-bar {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+
+.openfilm-rise {
+  animation: openfilm-rise 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.openfilm-pop {
+  animation: openfilm-pop 0.16s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+/* the loading screen's bar: says "still moving", promises no progress */
+.openfilm-loading-bar {
+  animation: openfilm-loading-bar 1.15s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+/* Focus rings only when moving by Tab: `:focus-visible` counts Space as keyboard, and the play shortcut would ring
+   the button just clicked. `data-focus-nav` is kept by FocusNav (Tab → tab, pointer down → pointer). */
+html:not([data-focus-nav='tab']) :is(a, button, [role='button'], select, summary):focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+html[data-focus-nav='tab'] :where(a, button, [role='button'], select, summary):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 7px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 37%, var(--surface) 63%);
+  background-size: 200% 100%;
+  animation: openfilm-shimmer 1.4s ease-in-out infinite;
+}
+
+/* "doing this now": a glint sweeps across the words themselves */
+.text-sweep {
+  background-image: linear-gradient(
+    90deg,
+    var(--text-faint) 0%,
+    var(--text-faint) 35%,
+    var(--text) 50%,
+    var(--text-faint) 65%,
+    var(--text-faint) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: openfilm-text-sweep 1.8s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .text-sweep {
+    animation: none;
+    color: var(--text-muted);
+  }
+}
+
+/* ── Timeline ── */
+
+/* Only the range bar under the tracks scrolls sideways; the lanes hide their horizontal scrollbar. */
+.tl-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--tl-faint) transparent;
+}
+.tl-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 0;
+}
+.tl-scroll::-webkit-scrollbar:horizontal {
+  width: 0;
+  height: 0;
+  display: none;
+}
+.tl-scroll::-webkit-scrollbar:vertical {
+  width: 8px;
+}
+.tl-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.tl-scroll::-webkit-scrollbar-thumb {
+  background: var(--tl-faint);
+  border: 2px solid transparent;
+  border-radius: 4px;
+  background-clip: content-box;
+}
+.tl-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--tl-text);
+  background-clip: content-box;
+}
+.tl-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/*
+ * Split mode's cursor: a slanted razor blade (pressing cuts, and the hand should say so). Measured, keep as is:
+ * 28px (at 24 it reads as a white dot), slanted 32° (upright it is a white bar), hotspot (9,11) on the cutting
+ * edge, white body with black outline and slot so it shows on every block color.
+ * Before .tl-playhead-hot: on the playhead's ±4px the press scrubs, so that cursor must win.
+ */
+.tl-blade,
+.tl-blade * {
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28'%3E%3Cg transform='rotate(32 14 14)' stroke='%23000' stroke-width='1.5' stroke-linejoin='round'%3E%3Crect x='8.4' y='2' width='11.2' height='24' rx='2' fill='%23fff'/%3E%3Crect x='12.2' y='8.7' width='3.6' height='10.6' rx='1.8' fill='%23000' stroke='none'/%3E%3C/g%3E%3C/svg%3E")
+      9 11,
+    crosshair !important;
+}
+
+/* Blocks carry their own cursor inline, so near the playhead and while scrubbing the whole subtree is held. */
+.tl-playhead-hot,
+.tl-playhead-hot *,
+body.tl-scrubbing,
+body.tl-scrubbing * {
+  cursor: col-resize !important;
+}
+
+/* The range bar: 10px to hit, a 4px thumb that thickens to 8px under the pointer, colored from the text. */
+.tl-range-thumb {
+  top: 50% !important;
+  bottom: auto !important;
+  height: 4px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 28%, transparent);
+  transition: height 0.12s ease, background-color 0.12s ease;
+}
+.tl-range:hover .tl-range-thumb,
+.tl-range:active .tl-range-thumb {
+  height: 8px;
+  background: color-mix(in srgb, var(--text) 42%, transparent);
+}
+
+/* The zoom slider: a narrow rounded thumb, the traveled part lit (`--pos` is set by the component). */
+.tl-zoom {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+.tl-zoom::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--tl-accent) 0,
+    var(--tl-accent) calc(var(--pos, 0) * 100%),
+    var(--tl-line) calc(var(--pos, 0) * 100%),
+    var(--tl-line) 100%
+  );
+}
+.tl-zoom::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 6px;
+  height: 13px;
+  margin-top: -5px;
+  border-radius: 2px;
+  background: var(--tl-accent);
+  cursor: pointer;
+}
+.tl-zoom::-moz-range-track {
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--tl-accent) 0,
+    var(--tl-accent) calc(var(--pos, 0) * 100%),
+    var(--tl-line) calc(var(--pos, 0) * 100%),
+    var(--tl-line) 100%
+  );
+}
+.tl-zoom::-moz-range-thumb {
+  width: 6px;
+  height: 12px;
+  border: 0;
+  border-radius: 2px;
+  background: var(--tl-text);
+  cursor: pointer;
+}
+
+/* A clip whose media shows no picture: a red edge and a badge on that block only; `unreachable` retries (amber). */
+[data-media-trouble] > :first-child {
+  box-shadow: inset 0 0 0 1.5px var(--err);
+}
+[data-media-trouble='unreachable'] > :first-child {
+  box-shadow: inset 0 0 0 1.5px var(--warn);
+}
+[data-media-trouble]::after {
+  content: '!';
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  z-index: 3;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--err);
+  color: #fff;
+  font: 700 10px/14px system-ui, sans-serif;
+  text-align: center;
+  pointer-events: none;
+}
+[data-media-trouble='unreachable']::after {
+  content: '⟳';
+  background: var(--warn);
+}
+
+/* ── The picture (editor/Preview): the film's page, scaled into the delivery frame's box ── */
+.stage-box {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.stage {
+  position: relative;
+  background: #000;
+  /* handles of what is selected reach past the picture's edge */
+  overflow: visible;
+}
+.stage iframe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+.stage .cover {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 16px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  background: #000;
+  z-index: 3;
+}
+
+/* in a host window with no title bar (lib/host.ts): the top bars drag the window, their controls do not */
+[data-host-titlebar] [data-titlebar] { -webkit-app-region: drag; app-region: drag; }
+/* menus and dialogs drawn over a top bar (often from a portal, so not inside it) take their clicks too */
+[data-host-titlebar] [data-titlebar] :is(button, a, input, select, textarea, [role='button']),
+[data-host-titlebar] :is([role='menu'], [role='dialog'], [role='listbox'], [role='tooltip']) {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+/* while a file from the computer is dragged over Studio (ProjectView), pictures drawn in frames let it through: dropped
+   on a frame, the browser would open the file in it instead of Studio importing it */
+html[data-file-drag] iframe { pointer-events: none; }
+
+/* a clip about to be replaced by the file dragged over it with ⇧ (components/replace-drop) */
+[data-replace-over] { outline: 2px solid var(--tl-accent); outline-offset: -2px; }

@@ -1,0 +1,22 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# builds and their caches
+dist/
+.release/
+*.tsbuildinfo
+
+# from-source runs: their own state, projects and exports (`pnpm dev`, `pnpm dev:desktop`)
+.dev/
+
+# what a film's tools keep beside it
+.film/
+.openfilm/
+
+# local settings and secrets
+.env*
+
+# OS and editors
+.DS_Store
+*.log

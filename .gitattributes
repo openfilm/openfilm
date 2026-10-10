@@ -1,0 +1,8 @@
+# the same bytes on every system: the manual, pages and tests are read as they are written
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.wav binary
+*.mp3 binary
+*.mp4 binary
+*.woff2 binary

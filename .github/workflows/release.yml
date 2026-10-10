@@ -1,0 +1,56 @@
+name: release
+# npm releases of `openfilm` (CONTRIBUTING.md, Releases). On every push to main, with the
+# changesets merged since the last release, changesets/action opens or updates the "Version packages" pull request;
+# merging it publishes the packages whose versions changed. npm trusted publishing: npm takes this workflow's OIDC
+# token instead of a stored token, and adds provenance once the repository is public.
+#
+# Set up once, by a maintainer:
+#   - npmjs.com: the package `openfilm` → Settings → Trusted publishing → GitHub Actions:
+#     openfilm / openfilm, workflow release.yml, no environment, publish allowed (or, npm 11.15+:
+#     `npm trust github openfilm --file release.yml --repo openfilm/openfilm --allow-publish`). Then Settings → Publishing access:
+#     "Require two-factor authentication and disallow tokens".
+#   - GitHub: Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests".
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: release
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.repository == 'openfilm/openfilm'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # the version branch, the packages' tags and GitHub releases
+      pull-requests: write  # the "Version packages" pull request
+      id-token: write       # npm trusted publishing (OIDC) and provenance
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      # trusted publishing needs npm 11.5.1 or later; pnpm publish hands its tarball to this npm
+      - run: npm install -g npm@^11.5.1
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm --filter openfilm exec playwright-core install --with-deps chromium-headless-shell
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: pnpm test
+      - name: What the package holds (the official product.json)
+        run: pnpm check:pack
+      - uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
+        with:
+          version: pnpm changeset version
+          publish: pnpm changeset publish
+          title: Version packages
+          commit: Version packages
+          # the release on GitHub is the tag v<version>'s, with the desktop installers (desktop.yml)
+          createGithubReleases: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

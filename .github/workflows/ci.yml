@@ -1,0 +1,76 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      # the tests never start Electron: no need for its 100 MB download
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      # the pnpm version package.json names (packageManager)
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm --filter openfilm exec playwright-core install --with-deps chromium-headless-shell
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        if: runner.os == 'Linux'
+      - run: brew install ffmpeg
+        if: runner.os == 'macOS'
+      - run: choco install ffmpeg --no-progress -y
+        if: runner.os == 'Windows'
+      - run: pnpm test
+
+  # what npm would get: the tarball of openfilm, listed in the log and checked (no tests, fixtures or dev files; the
+  # official product.json)
+  pack:
+    runs-on: ubuntu-latest
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check:pack
+
+  audit:
+    runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: 8.30.1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # every commit, for the secret scan of the history
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install gitleaks
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar -xz -C "$RUNNER_TEMP" gitleaks
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Secrets in the history
+        run: gitleaks git --config .gitleaks.toml --redact --no-banner --verbose .
+      - name: The public audit (the files as they are)
+        run: node scripts/audit-public.mjs

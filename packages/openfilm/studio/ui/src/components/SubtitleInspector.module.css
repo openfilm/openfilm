@@ -1,0 +1,46 @@
+/* A quiet, consistent range control across Chromium, Safari and Firefox. */
+.range {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 1;
+  min-width: 24px;
+  width: 0;
+  height: 20px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.range::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 3px;
+  background: var(--surface-3);
+}
+.range::-moz-range-track {
+  height: 3px;
+  border-radius: 3px;
+  background: var(--surface-3);
+}
+.range::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 10px;
+  height: 10px;
+  margin-top: -3.5px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--text-dim);
+  box-shadow: 0 0 0 2px var(--panel);
+}
+.range::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--text-dim);
+  box-shadow: 0 0 0 2px var(--panel);
+}
+.range:focus-visible {
+  outline: 1px solid var(--text-muted);
+  outline-offset: 2px;
+  border-radius: 3px;
+}

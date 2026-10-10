@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions
+    url: https://github.com/openfilm/openfilm/discussions
+    about: Ask and share in Discussions.
+  - name: Security vulnerabilities
+    url: https://github.com/openfilm/openfilm/blob/main/SECURITY.md
+    about: Report them privately, as SECURITY.md says, not in an issue.

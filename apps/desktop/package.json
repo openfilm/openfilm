@@ -1,0 +1,48 @@
+{
+  "name": "@openfilm/desktop",
+  "version": "0.1.3",
+  "private": true,
+  "type": "module",
+  "productName": "OpenFilm",
+  "description": "OpenFilm for desktop: Studio, with a chat beside it for Claude Code and Codex.",
+  "main": "src/main.mjs",
+  "scripts": {
+    "start": "node scripts/start.mjs",
+    "build:shell": "vite build --config shell/vite.config.ts",
+    "test": "node --test src/*.test.mjs",
+    "bench": "node bench/run.mjs",
+    "typecheck": "tsc -p chat && tsc -p shell",
+    "release": "node scripts/release.mjs"
+  },
+  "dependencies": {
+    "@agentclientprotocol/claude-agent-acp": "^0.81.2",
+    "@agentclientprotocol/codex-acp": "^1.13.1",
+    "@agentclientprotocol/sdk": "1.5.0",
+    "@earendil-works/pi-coding-agent": "1.1.0",
+    "electron-updater": "6.8.9",
+    "openfilm": "workspace:*"
+  },
+  "devDependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "@lexical/react": "^0.49.0",
+    "@openfilm/shared": "workspace:*",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^44.4.0",
+    "electron-builder": "26.15.3",
+    "gsap": "^3.15.0",
+    "lexical": "^0.49.0",
+    "lucide-react": "^0.469.0",
+    "pe-library": "2.0.1",
+    "playwright-core": "1.61.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "resedit": "3.1.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.6",
+    "zustand": "^5.0.14"
+  }
+}

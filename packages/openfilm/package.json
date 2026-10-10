@@ -1,0 +1,84 @@
+{
+  "name": "openfilm",
+  "version": "0.1.3",
+  "description": "The open source AI video agent: films as web pages, the manual that teaches your coding agent to make them, the `openfilm` command, and Studio, the editor to change anything in them.",
+  "license": "MIT",
+  "homepage": "https://openfilm.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openfilm/openfilm.git",
+    "directory": "packages/openfilm"
+  },
+  "bugs": {
+    "url": "https://github.com/openfilm/openfilm/issues"
+  },
+  "keywords": [
+    "video",
+    "motion-graphics",
+    "agents",
+    "claude-code",
+    "codex",
+    "animation",
+    "render"
+  ],
+  "type": "module",
+  "bin": {
+    "openfilm": "bin/openfilm.mjs"
+  },
+  "exports": {
+    "./film-doc": "./src/film-doc.mjs",
+    "./host": "./src/host.mjs",
+    "./shared": "./src/shared.mjs",
+    "./look": "./src/look.mjs",
+    "./render": "./src/render.mjs",
+    "./studio": "./studio/server/server.mjs",
+    "./studio-ui/*": "./studio/ui/src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "README.md",
+    "SPEC.md",
+    "TRADEMARK.md",
+    "bin",
+    "skills",
+    "src",
+    "!src/*.test.mjs",
+    "MANUAL.md",
+    "studio/server/**/*.mjs",
+    "studio/server/**/*.js",
+    "!studio/server/**/*.test.mjs",
+    "studio/client.mjs",
+    "studio/ui/dist",
+    "THIRD_PARTY_NOTICES.md",
+    "product.json"
+  ],
+  "engines": {
+    "node": ">=22.2"
+  },
+  "dependencies": {
+    "playwright-core": "1.61.1"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "test": "node --test --test-concurrency=1 --test-timeout=120000 src/*.test.mjs studio/*.test.mjs studio/server/*.test.mjs studio/server/providers/*.test.mjs studio/ui/src/editor/*.test.ts studio/ui/src/lib/*.test.ts",
+    "typecheck": "tsc -p studio/server && tsc -p studio/ui",
+    "build:ui": "vite build --config studio/ui/vite.config.ts",
+    "prepare": "npm run build:ui",
+    "prepack": "node scripts/product.mjs official",
+    "postpack": "node scripts/product.mjs restore"
+  },
+  "devDependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "lucide-react": "^0.469.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.6"
+  }
+}

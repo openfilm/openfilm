@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1920, height=1080">
+<style>
+  html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: transparent; font-family: system-ui, sans-serif; }
+  #line { position: absolute; left: 0; right: 0; top: 420px; text-align: center; color: #fff; font: 800 150px/1 system-ui, sans-serif; letter-spacing: -0.03em; white-space: nowrap; }
+  #line span { display: inline-block; }
+  #sub { position: absolute; left: 0; right: 0; top: 620px; text-align: center; color: rgba(255,255,255,.85); font: 500 30px/1 ui-monospace, monospace; letter-spacing: .4em; }
+</style>
+</head>
+<body>
+<div id="line"></div>
+<div id="sub">A BENCHMARK FILM</div>
+<script>
+  /* a title: each letter rises, turns and fades in on its own beat (a DOM page with many moving parts) */
+  const TEXT = 'INTO THE WHITE ROAD';
+  const line = document.getElementById('line');
+  line.innerHTML = [...TEXT].map((c) => `<span>${c === ' ' ? '&nbsp;' : c}</span>`).join('');
+  const letters = [...line.children];
+  const clamp = (x) => Math.max(0, Math.min(1, x));
+  const out3 = (x) => 1 - Math.pow(1 - clamp(x), 3);
+  window.film = {
+    duration: 5, width: 1920, height: 1080,
+    ready: document.fonts.ready,
+    frame(t) {
+      letters.forEach((s, i) => {
+        const k = out3((t - 0.2 - i * 0.05) / 0.6), o = 1 - clamp((t - 4.4) / 0.5);
+        s.style.transform = `translateY(${(1 - k) * 80}px) rotate(${(1 - k) * -12}deg) scale(${0.8 + 0.2 * k})`;
+        s.style.opacity = String(k * o);
+      });
+      const sub = document.getElementById('sub');
+      sub.style.opacity = String(out3((t - 1.2) / 0.6) * (1 - clamp((t - 4.4) / 0.5)));
+      sub.style.letterSpacing = `${0.4 + 0.1 * t}em`;
+    },
+  };
+  if (!window.filmHost) { const t0 = performance.now(); const loop = () => { window.film.frame(((performance.now() - t0) / 1000) % 5); requestAnimationFrame(loop); }; requestAnimationFrame(loop); }
+</script>
+</body>
+</html>
