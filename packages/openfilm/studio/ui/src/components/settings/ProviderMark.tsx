@@ -22,7 +22,7 @@ const MARKS: Record<string, { viewBox: string; d: string }> = {
 };
 
 /** The services shown as a letter cut out of a rounded square. */
-const LETTERS: Record<string, string> = { brave: 'B', groq: 'G', pexels: 'P', tavily: 'T' };
+const LETTERS: Record<string, string> = { azure: 'A', brave: 'B', groq: 'G', pexels: 'P', tavily: 'T' };
 
 export function ProviderMark({ id, size = 18 }: { id: string; size?: number }) {
   const mark = MARKS[id];
