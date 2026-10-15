@@ -2,21 +2,20 @@
  * The examples (films made with OpenFilm) and the skills, to start from or to learn from. One view, two places:
  *
  *   · start      the projects window's "Examples": the examples only; one is started from (copied into a new project)
- *   · reference  the Community, over a film, from the app's chat (lib/host.ts `onCommand` `show-examples`): the skills
- *                first (one is named in the message being written; one added; their folder; feedback), then the
- *                examples (one, or a part of it, a segment or a stretch dragged on its strip, is pointed at in the
- *                message; starting from one is still there)
+ *   · reference  the Community, over a film, from the app's chat (lib/host.ts `onCommand` `show-examples`): two views
+ *                switched in its title row, Skills first (one is named in the message being written; one added; their
+ *                folder; feedback), then Examples (one, or a part of it, a segment or a stretch dragged on its strip,
+ *                is pointed at in the message; starting from one is still there)
  *
- * A sidebar beside the cards: posters that play their preview under the pointer, and skills by their own title and
- * summary (a skill's openfilm.json, in the language shown) rather than the words written for the agent. The title row
- * is the projects window's own (its switch, its close), so switching between the projects and the examples moves
- * nothing. Esc goes back from a page, else closes.
+ * While there are few, one page each: the first example wide, the others in a grid; the skills by where they come from.
+ * Example cards are posters that play their preview under the pointer; skills show their own title and summary (a
+ * skill's openfilm.json, in the language shown) rather than the words written for the agent. The title row is the
+ * projects window's own, so switching views moves nothing. Esc goes back from a page, else closes.
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
 import {
-  ArrowLeft, Blocks, Check, Clapperboard, Compass, ExternalLink, FolderOpen, Loader2, MessageSquare, Play, Plus, Search,
-  Sparkles, X,
+  ArrowLeft, Check, Clapperboard, ExternalLink, FolderOpen, Loader2, MessageSquare, Play, Plus, Sparkles, X,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
@@ -27,11 +26,8 @@ export type ExamplesMode = 'start' | 'reference';
 /** A part of an example picked to point at: none for the whole film. */
 export type ExamplePart = { from: number; to: number; segment?: string } | null;
 
-type Section = 'discover' | `kind:${string}` | 'skills' | `skills:${SkillEntry['source']}`;
 type Opened = { kind: 'example'; example: Example } | { kind: 'skill'; skill: SkillEntry };
 
-/** the kinds of film the examples are grouped by, in this order; any other comes after, by its own name */
-const CATEGORIES = ['launch', 'explainer', 'slides', 'captions', 'ads', 'commerce', 'music'];
 const SOURCES: ReadonlyArray<SkillEntry['source']> = ['official', 'mine', 'project'];
 /** where people tell us how skills work for them (a GitHub issue form; no account with us) */
 const FEEDBACK = 'https://github.com/openfilm/openfilm/issues/new?template=skill_feedback.yml';
@@ -50,11 +46,25 @@ function useSkillWords() {
   });
 }
 
+/** Two titles in the title row, the one shown bright (the projects window's switch is the same). */
+export function TitleSwitch<T extends string>({ items, value, onChange }: { items: Array<{ id: T; label: string }>; value: T; onChange: (id: T) => void }) {
+  return (
+    <div role="tablist" className="mr-auto flex items-baseline gap-5">
+      {items.map((item) => (
+        <button key={item.id} type="button" role="tab" aria-selected={value === item.id} onClick={() => onChange(item.id)}
+          className={`text-[17px] font-semibold tracking-[-0.01em] transition ${value === item.id ? 'text-[var(--text)]' : 'text-[var(--text-faint)] hover:text-[var(--text-muted)]'}`}>
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function ExamplesGallery({ mode, projectId = null, heading, onClose, onStart, onReference, onUseSkill }: {
   mode: ExamplesMode;
   /** the project shown, for its own skills */
   projectId?: string | null;
-  /** the title row's left (the projects window's switch); none: "Examples" */
+  /** the title row's left (the projects window's switch); none: the Community's own (Skill, Examples) */
   heading?: React.ReactNode;
   onClose?: () => void;
   onStart: (example: Example) => void;
@@ -62,13 +72,11 @@ export function ExamplesGallery({ mode, projectId = null, heading, onClose, onSt
   onUseSkill?: (skill: SkillEntry) => void;
 }) {
   const t = useT();
-  const words = useSkillWords();
-  const [examples, setExamples] = React.useState<Example[] | null>(null);
-  const [skills, setSkills] = React.useState<SkillEntry[]>([]);
   /* the Community (over a film) opens on its skills; the projects window shows the examples only */
   const community = mode === 'reference';
-  const [section, setSection] = React.useState<Section>(community ? 'skills' : 'discover');
-  const [query, setQuery] = React.useState('');
+  const [view, setView] = React.useState<'skills' | 'examples'>(community ? 'skills' : 'examples');
+  const [examples, setExamples] = React.useState<Example[] | null>(null);
+  const [skills, setSkills] = React.useState<SkillEntry[]>([]);
   const [opened, setOpened] = React.useState<Opened | null>(null);
 
   React.useEffect(() => {
@@ -88,108 +96,65 @@ export function ExamplesGallery({ mode, projectId = null, heading, onClose, onSt
   }, [opened, onClose]);
 
   const kindLabel = (c: string) => { const key = `gallery.cat.${c}`; const label = t(key); return label === key ? c : label; };
-  const all = examples ?? [];
-  const kinds = [...new Set(all.map((e) => e.category ?? 'other'))].sort((a, b) => (CATEGORIES.indexOf(a) + 1 || 99) - (CATEGORIES.indexOf(b) + 1 || 99));
-  const needle = query.trim().toLowerCase();
-  const match = (...w: Array<string | null | undefined>) => w.some((x) => x?.toLowerCase().includes(needle));
-  const go = (next: Section) => { setSection(next); setOpened(null); setQuery(''); };
-  const openExample = (example: Example) => setOpened({ kind: 'example', example });
-  const openSkill = (skill: SkillEntry) => setOpened({ kind: 'skill', skill });
+  const show = (next: 'skills' | 'examples') => { setView(next); setOpened(null); };
 
   let body: React.ReactNode;
   if (opened?.kind === 'example') {
     body = <ExampleDetail example={opened.example} mode={mode} onBack={() => setOpened(null)} onStart={onStart} onReference={onReference} categoryLabel={kindLabel} />;
   } else if (opened?.kind === 'skill') {
     body = <SkillDetail skill={opened.skill} mode={mode} onBack={() => setOpened(null)} onUse={onUseSkill} />;
-  } else if (needle) {
-    const foundExamples = all.filter((e) => match(e.title, e.description, e.category ? kindLabel(e.category) : null));
-    const foundSkills = community ? skills.filter((s) => { const w = words(s); return match(s.name, w.title, w.summary); }) : [];
+  } else if (view === 'skills') {
+    /* every skill, by where it comes from: OpenFilm's, the person's, this project's (only when it has some) */
+    const sections = SOURCES.filter((source) => source !== 'project' || skills.some((k) => k.source === 'project'));
     body = (
-      <Page title={t('gallery.resultsFor').replace('{q}', query.trim())}>
-        {foundExamples.length || foundSkills.length ? (
-          <>
-            {foundExamples.length ? <Grid>{foundExamples.map((e) => <ExampleCard key={e.id} example={e} label={e.category ? kindLabel(e.category) : null} onOpen={() => openExample(e)} />)}</Grid> : null}
-            {foundSkills.length ? <div className={foundExamples.length ? 'mt-8' : ''}><Grid>{foundSkills.map((s) => <SkillCard key={`${s.source}:${s.name}`} skill={s} onOpen={() => openSkill(s)} />)}</Grid></div> : null}
-          </>
-        ) : <Empty text={t('gallery.noResults')} />}
-      </Page>
-    );
-  } else if (section === 'skills') {
-    /* every skill, by where it comes from: OpenFilm's, the person's, this project's */
-    const sources = SOURCES.filter((source) => source !== 'project' || projectId);
-    body = (
-      <Page title={t('gallery.allSkills')} note={t('gallery.skillsNote')}>
-        {sources.map((source, i) => {
+      <Body note={t('gallery.skillsNote')}>
+        {sections.map((source, i) => {
           const items = skills.filter((k) => k.source === source);
-          if (!items.length && source === 'project') return null;
           return (
-            <div key={source} className={i ? 'mt-9' : ''}>
-              <div className="mb-3 flex items-baseline gap-3">
-                <h3 className="text-[14px] font-semibold text-[var(--text)]">{t(`gallery.${source}Skills`)}</h3>
-                <span className="flex-1" />
-                {items.length > 3 ? <button type="button" onClick={() => go(`skills:${source}`)} className="shrink-0 text-[12px] text-[var(--text-dim)] hover:text-[var(--text)]">{t('gallery.seeAll')} ›</button> : null}
-              </div>
-              {items.length ? <Grid>{items.slice(0, 3).map((k) => <SkillCard key={`${k.source}:${k.name}`} skill={k} onOpen={() => openSkill(k)} />)}</Grid>
-                : <NoSkills />}
-            </div>
+            <section key={source} className={i ? 'mt-9' : ''}>
+              <h3 className="mb-3 text-[14px] font-semibold text-[var(--text)]">{t(`gallery.${source}Skills`)}</h3>
+              {items.length ? <Grid>{items.map((k) => <SkillCard key={`${k.source}:${k.name}`} skill={k} onOpen={() => setOpened({ kind: 'skill', skill: k })} />)}</Grid> : <NoSkills />}
+            </section>
           );
         })}
-      </Page>
+      </Body>
     );
   } else if (examples == null) {
     body = <Empty text={t('gallery.loading')} />;
-  } else if (section === 'discover') {
-    const [hero] = all;
-    body = (
-      <Page title={t('gallery.discover')} note={t('gallery.discoverNote')}>
-        {hero ? <Hero example={hero} mode={mode} onOpen={() => openExample(hero)} onStart={() => onStart(hero)} /> : <Empty text={t('gallery.empty')} />}
-        {kinds.map((k) => {
-          const items = all.filter((e) => (e.category ?? 'other') === k && e !== hero);
-          if (!items.length) return null;
-          return (
-            <Row key={k} title={k === 'other' ? t('gallery.more') : kindLabel(k)} onAll={items.length > 3 ? () => go(`kind:${k}`) : undefined}>
-              <Grid>{items.slice(0, 3).map((e) => <ExampleCard key={e.id} example={e} label={null} onOpen={() => openExample(e)} />)}</Grid>
-            </Row>
-          );
-        })}
-      </Page>
-    );
-  } else if (section.startsWith('kind:')) {
-    const k = section.slice(5);
-    const items = all.filter((e) => (e.category ?? 'other') === k);
-    body = <Page title={k === 'other' ? t('gallery.more') : kindLabel(k)}>{items.length ? <Grid>{items.map((e) => <ExampleCard key={e.id} example={e} label={null} onOpen={() => openExample(e)} />)}</Grid> : <Empty text={t('gallery.empty')} />}</Page>;
+  } else if (!examples.length) {
+    body = <Empty text={t('gallery.empty')} />;
   } else {
-    const source = section.slice(7) as SkillEntry['source'];
-    const items = skills.filter((s) => s.source === source);
+    /* the first wide, the others in a grid */
+    const [hero, ...rest] = examples;
     body = (
-      <Page title={t(`gallery.${source}Skills`)} note={t('gallery.skillsNote')}>
-        {items.length ? <Grid>{items.map((s) => <SkillCard key={`${s.source}:${s.name}`} skill={s} onOpen={() => openSkill(s)} />)}</Grid>
-          : source === 'project' ? <Empty text={t('gallery.noProjectSkills')} /> : <NoSkills />}
-      </Page>
+      <Body note={community ? t('gallery.referenceNote') : t('gallery.discoverNote')}>
+        <Hero example={hero!} mode={mode} onOpen={() => setOpened({ kind: 'example', example: hero! })} onStart={() => onStart(hero!)} />
+        {rest.length ? (
+          <div className="mt-8">
+            <Grid>{rest.map((e) => <ExampleCard key={e.id} example={e} label={e.category ? kindLabel(e.category) : null} onOpen={() => setOpened({ kind: 'example', example: e })} />)}</Grid>
+          </div>
+        ) : null}
+      </Body>
     );
   }
 
-  const nav = (id: Section, label: string, icon: React.ReactNode, count?: number) => {
-    const on = section === id && !opened && !needle;
-    return (
-      <button key={id} type="button" onClick={() => go(id)}
-        className={`flex h-8 w-full items-center gap-2.5 rounded-[8px] px-2.5 text-left text-[13px] transition ${on ? 'bg-[var(--bg-hover)] font-medium text-[var(--text)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}`}>
-        <span className="flex w-4 shrink-0 justify-center text-[var(--text-dim)]">{icon}</span>
-        <span className="min-w-0 flex-1 truncate">{label}</span>
-        {count ? <span className="text-[11.5px] tabular-nums text-[var(--text-faint)]">{count}</span> : null}
-      </button>
-    );
-  };
-  const group = (label: string) => <div className="px-2.5 pb-1 pt-5 text-[11px] font-medium text-[var(--text-faint)]">{label}</div>;
-  const foot = 'flex h-8 w-full items-center gap-2.5 rounded-[8px] px-2.5 text-left text-[12.5px] text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]';
-
+  const tool = 'flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]';
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {/* the same row as the projects' (ProjectsView): switching between them moves nothing */}
       <header className="flex shrink-0 flex-col px-6 pb-4 pt-5">
-        <div className="flex min-h-8 items-center gap-2">
-          {heading ?? <h2 className="mr-auto text-[17px] font-semibold tracking-[-0.01em] text-[var(--text)]">{t(community ? 'gallery.community' : 'gallery.title')}</h2>}
-          {community ? <span className="hidden text-[12px] text-[var(--text-faint)] md:block">{t('gallery.referenceNote')}</span> : null}
+        <div className="flex min-h-8 items-center gap-1">
+          {heading ?? <TitleSwitch items={[{ id: 'skills' as const, label: t('gallery.skills') }, { id: 'examples' as const, label: t('gallery.title') }]} value={view} onChange={show} />}
+          {/* the person's own skills: add one, their folder; and where to tell us how skills work for them */}
+          {community && view === 'skills' && !opened ? (
+            <>
+              {studioHost?.skills ? <button type="button" onClick={() => studioHost?.skills?.add()} className={tool}><Plus size={14} />{t('gallery.addSkill')}</button> : null}
+              {studioHost?.skills ? (
+                <button type="button" onClick={() => studioHost?.skills?.reveal()} title={t('gallery.openFolder')} aria-label={t('gallery.openFolder')} className={`${tool} w-8 justify-center px-0`}><FolderOpen size={15} /></button>
+              ) : null}
+              <a href={FEEDBACK} target="_blank" rel="noreferrer" title={t('gallery.feedback')} aria-label={t('gallery.feedback')} className={`${tool} w-8 justify-center px-0`}><MessageSquare size={15} /></a>
+            </>
+          ) : null}
           {onClose ? (
             <button type="button" onClick={onClose} aria-label={t('project.close')}
               className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
@@ -198,64 +163,18 @@ export function ExamplesGallery({ mode, projectId = null, heading, onClose, onSt
           ) : null}
         </div>
       </header>
-      <div className="flex min-h-0 flex-1">
-        <nav className="flex w-[214px] shrink-0 flex-col overflow-y-auto border-r border-[var(--border)] px-3 pb-3">
-          <label className="relative mb-2 block">
-            <span className="sr-only">{t(community ? 'gallery.search' : 'gallery.searchExamples')}</span>
-            <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-faint)]" />
-            <input type="search" value={query} onChange={(e) => { setQuery(e.target.value); setOpened(null); }} placeholder={t(community ? 'gallery.search' : 'gallery.searchExamples')}
-              className="h-8 w-full rounded-[8px] bg-[var(--surface-2)] pl-8 pr-2 text-[12.5px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)] focus:ring-1 focus:ring-[var(--border-strong)]" />
-          </label>
-          {community ? (
-            <>
-              {nav('skills', t('gallery.allSkills'), <Sparkles size={14} />, skills.length)}
-              {/* a project's own skills: only over a project */}
-              {SOURCES.filter((s) => s !== 'project' || projectId).map((s) => nav(`skills:${s}`, t(`gallery.${s}Skills`), <Blocks size={14} />, skills.filter((k) => k.source === s).length))}
-              {group(t('gallery.title'))}
-            </>
-          ) : null}
-          {nav('discover', t('gallery.discover'), <Compass size={14} />)}
-          {kinds.length > 1 || (kinds.length === 1 && kinds[0] !== 'other') ? (
-            <>
-              {community ? null : group(t('gallery.kinds'))}
-              {kinds.map((k) => nav(`kind:${k}`, k === 'other' ? t('gallery.more') : kindLabel(k), <Clapperboard size={14} />, all.filter((e) => (e.category ?? 'other') === k).length))}
-            </>
-          ) : null}
-          {community ? (
-            <div className="mt-auto flex flex-col pt-4">
-              {studioHost?.skills ? <button type="button" onClick={() => studioHost?.skills?.add()} className={foot}><Plus size={14} />{t('gallery.addSkill')}</button> : null}
-              {studioHost?.skills ? <button type="button" onClick={() => studioHost?.skills?.reveal()} className={foot}><FolderOpen size={14} />{t('gallery.openFolder')}</button> : null}
-              <a href={FEEDBACK} target="_blank" rel="noreferrer" className={foot}><MessageSquare size={14} />{t('gallery.feedback')}</a>
-            </div>
-          ) : null}
-        </nav>
-        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">{body}</div>
-      </div>
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">{body}</div>
     </div>
   );
 }
 
-function Page({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
+/** A view's content: a line saying what it is, then its sections. */
+function Body({ note, children }: { note?: string; children: React.ReactNode }) {
   return (
-    <div className="mx-auto w-full max-w-[980px] px-7 pb-10 pt-6">
-      <h2 className="text-[19px] font-semibold tracking-[-0.01em] text-[var(--text)]">{title}</h2>
-      {note ? <p className="mt-1 text-[12.5px] text-[var(--text-muted)]">{note}</p> : null}
-      <div className="mt-5">{children}</div>
-    </div>
-  );
-}
-
-function Row({ title, note, onAll, children }: { title: string; note?: string; onAll?: () => void; children: React.ReactNode }) {
-  const t = useT();
-  return (
-    <section className="mt-9">
-      <div className="mb-3 flex items-baseline gap-3">
-        <h3 className="text-[14px] font-semibold text-[var(--text)]">{title}</h3>
-        {note ? <span className="min-w-0 flex-1 truncate text-[12px] text-[var(--text-faint)]">{note}</span> : <span className="flex-1" />}
-        {onAll ? <button type="button" onClick={onAll} className="shrink-0 text-[12px] text-[var(--text-dim)] hover:text-[var(--text)]">{t('gallery.seeAll')} ›</button> : null}
-      </div>
+    <div className="px-6 pb-10">
+      {note ? <p className="mb-5 text-[12.5px] text-[var(--text-muted)]">{note}</p> : null}
       {children}
-    </section>
+    </div>
   );
 }
 
@@ -371,7 +290,7 @@ function SkillDetail({ skill, mode, onBack, onUse }: { skill: SkillEntry; mode: 
   const t = useT();
   const words = useSkillWords()(skill);
   return (
-    <div className="mx-auto w-full max-w-[980px] px-7 pb-10 pt-5">
+    <div className="px-6 pb-10">
       <button type="button" onClick={onBack} className="mb-4 flex items-center gap-1 text-[12.5px] text-[var(--text-dim)] hover:text-[var(--text)]"><ArrowLeft size={14} />{t('gallery.back')}</button>
       <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] gap-7">
         <div className="relative aspect-video overflow-hidden rounded-[12px] ring-1 ring-[var(--border)]"><SkillCover title={words.title} big /></div>
@@ -423,7 +342,7 @@ function ExampleDetail({ example, mode, onBack, onStart, onReference, categoryLa
   const secondary = mode === 'reference' ? { label: t('gallery.startNew'), run: () => onStart(example) } : null;
 
   return (
-    <div className="mx-auto w-full max-w-[980px] px-7 pb-10 pt-5">
+    <div className="px-6 pb-10">
       <button type="button" onClick={onBack} className="mb-4 flex items-center gap-1 text-[12.5px] text-[var(--text-dim)] hover:text-[var(--text)]"><ArrowLeft size={14} />{t('gallery.back')}</button>
       <div className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] gap-7">
         <div>

@@ -1,8 +1,8 @@
 /**
- * The Projects popover (the top bar's Projects button), and a new tab's launcher (`inline`): a large centered dialog,
- * or the page, to switch project, start one, open a folder, get a film from GitHub, rename, delete, or file projects
- * in folders of the list; or, switched to "Examples", to start from an example (ExamplesGallery). Its projects are
- * ProjectsView; this file holds the data and actions.
+ * The Projects popover (the top bar's Projects button; with the app's tabs, their `+`, and the window with no tab open):
+ * a large centered dialog to switch project, start one, open a folder, get a film from GitHub, rename, delete, or
+ * file projects in folders of the list; or, switched to "Examples", to start from an example (ExamplesGallery). Its
+ * projects are ProjectsView; this file holds the data and actions.
  *
  * Studio's projects are folders on disk: deleting one moves its folder to the system's Trash. One whose folder is gone
  * (moved, renamed or deleted outside Studio: `missing`) cannot be opened; it can be located (the folder it is in now)
@@ -26,7 +26,7 @@ import { SourceError, sourcesApi } from '@/lib/project-sources';
 import { ConfirmDialog } from './ConfirmDialog';
 import { ProjectsView, type LibraryProject } from './ProjectsView';
 import { FolderBrowserDialog, GitHubDialog } from './ProjectSources';
-import { ExamplesGallery } from './ExamplesGallery';
+import { ExamplesGallery, TitleSwitch } from './ExamplesGallery';
 
 /** This browser's storage, when the page may use it. */
 const storage = () => { try { return localStorage; } catch { return null; } };
@@ -165,16 +165,10 @@ function useProjectLibrary(open: boolean) {
 /** The launcher's two views: the person's projects, and the examples to start from (ExamplesGallery). */
 export type LauncherView = 'projects' | 'examples';
 
-/** The switch between them, in the title row: two titles, the one shown bright. */
+/** The switch between them, in the title row (the Community's is the same). */
 export function LauncherSwitch({ view, onView }: { view: LauncherView; onView: (view: LauncherView) => void }) {
   const t = useT();
-  const item = (id: LauncherView, label: string) => (
-    <button type="button" role="tab" aria-selected={view === id} onClick={() => onView(id)}
-      className={`text-[17px] font-semibold tracking-[-0.01em] transition ${view === id ? 'text-[var(--text)]' : 'text-[var(--text-faint)] hover:text-[var(--text-muted)]'}`}>
-      {label}
-    </button>
-  );
-  return <div role="tablist" className="mr-auto flex items-baseline gap-5">{item('projects', t('launcher.projects'))}{item('examples', t('launcher.examples'))}</div>;
+  return <TitleSwitch items={[{ id: 'projects' as const, label: t('launcher.projects') }, { id: 'examples' as const, label: t('launcher.examples') }]} value={view} onChange={onView} />;
 }
 
 const VIEW_KEY = 'openfilm.launcher.view';
@@ -185,7 +179,6 @@ export function ProjectsPopover({
   onOpen,
   onCurrentRemoved,
   onClose,
-  inline = false,
 }: {
   open: boolean;
   /** The project open in the editor ("" when none: Studio has no project to show, and this window is all there is). */
@@ -199,8 +192,6 @@ export function ProjectsPopover({
   onCurrentRemoved: () => void;
   /** Missing: the window cannot be closed (there is no project behind it). */
   onClose?: () => void;
-  /** Not a window over the project but the page itself: a new tab's launcher (lib/host.ts `tabs`). */
-  inline?: boolean;
 }) {
   const t = useT();
   const lib = useProjectLibrary(open);
@@ -344,15 +335,13 @@ export function ProjectsPopover({
 
   const content = (
     <>
-      {inline ? null : <div className="fixed inset-0 z-[10040] bg-black/60" onMouseDown={close} />}
+      <div className="fixed inset-0 z-[10040] bg-black/60" onMouseDown={close} />
       <div
-        role={inline ? 'main' : 'dialog'}
+        role="dialog"
         aria-label={t('project.projects')}
-        aria-modal={inline ? undefined : true}
-        className={inline
-          ? 'relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[var(--app-content-bg)]'
-          : 'fixed left-1/2 top-1/2 z-[10050] flex -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-[var(--border-strong)] bg-[var(--app-content-bg)] shadow-[0_24px_64px_rgba(0,0,0,0.35)]'}
-        style={inline ? undefined : {
+        aria-modal="true"
+        className="fixed left-1/2 top-1/2 z-[10050] flex -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-[var(--border-strong)] bg-[var(--app-content-bg)] shadow-[0_24px_64px_rgba(0,0,0,0.35)]"
+        style={{
           width: 'min(1080px, calc(100vw - 64px))',
           height: 'min(760px, calc(100vh - 96px))',
         }}
@@ -483,5 +472,5 @@ export function ProjectsPopover({
       />
     </>
   );
-  return inline ? content : createPortal(content, document.body);
+  return createPortal(content, document.body);
 }
