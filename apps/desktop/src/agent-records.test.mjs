@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { agentRecordCalls, claudeCallsOf, claudeProjectName, codexCallsOf, compactCalls, findClaudeRecord, findCodexRecord, findKimiRecord, kimiCallsOf } from './agent-records.mjs';
+import { agentRecordCalls, claudeCallsOf, claudeProjectName, codexCallsOf, compactCalls, copilotCallsOf, findClaudeRecord, findCodexRecord, findCopilotRecord, findKimiRecord, kimiCallsOf } from './agent-records.mjs';
 
 const at = (s) => new Date(Date.UTC(2026, 9, 15, 10, 0, s)).toISOString();
 const jsonl = (rows) => `${rows.map((r) => JSON.stringify(r)).join('\n')}\n`;
@@ -186,6 +186,43 @@ test("Kimi's wire: each request from llm.request to step.end, with the system pr
   assert.equal(findKimiRecord({ sessionId: 'session_abc-12345', home }), dir);
   assert.equal(findKimiRecord({ sessionId: 'abc-12345', home }), dir, 'its ACP id without the prefix too');
   assert.equal(agentRecordCalls({ agent: 'kimi', sessionId: 'abc-12345', home, from: t(20), to: t(40) }).calls.length, 1);
+});
+
+test("Copilot's events: a request for each usage record, its answer by its API call, the system prompt it keeps; no tools", () => {
+  const rows = [
+    { type: 'session.start', data: { sessionId: 'cop-12345' }, timestamp: at(0) },
+    { type: 'user.message', data: { content: 'Make a title', transformedContent: '<current_datetime>now</current_datetime>\n\nMake a title' }, timestamp: at(1) },
+    { type: 'system.message', data: { role: 'system', content: 'You are GitHub Copilot.' }, timestamp: at(1) },
+    { type: 'session.usage_record', data: { usage: { model: 'gpt-x', inputTokens: 120, cacheReadTokens: 100, outputTokens: 9, duration: 2000, apiCallId: 'a1', initiator: 'user', requestBodyBytes: 41569 } }, timestamp: at(4) },
+    { type: 'assistant.message', data: { content: '', apiCallId: 'a1', toolRequests: [{ toolCallId: 'k1', name: 'bash', arguments: { command: 'openfilm look' } }] }, timestamp: at(4) },
+    { type: 'tool.execution_complete', data: { toolCallId: 'k1', success: true, result: { content: 'frames saved' } }, timestamp: at(6) },
+    { type: 'session.usage_record', data: { usage: { model: 'gpt-x', inputTokens: 10, outputTokens: 2, duration: 1000, apiCallId: 'a2', initiator: 'agent' } }, timestamp: at(8) },
+    { type: 'assistant.message', data: { content: 'Done.', apiCallId: 'a2', toolRequests: [] }, timestamp: at(8) },
+  ];
+  const calls = copilotCallsOf(rows);
+  assert.equal(calls.length, 2);
+  const [first, second] = calls;
+  assert.equal(first.systemPrompt, 'You are GitHub Copilot.');
+  assert.equal(first.tools, null);
+  assert.deepEqual(first.lacks, ['copilotRebuilt']);
+  assert.deepEqual(first.messages, [{ role: 'user', content: [{ type: 'text', text: '<current_datetime>now</current_datetime>\n\nMake a title' }] }], 'as the model got it');
+  assert.deepEqual(first.answer.content, [{ type: 'toolCall', id: 'k1', name: 'bash', arguments: { command: 'openfilm look' } }]);
+  assert.deepEqual(first.answer.usage, { input: 20, cacheRead: 100, cacheWrite: 0, output: 9, reasoning: 0 });
+  assert.equal(first.startedAt, Date.parse(at(2)));
+  assert.equal(first.ms, 2000);
+  assert.equal(first.settings.requestBodyBytes, 41569);
+  assert.deepEqual(second.messages.slice(1), [
+    { role: 'assistant', content: first.answer.content },
+    { role: 'toolResult', toolCallId: 'k1', toolName: 'bash', content: [{ type: 'text', text: 'frames saved' }], isError: false },
+  ]);
+  assert.deepEqual(second.answer.content, [{ type: 'text', text: 'Done.' }]);
+
+  const home = mkdtempSync(join(tmpdir(), 'of-copilot-'));
+  mkdirSync(join(home, '.copilot', 'session-state', 'cop-12345'), { recursive: true });
+  writeFileSync(join(home, '.copilot', 'session-state', 'cop-12345', 'events.jsonl'), jsonl(rows));
+  assert.ok(findCopilotRecord({ sessionId: 'cop-12345', home }));
+  assert.equal(findCopilotRecord({ sessionId: '../../x', home }), null);
+  assert.equal(agentRecordCalls({ agent: 'copilot', sessionId: 'cop-12345', home, from: Date.parse(at(7)), to: Date.parse(at(9)) }).calls.length, 1);
 });
 
 test('compactCalls keeps each request only as far as it is new, and reads back whole', () => {

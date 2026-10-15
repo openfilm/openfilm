@@ -33,6 +33,7 @@ import { fileURLToPath } from 'node:url';
 import * as acp from '@agentclientprotocol/sdk';
 import { PATH_SEP, childEnvironment, lastPathSource, loginShellEnvironment, loginShellVariables, shellSubset } from './environment.mjs';
 import { AGENT_PROGRAMS, HOME_BIN_CANDIDATES, chosenProgram, consoleProgram, detectAgentInstallation, searchReport } from './agent-installation.mjs';
+import { logSwitches } from './agent-logs.mjs';
 import { nodeBinary } from './node-runtime.mjs';
 import { outOfBalance } from './pi-config.mjs';
 
@@ -646,13 +647,15 @@ export class AgentSession {
    * and the one it starts on.
    * @param {{ agent: string, cwd: string, resume?: string | null, binDir?: string | null, fallbackDir?: string | null,
    *           harness?: any,
-   *           env?: Record<string, string>,
+   *           env?: Record<string, string>, logDir?: string | null,
    *           onUpdate?: (update: any) => void, onPermission?: (params: any) => Promise<string | null>,
    *           onQuestion?: (ask: { message: string, toolCallId: string | null, questions: any[] }) => Promise<Record<string, { label?: string, text?: string }> | null>,
    *           onExit?: (info: { code: number | null, stderr: string }) => void,
    *           onSend?: (sent: { prompt: any[], _meta?: any }) => void }} opts
    * `onSend` hears each message as it goes to the agent, whole (the app's words before the first one's, for an agent
    * told them there); `opened`, once started, says what it was started and opened with.
+   * `logDir` (Developer mode): an agent whose own record lacks what its model got is started with its own logging
+   * switch, writing under this folder (agent-logs.mjs); `opened.log` says where.
    */
   constructor(opts) {
     if (!isChatAgent(opts.agent)) throw new Error(`Unknown agent: ${String(opts.agent)}`);
@@ -687,9 +690,13 @@ export class AgentSession {
       OPENFILM_GET_WEB: '1',
       OPENFILM_PI: JSON.stringify({ agentDir: harness.home, models: harness.models, model: harness.model, systemPrompt: ownAgentPrompt() }),
     };
+    /* Developer mode: the agent's own logging switch, so the turn log has what its model got; none when the person
+       set its telemetry themselves (agent-logs.mjs) */
+    this.logging = this.opts.logDir && cli && !this.spec.adapter
+      ? await logSwitches(this.opts.agent, { base: this.opts.logDir, shell, cwd: this.opts.cwd }).catch(() => null) : null;
     /* an agent that speaks ACP itself: its own program, started as the registry starts it */
-    const native = cli && !this.spec.adapter ? starting(cli.path, this.spec.args) : null;
-    const extra = { ...this.opts.env, ...(native ? native.env : node.env), ...(cli && this.spec.env ? this.spec.env(cli.path) : {}), ...own };
+    const native = cli && !this.spec.adapter ? starting(cli.path, [...this.spec.args, ...(this.logging?.args ?? [])]) : null;
+    const extra = { ...this.opts.env, ...(native ? native.env : node.env), ...(cli && this.spec.env ? this.spec.env(cli.path) : {}), ...own, ...this.logging?.env };
     const env = childEnvironment({ shell: { ...shell, PATH: path }, extra });
     const claude = this.spec.adapter === AGENTS.claude.adapter;
     if (this.spec.adapter === AGENTS.codex.adapter) {
@@ -785,6 +792,7 @@ export class AgentSession {
       initialize: { request: { protocolVersion: acp.PROTOCOL_VERSION, clientCapabilities: CLIENT_CAPABILITIES, clientInfo: CLIENT_INFO }, response: init },
       session: { method: !resumed ? 'session/new' : caps.sessionCapabilities?.resume ? 'session/resume' : 'session/load', params: { ...params, ...(resumed ? { sessionId: resume } : {}) } },
       firstMessage: this.instructions,
+      log: this.logging?.log ?? null,
     };
     return this.info;
   }
@@ -852,5 +860,6 @@ export class AgentSession {
   close() {
     try { this.conn?.close(); } catch { /* gone already */ }
     if (this.child && this.child.exitCode === null) this.child.kill('SIGTERM');
+    this.logging?.close();
   }
 }

@@ -5,7 +5,8 @@
  * Model requests: each request the agent made to its model, whole — the system prompt, every message (the person's,
  * its own with its thinking and tool calls, each tool's result, and what the agent put in by itself), the tools — and
  * the answer, with the model, provider and thinking level that made it, its tokens, or its error. The app's own agent
- * (Pi) logs its own; Claude Code's and Codex's come from their own records. The messages new in that request are open;
+ * (Pi) logs its own; the others' come from their own records, or from the logs they are started with in Developer
+ * mode, and what such a log lacks is said beside it. The messages new in that request are open;
  * the ones carried over from before, and the system prompt, are one line each until opened.
  * Sent to the agent: what the app started and opened the agent with (every word it adds to the agent's own, the
  * variables it set), and each message exactly as the agent got it.
@@ -42,7 +43,17 @@ export function TurnLogButton({ project, turnId, live = false }: { project: stri
   );
 }
 
-const seconds = (ms: number) => (ms < 60_000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.floor(ms / 60_000)}:${String(Math.round((ms % 60_000) / 1000)).padStart(2, '0')}`);
+/** the agents started with a logging switch in Developer mode (src/agent-logs.mjs) */
+const LOGGED_AGENTS = ['gemini', 'qwen', 'codebuddy', 'opencode'];
+
+/** Why a turn has no model requests, as its agent and what it was started with say. */
+function noCallsReason(agent: string | null, log: Item | null | undefined): string {
+  if (agent === 'cursor') return 'turnLog.noCallsCursor';
+  if (agent && LOGGED_AGENTS.includes(agent)) return log?.none === 'own' ? 'turnLog.logOwn' : log?.none === 'sendsMore' ? 'turnLog.logSendsMore' : log ? 'turnLog.noCalls' : 'turnLog.logOff';
+  return 'turnLog.noCalls';
+}
+
+const seconds = (ms: number | null) => (ms === null ? '—' : ms < 60_000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.floor(ms / 60_000)}:${String(Math.round((ms % 60_000) / 1000)).padStart(2, '0')}`);
 const fill = (template: string, values: Record<string, string | number>) => template.replace(/\{(\w+)\}/g, (_, k) => String(values[k] ?? ''));
 const k = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 100_000 ? 0 : 1)}k` : String(n));
 
@@ -151,7 +162,7 @@ function TurnLogViewer({ project, turnId, live, onClose }: { project: string; tu
                 {log.cut ? <span className="text-[12px] text-[var(--warn)]">{t('turnLog.cut')}</span> : null}
               </div>
               {shownTab === 'calls'
-                ? (calls.length ? <Calls calls={calls} start={prompt?.t ?? calls[0]!.startedAt} t={t} /> : <p className="px-5 py-4 text-[13px] text-[var(--chat-hint)]">{t('turnLog.noCalls')}</p>)
+                ? (calls.length ? <Calls calls={calls} start={prompt?.t ?? calls[0]!.startedAt} t={t} /> : <p className="px-5 py-4 text-[13px] text-[var(--chat-hint)]">{t(noCallsReason(agent, prompt?.opened?.log))}</p>)
                 : shownTab === 'sent' ? <Sent events={sent} t={t} /> : <Events events={events} t={t} />}
             </>
           )}
@@ -298,6 +309,7 @@ function Calls({ calls, start, t }: { calls: ModelCall[]; start: number; t: T })
             {fill(t('turnLog.fromRecord'), { file: call.source.file })}
           </div>
         ) : null}
+        {call.lacks.map((name) => <p key={name} className="-mt-1.5 mb-3 text-[12px] text-[var(--chat-hint)]">{t(`turnLog.lacks.${name}`)}</p>)}
         {raw ? (
           <pre className={`${block} rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] p-3`}>
             {JSON.stringify({ request: { systemPrompt: call.systemPrompt, messages: call.messages, tools: call.tools, ...(call.settings ? { settings: call.settings } : {}) }, answer: call.answer }, null, 2)}

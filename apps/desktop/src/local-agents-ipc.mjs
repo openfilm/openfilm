@@ -40,12 +40,13 @@
  * Every turn is also written down as it happens, in the project's `.film/logs/<turn>.jsonl` (chat-store.mjs):
  * the prompt and the session it ran in (what the agent was started and opened with, `opened`), each message exactly
  * as the agent got it (`sent`: the app's words before the first one's too; pictures kept apart, by file), every event
- * above, each answer the page gave, how it ended. Once a turn of Claude Code or Codex ends, the requests it made to its
- * model are read from its own record (agent-records.mjs) into `.film/logs/<turn>.model.jsonl`, as the app's own
- * agent writes its own.
+ * above, each answer the page gave, how it ended. Once a turn ends, the requests the agent made to its model are read
+ * from its own record (agent-records.mjs), or from the log it was started with in Developer mode (agent-logs.mjs),
+ * into `.film/logs/<turn>.model.jsonl`, as the app's own agent writes its own.
  */
 import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
+import { LOG_SETTLE_MS } from './agent-logs.mjs';
 import { RECORDED_AGENTS, agentRecordCalls, compactCalls } from './agent-records.mjs';
 import { AgentSession, HARNESS_AGENTS, isAgentId, isChatAgent, listAgents, openAgentSignIn } from './agents.mjs';
 import { loggedBlocks, openLog, writeModelLog } from './chat-store.mjs';
@@ -68,15 +69,15 @@ const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const RECORD_SETTLE_MS = 800;
 
 /**
- * Claude Code's or Codex's requests to its model from `from` to `to` (ms), read from its own record into the turn's
- * model log. Never throws: a record that cannot be read leaves the turn without one.
+ * The agent's requests to its model from `from` to `to` (ms), read from its own record (or `agentLog`, the log it was
+ * started with) into the turn's model log. Never throws: a record that cannot be read leaves the turn without one.
  */
-export async function keepAgentRecord({ agent, sessionId, cwd, turnId, from, to, log = () => {}, settleMs = RECORD_SETTLE_MS }) {
+export async function keepAgentRecord({ agent, sessionId, cwd, turnId, from, to, agentLog = null, log = () => {}, settleMs = LOG_SETTLE_MS[agent] ?? RECORD_SETTLE_MS }) {
   if (!RECORDED_AGENTS.includes(agent) || !sessionId || !turnId) return;
   try {
     await new Promise((done) => setTimeout(done, settleMs));
     const env = await loginShellVariables({ staleOk: true });
-    const found = agentRecordCalls({ agent, sessionId, cwd, from, to, env });
+    const found = agentRecordCalls({ agent, sessionId, cwd, from, to, env, log: agentLog });
     if (found?.calls.length) writeModelLog(cwd, turnId, compactCalls(found.calls));
   } catch (e) {
     log(`agent record ${turnId}: ${e instanceof Error ? e.message : String(e)}\n`);
@@ -97,10 +98,11 @@ function imageBlocks(images) {
  * `harness(id)` gives the app's own agent ('byok') what it runs with (agent-roster.mjs), resolved as
  * each session starts.
  * `onWorking` hears the folders agents are working in (a turn running there) each time they change.
+ * `logDir()`, as each session starts: the folder for the logs an agent is started with (Developer mode on), or null.
  * @param {{ trusted: (event: any) => boolean, binDir?: string | null, fallbackDir?: string | null, env?: Record<string, string>,
- *           harness?: (id: string) => Promise<any>, onWorking?: (folders: string[]) => void }} opts
+ *           harness?: (id: string) => Promise<any>, onWorking?: (folders: string[]) => void, logDir?: () => string | null }} opts
  */
-export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbackDir = null, env = {}, harness = async () => null, log = () => {}, onWorking = () => {} }) {
+export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbackDir = null, env = {}, harness = async () => null, log = () => {}, onWorking = () => {}, logDir = () => null }) {
   const harnessFor = async (agent) => (HARNESS_AGENTS.includes(agent) ? harness(agent) : undefined);
   /** @type {Map<string, { session: AgentSession, sender: import('electron').WebContents, pending: Map<string, (answer: any) => void>, agent: string, cwd: string, turn: any }>} */
   const sessions = new Map();
@@ -203,6 +205,7 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
         binDir,
         fallbackDir,
         env,
+        logDir: logDir(),
         harness: await harnessFor(agent),
         onUpdate: (update) => send(entry, key, { kind: 'update', update }),
         onPermission: (params) => new Promise((resolve) => {
@@ -269,7 +272,7 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
       turn.file.end();
       turn.done = result;
       entry.turnEnded = Date.now();
-      void keepAgentRecord({ agent: entry.agent, sessionId: entry.info?.sessionId, cwd: entry.cwd, turnId: meta.turnId, from, to: entry.turnEnded, log });
+      void keepAgentRecord({ agent: entry.agent, sessionId: entry.info?.sessionId, cwd: entry.cwd, turnId: meta.turnId, from, to: entry.turnEnded, agentLog: entry.session.opened?.log, log });
       /* the page that asked may be gone (reloaded): say it on the channel too */
       if (!entry.sender.isDestroyed()) entry.sender.send('desktop:local-agents:event', { key, kind: 'done', turnId: meta.turnId, ...result });
     }
@@ -310,7 +313,7 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
     if (entry.adopted) {
       entry.adopted.write('done', { ok: true, unprompted: true });
       entry.adopted.end();
-      void keepAgentRecord({ agent: entry.agent, sessionId: entry.info?.sessionId, cwd: entry.cwd, turnId: entry.adopted.turnId, from: entry.adopted.from, to: Date.now(), log });
+      void keepAgentRecord({ agent: entry.agent, sessionId: entry.info?.sessionId, cwd: entry.cwd, turnId: entry.adopted.turnId, from: entry.adopted.from, to: Date.now(), agentLog: entry.session?.opened?.log, log });
     }
     entry.adopted = null;
     if (typeof opts?.turnId === 'string') {

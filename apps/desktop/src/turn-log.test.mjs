@@ -61,6 +61,26 @@ test('the turn log has what the agent was started with and each message as it go
   }
 });
 
+test('in Developer mode an agent is started with its own logging switch, and the turn log says where it writes', { timeout: 60_000 }, async () => {
+  const out = join(mkdtempSync(join(tmpdir(), 'of-fake-out-')), 'prompts.jsonl');
+  setChosenPaths({ qwen: fakeAgent(out) });
+  const logDir = mkdtempSync(join(tmpdir(), 'of-agent-logs-'));
+  const session = new AgentSession({ agent: 'qwen', cwd: mkdtempSync(join(tmpdir(), 'of-project-')), logDir });
+  try {
+    await session.start();
+    const { log, command } = session.opened;
+    assert.equal(log.agent, 'qwen');
+    assert.ok(log.dir.startsWith(join(logDir, 'qwen')));
+    assert.deepEqual(command.slice(-6), ['--acp', '--approval-mode', 'yolo', '--openai-logging', '--openai-logging-dir', log.dir], 'its own flags, then the switch');
+    await session.prompt([{ type: 'text', text: 'hi' }]);
+    const [got] = readFileSync(out, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    assert.deepEqual(got.argv.slice(-3), ['--openai-logging', '--openai-logging-dir', log.dir]);
+  } finally {
+    session.close();
+    setChosenPaths({});
+  }
+});
+
 test('a message\'s pictures are kept in the logs by their content and named in its blocks; a turn\'s model log is written whole', () => {
   const project = mkdtempSync(join(tmpdir(), 'of-log-'));
   const data = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]).toString('base64');

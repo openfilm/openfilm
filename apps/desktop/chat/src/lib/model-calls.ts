@@ -2,7 +2,8 @@
  * The requests an agent made to its model in a turn and the answers (the turn's model log, src/chat-store.mjs), whole
  * again: a line keeps only what is new since the request before (`prefix` of that one's messages, then its own;
  * `systemPrompt`, `tools`, `settings`, `source` and `thread` when they changed). The app's own agent (Pi) writes its
- * own; Claude Code's and Codex's are read from their own records (src/agent-records.mjs).
+ * own; the other agents' are read from their own records (src/agent-records.mjs), or from the logs they are started
+ * with in Developer mode (src/agent-logs.mjs).
  *
  * Messages are Pi's: system (its text in `sections`), user (text or parts), assistant (`thinking`, `text` and
  * `toolCall` parts, its usage and why it stopped) and toolResult (`toolCallId`, `toolName`, parts, `isError`); from an
@@ -12,7 +13,8 @@ type Item = Record<string, any>;
 
 export interface RawCall {
   startedAt: number;
-  ms: number;
+  /** null: the log does not say how long it took (Qwen Code's) */
+  ms: number | null;
   prefix: number;
   messages: Item[];
   systemPrompt?: string | null;
@@ -25,13 +27,15 @@ export interface RawCall {
   source?: { agent: string; file: string } | null;
   /** a subagent's request (Claude Code), named */
   thread?: { id: string; label: string } | null;
+  /** what the log this was read from does not have, by name (the turn log says each: turnLog.lacks.<name>) */
+  lacks?: string[];
   answer: Item | null;
 }
 
 export interface ModelCall {
   no: number;
   startedAt: number;
-  ms: number;
+  ms: number | null;
   systemPrompt: string | null;
   /** every message the model got, in order; from `fresh` on, the ones new in this request */
   messages: Item[];
@@ -41,6 +45,7 @@ export interface ModelCall {
   settings: Item | null;
   source: { agent: string; file: string } | null;
   thread: { id: string; label: string } | null;
+  lacks: string[];
   answer: Item | null;
 }
 
@@ -58,7 +63,7 @@ export function modelCalls(raw: RawCall[]): ModelCall[] {
     if ('settings' in call) settings = call.settings ?? null;
     if ('source' in call) source = call.source ?? null;
     if ('thread' in call) thread = call.thread ?? null;
-    return { no: i + 1, startedAt: call.startedAt, ms: call.ms, systemPrompt, messages, fresh: call.prefix, tools, toolsUnknown: call.toolsUnknown === true, settings, source, thread, answer: call.answer };
+    return { no: i + 1, startedAt: call.startedAt, ms: call.ms, systemPrompt, messages, fresh: call.prefix, tools, toolsUnknown: call.toolsUnknown === true, settings, source, thread, lacks: call.lacks ?? [], answer: call.answer };
   });
 }
 

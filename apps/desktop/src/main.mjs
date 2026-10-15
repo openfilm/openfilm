@@ -19,7 +19,7 @@ import { startWindowStudio } from './studio.mjs';
 import { CHAT_MIN, STUDIO_MIN, WINDOW_MIN, placeOnDisplays, readWindowState, writeWindowState } from './window-state.mjs';
 import { applicationMenu } from './menu.mjs';
 import { registerLocalAgentIpc } from './local-agents-ipc.mjs';
-import { registerChatIpc } from './chat-ipc.mjs';
+import { readPreferences, registerChatIpc } from './chat-ipc.mjs';
 import { createRoster } from './agent-roster.mjs';
 import { checkAgentProgram, diagnoseAgent, listAgents, openAgentSignIn, setChosenPaths } from './agents.mjs';
 import { agentUsage, forgetAgentUsage } from './agent-usage.mjs';
@@ -308,6 +308,8 @@ async function start() {
     fallbackDir: ffmpegHere,
     env: { OPENFILM_HOME: env.OPENFILM_HOME, ...(env.OPENFILM_LIBRARY ? { OPENFILM_LIBRARY: env.OPENFILM_LIBRARY } : {}) },
     harness: async (id) => roster?.harness(id) ?? null,
+    /* Developer mode: an agent whose own record lacks what its model got logs it here (agent-logs.mjs) */
+    logDir: () => (readPreferences(DATA).developer ? join(DATA, 'agent-logs') : null),
   });
   /* Settings → Agents (in Studio's page) and the chat's agent menu: one roster, both told of every change */
   roster = createRoster({

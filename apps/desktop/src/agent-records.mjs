@@ -16,9 +16,14 @@
  *   Kimi          ~/.kimi-code/sessions/<folder>/session_<id>/agents/<main or a subagent>/wire.jsonl, found by
  *                 ~/.kimi-code/session_index.jsonl. Each request is an `llm.request` (model, effort, how many
  *                 messages) closed by a `step.end` (usage); the system prompt and the tools are kept as they change.
+ *   Copilot       <COPILOT_HOME or ~/.copilot>/session-state/<session>/events.jsonl: the system prompt
+ *                 (`system.message`), each message as the model got it (`user.message` transformedContent), each answer
+ *                 (`assistant.message`, its tool requests) and each tool's result; a `session.usage_record` for each
+ *                 request. No tools' definitions: Copilot does not keep them, and its OpenTelemetry makes no spans
+ *                 over ACP.
  *
- * The other agents keep no record that has what their model was sent (Gemini CLI, OpenCode, Copilot and Qwen keep
- * the conversation without the system prompt or the tools; Cursor's prompt is made on its servers).
+ * Gemini CLI, Qwen Code, CodeBuddy and OpenCode keep the conversation without the system prompt or the tools:
+ * theirs are read from the logs they are started with (agent-logs.mjs). Cursor's prompt is made on its servers.
  *
  * Neither record is a public format: read for what it has, and whatever is not understood is left out, never a
  * failure. A request's messages are rebuilt from the record, as the agent keeps them: not the bytes on the wire.
@@ -28,9 +33,10 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { LOGGED_AGENTS, agentLogCalls } from './agent-logs.mjs';
 
-/** The agents whose records are read. */
-export const RECORDED_AGENTS = Object.freeze(['claude', 'codex', 'kimi']);
+/** The agents whose records (or logs) are read. */
+export const RECORDED_AGENTS = Object.freeze(['claude', 'codex', 'kimi', 'copilot', ...LOGGED_AGENTS]);
 
 /** a record longer than this is not read: one turn's requests are not worth reading hundreds of megabytes */
 const RECORD_MAX = 256 * 1024 * 1024;
@@ -478,19 +484,98 @@ export function kimiCalls(sessionDir, { from = 0, to = Infinity } = {}) {
     .sort((a, b) => a.startedAt - b.startedAt);
 }
 
+/* ── Copilot ─────────────────────────────────────────────────────────────── */
+
+/** The events of a Copilot session, or null: in its session state, by its ACP id. */
+export function findCopilotRecord({ sessionId, env = {}, home = homedir() }) {
+  if (!/^[\w-]{8,80}$/.test(String(sessionId ?? ''))) return null;
+  const file = join(env.COPILOT_HOME || join(home, '.copilot'), 'session-state', sessionId, 'events.jsonl');
+  return existsSync(file) ? file : null;
+}
+
+/**
+ * The requests in a Copilot session's events whose answers came between `from` and `to` (ms), rebuilt from them:
+ * each `session.usage_record` is one request, its answer the `assistant.message` of the same API call, and what
+ * came before it its messages. `settings`: the request's model, and how big Copilot says its body was.
+ */
+export function copilotCallsOf(entries, { from = 0, to = Infinity } = {}) {
+  let systemPrompt = null;
+  const history = [];
+  const names = new Map();
+  const calls = [];
+  /** answers by their API call: an answer's message may come just before its usage record, or just after */
+  const answers = new Map();
+  for (const e of entries) {
+    if (e?.type === 'assistant.message' && e.data?.apiCallId) answers.set(e.data.apiCallId, e.data);
+  }
+  const said = (d) => [
+    ...(typeof d?.reasoningText === 'string' && d.reasoningText ? [{ type: 'thinking', thinking: d.reasoningText }] : []),
+    ...(typeof d?.content === 'string' && d.content ? [{ type: 'text', text: d.content }] : []),
+    ...(d?.toolRequests ?? []).map((r) => ({ type: 'toolCall', id: String(r?.toolCallId ?? ''), name: String(r?.name ?? ''), arguments: r?.arguments ?? {} })),
+  ];
+  for (const e of entries) {
+    const d = e?.data ?? {};
+    switch (e?.type) {
+      case 'system.message': if (typeof d.content === 'string') systemPrompt = d.content; break;
+      case 'user.message': history.push({ role: 'user', content: [{ type: 'text', text: String(d.transformedContent ?? d.content ?? '') }] }); break;
+      case 'assistant.message': {
+        const content = said(d);
+        for (const part of content) if (part.type === 'toolCall') names.set(part.id, part.name);
+        if (content.length) history.push({ role: 'assistant', content });
+        break;
+      }
+      case 'tool.execution_complete': {
+        const r = d.result ?? {};
+        history.push({ role: 'toolResult', toolCallId: String(d.toolCallId ?? ''), toolName: names.get(d.toolCallId) ?? 'tool',
+          content: [{ type: 'text', text: typeof r.content === 'string' ? r.content : str(r.content ?? d.error ?? r) }], isError: d.success === false });
+        break;
+      }
+      case 'session.usage_record': {
+        const u = d.usage ?? {};
+        const at = ms(e.timestamp) ?? 0;
+        if (at < from || at > to) break;
+        const took = Number(u.duration) || 0;
+        const reply = answers.get(u.apiCallId);
+        const cacheRead = Number(u.cacheReadTokens) || 0;
+        const cacheWrite = Number(u.cacheWriteTokens) || 0;
+        calls.push({
+          startedAt: at - took, ms: took, messages: history.map((m) => ({ ...m })), systemPrompt, tools: null,
+          answer: { role: 'assistant', content: reply ? said(reply) : [],
+            usage: { input: Math.max(0, (Number(u.inputTokens) || 0) - cacheRead - cacheWrite), cacheRead, cacheWrite, output: Number(u.outputTokens) || 0, reasoning: Number(u.reasoningTokens) || 0 },
+            ...(u.model ? { responseModel: String(u.model) } : {}) },
+          settings: { model: u.model ?? null, initiator: u.initiator ?? null, requestBodyBytes: u.requestBodyBytes ?? null, availableToolCount: u.availableToolCount ?? null },
+          lacks: ['copilotRebuilt'],
+        });
+        break;
+      }
+      default: break;
+    }
+  }
+  return calls;
+}
+
+export const copilotCalls = (file, { from = 0, to = Infinity } = {}) => copilotCallsOf(lines(file), { from, to });
+
 /* ── all ─────────────────────────────────────────────────────────────────── */
 
 /**
  * A turn's requests, read from the agent's own record: `{ file, calls }` (calls whole, in time order), or null when
  * the agent keeps none this can read. `from`/`to`: the turn's start and end (ms); `env`: where the person's agent keeps
- * its records (CLAUDE_CONFIG_DIR, CODEX_HOME), as their shell sets it; `home`, theirs (Kimi's are in it).
+ * its records (CLAUDE_CONFIG_DIR, CODEX_HOME), as their shell sets it; `home`, theirs (Kimi's are in it); `log`: the
+ * log an agent of agent-logs.mjs was started with (its turn log's `opened.log`).
  */
-export function agentRecordCalls({ agent, sessionId, cwd, from, to, env = {}, home = homedir() }) {
+export function agentRecordCalls({ agent, sessionId, cwd, from, to, env = {}, home = homedir(), log = null }) {
+  if (LOGGED_AGENTS.includes(agent)) {
+    const read = agentLogCalls({ agent, sessionId, log, from, to });
+    return read ? { file: read.file, calls: read.calls.map((c) => ({ ...c, source: { agent, file: read.file } })) } : null;
+  }
   const file = agent === 'claude' ? findClaudeRecord({ sessionId, cwd, env })
     : agent === 'codex' ? findCodexRecord({ sessionId, env })
-      : agent === 'kimi' ? findKimiRecord({ sessionId, home }) : null;
+      : agent === 'kimi' ? findKimiRecord({ sessionId, home })
+        : agent === 'copilot' ? findCopilotRecord({ sessionId, env, home }) : null;
   if (!file) return null;
-  const calls = agent === 'claude' ? claudeCalls(file, { from, to }) : agent === 'codex' ? codexCalls(file, { from, to }) : kimiCalls(file, { from, to });
+  const read = { claude: claudeCalls, codex: codexCalls, kimi: kimiCalls, copilot: copilotCalls }[agent];
+  const calls = read(file, { from, to });
   return { file, calls: calls.map((c) => ({ ...c, source: { agent, file } })) };
 }
 
@@ -513,6 +598,7 @@ export function compactCalls(calls) {
       if (key !== last[field]) { line[field] = call[field] ?? null; last[field] = key; }
     }
     if (call.toolsUnknown) line.toolsUnknown = true;
+    if (call.lacks?.length) line.lacks = call.lacks;
     return line;
   });
 }

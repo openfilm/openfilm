@@ -5,8 +5,8 @@
  *   desktop:chat:sessions  { project, sessions, last }
  *   desktop:chat:turn      { project, turn, items }
  *   desktop:chat:log       { project, turnId, unless? } → { file, cut, size, callsSize, events, calls } | { same } | null
- *                          a turn of Claude Code or Codex with no model log yet (running, or from before there was one)
- *                          has its requests read from the agent's own record as it is now (agent-records.mjs)
+ *                          a turn of another agent with no model log yet (running, or from before there was one) has
+ *                          its requests read from the agent's own record (or log) as it is now (agent-records.mjs)
  *   desktop:chat:reveal    { project, turnId? }   the turn's log (or the logs folder) in the file manager
  *   desktop:chat:ref-image { project, turnId, n, bytes } → { path }   a reference's picture, kept for the agent
  *   desktop:chat:unsaved   { project, except? } → [{ turnId, events }]   turns with a log and no saved record
@@ -28,8 +28,8 @@ import { changes, snapshot } from './file-changes.mjs';
 const RECORD_MARGIN_MS = 1000;
 
 /**
- * A log with no model requests, of a turn of Claude Code or Codex: its requests from the agent's own record, read
- * now. The log as it was when there is none to read.
+ * A log with no model requests, of a turn of an agent whose record (or log, `opened.log`) is read: its requests from
+ * there, read now. The log as it was when there is none to read.
  */
 export async function withAgentRecord(found) {
   if (!found || 'same' in found || found.calls?.length) return found;
@@ -38,10 +38,21 @@ export async function withAgentRecord(found) {
   const sessionId = prompt?.session?.sessionId;
   if (!RECORDED_AGENTS.includes(prompt?.agent) || !sessionId) return found;
   const read = agentRecordCalls({
-    agent: prompt.agent, sessionId, cwd: prompt.cwd, env: await loginShellVariables({ staleOk: true }),
+    agent: prompt.agent, sessionId, cwd: prompt.cwd, env: await loginShellVariables({ staleOk: true }), log: prompt.opened?.log ?? null,
     from: prompt.t - RECORD_MARGIN_MS, to: done ? done.t + RECORD_MARGIN_MS : Date.now() + RECORD_MARGIN_MS,
   });
   return read?.calls.length ? { ...found, calls: compactCalls(read.calls) } : found;
+}
+
+/**
+ * The app's own preferences (`<dataDir>/preferences.json`): `developer`, each turn's log shown, and agents started with
+ * their logging switches (off unless turned on); `changes`, what each turn changed, under its reply (on).
+ */
+export function readPreferences(dataDir) {
+  try {
+    const raw = JSON.parse(readFileSync(join(dataDir, 'preferences.json'), 'utf8'));
+    return { developer: raw.developer === true, changes: raw.changes !== false };
+  } catch { return { developer: false, changes: true }; }
 }
 
 /** how many turns' snapshots are kept at once: one per running turn, and a few whose end was never asked about */
@@ -104,13 +115,7 @@ export function registerChatIpc(ipcMain, { trusted, projects, dataDir, reveal, t
 
   /* the app's own preferences: kept by the app, not by the page (whose storage is its address's) */
   const file = join(dataDir, 'preferences.json');
-  /* `developer`: each turn's log (off unless turned on); `changes`: what each turn changed, under its reply (on) */
-  const read = () => {
-    try {
-      const raw = JSON.parse(readFileSync(file, 'utf8'));
-      return { developer: raw.developer === true, changes: raw.changes !== false };
-    } catch { return { developer: false, changes: true }; }
-  };
+  const read = () => readPreferences(dataDir);
   handle('desktop:prefs', async () => read());
   handle('desktop:prefs:set', async (next) => {
     const prefs = { ...read() };
