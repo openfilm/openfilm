@@ -62,6 +62,14 @@ export interface StudioHost {
     setWidth?: (width: number, done?: boolean) => void;
     onChange: (listener: (state: { open: boolean; width: number; assets?: { open: boolean; bottom: number } }) => void) => void;
   };
+  /**
+   * The app's chat names a skill in the message being written: the examples (opened from the chat, `show-examples`)
+   * call this for a skill picked in them.
+   */
+  useSkill?: (skill: { name: string; description: string }) => void;
+  /** The person's own skills, where the app keeps them: one added (the app's own way: from a link, a folder, or made
+      with the agent), their folder shown. The examples' skills offer both. */
+  skills?: { add: () => void; reveal: () => void };
   /** Let the app ask Studio to show something: Studio calls this once with its listener. */
   onCommand?: (listener: (command: StudioCommand) => void) => void;
   /**
@@ -277,6 +285,8 @@ export interface StudioRefImage { src?: string; viewer?: boolean; crop?: StageBo
  *   · range   a stretch of the film (marked on the timeline's ruler, or with I and O): the clips playing in it
  *   · track   a whole track
  *   · file    a file of the project (the media pane): its path, kind, and length / size when known
+ *   · example  an example film (ExamplesGallery), or a part of it (`start`–`end`, a `segment` it names): its folder on
+ *             this computer, to read how it is made, and where it comes from (`url`)
  *   · subtitle a line of the film's subtitles (the subtitle panel), or words picked inside one: their span on the film,
  *             the words, the language they are in when a translation is shown (`lang`), the line's number in the panel
  *             (`index`, from 1), and each word's own span when the transcript has word times (`words`)
@@ -293,6 +303,7 @@ export type StudioRef = (
   | { kind: 'track'; track: number; label: string; clipIds: string[] }
   | { kind: 'file'; path: string; fileKind: string; duration?: number; w?: number; h?: number }
   | { kind: 'subtitle'; start: number; end: number; text: string; lang?: string | null; index?: number; words?: Array<{ text: string; start: number; end: number }> }
+  | { kind: 'example'; id: string; title: string; url: string; folder: string; start?: number; end?: number; segment?: string }
 ) & { image?: StudioRefImage };
 
 /**
@@ -335,7 +346,9 @@ export type StudioCommand =
   | { type: 'highlight'; ref: StudioRef | null }
   | { type: 'draft-refs'; refs: StudioRef[] }
   /* the app's chat sends the person to Settings (an agent to set up) */
-  | { type: 'settings'; section?: 'agents' | 'providers' };
+  | { type: 'settings'; section?: 'agents' | 'providers' }
+  /* the app's chat opens the examples over the film, to point at one or a part of one, or name a skill */
+  | { type: 'show-examples' };
 
 export const studioHost: StudioHost | null = (globalThis as { openfilmHost?: StudioHost }).openfilmHost ?? null;
 

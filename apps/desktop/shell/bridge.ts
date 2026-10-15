@@ -151,6 +151,9 @@ projectReady = follow();
 /* ── between Studio and the chat: what is selected, what is referenced, what Studio is asked to show ── */
 const selection = signal<StudioSelection | null>(null);
 const refer = events<StudioRef>();
+/* a skill picked in the examples (Studio's ExamplesDialog), to be named in the message; and "Add a skill" there */
+const skillPicked = events<{ name: string; description: string }>();
+const skillAdd = events<void>();
 /** what the pointer is over in Studio (null: nothing), for the chat to light its pills that point at it */
 const hover = signal<StudioRef | null>(null);
 let command: ((command: StudioCommand) => void) | null = null;
@@ -278,6 +281,8 @@ const host: StudioHost = {
   update,
   folders: { pick: native.pickFolder, pathOf: native.pathForFile },
   tabs: native.tabs,
+  useSkill: (skill) => skillPicked.set(skill),
+  skills: { add: () => skillAdd.set(undefined), reveal: () => { void native.skills.reveal(); } },
 };
 (window as unknown as { openfilmHost: StudioHost }).openfilmHost = host;
 
@@ -309,6 +314,8 @@ function commandFor(ref: StudioRef): StudioCommand {
     case 'track': return { type: 'show-track', track: ref.track };
     case 'file': return { type: 'show-file', path: ref.path };
     case 'subtitle': return { type: 'show-subtitle', start: ref.start, end: ref.end };
+    /* another film: the examples, where it came from */
+    case 'example': return { type: 'show-examples' };
   }
 }
 const uploadName = (name: string) => name.split(/[\\/]/).pop()!.replace(/[\u0000-\u001f]+/g, '').slice(0, 200) || 'file';
@@ -344,6 +351,11 @@ const uploadName = (name: string) => name.split(/[\\/]/).pop()!.replace(/[\u0000
   onSelection: (listener: Listener<StudioSelection>) => selection.on((s) => { if (s) listener(s); }),
   onFfmpeg: native.onFfmpeg,
   showInStudio: (ref: StudioRef) => command?.(commandFor(ref)),
+  /* the composer's examples button: the examples over the film, to point at one or name a skill */
+  showExamples: () => command?.({ type: 'show-examples' }),
+  onUseSkill: skillPicked.on,
+  onAddSkill: skillAdd.on,
+  useSkill: (skill: { name: string; description: string }) => skillPicked.set(skill),
   /* a reference made in the chat (⌘L there, the @ menu) gets its picture as Studio's own do */
   withPicture: (ref: StudioRef) => { const done = pictured.then(() => withPicture(ref)); pictured = done.then(() => {}); return done; },
   /* what a pill hovered in the chat points at, lit in Studio while it is (null: none); and the references of the

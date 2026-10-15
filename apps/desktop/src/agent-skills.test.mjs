@@ -93,13 +93,14 @@ test("OpenCode: every skill denied but its own, OpenFilm's and those let in; Pi:
   const w = world();
   const oc = await sessionSkills('opencode', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills'), allowed: ['research'] });
   const config = JSON.parse(oc.env.OPENCODE_CONFIG_CONTENT);
-  assert.deepEqual(config.permission.skill, { '*': 'deny', 'customize-opencode': 'allow', brand: 'allow', 'lyric-pv': 'allow', research: 'allow' });
+  /* `replicate`: the official skill that comes with the package */
+  assert.deepEqual(config.permission.skill, { '*': 'deny', 'customize-opencode': 'allow', brand: 'allow', 'lyric-pv': 'allow', replicate: 'allow', research: 'allow' });
   assert.deepEqual(config.mcp, { search: { enabled: false } });
   assert.match(config.skills.paths[0], /agent-skills\/.+\/skills$/);
   const pi = await sessionSkills('byok', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills') });
-  assert.deepEqual(pi.piSkills.names, ['brand', 'lyric-pv']);
+  assert.deepEqual(pi.piSkills.names, ['brand', 'lyric-pv', 'replicate']);
   const kimi = await sessionSkills('kimi', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills') });
-  assert.deepEqual(kimi.log, { openfilm: ['brand', 'lyric-pv'], allowed: [], mcpAllowed: [], filtered: false, mcpFiltered: false });
+  assert.deepEqual(kimi.log, { openfilm: ['brand', 'lyric-pv', 'replicate'], allowed: [], mcpAllowed: [], filtered: false, mcpFiltered: false });
   assert.equal(readlinkSync(join(pi.piSkills.paths[0], 'brand')), join(w.project, 'skills', 'brand'));
 });
 

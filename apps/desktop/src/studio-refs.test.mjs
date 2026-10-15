@@ -134,3 +134,16 @@ test('the message being written numbers its references as the agent will: each o
   assert.deepEqual(draftRefs(['b', 'file:assets/x.png', 'a', 'b', 'c', 'gone'], known), [layer, clip, region]);
   assert.deepEqual(draftRefs([], known), []);
 });
+
+test('an example, or a part of it: its pill names it and the part, the agent reads another film\'s folder', () => {
+  const part = { kind: 'example', id: 'openfilm-intro', title: 'OpenFilm intro', url: 'https://github.com/openfilm/examples/tree/main/openfilm-intro', folder: '/cache/examples/openfilm-intro', start: 16.12, end: 31.6, segment: 'S4-Studio' };
+  const whole = { kind: 'example', id: 'one-prompt', title: 'One Prompt', url: 'https://github.com/openfilm/examples/tree/main/one-prompt', folder: '/cache/examples/one-prompt' };
+  const pill = refPill(undefined, part);
+  assert.deepEqual([pill.id, pill.kind, pill.label, pill.detail], ['studio:example:openfilm-intro:16.12-31.6', 'example', 'OpenFilm intro', 'S4-Studio']);
+  assert.equal(refPill(undefined, whole).detail, undefined);
+  const text = studioReferencesText([part, whole]);
+  assert.match(text, /\[1\] example film "OpenFilm intro" \(another OpenFilm film, not this one: read its film\.html and pages for how it is made\) · folder \/cache\/examples\/openfilm-intro · its 16\.120–31\.600 s \("S4-Studio"\) · source https:\/\/github\.com\//);
+  assert.match(text, /\[2\] example film "One Prompt" .* · the whole film · source /);
+  assert.ok(sameStudioThing(part, { ...part }) && !sameStudioThing(part, whole));
+  assert.equal(pillCard(pill, (k) => k).title, 'refCard.title.example');
+});

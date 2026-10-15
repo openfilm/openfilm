@@ -65,6 +65,7 @@ import { DEFAULT_INSPECTOR, DOCK_GAP, DockPaneDivider, MIN_DOCK_H, MIN_INSPECTOR
 import { PANE_BAR, PANE_BTN_ON, PANE_TOGGLE, PANE_TOGGLE_ICON } from './dock-pane-bar';
 import { Tooltip } from './Tooltip';
 import { TabStrip } from './TabStrip';
+import { ExamplesDialog } from './ExamplesGallery';
 import { UpdateButton, WebUpdateButton } from './UpdateButton';
 import { MediaPool, type ImportProgress } from './MediaPool';
 import type { SubtitleRowSpec } from './SubtitleRow';
@@ -1202,6 +1203,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (command.type === 'highlight') { setChatRef(command.ref ?? null); return; }
     if (command.type === 'draft-refs') { setDraftMarks(draftMarksOf(Array.isArray(command.refs) ? command.refs : [])); return; }
     if (command.type === 'settings') { setSettingsOpen(command.section ?? 'agents'); return; }
+    if (command.type === 'show-examples') { setExamplesOpen(true); return; }
     if (command.type === 'seek' && Number.isFinite(command.time)) { pause(); seek(command.time * 1000); return; }
     if ((command.type === 'show-range' || command.type === 'show-subtitle') && Number.isFinite(command.start) && Number.isFinite(command.end)) {
       /* a subtitle's span marked, and the subtitle panel open: the playhead at its start lights the line there */
@@ -2264,6 +2266,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     }
   };
   const [projectsOpen, setProjectsOpen] = React.useState(false);
+  /* the examples over the film, opened from the app's chat */
+  const [examplesOpen, setExamplesOpen] = React.useState(false);
   const [settingsOpen, setSettingsOpen] = React.useState<SettingsSection | null>(null);
   /* making subtitles: what went wrong, shown on the CC button; with no service to transcribe, it opens Providers */
   const [subtitleProblem, setSubtitleProblem] = React.useState<{ text: string; connect: boolean } | null>(null);
@@ -2801,6 +2805,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
 
       <ProjectHistoryControls projectId={projectId} history={history} open={historyOpen} anchor={historyAnchor} onClose={() => setHistoryOpen(false)} />
       <ProjectsPopover open={projectsOpen} currentProjectId={projectId} onOpen={(id) => { setProjectsOpen(false); onProject(id); }} onCurrentRemoved={onLeave} onClose={() => setProjectsOpen(false)} />
+      {examplesOpen ? (
+        <ExamplesDialog projectId={projectId} onClose={() => setExamplesOpen(false)}
+          /* a film started from an example: in a tab of its own where there are tabs, else here */
+          onStarted={(id) => { if (studioHost?.tabs) studioHost.tabs.open(id); else onProject(id); }} />
+      ) : null}
       <SettingsModal open={settingsOpen !== null} section={settingsOpen ?? undefined} onClose={() => setSettingsOpen(null)} />
       {/* the host app's media drawer (panel.assets): over its panel, under Studio's top bar, down to the `bottom` px the
           panel keeps for itself (the panel goes on below it, so the two read as one) */}

@@ -11,9 +11,12 @@
  * Cards are posters that play their preview under the pointer. Esc goes back from an example's page, else closes.
  */
 import React from 'react';
-import { ArrowLeft, Blocks, Check, Clapperboard, ExternalLink, Play, Search, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { ArrowLeft, Blocks, Check, Clapperboard, ExternalLink, FolderOpen, Loader2, MessageSquare, Play, Plus, Search, X } from 'lucide-react';
 import { useT } from '@/i18n';
+import { studioHost } from '@/lib/host';
 import { sourcesApi, type Example, type SkillEntry } from '@/lib/project-sources';
+import { GitHubDialog } from './ProjectSources';
 
 export type ExamplesMode = 'start' | 'reference';
 /** A part of an example picked to point at: none for the whole film. */
@@ -24,6 +27,10 @@ type Opened = { kind: 'example'; example: Example } | { kind: 'skill'; skill: Sk
 
 /** the kinds of film the examples are grouped by, in this order; any other comes after, by its own name */
 const CATEGORIES = ['launch', 'explainer', 'slides', 'captions', 'ads', 'commerce', 'music'];
+
+/** where people tell us how skills work for them (a GitHub issue form; no account with us) */
+const FEEDBACK = 'https://github.com/openfilm/openfilm/issues/new?template=skill_feedback.yml';
+const SMALL = 'flex h-7 items-center gap-1.5 rounded-[7px] px-2 text-[12px] text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]';
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
@@ -100,10 +107,18 @@ export function ExamplesGallery({ mode, projectId = null, heading, onClose, onSt
             ))}
           </>
         )}
-        {shownSkills.length ? (
+        {shownSkills.length || filter === 'skills' ? (
           <section className={plain && !shownExamples.length ? '' : 'mt-8'}>
-            {plain && !shownExamples.length ? null : <h3 className="mb-1 text-[14px] font-semibold text-[var(--text)]">{t('gallery.skills')}</h3>}
-            {plain && !shownExamples.length ? null : <p className="mb-3 text-[12px] text-[var(--text-faint)]">{t('gallery.skillsNote')}</p>}
+            <div className="mb-3 flex items-end gap-2">
+              <div className="min-w-0 flex-1">
+                {plain && !shownExamples.length ? null : <h3 className="mb-1 text-[14px] font-semibold text-[var(--text)]">{t('gallery.skills')}</h3>}
+                <p className="text-[12px] text-[var(--text-faint)]">{t('gallery.skillsNote')}</p>
+              </div>
+              {/* the person's own skills, where the app keeps them; and where to tell us how skills work for them */}
+              {studioHost?.skills ? <button type="button" onClick={() => studioHost?.skills?.add()} className={SMALL}><Plus size={13} />{t('gallery.addSkill')}</button> : null}
+              {studioHost?.skills ? <button type="button" onClick={() => studioHost?.skills?.reveal()} className={SMALL} title={t('gallery.openFolder')} aria-label={t('gallery.openFolder')}><FolderOpen size={13} /></button> : null}
+              <a href={FEEDBACK} target="_blank" rel="noreferrer" className={SMALL} title={t('gallery.feedback')} aria-label={t('gallery.feedback')}><MessageSquare size={13} /></a>
+            </div>
             <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
               {shownSkills.map((s) => <SkillCard key={`${s.source}:${s.name}`} skill={s} onOpen={() => setOpened({ kind: 'skill', skill: s })} />)}
             </div>
@@ -337,5 +352,64 @@ function SkillDetail({ skill, mode, onBack, onUse }: { skill: SkillEntry; mode: 
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * The examples over a film, opened from the app's chat (`show-examples`): an example or a part of it becomes a
+ * reference in the message being written (its folder fetched first, for the agent to read), a skill is named in it
+ * (lib/host.ts `useSkill`), and an example can still be started from, as a new project (`onStarted`).
+ */
+export function ExamplesDialog({ projectId, onClose, onStarted }: { projectId: string; onClose: () => void; onStarted: (projectId: string) => void }) {
+  const t = useT();
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [starting, setStarting] = React.useState<Example | null>(null);
+  const reference = async (example: Example, part: ExamplePart) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const folder = await sourcesApi.exampleFolder(example.id);
+      studioHost?.refer?.({
+        kind: 'example', id: example.id, title: example.title, url: example.url, folder,
+        ...(part ? { start: part.from, end: part.to, ...(part.segment ? { segment: part.segment } : {}) } : {}),
+      });
+      onClose();
+    } catch (e) {
+      setError(t('gallery.fetchFailed').replace('{error}', e instanceof Error ? e.message : String(e)));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return createPortal(
+    <>
+      <div className="fixed inset-0 z-[10040] bg-black/60" onMouseDown={onClose} />
+      <div role="dialog" aria-modal="true" aria-label={t('gallery.title')}
+        className="fixed left-1/2 top-1/2 z-[10050] flex -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-[var(--border-strong)] bg-[var(--app-content-bg)] shadow-[0_24px_64px_rgba(0,0,0,0.35)]"
+        style={{ width: 'min(1080px, calc(100vw - 64px))', height: 'min(760px, calc(100vh - 96px))' }}>
+        <ExamplesGallery
+          mode="reference"
+          projectId={projectId}
+          onClose={onClose}
+          onStart={setStarting}
+          onReference={(example, part) => void reference(example, part)}
+          onUseSkill={(skill) => { studioHost?.useSkill?.({ name: skill.name, description: skill.description }); onClose(); }}
+        />
+        {busy ? (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-[var(--app-content-bg)]/70">
+            <div className="flex items-center gap-2 rounded-lg bg-[var(--surface)] px-4 py-3 text-sm shadow-lg"><Loader2 size={16} className="animate-spin" />{t('gallery.fetching')}</div>
+          </div>
+        ) : null}
+        {error ? (
+          <div role="alert" className="absolute bottom-4 left-1/2 z-30 -translate-x-1/2 rounded-full border border-[var(--err)]/40 bg-[var(--surface)] px-4 py-2 text-[12.5px] font-medium text-[var(--err)] shadow-[var(--shadow-lg)]">{error}</div>
+        ) : null}
+      </div>
+      {starting ? (
+        <GitHubDialog url={starting.url} start title={starting.title}
+          onDone={(id) => { setStarting(null); onStarted(id); onClose(); }}
+          onClose={() => setStarting(null)} />
+      ) : null}
+    </>,
+    document.body,
   );
 }

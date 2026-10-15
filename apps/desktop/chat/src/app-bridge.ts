@@ -29,6 +29,14 @@ interface AppBridge {
   onFfmpeg(listener: (state: FfmpegState) => void): () => void;
   /** take the person to a reference in Studio */
   showInStudio(ref: StudioRef): void;
+  /** the examples over the film (Studio's), to point at one or a part of one, or name a skill */
+  showExamples?(): void;
+  /** a skill picked in the examples, to be named in the message */
+  onUseSkill?(listener: (skill: { name: string; description: string }) => void): () => void;
+  /** "Add a skill" in the examples */
+  onAddSkill?(listener: () => void): () => void;
+  /** name a skill in the message being written (as one picked in the examples) */
+  useSkill?(skill: { name: string; description: string }): void;
   /** the reference with its picture: the viewer as it is now, for one that shows it (lib/host.ts StudioRefImage) */
   withPicture(ref: StudioRef): Promise<StudioRef>;
   /** light in Studio what a hovered pill points at, without moving there (null: the pointer left it) */

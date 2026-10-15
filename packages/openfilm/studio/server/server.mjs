@@ -32,9 +32,9 @@ import {
   ProjectError, createFolder, createProject, deleteFolder, deleteProject, libraryRoot, listFolders, listProjects, locateProject, markOpened,
   moveProjectToFolder, openProject, projectById, renameFolder, renameProject, studioHome, studioKey, TOOL_DIR,
 } from './projects.mjs';
-import { FetchError, createFetches } from './fetch-repo.mjs';
+import { FetchError, createFetches, fetchFilm, parseRepoUrl } from './fetch-repo.mjs';
 import { BrowseError, browseFolder, browsePlaces } from './browse.mjs';
-import { exampleFile, listExamples } from './examples.mjs';
+import { exampleFile, exampleFolder, listExamples } from './examples.mjs';
 import { pickFiles, pickFolder } from './folder-picker.mjs';
 import { readPrefs, writePrefs } from './prefs.mjs';
 import { ensureProxies } from './proxies.mjs';
@@ -317,6 +317,18 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       res.writeHead(range ? 206 : 200, { 'content-type': type, 'content-length': to - from + 1, 'accept-ranges': 'bytes', ...(range ? { 'content-range': `bytes ${from}-${to}/${size}` } : {}) });
       createReadStream(file, { start: from, end: to }).pipe(res);
       return undefined;
+    }
+    /* an example's folder on this computer, to point an agent at (examples.mjs exampleFolder) */
+    if (parts[0] === 'examples' && parts.length === 3 && parts[2] === 'folder' && req.method === 'POST') {
+      try {
+        const folder = await exampleFolder(decodeURIComponent(parts[1]), {
+          home: studioHome(),
+          fetchFolder: (address, into) => fetchFilm(parseRepoUrl(address), { library: into }),
+        });
+        return json(res, 200, { folder });
+      } catch (e) {
+        throw new HttpError(e instanceof FetchError ? e.status : 404, e instanceof Error ? e.message : String(e));
+      }
     }
     /* the skills a project can be made with (../../src/skills.mjs): its own, the person's, the official ones */
     if (parts[0] === 'skills' && parts.length === 1 && req.method === 'GET') {

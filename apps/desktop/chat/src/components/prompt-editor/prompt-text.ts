@@ -43,7 +43,7 @@ export interface PromptReference extends StoredPromptReference {
  * a voice line in one sentence look different.
  */
 export type PromptReferenceKind =
-  | 'element' | 'region' | 'time' | 'range' | 'track' | 'subtitle' | 'showcase' | 'file' | 'card' | 'skill'
+  | 'element' | 'region' | 'time' | 'range' | 'track' | 'subtitle' | 'showcase' | 'file' | 'card' | 'skill' | 'example'
   | 'clipMg' | 'clipVideo' | 'clipVoice' | 'clipSfx' | 'clipMusic' | 'clipCaption';
 
 /* The id prefix of a file reference, followed by the workspace-relative path, which is

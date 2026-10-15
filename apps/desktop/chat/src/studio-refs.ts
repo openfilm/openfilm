@@ -40,6 +40,7 @@ const idOf = (ref: StudioRef): string => {
     case 'track': return `studio:track:${ref.track}`;
     case 'file': return `studio:file:${ref.path}`;
     case 'subtitle': return `studio:subtitle:${ref.start}-${ref.end}${ref.lang ? `:${ref.lang}` : ''}`;
+    case 'example': return `studio:example:${ref.id}${ref.end ? `:${ref.start ?? 0}-${ref.end}` : ''}`;
   }
 };
 
@@ -70,6 +71,8 @@ export function refPill(id: string | undefined, ref: StudioRef): PromptReference
       ...(ref.w && ref.h ? { detail: `${ref.w}×${ref.h}` } : ref.duration ? { detail: clock(ref.duration) } : {}),
     };
     case 'subtitle': return { ...base, kind: 'subtitle', label: clipped(ref.text, 40) || span(ref.start, ref.end) };
+    /* an example: its title, and the part when one was picked */
+    case 'example': return { ...base, kind: 'example', label: clipped(ref.title, 40), ...(ref.segment ? { detail: ref.segment } : ref.end ? { detail: `${clock(ref.start ?? 0)}–${clock(ref.end)}` } : {}) };
   }
 }
 
@@ -123,6 +126,7 @@ export function sameStudioThing(a: StudioRef, b: StudioRef): boolean {
     case 'track': return b.kind === 'track' && a.track === b.track;
     case 'file': return b.kind === 'file' && a.path === b.path;
     case 'subtitle': return b.kind === 'subtitle' && near(a.start, b.start) && near(a.end, b.end) && (a.lang ?? null) === (b.lang ?? null);
+    case 'example': return b.kind === 'example' && a.id === b.id && near(a.start ?? 0, b.start ?? 0) && near(a.end ?? 0, b.end ?? 0);
   }
 }
 
@@ -219,6 +223,11 @@ export function pillCard(pill: { id: string; label: string; target?: Record<stri
       row('language', ref.lang);
       row('line', ref.index);
       break;
+    case 'example':
+      row('example', ref.title);
+      row('part', ref.segment ?? (ref.end ? span(ref.start ?? 0, ref.end) : null));
+      row('path', ref.folder);
+      break;
   }
   return { title: t(`refCard.title.${ref.kind}`), rows };
 }
@@ -267,6 +276,13 @@ function refLine(ref: StudioRef): string {
       `subtitle ${ref.start.toFixed(3)}–${ref.end.toFixed(3)} s ${quote(ref.text, 300)}${ref.lang ? ` (${ref.lang})` : ''}`,
       typeof ref.index === 'number' ? `line ${ref.index}` : null,
     ].filter(Boolean).join(' · ');
+    /* not this film: another OpenFilm film, whose source shows how it is made */
+    case 'example': return [
+      `example film ${quote(ref.title, 80)} (another OpenFilm film, not this one: read its film.html and pages for how it is made)`,
+      `folder ${ref.folder}`,
+      ref.end ? `its ${ref.start?.toFixed(3) ?? '0.000'}–${ref.end.toFixed(3)} s${ref.segment ? ` (${quote(ref.segment, 60)})` : ''}` : 'the whole film',
+      `source ${ref.url}`,
+    ].join(' · ');
   }
 }
 

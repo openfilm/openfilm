@@ -16,7 +16,8 @@
  * `category` (what kind of film it is, as the examples window groups them: a short word such as "launch" or
  * "explainer"), `segments` (its parts, so one can be pointed at: `[{ "title": "S2-Hook", "from": 12, "to": 30 }]`).
  */
-import { readFile } from 'node:fs/promises';
+import { existsSync, statSync } from 'node:fs';
+import { mkdir, mkdtemp, readFile, rename, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
 export const EXAMPLES_INDEX = 'https://raw.githubusercontent.com/openfilm/examples/main/examples.json';
@@ -115,4 +116,38 @@ export async function listExamples({ source = process.env.OPENFILM_EXAMPLES_INDE
   } catch { /* offline, private, or not an index: none */ }
   cache.set(source, { at: Date.now(), ok, examples });
   return examples;
+}
+
+const DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * An example's folder on this computer, for an agent to read how it is made (a part of it pointed at from the chat):
+ * fetched from its repository into Studio's cache (`<home>/cache/examples/<id>`, fetched again after a day), or, for an
+ * index read from a file, its folder beside the index. Throws when there is no such example or it cannot be fetched.
+ * @param {string} id
+ * @param {{ home: string, source?: string, fetchFolder: (url: string, into: string) => Promise<string>, now?: () => number }} options
+ *   `fetchFolder`: a repository folder's address fetched into a folder (fetch-repo.mjs), → where it landed
+ */
+export async function exampleFolder(id, { home, source = process.env.OPENFILM_EXAMPLES_INDEX || EXAMPLES_INDEX, fetchFolder, now = Date.now }) {
+  if (!repoPath(id) || id.includes('/')) throw new Error('There is no such example.');
+  if (!/^https?:\/\//.test(source)) {
+    const dir = join(dirname(source), id);
+    if (existsSync(join(dir, 'film.html'))) return dir;
+    throw new Error('There is no such example.');
+  }
+  const example = (await listExamples({ source })).find((e) => e.id === id);
+  if (!example) throw new Error('There is no such example.');
+  const cache = join(home, 'cache', 'examples');
+  const dir = join(cache, id);
+  try { if (now() - statSync(dir).mtimeMs < DAY && existsSync(join(dir, 'film.html'))) return dir; } catch { /* not kept yet */ }
+  await mkdir(cache, { recursive: true });
+  const work = await mkdtemp(join(cache, `.${id}-`));
+  try {
+    const landed = await fetchFolder(example.url, work);
+    await rm(dir, { recursive: true, force: true });
+    await rename(landed, dir);
+    return dir;
+  } finally {
+    await rm(work, { recursive: true, force: true }).catch(() => {});
+  }
 }

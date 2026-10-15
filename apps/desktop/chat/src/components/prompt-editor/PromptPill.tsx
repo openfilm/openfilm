@@ -12,7 +12,7 @@
 
 import React from 'react';
 import {
-  Blocks, Brackets, Captions, Clock3, Crop, Film, Mic, MousePointer2, Music, Paperclip,
+  Blocks, Brackets, Captions, Clapperboard, Clock3, Crop, Film, Mic, MousePointer2, Music, Paperclip,
   Quote, Rows3, Shapes, SquareDashed, Video, Waves,
 } from 'lucide-react';
 import {
@@ -43,6 +43,8 @@ export const PILL_ICON: Record<PromptReferenceKind, React.ComponentType<{ size?:
   /* A skill: blocks, a piece of craft inserted into the sentence. Other pills point at
      things in the film; this one points at a way of working. */
   skill: Blocks,
+  /* An example film (another film, not this one): a clapperboard. */
+  example: Clapperboard,
   /* Timeline clips: the icon follows the clip's kind on the timeline, so the pill
      matches the clip the user just picked. */
   clipMg: Shapes,

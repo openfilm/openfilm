@@ -50,3 +50,31 @@ test('the index from a file on this computer, or from an address; one that canno
   const notFound = /** @type {typeof fetch} */ (async () => new Response('', { status: 404 }));
   assert.deepEqual(await listExamples({ source: 'https://example.test/b.json', fetchImpl: notFound }), []);
 });
+
+test('an example\'s folder: beside a local index, or fetched into the cache and kept a day', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync, existsSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { exampleFolder } = await import('./examples.mjs');
+  const root = mkdtempSync(join(tmpdir(), 'of-example-'));
+  mkdirSync(join(root, 'intro'));
+  writeFileSync(join(root, 'intro', 'film.html'), '<!doctype html>');
+  writeFileSync(join(root, 'examples.json'), JSON.stringify({ examples: [{ folder: 'intro', title: 'Intro' }] }));
+  const fetchFolder = async () => { throw new Error('not fetched'); };
+  assert.equal(await exampleFolder('intro', { home: root, source: join(root, 'examples.json'), fetchFolder }), join(root, 'intro'));
+  await assert.rejects(exampleFolder('../intro', { home: root, source: join(root, 'examples.json'), fetchFolder }), /no such example/);
+  /* from a repository: fetched once, then the copy kept */
+  let fetched = 0;
+  const index = 'https://index.test/examples.json';
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ repo: 'https://github.com/a/b', examples: [{ folder: 'intro', title: 'Intro' }] }) });
+  await listExamples({ source: index, fetchImpl });
+  const fromRepo = async (url, into) => { fetched++; assert.equal(url, 'https://github.com/a/b/tree/main/intro'); const d = join(into, 'intro'); mkdirSync(d); writeFileSync(join(d, 'film.html'), 'x'); return d; };
+  const home = join(root, 'home');
+  const dir = await exampleFolder('intro', { home, source: index, fetchFolder: fromRepo });
+  assert.equal(dir, join(home, 'cache', 'examples', 'intro'));
+  assert.ok(existsSync(join(dir, 'film.html')));
+  await exampleFolder('intro', { home, source: index, fetchFolder: fromRepo });
+  assert.equal(fetched, 1, 'kept');
+  await exampleFolder('intro', { home, source: index, fetchFolder: fromRepo, now: () => Date.now() + 2 * 24 * 3600 * 1000 });
+  assert.equal(fetched, 2, 'a day on: fetched again');
+});
