@@ -834,7 +834,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
             <Plus size={16} strokeWidth={1.75} />
           </button>
         </Tooltip>
-        {app.skills ? <SkillsPopover project={project.path} agent={agent} agentName={agentName} listing={skillListing} reload={reloadSkills} onPick={pickSkill} /> : null}
+        {app.skills ? <SkillsPopover agentName={agentName} listing={skillListing} reload={reloadSkills} onPick={pickSkill} /> : null}
         <Tooltip label={t('project.assets')}>
           <button type="button" onClick={() => app.setAssetsOpen(!assetsOpen)} aria-pressed={assetsOpen} className="openfilm-composer-tool" aria-label={t('project.assets')}>
             <LibraryBig size={16} strokeWidth={1.75} />

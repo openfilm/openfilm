@@ -649,7 +649,7 @@ export class AgentSession {
    * @param {{ agent: string, cwd: string, resume?: string | null, binDir?: string | null, fallbackDir?: string | null,
    *           harness?: any,
    *           env?: Record<string, string>, logDir?: string | null,
-   *           skills?: { dataDir: string, openfilmHome?: string, allowed?: string[], mcpAllowed?: string[] } | null,
+   *           skills?: { dataDir: string, mine?: string, allowed?: string[], mcpAllowed?: string[] } | null,
    *           onUpdate?: (update: any) => void, onPermission?: (params: any) => Promise<string | null>,
    *           onQuestion?: (ask: { message: string, toolCallId: string | null, questions: any[] }) => Promise<Record<string, { label?: string, text?: string }> | null>,
    *           onExit?: (info: { code: number | null, stderr: string }) => void,

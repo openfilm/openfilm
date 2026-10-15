@@ -1505,6 +1505,11 @@ export const ja: Words = {
       mcpDone: '完了',
       mcpNote: '{agent} に自分で追加した MCP サーバーは、オンにするまで OpenFilm では使いません。{agent} 自身のものは常に使えます。',
       mcpAllow: 'OpenFilm で {name} を使う',
+      skillsSummary: 'あなたのスキル：{n} 個のうち {on} 個を OpenFilm で使用',
+      skillsNote: '{agent} に自分で入れたスキルは、毎回同じように仕上がるよう、オンにするまで OpenFilm では使いません。{agent} 自身のものは常に使えます。',
+      skillsAllow: 'OpenFilm で {name} を使う',
+      skillsUnfiltered: '{agent} は本来のアプリと同じく、OpenFilm でも自分のスキル {n} 個をすべて使います。',
+      mcpUnfiltered: '{agent} は本来のアプリと同じく、OpenFilm でも自分の MCP サーバー {n} 個をすべて使います。',
     },
     developer: {
       intro: 'エージェントが何をなぜ行ったかを正確に確かめるためのものです。エージェントの動作は変わりません。',

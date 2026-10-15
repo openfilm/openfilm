@@ -66,7 +66,7 @@ test("the person's own skills, as each agent keeps them, never its maker's", asy
 
 test("Claude Code: OpenFilm's skills as a plugin; the person's own skills and MCP servers off but those let in", async () => {
   const w = world();
-  const s = await sessionSkills('claude', { cwd: w.project, home: w.home, dataDir: w.dataDir, openfilmHome: w.openfilmHome, allowed: ['research'], mcpAllowed: ['notes'] });
+  const s = await sessionSkills('claude', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills'), allowed: ['research'], mcpAllowed: ['notes'] });
   assert.equal(s.claude.plugins[0].type, 'local');
   const dir = s.claude.plugins[0].path;
   assert.deepEqual(JSON.parse(readFileSync(join(dir, '.claude-plugin', 'plugin.json'), 'utf8')).name, 'openfilm');
@@ -80,7 +80,7 @@ test("Claude Code: OpenFilm's skills as a plugin; the person's own skills and MC
 
 test("Codex: each of the person's own not let in turned off by its file, OpenFilm's as an extra folder", async () => {
   const w = world();
-  const s = await sessionSkills('codex', { cwd: w.project, home: w.home, dataDir: w.dataDir, openfilmHome: w.openfilmHome, allowed: ['notes'] });
+  const s = await sessionSkills('codex', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills'), allowed: ['notes'] });
   assert.deepEqual(s.codexConfig.skills.config.map((c) => [c.path.replace(w.home, '~'), c.enabled]),
     [['~/.codex/skills/old-openfilm/SKILL.md', false], ['~/.codex/plugins/cache/someone/pets/0.1/skills/pet/SKILL.md', false]]);
   assert.equal(s.codexConfig['mcp_servers.my-db.enabled'], false, 'the person\'s server turned off by itself, the rest of it left');
@@ -91,31 +91,42 @@ test("Codex: each of the person's own not let in turned off by its file, OpenFil
 
 test("OpenCode: every skill denied but its own, OpenFilm's and those let in; Pi: OpenFilm's only; the others unfiltered", async () => {
   const w = world();
-  const oc = await sessionSkills('opencode', { cwd: w.project, home: w.home, dataDir: w.dataDir, openfilmHome: w.openfilmHome, allowed: ['research'] });
+  const oc = await sessionSkills('opencode', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills'), allowed: ['research'] });
   const config = JSON.parse(oc.env.OPENCODE_CONFIG_CONTENT);
   assert.deepEqual(config.permission.skill, { '*': 'deny', 'customize-opencode': 'allow', brand: 'allow', 'lyric-pv': 'allow', research: 'allow' });
   assert.deepEqual(config.mcp, { search: { enabled: false } });
   assert.match(config.skills.paths[0], /agent-skills\/.+\/skills$/);
-  const pi = await sessionSkills('byok', { cwd: w.project, home: w.home, dataDir: w.dataDir, openfilmHome: w.openfilmHome });
+  const pi = await sessionSkills('byok', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills') });
   assert.deepEqual(pi.piSkills.names, ['brand', 'lyric-pv']);
-  const kimi = await sessionSkills('kimi', { cwd: w.project, home: w.home, dataDir: w.dataDir, openfilmHome: w.openfilmHome });
+  const kimi = await sessionSkills('kimi', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills') });
   assert.deepEqual(kimi.log, { openfilm: ['brand', 'lyric-pv'], allowed: [], mcpAllowed: [], filtered: false, mcpFiltered: false });
   assert.equal(readlinkSync(join(pi.piSkills.paths[0], 'brand')), join(w.project, 'skills', 'brand'));
 });
 
+test("OpenFilm's own skill for terminal agents is known, never offered, and always off in the app", async () => {
+  const w = world();
+  skill(join(w.home, '.claude', 'skills', 'openfilm'), 'openfilm', 'Make videos as web pages with OpenFilm.');
+  const own = await ownSkills('claude', { cwd: w.project, home: w.home });
+  assert.equal(own.find((s) => s.name === 'openfilm')?.ours, true);
+  assert.equal(own.find((s) => s.name === 'research')?.ours, undefined);
+  const s = await sessionSkills('claude', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills'), allowed: ['openfilm', 'research'] });
+  assert.equal(s.claude.settings.skillOverrides.openfilm, 'off', 'off even when it was let in');
+  assert.equal(s.claude.settings.skillOverrides.research, undefined);
+});
+
 test('Qwen Code and Gemini CLI: a system-defaults file of the app\'s; Copilot: OpenFilm\'s folder and its servers off', async () => {
   const w = world();
-  const qwen = await sessionSkills('qwen', { cwd: w.project, home: w.home, dataDir: w.dataDir, openfilmHome: w.openfilmHome });
+  const qwen = await sessionSkills('qwen', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills') });
   const q = JSON.parse(readFileSync(qwen.env.QWEN_CODE_SYSTEM_DEFAULTS_PATH, 'utf8'));
   assert.deepEqual(q.mcp, { excluded: ['qtool'] });
   assert.match(q.skills.directories[0], /agent-skills\/.+\/skills$/);
-  const gemini = await sessionSkills('gemini', { cwd: w.project, home: w.home, dataDir: w.dataDir, openfilmHome: w.openfilmHome });
+  const gemini = await sessionSkills('gemini', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills') });
   const g = JSON.parse(readFileSync(gemini.env.GEMINI_CLI_SYSTEM_DEFAULTS_PATH, 'utf8'));
   assert.deepEqual(g, { skills: { disabled: ['gem-notes', 'notes'] }, mcp: { excluded: ['gtool'] } }, 'no other skills folder for it to take');
   const own = await sessionSkills('gemini', { cwd: w.project, home: w.home, dataDir: w.dataDir, env: { GEMINI_CLI_SYSTEM_DEFAULTS_PATH: '/theirs.json' } });
   assert.equal(own.env, undefined, 'a defaults file of the person\'s own is left as it is');
   assert.equal(own.log.filtered, false);
-  const copilot = await sessionSkills('copilot', { cwd: w.project, home: w.home, dataDir: w.dataDir, openfilmHome: w.openfilmHome, env: { COPILOT_SKILLS_DIRS: '/mine' } });
+  const copilot = await sessionSkills('copilot', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills'), env: { COPILOT_SKILLS_DIRS: '/mine' } });
   assert.match(copilot.env.COPILOT_SKILLS_DIRS, /^\/mine,.+\/skills$/);
   assert.deepEqual(copilot.args, ['--disable-mcp-server', 'ctool']);
   assert.deepEqual(copilot.log.hidden, [], 'Copilot cannot hide a skill: it keeps the person\'s');

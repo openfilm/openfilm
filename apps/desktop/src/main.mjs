@@ -9,7 +9,7 @@
  */
 import { BaseWindow, Menu, WebContentsView, app, dialog, ipcMain, nativeTheme, safeStorage, screen, shell } from 'electron';
 import { appendFileSync, createReadStream, existsSync, mkdirSync, statSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { FLAVOR, IDENTITY, PRODUCT_NAME } from './flavor.mjs';
@@ -298,6 +298,8 @@ async function start() {
     log,
   });
   /* the agents: Studio's home and library go with them, so the `openfilm` they run finds this window's Studio */
+  /* the person's own skills: Skills/ beside this app's projects (~/Movies/OpenFilm/Skills), as its `openfilm` finds them */
+  const mySkills = process.env.OPENFILM_SKILLS || (env.OPENFILM_LIBRARY ? join(dirname(env.OPENFILM_LIBRARY), 'Skills') : (await import('openfilm/skills')).mySkillsDir());
   localAgents = registerLocalAgentIpc(ipcMain, {
     trusted: fromPage,
     log,
@@ -312,14 +314,15 @@ async function start() {
     /* Developer mode: an agent whose own record lacks what its model got logs it here (agent-logs.mjs) */
     logDir: () => (readPreferences(DATA).developer ? join(DATA, 'agent-logs') : null),
     /* each session's skills: its maker's, OpenFilm's, and of the person's own those let in (agent-skills.mjs) */
-    skills: { dataDir: DATA, openfilmHome: env.OPENFILM_HOME },
+    skills: { dataDir: DATA, mine: mySkills },
   });
   /* the composer's Skills button */
   registerSkillsIpc(ipcMain, {
     trusted: fromPage,
     projects: async () => (await studioApi('/api/projects')).projects.filter((p) => !p.missing).map((p) => p.path),
     dataDir: DATA,
-    openfilmHome: env.OPENFILM_HOME,
+    mine: mySkills,
+    oldMine: join(env.OPENFILM_HOME, 'skills'),
     reveal: (path) => { void shell.openPath(path); },
     refreshSkills: (agent) => localAgents?.refreshSkills(agent),
     log,

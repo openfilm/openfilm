@@ -13,8 +13,8 @@
  * tried and used from then on (Find automatically goes back). A connected one keeps the program it found. "Why isn't
  * it found?" says what was searched, with a report to copy.
  *
- * Under a connected agent: the MCP servers the person added to it themselves, each off in the app until let in (its
- * maker's own are always on).
+ * Under a connected agent: the skills and the MCP servers the person added to it themselves, each off in the app until
+ * let in (its maker's own are always on).
  */
 import React from 'react';
 import { Check, Copy, Download, KeyRound, Loader2, Plus, X } from 'lucide-react';
@@ -265,7 +265,7 @@ export function AgentsSection() {
           </>
         )}
       >
-        {agent.status === 'waiting' || open || said || agent.chosen || lost || meter || (chosen && agent.status === 'ready' && host.mcp) ? (
+        {agent.status === 'waiting' || open || said || agent.chosen || lost || meter || (chosen && agent.status === 'ready' && (host.mcp || host.skills)) ? (
           <div className="flex flex-col gap-1.5 pl-[34px]">
             {meter ? (
               <div className="flex flex-col gap-1.5" aria-label={t('settings.agents.usage')}>
@@ -274,7 +274,8 @@ export function AgentsSection() {
                 ) : plan?.windows.map((w) => <UsageBar key={w.kind + (w.minutes ?? '')} window={w} />)}
               </div>
             ) : null}
-            {chosen && agent.status === 'ready' && host.mcp ? <AgentMcp agent={agent} /> : null}
+            {chosen && agent.status === 'ready' && host.skills ? <AgentOwn agent={agent} kind="skills" /> : null}
+            {chosen && agent.status === 'ready' && host.mcp ? <AgentOwn agent={agent} kind="mcp" /> : null}
             {agent.chosen ? (
               <p className="break-all text-[13.5px] leading-relaxed text-[var(--text-muted)]">
                 {t('settings.agents.chosenAt').replace('{path}', agent.chosen)}{' '}
@@ -335,41 +336,53 @@ export function AgentsSection() {
 }
 
 /**
- * The MCP servers the person added to an agent themselves: how many are let into the app, and on asking, a switch for
- * each. None: nothing shown.
+ * What the person added to an agent themselves, its skills or its MCP servers: how many are used in the app, and on
+ * asking, a switch for each (its maker's own are always on). An agent that cannot be told says it uses them all.
+ * None: nothing shown.
  */
-function AgentMcp({ agent }: { agent: HostAgent }) {
+function AgentOwn({ agent, kind }: { agent: HostAgent; kind: 'skills' | 'mcp' }) {
   const t = useT();
   const host = studioHost?.agents;
-  const [listing, setListing] = React.useState<{ filtered: boolean; servers: Array<{ name: string; detail: string; allowed: boolean }> } | null>(null);
+  type Item = { name: string; detail: string; allowed: boolean };
+  const [listing, setListing] = React.useState<{ filtered: boolean; items: Item[] } | null>(null);
   const [open, setOpen] = React.useState(false);
-  const load = React.useCallback(() => { void host?.mcp?.(agent.id).then(setListing).catch(() => {}); }, [host, agent.id]);
+  const load = React.useCallback(() => {
+    const read = kind === 'skills'
+      ? host?.skills?.(agent.id).then((r) => ({ filtered: r.filtered, items: r.skills.map((s) => ({ name: s.name, detail: s.description, allowed: s.allowed })) }))
+      : host?.mcp?.(agent.id).then((r) => ({ filtered: r.filtered, items: r.servers }));
+    void read?.then(setListing).catch(() => {});
+  }, [host, agent.id, kind]);
   React.useEffect(load, [load]);
-  if (!host?.allowMcp || !listing?.filtered || !listing.servers.length) return null;
-  const on = listing.servers.filter((s) => s.allowed).length;
+  const allowIt = kind === 'skills' ? host?.allowSkill : host?.allowMcp;
+  if (!allowIt || !listing?.items.length) return null;
   const name = agent.id === 'byok' ? t('settings.agents.byokName') : agent.name;
-  const allow = (server: string, allowed: boolean) => {
-    setListing((l) => (l ? { ...l, servers: l.servers.map((s) => (s.name === server ? { ...s, allowed } : s)) } : l));
-    void host.allowMcp!(agent.id, server, allowed).finally(load);
+  const key = (k: string) => t(`settings.agents.${kind}${k}`);
+  if (!listing.filtered) {
+    return <p className="text-[13.5px] leading-relaxed text-[var(--text-muted)]">{key('Unfiltered').replace('{agent}', name).replace('{n}', String(listing.items.length))}</p>;
+  }
+  const on = listing.items.filter((i) => i.allowed).length;
+  const allow = (item: string, allowed: boolean) => {
+    setListing((l) => (l ? { ...l, items: l.items.map((i) => (i.name === item ? { ...i, allowed } : i)) } : l));
+    void allowIt(agent.id, item, allowed).finally(load);
   };
   return (
     <div className="flex flex-col gap-2">
       <p className="text-[13.5px] leading-relaxed text-[var(--text-muted)]">
-        {t('settings.agents.mcpSummary').replace('{n}', String(listing.servers.length)).replace('{on}', String(on))}{' '}
+        {key('Summary').replace('{n}', String(listing.items.length)).replace('{on}', String(on))}{' '}
         <button type="button" onClick={() => setOpen((o) => !o)} className="underline underline-offset-2 hover:text-[var(--text)]">
           {open ? t('settings.agents.mcpDone') : t('settings.agents.mcpManage')}
         </button>
       </p>
       {open ? (
         <SettingsInset>
-          <p className="text-[13px] leading-relaxed text-[var(--text-faint)]">{t('settings.agents.mcpNote').replaceAll('{agent}', name)}</p>
-          {listing.servers.map((server) => (
-            <div key={server.name} className="flex items-center gap-3">
+          <p className="text-[13px] leading-relaxed text-[var(--text-faint)]">{key('Note').replaceAll('{agent}', name)}</p>
+          {listing.items.map((item) => (
+            <div key={item.name} className="flex items-center gap-3">
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[14px] text-[var(--text)]">{server.name}</div>
-                {server.detail ? <div className="truncate text-[12.5px] text-[var(--text-faint)]">{server.detail}</div> : null}
+                <div className="truncate text-[14px] text-[var(--text)]">{item.name}</div>
+                {item.detail ? <div className="line-clamp-2 text-[12.5px] leading-snug text-[var(--text-faint)]">{item.detail}</div> : null}
               </div>
-              <SettingsSwitch checked={server.allowed} label={t('settings.agents.mcpAllow').replace('{name}', server.name)} onChange={(v) => allow(server.name, v)} />
+              <SettingsSwitch checked={item.allowed} label={key('Allow').replace('{name}', item.name)} onChange={(v) => allow(item.name, v)} />
             </div>
           ))}
         </SettingsInset>

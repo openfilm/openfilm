@@ -1506,6 +1506,11 @@ export const zhCN: Words = {
       mcpDone: '完成',
       mcpNote: '你自己给 {agent} 添加的 MCP 服务，在 OpenFilm 里默认不使用，打开开关后才会使用。它自带的服务始终保留。',
       mcpAllow: '在 OpenFilm 里使用 {name}',
+      skillsSummary: '你的 skill：{n} 个，其中 {on} 个在 OpenFilm 里使用',
+      skillsNote: '你自己给 {agent} 装的 skill，在 OpenFilm 里默认不使用，这样每次做出的片子更稳定；打开开关后才会使用。它自带的 skill 始终保留。',
+      skillsAllow: '在 OpenFilm 里使用 {name}',
+      skillsUnfiltered: '{agent} 在 OpenFilm 里会使用你自己的全部 {n} 个 skill，和它自己的应用里一样。',
+      mcpUnfiltered: '{agent} 在 OpenFilm 里会使用你自己的全部 {n} 个 MCP 服务，和它自己的应用里一样。',
     },
     developer: {
       intro: '用来弄清楚智能体到底做了什么、为什么这么做；这里的设置不会改变智能体的行为。',

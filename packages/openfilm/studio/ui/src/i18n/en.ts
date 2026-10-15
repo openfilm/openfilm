@@ -1506,6 +1506,11 @@ export const en = {
       mcpDone: 'Done',
       mcpNote: 'MCP servers you added to {agent} yourself are off in OpenFilm until you turn one on. Its own are always on.',
       mcpAllow: 'Use {name} in OpenFilm',
+      skillsSummary: 'Your skills: {on} of {n} used in OpenFilm',
+      skillsNote: 'Skills you installed in {agent} yourself are off in OpenFilm until you turn one on, so films come out the same each time. Its own are always on.',
+      skillsAllow: 'Use {name} in OpenFilm',
+      skillsUnfiltered: '{agent} uses all {n} of your own skills in OpenFilm, as in its own app.',
+      mcpUnfiltered: '{agent} uses all {n} of your own MCP servers in OpenFilm, as in its own app.',
     },
     developer: {
       intro: 'For finding out exactly what an agent did, and why: nothing here changes what the agents do.',

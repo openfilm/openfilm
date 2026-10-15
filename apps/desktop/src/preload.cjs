@@ -40,6 +40,9 @@ contextBridge.exposeInMainWorld('openfilmNative', {
     removeOwnModel: (id) => ipcRenderer.invoke('desktop:agents:own-model-remove', { id }),
     /* the MCP servers the person added to it themselves, each let into OpenFilm or not (skills-ipc.mjs) */
     mcp: (id) => ipcRenderer.invoke('desktop:agents:mcp', { id }),
+    /* the skills the person installed in it themselves, each let into OpenFilm or not */
+    skills: (id) => ipcRenderer.invoke('desktop:agents:skills', { id }),
+    allowSkill: (id, name, allowed) => ipcRenderer.invoke('desktop:skills:allow', { agent: id, name, allowed: allowed === true }),
     allowMcp: (id, name, allowed) => ipcRenderer.invoke('desktop:agents:mcp-allow', { id, name, allowed: allowed === true }),
     onChange: on('desktop:agents'),
   },
@@ -80,7 +83,9 @@ contextBridge.exposeInMainWorld('openfilmNative', {
     list: (project, agent) => ipcRenderer.invoke('desktop:skills:list', { project, agent }),
     texts: (project, agent, names) => ipcRenderer.invoke('desktop:skills:texts', { project, agent, names }),
     allow: (agent, name, allowed) => ipcRenderer.invoke('desktop:skills:allow', { agent, name, allowed }),
-    add: (url) => ipcRenderer.invoke('desktop:skills:add', { url }),
+    preview: (url) => ipcRenderer.invoke('desktop:skills:preview', { url }),
+    commit: (id) => ipcRenderer.invoke('desktop:skills:commit', { id }),
+    discard: (id) => ipcRenderer.invoke('desktop:skills:discard', { id }),
     reveal: () => ipcRenderer.invoke('desktop:skills:reveal'),
   },
   /* the app's own preferences (Settings → Developer) */

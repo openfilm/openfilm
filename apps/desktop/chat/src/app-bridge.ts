@@ -77,7 +77,10 @@ interface AppBridge {
     texts(project: string, agent: string, names: string[]): Promise<Array<{ name: string; text: string }>>;
     /** one of the agent's own skills let into OpenFilm, or not */
     allow(agent: string, name: string, allowed: boolean): Promise<{ ok: boolean }>;
-    add(url: string): Promise<{ ok: true; skills: SkillInfo[] } | { ok: false; error: string }>;
+    /** a GitHub or GitLab address fetched to be looked at; then kept (`commit`) or let go (`discard`) */
+    preview(url: string): Promise<{ ok: true; id: string; skills: SkillPreview[] } | { ok: false; error: string }>;
+    commit(id: string): Promise<{ ok: true; skills: SkillInfo[] } | { ok: false; error: string }>;
+    discard(id: string): Promise<unknown>;
     reveal(): Promise<unknown>;
   };
   /** Settings → Developer: `logs`, each turn shows its full log; `changes`, what it changed in the files, under its reply */
@@ -97,6 +100,9 @@ export interface SkillInfo {
   /** the places with a skill of the same name it takes the place of */
   over?: Array<'project' | 'mine' | 'official'>;
 }
+
+/** A skill fetched from an address, before it is kept: `replaces`, one of the person's has its name. */
+export interface SkillPreview { name: string; description: string; scripts: string[]; size: number; replaces: boolean }
 
 /** A skill the person installed in their agent themselves, let into OpenFilm or not. */
 export interface OwnSkill { name: string; description: string; folder: string; allowed: boolean }

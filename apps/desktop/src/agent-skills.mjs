@@ -91,9 +91,16 @@ async function skillFolders(dir, { except = [] } = {}) {
     const folder = join(dir, n);
     if (!isDir(folder)) return [];
     const skill = readSkill(folder, 'mine');
-    return skill ? [{ name: skill.name, dirName: n, description: skill.description, folder, file: skill.file }] : [];
+    return skill ? [{ name: skill.name, dirName: n, description: skill.description, folder, file: skill.file, ...(isOurs(skill) ? { ours: true } : {}) }] : [];
   });
 }
+
+/**
+ * OpenFilm's own skill for agents in a terminal (the repository's skills/openfilm: "run `npx openfilm`, read the
+ * manual"), installed in an agent: in the app it is never wanted, as the app tells the agent the same, and its `npx`
+ * would contradict it. Never shown, never let in.
+ */
+export const isOurs = (skill) => skill.name === 'openfilm' && /\bOpenFilm\b/.test(skill.description ?? '');
 /** the folder and each above it, to the root */
 const upFrom = (cwd) => { const out = []; for (let up = resolve(cwd); ; up = dirname(up)) { out.push(up); if (up === dirname(up)) break; } return out; };
 const subdirs = (dir) => { try { return readdirSync(dir); } catch { return []; } };
@@ -236,17 +243,18 @@ function defaultsFile(dir, name, settings) {
  * additionalDirectories?, env?, args?, piSkills?, log }` (agents.mjs puts each where it goes). `log`: what the turn log
  * says of it (agents.mjs `opened.skills`). `allowed`, `mcpAllowed`: the person's own let in, by name.
  * @param {string} agent
- * @param {{ cwd: string, env?: Record<string, string>, dataDir: string, openfilmHome?: string, allowed?: string[],
+ * `mine`: the person's own skills folder (openfilm/skills mySkillsDir).
+ * @param {{ cwd: string, env?: Record<string, string>, dataDir: string, mine?: string, allowed?: string[],
  *   mcpAllowed?: string[], home?: string }} o
  */
-export async function sessionSkills(agent, { cwd, env = {}, dataDir, openfilmHome, allowed = [], mcpAllowed = [], home = homedir() }) {
+export async function sessionSkills(agent, { cwd, env = {}, dataDir, mine, allowed = [], mcpAllowed = [], home = homedir() }) {
   const { listSkills, mySkillsDir } = await skillsLib();
-  const openfilm = listSkills({ project: cwd, mine: openfilmHome ? join(openfilmHome, 'skills') : mySkillsDir() });
+  const openfilm = listSkills({ project: cwd, mine: mine ?? mySkillsDir() });
   const names = openfilm.map((s) => s.name);
   const filtered = FILTERED_AGENTS.includes(agent);
   const base = { openfilm: names, allowed: [...allowed], mcpAllowed: [...mcpAllowed], filtered, mcpFiltered: MCP_AGENTS.includes(agent) };
   if (!filtered && !MCP_AGENTS.includes(agent)) return { log: base };
-  const hidden = filtered && agent !== 'byok' ? (await ownSkills(agent, { cwd, env, home })).filter((s) => !allowed.includes(s.name)) : [];
+  const hidden = filtered && agent !== 'byok' ? (await ownSkills(agent, { cwd, env, home })).filter((s) => s.ours || !allowed.includes(s.name)) : [];
   const mcpHidden = MCP_AGENTS.includes(agent) ? ownMcpServers(agent, { cwd, env, home }).filter((s) => !mcpAllowed.includes(s.name)).map((s) => s.name) : [];
   const dir = linkFolder(join(dataDir, 'agent-skills'), openfilm);
   const log = { ...base, folder: dir, hidden: hidden.map((s) => s.name), mcpHidden };

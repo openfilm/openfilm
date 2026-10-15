@@ -102,12 +102,11 @@ function imageBlocks(images) {
  * each session starts.
  * `onWorking` hears the folders agents are working in (a turn running there) each time they change.
  * `logDir()`, as each session starts: the folder for the logs an agent is started with (Developer mode on), or null.
- * `skills`: where the app keeps its record of skills (`dataDir`) and Studio's home (`openfilmHome`, the person's own
- * skills): each session has its maker's skills and MCP servers, OpenFilm's skills, and of the person's own those let
+ * `skills`: where the app keeps its record of skills (`dataDir`) and the person's own skills (`mine`): each session has its maker's skills and MCP servers, OpenFilm's skills, and of the person's own those let
  * in (agent-skills.mjs).
  * @param {{ trusted: (event: any) => boolean, binDir?: string | null, fallbackDir?: string | null, env?: Record<string, string>,
  *           harness?: (id: string) => Promise<any>, onWorking?: (folders: string[]) => void, logDir?: () => string | null,
- *           skills?: { dataDir: string, openfilmHome?: string } | null }} opts
+ *           skills?: { dataDir: string, mine: string } | null }} opts
  */
 export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbackDir = null, env = {}, harness = async () => null, log = () => {}, onWorking = () => {}, logDir = () => null, skills = null }) {
   const harnessFor = async (agent) => (HARNESS_AGENTS.includes(agent) ? harness(agent) : undefined);

@@ -1505,6 +1505,11 @@ export const es: Words = {
       mcpDone: 'Listo',
       mcpNote: 'Los servidores MCP que añadiste tú a {agent} están desactivados en OpenFilm hasta que actives uno. Los suyos propios siempre están activos.',
       mcpAllow: 'Usar {name} en OpenFilm',
+      skillsSummary: 'Tus skills: {on} de {n} en uso en OpenFilm',
+      skillsNote: 'Las skills que instalaste tú en {agent} están desactivadas en OpenFilm hasta que actives una, para que las películas salgan igual cada vez. Las suyas propias siempre están activas.',
+      skillsAllow: 'Usar {name} en OpenFilm',
+      skillsUnfiltered: '{agent} usa tus {n} skills en OpenFilm, como en su propia app.',
+      mcpUnfiltered: '{agent} usa tus {n} servidores MCP en OpenFilm, como en su propia app.',
     },
     developer: {
       intro: 'Para saber exactamente qué hizo un agente y por qué: nada de esto cambia lo que hacen los agentes.',

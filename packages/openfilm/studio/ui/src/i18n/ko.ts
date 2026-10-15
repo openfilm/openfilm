@@ -1504,6 +1504,11 @@ export const ko: Words = {
       mcpDone: '완료',
       mcpNote: '{agent}에 직접 추가한 MCP 서버는 켜기 전에는 OpenFilm에서 사용하지 않습니다. {agent} 자체 서버는 항상 사용됩니다.',
       mcpAllow: 'OpenFilm에서 {name} 사용',
+      skillsSummary: '내 스킬: {n}개 중 {on}개를 OpenFilm에서 사용',
+      skillsNote: '{agent}에 직접 설치한 스킬은 매번 같은 결과가 나오도록 켜기 전에는 OpenFilm에서 사용하지 않습니다. {agent} 자체 스킬은 항상 사용됩니다.',
+      skillsAllow: 'OpenFilm에서 {name} 사용',
+      skillsUnfiltered: '{agent}는 자체 앱에서처럼 OpenFilm에서도 내 스킬 {n}개를 모두 사용합니다.',
+      mcpUnfiltered: '{agent}는 자체 앱에서처럼 OpenFilm에서도 내 MCP 서버 {n}개를 모두 사용합니다.',
     },
     developer: {
       intro: '에이전트가 무엇을 왜 했는지 정확히 확인하기 위한 기능입니다. 에이전트의 동작은 바뀌지 않습니다.',

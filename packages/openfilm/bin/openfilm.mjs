@@ -34,13 +34,18 @@ const COMMAND_HELP = {
 
   The skills the project around the current folder can be made with: ways of making a kind of film, each a folder with
   a SKILL.md (its name, what it is for, how to work) and the files it brings. Looked for in the project's skills/,
-  then yours (skills/ in OPENFILM_HOME, else ~/.openfilm), then the official ones; the first holding a name wins.`,
+  then yours (Skills/ beside the projects, ~/Movies/OpenFilm/Skills on macOS), then the official ones; the first
+  holding a name wins.`,
   skill: `openfilm skill <name>
 openfilm skill add <GitHub address | folder>
+openfilm skill remove <name>
 
   <name>   print the skill: where its files are, and its SKILL.md whole
   add      add a skill (or a folder of skills) to yours: a folder on this computer, or a repository or a folder in one
-           on github.com or gitlab.com, fetched without its git history. One of the same name is replaced.`,
+           on github.com or gitlab.com, fetched without its git history. One of the same name goes to the trash.
+  remove   move one of yours to the trash, where you can take it back
+
+  Yours are kept in Skills/ beside the projects (~/Movies/OpenFilm/Skills on macOS; OPENFILM_SKILLS names another).`,
   update: `openfilm update
 
   The newest OpenFilm from npm, and Studio started again on it once nothing is being exported or made; pages open on

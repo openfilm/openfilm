@@ -91,6 +91,9 @@ export interface StudioHost {
      */
     mcp?: (id: HostAgentId) => Promise<{ filtered: boolean; servers: Array<{ name: string; detail: string; allowed: boolean }> }>;
     allowMcp?: (id: HostAgentId, name: string, allowed: boolean) => Promise<unknown>;
+    /** The same for the skills the person installed in an agent themselves (OpenFilm's own skill for terminal agents is never among them). */
+    skills?: (id: HostAgentId) => Promise<{ filtered: boolean; skills: Array<{ name: string; description: string; allowed: boolean }> }>;
+    allowSkill?: (id: HostAgentId, name: string, allowed: boolean) => Promise<unknown>;
     onChange: (listener: (agents: HostAgent[]) => void) => () => void;
   };
   /**

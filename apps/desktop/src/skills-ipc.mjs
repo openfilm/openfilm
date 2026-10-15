@@ -1,45 +1,56 @@
 /**
- * The chat's skills (the composer's Skills button): OpenFilm's (the project's, the person's own, the official ones:
- * openfilm/skills) and the skills the person installed in the agent in use, each let into OpenFilm or not
- * (agent-skills.mjs).
+ * The skills and MCP servers the chat and Settings show (apps/desktop/src/agent-skills.mjs, openfilm/skills).
  *
- *   desktop:skills:list    { project, agent } → { openfilm: [Skill], own: { agent, filtered, skills: [OwnSkill] }, mine }
- *                          `filtered`: the agent's own skills are hidden unless let in (agents that cannot be told
- *                          show them all, as in their own terminal)
- *   desktop:skills:texts   { project, agent, names } → [{ name, text }]   skills named in a message, as the agent reads
- *                          each (its folder and its SKILL.md whole)
- *   desktop:skills:allow   { agent, name, allowed } → { ok }   one of the agent's own let into OpenFilm, or not: its
- *                          sessions take it up from their next message
- *   desktop:skills:add     { url } → { ok, skills: [Skill] } | { ok: false, error }   a GitHub or GitLab address (a skill,
- *                          or a folder of skills) added to the person's own
- *   desktop:skills:reveal  the person's own skills folder in the file manager
- *   desktop:agents:mcp     { id } → { filtered, servers: [{ name, detail, allowed }] }   the MCP servers the person added
- *                          to an agent themselves (Settings → Agents), each let into OpenFilm or not
- *   desktop:agents:mcp-allow { id, name, allowed } → { ok }   one let in, or not: the agent's sessions take it up
+ * For the composer's Skills button:
+ *   desktop:skills:list     { project, agent } → { openfilm: [Skill], own: { agent, filtered, skills: [OwnSkill] }, mine }
+ *                           OpenFilm's skills (the project's, the person's own, the official ones), and the agent's
+ *                           own skills with whether each is let in (`filtered` false: it has them all, as in its own
+ *                           terminal). OpenFilm's own skill for terminal agents is never among them (agent-skills isOurs).
+ *   desktop:skills:texts    { project, agent, names } → [{ name, text }]   skills named in a message, as the agent reads
+ *                           each (its folder and its SKILL.md whole)
+ *   desktop:skills:preview  { url } → { ok, id, skills: [{ name, description, scripts, size, replaces }] } | { ok: false, error }
+ *                           a GitHub or GitLab address fetched beside the person's skills, to be looked at first
+ *   desktop:skills:commit   { id } → { ok, skills: [Skill] } | { ok: false, error }   kept: added to the person's own,
+ *                           one of the same name to the trash
+ *   desktop:skills:discard  { id }   let go
+ *   desktop:skills:reveal   the person's own skills folder in the file manager
+ * For Settings → Agents:
+ *   desktop:agents:skills   { id } → { filtered, skills: [{ name, description, allowed }] }   the skills the person
+ *                           installed in an agent, each let into OpenFilm or not
+ *   desktop:skills:allow    { agent, name, allowed } → { ok }   one let in, or not: the agent's sessions take it up
+ *   desktop:agents:mcp      { id } → { filtered, servers: [{ name, detail, allowed }] }   the same for MCP servers
+ *   desktop:agents:mcp-allow { id, name, allowed } → { ok }
  *
- * `project` is a folder Studio has as a project, as for the chat's record (chat-ipc.mjs).
+ * `project` is a folder Studio has as a project, as for the chat's record (chat-ipc.mjs). The person's own skills kept
+ * in Studio's home before are moved beside the projects as this starts (openfilm/skills migrateMySkills).
  * Reads no Electron module, so `node --test` can use it.
  */
-import { mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { join, resolve } from 'node:path';
+import { mkdirSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { FILTERED_AGENTS, MCP_AGENTS, ownMcpServers, ownSkills, skillStore } from './agent-skills.mjs';
 import { loginShellVariables } from './environment.mjs';
 
 const require = createRequire(import.meta.url);
 const lib = () => import(require.resolve('openfilm/skills'));
+const cli = () => import(require.resolve('openfilm/skills-cli'));
 
 /** A skill as the page shows it. */
 const shown = (s) => ({ name: s.name, description: s.description, source: s.source, folder: s.folder, scripts: s.scripts ?? [], ...(s.over ? { over: s.over } : {}) });
 
 /**
  * @param {import('electron').IpcMain} ipcMain
- * @param {{ trusted: (event: any) => boolean, projects: () => Promise<string[]>, dataDir: string, openfilmHome: string,
- *   reveal: (path: string) => void, refreshSkills: (agent: string) => void, log: (line: string) => void }} opts
+ * @param {{ trusted: (event: any) => boolean, projects: () => Promise<string[]>, dataDir: string, mine: string,
+ *   oldMine?: string, reveal: (path: string) => void, refreshSkills: (agent: string) => void, log: (line: string) => void }} opts
+ *   `mine`: the person's own skills folder; `oldMine`: where they were kept before, moved from as this starts
  */
-export function registerSkillsIpc(ipcMain, { trusted, projects, dataDir, openfilmHome, reveal, refreshSkills, log }) {
+export function registerSkillsIpc(ipcMain, { trusted, projects, dataDir, mine, oldMine, reveal, refreshSkills, log }) {
   const store = skillStore(dataDir);
-  const mine = join(openfilmHome, 'skills');
+  if (oldMine) void lib().then(({ migrateMySkills }) => {
+    const moved = migrateMySkills({ from: oldMine, to: mine });
+    if (moved.length) log(`skills moved to ${mine}: ${moved.join(', ')}\n`);
+  }).catch((e) => log(`skills: ${e.message}\n`));
   let known = new Set();
   const project = async (path) => {
     if (typeof path !== 'string' || !path) return null;
@@ -52,8 +63,9 @@ export function registerSkillsIpc(ipcMain, { trusted, projects, dataDir, openfil
     if (!trusted(event)) throw new Error('not the window\'s page');
     try { return await fn(opts ?? {}); } catch (e) { log(`${channel}: ${e.message}\n`); throw e; }
   });
-  /* the person's own skills in the agent: hidden in OpenFilm unless let in where the agent can be told, else all used */
-  const agentOwn = async (agent, cwd) => (agent && agent !== 'byok' ? ownSkills(agent, { cwd: cwd ?? '', env: await loginShellVariables({ staleOk: true }) }) : []);
+  /* the skills the person installed in the agent (OpenFilm's own for terminal agents never among them) */
+  const agentOwn = async (agent, cwd) => (agent && agent !== 'byok'
+    ? (await ownSkills(agent, { cwd: cwd ?? '', env: await loginShellVariables({ staleOk: true }) })).filter((s) => !s.ours) : []);
 
   handle('desktop:skills:list', async ({ project: path, agent }) => {
     const cwd = await project(path);
@@ -78,23 +90,50 @@ export function registerSkillsIpc(ipcMain, { trusted, projects, dataDir, openfil
     });
   });
 
+  /* adding from an address: fetched and looked at, then kept or let go; each fetch waiting by its id */
+  const waiting = new Map();
+  handle('desktop:skills:preview', async ({ url }) => {
+    const address = String(url ?? '').trim();
+    if (!/^https:\/\//i.test(address)) return { ok: false, error: 'Paste the https address of a skill on GitHub or GitLab.' };
+    try {
+      const { previewSkills } = await cli();
+      const { staging, skills } = await previewSkills(address, { mine });
+      const id = randomUUID();
+      waiting.set(id, staging);
+      return { ok: true, id, skills: skills.map((s) => ({ name: s.name, description: s.description, scripts: s.scripts, size: s.size, replaces: s.replaces })) };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+  handle('desktop:skills:commit', async ({ id }) => {
+    const staging = waiting.get(id);
+    waiting.delete(id);
+    if (!staging) return { ok: false, error: 'Nothing is waiting to be added.' };
+    try {
+      const { commitSkills } = await cli();
+      return { ok: true, skills: (await commitSkills(staging, { mine })).map(shown) };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+  handle('desktop:skills:discard', async ({ id }) => {
+    const staging = waiting.get(id);
+    waiting.delete(id);
+    if (staging) await (await cli()).discardSkills(staging, { mine });
+    return { ok: true };
+  });
+
+  handle('desktop:agents:skills', async ({ id }) => {
+    const agent = String(id ?? '');
+    const allowed = new Set(store.allowed(agent));
+    return { filtered: FILTERED_AGENTS.includes(agent), skills: (await agentOwn(agent, '')).map((s) => ({ name: s.name, description: s.description, allowed: allowed.has(s.name) })) };
+  });
+
   handle('desktop:skills:allow', async ({ agent, name, allowed }) => {
     if (typeof agent !== 'string' || typeof name !== 'string' || !name) return { ok: false };
     store.setAllowed(agent, name, allowed === true);
     refreshSkills(agent);
     return { ok: true };
-  });
-
-  handle('desktop:skills:add', async ({ url }) => {
-    const { addSkillFrom } = await import(require.resolve('openfilm/skills-cli'));
-    const address = String(url ?? '').trim();
-    /* a web address only: a folder on this computer is put in the skills folder by the person themselves */
-    if (!/^https:\/\//i.test(address)) return { ok: false, error: 'Paste the https address of a skill on GitHub or GitLab.' };
-    try {
-      return { ok: true, skills: (await addSkillFrom(address, { mine })).map(shown) };
-    } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : String(e) };
-    }
   });
 
   handle('desktop:agents:mcp', async ({ id }) => {

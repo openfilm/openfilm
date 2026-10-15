@@ -7,17 +7,33 @@
  *
  * Three places hold them, the first a name is found in winning:
  *   project    `<project>/skills/<name>/`, kept with the project, so a film carries the ways it was made
- *   mine       `skills/` in Studio's home (OPENFILM_HOME, else ~/.openfilm): the person's own, and those they added
+ *   mine       `Skills/` beside the projects library (~/Movies/OpenFilm/Skills on macOS, ~/Videos/OpenFilm/Skills
+ *              elsewhere; OPENFILM_SKILLS to name another): the person's own, and those they added. In sight beside
+ *              their Projects and Exports, backed up with them, and never in Studio's own folder, which a reset clears.
+ *              Skills kept in Studio's home before (~/.openfilm/skills) are moved there (migrateMySkills).
  *   official   `skills/` in this package, released with OpenFilm
+ *
+ * Nothing here deletes a skill outright: one replaced or removed goes to the system's trash.
  *
  * `openfilm skills` lists them and `openfilm skill <name>` prints one, as `openfilm` prints the manual: that is how any
  * agent reads a skill. The desktop app's chat offers the same list (apps/desktop).
  */
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { cp, mkdir, rename, rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { moveToTrash } from '../studio/server/trash.mjs';
+
+const mkdirSyncSafe = (/** @type {string} */ dir) => mkdirSync(dir, { recursive: true });
+/** a folder moved to another place: renamed, else (another disk) copied and then removed */
+function renameSyncSafe(/** @type {string} */ from, /** @type {string} */ to) {
+  try { renameSync(from, to); } catch (e) {
+    if (/** @type {any} */ (e)?.code !== 'EXDEV') throw e;
+    cpSync(from, to, { recursive: true });
+    rmSync(from, { recursive: true, force: true });
+  }
+}
 
 export const SKILL_FILE = 'SKILL.md';
 /** The project's own skills, beside film.html. */
@@ -28,8 +44,45 @@ export const SKILL_SOURCES = /** @type {const} */ (['project', 'mine', 'official
 
 /** The official skills, released with this package. */
 export const officialSkillsDir = () => join(dirname(fileURLToPath(import.meta.url)), '..', 'skills');
-/** The person's own skills: `skills/` in Studio's home (studio/server/projects.mjs studioHome). */
-export const mySkillsDir = () => join(process.env.OPENFILM_HOME || join(homedir(), '.openfilm'), 'skills');
+/**
+ * The person's own skills: OPENFILM_SKILLS, else `Skills/` beside the projects library (OPENFILM_LIBRARY, else
+ * ~/Movies/OpenFilm/Projects on macOS, ~/Videos/OpenFilm/Projects elsewhere: studio/server/projects.mjs libraryRoot).
+ */
+export const mySkillsDir = () => process.env.OPENFILM_SKILLS
+  || join(dirname(process.env.OPENFILM_LIBRARY || join(homedir(), process.platform === 'darwin' ? 'Movies' : 'Videos', 'OpenFilm', 'Projects')), 'Skills');
+/** Where the person's own skills were kept before: `skills/` in Studio's home. */
+export const oldSkillsDir = () => join(process.env.OPENFILM_HOME || join(homedir(), '.openfilm'), 'skills');
+
+/** A note left where the skills were, saying where they went. */
+const MOVED_NOTE = 'README.txt';
+
+/**
+ * Move the person's own skills from where they were kept before (Studio's home) to their place beside the projects.
+ * Each skill whose name is free there goes; one whose name is taken stays, and the note left says so. Run whenever the
+ * skills are listed; it does nothing once they have moved. → the names moved.
+ * @param {{ from?: string, to?: string }} [where]
+ */
+export function migrateMySkills({ from = oldSkillsDir(), to = mySkillsDir() } = {}) {
+  if (resolve(from) === resolve(to) || !existsSync(from)) return [];
+  const waiting = skillsIn(from, 'mine');
+  if (!waiting.length) return [];
+  /** @type {string[]} */
+  const moved = [];
+  /** @type {string[]} */
+  const kept = [];
+  try { mkdirSyncSafe(to); } catch { return []; }
+  for (const skill of waiting) {
+    const target = join(to, basename(skill.folder));
+    if (existsSync(target)) { kept.push(basename(skill.folder)); continue; }
+    try { renameSyncSafe(skill.folder, target); moved.push(skill.name); } catch { kept.push(basename(skill.folder)); }
+  }
+  try {
+    writeFileSync(join(from, MOVED_NOTE), `Your OpenFilm skills are kept in ${to} now.
+${kept.length ? `These stayed here, as a skill of the same name is there: ${kept.join(', ')}.
+` : ''}`);
+  } catch { /* the note is only a courtesy */ }
+  return moved;
+}
 
 /** a skill's name, as the format allows it: lowercase letters, digits and dashes */
 export const SKILL_NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
@@ -177,12 +230,41 @@ export async function addSkills(from, { mine = mySkillsDir(), move = false } = {
     await rm(staging, { recursive: true, force: true });
     if (move && found.length === 1) await rename(skill.folder, staging);
     else await cp(skill.folder, staging, { recursive: true, filter: (p) => basename(p) !== '.git' });
-    await rm(to, { recursive: true, force: true });
+    /* one of the same name is replaced: the one there goes to the trash, never deleted */
+    if (existsSync(to)) await moveToTrash(to);
     await rename(staging, to);
     const kept = readSkill(to, 'mine');
     if (kept) added.push(kept);
   }
   return added;
+}
+
+/**
+ * Remove one of the person's own skills: to the system's trash, where it can be taken back. → whether it was there.
+ * @param {string} name @param {{ mine?: string }} [where]
+ */
+export async function removeSkill(name, { mine = mySkillsDir() } = {}) {
+  const skill = skillsIn(mine, 'mine').find((s) => s.name === name);
+  if (!skill || resolve(dirname(skill.folder)) !== resolve(mine)) return false;
+  await moveToTrash(skill.folder);
+  return true;
+}
+
+/** How many bytes a folder holds (its .git left out). @param {string} dir */
+export function folderSize(dir) {
+  let total = 0;
+  const walk = (/** @type {string} */ d) => {
+    let entries = [];
+    try { entries = readdirSync(d, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (e.name === '.git') continue;
+      const p = join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else { try { total += statSync(p).size; } catch { /* gone */ } }
+    }
+  };
+  walk(dir);
+  return total;
 }
 
 /** Whether a folder holds a skill, or skills (each a folder with a SKILL.md, or under skills/). @param {string} dir */
