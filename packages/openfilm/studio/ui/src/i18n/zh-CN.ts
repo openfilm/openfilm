@@ -1501,6 +1501,11 @@ export const zhCN: Words = {
       save: '检查并保存',
       checkingKey: '正在检查…',
       cancel: '取消',
+      mcpSummary: '你的 MCP 服务：{n} 个，其中 {on} 个在 OpenFilm 里使用',
+      mcpManage: '选择',
+      mcpDone: '完成',
+      mcpNote: '你自己给 {agent} 添加的 MCP 服务，在 OpenFilm 里默认不使用，打开开关后才会使用。它自带的服务始终保留。',
+      mcpAllow: '在 OpenFilm 里使用 {name}',
     },
     developer: {
       intro: '用来弄清楚智能体到底做了什么、为什么这么做；这里的设置不会改变智能体的行为。',

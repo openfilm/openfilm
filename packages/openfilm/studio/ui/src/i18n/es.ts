@@ -1500,6 +1500,11 @@ export const es: Words = {
       save: 'Comprobar y guardar',
       checkingKey: 'Comprobando…',
       cancel: 'Cancelar',
+      mcpSummary: 'Tus servidores MCP: {on} de {n} en uso en OpenFilm',
+      mcpManage: 'Elegir',
+      mcpDone: 'Listo',
+      mcpNote: 'Los servidores MCP que añadiste tú a {agent} están desactivados en OpenFilm hasta que actives uno. Los suyos propios siempre están activos.',
+      mcpAllow: 'Usar {name} en OpenFilm',
     },
     developer: {
       intro: 'Para saber exactamente qué hizo un agente y por qué: nada de esto cambia lo que hacen los agentes.',

@@ -1499,6 +1499,11 @@ export const ko: Words = {
       save: '확인 후 저장',
       checkingKey: '확인 중…',
       cancel: '취소',
+      mcpSummary: '내 MCP 서버: {n}개 중 {on}개를 OpenFilm에서 사용',
+      mcpManage: '선택',
+      mcpDone: '완료',
+      mcpNote: '{agent}에 직접 추가한 MCP 서버는 켜기 전에는 OpenFilm에서 사용하지 않습니다. {agent} 자체 서버는 항상 사용됩니다.',
+      mcpAllow: 'OpenFilm에서 {name} 사용',
     },
     developer: {
       intro: '에이전트가 무엇을 왜 했는지 정확히 확인하기 위한 기능입니다. 에이전트의 동작은 바뀌지 않습니다.',

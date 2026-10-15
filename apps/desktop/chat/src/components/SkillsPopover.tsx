@@ -23,13 +23,13 @@ const ROW = 'flex w-full items-start gap-2.5 rounded-[8px] px-2.5 py-[7px] text-
 /** A skill named in a message, as its pill. */
 export interface PickedSkill { name: string; description: string }
 
-/** A small on/off switch. */
+/** A small on/off switch, drawn as Studio's settings draw theirs. */
 function Switch({ on, label, onChange }: { on: boolean; label: string; onChange: (on: boolean) => void }) {
   return (
-    <button type="button" role="switch" aria-checked={on} aria-label={label} onMouseDown={keepFocus}
+    <button type="button" role="switch" aria-checked={on} aria-label={label} title={label} onMouseDown={keepFocus}
       onClick={(e) => { e.stopPropagation(); onChange(!on); }}
-      className={`relative mt-[1px] inline-flex h-[18px] w-[30px] shrink-0 items-center rounded-full transition-colors duration-150 ${on ? 'bg-[var(--accent,#3b82f6)]' : 'bg-[var(--surface-3)]'}`}>
-      <span className={`inline-block h-[14px] w-[14px] rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.25)] transition-transform duration-150 ${on ? 'translate-x-[14px]' : 'translate-x-[2px]'}`} />
+      className={`relative mt-[1px] h-[18px] w-[30px] shrink-0 rounded-full transition-colors duration-150 ${on ? 'bg-[var(--text)]' : 'bg-[var(--surface-3)]'}`}>
+      <span className={`absolute top-[2px] h-[14px] w-[14px] rounded-full bg-[var(--bg)] shadow-[0_1px_2px_rgba(0,0,0,0.2)] transition-all duration-150 ${on ? 'left-[14px]' : 'left-[2px]'}`} />
     </button>
   );
 }

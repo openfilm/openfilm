@@ -85,6 +85,12 @@ export interface StudioHost {
      */
     saveOwnModel: (config: HostOwnModelConfig) => Promise<{ ok: true; id: string } | { ok: false; error: string; code?: string }>;
     removeOwnModel: (id: string) => Promise<unknown>;
+    /**
+     * The MCP servers the person added to an agent themselves (its maker's not among them), each let into the app or
+     * not: hidden there until let in. `filtered` false: the agent cannot be told, and has them all.
+     */
+    mcp?: (id: HostAgentId) => Promise<{ filtered: boolean; servers: Array<{ name: string; detail: string; allowed: boolean }> }>;
+    allowMcp?: (id: HostAgentId, name: string, allowed: boolean) => Promise<unknown>;
     onChange: (listener: (agents: HostAgent[]) => void) => () => void;
   };
   /**

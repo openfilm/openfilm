@@ -1500,6 +1500,11 @@ export const ja: Words = {
       save: '確認して保存',
       checkingKey: '確認中…',
       cancel: 'キャンセル',
+      mcpSummary: 'あなたの MCP サーバー：{n} 個のうち {on} 個を OpenFilm で使用',
+      mcpManage: '選ぶ',
+      mcpDone: '完了',
+      mcpNote: '{agent} に自分で追加した MCP サーバーは、オンにするまで OpenFilm では使いません。{agent} 自身のものは常に使えます。',
+      mcpAllow: 'OpenFilm で {name} を使う',
     },
     developer: {
       intro: 'エージェントが何をなぜ行ったかを正確に確かめるためのものです。エージェントの動作は変わりません。',

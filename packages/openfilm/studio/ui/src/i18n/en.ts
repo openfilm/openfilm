@@ -1501,6 +1501,11 @@ export const en = {
       save: 'Check and save',
       checkingKey: 'Checking…',
       cancel: 'Cancel',
+      mcpSummary: 'Your MCP servers: {on} of {n} used in OpenFilm',
+      mcpManage: 'Choose',
+      mcpDone: 'Done',
+      mcpNote: 'MCP servers you added to {agent} yourself are off in OpenFilm until you turn one on. Its own are always on.',
+      mcpAllow: 'Use {name} in OpenFilm',
     },
     developer: {
       intro: 'For finding out exactly what an agent did, and why: nothing here changes what the agents do.',

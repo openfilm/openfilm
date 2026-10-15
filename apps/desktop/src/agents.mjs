@@ -649,15 +649,15 @@ export class AgentSession {
    * @param {{ agent: string, cwd: string, resume?: string | null, binDir?: string | null, fallbackDir?: string | null,
    *           harness?: any,
    *           env?: Record<string, string>, logDir?: string | null,
-   *           skills?: { dataDir: string, openfilmHome?: string, allowed?: string[], commands?: string[] | null } | null,
+   *           skills?: { dataDir: string, openfilmHome?: string, allowed?: string[], mcpAllowed?: string[] } | null,
    *           onUpdate?: (update: any) => void, onPermission?: (params: any) => Promise<string | null>,
    *           onQuestion?: (ask: { message: string, toolCallId: string | null, questions: any[] }) => Promise<Record<string, { label?: string, text?: string }> | null>,
    *           onExit?: (info: { code: number | null, stderr: string }) => void,
    *           onSend?: (sent: { prompt: any[], _meta?: any }) => void }} opts
    * `onSend` hears each message as it goes to the agent, whole (the app's words before the first one's, for an agent
    * told them there); `opened`, once started, says what it was started and opened with.
-   * `skills`: the session has its maker's skills, OpenFilm's, and of the person's own only `allowed`, each agent told by
-   * its own switch (agent-skills.mjs; `commands`, what Claude Code said it has); `opened.skills` says how.
+   * `skills`: the session has its maker's skills and MCP servers, OpenFilm's skills, and of the person's own only those
+   * let in (`allowed`, `mcpAllowed`), each agent told by its own switch (agent-skills.mjs); `opened.skills` says how.
    * `logDir` (Developer mode): an agent whose own record lacks what its model got is started with its own logging
    * switch, writing under this folder (agent-logs.mjs); `opened.log` says where.
    */
@@ -693,7 +693,7 @@ export class AgentSession {
       ...harness.env,
       OPENFILM_GET_WEB: '1',
     };
-    /* its skills: its maker's, OpenFilm's, and the person's own only those let in (agent-skills.mjs) */
+    /* its skills and MCP servers: its maker's, OpenFilm's skills, and the person's own only those let in (agent-skills.mjs) */
     const skills = this.opts.skills
       ? await sessionSkills(this.opts.agent, { cwd: this.opts.cwd, env: shell, ...this.opts.skills }).catch(() => null) : null;
     if (harness) own.OPENFILM_PI = JSON.stringify({ agentDir: harness.home, models: harness.models, model: harness.model, systemPrompt: ownAgentPrompt(), skills: skills?.piSkills ?? null });
@@ -702,7 +702,7 @@ export class AgentSession {
     this.logging = this.opts.logDir && cli && !this.spec.adapter
       ? await logSwitches(this.opts.agent, { base: this.opts.logDir, shell, cwd: this.opts.cwd }).catch(() => null) : null;
     /* an agent that speaks ACP itself: its own program, started as the registry starts it */
-    const native = cli && !this.spec.adapter ? starting(cli.path, [...this.spec.args, ...(this.logging?.args ?? [])]) : null;
+    const native = cli && !this.spec.adapter ? starting(cli.path, [...this.spec.args, ...(this.logging?.args ?? []), ...(skills?.args ?? [])]) : null;
     const extra = { ...this.opts.env, ...(native ? native.env : node.env), ...(cli && this.spec.env ? this.spec.env(cli.path) : {}), ...own, ...skills?.env, ...this.logging?.env };
     /* OpenCode's inline configuration carries both its skills and, in Developer mode, its logging */
     if (skills?.env?.OPENCODE_CONFIG_CONTENT && this.logging?.env?.OPENCODE_CONFIG_CONTENT) {

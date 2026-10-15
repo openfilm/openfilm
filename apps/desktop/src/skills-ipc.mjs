@@ -13,6 +13,9 @@
  *   desktop:skills:add     { url } → { ok, skills: [Skill] } | { ok: false, error }   a GitHub or GitLab address (a skill,
  *                          or a folder of skills) added to the person's own
  *   desktop:skills:reveal  the person's own skills folder in the file manager
+ *   desktop:agents:mcp     { id } → { filtered, servers: [{ name, detail, allowed }] }   the MCP servers the person added
+ *                          to an agent themselves (Settings → Agents), each let into OpenFilm or not
+ *   desktop:agents:mcp-allow { id, name, allowed } → { ok }   one let in, or not: the agent's sessions take it up
  *
  * `project` is a folder Studio has as a project, as for the chat's record (chat-ipc.mjs).
  * Reads no Electron module, so `node --test` can use it.
@@ -20,7 +23,7 @@
 import { mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, resolve } from 'node:path';
-import { FILTERED_AGENTS, ownSkills, skillStore } from './agent-skills.mjs';
+import { FILTERED_AGENTS, MCP_AGENTS, ownMcpServers, ownSkills, skillStore } from './agent-skills.mjs';
 import { loginShellVariables } from './environment.mjs';
 
 const require = createRequire(import.meta.url);
@@ -49,8 +52,8 @@ export function registerSkillsIpc(ipcMain, { trusted, projects, dataDir, openfil
     if (!trusted(event)) throw new Error('not the window\'s page');
     try { return await fn(opts ?? {}); } catch (e) { log(`${channel}: ${e.message}\n`); throw e; }
   });
-  const agentOwn = async (agent, cwd) => (FILTERED_AGENTS.includes(agent) && agent !== 'byok'
-    ? ownSkills(agent, { cwd: cwd ?? '', env: await loginShellVariables({ staleOk: true }) }) : []);
+  /* the person's own skills in the agent: hidden in OpenFilm unless let in where the agent can be told, else all used */
+  const agentOwn = async (agent, cwd) => (agent && agent !== 'byok' ? ownSkills(agent, { cwd: cwd ?? '', env: await loginShellVariables({ staleOk: true }) }) : []);
 
   handle('desktop:skills:list', async ({ project: path, agent }) => {
     const cwd = await project(path);
@@ -92,6 +95,20 @@ export function registerSkillsIpc(ipcMain, { trusted, projects, dataDir, openfil
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
+  });
+
+  handle('desktop:agents:mcp', async ({ id }) => {
+    const agent = String(id ?? '');
+    const allowed = new Set(store.mcpAllowed(agent));
+    const servers = MCP_AGENTS.includes(agent) ? ownMcpServers(agent, { env: await loginShellVariables({ staleOk: true }) }) : [];
+    return { filtered: MCP_AGENTS.includes(agent), servers: servers.map((s) => ({ ...s, allowed: allowed.has(s.name) })) };
+  });
+
+  handle('desktop:agents:mcp-allow', async ({ id, name, allowed }) => {
+    if (typeof id !== 'string' || typeof name !== 'string' || !name) return { ok: false };
+    store.setMcpAllowed(id, name, allowed === true);
+    refreshSkills(id);
+    return { ok: true };
   });
 
   handle('desktop:skills:reveal', async () => {
