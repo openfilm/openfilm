@@ -84,6 +84,14 @@ export const isAgentId = (id) => typeof id === 'string' && Object.hasOwn(AGENTS,
 export const HARNESS_AGENTS = Object.freeze(['byok']);
 export const isChatAgent = (id) => isAgentId(id) || HARNESS_AGENTS.includes(id);
 
+/** How the person points at things in Studio, and how the agent points back: told to every agent, the app's own too. */
+export const STUDIO_REFERENCES = `When the person mentions something in Studio, they may name a clip, a page or a moment (as seconds); find it in
+film.html and the project's files.
+
+In your replies you can point at things in Studio for the person: [[clip:ID]] (a clip, by its id in film.html),
+[[t:SECONDS]] (a moment), [[range:START-END]] (a stretch, in seconds), [[track:N]] (a track, 0 is the first) and
+[[file:PATH]] (a file of the project). They show as links that open it in Studio.`;
+
 /** What the agent is told about where it is, on top of its own instructions. */
 export const INSTRUCTIONS = `You are working inside OpenFilm, a desktop app for making videos. Beside this chat the person sees OpenFilm Studio,
 the video editor, showing the project in your working directory; it updates live as you save files.
@@ -95,30 +103,19 @@ project: you never need \`openfilm open\` and never open Studio in a browser. Ru
 to see what you made. Render the MP4 only when the person asks for it; they can also export from Studio. Reply in the
 language the person writes in.
 
-When the person mentions something in Studio, they may name a clip, a page or a moment (as seconds); find it in
-film.html and the project's files.
-
-In your replies you can point at things in Studio for the person: [[clip:ID]] (a clip, by its id in film.html),
-[[t:SECONDS]] (a moment), [[range:START-END]] (a stretch, in seconds), [[track:N]] (a track, 0 is the first) and
-[[file:PATH]] (a file of the project). They show as links that open it in Studio.`;
+${STUDIO_REFERENCES}`;
 
 /**
- * For the app's own agent, which has no web tools of its own: web search and web pages from a service the person
- * connected (Brave Search or Tavily), like any other media (`openfilm get` lists them for an agent with OPENFILM_GET_WEB=1).
- */
-export const WEB_INSTRUCTIONS = `To search the web, run \`openfilm get web-search --query "…"\`; to read a page, \`openfilm get web-fetch --url …\`
-(it saves the page's text in the project). Both work once the person has connected a web search service (Brave Search
-or Tavily) with their own key; until then, read public pages with \`curl\`.`;
-
-/**
- * The app's own agent's whole system prompt, in place of Pi's (a coding assistant's, with Pi's own docs): who it is
- * and how it works with the person (agent-prompt.md), where it is (INSTRUCTIONS, WEB_INSTRUCTIONS), and the manual
- * `openfilm` prints, so it starts knowing it.
+ * The app's own agent's whole system prompt, in place of Pi's (a coding assistant's, with Pi's own docs): who it is,
+ * where it is and how it works with the person (agent-prompt.md: written for it, so not INSTRUCTIONS, which tell
+ * another agent to go and read the manual), how the person points at Studio (STUDIO_REFERENCES), and the manual
+ * `openfilm` prints, so it starts knowing it. Each thing is said once: what the manual says (`openfilm get`'s
+ * services, rendering, the person's changes) and what Pi's tools say of themselves are not said again.
  */
 export function ownAgentPrompt() {
   const prompt = readFileSync(new URL('./agent-prompt.md', import.meta.url), 'utf8').trim();
   const manual = readFileSync(join(dirname(require.resolve('openfilm/package.json')), 'MANUAL.md'), 'utf8').replaceAll('npx openfilm', 'openfilm').trim();
-  return `${prompt}\n\n## Where you are\n\n${INSTRUCTIONS}\n\n${WEB_INSTRUCTIONS}\n\n<manual>\n${manual}\n</manual>`;
+  return `${prompt}\n\n## Pointing at Studio\n\n${STUDIO_REFERENCES}\n\n<manual>\n${manual}\n</manual>`;
 }
 
 /**
