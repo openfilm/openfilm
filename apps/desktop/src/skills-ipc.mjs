@@ -8,10 +8,12 @@
  *                           terminal). OpenFilm's own skill for terminal agents is never among them (agent-skills isOurs).
  *   desktop:skills:texts    { project, agent, names } → [{ name, text }]   skills named in a message, as the agent reads
  *                           each (its folder and its SKILL.md whole)
- *   desktop:skills:preview  { url } → { ok, id, skills: [{ name, description, scripts, size, replaces }] } | { ok: false, error }
- *                           a GitHub or GitLab address fetched beside the person's skills, to be looked at first
- *   desktop:skills:commit   { id } → { ok, skills: [Skill] } | { ok: false, error }   kept: added to the person's own,
- *                           one of the same name to the trash
+ *   desktop:skills:preview  { url } | { folder } → { ok, id, skills: [{ name, description, scripts, size, replaces }] }
+ *                           | { ok: false, error } | { ok: false, cancelled }   a GitHub or GitLab address fetched beside
+ *                           the person's skills, or a folder on this computer (one dropped, or `folder` null: picked
+ *                           in the system's dialog, with the page's `words` { title, button }) looked at where it is, to be looked at first
+ *   desktop:skills:commit   { id } → { ok, skills: [Skill] } | { ok: false, error }   kept: added to the person's own
+ *                           (a folder copied), one of the same name to the trash
  *   desktop:skills:discard  { id }   let go
  *   desktop:skills:reveal   the person's own skills folder in the file manager
  * For Settings → Agents:
@@ -27,7 +29,7 @@
  */
 import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { isAbsolute, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { FILTERED_AGENTS, MCP_AGENTS, ownMcpServers, ownSkills, skillStore } from './agent-skills.mjs';
 import { loginShellVariables } from './environment.mjs';
@@ -42,10 +44,12 @@ const shown = (s) => ({ name: s.name, description: s.description, source: s.sour
 /**
  * @param {import('electron').IpcMain} ipcMain
  * @param {{ trusted: (event: any) => boolean, projects: () => Promise<string[]>, dataDir: string, mine: string,
- *   oldMine?: string, reveal: (path: string) => void, refreshSkills: (agent: string) => void, log: (line: string) => void }} opts
- *   `mine`: the person's own skills folder; `oldMine`: where they were kept before, moved from as this starts
+ *   oldMine?: string, reveal: (path: string) => void, pickFolder: (words: unknown) => Promise<string | null>,
+ *   refreshSkills: (agent: string) => void, log: (line: string) => void }} opts
+ *   `mine`: the person's own skills folder; `oldMine`: where they were kept before, moved from as this starts;
+ *   `pickFolder`: a folder of skills picked in the system's dialog (null: cancelled)
  */
-export function registerSkillsIpc(ipcMain, { trusted, projects, dataDir, mine, oldMine, reveal, refreshSkills, log }) {
+export function registerSkillsIpc(ipcMain, { trusted, projects, dataDir, mine, oldMine, reveal, pickFolder, refreshSkills, log }) {
   const store = skillStore(dataDir);
   if (oldMine) void lib().then(({ migrateMySkills }) => {
     const moved = migrateMySkills({ from: oldMine, to: mine });
@@ -90,36 +94,48 @@ export function registerSkillsIpc(ipcMain, { trusted, projects, dataDir, mine, o
     });
   });
 
-  /* adding from an address: fetched and looked at, then kept or let go; each fetch waiting by its id */
+  /* adding from an address or a folder: looked at, then kept or let go; each waiting by its id (an address's fetch, or
+     the folder to copy) */
   const waiting = new Map();
-  handle('desktop:skills:preview', async ({ url }) => {
-    const address = String(url ?? '').trim();
-    if (!/^https:\/\//i.test(address)) return { ok: false, error: 'Paste the https address of a skill on GitHub or GitLab.' };
+  const looked = (skills) => skills.map((s) => ({ name: s.name, description: s.description, scripts: s.scripts, size: s.size, replaces: s.replaces }));
+  handle('desktop:skills:preview', async ({ url, folder, words }) => {
     try {
+      if (folder !== undefined) {
+        const path = folder === null ? await pickFolder(words) : String(folder);
+        if (!path) return { ok: false, cancelled: true };
+        if (!isAbsolute(path)) return { ok: false, error: 'Drop a folder that holds a SKILL.md.' };
+        const { previewFolder } = await cli();
+        const { folder: src, skills } = previewFolder(path, { mine });
+        const id = randomUUID();
+        waiting.set(id, { folder: src });
+        return { ok: true, id, skills: looked(skills) };
+      }
+      const address = String(url ?? '').trim();
+      if (!/^https:\/\//i.test(address)) return { ok: false, error: 'Paste the https address of a skill on GitHub or GitLab.' };
       const { previewSkills } = await cli();
       const { staging, skills } = await previewSkills(address, { mine });
       const id = randomUUID();
-      waiting.set(id, staging);
-      return { ok: true, id, skills: skills.map((s) => ({ name: s.name, description: s.description, scripts: s.scripts, size: s.size, replaces: s.replaces })) };
+      waiting.set(id, { staging });
+      return { ok: true, id, skills: looked(skills) };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
   });
   handle('desktop:skills:commit', async ({ id }) => {
-    const staging = waiting.get(id);
+    const what = waiting.get(id);
     waiting.delete(id);
-    if (!staging) return { ok: false, error: 'Nothing is waiting to be added.' };
+    if (!what) return { ok: false, error: 'Nothing is waiting to be added.' };
     try {
-      const { commitSkills } = await cli();
-      return { ok: true, skills: (await commitSkills(staging, { mine })).map(shown) };
+      const kept = what.folder ? await (await lib()).addSkills(what.folder, { mine }) : await (await cli()).commitSkills(what.staging, { mine });
+      return { ok: true, skills: kept.map(shown) };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
   });
   handle('desktop:skills:discard', async ({ id }) => {
-    const staging = waiting.get(id);
+    const what = waiting.get(id);
     waiting.delete(id);
-    if (staging) await (await cli()).discardSkills(staging, { mine });
+    if (what?.staging) await (await cli()).discardSkills(what.staging, { mine });
     return { ok: true };
   });
 

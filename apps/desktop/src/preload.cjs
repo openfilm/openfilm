@@ -84,6 +84,8 @@ contextBridge.exposeInMainWorld('openfilmNative', {
     texts: (project, agent, names) => ipcRenderer.invoke('desktop:skills:texts', { project, agent, names }),
     allow: (agent, name, allowed) => ipcRenderer.invoke('desktop:skills:allow', { agent, name, allowed }),
     preview: (url) => ipcRenderer.invoke('desktop:skills:preview', { url }),
+    /* a folder dropped (its path), or null: one picked in the system's dialog, with the page's words { title, button } */
+    previewFolder: (path, words) => ipcRenderer.invoke('desktop:skills:preview', { folder: typeof path === 'string' ? path : null, words }),
     commit: (id) => ipcRenderer.invoke('desktop:skills:commit', { id }),
     discard: (id) => ipcRenderer.invoke('desktop:skills:discard', { id }),
     reveal: () => ipcRenderer.invoke('desktop:skills:reveal'),

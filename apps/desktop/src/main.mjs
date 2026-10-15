@@ -324,6 +324,7 @@ async function start() {
     mine: mySkills,
     oldMine: join(env.OPENFILM_HOME, 'skills'),
     reveal: (path) => { void shell.openPath(path); },
+    pickFolder: (words) => pickFolder(words),
     refreshSkills: (agent) => localAgents?.refreshSkills(agent),
     log,
   });

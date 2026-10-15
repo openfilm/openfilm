@@ -79,6 +79,9 @@ interface AppBridge {
     allow(agent: string, name: string, allowed: boolean): Promise<{ ok: boolean }>;
     /** a GitHub or GitLab address fetched to be looked at; then kept (`commit`) or let go (`discard`) */
     preview(url: string): Promise<{ ok: true; id: string; skills: SkillPreview[] } | { ok: false; error: string }>;
+    /** a folder on this computer looked at where it is: one dropped (its path), or null: picked in the system's dialog
+        with these words (cancelled: nothing to show) */
+    previewFolder(path: string | null, words?: { title: string; button: string }): Promise<{ ok: true; id: string; skills: SkillPreview[] } | { ok: false; error: string } | { ok: false; cancelled: true }>;
     commit(id: string): Promise<{ ok: true; skills: SkillInfo[] } | { ok: false; error: string }>;
     discard(id: string): Promise<unknown>;
     reveal(): Promise<unknown>;

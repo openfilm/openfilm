@@ -3,13 +3,14 @@
  *
  * One list, searched as typed: this project's skills, the person's own, the official ones, and the skills of the
  * agent in use the person let into OpenFilm (Settings → Agents is where they are let in). Picking one puts it into the
- * message as a pill where the cursor is. Below, adding one from an address (looked at before it is kept) and the
- * folder the person's own are kept in.
+ * message as a pill where the cursor is. Below, adding one (from an address or a folder, looked at before it is kept, or
+ * made with the agent), the folder the person's own are kept in, and where to tell us how skills work for them. A
+ * folder dropped on it is looked at to be added.
  *
  * Arrow keys move through the skills, Enter names the one lit, Esc closes.
  */
 import React from 'react';
-import { AlertTriangle, ArrowLeft, Blocks, FolderOpen, Link2, Loader2, Search } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Blocks, FolderOpen, FolderPlus, Loader2, MessageSquare, Plus, Search, Sparkles } from 'lucide-react';
 import { keepFocus, Popover } from './Popover';
 import { POPOVER_CHROME } from './ComposerCard';
 import { Tooltip } from './Tooltip';
@@ -22,6 +23,17 @@ const ROW = 'flex w-full items-start gap-2.5 rounded-[8px] px-2.5 py-[7px] text-
 const QUIET_BUTTON = 'h-7 rounded-[7px] px-2.5 text-[12px] text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-40';
 const MAIN_BUTTON = 'flex h-7 items-center gap-1.5 rounded-[7px] bg-[var(--text)] px-3 text-[12px] font-medium text-[var(--bg)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40';
 const FOOT_BUTTON = 'flex h-7 items-center gap-1.5 rounded-[7px] px-2 text-[12px] text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]';
+const FOOT_ICON = 'flex h-7 w-7 items-center justify-center rounded-[7px] text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]';
+const WAY = 'flex w-full items-start gap-2.5 rounded-[8px] px-2.5 py-2 text-left transition hover:bg-[var(--bg-hover)] disabled:opacity-40';
+/** where people tell us how skills work for them (a GitHub issue form; no account with us) */
+const FEEDBACK = 'https://github.com/openfilm/openfilm/issues/new?template=skill_feedback.yml';
+
+/** A folder dragged from the file manager, by its path (the desktop app's bridge), or ''. */
+const droppedPath = (e: React.DragEvent) => {
+  const file = e.dataTransfer.files[0];
+  return file ? (window as unknown as { openfilmDesktop?: { pathForFile?: (f: File) => string } }).openfilmDesktop?.pathForFile?.(file) ?? '' : '';
+};
+const dragsFiles = (e: React.DragEvent) => e.dataTransfer.types.includes('Files');
 
 /** A skill named in a message, as its pill. */
 export interface PickedSkill { name: string; description: string }
@@ -30,9 +42,11 @@ const matches = (needle: string, ...words: string[]) => !needle || words.some((w
 /** a size as people read it */
 const sizeOf = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`);
 
-export function SkillsPopover({ agentName, onPick, listing, reload }: {
+export function SkillsPopover({ agentName, onPick, onDraft, listing, reload }: {
   agentName: string;
   onPick: (skill: PickedSkill) => void;
+  /** a message put in the composer for the person to send (making a skill with the agent) */
+  onDraft: (text: string) => void;
   /** what the button lists, loaded by the chat (it names skills in `/` too) */
   listing: SkillListing | null;
   reload: () => Promise<void>;
@@ -40,6 +54,9 @@ export function SkillsPopover({ agentName, onPick, listing, reload }: {
   const t = useT();
   const [open, setOpen] = React.useState(false);
   const [view, setView] = React.useState<'list' | 'add'>('list');
+  /* a folder dropped: the add view looks at it as it opens */
+  const [dropped, setDropped] = React.useState<string | null>(null);
+  const [dragging, setDragging] = React.useState(false);
   const [query, setQuery] = React.useState('');
   const [lit, setLit] = React.useState(0);
   const listRef = React.useRef<HTMLDivElement>(null);
@@ -48,6 +65,8 @@ export function SkillsPopover({ agentName, onPick, listing, reload }: {
   React.useEffect(() => {
     if (open) { void reload(); return; }
     setView('list');
+    setDropped(null);
+    setDragging(false);
     setQuery('');
     setLit(0);
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps -- each time it opens or closes
@@ -108,8 +127,27 @@ export function SkillsPopover({ agentName, onPick, listing, reload }: {
           </button>
         </Tooltip>
       }>
-      <div style={{ ...POPOVER_CHROME, width: `min(${CARD_W}px, calc(100vw - 24px))` }} className="flex flex-col overflow-hidden" onKeyDown={view === 'list' ? onKey : undefined}>
-        {view === 'add' ? <AddSkill onBack={() => setView('list')} onAdded={reload} onPick={pick} /> : (
+      <div style={{ ...POPOVER_CHROME, width: `min(${CARD_W}px, calc(100vw - 24px))` }} className="relative flex flex-col overflow-hidden" onKeyDown={view === 'list' ? onKey : undefined}
+        onDragOver={(e) => { if (!dragsFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDragging(true); }}
+        onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
+        onDrop={(e) => {
+          if (!dragsFiles(e)) return;
+          e.preventDefault();
+          setDragging(false);
+          const path = droppedPath(e);
+          if (!path) return;
+          setDropped(path);
+          setView('add');
+        }}>
+        {dragging ? (
+          <div className="pointer-events-none absolute inset-1 z-10 flex flex-col items-center justify-center gap-1.5 rounded-[10px] border border-dashed border-[var(--border-strong)] bg-[var(--bg-surface)] text-[12.5px] text-[var(--text)]">
+            <FolderPlus size={18} strokeWidth={1.75} className="text-[var(--text-dim)]" />{t('skills.dropToAdd')}
+          </div>
+        ) : null}
+        {view === 'add' ? (
+          <AddSkill key={dropped ?? ''} dropped={dropped} onBack={() => { setDropped(null); setView('list'); }} onAdded={reload} onPick={pick}
+            onMake={() => { setOpen(false); onDraft(t('skills.makePrompt').replace('{folder}', listing?.mine ?? '')); }} />
+        ) : (
           <>
             <div className="flex items-center gap-2 border-b border-[var(--border)] px-3 py-2.5">
               <Search size={14} className="shrink-0 text-[var(--text-faint)]" />
@@ -135,9 +173,15 @@ export function SkillsPopover({ agentName, onPick, listing, reload }: {
                 </>
               )}
             </div>
-            <div className="flex items-center gap-1 border-t border-[var(--border)] px-1.5 py-1.5">
-              <button type="button" onMouseDown={keepFocus} onClick={() => setView('add')} className={FOOT_BUTTON}><Link2 size={13} />{t('skills.addFromLink')}</button>
-              <button type="button" onMouseDown={keepFocus} onClick={() => { void app.skills.reveal(); }} className={FOOT_BUTTON}><FolderOpen size={13} />{t('skills.openFolder')}</button>
+            <div className="flex items-center gap-0.5 border-t border-[var(--border)] px-1.5 py-1.5">
+              <button type="button" onMouseDown={keepFocus} onClick={() => setView('add')} className={FOOT_BUTTON}><Plus size={13} />{t('skills.addTitle')}</button>
+              <span className="flex-1" />
+              <Tooltip label={t('skills.openFolder')}>
+                <button type="button" onMouseDown={keepFocus} onClick={() => { void app.skills.reveal(); }} aria-label={t('skills.openFolder')} className={FOOT_ICON}><FolderOpen size={14} /></button>
+              </Tooltip>
+              <Tooltip label={t('skills.feedback')}>
+                <a href={FEEDBACK} target="_blank" rel="noreferrer" onMouseDown={keepFocus} aria-label={t('skills.feedback')} className={FOOT_ICON}><MessageSquare size={14} /></a>
+              </Tooltip>
             </div>
           </>
         )}
@@ -147,10 +191,13 @@ export function SkillsPopover({ agentName, onPick, listing, reload }: {
 }
 
 /**
- * Adding a skill from an address: the address; what came, looked at (each skill, its size, the scripts it brings, one of
- * the same name it would replace); then kept, or let go. Leaving before it is kept lets it go.
+ * Adding a skill: from an address, from a folder (picked, or `dropped` on the popover), or made with the agent (a message
+ * put in the composer). What came is looked at (each skill, its size, the scripts it brings, one of the same name it
+ * would replace), then kept, or let go. Leaving before it is kept lets it go.
  */
-function AddSkill({ onBack, onAdded, onPick }: { onBack: () => void; onAdded: () => Promise<void>; onPick: (skill: SkillInfo) => void }) {
+function AddSkill({ dropped, onBack, onAdded, onPick, onMake }: {
+  dropped: string | null; onBack: () => void; onAdded: () => Promise<void>; onPick: (skill: SkillInfo) => void; onMake: () => void;
+}) {
   const t = useT();
   const [url, setUrl] = React.useState('');
   const [step, setStep] = React.useState<'address' | 'fetching' | 'look' | 'adding' | 'added'>('address');
@@ -161,16 +208,19 @@ function AddSkill({ onBack, onAdded, onPick }: { onBack: () => void; onAdded: ()
   /* left before it is kept: let go */
   React.useEffect(() => () => { if (waiting.current) void app.skills.discard(waiting.current); }, []);
 
-  const fetchIt = async () => {
-    if (!url.trim() || step === 'fetching') return;
+  const look = async (preview: () => ReturnType<typeof app.skills.previewFolder>) => {
     setStep('fetching');
     setError(null);
-    const r = await app.skills.preview(url.trim()).catch((e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }));
-    if (!r.ok) { setError(r.error); setStep('address'); return; }
+    const r = await preview().catch((e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }));
+    if (!r.ok) { if (!('cancelled' in r)) setError(r.error); setStep('address'); return; }
     waiting.current = r.id;
     setFetched({ id: r.id, skills: r.skills });
     setStep('look');
   };
+  const fetchIt = () => { if (url.trim() && step !== 'fetching') void look(() => app.skills.preview(url.trim())); };
+  const words = { title: t('skills.folderDialog'), button: t('skills.add') };
+  const pickFolder = () => { if (step !== 'fetching') void look(() => app.skills.previewFolder(null, words)); };
+  React.useEffect(() => { if (dropped) void look(() => app.skills.previewFolder(dropped)); }, []); // eslint-disable-line react-hooks/exhaustive-deps -- once, for the folder it opened with
   const keep = async () => {
     if (!fetched) return;
     setStep('adding');
@@ -237,13 +287,30 @@ function AddSkill({ onBack, onAdded, onPick }: { onBack: () => void; onAdded: ()
           </div>
         </div>
       ) : (
-        <form className="px-3 py-3" onSubmit={(e) => { e.preventDefault(); void fetchIt(); }}>
-          <input autoFocus value={url} onChange={(e) => { setUrl(e.target.value); setError(null); }} placeholder="https://github.com/…" disabled={step === 'fetching'} spellCheck={false}
+        <form className="px-3 pt-3 pb-2" onSubmit={(e) => { e.preventDefault(); fetchIt(); }}>
+          <div className="pb-1.5 text-[11px] font-medium text-[var(--text-faint)]">{t('skills.fromLink')}</div>
+          <input autoFocus={!dropped} value={url} onChange={(e) => { setUrl(e.target.value); setError(null); }} placeholder="https://github.com/…" disabled={step === 'fetching'} spellCheck={false}
             className="h-8 w-full rounded-[8px] border border-[var(--border)] bg-transparent px-2.5 text-[12.5px] text-[var(--text)] outline-none transition placeholder:text-[var(--text-faint)] focus:border-[var(--border-strong)]" />
           <p className={`mt-1.5 text-[11.5px] leading-[16px] ${error ? 'text-[var(--err)]' : 'text-[var(--text-muted)]'}`}>{error ?? t('skills.addHint')}</p>
           <div className="mt-3 flex justify-end">
             <button type="submit" disabled={!url.trim() || step === 'fetching'} onMouseDown={keepFocus} className={MAIN_BUTTON}>
               {step === 'fetching' ? <><Loader2 size={12} className="animate-spin" />{t('skills.fetching')}</> : t('skills.next')}
+            </button>
+          </div>
+          <div className="mt-2.5 border-t border-[var(--border)] pt-1.5 -mx-1.5">
+            <button type="button" onMouseDown={keepFocus} onClick={pickFolder} disabled={step === 'fetching'} className={WAY}>
+              <FolderPlus size={14} strokeWidth={1.75} className="mt-[2px] shrink-0 text-[var(--text-dim)]" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13px] leading-[18px] text-[var(--text)]">{t('skills.fromFolder')}</span>
+                <span className="block text-[11.5px] leading-[16px] text-[var(--text-muted)]">{t('skills.fromFolderHint')}</span>
+              </span>
+            </button>
+            <button type="button" onMouseDown={keepFocus} onClick={onMake} disabled={step === 'fetching'} className={WAY}>
+              <Sparkles size={14} strokeWidth={1.75} className="mt-[2px] shrink-0 text-[var(--text-dim)]" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13px] leading-[18px] text-[var(--text)]">{t('skills.make')}</span>
+                <span className="block text-[11.5px] leading-[16px] text-[var(--text-muted)]">{t('skills.makeHint')}</span>
+              </span>
             </button>
           </div>
         </form>

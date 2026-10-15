@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, writeFileSync, existsSync, readFileSync } from 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { addSkills, findSkill, listSkills, migrateMySkills, mySkillsDir, parseSkillFile, readSkill, removeSkill, skillText } from './skills.mjs';
-import { commitSkills, discardSkills, previewSkills, skillCommand, skillsCommand } from './skills-cli.mjs';
+import { commitSkills, discardSkills, previewFolder, previewSkills, skillCommand, skillsCommand } from './skills-cli.mjs';
 
 const skill = (dir, name, description, body = 'How to make it.', extra = {}) => {
   mkdirSync(dir, { recursive: true });
@@ -131,6 +131,25 @@ test('adding from an address is looked at first: kept, or let go', async () => {
   await discardSkills(again.staging, { mine });
   assert.ok(!existsSync(again.staging));
   await assert.rejects(commitSkills(join(root, 'elsewhere'), { mine }), /Nothing is waiting/);
+});
+
+test('a folder on this computer looked at where it is; one already among the person\'s own, or not a skill, refused', () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-folder-'));
+  const mine = join(root, 'mine');
+  skill(join(mine, 'charts'), 'charts', 'Mine');
+  const pack = join(root, 'pack');
+  skill(join(pack, 'charts'), 'charts', 'Theirs', 'x', { 'scripts/a.py': 'print(1)' });
+  skill(join(pack, 'captions'), 'captions', 'Captions');
+  const seen = previewFolder(pack, { mine });
+  assert.deepEqual(seen.skills.map((s) => [s.name, s.replaces, s.scripts.length]).sort(), [['captions', false, 0], ['charts', true, 1]]);
+  assert.deepEqual(previewFolder(join(pack, 'captions'), { mine }).skills.map((s) => s.name), ['captions'], 'one skill\'s own folder');
+  assert.deepEqual(previewFolder(join(pack, 'captions', 'SKILL.md'), { mine }), previewFolder(join(pack, 'captions'), { mine }), 'its SKILL.md for it');
+  assert.equal(readSkill(join(mine, 'charts'), 'mine')?.description, 'Mine', 'nothing copied yet');
+  assert.throws(() => previewFolder(join(mine, 'charts'), { mine }), /among your skills/);
+  assert.throws(() => previewFolder(mine, { mine }), /among your skills/);
+  assert.throws(() => previewFolder(root + '-none', { mine }), /no SKILL\.md/);
+  mkdirSync(join(root, 'empty'));
+  assert.throws(() => previewFolder(join(root, 'empty'), { mine }), /no SKILL\.md/);
 });
 
 test('openfilm skills and skill: the list, one printed whole, one added from an address', async () => {

@@ -6,11 +6,12 @@
  * first (migrateMySkills).
  *
  * Adding from an address is two steps for an app to show what came before it is kept: previewSkills fetches it into
- * a folder of its own beside the person's skills, commitSkills keeps it, discardSkills lets it go.
+ * a folder of its own beside the person's skills, commitSkills keeps it, discardSkills lets it go. A folder on this
+ * computer is looked at where it is (previewFolder) and copied in when kept (addSkills).
  */
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
-import { dirname, join, relative, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { FILM_FILE } from './film-doc.mjs';
 import { addSkills, findSkill, folderSize, holdsSkills, listSkills, migrateMySkills, mySkillsDir, readSkill, removeSkill, skillText, skillsIn, PROJECT_SKILLS } from './skills.mjs';
 
@@ -62,12 +63,34 @@ export async function previewSkills(url, { mine = mySkillsDir(), fetch = fetchSk
     const staging = await fetch(url, work);
     const found = skillsAt(staging);
     if (!found.length || !holdsSkills(staging)) throw new Error(`There is no SKILL.md in ${url}: it is not a skill.`);
-    const mineNow = new Set(skillsIn(mine, 'mine').map((s) => s.name));
-    return { staging: work, skills: found.map((s) => ({ ...s, size: folderSize(s.folder), replaces: mineNow.has(s.name) })) };
+    return { staging: work, skills: looked(found, mine) };
   } catch (e) {
     await rm(work, { recursive: true, force: true }).catch(() => {});
     throw e;
   }
+}
+
+/** Skills as they are looked at before they are kept: each with its size and whether it replaces one of the person's. */
+const looked = (/** @type {import('./skills.mjs').Skill[]} */ found, /** @type {string} */ mine) => {
+  const mineNow = new Set(skillsIn(mine, 'mine').map((s) => s.name));
+  return found.map((s) => ({ ...s, size: folderSize(s.folder), replaces: mineNow.has(s.name) }));
+};
+
+/**
+ * The skills in a folder on this computer, looked at where they are before they are copied in (addSkills): as
+ * previewSkills gives them (a SKILL.md given: its folder). A folder that is not a skill, or one of the person's own
+ * already, throws.
+ * @param {string} folder @param {{ mine?: string }} [opts]
+ */
+export function previewFolder(folder, { mine = mySkillsDir() } = {}) {
+  /* a skill's SKILL.md stands for its folder */
+  const src = basename(folder) === 'SKILL.md' ? dirname(resolve(folder)) : resolve(folder);
+  const inside = relative(resolve(mine), src);
+  if (!inside || (!inside.startsWith('..') && !isAbsolute(inside))) throw new Error('This folder is among your skills already.');
+  let found = [];
+  try { if (statSync(src).isDirectory()) found = skillsAt(src); } catch { /* not there */ }
+  if (!found.length) throw new Error(`There is no SKILL.md in ${folder}: it is not a skill.`);
+  return { folder: src, skills: looked(found, mine) };
 }
 
 /** A fetched folder (previewSkills' `staging`) only: one in the person's skills folder, made for a fetch. */

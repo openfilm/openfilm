@@ -1,0 +1,21 @@
+name: Skill feedback
+description: How a skill worked for you, or a skill you wish there were.
+labels: [skills]
+body:
+  - type: input
+    id: skill
+    attributes:
+      label: The skill
+      description: Its name, or its link if you added it from one. Leave it empty for a skill you wish there were.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you asked for, what the agent made with the skill, and what you hoped for.
+    validations:
+      required: true
+  - type: input
+    id: agent
+    attributes:
+      label: The agent
+      description: Which agent and model you used, if you know.
