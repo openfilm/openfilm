@@ -652,7 +652,10 @@ export class AgentSession {
    *           env?: Record<string, string>,
    *           onUpdate?: (update: any) => void, onPermission?: (params: any) => Promise<string | null>,
    *           onQuestion?: (ask: { message: string, toolCallId: string | null, questions: any[] }) => Promise<Record<string, { label?: string, text?: string }> | null>,
-   *           onExit?: (info: { code: number | null, stderr: string }) => void }} opts
+   *           onExit?: (info: { code: number | null, stderr: string }) => void,
+   *           onSend?: (sent: { prompt: any[], _meta?: any }) => void }} opts
+   * `onSend` hears each message as it goes to the agent, whole (the app's words before the first one's, for an agent
+   * told them there); `opened`, once started, says what it was started and opened with.
    */
   constructor(opts) {
     if (!isChatAgent(opts.agent)) throw new Error(`Unknown agent: ${String(opts.agent)}`);
@@ -689,7 +692,8 @@ export class AgentSession {
     };
     /* an agent that speaks ACP itself: its own program, started as the registry starts it */
     const native = cli && !this.spec.adapter ? starting(cli.path, this.spec.args) : null;
-    const env = childEnvironment({ shell: { ...shell, PATH: path }, extra: { ...this.opts.env, ...(native ? native.env : node.env), ...(cli && this.spec.env ? this.spec.env(cli.path) : {}), ...own } });
+    const extra = { ...this.opts.env, ...(native ? native.env : node.env), ...(cli && this.spec.env ? this.spec.env(cli.path) : {}), ...own };
+    const env = childEnvironment({ shell: { ...shell, PATH: path }, extra });
     const claude = this.spec.adapter === AGENTS.claude.adapter;
     if (this.spec.adapter === AGENTS.codex.adapter) {
       const theirs = codexDeveloperInstructions(codexConfigText(shell));
@@ -769,6 +773,22 @@ export class AgentSession {
       steering: init._meta?.steering?.supported === true,
     };
     this.noteModel(this.info.configOptions);
+    /* what the agent was started and opened with, for the turn log: every word the app adds to its own, and the
+       variables the app set (a key's value never: it reads "(hidden)") */
+    const secret = new Set(Object.keys(harness?.env ?? {}));
+    this.opened = {
+      program: harness ? 'pi' : cli.path,
+      /* the command line the agent's process was started with: its own program, or the app's Node running its adapter (or Pi) */
+      command: native ? [native.cmd, ...native.args] : [node.command, ...(node.env.ELECTRON_RUN_AS_NODE ? [AS_NODE] : []), script],
+      adapter: this.spec.adapter ?? null,
+      env: Object.fromEntries(Object.entries(extra).map(([k, v]) => [k, secret.has(k) || /KEY|TOKEN|SECRET|PASSWORD/i.test(k) ? '(hidden)' : k === 'OPENFILM_PI' ? JSON.parse(v) : v])),
+      ...(env.CODEX_CONFIG ? { codexConfig: JSON.parse(env.CODEX_CONFIG) } : {}),
+      path: { first: this.opts.binDir ?? null, last: this.opts.fallbackDir ?? null },
+      fromShell: this.spec.fromShell ? Object.keys(shell).sort() : 'all',
+      initialize: { request: { protocolVersion: acp.PROTOCOL_VERSION, clientCapabilities: CLIENT_CAPABILITIES, clientInfo: CLIENT_INFO }, response: init },
+      session: { method: !resumed ? 'session/new' : caps.sessionCapabilities?.resume ? 'session/resume' : 'session/load', params: { ...params, ...(resumed ? { sessionId: resume } : {}) } },
+      firstMessage: this.instructions,
+    };
     return this.info;
   }
 
@@ -781,6 +801,8 @@ export class AgentSession {
     const meta = this.opts.harness && turnId ? { _meta: { openfilm: { turnId, cwd: this.opts.cwd } } } : {};
     const told = this.instructions ? [{ type: 'text', text: this.instructions }] : [];
     this.instructions = null;
+    /* the message exactly as the agent gets it, for the turn log */
+    this.opts.onSend?.({ prompt: [...told, ...blocks], ...meta });
     const r = await this.conn.agent.request(acp.methods.agent.session.prompt, { sessionId: this.sessionId, prompt: [...told, ...blocks], ...meta })
       .catch((e) => {
         /* the app's own agent: a service with no balance left is said the same for every service, with its page */

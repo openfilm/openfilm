@@ -5,6 +5,8 @@
  *   desktop:chat:sessions  { project, sessions, last }
  *   desktop:chat:turn      { project, turn, items }
  *   desktop:chat:log       { project, turnId, unless? } → { file, cut, size, callsSize, events, calls } | { same } | null
+ *                          a turn of Claude Code or Codex with no model log yet (running, or from before there was one)
+ *                          has its requests read from the agent's own record as it is now (agent-records.mjs)
  *   desktop:chat:reveal    { project, turnId? }   the turn's log (or the logs folder) in the file manager
  *   desktop:chat:ref-image { project, turnId, n, bytes } → { path }   a reference's picture, kept for the agent
  *   desktop:chat:unsaved   { project, except? } → [{ turnId, events }]   turns with a log and no saved record
@@ -17,8 +19,30 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { RECORDED_AGENTS, agentRecordCalls, compactCalls } from './agent-records.mjs';
 import { chatDir, loadChat, readLog, saveRefImage, saveSessions, saveTurn, unsavedTurns } from './chat-store.mjs';
+import { loginShellVariables } from './environment.mjs';
 import { changes, snapshot } from './file-changes.mjs';
+
+/** a turn's requests are those its agent's record has from a moment before it began to a moment after it ended */
+const RECORD_MARGIN_MS = 1000;
+
+/**
+ * A log with no model requests, of a turn of Claude Code or Codex: its requests from the agent's own record, read
+ * now. The log as it was when there is none to read.
+ */
+export async function withAgentRecord(found) {
+  if (!found || 'same' in found || found.calls?.length) return found;
+  const prompt = found.events.find((e) => e.kind === 'prompt');
+  const done = [...found.events].reverse().find((e) => e.kind === 'done');
+  const sessionId = prompt?.session?.sessionId;
+  if (!RECORDED_AGENTS.includes(prompt?.agent) || !sessionId) return found;
+  const read = agentRecordCalls({
+    agent: prompt.agent, sessionId, cwd: prompt.cwd, env: await loginShellVariables({ staleOk: true }),
+    from: prompt.t - RECORD_MARGIN_MS, to: done ? done.t + RECORD_MARGIN_MS : Date.now() + RECORD_MARGIN_MS,
+  });
+  return read?.calls.length ? { ...found, calls: compactCalls(read.calls) } : found;
+}
 
 /** how many turns' snapshots are kept at once: one per running turn, and a few whose end was never asked about */
 const SNAPSHOTS_MAX = 8;
@@ -50,9 +74,9 @@ export function registerChatIpc(ipcMain, { trusted, projects, dataDir, reveal, t
   handle('desktop:chat:unsaved', async ({ project: path, except }) => unsavedTurns(await project(path), {
     except: Array.isArray(except) ? except.filter((id) => typeof id === 'string') : [],
   }));
-  handle('desktop:chat:log', async ({ project: path, turnId, unless }) => readLog(await project(path), turnId, {
+  handle('desktop:chat:log', async ({ project: path, turnId, unless }) => withAgentRecord(readLog(await project(path), turnId, {
     unless: unless && Number.isFinite(unless.size) && Number.isFinite(unless.callsSize) ? unless : null,
-  }));
+  })));
   /* the files as each running turn found them, by the turn: compared, and let go, when the turn settles */
   const snapshots = new Map();
   handle('desktop:chat:snapshot', async ({ project: path, turnId }) => {

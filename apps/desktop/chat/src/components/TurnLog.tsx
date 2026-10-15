@@ -2,10 +2,13 @@
  * A turn's log, as the app wrote it while it ran (src/chat-store.mjs), shown in developer mode (Settings → Developer)
  * from a turn's footer.
  *
- * Model requests (the app's own agent, Pi): each request it made to its model, whole — the system prompt, every
- * message (the person's, its own with its thinking and tool calls, each tool's result), the tools — and the answer,
- * with the model, provider and thinking level that made it, its tokens, or its error. The messages new in that
- * request are open; the ones carried over from before, and the system prompt, are one line each until opened.
+ * Model requests: each request the agent made to its model, whole — the system prompt, every message (the person's,
+ * its own with its thinking and tool calls, each tool's result, and what the agent put in by itself), the tools — and
+ * the answer, with the model, provider and thinking level that made it, its tokens, or its error. The app's own agent
+ * (Pi) logs its own; Claude Code's and Codex's come from their own records. The messages new in that request are open;
+ * the ones carried over from before, and the system prompt, are one line each until opened.
+ * Sent to the agent: what the app started and opened the agent with (every word it adds to the agent's own, the
+ * variables it set), and each message exactly as the agent got it.
  * Events: every event the agent sent, each a line opening to the event exactly as it was.
  *
  * Opened while the turn runs, it reads the log again every moment until the turn ends, so it shows the turn so far.
@@ -22,6 +25,7 @@ import { BrandLogo } from './BrandLogo';
 
 type LogEvent = TurnLogData['events'][number];
 type T = (key: string) => string;
+type Tab = 'calls' | 'sent' | 'events';
 
 export function TurnLogButton({ project, turnId, live = false }: { project: string; turnId: string; live?: boolean }) {
   const t = useT();
@@ -48,7 +52,7 @@ const LIVE_READ_MS = 1500;
 function TurnLogViewer({ project, turnId, live, onClose }: { project: string; turnId: string; live: boolean; onClose: () => void }) {
   const t = useT();
   const [log, setLog] = React.useState<TurnLogData | null | undefined>(undefined);
-  const [tab, setTab] = React.useState<'calls' | 'events' | null>(null);
+  const [tab, setTab] = React.useState<Tab | null>(null);
   const [copied, setCopied] = React.useState(false);
   const load = React.useCallback(() => {
     void app.chat.log(project, turnId).then((next) => setLog(next && 'same' in next ? undefined : next)).catch(() => setLog(null));
@@ -77,7 +81,8 @@ function TurnLogViewer({ project, turnId, live, onClose }: { project: string; tu
 
   const events = log?.events ?? [];
   const calls = React.useMemo(() => modelCalls((log?.calls ?? []) as RawCall[]), [log]);
-  const shownTab = tab ?? (calls.length ? 'calls' : 'events');
+  const sent = events.filter((e) => e.kind === 'prompt' || e.kind === 'sent' || e.kind === 'steer');
+  const shownTab = tab ?? (calls.length ? 'calls' : 'sent');
   const prompt = events.find((e) => e.kind === 'prompt') as Record<string, any> | undefined;
   const done = [...events].reverse().find((e) => e.kind === 'done') as Record<string, any> | undefined;
   const agent = typeof prompt?.agent === 'string' ? prompt.agent : null;
@@ -89,10 +94,10 @@ function TurnLogViewer({ project, turnId, live, onClose }: { project: string; tu
   }, { input: 0, cached: 0, output: 0 });
 
   const copy = () => {
-    void navigator.clipboard?.writeText(JSON.stringify(shownTab === 'calls' ? calls : events, null, 2)).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
+    void navigator.clipboard?.writeText(JSON.stringify(shownTab === 'calls' ? calls : shownTab === 'sent' ? sent : events, null, 2)).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
   };
   const button = 'flex h-8 items-center gap-1.5 rounded-[8px] border border-[var(--border)] px-2.5 text-[12.5px] text-[var(--chat-text)] transition hover:bg-[var(--bg-hover)]';
-  const tabButton = (id: 'calls' | 'events', label: string) => (
+  const tabButton = (id: Tab, label: string) => (
     <button type="button" onClick={() => setTab(id)}
       className={`h-9 border-b-2 px-1 text-[13px] transition ${shownTab === id ? 'border-[var(--chat-text)] text-[var(--chat-text)]' : 'border-transparent text-[var(--chat-hint)] hover:text-[var(--chat-text)]'}`}>
       {label}
@@ -141,12 +146,13 @@ function TurnLogViewer({ project, turnId, live, onClose }: { project: string; tu
             <>
               <div className="flex shrink-0 items-center gap-4 border-b border-[var(--border)] px-5">
                 {tabButton('calls', fill(t('turnLog.calls'), { n: calls.length }))}
+                {tabButton('sent', t('turnLog.sentTab'))}
                 {tabButton('events', fill(t('turnLog.events'), { n: events.length }))}
                 {log.cut ? <span className="text-[12px] text-[var(--warn)]">{t('turnLog.cut')}</span> : null}
               </div>
               {shownTab === 'calls'
                 ? (calls.length ? <Calls calls={calls} start={prompt?.t ?? calls[0]!.startedAt} t={t} /> : <p className="px-5 py-4 text-[13px] text-[var(--chat-hint)]">{t('turnLog.noCalls')}</p>)
-                : <Events events={events} t={t} />}
+                : shownTab === 'sent' ? <Sent events={sent} t={t} /> : <Events events={events} t={t} />}
             </>
           )}
       </div>
@@ -164,6 +170,7 @@ const ROLE_COLOR: Record<string, string> = {
   user: 'text-[#3f8fd0]',
   assistant: 'text-[#4aa36c]',
   toolResult: 'text-[#a26bd6]',
+  context: 'text-[#c0603a]',
 };
 
 const block = 'whitespace-pre-wrap break-words font-mono text-[12px] leading-[1.55] text-[var(--chat-text)]';
@@ -226,6 +233,8 @@ function MessageRow({ message, index, fresh, open: initial, t }: { message: Item
         <ChevronRight size={12} className={`shrink-0 text-[var(--text-faint)] transition-transform ${open ? 'rotate-90' : ''}`} />
         <span className="w-6 shrink-0 tabular-nums text-[var(--text-faint)]">{index}</span>
         <b className={`shrink-0 font-semibold ${failed ? 'text-[var(--err)]' : ROLE_COLOR[role] ?? 'text-[var(--chat-hint)]'}`}>{role === 'toolResult' ? String(message.toolName ?? 'tool') : role}</b>
+        {role === 'context' || message.label ? <span className="shrink-0 font-mono text-[11px] text-[var(--chat-hint)]" title={t('turnLog.contextHint')}>{[message.label, message.as ? `as ${message.as}` : null].filter(Boolean).join(' · ')}</span> : null}
+        {message.meta ? <span className="shrink-0 font-mono text-[11px] text-[var(--chat-hint)]">meta</span> : null}
         {fresh ? <span className="shrink-0 rounded-[4px] bg-[var(--bg-hover)] px-1 text-[10.5px] text-[var(--chat-text)]">{t('turnLog.fresh')}</span> : null}
         {message.toolCallId ? <span className="shrink-0 font-mono text-[11px] text-[var(--text-faint)]">{String(message.toolCallId)}</span> : null}
         <span className={`min-w-0 flex-1 truncate ${open ? 'invisible' : 'text-[var(--chat-hint)]'}`}>{text.replace(/\s+/g, ' ').slice(0, 200)}</span>
@@ -264,6 +273,7 @@ function Calls({ calls, start, t }: { calls: ModelCall[]; start: number; t: T })
                 <b className={`text-[12.5px] ${error ? 'text-[var(--err)]' : 'text-[var(--chat-text)]'}`}>#{c.no}</b>
                 <span className="tabular-nums text-[var(--text-faint)]">+{seconds(c.startedAt - start)} · {seconds(c.ms)}</span>
               </div>
+              {c.thread ? <div className="mt-0.5 truncate text-[11px] text-[#c0603a]">{c.thread.label}</div> : null}
               <div className="mt-0.5 truncate text-[var(--chat-hint)]">
                 {error ? <span className="text-[var(--err)]">{String(c.answer?.errorMessage ?? '')}</span>
                   : asked.length ? `→ ${asked.join(', ')}` : t('turnLog.answered')}
@@ -276,15 +286,21 @@ function Calls({ calls, start, t }: { calls: ModelCall[]; start: number; t: T })
       <div className="min-w-0 flex-1 overflow-y-auto px-5 py-3">
         <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[var(--chat-hint)]">
           <b className="text-[13px] text-[var(--chat-text)]">#{call.no}</b>
+          {call.thread ? <span className="text-[#c0603a]">{call.thread.label}</span> : null}
           {facts.map((f, i) => <span key={i}>{f}</span>)}
           <span className="tabular-nums">{fill(t('turnLog.tokens'), { input: u.input.toLocaleString(), cached: u.cached.toLocaleString(), output: u.output.toLocaleString() })}{u.reasoning ? ` (${fill(t('turnLog.reasoningTokens'), { n: u.reasoning.toLocaleString() })})` : ''}</span>
           <span className="tabular-nums">{seconds(call.ms)}</span>
           <span className="flex-1" />
           <button type="button" className={small} onClick={() => setRaw((r) => !r)}>{raw ? t('turnLog.readable') : 'JSON'}</button>
         </div>
+        {call.source ? (
+          <div className="-mt-1.5 mb-3 truncate text-[11.5px] text-[var(--text-faint)]" title={call.source.file}>
+            {fill(t('turnLog.fromRecord'), { file: call.source.file })}
+          </div>
+        ) : null}
         {raw ? (
           <pre className={`${block} rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] p-3`}>
-            {JSON.stringify({ request: { systemPrompt: call.systemPrompt, messages: call.messages, tools: call.tools }, answer: call.answer }, null, 2)}
+            {JSON.stringify({ request: { systemPrompt: call.systemPrompt, messages: call.messages, tools: call.tools, ...(call.settings ? { settings: call.settings } : {}) }, answer: call.answer }, null, 2)}
           </pre>
         ) : (
           <div className="space-y-5">
@@ -316,17 +332,106 @@ function Calls({ calls, start, t }: { calls: ModelCall[]; start: number; t: T })
               </div>
             </section>
             <section>
-              <details>
-                <summary className="cursor-pointer text-[12.5px] font-semibold text-[var(--chat-text)]">{fill(t('turnLog.rest'), { n: tools.length })}</summary>
-                <div className="mt-2 space-y-2">
-                  <div className="text-[12px] text-[var(--chat-hint)]">{tools.map((tool) => tool.name).join(', ')}</div>
-                  <pre className={`${block} max-h-[480px] overflow-auto rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] p-3`}>{JSON.stringify(call.tools, null, 2)}</pre>
-                </div>
-              </details>
+              {call.tools ? (
+                <details>
+                  <summary className="cursor-pointer text-[12.5px] font-semibold text-[var(--chat-text)]">{fill(t('turnLog.rest'), { n: tools.length })}</summary>
+                  <div className="mt-2 space-y-2">
+                    <div className="text-[12px] text-[var(--chat-hint)]">{tools.map((tool) => tool.name).join(', ')}</div>
+                    <pre className={`${block} max-h-[480px] overflow-auto rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] p-3`}>{JSON.stringify(call.tools, null, 2)}</pre>
+                  </div>
+                </details>
+              ) : (
+                <p className="text-[12.5px] text-[var(--chat-hint)]">{t(call.toolsUnknown ? 'turnLog.toolsUnknown' : 'turnLog.toolsMissing')}</p>
+              )}
             </section>
+            {call.settings ? (
+              <section>
+                <details>
+                  <summary className="cursor-pointer text-[12.5px] font-semibold text-[var(--chat-text)]">{t('turnLog.settings')}</summary>
+                  <pre className={`${block} mt-2 max-h-[480px] overflow-auto rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] p-3`}>{JSON.stringify(call.settings, null, 2)}</pre>
+                </details>
+              </section>
+            ) : null}
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ── sent to the agent ──────────────────────────────────────────────────────── */
+
+/** A message's blocks as the agent got them: text, pictures (kept by file), anything else as it was. */
+function SentBlocks({ blocks, t }: { blocks: Item[]; t: T }) {
+  return (
+    <div className="space-y-2">
+      {blocks.map((b, i) => (b?.type === 'text' ? <Clamped key={i} text={String(b.text ?? '')} max={20000} t={t} />
+        : b?.type === 'image' ? (
+          <div key={i} className="font-mono text-[12px] text-[var(--chat-hint)]">
+            {fill(t('turnLog.picture'), { type: String(b.mimeType ?? ''), size: k(Number(b.bytes) || 0) })}{b.file ? ` · ${String(b.file)}` : ''}
+          </div>
+        ) : <Clamped key={i} text={pretty(b)} t={t} />))}
+    </div>
+  );
+}
+
+function Labeled({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-[180px_minmax(0,1fr)] gap-3 border-t border-[var(--border)] py-2 first:border-t-0">
+      <div className="text-[12px] text-[var(--chat-hint)]">{label}</div>
+      <div className="min-w-0">{children}</div>
+    </div>
+  );
+}
+
+function Sent({ events, t }: { events: LogEvent[]; t: T }) {
+  const prompt = events.find((e) => e.kind === 'prompt') as Item | undefined;
+  const opened = prompt?.opened as Item | null | undefined;
+  const messages = events.filter((e) => e.kind === 'sent' || e.kind === 'steer') as Item[];
+  const start = prompt?.t ?? 0;
+  const heading = 'mb-2 text-[12.5px] font-semibold text-[var(--chat-text)]';
+  const appended = opened?.session?.params?._meta?.systemPrompt?.append;
+  const developer = opened?.codexConfig?.developer_instructions;
+  return (
+    <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-4">
+      <section>
+        <div className={heading}>{t('turnLog.opened')}</div>
+        {!opened ? <p className="text-[12.5px] text-[var(--chat-hint)]">{t('turnLog.noOpened')}</p> : (
+          <div className="rounded-[8px] border border-[var(--border)] px-3">
+            <Labeled label={t('turnLog.program')}>
+              <div className={block}>{(opened.command ?? [opened.program]).join(' ')}{opened.adapter ? `\n${fill(t('turnLog.through'), { adapter: String(opened.adapter) })}` : ''}</div>
+            </Labeled>
+            {typeof appended === 'string' ? <Labeled label={t('turnLog.appended')}><Clamped text={appended} max={20000} t={t} /></Labeled> : null}
+            {typeof developer === 'string' ? <Labeled label={t('turnLog.developer')}><Clamped text={developer} max={20000} t={t} /></Labeled> : null}
+            {typeof opened.firstMessage === 'string' ? <Labeled label={t('turnLog.firstMessage')}><Clamped text={opened.firstMessage} max={20000} t={t} /></Labeled> : null}
+            <Labeled label={t('turnLog.session')}><Clamped text={pretty(opened.session ?? null)} t={t} /></Labeled>
+            <Labeled label={t('turnLog.env')}><Clamped text={pretty({ ...opened.env, PATH: opened.path, fromShell: opened.fromShell })} t={t} /></Labeled>
+            <Labeled label={t('turnLog.handshake')}>
+              <details>
+                <summary className="cursor-pointer text-[12px] text-[var(--chat-hint)]">initialize</summary>
+                <div className="mt-1"><Clamped text={pretty(opened.initialize ?? null)} t={t} /></div>
+              </details>
+            </Labeled>
+          </div>
+        )}
+      </section>
+      <section>
+        <div className={heading}>{fill(t('turnLog.messages'), { n: messages.length })}</div>
+        {messages.length === 0 ? <p className="text-[12.5px] text-[var(--chat-hint)]">{t('turnLog.noSent')}</p> : (
+          <div className="space-y-2">
+            {messages.map((m, i) => (
+              <div key={i} className="rounded-[8px] border border-[var(--border)] px-3 py-2">
+                <div className="mb-1.5 flex gap-2 text-[12px] text-[var(--chat-hint)]">
+                  <b className="text-[var(--chat-text)]">{t(m.kind === 'steer' ? 'turnLog.steered' : 'turnLog.message')}</b>
+                  <span className="tabular-nums">+{seconds(m.t - start)}</span>
+                  {m._meta ? <span className="font-mono">_meta {JSON.stringify(m._meta)}</span> : null}
+                </div>
+                <SentBlocks blocks={(m.prompt ?? [{ type: 'text', text: m.text }]) as Item[]} t={t} />
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
@@ -369,6 +474,7 @@ function rowOf(event: LogEvent, titles: Map<string, string>): Omit<Row, 'at' | '
     case 'permission-answer': return { kind: 'ask', label: 'permission · answer', summary: str(event.optionId ?? 'cancelled') };
     case 'question': return { kind: 'ask', label: 'question', summary: str(event.message ?? event.questions, 300) };
     case 'question-answer': return { kind: 'ask', label: 'question · answer', summary: str(event.answers ?? 'skipped', 300) };
+    case 'sent': return { kind: 'prompt', label: 'sent', summary: str(((event.prompt ?? []) as Item[]).map((b) => (b?.type === 'text' ? b.text : `[${b?.type}]`)).join(' '), 600) };
     case 'steer': return { kind: 'prompt', label: 'steer', summary: str(event.text, 600) };
     case 'steer-answer': return { kind: 'prompt', label: 'steer · answer', summary: str(event.outcome), tone: event.outcome === 'injected' ? undefined : 'error' };
     case 'cancel': return { kind: 'end', label: 'cancel', summary: '' };

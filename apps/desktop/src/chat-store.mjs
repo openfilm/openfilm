@@ -11,10 +11,12 @@
  *   <turn>.jsonl           each turn as it happened, one event a line, untouched: the prompt and its settings, every
  *                          update the agent sent (what it said and thought, each tool call with its input and output),
  *                          every question and permission and the answer, how it ended; for whoever needs every detail
- *   <turn>.model.jsonl     each request the app's own agent made to its model in that turn (pi-agent.mjs): the
- *                          whole context, as Pi sends it, and the answer. A request carries the whole conversation, so a
+ *   <turn>.model.jsonl     each request the agent made to its model in that turn, and the answer: the app's own
+ *                          agent's as Pi sends it (pi-agent.mjs); Claude Code's and Codex's read from their own records
+ *                          once the turn ends (agent-records.mjs). A request carries the whole conversation, so a
  *                          line keeps only what is new: `prefix`, how many of the last request's messages come first,
  *                          then its own; `systemPrompt` and `tools` only when they changed
+ *   images/<sha1>.<ext>    each picture a message carried to its agent, by its content (the log names the file)
  *
  * the pictures a message's references point at, `.film/refs/`:
  *   <turn>-<n>.jpg         the picture of the message's reference [n] (a frame, or the part of it pointed at), for its
@@ -23,6 +25,7 @@
  * `.film/` is Studio's own (its projects.mjs says what else is there): a film never reads it, and nothing in it is
  * served. Reads no Electron module, so `node --test` can use it.
  */
+import { createHash } from 'node:crypto';
 import { createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -147,6 +150,39 @@ export function unsavedTurns(project, { except = [] } = {}) {
     if (prompt?.meta?.turnId && typeof prompt.meta.turnId === 'string') out.push({ turnId: prompt.meta.turnId, events });
   }
   return out;
+}
+
+const IMAGE_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
+
+/**
+ * Keep a picture a message carried (base64) in the logs, named by its content, so a turn's log can say which picture
+ * went without carrying its bytes; → its path in the project (`.film/logs/images/<sha1>.<ext>`), or null.
+ */
+export function saveLogImage(project, data, mimeType) {
+  try {
+    const bytes = Buffer.from(String(data ?? ''), 'base64');
+    if (!bytes.length) return null;
+    const name = `${createHash('sha1').update(bytes).digest('hex')}.${IMAGE_EXT[mimeType] ?? 'bin'}`;
+    const dir = join(logsDir(project), 'images');
+    mkdirSync(dir, { recursive: true });
+    if (!existsSync(join(dir, name))) writeAtomic(join(dir, name), bytes);
+    return `.film/logs/images/${name}`;
+  } catch { return null; }
+}
+
+/** A message's blocks as the log keeps them: each picture's bytes kept apart (saveLogImage), the rest as it went. */
+export function loggedBlocks(project, blocks) {
+  return (Array.isArray(blocks) ? blocks : []).map((b) => (b?.type === 'image' && typeof b.data === 'string'
+    ? { type: 'image', mimeType: b.mimeType, bytes: Buffer.byteLength(b.data, 'base64'), file: saveLogImage(project, b.data, b.mimeType) }
+    : b));
+}
+
+/** Write a turn's model requests whole (lines as agent-records.mjs compactCalls makes them), in place of any before. */
+export function writeModelLog(project, turnId, lines) {
+  if (typeof turnId !== 'string' || !ID.test(turnId)) return;
+  const dir = logsDir(project);
+  mkdirSync(dir, { recursive: true });
+  writeAtomic(join(dir, `${fileOf(turnId)}.model.jsonl`), lines.map((line) => `${JSON.stringify(line)}\n`).join(''));
 }
 
 /**

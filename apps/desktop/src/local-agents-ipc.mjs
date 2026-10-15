@@ -38,12 +38,18 @@
  * for IDLE_MS closes (its process goes); the conversation is resumed from the agent's own record on its next turn.
  *
  * Every turn is also written down as it happens, in the project's `.film/logs/<turn>.jsonl` (chat-store.mjs):
- * the prompt and the session it ran in, every event above, each answer the page gave, how it ended.
+ * the prompt and the session it ran in (what the agent was started and opened with, `opened`), each message exactly
+ * as the agent got it (`sent`: the app's words before the first one's too; pictures kept apart, by file), every event
+ * above, each answer the page gave, how it ended. Once a turn of Claude Code or Codex ends, the requests it made to its
+ * model are read from its own record (agent-records.mjs) into `.film/logs/<turn>.model.jsonl`, as the app's own
+ * agent writes its own.
  */
 import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
+import { RECORDED_AGENTS, agentRecordCalls, compactCalls } from './agent-records.mjs';
 import { AgentSession, HARNESS_AGENTS, isAgentId, isChatAgent, listAgents, openAgentSignIn } from './agents.mjs';
-import { openLog } from './chat-store.mjs';
+import { loggedBlocks, openLog, writeModelLog } from './chat-store.mjs';
+import { loginShellVariables } from './environment.mjs';
 
 const TURN_LOG_MAX = 5000;
 /** what the agent sends between turns, kept for a turn of its own the page may open for it */
@@ -57,6 +63,25 @@ const PROBE_COMMANDS_MS = 1500;
 const PROMPT_IMAGES_MAX = 8;
 const PROMPT_IMAGE_MAX_CHARS = 8 * 1024 * 1024;
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+/** how long after a turn the agent's own record is read: its last lines may still be on their way to the file */
+const RECORD_SETTLE_MS = 800;
+
+/**
+ * Claude Code's or Codex's requests to its model from `from` to `to` (ms), read from its own record into the turn's
+ * model log. Never throws: a record that cannot be read leaves the turn without one.
+ */
+export async function keepAgentRecord({ agent, sessionId, cwd, turnId, from, to, log = () => {}, settleMs = RECORD_SETTLE_MS }) {
+  if (!RECORDED_AGENTS.includes(agent) || !sessionId || !turnId) return;
+  try {
+    await new Promise((done) => setTimeout(done, settleMs));
+    const env = await loginShellVariables({ staleOk: true });
+    const found = agentRecordCalls({ agent, sessionId, cwd, from, to, env });
+    if (found?.calls.length) writeModelLog(cwd, turnId, compactCalls(found.calls));
+  } catch (e) {
+    log(`agent record ${turnId}: ${e instanceof Error ? e.message : String(e)}\n`);
+  }
+}
 
 /** The page's pictures as ACP image blocks; anything not one is left out. */
 function imageBlocks(images) {
@@ -191,6 +216,10 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
           send(entry, key, { kind: 'question', requestId, ...ask });
         }),
         onExit: (info) => { send(entry, key, { kind: 'exit', ...info }); sessions.delete(key); if (entry.running > 0) onWorking(working()); },
+        onSend: (sent) => {
+          const file = entry.turn && !entry.turn.done ? entry.turn.file : entry.adopted;
+          file?.write('sent', { ...sent, prompt: loggedBlocks(cwd, sent.prompt) });
+        },
       });
       sessions.set(key, entry);
       event.sender.once('destroyed', () => close(key));
@@ -216,8 +245,9 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
     entry.between = [];
     if (turn) {
       entry.turn = turn;
-      file.write('prompt', { agent: entry.agent, cwd: entry.cwd, session: entry.info ?? null, meta, text, images: images.length });
+      file.write('prompt', { agent: entry.agent, cwd: entry.cwd, session: entry.info ?? null, opened: entry.session.opened ?? null, meta, text, images: images.length });
     }
+    const from = Date.now();
     activePrompts++;
     entry.running = (entry.running ?? 0) + 1;
     onWorking(working());
@@ -238,6 +268,8 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
       turn.file.write('done', result.ok ? result : { ...result, stderr: String(entry.session?.stderr ?? '').slice(-8000) });
       turn.file.end();
       turn.done = result;
+      entry.turnEnded = Date.now();
+      void keepAgentRecord({ agent: entry.agent, sessionId: entry.info?.sessionId, cwd: entry.cwd, turnId: meta.turnId, from, to: entry.turnEnded, log });
       /* the page that asked may be gone (reloaded): say it on the channel too */
       if (!entry.sender.isDestroyed()) entry.sender.send('desktop:local-agents:event', { key, kind: 'done', turnId: meta.turnId, ...result });
     }
@@ -266,7 +298,7 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
     if (!entry || !(entry.running > 0)) return { ok: false, outcome: 'noRunningTurn' };
     const images = entry.info?.promptCapabilities?.image ? imageBlocks(opts?.images) : [];
     const text = String(opts?.text ?? '');
-    noted(opts, 'steer', { text, images: images.length });
+    noted(opts, 'steer', { text, images: images.length, prompt: loggedBlocks(entry.cwd, [{ type: 'text', text }, ...images]) });
     const outcome = await entry.session.steer([{ type: 'text', text }, ...images]);
     noted(opts, 'steer-answer', { outcome });
     return { ok: outcome === 'injected', outcome };
@@ -275,14 +307,17 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
   handle('desktop:local-agents:adopt', (_event, opts) => {
     const entry = sessions.get(opts?.key);
     if (!entry) return { ok: false };
-    entry.adopted?.write('done', { ok: true, unprompted: true });
-    entry.adopted?.end();
+    if (entry.adopted) {
+      entry.adopted.write('done', { ok: true, unprompted: true });
+      entry.adopted.end();
+      void keepAgentRecord({ agent: entry.agent, sessionId: entry.info?.sessionId, cwd: entry.cwd, turnId: entry.adopted.turnId, from: entry.adopted.from, to: Date.now(), log });
+    }
     entry.adopted = null;
     if (typeof opts?.turnId === 'string') {
-      entry.adopted = openLog(entry.cwd, opts.turnId, (e) => log(`turn log ${opts.turnId}: ${e.message}\n`));
+      entry.adopted = Object.assign(openLog(entry.cwd, opts.turnId, (e) => log(`turn log ${opts.turnId}: ${e.message}\n`)), { turnId: opts.turnId, from: entry.turnEnded ?? Date.now() });
       /* `meta`: the page's turn, so a log found without a saved turn can be made a turn again (chat-store unsavedTurns) */
       const meta = opts?.meta && typeof opts.meta === 'object' ? opts.meta : null;
-      entry.adopted.write('prompt', { agent: entry.agent, cwd: entry.cwd, session: entry.info ?? null, meta, unprompted: true, text: '' });
+      entry.adopted.write('prompt', { agent: entry.agent, cwd: entry.cwd, session: entry.info ?? null, opened: entry.session?.opened ?? null, meta, unprompted: true, text: '' });
       for (const { kind, ...fields } of entry.between ?? []) entry.adopted.write(kind, fields);
     }
     entry.between = [];
