@@ -213,7 +213,7 @@ function Parts({ message, t }: { message: Item; t: T }) {
         if (part.type === 'thinking') {
           return (
             <details key={i}>
-              <summary className="cursor-pointer text-[12px] text-[var(--chat-hint)]">{t('turnLog.thought')} · {fill(t('turnLog.chars'), { n: String(part.thinking ?? '').length.toLocaleString() })}</summary>
+              <summary className="cursor-pointer text-[12px] text-[var(--chat-hint)]">{t('turnLog.thought')} · {part.thinking ? fill(t('turnLog.chars'), { n: String(part.thinking).length.toLocaleString() }) : t('turnLog.thoughtNotKept')}</summary>
               <div className="mt-1 italic"><Clamped text={String(part.thinking ?? '')} t={t} /></div>
             </details>
           );
@@ -387,6 +387,17 @@ function SentBlocks({ blocks, t }: { blocks: Item[]; t: T }) {
   );
 }
 
+/** How a session's skills and MCP servers were set (agent-skills.mjs `log`): OpenFilm's, and the person's own hidden or let in. */
+function skillsLines(skills: Item, t: T): string[] {
+  const list = (v: unknown) => (Array.isArray(v) && v.length ? v.join(', ') : '—');
+  return [
+    `${t('turnLog.skillsOpenfilm')}: ${list(skills.openfilm)}`,
+    skills.filtered ? `${t('turnLog.skillsHidden')}: ${list(skills.hidden)}` : t('turnLog.skillsUnfiltered'),
+    ...(skills.mcpFiltered ? [`${t('turnLog.mcpHidden')}: ${list(skills.mcpHidden)}`] : []),
+    ...([...(skills.allowed ?? []), ...(skills.mcpAllowed ?? [])].length ? [`${t('turnLog.letIn')}: ${list([...(skills.allowed ?? []), ...(skills.mcpAllowed ?? [])])}`] : []),
+  ];
+}
+
 function Labeled({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="grid grid-cols-[180px_minmax(0,1fr)] gap-3 border-t border-[var(--border)] py-2 first:border-t-0">
@@ -416,6 +427,7 @@ function Sent({ events, t }: { events: LogEvent[]; t: T }) {
             {typeof appended === 'string' ? <Labeled label={t('turnLog.appended')}><Clamped text={appended} max={20000} t={t} /></Labeled> : null}
             {typeof developer === 'string' ? <Labeled label={t('turnLog.developer')}><Clamped text={developer} max={20000} t={t} /></Labeled> : null}
             {typeof opened.firstMessage === 'string' ? <Labeled label={t('turnLog.firstMessage')}><Clamped text={opened.firstMessage} max={20000} t={t} /></Labeled> : null}
+            {opened.skills ? <Labeled label={t('turnLog.skills')}><div className={block}>{skillsLines(opened.skills, t).join('\n')}</div></Labeled> : null}
             <Labeled label={t('turnLog.session')}><Clamped text={pretty(opened.session ?? null)} t={t} /></Labeled>
             <Labeled label={t('turnLog.env')}><Clamped text={pretty({ ...opened.env, PATH: opened.path, fromShell: opened.fromShell })} t={t} /></Labeled>
             <Labeled label={t('turnLog.handshake')}>

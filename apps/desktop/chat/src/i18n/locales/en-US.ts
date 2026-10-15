@@ -282,6 +282,13 @@ export const enUS = {
     cardDoes: 'What it does',
   },
   turnLog: {
+    thoughtNotKept: 'not kept in the agent\'s record',
+    skills: 'Skills and MCP',
+    skillsOpenfilm: 'OpenFilm\'s skills',
+    skillsHidden: 'Your own skills, off',
+    skillsUnfiltered: 'This agent has all your own skills, as in its own app',
+    mcpHidden: 'Your own MCP servers, off',
+    letIn: 'Let in',
     answered: 'Answered',
     appended: 'Added to its system prompt',
     callCount: '{n} requests',

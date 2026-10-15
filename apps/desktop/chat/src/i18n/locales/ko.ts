@@ -282,6 +282,13 @@ export const ko: Words = {
     cardDoes: '용도',
   },
   turnLog: {
+    thoughtNotKept: '에이전트 기록에 생각 내용이 저장되지 않았습니다',
+    skills: '스킬과 MCP',
+    skillsOpenfilm: 'OpenFilm 스킬',
+    skillsHidden: '내 스킬(꺼짐)',
+    skillsUnfiltered: '이 에이전트는 자체 앱에서처럼 내 스킬을 모두 사용합니다',
+    mcpHidden: '내 MCP 서버(꺼짐)',
+    letIn: '허용됨',
     answered: '응답함',
     appended: '시스템 프롬프트에 추가한 내용',
     callCount: '요청 {n}개',

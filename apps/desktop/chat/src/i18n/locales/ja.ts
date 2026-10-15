@@ -282,6 +282,13 @@ export const ja: Words = {
     cardDoes: '用途',
   },
   turnLog: {
+    thoughtNotKept: 'エージェントの記録には思考内容が保存されていません',
+    skills: 'スキルと MCP',
+    skillsOpenfilm: 'OpenFilm のスキル',
+    skillsHidden: '自分のスキル（オフ）',
+    skillsUnfiltered: 'このエージェントは本来のアプリと同じく、自分のスキルをすべて使います',
+    mcpHidden: '自分の MCP サーバー（オフ）',
+    letIn: '許可済み',
     answered: '回答済み',
     appended: 'システムプロンプトへの追加',
     callCount: 'リクエスト {n} 件',

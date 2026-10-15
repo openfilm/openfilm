@@ -282,6 +282,13 @@ export const zhCN: Words = {
     cardDoes: '用途',
   },
   turnLog: {
+    thoughtNotKept: 'agent 的记录里没有保存思考内容',
+    skills: 'Skills 和 MCP',
+    skillsOpenfilm: 'OpenFilm 的 skill',
+    skillsHidden: '你自己的 skill（已关闭）',
+    skillsUnfiltered: '这个 agent 带着你自己的全部 skill，和它自己的应用里一样',
+    mcpHidden: '你自己的 MCP 服务（已关闭）',
+    letIn: '已放行',
     answered: '已回答',
     appended: '追加到它的系统提示',
     callCount: '{n} 次请求',
