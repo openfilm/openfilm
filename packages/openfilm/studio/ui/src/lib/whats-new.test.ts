@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { RELEASES, compareVersions, notesToShow, releaseNotes, type ReleaseNotes } from './whats-new.ts';
 
 const release = (version: string): ReleaseNotes => ({ version, date: '2026-01-01', notes: { en: [], 'zh-CN': [], ja: [], ko: [], es: [] } });
@@ -32,4 +33,10 @@ test('each release says what is new in every language, a few lines each', () => 
   }
   const versions = RELEASES.map((r) => r.version);
   assert.deepEqual(versions, [...versions].sort((a, b) => compareVersions(b, a)), 'the newest first');
+});
+
+test('this version has its notes: a release without them shows nothing after the update (as 0.1.7 did)', () => {
+  const { version } = JSON.parse(readFileSync(new URL('../../../../package.json', import.meta.url), 'utf8'));
+  assert.ok(releaseNotes(version), `write ${version}'s notes in lib/whats-new.ts (the newest first), in every language`);
+  assert.equal(RELEASES[0].version, version, 'the newest notes are this version\'s');
 });
