@@ -3,8 +3,8 @@
  *
  *   · start      the projects window's "Examples": the examples only; one is started from (copied into a new project)
  *   · reference  the Community, over a film, from the app's chat (lib/host.ts `onCommand` `show-examples`): two views
- *                switched in its title row, Skills first (one is named in the message being written; one added; their
- *                folder; feedback), then Examples (one, or a part of it, a segment or a stretch dragged on its strip,
+ *                switched in its title row, Skills first (one is named in the message being written; one of the
+ *                person's own added), then Examples (one, or a part of it, a segment or a stretch dragged on its strip,
  *                is pointed at in the message; starting from one is still there)
  *
  * While there are few, one page each: the first example wide, the others in a grid; the skills by where they come from.
@@ -15,7 +15,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import {
-  ArrowLeft, Check, Clapperboard, ExternalLink, FolderOpen, MessageSquare, Play, Plus, Sparkles, X,
+  ArrowLeft, Check, Clapperboard, ExternalLink, Play, Plus, Sparkles, X,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
@@ -29,8 +29,6 @@ export type ExamplePart = { from: number; to: number; segment?: string } | null;
 type Opened = { kind: 'example'; example: Example } | { kind: 'skill'; skill: SkillEntry };
 
 const SOURCES: ReadonlyArray<SkillEntry['source']> = ['official', 'mine', 'project'];
-/** where people tell us how skills work for them (a GitHub issue form; no account with us) */
-const FEEDBACK = 'https://github.com/openfilm/openfilm/issues/new?template=skill_feedback.yml';
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 /** words in the language shown, else its family's, else English, else any */
@@ -113,7 +111,13 @@ export function ExamplesGallery({ mode, projectId = null, heading, onClose, onSt
           return (
             <section key={source} className={i ? 'mt-9' : ''}>
               <h3 className="mb-3 text-[14px] font-semibold text-[var(--text)]">{t(`gallery.${source}Skills`)}</h3>
-              {items.length ? <Grid>{items.map((k) => <SkillCard key={`${k.source}:${k.name}`} skill={k} onOpen={() => setOpened({ kind: 'skill', skill: k })} />)}</Grid> : <NoSkills />}
+              {items.length ? (
+                <Grid>
+                  {items.map((k) => <SkillCard key={`${k.source}:${k.name}`} skill={k} onOpen={() => setOpened({ kind: 'skill', skill: k })} />)}
+                  {/* the person's own: one more, beside them */}
+                  {source === 'mine' && studioHost?.skills ? <AddSkillCard /> : null}
+                </Grid>
+              ) : source === 'mine' ? <NoSkills /> : null}
             </section>
           );
         })}
@@ -138,23 +142,12 @@ export function ExamplesGallery({ mode, projectId = null, heading, onClose, onSt
     );
   }
 
-  const tool = 'flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]';
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {/* the same row as the projects' (ProjectsView): switching between them moves nothing */}
       <header className="flex shrink-0 flex-col px-6 pb-4 pt-5">
         <div className="flex min-h-8 items-center gap-1">
           {heading ?? <TitleSwitch items={[{ id: 'skills' as const, label: t('gallery.skills') }, { id: 'examples' as const, label: t('gallery.title') }]} value={view} onChange={show} />}
-          {/* the person's own skills: add one, their folder; and where to tell us how skills work for them */}
-          {community && view === 'skills' && !opened ? (
-            <>
-              {studioHost?.skills ? <button type="button" onClick={() => studioHost?.skills?.add()} className={tool}><Plus size={14} />{t('gallery.addSkill')}</button> : null}
-              {studioHost?.skills ? (
-                <button type="button" onClick={() => studioHost?.skills?.reveal()} title={t('gallery.openFolder')} aria-label={t('gallery.openFolder')} className={`${tool} w-8 justify-center px-0`}><FolderOpen size={15} /></button>
-              ) : null}
-              <a href={FEEDBACK} target="_blank" rel="noreferrer" title={t('gallery.feedback')} aria-label={t('gallery.feedback')} className={`${tool} w-8 justify-center px-0`}><MessageSquare size={15} /></a>
-            </>
-          ) : null}
           {onClose ? (
             <button type="button" onClick={onClose} aria-label={t('project.close')}
               className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
@@ -175,6 +168,19 @@ function Body({ note, children }: { note?: string; children: React.ReactNode }) 
       {note ? <p className="mb-5 text-[12.5px] text-[var(--text-muted)]">{note}</p> : null}
       {children}
     </div>
+  );
+}
+
+/** A card at the end of the person's own skills: adding one more (the app's dialog). */
+function AddSkillCard() {
+  const t = useT();
+  return (
+    <button type="button" onClick={() => studioHost?.skills?.add()} className="group flex min-w-0 flex-col text-left outline-none">
+      <div className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-[10px] border border-dashed border-[var(--border-strong)] text-[var(--text-dim)] transition group-hover:bg-[var(--bg-hover)] group-hover:text-[var(--text)]">
+        <Plus size={20} strokeWidth={1.6} />
+        <span className="text-[13px]">{t('gallery.addSkill')}</span>
+      </div>
+    </button>
   );
 }
 

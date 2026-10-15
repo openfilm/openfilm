@@ -43,8 +43,6 @@ export const ko: Words = {
     mine: '내 스킬',
     project: '이 프로젝트',
     addSkill: '스킬 추가',
-    openFolder: 'skills 폴더 열기',
-    feedback: '스킬 사용 의견 보내기',
     scripts: '스크립트 {n}개',
     cat: { launch: '제품 출시', explainer: '해설', slides: '슬라이드를 영상으로', captions: '자막과 타이틀', ads: '광고', commerce: '판매 포인트', music: '음악' },
   },

@@ -44,8 +44,6 @@ export const en = {
     mine: 'Yours',
     project: 'This project',
     addSkill: 'Add a skill',
-    openFolder: 'Open the skills folder',
-    feedback: 'Feedback on skills',
     scripts: '{n} scripts',
     cat: { launch: 'Product launches', explainer: 'Explainers', slides: 'Slides to video', captions: 'Captions and titles', ads: 'Ads', commerce: 'Selling points', music: 'Music' },
   },

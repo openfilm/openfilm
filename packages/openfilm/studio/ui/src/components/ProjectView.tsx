@@ -2412,6 +2412,10 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     if (e.key === 'Escape') { setTitleDraft(title); setRenaming(false); }
                   }}
                   onClick={(e) => e.stopPropagation()}
+                  /* opened by a double-click: all its words selected, to type over or to pick from */
+                  onFocus={(e) => e.currentTarget.select()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onDoubleClick={(e) => e.stopPropagation()}
                   placeholder={t('project.untitled')}
                   maxLength={TITLE_MAX_CHARS}
                   className="min-w-0 flex-1 bg-transparent text-[12.5px] font-medium text-[var(--text)] outline-none"

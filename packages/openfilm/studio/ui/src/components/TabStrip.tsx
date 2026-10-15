@@ -52,16 +52,18 @@ export function TabStrip({ editor, onRename, onNew }: { editor?: React.ReactNode
       <div className="flex h-full min-w-0 items-stretch overflow-hidden border-l border-[var(--border)]">
         {tabs.map((tab, i) => {
           const mine = tab.id === self;
+          /* being renamed: its words are selected and edited like any text, and the tab does not move */
+          const editing = mine && Boolean(editor);
           return (
             <React.Fragment key={tab.id}>
               <div
                 role="tab"
                 aria-selected={tab.active}
                 tabIndex={-1}
-                draggable
+                draggable={!editing}
                 title={titleOf(tab)}
                 onClick={() => { if (!tab.active) host.show(tab.id); }}
-                onDoubleClick={() => { if (mine) onRename?.(); }}
+                onDoubleClick={() => { if (mine && !editing) onRename?.(); }}
                 onMouseDown={(e) => { if (e.button === 1) { e.preventDefault(); host.close(tab.id); } }}
                 onDragStart={(e) => { e.dataTransfer.setData(TAB_TYPE, tab.id); e.dataTransfer.effectAllowed = 'move'; setDragging(tab.id); }}
                 onDragEnd={() => { setDragging(null); setOver(null); }}
@@ -73,7 +75,7 @@ export function TabStrip({ editor, onRename, onNew }: { editor?: React.ReactNode
               >
                 {tab.working ? <Loader2 size={11} className="shrink-0 animate-spin text-[var(--text-dim)]" /> : null}
                 {tab.asking ? <span className="h-[6px] w-[6px] shrink-0 rounded-full bg-[#ff9f43]" /> : null}
-                {mine && editor ? editor : <span className="min-w-0 flex-1 truncate font-medium">{titleOf(tab)}</span>}
+                {editing ? editor : <span className="min-w-0 flex-1 truncate font-medium">{titleOf(tab)}</span>}
                 {tab.exporting != null ? <span className="shrink-0 font-mono text-[10.5px] text-[var(--text-faint)]">{Math.round(tab.exporting * 100)}%</span> : null}
                 <button
                   type="button"

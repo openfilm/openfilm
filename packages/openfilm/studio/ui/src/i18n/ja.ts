@@ -43,8 +43,6 @@ export const ja: Words = {
     mine: '自分の',
     project: 'このプロジェクト',
     addSkill: 'スキルを追加',
-    openFolder: 'skills フォルダを開く',
-    feedback: 'スキルについてのフィードバック',
     scripts: 'スクリプト {n} 個',
     cat: { launch: '製品発表', explainer: '解説', slides: 'スライドを動画に', captions: '字幕とテロップ', ads: '広告', commerce: 'セールスポイント', music: '音楽' },
   },

@@ -43,8 +43,6 @@ export const es: Words = {
     mine: 'Tuya',
     project: 'Este proyecto',
     addSkill: 'Añadir una skill',
-    openFolder: 'Abrir la carpeta de skills',
-    feedback: 'Comentarios sobre las skills',
     scripts: '{n} scripts',
     cat: { launch: 'Lanzamientos', explainer: 'Explicaciones', slides: 'Diapositivas a vídeo', captions: 'Subtítulos y títulos', ads: 'Anuncios', commerce: 'Puntos de venta', music: 'Música' },
   },

@@ -67,9 +67,9 @@ export interface StudioHost {
    * call this for a skill picked in them.
    */
   useSkill?: (skill: { name: string; description: string }) => void;
-  /** The person's own skills, where the app keeps them: one added (the app's own way: from a link, a folder, or made
-      with the agent), their folder shown. The examples' skills offer both. */
-  skills?: { add: () => void; reveal: () => void };
+  /** The person's own skills, where the app keeps them: one added, the app's own way (from a link, a folder, or made
+      with the agent). The Community's skills offer it. */
+  skills?: { add: () => void };
   /** Let the app ask Studio to show something: Studio calls this once with its listener. */
   onCommand?: (listener: (command: StudioCommand) => void) => void;
   /**

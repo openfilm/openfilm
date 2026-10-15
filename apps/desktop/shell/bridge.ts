@@ -282,7 +282,7 @@ const host: StudioHost = {
   folders: { pick: native.pickFolder, pathOf: native.pathForFile },
   tabs: native.tabs,
   useSkill: (skill) => skillPicked.set(skill),
-  skills: { add: () => skillAdd.set(undefined), reveal: () => { void native.skills.reveal(); } },
+  skills: { add: () => skillAdd.set(undefined) },
 };
 (window as unknown as { openfilmHost: StudioHost }).openfilmHost = host;
 
