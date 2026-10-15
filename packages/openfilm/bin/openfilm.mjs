@@ -7,6 +7,7 @@ const USAGE = `openfilm — a film is a function of time: given t, it draws that
   openfilm look   [what] [t | a-b]    check the film and draw it: a contact sheet with its sound and loudness
   openfilm render [a-b]               the MP4, saved beside film.html
   openfilm get    [what] [--options]  voice-over, music, sound effects, transcripts, images, video, from a connected service
+  openfilm skills                     the skills this film can be made with; \`openfilm skill <name>\` prints one
   openfilm update                     the newest OpenFilm; Studio starts again on it
 
   Run with no arguments for the manual; \`openfilm <command> --help\` for one command's options; --version for the version.
@@ -29,6 +30,17 @@ const COMMAND_HELP = {
   Starts OpenFilm Studio if it is not running and prints its address. A Studio page already open, in any browser,
   switches to the project, and nothing more opens; otherwise open the address in your built-in browser, and if no
   page connects within 15 s, Studio opens the person's browser (OPENFILM_NO_BROWSER=1: never).`,
+  skills: `openfilm skills
+
+  The skills the project around the current folder can be made with: ways of making a kind of film, each a folder with
+  a SKILL.md (its name, what it is for, how to work) and the files it brings. Looked for in the project's skills/,
+  then yours (skills/ in OPENFILM_HOME, else ~/.openfilm), then the official ones; the first holding a name wins.`,
+  skill: `openfilm skill <name>
+openfilm skill add <GitHub address | folder>
+
+  <name>   print the skill: where its files are, and its SKILL.md whole
+  add      add a skill (or a folder of skills) to yours: a folder on this computer, or a repository or a folder in one
+           on github.com or gitlab.com, fetched without its git history. One of the same name is replaced.`,
   update: `openfilm update
 
   The newest OpenFilm from npm, and Studio started again on it once nothing is being exported or made; pages open on
@@ -131,6 +143,8 @@ const commands = {
   look: () => import('../src/look.mjs').then((m) => m.look(args, opts)),
   render: () => import('../src/render.mjs').then((m) => m.render(args, opts)),
   update: () => import('../studio/client.mjs').then((m) => m.updateOpenfilm((line) => console.error(line))),
+  skills: () => import('../src/skills-cli.mjs').then((m) => m.skillsCommand(RUN)),
+  skill: () => import('../src/skills-cli.mjs').then((m) => m.skillCommand(args, RUN)),
 };
 /**
  * Show a project in Studio; `.film/opened` marks a project Studio has shown. A folder named is made a project when it is

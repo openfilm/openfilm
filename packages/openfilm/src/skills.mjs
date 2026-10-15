@@ -1,0 +1,192 @@
+// @ts-check
+/**
+ * Skills: ways of making a kind of film that an agent takes up when asked. A skill is a folder in the Agent Skills
+ * format (agentskills.io): a `SKILL.md` whose front matter names it and says what it is for (`name`, `description`),
+ * its body the way to work, and any files it brings (scripts, templates, libraries). A skill never changes OpenFilm
+ * itself: what it makes is pages and media in the project, like anything else an agent writes.
+ *
+ * Three places hold them, the first a name is found in winning:
+ *   project    `<project>/skills/<name>/`, kept with the project, so a film carries the ways it was made
+ *   mine       `skills/` in Studio's home (OPENFILM_HOME, else ~/.openfilm): the person's own, and those they added
+ *   official   `skills/` in this package, released with OpenFilm
+ *
+ * `openfilm skills` lists them and `openfilm skill <name>` prints one, as `openfilm` prints the manual: that is how any
+ * agent reads a skill. The desktop app's chat offers the same list (apps/desktop).
+ */
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { cp, mkdir, rename, rm } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { basename, dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+export const SKILL_FILE = 'SKILL.md';
+/** The project's own skills, beside film.html. */
+export const PROJECT_SKILLS = 'skills';
+/** The places skills are looked for, the first winning a name. */
+export const SKILL_SOURCES = /** @type {const} */ (['project', 'mine', 'official']);
+/** @typedef {typeof SKILL_SOURCES[number]} SkillSource */
+
+/** The official skills, released with this package. */
+export const officialSkillsDir = () => join(dirname(fileURLToPath(import.meta.url)), '..', 'skills');
+/** The person's own skills: `skills/` in Studio's home (studio/server/projects.mjs studioHome). */
+export const mySkillsDir = () => join(process.env.OPENFILM_HOME || join(homedir(), '.openfilm'), 'skills');
+
+/** a skill's name, as the format allows it: lowercase letters, digits and dashes */
+export const SKILL_NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
+/**
+ * The front matter of a SKILL.md: its flat `key: value` lines, values plain, quoted, or a block (`|`, `>`) of the
+ * lines indented under them. Enough for `name` and `description`; anything else is kept as text.
+ * @param {string} text
+ * @returns {{ fields: Record<string, string>, body: string }}
+ */
+export function parseSkillFile(text) {
+  const m = /^﻿?---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(text);
+  if (!m) return { fields: {}, body: text.trim() };
+  /** @type {Record<string, string>} */
+  const fields = {};
+  const lines = m[1].split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const kv = /^([A-Za-z][\w-]*):[ \t]*(.*)$/.exec(lines[i]);
+    if (!kv) continue;
+    const [, key, raw] = kv;
+    let value = raw.trim();
+    if (/^[|>][+-]?$/.test(value)) {
+      const block = [];
+      while (i + 1 < lines.length && (/^\s/.test(lines[i + 1]) || lines[i + 1] === '')) block.push(lines[++i]);
+      const indent = Math.min(...block.filter((l) => l.trim()).map((l) => /^\s*/.exec(l)?.[0].length ?? 0));
+      const kept = block.map((l) => l.slice(Number.isFinite(indent) ? indent : 0));
+      value = (value.startsWith('>') ? kept.join(' ').replace(/\s+/g, ' ') : kept.join('\n')).trim();
+    } else if (/^"(?:[^"\\]|\\.)*"$/.test(value)) {
+      try { value = JSON.parse(value); } catch { value = value.slice(1, -1); }
+    } else if (/^'.*'$/.test(value)) {
+      value = value.slice(1, -1).replace(/''/g, "'");
+    } else {
+      /* a plain value may go on over the lines indented under it */
+      while (i + 1 < lines.length && /^\s+\S/.test(lines[i + 1])) value += ` ${lines[++i].trim()}`;
+    }
+    fields[key] = value;
+  }
+  return { fields, body: text.slice(m[0].length).trim() };
+}
+
+/**
+ * @typedef {{ name: string, description: string, folder: string, source: SkillSource, file: string,
+ *   scripts: string[], over?: SkillSource[] }} Skill
+ *   `over`: the places that had a skill of the same name, which this one takes the place of.
+ */
+
+/**
+ * The skill in one folder, or null when it has no SKILL.md. Its name is the front matter's, else the folder's.
+ * @param {string} folder @param {SkillSource} source @returns {Skill | null}
+ */
+export function readSkill(folder, source) {
+  const file = join(folder, SKILL_FILE);
+  let text;
+  try { text = readFileSync(file, 'utf8'); } catch { return null; }
+  const { fields } = parseSkillFile(text);
+  const name = (fields.name || basename(folder)).trim();
+  return { name, description: (fields.description ?? '').trim(), folder, source, file, scripts: scriptsIn(folder) };
+}
+
+/** The scripts a skill brings (any file under scripts/, and executables anywhere), for the person to see. */
+function scriptsIn(/** @type {string} */ folder) {
+  /** @type {string[]} */
+  const found = [];
+  const walk = (/** @type {string} */ dir, /** @type {string} */ rel, depth = 0) => {
+    if (depth > 4 || found.length >= 50) return;
+    let entries = [];
+    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (e.name.startsWith('.') || e.name === 'node_modules') continue;
+      const path = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) walk(join(dir, e.name), path, depth + 1);
+      else if (rel.split('/')[0] === 'scripts' || /\.(sh|py|mjs|cjs|js|ts|rb|pl|ps1|bat|cmd)$/i.test(e.name)) found.push(path);
+    }
+  };
+  walk(folder, '');
+  return found.sort();
+}
+
+/** The skills in one place: each folder in it with a SKILL.md. @param {string} dir @param {SkillSource} source */
+export function skillsIn(dir, source) {
+  let names = [];
+  try { names = readdirSync(dir); } catch { return []; }
+  return names.filter((n) => !n.startsWith('.')).flatMap((n) => {
+    const folder = join(dir, n);
+    try { if (!statSync(folder).isDirectory()) return []; } catch { return []; }
+    const skill = readSkill(folder, source);
+    return skill ? [skill] : [];
+  });
+}
+
+/**
+ * Every skill available to a project (or none: only the person's own and the official ones), by name, the first
+ * place holding a name winning; sorted by name.
+ * @param {{ project?: string | null, mine?: string, official?: string }} [where]
+ * @returns {Skill[]}
+ */
+export function listSkills({ project = null, mine = mySkillsDir(), official = officialSkillsDir() } = {}) {
+  /** @type {Map<string, Skill>} */
+  const byName = new Map();
+  const places = /** @type {Array<[string | null, SkillSource]>} */ ([[project ? join(project, PROJECT_SKILLS) : null, 'project'], [mine, 'mine'], [official, 'official']]);
+  for (const [dir, source] of places) {
+    if (!dir) continue;
+    for (const skill of skillsIn(dir, source)) {
+      const first = byName.get(skill.name);
+      if (first) first.over = [...(first.over ?? []), source];
+      else byName.set(skill.name, skill);
+    }
+  }
+  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** One skill by name, as listSkills finds it, or null. @param {string} name @param {Parameters<typeof listSkills>[0]} [where] */
+export function findSkill(name, where) {
+  return listSkills(where).find((s) => s.name === name) ?? null;
+}
+
+/**
+ * A skill as an agent reads it: its name, where its files are (only read: what a film uses is copied into the
+ * project), and its SKILL.md whole.
+ * @param {Skill} skill
+ */
+export function skillText(skill) {
+  return `<skill name="${skill.name}" folder="${skill.folder}">\n${readFileSync(skill.file, 'utf8').trim()}\n</skill>`;
+}
+
+/**
+ * Add a skill to the person's own (`mine`): a folder on this computer, copied; or one fetched by the caller into
+ * `from` (a GitHub or GitLab address, studio/server/fetch-repo.mjs). A folder holding several skills (each a folder
+ * with a SKILL.md) adds them all. One of the same name is replaced. → the skills added.
+ * @param {string} from @param {{ mine?: string, move?: boolean }} [opts]  `move`: the folder is a download of the caller's
+ * @returns {Promise<Skill[]>}
+ */
+export async function addSkills(from, { mine = mySkillsDir(), move = false } = {}) {
+  const src = resolve(from);
+  const one = readSkill(src, 'mine');
+  const found = one ? [one] : skillsIn(src, 'mine').concat(skillsIn(join(src, PROJECT_SKILLS), 'mine'));
+  if (!found.length) throw new Error(`There is no ${SKILL_FILE} in ${from}: it is not a skill.`);
+  await mkdir(mine, { recursive: true });
+  /** @type {Skill[]} */
+  const added = [];
+  for (const skill of found) {
+    const name = SKILL_NAME.test(skill.name) ? skill.name : basename(skill.folder).toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '') || 'skill';
+    const to = join(mine, name);
+    const staging = `${to}.adding-${process.pid}`;
+    await rm(staging, { recursive: true, force: true });
+    if (move && found.length === 1) await rename(skill.folder, staging);
+    else await cp(skill.folder, staging, { recursive: true, filter: (p) => basename(p) !== '.git' });
+    await rm(to, { recursive: true, force: true });
+    await rename(staging, to);
+    const kept = readSkill(to, 'mine');
+    if (kept) added.push(kept);
+  }
+  return added;
+}
+
+/** Whether a folder holds a skill, or skills (each a folder with a SKILL.md, or under skills/). @param {string} dir */
+export function holdsSkills(dir) {
+  if (existsSync(join(dir, SKILL_FILE))) return true;
+  return skillsIn(dir, 'mine').length > 0 || skillsIn(join(dir, PROJECT_SKILLS), 'mine').length > 0;
+}

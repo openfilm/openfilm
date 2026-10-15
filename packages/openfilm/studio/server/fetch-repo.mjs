@@ -15,6 +15,7 @@ import { existsSync } from 'node:fs';
 import { lstat, mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { FILM_FILE } from '../../src/film-doc.mjs';
+import { SKILL_FILE, holdsSkills } from '../../src/skills.mjs';
 import { FetchError } from './fetch-error.mjs';
 import { downloadFiles, listFiles, resolveCommit } from './fetch-github.mjs';
 
@@ -223,12 +224,13 @@ export async function cloneInto({ cloneUrl, ref, folder, dir, signal, onLine }) 
  * Fetch a film into `library`: the repository or folder `source` points at, as a folder of its own named after it
  * ("one-prompt", "one-prompt 2", …), without `.git`. Resolves to that folder. A folder that is missing, or has no
  * film.html, leaves nothing behind. GitHub's public repositories come over https (fetch-github.mjs); the others, and
- * any GitHub's API cannot list, through git.
+ * any GitHub's API cannot list, through git. `skill`: what is fetched is a skill, or a folder of skills (a SKILL.md
+ * in place of film.html: src/skills.mjs).
  * @param {RepoSource} source
  * @param {{ library: string, onProgress?: (p: FetchProgress) => void, signal?: AbortSignal, maxBytes?: number, timeoutMs?: number,
- *   hosts?: import('./fetch-github.mjs').GitHubHosts }} options
+ *   hosts?: import('./fetch-github.mjs').GitHubHosts, skill?: boolean }} options
  */
-export async function fetchFilm(source, { library, onProgress = () => {}, signal, maxBytes = MAX_BYTES, timeoutMs = TIMEOUT_MS, hosts }) {
+export async function fetchFilm(source, { library, onProgress = () => {}, signal, maxBytes = MAX_BYTES, timeoutMs = TIMEOUT_MS, hosts, skill = false }) {
   const where = source.host === 'github' ? 'GitHub' : 'GitLab';
   /* why it stopped, when it was stopped here (nothing coming, too big) or by the caller */
   /** @type {FetchError | null} */
@@ -248,6 +250,12 @@ export async function fetchFilm(source, { library, onProgress = () => {}, signal
   };
   waited();
 
+  /** what was fetched is not what was asked for: no film.html, or no SKILL.md */
+  const notThere = (/** @type {string[]} */ folder) => {
+    const place = folder.length ? `“${folder.join('/')}”` : 'that repository';
+    return skill ? new FetchError(`There is no ${SKILL_FILE} in ${place}: it is not a skill.`, 422, 'no-skill')
+      : new FetchError(`There is no film.html in ${place}: it is not an OpenFilm film.`, 422, 'no-film');
+  };
   const tooBig = () => new FetchError(`It is bigger than ${Math.max(1, Math.round(maxBytes / 1024 / 1024))} MB, so it was stopped.`, 413, 'too-big');
   /** @type {FetchProgress} */
   const progress = { phase: 'lookup', percent: null, bytes: 0, total: null };
@@ -267,9 +275,8 @@ export async function fetchFilm(source, { library, onProgress = () => {}, signal
   const overHttp = async (/** @type {{ owner: string, repo: string }} */ at) => {
     const { commit, folder } = await resolveCommit(at, source.tree, source.blob, { signal: control.signal, hosts });
     const files = await listFiles(at, commit, folder, { signal: control.signal, hosts });
-    if (!files.some((file) => file.path === FILM_FILE)) {
-      throw new FetchError(`There is no film.html in ${folder.length ? `“${folder.join('/')}”` : 'that repository'}: it is not an OpenFilm film.`, 422, 'no-film');
-    }
+    const fits = skill ? files.some((file) => file.path === SKILL_FILE || file.path.endsWith(`/${SKILL_FILE}`)) : files.some((file) => file.path === FILM_FILE);
+    if (!fits) throw notThere(folder);
     const total = files.reduce((sum, file) => sum + file.size, 0);
     if (total > maxBytes) throw tooBig();
     Object.assign(progress, { phase: 'download', total, percent: 0 });
@@ -317,9 +324,7 @@ export async function fetchFilm(source, { library, onProgress = () => {}, signal
     const from = join(clone, ...folder);
     const kind = await stat(from).catch(() => null);
     if (!kind?.isDirectory()) throw new FetchError(`There is no folder “${folder.join('/')}” in that repository.`, 404, 'no-folder');
-    if (!existsSync(join(from, FILM_FILE))) {
-      throw new FetchError(`There is no film.html in ${folder.length ? `“${folder.join('/')}”` : 'that repository'}: it is not an OpenFilm film.`, 422, 'no-film');
-    }
+    if (skill ? !holdsSkills(from) : !existsSync(join(from, FILM_FILE))) throw notThere(folder);
     /* the copy is the person's own: no history of where it came from, no remote */
     await rm(join(from, '.git'), { recursive: true, force: true });
     return { from, folder };

@@ -25,8 +25,9 @@ import { ffmpeg } from '../../src/shared.mjs';
 
 export const ASSETS = 'assets';
 /** Folders that hold tools and builds, not a film's pages. */
-/* folders that hold no pages of the film (a dot folder is a tool's, and never looked in) */
-const SKIP = new Set(['node_modules', 'dist', 'build', 'lib', 'vendor', ASSETS]);
+/* folders that hold no pages of the film (a dot folder is a tool's, and never looked in; skills/ holds the project's
+   skills, src/skills.mjs) */
+const SKIP = new Set(['node_modules', 'dist', 'build', 'lib', 'vendor', 'skills', ASSETS]);
 
 export class FileError extends Error {
   /** @param {string} message @param {number} status */
