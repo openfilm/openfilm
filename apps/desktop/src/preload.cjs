@@ -72,6 +72,14 @@ contextBridge.exposeInMainWorld('openfilmNative', {
     snapshot: (project, turnId) => ipcRenderer.invoke('desktop:chat:snapshot', { project, turnId }),
     changes: (project, turnId) => ipcRenderer.invoke('desktop:chat:changes', { project, turnId }),
   },
+  /* the composer's Skills button (skills-ipc.mjs) */
+  skills: {
+    list: (project, agent) => ipcRenderer.invoke('desktop:skills:list', { project, agent }),
+    texts: (project, agent, names) => ipcRenderer.invoke('desktop:skills:texts', { project, agent, names }),
+    allow: (agent, name, allowed) => ipcRenderer.invoke('desktop:skills:allow', { agent, name, allowed }),
+    add: (url) => ipcRenderer.invoke('desktop:skills:add', { url }),
+    reveal: () => ipcRenderer.invoke('desktop:skills:reveal'),
+  },
   /* the app's own preferences (Settings → Developer) */
   prefs: {
     get: () => ipcRenderer.invoke('desktop:prefs'),

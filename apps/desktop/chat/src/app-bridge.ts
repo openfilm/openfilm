@@ -70,11 +70,44 @@ interface AppBridge {
   /** what an agent's command asks before it spends (a video clip), and what it tells the person (a provider with no
       balance left), worded by Studio: shown above the composer until answered; the command waits for a question */
   asks: { get(): SpendAsk[]; onChange(listener: (asks: SpendAsk[]) => void): () => void; answer(id: string, allow: boolean): void };
+  /** the composer's Skills button (apps/desktop/src/skills-ipc.mjs) */
+  skills: {
+    list(project: string, agent: string): Promise<SkillListing>;
+    /** the skills a message names, as its agent reads each (its folder and its SKILL.md whole) */
+    texts(project: string, agent: string, names: string[]): Promise<Array<{ name: string; text: string }>>;
+    /** one of the agent's own skills let into OpenFilm, or not */
+    allow(agent: string, name: string, allowed: boolean): Promise<{ ok: boolean }>;
+    add(url: string): Promise<{ ok: true; skills: SkillInfo[] } | { ok: false; error: string }>;
+    reveal(): Promise<unknown>;
+  };
   /** Settings → Developer: `logs`, each turn shows its full log; `changes`, what it changed in the files, under its reply */
   developer: { get(): Promise<DeveloperPrefs>; onChange(listener: (prefs: DeveloperPrefs) => void): () => void };
 }
 
 export interface DeveloperPrefs { logs: boolean; changes: boolean }
+
+/** One of OpenFilm's skills: the project's, the person's own, or official (openfilm/src/skills.mjs). */
+export interface SkillInfo {
+  name: string;
+  description: string;
+  source: 'project' | 'mine' | 'official';
+  folder: string;
+  /** what it brings that an agent could run */
+  scripts: string[];
+  /** the places with a skill of the same name it takes the place of */
+  over?: Array<'project' | 'mine' | 'official'>;
+}
+
+/** A skill the person installed in their agent themselves, let into OpenFilm or not. */
+export interface OwnSkill { name: string; description: string; folder: string; allowed: boolean }
+
+export interface SkillListing {
+  openfilm: SkillInfo[];
+  /** `filtered`: the agent's own are hidden unless let in; otherwise it has them all, as in its own terminal */
+  own: { agent: string; filtered: boolean; skills: OwnSkill[] };
+  /** the person's own skills folder */
+  mine: string;
+}
 
 /** A question about spending, as Studio words it. */
 export interface SpendAsk { id: string; title: string; body: string | null; allowLabel: string; denyLabel: string }

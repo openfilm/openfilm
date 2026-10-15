@@ -34,6 +34,7 @@ import * as acp from '@agentclientprotocol/sdk';
 import { PATH_SEP, childEnvironment, lastPathSource, loginShellEnvironment, loginShellVariables, shellSubset } from './environment.mjs';
 import { AGENT_PROGRAMS, HOME_BIN_CANDIDATES, chosenProgram, consoleProgram, detectAgentInstallation, searchReport } from './agent-installation.mjs';
 import { logSwitches } from './agent-logs.mjs';
+import { mergeConfig, sessionSkills } from './agent-skills.mjs';
 import { nodeBinary } from './node-runtime.mjs';
 import { outOfBalance } from './pi-config.mjs';
 
@@ -648,12 +649,15 @@ export class AgentSession {
    * @param {{ agent: string, cwd: string, resume?: string | null, binDir?: string | null, fallbackDir?: string | null,
    *           harness?: any,
    *           env?: Record<string, string>, logDir?: string | null,
+   *           skills?: { dataDir: string, openfilmHome?: string, allowed?: string[], commands?: string[] | null } | null,
    *           onUpdate?: (update: any) => void, onPermission?: (params: any) => Promise<string | null>,
    *           onQuestion?: (ask: { message: string, toolCallId: string | null, questions: any[] }) => Promise<Record<string, { label?: string, text?: string }> | null>,
    *           onExit?: (info: { code: number | null, stderr: string }) => void,
    *           onSend?: (sent: { prompt: any[], _meta?: any }) => void }} opts
    * `onSend` hears each message as it goes to the agent, whole (the app's words before the first one's, for an agent
    * told them there); `opened`, once started, says what it was started and opened with.
+   * `skills`: the session has its maker's skills, OpenFilm's, and of the person's own only `allowed`, each agent told by
+   * its own switch (agent-skills.mjs; `commands`, what Claude Code said it has); `opened.skills` says how.
    * `logDir` (Developer mode): an agent whose own record lacks what its model got is started with its own logging
    * switch, writing under this folder (agent-logs.mjs); `opened.log` says where.
    */
@@ -688,20 +692,27 @@ export class AgentSession {
     const own = !harness ? {} : {
       ...harness.env,
       OPENFILM_GET_WEB: '1',
-      OPENFILM_PI: JSON.stringify({ agentDir: harness.home, models: harness.models, model: harness.model, systemPrompt: ownAgentPrompt() }),
     };
+    /* its skills: its maker's, OpenFilm's, and the person's own only those let in (agent-skills.mjs) */
+    const skills = this.opts.skills
+      ? await sessionSkills(this.opts.agent, { cwd: this.opts.cwd, env: shell, ...this.opts.skills }).catch(() => null) : null;
+    if (harness) own.OPENFILM_PI = JSON.stringify({ agentDir: harness.home, models: harness.models, model: harness.model, systemPrompt: ownAgentPrompt(), skills: skills?.piSkills ?? null });
     /* Developer mode: the agent's own logging switch, so the turn log has what its model got; none when the person
        set its telemetry themselves (agent-logs.mjs) */
     this.logging = this.opts.logDir && cli && !this.spec.adapter
       ? await logSwitches(this.opts.agent, { base: this.opts.logDir, shell, cwd: this.opts.cwd }).catch(() => null) : null;
     /* an agent that speaks ACP itself: its own program, started as the registry starts it */
     const native = cli && !this.spec.adapter ? starting(cli.path, [...this.spec.args, ...(this.logging?.args ?? [])]) : null;
-    const extra = { ...this.opts.env, ...(native ? native.env : node.env), ...(cli && this.spec.env ? this.spec.env(cli.path) : {}), ...own, ...this.logging?.env };
+    const extra = { ...this.opts.env, ...(native ? native.env : node.env), ...(cli && this.spec.env ? this.spec.env(cli.path) : {}), ...own, ...skills?.env, ...this.logging?.env };
+    /* OpenCode's inline configuration carries both its skills and, in Developer mode, its logging */
+    if (skills?.env?.OPENCODE_CONFIG_CONTENT && this.logging?.env?.OPENCODE_CONFIG_CONTENT) {
+      extra.OPENCODE_CONFIG_CONTENT = JSON.stringify(mergeConfig(JSON.parse(skills.env.OPENCODE_CONFIG_CONTENT), JSON.parse(this.logging.env.OPENCODE_CONFIG_CONTENT)));
+    }
     const env = childEnvironment({ shell: { ...shell, PATH: path }, extra });
     const claude = this.spec.adapter === AGENTS.claude.adapter;
     if (this.spec.adapter === AGENTS.codex.adapter) {
       const theirs = codexDeveloperInstructions(codexConfigText(shell));
-      env.CODEX_CONFIG = JSON.stringify({ developer_instructions: theirs ? `${theirs}\n\n${instructions}` : instructions });
+      env.CODEX_CONFIG = JSON.stringify(mergeConfig({ developer_instructions: theirs ? `${theirs}\n\n${instructions}` : instructions }, skills?.codexConfig ?? {}));
     }
     /* the others have no place for it: the session's first message carries it */
     this.instructions = harness || this.spec.systemPrompt ? null : instructions;
@@ -741,7 +752,8 @@ export class AgentSession {
     const params = {
       cwd: this.opts.cwd,
       mcpServers: [],
-      ...(claude ? { _meta: { systemPrompt: { append: instructions } } } : {}),
+      ...(skills?.additionalDirectories ? { additionalDirectories: skills.additionalDirectories } : {}),
+      ...(claude ? { _meta: { systemPrompt: { append: instructions }, ...(skills?.claude ? { claudeCode: { options: skills.claude } } : {}) } } : {}),
     };
     /* the program's own sign-in, taken up (Cursor asks for this before any session) */
     if (this.spec.authenticate && (init.authMethods ?? []).some((m) => m.id === this.spec.authenticate)) {
@@ -793,6 +805,7 @@ export class AgentSession {
       session: { method: !resumed ? 'session/new' : caps.sessionCapabilities?.resume ? 'session/resume' : 'session/load', params: { ...params, ...(resumed ? { sessionId: resume } : {}) } },
       firstMessage: this.instructions,
       log: this.logging?.log ?? null,
+      skills: skills?.log ?? null,
     };
     return this.info;
   }

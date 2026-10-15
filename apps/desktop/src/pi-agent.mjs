@@ -8,7 +8,7 @@
  * the model asked for and its reasoning efforts: pi-config.mjs OwnModel; `model` the id of the one a session starts
  * on; the chat switches between them with the session's `model` option, and a model's efforts with `effort`, for one
  * offering more than one; `auto` sends none), and its whole system prompt (agents.mjs ownAgentPrompt), in place of Pi's. Of the project's instructions only its own AGENTS.md (or CLAUDE.md) is read, not
- * the folders above it; no skills, no SYSTEM.md. Besides Pi's read, bash, edit and write it has `ask`: questions for
+ * the folders above it; no SYSTEM.md; of skills only OpenFilm's (`skills`: their folder and names, agent-skills.mjs). Besides Pi's read, bash, edit and write it has `ask`: questions for
  * the person, with options, shown in the chat as Claude Code's and Codex's are (an ACP form).
  *
  * A conversation's session is kept with the project it is about (chat-store.mjs: `.film/chat/agent/`), so it goes
@@ -31,6 +31,8 @@ import { THINKING, contextUsed, effortOption, modelOption, modelsJson, providerO
 console.log = console.info = console.warn = console.debug = (...args) => process.stderr.write(`${args.map(String).join(' ')}\n`);
 
 const config = JSON.parse(process.env.OPENFILM_PI ?? '{}');
+/** OpenFilm's skills for this session (agent-skills.mjs): Pi loads these and no others */
+const ownSkills = { paths: Array.isArray(config.skills?.paths) ? config.skills.paths : [], names: Array.isArray(config.skills?.names) ? config.skills.names : [] };
 const VERSION = '1.1.0';
 /** @type {import('./pi-config.mjs').OwnModel[]} */
 const models = Array.isArray(config.models) ? config.models : [];
@@ -110,7 +112,10 @@ async function open(client, cwd, resumeId) {
   /* the session's id, once it has one: the questions `ask` puts are the session's */
   let sessionId = null;
   const resourceLoader = new DefaultResourceLoader({
-    cwd, agentDir: config.agentDir, settingsManager, noExtensions: true, noPromptTemplates: true, noThemes: true, noSkills: true,
+    cwd, agentDir: config.agentDir, settingsManager, noExtensions: true, noPromptTemplates: true, noThemes: true,
+    /* OpenFilm's skills, and no other Pi would find (in the project, or its own folders) */
+    noSkills: !ownSkills.names.length, additionalSkillPaths: ownSkills.paths,
+    skillsOverride: (base) => ({ ...base, skills: base.skills.filter((skill) => ownSkills.names.includes(skill.name)) }),
     systemPromptOverride: () => config.systemPrompt,
     appendSystemPromptOverride: () => [],
     agentsFilesOverride: ({ agentsFiles }) => ({ agentsFiles: agentsFiles.filter((f) => dirname(resolve(f.path)) === resolve(cwd)) }),

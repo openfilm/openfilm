@@ -48,6 +48,7 @@ import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import { LOG_SETTLE_MS } from './agent-logs.mjs';
 import { RECORDED_AGENTS, agentRecordCalls, compactCalls } from './agent-records.mjs';
+import { skillStore } from './agent-skills.mjs';
 import { AgentSession, HARNESS_AGENTS, isAgentId, isChatAgent, listAgents, openAgentSignIn } from './agents.mjs';
 import { loggedBlocks, openLog, writeModelLog } from './chat-store.mjs';
 import { loginShellVariables } from './environment.mjs';
@@ -60,6 +61,10 @@ const IDLE_MS = 20 * 60_000;
 const IDLE_CHECK_MS = 60_000;
 /** how long a session opened for its options waits for the agent to say its commands */
 const PROBE_COMMANDS_MS = 1500;
+/** how long after its turn a session whose skills changed closes: the page has settled the turn by then */
+const STALE_CLOSE_MS = 3000;
+/** how long a session opened only to hear Claude Code's commands (its skills' filter) waits for them */
+const COMMANDS_WAIT_MS = 8000;
 /** the pictures one message may carry, and how big each (base64 of a JPEG at most 1280 px wide) */
 const PROMPT_IMAGES_MAX = 8;
 const PROMPT_IMAGE_MAX_CHARS = 8 * 1024 * 1024;
@@ -99,11 +104,38 @@ function imageBlocks(images) {
  * each session starts.
  * `onWorking` hears the folders agents are working in (a turn running there) each time they change.
  * `logDir()`, as each session starts: the folder for the logs an agent is started with (Developer mode on), or null.
+ * `skills`: where the app keeps its record of skills (`dataDir`) and Studio's home (`openfilmHome`, the person's own
+ * skills): each session has its maker's skills, OpenFilm's, and of the person's own those let in (agent-skills.mjs).
  * @param {{ trusted: (event: any) => boolean, binDir?: string | null, fallbackDir?: string | null, env?: Record<string, string>,
- *           harness?: (id: string) => Promise<any>, onWorking?: (folders: string[]) => void, logDir?: () => string | null }} opts
+ *           harness?: (id: string) => Promise<any>, onWorking?: (folders: string[]) => void, logDir?: () => string | null,
+ *           skills?: { dataDir: string, openfilmHome?: string } | null }} opts
  */
-export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbackDir = null, env = {}, harness = async () => null, log = () => {}, onWorking = () => {}, logDir = () => null }) {
+export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbackDir = null, env = {}, harness = async () => null, log = () => {}, onWorking = () => {}, logDir = () => null, skills = null }) {
   const harnessFor = async (agent) => (HARNESS_AGENTS.includes(agent) ? harness(agent) : undefined);
+  const skillRecord = skills ? skillStore(skills.dataDir) : null;
+  /** what an agent's names of its commands are, kept for its skills' filter (Claude Code's: agent-skills.mjs) */
+  const noteCommands = (agent, update) => {
+    if (agent === 'claude' && update?.sessionUpdate === 'available_commands_update' && Array.isArray(update.availableCommands)) {
+      skillRecord?.setCommands(agent, update.availableCommands.map((c) => String(c?.name ?? '').replace(/^\//, '')));
+    }
+  };
+  /**
+   * A session's skills: Claude Code's filter is the list of what it has, so a session opened before it ever said
+   * that is preceded by one opened only to hear it.
+   */
+  const skillsFor = async (agent) => {
+    if (!skills || !skillRecord) return null;
+    if (agent === 'claude' && !skillRecord.commands(agent)) {
+      let heard = () => {};
+      const said = new Promise((done) => { heard = done; });
+      const probe = new AgentSession({ agent, cwd: homedir(), binDir, fallbackDir, env, onUpdate: (update) => { noteCommands(agent, update); if (update?.sessionUpdate === 'available_commands_update') heard(); } });
+      try {
+        await probe.start();
+        await Promise.race([said, new Promise((done) => setTimeout(done, COMMANDS_WAIT_MS))]);
+      } catch { /* its own session says why */ } finally { probe.close(); }
+    }
+    return { ...skills, allowed: skillRecord.allowed(agent), commands: skillRecord.commands(agent) };
+  };
   /** @type {Map<string, { session: AgentSession, sender: import('electron').WebContents, pending: Map<string, (answer: any) => void>, agent: string, cwd: string, turn: any }>} */
   const sessions = new Map();
   let activePrompts = 0;
@@ -168,7 +200,7 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
       let said = () => {};
       const heard = new Promise((done) => { said = done; });
       session = new AgentSession({ agent, cwd: homedir(), binDir, fallbackDir, env, harness: await harnessFor(agent),
-        onUpdate: (update) => { if (update?.sessionUpdate === 'available_commands_update') { commands = update.availableCommands ?? null; said(); } } });
+        onUpdate: (update) => { noteCommands(agent, update); if (update?.sessionUpdate === 'available_commands_update') { commands = update.availableCommands ?? null; said(); } } });
       const info = await session.start();
       await Promise.race([heard, new Promise((done) => setTimeout(done, PROBE_COMMANDS_MS))]);
       return { ok: true, info: { ...info, ...(commands ? { commands } : {}) } };
@@ -206,8 +238,9 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
         fallbackDir,
         env,
         logDir: logDir(),
+        skills: await skillsFor(agent),
         harness: await harnessFor(agent),
-        onUpdate: (update) => send(entry, key, { kind: 'update', update }),
+        onUpdate: (update) => { noteCommands(agent, update); send(entry, key, { kind: 'update', update }); },
         onPermission: (params) => new Promise((resolve) => {
           const requestId = randomUUID();
           pending.set(requestId, (optionId) => { pending.delete(requestId); resolve(optionId); });
@@ -272,6 +305,8 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
       turn.file.end();
       turn.done = result;
       entry.turnEnded = Date.now();
+      /* its skills changed while it worked: closed now its turn is over (refreshSkills) */
+      if (entry.stale) setTimeout(() => { if (sessions.get(key) === entry && !(entry.running > 0)) close(key); }, STALE_CLOSE_MS);
       void keepAgentRecord({ agent: entry.agent, sessionId: entry.info?.sessionId, cwd: entry.cwd, turnId: meta.turnId, from, to: entry.turnEnded, agentLog: entry.session.opened?.log, log });
       /* the page that asked may be gone (reloaded): say it on the channel too */
       if (!entry.sender.isDestroyed()) entry.sender.send('desktop:local-agents:event', { key, kind: 'done', turnId: meta.turnId, ...result });
@@ -378,5 +413,15 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
     closeAll: () => [...sessions.keys()].forEach(close),
     /** an agent disconnected in Settings: its sessions close */
     closeAgent: (agent) => { for (const [key, entry] of [...sessions]) if (entry.agent === agent) close(key); },
+    /**
+     * The skills let in changed for an agent: its sessions close (one at work once its turn ends), and the next message
+     * takes each conversation up again with them.
+     */
+    refreshSkills: (agent) => {
+      for (const [key, entry] of [...sessions]) {
+        if (entry.agent !== agent) continue;
+        if (entry.running > 0) entry.stale = true; else close(key);
+      }
+    },
   };
 }

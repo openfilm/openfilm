@@ -28,6 +28,8 @@ interface Native {
   localAgents: Record<string, unknown>;
   importFile(request: { projectId: string; path: string; name: string }): Promise<{ ok: true; path: string } | { ok: false; error: string }>;
   chat: Record<string, (...args: never[]) => Promise<unknown>>;
+  /* the composer's Skills button (src/skills-ipc.mjs) */
+  skills: Record<string, (...args: never[]) => Promise<unknown>>;
   prefs: { get(): Promise<AppPrefs>; set(next: Partial<AppPrefs>): Promise<unknown>; onChange(listener: Listener<AppPrefs>): Stop };
   saveLayout(layout: { chatOpen: boolean; chatWidth: number }): void;
   setTheme(theme: Theme): void;
@@ -378,6 +380,7 @@ const uploadName = (name: string) => name.split(/[\\/]/).pop()!.replace(/[\u0000
   setMenuOpen() {},
   /* the chat's record of each project, in its .film/chat and .film/logs */
   chat: native.chat,
+  skills: native.skills,
   asks: { get: asks.get, onChange: asks.on, answer: (id: string, allow: boolean) => answerAsk(id, allow) },
   developer,
 };

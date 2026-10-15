@@ -20,6 +20,7 @@ import { CHAT_MIN, STUDIO_MIN, WINDOW_MIN, placeOnDisplays, readWindowState, wri
 import { applicationMenu } from './menu.mjs';
 import { registerLocalAgentIpc } from './local-agents-ipc.mjs';
 import { readPreferences, registerChatIpc } from './chat-ipc.mjs';
+import { registerSkillsIpc } from './skills-ipc.mjs';
 import { createRoster } from './agent-roster.mjs';
 import { checkAgentProgram, diagnoseAgent, listAgents, openAgentSignIn, setChosenPaths } from './agents.mjs';
 import { agentUsage, forgetAgentUsage } from './agent-usage.mjs';
@@ -310,6 +311,18 @@ async function start() {
     harness: async (id) => roster?.harness(id) ?? null,
     /* Developer mode: an agent whose own record lacks what its model got logs it here (agent-logs.mjs) */
     logDir: () => (readPreferences(DATA).developer ? join(DATA, 'agent-logs') : null),
+    /* each session's skills: its maker's, OpenFilm's, and of the person's own those let in (agent-skills.mjs) */
+    skills: { dataDir: DATA, openfilmHome: env.OPENFILM_HOME },
+  });
+  /* the composer's Skills button */
+  registerSkillsIpc(ipcMain, {
+    trusted: fromPage,
+    projects: async () => (await studioApi('/api/projects')).projects.filter((p) => !p.missing).map((p) => p.path),
+    dataDir: DATA,
+    openfilmHome: env.OPENFILM_HOME,
+    reveal: (path) => { void shell.openPath(path); },
+    refreshSkills: (agent) => localAgents?.refreshSkills(agent),
+    log,
   });
   /* Settings → Agents (in Studio's page) and the chat's agent menu: one roster, both told of every change */
   roster = createRoster({
