@@ -6,7 +6,9 @@
  *
  * `openfilm get call` sends a request to one through Studio, which adds the key (the agent never sees it) and lands
  * what comes back: a file under assets/<service>/, or text and JSON as they are, for the agent to read. OpenFilm knows
- * nothing about what a service answers; the agent does, from the person's words and the service's own docs.
+ * nothing about what a service answers; the agent does, from the person's words and the service's own docs. The key
+ * goes where the agent writes {key} (a header, the path's query), as the docs say; else as `Authorization: Bearer`
+ * (or where the person once said, `auth`).
  *
  * A request goes only to the address the person gave (a path under it, never another host), and carries only the
  * project's own files.
@@ -30,6 +32,8 @@ export const DEFAULT_AUTH = 'Authorization: Bearer {key}';
 const MAX_SEND_BYTES = 200 << 20;
 /** Text longer than this is saved as a file, its start shown. */
 const MAX_SHOWN_CHARS = 20_000;
+/** The most the person's words about a service may be: what it does, how it is called, or its docs. */
+const MAX_NOTE_CHARS = 2000;
 /** How long a service has to answer. */
 export const CALL_TIMEOUT_SEC = 600;
 
@@ -99,10 +103,12 @@ export function withService(services, id, input) {
   let newId = was?.id ?? idOf(name);
   for (let n = 2; others.some((s) => s.id === newId); n++) newId = `${idOf(name)}-${n}`;
   const note = plainText(input.note);
-  if (note.length > 600) throw bad('Say what it does in a few lines (600 characters at most)');
+  if (note.length > MAX_NOTE_CHARS) throw bad(`Say what it does and how it is called, or where its docs are (${MAX_NOTE_CHARS} characters at most)`);
   const key = input.key === undefined ? was?.key : plainText(input.key) ? cleanServiceKey(plainText(input.key)) : undefined;
+  /* where the key goes, when Settings says (it no longer asks: the agent writes {key} where the docs want it) */
+  const auth = input.auth === undefined ? (was?.auth ?? DEFAULT_AUTH) : cleanAuth(input.auth);
   /** @type {CustomService} */
-  const service = { ...(was ? unknownOf(was) : {}), id: newId, name, url: cleanAddress(input.url), ...(key ? { key } : {}), auth: cleanAuth(input.auth), note };
+  const service = { ...(was ? unknownOf(was) : {}), id: newId, name, url: cleanAddress(input.url), ...(key ? { key } : {}), auth, note };
   return was ? services.map((s) => (s === was ? service : s)) : [...services, service];
 }
 
@@ -166,7 +172,11 @@ const isText = (/** @type {string} */ type) => /^text\/|[/+]json$|\/xml$|[/+]xml
  * @param {AbortSignal} signal
  */
 export async function callService(root, service, args, signal) {
-  const url = targetOf(service.url, args.path ?? '/');
+  /* {key}: where the agent wants the key, filled in here (it never has it); with none, the usual header */
+  const placed = [args.path ?? '', ...(args.header ?? [])].some((v) => v.includes('{key}'));
+  if (placed && !service.key) throw bad(`${service.name} has no key in Settings, so {key} has nothing to stand for`);
+  const fill = (/** @type {string} */ v, encode = false) => (service.key ? v.replaceAll('{key}', encode ? encodeURIComponent(service.key) : service.key) : v);
+  const url = targetOf(service.url, fill(args.path ?? '/', true));
   const forms = args.form ?? [], files = args.file ?? [];
   const kinds = [args.json !== undefined, forms.length + files.length > 0, args.body !== undefined].filter(Boolean).length;
   if (kinds > 1) throw bad('Send one kind of body: --json, or --form and --file, or --body');
@@ -197,9 +207,9 @@ export async function callService(root, service, args, signal) {
     const name = at > 0 ? line.slice(0, at).trim() : '';
     if (!/^[A-Za-z0-9-]+$/.test(name) || /[\r\n]/.test(line)) throw bad('--header is written "Name: value"');
     if (/^(host|content-length|connection|transfer-encoding)$/i.test(name)) throw bad(`--header ${name} is set by Studio`);
-    headers[name.toLowerCase()] = line.slice(at + 1).trim();
+    headers[name.toLowerCase()] = fill(line.slice(at + 1).trim());
   }
-  if (service.key) {
+  if (service.key && !placed) {
     const at = service.auth.indexOf(':');
     headers[service.auth.slice(0, at).trim().toLowerCase()] = service.auth.slice(at + 1).trim().replaceAll('{key}', service.key);
   }

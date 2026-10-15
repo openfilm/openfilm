@@ -35,7 +35,7 @@ import azure from './azure.mjs';
 /** The providers paid with the person's own key. */
 const OWN = [elevenlabs, openai, google, fal, pexels, pixabay, brave, tavily, groq, azure];
 
-/** The kinds of media the person chooses a provider and model for (Settings → Models). */
+/** The kinds of media the person chooses a provider and model for (Settings → Services). */
 const USE_VERBS = /** @type {Verb[]} */ (['tts', 'music', 'sfx', 'asr', 'image', 'image-search', 'video', 'translate', 'web-search']);
 
 export const listProviders = () => OWN;
@@ -88,7 +88,7 @@ export async function chooseProvider(verb, { via, settings } = {}) {
 }
 
 /**
- * What each kind of media is made with, as Settings → Models shows it: the person's choice while its provider has a
+ * What each kind of media is made with, as Settings → Services shows it: the person's choice while its provider has a
  * key, else none. A choice whose key went away (an environment's key not set where Studio runs now) is kept in the
  * settings, and comes back with the key, but is not shown as if it could make anything.
  * @param {ProviderSettings} settings

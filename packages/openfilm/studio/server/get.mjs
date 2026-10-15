@@ -116,7 +116,7 @@ export const VERBS = /** @type {Record<string, VerbSpec>} */ ({
     options: { url: { value: 'url', required: true, repeat: true } },
   },
   call: {
-    help: 'A request to one of the person\'s own services (below), with its key added by Studio. Its answer comes back as it is: text or JSON here, a file saved under assets/<service>/. What it means is yours to read.',
+    help: 'A request to one of the person\'s own services (below): how to call it is in the person\'s words or the service\'s docs. Studio adds its key as Authorization: Bearer, or where you write {key} (a --header, the --path\'s query), as the docs say; you never see the key. Its answer comes back as it is: text or JSON here, a file saved under assets/<service>/. What it means is yours to read.',
     timeoutSec: CALL_TIMEOUT_SEC,
     options: { service: { value: 'id', required: true }, path: { value: '/path', default: '/' },
       method: { value: 'method', choices: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] }, json: { value: 'json' },
@@ -130,7 +130,7 @@ export const WEB_VERBS = ['web-search', 'web-fetch'];
 
 /** Where the person connects a service and picks its models, said the same way everywhere. */
 export const WHERE_TO_CONNECT = 'In Studio, the OpenFilm logo at the top left opens Settings: connect a service under Providers, '
-  + 'with the person\'s own key, then choose the model for each kind of media under Models.';
+  + 'with the person\'s own key, then choose the model for each kind of media under Services.';
 /** The services that make `verb`, by name: "fal.ai, Google or OpenAI". @param {string} verb */
 const makers = (verb) => {
   const names = listProviders().filter((p) => /** @type {readonly string[]} */ (p.verbs).includes(verb)).map((p) => p.name).sort((a, b) => a.localeCompare(b));

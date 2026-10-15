@@ -27,8 +27,8 @@ export interface OwnProvider {
 }
 
 /**
- * One of the person's own services (studio/server/custom-services.mjs): any service at an address, reached by their
- * agent with `openfilm get call`. `auth`: the header its key goes in, `{key}` standing for it.
+ * One of the person's custom services (studio/server/custom-services.mjs): any service at an address, reached by their
+ * agent with `openfilm get call`. `auth`: the header its key goes in when the agent does not place it ({key}).
  */
 export interface OwnService {
   id: string;
@@ -39,8 +39,8 @@ export interface OwnService {
   last4: string | null;
 }
 
-/** What Settings sends for a service: no `key` keeps the one it has, '' takes it away. */
-export type OwnServiceFields = { name: string; url: string; auth: string; note: string; key?: string };
+/** What Settings sends for a service: no `key` keeps the one it has, '' takes it away; no `auth` keeps where it goes. */
+export type OwnServiceFields = { name: string; url: string; auth?: string; note: string; key?: string };
 
 export interface ProvidersState {
   providers: OwnProvider[];

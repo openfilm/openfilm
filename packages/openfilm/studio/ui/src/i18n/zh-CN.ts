@@ -1377,7 +1377,7 @@ export const zhCN: Words = {
     sections: {
       agents: '智能体',
       providers: '服务商',
-      models: '模型',
+      models: '服务',
       developer: '开发者',
       general: '通用',
       shortcuts: '键盘快捷键',
@@ -1593,9 +1593,9 @@ export const zhCN: Words = {
       keyEnding: '尾号为 {last4} 的密钥',
       useEnv: '使用环境变量 ${env} 里的 key',
       own: {
-        title: "自己的服务",
-        note: "你自己运行或使用的任何服务，在这台电脑上或在线上都可以（你自己的声音、语音转写服务、这里没列出的 API）。智能体按地址访问它，密钥只留在这台电脑上。写清它能做什么，智能体才知道什么时候用它。",
-        add: "添加服务",
+        title: "自定义服务",
+        note: "你自己运行或使用的任何服务，在这台电脑上或在线上都可以（你自己的声音、语音转写服务、这里没列出的 API），接口可以完全自定义。OpenFilm 不会自动调用它：智能体会读你在这里写的说明来调用，密钥只留在这台电脑上。写清它能做什么、怎么调用，或写上 API 文档地址。",
+        add: "添加自定义服务",
         edit: "编辑",
         remove: "移除",
         name: "名称",
@@ -1605,9 +1605,8 @@ export const zhCN: Words = {
         keyOptional: "可选",
         keyKeep: "留空则保留末尾为 {last4} 的密钥",
         removeKey: "移除密钥",
-        auth: "密钥放在哪里",
-        what: "它能做什么",
-        whatPlaceholder: "例如：用我的声音朗读文案：POST /tts，内容 {\"text\": \"…\"}，返回 WAV。文档：https://…",
+        what: "说明",
+        whatPlaceholder: "例如：用我的声音朗读文案：POST /tts，内容 {\"text\": \"…\"}，返回 WAV。也可以只写 API 文档地址：https://…",
       },
       verbs: {
         tts: '配音',
@@ -1623,7 +1622,7 @@ export const zhCN: Words = {
       },
     },
     models: {
-      desc: '每种媒体由哪个服务商和模型生成。连接服务商后，会自动填补尚未设置的类型；你也可以在这里修改任意一项。',
+      desc: '每种媒体用哪个服务来生成：从已连接服务商的模型中选择。连接服务商后，会自动填补尚未设置的类型；你也可以在这里修改任意一项。',
       nothing: '尚未连接任何服务。连接一个服务商即可选择它的模型。',
       goConnect: '连接服务商',
       none: '无',

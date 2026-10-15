@@ -81,7 +81,7 @@ function worded(ask: SpendAsk | StudioNotice, t: (path: string) => string): Host
       denyLabel: t('asks.close'),
     };
   }
-  /* "a slow push…" · fal.ai · Seedance 2.0 · 5s, as Settings → Models names a model */
+  /* "a slow push…" · fal.ai · Seedance 2.0 · 5s, as Settings → Services names a model */
   const by = ask.model ? `${ask.provider} · ${ask.model}` : ask.provider;
   const facts = [ask.prompt ? `“${ask.prompt}”` : null, by, ask.seconds ? `${ask.seconds}s` : null].filter(Boolean).join(' · ');
   return { id: ask.id, title: t('asks.videoTitle'), body: `${facts}. ${t('asks.videoNote')}`, allowLabel: t('asks.make'), denyLabel: t('asks.skip') };

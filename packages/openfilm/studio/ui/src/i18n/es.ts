@@ -1376,7 +1376,7 @@ export const es: Words = {
     sections: {
       agents: 'Agentes',
       providers: 'Proveedores',
-      models: 'Modelos',
+      models: 'Servicios',
       developer: 'Desarrollador',
       general: 'General',
       shortcuts: 'Atajos de teclado',
@@ -1592,9 +1592,9 @@ export const es: Words = {
       keyEnding: 'Clave terminada en {last4}',
       useEnv: 'Usar la clave de ${env}',
       own: {
-        title: "Tus propios servicios",
-        note: "Cualquier servicio que ejecutes o uses, en este ordenador o en línea (tu propia voz, un servidor de transcripción, una API que no está en la lista). Tu agente lo usa en su dirección y su clave se queda en este ordenador. Di qué hace, para que tu agente sepa cuándo usarlo.",
-        add: "Añadir un servicio",
+        title: "Servicios personalizados",
+        note: "Cualquier servicio que ejecutes o uses, en este ordenador o en línea (tu propia voz, un servidor de transcripción, una API que no está en la lista), con cualquier interfaz. OpenFilm no lo llama por sí mismo: tu agente lee lo que escribas aquí y lo llama, y su clave se queda en este ordenador. Di qué hace y cómo se llama, o dónde está su documentación de API.",
+        add: "Añadir un servicio personalizado",
         edit: "Editar",
         remove: "Quitar",
         name: "Nombre",
@@ -1604,9 +1604,8 @@ export const es: Words = {
         keyOptional: "Opcional",
         keyKeep: "Déjala vacía para conservar la clave que termina en {last4}",
         removeKey: "Quitar la clave",
-        auth: "Dónde va la clave",
-        what: "Qué hace",
-        whatPlaceholder: "p. ej. Lee un guion con mi voz: POST /tts con {\"text\": \"…\"} devuelve un WAV. Documentación: https://…",
+        what: "Descripción",
+        whatPlaceholder: "p. ej. Lee un guion con mi voz: POST /tts con {\"text\": \"…\"} devuelve un WAV. O solo su documentación de API: https://…",
       },
       verbs: {
         tts: 'Locución',
@@ -1622,7 +1621,7 @@ export const es: Words = {
       },
     },
     models: {
-      desc: 'Qué proveedor y modelo crea cada tipo de medio. Al conectar un proveedor se rellenan los tipos que no tienen ninguno; puedes cambiar cualquiera aquí.',
+      desc: 'Qué servicio crea cada tipo de medio: un modelo de un proveedor conectado. Al conectar un proveedor se rellenan los tipos que no tienen ninguno; puedes cambiar cualquiera aquí.',
       nothing: 'Aún no hay nada conectado. Conecta un proveedor para elegir sus modelos.',
       goConnect: 'Conectar un proveedor',
       none: 'Ninguno',

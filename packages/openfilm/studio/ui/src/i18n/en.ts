@@ -1377,7 +1377,7 @@ export const en = {
     sections: {
       agents: 'Agents',
       providers: 'Providers',
-      models: 'Models',
+      models: 'Services',
       developer: 'Developer',
       general: 'General',
       shortcuts: 'Keyboard shortcuts',
@@ -1593,9 +1593,9 @@ export const en = {
       keyEnding: 'Key ending in {last4}',
       useEnv: 'Use the key in ${env}',
       own: {
-        title: "Your own services",
-        note: "Any service you run or use, on this computer or online (your own voice, a transcription server, an API not listed here). Your agent reaches it at its address, and its key stays on this computer. Say what it does, so your agent knows when to use it.",
-        add: "Add a service",
+        title: "Custom services",
+        note: "Any service you run or use, on this computer or online (your own voice, a transcription server, an API not listed here), with any interface. OpenFilm doesn't call it itself: your agent reads what you write here and calls it, and its key stays on this computer. Say what it does and how it is called, or where its API docs are.",
+        add: "Add a custom service",
         edit: "Edit",
         remove: "Remove",
         name: "Name",
@@ -1605,9 +1605,8 @@ export const en = {
         keyOptional: "Optional",
         keyKeep: "Leave empty to keep the key ending in {last4}",
         removeKey: "Remove the key",
-        auth: "Where the key goes",
-        what: "What it does",
-        whatPlaceholder: "e.g. Speaks a script in my voice: POST /tts with {\"text\": \"…\"} answers a WAV. Docs: https://…",
+        what: "Description",
+        whatPlaceholder: "e.g. Speaks a script in my voice: POST /tts with {\"text\": \"…\"} answers a WAV. Or just its API docs: https://…",
       },
       verbs: {
         tts: 'Voice-over',
@@ -1623,7 +1622,7 @@ export const en = {
       },
     },
     models: {
-      desc: 'Which provider and model makes each kind of media. Connecting a provider fills the kinds that have none; change any of them here.',
+      desc: 'Which service makes each kind of media: a model of a connected provider. Connecting a provider fills the kinds that have none; change any of them here.',
       nothing: 'Nothing is connected yet. Connect a provider to choose its models.',
       goConnect: 'Connect a provider',
       none: 'None',

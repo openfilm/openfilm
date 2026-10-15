@@ -110,3 +110,26 @@ test('a service that is not running says so', async () => {
   const [s] = withService([], null, { name: 'Off', url: `http://127.0.0.1:${port}` });
   await assert.rejects(callService(project(), s, { path: '/' }, signal), new RegExp(`not answering at http://127\\.0\\.0\\.1:${port}: is it running\\?`));
 });
+
+test('the key goes where the agent writes {key}, as the service\'s docs say; with none, as the usual header', async () => {
+  const root = project();
+  const [s] = withService([], null, { name: 'Odd', url: `${base}/v1`, key: 'odd+key&1' });
+  await callService(root, s, { path: '/words?token={key}' }, signal);
+  assert.equal(seen.at(-1).url, '/v1/words?token=odd%2Bkey%261', 'in the query, encoded');
+  assert.equal(seen.at(-1).headers.authorization, undefined, 'and nowhere else');
+  await callService(root, s, { path: '/words', header: ['X-Auth-Token: Token {key}'] }, signal);
+  assert.equal(seen.at(-1).headers['x-auth-token'], 'Token odd+key&1');
+  assert.equal(seen.at(-1).headers.authorization, undefined);
+  await callService(root, s, { path: '/words' }, signal);
+  assert.equal(seen.at(-1).headers.authorization, 'Bearer odd+key&1');
+  const [none] = withService([], null, { name: 'Open', url: base });
+  await assert.rejects(callService(root, none, { path: '/words?token={key}' }, signal), (e) => e.status === 400 && /no key/.test(e.message));
+});
+
+test('a service changed without saying where its key goes keeps where it went', () => {
+  const [s] = withService([], null, { name: 'Della', url: base, auth: 'x-api-key: {key}', key: 'della-key' });
+  const [changed] = withService([s], s.id, { name: 'Della', url: base, note: 'Speaks in my voice' });
+  assert.equal(changed.auth, 'x-api-key: {key}');
+  assert.equal(changed.note, 'Speaks in my voice');
+  assert.equal(withService([], null, { name: 'New', url: base })[0].auth, 'Authorization: Bearer {key}');
+});

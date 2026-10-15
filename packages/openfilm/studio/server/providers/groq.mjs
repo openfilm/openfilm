@@ -46,7 +46,7 @@ export default {
       const language = text(args.language).toLowerCase();
       const gender = text(args.gender).toLowerCase().slice(0, 1);
       const said = [
-        ...(language && !language.startsWith(LANGUAGE[model]) ? [`these voices speak ${LANGUAGE[model] === 'en' ? 'English' : 'Arabic'} only (another model in Settings → Models)`] : []),
+        ...(language && !language.startsWith(LANGUAGE[model]) ? [`these voices speak ${LANGUAGE[model] === 'en' ? 'English' : 'Arabic'} only (another model in Settings → Services)`] : []),
         ...(text(args.prompt) ? ['--prompt does not narrow Groq\'s voices'] : []),
       ];
       const limit = clamp(Math.round(number(args.limit) ?? 5), 1, 100);

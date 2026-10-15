@@ -1,7 +1,7 @@
 // @ts-check
 /**
  * The person's own keys for media services (Settings → Providers), which service makes each kind of media and with
- * which model (Settings → Models).
+ * which model (Settings → Services).
  *
  * Kept in ~/.openfilm/providers.json, readable by this user only (0600, in a 0700 folder), written whole and atomically:
  *   { "keys": { "<provider id>": "<key>" }, "use": { "<verb>": "<provider id>" }, "model": { "<verb>": "<model id>" },

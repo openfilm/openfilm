@@ -1,7 +1,8 @@
 /**
- * Settings → Models: which connected provider, and which of its models, makes each kind of media. One of the models of
- * a provider the person has a key for ("ElevenLabs · Eleven v3"), or none, listed by the providers' names, none put
- * first. Connecting a provider fills the kinds that have none, with its first model; the person changes any here. Any other service is the agent's to use, told about it in the chat.
+ * Settings → Services: which connected provider, and which of its models, makes each kind of media. One of the models
+ * of a provider the person has a key for ("ElevenLabs · Eleven v3"), or none, listed by the providers' names, none put
+ * first. Connecting a provider fills the kinds that have none, with its first model; the person changes any here.
+ * Under them, the person's custom services, which their agent calls itself (CustomServices).
  */
 import React from 'react';
 import { Check, ChevronDown, ChevronRight } from 'lucide-react';
@@ -10,6 +11,7 @@ import { USE_VERBS, couldMake, offered, useProviders, type ProviderVerb, type Pr
 import { Popover } from '@/components/Popover';
 import { ProviderMark } from './ProviderMark';
 import { SettingsButton, SettingsGroup, SettingsItem, SettingsPage, settingsError } from './ui';
+import { CustomServices, customProblem } from './CustomServices';
 
 /** One thing a kind of media can be made with: a provider and its model. */
 interface Choice {
@@ -39,7 +41,9 @@ export function ModelsSection({ onConnect }: { onConnect: () => void }) {
           {USE_VERBS.filter((verb) => offered(providers, verb)).map((verb) => <ModelRow key={verb} verb={verb} hook={hook} onConnect={onConnect} />)}
         </SettingsGroup>
       ) : null}
-      {hook.problem ? <p className={settingsError}>{hook.problem}</p> : null}
+      <CustomServices hook={hook} />
+      {/* a custom service's problem is said under its form */}
+      {hook.problem && !customProblem(hook) ? <p className={settingsError}>{hook.problem}</p> : null}
     </SettingsPage>
   );
 }
