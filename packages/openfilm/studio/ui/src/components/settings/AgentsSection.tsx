@@ -9,8 +9,9 @@
  * are always listed under the person's agents, with the person's own key; the others there once switched on (connecting
  * one does), else under "More agents", with where to get them when they are not installed. The person's own key is on a service of theirs, with a model that reads pictures (the agent looks at its own frames).
  *
- * One not found can be pointed at: Locate… opens the system's file dialog, the program chosen is tried and used from
- * then on (Find automatically goes back). "Why isn't it found?" says what was searched, with a report to copy.
+ * One not found, or one disconnected, can be pointed at: Locate… opens the system's file dialog, the program chosen is
+ * tried and used from then on (Find automatically goes back). A connected one keeps the program it found. "Why isn't
+ * it found?" says what was searched, with a report to copy.
  */
 import React from 'react';
 import { Check, Copy, Download, KeyRound, Loader2, Plus, X } from 'lucide-react';
@@ -180,21 +181,11 @@ export function AgentsSection() {
   const action = (agent: HostAgent, chosen = true) => {
     const working = busy === agent.id;
     if (agent.status === 'ready' && chosen) {
-      /* the program can be pointed at even when one was found: a particular version, another install; byok has none */
-      const canLocate = host.locate && agent.id !== 'byok';
       return (
-        <>
-          {canLocate ? (
-            <SettingsButton variant="quiet" disabled={working} onClick={() => locate(agent)}>
-              {working ? <Loader2 size={16} className="animate-spin" aria-hidden /> : null}
-              {t('settings.agents.locate')}
-            </SettingsButton>
-          ) : null}
-          <SettingsButton variant="quiet" disabled={working} title={agent.id === 'byok' ? undefined : t('settings.agents.disconnectHint').replaceAll('{name}', agent.name)}
-            onClick={() => act(agent.id, () => host.disconnect(agent.id))}>
-            {t('settings.agents.disconnect')}
-          </SettingsButton>
-        </>
+        <SettingsButton variant="quiet" disabled={working} title={agent.id === 'byok' ? undefined : t('settings.agents.disconnectHint').replaceAll('{name}', agent.name)}
+          onClick={() => act(agent.id, () => host.disconnect(agent.id))}>
+          {t('settings.agents.disconnect')}
+        </SettingsButton>
       );
     }
     if (agent.status === 'missing') {
@@ -215,11 +206,21 @@ export function AgentsSection() {
     if (agent.status === 'key') return <SettingsButton onClick={() => setKeyOpen(true)}>{t('settings.agents.setUpKey')}</SettingsButton>;
     if (agent.status === 'unavailable') return null;
     if (agent.status === 'checking') return <Loader2 size={16} className="animate-spin text-[var(--text-muted)]" aria-hidden />;
+    /* disconnected: the program it runs can be pointed at before connecting again (a particular version, another
+       install); a connected one keeps the program it found. The own key has none */
+    const canLocate = agent.status === 'off' && host.locate && agent.id !== 'byok';
     return (
-      <SettingsButton disabled={working || agent.status === 'waiting'} onClick={() => act(agent.id, () => host.connect(agent.id))}>
-        {working ? <Loader2 size={16} className="animate-spin" aria-hidden /> : null}
-        {agent.status === 'sign-in' ? t('settings.agents.signIn') : t('settings.agents.connect')}
-      </SettingsButton>
+      <>
+        {canLocate ? (
+          <SettingsButton variant="quiet" disabled={working} onClick={() => locate(agent)}>
+            {t('settings.agents.locate')}
+          </SettingsButton>
+        ) : null}
+        <SettingsButton disabled={working || agent.status === 'waiting'} onClick={() => act(agent.id, () => host.connect(agent.id))}>
+          {working ? <Loader2 size={16} className="animate-spin" aria-hidden /> : null}
+          {agent.status === 'sign-in' ? t('settings.agents.signIn') : t('settings.agents.connect')}
+        </SettingsButton>
+      </>
     );
   };
 
