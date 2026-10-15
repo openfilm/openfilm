@@ -34,10 +34,9 @@ contextBridge.exposeInMainWorld('openfilmNative', {
     close: (id) => ipcRenderer.invoke('desktop:tabs:close', { id }),
     open: (projectId) => ipcRenderer.invoke('desktop:tabs:new', { projectId }),
     move: (id, index) => ipcRenderer.invoke('desktop:tabs:move', { id, index }),
-    claim: (projectId) => ipcRenderer.invoke('desktop:tabs:claim', { projectId }),
     report: (state) => ipcRenderer.invoke('desktop:tabs:report', state ?? {}),
     openRequest: (to) => ipcRenderer.invoke('desktop:tabs:open', { to }),
-    onGo: on('desktop:tabs:go'),
+    onPick: on('desktop:tabs:pick'),
   },
 
   /* the roster (agent-roster.mjs): Settings → Agents and the chat's menu */

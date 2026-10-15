@@ -39,7 +39,11 @@ export type FetchJob = {
   project?: { id: string };
 };
 /** a skill a project can be made with (openfilm/src/skills.mjs): the project's own, the person's, or official */
-export type SkillEntry = { name: string; description: string; source: 'project' | 'mine' | 'official'; scripts: number };
+export type SkillEntry = {
+  name: string; description: string; source: 'project' | 'mine' | 'official'; scripts: number;
+  /** how people see it (its openfilm.json): a title and a one-line summary, by language */
+  shown?: { title: Record<string, string>; summary: Record<string, string> };
+};
 /** an example film's part, as its index names it (`S2-Hook`), from and to in seconds */
 export type ExampleSegment = { title: string; from: number; to: number };
 export type Example = {

@@ -1,0 +1,16 @@
+{
+  "title": {
+    "en": "Replicate a video",
+    "zh-CN": "复刻视频",
+    "ja": "動画を再現",
+    "ko": "영상 따라 만들기",
+    "es": "Replicar un vídeo"
+  },
+  "summary": {
+    "en": "Give it a video: your film follows its structure, rhythm, look and motion, with your own content.",
+    "zh-CN": "给它一条视频，做出你的同款：结构、节奏、版式和动效跟着它，内容是你的。",
+    "ja": "動画を渡すと、構成・リズム・見た目・動きを同じにして、中身はあなたのもので作ります。",
+    "ko": "영상을 주면 구성, 리듬, 화면, 움직임은 그대로, 내용은 당신의 것으로 만듭니다.",
+    "es": "Dale un vídeo: tu película sigue su estructura, ritmo, aspecto y movimiento, con tu propio contenido."
+  }
+}

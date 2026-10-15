@@ -193,3 +193,13 @@ test('openfilm skills and skill: the list, one printed whole, one added from an 
     if (beforeHome === undefined) delete process.env.OPENFILM_HOME; else process.env.OPENFILM_HOME = beforeHome;
   }
 });
+
+test('a skill as people see it: its openfilm.json title and summary by language; none, or not one, read as nothing', () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-shown-'));
+  const dir = skill(join(root, 'replicate'), 'replicate', 'For the agent.');
+  writeFileSync(join(dir, 'openfilm.json'), JSON.stringify({ title: { en: 'Replicate a video', 'zh-CN': '复刻视频', bad: 1, 'not a lang': 'x' }, summary: 'One line.' }));
+  assert.deepEqual(readSkill(dir, 'official').shown, { title: { en: 'Replicate a video', 'zh-CN': '复刻视频' }, summary: { en: 'One line.' } });
+  writeFileSync(join(dir, 'openfilm.json'), '{ not json');
+  assert.equal(readSkill(dir, 'official').shown, undefined);
+  assert.equal(readSkill(skill(join(root, 'plain'), 'plain', 'x'), 'mine').shown, undefined);
+});

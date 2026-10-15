@@ -4,8 +4,9 @@
  * project" in it: no folder is made that the person did not ask for. The address is the state, so the agent's
  * `openfilm open` (which sends the page to a project) and the browser's back button both work.
  *
- * In an app with tabs (lib/host.ts `tabs`) this page is one tab: `/` is its launcher (a new tab), a project is shown
- * here only once the app agrees no other tab has it, and `openfilm open` is the app's to settle (every tab hears it).
+ * In an app with tabs (lib/host.ts `tabs`) this page is one project's tab: a project picked opens in its own tab (the
+ * app's to open), `/` is the projects (the window with no tab open), and `openfilm open` is the app's to settle (every
+ * tab hears it).
  */
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { api, listen, studioConnection } from './api';
@@ -48,21 +49,17 @@ export function App() {
       if (event.type !== 'open') return;
       if (tabs) tabs.openRequest(event.to); else go(event.to);
     }, { watch: true });
-    const stopGo = tabs?.onGo((to) => go(to));
-    return () => { window.removeEventListener('popstate', onPop); stop(); stopGo?.(); };
+    return () => { window.removeEventListener('popstate', onPop); stop(); };
   }, []);
 
-  /** Show a project here; with tabs, only once the app agrees (another tab may have it, and is shown instead). */
-  const open = (projectId: string) => {
-    if (!tabs) { go(`/projects/${projectId}`); return; }
-    void tabs.claim(projectId).then(({ here }) => { if (here) go(`/projects/${projectId}`); });
-  };
-  /** The project shown was deleted: back to the launcher (with tabs) or to the last project. */
-  const leave = () => { tabs?.report({ gone: true }); go('/', true); };
+  /** Show a project: here, or (with tabs) in its own tab. */
+  const open = (projectId: string) => { if (tabs) tabs.open(projectId); else go(`/projects/${projectId}`); };
+  /** The project shown was deleted: its tab closes (with tabs), or back to the last project. */
+  const leave = () => { if (tabs) tabs.report({ gone: true }); else go('/', true); };
 
   const id = projectIn(path);
   /* no project in the address: the one opened last that is still there, else the Projects window (`none`); with
-     tabs, the launcher */
+     tabs, the projects (no tab is open) */
   const [none, setNone] = useState(false);
   useEffect(() => {
     if (id || tabs) return;

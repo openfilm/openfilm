@@ -6,8 +6,8 @@ import React from 'react';
  * editor in, served with `startStudio({ editorDir })`); Studio then leaves out what only makes sense in a browser,
  * such as the button that introduces the desktop app.
  */
-/** A tab of the app's window (`tabs` below): a project's (its title as Studio shows it), or a new tab's launcher. */
-export interface HostTab { id: string; projectId: string | null; title: string; active: boolean; working: boolean; asking: boolean; exporting: number | null }
+/** A tab of the app's window (`tabs` below): a project's, its title as Studio shows it. */
+export interface HostTab { id: string; projectId: string; title: string; active: boolean; working: boolean; asking: boolean; exporting: number | null }
 
 /** Settings → Developer, as the app keeps it (`developer` below). */
 export interface HostDeveloper { logs: boolean; changes: boolean }
@@ -139,26 +139,26 @@ export interface StudioHost {
   };
   /**
    * The app shows each project in a tab of its own window and draws no tab strip of its own: Studio draws the tabs in
-   * its top bar (where the projects button and the title are otherwise) with a `+` for a new tab, and at `/` shows its
-   * launcher (the person's projects, the examples) instead of going to the project opened last. `list` gives the tabs
-   * and which is this page's (`self`); `onChange` every change. Before this page shows a project it `claim`s it
-   * (`here` false: another tab has it, and that one is shown instead); it `report`s what it shows (its title, an
-   * export's progress, its project gone). The app knows itself where an agent works or waits for an answer. Studio's "open this project" (heard by every page) goes
-   * to `openRequest`, which the app settles once; `onGo` is the app sending this page to a project.
+   * its top bar (where the projects button and the title are otherwise), with a `+` that opens the projects window to
+   * pick the project a new tab shows (`open`; one open already is shown). With no tab open the page is at `/`, and
+   * Studio shows the projects there. `list` gives the tabs and which is this page's (`self`); `onChange` every change.
+   * A page `report`s what it shows (its title, an export's progress, its project gone: its tab closes). Studio's
+   * "open this project" (heard by every page) goes to `openRequest`, which the app settles once; `onPick` is the app
+   * asking for the projects window (a new tab from its menu).
    */
   tabs?: {
     list: () => Promise<{ self: string | null; tabs: HostTab[] }>;
     onChange: (listener: (tabs: HostTab[]) => void) => () => void;
     show: (id: string) => void;
     close: (id?: string) => void;
-    /** a new tab: a project's, else the launcher */
-    open: (projectId?: string) => void;
+    /** a project's tab: shown, opened when it is not */
+    open: (projectId: string) => void;
     move: (id: string, index: number) => void;
-    claim: (projectId: string) => Promise<{ here: boolean }>;
     report: (state: { title?: string; exporting?: number | null; gone?: boolean }) => void;
     openRequest: (to: string) => void;
-    onGo: (listener: (to: string) => void) => () => void;
+    onPick: (listener: () => void) => () => void;
   };
+
   /**
    * The app picks folders, and knows where a dropped one is: the Projects list gets "Open…", which asks the app for a
    * folder to open as a project (`pick`: null when the person cancelled), and opens a folder dropped on it (`pathOf`:

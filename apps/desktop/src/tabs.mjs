@@ -1,19 +1,19 @@
 // @ts-check
 /**
- * The window's tabs: one per project the person has open, and a new tab's launcher (no project yet) until a project is
- * picked in it. Only what the tabs are, in order, which is in front and what each says (its project's title, an agent
- * working in it, an export, a question waiting); main.mjs gives each a page. Reads no Electron module, so
- * `node --test` can use it.
+ * The window's tabs: one per project the person has open. Only what the tabs are, in order, which is in front and what
+ * each says (its project's title, an agent working in it, an export, a question waiting); main.mjs gives each a page.
+ * Reads no Electron module, so `node --test` can use it.
  *
- * Rules: a project is in one tab at most; there is always a tab (closing the last leaves a new one); a tab closed can
- * be opened again, last closed first.
+ * Rules: a project is in one tab at most; a tab is always a project's (a project is picked first, in the projects
+ * window, and its tab opens); with none open, the window shows the projects; a tab closed can be opened again, last
+ * closed first.
  */
 import { randomUUID } from 'node:crypto';
 
 /**
- * @typedef {{ id: string, projectId: string | null, title: string, working: boolean, asking: boolean,
+ * @typedef {{ id: string, projectId: string, title: string, working: boolean, asking: boolean,
  *   exporting: number | null, shown: number }} Tab
- * @typedef {{ tabs: Array<{ projectId: string | null, title?: string }>, active: number }} SavedTabs
+ * @typedef {{ tabs: Array<{ projectId: string, title?: string }>, active: number }} SavedTabs
  */
 
 const REOPEN_KEPT = 20;
@@ -29,7 +29,7 @@ export function createTabs({ saved = null, now = Date.now, newId = randomUUID } 
   /** @type {Array<{ projectId: string, title: string, at: number }>} */
   const closed = [];
 
-  const make = (/** @type {string | null} */ projectId, title = '') => ({ id: newId(), projectId, title, working: false, asking: false, exporting: null, shown: now() });
+  const make = (/** @type {string} */ projectId, title = '') => ({ id: newId(), projectId, title, working: false, asking: false, exporting: null, shown: now() });
   const indexOf = (/** @type {string} */ id) => tabs.findIndex((t) => t.id === id);
 
   /* the tabs as last left; a project in two of them (an older save) once */
@@ -37,8 +37,8 @@ export function createTabs({ saved = null, now = Date.now, newId = randomUUID } 
     const seen = new Set();
     for (const t of saved.tabs) {
       const projectId = typeof t?.projectId === 'string' && t.projectId ? t.projectId : null;
-      if (projectId && seen.has(projectId)) continue;
-      if (projectId) seen.add(projectId);
+      if (!projectId || seen.has(projectId)) continue;
+      seen.add(projectId);
       tabs.push(make(projectId, typeof t?.title === 'string' ? t.title : ''));
     }
     active = tabs[Math.min(Math.max(0, Number(saved.active) || 0), tabs.length - 1)]?.id ?? null;
@@ -53,11 +53,11 @@ export function createTabs({ saved = null, now = Date.now, newId = randomUUID } 
     /** @param {string} projectId */
     byProject: (projectId) => tabs.find((t) => t.projectId === projectId) ?? null,
     /**
-     * A new tab, right of the one in front: a project's (the one it is in, if it is open already) or a launcher.
-     * @param {{ projectId?: string | null, title?: string }} [opts] → the tab
+     * A project's tab, right of the one in front (the one it is in, if it is open already). → the tab
+     * @param {{ projectId: string, title?: string }} opts
      */
-    open({ projectId = null, title = '' } = {}) {
-      const there = projectId ? api.byProject(projectId) : null;
+    open({ projectId, title = '' }) {
+      const there = api.byProject(projectId);
       if (there) { api.activate(there.id); return there; }
       const tab = make(projectId, title);
       const at = active ? indexOf(active) + 1 : tabs.length;
@@ -74,19 +74,18 @@ export function createTabs({ saved = null, now = Date.now, newId = randomUUID } 
       return true;
     },
     /**
-     * Close a tab: the one to its right comes to the front (else its left); the last one closed leaves a launcher.
-     * → { next: the tab in front now, made: a launcher made for it, or null }
+     * Close a tab: the one to its right comes to the front (else its left). → the tab in front now (null: none left)
      * @param {string} id
      */
     close(id) {
       const i = indexOf(id);
-      if (i < 0) return { next: api.get(active ?? '') , made: null };
+      if (i < 0) return api.get(active ?? '');
       const [gone] = tabs.splice(i, 1);
-      if (gone.projectId) { closed.push({ projectId: gone.projectId, title: gone.title, at: i }); if (closed.length > REOPEN_KEPT) closed.shift(); }
-      let made = null;
-      if (!tabs.length) { made = make(null); tabs.push(made); }
-      if (active === id || made) api.activate((tabs[Math.min(i, tabs.length - 1)]).id);
-      return { next: api.get(active ?? ''), made };
+      closed.push({ projectId: gone.projectId, title: gone.title, at: i });
+      if (closed.length > REOPEN_KEPT) closed.shift();
+      if (!tabs.length) active = null;
+      else if (active === id) api.activate(tabs[Math.min(i, tabs.length - 1)].id);
+      return api.get(active ?? '');
     },
     /** The tab closed last, open again where it was (its project in front if it is open already). → the tab, or null */
     reopen() {
@@ -111,22 +110,15 @@ export function createTabs({ saved = null, now = Date.now, newId = randomUUID } 
       return true;
     },
     /**
-     * What a tab's page says it shows now. A project open in another tab already is not taken: → that tab instead.
-     * @param {string} id @param {{ projectId?: string | null, title?: string, exporting?: number | null }} state
-     * @returns {{ ok: true } | { ok: false, other: Tab }}
+     * What a tab's page says it shows now: its project's title, an export's progress.
+     * @param {string} id @param {{ title?: string, exporting?: number | null }} state → whether there was such a tab
      */
-    report(id, { projectId, title, exporting }) {
+    report(id, { title, exporting }) {
       const tab = api.get(id);
-      if (!tab) return { ok: true };
-      if (projectId !== undefined) {
-        const other = projectId ? tabs.find((t) => t.projectId === projectId && t.id !== id) : null;
-        if (other) return { ok: false, other };
-        if (projectId !== tab.projectId) tab.title = '';
-        tab.projectId = projectId;
-      }
+      if (!tab) return false;
       if (typeof title === 'string') tab.title = title;
       if (exporting !== undefined) tab.exporting = typeof exporting === 'number' ? Math.max(0, Math.min(1, exporting)) : null;
-      return { ok: true };
+      return true;
     },
     /**
      * The projects an agent is working in, and those where one waits for an answer. → whether a tab changed
@@ -136,7 +128,7 @@ export function createTabs({ saved = null, now = Date.now, newId = randomUUID } 
       const w = new Set(working); const a = new Set(asking);
       let changed = false;
       for (const t of tabs) {
-        const nw = Boolean(t.projectId && w.has(t.projectId)); const na = Boolean(t.projectId && a.has(t.projectId));
+        const nw = w.has(t.projectId); const na = a.has(t.projectId);
         if (nw !== t.working || na !== t.asking) { t.working = nw; t.asking = na; changed = true; }
       }
       return changed;

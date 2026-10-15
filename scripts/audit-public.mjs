@@ -4,7 +4,8 @@
  * would commit (tracked and untracked, not ignored; every file under the folder when it is not a git checkout), less
  * node_modules, dist, .dev and .release, and reports:
  *
- *   cjk       Chinese, Japanese or Korean prose outside the i18n dictionaries, the release notes (whats-new.ts) and translated docs
+ *   cjk       Chinese, Japanese or Korean prose outside the i18n dictionaries, the release notes (whats-new.ts), translated docs
+ *             and a skill's openfilm.json (its title and summary in each language)
  *             (README.zh-CN.md): comments and text are in English.
  *             A line is prose when its CJK characters outweigh its Latin words (one character for four letters), so
  *             an English comment that quotes 永 or 2026年10月7日 passes. In tests and fixtures, string literals are
@@ -38,7 +39,7 @@ const { values: opts } = parseArgs({
 const ROOT = resolve(opts.dir ?? join(import.meta.dirname, '..'));
 
 const SKIP_DIR = /(^|\/)(node_modules|dist|\.dev|\.release|\.git)\//;
-const LOCALE = /(^|\/)(i18n|locales)\/|\/whats-new\.ts$|\.(zh-CN|ja|ko|es)\.md$/;
+const LOCALE = /(^|\/)(i18n|locales)\/|\/whats-new\.ts$|\.(zh-CN|ja|ko|es)\.md$|(^|\/)skills\/[^/]+\/openfilm\.json$/;
 const TESTISH = /(\.test\.[cm]?[jt]sx?$|(^|\/)(test|tests|fixtures?|__fixtures__)\/)/;
 
 /** A home folder with a real name in it; the placeholders docs and tests use are fine. */

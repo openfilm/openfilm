@@ -1,6 +1,7 @@
 /**
  * OpenFilm for desktop: one window of tabs, a project in each, Studio on the left and a chat on the right, one page
- * per tab (tabs.mjs; a new tab's page is Studio's launcher until a project is picked in it).
+ * per tab (tabs.mjs). A project is picked in Studio's projects window (the tabs' `+`), and its tab opens; with no tab
+ * open, the window's page is the projects (HOME).
  *
  * Studio is the open-source one (the `openfilm` package), run in a utility process (studio.mjs). It serves the
  * window's page: Studio's editor, built together with the chat beside it (shell/), on Studio's own origin, so the
@@ -66,7 +67,7 @@ let tabs = null;
 /** @type {Map<string, WebContentsView>} */
 const views = new Map();
 /** the page in front */
-const activeView = () => (tabs ? views.get(tabs.activeId() ?? '') ?? null : null);
+const activeView = () => (tabs ? views.get(tabs.activeId() ?? HOME) ?? null : null);
 /** something every page is told (the theme, an update, the agents…) */
 const broadcast = (channel, value) => { for (const v of views.values()) if (!v.webContents.isDestroyed()) v.webContents.send(channel, value); };
 /** the tab whose page this is, or null */
@@ -159,8 +160,10 @@ function makeView(tabId) {
   return v;
 }
 
-/** Where a tab's page opens: its project, else the launcher (`/` with tabs: Studio shows the launcher there). */
-const pageAddress = (tab, path = null) => `${studio.origin}/open?key=${studio.key}&to=${encodeURIComponent(path ?? (tab?.projectId ? `/projects/${encodeURIComponent(tab.projectId)}` : '/'))}`;
+/** The page shown when no tab is open: Studio's projects (`/` with tabs). */
+const HOME = 'home';
+/** Where a tab's page opens: its project (no tab: the projects). */
+const pageAddress = (tab, path = null) => `${studio.origin}/open?key=${studio.key}&to=${encodeURIComponent(path ?? (tab ? `/projects/${encodeURIComponent(tab.projectId)}` : '/'))}`;
 
 /** Every page told of the tabs as they are now; kept for next time. */
 function tellTabs() {
@@ -169,19 +172,26 @@ function tellTabs() {
   saveState();
 }
 
-/** Bring a tab to the front: its page made (again) when it has none. */
-function showTab(id) {
-  if (!tabs || !win || !studio || !tabs.activate(id)) return;
+/** Show a page: a tab's (made again when it has none), or HOME. Once a tab shows, HOME's page goes. */
+function showPage(id) {
+  if (!win || !studio) return;
   let v = views.get(id);
-  if (!v) { v = makeView(id); void v.webContents.loadURL(pageAddress(tabs.get(id))); }
+  if (!v) { v = makeView(id); void v.webContents.loadURL(pageAddress(id === HOME ? null : tabs?.get(id))); }
   for (const [other, page] of views) page.setVisible(other === id);
   v.webContents.focus();
+  if (id !== HOME) dropView(HOME);
+}
+
+/** Bring a tab to the front. */
+function showTab(id) {
+  if (!tabs || !tabs.activate(id)) return;
+  showPage(id);
   tellTabs();
 }
 
-/** A new tab: a project's (in front if it is open already), else the launcher. */
-function newTab(projectId = null) {
-  if (!tabs) return;
+/** A project's tab (in front if it is open already). */
+function newTab(projectId) {
+  if (!tabs || typeof projectId !== 'string' || !projectId) return;
   showTab(tabs.open({ projectId }).id);
 }
 
@@ -207,13 +217,14 @@ async function closeTab(id) {
     if (response !== 0) return;
   }
   dropView(id);
-  const { next } = tabs.close(id);
+  const next = tabs.close(id);
   if (next) showTab(next.id);
+  else { showPage(HOME); tellTabs(); }
 }
 
 /**
- * Studio's "open this project" (`openfilm open`, File › Open Project…), heard by every page at once: once only. A tab
- * with the project comes to the front; else the launcher in front takes it; else a new tab.
+ * Studio's "open this project" (`openfilm open`, File › Open Project…), heard by every page at once: once only. Its
+ * tab comes to the front, opened if it is not.
  */
 let lastOpen = { to: '', at: 0 };
 function openInTabs(to) {
@@ -221,31 +232,20 @@ function openInTabs(to) {
   if (to === lastOpen.to && Date.now() - lastOpen.at < 2000) return;
   lastOpen = { to, at: Date.now() };
   const projectId = /^\/projects\/([\w-]+)/.exec(to)?.[1] ?? null;
-  if (!projectId) { newTab(); return; }
-  const there = tabs.byProject(projectId);
-  if (there) { showTab(there.id); return; }
-  const front = tabs.get(tabs.activeId() ?? '');
-  if (front && !front.projectId && views.get(front.id)) {
-    tabs.report(front.id, { projectId });
-    views.get(front.id)?.webContents.send('desktop:tabs:go', to);
-    tellTabs();
-    return;
-  }
-  newTab(projectId);
+  if (projectId) newTab(projectId);
 }
 
-/** The tabs open when the window opens: those left last time, else the last project's (or a launcher). */
+/** The tabs open when the window opens: those left last time, else the last project's; none: the projects. */
 async function openTabs() {
-  if (state.tabs?.tabs?.length) tabs = createTabs({ saved: state.tabs });
-  else {
-    tabs = createTabs();
-    const last = (await studioApi('/api/projects').catch(() => ({ projects: [] }))).projects.find((p) => !p.missing);
-    tabs.open({ projectId: last?.id ?? null, title: last?.name ?? '' });
-  }
+  const projects = (await studioApi('/api/projects').catch(() => ({ projects: [] }))).projects.filter((p) => !p.missing);
+  tabs = createTabs({ saved: state.tabs?.tabs?.length ? state.tabs : null });
   /* a tab of a project no longer there is left out */
-  const known = new Set((await studioApi('/api/projects').catch(() => ({ projects: [] }))).projects.filter((p) => !p.missing).map((p) => p.id));
-  for (const t of tabs.list()) if (t.projectId && !known.has(t.projectId)) tabs.close(t.id);
-  showTab(tabs.activeId() ?? tabs.list()[0].id);
+  const known = new Set(projects.map((p) => p.id));
+  for (const t of tabs.list()) if (!known.has(t.projectId)) tabs.close(t.id);
+  if (!tabs.list().length && !state.tabs?.tabs?.length && projects[0]) tabs.open({ projectId: projects[0].id, title: projects[0].name });
+  const front = tabs.activeId();
+  if (front) showTab(front);
+  else { showPage(HOME); tellTabs(); }
 }
 
 /** The projects the chat's agents work in, and wait for an answer in, by Studio's ids (from their folders), on each tab. */
@@ -428,25 +428,16 @@ async function start() {
     return fn(tabOf(event.sender), opts ?? {});
   });
   tabHandle('desktop:tabs:list', (self) => ({ self, tabs: tabs?.list() ?? [] }));
-  tabHandle('desktop:tabs:new', (_self, { projectId }) => { newTab(typeof projectId === 'string' && projectId ? projectId : null); return { ok: true }; });
+  tabHandle('desktop:tabs:new', (_self, { projectId }) => { newTab(projectId); return { ok: true }; });
   tabHandle('desktop:tabs:show', (_self, { id }) => { showTab(String(id)); return { ok: true }; });
   tabHandle('desktop:tabs:close', (self, { id }) => { void closeTab(typeof id === 'string' ? id : self); return { ok: true }; });
   tabHandle('desktop:tabs:move', (_self, { id, index }) => { if (tabs?.move(String(id), Number(index))) tellTabs(); return { ok: true }; });
-  /* a page about to show a project: here, unless another tab has it (that one comes forward; a launcher left with
-     nothing in it closes) */
-  tabHandle('desktop:tabs:claim', (self, { projectId }) => {
-    if (!tabs || typeof projectId !== 'string' || !projectId) return { here: true };
-    const answer = tabs.report(self, { projectId });
-    if (answer.ok) { tellTabs(); return { here: true }; }
-    const empty = !tabs.get(self)?.projectId;
-    showTab(answer.other.id);
-    if (empty) void closeTab(self);
-    return { here: false };
-  });
   /* what a page shows now: its project's title, an export's progress; or its project gone */
   tabHandle('desktop:tabs:report', (self, { title, exporting, gone }) => {
     if (!tabs) return { ok: false };
-    tabs.report(self, { ...(typeof title === 'string' ? { title: title.slice(0, 200) } : {}), ...(exporting !== undefined ? { exporting: typeof exporting === 'number' ? exporting : null } : {}), ...(gone === true ? { projectId: null } : {}) });
+    /* its project deleted (in this page or another): its tab closes */
+    if (gone === true) { void closeTab(self); return { ok: true }; }
+    tabs.report(self, { ...(typeof title === 'string' ? { title: title.slice(0, 200) } : {}), ...(exporting !== undefined ? { exporting: typeof exporting === 'number' ? exporting : null } : {}) });
     tellTabs();
     return { ok: true };
   });
@@ -589,7 +580,8 @@ async function start() {
     reload: () => activeView()?.webContents.reload(),
     devTools: () => activeView()?.webContents.toggleDevTools(),
     tabs: {
-      open: () => newTab(),
+      /* the projects window, in the page in front, to pick the project a new tab shows */
+      open: () => activeView()?.webContents.send('desktop:tabs:pick') ?? views.get(HOME)?.webContents.focus(),
       close: () => { if (tabs?.activeId()) void closeTab(tabs.activeId()); },
       reopen: () => { const tab = tabs?.reopen(); if (tab) showTab(tab.id); },
       step: (by) => {

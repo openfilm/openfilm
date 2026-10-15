@@ -2253,6 +2253,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const startRename = () => { setTitleEditWidth(titleBoxRef.current?.offsetWidth ?? null); setTitleDraft(title); setRenaming(true); };
   /* in an app with tabs: the tab says this project's title; the tabs are where the projects button and the title are */
   const inTabs = Boolean(studioHost?.tabs);
+  /* the app's "New Tab" (its menu): the projects, to pick what the new tab shows */
+  React.useEffect(() => studioHost?.tabs?.onPick(() => setProjectsOpen(true)), []);
   React.useEffect(() => { if (title) studioHost?.tabs?.report({ title }); }, [title]);
   const commitTitle = async () => {
     setRenaming(false);
@@ -2399,7 +2401,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
               </Tooltip>}
             </div>
             {inTabs ? (
-              <TabStrip onRename={startRename} editor={renaming ? (
+              <TabStrip onRename={startRename} onNew={() => setProjectsOpen(true)} editor={renaming ? (
                 <input
                   autoFocus
                   value={titleDraft}

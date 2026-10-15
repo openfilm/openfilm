@@ -125,9 +125,24 @@ export function parseSkillFile(text) {
 
 /**
  * @typedef {{ name: string, description: string, folder: string, source: SkillSource, file: string,
- *   scripts: string[], over?: SkillSource[] }} Skill
+ *   scripts: string[], over?: SkillSource[], shown?: SkillShown }} Skill
  *   `over`: the places that had a skill of the same name, which this one takes the place of.
+ * @typedef {{ title: Record<string, string>, summary: Record<string, string> }} SkillShown
+ *   how people see it in an app (openfilm.json beside SKILL.md, optional): a title and a one-line summary, by language
+ *   (`en`, `zh-CN`…); the SKILL.md's description is for the agent
  */
+
+/** The words of an openfilm.json field: a string (any language), or one per language; anything else is none. */
+const byLanguage = (/** @type {unknown} */ v) => (typeof v === 'string' && v.trim() ? { en: v.trim().slice(0, 200) }
+  : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).filter(([k, w]) => /^[a-z]{2}(-[A-Za-z]{2,4})?$/.test(k) && typeof w === 'string' && w.trim()).map(([k, w]) => [k, String(w).trim().slice(0, 200)])) : {});
+
+/** A skill's openfilm.json, as shown to people (none, or not read: undefined). @param {string} folder */
+function shownOf(folder) {
+  let raw;
+  try { raw = JSON.parse(readFileSync(join(folder, 'openfilm.json'), 'utf8')); } catch { return undefined; }
+  const shown = { title: byLanguage(raw?.title), summary: byLanguage(raw?.summary) };
+  return Object.keys(shown.title).length || Object.keys(shown.summary).length ? shown : undefined;
+}
 
 /**
  * The skill in one folder, or null when it has no SKILL.md. Its name is the front matter's, else the folder's.
@@ -139,7 +154,8 @@ export function readSkill(folder, source) {
   try { text = readFileSync(file, 'utf8'); } catch { return null; }
   const { fields } = parseSkillFile(text);
   const name = (fields.name || basename(folder)).trim();
-  return { name, description: (fields.description ?? '').trim(), folder, source, file, scripts: scriptsIn(folder) };
+  const shown = shownOf(folder);
+  return { name, description: (fields.description ?? '').trim(), folder, source, file, scripts: scriptsIn(folder), ...(shown ? { shown } : {}) };
 }
 
 /** The scripts a skill brings (any file under scripts/, and executables anywhere), for the person to see. */

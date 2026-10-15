@@ -335,7 +335,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const id = url.searchParams.get('project');
       const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) : null;
       const skills = listSkills({ project: project?.path ?? null });
-      return json(res, 200, { skills: skills.map((k) => ({ name: k.name, description: k.description, source: k.source, scripts: k.scripts.length })) });
+      return json(res, 200, { skills: skills.map((k) => ({ name: k.name, description: k.description, source: k.source, scripts: k.scripts.length, ...(k.shown ? { shown: k.shown } : {}) })) });
     }
 
     if (parts[0] !== 'projects') throw new HttpError(404, 'no such API');
