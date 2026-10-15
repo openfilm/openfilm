@@ -1,17 +1,16 @@
 /**
- * The examples: films made with OpenFilm and the skills that go with them, to start from or to learn from. One view,
- * two places:
+ * The examples (films made with OpenFilm) and the skills, to start from or to learn from. One view, two places:
  *
- *   · start      the projects window's "Examples": an example is started from (copied into a new project); a skill is
- *                shown for what it does
- *   · reference  over a film, from the app's chat (lib/host.ts `onCommand` `show-examples`): an example, or a part of
- *                it (a segment, or a stretch dragged on its strip), is pointed at in the message being written; a skill
- *                is named in it; starting from an example is still there
+ *   · start      the projects window's "Examples": the examples only; one is started from (copied into a new project)
+ *   · reference  the Community, over a film, from the app's chat (lib/host.ts `onCommand` `show-examples`): the skills
+ *                first (one is named in the message being written; one added; their folder; feedback), then the
+ *                examples (one, or a part of it, a segment or a stretch dragged on its strip, is pointed at in the
+ *                message; starting from one is still there)
  *
- * A sidebar (search; Discover; the kinds of film; the skills: official, yours, this project's; adding one, their
- * folder, feedback) beside the cards: posters that play their preview under the pointer, and skills by their own
- * title and summary (a skill's openfilm.json, in the language shown) rather than the words written for the agent. Esc
- * goes back from an example's page, else closes.
+ * A sidebar beside the cards: posters that play their preview under the pointer, and skills by their own title and
+ * summary (a skill's openfilm.json, in the language shown) rather than the words written for the agent. The title row
+ * is the projects window's own (its switch, its close), so switching between the projects and the examples moves
+ * nothing. Esc goes back from a page, else closes.
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
@@ -28,7 +27,7 @@ export type ExamplesMode = 'start' | 'reference';
 /** A part of an example picked to point at: none for the whole film. */
 export type ExamplePart = { from: number; to: number; segment?: string } | null;
 
-type Section = 'discover' | `kind:${string}` | `skills:${SkillEntry['source']}`;
+type Section = 'discover' | `kind:${string}` | 'skills' | `skills:${SkillEntry['source']}`;
 type Opened = { kind: 'example'; example: Example } | { kind: 'skill'; skill: SkillEntry };
 
 /** the kinds of film the examples are grouped by, in this order; any other comes after, by its own name */
@@ -66,16 +65,18 @@ export function ExamplesGallery({ mode, projectId = null, heading, onClose, onSt
   const words = useSkillWords();
   const [examples, setExamples] = React.useState<Example[] | null>(null);
   const [skills, setSkills] = React.useState<SkillEntry[]>([]);
-  const [section, setSection] = React.useState<Section>('discover');
+  /* the Community (over a film) opens on its skills; the projects window shows the examples only */
+  const community = mode === 'reference';
+  const [section, setSection] = React.useState<Section>(community ? 'skills' : 'discover');
   const [query, setQuery] = React.useState('');
   const [opened, setOpened] = React.useState<Opened | null>(null);
 
   React.useEffect(() => {
     let alive = true;
     void sourcesApi.examples().then((list) => { if (alive) setExamples(list); });
-    void sourcesApi.skills(projectId).then((list) => { if (alive) setSkills(list); });
+    if (community) void sourcesApi.skills(projectId).then((list) => { if (alive) setSkills(list); });
     return () => { alive = false; };
-  }, [projectId]);
+  }, [projectId, community]);
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -102,7 +103,7 @@ export function ExamplesGallery({ mode, projectId = null, heading, onClose, onSt
     body = <SkillDetail skill={opened.skill} mode={mode} onBack={() => setOpened(null)} onUse={onUseSkill} />;
   } else if (needle) {
     const foundExamples = all.filter((e) => match(e.title, e.description, e.category ? kindLabel(e.category) : null));
-    const foundSkills = skills.filter((s) => { const w = words(s); return match(s.name, w.title, w.summary); });
+    const foundSkills = community ? skills.filter((s) => { const w = words(s); return match(s.name, w.title, w.summary); }) : [];
     body = (
       <Page title={t('gallery.resultsFor').replace('{q}', query.trim())}>
         {foundExamples.length || foundSkills.length ? (
@@ -113,11 +114,32 @@ export function ExamplesGallery({ mode, projectId = null, heading, onClose, onSt
         ) : <Empty text={t('gallery.noResults')} />}
       </Page>
     );
+  } else if (section === 'skills') {
+    /* every skill, by where it comes from: OpenFilm's, the person's, this project's */
+    const sources = SOURCES.filter((source) => source !== 'project' || projectId);
+    body = (
+      <Page title={t('gallery.allSkills')} note={t('gallery.skillsNote')}>
+        {sources.map((source, i) => {
+          const items = skills.filter((k) => k.source === source);
+          if (!items.length && source === 'project') return null;
+          return (
+            <div key={source} className={i ? 'mt-9' : ''}>
+              <div className="mb-3 flex items-baseline gap-3">
+                <h3 className="text-[14px] font-semibold text-[var(--text)]">{t(`gallery.${source}Skills`)}</h3>
+                <span className="flex-1" />
+                {items.length > 3 ? <button type="button" onClick={() => go(`skills:${source}`)} className="shrink-0 text-[12px] text-[var(--text-dim)] hover:text-[var(--text)]">{t('gallery.seeAll')} ›</button> : null}
+              </div>
+              {items.length ? <Grid>{items.slice(0, 3).map((k) => <SkillCard key={`${k.source}:${k.name}`} skill={k} onOpen={() => openSkill(k)} />)}</Grid>
+                : <NoSkills />}
+            </div>
+          );
+        })}
+      </Page>
+    );
   } else if (examples == null) {
     body = <Empty text={t('gallery.loading')} />;
   } else if (section === 'discover') {
     const [hero] = all;
-    const official = skills.filter((s) => s.source === 'official');
     body = (
       <Page title={t('gallery.discover')} note={t('gallery.discoverNote')}>
         {hero ? <Hero example={hero} mode={mode} onOpen={() => openExample(hero)} onStart={() => onStart(hero)} /> : <Empty text={t('gallery.empty')} />}
@@ -130,11 +152,6 @@ export function ExamplesGallery({ mode, projectId = null, heading, onClose, onSt
             </Row>
           );
         })}
-        {official.length ? (
-          <Row title={t('gallery.officialSkills')} note={t('gallery.skillsNote')} onAll={official.length > 3 ? () => go('skills:official') : undefined}>
-            <Grid>{official.slice(0, 3).map((s) => <SkillCard key={s.name} skill={s} onOpen={() => openSkill(s)} />)}</Grid>
-          </Row>
-        ) : null}
       </Page>
     );
   } else if (section.startsWith('kind:')) {
@@ -147,7 +164,7 @@ export function ExamplesGallery({ mode, projectId = null, heading, onClose, onSt
     body = (
       <Page title={t(`gallery.${source}Skills`)} note={t('gallery.skillsNote')}>
         {items.length ? <Grid>{items.map((s) => <SkillCard key={`${s.source}:${s.name}`} skill={s} onOpen={() => openSkill(s)} />)}</Grid>
-          : <Empty text={t(source === 'project' ? 'gallery.noProjectSkills' : 'gallery.noSkills')} />}
+          : source === 'project' ? <Empty text={t('gallery.noProjectSkills')} /> : <NoSkills />}
       </Page>
     );
   }
@@ -168,35 +185,49 @@ export function ExamplesGallery({ mode, projectId = null, heading, onClose, onSt
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <header className="flex shrink-0 items-center gap-2 border-b border-[var(--border)] px-6 py-3.5">
-        {heading ?? <h2 className="mr-auto text-[17px] font-semibold tracking-[-0.01em] text-[var(--text)]">{t('gallery.title')}</h2>}
-        {mode === 'reference' ? <span className="hidden text-[12px] text-[var(--text-faint)] md:block">{t('gallery.referenceNote')}</span> : null}
-        {onClose ? (
-          <button type="button" onClick={onClose} aria-label={t('project.close')}
-            className="ml-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
-            <X size={16} strokeWidth={1.75} />
-          </button>
-        ) : null}
+      {/* the same row as the projects' (ProjectsView): switching between them moves nothing */}
+      <header className="flex shrink-0 flex-col px-6 pb-4 pt-5">
+        <div className="flex min-h-8 items-center gap-2">
+          {heading ?? <h2 className="mr-auto text-[17px] font-semibold tracking-[-0.01em] text-[var(--text)]">{t(community ? 'gallery.community' : 'gallery.title')}</h2>}
+          {community ? <span className="hidden text-[12px] text-[var(--text-faint)] md:block">{t('gallery.referenceNote')}</span> : null}
+          {onClose ? (
+            <button type="button" onClick={onClose} aria-label={t('project.close')}
+              className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+              <X size={16} strokeWidth={1.75} />
+            </button>
+          ) : null}
+        </div>
       </header>
       <div className="flex min-h-0 flex-1">
-        <nav className="flex w-[214px] shrink-0 flex-col overflow-y-auto border-r border-[var(--border)] px-3 py-3">
+        <nav className="flex w-[214px] shrink-0 flex-col overflow-y-auto border-r border-[var(--border)] px-3 pb-3">
           <label className="relative mb-2 block">
-            <span className="sr-only">{t('gallery.search')}</span>
+            <span className="sr-only">{t(community ? 'gallery.search' : 'gallery.searchExamples')}</span>
             <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-faint)]" />
-            <input type="search" value={query} onChange={(e) => { setQuery(e.target.value); setOpened(null); }} placeholder={t('gallery.search')}
+            <input type="search" value={query} onChange={(e) => { setQuery(e.target.value); setOpened(null); }} placeholder={t(community ? 'gallery.search' : 'gallery.searchExamples')}
               className="h-8 w-full rounded-[8px] bg-[var(--surface-2)] pl-8 pr-2 text-[12.5px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)] focus:ring-1 focus:ring-[var(--border-strong)]" />
           </label>
+          {community ? (
+            <>
+              {nav('skills', t('gallery.allSkills'), <Sparkles size={14} />, skills.length)}
+              {/* a project's own skills: only over a project */}
+              {SOURCES.filter((s) => s !== 'project' || projectId).map((s) => nav(`skills:${s}`, t(`gallery.${s}Skills`), <Blocks size={14} />, skills.filter((k) => k.source === s).length))}
+              {group(t('gallery.title'))}
+            </>
+          ) : null}
           {nav('discover', t('gallery.discover'), <Compass size={14} />)}
-          {kinds.length ? group(t('gallery.kinds')) : null}
-          {kinds.map((k) => nav(`kind:${k}`, k === 'other' ? t('gallery.more') : kindLabel(k), <Clapperboard size={14} />, all.filter((e) => (e.category ?? 'other') === k).length))}
-          {group(t('gallery.skills'))}
-          {/* a project's own skills: only over a project */}
-          {SOURCES.filter((s) => s !== 'project' || projectId).map((s) => nav(`skills:${s}`, t(`gallery.${s}Skills`), <Blocks size={14} />, skills.filter((k) => k.source === s).length))}
-          <div className="mt-auto flex flex-col pt-4">
-            {studioHost?.skills ? <button type="button" onClick={() => studioHost?.skills?.add()} className={foot}><Plus size={14} />{t('gallery.addSkill')}</button> : null}
-            {studioHost?.skills ? <button type="button" onClick={() => studioHost?.skills?.reveal()} className={foot}><FolderOpen size={14} />{t('gallery.openFolder')}</button> : null}
-            <a href={FEEDBACK} target="_blank" rel="noreferrer" className={foot}><MessageSquare size={14} />{t('gallery.feedback')}</a>
-          </div>
+          {kinds.length > 1 || (kinds.length === 1 && kinds[0] !== 'other') ? (
+            <>
+              {community ? null : group(t('gallery.kinds'))}
+              {kinds.map((k) => nav(`kind:${k}`, k === 'other' ? t('gallery.more') : kindLabel(k), <Clapperboard size={14} />, all.filter((e) => (e.category ?? 'other') === k).length))}
+            </>
+          ) : null}
+          {community ? (
+            <div className="mt-auto flex flex-col pt-4">
+              {studioHost?.skills ? <button type="button" onClick={() => studioHost?.skills?.add()} className={foot}><Plus size={14} />{t('gallery.addSkill')}</button> : null}
+              {studioHost?.skills ? <button type="button" onClick={() => studioHost?.skills?.reveal()} className={foot}><FolderOpen size={14} />{t('gallery.openFolder')}</button> : null}
+              <a href={FEEDBACK} target="_blank" rel="noreferrer" className={foot}><MessageSquare size={14} />{t('gallery.feedback')}</a>
+            </div>
+          ) : null}
         </nav>
         <div className="min-h-0 min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">{body}</div>
       </div>
@@ -225,6 +256,20 @@ function Row({ title, note, onAll, children }: { title: string; note?: string; o
       </div>
       {children}
     </section>
+  );
+}
+
+/** None of the person's skills yet: how to get one. */
+function NoSkills() {
+  const t = useT();
+  return (
+    <div className="flex items-center gap-3 rounded-[10px] border border-dashed border-[var(--border-strong)] px-4 py-4">
+      <p className="min-w-0 flex-1 text-[12.5px] leading-[18px] text-[var(--text-muted)]">{t('gallery.noSkills')}</p>
+      {studioHost?.skills ? (
+        <button type="button" onClick={() => studioHost?.skills?.add()}
+          className="flex h-8 shrink-0 items-center gap-1.5 rounded-[8px] border border-[var(--border)] px-3 text-[12.5px] text-[var(--text)] transition hover:bg-[var(--bg-hover)]"><Plus size={13} />{t('gallery.addSkill')}</button>
+      ) : null}
+    </div>
   );
 }
 
@@ -468,7 +513,7 @@ export function ExamplesDialog({ projectId, onClose, onStarted }: { projectId: s
   return createPortal(
     <>
       <div className="fixed inset-0 z-[10040] bg-black/60" onMouseDown={onClose} />
-      <div role="dialog" aria-modal="true" aria-label={t('gallery.title')}
+      <div role="dialog" aria-modal="true" aria-label={t('gallery.community')}
         className="fixed left-1/2 top-1/2 z-[10050] flex -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-[var(--border-strong)] bg-[var(--app-content-bg)] shadow-[0_24px_64px_rgba(0,0,0,0.35)]"
         style={{ width: 'min(1200px, calc(100vw - 64px))', height: 'min(800px, calc(100vh - 80px))' }}>
         <ExamplesGallery

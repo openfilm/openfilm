@@ -258,8 +258,8 @@ export const ko: Words = {
     skipped: '건너뜀 — 에이전트가 스스로 판단해 계속 진행했습니다',
     timedOut: '시간 안에 답이 없어 에이전트가 스스로 판단해 계속 진행했습니다',
   },
-  /* the composer's button that opens the examples over the film (Studio's ExamplesGallery) */
-  examples: { button: '예시' },
+  /* the composer's button that opens the Community over the film: skills and examples (Studio's ExamplesGallery) */
+  community: { button: '커뮤니티' },
   skills: {
     button: 'Skills',
     back: '뒤로',

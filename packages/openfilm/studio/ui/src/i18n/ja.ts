@@ -14,6 +14,9 @@ export const ja: Words = {
   launcher: { projects: 'プロジェクト', examples: 'サンプル' },
   gallery: {
     title: 'サンプル',
+    community: 'コミュニティ',
+    allSkills: 'すべてのスキル',
+    searchExamples: 'サンプルを検索',
     discover: '見つける',
     discoverNote: 'OpenFilm で作った映像。ここから始めることも、作り方を参考にすることもできます。',
     kinds: '映像の種類',
@@ -38,7 +41,7 @@ export const ja: Words = {
     reference: 'この映像で参考にする',
     referencePart: 'この部分を参考にする',
     referenceHow: 'メッセージに入ります。エージェントが作り方（ページとタイミング）を読み、あなたの映像に活かします。',
-    referenceNote: 'サンプルやその一部を選んで、エージェントに参考として示します',
+    referenceNote: 'メッセージでスキルを使うか、サンプルやその一部をエージェントに参考として示します',
     parts: 'パート',
     whole: '全体',
     partsHint: 'パートをクリックするか、バーの上をドラッグして範囲を選びます。',

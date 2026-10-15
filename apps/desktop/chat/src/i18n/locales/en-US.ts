@@ -258,8 +258,8 @@ export const enUS = {
     skipped: 'Skipped — it carried on with its own call',
     timedOut: 'No answer in time — it carried on with its own call',
   },
-  /* the composer's button that opens the examples over the film (Studio's ExamplesGallery) */
-  examples: { button: 'Examples' },
+  /* the composer's button that opens the Community over the film: skills and examples (Studio's ExamplesGallery) */
+  community: { button: 'Community' },
   skills: {
     button: 'Skills',
     back: 'Back',

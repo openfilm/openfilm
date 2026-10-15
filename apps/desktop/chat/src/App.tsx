@@ -861,8 +861,8 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
           </button>
         </Tooltip>
         {app.showExamples ? (
-          <Tooltip label={t('examples.button')}>
-            <button type="button" onClick={() => app.showExamples?.()} className="openfilm-composer-tool" aria-label={t('examples.button')}>
+          <Tooltip label={t('community.button')}>
+            <button type="button" onClick={() => app.showExamples?.()} className="openfilm-composer-tool" aria-label={t('community.button')}>
               <LayoutGrid size={16} strokeWidth={1.75} />
             </button>
           </Tooltip>

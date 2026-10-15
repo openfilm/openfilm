@@ -258,8 +258,8 @@ export const es: Words = {
     skipped: 'Omitida: siguió con su propio criterio',
     timedOut: 'No hubo respuesta a tiempo: siguió con su propio criterio',
   },
-  /* the composer's button that opens the examples over the film (Studio's ExamplesGallery) */
-  examples: { button: 'Ejemplos' },
+  /* the composer's button that opens the Community over the film: skills and examples (Studio's ExamplesGallery) */
+  community: { button: 'Comunidad' },
   skills: {
     button: 'Skills',
     back: 'Atrás',

@@ -258,8 +258,8 @@ export const zhCN: Words = {
     skipped: '已跳过，它按自己的判断继续了',
     timedOut: '未及时回答，它按自己的判断继续了',
   },
-  /* the composer's button that opens the examples over the film (Studio's ExamplesGallery) */
-  examples: { button: '示例' },
+  /* the composer's button that opens the Community over the film: skills and examples (Studio's ExamplesGallery) */
+  community: { button: '社区' },
   skills: {
     button: 'Skills',
     back: '返回',

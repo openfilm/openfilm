@@ -15,6 +15,9 @@ export const zhCN: Words = {
   launcher: { projects: '我的项目', examples: '示例' },
   gallery: {
     title: '示例',
+    community: '社区',
+    allSkills: '全部 skill',
+    searchExamples: '搜索示例',
     discover: '发现',
     discoverNote: '用 OpenFilm 做的片子，可以从它开始，也可以参考它的做法。',
     kinds: '片子类型',
@@ -39,7 +42,7 @@ export const zhCN: Words = {
     reference: '在这部片子里参考',
     referencePart: '参考这一段',
     referenceHow: '会放进你的消息里。agent 会读它是怎么做的（页面和时间），照着用在你的片子里。',
-    referenceNote: '选一个示例，或者其中一段，让 agent 参考',
+    referenceNote: '在消息里用一个 skill，或者让 agent 参考一个示例（或其中一段）',
     parts: '分段',
     whole: '整部',
     partsHint: '点一段，或者在条上拖出一段。',

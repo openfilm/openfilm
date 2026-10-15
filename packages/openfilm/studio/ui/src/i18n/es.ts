@@ -14,6 +14,9 @@ export const es: Words = {
   launcher: { projects: 'Proyectos', examples: 'Ejemplos' },
   gallery: {
     title: 'Ejemplos',
+    community: 'Comunidad',
+    allSkills: 'Todas las skills',
+    searchExamples: 'Buscar ejemplos',
     discover: 'Descubrir',
     discoverNote: 'Películas hechas con OpenFilm, para empezar con ellas o aprender de cómo están hechas.',
     kinds: 'Tipos de película',
@@ -38,7 +41,7 @@ export const es: Words = {
     reference: 'Usar como referencia en esta película',
     referencePart: 'Usar esta parte como referencia',
     referenceHow: 'Va en tu mensaje. El agente lee cómo está hecho (sus páginas y tiempos) y lo sigue en tu película.',
-    referenceNote: 'Elige un ejemplo, o una parte, para que el agente lo tome como referencia',
+    referenceNote: 'Usa una skill en tu mensaje, o da al agente un ejemplo, o una parte, como referencia',
     parts: 'Partes',
     whole: 'La película entera',
     partsHint: 'Haz clic en una parte o arrastra sobre la barra para un tramo.',

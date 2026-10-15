@@ -15,6 +15,9 @@ export const en = {
   launcher: { projects: 'Projects', examples: 'Examples' },
   gallery: {
     title: 'Examples',
+    community: 'Community',
+    allSkills: 'All skills',
+    searchExamples: 'Search examples',
     discover: 'Discover',
     discoverNote: 'Films made with OpenFilm, to start from or to learn from.',
     kinds: 'Kinds of film',
@@ -39,7 +42,7 @@ export const en = {
     reference: 'Reference in this film',
     referencePart: 'Reference this part',
     referenceHow: 'It goes into your message. The agent reads how it is made (its pages and timing) and follows it in your film.',
-    referenceNote: 'Pick an example, or a part of one, to point the agent at',
+    referenceNote: 'Use a skill in your message, or point the agent at an example or a part of one',
     parts: 'Parts',
     whole: 'The whole film',
     partsHint: 'Click a part, or drag across the strip for a stretch.',

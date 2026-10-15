@@ -249,7 +249,7 @@ export function ProjectsView({
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {/* the header stays out of the scroll area: inside it, the list view's scrollbar would narrow the header */}
       <header className="flex shrink-0 flex-col gap-3 px-6 pb-4 pt-5">
-        <div className="flex items-center gap-2">
+        <div className="flex min-h-8 items-center gap-2">
           {/* inside a folder the title is the way back: "Projects / test", on the same line, so what is in the folder
               starts where the projects do */}
           {currentFolder ? (

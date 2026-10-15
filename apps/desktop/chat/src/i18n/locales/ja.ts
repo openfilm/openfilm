@@ -258,8 +258,8 @@ export const ja: Words = {
     skipped: 'スキップしました — エージェントが自分で判断して続けました',
     timedOut: '時間内に回答がありませんでした — エージェントが自分で判断して続けました',
   },
-  /* the composer's button that opens the examples over the film (Studio's ExamplesGallery) */
-  examples: { button: 'サンプル' },
+  /* the composer's button that opens the Community over the film: skills and examples (Studio's ExamplesGallery) */
+  community: { button: 'コミュニティ' },
   skills: {
     button: 'Skills',
     back: '戻る',

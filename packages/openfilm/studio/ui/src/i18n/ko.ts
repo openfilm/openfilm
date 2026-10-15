@@ -14,6 +14,9 @@ export const ko: Words = {
   launcher: { projects: '내 프로젝트', examples: '예시' },
   gallery: {
     title: '예시',
+    community: '커뮤니티',
+    allSkills: '전체 스킬',
+    searchExamples: '예시 검색',
     discover: '둘러보기',
     discoverNote: 'OpenFilm으로 만든 영상. 여기서 시작하거나 만든 방식을 참고하세요.',
     kinds: '영상 종류',
@@ -38,7 +41,7 @@ export const ko: Words = {
     reference: '이 영상에서 참고',
     referencePart: '이 부분 참고',
     referenceHow: '메시지에 들어갑니다. 에이전트가 만든 방식(페이지와 타이밍)을 읽고 당신의 영상에 적용합니다.',
-    referenceNote: '예시나 그 일부를 골라 에이전트가 참고하게 하세요',
+    referenceNote: '메시지에서 스킬을 쓰거나, 예시나 그 일부를 에이전트가 참고하게 하세요',
     parts: '구간',
     whole: '전체',
     partsHint: '구간을 클릭하거나 막대 위를 드래그해 범위를 고르세요.',
