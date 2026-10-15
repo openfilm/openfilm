@@ -39,6 +39,7 @@ import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { lockedOverrides, versionsOffLock } from './locked-versions.mjs';
 
 const require = createRequire(import.meta.url);
 const desktop = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -88,6 +89,8 @@ cpSync(join(desktop, 'src'), join(stage, 'src'), { recursive: true, filter: (fro
 cpSync(join(desktop, 'shell/dist'), join(stage, 'shell/dist'), { recursive: true });
 const pack = (dir) => execFileSync('npm', ['pack', '--ignore-scripts', '--pack-destination', work, '--silent'], { cwd: dir, encoding: 'utf8' }).trim().split('\n').pop();
 const dependencies = { ...pkg.dependencies, openfilm: `file:../${pack(protocol)}` };
+/* npm takes the versions pnpm's lockfile has (locked-versions.mjs): what the tests ran with, not the latest */
+const lockedTree = JSON.parse(execFileSync('pnpm', ['list', '--prod', '--depth', 'Infinity', '--json'], { cwd: desktop, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }))[0];
 writeFileSync(join(stage, 'package.json'), `${JSON.stringify({
   name: 'openfilm-desktop',
   productName: NAME,
@@ -100,8 +103,13 @@ writeFileSync(join(stage, 'package.json'), `${JSON.stringify({
   type: 'module',
   main: 'src/main.mjs',
   dependencies,
+  overrides: lockedOverrides(lockedTree),
 }, null, 2)}\n`);
 run('npm', ['install', '--omit=dev', '--omit=optional', '--no-audit', '--no-fund', '--no-package-lock', '--loglevel=error'], { cwd: stage });
+const offLock = versionsOffLock(lockedTree, join(stage, 'node_modules'));
+if (offLock.length) {
+  throw new Error(`The installer's packages are not the lockfile's:\n${offLock.map((p) => `  ${p.name} ${p.version} (locked: ${p.locked.join(', ')})`).join('\n')}`);
+}
 /* the build's product file */
 cpSync(productFile, join(stage, 'node_modules/openfilm/product.json'));
 

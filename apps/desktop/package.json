@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node scripts/start.mjs",
     "build:shell": "vite build --config shell/vite.config.ts",
-    "test": "node --test src/*.test.mjs",
+    "test": "node --test src/*.test.mjs scripts/*.test.mjs",
     "bench": "node bench/run.mjs",
     "typecheck": "tsc -p chat && tsc -p shell",
     "release": "node scripts/release.mjs"
