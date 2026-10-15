@@ -24,11 +24,11 @@ export interface RosterAgent {
   install?: string | null;
   setupRequired?: string | null;
   error?: string;
-  byok?: {
-    format: 'responses' | 'chat' | 'anthropic'; baseUrl: string; model: string; models?: string[]; last4: string;
-    /** per model, the reasoning efforts it offers and the one it starts on (apps/desktop src/pi-config.mjs EFFORTS) */
-    efforts?: Record<string, { levels: string[]; effort: string }>;
-  };
+  /**
+   * The own key's models, each set up on its own (its name, its service, the model asked for there), with the reasoning
+   * efforts it offers and the one it starts on (apps/desktop src/pi-config.mjs EFFORTS); the first one to begin with.
+   */
+  byok?: { models: Array<{ id: string; name: string; format: 'responses' | 'chat' | 'anthropic'; baseUrl: string; model: string; levels: string[]; effort: string; last4: string }> };
 }
 
 export interface LocalAgentState {

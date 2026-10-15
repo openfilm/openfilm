@@ -341,7 +341,8 @@ async function start() {
   agentHandle('desktop:agents:automatic', ({ id }) => roster.useAutomatic(String(id)));
   agentHandle('desktop:agents:diagnose', ({ id }) => roster.diagnose(String(id)));
   agentHandle('desktop:agents:shown', ({ id, shown }) => { roster.setShown(String(id), shown === true); return { ok: true }; });
-  agentHandle('desktop:agents:byok', ({ config }) => roster.configureByok(config));
+  agentHandle('desktop:agents:own-model', ({ config }) => roster.saveOwnModel(config));
+  agentHandle('desktop:agents:own-model-remove', ({ id }) => { roster.removeOwnModel(String(id)); return { ok: true }; });
   /* a file on the disk brought into the chat goes into the project the page names, through Studio's own import (it
      shows in Studio's media at once, and the import is in the project's history); one without a path the page sends
      itself */

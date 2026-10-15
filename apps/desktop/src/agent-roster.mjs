@@ -8,28 +8,31 @@
  *     in then (one switched in the agent or its maker's app). `account` says whose it is. Codex and Claude Code are
  *     shown in the chat's menu from the start; the others once the person connects one or switches it on. Codex is
  *     connected from the start, Claude Code once the person connects it.
- *   · byok — the app's own agent (Pi, pi-agent.mjs) on the person's own key, on a standard API in one of three formats: the OpenAI
- *     Responses API (…/v1/responses), the OpenAI Chat Completions API (…/v1/chat/completions) or the Anthropic Messages
- *     API (…/v1/messages); Pi speaks each. It may name several models (the chat's menu switches between them, the first
- *     one to begin with), each with the reasoning efforts the person says it takes and the one it starts on (`efforts`;
- *     `auto` alone, sending no reasoning setting, when they said nothing). Each has to read pictures (the agent looks at its own frames): setting it up sends one small
- *     request with a picture to each, and a model that cannot take it is refused.
+ *   · byok — the app's own agent (Pi, pi-agent.mjs) on the person's own models, each set up on its own: the name the
+ *     chat's menu shows, its service (an address on a standard API in one of three formats: the OpenAI Responses API
+ *     (…/v1/responses), the OpenAI Chat Completions API (…/v1/chat/completions) or the Anthropic Messages API
+ *     (…/v1/messages); Pi speaks each), its own key, the model asked for there, and the reasoning efforts the person
+ *     says it takes and the one it starts on (`auto` alone, sending no reasoning setting, when they said nothing). The
+ *     chat's menu switches between them, the first one to begin with. Each has to read pictures (the agent looks at its
+ *     own frames): setting one up sends it one small request with a picture, and a model that cannot take it is refused.
  *
  * One of the person's own agents not found where it is looked for can be pointed at (`locate`): the program they choose
  * is tried (it has to answer `--version`) and used from then on, until they go back to finding it (`useAutomatic`).
  * `diagnose` says what was searched, for them to read or send with an issue.
  *
  * Each has a switch for whether the chat's menu shows it. Kept in the app's data folder: agents.json (the choices) and
- * byok.key (the key, sealed with the system's keychain by the caller's `seal`/`unseal`).
+ * byok-keys (each own model's key by its id, sealed with the system's keychain by the caller's `seal`/`unseal`; byok.key,
+ * the one key of a version before, is the key of the models set up then).
  *
  * State per agent: ready · off (disconnected here) · sign-in (its own sign-in is needed) · waiting (signing in, in
  * Terminal) · missing (not installed; `install` says where from) · key (no key set up) · checking (not known yet).
  *
  * Reads no Electron module, so `node --test` can use it.
  */
+import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { PI_APIS, modelEfforts } from './pi-config.mjs';
+import { PI_APIS, modelEffort } from './pi-config.mjs';
 
 /** The person's own agents, as agents.mjs AGENTS has them. */
 export const OWN_AGENT_IDS = Object.freeze(['codex', 'claude', 'gemini', 'copilot', 'cursor', 'opencode', 'codebuddy', 'qwen', 'kimi']);
@@ -69,9 +72,8 @@ export function readChoices(dataDir) {
   const raw = readJson(join(dataDir, 'agents.json'), {});
   const shown = { ...DEFAULT_SHOWN };
   for (const id of AGENT_IDS) if (typeof raw.shown?.[id] === 'boolean') shown[id] = raw.shown[id];
-  const byok = raw.byok && typeof raw.byok === 'object' && Object.hasOwn(BYOK_FORMATS, raw.byok.format)
-    ? byokChoice(raw.byok)
-    : null;
+  const models = ownModels(raw.byok);
+  const byok = models.length ? { models } : null;
   const paths = {};
   for (const id of OWN_AGENT_IDS) if (typeof raw.paths?.[id] === 'string' && raw.paths[id]) paths[id] = raw.paths[id];
   return {
@@ -82,10 +84,31 @@ export function readChoices(dataDir) {
   };
 }
 
-/** The own key's choice as kept: its models (one kept before there could be several is the one), the first the default. */
-function byokChoice(raw) {
-  const models = modelList(Array.isArray(raw.models) && raw.models.length ? raw.models : [raw.model]);
-  return { format: raw.format, baseUrl: String(raw.baseUrl ?? ''), model: models[0] ?? '', models, efforts: modelEfforts(raw.efforts, models), last4: String(raw.last4 ?? '') };
+/**
+ * The person's own models as kept: `[{ id, name, format, baseUrl, model, levels, effort, last4 }]`, the first the one a
+ * conversation starts on. One without a known format, an address or a model is left out. Kept before each model was set
+ * up on its own (one service, its models by name, `efforts` by name): each of those models on that service (`m1`, `m2`…),
+ * on the key kept then.
+ */
+export function ownModels(raw) {
+  if (!raw || typeof raw !== 'object') return [];
+  const list = Array.isArray(raw.models) && raw.models.some((m) => m && typeof m === 'object')
+    ? raw.models
+    : Object.hasOwn(BYOK_FORMATS, raw.format)
+      ? modelList(Array.isArray(raw.models) && raw.models.length ? raw.models : [raw.model]).map((model, i) => ({
+        id: `m${i + 1}`, name: model, format: raw.format, baseUrl: raw.baseUrl, model, last4: raw.last4,
+        levels: raw.efforts?.[model]?.levels, effort: raw.efforts?.[model]?.effort,
+      }))
+      : [];
+  const ids = new Set();
+  return list.flatMap((m) => {
+    const model = String(m?.model ?? '').trim();
+    const baseUrl = String(m?.baseUrl ?? '').trim();
+    const id = String(m?.id ?? '');
+    if (!model || !baseUrl || !Object.hasOwn(BYOK_FORMATS, m?.format) || !/^[a-z0-9]+$/.test(id) || ids.has(id)) return [];
+    ids.add(id);
+    return [{ id, name: String(m.name ?? '').trim() || model, format: m.format, baseUrl, model, ...modelEffort(m.levels, m.effort), last4: String(m.last4 ?? '') }];
+  });
 }
 
 /** Model names, from a list or text (separated by commas or new lines): trimmed, each once, in order. */
@@ -174,10 +197,23 @@ export function createRoster(deps) {
   const live = { waiting: {}, errors: {} };
   let local = null;
 
-  const keyFile = join(dataDir, 'byok.key');
-  const byokKey = () => {
-    try { return existsSync(keyFile) ? deps.unseal(readFileSync(keyFile)) : null; } catch { return null; }
+  /* each own model's key by its id; the one key of a version before is the key of the models set up then */
+  const keysFile = join(dataDir, 'byok-keys');
+  const legacyKeyFile = join(dataDir, 'byok.key');
+  const byokKeys = () => {
+    try { return existsSync(keysFile) ? JSON.parse(deps.unseal(readFileSync(keysFile))) : {}; } catch { return {}; }
   };
+  const keyOf = (/** @type {string} */ id) => {
+    const key = byokKeys()[id];
+    if (typeof key === 'string' && key) return key;
+    try { return existsSync(legacyKeyFile) ? deps.unseal(readFileSync(legacyKeyFile)) : null; } catch { return null; }
+  };
+  const writeKeys = (keys) => {
+    mkdirSync(dataDir, { recursive: true });
+    writeFileSync(keysFile, deps.seal(JSON.stringify(keys)), { mode: 0o600 });
+  };
+  /** The own models that have a key: the ones the agent can use. */
+  const keyed = () => (choices.byok?.models ?? []).filter((m) => keyOf(m.id));
 
   function stateOf(id) {
     if (isOwn(id)) {
@@ -190,7 +226,7 @@ export function createRoster(deps) {
       return { status: 'ready', ...where, ...(found.account ? { account: { ...found.account } } : {}) };
     }
     if (choices.disconnected.includes(id)) return { status: 'off' };
-    if (!choices.byok || !byokKey()) return { status: 'key' };
+    if (!keyed().length) return { status: 'key' };
     return { status: 'ready' };
   }
 
@@ -201,7 +237,7 @@ export function createRoster(deps) {
       shown: choices.shown[id] ?? false,
       ...stateOf(id),
       ...(live.errors[id] ? { error: live.errors[id] } : {}),
-      ...(id === 'byok' && choices.byok ? { byok: { ...choices.byok, models: [...choices.byok.models], efforts: modelEfforts(choices.byok.efforts, choices.byok.models) } } : {}),
+      ...(id === 'byok' && choices.byok ? { byok: { models: choices.byok.models.map((m) => ({ ...m, levels: [...m.levels] })) } } : {}),
     }));
   }
 
@@ -311,50 +347,70 @@ export function createRoster(deps) {
     },
 
     /**
-     * The person's own key: checked (key accepted, each model reads pictures) before it is kept. A key left empty keeps
-     * the one kept already (the models or the address changed). `models`: a list, or text with the names separated by
-     * commas or new lines (`model`, one name, as before). `efforts`: per model, the efforts it takes and the one it
-     * starts on (pi-config.mjs EFFORTS; `auto` alone for a model not named there).
-     * @param {{ format: string, baseUrl?: string, models?: string[] | string, model?: string, efforts?: Record<string, { levels?: string[], effort?: string }>, key?: string }} config
+     * One of the person's own models, set up or changed (`id` names one already set up): its name (the model, when
+     * none), its API format, the service's address, the model asked for there, its key, and its efforts (pi-config.mjs
+     * EFFORTS: the ones it takes and the one it starts on). A key left empty keeps the one it has, or takes the key of
+     * another model on the same address. Checked first (the key is taken, the model reads pictures).
+     * @param {{ id?: string, name?: string, format: string, baseUrl?: string, model: string, key?: string, levels?: string[], effort?: string }} config
+     * @returns {Promise<{ ok: true, id: string } | { ok: false, error: string, code?: string }>}
      */
-    async configureByok(config) {
+    async saveOwnModel(config) {
       const format = BYOK_FORMATS[config?.format];
       if (!format) return { ok: false, error: 'Choose the API format.' };
       const baseUrl = String(config.baseUrl || format.baseUrl).trim().replace(/\/+$/, '');
       if (!/^https?:\/\/[^\s]+$/.test(baseUrl)) return { ok: false, error: 'The address has to start with https:// (or http:// for one on this computer).' };
-      const models = modelList(config.models ?? config.model);
-      if (!models.length) return { ok: false, error: 'Name the model.' };
-      const key = String(config.key ?? '').trim() || byokKey();
+      const model = String(config.model ?? '').trim();
+      if (!model) return { ok: false, error: 'Name the model.' };
+      const models = choices.byok?.models ?? [];
+      const before = config.id ? models.find((m) => m.id === config.id) : null;
+      if (config.id && !before) return { ok: false, error: 'That model is no longer set up.' };
+      const sameService = models.find((m) => m.id !== config.id && m.baseUrl === baseUrl && keyOf(m.id));
+      const key = String(config.key ?? '').trim() || (before ? keyOf(before.id) : null) || (sameService ? keyOf(sameService.id) : null);
       if (!key) return { ok: false, error: 'Paste the key.' };
-      const probes = await Promise.all(models.map((model) => probeModel({ format: config.format, baseUrl, key, model, fetch: deps.fetch })));
-      const failed = probes.findIndex((p) => !p.ok);
-      if (failed >= 0) return models.length > 1 ? { ...probes[failed], error: `${models[failed]}: ${probes[failed].error}` } : probes[failed];
-      mkdirSync(dataDir, { recursive: true });
-      writeFileSync(keyFile, deps.seal(key), { mode: 0o600 });
+      const probe = await probeModel({ format: config.format, baseUrl, key, model, fetch: deps.fetch });
+      if (!probe.ok) return probe;
+      let id = before?.id;
+      while (!id || models.some((m) => m.id === id && m !== before)) id = randomBytes(4).toString('hex');
+      const entry = { id, name: String(config.name ?? '').trim() || model, format: config.format, baseUrl, model, ...modelEffort(config.levels, config.effort), last4: key.slice(-4) };
+      writeKeys({ ...byokKeys(), [id]: key });
       delete live.errors.byok;
       save({
         ...choices,
         shown: { ...choices.shown, byok: true },
         disconnected: choices.disconnected.filter((a) => a !== 'byok'),
-        byok: { format: config.format, baseUrl, model: models[0], models, efforts: modelEfforts(config.efforts, models), last4: key.slice(-4) },
+        byok: { models: before ? models.map((m) => (m.id === id ? entry : m)) : [...models, entry] },
       });
       deps.closeSessions('byok');
-      changed();
-      return { ok: true };
+      return { ok: true, id };
+    },
+
+    /** One of the person's own models no longer set up, and its key gone with it. */
+    removeOwnModel(id) {
+      const models = choices.byok?.models ?? [];
+      if (!models.some((m) => m.id === id)) return;
+      const { [id]: _, ...keys } = byokKeys();
+      writeKeys(keys);
+      const left = models.filter((m) => m.id !== id);
+      save({ ...choices, byok: left.length ? { models: left } : null });
+      deps.closeSessions('byok');
     },
 
     /**
-     * What a session of the app's own agent runs with (pi-agent.mjs): Pi's own folder, the service (Pi's provider:
-     * its API, address and the variable its key is in), the models (`model` the one it starts on), and the key itself
-     * (`env`).
+     * What a session of the app's own agent runs with (pi-agent.mjs): Pi's own folder, the person's models that have a
+     * key (pi-config.mjs OwnModel: each its own service, its key in a variable of its own), the one it starts on, and
+     * the keys themselves (`env`).
      */
     harness(id) {
       if (id !== 'byok') return null;
-      const key = byokKey();
-      if (!choices.byok || !key) return null;
-      const { format, baseUrl, model, models, efforts } = choices.byok;
-      const provider = { id: 'byok', api: PI_APIS[format], baseUrl, apiKeyEnv: 'OPENFILM_BYOK_KEY' };
-      return { home: join(dataDir, 'agents', 'byok', 'pi'), provider, model, models: [...models], efforts: modelEfforts(efforts, models), env: { OPENFILM_BYOK_KEY: key } };
+      const models = keyed();
+      if (!models.length) return null;
+      const env = {};
+      const own = models.map((m, i) => {
+        const keyEnv = `OPENFILM_BYOK_KEY_${i + 1}`;
+        env[keyEnv] = keyOf(m.id);
+        return { id: m.id, name: m.name, api: PI_APIS[m.format], baseUrl: m.baseUrl, keyEnv, model: m.model, levels: [...m.levels], effort: m.effort };
+      });
+      return { home: join(dataDir, 'agents', 'byok', 'pi'), models: own, model: own[0].id, env };
     },
   };
 }

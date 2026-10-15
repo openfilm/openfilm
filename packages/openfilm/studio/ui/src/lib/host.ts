@@ -79,7 +79,12 @@ export interface StudioHost {
     locate?: (id: HostAgentId, words?: { title?: string; button?: string }) => Promise<{ ok: boolean; error?: string; code?: 'not-a-program' | 'did-not-start' | string }>;
     useAutomatic?: (id: HostAgentId) => Promise<unknown>;
     diagnose?: (id: HostAgentId) => Promise<HostAgentDiagnosis | null>;
-    configureByok: (config: { format: HostByokFormat; baseUrl?: string; models: string[]; efforts?: Record<string, HostByokEffort>; key?: string }) => Promise<{ ok: boolean; error?: string; code?: string }>;
+    /**
+     * One of the person's own models set up (no `id`) or changed: checked before it is kept. A key left empty keeps its
+     * own, or takes the one of another model on the same address.
+     */
+    saveOwnModel: (config: HostOwnModelConfig) => Promise<{ ok: true; id: string } | { ok: false; error: string; code?: string }>;
+    removeOwnModel: (id: string) => Promise<unknown>;
     onChange: (listener: (agents: HostAgent[]) => void) => () => void;
   };
   /**
@@ -176,8 +181,18 @@ export interface HostAgent {
   chosen?: string | null;
   error?: string;
   account?: HostAgentAccount;
-  byok?: { format: HostByokFormat; baseUrl: string; model: string; models?: string[]; efforts?: Record<string, HostByokEffort>; last4: string };
+  /** The own key's models, each set up on its own; the first is the one a conversation starts on. */
+  byok?: { models: HostOwnModel[] };
 }
+
+/**
+ * One of the person's own models: its `id` (the app's), the `name` the chat's menu shows, its service (API `format`
+ * and `baseUrl`), the `model` asked for there, its efforts, and the last four characters of its key.
+ */
+export interface HostOwnModel extends HostByokEffort { id: string; name: string; format: HostByokFormat; baseUrl: string; model: string; last4: string }
+
+/** What setting up one of the person's own models sends: `id` to change one, no `key` to keep its key. */
+export interface HostOwnModelConfig { id?: string; name?: string; format: HostByokFormat; baseUrl: string; model: string; key?: string; levels: HostByokEffortLevel[]; effort: HostByokEffortLevel }
 
 /**
  * The reasoning efforts a model of the person's own key offers, in this order (`auto`: none is sent, the service decides),

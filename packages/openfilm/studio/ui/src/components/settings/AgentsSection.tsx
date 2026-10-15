@@ -13,9 +13,9 @@
  * then on (Find automatically goes back). "Why isn't it found?" says what was searched, with a report to copy.
  */
 import React from 'react';
-import { Check, Copy, Download, KeyRound, Loader2, X } from 'lucide-react';
+import { Check, Copy, Download, KeyRound, Loader2, Plus, X } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
-import { BYOK_EFFORTS, studioHost, type HostAgent, type HostAgentDiagnosis, type HostAgentId, type HostAgentUsage, type HostByokEffort, type HostByokEffortLevel, type HostByokFormat } from '@/lib/host';
+import { BYOK_EFFORTS, studioHost, type HostAgent, type HostAgentDiagnosis, type HostAgentId, type HostAgentUsage, type HostByokEffort, type HostByokEffortLevel, type HostByokFormat, type HostOwnModel } from '@/lib/host';
 
 /** What is left of the plan: what Codex can say (the app's agent-usage.mjs; Claude Code's own report is wrong for Team accounts). */
 const PLAN_AGENTS: readonly HostAgentId[] = ['codex'];
@@ -248,7 +248,7 @@ export function AgentsSection() {
                 {t('settings.agents.recommended')}
               </span>
             ) : null}
-            {agent.status === 'ready' && chosen ? <SettingsStatus>{ownKey ? `${byokModels(agent).join(', ')} · •••• ${agent.byok!.last4}` : t('settings.agents.ready')}</SettingsStatus> : null}
+            {agent.status === 'ready' && chosen ? <SettingsStatus>{ownKey ? agent.byok!.models.map((m) => m.name).join(', ') : t('settings.agents.ready')}</SettingsStatus> : null}
           </>
         )}
         description={agent.status === 'ready' ? accountLine(agent) : statusLine(agent)}
@@ -305,7 +305,7 @@ export function AgentsSection() {
                 <button type="button" onClick={() => act(agent.id, () => host.connect(agent.id))} className="underline underline-offset-2 hover:text-[var(--text)]">{t('settings.agents.startAgain')}</button>
               </p>
             ) : null}
-            {open ? <ByokForm agent={agent} onDone={() => setKeyOpen(false)} /> : null}
+            {open ? <OwnModels agent={agent} onDone={() => setKeyOpen(false)} /> : null}
             {said ? <p className={settingsError}>{said}</p> : null}
           </div>
         ) : null}
@@ -336,49 +336,149 @@ const FORMATS: ReadonlyArray<{ value: HostByokFormat; label: string; address: st
   { value: 'anthropic', label: 'Anthropic Messages', address: 'https://api.anthropic.com' },
 ];
 
-/** The own key's models, the first one the chat begins with. */
-const byokModels = (agent: HostAgent) => (agent.byok?.models?.length ? agent.byok.models : [agent.byok?.model ?? ''].filter(Boolean));
+/** Where a service is, for a model's line: its host, or the address as typed when it is not one. */
+const hostOf = (address: string) => { try { return new URL(address).host; } catch { return address; } };
 
-/** Model names typed in one field, separated by commas or new lines: trimmed, each once. */
-const modelNames = (text: string) => [...new Set(text.split(/[,\n]/).map((m) => m.trim()).filter(Boolean))];
-
-/** A model of the own key, with the efforts it offers and the one it starts on; a new one offers Auto alone. */
-interface ByokModelRow extends HostByokEffort { name: string }
-const byokRows = (agent: HostAgent): ByokModelRow[] =>
-  byokModels(agent).map((name) => ({ name, ...(agent.byok?.efforts?.[name] ?? { levels: ['auto'], effort: 'auto' }) }));
+/** An address as kept: trimmed, no trailing slash (the roster keeps it so). */
+const addressKey = (address: string) => address.trim().replace(/\/+$/, '');
 
 /**
- * One model of the own key: its name, the efforts it takes (each a toggle, at least one on) and, when it takes more than
- * one, the one a conversation starts on.
+ * The own key's models, each set up on its own: a line each (its name; the model at its service, where, its key) to
+ * change or remove, and one to add. The form takes a line's place while it is changed. With none yet, the form opens.
  */
-function ByokModel({ row, onChange, onRemove }: { row: ByokModelRow; onChange: (row: ByokModelRow) => void; onRemove: () => void }) {
+function OwnModels({ agent, onDone }: { agent: HostAgent; onDone: () => void }) {
+  const t = useT();
+  const host = studioHost?.agents;
+  const models = agent.byok?.models ?? [];
+  /* the model being changed, 'new' for one being added, null for none */
+  const [editing, setEditing] = React.useState<string | null>(models.length ? null : 'new');
+  const level = (l: HostByokEffortLevel) => t(`settings.agents.effortLevels.${l}`);
+  return (
+    <SettingsInset>
+      {models.map((m) => (editing === m.id
+        ? <OwnModelForm key={m.id} model={m} models={models} onDone={() => setEditing(null)} />
+        : (
+          <div key={m.id} className="flex min-h-12 items-center gap-2 rounded-[8px] border border-[var(--border)] px-3 py-2">
+            <div className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-[14px] text-[var(--text)]" title={m.name}>{m.name}</span>
+              <span className="truncate text-[12.5px] text-[var(--text-muted)]">
+                <span className="font-mono">{m.model}</span>{` · ${hostOf(m.baseUrl)} · •••• ${m.last4}`}
+                {m.levels.length > 1 ? ` · ${m.levels.map(level).join(' / ')}` : ''}
+              </span>
+            </div>
+            <SettingsButton variant="quiet" disabled={editing !== null} onClick={() => setEditing(m.id)}>{t('settings.agents.edit')}</SettingsButton>
+            <button type="button" disabled={editing !== null} onClick={() => void host?.removeOwnModel(m.id)}
+              aria-label={t('settings.agents.removeModel').replace('{name}', m.name)} title={t('settings.agents.removeModel').replace('{name}', m.name)}
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-40">
+              <X size={14} aria-hidden />
+            </button>
+          </div>
+        )))}
+      {editing === 'new' ? <OwnModelForm models={models} onDone={() => (models.length ? setEditing(null) : onDone())} /> : null}
+      {editing === null ? (
+        <div className="flex items-center justify-between gap-2">
+          <SettingsButton onClick={() => setEditing('new')}><Plus size={15} aria-hidden />{t('settings.agents.addModel')}</SettingsButton>
+          <SettingsButton variant="quiet" onClick={onDone}>{t('settings.agents.done')}</SettingsButton>
+        </div>
+      ) : null}
+      <p className="text-[13px] leading-relaxed text-[var(--text-faint)]">{t('settings.agents.byokNote')}</p>
+    </SettingsInset>
+  );
+}
+
+/**
+ * One own model, set up or changed: its name (the model, when empty), the API format, the service's address, the
+ * model asked for there, the key (left empty: its own, or another model's on the same address), and the efforts it
+ * takes (each a toggle, at least one on) with the one a conversation starts on. Checked before it is kept.
+ */
+function OwnModelForm({ model, models, onDone }: { model?: HostOwnModel; models: HostOwnModel[]; onDone: () => void }) {
+  const t = useT();
+  const host = studioHost?.agents;
+  const [name, setName] = React.useState(model?.name ?? '');
+  const [format, setFormat] = React.useState<HostByokFormat>(model?.format ?? 'responses');
+  const official = FORMATS.find((f) => f.value === format)!;
+  const [baseUrl, setBaseUrl] = React.useState(model?.baseUrl ?? official.address);
+  const [modelId, setModelId] = React.useState(model?.model ?? '');
+  const [key, setKey] = React.useState('');
+  const [effort, setEffort] = React.useState<HostByokEffort>({ levels: model?.levels ?? ['auto'], effort: model?.effort ?? 'auto' });
+  const [state, setState] = React.useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
+  /* another model on this address, whose key an empty field takes */
+  const sameService = models.find((m) => m.id !== model?.id && addressKey(m.baseUrl) === addressKey(baseUrl));
+  /* another format: its official address, unless the person typed one of their own */
+  const pickFormat = (next: HostByokFormat) => {
+    if (FORMATS.some((f) => f.address === baseUrl.trim()) || !baseUrl.trim()) setBaseUrl(FORMATS.find((f) => f.value === next)!.address);
+    setFormat(next);
+  };
+  const ready = modelId.trim() && baseUrl.trim() && (key.trim() || model || sameService);
+  const save = () => {
+    if (!host || !ready) return;
+    setState({ busy: true, error: null });
+    void host.saveOwnModel({ ...(model ? { id: model.id } : {}), name, format, baseUrl, model: modelId, ...(key.trim() ? { key } : {}), levels: effort.levels, effort: effort.effort })
+      .then((r) => { if (r.ok) onDone(); else setState({ busy: false, error: r.error || t('settings.agents.failed') }); })
+      .catch((e: unknown) => setState({ busy: false, error: e instanceof Error ? e.message : String(e) }));
+  };
+  const keyHint = model ? t('settings.agents.keyKept').replace('{last4}', model.last4)
+    : sameService ? t('settings.agents.keySame').replace('{name}', sameService.name) : t('settings.agents.keyPlaceholder');
+  const label = (text: string) => <span className="w-[92px] shrink-0 text-[13px] text-[var(--text-muted)]">{text}</span>;
+  return (
+    <form className="flex flex-col gap-2.5 rounded-[8px] border border-[var(--border-strong)] p-3" onSubmit={(e) => { e.preventDefault(); if (!state.busy) save(); }}>
+      <div className="flex items-center gap-2">
+        {label(t('settings.agents.name'))}
+        <SettingsField value={name} onChange={(e) => setName(e.target.value)} placeholder={t('settings.agents.namePlaceholder')} aria-label={t('settings.agents.name')} />
+      </div>
+      <div className="flex items-center gap-2">
+        {label(t('settings.agents.format'))}
+        <SettingsSelect<HostByokFormat> label={t('settings.agents.format')} value={format} onChange={pickFormat} width={220}
+          options={FORMATS.map((f) => ({ value: f.value, label: f.label }))} />
+      </div>
+      <div className="flex items-center gap-2">
+        {label(t('settings.agents.address'))}
+        <SettingsField value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder={official.address} aria-label={t('settings.agents.address')} spellCheck={false} />
+      </div>
+      <div className="flex items-center gap-2">
+        {label(t('settings.agents.model'))}
+        <SettingsField value={modelId} onChange={(e) => setModelId(e.target.value)} placeholder={t('settings.agents.modelPlaceholder')} aria-label={t('settings.agents.model')}
+          className="font-mono placeholder:font-sans" spellCheck={false} />
+      </div>
+      <div className="flex items-center gap-2">
+        {label(t('settings.agents.key'))}
+        <SettingsField type="password" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" className="font-mono placeholder:font-sans"
+          placeholder={keyHint} aria-label={t('settings.agents.key')} />
+      </div>
+      <div className="flex items-start gap-2">
+        <span className="flex h-8 items-center">{label(t('settings.agents.efforts'))}</span>
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <EffortPicker value={effort} onChange={setEffort} />
+          <p className="text-[12.5px] leading-relaxed text-[var(--text-faint)]">{t('settings.agents.effortHint')}</p>
+        </div>
+      </div>
+      {state.error ? <p className={settingsError}>{state.error}</p> : null}
+      <div className="flex justify-end gap-1.5">
+        <SettingsButton variant="quiet" onClick={onDone}>{t('settings.agents.cancel')}</SettingsButton>
+        <SettingsButton type="submit" variant="primary" disabled={state.busy || !ready}>
+          {state.busy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : null}
+          {state.busy ? t('settings.agents.checkingKey') : t('settings.agents.save')}
+        </SettingsButton>
+      </div>
+    </form>
+  );
+}
+
+/** The efforts a model takes (each a toggle, at least one on) and, when it takes more than one, the one it starts on. */
+function EffortPicker({ value, onChange }: { value: HostByokEffort; onChange: (value: HostByokEffort) => void }) {
   const t = useT();
   const name = (level: HostByokEffortLevel) => t(`settings.agents.effortLevels.${level}`);
   const toggle = (level: HostByokEffortLevel) => {
-    const on = row.levels.includes(level);
-    if (on && row.levels.length === 1) return;
-    const levels = BYOK_EFFORTS.filter((l) => (l === level ? !on : row.levels.includes(l)));
-    onChange({ ...row, levels, effort: levels.includes(row.effort) ? row.effort : levels[0]! });
+    const on = value.levels.includes(level);
+    if (on && value.levels.length === 1) return;
+    const levels = BYOK_EFFORTS.filter((l) => (l === level ? !on : value.levels.includes(l)));
+    onChange({ levels, effort: levels.includes(value.effort) ? value.effort : levels[0]! });
   };
   return (
-    <div className="flex flex-col gap-2 rounded-[8px] border border-[var(--border)] px-3 py-2.5">
-      <div className="flex min-h-8 items-center gap-2">
-        <span className="min-w-0 flex-1 truncate font-mono text-[13.5px] text-[var(--text)]" title={row.name}>{row.name}</span>
-        {row.levels.length > 1 ? (
-          <>
-            <span className="shrink-0 text-[13px] text-[var(--text-muted)]">{t('settings.agents.effortStart')}</span>
-            <SettingsSelect<HostByokEffortLevel> label={t('settings.agents.effortStart')} value={row.effort} width={128}
-              onChange={(effort) => onChange({ ...row, effort })} options={row.levels.map((l) => ({ value: l, label: name(l) }))} />
-          </>
-        ) : null}
-        <button type="button" onClick={onRemove} aria-label={t('settings.agents.removeModel').replace('{name}', row.name)} title={t('settings.agents.removeModel').replace('{name}', row.name)}
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
-          <X size={14} aria-hidden />
-        </button>
-      </div>
-      <div role="group" aria-label={`${t('settings.agents.efforts')} · ${row.name}`} className="flex flex-wrap items-center gap-1">
+    <>
+      <div role="group" aria-label={t('settings.agents.efforts')} className="flex flex-wrap items-center gap-1">
         {BYOK_EFFORTS.map((level) => {
-          const on = row.levels.includes(level);
+          const on = value.levels.includes(level);
           return (
             <button key={level} type="button" aria-pressed={on} onClick={() => toggle(level)}
               className={`inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-[12.5px] transition ${
@@ -390,89 +490,13 @@ function ByokModel({ row, onChange, onRemove }: { row: ByokModelRow; onChange: (
           );
         })}
       </div>
-    </div>
-  );
-}
-
-/**
- * The person's own key: the API format, its address (the official one, or any service that speaks it), the models (the
- * chat's menu switches between them) and the key. Checked before it is kept.
- */
-function ByokForm({ agent, onDone }: { agent: HostAgent; onDone: () => void }) {
-  const t = useT();
-  const host = studioHost?.agents;
-  const [format, setFormat] = React.useState<HostByokFormat>(agent.byok?.format ?? 'responses');
-  const official = FORMATS.find((f) => f.value === format)!;
-  const [baseUrl, setBaseUrl] = React.useState(agent.byok?.baseUrl ?? official.address);
-  const [rows, setRows] = React.useState<ByokModelRow[]>(() => byokRows(agent));
-  const [draft, setDraft] = React.useState('');
-  /* names typed (several at once, separated by commas, as before), each added once, offering Auto alone */
-  const addModels = () => {
-    const names = modelNames(draft).filter((name) => !rows.some((r) => r.name === name));
-    if (names.length) setRows((list) => [...list, ...names.map((name): ByokModelRow => ({ name, levels: ['auto'], effort: 'auto' }))]);
-    setDraft('');
-  };
-  /* what is kept: a name still in the field counts as added */
-  const named = () => [...rows, ...modelNames(draft).filter((name) => !rows.some((r) => r.name === name)).map((name): ByokModelRow => ({ name, levels: ['auto'], effort: 'auto' }))];
-  const [key, setKey] = React.useState('');
-  const [state, setState] = React.useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
-  /* another format: its official address, unless the person typed one of their own */
-  const pickFormat = (next: HostByokFormat) => {
-    if (FORMATS.some((f) => f.address === baseUrl.trim()) || !baseUrl.trim()) setBaseUrl(FORMATS.find((f) => f.value === next)!.address);
-    setFormat(next);
-  };
-  const save = () => {
-    if (!host) return;
-    setState({ busy: true, error: null });
-    const kept = named();
-    void host.configureByok({ format, baseUrl, models: kept.map((r) => r.name), efforts: Object.fromEntries(kept.map((r) => [r.name, { levels: r.levels, effort: r.effort }])), ...(key ? { key } : {}) })
-      .then((r) => { if (r.ok) { setKey(''); setDraft(''); setState({ busy: false, error: null }); onDone(); } else setState({ busy: false, error: r.error ?? t('settings.agents.failed') }); })
-      .catch((e: unknown) => setState({ busy: false, error: e instanceof Error ? e.message : String(e) }));
-  };
-  const ready = named().length > 0 && baseUrl.trim() && (key.trim() || agent.byok);
-  const label = (text: string) => <span className="w-[92px] shrink-0 text-[13px] text-[var(--text-muted)]">{text}</span>;
-  return (
-    <SettingsInset>
-      <form className="contents" onSubmit={(e) => { e.preventDefault(); if (ready && !state.busy) save(); }}>
+      {value.levels.length > 1 ? (
         <div className="flex items-center gap-2">
-          {label(t('settings.agents.format'))}
-          <SettingsSelect<HostByokFormat> label={t('settings.agents.format')} value={format} onChange={pickFormat} width={220}
-            options={FORMATS.map((f) => ({ value: f.value, label: f.label }))} />
+          <span className="shrink-0 text-[13px] text-[var(--text-muted)]">{t('settings.agents.effortStart')}</span>
+          <SettingsSelect<HostByokEffortLevel> label={t('settings.agents.effortStart')} value={value.effort} width={128}
+            onChange={(effort) => onChange({ ...value, effort })} options={value.levels.map((l) => ({ value: l, label: name(l) }))} />
         </div>
-        <div className="flex items-center gap-2">
-          {label(t('settings.agents.address'))}
-          <SettingsField value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder={official.address} aria-label={t('settings.agents.address')} spellCheck={false} />
-        </div>
-        <div className="flex items-start gap-2">
-          <span className="flex h-10 items-center">{label(t('settings.agents.model'))}</span>
-          <div className="flex min-w-0 flex-1 flex-col gap-2">
-            {rows.map((row) => (
-              <ByokModel key={row.name} row={row} onChange={(next) => setRows((list) => list.map((r) => (r.name === row.name ? next : r)))}
-                onRemove={() => setRows((list) => list.filter((r) => r.name !== row.name))} />
-            ))}
-            <div className="flex items-center gap-2">
-              <SettingsField value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={t('settings.agents.modelPlaceholder')} aria-label={t('settings.agents.model')} spellCheck={false}
-                onKeyDown={(e) => { if (e.key === 'Enter' && draft.trim()) { e.preventDefault(); addModels(); } }} />
-              <SettingsButton onClick={addModels} disabled={!draft.trim()}>{t('settings.agents.addModel')}</SettingsButton>
-            </div>
-            {rows.length ? <p className="text-[12.5px] leading-relaxed text-[var(--text-faint)]">{t('settings.agents.effortHint')}</p> : null}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {label(t('settings.agents.key'))}
-          <SettingsField type="password" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" className="font-mono placeholder:font-sans"
-            placeholder={agent.byok ? t('settings.agents.keyKept').replace('{last4}', agent.byok.last4) : t('settings.agents.keyPlaceholder')} aria-label={t('settings.agents.key')} />
-        </div>
-        <p className="text-[13px] leading-relaxed text-[var(--text-faint)]">{t('settings.agents.byokNote')}</p>
-        {state.error ? <p className={settingsError}>{state.error}</p> : null}
-        <div className="flex justify-end gap-1.5">
-          <SettingsButton variant="quiet" onClick={onDone}>{t('settings.agents.cancel')}</SettingsButton>
-          <SettingsButton type="submit" variant="primary" disabled={state.busy || !ready}>
-            {state.busy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : null}
-            {state.busy ? t('settings.agents.checkingKey') : t('settings.agents.save')}
-          </SettingsButton>
-        </div>
-      </form>
-    </SettingsInset>
+      ) : null}
+    </>
   );
 }

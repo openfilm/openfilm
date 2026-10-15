@@ -77,11 +77,20 @@ function save(s: Persisted): void {
   } catch { /* private mode */ }
 }
 
-/** The own key's models, as Settings names them (the first one to begin with). */
-function byokModels(roster: RosterAgent[] | null): string[] {
-  const byok = roster?.find((a) => a.id === 'byok')?.byok;
-  if (!byok) return [];
-  return byok.models?.length ? byok.models : [byok.model].filter(Boolean);
+type OwnModel = NonNullable<RosterAgent['byok']>['models'][number];
+
+/** The own key's models, as Settings sets them up (the first one to begin with). */
+function byokModels(roster: RosterAgent[] | null): OwnModel[] {
+  return roster?.find((a) => a.id === 'byok')?.byok?.models ?? [];
+}
+
+/**
+ * Which own model a pick is: its id, or, picked before each model was set up on its own, the model's name at the
+ * service (that model kept its name there). Null for one no longer set up.
+ */
+function ownModelPicked(models: OwnModel[], picked: unknown): OwnModel | null {
+  const value = String(picked ?? '');
+  return models.find((m) => m.id === value) ?? models.find((m) => m.model === value) ?? null;
 }
 
 const EFFORT_NAMES: Record<string, string> = { auto: 'Auto', off: 'Off', minimal: 'Minimal', low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max' };
@@ -95,13 +104,11 @@ export function agentOptions(state: Pick<LocalAgentStore, 'options' | 'roster'> 
   if (agent !== 'byok') return state.options[agent];
   const models = byokModels(state.roster);
   if (!models.length) return undefined;
-  const picked = String(state.prefs?.byok?.model ?? '');
-  const model = models.includes(picked) ? picked : models[0]!;
-  const options: ConfigOptions = [{ id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: model, options: models.map((m) => ({ value: m, name: m })) }];
-  const effort = state.roster?.find((a) => a.id === 'byok')?.byok?.efforts?.[model];
-  if (effort && effort.levels.length > 1) {
-    options.push({ id: 'effort', name: 'Effort', category: 'thought_level', type: 'select', currentValue: effort.effort,
-      options: effort.levels.map((l) => ({ value: l, name: EFFORT_NAMES[l] ?? l })) });
+  const model = ownModelPicked(models, state.prefs?.byok?.model) ?? models[0]!;
+  const options: ConfigOptions = [{ id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: model.id, options: models.map((m) => ({ value: m.id, name: m.name })) }];
+  if (model.levels.length > 1) {
+    options.push({ id: 'effort', name: 'Effort', category: 'thought_level', type: 'select', currentValue: model.effort,
+      options: model.levels.map((l) => ({ value: l, name: EFFORT_NAMES[l] ?? l })) });
   }
   return options;
 }
@@ -160,7 +167,7 @@ export const useLocalAgents = create<LocalAgentStore>((set, get) => ({
           const now = roster.find((a) => a.id === before.id);
           if (before.status === 'ready' && now?.status !== 'ready') forgetLocalAgentSessions(before.id);
           /* other models (the own key's): its sessions were closed for the next ones to use them */
-          else if (String(byokModels([before])) !== String(byokModels(now ? [now] : []))) forgetLocalAgentSessions(before.id);
+          else if (JSON.stringify(byokModels([before])) !== JSON.stringify(byokModels(now ? [now] : []))) forgetLocalAgentSessions(before.id);
         }
         set({ roster });
       });
@@ -226,12 +233,11 @@ const AGENT_FORCED_PREFS: Partial<Record<LocalAgentId, Record<string, unknown>>>
 const DROPPED_PREFS = new Set(['plan', 'collaboration_mode']);
 
 /**
- * The options in effect for an agent: the person's picks, then the ones the app sets. The own key on the Anthropic API
- * runs Claude Code, whose options are Claude Code's (`roster` says which). What the person never picked here is the
- * agent's own, as their config has it: the same model and effort as in their terminal.
+ * The options in effect for an agent: the person's picks, then the ones the app sets. What the person never picked
+ * here is the agent's own, as their config has it: the same model and effort as in their terminal. The own key's model
+ * picked by its name at the service (before each model was set up on its own) is its id now.
  */
 export function effectivePrefs(prefs: Persisted['prefs'], agent: LocalAgentId, roster?: RosterAgent[] | null, options?: ConfigOptions): Record<string, unknown> {
-  const claudeHarness = agent === 'byok' && roster?.find((a) => a.id === 'byok')?.byok?.format === 'anthropic';
   /* "default" was a row the menu no longer offers (the agents name their default for what it is): the agent's own
      current value stands instead. A mode picked once (plan mode, offered for a while) is not kept: every agent works
      with full access. A pick the agent no longer offers (a model gone in its update, one the own key no longer names)
@@ -241,10 +247,10 @@ export function effectivePrefs(prefs: Persisted['prefs'], agent: LocalAgentId, r
     return !option?.options?.length || option.options.some((o) => o.value === value);
   };
   const models = agent === 'byok' ? byokModels(roster ?? null) : null;
-  const kept = Object.fromEntries(Object.entries(prefs[agent] ?? {})
-    .filter(([id, value]) => value !== 'default' && !DROPPED_PREFS.has(id) && offers(id, value)
-      && !(models && id === 'model' && !models.includes(String(value)))));
-  return { ...kept, ...(AGENT_FORCED_PREFS[claudeHarness ? 'claude' : agent] ?? {}) };
+  const own = Object.entries(prefs[agent] ?? {}).map(([id, value]): [string, unknown] => (models && id === 'model' ? [id, ownModelPicked(models, value)?.id ?? null] : [id, value]));
+  const kept = Object.fromEntries(own
+    .filter(([id, value]) => value !== 'default' && value !== null && !DROPPED_PREFS.has(id) && offers(id, value)));
+  return { ...kept, ...(AGENT_FORCED_PREFS[agent] ?? {}) };
 }
 
 /** An option's current value (the person's pick first, else the value the session reports). */

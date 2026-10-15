@@ -36,7 +36,8 @@ contextBridge.exposeInMainWorld('openfilmNative', {
     locate: (id, words) => ipcRenderer.invoke('desktop:agents:locate', { id, words }),
     useAutomatic: (id) => ipcRenderer.invoke('desktop:agents:automatic', { id }),
     diagnose: (id) => ipcRenderer.invoke('desktop:agents:diagnose', { id }),
-    configureByok: (config) => ipcRenderer.invoke('desktop:agents:byok', { config }),
+    saveOwnModel: (config) => ipcRenderer.invoke('desktop:agents:own-model', { config }),
+    removeOwnModel: (id) => ipcRenderer.invoke('desktop:agents:own-model-remove', { id }),
     onChange: on('desktop:agents'),
   },
   /* the agents' turns (local-agents-ipc.mjs) */

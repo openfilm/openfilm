@@ -1,8 +1,9 @@
 /**
  * What the app's own agent (Pi, src/pi-agent.mjs) runs with, and how what it does reads in the chat (ACP).
  *
- * The service is one provider in Pi's `models.json`: the person's own key on one of three APIs, with the models they
- * named; the chat's menu switches between them (`modelOption`).
+ * The person's own models, each set up on its own (agent-roster.mjs): its name, its service (an address on one of three
+ * APIs, and its own key), the model asked for there and its reasoning efforts. Each is a provider of its own in Pi's
+ * `models.json`, so the chat's menu switches between them (`modelOption`), one service to another.
  *
  * Reads no Electron module, so `node --test` can use it.
  */
@@ -26,19 +27,23 @@ export function effortLevels(value) {
 }
 
 /**
- * Each model's efforts, for the models named: the ones it offers (`levels`) and the one a conversation starts on
- * (`effort`, one of them; the first when the one asked is not).
- * @param {unknown} raw @param {string[]} models
- * @returns {Record<string, { levels: string[], effort: string }>}
+ * A model's efforts: the ones it offers (`levels`) and the one a conversation starts on (`effort`, one of them; the
+ * first when the one asked is not).
+ * @returns {{ levels: string[], effort: string }}
  */
-export function modelEfforts(raw, models) {
-  const all = raw && typeof raw === 'object' ? /** @type {Record<string, any>} */ (raw) : {};
-  return Object.fromEntries(models.map((model) => {
-    const levels = effortLevels(all[model]?.levels);
-    const effort = levels.includes(String(all[model]?.effort)) ? String(all[model].effort) : levels[0];
-    return [model, { levels, effort }];
-  }));
+export function modelEffort(/** @type {unknown} */ levels, /** @type {unknown} */ effort) {
+  const offered = effortLevels(levels);
+  return { levels: offered, effort: offered.includes(String(effort)) ? String(effort) : offered[0] };
 }
+
+/**
+ * One of the person's own models as the agent runs it: `id` (the app's, never shown), `name` (the menu's), Pi's `api`,
+ * the service's `baseUrl`, the variable its key is in (`keyEnv`), the `model` asked for there and its efforts.
+ * @typedef {{ id: string, name: string, api: string, baseUrl: string, keyEnv: string, model: string, levels: string[], effort: string }} OwnModel
+ */
+
+/** Pi's provider for one of the person's own models: each its own service. */
+export const providerOf = (/** @type {string} */ id) => `byok-${id}`;
 
 /** The provider that thinks: the same service, its models told which levels they take. */
 export const THINKING = (/** @type {string} */ id) => `${id}-thinking`;
@@ -50,37 +55,36 @@ const wire = (/** @type {string} */ api, /** @type {string} */ level) => (level 
 const CONTEXT = 128_000;
 
 /**
- * Pi's `models.json` for the service and its models. The service twice: as itself, where no model is told to reason
- * (`auto`: no reasoning setting is sent), and as THINKING(id) with the models that offer levels, each told exactly
- * which (Pi sends the one picked; the others are not there).
- * @param {{ id: string, api: string, baseUrl: string, apiKeyEnv: string }} provider @param {string[] | string} models
- * @param {Record<string, { levels: string[] }>} [efforts]
+ * Pi's `models.json` for the person's own models: each its own provider (its address and key), twice when it offers
+ * levels: as itself, told not to reason (`auto`: no reasoning setting is sent), and as THINKING(provider) told exactly
+ * which levels it takes (Pi sends the one picked; the others are not there).
+ * @param {OwnModel[]} models
  */
-export function modelsJson(provider, models, efforts = {}) {
-  const names = [models].flat();
-  const entry = (/** @type {string} */ model, /** @type {string[] | null} */ levels) => ({
-    id: model,
-    name: model,
+export function modelsJson(models) {
+  const entry = (/** @type {OwnModel} */ m, /** @type {string[] | null} */ levels) => ({
+    id: m.model,
+    name: m.name,
     input: ['text', 'image'],
     contextWindow: CONTEXT,
     maxTokens: Math.floor(CONTEXT / 4),
     reasoning: Boolean(levels),
-    ...(levels ? { thinkingLevelMap: Object.fromEntries(EFFORTS.slice(1).map((l) => [l, levels.includes(l) ? wire(provider.api, l) : null])) } : {}),
+    ...(levels ? { thinkingLevelMap: Object.fromEntries(EFFORTS.slice(1).map((l) => [l, levels.includes(l) ? wire(m.api, l) : null])) } : {}),
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   });
-  const service = { baseUrl: provider.baseUrl, api: provider.api, apiKey: `$${provider.apiKeyEnv}` };
-  const thinking = names.map((m) => [m, (efforts[m]?.levels ?? []).filter((l) => l !== 'auto')]).filter(([, levels]) => levels.length);
-  return {
-    providers: {
-      [provider.id]: { ...service, models: names.map((m) => entry(m, null)) },
-      ...(thinking.length ? { [THINKING(provider.id)]: { ...service, models: thinking.map(([m, levels]) => entry(/** @type {string} */ (m), /** @type {string[]} */ (levels))) } } : {}),
-    },
-  };
+  /** @type {Record<string, any>} */
+  const providers = {};
+  for (const m of models) {
+    const service = { baseUrl: m.baseUrl, api: m.api, apiKey: `$${m.keyEnv}` };
+    const levels = m.levels.filter((l) => l !== 'auto');
+    providers[providerOf(m.id)] = { ...service, models: [entry(m, null)] };
+    if (levels.length) providers[THINKING(providerOf(m.id))] = { ...service, models: [entry(m, levels)] };
+  }
+  return { providers };
 }
 
-/** The model as a config option the chat's menu reads (ACP): the models named, and the one a session runs. */
-export function modelOption(models, current) {
-  return { id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: current, options: models.map((m) => ({ value: m, name: m })) };
+/** The model as a config option the chat's menu reads (ACP): the person's models by their names, and the one a session runs. */
+export function modelOption(/** @type {Array<{ id: string, name: string }>} */ models, /** @type {string} */ current) {
+  return { id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: current, options: models.map((m) => ({ value: m.id, name: m.name })) };
 }
 
 const EFFORT_NAMES = { auto: 'Auto', off: 'Off', minimal: 'Minimal', low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max' };

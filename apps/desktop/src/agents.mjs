@@ -645,7 +645,8 @@ export function legacyOptions(session) {
  */
 export class AgentSession {
   /**
-   * `harness` (for 'byok'): agent-roster.mjs's `harness(id)`, Pi's folder, its service and its model.
+   * `harness` (for 'byok'): agent-roster.mjs's `harness(id)`, Pi's folder, the person's models (each its own service)
+   * and the one it starts on.
    * @param {{ agent: string, cwd: string, resume?: string | null, binDir?: string | null, fallbackDir?: string | null,
    *           harness?: any,
    *           env?: Record<string, string>,
@@ -684,7 +685,7 @@ export class AgentSession {
     const own = !harness ? {} : {
       ...harness.env,
       OPENFILM_GET_WEB: '1',
-      OPENFILM_PI: JSON.stringify({ agentDir: harness.home, provider: harness.provider, model: harness.model, models: harness.models ?? [harness.model], efforts: harness.efforts ?? {}, systemPrompt: ownAgentPrompt() }),
+      OPENFILM_PI: JSON.stringify({ agentDir: harness.home, models: harness.models, model: harness.model, systemPrompt: ownAgentPrompt() }),
     };
     /* an agent that speaks ACP itself: its own program, started as the registry starts it */
     const native = cli && !this.spec.adapter ? starting(cli.path, this.spec.args) : null;
@@ -767,6 +768,7 @@ export class AgentSession {
       /* a message sent while it works joins the turn it is in (steer), as in its own chat */
       steering: init._meta?.steering?.supported === true,
     };
+    this.noteModel(this.info.configOptions);
     return this.info;
   }
 
@@ -782,7 +784,8 @@ export class AgentSession {
     const r = await this.conn.agent.request(acp.methods.agent.session.prompt, { sessionId: this.sessionId, prompt: [...told, ...blocks], ...meta })
       .catch((e) => {
         /* the app's own agent: a service with no balance left is said the same for every service, with its page */
-        const broke = this.opts.harness ? outOfBalance(this.opts.harness.provider, e) : null;
+        const own = this.opts.harness?.models?.find((m) => m.id === this.modelNow) ?? this.opts.harness?.models?.[0];
+        const broke = own ? outOfBalance({ id: own.name, baseUrl: own.baseUrl }, e) : null;
         if (broke) throw broke;
         if (!isAgentId(this.opts.agent)) throw e;
         const said = signInError(this.spec.label, e);
@@ -812,7 +815,15 @@ export class AgentSession {
   async setConfigOption(configId, value) {
     if (this.legacy && configId === 'mode') return this.setMode(value);
     if (this.legacy && configId === 'model') return this.conn.agent.request('session/set_model', { sessionId: this.sessionId, modelId: value });
-    return this.conn.agent.request(acp.methods.agent.session.setConfigOption, { sessionId: this.sessionId, configId, value });
+    const r = await this.conn.agent.request(acp.methods.agent.session.setConfigOption, { sessionId: this.sessionId, configId, value });
+    this.noteModel(r?.configOptions);
+    return r;
+  }
+
+  /** The model the session is on (its `model` option's value): the app's own agent names the service a failure was on by it. */
+  noteModel(configOptions) {
+    const model = (configOptions ?? []).find((o) => o?.id === 'model');
+    if (model) this.modelNow = model.currentValue;
   }
 
   async setMode(modeId) {
