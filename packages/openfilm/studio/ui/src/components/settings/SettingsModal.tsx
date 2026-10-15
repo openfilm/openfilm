@@ -14,6 +14,7 @@ import { SHORTCUTS, type ShortcutKey } from '@/lib/timeline-keys';
 import { studioHost, type HostDeveloper, type HostUpdateState } from '@/lib/host';
 import { showWhatsNew } from '@/lib/whats-new';
 import { hasNotes, newestVersion } from '../WhatsNew';
+import { useWebUpdate } from '../UpdateButton';
 import { api, type StudioPrefs, type StudioVersion } from '@/api';
 import { AgentsSection } from './AgentsSection';
 import { ModelsSection } from './ModelsSection';
@@ -291,6 +292,8 @@ function AboutGroup() {
   const [state, setState] = React.useState<'idle' | 'checking' | 'failed'>('idle');
   React.useEffect(() => { void api.version().then(setInfo).catch(() => {}); }, []);
   const inApp = Boolean(studioHost);
+  /* Update here as in the top bar: Studio runs the newest and starts again on it */
+  const web = useWebUpdate();
   const check = () => {
     setState('checking');
     const before = info?.checkedAt ?? null;
@@ -320,8 +323,19 @@ function AboutGroup() {
       {!inApp && !info?.source && info?.newer ? (
         <SettingsItem
           title={t('settings.about.howTitle')}
-          description={t('settings.about.how')}
-          control={<code className="select-all rounded-md bg-[var(--surface-2)] px-2 py-1 font-mono text-[12px] text-[var(--text)]">npx -y openfilm@latest open</code>}
+          description={web.update?.status === 'updating' ? t('update.webUpdating')
+            : web.update?.status === 'waiting' ? t(web.update.reason === 'exporting' ? 'update.webExporting' : 'update.webMaking')
+            : web.update?.status === 'failed' ? t('update.webFailed').replace('{error}', web.update.error)
+            : t('settings.about.how')}
+          control={(
+            <>
+              <code className="select-all rounded-md bg-[var(--surface-2)] px-2 py-1 font-mono text-[12px] text-[var(--text)]">npx -y openfilm@latest update</code>
+              <SettingsButton variant="primary" disabled={!web.update || web.update.status === 'updating'} onClick={web.start}>
+                {web.update?.status === 'updating' ? <Loader2 size={14} className="animate-spin" aria-hidden /> : null}
+                {t('update.webUpdate')}
+              </SettingsButton>
+            </>
+          )}
         />
       ) : null}
     </SettingsGroup>

@@ -5,7 +5,7 @@
  * project.
  */
 import { createHash } from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs';
 import { request } from 'node:http';
 import { dirname, join, resolve } from 'node:path';
@@ -14,8 +14,10 @@ import { studioHome, studioKey } from './server/projects.mjs';
 
 const MAIN = fileURLToPath(new URL('./server/main.mjs', import.meta.url));
 const VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
+/** A source checkout (Studio's editor source is here): git pull updates it, not npm. */
+export const FROM_SOURCE = existsSync(new URL('./ui/src', import.meta.url));
 
-/** @typedef {{ pid?: number, supervisor?: number, origin: string, filmOrigin: string, key: string, version?: string }} Running */
+/** @typedef {{ pid?: number, supervisor?: number, origin: string, filmOrigin: string, key: string, version?: string, app?: boolean }} Running */
 
 /** What a Studio says about itself, or null when nothing (or something else) answers at `origin`. */
 async function health(/** @type {string} */ origin, ms = 1500) {
@@ -36,14 +38,14 @@ async function running() {
   try { run = JSON.parse(readFileSync(join(studioHome(), 'run.json'), 'utf8')); } catch { /* none advertised */ }
   if (run) {
     const said = await health(run.origin);
-    if (said) return { ...run, version: said.version };
+    if (said) return { ...run, version: said.version, ...(said.app ? { app: true } : {}) };
   }
   const given = Number(process.env.OPENFILM_STUDIO_PORT);
   const origin = `http://127.0.0.1:${Number.isInteger(given) && given > 0 ? given : 4747}`;
   const said = await health(origin);
   /* it says which home it serves as a hash of the path (the path itself is not told to anyone who asks) */
   if (said?.home !== createHash('sha256').update(studioHome()).digest('hex') || !said.filmOrigin) return null;
-  return { origin, filmOrigin: said.filmOrigin, key: studioKey(), version: said.version };
+  return { origin, filmOrigin: said.filmOrigin, key: studioKey(), version: said.version, ...(said.app ? { app: true } : {}) };
 }
 
 /**
@@ -182,6 +184,40 @@ export async function ensureStudio(say = () => {}, { fresh = false } = {}) {
     await new Promise((r) => setTimeout(r, 200));
   }
   throw new Error(`Studio did not start; see ${join(logs, 'studio.log')}`);
+}
+
+/**
+ * `openfilm update`: the newest openfilm, and Studio on it. This one is the newest, or the newest is run to do it
+ * (`npx -y openfilm@<latest> update` fetches it); then a Studio on an older one is started again on it once it is
+ * idle, and the pages open on it come back on the new version. The desktop app's Studio updates with the app, and a
+ * source checkout with git pull: each is said instead. `ok` false when it could not be done (offline, Studio busy).
+ * @param {(line: string) => void} [say] @returns {Promise<{ ok: boolean, lines: string[] }>}
+ */
+export async function updateOpenfilm(say = () => {}) {
+  if (FROM_SOURCE) return { ok: true, lines: [`openfilm ${VERSION} runs from a source checkout: git pull updates it.`] };
+  const found = (await running()) ?? (await restarting());
+  if (found?.app) return { ok: true, lines: ['Studio is the OpenFilm app\'s: it updates with the app (OpenFilm → Check for Updates…).'] };
+  const { latest } = await npmOpenfilm({ force: true, waitMs: 8000 });
+  if (!latest) return { ok: false, lines: ['Could not reach npm to learn the newest openfilm: try again when online.'] };
+  if (olderThanThis(VERSION, latest)) {
+    /* the newest does it, fetched by npx; it ran already and is still not the newest: npx gave another */
+    if (process.env.OPENFILM_UPDATING) return { ok: false, lines: [`npx ran openfilm ${VERSION}, not ${latest}.`] };
+    say(`Getting openfilm ${latest}…`);
+    const r = spawnSync('npx', ['-y', `openfilm@${latest}`, 'update'], {
+      stdio: 'inherit', env: { ...process.env, OPENFILM_UPDATING: '1' }, shell: process.platform === 'win32', windowsHide: true,
+    });
+    if (r.error) return { ok: false, lines: [`Could not run npx (it comes with Node.js): ${r.error.message}`] };
+    /* an `openfilm` installed with npm -g is not npx's: it stays as it is until npm updates it */
+    const installed = process.env.npm_command !== 'exec' && !process.env.OPENFILM_RUN;
+    return { ok: r.status === 0, lines: installed && r.status === 0 ? [`The \`openfilm\` command installed here is still ${VERSION}: \`npm install -g openfilm@latest\` updates it.`] : [] };
+  }
+  if (!found) return { ok: true, lines: [`openfilm ${VERSION} is the newest. Studio starts on it the next time it opens.`] };
+  if (!olderThanThis(found.version)) return { ok: true, lines: [`openfilm ${VERSION} is the newest, and Studio runs it.`] };
+  say(`Updating OpenFilm Studio from ${found.version} to ${VERSION}…`);
+  const replaced = await replace(found);
+  if ('stays' in replaced) return { ok: false, lines: [`Studio keeps running ${found.version} for now: ${replaced.stays}. Update again once that is done.`] };
+  await ensureStudio(say);
+  return { ok: true, lines: [`Studio runs openfilm ${VERSION} now${replaced.pages ? `: the ${replaced.pages === 1 ? 'page' : `${replaced.pages} pages`} open on it come back on it` : ''}.`] };
 }
 
 /**

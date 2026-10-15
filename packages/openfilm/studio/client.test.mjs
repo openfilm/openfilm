@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ensureStudio, olderThanThis, openInStudio } from './client.mjs';
+import { ensureStudio, olderThanThis, openInStudio, updateOpenfilm } from './client.mjs';
 
 const freePort = () => new Promise((resolve) => {
   const probe = createServer().listen(0, '127.0.0.1', () => { const { port } = probe.address(); probe.close(() => resolve(port)); });
@@ -128,4 +128,10 @@ test('a newer openfilm on npm is told from what was learnt (no network when not 
     if (was === undefined) delete process.env.OPENFILM_HOME; else process.env.OPENFILM_HOME = was;
     if (wasOff !== undefined) process.env.OPENFILM_NO_UPDATE_CHECK = wasOff;
   }
+});
+
+test('`openfilm update` in a source checkout says git pull updates it, and touches nothing', async () => {
+  const said = await updateOpenfilm();
+  assert.equal(said.ok, true);
+  assert.match(said.lines[0], /source checkout: git pull updates it/);
 });

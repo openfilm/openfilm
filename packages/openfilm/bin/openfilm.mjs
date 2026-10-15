@@ -7,6 +7,7 @@ const USAGE = `openfilm — a film is a function of time: given t, it draws that
   openfilm look   [what] [t | a-b]    check the film and draw it: a contact sheet with its sound and loudness
   openfilm render [a-b]               the MP4, saved beside film.html
   openfilm get    [what] [--options]  voice-over, music, sound effects, transcripts, images, video, from a connected service
+  openfilm update                     the newest OpenFilm; Studio starts again on it
 
   Run with no arguments for the manual; \`openfilm <command> --help\` for one command's options; --version for the version.
   look, render and get work on the project around the current folder.
@@ -28,6 +29,11 @@ const COMMAND_HELP = {
   Starts OpenFilm Studio if it is not running and prints its address. A Studio page already open, in any browser,
   switches to the project, and nothing more opens; otherwise open the address in your built-in browser, and if no
   page connects within 15 s, Studio opens the person's browser (OPENFILM_NO_BROWSER=1: never).`,
+  update: `openfilm update
+
+  The newest OpenFilm from npm, and Studio started again on it once nothing is being exported or made; pages open on
+  it come back on the new version. The desktop app's Studio updates with the app, a source checkout with git pull:
+  each is said instead.`,
   look: `openfilm look [what] [t | a-b]
 
   what   the project (default), a web page (.html), or a media file (video, image, sound)
@@ -66,7 +72,7 @@ const RUN = process.env.OPENFILM_RUN || (process.env.npm_command === 'exec' ? 'n
  */
 const updateNotice = async (network) => {
   const latest = await (await import('../studio/client.mjs')).newerOpenfilm({ network }).catch(() => null);
-  if (latest) console.error(`openfilm ${latest} is out (this is an older one): run commands as \`npx -y openfilm@latest …\` to use it; it updates Studio too.`);
+  if (latest) console.error(`openfilm ${latest} is out (this is an older one): \`${RUN} update\` updates it, and Studio with it.`);
 };
 if (RAW.length === 0) {
   const { readFileSync } = await import('node:fs');
@@ -79,7 +85,7 @@ if (RAW.length === 1 && (RAW[0] === '--version' || RAW[0] === '-v')) {
   console.log(JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version);
   process.exit(0);
 }
-await updateNotice(RAW[0] === 'open');
+if (RAW[0] !== 'update') await updateNotice(RAW[0] === 'open');
 if (RAW[0] === 'get') {
   let result;
   try { result = await (await import('../studio/client.mjs')).getMedia(RAW.slice(1), (line) => console.error(line)); }
@@ -124,6 +130,7 @@ const commands = {
   open: () => open(args[0] ?? null),
   look: () => import('../src/look.mjs').then((m) => m.look(args, opts)),
   render: () => import('../src/render.mjs').then((m) => m.render(args, opts)),
+  update: () => import('../studio/client.mjs').then((m) => m.updateOpenfilm((line) => console.error(line))),
 };
 /**
  * Show a project in Studio; `.film/opened` marks a project Studio has shown. A folder named is made a project when it is

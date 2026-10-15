@@ -13,7 +13,7 @@
  * whose name is pointed at this machine (DNS rebinding) gets nothing, not even /api/health.
  */
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, openSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, extname, isAbsolute, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:http';
@@ -107,6 +107,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
   let pageCame = () => {};
   /** media being made for an agent's `openfilm get` right now (it would be lost, and paid for, if Studio stopped) */
   let making = 0;
+  /** the update run from the top bar: `{ status: 'updating' | 'failed', version, error? }` (see /api/update) */
+  let updating = /** @type {{ status: 'updating' | 'failed', version: string, error?: string } | null} */ (null);
   /** whether an app's agent is working in the project at `path` now */
   const agentIn = (/** @type {string} */ path) => working().some((folder) => resolve(folder) === resolve(path));
   /** how many editor pages have connected since Studio started: whether one opened an address `/open` gave out */
@@ -158,7 +160,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
 
     /* which Studio this is: the CLI replaces an older one, and finds its own home's when run.json is gone. Asked
        without the key, so it says nothing of the machine: its home only as a digest (homeTag), no process id */
-    if (path === '/api/health') return json(res, 200, { product: 'openfilm-studio', version: VERSION, home: homeTag(), filmOrigin });
+    /* `app`: the desktop app's Studio, which updates with the app (`openfilm update` says so instead) */
+    if (path === '/api/health') return json(res, 200, { product: 'openfilm-studio', version: VERSION, home: homeTag(), filmOrigin, ...(stays ? { app: true } : {}) });
     const signIn = [`${COOKIE}=${key}; Path=/; HttpOnly; SameSite=Strict`, `${FRAMED}=${key}; Path=/; HttpOnly; Secure; SameSite=None; Partitioned`];
     /** A page's address with the key in it (the address bar is what a person copies). */
     const keyed = (/** @type {string} */ to) => {
@@ -232,7 +235,21 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (parts[0] === 'version' && parts.length === 1 && req.method === 'GET') {
       const now = url.searchParams.get('check') === '1';
       const { latest, checkedAt } = await npmOpenfilm({ force: now, waitMs: 4000 });
-      return json(res, 200, { version: VERSION, latest, newer: Boolean(latest && olderThanThis(VERSION, latest)), checkedAt, checking: !process.env.OPENFILM_NO_UPDATE_CHECK && !FROM_SOURCE, source: FROM_SOURCE });
+      return json(res, 200, { version: VERSION, latest, newer: Boolean(latest && olderThanThis(VERSION, latest)), checkedAt, checking: !process.env.OPENFILM_NO_UPDATE_CHECK && !FROM_SOURCE, source: FROM_SOURCE,
+        ...(updating ? { update: updating } : {}) });
+    }
+    /* the top bar's Update (Studio run with npm, not the app's nor a checkout): the newest openfilm run in the
+       background as `openfilm update` (client.mjs updateOpenfilm), which starts Studio again on it; the pages come back
+       on the new version and reload. Not while an export runs or media is made. `/api/version` says how it goes */
+    if (parts[0] === 'update' && parts.length === 1 && req.method === 'POST') {
+      if (stays || FROM_SOURCE) return json(res, 409, { error: 'this Studio does not update itself', code: stays ? 'app' : 'source' });
+      if (exports.busy()) return json(res, 409, { error: 'an export is running', code: 'exporting' });
+      if (making) return json(res, 409, { error: 'media is being made', code: 'making' });
+      if (updating?.status === 'updating') return json(res, 202, { update: updating });
+      const { latest } = await npmOpenfilm({ waitMs: 4000 });
+      if (!latest || !olderThanThis(VERSION, latest)) return json(res, 409, { error: 'this is the newest openfilm', code: 'newest' });
+      updating = runUpdate(latest, (next) => { updating = next; });
+      return json(res, 202, { update: updating });
     }
     /* the fonts installed here (what a web page can draw with, in the preview and the export alike) */
     if (parts[0] === 'fonts' && parts.length === 1 && req.method === 'GET') return json(res, 200, { fonts: await installedFonts() });
@@ -733,6 +750,35 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
 
 /** Run from a checkout of the repository (the editor's source is beside its build), not from an installed package. */
 const FROM_SOURCE = existsSync(new URL('../ui/src', import.meta.url));
+
+/**
+ * `npx -y openfilm@<version> update` in the background (its words in logs/update.log), as the person would run it: the
+ * newest stops this Studio and starts itself in its place. `then` hears it failed later, with its last words, if this
+ * Studio is still here to hear it; one that cannot start is said at once.
+ * @param {string} version @param {(state: { status: 'failed', version: string, error: string }) => void} then
+ * @returns {{ status: 'updating' | 'failed', version: string, error?: string }}
+ */
+function runUpdate(version, then) {
+  const logs = join(studioHome(), 'logs');
+  mkdirSync(logs, { recursive: true });
+  const file = join(logs, 'update.log');
+  writeFileSync(file, '');
+  const failed = (/** @type {string} */ error) => then({ status: 'failed', version, error });
+  try {
+    const out = openSync(file, 'a');
+    const child = spawn('npx', ['-y', `openfilm@${version}`, 'update'], {
+      detached: true, stdio: ['ignore', out, out], windowsHide: true, shell: process.platform === 'win32', env: { ...process.env, OPENFILM_NO_BROWSER: '1' },
+    });
+    child.once('error', (e) => failed(`npx did not start (it comes with Node.js): ${e.message}`));
+    child.once('exit', (code) => {
+      if (code === 0) return;
+      const said = readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).pop() ?? '';
+      failed(said || `npx stopped (${code})`);
+    });
+    child.unref();
+  } catch (e) { return { status: 'failed', version, error: e instanceof Error ? e.message : String(e) }; }
+  return { status: 'updating', version };
+}
 
 /** This package's version: the CLI replaces a Studio older than itself. */
 export const VERSION = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version;

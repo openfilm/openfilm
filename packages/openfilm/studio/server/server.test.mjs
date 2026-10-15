@@ -499,9 +499,21 @@ test('an app\'s Studio (`stays`) is not stopped by `openfilm open`, and says why
     assert.equal(res.status, 423);
     assert.match((await res.json()).error, /app/);
     assert.equal((await fetch(`${kept.origin}/api/health`)).status, 200, 'still there');
+    /* it says it is the app's, so `openfilm update` says the app updates it */
+    assert.equal((await (await fetch(`${kept.origin}/api/health`)).json()).app, true);
+    const update = await fetch(`${kept.origin}/api/update`, { method: 'POST', headers: { 'x-studio-key': kept.key, 'content-type': 'application/json' }, body: '{}' });
+    assert.deepEqual([update.status, (await update.json()).code], [409, 'app'], 'it does not update itself');
   } finally {
     await kept.close();
   }
+});
+
+test('Update is not run from a source checkout (git pull updates it), nor without the key', async () => {
+  assert.equal((await api('/api/update', { method: 'POST', body: {}, key: null })).status, 401);
+  const res = await api('/api/update', { method: 'POST', body: {} });
+  assert.deepEqual([res.status, (await res.json()).code], [409, 'source']);
+  assert.equal((await (await api('/api/health')).json()).app, undefined, 'not an app\'s');
+  assert.equal((await (await api('/api/version')).json()).update, undefined, 'no update running');
 });
 
 test('`openfilm open` without a folder opens the project opened last, and makes none', async () => {

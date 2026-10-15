@@ -7,7 +7,9 @@ import { watchStudioVersion } from '@/lib/studio-version';
 
 /** `working`: an agent of the app's chat is working in it right now (it cannot be deleted meanwhile). */
 /** GET /api/version: this Studio's, and npm's latest (null when never learnt; `checking` false: never asked). */
-export interface StudioVersion { version: string; latest: string | null; newer: boolean; checkedAt: number | null; checking: boolean; source: boolean }
+export interface StudioVersion { version: string; latest: string | null; newer: boolean; checkedAt: number | null; checking: boolean; source: boolean;
+  /** the update Studio runs from the top bar (lib/web-update), or one that failed */
+  update?: { status: 'updating' | 'failed'; version: string; error?: string } }
 
 export type Project = { id: string; path: string; name: string; openedAt: number; missing: boolean; working?: boolean };
 export type Clip = { src: string; id: string; at?: number; time?: [number] | [number, number];
@@ -82,6 +84,8 @@ export const PREFS_EVENT = 'openfilm:prefs';
 export const api = {
   /** this Studio's version and the latest openfilm on npm; `check`: ask npm now */
   version: (check = false) => call<StudioVersion>(`version${check ? '?check=1' : ''}`),
+  /** the newest openfilm, run in the background (`openfilm update`): Studio starts again on it; refused (ApiError, `body.code`) while busy */
+  update: () => call<{ update: NonNullable<StudioVersion['update']> }>('update', { method: 'POST', json: {} }),
   projects: () => call<{ projects: Project[] }>('projects').then((r) => r.projects),
   prefs: () => call<StudioPrefs>('prefs'),
   setPrefs: (patch: { proxies?: Partial<StudioPrefs['proxies']>; seenVersion?: string }) => call<StudioPrefs>('prefs', { method: 'PATCH', json: patch }).then((prefs) => {
