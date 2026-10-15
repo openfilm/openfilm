@@ -14,6 +14,7 @@
  *                           one of the same name to the trash
  *   desktop:skills:discard  { id }   let go
  *   desktop:skills:reveal   the person's own skills folder in the file manager
+ *   desktop:skills:store    → { ok, index, offline } | { ok: false, error }   the skill store's index (store-index.mjs)
  * For Settings → Agents:
  *   desktop:agents:skills   { id } → { filtered, skills: [{ name, description, allowed }] }   the skills the person
  *                           installed in an agent, each let into OpenFilm or not
@@ -31,6 +32,7 @@ import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { FILTERED_AGENTS, MCP_AGENTS, ownMcpServers, ownSkills, skillStore } from './agent-skills.mjs';
 import { loginShellVariables } from './environment.mjs';
+import { readStoreIndex } from './store-index.mjs';
 
 const require = createRequire(import.meta.url);
 const lib = () => import(require.resolve('openfilm/skills'));
@@ -149,6 +151,8 @@ export function registerSkillsIpc(ipcMain, { trusted, projects, dataDir, mine, o
     refreshSkills(id);
     return { ok: true };
   });
+
+  handle('desktop:skills:store', async () => readStoreIndex({ dataDir }));
 
   handle('desktop:skills:reveal', async () => {
     mkdirSync(mine, { recursive: true });

@@ -86,6 +86,7 @@ contextBridge.exposeInMainWorld('openfilmNative', {
     preview: (url) => ipcRenderer.invoke('desktop:skills:preview', { url }),
     commit: (id) => ipcRenderer.invoke('desktop:skills:commit', { id }),
     discard: (id) => ipcRenderer.invoke('desktop:skills:discard', { id }),
+    store: () => ipcRenderer.invoke('desktop:skills:store'),
     reveal: () => ipcRenderer.invoke('desktop:skills:reveal'),
   },
   /* the app's own preferences (Settings → Developer) */

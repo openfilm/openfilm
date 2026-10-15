@@ -9,7 +9,7 @@
  * Arrow keys move through the skills, Enter names the one lit, Esc closes.
  */
 import React from 'react';
-import { AlertTriangle, ArrowLeft, Blocks, FolderOpen, Link2, Loader2, Search } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Blocks, FolderOpen, Link2, Loader2, Search, Store } from 'lucide-react';
 import { keepFocus, Popover } from './Popover';
 import { POPOVER_CHROME } from './ComposerCard';
 import { Tooltip } from './Tooltip';
@@ -30,8 +30,10 @@ const matches = (needle: string, ...words: string[]) => !needle || words.some((w
 /** a size as people read it */
 const sizeOf = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`);
 
-export function SkillsPopover({ agentName, onPick, listing, reload }: {
+export function SkillsPopover({ agentName, onPick, listing, reload, onOpenStore }: {
   agentName: string;
+  /** the skill store (SkillStore) */
+  onOpenStore: () => void;
   onPick: (skill: PickedSkill) => void;
   /** what the button lists, loaded by the chat (it names skills in `/` too) */
   listing: SkillListing | null;
@@ -136,8 +138,10 @@ export function SkillsPopover({ agentName, onPick, listing, reload }: {
               )}
             </div>
             <div className="flex items-center gap-1 border-t border-[var(--border)] px-1.5 py-1.5">
-              <button type="button" onMouseDown={keepFocus} onClick={() => setView('add')} className={FOOT_BUTTON}><Link2 size={13} />{t('skills.addFromLink')}</button>
-              <button type="button" onMouseDown={keepFocus} onClick={() => { void app.skills.reveal(); }} className={FOOT_BUTTON}><FolderOpen size={13} />{t('skills.openFolder')}</button>
+              <button type="button" onMouseDown={keepFocus} onClick={() => { setOpen(false); onOpenStore(); }} className={`${FOOT_BUTTON} font-medium text-[var(--text)]`}><Store size={13} />{t('skills.openStore')}</button>
+              <span className="flex-1" />
+              <button type="button" onMouseDown={keepFocus} onClick={() => setView('add')} className={FOOT_BUTTON} title={t('skills.addFromLink')} aria-label={t('skills.addFromLink')}><Link2 size={13} /></button>
+              <button type="button" onMouseDown={keepFocus} onClick={() => { void app.skills.reveal(); }} className={FOOT_BUTTON} title={t('skills.openFolder')} aria-label={t('skills.openFolder')}><FolderOpen size={13} /></button>
             </div>
           </>
         )}
@@ -150,7 +154,7 @@ export function SkillsPopover({ agentName, onPick, listing, reload }: {
  * Adding a skill from an address: the address; what came, looked at (each skill, its size, the scripts it brings, one of
  * the same name it would replace); then kept, or let go. Leaving before it is kept lets it go.
  */
-function AddSkill({ onBack, onAdded, onPick }: { onBack: () => void; onAdded: () => Promise<void>; onPick: (skill: SkillInfo) => void }) {
+export function AddSkill({ onBack, onAdded, onPick }: { onBack: () => void; onAdded: () => Promise<void>; onPick: (skill: SkillInfo) => void }) {
   const t = useT();
   const [url, setUrl] = React.useState('');
   const [step, setStep] = React.useState<'address' | 'fetching' | 'look' | 'adding' | 'added'>('address');

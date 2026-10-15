@@ -82,6 +82,8 @@ interface AppBridge {
     commit(id: string): Promise<{ ok: true; skills: SkillInfo[] } | { ok: false; error: string }>;
     discard(id: string): Promise<unknown>;
     reveal(): Promise<unknown>;
+    /** the skill store's index (apps/desktop/src/store-index.mjs): the skills on offer, as last read when offline */
+    store(): Promise<{ ok: true; index: StoreIndex; offline: boolean } | { ok: false; error: string }>;
   };
   /** Settings → Developer: `logs`, each turn shows its full log; `changes`, what it changed in the files, under its reply */
   developer: { get(): Promise<DeveloperPrefs>; onChange(listener: (prefs: DeveloperPrefs) => void): () => void };
@@ -100,6 +102,34 @@ export interface SkillInfo {
   /** the places with a skill of the same name it takes the place of */
   over?: Array<'project' | 'mine' | 'official'>;
 }
+
+/** Words in several languages, by locale tag (en, zh-CN, ja, ko, es). */
+export type Localized = Record<string, string>;
+
+/** Something a skill needs the person to bring: a file, some words, or a service connected with their own key. */
+export interface StoreNeed { kind: 'file' | 'text' | 'service'; what: string; label?: Localized; optional?: boolean }
+
+/** A skill in the store's index (the skills repository's index.json; see internal design §10.1). */
+export interface StoreSkill {
+  id: string;
+  source: { repo: string; path: string; commit?: string };
+  badge: 'official' | 'reviewed' | 'community';
+  title: Localized;
+  summary: Localized;
+  category: 'format' | 'style' | 'capability' | 'brand';
+  tags?: string[];
+  author: { name: string; url?: string };
+  version: string;
+  preview?: { poster?: string; video?: string };
+  scripts?: number;
+  size?: number;
+  testedWith?: string[];
+  needs?: StoreNeed[];
+  featured?: number;
+  updated?: string;
+}
+
+export interface StoreIndex { version: number; updated: string; skills: StoreSkill[] }
 
 /** A skill fetched from an address, before it is kept: `replaces`, one of the person's has its name. */
 export interface SkillPreview { name: string; description: string; scripts: string[]; size: number; replaces: boolean }

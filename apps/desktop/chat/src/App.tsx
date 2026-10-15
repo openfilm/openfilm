@@ -14,6 +14,7 @@ import { ProjectConversation, primeStoredTranscript } from '@/components/Project
 import { ProjectStarters } from '@/components/ProjectStarters';
 import { ModelPopover } from '@/components/ModelPopover';
 import { SkillsPopover, type PickedSkill } from '@/components/SkillsPopover';
+import { SkillStore } from '@/components/SkillStore';
 import { CardActions, CardButton, ComposerCard } from '@/components/ComposerCard';
 import { LocalAgentQuestionCard } from '@/components/TurnQuestionCard';
 import { Tooltip } from '@/components/Tooltip';
@@ -306,6 +307,8 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
 
   /* the skills this message can name (the Skills button, and `/`) */
   const [skillListing, setSkillListing] = React.useState<SkillListing | null>(null);
+  /* the skill store, opened from the Skills button */
+  const [storeOpen, setStoreOpen] = React.useState(false);
   const reloadSkills = React.useCallback(async () => {
     const next = await app.skills?.list(project.path, agent).catch(() => null);
     if (next) setSkillListing(next);
@@ -834,7 +837,12 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
             <Plus size={16} strokeWidth={1.75} />
           </button>
         </Tooltip>
-        {app.skills ? <SkillsPopover agentName={agentName} listing={skillListing} reload={reloadSkills} onPick={pickSkill} /> : null}
+        {app.skills ? <SkillsPopover agentName={agentName} listing={skillListing} reload={reloadSkills} onPick={pickSkill} onOpenStore={() => setStoreOpen(true)} /> : null}
+        {storeOpen ? (
+          <SkillStore listing={skillListing} reload={reloadSkills} onClose={() => setStoreOpen(false)}
+            onUse={(skill) => { setStoreOpen(false); pickSkill(skill); }}
+            onStart={(skill) => { setStoreOpen(false); pickSkill({ name: skill.name, description: '' }); }} />
+        ) : null}
         <Tooltip label={t('project.assets')}>
           <button type="button" onClick={() => app.setAssetsOpen(!assetsOpen)} aria-pressed={assetsOpen} className="openfilm-composer-tool" aria-label={t('project.assets')}>
             <LibraryBig size={16} strokeWidth={1.75} />
