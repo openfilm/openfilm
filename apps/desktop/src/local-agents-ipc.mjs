@@ -100,15 +100,16 @@ function imageBlocks(images) {
  * @param {import('electron').IpcMain} ipcMain
  * `harness(id)` gives the app's own agent ('byok') what it runs with (agent-roster.mjs), resolved as
  * each session starts.
- * `onWorking` hears the folders agents are working in (a turn running there) each time they change.
+ * `onWorking` hears the folders agents are working in (a turn running there) each time they change; `onAsking` the
+ * folders where an agent waits for the person's answer.
  * `logDir()`, as each session starts: the folder for the logs an agent is started with (Developer mode on), or null.
  * `skills`: where the app keeps its record of skills (`dataDir`) and the person's own skills (`mine`): each session has its maker's skills and MCP servers, OpenFilm's skills, and of the person's own those let
  * in (agent-skills.mjs).
  * @param {{ trusted: (event: any) => boolean, binDir?: string | null, fallbackDir?: string | null, env?: Record<string, string>,
- *           harness?: (id: string) => Promise<any>, onWorking?: (folders: string[]) => void, logDir?: () => string | null,
+ *           harness?: (id: string) => Promise<any>, onWorking?: (folders: string[]) => void, onAsking?: (folders: string[]) => void, logDir?: () => string | null,
  *           skills?: { dataDir: string, mine: string } | null }} opts
  */
-export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbackDir = null, env = {}, harness = async () => null, log = () => {}, onWorking = () => {}, logDir = () => null, skills = null }) {
+export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbackDir = null, env = {}, harness = async () => null, log = () => {}, onWorking = () => {}, onAsking = () => {}, logDir = () => null, skills = null }) {
   const harnessFor = async (agent) => (HARNESS_AGENTS.includes(agent) ? harness(agent) : undefined);
   const skillRecord = skills ? skillStore(skills.dataDir) : null;
   /** a session's skills and MCP servers: OpenFilm's, and of the person's own those let in (agent-skills.mjs) */
@@ -118,6 +119,8 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
   let activePrompts = 0;
   /** the folders a turn is running in now: what a project cannot be deleted from under */
   const working = () => [...new Set([...sessions.values()].filter((entry) => entry.running > 0).map((entry) => entry.cwd))];
+  /** the folders where an agent waits for the person's answer (a permission, a question): told on each change */
+  const tellAsking = () => onAsking([...new Set([...sessions.values()].filter((entry) => entry.pending.size > 0).map((entry) => entry.cwd))]);
   const handle = (channel, fn) => ipcMain.handle(channel, (event, opts) => {
     if (!trusted(event)) throw new Error('not the chat');
     return fn(event, opts);
@@ -220,13 +223,15 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
         onUpdate: (update) => send(entry, key, { kind: 'update', update }),
         onPermission: (params) => new Promise((resolve) => {
           const requestId = randomUUID();
-          pending.set(requestId, (optionId) => { pending.delete(requestId); resolve(optionId); });
+          pending.set(requestId, (optionId) => { pending.delete(requestId); tellAsking(); resolve(optionId); });
           send(entry, key, { kind: 'permission', requestId, params });
+          tellAsking();
         }),
         onQuestion: (ask) => new Promise((resolve) => {
           const requestId = randomUUID();
-          pending.set(requestId, (answers) => { pending.delete(requestId); resolve(answers); });
+          pending.set(requestId, (answers) => { pending.delete(requestId); tellAsking(); resolve(answers); });
           send(entry, key, { kind: 'question', requestId, ...ask });
+          tellAsking();
         }),
         onExit: (info) => { send(entry, key, { kind: 'exit', ...info }); sessions.delete(key); if (entry.running > 0) onWorking(working()); },
         onSend: (sent) => {

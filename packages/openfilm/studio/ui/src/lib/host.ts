@@ -143,7 +143,7 @@ export interface StudioHost {
    * launcher (the person's projects, the examples) instead of going to the project opened last. `list` gives the tabs
    * and which is this page's (`self`); `onChange` every change. Before this page shows a project it `claim`s it
    * (`here` false: another tab has it, and that one is shown instead); it `report`s what it shows (its title, an
-   * export's progress, a question waiting, its project gone). Studio's "open this project" (heard by every page) goes
+   * export's progress, its project gone). The app knows itself where an agent works or waits for an answer. Studio's "open this project" (heard by every page) goes
    * to `openRequest`, which the app settles once; `onGo` is the app sending this page to a project.
    */
   tabs?: {
@@ -155,7 +155,7 @@ export interface StudioHost {
     open: (projectId?: string) => void;
     move: (id: string, index: number) => void;
     claim: (projectId: string) => Promise<{ here: boolean }>;
-    report: (state: { title?: string; exporting?: number | null; asking?: boolean; gone?: boolean }) => void;
+    report: (state: { title?: string; exporting?: number | null; gone?: boolean }) => void;
     openRequest: (to: string) => void;
     onGo: (listener: (to: string) => void) => () => void;
   };

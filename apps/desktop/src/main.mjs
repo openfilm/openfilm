@@ -248,14 +248,17 @@ async function openTabs() {
   showTab(tabs.activeId() ?? tabs.list()[0].id);
 }
 
-/** The projects the chat's agents work in, by Studio's ids (from their folders), on each tab. */
+/** The projects the chat's agents work in, and wait for an answer in, by Studio's ids (from their folders), on each tab. */
 let projectPaths = new Map();
-async function tellTabsWorking(folders) {
+const agentFolders = { working: /** @type {string[]} */ ([]), asking: /** @type {string[]} */ ([]) };
+async function tellTabsWorking({ working = agentFolders.working, asking = agentFolders.asking } = {}) {
+  Object.assign(agentFolders, { working, asking });
   if (!tabs) return;
-  if (folders.some((f) => !projectPaths.has(f))) {
+  if ([...working, ...asking].some((f) => !projectPaths.has(f))) {
     projectPaths = new Map((await studioApi('/api/projects').catch(() => ({ projects: [] }))).projects.map((p) => [p.path, p.id]));
   }
-  if (tabs.setAgents(folders.map((f) => projectPaths.get(f)).filter(Boolean))) tellTabs();
+  const ids = (folders) => folders.map((f) => projectPaths.get(f)).filter(Boolean);
+  if (tabs.setAgents(ids(agentFolders.working), ids(agentFolders.asking))) tellTabs();
 }
 
 async function studioApi(path, method = 'GET', body = undefined) {
@@ -308,7 +311,7 @@ function setTheme(next) {
 /** Tell Studio which folders the chat's agents are working in now. */
 function tellWorking(/** @type {string[]} */ folders) {
   studio?.child.postMessage({ type: 'working', folders });
-  void tellTabsWorking(folders);
+  void tellTabsWorking({ working: folders });
 }
 
 async function runStudio(env) {
@@ -440,11 +443,10 @@ async function start() {
     if (empty) void closeTab(self);
     return { here: false };
   });
-  /* what a page shows now: its project's title, an export's progress, a question waiting; or its project gone */
-  tabHandle('desktop:tabs:report', (self, { title, exporting, asking, gone }) => {
+  /* what a page shows now: its project's title, an export's progress; or its project gone */
+  tabHandle('desktop:tabs:report', (self, { title, exporting, gone }) => {
     if (!tabs) return { ok: false };
     tabs.report(self, { ...(typeof title === 'string' ? { title: title.slice(0, 200) } : {}), ...(exporting !== undefined ? { exporting: typeof exporting === 'number' ? exporting : null } : {}), ...(gone === true ? { projectId: null } : {}) });
-    if (typeof asking === 'boolean') { const tab = tabs.get(self); if (tab) tab.asking = asking; }
     tellTabs();
     return { ok: true };
   });
@@ -461,6 +463,8 @@ async function start() {
     log,
     /* Studio refuses to delete a project an agent is working in */
     onWorking: tellWorking,
+    /* a tab says when its agent waits for the person's answer */
+    onAsking: (folders) => void tellTabsWorking({ asking: folders }),
     /* the `openfilm` command first (with the app's ffmpeg and browser in it); the app's ffmpeg last, for a computer
        that has none of its own: the person's own ffmpeg and browsers are what the agent's commands use */
     binDir: installOpenfilmCommand(DATA, { ffmpeg: ffmpegHere, env: browsers }),

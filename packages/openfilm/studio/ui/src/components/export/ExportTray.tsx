@@ -10,6 +10,7 @@ import React from 'react';
 
 import { projectEvents, studioConnection } from '@/api';
 import { useT } from '@/i18n';
+import { studioHost } from '@/lib/host';
 import {
   basenameOf,
   cancelExport,
@@ -55,6 +56,11 @@ export const ExportTray = React.forwardRef<ExportTrayHandle, { projectId: string
     setCancelAsked((s) => new Set(s).add(job.id));
     void cancelExport(projectId, job.id).catch(() => setCancelAsked((s) => { const next = new Set(s); next.delete(job.id); return next; }));
   };
+
+  /* in an app with tabs: this project's tab shows how far its exports have got (none running: nothing) */
+  const running = jobs.filter(jobIsActive);
+  const share = running.length ? Math.floor((running.reduce((sum, j) => sum + (j.progress ?? 0), 0) / running.length) * 100) / 100 : null;
+  React.useEffect(() => { studioHost?.tabs?.report({ exporting: share }); }, [share]);
 
   const merge = React.useCallback((incoming: readonly ExportJob[]) => {
     setJobs((prev) => {
