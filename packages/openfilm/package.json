@@ -1,6 +1,6 @@
 {
   "name": "openfilm",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "The open source AI video agent: films as web pages, the manual that teaches your coding agent to make them, the `openfilm` command, and Studio, the editor to change anything in them.",
   "license": "MIT",
   "homepage": "https://openfilm.dev",
