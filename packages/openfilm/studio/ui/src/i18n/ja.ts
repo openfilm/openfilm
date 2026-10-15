@@ -42,8 +42,6 @@ export const ja: Words = {
     official: '公式',
     mine: '自分の',
     project: 'このプロジェクト',
-    fetching: 'サンプルを取得中…',
-    fetchFailed: 'サンプルを取得できませんでした：{error}',
     addSkill: 'スキルを追加',
     openFolder: 'skills フォルダを開く',
     feedback: 'スキルについてのフィードバック',

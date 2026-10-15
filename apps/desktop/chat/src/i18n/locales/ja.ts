@@ -259,7 +259,7 @@ export const ja: Words = {
     timedOut: '時間内に回答がありませんでした — エージェントが自分で判断して続けました',
   },
   /* the composer's button that opens the Community over the film: skills and examples (Studio's ExamplesGallery) */
-  community: { button: 'コミュニティ' },
+  community: { button: 'コミュニティ', tooltip: 'コミュニティ：スキルとサンプル' },
   skills: {
     button: 'Skills',
     back: '戻る',

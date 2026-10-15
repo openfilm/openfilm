@@ -43,8 +43,6 @@ export const zhCN: Words = {
     official: '官方',
     mine: '我的',
     project: '本项目',
-    fetching: '正在取来示例…',
-    fetchFailed: '取不到这个示例：{error}',
     addSkill: '添加 skill',
     openFolder: '打开 skills 文件夹',
     feedback: '反馈 skill 的使用体验',

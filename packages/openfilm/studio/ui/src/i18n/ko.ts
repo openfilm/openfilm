@@ -42,8 +42,6 @@ export const ko: Words = {
     official: '공식',
     mine: '내 스킬',
     project: '이 프로젝트',
-    fetching: '예시를 가져오는 중…',
-    fetchFailed: '예시를 가져오지 못했습니다: {error}',
     addSkill: '스킬 추가',
     openFolder: 'skills 폴더 열기',
     feedback: '스킬 사용 의견 보내기',

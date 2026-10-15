@@ -43,8 +43,6 @@ export const en = {
     official: 'Official',
     mine: 'Yours',
     project: 'This project',
-    fetching: 'Fetching the example…',
-    fetchFailed: 'Could not fetch the example: {error}',
     addSkill: 'Add a skill',
     openFolder: 'Open the skills folder',
     feedback: 'Feedback on skills',

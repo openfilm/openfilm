@@ -226,7 +226,7 @@ export function pillCard(pill: { id: string; label: string; target?: Record<stri
     case 'example':
       row('example', ref.title);
       row('part', ref.segment ?? (ref.end ? span(ref.start ?? 0, ref.end) : null));
-      row('path', ref.folder);
+      row('path', ref.folder ?? null);
       break;
   }
   return { title: t(`refCard.title.${ref.kind}`), rows };
@@ -279,7 +279,7 @@ function refLine(ref: StudioRef): string {
     /* not this film: another OpenFilm film, whose source shows how it is made */
     case 'example': return [
       `example film ${quote(ref.title, 80)} (another OpenFilm film, not this one: read its film.html and pages for how it is made)`,
-      `folder ${ref.folder}`,
+      ref.folder ? `folder ${ref.folder}` : 'its folder could not be fetched: read it at its source',
       ref.end ? `its ${ref.start?.toFixed(3) ?? '0.000'}–${ref.end.toFixed(3)} s${ref.segment ? ` (${quote(ref.segment, 60)})` : ''}` : 'the whole film',
       `source ${ref.url}`,
     ].join(' · ');

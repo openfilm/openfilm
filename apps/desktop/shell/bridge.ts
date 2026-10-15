@@ -351,6 +351,13 @@ const uploadName = (name: string) => name.split(/[\\/]/).pop()!.replace(/[\u0000
   onSelection: (listener: Listener<StudioSelection>) => selection.on((s) => { if (s) listener(s); }),
   onFfmpeg: native.onFfmpeg,
   showInStudio: (ref: StudioRef) => command?.(commandFor(ref)),
+  /* an example's folder on this computer (Studio fetches it when needed), for a reference to one in a message sent */
+  async exampleFolder(id: string) {
+    const res = await fetch(`/api/examples/${encodeURIComponent(id)}/folder`, { method: 'POST' });
+    const body = await res.json().catch(() => ({})) as { folder?: string; error?: string };
+    if (!res.ok || !body.folder) throw new Error(body.error ?? `Studio answered ${res.status}`);
+    return body.folder;
+  },
   /* the composer's examples button: the examples over the film, to point at one or name a skill */
   showExamples: () => command?.({ type: 'show-examples' }),
   onUseSkill: skillPicked.on,

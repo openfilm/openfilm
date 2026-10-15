@@ -259,7 +259,7 @@ export const enUS = {
     timedOut: 'No answer in time — it carried on with its own call',
   },
   /* the composer's button that opens the Community over the film: skills and examples (Studio's ExamplesGallery) */
-  community: { button: 'Community' },
+  community: { button: 'Community', tooltip: 'Community: skills and examples' },
   skills: {
     button: 'Skills',
     back: 'Back',

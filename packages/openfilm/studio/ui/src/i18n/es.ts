@@ -42,8 +42,6 @@ export const es: Words = {
     official: 'Oficial',
     mine: 'Tuya',
     project: 'Este proyecto',
-    fetching: 'Trayendo el ejemplo…',
-    fetchFailed: 'No se pudo traer el ejemplo: {error}',
     addSkill: 'Añadir una skill',
     openFolder: 'Abrir la carpeta de skills',
     feedback: 'Comentarios sobre las skills',

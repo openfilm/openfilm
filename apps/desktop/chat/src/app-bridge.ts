@@ -29,6 +29,8 @@ interface AppBridge {
   onFfmpeg(listener: (state: FfmpegState) => void): () => void;
   /** take the person to a reference in Studio */
   showInStudio(ref: StudioRef): void;
+  /** an example's folder on this computer, fetched when needed (a reference to one, as its message is sent) */
+  exampleFolder?(id: string): Promise<string>;
   /** the examples over the film (Studio's), to point at one or a part of one, or name a skill */
   showExamples?(): void;
   /** a skill picked in the examples, to be named in the message */

@@ -259,7 +259,7 @@ export const es: Words = {
     timedOut: 'No hubo respuesta a tiempo: siguió con su propio criterio',
   },
   /* the composer's button that opens the Community over the film: skills and examples (Studio's ExamplesGallery) */
-  community: { button: 'Comunidad' },
+  community: { button: 'Comunidad', tooltip: 'Comunidad: skills y ejemplos' },
   skills: {
     button: 'Skills',
     back: 'Atrás',

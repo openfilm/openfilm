@@ -144,6 +144,7 @@ test('an example, or a part of it: its pill names it and the part, the agent rea
   const text = studioReferencesText([part, whole]);
   assert.match(text, /\[1\] example film "OpenFilm intro" \(another OpenFilm film, not this one: read its film\.html and pages for how it is made\) · folder \/cache\/examples\/openfilm-intro · its 16\.120–31\.600 s \("S4-Studio"\) · source https:\/\/github\.com\//);
   assert.match(text, /\[2\] example film "One Prompt" .* · the whole film · source /);
+  assert.match(studioReferencesText([{ ...whole, folder: undefined }]), /could not be fetched: read it at its source · the whole film · source https:/, 'not fetched: its source said instead');
   assert.ok(sameStudioThing(part, { ...part }) && !sameStudioThing(part, whole));
   assert.equal(pillCard(pill, (k) => k).title, 'refCard.title.example');
 });

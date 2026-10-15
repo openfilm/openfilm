@@ -15,7 +15,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import {
-  ArrowLeft, Check, Clapperboard, ExternalLink, FolderOpen, Loader2, MessageSquare, Play, Plus, Sparkles, X,
+  ArrowLeft, Check, Clapperboard, ExternalLink, FolderOpen, MessageSquare, Play, Plus, Sparkles, X,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
@@ -405,29 +405,21 @@ function ExampleDetail({ example, mode, onBack, onStart, onReference, categoryLa
 
 /**
  * The examples over a film, opened from the app's chat (`show-examples`): an example or a part of it becomes a
- * reference in the message being written (its folder fetched first, for the agent to read), a skill is named in it
- * (lib/host.ts `useSkill`), and an example can still be started from, as a new project (`onStarted`).
+ * reference in the message being written at once (its folder, for the agent to read, fetched meanwhile and by the app
+ * when the message is sent), a skill is named in it (lib/host.ts `useSkill`), and an example can still be started
+ * from, as a new project (`onStarted`).
  */
 export function ExamplesDialog({ projectId, onClose, onStarted }: { projectId: string; onClose: () => void; onStarted: (projectId: string) => void }) {
   const t = useT();
-  const [busy, setBusy] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
   const [starting, setStarting] = React.useState<Example | null>(null);
-  const reference = async (example: Example, part: ExamplePart) => {
-    setBusy(true);
-    setError(null);
-    try {
-      const folder = await sourcesApi.exampleFolder(example.id);
-      studioHost?.refer?.({
-        kind: 'example', id: example.id, title: example.title, url: example.url, folder,
-        ...(part ? { start: part.from, end: part.to, ...(part.segment ? { segment: part.segment } : {}) } : {}),
-      });
-      onClose();
-    } catch (e) {
-      setError(t('gallery.fetchFailed').replace('{error}', e instanceof Error ? e.message : String(e)));
-    } finally {
-      setBusy(false);
-    }
+  const reference = (example: Example, part: ExamplePart) => {
+    /* fetched meanwhile, so the message goes as soon as it is sent */
+    void sourcesApi.exampleFolder(example.id).catch(() => {});
+    studioHost?.refer?.({
+      kind: 'example', id: example.id, title: example.title, url: example.url,
+      ...(part ? { start: part.from, end: part.to, ...(part.segment ? { segment: part.segment } : {}) } : {}),
+    });
+    onClose();
   };
   return createPortal(
     <>
@@ -440,17 +432,9 @@ export function ExamplesDialog({ projectId, onClose, onStarted }: { projectId: s
           projectId={projectId}
           onClose={onClose}
           onStart={setStarting}
-          onReference={(example, part) => void reference(example, part)}
+          onReference={reference}
           onUseSkill={(skill) => { studioHost?.useSkill?.({ name: skill.name, description: skill.description }); onClose(); }}
         />
-        {busy ? (
-          <div className="absolute inset-0 z-20 flex items-center justify-center bg-[var(--app-content-bg)]/70">
-            <div className="flex items-center gap-2 rounded-lg bg-[var(--surface)] px-4 py-3 text-sm shadow-lg"><Loader2 size={16} className="animate-spin" />{t('gallery.fetching')}</div>
-          </div>
-        ) : null}
-        {error ? (
-          <div role="alert" className="absolute bottom-4 left-1/2 z-30 -translate-x-1/2 rounded-full border border-[var(--err)]/40 bg-[var(--surface)] px-4 py-2 text-[12.5px] font-medium text-[var(--err)] shadow-[var(--shadow-lg)]">{error}</div>
-        ) : null}
       </div>
       {starting ? (
         <GitHubDialog url={starting.url} start title={starting.title}

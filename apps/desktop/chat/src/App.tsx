@@ -6,7 +6,7 @@
  * (lib/local-agent-run's saved turns).
  */
 import React from 'react';
-import { ArrowDown, Blocks, Coins, CornerDownLeft, LayoutGrid, LibraryBig, Loader2, Play, Plus, ShieldQuestion, Square, SquareSlash, X } from 'lucide-react';
+import { ArrowDown, Blocks, Coins, CornerDownLeft, LibraryBig, Loader2, Play, Plus, ShieldQuestion, Square, SquareSlash, X } from 'lucide-react';
 import { buildPromptDisplay, type Turn } from '@openfilm/shared';
 import { useT } from '@/i18n';
 import { ConversationSessionBar } from '@/components/ConversationSessionBar';
@@ -695,11 +695,14 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     const stage = selection?.stage ?? null;
     /* each reference's picture is kept in the project for the agent (the block names it), and sent to one that takes pictures */
     const skillTexts = skillNames.length ? (app.skills?.texts(project.path, agent, skillNames).catch(() => []) ?? Promise.resolve([])) : Promise.resolve([]);
-    const prepared = Promise.all([referencePictures(refs, { project: project.path, turnId: id }), skillTexts])
+    /* an example pointed at: its folder fetched now if it is not yet (the turn waits, as it waits for its reply) */
+    const withFolders = Promise.all(refs.map(async (ref) => (ref.kind === 'example' && !ref.folder
+      ? { ...ref, folder: await app.exampleFolder?.(ref.id).catch(() => undefined) } : ref)));
+    const prepared = withFolders.then((ready) => Promise.all([referencePictures(ready, { project: project.path, turnId: id }), skillTexts])
       .then(([{ pictures, images }, skills]) => ({
-        text: said + studioReferencesText(refs, { stage, pictures }) + skills.map((s) => `\n\n${s.text}`).join(''),
+        text: said + studioReferencesText(ready, { stage, pictures }) + skills.map((s) => `\n\n${s.text}`).join(''),
         images: [...attachedPictures(files), ...images],
-      }));
+      })));
     const opened = openTurn(id, instruction, promptDisplay ?? null, turnAttachments(files));
     if (steer && asset) steerTurn(asset.id, opened, prepared);
     else runTurn(opened, prepared);
@@ -861,9 +864,9 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
           </button>
         </Tooltip>
         {app.showExamples ? (
-          <Tooltip label={t('community.button')}>
+          <Tooltip label={t('community.tooltip')}>
             <button type="button" onClick={() => app.showExamples?.()} className="openfilm-composer-tool" aria-label={t('community.button')}>
-              <LayoutGrid size={16} strokeWidth={1.75} />
+              <Blocks size={16} strokeWidth={1.75} />
             </button>
           </Tooltip>
         ) : null}

@@ -28,8 +28,6 @@ import { ProjectsView, type LibraryProject } from './ProjectsView';
 import { FolderBrowserDialog, GitHubDialog } from './ProjectSources';
 import { ExamplesGallery, TitleSwitch } from './ExamplesGallery';
 
-/** This browser's storage, when the page may use it. */
-const storage = () => { try { return localStorage; } catch { return null; } };
 
 /* each card's picture: the film's middle frame, drawn by Studio (cached until film.html changes); none for a project
    whose folder is gone (its card shows its color) */
@@ -171,7 +169,6 @@ export function LauncherSwitch({ view, onView }: { view: LauncherView; onView: (
   return <TitleSwitch items={[{ id: 'projects' as const, label: t('launcher.projects') }, { id: 'examples' as const, label: t('launcher.examples') }]} value={view} onChange={onView} />;
 }
 
-const VIEW_KEY = 'openfilm.launcher.view';
 
 export function ProjectsPopover({
   open,
@@ -195,11 +192,10 @@ export function ProjectsPopover({
 }) {
   const t = useT();
   const lib = useProjectLibrary(open);
-  /* the projects, or the examples: as last left (a first launch with no project: the examples) */
-  const [view, setView] = React.useState<LauncherView>(() => (storage()?.getItem(VIEW_KEY) === 'examples' ? 'examples' : 'projects'));
-  const showView = (next: LauncherView) => { setView(next); try { storage()?.setItem(VIEW_KEY, next); } catch { /* not kept */ } };
-  const firstTime = lib.loaded && !lib.projects.length;
-  React.useEffect(() => { if (firstTime && !storage()?.getItem(VIEW_KEY)) setView('examples'); }, [firstTime]);
+  /* each time it opens: the projects (the examples are a switch away) */
+  const [view, setView] = React.useState<LauncherView>('projects');
+  React.useEffect(() => { if (open) setView('projects'); }, [open]);
+  const showView = setView;
   const [pendingDelete, setPendingDelete] = React.useState<string[] | null>(null);
   const [pendingFolder, setPendingFolder] = React.useState<ProjectFolder | null>(null);
   const [busy, setBusy] = React.useState<'creating' | 'opening' | null>(null);

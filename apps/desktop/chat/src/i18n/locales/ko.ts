@@ -259,7 +259,7 @@ export const ko: Words = {
     timedOut: '시간 안에 답이 없어 에이전트가 스스로 판단해 계속 진행했습니다',
   },
   /* the composer's button that opens the Community over the film: skills and examples (Studio's ExamplesGallery) */
-  community: { button: '커뮤니티' },
+  community: { button: '커뮤니티', tooltip: '커뮤니티: 스킬과 예시' },
   skills: {
     button: 'Skills',
     back: '뒤로',

@@ -285,8 +285,9 @@ export interface StudioRefImage { src?: string; viewer?: boolean; crop?: StageBo
  *   · range   a stretch of the film (marked on the timeline's ruler, or with I and O): the clips playing in it
  *   · track   a whole track
  *   · file    a file of the project (the media pane): its path, kind, and length / size when known
- *   · example  an example film (ExamplesGallery), or a part of it (`start`–`end`, a `segment` it names): its folder on
- *             this computer, to read how it is made, and where it comes from (`url`)
+ *   · example  an example film (ExamplesGallery), or a part of it (`start`–`end`, a `segment` it names): where it comes
+ *             from (`url`), and its folder on this computer to read how it is made (`folder`: fetched by the app
+ *             when the message is sent, if not yet)
  *   · subtitle a line of the film's subtitles (the subtitle panel), or words picked inside one: their span on the film,
  *             the words, the language they are in when a translation is shown (`lang`), the line's number in the panel
  *             (`index`, from 1), and each word's own span when the transcript has word times (`words`)
@@ -303,7 +304,7 @@ export type StudioRef = (
   | { kind: 'track'; track: number; label: string; clipIds: string[] }
   | { kind: 'file'; path: string; fileKind: string; duration?: number; w?: number; h?: number }
   | { kind: 'subtitle'; start: number; end: number; text: string; lang?: string | null; index?: number; words?: Array<{ text: string; start: number; end: number }> }
-  | { kind: 'example'; id: string; title: string; url: string; folder: string; start?: number; end?: number; segment?: string }
+  | { kind: 'example'; id: string; title: string; url: string; folder?: string; start?: number; end?: number; segment?: string }
 ) & { image?: StudioRefImage };
 
 /**
