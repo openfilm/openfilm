@@ -1423,7 +1423,7 @@ export const es: Words = {
       appFailed: 'No se pudo completar la actualización. Inténtalo más tarde.',
     },
     agents: {
-      intro: 'Los agentes que puede usar el chat. Codex, Claude Code y los demás de Tus agentes son tuyos y usan la cuenta con la que este equipo inició sesión: para usar otra, cambia de cuenta en el propio agente y luego desconéctalo y vuelve a conectarlo aquí. Tu propia clave funciona en un servicio tuyo.',
+      intro: 'Los agentes que puede usar el chat. Codex, Claude Code y los demás de Tus agentes son tuyos, con la cuenta iniciada en este equipo: para usar otra cuenta, cámbiala en el propio agente y luego desconéctalo y vuelve a conectarlo aquí. Tu propia clave usa modelos que configuras tú, cada uno con su propio servicio.',
       byokName: 'Tu propia clave',
       groupYours: 'Tus agentes',
       groupMore: 'Otros agentes que puedes usar',
@@ -1432,7 +1432,7 @@ export const es: Words = {
       ready: 'Conectado',
       off: 'No conectado',
       signedOut: 'Sin sesión iniciada',
-      waiting: 'Esperando el inicio de sesión en Terminal…',
+      waiting: 'Esperando a que inicies sesión…',
       waitingHint: 'Termina de iniciar sesión en la ventana que se abrió y vuelve aquí.',
       startAgain: 'Volver a empezar',
       missing: 'No está instalado en este equipo',
@@ -1579,7 +1579,7 @@ export const es: Words = {
       copyDrag: 'Arrastra un clip con ella pulsada: una copia va donde lo sueltas y el clip se queda',
     },
     providers: {
-      desc: 'De dónde vienen las voces, la música, los efectos de sonido, las transcripciones, las imágenes y el video. OpenFilm crea y edita películas sin ninguno de ellos: conecta uno cuando tu agente necesite medios.',
+      desc: 'De dónde vienen las voces, la música, los efectos de sonido, las transcripciones, las imágenes y el video. OpenFilm crea y edita películas sin ninguno de ellos: conecta uno cuando tu agente necesite medios. Cuál crea cada tipo de medio se elige en Servicios.',
       connect: 'Conectar',
       disconnect: 'Desconectar',
       connected: 'Conectado',
@@ -1593,7 +1593,7 @@ export const es: Words = {
       useEnv: 'Usar la clave de ${env}',
       own: {
         title: "Servicios personalizados",
-        note: "Cualquier servicio que ejecutes o uses, en este ordenador o en línea (tu propia voz, un servidor de transcripción, una API que no está en la lista), con cualquier interfaz. OpenFilm no lo llama por sí mismo: tu agente lee lo que escribas aquí y lo llama, y su clave se queda en este ordenador. Di qué hace y cómo se llama, o dónde está su documentación de API.",
+        note: "Servicios que no están arriba, tantos como quieras: uno que ejecutes en este ordenador o uno en línea (tu propia voz, un servidor de transcripción, una API que no está en la lista), con cualquier interfaz. OpenFilm no los llama por sí mismo: tu agente lee tu descripción y los llama, y sus claves se quedan en este ordenador, fuera de la vista del agente. También puedes hablarle de un servicio en el chat; si necesita clave, añádelo aquí para que la clave no aparezca en la conversación.",
         add: "Añadir un servicio personalizado",
         edit: "Editar",
         remove: "Quitar",
@@ -1626,7 +1626,6 @@ export const es: Words = {
       goConnect: 'Conectar un proveedor',
       none: 'Ninguno',
       connectNamed: 'Conectar {names}',
-      otherBody: "¿Quieres un servicio o modelo que no aparece en la lista? Añádelo en Proveedores → Tus propios servicios, con su dirección y su clave: tu agente podrá usarlo. Lo que cree llega a Recursos como todo lo demás.",
       about: {
         tts: 'Lee un guion en voz alta y encuentra voces para leerlo',
         music: 'Crea una banda sonora a partir de una descripción',

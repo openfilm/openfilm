@@ -37,7 +37,7 @@ export function ModelsSection({ onConnect }: { onConnect: () => void }) {
         </SettingsGroup>
       ) : null}
       {providers ? (
-        <SettingsGroup footnote={t('settings.models.otherBody')}>
+        <SettingsGroup>
           {USE_VERBS.filter((verb) => offered(providers, verb)).map((verb) => <ModelRow key={verb} verb={verb} hook={hook} onConnect={onConnect} />)}
         </SettingsGroup>
       ) : null}

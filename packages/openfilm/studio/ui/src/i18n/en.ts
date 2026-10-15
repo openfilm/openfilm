@@ -1424,7 +1424,7 @@ export const en = {
       appFailed: 'Could not complete the update. Try again later.',
     },
     agents: {
-      intro: 'The agents the chat can use. Codex, Claude Code and the others under Your agents are your own, on the account signed in on this computer: to use another account, switch accounts in the agent itself, then disconnect and connect it again here. Your own key runs on a service of yours.',
+      intro: 'The agents the chat can use. Codex, Claude Code and the others under Your agents are your own, on the account signed in on this computer: to use another account, switch accounts in the agent itself, then disconnect and connect it again here. Your own key runs on models you set up yourself, each on its own service.',
       byokName: 'Your own key',
       groupYours: 'Your agents',
       groupMore: 'More agents you can use',
@@ -1433,7 +1433,7 @@ export const en = {
       ready: 'Connected',
       off: 'Not connected',
       signedOut: 'Not signed in',
-      waiting: 'Waiting for the sign-in in Terminal…',
+      waiting: 'Waiting for you to sign in…',
       waitingHint: 'Finish signing in in the window that opened, then come back.',
       startAgain: 'Start again',
       missing: 'Not installed on this computer',
@@ -1580,7 +1580,7 @@ export const en = {
       copyDrag: 'Drag a clip with it held: a copy goes where you let go, the clip stays',
     },
     providers: {
-      desc: 'Where voices, music, sound effects, transcripts, images and video come from. OpenFilm makes and edits films without any of them: connect one when your agent needs media.',
+      desc: 'Where voices, music, sound effects, transcripts, images and video come from. OpenFilm makes and edits films without any of them: connect one when your agent needs media. Which one makes each kind of media is chosen under Services.',
       connect: 'Connect',
       disconnect: 'Disconnect',
       connected: 'Connected',
@@ -1594,7 +1594,7 @@ export const en = {
       useEnv: 'Use the key in ${env}',
       own: {
         title: "Custom services",
-        note: "Any service you run or use, on this computer or online (your own voice, a transcription server, an API not listed here), with any interface. OpenFilm doesn't call it itself: your agent reads what you write here and calls it, and its key stays on this computer. Say what it does and how it is called, or where its API docs are.",
+        note: "Services not listed above, as many as you like: one you run on this computer or one online (your own voice, a transcription server, an API not listed), with any interface. OpenFilm doesn't call them itself: your agent reads your description and calls them, and their keys stay on this computer, out of the agent's sight. You can also tell your agent about a service in the chat instead; set it up here when it takes a key, so the key stays out of the conversation.",
         add: "Add a custom service",
         edit: "Edit",
         remove: "Remove",
@@ -1627,7 +1627,6 @@ export const en = {
       goConnect: 'Connect a provider',
       none: 'None',
       connectNamed: 'Connect {names}',
-      otherBody: "Want a service or model that isn’t listed? Add it under Providers → Your own services, with its address and key: your agent can then use it. What it makes lands in Assets like everything else.",
       about: {
         tts: 'Speaks a script, and finds voices to speak it',
         music: 'Makes a soundtrack from a description',
