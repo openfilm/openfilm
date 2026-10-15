@@ -1,31 +1,43 @@
 ---
 name: replicate
-description: Make a film that follows a reference video's structure (its rhythm, look and motion) with the person's own content. Use when the person gives a video, as a file or a link, and asks for one like it, to learn its style or pacing, or to remake it for their product or topic (复刻, 照着做, 做个同款).
+description: Make a film like a reference video (its structure, rhythm, look and motion) with the person's own content. Use when the person gives a video, as a file or a link, and asks for one like it, to learn its style or pacing, or to remake it for their product or topic (复刻, 照着做, 做个同款).
 ---
 
-# Replicate
+# Replicate a video
 
-Two videos feel alike when they share a rhythm (when the picture changes), a look (layout, type, color), a motion
-language (how it changes) and what each part does for the viewer. The content is the person's. Never reuse the
-reference's footage, music, voice, likeness or words: they are someone else's, and platforms hold back near copies.
+## What a good replica keeps
 
-A video, as a viewer follows it, is a run of **states** (a picture at rest) and **changes** between them (a cut, a
-fade, a move). You read a state well from one frame; a change you cannot judge from frames, so it is measured.
+- **Structure**: the same parts in the same order, each doing the same job for the viewer (the hook, the setup, the
+  turn, the payoff, the call to action).
+- **Rhythm**: each part about as long; the picture changes at the same moments; cuts and hits land on the same beats.
+  A longer or shorter film scales them.
+- **Look**: layout and framing, type (family, weight, how sizes relate), palette, background, the elements that recur
+  (captions, labels, counters, a frame around everything).
+- **Motion**: how things enter, move and leave: direction, distance, speed, ease, overshoot; the transitions between
+  parts.
 
-1. **The reference** goes in the project's `references/`. Given a link, `yt-dlp -o references/<name>.mp4 <link>`
-   when yt-dlp is installed; otherwise ask for the file. When it has speech, transcribe it first with
-   `npx openfilm get` (a `.vtt` beside the video).
-2. **Measure it**: `node <this folder>/scripts/measure.mjs references/<name>.mp4`. It prints every state and every
-   change in order (when, how long, where on screen, how it eases, on which beat or hit, with the words said), and
-   draws the storyboard: one picture per state, numbered as printed.
-3. **Read the storyboard** for what each state shows and how it is laid out. Where a change matters and its numbers
-   are not enough, look at it: `npx openfilm look references/<name>.mp4 <a-b> --count 24`.
-4. **Write the plan** in `references/<name>.plan.md`: each state and change of the reference, what it is for, and what
-   takes its place in the person's film. Keep its timing (how long each state holds, each change's length and ease,
-   which changes land on beats); scale it when the film is longer or shorter. When the person's words set the pace,
-   their sentences take the place of the reference's.
+## What it changes
+
+- The content is the person's: their topic, product, words, footage. Change what a part shows; keep what it does. A
+  part with nothing to stand for in their film gives its job to something that fits.
+- Never the reference's own footage, music, voice, likeness, logo or words: they are someone else's, and platforms hold
+  back near copies.
+
+## How
+
+1. **The reference** goes in `references/`. Given a link, `yt-dlp -o references/<name>.mp4 <link>` when yt-dlp is
+   installed; otherwise ask for the file. When it has speech, transcribe it with `npx openfilm get` (a `.vtt` beside
+   it).
+2. **Watch all of it**: `npx openfilm look references/<name>.mp4` for the whole, then stretches
+   (`look references/<name>.mp4 4-8 --count 24`) and single frames at full size (`look references/<name>.mp4 5.2`)
+   to read type and layout. Where something moves, look at a short stretch densely to see its path, speed and ease.
+3. **Reuse before building**: when an OpenFilm example or one of the person's projects already does something like a
+   part, read its source and start from it.
+4. **Write the plan** in `references/<name>.md`: the reference part by part (its times, what it shows, how it looks
+   and moves, what it does) and what takes each part's place in the person's film.
 5. **Make the film** from the plan.
-6. **Compare**: render a small copy (`npx openfilm render --scale 0.5 --out .film/cache/replicate/film.mp4`), then
-   `node <this folder>/scripts/compare.mjs references/<name>.mp4 .film/cache/replicate/film.mp4`. It measures the film
-   the same way and lists the changes that are late, early or missing, the two rhythms' correlation, how many states
-   each has, and draws them side by side. Fix what is off; one or two rounds are usually enough.
+6. **Compare** the film with the reference at the same moments: `look` the same stretch of each and set the sheets
+   side by side. Fix what differs in timing, size, position, color and motion; then check the whole film.
+
+When done, tell the person in a few lines what was kept, what changed and why, and what of theirs (footage, a logo,
+their voice) would bring it closer.
