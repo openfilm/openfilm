@@ -13,7 +13,7 @@
  * whose name is pointed at this machine (DNS rebinding) gets nothing, not even /api/health.
  */
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { existsSync, mkdirSync, openSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, openSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, extname, isAbsolute, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:http';
@@ -34,7 +34,7 @@ import {
 } from './projects.mjs';
 import { FetchError, createFetches } from './fetch-repo.mjs';
 import { BrowseError, browseFolder, browsePlaces } from './browse.mjs';
-import { listExamples } from './examples.mjs';
+import { exampleFile, listExamples } from './examples.mjs';
 import { pickFiles, pickFolder } from './folder-picker.mjs';
 import { readPrefs, writePrefs } from './prefs.mjs';
 import { ensureProxies } from './proxies.mjs';
@@ -45,6 +45,7 @@ import { installedFonts } from './fonts.mjs';
 import { projectFonts, resolveIn } from './project-fonts.mjs';
 import { FILM_PAGE, PageFrameError, closePageFrames, filmPoster, pageFacts, pageFrame, warmFilmPoster } from './pageframes.mjs';
 import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
+import { listSkills } from '../../src/skills.mjs';
 import { providersRoute } from './providers/index.mjs';
 import { captionRoutes } from './captions.mjs';
 import { projectSettingsRoute } from './project-settings.mjs';
@@ -304,6 +305,26 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     /* the example films (examples.mjs): none when the index cannot be read */
     if (parts[0] === 'examples' && parts.length === 1 && req.method === 'GET') return json(res, 200, { examples: await listExamples() });
+    /* a poster or preview beside an index read from this computer (examples.mjs exampleFile) */
+    if (parts[0] === 'examples' && parts[1] === 'file' && parts.length > 2 && req.method === 'GET') {
+      const file = exampleFile(parts.slice(2).map(decodeURIComponent).join('/'));
+      if (!file || !existsSync(file) || !statSync(file).isFile()) throw new HttpError(404, 'no such file');
+      const size = statSync(file).size;
+      const type = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.mp4': 'video/mp4', '.webm': 'video/webm' }[extname(file).toLowerCase()] ?? 'application/octet-stream';
+      /* a preview is seeked in: a range is answered as one */
+      const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range ?? ''));
+      const [from, to] = range ? [range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2])), range[2] && range[1] ? Math.min(size - 1, Number(range[2])) : size - 1] : [0, size - 1];
+      res.writeHead(range ? 206 : 200, { 'content-type': type, 'content-length': to - from + 1, 'accept-ranges': 'bytes', ...(range ? { 'content-range': `bytes ${from}-${to}/${size}` } : {}) });
+      createReadStream(file, { start: from, end: to }).pipe(res);
+      return undefined;
+    }
+    /* the skills a project can be made with (../../src/skills.mjs): its own, the person's, the official ones */
+    if (parts[0] === 'skills' && parts.length === 1 && req.method === 'GET') {
+      const id = url.searchParams.get('project');
+      const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) : null;
+      const skills = listSkills({ project: project?.path ?? null });
+      return json(res, 200, { skills: skills.map((k) => ({ name: k.name, description: k.description, source: k.source, scripts: k.scripts.length })) });
+    }
 
     if (parts[0] !== 'projects') throw new HttpError(404, 'no such API');
     if (parts.length === 1) {

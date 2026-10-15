@@ -8,7 +8,8 @@ import { exampleSeconds, listExamples, readExamples } from './examples.mjs';
 test('an index\'s examples: each with the address that fetches its folder, its poster from the repository', () => {
   const examples = readExamples({
     examples: [
-      { folder: 'one-prompt', title: 'One Prompt', description: 'Every frame is code.', poster: 'one-prompt/look.png', duration: '1:29' },
+      { folder: 'one-prompt', title: 'One Prompt', description: 'Every frame is code.', poster: 'one-prompt/look.png', duration: '1:29',
+        video: 'one-prompt/preview.mp4', category: 'music', segments: [{ title: 'S1-Open', from: 0, to: '0:12' }, { title: 'bad', from: 5, to: 2 }, { from: 1, to: 2 }] },
       { folder: '../escape', title: 'No' },
       { folder: 'untitled' },
       { folder: 'abs', title: 'Abs', poster: 'https://example.com/p.png', duration: 12 },
@@ -18,9 +19,11 @@ test('an index\'s examples: each with the address that fetches its folder, its p
     {
       id: 'one-prompt', title: 'One Prompt', description: 'Every frame is code.', duration: 89,
       poster: 'https://raw.githubusercontent.com/openfilm/examples/main/one-prompt/look.png',
+      video: 'https://raw.githubusercontent.com/openfilm/examples/main/one-prompt/preview.mp4',
       url: 'https://github.com/openfilm/examples/tree/main/one-prompt',
+      category: 'music', segments: [{ title: 'S1-Open', from: 0, to: 12 }],
     },
-    { id: 'abs', title: 'Abs', description: '', duration: 12, poster: 'https://example.com/p.png', url: 'https://github.com/openfilm/examples/tree/main/abs' },
+    { id: 'abs', title: 'Abs', description: '', duration: 12, poster: 'https://example.com/p.png', video: null, url: 'https://github.com/openfilm/examples/tree/main/abs', category: null, segments: [] },
   ]);
   /* another repository: named by the index, or the one it is read from */
   assert.equal(readExamples({ repo: 'https://github.com/a/b', branch: 'dev', examples: [{ folder: 'x', title: 'X' }] })[0].url, 'https://github.com/a/b/tree/dev/x');

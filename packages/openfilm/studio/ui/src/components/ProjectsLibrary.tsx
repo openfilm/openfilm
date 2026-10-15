@@ -1,7 +1,8 @@
 /**
- * The Projects popover (the top bar's Projects button): a large centered dialog to switch project, start one, open a
- * folder, get a film from GitHub or the examples, rename, delete, or file projects in folders of the list. Its
- * contents are ProjectsView; this file holds the data and actions.
+ * The Projects popover (the top bar's Projects button), and a new tab's launcher (`inline`): a large centered dialog,
+ * or the page, to switch project, start one, open a folder, get a film from GitHub, rename, delete, or file projects
+ * in folders of the list; or, switched to "Examples", to start from an example (ExamplesGallery). Its projects are
+ * ProjectsView; this file holds the data and actions.
  *
  * Studio's projects are folders on disk: deleting one moves its folder to the system's Trash. One whose folder is gone
  * (moved, renamed or deleted outside Studio: `missing`) cannot be opened; it can be located (the folder it is in now)
@@ -21,10 +22,11 @@ import { api, ApiError } from '@/api';
 import { useT } from '@/i18n';
 import { folderApi, folderCounts, folderTrail, type ProjectFolder } from '@/lib/project-folders';
 import { studioHost } from '@/lib/host';
-import { SourceError, examplesCollapsed, setExamplesCollapsed, sourcesApi, type Example } from '@/lib/project-sources';
+import { SourceError, sourcesApi } from '@/lib/project-sources';
 import { ConfirmDialog } from './ConfirmDialog';
 import { ProjectsView, type LibraryProject } from './ProjectsView';
 import { FolderBrowserDialog, GitHubDialog } from './ProjectSources';
+import { ExamplesGallery } from './ExamplesGallery';
 
 /** This browser's storage, when the page may use it. */
 const storage = () => { try { return localStorage; } catch { return null; } };
@@ -160,12 +162,30 @@ function useProjectLibrary(open: boolean) {
   return { projects, folders, loaded, error, flash, reload: reloadFolders, agentRunning, workingIn, deleteProjects, renameProject, createFolder, renameFolder, moveProject, deleteFolder };
 }
 
+/** The launcher's two views: the person's projects, and the examples to start from (ExamplesGallery). */
+export type LauncherView = 'projects' | 'examples';
+
+/** The switch between them, in the title row: two titles, the one shown bright. */
+export function LauncherSwitch({ view, onView }: { view: LauncherView; onView: (view: LauncherView) => void }) {
+  const t = useT();
+  const item = (id: LauncherView, label: string) => (
+    <button type="button" role="tab" aria-selected={view === id} onClick={() => onView(id)}
+      className={`text-[17px] font-semibold tracking-[-0.01em] transition ${view === id ? 'text-[var(--text)]' : 'text-[var(--text-faint)] hover:text-[var(--text-muted)]'}`}>
+      {label}
+    </button>
+  );
+  return <div role="tablist" className="mr-auto flex items-baseline gap-5">{item('projects', t('launcher.projects'))}{item('examples', t('launcher.examples'))}</div>;
+}
+
+const VIEW_KEY = 'openfilm.launcher.view';
+
 export function ProjectsPopover({
   open,
   currentProjectId,
   onOpen,
   onCurrentRemoved,
   onClose,
+  inline = false,
 }: {
   open: boolean;
   /** The project open in the editor ("" when none: Studio has no project to show, and this window is all there is). */
@@ -179,9 +199,16 @@ export function ProjectsPopover({
   onCurrentRemoved: () => void;
   /** Missing: the window cannot be closed (there is no project behind it). */
   onClose?: () => void;
+  /** Not a window over the project but the page itself: a new tab's launcher (lib/host.ts `tabs`). */
+  inline?: boolean;
 }) {
   const t = useT();
   const lib = useProjectLibrary(open);
+  /* the projects, or the examples: as last left (a first launch with no project: the examples) */
+  const [view, setView] = React.useState<LauncherView>(() => (storage()?.getItem(VIEW_KEY) === 'examples' ? 'examples' : 'projects'));
+  const showView = (next: LauncherView) => { setView(next); try { storage()?.setItem(VIEW_KEY, next); } catch { /* not kept */ } };
+  const firstTime = lib.loaded && !lib.projects.length;
+  React.useEffect(() => { if (firstTime && !storage()?.getItem(VIEW_KEY)) setView('examples'); }, [firstTime]);
   const [pendingDelete, setPendingDelete] = React.useState<string[] | null>(null);
   const [pendingFolder, setPendingFolder] = React.useState<ProjectFolder | null>(null);
   const [busy, setBusy] = React.useState<'creating' | 'opening' | null>(null);
@@ -189,8 +216,6 @@ export function ProjectsPopover({
   const [browser, setBrowser] = React.useState<{ mode: 'open' } | { mode: 'locate'; project: LibraryProject } | null>(null);
   const [github, setGithub] = React.useState<{ url?: string; start?: boolean; title?: string } | null>(null);
   const [askStart, setAskStart] = React.useState<string | null>(null);
-  const [examples, setExamples] = React.useState<Example[]>([]);
-  const [examplesFolded, setExamplesFolded] = React.useState(() => examplesCollapsed(storage()));
   const close = React.useCallback(() => onClose?.(), [onClose]);
 
   React.useEffect(() => {
@@ -199,14 +224,6 @@ export function ProjectsPopover({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, close, pendingDelete, pendingFolder, askStart]);
-
-  /* the examples, read on each open (none when the index cannot be read: the section stays hidden) */
-  React.useEffect(() => {
-    if (!open) return undefined;
-    let alive = true;
-    void sourcesApi.examples().then((list) => { if (alive) setExamples(list); });
-    return () => { alive = false; };
-  }, [open]);
 
   const go = (projectId: string, kind: 'creating' | 'opening') => {
     /* the project already open: nowhere to go, and an "Opening" that would never end */
@@ -325,15 +342,17 @@ export function ProjectsPopover({
   /* what deleting it takes: its projects and those of the folders inside it */
   const folderHeld = pendingFolder ? (folderCounts(lib.projects, lib.folders)[pendingFolder.id] ?? 0) : 0;
 
-  return createPortal(
+  const content = (
     <>
-      <div className="fixed inset-0 z-[10040] bg-black/60" onMouseDown={close} />
+      {inline ? null : <div className="fixed inset-0 z-[10040] bg-black/60" onMouseDown={close} />}
       <div
-        role="dialog"
+        role={inline ? 'main' : 'dialog'}
         aria-label={t('project.projects')}
-        aria-modal="true"
-        className="fixed left-1/2 top-1/2 z-[10050] flex -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-[var(--border-strong)] bg-[var(--app-content-bg)] shadow-[0_24px_64px_rgba(0,0,0,0.35)]"
-        style={{
+        aria-modal={inline ? undefined : true}
+        className={inline
+          ? 'relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[var(--app-content-bg)]'
+          : 'fixed left-1/2 top-1/2 z-[10050] flex -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-[var(--border-strong)] bg-[var(--app-content-bg)] shadow-[0_24px_64px_rgba(0,0,0,0.35)]'}
+        style={inline ? undefined : {
           width: 'min(1080px, calc(100vw - 64px))',
           height: 'min(760px, calc(100vh - 96px))',
         }}
@@ -341,18 +360,22 @@ export function ProjectsPopover({
         onDrop={onDrop}
       >
         <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-          {lib.loaded ? (
+          {view === 'examples' ? (
+            <ExamplesGallery
+              mode="start"
+              heading={<LauncherSwitch view={view} onView={showView} />}
+              onClose={onClose}
+              onStart={(example) => setGithub({ url: example.url, start: true, title: example.title })}
+            />
+          ) : lib.loaded ? (
             <ProjectsView
+              heading={<LauncherSwitch view={view} onView={showView} />}
               projects={lib.projects}
               creating={busy !== null}
               onNewProject={() => void newProject()}
               onOpenFolder={() => void openFolder()}
               onGetFromGitHub={() => setGithub({})}
               onLocate={(project) => void locate(project)}
-              examples={examples}
-              examplesCollapsed={examplesFolded}
-              onToggleExamples={() => setExamplesFolded((folded) => { setExamplesCollapsed(storage(), !folded); return !folded; })}
-              onOpenExample={(example) => setGithub({ url: example.url, start: true, title: example.title })}
               /* its folder is gone: there is nothing to open, and the editor would only say so */
               onOpen={(project) => (project.missing ? lib.flash(t('projects.missingOpen')) : go(project.id, 'opening'))}
               onRename={(projectId, name) => void lib.renameProject(projectId, name)}
@@ -458,7 +481,7 @@ export function ProjectsPopover({
           });
         }}
       />
-    </>,
-    document.body,
+    </>
   );
+  return inline ? content : createPortal(content, document.body);
 }

@@ -65,6 +65,7 @@ export function ProjectsView({
   onDeleteFolder,
   onMoveToFolder,
   onClose,
+  heading,
 }: {
   projects: LibraryProject[];
   /** A project is being created or opened; "New project" does not take a second click meanwhile. */
@@ -99,6 +100,8 @@ export function ProjectsView({
   onMoveToFolder: (projectId: string, folderId: string | null) => void;
   /** Missing: no close button (Studio has no project to go back to). */
   onClose?: () => void;
+  /** The title row's left, in place of "Projects" (the launcher's switch between the projects and the examples). */
+  heading?: React.ReactNode;
 }) {
   const t = useT();
   /* recently opened first: someone coming back to the list most likely wants the one they just had */
@@ -259,7 +262,7 @@ export function ProjectsView({
               onDelete={() => onDeleteFolder(currentFolder)}
             />
           ) : (
-            <h2 className="mr-auto text-[17px] font-semibold tracking-[-0.01em] text-[var(--text)]">{t('nav.projects')}</h2>
+            heading ?? <h2 className="mr-auto text-[17px] font-semibold tracking-[-0.01em] text-[var(--text)]">{t('nav.projects')}</h2>
           )}
           {projects.length > 0 ? (
             <>

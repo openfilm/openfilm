@@ -7,6 +7,7 @@
  *   POST /api/projects { path, create: false } → { project }, or 409 code 'no-film' (ask before starting one there)
  *   POST /api/projects/fetch { url } → { job }; GET / DELETE /api/projects/fetch/:id
  *   GET  /api/examples              → { examples } (none when the index cannot be read)
+ *   GET  /api/skills?project=<id>   → { skills } (the project's, the person's own, the official ones)
  *   POST /api/projects/:id/locate { path } → { project }
  */
 
@@ -37,7 +38,14 @@ export type FetchJob = {
   code?: string;
   project?: { id: string };
 };
-export type Example = { id: string; title: string; description: string; poster: string | null; duration: number | null; url: string };
+/** a skill a project can be made with (openfilm/src/skills.mjs): the project's own, the person's, or official */
+export type SkillEntry = { name: string; description: string; source: 'project' | 'mine' | 'official'; scripts: number };
+/** an example film's part, as its index names it (`S2-Hook`), from and to in seconds */
+export type ExampleSegment = { title: string; from: number; to: number };
+export type Example = {
+  id: string; title: string; description: string; poster: string | null; video: string | null; duration: number | null; url: string;
+  category: string | null; segments: ExampleSegment[];
+};
 
 export class SourceError extends Error {
   readonly status: number;
@@ -67,6 +75,7 @@ export const sourcesApi = {
   fetchJob: (id: string) => call<{ job: FetchJob }>(`projects/fetch/${encodeURIComponent(id)}`).then((r) => r.job),
   cancelFetch: (id: string) => call<object>(`projects/fetch/${encodeURIComponent(id)}`, 'DELETE'),
   examples: () => call<{ examples: Example[] }>('examples').then((r) => r.examples, () => [] as Example[]),
+  skills: (projectId?: string | null) => call<{ skills: SkillEntry[] }>(`skills${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`).then((r) => r.skills, () => [] as SkillEntry[]),
   locate: (id: string, path: string) => call<{ project: { id: string } }>(`projects/${encodeURIComponent(id)}/locate`, 'POST', { path }).then((r) => r.project),
 };
 

@@ -6,6 +6,9 @@ import React from 'react';
  * editor in, served with `startStudio({ editorDir })`); Studio then leaves out what only makes sense in a browser,
  * such as the button that introduces the desktop app.
  */
+/** A tab of the app's window (`tabs` below): a project's (its title as Studio shows it), or a new tab's launcher. */
+export interface HostTab { id: string; projectId: string | null; title: string; active: boolean; working: boolean; asking: boolean; exporting: number | null }
+
 /** Settings → Developer, as the app keeps it (`developer` below). */
 export interface HostDeveloper { logs: boolean; changes: boolean }
 
@@ -125,6 +128,28 @@ export interface StudioHost {
     get: () => Promise<HostDeveloper>;
     set: (next: Partial<HostDeveloper>) => Promise<unknown>;
     onChange: (listener: (prefs: HostDeveloper) => void) => () => void;
+  };
+  /**
+   * The app shows each project in a tab of its own window and draws no tab strip of its own: Studio draws the tabs in
+   * its top bar (where the projects button and the title are otherwise) with a `+` for a new tab, and at `/` shows its
+   * launcher (the person's projects, the examples) instead of going to the project opened last. `list` gives the tabs
+   * and which is this page's (`self`); `onChange` every change. Before this page shows a project it `claim`s it
+   * (`here` false: another tab has it, and that one is shown instead); it `report`s what it shows (its title, an
+   * export's progress, a question waiting, its project gone). Studio's "open this project" (heard by every page) goes
+   * to `openRequest`, which the app settles once; `onGo` is the app sending this page to a project.
+   */
+  tabs?: {
+    list: () => Promise<{ self: string | null; tabs: HostTab[] }>;
+    onChange: (listener: (tabs: HostTab[]) => void) => () => void;
+    show: (id: string) => void;
+    close: (id?: string) => void;
+    /** a new tab: a project's, else the launcher */
+    open: (projectId?: string) => void;
+    move: (id: string, index: number) => void;
+    claim: (projectId: string) => Promise<{ here: boolean }>;
+    report: (state: { title?: string; exporting?: number | null; asking?: boolean; gone?: boolean }) => void;
+    openRequest: (to: string) => void;
+    onGo: (listener: (to: string) => void) => () => void;
   };
   /**
    * The app picks folders, and knows where a dropped one is: the Projects list gets "Open…", which asks the app for a

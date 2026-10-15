@@ -26,6 +26,20 @@ contextBridge.exposeInMainWorld('openfilmNative', {
   /* part of the window as a JPEG (base64), for a reference's picture: null when it could not be taken */
   capture: (rect) => ipcRenderer.invoke('desktop:capture', rect),
 
+  /* the window's tabs (tabs.mjs), drawn by the page in Studio's top bar */
+  tabs: {
+    list: () => ipcRenderer.invoke('desktop:tabs:list'),
+    onChange: on('desktop:tabs'),
+    show: (id) => ipcRenderer.invoke('desktop:tabs:show', { id }),
+    close: (id) => ipcRenderer.invoke('desktop:tabs:close', { id }),
+    open: (projectId) => ipcRenderer.invoke('desktop:tabs:new', { projectId }),
+    move: (id, index) => ipcRenderer.invoke('desktop:tabs:move', { id, index }),
+    claim: (projectId) => ipcRenderer.invoke('desktop:tabs:claim', { projectId }),
+    report: (state) => ipcRenderer.invoke('desktop:tabs:report', state ?? {}),
+    openRequest: (to) => ipcRenderer.invoke('desktop:tabs:open', { to }),
+    onGo: on('desktop:tabs:go'),
+  },
+
   /* the roster (agent-roster.mjs): Settings → Agents and the chat's menu */
   agents: {
     list: () => ipcRenderer.invoke('desktop:agents:list'),

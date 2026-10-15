@@ -8,10 +8,16 @@
  *   { "repo": "https://github.com/openfilm/examples", "branch": "main",
  *     "examples": [{ "folder": "one-prompt", "title": "…", "description": "…", "poster": "one-prompt/look.png", "duration": "1:29" }] }
  *
- * `repo` and `branch` default to the repository the index is read from; `poster` is an address, or a path in the
- * repository; `duration` is seconds or "m:ss".
+ * An index read from a file on this computer (trying a new one) has its posters and previews served by Studio from
+ * the folder it is in (`/api/examples/file/<path>`), so they show before the repository has them.
+ *
+ * `repo` and `branch` default to the repository the index is read from; `poster` (and `video`, a short preview played
+ * under the pointer) is an address, or a path in the repository; `duration` is seconds or "m:ss". Optional:
+ * `category` (what kind of film it is, as the examples window groups them: a short word such as "launch" or
+ * "explainer"), `segments` (its parts, so one can be pointed at: `[{ "title": "S2-Hook", "from": 12, "to": 30 }]`).
  */
 import { readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 
 export const EXAMPLES_INDEX = 'https://raw.githubusercontent.com/openfilm/examples/main/examples.json';
 const DEFAULT_REPO = { owner: 'openfilm', repo: 'examples', branch: 'main' };
@@ -20,7 +26,11 @@ const KEEP_MS = 10 * 60 * 1000;
 const RETRY_MS = 60 * 1000;
 const NAME = /^[\w.-]+$/;
 
-/** @typedef {{ id: string, title: string, description: string, poster: string | null, duration: number | null, url: string }} Example */
+/**
+ * @typedef {{ title: string, from: number, to: number }} ExampleSegment
+ * @typedef {{ id: string, title: string, description: string, poster: string | null, video: string | null,
+ *   duration: number | null, url: string, category: string | null, segments: ExampleSegment[] }} Example
+ */
 
 /** "1:29" or 89 → 89; anything else → null. @param {unknown} value */
 export function exampleSeconds(value) {
@@ -51,18 +61,37 @@ export function readExamples(raw, source = EXAMPLES_INDEX) {
   const out = [];
   for (const entry of index.examples.slice(0, 50)) {
     if (!entry || typeof entry !== 'object' || !repoPath(entry.folder) || typeof entry.title !== 'string' || !entry.title.trim()) continue;
-    const poster = typeof entry.poster === 'string' && /^https:\/\//.test(entry.poster) ? entry.poster
-      : repoPath(entry.poster) ? `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${entry.poster}` : null;
+    const local = !/^https?:\/\//.test(source);
+    const media = (/** @type {unknown} */ v) => (typeof v === 'string' && /^https:\/\//.test(v) ? v
+      : !repoPath(v) ? null
+        : local ? `/api/examples/file/${String(v).split('/').map(encodeURIComponent).join('/')}`
+          : `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${v}`);
+    const segments = Array.isArray(entry.segments) ? entry.segments.slice(0, 40).flatMap((/** @type {any} */ g) => {
+      const [from, to] = [exampleSeconds(g?.from) ?? (g?.from === 0 ? 0 : null), exampleSeconds(g?.to)];
+      return typeof g?.title === 'string' && g.title.trim() && from != null && to != null && to > from ? [{ title: g.title.trim().slice(0, 60), from, to }] : [];
+    }) : [];
     out.push({
       id: entry.folder,
       title: entry.title.trim().slice(0, 80),
       description: typeof entry.description === 'string' ? entry.description.trim().slice(0, 300) : '',
-      poster,
+      poster: media(entry.poster),
+      video: media(entry.video),
       duration: exampleSeconds(entry.duration),
       url: `https://github.com/${owner}/${repo}/tree/${branch}/${entry.folder}`,
+      category: typeof entry.category === 'string' && /^[\w-]{1,30}$/.test(entry.category) ? entry.category : null,
+      segments,
     });
   }
   return out;
+}
+
+/**
+ * A file beside an index read from this computer (its posters and previews), or null: a path inside its folder only.
+ * @param {string} path @param {{ source?: string }} [options]
+ */
+export function exampleFile(path, { source = process.env.OPENFILM_EXAMPLES_INDEX || EXAMPLES_INDEX } = {}) {
+  if (/^https?:\/\//.test(source) || !repoPath(path)) return null;
+  return join(dirname(source), ...path.split('/'));
 }
 
 /** @type {Map<string, { at: number, ok: boolean, examples: Example[] }>} */

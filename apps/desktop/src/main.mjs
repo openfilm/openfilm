@@ -1,5 +1,6 @@
 /**
- * OpenFilm for desktop: one window, Studio on the left and a chat on the right, one page.
+ * OpenFilm for desktop: one window of tabs, a project in each, Studio on the left and a chat on the right, one page
+ * per tab (tabs.mjs; a new tab's page is Studio's launcher until a project is picked in it).
  *
  * Studio is the open-source one (the `openfilm` package), run in a utility process (studio.mjs). It serves the
  * window's page: Studio's editor, built together with the chat beside it (shell/), on Studio's own origin, so the
@@ -28,6 +29,7 @@ import { installOpenfilmCommand } from './openfilm-command.mjs';
 import { startUpdates } from './updates.mjs';
 import { ensureFfmpeg, ffmpegDir, ffmpegDownloadable, ffmpegIn, ffmpegOnPath } from './ffmpeg-runtime.mjs';
 import { PATH_SEP } from './environment.mjs';
+import { createTabs } from './tabs.mjs';
 
 const here = (path) => fileURLToPath(new URL(path, import.meta.url));
 const mac = process.platform === 'darwin';
@@ -58,8 +60,19 @@ if (!app.requestSingleInstanceLock()) {
 
 /** @type {BaseWindow | null} */
 let win = null;
-/** @type {WebContentsView | null} */
-let view = null;
+/** @type {ReturnType<typeof createTabs> | null} */
+let tabs = null;
+/** the page of each tab that has one (a tab left behind long enough has none until it is shown again) */
+/** @type {Map<string, WebContentsView>} */
+const views = new Map();
+/** the page in front */
+const activeView = () => (tabs ? views.get(tabs.activeId() ?? '') ?? null : null);
+/** something every page is told (the theme, an update, the agents…) */
+const broadcast = (channel, value) => { for (const v of views.values()) if (!v.webContents.isDestroyed()) v.webContents.send(channel, value); };
+/** the tab whose page this is, or null */
+const tabOf = (contents) => { for (const [id, v] of views) if (v.webContents === contents) return id; return null; };
+/** a tab behind for this long lets its page go (it comes back when shown), unless an agent works in it or it exports */
+const IDLE_PAGE_MS = 5 * 60_000;
 /** @type {Awaited<ReturnType<typeof startWindowStudio>> | null} */
 let studio = null;
 let state = readWindowState(DATA);
@@ -68,7 +81,7 @@ let theme = 'dark';
 let ffmpegFound = null;
 /** ffmpeg is being downloaded (ffmpeg-runtime.mjs): Studio's "not found" at its start is not the last word */
 let ffmpegFetching = false;
-const tellFfmpeg = (state) => { ffmpegFound = state; view?.webContents.send('desktop:ffmpeg', state); };
+const tellFfmpeg = (state) => { ffmpegFound = state; broadcast('desktop:ffmpeg', state); };
 /** @type {ReturnType<typeof startUpdates> | null} */
 let updates = null;
 let quitting = false;
@@ -87,17 +100,17 @@ function focusWindow() {
   win.focus();
 }
 
-/** The page fills the window. */
+/** Each page fills the window (only the one in front shows). */
 function layout() {
-  if (!win || !view) return;
+  if (!win) return;
   const { width, height } = win.getContentBounds();
-  view.setBounds({ x: 0, y: 0, width, height });
+  for (const v of views.values()) v.setBounds({ x: 0, y: 0, width, height });
 }
 
 function saveState() {
   if (!win) return;
   const maximized = win.isMaximized() || win.isFullScreen();
-  state = { ...state, maximized, bounds: maximized ? state.bounds : win.getNormalBounds() };
+  state = { ...state, maximized, bounds: maximized ? state.bounds : win.getNormalBounds(), ...(tabs ? { tabs: tabs.saved() } : {}) };
   try { writeWindowState(DATA, state); } catch { /* kept until next time */ }
 }
 
@@ -115,8 +128,135 @@ function guard(contents, allowed) {
   contents.on('will-attach-webview', (event) => event.preventDefault());
 }
 
-/** IPC only from the page's own main frame. */
-const fromPage = (event) => Boolean(view) && event.sender === view.webContents && event.senderFrame === view.webContents.mainFrame;
+/** IPC only from a tab's page, its own main frame. */
+const fromPage = (event) => tabOf(event.sender) != null && event.senderFrame === event.sender.mainFrame;
+
+/** A page for a tab: Studio's editor at its project (or its launcher), on Studio's origin. */
+function makeView(tabId) {
+  const v = new WebContentsView({
+    webPreferences: {
+      preload: here('./preload.cjs'),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+      spellcheck: true,
+      autoplayPolicy: 'no-user-gesture-required',
+      devTools: !app.isPackaged,
+    },
+  });
+  v.setBackgroundColor(BACKGROUND[theme]);
+  views.set(tabId, v);
+  win.contentView.addChildView(v);
+  const { width, height } = win.getContentBounds();
+  v.setBounds({ x: 0, y: 0, width, height });
+  guard(v.webContents, (url) => Boolean(studio) && url.startsWith(`${studio.origin}/`));
+  /* what went wrong with the page, for the log (logs/studio.log) */
+  v.webContents.on('render-process-gone', (_event, details) => log(`page: renderer gone (${details.reason}, ${details.exitCode})\n`));
+  v.webContents.on('did-fail-load', (_event, code, description, url, mainFrame) => { if (mainFrame) log(`page: ${description} (${code}) loading ${url.replace(/key=[^&]+/, 'key=…')}\n`); });
+  v.webContents.on('unresponsive', () => log('page: not responding\n'));
+  /* the page gone (a crash): it comes back where it was; the agents' turns go on in this process meanwhile */
+  v.webContents.on('render-process-gone', (_event, details) => { if (details.reason !== 'clean-exit' && !quitting) setTimeout(() => { if (!v.webContents.isDestroyed()) v.webContents.reload(); }, 500); });
+  return v;
+}
+
+/** Where a tab's page opens: its project, else the launcher (`/` with tabs: Studio shows the launcher there). */
+const pageAddress = (tab, path = null) => `${studio.origin}/open?key=${studio.key}&to=${encodeURIComponent(path ?? (tab?.projectId ? `/projects/${encodeURIComponent(tab.projectId)}` : '/'))}`;
+
+/** Every page told of the tabs as they are now; kept for next time. */
+function tellTabs() {
+  if (!tabs) return;
+  broadcast('desktop:tabs', tabs.list());
+  saveState();
+}
+
+/** Bring a tab to the front: its page made (again) when it has none. */
+function showTab(id) {
+  if (!tabs || !win || !studio || !tabs.activate(id)) return;
+  let v = views.get(id);
+  if (!v) { v = makeView(id); void v.webContents.loadURL(pageAddress(tabs.get(id))); }
+  for (const [other, page] of views) page.setVisible(other === id);
+  v.webContents.focus();
+  tellTabs();
+}
+
+/** A new tab: a project's (in front if it is open already), else the launcher. */
+function newTab(projectId = null) {
+  if (!tabs) return;
+  showTab(tabs.open({ projectId }).id);
+}
+
+/** Let a tab's page go: closed, or behind too long (the tab stays). */
+function dropView(id) {
+  const v = views.get(id);
+  if (!v) return;
+  views.delete(id);
+  win?.contentView.removeChildView(v);
+  if (!v.webContents.isDestroyed()) v.webContents.close();
+}
+
+/** Close a tab; one whose agent is still at work, only once the person says so. */
+async function closeTab(id) {
+  if (!tabs || !win) return;
+  const tab = tabs.get(id);
+  if (!tab) return;
+  if (tab.working) {
+    const { response } = await dialog.showMessageBox(win, {
+      type: 'warning', buttons: ['Close Tab', 'Cancel'], defaultId: 1, cancelId: 1,
+      message: 'An agent is still working in this project.', detail: 'Closing the tab stops it.',
+    });
+    if (response !== 0) return;
+  }
+  dropView(id);
+  const { next } = tabs.close(id);
+  if (next) showTab(next.id);
+}
+
+/**
+ * Studio's "open this project" (`openfilm open`, File › Open Project…), heard by every page at once: once only. A tab
+ * with the project comes to the front; else the launcher in front takes it; else a new tab.
+ */
+let lastOpen = { to: '', at: 0 };
+function openInTabs(to) {
+  if (!tabs || typeof to !== 'string') return;
+  if (to === lastOpen.to && Date.now() - lastOpen.at < 2000) return;
+  lastOpen = { to, at: Date.now() };
+  const projectId = /^\/projects\/([\w-]+)/.exec(to)?.[1] ?? null;
+  if (!projectId) { newTab(); return; }
+  const there = tabs.byProject(projectId);
+  if (there) { showTab(there.id); return; }
+  const front = tabs.get(tabs.activeId() ?? '');
+  if (front && !front.projectId && views.get(front.id)) {
+    tabs.report(front.id, { projectId });
+    views.get(front.id)?.webContents.send('desktop:tabs:go', to);
+    tellTabs();
+    return;
+  }
+  newTab(projectId);
+}
+
+/** The tabs open when the window opens: those left last time, else the last project's (or a launcher). */
+async function openTabs() {
+  if (state.tabs?.tabs?.length) tabs = createTabs({ saved: state.tabs });
+  else {
+    tabs = createTabs();
+    const last = (await studioApi('/api/projects').catch(() => ({ projects: [] }))).projects.find((p) => !p.missing);
+    tabs.open({ projectId: last?.id ?? null, title: last?.name ?? '' });
+  }
+  /* a tab of a project no longer there is left out */
+  const known = new Set((await studioApi('/api/projects').catch(() => ({ projects: [] }))).projects.filter((p) => !p.missing).map((p) => p.id));
+  for (const t of tabs.list()) if (t.projectId && !known.has(t.projectId)) tabs.close(t.id);
+  showTab(tabs.activeId() ?? tabs.list()[0].id);
+}
+
+/** The projects the chat's agents work in, by Studio's ids (from their folders), on each tab. */
+let projectPaths = new Map();
+async function tellTabsWorking(folders) {
+  if (!tabs) return;
+  if (folders.some((f) => !projectPaths.has(f))) {
+    projectPaths = new Map((await studioApi('/api/projects').catch(() => ({ projects: [] }))).projects.map((p) => [p.path, p.id]));
+  }
+  if (tabs.setAgents(folders.map((f) => projectPaths.get(f)).filter(Boolean))) tellTabs();
+}
 
 async function studioApi(path, method = 'GET', body = undefined) {
   const res = await fetch(`${studio.origin}${path}`, {
@@ -161,13 +301,14 @@ function setTheme(next) {
   theme = next === 'dark' ? 'dark' : 'light';
   nativeTheme.themeSource = theme;
   win?.setBackgroundColor(BACKGROUND[theme]);
-  view?.setBackgroundColor(BACKGROUND[theme]);
+  for (const v of views.values()) v.setBackgroundColor(BACKGROUND[theme]);
   if (windows) win?.setTitleBarOverlay?.(overlayColours(theme));
 }
 
 /** Tell Studio which folders the chat's agents are working in now. */
 function tellWorking(/** @type {string[]} */ folders) {
   studio?.child.postMessage({ type: 'working', folders });
+  void tellTabsWorking(folders);
 }
 
 async function runStudio(env) {
@@ -184,7 +325,7 @@ async function runStudio(env) {
     },
     onBrowser: (message) => {
       if (message.type === 'ffmpeg') { if (!ffmpegFetching) tellFfmpeg(message.found); }
-      else view?.webContents.send('desktop:studio-browser', message);
+      else broadcast('desktop:studio-browser', message);
     },
     onExit: (code) => {
       if (quitting) return;
@@ -194,10 +335,12 @@ async function runStudio(env) {
   });
   /* a Studio started again hears where the agents are working */
   tellWorking(localAgents?.working() ?? []);
-  /* the page Studio shows at `/` is the last project; a page already open (Studio restarted) stays where it was */
-  const at = view.webContents.getURL();
-  const to = at.startsWith('http') ? new URL(at).pathname : '/';
-  await view.webContents.loadURL(`${studio.origin}/open?key=${studio.key}&to=${encodeURIComponent(to)}`);
+  /* the first time, the tabs; a Studio started again: each page stays where it was */
+  if (!tabs) { await openTabs(); return; }
+  for (const [id, v] of views) {
+    const at = v.webContents.getURL();
+    await v.webContents.loadURL(pageAddress(tabs.get(id), at.startsWith('http') ? new URL(at).pathname : null));
+  }
 }
 
 async function start() {
@@ -210,6 +353,8 @@ async function start() {
       /* the app names Studio's home, which would put exports inside it (Studio's rule for a home kept apart): the
          Desktop, where `openfilm` puts them, unless this is a flavour with a home of its own */
       ...(IDENTITY.studioHome || process.env.OPENFILM_EXPORTS ? {} : { OPENFILM_EXPORTS: app.getPath('desktop') }),
+      /* another examples index (a file, to try one), passed through when run from source */
+      ...(process.env.OPENFILM_EXAMPLES_INDEX ? { OPENFILM_EXAMPLES_INDEX: process.env.OPENFILM_EXAMPLES_INDEX } : {}),
     },
   });
 
@@ -245,36 +390,13 @@ async function start() {
   });
   if (state.maximized) win.maximize();
 
-  view = new WebContentsView({
-    webPreferences: {
-      preload: here('./preload.cjs'),
-      contextIsolation: true,
-      sandbox: true,
-      nodeIntegration: false,
-      spellcheck: true,
-      autoplayPolicy: 'no-user-gesture-required',
-      devTools: !app.isPackaged,
-    },
-  });
-  view.setBackgroundColor(BACKGROUND[theme]);
-  win.contentView.addChildView(view);
-  layout();
-
-  guard(view.webContents, (url) => Boolean(studio) && url.startsWith(`${studio.origin}/`));
-  /* what went wrong with the page, for the log (logs/studio.log) */
-  view.webContents.on('render-process-gone', (_event, details) => log(`page: renderer gone (${details.reason}, ${details.exitCode})\n`));
-  view.webContents.on('did-fail-load', (_event, code, description, url, mainFrame) => { if (mainFrame) log(`page: ${description} (${code}) loading ${url.replace(/key=[^&]+/, 'key=…')}\n`); });
-  view.webContents.on('unresponsive', () => log('page: not responding\n'));
-  /* the page gone (a crash): it comes back where it was; the agents' turns go on in this process meanwhile */
-  view.webContents.on('render-process-gone', (_event, details) => { if (details.reason !== 'clean-exit' && !quitting) setTimeout(() => view?.webContents.reload(), 500); });
-
   win.on('resize', layout);
   win.on('resized', saveState);
   win.on('moved', saveState);
-  win.on('enter-full-screen', () => view?.webContents.send('desktop:full-screen', true));
-  win.on('leave-full-screen', () => view?.webContents.send('desktop:full-screen', false));
+  win.on('enter-full-screen', () => broadcast('desktop:full-screen', true));
+  win.on('leave-full-screen', () => broadcast('desktop:full-screen', false));
   win.on('close', saveState);
-  win.on('closed', () => { win = null; view = null; app.quit(); });
+  win.on('closed', () => { win = null; views.clear(); app.quit(); });
 
   ipcMain.on('desktop:theme', (event, next) => { if (fromPage(event)) setTheme(next); });
   ipcMain.handle('desktop:hello', (event) => {
@@ -294,9 +416,43 @@ async function start() {
     projects: async () => (await studioApi('/api/projects')).projects.filter((p) => !p.missing).map((p) => p.path),
     dataDir: DATA,
     reveal: (path) => shell.showItemInFolder(path),
-    tell: (channel, value) => view?.webContents.send(channel, value),
+    tell: (channel, value) => broadcast(channel, value),
     log,
   });
+  /* the tabs, drawn by each page in Studio's top bar: asked for, and told of every change (tellTabs) */
+  const tabHandle = (channel, fn) => ipcMain.handle(channel, (event, opts) => {
+    if (!fromPage(event)) throw new Error('not the window\'s page');
+    return fn(tabOf(event.sender), opts ?? {});
+  });
+  tabHandle('desktop:tabs:list', (self) => ({ self, tabs: tabs?.list() ?? [] }));
+  tabHandle('desktop:tabs:new', (_self, { projectId }) => { newTab(typeof projectId === 'string' && projectId ? projectId : null); return { ok: true }; });
+  tabHandle('desktop:tabs:show', (_self, { id }) => { showTab(String(id)); return { ok: true }; });
+  tabHandle('desktop:tabs:close', (self, { id }) => { void closeTab(typeof id === 'string' ? id : self); return { ok: true }; });
+  tabHandle('desktop:tabs:move', (_self, { id, index }) => { if (tabs?.move(String(id), Number(index))) tellTabs(); return { ok: true }; });
+  /* a page about to show a project: here, unless another tab has it (that one comes forward; a launcher left with
+     nothing in it closes) */
+  tabHandle('desktop:tabs:claim', (self, { projectId }) => {
+    if (!tabs || typeof projectId !== 'string' || !projectId) return { here: true };
+    const answer = tabs.report(self, { projectId });
+    if (answer.ok) { tellTabs(); return { here: true }; }
+    const empty = !tabs.get(self)?.projectId;
+    showTab(answer.other.id);
+    if (empty) void closeTab(self);
+    return { here: false };
+  });
+  /* what a page shows now: its project's title, an export's progress, a question waiting; or its project gone */
+  tabHandle('desktop:tabs:report', (self, { title, exporting, asking, gone }) => {
+    if (!tabs) return { ok: false };
+    tabs.report(self, { ...(typeof title === 'string' ? { title: title.slice(0, 200) } : {}), ...(exporting !== undefined ? { exporting: typeof exporting === 'number' ? exporting : null } : {}), ...(gone === true ? { projectId: null } : {}) });
+    if (typeof asking === 'boolean') { const tab = tabs.get(self); if (tab) tab.asking = asking; }
+    tellTabs();
+    return { ok: true };
+  });
+  /* Studio's "open this project", heard by each page: settled once here */
+  tabHandle('desktop:tabs:open', (_self, { to }) => { openInTabs(to); return { ok: true }; });
+  /* a tab left behind long enough lets its page go; it comes back when shown */
+  setInterval(() => { for (const id of tabs?.idle(IDLE_PAGE_MS) ?? []) dropView(id); }, 60_000).unref?.();
+
   /* the agents: Studio's home and library go with them, so the `openfilm` they run finds this window's Studio */
   /* the person's own skills: Skills/ beside this app's projects (~/Movies/OpenFilm/Skills), as its `openfilm` finds them */
   const mySkills = process.env.OPENFILM_SKILLS || (env.OPENFILM_LIBRARY ? join(dirname(env.OPENFILM_LIBRARY), 'Skills') : (await import('openfilm/skills')).mySkillsDir());
@@ -337,7 +493,7 @@ async function start() {
     closeSessions: (id) => { forgetAgentUsage(id); localAgents?.closeAgent(id); },
     seal,
     unseal,
-    onChange: (list) => view?.webContents.send('desktop:agents', list),
+    onChange: (list) => broadcast('desktop:agents', list),
     /* the program the person points at, for an agent not found where it is looked for */
     usePaths: setChosenPaths,
     pickProgram: async (_id, words) => {
@@ -387,7 +543,7 @@ async function start() {
     if (!fromPage(event) || !rect || typeof rect !== 'object') return null;
     const box = { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) };
     if (!Object.values(box).every((n) => Number.isFinite(n)) || box.width < 2 || box.height < 2 || box.width > 8000 || box.height > 8000) return null;
-    const image = await view.webContents.capturePage(box).catch(() => null);
+    const image = await event.sender.capturePage(box).catch(() => null);
     return image && !image.isEmpty() ? image.toJPEG(88).toString('base64') : null;
   });
 
@@ -396,7 +552,7 @@ async function start() {
     dataDir: DATA,
     productName: PRODUCT_NAME,
     getWindow: () => win,
-    onState: (next) => view?.webContents.send('desktop:update', next),
+    onState: (next) => broadcast('desktop:update', next),
     prepareRestart: async () => {
       if (localAgents?.isBusy()) return { ok: false, error: 'agent-busy' };
       /* Studio's quit-when-idle answers 409 while it exports; otherwise the window's Studio stays (studio-process.mjs
@@ -411,7 +567,7 @@ async function start() {
     beforeInstall: async () => {
       quitting = true;
       localAgents?.closeAll();
-      view?.webContents.on('will-prevent-unload', (event) => event.preventDefault());
+      for (const v of views.values()) v.webContents.on('will-prevent-unload', (event) => event.preventDefault());
       await studio?.quit();
       updates?.close();
     },
@@ -424,10 +580,21 @@ async function start() {
   Menu.setApplicationMenu(applicationMenu({
     productName: PRODUCT_NAME,
     packaged: app.isPackaged,
-    toggleChat: () => view?.webContents.send('desktop:toggle-chat'),
+    toggleChat: () => activeView()?.webContents.send('desktop:toggle-chat'),
     openProject: () => void openProjectFolder(),
-    reload: () => view?.webContents.reload(),
-    devTools: () => view?.webContents.toggleDevTools(),
+    reload: () => activeView()?.webContents.reload(),
+    devTools: () => activeView()?.webContents.toggleDevTools(),
+    tabs: {
+      open: () => newTab(),
+      close: () => { if (tabs?.activeId()) void closeTab(tabs.activeId()); },
+      reopen: () => { const tab = tabs?.reopen(); if (tab) showTab(tab.id); },
+      step: (by) => {
+        const list = tabs?.list() ?? [];
+        const i = list.findIndex((t) => t.active);
+        if (list.length > 1) showTab(list[(i + by + list.length) % list.length].id);
+      },
+      pick: (n) => { const list = tabs?.list() ?? []; const tab = n === 9 ? list.at(-1) : list[n - 1]; if (tab) showTab(tab.id); },
+    },
     updates: updates.packaged ? {
       check: () => updates.manualCheck(),
       beta: updates.channel() === 'beta',
@@ -449,7 +616,8 @@ async function start() {
     await runStudio(env);
   } catch (error) {
     log(`Studio did not start: ${error.stack ?? error}\n`);
-    void view.webContents.loadFile(here('./failed.html'), { query: { message: String(error.message ?? error) } });
+    const v = makeView('failed');
+    void v.webContents.loadFile(here('./failed.html'), { query: { message: String(error.message ?? error) } });
   }
 }
 

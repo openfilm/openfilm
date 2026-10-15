@@ -539,7 +539,7 @@ body.tl-scrubbing * {
 /* in a host window with no title bar (lib/host.ts): the top bars drag the window, their controls do not */
 [data-host-titlebar] [data-titlebar] { -webkit-app-region: drag; app-region: drag; }
 /* menus and dialogs drawn over a top bar (often from a portal, so not inside it) take their clicks too */
-[data-host-titlebar] [data-titlebar] :is(button, a, input, select, textarea, [role='button']),
+[data-host-titlebar] [data-titlebar] :is(button, a, input, select, textarea, [role='button'], [role='tab']),
 [data-host-titlebar] :is([role='menu'], [role='dialog'], [role='listbox'], [role='tooltip']) {
   -webkit-app-region: no-drag;
   app-region: no-drag;

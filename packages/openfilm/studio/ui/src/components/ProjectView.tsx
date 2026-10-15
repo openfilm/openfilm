@@ -64,6 +64,7 @@ import { cueAt, filmSubtitleStyleFor, sameFilmSubtitleLanguage } from '@/lib/sub
 import { DEFAULT_INSPECTOR, DOCK_GAP, DockPaneDivider, MIN_DOCK_H, MIN_INSPECTOR, MIN_STAGE_H, MIN_VIEWER, PaneDivider, usePaneSize } from './PaneDivider';
 import { PANE_BAR, PANE_BTN_ON, PANE_TOGGLE, PANE_TOGGLE_ICON } from './dock-pane-bar';
 import { Tooltip } from './Tooltip';
+import { TabStrip } from './TabStrip';
 import { UpdateButton, WebUpdateButton } from './UpdateButton';
 import { MediaPool, type ImportProgress } from './MediaPool';
 import type { SubtitleRowSpec } from './SubtitleRow';
@@ -2248,6 +2249,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     return { title, durationMs: totalMs, tracks: tracks.length, clips: tracks.reduce((n, tr) => n + tr.clips.length, 0), empty, badges: filmTrackBadges(tracks) };
   }, [title, totalMs, film.film?.tracks, empty]);
   const startRename = () => { setTitleEditWidth(titleBoxRef.current?.offsetWidth ?? null); setTitleDraft(title); setRenaming(true); };
+  /* in an app with tabs: the tab says this project's title; the tabs are where the projects button and the title are */
+  const inTabs = Boolean(studioHost?.tabs);
+  React.useEffect(() => { if (title) studioHost?.tabs?.report({ title }); }, [title]);
   const commitTitle = async () => {
     setRenaming(false);
     const next = titleDraft.trim();
@@ -2338,7 +2342,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         <div className="relative z-10 grid min-h-0 min-w-0 flex-1" style={{ gridTemplateColumns: 'minmax(0, 1fr)', gridTemplateRows: 'auto minmax(0, 1fr)', gridTemplateAreas: '"bar" "main"' }}>
           {/* ── top bar: the title centered, whatever is on either side ── */}
           <div data-titlebar className="relative flex h-8 min-w-0 items-center gap-1" style={{ gridArea: 'bar' }}>
-            <div className="pointer-events-none absolute inset-0 flex min-w-0 items-center justify-center">
+            {inTabs ? null : <div className="pointer-events-none absolute inset-0 flex min-w-0 items-center justify-center">
               <div className="pointer-events-auto flex min-w-0 max-w-full items-center">
                 {renaming ? (
                   <input
@@ -2364,7 +2368,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                   </Tooltip>
                 )}
               </div>
-            </div>
+            </div>}
             <div aria-hidden className="shrink-0 self-stretch" style={{ width: 'var(--titlebar-logo-x)' }} />
             <div className="pointer-events-auto relative flex min-w-0 items-center gap-1">
               <Tooltip label={t('project.appMenu')} side="bottom">
@@ -2374,12 +2378,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                   <BrandLogo size={15} />
                 </button>
               </Tooltip>
-              <Tooltip label={t('nav.projects')} side="bottom">
+              {inTabs ? null : <Tooltip label={t('nav.projects')} side="bottom">
                 <button type="button" aria-label={t('nav.projects')} onClick={() => setProjectsOpen((v) => !v)}
                   className={`${TOP_BTN} ${projectsOpen ? 'bg-[var(--bg-hover)] text-[var(--text)]' : ''}`}>
                   <GalleryVerticalEnd size={15} />
                 </button>
-              </Tooltip>
+              </Tooltip>}
               <UpdateButton />
               <WebUpdateButton />
               {!studioHost && <Tooltip label={t('desktop.title')} side="bottom">
@@ -2390,7 +2394,24 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 </button>
               </Tooltip>}
             </div>
-            <div className="min-w-0 flex-1" />
+            {inTabs ? (
+              <TabStrip onRename={startRename} editor={renaming ? (
+                <input
+                  autoFocus
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  onBlur={() => void commitTitle()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void commitTitle();
+                    if (e.key === 'Escape') { setTitleDraft(title); setRenaming(false); }
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  placeholder={t('project.untitled')}
+                  maxLength={TITLE_MAX_CHARS}
+                  className="min-w-0 flex-1 bg-transparent text-[12.5px] font-medium text-[var(--text)] outline-none"
+                />
+              ) : undefined} />
+            ) : <div className="min-w-0 flex-1" />}
             <div ref={headerOpsRef} className="pointer-events-auto flex min-w-0 items-center justify-end gap-1">
               <ProjectLayoutMenu className={TOP_BTN}
                 /* an app that keeps the media in its own panel opens it there, from its own button: not a pane of Studio's */

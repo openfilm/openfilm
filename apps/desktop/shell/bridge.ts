@@ -25,6 +25,8 @@ interface Native {
   pickFolder(options?: { title?: string; button?: string; at?: string }): Promise<string | null>;
   capture(rect: { x: number; y: number; width: number; height: number }): Promise<string | null>;
   agents: NonNullable<StudioHost['agents']>;
+  /* the window's tabs (src/tabs.mjs) */
+  tabs: NonNullable<StudioHost['tabs']>;
   localAgents: Record<string, unknown>;
   importFile(request: { projectId: string; path: string; name: string }): Promise<{ ok: true; path: string } | { ok: false; error: string }>;
   chat: Record<string, (...args: never[]) => Promise<unknown>>;
@@ -72,8 +74,10 @@ const shownWidth = () => (layout.open ? Math.max(Math.min(layout.width, innerWid
 const panelState = () => ({ open: layout.open, width: shownWidth(), assets: { open: assets.open && layout.open, bottom: assets.bottom } });
 const panelListeners = new Set<Listener<ReturnType<typeof panelState>>>();
 
+/** The page shows a project (not a new tab's launcher): only then is there a chat to show. */
+const onProject = () => /^\/projects\/[\w-]+/.test(location.pathname);
 function place() {
-  column.hidden = !layout.open;
+  column.hidden = !layout.open || !onProject();
   column.style.width = `${shownWidth()}px`;
   column.style.top = `${TOP_BAR}px`;
   /* the column never moves or resizes for the assets: the chat shows only its composer then, and the rest of the
@@ -139,9 +143,9 @@ async function follow() {
 }
 for (const method of ['pushState', 'replaceState'] as const) {
   const original = history[method].bind(history);
-  history[method] = (...args: Parameters<History['pushState']>) => { original(...args); projectReady = follow(); };
+  history[method] = (...args: Parameters<History['pushState']>) => { original(...args); projectReady = follow(); place(); };
 }
-addEventListener('popstate', () => { projectReady = follow(); });
+addEventListener('popstate', () => { projectReady = follow(); place(); });
 projectReady = follow();
 
 /* ── between Studio and the chat: what is selected, what is referenced, what Studio is asked to show ── */
@@ -273,6 +277,7 @@ const host: StudioHost = {
   developer,
   update,
   folders: { pick: native.pickFolder, pathOf: native.pathForFile },
+  tabs: native.tabs,
 };
 (window as unknown as { openfilmHost: StudioHost }).openfilmHost = host;
 

@@ -1,5 +1,6 @@
 /**
- * What the window looked like when it was last closed: where it was, how wide the chat was, whether it was shown.
+ * What the window looked like when it was last closed: where it was, how wide the chat was, whether it was shown,
+ * which tabs were open.
  * Kept in the app's data folder. Reads no Electron module, so `node --test` can use it.
  */
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
@@ -25,6 +26,8 @@ export function readWindowState(dir) {
     maximized: raw.maximized === true,
     chatWidth: finite(raw.chatWidth) ? Math.max(CHAT_MIN, Math.round(raw.chatWidth)) : CHAT_DEFAULT,
     chatOpen: raw.chatOpen !== false,
+    /* the tabs as left (tabs.mjs reads them with care) */
+    tabs: raw.tabs && typeof raw.tabs === 'object' && Array.isArray(raw.tabs.tabs) ? { tabs: raw.tabs.tabs.slice(0, 50), active: Number(raw.tabs.active) || 0 } : null,
   };
 }
 

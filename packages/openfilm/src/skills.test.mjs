@@ -168,7 +168,10 @@ test('openfilm skills and skill: the list, one printed whole, one added from an 
     const listed = skillsCommand('openfilm', { cwd: film });
     assert.ok(listed.lines.some((l) => /brand\s+this project/.test(l)));
     assert.ok(listed.lines.some((l) => l.includes('This film\'s brand')));
-    assert.match(skillsCommand('openfilm', { cwd: root }).lines[0], /^No skills yet/);
+    /* outside a project: none of this film's, only what comes with OpenFilm */
+    const outside = skillsCommand('openfilm', { cwd: root }).lines;
+    assert.match(outside[0], /^Skills\. /);
+    assert.ok(!outside.some((l) => /this project/.test(l)) && outside.some((l) => /replicate\s+official/.test(l)));
 
     const printed = await skillCommand(['brand'], 'openfilm', { cwd: film });
     assert.ok(printed.ok);

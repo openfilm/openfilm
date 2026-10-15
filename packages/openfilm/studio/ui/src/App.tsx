@@ -3,6 +3,9 @@
  * opened last, or (none left, or only ones whose folder is gone) shows the Projects window on its own, with "New
  * project" in it: no folder is made that the person did not ask for. The address is the state, so the agent's
  * `openfilm open` (which sends the page to a project) and the browser's back button both work.
+ *
+ * In an app with tabs (lib/host.ts `tabs`) this page is one tab: `/` is its launcher (a new tab), a project is shown
+ * here only once the app agrees no other tab has it, and `openfilm open` is the app's to settle (every tab hears it).
  */
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { api, listen, studioConnection } from './api';
@@ -10,6 +13,7 @@ import { useT } from './i18n';
 import { ProjectView } from './components/ProjectView';
 import { BrandLoadingScreen } from './components/BrandLoadingScreen';
 import { ProjectsPopover } from './components/ProjectsLibrary';
+import { Launcher } from './components/Launcher';
 import { studioHost } from './lib/host';
 import { WhatsNew } from './components/WhatsNew';
 
@@ -26,6 +30,8 @@ const keepKey = (to: string) => {
 };
 
 const projectIn = (path: string) => /^\/projects\/([\w-]+)/.exec(path)?.[1] ?? null;
+/** the app's tabs, when Studio is a tab of an app's window */
+const tabs = studioHost?.tabs ?? null;
 
 export function App() {
   const [path, setPath] = useState(location.pathname);
@@ -37,16 +43,29 @@ export function App() {
   useEffect(() => {
     const onPop = () => setPath(location.pathname);
     window.addEventListener('popstate', onPop);
-    /* `openfilm open` while this page is open: show the project it opened */
-    const stop = listen('events', (event) => { if (event.type === 'open') go(event.to); }, { watch: true });
-    return () => { window.removeEventListener('popstate', onPop); stop(); };
+    /* `openfilm open` while this page is open: show the project it opened (with tabs, the app says which tab does) */
+    const stop = listen('events', (event) => {
+      if (event.type !== 'open') return;
+      if (tabs) tabs.openRequest(event.to); else go(event.to);
+    }, { watch: true });
+    const stopGo = tabs?.onGo((to) => go(to));
+    return () => { window.removeEventListener('popstate', onPop); stop(); stopGo?.(); };
   }, []);
 
+  /** Show a project here; with tabs, only once the app agrees (another tab may have it, and is shown instead). */
+  const open = (projectId: string) => {
+    if (!tabs) { go(`/projects/${projectId}`); return; }
+    void tabs.claim(projectId).then(({ here }) => { if (here) go(`/projects/${projectId}`); });
+  };
+  /** The project shown was deleted: back to the launcher (with tabs) or to the last project. */
+  const leave = () => { tabs?.report({ gone: true }); go('/', true); };
+
   const id = projectIn(path);
-  /* no project in the address: the one opened last that is still there, else the Projects window (`none`) */
+  /* no project in the address: the one opened last that is still there, else the Projects window (`none`); with
+     tabs, the launcher */
   const [none, setNone] = useState(false);
   useEffect(() => {
-    if (id) return;
+    if (id || tabs) return;
     let alive = true;
     void api.projects().then((projects) => {
       if (!alive) return;
@@ -57,7 +76,8 @@ export function App() {
     return () => { alive = false; setNone(false); };
   }, [id]);
 
-  const page = id ? <ProjectView key={id} projectId={id} onProject={(next) => go(`/projects/${next}`)} onLeave={() => go('/', true)} />
+  const page = id ? <ProjectView key={id} projectId={id} onProject={open} onLeave={leave} />
+    : tabs ? <Launcher onOpen={open} />
     : !none ? <BrandLoadingScreen labelKey="projects.opening" />
       : (
         <div className="workspace-shell bg-[var(--dock-shell)]">
