@@ -108,7 +108,8 @@ function dress(c, row) {
   wear(c, row.style ?? '');
   if (c.kind === 'page' && !c.el.style.border) c.el.style.border = '0';
   c.el.style.zIndex = String(doc.tracks.length - c.ti); // track 0 on top
-  c.el.style.visibility = c.shown ? 'visible' : 'hidden';
+  /* a page coming on shows once it is drawn (see draw) */
+  c.el.style.visibility = c.shown && !c.coming ? 'visible' : 'hidden';
   place(c, row.box);
 }
 
@@ -601,6 +602,9 @@ const loading = (async () => {
    `ready`: until it does, that is not an error nobody handled */
 loading.catch(() => {});
 
+/** the latest frame drawn for a person watching: an earlier one that finishes after it does not change what shows */
+let watched = 0;
+
 /**
  * Draw the film at t. `live`: a person is watching (an editor, or the film opened as a page), so videos play by
  * themselves while frames come in order, and a scrub's frame does not wait for its video to be on screen; otherwise
@@ -617,51 +621,69 @@ async function draw(t, live) {
   lastLive = live ? { t, at: now } : { t: -Infinity, at: 0 };
   clearTimeout(settleNear);
   if (live && !playing) { near(t, { only: true }); settleNear = setTimeout(() => near(t), 250); } else near(t, { exact: !live });
-  await Promise.all(clips.map(async (c) => {
-    if (c.kind === 'sound') return;
-    const on = !c.hidden && !c.missing && t >= c.at && t < c.end;
-    c.shown = on;
-    const appears = on && c.el.style.visibility !== 'visible';
-    c.el.style.visibility = on ? 'visible' : 'hidden';
-    if (on) fadeAt(c, t);
-    if (!on) {
-      if (c.kind !== 'video') return;
-      if (playing && c.awake && c.at > t && c.at - t < CUE_AHEAD) getReady(c, c.at - t);
-      else { if (!c.el.paused) c.el.pause(); c.lastWant = c.cued = undefined; }
-      return;
+  /* watched, a page coming on shows once its frame is drawn, and the pictures going off stay until then: shown first,
+     it showed what it held before (its own first state, or the frame it drew the last time it was on) for as long as
+     its frame took, a flash at the cut. An exact frame is taken when all of it is drawn, so it shows each at once. */
+  const turn = live ? ++watched : 0;
+  const coming = [], going = [];
+  try {
+    await Promise.all(clips.map((c) => drawClip(c, t, live, playing, turn, coming, going)));
+  } finally {
+    for (const c of coming) if (c.coming === turn) c.coming = 0;
+    if (live && turn === watched) {
+      for (const c of going) if (!c.shown) c.el.style.visibility = 'hidden';
+      for (const c of coming) if (c.shown) c.el.style.visibility = 'visible';
     }
-    if (c.kind === 'still') return;
-    if (c.kind === 'video') {
-      const want = sourceAt(c.span, t - c.at, c.row);
-      if (playing) { if (c.held) step(c, want); else roll(c, want); return; }
-      c.held = false;
-      if (live) { await glance(c, want); return; }
-      if (!c.el.paused) c.el.pause();
-      c.lastWant = want;
-      await loaded(c);
-      /* a video coming on: shown before it is sought. A frame made current in the moment it turns visible is said to
-         be presented, yet the picture keeps the frame it had for a second or so (Chromium, its frames sent apart from
-         the page's): the same t drew two pictures */
-      if (appears) await frames(2);
-      await showVideoAt(c.el, want, await frameOf(c));
-      return;
-    }
-    /* a page closed while the playhead was far (see near): opened again, then drawn; one that will not open is the
-       film's error in an exact frame, and shows nothing to a person watching */
-    if (!c.child) {
-      try { await wake(c); } catch (e) { if (live) return; throw new Error(`clip "${c.id}" (${c.src}): ${e?.message ?? e}`); }
-      if (!c.child || !c.shown) return;
-    }
-    const local = sourceAt(c.span, t - c.at, c.row, c.native);
-    c.win.filmHost?.time?.(local);
-    /* a page's error says which clip and which of its own seconds, not only the film's t */
-    try { await c.child.frame(local); }
-    catch (e) { throw new Error(`clip "${c.id}" (${c.src}) at its ${Number(local.toFixed(3))}s: ${e?.message ?? e}`); }
-    c.win.filmHost?.settle?.(local);
-    if (!live) await mediaShown(c.win.document);
-    c.drawn = true;
-    override(c, c.preview ?? c.overrides);
-  }));
+  }
+}
+
+/** One clip's part of a frame (see draw): a page coming on while watched is put in `coming`, a picture going off in `going`. */
+async function drawClip(c, t, live, playing, turn, coming, going) {
+  if (c.kind === 'sound') return;
+  const on = !c.hidden && !c.missing && t >= c.at && t < c.end;
+  c.shown = on;
+  const appears = on && c.el.style.visibility !== 'visible';
+  if (live && appears && c.kind === 'page') { c.coming = turn; coming.push(c); }
+  else if (live && !on && c.el.style.visibility === 'visible') going.push(c);
+  else c.el.style.visibility = on ? 'visible' : 'hidden';
+  if (on) fadeAt(c, t);
+  if (!on) {
+    if (c.kind !== 'video') return;
+    if (playing && c.awake && c.at > t && c.at - t < CUE_AHEAD) getReady(c, c.at - t);
+    else { if (!c.el.paused) c.el.pause(); c.lastWant = c.cued = undefined; }
+    return;
+  }
+  if (c.kind === 'still') return;
+  if (c.kind === 'video') {
+    const want = sourceAt(c.span, t - c.at, c.row);
+    if (playing) { if (c.held) step(c, want); else roll(c, want); return; }
+    c.held = false;
+    if (live) { await glance(c, want); return; }
+    if (!c.el.paused) c.el.pause();
+    c.lastWant = want;
+    await loaded(c);
+    /* a video coming on: shown before it is sought. A frame made current in the moment it turns visible is said to
+       be presented, yet the picture keeps the frame it had for a second or so (Chromium, its frames sent apart from
+       the page's): the same t drew two pictures */
+    if (appears) await frames(2);
+    await showVideoAt(c.el, want, await frameOf(c));
+    return;
+  }
+  /* a page closed while the playhead was far (see near): opened again, then drawn; one that will not open is the
+     film's error in an exact frame, and shows nothing to a person watching */
+  if (!c.child) {
+    try { await wake(c); } catch (e) { if (live) return; throw new Error(`clip "${c.id}" (${c.src}): ${e?.message ?? e}`); }
+    if (!c.child || !c.shown) return;
+  }
+  const local = sourceAt(c.span, t - c.at, c.row, c.native);
+  c.win.filmHost?.time?.(local);
+  /* a page's error says which clip and which of its own seconds, not only the film's t */
+  try { await c.child.frame(local); }
+  catch (e) { throw new Error(`clip "${c.id}" (${c.src}) at its ${Number(local.toFixed(3))}s: ${e?.message ?? e}`); }
+  c.win.filmHost?.settle?.(local);
+  if (!live) await mediaShown(c.win.document);
+  c.drawn = true;
+  override(c, c.preview ?? c.overrides);
 }
 
 window.film = {

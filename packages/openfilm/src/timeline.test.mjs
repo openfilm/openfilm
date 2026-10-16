@@ -760,3 +760,36 @@ test('a clip\'s look changed (an inspector\'s value, an edit) keeps its fade on 
     await s.close();
   }
 });
+
+test('watched, a page coming on shows once its frame is drawn, the picture going off staying until then; a later frame keeps what it shows', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-cut-'));
+  writeFileSync(join(dir, 'a.html'), page('a', 1));
+  /* a page whose frame takes a while, and that looks unlike its frame before it is drawn */
+  writeFileSync(join(dir, 'b.html'), `<!doctype html><body style="margin:0;background:#f00"><script>window.seen=[];
+window.film={duration:1,width:320,height:180,async frame(t){const look=()=>[frameElement.style.visibility,parent.document.getElementById('a').style.visibility];
+window.seen.push(look());await new Promise((r)=>setTimeout(r,150));window.seen.push(look());document.body.style.background='#0f0'}}</script></body>`);
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [
+    { src: 'a.html', id: 'a' }, { src: 'b.html', id: 'b', at: 1 },
+  ] }] }));
+  const s = await open(dir);
+  const shown = () => s.film.page.evaluate(() => ['a', 'b'].map((id) => document.getElementById(id).style.visibility));
+  try {
+    await s.film.page.evaluate(() => window.__filmEditor.watch(0.5));
+    await s.film.page.evaluate(() => window.__filmEditor.watch(1.25));
+    const seen = await s.film.page.evaluate(() => document.getElementById('b').contentWindow.seen);
+    assert.deepEqual(seen, [['hidden', 'visible'], ['hidden', 'visible']], 'while its frame was drawn, it was out of sight and the one before on screen');
+    assert.deepEqual(await shown(), ['hidden', 'visible'], 'drawn: it shows, the one before has gone');
+    /* back before the cut: the earlier frame, still drawing, does not put its picture back over the later one */
+    await s.film.page.evaluate(() => window.__filmEditor.watch(0.5));
+    const order = await s.film.page.evaluate(async () => {
+      const slow = window.__filmEditor.watch(1.5);
+      await new Promise((r) => setTimeout(r, 30));
+      await window.__filmEditor.watch(0.75);
+      await slow;
+      return ['a', 'b'].map((id) => document.getElementById(id).style.visibility);
+    });
+    assert.deepEqual(order, ['visible', 'hidden']);
+  } finally {
+    await s.close();
+  }
+});
