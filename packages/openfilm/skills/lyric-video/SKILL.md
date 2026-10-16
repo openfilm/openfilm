@@ -40,8 +40,9 @@ whole range — for example:
 - **Restraint**: one color, one typeface, perfect timing and spacing, silence used as much as motion.
 
 Write the direction down in a few lines at the top of the plan (`direction.md`): the idea in one sentence, the
-references in the person's words, palette, typefaces, how type and camera move, what each section does. Then build
-it.
+references in the person's words, palette, typefaces, how type and camera move, what each section does. Weigh it
+against at least two genuinely different directions you considered, and say in a line why this one is the strongest
+for this song. Then build it.
 
 ## The means
 
@@ -64,7 +65,8 @@ is a reminder of the range, not a limit:
   (LUT color grading, blends, displacement, glitch, time remapping, frame interpolation) and image sequences encoded
   once into a clip.
 - **Generated media**: images, video, music, sound effects and voice from `npx openfilm get` when those services are
-  connected, or from any service the person uses with their own key.
+  connected, your own built-in tools (an image generation tool, say), or any service the person uses with their own
+  key.
 - **The person's own**: their cover, photos, footage, logo, handwriting.
 - **Type**: any font whose license allows it (for Chinese, for example Noto Serif SC, Noto Sans SC, LXGW WenKai, ZCOOL
   XiaoWei, Ma Shan Zheng, Zhi Mang Xing, Long Cang), lettering drawn as paths, brush strokes animated along a glyph.
@@ -84,8 +86,10 @@ The film is done when all of this is true:
   frames, measured against the audio, never estimated. An LRC gives only where lines start. Use the most accurate
   source you can get: see what `npx openfilm get` can do here first (a connected transcript service gives word
   times), then check every time against the voice in the audio itself and fix the ones that are off. The check must be
-  independent of whatever produced the times: a tool agreeing with itself proves nothing. Held notes stay held; pauses
-  stay empty. Report the result as numbers: how many words are within two frames, and the largest gap.
+  independent of whatever produced the times (a tool agreeing with itself proves nothing) and something a reviewer
+  can run again: a script whose output lists every word with its time, the onset measured in the audio, and the gap.
+  Reading a spectrogram by eye does not count. Held notes stay held; pauses stay empty. Report the result as numbers:
+  how many words are within two frames, and the largest gap.
 - **The words**: exactly the person's lyrics, order, line breaks and language; nothing retyped, translated or added
   (title and artist cards aside).
 - **Readable**: every line legible at phone size for its whole time on screen; the line being sung unmistakable.
