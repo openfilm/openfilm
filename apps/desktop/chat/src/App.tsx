@@ -801,7 +801,8 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
         }`}
       >
         {composerFiles.files.length > 0 && (
-          <div className="flex max-h-[76px] flex-wrap gap-1.5 overflow-y-auto px-3.5 pt-3">
+          /* whole rows: up to three show at once (a message's twelve files fit in two), only more than that scrolls */
+          <div className="flex max-h-[144px] flex-wrap gap-1.5 overflow-y-auto px-3.5 pt-3">
             {composerFiles.files.map((file) => {
               const Icon = attachmentIcon({ name: file.name, mediaType: file.mediaType });
               const remove = (
