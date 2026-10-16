@@ -1,5 +1,5 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/skills/lyric-video",
   "kind": "style",
   "order": 8,

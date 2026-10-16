@@ -81,16 +81,19 @@ The film is done when all of this is true:
 - **The type is the picture**: the lyrics are drawn in the pages, big and composed for their words — never a subtitle
   line, and never the film's subtitles (leave no transcript beside the song, or Studio shows the words twice).
 - **Sync**: every character (or word, in spaced languages) appears or takes its accent on its sung onset, within two
-  frames, measured against the audio, never estimated. An LRC gives only where lines start: word times come from
-  word-stamped lyrics, a transcript of the song (`npx openfilm get asr`) or your own analysis. Held notes stay held;
-  pauses stay empty. Say how you measured it.
+  frames, measured against the audio, never estimated. An LRC gives only where lines start. Use the most accurate
+  source you can get: see what `npx openfilm get` can do here first (a connected transcript service gives word
+  times), then check every time against the voice in the audio itself and fix the ones that are off. Held notes stay
+  held; pauses stay empty. Report the result as numbers: how many words are within two frames, and the largest gap.
 - **The words**: exactly the person's lyrics, order, line breaks and language; nothing retyped, translated or added
   (title and artist cards aside).
 - **Readable**: every line legible at phone size for its whole time on screen; the line being sung unmistakable.
 - **One idea, developed**: verse, chorus and bridge each with their own treatment; the chorus recognizable each time
   and biggest the last time; key words staged for what they mean.
 - **Professional craft**: light, depth, texture, color and motion that would stand next to the best work of its kind;
-  motion with weight and intent, never a default fade on everything, never jittery, never a long still.
+  motion with weight and intent, never a default fade on everything, never jittery, never a long still. Text laid over
+  a gradient or a flat illustration does not meet it: the picture needs real depth, material and light, from whichever
+  means above get there.
 - **Open and close**: title and artist before the first line; an ending that resolves with the music.
 - **Editable**: a word or a time fixable in one place. Type drawn in pages stays adjustable in Studio; type rendered
   elsewhere (in Blender, say) is made again by its script.
