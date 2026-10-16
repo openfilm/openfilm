@@ -24,6 +24,7 @@ import { attachmentIcon } from '@/lib/project-resources';
 import { attachedPictures, attachedText, attachmentBlocker, formatFileSize, turnAttachments, useDesktopAttachments } from '@/lib/desktop-attachments';
 import { deriveProjectTurns } from '@/lib/project-versions';
 import { makePlaceholder, mergeAssetLists } from '@/lib/asset-lists';
+import { isEmptyBackgroundTurn } from '@/lib/unprompted';
 import {
   answerLocalAgentPermission,
   answerLocalAgentQuestion,
@@ -199,7 +200,10 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     const done: Turn = { ...(meta.turn as Turn), ...patch, updatedAt: new Date().toISOString() };
     primeStoredTranscript(id, turn.items);
     saveLocalAgentTurn(meta.projectId, done, turn.items);
-    setTurns((list) => list.map((item) => (item.id === id ? { ...item, ...patch, updatedAt: done.updatedAt } : item)));
+    /* a turn the agent started by itself that ended with nothing in it leaves no line behind */
+    setTurns((list) => (isEmptyBackgroundTurn(done, turn.items)
+      ? list.filter((item) => item.id !== id)
+      : list.map((item) => (item.id === id ? { ...item, ...patch, updatedAt: done.updatedAt } : item))));
     return done;
   }
 
@@ -546,7 +550,11 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     if (projectId !== projectKey) return null;
     const id = makeLocalAgentTurnId();
     const opened = openTurnNow.current(id, '', null, [], { conversation, by, origin: 'background' });
-    return { turn: opened.turn, meta: opened.meta, done: () => settlers.current.get(id)?.({ status: 'ready' }) };
+    return {
+      turn: opened.turn,
+      meta: opened.meta,
+      done: (outcome) => settlers.current.get(id)?.(outcome === 'cancelled' ? { status: 'cancelled', cancelReason: 'user' } : { status: 'ready' }),
+    };
   }), [projectKey]);
 
   /**

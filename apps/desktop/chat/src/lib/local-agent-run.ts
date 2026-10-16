@@ -28,6 +28,7 @@ import type { Turn } from '@openfilm/shared';
 import type { Balance } from '@/lib/balance';
 import { chatTurns, putChatTurn, type SavedTurn } from '@/lib/chat-store';
 import { app } from '../app-bridge';
+import { isEmptyBackgroundTurn, opensUnprompted } from '@/lib/unprompted';
 import { reduceTranscript, type TranscriptItem, type TranscriptPlanEntry } from '@/lib/agent-transcript';
 import {
   desktopBridge,
@@ -613,19 +614,18 @@ export function useAgentContext(projectId: string, conversation: string, agent: 
    command it ran in the background, a subagent), which it takes up by itself, as in its own chat. Its work is shown
    as a turn of its own in its conversation (`onUnpromptedTurn`, from the page showing the project), which ends with
    the agent's own result for it (a usage_update saying where it came from) or after UNPROMPTED_QUIET_MS of quiet,
-   and as soon as the person writes. ── */
+   as soon as the person writes, and at once when they stop it. ── */
 
-/** What a turn the agent started by itself needs from the page: the turn to fill, the page's way to settle it, and
-    what the turn's log keeps of it (its conversation), so the log can make it again (recoverLoggedTurns). */
-export interface UnpromptedTurn { turn: LocalAgentTurn; done: () => void; meta?: LocalAgentTurnMeta }
+/** What a turn the agent started by itself needs from the page: the turn to fill, the page's way to settle it
+    ('cancelled': the person stopped it), and what the turn's log keeps of it (its conversation), so the log can make
+    it again (recoverLoggedTurns). */
+export interface UnpromptedTurn { turn: LocalAgentTurn; done: (outcome?: 'cancelled') => void; meta?: LocalAgentTurnMeta }
 type UnpromptedHandler = (where: { projectId: string; conversation: string; agent: LocalAgentId }) => UnpromptedTurn | null;
 
 const UNPROMPTED_QUIET_MS = 30_000;
 /** words of a turn just ended can come a moment after it: not a turn of the agent's own until this long after */
 const AFTER_TURN_MS = 2000;
 const turnEndedAt = new Map<string, number>();
-/** the updates that mean the agent is working (not a list or a setting changing) */
-const WORK_UPDATES = new Set(['agent_message_chunk', 'agent_thought_chunk', 'tool_call', 'tool_call_update', 'plan']);
 const unpromptedHandlers = new Set<UnpromptedHandler>();
 const unprompted = new Map<string, UnpromptedTurn & { timer: ReturnType<typeof setTimeout> }>();
 
@@ -658,16 +658,17 @@ function stillUnprompted(key: string): void {
   open.timer = setTimeout(() => endUnprompted(key), UNPROMPTED_QUIET_MS);
 }
 
-function endUnprompted(key: string): void {
+function endUnprompted(key: string, outcome?: 'cancelled'): void {
   const open = unprompted.get(key);
   if (!open) return;
   unprompted.delete(key);
   clearTimeout(open.timer);
   open.turn.seal();
   if (turnByKey.get(key) === open.turn) turnByKey.delete(key);
+  turnEndedAt.set(key, Date.now());
   if (current === open.turn) current = null;
   void desktopBridge()?.localAgents?.adopt?.(key, null);
-  open.done();
+  open.done(outcome);
 }
 
 /** Whether this turn is one the agent started by itself (it has no run of the page's to wait on). */
@@ -739,7 +740,7 @@ function listen(): void {
     }
     if (turn && unprompted.has(event.key)) stillUnprompted(event.key);
     /* working with nobody having written: a background task of its own came back */
-    const taken = turn ?? (event.kind === 'update' && WORK_UPDATES.has(event.update.sessionUpdate) ? openUnprompted(event.key) : null);
+    const taken = turn ?? (event.kind === 'update' && opensUnprompted(event.update) ? openUnprompted(event.key) : null);
     if (taken && !turn) { dispatch(taken, event as Record<string, unknown> & { kind: string }); return; }
     if (!turn) {
       /* The turn has ended or belongs to another window: a permission request must not hang, so deny it,
@@ -990,7 +991,12 @@ export async function cancelLocalAgentTurn(turnId: string): Promise<void> {
   const bridge = desktopBridge()?.localAgents;
   const turn = turns.get(turnId);
   if (!bridge || !turn) return;
-  for (const [key, t] of turnByKey) if (t === turn) await bridge.cancel(key);
+  for (const [key, t] of turnByKey) {
+    if (t !== turn) continue;
+    /* a turn the agent started by itself has no prompt of the page's to end it: it ends here, and the agent is told */
+    if (unprompted.get(key)?.turn === turn) endUnprompted(key, 'cancelled');
+    await bridge.cancel(key);
+  }
 }
 
 export async function answerLocalAgentPermission(turnId: string, optionId: string | null): Promise<void> {
@@ -1054,12 +1060,12 @@ const ACTIVE_STATUSES = new Set<Turn['status']>(['generating', 'failing', 'cance
 /**
  * The turns run with a local agent in this project (this session). One kept while it ran (the page saves a running
  * turn as it goes) and running no more, the app having closed on it, reads as interrupted: what it did so far stays,
- * and the next message goes on from there.
+ * and the next message goes on from there. One the agent started by itself and ended with nothing in it is left out.
  */
 export function loadLocalAgentTurns(projectId: string, sessionId: string | null): SavedLocalTurn[] {
   if (typeof window === 'undefined') return [];
   return readSaved(projectId)
-    .filter((x) => !sessionId || x.turn.sessionId === sessionId)
+    .filter((x) => (!sessionId || x.turn.sessionId === sessionId) && !isEmptyBackgroundTurn(x.turn, x.items))
     .map((x) => (ACTIVE_STATUSES.has(x.turn.status) && !runningTurns.has(x.turn.id)
       ? { ...x, turn: { ...x.turn, status: 'error' as const, error: INTERRUPTED } }
       : x));
