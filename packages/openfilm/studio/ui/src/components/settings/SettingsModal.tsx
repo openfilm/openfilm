@@ -22,6 +22,7 @@ import { ProvidersSection } from './ProvidersSection';
 import { SettingsSelect } from './SettingsSelect';
 import { SettingsButton, SettingsGroup, SettingsItem, SettingsPage, SettingsSegmented, SettingsSwitch } from './ui';
 import { useThemeMode, type ThemeMode } from './theme';
+import { StorageGroup } from './StorageGroup';
 
 export type SettingsSection = 'general' | 'agents' | 'providers' | 'models' | 'developer' | 'shortcuts';
 
@@ -50,7 +51,7 @@ const SECTION_ICON: Record<SettingsSection, React.ReactNode> = {
 
 /** what a search through each section reads: its name and every phrase it shows */
 const SECTION_WORDS: Record<SettingsSection, string | string[]> = {
-  general: ['settings.appearance', 'settings.playback'],
+  general: ['settings.appearance', 'settings.storage', 'settings.playback'],
   agents: 'settings.agents',
   providers: 'settings.providers',
   models: 'settings.models',
@@ -238,6 +239,7 @@ function GeneralSection() {
           )}
         />
       </SettingsGroup>
+      <StorageGroup />
       <PlaybackGroup />
       {studioHost?.update?.onState ? <AppAboutGroup /> : <AboutGroup />}
     </SettingsPage>

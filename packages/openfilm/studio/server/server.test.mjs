@@ -200,7 +200,7 @@ test('the preview plays heavy footage from its proxy once made; what the file is
   mkdirSync(join(project.path, 'assets'), { recursive: true });
   const big = join(project.path, 'assets', 'big.mp4');
   execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=2560x1440:rate=25:duration=1', '-pix_fmt', 'yuv420p', big]);
-  assert.deepEqual(await (await api('/api/prefs')).json(), { proxies: { on: true, height: 720 }, seenVersion: null });
+  assert.deepEqual(await (await api('/api/prefs')).json(), { proxies: { on: true, height: 720 }, seenVersion: null, projectsFolder: null, exportsFolder: null });
   let answer;
   for (const end = Date.now() + 30_000; answer?.states?.['assets/big.mp4']?.state !== 'ready' && Date.now() < end;) {
     answer = await (await api(`/api/projects/${project.id}/proxies`, { method: 'POST', body: {} })).json();
@@ -213,7 +213,7 @@ test('the preview plays heavy footage from its proxy once made; what the file is
   assert.ok(played > 0 && played !== statSync(big).size, 'the proxy');
   assert.equal(await size('?film-facts=1'), statSync(big).size, 'what the file is: the file');
   /* off: the original, and no proxy asked for */
-  assert.deepEqual(await (await api('/api/prefs', { method: 'PATCH', body: { proxies: { on: false } } })).json(), { proxies: { on: false, height: 720 }, seenVersion: null });
+  assert.deepEqual(await (await api('/api/prefs', { method: 'PATCH', body: { proxies: { on: false } } })).json(), { proxies: { on: false, height: 720 }, seenVersion: null, projectsFolder: null, exportsFolder: null });
   assert.equal(await size(), statSync(big).size);
   assert.deepEqual((await (await api(`/api/projects/${project.id}/proxies`, { method: 'POST', body: {} })).json()).states, {});
   await api('/api/prefs', { method: 'PATCH', body: { proxies: { on: true } } });

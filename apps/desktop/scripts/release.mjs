@@ -146,7 +146,9 @@ await builder.build({
       artifactName: `${NAME.replace(' ', '-')}-Setup-\${arch}.\${ext}`,
     },
     nsis: {
-      oneClick: true,
+      /* the installer asks where to put the app (the person's own folder by default), so it need not live on C: */
+      oneClick: false,
+      allowToChangeInstallationDirectory: true,
       perMachine: false,
       installerIcon: join(desktop, 'build/icon.ico'),
       uninstallerIcon: join(desktop, 'build/icon.ico'),

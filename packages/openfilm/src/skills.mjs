@@ -24,6 +24,7 @@ import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { moveToTrash } from '../studio/server/trash.mjs';
+import { libraryDefault } from './locations.mjs';
 
 const mkdirSyncSafe = (/** @type {string} */ dir) => mkdirSync(dir, { recursive: true });
 /** a folder moved to another place: renamed, else (another disk) copied and then removed */
@@ -45,11 +46,11 @@ export const SKILL_SOURCES = /** @type {const} */ (['project', 'mine', 'official
 /** The official skills, released with this package. */
 export const officialSkillsDir = () => join(dirname(fileURLToPath(import.meta.url)), '..', 'skills');
 /**
- * The person's own skills: OPENFILM_SKILLS, else `Skills/` beside the projects library (OPENFILM_LIBRARY, else
- * ~/Movies/OpenFilm/Projects on macOS, ~/Videos/OpenFilm/Projects elsewhere: studio/server/projects.mjs libraryRoot).
+ * The person's own skills: OPENFILM_SKILLS, else `Skills/` beside the default projects library (OPENFILM_LIBRARY, else
+ * ~/Movies/OpenFilm/Projects on macOS, ~/Videos/OpenFilm/Projects elsewhere: locations.mjs libraryDefault). They stay
+ * there when new projects are set to go elsewhere.
  */
-export const mySkillsDir = () => process.env.OPENFILM_SKILLS
-  || join(dirname(process.env.OPENFILM_LIBRARY || join(homedir(), process.platform === 'darwin' ? 'Movies' : 'Videos', 'OpenFilm', 'Projects')), 'Skills');
+export const mySkillsDir = () => process.env.OPENFILM_SKILLS || join(dirname(libraryDefault()), 'Skills');
 /** Where the person's own skills were kept before: `skills/` in Studio's home. */
 export const oldSkillsDir = () => join(process.env.OPENFILM_HOME || join(homedir(), '.openfilm'), 'skills');
 

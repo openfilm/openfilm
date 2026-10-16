@@ -48,6 +48,17 @@ test('new projects go to the library as Untitled, Untitled 2', async () => {
   assert.ok(one.path.startsWith(join(realpathSync(scratch), 'library')));
 });
 
+test('new projects go to the folder chosen in Settings; those made before stay where they are', async () => {
+  const before = await createProject('Before');
+  mkdirSync(process.env.OPENFILM_HOME, { recursive: true });
+  writeFileSync(join(process.env.OPENFILM_HOME, 'prefs.json'), JSON.stringify({ projectsFolder: join(scratch, 'D', 'OpenFilm', 'Projects') }));
+  const after = await createProject('After');
+  assert.ok(after.path.startsWith(join(realpathSync(scratch), 'D', 'OpenFilm', 'Projects')), after.path);
+  const listed = await listProjects();
+  assert.equal(listed.find((p) => p.id === before.id)?.path, before.path, 'the one made before is listed where it is');
+  assert.equal(listed.find((p) => p.id === before.id)?.missing, false);
+});
+
 test('one folder is one project, however its path reaches it', { skip: process.platform === 'win32' }, async () => {
   const first = await openProject(join(scratch, 'same'));
   symlinkSync(join(scratch, 'same'), join(scratch, 'link-to-same'));

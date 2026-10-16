@@ -5,21 +5,24 @@
  *
  *   proxies       light copies of heavy footage for the preview (proxies.mjs): on, and how tall
  *   seenVersion   the version whose "what's new" was last shown (null: none yet, a new install shows none)
+ *   projectsFolder, exportsFolder   where new projects and exports go, when the person chose (null: the default;
+ *                 src/locations.mjs, which the `openfilm` command reads too)
  */
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 import { studioHome } from './projects.mjs';
 
-/** @typedef {{ proxies: { on: boolean, height: 540 | 720 | 1080 }, seenVersion: string | null }} Prefs */
+/** @typedef {{ proxies: { on: boolean, height: 540 | 720 | 1080 }, seenVersion: string | null, projectsFolder: string | null, exportsFolder: string | null }} Prefs */
 
 /** Proxies as CapCut has them: on, at 720p. */
-export const DEFAULT_PREFS = /** @type {Prefs} */ ({ proxies: { on: true, height: 720 }, seenVersion: null });
+export const DEFAULT_PREFS = /** @type {Prefs} */ ({ proxies: { on: true, height: 720 }, seenVersion: null, projectsFolder: null, exportsFolder: null });
 const VERSION = /^\d+\.\d+\.\d+(?:-[\w.]+)?$/;
 const HEIGHTS = [540, 720, 1080];
 
 /** What is kept, each field checked; anything missing or wrong is its default. @param {unknown} raw @returns {Prefs} */
 export function prefsOf(raw) {
-  const p = /** @type {{ proxies?: { on?: unknown, height?: unknown }, seenVersion?: unknown } | null} */ (raw && typeof raw === 'object' ? raw : null);
+  const p = /** @type {{ proxies?: { on?: unknown, height?: unknown }, seenVersion?: unknown, projectsFolder?: unknown, exportsFolder?: unknown } | null} */ (raw && typeof raw === 'object' ? raw : null);
+  const folder = (/** @type {unknown} */ v) => (typeof v === 'string' && isAbsolute(v) ? resolve(v) : null);
   const height = Number(p?.proxies?.height);
   return {
     proxies: {
@@ -27,6 +30,8 @@ export function prefsOf(raw) {
       height: /** @type {540 | 720 | 1080} */ (HEIGHTS.includes(height) ? height : DEFAULT_PREFS.proxies.height),
     },
     seenVersion: typeof p?.seenVersion === 'string' && VERSION.test(p.seenVersion) ? p.seenVersion : null,
+    projectsFolder: folder(p?.projectsFolder),
+    exportsFolder: folder(p?.exportsFolder),
   };
 }
 
@@ -44,7 +49,7 @@ export function readPrefs() {
  */
 export function writePrefs(patch) {
   const now = readPrefs();
-  const asked = /** @type {{ proxies?: object, seenVersion?: unknown }} */ (patch && typeof patch === 'object' ? patch : {});
+  const asked = /** @type {{ proxies?: object, seenVersion?: unknown, projectsFolder?: unknown, exportsFolder?: unknown }} */ (patch && typeof patch === 'object' ? patch : {});
   const next = prefsOf({ ...now, ...asked, proxies: { ...now.proxies, ...(asked.proxies ?? {}) } });
   const at = file();
   let kept = {};

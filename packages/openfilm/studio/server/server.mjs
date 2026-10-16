@@ -52,6 +52,7 @@ import { projectSettingsRoute } from './project-settings.mjs';
 import { markersRoute } from './markers.mjs';
 import { transitionPageRoutes } from './transition-pages.mjs';
 import { createAsks, getRoute, subtitleTranscriber, subtitleTranslator } from './get.mjs';
+import { LOCATION_KEYS, locations, usableFolder } from '../../src/locations.mjs';
 
 /** @typedef {import('./http.mjs').Req} Req @typedef {import('./http.mjs').Res} Res */
 
@@ -285,7 +286,24 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* Studio's own preferences, the same for every project (prefs.mjs) */
     if (parts[0] === 'prefs' && parts.length === 1) {
       if (req.method === 'GET') return json(res, 200, readPrefs());
-      if (req.method === 'PATCH') return json(res, 200, writePrefs(await readJson(req)));
+      if (req.method === 'PATCH') {
+        /* a folder chosen for new projects or exports is checked, and made, before it is kept */
+        const patch = /** @type {Record<string, unknown>} */ (await readJson(req) ?? {});
+        for (const key of Object.values(LOCATION_KEYS)) {
+          if (patch[key] == null) continue;
+          try { patch[key] = usableFolder(patch[key]); } catch (e) { throw new HttpError(400, /** @type {Error} */ (e).message); }
+        }
+        return json(res, 200, writePrefs(patch));
+      }
+    }
+    /* where new projects and exports go (src/locations.mjs): each folder, its default, and its disk's free space; a
+       POST to one opens it in the system's file manager */
+    if (parts[0] === 'locations' && parts.length === 1 && req.method === 'GET') return json(res, 200, locations());
+    if (parts[0] === 'locations' && (parts[1] === 'projects' || parts[1] === 'exports') && parts.length === 2 && req.method === 'POST') {
+      const folder = locations()[parts[1]].path;
+      mkdirSync(folder, { recursive: true });
+      openFile(folder);
+      return json(res, 200, { ok: true });
     }
     /* the system's file dialog (folder-picker.mjs pickFiles), several at once: { paths } (none: cancelled); 501 when
        this system has none */

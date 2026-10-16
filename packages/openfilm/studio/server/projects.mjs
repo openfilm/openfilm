@@ -22,6 +22,7 @@ import { basename, dirname, join, resolve, sep } from 'node:path';
 import { EMPTY_FILM } from './film.mjs';
 import { FILM_FILE, filmHtml } from '../../src/film-doc.mjs';
 import { writeAtomic } from './atomic.mjs';
+import { libraryRoot } from '../../src/locations.mjs';
 
 export const TOOL_DIR = '.film';
 
@@ -56,9 +57,8 @@ export function studioKey() {
   return key;
 }
 
-/** Where new projects go: ~/Movies/OpenFilm/Projects on macOS, ~/Videos/OpenFilm/Projects elsewhere. */
-export const libraryRoot = () => process.env.OPENFILM_LIBRARY
-  || join(homedir(), process.platform === 'darwin' ? 'Movies' : 'Videos', 'OpenFilm', 'Projects');
+/** Where new projects go: the folder chosen in Settings, else ~/Movies/OpenFilm/Projects on macOS, ~/Videos/OpenFilm/Projects elsewhere (src/locations.mjs). */
+export { libraryRoot };
 
 /**
  * @typedef {{ id: string, path: string, openedAt: number, folderId?: string }} Recent

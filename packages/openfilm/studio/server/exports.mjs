@@ -66,14 +66,10 @@ import { filmSubtitleCuesInRange, filmSubtitleShown, filmSubtitleSrt, filmSubtit
 import { zipFiles } from './zip.mjs';
 import { inProject } from './files.mjs';
 import { PROJECT_PARTS, TOOL_DIR } from './projects.mjs';
+import { exportsRoot } from '../../src/locations.mjs';
 
-/**
- * The exports folder: OPENFILM_EXPORTS, else `exports` in OPENFILM_HOME when that is set (a Studio kept apart, for work
- * on OpenFilm itself, leaves nothing in the person's own folder), else the Desktop, where a file just made is found.
- */
-export const exportsRoot = () => process.env.OPENFILM_EXPORTS
-  || (process.env.OPENFILM_HOME ? join(process.env.OPENFILM_HOME, 'exports') : '')
-  || join(homedir(), 'Desktop');
+/** The exports folder: the one chosen in Settings, else the Desktop, where a file just made is found (src/locations.mjs). */
+export { exportsRoot };
 
 /**
  * @typedef {'h264' | 'hevc' | 'vp9' | 'prores422hq' | 'prores4444' | 'hevc_alpha' | 'png'} VideoCodec
