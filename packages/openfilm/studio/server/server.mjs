@@ -287,7 +287,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (parts[0] === 'prefs' && parts.length === 1) {
       if (req.method === 'GET') return json(res, 200, readPrefs());
       if (req.method === 'PATCH') {
-        /* a folder chosen for new projects or exports is checked, and made, before it is kept */
+        /* a folder chosen for new projects is checked, and made, before it is kept */
         const patch = /** @type {Record<string, unknown>} */ (await readJson(req) ?? {});
         for (const key of Object.values(LOCATION_KEYS)) {
           if (patch[key] == null) continue;
@@ -296,10 +296,10 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         return json(res, 200, writePrefs(patch));
       }
     }
-    /* where new projects and exports go (src/locations.mjs): each folder, its default, and its disk's free space; a
-       POST to one opens it in the system's file manager */
+    /* where new projects go (src/locations.mjs): the folder, its default, and its disk's free space; a POST opens it
+       in the system's file manager */
     if (parts[0] === 'locations' && parts.length === 1 && req.method === 'GET') return json(res, 200, locations());
-    if (parts[0] === 'locations' && (parts[1] === 'projects' || parts[1] === 'exports') && parts.length === 2 && req.method === 'POST') {
+    if (parts[0] === 'locations' && parts[1] === 'projects' && parts.length === 2 && req.method === 'POST') {
       const folder = locations()[parts[1]].path;
       mkdirSync(folder, { recursive: true });
       openFile(folder);

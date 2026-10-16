@@ -1,7 +1,8 @@
 /**
- * Settings → General → Storage: where new projects and exports go (studio/server's locations, src/locations.mjs). Each
- * shows its folder and the free space on its disk, and can be changed (the system's folder dialog), opened in the file
- * manager, or set back to its default. Projects made before stay where they are.
+ * Settings → General → Storage: where new projects go (studio/server's locations, src/locations.mjs). It shows its
+ * folder and the free space on its disk, and can be changed (the system's folder dialog), opened in the file manager,
+ * or set back to its default. Projects made before stay where they are. Exports have no setting: the export dialog
+ * picks the folder and keeps the last one.
  */
 import React from 'react';
 import { useT } from '@/i18n';
@@ -31,7 +32,7 @@ export function StorageGroup() {
     setBusy(which);
     setError(null);
     try {
-      await api.setPrefs(which === 'projects' ? { projectsFolder: folder } : { exportsFolder: folder });
+      await api.setPrefs({ projectsFolder: folder });
       setTyping(null);
       load();
     } catch (e) {
@@ -87,7 +88,6 @@ export function StorageGroup() {
   return (
     <SettingsGroup title={t('settings.storage.group')}>
       {row('projects', where.projects)}
-      {row('exports', where.exports)}
     </SettingsGroup>
   );
 }

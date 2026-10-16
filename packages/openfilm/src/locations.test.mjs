@@ -20,20 +20,21 @@ afterEach(() => {
 });
 const prefs = (value) => writeFileSync(join(home, 'prefs.json'), JSON.stringify(value));
 
-test('new projects and exports go to the folders chosen, before any default', () => {
+test('new projects go to the folder chosen, before any default', () => {
   process.env.OPENFILM_LIBRARY = join(home, 'lib');
-  process.env.OPENFILM_EXPORTS = join(home, 'out');
   assert.equal(libraryRoot(), join(home, 'lib'), 'the default: what the build set');
-  assert.equal(exportsRoot(), join(home, 'out'));
   const projects = join(tmpdir(), 'D', 'OpenFilm', 'Projects');
-  const exports = join(tmpdir(), 'D', 'OpenFilm', 'Exports');
-  prefs({ proxies: { on: true }, projectsFolder: projects, exportsFolder: exports });
+  prefs({ proxies: { on: true }, projectsFolder: projects });
   assert.equal(libraryRoot(), projects);
-  assert.equal(exportsRoot(), exports);
   assert.equal(libraryDefault(), join(home, 'lib'), 'the default stays what it was');
   /* a value that is not a full path is no choice */
-  prefs({ projectsFolder: 'relative/folder', exportsFolder: 7 });
+  prefs({ projectsFolder: 'relative/folder' });
   assert.equal(libraryRoot(), join(home, 'lib'));
+});
+
+test('exports go to the default: no folder kept in prefs.json moves them (the export dialog picks one)', () => {
+  process.env.OPENFILM_EXPORTS = join(home, 'out');
+  prefs({ exportsFolder: join(tmpdir(), 'D', 'OpenFilm', 'Exports') });
   assert.equal(exportsRoot(), join(home, 'out'));
 });
 
@@ -50,7 +51,7 @@ test('each folder for Settings: where it is, its default, whether chosen, and fr
   assert.equal(now.projects.chosen, true);
   assert.notEqual(now.projects.default, projects);
   assert.ok(now.projects.free > 0, 'measured on the disk above a folder not made yet');
-  assert.equal(now.exports.chosen, false);
+  assert.deepEqual(Object.keys(now), ['projects'], 'only where new projects go is a setting');
 });
 
 test('a folder offered is made and kept by its full path; a disk, Studio\'s own home or a relative path is refused', () => {
