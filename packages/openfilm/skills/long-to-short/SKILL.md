@@ -1,35 +1,36 @@
 ---
 name: long-to-short
-description: Turn a long video (a talk, podcast, interview, lesson, livestream or vlog) into short vertical clips that each stand alone and hold attention from the first second. Use when the person gives a long recording and asks for clips, shorts, highlights or cut-downs for Douyin, Reels, Shorts or similar (长视频转短视频, 切片, 剪短视频, 高光).
+description: Turn a long video (a talk, podcast, interview, lesson, livestream or vlog) into short vertical clips that each stand alone and hold attention from the first second. Use when the person gives a long recording and asks for clips, shorts, highlights or cut-downs for Douyin, Reels, Shorts or similar (长视频转短视频, 切片, 剪短视频, 高光, 拆条).
 ---
 
 # Long video to shorts
 
-## The result
+Find the moments in this recording that people would stop scrolling for, and make each one a short a channel would post
+as it is: it opens on its strongest real line, ends on its point, and makes sense to someone who never saw the long
+video. The speaker, watching it, would say: yes, that is what I meant.
 
-Short clips a channel would post as they are: each one built around a single moment worth sharing, opening on its
-strongest line, ending on a payoff, and making sense to someone who never saw the long video.
+## What has to be true
 
-## The bar
+- **The speaker's meaning, intact.** Nothing said in different places is joined into a claim they did not make; an
+  "if", a "not" or an "in some cases" is never cut away; an answer keeps its question. A title or any other text on
+  screen says only what the recording says, or is plainly yours.
+- **It stands alone**: a viewer knows who is speaking and what they are answering.
+- **Every word exact.** The transcript says exactly what was said; names, numbers and terms you cannot confirm are named
+  in your reply. Each cut falls in a pause: no clip starts on a clipped word or stops mid-thought.
+- **Made for a phone**: the one who is speaking well framed at every moment, and nothing that matters where the app's
+  buttons and captions sit.
+- **Worth posting**: each one holds up next to the best clips on the platform, as long as its moment needs and no
+  longer. Watch each as a viewer would; a clip you would scroll past is not done.
 
-- **The right moments**: chosen from the whole recording for what an audience would stop for (a sharp claim, a story,
-  a laugh, a reveal, a useful answer), not for where they happen to be. Say why each was chosen.
-- **Hook first**: the first two seconds make a viewer stay; the clip ends on its point, not mid-thought.
-- **Clean cuts**: cut in pauses, never through a word; the speaker's meaning kept — no line moved so it says something
-  they did not mean.
-- **Framed for phones**: 9:16 with the speaker's face well placed at every moment; nothing important under the
-  areas apps cover.
-- **Words**: subtitles from the recording's own transcript (`npx openfilm get asr`), exact; key words made to stand
-  out where it helps.
-- **Length**: what the platform rewards for this kind of moment, usually 20 to 60 seconds.
-- **Trimmed, not re-encoded**: every clip is the same file with its own in and out points, as the manual says.
+## What you have
 
-## Freedom
+The recording's transcript with every word's time (`npx openfilm get asr`, a WebVTT beside it), from which Studio draws
+the subtitles; the person sets how they look. A short is the same recording trimmed (`#t=`) and framed with CSS, never
+cut or re-encoded into new files; a page can also play the recording, silent, with its time set from t, when the
+picture has to move over it. Anything you can make titles and motion with, and your own built-in tools.
 
-Use any technique: transcripts and their word times, audio energy and laughter, scene changes, face positions, the
-person's own notes. Titles, emphasis and motion can be made with anything the web or a renderer can make.
+## With the person
 
-## From the person
-
-The recording, where the clips will go, and how many they want (else a few of the best). Ask whether there are
-moments they must keep or must not use.
+What they ask for comes before anything here. The recording, where the shorts will go, and how many they want (else the
+few best). Ask whether there are moments they must keep or must not use, without holding up the work. When done, list
+the shorts: for each, its length, its first line, and why you chose it.

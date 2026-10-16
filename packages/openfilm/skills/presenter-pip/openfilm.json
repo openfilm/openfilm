@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/skills/presenter-pip",
+  "repository": "https://github.com/openfilm/skills/tree/main/skills/presenter-pip",
   "kind": "workflow",
   "order": 5,
   "icon": "pip",

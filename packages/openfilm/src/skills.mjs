@@ -43,8 +43,11 @@ export const PROJECT_SKILLS = 'skills';
 export const SKILL_SOURCES = /** @type {const} */ (['project', 'mine', 'official']);
 /** @typedef {typeof SKILL_SOURCES[number]} SkillSource */
 
-/** The official skills, released with this package. */
-export const officialSkillsDir = () => join(dirname(fileURLToPath(import.meta.url)), '..', 'skills');
+/**
+ * The official skills, released with this package (a copy of openfilm/skills: `pnpm skills:sync`).
+ * OPENFILM_OFFICIAL_SKILLS names another folder of them: a checkout's skills/, while they are being changed.
+ */
+export const officialSkillsDir = () => process.env.OPENFILM_OFFICIAL_SKILLS || join(dirname(fileURLToPath(import.meta.url)), '..', 'skills');
 /**
  * The person's own skills: OPENFILM_SKILLS, else `Skills/` beside the default projects library (OPENFILM_LIBRARY, else
  * ~/Movies/OpenFilm/Projects on macOS, ~/Videos/OpenFilm/Projects elsewhere: locations.mjs libraryDefault). They stay

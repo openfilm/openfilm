@@ -1,33 +1,34 @@
 ---
 name: presenter-pip
-description: Make a talking-head video where the content fills the screen and the presenter speaks from a small window — slides, screens, pictures and motion graphics that follow what they say, their face always there. Use when the person gives a recording of themselves talking (with slides, a screen or notes) and asks for a lesson, a knowledge video, a commentary or a presentation with them in a corner (小窗人物口播, 画中画, 口播, 讲解视频).
+description: Make a talking-head video where the content fills the screen and the presenter speaks from a small window: slides, screens, charts and pictures that follow what they say, their face always there. Use when the person gives a recording of themselves talking (with slides, a screen, data or notes) and asks for a lesson, a knowledge video, a business review, a commentary or a presentation with them in a corner (小窗人物口播, 画中画, 口播, 讲解视频).
 ---
 
 # Presenter in a window
 
-## The result
+Make the video that keeps the person present and puts what they talk about in charge: each thing they mention fills
+the screen the moment they say it, and they speak from a window that never gets in its way.
 
-A video that keeps the person present and the content in charge: what they talk about fills the screen at the moment
-they say it, and they speak from a window that never gets in the way.
+## What has to be true
 
-## The bar
+- **The picture follows their words.** Each slide, screen, chart, number or picture arrives as they say it and leaves
+  when they move on. Check it in the frames against the transcript's word times, and say how close it is.
+- **The window never covers what matters**: the content, the subtitles, or a phone app's buttons; their face is never
+  cut badly.
+- **Their words and meaning.** Cuts fall in pauses; ums and false starts go only when they ask; nothing appears that they
+  did not say or give. A number on screen is the one they say, from their data or its source.
+- **It holds up next to the best explainers you know.** Watch the whole film as a viewer would, and keep refining until
+  it does.
 
-- **The person, well framed**: their own recording, in a window with a shape and place that suit the film (cut out
-  from the background when it helps); face never cropped badly, never covering what matters. Full screen when the
-  moment is about them.
-- **Content on their words**: each slide, screen, picture, number or diagram appears when they say it (from the
-  recording's transcript, `npx openfilm get asr`), and leaves when they move on.
-- **Their words kept**: cuts only in pauses, ums and false starts removed when asked, meaning never changed; subtitles
-  from the transcript, exact.
-- **Finished**: a consistent layout system, readable type at the size it will be watched, motion that guides the eye,
-  sound levels even.
-- **Trimmed, not re-encoded**: the recording is cut by its in and out points, as the manual says.
+## What you have
 
-## Freedom
+Their recording, cut by its in and out points, never re-encoded, its window shaped with CSS; its transcript with every
+word's time (`npx openfilm get asr`), from which Studio draws the subtitles. A version you treat (its background
+removed, its sound cleaned) is a new file under `assets/`, and the cuts stay trims of it. Their slides as pictures or
+rebuilt as pages, anything you can make charts, pictures and motion with, images and sound from `get`, your own
+built-in tools, and services the person has keys for. Ask before downloading anything large onto the person's computer.
 
-Use any technique: CSS masks and shapes for the window, background removal, motion graphics from the web or a
-renderer, the person's slides as pictures or rebuilt as pages, generated pictures when a service is connected.
+## With the person
 
-## From the person
-
-The recording, their slides or notes, where it will be watched, and whether they want ums and pauses removed.
+What they ask for comes before anything here. The recording, their slides, data or notes, where it will be watched, and
+whether ums and pauses should go. Ask without holding up the work. When done, tell them in a few lines what you made,
+how close the content is to their words, and what of theirs would make it better.

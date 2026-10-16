@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/skills/collage",
+  "repository": "https://github.com/openfilm/skills/tree/main/skills/collage",
   "kind": "style",
   "order": 10,
   "icon": "layers",
@@ -13,17 +13,17 @@
     "es": "Collage de papel"
   },
   "summary": {
-    "en": "Motion graphics in torn paper, cut-out photos, halftone print and tape, moving with stop-motion charm.",
-    "zh-CN": "撕纸、剪下来的照片、网点印刷和胶带拼出来的 MG 动画，带着定格动画的手工感。",
-    "ja": "破いた紙、切り抜き写真、網点印刷、テープでつくる、コマ撮り感のあるモーショングラフィックス。",
-    "ko": "찢은 종이, 오린 사진, 망점 인쇄, 테이프로 만든, 스톱모션 느낌의 모션그래픽.",
-    "es": "Motion graphics con papel rasgado, fotos recortadas, trama de impresión y cinta, con encanto de stop motion."
+    "en": "Motion graphics made of photos, paper and print, cut out and put together by hand.",
+    "zh-CN": "用照片、纸张和印刷品剪下来、亲手拼成的 MG 动画。",
+    "ja": "写真や紙、印刷物を切り抜き、手で組み合わせてつくるモーショングラフィックス。",
+    "ko": "사진, 종이, 인쇄물을 오려 손으로 붙여 만든 모션그래픽.",
+    "es": "Motion graphics hechos con fotos, papel e impresos, recortados y unidos a mano."
   },
   "details": {
-    "zh-CN": "适合：讲解、宣传、故事短片、片头和社媒帖子，想要手作感的时候。\n它会：用撕纸、剪下来的照片、网点印刷、胶带和手写标签拼出画面，带着定格动画的抖动感，每一屏都有编辑的构图。",
-    "en": "Best for: explainers, promos, stories, intros and posts that want a hand-made feel.\nWhat it does: builds each frame from torn paper, cut-out photos, halftone print, tape and hand-made labels, moving with stop-motion jitter and composed with an editor’s eye.",
-    "ja": "こんなときに：解説、プロモ、ストーリー、オープニング、SNS投稿で手作り感がほしいとき。\nすること：破いた紙、切り抜き写真、網点印刷、テープ、手書きのラベルで画面を組み、コマ撮りの揺れで動かし、編集者の目で構図を整えます。",
-    "ko": "이럴 때: 손맛이 필요한 설명, 홍보, 스토리, 인트로, SNS 게시물.\n하는 일: 찢은 종이, 오린 사진, 망점 인쇄, 테이프, 손글씨 라벨로 화면을 만들고, 스톱모션처럼 흔들리며 움직이고, 편집자의 눈으로 구도를 잡습니다.",
-    "es": "Ideal para: explicativos, promos, historias, intros y publicaciones con aire artesanal.\nQué hace: compone cada plano con papel rasgado, fotos recortadas, trama de impresión, cinta y etiquetas a mano, con el temblor del stop motion y ojo de editor."
+    "zh-CN": "适合：讲解、宣传、故事短片、片头和社媒帖子，想要手作感的时候。\n它会：把图片剪开、拼在一起，让组合本身说出意思；每张图的来源清楚，你照片里的人不被改动。",
+    "en": "Best for: explainers, promos, stories, intros and posts that want a hand-made feel.\nWhat it does: cuts and combines pictures so that together they say something, with every picture’s source clear and the people in your photos unchanged.",
+    "ja": "こんなときに：解説、プロモ、ストーリー、オープニング、SNS投稿で手作り感がほしいとき。\nすること：写真を切り抜いて組み合わせ、組み合わせそのものに意味を語らせます。どの写真も出どころがはっきりしていて、あなたの写真の人物は変えません。",
+    "ko": "이럴 때: 손맛이 필요한 설명, 홍보, 스토리, 인트로, SNS 게시물.\n하는 일: 사진을 오리고 붙여 조합 자체가 의미를 말하게 합니다. 모든 사진의 출처가 분명하고, 당신 사진 속 사람은 바꾸지 않습니다.",
+    "es": "Ideal para: explicativos, promos, historias, intros y publicaciones con aire artesanal.\nQué hace: recorta y combina imágenes para que juntas digan algo, con el origen de cada imagen claro y sin cambiar a las personas de tus fotos."
   }
 }

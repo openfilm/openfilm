@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/skills/whiteboard",
+  "repository": "https://github.com/openfilm/skills/tree/main/skills/whiteboard",
   "kind": "style",
   "order": 6,
   "icon": "pen",
@@ -13,17 +13,17 @@
     "es": "Explicación en pizarra"
   },
   "summary": {
-    "en": "A voice explains while a hand draws it on a whiteboard. Turns a document, slides or notes into a lesson.",
-    "zh-CN": "边讲边画的白板讲解：配音讲到哪，手就画到哪。文稿、课件、笔记都能做成讲解视频。",
+    "en": "A voice explains while the board is drawn, mark by mark, as it speaks. Turns a document, slides or notes into a lesson.",
+    "zh-CN": "边讲边画的白板讲解：配音讲到哪，画面就画到哪。文稿、课件、笔记都能做成讲解视频。",
     "ja": "声で説明しながら、その場でホワイトボードに描いていきます。資料やスライドから解説動画に。",
-    "ko": "목소리가 설명하는 대로 손이 화이트보드에 그립니다. 문서, 슬라이드, 노트로 강의 영상을.",
-    "es": "Una voz explica mientras una mano lo dibuja en una pizarra. Convierte documentos o diapositivas en una lección."
+    "ko": "목소리가 설명하는 대로 화이트보드에 그려집니다. 문서, 슬라이드, 노트로 강의 영상을.",
+    "es": "Una voz explica mientras se dibuja en la pizarra, trazo a trazo. Convierte documentos o diapositivas en una lección."
   },
   "details": {
-    "zh-CN": "适合：微课、培训、科普，把文稿、课件、笔记讲清楚。\n它会：配音讲到哪，手就在白板上画到哪：线条一笔笔画出来，字一个个写出来，画的是东西本身，不是一框一框的字。",
-    "en": "Best for: micro-lessons, training and explainers, from a document, slides or notes.\nWhat it does: a hand draws on a whiteboard exactly what the voice is saying, stroke by stroke and word by word, drawing the things themselves rather than boxes of text.",
-    "ja": "こんなときに：ミニ授業、研修、解説。資料、スライド、ノートを分かりやすく。\nすること：ナレーションに合わせて、手がホワイトボードに一筆ずつ描き、一文字ずつ書きます。文字の箱ではなく、もの自体を描きます。",
-    "ko": "이럴 때: 짧은 강의, 교육, 설명 영상. 문서, 슬라이드, 노트를 쉽게.\n하는 일: 내레이션에 맞춰 손이 화이트보드에 한 획씩 그리고 한 글자씩 씁니다. 글상자가 아니라 대상 자체를 그립니다.",
-    "es": "Ideal para: microclases, formación y divulgación, desde un documento, diapositivas o notas.\nQué hace: una mano dibuja en una pizarra justo lo que dice la voz, trazo a trazo y palabra a palabra, dibujando las cosas en sí y no cajas de texto."
+    "zh-CN": "适合：微课、培训、科普，把文稿、课件、笔记讲清楚。\n它会：配音讲到哪，白板上就画到哪（对着配音实测对齐）；文稿里的事实、数字和术语原样保留，不编造。",
+    "en": "Best for: micro-lessons, training and explainers, from a document, slides or notes.\nWhat it does: draws on the board exactly what the voice is saying, as it says it (checked against the voice), and keeps every fact, number and term of your document as written.",
+    "ja": "こんなときに：ミニ授業、研修、解説。資料、スライド、ノートを分かりやすく。\nすること：ナレーションが話すそのときに、話している内容をボードに描きます（声と照らして確認）。資料の事実、数字、用語はそのまま守ります。",
+    "ko": "이럴 때: 짧은 강의, 교육, 설명 영상. 문서, 슬라이드, 노트를 쉽게.\n하는 일: 내레이션이 말하는 그 순간에 그 내용을 보드에 그립니다(목소리와 맞춰 확인). 문서의 사실, 숫자, 용어는 그대로 지킵니다.",
+    "es": "Ideal para: microclases, formación y divulgación, desde un documento, diapositivas o notas.\nQué hace: dibuja en la pizarra justo lo que dice la voz, en el momento en que lo dice (comprobado con la voz), y respeta cada dato, cifra y término de tu documento."
   }
 }

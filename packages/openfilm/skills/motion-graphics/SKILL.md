@@ -1,41 +1,34 @@
 ---
 name: motion-graphics
-description: Make premium motion graphics — an explainer, a promo, a title sequence or a data story designed and animated at the level of a top studio, with a visual system made for this subject. Use when the person asks for motion graphics, an MG animation, an animated explainer, a promo or an intro that should look high end (高级 MG, 动效, 动画视频, 片头, 宣传动画).
+description: Make premium motion graphics (an explainer, a promo, a title sequence or a data story) designed and animated at the level of a top studio, for this subject alone. Use when the person asks for motion graphics, an MG animation, an animated explainer, a promo or an intro that should look high end (高级 MG, 动效, 动画视频, 片头, 宣传动画).
 ---
 
 # Motion graphics
 
-## The standard
+Make the piece a top motion studio would put in its reel: an idea for this subject, designed and moved with intent,
+that makes people understand it or want it. Surprise us; the expected version is not the goal.
 
-Work a top motion studio would put in its reel: a visual system designed for this subject, motion with weight and
-intent, every frame composed. Not a slideshow with things sliding in. Avoid the look that fits any subject — flat
-icons popping in, default gradients, every element fading up — unless the idea truly calls for it and it is
-executed at a professional level.
+## What has to be true
 
-## Find the look first
+- **It belongs to this subject.** The idea, the pictures and the motion come from what it is about; nothing in it could
+  be moved into another company's film.
+- **The person's facts and brand.** Every number, name, quote and claim as they gave it, none made up; a chart's shapes
+  match its values, with units and where the data comes from; when there is a voice, the picture shows what it says as
+  it says it. Their logo, colors and type are used as given, never redrawn.
+- **It holds up next to the best motion work you know.** Watch the whole film as a viewer would, and keep refining until
+  it does.
+- **It stays editable**: the person can change any word or number later.
 
-From the subject, the audience and the message, choose one direction that could only belong to this film and write it
-down (`direction.md`): the idea in a sentence, palette, typefaces, shapes, how things move and connect, what each part
-does. Consider the whole range — bold typographic systems, isometric or 3D worlds, data turned into form, line and
-shape choreography, textured illustration, photographic collage, generative and shader-driven visuals, restrained
-minimalism.
+## What you have
 
-## The bar
+Anything you can make pictures and motion with: the web platform and any library on it, Blender or any renderer whose
+output becomes a clip, the person's footage, photos and data, any font whose license allows it, images, video, music and
+sound from `npx openfilm get`, your own built-in tools, and services the person has keys for. OpenFilm's own rules
+still hold: the picture at t depends on t alone, a page has no sound, and what you render elsewhere enters as a clip
+under `assets/` with the script that made it. Ask before downloading anything large onto the person's computer.
 
-- **One system**: shapes, color, type and motion follow rules the viewer can feel; transitions carry ideas from one
-  scene to the next instead of cutting between slides.
-- **Motion craft**: anticipation, overlap, easing with weight, a clear hierarchy of what moves first; never jittery,
-  never everything at once, never a long still.
-- **Clarity**: one idea at a time, readable at the size it will be watched; numbers and facts exactly the person's.
-- **Sound**: music and effects that hit with the motion (`npx openfilm get` when a service is connected).
-- **Judge it honestly** at full size, scene by scene, against the best work you know, and refine at least once more.
+## With the person
 
-## Freedom
-
-Use everything you can make pictures with: HTML and CSS, SVG, Canvas, WebGL and shaders, three.js and other engines,
-animation libraries driven by t, Blender or any renderer whose output becomes a clip, generated images and video, the
-person's own assets. The rules are only OpenFilm's: the picture at t depends on t alone, and a page has no sound.
-
-## From the person
-
-What it is about, who it is for, where it will be shown, and any brand (logo, colors, fonts) to follow.
+What they ask for comes before anything here. What it is about, who it is for, where it will be shown, and their
+material: a logo, colors, product shots, data, a script. Ask without holding up the work. When done, tell them in a few
+lines the idea and why it fits, where every number came from, and what of theirs would make it better.

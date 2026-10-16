@@ -1,33 +1,36 @@
 ---
 name: screen-demo
-description: Turn a screen recording into a polished product or tutorial demo — the camera follows the action with smooth zooms, dead time is gone, clicks and key moments are clear, and the story of what the product does reads at a glance. Use when the person gives a screen recording (or a product to record) and asks for a demo, walkthrough, tutorial or feature video (录屏演示, 产品演示, 教程, 操作视频).
+description: Turn a screen recording into a polished product demo or tutorial: the view follows the action, dead time is gone, every step is easy to see, and the product looks as good as it is. Use when the person gives a screen recording (or a product to capture) and asks for a demo, walkthrough, tutorial, feature video or how-to (录屏演示, 产品演示, 教程, 操作视频, 功能介绍).
 ---
 
 # Screen demo
 
-## The result
+Make the demo that shows this product at its best and is effortless to follow: the viewer always knows where to look,
+sees each step land, never waits, and could do the same in the product today.
 
-A demo that makes the product look as good as it is and easy to follow: the viewer always knows where to look, sees
-each step land, and never waits.
+## What has to be true
 
-## The bar
+- **The real product.** Its own screens, actions and results, from the person's recording or captured from the live
+  product; never a redrawn interface or a result that did not happen. Where it must be simpler, crop and zoom into the
+  real thing.
+- **Clear where to look**, at the size it will be watched: the action, its text and its result readable on that
+  screen, a phone too when the demo is vertical.
+- **Nothing private in any frame**: keys, tokens, passwords, emails, names, customer data, notifications, other tabs
+  and bookmarks are hidden, or that part is recorded again.
+- **Honest time.** Waiting can go; where speed is what the product sells, the real time stays or the speed-up is shown.
+- **It holds up next to the best product demos you know.** Watch the whole film as a viewer would, and keep refining
+  until it does.
 
-- **The real product**: the person's recording, or the product recorded live; never a redrawn interface.
-- **Always clear where to look**: the frame moves to where the action is, close enough to read, smoothly, and back
-  out when the context matters.
-- **No waiting**: loading, typing and searching shortened or sped up; pauses only where the viewer needs a moment.
-- **Steps that land**: clicks, results and key moments marked so they are seen (a highlight, a cursor emphasis, a
-  short label), never cluttered.
-- **A story**: what the viewer will get, then the steps, then the result; one idea per beat.
-- **Finished**: a frame around the screen that suits the product, readable type, sound or music that fits, and a
-  voice-over when asked or useful (`npx openfilm get tts` when a voice service is connected).
-- **Trimmed, not re-encoded**: the recording is cut by its in and out points, its speed by `speed`, as the manual says.
+## What you have
 
-## Freedom
+The recording, cut by its in and out points and sped up with `speed`, never re-encoded; a page can also play it,
+silent, with its time set from t, so the picture can move over it. OpenFilm's own headless browser captures the live
+product with nothing to install: `npx openfilm capture --help`. A voice from `npx openfilm get tts`,
+music and sound from `get`, your own built-in tools, services the person has keys for, and anything you can make
+pictures and motion with.
 
-Use any technique: zooms and pans by CSS, canvas or WebGL; cursor tracking from the recording's frames; captured
-screenshots or recordings of the live product; any renderer or library for titles and motion.
+## With the person
 
-## From the person
-
-The recording or the product, who the demo is for, and what it must show. Ask what matters most if it is unclear.
+What they ask for comes before anything here. The recording or the product (its address, and an account to show it
+with), who the demo is for, and the one thing it must show. Ask without holding up the work. When done, tell them in a
+few lines what it shows, what you sped up or left out, and what you hid.

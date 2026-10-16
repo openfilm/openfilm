@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/skills/screen-demo",
+  "repository": "https://github.com/openfilm/skills/tree/main/skills/screen-demo",
   "kind": "workflow",
   "order": 3,
   "icon": "monitor",
@@ -20,10 +20,10 @@
     "es": "Una grabación de pantalla convertida en una demo pulida: la cámara sigue la acción, sin esperas, cada paso se entiende."
   },
   "details": {
-    "zh-CN": "适合：产品演示、软件教程、功能介绍。\n它会：把录屏做成精致的演示片：镜头跟着操作推近拉远，加载和等待剪掉，点击和结果清楚可见，需要时配上讲解。",
-    "en": "Best for: product demos, software tutorials and feature videos.\nWhat it does: turns a screen recording into a polished demo. The camera follows the action, the waiting is cut, clicks and results are clear, with a voice-over when you want one.",
-    "ja": "こんなときに：製品デモ、ソフトのチュートリアル、機能紹介。\nすること：画面収録を洗練されたデモに。カメラが操作に寄り、待ち時間はカットし、クリックと結果がはっきり見えます。必要ならナレーションも。",
-    "ko": "이럴 때: 제품 데모, 소프트웨어 튜토리얼, 기능 소개.\n하는 일: 화면 녹화를 완성도 높은 데모로. 카메라가 동작을 따라가고 기다림은 자르고 클릭과 결과가 분명하게 보이며, 원하면 내레이션도 넣습니다.",
-    "es": "Ideal para: demos de producto, tutoriales de software y vídeos de funciones.\nQué hace: convierte una grabación de pantalla en una demo pulida: la cámara sigue la acción, se cortan las esperas, los clics y resultados se ven claros, con voz en off si la quieres."
+    "zh-CN": "适合：产品演示、软件教程、功能介绍。\n它会：用你的真实录屏做成精致的演示片：画面跟着操作走，等待剪掉，每一步都看得清；界面不重画，密钥和隐私信息会遮掉，需要时配上讲解。",
+    "en": "Best for: product demos, software tutorials and feature videos.\nWhat it does: turns your real screen recording into a polished demo: the view follows the action, the waiting is cut, every step is clear. The interface is never redrawn, keys and private details are hidden, and there is a voice-over when you want one.",
+    "ja": "こんなときに：製品デモ、ソフトのチュートリアル、機能紹介。\nすること：実際の画面収録を洗練されたデモに。画面が操作を追い、待ち時間はカットし、各ステップがはっきり見えます。画面を描き直すことはなく、キーや個人情報は隠します。必要ならナレーションも。",
+    "ko": "이럴 때: 제품 데모, 소프트웨어 튜토리얼, 기능 소개.\n하는 일: 실제 화면 녹화를 완성도 높은 데모로. 화면이 동작을 따라가고 기다림은 자르며 모든 단계가 분명하게 보입니다. 화면을 다시 그리지 않고, 키와 개인 정보는 가립니다. 원하면 내레이션도 넣습니다.",
+    "es": "Ideal para: demos de producto, tutoriales de software y vídeos de funciones.\nQué hace: convierte tu grabación de pantalla real en una demo pulida: la imagen sigue la acción, se cortan las esperas y cada paso se ve claro. La interfaz nunca se redibuja, las claves y los datos privados se ocultan, y hay voz en off si la quieres."
   }
 }

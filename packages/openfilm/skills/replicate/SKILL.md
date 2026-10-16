@@ -1,43 +1,40 @@
 ---
 name: replicate
-description: Make a film like a reference video (its structure, rhythm, look and motion) with the person's own content. Use when the person gives a video, as a file or a link, and asks for one like it, to learn its style or pacing, or to remake it for their product or topic (复刻, 照着做, 做个同款).
+description: Remake a reference video in OpenFilm, as close as the person wants it, from frame for frame to its structure, rhythm, look and motion carrying their own content. Use when the person gives a video, as a file or a link, and asks for an exact copy of it, one like it, its style or pacing, or a remake for their product or topic (复刻, 照着做, 做个同款, 一模一样, 仿这个视频).
 ---
 
 # Replicate a video
 
-## What a good replica keeps
+Remake a video the person admires, as close as they want it: the same film frame for frame, or its form (the parts,
+the rhythm, the look, the way things move) carrying their own content. When their words do not say which, ask. Either
+way it is made again in OpenFilm, so every part of it can be changed.
 
-- **Structure**: the same parts in the same order, each doing the same job for the viewer (the hook, the setup, the
-  turn, the payoff, the call to action).
-- **Rhythm**: each part about as long; the picture changes at the same moments; cuts and hits land on the same beats.
-  A longer or shorter film scales them.
-- **Look**: layout and framing, type (family, weight, how sizes relate), palette, background, the elements that recur
-  (captions, labels, counters, a frame around everything).
-- **Motion**: how things enter, move and leave: direction, distance, speed, ease, overshoot; the transitions between
-  parts.
+## What has to be true
 
-## What it changes
+- **The same moments.** Where the reference cuts, a word appears, something moves or a sound hits, the film does too,
+  scaled when the lengths differ; for an exact copy, each frame matches the reference's frame at the same time. Compare
+  the two at the same times with `npx openfilm look`, and report honestly, in numbers, how close it is.
+- **Made again.** The reference stays in `references/` and is never a clip of the film: what the film shows is made
+  anew, and the reference's own music, footage or voice go in only when the person asks for them.
+- **Their version is theirs**: when they want their own content, every part carries their topic, product, words and
+  material, and a part they have nothing for takes a job that fits their film. A template with new words in it is not
+  done.
+- **It holds up next to the reference**, as well made at every moment. Watch the whole film as a viewer would, and keep
+  refining until it does.
 
-- The content is the person's: their topic, product, words, footage. Change what a part shows; keep what it does. A
-  part with nothing to stand for in their film gives its job to something that fits.
-- Never the reference's own footage, music, voice, likeness, logo or words: they are someone else's, and platforms hold
-  back near copies.
+## What you have
 
-## How
+`references/` sits beside the film but not in it: `assets/` holds only what the film uses. Anything you can make
+pictures, motion and sound with: the web platform and any library on it, renderers whose output becomes a clip, the
+person's footage and photos, any font whose license allows it, images, video, music and voice from `npx openfilm get`,
+your own built-in tools, and services the person has keys for. OpenFilm's own rules still hold: the picture at t
+depends on t alone, a page has no sound, and what you render elsewhere enters as a clip under `assets/` with the script
+that made it. Ask before downloading anything large onto the person's computer.
 
-1. **The reference** goes in `references/`. Given a link, `yt-dlp -o references/<name>.mp4 <link>` when yt-dlp is
-   installed; otherwise ask for the file. When it has speech, transcribe it with `npx openfilm get` (a `.vtt` beside
-   it).
-2. **Watch all of it**: `npx openfilm look references/<name>.mp4` for the whole, then stretches
-   (`look references/<name>.mp4 4-8 --count 24`) and single frames at full size (`look references/<name>.mp4 5.2`)
-   to read type and layout. Where something moves, look at a short stretch densely to see its path, speed and ease.
-3. **Reuse before building**: when an OpenFilm example or one of the person's projects already does something like a
-   part, read its source and start from it.
-4. **Write the plan** in `references/<name>.md`: the reference part by part (its times, what it shows, how it looks
-   and moves, what it does) and what takes each part's place in the person's film.
-5. **Make the film** from the plan.
-6. **Compare** the film with the reference at the same moments: `look` the same stretch of each and set the sheets
-   side by side. Fix what differs in timing, size, position, color and motion; then check the whole film.
+## With the person
 
-When done, tell the person in a few lines what was kept, what changed and why, and what of theirs (footage, a logo,
-their voice) would bring it closer.
+What they ask for comes before anything here. The reference (a file, or a link you can download), how close they want
+it, what their version is about and the material they have (footage, product shots, a logo, their voice), and where it
+will be posted. Ask without holding up the work. When done, tell them in a few lines what was kept, what changed and
+why, how close it is, and, if they will post it, which parts belong to someone else (footage, music, voice, faces, a
+logo, words, typefaces).

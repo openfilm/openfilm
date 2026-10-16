@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/skills/vintage-film",
+  "repository": "https://github.com/openfilm/skills/tree/main/skills/vintage-film",
   "kind": "style",
   "order": 7,
   "icon": "film",
@@ -13,17 +13,17 @@
     "es": "Película antigua"
   },
   "summary": {
-    "en": "Your photos as old film and instant prints: grain, warm color, light leaks, date stamps.",
-    "zh-CN": "把照片做成老胶片和拍立得的样子：颗粒、暖色、漏光、日期戳，适合旅行、生日和各种回忆。",
-    "ja": "写真を古いフィルムやインスタント写真のように。粒子、暖かい色、光漏れ、日付入り。",
-    "ko": "사진을 옛 필름과 즉석 사진처럼: 입자, 따뜻한 색, 빛 번짐, 날짜 스탬프.",
-    "es": "Tus fotos como película antigua e instantáneas: grano, color cálido, fugas de luz, fechas."
+    "en": "Your photos and clips as a memory film, as if found on an old reel or in a box of prints.",
+    "zh-CN": "把照片和视频做成回忆短片，像从老胶卷或一盒旧照片里找出来的。",
+    "ja": "写真と動画を、古いフィルムや焼き増し写真の箱から見つけたような思い出の映像に。",
+    "ko": "사진과 영상을 오래된 필름이나 사진 상자에서 찾아낸 듯한 추억 영상으로.",
+    "es": "Tus fotos y clips como una película de recuerdos, como encontrada en un viejo rollo o en una caja de copias."
   },
   "details": {
-    "zh-CN": "适合：旅行、生日、毕业、婚礼、年度回顾这类照片回忆。\n它会：挑出撑得起故事的照片，做成老胶片和拍立得的样子：颗粒、暖色、漏光、日期戳；默认是适合朋友圈的竖版短片。",
-    "en": "Best for: memories from a trip, a birthday, a graduation, a wedding or a year.\nWhat it does: picks the photos that carry the story and shows them as old film and instant prints, with grain, warm color, light leaks and date stamps; a vertical short for social posts by default.",
-    "ja": "こんなときに：旅行、誕生日、卒業、結婚式、一年の振り返りなど写真の思い出。\nすること：物語になる写真を選び、粒子、暖かい色、光漏れ、日付入りの古いフィルムやインスタント写真のように。標準はSNS向けの縦型ショート。",
-    "ko": "이럴 때: 여행, 생일, 졸업, 결혼식, 한 해 돌아보기 같은 사진 추억.\n하는 일: 이야기를 이끄는 사진을 골라 입자, 따뜻한 색, 빛 번짐, 날짜 스탬프가 있는 옛 필름과 즉석 사진처럼 만듭니다. 기본은 SNS용 세로 쇼츠.",
-    "es": "Ideal para: recuerdos de un viaje, un cumpleaños, una graduación, una boda o un año.\nQué hace: elige las fotos que cuentan la historia y las muestra como película antigua e instantáneas, con grano, color cálido, fugas de luz y fechas; por defecto, un vertical para redes."
+    "zh-CN": "适合：旅行、生日、毕业、婚礼、年度回顾这类照片回忆。\n它会：挑出撑得起故事的照片，做出胶片和老照片的质感；照片里的人和事不改动，日期和地点不编造。",
+    "en": "Best for: memories from a trip, a birthday, a graduation, a wedding or a year.\nWhat it does: picks the pictures that carry the story and gives them the look of film and prints, never changing the people in them or making up dates and places.",
+    "ja": "こんなときに：旅行、誕生日、卒業、結婚式、一年の振り返りなど写真の思い出。\nすること：物語になる写真を選び、フィルムや焼き増し写真の質感に。写っている人や出来事は変えず、日付や場所を作りません。",
+    "ko": "이럴 때: 여행, 생일, 졸업, 결혼식, 한 해 돌아보기 같은 사진 추억.\n하는 일: 이야기를 이끄는 사진을 골라 필름과 인화 사진의 질감으로 만듭니다. 사진 속 사람과 일은 바꾸지 않고, 날짜와 장소를 지어내지 않습니다.",
+    "es": "Ideal para: recuerdos de un viaje, un cumpleaños, una graduación, una boda o un año.\nQué hace: elige las fotos que cuentan la historia y les da el aspecto de la película y las copias en papel, sin cambiar a las personas ni inventar fechas o lugares."
   }
 }

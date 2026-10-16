@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/skills/motion-graphics",
+  "repository": "https://github.com/openfilm/skills/tree/main/skills/motion-graphics",
   "kind": "workflow",
   "order": 4,
   "icon": "shapes",
@@ -20,10 +20,10 @@
     "es": "Un explicativo, una promo o una intro diseñados y animados a nivel de estudio, con un sistema visual propio."
   },
   "details": {
-    "zh-CN": "适合：产品讲解、品牌宣传、片头、数据故事。\n它会：先为你的主题定一套专属的视觉体系，再用顶级工作室的标准做设计和动画，不是幻灯片加飞入动画。",
-    "en": "Best for: product explainers, brand promos, intros and data stories.\nWhat it does: designs a visual system for your subject first, then designs and animates it to a top studio’s standard. Not slides with things flying in.",
-    "ja": "こんなときに：製品解説、ブランドプロモーション、オープニング、データストーリー。\nすること：テーマに合わせたビジュアルシステムを最初に決め、一流スタジオの基準でデザインとアニメーションを仕上げます。",
-    "ko": "이럴 때: 제품 설명, 브랜드 홍보, 인트로, 데이터 스토리.\n하는 일: 주제에 맞는 비주얼 시스템을 먼저 정하고 최고 스튜디오 수준으로 디자인하고 움직입니다. 슬라이드에 날아드는 효과가 아닙니다.",
-    "es": "Ideal para: explicativos de producto, promos de marca, intros e historias con datos.\nQué hace: primero diseña un sistema visual para tu tema y luego lo diseña y anima al nivel de un gran estudio. No son diapositivas con cosas que entran volando."
+    "zh-CN": "适合：产品讲解、品牌宣传、片头、数据故事。\n它会：为你的主题找一个只属于它的创意，按顶级工作室的标准设计和制作动画；你的数字、事实和品牌原样使用，不编造。",
+    "en": "Best for: product explainers, brand promos, intros and data stories.\nWhat it does: finds an idea that belongs to your subject alone, then designs and animates it to a top studio’s standard. Your numbers, facts and brand are used exactly as you gave them.",
+    "ja": "こんなときに：製品解説、ブランドプロモーション、オープニング、データストーリー。\nすること：そのテーマだけのアイデアを見つけ、一流スタジオの基準でデザインとアニメーションを仕上げます。数字、事実、ブランドは渡されたとおりに使い、作り話はしません。",
+    "ko": "이럴 때: 제품 설명, 브랜드 홍보, 인트로, 데이터 스토리.\n하는 일: 주제에만 어울리는 아이디어를 찾아 최고 스튜디오 수준으로 디자인하고 움직입니다. 숫자, 사실, 브랜드는 받은 그대로 쓰고 지어내지 않습니다.",
+    "es": "Ideal para: explicativos de producto, promos de marca, intros e historias con datos.\nQué hace: encuentra una idea que solo pertenece a tu tema y la diseña y anima al nivel de un gran estudio. Tus cifras, datos y marca se usan tal como los diste."
   }
 }

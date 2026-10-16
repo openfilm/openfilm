@@ -16,6 +16,7 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "audit:public": "node scripts/audit-public.mjs",
     "check:pack": "node scripts/check-pack.mjs",
+    "skills:sync": "node scripts/sync-skills.mjs",
     "changeset": "changeset"
   },
   "devDependencies": {

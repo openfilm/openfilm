@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/skills/replicate",
+  "repository": "https://github.com/openfilm/skills/tree/main/skills/replicate",
   "kind": "workflow",
   "order": 1,
   "icon": "copy",
@@ -13,17 +13,17 @@
     "es": "Replicar un vídeo"
   },
   "summary": {
-    "en": "Give it a video: your film follows its structure, rhythm, look and motion, with your own content.",
-    "zh-CN": "给它一条视频，做出你的同款：结构、节奏、版式和动效跟着它，内容是你的。",
-    "ja": "動画を渡すと、構成・リズム・見た目・動きを同じにして、中身はあなたのもので作ります。",
-    "ko": "영상을 주면 구성, 리듬, 화면, 움직임은 그대로, 내용은 당신의 것으로 만듭니다.",
-    "es": "Dale un vídeo: tu película sigue su estructura, ritmo, aspecto y movimiento, con tu propio contenido."
+    "en": "Give it a video and it is remade in OpenFilm: frame for frame, or with your own content.",
+    "zh-CN": "给它一条视频，在 OpenFilm 里重做一遍：可以逐帧一模一样，也可以换成你的内容。",
+    "ja": "動画を渡すと、OpenFilm で作り直します。1コマずつ同じにも、あなたの内容に置き換えることもできます。",
+    "ko": "영상을 주면 OpenFilm에서 다시 만듭니다. 프레임까지 똑같이, 또는 당신의 내용으로.",
+    "es": "Dale un vídeo y se rehace en OpenFilm: fotograma a fotograma, o con tu propio contenido."
   },
   "details": {
-    "zh-CN": "适合：看到一条喜欢的视频，想做一条自己的同款。\n它会：拆出参考片的结构、节奏、版式和动效，换成你的内容重新做一遍；只学做法，不搬别人的画面、音乐和文案。",
-    "en": "Best for: you saw a video you love and want one like it.\nWhat it does: takes apart the reference's structure, rhythm, layout and motion, and remakes them with your content. It learns how it was made, never copies its footage, music or words.",
-    "ja": "こんなときに：気に入った動画と同じような一本を作りたいとき。\nすること：参考動画の構成、リズム、レイアウト、動きを分解し、あなたの内容で作り直します。作り方だけを学び、映像や音楽、文章は使いません。",
-    "ko": "이럴 때: 마음에 드는 영상과 같은 느낌의 영상을 만들고 싶을 때.\n하는 일: 참고 영상의 구성, 리듬, 레이아웃, 움직임을 분석해 당신의 내용으로 다시 만듭니다. 만드는 방식만 배우고 영상, 음악, 글은 가져오지 않습니다.",
-    "es": "Ideal para: viste un vídeo que te encanta y quieres uno igual.\nQué hace: desmonta la estructura, el ritmo, la composición y el movimiento de la referencia y los rehace con tu contenido. Aprende cómo se hizo; nunca copia sus imágenes, música ni textos."
+    "zh-CN": "适合：看到一条喜欢的视频，想做一条一模一样的，或者做一条自己的同款。\n它会：在 OpenFilm 里把它重新做出来，每个时刻都对上（实测，不是估）；做出来的每一部分你都能再改。",
+    "en": "Best for: a video you love that you want copied exactly, or one like it with your content.\nWhat it does: remakes it in OpenFilm with every moment matched (measured, not guessed), so you can change any part of it afterwards.",
+    "ja": "こんなときに：気に入った動画をそっくり作りたいとき、または自分の内容で同じような動画を作りたいとき。\nすること：OpenFilm で作り直し、すべての瞬間を合わせます（実測で確認）。できあがった部分はどれも後から変えられます。",
+    "ko": "이럴 때: 마음에 드는 영상을 똑같이 만들고 싶거나, 내 내용으로 비슷한 영상을 만들고 싶을 때.\n하는 일: OpenFilm에서 다시 만들어 모든 순간을 맞춥니다(측정해서 확인). 만들어진 모든 부분은 나중에 바꿀 수 있습니다.",
+    "es": "Ideal para: un vídeo que te encanta y quieres copiar tal cual, o uno parecido con tu contenido.\nQué hace: lo rehace en OpenFilm con cada momento igualado (medido, no estimado), para que puedas cambiar cualquier parte después."
   }
 }
