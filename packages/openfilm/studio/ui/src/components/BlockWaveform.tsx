@@ -12,6 +12,7 @@
 import * as React from 'react';
 import { normalizeWavePeaks, waveformColumns } from '@/lib/waveform-columns';
 import { mediaFetch } from '@/lib/media-queue';
+import { useThemeChanges } from '@/lib/theme-changes';
 
 /** A sound's envelope: the whole file's peaks and its length (to turn peak indexes into ms). */
 interface Wave {
@@ -103,6 +104,8 @@ export function BlockWaveform({
     return () => { alive = false; };
   }, [url]);
 
+  /* its color is read as it draws: a theme changed, it draws again */
+  const theme = useThemeChanges();
   const from = Math.max(0, Math.min(width, Math.floor(visiblePx?.from ?? 0)));
   const to = Math.max(from, Math.min(width, Math.ceil(visiblePx?.to ?? width)));
   const sliceW = to - from;
@@ -139,7 +142,7 @@ export function BlockWaveform({
       ctx.fill();
     });
     return () => cancelAnimationFrame(frame);
-  }, [wave, width, height, color, inMs, durMs, from, sliceW]);
+  }, [wave, width, height, color, inMs, durMs, from, sliceW, theme]);
 
   if (!wave?.peaks.length || sliceW <= 0) return null;
   return (

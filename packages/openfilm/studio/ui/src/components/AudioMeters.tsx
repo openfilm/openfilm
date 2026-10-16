@@ -13,6 +13,7 @@ import {
   channelLevel, fallTo, formatDb, holdPeak, meterPosition, METER_FLOOR_DB, METER_MARKS, type HeldPeak,
 } from '@/lib/audio-levels';
 import type { MixSamples } from '@/editor/player';
+import { useThemeChanges } from '@/lib/theme-changes';
 
 /** How wide the meters are, px: two bars and their scale. */
 export const METERS_W = 44;
@@ -108,14 +109,10 @@ export function AudioMeters({ levels, playing }: {
     });
   }, [size]);
 
-  React.useEffect(() => { draw(); }, [draw]);
-  /* its colors are the theme's, read as it draws: when the theme changes (Settings, the system's, a page that settled
-     on another after its first picture), it draws again, or it keeps the old theme's bars until the film plays */
-  React.useEffect(() => {
-    const watch = new MutationObserver(() => draw());
-    watch.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-    return () => watch.disconnect();
-  }, [draw]);
+  /* its colors are the theme's, read as it draws: when the theme changes it draws again, or it would keep the old
+     theme's bars until the film plays */
+  const theme = useThemeChanges();
+  React.useEffect(() => { draw(); }, [draw, theme]);
 
   /* while playing (and while the bars fall back after), once a frame; nothing otherwise */
   React.useEffect(() => {
