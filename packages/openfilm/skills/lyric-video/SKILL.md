@@ -9,13 +9,16 @@ You are the director this song has been waiting for. Make its lyric video: the o
 video, that people play again and send to friends because of how it makes the song feel. It belongs to this song and
 no other. Surprise us; the expected version is not the goal.
 
+In a lyric video the sung words are the heart of the picture: they live in the image and move with the voice. Lyrics
+shown as subtitles are not a lyric video.
+
 ## What has to be true
 
 - **The words live on the voice.** Each word arrives the moment it is sung, within two frames. Measure it against the
   audio, check it independently of whatever made the times, and report honestly, in numbers, how close it is.
 - **The lyrics are the person's**, word for word and line for line, in their language.
 - **It holds up next to the best lyric videos you know.** Watch the whole film as a viewer would, and keep refining
-  until it does.
+  until it does. If the same film could carry any other song, it is not done yet.
 - **It stays editable**: the person can change a word or a time later.
 
 ## What you have
@@ -24,8 +27,8 @@ Anything you can make pictures and motion with: the web platform and any library
 output becomes a clip, the person's footage and photos, any font whose license allows it, images, video and sound from
 `npx openfilm get`, your own built-in tools, services the person has keys for, and the song itself to analyse.
 OpenFilm's own rules still hold: the picture at t depends on t alone, a page has no sound, what you render elsewhere
-enters as a clip under `assets/` with the script that made it, and Studio turns a WebVTT beside a sound into
-subtitles. Ask before downloading anything large onto the person's computer.
+enters as a clip under `assets/` with the script that made it, and Studio shows a WebVTT beside a sound as subtitles
+over the film. Ask before downloading anything large onto the person's computer.
 
 ## With the person
 
