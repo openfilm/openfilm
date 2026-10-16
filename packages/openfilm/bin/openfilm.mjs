@@ -3,12 +3,13 @@ import { parseArgs } from 'node:util';
 
 const USAGE = `openfilm — a film is a function of time: given t, it draws that moment
 
-  openfilm open   [folder | url]      start or open a project; Studio shows it to the person
-  openfilm look   [what] [t | a-b]    check the film and draw it: a contact sheet with its sound and loudness
-  openfilm render [a-b]               the MP4, saved beside film.html
-  openfilm get    [what] [--options]  voice-over, music, sound effects, transcripts, images, video, from a connected service
-  openfilm skills                     the skills this film can be made with; \`openfilm skill <name>\` prints one
-  openfilm update                     the newest OpenFilm; Studio starts again on it
+  openfilm open    [folder | url]      start or open a project; Studio shows it to the person
+  openfilm look    [what] [t | a-b]    check the film and draw it: a contact sheet with its sound and loudness
+  openfilm render  [a-b]               the MP4, saved beside film.html
+  openfilm get     [what] [--options]  voice-over, music, sound effects, transcripts, images, video, from a connected service
+  openfilm capture <url> <file.png>    a picture of a live web page, to show a product or a site as it is
+  openfilm skills                      the skills this film can be made with; \`openfilm skill <name>\` prints one
+  openfilm update                      the newest OpenFilm; Studio starts again on it
 
   Run with no arguments for the manual; \`openfilm <command> --help\` for one command's options; --version for the version.
   look, render and get work on the project around the current folder.
@@ -74,6 +75,19 @@ openfilm skill remove <name>
   --4k            3840 px wide              --scale <n>     any device pixel ratio
   --blur          motion blur (8 samples)   --samples <n>   --shutter <0..1>
   --alpha         transparent background    --workers <n>   parallel browsers`,
+  capture: `openfilm capture <url> <file.png>
+
+  A picture of a live web page (a product, a site) as it is, sharp enough to fill the stage, taken in the browser
+  OpenFilm draws films in: nothing to install. Prints the picture's path and its size in pixels.
+
+  --size <w>x<h>    the window, in px (1440x900; a phone: 390x844)
+  --scale <n>       pixels per px (2)
+  --full            the whole page, top to bottom, for a scroll in the film
+  --selector <css>  only this element (a panel, a card)
+  --click <css>     click it first (a tab, a menu); give it again for more, in order
+  --hide <css>      remove it first (a cookie banner, a chat bubble); give it again for more
+  --dark            the page in its dark theme
+  --wait <ms>       time for the page to settle before the picture (1500)`,
 };
 
 /* `openfilm` alone: the manual, the whole of what an agent needs to know. `get` takes any options its verb has,
@@ -121,6 +135,8 @@ try {
       count: { type: 'string' }, out: { type: 'string', short: 'o' }, '4k': { type: 'boolean' }, scale: { type: 'string' },
       blur: { type: 'boolean' }, samples: { type: 'string' }, shutter: { type: 'string' }, alpha: { type: 'boolean' },
       fps: { type: 'string' }, workers: { type: 'string' }, help: { type: 'boolean', short: 'h' },
+      size: { type: 'string' }, full: { type: 'boolean' }, wait: { type: 'string' }, dark: { type: 'boolean' },
+      click: { type: 'string', multiple: true }, hide: { type: 'string', multiple: true }, selector: { type: 'string' },
     },
   });
 } catch (e) {
@@ -147,6 +163,7 @@ const commands = {
   open: () => open(args[0] ?? null),
   look: () => import('../src/look.mjs').then((m) => m.look(args, opts)),
   render: () => import('../src/render.mjs').then((m) => m.render(args, opts)),
+  capture: () => import('../src/capture.mjs').then((m) => m.capture(args, opts)),
   update: () => import('../studio/client.mjs').then((m) => m.updateOpenfilm((line) => console.error(line))),
   skills: () => import('../src/skills-cli.mjs').then((m) => m.skillsCommand(RUN)),
   skill: () => import('../src/skills-cli.mjs').then((m) => m.skillCommand(args, RUN)),

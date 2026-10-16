@@ -65,6 +65,7 @@ openfilm open   [folder | url]    # 在 Studio 里打开片子：新建、打开
 openfilm look   [what] [t | a-b]  # 检查片子、某个页面或媒体文件：缩略图总览、单帧或一段区间
 openfilm render [a-b]             # 渲染成 MP4；--4k、--blur（运动模糊）、--alpha（.webm / .mov）
 openfilm get    [what]            # 用你接入的服务生成配音、音乐、音效、字幕转写、图片和视频
+openfilm capture <url> <file.png> # 截取正在运行的网页（产品、网站），清晰到能占满画面
 ```
 
 `openfilm <命令> --help` 列出某个命令的选项；单独运行 `openfilm get` 会列出能生成什么，以及怎么在 Studio 里用你

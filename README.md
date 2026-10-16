@@ -66,6 +66,7 @@ openfilm open   [folder | url]    # show a film in Studio: a new one, an existin
 openfilm look   [what] [t | a-b]  # check the film, a page or a media file: a contact sheet, one frame, or a range
 openfilm render [a-b]             # the MP4; --4k, --blur (motion blur), --alpha (.webm / .mov)
 openfilm get    [what]            # voice-over, music, sound effects, transcripts, images, video, from your services
+openfilm capture <url> <file.png> # a picture of a live web page (a product, a site), sharp enough to fill the stage
 ```
 
 `openfilm <command> --help` lists a command's options; `openfilm get` alone lists what can be made and how to

@@ -26,6 +26,7 @@ openfilm open   [folder | url]    # show a film in Studio (a GitHub address fetc
 openfilm look   [what] [t | a-b]  # check the film, a page or a media file
 openfilm render [a-b]             # the MP4; --4k, --blur, --alpha
 openfilm get    [what]            # voice-over, music, sound effects, transcripts, images, video, from your services
+openfilm capture <url> <file.png> # a picture of a live web page, to show a product as it is
 ```
 
 `MANUAL.md` (in this package) is what `openfilm` tells your agent, and `SPEC.md` is the film format, for anyone
