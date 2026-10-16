@@ -109,6 +109,13 @@ export function AudioMeters({ levels, playing }: {
   }, [size]);
 
   React.useEffect(() => { draw(); }, [draw]);
+  /* its colors are the theme's, read as it draws: when the theme changes (Settings, the system's, a page that settled
+     on another after its first picture), it draws again, or it keeps the old theme's bars until the film plays */
+  React.useEffect(() => {
+    const watch = new MutationObserver(() => draw());
+    watch.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => watch.disconnect();
+  }, [draw]);
 
   /* while playing (and while the bars fall back after), once a frame; nothing otherwise */
   React.useEffect(() => {
