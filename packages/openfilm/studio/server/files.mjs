@@ -153,7 +153,7 @@ function cleanLast(/** @type {string} */ rel) {
 }
 
 /** What a file is to the media pane: a picture, a video, a sound, a page, or something else. */
-function kindOf(/** @type {string} */ name) {
+export function kindOf(/** @type {string} */ name) {
   const kind = clipKind(name);
   return kind === 'still' ? 'image' : kind === 'sound' ? 'audio' : kind ?? 'other';
 }
@@ -484,12 +484,14 @@ function freeIn(/** @type {string} */ dir, /** @type {string} */ name) {
  * Bring files or folders from this computer into the project folder `into` (`assets` or under it): `copy` copies each
  * (a clone where the disk can make one: at once, and no more room taken until either is changed), `link` puts a link
  * to it there and remembers the place as one the person linked. A link to the same place already there is that one.
- * Returns where each landed.
+ * Returns where each landed. `anywhere`: into any folder of `root` ('' its top), not only assets/ (the Saved library,
+ * saved.mjs, whose folder is all media).
  * @param {string} root @param {string} into @param {string[]} paths @param {'copy' | 'link'} mode
+ * @param {{ anywhere?: boolean }} [o]
  */
-export async function bringIn(root, into, paths, mode) {
-  if (into !== ASSETS && !into.startsWith(`${ASSETS}/`)) throw new FileError('media goes in assets/');
-  const dir = inside(root, into);
+export async function bringIn(root, into, paths, mode, { anywhere = false } = {}) {
+  if (!anywhere && into !== ASSETS && !into.startsWith(`${ASSETS}/`)) throw new FileError('media goes in assets/');
+  const dir = into ? inside(root, into) : root;
   await mkdir(dir, { recursive: true });
   /** @type {string[]} */
   const landed = [];

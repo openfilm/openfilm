@@ -130,47 +130,23 @@ export const api = {
   answerAsk: (askId: string, allow: boolean) => call<{ answered: boolean }>(`get/asks/${encodeURIComponent(askId)}`, { method: 'POST', json: { allow } }),
   /** the provider's own page for its balance, opened in the person's browser */
   openBilling: (providerId: string) => call<Record<string, never>>(`providers/${encodeURIComponent(providerId)}/billing`, { method: 'POST' }),
-  /** what the person saved to use again in any project (studio/server/saved.mjs), the newest first */
-  saved: () => call<{ items: SavedItem[] }>('saved').then((r) => r.items),
-  /** clips (by id) and files (by path) of a project saved, each with its picture */
-  save: (id: string, what: { clips?: SavedAsk[]; groups?: Array<SavedAsk & { ids: string[] }>; files?: Array<SavedAsk & { path: string }> }) => (
-    call<{ items: SavedItem[] }>(`${p(id)}/saved`, { method: 'POST', json: what }).then((r) => r.items)
+  /** clips (by id), clips together (a group) and files (by path) of a project put in Saved (studio/server/saved.mjs):
+      each one's place there */
+  save: (id: string, what: { clips?: SavedAsk[]; groups?: Array<SavedAsk & { ids: string[] }>; files?: Array<SavedAsk & { path: string }>; into?: string }) => (
+    call<{ paths: string[] }>(`${p(id)}/saved`, { method: 'POST', json: what }).then((r) => r.paths)
   ),
-  /** a saved thing's files brought into the project: the clip to put on the timeline (a group's clips), or the file's place */
-  takeSaved: (id: string, savedId: string) => call<{ clip: Record<string, unknown> & { src: string } } | { clips: SavedGroupClip[] } | { path: string }>(
-    `${p(id)}/saved/${encodeURIComponent(savedId)}/take`, { method: 'POST', json: {} },
+  /** a thing of Saved (its `saved/` path) used in the project: a file imported (its place), or a bundle's files brought in
+      and the clip, a group's clips or the page to put on the timeline */
+  takeSaved: (id: string, path: string) => call<{ clip: Record<string, unknown> & { src: string } } | { clips: SavedGroupClip[] } | { path: string }>(
+    `${p(id)}/saved/take`, { method: 'POST', json: { path } },
   ),
-  renameSaved: (savedId: string, name: string) => call<{ item: SavedItem }>(`saved/${encodeURIComponent(savedId)}`, { method: 'PATCH', json: { name } }).then((r) => r.item),
-  /** into the system's trash */
-  trashSaved: (savedId: string) => call<object>(`saved/${encodeURIComponent(savedId)}`, { method: 'DELETE' }),
-  revealSaved: (savedId: string) => call<{ ok: true }>(`saved/${encodeURIComponent(savedId)}/reveal`, { method: 'POST', json: {} }),
 };
 
 /** A clip of a saved group: its track counted from the group's top one, its time in seconds from the group's start. */
 export type SavedGroupClip = { track: number; at: number; clip: Record<string, unknown> & { src: string } };
 
-/** A saved clip, group of clips or file, as the Saved view lists it. `main`: its (top) file, by its place in the project it came from. */
-export interface SavedItem {
-  id: string;
-  name: string;
-  kind: 'clip' | 'group' | 'file';
-  /** a group's clips */
-  count?: number;
-  savedAt: string;
-  main: string;
-  durationMs?: number;
-  w?: number;
-  h?: number;
-  /** its page sets custom properties on :root: the inspector's Template section changes them */
-  template?: boolean;
-  poster: boolean;
-}
-
-/** What is said of a thing to save: a clip's id (a file's path beside it), a name, and how long and big it is. */
+/** What is said of a thing put in Saved: a clip's id (a file's path beside it), a name, and how long and big it is. */
 export type SavedAsk = { id?: string; name?: string; durationMs?: number; w?: number; h?: number };
-
-/** A saved thing's picture. */
-export const savedPosterUrl = (item: Pick<SavedItem, 'id' | 'savedAt'>) => `/api/saved/${encodeURIComponent(item.id)}/poster?v=${encodeURIComponent(item.savedAt)}`;
 
 /** What an agent's `openfilm get` asks the person before it spends (studio/server/get.mjs). */
 export type SpendAsk = {

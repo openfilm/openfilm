@@ -19,6 +19,8 @@ import {
   ArrowUpDown,
   Bookmark,
   BookmarkPlus,
+  Layers,
+  LayoutTemplate,
   ChevronRight,
   Clapperboard,
   Copy,
@@ -71,9 +73,6 @@ import { Tooltip } from './Tooltip';
 import { retryImage } from '@/lib/retry-image';
 import { boxBetween, boxHits, boxPick, moveTargets, pickItem, type Box } from '@/lib/media-selection';
 import { barLayout, type BarWords } from '@/lib/media-bar';
-import type { SavedItem } from '@/api';
-import { useSaved } from '@/lib/saved';
-import { SavedView } from './SavedView';
 
 type Filter = 'all' | 'video' | 'image' | 'audio' | 'page' | 'other';
 type SortKey = 'name' | 'time' | 'duration' | 'type';
@@ -85,8 +84,6 @@ const FOLDER_DRAG = 'application/x-openfilm-media';
 const fromComputer = (dt: DataTransfer) => dt.types.includes('Files') && !dt.types.includes(FOLDER_DRAG);
 /** The open folder per project, kept across remounts (the layout re-mounts the pane). */
 const OPEN_FOLDER = new Map<string, string>();
-/** Which the pane shows, the project's media or what was saved: kept while Studio is open. */
-const SCOPE: { current: 'project' | 'saved' } = { current: 'project' };
 
 /** Tool folders, not material: fonts. */
 const HIDDEN_DIRS = [/(^|\/)fonts?(\/|$)/i];
@@ -168,8 +165,15 @@ export interface MediaPoolProps {
   onCollect?: (path: string) => Promise<MediaResult>;
   /** Files kept to use again in any project (lib/saved): the file menu's "Add to Saved". */
   onSave?: (files: WorkspaceResource[]) => void;
-  /** A saved thing put on the timeline at the playhead (the Saved view's double-click, Enter, Insert). */
-  onInsertSaved?: (item: SavedItem) => void;
+  /**
+   * Which library the pane shows, the project's media or Saved (the person's own, for every project), and the button
+   * beside Upload that switches between them. Both are the same pane: upload, folders, views, filters, sort, rename,
+   * move, delete, drag onto the timeline.
+   */
+  scope?: 'project' | 'saved';
+  onScope?: (next: 'project' | 'saved') => void;
+  /** Upload may also link media kept elsewhere (a project's); without it, files are copied in only (Saved). */
+  links?: boolean;
   /**
    * The app around Studio has a chat (lib/host.ts `refer`): a file as a reference in it. With it the file menu has
    * "Reference in chat", and a dragged file carries the reference too (STUDIO_REF_TYPE), for the chat to take.
@@ -207,7 +211,9 @@ export function MediaPool({
   onRelink,
   onCollect,
   onSave,
-  onInsertSaved,
+  scope = 'project',
+  onScope,
+  links = true,
   fileRef,
   onRefer,
   reveal,
@@ -233,11 +239,10 @@ export function MediaPool({
   const [dropTarget, setDropTarget] = React.useState<string | null>(null);
   const [osDrag, setOsDrag] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
-  /* the project's media, or what the person saved to use in any project (SavedView); the pane remembers which */
-  const [scope, setScopeState] = React.useState<'project' | 'saved'>(() => SCOPE.current);
-  const setScope = (next: 'project' | 'saved') => { SCOPE.current = next; setScopeState(next); setQuery(''); };
   const inSaved = scope === 'saved';
-  const savedList = useSaved();
+  React.useEffect(() => { setQuery(''); }, [scope]);
+  /* the top folder: All of the project's media, or Saved */
+  const topName = inSaved ? t('saved.title') : t('media.filter_all');
 
   React.useEffect(() => { setView(loadView(projectId)); setAtState(OPEN_FOLDER.get(projectId) ?? ''); setPicked([]); }, [projectId]);
   /* the file the viewer shows is the host's: the one clicked last, when it is a file. One shown from elsewhere (a click
@@ -449,7 +454,7 @@ export function MediaPool({
       else if (result === 'taken') taken ??= nameOf(path);
       else failed = true;
     }
-    if (taken) setNotice(t('media.moveTaken').replace('{name}', taken).replace('{folder}', intoRel ? intoRel.split('/').pop()! : t('media.filter_all')));
+    if (taken) setNotice(t('media.moveTaken').replace('{name}', taken).replace('{folder}', intoRel ? intoRel.split('/').pop()! : topName));
     else if (failed) setNotice(t('media.moveFailed'));
     if (selectedRef.current && moved.includes(selectedRef.current)) showFile(null);
     setPicked((cur) => cur.filter((key) => !moved.includes(key)));
@@ -553,7 +558,7 @@ export function MediaPool({
       submenu: moveTargets(folders, moving).map((rel) => {
         const here = heres.size === 1 && heres.has(rel);
         return {
-          id: `move:${rel}`, label: rel ? rel.split('/').join(' / ') : t('media.filter_all'), checked: here, disabled: here,
+          id: `move:${rel}`, label: rel ? rel.split('/').join(' / ') : topName, checked: here, disabled: here,
           ...(here ? { hint: t('media.moveHere') } : {}),
           onSelect: () => { void moveAll(keys, rel); },
         };
@@ -575,7 +580,8 @@ export function MediaPool({
       id: 'extract-audio', label: t('assets.extractAudio'), icon: <AudioLines size={14} />,
       onSelect: () => { void onExtractAudio(file.path).then((r) => { if (r !== 'ok') setNotice(t('assets.extractAudioFailed')); }); },
     }] : []),
-    ...(file.kind === 'mg' ? [] : [{ id: 'rename', label: t('assets.rename'), icon: <Pencil size={14} />, onSelect: () => setRenaming(file.path) }]),
+    /* a page of the project is named in other pages' code (not renamed here); one of Saved is its own folder */
+    ...(file.kind === 'mg' && !file.bundle ? [] : [{ id: 'rename', label: t('assets.rename'), icon: <Pencil size={14} />, onSelect: () => setRenaming(file.path) }]),
     moveEntry([file.path]),
     { id: 'delete', label: t('assets.delete'), icon: <Trash2 size={14} />, danger: true, onSelect: () => setConfirm({ targets: [{ path: file.path, folder: false }], name: file.name }) },
   ];
@@ -601,7 +607,8 @@ export function MediaPool({
     { id: 'sep', separator: true },
     { id: 'delete', label: t('media.deleteMany').replace('{n}', String(keys.length)), icon: <Trash2 size={14} />, danger: true, onSelect: () => askDelete(keys) },
   ];
-  /* what Upload offers: a copy in the project, or a link to where the media is kept (a NAS, another disk) */
+  /* what Upload offers: a copy in the project, or a link to where the media is kept (a NAS, another disk); where
+     nothing is linked (Saved), Upload picks the files to copy in at once */
   const importMenu: ContextMenuEntry[] = [
     { id: 'import', label: t('media.importFiles'), note: t('media.importFilesNote'), icon: <Upload size={14} />, onSelect: () => { void bringFrom('copy', false); } },
     { id: 'link', label: t('media.linkFiles'), note: t('media.linkFilesNote'), icon: <Link2 size={14} />, onSelect: () => { void bringFrom('link', false); } },
@@ -610,7 +617,7 @@ export function MediaPool({
   const blankMenu: ContextMenuEntry[] = [
     { id: 'new-folder', label: t('assets.newFolder'), icon: <FolderPlus size={14} />, onSelect: () => setCreating(true) },
     { id: 'import', label: t('media.import'), icon: <Plus size={14} />, onSelect: () => (onPick && onBring ? void bringFrom('copy', false) : inputRef.current?.click()) },
-    ...(onPick && onBring ? [
+    ...(onPick && onBring && links ? [
       { id: 'link', label: t('media.linkFiles'), icon: <Link2 size={14} />, onSelect: () => { void bringFrom('link', false); } },
       { id: 'link-folder', label: t('media.linkFolder'), icon: <FolderSymlink size={14} />, onSelect: () => { void bringFrom('link', true); } },
     ] : []),
@@ -797,7 +804,7 @@ export function MediaPool({
          delete what is picked, as an editor's project panel does; Enter puts the one file picked on the timeline, as
          its "+" does; ⌘A picks everything shown; Esc lets go */
       onKeyDown={(e) => {
-        if (renaming || confirm || inSaved) return;
+        if (renaming || confirm) return;
         if ((e.target as HTMLElement).closest('input, textarea, [contenteditable="true"], button')) return;
         const plain = !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey;
         if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'a' && order.length) {
@@ -860,19 +867,20 @@ export function MediaPool({
           </Tooltip>
         )}
         {/* bringing media in is what this pane is for: the one labeled button, right after the search */}
-        {inSaved ? null : <Tooltip label={t('media.import')} side="bottom">
+        <Tooltip label={t('media.import')} side="bottom">
           <button type="button" aria-label={t('media.import')} aria-haspopup={onPick && onBring ? 'menu' : undefined}
-            onClick={(e) => (onPick && onBring ? barMenu(e, importMenu) : inputRef.current?.click())}
+            onClick={(e) => (onPick && onBring ? (links ? barMenu(e, importMenu) : void bringFrom('copy', false)) : inputRef.current?.click())}
             className={`flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md bg-[var(--bg-active)] text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--border-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--border-strong)] ${bar.uploadWord ? 'px-2.5' : 'w-7'}`}>
             <Upload size={13} strokeWidth={2.2} />
             {bar.uploadWord ? uploadWord : null}
           </button>
-        </Tooltip>}
-        {/* what the person saved, for any project: the pane shows it in place of the project's media, and back */}
-        <BarButton label={t(inSaved ? 'saved.back' : 'saved.title')} on={inSaved} onClick={() => setScope(inSaved ? 'project' : 'saved')}>
-          <Bookmark size={14} {...(inSaved ? { fill: 'currentColor' } : {})} />
-        </BarButton>
-        {inSaved ? null : <>
+        </Tooltip>
+        {/* Saved, the person's own library for every project: the pane shows it in place of the project's media, and back */}
+        {onScope ? (
+          <BarButton label={t(inSaved ? 'saved.back' : 'saved.title')} on={inSaved} onClick={() => onScope(inSaved ? 'project' : 'saved')}>
+            <Bookmark size={14} {...(inSaved ? { fill: 'currentColor' } : {})} />
+          </BarButton>
+        ) : null}
         <BarButton label={t(rows ? 'media.viewGrid' : 'media.viewList')} onClick={() => setView((v) => ({ ...v, layout: rows ? 'grid' : 'list' }))}>
           {rows ? <LayoutGrid size={14} /> : <List size={14} />}
         </BarButton>
@@ -883,7 +891,6 @@ export function MediaPool({
           id: key, label: t(`media.sort_${key}`), checked: view.sort === key, onSelect: () => setView((v) => ({ ...v, sort: key })),
         })))}><ArrowUpDown size={14} /></BarButton>
         <BarButton label={t('assets.newFolder')} onClick={() => { setQuery(''); setView((v) => ({ ...v, filter: 'all' })); setCreating(true); }}><FolderPlus size={14} /></BarButton>
-        </>}
         {/* any kind of file: what Studio cannot play is still the project's material */}
         <input ref={inputRef} type="file" multiple className="hidden"
           onChange={(e) => { const list = [...(e.target.files ?? [])]; e.target.value = ''; void importFiles(list); }} />
@@ -891,12 +898,7 @@ export function MediaPool({
 
       {/* where you are: All, then the folders you went into (drop a file on one to move it there) */}
       <div className="flex h-7 shrink-0 items-center gap-0.5 overflow-hidden px-2.5 text-[12.5px]">
-        {inSaved ? (
-          <span className="flex min-w-0 items-center gap-1 px-1">
-            <span className="truncate font-medium text-[var(--text)]">{t('saved.title')}</span>
-            {savedList?.length ? <span className="text-[var(--text-faint)]">{savedList.length}</span> : null}
-          </span>
-        ) : flat ? (
+        {flat ? (
           <span className="truncate text-[var(--text-muted)]">
             {view.filter !== 'all' ? t(`media.filter_${view.filter}`) : t('media.results')}
           </span>
@@ -904,7 +906,7 @@ export function MediaPool({
           <>
             <button type="button" onClick={() => setAt('')} {...dropProps('')}
               className={`shrink-0 rounded px-1 ${at ? 'text-[var(--text-muted)] hover:text-[var(--text)]' : 'font-medium text-[var(--text)]'} ${dropTarget === '' ? 'bg-[var(--bg-hover)] ring-1 ring-[var(--accent)]' : ''}`}>
-              {t('media.filter_all')}
+              {topName}
             </button>
             {crumbs.map((name, i) => {
               const rel = crumbs.slice(0, i + 1).join('/');
@@ -934,16 +936,14 @@ export function MediaPool({
         ref={gridRef}
         tabIndex={-1}
         className="relative min-h-0 flex-1 overflow-y-auto px-2.5 pb-3 pt-1 outline-none"
-        onPointerDown={inSaved ? undefined : startBox}
+        onPointerDown={startBox}
         /* a click on empty space (around the tiles, or in the gaps between them) lets go of what is picked */
         onClick={(e) => {
-          if (inSaved) return;
           if (boxed.current) { boxed.current = false; return; }
           if (!(e.target as Element).closest('[data-media-path], [data-media-folder], [data-media-new-folder], button')) { setPicked([]); showFile(null); }
         }}
-        onContextMenu={(e) => { if (!inSaved && e.target === e.currentTarget) { e.preventDefault(); openMenuAt(e, blankMenu); } }}
+        onContextMenu={(e) => { if (e.target === e.currentTarget) { e.preventDefault(); openMenuAt(e, blankMenu); } }}
       >
-        {inSaved ? <SavedView query={query} {...(onInsertSaved ? { onInsert: onInsertSaved } : {})} onNotify={setNotice} /> : <>
         {marquee ? (
           <div className="pointer-events-none absolute z-20 rounded-[2px] border border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_14%,transparent)]"
             style={{ left: marquee.left, top: marquee.top, width: marquee.right - marquee.left, height: marquee.bottom - marquee.top }} />
@@ -952,8 +952,8 @@ export function MediaPool({
           flat ? <p className="px-1 pt-6 text-center text-[12px] text-[var(--text-muted)]">{t('media.noMatch')}</p> : (
             <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
               <Clapperboard size={22} className="text-[var(--text-faint)]" />
-              <div className="text-[13px] font-medium text-[var(--text)]">{t(at ? 'media.emptyFolder' : 'media.emptyTitle')}</div>
-              {at ? null : <p className="max-w-[30ch] text-[12px] leading-relaxed text-[var(--text-muted)]">{t('media.emptyBody')}</p>}
+              <div className="text-[13px] font-medium text-[var(--text)]">{t(at ? 'media.emptyFolder' : inSaved ? 'saved.emptyTitle' : 'media.emptyTitle')}</div>
+              {at ? null : <p className="max-w-[30ch] text-[12px] leading-relaxed text-[var(--text-muted)]">{t(inSaved ? 'saved.emptyBody' : 'media.emptyBody')}</p>}
               <button type="button" onClick={() => (onPick && onBring ? void bringFrom('copy', false) : inputRef.current?.click())}
                 className="mt-1 inline-flex h-7 items-center gap-1.5 rounded-md border border-[var(--border)] px-2.5 text-[12.5px] text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)]">
                 <Plus size={13} />{t('media.import')}
@@ -1013,7 +1013,9 @@ export function MediaPool({
                 {...(fileRef ? { studioRef: () => fileRef(item.file) } : {})}
                 moving={() => dragKeys(item.file.path)}
                 onPress={(e) => press(item, e)}
-                typeText={item.file.kind === 'mg' ? t('assets.kindPage') : extOf(item.file.name).toUpperCase()}
+                typeText={item.file.bundle ? t(`saved.kind_${item.file.bundle.kind}`) : item.file.kind === 'mg' ? t('assets.kindPage') : extOf(item.file.name).toUpperCase()}
+                library={inSaved}
+                {...(item.file.bundle?.template ? { templateMark: t('saved.template') } : {})}
                 onMenu={(e) => menuFor(item, e)}
                 onRename={(name) => void rename(item.file.path, name, false)}
                 onCancelRename={() => setRenaming(null)}
@@ -1022,7 +1024,6 @@ export function MediaPool({
             {flat ? null : uploads.filter((u) => u.into === at).map((u) => <UploadTile key={u.id} upload={u} row={rows} />)}
           </div>
         )}
-        </>}
       </div>
 
       {/* over a folder, the folder shows where they go */}
@@ -1250,7 +1251,12 @@ function FileTile(p: {
   typeText: string;
   /** A row of the list view, not a tile. */
   row?: boolean;
+  /** In Saved: a drag of it says its place there (its files are brought into the project as it lands). */
+  library?: boolean;
+  /** A bundle of Saved whose page has custom properties: the word that marks it a template. */
+  templateMark?: string;
 }) {
+  const bundle = p.file.bundle;
   return (
     <div
       className={p.row
@@ -1264,7 +1270,7 @@ function FileTile(p: {
       /* a drag picks nothing: picking opens the inspector, and the pane laid out again under the pointer (or hidden for
          room) would lose the drag */
       onDragStart={(e) => {
-        setResourceDragData(e.dataTransfer, p.file);
+        setResourceDragData(e.dataTransfer, p.library ? { ...p.file, saved: p.file.path } : p.file);
         if (p.studioRef) e.dataTransfer.setData(STUDIO_REF_TYPE, JSON.stringify([p.studioRef()]));
         /* any file can go into a folder of this pane: a page's links are written again as it moves (Studio) */
         e.dataTransfer.setData(FOLDER_DRAG, p.moving().join('\n'));
@@ -1315,6 +1321,13 @@ function FileTile(p: {
             <span className="absolute right-1 top-1 z-10 rounded bg-black/65 px-1 text-[9.5px] font-semibold uppercase leading-[15px] tracking-wide text-white/90" title={p.proxyLabel}>{p.proxyMark}</span>
           ) : p.file.proxy && p.file.proxy.state !== 'failed' ? (
             <span className="absolute inset-x-0 bottom-0 z-10 h-1" title={p.proxyLabel}><UploadBar ratio={p.file.proxy.state === 'making' ? p.file.proxy.ratio ?? 0 : -1} /></span>
+          ) : null}
+          {/* a bundle of Saved: a template, and how many clips a group holds */}
+          {p.templateMark ? (
+            <span className="absolute left-1 top-1 z-10 flex items-center gap-0.5 rounded bg-black/65 px-1 text-[9.5px] font-semibold leading-[15px] text-white/90"><LayoutTemplate size={9} />{p.templateMark}</span>
+          ) : null}
+          {bundle?.kind === 'group' && bundle.count ? (
+            <span className="absolute bottom-1 left-1 z-10 flex items-center gap-0.5 rounded bg-black/65 px-1 text-[10.5px] tabular-nums leading-[16px] text-white"><Layers size={10} />{bundle.count}</span>
           ) : null}
           {p.duration ? <span className="absolute bottom-1 right-1 z-10 rounded bg-black/65 px-1 text-[10.5px] tabular-nums leading-[16px] text-white">{p.duration}</span> : null}
         </div>

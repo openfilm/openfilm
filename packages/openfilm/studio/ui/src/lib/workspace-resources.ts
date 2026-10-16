@@ -41,7 +41,12 @@ export interface WorkspaceResource {
   link?: MediaLink;
   /** Heavy footage's proxy for the preview (studio/server/proxies.mjs): waiting, being made (`ratio`), ready, failed. */
   proxy?: MediaProxy;
+  /** In Saved, what Studio saved from a film (studio/server/saved.mjs): a clip, clips together, or a page with its files. */
+  bundle?: SavedBundle;
 }
+
+/** What a bundle of Saved is: a clip, a group of `count` clips, or a page; `template`: its page has custom properties. */
+export interface SavedBundle { kind: 'clip' | 'group' | 'page'; count?: number; template?: boolean }
 
 export interface MediaProxy { state: 'waiting' | 'making' | 'ready' | 'failed'; ratio?: number }
 
@@ -99,7 +104,7 @@ export interface MediaFacts {
 
 /** Studio's `GET files` answer. */
 export interface FilesListing {
-  files: readonly { path: string; kind: string; size: number; mtime: number; added?: number }[];
+  files: readonly { path: string; kind: string; size: number; mtime: number; added?: number; saved?: SavedBundle & { durationMs?: number; w?: number; h?: number } }[];
   folders: readonly string[];
   pages: readonly { path: string; size: number; mtime: number }[];
   /** Links to media kept elsewhere, by project path (files and folders). */
@@ -147,12 +152,19 @@ export function mediaListingOf(
     /* a page put in a folder here is a page still: its poster, its preview, an mg clip */
     files: raw.files.map((f) => ({
       path: f.path,
-      name: f.kind === 'page' ? pageName(f.path) : f.path.slice(f.path.lastIndexOf('/') + 1),
+      name: f.kind === 'page' && !f.saved ? pageName(f.path) : f.path.slice(f.path.lastIndexOf('/') + 1),
       dir: dirOf(f.path),
       size: f.size,
       kind: (f.kind === 'page' ? 'mg' : MEDIA_KINDS.includes(f.kind) ? f.kind : 'other') as WorkspaceResourceKind,
       mtimeMs: f.mtime,
       addedMs: f.added ?? f.mtime,
+      /* a bundle of Saved says its own length and size (it is no file to probe) */
+      ...(f.saved ? {
+        bundle: { kind: f.saved.kind, ...(f.saved.count ? { count: f.saved.count } : {}), ...(f.saved.template ? { template: true } : {}) },
+        ...(f.saved.durationMs ? { durationMs: f.saved.durationMs } : {}),
+        ...(f.saved.w ? { w: f.saved.w } : {}),
+        ...(f.saved.h ? { h: f.saved.h } : {}),
+      } : {}),
       ...facts?.(f.path),
       ...(raw.links?.[f.path] ? { link: raw.links[f.path]! } : {}),
     })),

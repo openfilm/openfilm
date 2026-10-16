@@ -27,8 +27,9 @@ import { renumberTracks, type TimelineBlockKind, type TimelineTrack } from './ti
 export type AssetClipKind = 'mg' | 'video' | 'audio';
 
 export function assetClipKindOf(file: { path: string; kind: string }): AssetClipKind | null {
-  /* a web page (`scenes/intro.html`) is an mg clip, its src the page's path */
-  if (filmSrcIsPage(file.path)) return 'mg';
+  /* a web page (`scenes/intro.html`) is an mg clip, its src the page's path; so is a page the pane names one without
+     its ending (a bundle of Saved, a folder holding its page) */
+  if (filmSrcIsPage(file.path) || file.kind === 'mg') return 'mg';
   if (file.kind === 'video' || file.kind === 'image') return 'video';
   if (file.kind === 'audio') return 'audio';
   return null;

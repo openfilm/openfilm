@@ -1,29 +1,31 @@
 // @ts-check
 /**
- * What the person saved to use again in any project: a clip as the film has it (its place, its look, the changes made
- * in its page), several clips together as they were laid out (a group: each one's track and time from the first), or a
- * file of the project, each with every file it needs. A saved thing is a copy, and so is what is taken from it:
- * changing one never changes the other, as a template is used in an editor.
+ * Saved: the person's own library, one for every project, kept as a folder (src/locations.mjs savedRoot,
+ * ~/Movies/OpenFilm/Saved). Anything can go in it, in folders of the person's: files of any kind, uploaded or added from
+ * a project, and what Studio saves from a film, each as a folder of its own holding what it needs (a bundle):
  *
- *   <Saved>/<id>/saved.json   { version, name, savedAt, kind: 'clip' | 'group' | 'file', clip | clips | path,
- *                               durationMs?, w?, h?, template? }   a group's clips: { track, at, clip }, its tracks
- *                               counted from the top one it had, `at` seconds from its first clip
- *   <Saved>/<id>/files/…      the clip's file and what it loads (closure.mjs), at the places they had in its project,
- *                             so a page's own references still find what they name
- *   <Saved>/<id>/poster.jpg   its picture, when one could be drawn
+ *   <bundle>/saved.json   { version, savedAt, kind: 'clip' | 'group' | 'page', clip | clips | path, durationMs?, w?,
+ *                           h?, template? }   a clip as the film has it (its place, its look, the changes made in its
+ *                           page; no time, no id), clips saved together (each one's track from the top one they had
+ *                           and `at` seconds from the first), or a page of a project with what it loads
+ *   <bundle>/files/…      the clip's file and what it loads (closure.mjs), at the places they had in its project, so a
+ *                         page's own references still find what they name
+ *   <bundle>/poster.jpg   its picture, when one could be drawn
  *
- * `<Saved>` is src/locations.mjs savedRoot(). Taken into a project, the files go to `saved/<id>/` in it (the places
- * they had, under that folder), once: taken again, what is there already is used.
+ * A bundle is named as the person reads it (its folder's name), and moved, renamed and taken away as any folder is.
+ * The API names what is in the library from `saved/` (LIBRARY), as a project's media is named from `assets/`, so the
+ * media pane shows both the same way. Used in a project, a thing is a copy: a file is imported into its assets/ as one
+ * from the computer is (the same bytes there already are that file), a bundle's files go to `saved/<its place>/` there
+ * once (taken again, what is there is used). Changing one never changes the other.
  */
-import { randomBytes } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, createReadStream } from 'node:fs';
 import { copyFile, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
-import { dirname, join, posix } from 'node:path';
+import { basename, dirname, join, posix } from 'node:path';
 import { FILM_FILE, clipKind, filmHtml } from '../../src/film-doc.mjs';
 import { savedRoot } from '../../src/locations.mjs';
 import { STUDIO_STATE, filmClosure, folderView } from './closure.mjs';
 import { readProjectFilm } from './film.mjs';
-import { moveToTrash } from './trash.mjs';
+import { cleanName, importFile, inside, kindOf } from './files.mjs';
 
 export class SavedError extends Error {
   /** @param {string} message @param {number} status */
@@ -33,49 +35,117 @@ export class SavedError extends Error {
   }
 }
 
-const VERSION = 1;
-/** The folder a project keeps what it took from the saved things in. */
-export const TAKEN_DIR = 'saved';
-const ID = /^[\p{L}\p{N}][\p{L}\p{N}-]{0,63}$/u;
+const VERSION = 2;
+/** What the API calls the library's top folder: its paths are `saved/<place in the library>`. */
+export const LIBRARY = 'saved';
+/** The file that makes a folder of the library a bundle. */
+const BUNDLE = 'saved.json';
 /** A page whose own CSS sets custom properties on :root (or html): the inspector offers them as its template's controls. */
 const ROOT_VARS = /(?::root|\bhtml)\s*(?:,[^{]*)?\{[^}]*--[\w-]+\s*:/i;
 
+/** The library's folder, made when it is not there yet. */
+export async function libraryRoot() {
+  const root = savedRoot();
+  await mkdir(root, { recursive: true });
+  return root;
+}
+
+/** A library path (`saved/<rel>`, `saved` for the top) as its place in the library ('' for the top). */
+export function libraryRel(/** @type {unknown} */ path) {
+  if (path === LIBRARY || path === '') return '';
+  if (typeof path !== 'string' || !path.startsWith(`${LIBRARY}/`)) throw new SavedError('a place in Saved, please', 400);
+  return path.slice(LIBRARY.length + 1);
+}
+
+/** A place in the library as the API names it. */
+export const libraryPath = (/** @type {string} */ rel) => (rel ? `${LIBRARY}/${rel}` : LIBRARY);
+
 /**
- * @typedef {{ id: string, name: string, kind: 'clip' | 'group' | 'file', savedAt: string, main: string, durationMs?: number,
- *   w?: number, h?: number, template?: boolean, count?: number, poster: boolean }} SavedItem
+ * The library as the media pane lists a project's media (files.mjs listFiles): its files and folders, any depth, by
+ * their `saved/` paths. A bundle is one entry, of the kind of its (top) file, with what it is in `saved`.
  */
-
-/** A name for its folder: the words of its name, and a few letters that make it its own. */
-export function newSavedId(/** @type {string} */ name) {
-  const words = name.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '');
-  return `${words || 'saved'}-${randomBytes(3).toString('hex')}`;
+export async function listLibrary() {
+  const root = await libraryRoot();
+  /** @type {{ path: string, kind: string, size: number, mtime: number, added: number, saved?: object }[]} */
+  const files = [];
+  /** @type {string[]} */
+  const folders = [];
+  async function walk(/** @type {string} */ rel, /** @type {number} */ depth) {
+    const entries = await readdir(rel ? join(root, rel) : root, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue;
+      const at = rel ? `${rel}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        const bundle = await readBundle(join(root, at));
+        if (bundle) { files.push(bundleEntry(at, bundle)); continue; }
+        folders.push(libraryPath(at));
+        if (depth < 8) await walk(at, depth + 1);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      const info = await stat(join(root, at)).catch(() => null);
+      if (info) files.push({ path: libraryPath(at), kind: kindOf(entry.name), size: info.size, mtime: Math.round(info.mtimeMs), added: Math.round(info.birthtimeMs || info.mtimeMs) });
+    }
+  }
+  await walk('', 0);
+  const sort = (/** @type {{ path: string }} */ a, /** @type {{ path: string }} */ b) => a.path.localeCompare(b.path, undefined, { numeric: true });
+  folders.sort();
+  return { files: files.sort(sort), folders, made: folders, pages: [], links: {} };
 }
 
-const dirOf = (/** @type {string} */ id) => {
-  if (typeof id !== 'string' || !ID.test(id)) throw new SavedError('no such saved item', 404);
-  return join(savedRoot(), id);
-};
-
-/** @param {string} id */
-async function readItem(id) {
-  const dir = dirOf(id);
-  const raw = await readFile(join(dir, 'saved.json'), 'utf8').catch(() => null);
-  const item = raw ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : null;
-  if (!item || typeof item !== 'object' || !['clip', 'group', 'file'].includes(item.kind)) throw new SavedError('no such saved item', 404);
-  if (item.kind === 'group' && !(Array.isArray(item.clips) && item.clips.length)) throw new SavedError('no such saved item', 404);
-  return { dir, item };
+/** A bundle's saved.json, or null when the folder is no bundle. @param {string} dir */
+async function readBundle(dir) {
+  const raw = await readFile(join(dir, BUNDLE), 'utf8').catch(() => null);
+  if (!raw) return null;
+  let item;
+  try { item = JSON.parse(raw); } catch { return null; }
+  if (!item || typeof item !== 'object') return null;
+  /* a page of a project was 'file' before */
+  if (item.kind === 'file') item.kind = 'page';
+  if (item.kind === 'clip' && typeof item.clip?.src === 'string') return item;
+  if (item.kind === 'group' && Array.isArray(item.clips) && item.clips.length && item.clips.every((/** @type {any} */ c) => typeof c?.clip?.src === 'string')) return item;
+  if (item.kind === 'page' && typeof item.path === 'string') return item;
+  return null;
 }
 
-/** Its files, by their place in the project it came from. @param {string} dir @returns {Promise<string[]>} */
-async function filesOf(dir) {
-  const base = join(dir, 'files');
-  const entries = await readdir(base, { recursive: true, withFileTypes: true }).catch(() => []);
-  return entries.filter((e) => e.isFile()).map((e) => join(e.parentPath ?? e.path, e.name).slice(base.length + 1).split('\\').join('/'));
+/** Its main file: the clip's, a group's top one, the page. */
+const mainOf = (/** @type {any} */ item) => (item.kind === 'clip' ? item.clip.src : item.kind === 'group' ? item.clips[0].clip.src : item.path);
+
+/** A bundle as the listing shows it. @param {string} rel @param {any} item */
+function bundleEntry(rel, item) {
+  const kind = kindOf(mainOf(item));
+  const num = (/** @type {unknown} */ v) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.round(v) : undefined);
+  const savedAt = Date.parse(item.savedAt) || 0;
+  const saved = {
+    kind: item.kind,
+    ...(item.kind === 'group' ? { count: item.clips.length } : {}),
+    ...(item.template === true ? { template: true } : {}),
+    ...(num(item.durationMs) ? { durationMs: num(item.durationMs) } : {}),
+    ...(num(item.w) ? { w: num(item.w) } : {}),
+    ...(num(item.h) ? { h: num(item.h) } : {}),
+  };
+  return { path: libraryPath(rel), kind: kind === 'page' ? 'page' : kind, size: 0, mtime: savedAt, added: savedAt, saved };
+}
+
+/** A bundle's picture, or null. */
+export async function bundlePoster(/** @type {unknown} */ path) {
+  const root = await libraryRoot();
+  const file = join(inside(root, libraryRel(path)), 'poster.jpg');
+  return existsSync(file) ? file : null;
+}
+
+/** A name that is free in folder `dir`: `name`, else `name 2`, `name 3`… */
+function freeName(/** @type {string} */ dir, /** @type {string} */ name) {
+  for (let n = 1; ; n++) {
+    const candidate = n === 1 ? name : `${name} ${n}`;
+    if (!existsSync(join(dir, candidate))) return candidate;
+  }
 }
 
 /**
  * The files a clip needs in project `root`: its own and what it loads, read as the film would (closure.mjs) from a film
- * holding that clip alone. @param {string} root @param {Record<string, unknown> & { src: string }} clip
+ * holding that clip alone; a page beside it only when it is named (another clip's page beside it is not its).
+ * @param {string} root @param {Record<string, unknown> & { src: string }} clip
  */
 async function clipFiles(root, clip) {
   const folder = folderView(root);
@@ -87,18 +157,25 @@ async function clipFiles(root, clip) {
   });
   const files = [...held.keys()].filter((path) => path !== FILM_FILE && !STUDIO_STATE.includes(path));
   /* a version of a project keeps every page beside a page, in case one loads it; a saved clip needs only the pages it
-     names (another clip's page beside it is not its) */
+     names */
   const texts = new Map();
   for (const path of files) if (/\.(html?|css|m?js|json|svg)$/i.test(path)) texts.set(path, await folder.text(path) ?? '');
   const named = (/** @type {string} */ page) => [...texts].some(([path, text]) => path !== page && text.includes(posix.basename(page)));
   return files.filter((path) => !/\.html?$/i.test(path) || path === clip.src || named(path));
 }
 
-/** Copies `files` of project `root` into a new saved item and writes what it is. @returns {Promise<SavedItem>} */
-async function keep(/** @type {string} */ root, /** @type {string[]} */ files, /** @type {Record<string, unknown>} */ about, /** @type {(() => Promise<Buffer | null>) | null} */ poster) {
-  const name = String(about.name || 'Saved').slice(0, 120);
-  const id = newSavedId(name);
-  const dir = join(savedRoot(), id);
+/**
+ * A new bundle in the library folder `into` ('' its top), named `name` (a number after it when taken): `files` of
+ * project `root` copied in, what it is written, its picture drawn. Returns its path.
+ * @param {string} root @param {string[]} files @param {Record<string, unknown>} about @param {string} name @param {string} into
+ * @param {(() => Promise<Buffer | null>) | null} poster
+ */
+async function keep(root, files, about, name, into, poster) {
+  const lib = await libraryRoot();
+  const parent = into ? inside(lib, into) : lib;
+  await mkdir(parent, { recursive: true });
+  const folder = freeName(parent, cleanName(name) || 'Saved');
+  const dir = join(parent, folder);
   await mkdir(join(dir, 'files'), { recursive: true });
   let template = false;
   for (const rel of files) {
@@ -109,37 +186,25 @@ async function keep(/** @type {string} */ root, /** @type {string[]} */ files, /
   }
   const picture = poster ? await poster().catch(() => null) : null;
   if (picture) await writeFile(join(dir, 'poster.jpg'), picture);
-  const item = { version: VERSION, ...about, name, savedAt: new Date().toISOString(), ...(template ? { template: true } : {}) };
-  await writeFile(join(dir, 'saved.json'), `${JSON.stringify(item, null, 2)}\n`);
-  return summary(id, item, Boolean(picture));
+  await writeFile(join(dir, BUNDLE), `${JSON.stringify({ version: VERSION, ...about, savedAt: new Date().toISOString(), ...(template ? { template: true } : {}) }, null, 2)}\n`);
+  return libraryPath(into ? `${into}/${folder}` : folder);
 }
 
-/** @returns {SavedItem} */
-function summary(/** @type {string} */ id, /** @type {any} */ item, /** @type {boolean} */ poster) {
-  const num = (/** @type {unknown} */ v) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined);
-  const durationMs = num(item.durationMs);
-  const w = num(item.w);
-  const h = num(item.h);
-  return {
-    id,
-    name: typeof item.name === 'string' ? item.name : id,
-    kind: item.kind,
-    savedAt: typeof item.savedAt === 'string' ? item.savedAt : '',
-    main: item.kind === 'clip' ? String(item.clip?.src ?? '') : item.kind === 'group' ? String(item.clips[0]?.clip?.src ?? '') : String(item.path ?? ''),
-    ...(item.kind === 'group' ? { count: item.clips.length } : {}),
-    ...(durationMs ? { durationMs } : {}),
-    ...(w ? { w } : {}),
-    ...(h ? { h } : {}),
-    ...(item.template === true ? { template: true } : {}),
-    poster,
-  };
-}
+/** Sizes as asked, when they are some. */
+const sizes = (/** @type {{ durationMs?: number, w?: number, h?: number }} */ o) => Object.fromEntries(
+  /** @type {const} */ (['durationMs', 'w', 'h']).flatMap((k) => (typeof o[k] === 'number' && Number.isFinite(o[k]) && /** @type {number} */ (o[k]) > 0 ? [[k, Math.round(/** @type {number} */ (o[k]))]] : [])),
+);
 
 /**
- * Saves the clip `clipId` of the project at `root`: the clip as the film has it, without its place in time or its id
- * (it gets a new one where it is taken), and every file it needs.
- * @param {string} root @param {string} clipId
- * @param {{ name?: string, durationMs?: number, w?: number, h?: number, poster?: (clip: Record<string, unknown> & { src: string }) => Promise<Buffer | null> }} [o]
+ * @typedef {{ name?: string, into?: string, durationMs?: number, w?: number, h?: number,
+ *   poster?: (clip: Record<string, unknown> & { src: string }) => Promise<Buffer | null> }} SaveOptions
+ */
+
+/**
+ * Saves the clip `clipId` of the project at `root` into the library (`o.into`, a `saved/` path; its top by default): the
+ * clip as the film has it, without its place in time or its id (it gets a new one where it is put), and every file it
+ * needs. A link to clips left behind is not kept. Returns its path.
+ * @param {string} root @param {string} clipId @param {SaveOptions} [o]
  */
 export async function saveClip(root, clipId, o = {}) {
   const { value } = await readProjectFilm(root);
@@ -148,7 +213,6 @@ export async function saveClip(root, clipId, o = {}) {
   const clip = /** @type {Record<string, unknown> & { src: string, attrs?: Record<string, string> }} */ (structuredClone(found));
   delete clip.at;
   delete clip.id;
-  /* a link ties clips of one film together (a video and its sound): a saved clip stands alone */
   if (clip.attrs) {
     delete clip.attrs['data-link'];
     if (!Object.keys(clip.attrs).length) delete clip.attrs;
@@ -156,15 +220,14 @@ export async function saveClip(root, clipId, o = {}) {
   const files = await clipFiles(root, clip);
   if (!files.includes(clip.src)) throw new SavedError('That clip’s file is not in the project.', 409);
   const name = o.name?.trim() || clip.src.split('/').pop()?.replace(/\.[^.]+$/, '') || clipId;
-  return keep(root, files, { kind: 'clip', clip, name, ...sizes(o) }, o.poster ? () => /** @type {NonNullable<typeof o.poster>} */ (o.poster)(clip) : null);
+  return keep(root, files, { kind: 'clip', clip, ...sizes(o) }, name, libraryRel(o.into ?? LIBRARY), o.poster ? () => /** @type {NonNullable<typeof o.poster>} */ (o.poster)(clip) : null);
 }
 
 /**
  * Saves the clips `clipIds` of the project at `root` together, as they are laid out: each one's track counted from the
  * top one among them, its time from the first of them. Links among them are kept (they are made anew where they go),
- * links to clips left out are not. The picture is the top one's that draws one.
- * @param {string} root @param {string[]} clipIds
- * @param {{ name?: string, durationMs?: number, w?: number, h?: number, poster?: (clip: Record<string, unknown> & { src: string }) => Promise<Buffer | null> }} [o]
+ * links to clips left out are not. The picture is the top one's that draws one. Returns its path.
+ * @param {string} root @param {string[]} clipIds @param {SaveOptions} [o]
  */
 export async function saveGroup(root, clipIds, o = {}) {
   const { value } = await readProjectFilm(root);
@@ -194,86 +257,60 @@ export async function saveGroup(root, clipIds, o = {}) {
   }
   const top = clips.find(({ clip }) => clipKind(clip.src) !== 'sound' && clip.sound !== true)?.clip ?? null;
   const name = o.name?.trim() || `${clips.length} clips`;
-  return keep(root, [...files], { kind: 'group', clips, name, ...sizes(o) }, top && o.poster ? () => /** @type {NonNullable<typeof o.poster>} */ (o.poster)(top) : null);
+  return keep(root, [...files], { kind: 'group', clips, ...sizes(o) }, name, libraryRel(o.into ?? LIBRARY), top && o.poster ? () => /** @type {NonNullable<typeof o.poster>} */ (o.poster)(top) : null);
 }
 
 /**
- * Saves the file `rel` of the project at `root` (a page with what it loads).
- * @param {string} root @param {string} rel
- * @param {{ name?: string, durationMs?: number, w?: number, h?: number, poster?: () => Promise<Buffer | null> }} [o]
+ * Saves the file `rel` of the project at `root` into the library: a page as a bundle, with what it loads; any other
+ * file as itself (the same bytes there already are that file). Returns its path.
+ * @param {string} root @param {string} rel @param {Omit<SaveOptions, 'poster'> & { poster?: () => Promise<Buffer | null> }} [o]
  */
 export async function saveFile(root, rel, o = {}) {
   if (typeof rel !== 'string' || !rel || rel.startsWith('/') || rel.split('/').includes('..')) throw new SavedError('a file of the project, please', 400);
   const info = await stat(join(root, rel)).catch(() => null);
   if (!info?.isFile()) throw new SavedError('That file is not in the project any more.', 404);
-  const files = clipKind(rel) ? await clipFiles(root, { src: rel }) : [rel];
-  if (!files.includes(rel)) files.unshift(rel);
-  const name = o.name?.trim() || rel.split('/').pop() || rel;
-  return keep(root, files, { kind: 'file', path: rel, name, ...sizes(o) }, o.poster ?? null);
-}
-
-const sizes = (/** @type {{ durationMs?: number, w?: number, h?: number }} */ o) => Object.fromEntries(
-  /** @type {const} */ (['durationMs', 'w', 'h']).flatMap((k) => (typeof o[k] === 'number' && Number.isFinite(o[k]) && /** @type {number} */ (o[k]) > 0 ? [[k, Math.round(/** @type {number} */ (o[k]))]] : [])),
-);
-
-/** Everything saved, the newest first. @returns {Promise<SavedItem[]>} */
-export async function listSaved() {
-  const root = savedRoot();
-  const names = await readdir(root, { withFileTypes: true }).catch(() => []);
-  const out = [];
-  for (const e of names) {
-    if (!e.isDirectory() || !ID.test(e.name)) continue;
-    const found = await readItem(e.name).catch(() => null);
-    if (found) out.push(summary(e.name, found.item, existsSync(join(found.dir, 'poster.jpg'))));
+  const into = libraryRel(o.into ?? LIBRARY);
+  if (clipKind(rel) === 'page') {
+    const files = await clipFiles(root, { src: rel });
+    if (!files.includes(rel)) files.unshift(rel);
+    const name = o.name?.trim() || rel.split('/').pop()?.replace(/\.[^.]+$/, '') || rel;
+    return keep(root, files, { kind: 'page', path: rel, ...sizes(o) }, name, into, o.poster ?? null);
   }
-  return out.sort((a, b) => b.savedAt.localeCompare(a.savedAt));
-}
-
-/** Its picture's file, or null. */
-export function savedPoster(/** @type {string} */ id) {
-  const file = join(dirOf(id), 'poster.jpg');
-  return existsSync(file) ? file : null;
-}
-
-/** Its folder (to show it in the file manager). */
-export function savedFolder(/** @type {string} */ id) {
-  return dirOf(id);
-}
-
-/** A new name. @returns {Promise<SavedItem>} */
-export async function renameSaved(/** @type {string} */ id, /** @type {unknown} */ name) {
-  const next = typeof name === 'string' ? name.trim().slice(0, 120) : '';
-  if (!next) throw new SavedError('a name, please', 400);
-  const { dir, item } = await readItem(id);
-  item.name = next;
-  await writeFile(join(dir, 'saved.json'), `${JSON.stringify(item, null, 2)}\n`);
-  return summary(id, item, existsSync(join(dir, 'poster.jpg')));
-}
-
-/** Into the system's trash, where it can be taken back from. */
-export async function trashSaved(/** @type {string} */ id) {
-  const { dir } = await readItem(id);
-  await moveToTrash(dir);
+  const lib = await libraryRoot();
+  const { path } = await importFile(lib, into ? `${into}/${basename(rel)}` : basename(rel), createReadStream(join(root, rel)));
+  return libraryPath(path);
 }
 
 /**
- * What a project needs to use a saved thing: its files copied into `saved/<id>/` of the project at `root` (a file there
- * already is kept as it is), and the clip (a group's clips) with its file's place there, or the file's place.
- * @param {string} root @param {string} id
+ * What a project needs to use a thing of the library (`path`, a `saved/` path): a file imported into its assets/ (as
+ * one from the computer is), or a bundle's files copied to `saved/<its place>/` there (a file there already is kept as
+ * it is) and the clip, a group's clips or the page, with their files' places there.
+ * @param {string} root @param {unknown} path
  * @returns {Promise<{ clip: Record<string, unknown> & { src: string } } | { clips: { track: number, at: number, clip: Record<string, unknown> & { src: string } }[] } | { path: string }>}
  */
-export async function takeSaved(root, id) {
-  const { dir, item } = await readItem(id);
-  const base = `${TAKEN_DIR}/${id}`;
-  for (const rel of await filesOf(dir)) {
-    const from = join(dir, 'files', rel);
-    const to = join(root, base, rel);
+export async function takeSaved(root, path) {
+  const lib = await libraryRoot();
+  const rel = libraryRel(path);
+  if (!rel) throw new SavedError('a thing in Saved, please', 400);
+  const at = inside(lib, rel);
+  const info = await stat(at).catch(() => null);
+  if (!info) throw new SavedError('That is not in Saved any more.', 404);
+  if (info.isFile()) return { path: (await importFile(root, `assets/${basename(rel)}`, createReadStream(at))).path };
+  const item = await readBundle(at);
+  if (!item) throw new SavedError('That is a folder: open it and pick what is in it.', 400);
+  /* its place in the project: the library's, made a name a page's address takes as it is */
+  const base = `saved/${rel.split('/').map((part) => part.normalize('NFKC').replace(/[^\p{L}\p{N}._-]+/gu, '-').replace(/^-+|-+$/g, '') || 'saved').join('/')}`;
+  const from = join(at, 'files');
+  for (const entry of await readdir(from, { recursive: true, withFileTypes: true }).catch(() => [])) {
+    if (!entry.isFile()) continue;
+    const src = join(entry.parentPath ?? entry.path, entry.name);
+    const to = join(root, base, src.slice(from.length + 1));
     /* there already (taken before, maybe changed since in this project): it stays as it is */
     if ((await stat(to).catch(() => null))?.isFile()) continue;
     await mkdir(dirname(to), { recursive: true });
-    await copyFile(from, to);
+    await copyFile(src, to);
   }
-  if (item.kind === 'file') return { path: `${base}/${item.path}` };
+  if (item.kind === 'page') return { path: `${base}/${item.path}` };
   if (item.kind === 'group') return { clips: item.clips.map((/** @type {any} */ c) => ({ track: c.track, at: c.at, clip: { ...c.clip, src: `${base}/${c.clip.src}` } })) };
   return { clip: { ...item.clip, src: `${base}/${item.clip.src}` } };
 }

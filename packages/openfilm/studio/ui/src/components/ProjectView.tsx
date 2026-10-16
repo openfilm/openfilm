@@ -100,8 +100,7 @@ import type { StageEditFailure, StageTextEdit } from './FilmInspector';
 import { layerTarget, pageClipOf, recoverLayer } from '@/lib/stage-layers';
 import type { TemplateControls } from '@/lib/template-controls';
 import type { TemplateHost } from './TemplateSection';
-import type { SavedItem } from '@/api';
-import { refreshSaved, savedDragItem } from '@/lib/saved';
+import { SAVED, refreshSaved, savedActions, savedSources, useSavedListing } from '@/lib/saved';
 import { groupInsertAt, groupInsertOps } from '@/lib/saved-insert';
 import { pageClips, pageMayHave, similarEdits } from '@/lib/similar-layers';
 import type { MaskSession } from '@/lib/stage-mask';
@@ -113,6 +112,8 @@ import { isTypingTarget } from './typing-target';
 const PANE = 'relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[7px]';
 /* ⌘ is the modifier on a Mac, Ctrl elsewhere (the editor's keys, lib/timeline-keys) */
 const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+/** Which the media pane shows, the project's media or Saved: kept while Studio is open, across projects. */
+const MEDIA_SCOPE: { current: 'project' | 'saved' } = { current: 'project' };
 /** where the app's panel starts: under Studio's top bar (its h-8) */
 const HOST_PANEL_TOP = 32;
 
@@ -657,6 +658,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   stageElementRef.current = stageElement;
   /* the inspector shows a media file, or what is selected */
   const [pickedMedia, setPickedMedia] = React.useState<WorkspaceResource | null>(null);
+  /* the file picked is one of Saved (lib/saved): shown from there, and brought into the project when it is used */
+  const [pickedSaved, setPickedSaved] = React.useState(false);
   const [inspectorContent, setInspectorContent] = React.useState<'selection' | 'subtitles' | WorkspaceResource>('selection');
   const subs = useFilmSubtitles(projectId);
   /* fullscreen's CC button (and c): only what is shown, not the film's own setting */
@@ -675,6 +678,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   }, []);
   const pickMedia = React.useCallback((file: WorkspaceResource | null) => {
     setPickedMedia(file);
+    /* one of the project's, unless the Saved pane says otherwise right after (pickSaved) */
+    setPickedSaved(false);
     if (file) { setInspectorContent(file); setInspectorOpen(true); }
     else setInspectorContent((c) => (typeof c === 'object' ? 'selection' : c));
   }, []);
@@ -963,14 +968,18 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const dropAsset = React.useCallback(async (file: ResourceDragItem, target: AssetDropTarget, atMs: number): Promise<string | null> => {
     const plan = assetDropInsert(file, timelineTracks, target, atMs, stageRef.current);
     if ('error' in plan) return plan.error === 'locked' ? t('timeline.trackLocked') : t('timeline.dropNotClip');
-    /* a saved thing (lib/saved): its files brought into the project first, then the clip as it was saved, where it
-       was dropped (a saved file goes in as a file of the project does) */
+    /* a thing of Saved (lib/saved): brought into the project first (a file imported, a bundle's files copied in), then
+       put where it was dropped: a file as a file of the project goes, a clip as it was saved */
     if (file.saved) {
       let taken: Awaited<ReturnType<typeof api.takeSaved>>;
       try { taken = await api.takeSaved(projectId, file.saved); } catch (e) { return e instanceof Error ? e.message : String(e); }
       /* a group: its tracks new ones, where it was dropped */
       if ('clips' in taken) return edit(groupInsertOps(taken.clips, plan.at, groupInsertAt(plan.track), editModel()), 'history.stepDrop');
-      const clip = 'clip' in taken ? taken.clip : { ...(plan.element as Record<string, unknown>), src: taken.path };
+      if ('path' in taken) {
+        const { saved: _from, ...rest } = file;
+        return dropAssetRef.current({ ...rest, path: taken.path }, target, atMs);
+      }
+      const clip = taken.clip;
       const durMs = file.durationMs ?? assetRunMs([file]);
       return edit([
         { op: 'insert', clip: clip as never, at: plan.at, ...(plan.track != null ? { track: plan.track } : {}) },
@@ -988,6 +997,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       if (pending) setPendingDrops((all) => all.filter((d) => d.id !== pending.id));
     }
   }, [timelineTracks, edit, roomFor, t, projectId, editModel]);
+  const dropAssetRef = React.useRef(dropAsset);
+  dropAssetRef.current = dropAsset;
   /**
    * A media file put on the timeline without a drag (lib/media-place): the media pane's "+" and Enter (in the
    * timeline's mode, at the playhead on the targeted track, else at the end of the main track), the source viewer's
@@ -1008,15 +1019,19 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       else seekWhenLonger.current = end;
     }
   }, [editModel, edit, pause, seek, t, toast]);
-  const placeFromSource = React.useCallback((mode: EditMode, range: SourceRange | null) => {
-    if (pickedMedia) void addMedia(pickedMedia, { mode, range, atPlayhead: true });
-  }, [addMedia, pickedMedia]);
-  /* a saved thing put on the timeline without a drag (the Saved view's double-click, Enter, Insert): at the playhead on
-     the targeted track, as a file of the project goes, its files brought into the project first */
-  const insertSaved = React.useCallback(async (item: SavedItem) => {
-    const file = savedDragItem(item);
+  /*
+   * A thing of Saved put on the timeline without a drag (its "+", Enter, the source viewer's `,` and `.`): brought into
+   * the project first, then as a file of the project goes (`how`), or a clip as it was saved, at the playhead on the
+   * targeted track; a group on new tracks at the top, from the playhead.
+   */
+  const placeSaved = React.useCallback(async (file: WorkspaceResource, how: { mode?: EditMode; range?: SourceRange | null; atPlayhead?: boolean } = {}) => {
     let taken: Awaited<ReturnType<typeof api.takeSaved>>;
-    try { taken = await api.takeSaved(projectId, item.id); } catch (e) { toast.show(e instanceof Error ? e.message : String(e)); return; }
+    try { taken = await api.takeSaved(projectId, file.path); } catch (e) { toast.show(e instanceof Error ? e.message : String(e)); return; }
+    if ('path' in taken) {
+      const { bundle: _bundle, ...rest } = file;
+      await addMedia({ ...rest, path: taken.path }, how);
+      return;
+    }
     /* a group: on new tracks at the top, from the playhead */
     if ('clips' in taken) {
       const failed = await edit(groupInsertOps(taken.clips, snapToFrame(timeRef.current) / 1000, 0, editModel()), 'history.stepDrop');
@@ -1025,20 +1040,23 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     }
     const prefs = readTimelinePrefs();
     const target = timelineCommands.current?.target() ?? null;
-    const placed = { ...file, path: 'path' in taken ? taken.path : file.path };
-    const plan = placeMedia(editModel(), { file: placed, range: null, target, at: snapToFrame(timeRef.current), magnet: prefs.magnet, ...followOf(prefs), stage: stageRef.current });
+    const plan = placeMedia(editModel(), { file, range: null, target, at: snapToFrame(timeRef.current), magnet: prefs.magnet, ...followOf(prefs), stage: stageRef.current });
     if ('error' in plan) { toast.show(plan.error === 'locked' ? t('timeline.trackLocked') : t('timeline.dropNotClip')); return; }
-    const ops = 'clip' in taken ? plan.ops.map((op) => (op.op === 'insert' ? { ...op, clip: taken.clip as never } : op)) : plan.ops;
-    const failed = await edit(ops, 'history.stepDrop');
+    const clip = taken.clip;
+    const failed = await edit(plan.ops.map((op) => (op.op === 'insert' ? { ...op, clip: clip as never } : op)), 'history.stepDrop');
     if (failed) toast.show(failed);
-  }, [projectId, editModel, edit, t, toast]);
+  }, [projectId, editModel, edit, addMedia, t, toast]);
+  const placeFromSource = React.useCallback((mode: EditMode, range: SourceRange | null) => {
+    if (pickedMedia && pickedSaved) void placeSaved(pickedMedia, { mode, range, atPlayhead: true });
+    else if (pickedMedia) void addMedia(pickedMedia, { mode, range, atPlayhead: true });
+  }, [addMedia, placeSaved, pickedMedia, pickedSaved]);
   /* clips (and files) kept to use again in any project (lib/saved, studio/server/saved.mjs): the timeline's, the
      picture's and the media pane's "Add to Saved" */
   const saveThings = React.useCallback(async (what: Parameters<typeof api.save>[1], n: number) => {
     if (!n) return;
     try {
       await api.save(projectId, what);
-      await refreshSaved();
+      refreshSaved();
       toast.show(n === 1 ? t('saved.added') : t('saved.addedMany').replace('{n}', String(n)));
     } catch (e) {
       toast.showError(t('saved.failed').replace('{error}', e instanceof Error ? e.message : String(e)));
@@ -1163,13 +1181,44 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const layersShownWidth = rowWidth ? Math.min(layersWidth, layersRoom) : layersWidth;
   const layersFit = !rowWidth || layersShownWidth >= 180;
   const layersShown = layersPaneOpen && layersFit;
-  const mediaPool = () => (
+  /* the media pane shows the project's media, or Saved (lib/saved): the same pane, the button beside Upload switches */
+  const [mediaScope, setMediaScope] = React.useState<'project' | 'saved'>(() => MEDIA_SCOPE.current);
+  const switchMedia = React.useCallback((next: 'project' | 'saved') => { MEDIA_SCOPE.current = next; setMediaScope(next); }, []);
+  const savedListing = useSavedListing(mediaScope === 'saved');
+  const savedImport = React.useCallback((files: File[], into: string, onProgress: ImportProgress) => {
+    /* in the app a dropped file's path is known: copied on this computer, not sent through the page */
+    const paths = files.map((file) => studioHost?.folders?.pathOf(file) ?? '');
+    if (paths.length && paths.every(Boolean)) return savedActions.bring(paths, into);
+    return savedActions.upload(files, into, onProgress, t('assets.uploadFailed'));
+  }, [t]);
+  const mediaPool = () => (mediaScope === 'saved' ? (
     <MediaPool
+      key="saved"
+      projectId={SAVED}
+      listing={savedListing}
+      sources={savedSources}
+      selectedPath={pickedSaved ? pickedMedia?.path ?? null : null}
+      onSelectFile={(file) => { pickMedia(file); setPickedSaved(Boolean(file)); }}
+      onImport={savedImport}
+      onMove={savedActions.move}
+      onDelete={savedActions.remove}
+      onNewFolder={savedActions.newFolder}
+      onReveal={savedActions.reveal}
+      onPick={onPick}
+      onBring={(paths, into) => savedActions.bring(paths, into)}
+      links={false}
+      scope="saved"
+      onScope={switchMedia}
+      onAdd={(file) => void placeSaved(file)}
+    />
+  ) : (
+    <MediaPool
+      key="project"
       projectId={projectId}
       listing={listing}
       sources={mediaSources}
       usedSrcs={usedSrcs}
-      selectedPath={pickedMedia?.path ?? null}
+      selectedPath={pickedSaved ? null : pickedMedia?.path ?? null}
       onSelectFile={pickMedia}
       onImport={onImport}
       onMove={onMove}
@@ -1184,13 +1233,14 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       onRelink={onRelink}
       onCollect={onCollect}
       onSave={saveFiles}
-      onInsertSaved={(item) => void insertSaved(item)}
+      scope="project"
+      onScope={switchMedia}
       {...(studioHost?.refer ? { fileRef: refOfFile, onRefer: studioHost.refer } : {})}
       reveal={revealMedia}
       litPath={chatPoint?.file ?? null}
       onAdd={(file) => void addMedia(file)}
     />
-  );
+  ));
   /* the range marked on the timeline (⇧-drag on the ruler, I and O): Studio's, told to the app with the selection */
   const [markedRange, setMarkedRange] = React.useState<FilmRange | null>(null);
   rangeNowRef.current = markedRange;
@@ -2645,7 +2695,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                   }} />
                 {pickedMedia ? (
                   <div className="absolute inset-x-0 bottom-0 top-8 z-20">
-                    <SourcePreview file={pickedMedia} sources={mediaSources} onClose={() => pickMedia(null)} onPlace={placeFromSource} />
+                    <SourcePreview file={pickedSaved && pickedMedia.bundle ? { ...pickedMedia, kind: 'image' } : pickedMedia} sources={pickedSaved ? savedSources : mediaSources} onClose={() => pickMedia(null)} onPlace={placeFromSource} />
                   </div>
                 ) : null}
                 {dropped?.length || undone.length ? (
@@ -2791,7 +2841,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 <>
                   <PaneDivider width={inspectorShownWidth} onResize={commitInspectorWidth} containerRef={viewerRowRef} label={t('inspector.resize')} min={MIN_INSPECTOR} minRest={MIN_VIEWER} side="end" />
                   {typeof inspectorContent === 'object' ? (
-                    <ResourceInspector file={inspectorContent} url={mediaSources.file(inspectorContent)} width={inspectorShownWidth} onClose={closeInspector} />
+                    <ResourceInspector file={inspectorContent} url={(pickedSaved && inspectorContent === pickedMedia ? savedSources : mediaSources).file(inspectorContent)} width={inspectorShownWidth} onClose={closeInspector} />
                   ) : inspectorContent === 'subtitles' ? (
                     <SubtitleInspector
                       subtitles={{ style: subs.style, onStyle: subs.patchStyle, translate: subs.translate, sourceLanguage: subs.sourceLanguage, lines: subs.captions?.cues ?? [], onEditLine: (cue, text, language) => void subs.setLine(cue, text, language), timeMs, onSeek: seek, untranscribed: subs.captions?.untranscribed.length ?? 0, onMake: makeSubtitles, making: subs.transcribing, ...(subtitleRefer ? { refer: subtitleRefer } : {}) }}

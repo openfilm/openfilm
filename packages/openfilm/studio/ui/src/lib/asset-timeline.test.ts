@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { assetClipElement, assetDropInsert, assetDropSpot, assetDropTargetOf, assetFitBox, assetPageFit, assetRunInsert, soundLaneHit } from './asset-timeline.ts';
+import { assetClipElement, assetClipKindOf, assetDropInsert, assetDropSpot, assetDropTargetOf, assetFitBox, assetPageFit, assetRunInsert, soundLaneHit } from './asset-timeline.ts';
 import type { TimelineTrack } from './timeline-layout.ts';
 
 /* A file from the media pane lands on the row under the pointer — a track has no kind (SPEC) — or, where its time
@@ -135,4 +135,9 @@ test('a page without a size of its own keeps the size it is shown at alone, scal
   /* on its own size, or for a page that sets its size (it is its own size already): nothing */
   assert.deepEqual(assetClipElement(page, { w: 1920, h: 1080 }), { src: 'scenes/cards.html' });
   assert.equal(assetPageFit({ w: 480, h: 320 }, { w: 2520, h: 1080 }), null);
+});
+
+test('a page the pane names one without its ending (a bundle of Saved) is an mg clip', () => {
+  assert.equal(assetClipKindOf({ path: 'saved/Lower third', kind: 'mg' }), 'mg');
+  assert.equal(assetClipKindOf({ path: 'saved/notes', kind: 'other' }), null);
 });
