@@ -130,7 +130,42 @@ export const api = {
   answerAsk: (askId: string, allow: boolean) => call<{ answered: boolean }>(`get/asks/${encodeURIComponent(askId)}`, { method: 'POST', json: { allow } }),
   /** the provider's own page for its balance, opened in the person's browser */
   openBilling: (providerId: string) => call<Record<string, never>>(`providers/${encodeURIComponent(providerId)}/billing`, { method: 'POST' }),
+  /** what the person saved to use again in any project (studio/server/saved.mjs), the newest first */
+  saved: () => call<{ items: SavedItem[] }>('saved').then((r) => r.items),
+  /** clips (by id) and files (by path) of a project saved, each with its picture */
+  save: (id: string, what: { clips?: SavedAsk[]; files?: Array<SavedAsk & { path: string }> }) => (
+    call<{ items: SavedItem[] }>(`${p(id)}/saved`, { method: 'POST', json: what }).then((r) => r.items)
+  ),
+  /** a saved thing's files brought into the project: the clip to put on the timeline, or the file's place */
+  takeSaved: (id: string, savedId: string) => call<{ clip: Record<string, unknown> & { src: string } } | { path: string }>(
+    `${p(id)}/saved/${encodeURIComponent(savedId)}/take`, { method: 'POST', json: {} },
+  ),
+  renameSaved: (savedId: string, name: string) => call<{ item: SavedItem }>(`saved/${encodeURIComponent(savedId)}`, { method: 'PATCH', json: { name } }).then((r) => r.item),
+  /** into the system's trash */
+  trashSaved: (savedId: string) => call<object>(`saved/${encodeURIComponent(savedId)}`, { method: 'DELETE' }),
+  revealSaved: (savedId: string) => call<{ ok: true }>(`saved/${encodeURIComponent(savedId)}/reveal`, { method: 'POST', json: {} }),
 };
+
+/** A saved clip or file, as the Saved view lists it. `main`: its file, by its place in the project it came from. */
+export interface SavedItem {
+  id: string;
+  name: string;
+  kind: 'clip' | 'file';
+  savedAt: string;
+  main: string;
+  durationMs?: number;
+  w?: number;
+  h?: number;
+  /** its page sets custom properties on :root: the inspector's Template section changes them */
+  template?: boolean;
+  poster: boolean;
+}
+
+/** What is said of a thing to save: a clip's id (a file's path beside it), a name, and how long and big it is. */
+export type SavedAsk = { id?: string; name?: string; durationMs?: number; w?: number; h?: number };
+
+/** A saved thing's picture. */
+export const savedPosterUrl = (item: Pick<SavedItem, 'id' | 'savedAt'>) => `/api/saved/${encodeURIComponent(item.id)}/poster?v=${encodeURIComponent(item.savedAt)}`;
 
 /** What an agent's `openfilm get` asks the person before it spends (studio/server/get.mjs). */
 export type SpendAsk = {

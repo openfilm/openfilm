@@ -34,6 +34,8 @@ export interface ResourceDragItem {
   w?: number;
   h?: number;
   fps?: number;
+  /** A saved thing (lib/saved), not a file of the project: its files are brought in as it lands. */
+  saved?: string;
 }
 
 const KINDS: readonly ResourceKind[] = ['video', 'image', 'audio', 'mg', 'other'];
@@ -101,6 +103,7 @@ function normalizeResourceDragItem(value: unknown): ResourceDragItem | null {
     ...(w === undefined ? {} : { w }),
     ...(h === undefined ? {} : { h }),
     ...(fps === undefined ? {} : { fps }),
+    ...(typeof item.saved === 'string' && item.saved ? { saved: item.saved } : {}),
   };
 }
 

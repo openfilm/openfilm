@@ -44,6 +44,7 @@ import { createWatchers } from './watch.mjs';
 import { installedFonts } from './fonts.mjs';
 import { projectFonts, resolveIn } from './project-fonts.mjs';
 import { FILM_PAGE, PageFrameError, closePageFrames, filmPoster, pageFacts, pageFrame, warmFilmPoster } from './pageframes.mjs';
+import { SavedError, listSaved, renameSaved, saveClip, saveFile, savedFolder, savedPoster, takeSaved, trashSaved } from './saved.mjs';
 import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listSkills, skillOrigins } from '../../src/skills.mjs';
 import { providersRoute } from './providers/index.mjs';
@@ -282,6 +283,20 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       } catch (e) {
         throw new HttpError(501, /** @type {Error} */ (e).message);
       }
+    }
+    /* what the person saved to use again in any project (saved.mjs): the list, each one's picture, a new name, its
+       folder shown, and taking it away (to the system's trash) */
+    if (parts[0] === 'saved' && parts.length >= 1 && parts.length <= 3) {
+      const id = parts[1] ?? '';
+      const answer = await savedCall(async () => {
+        if (parts.length === 1 && req.method === 'GET') return { items: await listSaved() };
+        if (parts.length === 3 && parts[2] === 'reveal' && req.method === 'POST') { openFile(savedFolder(id)); return { ok: true }; }
+        if (parts.length === 2 && req.method === 'PATCH') return { item: await renameSaved(id, (/** @type {{ name?: unknown }} */ (await readJson(req) ?? {})).name) };
+        if (parts.length === 2 && req.method === 'DELETE') { await trashSaved(id); return {}; }
+        return null;
+      });
+      if (answer) return json(res, 200, answer);
+      if (parts.length === 3 && parts[2] === 'poster' && req.method === 'GET') return sendMedia(req, res, await savedCall(async () => savedPoster(id)));
     }
     /* Studio's own preferences, the same for every project (prefs.mjs) */
     if (parts[0] === 'prefs' && parts.length === 1) {
@@ -618,6 +633,28 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         return json(res, 200, {});
       }
     }
+    /* clips and files of this project saved to use again anywhere, each with its picture; and a saved one taken into
+       this project (its files copied in, see saved.mjs) */
+    if (rest === 'saved' && req.method === 'POST') {
+      const body = /** @type {{ clips?: unknown, files?: unknown }} */ (await readJson(req) ?? {});
+      const asked = (/** @type {unknown} */ list) => (Array.isArray(list) ? list.filter((x) => x && typeof x === 'object').slice(0, 50) : []);
+      const items = await savedCall(async () => {
+        const out = [];
+        for (const c of /** @type {{ id?: unknown, name?: string, durationMs?: number, w?: number, h?: number }[]} */ (asked(body.clips))) {
+          const ms = typeof c.durationMs === 'number' && c.durationMs > 0 ? c.durationMs : 0;
+          out.push(await saveClip(project.path, String(c.id ?? ''), { ...c, poster: (clip) => clipPoster(project.path, pages.folderUrl(project), clip, ms) }));
+        }
+        for (const f of /** @type {{ path?: unknown, name?: string, durationMs?: number, w?: number, h?: number }[]} */ (asked(body.files))) {
+          const rel = String(f.path ?? '');
+          out.push(await saveFile(project.path, rel, { ...f, poster: () => clipPoster(project.path, pages.folderUrl(project), { src: rel }, typeof f.durationMs === 'number' ? f.durationMs : 0) }));
+        }
+        return out;
+      });
+      return json(res, 200, { items });
+    }
+    if (parts[2] === 'saved' && parts.length === 5 && parts[4] === 'take' && req.method === 'POST') {
+      return json(res, 200, await savedCall(() => takeSaved(project.path, parts[3])));
+    }
     /* what Studio works out from a media file: its length and size, a poster, a frame, a waveform (see derived.mjs) */
     if (rest === 'media' && req.method === 'GET') {
       const at = url.searchParams.get('path') ?? '';
@@ -900,6 +937,34 @@ function reveal(/** @type {string} */ file) {
 export function opener(target, platform = process.platform) {
   if (platform === 'win32') return /^https?:\/\//i.test(target) ? ['rundll32', 'url.dll,FileProtocolHandler', target] : ['explorer.exe', target];
   return platform === 'darwin' ? ['open', target] : ['xdg-open', target];
+}
+
+/**
+ * What saved.mjs answers, its refusals as the HTTP errors they are.
+ * @template T @param {() => Promise<T>} fn @returns {Promise<T>}
+ */
+async function savedCall(fn) {
+  try { return await fn(); } catch (e) {
+    if (e instanceof SavedError) throw new HttpError(/** @type {number} */ (e.status), e.message);
+    throw e;
+  }
+}
+
+/**
+ * A saved clip's picture, from the middle of what it shows: a page drawn with the changes made in it, a video's frame,
+ * a still's own; a sound has none.
+ * @param {string} root @param {string} base the project's folder as the pages are served (pageframes.mjs)
+ * @param {{ src: string, time?: unknown, overrides?: unknown }} clip @param {number} durationMs
+ * @returns {Promise<Buffer | null>}
+ */
+async function clipPoster(root, base, clip, durationMs) {
+  const kind = clipKind(clip.src);
+  const from = Array.isArray(clip.time) && typeof clip.time[0] === 'number' ? clip.time[0] * 1000 : 0;
+  const ms = durationMs > 0 ? from + durationMs / 2 : -1;
+  if (kind === 'page') return pageFrame(root, base, clip.src, ms, 480, Array.isArray(clip.overrides) ? clip.overrides : null);
+  if (kind === 'video') return frame(root, clip.src, Math.max(0, ms), 480);
+  if (kind === 'still') return poster(root, clip.src);
+  return null;
 }
 
 /** A file in the app the system opens it with. */

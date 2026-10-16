@@ -7,7 +7,7 @@
  * are written one at a time (see editor/use-film.ts); the agent's writes come in through the folder's events.
  */
 import * as React from 'react';
-import { ClipboardCopy, ClipboardPaste, GalleryVerticalEnd, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, TriangleAlert } from 'lucide-react';
+import { BookmarkPlus, ClipboardCopy, ClipboardPaste, GalleryVerticalEnd, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, TriangleAlert } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
 import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type Op, type ProjectFilm, type ProjectSettings } from '@/api';
 import { useT } from '@/i18n';
@@ -18,7 +18,7 @@ import { filmShape, type MediaFacts } from '@/lib/film-shape';
 import { changesPicture } from '@/lib/picture-files';
 import type { ReplaceFamily } from '@/lib/clip-replace';
 import { layoutTracks, type TimelineBlock, type TimelineTrack } from '@/lib/timeline-layout';
-import { filmClipKind, filmSrcIsPage, filmSrcKind, filmTrackBadges, parseFilmDocLoc, type FilmBox, type FilmDoc } from '@/lib/film';
+import { filmClipKind, filmSrcIsPage, filmSrcKind, filmTrackBadges, parseFilmDocLoc, type FilmBox, type FilmDoc, type FilmOverride } from '@/lib/film';
 import { footageFps, setTimecodeFps, snapToFrame, stepFrames } from '@/lib/timecode';
 import { JUMP_FRAMES, keyCommandOf, loopBack, playStart, shuttleRate } from '@/lib/timeline-keys';
 import { attrsOf, pasteAttrs, type AttrGroup, type CopiedAttrs } from '@/lib/clip-attrs';
@@ -98,6 +98,10 @@ import { FontScopeContext, type FontScope } from '@/lib/use-fonts';
 import { stageMenu, stageRecoveryMenu, type StageArrangeResult, type StageMenuContext } from './stage-menu';
 import type { StageEditFailure, StageTextEdit } from './FilmInspector';
 import { layerTarget, pageClipOf, recoverLayer } from '@/lib/stage-layers';
+import type { TemplateControls } from '@/lib/template-controls';
+import type { TemplateHost } from './TemplateSection';
+import type { SavedItem } from '@/api';
+import { refreshSaved, savedDragItem } from '@/lib/saved';
 import { pageClips, pageMayHave, similarEdits } from '@/lib/similar-layers';
 import type { MaskSession } from '@/lib/stage-mask';
 import type { MaskShape } from '@/lib/clip-mask';
@@ -958,6 +962,18 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const dropAsset = React.useCallback(async (file: ResourceDragItem, target: AssetDropTarget, atMs: number): Promise<string | null> => {
     const plan = assetDropInsert(file, timelineTracks, target, atMs, stageRef.current);
     if ('error' in plan) return plan.error === 'locked' ? t('timeline.trackLocked') : t('timeline.dropNotClip');
+    /* a saved thing (lib/saved): its files brought into the project first, then the clip as it was saved, where it
+       was dropped (a saved file goes in as a file of the project does) */
+    if (file.saved) {
+      let taken: Awaited<ReturnType<typeof api.takeSaved>>;
+      try { taken = await api.takeSaved(projectId, file.saved); } catch (e) { return e instanceof Error ? e.message : String(e); }
+      const clip = 'clip' in taken ? taken.clip : { ...(plan.element as Record<string, unknown>), src: taken.path };
+      const durMs = file.durationMs ?? assetRunMs([file]);
+      return edit([
+        { op: 'insert', clip: clip as never, at: plan.at, ...(plan.track != null ? { track: plan.track } : {}) },
+        ...roomFor([{ track: plan.track, atSec: plan.at, durMs }], target.edit),
+      ], 'history.stepDrop');
+    }
     const pending = pendingDropOf(file, target, atMs);
     if (pending) setPendingDrops((all) => [...all, pending]);
     try {
@@ -968,7 +984,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     } finally {
       if (pending) setPendingDrops((all) => all.filter((d) => d.id !== pending.id));
     }
-  }, [timelineTracks, edit, roomFor, t]);
+  }, [timelineTracks, edit, roomFor, t, projectId]);
   /**
    * A media file put on the timeline without a drag (lib/media-place): the media pane's "+" and Enter (in the
    * timeline's mode, at the playhead on the targeted track, else at the end of the main track), the source viewer's
@@ -992,6 +1008,48 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const placeFromSource = React.useCallback((mode: EditMode, range: SourceRange | null) => {
     if (pickedMedia) void addMedia(pickedMedia, { mode, range, atPlayhead: true });
   }, [addMedia, pickedMedia]);
+  /* a saved thing put on the timeline without a drag (the Saved view's double-click, Enter, Insert): at the playhead on
+     the targeted track, as a file of the project goes, its files brought into the project first */
+  const insertSaved = React.useCallback(async (item: SavedItem) => {
+    const file = savedDragItem(item);
+    let taken: Awaited<ReturnType<typeof api.takeSaved>>;
+    try { taken = await api.takeSaved(projectId, item.id); } catch (e) { toast.show(e instanceof Error ? e.message : String(e)); return; }
+    const prefs = readTimelinePrefs();
+    const target = timelineCommands.current?.target() ?? null;
+    const placed = { ...file, path: 'path' in taken ? taken.path : file.path };
+    const plan = placeMedia(editModel(), { file: placed, range: null, target, at: snapToFrame(timeRef.current), magnet: prefs.magnet, ...followOf(prefs), stage: stageRef.current });
+    if ('error' in plan) { toast.show(plan.error === 'locked' ? t('timeline.trackLocked') : t('timeline.dropNotClip')); return; }
+    const ops = 'clip' in taken ? plan.ops.map((op) => (op.op === 'insert' ? { ...op, clip: taken.clip as never } : op)) : plan.ops;
+    const failed = await edit(ops, 'history.stepDrop');
+    if (failed) toast.show(failed);
+  }, [projectId, editModel, edit, t, toast]);
+  /* clips (and files) kept to use again in any project (lib/saved, studio/server/saved.mjs): the timeline's, the
+     picture's and the media pane's "Add to Saved" */
+  const saveThings = React.useCallback(async (what: Parameters<typeof api.save>[1], n: number) => {
+    if (!n) return;
+    try {
+      await api.save(projectId, what);
+      await refreshSaved();
+      toast.show(n === 1 ? t('saved.added') : t('saved.addedMany').replace('{n}', String(n)));
+    } catch (e) {
+      toast.showError(t('saved.failed').replace('{error}', e instanceof Error ? e.message : String(e)));
+    }
+  }, [projectId, t, toast]);
+  const saveBlocks = React.useCallback((blocks: readonly TimelineBlock[]) => {
+    const clips = blocks.filter((b) => b.clipId).map((b) => {
+      const w = b.box?.w ?? b.size?.w;
+      const h = b.box?.h ?? b.size?.h;
+      return { id: b.clipId!, name: b.title, durationMs: Math.max(0, b.endMs - b.startMs), ...(w ? { w } : {}), ...(h ? { h } : {}) };
+    });
+    void saveThings({ clips }, clips.length);
+  }, [saveThings]);
+  const saveFiles = React.useCallback((files: WorkspaceResource[]) => {
+    const list = files.map((f) => ({ path: f.path, name: f.name, ...(f.durationMs ? { durationMs: f.durationMs } : {}), ...(f.w ? { w: f.w } : {}), ...(f.h ? { h: f.h } : {}) }));
+    void saveThings({ files: list }, list.length);
+  }, [saveThings]);
+  const saveEntry = (blocks: readonly TimelineBlock[]): ContextMenuEntry[] => (blocks.some((b) => b.clipId) ? [{
+    id: 'save', label: t('saved.add'), icon: <BookmarkPlus size={14} />, onSelect: () => saveBlocks(blocks),
+  }] : []);
   /* the subtitle row (components/SubtitleRow): its edits go into the transcripts, each a step of the undo here */
   const subtitleEdits = useSubtitleEdits(projectId, { film: film.film, refresh: subs.refresh, record: film.record });
   const subtitleRow = React.useMemo<SubtitleRowSpec>(() => ({
@@ -1074,7 +1132,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const layersShownWidth = rowWidth ? Math.min(layersWidth, layersRoom) : layersWidth;
   const layersFit = !rowWidth || layersShownWidth >= 180;
   const layersShown = layersPaneOpen && layersFit;
-  const mediaPool = (onClose?: () => void) => (
+  const mediaPool = () => (
     <MediaPool
       projectId={projectId}
       listing={listing}
@@ -1094,7 +1152,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       onBring={onBring}
       onRelink={onRelink}
       onCollect={onCollect}
-      onClose={onClose}
+      onSave={saveFiles}
+      onInsertSaved={(item) => void insertSaved(item)}
       {...(studioHost?.refer ? { fileRef: refOfFile, onRefer: studioHost.refer } : {})}
       reveal={revealMedia}
       litPath={chatPoint?.file ?? null}
@@ -1448,6 +1507,22 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const startStageCrop = React.useCallback(() => { stageControl.current?.startCrop(); }, []);
   const editStageMask = React.useCallback((session: MaskSession | null) => { stageControl.current?.editMask(session); }, []);
   const pageChangesOf = usePageChanges(preview, filmRef);
+  /* a page clip's template controls (components/TemplateSection): read from its page on the picture, previewed there,
+     written as its overrides by the inspector */
+  const templateOf = React.useCallback((block: TimelineBlock): TemplateHost | null => {
+    const clip = block.clipId;
+    if (!clip) return null;
+    return {
+      read: () => askStage<TemplateControls>('controls', { clip }),
+      overrides: () => {
+        const at = parseFilmDocLoc(blocksRef.current.find((b) => b.clipId === clip)?.loc ?? '');
+        return (at ? filmRef.current?.tracks[at.track]?.clips[at.clip]?.overrides : undefined) as readonly FilmOverride[] | undefined;
+      },
+      preview: (target, patch) => {
+        void (patch ? askStage('tweak', { clip, at: target.at, ...(target.n ? { n: target.n } : {}), patch }) : askStage('release', { clip }));
+      },
+    };
+  }, [askStage]);
   /* a clip's own CSS as film.html has it, and the look the player measured (the Inspector's Look section) */
   const clipLookOf = React.useCallback((clipLoc: string) => {
     const at = parseFilmDocLoc(clipLoc);
@@ -1521,10 +1596,10 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const entries = stageMenuFor(el, ctx);
     const block = el.clipLoc ? blocksRef.current.find((b) => b.loc === el.clipLoc) : null;
     const whole = el.kind === 'clip' || el.isMgOuter;
-    const extra = whole && !block ? [] : referEntry(() => [whole ? refOfBlock(block!) : refOfLayer(el)]);
+    const extra = whole && !block ? [] : [...referEntry(() => [whole ? refOfBlock(block!) : refOfLayer(el)]), ...(whole && block ? saveEntry([block]) : [])];
     return extra.length ? [...extra, ...(entries.length ? [{ id: 'refer-sep', separator: true } as const] : []), ...entries] : entries;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stageMenuFor, t]);
+  }, [stageMenuFor, t, saveBlocks]);
   /** Two groups of menu entries, a line between them when both have some. */
   const menuGroups = (a: ContextMenuEntry[], b: ContextMenuEntry[]): ContextMenuEntry[] => (a.length && b.length ? [...a, { id: 'tools-sep', separator: true }, ...b] : [...a, ...b]);
   /* copy and paste attributes, as CapCut's clip menu has them */
@@ -1532,7 +1607,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     { id: 'copy-attrs', label: t('clipAttrs.copy'), icon: <ClipboardCopy size={14} />, shortcut: shortcutHint('C', { mod: true, shift: true }), disabled: blocks.length !== 1, onSelect: () => copyAttrs(blocks) },
     { id: 'paste-attrs', label: t('clipAttrs.pasteMenu'), icon: <ClipboardPaste size={14} />, shortcut: shortcutHint('V', { mod: true, shift: true }), disabled: !copiedAttrs, hint: t('clipAttrs.nothing'), onSelect: () => askPasteAttrs(blocks) },
   ];
-  const timelineMenuExtra = React.useCallback((blocks: readonly TimelineBlock[]) => (blocks.length ? menuGroups(menuGroups(referEntry(() => blocks.map(refOfBlock)), tools.menuExtra(blocks)), attrsEntries(blocks)) : []), [t, tools.menuExtra, copiedAttrs, copyAttrs, askPasteAttrs]); // eslint-disable-line react-hooks/exhaustive-deps
+  const timelineMenuExtra = React.useCallback((blocks: readonly TimelineBlock[]) => (blocks.length ? menuGroups(menuGroups([...referEntry(() => blocks.map(refOfBlock)), ...saveEntry(blocks)], tools.menuExtra(blocks)), attrsEntries(blocks)) : []), [t, tools.menuExtra, copiedAttrs, copyAttrs, askPasteAttrs, saveBlocks]); // eslint-disable-line react-hooks/exhaustive-deps
   const trackMenuExtra = React.useCallback((track: TimelineTrack) => {
     const docIndex = track.docIndex;
     const refer = docIndex == null || !studioHost?.refer ? [] : referEntry(() => { const ref = trackRef(tracksRef.current, docIndex); return ref ? [ref] : []; }, false);
@@ -2709,6 +2784,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                       onSelectClip={selectStageClip}
                       onPreviewClip={previewClip}
                       pageChangesOf={pageChangesOf}
+                      templateOf={templateOf}
                       replaceEntries={tools.replaceEntries}
                       clipLookOf={clipLookOf}
                       onPreviewLook={previewLook}
@@ -2824,7 +2900,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       {hostAssets?.open && hostPanel ? (
         <div className="fixed z-30 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-t-[7px] bg-[var(--dock-pane)]"
           style={{ top: HOST_PANEL_TOP, right: DOCK_GAP, bottom: hostAssets.bottom, width: Math.max(0, hostPanel.width - 2 * DOCK_GAP) }}>
-          {mediaPool(() => hostAssets.setOpen(false))}
+          {mediaPool()}
         </div>
       ) : null}
       <DesktopDialog open={desktopOpen} onClose={() => setDesktopOpen(false)} />

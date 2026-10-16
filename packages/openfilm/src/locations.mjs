@@ -29,6 +29,13 @@ export const exportsDefault = () => process.env.OPENFILM_EXPORTS
   || (process.env.OPENFILM_HOME ? join(process.env.OPENFILM_HOME, 'exports') : '')
   || join(homedir(), 'Desktop');
 
+/**
+ * Where what the person saved goes (clips and files kept to use again in any project, studio/server/saved.mjs): beside
+ * the projects' default folder, `Saved` (~/Movies/OpenFilm/Saved on macOS), else OPENFILM_SAVED. Not moved with the
+ * projects folder: what was saved stays where it was found.
+ */
+export const savedRoot = () => process.env.OPENFILM_SAVED || join(dirname(libraryDefault()), 'Saved');
+
 /** The folders the person can choose, by their key in prefs.json. */
 export const LOCATION_KEYS = /** @type {const} */ ({ projects: 'projectsFolder' });
 

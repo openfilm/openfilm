@@ -101,6 +101,8 @@
   const INLINE = new Set(['BR', 'WBR', 'EM', 'STRONG', 'B', 'I', 'U', 'S', 'SPAN', 'SMALL', 'SUP', 'SUB', 'A', 'MARK', 'CODE', 'ABBR', 'Q', 'TIME']);
   const EDITOR_ATTR = 'data-openfilm-text-editor';
   const LIMIT = 1500;
+  /** At most this many custom properties, and as many words, as a page's template controls. */
+  const CONTROLS = 40;
 
   const view = (el) => el.ownerDocument.defaultView;
   const css = (el) => view(el).getComputedStyle(el);
@@ -1507,6 +1509,41 @@
     },
     textStart: startText,
     textFinish({ commit }) { finishText(Boolean(commit)); return true; },
+    /**
+     * A page clip's template controls, what the inspector offers to change in it without opening the page: the CSS
+     * custom properties its stylesheets set on `:root` (or `html`), each with its value now, and its words, each layer
+     * of text with its selector and its words now. Null when the clip is not a page on the picture now.
+     */
+    controls({ clip }) {
+      const c = clipById(clip);
+      const doc = c?.kind === 'page' ? c.win?.document : null;
+      if (!doc?.documentElement || !doc.body) return null;
+      const names = new Set();
+      const root = /^(?::root|html)$/i;
+      const read = (rules) => {
+        for (const rule of rules ?? []) {
+          if (names.size >= CONTROLS) return;
+          if (rule.cssRules && !rule.selectorText) { read(rule.cssRules); continue; }
+          if (!rule.selectorText || !rule.selectorText.split(',').some((sel) => root.test(sel.trim()))) continue;
+          for (const prop of rule.style) if (prop.startsWith('--')) names.add(prop);
+        }
+      };
+      for (const sheet of doc.styleSheets) {
+        try { read(sheet.cssRules); } catch { /* a stylesheet from elsewhere: not readable */ }
+      }
+      const now = c.win.getComputedStyle(doc.documentElement);
+      const vars = [...names].slice(0, CONTROLS).map((name) => ({ name, value: now.getPropertyValue(name).trim() }));
+      const texts = [];
+      for (const el of layersOf(doc)) {
+        if (texts.length >= CONTROLS) break;
+        if (kindOf(el) !== 'text' || isSvgText(el) || el.closest('svg')) continue;
+        const value = textOf(el);
+        if (!value) continue;
+        const { at, n } = locOf(el);
+        texts.push({ at, ...(n ? { n } : {}), label: el.id ? nameOf(el) : '', value });
+      }
+      return { vars, texts };
+    },
   };
 
   window.addEventListener('message', async (e) => {

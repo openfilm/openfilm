@@ -60,6 +60,7 @@ import type { MaskSession } from '@/lib/stage-mask';
 import type { MaskShape } from '@/lib/clip-mask';
 import type { FadeMs } from '@/lib/clip-fade';
 import type { FoundKind } from '@/lib/transitions';
+import { TemplateSection, type TemplateHost } from './TemplateSection';
 
 /** A change of a layer's words (kept as its `text` override). `expect` is what it said before: painted back on refusal. */
 export type StageTextEdit = {
@@ -174,6 +175,7 @@ export const FilmInspector = React.memo(function FilmInspector({
   rate,
   fades,
   transition,
+  templateOf,
 }: {
   element: StageElement | null;
   /** The clips selected on the timeline. A layer picked on the picture wins: one selection at a time. */
@@ -251,6 +253,8 @@ export const FilmInspector = React.memo(function FilmInspector({
   fades?: ReadonlyMap<string, FadeMs>;
   /** The transition picked on the timeline (no clip selected): its kind and length, made longer or taken away here. */
   transition?: TransitionPick | null;
+  /** A page clip's template controls (TemplateSection): read from its page, written as its overrides. */
+  templateOf?: (block: TimelineBlock) => TemplateHost | null;
 }) {
   const t = useT();
   useCommitBeforeLeaving();
@@ -322,6 +326,7 @@ export const FilmInspector = React.memo(function FilmInspector({
             badges={film?.badges}
             stage={stageSize}
             {...(fades ? { fades } : {})}
+            {...(templateOf ? { templateOf } : {})}
           />
         ) : many ? (
           <MultiClipPanel
@@ -1371,8 +1376,10 @@ function clipsLook(
  */
 function ClipPanel({
   block, onMain, geometry, stage, badges, onEdit, onPreviewClip, pageChangesOf, replaceEntries, clipLookOf, onPreviewLook, onStartCrop, onEditMask, maskAsk, onMaskAsked, fades,
+  templateOf,
 }: {
   fades?: ReadonlyMap<string, FadeMs>;
+  templateOf?: (block: TimelineBlock) => TemplateHost | null;
   replaceEntries?: (block: TimelineBlock) => ContextMenuEntry[];
   block: TimelineBlock;
   /** On the main track, where the magnet acts. */
@@ -1417,6 +1424,12 @@ function ClipPanel({
   const look = target ? clipsLook([target], commit, onPreviewLook) : null;
   const at = parseFilmDocLoc(loc ?? '');
   const badge = at ? badges?.[at.track] : undefined;
+  /* the same host while the same clip is in hand: the section reads the page again when its overrides change */
+  const template = React.useMemo(
+    () => (block.kind === 'mg' && docLoc && templateOf ? templateOf(block) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [templateOf, block.clipId, block.kind, docLoc],
+  );
 
   return (
     <>
@@ -1437,6 +1450,10 @@ function ClipPanel({
         </p>
       ) : (
         <>
+          {/* a page's own controls first: what a template is used for */}
+          {template ? (
+            <TemplateSection host={template} commit={(next) => commit([{ loc: loc!, prop: 'overrides', value: next as unknown as Record<string, unknown> | null }])} />
+          ) : null}
           {picture && own && geo ? (
             <ClipPositionSection
               t={t}
