@@ -1068,7 +1068,8 @@ function BarButton({ label, on, onClick, children }: { label: string; on?: boole
   return (
     <Tooltip label={label} side="bottom">
       <button type="button" aria-label={label} onClick={onClick}
-        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] ${on ? 'text-[var(--accent)]' : 'text-[var(--text-dim)]'}`}>
+        /* two states, on and off: hovered, only the ground lights; an on button keeps its color */
+        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition hover:bg-[var(--bg-hover)] ${on ? 'text-[var(--accent)]' : 'text-[var(--text-dim)] hover:text-[var(--text)]'}`}>
         {children}
       </button>
     </Tooltip>
