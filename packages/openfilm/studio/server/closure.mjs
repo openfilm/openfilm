@@ -4,7 +4,7 @@
  * follows the film and nothing else:
  *
  *   film.html                  and what its own head loads (styles, fonts, scripts)
- *   every clip's file          video, sound, picture or page
+ *   every clip's file          video, sound, picture or page, and a picture an override draws in a page (`url()`)
  *   what a page loads          relative `src` / `href` / `srcset` and the like in its HTML, `url()` and `@import` in
  *                              its CSS, imports in its scripts (an import map is followed), and any string in its
  *                              scripts and JSON that names a file of the project (`fetch('lib/plan.json')`); a
@@ -291,8 +291,14 @@ export async function filmClosure(view) {
   let value = null;
   try { value = readFilmFile(filmText).value; } catch { /* read as HTML below */ }
   for (const track of value?.tracks ?? []) {
-    for (const clip of /** @type {{ src?: unknown }[]} */ (track.clips ?? [])) {
-      if (typeof clip?.src === 'string') await ref(clip.src, [''], FILM_FILE);
+    for (const clip of /** @type {{ src?: unknown, overrides?: unknown }[]} */ (track.clips ?? [])) {
+      if (typeof clip?.src !== 'string') continue;
+      await ref(clip.src, [''], FILM_FILE);
+      /* a picture the person put in a page's place (an override's `url()`), named from the page's folder */
+      const dir = posix.dirname(clip.src) === '.' ? '' : posix.dirname(clip.src);
+      for (const o of Array.isArray(clip.overrides) ? clip.overrides : []) {
+        for (const v of Object.values(o?.style ?? {})) if (typeof v === 'string') for (const r of cssRefs(v)) await ref(r, [dir], clip.src);
+      }
     }
   }
   /* and the film read as the page it is: its head, and any clip the reading above did not take */

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { listSaved, newSavedId, renameSaved, saveClip, saveFile, takeSaved } from './saved.mjs';
+import { listSaved, newSavedId, renameSaved, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
 
 let saved;
 let before;
@@ -99,4 +99,37 @@ test('the list is the newest first, and a name can be changed', async () => {
 test('a saved thing\'s folder name: its words and a few letters of its own', () => {
   assert.match(newSavedId('Lower Third / blue!'), /^lower-third-blue-[0-9a-f]{6}$/);
   assert.match(newSavedId('***'), /^saved-[0-9a-f]{6}$/);
+});
+
+test('clips saved together keep their tracks and times from the first, and the links among them only', async () => {
+  const root = project();
+  writeFileSync(join(root, 'assets', 'v.mp4'), 'mp4');
+  writeFileSync(join(root, 'film.html'), `<meta name="viewport" content="width=1920, height=1080">
+<section>
+  <iframe id="title" src="pages/title.html" at="5"></iframe>
+</section>
+<section>
+  <video id="v" src="assets/v.mp4#t=0,4" at="3" data-link="L"></video>
+  <video id="w" src="assets/v.mp4#t=4,6" at="9" data-link="M"></video>
+</section>
+<section>
+  <audio id="a" src="assets/v.mp4#t=0,4" at="3" data-link="L"></audio>
+</section>
+`);
+  const item = await saveGroup(root, ['title', 'v', 'a', 'w'], { name: 'Opener' });
+  assert.equal(item.kind, 'group');
+  assert.equal(item.count, 4);
+  assert.equal(item.main, 'pages/title.html', 'the top one');
+  const other = mkdtempSync(join(tmpdir(), 'of-saved-other-'));
+  const taken = await takeSaved(other, item.id);
+  assert.ok('clips' in taken);
+  const base = `saved/${item.id}`;
+  assert.deepEqual(taken.clips.map(({ track, at, clip }) => [track, at, clip.src, clip.attrs?.['data-link'] ?? null]), [
+    [0, 2, `${base}/pages/title.html`, null],
+    [1, 0, `${base}/assets/v.mp4`, 'L'],
+    [1, 6, `${base}/assets/v.mp4`, null],
+    [2, 0, `${base}/assets/v.mp4`, 'L'],
+  ]);
+  assert.ok(existsSync(join(other, base, 'pages', 'title.css')));
+  await assert.rejects(saveGroup(root, ['title', 'gone']), /not all in the film/);
 });

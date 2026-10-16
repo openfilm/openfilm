@@ -1,7 +1,7 @@
 import { test as it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { FilmOverride } from './film.ts';
-import { changedText, changedVar, fieldOf, labelOf, valueOf, withText, withVar } from './template-controls.ts';
+import { changedImage, changedText, changedVar, cssUrl, fieldOf, isFontVar, labelOf, relativeTo, urlOf, valueOf, withImage, withText, withVar } from './template-controls.ts';
 
 it('a custom property is changed as a color, a number with its unit, words, or as typed', () => {
   assert.deepEqual(fieldOf('#ff5746'), { kind: 'color', value: '#ff5746' });
@@ -57,4 +57,38 @@ it('a layer\'s words are its text override, by its selector and which match', ()
   assert.equal(changedText(all ?? undefined, 'p.line'), null, 'every match is another layer');
   all = withText(all ?? undefined, 'p.line', 2, null);
   assert.equal(all, null);
+});
+
+it('a picture put in a page is named from the page\'s folder, as CSS writes a url', () => {
+  assert.equal(relativeTo('pages/lower.html', 'assets/logo.png'), '../assets/logo.png');
+  assert.equal(relativeTo('lower.html', 'assets/logo.png'), 'assets/logo.png');
+  assert.equal(relativeTo('saved/x/pages/a.html', 'saved/x/pages/img/b.png'), 'img/b.png');
+  assert.equal(relativeTo('a/b/c.html', 'a/d.png'), '../d.png');
+  assert.equal(cssUrl('../my "logo".png'), 'url("../my \\"logo\\".png")');
+  for (const path of ['../assets/logo.png', 'a b.png', 'my "logo".png']) assert.equal(urlOf(cssUrl(path)), path);
+  assert.equal(urlOf("url('x.png')"), 'x.png');
+  assert.equal(urlOf('url(x.png)'), 'x.png');
+  assert.equal(urlOf('none'), null);
+});
+
+it('a picture is replaced with the CSS that draws another file in its place: content for an <img>, a background for a box', () => {
+  const logo = { at: 'img.logo', kind: 'img' as const };
+  const card = { at: '.card', n: 2, kind: 'bg' as const };
+  let all = withImage(undefined, logo, '../assets/new.png');
+  all = withImage(all ?? undefined, card, 'bg.jpg');
+  assert.deepEqual(all, [
+    { at: 'img.logo', style: { content: 'url("../assets/new.png")' } },
+    { at: '.card', n: 2, style: { backgroundImage: 'url("bg.jpg")' } },
+  ]);
+  assert.equal(changedImage(all ?? undefined, logo), '../assets/new.png');
+  assert.equal(changedImage(all ?? undefined, { at: '.card', kind: 'bg' }), null, 'another match is another layer');
+  assert.deepEqual(withImage(all ?? undefined, logo, null), [{ at: '.card', n: 2, style: { backgroundImage: 'url("bg.jpg")' } }]);
+});
+
+it('a custom property that names a font gets the font picker', () => {
+  assert.equal(isFontVar('--title-font', '"Inter", sans-serif'), true);
+  assert.equal(isFontVar('--fontFamily', 'Geist'), true);
+  assert.equal(isFontVar('--font-size', '48px'), false);
+  assert.equal(isFontVar('--font-color', '#fff'), false);
+  assert.equal(isFontVar('--accent', 'Inter'), false);
 });

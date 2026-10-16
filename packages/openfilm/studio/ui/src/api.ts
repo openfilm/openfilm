@@ -133,11 +133,11 @@ export const api = {
   /** what the person saved to use again in any project (studio/server/saved.mjs), the newest first */
   saved: () => call<{ items: SavedItem[] }>('saved').then((r) => r.items),
   /** clips (by id) and files (by path) of a project saved, each with its picture */
-  save: (id: string, what: { clips?: SavedAsk[]; files?: Array<SavedAsk & { path: string }> }) => (
+  save: (id: string, what: { clips?: SavedAsk[]; groups?: Array<SavedAsk & { ids: string[] }>; files?: Array<SavedAsk & { path: string }> }) => (
     call<{ items: SavedItem[] }>(`${p(id)}/saved`, { method: 'POST', json: what }).then((r) => r.items)
   ),
-  /** a saved thing's files brought into the project: the clip to put on the timeline, or the file's place */
-  takeSaved: (id: string, savedId: string) => call<{ clip: Record<string, unknown> & { src: string } } | { path: string }>(
+  /** a saved thing's files brought into the project: the clip to put on the timeline (a group's clips), or the file's place */
+  takeSaved: (id: string, savedId: string) => call<{ clip: Record<string, unknown> & { src: string } } | { clips: SavedGroupClip[] } | { path: string }>(
     `${p(id)}/saved/${encodeURIComponent(savedId)}/take`, { method: 'POST', json: {} },
   ),
   renameSaved: (savedId: string, name: string) => call<{ item: SavedItem }>(`saved/${encodeURIComponent(savedId)}`, { method: 'PATCH', json: { name } }).then((r) => r.item),
@@ -146,11 +146,16 @@ export const api = {
   revealSaved: (savedId: string) => call<{ ok: true }>(`saved/${encodeURIComponent(savedId)}/reveal`, { method: 'POST', json: {} }),
 };
 
-/** A saved clip or file, as the Saved view lists it. `main`: its file, by its place in the project it came from. */
+/** A clip of a saved group: its track counted from the group's top one, its time in seconds from the group's start. */
+export type SavedGroupClip = { track: number; at: number; clip: Record<string, unknown> & { src: string } };
+
+/** A saved clip, group of clips or file, as the Saved view lists it. `main`: its (top) file, by its place in the project it came from. */
 export interface SavedItem {
   id: string;
   name: string;
-  kind: 'clip' | 'file';
+  kind: 'clip' | 'group' | 'file';
+  /** a group's clips */
+  count?: number;
   savedAt: string;
   main: string;
   durationMs?: number;

@@ -1,11 +1,11 @@
 /**
  * The media pane's Saved view: what the person saved to use again in any project (lib/saved, studio/server/saved.mjs),
- * as tiles. One is dragged onto the timeline, or double-clicked to go in at the playhead; its files are brought into
- * the project as it goes in. A page saved with custom properties on :root is marked a template: the inspector's
+ * as tiles: a clip, several clips saved as one (a group, marked with how many), or a file. One is dragged onto the
+ * timeline, or double-clicked to go in at the playhead; its files are brought into the project as it goes in. A page saved with custom properties on :root is marked a template: the inspector's
  * Template section changes them once it is on the timeline.
  */
 import React from 'react';
-import { Bookmark, Film, FileText, Image as ImageIcon, LayoutTemplate, Music, Pencil, Plus, Trash2, FolderOpen } from 'lucide-react';
+import { Bookmark, Film, FileText, Image as ImageIcon, Layers, LayoutTemplate, Music, Pencil, Plus, Trash2, FolderOpen } from 'lucide-react';
 
 import { api, savedPosterUrl, type SavedItem } from '@/api';
 import { useT } from '@/i18n';
@@ -102,6 +102,11 @@ export function SavedView({ query, onInsert, onNotify }: {
                   {item.template ? (
                     <span className="absolute left-1 top-1 z-10 flex items-center gap-0.5 rounded bg-black/65 px-1 text-[9.5px] font-semibold leading-[15px] text-white/90">
                       <LayoutTemplate size={9} />{t('saved.template')}
+                    </span>
+                  ) : null}
+                  {item.kind === 'group' && item.count ? (
+                    <span className="absolute bottom-1 left-1 z-10 flex items-center gap-0.5 rounded bg-black/65 px-1 text-[10.5px] tabular-nums leading-[16px] text-white" title={t('saved.groupOf').replace('{n}', String(item.count))}>
+                      <Layers size={10} />{item.count}
                     </span>
                   ) : null}
                   {duration ? <span className="absolute bottom-1 right-1 z-10 rounded bg-black/65 px-1 text-[10.5px] tabular-nums leading-[16px] text-white">{duration}</span> : null}

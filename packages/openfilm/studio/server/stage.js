@@ -1511,8 +1511,9 @@
     textFinish({ commit }) { finishText(Boolean(commit)); return true; },
     /**
      * A page clip's template controls, what the inspector offers to change in it without opening the page: the CSS
-     * custom properties its stylesheets set on `:root` (or `html`), each with its value now, and its words, each layer
-     * of text with its selector and its words now. Null when the clip is not a page on the picture now.
+     * custom properties its stylesheets set on `:root` (or `html`), each with its value now; its words, each layer of
+     * text with its selector and its words now; and its pictures, each <img> and each box painted with one image, with
+     * the address drawn now. Null when the clip is not a page on the picture now.
      */
     controls({ clip }) {
       const c = clipById(clip);
@@ -1542,7 +1543,18 @@
         const { at, n } = locOf(el);
         texts.push({ at, ...(n ? { n } : {}), label: el.id ? nameOf(el) : '', value });
       }
-      return { vars, texts };
+      const images = [];
+      for (const el of layersOf(doc)) {
+        if (images.length >= CONTROLS) break;
+        if (el.closest('svg')) continue;
+        const img = el.localName.toLowerCase() === 'img';
+        const painted = img ? null : /^url\("?([^"]*)"?\)$/.exec(css(el).backgroundImage);
+        const src = img ? el.currentSrc || el.src : painted?.[1] ?? '';
+        if (!src) continue;
+        const { at, n } = locOf(el);
+        images.push({ at, ...(n ? { n } : {}), label: el.id ? nameOf(el) : (img && el.alt) || '', kind: img ? 'img' : 'bg', src });
+      }
+      return { vars, texts, images, page: c.win.location.href };
     },
   };
 

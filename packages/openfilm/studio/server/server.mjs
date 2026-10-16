@@ -44,7 +44,7 @@ import { createWatchers } from './watch.mjs';
 import { installedFonts } from './fonts.mjs';
 import { projectFonts, resolveIn } from './project-fonts.mjs';
 import { FILM_PAGE, PageFrameError, closePageFrames, filmPoster, pageFacts, pageFrame, warmFilmPoster } from './pageframes.mjs';
-import { SavedError, listSaved, renameSaved, saveClip, saveFile, savedFolder, savedPoster, takeSaved, trashSaved } from './saved.mjs';
+import { SavedError, listSaved, renameSaved, saveClip, saveFile, saveGroup, savedFolder, savedPoster, takeSaved, trashSaved } from './saved.mjs';
 import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listSkills, skillOrigins } from '../../src/skills.mjs';
 import { providersRoute } from './providers/index.mjs';
@@ -633,16 +633,20 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         return json(res, 200, {});
       }
     }
-    /* clips and files of this project saved to use again anywhere, each with its picture; and a saved one taken into
-       this project (its files copied in, see saved.mjs) */
+    /* clips, groups of clips and files of this project saved to use again anywhere, each with its picture; and a saved
+       one taken into this project (its files copied in, see saved.mjs) */
     if (rest === 'saved' && req.method === 'POST') {
-      const body = /** @type {{ clips?: unknown, files?: unknown }} */ (await readJson(req) ?? {});
+      const body = /** @type {{ clips?: unknown, groups?: unknown, files?: unknown }} */ (await readJson(req) ?? {});
       const asked = (/** @type {unknown} */ list) => (Array.isArray(list) ? list.filter((x) => x && typeof x === 'object').slice(0, 50) : []);
       const items = await savedCall(async () => {
         const out = [];
         for (const c of /** @type {{ id?: unknown, name?: string, durationMs?: number, w?: number, h?: number }[]} */ (asked(body.clips))) {
           const ms = typeof c.durationMs === 'number' && c.durationMs > 0 ? c.durationMs : 0;
           out.push(await saveClip(project.path, String(c.id ?? ''), { ...c, poster: (clip) => clipPoster(project.path, pages.folderUrl(project), clip, ms) }));
+        }
+        for (const g of /** @type {{ ids?: unknown, name?: string, durationMs?: number, w?: number, h?: number }[]} */ (asked(body.groups))) {
+          const ids = Array.isArray(g.ids) ? g.ids.filter((id) => typeof id === 'string').slice(0, 200) : [];
+          out.push(await saveGroup(project.path, ids, { ...g, poster: (clip) => clipPoster(project.path, pages.folderUrl(project), clip, 0) }));
         }
         for (const f of /** @type {{ path?: unknown, name?: string, durationMs?: number, w?: number, h?: number }[]} */ (asked(body.files))) {
           const rel = String(f.path ?? '');

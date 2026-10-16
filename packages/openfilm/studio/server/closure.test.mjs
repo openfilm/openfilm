@@ -129,3 +129,21 @@ test('a reference made a project path, or nothing', () => {
   assert.equal(projectPath('../../out.png', 'scenes'), null, 'outside the folder');
   for (const ref of ['https://x.test/a.png', '//x.test/a.png', 'data:image/png;base64,AA', '#id', '', 'mailto:a@b']) assert.equal(projectPath(ref, ''), null, ref);
 });
+
+test('a picture an override draws in a page is the film\'s, named from the page\'s folder', async () => {
+  const root = folder({
+    'film.html': `<meta name="viewport" content="width=1920, height=1080">
+<section>
+  <iframe src="pages/lower.html" overrides='[{"at":"img.logo","style":{"content":"url(\\"../assets/new-logo.png\\")"}},{"at":".card","style":{"backgroundImage":"url(bg.jpg)"}}]'></iframe>
+</section>
+`,
+    'pages/lower.html': '<img class="logo" src="logo.png"><div class="card"></div>',
+    'pages/logo.png': 'old',
+    'pages/bg.jpg': 'bg',
+    'assets/new-logo.png': 'new',
+    'assets/unused.png': 'unused',
+  });
+  const held = await filmClosure(folderView(root));
+  for (const path of ['pages/lower.html', 'pages/logo.png', 'assets/new-logo.png', 'pages/bg.jpg']) assert.ok(held.has(path), path);
+  assert.ok(!held.has('assets/unused.png'));
+});

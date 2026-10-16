@@ -1,18 +1,25 @@
 /**
- * The inspector's Template section for a page clip: the page's custom properties and its words, changed here without
- * opening the page, as a motion graphics template is filled in (lib/template-controls). Each field paints first and
- * writes when let go, as every inspector field does; each change is an override of the clip, and a field changed from
- * the page's own value can go back to it.
+ * The inspector's Template section for a page clip: the page's custom properties, its words and its pictures, changed
+ * here without opening the page, as a motion graphics template is filled in (lib/template-controls). Each field paints
+ * first and writes when let go, as every inspector field does; each change is an override of the clip, and a field
+ * changed from the page's own value can go back to it. A custom property that names a font gets the font picker; a
+ * picture is replaced by a picture of the project (picked from a menu, or dropped from the media pane) or one from this
+ * computer.
  */
 import * as React from 'react';
-import { RotateCcw } from 'lucide-react';
+import { HardDriveUpload, ImageIcon, RotateCcw } from 'lucide-react';
 
 import { useT } from '@/i18n';
 import type { FilmOverride } from '@/lib/film';
 import {
-  ROOT, changedText, changedVar, fieldOf, labelOf, valueOf, withText, withVar, type TemplateControls, type VarField,
+  ROOT, changedImage, changedText, changedVar, fieldOf, isFontVar, labelOf, relativeTo, valueOf, withImage, withText, withVar,
+  type TemplateControls, type TemplateImage, type VarField,
 } from '@/lib/template-controls';
+import { joinFontFamily, splitFontFamily } from '@/lib/font-styles';
+import { readResourceDragData, RESOURCE_DRAG_TYPE } from '@/lib/resource-drag';
 import { ColorField, FIELD, INPUT, NumField, Section, SectionAction } from './inspector-fields';
+import { FontFamilyPicker } from './FontFamilyPicker';
+import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 
 type T = ReturnType<typeof useT>;
 
@@ -23,7 +30,15 @@ export interface TemplateHost {
   overrides: () => readonly FilmOverride[] | undefined;
   /** Paints a change without writing it; null takes it back. */
   preview: (target: { at: string; n?: number }, patch: { style?: Record<string, string>; text?: string } | null) => void;
+  /** The page's file, by its place in the project: a picture put in is named from its folder. */
+  page: string;
+  /** The project's pictures, by their place in the project. */
+  pictures: () => Array<{ path: string; name: string }>;
+  /** One from this computer, brought into the project: its place there (null: none picked). */
+  pickPicture?: () => Promise<string | null>;
 }
+
+const PICTURE = /\.(png|jpe?g|gif|webp|avif|svg|bmp)$/i;
 
 /* a page clip off the picture is read again now and then: the playhead may come to it */
 const OFF_PICTURE_EVERY_MS = 1500;
@@ -55,9 +70,10 @@ export function TemplateSection({ host, commit }: {
   }, [host, kept]);
 
   if (controls === undefined) return null;
-  if (controls && !controls.vars.length && !controls.texts.length) return null;
+  if (controls && !controls.vars.length && !controls.texts.length && !controls.images?.length) return null;
   const setVar = (name: string, value: string | null) => commit(withVar(overrides, name, value));
   const setText = (at: string, n: number | undefined, value: string | null) => commit(withText(overrides, at, n, value));
+  const setImage = (image: TemplateImage, path: string | null) => commit(withImage(overrides, image, path == null ? null : relativeTo(host.page, path)));
 
   return (
     <Section id="template" title={t('inspector.template')}>
@@ -67,12 +83,21 @@ export function TemplateSection({ host, commit }: {
         <>
           {controls.vars.map(({ name, value }) => (
             <Line key={name} label={labelOf(name)} title={name} changed={changedVar(overrides, name) != null} onReset={() => setVar(name, null)} t={t}>
-              <VarInput
-                name={name}
-                field={fieldOf(value, isNamedColor)}
-                onCommit={(next) => setVar(name, next)}
-                onPreview={(next) => host.preview({ at: ROOT }, next == null ? null : { style: { [name]: next } })}
-              />
+              {isFontVar(name, value) ? (
+                <FontInput
+                  label={labelOf(name)}
+                  value={value}
+                  onCommit={(next) => setVar(name, next)}
+                  onPreview={(next) => host.preview({ at: ROOT }, next == null ? null : { style: { [name]: next } })}
+                />
+              ) : (
+                <VarInput
+                  name={name}
+                  field={fieldOf(value, isNamedColor)}
+                  onCommit={(next) => setVar(name, next)}
+                  onPreview={(next) => host.preview({ at: ROOT }, next == null ? null : { style: { [name]: next } })}
+                />
+              )}
             </Line>
           ))}
           {controls.texts.map(({ at, n, label, value }, i) => (
@@ -93,9 +118,84 @@ export function TemplateSection({ host, commit }: {
               />
             </Line>
           ))}
+          {(controls.images ?? []).map((image, i) => {
+            const label = image.label || `${t('inspector.templatePicture')} ${i + 1}`;
+            const put = changedImage(overrides, image);
+            /* what it draws now: the picture put in, read from the page's folder, else the page's own */
+            const src = put != null && controls.page ? new URL(put, controls.page).href : image.src;
+            return (
+              <Line key={`${image.at}#${image.n ?? 0}`} label={label} title={image.n ? `${image.at} (${image.n})` : image.at} changed={put != null} onReset={() => setImage(image, null)} t={t}>
+                <PictureInput src={src} host={host} label={label} onPick={(path) => setImage(image, path)} t={t} />
+              </Line>
+            );
+          })}
         </>
       )}
     </Section>
+  );
+}
+
+/** A picture: its thumbnail and name; clicked, the project's pictures and one from this computer; a picture dropped. */
+function PictureInput({ src, host, label, onPick, t }: {
+  src: string; host: TemplateHost; label: string; onPick: (path: string) => void; t: T;
+}) {
+  const [menu, setMenu] = React.useState<{ x: number; y: number } | null>(null);
+  const [over, setOver] = React.useState(false);
+  const name = decodeURIComponent(src.split(/[?#]/)[0]!.split('/').pop() ?? '');
+  const entries = (): ContextMenuEntry[] => {
+    const list = host.pictures().slice(0, 40);
+    const pick = host.pickPicture;
+    return [
+      ...list.map((f) => ({ id: `pic:${f.path}`, label: f.name, onSelect: () => onPick(f.path) })),
+      ...(pick ? [
+        ...(list.length ? [{ id: 'pic-sep', separator: true as const }] : []),
+        { id: 'pic-computer', label: t('inspector.templatePictureComputer'), icon: <HardDriveUpload size={14} />, onSelect: () => { void pick().then((path) => { if (path && PICTURE.test(path)) onPick(path); }); } },
+      ] : []),
+    ];
+  };
+  return (
+    <>
+      <button
+        type="button"
+        aria-label={`${label}: ${t('inspector.templatePictureReplace')}`}
+        title={t('inspector.templatePictureReplace')}
+        onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ x: r.left, y: r.bottom + 4 }); }}
+        onDragOver={(e) => { if (e.dataTransfer.types.includes(RESOURCE_DRAG_TYPE)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setOver(true); } }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => {
+          setOver(false);
+          const file = readResourceDragData(e.dataTransfer);
+          if (!file || file.saved || !PICTURE.test(file.path)) return;
+          e.preventDefault();
+          onPick(file.path);
+        }}
+        className={`${FIELD} gap-1.5 px-1 text-left ${over ? 'ring-[1.5px] ring-[var(--accent)]' : ''}`}
+      >
+        <span className="flex h-[18px] w-[28px] shrink-0 items-center justify-center overflow-hidden rounded-[3px] bg-[var(--bg-hover)]">
+          {src ? <img src={src} alt="" className="h-full w-full object-cover" draggable={false} /> : <ImageIcon size={12} />}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-[11px] text-[var(--text)]">{name}</span>
+      </button>
+      {menu ? <ContextMenu x={menu.x} y={menu.y} items={entries()} onClose={() => setMenu(null)} /> : null}
+    </>
+  );
+}
+
+/** A custom property that names a font: the font picker over its first family, the fallbacks after it kept. */
+function FontInput({ label, value, onCommit, onPreview }: {
+  label: string; value: string; onCommit: (value: string) => void; onPreview: (value: string | null) => void;
+}) {
+  const [family, rest] = splitFontFamily(value);
+  return (
+    <FontFamilyPicker
+      label={label}
+      value={family}
+      sample=""
+      onPreview={(next) => onPreview(joinFontFamily(next, rest))}
+      onRevert={() => onPreview(null)}
+      onCommit={(next) => onCommit(joinFontFamily(next, rest))}
+      className={FIELD}
+    />
   );
 }
 

@@ -102,6 +102,7 @@ import type { TemplateControls } from '@/lib/template-controls';
 import type { TemplateHost } from './TemplateSection';
 import type { SavedItem } from '@/api';
 import { refreshSaved, savedDragItem } from '@/lib/saved';
+import { groupInsertAt, groupInsertOps } from '@/lib/saved-insert';
 import { pageClips, pageMayHave, similarEdits } from '@/lib/similar-layers';
 import type { MaskSession } from '@/lib/stage-mask';
 import type { MaskShape } from '@/lib/clip-mask';
@@ -967,6 +968,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (file.saved) {
       let taken: Awaited<ReturnType<typeof api.takeSaved>>;
       try { taken = await api.takeSaved(projectId, file.saved); } catch (e) { return e instanceof Error ? e.message : String(e); }
+      /* a group: its tracks new ones, where it was dropped */
+      if ('clips' in taken) return edit(groupInsertOps(taken.clips, plan.at, groupInsertAt(plan.track), editModel()), 'history.stepDrop');
       const clip = 'clip' in taken ? taken.clip : { ...(plan.element as Record<string, unknown>), src: taken.path };
       const durMs = file.durationMs ?? assetRunMs([file]);
       return edit([
@@ -984,7 +987,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     } finally {
       if (pending) setPendingDrops((all) => all.filter((d) => d.id !== pending.id));
     }
-  }, [timelineTracks, edit, roomFor, t, projectId]);
+  }, [timelineTracks, edit, roomFor, t, projectId, editModel]);
   /**
    * A media file put on the timeline without a drag (lib/media-place): the media pane's "+" and Enter (in the
    * timeline's mode, at the playhead on the targeted track, else at the end of the main track), the source viewer's
@@ -1014,6 +1017,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const file = savedDragItem(item);
     let taken: Awaited<ReturnType<typeof api.takeSaved>>;
     try { taken = await api.takeSaved(projectId, item.id); } catch (e) { toast.show(e instanceof Error ? e.message : String(e)); return; }
+    /* a group: on new tracks at the top, from the playhead */
+    if ('clips' in taken) {
+      const failed = await edit(groupInsertOps(taken.clips, snapToFrame(timeRef.current) / 1000, 0, editModel()), 'history.stepDrop');
+      if (failed) toast.show(failed);
+      return;
+    }
     const prefs = readTimelinePrefs();
     const target = timelineCommands.current?.target() ?? null;
     const placed = { ...file, path: 'path' in taken ? taken.path : file.path };
@@ -1035,8 +1044,23 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       toast.showError(t('saved.failed').replace('{error}', e instanceof Error ? e.message : String(e)));
     }
   }, [projectId, t, toast]);
-  const saveBlocks = React.useCallback((blocks: readonly TimelineBlock[]) => {
-    const clips = blocks.filter((b) => b.clipId).map((b) => {
+  const saveBlocks = React.useCallback((blocks: readonly TimelineBlock[], together = false) => {
+    const kept = blocks.filter((b) => b.clipId);
+    /* several as one: laid out as they are, from the first one's start to the last one's end */
+    if (together && kept.length > 1) {
+      const startMs = Math.min(...kept.map((b) => b.startMs));
+      const endMs = Math.max(...kept.map((b) => b.endMs));
+      /* named and pictured by the top one that draws a picture */
+      const trackOf = (b: TimelineBlock) => parseFilmDocLoc(b.loc ?? '')?.track ?? 0;
+      const byTrack = [...kept].sort((a, b) => trackOf(a) - trackOf(b) || a.startMs - b.startMs);
+      const top = byTrack.find((b) => b.kind === 'mg' || b.kind === 'video') ?? byTrack[0]!;
+      const w = top.box?.w ?? top.size?.w;
+      const h = top.box?.h ?? top.size?.h;
+      const name = `${top.title}${kept.length > 1 ? ` +${kept.length - 1}` : ''}`;
+      void saveThings({ groups: [{ ids: kept.map((b) => b.clipId!), name, durationMs: endMs - startMs, ...(w ? { w } : {}), ...(h ? { h } : {}) }] }, 1);
+      return;
+    }
+    const clips = kept.map((b) => {
       const w = b.box?.w ?? b.size?.w;
       const h = b.box?.h ?? b.size?.h;
       return { id: b.clipId!, name: b.title, durationMs: Math.max(0, b.endMs - b.startMs), ...(w ? { w } : {}), ...(h ? { h } : {}) };
@@ -1047,9 +1071,16 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const list = files.map((f) => ({ path: f.path, name: f.name, ...(f.durationMs ? { durationMs: f.durationMs } : {}), ...(f.w ? { w: f.w } : {}), ...(f.h ? { h: f.h } : {}) }));
     void saveThings({ files: list }, list.length);
   }, [saveThings]);
-  const saveEntry = (blocks: readonly TimelineBlock[]): ContextMenuEntry[] => (blocks.some((b) => b.clipId) ? [{
-    id: 'save', label: t('saved.add'), icon: <BookmarkPlus size={14} />, onSelect: () => saveBlocks(blocks),
-  }] : []);
+  /* one clip, or several as one (each one alone, too) */
+  const saveEntry = (blocks: readonly TimelineBlock[]): ContextMenuEntry[] => {
+    const n = blocks.filter((b) => b.clipId).length;
+    if (!n) return [];
+    if (n === 1) return [{ id: 'save', label: t('saved.add'), icon: <BookmarkPlus size={14} />, onSelect: () => saveBlocks(blocks) }];
+    return [
+      { id: 'save', label: t('saved.addTogether').replace('{n}', String(n)), icon: <BookmarkPlus size={14} />, onSelect: () => saveBlocks(blocks, true) },
+      { id: 'save-each', label: t('saved.addEach'), icon: <BookmarkPlus size={14} />, onSelect: () => saveBlocks(blocks) },
+    ];
+  };
   /* the subtitle row (components/SubtitleRow): its edits go into the transcripts, each a step of the undo here */
   const subtitleEdits = useSubtitleEdits(projectId, { film: film.film, refresh: subs.refresh, record: film.record });
   const subtitleRow = React.useMemo<SubtitleRowSpec>(() => ({
@@ -1509,6 +1540,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const pageChangesOf = usePageChanges(preview, filmRef);
   /* a page clip's template controls (components/TemplateSection): read from its page on the picture, previewed there,
      written as its overrides by the inspector */
+  /* the project's files as listed now, for the Template section's pictures (its host outlives a render) */
+  const listingRef = React.useRef(listing);
+  listingRef.current = listing;
   const templateOf = React.useCallback((block: TimelineBlock): TemplateHost | null => {
     const clip = block.clipId;
     if (!clip) return null;
@@ -1521,8 +1555,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       preview: (target, patch) => {
         void (patch ? askStage('tweak', { clip, at: target.at, ...(target.n ? { n: target.n } : {}), patch }) : askStage('release', { clip }));
       },
+      page: block.src ?? '',
+      pictures: () => (listingRef.current?.files ?? []).filter((f) => /\.(png|jpe?g|gif|webp|avif|svg|bmp)$/i.test(f.path)).map((f) => ({ path: f.path, name: f.path.split('/').pop() ?? f.path })),
+      pickPicture: () => pickReplacement('picture'),
     };
-  }, [askStage]);
+  }, [askStage, pickReplacement]);
   /* a clip's own CSS as film.html has it, and the look the player measured (the Inspector's Look section) */
   const clipLookOf = React.useCallback((clipLoc: string) => {
     const at = parseFilmDocLoc(clipLoc);
