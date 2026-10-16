@@ -312,3 +312,11 @@ test('a clip named after its file has no dashes at its ends, however many there 
   assert.equal(clipIdFor(`a${'-'.repeat(200_000)}b`, []), `a${'-'.repeat(200_000)}b`);
   assert.equal(clipIdFor('----.mp4', []), 'clip');
 });
+
+test('an override\'s style takes CSS properties in camelCase and custom properties as CSS names them', () => {
+  const page = (style) => film({ src: 't.html', overrides: [{ at: ':root', style }] });
+  assert.equal(problems(page({ color: '#fff', '--accent': '#ff5746', '--bar_width2': '640px', '--n': 3 })), '');
+  for (const bad of [{ 'font-size': '12px' }, { '-x': '1' }, { '--': '1' }, { '--a b': '1' }, { [`--${'x'.repeat(61)}`]: '1' }]) {
+    assert.match(problems(page(bad)), /style has to be at most 24 properties, camelCase or custom/, JSON.stringify(bad));
+  }
+});

@@ -104,6 +104,8 @@ const KEPT_ATTRIBUTE = /^(alt|title|lang|dir|data-[a-z0-9-]+|aria-[a-z]+)$/;
 /** What a track keeps of its element that says nothing to the film: a name, a class, a description. */
 const KEPT_TRACK_ATTRIBUTE = /^(id|class|title|lang|dir|data-[a-z0-9-]+|aria-[a-z]+)$/;
 const OVERRIDE_FIELDS = ['at', 'n', 't', 's', 'r', 'style', 'lock', 'text', 'fade'];
+/** A key of an override's style: a CSS property in camelCase, or a custom property as CSS writes it (`--accent`). */
+const STYLE_KEY = /^(?:[a-zA-Z]{1,40}|--[A-Za-z0-9_-]{1,60})$/;
 const BOX_FIELDS = ['x', 'y', 'w', 'h', 'r'];
 /** The largest side a page is laid out at (`size`): a stage's. */
 const PAGE_SIZE_MAX = 8192;
@@ -152,8 +154,8 @@ function checkOverride(o, where, problems, kind) {
     const entries = isObject(o.style) ? Object.entries(o.style) : null;
     /* a value up to 2000 characters: a mask's inline SVG (`mask-image: url("data:image/svg+xml,…")`) runs to a few hundred */
     if (!entries || entries.length > 24
-      || !entries.every(([k, v]) => /^[a-zA-Z]{1,40}$/.test(k) && ((typeof v === 'string' && v.length <= 2000) || isFinite(v)))) {
-      problems.push(`${where}style has to be at most 24 camelCase properties, each text or a number.`);
+      || !entries.every(([k, v]) => STYLE_KEY.test(k) && ((typeof v === 'string' && v.length <= 2000) || isFinite(v)))) {
+      problems.push(`${where}style has to be at most 24 properties, camelCase or custom (--name), each text or a number.`);
     }
   }
   if (o.lock !== undefined && o.lock !== true) problems.push(`${where}lock is true, or not written.`);

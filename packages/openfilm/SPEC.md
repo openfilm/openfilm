@@ -75,7 +75,8 @@ where, and CSS that says how each looks. A page draws a shot.
   - `overrides` are the person's changes made in Studio, as JSON, a list of entries. An entry with `at` (a CSS
     selector), on a page clip only, tweaks an element of the page, applied by the host after each frame: optional `n`
     (which match, from 1), `t` (translate px), `s` (scale), `r` (rotate degrees) as the independent CSS transform
-    properties so they compose with the page's own animation, `style` (CSS properties, applied with priority), `text`
+    properties so they compose with the page's own animation, `style` (CSS properties, camelCase or custom
+    `--name`, applied with priority), `text`
     (replaces the element's own text: all of it when it has no child elements or only `<br>`s, a line break in `text`
     being a `<br>`; with other inline children, its first run of text, the children kept), `lock` (`true`: an editor keeps the element from being selected or moved; it changes
     nothing in the picture). An entry without `at`, at most one, on any clip, is the clip's own: `fade: [in, out]`,

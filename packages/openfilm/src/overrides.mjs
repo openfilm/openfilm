@@ -29,6 +29,8 @@ export function override(c, list = []) {
       if (o.s != null) set(el, 'scale', Array.isArray(o.s) ? `${o.s[0]} ${o.s[1]}` : String(o.s));
       if (o.r != null) set(el, 'rotate', `${o.r}deg`);
       for (const [k, v] of Object.entries(o.style ?? {})) {
+        /* a custom property (`--accent`) is set as it is named, its value as it is: what a number means is the page's */
+        if (k.startsWith('--')) { set(el, k, String(v), 'important'); continue; }
         const prop = k.replace(/[A-Z]/g, (ch) => '-' + ch.toLowerCase());
         set(el, prop, typeof v === 'number' && !/opacity|z-index|font-weight|line-height|flex/.test(prop) ? v + 'px' : String(v), 'important');
       }
