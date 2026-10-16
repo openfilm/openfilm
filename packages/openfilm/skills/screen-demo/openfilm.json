@@ -1,0 +1,29 @@
+{
+  "version": "0.1.0",
+  "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/skills/screen-demo",
+  "kind": "workflow",
+  "order": 3,
+  "icon": "monitor",
+  "cover": "cover.jpg",
+  "title": {
+    "en": "Screen demo",
+    "zh-CN": "录屏演示",
+    "ja": "画面収録デモ",
+    "ko": "화면 녹화 데모",
+    "es": "Demo de pantalla"
+  },
+  "summary": {
+    "en": "A screen recording made into a polished demo: the camera follows the action, the waiting is gone, every step lands.",
+    "zh-CN": "把录屏做成精致的产品演示或教程：镜头跟着操作走，等待的地方剪掉，每一步都看得清。",
+    "ja": "画面収録を洗練されたデモに。カメラが操作を追い、待ち時間はカット、各ステップがはっきり伝わります。",
+    "ko": "화면 녹화를 완성도 높은 데모로: 카메라가 동작을 따라가고, 기다림은 없애고, 모든 단계가 분명하게.",
+    "es": "Una grabación de pantalla convertida en una demo pulida: la cámara sigue la acción, sin esperas, cada paso se entiende."
+  },
+  "details": {
+    "zh-CN": "适合：产品演示、软件教程、功能介绍。\n它会：把录屏做成精致的演示片：镜头跟着操作推近拉远，加载和等待剪掉，点击和结果清楚可见，需要时配上讲解。",
+    "en": "Best for: product demos, software tutorials and feature videos.\nWhat it does: turns a screen recording into a polished demo. The camera follows the action, the waiting is cut, clicks and results are clear, with a voice-over when you want one.",
+    "ja": "こんなときに：製品デモ、ソフトのチュートリアル、機能紹介。\nすること：画面収録を洗練されたデモに。カメラが操作に寄り、待ち時間はカットし、クリックと結果がはっきり見えます。必要ならナレーションも。",
+    "ko": "이럴 때: 제품 데모, 소프트웨어 튜토리얼, 기능 소개.\n하는 일: 화면 녹화를 완성도 높은 데모로. 카메라가 동작을 따라가고 기다림은 자르고 클릭과 결과가 분명하게 보이며, 원하면 내레이션도 넣습니다.",
+    "es": "Ideal para: demos de producto, tutoriales de software y vídeos de funciones.\nQué hace: convierte una grabación de pantalla en una demo pulida: la cámara sigue la acción, se cortan las esperas, los clics y resultados se ven claros, con voz en off si la quieres."
+  }
+}

@@ -9,7 +9,7 @@
  * a folder of its own beside the person's skills, commitSkills keeps it, discardSkills lets it go. A folder on this
  * computer is looked at where it is (previewFolder) and copied in when kept (addSkills).
  */
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { FILM_FILE } from './film-doc.mjs';
@@ -61,6 +61,8 @@ export async function previewSkills(url, { mine = mySkillsDir(), fetch = fetchSk
   const work = await mkdtemp(join(mine, '.adding-'));
   try {
     const staging = await fetch(url, work);
+    /* the address, for commitSkills to keep as where they came from */
+    writeFileSync(join(work, '.from'), url);
     const found = skillsAt(staging);
     if (!found.length || !holdsSkills(staging)) throw new Error(`There is no SKILL.md in ${url}: it is not a skill.`);
     return { staging: work, skills: looked(found, mine) };
@@ -102,7 +104,9 @@ export async function commitSkills(/** @type {string} */ staging, { mine = mySki
   try {
     const [fetched] = readdirSync(staging).filter((n) => !n.startsWith('.')).map((n) => join(staging, n));
     if (!fetched) throw new Error('Nothing is waiting to be added.');
-    return await addSkills(fetched, { mine });
+    let address = '';
+    try { address = readFileSync(join(staging, '.from'), 'utf8').trim(); } catch { /* fetched before addresses were kept */ }
+    return await addSkills(fetched, { mine, ...(address ? { origin: { from: 'link', address } } : {}) });
   } finally {
     await rm(staging, { recursive: true, force: true }).catch(() => {});
   }

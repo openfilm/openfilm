@@ -45,7 +45,7 @@ import { installedFonts } from './fonts.mjs';
 import { projectFonts, resolveIn } from './project-fonts.mjs';
 import { FILM_PAGE, PageFrameError, closePageFrames, filmPoster, pageFacts, pageFrame, warmFilmPoster } from './pageframes.mjs';
 import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
-import { listSkills } from '../../src/skills.mjs';
+import { listSkills, skillOrigins } from '../../src/skills.mjs';
 import { providersRoute } from './providers/index.mjs';
 import { captionRoutes } from './captions.mjs';
 import { projectSettingsRoute } from './project-settings.mjs';
@@ -307,16 +307,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (parts[0] === 'examples' && parts.length === 1 && req.method === 'GET') return json(res, 200, { examples: await listExamples() });
     /* a poster or preview beside an index read from this computer (examples.mjs exampleFile) */
     if (parts[0] === 'examples' && parts[1] === 'file' && parts.length > 2 && req.method === 'GET') {
-      const file = exampleFile(parts.slice(2).map(decodeURIComponent).join('/'));
-      if (!file || !existsSync(file) || !statSync(file).isFile()) throw new HttpError(404, 'no such file');
-      const size = statSync(file).size;
-      const type = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.mp4': 'video/mp4', '.webm': 'video/webm' }[extname(file).toLowerCase()] ?? 'application/octet-stream';
-      /* a preview is seeked in: a range is answered as one */
-      const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range ?? ''));
-      const [from, to] = range ? [range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2])), range[2] && range[1] ? Math.min(size - 1, Number(range[2])) : size - 1] : [0, size - 1];
-      res.writeHead(range ? 206 : 200, { 'content-type': type, 'content-length': to - from + 1, 'accept-ranges': 'bytes', ...(range ? { 'content-range': `bytes ${from}-${to}/${size}` } : {}) });
-      createReadStream(file, { start: from, end: to }).pipe(res);
-      return undefined;
+      return sendMedia(req, res, exampleFile(parts.slice(2).map(decodeURIComponent).join('/')));
     }
     /* an example's folder on this computer, to point an agent at (examples.mjs exampleFolder) */
     if (parts[0] === 'examples' && parts.length === 3 && parts[2] === 'folder' && req.method === 'POST') {
@@ -335,7 +326,26 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const id = url.searchParams.get('project');
       const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) : null;
       const skills = listSkills({ project: project?.path ?? null });
-      return json(res, 200, { skills: skills.map((k) => ({ name: k.name, description: k.description, source: k.source, scripts: k.scripts.length, ...(k.shown ? { shown: k.shown } : {}) })) });
+      const origins = skillOrigins();
+      const media = (/** @type {string} */ name, /** @type {'cover' | 'preview'} */ which) => `/api/skills/${encodeURIComponent(name)}/${which}${id ? `?project=${encodeURIComponent(id)}` : ''}`;
+      return json(res, 200, {
+        skills: skills.map((k) => ({
+          name: k.name, description: k.description, source: k.source, scripts: k.scripts.length,
+          ...(k.shown ? { shown: k.shown } : {}), ...(k.version ? { version: k.version } : {}), ...(k.kind ? { kind: k.kind } : {}),
+          ...(k.order != null ? { order: k.order } : {}), ...(k.icon ? { icon: k.icon } : {}), ...(k.repository ? { repository: k.repository } : {}),
+          ...(k.cover ? { cover: media(k.name, 'cover') } : {}), ...(k.preview ? { preview: media(k.name, 'preview') } : {}),
+          /* the person's own: where it came from (none kept: made where it is) */
+          ...(k.source === 'mine' ? { origin: origins[basename(k.folder)] ?? { from: 'made' } } : {}),
+        })),
+      });
+    }
+    /* a skill's cover picture or preview video (its openfilm.json's `cover`, `preview`) */
+    if (parts[0] === 'skills' && parts.length === 3 && (parts[2] === 'cover' || parts[2] === 'preview') && req.method === 'GET') {
+      const id = url.searchParams.get('project');
+      const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) : null;
+      const skill = listSkills({ project: project?.path ?? null }).find((k) => k.name === decodeURIComponent(parts[1]));
+      const file = skill?.[parts[2]];
+      return sendMedia(req, res, skill && file ? join(skill.folder, file) : null);
     }
 
     if (parts[0] !== 'projects') throw new HttpError(404, 'no such API');
@@ -886,3 +896,18 @@ function systemBrowser(/** @type {string} */ url) {
   try { spawn(cmd, args, { stdio: 'ignore', detached: true, windowsHide: true }).on('error', () => {}).unref(); } catch { /* no browser to open */ }
 }
 
+
+/**
+ * A picture or a video from this computer, a range answered as one (a preview is seeked in); none: 404.
+ * @param {import('node:http').IncomingMessage} req @param {import('node:http').ServerResponse} res @param {string | null | undefined} file
+ */
+function sendMedia(req, res, file) {
+  if (!file || !existsSync(file) || !statSync(file).isFile()) throw new HttpError(404, 'no such file');
+  const size = statSync(file).size;
+  const type = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.mp4': 'video/mp4', '.webm': 'video/webm' }[extname(file).toLowerCase()] ?? 'application/octet-stream';
+  const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range ?? ''));
+  const [from, to] = range ? [range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2])), range[2] && range[1] ? Math.min(size - 1, Number(range[2])) : size - 1] : [0, size - 1];
+  res.writeHead(range ? 206 : 200, { 'content-type': type, 'content-length': to - from + 1, 'accept-ranges': 'bytes', ...(range ? { 'content-range': `bytes ${from}-${to}/${size}` } : {}) });
+  createReadStream(file, { start: from, end: to }).pipe(res);
+  return undefined;
+}

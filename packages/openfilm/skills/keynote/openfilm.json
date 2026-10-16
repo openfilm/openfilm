@@ -1,0 +1,29 @@
+{
+  "version": "0.1.0",
+  "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/skills/keynote",
+  "kind": "style",
+  "order": 9,
+  "icon": "presentation",
+  "cover": "cover.jpg",
+  "title": {
+    "en": "Keynote",
+    "zh-CN": "发布会风格",
+    "ja": "発表会スタイル",
+    "ko": "발표회 스타일",
+    "es": "Estilo keynote"
+  },
+  "summary": {
+    "en": "A launch-event film: black stage, huge type, your real product in device frames, slow camera moves.",
+    "zh-CN": "像新品发布会那样介绍产品：黑色舞台、超大字、真实界面装进设备里，镜头缓慢推移。",
+    "ja": "新製品発表会のような紹介動画。黒いステージ、大きな文字、実際の画面をデバイスに収めて。",
+    "ko": "신제품 발표회처럼: 검은 무대, 큰 글자, 실제 화면을 기기에 담아 천천히 움직이는 카메라.",
+    "es": "Un lanzamiento como en un gran evento: escenario negro, tipografía enorme, tu producto real en dispositivos."
+  },
+  "details": {
+    "zh-CN": "适合：App、网站、软件、硬件的发布片和产品介绍。\n它会：先拿到你产品的真实界面（截图或录屏，绝不重画），放进设备里，黑色舞台、超大字、镜头缓慢推移，一个镜头讲一件事。",
+    "en": "Best for: launch films and intros for apps, websites, software and gadgets.\nWhat it does: gets your product’s real screens first (screenshots or recordings, never redrawn), puts them in devices on a black stage with huge type and slow camera moves, one idea per shot.",
+    "ja": "こんなときに：アプリ、Webサイト、ソフト、ハードウェアの発表動画や紹介。\nすること：まず製品の実際の画面（スクリーンショットや収録。描き直しはしません）を用意し、黒いステージ、大きな文字、ゆっくりしたカメラでデバイスに収めて見せます。",
+    "ko": "이럴 때: 앱, 웹사이트, 소프트웨어, 하드웨어의 출시 영상과 제품 소개.\n하는 일: 먼저 제품의 실제 화면(스크린샷이나 녹화, 다시 그리지 않음)을 가져와 검은 무대, 큰 글자, 천천히 움직이는 카메라로 기기에 담아 보여 줍니다.",
+    "es": "Ideal para: vídeos de lanzamiento y presentaciones de apps, webs, software y dispositivos.\nQué hace: primero obtiene las pantallas reales de tu producto (capturas o grabaciones, nunca redibujadas) y las muestra en dispositivos sobre un escenario negro, con tipografía enorme y cámara lenta."
+  }
+}

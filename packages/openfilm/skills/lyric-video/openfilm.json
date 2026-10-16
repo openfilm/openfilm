@@ -1,0 +1,29 @@
+{
+  "version": "0.2.0",
+  "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/skills/lyric-video",
+  "kind": "style",
+  "order": 8,
+  "icon": "music",
+  "cover": "cover.jpg",
+  "title": {
+    "en": "Lyric video",
+    "zh-CN": "动态歌词 MV",
+    "ja": "歌詞動画",
+    "ko": "가사 영상",
+    "es": "Vídeo con letra"
+  },
+  "summary": {
+    "en": "Give it a song and its lyrics: every word lands as it is sung, in big kinetic type.",
+    "zh-CN": "给一首歌和歌词：唱到哪个字，哪个字就跳出来，大字动态排版，主歌副歌各有样子。",
+    "ja": "曲と歌詞を渡すと、歌われた言葉がその瞬間に大きく動いて現れます。",
+    "ko": "노래와 가사를 주면, 부르는 순간마다 단어가 큰 글자로 움직이며 나타납니다.",
+    "es": "Dale una canción y su letra: cada palabra aparece al cantarse, en tipografía grande y animada."
+  },
+  "details": {
+    "zh-CN": "适合：给一首歌做歌词视频，发 B 站、抖音或音乐平台。\n它会：先根据歌曲定一个专属的视觉方向，歌词就是画面，每个字在唱出的那一刻落下（实测对齐，不是估算），主歌副歌各有样子。",
+    "en": "Best for: a lyric video for a song, for video sites or music platforms.\nWhat it does: designs a visual direction for this one song; the lyrics are the picture, each word landing the moment it is sung (measured, not estimated), with verse and chorus each their own look.",
+    "ja": "こんなときに：曲の歌詞動画を作って、動画サイトや音楽配信に出すとき。\nすること：曲に合わせた専用のビジュアルの方向を決め、歌詞そのものを画面に。歌われた瞬間に一文字ずつ現れ（実測で合わせます）、Aメロとサビで見せ方を変えます。",
+    "ko": "이럴 때: 노래의 가사 영상을 만들어 영상 사이트나 음원 플랫폼에 올릴 때.\n하는 일: 이 노래만의 비주얼 방향을 정하고 가사 자체를 화면으로. 부르는 순간 한 글자씩 나타나며(측정해서 맞춥니다), 벌스와 후렴이 각자 다른 모습입니다.",
+    "es": "Ideal para: un vídeo con letra para una canción, para plataformas de vídeo o de música.\nQué hace: diseña una dirección visual para esta canción; la letra es la imagen y cada palabra aparece justo cuando se canta (medido, no estimado), con estrofa y estribillo de aspecto propio."
+  }
+}

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { codexServers, mergeConfig, ownMcpServers, ownSkills, sessionSkills, skillStore } from './agent-skills.mjs';
@@ -93,14 +93,15 @@ test("OpenCode: every skill denied but its own, OpenFilm's and those let in; Pi:
   const w = world();
   const oc = await sessionSkills('opencode', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills'), allowed: ['research'] });
   const config = JSON.parse(oc.env.OPENCODE_CONFIG_CONTENT);
-  /* `replicate`: the official skill that comes with the package */
-  assert.deepEqual(config.permission.skill, { '*': 'deny', 'customize-opencode': 'allow', brand: 'allow', 'lyric-pv': 'allow', replicate: 'allow', research: 'allow' });
+  /* with the project's brand and lyric-pv: the official skills that come with the package */
+  const names = [...readdirSync(new URL('../../../packages/openfilm/skills/', import.meta.url)), 'brand', 'lyric-pv'].sort();
+  assert.deepEqual(config.permission.skill, { '*': 'deny', 'customize-opencode': 'allow', ...Object.fromEntries([...names, 'research'].sort().map((n) => [n, 'allow'])) });
   assert.deepEqual(config.mcp, { search: { enabled: false } });
   assert.match(config.skills.paths[0], /agent-skills\/.+\/skills$/);
   const pi = await sessionSkills('byok', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills') });
-  assert.deepEqual(pi.piSkills.names, ['brand', 'lyric-pv', 'replicate']);
+  assert.deepEqual(pi.piSkills.names, names);
   const kimi = await sessionSkills('kimi', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills') });
-  assert.deepEqual(kimi.log, { openfilm: ['brand', 'lyric-pv', 'replicate'], allowed: [], mcpAllowed: [], filtered: false, mcpFiltered: false });
+  assert.deepEqual(kimi.log, { openfilm: names, allowed: [], mcpAllowed: [], filtered: false, mcpFiltered: false });
   assert.equal(readlinkSync(join(pi.piSkills.paths[0], 'brand')), join(w.project, 'skills', 'brand'));
 });
 

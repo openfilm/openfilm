@@ -125,24 +125,50 @@ export function parseSkillFile(text) {
 
 /**
  * @typedef {{ name: string, description: string, folder: string, source: SkillSource, file: string,
- *   scripts: string[], over?: SkillSource[], shown?: SkillShown }} Skill
- *   `over`: the places that had a skill of the same name, which this one takes the place of.
- * @typedef {{ title: Record<string, string>, summary: Record<string, string> }} SkillShown
- *   how people see it in an app (openfilm.json beside SKILL.md, optional): a title and a one-line summary, by language
- *   (`en`, `zh-CN`…); the SKILL.md's description is for the agent
+ *   scripts: string[], over?: SkillSource[], shown?: SkillShown, version?: string } & SkillLook} Skill
+ *   `over`: the places that had a skill of the same name, which this one takes the place of. `version`: its
+ *   openfilm.json's, else its front matter's.
+ * @typedef {{ title: Record<string, string>, summary: Record<string, string>, details?: Record<string, string> }} SkillShown
+ *   how people see it in an app (openfilm.json beside SKILL.md, optional): a title, a one-line summary and a few lines
+ *   on who it is for and what it does, by language (`en`, `zh-CN`…); the SKILL.md's description is for the agent
+ * @typedef {{ kind?: 'workflow' | 'style', order?: number, icon?: string, cover?: string, preview?: string, repository?: string }} SkillLook
+ *   where an app shows it (openfilm.json, each optional): `kind` a way of working or a look, `order` among its kind,
+ *   `icon` a mark's name, `cover` a picture and `preview` a video in its folder, `repository` where its source is read
  */
 
 /** The words of an openfilm.json field: a string (any language), or one per language; anything else is none. */
-const byLanguage = (/** @type {unknown} */ v) => (typeof v === 'string' && v.trim() ? { en: v.trim().slice(0, 200) }
-  : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).filter(([k, w]) => /^[a-z]{2}(-[A-Za-z]{2,4})?$/.test(k) && typeof w === 'string' && w.trim()).map(([k, w]) => [k, String(w).trim().slice(0, 200)])) : {});
+const byLanguage = (/** @type {unknown} */ v, max = 200) => (typeof v === 'string' && v.trim() ? { en: v.trim().slice(0, max) }
+  : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).filter(([k, w]) => /^[a-z]{2}(-[A-Za-z]{2,4})?$/.test(k) && typeof w === 'string' && w.trim()).map(([k, w]) => [k, String(w).trim().slice(0, max)])) : {});
 
-/** A skill's openfilm.json, as shown to people (none, or not read: undefined). @param {string} folder */
-function shownOf(folder) {
+/** A file named by openfilm.json, when it is one in the skill's folder. @param {string} folder @param {unknown} name */
+const fileIn = (folder, name) => (typeof name === 'string' && /^[\w./-]{1,200}$/.test(name) && !name.split('/').includes('..')
+  && existsSync(join(folder, name)) ? name : undefined);
+
+/**
+ * A skill's openfilm.json: how people see it and where an app shows it (anything missing or wrong left out).
+ * @param {string} folder @returns {{ shown?: SkillShown, version?: string } & SkillLook}
+ */
+function openfilmJson(folder) {
   let raw;
-  try { raw = JSON.parse(readFileSync(join(folder, 'openfilm.json'), 'utf8')); } catch { return undefined; }
-  const shown = { title: byLanguage(raw?.title), summary: byLanguage(raw?.summary) };
-  return Object.keys(shown.title).length || Object.keys(shown.summary).length ? shown : undefined;
+  try { raw = JSON.parse(readFileSync(join(folder, 'openfilm.json'), 'utf8')); } catch { return {}; }
+  const details = byLanguage(raw?.details, 1000);
+  /** @type {SkillShown} */
+  const shown = { title: byLanguage(raw?.title), summary: byLanguage(raw?.summary), ...(Object.keys(details).length ? { details } : {}) };
+  /** @type {{ shown?: SkillShown, version?: string } & SkillLook} */
+  const out = {};
+  if (Object.keys(shown.title).length || Object.keys(shown.summary).length) out.shown = shown;
+  if (typeof raw?.version === 'string' && VERSION.test(raw.version)) out.version = raw.version;
+  if (raw?.kind === 'workflow' || raw?.kind === 'style') out.kind = raw.kind;
+  if (Number.isFinite(raw?.order)) out.order = raw.order;
+  if (typeof raw?.icon === 'string' && /^[a-z][a-z0-9-]{0,23}$/.test(raw.icon)) out.icon = raw.icon;
+  if (typeof raw?.repository === 'string' && /^https:\/\/[^\s]{4,300}$/.test(raw.repository)) out.repository = raw.repository;
+  const cover = fileIn(folder, raw?.cover), preview = fileIn(folder, raw?.preview);
+  if (cover) out.cover = cover;
+  if (preview) out.preview = preview;
+  return out;
 }
+
+const VERSION = /^\d+\.\d+(\.\d+)?([-+][\w.]+)?$/;
 
 /**
  * The skill in one folder, or null when it has no SKILL.md. Its name is the front matter's, else the folder's.
@@ -154,8 +180,9 @@ export function readSkill(folder, source) {
   try { text = readFileSync(file, 'utf8'); } catch { return null; }
   const { fields } = parseSkillFile(text);
   const name = (fields.name || basename(folder)).trim();
-  const shown = shownOf(folder);
-  return { name, description: (fields.description ?? '').trim(), folder, source, file, scripts: scriptsIn(folder), ...(shown ? { shown } : {}) };
+  const extra = openfilmJson(folder);
+  if (!extra.version && fields.version && VERSION.test(fields.version.trim())) extra.version = fields.version.trim();
+  return { name, description: (fields.description ?? '').trim(), folder, source, file, scripts: scriptsIn(folder), ...extra };
 }
 
 /** The scripts a skill brings (any file under scripts/, and executables anywhere), for the person to see. */
@@ -228,10 +255,12 @@ export function skillText(skill) {
  * Add a skill to the person's own (`mine`): a folder on this computer, copied; or one fetched by the caller into
  * `from` (a GitHub or GitLab address, studio/server/fetch-repo.mjs). A folder holding several skills (each a folder
  * with a SKILL.md) adds them all. One of the same name is replaced. → the skills added.
- * @param {string} from @param {{ mine?: string, move?: boolean }} [opts]  `move`: the folder is a download of the caller's
+ * Where each came from is kept beside them (skillOrigins).
+ * @param {string} from @param {{ mine?: string, move?: boolean, origin?: SkillOrigin }} [opts]  `move`: the folder is a
+ *   download of the caller's; `origin`: where it came from (default: the folder)
  * @returns {Promise<Skill[]>}
  */
-export async function addSkills(from, { mine = mySkillsDir(), move = false } = {}) {
+export async function addSkills(from, { mine = mySkillsDir(), move = false, origin = { from: 'folder', address: resolve(from) } } = {}) {
   const src = resolve(from);
   const one = readSkill(src, 'mine');
   const found = one ? [one] : skillsIn(src, 'mine').concat(skillsIn(join(src, PROJECT_SKILLS), 'mine'));
@@ -252,7 +281,31 @@ export async function addSkills(from, { mine = mySkillsDir(), move = false } = {
     const kept = readSkill(to, 'mine');
     if (kept) added.push(kept);
   }
+  noteOrigins(mine, Object.fromEntries(added.map((k) => [basename(k.folder), { ...origin, added: new Date().toISOString() }])));
   return added;
+}
+
+/**
+ * @typedef {{ from: 'link' | 'folder', address: string, added?: string }} SkillOrigin
+ *   where one of the person's skills came from: a GitHub or GitLab address, or a folder on this computer. One with
+ *   none was made where it is (with the agent, or by hand).
+ */
+
+const ORIGINS = '.origins.json';
+
+/** Where each of the person's skills came from, by its folder's name. @param {string} [mine] @returns {Record<string, SkillOrigin>} */
+export function skillOrigins(mine = mySkillsDir()) {
+  try {
+    const raw = JSON.parse(readFileSync(join(mine, ORIGINS), 'utf8'));
+    return Object.fromEntries(Object.entries(raw ?? {}).filter(([, o]) => (o?.from === 'link' || o?.from === 'folder') && typeof o.address === 'string'));
+  } catch { return {}; }
+}
+
+/** Keep (or with null, forget) where skills came from. @param {string} mine @param {Record<string, SkillOrigin | null>} changes */
+function noteOrigins(mine, changes) {
+  const all = { ...skillOrigins(mine), ...changes };
+  for (const [k, v] of Object.entries(all)) if (!v) delete all[k];
+  try { writeFileSync(join(mine, ORIGINS), `${JSON.stringify(all, null, 2)}\n`); } catch { /* a skill without its origin is still a skill */ }
 }
 
 /**
@@ -263,6 +316,7 @@ export async function removeSkill(name, { mine = mySkillsDir() } = {}) {
   const skill = skillsIn(mine, 'mine').find((s) => s.name === name);
   if (!skill || resolve(dirname(skill.folder)) !== resolve(mine)) return false;
   await moveToTrash(skill.folder);
+  noteOrigins(mine, { [basename(skill.folder)]: null });
   return true;
 }
 

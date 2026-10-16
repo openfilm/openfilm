@@ -1,0 +1,29 @@
+{
+  "version": "0.1.0",
+  "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/skills/presenter-pip",
+  "kind": "workflow",
+  "order": 5,
+  "icon": "pip",
+  "cover": "cover.jpg",
+  "title": {
+    "en": "Presenter in a window",
+    "zh-CN": "小窗人物口播",
+    "ja": "ワイプで話す解説",
+    "ko": "작은 창 진행자",
+    "es": "Presentador en ventana"
+  },
+  "summary": {
+    "en": "Your talking recording with the content filling the screen as you say it, and you speaking from a small window.",
+    "zh-CN": "你的口播录像：讲到什么，画面就满屏展示什么，人在小窗里一直在场。",
+    "ja": "話している映像に、話した内容を全画面で。あなたは小さなワイプからずっと話します。",
+    "ko": "말하는 영상에, 말하는 내용이 화면을 채우고, 당신은 작은 창에서 계속 이야기합니다.",
+    "es": "Tu grabación hablando, con el contenido llenando la pantalla cuando lo dices y tú en una ventana pequeña."
+  },
+  "details": {
+    "zh-CN": "适合：知识讲解、课程、评论、带 PPT 的口播。\n它会：讲到什么，画面就满屏展示什么（图、表、页面、录屏），你在小窗里一直在场；停顿和口误可以剪掉，字幕来自原声。",
+    "en": "Best for: knowledge videos, lessons, commentary and talks with slides.\nWhat it does: whatever you mention fills the screen as you say it (pictures, charts, slides, screens) while you stay in a small window; pauses and slips can go, captions come from your voice.",
+    "ja": "こんなときに：解説、授業、コメンタリー、スライド付きのトーク。\nすること：話した内容（画像、グラフ、スライド、画面）がその瞬間に全画面で映り、あなたは小さなワイプにずっといます。間や言い間違いはカットでき、字幕は音声から作ります。",
+    "ko": "이럴 때: 지식 영상, 강의, 코멘터리, 슬라이드가 있는 발표.\n하는 일: 말하는 내용(이미지, 차트, 슬라이드, 화면)이 그 순간 화면을 채우고 당신은 작은 창에 계속 있습니다. 쉬는 부분과 말실수는 잘라낼 수 있고, 자막은 음성에서 만듭니다.",
+    "es": "Ideal para: vídeos de divulgación, clases, comentarios y charlas con diapositivas.\nQué hace: lo que mencionas llena la pantalla en ese momento (imágenes, gráficos, diapositivas, pantallas) mientras tú sigues en una ventana pequeña; se pueden quitar pausas y errores, y los subtítulos salen de tu voz."
+  }
+}

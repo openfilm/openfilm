@@ -1,0 +1,29 @@
+{
+  "version": "0.1.0",
+  "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/skills/long-to-short",
+  "kind": "workflow",
+  "order": 2,
+  "icon": "scissors",
+  "cover": "cover.jpg",
+  "title": {
+    "en": "Long video to shorts",
+    "zh-CN": "长视频转短视频",
+    "ja": "長尺動画をショートに",
+    "ko": "긴 영상을 쇼츠로",
+    "es": "De vídeo largo a cortos"
+  },
+  "summary": {
+    "en": "A talk, podcast or livestream cut into vertical clips that each stand alone and hook from the first second.",
+    "zh-CN": "把讲座、播客、直播这类长视频，切成一条条能单独发的竖版短视频，开头就抓人。",
+    "ja": "講演、ポッドキャスト、配信を、それぞれ単体で見られる縦型ショートに。最初の一秒から引き込みます。",
+    "ko": "강연, 팟캐스트, 라이브를 각각 따로 올릴 수 있는 세로 쇼츠로. 첫 순간부터 붙잡습니다.",
+    "es": "Una charla, un pódcast o un directo en clips verticales que funcionan solos y enganchan desde el primer segundo."
+  },
+  "details": {
+    "zh-CN": "适合：讲座、播客、访谈、直播、课程这类长视频。\n它会：从整段里挑出最值得分享的时刻，切成一条条能单独发布的竖版短视频；开头就抓人，结尾落在要点上，字幕来自原声。",
+    "en": "Best for: talks, podcasts, interviews, livestreams and lessons.\nWhat it does: finds the moments most worth sharing across the whole recording and cuts each into a vertical short that stands alone, hooking from the start, ending on its point, with captions from the speech.",
+    "ja": "こんなときに：講演、ポッドキャスト、インタビュー、配信、授業などの長い動画。\nすること：全体から共有したくなる瞬間を選び、それぞれ単独で見られる縦型ショートに。冒頭で引き込み、要点で終わり、字幕は音声から作ります。",
+    "ko": "이럴 때: 강연, 팟캐스트, 인터뷰, 라이브, 강의 같은 긴 영상.\n하는 일: 전체에서 공유할 만한 순간을 골라 각각 따로 올릴 수 있는 세로 쇼츠로 자릅니다. 첫 순간에 붙잡고 요점에서 끝나며, 자막은 음성에서 만듭니다.",
+    "es": "Ideal para: charlas, pódcasts, entrevistas, directos y clases.\nQué hace: encuentra los momentos que más vale la pena compartir y corta cada uno en un vertical que funciona solo: engancha desde el inicio, termina en su idea y lleva subtítulos de la voz."
+  }
+}

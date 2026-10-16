@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { addSkills, findSkill, listSkills, migrateMySkills, mySkillsDir, parseSkillFile, readSkill, removeSkill, skillText } from './skills.mjs';
+import { addSkills, findSkill, listSkills, migrateMySkills, mySkillsDir, parseSkillFile, readSkill, removeSkill, skillOrigins, skillText } from './skills.mjs';
 import { commitSkills, discardSkills, previewFolder, previewSkills, skillCommand, skillsCommand } from './skills-cli.mjs';
 
 const skill = (dir, name, description, body = 'How to make it.', extra = {}) => {
@@ -202,4 +202,35 @@ test('a skill as people see it: its openfilm.json title and summary by language;
   writeFileSync(join(dir, 'openfilm.json'), '{ not json');
   assert.equal(readSkill(dir, 'official').shown, undefined);
   assert.equal(readSkill(skill(join(root, 'plain'), 'plain', 'x'), 'mine').shown, undefined);
+});
+
+test("a skill's openfilm.json: its version, kind, order, mark and media; anything wrong left out; else the front matter's version", () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-skill-look-'));
+  const a = skill(join(root, 'a'), 'a', 'Does a.', 'How.', {
+    'openfilm.json': JSON.stringify({ version: '0.2.0', kind: 'style', order: 3, icon: 'film', cover: 'cover.jpg', preview: 'none.mp4' }),
+    'cover.jpg': 'jpeg',
+  });
+  assert.deepEqual((({ version, kind, order, icon, cover, preview }) => ({ version, kind, order, icon, cover, preview }))(readSkill(a, 'official')),
+    { version: '0.2.0', kind: 'style', order: 3, icon: 'film', cover: 'cover.jpg', preview: undefined });
+  const b = skill(join(root, 'b'), 'b', 'Does b.', 'How.', { 'openfilm.json': JSON.stringify({ version: 'latest', kind: 'other', order: 'first', icon: 'Big Icon', cover: '../x.jpg' }) });
+  const read = readSkill(b, 'mine');
+  for (const key of ['version', 'kind', 'order', 'icon', 'cover']) assert.equal(read?.[key], undefined, key);
+  mkdirSync(join(root, 'c'));
+  writeFileSync(join(root, 'c', 'SKILL.md'), '---\nname: c\ndescription: Does c.\nversion: 1.4\n---\nHow.\n');
+  assert.equal(readSkill(join(root, 'c'), 'mine')?.version, '1.4');
+});
+
+test('where the person\'s skills came from: a folder, or the address commitSkills was given; forgotten when removed', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-skill-origin-'));
+  const mine = join(root, 'mine');
+  const src = skill(join(root, 'src', 'cards'), 'cards', 'Makes cards.');
+  await addSkills(src, { mine });
+  assert.deepEqual((({ from, address }) => ({ from, address }))(skillOrigins(mine).cards), { from: 'folder', address: src });
+  const fetched = skill(join(root, 'net', 'lyrics'), 'lyrics', 'Makes lyric videos.');
+  const { staging } = await previewSkills('https://github.com/someone/lyrics', { mine, fetch: async (_url, into) => { const to = join(into, 'lyrics'); cpSync(fetched, to, { recursive: true }); return to; } });
+  await commitSkills(staging, { mine });
+  assert.deepEqual((({ from, address }) => ({ from, address }))(skillOrigins(mine).lyrics), { from: 'link', address: 'https://github.com/someone/lyrics' });
+  await removeSkill('cards', { mine });
+  assert.equal(skillOrigins(mine).cards, undefined);
+  assert.ok(skillOrigins(mine).lyrics);
 });

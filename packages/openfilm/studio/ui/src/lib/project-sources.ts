@@ -42,7 +42,17 @@ export type FetchJob = {
 export type SkillEntry = {
   name: string; description: string; source: 'project' | 'mine' | 'official'; scripts: number;
   /** how people see it (its openfilm.json): a title and a one-line summary, by language */
-  shown?: { title: Record<string, string>; summary: Record<string, string> };
+  shown?: { title: Record<string, string>; summary: Record<string, string>; details?: Record<string, string> };
+  /** its openfilm.json's (else its front matter's) */
+  version?: string;
+  /** a way of working (a kind of job) or a look; its place among its kind; its mark */
+  kind?: 'workflow' | 'style'; order?: number; icon?: string;
+  /** addresses of its cover picture and preview video, when it has them */
+  cover?: string; preview?: string;
+  /** where its source can be read (a repository's address) */
+  repository?: string;
+  /** the person's own: where it came from (a link, a folder), or made where it is */
+  origin?: { from: 'link' | 'folder'; address: string } | { from: 'made' };
 };
 /** an example film's part, as its index names it (`S2-Hook`), from and to in seconds */
 export type ExampleSegment = { title: string; from: number; to: number };

@@ -1,0 +1,29 @@
+{
+  "version": "0.1.0",
+  "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/skills/vintage-film",
+  "kind": "style",
+  "order": 7,
+  "icon": "film",
+  "cover": "cover.jpg",
+  "title": {
+    "en": "Vintage film",
+    "zh-CN": "复古胶片相册",
+    "ja": "フィルム風アルバム",
+    "ko": "필름 감성 앨범",
+    "es": "Película antigua"
+  },
+  "summary": {
+    "en": "Your photos as old film and instant prints: grain, warm color, light leaks, date stamps.",
+    "zh-CN": "把照片做成老胶片和拍立得的样子：颗粒、暖色、漏光、日期戳，适合旅行、生日和各种回忆。",
+    "ja": "写真を古いフィルムやインスタント写真のように。粒子、暖かい色、光漏れ、日付入り。",
+    "ko": "사진을 옛 필름과 즉석 사진처럼: 입자, 따뜻한 색, 빛 번짐, 날짜 스탬프.",
+    "es": "Tus fotos como película antigua e instantáneas: grano, color cálido, fugas de luz, fechas."
+  },
+  "details": {
+    "zh-CN": "适合：旅行、生日、毕业、婚礼、年度回顾这类照片回忆。\n它会：挑出撑得起故事的照片，做成老胶片和拍立得的样子：颗粒、暖色、漏光、日期戳；默认是适合朋友圈的竖版短片。",
+    "en": "Best for: memories from a trip, a birthday, a graduation, a wedding or a year.\nWhat it does: picks the photos that carry the story and shows them as old film and instant prints, with grain, warm color, light leaks and date stamps; a vertical short for social posts by default.",
+    "ja": "こんなときに：旅行、誕生日、卒業、結婚式、一年の振り返りなど写真の思い出。\nすること：物語になる写真を選び、粒子、暖かい色、光漏れ、日付入りの古いフィルムやインスタント写真のように。標準はSNS向けの縦型ショート。",
+    "ko": "이럴 때: 여행, 생일, 졸업, 결혼식, 한 해 돌아보기 같은 사진 추억.\n하는 일: 이야기를 이끄는 사진을 골라 입자, 따뜻한 색, 빛 번짐, 날짜 스탬프가 있는 옛 필름과 즉석 사진처럼 만듭니다. 기본은 SNS용 세로 쇼츠.",
+    "es": "Ideal para: recuerdos de un viaje, un cumpleaños, una graduación, una boda o un año.\nQué hace: elige las fotos que cuentan la historia y las muestra como película antigua e instantáneas, con grano, color cálido, fugas de luz y fechas; por defecto, un vertical para redes."
+  }
+}
