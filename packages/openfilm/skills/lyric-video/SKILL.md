@@ -83,8 +83,9 @@ The film is done when all of this is true:
 - **Sync**: every character (or word, in spaced languages) appears or takes its accent on its sung onset, within two
   frames, measured against the audio, never estimated. An LRC gives only where lines start. Use the most accurate
   source you can get: see what `npx openfilm get` can do here first (a connected transcript service gives word
-  times), then check every time against the voice in the audio itself and fix the ones that are off. Held notes stay
-  held; pauses stay empty. Report the result as numbers: how many words are within two frames, and the largest gap.
+  times), then check every time against the voice in the audio itself and fix the ones that are off. The check must be
+  independent of whatever produced the times: a tool agreeing with itself proves nothing. Held notes stay held; pauses
+  stay empty. Report the result as numbers: how many words are within two frames, and the largest gap.
 - **The words**: exactly the person's lyrics, order, line breaks and language; nothing retyped, translated or added
   (title and artist cards aside).
 - **Readable**: every line legible at phone size for its whole time on screen; the line being sung unmistakable.
