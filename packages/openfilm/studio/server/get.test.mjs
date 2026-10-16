@@ -250,6 +250,28 @@ test('asr: the speech alone is sent, its transcript lands beside the recording, 
   assert.equal(transcribed(), 2, '--force transcribes again');
 });
 
+test('asr: a recording outside assets/ gets its transcript beside it too; the tools\' files are refused', async () => {
+  const root = project();
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', join(root, 'talk.wav')]);
+  assert.deepEqual(JSON.parse(await runGet(root, 'asr', { src: 'talk.wav' })), { src: 'talk.wav', text: 'One two.', transcript: 'talk.vtt' });
+  assert.match(readFileSync(join(root, 'talk.vtt'), 'utf8'), /^WEBVTT\n\n00:00:00\.100 --> .*\nOne <00:00:00\.500>two\./);
+
+  /* a video the film is made like, kept beside the film but not in it */
+  mkdirSync(join(root, 'references'));
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=black:s=64x64:d=1', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1',
+    '-c:v', 'mpeg4', '-c:a', 'aac', '-shortest', join(root, 'references/ref.mp4')]);
+  assert.deepEqual(JSON.parse(await runGet(root, 'asr', { src: 'references/ref.mp4' })), { src: 'references/ref.mp4', text: 'One two.', transcript: 'references/ref.vtt' });
+  assert.match(readFileSync(join(root, 'references/ref.vtt'), 'utf8'), /\nOne <00:00:00\.500>two\./);
+  assert.equal(JSON.parse(await runGet(root, 'asr', { src: 'references/ref.mp4' })).skip, true, 'not made twice');
+
+  /* files and folders starting with a dot are the tools': nothing is sent, nothing is written there */
+  mkdirSync(join(root, '.git'));
+  writeFileSync(join(root, '.git/talk.wav'), 'RIFF');
+  await assert.rejects(runGet(root, 'asr', { src: '.git/talk.wav' }), (e) => e.code === 2 && /belongs to the tools/.test(e.message));
+  assert.ok(!existsSync(join(root, '.git/talk.vtt')));
+  assert.equal(calls.filter((c) => c.path === '/v1/speech-to-text').length, 2);
+});
+
 test('what lands stays in assets/, and the receipt leaves out what it cost', async (t) => {
   const root = project();
   const fal = listProviders().find((p) => p.id === 'fal');

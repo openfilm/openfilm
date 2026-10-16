@@ -28,7 +28,7 @@ import { randomUUID } from 'node:crypto';
 import { realpathSync } from 'node:fs';
 import { lstat, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, dirname, extname, join, resolve, sep } from 'node:path';
+import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { FILM_FILE, clipKind } from '../../src/film-doc.mjs';
 import { spokenLines } from './captions.mjs';
 import { dropTranscripts, readTranscript, transcriptIsCurrent, transcriptPath, writeTranscript } from './transcripts.mjs';
@@ -245,6 +245,10 @@ async function projectFile(root, rel, name, want) {
   if (want === 'speech' ? kind !== 'sound' && kind !== 'video' : kind !== 'still') {
     throw usage(`--${name} wants ${want === 'speech' ? 'a sound or video file' : 'a picture'}; ${basename(rel)} is not one`);
   }
+  /* a recording's transcript is written beside it, and files and folders starting with a dot are the tools' (.git) */
+  if (want === 'speech' && relative(root, abs).split(sep).some((part) => part.startsWith('.'))) {
+    throw usage(`--${name} ${rel} belongs to the tools (a name starting with a dot), and its transcript would go beside it: copy it elsewhere in the project first`);
+  }
 }
 
 /* ── running ─────────────────────────────────────────────────────────────── */
@@ -454,9 +458,11 @@ async function land(root, verb, args, result) {
   }
   if (verb !== 'tts' && verb !== 'asr') return;
   for (const row of result.index ?? []) {
+    /* asr: beside the recording --src names, checked already (in the project, not the tools'); tts: beside the
+       provider's file, under assets/ */
     const src = verb === 'asr' ? String(args.src) : row?.src;
     const words = wordsOf(row?.words);
-    if (!landable(src) || !words.length) continue;
+    if ((verb === 'tts' && !landable(src)) || !words.length) continue;
     const text = typeof row.text === 'string' && row.text.trim() ? row.text : words.map((w) => w.token).join(' ');
     const dur = Number(row.dur);
     const lines = spokenLines(text, words, Number.isFinite(dur) && dur > 0 ? dur * 1000 : undefined);
