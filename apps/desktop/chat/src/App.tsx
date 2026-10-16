@@ -12,6 +12,7 @@ import { useT, useUiLocale } from '@/i18n';
 import { ConversationSessionBar } from '@/components/ConversationSessionBar';
 import { ProjectConversation, primeStoredTranscript } from '@/components/ProjectConversation';
 import { ProjectStarters } from '@/components/ProjectStarters';
+import { AttachmentPreview, type AttachmentPreviewItem } from '@/components/AttachmentPreview';
 import { ModelPopover } from '@/components/ModelPopover';
 import { AddSkillDialog, type PickedSkill } from '@/components/AddSkill';
 import { CardActions, CardButton, ComposerCard } from '@/components/ComposerCard';
@@ -280,6 +281,8 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   const [queued, setQueued] = React.useState(false);
   const [followUpError, setFollowUpError] = React.useState<string | null>(null);
   const composerFiles = useDesktopAttachments();
+  /* a file of the message being written, opened to look at */
+  const [openedFile, setOpenedFile] = React.useState<AttachmentPreviewItem | null>(null);
   const attachInputRef = React.useRef<HTMLInputElement>(null);
   const [dropping, setDropping] = React.useState(false);
   /** files of the project pointed at with @ (their pills turn back into their paths when sent) */
@@ -815,17 +818,25 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
               const busy = file.state === 'importing' ? <Loader2 size={12} className="absolute inset-0 m-auto animate-spin text-white drop-shadow" /> : null;
               /* a picture shows itself; a video, a frame of itself with a play mark (once one is had) */
               const picture = file.kind === 'image' ? file.previewUrl : file.thumb;
+              /* clicked, it opens to look at: a picture large, a video played, a text read */
+              const open = file.previewUrl ? {
+                role: 'button' as const,
+                tabIndex: 0,
+                'aria-label': t('composer.openAttachment').replace('{name}', file.name),
+                onClick: () => setOpenedFile({ name: file.name, kind: file.kind, url: file.previewUrl!, ...(file.mediaType ? { mediaType: file.mediaType } : {}) }),
+                onKeyDown: (event: React.KeyboardEvent) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); (event.currentTarget as HTMLElement).click(); } },
+              } : {};
               return picture ? (
-                <div key={file.id} title={file.error ?? file.name}
-                  className={`group relative h-10 w-10 overflow-hidden rounded-[8px] border bg-[var(--surface-2)] transition ${file.state === 'failed' ? 'border-[var(--danger)]' : 'border-[var(--border)] hover:border-[var(--border-strong)]'}`}>
+                <div key={file.id} title={file.error ?? file.name} {...open}
+                  className={`group relative h-10 w-10 overflow-hidden rounded-[8px] border bg-[var(--surface-2)] transition ${file.previewUrl ? 'cursor-pointer' : ''} ${file.state === 'failed' ? 'border-[var(--danger)]' : 'border-[var(--border)] hover:border-[var(--border-strong)]'}`}>
                   <img src={picture} alt={file.name} className={`h-full w-full object-cover transition ${file.state === 'ready' ? '' : 'opacity-45'}`} />
                   {file.kind !== 'image' && !busy ? <PlayMark /> : null}
                   {busy}
                   {remove}
                 </div>
               ) : (
-                <div key={file.id} title={file.error ?? file.name}
-                  className={`group relative flex h-10 min-w-0 max-w-[150px] items-center gap-1.5 overflow-hidden rounded-[8px] border bg-[var(--surface-2)] py-1 pl-2 pr-5 transition ${file.state === 'failed' ? 'border-[var(--danger)]' : 'border-[var(--border)] hover:border-[var(--border-strong)]'}`}>
+                <div key={file.id} title={file.error ?? file.name} {...open}
+                  className={`group relative flex h-10 min-w-0 max-w-[150px] items-center gap-1.5 overflow-hidden rounded-[8px] border bg-[var(--surface-2)] py-1 pl-2 pr-5 transition ${file.previewUrl ? 'cursor-pointer' : ''} ${file.state === 'failed' ? 'border-[var(--danger)]' : 'border-[var(--border)] hover:border-[var(--border-strong)]'}`}>
                   {file.state === 'importing' ? <Loader2 size={13} className="shrink-0 animate-spin text-[var(--text-muted)]" /> : <Icon size={13} className="shrink-0 text-[var(--text-muted)]" />}
                   <span className="flex min-w-0 flex-col">
                     <span className="truncate text-[11.5px] leading-tight text-[var(--text-muted)]">{file.name}</span>
@@ -837,6 +848,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
             })}
           </div>
         )}
+        {openedFile ? <AttachmentPreview item={openedFile} onClose={() => setOpenedFile(null)} /> : null}
         <div className="flex items-end gap-1 py-2.5 pl-3.5 pr-2">
           <div className="min-w-0 flex-1">
             <PromptEditor

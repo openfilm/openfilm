@@ -20,7 +20,7 @@ export interface DesktopAttachment {
   kind: 'image' | 'document';
   mediaType: string;
   size: number;
-  /** an image's own picture, while it is in the composer */
+  /** the file itself, while it is in the composer: an image shows it, and any one opens it to look at (AttachmentPreview) */
   previewUrl?: string;
   /** the small picture kept with the message: an image's, or a frame of a video */
   thumb?: string;
@@ -62,7 +62,7 @@ export function useDesktopAttachments() {
         kind: image ? 'image' : 'document',
         mediaType: file.type,
         size: file.size,
-        ...(image ? { previewUrl: URL.createObjectURL(file) } : {}),
+        previewUrl: URL.createObjectURL(file),
         state: 'importing',
       };
       return { item, file };
@@ -99,6 +99,8 @@ export function useDesktopAttachments() {
   current.current = files;
   const take = React.useCallback((): DesktopAttachment[] => {
     const taken = current.current;
+    /* sent: the message keeps their thumbnails, the files are in the project */
+    for (const f of taken) if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
     current.current = [];
     count.current = 0;
     setFiles([]);
