@@ -2,7 +2,7 @@
  * The parts of `window.openfilmDesktop` that are this app's own (src/preload-chat.cjs); the parts the copied chat code
  * uses (localAgents, pathForFile) are typed in lib/desktop-bridge.ts.
  */
-import type { StudioRef, StudioSelection } from 'openfilm/studio-ui/lib/host.ts';
+import type { CommunityItem, StudioRef, StudioSelection } from 'openfilm/studio-ui/lib/host.ts';
 import type { FileChange } from './lib/file-changes';
 
 /* what Studio and the chat say to each other about the film is Studio's own contract (its lib/host.ts) */
@@ -32,7 +32,8 @@ interface AppBridge {
   /** an example's folder on this computer, fetched when needed (a reference to one, as its message is sent) */
   exampleFolder?(id: string): Promise<string>;
   /** the examples over the film (Studio's), to point at one or a part of one, or name a skill */
-  showExamples?(): void;
+  /** the Community over the film; `open`: on that skill's or example's page */
+  showExamples?(open?: CommunityItem): void;
   /** a skill picked in the examples, to be named in the message */
   onUseSkill?(listener: (skill: { name: string; description: string }) => void): () => void;
   /** "Add a skill" in the examples */
@@ -112,6 +113,8 @@ export interface SkillInfo {
   scripts: string[];
   /** the places with a skill of the same name it takes the place of */
   over?: Array<'project' | 'mine' | 'official'>;
+  /** how people see it (its openfilm.json): title, summary and who it is for and what it does, by language */
+  shown?: { title: Record<string, string>; summary: Record<string, string>; details?: Record<string, string> };
 }
 
 /** A skill fetched from an address, before it is kept: `replaces`, one of the person's has its name. */

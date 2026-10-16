@@ -21,7 +21,7 @@ import {
   PictureInPicture2, Play, Plus, Presentation, Scissors, Search, Shapes, Sparkles, Wand2, X, Github, type LucideIcon,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
-import { studioHost } from '@/lib/host';
+import { studioHost, type CommunityItem } from '@/lib/host';
 import { sourcesApi, type Example, type SkillEntry } from '@/lib/project-sources';
 import { GitHubDialog } from './ProjectSources';
 
@@ -65,8 +65,10 @@ export function TitleSwitch<T extends string>({ items, value, onChange }: { item
   );
 }
 
-export function ExamplesGallery({ mode, projectId = null, heading, onClose, onStart, onReference, onUseSkill }: {
+export function ExamplesGallery({ mode, projectId = null, heading, initial, onClose, onStart, onReference, onUseSkill }: {
   mode: ExamplesMode;
+  /** open on this skill's or example's page (a pill of one clicked in the chat) */
+  initial?: CommunityItem;
   /** the project shown, for its own skills */
   projectId?: string | null;
   /** the title row's left (the projects window's switch); none: the Community's own (Skill, Examples) */
@@ -83,6 +85,21 @@ export function ExamplesGallery({ mode, projectId = null, heading, onClose, onSt
   const [examples, setExamples] = React.useState<Example[] | null>(null);
   const [skills, setSkills] = React.useState<SkillEntry[]>([]);
   const [opened, setOpened] = React.useState<Opened | null>(null);
+  /* opening on one item: once what it is in has been read */
+  const pending = React.useRef(initial);
+  React.useEffect(() => {
+    const want = pending.current;
+    if (!want) return;
+    if (want.kind === 'skill') {
+      const skill = skills.find((k) => k.name === want.name);
+      if (skill) { pending.current = undefined; setView('skills'); setOpened({ kind: 'skill', skill }); }
+    } else if (examples) {
+      pending.current = undefined;
+      const example = examples.find((e) => e.id === want.id);
+      setView('examples');
+      if (example) setOpened({ kind: 'example', example });
+    }
+  }, [skills, examples]);
   const [filter, setFilter] = React.useState<SkillFilter>('all');
 
   React.useEffect(() => {
@@ -529,14 +546,14 @@ function ExampleDetail({ example, mode, onStart, onReference, categoryLabel }: {
  * when the message is sent), a skill is named in it (lib/host.ts `useSkill`), and an example can still be started
  * from, as a new project (`onStarted`).
  */
-export function ExamplesDialog({ projectId, onClose, onStarted }: { projectId: string; onClose: () => void; onStarted: (projectId: string) => void }) {
+export function ExamplesDialog({ projectId, open, onClose, onStarted }: { projectId: string; open?: CommunityItem; onClose: () => void; onStarted: (projectId: string) => void }) {
   const t = useT();
   const [starting, setStarting] = React.useState<Example | null>(null);
   const reference = (example: Example, part: ExamplePart) => {
     /* fetched meanwhile, so the message goes as soon as it is sent */
     void sourcesApi.exampleFolder(example.id).catch(() => {});
     studioHost?.refer?.({
-      kind: 'example', id: example.id, title: example.title, url: example.url,
+      kind: 'example', id: example.id, title: example.title, url: example.url, ...(example.description ? { description: example.description } : {}),
       ...(part ? { start: part.from, end: part.to, ...(part.segment ? { segment: part.segment } : {}) } : {}),
     });
     onClose();
@@ -550,6 +567,7 @@ export function ExamplesDialog({ projectId, onClose, onStarted }: { projectId: s
         <ExamplesGallery
           mode="reference"
           projectId={projectId}
+          {...(open ? { initial: open } : {})}
           onClose={onClose}
           onStart={setStarting}
           onReference={reference}

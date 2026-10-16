@@ -229,7 +229,8 @@ export function pillCard(pill: { id: string; label: string; target?: Record<stri
       row('path', ref.folder ?? null);
       break;
   }
-  return { title: t(`refCard.title.${ref.kind}`), rows };
+  /* an example: what it is, as its page says */
+  return { title: t(`refCard.title.${ref.kind}`), rows, ...(ref.kind === 'example' && ref.description ? { text: [ref.description] } : {}) };
 }
 
 /* the agent's numbers: seconds to the millisecond, as film.html writes them */

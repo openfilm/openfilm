@@ -39,7 +39,7 @@ const lib = () => import(require.resolve('openfilm/skills'));
 const cli = () => import(require.resolve('openfilm/skills-cli'));
 
 /** A skill as the page shows it. */
-const shown = (s) => ({ name: s.name, description: s.description, source: s.source, folder: s.folder, scripts: s.scripts ?? [], ...(s.over ? { over: s.over } : {}) });
+const shown = (s) => ({ name: s.name, description: s.description, source: s.source, folder: s.folder, scripts: s.scripts ?? [], ...(s.over ? { over: s.over } : {}), ...(s.shown ? { shown: s.shown } : {}) });
 
 /**
  * @param {import('electron').IpcMain} ipcMain

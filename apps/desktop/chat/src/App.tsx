@@ -8,7 +8,7 @@
 import React from 'react';
 import { ArrowDown, Blocks, Coins, CornerDownLeft, LibraryBig, Loader2, Play, Plus, ShieldQuestion, Square, SquareSlash, X } from 'lucide-react';
 import { buildPromptDisplay, type Turn } from '@openfilm/shared';
-import { useT } from '@/i18n';
+import { useT, useUiLocale } from '@/i18n';
 import { ConversationSessionBar } from '@/components/ConversationSessionBar';
 import { ProjectConversation, primeStoredTranscript } from '@/components/ProjectConversation';
 import { ProjectStarters } from '@/components/ProjectStarters';
@@ -326,12 +326,25 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     if (next) setSkillListing(next);
   }, [project.path, agent]);
   React.useEffect(() => { void reloadSkills(); }, [reloadSkills]);
+  /* a skill as people see it, in the language shown: its title, and what its page says (none: its name and the
+     agent's description) */
+  const locale = useUiLocale();
+  const skillWords = React.useCallback((name: string, description = '') => {
+    const shown = skillListing?.openfilm.find((s) => s.name === name)?.shown;
+    const pick = (words?: Record<string, string>) => (words ? words[locale] ?? words[locale.split('-')[0]!] ?? words.en ?? Object.values(words)[0] : undefined);
+    const summary = pick(shown?.summary);
+    return {
+      title: pick(shown?.title) ?? name,
+      summary: summary ?? description,
+      text: shown ? [summary, ...(pick(shown.details)?.split('\n') ?? [])].filter((w): w is string => Boolean(w)) : description ? [description] : [],
+    };
+  }, [skillListing, locale]);
   const skillPill = React.useCallback((skill: PickedSkill): PromptReference => {
-    /* the name alone: what it does is in its hover card */
-    const pill: PromptReference = { id: skillReferenceId(skill.name), kind: 'skill', label: skill.name };
+    /* its title alone: what it does is in its hover card */
+    const pill: PromptReference = { id: skillReferenceId(skill.name), kind: 'skill', label: skillWords(skill.name, skill.description).title };
     setSkillRefs((list) => (list.some((p) => p.id === pill.id) ? list : [...list, pill]));
     return pill;
-  }, []);
+  }, [skillWords]);
   const pickSkill = React.useCallback((skill: PickedSkill) => {
     const pill = skillPill(skill);
     requestAnimationFrame(() => { composerRef.current?.insertReference(pill); composerRef.current?.focus(); });
@@ -367,9 +380,9 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
         id: skillReferenceId(skill.name),
         kind: 'skill' as const,
         icon: Blocks,
-        label: skill.name,
-        ...(skill.description ? { detail: skill.description, describes: true } : {}),
-        keywords: [skill.name],
+        label: skillWords(skill.name).title,
+        ...(skillWords(skill.name, skill.description).summary ? { detail: skillWords(skill.name, skill.description).summary, describes: true } : {}),
+        keywords: [skill.name, skillWords(skill.name).title],
         select: () => skillPill(skill),
       })),
     }] : []), ...(agentCommands.length ? [{
@@ -387,7 +400,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
         select: () => ({ text: `/${c.name}` }),
       })),
     }] : [])],
-  } : undefined), [agentCommands, nameableSkills, hiddenSkills, skillPill, t]);
+  } : undefined), [agentCommands, nameableSkills, hiddenSkills, skillPill, skillWords, t]);
   const mentionProviders = React.useMemo<MentionProvider[]>(() => {
     const picked = selection?.refs ?? [];
     const range = selection ? selectionRange(selection) : null;
@@ -467,11 +480,15 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     const name = skillReferencePackage(pill.id);
     if (name) {
       const skill = nameableSkills.find((s) => s.name === name);
-      return { title: name, rows: skill?.description ? [[t('skills.cardDoes'), skill.description] as [string, string]] : [] };
+      const words = skillWords(name, skill?.description);
+      return { title: words.title, rows: [], text: words.text };
     }
     return pillCard(pill, t);
-  }, [t, nameableSkills]);
+  }, [t, nameableSkills, skillWords]);
   const revealPill = React.useCallback((pill: { id: string; label: string; target?: Record<string, unknown> }) => {
+    /* a skill: its page in the Community; anything else: where it is in Studio */
+    const name = skillReferencePackage(pill.id);
+    if (name) { app.showExamples?.({ kind: 'skill', name }); return; }
     const ref = refFromPill(pill);
     if (ref) app.showInStudio(ref);
   }, []);

@@ -304,7 +304,7 @@ export type StudioRef = (
   | { kind: 'track'; track: number; label: string; clipIds: string[] }
   | { kind: 'file'; path: string; fileKind: string; duration?: number; w?: number; h?: number }
   | { kind: 'subtitle'; start: number; end: number; text: string; lang?: string | null; index?: number; words?: Array<{ text: string; start: number; end: number }> }
-  | { kind: 'example'; id: string; title: string; url: string; folder?: string; start?: number; end?: number; segment?: string }
+  | { kind: 'example'; id: string; title: string; url: string; folder?: string; start?: number; end?: number; segment?: string; description?: string }
 ) & { image?: StudioRefImage };
 
 /**
@@ -348,8 +348,12 @@ export type StudioCommand =
   | { type: 'draft-refs'; refs: StudioRef[] }
   /* the app's chat sends the person to Settings (an agent to set up) */
   | { type: 'settings'; section?: 'agents' | 'providers' }
-  /* the app's chat opens the examples over the film, to point at one or a part of one, or name a skill */
-  | { type: 'show-examples' };
+  /* the app's chat opens the examples over the film, to point at one or a part of one, or name a skill; `open`: on
+     that skill's or example's page (a pill of one clicked) */
+  | { type: 'show-examples'; open?: CommunityItem };
+
+/** A skill or an example in the Community, to open on its page. */
+export type CommunityItem = { kind: 'skill'; name: string } | { kind: 'example'; id: string };
 
 export const studioHost: StudioHost | null = (globalThis as { openfilmHost?: StudioHost }).openfilmHost ?? null;
 

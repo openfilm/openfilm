@@ -102,13 +102,16 @@ const REVEALABLE_PILL_KINDS = new Set<string>([
  * what it points at (`target`), such as a file dragged in from Studio's assets.
  */
 export function canRevealPill(reference: StoredPromptReference): boolean {
-  return Boolean(reference.target) || REVEALABLE_PILL_KINDS.has(reference.kind);
+  /* a skill opens on its page in the Community */
+  return Boolean(reference.target) || REVEALABLE_PILL_KINDS.has(reference.kind) || reference.kind === 'skill';
 }
 
 /** A pill's hover card: what it is, and label/value rows (already translated by the host). */
 export interface PromptPillCard {
   title: string;
   rows: Array<[string, string]>;
+  /** paragraphs under the title: what a skill or an example is, as its page says */
+  text?: string[];
 }
 
 type PillImage = NonNullable<StoredPromptReference['image']>;
@@ -196,11 +199,12 @@ function PillCardPicture({ image }: { image: PillImage }) {
 
 function PillCardBody({ card, image, hint }: { card?: PromptPillCard | null; image?: PillImage | null; hint?: string }) {
   return (
-    <div className="flex w-[240px] flex-col gap-1.5 whitespace-normal py-0.5 text-left">
+    <div className={`flex flex-col gap-1.5 whitespace-normal py-0.5 text-left ${card?.text?.length ? 'w-[300px]' : 'w-[240px]'}`}>
       {image ? <PillCardPicture image={image} /> : null}
       {card ? (
         <>
           <div className="text-[11.5px] font-semibold">{card.title}</div>
+          {card.text?.map((line, index) => <p key={index} className="text-[11.5px] font-normal leading-[17px] opacity-80">{line}</p>)}
           {card.rows.length ? (
             <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-[11px] font-normal leading-snug">
               {card.rows.map(([label, value], index) => (

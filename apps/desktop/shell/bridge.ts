@@ -10,7 +10,7 @@
  * (src/preload.cjs). Imported before Studio's modules and the chat's: Studio reads its host as it loads.
  */
 import { flushSync } from 'react-dom';
-import type { HostAgent, HostAsk, HostUpdate, HostUpdateState, StudioCommand, StudioHost, StudioRef, StudioSelection } from 'openfilm/studio-ui/lib/host.ts';
+import type { CommunityItem, HostAgent, HostAsk, HostUpdate, HostUpdateState, StudioCommand, StudioHost, StudioRef, StudioSelection } from 'openfilm/studio-ui/lib/host.ts';
 
 type Listener<T> = (value: T) => void;
 type Stop = () => void;
@@ -315,7 +315,7 @@ function commandFor(ref: StudioRef): StudioCommand {
     case 'file': return { type: 'show-file', path: ref.path };
     case 'subtitle': return { type: 'show-subtitle', start: ref.start, end: ref.end };
     /* another film: the examples, where it came from */
-    case 'example': return { type: 'show-examples' };
+    case 'example': return { type: 'show-examples', open: { kind: 'example', id: ref.id } };
   }
 }
 const uploadName = (name: string) => name.split(/[\\/]/).pop()!.replace(/[\u0000-\u001f]+/g, '').slice(0, 200) || 'file';
@@ -359,7 +359,7 @@ const uploadName = (name: string) => name.split(/[\\/]/).pop()!.replace(/[\u0000
     return body.folder;
   },
   /* the composer's examples button: the examples over the film, to point at one or name a skill */
-  showExamples: () => command?.({ type: 'show-examples' }),
+  showExamples: (open?: CommunityItem) => command?.({ type: 'show-examples', ...(open ? { open } : {}) }),
   onUseSkill: skillPicked.on,
   onAddSkill: skillAdd.on,
   useSkill: (skill: { name: string; description: string }) => skillPicked.set(skill),
