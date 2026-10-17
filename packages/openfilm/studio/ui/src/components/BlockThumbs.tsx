@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { THUMB_CELL_PX } from '@/lib/thumb-cache';
+import { thumbCellStyle } from '@/lib/thumb-cell';
 import { pickShot } from '@/lib/thumb-pick';
 import { retryImage } from '@/lib/retry-image';
 
@@ -71,7 +72,7 @@ export function BlockThumbs({
           alt=""
           draggable={false}
           className="absolute top-0 object-cover"
-          style={{ left: cell.left, width: thumbWidthPx, height, opacity: 0.9 }}
+          style={thumbCellStyle(cell.left, thumbWidthPx, height)}
           /* a picture that fails is hidden (the clip color shows), better than a broken-image icon, and asked for
              again a little later; it comes back when it loads */
           onError={(e) => { e.currentTarget.style.visibility = 'hidden'; retryImage(e.currentTarget); }}
