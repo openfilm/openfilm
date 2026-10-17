@@ -695,7 +695,7 @@ function srtStamp(ms) {
  * players disagree on overlaps). Cut, not dropped: the dropped line was really said.
  * @param {readonly FilmSubtitleCue[]} cues
  */
-function sequencedCues(cues) {
+export function filmSubtitleSequence(cues) {
   const sorted = [...cues].filter((c) => c.text.trim() && c.durMs > 0).sort((a, b) => a.startMs - b.startMs);
   /** @type {{ cue: FilmSubtitleCue, end: number }[]} */
   const out = [];
@@ -714,7 +714,7 @@ function sequencedCues(cues) {
  * @param {readonly FilmSubtitleCue[]} cues
  */
 export function filmSubtitleSrt(cues) {
-  const blocks = sequencedCues(cues).map(({ cue, end }, i) => {
+  const blocks = filmSubtitleSequence(cues).map(({ cue, end }, i) => {
     const line = cue.speaker ? `${cue.speaker}:${cue.text}` : cue.text;
     return `${i + 1}\n${srtStamp(cue.startMs)} --> ${srtStamp(end)}\n${line.trim()}`;
   });
@@ -723,7 +723,7 @@ export function filmSubtitleSrt(cues) {
 
 /** A WebVTT file; the speaker as `<v name>`, VTT's own voice tag. @param {readonly FilmSubtitleCue[]} cues */
 export function filmSubtitleVtt(cues) {
-  const blocks = sequencedCues(cues).map(({ cue, end }) => {
+  const blocks = filmSubtitleSequence(cues).map(({ cue, end }) => {
     const text = cue.text.trim().replace(/-->/g, '→');
     const line = cue.speaker ? `<v ${cue.speaker.replace(/[<>]/g, '')}>${text}` : text;
     return `${srtStamp(cue.startMs).replace(',', '.')} --> ${srtStamp(end).replace(',', '.')}\n${line}`;
@@ -737,7 +737,7 @@ export function filmSubtitleTranscript(cues) {
   const lines = [];
   /** @type {string | undefined} */
   let lastSpeaker;
-  for (const { cue } of sequencedCues(cues)) {
+  for (const { cue } of filmSubtitleSequence(cues)) {
     if (lines.length && cue.speaker !== lastSpeaker) lines.push('');
     lines.push(cue.speaker && cue.speaker !== lastSpeaker ? `${cue.speaker}:${cue.text.trim()}` : cue.text.trim());
     lastSpeaker = cue.speaker;

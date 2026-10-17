@@ -301,7 +301,7 @@ export const ja: Words = {
       slides: '1 ショット 1 スライド',
       project: 'プロジェクト全体を渡す',
       alpha: 'AE、Final Cut、Web 用のアルファ付き',
-      nle: '{app}、Premiere Pro、DaVinci Resolve',
+      nle: '{app}、Final Cut Pro、Premiere Pro、DaVinci Resolve',
     },
     destDesc: {
       social: 'プラットフォームを 1 つ以上選んでください。それぞれに合った形、サイズ、フレームレートで、まとめて書き出します。',
@@ -427,6 +427,7 @@ export const ja: Words = {
     nleDraftTitle: '{app} の下書き',
     nleSrt: '字幕を含める（SRT）',
     nleSubs: '字幕を含める',
+    nleHintFinalCut: 'FCPXML はすべてのプラットフォームで書き出せます。Final Cut Pro は macOS のみ対応のため、ほかのプラットフォームでは書き出したフォルダを Mac に移して読み込んでください。Final Cut Pro で「ファイル › 読み込む › XML」を選択します。ページはアルファ付き動画になり、文字とアニメーションは映像に含まれます。字幕は映像トラックの上に編集可能なタイトルクリップとして読み込まれ、SRT も保存されます。Studio の字幕スタイルは保持されません。移動後はメディアを再リンクしてください。',
     nleHintPremiere: 'XML とメディアフォルダーを含むフォルダーを作成します。Premiere Pro で：ファイル › 読み込み。フォルダーはそのままの場所に置くか、移動した場合はメディアを再リンクしてください。',
     nleHintResolve: 'XML とメディアフォルダーを含むフォルダーを作成します。DaVinci Resolve で：ファイル › 読み込み › タイムライン。フォルダーはそのままの場所に置くか、移動した場合はメディアを再リンクしてください。',
     nleHintDraft: '{app} の下書きフォルダーに直接作成するので、{app} のホーム画面に表示されます（{app} を開いている場合は再起動してください）。ページはアルファ付きクリップ、字幕はテキストトラックになります。',

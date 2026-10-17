@@ -69,8 +69,12 @@ const DESTS: readonly { id: Dest; icon: React.ReactNode }[] = [
   { id: 'project', icon: <FolderArchive size={16} /> },
 ];
 
-/** Editors' names, never translated. */
-const NLE_APP_NAME = { premiere: 'Premiere Pro', resolve: 'DaVinci Resolve' } as const;
+/** XML destinations: names are not translated; formats and help stay with their editor. */
+const NLE_APPS = {
+  premiere: { name: 'Premiere Pro', format: 'xml', hint: 'exportCenter.nleHintPremiere' },
+  resolve: { name: 'DaVinci Resolve', format: 'xml', hint: 'exportCenter.nleHintResolve' },
+  finalcut: { name: 'Final Cut Pro', format: 'fcpxml', hint: 'exportCenter.nleHintFinalCut' },
+} as const;
 const DRAFT_APP_NAME = { jianying: '剪映', capcut: 'CapCut' } as const;
 
 /** "As now" in a frame choice: the delivery frame picked beside the player. */
@@ -107,7 +111,7 @@ interface Settings {
   /** For an editing program: the sound as clips or as mixed stems. */
   /** the app it is for: `draft` 剪映 (in Chinese) or CapCut (elsewhere), the same draft; `auto`: the draft when that app
       is on this computer, else Premiere Pro */
-  nle: { app: 'auto' | 'draft' | 'premiere' | 'resolve'; fps: number | 'source'; audio: 'clips' | 'stems'; subtitles: boolean };
+  nle: { app: 'auto' | 'draft' | keyof typeof NLE_APPS; fps: number | 'source'; audio: 'clips' | 'stems'; subtitles: boolean };
   subtitles: { format: 'srt' | 'vtt' | 'txt' };
   images: { format: 'png' | 'jpg'; shortEdge: number; frame: FrameChoice; fill: FilmFrameFill; burn: boolean };
   slides: { format: 'pptx' | 'pdf'; shortEdge: number; frame: FrameChoice; fill: FilmFrameFill; burn: boolean };
@@ -144,6 +148,8 @@ function loadSettings(language: string): Settings {
   try {
     const raw = JSON.parse(localStorage.getItem(STORE_KEY) ?? 'null') as Partial<Settings> | null;
     if (!raw || typeof raw !== 'object') return first;
+    const nle = { ...DEFAULTS.nle, ...raw.nle };
+    if (nle.app !== 'auto' && nle.app !== 'draft' && !Object.hasOwn(NLE_APPS, nle.app)) nle.app = 'auto';
     return {
       ...DEFAULTS,
       ...raw,
@@ -152,7 +158,7 @@ function loadSettings(language: string): Settings {
       gif: { ...DEFAULTS.gif, ...raw.gif },
       alpha: { ...DEFAULTS.alpha, ...raw.alpha },
       audio: { ...DEFAULTS.audio, ...raw.audio },
-      nle: { ...DEFAULTS.nle, ...raw.nle },
+      nle,
       subtitles: { ...DEFAULTS.subtitles, ...raw.subtitles },
       images: { ...DEFAULTS.images, ...raw.images },
       slides: { ...DEFAULTS.slides, ...raw.slides },
@@ -407,8 +413,8 @@ export function ExportCenter(props: ExportCenterProps) {
       }
       case 'nle':
         return [{
-          kind: 'nle', format: nleApp === 'draft' ? draftApp : 'xml', fps: s.nle.fps === 'source' ? (nleSourceFps ?? projectFps) : s.nle.fps, audio: s.nle.audio, media: 'copy',
-          subtitles: s.nle.subtitles, label: nleApp === 'draft' ? tApp('exportCenter.nleDraftTitle') : `${NLE_APP_NAME[nleApp]} XML`,
+          kind: 'nle', format: nleApp === 'draft' ? draftApp : NLE_APPS[nleApp].format, fps: s.nle.fps === 'source' ? (nleSourceFps ?? projectFps) : s.nle.fps, audio: s.nle.audio, media: 'copy',
+          subtitles: s.nle.subtitles, label: nleApp === 'draft' ? tApp('exportCenter.nleDraftTitle') : `${NLE_APPS[nleApp].name} XML`,
         }];
       case 'subtitles':
         return [{ kind: 'subtitles', format: s.subtitles.format, label: s.subtitles.format === 'txt' ? t('exportCenter.transcript') : s.subtitles.format.toUpperCase(), ...ranged }];
@@ -837,8 +843,9 @@ export function ExportCenter(props: ExportCenterProps) {
                       value={nleApp}
                       options={[
                         { value: 'draft', label: DRAFT_APP_NAME[draftApp] },
-                        { value: 'premiere', label: NLE_APP_NAME.premiere },
-                        { value: 'resolve', label: NLE_APP_NAME.resolve },
+                        { value: 'premiere', label: NLE_APPS.premiere.name },
+                        { value: 'resolve', label: NLE_APPS.resolve.name },
+                        { value: 'finalcut', label: NLE_APPS.finalcut.name },
                       ]}
                       onChange={(app) => patch('nle', { app })}
                     />
@@ -863,9 +870,11 @@ export function ExportCenter(props: ExportCenterProps) {
                     />
                   </Field>
                   {captions > 0 && (
-                    <Toggle checked={s.nle.subtitles} onChange={(subtitles) => patch('nle', { subtitles })} label={t(nleApp === 'draft' ? 'exportCenter.nleSubs' : 'exportCenter.nleSrt')} />
+                    <Toggle checked={s.nle.subtitles} onChange={(subtitles) => patch('nle', { subtitles })} label={t(nleApp === 'draft' || nleApp === 'finalcut' ? 'exportCenter.nleSubs' : 'exportCenter.nleSrt')} />
                   )}
-                  <Hint>{tApp(nleApp === 'premiere' ? 'exportCenter.nleHintPremiere' : nleApp === 'resolve' ? 'exportCenter.nleHintResolve' : draftHere ? 'exportCenter.nleHintDraft' : 'exportCenter.nleHintDraftNone')}</Hint>
+                  <Hint>{tApp(nleApp === 'draft'
+                    ? draftHere ? 'exportCenter.nleHintDraft' : 'exportCenter.nleHintDraftNone'
+                    : NLE_APPS[nleApp].hint)}</Hint>
                 </>
               )}
 

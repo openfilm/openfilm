@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createExports, exportCapabilities, exportsRoot, ExportError, frameBox, dimsForShortEdge, hardwareEncoder, hardwareOptions, projectFiles, projectSizes } from './exports.mjs';
 import { allocateLanes, containMotion, fadeKeyframes, frameSpan, nleRate, planNleTimeline, xmemlDocument } from './nle.mjs';
+import { fcpxmlDocument } from './fcpxml.mjs';
 import { pptxParts } from './slides.mjs';
 import { filmSubtitleSrt, parseFilmSubtitleStyle } from './film-subtitle.mjs';
 import { zipFiles } from './zip.mjs';
@@ -427,6 +428,143 @@ test('fades in the editor\'s timeline: a picture that fades is rendered; a sound
   assert.equal(sound.in, 0);
   assert.deepEqual(sound.levels, [{ when: 0, value: 0 }, { when: 13, value: 1 }]);
   assert.match(xmemlDocument(timeline), /<parameterid>level<\/parameterid>[\s\S]*<keyframe>\s*<when>0<\/when>\s*<value>0<\/value>\s*<\/keyframe>\s*<keyframe>\s*<when>13<\/when>/);
+});
+
+test('Final Cut Pro keeps source audio rows when an effect overlaps adjacent narration clips', () => {
+  const facts = { duration: 120, hasAudio: true, channels: 2, sampleRate: 48000 };
+  const sound = (id, track, at, to) => ({ id, track, at, from: 0, to, speed: 1, volume: 1, enabled: true,
+    role: 'voice', src: `${id}.wav`, path: join(scratch, `${id}.wav`), facts });
+  const film = { stage: { w: 320, h: 180 }, duration: 120, pictures: [], sounds: [
+    sound('story-01-1', 1, 0.4, 4.98), sound('story-01-2', 1, 5.5683, 5.82),
+    sound('game-sfx-1', 2, 5.4, 0.333), sound('adventure-music', 3, 0, 120),
+  ] };
+  const opts = { title: 'Source tracks', fps: 60, audio: 'clips', media: 'copy', mediaDir: scratch };
+  const timeline = planNleTimeline(film, { ...opts, audioTracks: 'source' });
+  assert.deepEqual(timeline.audio.map((t) => t.clips.map((c) => c.name)), [
+    ['story-01-1', 'story-01-2'], ['game-sfx-1'], ['adventure-music'],
+  ]);
+  assert.deepEqual(timeline.audio.map((t) => t.sourceTrack), [1, 2, 3]);
+  const xml = fcpxmlDocument(timeline);
+  assert.match(xml, /name="story-01-1" lane="-1"[^>]*audioRole="OpenFilm A1"/);
+  assert.match(xml, /name="story-01-2" lane="-1"[^>]*audioRole="OpenFilm A1"/);
+  assert.match(xml, /name="game-sfx-1" lane="-2"[^>]*audioRole="OpenFilm A2"/);
+  assert.match(xml, /name="adventure-music" lane="-3"[^>]*audioRole="OpenFilm A3"/);
+  assert.notDeepEqual(planNleTimeline(film, opts).audio.map((t) => t.clips.map((c) => c.name)), timeline.audio.map((t) => t.clips.map((c) => c.name)), 'other editors keep their existing role grouping');
+  const overlapping = planNleTimeline({ ...film, sounds: [...film.sounds, sound('overlapping-voice', 1, 1, 2)] }, { ...opts, audioTracks: 'source' });
+  assert.equal(overlapping.audio.length, 4, 'only an overlap within a source row needs another lane');
+  assert.deepEqual(overlapping.audio.map((t) => t.sourceTrack), [1, 1, 2, 3]);
+  assert.match(fcpxmlDocument(overlapping), /name="overlapping-voice"[^>]*audioRole="OpenFilm A1"/);
+  const reversed = planNleTimeline({ ...film, sounds: [...film.sounds].reverse() }, { ...opts, audioTracks: 'source' });
+  assert.deepEqual(reversed.audio.map((t) => t.clips.map((c) => c.name)), timeline.audio.map((t) => t.clips.map((c) => c.name)));
+  const { track, ...untracked } = film.sounds[0];
+  assert.throws(() => planNleTimeline({ ...film, sounds: [untracked] }, { ...opts, audioTracks: 'source' }), /story-01-1 has no source track/);
+});
+
+test('Final Cut Pro reports unreadable subtitles before writing an incomplete export', async () => {
+  const exports = createExports({ captions: async () => { throw new Error('subtitle storage is unreadable'); } });
+  const name = 'Unreadable captions';
+  const done = await ended(exports, exports.start(project(name), { kind: 'nle', format: 'fcpxml', subtitles: true }));
+  assert.equal(done.status, 'failed');
+  assert.match(done.error, /subtitle storage is unreadable/);
+  assert.deepEqual(done.outputs, []);
+  assert.ok(!readdirSync(process.env.OPENFILM_EXPORTS).some((entry) => entry.includes(name)), 'no incomplete folder is published');
+});
+
+test('Final Cut Pro connections retain their parent and sequence positions across cuts, trims and gaps', async () => {
+  const clip = (name, start, end, from, fileId = 'picture') => ({ name, start, end, in: from, out: from + end - start, fileId, enabled: true });
+  const primary = [clip('first', 10, 35, 50), clip('second', 40, 70, 5), clip('third', 70, 100, 30)];
+  const overlays = [clip('overlay-a', 20, 60, 7), clip('overlay-b', 50, 90, 9)];
+  const across = clip('across-gap', 5, 105, 0);
+  const music = clip('music', 0, 110, 0, 'sound');
+  const voice = clip('voice', 55, 75, 12, 'sound');
+  const caption = clip('Caption & <text>\nNext line', 55, 85, 0);
+  const gapCaption = clip('Caption in gap', 37, 50, 0);
+  const expected = [...primary, ...overlays, across, music, voice, caption, gapCaption];
+  const rates = [25, 29.97];
+  const documents = rates.map((fps) => {
+    const rate = nleRate(fps);
+    const cues = [caption, gapCaption].map((c) => ({
+      text: c.name, startMs: c.start / rate.fps * 1000, durMs: (c.end - c.start) / rate.fps * 1000,
+    }));
+    return fcpxmlDocument({
+      name: 'Connected\tclips\nwith\rnames', rate, width: 1920, height: 1080, durationFrames: 110,
+      files: [
+        { id: 'picture', name: 'picture.mov', path: join(scratch, 'picture.mov'), durationFrames: 200, video: { w: 1920, h: 1080, still: false, alpha: true } },
+        { id: 'sound', name: 'sound.wav', path: join(scratch, 'sound.wav'), durationFrames: 200, audio: { channels: 2, sampleRate: 48000 } },
+      ],
+      video: [{ enabled: true, clips: primary }, { enabled: true, clips: overlays }, { enabled: true, clips: [across] }],
+      audio: [{ enabled: true, clips: [music] }, { enabled: true, clips: [voice] }],
+    }, { cues });
+  });
+  const parsed = await parseXml(documents, (doc) => {
+    const seconds = (value) => {
+      const [n, d = '1'] = (value ?? '0s').replace(/s$/, '').split('/');
+      return Number(n) / Number(d);
+    };
+    const attr = (el, name) => seconds(el.getAttribute(name));
+    const clips = [];
+    const visit = (el, parentAt, parentIn) => {
+      const at = parentAt + attr(el, 'offset') - parentIn;
+      if (el.tagName === 'asset-clip' || el.tagName === 'title') clips.push({
+        name: el.getAttribute('name'), parent: el.parentElement?.getAttribute('name'),
+        at, end: at + attr(el, 'duration'), from: attr(el, 'start'),
+      });
+      for (const child of el.children) if (['asset-clip', 'gap', 'title'].includes(child.tagName)) visit(child, at, attr(el, 'start'));
+    };
+    const spine = doc.querySelector('sequence > spine');
+    for (const child of spine.children) visit(child, 0, 0);
+    return { name: doc.querySelector('project').getAttribute('name'), primary: [...spine.children].map((el) => el.tagName === 'gap' ? 'gap' : el.getAttribute('name')), clips };
+  });
+  for (const [i, { error, found }] of parsed.entries()) {
+    assert.equal(error, null);
+    assert.equal(found.name, 'Connected\tclips\nwith\rnames');
+    assert.deepEqual(found.primary, ['gap', 'first', 'gap', 'second', 'third', 'gap']);
+    assert.equal(found.clips.length, expected.length);
+    const fps = nleRate(rates[i]).fps;
+    for (const original of expected) {
+      const actual = found.clips.find((c) => c.name === original.name);
+      assert.ok(actual, original.name);
+      assert.deepEqual([actual.at, actual.end, actual.from].map((t) => Math.round(t * fps)), [original.start, original.end, original.in], original.name);
+    }
+    const parents = Object.fromEntries(found.clips.map((c) => [c.name, c.parent]));
+    assert.equal(parents['overlay-a'], 'first');
+    assert.equal(parents['overlay-b'], 'second');
+    assert.equal(parents.voice, 'second');
+    assert.equal(parents['across-gap'], 'OpenFilm');
+    assert.equal(parents[caption.name], 'second');
+    assert.equal(parents[gapCaption.name], 'OpenFilm');
+  }
+});
+
+test('Final Cut Pro export packages FCPXML, rendered pages, audio and optional subtitle sidecars', ffmpeg, async () => {
+  for (const audio of ['clips', 'stems']) {
+    const done = await exported({ kind: 'nle', format: 'fcpxml', fps: 25, audio, subtitles: audio === 'clips' });
+    assert.match(done.out, /Tiny\.fcpxml$/);
+    for (const file of done.outputs) assert.ok(existsSync(file), file);
+    assert.equal(done.outputs.some((f) => f.endsWith('.srt')), audio === 'clips');
+    const [{ error, found }] = await parseXml([readFileSync(done.out, 'utf8')], (doc) => ({
+      version: doc.documentElement.getAttribute('version'),
+      primary: [...doc.querySelectorAll('sequence > spine > asset-clip')].map((c) => c.getAttribute('name')),
+      clips: [...doc.querySelectorAll('asset-clip')].map((c) => ({ name: c.getAttribute('name'), role: c.getAttribute('audioRole'), lane: Number(c.getAttribute('lane')), enabled: c.getAttribute('enabled'), kind: c.getAttribute('srcEnable') })),
+      media: [...doc.querySelectorAll('media-rep')].map((m) => m.getAttribute('src')),
+      formats: [...doc.querySelectorAll('format')].map((f) => f.getAttribute('frameDuration')),
+      subtitles: [...doc.querySelectorAll('title > text')].map((c) => c.textContent),
+      captions: doc.querySelectorAll('caption').length,
+    }));
+    assert.equal(error, null);
+    assert.equal(found.version, '1.10');
+    assert.deepEqual(found.subtitles, audio === 'clips' ? ['Ann：Hello there', 'And welcome'] : []);
+    assert.equal(found.captions, 0, 'subtitles use ordinary title clips instead of the fixed caption area');
+    assert.deepEqual(found.primary, ['title'], 'Studio’s main picture track becomes the primary storyline');
+    assert.equal(found.clips.filter((c) => c.kind === 'video').length, 2);
+    assert.ok(found.clips.some((c) => c.kind === 'audio' && c.lane < 0));
+    if (audio === 'clips') {
+      for (const name of ['tone', 'click']) assert.equal(found.clips.find((c) => c.name === name)?.role, 'OpenFilm A1');
+      assert.equal(found.clips.find((c) => c.name === 'bed')?.role, 'OpenFilm A2');
+    }
+    assert.ok(found.formats.every((f) => f === '1/25s'));
+    for (const url of found.media) assert.ok(existsSync(fileURLToPath(url)), url);
+  }
 });
 
 test('editing software: an xmeml folder; pages rendered with alpha, footage placed, sound as clips or stems, subtitles as SRT', { ...ffmpeg, timeout: 240_000 }, async () => {

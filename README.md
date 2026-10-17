@@ -78,8 +78,18 @@ Studio runs on your machine, in your browser: use one built on Chromium (Chrome,
 and exported with, so the preview is what you export. Everything in the film can be changed: text and layers in the
 picture, clips on the timeline, their place, look, volume and speed, and the subtitles. Your edits are saved to the
 film's files, so the agent sees and keeps them, and you can save named versions to go back to. Export a video, a GIF,
-the sound or its stems, subtitles, stills, slides, a transparent video, or the timeline itself for Premiere Pro and
+the sound or its stems, subtitles, stills, slides, a transparent video, or the timeline itself for Final Cut Pro, Premiere Pro and
 DaVinci Resolve.
+
+Choose **Editing project → Final Cut Pro** in Export on any platform. Final Cut Pro runs on macOS; move the
+export folder to a Mac and import the `.fcpxml` with **File → Import → XML**. Keep its media folder beside it and
+relink the media if its location changed. Tracks and clip timing stay editable; HTML pages become
+ProRes clips with alpha. With subtitles enabled, their text and timing are included as editable title clips above the picture tracks,
+with an SRT copy beside the XML. Titles use Final Cut Pro's styling; Studio's karaoke animation and custom subtitle
+appearance are not reproduced.
+Separate audio clips retain Studio's audio-row grouping, with a distinct audio role for each row (`OpenFilm A1`,
+`OpenFilm A2`, and so on). Overlaps within one row still need additional lanes. In Final Cut Pro, use the timeline
+index's **Roles → Show Audio Lanes** to display each role in its own lane.
 
 The desktop app ([apps/desktop](apps/desktop)) is Studio with a chat beside it, for Claude Code, Codex and the other
 agents, or its own agent with your own key.

@@ -18,8 +18,8 @@ export type ExportRequest = { range?: [number, number]; label?: string } & (
   | (Framing & { kind: 'poster'; format: 'png' | 'jpg'; shortEdge: number; at?: number })
   | { kind: 'subtitles'; format: 'srt' | 'vtt' | 'txt' }
   | (Framing & { kind: 'slides'; format: 'pptx' | 'pdf'; shortEdge: number; at?: number[] })
-  /* for an editing program: an xmeml folder; `media: 'link'` points at the sources where they are instead of cloning them */
-  | { kind: 'nle'; format?: 'xml' | 'jianying' | 'capcut'; fps: number; audio: 'clips' | 'stems'; media?: 'copy' | 'link'; subtitles: boolean }
+  /* for an editing program: an XML and media folder; `media: 'link'` points at the sources where they are instead of cloning them */
+  | { kind: 'nle'; format?: 'xml' | 'fcpxml' | 'jianying' | 'capcut'; fps: number; audio: 'clips' | 'stems'; media?: 'copy' | 'link'; subtitles: boolean }
   /* the project itself: its work, and the parts of its .film asked; a zip of its folder, or the folder */
   | { kind: 'project'; parts: ProjectPart[]; as: 'zip' | 'folder' }
 );

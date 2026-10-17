@@ -301,7 +301,7 @@ export const ko: Words = {
       slides: '샷마다 슬라이드 1장',
       project: '프로젝트 전체를 전달',
       alpha: 'AE, Final Cut, 웹용 알파',
-      nle: '{app}, Premiere Pro, DaVinci Resolve',
+      nle: '{app}, Final Cut Pro, Premiere Pro, DaVinci Resolve',
     },
     destDesc: {
       social: '플랫폼을 하나 이상 선택하세요. 각 플랫폼에 맞는 화면 비율, 크기, 프레임 레이트로 한 번에 내보냅니다.',
@@ -427,6 +427,7 @@ export const ko: Words = {
     nleDraftTitle: '{app} 초안',
     nleSrt: '자막 포함(SRT)',
     nleSubs: '자막 포함',
+    nleHintFinalCut: 'FCPXML은 모든 플랫폼에서 내보낼 수 있습니다. Final Cut Pro는 macOS만 지원하므로, 다른 플랫폼에서는 내보낸 폴더를 Mac으로 옮겨 가져오세요. Final Cut Pro에서 파일 › 가져오기 › XML을 선택하세요. 페이지는 알파 채널이 있는 동영상으로 렌더링되며 텍스트와 애니메이션은 영상에 포함됩니다. 자막은 영상 트랙 위의 편집 가능한 타이틀 클립으로 가져오며 SRT 사본도 저장합니다. Studio 자막 스타일은 유지되지 않습니다. 폴더를 이동하면 미디어를 다시 연결하세요.',
     nleHintPremiere: 'XML과 미디어 폴더가 들어 있는 폴더를 만듭니다. Premiere Pro에서: 파일 › 가져오기. 폴더를 그 자리에 두거나, 옮긴 뒤에는 미디어를 다시 연결하세요.',
     nleHintResolve: 'XML과 미디어 폴더가 들어 있는 폴더를 만듭니다. DaVinci Resolve에서: 파일 › 가져오기 › 타임라인. 폴더를 그 자리에 두거나, 옮긴 뒤에는 미디어를 다시 연결하세요.',
     nleHintDraft: '{app}의 초안 폴더에 바로 만들어서 {app} 홈 화면에 나타납니다({app}이 열려 있으면 다시 시작하세요). 페이지는 알파가 포함된 클립으로, 자막은 텍스트 트랙으로 들어갑니다.',
