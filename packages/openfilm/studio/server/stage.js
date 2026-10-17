@@ -9,6 +9,7 @@
  *
  *   editor → { source: 'openfilm-studio', type: 'stage', seq, op, ...args }    (ops below, at `ops`)
  *   film   → { source: 'openfilm-film', type: 'stage', seq, result }           the answer (null when nothing)
+ *            { type: 'stage-event', event: 'typing', handle, value }   the words of an in-place edit as they are typed
  *            { type: 'stage-event', event: 'text', handle, commit, value?, before? }   an in-place edit ended
  *            { type: 'stage-event', event: 'key', key, code, repeat, metaKey, ctrlKey, shiftKey, altKey }
  *                                                   a key pressed in the picture (not while typing in it)
@@ -927,7 +928,12 @@
         else el.style.setProperty(prop, extra[k], 'important');
       }
     };
-    const onInput = () => { if (search && editing) editing.hold = search(holdInline); };
+    /* the editor shows the words as they are typed (the inspector's box with them); they are kept at Enter or blur */
+    const onInput = () => {
+      if (!editing) return;
+      if (search) editing.hold = search(holdInline);
+      post({ type: 'stage-event', event: 'typing', handle, value: overlay ? collapse(host.innerText ?? host.textContent ?? '') : stageText(host) });
+    };
     const host = overlay ? openOverlay(el) : el;
     /* the line hidden under its overlay, the blocks in it still shown (they are not what is typed) */
     const blocks = overlay ? blocksIn(el).map((b) => [b, b.getAttribute('style')]) : [];

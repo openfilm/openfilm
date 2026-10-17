@@ -128,6 +128,32 @@ test('a line typed in place starts with all of its words selected; a click on th
   }
 });
 
+test('a line typed in place tells the editor its words as they are typed, and kept at Enter', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-stage-typing-'));
+  writeFileSync(join(dir, 'title.html'), `<!doctype html><body style="margin:0">
+<h1 id="title" style="position:absolute;left:20px;top:20px;margin:0;font:700 24px monospace">Every parcel</h1>
+<script>window.film={duration:2,frame(){}}</script></body>`);
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'title', src: 'title.html' }] }] }));
+  const stage = await stageOf(dir);
+  try {
+    await stage.page.evaluate(() => {
+      window.heard = [];
+      window.addEventListener('message', (e) => { if (e.data?.source === 'openfilm-film' && e.data.type === 'stage-event') window.heard.push(e.data); });
+    });
+    const title = await stage.ask('hit', { x: 40, y: 30, detail: true });
+    assert.equal(await stage.ask('textStart', { handle: title.handle }), true);
+    /* all of its words selected: the first key replaces them */
+    for (const ch of 'Box') await stage.page.keyboard.type(ch);
+    await stage.page.keyboard.press('Enter');
+    await stage.page.waitForFunction(() => window.heard.some((e) => e.event === 'text'));
+    const heard = await stage.page.evaluate(() => window.heard.map(({ event, handle, value, commit }) => ({ event, handle, value, commit })));
+    assert.deepEqual(heard.filter((e) => e.event === 'typing').map((e) => [e.handle, e.value]), [[title.handle, 'B'], [title.handle, 'Bo'], [title.handle, 'Box']]);
+    assert.deepEqual(heard.at(-1), { event: 'text', handle: title.handle, value: 'Box', commit: true });
+  } finally {
+    await stage.close();
+  }
+});
+
 test('a click on words takes them, though a line drawn behind runs across its own box there', { timeout: 60_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'of-stage-line-'));
   writeFileSync(join(dir, 'net.html'), `<!doctype html><body style="margin:0">

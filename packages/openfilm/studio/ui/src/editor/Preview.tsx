@@ -48,10 +48,12 @@ export type PreviewHandle = {
 };
 
 /**
- * What the film's stage tells on its own: an in-place text edit ended (`commit` with the new words), a key pressed
- * while the picture had focus (not while typing in it), or another load of the film is shown (its handles are new).
+ * What the film's stage tells on its own: the words of an in-place text edit as they are typed, the edit ended
+ * (`commit` with the new words), a key pressed while the picture had focus (not while typing in it), or another load
+ * of the film is shown (its handles are new).
  */
 export type StageEvent =
+  | { event: 'typing'; handle: number; value: string }
   /* `hold`: what kept the other layers in place as the words were typed (style for the same override, null takes a key away) */
   | { event: 'text'; handle: number; commit: boolean; value?: string; before?: string; hold?: Record<string, string | null> }
   | { event: 'key'; key: KeyboardEvent }
@@ -229,6 +231,8 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
           });
           tell({ event: 'key', key });
           onKeyRef.current?.(key);
+        } else if (m.event === 'typing') {
+          tell({ event: 'typing', handle: Number(m.handle), value: String(m.value ?? '') });
         } else if (m.event === 'text') {
           tell({
             event: 'text', handle: Number(m.handle), commit: Boolean(m.commit),

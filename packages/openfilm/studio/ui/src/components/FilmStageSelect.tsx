@@ -1028,6 +1028,17 @@ function FilmStageSelectImpl({
   };
   const finishTextEditRef = React.useRef(finishTextEdit);
   finishTextEditRef.current = finishTextEdit;
+  /* the words as they are typed in the picture: the inspector shows them (its box and the layer's name) as they come */
+  const onTyping = (e: Extract<StageEvent, { event: 'typing' }>) => {
+    const edit = textEdit.current;
+    const element = edit?.element;
+    if (!edit || edit.layer.handle !== e.handle || !element?.text) return;
+    /* a layer named by its words is named by the new ones */
+    const label = element.label === element.text.value && e.value ? e.value : element.label;
+    const next = { ...element, label, text: { ...element.text, value: e.value } };
+    setPicked((cur) => (cur?.element?.loc === element.loc ? { ...cur, element: next } : cur));
+    onSelectElement?.(next);
+  };
   const onTextDone = (e: Extract<StageEvent, { event: 'text' }>) => {
     const edit = textEdit.current;
     if (!edit || edit.layer.handle !== e.handle) return;
@@ -1035,7 +1046,12 @@ function FilmStageSelectImpl({
     setEditingText(null);
     syncGeomSoon();
     const { element, layer } = edit;
-    if (!e.commit || !e.value || !onEditTextInline) return;
+    if (!e.commit || !e.value || !onEditTextInline) {
+      /* given up (or nothing new): the inspector goes back to the words it had */
+      setPicked((cur) => (cur?.element?.loc === element.loc ? { ...cur, element } : cur));
+      if (pickedRef.current?.element?.loc === element.loc) onSelectElement?.(element);
+      return;
+    }
     const value = e.value;
     const nextElement = { ...element, ...(element.text ? { text: { ...element.text, value } } : {}) };
     setPicked((cur) => (cur?.element?.loc === element.loc ? { ...cur, element: nextElement } : cur));
@@ -1234,6 +1250,7 @@ function FilmStageSelectImpl({
     if (!preview?.onStage) return undefined;
     return preview.onStage((e) => {
       if (e.event === 'text') onTextDoneRef.current(e);
+      else if (e.event === 'typing') onTypingRef.current(e);
       else if (e.event === 'key') {
         const k = e.key;
         if (isSelectAll(k)) { if (!textEdit.current && !cropRef.current) void selectAllRef.current(); }
@@ -1250,6 +1267,8 @@ function FilmStageSelectImpl({
   }, [previewRef, syncGeomSoon]);
   const onTextDoneRef = React.useRef(onTextDone);
   onTextDoneRef.current = onTextDone;
+  const onTypingRef = React.useRef(onTyping);
+  onTypingRef.current = onTyping;
 
   /* ── the clips selected on the timeline ── */
   const [linkedMarks, setLinkedMarks] = React.useState<readonly LinkedMark[]>(NO_MARKS);
