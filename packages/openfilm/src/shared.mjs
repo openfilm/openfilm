@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { FilmPage, FrameError, launch, serve } from './host.mjs';
 import { FILM_FILE, readFilmFile } from './film-doc.mjs';
@@ -238,20 +238,79 @@ export function fadeFilter(fade) {
 }
 
 /** Mix clips into one track of `duration` seconds. */
-export function mix(clips, duration, file, codec = ['-c:a', 'aac', '-b:a', '192k']) {
-  /* each input seeks to its part (-ss/-t): a clip from deep inside a long recording is not decoded from the start */
-  const inputs = clips.flatMap((c) => [...(c.from > 0 ? ['-ss', String(c.from)] : []), ...(c.to != null ? ['-t', String(c.to - c.from)] : []), '-vn', '-i', c.file]);
+export async function mix(clips, duration, file, codec = ['-c:a', 'aac', '-b:a', '192k']) {
+  const { inputs, filter } = mixGraph(clips, duration);
+  /* a mix takes seconds; one that has not ended in minutes never will */
+  const timeoutMs = (120 + duration * 2) * 1000;
+  /* a long graph goes in a file of its own: a command line has a limit (32,767 characters on Windows), and a film of
+     hundreds of sounds passes it */
+  const long = filter.length + inputs.reduce((n, a) => n + a.length + 3, 0) > COMMAND_ROOM;
+  const script = long ? `${file}.${process.pid}.filter` : null;
+  if (script) writeFileSync(script, filter);
+  try {
+    const graph = script ? [await filterScriptOption(), script] : ['-filter_complex', filter];
+    await ffmpeg([...inputs, ...graph, '-map', '[out]', '-t', String(duration), ...codec, file], { timeoutMs, what: 'mixing the sound' }).done;
+  } finally {
+    if (script) rmSync(script, { force: true });
+  }
+}
+
+/** How long a mix's command may be before its graph goes in a file: well under Windows' limit, with room for the rest. */
+export const COMMAND_ROOM = 24_000;
+
+/**
+ * The inputs and the filter graph of a mix. A file used by one sound is an input that seeks to its part (-ss/-t: a
+ * clip deep inside a long recording is not decoded from the start); one used by several is read once and split, each
+ * part cut from it, so a film that uses one sound a hundred times has one input, not a hundred.
+ */
+export function mixGraph(clips, duration) {
+  /** @type {Map<string, number[]>} */
+  const uses = new Map();
+  clips.forEach((c, i) => uses.set(c.file, [...(uses.get(c.file) ?? []), i]));
+  const inputs = [];
+  const splits = [];
+  /** @type {string[]} */
+  const source = [];
+  for (const [path, at] of uses) {
+    const n = inputs.filter((a) => a === '-i').length;
+    if (at.length === 1) {
+      const c = clips[at[0]];
+      inputs.push(...(c.from > 0 ? ['-ss', String(c.from)] : []), ...(c.to != null ? ['-t', String(c.to - c.from)] : []), '-vn', '-i', path);
+      source[at[0]] = `[${n}:a]`;
+    } else {
+      inputs.push('-vn', '-i', path);
+      splits.push(`[${n}:a]asplit=${at.length}${at.map((i) => `[s${i}]`).join('')}`);
+      for (const i of at) {
+        const c = clips[i];
+        const cut = c.from > 0 || c.to != null ? `atrim=${c.from > 0 ? `start=${c.from}` : ''}${c.from > 0 && c.to != null ? ':' : ''}${c.to != null ? `end=${c.to}` : ''},` : '';
+        source[i] = `[s${i}]${cut}`;
+      }
+    }
+  }
   const chains = clips.map((c, i) => {
     const fade = fadeFilter(c.fade);
     const trim = `asetpts=PTS-STARTPTS${c.speed && c.speed !== 1 ? `,${tempo(c.speed)}` : ''}${fade ? `,${fade}` : ''}`;
     const delay = Math.round(c.at * 1000);
-    return `[${i}:a]${trim},volume=${c.volume},adelay=${delay}:all=1,aresample=48000,aformat=channel_layouts=stereo[a${i}]`;
+    return `${source[i]}${trim},volume=${c.volume},adelay=${delay}:all=1,aresample=48000,aformat=channel_layouts=stereo[a${i}]`;
   });
   /* padded to the film's length and no further, and cut there: the mix always ends */
   const sum = `${clips.map((_, i) => `[a${i}]`).join('')}amix=inputs=${clips.length}:normalize=0:dropout_transition=0,apad=whole_dur=${duration},atrim=0:${duration}[out]`;
-  /* a mix takes seconds; one that has not ended in minutes never will */
-  const timeoutMs = (120 + duration * 2) * 1000;
-  return ffmpeg([...inputs, '-filter_complex', [...chains, sum].join(';'), '-map', '[out]', '-t', String(duration), ...codec, file], { timeoutMs, what: 'mixing the sound' }).done;
+  return { inputs, filter: [...splits, ...chains, sum].join(';') };
+}
+
+/** @type {Promise<string> | null} */
+let scriptOption = null;
+/**
+ * The option that reads a filter graph from a file: `-/filter_complex` since ffmpeg 7, `-filter_complex_script` before
+ * (the one older builds know; newer ones drop it).
+ */
+function filterScriptOption() {
+  scriptOption ??= new Promise((done) => {
+    const r = spawnSync('ffmpeg', ['-hide_banner', '-version'], { encoding: 'utf8', windowsHide: true });
+    const major = Number(/^ffmpeg version n?(\d+)\./m.exec(String(r.stdout ?? ''))?.[1]);
+    done(Number.isFinite(major) && major < 7 ? '-filter_complex_script' : '-/filter_complex');
+  });
+  return scriptOption;
 }
 
 /**
