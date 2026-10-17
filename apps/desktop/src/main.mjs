@@ -19,6 +19,8 @@ import { folderDialogOptions, programDialogOptions } from './folder-dialog.mjs';
 import { childEnvironment, loginShellEnvironment } from './environment.mjs';
 import { startWindowStudio } from './studio.mjs';
 import { CHAT_MIN, STUDIO_MIN, WINDOW_MIN, placeOnDisplays, readWindowState, writeWindowState } from './window-state.mjs';
+import { keepWindowOnClose } from './window-lifecycle.mjs';
+import { createPagePresentation, nextClosePage, revealPage } from './page-presentation.mjs';
 import { applicationMenu } from './menu.mjs';
 import { registerLocalAgentIpc } from './local-agents-ipc.mjs';
 import { readPreferences, registerChatIpc } from './chat-ipc.mjs';
@@ -66,6 +68,7 @@ let tabs = null;
 /** the page of each tab that has one (a tab left behind long enough has none until it is shown again) */
 /** @type {Map<string, WebContentsView>} */
 const views = new Map();
+let pagePresentation = null;
 /** the page in front */
 const activeView = () => (tabs ? views.get(tabs.activeId() ?? HOME) ?? null : null);
 /** something every page is told (the theme, an update, the agents…) */
@@ -146,6 +149,8 @@ function makeView(tabId) {
     },
   });
   v.setBackgroundColor(BACKGROUND[theme]);
+  // A newly attached view must not cover the current page with its initial blank frame.
+  v.setVisible(false);
   views.set(tabId, v);
   win.contentView.addChildView(v);
   const { width, height } = win.getContentBounds();
@@ -172,14 +177,41 @@ function tellTabs() {
   saveState();
 }
 
-/** Show a page: a tab's (made again when it has none), or HOME. Once a tab shows, HOME's page goes. */
+function presentation() {
+  return pagePresentation ??= createPagePresentation({
+    prepare(id) {
+      const v = makeView(id);
+      // A never-visible native view produces no frames. Paint it underneath the outgoing page.
+      win.contentView.addChildView(v, 0);
+      v.setVisible(true);
+      v.webContents.setBackgroundThrottling(false);
+      const ready = v.webContents.loadURL(pageAddress(id === HOME ? null : tabs?.get(id)))
+        .then(() => v.webContents.executeJavaScript('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))'))
+        .finally(() => {
+          if (v.webContents.isDestroyed()) return;
+          v.webContents.setBackgroundThrottling(true);
+          if (pagePresentation?.currentId() !== id && pagePresentation?.wantedId() !== id) v.setVisible(false);
+        });
+      return { view: v, ready };
+    },
+    present(_id, v) { if (win) revealPage(win.contentView, v, views.values()); },
+    discard: destroyView,
+    onError: (error) => { if (!quitting) log(`page: could not prepare replacement (${String(error.message).replace(/key=[^&\s)]+/g, 'key=…')})\n`); },
+  });
+}
+
+/** Keep the projects page and the next close destination ready, without focusing them. */
+function warmClosePages() {
+  if (!tabs || !win || quitting) return;
+  void presentation().warm(HOME);
+  const next = nextClosePage(tabs, HOME);
+  if (next !== HOME) void presentation().warm(next);
+}
+
+/** A ready page replaces the old frame; a cold page is prepared before it covers it. */
 function showPage(id) {
-  if (!win || !studio) return;
-  let v = views.get(id);
-  if (!v) { v = makeView(id); void v.webContents.loadURL(pageAddress(id === HOME ? null : tabs?.get(id))); }
-  for (const [other, page] of views) page.setVisible(other === id);
-  v.webContents.focus();
-  if (id !== HOME) dropView(HOME);
+  if (!win || !studio) return Promise.resolve(false);
+  return presentation().show(id).then((shown) => { if (shown && id !== HOME) warmClosePages(); return shown; });
 }
 
 /** Bring a tab to the front. */
@@ -196,13 +228,15 @@ function newTab(projectId) {
 }
 
 /** Let a tab's page go: closed, or behind too long (the tab stays). */
-function dropView(id) {
+function destroyView(id) {
   const v = views.get(id);
   if (!v) return;
   views.delete(id);
   win?.contentView.removeChildView(v);
   if (!v.webContents.isDestroyed()) v.webContents.close();
 }
+
+function dropView(id) { if (pagePresentation) pagePresentation.drop(id); else destroyView(id); }
 
 /** Close a tab; one whose agent is still at work, only once the person says so. */
 async function closeTab(id) {
@@ -216,8 +250,8 @@ async function closeTab(id) {
     });
     if (response !== 0) return;
   }
-  dropView(id);
   const next = tabs.close(id);
+  presentation().retire(id);
   if (next) showTab(next.id);
   else { showPage(HOME); tellTabs(); }
 }
@@ -398,8 +432,8 @@ async function start() {
   win.on('moved', saveState);
   win.on('enter-full-screen', () => broadcast('desktop:full-screen', true));
   win.on('leave-full-screen', () => broadcast('desktop:full-screen', false));
-  win.on('close', saveState);
-  win.on('closed', () => { win = null; views.clear(); app.quit(); });
+  keepWindowOnClose(win, { mac, isQuitting: () => quitting, save: saveState });
+  win.on('closed', () => { win = null; views.clear(); pagePresentation = null; app.quit(); });
 
   ipcMain.on('desktop:theme', (event, next) => { if (fromPage(event)) setTheme(next); });
   ipcMain.handle('desktop:hello', (event) => {
@@ -444,7 +478,10 @@ async function start() {
   /* Studio's "open this project", heard by each page: settled once here */
   tabHandle('desktop:tabs:open', (_self, { to }) => { openInTabs(to); return { ok: true }; });
   /* a tab left behind long enough lets its page go; it comes back when shown */
-  setInterval(() => { for (const id of tabs?.idle(IDLE_PAGE_MS) ?? []) dropView(id); }, 60_000).unref?.();
+  setInterval(() => {
+    const next = tabs ? nextClosePage(tabs, HOME) : null;
+    for (const id of tabs?.idle(IDLE_PAGE_MS) ?? []) if (id !== next) dropView(id);
+  }, 60_000).unref?.();
 
   /* the agents: Studio's home and library go with them, so the `openfilm` they run finds this window's Studio */
   /* the person's own skills: Skills/ beside this app's projects (~/Movies/OpenFilm/Skills), as its `openfilm` finds them */
@@ -582,7 +619,11 @@ async function start() {
     tabs: {
       /* the projects window, in the page in front, to pick the project a new tab shows */
       open: () => activeView()?.webContents.send('desktop:tabs:pick') ?? views.get(HOME)?.webContents.focus(),
-      close: () => { if (tabs?.activeId()) void closeTab(tabs.activeId()); },
+      close: () => {
+        const id = tabs?.activeId();
+        if (id) void closeTab(id);
+        else win?.close();
+      },
       reopen: () => { const tab = tabs?.reopen(); if (tab) showTab(tab.id); },
       step: (by) => {
         const list = tabs?.list() ?? [];
@@ -613,6 +654,7 @@ async function start() {
   } catch (error) {
     log(`Studio did not start: ${error.stack ?? error}\n`);
     const v = makeView('failed');
+    v.setVisible(true);
     void v.webContents.loadFile(here('./failed.html'), { query: { message: String(error.message ?? error) } });
   }
 }
