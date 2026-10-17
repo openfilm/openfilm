@@ -4,7 +4,7 @@ The open source AI video agent: films as web pages, the manual that teaches your
 `openfilm` command, and Studio, the editor to change anything in them.
 
 Ask Codex, Claude Code or any coding agent to make a film. It writes the film as web pages (`film.html` cuts them
-together with footage, pictures and sound), and Studio, a local editor in your browser, shows it taking shape. Then
+together with footage, pictures and sound), and Studio, a local editor in your browser (Chrome or Edge: films are drawn with Chromium), shows it taking shape. Then
 change anything you like, by hand or by asking.
 
 ## Install

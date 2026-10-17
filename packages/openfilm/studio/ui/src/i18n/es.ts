@@ -510,6 +510,7 @@ export const es: Words = {
     editsRestore: 'Restaurarlas',
     editsLeaveOut: 'Descartarlas',
     previewFailed: 'No se pudo dibujar la vista previa.',
+    previewBrowser: 'Esta página usa algo que tu navegador no tiene. Las películas se dibujan y exportan con Chromium: abre Studio en Chrome o Edge.',
     previewMissing: 'Falta el medio: {file} · clic derecho en el clip para revincular',
     filmEmptyHint: 'Arrastra medios a la línea de tiempo para empezar tu película, o pide a tu agente que haga una.',
     filmBroken: 'Ahora mismo no se puede leer film.html, así que Studio muestra la película tal como estaba, y las ediciones de aquí no se pueden guardar hasta que se corrija:',

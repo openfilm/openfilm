@@ -16,6 +16,7 @@ import { useT } from '@/i18n';
 import type { ClipSpan } from '@/lib/film-shape';
 import type { Sound } from './player';
 import { reloaded, shownAfter, updateKeys, type Frame } from './preview-frames';
+import { chromiumBased } from '@/lib/browser';
 
 /** How far the film's frame reaches past the picture's box on each side, in px (see the `stage-frames` clip). */
 const BLEED = 1;
@@ -297,6 +298,8 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
           <div className="cover" role="alert">
             <div className="max-w-[420px] text-[13px] leading-relaxed text-white/70">
               <p>{t('project.previewFailed')}</p>
+              {/* in Safari or Firefox the likely reason is the browser: films are drawn and exported in Chromium */}
+              {!chromiumBased() ? <p className="mt-1.5">{t('project.previewBrowser')}</p> : null}
               <p className="mt-1.5 text-[11.5px] text-white/45">{error}</p>
             </div>
           </div>

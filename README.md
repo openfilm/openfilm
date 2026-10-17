@@ -74,7 +74,8 @@ connect a service in Studio with your own key.
 
 ## Studio
 
-Studio runs on your machine, in your browser. Everything in the film can be changed: text and layers in the
+Studio runs on your machine, in your browser: use one built on Chromium (Chrome, Edge), the engine films are drawn
+and exported with, so the preview is what you export. Everything in the film can be changed: text and layers in the
 picture, clips on the timeline, their place, look, volume and speed, and the subtitles. Your edits are saved to the
 film's files, so the agent sees and keeps them, and you can save named versions to go back to. Export a video, a GIF,
 the sound or its stems, subtitles, stills, slides, a transparent video, or the timeline itself for Premiere Pro and

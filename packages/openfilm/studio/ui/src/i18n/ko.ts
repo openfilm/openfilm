@@ -510,6 +510,7 @@ export const ko: Words = {
     editsRestore: '복원',
     editsLeaveOut: '제외',
     previewFailed: '미리보기를 그릴 수 없습니다.',
+    previewBrowser: '이 페이지는 현재 브라우저가 지원하지 않는 기능을 사용합니다. 영상은 Chromium으로 그리고 내보내므로 Studio를 Chrome이나 Edge에서 여세요.',
     previewMissing: '미디어 없음: {file} · 클립 오른쪽 클릭으로 다시 연결',
     filmEmptyHint: '미디어를 타임라인으로 끌어와 영상을 시작하거나, 에이전트에게 만들어 달라고 요청하세요.',
     filmBroken: '지금은 film.html을 읽을 수 없어 Studio가 마지막 상태의 영상을 보여 줍니다. 문제가 해결될 때까지 여기서 한 편집은 저장할 수 없습니다:',

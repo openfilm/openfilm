@@ -510,6 +510,7 @@ export const ja: Words = {
     editsRestore: '元に戻す',
     editsLeaveOut: '戻さない',
     previewFailed: 'プレビューを描画できませんでした。',
+    previewBrowser: 'このページは、お使いのブラウザにない機能を使っています。映像は Chromium で描画・書き出しされるため、Studio は Chrome か Edge で開いてください。',
     previewMissing: 'メディアなし：{file} · クリップを右クリックで再リンク',
     filmEmptyHint: 'メディアをタイムラインにドラッグして映像を作り始めるか、エージェントに作成を頼んでください。',
     filmBroken: '現在 film.html を読み込めないため、Studio は最後の状態の映像を表示しています。修正されるまで、ここでの編集は保存できません：',
