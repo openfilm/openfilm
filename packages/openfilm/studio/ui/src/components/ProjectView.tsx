@@ -101,6 +101,7 @@ import { layerTarget, pageClipOf, recoverLayer } from '@/lib/stage-layers';
 import type { TemplateControls } from '@/lib/template-controls';
 import type { TemplateHost } from './TemplateSection';
 import { SAVED, refreshSaved, savedActions, savedSources, useSavedListing } from '@/lib/saved';
+import { batchMap } from '@/lib/batch-map';
 import { groupInsertAt, groupInsertOps } from '@/lib/saved-insert';
 import { pageClips, pageMayHave, similarEdits } from '@/lib/similar-layers';
 import type { MaskSession } from '@/lib/stage-mask';
@@ -267,6 +268,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
      page without a duration has no end, and is dropped on the timeline with a length of its own; a picture's size
      gives its clip a box in its own shape */
   const probed = React.useRef(new Set<string>());
+  /* the answers handed on a few times a second, not one by one (lib/batch-map) */
+  const factsIn = React.useMemo(() => batchMap<string, ReturnType<typeof factsOfProbe> & { audio?: boolean }>((batch) => {
+    setFacts((m) => { const next = new Map(m); for (const [path, f] of batch) next.set(path, f); return next; });
+  }, 250), []);
+  React.useEffect(() => () => factsIn.cancel(), [factsIn]);
   React.useEffect(() => {
     if (!rawListing) return;
     const wanted = [
@@ -287,10 +293,10 @@ export function ProjectView({ projectId, onProject, onLeave }: {
             ...(page && !(probe.duration > 0) ? { endless: true } : {}),
             ...(page && probe.reflows ? { reflows: true } : {}),
           };
-          setFacts((m) => new Map(m).set(f.path, facts));
+          factsIn.set(f.path, facts);
         }, () => {});
     }
-  }, [rawListing, projectId]);
+  }, [rawListing, projectId, factsIn]);
 
   const folder = loaded?.folder ?? '';
   const mediaSources = React.useMemo<MediaSources>(() => {

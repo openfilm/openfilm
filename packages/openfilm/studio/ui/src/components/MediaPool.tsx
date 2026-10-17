@@ -73,6 +73,7 @@ import { Tooltip } from './Tooltip';
 import { retryImage } from '@/lib/retry-image';
 import { boxBetween, boxHits, boxPick, moveTargets, pickItem, type Box } from '@/lib/media-selection';
 import { barLayout, type BarWords } from '@/lib/media-bar';
+import { byName, folderFaces } from '@/lib/media-folders';
 
 type Filter = 'all' | 'video' | 'image' | 'audio' | 'page' | 'other';
 type SortKey = 'name' | 'time' | 'duration' | 'type';
@@ -284,10 +285,10 @@ export function MediaPool({
     const q = query.trim();
     const order = (a: WorkspaceResource, b: WorkspaceResource) => {
       /* as added: the oldest first, what comes in goes last */
-      if (view.sort === 'time') return (a.addedMs ?? a.mtimeMs) - (b.addedMs ?? b.mtimeMs) || a.name.localeCompare(b.name, undefined, { numeric: true });
+      if (view.sort === 'time') return (a.addedMs ?? a.mtimeMs) - (b.addedMs ?? b.mtimeMs) || byName(a.name, b.name);
       if (view.sort === 'duration') return (b.durationMs ?? -1) - (a.durationMs ?? -1);
       if (view.sort === 'type') return filterOf(a).localeCompare(filterOf(b)) || a.name.localeCompare(b.name);
-      return a.name.localeCompare(b.name, undefined, { numeric: true });
+      return byName(a.name, b.name);
     };
     /* searching or showing one kind looks through every folder at once */
     if (q || view.filter !== 'all') {
@@ -297,18 +298,8 @@ export function MediaPool({
     }
     /* the project's pages are at the top; a page put in a folder is in its folder */
     const here = allFiles.filter((f) => (inMedia(f.path) ? relDir(assetRel(f.path)) === at : at === '')).sort(order);
-    const sub = folders
-      .filter((dir) => relDir(dir) === at)
-      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-      .map((rel) => ({
-        type: 'folder' as const, rel, name: rel.split('/').pop()!,
-        count: allFiles.filter((f) => inMedia(f.path) && assetRel(f.path).startsWith(`${rel}/`)).length,
-        /* what the folder holds, on its cover: pictures first (they say the most), sounds after */
-        covers: allFiles
-          .filter((f) => inMedia(f.path) && assetRel(f.path).startsWith(`${rel}/`))
-          .sort((a, b) => Number(a.kind === 'audio') - Number(b.kind === 'audio') || a.name.localeCompare(b.name, undefined, { numeric: true }))
-          .slice(0, 4),
-      }));
+    /* the folders here, what each holds and its cover (lib/media-folders) */
+    const sub = folderFaces(allFiles, folders, at, (path) => (inMedia(path) ? assetRel(path) : null)).map((face) => ({ type: 'folder' as const, ...face }));
     return [...sub, ...here.map((file) => ({ type: 'file' as const, file }))];
   }, [allFiles, folders, at, query, view, assetRel, inMedia]);
 
