@@ -585,6 +585,30 @@
    */
   const backdrop = (c, hit) => hit.kind === 'box' && !hit.frame.r
     && hit.rect.left <= 1 && hit.rect.top <= 1 && hit.rect.right >= c.win.innerWidth - 1 && hit.rect.bottom >= c.win.innerHeight - 1;
+  /** A layer that fills its whole page, whatever it is (a vignette's box, a grain's canvas, a letterbox's picture). */
+  const fillsPage = (c, hit) => !hit.frame.r
+    && hit.rect.left <= 1 && hit.rect.top <= 1 && hit.rect.right >= c.win.innerWidth - 1 && hit.rect.bottom >= c.win.innerHeight - 1;
+  /**
+   * The page a point of the picture is about. The top page under it, unless all it has there fills the page (a
+   * letterbox, a vignette, grain laid over the film) while a page under it has a layer of its own there: then that
+   * one, so a click on a title under a full-frame overlay takes the title. A layer in hand keeps its own page.
+   */
+  const pageAt = (x, y, includeLocked, held) => {
+    const inside = (c) => { const p = matrixOf(c).inverse().transformPoint(new DOMPoint(x, y)); return p.x >= 0 && p.y >= 0 && p.x <= c.w && p.y <= c.h ? p : null; };
+    if (held) {
+      const own = shown().find((c) => c.kind === 'page' && c.win && c.win.document === held.ownerDocument && inside(c));
+      if (own) return own;
+    }
+    const top = clipAt(x, y);
+    if (!top || top.kind !== 'page' || !top.win) return top;
+    for (const c of shown()) {
+      const p = inside(c);
+      if (!p) continue;
+      if (c.kind !== 'page' || !c.win) break;
+      if (layersAt(c, p.x, p.y, includeLocked).some((h) => !fillsPage(c, h))) return c;
+    }
+    return top;
+  };
   /** A layer inside a group is the group until the group is entered (a layer of it is in hand). */
   const liftToGroup = (hit, current) => {
     const groups = [];
@@ -1229,7 +1253,7 @@
   const ops = {
     /** The layer under a point: the smallest (Alt: the next one under `cycleFrom`); groups stand for their layers. */
     hit({ x, y, cycleFrom, includeLocked, from, enter, detail }) {
-      const c = clipAt(x, y);
+      const c = pageAt(x, y, Boolean(includeLocked), nodeOf(cycleFrom) ?? nodeOf(from));
       if (!c || c.kind !== 'page' || !c.win) return null;
       const p = matrixOf(c).inverse().transformPoint(new DOMPoint(x, y));
       const all = layersAt(c, p.x, p.y, Boolean(includeLocked));

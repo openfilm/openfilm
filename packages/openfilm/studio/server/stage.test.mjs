@@ -77,6 +77,29 @@ test('a click on a page\'s backdrop (a box filling the page) takes the clip, not
   }
 });
 
+test('a click on a title under a full-frame overlay (letterbox, vignette) takes the title; on nothing but the overlay, the clip', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-stage-overlay-'));
+  writeFileSync(join(dir, 'title.html'), `<!doctype html><body style="margin:0">
+<h1 id="title" style="position:absolute;left:20px;top:60px;margin:0;font:700 24px sans-serif">On the road</h1>
+<script>window.film={duration:2,frame(){}}</script></body>`);
+  writeFileSync(join(dir, 'lens.html'), `<!doctype html><body style="margin:0">
+<div id="vignette" style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 50%,transparent 55%,rgba(0,0,0,.45))"></div>
+<div id="top" style="position:absolute;left:0;right:0;top:0;height:20px;background:#000"></div>
+<script>window.film={duration:2,frame(){}}</script></body>`);
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'lens', src: 'lens.html' }] }, { clips: [{ id: 'title', src: 'title.html' }] }] }));
+  const stage = await stageOf(dir);
+  try {
+    const title = await stage.ask('hit', { x: 50, y: 72, detail: true });
+    assert.equal(title?.text?.value, 'On the road', 'through the overlay, the words under it');
+    assert.equal(title?.clip, 'title');
+    assert.equal((await stage.ask('hit', { x: 50, y: 72, from: title.handle, detail: true }))?.handle, title.handle, 'in hand, a click on it keeps it');
+    assert.equal((await stage.ask('hit', { x: 150, y: 10, detail: true }))?.clip, 'lens', 'the overlay\'s own bar is its layer');
+    assert.equal(await stage.ask('hit', { x: 250, y: 150, detail: true }), null, 'nothing but the overlay there: the clip is taken');
+  } finally {
+    await stage.close();
+  }
+});
+
 test('a line typed in place starts with all of its words selected; a click on them moves the caret, though something unseen lies over them', { timeout: 60_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'of-stage-select-'));
   writeFileSync(join(dir, 'title.html'), `<!doctype html><body style="margin:0">
