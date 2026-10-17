@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { chosenProgram, claudeAppCli, claudeVersion, cmdTarget, consoleProgram, detectAgentInstallation, findExecutable, laterVersion, searchReport, windowsBinDirs } from './agent-installation.mjs';
+import { chosenProgram, claudeAppCli, claudeVersion, cmdTarget, codexVersion, consoleProgram, detectAgentInstallation, findExecutable, laterVersion, searchReport, windowsBinDirs } from './agent-installation.mjs';
 
 test("an npm .cmd shim (Windows) runs its package's script: that is what gets started", () => {
   const npm = mkdtempSync(join(tmpdir(), 'of-npm-'));
@@ -224,4 +224,42 @@ test('Claude Code on the PATH and in the Claude app: the later one is used, told
   assert.equal(detectAgentInstallation('claude', { home, env: { PATH: '' }, pathDirs: [plain] }).source, 'path');
   assert.equal(laterVersion('2.1.10', '2.1.9'), true);
   assert.equal(laterVersion('2.1.9', '2.1.9'), false);
+});
+
+test('which Codex a program is: npm\'s package, Homebrew\'s folder, else what it says when asked, once', () => {
+  const home = mkdtempSync(join(tmpdir(), 'of-home-'));
+  const pkg = join(home, 'npm', 'node_modules', '@openai', 'codex');
+  put(join(pkg, 'package.json'), JSON.stringify({ name: '@openai/codex', version: '0.42.0' }));
+  const script = put(join(pkg, 'bin', 'codex.js'));
+  assert.equal(codexVersion(script), '0.42.0');
+  /* its program in the platform package npm puts beside it */
+  const plat = join(home, 'npm', 'node_modules', '@openai', 'codex-win32-x64');
+  put(join(plat, 'package.json'), JSON.stringify({ name: '@openai/codex-win32-x64', version: '0.150.0-win32-x64' }));
+  assert.equal(codexVersion(put(join(plat, 'vendor', 'x86_64-pc-windows-msvc', 'bin', 'codex.exe'))), '0.150.0');
+  assert.equal(codexVersion(put(join(home, 'Caskroom', 'codex', '0.163.0', 'codex-aarch64-apple-darwin'))), '0.163.0');
+  let asked = 0;
+  const inApp = put(join(home, 'Codex.app', 'Contents', 'Resources', 'codex'));
+  const ask = () => { asked += 1; return '0.170.1'; };
+  assert.equal(codexVersion(inApp, { ask }), '0.170.1');
+  assert.equal(codexVersion(inApp, { ask }), '0.170.1');
+  assert.equal(asked, 1, 'asked once while the program is the same');
+  assert.equal(codexVersion(join(home, 'gone')), null);
+});
+
+test('Codex installed long ago beside the copy an app keeps up to date: the later one is used', () => {
+  if (process.platform === 'win32') return;
+  const home = mkdtempSync(join(tmpdir(), 'of-home-'));
+  const bin = join(home, 'bin');
+  const onPath = put(join(bin, 'codex'), '', 0o755);
+  const apps = join(home, 'Applications');
+  const inApp = put(join(apps, 'ChatGPT.app', 'Contents', 'Resources', 'codex'), '', 0o755);
+  const store = put(join(home, 'Store', 'codex.exe'), '', 0o755);
+  const versions = (map) => (file) => map[file] ?? null;
+  const opts = { home, env: { PATH: bin }, pathDirs: [], applicationDirs: [apps] };
+  assert.deepEqual(detectAgentInstallation('codex', { ...opts, codexVersionOf: versions({ [onPath]: '0.42.0', [inApp]: '0.163.0' }) }),
+    { installed: true, cli: inApp, source: 'app', install: 'https://developers.openai.com/codex' });
+  assert.equal(detectAgentInstallation('codex', { ...opts, others: [store], codexVersionOf: versions({ [onPath]: '0.42.0', [inApp]: '0.163.0', [store]: '0.170.0' }) }).cli, store, 'the latest of them');
+  assert.equal(detectAgentInstallation('codex', { ...opts, codexVersionOf: versions({ [onPath]: '0.170.0', [inApp]: '0.163.0' }) }).cli, onPath, 'the one on the PATH is the later');
+  assert.equal(detectAgentInstallation('codex', { ...opts, codexVersionOf: versions({ [inApp]: '0.163.0' }) }).cli, onPath, 'one whose version can\'t be told stays');
+  assert.equal(detectAgentInstallation('codex', { ...opts, chosen: onPath, codexVersionOf: versions({ [onPath]: '0.1.0', [inApp]: '0.163.0' }) }).cli, onPath, 'the one chosen, whatever its version');
 });

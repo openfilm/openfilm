@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CLIENT_CAPABILITIES, agentShell, allowOption, codexDeveloperInstructions, legacyOptions, powerShellScript, readAgentStatus } from './agents.mjs';
+import { CLIENT_CAPABILITIES, CODEX_UTF8_CMD, agentShell, allowOption, codexDeveloperInstructions, codexLaunchEnv, legacyOptions, powerShellScript, readAgentStatus } from './agents.mjs';
 
 test('an agent that asks: yes for good where it offers that, else yes this once; nothing to say yes with is null', () => {
   const options = [
@@ -82,4 +82,25 @@ test('a Windows sign-in is a PowerShell script: each path whole however it is sp
   assert.equal(lines[0], "$Host.UI.RawUI.WindowTitle = 'Claude Code sign-in'");
   assert.equal(lines[1], "& 'C:\\Program Files\\OpenFilm\\OpenFilm.exe' 'C:\\Program Files\\OpenFilm\\app.asar\\src\\as-node.mjs' "
     + "'D:\\用户\\it''s\\index.js' '--cli' 'auth' 'login' '--claudeai'");
+});
+
+test('on Windows, Codex is started through a script that turns the console to UTF-8, so a reason comes out readable', async () => {
+  const { mkdtempSync, readFileSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const exe = 'C:\\Users\\李\\AppData\\Roaming\\npm\\codex.exe';
+  assert.deepEqual(codexLaunchEnv('/usr/local/bin/codex', { win: false }), { CODEX_PATH: '/usr/local/bin/codex' });
+  const dir = join(mkdtempSync(join(tmpdir(), 'of-codex-')), 'launch');
+  const env = codexLaunchEnv(exe, { win: true, dir });
+  assert.deepEqual(env, { CODEX_PATH: join(dir, 'codex-utf8.cmd'), OPENFILM_CODEX: exe });
+  assert.equal(readFileSync(env.CODEX_PATH, 'utf8'), CODEX_UTF8_CMD);
+  assert.match(CODEX_UTF8_CMD, /^@echo off\r\nchcp 65001 >nul\r\n"%OPENFILM_CODEX%" %\*\r\n$/, 'UTF-8 first, then Codex with what the adapter asks (app-server, login)');
+  /* a script changed since: written again */
+  writeFileSync(env.CODEX_PATH, 'echo old');
+  codexLaunchEnv(exe, { win: true, dir });
+  assert.equal(readFileSync(env.CODEX_PATH, 'utf8'), CODEX_UTF8_CMD);
+  /* nowhere to write it: Codex as before */
+  const blocked = join(mkdtempSync(join(tmpdir(), 'of-codex-')), 'file');
+  writeFileSync(blocked, '');
+  assert.deepEqual(codexLaunchEnv(exe, { win: true, dir: join(blocked, 'launch') }), { CODEX_PATH: exe });
 });

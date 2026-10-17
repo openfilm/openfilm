@@ -66,7 +66,7 @@ export const AGENTS = Object.freeze({
   codex: {
     label: 'Codex',
     adapter: '@agentclientprotocol/codex-acp',
-    env: (path) => ({ CODEX_PATH: path }),
+    env: (path) => codexLaunchEnv(path),
     auth: ['login', 'status'],
     login: ['login'],
     systemPrompt: true,
@@ -155,6 +155,28 @@ export function setChosenPaths(paths) {
 }
 
 const windows = process.platform === 'win32';
+
+/**
+ * How the Codex adapter is told where Codex is. On Windows it starts it through cmd.exe, whose own messages (a program
+ * not found, access refused) are in the console's code page, which the adapter reads as UTF-8: on a Chinese Windows
+ * the reason came out as `������`. There Codex is started through a script that turns the console to UTF-8 first, made
+ * on disk (the app's own files are in an archive cmd.exe cannot run from); Codex's own messages are UTF-8 already.
+ */
+export const CODEX_UTF8_CMD = '@echo off\r\nchcp 65001 >nul\r\n"%OPENFILM_CODEX%" %*\r\n';
+export function codexLaunchEnv(/** @type {string} */ path, { win = windows, dir = join(tmpdir(), 'openfilm-codex') } = {}) {
+  if (!win) return { CODEX_PATH: path };
+  try {
+    const script = join(dir, 'codex-utf8.cmd');
+    if (!existsSync(script) || readFileSync(script, 'utf8') !== CODEX_UTF8_CMD) {
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(script, CODEX_UTF8_CMD);
+    }
+    return { CODEX_PATH: script, OPENFILM_CODEX: path };
+  } catch {
+    /* no room for the script: Codex as before, its reasons maybe unreadable */
+    return { CODEX_PATH: path };
+  }
+}
 /** what the slower search found last (Windows): npm's global folder, Codex inside a Microsoft Store app */
 let slowFound = { npmPrefix: null, storeCodex: null };
 let slowCache = null;
@@ -484,10 +506,14 @@ export async function openAgentSignIn(id) {
 export async function listAgents() {
   /* looked at as the person comes back from installing one: a PATH from a few seconds ago at most */
   const pathDirs = (await loginShellEnvironment({ maxAgeMs: 10_000 })).PATH.split(PATH_SEP);
-  /* one not found the quick way: the slower search (Windows), then all of them again; waited for a few seconds at
-     most, what it finds later is there on the next look */
-  if (windows && Object.keys(AGENTS).some((id) => !resolveAgentCli(id, { pathDirs }))) {
-    await Promise.race([windowsSlowSearch(), new Promise((done) => setTimeout(done, 3000).unref?.())]);
+  /* the slower search (Windows): always, as it finds Codex inside a Store app, which may be later than one on the PATH
+     (resolveAgentCli takes the later); waited for, a few seconds at most, when one is not found the quick way. What it
+     finds later is there on the next look */
+  if (windows) {
+    const slow = windowsSlowSearch();
+    if (Object.keys(AGENTS).some((id) => !resolveAgentCli(id, { pathDirs }))) {
+      await Promise.race([slow, new Promise((done) => setTimeout(done, 3000).unref?.())]);
+    }
   }
   return Promise.all(Object.entries(AGENTS).map(async ([id, spec]) => {
     const cli = resolveAgentCli(id, { pathDirs });

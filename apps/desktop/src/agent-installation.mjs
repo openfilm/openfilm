@@ -5,6 +5,7 @@
  * cmd.exe (agents.mjs). A program the person chose themselves (Settings → Agents → Locate) comes before any of these.
  * Reads no Electron module, so `node --test` can use it.
  */
+import { execFileSync } from 'node:child_process';
 import { accessSync, closeSync, constants, lstatSync, openSync, readFileSync, readSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, dirname, isAbsolute, join } from 'node:path';
@@ -100,6 +101,44 @@ export function claudeVersion(file) {
     } catch { /* not here */ }
   }
   return real.split(/[\\/]/).reverse().find((part) => /^\d+\.\d+\.\d+$/.test(part)) ?? null;
+}
+
+/** What versions of Codex said of themselves (`codex --version`), by program and its time: each asked once. */
+const codexAsked = new Map();
+
+/** What a Codex program says its version is (`codex-cli 0.163.0`); null when it says nothing in two seconds. */
+function askCodexVersion(/** @type {string} */ file) {
+  /* a `.cmd` shim cannot be started without a shell; npm's says its version in its package.json anyway */
+  if (/\.(cmd|bat)$/i.test(file)) return null;
+  try {
+    const out = execFileSync(file, ['--version'], { encoding: 'utf8', timeout: 2000, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
+    return /(\d+\.\d+\.\d+)/.exec(out)?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Which Codex a program is: npm's says it in its package.json (`@openai/codex`, or the platform package its program
+ * is in), Homebrew's folder is named for it (`Caskroom/codex/0.163.0/…`); a copy inside an app (Codex.app,
+ * ChatGPT.app, a Store app) says it when asked (`--version`), once. Null when it can't be told.
+ * @param {string} file @param {{ ask?: (file: string) => string | null }} [o]
+ */
+export function codexVersion(file, { ask = askCodexVersion } = {}) {
+  let real;
+  try { real = realpathSync(file); } catch { return null; }
+  for (let dir = dirname(real), up = 0; up < 6; dir = dirname(dir), up += 1) {
+    try {
+      const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+      if (typeof pkg.name === 'string' && pkg.name.startsWith('@openai/codex') && typeof pkg.version === 'string') return pkg.version.replace(/-.*$/, '');
+    } catch { /* not here */ }
+  }
+  const named = real.split(/[\\/]/).reverse().find((part) => /^\d+\.\d+\.\d+$/.test(part));
+  if (named) return named;
+  let key;
+  try { key = `${real}\0${statSync(real).mtimeMs}`; } catch { return null; }
+  if (!codexAsked.has(key)) codexAsked.set(key, ask(real));
+  return codexAsked.get(key) ?? null;
 }
 
 /** Whether version `a` is later than `b` (dotted numbers); false when either is unknown. */
@@ -226,6 +265,11 @@ function existsFile(path) {
 /* where Codex is inside Codex.app and ChatGPT.app */
 const CODEX_IN_APP = ['Contents/Resources/codex', 'Contents/Resources/codex-cli/bin/codex'];
 
+/** The copies of Codex inside Codex.app and ChatGPT.app in these folders, Codex.app's first. */
+function codexInApps(/** @type {string[]} */ applicationDirs) {
+  return applicationDirs.flatMap((dir) => ['Codex.app', 'ChatGPT.app'].flatMap((app) => CODEX_IN_APP.map((p) => join(dir, app, p)))).filter(executableFile);
+}
+
 /**
  * The program the person chose for an agent, as it can be started: a `.cmd` shim's target, the `.cmd` beside a
  * PowerShell shim (`.ps1`), the program inside a folder or an app chosen instead of it. Null when it is not there.
@@ -256,7 +300,7 @@ export function chosenProgram(path, { names = [], win = windows } = {}) {
  * other way (a Store app's own copy, agents.mjs), after the rest. `source` says which it is: chosen · path · app.
  */
 export function detectAgentInstallation(id, { home = homedir(), env = process.env, pathDirs = HOME_BIN_CANDIDATES(home),
-  applicationDirs = ['/Applications', join(home, 'Applications')], chosen = null, others = [], win = windows } = {}) {
+  applicationDirs = ['/Applications', join(home, 'Applications')], chosen = null, others = [], win = windows, codexVersionOf = codexVersion } = {}) {
   const program = AGENT_PROGRAMS[id] ?? { names: [id] };
   const install = AGENT_DOWNLOADS[id] ?? null;
   const picked = chosen ? chosenProgram(chosen, { names: program.names, win }) : null;
@@ -269,11 +313,21 @@ export function detectAgentInstallation(id, { home = homedir(), env = process.en
        own up to date: the later one, whose models are the current ones. One whose version can't be told stays. */
     const inApp = id === 'claude' ? claudeAppCli(home) : null;
     if (inApp && laterVersion(claudeVersion(inApp), claudeVersion(cli))) return { installed: true, cli: inApp, source: 'app', install };
+    /* Codex the same: one installed by npm long ago beside the copy in Codex.app, ChatGPT.app or a Store app, which
+       keep theirs up to date. Its models are the ones its version is offered, so the later one is used */
+    if (id === 'codex') {
+      const copies = [...codexInApps(applicationDirs), ...others.filter((file) => (win ? presentFile(file) : executableFile(file)))];
+      const mine = copies.length ? codexVersionOf(cli) : null;
+      let newest = null;
+      for (const copy of copies) {
+        const version = codexVersionOf(copy);
+        if (laterVersion(version, newest?.version ?? mine)) newest = { copy, version };
+      }
+      if (newest) return { installed: true, cli: newest.copy, source: 'app', install };
+    }
     return { installed: true, cli, source: 'path', install };
   }
-  if (id === 'codex') {
-    cli = applicationDirs.flatMap((dir) => ['Codex.app', 'ChatGPT.app'].flatMap((app) => CODEX_IN_APP.map((p) => join(dir, app, p)))).find(executableFile) ?? null;
-  }
+  if (id === 'codex') cli = codexInApps(applicationDirs)[0] ?? null;
   if (!cli && id === 'claude') cli = claudeAppCli(home);
   if (!cli) cli = others.find((file) => (win ? presentFile(file) : executableFile(file))) ?? null;
   return { installed: Boolean(cli), cli, source: cli ? 'app' : null, install };
