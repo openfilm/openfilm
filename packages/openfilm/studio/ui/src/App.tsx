@@ -17,6 +17,7 @@ import { ProjectsPopover } from './components/ProjectsLibrary';
 import { Launcher } from './components/Launcher';
 import { studioHost } from './lib/host';
 import { WhatsNew } from './components/WhatsNew';
+import { sourcesApi } from './lib/project-sources';
 
 /**
  * `to` with this page's key in its address (the server puts it there): the address bar is what a person copies, and
@@ -40,6 +41,9 @@ export function App() {
     if (to !== location.pathname) (replace ? history.replaceState : history.pushState).call(history, null, '', keepKey(to));
     setPath(to);
   };
+
+  /* the examples and skills, read as Studio opens: a gallery opened later shows them at once */
+  useEffect(() => { sourcesApi.preload(); }, []);
 
   useEffect(() => {
     const onPop = () => setPath(location.pathname);

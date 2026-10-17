@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { exampleSeconds, listExamples, readExamples } from './examples.mjs';
@@ -77,4 +77,23 @@ test('an example\'s folder: beside a local index, or fetched into the cache and 
   assert.equal(fetched, 1, 'kept');
   await exampleFolder('intro', { home, source: index, fetchFolder: fromRepo, now: () => Date.now() + 2 * 24 * 3600 * 1000 });
   assert.equal(fetched, 2, 'a day on: fetched again');
+});
+
+test('GitHub\'s index shows at once: the copy OpenFilm came with, then the last one read, while GitHub is asked', async () => {
+  const { EXAMPLES_INDEX, listExamples } = await import('./examples.mjs');
+  const home = mkdtempSync(join(tmpdir(), 'of-examples-home-'));
+  let answer;
+  const slow = () => new Promise((done) => { answer = done; });
+  /* GitHub does not answer yet: the copy that came with OpenFilm, its posters served from it */
+  const first = await listExamples({ source: EXAMPLES_INDEX, fetchImpl: slow, home });
+  assert.ok(first.length > 0, 'examples at once');
+  assert.ok(first.every((e) => e.poster?.startsWith('/api/examples/file/')), 'posters from the copy');
+  /* GitHub answers with a newer index: kept, and in Studio's home for the next start */
+  const newer = { repo: 'https://github.com/openfilm/examples', branch: 'main', examples: [{ folder: 'fresh-one', title: 'Fresh one', poster: 'fresh-one/look.jpg' }] };
+  answer({ ok: true, json: async () => newer });
+  await new Promise((done) => setTimeout(done, 20));
+  const second = await listExamples({ source: EXAMPLES_INDEX, fetchImpl: slow, home });
+  assert.deepEqual(second.map((e) => e.id), ['fresh-one']);
+  assert.equal(second[0].poster, 'https://raw.githubusercontent.com/openfilm/examples/main/fresh-one/look.jpg', 'a poster the copy does not have comes from GitHub');
+  assert.ok(existsSync(join(home, 'cache', 'examples-index.json')));
 });

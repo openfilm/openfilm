@@ -1,0 +1,20 @@
+{
+  "repo": "https://github.com/openfilm/examples",
+  "branch": "main",
+  "examples": [
+    {
+      "folder": "one-prompt",
+      "title": "One Prompt",
+      "description": "A 90-second lyric music video where every frame is code.",
+      "poster": "one-prompt/look.jpg",
+      "duration": "1:31"
+    },
+    {
+      "folder": "openfilm-intro",
+      "title": "OpenFilm intro",
+      "description": "The 1:42 film that introduces OpenFilm, made with OpenFilm: footage, app recordings and motion graphics cut to a Chinese voice-over.",
+      "poster": "openfilm-intro/look.jpg",
+      "duration": "1:42"
+    }
+  ]
+}

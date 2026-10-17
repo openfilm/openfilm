@@ -11,14 +11,20 @@
  * An index read from a file on this computer (trying a new one) has its posters and previews served by Studio from
  * the folder it is in (`/api/examples/file/<path>`), so they show before the repository has them.
  *
+ * GitHub's index shows at once: OpenFilm comes with a copy of it and its posters (examples-index, `pnpm examples:sync`),
+ * and the last one read is kept in Studio's home. Those are shown while GitHub is asked in the background (Studio asks
+ * as it starts), and a poster the copy has is served from it, so a slow or blocked GitHub costs no wait.
+ *
  * `repo` and `branch` default to the repository the index is read from; `poster` (and `video`, a short preview played
  * under the pointer) is an address, or a path in the repository; `duration` is seconds or "m:ss". Optional:
  * `category` (what kind of film it is, as the examples window groups them: a short word such as "launch" or
  * "explainer"), `segments` (its parts, so one can be pointed at: `[{ "title": "S2-Hook", "from": 12, "to": 30 }]`).
  */
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rename, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { studioHomeDir } from '../../src/locations.mjs';
 
 export const EXAMPLES_INDEX = 'https://raw.githubusercontent.com/openfilm/examples/main/examples.json';
 const DEFAULT_REPO = { owner: 'openfilm', repo: 'examples', branch: 'main' };
@@ -26,6 +32,10 @@ const DEFAULT_REPO = { owner: 'openfilm', repo: 'examples', branch: 'main' };
 const KEEP_MS = 10 * 60 * 1000;
 const RETRY_MS = 60 * 1000;
 const NAME = /^[\w.-]+$/;
+/** The copy of GitHub's index and its posters that comes with OpenFilm (`pnpm examples:sync`). */
+export const BUNDLED_INDEX = fileURLToPath(new URL('../../examples-index/', import.meta.url));
+/** Where the last index read from GitHub is kept, for the next start. */
+const savedIndex = (/** @type {string} */ home) => join(home, 'cache', 'examples-index.json');
 
 /**
  * @typedef {{ title: string, from: number, to: number }} ExampleSegment
@@ -63,9 +73,11 @@ export function readExamples(raw, source = EXAMPLES_INDEX) {
   for (const entry of index.examples.slice(0, 50)) {
     if (!entry || typeof entry !== 'object' || !repoPath(entry.folder) || typeof entry.title !== 'string' || !entry.title.trim()) continue;
     const local = !/^https?:\/\//.test(source);
+    /* GitHub's index: a poster the copy that came with OpenFilm has is served from it */
+    const bundled = source === EXAMPLES_INDEX ? (/** @type {string} */ v) => existsSync(join(BUNDLED_INDEX, ...v.split('/'))) : () => false;
     const media = (/** @type {unknown} */ v) => (typeof v === 'string' && /^https:\/\//.test(v) ? v
       : !repoPath(v) ? null
-        : local ? `/api/examples/file/${String(v).split('/').map(encodeURIComponent).join('/')}`
+        : local || bundled(String(v)) ? `/api/examples/file/${String(v).split('/').map(encodeURIComponent).join('/')}`
           : `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${v}`);
     const segments = Array.isArray(entry.segments) ? entry.segments.slice(0, 40).flatMap((/** @type {any} */ g) => {
       const [from, to] = [exampleSeconds(g?.from) ?? (g?.from === 0 ? 0 : null), exampleSeconds(g?.to)];
@@ -91,20 +103,51 @@ export function readExamples(raw, source = EXAMPLES_INDEX) {
  * @param {string} path @param {{ source?: string }} [options]
  */
 export function exampleFile(path, { source = process.env.OPENFILM_EXAMPLES_INDEX || EXAMPLES_INDEX } = {}) {
-  if (/^https?:\/\//.test(source) || !repoPath(path)) return null;
+  if (!repoPath(path)) return null;
+  /* GitHub's index: the posters of the copy that came with OpenFilm */
+  if (source === EXAMPLES_INDEX) return existsSync(join(BUNDLED_INDEX, ...path.split('/'))) ? join(BUNDLED_INDEX, ...path.split('/')) : null;
+  if (/^https?:\/\//.test(source)) return null;
   return join(dirname(source), ...path.split('/'));
 }
 
 /** @type {Map<string, { at: number, ok: boolean, examples: Example[] }>} */
 const cache = new Map();
 
+/** @type {Map<string, Promise<Example[]>>} */
+const reading = new Map();
+
+/** An index kept on disk (the last read, or the copy that came with OpenFilm), as examples; null when there is none. @param {string} file */
+function indexAt(file) {
+  try { return readExamples(JSON.parse(readFileSync(file, 'utf8')), EXAMPLES_INDEX); } catch { return null; }
+}
+
 /**
  * The examples, read from the index (cached a while). Never fails: an index that cannot be read is no examples.
- * @param {{ source?: string, fetchImpl?: typeof fetch }} [options]
+ * GitHub's index never waits on GitHub when there is one to show: the last read (here, then in Studio's home), else
+ * the copy that came with OpenFilm, while GitHub is asked in the background.
+ * @param {{ source?: string, fetchImpl?: typeof fetch, home?: string }} [options]
  */
-export async function listExamples({ source = process.env.OPENFILM_EXAMPLES_INDEX || EXAMPLES_INDEX, fetchImpl = fetch } = {}) {
+export async function listExamples({ source = process.env.OPENFILM_EXAMPLES_INDEX || EXAMPLES_INDEX, fetchImpl = fetch, home = studioHomeDir() } = {}) {
   const kept = cache.get(source);
   if (kept && Date.now() - kept.at < (kept.ok ? KEEP_MS : RETRY_MS)) return kept.examples;
+  if (source === EXAMPLES_INDEX) {
+    const now = kept?.ok ? kept.examples : indexAt(savedIndex(home)) ?? indexAt(join(BUNDLED_INDEX, 'examples.json'));
+    const asked = readIndex(source, fetchImpl, home);
+    if (now?.length) { asked.catch(() => {}); return now; }
+    return asked;
+  }
+  return readIndex(source, fetchImpl, home);
+}
+
+/** The index read now (one read at a time), kept here and, read from GitHub, in Studio's home. */
+function readIndex(/** @type {string} */ source, /** @type {typeof fetch} */ fetchImpl, /** @type {string} */ home) {
+  if (!reading.has(source)) {
+    reading.set(source, fetchIndex(source, fetchImpl, home).finally(() => reading.delete(source)));
+  }
+  return /** @type {Promise<Example[]>} */ (reading.get(source));
+}
+
+async function fetchIndex(/** @type {string} */ source, /** @type {typeof fetch} */ fetchImpl, /** @type {string} */ home) {
   let examples = /** @type {Example[]} */ ([]);
   let ok = false;
   try {
@@ -113,7 +156,13 @@ export async function listExamples({ source = process.env.OPENFILM_EXAMPLES_INDE
       : JSON.parse(await readFile(source, 'utf8'));
     examples = readExamples(raw, source);
     ok = raw != null;
+    if (ok && source === EXAMPLES_INDEX && examples.length) {
+      try { mkdirSync(dirname(savedIndex(home)), { recursive: true }); writeFileSync(savedIndex(home), JSON.stringify(raw)); } catch { /* kept here only */ }
+    }
   } catch { /* offline, private, or not an index: none */ }
+  /* a failed read keeps the last good one */
+  const kept = cache.get(source);
+  if (!ok && kept?.ok) { kept.at = Date.now() - KEEP_MS + RETRY_MS; return kept.examples; }
   cache.set(source, { at: Date.now(), ok, examples });
   return examples;
 }

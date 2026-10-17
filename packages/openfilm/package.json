@@ -43,6 +43,7 @@
     "TRADEMARK.md",
     "bin",
     "skills",
+    "examples-index",
     "src",
     "!src/*.test.mjs",
     "MANUAL.md",

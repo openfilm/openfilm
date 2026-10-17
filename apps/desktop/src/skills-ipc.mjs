@@ -51,6 +51,10 @@ const shown = (s) => ({ name: s.name, description: s.description, source: s.sour
  */
 export function registerSkillsIpc(ipcMain, { trusted, projects, dataDir, mine, oldMine, reveal, pickFolder, refreshSkills, log }) {
   const store = skillStore(dataDir);
+  /* read as the app starts, so the composer's first list does not wait on them: the skills' module, and the login
+     shell the agents' own skills are found with */
+  void lib().catch(() => {});
+  void loginShellVariables({ staleOk: true });
   if (oldMine) void lib().then(({ migrateMySkills }) => {
     const moved = migrateMySkills({ from: oldMine, to: mine });
     if (moved.length) log(`skills moved to ${mine}: ${moved.join(', ')}\n`);

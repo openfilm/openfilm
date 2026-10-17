@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { studioHost, type CommunityItem } from '@/lib/host';
-import { sourcesApi, type Example, type SkillEntry } from '@/lib/project-sources';
+import { seenExamples, seenSkills, sourcesApi, type Example, type SkillEntry } from '@/lib/project-sources';
 import { GitHubDialog } from './ProjectSources';
 
 export type ExamplesMode = 'start' | 'reference';
@@ -82,8 +82,9 @@ export function ExamplesGallery({ mode, projectId = null, heading, initial, onCl
   /* the Community (over a film) opens on its skills; the projects window shows the examples only */
   const community = mode === 'reference';
   const [view, setView] = React.useState<'skills' | 'examples'>(community ? 'skills' : 'examples');
-  const [examples, setExamples] = React.useState<Example[] | null>(null);
-  const [skills, setSkills] = React.useState<SkillEntry[]>([]);
+  /* what was read before shows at once; what is read now replaces it */
+  const [examples, setExamples] = React.useState<Example[] | null>(() => seenExamples());
+  const [skills, setSkills] = React.useState<SkillEntry[]>(() => seenSkills(projectId) ?? []);
   const [opened, setOpened] = React.useState<Opened | null>(null);
   /* opening on one item: once what it is in has been read */
   const pending = React.useRef(initial);

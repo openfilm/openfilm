@@ -81,6 +81,13 @@ async function call<T>(path: string, method = 'GET', json?: unknown): Promise<T>
   return body as T;
 }
 
+/* what the galleries read last: shown at once when one opens, and asked for again behind it */
+const seen: { examples: Example[] | null; skills: Map<string, SkillEntry[]> } = { examples: null, skills: new Map() };
+/** The examples read last, or null. */
+export const seenExamples = (): Example[] | null => seen.examples;
+/** The skills read last for a project (else for no project: the official ones and the person's own), or null. */
+export const seenSkills = (projectId?: string | null): SkillEntry[] | null => seen.skills.get(projectId ?? '') ?? seen.skills.get('') ?? null;
+
 export const sourcesApi = {
   browse: (path?: string | null) => call<BrowseListing>(`browse${path ? `?path=${encodeURIComponent(path)}` : ''}`),
   /** opens the folder only when it holds a film: else a SourceError with code 'no-film' (or 'not-found') */
@@ -88,10 +95,13 @@ export const sourcesApi = {
   startFetch: (url: string) => call<{ job: FetchJob }>('projects/fetch', 'POST', { url }).then((r) => r.job),
   fetchJob: (id: string) => call<{ job: FetchJob }>(`projects/fetch/${encodeURIComponent(id)}`).then((r) => r.job),
   cancelFetch: (id: string) => call<object>(`projects/fetch/${encodeURIComponent(id)}`, 'DELETE'),
-  examples: () => call<{ examples: Example[] }>('examples').then((r) => r.examples, () => [] as Example[]),
+  examples: () => call<{ examples: Example[] }>('examples').then((r) => (seen.examples = r.examples), () => seen.examples ?? []),
   /** an example's folder on this computer, fetched when needed (for an agent to read how it is made) */
   exampleFolder: (id: string) => call<{ folder: string }>(`examples/${encodeURIComponent(id)}/folder`, 'POST').then((r) => r.folder),
-  skills: (projectId?: string | null) => call<{ skills: SkillEntry[] }>(`skills${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`).then((r) => r.skills, () => [] as SkillEntry[]),
+  skills: (projectId?: string | null) => call<{ skills: SkillEntry[] }>(`skills${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`)
+    .then((r) => { seen.skills.set(projectId ?? '', r.skills); return r.skills; }, () => seenSkills(projectId) ?? []),
+  /** asked as Studio opens, so a gallery opened later shows its examples and skills at once */
+  preload: () => { void sourcesApi.examples(); void sourcesApi.skills(null); },
   locate: (id: string, path: string) => call<{ project: { id: string } }>(`projects/${encodeURIComponent(id)}/locate`, 'POST', { path }).then((r) => r.project),
 };
 

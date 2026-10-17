@@ -375,7 +375,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (parts[0] === 'examples' && parts.length === 1 && req.method === 'GET') return json(res, 200, { examples: await listExamples() });
     /* a poster or preview beside an index read from this computer (examples.mjs exampleFile) */
     if (parts[0] === 'examples' && parts[1] === 'file' && parts.length > 2 && req.method === 'GET') {
-      return sendMedia(req, res, exampleFile(parts.slice(2).map(decodeURIComponent).join('/')));
+      return sendMedia(req, res, exampleFile(parts.slice(2).map(decodeURIComponent).join('/')), { keep: true });
     }
     /* an example's folder on this computer, to point an agent at (examples.mjs exampleFolder) */
     if (parts[0] === 'examples' && parts.length === 3 && parts[2] === 'folder' && req.method === 'POST') {
@@ -413,7 +413,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) : null;
       const skill = listSkills({ project: project?.path ?? null }).find((k) => k.name === decodeURIComponent(parts[1]));
       const file = skill?.[parts[2]];
-      return sendMedia(req, res, skill && file ? join(skill.folder, file) : null);
+      return sendMedia(req, res, skill && file ? join(skill.folder, file) : null, { keep: true });
     }
 
     if (parts[0] !== 'projects') throw new HttpError(404, 'no such API');
@@ -846,6 +846,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     })().catch(() => refuse('500 Internal Server Error'));
   });
   await new Promise((done, fail) => { editor.once('error', fail); editor.listen(port, '127.0.0.1', () => done(undefined)); });
+  /* the examples index is asked for as Studio starts, so the Examples tab has GitHub's newest when it opens */
+  void listExamples().catch(() => {});
   const address = /** @type {import('node:net').AddressInfo} */ (editor.address());
   origin = `http://127.0.0.1:${address.port}`;
   COOKIE = cookieName(address.port);
@@ -1026,9 +1028,14 @@ function systemBrowser(/** @type {string} */ url) {
  * A picture or a video from this computer, a range answered as one (a preview is seeked in); none: 404.
  * @param {import('node:http').IncomingMessage} req @param {import('node:http').ServerResponse} res @param {string | null | undefined} file
  */
-function sendMedia(req, res, file) {
+function sendMedia(req, res, file, { keep = false } = {}) {
   if (!file || !existsSync(file) || !statSync(file).isFile()) throw new HttpError(404, 'no such file');
-  const size = statSync(file).size;
+  const { size, mtimeMs } = statSync(file);
+  /* `keep`: a picture that changes only with its file (a skill's cover, an example's poster) is kept by the browser
+     an hour, and then only asked whether it changed */
+  const tag = `"${size.toString(36)}-${Math.round(mtimeMs).toString(36)}"`;
+  const kept = keep ? { etag: tag, 'cache-control': 'private, max-age=3600' } : {};
+  if (keep && req.headers['if-none-match'] === tag) { res.writeHead(304, kept); res.end(); return undefined; }
   const type = {
     '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif', '.avif': 'image/avif', '.svg': 'image/svg+xml',
     '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime',
@@ -1036,7 +1043,7 @@ function sendMedia(req, res, file) {
   }[extname(file).toLowerCase()] ?? 'application/octet-stream';
   const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range ?? ''));
   const [from, to] = range ? [range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2])), range[2] && range[1] ? Math.min(size - 1, Number(range[2])) : size - 1] : [0, size - 1];
-  res.writeHead(range ? 206 : 200, { 'content-type': type, 'content-length': to - from + 1, 'accept-ranges': 'bytes', ...(range ? { 'content-range': `bytes ${from}-${to}/${size}` } : {}) });
+  res.writeHead(range ? 206 : 200, { 'content-type': type, 'content-length': to - from + 1, 'accept-ranges': 'bytes', ...kept, ...(range ? { 'content-range': `bytes ${from}-${to}/${size}` } : {}) });
   createReadStream(file, { start: from, end: to }).pipe(res);
   return undefined;
 }
