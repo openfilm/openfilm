@@ -174,6 +174,20 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
   /* the frames whose film said it is ready: each is told every edit from then on, the one loading behind too (it is
      shown next, and must not come up without the edits made while it drew its first picture) */
   const up = useRef(new Set<number>());
+  /* one ref callback a frame keeps for its life: a new one each render would be called with null on every render,
+     and drop the clock, scale and readiness measured for a frame still on screen */
+  const refs = useRef(new Map<number, (el: HTMLIFrameElement | null) => void>());
+  const refOf = (key: number) => {
+    let ref = refs.current.get(key);
+    if (!ref) {
+      ref = (el) => {
+        if (el) { elements.current.set(key, el); return; }
+        elements.current.delete(key); up.current.delete(key); clocks.current.delete(key); scaleOf.current.delete(key); refs.current.delete(key);
+      };
+      refs.current.set(key, ref);
+    }
+    return ref;
+  };
   /** load the film again behind the picture (its structure changed, or the folder's film was replaced) */
   const reload = () => setFrames((list) => {
     const next = reloaded(list);
@@ -369,7 +383,7 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
         {(measured ? frames : []).map((f) => (
           <iframe
             key={f.key}
-            ref={(el) => { if (el) elements.current.set(f.key, el); else { elements.current.delete(f.key); up.current.delete(f.key); clocks.current.delete(f.key); scaleOf.current.delete(f.key); } }}
+            ref={refOf(f.key)}
             /* `film-missing=skip`: a clip whose file is not there keeps its time and plays as nothing, the rest plays on
                (src/timeline.mjs); the timeline marks it and offers to relink it */
             src={`${folder}film.html?load=${f.key}&film-missing=skip${scaleOf.current.get(f.key) != null ? `&film-dpr=${scaleOf.current.get(f.key)}` : ''}`}
