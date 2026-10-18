@@ -1,6 +1,6 @@
 import type { Turn, LibraryVideo, PromptDisplay, TurnAttachment } from '@openfilm/shared';
-import { readFileChanges, type FileChange, type TurnFileChanges } from './file-changes';
-import { readBalance, type Balance, type TurnBalance } from './balance';
+import { readFileChanges, type FileChange, type TurnFileChanges } from './file-changes.ts';
+import { readBalance, type Balance, type TurnBalance } from './balance.ts';
 
 /**
  * A project's conversation: each of its turns, in time order.
@@ -38,6 +38,8 @@ export interface ProjectVersionEntry {
   outcome?: 'stopped' | 'failed' | 'balance';
   /** outcome 'balance': which service had no balance left, and its page */
   balance?: Balance;
+  /** outcome 'failed': why, as the turn kept it */
+  error?: string;
   /** When the message was sent (ISO). Hovering under the bubble says "N minutes ago". */
   createdAt?: string;
   /** When the turn settled (ISO), only for settled turns. Hovering under the reply says "N minutes ago". */
@@ -51,7 +53,7 @@ export interface ProjectVersionEntry {
 /** Longest believable turn: anything longer most likely means a later write touched updatedAt. */
 const DURATION_MAX_MS = 3 * 60 * 60 * 1000;
 
-function frameOf(asset: Turn): Pick<ProjectVersionEntry, 'agent' | 'model' | 'durationMs' | 'outcome' | 'balance' | 'createdAt' | 'settledAt'> {
+function frameOf(asset: Turn): Pick<ProjectVersionEntry, 'agent' | 'model' | 'durationMs' | 'outcome' | 'balance' | 'error' | 'createdAt' | 'settledAt'> {
   const settled = asset.status === 'ready' || asset.status === 'error' || asset.status === 'cancelled';
   const ms = Date.parse(asset.updatedAt) - Date.parse(asset.createdAt);
   const model = asset.localAgent?.model ?? null;
@@ -67,6 +69,7 @@ function frameOf(asset: Turn): Pick<ProjectVersionEntry, 'agent' | 'model' | 'du
     ...(settled && Number.isFinite(ms) && ms > 0 && ms < DURATION_MAX_MS ? { durationMs: ms } : {}),
     ...(outcome ? { outcome } : {}),
     ...(balance ? { balance } : {}),
+    ...(outcome === 'failed' && asset.error ? { error: asset.error } : {}),
     ...(asset.createdAt ? { createdAt: asset.createdAt } : {}),
     ...(settled && asset.updatedAt ? { settledAt: asset.updatedAt } : {}),
   };

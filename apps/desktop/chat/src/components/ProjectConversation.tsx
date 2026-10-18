@@ -407,7 +407,8 @@ const ConversationTurn = React.memo(function ConversationTurn({
       {/* Still running: one status line, always one line high, only its text changes (see StatusLine), and the
           footer under it on hover (its Log is the turn so far). Done, the footer alone. Always there, in one place
           in the tree: a log opened from it stays open as the turn finishes. An interruption doesn't
-          show Failed here: the reason and Resume appear above the composer, as in Cursor. */}
+          show Failed here: the reason and Resume appear above the composer, as in Cursor (the last turn's, even
+          after a restart); an older one's reason is on its footer's Interrupted, on hover. */}
       {running ? <StatusLine items={rows ?? NO_ROWS} fallback={liveActivity} /> : null}
       <TurnFooter entry={entry} items={items} running={running} />
       </div>
@@ -697,7 +698,7 @@ function TurnFooter({ entry, items, running = false }: { entry: ProjectVersion; 
         </span>
       ) : when ? <span>{when}</span> : null}
       {outcome ? (
-        <span className={entry.outcome === 'stopped' ? '' : 'text-[var(--warn)]'}>
+        <span className={entry.outcome === 'stopped' ? '' : 'text-[var(--warn)]'} title={entry.error}>
           {entry.agent || when ? '· ' : ''}{outcome}
         </span>
       ) : null}

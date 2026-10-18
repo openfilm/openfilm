@@ -24,7 +24,7 @@ import { registerLocalAgentIpc } from './local-agents-ipc.mjs';
 import { readPreferences, registerChatIpc } from './chat-ipc.mjs';
 import { registerSkillsIpc } from './skills-ipc.mjs';
 import { createRoster } from './agent-roster.mjs';
-import { checkAgentProgram, diagnoseAgent, listAgents, localAgent, openAgentSignIn, setChosenPaths } from './agents.mjs';
+import { checkAgentProgram, closeEverySession, diagnoseAgent, listAgents, localAgent, openAgentSignIn, setChosenPaths } from './agents.mjs';
 import { agentUsage, forgetAgentUsage } from './agent-usage.mjs';
 import { installOpenfilmCommand } from './openfilm-command.mjs';
 import { startUpdates } from './updates.mjs';
@@ -569,6 +569,7 @@ async function start() {
     beforeInstall: async () => {
       quitting = true;
       localAgents?.closeAll();
+      closeEverySession();
       for (const v of views.values()) v.webContents.on('will-prevent-unload', (event) => event.preventDefault());
       await studio?.quit();
       updates?.close();
@@ -631,6 +632,8 @@ app.on('activate', () => focusWindow());
 app.on('window-all-closed', () => app.quit());
 app.on('before-quit', (event) => {
   localAgents?.closeAll();
+  /* and the ones opened only to ask (signed in? its options?), which belong to no chat */
+  closeEverySession();
   if (quitting || !studio) return;
   event.preventDefault();
   quitting = true;

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AgentSession, CLIENT_CAPABILITIES, agentDefaults, planProblem, CODEX_UTF8_CMD, agentShell, allowOption, codexDeveloperInstructions, codexLaunchEnv, distinctOptions, legacyOptions, powerShellScript, readAgentStatus, setChosenPaths, signInScript, turnError } from './agents.mjs';
+import { AgentSession, CLIENT_CAPABILITIES, agentDefaults, closeEverySession, planProblem, probeFolder, CODEX_UTF8_CMD, agentShell, allowOption, codexDeveloperInstructions, codexLaunchEnv, distinctOptions, legacyOptions, powerShellScript, readAgentStatus, setChosenPaths, signInScript, turnError } from './agents.mjs';
 
 test('an agent that asks: yes for good where it offers that, else yes this once; nothing to say yes with is null', () => {
   const options = [
@@ -198,6 +198,71 @@ process.stdin.on('data', (d) => {
     const plan = await session.prompt([{ type: 'text', text: 'hi' }]).then(() => null, (e) => e);
     assert.equal(plan?.code, 'agent-error');
     assert.match(plan.message, /^Kimi: 403 Your current subscription/);
+  } finally {
+    session.close();
+    setChosenPaths({});
+  }
+});
+
+/** A fake agent over ACP (newline-delimited JSON-RPC), as a script: `onPrompt(m, send)` answers each message. */
+async function fakeAcpAgent(name, onPrompt) {
+  const { mkdtempSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const dir = mkdtempSync(join(tmpdir(), 'of-fake-'));
+  const program = join(dir, `${name}.mjs`);
+  writeFileSync(program, `let buf = '';
+let asked = null;
+const send = (o) => process.stdout.write(JSON.stringify(o) + '\\n');
+process.stdin.on('data', (d) => {
+  buf += d;
+  let i;
+  while ((i = buf.indexOf('\\n')) >= 0) {
+    const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1);
+    if (m.method === 'initialize') send({ jsonrpc: '2.0', id: m.id, result: { protocolVersion: 1, agentCapabilities: {}, authMethods: [] } });
+    else if (m.method === 'session/new') send({ jsonrpc: '2.0', id: m.id, result: { sessionId: 's1' } });
+    else (${onPrompt})(m, send);
+  }
+});
+setInterval(() => {}, 1000);
+`);
+  return { dir, program };
+}
+
+test('a turn whose agent waits on its model with nothing coming is stopped, and says why', async () => {
+  /* CodeBuddy with its connection hung: model_requesting, then nothing until it is cancelled */
+  const { dir, program } = await fakeAcpAgent('codebuddy', (m, send) => {
+    if (m.method === 'session/prompt') {
+      globalThis.asked = m.id;
+      send({ jsonrpc: '2.0', method: 'session/update', params: { sessionId: 's1', update: { sessionUpdate: 'session_info_update', _meta: { 'codebuddy.ai/agentPhase': { phase: 'model_requesting' } } } } });
+    } else if (m.method === 'session/cancel') {
+      send({ jsonrpc: '2.0', id: globalThis.asked, result: { stopReason: 'cancelled' } });
+    }
+  });
+  setChosenPaths({ codebuddy: program });
+  const session = new AgentSession({ agent: 'codebuddy', cwd: dir, stallMs: 200 });
+  try {
+    await session.start();
+    const failed = await session.prompt([{ type: 'text', text: 'hi' }]).then(() => null, (e) => e);
+    assert.equal(failed?.code, 'agent-stalled');
+    assert.match(failed.message, /^CodeBuddy heard nothing back from its model/);
+  } finally {
+    session.close();
+    setChosenPaths({});
+  }
+});
+
+test('quitting closes every agent process, one opened only to ask included; asking runs in one empty folder of the app', async () => {
+  assert.equal(probeFolder(), probeFolder());
+  const { dir, program } = await fakeAcpAgent('opencode', () => {});
+  setChosenPaths({ opencode: program });
+  const session = new AgentSession({ agent: 'opencode', cwd: dir });
+  try {
+    await session.start();
+    const gone = new Promise((done) => session.child.once('exit', done));
+    closeEverySession();
+    await gone;
+    assert.notEqual(session.child.exitCode ?? session.child.signalCode, null);
   } finally {
     session.close();
     setChosenPaths({});

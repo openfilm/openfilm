@@ -25,6 +25,8 @@ export interface ProjectVersion {
   outcome?: 'stopped' | 'failed' | 'balance';
   /** outcome 'balance': which service had no balance left, and its page to top it up */
   balance?: Balance;
+  /** outcome 'failed': why, as the turn kept it (on its footer's Interrupted, on hover) */
+  error?: string;
   /** When it was sent / settled (ISO): hover says "N minutes ago". */
   createdAt?: string;
   settledAt?: string;

@@ -24,7 +24,7 @@
  * Reads no Electron module, so `node --test` can use it.
  */
 import { execFile, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { arch, homedir, release, tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
 import { dirname, isAbsolute, join } from 'node:path';
@@ -375,10 +375,25 @@ export function readAgentStatus(id, stdout, out) {
   return { signedIn: null, account: null };
 }
 
-/** what a session opened only to ask found, for a while: the roster asks again every few seconds */
+/**
+ * What a session opened only to ask found, for a while: the roster asks again every few seconds. Signed in is kept
+ * longer: each ask starts the agent (CodeBuddy leaves a stale file for each one it is stopped at once), and a sign-out
+ * is learnt anyway, from a message refused for it (noteSignedOut) or when the person signs in from Settings.
+ */
 const asked = new Map();
 const ASKED_FOR_MS = 15_000;
-let probeDir = null;
+const SIGNED_IN_FOR_MS = 10 * 60_000;
+
+/**
+ * The folder a session opened only to ask (signed in? its options?) runs in: an empty one of the app's, the same each
+ * time. Not the home folder: an agent takes the folder it runs in for a project, keeping a record of it and reading
+ * its instructions files.
+ */
+export function probeFolder() {
+  const dir = join(tmpdir(), 'openfilm-agent-probe');
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
 
 /**
  * Signed in, for an agent with no command that says: a session opened (in an empty folder of the app's) and closed.
@@ -386,10 +401,9 @@ let probeDir = null;
  */
 export function acpSignedIn(id) {
   const kept = asked.get(id);
-  if (kept && Date.now() - kept.at < ASKED_FOR_MS) return kept.answer;
+  if (kept && Date.now() - kept.at < (kept.signedIn ? SIGNED_IN_FOR_MS : ASKED_FOR_MS)) return kept.answer;
   const answer = (async () => {
-    probeDir ??= mkdtempSync(join(tmpdir(), 'openfilm-agent-'));
-    const session = new AgentSession({ agent: id, cwd: probeDir });
+    const session = new AgentSession({ agent: id, cwd: probeFolder() });
     try {
       await Promise.race([session.start(), new Promise((_, fail) => setTimeout(() => fail(new Error('timed out')), 30_000))]);
       return true;
@@ -399,7 +413,9 @@ export function acpSignedIn(id) {
       session.close();
     }
   })();
-  asked.set(id, { at: Date.now(), answer });
+  const entry = { at: Date.now(), answer, signedIn: false };
+  asked.set(id, entry);
+  void answer.then((yes) => { entry.signedIn = yes === true; });
   return answer;
 }
 
@@ -666,6 +682,22 @@ export const CLIENT_CAPABILITIES = {
 
 const CLIENT_INFO = { name: 'openfilm-desktop', title: 'OpenFilm', version: '0.1.0' };
 
+/** How long an agent may wait on its model with nothing coming before the turn is stopped. */
+const MODEL_STALL_MS = 5 * 60_000;
+
+/** Where an agent says it is in its turn (CodeBuddy's `codebuddy.ai/agentPhase`: model_requesting, retrying…), or null. */
+export function agentPhase(update) {
+  const meta = update?._meta;
+  if (!meta || typeof meta !== 'object') return null;
+  const phase = Object.entries(meta).find(([k]) => /(?:^|[/.])agentPhase$/.test(k))?.[1]?.phase;
+  return typeof phase === 'string' ? phase : null;
+}
+
+function stallError(label, ms) {
+  const minutes = Math.max(1, Math.round(ms / 60_000));
+  return Object.assign(new Error(`${label} heard nothing back from its model for ${minutes} minute${minutes === 1 ? '' : 's'}: its connection may be blocked. The turn was stopped; send your message again to retry.`), { code: 'agent-stalled' });
+}
+
 /** What an agent sends while it answers or works: a turn with none of these said nothing. */
 const SPOKE = new Set(['agent_message_chunk', 'agent_thought_chunk', 'tool_call', 'tool_call_update', 'plan']);
 
@@ -755,11 +787,12 @@ export class AgentSession {
    *           onUpdate?: (update: any) => void, onPermission?: (params: any) => Promise<string | null>,
    *           onQuestion?: (ask: { message: string, toolCallId: string | null, questions: any[] }) => Promise<Record<string, { label?: string, text?: string }> | null>,
    *           onExit?: (info: { code: number | null, stderr: string }) => void,
-   *           onSend?: (sent: { prompt: any[], _meta?: any }) => void }} opts
+   *           onSend?: (sent: { prompt: any[], _meta?: any }) => void, stallMs?: number }} opts
    * `onSend` hears each message as it goes to the agent, whole (the app's words before the first one's, for an agent
    * told them there); `opened`, once started, says what it was started and opened with.
    * `skills`: the session has its maker's skills and MCP servers, OpenFilm's skills, and of the person's own only those
    * let in (`allowed`, `mcpAllowed`), each agent told by its own switch (agent-skills.mjs); `opened.skills` says how.
+   * `stallMs`: how long the agent may wait on its model with nothing coming (MODEL_STALL_MS) before the turn is stopped.
    * `logDir` (Developer mode): an agent whose own record lacks what its model got is started with its own logging
    * switch, writing under this folder (agent-logs.mjs); `opened.log` says where.
    */
@@ -829,7 +862,8 @@ export class AgentSession {
       ? spawn(native.cmd, native.args, { ...native.options, cwd: this.opts.cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
       : spawn(node.command, [...(node.env.ELECTRON_RUN_AS_NODE ? [AS_NODE] : []), script], { cwd: this.opts.cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
     this.child.stderr.on('data', (d) => { this.stderr = (this.stderr + String(d)).slice(-16_000); });
-    this.child.once('exit', (code) => this.opts.onExit?.({ code, stderr: this.stderr }));
+    LIVE.add(this);
+    this.child.once('exit', (code) => { LIVE.delete(this); this.opts.onExit?.({ code, stderr: this.stderr }); });
     this.child.once('error', () => {});
 
     const stream = acp.ndJsonStream(Writable.toWeb(this.child.stdin), Readable.toWeb(this.child.stdout));
@@ -848,6 +882,9 @@ export class AgentSession {
       .onNotification(acp.methods.client.session.update, (ctx) => {
         const update = ctx.params.update;
         if (SPOKE.has(update?.sessionUpdate)) this.spoke = true;
+        this.heard = Date.now();
+        const phase = agentPhase(update);
+        if (phase) this.phase = phase;
         if (!this.replaying) this.opts.onUpdate?.(update?.configOptions ? { ...update, configOptions: distinctOptions(update.configOptions) } : update);
       })
       .connect(stream);
@@ -931,7 +968,23 @@ export class AgentSession {
     /* the message exactly as the agent gets it, for the turn log */
     this.opts.onSend?.({ prompt: [...told, ...blocks], ...meta });
     this.spoke = false;
-    const r = await this.conn.agent.request(acp.methods.agent.session.prompt, { sessionId: this.sessionId, prompt: [...told, ...blocks], ...meta })
+    this.heard = Date.now();
+    this.phase = null;
+    /* a model asked and never answering (CodeBuddy, its connection hung): the turn is stopped for the person */
+    let stalled = false;
+    const stallMs = this.opts.stallMs ?? MODEL_STALL_MS;
+    let giveUp = () => {};
+    const gaveUp = new Promise((_, fail) => { giveUp = fail; });
+    gaveUp.catch(() => {});
+    const watch = setInterval(() => {
+      if (stalled || this.phase !== 'model_requesting' || Date.now() - this.heard < stallMs) return;
+      stalled = true;
+      void this.cancel();
+      /* one that does not stop when asked is left: the chat is not kept waiting on it */
+      setTimeout(() => giveUp(stallError(this.spec.label, stallMs)), 10_000).unref?.();
+    }, Math.min(15_000, Math.max(50, stallMs / 4)));
+    watch.unref?.();
+    const asking = this.conn.agent.request(acp.methods.agent.session.prompt, { sessionId: this.sessionId, prompt: [...told, ...blocks], ...meta })
       .catch((e) => {
         /* the app's own agent: a service with no balance left is said the same for every service, with its page */
         const own = this.opts.harness?.models?.find((m) => m.id === this.modelNow) ?? this.opts.harness?.models?.[0];
@@ -942,6 +995,8 @@ export class AgentSession {
         if (said.code === 'sign-in') noteSignedOut(this.opts.agent);
         throw said;
       });
+    const r = await Promise.race([asking, gaveUp]).finally(() => clearInterval(watch));
+    if (stalled && r.stopReason === 'cancelled') throw stallError(this.spec.label, stallMs);
     /* a turn the agent gave up on with its reason beside it, not in its reply (CodeBuddy: a network error): said as
        the turn's error, or the chat would show an empty reply */
     const why = r.stopReason === 'refusal' ? turnError(r) : null;
@@ -989,8 +1044,22 @@ export class AgentSession {
   }
 
   close() {
+    LIVE.delete(this);
     try { this.conn?.close(); } catch { /* gone already */ }
     if (this.child && this.child.exitCode === null) this.child.kill('SIGTERM');
     this.logging?.close();
   }
 }
+
+/** Every agent process this app started and has not closed: a chat's, or one opened only to ask. */
+const LIVE = new Set();
+
+/**
+ * Close every agent process, a session opened only to ask included (the chat's own are closed by their owner): the
+ * app is quitting, and one left would outlive it.
+ */
+export function closeEverySession() {
+  for (const session of [...LIVE]) session.close();
+}
+/* and as the process ends without quitting the usual way: none outlives it */
+process.once('exit', closeEverySession);

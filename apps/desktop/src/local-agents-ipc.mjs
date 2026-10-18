@@ -45,13 +45,12 @@
  * into `.film/logs/<turn>.model.jsonl`, as the app's own agent writes its own.
  */
 import { randomUUID } from 'node:crypto';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { recordProblem, problemsFile } from 'openfilm/problems';
 import { LOG_SETTLE_MS } from './agent-logs.mjs';
 import { RECORDED_AGENTS, agentRecordCalls, compactCalls } from './agent-records.mjs';
 import { skillStore } from './agent-skills.mjs';
-import { AGENTS, AgentSession, HARNESS_AGENTS, isAgentId, isChatAgent, listAgents, openAgentSignIn } from './agents.mjs';
+import { AGENTS, AgentSession, HARNESS_AGENTS, isAgentId, isChatAgent, listAgents, openAgentSignIn, probeFolder } from './agents.mjs';
 import { loggedBlocks, logsDir, openLog, writeModelLog } from './chat-store.mjs';
 import { loginShellVariables } from './environment.mjs';
 
@@ -201,7 +200,7 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
       let commands = null;
       let said = () => {};
       const heard = new Promise((done) => { said = done; });
-      session = new AgentSession({ agent, cwd: homedir(), binDir, fallbackDir, env, harness: await harnessFor(agent),
+      session = new AgentSession({ agent, cwd: probeFolder(), binDir, fallbackDir, env, harness: await harnessFor(agent),
         onUpdate: (update) => { if (update?.sessionUpdate === 'available_commands_update') { commands = update.availableCommands ?? null; said(); } } });
       const info = await session.start();
       await Promise.race([heard, new Promise((done) => setTimeout(done, PROBE_COMMANDS_MS))]);

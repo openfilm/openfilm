@@ -239,6 +239,8 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   const opLog = React.useMemo(() => (blank ? [] : deriveProjectTurns(ordered, [], asset?.id ?? null)), [blank, ordered, asset?.id]);
 
   const localTurn = useLocalAgentTurn(asset?.id ?? null);
+  /* why the last turn failed: as it happened, or, the chat opened again on it (the app restarted), as it was kept */
+  const turnError = localTurn ? localTurn.state.error : asset?.status === 'error' && !(asset as Turn & TurnBalance).balance ? asset.error ?? null : null;
   const liveStore = localTurn?.turn.store ?? EMPTY_STORE;
   const activity = useLiveActivityFromStore(liveStore, localTurn?.state.thinking ?? false, false);
 
@@ -1035,9 +1037,9 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
                       </CardActions>
                     </ComposerCard>
                   ) : null}
-                  {localTurn?.state.error ? (
+                  {turnError ? (
                     <p role="alert" className="text-xs text-[var(--err)]">
-                      {localTurn.state.error}{' '}
+                      {turnError}{' '}
                       {/* what to send when it keeps failing */}
                       <span className="text-[var(--text-muted)]"><CopyDiagnostics /></span>
                     </p>
