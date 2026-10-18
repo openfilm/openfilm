@@ -4,13 +4,16 @@
  * between hairlines; the one in front takes the panes' color. A tab says what is happening in it: an agent at work (a
  * spinner), a question waiting for the person (a dot), an export (its percent). A tab is shown by a click, closed by
  * its × or a middle click, moved by dragging; this page's own tab, double-clicked, renames its project (`onRename`),
- * and shows `editor` instead of its title while that happens.
+ * and shows `editor` instead of its title while that happens. A right-click opens a tab's menu: rename it (this page's
+ * own), show its project's folder, close it, the others or those to its right.
  */
 import React from 'react';
 import { Loader2, Plus, X } from 'lucide-react';
 import { api } from '@/api';
 import { useT } from '@/i18n';
 import { studioHost, type HostTab } from '@/lib/host';
+import { tabsToClose } from '@/lib/tab-menu';
+import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import { Tooltip } from './Tooltip';
 
 const TAB_TYPE = 'application/x-openfilm-tab';
@@ -43,9 +46,27 @@ export function TabStrip({ editor, onRename, onNew }: { editor?: React.ReactNode
   }, [unnamed]);
   const [dragging, setDragging] = React.useState<string | null>(null);
   const [over, setOver] = React.useState<number | null>(null);
+  /* the tab whose menu is open, and where */
+  const [menu, setMenu] = React.useState<{ id: string; x: number; y: number } | null>(null);
   if (!host) return null;
 
   const titleOf = (tab: HostTab) => tab.title || names[tab.projectId] || t('project.untitled');
+
+  const menuItems = (id: string): ContextMenuEntry[] => {
+    const tab = tabs.find((each) => each.id === id);
+    if (!tab) return [];
+    const mine = tab.id === self;
+    const others = tabsToClose(tabs, id, 'others');
+    const right = tabsToClose(tabs, id, 'right');
+    return [
+      { id: 'rename', label: t('projectMenu.rename'), disabled: !mine || !onRename, hint: mine ? undefined : t('tabs.renameHint'), onSelect: () => onRename?.() },
+      { id: 'reveal', label: t('projects.revealFolder'), onSelect: () => { void api.revealProject(tab.projectId).catch(() => {}); } },
+      { id: 'sep', separator: true },
+      { id: 'close', label: t('tabs.close'), onSelect: () => host.close(id) },
+      { id: 'close-others', label: t('tabs.closeOthers'), disabled: others.length === 0, onSelect: () => { for (const other of others) host.close(other.id); } },
+      { id: 'close-right', label: t('tabs.closeRight'), disabled: right.length === 0, onSelect: () => { for (const other of right) host.close(other.id); } },
+    ];
+  };
 
   return (
     <div role="tablist" aria-label={t('tabs.label')} className="flex h-full min-w-0 flex-1 items-stretch">
@@ -65,6 +86,7 @@ export function TabStrip({ editor, onRename, onNew }: { editor?: React.ReactNode
                 onClick={() => { if (!tab.active) host.show(tab.id); }}
                 onDoubleClick={() => { if (mine && !editing) onRename?.(); }}
                 onMouseDown={(e) => { if (e.button === 1) { e.preventDefault(); host.close(tab.id); } }}
+                onContextMenu={(e) => { if (editing) return; e.preventDefault(); setMenu({ id: tab.id, x: e.clientX, y: e.clientY }); }}
                 onDragStart={(e) => { e.dataTransfer.setData(TAB_TYPE, tab.id); e.dataTransfer.effectAllowed = 'move'; setDragging(tab.id); }}
                 onDragEnd={() => { setDragging(null); setOver(null); }}
                 onDragOver={(e) => { if (e.dataTransfer.types.includes(TAB_TYPE)) { e.preventDefault(); setOver(i); } }}
@@ -90,6 +112,7 @@ export function TabStrip({ editor, onRename, onNew }: { editor?: React.ReactNode
           );
         })}
       </div>
+      {menu ? <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.id)} onClose={() => setMenu(null)} /> : null}
       {onNew ? (
         <Tooltip label={t('tabs.new')} side="bottom">
           <button type="button" aria-label={t('tabs.new')} onClick={onNew}

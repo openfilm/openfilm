@@ -2,9 +2,10 @@
  * The composer's agent button: which agent is thinking and with what (its model, reasoning effort and speed), and a
  * menu to change them.
  *
- * The menu lists the agents switched on in Settings → Agents (none when only one is: there is nothing to choose), then
- * a row for each option the agent reports, with its value; pointing at a row opens its choices in a side menu beside
- * it. Choosing leaves both open (a model and an effort are often changed together); a click elsewhere closes them.
+ * The menu opens on a heading with a button to Settings → Agents, then lists the agents switched on there (none when
+ * only one is: there is nothing to choose, and the heading names it instead), then a row for each option the agent
+ * reports, with its value; pointing at a row opens its choices in a side menu beside it. Choosing leaves both open (a
+ * model and an effort are often changed together); a click elsewhere closes them.
  *
  * The chat is a view of its own and nothing can be drawn outside it, and the two never cover each other: the side menu
  * takes the room beside the card (a long name wraps to fit), the card slides left to make that room, and in a narrow
@@ -12,7 +13,7 @@
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronRight, KeyRound } from 'lucide-react';
+import { Check, ChevronRight, KeyRound, Settings } from 'lucide-react';
 import { keepFocus, Popover } from './Popover';
 import { useT } from '@/i18n';
 import { Tooltip } from '@/components/Tooltip';
@@ -202,9 +203,18 @@ export function ModelPopover({ placement = 'bottom', align = 'start' }: { placem
           </div>
         ) : (
           <>
+            {/* the heading, and Settings → Agents beside it (where agents are switched on, connected and signed in) */}
+            <div className="flex items-center gap-2 pb-0.5 pl-2.5 pr-0.5 pt-0.5">
+              <span className="min-w-0 flex-1 truncate text-[11px] text-[var(--text-faint)]">{shown.length > 1 ? t('composer.agentSection') : current ? nameOf(current) : t('composer.agentSection')}</span>
+              <Tooltip label={t('composer.openSettings')}>
+                <button type="button" aria-label={t('composer.openSettings')} onMouseDown={keepFocus} onMouseEnter={hideSideSoon} onClick={openSettings}
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] text-[var(--text-faint)] outline-none transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] focus-visible:bg-[var(--bg-hover)]">
+                  <Settings size={13} />
+                </button>
+              </Tooltip>
+            </div>
             {shown.length > 1 ? (
               <>
-                <div className="px-2.5 pb-1 pt-1 text-[11px] text-[var(--text-faint)]">{t('composer.agentSection')}</div>
                 {shown.map((a) => {
                   const status = statusOf(a);
                   return (

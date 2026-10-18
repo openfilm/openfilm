@@ -10,7 +10,7 @@ export const es: Words = {
     desktop: 'Escritorio',
   },
   /* the app window's tabs (TabStrip), a new tab's launcher, and the examples (ExamplesGallery) */
-  tabs: { label: 'Pestañas', new: 'Abrir un proyecto', close: 'Cerrar pestaña' },
+  tabs: { label: 'Pestañas', new: 'Abrir un proyecto', close: 'Cerrar pestaña', closeOthers: 'Cerrar las demás pestañas', closeRight: 'Cerrar las pestañas a la derecha', renameHint: 'Muestra esta pestaña para cambiarle el nombre' },
   launcher: { projects: 'Proyectos', examples: 'Ejemplos' },
   gallery: {
     title: 'Ejemplos',

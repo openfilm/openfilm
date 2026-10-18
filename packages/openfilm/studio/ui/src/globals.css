@@ -58,6 +58,8 @@
   --accent: #1a1a1a;
   --accent-soft: rgba(26, 26, 26, 0.06);
   --on-accent: #ffffff;
+  /* selected words being edited (a tab's name): plainly seen, as the system's text selection */
+  --text-selection: rgba(26, 147, 254, 0.3);
 
   --ok: #16a34a;
   --warn: #d97706;
@@ -137,6 +139,7 @@
   --accent: #1a93fe;
   --accent-soft: rgba(26, 147, 254, 0.12);
   --on-accent: #ffffff;
+  --text-selection: rgba(26, 147, 254, 0.45);
 
   --ok: #5eb92d;
   --warn: #ffbf36;

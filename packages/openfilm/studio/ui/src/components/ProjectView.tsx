@@ -2587,7 +2587,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                   onDoubleClick={(e) => e.stopPropagation()}
                   placeholder={t('project.untitled')}
                   maxLength={TITLE_MAX_CHARS}
-                  className="min-w-0 flex-1 bg-transparent text-[12.5px] font-medium text-[var(--text)] outline-none"
+                  className="min-w-0 flex-1 bg-transparent text-[12.5px] font-medium text-[var(--text)] outline-none selection:bg-[var(--text-selection)]"
                 />
               ) : undefined} />
             ) : <div className="min-w-0 flex-1" />}

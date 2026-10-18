@@ -10,7 +10,7 @@ export const ja: Words = {
     desktop: 'デスクトップ版',
   },
   /* the app window's tabs (TabStrip), a new tab's launcher, and the examples (ExamplesGallery) */
-  tabs: { label: 'タブ', new: 'プロジェクトを開く', close: 'タブを閉じる' },
+  tabs: { label: 'タブ', new: 'プロジェクトを開く', close: 'タブを閉じる', closeOthers: '他のタブを閉じる', closeRight: '右側のタブを閉じる', renameHint: 'このタブを表示すると名前を変更できます' },
   launcher: { projects: 'プロジェクト', examples: 'サンプル' },
   gallery: {
     title: 'サンプル',

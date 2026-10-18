@@ -10,7 +10,7 @@ export const ko: Words = {
     desktop: '데스크톱',
   },
   /* the app window's tabs (TabStrip), a new tab's launcher, and the examples (ExamplesGallery) */
-  tabs: { label: '탭', new: '프로젝트 열기', close: '탭 닫기' },
+  tabs: { label: '탭', new: '프로젝트 열기', close: '탭 닫기', closeOthers: '다른 탭 닫기', closeRight: '오른쪽 탭 닫기', renameHint: '이 탭으로 전환하면 이름을 바꿀 수 있습니다' },
   launcher: { projects: '내 프로젝트', examples: '예시' },
   gallery: {
     title: '예시',
