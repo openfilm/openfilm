@@ -138,6 +138,8 @@ export const enUS = {
     filesFailed: 'Couldn\'t attach {names}: {error} Remove it to send.',
     filesPending: 'The files are still being attached.',
     model: 'Model',
+    /* the one value of a model or an effort the agent offers no choice of */
+    optionDefault: 'Default',
     openAttachment: 'View {name}',
     revealFolder: 'Show {name} in its folder',
     openSettings: 'Open Settings',

@@ -3,9 +3,10 @@
  * menu to change them.
  *
  * The menu opens on a heading with a button to Settings → Agents, then lists the agents switched on there (none when
- * only one is: there is nothing to choose, and the heading names it instead), then a row for each option the agent
- * reports, with its value; pointing at a row opens its choices in a side menu beside it. Choosing leaves both open (a
- * model and an effort are often changed together); a click elsewhere closes them.
+ * only one is: there is nothing to choose, and the heading names it instead), then its model and effort, always, and
+ * its speed when it has one (agent-menu-rows.ts), each with its value; pointing at a row opens its choices in a side
+ * menu beside it. Choosing leaves both open (a model and an effort are often changed together); a click elsewhere
+ * closes them.
  *
  * The chat is a view of its own and nothing can be drawn outside it, and the two never cover each other: the side menu
  * takes the room beside the card (a long name wraps to fit), the card slides left to make that room, and in a narrow
@@ -22,6 +23,7 @@ import { POPOVER_CHROME } from '@/components/ComposerCard';
 import { desktopBridge, type LocalAgentId, type RosterAgent } from '@/lib/desktop-bridge';
 import { agentModelSummary, agentOptions, currentAgent, effectivePrefs, offeredChoices, offeredOption, optionLabel, optionValue, shownAgents, useLocalAgents } from '@/state/local-agent-store';
 import { chatLayer } from '@/lib/chat-layer';
+import { isSpeed, menuOptions, type MenuOption } from '@/lib/agent-menu-rows';
 
 /** the card, wider when it lists the agents; the side menu's least width; the gap between them; the window's margin */
 const CARD_W = 236;
@@ -38,13 +40,12 @@ const ROW_BASE =
   'flex min-h-[28px] w-full items-center gap-2 rounded-[6px] px-2.5 text-[13px] font-normal tracking-normal text-left outline-none transition';
 const ROW = `${ROW_BASE} hover:bg-[var(--bg-hover)] focus-visible:bg-[var(--bg-hover)]`;
 
-type Option = { id: string; name: string; category?: string; options?: Array<{ value: unknown; name: string; description?: string }> };
+type Option = MenuOption;
 
-/** The options the menu offers, in this order: the model, the reasoning effort, the speed (when the model has one). */
-const isSpeed = (o: Option) => o.category === 'speed' || /^(fast|fast-mode|speed)$/i.test(o.id) || /\b(fast|speed)\b/i.test(o.name);
-function menuOptions(options: Option[] | undefined): Option[] {
-  const pick = (test: (o: Option) => boolean) => (options ?? []).find((o) => test(o) && (o.options?.length ?? 0) > 1);
-  return [pick((o) => o.category === 'model'), pick((o) => o.category === 'thought_level'), pick(isSpeed)].filter((o): o is Option => Boolean(o));
+/** A row's choices: those the agent offers there, or its one value when that is all it has (a "default" too). */
+function rowChoices(agent: LocalAgentId, o: Option, chosen: unknown): NonNullable<Option['options']> {
+  if (o.fixed) return o.options!.slice(0, 1);
+  return offeredChoices(agent, o, chosen);
 }
 
 export function ChatAgentIcon({ id, size = 14 }: { id: LocalAgentId; size?: number }) {
@@ -96,11 +97,12 @@ export function ModelPopover({ placement = 'bottom', align = 'start' }: { placem
 
   const options = agentOptions(la, agent);
   const prefs = effectivePrefs(la.prefs, agent, la.roster, options);
-  const rows = menuOptions(options).filter((o) => offeredOption(agent, la.roster, o));
+  const rows = options ? menuOptions(options, t('composer.optionDefault')).filter((o) => offeredOption(agent, la.roster, o)) : [];
   const summary = agentModelSummary(options, prefs);
   const triggerModel = summary.model;
-  const triggerEffort = rows.some((o) => o.category === 'thought_level') ? summary.effort : null;
-  const valueOf = (o: Option) => (o.category === 'model' ? triggerModel : null) ?? optionLabel(options, o.id, optionValue(options, prefs, o.id)) ?? '';
+  const triggerEffort = rows.some((o) => o.category === 'thought_level' && !o.fixed) ? summary.effort : null;
+  const valueOf = (o: Option) => (o.fixed ? (optionLabel(options, o.id, optionValue(options, prefs, o.id)) ?? o.options![0]!.name)
+    : (o.category === 'model' ? triggerModel : null) ?? optionLabel(options, o.id, optionValue(options, prefs, o.id)) ?? '');
   const rowLabel = (o: Option) => (o.category === 'model' ? t('composer.model') : o.category === 'thought_level' ? t('composer.effort') : isSpeed(o) ? t('composer.speed') : o.name);
   const nameOf = (a: RosterAgent) => (a.id === 'byok' ? t('composer.agentOwnKey') : a.name);
 
@@ -123,8 +125,9 @@ export function ModelPopover({ placement = 'bottom', align = 'start' }: { placem
   const openSettings = () => { setOpen(false); desktopBridge()?.openSettings?.('agents'); };
   const current = shown.find((a) => a.id === agent);
   const choosing = side ? rows.find((o) => o.id === side) : undefined;
-  const chosenValue = (o: Option) => optionValue(options, prefs, o.id);
-  const pickChoice = (o: Option, value: unknown) => la.setPref(agent, o.id, value);
+  const chosenValue = (o: Option) => (o.fixed ? o.options![0]!.value : optionValue(options, prefs, o.id));
+  /* a fixed row's one value is already the one in use */
+  const pickChoice = (o: Option, value: unknown) => { if (!o.fixed) la.setPref(agent, o.id, value); };
 
   /* the side menu beside its row: on the right of the card, the card sliding left when the window is too narrow for
      both, and over the card's right edge only when it cannot slide far enough; measured again once it is drawn */
@@ -156,8 +159,8 @@ export function ModelPopover({ placement = 'bottom', align = 'start' }: { placem
   const sideMenu = open && choosing && typeof document !== 'undefined' ? createPortal(
     <div ref={sideRef} onMouseEnter={() => showSide(choosing.id)} onMouseLeave={hideSideSoon}
       style={{ ...POPOVER_CHROME, padding: 4, overflowY: 'auto', ...(sideStyle ?? { position: 'fixed', left: -9999, top: 0 }) }}>
-      {/* the names only: no descriptions, and the choices the menu offers (offeredChoices) */}
-      {offeredChoices(agent, choosing, chosenValue(choosing)).map((choice) => {
+      {/* the names only: no descriptions, and the choices the menu offers (rowChoices) */}
+      {rowChoices(agent, choosing, chosenValue(choosing)).map((choice) => {
         const selected = chosenValue(choosing) === choice.value;
         return (
           <button key={String(choice.value)} type="button" onMouseDown={keepFocus}
@@ -234,7 +237,7 @@ export function ModelPopover({ placement = 'bottom', align = 'start' }: { placem
                 {current ? `${nameOf(current)}: ${statusOf(current) ?? ''}` : t('composer.agentLoading')}{' '}
                 <button type="button" onMouseDown={keepFocus} onClick={openSettings} className="text-[var(--text)] underline underline-offset-2">{t('composer.openSettings')}</button>
               </div>
-            ) : rows.length === 0 && options && !la.optionsError[agent] ? null : rows.length === 0 ? (
+            ) : rows.length === 0 ? (
               <p className="px-2.5 py-1.5 text-[12px] leading-relaxed text-[var(--text-muted)]">
                 {la.optionsError[agent]
                   ? <>{t('composer.agentOptionsFailed')} <button type="button" onMouseDown={keepFocus} onClick={() => void la.ensureOptions(agent, { retry: true })} className="text-[var(--text)] underline underline-offset-2">{t('project.retry')}</button></>

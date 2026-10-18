@@ -139,6 +139,8 @@ export const ja: Words = {
     filesFailed: '{names} を追加できませんでした：{error} 削除してから送信してください。',
     filesPending: 'ファイルを追加しています。',
     model: 'モデル',
+    /* the one value of a model or an effort the agent offers no choice of */
+    optionDefault: 'デフォルト',
     openAttachment: '{name} を表示',
     revealFolder: '{name} をフォルダに表示',
     openSettings: '設定を開く',

@@ -139,6 +139,8 @@ export const zhCN: Words = {
     filesFailed: '{names} 添加失败：{error} 移除后再发送。',
     filesPending: '文件还在添加中。',
     model: '模型',
+    /* the one value of a model or an effort the agent offers no choice of */
+    optionDefault: '默认',
     openAttachment: '查看 {name}',
     revealFolder: '在文件夹中显示 {name}',
     openSettings: '打开设置',

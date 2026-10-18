@@ -139,6 +139,8 @@ export const ko: Words = {
     filesFailed: '{names}을(를) 추가하지 못했습니다: {error} 제거한 뒤 보내세요.',
     filesPending: '파일을 추가하는 중입니다.',
     model: '모델',
+    /* the one value of a model or an effort the agent offers no choice of */
+    optionDefault: '기본값',
     openAttachment: '{name} 보기',
     revealFolder: '폴더에서 {name} 보기',
     openSettings: '설정 열기',

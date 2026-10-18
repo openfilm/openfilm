@@ -139,6 +139,8 @@ export const es: Words = {
     filesFailed: 'No se pudo adjuntar {names}: {error} Quítalo para enviar.',
     filesPending: 'Los archivos aún se están adjuntando.',
     model: 'Modelo',
+    /* the one value of a model or an effort the agent offers no choice of */
+    optionDefault: 'Predeterminado',
     openAttachment: 'Ver {name}',
     revealFolder: 'Mostrar {name} en su carpeta',
     openSettings: 'Abrir Configuración',
