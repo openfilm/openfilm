@@ -113,8 +113,9 @@ function writable(folder) {
 const gb = (bytes) => (bytes == null ? '' : `, ${(bytes / 1e9).toFixed(bytes < 10e9 ? 1 : 0)} GB free`);
 
 /**
- * The browser films are drawn in: its version and what draws WebGL in it. null when it is not downloaded yet.
- * @returns {Promise<{ version: string, renderer: string | null } | null>}
+ * The browser films are drawn in: its version, what draws WebGL in it, and the video codecs it decodes on the graphics
+ * chip (Chromium's `powerEfficient`), which a film's footage is played with. null when it is not downloaded yet.
+ * @returns {Promise<{ version: string, renderer: string | null, chipVideo: string[] } | null>}
  */
 async function filmBrowser() {
   const { launch } = await import('./host.mjs');
@@ -129,10 +130,30 @@ async function filmBrowser() {
       const info = gl.getExtension('WEBGL_debug_renderer_info');
       return String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER));
     });
-    return { version: browser.version(), renderer };
+    const chipVideo = await page.evaluate(async () => {
+      const codecs = { 'H.264': 'video/mp4; codecs="avc1.640028"', HEVC: 'video/mp4; codecs="hvc1.1.6.L120.90"', VP9: 'video/webm; codecs="vp09.00.40.08"', AV1: 'video/mp4; codecs="av01.0.08M.08"' };
+      const on = [];
+      for (const [name, contentType] of Object.entries(codecs)) {
+        try {
+          const info = await navigator.mediaCapabilities.decodingInfo({ type: 'file', video: { contentType, width: 1920, height: 1080, bitrate: 8e6, framerate: 30 } });
+          if (info.powerEfficient) on.push(name);
+        } catch { /* not this one */ }
+      }
+      return on;
+    }).catch(() => []);
+    return { version: browser.version(), renderer, chipVideo };
   } finally {
     await browser.close().catch(() => {});
   }
+}
+
+/** What this machine's ffmpeg does on the graphics chip (encoders.mjs): the encoders that work here, and the decoding. */
+async function chipText() {
+  const { encoders, hardwareDecoding, hardwareEncoder } = await import('./encoders.mjs');
+  const have = await encoders();
+  const encoding = (await Promise.all(/** @type {const} */ (['h264', 'hevc', 'prores']).map((codec) => hardwareEncoder(codec, have)))).filter(Boolean);
+  const decoding = await hardwareDecoding();
+  return `ffmpeg ${encoding.length ? `encodes with ${encoding.join(', ')}` : 'encodes on the processor'}; ${decoding.length ? `decodes with ${decoding[1]}` : 'decodes on the processor'}`;
 }
 
 /**
@@ -172,6 +193,7 @@ export async function doctor({ run = 'openfilm', env = process.env, studio = nul
     const v = toolVersion(bin);
     checks.push(v ? { label: bin, text: v } : { label: bin, text: 'not found on the PATH', problem: `install ffmpeg (${FFMPEG_HELP})` });
   }
+  if (toolVersion('ffmpeg')) checks.push({ label: 'Hardware', text: await chipText() });
 
   if (browser) {
     try {
@@ -179,7 +201,8 @@ export async function doctor({ run = 'openfilm', env = process.env, studio = nul
       if (!b) checks.push({ label: 'Browser', text: 'not downloaded yet', problem: `\`${run} open\` downloads it (about 100 MB, once)` });
       else {
         const slow = softwareRenderer(b.renderer);
-        checks.push({ label: 'Browser', text: `Chromium ${b.version}; WebGL ${b.renderer ?? 'unavailable'}`,
+        const video = b.chipVideo.length ? `video decoded on the chip: ${b.chipVideo.join(', ')}` : 'video decoded by the processor';
+        checks.push({ label: 'Browser', text: `Chromium ${b.version}; WebGL ${b.renderer ?? 'unavailable'}; ${video}`,
           ...(slow ? { problem: 'films are drawn without the graphics chip, so looks and renders are slow: update the graphics driver' } : {}) });
       }
     } catch (e) {

@@ -4,8 +4,8 @@
  * past 1080p, or in a form slow to decode (ProRes, HEVC, 10-bit…), from a NAS most of all, stutters when played and
  * scrubbed; its proxy is an H.264 copy `height` px on its short side, its picture only, with the same frames at the
  * same times (passthrough: none added or dropped) and a key frame every half second, so a scrub lands at once. Made in
- * the background, one at a time, kept in the project's cache: decoded by the Mac's media engine and written by the
- * graphics chip's encoder when they work (src/encoders.mjs), so the processor stays free; by x264 otherwise.
+ * the background, one at a time, kept in the project's cache: decoded and written on the graphics chip when it can
+ * (src/encoders.mjs), so the processor stays free; by x264 otherwise.
  *
  * Only the preview plays them (pages.mjs swaps a file for its proxy): the film's sound is mixed from the original, and
  * an export or a render reads the originals. Nothing in film.html changes.
@@ -15,7 +15,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, renameSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { clipKind } from '../../src/film-doc.mjs';
-import { broken, chipDecoding, colorTagsOf, encoders, h264ColorTags, hardwareEncoder, hardwareOptions, hwaccels } from '../../src/encoders.mjs';
+import { colorTagsOf, encoders, h264ColorTags, hardwareEncoder, hardwareOptions, onTheChip } from '../../src/encoders.mjs';
 import { probe } from './derived.mjs';
 import { readable } from './files.mjs';
 import { TOOL_DIR } from './projects.mjs';
@@ -123,35 +123,31 @@ export async function ensureProxies(root, rels, height) {
 }
 
 /**
- * Make one proxy on the graphics chip when it has an H.264 encoder that works, else (or when it fails) with x264.
+ * Make one proxy, decoded and written on the graphics chip when it can, else (or when it fails) by x264.
  * @param {string} abs @param {string} out @param {{ w: number, h: number }} size @param {number} fps @param {number} seconds
  * @param {(ratio: number) => void} progress
  */
 async function proxy(abs, out, size, fps, seconds, progress) {
-  const [have, accels] = await Promise.all([encoders(), hwaccels()]);
-  const chip = await hardwareEncoder('h264', have);
-  if (chip) {
-    try { return await make(abs, out, size, fps, seconds, progress, { encoder: chip, accels }); } catch { broken(chip); }
-  }
-  return make(abs, out, size, fps, seconds, progress, null);
+  const chip = await hardwareEncoder('h264', await encoders());
+  await onTheChip(chip, (encoder, decoding) => make(abs, out, size, fps, seconds, progress, encoder, decoding));
 }
 
 /**
  * Make one proxy: through a hidden name, renamed once whole. ffmpeg turns a turned video upright (as it is shown),
- * which is the size asked for. `chip`: the graphics chip's encoder (about x264's quality at crf 23), with the source's
- * color tags, which it keeps only when told them.
+ * which is the size asked for. `encoder`: the graphics chip's (about x264's quality at crf 23), with the source's
+ * color tags, which it keeps only when told them; null for x264. `decoding`: the input options that decode on the chip.
  * @param {string} abs @param {string} out @param {{ w: number, h: number }} size @param {number} fps @param {number} seconds
- * @param {(ratio: number) => void} progress @param {{ encoder: string, accels: Set<string> } | null} chip
+ * @param {(ratio: number) => void} progress @param {string | null} encoder @param {string[]} decoding
  */
-async function make(abs, out, size, fps, seconds, progress, chip) {
+async function make(abs, out, size, fps, seconds, progress, encoder, decoding) {
   mkdirSync(join(out, '..'), { recursive: true });
   const part = `${out}.part.mp4`;
   const gop = Math.max(1, Math.round(fps * GOP_S));
-  const codec = chip
-    ? ['-pix_fmt', 'nv12', ...hardwareOptions(chip.encoder, Math.max(2e6, size.w * size.h * fps * 0.1), { gop }), ...h264ColorTags(await colorTagsOf(abs))]
+  const codec = encoder
+    ? ['-pix_fmt', 'nv12', ...hardwareOptions(encoder, Math.max(2e6, size.w * size.h * fps * 0.1), { gop }), ...h264ColorTags(await colorTagsOf(abs))]
     : ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-g', String(gop), '-keyint_min', String(gop), '-pix_fmt', 'yuv420p'];
   return new Promise((done, fail) => {
-    const proc = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-loglevel', 'error', '-y', ...(chip ? chipDecoding(chip.accels) : []), '-i', abs,
+    const proc = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-loglevel', 'error', '-y', ...decoding, '-i', abs,
       '-map', '0:v:0', '-an', '-sn', '-dn', '-fps_mode', 'passthrough', '-vf', `scale=${size.w}:${size.h}`, ...codec,
       '-movflags', '+faststart', '-progress', 'pipe:1', '-nostats', part], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
     let err = '';

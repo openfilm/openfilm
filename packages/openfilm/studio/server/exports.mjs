@@ -56,7 +56,7 @@ import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FilmPage, launch } from '../../src/host.mjs';
-import { broken, chipDecoding, encoders, hardwareEncoder, hardwareOptions, hwaccels, proresOptions } from '../../src/encoders.mjs';
+import { broken, encoders, hardwareEncoder, hardwareOptions, onTheChip, proresOptions } from '../../src/encoders.mjs';
 import { filmSound, kill as killProcess, mix, open } from '../../src/shared.mjs';
 import { FILM_FILE, clipFade, filmHtml, fittedFade, kindOf, pictureRect, readFilmFile } from '../../src/film-doc.mjs';
 import { NLE_FPS, nleFps, planNleTimeline, probeSource, soundStem, xmemlDocument } from './nle.mjs';
@@ -630,26 +630,17 @@ async function transcode(make, out, signal) {
     return;
   }
   const alpha = make.to === 'prores4444';
-  /* the Mac's media engine decodes and its ProRes engine encodes, when it has them; ffmpeg's own encoder otherwise */
-  const [have, accels] = await Promise.all([encoders(), hwaccels()]);
-  const chip = await hardwareEncoder('prores', have);
-  const once = async (/** @type {string} */ encoder) => {
-    const { video, pix } = proresOptions(encoder, alpha);
+  /* decoded on the graphics chip and written by the Mac's ProRes engine when it can, else by ffmpeg's own encoder */
+  const chip = await hardwareEncoder('prores', await encoders());
+  await onTheChip(chip, async (encoder, decoding) => {
+    const { video, pix } = proresOptions(encoder ?? 'prores_ks', alpha);
     const tail = ['-map', '0:v:0', '-map', '0:a?', '-vf', pix, ...video, '-c:a', 'pcm_s16le', '-ar', '48000', out];
     /* VP9's alpha is a side channel ffmpeg's own decoder drops: libvpx reads it */
     if (alpha) {
       try { await run(['-c:v', 'libvpx-vp9', '-i', make.from, ...tail], signal); return; } catch (e) { if (signal.aborted) throw e; }
     }
-    await run([...chipDecoding(accels), '-i', make.from, ...tail], signal);
-  };
-  if (!chip) return once('prores_ks');
-  try {
-    await once(chip);
-  } catch (e) {
-    if (signal.aborted) throw e;
-    broken(chip);
-    await once('prores_ks');
-  }
+    await run([...decoding, '-i', make.from, ...tail], signal);
+  }, signal);
 }
 
 const IMAGE_TYPES = /** @type {Record<string, string>} */ ({ svg: 'image/svg+xml', webp: 'image/webp', avif: 'image/avif', gif: 'image/gif', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', bmp: 'image/bmp' });

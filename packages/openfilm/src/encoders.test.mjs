@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { chipDecoding, colorTagsOf, encoders, h264ColorTags, hardwareEncoder, hardwareOptions, hwaccels, proresOptions } from './encoders.mjs';
+import { colorTagsOf, decoderCandidates, encoders, h264ColorTags, hardwareDecoding, hardwareEncoder, hardwareOptions, onTheChip, proresOptions } from './encoders.mjs';
 
 const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })();
 const ffmpeg = { skip: !hasFfmpeg && 'no ffmpeg', timeout: 120_000 };
@@ -40,10 +40,58 @@ test('a hardware encoder is used only when this ffmpeg has it and it works', ffm
   }
 });
 
-test('footage is decoded on the Mac\'s media engine when ffmpeg has it, and on the processor elsewhere', () => {
-  assert.deepEqual(chipDecoding(new Set(['videotoolbox']), 'darwin'), ['-hwaccel', 'videotoolbox']);
-  assert.deepEqual(chipDecoding(new Set([]), 'darwin'), []);
-  assert.deepEqual(chipDecoding(new Set(['cuda', 'd3d11va']), 'win32'), [], 'not tried on real machines yet');
+test('each system\'s decoders, in the order tried: the Mac\'s media engine; Direct3D 11, then NVIDIA\'s; VA-API through a render node, then NVIDIA\'s', () => {
+  assert.deepEqual(decoderCandidates('darwin'), [['-hwaccel', 'videotoolbox']]);
+  assert.deepEqual(decoderCandidates('win32'), [['-hwaccel', 'd3d11va'], ['-hwaccel', 'cuda']]);
+  assert.deepEqual(decoderCandidates('linux', ['/dev/dri/renderD128', '/dev/dri/renderD129']), [['-hwaccel', 'vaapi', '-hwaccel_device', '/dev/dri/renderD128'], ['-hwaccel', 'cuda']]);
+  assert.deepEqual(decoderCandidates('linux', []), [['-hwaccel', 'cuda']], 'no render node: no VA-API');
+  assert.deepEqual(decoderCandidates('freebsd'), []);
+});
+
+test('the chip\'s decoding is one that decodes here, or none; footage decodes either way', ffmpeg, async () => {
+  const decoding = await hardwareDecoding();
+  assert.ok(decoding.length === 0 || decoderCandidates().some((c) => c.join(' ') === decoding.join(' ')), decoding.join(' '));
+  if (process.platform === 'darwin' && execFileSync('ffmpeg', ['-hide_banner', '-hwaccels']).toString().includes('videotoolbox')) {
+    assert.deepEqual(decoding, ['-hwaccel', 'videotoolbox']);
+  }
+  const dir = mkdtempSync(join(tmpdir(), 'of-decoding-'));
+  try {
+    const src = join(dir, 'in.mp4');
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=s=320x180:r=30:d=0.5', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', src]);
+    const frames = execFileSync('ffmpeg', ['-v', 'error', ...decoding, '-i', src, '-vf', 'scale=160:90', '-f', 'framecrc', '-']).toString().split('\n').filter((l) => /^0,/.test(l));
+    assert.equal(frames.length, 15);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a conversion that fails on the chip is made again without what failed', ffmpeg, async () => {
+  const chip = await hardwareDecoding();
+  /** @param {string | null} encoder @param {string[]} failing the tries that throw, as `encoder+decoding` */
+  const run = async (encoder, failing) => {
+    const seen = [];
+    const result = await onTheChip(encoder, async (e, d) => {
+      seen.push(`${e ?? 'cpu'}+${d.length ? 'chip' : 'cpu'}`);
+      if (failing.includes(seen.at(-1))) throw new Error(`ffmpeg: ${seen.at(-1)} failed`);
+      return seen.at(-1);
+    });
+    return { result, seen };
+  };
+  assert.deepEqual(await run('fake_encoder', []), { result: `fake_encoder+${chip.length ? 'chip' : 'cpu'}`, seen: [`fake_encoder+${chip.length ? 'chip' : 'cpu'}`] });
+  /* the encoder fails with either decoding: the processor's encoder */
+  const encoderFails = await run('fake_encoder', ['fake_encoder+chip', 'fake_encoder+cpu']);
+  assert.deepEqual(encoderFails.seen, [...(chip.length ? ['fake_encoder+chip'] : []), 'fake_encoder+cpu', 'cpu+cpu']);
+  assert.equal(encoderFails.result, 'cpu+cpu');
+  await assert.rejects(run(null, ['cpu+chip', 'cpu+cpu']), /ffmpeg: cpu\+cpu failed/, 'what fails on the processor too is the source\'s');
+  const stopped = new AbortController();
+  stopped.abort();
+  await assert.rejects(onTheChip('fake_encoder', async () => { throw new Error('ffmpeg: cancelled'); }, stopped.signal), /cancelled/);
+  if (chip.length) {
+    /* the chip's decoding fails where the processor's works with the same encoder: it is left out from then on */
+    const decodingFails = await run('fake_encoder', ['fake_encoder+chip']);
+    assert.deepEqual(decodingFails.seen, ['fake_encoder+chip', 'fake_encoder+cpu']);
+    assert.deepEqual(await hardwareDecoding(), []);
+  }
 });
 
 test('a copy keeps its source\'s color tags, by their H.273 codes', () => {
@@ -75,7 +123,7 @@ test('on a Mac with a ProRes engine, ProRes keeps half alpha; the chip\'s H.264 
     const tags = await colorTagsOf(src);
     assert.equal(tags.color_transfer, 'iec61966-2-1');
     const copy = join(dir, 'copy.mp4');
-    execFileSync('ffmpeg', ['-v', 'error', '-y', ...chipDecoding(await hwaccels()), '-i', src, '-pix_fmt', 'nv12',
+    execFileSync('ffmpeg', ['-v', 'error', '-y', ...(await hardwareDecoding()), '-i', src, '-pix_fmt', 'nv12',
       ...hardwareOptions('h264_videotoolbox', 4e6, { gop: 8 }), ...h264ColorTags(tags), copy]);
     assert.equal((await colorTagsOf(copy)).color_transfer, 'iec61966-2-1');
   } finally {

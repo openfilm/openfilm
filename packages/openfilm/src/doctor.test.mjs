@@ -52,6 +52,8 @@ test('doctor: the folders and the log, paths under home as ~', async () => {
     const report = await doctor({ env: { CODEX_SANDBOX: 'seatbelt' }, studio: { origin: 'http://127.0.0.1:4848', version: '0.1.7' }, browser: false, network: false, home });
     assert.match(report.text, /Run by +Codex \(CODEX_SANDBOX\)/);
     assert.match(report.text, /Studio +0\.1\.7 at http:\/\/127\.0\.0\.1:4848/);
+    /* what ffmpeg does on the graphics chip here, or that it does it on the processor */
+    if (/ffmpeg +\d/.test(report.text)) assert.match(report.text, /Hardware +ffmpeg encodes (with [^;]+|on the processor); decodes (with \S+|on the processor)\n/);
     assert.match(report.text, /Data +~[/\\]\.openfilm/);
     assert.match(report.text, /Projects +~[/\\]Projects \(not made yet\)/);
     assert.match(report.text, /Last errors in ~.*studio\.log:\n {2}.*could not read ~[/\\]film/);

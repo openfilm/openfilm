@@ -5,7 +5,8 @@
  * has, whether each works here (a moment of video goes through it first, once a launch), and the options each takes.
  * A caller uses the processor's own encoder when the chip has none, and when the chip's fails partway (`broken`).
  */
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { readdirSync } from 'node:fs';
 
 /** @typedef {'h264' | 'hevc' | 'prores'} ChipCodec */
 
@@ -29,7 +30,7 @@ export function encoders() {
 /** @type {Promise<Set<string>> | null} */
 let accelList = null;
 /** The hardware decoders this machine's ffmpeg has (`-hwaccels`), asked again while there is no ffmpeg. @returns {Promise<Set<string>>} */
-export function hwaccels() {
+function hwaccels() {
   accelList ??= new Promise((done) => {
     execFile('ffmpeg', ['-hide_banner', '-hwaccels'], { windowsHide: true }, (error, stdout) => {
       if (error) accelList = null;
@@ -114,14 +115,105 @@ export async function hardwareEncoder(codec, have, platform = process.platform) 
   return null;
 }
 
+/** Linux's render nodes (`/dev/dri/renderD128`…), the way to a chip's VA-API without a display. */
+function renderNodes() {
+  try { return readdirSync('/dev/dri').filter((n) => /^renderD\d+$/.test(n)).sort().map((n) => `/dev/dri/${n}`); } catch { return []; }
+}
+
 /**
- * The input options that decode footage on the chip: the Mac's media engine. What it can't decode (a codec or a
- * pixel format it does not take) ffmpeg decodes on the processor by itself, so they suit any source. None on other
- * platforms yet: their decoders have not been tried on real machines.
- * @param {Set<string>} accels @param {string} [platform]
+ * The graphics chip's decoders a platform's ffmpeg may have, in the order they are tried, as the input options that
+ * turn each on: the Mac's media engine; on Windows Direct3D 11's, which every maker's chip has, then NVIDIA's own; on
+ * Linux VA-API's (Intel's and AMD's) through the first render node, then NVIDIA's. With no output format asked, each
+ * hands its frames back to memory, where any filter and either kind of encoder takes them.
+ * @param {string} [platform] @param {string[]} [nodes] Linux's render nodes
+ * @returns {string[][]}
  */
-export function chipDecoding(accels, platform = process.platform) {
-  return platform === 'darwin' && accels.has('videotoolbox') ? ['-hwaccel', 'videotoolbox'] : [];
+export function decoderCandidates(platform = process.platform, nodes = platform === 'linux' ? renderNodes() : []) {
+  if (platform === 'darwin') return [['-hwaccel', 'videotoolbox']];
+  if (platform === 'win32') return [['-hwaccel', 'd3d11va'], ['-hwaccel', 'cuda']];
+  if (platform === 'linux') return [...(nodes.length ? [['-hwaccel', 'vaapi', '-hwaccel_device', nodes[0]]] : []), ['-hwaccel', 'cuda']];
+  return [];
+}
+
+/** A moment of H.264 (ten frames, raw), for trying decoders on; null when this ffmpeg can't make one. @returns {Promise<Buffer | null>} */
+function sampleH264() {
+  return new Promise((done) => {
+    execFile('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=30', '-frames:v', '10',
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-f', 'h264', 'pipe:1'], { encoding: 'buffer', maxBuffer: 16 << 20, timeout: 20_000, windowsHide: true },
+    (error, stdout) => done(error || !stdout.length ? null : stdout));
+  });
+}
+
+/**
+ * `sample` decoded with these input options, as the MD5 of its frames in 8-bit 4:2:0; null when it does not decode. A
+ * decoder whose device does not open (no chip, no driver, a virtual machine) fails at once. H.264 decodes to the same
+ * pixels on every correct decoder, so a chip whose frames differ from the processor's has a driver that is wrong.
+ * @param {string[]} options @param {Buffer} sample @returns {Promise<string | null>}
+ */
+function decodedMd5(options, sample) {
+  return new Promise((done) => {
+    const proc = spawn('ffmpeg', ['-hide_banner', '-loglevel', 'error', ...options, '-f', 'h264', '-i', 'pipe:0', '-pix_fmt', 'yuv420p', '-f', 'md5', '-'],
+      { stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true });
+    let out = '';
+    proc.stdout.on('data', (d) => { out += d; });
+    const timer = setTimeout(() => proc.kill('SIGKILL'), 20_000);
+    proc.on('error', () => { clearTimeout(timer); done(null); });
+    proc.on('close', (code) => { clearTimeout(timer); done(code === 0 && /^MD5=\w+$/.test(out.trim()) ? out.trim() : null); });
+    proc.stdin.on('error', () => {});
+    proc.stdin.end(sample);
+  });
+}
+
+/** @type {Promise<string[]> | null} */
+let decoding = null;
+/**
+ * The input options that decode footage on the graphics chip here, or none: the first of decoderCandidates this
+ * ffmpeg has that decodes a moment of H.264 to the processor's very pixels (once a launch). What the chip can't take (a
+ * codec, a bit depth, a size) ffmpeg decodes on the processor by itself; a chip that fails partway is left out from
+ * then on (`onTheChip`).
+ * @returns {Promise<string[]>}
+ */
+export function hardwareDecoding() {
+  decoding ??= (async () => {
+    const built = await hwaccels();
+    const candidates = decoderCandidates().filter((options) => built.has(options[1]));
+    const sample = candidates.length ? await sampleH264() : null;
+    const expected = sample ? await decodedMd5([], sample) : null;
+    if (sample && expected) for (const options of candidates) if (await decodedMd5(options, sample) === expected) return options;
+    return [];
+  })();
+  return decoding;
+}
+
+/**
+ * A conversion on the chip, and again without what failed: `make(encoder, decoding)` with the chip's decoding and
+ * `encoder` (either may be none), then with the processor's decoding, then with the processor for both (`encoder`
+ * null). What made the difference is left out for the rest of this launch: the chip's decoding when the same encoder
+ * then worked, else the chip's encoder. Cancelled (`signal`), it is not tried again.
+ * @template T
+ * @param {string | null} encoder @param {(encoder: string | null, decoding: string[]) => Promise<T>} make
+ * @param {AbortSignal} [signal] @returns {Promise<T>}
+ */
+export async function onTheChip(encoder, make, signal) {
+  const chip = await hardwareDecoding();
+  const tries = /** @type {[string | null, string[]][]} */ ([[encoder, chip], [encoder, []], [null, []]])
+    .filter(([e, d], i, all) => all.findIndex(([e2, d2]) => e2 === e && d2.length === d.length) === i);
+  /** @type {string | null | undefined} the encoder of the try that failed last */
+  let failed;
+  for (const [i, [e, d]] of tries.entries()) {
+    try {
+      const made = await make(e, d);
+      if (failed !== undefined) {
+        if (failed === e) decoding = Promise.resolve([]);
+        else if (failed) broken(failed);
+      }
+      return made;
+    } catch (error) {
+      if (signal?.aborted || i === tries.length - 1) throw error;
+      failed = e;
+    }
+  }
+  throw new Error('no conversion was tried');
 }
 
 /* the codes of H.273 (what an H.264 stream says), by the names ffprobe gives */
