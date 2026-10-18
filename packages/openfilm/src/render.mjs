@@ -1,7 +1,8 @@
 // film render: the deliverable. Frames are rendered in parallel page instances, averaged
 // over the shutter for motion blur, encoded with tagged BT.709 color, and muxed with the mix of the film's sounds.
+import { spawnSync } from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { availableParallelism, totalmem } from 'node:os';
+import { availableParallelism, freemem, totalmem } from 'node:os';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { clipKind, FILM_FILE } from './film-doc.mjs';
 import { broken, encoders, hardwareEncoder, hardwareOptions, proresOptions } from './encoders.mjs';
@@ -92,7 +93,7 @@ export async function render(args, opts = {}) {
   const chip = opts.format || opts.hardware === false ? null : await chipFormat(extname(out).toLowerCase(), size, fps);
   let format = chip ? { ...own, ...chip.format } : own;
   let encoder = chip?.encoder ?? encoderOf(own.video);
-  const workers = Math.max(1, Math.min(Number(opts.workers ?? defaultWorkers()), total));
+  const workers = Math.max(1, Math.min(Number(opts.workers ?? defaultWorkers(machine(), total)), total));
   /* the videos get copies this browser plays: those it does not decode here (ProRes; HEVC without a chip for it), and
      for a render of more than a moment those that seek slowly (seekable.mjs). A film's video clips load only when
      their time comes, so they are read from film.html (a page drawn around the project's film, as a burned-in
@@ -207,9 +208,42 @@ export async function render(args, opts = {}) {
  * One browser per three cores, at most four, and memory to spare (a page with its media takes 1.5 GB or more, and the
  * encoder and the person's own apps need theirs): a render leaves the computer usable while it runs.
  */
-/** A browser for every two cores (a core's two threads), with 3 GB of memory each, up to 8. */
-export function defaultWorkers(threads = availableParallelism(), memory = totalmem()) {
-  return Math.max(1, Math.min(8, Math.floor(threads / 2), Math.floor(memory / (3 * 2 ** 30))));
+/** The memory a browser drawing a film takes, with its share of the encoding (a 1080p film's page measured 1.1 GB). */
+const WORKER_MEMORY = 1.5 * 2 ** 30;
+/** Memory left free for the person's own apps. */
+const RESERVE = 2 * 2 ** 30;
+/** Frames worth a browser of their own: for fewer, starting one costs more than it saves. */
+const FRAMES_PER_WORKER = 60;
+/** More browsers stop drawing faster: they share one graphics chip (measured: three draw twice as fast as one;
+ * past four, slower, and eight ran out of resources). */
+const MAX_WORKERS = 4;
+
+/**
+ * What a render may use of this machine: its performance cores (Apple silicon's efficiency cores are slow for
+ * drawing; elsewhere a core is two threads) and the memory free now. On a Mac `os.freemem()` counts only memory never
+ * used, a fraction of what is free: the system's own share of free memory is read instead.
+ */
+export function machine() {
+  const sysctl = (/** @type {string} */ name) => Number(spawnSync('sysctl', ['-n', name], { encoding: 'utf8', timeout: 2000 }).stdout?.trim());
+  let cores = Math.max(1, Math.floor(availableParallelism() / 2));
+  let available = freemem();
+  if (process.platform === 'darwin') {
+    const performance = sysctl('hw.perflevel0.physicalcpu');
+    if (performance > 0) cores = performance;
+    const free = sysctl('kern.memorystatus_level');
+    if (free > 0 && free <= 100) available = (totalmem() * free) / 100;
+  }
+  return { cores, available };
+}
+
+/**
+ * How many browsers draw a render: one for each performance core but one (the person keeps one), as many as the
+ * memory free now holds with room left for the person's apps, and enough frames for each; at most four. The
+ * computer stays usable while it renders: a render takes only memory that is free when it starts.
+ * @param {{ cores: number, available: number }} [budget] @param {number} [frames]
+ */
+export function defaultWorkers({ cores, available } = machine(), frames = Infinity) {
+  return Math.max(1, Math.min(MAX_WORKERS, cores - 1, Math.floor((available - RESERVE) / WORKER_MEMORY), Math.floor(frames / FRAMES_PER_WORKER)));
 }
 
 /** Frames [a, b) of one page into one file; sub-frames are averaged by ffmpeg (tmix) and every n-th kept. */

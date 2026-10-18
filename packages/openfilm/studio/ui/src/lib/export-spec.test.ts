@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { exportEstimateBytes, exportFilmPixels, exportFramedDims, exportGifDims, exportGifEstimateBytes, exportPresetsFor, rangeMarks } from './export-spec.ts';
+import { exportEstimateBytes, exportFilmPixels, exportFramedDims, exportGifDims, exportGifEstimateBytes, exportPreset, exportPresetsFor, presetFps, rangeMarks } from './export-spec.ts';
 import { filmFrameBox } from './film-frame.ts';
 
 const stage = { w: 1920, h: 1080 };
@@ -77,4 +77,14 @@ test('platforms: China\'s first in Chinese, none of them in any other language',
   }
   const xhs = exportPresetsFor('zh-CN').find((p) => p.id === 'xiaohongshu');
   assert.deepEqual(exportFramedDims({ w: 1920, h: 1080 }, xhs.frame, 'contain', xhs.shortEdge), { w: 1080, h: 1440 });
+});
+
+test('a platform gets the film\'s own frames a second, up to the most it shows', () => {
+  const bilibili = exportPreset('bilibili')!;
+  const douyin = exportPreset('douyin')!;
+  assert.equal(presetFps(bilibili, 30), 30, 'a 30 fps film is not drawn at 60');
+  assert.equal(presetFps(bilibili, 60), 60);
+  assert.equal(presetFps(bilibili, 23.976), 23.976);
+  assert.equal(presetFps(douyin, 60), 30, 'up to what the platform shows');
+  assert.equal(presetFps(douyin, 0), 30, 'no rate known: the platform\'s');
 });

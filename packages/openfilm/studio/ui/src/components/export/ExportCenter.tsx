@@ -34,6 +34,7 @@ import {
   exportGifDims,
   exportGifEstimateBytes,
   exportPreset,
+  presetFps,
   rangeMarks,
   type ExportPresetGroup,
   type ExportQuality,
@@ -381,7 +382,7 @@ export function ExportCenter(props: ExportCenterProps) {
     switch (dest) {
       case 'social':
         return s.presets.map((id) => presets.find((p) => p.id === id) ?? null).filter((p) => p !== null).map((p) => ({
-          kind: 'video', codec: 'h264', frame: p.frame, fill: 'contain', shortEdge: p.shortEdge, fps: p.fps,
+          kind: 'video', codec: 'h264', frame: p.frame, fill: 'contain', shortEdge: p.shortEdge, fps: presetFps(p, projectFps),
           quality: s.socialQuality, audio: true, preset: p.name, label: p.name,
           ...burn(s.socialSubs === 'auto' ? p.burnSubtitles : s.socialSubs === 'on'), ...ranged,
         }));
@@ -640,7 +641,7 @@ export function ExportCenter(props: ExportCenterProps) {
                                 {on && <Check size={13} className="shrink-0 text-[var(--text)]" />}
                               </span>
                               <span className="text-[11px] tabular-nums text-[var(--text-faint)]">
-                                {dims.w}×{dims.h} · {p.fps}fps
+                                {dims.w}×{dims.h} · {presetFps(p, projectFps)}fps
                               </span>
                               {tooLong && (
                                 <span className="text-[10.5px] leading-snug text-[var(--warn)]">

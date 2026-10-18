@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createExports, exportCapabilities, exportsRoot, ExportError, frameBox, dimsForShortEdge, projectFiles, projectSizes } from './exports.mjs';
 import { encoders, hardwareEncoder } from '../../src/encoders.mjs';
@@ -725,4 +725,18 @@ test('a poster, and a video with its subtitles burned in, show footage no browse
   } finally {
     rmSync(folder, { recursive: true, force: true });
   }
+});
+
+test('platforms that take the same picture are drawn once, the others get its file under their own name', ffmpeg, async () => {
+  const seen = [];
+  const exports = createExports({ captions: subtitles, onChange: (job) => seen.push(job) });
+  const same = { kind: 'video', frame: '9:16', shortEdge: 180, fps: 10, range: [0, 0.4] };
+  const queued = exports.startAll(project('Feeds'), { jobs: [{ ...same, preset: '抖音' }, { ...same, preset: '快手' }, { ...same, preset: '视频号' }, { ...same, fps: 5, preset: 'Other' }] });
+  const done = [];
+  for (const job of queued) done.push(await ended(exports, job));
+  assert.deepEqual(done.map((j) => j.status), ['done', 'done', 'done', 'done'], done.map((j) => j.error).join(' '));
+  assert.deepEqual(done.map((j) => basename(j.out)), ['Feeds · 抖音 0-0.4s.mp4', 'Feeds · 快手 0-0.4s.mp4', 'Feeds · 视频号 0-0.4s.mp4', 'Feeds · Other 0-0.4s.mp4']);
+  const drawn = new Set(seen.filter((j) => j.phase === 'rendering').map((j) => j.id));
+  assert.deepEqual(done.map((j) => drawn.has(j.id)), [true, false, false, true], 'only the first of the same, and the one at another rate');
+  assert.ok(readFileSync(done[1].out).equals(readFileSync(done[0].out)) && readFileSync(done[2].out).equals(readFileSync(done[0].out)), 'the same file');
 });

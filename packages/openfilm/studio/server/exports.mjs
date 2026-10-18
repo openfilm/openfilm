@@ -52,8 +52,8 @@ import { execFile, fork, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { constants as fsConstants, existsSync, readFileSync, statSync } from 'node:fs';
 import { copyFile, mkdir, mkdtemp, readdir, readFile, rename, rm, rmdir, stat, writeFile } from 'node:fs/promises';
-import { homedir, tmpdir } from 'node:os';
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { homedir, setPriority, tmpdir } from 'node:os';
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FilmPage, launch } from '../../src/host.mjs';
 import { broken, encoders, hardwareEncoder, hardwareOptions, onTheChip, proresOptions } from '../../src/encoders.mjs';
@@ -368,6 +368,14 @@ export async function projectSizes(root) {
 /* ── doing it ───────────────────────────────────────────────────────────── */
 
 /**
+ * Below the person's own apps: an export's processes (its renderer, and through it its browsers and encoders, which
+ * start below too; its ffmpeg runs) give way to what the person is doing, and take the computer whole when it is
+ * idle. Studio started by `openfilm open` runs below already (main.mjs); the desktop app's does not.
+ * @param {import('node:child_process').ChildProcess} proc
+ */
+const below = (proc) => { try { if (proc.pid) setPriority(proc.pid, 10); } catch { /* not allowed here: as it is */ } };
+
+/**
  * ffmpeg, stopped when `signal` aborts. `input`: what it reads from its standard input.
  * @param {string[]} args @param {AbortSignal} signal @param {Buffer} [input]
  */
@@ -375,6 +383,7 @@ function run(args, signal, input) {
   if (signal.aborted) return Promise.reject(new Error('cancelled'));
   return new Promise((done, fail) => {
     const proc = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-loglevel', 'error', '-y', ...args], { stdio: [input ? 'pipe' : 'ignore', 'ignore', 'pipe'], windowsHide: true });
+    below(proc);
     let err = '';
     proc.stderr?.on('data', (d) => { err += d; });
     const kill = () => killProcess(proc);
@@ -677,7 +686,7 @@ async function rasterize(browser, file, w, h, out) {
 export function createExports({ onChange = () => {}, captions = subtitlesForExport, drafts = defaultDrafts } = {}) {
   /** @type {ExportJob[]} */
   const jobs = [];
-  /** @type {Map<string, { root: string, folder: string, abort: AbortController }>} */
+  /** @type {Map<string, { root: string, folder: string, abort: AbortController, twin?: string }>} */
   const work = new Map();
   let running = false;
 
@@ -1236,18 +1245,42 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
     }
   }
 
+  /**
+   * An export the same as `made` but for its name: `made`'s files, cloned under this one's name beside them (on APFS at
+   * once, taking no more room), a sidecar with its file.
+   * @param {ExportJob} job @param {ExportJob} made @param {string} dir
+   */
+  async function cloneOf(job, made, dir) {
+    const main = made.outputs[0];
+    const ext = extname(main);
+    const out = freeFile(dir, baseName(job.name, job.ask), ext);
+    const stem = main.slice(0, main.length - ext.length);
+    /** @type {string[]} */
+    const outputs = [];
+    for (const file of made.outputs) {
+      const to = file === main ? out : `${out.slice(0, out.length - ext.length)}${file.slice(stem.length)}`;
+      outputs.push(to);
+      update(job, { out, outputs: [...outputs] });
+      await copyFile(file, to, fsConstants.COPYFILE_FICLONE);
+    }
+    update(job, { encoder: made.encoder, alpha: made.alpha });
+  }
+
   async function next() {
     if (running) return;
     /* the oldest waiting: the list is newest first, and exports run in the order asked */
     const job = jobs.findLast((j) => j.status === 'waiting');
     if (!job) return;
     running = true;
-    const { root, folder, abort } = /** @type {{ root: string, folder: string, abort: AbortController }} */ (work.get(job.id));
+    const { root, folder, abort, twin } = /** @type {{ root: string, folder: string, abort: AbortController, twin?: string }} */ (work.get(job.id));
     try {
       await mkdir(folder, { recursive: true });
       update(job, { status: 'running', phase: 'preparing', startedAt: Date.now() });
       const kind = job.ask.kind;
-      if (kind === 'video') await exportVideo(job, root, folder, abort.signal);
+      /* the same export as one made just before it (asked together), but for its name: that one's files, cloned */
+      const made = twin ? jobs.find((j) => j.id === twin && j.status === 'done' && j.outputs.length) : undefined;
+      if (made) await cloneOf(job, made, folder);
+      else if (kind === 'video') await exportVideo(job, root, folder, abort.signal);
       else if (kind === 'gif') await exportGif(job, root, folder, abort.signal);
       else if (kind === 'audio') await exportSound(job, root, folder, abort.signal);
       else if (kind === 'subtitles') await exportSubtitles(job, root, folder);
@@ -1273,7 +1306,8 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
   }
 
   /** @param {{ id: string, name: string, path: string }} project @param {ExportAsk} ask @param {string} folder */
-  function queue(project, ask, folder) {
+  /** @param {{ id: string, name: string, path: string }} project @param {ExportAsk} ask @param {string} folder @param {string} [twin] */
+  function queue(project, ask, folder, twin) {
     /** @type {ExportJob} */
     const job = {
       id: randomBytes(6).toString('hex'), project: project.id, name: project.name, label: ask.label ?? '', kind: ask.kind, ask,
@@ -1281,7 +1315,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       outputs: [], bytes: null, alpha: null, at: Date.now(), startedAt: null, finishedAt: null,
     };
     jobs.unshift(job);
-    work.set(job.id, { root: project.path, folder, abort: new AbortController() });
+    work.set(job.id, { root: project.path, folder, abort: new AbortController(), ...(twin ? { twin } : {}) });
     onChange({ ...job, outputs: [] });
     return job;
   }
@@ -1301,7 +1335,17 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       if (!Array.isArray(body?.jobs) || !body.jobs.length || body.jobs.length > 24) throw new ExportError('jobs: a list of 1 to 24 exports');
       const asks = body.jobs.map((ask) => checked(/** @type {ExportAsk} */ (ask)));
       const folder = folderOf(body.folder);
-      const queued = asks.map((ask) => queue(project, ask, folder));
+      /* asks the same but for their name (platforms that take the same frame, size and rate: 抖音, 快手, 视频号) are
+         drawn once, and the others get that one's files */
+      /** @type {Map<string, string>} */
+      const first = new Map();
+      const queued = asks.map((ask) => {
+        const { preset, label, ...rest } = /** @type {ExportAsk & { preset?: string }} */ (ask);
+        const same = ask.kind === 'video' || ask.kind === 'gif' ? JSON.stringify(rest, Object.keys(rest).sort()) : null;
+        const job = queue(project, ask, folder, same ? first.get(same) : undefined);
+        if (same && !first.has(same)) first.set(same, job.id);
+        return job;
+      });
       next();
       return queued.map((job) => ({ ...job }));
     },
@@ -1340,6 +1384,8 @@ function render(args, opts) {
   return new Promise((done, fail) => {
     if (signal?.aborted) return fail(new Error('cancelled'));
     const child = fork(fileURLToPath(new URL('./render-worker.mjs', import.meta.url)), [], { stdio: ['ignore', 'inherit', 'pipe', 'ipc'] });
+    /* before it is told what to render, so every browser and encoder it starts starts below too */
+    below(child);
     let said = '';
     child.stderr?.on('data', (d) => { said = (said + d).slice(-4000); process.stderr.write(d); });
     let settled = false;

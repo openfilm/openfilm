@@ -40,6 +40,7 @@ export interface ExportPreset {
   group: ExportPresetGroup;
   frame: Exclude<FilmFrameId, 'native'>;
   shortEdge: number;
+  /** The most frames a second the platform shows: a film is exported at its own rate up to it (presetFps). */
   fps: number;
   /** Vertical feeds are mostly watched muted: subtitles burned in by default. */
   burnSubtitles: boolean;
@@ -68,6 +69,14 @@ export const EXPORT_PRESETS: readonly ExportPreset[] = [
 /** The platforms offered in a language: China's first in Chinese, and none of them in any other. */
 export function exportPresetsFor(language: string): readonly ExportPreset[] {
   return language === 'zh-CN' ? [...EXPORT_PRESETS.filter((p) => p.china), ...EXPORT_PRESETS.filter((p) => !p.china)] : EXPORT_PRESETS.filter((p) => !p.china);
+}
+
+/**
+ * A film's frames a second on a platform: its own, up to the most the platform shows. A 30 fps film is not drawn
+ * twice over for a platform that shows 60: no frame of it would be new.
+ */
+export function presetFps(preset: ExportPreset, filmFps: number): number {
+  return filmFps > 0 ? Math.min(preset.fps, filmFps) : preset.fps;
 }
 
 export function exportPreset(id: string | undefined): ExportPreset | null {

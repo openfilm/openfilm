@@ -414,7 +414,9 @@ export class FilmPage {
   async capture({ format = 'png', quality } = {}) {
     // Without a clip, headless Chromium returns CSS pixels; a clip at the device pixel ratio returns real pixels.
     const clip = { x: 0, y: 0, width: this.meta.width, height: this.meta.height, scale: this.scale };
-    const { data } = await inTime(this.cdp.send('Page.captureScreenshot', { format, quality, clip, fromSurface: true, optimizeForSpeed: format !== 'png' }),
+    // Fast compression, for a PNG too: the same pixels in a larger file, two to four times sooner (a 4K frame of
+    // footage: 240 ms instead of a second).
+    const { data } = await inTime(this.cdp.send('Page.captureScreenshot', { format, quality, clip, fromSurface: true, optimizeForSpeed: true }),
       CAPTURE_MS, `the picture did not come within ${CAPTURE_MS / 1000} s`);
     return Buffer.from(data, 'base64');
   }

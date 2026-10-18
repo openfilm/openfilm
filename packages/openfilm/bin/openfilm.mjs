@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { setPriority } from 'node:os';
 import { parseArgs } from 'node:util';
 
 const USAGE = `openfilm — a film is a function of time: given t, it draws that moment
@@ -169,7 +170,12 @@ for (const [name, [lo, hi, whole]] of Object.entries(RANGES)) {
 const commands = {
   open: () => open(args[0] ?? null),
   look: () => import('../src/look.mjs').then((m) => m.look(args, opts)),
-  render: () => import('../src/render.mjs').then((m) => m.render(args, opts)),
+  /* below the person's own apps, with every browser and encoder it starts: a render takes the computer whole only
+     while nothing else wants it */
+  render: () => {
+    try { setPriority(10); } catch { /* not allowed here: as it is */ }
+    return import('../src/render.mjs').then((m) => m.render(args, opts));
+  },
   capture: () => import('../src/capture.mjs').then((m) => m.capture(args, opts)),
   update: () => import('../studio/client.mjs').then((m) => m.updateOpenfilm((line) => console.error(line))),
   skills: () => import('../src/skills-cli.mjs').then((m) => m.skillsCommand(RUN)),

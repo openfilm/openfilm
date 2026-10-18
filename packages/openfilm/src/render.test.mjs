@@ -1,11 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { execFileSync, spawn } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { getPriority, tmpdir, totalmem } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { encoders, hardwareEncoder } from './encoders.mjs';
-import { defaultWorkers, render } from './render.mjs';
+import { filmHtml } from './film-doc.mjs';
+import { defaultWorkers, machine, render } from './render.mjs';
 
 const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })();
 
@@ -46,10 +48,36 @@ test('an encoder that fails to start fails the render with ffmpeg\'s error, inst
   }
 });
 
-test('a browser for every two threads, with 3 GB of memory each, at least one and at most eight', () => {
+test('browsers: one per performance core but one, as many as the free memory holds with room to spare, enough frames each, at most four', () => {
   const GB = 2 ** 30;
-  assert.equal(defaultWorkers(10, 16 * GB), 5);
-  assert.equal(defaultWorkers(8, 8 * GB), 2, 'memory first');
-  assert.equal(defaultWorkers(32, 128 * GB), 8);
-  assert.equal(defaultWorkers(2, 4 * GB), 1);
+  assert.equal(defaultWorkers({ cores: 4, available: 6.5 * GB }), 3, 'an M5 with 16 GB, 41% free');
+  assert.equal(defaultWorkers({ cores: 4, available: 3 * GB }), 1, 'little memory free: one, never swapping');
+  assert.equal(defaultWorkers({ cores: 12, available: 48 * GB }), 4, 'a big machine: four, as one graphics chip takes no more');
+  assert.equal(defaultWorkers({ cores: 2, available: 16 * GB }), 1, 'two cores: one left for the person');
+  assert.equal(defaultWorkers({ cores: 8, available: 32 * GB }, 100), 1, 'a short render: one browser, its start not worth more');
+  assert.equal(defaultWorkers({ cores: 8, available: 32 * GB }, 240), 4);
+  const { cores, available } = machine();
+  assert.ok(cores >= 1 && available > 0 && available <= totalmem(), `this machine: ${cores} cores, ${available} bytes free`);
+});
+
+test('a render runs below the person\'s own apps, with every process it starts', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 120_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-render-priority-'));
+  try {
+    /* a project Studio has shown before (`.film/opened`), so the command goes straight to the render */
+    writeFileSync(join(dir, 'p.html'), '<!doctype html><body><script>window.film = { duration: 3, width: 320, height: 180, frame() {} };</script>');
+    writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'p', src: 'p.html', at: 0, time: [0, 3] }] }] }));
+    mkdirSync(join(dir, '.film'));
+    writeFileSync(join(dir, '.film', 'opened'), '');
+    const child = spawn(process.execPath, [fileURLToPath(new URL('../bin/openfilm.mjs', import.meta.url)), 'render', '0-3', '--workers', '1', '--out', join(dir, 'out.mp4')], { cwd: dir, stdio: 'ignore' });
+    const ended = new Promise((done) => child.on('exit', done));
+    let priority = 0;
+    for (const end = Date.now() + 20_000; priority === 0 && child.exitCode == null && Date.now() < end;) {
+      try { priority = getPriority(/** @type {number} */ (child.pid)); } catch { break; }
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    await ended;
+    assert.equal(priority, 10);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
