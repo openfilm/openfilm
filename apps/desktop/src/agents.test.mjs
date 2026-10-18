@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AgentSession, CLIENT_CAPABILITIES, agentDefaults, CODEX_UTF8_CMD, agentShell, allowOption, codexDeveloperInstructions, codexLaunchEnv, distinctOptions, legacyOptions, powerShellScript, readAgentStatus, setChosenPaths, signInScript, turnError } from './agents.mjs';
+import { AgentSession, CLIENT_CAPABILITIES, agentDefaults, planProblem, CODEX_UTF8_CMD, agentShell, allowOption, codexDeveloperInstructions, codexLaunchEnv, distinctOptions, legacyOptions, powerShellScript, readAgentStatus, setChosenPaths, signInScript, turnError } from './agents.mjs';
 
 test('an agent that asks: yes for good where it offers that, else yes this once; nothing to say yes with is null', () => {
   const options = [
@@ -157,4 +157,49 @@ test("CodeBuddy is started as its China edition, unless the person's shell says 
   assert.deepEqual(agentDefaults('codebuddy', { PATH: '/bin' }), { CODEBUDDY_INTERNET_ENVIRONMENT: 'internal' });
   assert.deepEqual(agentDefaults('codebuddy', { CODEBUDDY_INTERNET_ENVIRONMENT: 'ioa' }), {});
   assert.deepEqual(agentDefaults('cursor', {}), {});
+});
+
+test('a refusal about the plan is the agent\'s own words; one about the sign-in is a sign-in', () => {
+  /* Kimi 2.2 on an account without Kimi Code */
+  assert.equal(planProblem('Authentication required: 403 Your current subscription does not have access to Kimi Code right now. Upgrade your plan to keep coding with Kimi Code: https://www.kimi.com/code/#pricing'),
+    '403 Your current subscription does not have access to Kimi Code right now. Upgrade your plan to keep coding with Kimi Code: https://www.kimi.com/code/#pricing');
+  assert.equal(planProblem('Authentication required: Use Qwen Code CLI to authenticate first.'), null);
+  assert.equal(planProblem('Authentication required'), null);
+});
+
+test('a turn that ends with nothing said is said so; a refusal for the plan does not sign the agent out', async () => {
+  const { mkdtempSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const dir = mkdtempSync(join(tmpdir(), 'of-kimi-'));
+  /* a Kimi that answers its first message with nothing and its second with Kimi 2.2's refusal for the plan */
+  const program = join(dir, 'kimi.mjs');
+  writeFileSync(program, `let turns = 0;
+let buf = '';
+const send = (o) => process.stdout.write(JSON.stringify(o) + '\\n');
+process.stdin.on('data', (d) => {
+  buf += d;
+  let i;
+  while ((i = buf.indexOf('\\n')) >= 0) {
+    const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1);
+    if (m.method === 'initialize') send({ jsonrpc: '2.0', id: m.id, result: { protocolVersion: 1, agentCapabilities: {}, authMethods: [] } });
+    else if (m.method === 'session/new') send({ jsonrpc: '2.0', id: m.id, result: { sessionId: 's1' } });
+    else if (m.method === 'session/prompt') send(++turns === 1 ? { jsonrpc: '2.0', id: m.id, result: { stopReason: 'end_turn' } }
+      : { jsonrpc: '2.0', id: m.id, error: { code: -32000, message: 'Authentication required: 403 Your current subscription does not have access to Kimi Code right now.' } });
+  }
+});
+`);
+  setChosenPaths({ kimi: program });
+  const session = new AgentSession({ agent: 'kimi', cwd: dir });
+  try {
+    await session.start();
+    const empty = await session.prompt([{ type: 'text', text: 'hi' }]).then(() => null, (e) => e);
+    assert.equal(empty?.code, 'empty-turn');
+    const plan = await session.prompt([{ type: 'text', text: 'hi' }]).then(() => null, (e) => e);
+    assert.equal(plan?.code, 'agent-error');
+    assert.match(plan.message, /^Kimi: 403 Your current subscription/);
+  } finally {
+    session.close();
+    setChosenPaths({});
+  }
 });

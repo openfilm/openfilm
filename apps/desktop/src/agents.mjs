@@ -666,13 +666,29 @@ export const CLIENT_CAPABILITIES = {
 
 const CLIENT_INFO = { name: 'openfilm-desktop', title: 'OpenFilm', version: '0.1.0' };
 
+/** What an agent sends while it answers or works: a turn with none of these said nothing. */
+const SPOKE = new Set(['agent_message_chunk', 'agent_thought_chunk', 'tool_call', 'tool_call_update', 'plan']);
+
 /** ACP's auth_required: the agent wants its own sign-in first. */
 const AUTH_REQUIRED = -32000;
 
-/** A session refused for the agent's sign-in, said so (`code: 'sign-in'`); any other error as it was. */
+/**
+ * A session refused for the agent's sign-in, said so (`code: 'sign-in'`); any other error as it was. One refused in
+ * ACP's sign-in terms for the person's plan instead (Kimi 2.2: "Authentication required: 403 Your current subscription
+ * does not have access to Kimi Code…") is the agent's own words (`code: 'agent-error'`): signing in again would not
+ * help, and the agent is not taken for signed out.
+ */
 function signInError(label, e) {
   if (e?.code !== AUTH_REQUIRED) return e;
+  const plan = planProblem(e?.message);
+  if (plan) return Object.assign(new Error(`${label}: ${plan}`), { code: 'agent-error' });
   return Object.assign(new Error(`${label} is not signed in. Sign in under Settings → Agents.`), { code: 'sign-in' });
+}
+
+/** What an agent's sign-in refusal says when it is about the person's plan, not their sign-in, or null. */
+export function planProblem(message) {
+  const text = String(message ?? '').replace(/^\s*Authentication required[:.]?\s*/i, '').trim();
+  return /\b(?:403|subscriptions?|plans?|upgrade|quota|billing|credits?|balance)\b/i.test(text) ? text.slice(0, 1000) : null;
 }
 
 /**
@@ -831,6 +847,7 @@ export class AgentSession {
       })
       .onNotification(acp.methods.client.session.update, (ctx) => {
         const update = ctx.params.update;
+        if (SPOKE.has(update?.sessionUpdate)) this.spoke = true;
         if (!this.replaying) this.opts.onUpdate?.(update?.configOptions ? { ...update, configOptions: distinctOptions(update.configOptions) } : update);
       })
       .connect(stream);
@@ -913,6 +930,7 @@ export class AgentSession {
     this.instructions = null;
     /* the message exactly as the agent gets it, for the turn log */
     this.opts.onSend?.({ prompt: [...told, ...blocks], ...meta });
+    this.spoke = false;
     const r = await this.conn.agent.request(acp.methods.agent.session.prompt, { sessionId: this.sessionId, prompt: [...told, ...blocks], ...meta })
       .catch((e) => {
         /* the app's own agent: a service with no balance left is said the same for every service, with its page */
@@ -928,6 +946,10 @@ export class AgentSession {
        the turn's error, or the chat would show an empty reply */
     const why = r.stopReason === 'refusal' ? turnError(r) : null;
     if (why) throw Object.assign(new Error(why), { code: 'agent-error' });
+    /* a turn ended with nothing said or done (Kimi 0.27 so ends one its plan does not cover): said, not an empty reply */
+    if (r.stopReason === 'end_turn' && !this.spoke && isAgentId(this.opts.agent)) {
+      throw Object.assign(new Error(`${this.spec.label} ended its turn without replying. If it keeps doing so, try ${this.spec.label} in its own terminal: it may need an update, or a plan that covers it.`), { code: 'empty-turn' });
+    }
     return r.stopReason;
   }
 

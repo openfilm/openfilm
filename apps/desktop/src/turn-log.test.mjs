@@ -17,7 +17,11 @@ import * as acp from ${JSON.stringify(import.meta.resolve('@agentclientprotocol/
 const connection = new acp.AgentSideConnection(() => ({
   async initialize() { return { protocolVersion: acp.PROTOCOL_VERSION, agentCapabilities: { promptCapabilities: { image: true } }, agentInfo: { name: 'fake', version: '1' }, authMethods: [] }; },
   async newSession() { return { sessionId: 'fake-session' }; },
-  async prompt(params) { appendFileSync(${JSON.stringify(out)}, JSON.stringify({ argv: process.argv.slice(2), prompt: params.prompt }) + '\\n'); return { stopReason: 'end_turn' }; },
+  async prompt(params) {
+    appendFileSync(${JSON.stringify(out)}, JSON.stringify({ argv: process.argv.slice(2), prompt: params.prompt }) + '\\n');
+    await connection.sessionUpdate({ sessionId: params.sessionId, update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Done.' } } });
+    return { stopReason: 'end_turn' };
+  },
   async cancel() {},
 }), acp.ndJsonStream(Writable.toWeb(process.stdout), Readable.toWeb(process.stdin)));
 await connection.closed;
