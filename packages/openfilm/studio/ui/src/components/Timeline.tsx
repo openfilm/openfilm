@@ -2327,7 +2327,7 @@ export const Timeline = React.memo(function Timeline({
     const renamingHere = renaming != null && renaming === track.docIndex && track.index === 1;
     /* typing a name always has its field; a name given shows when the row has room for it */
     const nameLine = renamingHere || (Boolean(given) && h >= HEAD_NAME_MIN_H);
-    /* the main track is marked by its look (its band, the magnet by its badge), not by a name that reads as one */
+    /* the main track is marked by its look (its band) and its hover title, not by a name or a badge that reads as a switch */
     const mainHead = Boolean(track.main) && track.index === 1;
     /* the track a pill hovered in the app's chat points at */
     const chatLit = chatTrack != null && track.docIndex === chatTrack;
@@ -2441,9 +2441,6 @@ export const Timeline = React.memo(function Timeline({
           />
         ) : nameLine && given ? (
           <span className="col-span-full w-full min-w-0 justify-self-stretch truncate px-1 text-[10.5px] font-medium leading-[14px]" style={{ color: TL.text }} data-track-name="">{given}</span>
-        ) : null}
-        {mainHead ? (
-          <Magnet size={10} aria-label={t('timeline.mainTrack')} className="pointer-events-none absolute bottom-1 left-1.5" style={{ color: 'var(--tl-accent)' }} />
         ) : null}
         {onResizeTrack && track.docIndex != null ? <TrackResizeHandle height={h} onResize={(height, done) => onResizeTrack(track, height, done)} /> : null}
       </div>
