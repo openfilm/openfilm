@@ -27,7 +27,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { FILM_FILE, kindOf, readFilmFile } from '../../src/film-doc.mjs';
-import { filmClosure, folderView, projectFiles, projectPath } from './closure.mjs';
+import { clipFile, filmClosure, folderView, projectFiles } from './closure.mjs';
 import { FORMAT, formatOf, markFormat, migrateHistory } from './history-migrate.mjs';
 import {
   HistoryError, gitRun, keepFiles, openRepo, readBlobs, readVersion, sameAs, writeFiles, writeTree,
@@ -203,7 +203,7 @@ function clipsOf(/** @type {string} */ text) {
   for (const track of doc?.tracks ?? []) {
     for (const clip of track.clips) {
       const src = String(clip.src);
-      clips.set(clip.id, { sound: kindOf(clip) === 'sound', file: projectPath(src, '') ?? src.replace(/[#?].*$/, ''), said: JSON.stringify(clip) });
+      clips.set(clip.id, { sound: kindOf(clip) === 'sound', file: clipFile(src) ?? src, said: JSON.stringify(clip) });
     }
   }
   return { clips, stage: doc ? `${doc.stage.w}x${doc.stage.h}` : '' };

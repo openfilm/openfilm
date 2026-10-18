@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clipFade, clipIdFor, clipKind, clipSpan, fadeGain, filmHtml, kindOf, parseFilm, pictureRect, readFilm, readFilmFile, soundRole, sourceAt } from './film-doc.mjs';
+import { clipFade, clipIdFor, clipKind, clipSpan, fadeGain, filmHtml, kindOf, parseFilm, pictureRect, readFilm, readFilmFile, soundRole, sourceAt, srcHref } from './film-doc.mjs';
 
 const film = (clip) => ({ stage: { w: 1920, h: 1080 }, tracks: [{ clips: [clip] }] });
 const problems = (value) => readFilm(value).problems.join('\n');
@@ -60,6 +60,30 @@ test('a clip written without an id gets its name written, so it stays put', () =
   const { value, doc } = readFilmFile(text);
   assert.deepEqual(doc.tracks[0].clips.map((c) => c.id), ['line', 'line-2']);
   assert.match(filmHtml(value, text), /<audio id="line" src="vo\/line.m4a"><\/audio>\n {2}<audio id="line-2" src="vo\/line.m4a" at="3"><\/audio>/);
+});
+
+test('a file\'s name may hold any character: src escapes only %, # and ?, and reads back the same path', () => {
+  const names = ['assets/a#b.png', 'assets/what?.png', 'assets/100%.png', 'assets/a%20b.png', 'assets/封面，标题！.png', "assets/it's (1) [v2] & co.png"];
+  const value = { stage: { w: 1920, h: 1080 }, tracks: [{ clips: names.map((src, i) => ({ id: `c${i}`, src, at: i, time: [0, 1] })) }] };
+  const text = filmHtml(value);
+  assert.match(text, /src="assets\/a%23b\.png#t=0,1"/);
+  assert.match(text, /src="assets\/what%3F\.png#t=0,1"/);
+  assert.match(text, /src="assets\/100%25\.png#t=0,1"/);
+  assert.match(text, /src="assets\/a%2520b\.png#t=0,1"/);
+  assert.match(text, /src="assets\/封面，标题！\.png#t=0,1"/, 'written as it is');
+  const { doc, problems: said } = readFilmFile(text);
+  assert.deepEqual(said, []);
+  assert.deepEqual(doc.tracks[0].clips.map((c) => c.src), names);
+  assert.deepEqual(doc.tracks[0].clips.map((c) => c.time), names.map(() => [0, 1]));
+});
+
+test('a src written by hand: its escapes are read, a bare % is a %, an address is kept, a # in a name is told', () => {
+  const srcs = (els) => readFilmFile(page([els])).doc.tracks[0].clips.map((c) => c.src);
+  assert.deepEqual(srcs(['<img src="assets/my%20file.png#t=0,2">', '<img src="assets/100%.png#t=0,2" at="2">', '<img src="assets/%E5%9B%BE.png#t=0,2" at="4">']),
+    ['assets/my file.png', 'assets/100%.png', 'assets/图.png']);
+  assert.deepEqual(srcs(['<video src="https://x.test/a%20b.mp4"></video>']), ['https://x.test/a%20b.mp4']);
+  assert.match(said(page([['<img src="assets/a#b.png#t=0,2">']])), /A # in the file's name is written %23/);
+  assert.equal(srcHref('https://x.test/a.mp4?v=1#x'), 'https://x.test/a.mp4?v=1#x');
 });
 
 test('a new film is a whole page; a box at 0, 0 is written as one', () => {

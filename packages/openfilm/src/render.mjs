@@ -3,7 +3,7 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { availableParallelism, totalmem } from 'node:os';
 import { basename, dirname, extname, join, resolve } from 'node:path';
-import { clipKind, kindOf, readFilmFile } from './film-doc.mjs';
+import { clipKind, kindOf, readFilmFile, srcHref } from './film-doc.mjs';
 import { FilmPage, launch } from './host.mjs';
 import { seekableCopies } from './seekable.mjs';
 import { ffmpeg, fileOf, filmSound, fmt, kill, mix, open, outDir, parseTarget, shown, UsageError, write } from './shared.mjs';
@@ -67,7 +67,7 @@ export async function render(args, opts = {}) {
     if (isFilm) {
       try {
         const doc = readFilmFile(readFileSync(join(root, entry), 'utf8')).doc;
-        for (const track of doc?.tracks ?? []) for (const clip of track.clips) if (kindOf(clip) === 'video') videos.add(fileOf(root, entry, clip.src));
+        for (const track of doc?.tracks ?? []) for (const clip of track.clips) if (kindOf(clip) === 'video') videos.add(fileOf(root, entry, srcHref(clip.src)));
       } catch { /* the pages ask for what they need */ }
     }
     /* only ever faster: a copy that could not be made leaves its video as it is */

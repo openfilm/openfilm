@@ -51,6 +51,23 @@ export function soundRole(src) {
   return 'voice';
 }
 
+/* a src with a scheme (https:, data:) is an address, kept as written; any other is the path of a file */
+const ADDRESS = /^[a-z][a-z0-9+.-]*:/i;
+
+/**
+ * A clip's src as an address: its file's path with the three characters an address reads otherwise escaped (`%` an
+ * escape, `#` the part of the file, `?` a query). Any other character, a space or a Chinese comma, is written as is.
+ */
+export function srcHref(src) {
+  return ADDRESS.test(src) ? src : src.replace(/[%#?]/g, (c) => encodeURIComponent(c));
+}
+
+/** The path a src attribute names: its escapes read (`%23` is `#`), a `%` that escapes nothing kept as it is. */
+function srcPath(value) {
+  if (ADDRESS.test(value)) return value;
+  return value.replace(/(?:%[0-9a-f]{2})+/gi, (m) => { try { return decodeURIComponent(m); } catch { return m; } });
+}
+
 /** A web page clip: an .html file that sets `window.film` (SPEC.md). */
 export function isPage(src) {
   return /\.html?$/i.test(src);
@@ -679,13 +696,13 @@ function clipOfTag(tag, where, problems) {
     if (name === 'id') { if (value) raw.id = value; }
     else if (name === 'src') {
       const hash = value.indexOf('#');
-      raw.src = hash < 0 ? value : value.slice(0, hash);
+      raw.src = srcPath(hash < 0 ? value : value.slice(0, hash));
       if (hash >= 0) {
         const m = /^t=([^,]*)(?:,(.*))?$/.exec(value.slice(hash + 1));
         const from = m ? fragmentSeconds(m[1]) : NaN;
         const to = m && m[2] !== undefined ? fragmentSeconds(m[2]) : undefined;
         if (!m || !Number.isFinite(from) || (to !== undefined && !Number.isFinite(to))) {
-          problems.push(`${where}: src's fragment says which seconds of the file it plays, like src="a.mp4#t=2,6" (2 s to 6 s) or "#t=2" (2 s to the end) — "${value.slice(hash)}" is not that.`);
+          problems.push(`${where}: src's fragment says which seconds of the file it plays, like src="a.mp4#t=2,6" (2 s to 6 s) or "#t=2" (2 s to the end) — "${value.slice(hash)}" is not that.${m ? '' : ' A # in the file\'s name is written %23.'}`);
         } else if (to !== undefined) raw.time = [from, to];
         else if (from > 0) raw.time = [from];
       }
@@ -877,7 +894,7 @@ export function clipTag(clip) {
   const tag = TAG_OF_KIND[kind];
   const t = clip.time;
   const num = (n) => String(Number(n.toFixed(3)));
-  const src = clip.src + (t ? (t.length === 2 ? `#t=${num(t[0])},${num(t[1])}` : `#t=${num(t[0])}`) : '');
+  const src = srcHref(clip.src) + (t ? (t.length === 2 ? `#t=${num(t[0])},${num(t[1])}` : `#t=${num(t[0])}`) : '');
   const parts = [];
   if (clip.id) parts.push(`id="${escapeAttr(clip.id)}"`);
   parts.push(`src="${escapeAttr(src)}"`);

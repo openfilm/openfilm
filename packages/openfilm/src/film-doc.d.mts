@@ -86,6 +86,8 @@ export declare const SPEED_MAX: number;
 
 export declare function isStill(src: string): boolean;
 export declare function isPage(src: string): boolean;
+/** A clip's src as an address: its path with `%`, `#` and `?` escaped; a src with a scheme as written. */
+export declare function srcHref(src: string): string;
 export declare function soundRole(src: string): 'voice' | 'music' | 'sfx';
 export declare function clipKind(src: unknown): FilmClipKind | null;
 export declare function hasPicture(src: unknown): boolean;

@@ -73,6 +73,16 @@ export function projectPath(/** @type {string} */ ref, /** @type {string} */ bas
   return path.replace(/\/$/, '');
 }
 
+/**
+ * A clip's src (its file's path from film.html, as film-doc reads it: any character a name has) made a project path;
+ * null for another site, or outside the folder.
+ */
+export function clipFile(/** @type {string} */ src) {
+  if (/^([a-z][a-z0-9+.-]*:|\/\/)/i.test(src)) return null;
+  const path = posix.normalize(src.replace(/^\/+/, ''));
+  return !path || path === '.' || path === '..' || path.startsWith('../') ? null : path;
+}
+
 /* ── reading files for what they name ────────────────────────────────────── */
 
 /** The strings of a script or JSON text (comments skipped): quoted ones, and template strings with `${…}` as `\0`. */
@@ -293,7 +303,8 @@ export async function filmClosure(view) {
   for (const track of value?.tracks ?? []) {
     for (const clip of /** @type {{ src?: unknown, overrides?: unknown }[]} */ (track.clips ?? [])) {
       if (typeof clip?.src !== 'string') continue;
-      await ref(clip.src, [''], FILM_FILE);
+      const file = clipFile(clip.src);
+      if (file) await take(file, FILM_FILE);
       /* a picture the person put in a page's place (an override's `url()`), named from the page's folder */
       const dir = posix.dirname(clip.src) === '.' ? '' : posix.dirname(clip.src);
       for (const o of Array.isArray(clip.overrides) ? clip.overrides : []) {

@@ -145,7 +145,8 @@ export async function write(stream, buf) {
 }
 
 /**
- * Where a path the film asks for (a sound's `src`, resolved from the entry as the browser would) lives on disk. The
+ * Where an address the film asks for (a sound's `src`, resolved from the entry as the browser would; a clip's src made
+ * one by film-doc's srcHref) lives on disk. The
  * file is inside the film's folder; a link out of it is followed only to media the person linked (`readableLink`,
  * src/media-links.mjs), as the file server does.
  */
