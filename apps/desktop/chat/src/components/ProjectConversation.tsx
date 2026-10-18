@@ -28,6 +28,7 @@ import { TurnLogButton } from './TurnLog';
 import { FileChangesList } from './FileChangesList';
 import { ChatProjectContext, useDeveloperMode, useShowChanges } from '@/lib/developer';
 import { isVideoAttachment } from '@/lib/composer-attachments';
+import { desktopBridge } from '@/lib/desktop-bridge';
 
 /** What past turns get as "no live process". One constant: a new array each time would defeat the memo. */
 const NO_TRANSCRIPT: TranscriptItem[] = [];
@@ -498,13 +499,15 @@ function TurnAttachments({ items }: { items: TurnAttachment[] }) {
           </>
         );
 
-        return preview ? (
+        /* a folder stays where it was on the disk: clicked, it is shown there */
+        const folderPath = item.path;
+        return preview || folderPath ? (
           <button
             key={`${item.name}-${index}`}
             type="button"
-            title={item.name}
-            aria-label={t('composer.openAttachment').replace('{name}', item.name)}
-            onClick={() => setOpen(preview)}
+            title={folderPath ?? item.name}
+            aria-label={t(folderPath ? 'composer.revealFolder' : 'composer.openAttachment').replace('{name}', item.name)}
+            onClick={() => (folderPath ? void desktopBridge()?.revealPath(folderPath) : setOpen(preview))}
             className={`${shell} transition hover:border-[var(--border-strong)]`}
           >
             {inner}

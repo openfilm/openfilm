@@ -29,6 +29,8 @@ export const turnAttachmentSchema = z.object({
   thumb: z.string().max(TURN_ATTACHMENT_THUMB_MAX_CHARS).optional(),
   /** The original's sha256, to open it at full size (only its owner can). Older messages have none. */
   sha256: z.string().regex(/^[0-9a-f]{64}$/).optional(),
+  /** A folder's path on this computer, to show it in the file manager. Files and older messages have none. */
+  path: z.string().min(1).max(4096).optional(),
 });
 export type TurnAttachment = z.infer<typeof turnAttachmentSchema>;
 

@@ -51,7 +51,7 @@ import {
   type LocalAgentTurn,
   type LocalTranscriptStore,
 } from '@/lib/local-agent-run';
-import type { LocalAgentId, LocalAgentTurnMeta, PromptImage } from '@/lib/desktop-bridge';
+import { desktopBridge, type LocalAgentId, type LocalAgentTurnMeta, type PromptImage } from '@/lib/desktop-bridge';
 import { referencePictures } from '@/lib/ref-pictures';
 import type { TurnFileChanges } from '@/lib/file-changes';
 import { readBalance, type TurnBalance } from '@/lib/balance';
@@ -821,12 +821,15 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
               const busy = file.state === 'pending' ? <Loader2 size={12} className="absolute inset-0 m-auto animate-spin text-white drop-shadow" /> : null;
               /* a picture shows itself; a video, a frame of itself with a play mark (once one is had) */
               const picture = file.kind === 'image' ? file.previewUrl : file.thumb;
-              /* clicked, it opens to look at: a picture large, a video played, a text read */
-              const open = file.previewUrl ? {
+              /* clicked, it opens to look at: a picture large, a video played, a text read; a folder, shown where it is */
+              const folderPath = file.folder && file.state === 'ready' ? file.path : undefined;
+              const open = file.previewUrl || folderPath ? {
                 role: 'button' as const,
                 tabIndex: 0,
-                'aria-label': t('composer.openAttachment').replace('{name}', file.name),
-                onClick: () => setOpenedFile({ name: file.name, kind: file.kind, url: file.previewUrl!, ...(file.mediaType ? { mediaType: file.mediaType } : {}) }),
+                'aria-label': t(folderPath ? 'composer.revealFolder' : 'composer.openAttachment').replace('{name}', file.name),
+                onClick: () => (folderPath
+                  ? void desktopBridge()?.revealPath(folderPath)
+                  : setOpenedFile({ name: file.name, kind: file.kind, url: file.previewUrl!, ...(file.mediaType ? { mediaType: file.mediaType } : {}) })),
                 onKeyDown: (event: React.KeyboardEvent) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); (event.currentTarget as HTMLElement).click(); } },
               } : {};
               return picture ? (
@@ -839,7 +842,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
                 </div>
               ) : (
                 <div key={file.id} title={file.error ?? file.path ?? file.name} {...open}
-                  className={`group relative flex h-10 min-w-0 max-w-[150px] items-center gap-1.5 overflow-hidden rounded-[8px] border bg-[var(--surface-2)] py-1 pl-2 pr-5 transition ${file.previewUrl ? 'cursor-pointer' : ''} ${file.state === 'failed' ? 'border-[var(--danger)]' : 'border-[var(--border)] hover:border-[var(--border-strong)]'}`}>
+                  className={`group relative flex h-10 min-w-0 max-w-[150px] items-center gap-1.5 overflow-hidden rounded-[8px] border bg-[var(--surface-2)] py-1 pl-2 pr-5 transition ${file.previewUrl || folderPath ? 'cursor-pointer' : ''} ${file.state === 'failed' ? 'border-[var(--danger)]' : 'border-[var(--border)] hover:border-[var(--border-strong)]'}`}>
                   {file.state === 'pending' ? <Loader2 size={13} className="shrink-0 animate-spin text-[var(--text-muted)]" /> : <Icon size={13} className="shrink-0 text-[var(--text-muted)]" />}
                   <span className="flex min-w-0 flex-col">
                     <span className="truncate text-[11.5px] leading-tight text-[var(--text-muted)]">{file.name}</span>

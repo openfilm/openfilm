@@ -139,6 +139,7 @@ export const enUS = {
     filesPending: 'The files are still being attached.',
     model: 'Model',
     openAttachment: 'View {name}',
+    revealFolder: 'Show {name} in its folder',
     openSettings: 'Open Settings',
     queued: 'Queued — sends when this turn finishes.',
     queuedCancel: 'Don\'t send',

@@ -140,6 +140,7 @@ export const ko: Words = {
     filesPending: '파일을 추가하는 중입니다.',
     model: '모델',
     openAttachment: '{name} 보기',
+    revealFolder: '폴더에서 {name} 보기',
     openSettings: '설정 열기',
     queued: '대기 중 — 이번 턴이 끝나면 보냅니다.',
     queuedCancel: '보내지 않기',

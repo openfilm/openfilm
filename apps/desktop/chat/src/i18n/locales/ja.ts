@@ -140,6 +140,7 @@ export const ja: Words = {
     filesPending: 'ファイルを追加しています。',
     model: 'モデル',
     openAttachment: '{name} を表示',
+    revealFolder: '{name} をフォルダに表示',
     openSettings: '設定を開く',
     queued: '待機中 — このターンが終わると送信されます。',
     queuedCancel: '送信しない',

@@ -140,6 +140,7 @@ export const es: Words = {
     filesPending: 'Los archivos aún se están adjuntando.',
     model: 'Modelo',
     openAttachment: 'Ver {name}',
+    revealFolder: 'Mostrar {name} en su carpeta',
     openSettings: 'Abrir Configuración',
     queued: 'En cola: se envía cuando termine este turno.',
     queuedCancel: 'No enviar',

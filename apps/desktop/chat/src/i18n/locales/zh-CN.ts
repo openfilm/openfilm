@@ -140,6 +140,7 @@ export const zhCN: Words = {
     filesPending: '文件还在添加中。',
     model: '模型',
     openAttachment: '查看 {name}',
+    revealFolder: '在文件夹中显示 {name}',
     openSettings: '打开设置',
     queued: '已排队，本轮结束后发送。',
     queuedCancel: '不发送',

@@ -167,7 +167,12 @@ export async function attachedPictures(files: readonly DesktopAttachment[], room
   return made.filter((picture): picture is PromptImage => picture !== null);
 }
 
-/** What the message keeps of them, to show in its bubble (a folder's name ends in "/"). */
+/** What the message keeps of them, to show in its bubble (a folder's name ends in "/", and its path opens it). */
 export function turnAttachments(files: readonly DesktopAttachment[]): TurnAttachment[] {
-  return files.map((f) => ({ kind: f.kind, name: f.folder ? `${f.name}/` : f.name, ...(f.thumb ? { thumb: f.thumb } : {}) }));
+  return files.map((f) => ({
+    kind: f.kind,
+    name: f.folder ? `${f.name}/` : f.name,
+    ...(f.thumb ? { thumb: f.thumb } : {}),
+    ...(f.folder && f.path ? { path: f.path } : {}),
+  }));
 }
