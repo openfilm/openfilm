@@ -463,6 +463,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     setPlaying(false);
     setTimeMs(player.current.time() * 1000);
     preview.current?.seek(pictureAt(player.current.time()));
+    for (const fn of listeners.current) fn();
   }, []);
   const toggle = React.useCallback(() => {
     stopShuttle();
@@ -526,7 +527,19 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     return () => { window.removeEventListener('pointerdown', wake, true); window.removeEventListener('keydown', wake, true); };
   }, []);
   /* scrubbing the timeline pauses, and stays paused */
-  const scrubPreview = React.useCallback((ms: number) => { pause(); seek(ms); }, [pause, seek]);
+  /* while scrubbing, the picture and the timecode follow each step the timeline tells (every frame); the rest of the
+     editor, which renders whole each time, hears the time a few times a second, and once more as the scrub ends */
+  const scrubTold = React.useRef(0);
+  const scrubPreview = React.useCallback((ms: number) => {
+    pause();
+    const t = Math.max(0, Math.min(ms / 1000, player.current.duration || ms / 1000));
+    player.current.seek(t);
+    preview.current?.seek(pictureAt(t));
+    for (const fn of listeners.current) fn();
+    const now = performance.now();
+    if (now - scrubTold.current > 100) { scrubTold.current = now; setTimeMs(t * 1000); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pause]);
   const scrubCommit = React.useCallback((ms: number) => { pause(); seek(ms); }, [pause, seek]);
 
   /* a seek asked for past the film's end as it was (the end of a clip just put on): made once the film is that long */
@@ -2858,7 +2871,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 ) : null}
                 <ViewerBar
                   timeMs={timeMs}
-                  clock={playing ? clock : null}
+                  clock={clock}
                   totalMs={totalMs}
                   playing={playing}
                   onPlayPause={toggle}

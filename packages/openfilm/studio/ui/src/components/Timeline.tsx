@@ -206,10 +206,13 @@ const TRACK_H = { visual: 56, audio: 44 } as const;
 /** The info strip at the top of a clip (name + length). */
 const INFO_H = 15;
 /**
- * While scrubbing, how often the time is told upward: every 40 ms (25 Hz). Telling it re-renders the editor and seeks
- * the preview — the expensive part. The line itself follows every frame from local state.
+ * While scrubbing, how often the time is told upward: each frame (the editor seeks the picture there and writes the
+ * timecode, and renders the rest of itself a few times a second, see ProjectView's scrubPreview). The line itself
+ * follows every frame from local state.
  */
-const SCRUB_TELL_MS = 40;
+const SCRUB_TELL_MS = 15;
+/** While scrubbing, how often the timeline renders itself for the time (ms): the line itself moves each frame. */
+const SCRUB_STATE_MS = 100;
 /**
  * The audio band at the bottom of a video clip: its own sound draws its waveform here; a video without sound keeps
  * the band empty but still takes its height, so the preview bands of neighboring videos line up. A page or a still
@@ -1069,6 +1072,8 @@ export const Timeline = React.memo(function Timeline({
    * (only the timeline re-renders); the editor and the picture are told every SCRUB_TELL_MS.
    */
   const [scrubMs, setScrubMs] = React.useState<number | null>(null);
+  /* a scrub moves the playhead itself each frame (see PlayheadTrack `moveRef`); scrubMs follows a few times a second */
+  const playheadMove = React.useRef<((x: number) => void) | null>(null);
   /** When the time was last told upward (see SCRUB_TELL_MS). */
   const lastTold = React.useRef(0);
   /** What the selection bar is about: what was picked last (the clips, the range, a point on the ruler). */
@@ -1402,7 +1407,11 @@ export const Timeline = React.memo(function Timeline({
     setScrubMs(at);
     onScrubPreview(at);
     lastTold.current = performance.now();
+    let lastState = lastTold.current;
     setScrubbing(true);
+    /* the line where the time is now, the scroll as it is now (an edge may be scrolling it) */
+    const moveLine = () => playheadMove.current?.(at * pxPerMs - (scrollRef.current?.scrollLeft ?? 0) + PLAYHEAD_BLEED);
+    moveLine();
     /* the scrub cursor holds for the whole drag (an !important class), or clips under the line take it */
     document.body.classList.add('tl-scrubbing');
     /* once per frame: the pointer sends far more moves than the screen draws */
@@ -1411,10 +1420,11 @@ export const Timeline = React.memo(function Timeline({
     const flush = (): void => {
       raf = 0;
       at = timeAt(atX);
-      /* the line every frame (cheap: the rows are memoized without the time) */
-      setScrubMs(at);
-      /* the editor and the picture every SCRUB_TELL_MS (the expensive part) */
+      /* the line every frame, outside React; what else shows the time here (the selection bar), a few times a second */
+      moveLine();
       const now = performance.now();
+      if (now - lastState >= SCRUB_STATE_MS) { lastState = now; setScrubMs(at); }
+      /* the editor and the picture every SCRUB_TELL_MS */
       if (now - lastTold.current >= SCRUB_TELL_MS) {
         lastTold.current = now;
         onScrubPreview(at);
@@ -3987,7 +3997,8 @@ export const Timeline = React.memo(function Timeline({
           <PlayheadTrack
             clock={clock}
             animate={playing && scrubMs == null}
-            x={playheadX - scrollLeft + PLAYHEAD_BLEED}
+            x={scrubMs == null ? playheadX - scrollLeft + PLAYHEAD_BLEED : null}
+            moveRef={playheadMove}
             pxPerMs={pxPerMs}
             totalMs={totalMs}
             scrollRef={scrollRef}
@@ -4386,6 +4397,19 @@ function ModePicker({
   );
 }
 
+/**
+ * A playhead held at a place: an animation paused, its time the place in px from HELD_FROM to the left, so moving it is
+ * setting its time. A transform written from script made the browser lay the whole page out again on each move (all the
+ * timeline's clips); an animation's moves are the compositor's.
+ */
+const HELD_FROM = 100_000;
+const HELD_SPAN = 10_000_000;
+function holdAt(el: HTMLElement): Animation {
+  const a = el.animate([{ transform: `translate3d(${-HELD_FROM}px,0,0)` }, { transform: `translate3d(${HELD_SPAN - HELD_FROM}px,0,0)` }], { duration: HELD_SPAN, fill: 'both' });
+  a.pause();
+  return a;
+}
+
 /** The line under the ruler's colors: plays late, rendering, rendered, could not be rendered. */
 const PREVIEW_BAR: Record<PreviewBarRange['state'], string> = { late: '#e5484d', making: '#e8c547', ready: '#3dd68c', failed: '#8b8d98' };
 
@@ -4426,6 +4450,7 @@ function PlayheadTrack({
   clock,
   animate,
   x,
+  moveRef,
   pxPerMs,
   totalMs,
   scrollRef,
@@ -4434,8 +4459,10 @@ function PlayheadTrack({
   clock: PlaybackClock | null | undefined;
   /** Playing and not scrubbing: the line moves itself. Otherwise it is drawn at `x`. */
   animate: boolean;
-  /** Where the line is when not moving itself (scroll already taken off). */
-  x: number;
+  /** Where the line is when not moving itself (scroll already taken off); null: moved by `moveRef` (a scrub). */
+  x: number | null;
+  /** Set here: moves the line to x at once, outside React (a scrub moves it each frame). */
+  moveRef?: React.MutableRefObject<((x: number) => void) | null>;
   pxPerMs: number;
   totalMs: number;
   scrollRef: React.RefObject<HTMLDivElement | null>;
@@ -4443,11 +4470,33 @@ function PlayheadTrack({
 }) {
   const ref = React.useRef<HTMLDivElement>(null);
   const live = Boolean(clock) && animate;
+  /* still, or dragged: an animation held at the place (its time is the px), not a transform written from script,
+     which laid the page out again on every step of a drag */
+  const held = React.useRef<Animation | null>(null);
 
+  const hold = React.useCallback((at: number) => {
+    const el = ref.current;
+    if (!el) return;
+    held.current ??= holdAt(el);
+    held.current.currentTime = at + HELD_FROM;
+  }, []);
   React.useLayoutEffect(() => {
-    if (live || !ref.current) return;
-    ref.current.style.transform = `translate3d(${x}px,0,0)`;
-  }, [live, x]);
+    if (live || x == null) return;
+    hold(x);
+  }, [live, x, hold]);
+  React.useEffect(() => {
+    if (!moveRef) return undefined;
+    moveRef.current = (at) => { if (!live) hold(at); };
+    return () => { moveRef.current = null; };
+  }, [moveRef, live, hold]);
+  React.useEffect(() => {
+    if (!live) return undefined;
+    /* moving by itself: the held one gives way, and is made again when it stops */
+    held.current?.cancel();
+    held.current = null;
+    return undefined;
+  }, [live]);
+  React.useEffect(() => () => { held.current?.cancel(); }, []);
 
   React.useEffect(() => {
     const el = ref.current;

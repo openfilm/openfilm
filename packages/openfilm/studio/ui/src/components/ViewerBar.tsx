@@ -24,7 +24,7 @@ export function ViewerBar({
   loop,
 }: {
   timeMs: number;
-  /** While playing the time is on the clock; only the timecode subscribes to it, the rest of the bar stays still. */
+  /** The time on the clock (playing, scrubbing): only the timecode follows it, the rest of the bar stays still. */
   clock?: PlaybackClock | null;
   totalMs: number;
   playing: boolean;
