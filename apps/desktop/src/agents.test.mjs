@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CLIENT_CAPABILITIES, CODEX_UTF8_CMD, agentShell, allowOption, codexDeveloperInstructions, codexLaunchEnv, distinctOptions, legacyOptions, powerShellScript, readAgentStatus } from './agents.mjs';
+import { AgentSession, CLIENT_CAPABILITIES, CODEX_UTF8_CMD, agentShell, allowOption, codexDeveloperInstructions, codexLaunchEnv, distinctOptions, legacyOptions, powerShellScript, readAgentStatus, setChosenPaths } from './agents.mjs';
 
 test('an agent that asks: yes for good where it offers that, else yes this once; nothing to say yes with is null', () => {
   const options = [
@@ -114,4 +114,26 @@ test('on Windows, Codex is started through a script that turns the console to UT
   const blocked = join(mkdtempSync(join(tmpdir(), 'of-codex-')), 'file');
   writeFileSync(blocked, '');
   assert.deepEqual(codexLaunchEnv(exe, { win: true, dir: join(blocked, 'launch') }), { CODEX_PATH: exe });
+});
+
+test('a signed-out Cursor is said to need its sign-in at once, without the session that would open its sign-in page', async () => {
+  const { mkdtempSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const dir = mkdtempSync(join(tmpdir(), 'of-cursor-'));
+  /* says it is signed out, and never answers over ACP (Cursor waits on its sign-in page there) */
+  const program = join(dir, 'cursor-agent.mjs');
+  writeFileSync(program, "if (process.argv.includes('status')) console.log('Not logged in'); else setInterval(() => {}, 1000);\n");
+  setChosenPaths({ cursor: program });
+  const session = new AgentSession({ agent: 'cursor', cwd: dir });
+  try {
+    const failed = await Promise.race([
+      session.start().then(() => null, (e) => e),
+      new Promise((done) => setTimeout(() => done(new Error('still waiting')), 15_000).unref()),
+    ]);
+    assert.equal(failed?.code, 'sign-in', failed?.message);
+  } finally {
+    session.close();
+    setChosenPaths({});
+  }
 });

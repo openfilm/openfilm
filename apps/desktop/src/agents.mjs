@@ -723,6 +723,11 @@ export class AgentSession {
     const harness = this.opts.harness ?? null;
     const cli = harness ? null : resolveAgentCli(this.opts.agent, { pathDirs: shell.PATH.split(PATH_SEP) });
     if (!harness && !cli) throw Object.assign(new Error(`${this.spec.label} is not installed on this computer.`), { code: 'not-installed' });
+    /* one whose ACP sign-in takes up its own (Cursor's `authenticate`) opens the maker's sign-in page in the browser and
+       waits there when it is signed out: its own status says so first, and the person signs in from Settings */
+    if (cli && this.spec.authenticate && this.spec.auth && (await agentStatus(this.opts.agent, cli.path)).signedIn === false) {
+      throw signInError(this.spec.label, { code: AUTH_REQUIRED });
+    }
     const node = nodeRuntime();
     const path = [this.opts.binDir, shell.PATH, this.opts.fallbackDir].filter(Boolean).join(PATH_SEP);
     const instructions = INSTRUCTIONS;
