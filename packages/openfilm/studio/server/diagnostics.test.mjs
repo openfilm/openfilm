@@ -11,6 +11,10 @@ const TURN = [
   { t: 2, kind: 'sent', prompt: [{ type: 'text', text: 'make my secret film' }] },
   { t: 3, kind: 'update', update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'a reply about the secret' } } },
   { t: 4, kind: 'update', update: { sessionUpdate: 'notice', severity: 'warning', title: 'Reconnecting... 2/5' } },
+  { t: 4.1, kind: 'update', update: { sessionUpdate: 'tool_call', toolCallId: 'c1', title: "List files in 'secret'", name: 'exec_command', kind: 'read', status: 'in_progress', rawInput: { command: 'ls secret' } } },
+  { t: 4.2, kind: 'update', update: { sessionUpdate: 'tool_call_update', toolCallId: 'c1', status: 'failed', name: 'exec_command', rawOutput: { formatted_output: 'secret.txt', exit_code: 2 } } },
+  { t: 4.3, kind: 'permission', params: { toolCall: { title: 'Delete secret' } } },
+  { t: 4.4, kind: 'question', message: 'Which secret?' },
   { t: 5, kind: 'done', ok: false, error: 'Codex stopped while answering without saying why.' },
 ].map((e) => JSON.stringify(e)).join('\n');
 
@@ -21,6 +25,12 @@ test("a turn's log goes in as how it went, without what was said unless asked", 
   assert.match(kept, /without saying why/);
   const prompt = JSON.parse(kept.split('\n')[0]);
   assert.deepEqual([prompt.kind, prompt.model, prompt.program, prompt.words], ['prompt', '6.1 Sol', '/x/codex', '(left out)']);
+  const steps = kept.split('\n').map((l) => JSON.parse(l)).filter((e) => e.update?.toolCallId);
+  assert.deepEqual(steps.map((e) => e.update), [
+    { sessionUpdate: 'tool_call', toolCallId: 'c1', name: 'exec_command', kind: 'read', status: 'in_progress' },
+    { sessionUpdate: 'tool_call_update', toolCallId: 'c1', name: 'exec_command', status: 'failed', exitCode: 2 },
+  ]);
+  assert.match(kept, /"kind":"permission","words":"\(left out\)"/);
   assert.equal(turnLogForFile(TURN, true), TURN);
 });
 

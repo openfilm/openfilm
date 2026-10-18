@@ -10,7 +10,7 @@ import { useLanguage, useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import { fullReport, pageFacts } from '@/lib/diagnostics';
 import { api, type StudioProblem } from '@/api';
-import { SettingsButton, SettingsGroup, SettingsItem, SettingsSwitch } from './ui';
+import { SettingsButton, SettingsGroup, SettingsInset, SettingsItem, SettingsSwitch } from './ui';
 
 /** The report as text, made now: the computer's (with its problems), this browser's, and the app's agents. */
 async function makeReport(): Promise<string> {
@@ -73,6 +73,26 @@ export function ReportLink() {
   );
 }
 
+/**
+ * What an exported file holds, in words, from the names of what went in (server/diagnostics.mjs): each part once, the
+ * logs and the turns counted.
+ */
+function fileParts(files: string[], conversations: boolean, t: (key: string) => string): string[] {
+  const count = (prefix: string) => files.filter((f) => f.startsWith(prefix)).length;
+  const logs = count('logs/');
+  const turns = count('turns/');
+  return [
+    ...(files.includes('report.txt') ? [t('settings.report.partReport')] : []),
+    ...(files.includes('problems.jsonl') ? [t('settings.report.partProblems')] : []),
+    ...(logs ? [t('settings.report.partLogs').replace('{count}', String(logs))] : []),
+    ...(turns ? [t(conversations ? 'settings.report.partTurnsWords' : 'settings.report.partTurns').replace('{count}', String(turns))] : []),
+    ...(files.includes('agents/codex.txt') ? [t('settings.report.partCodex')] : []),
+  ];
+}
+
+/* what turning on "Include what was said" adds, said in full before it is on */
+const ADDS = ['settings.report.adds1', 'settings.report.adds2', 'settings.report.adds3', 'settings.report.adds4', 'settings.report.adds5'];
+
 /** How many problems show before "Show all". */
 const PROBLEMS_SHOWN = 5;
 
@@ -80,8 +100,10 @@ export function DiagnosticsGroup() {
   const t = useT();
   const locale = useLanguage();
   const copying = useReportCopy();
+  /* what was said in failed turns: off unless the person turns it on, and only after reading what it adds (`asking`) */
   const [conversations, setConversations] = React.useState(false);
-  const [exporting, setExporting] = React.useState<{ state: 'idle' | 'making' | 'failed' } | { state: 'done'; name: string }>({ state: 'idle' });
+  const [asking, setAsking] = React.useState(false);
+  const [exporting, setExporting] = React.useState<{ state: 'idle' | 'making' | 'failed' } | { state: 'done'; name: string; parts: string[] }>({ state: 'idle' });
   const [problems, setProblems] = React.useState<StudioProblem[] | null>(null);
   const [all, setAll] = React.useState(false);
   React.useEffect(() => { void api.problems().then(setProblems, () => setProblems([])); }, []);
@@ -90,7 +112,7 @@ export function DiagnosticsGroup() {
     setExporting({ state: 'making' });
     void makeReport()
       .then((report) => api.exportDiagnostics(report, conversations))
-      .then((made) => setExporting({ state: 'done', name: made.path.split(/[\\/]/).pop() ?? made.path }))
+      .then((made) => setExporting({ state: 'done', name: made.path.split(/[\\/]/).pop() ?? made.path, parts: fileParts(made.files, made.conversations, t) }))
       .catch(() => setExporting({ state: 'failed' }));
   };
 
@@ -110,22 +132,47 @@ export function DiagnosticsGroup() {
         {copying.shown ? <ReportText text={copying.shown} /> : null}
       </SettingsItem>
       <SettingsItem
+        title={t('settings.report.conversations')}
+        description={conversations ? t('settings.report.conversationsOn') : t('settings.report.conversationsHint')}
+        control={(
+          <SettingsSwitch checked={conversations || asking} label={t('settings.report.conversations')}
+            onChange={(on) => { if (on) setAsking(true); else { setAsking(false); setConversations(false); } }} />
+        )}
+      >
+        {asking ? (
+          <SettingsInset>
+            <p className="text-[14px] font-medium text-[var(--text)]">{t('settings.report.addsTitle')}</p>
+            <ul className="flex list-disc flex-col gap-1 pl-5 text-[13.5px] leading-relaxed text-[var(--text)]">
+              {ADDS.map((key) => <li key={key}>{t(key)}</li>)}
+            </ul>
+            <p className="text-[13px] leading-relaxed text-[var(--text-muted)]">{t('settings.report.addsKept')}</p>
+            <p className="text-[13px] leading-relaxed text-[var(--warn)]">{t('settings.report.addsWho')}</p>
+            <div className="flex justify-end gap-1.5">
+              <SettingsButton variant="quiet" onClick={() => setAsking(false)}>{t('settings.report.addsNo')}</SettingsButton>
+              <SettingsButton onClick={() => { setAsking(false); setConversations(true); }}>{t('settings.report.addsYes')}</SettingsButton>
+            </div>
+          </SettingsInset>
+        ) : null}
+      </SettingsItem>
+      <SettingsItem
         title={t('settings.report.export')}
         description={exporting.state === 'failed' ? t('settings.report.exportFailed')
           : exporting.state === 'done' ? t('settings.report.exported').replace('{name}', exporting.name)
             : t('settings.report.exportHint')}
         control={(
-          <SettingsButton disabled={exporting.state === 'making'} onClick={exportFile}>
+          <SettingsButton disabled={exporting.state === 'making' || asking} onClick={exportFile}>
             {exporting.state === 'making' ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Download size={15} aria-hidden />}
             {exporting.state === 'making' ? t('settings.report.exporting') : t('settings.report.exportButton')}
           </SettingsButton>
         )}
-      />
-      <SettingsItem
-        title={t('settings.report.conversations')}
-        description={t('settings.report.conversationsHint')}
-        control={<SettingsSwitch checked={conversations} label={t('settings.report.conversations')} onChange={setConversations} />}
-      />
+      >
+        {exporting.state === 'done' ? (
+          <div className="mb-2 text-[13px] leading-relaxed text-[var(--text-muted)]">
+            <p>{t('settings.report.exportedHas')}</p>
+            <ul className="list-disc pl-5">{exporting.parts.map((part) => <li key={part}>{part}</li>)}</ul>
+          </div>
+        ) : null}
+      </SettingsItem>
       <SettingsItem
         title={t('settings.report.problems')}
         description={problems && !problems.length ? t('settings.report.noProblems') : t('settings.report.problemsHint')}

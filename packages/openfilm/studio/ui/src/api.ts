@@ -103,7 +103,7 @@ export const api = {
   /** what went wrong in the last two weeks, newest first (src/problems.mjs) */
   problems: () => call<{ problems: StudioProblem[] }>('diagnostics/problems').then((r) => r.problems),
   /** the diagnostic file (server/diagnostics.mjs): `report` and the rest, zipped into the exports folder and shown there */
-  exportDiagnostics: (report: string, conversations: boolean) => call<{ path: string; files: string[] }>('diagnostics/export', { method: 'POST', json: { report, conversations } }),
+  exportDiagnostics: (report: string, conversations: boolean) => call<{ path: string; files: string[]; conversations: boolean }>('diagnostics/export', { method: 'POST', json: { report, conversations } }),
   projects: () => call<{ projects: Project[] }>('projects').then((r) => r.projects),
   prefs: () => call<StudioPrefs>('prefs'),
   /** where new projects and exports go, and the free space there */

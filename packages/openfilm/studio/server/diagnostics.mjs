@@ -6,8 +6,9 @@
  *   report.txt          the report the page copies (`openfilm doctor`, the browser, the desktop app's agents)
  *   problems.jsonl      the problems of the last KEEP_DAYS days (src/problems.mjs)
  *   logs/…              the last of each log Studio and the desktop app write (OPENFILM_APP_LOGS)
- *   turns/…             the logs of the turns the last agent problems were in: what happened, without what the person
- *                       and the agent wrote unless `conversations` (a prompt's words, a reply, a tool's input)
+ *   turns/…             the logs of the turns the last agent problems were in. Unless `conversations`, only how they
+ *                       went (turnLogForFile): never a word the person or the agent wrote, a tool's title, command,
+ *                       input or output, or anything from the person's files
  *   agents/codex.txt    Codex's own warnings and errors around each of its problems, from its log database
  *
  * Everything in it is redacted as problems are (the home folder as ~, no keys, tokens or email addresses).
@@ -42,10 +43,13 @@ function tail(file, max) {
 const TURN_KINDS = new Set(['start', 'done', 'exit', 'cancel', 'set-option', 'steer-answer', 'permission-answer']);
 /* the agent's own updates that say how it goes, not what it says or does */
 const STATE_UPDATES = new Set(['notice', 'session_info_update', 'usage_update', 'current_mode_update', 'config_option_update', 'available_commands_update']);
+/* asked of the person: that it was, and when, never what */
+const ASKED = new Set(['permission', 'question', 'question-answer']);
 
 /**
- * A turn's log as it goes in the file: whole with `conversations`, else only how it went (its start, how it ended,
- * the agent's notices and state; the prompt's agent, model and program without its words).
+ * A turn's log as it goes in the file: whole with `conversations`; else only how it went: its start and how it ended,
+ * the agent's notices and state, the prompt's agent, model and program without its words, each tool's step as its
+ * kind, name, status and exit code (no title, command, input or output), and when it asked the person something.
  * @param {string} text @param {boolean} conversations
  */
 export function turnLogForFile(text, conversations) {
@@ -56,6 +60,12 @@ export function turnLogForFile(text, conversations) {
     if (!e || typeof e !== 'object') return [];
     if (TURN_KINDS.has(e.kind)) return [line];
     if (e.kind === 'update' && STATE_UPDATES.has(e.update?.sessionUpdate)) return [line];
+    if (e.kind === 'update' && (e.update?.sessionUpdate === 'tool_call' || e.update?.sessionUpdate === 'tool_call_update')) {
+      const { sessionUpdate, toolCallId, name, kind, status } = e.update;
+      const exitCode = e.update.rawOutput?.exit_code ?? e.update.rawOutput?.exitCode;
+      return [JSON.stringify({ t: e.t, kind: 'update', update: { sessionUpdate, toolCallId, name, kind, status, ...(Number.isInteger(exitCode) ? { exitCode } : {}) } })];
+    }
+    if (ASKED.has(e.kind)) return [JSON.stringify({ t: e.t, kind: e.kind, words: '(left out)' })];
     if (e.kind === 'prompt') {
       const { t, kind, agent, meta, session, opened } = e;
       return [JSON.stringify({ t, kind, agent, model: meta?.model ?? null, agentInfo: session?.agentInfo ?? null,
@@ -137,5 +147,5 @@ export async function exportDiagnostics({ report, conversations = false, folder 
   await mkdir(folder, { recursive: true });
   const out = join(folder, diagnosticsName(now));
   await zipFiles(out, entries);
-  return { path: out, files: entries.map((e) => e.name) };
+  return { path: out, files: entries.map((e) => e.name), conversations };
 }
