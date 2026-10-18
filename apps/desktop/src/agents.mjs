@@ -75,12 +75,20 @@ export const AGENTS = Object.freeze({
   copilot: { label: 'GitHub Copilot', args: ['--acp', '--allow-all'], login: ['login'], approve: true },
   cursor: { label: 'Cursor', args: ['--force', 'acp'], auth: ['status'], login: ['login'], authenticate: 'cursor_login', approve: true },
   opencode: { label: 'OpenCode', args: ['acp'], login: ['auth', 'login'], approve: true },
-  codebuddy: { label: 'CodeBuddy', args: ['--acp', '--permission-mode', 'bypassPermissions'], login: [], approve: true },
+  /* CodeBuddy is the China edition unless the person's shell says otherwise: the program itself defaults to the
+     international site (www.codebuddy.ai) whichever site it was signed in on, out of reach from China */
+  codebuddy: { label: 'CodeBuddy', args: ['--acp', '--permission-mode', 'bypassPermissions'], login: [], approve: true,
+    defaults: { CODEBUDDY_INTERNET_ENVIRONMENT: 'internal' } },
   qwen: { label: 'Qwen Code', args: ['--acp', '--approval-mode', 'yolo'], login: [], approve: true },
   kimi: { label: 'Kimi', args: ['acp'], login: ['login'], approve: true },
 });
 
 export const isAgentId = (id) => typeof id === 'string' && Object.hasOwn(AGENTS, id);
+
+/** The variables an agent is started with (`defaults`) that the person's shell does not set itself. */
+export function agentDefaults(id, shell = {}) {
+  return Object.fromEntries(Object.entries(AGENTS[id]?.defaults ?? {}).filter(([key]) => !Object.hasOwn(shell, key)));
+}
 
 /** The app's own agent: Pi (pi-agent.mjs), on the person's own key (agent-roster.mjs). */
 export const HARNESS_AGENTS = Object.freeze(['byok']);
@@ -405,9 +413,12 @@ function noteSignedOut(id) {
 
 const shq = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
 
-/** The AppleScript that has Terminal run one command in a new window. */
-export function signInScript(cliPath, args) {
-  const command = [cliPath, ...args].map(shq).join(' ');
+/**
+ * The AppleScript that has Terminal run one command in a new window, in `cwd` when given (SIGN_IN_DIR: not the home
+ * folder a new window opens in).
+ */
+export function signInScript(cliPath, args, { cwd } = {}) {
+  const command = `${cwd ? `cd ${shq(cwd)} && ` : ''}${[cliPath, ...args].map(shq).join(' ')}`;
   return `tell application "Terminal"\nactivate\ndo script "${command.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"\nend tell`;
 }
 
@@ -457,6 +468,13 @@ export async function agentSignInMethods(id) {
 }
 
 /**
+ * Where a sign-in in Terminal runs: an empty folder of the app's own. A program whose sign-in is the program itself
+ * (CodeBuddy, Qwen Code) first asks whether to trust the folder it is in, and in the home folder a new Terminal window
+ * opens in, warns that it may hold sensitive files; trusted once, this folder is not asked about again.
+ */
+const SIGN_IN_DIR = () => join(tmpdir(), 'openfilm-sign-in');
+
+/**
  * Sign in: Terminal runs the program's own sign-in, which opens the maker's own page. The app touches nothing. One
  * signed in the way its adapter offers (`acpSignIn`, that way's id) runs the adapter with that way's arguments, as ACP
  * has a client do it.
@@ -474,27 +492,34 @@ export async function openAgentSignIn(id) {
     const launch = adapterLaunch(id, cli.path);
     how = { cmd: launch.cmd, args: [...launch.args, ...way.args], env: { ...launch.env, ...way.env } };
   }
+  /* signed in as it will be started (agentDefaults: CodeBuddy's China edition) */
+  const defaults = agentDefaults(id, agentShell(id, await loginShellVariables()));
+  if (!how && Object.keys(defaults).length && process.platform !== 'win32') how = { cmd: cli.path, args: spec.login, env: defaults };
   if (process.platform === 'win32') {
     /* a PowerShell window of its own running a script, as ChatCut does: no command line for cmd.exe to unquote (a path
        with a space in it), and left open so its sign-in can be read and answered (it runs a shim itself) */
     how ??= /\.(?:cmd|bat)$/i.test(cli.path) ? { cmd: cli.path, args: spec.login, env: {} } : starting(cli.path, spec.login);
+    how = { ...how, env: { ...defaults, ...how.env } };
     try {
-      const dir = join(tmpdir(), 'openfilm-sign-in');
+      const dir = SIGN_IN_DIR();
       mkdirSync(dir, { recursive: true });
       const file = join(dir, `${id}.ps1`);
       writeFileSync(file, powerShellScript(`${spec.label} sign-in`, how.cmd, how.args), 'utf8');
       const powershell = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
       const child = spawn(powershell, ['-NoLogo', '-NoExit', '-ExecutionPolicy', 'Bypass', '-File', file], {
-        detached: true, stdio: 'ignore', windowsHide: false, env: childEnvironment({ shell: agentShell(id, await loginShellVariables()), extra: how.env }),
+        cwd: dir, detached: true, stdio: 'ignore', windowsHide: false, env: childEnvironment({ shell: agentShell(id, await loginShellVariables()), extra: how.env }),
       });
       await new Promise((done, fail) => { child.once('spawn', done); child.once('error', fail); });
       child.unref();
       return { ok: true };
     } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
   }
+  const cwd = SIGN_IN_DIR();
+  try { mkdirSync(cwd, { recursive: true }); } catch { /* signed in from the home folder, as before */ }
+  const where = existsSync(cwd) ? { cwd } : {};
   const script = how
-    ? signInScript('/usr/bin/env', [...Object.entries(how.env).map(([k, v]) => `${k}=${v}`), how.cmd, ...how.args])
-    : signInScript(cli.path, spec.login);
+    ? signInScript('/usr/bin/env', [...Object.entries(how.env).map(([k, v]) => `${k}=${v}`), how.cmd, ...how.args], where)
+    : signInScript(cli.path, spec.login, where);
   const r = await run('/usr/bin/osascript', ['-e', script], 15_000);
   return r.ok ? { ok: true } : { ok: false, error: r.out.trim() || 'Terminal did not open.' };
 }
@@ -650,6 +675,20 @@ function signInError(label, e) {
   return Object.assign(new Error(`${label} is not signed in. Sign in under Settings → Agents.`), { code: 'sign-in' });
 }
 
+/**
+ * Why a turn ended, as the agent says it beside the turn's result (`_meta`, under a key ending in `errorMessage`:
+ * CodeBuddy's `codebuddy.ai/errorMessage`, itself JSON with a `message`), or null.
+ */
+export function turnError(result) {
+  const meta = result?._meta;
+  if (!meta || typeof meta !== 'object') return null;
+  const raw = Object.entries(meta).find(([k, v]) => /(?:^|[/.])errorMessage$/.test(k) && typeof v === 'string' && v.trim())?.[1];
+  if (!raw) return null;
+  let text = raw.trim();
+  try { const said = JSON.parse(text); if (typeof said?.message === 'string' && said.message.trim()) text = said.message.trim(); } catch { /* plain words */ }
+  return text.slice(0, 1000);
+}
+
 /** The answer that lets it go ahead (for good, where it offers that), or null when none does. */
 export function allowOption(params) {
   const options = params?.options ?? [];
@@ -755,7 +794,7 @@ export class AgentSession {
       ? await logSwitches(this.opts.agent, { base: this.opts.logDir, shell, cwd: this.opts.cwd }).catch(() => null) : null;
     /* an agent that speaks ACP itself: its own program, started as the registry starts it */
     const native = cli && !this.spec.adapter ? starting(cli.path, [...this.spec.args, ...(this.logging?.args ?? []), ...(skills?.args ?? [])]) : null;
-    const extra = { ...this.opts.env, ...(native ? native.env : node.env), ...(cli && this.spec.env ? this.spec.env(cli.path) : {}), ...own, ...skills?.env, ...this.logging?.env };
+    const extra = { ...agentDefaults(this.opts.agent, shell), ...this.opts.env, ...(native ? native.env : node.env), ...(cli && this.spec.env ? this.spec.env(cli.path) : {}), ...own, ...skills?.env, ...this.logging?.env };
     /* OpenCode's inline configuration carries both its skills and, in Developer mode, its logging */
     if (skills?.env?.OPENCODE_CONFIG_CONTENT && this.logging?.env?.OPENCODE_CONFIG_CONTENT) {
       extra.OPENCODE_CONFIG_CONTENT = JSON.stringify(mergeConfig(JSON.parse(skills.env.OPENCODE_CONFIG_CONTENT), JSON.parse(this.logging.env.OPENCODE_CONFIG_CONTENT)));
@@ -885,6 +924,10 @@ export class AgentSession {
         if (said.code === 'sign-in') noteSignedOut(this.opts.agent);
         throw said;
       });
+    /* a turn the agent gave up on with its reason beside it, not in its reply (CodeBuddy: a network error): said as
+       the turn's error, or the chat would show an empty reply */
+    const why = r.stopReason === 'refusal' ? turnError(r) : null;
+    if (why) throw Object.assign(new Error(why), { code: 'agent-error' });
     return r.stopReason;
   }
 

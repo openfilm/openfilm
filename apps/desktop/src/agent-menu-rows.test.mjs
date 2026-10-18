@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { menuOptions } from '../chat/src/lib/agent-menu-rows.ts';
+import { distinctNames, menuOptions } from '../chat/src/lib/agent-menu-rows.ts';
 
 const rows = (options) => menuOptions(options, 'Default').map((o) => [o.category, o.fixed === true, o.options.map((c) => c.name)]);
 
@@ -20,4 +20,12 @@ test('a model or an effort with choices is offered as it is, and the speed only 
   assert.deepEqual(rows(options), [['model', false, ['A', 'B']], ['thought_level', false, ['Low', 'High']]]);
   options[2].options.push({ value: 'on', name: 'On' });
   assert.deepEqual(rows(options).map(([c]) => c), ['model', 'thought_level', undefined]);
+});
+
+test('two choices named alike are told apart by their values; the others keep their names', () => {
+  /* CodeBuddy 2.168: "Hy3" is hy3 and hy3-x */
+  assert.deepEqual(distinctNames([{ value: 'hy4', name: 'Hy4' }, { value: 'hy3', name: 'Hy3' }, { value: 'hy3-x', name: 'Hy3' }]).map((c) => c.name),
+    ['Hy4', 'Hy3 (hy3)', 'Hy3 (hy3-x)']);
+  const [model] = menuOptions([{ id: 'model', name: 'Model', category: 'model', options: [{ value: 'a', name: 'A' }, { value: 'b', name: 'A' }] }], 'Default');
+  assert.deepEqual(model.options.map((c) => c.name), ['A (a)', 'A (b)']);
 });

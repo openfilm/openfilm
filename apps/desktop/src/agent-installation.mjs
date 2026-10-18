@@ -17,7 +17,7 @@ export const AGENT_DOWNLOADS = Object.freeze({
   copilot: 'https://github.com/features/copilot/cli',
   cursor: 'https://cursor.com/cli',
   opencode: 'https://opencode.ai/download',
-  codebuddy: 'https://www.workbuddy.ai/docs/cli/installation',
+  codebuddy: 'https://www.codebuddy.cn/docs/cli/installation',
   qwen: 'https://github.com/QwenLM/qwen-code',
   kimi: 'https://www.kimi.com/code',
 });

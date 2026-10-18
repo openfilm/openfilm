@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AgentSession, CLIENT_CAPABILITIES, CODEX_UTF8_CMD, agentShell, allowOption, codexDeveloperInstructions, codexLaunchEnv, distinctOptions, legacyOptions, powerShellScript, readAgentStatus, setChosenPaths } from './agents.mjs';
+import { AgentSession, CLIENT_CAPABILITIES, agentDefaults, CODEX_UTF8_CMD, agentShell, allowOption, codexDeveloperInstructions, codexLaunchEnv, distinctOptions, legacyOptions, powerShellScript, readAgentStatus, setChosenPaths, signInScript, turnError } from './agents.mjs';
 
 test('an agent that asks: yes for good where it offers that, else yes this once; nothing to say yes with is null', () => {
   const options = [
@@ -85,6 +85,12 @@ test('the chat says it signs in in Terminal, so Claude Code offers its subscript
   assert.equal(zClientCapabilities.parse(CLIENT_CAPABILITIES).auth?.terminal, true);
 });
 
+test("a sign-in in Terminal runs in a folder of the app's own, not the home folder a program warns about", () => {
+  const script = signInScript('/opt/homebrew/bin/codebuddy', [], { cwd: "/tmp/it's here" });
+  assert.match(script, /do script "cd '\/tmp\/it'\\\\''s here' && '\/opt\/homebrew\/bin\/codebuddy'"/);
+  assert.match(signInScript('/bin/copilot', ['login']), /do script "'\/bin\/copilot' 'login'"/);
+});
+
 test('a Windows sign-in is a PowerShell script: each path whole however it is spelled, read as UTF-8', () => {
   const script = powerShellScript('Claude Code sign-in', 'C:\\Program Files\\OpenFilm\\OpenFilm.exe',
     ['C:\\Program Files\\OpenFilm\\app.asar\\src\\as-node.mjs', 'D:\\用户\\it\'s\\index.js', '--cli', 'auth', 'login', '--claudeai']);
@@ -136,4 +142,19 @@ test('a signed-out Cursor is said to need its sign-in at once, without the sessi
     session.close();
     setChosenPaths({});
   }
+});
+
+test("a turn an agent gave up on is said in the agent's own words, not left as an empty reply", () => {
+  /* CodeBuddy 2.168, its site out of reach: stopReason "refusal", the reason beside it */
+  const message = 'Network error: 502 安全连接建立失败 (target: https://www.codebuddy.ai)';
+  assert.equal(turnError({ stopReason: 'refusal', _meta: { 'codebuddy.ai/requestId': 'r1', 'codebuddy.ai/errorMessage': JSON.stringify({ code: -32001, message }) } }), message);
+  assert.equal(turnError({ stopReason: 'refusal', _meta: { errorMessage: 'Rate limited' } }), 'Rate limited');
+  assert.equal(turnError({ stopReason: 'refusal' }), null);
+  assert.equal(turnError({ stopReason: 'refusal', _meta: { 'codebuddy.ai/requestId': 'r1' } }), null);
+});
+
+test("CodeBuddy is started as its China edition, unless the person's shell says which edition themselves", () => {
+  assert.deepEqual(agentDefaults('codebuddy', { PATH: '/bin' }), { CODEBUDDY_INTERNET_ENVIRONMENT: 'internal' });
+  assert.deepEqual(agentDefaults('codebuddy', { CODEBUDDY_INTERNET_ENVIRONMENT: 'ioa' }), {});
+  assert.deepEqual(agentDefaults('cursor', {}), {});
 });
