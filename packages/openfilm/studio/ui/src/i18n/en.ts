@@ -1496,6 +1496,15 @@ export const en = {
       appUnavailable: 'Updates are unavailable right now. Try again later.',
       appFailed: 'Could not complete the update. Try again later.',
     },
+    report: {
+      title: 'Diagnostic report',
+      hint: 'What OpenFilm finds on this computer and in this browser, to paste into an issue. Paths in your home folder show as ~; no keys, accounts or projects.',
+      copy: 'Copy report',
+      making: 'Checking…',
+      copied: 'Copied',
+      failed: 'Couldn’t make the report. Try again.',
+      select: 'Your browser didn’t let Studio copy it: select the report below and copy it.',
+    },
     agents: {
       intro: 'The agents the chat can use. Codex, Claude Code and the others under Your agents are your own, on the account signed in on this computer: to use another account, switch accounts in the agent itself, then disconnect and connect it again here. Your own key runs on models you set up yourself, each on its own service.',
       byokName: 'Your own key',

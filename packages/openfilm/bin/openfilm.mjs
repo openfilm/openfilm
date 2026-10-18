@@ -10,6 +10,7 @@ const USAGE = `openfilm — a film is a function of time: given t, it draws that
   openfilm capture <url> <file.png>    a picture of a live web page, to show a product or a site as it is
   openfilm skills                      the skills this film can be made with; \`openfilm skill <name>\` prints one
   openfilm update                      the newest OpenFilm; Studio starts again on it
+  openfilm doctor                      what this computer has for OpenFilm, to paste into an issue
 
   Run with no arguments for the manual; \`openfilm <command> --help\` for one command's options; --version for the version.
   look, render and get work on the project around the current folder.
@@ -52,6 +53,12 @@ openfilm skill remove <name>
   The newest OpenFilm from npm, and Studio started again on it once nothing is being exported or made; pages open on
   it come back on the new version. The desktop app's Studio updates with the app, a source checkout with git pull:
   each is said instead.`,
+  doctor: `openfilm doctor
+
+  Checks what OpenFilm needs here and prints a report to paste into an issue: OpenFilm's and Node's versions, the
+  system, which agent ran the command, Studio, ffmpeg, the browser films are drawn in and its graphics, the data and
+  projects folders, npm, and the last errors in Studio's log. Paths under your home folder read ~; no keys, accounts
+  or projects are in it. Exit status 1 when something needs fixing; the report says what.`,
   look: `openfilm look [what] [t | a-b]
 
   what   the project (default), a web page (.html), or a media file (video, image, sound)
@@ -167,6 +174,10 @@ const commands = {
   update: () => import('../studio/client.mjs').then((m) => m.updateOpenfilm((line) => console.error(line))),
   skills: () => import('../src/skills-cli.mjs').then((m) => m.skillsCommand(RUN)),
   skill: () => import('../src/skills-cli.mjs').then((m) => m.skillCommand(args, RUN)),
+  doctor: () => import('../src/doctor.mjs').then(async (m) => {
+    const report = await m.doctor({ run: RUN });
+    return { ok: report.ok, lines: [report.text] };
+  }),
 };
 /**
  * Show a project in Studio; `.film/opened` marks a project Studio has shown. A folder named is made a project when it is

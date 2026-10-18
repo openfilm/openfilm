@@ -90,6 +90,8 @@ export interface StudioHost {
     locate?: (id: HostAgentId, words?: { title?: string; button?: string }) => Promise<{ ok: boolean; error?: string; code?: 'not-a-program' | 'did-not-start' | string }>;
     useAutomatic?: (id: HostAgentId) => Promise<unknown>;
     diagnose?: (id: HostAgentId) => Promise<HostAgentDiagnosis | null>;
+    /** The app's part of Settings → General's diagnostic report: the app, and each agent's program, version and state, as text. */
+    report?: () => Promise<string>;
     /**
      * One of the person's own models set up (no `id`) or changed: checked before it is kept. A key left empty keeps its
      * own, or takes the one of another model on the same address.

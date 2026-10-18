@@ -1495,6 +1495,15 @@ export const es: Words = {
       appUnavailable: 'Las actualizaciones no están disponibles ahora. Inténtalo más tarde.',
       appFailed: 'No se pudo completar la actualización. Inténtalo más tarde.',
     },
+    report: {
+      title: 'Informe de diagnóstico',
+      hint: 'Lo que OpenFilm encuentra en este equipo y en este navegador, para pegarlo en un issue. Las rutas de tu carpeta personal aparecen como ~; sin claves, cuentas ni proyectos.',
+      copy: 'Copiar informe',
+      making: 'Comprobando…',
+      copied: 'Copiado',
+      failed: 'No se pudo crear el informe. Inténtalo de nuevo.',
+      select: 'Tu navegador no dejó que Studio lo copiara: selecciona el informe de abajo y cópialo.',
+    },
     agents: {
       intro: 'Los agentes que puede usar el chat. Codex, Claude Code y los demás de Tus agentes son tuyos, con la cuenta iniciada en este equipo: para usar otra cuenta, cámbiala en el propio agente y luego desconéctalo y vuelve a conectarlo aquí. Tu propia clave usa modelos que configuras tú, cada uno con su propio servicio.',
       byokName: 'Tu propia clave',

@@ -89,6 +89,8 @@ export const api = {
   version: (check = false) => call<StudioVersion>(`version${check ? '?check=1' : ''}`),
   /** the newest openfilm, run in the background (`openfilm update`): Studio starts again on it; refused (ApiError, `body.code`) while busy */
   update: () => call<{ update: NonNullable<StudioVersion['update']> }>('update', { method: 'POST', json: {} }),
+  /** `openfilm doctor`, run by this Studio: the report to paste into an issue (src/doctor.mjs) */
+  doctor: () => call<{ ok: boolean; text: string }>('doctor'),
   projects: () => call<{ projects: Project[] }>('projects').then((r) => r.projects),
   prefs: () => call<StudioPrefs>('prefs'),
   /** where new projects and exports go, and the free space there */

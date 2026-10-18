@@ -67,6 +67,7 @@ openfilm look   [what] [t | a-b]  # check the film, a page or a media file: a co
 openfilm render [a-b]             # the MP4; --4k, --blur (motion blur), --alpha (.webm / .mov)
 openfilm get    [what]            # voice-over, music, sound effects, transcripts, images, video, from your services
 openfilm capture <url> <file.png> # a picture of a live web page (a product, a site), sharp enough to fill the stage
+openfilm doctor                   # what this computer has for OpenFilm, to paste into an issue
 ```
 
 `openfilm <command> --help` lists a command's options; `openfilm get` alone lists what can be made and how to
@@ -154,7 +155,8 @@ what they say.
 ## Community
 
 Questions, ideas and films you made go to [Discussions](https://github.com/openfilm/openfilm/discussions): ask in
-Q&A, share your film in Show and tell. Bugs go to [Issues](https://github.com/openfilm/openfilm/issues).
+Q&A, share your film in Show and tell. Bugs go to [Issues](https://github.com/openfilm/openfilm/issues), with the
+report from Studio's Settings → General → Copy report (or `npx openfilm doctor`).
 
 ## Contributing
 

@@ -54,6 +54,7 @@ import { markersRoute } from './markers.mjs';
 import { transitionPageRoutes } from './transition-pages.mjs';
 import { createAsks, getRoute, subtitleTranscriber, subtitleTranslator } from './get.mjs';
 import { LOCATION_KEYS, locations, usableFolder } from '../../src/locations.mjs';
+import { doctor } from '../../src/doctor.mjs';
 
 /** @typedef {import('./http.mjs').Req} Req @typedef {import('./http.mjs').Res} Res */
 
@@ -240,6 +241,11 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const { latest, checkedAt } = await npmOpenfilm({ force: now, waitMs: 4000 });
       return json(res, 200, { version: VERSION, latest, newer: Boolean(latest && olderThanThis(VERSION, latest)), checkedAt, checking: !process.env.OPENFILM_NO_UPDATE_CHECK && !FROM_SOURCE, source: FROM_SOURCE,
         ...(updating ? { update: updating } : {}) });
+    }
+    /* Settings → General's diagnostic report: `openfilm doctor` (src/doctor.mjs), as this Studio sees the computer */
+    if (parts[0] === 'doctor' && parts.length === 1 && req.method === 'GET') {
+      const report = await doctor({ studio: { origin, version: VERSION, ...(stays ? { app: true } : {}) } });
+      return json(res, 200, { ok: report.ok, text: report.text });
     }
     /* the top bar's Update (Studio run with npm, not the app's nor a checkout): the newest openfilm run in the
        background as `openfilm update` (client.mjs updateOpenfilm), which starts Studio again on it; the pages come back

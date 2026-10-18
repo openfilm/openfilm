@@ -30,6 +30,16 @@ body:
         - Gemini CLI
         - Other (say which below)
     validations:
+  - type: textarea
+    id: report
+    attributes:
+      label: Diagnostic report
+      description: |
+        In Studio: Settings → General → Copy report, then paste it here. Without Studio, paste what `npx openfilm doctor`
+        prints. Paths in your home folder show as ~, and it has no keys or accounts. If neither runs, say so.
+      render: text
+    validations:
+      required: true
       required: true
   - type: textarea
     id: steps

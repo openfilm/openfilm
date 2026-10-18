@@ -16,7 +16,8 @@ import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { FLAVOR, IDENTITY, PRODUCT_NAME } from './flavor.mjs';
 import { folderDialogOptions, programDialogOptions } from './folder-dialog.mjs';
-import { childEnvironment, loginShellEnvironment } from './environment.mjs';
+import { childEnvironment, lastPathSource, loginShellEnvironment } from './environment.mjs';
+import { gatherAppReport } from './app-report.mjs';
 import { startWindowStudio } from './studio.mjs';
 import { CHAT_MIN, STUDIO_MIN, WINDOW_MIN, placeOnDisplays, readWindowState, writeWindowState } from './window-state.mjs';
 import { applicationMenu } from './menu.mjs';
@@ -510,6 +511,11 @@ async function start() {
   agentHandle('desktop:agents:locate', ({ id, words }) => roster.locate(String(id), words));
   agentHandle('desktop:agents:automatic', ({ id }) => roster.useAutomatic(String(id)));
   agentHandle('desktop:agents:diagnose', ({ id }) => roster.diagnose(String(id)));
+  /* the app's part of Studio's diagnostic report (app-report.mjs): the agents as found now, each one's --version */
+  agentHandle('desktop:agents:report', () => gatherAppReport({ list: () => roster.refresh(), check: checkAgentProgram }, {
+    version: app.getVersion(), flavor: FLAVOR, packaged: app.isPackaged, channel: updates?.snapshot()?.channel ?? null,
+    electron: process.versions.electron, pathSource: lastPathSource(),
+  }));
   agentHandle('desktop:agents:shown', ({ id, shown }) => { roster.setShown(String(id), shown === true); return { ok: true }; });
   agentHandle('desktop:agents:own-model', ({ config }) => roster.saveOwnModel(config));
   agentHandle('desktop:agents:own-model-remove', ({ id }) => { roster.removeOwnModel(String(id)); return { ok: true }; });

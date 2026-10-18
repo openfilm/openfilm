@@ -32,7 +32,7 @@ async function health(/** @type {string} */ origin, ms = 1500) {
  * run.json was lost; it opens with the machine's key, so it can still be used).
  * @returns {Promise<Running | null>}
  */
-async function running() {
+export async function running() {
   /** @type {Running | null} */
   let run = null;
   try { run = JSON.parse(readFileSync(join(studioHome(), 'run.json'), 'utf8')); } catch { /* none advertised */ }

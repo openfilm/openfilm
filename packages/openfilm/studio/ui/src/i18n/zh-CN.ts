@@ -1496,6 +1496,15 @@ export const zhCN: Words = {
       appUnavailable: '更新服务暂时不可用，请稍后再试。',
       appFailed: '更新没能完成，请稍后再试。',
     },
+    report: {
+      title: '诊断报告',
+      hint: 'OpenFilm 在这台电脑和这个浏览器里检查到的情况，可以贴到 issue 里。主目录下的路径显示为 ~，不含密钥、账号和项目。',
+      copy: '复制报告',
+      making: '检查中…',
+      copied: '已复制',
+      failed: '报告没有生成，请再试一次。',
+      select: '浏览器不允许 Studio 复制，请选中下面的报告手动复制。',
+    },
     agents: {
       intro: '对话可以使用的智能体。Codex、Claude Code 等「你的智能体」是你自己的，使用这台电脑上已登录的账号：想换账号，就在智能体里切换，再回到这里断开后重新连接。自有密钥使用你自己配置的模型，每个模型可以接不同的服务。',
       byokName: '自有密钥',

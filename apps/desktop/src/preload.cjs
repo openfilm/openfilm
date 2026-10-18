@@ -49,6 +49,7 @@ contextBridge.exposeInMainWorld('openfilmNative', {
     locate: (id, words) => ipcRenderer.invoke('desktop:agents:locate', { id, words }),
     useAutomatic: (id) => ipcRenderer.invoke('desktop:agents:automatic', { id }),
     diagnose: (id) => ipcRenderer.invoke('desktop:agents:diagnose', { id }),
+    report: () => ipcRenderer.invoke('desktop:agents:report'),
     saveOwnModel: (config) => ipcRenderer.invoke('desktop:agents:own-model', { config }),
     removeOwnModel: (id) => ipcRenderer.invoke('desktop:agents:own-model-remove', { id }),
     /* the MCP servers the person added to it themselves, each let into OpenFilm or not (skills-ipc.mjs) */

@@ -1,0 +1,61 @@
+name: agents
+# Every night, the newest release of each agent the desktop chat drives, installed the way most people install it (npm,
+# global), on macOS and Windows: found where the app looks, started, and spoken to over ACP through the app's own code
+# (apps/desktop/scripts/agent-check.mjs). An agent's update that breaks the chat shows here before people meet it.
+# Nobody is signed in: an agent that asks for its sign-in was found, started and answered, which is what is checked.
+# Cursor and Kimi are not on npm and are left out. A failed night opens an issue, or adds to the one still open.
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: agents
+  cancel-in-progress: true
+jobs:
+  check:
+    if: github.repository == 'openfilm/openfilm'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      # the check never starts Electron: no need for its 100 MB download
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: The newest agents from npm
+        run: npm install -g @openai/codex@latest @anthropic-ai/claude-code@latest @github/copilot@latest opencode-ai@latest @qwen-code/qwen-code@latest @tencent-ai/codebuddy-code@latest
+      - name: Found, started and spoken to
+        working-directory: apps/desktop
+        run: node scripts/agent-check.mjs codex claude copilot opencode qwen codebuddy
+
+  report:
+    needs: check
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open an issue, or add to the open one
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: Nightly agent check failed
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          body="An agent the desktop chat drives did not start or answer on its newest release: $RUN (each job's summary says which, and what it said)."
+          number=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title \"$TITLE\"" --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --label bug --body "$body"
+          fi
