@@ -56,6 +56,7 @@ import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FilmPage, launch } from '../../src/host.mjs';
+import { broken, chipDecoding, encoders, hardwareEncoder, hardwareOptions, hwaccels, proresOptions } from '../../src/encoders.mjs';
 import { filmSound, kill as killProcess, mix, open } from '../../src/shared.mjs';
 import { FILM_FILE, clipFade, filmHtml, fittedFade, kindOf, pictureRect, readFilmFile } from '../../src/film-doc.mjs';
 import { NLE_FPS, nleFps, planNleTimeline, probeSource, soundStem, xmemlDocument } from './nle.mjs';
@@ -110,22 +111,6 @@ export class ExportError extends Error {
 
 /* ── what this machine can encode ───────────────────────────────────────── */
 
-/** @type {Promise<Set<string>> | null} */
-let encoderList = null;
-/**
- * The encoders this machine's ffmpeg has (none when there is no ffmpeg). No ffmpeg is asked about again next time:
- * the desktop app downloads it while Studio is already running.
- */
-function encoders() {
-  encoderList ??= new Promise((done) => {
-    execFile('ffmpeg', ['-hide_banner', '-encoders'], { maxBuffer: 8 << 20, windowsHide: true }, (error, stdout) => {
-      if (error) encoderList = null;
-      done(new Set(error ? [] : [...String(stdout).matchAll(/^ [VAS][.A-Z]{5} (\S+)/gm)].map((m) => m[1])));
-    });
-  });
-  return encoderList;
-}
-
 /** What the export dialog may offer: the encoders behind each choice that depends on this machine's ffmpeg. */
 export async function exportCapabilities() {
   const have = await encoders();
@@ -134,7 +119,7 @@ export async function exportCapabilities() {
     hevc: have.has('libx265') || have.has('hevc_videotoolbox'),
     hevcAlpha: have.has('hevc_videotoolbox'),
     vp9: have.has('libvpx-vp9'),
-    prores: have.has('prores_ks'),
+    prores: have.has('prores_ks') || have.has('prores_videotoolbox'),
     mp3: have.has('libmp3lame'),
   };
 }
@@ -542,93 +527,43 @@ const BT709 = ['-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc'
 const TO_709 = 'scale=out_color_matrix=bt709:out_range=tv';
 
 /**
- * The graphics chip's encoders for H.264 and HEVC that this platform's ffmpeg may have, in the order they are tried:
- * the Mac's own; on Windows NVIDIA's, Intel's, AMD's, then Windows' own (Media Foundation, through whichever chip
- * there is); NVIDIA's on Linux.
+ * The graphics chip's encoder to try for a codec, or null: H.264 and HEVC below master, as editors do (several times
+ * faster, and the processor stays free for drawing the frames and for the person; master stays x264 and x265 at
+ * their slowest and best), and ProRes at any quality (the Mac's ProRes engine is Apple's own encoder).
+ * @param {VideoCodec} codec @param {Quality} quality
  */
-const HARDWARE = /** @type {Record<string, Record<'h264' | 'hevc', string[]>>} */ ({
-  darwin: { h264: ['h264_videotoolbox'], hevc: ['hevc_videotoolbox'] },
-  win32: { h264: ['h264_nvenc', 'h264_qsv', 'h264_amf', 'h264_mf'], hevc: ['hevc_nvenc', 'hevc_qsv', 'hevc_amf', 'hevc_mf'] },
-  linux: { h264: ['h264_nvenc'], hevc: ['hevc_nvenc'] },
-});
+const chipCodec = (codec, quality) => ((codec === 'h264' || codec === 'hevc') && quality !== 'master' ? codec
+  : codec === 'prores422hq' || codec === 'prores4444' ? 'prores' : null);
 
 /**
- * A hardware encoder's options at a bitrate (they take no quality number that means the same on every chip): peaks
- * allowed at half again, for cuts and screen text.
- * @param {string} encoder @param {number} bits a second
- */
-export function hardwareOptions(encoder, bits) {
-  const k = (/** @type {number} */ n) => `${Math.round(n / 1000)}k`;
-  const rate = ['-b:v', k(bits), '-maxrate', k(bits * 1.5), '-bufsize', k(bits * 2)];
-  const hevc = encoder.startsWith('hevc_');
-  const tag = hevc ? ['-tag:v', 'hvc1'] : [];
-  switch (encoder.slice(encoder.indexOf('_') + 1)) {
-    case 'videotoolbox': return ['-c:v', encoder, ...(hevc ? [] : ['-profile:v', 'high']), '-b:v', k(bits), ...tag];
-    case 'nvenc': return ['-c:v', encoder, '-preset', 'p5', '-rc', 'vbr', ...rate, ...tag];
-    case 'qsv': return ['-c:v', encoder, '-preset', 'medium', ...rate, ...tag];
-    case 'amf': return ['-c:v', encoder, '-quality', 'quality', '-rc', 'vbr_peak', ...rate, ...tag];
-    /* the chip's own encoder, never Windows' software one (x264 is better at that) */
-    case 'mf': return ['-c:v', encoder, '-hw_encoding', '1', '-rate_control', 'u_vbr', '-b:v', k(bits), ...tag];
-    default: return ['-c:v', encoder, '-b:v', k(bits), ...tag];
-  }
-}
-
-/** @type {Map<string, Promise<boolean>>} */
-const tried = new Map();
-/**
- * Whether a hardware encoder works on this machine: one built into ffmpeg may have no chip or driver behind it, so a
- * moment of video goes through it first (once a launch; `broken` remembers one that failed an export after that).
- * @param {string} encoder
- */
-function works(encoder) {
-  if (!tried.has(encoder)) {
-    tried.set(encoder, new Promise((done) => {
-      execFile('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=30', '-frames:v', '10',
-        '-vf', 'format=yuv420p', ...hardwareOptions(encoder, 2e6), '-f', 'null', '-'], { timeout: 20_000, windowsHide: true }, (error) => done(!error));
-    }));
-  }
-  return /** @type {Promise<boolean>} */ (tried.get(encoder));
-}
-/** A hardware encoder that failed an export: the rest of this launch uses another. @param {string} encoder */
-const broken = (encoder) => { tried.set(encoder, Promise.resolve(false)); };
-
-/**
- * The first hardware encoder for H.264 or HEVC that works here, or null.
- * @param {'h264' | 'hevc'} codec @param {Set<string>} have @param {string} [platform]
- */
-export async function hardwareEncoder(codec, have, platform = process.platform) {
-  for (const encoder of HARDWARE[platform]?.[codec] ?? []) if (have.has(encoder) && await works(encoder)) return encoder;
-  return null;
-}
-
-/**
- * How render should encode a codec: its encoder (for the person's list), and the container format render takes. H.264
- * and HEVC below master go through the graphics chip's encoder when it has one that works (`hw`, hardwareEncoder),
- * as editors do: several times faster, and the processor stays free for drawing the frames and for the person; master
- * stays x264 and x265 at their slowest and best.
+ * How render should encode a codec: its encoder (for the person's list), and the container format render takes,
+ * through the graphics chip's encoder when it has one that works (`hw`: hardwareEncoder for chipCodec).
  * @param {VideoCodec} codec @param {Quality} quality @param {{ w: number, h: number }} size @param {number} fps @param {Set<string>} have @param {string | null} [hw]
  */
 function encoding(codec, quality, size, fps, have, hw = null) {
   const bits = (/** @type {number} */ k) => Math.min(120e6, Math.max(2e6, size.w * size.h * fps * BPP[quality] * k));
   const bitrate = (/** @type {number} */ k) => `${Math.round(bits(k) / 1000)}k`;
+  /* a key frame every two seconds */
+  const gop = Math.round(fps * 2);
   switch (codec) {
     case 'h264':
       /* with room for screen text: half again the dialog's scale */
-      if (hw && quality !== 'master') return { encoder: hw, format: { video: [...hardwareOptions(hw, bits(1.5)), ...BT709] } };
+      if (hw) return { encoder: hw, format: { video: [...hardwareOptions(hw, bits(1.5), { gop }), ...BT709] } };
       return { encoder: 'libx264', format: { video: ['-c:v', 'libx264', '-preset', quality === 'master' ? 'slow' : 'medium', '-crf', String(H264_CRF[quality]), ...BT709] } };
     case 'hevc':
-      if (hw && quality !== 'master') return { encoder: hw, format: { video: [...hardwareOptions(hw, bits(0.8)), ...BT709], tag: ['-tag:v', 'hvc1'] } };
+      if (hw) return { encoder: hw, format: { video: [...hardwareOptions(hw, bits(0.8), { gop }), ...BT709], tag: ['-tag:v', 'hvc1'] } };
       if (have.has('libx265')) {
         return { encoder: 'libx265', format: { video: ['-c:v', 'libx265', '-preset', 'medium', '-crf', String(X265_CRF[quality]), '-x265-params', 'log-level=error', '-tag:v', 'hvc1', ...BT709], tag: ['-tag:v', 'hvc1'] } };
       }
-      if (have.has('hevc_videotoolbox')) return { encoder: 'hevc_videotoolbox', format: { video: ['-c:v', 'hevc_videotoolbox', '-b:v', bitrate(0.8), '-tag:v', 'hvc1', ...BT709], tag: ['-tag:v', 'hvc1'] } };
+      if (have.has('hevc_videotoolbox')) return { encoder: 'hevc_videotoolbox', format: { video: ['-c:v', 'hevc_videotoolbox', '-b:v', bitrate(0.8), '-g', String(gop), '-tag:v', 'hvc1', ...BT709], tag: ['-tag:v', 'hvc1'] } };
       throw new ExportError('this computer\'s ffmpeg has no HEVC encoder (libx265 or hevc_videotoolbox)');
     case 'vp9':
       return { encoder: 'libvpx-vp9', format: { video: ['-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', String(VP9_CRF[quality]), '-row-mt', '1'] } };
     case 'prores422hq':
-      return { encoder: 'prores_ks', format: { video: ['-c:v', 'prores_ks', '-profile:v', '3', '-vendor', 'apl0'], pix: 'format=yuv422p10le' } };
-    case 'prores4444':
-      return { encoder: 'prores_ks', format: {} };
+    case 'prores4444': {
+      const encoder = hw ?? 'prores_ks';
+      return { encoder, format: proresOptions(encoder, codec === 'prores4444') };
+    }
     case 'hevc_alpha':
       if (!have.has('hevc_videotoolbox')) throw new ExportError('HEVC with alpha needs macOS\'s hevc_videotoolbox encoder');
       return { encoder: 'hevc_videotoolbox', format: { video: ['-c:v', 'hevc_videotoolbox', '-alpha_quality', '0.75', '-b:v', bitrate(0.8), '-tag:v', 'hvc1'], pix: 'format=bgra', tag: ['-tag:v', 'hvc1'] } };
@@ -695,13 +630,26 @@ async function transcode(make, out, signal) {
     return;
   }
   const alpha = make.to === 'prores4444';
-  const tail = ['-map', '0:v:0', '-map', '0:a?', '-c:v', 'prores_ks', '-profile:v', alpha ? '4444' : '3', '-vendor', 'apl0',
-    '-pix_fmt', alpha ? 'yuva444p10le' : 'yuv422p10le', '-c:a', 'pcm_s16le', '-ar', '48000', out];
-  /* VP9's alpha is a side channel ffmpeg's own decoder drops: libvpx reads it */
-  if (alpha) {
-    try { await run(['-c:v', 'libvpx-vp9', '-i', make.from, ...tail], signal); return; } catch (e) { if (signal.aborted) throw e; }
+  /* the Mac's media engine decodes and its ProRes engine encodes, when it has them; ffmpeg's own encoder otherwise */
+  const [have, accels] = await Promise.all([encoders(), hwaccels()]);
+  const chip = await hardwareEncoder('prores', have);
+  const once = async (/** @type {string} */ encoder) => {
+    const { video, pix } = proresOptions(encoder, alpha);
+    const tail = ['-map', '0:v:0', '-map', '0:a?', '-vf', pix, ...video, '-c:a', 'pcm_s16le', '-ar', '48000', out];
+    /* VP9's alpha is a side channel ffmpeg's own decoder drops: libvpx reads it */
+    if (alpha) {
+      try { await run(['-c:v', 'libvpx-vp9', '-i', make.from, ...tail], signal); return; } catch (e) { if (signal.aborted) throw e; }
+    }
+    await run([...chipDecoding(accels), '-i', make.from, ...tail], signal);
+  };
+  if (!chip) return once('prores_ks');
+  try {
+    await once(chip);
+  } catch (e) {
+    if (signal.aborted) throw e;
+    broken(chip);
+    await once('prores_ks');
   }
-  await run(['-i', make.from, ...tail], signal);
 }
 
 const IMAGE_TYPES = /** @type {Record<string, string>} */ ({ svg: 'image/svg+xml', webp: 'image/webp', avif: 'image/avif', gif: 'image/gif', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', bmp: 'image/bmp' });
@@ -817,7 +765,8 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       const fps = ask.fps;
       const quality = ask.quality ?? 'high';
       const have = await encoders();
-      const hw = ask.hardware !== false && quality !== 'master' && (codec === 'h264' || codec === 'hevc') ? await hardwareEncoder(codec, have) : null;
+      const chipFor = chipCodec(codec, quality);
+      const hw = ask.hardware !== false && chipFor ? await hardwareEncoder(chipFor, have) : null;
       /** @param {string | null} chip */
       const how = (chip) => {
         const { encoder, format } = encoding(codec, quality, size, fps ?? 30, have, chip);
@@ -1074,7 +1023,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
     const fps = nleFps(ask.fps ?? 30);
     const mode = ask.audio ?? 'clips';
     const title = safeName(job.name);
-    update(job, { encoder: 'prores_ks' });
+    update(job, { encoder: (await hardwareEncoder('prores', await encoders())) ?? 'prores_ks' });
     /* the edit with every track shown: a hidden track comes over disabled, one click from back on, so it is drawn too */
     const doc = existsSync(join(root, FILM_FILE)) ? filmDoc(root)
       : { stage: await stageOf(root), tracks: [{ clips: [{ src: 'index.html', id: title }] }] };
@@ -1171,6 +1120,8 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       const totalFrames = renders.reduce((n, f) => n + (f.job.kind === 'render' ? f.job.frames : 0), 0);
       const tick = frames(job, 0.88);
       let framesBefore = 0;
+      /* the chip's ProRes until one of the pages has to do without it: the rest do without it too */
+      let hardware = true;
       for (const file of renders) {
         if (file.job.kind !== 'render') continue;
         const { clip: id, frames } = file.job;
@@ -1181,10 +1132,12 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
         const one = await clipFilm(root, id, { change: { time }, doc });
         const offset = framesBefore;
         try {
-          await render([one.dir], {
-            root, alpha: true, silent: true, fps: timeline.rate.fps, out: staged(file), signal,
+          const drawn = await render([one.dir], {
+            root, alpha: true, silent: true, fps: timeline.rate.fps, out: staged(file), signal, hardware,
             onProgress: (/** @type {number} */ done) => tick(offset + done, totalFrames),
           });
+          if (drawn.encoder !== job.encoder) update(job, { encoder: drawn.encoder });
+          if (drawn.encoder === 'prores_ks') hardware = false;
         } finally {
           await one.remove();
         }
@@ -1386,7 +1339,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
  * render (src/render.mjs) in a process of its own (render-worker.mjs), as an editor's export runs apart from the editor:
  * what breaks in its browsers or encoders ends that export, said in its error, and never Studio. Same arguments and
  * result as render; `signal` asks it to stop, and it is ended if it has not after a few seconds.
- * @param {string[]} args @param {Record<string, any>} opts @returns {Promise<{ out: string, lines: string[] }>}
+ * @param {string[]} args @param {Record<string, any>} opts @returns {Promise<{ out: string, encoder: string, lines: string[] }>}
  */
 function render(args, opts) {
   const { signal, onProgress, ...rest } = opts;

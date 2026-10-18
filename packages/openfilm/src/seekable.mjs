@@ -6,6 +6,7 @@
 import { execFile } from 'node:child_process';
 import { existsSync, renameSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { broken, chipDecoding, colorTagsOf, encoders, h264ColorTags, hardwareEncoder, hardwareOptions, hwaccels } from './encoders.mjs';
 import { ffmpeg, hash, outDir } from './shared.mjs';
 
 /** A key frame further apart than this is slow to seek to frame by frame. */
@@ -56,7 +57,7 @@ export async function slowSeeking(file) {
     span = first == null || last == null ? 0 : last - first;
   } catch { return null; }
   if (keys === 0 || span <= 0) return null;
-  return span / keys > SLOW_GOP_S ? { fps, seconds } : null;
+  return span / keys > SLOW_GOP_S ? { fps, seconds, w: Number(stream.width), h: Number(stream.height) } : null;
 }
 
 /**
@@ -67,7 +68,10 @@ export async function slowSeeking(file) {
 export async function seekableCopies(files, root, { signal } = {}) {
   const copies = new Map();
   const dir = outDir(root, 'seek');
-  /* two at a time: each one already keeps several cores busy */
+  /* decoded by the Mac's media engine and written by the graphics chip's encoder, when they work; x264 otherwise */
+  const [have, accels] = await Promise.all([encoders(), hwaccels()]);
+  let chip = await hardwareEncoder('h264', have);
+  /* two at a time: each one already keeps several cores busy (on the chip, it leaves them free) */
   const queue = [...new Set(files)];
   const worker = async () => {
     for (let file = queue.shift(); file; file = queue.shift()) {
@@ -78,21 +82,35 @@ export async function seekableCopies(files, root, { signal } = {}) {
       if (existsSync(out)) { copies.set(file, out); continue; }
       const slow = await slowSeeking(file);
       if (!slow) continue;
-      const gop = String(Math.max(1, Math.round(slow.fps * COPY_GOP_S)));
+      const gop = Math.max(1, Math.round(slow.fps * COPY_GOP_S));
       const part = `${out}.part.mp4`;
-      /* the same frames at the same times (passthrough: no frame is added or dropped), the picture only */
-      const run = ffmpeg(['-i', file, '-map', '0:v:0', '-an', '-sn', '-dn', '-fps_mode', 'passthrough',
-        '-c:v', 'libx264', '-preset', 'superfast', '-crf', '16', '-g', gop, '-keyint_min', gop, '-pix_fmt', 'yuv420p', part]);
-      const stop = () => run.proc.kill('SIGKILL');
-      signal?.addEventListener('abort', stop, { once: true });
+      /* all but lossless: about 19 Mbps at 1080p and 30 fps; the chip's encoder keeps the source's color tags only
+         when told them */
+      const bits = Math.min(120e6, Math.max(4e6, ((slow.w * slow.h) || 1920 * 1080) * slow.fps * 0.3));
+      const make = async (/** @type {string | null} */ encoder) => {
+        /* the same frames at the same times (passthrough: no frame is added or dropped), the picture only */
+        const run = ffmpeg([...(encoder ? chipDecoding(accels) : []), '-i', file, '-map', '0:v:0', '-an', '-sn', '-dn', '-fps_mode', 'passthrough',
+          ...(encoder ? ['-pix_fmt', 'nv12', ...hardwareOptions(encoder, bits, { gop }), ...h264ColorTags(await colorTagsOf(file))]
+            : ['-c:v', 'libx264', '-preset', 'superfast', '-crf', '16', '-g', String(gop), '-keyint_min', String(gop), '-pix_fmt', 'yuv420p']), part]);
+        const stop = () => run.proc.kill('SIGKILL');
+        signal?.addEventListener('abort', stop, { once: true });
+        try { await run.done; } finally { signal?.removeEventListener('abort', stop); }
+      };
       try {
-        await run.done;
+        const encoder = chip;
+        try {
+          await make(encoder);
+        } catch (e) {
+          /* the chip's encoder gave up: this copy, and the rest, on the processor */
+          if (!encoder || signal?.aborted) throw e;
+          broken(encoder);
+          chip = null;
+          await make(null);
+        }
         renameSync(part, out);
         copies.set(file, out);
       } catch {
         rmSync(part, { force: true });
-      } finally {
-        signal?.removeEventListener('abort', stop);
       }
     }
   };
