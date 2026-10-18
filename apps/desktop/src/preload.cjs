@@ -51,6 +51,8 @@ contextBridge.exposeInMainWorld('openfilmNative', {
     useAutomatic: (id) => ipcRenderer.invoke('desktop:agents:automatic', { id }),
     diagnose: (id) => ipcRenderer.invoke('desktop:agents:diagnose', { id }),
     report: () => ipcRenderer.invoke('desktop:agents:report'),
+    /* the whole diagnostic report on the clipboard (main.mjs): the chat's, by a turn that failed */
+    copyReport: () => ipcRenderer.invoke('desktop:diagnostics:copy'),
     saveOwnModel: (config) => ipcRenderer.invoke('desktop:agents:own-model', { config }),
     removeOwnModel: (id) => ipcRenderer.invoke('desktop:agents:own-model-remove', { id }),
     /* the MCP servers the person added to it themselves, each let into OpenFilm or not (skills-ipc.mjs) */

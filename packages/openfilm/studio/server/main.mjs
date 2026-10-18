@@ -35,16 +35,21 @@ if (process.env.OPENFILM_STUDIO_WORKER !== '1') await supervise();
 const { startStudio } = await import('./server.mjs');
 const { closePageFrames } = await import('./pageframes.mjs');
 const { closeBrowsers } = await import('../../src/host.mjs');
+const { recordProblem } = await import('../../src/problems.mjs');
 
 /* A browser's pipe that breaks (Playwright then throws where nothing can catch it) ends only the work on that browser:
    every browser is closed, so a render waiting on one fails and says so, the next one starts a new browser, and Studio
    keeps serving. Anything else still ends the process, its state unknown. */
 process.on('uncaughtException', (e) => {
   console.error('uncaught:', e);
+  recordProblem({ area: 'studio', step: 'uncaught', what: String(e?.message ?? e) });
   if (/playwright-core/.test(String(e?.stack ?? ''))) { void closePageFrames().catch(() => {}); void closeBrowsers(); return; }
   process.exit(1);
 });
-process.on('unhandledRejection', (e) => { console.error('unhandled rejection:', e); });
+process.on('unhandledRejection', (e) => {
+  console.error('unhandled rejection:', e);
+  recordProblem({ area: 'studio', step: 'unhandled rejection', what: String(/** @type {any} */ (e)?.message ?? e) });
+});
 
 const given = process.env.OPENFILM_STUDIO_PORT;
 const port = given != null && given !== '' && Number.isInteger(Number(given)) ? Number(given) : 4747;

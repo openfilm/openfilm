@@ -7,17 +7,17 @@
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { X, Settings2, Keyboard, Sun, Moon, Monitor, Plug, Boxes, Bot, Search, SquareTerminal, Loader2, Check, Copy } from 'lucide-react';
+import { X, Settings2, Keyboard, Sun, Moon, Monitor, Plug, Boxes, Bot, Search, SquareTerminal, Loader2 } from 'lucide-react';
 import { LANGUAGES, phrasesUnder, useLanguage, useLanguageChoice, useT, type LanguageChoice } from '@/i18n';
 import { shortcutHint } from '@/lib/shortcut-hint';
 import { SHORTCUTS, type ShortcutKey } from '@/lib/timeline-keys';
 import { studioHost, type HostDeveloper, type HostUpdateState } from '@/lib/host';
 import { showWhatsNew } from '@/lib/whats-new';
-import { fullReport, pageFacts } from '@/lib/diagnostics';
 import { hasNotes, newestVersion } from '../WhatsNew';
 import { useWebUpdate } from '../UpdateButton';
 import { api, type StudioPrefs, type StudioVersion } from '@/api';
 import { AgentsSection } from './AgentsSection';
+import { DiagnosticsGroup } from './DiagnosticsGroup';
 import { ModelsSection } from './ModelsSection';
 import { ProvidersSection } from './ProvidersSection';
 import { SettingsSelect } from './SettingsSelect';
@@ -27,11 +27,11 @@ import { StorageGroup } from './StorageGroup';
 
 export type SettingsSection = 'general' | 'agents' | 'providers' | 'models' | 'developer' | 'shortcuts';
 
-/* the nav, in groups: what OpenFilm does, then help (Agents and Developer only inside an app with a chat:
-   lib/host.ts `agents`, `developer`) */
+/* the nav, in groups: what OpenFilm does, then help (Agents only inside an app with a chat: lib/host.ts `agents`;
+   Developer always, for its diagnostics) */
 const NAV: Array<{ group: 'settings' | 'help'; sections: SettingsSection[] }> = [
   { group: 'settings', sections: ['general', ...(studioHost?.agents ? ['agents' as const] : []), 'providers', 'models'] },
-  { group: 'help', sections: ['shortcuts', ...(studioHost?.developer ? ['developer' as const] : [])] },
+  { group: 'help', sections: ['shortcuts', 'developer'] },
 ];
 
 /** where OpenFilm lives, linked at the foot of the nav */
@@ -52,11 +52,11 @@ const SECTION_ICON: Record<SettingsSection, React.ReactNode> = {
 
 /** what a search through each section reads: its name and every phrase it shows */
 const SECTION_WORDS: Record<SettingsSection, string | string[]> = {
-  general: ['settings.appearance', 'settings.storage', 'settings.playback', 'settings.report'],
+  general: ['settings.appearance', 'settings.storage', 'settings.playback'],
   agents: 'settings.agents',
   providers: 'settings.providers',
   models: 'settings.models',
-  developer: 'settings.developer',
+  developer: ['settings.developer', 'settings.report'],
   shortcuts: 'settings.shortcuts',
 };
 
@@ -341,45 +341,7 @@ function AboutGroup() {
           )}
         />
       ) : null}
-      <ReportItem />
     </SettingsGroup>
-  );
-}
-
-/**
- * The diagnostic report (lib/diagnostics), copied to paste into an issue: what Studio finds on the computer, what this
- * browser can do, and in the desktop app, its agents.
- */
-function ReportItem() {
-  const t = useT();
-  const [state, setState] = React.useState<'idle' | 'making' | 'copied' | 'failed'>('idle');
-  /* the report itself, shown when the browser does not let the page copy (an agent's preview pane may not) */
-  const [shown, setShown] = React.useState<string | null>(null);
-  const copy = () => {
-    setState('making');
-    void Promise.all([api.doctor(), studioHost?.agents?.report?.().catch(() => null) ?? null])
-      .then(([computer, app]) => {
-        const text = fullReport(computer.text, pageFacts(), app);
-        return navigator.clipboard.writeText(text).then(() => { setShown(null); setState('copied'); }, () => { setShown(text); setState('idle'); });
-      })
-      .catch(() => setState('failed'));
-  };
-  return (
-    <SettingsItem
-      title={t('settings.report.title')}
-      description={state === 'failed' ? t('settings.report.failed') : shown ? t('settings.report.select') : t('settings.report.hint')}
-      control={(
-        <SettingsButton disabled={state === 'making'} onClick={copy}>
-          {state === 'making' ? <Loader2 size={15} className="animate-spin" aria-hidden /> : state === 'copied' ? <Check size={15} aria-hidden /> : <Copy size={15} aria-hidden />}
-          {state === 'making' ? t('settings.report.making') : state === 'copied' ? t('settings.report.copied') : t('settings.report.copy')}
-        </SettingsButton>
-      )}
-    >
-      {shown ? (
-        <textarea readOnly value={shown} rows={12} aria-label={t('settings.report.title')} onFocus={(e) => e.currentTarget.select()}
-          className="mb-2 w-full resize-y rounded-md border border-[var(--border)] bg-[var(--surface-2)] p-2 font-mono text-[11.5px] leading-snug text-[var(--text)]" />
-      ) : null}
-    </SettingsItem>
   );
 }
 
@@ -463,12 +425,14 @@ function AppAboutGroup() {
           </div>
         ) : null}
       </SettingsItem>
-      <ReportItem />
     </SettingsGroup>
   );
 }
 
-/** What the app's chat shows of each turn: what it changed in the files, and its full log (lib/host.ts `developer`). */
+/**
+ * Diagnostics (DiagnosticsGroup), for when something does not work; in the app, what its chat shows of each turn: what
+ * it changed in the files, and its full log (lib/host.ts `developer`).
+ */
 function DeveloperSection() {
   const t = useT();
   const developer = studioHost?.developer;
@@ -478,26 +442,28 @@ function DeveloperSection() {
     void developer.get().then(setPrefs);
     return developer.onChange(setPrefs);
   }, [developer]);
-  if (!developer) return null;
   const change = (next: Partial<HostDeveloper>) => {
     setPrefs((was) => (was ? { ...was, ...next } : was));
-    void developer.set(next);
+    void developer?.set(next);
   };
   return (
     <SettingsPage note={t('settings.developer.intro')}>
-      <SettingsGroup title={t('settings.developer.group')} footnote={t('settings.developer.where')}>
-        {/* drawn once the app has said whether each is on: drawn off first, a switch slid on each time the page opened */}
-        <SettingsItem
-          title={t('settings.developer.changes')}
-          description={t('settings.developer.changesHint')}
-          control={prefs ? <SettingsSwitch checked={prefs.changes} label={t('settings.developer.changes')} onChange={(on) => change({ changes: on })} /> : null}
-        />
-        <SettingsItem
-          title={t('settings.developer.logs')}
-          description={t('settings.developer.logsHint')}
-          control={prefs ? <SettingsSwitch checked={prefs.logs} label={t('settings.developer.logs')} onChange={(on) => change({ logs: on })} /> : null}
-        />
-      </SettingsGroup>
+      <DiagnosticsGroup />
+      {developer ? (
+        <SettingsGroup title={t('settings.developer.group')} footnote={t('settings.developer.where')}>
+          {/* drawn once the app has said whether each is on: drawn off first, a switch slid on each time the page opened */}
+          <SettingsItem
+            title={t('settings.developer.changes')}
+            description={t('settings.developer.changesHint')}
+            control={prefs ? <SettingsSwitch checked={prefs.changes} label={t('settings.developer.changes')} onChange={(on) => change({ changes: on })} /> : null}
+          />
+          <SettingsItem
+            title={t('settings.developer.logs')}
+            description={t('settings.developer.logsHint')}
+            control={prefs ? <SettingsSwitch checked={prefs.logs} label={t('settings.developer.logs')} onChange={(on) => change({ logs: on })} /> : null}
+          />
+        </SettingsGroup>
+      ) : null}
       {newestVersion() ? (
         <SettingsGroup title={t('settings.developer.releaseGroup')}>
           <SettingsItem

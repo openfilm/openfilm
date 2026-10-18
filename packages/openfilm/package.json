@@ -31,6 +31,7 @@
     "./shared": "./src/shared.mjs",
     "./look": "./src/look.mjs",
     "./render": "./src/render.mjs",
+    "./problems": "./src/problems.mjs",
     "./skills": "./src/skills.mjs",
     "./skills-cli": "./src/skills-cli.mjs",
     "./studio": "./studio/server/server.mjs",

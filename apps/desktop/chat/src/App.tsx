@@ -56,6 +56,7 @@ import { referencePictures } from '@/lib/ref-pictures';
 import type { TurnFileChanges } from '@/lib/file-changes';
 import { readBalance, type TurnBalance } from '@/lib/balance';
 import { BalanceNotice } from '@/components/BalanceNotice';
+import { CopyDiagnostics } from '@/components/CopyDiagnostics';
 import { readStudioFilm } from '@/lib/studio-film';
 import { studioRefsFromTransfer, transferHasStudioRefs } from '@/lib/studio-transfer';
 import { agentModelSummary, agentOptions, currentAgent, effectivePrefs, offeredOption, useLocalAgents } from '@/state/local-agent-store';
@@ -1034,7 +1035,13 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
                       </CardActions>
                     </ComposerCard>
                   ) : null}
-                  {localTurn?.state.error ? <p role="alert" className="text-xs text-[var(--err)]">{localTurn.state.error}</p> : null}
+                  {localTurn?.state.error ? (
+                    <p role="alert" className="text-xs text-[var(--err)]">
+                      {localTurn.state.error}{' '}
+                      {/* what to send when it keeps failing */}
+                      <span className="text-[var(--text-muted)]"><CopyDiagnostics /></span>
+                    </p>
+                  ) : null}
                   {localTurn?.state.balance ? <BalanceNotice balance={localTurn.state.balance} /> : null}
                   {followUpError && <p className="text-xs text-[var(--err)]">{followUpError}</p>}
                   {queued && active ? (

@@ -46,11 +46,13 @@
  */
 import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { recordProblem, problemsFile } from 'openfilm/problems';
 import { LOG_SETTLE_MS } from './agent-logs.mjs';
 import { RECORDED_AGENTS, agentRecordCalls, compactCalls } from './agent-records.mjs';
 import { skillStore } from './agent-skills.mjs';
-import { AgentSession, HARNESS_AGENTS, isAgentId, isChatAgent, listAgents, openAgentSignIn } from './agents.mjs';
-import { loggedBlocks, openLog, writeModelLog } from './chat-store.mjs';
+import { AGENTS, AgentSession, HARNESS_AGENTS, isAgentId, isChatAgent, listAgents, openAgentSignIn } from './agents.mjs';
+import { loggedBlocks, logsDir, openLog, writeModelLog } from './chat-store.mjs';
 import { loginShellVariables } from './environment.mjs';
 
 const TURN_LOG_MAX = 5000;
@@ -97,6 +99,23 @@ function imageBlocks(images) {
 }
 
 /**
+ * An agent that did not start, did not answer, or whose process ended by itself, as Studio's problems keep it
+ * (openfilm's problems.mjs): why, the step it stopped at, its program, the last of its stderr, and where its turn's log
+ * is.
+ * @param {{ agent: string, cwd: string, session?: any }} entry @param {string} step @param {any} e @param {string | null} [turnId]
+ */
+export function agentProblem(entry, step, e, turnId = null) {
+  const failure = entry.session?.failure?.() ?? {};
+  const stderr = String(failure.stderr ?? entry.session?.stderr ?? '').trim().split(/\r?\n/).slice(-5).join('\n');
+  return {
+    area: 'agent', agent: AGENTS[entry.agent]?.label ?? (entry.agent === 'byok' ? 'Own key' : entry.agent), agentId: entry.agent,
+    what: e instanceof Error ? e.message : String(e), step: failure.step ?? e?.step ?? step, ...(e?.code != null ? { code: String(e.code) } : {}),
+    project: entry.cwd, ...(turnId ? { log: join(logsDir(entry.cwd), `${turnId.replace(/:/g, '-')}.jsonl`) } : {}),
+    ...(failure.program ? { program: failure.program } : {}), ...(stderr ? { stderr } : {}), ...(failure.ownLogs ? { ownLogs: failure.ownLogs } : {}),
+  };
+}
+
+/**
  * @param {import('electron').IpcMain} ipcMain
  * `harness(id)` gives the app's own agent ('byok') what it runs with (agent-roster.mjs), resolved as
  * each session starts.
@@ -112,6 +131,9 @@ function imageBlocks(images) {
 export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbackDir = null, env = {}, harness = async () => null, log = () => {}, onWorking = () => {}, onAsking = () => {}, logDir = () => null, skills = null }) {
   const harnessFor = async (agent) => (HARNESS_AGENTS.includes(agent) ? harness(agent) : undefined);
   const skillRecord = skills ? skillStore(skills.dataDir) : null;
+  /* what went wrong, kept in Studio's home with Studio's own problems (openfilm's problems.mjs), for its report */
+  const problems = env.OPENFILM_HOME ? problemsFile(env.OPENFILM_HOME) : undefined;
+  const noteProblem = (entry, step, e, turnId = null) => recordProblem(agentProblem(entry, step, e, turnId), { file: problems });
   /** a session's skills and MCP servers: OpenFilm's, and of the person's own those let in (agent-skills.mjs) */
   const skillsFor = (agent) => (skills && skillRecord ? { ...skills, allowed: skillRecord.allowed(agent), mcpAllowed: skillRecord.mcpAllowed(agent) } : null);
   /** @type {Map<string, { session: AgentSession, sender: import('electron').WebContents, pending: Map<string, (answer: any) => void>, agent: string, cwd: string, turn: any }>} */
@@ -233,7 +255,13 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
           send(entry, key, { kind: 'question', requestId, ...ask });
           tellAsking();
         }),
-        onExit: (info) => { send(entry, key, { kind: 'exit', ...info }); sessions.delete(key); if (entry.running > 0) onWorking(working()); },
+        onExit: (info) => {
+          /* ended by itself (not closed here), and not well: a problem */
+          if (sessions.get(key) === entry && info.code) noteProblem(entry, 'exit', new Error(`${AGENTS[agent]?.label ?? agent}'s process ended with code ${info.code}.`), entry.turn && !entry.turn.done ? entry.turn.meta?.turnId : null);
+          send(entry, key, { kind: 'exit', ...info });
+          sessions.delete(key);
+          if (entry.running > 0) onWorking(working());
+        },
         onSend: (sent) => {
           const file = entry.turn && !entry.turn.done ? entry.turn.file : entry.adopted;
           file?.write('sent', { ...sent, prompt: loggedBlocks(cwd, sent.prompt) });
@@ -245,6 +273,8 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
       entry.info = info;
       return { ok: true, key, info: { ...info, authMethods: [], mcp: false } };
     } catch (e) {
+      /* one not installed, or not set up, is not a problem of the app's: the chat says what to do */
+      if (e?.code !== 'not-installed' && e?.code !== 'not-ready') noteProblem(entry, 'start', e);
       close(key);
       return { ok: false, error: e instanceof Error ? e.message : String(e), ...(e?.code ? { code: String(e.code) } : {}) };
     }
@@ -275,6 +305,7 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
     } catch (e) {
       /* `balance`: the service the app's own agent runs on has no balance left (agents.mjs), and where to top it up */
       result = { ok: false, error: e instanceof Error ? e.message : String(e), ...(e?.balance ? { balance: e.balance } : {}) };
+      if (!e?.balance) noteProblem(entry, 'prompt', e, meta?.turnId ?? null);
     } finally {
       activePrompts--;
       entry.running -= 1;

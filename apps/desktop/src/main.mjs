@@ -9,7 +9,7 @@
  * in the page (shell/bridge.ts); this process does what only the app can: the window, the agents, files on the disk,
  * ffmpeg, updates (preload.cjs). The window opens straight into the last project.
  */
-import { BaseWindow, Menu, WebContentsView, app, dialog, ipcMain, nativeTheme, safeStorage, screen, shell } from 'electron';
+import { BaseWindow, Menu, WebContentsView, app, clipboard, dialog, ipcMain, nativeTheme, safeStorage, screen, shell } from 'electron';
 import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -319,7 +319,8 @@ async function runStudio(env) {
     home: env.OPENFILM_HOME,
     port: IDENTITY.studioPort,
     /* Studio serves the window's page as its editor (shell/: its editor with the chat beside it) */
-    env: { ...env, OPENFILM_EDITOR_DIR: here('../shell/dist/') },
+    /* its diagnostic file takes the app's own logs too (Studio's diagnostics.mjs) */
+    env: { ...env, OPENFILM_EDITOR_DIR: here('../shell/dist/'), OPENFILM_APP_LOGS: LOGS },
     log,
     onOpen: (url) => {
       /* Studio would open a browser for an address of its own: the window already shows Studio */
@@ -516,10 +517,23 @@ async function start() {
   agentHandle('desktop:agents:automatic', ({ id }) => roster.useAutomatic(String(id)));
   agentHandle('desktop:agents:diagnose', ({ id }) => roster.diagnose(String(id)));
   /* the app's part of Studio's diagnostic report (app-report.mjs): the agents as found now, each one's --version */
-  agentHandle('desktop:agents:report', () => gatherAppReport({ list: () => roster.refresh(), check: checkAgentProgram }, {
+  const appReport = () => gatherAppReport({ list: () => roster.refresh(), check: checkAgentProgram }, {
     version: app.getVersion(), flavor: FLAVOR, packaged: app.isPackaged, channel: updates?.snapshot()?.channel ?? null,
     electron: process.versions.electron, pathSource: lastPathSource(),
-  }));
+  });
+  agentHandle('desktop:agents:report', appReport);
+  /* the chat's "Copy diagnostic report" by a turn that failed: what Studio's report has (`openfilm doctor`, with the
+     last week's problems) and the app's agents, on the clipboard (the chat's page may not be let write it) */
+  agentHandle('desktop:diagnostics:copy', async () => {
+    const [computer, own] = await Promise.all([
+      studioApi('/api/doctor').then((r) => String(r.text ?? ''), () => ''),
+      appReport().catch(() => ''),
+    ]);
+    const text = [computer, own].filter(Boolean).join('\n\n────────\n\n');
+    if (!text) return { ok: false };
+    clipboard.writeText(text);
+    return { ok: true };
+  });
   agentHandle('desktop:agents:shown', ({ id, shown }) => { roster.setShown(String(id), shown === true); return { ok: true }; });
   agentHandle('desktop:agents:own-model', ({ config }) => roster.saveOwnModel(config));
   agentHandle('desktop:agents:own-model-remove', ({ id }) => { roster.removeOwnModel(String(id)); return { ok: true }; });

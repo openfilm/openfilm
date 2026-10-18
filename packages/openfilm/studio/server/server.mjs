@@ -55,6 +55,8 @@ import { transitionPageRoutes } from './transition-pages.mjs';
 import { createAsks, getRoute, subtitleTranscriber, subtitleTranslator } from './get.mjs';
 import { LOCATION_KEYS, locations, usableFolder } from '../../src/locations.mjs';
 import { doctor } from '../../src/doctor.mjs';
+import { recentProblems } from '../../src/problems.mjs';
+import { exportDiagnostics } from './diagnostics.mjs';
 
 /** @typedef {import('./http.mjs').Req} Req @typedef {import('./http.mjs').Res} Res */
 
@@ -242,10 +244,24 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       return json(res, 200, { version: VERSION, latest, newer: Boolean(latest && olderThanThis(VERSION, latest)), checkedAt, checking: !process.env.OPENFILM_NO_UPDATE_CHECK && !FROM_SOURCE, source: FROM_SOURCE,
         ...(updating ? { update: updating } : {}) });
     }
-    /* Settings → General's diagnostic report: `openfilm doctor` (src/doctor.mjs), as this Studio sees the computer */
+    /* Settings → Developer's diagnostic report: `openfilm doctor` (src/doctor.mjs), as this Studio sees the computer */
     if (parts[0] === 'doctor' && parts.length === 1 && req.method === 'GET') {
       const report = await doctor({ studio: { origin, version: VERSION, ...(stays ? { app: true } : {}) } });
       return json(res, 200, { ok: report.ok, text: report.text });
+    }
+    /* Settings → Developer: the problems of the last two weeks (src/problems.mjs), newest first */
+    if (parts[0] === 'diagnostics' && parts[1] === 'problems' && parts.length === 2 && req.method === 'GET') {
+      return json(res, 200, { problems: recentProblems().reverse() });
+    }
+    /* Settings → Developer's diagnostic file (diagnostics.mjs): the report the page made, and the rest, as a zip in the
+       exports folder, shown in the file manager */
+    if (parts[0] === 'diagnostics' && parts[1] === 'export' && parts.length === 2 && req.method === 'POST') {
+      const { report, conversations } = /** @type {{ report?: unknown, conversations?: unknown }} */ ((await readJson(req).catch(() => null)) ?? {});
+      const text = typeof report === 'string' && report.trim() ? report
+        : (await doctor({ studio: { origin, version: VERSION, ...(stays ? { app: true } : {}) } })).text;
+      const made = await exportDiagnostics({ report: text, conversations: conversations === true });
+      reveal(made.path);
+      return json(res, 200, made);
     }
     /* the top bar's Update (Studio run with npm, not the app's nor a checkout): the newest openfilm run in the
        background as `openfilm update` (client.mjs updateOpenfilm), which starts Studio again on it; the pages come back

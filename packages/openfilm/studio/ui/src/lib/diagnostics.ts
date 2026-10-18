@@ -1,5 +1,5 @@
 /**
- * The diagnostic report Settings → General copies: `openfilm doctor` as Studio's server runs it (src/doctor.mjs), what
+ * The diagnostic report Settings → Developer copies: `openfilm doctor` as Studio's server runs it (src/doctor.mjs), what
  * the browser Studio is open in can do (an agent's built-in browser can lack what Studio needs), and in the desktop
  * app, its agents (lib/host.ts `diagnostics`).
  */

@@ -1,5 +1,5 @@
 /**
- * The app's part of the diagnostic report Studio's Settings → General copies (the rest is `openfilm doctor` and the
+ * The app's part of the diagnostic report Studio's Settings → Developer copies (the rest is `openfilm doctor` and the
  * page's browser): the app, where its PATH came from, and each of the person's own agents as the roster has it, with
  * its program and the version that program says. Paths in the home folder read ~; no account, key or token.
  *

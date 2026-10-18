@@ -1,17 +1,19 @@
 // @ts-check
 /**
  * `openfilm doctor`: what this computer has for OpenFilm, as text a person pastes into an issue. Studio's Settings →
- * General copies the same report, with what the browser it is open in can do.
+ * Developer copies the same report, with what the browser it is open in can do.
  *
  * Each check is a line: what it is, what was found, and when something is wrong, what to do about it. A path under the
  * home folder reads ~. No keys, accounts, projects or variables' values are in it: of the variables an agent sets, only
- * their names, which say which agent ran the command.
+ * their names, which say which agent ran the command. After the checks, the problems of the last week (problems.mjs)
+ * and the last errors in Studio's log.
  */
 import { spawnSync } from 'node:child_process';
 import { accessSync, constants, existsSync, readFileSync } from 'node:fs';
 import { arch, homedir, platform, release, version as osVersion } from 'node:os';
 import { join } from 'node:path';
 import { freeSpace, libraryRoot, studioHomeDir } from './locations.mjs';
+import { problemLines, problemsFile } from './problems.mjs';
 
 const VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 const FROM_SOURCE = existsSync(new URL('../studio/ui/src', import.meta.url));
@@ -202,7 +204,12 @@ export async function doctor({ run = 'openfilm', env = process.env, studio = nul
 
   const log = join(data, 'logs', 'studio.log');
   const trouble = existsSync(log) ? logTrouble(readFileSync(log, 'utf8')).map((line) => (home.length > 1 ? line.replaceAll(home, '~') : line)) : [];
-  const extra = trouble.length ? [`Last errors in ${at(log)}:`, ...trouble.map((line) => `  ${line}`)] : [];
+  const recent = problemLines({ file: problemsFile(data) });
+  const extra = [
+    ...recent,
+    ...(recent.length && trouble.length ? [''] : []),
+    ...(trouble.length ? [`Last errors in ${at(log)}:`, ...trouble.map((line) => `  ${line}`)] : []),
+  ];
 
   return { ok: !checks.some((c) => c.problem), checks, text: formatReport(checks, extra) };
 }

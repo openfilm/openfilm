@@ -156,7 +156,7 @@ what they say.
 
 Questions, ideas and films you made go to [Discussions](https://github.com/openfilm/openfilm/discussions): ask in
 Q&A, share your film in Show and tell. Bugs go to [Issues](https://github.com/openfilm/openfilm/issues), with the
-report from Studio's Settings → General → Copy report (or `npx openfilm doctor`).
+report from Studio's Settings → Developer → Copy report (or `npx openfilm doctor`).
 
 ## Contributing
 

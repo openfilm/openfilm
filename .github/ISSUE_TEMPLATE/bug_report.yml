@@ -35,8 +35,10 @@ body:
     attributes:
       label: Diagnostic report
       description: |
-        In Studio: Settings → General → Copy report, then paste it here. Without Studio, paste what `npx openfilm doctor`
-        prints. Paths in your home folder show as ~, and it has no keys or accounts. If neither runs, say so.
+        In Studio: Settings → Developer → Copy report (or, in the desktop app, Copy diagnostic report under the message
+        that failed), then paste it here. Without Studio, paste what `npx openfilm doctor` prints. Paths in your home
+        folder show as ~, and it has no keys or accounts. If neither runs, say so. For more, attach the diagnostic file
+        from Settings → Developer → Export, after a look at it.
       render: text
     validations:
       required: true

@@ -84,6 +84,15 @@ export interface StudioLocations { projects: StudioLocation }
 /** Said on the window when they change, for what plays by them (the preview's proxies). */
 export const PREFS_EVENT = 'openfilm:prefs';
 
+/** A problem as Studio keeps it (src/problems.mjs): when, what it was about, what it said. */
+export interface StudioProblem {
+  t: string;
+  area: string;
+  what: string;
+  agent?: string;
+  step?: string;
+}
+
 export const api = {
   /** this Studio's version and the latest openfilm on npm; `check`: ask npm now */
   version: (check = false) => call<StudioVersion>(`version${check ? '?check=1' : ''}`),
@@ -91,6 +100,10 @@ export const api = {
   update: () => call<{ update: NonNullable<StudioVersion['update']> }>('update', { method: 'POST', json: {} }),
   /** `openfilm doctor`, run by this Studio: the report to paste into an issue (src/doctor.mjs) */
   doctor: () => call<{ ok: boolean; text: string }>('doctor'),
+  /** what went wrong in the last two weeks, newest first (src/problems.mjs) */
+  problems: () => call<{ problems: StudioProblem[] }>('diagnostics/problems').then((r) => r.problems),
+  /** the diagnostic file (server/diagnostics.mjs): `report` and the rest, zipped into the exports folder and shown there */
+  exportDiagnostics: (report: string, conversations: boolean) => call<{ path: string; files: string[] }>('diagnostics/export', { method: 'POST', json: { report, conversations } }),
   projects: () => call<{ projects: Project[] }>('projects').then((r) => r.projects),
   prefs: () => call<StudioPrefs>('prefs'),
   /** where new projects and exports go, and the free space there */

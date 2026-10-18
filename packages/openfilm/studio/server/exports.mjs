@@ -67,6 +67,7 @@ import { zipFiles } from './zip.mjs';
 import { inProject } from './files.mjs';
 import { PROJECT_PARTS, TOOL_DIR } from './projects.mjs';
 import { exportsRoot } from '../../src/locations.mjs';
+import { recordProblem } from '../../src/problems.mjs';
 
 /** The exports folder: the one chosen in Settings, else the Desktop, where a file just made is found (src/locations.mjs). */
 export { exportsRoot };
@@ -1314,7 +1315,9 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       /* what a cancelled or failed export left half written is not an export */
       for (const f of job.outputs) await rm(f, { force: true }).catch(() => {});
       const ended = { phase: null, etaMs: null, outputs: [], out: undefined, finishedAt: Date.now() };
-      update(job, abort.signal.aborted ? { ...ended, status: 'cancelled' } : { ...ended, status: 'failed', error: e instanceof Error ? e.message : String(e) });
+      const error = e instanceof Error ? e.message : String(e);
+      update(job, abort.signal.aborted ? { ...ended, status: 'cancelled' } : { ...ended, status: 'failed', error });
+      if (!abort.signal.aborted) recordProblem({ area: 'export', step: job.ask.kind, what: error, project: root });
     } finally {
       work.delete(job.id);
       running = false;

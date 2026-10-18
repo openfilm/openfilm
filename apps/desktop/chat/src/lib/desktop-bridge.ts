@@ -180,6 +180,8 @@ export interface DesktopBridge {
     list(): Promise<RosterAgent[]>;
     connect(id: LocalAgentId): Promise<{ ok: boolean; error?: string }>;
     onChange(listener: (agents: RosterAgent[]) => void): () => void;
+    /** The diagnostic report (the computer, the last week's problems, the agents) on the clipboard. Older shells lack it. */
+    copyReport?(): Promise<{ ok: boolean }>;
   };
   /** Studio's Settings, on Agents (or Providers). */
   openSettings?(section?: 'agents' | 'providers'): void;
