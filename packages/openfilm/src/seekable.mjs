@@ -5,10 +5,11 @@
 // frame every quarter second, all but lossless (with its alpha, when it has one), made once and kept in the project's
 // cache; the render's pages are served the copy, and the sound is still mixed from the original.
 import { execFile } from 'node:child_process';
-import { existsSync, renameSync, rmSync, statSync } from 'node:fs';
-import { extname, join } from 'node:path';
+import { existsSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs';
+import { extname, join, relative, sep } from 'node:path';
 import { colorTagsOf, encoders, h264ColorTags, hardwareEncoder, hardwareOptions, onTheChip } from './encoders.mjs';
-import { ffmpeg, hash, outDir } from './shared.mjs';
+import { kindOf, readFilmFile, srcHref } from './film-doc.mjs';
+import { ffmpeg, fileOf, hash, outDir } from './shared.mjs';
 
 /** A key frame further apart than this is slow to seek to frame by frame. */
 const SLOW_GOP_S = 0.5;
@@ -89,6 +90,88 @@ export async function copyNeed(file, { plays, slow = true } = {}) {
   return slowly ? { why: 'slow', fps: slowly.fps, w: slowly.w, h: slowly.h, alpha: false } : null;
 }
 
+/** Where `file`'s copy is kept in `root`'s cache, by the file's version: the path without its extension. */
+const copyBase = (/** @type {string} */ file, /** @type {string} */ root, /** @type {import('node:fs').Stats} */ stat) =>
+  join(root, '.film', 'cache', 'seek', hash(Buffer.from(`${VERSION}\0${file}\0${stat.size}\0${stat.mtimeMs}`)));
+
+/** @type {Map<string, { copy: string | null, at: number }>} what madeCopy found, by file and version */
+const found = new Map();
+/**
+ * The copy of `file` already made in `root`'s cache (seekableCopies), or null; nothing is made. Asked on every request
+ * a playing video makes, so a copy found is remembered, and one not found is looked for again a moment later.
+ * @param {string} file @param {string} root
+ */
+export function madeCopy(file, root) {
+  let stat;
+  try { stat = statSync(file); } catch { return null; }
+  const key = `${root}\0${file}\0${stat.size}\0${stat.mtimeMs}`;
+  const hit = found.get(key);
+  if (hit && (hit.copy ? existsSync(hit.copy) : Date.now() - hit.at < 2000)) return hit.copy;
+  const base = copyBase(file, root, stat);
+  const copy = [`${base}.mp4`, `${base}.webm`].find((f) => existsSync(f)) ?? null;
+  found.set(key, { copy, at: Date.now() });
+  return copy;
+}
+
+/**
+ * The files of a film's video clips: film.html at `film` (a path in `root`, as a URL says it), as a render, a look or
+ * a still of it plays them.
+ * @param {string} root @param {string} film
+ */
+export function filmVideos(root, film) {
+  let doc;
+  try { doc = readFilmFile(readFileSync(join(root, decodeURI(film)), 'utf8')).doc; } catch { return []; }
+  const files = new Set();
+  for (const track of doc?.tracks ?? []) {
+    for (const clip of track.clips) {
+      if (kindOf(clip) !== 'video') continue;
+      try { files.add(fileOf(root, film, srcHref(clip.src))); } catch { /* a source out of the folder: not served either */ }
+    }
+  }
+  return [...files];
+}
+
+/**
+ * In a page: whether the browser shows the first frame of the video at `url`. One it does not decode (ProRes; HEVC
+ * without a chip for it) fails at once, or never shows a frame.
+ * @param {string} url
+ */
+const firstFrame = (url) => new Promise((done) => {
+  const video = document.createElement('video');
+  video.muted = true;
+  video.preload = 'auto';
+  const end = (/** @type {boolean} */ shown) => { clearTimeout(timer); video.removeAttribute('src'); video.load(); done(shown); };
+  const timer = setTimeout(() => end(false), 10_000);
+  video.addEventListener('loadeddata', () => end(true), { once: true });
+  video.addEventListener('error', () => end(false), { once: true });
+  video.src = url;
+});
+
+/**
+ * The copies `browser` needs of `files` to show them (seekableCopies, kept in `root`'s cache), each file asked of the
+ * browser itself through a page that loads it from the site at `origin`, which serves `root`. `slow`: slow-seeking
+ * ones too. A map from a file to its copy; it never fails: a video that can't be copied stays as it is.
+ * @param {import('playwright-core').Browser} browser @param {string} origin @param {string} root @param {string[]} files
+ * @param {{ signal?: AbortSignal, slow?: boolean }} [options]
+ */
+export async function browserCopies(browser, origin, root, files, { signal, slow = false } = {}) {
+  if (!files.length) return new Map();
+  /** @type {Promise<import('playwright-core').Page> | null} */
+  let tester = null;
+  const plays = async (/** @type {string} */ file) => {
+    tester ??= browser.newPage();
+    const url = `${origin.replace(/\/$/, '')}/${relative(root, file).split(sep).map(encodeURIComponent).join('/')}`;
+    return (await tester).evaluate(firstFrame, url).catch(() => false);
+  };
+  try {
+    return await seekableCopies(files, root, { signal, plays, slow });
+  } catch {
+    return new Map();
+  } finally {
+    if (tester) await (await tester).close().catch(() => {});
+  }
+}
+
 /**
  * The copy of each of `files` that needs one (copyNeed), made in `root`'s cache (or found there from before): a map
  * from a file to its copy. A file that is fine as it is, or whose copy fails, is not in it. `plays`: whether the
@@ -98,7 +181,7 @@ export async function copyNeed(file, { plays, slow = true } = {}) {
  */
 export async function seekableCopies(files, root, { signal, plays, slow = true } = {}) {
   const copies = new Map();
-  const dir = outDir(root, 'seek');
+  outDir(root, 'seek');
   /* two at a time: on the processor each one keeps several cores busy; on the graphics chip it leaves them free */
   const queue = [...new Set(files)];
   const worker = async () => {
@@ -106,9 +189,11 @@ export async function seekableCopies(files, root, { signal, plays, slow = true }
       if (signal?.aborted) return;
       let stat;
       try { stat = statSync(file); } catch { continue; }
-      const base = join(dir, hash(Buffer.from(`${VERSION}\0${file}\0${stat.size}\0${stat.mtimeMs}`)));
+      const base = copyBase(file, root, stat);
+      /* madeCopy finds it from now on, without waiting out a miss it remembers */
+      const known = (/** @type {string} */ copy) => { copies.set(file, copy); found.set(`${root}\0${file}\0${stat.size}\0${stat.mtimeMs}`, { copy, at: Date.now() }); };
       const made = [`${base}.mp4`, `${base}.webm`].find((f) => existsSync(f));
-      if (made) { copies.set(file, made); continue; }
+      if (made) { known(made); continue; }
       const need = await copyNeed(file, { plays, slow });
       if (!need) continue;
       /* with an alpha to keep: VP9, which every Chromium decodes with its alpha; else H.264 */
@@ -133,7 +218,7 @@ export async function seekableCopies(files, root, { signal, plays, slow = true }
       try {
         await onTheChip(need.alpha ? null : await hardwareEncoder('h264', await encoders()), make, signal);
         renameSync(part, out);
-        copies.set(file, out);
+        known(out);
       } catch {
         rmSync(part, { force: true });
       }

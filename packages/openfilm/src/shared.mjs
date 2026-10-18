@@ -61,7 +61,11 @@ export function parseTarget(args) {
   return { film, at, range };
 }
 
-/** Serve the film's folder, open it in Chromium, wait for window.film and `ready`. */
+/**
+ * Serve the film's folder, open it in Chromium, wait for window.film and `ready`. `playable`: its picture is wanted,
+ * so footage this browser does not decode (ProRes; HEVC without a chip for it) is served as a copy it plays, made
+ * before the film opens (seekable.mjs): the film's video clips (`true`), or these files.
+ */
 export async function open(target, opts = {}) {
   const loc = locate(target, opts.root);
   /* an edit is read before anything opens: its problems, every one, at once */
@@ -69,10 +73,19 @@ export async function open(target, opts = {}) {
     const { problems } = readFilmFile(readFileSync(join(loc.dir, FILM_FILE), 'utf8'));
     if (problems.length) throw new FrameError(problems.length === 1 ? problems[0] : `${FILM_FILE} has ${problems.length} problems:\n  ${problems.join('\n  ')}`);
   }
-  const site = await serve(loc.root, { swap: opts.swap });
+  /** @type {Map<string, string>} */
+  const copies = new Map();
+  const site = await serve(loc.root, { swap: (file) => opts.swap?.(file) ?? copies.get(file) ?? null });
   let browser;
   try { browser = await launch(opts.launch); }
   catch (e) { await site.close(); throw e; }
+  if (opts.playable) {
+    try {
+      const { browserCopies, filmVideos } = await import('./seekable.mjs');
+      const files = Array.isArray(opts.playable) ? opts.playable : loc.isFilm ? filmVideos(loc.root, loc.entry) : [];
+      for (const [file, copy] of await browserCopies(browser, site.url, loc.root, files, { signal: opts.signal })) copies.set(file, copy);
+    } catch { /* the footage as it is */ }
+  }
   let film;
   try { film = await FilmPage.open(browser, site.url, loc.entry, opts); }
   catch (e) { await browser.close(); await site.close(); throw e; }

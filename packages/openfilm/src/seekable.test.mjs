@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { filmHtml } from './film-doc.mjs';
 import { render } from './render.mjs';
-import { copyNeed, seekableCopies, slowSeeking } from './seekable.mjs';
+import { copyNeed, madeCopy, seekableCopies, slowSeeking } from './seekable.mjs';
+import { look } from './look.mjs';
 
 const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })();
 const ffmpeg = { skip: !hasFfmpeg && 'no ffmpeg', timeout: 120_000 };
@@ -87,6 +88,34 @@ test('a render shows ProRes footage, which no browser decodes, through its copy'
     const done = await render([dir, '0-0.5'], { out: join(dir, 'out.mp4'), workers: 1, silent: true, onProgress() {} });
     assert.ok(Date.now() - started < 60_000, 'no frame waits on a video that never shows');
     const [r, g, b] = execFileSync('ffmpeg', ['-v', 'error', '-ss', '0.2', '-i', done.out, '-frames:v', '1', '-vf', 'crop=4:4:160:90,format=rgb24', '-f', 'rawvideo', '-']);
+    assert.ok(Math.abs(r - 0x20) < 16 && Math.abs(g - 0x60) < 16 && Math.abs(b - 0xc0) < 16, `the footage's colour: ${r},${g},${b}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a copy once made is found for each request after it, and none before', ffmpeg, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-seekable-made-'));
+  try {
+    const file = join(dir, 'prores.mov');
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=30', '-t', '1', '-c:v', 'prores_ks', '-profile:v', '3', file]);
+    assert.equal(madeCopy(file, dir), null);
+    const copies = await seekableCopies([file], dir, { plays: async () => false, slow: false });
+    assert.ok(copies.get(file));
+    assert.equal(madeCopy(file, dir), copies.get(file), 'at once, though a miss was just remembered');
+    assert.equal(madeCopy(join(dir, 'gone.mov'), dir), null);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('look shows ProRes footage, which no browser decodes, through its copy', ffmpeg, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-seekable-prores-look-'));
+  try {
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=0x2060c0:size=320x180:rate=30', '-t', '1', '-c:v', 'prores_ks', '-profile:v', '3', join(dir, 'a.mov')]);
+    writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'v', src: 'a.mov', at: 0, time: [0, 1] }] }] }));
+    const seen = await look([dir, '0.5']);
+    const [r, g, b] = execFileSync('ffmpeg', ['-v', 'error', '-i', seen.files[0], '-frames:v', '1', '-vf', 'crop=4:4:160:90,format=rgb24', '-f', 'rawvideo', '-']);
     assert.ok(Math.abs(r - 0x20) < 16 && Math.abs(g - 0x60) < 16 && Math.abs(b - 0xc0) < 16, `the footage's colour: ${r},${g},${b}`);
   } finally {
     rmSync(dir, { recursive: true, force: true });

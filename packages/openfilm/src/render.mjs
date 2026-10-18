@@ -1,13 +1,13 @@
 // film render: the deliverable. Frames are rendered in parallel page instances, averaged
 // over the shutter for motion blur, encoded with tagged BT.709 color, and muxed with the mix of the film's sounds.
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { availableParallelism, totalmem } from 'node:os';
-import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
-import { clipKind, kindOf, readFilmFile, srcHref } from './film-doc.mjs';
+import { basename, dirname, extname, join, resolve } from 'node:path';
+import { clipKind, FILM_FILE } from './film-doc.mjs';
 import { broken, encoders, hardwareEncoder, hardwareOptions, proresOptions } from './encoders.mjs';
 import { FilmPage, launch } from './host.mjs';
-import { seekableCopies } from './seekable.mjs';
-import { ffmpeg, fileOf, filmSound, fmt, kill, mix, open, outDir, parseTarget, shown, UsageError, write } from './shared.mjs';
+import { browserCopies, filmVideos } from './seekable.mjs';
+import { ffmpeg, filmSound, fmt, kill, mix, open, outDir, parseTarget, shown, UsageError, write } from './shared.mjs';
 
 const BT709 = ['-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv'];
 const TAG_709 = ['-bsf:v', 'h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0'];
@@ -44,22 +44,6 @@ async function chipFormat(ext, size, fps) {
 
 /** The encoder a format's picture options name. @param {string[] | undefined} video */
 const encoderOf = (video = []) => video[video.indexOf('-c:v') + 1] ?? 'ffmpeg';
-
-/**
- * In a page: whether the browser shows the first frame of the video at `url`. One it does not decode (ProRes; HEVC
- * without a chip for it) fails at once, or never shows a frame.
- * @param {string} url
- */
-const firstFrame = (url) => new Promise((done) => {
-  const video = document.createElement('video');
-  video.muted = true;
-  video.preload = 'auto';
-  const end = (/** @type {boolean} */ shown) => { clearTimeout(timer); video.removeAttribute('src'); video.load(); done(shown); };
-  const timer = setTimeout(() => end(false), 10_000);
-  video.addEventListener('loadeddata', () => end(true), { once: true });
-  video.addEventListener('error', () => end(false), { once: true });
-  video.src = url;
-});
 
 export async function render(args, opts = {}) {
   const started = Date.now();
@@ -110,27 +94,13 @@ export async function render(args, opts = {}) {
   let encoder = chip?.encoder ?? encoderOf(own.video);
   const workers = Math.max(1, Math.min(Number(opts.workers ?? defaultWorkers()), total));
   /* the videos get copies this browser plays: those it does not decode here (ProRes; HEVC without a chip for it), and
-     for a render of more than a moment those that seek slowly (a film's video clips load only when their time comes,
-     so they are read from film.html; a page's own videos are the ones it asked for) */
+     for a render of more than a moment those that seek slowly (seekable.mjs). A film's video clips load only when
+     their time comes, so they are read from film.html (a page drawn around the project's film, as a burned-in
+     subtitle export is, reads the project's); a page's own videos are the ones it asked for */
   if (opts.seekable !== false) {
-    if (isFilm) {
-      try {
-        const doc = readFilmFile(readFileSync(join(root, entry), 'utf8')).doc;
-        for (const track of doc?.tracks ?? []) for (const clip of track.clips) if (kindOf(clip) === 'video') videos.add(fileOf(root, entry, srcHref(clip.src)));
-      } catch { /* the pages ask for what they need */ }
-    }
-    if (videos.size) {
-      /** @type {Promise<import('playwright-core').Page> | null} */
-      let tester = null;
-      const plays = async (/** @type {string} */ file) => {
-        tester ??= browser.newPage();
-        const url = `${site.url}/${relative(root, file).split(sep).map(encodeURIComponent).join('/')}`;
-        return (await tester).evaluate(firstFrame, url).catch(() => false);
-      };
-      /* only ever better: a copy that could not be made leaves its video as it is */
-      copies = await seekableCopies([...videos], dir, { signal: opts.signal, plays, slow: total >= fps * 2 }).catch(() => new Map());
-      if (tester) await (await tester).close().catch(() => {});
-    }
+    const film = isFilm ? entry : opts.root ? FILM_FILE : null;
+    const files = [...new Set([...videos, ...(film ? filmVideos(root, film) : [])])];
+    copies = await browserCopies(browser, site.url, root, files, { signal: opts.signal, slow: total >= fps * 2 });
   }
 
   if (!process.stderr.isTTY && !opts.onProgress) process.stderr.write(`  rendering ${total} frames with ${workers} browser${workers > 1 ? 's' : ''}…\n`);

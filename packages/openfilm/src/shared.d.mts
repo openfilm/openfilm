@@ -16,7 +16,8 @@ export interface OpenFilm {
   site: { url: string; close(): Promise<void> };
   close(): Promise<void>;
 }
-export declare function open(target: string, opts?: { root?: string }): Promise<OpenFilm>;
+/** `playable`: the picture is wanted, so footage the browser does not decode is served as a copy it plays (the film's video clips, or these files). */
+export declare function open(target: string, opts?: { root?: string; playable?: boolean | string[]; signal?: AbortSignal }): Promise<OpenFilm>;
 /** The film's sound from `from` seconds on, as clips to mix: its sound clips and its videos' own sound. */
 export declare function filmSound(s: OpenFilm, from: number): Promise<MixClip[]>;
 export declare class UsageError extends Error {}

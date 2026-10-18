@@ -1,5 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -133,4 +134,15 @@ test('a page\'s facts: its own size, or none (reflows: shown alone at 1920 × 10
   const facts = async (path) => (await api(`/api/projects/${project.id}/media?what=probe&path=${path}`)).json();
   assert.deepEqual(await facts('chart.html'), { width: 480, height: 320 });
   assert.deepEqual(await facts('cards.html'), { duration: 5, width: 1920, height: 1080, reflows: true });
+});
+
+const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })();
+
+test('a film whose footage no browser decodes (ProRes) has its picture on its card, through a copy', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 120_000 }, async () => {
+  const { project } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'ProRes') } })).json();
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=0x2060c0:size=320x180:rate=30', '-t', '2', '-c:v', 'prores_ks', '-profile:v', '3', join(project.path, 'a.mov')]);
+  writeFileSync(join(project.path, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'v', src: 'a.mov', at: 0, time: [0, 2] }] }] }));
+  const jpeg = await posterOf(project.id);
+  const [r, g, b] = execFileSync('ffmpeg', ['-v', 'error', '-f', 'image2pipe', '-i', '-', '-frames:v', '1', '-vf', 'crop=4:4:iw/2:ih/2,format=rgb24', '-f', 'rawvideo', '-'], { input: jpeg });
+  assert.ok(Math.abs(r - 0x20) < 20 && Math.abs(g - 0x60) < 20 && Math.abs(b - 0xc0) < 20, `the footage's colour: ${r},${g},${b}`);
 });

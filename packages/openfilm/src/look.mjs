@@ -12,7 +12,8 @@ export async function look(args, opts = {}) {
   const { film: target, at, range } = parseTarget(args);
   if (MEDIA.test(target)) return lookMedia(target, at, range, opts);
   let s;
-  try { s = await open(target, { root: opts.root, offline: opts.offline, network: opts.network, transparent: true, launch: opts.launch }); }
+  /* `playable`: footage the browser does not decode (ProRes; HEVC without a chip for it) is looked at through a copy it plays */
+  try { s = await open(target, { root: opts.root, offline: opts.offline, network: opts.network, transparent: true, launch: opts.launch, playable: true }); }
   catch (e) { if (e instanceof FrameError) return { ok: false, lines: [`✗ ${e.message}`], files: [] }; throw e; }
   const { film, browser } = s;
   const m = film.meta;

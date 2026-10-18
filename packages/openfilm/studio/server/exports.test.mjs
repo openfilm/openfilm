@@ -711,3 +711,18 @@ test('an editing-software export of a film whose clip leads out of the project (
   assert.deepEqual(made.flatMap((n) => readdirSync(join(exportsRoot(), n), { recursive: true })).filter((f) => /private/.test(String(f))), []);
 });
 
+
+test('a poster, and a video with its subtitles burned in, show footage no browser decodes (ProRes) through its copy', ffmpeg, async () => {
+  const folder = mkdtempSync(join(tmpdir(), 'of-exports-prores-'));
+  try {
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=0x2060c0:size=320x180:rate=30', '-t', '1', '-c:v', 'prores_ks', '-profile:v', '3', join(folder, 'a.mov')]);
+    writeFileSync(join(folder, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'v', src: 'a.mov', at: 0, time: [0, 1] }] }] }));
+    const poster = await exported({ kind: 'poster', format: 'png', at: 0.5 }, 'ProRes', folder);
+    assert.ok(near(firstFrame(poster.out).at(160, 90), [0x20, 0x60, 0xc0], 20), `the poster: ${firstFrame(poster.out).at(160, 90)}`);
+    /* the film drawn inside a frame with its subtitles: the project's footage, copied for it too */
+    const burned = await exported({ kind: 'video', fps: 10, range: [0, 0.5], burnSubtitles: true }, 'ProRes burned', folder);
+    assert.ok(near(firstFrame(burned.out).at(160, 30), [0x20, 0x60, 0xc0], 24), `the burned video: ${firstFrame(burned.out).at(160, 30)}`);
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+});

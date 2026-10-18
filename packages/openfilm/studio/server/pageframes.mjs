@@ -12,7 +12,8 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { FilmPage, launch } from '../../src/host.mjs';
-import { FILM_FILE } from '../../src/film-doc.mjs';
+import { FILM_FILE, clipKind } from '../../src/film-doc.mjs';
+import { browserCopies, filmVideos, madeCopy } from '../../src/seekable.mjs';
 import { TOOL_DIR } from './projects.mjs';
 import { writeAtomic } from './atomic.mjs';
 import { inProject } from './files.mjs';
@@ -88,6 +89,9 @@ export async function pageFrame(root, base, rel, ms, width, overrides = null) {
   const pending = drawing.get(id);
   if (pending) return pending;
   const made = (async () => {
+    /* the film's footage this browser does not decode (ProRes; HEVC without a chip for it) gets a copy it plays first,
+       served in its place (pages.mjs): drawn without one, the film shows nothing where it is */
+    if (rel === FILM_PAGE) await filmCopies(root, base, info);
     /* a page drawn with tweaks is one of its own: the page kept open for another clip of the same file has none */
     const drawn = tweaks ? `${version}:${createHash('sha256').update(tweaks).digest('hex').slice(0, 12)}` : version;
     const { jpeg, duration, loaded } = await draw(pageUrl(base, rel), ms, w, drawn, base, tweaks ? overrides : null).catch((e) => {
@@ -115,10 +119,31 @@ export async function pageFrame(root, base, rel, ms, width, overrides = null) {
   return made;
 }
 
-/** What `files` (project relative) are now: each one's change time and size, as one text (a file gone reads so). */
+/**
+ * What `files` (project relative) are now: each one's change time and size, as one text (a file gone reads so); a
+ * video with a copy played in its place (seekable.mjs) says so, so a frame drawn before the copy was made is not kept.
+ */
 async function stampOf(/** @type {string} */ root, /** @type {string[]} */ files) {
-  const parts = await Promise.all(files.map((f) => stat(join(root, f)).then((s) => `${f}:${s.mtimeMs}:${s.size}`, () => `${f}:-`)));
+  const parts = await Promise.all(files.map((f) => stat(join(root, f)).then(
+    (s) => `${f}:${s.mtimeMs}:${s.size}${clipKind(f) === 'video' && madeCopy(join(root, f), root) ? ':copy' : ''}`, () => `${f}:-`)));
   return createHash('sha256').update(parts.join('\n')).digest('hex').slice(0, 24);
+}
+
+/** @type {Map<string, string>} the version of each project's film.html whose footage got its copies */
+const copied = new Map();
+/**
+ * The copies the film's footage needs to be drawn by this browser (seekable.mjs), made once for each version of
+ * film.html (`info`); a footage file changed since gets its own when it is drawn next with a changed film.html.
+ * @param {string} root @param {string} base @param {import('node:fs').Stats} info
+ */
+async function filmCopies(root, base, info) {
+  const version = `${info.mtimeMs}:${info.size}`;
+  if (copied.get(root) === version) return;
+  browser ??= launch().catch((e) => { browser = null; throw e; });
+  const b = await browser.catch(() => null);
+  if (!b) return;
+  await browserCopies(b, base, root, filmVideos(root, FILM_FILE));
+  copied.set(root, version);
 }
 
 /** The film's last poster, in `.film/cache/`: what its card shows at once while the poster of a changed film is drawn. */

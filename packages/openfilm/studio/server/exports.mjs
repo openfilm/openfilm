@@ -58,6 +58,7 @@ import { fileURLToPath } from 'node:url';
 import { FilmPage, launch } from '../../src/host.mjs';
 import { broken, encoders, hardwareEncoder, hardwareOptions, onTheChip, proresOptions } from '../../src/encoders.mjs';
 import { filmSound, kill as killProcess, mix, open } from '../../src/shared.mjs';
+import { filmVideos } from '../../src/seekable.mjs';
 import { FILM_FILE, clipFade, filmHtml, fittedFade, kindOf, pictureRect, readFilmFile } from '../../src/film-doc.mjs';
 import { NLE_FPS, nleFps, planNleTimeline, probeSource, soundStem, xmemlDocument } from './nle.mjs';
 import { draftsRoot, jianyingDraft } from './jianying.mjs';
@@ -887,7 +888,9 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
    */
   async function stillFrames(job, root, ask, ext, scratch, signal) {
     const burn = await burned(root, ask);
-    const probe = await open(burn ? burn.dir : root, burn ? { root } : {}).catch(async (e) => { await burn?.remove(); throw e; });
+    /* footage the browser does not decode (ProRes; HEVC without a chip for it) drawn through a copy it plays: the film's
+       video clips, the project's when the film is drawn inside a frame with its subtitles */
+    const probe = await open(burn ? burn.dir : root, burn ? { root, playable: filmVideos(root, FILM_FILE) } : { playable: true }).catch(async (e) => { await burn?.remove(); throw e; });
     try {
       const meta = probe.film.meta;
       /* with subtitles, the frame is the page drawn */

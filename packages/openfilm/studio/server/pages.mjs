@@ -29,6 +29,7 @@ import { readableLink } from '../../src/media-links.mjs';
 import { clipKind } from '../../src/film-doc.mjs';
 import { readPrefs } from './prefs.mjs';
 import { readyProxy } from './proxies.mjs';
+import { madeCopy } from '../../src/seekable.mjs';
 import { isPreviewKey, previewDir } from './preview-cache.mjs';
 import { soundOf } from './derived.mjs';
 
@@ -131,11 +132,12 @@ export async function startPages({ port, editorOrigin, secret, projects }) {
     inject: `<script>${HOST_FLAG}${PAGE_SCALE}</script>${scripts(BRIDGE)}`,
     timelineInject: `<script>${HOST_FLAG}</script>${scripts(BRIDGE, STAGE)}`,
     headers: policy(),
-    /* heavy footage is played from its proxy once it is made, while proxies are on (proxies.mjs): the preview only */
+    /* heavy footage is played from its proxy once it is made, while proxies are on (proxies.mjs); else from a copy made
+       for footage the browser does not decode, or that seeks slowly (src/seekable.mjs), when there is one */
     swap: (file) => {
       if (clipKind(file) !== 'video') return null;
       const { proxies } = readPrefs();
-      return proxies.on ? readyProxy(root, relative(root, file).split(sep).join('/'), proxies.height) : null;
+      return (proxies.on ? readyProxy(root, relative(root, file).split(sep).join('/'), proxies.height) : null) ?? madeCopy(file, root);
     },
   });
 
