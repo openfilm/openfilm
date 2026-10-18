@@ -348,64 +348,67 @@ export const SubtitleRow = React.forwardRef<SubtitleRowHandle, {
       onContextMenu={(e) => openMenu(e, null)}
     >
       <div ref={innerRef} className="absolute inset-y-0 left-0" style={{ width, transform: `translate3d(${-scrollLeft}px,0,0)` }}>
-        {cues.map((cue) => {
-          const key = cueKey(cue);
-          const shown = drag?.key === key ? drag : held?.key === key ? held : { startMs: cue.startMs, endMs: cueEnd(cue) };
-          const left = shown.startMs * pxPerMs;
-          const w = Math.max(2, (shown.endMs - shown.startMs) * pxPerMs);
-          const picked = selected === key;
-          const edge = Math.min(EDGE_PX, w / 4);
-          return (
-            <div
-              key={key}
-              data-subtitle-cue={cue.startMs}
-              title={cue.text}
-              className="absolute top-[3px] bottom-[3px] cursor-grab overflow-hidden rounded-[3px] active:cursor-grabbing"
-              style={{
-                left, width: w, background: 'var(--tl-caption)',
-                boxShadow: picked ? '0 0 0 1.5px var(--tl-select)' : undefined,
-                zIndex: picked ? 2 : 1,
-              }}
-              onPointerDown={(e) => startDrag(e, cue, 'move')}
-              onDoubleClick={(e) => { e.stopPropagation(); setEditing({ key, text: cue.text }); }}
-              onContextMenu={(e) => openMenu(e, cue)}
-            >
-              <span className="pointer-events-none absolute inset-0 flex items-center truncate px-1.5 text-[10.5px] leading-none text-white/95">
-                {w > 14 ? cue.text : null}
-              </span>
-              <span role="presentation" data-trim="start" className="absolute inset-y-0 left-0 z-[2] cursor-ew-resize" style={{ width: edge }}
-                onPointerDown={(e) => startDrag(e, cue, 'start')} />
-              <span role="presentation" data-trim="end" className="absolute inset-y-0 right-0 z-[2] cursor-ew-resize" style={{ width: edge }}
-                onPointerDown={(e) => startDrag(e, cue, 'end')} />
-            </div>
-          );
-        })}
-        {editing ? (() => {
-          const cue = cues.find((c) => cueKey(c) === editing.key);
-          if (!cue) return null;
-          return (
-            <input
-              autoFocus
-              data-subtitle-edit=""
-              aria-label={t('subtitleRow.edit')}
-              value={editing.text}
-              onChange={(e) => setEditing({ ...editing, text: e.target.value })}
-              onFocus={(e) => e.currentTarget.select()}
-              onKeyDown={(e) => {
-                e.stopPropagation();
-                if (e.key === 'Enter') { e.preventDefault(); commitText(); }
-                if (e.key === 'Escape') { e.preventDefault(); setEditing(null); }
-              }}
-              onBlur={commitText}
-              onPointerDown={(e) => e.stopPropagation()}
-              className="absolute top-[3px] z-10 h-[24px] rounded-[3px] bg-[var(--bg)] px-1.5 text-[11.5px] text-[var(--text)] outline-none ring-1 ring-[var(--tl-accent)]"
-              style={{ left: cue.startMs * pxPerMs, width: Math.max(180, cue.durMs * pxPerMs) }}
-            />
-          );
-        })() : null}
-        {drag?.guideMs != null ? (
-          <div aria-hidden className="pointer-events-none absolute inset-y-0 z-[3] w-px bg-[var(--tl-accent)]" style={{ left: drag.guideMs * pxPerMs }} />
-        ) : null}
+        {/* scaled while a zoom gesture goes on (see Timeline's zoom layers) */}
+        <div data-zoom-layer="content" className="absolute inset-0">
+          {cues.map((cue) => {
+            const key = cueKey(cue);
+            const shown = drag?.key === key ? drag : held?.key === key ? held : { startMs: cue.startMs, endMs: cueEnd(cue) };
+            const left = shown.startMs * pxPerMs;
+            const w = Math.max(2, (shown.endMs - shown.startMs) * pxPerMs);
+            const picked = selected === key;
+            const edge = Math.min(EDGE_PX, w / 4);
+            return (
+              <div
+                key={key}
+                data-subtitle-cue={cue.startMs}
+                title={cue.text}
+                className="absolute top-[3px] bottom-[3px] cursor-grab overflow-hidden rounded-[3px] active:cursor-grabbing"
+                style={{
+                  left, width: w, background: 'var(--tl-caption)',
+                  boxShadow: picked ? '0 0 0 1.5px var(--tl-select)' : undefined,
+                  zIndex: picked ? 2 : 1,
+                }}
+                onPointerDown={(e) => startDrag(e, cue, 'move')}
+                onDoubleClick={(e) => { e.stopPropagation(); setEditing({ key, text: cue.text }); }}
+                onContextMenu={(e) => openMenu(e, cue)}
+              >
+                <span className="pointer-events-none absolute inset-0 flex items-center truncate px-1.5 text-[10.5px] leading-none text-white/95">
+                  {w > 14 ? cue.text : null}
+                </span>
+                <span role="presentation" data-trim="start" className="absolute inset-y-0 left-0 z-[2] cursor-ew-resize" style={{ width: edge }}
+                  onPointerDown={(e) => startDrag(e, cue, 'start')} />
+                <span role="presentation" data-trim="end" className="absolute inset-y-0 right-0 z-[2] cursor-ew-resize" style={{ width: edge }}
+                  onPointerDown={(e) => startDrag(e, cue, 'end')} />
+              </div>
+            );
+          })}
+          {editing ? (() => {
+            const cue = cues.find((c) => cueKey(c) === editing.key);
+            if (!cue) return null;
+            return (
+              <input
+                autoFocus
+                data-subtitle-edit=""
+                aria-label={t('subtitleRow.edit')}
+                value={editing.text}
+                onChange={(e) => setEditing({ ...editing, text: e.target.value })}
+                onFocus={(e) => e.currentTarget.select()}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === 'Enter') { e.preventDefault(); commitText(); }
+                  if (e.key === 'Escape') { e.preventDefault(); setEditing(null); }
+                }}
+                onBlur={commitText}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="absolute top-[3px] z-10 h-[24px] rounded-[3px] bg-[var(--bg)] px-1.5 text-[11.5px] text-[var(--text)] outline-none ring-1 ring-[var(--tl-accent)]"
+                style={{ left: cue.startMs * pxPerMs, width: Math.max(180, cue.durMs * pxPerMs) }}
+              />
+            );
+          })() : null}
+          {drag?.guideMs != null ? (
+            <div aria-hidden className="pointer-events-none absolute inset-y-0 z-[3] w-px bg-[var(--tl-accent)]" style={{ left: drag.guideMs * pxPerMs }} />
+          ) : null}
+        </div>
       </div>
       {menu ? <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} /> : null}
     </div>

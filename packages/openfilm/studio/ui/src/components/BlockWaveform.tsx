@@ -139,7 +139,9 @@ export function BlockWaveform({
 
   React.useEffect(() => {
     let alive = true;
-    void loadWave(url).then((wave) => { if (alive) setLoaded({ url, wave }); });
+    /* the same wave already in hand (from the cache) renders nothing: a clip drawn as it scrolls into view is not
+       drawn twice */
+    void loadWave(url).then((wave) => { if (alive) setLoaded((cur) => (cur.url === url && cur.wave === wave ? cur : { url, wave })); });
     return () => { alive = false; };
   }, [url]);
 
