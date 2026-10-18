@@ -11,7 +11,7 @@ export const zhCN: Words = {
     desktop: '桌面版',
   },
   /* the app window's tabs (TabStrip), a new tab's launcher, and the examples (ExamplesGallery) */
-  tabs: { label: '标签页', new: '打开项目', close: '关闭标签页', closeOthers: '关闭其他标签页', closeRight: '关闭右侧标签页', renameHint: '切换到这个标签页后才能重命名' },
+  tabs: { label: '标签页', new: '打开项目', close: '关闭标签页', closeOthers: '关闭其他标签页', closeRight: '关闭右侧标签页' },
   launcher: { projects: '我的项目', examples: '示例' },
   gallery: {
     title: '示例',

@@ -184,10 +184,13 @@ test('a film whose clips have no ids comes back with each named after its file, 
   assert.deepEqual(film.value.tracks[0].clips.map((c) => c.id), ['title', 'title-2']);
 });
 
-test('rename renames the folder; delete moves it to the Trash and off the list', async () => {
+test('rename renames the folder and tells the pages showing it; delete moves it to the Trash and off the list', async () => {
   const { project } = await (await api('/api/projects', { method: 'POST', body: { name: 'Draft' } })).json();
+  const events = collect(`/api/projects/${project.id}/events`, (e) => e.some((x) => x.type === 'project'));
+  await new Promise((r) => setTimeout(r, 300));
   const renamed = await (await api(`/api/projects/${project.id}`, { method: 'PATCH', body: { name: 'Final' } })).json();
   assert.equal(renamed.project.name, 'Final');
+  assert.equal((await events).find((e) => e.type === 'project').project.name, 'Final');
   assert.ok(existsSync(renamed.project.path));
   assert.equal((await api(`/api/projects/${project.id}`, { method: 'DELETE' })).status, 200);
   assert.equal((await api(`/api/projects/${project.id}`)).status, 404);

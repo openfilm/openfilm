@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('openfilmNative', {
     open: (projectId) => ipcRenderer.invoke('desktop:tabs:new', { projectId }),
     move: (id, index) => ipcRenderer.invoke('desktop:tabs:move', { id, index }),
     report: (state) => ipcRenderer.invoke('desktop:tabs:report', state ?? {}),
+    retitle: (id, title) => ipcRenderer.invoke('desktop:tabs:retitle', { id, title }),
     openRequest: (to) => ipcRenderer.invoke('desktop:tabs:open', { to }),
     onPick: on('desktop:tabs:pick'),
   },

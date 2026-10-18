@@ -3,9 +3,10 @@
  * opens the projects window to pick the project a new tab shows. Tabs are the bar's full height, square, side by side
  * between hairlines; the one in front takes the panes' color. A tab says what is happening in it: an agent at work (a
  * spinner), a question waiting for the person (a dot), an export (its percent). A tab is shown by a click, closed by
- * its × or a middle click, moved by dragging; this page's own tab, double-clicked, renames its project (`onRename`),
- * and shows `editor` instead of its title while that happens. A right-click opens a tab's menu: rename it (this page's
- * own), show its project's folder, close it, the others or those to its right.
+ * its × or a middle click, moved by dragging. Any tab renames its project in place (`onRename`), double-clicked or from
+ * its menu: its title becomes a field, its words selected. A tab behind takes the double-click's first click to come to
+ * front, so its page renames on the second. A right-click opens a tab's menu: rename it, show its project's folder,
+ * close it, the others or those to its right.
  */
 import React from 'react';
 import { Loader2, Plus, X } from 'lucide-react';
@@ -17,6 +18,8 @@ import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import { Tooltip } from './Tooltip';
 
 const TAB_TYPE = 'application/x-openfilm-tab';
+/* a second click this soon after this page's tab came to front ends a double-click begun on it while it was behind */
+const DOUBLE_CLICK_MS = 500;
 
 /** The tabs as the app has them, live, and which is this page's. */
 export function useHostTabs() {
@@ -33,7 +36,15 @@ export function useHostTabs() {
   return { tabs, self };
 }
 
-export function TabStrip({ editor, onRename, onNew }: { editor?: React.ReactNode; onRename?: () => void; onNew?: () => void }) {
+/**
+ * `onRename`: a tab's project renamed (this page's own or another's); resolves whether it was. `maxLength`: a name's
+ * longest.
+ */
+export function TabStrip({ onRename, onNew, maxLength }: {
+  onRename?: (projectId: string, name: string) => Promise<boolean>;
+  onNew?: () => void;
+  maxLength?: number;
+}) {
   const t = useT();
   const host = studioHost?.tabs;
   const { tabs, self } = useHostTabs();
@@ -48,18 +59,40 @@ export function TabStrip({ editor, onRename, onNew }: { editor?: React.ReactNode
   const [over, setOver] = React.useState<number | null>(null);
   /* the tab whose menu is open, and where */
   const [menu, setMenu] = React.useState<{ id: string; x: number; y: number } | null>(null);
+  /* the tab being renamed and its words so far; a name on its way, shown until its tab says it */
+  const [editing, setEditing] = React.useState<string | null>(null);
+  const [draft, setDraft] = React.useState('');
+  const [pending, setPending] = React.useState<{ id: string; name: string } | null>(null);
+  const frontAt = React.useRef(0);
+  const front = tabs.some((tab) => tab.id === self && tab.active);
+  React.useEffect(() => { if (front) frontAt.current = Date.now(); }, [front]);
   if (!host) return null;
 
-  const titleOf = (tab: HostTab) => tab.title || names[tab.projectId] || t('project.untitled');
+  const titleOf = (tab: HostTab) => (pending?.id === tab.id ? pending.name : tab.title || names[tab.projectId] || t('project.untitled'));
+  const startRename = (tab: HostTab) => { if (!onRename || editing === tab.id) return; setDraft(titleOf(tab)); setEditing(tab.id); };
+  const commitRename = () => {
+    const tab = tabs.find((each) => each.id === editing);
+    setEditing(null);
+    const next = draft.trim();
+    if (!tab || !onRename || !next || next === titleOf(tab)) return;
+    setPending({ id: tab.id, name: next });
+    void onRename(tab.projectId, next).then(async (ok) => {
+      /* another tab's page may be gone (behind too long): the app is told its title, and so is this page's list */
+      if (ok && tab.id !== self) {
+        setNames((n) => ({ ...n, [tab.projectId]: next }));
+        await host.retitle?.(tab.id, next);
+      }
+      setPending((p) => (p?.id === tab.id ? null : p));
+    });
+  };
 
   const menuItems = (id: string): ContextMenuEntry[] => {
     const tab = tabs.find((each) => each.id === id);
     if (!tab) return [];
-    const mine = tab.id === self;
     const others = tabsToClose(tabs, id, 'others');
     const right = tabsToClose(tabs, id, 'right');
     return [
-      { id: 'rename', label: t('projectMenu.rename'), disabled: !mine || !onRename, hint: mine ? undefined : t('tabs.renameHint'), onSelect: () => onRename?.() },
+      { id: 'rename', label: t('projectMenu.rename'), disabled: !onRename, onSelect: () => startRename(tab) },
       { id: 'reveal', label: t('projects.revealFolder'), onSelect: () => { void api.revealProject(tab.projectId).catch(() => {}); } },
       { id: 'sep', separator: true },
       { id: 'close', label: t('tabs.close'), onSelect: () => host.close(id) },
@@ -74,19 +107,23 @@ export function TabStrip({ editor, onRename, onNew }: { editor?: React.ReactNode
         {tabs.map((tab, i) => {
           const mine = tab.id === self;
           /* being renamed: its words are selected and edited like any text, and the tab does not move */
-          const editing = mine && Boolean(editor);
+          const renaming = editing === tab.id;
           return (
             <React.Fragment key={tab.id}>
               <div
                 role="tab"
                 aria-selected={tab.active}
                 tabIndex={-1}
-                draggable={!editing}
+                draggable={!renaming}
                 title={titleOf(tab)}
-                onClick={() => { if (!tab.active) host.show(tab.id); }}
-                onDoubleClick={() => { if (mine && !editing) onRename?.(); }}
+                onClick={() => {
+                  if (renaming) return;
+                  if (!tab.active) host.show(tab.id);
+                  else if (mine && Date.now() - frontAt.current < DOUBLE_CLICK_MS) startRename(tab);
+                }}
+                onDoubleClick={() => { if (tab.active) startRename(tab); }}
                 onMouseDown={(e) => { if (e.button === 1) { e.preventDefault(); host.close(tab.id); } }}
-                onContextMenu={(e) => { if (editing) return; e.preventDefault(); setMenu({ id: tab.id, x: e.clientX, y: e.clientY }); }}
+                onContextMenu={(e) => { if (renaming) return; e.preventDefault(); setMenu({ id: tab.id, x: e.clientX, y: e.clientY }); }}
                 onDragStart={(e) => { e.dataTransfer.setData(TAB_TYPE, tab.id); e.dataTransfer.effectAllowed = 'move'; setDragging(tab.id); }}
                 onDragEnd={() => { setDragging(null); setOver(null); }}
                 onDragOver={(e) => { if (e.dataTransfer.types.includes(TAB_TYPE)) { e.preventDefault(); setOver(i); } }}
@@ -97,7 +134,27 @@ export function TabStrip({ editor, onRename, onNew }: { editor?: React.ReactNode
               >
                 {tab.working ? <Loader2 size={11} className="shrink-0 animate-spin text-[var(--text-dim)]" /> : null}
                 {tab.asking ? <span className="h-[6px] w-[6px] shrink-0 rounded-full bg-[#ff9f43]" /> : null}
-                {editing ? editor : <span className="min-w-0 flex-1 truncate font-medium">{titleOf(tab)}</span>}
+                {renaming ? (
+                  <input
+                    autoFocus
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onBlur={commitRename}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') commitRename();
+                      if (e.key === 'Escape') setEditing(null);
+                    }}
+                    /* opened by a double-click or the menu: all its words selected, to type over or to pick from */
+                    onFocus={(e) => e.currentTarget.select()}
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onDoubleClick={(e) => e.stopPropagation()}
+                    aria-label={t('projectMenu.rename')}
+                    placeholder={t('project.untitled')}
+                    maxLength={maxLength}
+                    className="min-w-0 flex-1 bg-transparent text-[12.5px] font-medium text-[var(--text)] outline-none selection:bg-[var(--text-selection)]"
+                  />
+                ) : <span className="min-w-0 flex-1 truncate font-medium">{titleOf(tab)}</span>}
                 {tab.exporting != null ? <span className="shrink-0 font-mono text-[10.5px] text-[var(--text-faint)]">{Math.round(tab.exporting * 100)}%</span> : null}
                 <button
                   type="button"

@@ -215,6 +215,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       /* a picture that could not be drawn is tried again whenever the folder changes: the missing file arrived, or
          the clip that named it is gone from film.html now that the edit is written */
       if (previewErrorRef.current && (event.type === 'film' || event.type === 'files')) { preview.current?.reload?.(); }
+      /* renamed from another tab, or the projects list */
+      if (event.type === 'project') { setLoaded((l) => (l ? { ...l, project: event.project } : l)); return; }
       if (event.type !== 'files') return;
       void loadFiles();
       /* a page's picture depends on the files it loads (its styles, code, pictures): its thumbnails are asked again
@@ -2424,16 +2426,25 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* the app's "New Tab" (its menu): the projects, to pick what the new tab shows */
   React.useEffect(() => studioHost?.tabs?.onPick(() => setProjectsOpen(true)), []);
   React.useEffect(() => { if (title) studioHost?.tabs?.report({ title }); }, [title]);
-  const commitTitle = async () => {
+  const renameError = (e: unknown, name: string) =>
+    toast.showError(e instanceof ApiError && e.status === 409 ? t('projects.renameTaken').replace('{name}', name) : t('project.renameFailed'));
+  const commitTitle = async (draft = titleDraft) => {
     setRenaming(false);
-    const next = titleDraft.trim();
-    if (!next || next === title || !loaded) return;
+    const next = draft.trim();
+    if (!next || next === title || !loaded) return false;
     setLoaded({ ...loaded, project: { ...loaded.project, name: next } });
-    try { const project = await api.rename(projectId, next); setLoaded((l) => (l ? { ...l, project } : l)); }
+    try { const project = await api.rename(projectId, next); setLoaded((l) => (l ? { ...l, project } : l)); return true; }
     catch (e) {
       setLoaded((l) => (l ? { ...l, project: { ...l.project, name: title } } : l));
-      toast.showError(e instanceof ApiError && e.status === 409 ? t('projects.renameTaken').replace('{name}', next) : t('project.renameFailed'));
+      renameError(e, next);
+      return false;
     }
+  };
+  /* a tab renamed in the tab strip: this page's project, as its title is, or another tab's (its page hears it) */
+  const renameTab = async (id: string, name: string) => {
+    if (id === projectId) return commitTitle(name);
+    try { await api.rename(id, name); return true; }
+    catch (e) { renameError(e, name); return false; }
   };
   const [projectsOpen, setProjectsOpen] = React.useState(false);
   /* the examples over the film, opened from the app's chat */
@@ -2570,26 +2581,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
               </Tooltip>}
             </div>
             {inTabs ? (
-              <TabStrip onRename={startRename} onNew={() => setProjectsOpen(true)} editor={renaming ? (
-                <input
-                  autoFocus
-                  value={titleDraft}
-                  onChange={(e) => setTitleDraft(e.target.value)}
-                  onBlur={() => void commitTitle()}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') void commitTitle();
-                    if (e.key === 'Escape') { setTitleDraft(title); setRenaming(false); }
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                  /* opened by a double-click: all its words selected, to type over or to pick from */
-                  onFocus={(e) => e.currentTarget.select()}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onDoubleClick={(e) => e.stopPropagation()}
-                  placeholder={t('project.untitled')}
-                  maxLength={TITLE_MAX_CHARS}
-                  className="min-w-0 flex-1 bg-transparent text-[12.5px] font-medium text-[var(--text)] outline-none selection:bg-[var(--text-selection)]"
-                />
-              ) : undefined} />
+              <TabStrip onRename={renameTab} onNew={() => setProjectsOpen(true)} maxLength={TITLE_MAX_CHARS} />
             ) : <div className="min-w-0 flex-1" />}
             <div ref={headerOpsRef} className="pointer-events-auto flex min-w-0 items-center justify-end gap-1">
               <ProjectLayoutMenu className={TOP_BTN}

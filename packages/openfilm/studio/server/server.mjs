@@ -488,6 +488,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         const renamed = await renameProject(project.id, String(name ?? ''));
         /* its address stays: the preview open on it keeps loading from the folder by its new name */
         pages.folderUrl(renamed);
+        /* the pages showing it (renamed from another tab, or the projects list) take the new name */
+        watchers.emit(project.path, { type: 'project', project: renamed });
         return json(res, 200, { project: renamed });
       }
       /* the project is deleted: its folder goes to the Trash (pages showing it go back to the list) */

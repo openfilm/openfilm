@@ -160,7 +160,7 @@ export type StudioNotice = { id: string; kind: 'balance'; provider: string; prov
 
 export type FolderEvent = { type: 'film'; rev: string } | { type: 'files'; paths?: string[] } | { type: 'history' } | { type: 'export'; job: ExportJob } | { type: 'open'; to: string }
   | { type: 'history-progress'; op: string; phase: string; done: number; total: number }
-  | { type: 'ask'; ask: SpendAsk } | { type: 'asked'; id: string } | { type: 'notice'; notice: StudioNotice };
+  | { type: 'ask'; ask: SpendAsk } | { type: 'asked'; id: string } | { type: 'notice'; notice: StudioNotice } | { type: 'project'; project: Project };
 
 /**
  * Listen to a stream of events (a WebSocket: a browser's six HTTP connections to Studio stay free for the page's

@@ -217,8 +217,11 @@ body {
   overscroll-behavior: none;
 }
 
-::selection {
-  background: var(--accent-soft);
+/* in the base layer, so a field's own selection color (a tab's name being edited) wins over it */
+@layer base {
+  ::selection {
+    background: var(--accent-soft);
+  }
 }
 
 ::-webkit-scrollbar {

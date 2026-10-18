@@ -442,6 +442,11 @@ async function start() {
     tellTabs();
     return { ok: true };
   });
+  /* another tab's project renamed from this page's tabs: its title, also while that tab has no page to say it */
+  tabHandle('desktop:tabs:retitle', (_self, { id, title }) => {
+    if (typeof title === 'string' && tabs?.report(String(id), { title: title.slice(0, 200) })) tellTabs();
+    return { ok: true };
+  });
   /* Studio's "open this project", heard by each page: settled once here */
   tabHandle('desktop:tabs:open', (_self, { to }) => { openInTabs(to); return { ok: true }; });
   /* a tab left behind long enough lets its page go; it comes back when shown */

@@ -11,7 +11,7 @@ export const en = {
     desktop: 'Desktop',
   },
   /* the app window's tabs (TabStrip), a new tab's launcher, and the examples (ExamplesGallery) */
-  tabs: { label: 'Tabs', new: 'Open a project', close: 'Close tab', closeOthers: 'Close other tabs', closeRight: 'Close tabs to the right', renameHint: 'Show this tab to rename it' },
+  tabs: { label: 'Tabs', new: 'Open a project', close: 'Close tab', closeOthers: 'Close other tabs', closeRight: 'Close tabs to the right' },
   launcher: { projects: 'Projects', examples: 'Examples' },
   gallery: {
     title: 'Examples',

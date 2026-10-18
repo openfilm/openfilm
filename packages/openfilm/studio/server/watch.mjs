@@ -23,8 +23,9 @@ const WRITING = /(^|[/\\])([^/\\]+\.[0-9a-f-]{8,}\.tmp|\.\d+\.\d+\.importing)$/;
  * `ask` / `asked`: a question about spending for the person, and that it was answered; `notice`: something the person
  * is told, such as a provider with no balance left (get.mjs).
  * `history-progress`: how far a version history action is (history.mjs), `op` the action ('commit', 'checkout'…).
+ * `project`: the project renamed, as it is now.
  * @typedef {{ type: 'film', rev: string } | { type: 'files', paths?: string[] } | { type: 'history' } | { type: 'export', job: object }
- *   | { type: 'history-progress', op: string, phase: string, done: number, total: number }
+ *   | { type: 'history-progress', op: string, phase: string, done: number, total: number } | { type: 'project', project: object }
  *   | { type: 'ask', ask: object } | { type: 'asked', id: string } | { type: 'notice', notice: object }} FolderEvent
  */
 
