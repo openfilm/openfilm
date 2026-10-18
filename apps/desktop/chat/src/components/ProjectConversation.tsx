@@ -2,7 +2,7 @@
 
 import React from 'react';
 import type { PublicProgressSnapshot, TurnAttachment } from '@openfilm/shared';
-import { BellRing, Check, ChevronRight, Copy, Play } from 'lucide-react';
+import { BellRing, Check, ChevronRight, Copy } from 'lucide-react';
 import { AgentActivityList, formatWorkDuration, StatusLine, type AgentActivityItem } from './AgentActivityRow';
 import { AgentIcon, hasAgentIcon } from './AgentIcons';
 import { BrandLogo } from './BrandLogo';
@@ -30,7 +30,7 @@ import { ChatProjectContext, useDeveloperMode, useShowChanges } from '@/lib/deve
 import { isVideoAttachment } from '@/lib/composer-attachments';
 import { desktopBridge } from '@/lib/desktop-bridge';
 import { attachmentPlace } from '@/lib/attachment-place';
-import { AttachmentCardBody, attachmentCardClass } from './AttachmentCard';
+import { ATTACHMENT_CARD, ATTACHMENT_THUMB, AttachmentCardBody, PlayMark } from './AttachmentCard';
 
 /** What past turns get as "no live process". One constant: a new array each time would defeat the memo. */
 const NO_TRANSCRIPT: TranscriptItem[] = [];
@@ -478,27 +478,18 @@ function TurnAttachments({ items }: { items: TurnAttachment[] }) {
           : (item.thumb
             ? { name: item.name, kind: item.kind, url: item.thumb, thumbOnly: true }
             : null);
-        /* 32px squares: a receipt, not a gallery. Enough to recognize what was sent; open one to see it. The
-           smaller they are, the higher the text sits, and the bubble reads as a sentence, not an attachment list.
-           Without a picture, the composer's card at the same height. */
-        const shell = item.thumb
-          ? 'relative h-8 w-8 overflow-hidden rounded-[6px] border border-[var(--border)] bg-[var(--surface)]'
-          : `${attachmentCardClass('message')} border border-[var(--border)] bg-[var(--surface)]`;
+        /* as each was in the composer: a square for a picture, a card for anything else */
+        const shell = `${item.thumb ? ATTACHMENT_THUMB : ATTACHMENT_CARD} border-[var(--border)]`;
         /* a video's thumbnail is a frame of it: a play mark says it is not a picture */
         const inner = item.thumb ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={item.thumb} alt={item.name} className="h-full w-full object-cover" />
-            {isVideoAttachment(item) ? (
-              <span aria-hidden className="pointer-events-none absolute inset-0 m-auto flex h-3.5 w-3.5 items-center justify-center rounded-full bg-black/55">
-                <Play size={7} className="translate-x-[0.5px] fill-white text-white" />
-              </span>
-            ) : null}
+            {isVideoAttachment(item) ? <PlayMark /> : null}
           </>
         ) : (
           <AttachmentCardBody
-            size="message"
-            icon={<AttachmentTypeIcon file={item} size={12} />}
+            icon={<AttachmentTypeIcon file={item} size={14} />}
             name={item.name.replace(/\/$/, '')}
             detail={item.path ? attachmentPlace(item.path) : null}
           />

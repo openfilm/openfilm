@@ -6,14 +6,14 @@
  * (lib/local-agent-run's saved turns).
  */
 import React from 'react';
-import { ArrowDown, Blocks, Coins, CornerDownLeft, LibraryBig, Loader2, Play, Plus, ShieldQuestion, Square, SquareSlash, X } from 'lucide-react';
+import { ArrowDown, Blocks, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, ShieldQuestion, Square, SquareSlash, X } from 'lucide-react';
 import { buildPromptDisplay, type Turn } from '@openfilm/shared';
 import { useT, useUiLocale } from '@/i18n';
 import { ConversationSessionBar } from '@/components/ConversationSessionBar';
 import { ProjectConversation, primeStoredTranscript } from '@/components/ProjectConversation';
 import { ProjectStarters } from '@/components/ProjectStarters';
 import { AttachmentPreview, type AttachmentPreviewItem } from '@/components/AttachmentPreview';
-import { AttachmentCardBody, attachmentCardClass } from '@/components/AttachmentCard';
+import { ATTACHMENT_CARD, ATTACHMENT_THUMB, AttachmentCardBody, PlayMark } from '@/components/AttachmentCard';
 import { attachmentPlace } from '@/lib/attachment-place';
 import { ModelPopover } from '@/components/ModelPopover';
 import { AddSkillDialog, type PickedSkill } from '@/components/AddSkill';
@@ -87,14 +87,6 @@ const CONTEXT_NOTICE_SHARE = 0.85;
 /* between the chat's root (the add-skill dialog) and the project's chat: a skill added, a skill to make */
 const SKILLS_CHANGED = 'openfilm:skills-changed';
 const MAKE_SKILL = 'openfilm:make-skill';
-
-function PlayMark() {
-  return (
-    <span aria-hidden className="pointer-events-none absolute inset-0 m-auto flex h-4 w-4 items-center justify-center rounded-full bg-black/55">
-      <Play size={8} className="translate-x-[0.5px] fill-white text-white" />
-    </span>
-  );
-}
 
 export function App({ initialProject, initialSelection, initialFfmpeg }: {
   initialProject: Project | null;
@@ -836,7 +828,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
               } : {};
               return picture ? (
                 <div key={file.id} title={file.error ?? file.path ?? file.name} {...open}
-                  className={`group relative h-10 w-10 overflow-hidden rounded-[8px] border bg-[var(--surface-2)] transition ${file.previewUrl ? 'cursor-pointer' : ''} ${file.state === 'failed' ? 'border-[var(--danger)]' : 'border-[var(--border)] hover:border-[var(--border-strong)]'}`}>
+                  className={`group ${ATTACHMENT_THUMB} transition ${file.previewUrl ? 'cursor-pointer' : ''} ${file.state === 'failed' ? 'border-[var(--danger)]' : 'border-[var(--border)] hover:border-[var(--border-strong)]'}`}>
                   <img src={picture} alt={file.name} className={`h-full w-full object-cover transition ${file.state === 'ready' ? '' : 'opacity-45'}`} />
                   {file.kind !== 'image' && !busy ? <PlayMark /> : null}
                   {busy}
@@ -844,9 +836,8 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
                 </div>
               ) : (
                 <div key={file.id} title={file.error ?? file.path ?? file.name} {...open}
-                  className={`group relative border bg-[var(--surface-2)] transition ${attachmentCardClass('composer')} ${file.previewUrl || folderPath ? 'cursor-pointer' : ''} ${file.state === 'failed' ? 'border-[var(--danger)]' : 'border-[var(--border)] hover:border-[var(--border-strong)]'}`}>
+                  className={`group ${ATTACHMENT_CARD} transition ${file.previewUrl || folderPath ? 'cursor-pointer' : ''} ${file.state === 'failed' ? 'border-[var(--danger)]' : 'border-[var(--border)] hover:border-[var(--border-strong)]'}`}>
                   <AttachmentCardBody
-                    size="composer"
                     icon={file.state === 'pending' ? <Loader2 size={14} className="animate-spin" /> : <Icon size={14} />}
                     name={file.name}
                     /* a folder's size is not read: where it is says more */
