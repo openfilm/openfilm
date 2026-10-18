@@ -14,8 +14,9 @@ import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, us
 import type { Film } from '../api';
 import { useT } from '@/i18n';
 import type { ClipSpan } from '@/lib/film-shape';
-import type { Sound } from './player';
-import { reloaded, shownAfter, updateKeys, type Frame } from './preview-frames';
+import type { Anchor, Sound } from './player';
+import { pageScaleFor, reloaded, shownAfter, updateKeys, type Frame } from './preview-frames';
+import { usePreviewPrefs } from '@/lib/preview-prefs';
 import { chromiumBased } from '@/lib/browser';
 
 /** How far the film's frame reaches past the picture's box on each side, in px (see the `stage-frames` clip). */
@@ -28,7 +29,10 @@ export type Target = {
   at?: string; n?: number; tag?: string; text?: string | null; style?: Record<string, string>;
 };
 export type PreviewHandle = {
+  /** Show the still moment t (the film stops playing). */
   seek(t: number): void;
+  /** Play on this line (the player's, on this page's clock): the film draws its own frames from it until `seek`. */
+  play?(anchor: Anchor): void;
   update(film: Film, head?: string): void;
   preview(clip: string, overrides: unknown[] | null): void;
   pick(x: number, y: number): Promise<Target | null>;
@@ -65,6 +69,8 @@ type Props = {
   stage: { w: number; h: number };
   /** where the film is: a loaded page draws its first frame there */
   time: () => number;
+  /** the film's frame rate (frames a second, 29.97 as 30000/1001): playing draws each of its frames, none between */
+  fps?: number;
   onInfo(info: FilmInfo): void;
   /**
    * A key pressed while the picture had focus (key events do not cross documents), after the stage's own listeners
@@ -77,7 +83,12 @@ type Props = {
   children?: ReactNode;
 };
 
-export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folder, stage, time, onInfo, onKey, onError, children }, ref) {
+/** Clock readings asked of a frame as it comes up: the one answered soonest says best where its clock is. */
+const CLOCK_PINGS = 5;
+/** How long the viewer keeps another size before the film is loaded again for it (ms): not at each step of a drag. */
+const RESCALE_MS = 600;
+
+export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folder, stage, time, fps, onInfo, onKey, onError, children }, ref) {
   const t = useT();
   const origin = new URL(folder).origin;
   const [frames, setFrames] = useState<Frame[]>([{ key: 1, ready: false }]);
@@ -90,6 +101,17 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
   onKeyRef.current = onKey;
   const box = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState({ w: 0, h: 0, k: 1 });
+  /* the viewer measured once: the film loads only then, its pages drawn for that size (see pageScale) */
+  const [measured, setMeasured] = useState(false);
+  /*
+   * The device pixels a page draws per CSS px (its devicePixelRatio, `film-dpr` in the film's address, see
+   * studio/server/pages.mjs): what the viewer shows, not the film's full size scaled down, while that switch is on;
+   * null: the screen's own. A load of the film keeps the scale it was made with; another one, kept a moment, loads
+   * the film again behind the picture.
+   */
+  const { fitPages } = usePreviewPrefs();
+  const pageScale = fitPages && fit.w > 0 ? pageScaleFor(fit.k, window.devicePixelRatio || 1) : null;
+  const scaleOf = useRef(new Map<number, number | null>());
   const framesRef = useRef(frames);
   framesRef.current = frames;
   const shown = frames.find((f) => f.ready) ?? null;
@@ -106,6 +128,22 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
   const post = (key: number | undefined, message: object) => {
     if (key == null) return;
     elements.current.get(key)?.contentWindow?.postMessage({ source: 'openfilm-studio', ...message }, origin);
+  };
+  /*
+   * Playing: the line the film plays on (null while still), told to the frame shown, and to a frame that comes up
+   * meanwhile once it shows. The line is on this page's clock; each frame's clock starts elsewhere (another document,
+   * another process), so each is told it on its own: by how far its clock is from this one, read with a few pings and
+   * taken from the one answered soonest (the time a message takes is the error, a fraction of a millisecond).
+   */
+  const line = useRef<Anchor | null>(null);
+  const fpsRef = useRef(fps);
+  fpsRef.current = fps;
+  const clocks = useRef(new Map<number, { offset: number; rtt: number }>());
+  const tellPlay = (key: number | undefined) => {
+    const a = line.current;
+    if (key == null || !a) return;
+    const offset = clocks.current.get(key)?.offset ?? 0;
+    post(key, { type: 'play', t: a.t, at: a.at + offset, rate: a.rate, fps: fpsRef.current ?? 0 });
   };
   /*
    * A frame loads film.html as the folder has it when it starts; the films given since (`update`) are kept, and a frame
@@ -128,7 +166,12 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
 
   useImperativeHandle(ref, () => ({
     seek(t) {
+      line.current = null;
       post(shownRef.current?.key, { type: 'seek', t, seq: ++seq.current });
+    },
+    play(anchor) {
+      line.current = { ...anchor };
+      tellPlay(shownRef.current?.key);
     },
     update(film, head) {
       updates.current += 1;
@@ -202,16 +245,29 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
       if (m.type === 'ready') {
         onInfo(m as FilmInfo);
         up.current.add(key);
+        /* where its clock is: first by where each clock started, then by pings */
+        if (Number(m.origin) > 0) clocks.current.set(key, { offset: performance.timeOrigin - Number(m.origin), rtt: Infinity });
+        for (let i = 0; i < CLOCK_PINGS; i++) setTimeout(() => post(key, { type: 'clock', ping: performance.now() }), 40 * i);
         /* the film changed here while this frame was loading: it gets the latest before its first picture */
         if ((born.current.get(key) ?? 0) < updates.current && latest.current) post(key, { type: 'update', film: latest.current, head: latestHead.current, seq: ++seq.current });
         /* behind the picture shown: its first picture is waited for whole (its videos loaded), as it replaces that one */
         const behind = shownRef.current != null && shownRef.current.key !== key;
         post(key, { type: 'seek', t: time(), seq: ++seq.current, ...(behind ? { behind: true } : {}) });
+      } else if (m.type === 'clock') {
+        const back = performance.now();
+        const rtt = back - Number(m.ping);
+        const had = clocks.current.get(key);
+        if (!(rtt >= 0) || (had && had.rtt <= rtt)) return;
+        clocks.current.set(key, { offset: Number(m.now) - (Number(m.ping) + rtt / 2), rtt });
+        /* playing on it: told the line again, on its clock as now read */
+        if (line.current && key === shownRef.current?.key) tellPlay(key);
       } else if (m.type === 'seeked') {
         const swap = !framesRef.current.find((f) => f.key === key)?.ready;
         setFrames((list) => shownAfter(list, key));
-        /* shown now: the playhead may have moved while it drew, and seeks went to the frame shown then */
-        if (swap && Math.abs(time() - Number(m.t)) > 1e-6) post(key, { type: 'seek', t: time(), seq: ++seq.current });
+        /* shown now: the film playing, it plays on from the line; still, the playhead may have moved while it drew,
+           and seeks went to the frame shown then */
+        if (swap && line.current) tellPlay(key);
+        else if (swap && Math.abs(time() - Number(m.t)) > 1e-6) post(key, { type: 'seek', t: time(), seq: ++seq.current });
       } else if (m.type === 'updated') {
         if (m.inPlace) onInfo(m as FilmInfo);
         else reload();
@@ -253,14 +309,28 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
   useLayoutEffect(() => {
     const el = box.current;
     if (!el) return undefined;
-    const observer = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect;
+    const size = (width: number, height: number) => {
       const k = Math.max(0.01, Math.min(width / stage.w, height / stage.h));
       setFit({ w: Math.floor(stage.w * k), h: Math.floor(stage.h * k), k });
-    });
+    };
+    /* measured now, before the first picture: the film loads once, for this size */
+    if (el.clientWidth > 0 && el.clientHeight > 0) size(el.clientWidth, el.clientHeight);
+    setMeasured(true);
+    const observer = new ResizeObserver(([entry]) => size(entry.contentRect.width, entry.contentRect.height));
     observer.observe(el);
     return () => observer.disconnect();
   }, [stage.w, stage.h]);
+
+  /* a load keeps the scale it was made with */
+  if (measured) for (const f of frames) if (!scaleOf.current.has(f.key)) scaleOf.current.set(f.key, pageScale);
+  /* the viewer kept another size (fullscreen, a pane resized), or the switch changed: the film loads again behind */
+  const shownScale = shown ? scaleOf.current.get(shown.key) : undefined;
+  useEffect(() => {
+    if (!shown || shownScale === undefined || shownScale === pageScale || frames.some((f) => !f.ready)) return undefined;
+    const timer = setTimeout(reload, RESCALE_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageScale, shownScale, shown?.key, frames.length]);
 
   const error = failed;
   return (
@@ -270,13 +340,13 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
             of a frame (a part of a device px a browser rounds its own way, a backdrop it paints under the film) is
             never on screen as a line along the picture */}
         <div className="stage-frames">
-        {frames.map((f) => (
+        {(measured ? frames : []).map((f) => (
           <iframe
             key={f.key}
-            ref={(el) => { if (el) elements.current.set(f.key, el); else { elements.current.delete(f.key); up.current.delete(f.key); } }}
+            ref={(el) => { if (el) elements.current.set(f.key, el); else { elements.current.delete(f.key); up.current.delete(f.key); clocks.current.delete(f.key); scaleOf.current.delete(f.key); } }}
             /* `film-missing=skip`: a clip whose file is not there keeps its time and plays as nothing, the rest plays on
                (src/timeline.mjs); the timeline marks it and offers to relink it */
-            src={`${folder}film.html?load=${f.key}&film-missing=skip`}
+            src={`${folder}film.html?load=${f.key}&film-missing=skip${scaleOf.current.get(f.key) != null ? `&film-dpr=${scaleOf.current.get(f.key)}` : ''}`}
             /* the film's videos play when the person presses play here: another origin needs this to be allowed */
             allow="autoplay"
             scrolling="no"

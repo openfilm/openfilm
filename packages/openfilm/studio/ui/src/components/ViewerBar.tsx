@@ -7,7 +7,7 @@ import { Expand, Pause, Play, Repeat } from 'lucide-react';
 import { useT } from '@/i18n';
 import { formatTimecode, useTimecodeFps } from '@/lib/timecode';
 import { PANE_BTN, PANE_ICON } from './dock-pane-bar';
-import { LiveTime, type PlaybackClock } from './LiveTime';
+import { LiveText, type PlaybackClock } from './LiveTime';
 import { Tooltip } from './Tooltip';
 
 /** The bar's buttons: the pane-bar size (22×22, icon 14) plus a keyboard focus ring (Tab must show where it is). */
@@ -49,7 +49,7 @@ export function ViewerBar({
       {/* where we are is read constantly: body color, 12px; the length one step fainter. One line, never wrapped:
           when it does not fit, the length is clipped first. No hour field for a film under an hour. */}
       <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[12px] tabular-nums text-[var(--text)]">
-        <LiveTime clock={clock} timeMs={timeMs}>{(liveMs) => formatTimecode(liveMs, { hours })}</LiveTime>
+        <LiveText clock={clock} timeMs={timeMs} format={(ms) => formatTimecode(ms, { hours })} />
         <span className="text-[11px] text-[var(--text-faint)]">
           {' / '}{formatTimecode(totalMs, { hours })}
         </span>

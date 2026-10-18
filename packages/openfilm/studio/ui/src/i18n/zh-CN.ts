@@ -1472,6 +1472,8 @@ export const zhCN: Words = {
       proxiesHint: "超过 1080p 或解码较慢（ProRes、HEVC、10 位）的素材，会在后台生成一份轻量副本用于预览播放。导出始终使用原素材。",
       proxySize: "代理分辨率",
       proxySizeHint: "越小播放越流畅，越大预览越清晰。",
+      fitPages: "按查看器尺寸绘制网页",
+      fitPagesHint: "网页里的 Canvas 和 3D 按查看器实际显示的尺寸绘制，看起来一样，播放更流畅。关闭后按影片完整尺寸绘制。导出始终按完整尺寸。",
     },
     about: {
       group: '关于',

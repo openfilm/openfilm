@@ -19,7 +19,7 @@ import { changesPicture } from '@/lib/picture-files';
 import type { ReplaceFamily } from '@/lib/clip-replace';
 import { layoutTracks, type TimelineBlock, type TimelineTrack } from '@/lib/timeline-layout';
 import { filmClipKind, filmSrcIsPage, filmSrcKind, filmTrackBadges, parseFilmDocLoc, type FilmBox, type FilmDoc, type FilmOverride } from '@/lib/film';
-import { footageFps, setTimecodeFps, snapToFrame, stepFrames } from '@/lib/timecode';
+import { exactRate, footageFps, setTimecodeFps, snapToFrame, stepFrames } from '@/lib/timecode';
 import { JUMP_FRAMES, keyCommandOf, loopBack, playStart, shuttleRate } from '@/lib/timeline-keys';
 import { attrsOf, pasteAttrs, type AttrGroup, type CopiedAttrs } from '@/lib/clip-attrs';
 import { cutPoints, namedTrack, nextCut, trackNamesOf } from '@/lib/timeline-nav';
@@ -60,7 +60,7 @@ import { SubtitleOverlay } from './SubtitleOverlay';
 import { SubtitleInspector, subtitleLineKey, type SubtitleLineAt, type SubtitleLineRefer } from './SubtitleInspector';
 import { useFilmSubtitles } from '@/lib/use-film-subtitles';
 import { speakerAt, useSubtitleEdits } from '@/lib/use-subtitle-edits';
-import { cueAt, filmSubtitleStyleFor, sameFilmSubtitleLanguage } from '@/lib/subtitles';
+import { cueAt, filmSubtitleStyleFor, filmSubtitleWords, sameFilmSubtitleLanguage, type SubtitleCue } from '@/lib/subtitles';
 import { DEFAULT_INSPECTOR, DOCK_GAP, DockPaneDivider, MIN_DOCK_H, MIN_INSPECTOR, MIN_STAGE_H, MIN_VIEWER, PaneDivider, usePaneSize } from './PaneDivider';
 import { PANE_BAR, PANE_BTN_ON, PANE_TOGGLE, PANE_TOGGLE_ICON } from './dock-pane-bar';
 import { Tooltip } from './Tooltip';
@@ -182,6 +182,9 @@ function clipIdAt(film: Film | null, loc: string): string | null {
   const at = parseFilmDocLoc(loc);
   return at ? film?.tracks[at.track]?.clips[at.clip]?.id ?? null : null;
 }
+
+/** No subtitles shown (fullscreen's CC off): the same list each time, so nothing renders again for it. */
+const NO_CUES: readonly SubtitleCue[] = [];
 
 export function ProjectView({ projectId, onProject, onLeave }: {
   projectId: string;
@@ -353,9 +356,13 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const refOfFile = React.useCallback((file: WorkspaceResource) => fileRef(file, file.kind === 'mg' ? mediaSources.pagePoster?.(file)
     : file.kind === 'image' ? stillUrl(projectId, file.path, Math.round(file.mtimeMs)) : file.kind === 'video' ? mediaSources.poster?.(file) : undefined), [mediaSources, projectId]);
 
-  /* ── transport: the sound is the clock; the picture follows it ── */
+  /* ── transport: the sound is the clock; the picture follows it, drawn in the preview from the player's line ── */
   const player = React.useRef(new Player());
-  React.useEffect(() => () => player.current.close(), []);
+  React.useEffect(() => {
+    const p = player.current;
+    p.onAnchor = (anchor) => preview.current?.play?.(anchor);
+    return () => { p.onAnchor = null; p.close(); };
+  }, []);
   const [playing, setPlaying] = React.useState(false);
   const [timeMs, setTimeMs] = React.useState(0);
   const timeRef = React.useRef(0);
@@ -372,6 +379,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const clock = React.useMemo<PlaybackClock>(() => ({
     get: () => player.current.time() * 1000,
     subscribe: (fn) => { listeners.current.add(fn); return () => listeners.current.delete(fn); },
+    line: () => { const a = player.current.anchor(); return a ? { ms: a.t * 1000, at: a.at, rate: a.rate } : null; },
   }), []);
   /* the player never says 0 (it divides by its length): an empty film is 0.001 s long, here 0 */
   const drawnMs = (info?.duration ?? 0) > 0.001 ? Math.round(info!.duration * 1000) : 0;
@@ -388,8 +396,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       const back = loopRef.current ? loopBack(t * 1000, rangeNowRef.current, player.current.duration * 1000) : null;
       if (back != null) {
         stopAtRef.current = null;
+        /* the player plays on from there: the preview is told its new line */
         player.current.seek(back / 1000);
-        preview.current?.seek(pictureAt(back / 1000));
         setTimeMs(back);
         for (const fn of listeners.current) fn();
         frame = requestAnimationFrame(tick);
@@ -406,10 +414,10 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         for (const fn of listeners.current) fn();
         return;
       }
-      preview.current?.seek(pictureAt(t));
+      /* the picture draws itself from the player's line (Preview's play); the playhead, timecode and subtitles read the
+         clock; the rest of the editor hears the time a few times a second (each time, all of it renders again) */
       for (const fn of listeners.current) fn();
-      /* the rest of the editor hears the time a few times a second; the playhead and timecode read the clock */
-      if (now - lastTick > 50) { lastTick = now; setTimeMs(t * 1000); }
+      if (now - lastTick > 250) { lastTick = now; setTimeMs(t * 1000); }
       if (!player.current.playing || t >= player.current.duration - 1e-3) {
         player.current.pause();
         setPlaying(false);
@@ -425,9 +433,10 @@ export function ProjectView({ projectId, onProject, onLeave }: {
 
   const seek = React.useCallback((ms: number) => {
     const t = Math.max(0, Math.min(ms / 1000, player.current.duration || ms / 1000));
+    /* playing, it plays on from there (the preview is told the player's new line); still, the picture shows t */
     player.current.seek(t);
     setTimeMs(t * 1000);
-    preview.current?.seek(pictureAt(t));
+    if (!player.current.playing) preview.current?.seek(pictureAt(t));
     for (const fn of listeners.current) fn();
   }, []);
   /* ── J / K / L: the shuttle. 1× and 2× forward are the player's own (with sound); faster, or backwards, the picture
@@ -447,6 +456,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (shuttleFrame.current) { cancelAnimationFrame(shuttleFrame.current); shuttleFrame.current = 0; shuttleRateRef.current = 0; }
     if (!player.current.playing) return;
     player.current.pause();
+    /* stopped on the frame being shown: the timecode, the picture and an edit at the playhead all mean that frame */
+    player.current.seek(snapToFrame(player.current.time() * 1000) / 1000);
     setPlaying(false);
     setTimeMs(player.current.time() * 1000);
     preview.current?.seek(pictureAt(player.current.time()));
@@ -672,6 +683,13 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const subs = useFilmSubtitles(projectId);
   /* fullscreen's CC button (and c): only what is shown, not the film's own setting */
   const [captionsOn, setCaptionsOn] = React.useState(true);
+  /* the subtitle over the picture renders again while playing only when another line, or another of its words, is said */
+  const shownCues = captionsOn ? subs.cues : NO_CUES;
+  const subtitleStep = React.useCallback((ms: number) => {
+    const cue = subs.style.on ? cueAt(shownCues, ms) : null;
+    if (!cue) return '';
+    return `${shownCues.indexOf(cue)}:${subs.style.karaoke ? filmSubtitleWords(cue, ms).map((w) => (w.active ? 1 : 0)).join('') : ''}`;
+  }, [shownCues, subs.style.on, subs.style.karaoke]);
   const configureSubtitles = React.useCallback(() => {
     setInspectorContent('subtitles');
     setInspectorOpen(!(inspectorOpen && inspectorContent === 'subtitles'));
@@ -2727,7 +2745,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                           width: `${(frameBox.inner.w / frameBox.w) * 100}%`,
                           height: `${(frameBox.inner.h / frameBox.h) * 100}%`,
                         }}>
-                          <Preview ref={preview} folder={folder} stage={shownStage} time={() => player.current.time()}
+                          <Preview ref={preview} folder={folder} stage={shownStage} time={() => player.current.time()} fps={exactRate(projectFps)}
                             onInfo={onInfo} onKey={previewKey} onError={setPreviewError}>
                             {!fullscreen ? (
                               <FilmStageSelect
@@ -2780,9 +2798,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                         {fullscreen ? <div className="absolute inset-0 z-[5]" aria-hidden /> : null}
                         {/* subtitles sit on the frame, not on the film: their place is a share of the frame, so a 9:16
                             frame puts them on its own bottom (the bar), not pushed up with the picture */}
-                        <LiveTime clock={playing ? clock : null} timeMs={timeMs}>{(liveMs) => (
+                        <LiveTime clock={playing ? clock : null} timeMs={timeMs} step={subtitleStep}>{(liveMs) => (
                           <SubtitleOverlay
-                            cues={captionsOn ? subs.cues : []}
+                            cues={shownCues}
                             timeMs={liveMs}
                             style={filmSubtitleStyleFor(subs.style, frameBox)}
                             onMove={fullscreen ? undefined : subs.move}

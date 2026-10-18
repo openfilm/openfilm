@@ -13,6 +13,7 @@ import { shortcutHint } from '@/lib/shortcut-hint';
 import { SHORTCUTS, type ShortcutKey } from '@/lib/timeline-keys';
 import { studioHost, type HostDeveloper, type HostUpdateState } from '@/lib/host';
 import { showWhatsNew } from '@/lib/whats-new';
+import { usePreviewPrefs, writePreviewPref } from '@/lib/preview-prefs';
 import { hasNotes, newestVersion } from '../WhatsNew';
 import { useWebUpdate } from '../UpdateButton';
 import { api, type StudioPrefs, type StudioVersion } from '@/api';
@@ -249,10 +250,12 @@ function GeneralSection() {
 
 /**
  * How the preview plays heavy footage (studio/server/proxies.mjs): from a lighter copy made in the background, as
- * CapCut's proxies, and how tall that copy is. Exports always read the originals.
+ * CapCut's proxies, and how tall that copy is; and whether pages draw at the viewer's size (lib/preview-prefs).
+ * Exports always read the originals and draw at full size.
  */
 function PlaybackGroup() {
   const t = useT();
+  const { fitPages } = usePreviewPrefs();
   const [prefs, setPrefs] = React.useState<StudioPrefs | null>(null);
   React.useEffect(() => { void api.prefs().then(setPrefs).catch(() => {}); }, []);
   if (!prefs) return null;
@@ -281,6 +284,11 @@ function PlaybackGroup() {
           )}
         />
       ) : null}
+      <SettingsItem
+        title={t('settings.playback.fitPages')}
+        description={t('settings.playback.fitPagesHint')}
+        control={<SettingsSwitch checked={fitPages} onChange={writePreviewPref} label={t('settings.playback.fitPages')} />}
+      />
     </SettingsGroup>
   );
 }

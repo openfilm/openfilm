@@ -24,3 +24,13 @@ export function shownAfter(list: readonly Frame[], key: number): Frame[] {
 export function updateKeys(shown: number, up: ReadonlySet<number>): number[] {
   return [shown, ...[...up].filter((key) => key !== shown)];
 }
+
+/**
+ * The device pixels a page draws per CSS px in the viewer (its devicePixelRatio there): what the viewer shows of the
+ * film (`k`, viewer px per stage px, times the screen's `dpr`), in quarter steps rounded up, so a small resize does not
+ * load the film again; never more than the screen's own, nor under a quarter.
+ */
+export function pageScaleFor(k: number, dpr: number): number {
+  const shown = Math.max(0.25, k * dpr);
+  return Math.min(dpr, Math.ceil(shown * 4 - 1e-9) / 4);
+}

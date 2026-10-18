@@ -4382,11 +4382,10 @@ function ModePicker({
 }
 
 /**
- * The playhead line — while playing it follows the clock itself, outside React.
- *
- * The clock ticks at 20 Hz; drawn tick by tick the line jumps, zoomed in by a dozen pixels. Each frame it moves on
- * from the last tick by the time since, and lines up at the next tick; when a new tick is slightly behind what was
- * drawn, it waits instead of stepping back.
+ * The playhead line — while playing it moves by itself, outside React and off the page's main thread: an animation
+ * from where the film is to its end, on the clock's line (`line`: where the film is at a moment, and how fast it goes),
+ * which the compositor draws every frame. It is made again only when the line changes (a seek, a loop, another speed),
+ * the timeline scrolls or zooms. Moved from script each frame instead, the editor laid out its whole page every frame.
  *
  * Follow-scroll happens here too: out of view, the timeline pages (the playhead at 10% from the left) rather than
  * recentring every step, which would slide constantly. For a while after the user scrolls, it does not follow.
@@ -4419,40 +4418,64 @@ function PlayheadTrack({
   }, [live, x]);
 
   React.useEffect(() => {
-    if (!live || !clock) return undefined;
+    const el = ref.current;
+    if (!live || !clock || !el) return undefined;
     const scroller = scrollRef.current;
-    let tick = { ms: clock.get(), at: performance.now() };
-    let shown = tick.ms;
     let userAt = -Infinity;
-    const off = clock.subscribe(() => { tick = { ms: clock.get(), at: performance.now() }; });
-    const onUser = () => { userAt = performance.now(); };
-    scroller?.addEventListener('wheel', onUser, { passive: true });
-    scroller?.addEventListener('pointerdown', onUser, { passive: true });
-    let raf = 0;
-    const frame = (now: number) => {
-      let ms = Math.min(tick.ms + Math.min(now - tick.at, 120), totalMs);
-      /* a new tick slightly behind what was drawn: wait, do not step back. Far behind (a seek, a loop): follow it. */
-      if (ms < shown && shown - ms < 80) ms = shown;
-      shown = ms;
-      const el = scrollRef.current;
-      const scrollLeft = el?.scrollLeft ?? 0;
-      const px = ms * pxPerMs;
-      if (el && now - userAt > 1500 && pxPerMs > 0) {
-        if (px < scrollLeft + FOLLOW_EDGE || px > scrollLeft + el.clientWidth - FOLLOW_EDGE) {
-          el.scrollLeft = Math.max(0, px - el.clientWidth * 0.1);
-        }
-      }
-      if (ref.current) {
-        ref.current.style.transform = `translate3d(${px - (el?.scrollLeft ?? scrollLeft) + PLAYHEAD_BLEED}px,0,0)`;
-      }
-      raf = requestAnimationFrame(frame);
+    let scroll = scroller?.scrollLeft ?? 0;
+    let width = scroller?.clientWidth ?? 0;
+    /* the line the animation runs on now, and the scroll it was made for */
+    let made: { ms: number; at: number; rate: number; scroll: number } | null = null;
+    let anim: Animation | null = null;
+    const lineNow = () => clock.line?.() ?? { ms: clock.get(), at: performance.now(), rate: 1 };
+    const make = () => {
+      const line = lineNow();
+      const from = Math.min(line.ms, totalMs);
+      const place = (ms: number) => `translate3d(${ms * pxPerMs - scroll + PLAYHEAD_BLEED}px,0,0)`;
+      anim?.cancel();
+      anim = el.animate([{ transform: place(from) }, { transform: place(totalMs) }], {
+        duration: Math.max(1, (totalMs - from) / Math.max(1e-6, line.rate)), easing: 'linear', fill: 'both',
+      });
+      /* on the page's clock: the document's timeline counts from the same origin as performance.now() */
+      anim.startTime = line.at;
+      made = { ...line, scroll };
     };
-    raf = requestAnimationFrame(frame);
+    /* a new line moves the film elsewhere than this one: within a pixel, it is the same line (the sound's small
+       corrections) */
+    const moved = () => {
+      const line = lineNow();
+      if (!made || line.rate !== made.rate || made.scroll !== scroll) return true;
+      const now = performance.now();
+      const at = (l: { ms: number; at: number; rate: number }) => l.ms + Math.max(0, now - l.at) * l.rate;
+      return Math.abs(at(line) - at(made)) * pxPerMs > 1;
+    };
+    const follow = () => {
+      const px = clock.get() * pxPerMs;
+      if (scroller && performance.now() - userAt > 1500 && pxPerMs > 0 && (px < scroll + FOLLOW_EDGE || px > scroll + width - FOLLOW_EDGE)) {
+        scroller.scrollLeft = Math.max(0, px - width * 0.1);
+        scroll = scroller.scrollLeft;
+      }
+    };
+    const tick = () => { follow(); if (moved()) make(); };
+    make();
+    tick();
+    const off = clock.subscribe(tick);
+    const onUser = () => { userAt = performance.now(); };
+    const onScroll = () => { scroll = scroller?.scrollLeft ?? 0; if (moved()) make(); };
+    const sized = new ResizeObserver(() => { width = scroller?.clientWidth ?? 0; });
+    if (scroller) {
+      scroller.addEventListener('wheel', onUser, { passive: true });
+      scroller.addEventListener('pointerdown', onUser, { passive: true });
+      scroller.addEventListener('scroll', onScroll, { passive: true });
+      sized.observe(scroller);
+    }
     return () => {
-      cancelAnimationFrame(raf);
       off();
+      anim?.cancel();
+      sized.disconnect();
       scroller?.removeEventListener('wheel', onUser);
       scroller?.removeEventListener('pointerdown', onUser);
+      scroller?.removeEventListener('scroll', onScroll);
     };
   }, [live, clock, pxPerMs, totalMs, scrollRef]);
 

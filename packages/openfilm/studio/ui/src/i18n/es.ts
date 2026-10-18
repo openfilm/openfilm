@@ -1471,6 +1471,8 @@ export const es: Words = {
       proxiesHint: "El metraje de más de 1080p, o lento de decodificar (ProRes, HEVC, 10 bits), se reproduce desde una copia ligera hecha en segundo plano. Las exportaciones siempre usan los originales.",
       proxySize: "Tamaño del proxy",
       proxySizeHint: "Más pequeño se reproduce con más fluidez; más grande se ve más nítido en el visor.",
+      fitPages: "Dibujar las páginas al tamaño del visor",
+      fitPagesHint: "El canvas y el 3D de las páginas web se dibujan al tamaño con que los muestra el visor: se ven igual y se reproducen con más fluidez. Desactivado: al tamaño completo de la película. Las exportaciones siempre se dibujan a tamaño completo.",
     },
     about: {
       group: 'Acerca de',

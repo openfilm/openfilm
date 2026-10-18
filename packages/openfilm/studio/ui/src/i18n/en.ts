@@ -1472,6 +1472,8 @@ export const en = {
       proxiesHint: "Footage past 1080p, or slow to decode (ProRes, HEVC, 10-bit), plays from a lighter copy made in the background. Exports always use the originals.",
       proxySize: "Proxy size",
       proxySizeHint: "Smaller plays more smoothly; larger looks sharper in the viewer.",
+      fitPages: "Draw pages at the viewer’s size",
+      fitPagesHint: "Canvas and 3D in web pages are drawn at the size the viewer shows them, which plays more smoothly and looks the same. Off: at the film’s full size. Exports always draw at full size.",
     },
     about: {
       group: 'About',

@@ -70,6 +70,12 @@ async function playableCopy(root, rel) {
   return made;
 }
 const STAGE = readFileSync(new URL('./stage.js', import.meta.url), 'utf8');
+/*
+ * A page in the preview's film draws at the pixels the viewer shows it at: its devicePixelRatio is the one the editor
+ * put in the film's address (`film-dpr`, editor/Preview.tsx), so a canvas sized by it (SPEC §3) is no larger than what is
+ * seen. The film's own videos and pictures, and every page drawn for an export, are as the screen is.
+ */
+const PAGE_SCALE = `(()=>{try{if(parent===window)return;const k=Number(new URL(parent.location.href).searchParams.get('film-dpr'));if(k>0)Object.defineProperty(window,'devicePixelRatio',{configurable:true,get:()=>k})}catch{}})();`;
 
 /**
  * Whether a request was addressed to this machine at `port` by name (its Host): another site whose name is made to
@@ -121,7 +127,7 @@ export async function startPages({ port, editorOrigin, secret, projects }) {
   /* the timeline page (the preview) gets the bridge and the stage; a web page gets the bridge too, so the editor can
      play one on its own (the media pane's viewer) — inside the timeline it stays quiet: its parent is not the editor */
   const filesOf = (/** @type {string} */ root) => folderFiles(root, {
-    inject: `<script>${HOST_FLAG}</script>${scripts(BRIDGE)}`,
+    inject: `<script>${HOST_FLAG}${PAGE_SCALE}</script>${scripts(BRIDGE)}`,
     timelineInject: `<script>${HOST_FLAG}</script>${scripts(BRIDGE, STAGE)}`,
     headers: policy(),
     /* heavy footage is played from its proxy once it is made, while proxies are on (proxies.mjs): the preview only */
