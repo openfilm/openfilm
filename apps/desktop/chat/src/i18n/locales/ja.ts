@@ -136,6 +136,8 @@ export const ja: Words = {
     agentSetUp: '設定',
     agentWaiting: 'サインイン中…',
     effort: '思考レベル',
+    filesFailed: '{names} を追加できませんでした：{error} 削除してから送信してください。',
+    filesPending: 'ファイルを追加しています。',
     model: 'モデル',
     openAttachment: '{name} を表示',
     openSettings: '設定を開く',
@@ -144,7 +146,7 @@ export const ja: Words = {
     removeFile: 'ファイルを削除',
     removeImage: '画像を削除',
     speed: '速度',
-    thumbOnly: 'メッセージにはサムネイルだけが残ります。元のファイルはエージェントに送られ、プロジェクトの素材に保存されています。',
+    thumbOnly: 'メッセージにはサムネイルだけが残ります。元のファイルは元の場所にあります。貼り付けたものはプロジェクトに保存されています。',
   },
   library: {
     removeReference: '参照を削除',

@@ -136,6 +136,8 @@ export const zhCN: Words = {
     agentSetUp: '设置',
     agentWaiting: '正在登录…',
     effort: '思考强度',
+    filesFailed: '{names} 添加失败：{error} 移除后再发送。',
+    filesPending: '文件还在添加中。',
     model: '模型',
     openAttachment: '查看 {name}',
     openSettings: '打开设置',
@@ -144,7 +146,7 @@ export const zhCN: Words = {
     removeFile: '移除文件',
     removeImage: '移除图片',
     speed: '速度',
-    thumbOnly: '消息中只保留了缩略图。原图已发送给智能体，并保存在项目素材中。',
+    thumbOnly: '消息中只保留了缩略图。原文件还在原来的位置；粘贴的文件保存在项目里。',
   },
   library: {
     removeReference: '移除引用',

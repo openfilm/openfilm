@@ -10,9 +10,8 @@
  * ffmpeg, updates (preload.cjs). The window opens straight into the last project.
  */
 import { BaseWindow, Menu, WebContentsView, app, dialog, ipcMain, nativeTheme, safeStorage, screen, shell } from 'electron';
-import { appendFileSync, createReadStream, existsSync, mkdirSync, statSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
-import { Readable } from 'node:stream';
+import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FLAVOR, IDENTITY, PRODUCT_NAME } from './flavor.mjs';
 import { folderDialogOptions, programDialogOptions } from './folder-dialog.mjs';
@@ -524,24 +523,6 @@ async function start() {
   agentHandle('desktop:agents:shown', ({ id, shown }) => { roster.setShown(String(id), shown === true); return { ok: true }; });
   agentHandle('desktop:agents:own-model', ({ config }) => roster.saveOwnModel(config));
   agentHandle('desktop:agents:own-model-remove', ({ id }) => { roster.removeOwnModel(String(id)); return { ok: true }; });
-  /* a file on the disk brought into the chat goes into the project the page names, through Studio's own import (it
-     shows in Studio's media at once, and the import is in the project's history); one without a path the page sends
-     itself */
-  ipcMain.handle('desktop:import-file', async (event, request) => {
-    if (!fromPage(event) || !studio) return { ok: false, error: 'Studio is not running.' };
-    const projectId = String(request?.projectId ?? '');
-    if (!/^[\w-]+$/.test(projectId)) return { ok: false, error: 'No project is open.' };
-    const name = basename(String(request?.name ?? '')).replace(/[\u0000-\u001f/\\]+/g, '').slice(0, 200) || 'file';
-    const path = typeof request?.path === 'string' ? request.path : '';
-    try { if (!path || !statSync(path).isFile()) return { ok: false, error: 'That is not a file.' }; } catch { return { ok: false, error: 'That file is not there any more.' }; }
-    try {
-      const res = await fetch(`${studio.origin}/api/projects/${encodeURIComponent(projectId)}/files?path=${encodeURIComponent(`assets/upload/${name}`)}`, {
-        method: 'PUT', headers: { 'x-studio-key': studio.key }, body: Readable.toWeb(createReadStream(path)), duplex: 'half',
-      });
-      const answer = await res.json().catch(() => ({}));
-      return res.ok ? { ok: true, path: answer.path } : { ok: false, error: answer.error ?? `Studio answered ${res.status}` };
-    } catch (error) { return { ok: false, error: error.message }; }
-  });
   ipcMain.handle('desktop:reveal', (event, path) => { if (fromPage(event) && typeof path === 'string' && path) shell.showItemInFolder(path); });
   ipcMain.handle('desktop:pick-folder', (event, options) => (fromPage(event) ? pickFolder(options) : null));
   /* a picture of part of the window (the viewer, for a reference in the chat): what the person sees, as JPEG */

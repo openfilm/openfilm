@@ -22,12 +22,17 @@
  *   <turn>-<n>.jpg         the picture of the message's reference [n] (a frame, or the part of it pointed at), for its
  *                          agent to look at: the message names the path
  *
+ * the files pasted into a message, `.film/attachments/`:
+ *   <name>                 a file with no place on the disk of its own (a screenshot, a picture copied from a page),
+ *                          kept for the agent: the message names the path. A file or folder dragged in from the disk
+ *                          stays where it is, and the message names that path instead
+ *
  * `.film/` is Studio's own (its projects.mjs says what else is there): a film never reads it, and nothing in it is
  * served. Reads no Electron module, so `node --test` can use it.
  */
 import { createHash } from 'node:crypto';
 import { createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 
 /** a turn's id (`local:…`) and the file it names (no `:`, which Windows does not allow in a name) */
 const ID = /^[\w:-]{1,120}$/;
@@ -38,6 +43,7 @@ const LOG_READ_MAX = 32 * 1024 * 1024;
 export const chatDir = (project) => join(project, '.film', 'chat');
 export const logsDir = (project) => join(project, '.film', 'logs');
 export const refsDir = (project) => join(project, '.film', 'refs');
+export const attachmentsDir = (project) => join(project, '.film', 'attachments');
 /** a reference's picture: a JPEG, of a frame at most 1280 px wide (the page makes it so) */
 const REF_IMAGE_MAX = 8 * 1024 * 1024;
 const REF_MAX = 64;
@@ -100,6 +106,42 @@ export function saveRefImage(project, turnId, n, bytes) {
   mkdirSync(dir, { recursive: true });
   writeAtomic(join(dir, name), data);
   return { path: `.film/refs/${name}` };
+}
+
+/**
+ * Keep a file pasted into a message; → its path in the project (`.film/attachments/<name>`). The name is cut to its last
+ * part and cleaned here, so the page cannot write anywhere else; a name already there gets ` 2`, ` 3`… before its ending.
+ */
+export function saveAttachment(project, name, bytes) {
+  const data = bytes instanceof Uint8Array ? bytes : bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : null;
+  if (!data || !data.length) throw new Error('the file is empty');
+  const clean = String(name ?? '').split(/[/\\]/).pop().replace(/[\u0000-\u001f<>:"|?*]+/g, '').replace(/^[.\s]+/, '').trim().slice(0, 200) || 'file';
+  const dot = clean.lastIndexOf('.');
+  const [stem, ending] = dot > 0 ? [clean.slice(0, dot), clean.slice(dot)] : [clean, ''];
+  const dir = attachmentsDir(project);
+  mkdirSync(dir, { recursive: true });
+  for (let n = 1; ; n++) {
+    const file = n === 1 ? clean : `${stem} ${n}${ending}`;
+    if (existsSync(join(dir, file))) continue;
+    writeAtomic(join(dir, file), data);
+    return { path: `.film/attachments/${file}` };
+  }
+}
+
+/**
+ * What each path dragged into a message is: a file (its size) or a folder; `error` for one that is not there or cannot
+ * be read. Nothing is copied: the message names the path where it is.
+ */
+export function describePaths(paths) {
+  return (Array.isArray(paths) ? paths : []).map((path) => {
+    if (typeof path !== 'string' || !isAbsolute(path)) return { path: String(path), error: 'That is not a file.' };
+    try {
+      const found = statSync(path);
+      return found.isDirectory() ? { path, folder: true } : { path, folder: false, size: found.size };
+    } catch {
+      return { path, error: 'That file is not there any more.' };
+    }
+  });
 }
 
 /**

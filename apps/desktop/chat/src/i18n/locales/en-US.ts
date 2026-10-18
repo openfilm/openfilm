@@ -135,6 +135,8 @@ export const enUS = {
     agentSetUp: 'Set up',
     agentWaiting: 'Signing in…',
     effort: 'Effort',
+    filesFailed: 'Couldn\'t attach {names}: {error} Remove it to send.',
+    filesPending: 'The files are still being attached.',
     model: 'Model',
     openAttachment: 'View {name}',
     openSettings: 'Open Settings',
@@ -143,7 +145,7 @@ export const enUS = {
     removeFile: 'Remove file',
     removeImage: 'Remove image',
     speed: 'Speed',
-    thumbOnly: 'A thumbnail kept with the message. The original went to the agent and lives in the project assets.',
+    thumbOnly: 'A thumbnail kept with the message. The original stays where it was, or in the project if it was pasted.',
   },
   library: {
     removeReference: 'Remove reference',

@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { appendFileSync, mkdtempSync, readFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { chatDir, loadChat, logsDir, openLog, readLog, refsDir, saveRefImage, saveSessions, saveTurn, unsavedTurns } from './chat-store.mjs';
+import { attachmentsDir, chatDir, describePaths, loadChat, logsDir, openLog, readLog, refsDir, saveAttachment, saveRefImage, saveSessions, saveTurn, unsavedTurns } from './chat-store.mjs';
 
 const project = () => mkdtempSync(join(tmpdir(), 'of-chat-'));
 const turn = (id, createdAt) => ({ turn: { id, createdAt, sessionId: 's1', prompt: id }, items: [{ kind: 'text', text: id }] });
@@ -93,6 +93,37 @@ test('a reference\'s picture is kept as .film/refs/<turn>-<n>.jpg, and nothing b
   assert.throws(() => saveRefImage(dir, 'local:abc', 1.5, jpeg), /reference number/);
   assert.throws(() => saveRefImage(dir, 'local:abc', 1, new Uint8Array([0x89, 0x50, 0x4e, 0x47])), /not a JPEG/);
   assert.throws(() => saveRefImage(dir, 'local:abc', 1, 'not bytes'), /not a picture/);
+});
+
+test('a pasted file is kept in .film/attachments under its own name, cleaned, and never anywhere else', () => {
+  const dir = project();
+  const bytes = new Uint8Array([1, 2, 3]);
+  assert.deepEqual(saveAttachment(dir, 'image.png', bytes), { path: '.film/attachments/image.png' });
+  assert.deepEqual([...readFileSync(join(attachmentsDir(dir), 'image.png'))], [1, 2, 3]);
+  assert.equal(saveAttachment(dir, 'image.png', bytes.buffer).path, '.film/attachments/image 2.png', 'a name already there is not written over');
+  assert.equal(saveAttachment(dir, 'image.png', bytes).path, '.film/attachments/image 3.png');
+  assert.equal(saveAttachment(dir, '../../etc/passwd', bytes).path, '.film/attachments/passwd');
+  assert.equal(saveAttachment(dir, '..\\..\\win.ini', bytes).path, '.film/attachments/win.ini');
+  assert.equal(saveAttachment(dir, '.hidden', bytes).path, '.film/attachments/hidden');
+  assert.equal(saveAttachment(dir, '', bytes).path, '.film/attachments/file');
+  assert.throws(() => saveAttachment(dir, 'empty.txt', new Uint8Array()), /empty/);
+  assert.throws(() => saveAttachment(dir, 'x.txt', 'not bytes'), /empty/);
+});
+
+test('a path dragged in is said to be a file (with its size) or a folder, where it is; one not there is said so', () => {
+  const dir = project();
+  const folder = join(dir, 'Footage');
+  mkdirSync(folder);
+  const clip = join(folder, 'a.mp4');
+  writeFileSync(clip, 'abcd');
+  assert.deepEqual(describePaths([clip, folder, join(dir, 'gone.mp4'), 'relative.mp4', 7]), [
+    { path: clip, folder: false, size: 4 },
+    { path: folder, folder: true },
+    { path: join(dir, 'gone.mp4'), error: 'That file is not there any more.' },
+    { path: 'relative.mp4', error: 'That is not a file.' },
+    { path: '7', error: 'That is not a file.' },
+  ]);
+  assert.deepEqual(describePaths('not a list'), []);
 });
 
 test('a log not grown since the sizes a reader has is not read again', async () => {

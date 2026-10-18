@@ -50,8 +50,6 @@ interface AppBridge {
   onStudioHover(listener: (ref: StudioRef | null) => void): () => void;
   /** the project's files (Studio's listing), for the @ menu */
   projectFiles(): Promise<{ files: Array<{ path: string; kind: string; size: number }>; pages?: Array<{ path: string; size: number }> }>;
-  /** bring a file into the project (assets/upload/): from its path, or its bytes */
-  importFile(file: { path: string; name: string } | { bytes: ArrayBuffer; name: string }): Promise<{ ok: true; path: string } | { ok: false; error: string }>;
   onSelection(listener: (selection: StudioSelection) => void): () => void;
   setChatWidth(width: number, done?: boolean): void;
   setChatOpen(open: boolean): void;
@@ -72,6 +70,10 @@ interface AppBridge {
     reveal(project: string, turnId?: string): Promise<unknown>;
     /** a picture a message's reference points at, kept for its agent: .film/refs/<turn>-<n>.jpg (its path in the project) */
     saveRefImage(project: string, turnId: string, n: number, bytes: ArrayBuffer): Promise<{ path: string }>;
+    /** a file pasted into a message (it has no path of its own), kept for its agent: .film/attachments/<name> */
+    saveAttachment(project: string, name: string, bytes: ArrayBuffer): Promise<{ path: string }>;
+    /** what each path dragged into a message is, where it is (nothing is copied) */
+    describePaths(paths: string[]): Promise<Array<{ path: string; folder: boolean; size?: number } | { path: string; error: string }>>;
     /** the turns with a log and no saved record (src/chat-store.mjs unsavedTurns), but those of `except` */
     unsaved?(project: string, except?: string[]): Promise<Array<{ turnId: string; events: TurnLog['events'] }>>;
     /** the project's files as a turn starts, kept by the app; then what the turn changed in them (src/file-changes.mjs) */

@@ -81,9 +81,12 @@ export async function referencePictures(refs: StudioRef[], { project, turnId }: 
   return { pictures, images };
 }
 
-/** an attached picture is sent as it is up to this size and this many pixels on its long side; larger, made smaller */
+/**
+ * an attached picture is sent as it is up to this size and this many pixels on its long side; larger, made smaller.
+ * 2000: a request with more than 20 pictures in it (a conversation's, not only this message's) takes none larger
+ */
 const ATTACHED_MAX_BYTES = 4 * 1024 * 1024;
-const ATTACHED_MAX_SIDE = 2048;
+const ATTACHED_MAX_SIDE = 2000;
 const AS_IS = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 /**

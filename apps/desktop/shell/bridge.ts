@@ -28,7 +28,6 @@ interface Native {
   /* the window's tabs (src/tabs.mjs) */
   tabs: NonNullable<StudioHost['tabs']>;
   localAgents: Record<string, unknown>;
-  importFile(request: { projectId: string; path: string; name: string }): Promise<{ ok: true; path: string } | { ok: false; error: string }>;
   chat: Record<string, (...args: never[]) => Promise<unknown>>;
   /* the composer's Skills button (src/skills-ipc.mjs) */
   skills: Record<string, (...args: never[]) => Promise<unknown>>;
@@ -318,7 +317,6 @@ function commandFor(ref: StudioRef): StudioCommand {
     case 'example': return { type: 'show-examples', open: { kind: 'example', id: ref.id } };
   }
 }
-const uploadName = (name: string) => name.split(/[\\/]/).pop()!.replace(/[\u0000-\u001f]+/g, '').slice(0, 200) || 'file';
 
 (window as unknown as { openfilmDesktop: unknown }).openfilmDesktop = {
   bridgeVersion: '1',
@@ -375,19 +373,6 @@ const uploadName = (name: string) => name.split(/[\\/]/).pop()!.replace(/[\u0000
     const id = project.get()?.id;
     if (!id) return { files: [] };
     try { return await (await fetch(`/api/projects/${encodeURIComponent(id)}/files`)).json(); } catch { return { files: [] }; }
-  },
-  /* a file brought into the chat goes into the project (assets/upload/), through Studio's own import: a file on the
-     disk by its path (the app reads it), one with no path (pasted) by its bytes */
-  async importFile(file: { path: string; name: string } | { bytes: ArrayBuffer; name: string }) {
-    const id = project.get()?.id;
-    if (!id) return { ok: false, error: 'No project is open.' };
-    const name = uploadName(file.name);
-    if ('path' in file) return native.importFile({ projectId: id, path: file.path, name });
-    try {
-      const res = await fetch(`/api/projects/${encodeURIComponent(id)}/files?path=${encodeURIComponent(`assets/upload/${name}`)}`, { method: 'PUT', body: file.bytes });
-      const answer = await res.json().catch(() => ({})) as { path?: string; error?: string };
-      return res.ok ? { ok: true, path: answer.path } : { ok: false, error: answer.error ?? `Studio answered ${res.status}` };
-    } catch (error) { return { ok: false, error: (error as Error).message }; }
   },
   setChatWidth: (width: number, done?: boolean) => setChatWidth(width, done === true),
   setChatOpen,

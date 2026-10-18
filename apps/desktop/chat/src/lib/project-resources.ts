@@ -10,6 +10,7 @@ import {
   FileSpreadsheet,
   FileText,
   FileVideo,
+  Folder,
   Image as ImageIcon,
   Subtitles,
   type LucideIcon,
@@ -58,7 +59,8 @@ export function attachmentKind(file: { name: string; mediaType?: string }): Work
   return 'other';
 }
 
-/** The icon for a file in the composer or a message. */
-export function attachmentIcon(file: { name: string; mediaType?: string }): LucideIcon {
+/** The icon for a file in the composer or a message; a folder's name ends in "/" (desktop-attachments turnAttachments). */
+export function attachmentIcon(file: { name: string; mediaType?: string; folder?: boolean }): LucideIcon {
+  if (file.folder || file.name.endsWith('/')) return Folder;
   return resourceIcon({ name: file.name, kind: attachmentKind(file) });
 }

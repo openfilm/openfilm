@@ -63,8 +63,8 @@ const IDLE_CHECK_MS = 60_000;
 const PROBE_COMMANDS_MS = 1500;
 /** how long after its turn a session whose skills changed closes: the page has settled the turn by then */
 const STALE_CLOSE_MS = 3000;
-/** the pictures one message may carry, and how big each (base64 of a JPEG at most 1280 px wide) */
-const PROMPT_IMAGES_MAX = 8;
+/** the pictures one message may carry (the page's PROMPT_PICTURES_MAX), and how big each (base64, at most 2000 px a side) */
+const PROMPT_IMAGES_MAX = 20;
 const PROMPT_IMAGE_MAX_CHARS = 8 * 1024 * 1024;
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 

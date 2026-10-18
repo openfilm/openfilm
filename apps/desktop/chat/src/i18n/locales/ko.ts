@@ -136,6 +136,8 @@ export const ko: Words = {
     agentSetUp: '설정',
     agentWaiting: '로그인하는 중…',
     effort: '추론 강도',
+    filesFailed: '{names}을(를) 추가하지 못했습니다: {error} 제거한 뒤 보내세요.',
+    filesPending: '파일을 추가하는 중입니다.',
     model: '모델',
     openAttachment: '{name} 보기',
     openSettings: '설정 열기',
@@ -144,7 +146,7 @@ export const ko: Words = {
     removeFile: '파일 제거',
     removeImage: '이미지 제거',
     speed: '속도',
-    thumbOnly: '메시지에는 썸네일만 남겨 두었습니다. 원본은 에이전트에게 전달되었고 프로젝트 에셋에 있습니다.',
+    thumbOnly: '메시지에는 썸네일만 남겨 두었습니다. 원본은 원래 위치에 있고, 붙여 넣은 파일은 프로젝트에 저장되어 있습니다.',
   },
   library: {
     removeReference: '참조 제거',

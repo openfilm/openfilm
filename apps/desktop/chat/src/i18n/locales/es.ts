@@ -136,6 +136,8 @@ export const es: Words = {
     agentSetUp: 'Configurar',
     agentWaiting: 'Iniciando sesión…',
     effort: 'Esfuerzo',
+    filesFailed: 'No se pudo adjuntar {names}: {error} Quítalo para enviar.',
+    filesPending: 'Los archivos aún se están adjuntando.',
     model: 'Modelo',
     openAttachment: 'Ver {name}',
     openSettings: 'Abrir Configuración',
@@ -144,7 +146,7 @@ export const es: Words = {
     removeFile: 'Quitar archivo',
     removeImage: 'Quitar imagen',
     speed: 'Velocidad',
-    thumbOnly: 'Una miniatura guardada con el mensaje. El original se envió al agente y está en los recursos del proyecto.',
+    thumbOnly: 'Una miniatura guardada con el mensaje. El original sigue donde estaba, o en el proyecto si se pegó.',
   },
   library: {
     removeReference: 'Quitar referencia',

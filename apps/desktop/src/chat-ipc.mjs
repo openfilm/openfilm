@@ -9,6 +9,8 @@
  *                          its requests read from the agent's own record (or log) as it is now (agent-records.mjs)
  *   desktop:chat:reveal    { project, turnId? }   the turn's log (or the logs folder) in the file manager
  *   desktop:chat:ref-image { project, turnId, n, bytes } → { path }   a reference's picture, kept for the agent
+ *   desktop:chat:attachment { project, name, bytes } → { path }   a file pasted into a message, kept for the agent
+ *   desktop:chat:paths     { paths } → [{ path, folder, size? } | { path, error }]   files and folders dragged in
  *   desktop:chat:unsaved   { project, except? } → [{ turnId, events }]   turns with a log and no saved record
  *   desktop:chat:snapshot  { project, turnId }     the project's files as a turn starts (file-changes.mjs), kept here
  *   desktop:chat:changes   { project, turnId } → { files, cut } | null   what the turn changed in them since
@@ -20,7 +22,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { RECORDED_AGENTS, agentRecordCalls, compactCalls } from './agent-records.mjs';
-import { chatDir, loadChat, readLog, saveRefImage, saveSessions, saveTurn, unsavedTurns } from './chat-store.mjs';
+import { chatDir, describePaths, loadChat, readLog, saveAttachment, saveRefImage, saveSessions, saveTurn, unsavedTurns } from './chat-store.mjs';
 import { loginShellVariables } from './environment.mjs';
 import { changes, snapshot } from './file-changes.mjs';
 
@@ -82,6 +84,8 @@ export function registerChatIpc(ipcMain, { trusted, projects, dataDir, reveal, t
   handle('desktop:chat:sessions', async ({ project: path, sessions, last }) => { saveSessions(await project(path), { sessions, last }); return { ok: true }; });
   handle('desktop:chat:turn', async ({ project: path, turn, items }) => { saveTurn(await project(path), { turn, items }); return { ok: true }; });
   handle('desktop:chat:ref-image', async ({ project: path, turnId, n, bytes }) => saveRefImage(await project(path), turnId, n, bytes));
+  handle('desktop:chat:attachment', async ({ project: path, name, bytes }) => saveAttachment(await project(path), name, bytes));
+  handle('desktop:chat:paths', async ({ paths }) => describePaths(paths));
   handle('desktop:chat:unsaved', async ({ project: path, except }) => unsavedTurns(await project(path), {
     except: Array.isArray(except) ? except.filter((id) => typeof id === 'string') : [],
   }));
