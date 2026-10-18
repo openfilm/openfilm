@@ -82,8 +82,8 @@ export interface MediaSources {
   /** A web page's own poster (its middle frame); undefined falls back to the timeline's frame, then an icon. */
   pagePoster?(file: WorkspaceResource): string | undefined;
   /**
-   * A web page on its own, on the film's origin with Studio's bridge in it (`openfilm-studio` seek messages,
-   * `openfilm-film` ready/error answers): the viewer plays a picked scene through it. Undefined: cannot be previewed.
+   * A web page on its own, on the film's origin with Studio's bridge in it (`openfilm-studio` seek and play messages,
+   * `openfilm-film` answers): the viewer plays a picked scene through it. Undefined: cannot be previewed.
    */
   pageSurface?(file: WorkspaceResource): string | undefined;
 }

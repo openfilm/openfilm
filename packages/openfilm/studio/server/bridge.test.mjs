@@ -9,22 +9,22 @@ const EDITOR = 'http://127.0.0.1:4792';
 /**
  * The bridge in a film page of its own: the film's draws held until let go, and what it says to the editor. Its clock
  * and its screen's refreshes are the test's: `refresh(ms)` moves the clock on and runs the frame callbacks waiting.
+ * `alone`: a web page on its own (the media pane's viewer), with no timeline in it: its own frame(t) draws.
+ * `duration` null: a page without one.
  */
-function filmPage() {
+function filmPage({ alone = false, duration = 10 } = {}) {
   const listeners = new Map();
   const said = [];
   const drawn = [];
   let now = 5000;
   let frames = new Map();
   let ids = 0;
+  /* each draw waits until the test lets it go */
+  const held = (t, play = null) => new Promise((done) => drawn.push({ t, play, done }));
   const window = {
     addEventListener: (type, fn) => listeners.set(type, fn),
-    film: { duration: 10, width: 320, height: 180, ready: Promise.resolve(), frame() {} },
-    __filmEditor: {
-      /* each draw waits until the test lets it go */
-      watch: (t, play = null) => new Promise((done) => drawn.push({ t, play, done })),
-      update: async () => true,
-    },
+    film: { ...(duration == null ? {} : { duration }), width: 320, height: 180, ready: Promise.resolve(), frame: alone ? (t) => held(t) : () => {} },
+    ...(alone ? {} : { __filmEditor: { watch: held, update: async () => true } }),
   };
   const parent = { postMessage: (m) => said.push(m) };
   const performance = { now: () => now, timeOrigin: 1_700_000_000_000 };
@@ -143,4 +143,38 @@ test('the film\'s clock is read with a ping, and an edit while playing is drawn 
   assert.ok(page.drawn.every((d) => d.play), 'no still moment drawn for it');
   await page.refresh();
   assert.equal(page.drawn.length, 2, 'the next frame is drawn, the film as it is now');
+});
+
+test('a web page on its own plays from the line too, drawn by its own frame(t): each frame of the rate once, never past its end, until a seek', async () => {
+  /* 0.2 s long at 30 fps: its frames up to the last one before its end */
+  const page = filmPage({ alone: true, duration: 0.2 });
+  await page.settle();
+  page.send({ type: 'play', t: 0, at: page.clock(), rate: 1, fps: 30 });
+  for (let i = 0; i < 20; i++) {
+    await page.refresh();
+    page.drawn.at(-1)?.done();
+  }
+  await page.settle();
+  assert.deepEqual(page.drawn.map((d) => Math.round(d.t * 30)), [1, 2, 3, 4, 5], 'a refresh ahead, each frame once, none past its end');
+  assert.ok(page.drawn.every((d) => Math.abs(d.t * 30 - Math.round(d.t * 30)) < 1e-6), 'on the frame grid');
+  /* a still moment stops it: drawn, and no frame after it */
+  page.send({ type: 'seek', t: 0.1, seq: 1 });
+  await page.settle();
+  page.drawn.at(-1).done();
+  await page.settle();
+  await page.refresh();
+  await page.refresh();
+  assert.deepEqual(page.drawn.slice(5).map((d) => d.t), [0.1]);
+  assert.deepEqual(page.said.filter((m) => m.type === 'seeked').map((m) => m.t), [0.1]);
+
+  /* a page without a duration has no end of its own: it plays on until the viewer stops it */
+  const endless = filmPage({ alone: true, duration: null });
+  await endless.settle();
+  endless.send({ type: 'play', t: 0, at: endless.clock(), rate: 1, fps: 30 });
+  for (let i = 0; i < 20; i++) {
+    await endless.refresh();
+    endless.drawn.at(-1)?.done();
+  }
+  await endless.settle();
+  assert.equal(Math.round(endless.drawn.at(-1).t * 30), 10, 'a third of a second in, a refresh ahead');
 });

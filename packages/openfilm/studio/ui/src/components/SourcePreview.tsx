@@ -8,10 +8,11 @@
  */
 import React from 'react';
 import { Expand } from 'lucide-react';
+import { anchorTime, type Anchor } from '@/editor/player';
 import { useT } from '@/i18n';
 import { STILL_DROP_MS } from '@/lib/asset-timeline';
 import type { SourceRange } from '@/lib/media-place';
-import { formatTimecode, snapToFrame } from '@/lib/timecode';
+import { exactRate, formatTimecode, snapToFrame, useTimecodeFps } from '@/lib/timecode';
 import { type MediaSources, type WorkspaceResource } from '@/lib/workspace-resources';
 import { isTypingTarget } from './typing-target';
 import { KIND_ICON, MediaPreview } from './MediaPreview';
@@ -277,16 +278,20 @@ function MediaPreviewPane({ file, sources, onClose, onPlace }: SourcePreviewProp
   );
 }
 
+/** Clock readings asked of a page as it comes up: the one answered soonest says best where its clock is. */
+const CLOCK_PINGS = 5;
+
 /**
  * One web page on its own, the way the preview plays the film: on the film's origin (a page is its author's code; on
- * the editor's origin it could reach the editor), with Studio's bridge in it, driven by messages (seek t → frame(t)).
+ * the editor's origin it could reach the editor), with Studio's bridge in it, driven by messages. Still, it is told the
+ * moment to draw (seek t → frame(t)); playing, the line it plays on, and it draws its own frames from it, on the
+ * project's frame grid (studio/server/bridge.js `play`): no message a frame, so a busy editor does not hold the picture.
  */
 function PagePreview({ file, sources, onClose, onPlace }: SourcePreviewProps) {
   const t = useT();
   const rootRef = React.useRef<HTMLDivElement>(null);
   const frameRef = React.useRef<HTMLIFrameElement>(null);
   const boxRef = React.useRef<HTMLDivElement>(null);
-  const clockRef = React.useRef({ base: 0, at: 0 });
   const seq = React.useRef(0);
   const surface = sources.pageSurface?.(file) ?? null;
   const origin = React.useMemo(() => {
@@ -297,25 +302,60 @@ function PagePreview({ file, sources, onClose, onPlace }: SourcePreviewProps) {
   const [playing, setPlaying] = React.useState(false);
   const [time, setTime] = React.useState(0);
   const [scale, setScale] = React.useState(1);
+  /* playing draws each frame of the project's rate, as the film would draw the page, none between */
+  const fps = exactRate(useTimecodeFps());
+  const fpsRef = React.useRef(fps);
+  fpsRef.current = fps;
 
-  const draw = React.useCallback((at: number) => {
+  const post = React.useCallback((message: object) => {
     if (!origin) return;
-    frameRef.current?.contentWindow?.postMessage({ source: 'openfilm-studio', type: 'seek', seq: ++seq.current, t: Math.max(0, at) }, origin);
+    frameRef.current?.contentWindow?.postMessage({ source: 'openfilm-studio', ...message }, origin);
   }, [origin]);
+  /* the picture at t: at the very end of a page with a duration its last frame (it draws below its duration) */
+  const end = size?.duration ? size.duration - 1e-3 : Infinity;
+  const draw = React.useCallback((at: number) => {
+    post({ type: 'seek', seq: ++seq.current, t: Math.max(0, Math.min(at, end)) });
+  }, [post, end]);
+  /*
+   * Playing: the line the page plays on (null while still), on this page's clock. The page's clock starts elsewhere
+   * (another document, another process), so it is told the line by how far its clock is from this one, read with a
+   * few pings and taken from the one answered soonest (the time a message takes is the error, a fraction of a
+   * millisecond).
+   */
+  const line = React.useRef<Anchor | null>(null);
+  const clock = React.useRef<{ offset: number; rtt: number } | null>(null);
+  const tellPlay = React.useCallback(() => {
+    const a = line.current;
+    if (!a) return;
+    post({ type: 'play', t: a.t, at: a.at + (clock.current?.offset ?? 0), rate: a.rate, fps: fpsRef.current });
+  }, [post]);
 
   React.useEffect(() => {
     const onMessage = (event: MessageEvent) => {
-      const data = event.data as { source?: unknown; type?: unknown; duration?: unknown; width?: unknown; height?: unknown } | null;
+      const data = event.data as {
+        source?: unknown; type?: unknown; duration?: unknown; width?: unknown; height?: unknown; origin?: unknown; ping?: unknown; now?: unknown;
+      } | null;
       if (event.source !== frameRef.current?.contentWindow || event.origin !== origin || data?.source !== 'openfilm-film') return;
       if (data.type === 'error') { setFailed(true); return; }
+      if (data.type === 'clock') {
+        const rtt = performance.now() - Number(data.ping);
+        if (!(rtt >= 0) || (clock.current && clock.current.rtt <= rtt)) return;
+        clock.current = { offset: Number(data.now) - (Number(data.ping) + rtt / 2), rtt };
+        /* playing on it: told the line again, on its clock as now read */
+        tellPlay();
+        return;
+      }
       if (data.type !== 'ready') return;
       const num = (v: unknown, fallback: number) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : fallback);
       setSize({ w: num(data.width, 1920), h: num(data.height, 1080), duration: num(data.duration, 0) });
+      /* where its clock is: first by where each clock started, then by pings */
+      clock.current = Number(data.origin) > 0 ? { offset: performance.timeOrigin - Number(data.origin), rtt: Infinity } : null;
+      for (let i = 0; i < CLOCK_PINGS; i++) setTimeout(() => post({ type: 'clock', ping: performance.now() }), 40 * i);
       draw(0);
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [draw, origin]);
+  }, [draw, origin, post, tellPlay]);
 
   React.useEffect(() => {
     const box = boxRef.current;
@@ -335,10 +375,22 @@ function PagePreview({ file, sources, onClose, onPlace }: SourcePreviewProps) {
   const play = React.useCallback(() => {
     if (!size) return;
     const from = time >= duration - 0.05 ? 0 : time;
-    clockRef.current = { base: from, at: performance.now() };
+    line.current = { t: from, at: performance.now(), rate: 1 };
+    tellPlay();
     setPlaying(true);
-  }, [time, duration, size]);
-  const pause = React.useCallback(() => setPlaying(false), []);
+  }, [time, duration, size, tellPlay]);
+  /* still at `at` (a pause, the end, a scrub): the page stops playing and draws that moment */
+  const still = React.useCallback((at: number) => {
+    line.current = null;
+    setPlaying(false);
+    setTime(at);
+    draw(at);
+  }, [draw]);
+  /* stopped on the frame being shown: the timecode, the picture and a mark all mean that frame */
+  const pause = React.useCallback(() => {
+    const a = line.current;
+    if (a) still(Math.min(duration, snapToFrame(anchorTime(a, performance.now()) * 1000) / 1000));
+  }, [duration, still]);
   /* picked to be seen: it plays from the start once the page is ready (once: a pause stays a pause) */
   const started = React.useRef(false);
   React.useEffect(() => {
@@ -348,20 +400,21 @@ function PagePreview({ file, sources, onClose, onPlace }: SourcePreviewProps) {
   }, [size, play]);
   const toggle = React.useCallback(() => (playing ? pause() : play()), [playing, play, pause]);
 
+  /* the page draws itself while it plays; the timecode and the scrub line follow its line here, to its end */
   React.useEffect(() => {
     if (!playing) return;
     let raf = 0;
     const step = () => {
-      const now = clockRef.current.base + (performance.now() - clockRef.current.at) / 1000;
-      const at = Math.min(now, duration);
+      const a = line.current;
+      if (!a) return;
+      const at = Math.min(anchorTime(a, performance.now()), duration);
+      if (at >= duration) { still(duration); return; }
       setTime(at);
-      draw(at);
-      if (at >= duration) { setPlaying(false); return; }
       raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [playing, duration, draw]);
+  }, [playing, duration, still]);
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -395,7 +448,7 @@ function PagePreview({ file, sources, onClose, onPlace }: SourcePreviewProps) {
         duration={duration}
         playing={playing}
         onToggle={toggle}
-        onSeek={(v) => { setPlaying(false); setTime(v); draw(v); }}
+        onSeek={still}
         disabled={!size}
         marks={marks}
         onFullscreen={() => toggleFullscreen(rootRef.current)}
