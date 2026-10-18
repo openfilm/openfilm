@@ -38,6 +38,7 @@ import { exampleFile, exampleFolder, listExamples } from './examples.mjs';
 import { pickFiles, pickFolder } from './folder-picker.mjs';
 import { readPrefs, writePrefs } from './prefs.mjs';
 import { ensureProxies } from './proxies.mjs';
+import { ensurePreviews, knownLate } from './preview-cache.mjs';
 import { npmOpenfilm, olderThanThis } from '../client.mjs';
 import { writeAtomic } from './atomic.mjs';
 import { createWatchers } from './watch.mjs';
@@ -661,6 +662,19 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (rest === 'files/still' && req.method === 'POST') {
       const { path: from, ms } = /** @type {{ path?: string, ms?: number }} */ (await readJson(req));
       return json(res, 200, { path: await freezeFrame(project.path, String(from ?? ''), Number(ms)) });
+    }
+    /* renders of the stretches the preview played late (preview-cache.mjs), asked for when not made yet: each one's
+       name and state, at the proxies' size */
+    if (rest === 'preview-cache' && (req.method === 'POST' || req.method === 'GET')) {
+      /* GET: the stretches known to play late (from an earlier session) and theirs */
+      const { ranges, fps } = /** @type {{ ranges?: unknown, fps?: unknown }} */ (req.method === 'GET'
+        ? { ranges: knownLate(project.path), fps: url.searchParams.get('fps') }
+        : await readJson(req));
+      const rate = Number(fps);
+      const list = Array.isArray(ranges) ? ranges.filter((r) => Array.isArray(r) && r.length === 2 && r.every(Number.isFinite) && r[1] > r[0] && r[0] >= 0).slice(0, 50) : [];
+      if (!(rate > 0 && rate <= 240)) throw new HttpError(400, 'fps: a frame rate');
+      const { proxies } = readPrefs();
+      return json(res, 200, { late: list, ranges: list.length ? ensurePreviews(project.path, /** @type {[number, number][]} */ (list), rate, proxies.height) : [] });
     }
     if (rest === 'files') {
       const at = url.searchParams.get('path') ?? '';

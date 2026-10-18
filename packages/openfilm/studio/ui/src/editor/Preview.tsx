@@ -33,6 +33,8 @@ export type PreviewHandle = {
   seek(t: number): void;
   /** Play on this line (the player's, on this page's clock): the film draws its own frames from it until `seek`. */
   play?(anchor: Anchor): void;
+  /** Stretches rendered to play in place of the film while it plays (studio/server/preview-cache.mjs); [] none. */
+  renders?(list: PreviewRender[]): void;
   update(film: Film, head?: string): void;
   preview(clip: string, overrides: unknown[] | null): void;
   pick(x: number, y: number): Promise<Target | null>;
@@ -51,6 +53,15 @@ export type PreviewHandle = {
   /** Load the film again behind the picture (a page or a file it uses changed on disk). */
   reload?(): void;
 };
+
+/** A stretch of the film rendered into a video (film seconds [a, b)), played in its place while the film plays. */
+export type PreviewRender = { a: number; b: number; src: string };
+/**
+ * How playing went, about once a second over `ms` (studio/server/bridge.js `played`): refreshes the screen had while
+ * playing, the film's frames drawn, how many refreshes got no new frame (`late`), whether a render played, and per half
+ * second of film [its start, refreshes, late].
+ */
+export type PlayedReport = { frames: number; drawn: number; late: number; rendered: boolean; ms: number; spans: [number, number, number][] };
 
 /**
  * What the film's stage tells on its own: the words of an in-place text edit as they are typed, the edit ended
@@ -80,6 +91,8 @@ type Props = {
   onKey?(e: KeyboardEvent): void;
   /** The film could not be drawn (the message), or it is drawn again (null). */
   onError?(message: string | null): void;
+  /** How playing went, about once a second while it plays. */
+  onPlayed?(report: PlayedReport): void;
   children?: ReactNode;
 };
 
@@ -88,7 +101,7 @@ const CLOCK_PINGS = 5;
 /** How long the viewer keeps another size before the film is loaded again for it (ms): not at each step of a drag. */
 const RESCALE_MS = 600;
 
-export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folder, stage, time, fps, onInfo, onKey, onError, children }, ref) {
+export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folder, stage, time, fps, onInfo, onKey, onError, onPlayed, children }, ref) {
   const t = useT();
   const origin = new URL(folder).origin;
   const [frames, setFrames] = useState<Frame[]>([{ key: 1, ready: false }]);
@@ -123,6 +136,10 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
   failedRef.current = failed;
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
+  const onPlayedRef = useRef(onPlayed);
+  onPlayedRef.current = onPlayed;
+  /* the stretches rendered to play in the film's place: told to each load of the film once it is up */
+  const rendered = useRef<PreviewRender[]>([]);
   useEffect(() => { onErrorRef.current?.(failed); }, [failed]);
 
   const post = (key: number | undefined, message: object) => {
@@ -172,6 +189,10 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
     play(anchor) {
       line.current = { ...anchor };
       tellPlay(shownRef.current?.key);
+    },
+    renders(list) {
+      rendered.current = list;
+      for (const key of up.current) post(key, { type: 'renders', list });
     },
     update(film, head) {
       updates.current += 1;
@@ -245,6 +266,7 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
       if (m.type === 'ready') {
         onInfo(m as FilmInfo);
         up.current.add(key);
+        if (rendered.current.length) post(key, { type: 'renders', list: rendered.current });
         /* where its clock is: first by where each clock started, then by pings */
         if (Number(m.origin) > 0) clocks.current.set(key, { offset: performance.timeOrigin - Number(m.origin), rtt: Infinity });
         for (let i = 0; i < CLOCK_PINGS; i++) setTimeout(() => post(key, { type: 'clock', ping: performance.now() }), 40 * i);
@@ -253,6 +275,10 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
         /* behind the picture shown: its first picture is waited for whole (its videos loaded), as it replaces that one */
         const behind = shownRef.current != null && shownRef.current.key !== key;
         post(key, { type: 'seek', t: time(), seq: ++seq.current, ...(behind ? { behind: true } : {}) });
+      } else if (m.type === 'played') {
+        if (key === shownRef.current?.key) {
+          onPlayedRef.current?.({ frames: Number(m.frames), drawn: Number(m.drawn) || 0, late: Number(m.late), rendered: Boolean(m.rendered), ms: Number(m.ms), spans: Array.isArray(m.spans) ? m.spans : [] });
+        }
       } else if (m.type === 'clock') {
         const back = performance.now();
         const rtt = back - Number(m.ping);

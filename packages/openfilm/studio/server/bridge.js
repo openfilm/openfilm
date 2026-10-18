@@ -8,13 +8,16 @@
  *                                         seconds a second; the frames are drawn here, on the film's frame grid
  *            { type: 'clock', ping }      what this page's clock says now (to put the editor's moments on it)
  *            { type: 'update', film, head, seq }  film.html changed: change the film in place if it can be
+ *            { type: 'renders', list }    stretches rendered for the preview to play in their place: [{ a, b, src }]
  *            { type: 'preview', clip, overrides }   show a tweak on a page, not kept (null: stop showing)
  *            { type: 'pick', x, y, seq }          what is under this stage point
  *   film   → { source: 'openfilm-film', type: 'ready', duration, width, height, sounds, spans, origin }
  *            { type: 'seeked', t, seq }           the frame at t is on screen
  *            { type: 'clock', ping, now }         this page's clock (performance.now) when the ping came
- *            { type: 'played', frames, late, spans }   while playing, about once a second: frames drawn, frames the
- *                                         screen showed late, and per half second of film the share drawn late
+ *            { type: 'played', frames, drawn, late, rendered, ms, spans }   while playing, about once a second over
+ *                                         `ms`: the screen's refreshes, the film's frames drawn, the refreshes that got
+ *                                         no new frame, whether a render played, and per half second of film [its start,
+ *                                         refreshes, late]
  *            { type: 'updated', seq, inPlace, duration, sounds, spans }   (inPlace false: load the page again)
  *            { type: 'picked', seq, target }      (null: nothing there)
  *            { type: 'error', message }           the film or a page failed
@@ -93,7 +96,7 @@
   let refresh = 1000 / 60;
   let lastTick = 0;
   /* what the editor is told about how playing goes: frames drawn and late, and late frames per half second of film */
-  let tally = { frames: 0, late: 0, since: 0, spans: new Map() };
+  let tally = { frames: 0, drawn: 0, late: 0, since: 0, rendered: false, spans: new Map() };
   const requestFrame = () => { if (!raf) raf = requestAnimationFrame(tick); };
   const lineAt = (ms) => line.t + (Math.max(0, ms - line.at) / 1000) * line.rate;
   async function tick() {
@@ -113,6 +116,7 @@
     if (drawing || t === lastT) return;
     lastT = t;
     drawing = true;
+    tally.drawn += 1;
     try {
       const watch = editor()?.watch;
       const play = { rate: line.rate, now: Math.min(lineAt(now), end) };
@@ -128,6 +132,7 @@
   function count(t, late) {
     tally.frames += 1;
     tally.late += late;
+    if (editor()?.rendering?.()) tally.rendered = true;
     const half = Math.floor(t * 2) / 2;
     const span = tally.spans.get(half) ?? [0, 0];
     span[0] += 1 + late;
@@ -138,8 +143,8 @@
     if (now - tally.since >= 1000) say();
   }
   function say() {
-    if (tally.frames) post({ type: 'played', frames: tally.frames, late: tally.late, ms: Math.round(clock() - tally.since), spans: [...tally.spans].map(([t, [frames, late]]) => [t, frames, late]) });
-    tally = { frames: 0, late: 0, since: 0, spans: new Map() };
+    if (tally.frames) post({ type: 'played', frames: tally.frames, drawn: tally.drawn, late: tally.late, rendered: tally.rendered, ms: Math.round(clock() - tally.since), spans: [...tally.spans].map(([t, [frames, late]]) => [t, frames, late]) });
+    tally = { frames: 0, drawn: 0, late: 0, since: 0, rendered: false, spans: new Map() };
   }
   function stop() {
     if (!line) return;
@@ -176,6 +181,7 @@
       if (inPlace && line) lastT = null;
       else if (inPlace && !next) { next = { t: asked, seq: m.seq }; draw(); }
     }
+    if (m.type === 'renders') editor()?.renders?.(m.list);
     if (m.type === 'preview') editor()?.preview(m.clip, m.overrides);
     if (m.type === 'pick') post({ type: 'picked', seq: m.seq, target: editor()?.pick(m.x, m.y) ?? null });
   });

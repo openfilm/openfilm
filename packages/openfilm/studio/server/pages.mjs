@@ -29,6 +29,7 @@ import { readableLink } from '../../src/media-links.mjs';
 import { clipKind } from '../../src/film-doc.mjs';
 import { readPrefs } from './prefs.mjs';
 import { readyProxy } from './proxies.mjs';
+import { isPreviewKey, previewDir } from './preview-cache.mjs';
 import { soundOf } from './derived.mjs';
 
 const BRIDGE = readFileSync(new URL('./bridge.js', import.meta.url), 'utf8');
@@ -179,6 +180,13 @@ export async function startPages({ port, editorOrigin, secret, projects }) {
       if (file === undefined) { res.writeHead(404, headers).end('not found'); return; }
       if (!file) { res.writeHead(204, headers).end(); return; }
       if (!folderFiles(dirname(file), { headers: policy() })(req, res, `/${basename(file)}`, url.searchParams)) res.writeHead(403, headers).end();
+      return;
+    }
+    /* a stretch of the film rendered for the preview to play in its place (preview-cache.mjs): its cache, not the
+       project's files */
+    const render = /^\/__film\/preview\/([0-9a-f]+)\.mp4$/.exec(plain);
+    if (render && isPreviewKey(render[1])) {
+      if (!folderFiles(previewDir(entry.root), { headers: policy() })(req, res, `/${render[1]}.mp4`, url.searchParams)) res.writeHead(403, headers).end();
       return;
     }
     if (UNPLAYABLE.test(plain)) {

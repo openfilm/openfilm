@@ -250,12 +250,12 @@ function GeneralSection() {
 
 /**
  * How the preview plays heavy footage (studio/server/proxies.mjs): from a lighter copy made in the background, as
- * CapCut's proxies, and how tall that copy is; and whether pages draw at the viewer's size (lib/preview-prefs).
- * Exports always read the originals and draw at full size.
+ * CapCut's proxies, and how tall that copy is; whether pages draw at the viewer's size, and whether stretches that play
+ * late are rendered to play smoothly (lib/preview-prefs). Exports always read the originals and draw at full size.
  */
 function PlaybackGroup() {
   const t = useT();
-  const { fitPages } = usePreviewPrefs();
+  const { fitPages, renders } = usePreviewPrefs();
   const [prefs, setPrefs] = React.useState<StudioPrefs | null>(null);
   React.useEffect(() => { void api.prefs().then(setPrefs).catch(() => {}); }, []);
   if (!prefs) return null;
@@ -287,7 +287,12 @@ function PlaybackGroup() {
       <SettingsItem
         title={t('settings.playback.fitPages')}
         description={t('settings.playback.fitPagesHint')}
-        control={<SettingsSwitch checked={fitPages} onChange={writePreviewPref} label={t('settings.playback.fitPages')} />}
+        control={<SettingsSwitch checked={fitPages} onChange={(on) => writePreviewPref('fitPages', on)} label={t('settings.playback.fitPages')} />}
+      />
+      <SettingsItem
+        title={t('settings.playback.renders')}
+        description={t('settings.playback.rendersHint')}
+        control={<SettingsSwitch checked={renders} onChange={(on) => writePreviewPref('renders', on)} label={t('settings.playback.renders')} />}
       />
     </SettingsGroup>
   );
@@ -438,8 +443,9 @@ function AppAboutGroup() {
 }
 
 /**
- * Diagnostics (DiagnosticsGroup), for when something does not work; in the app, what its chat shows of each turn: what
- * it changed in the files, and its full log (lib/host.ts `developer`).
+ * Diagnostics (DiagnosticsGroup), for when something does not work; how playing goes, in the viewer's corner
+ * (lib/preview-prefs `stats`); in the app, what its chat shows of each turn: what it changed in the files, and its
+ * full log (lib/host.ts `developer`).
  */
 function DeveloperSection() {
   const t = useT();
@@ -454,9 +460,17 @@ function DeveloperSection() {
     setPrefs((was) => (was ? { ...was, ...next } : was));
     void developer?.set(next);
   };
+  const { stats } = usePreviewPrefs();
   return (
     <SettingsPage note={t('settings.developer.intro')}>
       <DiagnosticsGroup />
+      <SettingsGroup title={t('settings.developer.playbackGroup')}>
+        <SettingsItem
+          title={t('settings.developer.playbackStats')}
+          description={t('settings.developer.playbackStatsHint')}
+          control={<SettingsSwitch checked={stats} onChange={(on) => writePreviewPref('stats', on)} label={t('settings.developer.playbackStats')} />}
+        />
+      </SettingsGroup>
       {developer ? (
         <SettingsGroup title={t('settings.developer.group')} footnote={t('settings.developer.where')}>
           {/* drawn once the app has said whether each is on: drawn off first, a switch slid on each time the page opened */}

@@ -13,7 +13,8 @@ import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type L
 import { useT } from '@/i18n';
 import { useFilm, type Step } from '@/editor/use-film';
 import { Player } from '@/editor/player';
-import { Preview, type FilmInfo, type PreviewHandle } from '@/editor/Preview';
+import { Preview, type FilmInfo, type PlayedReport, type PreviewHandle } from '@/editor/Preview';
+import { usePreviewRenders } from '@/editor/use-preview-renders';
 import { filmShape, type MediaFacts } from '@/lib/film-shape';
 import { changesPicture } from '@/lib/picture-files';
 import type { ReplaceFamily } from '@/lib/clip-replace';
@@ -108,6 +109,7 @@ import type { MaskSession } from '@/lib/stage-mask';
 import type { MaskShape } from '@/lib/clip-mask';
 import { nextOverrides, overrideOf, type OverrideGeometry } from '@/lib/film-overrides';
 import { compactScale, type MgTransform, type NodeOverride, type OverridePivot, type StageElement, type StageElementStyle, type StageGeometry } from '@/lib/stage-types';
+import { usePreviewPrefs } from '@/lib/preview-prefs';
 import { isTypingTarget } from './typing-target';
 
 const PANE = 'relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[7px]';
@@ -581,6 +583,15 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     ...(rawListing?.files ?? []).filter((f) => f.kind === 'video').map((f) => facts.get(f.path)?.fps),
   ]), [timelineTracks, rawListing, facts]);
   const projectFps = settings?.fps ?? footageRate;
+  /* stretches that play late, rendered in the background to play smoothly (editor/use-preview-renders) */
+  const { renders: rendersOn, stats: statsOn } = usePreviewPrefs();
+  const previewRenders = usePreviewRenders({ projectId, folder, fps: exactRate(projectFps), playing, on: rendersOn, film: film.film, files: filesTick, preview });
+  /* Settings → Developer: how playing goes, in the viewer's corner, said about once a second */
+  const [played, setPlayed] = React.useState<PlayedReport | null>(null);
+  const onPlayed = React.useCallback((report: PlayedReport) => {
+    previewRenders.onPlayed(report);
+    if (statsOn) setPlayed(report);
+  }, [previewRenders, statsOn]);
   React.useEffect(() => { setTimecodeFps(projectFps); }, [projectFps]);
   React.useEffect(() => () => setTimecodeFps(30), []);
   const frameRate = React.useMemo(() => ({ fps: projectFps, fromFootage: settings?.fps == null, onChange: (fps: number) => patchSettings({ fps }) }), [projectFps, settings, patchSettings]);
@@ -2746,7 +2757,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                           height: `${(frameBox.inner.h / frameBox.h) * 100}%`,
                         }}>
                           <Preview ref={preview} folder={folder} stage={shownStage} time={() => player.current.time()} fps={exactRate(projectFps)}
-                            onInfo={onInfo} onKey={previewKey} onError={setPreviewError}>
+                            onInfo={onInfo} onKey={previewKey} onError={setPreviewError} onPlayed={onPlayed}>
                             {!fullscreen ? (
                               <FilmStageSelect
                                 previewRef={preview}
@@ -2785,6 +2796,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                         </div>
                         {/* a clip under the playhead whose file is gone plays as nothing (src/timeline.mjs, film-missing):
                             said here, over the picture, with what to do */}
+                        {statsOn && playing && played ? (
+                          <div data-playback-stats="" className="pointer-events-none absolute right-2 top-2 z-10 rounded-[4px] bg-black/75 px-2 py-1 font-mono text-[11px] tabular-nums text-white">
+                            {t('viewer.stats').replace('{fps}', String(Math.round((played.drawn * 1000) / Math.max(1, played.ms)))).replace('{late}', String(Math.round((played.late * 1000) / Math.max(1, played.ms))))}
+                            {played.rendered ? ` · ${t('viewer.statsRendered')}` : ''}
+                          </div>
+                        ) : null}
                         {missingHere && !fullscreen ? (
                           <div data-preview-missing="" className="pointer-events-none absolute left-2 top-2 z-10 max-w-[80%] truncate rounded-[4px] bg-black/75 px-2 py-1 text-[11px] text-white">
                             {t('project.previewMissing').replace('{file}', missingHere)}
@@ -2951,6 +2968,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     timeMs={timeMs}
                     clock={playing ? clock : null}
                     playing={playing}
+                    previewBar={previewRenders.bar}
                     onSeek={(ms) => seek(ms)}
                     onScrubPreview={scrubPreview}
                     onScrubCommit={scrubCommit}
