@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CLIENT_CAPABILITIES, CODEX_UTF8_CMD, agentShell, allowOption, codexDeveloperInstructions, codexLaunchEnv, legacyOptions, powerShellScript, readAgentStatus } from './agents.mjs';
+import { CLIENT_CAPABILITIES, CODEX_UTF8_CMD, agentShell, allowOption, codexDeveloperInstructions, codexLaunchEnv, distinctOptions, legacyOptions, powerShellScript, readAgentStatus } from './agents.mjs';
 
 test('an agent that asks: yes for good where it offers that, else yes this once; nothing to say yes with is null', () => {
   const options = [
@@ -22,6 +22,17 @@ test("the older model and mode lists (Gemini CLI's) read as the config options t
   assert.deepEqual(options.map((o) => [o.id, o.category, o.currentValue]), [['model', 'model', 'auto'], ['mode', 'mode', 'yolo']]);
   assert.deepEqual(options[0].options[1], { value: 'pro', name: 'Pro', description: 'slow' });
   assert.deepEqual(legacyOptions({}), []);
+});
+
+test('a choice an agent lists twice shows once in the menu', () => {
+  /* GitHub Copilot 1.0.98 lists its model "auto" twice */
+  const [model, mode] = distinctOptions([
+    { id: 'model', currentValue: 'auto', options: [{ value: 'auto', name: 'Auto' }, { value: 'auto', name: 'Auto', description: 'Auto' }, { value: 'gpt', name: 'GPT' }] },
+    { id: 'mode', currentValue: 'agent', options: [{ value: 'agent', name: 'Agent' }, { value: 'plan', name: 'Plan' }] },
+  ]);
+  assert.deepEqual(model.options, [{ value: 'auto', name: 'Auto' }, { value: 'gpt', name: 'GPT' }]);
+  assert.deepEqual(mode.options.map((o) => o.value), ['agent', 'plan']);
+  assert.equal(distinctOptions(null), null);
 });
 
 test('whose sign-in it is, as each program says it, never a key', () => {

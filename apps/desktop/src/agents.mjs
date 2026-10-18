@@ -663,6 +663,19 @@ export function legacyOptions(session) {
 }
 
 /**
+ * Config options with each choice once: an agent may list the same value twice (GitHub Copilot's model list has
+ * "Auto" twice), which the menu would show twice, both ticked. The first of each is kept; anything else as it was.
+ */
+export function distinctOptions(configOptions) {
+  if (!Array.isArray(configOptions)) return configOptions;
+  return configOptions.map((o) => {
+    if (!Array.isArray(o?.options)) return o;
+    const seen = new Set();
+    return { ...o, options: o.options.filter((c) => !c || !('value' in c) || (!seen.has(c.value) && seen.add(c.value))) };
+  });
+}
+
+/**
  * One conversation: one ACP session on one adapter process.
  *
  * `onUpdate(update)` hears each session/update as it comes; `onPermission(params)` answers an optionId, or null to
@@ -765,7 +778,8 @@ export class AgentSession {
         return answers ? { action: 'accept', content: formContent(questions, answers) } : { action: 'decline' };
       })
       .onNotification(acp.methods.client.session.update, (ctx) => {
-        if (!this.replaying) this.opts.onUpdate?.(ctx.params.update);
+        const update = ctx.params.update;
+        if (!this.replaying) this.opts.onUpdate?.(update?.configOptions ? { ...update, configOptions: distinctOptions(update.configOptions) } : update);
       })
       .connect(stream);
 
@@ -808,7 +822,7 @@ export class AgentSession {
       agentInfo: init.agentInfo ?? null,
       models: session.models ?? null,
       modes: session.modes ?? null,
-      configOptions: session.configOptions ?? (this.legacy ? legacyOptions(session) : null),
+      configOptions: distinctOptions(session.configOptions ?? (this.legacy ? legacyOptions(session) : null)),
       /* what a prompt may carry besides text (pictures, for one): the agent says so as it shakes hands */
       promptCapabilities: caps.promptCapabilities ?? null,
       /* a message sent while it works joins the turn it is in (steer), as in its own chat */
@@ -883,7 +897,7 @@ export class AgentSession {
     if (this.legacy && configId === 'model') return this.conn.agent.request('session/set_model', { sessionId: this.sessionId, modelId: value });
     const r = await this.conn.agent.request(acp.methods.agent.session.setConfigOption, { sessionId: this.sessionId, configId, value });
     this.noteModel(r?.configOptions);
-    return r;
+    return r?.configOptions ? { ...r, configOptions: distinctOptions(r.configOptions) } : r;
   }
 
   /** The model the session is on (its `model` option's value): the app's own agent names the service a failure was on by it. */
