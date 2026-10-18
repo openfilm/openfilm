@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckSquare, Download, FolderInput, FolderOpen, FolderSearch, ListX, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { CheckSquare, Download, FolderInput, FolderOpen, FolderSearch, Image, ImageOff, ImagePlus, ListX, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import { Tooltip } from './Tooltip';
 import { useT } from '@/i18n';
@@ -7,8 +7,9 @@ import { useT } from '@/i18n';
 /**
  * A project's "…" menu.
  *
- * Each item shows only when its callback is passed: the editor's top bar passes Export and Reveal in Finder; a card in
- * the Projects popover passes Open / Rename / Select / Move to folder / Delete, or Locate… and Remove from list when the
+ * Each item shows only when its callback is passed: the editor's top bar passes the current frame as the cover, Export
+ * and Reveal in Finder; a card in the Projects popover passes Open / Rename / Select / Move to folder / Change cover /
+ * Restore cover / Reveal / Delete, or Locate… and Remove from list when the
  * project's folder is gone. The order is fixed here, not by the props, so the same menu looks the same wherever it
  * appears. It is a ContextMenu hanging from the button: it flips above it near the bottom of the window, and Esc
  * closes only the menu.
@@ -18,6 +19,9 @@ export function ProjectMenu({
   onRename,
   onSelect,
   onMoveToFolder,
+  onChangeCover,
+  onRestoreCover,
+  onCoverFromFrame,
   onExport,
   onReveal,
   onLocate,
@@ -33,6 +37,12 @@ export function ProjectMenu({
   onSelect?: () => void;
   /** Pick a folder of the Projects list to put it in. */
   onMoveToFolder?: () => void;
+  /** Pick a picture for the project's card. */
+  onChangeCover?: () => void;
+  /** The project has a cover of its own: back to the film's poster. */
+  onRestoreCover?: () => void;
+  /** The film as the viewer shows it now made the project's cover. */
+  onCoverFromFrame?: () => void;
   onExport?: () => void;
   /** Show the project's folder in Finder / Explorer. */
   onReveal?: () => void;
@@ -63,6 +73,9 @@ export function ProjectMenu({
   add('rename', <Pencil size={15} />, t('projectMenu.rename'), onRename);
   add('select', <CheckSquare size={15} />, t('library.select'), onSelect);
   add('move', <FolderInput size={15} />, t('projects.moveToFolder'), onMoveToFolder);
+  add('cover', <ImagePlus size={15} />, t('projects.changeCover'), onChangeCover);
+  add('coverFrame', <Image size={15} />, t('projects.coverFromFrame'), onCoverFromFrame);
+  add('coverReset', <ImageOff size={15} />, t('projects.restoreCover'), onRestoreCover);
   add('export', <Download size={15} />, t('projectMenu.export'), onExport);
   add('reveal', <FolderOpen size={15} />, t('projects.revealFolder'), onReveal);
   add('locate', <FolderSearch size={15} />, t('projects.locate'), onLocate);

@@ -45,6 +45,7 @@ import { createWatchers } from './watch.mjs';
 import { installedFonts } from './fonts.mjs';
 import { projectFonts, resolveIn } from './project-fonts.mjs';
 import { FILM_PAGE, PageFrameError, closePageFrames, filmPoster, pageFacts, pageFrame, warmFilmPoster } from './pageframes.mjs';
+import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCover, setCoverFromFile } from './cover.mjs';
 import { SavedError, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
 import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listSkills, skillOrigins } from '../../src/skills.mjs';
@@ -805,8 +806,40 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       else openFile(file);
       return json(res, 200, {});
     }
-    /* the film's middle frame: the project's card in the projects list */
+    /* the project's own cover (cover.mjs): PUT a picture's bytes; POST `{ path }`, a picture of the project, or `{ ms }`,
+       the film at that moment; DELETE, none of its own (the film's poster again). Answers when it was set (null: none) */
+    if (rest === 'cover') {
+      const set = (/** @type {{ at: number } | null} */ cover) => json(res, 200, { cover: cover?.at ?? null });
+      try {
+        if (req.method === 'PUT') return set(await setCover(project.path, await readCoverBody(req)));
+        if (req.method === 'POST') {
+          const { path: rel, ms } = /** @type {{ path?: unknown, ms?: unknown }} */ (await readJson(req));
+          if (typeof rel === 'string' && rel) return set(await setCoverFromFile(project.path, readable(project.path, rel)));
+          if (typeof ms === 'number' && Number.isFinite(ms) && ms >= 0) {
+            const jpeg = await pageFrame(project.path, pages.folderUrl(project), FILM_PAGE, ms, COVER_FRAME_W).catch((e) => {
+              throw new HttpError(e instanceof PageFrameError ? 404 : 422, String(e?.message ?? e));
+            });
+            return set(await setCover(project.path, jpeg));
+          }
+          throw new HttpError(400, 'a picture of the project (path) or a moment of the film (ms)');
+        }
+        if (req.method === 'DELETE') {
+          await clearCover(project.path);
+          return set(null);
+        }
+      } catch (e) {
+        if (e instanceof CoverError) throw new HttpError(e.status, e.message);
+        throw e;
+      }
+    }
+    /* the project's card in the projects list: its own cover, else the film's middle frame */
     if (rest === 'poster' && req.method === 'GET') {
+      const cover = await readCover(project.path);
+      if (cover) {
+        const picture = await readFile(cover.path);
+        res.writeHead(200, { 'content-type': cover.type, 'cache-control': 'private, max-age=60', 'content-length': picture.length });
+        return res.end(picture);
+      }
       /* a film with nothing in it yet has no picture to show (its card shows its own face, not a black frame) */
       const { doc } = await readProjectFilm(project.path);
       if (!doc?.tracks.some((t) => t.clips.length)) throw new HttpError(404, 'the film is empty');

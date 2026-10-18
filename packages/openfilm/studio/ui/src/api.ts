@@ -11,7 +11,8 @@ export interface StudioVersion { version: string; latest: string | null; newer: 
   /** the update Studio runs from the top bar (lib/web-update), or one that failed */
   update?: { status: 'updating' | 'failed'; version: string; error?: string } }
 
-export type Project = { id: string; path: string; name: string; openedAt: number; missing: boolean; working?: boolean };
+/** `cover`: when the person set a cover of its own (studio/server/cover.mjs), absent when it has none. */
+export type Project = { id: string; path: string; name: string; openedAt: number; missing: boolean; working?: boolean; cover?: number };
 export type Clip = { src: string; id: string; at?: number; time?: [number] | [number, number];
   box?: { x: number; y: number; w?: number; h?: number; r?: number }; volume?: number; speed?: number; overrides?: unknown[];
   /** a page that sets no size of its own: the px it is laid out at (the stage's without it) */
@@ -142,6 +143,11 @@ export const api = {
   ),
   /** a video's frame (`ms` of its own time) made a still beside it; answers its path */
   freezeFrame: (id: string, path: string, ms: number) => call<{ path: string }>(`${p(id)}/files/still`, { method: 'POST', json: { path, ms } }).then((r) => r.path),
+  /** The project's own cover for its card (studio/server/cover.mjs): a picture from this computer, a picture of the project,
+      the film at `ms`, or none (null: its film's poster again). Each answers when it was set. */
+  setCover: (id: string, from: { file: Blob } | { path: string } | { ms: number }) => call<{ cover: number | null }>(`${p(id)}/cover`,
+    'file' in from ? { method: 'PUT', body: from.file, headers: { 'content-type': 'application/octet-stream' } } : { method: 'POST', json: from }).then((r) => r.cover),
+  clearCover: (id: string) => call<{ cover: null }>(`${p(id)}/cover`, { method: 'DELETE' }).then(() => null),
   answerAsk: (askId: string, allow: boolean) => call<{ answered: boolean }>(`get/asks/${encodeURIComponent(askId)}`, { method: 'POST', json: { allow } }),
   /** the provider's own page for its balance, opened in the person's browser */
   openBilling: (providerId: string) => call<Record<string, never>>(`providers/${encodeURIComponent(providerId)}/billing`, { method: 'POST' }),

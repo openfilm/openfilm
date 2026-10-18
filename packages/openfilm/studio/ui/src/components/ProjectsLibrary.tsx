@@ -27,11 +27,12 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { ProjectsView, type LibraryProject } from './ProjectsView';
 import { FolderBrowserDialog, GitHubDialog } from './ProjectSources';
 import { ExamplesGallery, TitleSwitch } from './ExamplesGallery';
+import { ProjectCoverContext, posterUrl, useProjectCover } from './ProjectCover';
 
 
-/* each card's picture: the film's middle frame, drawn by Studio (cached until film.html changes); none for a project
-   whose folder is gone (its card shows its color) */
-const posterOf = (p: LibraryProject) => (p.missing ? undefined : `/api/projects/${encodeURIComponent(p.id)}/poster`);
+/* each card's picture: its own cover, else the film's middle frame, drawn by Studio (cached until film.html changes);
+   none for a project whose folder is gone (its card shows its color) */
+const posterOf = (p: LibraryProject) => (p.missing ? undefined : posterUrl(p));
 
 function useProjectLibrary(open: boolean) {
   const t = useT();
@@ -64,7 +65,20 @@ function useProjectLibrary(open: boolean) {
 
   const reloadFolders = React.useCallback(() => {
     void folderApi.list().then(setFolders, () => {});
-    void api.projects().then((list) => setProjects((cur) => list.map((p) => ({ ...p, poster: cur.find((c) => c.id === p.id)?.poster ?? posterOf(p) }))), () => {});
+    /* a card keeps the picture it shows, unless its cover changed meanwhile (from the editor, or another window) */
+    void api.projects().then((list) => setProjects((cur) => list.map((p) => {
+      const shown = cur.find((c) => c.id === p.id);
+      return { ...p, poster: shown && shown.cover === p.cover ? shown.poster ?? posterOf(p) : posterOf(p) };
+    })), () => {});
+  }, []);
+
+  /** A project's cover set or taken off (null): its card asks for its picture again. */
+  const coverChanged = React.useCallback((id: string, cover: number | null) => {
+    setProjects((list) => list.map((p) => {
+      if (p.id !== id) return p;
+      const next = { ...p, cover: cover ?? undefined };
+      return { ...next, poster: posterOf(next) };
+    }));
   }, []);
 
   /**
@@ -157,7 +171,7 @@ function useProjectLibrary(open: boolean) {
     }
   }
 
-  return { projects, folders, loaded, error, flash, reload: reloadFolders, agentRunning, workingIn, deleteProjects, renameProject, createFolder, renameFolder, moveProject, deleteFolder };
+  return { projects, folders, loaded, error, flash, reload: reloadFolders, agentRunning, workingIn, deleteProjects, renameProject, createFolder, renameFolder, moveProject, deleteFolder, coverChanged };
 }
 
 /** The launcher's two views: the person's projects, and the examples to start from (ExamplesGallery). */
@@ -192,6 +206,8 @@ export function ProjectsPopover({
 }) {
   const t = useT();
   const lib = useProjectLibrary(open);
+  const { flash } = lib;
+  const cover = useProjectCover(lib.coverChanged, React.useCallback(() => flash(t('projects.coverFailed')), [flash, t]));
   /* each time it opens: the projects (the examples are a switch away) */
   const [view, setView] = React.useState<LauncherView>('projects');
   React.useEffect(() => { if (open) setView('projects'); }, [open]);
@@ -345,6 +361,7 @@ export function ProjectsPopover({
         onDrop={onDrop}
       >
         <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+          {cover.picker}
           {view === 'examples' ? (
             <ExamplesGallery
               mode="start"
@@ -353,6 +370,7 @@ export function ProjectsPopover({
               onStart={(example) => setGithub({ url: example.url, start: true, title: example.title })}
             />
           ) : lib.loaded ? (
+            <ProjectCoverContext.Provider value={cover.actions}>
             <ProjectsView
               heading={<LauncherSwitch view={view} onView={showView} />}
               projects={lib.projects}
@@ -382,6 +400,7 @@ export function ProjectsPopover({
               onMoveToFolder={lib.moveProject}
               onClose={onClose}
             />
+            </ProjectCoverContext.Provider>
           ) : (
             <div className="flex flex-1 items-center justify-center text-[var(--text-muted)]">
               <Loader2 size={18} className="animate-spin" />

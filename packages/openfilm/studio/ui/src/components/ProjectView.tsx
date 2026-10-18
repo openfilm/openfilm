@@ -1275,6 +1275,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       onMoveCheck={onMoveCheck}
       onDelete={onDelete}
       onExtractAudio={onExtractAudio}
+      onSetCover={onSetCover}
       onNewFolder={onNewFolder}
       onDropClips={dropClipsForAssets}
       onReveal={reveal}
@@ -2155,6 +2156,10 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const onExtractAudio = React.useCallback(async (path: string) => mediaResult(await fetch(`${projectApi}/files/audio`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }),
   })), [projectApi]);
+  /* a picture of the project: the project's card in the projects list */
+  const onSetCover = React.useCallback((path: string) => {
+    void api.setCover(projectId, { path }).then(() => toast.show(t('projects.coverSet')), () => toast.showError(t('projects.coverFailed')));
+  }, [projectId, toast, t]);
   const onNewFolder = React.useCallback(async (path: string) => mediaResult(await fetch(`${projectApi}/folders`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }),
   })), [projectApi]);
@@ -2635,6 +2640,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 hostPanel={hostPanel ? { label: hostPanel.label, open: hostPanel.open, onChange: hostPanel.setOpen } : null} />
               <ProjectHistoryButton open={historyOpen} onClick={openHistory} className={TOP_BTN} />
               <ProjectMenu className={TOP_BTN}
+                /* the film at the playhead, drawn by Studio as the projects list will show it */
+                onCoverFromFrame={() => {
+                  if (previewError || totalMs <= 0) { toast.show(t('project.filmNotReady')); return; }
+                  void api.setCover(projectId, { ms: Math.max(0, Math.min(totalMs - 1, timeRef.current)) })
+                    .then(() => toast.show(t('projects.coverSet')), () => toast.showError(t('projects.coverFailed')));
+                }}
                 onExport={() => {
                   if (previewError) toast.showError(`${t('project.filmCannotExport')} ${previewError}`);
                   else if (totalMs > 0) setExportOpen(true);

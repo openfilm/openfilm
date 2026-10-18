@@ -29,6 +29,7 @@ import {
   FolderInput,
   FolderSymlink,
   HardDriveDownload,
+  ImagePlus,
   Link2,
   Unlink,
   FolderOpen,
@@ -145,6 +146,8 @@ export interface MediaPoolProps {
   onDelete: (path: string) => Promise<MediaResult>;
   /** A video's sound made a file of its own beside it (it shows up in the listing like any new file). */
   onExtractAudio?: (path: string) => Promise<MediaResult>;
+  /** A picture of the project made its cover in the projects list. */
+  onSetCover?: (path: string) => void;
   /** Make a folder (project-relative path, its name already made safe). */
   onNewFolder: (path: string) => Promise<MediaResult>;
   /** Before deleting files, take their clips off the timeline. A string is the reason it could not. */
@@ -204,6 +207,7 @@ export function MediaPool({
   onMoveCheck,
   onDelete,
   onExtractAudio,
+  onSetCover,
   onNewFolder,
   onDropClips,
   onReveal,
@@ -571,6 +575,7 @@ export function MediaPool({
       id: 'extract-audio', label: t('assets.extractAudio'), icon: <AudioLines size={14} />,
       onSelect: () => { void onExtractAudio(file.path).then((r) => { if (r !== 'ok') setNotice(t('assets.extractAudioFailed')); }); },
     }] : []),
+    ...(file.kind === 'image' && onSetCover ? [{ id: 'cover', label: t('projects.setAsCover'), icon: <ImagePlus size={14} />, onSelect: () => onSetCover(file.path) }] : []),
     /* a page of the project is named in other pages' code (not renamed here); one of Saved is its own folder */
     ...(file.kind === 'mg' && !file.bundle ? [] : [{ id: 'rename', label: t('assets.rename'), icon: <Pencil size={14} />, onSelect: () => setRenaming(file.path) }]),
     moveEntry([file.path]),

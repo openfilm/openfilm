@@ -35,6 +35,7 @@ import type { Project } from '@/api';
 import { folderCounts, folderPosters, folderTrail, parentOf, visibleProjects, type LibrarySort, type ProjectFolder } from '@/lib/project-folders';
 import { ContextMenu } from './ContextMenu';
 import { ProjectMenu } from './ProjectMenu';
+import { ProjectCoverContext } from './ProjectCover';
 import { Tooltip } from './Tooltip';
 
 /**
@@ -765,6 +766,7 @@ function ItemMenu({
   onDelete,
   size,
 }: Pick<ItemProps, 'project' | 'onOpen' | 'onStartRename' | 'onStartSelect' | 'onMoveToFolder' | 'onLocate' | 'onDelete'> & { size: number }) {
+  const cover = React.useContext(ProjectCoverContext);
   if (project.missing) return <ProjectMenu onLocate={onLocate} onRemove={onDelete} size={size} />;
   return (
     <ProjectMenu
@@ -772,6 +774,8 @@ function ItemMenu({
       onRename={onStartRename}
       onSelect={onStartSelect}
       onMoveToFolder={onMoveToFolder}
+      onChangeCover={cover ? () => cover.change(project) : undefined}
+      onRestoreCover={cover && project.cover ? () => cover.restore(project) : undefined}
       onDelete={onDelete}
       size={size}
     />

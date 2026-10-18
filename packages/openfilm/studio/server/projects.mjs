@@ -22,6 +22,7 @@ import { basename, dirname, join, resolve, sep } from 'node:path';
 import { EMPTY_FILM } from './film.mjs';
 import { FILM_FILE, filmHtml } from '../../src/film-doc.mjs';
 import { writeAtomic } from './atomic.mjs';
+import { coverAt } from './cover.mjs';
 import { libraryRoot } from '../../src/locations.mjs';
 
 export const TOOL_DIR = '.film';
@@ -175,17 +176,20 @@ function folderName(/** @type {string} */ name) {
 
 /**
  * A project as the API gives it: `createdAt` is when its folder was made; `duration` (s) the film's length when Studio
- * has drawn the film since film.html last changed (its poster), else absent; `folderId` its folder in the list.
+ * has drawn the film since film.html last changed (its poster), else absent; `folderId` its folder in the list; `cover`
+ * when the person last set a cover of its own (cover.mjs), else absent.
  */
 const describe = (/** @type {Recent} */ r) => {
   const created = statSync(r.path, { throwIfNoEntry: false });
   const duration = filmDuration(r.path);
+  const cover = coverAt(r.path);
   return {
     /* `missing`: its folder is gone (one that only lost its film.html is still there, and still opens) */
     id: r.id, path: r.path, name: basename(r.path), openedAt: r.openedAt, missing: !created?.isDirectory(),
     createdAt: created ? Math.round(created.birthtimeMs || created.ctimeMs) : r.openedAt,
     ...(duration != null ? { duration } : {}),
     ...(r.folderId ? { folderId: r.folderId } : {}),
+    ...(cover != null ? { cover } : {}),
   };
 };
 
