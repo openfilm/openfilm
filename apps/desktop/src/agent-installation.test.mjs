@@ -263,3 +263,22 @@ test('Codex installed long ago beside the copy an app keeps up to date: the late
   assert.equal(detectAgentInstallation('codex', { ...opts, codexVersionOf: versions({ [inApp]: '0.163.0' }) }).cli, onPath, 'one whose version can\'t be told stays');
   assert.equal(detectAgentInstallation('codex', { ...opts, chosen: onPath, codexVersionOf: versions({ [onPath]: '0.1.0', [inApp]: '0.163.0' }) }).cli, onPath, 'the one chosen, whatever its version');
 });
+
+test("Cursor installed as `agent` alone is found; another program called `agent` is not taken for it", () => {
+  if (process.platform === 'win32') return;
+  const home = mkdtempSync(join(tmpdir(), 'of-home-'));
+  const exe = (file) => { mkdirSync(join(file, '..'), { recursive: true }); writeFileSync(file, '', { mode: 0o755 }); return file; };
+  /* some other tool's `agent` */
+  const other = join(home, 'other-bin');
+  exe(join(other, 'agent'));
+  assert.equal(detectAgentInstallation('cursor', { home, env: { PATH: '' }, pathDirs: [other] }).cli, null);
+  /* Cursor's installer: its own folder, linked as `agent` (the legacy `cursor-agent` link gone) */
+  const real = exe(join(home, '.local/share/cursor-agent/versions/2026.10.16-e3cb207/cursor-agent'));
+  const bin = join(home, '.local/bin');
+  mkdirSync(bin, { recursive: true });
+  symlinkSync(real, join(bin, 'agent'));
+  assert.equal(detectAgentInstallation('cursor', { home, env: { PATH: '' }, pathDirs: [other, bin] }).cli, join(bin, 'agent'));
+  /* both links, as the installer makes them now: `cursor-agent` first */
+  symlinkSync(real, join(bin, 'cursor-agent'));
+  assert.equal(detectAgentInstallation('cursor', { home, env: { PATH: '' }, pathDirs: [bin] }).cli, join(bin, 'cursor-agent'));
+});

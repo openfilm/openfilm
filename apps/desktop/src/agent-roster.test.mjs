@@ -196,3 +196,33 @@ test('Codex is connected from the start, Claude Code once the person connects it
   writeFileSync(join(dir, 'agents.json'), JSON.stringify({ disconnected: [] }));
   assert.deepEqual(readChoices(dir).disconnected, [], 'connected before: still connected');
 });
+
+test('a sign-in in Terminal is waited for asking only that agent, until it is signed in or the wait is over', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-roster-'));
+  const cursor = (signedIn) => ({ id: 'cursor', cli: { path: '/bin/cursor-agent' }, signedIn, install: null, setupRequired: null });
+  let signedIn = false;
+  let all = 0;
+  const asked = [];
+  const r = roster(dir, undefined, {
+    localAgents: async () => { all++; return [cursor(signedIn)]; },
+    localAgent: async (id) => { asked.push(id); return cursor(signedIn); },
+    signInWait: { ms: 2000, pollMs: 10 },
+  });
+  assert.deepEqual(await r.connect('cursor'), { ok: true });
+  await new Promise((done) => setTimeout(done, 50));
+  assert.equal(r.list().find((a) => a.id === 'cursor').status, 'waiting');
+  const before = all;
+  signedIn = true;
+  await new Promise((done) => setTimeout(done, 50));
+  assert.equal(r.list().find((a) => a.id === 'cursor').status, 'ready');
+  assert.ok(asked.length > 1 && asked.every((id) => id === 'cursor'));
+  assert.equal(all, before, 'the other agents are not asked while it waits');
+
+  /* a sign-in never finished: asked about until the wait is over, then it needs its sign-in again */
+  const late = roster(mkdtempSync(join(tmpdir(), 'of-roster-')), undefined, {
+    localAgents: async () => [cursor(false)], localAgent: async () => cursor(false), signInWait: { ms: 40, pollMs: 10 },
+  });
+  await late.connect('cursor');
+  await new Promise((done) => setTimeout(done, 120));
+  assert.equal(late.list().find((a) => a.id === 'cursor').status, 'sign-in');
+});

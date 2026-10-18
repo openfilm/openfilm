@@ -24,7 +24,7 @@ import { registerLocalAgentIpc } from './local-agents-ipc.mjs';
 import { readPreferences, registerChatIpc } from './chat-ipc.mjs';
 import { registerSkillsIpc } from './skills-ipc.mjs';
 import { createRoster } from './agent-roster.mjs';
-import { checkAgentProgram, diagnoseAgent, listAgents, openAgentSignIn, setChosenPaths } from './agents.mjs';
+import { checkAgentProgram, diagnoseAgent, listAgents, localAgent, openAgentSignIn, setChosenPaths } from './agents.mjs';
 import { agentUsage, forgetAgentUsage } from './agent-usage.mjs';
 import { installOpenfilmCommand } from './openfilm-command.mjs';
 import { startUpdates } from './updates.mjs';
@@ -489,6 +489,7 @@ async function start() {
   roster = createRoster({
     dataDir: DATA,
     localAgents: listAgents,
+    localAgent,
     openSignIn: openAgentSignIn,
     /* sessions closed on connecting and disconnecting: the next look at its usage is for whichever account is used now */
     closeSessions: (id) => { forgetAgentUsage(id); localAgents?.closeAgent(id); },

@@ -515,20 +515,28 @@ export async function listAgents() {
       await Promise.race([slow, new Promise((done) => setTimeout(done, 3000).unref?.())]);
     }
   }
-  return Promise.all(Object.entries(AGENTS).map(async ([id, spec]) => {
-    const cli = resolveAgentCli(id, { pathDirs });
-    const { install } = detectAgentInstallation(id);
-    const claudeApp = id === 'claude' && !cli && ['/Applications', join(homedir(), 'Applications')].some((dir) => existsSync(join(dir, 'Claude.app')));
-    return {
-      id,
-      label: spec.label,
-      cli: cli ? { path: cli.path, source: cli.source } : null,
-      chosen: chosenPaths[id] ?? null,
-      ...(cli ? await agentStatus(id, cli.path) : { signedIn: null, account: null }),
-      install,
-      setupRequired: claudeApp ? 'code-tab' : null,
-    };
-  }));
+  return Promise.all(Object.keys(AGENTS).map((id) => agentOnComputer(id, pathDirs)));
+}
+
+/** One agent as listAgents has it, asked alone: while the person signs in to it, only it is asked again. */
+export async function localAgent(id) {
+  if (!isAgentId(id)) throw new Error(`No agent ${id}`);
+  return agentOnComputer(id, (await loginShellEnvironment({ maxAgeMs: 10_000 })).PATH.split(PATH_SEP));
+}
+
+async function agentOnComputer(id, pathDirs) {
+  const cli = resolveAgentCli(id, { pathDirs });
+  const { install } = detectAgentInstallation(id);
+  const claudeApp = id === 'claude' && !cli && ['/Applications', join(homedir(), 'Applications')].some((dir) => existsSync(join(dir, 'Claude.app')));
+  return {
+    id,
+    label: AGENTS[id].label,
+    cli: cli ? { path: cli.path, source: cli.source } : null,
+    chosen: chosenPaths[id] ?? null,
+    ...(cli ? await agentStatus(id, cli.path) : { signedIn: null, account: null }),
+    install,
+    setupRequired: claudeApp ? 'code-tab' : null,
+  };
 }
 
 /** The adapter's command line (its package's `bin`), run with Electron's own Node. */

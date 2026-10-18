@@ -55,9 +55,12 @@ const DEFAULT_SHOWN = { codex: true, claude: true, byok: false };
 /* Codex is used as it is signed in on the computer from the start; Claude Code only once the person connects it, which
    signs in to their Claude subscription the first time */
 const DEFAULT_DISCONNECTED = Object.freeze(['claude']);
-/** How long a sign-in in Terminal is waited for, asked about every few seconds. */
-const SIGN_IN_WAIT_MS = 5 * 60_000;
-const SIGN_IN_POLL_MS = 3000;
+/**
+ * How long a sign-in in Terminal is waited for, asked about every few seconds: a person may first sign in to the
+ * maker's site, with a code sent to them (five minutes, as it was, was too short for Cursor's). Once it is over, the
+ * window coming back into focus asks again (Settings → Agents).
+ */
+const SIGN_IN_WAIT = { ms: 15 * 60_000, pollMs: 3000 };
 
 /** A red 16 × 16 picture, for asking a model whether it reads pictures. */
 const PROBE_PNG = 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR4nGN4pqFBEmIY1TCqYfhqAACM5TYQULtblwAAAABJRU5ErkJggg==';
@@ -178,6 +181,7 @@ export async function probeModel({ format, baseUrl, key, model, fetch: fetchImpl
  * @param {{
  *   dataDir: string,
  *   localAgents: () => Promise<Array<{ id: string, cli: { path: string } | null, signedIn: boolean | null, account?: object | null, install: string | null, setupRequired: string | null }>>,
+ *   localAgent?: (id: string) => Promise<{ id: string, cli: { path: string } | null, signedIn: boolean | null, account?: object | null, install: string | null, setupRequired: string | null }>,
  *   openSignIn: (id: string) => Promise<{ ok: boolean, error?: string }>,
  *   usePaths?: (paths: Record<string, string>) => void,
  *   pickProgram?: (id: string, words?: { title?: string, button?: string }) => Promise<string | null>,
@@ -187,7 +191,9 @@ export async function probeModel({ format, baseUrl, key, model, fetch: fetchImpl
  *   seal: (text: string) => Buffer, unseal: (data: Buffer) => string,
  *   onChange: (list: any[]) => void,
  *   fetch?: typeof fetch,
+ *   signInWait?: { ms: number, pollMs: number },
  * }} deps
+ * `localAgent(id)`: one agent as `localAgents` has it, asked alone while its sign-in is waited for (`signInWait`).
  */
 export function createRoster(deps) {
   const { dataDir } = deps;
@@ -251,13 +257,23 @@ export function createRoster(deps) {
     return list();
   }
 
+  /** The one agent signed in to, asked again: alone when it can be, not every agent every few seconds. */
+  async function lookAgain(id) {
+    if (!deps.localAgent) { await refresh(); return; }
+    const one = await deps.localAgent(id).catch(() => null);
+    if (!one) return;
+    local = [...(local ?? []).filter((a) => a.id !== id), one];
+    changed();
+  }
+
   async function waitForSignIn(id) {
     live.waiting[id] = true;
     changed();
-    const until = Date.now() + SIGN_IN_WAIT_MS;
+    const wait = deps.signInWait ?? SIGN_IN_WAIT;
+    const until = Date.now() + wait.ms;
     while (Date.now() < until && live.waiting[id]) {
-      await new Promise((done) => setTimeout(done, SIGN_IN_POLL_MS));
-      await refresh();
+      await new Promise((done) => setTimeout(done, wait.pollMs));
+      await lookAgain(id);
       if (local?.find((a) => a.id === id)?.signedIn !== false) break;
     }
     delete live.waiting[id];
