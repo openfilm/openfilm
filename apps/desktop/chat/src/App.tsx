@@ -946,11 +946,12 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
                   busy={active}
                 />
                 <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-                  {/* the first message well below the session bar, as a chat app opens a conversation */}
+                  {/* the first message well below the session bar, as a chat app opens a conversation; the last well above
+                      the composer, room for the way back to it */}
                   <div
                     ref={thread.viewportRef}
                     onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 2)}
-                    className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden [overflow-anchor:none] [scrollbar-gutter:stable] px-4${blank ? ' justify-center py-3.5' : ' pt-8 pb-10'}`}
+                    className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden [overflow-anchor:none] [scrollbar-gutter:stable] px-4${blank ? ' justify-center py-3.5' : ' pt-8 pb-24'}`}
                   >
                     {blank ? (
                       <div ref={thread.contentRef}>
@@ -977,14 +978,16 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
                   <div aria-hidden className={`pointer-events-none absolute inset-x-0 top-0 h-6 bg-gradient-to-b from-[var(--dock-pane)] to-transparent transition-opacity duration-150 ${scrolled && !blank ? 'opacity-100' : 'opacity-0'}`} />
                   <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-[var(--dock-pane)] to-transparent" />
                   {!blank && !thread.atBottom && (
-                    <button
-                      type="button"
-                      onClick={() => thread.scrollToBottom({ smooth: true })}
-                      className="absolute bottom-1.5 left-1/2 flex h-7 -translate-x-1/2 items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 text-[11.5px] font-medium text-[var(--text-dim)] shadow-[0_2px_10px_rgba(0,0,0,0.18)] transition hover:text-[var(--text)]"
-                    >
-                      <ArrowDown size={12} />
-                      {t('project.jumpToLatest')}
-                    </button>
+                    <Tooltip label={t('project.jumpToLatest')}>
+                      <button
+                        type="button"
+                        onClick={() => thread.scrollToBottom({ smooth: true })}
+                        aria-label={t('project.jumpToLatest')}
+                        className="absolute bottom-4 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full border border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text-dim)] shadow-[0_2px_10px_rgba(0,0,0,0.18)] transition hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+                      >
+                        <ArrowDown size={17} />
+                      </button>
+                    </Tooltip>
                   )}
                 </div>
               </div>
