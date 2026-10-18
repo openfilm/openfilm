@@ -13,6 +13,8 @@ import { ConversationSessionBar } from '@/components/ConversationSessionBar';
 import { ProjectConversation, primeStoredTranscript } from '@/components/ProjectConversation';
 import { ProjectStarters } from '@/components/ProjectStarters';
 import { AttachmentPreview, type AttachmentPreviewItem } from '@/components/AttachmentPreview';
+import { AttachmentCardBody, attachmentCardClass } from '@/components/AttachmentCard';
+import { attachmentPlace } from '@/lib/attachment-place';
 import { ModelPopover } from '@/components/ModelPopover';
 import { AddSkillDialog, type PickedSkill } from '@/components/AddSkill';
 import { CardActions, CardButton, ComposerCard } from '@/components/ComposerCard';
@@ -842,13 +844,14 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
                 </div>
               ) : (
                 <div key={file.id} title={file.error ?? file.path ?? file.name} {...open}
-                  className={`group relative flex h-10 min-w-0 max-w-[150px] items-center gap-1.5 overflow-hidden rounded-[8px] border bg-[var(--surface-2)] py-1 pl-2 pr-5 transition ${file.previewUrl || folderPath ? 'cursor-pointer' : ''} ${file.state === 'failed' ? 'border-[var(--danger)]' : 'border-[var(--border)] hover:border-[var(--border-strong)]'}`}>
-                  {file.state === 'pending' ? <Loader2 size={13} className="shrink-0 animate-spin text-[var(--text-muted)]" /> : <Icon size={13} className="shrink-0 text-[var(--text-muted)]" />}
-                  <span className="flex min-w-0 flex-col">
-                    <span className="truncate text-[11.5px] leading-tight text-[var(--text-muted)]">{file.name}</span>
-                    {/* a folder's size is not read: its name is all it shows */}
-                    {file.folder ? null : <span className="truncate text-[10.5px] leading-tight text-[var(--text-faint)]">{file.state === 'failed' ? 'Not added' : formatFileSize(file.size)}</span>}
-                  </span>
+                  className={`group relative border bg-[var(--surface-2)] transition ${attachmentCardClass('composer')} ${file.previewUrl || folderPath ? 'cursor-pointer' : ''} ${file.state === 'failed' ? 'border-[var(--danger)]' : 'border-[var(--border)] hover:border-[var(--border-strong)]'}`}>
+                  <AttachmentCardBody
+                    size="composer"
+                    icon={file.state === 'pending' ? <Loader2 size={14} className="animate-spin" /> : <Icon size={14} />}
+                    name={file.name}
+                    /* a folder's size is not read: where it is says more */
+                    detail={file.state === 'failed' ? 'Not added' : file.folder ? (file.path ? attachmentPlace(file.path) : null) : formatFileSize(file.size)}
+                  />
                   {remove}
                 </div>
               );

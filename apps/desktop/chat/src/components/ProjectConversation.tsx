@@ -29,6 +29,8 @@ import { FileChangesList } from './FileChangesList';
 import { ChatProjectContext, useDeveloperMode, useShowChanges } from '@/lib/developer';
 import { isVideoAttachment } from '@/lib/composer-attachments';
 import { desktopBridge } from '@/lib/desktop-bridge';
+import { attachmentPlace } from '@/lib/attachment-place';
+import { AttachmentCardBody, attachmentCardClass } from './AttachmentCard';
 
 /** What past turns get as "no live process". One constant: a new array each time would defeat the memo. */
 const NO_TRANSCRIPT: TranscriptItem[] = [];
@@ -477,10 +479,11 @@ function TurnAttachments({ items }: { items: TurnAttachment[] }) {
             ? { name: item.name, kind: item.kind, url: item.thumb, thumbOnly: true }
             : null);
         /* 32px squares: a receipt, not a gallery. Enough to recognize what was sent; open one to see it. The
-           smaller they are, the higher the text sits, and the bubble reads as a sentence, not an attachment list. */
+           smaller they are, the higher the text sits, and the bubble reads as a sentence, not an attachment list.
+           Without a picture, the composer's card at the same height. */
         const shell = item.thumb
           ? 'relative h-8 w-8 overflow-hidden rounded-[6px] border border-[var(--border)] bg-[var(--surface)]'
-          : 'flex h-8 min-w-0 max-w-[132px] items-center gap-1 overflow-hidden rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-1.5';
+          : `${attachmentCardClass('message')} border border-[var(--border)] bg-[var(--surface)]`;
         /* a video's thumbnail is a frame of it: a play mark says it is not a picture */
         const inner = item.thumb ? (
           <>
@@ -493,10 +496,12 @@ function TurnAttachments({ items }: { items: TurnAttachment[] }) {
             ) : null}
           </>
         ) : (
-          <>
-            <AttachmentTypeIcon file={item} size={11} className="shrink-0 text-[var(--chat-hint)]" />
-            <span className="truncate text-[11px] text-[var(--chat-hint)]">{item.name}</span>
-          </>
+          <AttachmentCardBody
+            size="message"
+            icon={<AttachmentTypeIcon file={item} size={12} />}
+            name={item.name.replace(/\/$/, '')}
+            detail={item.path ? attachmentPlace(item.path) : null}
+          />
         );
 
         /* a folder stays where it was on the disk: clicked, it is shown there */
