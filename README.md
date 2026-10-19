@@ -24,7 +24,8 @@ editor that runs in your browser, shows it taking shape. Then change anything yo
 - **One real editor.** Move, scale and rotate any element inside a page, change its text, color and style; place,
   crop and restyle every clip, trim and cut them on the timeline.
 
-<p align="center"><img src="docs/openfilm.webp" alt="An agent makes a film with OpenFilm; it is then changed by hand in Studio" width="900"></p>
+<p align="center"><img src="docs/openfilm.webp" alt="An agent makes a film with OpenFilm; it is then changed by hand in Studio" width="900"><br>
+<sub>▶ <a href="https://www.youtube.com/watch?v=Qea7v6dtNM0">Watch the 1:42 launch video</a>, made with OpenFilm from start to finish.</sub></p>
 
 ## Install
 

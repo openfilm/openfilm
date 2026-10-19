@@ -24,7 +24,8 @@ OpenFilm 让你的编程智能体来做视频，也让你亲手修改。
 - **一个真正的剪辑器。** 可以移动、缩放、旋转页面里的任何元素，改它的文字、颜色和样式；摆放、裁剪、调整每个片段的
   样式，在时间线上修剪和切分。
 
-<p align="center"><img src="docs/openfilm.webp" alt="智能体用 OpenFilm 做出一部片子，再在 Studio 里手动修改" width="900"></p>
+<p align="center"><img src="docs/openfilm.webp" alt="智能体用 OpenFilm 做出一部片子，再在 Studio 里手动修改" width="900"><br>
+<sub>▶ <a href="https://www.youtube.com/watch?v=Qea7v6dtNM0">观看 1 分 42 秒的发布视频</a>（英文），从头到尾都是用 OpenFilm 做的。</sub></p>
 
 ## 安装
 
