@@ -443,10 +443,11 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (parts[0] !== 'projects') throw new HttpError(404, 'no such API');
     if (parts.length === 1) {
       if (req.method === 'GET') return json(res, 200, { projects: (await listProjects()).map((p) => (agentIn(p.path) ? { ...p, working: true } : p)) });
-      /* `create` false: only a folder holding a film opens (the editor asks before starting one in a folder) */
+      /* `create` false: only a folder holding a film opens (the editor asks before starting one in a folder); `exact`:
+         a new project's name as the person typed it, refused when taken */
       if (req.method === 'POST') {
-        const body = /** @type {{ path?: string, name?: string, create?: boolean }} */ (await readJson(req));
-        return json(res, 200, { project: body.path ? await openProject(body.path, { create: body.create !== false }) : await createProject(body.name) });
+        const body = /** @type {{ path?: string, name?: string, create?: boolean, exact?: boolean }} */ (await readJson(req));
+        return json(res, 200, { project: body.path ? await openProject(body.path, { create: body.create !== false }) : await createProject(body.name, { exact: body.exact === true }) });
       }
     }
     /* a film from GitHub (fetch-repo.mjs): POST { url } `projects/fetch` starts it → { job }; GET `projects/fetch/:id`
@@ -846,6 +847,11 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const jpeg = await filmPoster(project.path, pages.folderUrl(project)).catch((e) => {
         throw new HttpError(e instanceof PageFrameError ? 404 : 422, String(e?.message ?? e));
       });
+      /* its first one is still being drawn: the card asks again in a while, rather than hold a connection meanwhile */
+      if (!jpeg) {
+        res.writeHead(503, { 'retry-after': '5', 'cache-control': 'no-store', 'content-type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'the film\'s poster is being drawn; ask again in a few seconds', code: 'drawing' }));
+      }
       res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'private, max-age=60', 'content-length': jpeg.length });
       return res.end(jpeg);
     }

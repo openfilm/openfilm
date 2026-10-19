@@ -33,6 +33,7 @@ import { useLanguage, useT, type Language } from '@/i18n';
 import { limitTitleWidth, TITLE_MAX_WIDTH } from '@/lib/title';
 import type { Project } from '@/api';
 import { folderCounts, folderPosters, folderTrail, parentOf, visibleProjects, type LibrarySort, type ProjectFolder } from '@/lib/project-folders';
+import { newProjectName, posterRetryDelay, posterTry } from '@/lib/projects-page';
 import { ContextMenu } from './ContextMenu';
 import { ProjectMenu } from './ProjectMenu';
 import { ProjectCoverContext } from './ProjectCover';
@@ -71,7 +72,11 @@ export function ProjectsView({
   projects: LibraryProject[];
   /** A project is being created or opened; "New project" does not take a second click meanwhile. */
   creating?: boolean;
-  onNewProject: () => void;
+  /**
+   * Make a project of this name (`exact`: as the person typed it, refused when taken) and open it. Resolves whether it
+   * was made: when not (said why), the name stays to change.
+   */
+  onNewProject: (name: string, exact: boolean) => Promise<boolean>;
   /** "Open folder…": a folder anywhere, opened as a project (the app's own dialog, else Studio's folder browser). */
   onOpenFolder: () => void;
   /** "Get from GitHub…": a repository or a folder in one, copied into the library and opened. */
@@ -117,6 +122,8 @@ export function ProjectsView({
   const [folderId, setFolderId] = React.useState<string | null>(null);
   const [moving, setMoving] = React.useState<LibraryProject | null>(null);
   const [renamingFolderId, setRenamingFolderId] = React.useState<string | null>(null);
+  /** "New project" asks for its name first: the name offered (as Studio would name it), while it is asked for */
+  const [newName, setNewName] = React.useState<string | null>(null);
   /* the folder looked at was deleted (here or elsewhere): back to all */
   React.useEffect(() => {
     if (folderId && !folders.some((f) => f.id === folderId)) setFolderId(null);
@@ -245,6 +252,15 @@ export function ProjectsView({
   }
 
   const showNew = folderId === null && !query.trim();
+  const newProps: NewProjectProps = {
+    creating,
+    naming: newName,
+    onNewProject: () => setNewName(newProjectName(t('project.untitled'), projects.map((p) => p.name))),
+    onCreate: onNewProject,
+    onCancelNew: () => setNewName(null),
+    onOpenFolder,
+    onGetFromGitHub,
+  };
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -318,13 +334,13 @@ export function ProjectsView({
             </div>
           ) : view === 'cards' ? (
             <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4">
-              {showNew ? <NewProjectCard creating={creating} onNewProject={onNewProject} onOpenFolder={onOpenFolder} onGetFromGitHub={onGetFromGitHub} /> : null}
+              {showNew ? <NewProjectCard {...newProps} /> : null}
               {showFolders ? levelFolders.map((folder) => <FolderCard key={`folder:${folder.id}`} {...folderProps(folder)} />) : null}
               {visible.map((project) => <ProjectCard key={project.id} {...itemProps(project)} />)}
             </div>
           ) : (
             <div className="flex flex-col divide-y divide-[var(--border)]">
-              {showNew ? <NewProjectListRow creating={creating} onNewProject={onNewProject} onOpenFolder={onOpenFolder} onGetFromGitHub={onGetFromGitHub} /> : null}
+              {showNew ? <NewProjectListRow {...newProps} /> : null}
               {showFolders ? levelFolders.map((folder) => <FolderListRow key={`folder:${folder.id}`} {...folderProps(folder)} />) : null}
               {visible.map((project) => <ProjectListRow key={project.id} {...itemProps(project)} />)}
             </div>
@@ -553,13 +569,76 @@ function ProjectCardTitle({
 
 type NewProjectProps = {
   creating: boolean;
+  /** The name offered while the new project's name is asked for, else null. */
+  naming: string | null;
+  /** "New project": ask for its name. */
   onNewProject: () => void;
+  onCreate: (name: string, exact: boolean) => Promise<boolean>;
+  onCancelNew: () => void;
   onOpenFolder: () => void;
   onGetFromGitHub: () => void;
 };
 
+/**
+ * The new project's name, typed where its name will show, offered as Studio would name it: Enter makes the project,
+ * Escape or leaving the field does not. Cleaned as a rename is; left empty, it is the name offered.
+ */
+function NewProjectName({ offered, size, onCreate, onCancel }: {
+  offered: string;
+  size: 'card' | 'list';
+  onCreate: (name: string, exact: boolean) => Promise<boolean>;
+  onCancel: () => void;
+}) {
+  const t = useT();
+  const [draft, setDraft] = React.useState(offered);
+  const input = React.useRef<HTMLInputElement>(null);
+  /* being made: the field may lose its focus meanwhile, which does not cancel it */
+  const making = React.useRef(false);
+
+  async function create() {
+    if (making.current) return;
+    const typed = limitTitleWidth(draft.replace(/\s+/g, ' ').trim(), TITLE_MAX_WIDTH);
+    making.current = true;
+    if (await onCreate(typed || offered, Boolean(typed) && typed !== offered)) return;
+    making.current = false;
+    input.current?.focus();
+  }
+
+  return (
+    <input
+      ref={input}
+      autoFocus
+      value={draft}
+      aria-label={t('projects.newProjectName')}
+      placeholder={offered}
+      onChange={(event) => {
+        const next = event.target.value;
+        /* mid-composition (IME) the text is not final: limit it once composition ends */
+        setDraft((event.nativeEvent as InputEvent).isComposing ? next : limitTitleWidth(next, TITLE_MAX_WIDTH));
+      }}
+      onCompositionEnd={(event) => setDraft(limitTitleWidth(event.currentTarget.value, TITLE_MAX_WIDTH))}
+      onFocus={(event) => event.currentTarget.select()}
+      onBlur={() => { if (!making.current) onCancel(); }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          if (event.nativeEvent.isComposing) return;
+          event.preventDefault();
+          void create();
+        }
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          /* the popover would close on this Escape too */
+          event.stopPropagation();
+          if (!making.current) onCancel();
+        }
+      }}
+      className={`box-border w-full min-w-0 bg-transparent font-semibold text-[var(--text)] outline-none placeholder:text-[var(--text-faint)] ${size === 'card' ? 'h-7 text-[13px]' : 'text-[14px]'}`}
+    />
+  );
+}
+
 /** The grid's first cell: start a new project, card-sized, so "new ones start here" reads at a glance. */
-function NewProjectCard({ creating, onNewProject, onOpenFolder, onGetFromGitHub }: NewProjectProps) {
+function NewProjectCard({ creating, naming, onNewProject, onCreate, onCancelNew, onOpenFolder, onGetFromGitHub }: NewProjectProps) {
   const t = useT();
   return (
     <article className="group min-w-0">
@@ -575,16 +654,17 @@ function NewProjectCard({ creating, onNewProject, onOpenFolder, onGetFromGitHub 
         </span>
         <span className="text-[13px] font-medium">{t('projects.newProject')}</span>
       </button>
-      {/* where the other cards have their name: starting from a film that exists */}
+      {/* where the other cards have their name: the new one's, asked for; else starting from a film that exists */}
       <div className="mt-2 flex">
-        <ImportMenu creating={creating} onOpenFolder={onOpenFolder} onGetFromGitHub={onGetFromGitHub} className="-ml-1.5 h-7 px-1.5 text-[12.5px]" />
+        {naming != null ? <NewProjectName offered={naming} size="card" onCreate={onCreate} onCancel={onCancelNew} />
+          : <ImportMenu creating={creating} onOpenFolder={onOpenFolder} onGetFromGitHub={onGetFromGitHub} className="-ml-1.5 h-7 px-1.5 text-[12.5px]" />}
       </div>
     </article>
   );
 }
 
 /** "New project" in the list view: the same entries, as a row. */
-function NewProjectListRow({ creating, onNewProject, onOpenFolder, onGetFromGitHub }: NewProjectProps) {
+function NewProjectListRow({ creating, naming, onNewProject, onCreate, onCancelNew, onOpenFolder, onGetFromGitHub }: NewProjectProps) {
   const t = useT();
   return (
     <article className="group flex min-w-0 items-center gap-3 py-4 sm:gap-4">
@@ -601,14 +681,16 @@ function NewProjectListRow({ creating, onNewProject, onOpenFolder, onGetFromGitH
         </span>
       </button>
       <div className="min-w-0 flex-1">
-        <button
-          type="button"
-          onClick={onNewProject}
-          disabled={creating}
-          className="text-left text-[14px] font-medium text-[var(--text)] hover:underline disabled:opacity-60"
-        >
-          {t('projects.newProject')}
-        </button>
+        {naming != null ? <NewProjectName offered={naming} size="list" onCreate={onCreate} onCancel={onCancelNew} /> : (
+          <button
+            type="button"
+            onClick={onNewProject}
+            disabled={creating}
+            className="text-left text-[14px] font-medium text-[var(--text)] hover:underline disabled:opacity-60"
+          >
+            {t('projects.newProject')}
+          </button>
+        )}
       </div>
       <ImportMenu creating={creating} onOpenFolder={onOpenFolder} onGetFromGitHub={onGetFromGitHub} className="h-8 px-2.5 text-[12.5px]" />
     </article>
@@ -616,7 +698,7 @@ function NewProjectListRow({ creating, onNewProject, onOpenFolder, onGetFromGitH
 }
 
 /** "Import from ⌄": the ways to start from a film that exists, a folder on this computer or a repository on GitHub. */
-function ImportMenu({ creating, onOpenFolder, onGetFromGitHub, className }: Omit<NewProjectProps, 'onNewProject'> & { className: string }) {
+function ImportMenu({ creating, onOpenFolder, onGetFromGitHub, className }: Pick<NewProjectProps, 'creating' | 'onOpenFolder' | 'onGetFromGitHub'> & { className: string }) {
   const t = useT();
   const [anchor, setAnchor] = React.useState<{ x: number; y: number; top: number } | null>(null);
   const button = React.useRef<HTMLButtonElement>(null);
@@ -1353,32 +1435,42 @@ function FolderPicker({
 
 /**
  * The cover, or (none, or it failed to load) a gradient made from the id. While Studio draws it (the first time can
- * take a while) the card shows its plain face with the film mark, not a black frame that reads as a black film.
+ * take a while) the card shows its plain face with the film mark, not a black frame that reads as a black film. Studio
+ * answers at once while it draws a film's first poster (so the card holds none of the browser's few connections to
+ * it): the card shows its gradient and asks again a few times.
  */
 function PosterMedia({ project, shade = false }: { project: LibraryProject; shade?: boolean }) {
-  const [failedUrl, setFailedUrl] = React.useState<string | null>(null);
+  /* the try asked for now (0: the first) and whether it failed, for this poster */
+  const [attempt, setAttempt] = React.useState<{ url: string; n: number; failed: boolean } | null>(null);
   const [loadedUrl, setLoadedUrl] = React.useState<string | null>(null);
+  const tried = attempt && attempt.url === project.poster ? attempt : { url: project.poster ?? '', n: 0, failed: false };
+  const again = tried.failed ? posterRetryDelay(tried.n) : null;
+  React.useEffect(() => {
+    if (again == null) return undefined;
+    const timer = setTimeout(() => setAttempt({ url: tried.url, n: tried.n + 1, failed: false }), again);
+    return () => clearTimeout(timer);
+  }, [again, tried.url, tried.n]);
   /* `shade`: darker toward the bottom, under the length badge; only over a picture (on the plain face it is a smudge) */
   const shadow = shade ? <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent opacity-90" /> : null;
-  if (!project.poster || failedUrl === project.poster) {
-    return <><div className="absolute inset-0 opacity-80" style={{ background: gradientForId(project.id) }} />{shadow}</>;
-  }
-  const ready = loadedUrl === project.poster;
+  const face = <div className="absolute inset-0 opacity-80" style={{ background: gradientForId(project.id) }} />;
+  if (!project.poster || (tried.failed && again == null)) return <>{face}{shadow}</>;
+  const src = posterTry(project.poster, tried.n);
+  const ready = loadedUrl === src;
   return (
     <>
-      {ready ? null : (
+      {ready ? null : tried.n > 0 || tried.failed ? face : (
         <span aria-hidden className="absolute inset-0 flex items-center justify-center text-[var(--text-faint)]">
           <Video size={22} strokeWidth={1.5} />
         </span>
       )}
       <img
-        src={project.poster}
+        src={src}
         alt=""
         loading="lazy"
         decoding="async"
         draggable={false}
-        onLoad={() => setLoadedUrl(project.poster ?? null)}
-        onError={() => setFailedUrl(project.poster ?? null)}
+        onLoad={() => setLoadedUrl(src)}
+        onError={() => setAttempt({ url: tried.url, n: tried.n, failed: true })}
         className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-200 ${ready ? 'opacity-100' : 'opacity-0'}`}
       />
       {ready ? shadow : null}

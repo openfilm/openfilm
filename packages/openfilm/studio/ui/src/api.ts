@@ -118,7 +118,8 @@ export const api = {
   /** the system's folder dialog, opened by Studio (a page in a browser cannot learn a path): the folder, or null when
       cancelled; throws (501) where this system has none */
   pickFolder: (title: string, at?: string) => call<{ path: string | null }>('pick-folder', { method: 'POST', json: { title, ...(at ? { at } : {}) } }).then((r) => r.path),
-  newProject: (name?: string) => call<{ project: Project }>('projects', { method: 'POST', json: { name } }).then((r) => r.project),
+  /** a new project in the library; `exact`: the name as the person typed it, refused (409) when taken */
+  newProject: (name?: string, exact = false) => call<{ project: Project }>('projects', { method: 'POST', json: { name, ...(exact ? { exact } : {}) } }).then((r) => r.project),
   /** open a folder (its full path) as a project: made one when it is not yet */
   openFolder: (path: string) => call<{ project: Project }>('projects', { method: 'POST', json: { path } }).then((r) => r.project),
   rename: (id: string, name: string) => call<{ project: Project }>(p(id), { method: 'PATCH', json: { name } }).then((r) => r.project),

@@ -18,6 +18,7 @@ import { Launcher } from './components/Launcher';
 import { studioHost } from './lib/host';
 import { WhatsNew } from './components/WhatsNew';
 import { sourcesApi } from './lib/project-sources';
+import { LIST_WAIT_MS, within } from './lib/projects-page';
 
 /**
  * `to` with this page's key in its address (the server puts it there): the address bar is what a person copies, and
@@ -68,12 +69,13 @@ export function App() {
   useEffect(() => {
     if (id || tabs) return;
     let alive = true;
-    void api.projects().then((projects) => {
+    /* the list not read (refused, or no answer in time): the Projects window, which says so and tries again */
+    void within(api.projects(), LIST_WAIT_MS).then((projects) => {
       if (!alive) return;
       const last = projects.find((p) => !p.missing);
       if (last) go(`/projects/${last.id}`, true);
       else setNone(true);
-    });
+    }, () => { if (alive) setNone(true); });
     return () => { alive = false; setNone(false); };
   }, [id]);
 

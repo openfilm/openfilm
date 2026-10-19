@@ -138,6 +138,9 @@ export const zhCN: Words = {
   projects: {
     newProject: '新建项目',
     localProjectFailed: '无法创建项目，请重试。',
+    newProjectName: '新项目的名称',
+    loadFailed: '无法加载你的项目。',
+    loadRetry: '重试',
     revealFolder: `在${FILES}中显示`,
     folderAll: '全部',
     folderUp: '返回上一级',

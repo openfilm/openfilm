@@ -151,6 +151,9 @@ const FILM_POSTER = 'film-poster.jpg';
 /** How long a card waits for the film's current poster before it is given the last one: one drawn already is read
  * from the cache in far less, and drawing one takes seconds. */
 const STALE_AFTER_MS = 300;
+/** How long a card waits for a film's first poster (none drawn before) before it is told to ask again: the card's
+ * request holds one of the few connections a browser opens to Studio, and the editor's own requests wait behind it. */
+const FIRST_WAIT_MS = 2_000;
 /** How long after a project opens its first poster is drawn: after the editor's own first thumbnails. */
 const WARM_MS = 10_000;
 /** @type {Map<string, NodeJS.Timeout>} projects whose first poster is about to be drawn */
@@ -161,21 +164,31 @@ const warming = new Map();
  * in the projects list. Drawing it takes seconds (the whole film opens, every page in it, one frame at a time behind
  * the open project's own thumbnails), and any change to film.html makes a new one, so a card waiting for it showed
  * nothing. The current poster comes when it is drawn already; else the last one comes at once while the current one
- * is drawn for next time; a film never drawn is waited for.
- * @param {string} root @param {string} base
+ * is drawn for next time; a film never drawn is waited for a moment (FIRST_WAIT_MS), then null: it is still being
+ * drawn, ask again.
+ * @param {string} root @param {string} base @returns {Promise<Buffer | null>}
  */
 export async function filmPoster(root, base) {
   const fresh = pageFrame(root, base, FILM_PAGE, -1, POSTER_W);
+  /* drawn for next time, whoever waits for it: a film that can't be drawn now (a page's library offline) still shows
+     its last picture */
+  fresh.catch(() => {});
+  const soon = await within(fresh.catch(() => null), STALE_AFTER_MS);
+  if (soon) return soon;
+  const last = await readFile(join(root, TOOL_DIR, 'cache', FILM_POSTER)).catch(() => null);
+  if (last) return last;
+  return within(fresh, FIRST_WAIT_MS - STALE_AFTER_MS);
+}
+
+/** What `promise` gives within `ms`, else null (it goes on). @template T @param {Promise<T>} promise @param {number} ms */
+async function within(promise, ms) {
   /** @type {NodeJS.Timeout | undefined} */
   let timer;
-  const soon = await Promise.race([fresh.catch(() => null), new Promise((done) => { timer = setTimeout(() => done(null), STALE_AFTER_MS); })]);
-  clearTimeout(timer);
-  if (soon) return /** @type {Buffer} */ (soon);
-  const last = await readFile(join(root, TOOL_DIR, 'cache', FILM_POSTER)).catch(() => null);
-  if (!last) return fresh;
-  /* drawn for next time: a film that can't be drawn now (a page's library offline) still shows its last picture */
-  fresh.catch(() => {});
-  return last;
+  try {
+    return await Promise.race([promise, new Promise((/** @type {(value: null) => void} */ done) => { timer = setTimeout(() => done(null), ms); })]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**

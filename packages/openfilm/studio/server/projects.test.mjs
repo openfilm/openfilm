@@ -48,6 +48,18 @@ test('new projects go to the library as Untitled, Untitled 2', async () => {
   assert.ok(one.path.startsWith(join(realpathSync(scratch), 'library')));
 });
 
+test('a new project named as typed: cleaned as a rename is, and a name taken in the library is refused, not changed', async () => {
+  const trip = await createProject(' Trip / Japan ', { exact: true });
+  assert.equal(trip.name, 'Trip Japan');
+  await assert.rejects(createProject('Trip Japan', { exact: true }), (e) => e instanceof ProjectError && e.status === 409 && /"Trip Japan" is taken/.test(e.message));
+  /* a plain folder of that name takes it as much as a project does */
+  mkdirSync(join(scratch, 'library', 'Notes'));
+  await assert.rejects(createProject('Notes', { exact: true }), (e) => e instanceof ProjectError && e.status === 409);
+  /* not typed (the name offered): the next free one, as before */
+  assert.equal((await createProject('Trip Japan')).name, 'Trip Japan 2');
+  await assert.rejects(createProject('  ', { exact: true }), (e) => e instanceof ProjectError && e.status === 400);
+});
+
 test('new projects go to the folder chosen in Settings; those made before stay where they are', async () => {
   const before = await createProject('Before');
   mkdirSync(process.env.OPENFILM_HOME, { recursive: true });

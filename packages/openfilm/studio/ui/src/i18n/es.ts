@@ -137,6 +137,9 @@ export const es: Words = {
   projects: {
     newProject: 'Nuevo proyecto',
     localProjectFailed: 'No se pudo crear el proyecto. Inténtalo de nuevo.',
+    newProjectName: 'Nombre del nuevo proyecto',
+    loadFailed: 'No se pudieron cargar tus proyectos.',
+    loadRetry: 'Reintentar',
     revealFolder: `Mostrar en ${FILES}`,
     folderAll: 'Todos',
     folderUp: 'Subir un nivel',

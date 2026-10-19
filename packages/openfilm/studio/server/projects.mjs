@@ -153,12 +153,17 @@ export async function openProject(path, { create = true } = {}) {
   return describe(entry);
 }
 
-/** A new project in the library: "Untitled", "Untitled 2", … never an existing folder. */
-export async function createProject(name = 'Untitled') {
+/**
+ * A new project in the library: "Untitled", "Untitled 2", … never an existing folder. `exact`: the name the person
+ * typed, refused when a folder of the library has it (as a rename is: retrying can't help).
+ * @param {string} [name] @param {{ exact?: boolean }} [options]
+ */
+export async function createProject(name = 'Untitled', { exact = false } = {}) {
   const clean = folderName(name);
   const root = libraryRoot();
   await mkdir(root, { recursive: true });
   let candidate = join(root, clean);
+  if (exact && existsSync(candidate)) throw new ProjectError(`the name "${clean}" is taken: there is already a folder by that name in the projects folder`, 409);
   for (let n = 2; existsSync(candidate); n++) candidate = join(root, `${clean} ${n}`);
   return openProject(candidate);
 }
