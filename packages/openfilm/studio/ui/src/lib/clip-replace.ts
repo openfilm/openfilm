@@ -1,5 +1,5 @@
 /**
- * Replace a clip: another file in its place, as Premiere's replace edit. The clip keeps its id, its place, its length
+ * Replace a clip: another file in its place. The clip keeps its id, its place, its length
  * and its look (box, class, style); the new file plays from its start for that long, at the clip's speed. A file
  * shorter than that makes the clip shorter (`shortMs` says by how much); a still or a page without an end lasts the
  * clip's length. A picture is replaced by a picture (a video, a still, a page), a sound by a sound (a sound file, or a

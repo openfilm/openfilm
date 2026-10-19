@@ -3,7 +3,7 @@
  * where it is silent — and "did this cut land mid-word" can only be seen on the waveform.
  *
  * Drawn from the bottom, not mirrored: sound rows are short, and a mirrored waveform leaves half the height each way.
- * A skyline still reads when low (CapCut draws it this way). On a canvas, not hundreds of divs: dozens of clips with
+ * A skyline still reads when low. On a canvas, not hundreds of divs: dozens of clips with
  * hundreds of peaks each would be tens of thousands of nodes.
  *
  * Peaks come from the server: GET media?what=wave&path= → `{ duration (s), peaks }`, 40 peaks a second, 0..1;

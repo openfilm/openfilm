@@ -249,8 +249,8 @@ function GeneralSection() {
 }
 
 /**
- * How the preview plays heavy footage (studio/server/proxies.mjs): from a lighter copy made in the background, as
- * CapCut's proxies, and how tall that copy is; whether pages draw at the viewer's size, and whether stretches that play
+ * How the preview plays heavy footage (studio/server/proxies.mjs): from a lighter copy made in the background (a
+ * proxy), and how tall that copy is; whether pages draw at the viewer's size, and whether stretches that play
  * late are rendered to play smoothly (lib/preview-prefs). Exports always read the originals and draw at full size.
  */
 function PlaybackGroup() {

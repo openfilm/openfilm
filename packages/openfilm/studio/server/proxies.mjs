@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * Proxies: light copies of heavy footage for the preview to play, as editors make them (CapCut's, Premiere's). Footage
+ * Proxies: light copies of heavy footage for the preview to play, as editors make them. Footage
  * past 1080p, or in a form slow to decode (ProRes, HEVC, 10-bit…), from a NAS most of all, stutters when played and
  * scrubbed; its proxy is an H.264 copy `height` px on its short side, its picture only, with the same frames at the
  * same times (passthrough: none added or dropped) and a key frame every half second, so a scrub lands at once. Made in

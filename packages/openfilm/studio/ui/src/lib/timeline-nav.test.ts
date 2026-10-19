@@ -41,7 +41,7 @@ test('⌘B splits the selected clips under the playhead, else the main track\'s,
   const ids = (bs: TimelineBlock[]) => bs.map((b) => b.clipId);
   assert.deepEqual(ids(splitTargets(tracks, ['b-s', 'b-s2', 'b-locked'], 2000, null)), ['s'], 'selected and under it, not locked');
   assert.deepEqual(ids(splitTargets(tracks, ['b-s2'], 2000, null)), [], 'a selection the playhead is not over: nothing');
-  assert.deepEqual(ids(splitTargets(tracks, [], 2000, 'doc-1')), ['s'], 'the main track (the lowest picture track), as CapCut\'s');
+  assert.deepEqual(ids(splitTargets(tracks, [], 2000, 'doc-1')), ['s'], 'the main track (the lowest picture track)');
   /* past the main track's end: the targeted track, else the top one seen */
   assert.deepEqual(ids(splitTargets(tracks, [], 10_000, 'doc-4')), ['m'], 'the targeted track');
   assert.deepEqual(ids(splitTargets(tracks, [], 10_000, 'doc-2')), [], 'a locked target: nothing');

@@ -41,7 +41,7 @@ export function compactBox(d: MgTransform, own: MgBox): FilmBox {
   return out;
 }
 
-/** A clip's X / Y / W / H on the stage (its unturned box, as Figma shows them) for transform `t` in `box`. */
+/** A clip's X / Y / W / H on the stage (its unturned box) for transform `t` in `box`. */
 export function clipFields(t: MgTransform, box: MgBox): { x: number; y: number; w: number; h: number } {
   return { x: (box.x ?? 0) + t.x, y: (box.y ?? 0) + t.y, w: box.w * t.scaleX, h: box.h * t.scaleY };
 }

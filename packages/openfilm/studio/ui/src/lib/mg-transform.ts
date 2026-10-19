@@ -37,7 +37,7 @@ export interface MgGuide {
   at: number;
 }
 
-/** The three places on an axis worth lining up: both edges and the middle (as in Figma). */
+/** The three places on an axis worth lining up: both edges and the middle. */
 function anchorsOf(start: number, size: number): [number, number, number] {
   return [start, start + size / 2, start + size];
 }

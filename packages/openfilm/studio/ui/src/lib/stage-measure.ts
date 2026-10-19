@@ -1,5 +1,5 @@
 /**
- * Distances between the thing in hand and another box on the stage, as Figma draws them while Alt is held: red lines
+ * Distances between the thing in hand and another box on the stage, drawn while Alt is held: red lines
  * with their length, from the selection's edges to the other box's (or to the stage's, when nothing else is pointed
  * at). Boxes are unturned rects in stage px; lines are horizontal or vertical.
  */

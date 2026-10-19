@@ -1,7 +1,7 @@
 /**
  * Freeze frame: the frame of a video clip under the playhead, made a still (studio/server/files.mjs freezeFrame) and
  * put in at the playhead on the clip's track: an insert cuts the video there and what follows on that track moves on
- * by the still's length (with linkage, what rides on the main track along), as CapCut's; an overwrite has the still
+ * by the still's length (with linkage, what rides on the main track along); an overwrite has the still
  * cover that much of the video after the playhead. The still looks as the video does (its box, class and style).
  */
 import type { Clip, Op } from '../api.ts';
@@ -9,7 +9,7 @@ import { planRoom, type EditMode, type EditModel, type Switches } from './timeli
 import { snapToFrame } from './timecode.ts';
 import type { TimelineBlock } from './timeline-layout';
 
-/** How long a freeze frame lasts: 3 s, as CapCut's. */
+/** How long a freeze frame lasts: 3 s. */
 export const FREEZE_MS = 3000;
 
 /** The moment of the clip's file the playhead is on (ms), or null when the playhead is not on the clip. */

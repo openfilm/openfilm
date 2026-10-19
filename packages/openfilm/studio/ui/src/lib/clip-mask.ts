@@ -1,5 +1,5 @@
 /**
- * A mask (CapCut's 蒙版) as plain CSS: `mask-image` layers any browser draws, nothing of our own, no new attribute.
+ * A mask as plain CSS: `mask-image` layers any browser draws, nothing of our own, no new attribute.
  * What the inspector's Mask section and the mask's handles on the picture read and write, for a whole clip (its
  * `style`) and a layer inside a page (its override's `style`) alike.
  *
@@ -313,7 +313,7 @@ export function maskDefault(shape: MaskShape, box?: MaskBox | null, from?: Mask 
     w: sized ? from!.w : square.w,
     h: sized ? from!.h : square.h,
     rotate: from && MASK_FIELDS[from.shape].rotate ? from.rotate : 0,
-    /* a hard edge until the person feathers it (CapCut's) */
+    /* a hard edge until the person feathers it */
     feather: from && MASK_FIELDS[from.shape].feather ? from.feather : 0,
     radius: from?.radius ?? 0,
     invert: from?.invert ?? false,

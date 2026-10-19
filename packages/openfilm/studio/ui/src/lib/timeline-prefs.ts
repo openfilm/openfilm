@@ -1,5 +1,5 @@
 /**
- * The timeline's switches, kept on this machine across projects, CapCut's, in its order and all on by default:
+ * The timeline's switches, kept on this machine across projects, in this order and all on by default:
  *   · `magnet` (主轨磁吸): the main track (the lowest picture track) stays closed up — a clip put on it goes in between,
  *     one deleted or taken off it closes up after it, a trim or a new speed there moves what follows. Off, the main
  *     track is like the others (lib/timeline-edit);
@@ -21,7 +21,7 @@ type Pref = keyof TimelinePrefs;
 const DEFAULTS: TimelinePrefs = { snap: true, magnet: true, linkage: true, previewAxis: true };
 const KEY: Record<Pref, string> = {
   snap: 'openfilm.timeline.snap',
-  /* new keys: the main track came back on 10-19 with CapCut's rules, so choices made for the switches before do not
+  /* new keys: the main track came back on 10-19 with new rules, so choices made for the switches before do not
      carry over */
   magnet: 'openfilm.timeline.mainTrackMagnet',
   linkage: 'openfilm.timeline.mainTrackLinkage',

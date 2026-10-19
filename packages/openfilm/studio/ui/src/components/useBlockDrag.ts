@@ -241,7 +241,7 @@ export function useBlockDrag(opts: {
     block: TimelineBlock,
     mode: GestureMode,
     selected?: readonly string[],
-    /** A move that copies (⌥ at the press, as CapCut's): the clips stay, copies land where they are let go. */
+    /** A move that copies (⌥ at the press): the clips stay, copies land where they are let go. */
     copy = false,
   ) => {
     if (e.button !== 0) return;
@@ -299,7 +299,7 @@ export function useBlockDrag(opts: {
     const snapCache = new Map<string, SnapTarget[]>();
     /* a trim stops at the neighbors on the clip's own track (every row of it) */
     const fence = mode === 'trim-start' || mode === 'trim-end' ? trimFence(geom, singleLanes[homeLaneIndex]?.occupied ?? []) : undefined;
-    /* on the main track with the magnet a trim ripples, as CapCut's: what follows moves with the edge */
+    /* on the main track with the magnet a trim ripples: what follows moves with the edge */
     const ripple = magnetOn(model, homeLane?.docIndex, prefs.magnet) && (mode === 'trim-start' || mode === 'trim-end');
 
     let dragging = false;
@@ -415,7 +415,7 @@ export function useBlockDrag(opts: {
         : null;
       /* a copy (⌥ at the press, often still held) is always put down: ⌥ inserts only a move */
       const editMode: MoveMode = copy ? 'place' : moveEditMode(altNow);
-      /* onto the main track with the magnet it goes in between, as CapCut's: the insert point decides, not a snap */
+      /* onto the main track with the magnet it goes in between: the insert point decides, not a snap */
       const landsOn = groupOpens != null ? null : drop.action === 'move' ? drop.trackIndex : drop.action === 'stay' ? homeLane?.docIndex : null;
       const mainInsert = !grouped && magnetOn(m, landsOn, p.magnet);
       const settle = editMode === 'place' && !mainInsert ? flush : null;

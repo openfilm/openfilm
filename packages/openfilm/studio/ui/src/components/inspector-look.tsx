@@ -338,7 +338,7 @@ export function MaskGlyph({ shape }: { shape: MaskShape | 'none' }) {
 }
 
 /**
- * A mask, as CapCut's: a shape the picture shows through (or, inverted, is hidden by), placed, sized, turned and
+ * A mask: a shape the picture shows through (or, inverted, is hidden by), placed, sized, turned and
  * feathered in % of the box. Written as `mask-image` layers (lib/clip-mask: what each shape is in CSS, and how it sits
  * with the faded edges, which share the property, and with the crop's clip-path). A mask written by hand is "custom":
  * the raw CSS (Advanced) has it.
@@ -518,7 +518,7 @@ const CORNERS = ['top-left', 'top-right', 'bottom-right', 'bottom-left'] as cons
 type Corner = (typeof CORNERS)[number];
 
 /**
- * Corner radius, as Figma's: one number for all four, or (the button beside it) each corner its own. A crop cuts the
+ * Corner radius: one number for all four, or (the button beside it) each corner its own. A crop cuts the
  * box's own corners away, so it carries the same roundness (one for all: a crop's shape rounds its corners alike).
  */
 function RadiusField({ look, t }: { look: Look; t: T }) {
@@ -586,12 +586,12 @@ function CornerGlyph({ corner }: { corner: Corner }) {
 }
 
 /**
- * Opacity, corner radius (`radius`: for what has corners — a box, a picture, a line with its own fill) and blend,
- * as Figma's Appearance.
+ * Opacity, corner radius (`radius`: for what has corners — a box, a picture, a line with its own fill) and blend:
+ * the Appearance section.
  */
 /**
  * What the things in hand looked like before a menu showed something else on the picture (a hovered font, weight,
- * size or blend mode, as Figma shows one on the canvas before it is picked): the stage measures a layer again after
+ * size or blend mode, shown on the picture before it is picked): the stage measures a layer again after
  * each preview, so by then it reads as the preview. Giving up (`restore`) paints that back; a pick (`commit`) keeps it.
  */
 function usePreviewed(look: Look) {
@@ -658,7 +658,7 @@ export function AppearanceSection({ look, t, children, radius = false }: { look:
 /* ───────────────────────────── fill ───────────────────────────── */
 
 /**
- * Fill, as Figma's: what paints the thing — a line's color, a box's background, a shape's fill. One the thing may go
+ * Fill: what paints the thing — a line's color, a box's background, a shape's fill. One the thing may go
  * without (a box's background) has "−" to take it off, and "+" brings one back.
  */
 export function FillSection({ look, t, fills, add }: {
@@ -701,7 +701,7 @@ export function FillSection({ look, t, fills, add }: {
 /* ───────────────────────────── stroke ───────────────────────────── */
 
 /**
- * Stroke, as Figma's: color, weight, where it lies against the edge (inside, across, outside) and its line (solid,
+ * Stroke: color, weight, where it lies against the edge (inside, across, outside) and its line (solid,
  * dashed, dotted). Drawn as an `outline` with its offset (lib/clip-look placedStrokeOf): it adds nothing to the box,
  * so the layout does not move as it is added or thickened.
  */
@@ -804,7 +804,7 @@ const ADJUST_RANGE: Record<AdjustKey, { min: number; max: number; unit: string; 
  * grayscale): 0 is as is, a double-click puts one back, the reset all. Filter functions without a control here
  * (sepia, a url) are kept as written, in their place.
  */
-/* the picture's color; its blur is an effect (Figma's layer blur) */
+/* the picture's color; its blur is an effect (a layer blur) */
 const COLOR_KEYS = ADJUST_KEYS.filter((k) => k !== 'blur');
 
 export function AdjustSection({ look, t }: { look: Look; t: T }) {
@@ -866,7 +866,7 @@ export function AdjustSection({ look, t }: { look: Look; t: T }) {
 type EffectId = 'shadow' | 'inner' | 'blur' | 'backdrop' | 'fade';
 
 /**
- * Effects, as Figma's, each added with "+" and taken off with "−", none taking room unless used: a drop shadow, an
+ * Effects, each added with "+" and taken off with "−", none taking room unless used: a drop shadow, an
  * inner shadow (`inner`: for what has a box of its own to cast it in), a layer blur, a background blur — and faded
  * edges, a video editor's.
  *
@@ -1110,7 +1110,7 @@ export function EffectsSection({ look, t, inner = false }: { look: Look; t: T; i
 /** What a type property is when nothing sets it (what giving up a preview paints back when the layer had none). */
 const TYPE_NEUTRAL: Record<string, string> = { 'font-weight': '400', 'font-style': 'normal', 'line-height': 'normal', 'letter-spacing': 'normal' };
 
-/** A family's weight menu: its own weights and italics by name, as Figma's ("Semi Bold", "Bold Italic"). */
+/** A family's weight menu: its own weights and italics by name ("Semi Bold", "Bold Italic"). */
 function weightOptions(styles: FontStyles | null, t: T): { value: string; label: string }[] {
   const list = styleOptions(styles ?? { weights: NAMED_WEIGHTS });
   return list.map((s) => {
@@ -1122,7 +1122,7 @@ function weightOptions(styles: FontStyles | null, t: T): { value: string; label:
 }
 
 /**
- * Type, as Figma's typography panel: font (its menu shows each family on the picture as it is pointed at), weight
+ * Type: font (its menu shows each family on the picture as it is pointed at), weight
  * (the family's own), size (with a menu of common sizes), line height, letter spacing, alignment, case
  * (`text-transform`) and color. Text in an SVG has no line layout and is colored by its fill.
  */
@@ -1286,7 +1286,7 @@ export function TypographySection({ look, t, svg, sample }: { look: Look; t: T; 
   );
 }
 
-/** The font size field's menu: the common sizes, as Figma's; the one under the pointer shown before it is picked. */
+/** The font size field's menu: the common sizes; the one under the pointer shown before it is picked. */
 function FontSizeMenu({ t, onPick, onPreview, onRevert }: { t: T; onPick: (n: number) => void; onPreview: (n: number) => void; onRevert: () => void }) {
   const [open, setOpen] = React.useState(false);
   const previewing = React.useRef(false);

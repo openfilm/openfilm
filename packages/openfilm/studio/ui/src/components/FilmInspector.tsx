@@ -1,5 +1,5 @@
 /**
- * The inspector: what is selected right now, read like Figma's properties panel and adjusted as in an editor.
+ * The inspector: what is selected right now, read as a properties panel and adjusted as in an editor.
  *
  * One property model wherever a thing is: a whole clip on the timeline (a video, a still, a page), a layer inside a
  * page on the picture, several of either, and the film itself when nothing is selected. The same sections in the
@@ -808,7 +808,7 @@ function LayerPanel({
   /* the anchor below is a hook: it has to run before the early return */
   const geoAnchor = React.useRef<StageGeometry | null>(null);
   React.useEffect(() => { geoAnchor.current = null; }, [element.loc, element.override]);
-  /* aspect lock: on by default for text (squashed letters are never wanted), off otherwise (as in Figma) */
+  /* aspect lock: on by default for text (squashed letters are never wanted), off otherwise */
   const [ratioLocked, setRatioLocked] = React.useState(element.kind === 'text');
   /* the properties a preview has painted: what a revert paints back */
   const previewedKeys = React.useRef(new Set<string>());
@@ -853,7 +853,7 @@ function LayerPanel({
   });
 
   /*
-   * Position and size are an override. The panel shows Figma's numbers — X / Y, W / H on the stage, the angle — as
+   * Position and size are an override. The panel shows the numbers — X / Y, W / H on the stage, the angle — as
    * the stage measures them (geometry); what is written is the override's offset / factors, converted back by
    * `unit` (the offset is in the parent's coordinates). Not measurable (not on screen) → the written offset.
    * With "All N copies" one override covers every copy, otherwise only the picked one.
@@ -899,8 +899,8 @@ function LayerPanel({
     ];
   };
   /**
-   * W / H write the override's x / y factors (both together when the aspect is locked). The top left stays put, as
-   * in Figma; the offset that keeps it there is added by the caller from what the stage measures.
+   * W / H write the override's x / y factors (both together when the aspect is locked). The top left stays put;
+   * the offset that keeps it there is added by the caller from what the stage measures.
    */
   const sizeFor = (w: number | null, h: number | null): { s: number | [number, number] } | null => {
     if (!geo || !(geo.w > 0) || !(geo.h > 0)) return null;
@@ -1093,7 +1093,7 @@ function LayerPanel({
         {...(onEditMask ? { onEditMask } : {})}
       />
 
-      {/* Figma's order: appearance, fill, stroke, effects; then the picture's color adjustments */}
+      {/* in order: appearance, fill, stroke, effects; then the picture's color adjustments */}
       <AppearanceSection look={look} t={t} radius={kind === 'box' || kind === 'image' || textFilled} />
       <FillSection
         look={look}
@@ -1202,7 +1202,7 @@ function TextSection({
           cancelled.current = false;
           typing.current = true;
           setRaw(e.target.value);
-          /* the picture follows the words (Figma's feel); the write still waits for blur / Enter */
+          /* the picture follows the words; the write still waits for blur / Enter */
           onPreviewText?.(text.loc, e.target.value);
         }}
         onBlur={save}
@@ -1240,7 +1240,7 @@ function GroupPanel({ geometry, group, layers, onEditLayers, onPlace, t }: {
   group: NonNullable<StageGeometry['group']>;
   layers?: readonly StageElement[];
   onEditLayers?: (list: LayerEdit[]) => Promise<string | null>;
-  /** Their bounds typed: moved (x, y) or scaled in proportion (w, h), as Figma's fields do a selection. */
+  /** Their bounds typed: moved (x, y) or scaled in proportion (w, h). */
   onPlace?: (to: { x?: number; y?: number; w?: number; h?: number }) => void;
   t: T;
 }) {
@@ -1948,7 +1948,7 @@ function MultiClipPanel({
     const before = compactBox(p.value, p.own);
     return JSON.stringify(next) === JSON.stringify(before) ? [] : [{ loc: p.loc, prop: 'box', value: next }];
   });
-  /* their bounds, as Figma shows a selection's: typed, the X / Y move them all and the W / H scale them all, in
+  /* their bounds: typed, the X / Y move them all and the W / H scale them all, in
      proportion, about the bounds' top left */
   const bounds = allPlaced?.length ? (() => {
     const x0 = Math.min(...allPlaced.map((p) => p.x)), y0 = Math.min(...allPlaced.map((p) => p.y));
@@ -2120,7 +2120,7 @@ function TransitionPanel({ t, pick }: { t: T; pick: TransitionPick }) {
 /**
  * A clip's `box` (film.html only — a code-shaped clip has no such section), its picture's own size `own` known.
  *
- * The fields are Figma's: X / Y, W / H in stage px, the angle, and the align row. W and H keep the picture's
+ * The fields: X / Y, W / H in stage px, the angle, and the align row. W and H keep the picture's
  * proportions while locked (typing one sets the other, and the box is written with its width alone); unlocked, a
  * video or still gets a box of its own proportions (its CSS fits or crops the picture in it). A page always shows
  * whole, so its box keeps its proportions.

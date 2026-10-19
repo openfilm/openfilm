@@ -1363,7 +1363,7 @@ export const zhCN: Words = {
     replaceFromComputer: "从电脑选择…",
     replacePick: "选择用来替换的文件",
   },
-  /* a clip's attributes copied onto others (lib/clip-attrs, components/PasteAttrsDialog), as CapCut's */
+  /* a clip's attributes copied onto others (lib/clip-attrs, components/PasteAttrsDialog) */
   clipAttrs: {
     title: '粘贴属性',
     picture: '画面',

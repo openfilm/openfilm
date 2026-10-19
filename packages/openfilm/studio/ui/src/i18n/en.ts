@@ -1363,7 +1363,7 @@ export const en = {
     replaceFromComputer: "From your computer…",
     replacePick: "Choose a file to replace the clip",
   },
-  /* a clip's attributes copied onto others (lib/clip-attrs, components/PasteAttrsDialog), as CapCut's */
+  /* a clip's attributes copied onto others (lib/clip-attrs, components/PasteAttrsDialog) */
   clipAttrs: {
     title: 'Paste attributes',
     picture: 'Picture',

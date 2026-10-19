@@ -3,7 +3,7 @@
  * magnet and linkage, and linked clips. Each works on a plain model of the tracks (film ms, and each clip's own source
  * ms) and comes back as the operations film.html takes (studio/server/ops.mjs), in one batch: one write, one undo step.
  *
- * Rules every edit here keeps, as CapCut's:
+ * Rules every edit here keeps:
  *   · a locked track never changes;
  *   · clips on one track never overlap, and nothing put down cuts what is there: where its time is taken a clip goes
  *     to a new track beside (an overwrite, asked for, is the one exception);
@@ -65,7 +65,7 @@ export interface EditTrack {
 export type EditModel = readonly EditTrack[];
 
 /**
- * The switches an edit is planned by (lib/timeline-prefs), as CapCut's: `magnet` (主轨磁吸) keeps the main track
+ * The switches an edit is planned by (lib/timeline-prefs): `magnet` (主轨磁吸) keeps the main track
  * closed up, `linkage` (联动) carries what rides on main-track clips with them. Both act on the main track alone.
  */
 export interface Switches { magnet: boolean; linkage: boolean }
@@ -696,7 +696,7 @@ export function gapsOf(model: EditModel, track: number): { startMs: number; endM
   return spans;
 }
 
-/** Every gap on a track closed (CapCut's 批量闭合空隙), as closing each does. Nothing on a locked track. */
+/** Every gap on a track closed, as closing each does. Nothing on a locked track. */
 export function planCloseTrackGaps(model: EditModel, track: number, sw: Switches = NO_SWITCHES): EditPlan {
   const spans = gapsOf(model, track);
   if (!spans.length || model.find((t) => t.index === track)?.locked) return emptyPlan();
@@ -707,7 +707,7 @@ export function planCloseTrackGaps(model: EditModel, track: number, sw: Switches
   return planOf(d);
 }
 
-/** The main track closed up, as CapCut's when its magnet is turned on (planCloseTrackGaps on the main track). */
+/** The main track closed up when its magnet is turned on (planCloseTrackGaps on the main track). */
 export function planCloseMainGaps(model: EditModel, sw: Switches): EditPlan {
   const main = mainTrackOf(model);
   return main == null ? emptyPlan() : planCloseTrackGaps(model, main, sw);
@@ -724,7 +724,7 @@ export function planRemove(model: EditModel, ids: readonly string[], opts: { rip
   const d = draftOf(model);
   const main = mainTrackOf(model);
   const rides = opts.linkage ? ridesOf(d, main, new Set(ids)) : new Map<string, Ride>();
-  /* what rides on a deleted main-track clip goes with it, as CapCut's ("随着主轨移动、删除") */
+  /* what rides on a deleted main-track clip goes with it */
   const deleted = new Set(ids);
   for (const [id, ride] of rides) {
     if (!deleted.has(ride.host)) continue;
@@ -827,7 +827,7 @@ export interface MoveSpec extends Partial<Switches> {
  * and take that time off the tracks they land on. Insert (⌥): they are lifted out (the time they took closes on their
  * tracks) and go in at the insert point of the track the grabbed one lands on, pushing what comes after on.
  *
- * With the magnet, the main track stays closed up, as CapCut's: the time clips leave on it closes, and clips the
+ * With the magnet, the main track stays closed up: the time clips leave on it closes, and clips the
  * grabbed one takes onto it go in end to end at the insert point there (a move along it reorders). With linkage what
  * rides on main-track clips stays on their footage (carry). A new track takes clips as they are. Null when a track it
  * would change is locked.
@@ -1021,7 +1021,7 @@ export function planEdges(model: EditModel, moves: readonly EdgeMove[], deltaMs:
 /**
  * A ripple trim: one edge of these clips (the first is the one in hand, the rest linked to it) moves by `deltaMs` and
  * what comes after follows on their tracks (with linkage, what rides on the main track along). The start edge trims
- * the head and keeps the clip where it starts, as in CapCut: it is the clip that gets shorter, and what follows moves
+ * the head and keeps the clip where it starts: it is the clip that gets shorter, and what follows moves
  * back. Shortening stops where the clips' own tracks have no room.
  */
 export function planRippleTrim(

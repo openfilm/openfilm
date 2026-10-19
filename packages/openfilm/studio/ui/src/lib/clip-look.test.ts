@@ -94,7 +94,7 @@ test('what the controls say is left out of the raw CSS', () => {
   assert.ok(ownedDeclaration('mask-image', 'linear-gradient(to right, transparent, #000 15%)', none));
 });
 
-test('a stroke lies inside, across or outside the edge, as Figma\'s: an outline and its offset', () => {
+test('a stroke lies inside, across or outside the edge: an outline and its offset', () => {
   const read = (css: Record<string, string>) => (prop: string) => css[prop];
   assert.deepEqual(placedStrokeOf(read({ outline: 'rgb(255, 255, 255) solid 4px', 'outline-offset': '-4px' })), { width: 4, style: 'solid', color: 'rgb(255, 255, 255)', position: 'inside' });
   assert.equal(placedStrokeOf(read({ outline: '#fff solid 4px', 'outline-offset': '-2px' }))?.position, 'center');

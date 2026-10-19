@@ -1,6 +1,6 @@
 /**
  * A file from the media pane put on the timeline without dragging it: its "+" button and Enter, and `,` / `.` from the
- * source viewer (insert / overwrite, as Premiere's keys). The part of the file marked in the source viewer (I and O
+ * source viewer (insert / overwrite). The part of the file marked in the source viewer (I and O
  * there), else all of it, as one clip — a video carries its own sound.
  *
  * Where it goes: at the playhead on the targeted track (the track last clicked on the timeline), or without one at

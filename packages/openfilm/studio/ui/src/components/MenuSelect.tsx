@@ -3,7 +3,7 @@
  * checked), in place of the browser's own list: that one is drawn by the system, light in a dark Studio, and with
  * the field's text color it read as if every choice were disabled. Choices may come in groups, each under a small
  * heading. The arrow keys move through them, Enter picks, Esc closes. With `onPreview`, the choice under the pointer (or
- * the keys) is shown before it is picked, as Figma shows a font or a blend mode on the canvas; closing without a pick
+ * the keys) is shown before it is picked; closing without a pick
  * takes it back (`onRevert`).
  */
 import React from 'react';

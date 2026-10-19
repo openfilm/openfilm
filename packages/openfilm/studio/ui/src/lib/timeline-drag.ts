@@ -2,7 +2,7 @@
  * The arithmetic of dragging on the timeline: pixels to time, what to snap to, where to land.
  *
  * Kept apart because a drag is dozens of pointer moves and a wrong step in any of them only feels "a bit off"; as pure
- * functions they are easy to pin down. Following mature editors (OpenCut):
+ * functions they are easy to pin down. The rules:
  *   · a 5 px threshold: without one, clicking a clip is a zero-length drag that writes the same value back;
  *   · snapping measured in screen pixels, not milliseconds, so it feels the same at every zoom;
  *   · a clip never snaps to itself, or it could not move at all.
@@ -546,8 +546,8 @@ export interface GroupLaneShift {
 /**
  * Where a selection moved up or down lands.
  *
- * One degree of freedom: the whole group moves the same number of rows, keeping the shape the user made (Premiere /
- * Resolve do the same). Only the rows asked for are tried. Any track takes any clip; a track a clip moves to must be
+ * One degree of freedom: the whole group moves the same number of rows, keeping the shape the user made.
+ * Only the rows asked for are tried. Any track takes any clip; a track a clip moves to must be
  * unlocked. What is already on a track where a clip lands is the edit mode's to settle (insert or overwrite); the
  * landings themselves may not overlap each other: clips on one track do not overlap (SPEC).
  */

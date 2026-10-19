@@ -1362,7 +1362,7 @@ export const ko: Words = {
     replaceFromComputer: "이 컴퓨터에서…",
     replacePick: "클립을 바꿀 파일 선택",
   },
-  /* a clip's attributes copied onto others (lib/clip-attrs, components/PasteAttrsDialog), as CapCut's */
+  /* a clip's attributes copied onto others (lib/clip-attrs, components/PasteAttrsDialog) */
   clipAttrs: {
     title: '속성 붙여넣기',
     picture: '화면',

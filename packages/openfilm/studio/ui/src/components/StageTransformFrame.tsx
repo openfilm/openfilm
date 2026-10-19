@@ -1,5 +1,5 @@
 /**
- * The frame of the thing in hand on the stage, shared by a whole clip and a layer inside one (Figma's look).
+ * The frame of the thing in hand on the stage, shared by a whole clip and a layer inside one.
  *
  * A 1px blue border and white corner squares with a blue edge (scale); an invisible ring outside the corners turns the
  * pointer into the rotate cursor; invisible strips on the edges stretch one side (a layer's override scale has x and y;
@@ -41,7 +41,7 @@ const CORNER_AT: Record<FrameCorner, { x: 0 | 1; y: 0 | 1 }> = {
 };
 
 /*
- * The rotate cursor: a quarter arc with an arrow at each end (Figma's; browsers have no such cursor). Drawn for the
+ * The rotate cursor: a quarter arc with an arrow at each end (browsers have no such cursor). Drawn for the
  * top-right corner; other corners and turned frames turn it, cached in 15° steps.
  */
 const ROTATE_CURSORS = new Map<number, string>();
@@ -103,7 +103,7 @@ export function StageTransformFrame({
   const h = Math.max(frame.h, 1);
   /*
    * Handles sit on a frame at least HANDLE_BOX_MIN big: on something tiny (an icon, a thin line) corner squares on its
-   * own edges would pile up over it. As in Figma the blue border keeps the true size and the handles go on the ring
+   * own edges would pile up over it. The blue border keeps the true size and the handles go on the ring
    * outside, the whole middle still draggable.
    */
   const hw = Math.max(w, HANDLE_BOX_MIN);
@@ -204,7 +204,7 @@ export function StageTransformFrame({
           );
         }) : null}
       </div>
-      {/* shown while dragging too: the frame moves and its size changes, and the label follows (as in Figma) */}
+      {/* shown while dragging too: the frame moves and its size changes, and the label follows */}
       {label ? <FrameLabel frame={{ ...frame, w: hw, h: hh }} text={label} {...(bounds ? { bounds } : {})} /> : null}
     </>
   );

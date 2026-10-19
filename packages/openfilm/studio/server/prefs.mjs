@@ -14,7 +14,7 @@ import { studioHome } from './projects.mjs';
 
 /** @typedef {{ proxies: { on: boolean, height: 540 | 720 | 1080 }, seenVersion: string | null, projectsFolder: string | null }} Prefs */
 
-/** Proxies as CapCut has them: on, at 720p. */
+/** Proxies: on, at 720p. */
 export const DEFAULT_PREFS = /** @type {Prefs} */ ({ proxies: { on: true, height: 720 }, seenVersion: null, projectsFolder: null });
 const VERSION = /^\d+\.\d+\.\d+(?:-[\w.]+)?$/;
 const HEIGHTS = [540, 720, 1080];

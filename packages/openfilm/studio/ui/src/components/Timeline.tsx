@@ -1,5 +1,5 @@
 /**
- * The timeline under the picture — the multi-track kind, as in CapCut and OpenCut.
+ * The timeline under the picture — the multi-track kind.
  *
  * film.html has tracks of clips; each film.html track is a row here (overlapping clips spread into extra rows, see
  * layoutTracks), pictures above, sounds below.
@@ -601,7 +601,7 @@ export interface TimelineProps {
   /** On release, once: settle. */
   onScrubCommit: (ms: number) => void;
   /**
-   * The preview axis (CapCut's 预览轴, a switch in the toolbar): the picture at the moment under the pointer while it
+   * The preview axis (a switch in the toolbar): the picture at the moment under the pointer while it
    * moves over the tracks, the playhead staying where it is; null: back to the playhead's picture. Without it there is
    * no preview axis.
    */
@@ -825,7 +825,7 @@ function TrimHandle({
       className="group/trim absolute inset-y-0 z-[2] cursor-ew-resize"
       /* picked, the grab straddles the edge (the selection frame outside, the clip's own edge inside): a person reaches
          for the clip's edge, and grabbing just inside it moved the whole clip instead (UI test, 2026-10-03). Not where
-         another clip touches it: outside is that clip's own edge, which trims that clip (CapCut has no roll) */
+         another clip touches it: outside is that clip's own edge, which trims that clip (there is no roll) */
       style={{
         width: picked ? hit * 2 : hit,
         ...(edge === 'start'
@@ -1037,7 +1037,7 @@ export const Timeline = React.memo(function Timeline({
   };
 
   const [zoom, setZoom] = React.useState(ZOOM_DEFAULT);
-  /* the switches, CapCut's (the main-track magnet, snapping, linkage, the preview axis); kept on this machine */
+  /* the switches (the main-track magnet, snapping, linkage, the preview axis); kept on this machine */
   const prefs = useTimelinePrefs();
   const snap = prefs.snap;
   const prefsRef = React.useRef(prefs);
@@ -1630,7 +1630,7 @@ export const Timeline = React.memo(function Timeline({
 
   /* A scrub follows the pointer from pointerdown to pointerup even outside the timeline (listeners on window). Each
      frame previews, release commits: hundreds of seeks would make the sound tear. With snapping on, the line snaps to
-     clip edges and markers, as CapCut's. A click without dragging takes the same path, and pauses, as CapCut does. */
+     clip edges and markers. A click without dragging takes the same path, and pauses. */
   const startScrub = React.useCallback((e: React.PointerEvent, fromRuler = false) => {
     if (e.button !== 0 || !playable) return;
     e.preventDefault();
@@ -1781,7 +1781,7 @@ export const Timeline = React.memo(function Timeline({
       return now && Math.abs(now.startMs - g.startMs) < TOUCH_MS && Math.abs(now.endMs - g.endMs) < TOUCH_MS ? g : null;
     });
   }, [model]);
-  /* the magnet turned on closes up the main track, as CapCut's: its gaps go, in one step */
+  /* the magnet turned on closes up the main track: its gaps go, in one step */
   onMagnetOn.current = () => {
     void runPlan(planCloseMainGaps(modelRef.current, switchesOf(prefsRef.current)), 'history.stepMainClosed');
   };
@@ -2108,7 +2108,7 @@ export const Timeline = React.memo(function Timeline({
     void rippleRemove(tracks.flatMap((tr) => tr.blocks).filter(mine), true, wait.ripple);
   };
   React.useEffect(() => { rippleRetry.current(false); }, [tracks]);
-  /** Delete (⌫, ⌘X, the menu): with the magnet the main track closes up, as CapCut's: it waits as a ripple does. */
+  /** Delete (⌫, ⌘X, the menu): with the magnet the main track closes up: it waits as a ripple does. */
   const magnetRemove = React.useCallback(
     (blocks: readonly TimelineBlock[]) => (prefsRef.current.magnet ? rippleRemove(blocks, false, false) : removeMany(blocks)),
     [rippleRemove, removeMany],
@@ -2230,7 +2230,7 @@ export const Timeline = React.memo(function Timeline({
    */
   const dropModeAt = React.useCallback((hit: { lane: number; band: DropBand }, alt: boolean): EditMode | undefined => {
     if (alt) return 'overwrite';
-    /* onto the main track with the magnet, as CapCut's: in between, what follows moving on */
+    /* onto the main track with the magnet: in between, what follows moving on */
     const doc = hit.band === 'body' ? tracks[hit.lane]?.docIndex : undefined;
     return magnetOn(modelRef.current, doc, prefsRef.current.magnet) ? 'insert' : undefined;
   }, [tracks]);
@@ -2366,7 +2366,7 @@ export const Timeline = React.memo(function Timeline({
       if (!onSplit) return;
       if (e.altKey || e.shiftKey || e.metaKey || e.ctrlKey || e.defaultPrevented) return;
       const key = e.key.toLowerCase();
-      /* A or V selects (CapCut's key, Premiere's key), B splits */
+      /* A or V selects, B splits */
       if (key !== 'a' && key !== 'b' && key !== 'v') return;
       e.preventDefault();
       setMode(key === 'b' ? 'split' : 'select');
@@ -2991,13 +2991,13 @@ export const Timeline = React.memo(function Timeline({
                     if (!inGroup) setSelected(own);
                     if (track.locked) return;
                     const at = msAtClientX(e.clientX);
-                    /* ⇧: every track is cut there, as CapCut's */
+                    /* ⇧: every track is cut there */
                     if (e.shiftKey) { void runSplit(splitAllTargets(tracks, at), at); return; }
                     const cut = new Set(own);
                     void runSplit(tracks.flatMap((tr) => tr.blocks).filter((b) => cut.has(b.id)), at);
                     return;
                   }
-                  /* ⌥-drag copies (this clip alone, or the group it is in), as CapCut's; a ⌥-click picks this clip alone */
+                  /* ⌥-drag copies (this clip alone, or the group it is in); a ⌥-click picks this clip alone */
                   if (e.altKey) {
                     if (!inGroup) setSelected(withLinked([block.id]));
                     collapseIfClick(e, block.id, true);
@@ -3388,9 +3388,9 @@ export const Timeline = React.memo(function Timeline({
   /**
    * Ripple trim to the playhead (Q / W): `start` takes the head of the clip off up to the playhead, `end` its tail
    * from it, and what follows on its track closes up (with linkage, what rides on the main track along). On the clips
-   * given, else the selected ones the playhead is inside, else the main track's under it (as CapCut's), else the one
+   * given, else the selected ones the playhead is inside, else the main track's under it, else the one
    * under it on the targeted track, else the topmost under it; the clips linked to them go along. After Q the
-   * playhead goes to the clip's start, where what was under it now is, as CapCut's.
+   * playhead goes to the clip's start, where what was under it now is.
    */
   const rippleTrimToPlayhead = React.useCallback((edge: 'start' | 'end', given?: readonly TimelineBlock[]) => {
     const atMs = timeMsRef.current;
@@ -3513,7 +3513,7 @@ export const Timeline = React.memo(function Timeline({
           onSelect: () => closeGapOn(found),
         });
       }
-      /* every gap on this track at once (CapCut's 批量闭合空隙) */
+      /* every gap on this track at once */
       const row = tracks.find((tr) => tr.lane === menu.lane);
       if (onEditOps && row?.docIndex != null && !laneLocked && gapsOf(modelRef.current, row.docIndex).length) {
         const doc = row.docIndex;
@@ -3549,7 +3549,7 @@ export const Timeline = React.memo(function Timeline({
         onSelect: () => { void runSplit(picked); },
       });
     }
-    /* ripple trims to the playhead (Q / W in Premiere): off the head up to it, or off the tail from it, closing up */
+    /* ripple trims to the playhead (Q / W): off the head up to it, or off the tail from it, closing up */
     if (one && onEditOps && one.clipId) {
       const under = spans(one) && !pickedLocked;
       out.push({
@@ -3928,7 +3928,7 @@ export const Timeline = React.memo(function Timeline({
           ) : null}
         </div>
 
-        {/* the switches (lib/timeline-prefs), in CapCut's order: the main-track magnet, snapping, linkage, the preview axis */}
+        {/* the switches (lib/timeline-prefs), in order: the main-track magnet, snapping, linkage, the preview axis */}
         {onEditOps ? <>
           <span data-timeline-magnet={prefs.magnet ? '1' : '0'}>
             <ToolButton onClick={() => togglePref('magnet')} active={prefs.magnet} label={t('timeline.magnet')}

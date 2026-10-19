@@ -1,5 +1,5 @@
 /**
- * A mask's handles on the picture (as CapCut draws them), apart from the DOM so it can be tested: where the outline and
+ * A mask's handles on the picture, apart from the DOM so it can be tested: where the outline and
  * the handles go, and what a drag of each makes of the mask (lib/clip-mask's numbers).
  *
  * Everything is in the clip's or layer's box, unturned, px from its top left (the overlay's px, the picture's scale

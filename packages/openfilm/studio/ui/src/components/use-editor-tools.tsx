@@ -114,7 +114,7 @@ export function useEditorTools({
     const atMs = at ?? timeRef.current;
     const clip = on === undefined ? markerClip(tracksRef.current, selectedClipIds, atMs) : on;
     const { list, added } = addMarker(markersRef.current, atMs, clip);
-    /* one there already: M again names it, as Premiere's */
+    /* one there already: M again names it */
     if (list.length === markersRef.current.length) { setNaming(added.id); return; }
     saveMarkers(list);
     if (added.clip && clip) toast.show(t('editorTools.markerAddedOn').replace('{clip}', clip.title));
@@ -258,7 +258,7 @@ export function useEditorTools({
     let still: string;
     try { still = await api.freezeFrame(projectId, block.src, srcMs); }
     catch (e) { toast.showError(t('editorTools.freezeFail').replace('{reason}', (e as Error).message)); return; }
-    /* the still goes in between at the playhead, as CapCut's: what follows on that track moves on (with linkage, what
+    /* the still goes in between at the playhead: what follows on that track moves on (with linkage, what
        rides on the main track along) */
     const ops = planFreeze(editModel(), { clip, track: ti, atMs: at, still, mode: 'insert', ...switchesOf(readTimelinePrefs()) });
     if (!ops) { toast.show(t('timeline.trackLocked')); return; }

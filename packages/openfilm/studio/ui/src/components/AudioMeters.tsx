@@ -1,5 +1,5 @@
 /**
- * The audio meters, as Premiere's: the film's sound as it plays, left and right, peak (the light bar, with a mark that
+ * The audio meters: the film's sound as it plays, left and right, peak (the light bar, with a mark that
  * holds the loudest of late) and RMS (the solid bar inside it), on a dBFS scale. A channel that reached 0 dBFS lights
  * its clip light at the top until it is clicked.
  *

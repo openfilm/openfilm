@@ -6,14 +6,14 @@
  * wider pane or a taller timeline when working on a long edit. A fixed ratio always
  * shortchanges one of them, and only the user knows the trade-off at that moment.
  *
- * Modeled on Unreal: the gap between the panes is the seam, and the seam is the handle. Its
+ * The gap between the panes is the seam, and the seam is the handle. Its
  * width must therefore equal the spacing between panes (DOCK_GAP); one pixel off makes it look crooked.
  *
  * With a mouse the seam draws nothing. Hovering already turns the cursor into a resize arrow,
  * and while dragging the panes widen under the hand, which is the most direct feedback there
  * is. Lighting up a line would say the same thing a third time, and it would flicker whenever
  * the pointer merely crosses the seam (a seam between panes is on the path across the screen).
- * CapCut and Unreal work this way: the cursor says where you can drag, the content says what is happening.
+ * The cursor says where you can drag, the content says what is happening.
  *
  * It lights up only when reached by keyboard: there is no cursor shape and no held button
  * then, so without a highlight a keyboard user cannot tell which seam has focus.

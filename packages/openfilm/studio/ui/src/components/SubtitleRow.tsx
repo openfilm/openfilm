@@ -1,5 +1,5 @@
 /**
- * The subtitle row: the film's subtitles as blocks under the ruler, timed by hand as CapCut's caption track is.
+ * The subtitle row: the film's subtitles as blocks under the ruler, timed by hand.
  *
  *   drag a cue's edge     its start or end (never over a neighbor, snapping to clip edges, cues and the playhead)
  *   drag a cue            moves it, its length kept

@@ -12,7 +12,7 @@ test('another shape keeps the canvas short side (1920×1080 made 3:4 is 1080×14
   assert.deepEqual(canvasFor(wide, '2.35:1'), cinema);
 });
 
-test('each picture is fitted to the new canvas on its own, as CapCut does: a full-frame video, a portrait photo, a title', () => {
+test('each picture is fitted to the new canvas on its own: a full-frame video, a portrait photo, a title', () => {
   const out = fitToCanvas([
     { id: 'v', kind: 'video', own: wide, box: { x: 0, y: 0, w: 1920, h: 1080 } },
     /* a 3:4 photo on another clip, filling the height in the middle */

@@ -1,5 +1,5 @@
 /**
- * The font menu's rows, as Figma lays them out: "In this project" first — the families the project's pages declare
+ * The font menu's rows: "In this project" first — the families the project's pages declare
  * with @font-face and the ones the current page names — then "Recent", then every font installed here, by script
  * (the CJK ones first for CJK text). Typing filters every section by name and alias, best matches first.
  *

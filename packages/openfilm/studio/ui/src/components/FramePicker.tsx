@@ -1,6 +1,6 @@
 /**
  * The aspect ratio button beside the picture: the film's canvas (its stage in film.html). Picking a shape changes the
- * canvas itself (`onCanvas`), as CapCut's does: the film is scaled whole into it, centered, until the agent lays it
+ * canvas itself (`onCanvas`): the film is scaled whole into it, centered, until the agent lays it
  * out again. A delivery frame (bars or a crop around the film) is the export's. Any other size is typed in the
  * inspector.
  */
@@ -10,7 +10,7 @@ import { useT } from '@/i18n';
 import { customFilmFrame, filmFrameRatio, type FilmFrameId } from '@/lib/film-frame';
 import { Tooltip } from './Tooltip';
 
-/** The shapes a canvas is offered in, as CapCut lists them (and 21:9): landscape, then portrait. */
+/** The shapes a canvas is offered in: landscape, then portrait. */
 export const CANVAS_RATIOS: { group: 'wide' | 'tall'; id: FilmFrameId; phone?: true }[] = [
   { group: 'wide', id: '16:9' },
   { group: 'wide', id: '21:9' },

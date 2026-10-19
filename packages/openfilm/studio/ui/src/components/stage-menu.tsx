@@ -1,5 +1,5 @@
 /**
- * The stage's context menus (FilmStageSelect asks for one on a right-click): as in Figma, what was hit decides the
+ * The stage's context menus (FilmStageSelect asks for one on a right-click): what was hit decides the
  * list. A layer inside a page, a whole clip (the same actions as its block on the timeline), several layers boxed
  * together; and after them on every menu, Show… / Unlock… for the layers that cannot be clicked any more. Items that
  * cannot run stay, grayed, with the reason.

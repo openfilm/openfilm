@@ -20,8 +20,7 @@ editor that runs in your browser, shows it taking shape. Then change anything yo
 - **One HTML file.** `film.html` cuts animated web pages, footage, pictures and sound together on tracks, styled
   with CSS. Nothing new to learn: your agent already knows the web.
 - **One function.** Each shot is a web page that draws any moment with `frame(t)`, using anything a browser can
-  draw: three.js, WebGL, canvas, SVG, CSS, GSAP, video and more. No framework (like Remotion or HyperFrames): one
-  function is enough.
+  draw: three.js, WebGL, canvas, SVG, CSS, GSAP, video and more. No framework: one function is enough.
 - **One real editor.** Move, scale and rotate any element inside a page, change its text, color and style; place,
   crop and restyle every clip, trim and cut them on the timeline.
 

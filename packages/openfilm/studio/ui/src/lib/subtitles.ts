@@ -84,7 +84,7 @@ export const SNAP_Y: readonly number[] = [1 - SUBTITLE_HOME_Y, 0.5, FILM_SUBTITL
 
 /**
  * The snap radius, in screen pixels rather than a fraction: 1% is a few pixels in a small pane (never catches) and
- * twenty at full screen (cannot be avoided). Figma's 6px.
+ * twenty at full screen (cannot be avoided).
  */
 export const SNAP_PX = 6;
 

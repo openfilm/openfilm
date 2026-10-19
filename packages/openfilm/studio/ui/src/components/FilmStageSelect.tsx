@@ -111,12 +111,12 @@ type PressEvent = Pick<PointerEvent, 'button' | 'timeStamp' | 'pointerId' | 'tar
 /** Controls in the viewer's picture area: a press on one is theirs. */
 const CONTROLS = 'button, a, input, textarea, select, [role="button"], [role="slider"], [role="menu"], [contenteditable="true"]';
 const regionKeyHeld = (e: { metaKey: boolean; ctrlKey: boolean }) => (MAC ? e.metaKey : e.ctrlKey);
-/** ⌘A (Ctrl+A elsewhere): every layer on the picture, as Figma selects all. */
+/** ⌘A (Ctrl+A elsewhere): every layer on the picture. */
 const isSelectAll = (e: KeyLike) => isSelectAllKey(e, MAC);
 /** Arrow keys write what they moved this long after the last one (held down they come thirty a second). */
 const NUDGE_WRITE_MS = 350;
 const NO_CROP: Crop = [0, 0, 0, 0];
-/** Figma's measuring red: distances held apart from the selection's blue. */
+/** The measuring red: distances held apart from the selection's blue. */
 const MEASURE_RED = '#f24822';
 
 /** A layer as the film's stage describes it (studio/server/stage.js `describe`); boxes in stage px. */
@@ -182,8 +182,8 @@ export interface FilmStageControl {
   /** Show style keys on a layer before they are kept (`null` takes a key back to the page's own). */
   previewStyle(element: StageElement, patch: StageElementStyle | Record<string, string | number | null>): void;
   /**
-   * What a layer needs besides `style` so that no other layer moves when it is kept (its place in the page held, as
-   * Figma keeps a restyled layer from moving the others): style to write with it, {} when nothing else moves.
+   * What a layer needs besides `style` so that no other layer moves when it is kept (its place in the page held):
+   * style to write with it, {} when nothing else moves.
    */
   holdStyle(element: StageElement, style: Record<string, string | number | null>, text?: string): Promise<Record<string, string | null>>;
   /** Show a layer's words before they are kept. */
@@ -214,7 +214,7 @@ export interface FilmStageControl {
   flushPending(): void;
   /**
    * Several layers in hand: their bounds put at `x` / `y` (all moved alike), or made `w` / `h` wide (all scaled alike,
-   * in proportion, about the bounds' top left), as Figma's fields move and scale a selection. Stage px.
+   * in proportion, about the bounds' top left). Stage px.
    */
   placeLayers(to: { x?: number; y?: number; w?: number; h?: number }): void;
 }
@@ -564,7 +564,7 @@ function FilmStageSelectImpl({
   };
   /**
    * The clips a marquee `area` goes around (stage px), by the part of each on the canvas (a part past its edge cannot
-   * be boxed), as Figma takes the frames a box goes around.
+   * be boxed).
    */
   const clipsInside = (list: readonly StageClipBox[], area: Rect): { id: string; loc: string }[] => {
     const onCanvas = (r: Rect): Rect => {
@@ -661,7 +661,7 @@ function FilmStageSelectImpl({
   /* ── several layers moved together ── */
   type MultiDragItem = MultiItem & { base: LayerGeometry; scale: number; now: LayerGeometry };
   const multiDrag = React.useRef<{ x: number; y: number; moved: boolean; rect0: ClientBox; items: MultiDragItem[] } | null>(null);
-  /* several layers scaled or turned by their box's handles (Figma's): each one's center at the press (stage px) */
+  /* several layers scaled or turned by their box's handles: each one's center at the press (stage px) */
   const layersPull = React.useRef<(GroupPull & { x: number; y: number; moved: boolean; box0: ClientBox; items: MultiDragItem[]; centers: { x: number; y: number }[] }) | null>(null);
   /** The box around several layers while they are turned: the box they had, turned as far. */
   const [layersTurn, setLayersTurn] = React.useState<{ box: ClientBox; turn: number } | null>(null);
@@ -671,7 +671,7 @@ function FilmStageSelectImpl({
     /* scaling: the corner or edge pulled ('n', 'se'…) and where it was (stage px); turning: the pointer's first angle */
     handle: string | null; from: { x: number; y: number }; a0: number; box0: ClientBox;
   }) | null>(null);
-  /** The frame around several clips while they are turned: the frame they had, turned as far (Figma's). */
+  /** The frame around several clips while they are turned: the frame they had, turned as far. */
   const [groupTurn, setGroupTurn] = React.useState<{ box: ClientBox; turn: number } | null>(null);
   /** Where the clips being dragged are drawn now (their outlines follow the hand; film.html is written at the release). */
   const [clipsMoved, setClipsMoved] = React.useState<readonly LinkedMark[] | null>(null);
@@ -931,7 +931,7 @@ function FilmStageSelectImpl({
     let guides: MgGuide[] = [];
     let center: { x: number; y: number } | undefined;
     if (d.kind === 'move') {
-      /* Shift keeps one axis, as in Figma */
+      /* Shift keeps one axis */
       if (mods.shift) {
         if (Math.abs(dx) >= Math.abs(dy)) dy = 0;
         else dx = 0;
@@ -1137,7 +1137,7 @@ function FilmStageSelectImpl({
         if (!nudgeClip(e)) nudgeLayer(e);
         return;
       }
-      /* the shortcuts are the menu's items (Figma's): ⇧⌘H hide, ⇧⌘L lock, ] / [ to the front / back; grayed ones
+      /* the shortcuts are the menu's items: ⇧⌘H hide, ⇧⌘L lock, ] / [ to the front / back; grayed ones
          do nothing. A whole clip's delete / copy / paste are the timeline's keys. */
       const mod = e.metaKey || e.ctrlKey;
       const k = e.key.toLowerCase();
@@ -1178,7 +1178,7 @@ function FilmStageSelectImpl({
       }
       if (e.key !== 'Escape') return;
       /* a number being typed in the inspector: the field gives it up itself (its own Esc runs after this one, which
-         listens first), then it is blurred; the selection stays (as Figma does). Blurred here at once, the field
+         listens first), then it is blurred; the selection stays. Blurred here at once, the field
          would take the blur for a commit and keep what was typed. */
       const focus = document.activeElement as HTMLElement | null;
       if (focus?.closest('[data-film-inspector]') && /^(INPUT|TEXTAREA|SELECT)$/.test(focus.tagName)) {
@@ -1434,7 +1434,7 @@ function FilmStageSelectImpl({
       ? (cur && cur.handle === found.handle && cur.clip === found.clip && sameClientRect(cur.rect, found.rect) ? cur : found)
       : (cur ? null : cur)));
   }), [ask]);
-  /* while a marquee is drawn: what letting go would select, outlined as it goes (Figma) — the clips it goes around,
+  /* while a marquee is drawn: what letting go would select, outlined as it goes — the clips it goes around,
      else the layers wholly inside it. The clips are asked once, at the press */
   const marqueeClips = React.useRef<Promise<StageClipBox[] | null> | null>(null);
   const [marqueeHits, setMarqueeHits] = React.useState<readonly StageOutline[]>([]);
@@ -1514,7 +1514,7 @@ function FilmStageSelectImpl({
       next = rotateTransform(g.origin, g.box, g.start, stagePt, shift ? 15 : 0);
     } else if (g.kind === 'scale' && g.handle) {
       const f0 = shown;
-      /* as Figma: a corner keeps the proportions and an edge stretches its side, Shift the other way round; a page's
+      /* a corner keeps the proportions and an edge stretches its side, Shift the other way round; a page's
          box is never stretched. Alt: about the center, unsnapped (it moves both sides) */
       const proportional = !g.stretchable || (g.handle.hx && g.handle.hy ? !shift : shift);
       const r = resizedFrame(f0, g.handle, { x: stagePt.x - g.start.x, y: stagePt.y - g.start.y }, { proportional, fromCenter: alt },
@@ -1978,7 +1978,7 @@ function FilmStageSelectImpl({
     const first = doubleClickAim(pressesRef.current, e.timeStamp);
     const at = first ? { x: first.x, y: first.y } : { x: p.x / vs, y: p.y / vs };
     const inside = held && insideBox(held.rect, at.x, at.y);
-    /* cropping, a double-click keeps the crop (as in Figma); on the video or still in hand, it starts one */
+    /* cropping, a double-click keeps the crop; on the video or still in hand, it starts one */
     if (cropRef.current) { finishCrop(true); return; }
     const outer = held?.element;
     const t = liveTRef.current ?? outer?.transform;
@@ -2246,8 +2246,8 @@ function FilmStageSelectImpl({
       e.stopPropagation();
       const p = local(e);
       if (gestureRef.current.pendingClick) {
-        /* a click on the clip in hand (a drag moves it): the layer of a page under the pointer is taken in hand, as
-           a click in a selected frame selects what is in it (Figma); else the top clip there */
+        /* a click on the clip in hand (a drag moves it): the layer of a page under the pointer is taken in hand:
+           a click in a selected frame selects what is in it; else the top clip there */
         const g = gestureRef.current;
         gestureRef.current = null;
         liveTRef.current = null;
@@ -2295,8 +2295,8 @@ function FilmStageSelectImpl({
       /* the threshold is in stage px: the same gesture is a click in a small window and in full screen alike */
       if (box.width / vs >= MARQUEE_MIN_PX && box.height / vs >= MARQUEE_MIN_PX) {
         const area = { x: box.left / vs, y: box.top / vs, w: box.width / vs, h: box.height / vs };
-        /* clips wholly inside (a page, a video, a still, by the part on the canvas) are selected whole, as Figma takes
-           a frame the box goes around; Shift adds them to the clips selected */
+        /* clips wholly inside (a page, a video, a still, by the part on the canvas) are selected whole;
+           Shift adds them to the clips selected */
         const clips = onSelectClips ? await (marqueeClips.current ?? ask<StageClipBox[]>('clips')) ?? [] : [];
         if (token !== pressSeq.current) return;
         const around = clipsInside(clips, area).map((c) => c.loc);
@@ -2324,7 +2324,7 @@ function FilmStageSelectImpl({
       /* not pulled open far enough: a click. A layer of a page is selected, else the clip; on nothing, nothing is */
       const layer = await ask<StageLayer>('hit', { x: p.x / vs, y: p.y / vs, cycleFrom: cycle, from, detail: true });
       if (token !== pressSeq.current) return;
-      /* Shift-click adds to / takes from the selection (Figma) */
+      /* Shift-click adds to / takes from the selection */
       if (base && layer) {
         const has = base.some((b) => b.handle === layer.handle);
         setHover(null);
@@ -2357,7 +2357,7 @@ function FilmStageSelectImpl({
     ? { left: Math.min(draft.x1, draft.x2), top: Math.min(draft.y1, draft.y2), width: Math.abs(draft.x2 - draft.x1), height: Math.abs(draft.y2 - draft.y1) }
     : null;
   const linkedShown = linkedOutlines(linkedMarks, picked?.element?.clipLoc, dragging);
-  /* several clips selected: one frame around them all, as Figma draws a selection (it moves with them) */
+  /* several clips selected: one frame around them all (it moves with them) */
   const groupMarks = clipsMoved ?? (linkedShown.length > 1 ? linkedShown : null);
   const groupStretch = Boolean(groupMarks?.every((m) => infoOf(m.loc)?.kind === 'video'));
   const groupBox = groupMarks ? unionRect(groupMarks.map((m) => clientOf(frameAabb(visibleFrame(m.t, m.box, infoOf(m.loc)?.crop ?? NO_CROP))))) : null;
@@ -2489,7 +2489,7 @@ function FilmStageSelectImpl({
   const barLabel = barKind === 'layers' ? t('selectionBar.layers').replace('{n}', String(multi?.length ?? 0)) : undefined;
 
   /**
-   * A press: on the picture, or on the dark around it (a marquee starts there too, as on Figma's canvas, so what sits
+   * A press: on the picture, or on the dark around it (a marquee starts there too, so what sits
    * at an edge can be boxed whole). The moves and the release then come to the overlay, which holds the pointer.
    * `outside`: in the dark, where nothing can be clicked, only a box drawn: the film plays on until the box is pulled
    * open (a click there only lets the selection go).
@@ -2602,7 +2602,7 @@ function FilmStageSelectImpl({
         });
         return;
       }
-      /* several clips selected: a press on one of them drags them all, as Figma moves a selection (Shift: a marquee
+      /* several clips selected: a press on one of them drags them all (Shift: a marquee
          that adds to them instead) */
       const linkedNow = linkedLocs ?? [];
       const groupHit = target?.closest('[data-group-kind]') as HTMLElement | null;
@@ -2633,7 +2633,7 @@ function FilmStageSelectImpl({
         return;
       }
       /* several selected: a press inside their box drags them all (Shift adds / takes away instead); its handles scale
-         them or turn them together, as Figma does a selection */
+         them or turn them together */
       const many = multiRef.current;
       const held0 = pickedRef.current;
       const pullKind = groupHit?.getAttribute('data-group-kind');
@@ -3201,7 +3201,7 @@ function CropOverlay({ session: s, viewScale: vs, moving, bounds, onAspect, onDo
 }
 
 /**
- * Distances while Alt is held (Figma's): a red line across each gap with its length in stage px, dashed helpers from
+ * Distances while Alt is held: a red line across each gap with its length in stage px, dashed helpers from
  * the other box's edge, and the other box outlined.
  */
 function Measures({ lines, other, viewScale: vs }: { lines: readonly MeasureLine[]; other: Rect | null; viewScale: number }) {

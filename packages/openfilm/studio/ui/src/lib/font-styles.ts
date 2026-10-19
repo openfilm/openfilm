@@ -1,5 +1,5 @@
 /**
- * A family's weights and italics, as the inspector's weight menu offers them (Figma's: "Light", "Bold Italic"), and
+ * A family's weights and italics, as the inspector's weight menu offers them ("Light", "Bold Italic"), and
  * a CSS `font-family` stack's first family, as the font field shows and changes it.
  *
  * What a family has comes from its faces: an installed font's OS/2 weight classes and italic bits (GET /api/fonts),
@@ -102,7 +102,7 @@ export function snapStyle(styles: FontStyles, want: FontStyle): FontStyle {
 /* ── a font-family stack ── */
 
 /**
- * The font field shows the first family only (as Figma does); the fallbacks after it stay as written — changing the
+ * The font field shows the first family only; the fallbacks after it stay as written — changing the
  * main font must not replace `Inter, "PingFang SC", sans-serif` with one name.
  */
 export function splitFontFamily(stack: string): [string, string] {

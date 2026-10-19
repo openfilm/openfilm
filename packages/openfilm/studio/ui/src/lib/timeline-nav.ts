@@ -42,7 +42,7 @@ const lockedRows = (tracks: readonly TimelineTrack[]) => new Set(tracks.filter((
 
 /**
  * What ⌘B splits at the playhead: the selected clips it is inside; with nothing selected, the clip it is inside on the
- * main track (the lowest picture track), as CapCut's; else on the targeted track (`targetLane`), else on the topmost
+ * main track (the lowest picture track); else on the targeted track (`targetLane`), else on the topmost
  * track that is seen and has one. Never a clip on a locked track. The clips linked to them are the caller's to add.
  */
 export function splitTargets(
@@ -72,7 +72,7 @@ export function splitTargets(
 }
 
 /**
- * What [ / ] select (CapCut's 向左全选 / 向右全选): every clip with a part before the playhead (`dir` -1) or after it
+ * What [ / ] select: every clip with a part before the playhead (`dir` -1) or after it
  * (`dir` 1), on every track not locked — what to move when the film before or after a point moves along.
  */
 export function sideTargets(tracks: readonly TimelineTrack[], atMs: number, dir: -1 | 1): TimelineBlock[] {

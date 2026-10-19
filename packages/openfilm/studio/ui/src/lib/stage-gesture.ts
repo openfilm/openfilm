@@ -241,7 +241,7 @@ export function pullGroup(d: GroupPull, at: { x: number; y: number }, shift: boo
 }
 
 /**
- * One of several layers scaled or turned together by their box's handles (as Figma does a selection): its center
+ * One of several layers scaled or turned together by their box's handles: its center
  * (`center`, stage px) goes with the box, scaled or turned about the same point, and it takes the same scale or turn
  * itself. How far its center goes (stage px), and its own scale and angle after.
  */
@@ -259,7 +259,7 @@ export function layerInGroup(d: GroupDrag, center: { x: number; y: number }, g: 
 /**
  * Where one of several clips dragged together is now. `t0` is where it was (its unturned top left, stage px, and its
  * scale), `size` its picture's own size: its center moves with the others, scaled or turned about the same point, so
- * the gaps between them change with them (Figma); a turn turns each one by as much.
+ * the gaps between them change with them; a turn turns each one by as much.
  */
 export function groupDragged<T extends { x: number; y: number; scaleX: number; scaleY: number; rotate: number }>(
   d: GroupDrag, t0: T, size: { w: number; h: number },

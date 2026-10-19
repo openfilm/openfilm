@@ -118,7 +118,7 @@
   --card-bg: #0b0d14;
 
   /* Docked workspace: panes sit on a backing a step darker, and the gaps are that backing showing through.
-     As in Unreal: a divider says "a boundary", a gap says "two separate things". */
+     A divider says "a boundary", a gap says "two separate things". */
   --dock-shell: #f2f2f2;
   --dock-pane: #fcfcfc;
 

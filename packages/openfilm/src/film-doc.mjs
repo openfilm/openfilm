@@ -511,7 +511,7 @@ const NOT_OF_KIND = {
 };
 
 /**
- * What an agent writes from elsewhere (other editors, web pages, HyperFrames), answered with what it is here.
+ * What an agent writes from elsewhere (other editors, web pages, other HTML video tools), answered with what it is here.
  */
 const ATTRIBUTE_HINTS = {
   time: 'the part of the file goes on src as a media fragment: src="a.mp4#t=2,6" (its seconds 2 to 6)',

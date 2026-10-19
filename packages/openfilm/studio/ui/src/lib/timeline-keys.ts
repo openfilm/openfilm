@@ -1,6 +1,5 @@
 /**
- * The editor's keys, as CapCut (剪映) has them on a Mac — its keys there are its Final Cut Pro X set — with Premiere's
- * where CapCut has none: which key does what (`keyCommandOf`), the list Settings shows (`SHORTCUTS`), J / K / L shuttle
+ * The editor's keys: which key does what (`keyCommandOf`), the list Settings shows (`SHORTCUTS`), J / K / L shuttle
  * (`shuttleRate`) and looping a range (`loopBack`, `playStart`).
  *
  * Plain letters are read by the letter they type, so they follow the keyboard's layout; on a layout without Latin
@@ -39,7 +38,7 @@ export function letterOf(e: Pick<KeyPress, 'key' | 'code'>): string {
   return code ? code.toLowerCase() : key;
 }
 
-/** How many frames ⇧← / ⇧→ move the playhead (CapCut's "大幅移动"). */
+/** How many frames ⇧← / ⇧→ move the playhead. */
 export const JUMP_FRAMES = 10;
 
 /**
@@ -49,7 +48,7 @@ export const JUMP_FRAMES = 10;
 export function keyCommandOf(e: KeyPress, mac: boolean): KeyCommand | null {
   const mod = mac ? e.metaKey : e.ctrlKey;
   const k = letterOf(e);
-  /* ⇧⌃S detaches a video's sound, as CapCut's (on a Mac Ctrl itself, elsewhere Ctrl the modifier) */
+  /* ⇧⌃S detaches a video's sound (on a Mac Ctrl itself, elsewhere Ctrl the modifier) */
   if (k === 's' && e.shiftKey && e.ctrlKey && !e.metaKey && !e.altKey) return 'detach-audio';
   /* the other platform's modifier (Ctrl on a Mac) is no shortcut here */
   const other = mac ? e.ctrlKey : e.metaKey;
@@ -57,7 +56,7 @@ export function keyCommandOf(e: KeyPress, mac: boolean): KeyCommand | null {
   if (mod) {
     if (e.altKey) return null;
     if (k === 'b') return e.shiftKey ? 'split-all' : 'split';
-    /* ⌘⇧C / ⌘⇧V copy a clip's look, place and sound onto others (CapCut's 复制属性 / 粘贴属性) */
+    /* ⌘⇧C / ⌘⇧V copy a clip's look, place and sound onto others */
     if (k === 'c' && e.shiftKey) return 'copy-attrs';
     if (k === 'v' && e.shiftKey) return 'paste-attrs';
     if (k === 'r' && !e.shiftKey) return 'speed';
@@ -78,10 +77,10 @@ export function keyCommandOf(e: KeyPress, mac: boolean): KeyCommand | null {
     case '.': return e.altKey || e.shiftKey ? null : 'overwrite-source';
     default: break;
   }
-  /* [ / ]: every clip before / after the playhead selected (CapCut's 向左全选 / 向右全选), read by where the key is */
+  /* [ / ]: every clip before / after the playhead selected, read by where the key is */
   if (!e.shiftKey && !e.altKey && (e.code === 'BracketLeft' || e.key === '[')) return 'select-left';
   if (!e.shiftKey && !e.altKey && (e.code === 'BracketRight' || e.key === ']')) return 'select-right';
-  /* ~ (the key left of 1, with ⇧ or without): linkage on / off, as CapCut's */
+  /* ~ (the key left of 1, with ⇧ or without): linkage on / off */
   if (e.code === 'Backquote' || e.key === '`' || e.key === '~') return e.altKey ? null : 'toggle-linkage';
   /* ⌥M / ⌥⇧M: the marker before; ⌥X: the range cleared (on a Mac ⌥ types another letter: read by where the key is) */
   if (e.altKey) return k === 'm' ? 'prev-marker' : k === 'x' && !e.shiftKey ? 'clear-range' : null;
@@ -93,7 +92,7 @@ export function keyCommandOf(e: KeyPress, mac: boolean): KeyCommand | null {
       case 'z': return 'zoom-fit';
       case 'n': return 'toggle-magnet';
       case 'm': return 'next-marker';
-      /* ⇧X: the range is the selected clips' (CapCut's 以片段选定区域) */
+      /* ⇧X: the range is the selected clips' */
       case 'x': return 'range-clip';
       default: return null;
     }

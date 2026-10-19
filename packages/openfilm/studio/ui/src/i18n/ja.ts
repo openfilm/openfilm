@@ -1362,7 +1362,7 @@ export const ja: Words = {
     replaceFromComputer: "このコンピュータから…",
     replacePick: "クリップと置き換えるファイルを選択",
   },
-  /* a clip's attributes copied onto others (lib/clip-attrs, components/PasteAttrsDialog), as CapCut's */
+  /* a clip's attributes copied onto others (lib/clip-attrs, components/PasteAttrsDialog) */
   clipAttrs: {
     title: '属性をペースト',
     picture: '映像',

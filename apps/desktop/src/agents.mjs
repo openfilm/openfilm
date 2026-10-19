@@ -56,7 +56,7 @@ export const AGENTS = Object.freeze({
     env: (path) => ({ CLAUDE_CODE_EXECUTABLE: path }),
     auth: ['auth', 'status'],
     login: ['auth', 'login'],
-    /* of the shell only its PATH, proxies, config folder and locale, as 0.1.5 had it and ChatCut has it: a key or
+    /* of the shell only its PATH, proxies, config folder and locale, as 0.1.5 had it: a key or
        gateway set there (ANTHROPIC_*) would take the place of the person's Claude subscription */
     fromShell: shellSubset,
     /* signed in to the person's Claude subscription, the way its adapter offers it (ACP terminal auth), in Terminal */
@@ -512,7 +512,7 @@ export async function openAgentSignIn(id) {
   const defaults = agentDefaults(id, agentShell(id, await loginShellVariables()));
   if (!how && Object.keys(defaults).length && process.platform !== 'win32') how = { cmd: cli.path, args: spec.login, env: defaults };
   if (process.platform === 'win32') {
-    /* a PowerShell window of its own running a script, as ChatCut does: no command line for cmd.exe to unquote (a path
+    /* a PowerShell window of its own running a script: no command line for cmd.exe to unquote (a path
        with a space in it), and left open so its sign-in can be read and answered (it runs a shim itself) */
     how ??= /\.(?:cmd|bat)$/i.test(cli.path) ? { cmd: cli.path, args: spec.login, env: {} } : starting(cli.path, spec.login);
     how = { ...how, env: { ...defaults, ...how.env } };

@@ -46,8 +46,8 @@ export function filmTrackPrefix(kind: string): string {
 }
 
 /**
- * Each track's name on the timeline (P1, V2, A1), worked out from position and kind, never stored, as Premiere and
- * Resolve name theirs: picture tracks (P, V) counted from the bottom up, so V1 is the lowest and V2 covers it, and
+ * Each track's name on the timeline (P1, V2, A1), worked out from position and kind, never stored:
+ * picture tracks (P, V) counted from the bottom up, so V1 is the lowest and V2 covers it, and
  * sound tracks (A) from the top down. Each prefix on its own. It names a track a person can point at; stacking is
  * the position itself.
  */

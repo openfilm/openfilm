@@ -580,7 +580,7 @@
     return hits.sort((a, b) => a.area - b.area || b.order - a.order);
   };
   /**
-   * A box that fills its whole page is the page's backdrop, as a frame's fill in Figma: a click there takes the clip
+   * A box that fills its whole page is the page's backdrop: a click there takes the clip
    * (moving the picture), not the box (which would only move what is inside the page). It is selected in Layers, or
    * with Alt, and once in hand a click on it keeps it.
    */
@@ -1060,7 +1060,7 @@
     return pinned.some((e) => e.style.position) && holds(pinned) ? pinned : null;
   };
 
-  /* ── a layer restyled: the others stay where they are, as in Figma, where one layer's look never moves another ── */
+  /* ── a layer restyled: the others stay where they are; one layer's look never moves another ── */
   /** The style a hold sets (holdFor): kept apart from what the person set, so a new hold replaces the one before. */
   const HOLD_KEYS = ['marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'width'];
   const SIDES = ['Top', 'Right', 'Bottom', 'Left'];
@@ -1070,7 +1070,7 @@
    * hold's style on it (`show`, style keys to null take a kept one away). `unheld`: a hold kept before, taken away
    * first (it was for the change before).
    *
-   * The layer takes its new size (its box grows with a larger font or more words, as a text box in Figma does); margins
+   * The layer takes its new size (its box grows with a larger font or more words); margins
    * give back to the page's flow the room it gained or lost, on the side the flow lays it out from, so what is beside
    * it, under it or lined up with its baseline stays put. Words in a block as wide as what holds it get a box that hugs
    * them, and stay where they were set in it (centered, at its end).
@@ -1423,7 +1423,7 @@
     /** Stop showing what was not kept on a clip (a refused edit, a cancelled drag). */
     release({ clip }) { release(clip); return true; },
     /**
-     * Bring a layer to the front of what it overlaps, or send it to the back of it, as Photoshop does — whatever part
+     * Bring a layer to the front of what it overlaps, or send it to the back of it — whatever part
      * of the page the other layer is in. A z-index orders only siblings, so for each layer it overlaps the order is
      * set where the two meet: on the two branches under their nearest common ancestor, the branch it is in is given a
      * z-index past the other's (with position: relative where it has none, which moves nothing). Sent back, a common

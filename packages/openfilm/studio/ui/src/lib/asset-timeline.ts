@@ -36,8 +36,8 @@ export function assetClipKindOf(file: { path: string; kind: string }): AssetClip
 }
 
 /**
- * How long a dropped still, or a web page without a duration, stays: four seconds, as in Final Cut (Premiere and
- * Resolve use five). The number matters less than having one: neither has a length, a drag cannot ask for one, and
+ * How long a dropped still, or a web page without a duration, stays: four seconds.
+ * The number matters less than having one: neither has a length, a drag cannot ask for one, and
  * film.html needs a length for it (`#t=0,4`). A person can pull the edge right after. (An agent writing film.html
  * gives the fragment itself.)
  */
@@ -63,7 +63,7 @@ export type StageSize = { w: number; h: number };
 
 /**
  * Where a dropped video or still sits: in its own shape, as large as the canvas holds, centered, so one side meets the
- * canvas's edge (as CapCut places it). Without a box it would be the whole canvas with the picture letterboxed inside
+ * canvas's edge. Without a box it would be the whole canvas with the picture letterboxed inside
  * it, and the box a person picks would not be the picture. None when its shape is the canvas's, or not known yet.
  */
 export function assetFitBox(file: { w?: number | undefined; h?: number | undefined }, stage: StageSize | null | undefined): FilmBox | null {

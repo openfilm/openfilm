@@ -24,7 +24,7 @@ import { MenuSelect } from './MenuSelect';
 
 /* ───────────────────────────── skin ───────────────────────────── */
 
-/** A field: light fill, no border; a thin edge on hover, the accent ring on focus. Figma's properties panel look. */
+/** A field: light fill, no border; a thin edge on hover, the accent ring on focus. */
 export const FIELD = 'group/field relative flex h-[26px] min-w-0 w-full items-center overflow-hidden rounded-[5px] bg-[var(--fill-tsp)] ring-1 ring-inset ring-transparent transition-[box-shadow,background-color] hover:ring-[var(--border)] focus-within:bg-[var(--bg)] focus-within:ring-[1.5px] focus-within:ring-[var(--accent)]';
 export const INPUT = 'h-[26px] min-w-0 flex-1 border-0 bg-transparent pr-2 text-[11px] text-[var(--text)] outline-none tabular-nums placeholder:text-[var(--text-faint)]';
 const PREFIX = 'flex h-[26px] w-[22px] shrink-0 select-none items-center justify-center text-[10.5px] text-[var(--text-faint)]';
@@ -678,8 +678,8 @@ export function SelectField({
 /* ───────────────────────────── color ───────────────────────────── */
 
 /**
- * A color: swatch + hex (with its opacity after it when it has one). The swatch opens our own picker (ColorPicker,
- * like Figma's); the hex can be typed too (`#` optional). Gradients, `url()` and the like show as written, with a
+ * A color: swatch + hex (with its opacity after it when it has one). The swatch opens our own picker (ColorPicker);
+ * the hex can be typed too (`#` optional). Gradients, `url()` and the like show as written, with a
  * checkerboard swatch — that is not one color, and the picker cannot make it.
  */
 export function ColorField({
@@ -798,7 +798,7 @@ export function useTimeUnit(): [TimeUnit, (next: TimeUnit) => void] {
 
 /* ───────────────────────────── glyphs ───────────────────────────── */
 
-/* Figma's little marks that lucide does not have: opacity (half-filled square), radius, angle, type sizes. */
+/* Little marks that lucide does not have: opacity (half-filled square), radius, angle, type sizes. */
 export function OpacityGlyph() {
   return (
     <svg width="11" height="11" viewBox="0 0 11 11" aria-hidden>

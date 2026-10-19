@@ -1,5 +1,5 @@
 /**
- * Studio's media pane, kept the way editors keep media (CapCut's media panel, DaVinci's Media Pool): everything at
+ * Studio's media pane, kept the way editors keep media: everything at
  * one top level called All, folders as tiles beside the files, double-click a folder to go in.
  *
  * The top level is assets/ itself plus every web page of the project (its scenes). A person can make folders and

@@ -1,5 +1,5 @@
 /**
- * What a person types into a number field of the inspector, read as Figma and the editors read it: arithmetic
+ * What a person types into a number field of the inspector: arithmetic
  * (`1440/2`), a change of the value there (`+20`, `-20`, `*2`, `/2`), and units — `px` is dropped, `50%` is half of
  * what the field measures against (the stage, for a place or a size), and a time takes seconds (`2.5s`), frames
  * (`12f`, at the timecode's 30 a second), milliseconds and timecodes (`00:00:02:15`).

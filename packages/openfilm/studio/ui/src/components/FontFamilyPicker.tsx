@@ -1,5 +1,5 @@
 /**
- * Picking a font in the inspector, as in Figma.
+ * Picking a font in the inspector.
  *
  * The menu has "In this project" first (the families the project's pages declare with @font-face, and the ones the
  * page in hand names), then the recent picks, then every font installed here by script — the CJK groups first when

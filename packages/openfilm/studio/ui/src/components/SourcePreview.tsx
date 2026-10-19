@@ -1,6 +1,6 @@
 /**
  * The viewer showing one media file instead of the film: what an editor's source monitor does when a clip is picked
- * in the media pane (CapCut, DaVinci). Video and sound play with their own playhead; a still is shown. The film stays
+ * in the media pane. Video and sound play with their own playhead; a still is shown. The film stays
  * loaded behind it, so going back costs nothing: Esc, or picking anything on the timeline (the host clears it).
  *
  * While it is up the keys are its own, as a source monitor's: I and O mark the part of the file to use (X lets the

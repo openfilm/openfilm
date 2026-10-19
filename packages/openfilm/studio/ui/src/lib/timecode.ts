@@ -19,7 +19,7 @@ import { useSyncExternalStore } from 'react';
 export const DISPLAY_FPS = 30;
 
 /**
- * The rates a project can be set to and a video exported at, as editors name them: Premiere's and DaVinci Resolve's
+ * The rates a project can be set to and a video exported at, as editors name them: the
  * common ones (the NTSC 23.976, 29.97 and 59.94 are what cameras and phones record), and 120 for high frame rate.
  */
 export const FRAME_RATES = [23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60, 120] as const;
@@ -137,8 +137,8 @@ export function formatTimecode(ms: number, opts?: { hours?: boolean; fps?: numbe
 }
 
 /**
- * The short label on the ruler: `mm:ss` on whole seconds (with hours past an hour), `12f` in between — as OpenCut and
- * CapCut do. Full timecodes on every tick would be a wall of `00:00:47:29`.
+ * The short label on the ruler: `mm:ss` on whole seconds (with hours past an hour), `12f` in between.
+ * Full timecodes on every tick would be a wall of `00:00:47:29`.
  */
 export function formatRulerLabel(ms: number, fps = currentFps): string {
   /* a tick is a place on the clock, not a frame: a whole second is labeled as one even where no frame starts on it */

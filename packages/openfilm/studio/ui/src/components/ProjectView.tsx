@@ -783,7 +783,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /** An edit the timeline planned (lib/timeline-edit), as it planned it: one write, one undo step. */
   const editOps = React.useCallback((ops: Op[], label: string) => edit(ops, label), [edit]);
 
-  /* ── a clip's attributes copied onto others (lib/clip-attrs, ⌘⇧C / ⌘⇧V, as CapCut's) ── */
+  /* ── a clip's attributes copied onto others (lib/clip-attrs, ⌘⇧C / ⌘⇧V) ── */
   const [copiedAttrs, setCopiedAttrs] = React.useState<CopiedAttrs | null>(null);
   const [pasteAttrsOpen, setPasteAttrsOpen] = React.useState(false);
   const filmClipOf = React.useCallback((id: string) => filmRef.current?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === id) ?? null, []);
@@ -930,7 +930,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       taken.add(made);
       rightLinks.set(link, made);
     }
-    /* a selected clip's selection goes to its right half, as CapCut's: named here so it can be selected once written */
+    /* a selected clip's selection goes to its right half: named here so it can be selected once written */
     const selected = new Set(selectedKeysRef.current);
     const used = new Set(clips.map((c) => c.id));
     const rightIds = new Map<string, string>();
@@ -994,8 +994,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   }, [timelineTracks]);
   /**
    * A paste (⌘V, the menu) at a time: onto the track pointed at (`lane`) or each copy's own, never cutting what is
-   * there: a taken spot opens a track beside it, and with the magnet a copy for the main track goes right above it, as
-   * CapCut's (lib/timeline-clipboard pasteEdit). A clip cut since it was copied comes back as it was copied (under a
+   * there: a taken spot opens a track beside it, and with the magnet a copy for the main track goes right above it
+   * (lib/timeline-clipboard pasteEdit). A clip cut since it was copied comes back as it was copied (under a
    * new id).
    */
   const pasteAt = React.useCallback((lane: string | null, atMs: number): Promise<string | null> => {
@@ -1060,7 +1060,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /**
    * A media file put on the timeline without a drag (lib/media-place): the media pane's "+" and Enter (in the
    * playhead on the targeted track, else at the end of the lowest picture track), the source viewer's
-   * `,` and `.` (insert or overwrite the part marked, at the playhead; the playhead then goes to its end, as Premiere's).
+   * `,` and `.` (insert or overwrite the part marked, at the playhead; the playhead then goes to its end).
    */
   const addMedia = React.useCallback(async (file: WorkspaceResource, how: { mode?: EditMode; range?: SourceRange | null; atPlayhead?: boolean } = {}) => {
     const target = timelineCommands.current?.target() ?? null;
@@ -1746,7 +1746,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   }, [stageMenuFor, t, saveBlocks]);
   /** Two groups of menu entries, a line between them when both have some. */
   const menuGroups = (a: ContextMenuEntry[], b: ContextMenuEntry[]): ContextMenuEntry[] => (a.length && b.length ? [...a, { id: 'tools-sep', separator: true }, ...b] : [...a, ...b]);
-  /* copy and paste attributes, as CapCut's clip menu has them */
+  /* copy and paste attributes, in the clip's menu */
   const attrsEntries = (blocks: readonly TimelineBlock[]): ContextMenuEntry[] => [
     { id: 'copy-attrs', label: t('clipAttrs.copy'), icon: <ClipboardCopy size={14} />, shortcut: shortcutHint('C', { mod: true, shift: true }), disabled: blocks.length !== 1, onSelect: () => copyAttrs(blocks) },
     { id: 'paste-attrs', label: t('clipAttrs.pasteMenu'), icon: <ClipboardPaste size={14} />, shortcut: shortcutHint('V', { mod: true, shift: true }), disabled: !copiedAttrs, hint: t('clipAttrs.nothing'), onSelect: () => askPasteAttrs(blocks) },
@@ -2177,7 +2177,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const stage = film.film?.stage ?? { w: 1920, h: 1080 };
   stageRef.current = stage;
   const empty = !film.film?.tracks.some((tr) => tr.clips.length);
-  /* the canvas (the stage in film.html), from the viewer's ratio button or the inspector, as CapCut's: another shape
+  /* the canvas (the stage in film.html), from the viewer's ratio button or the inspector: another shape
      keeps the canvas's short side (canvasFor; a typed size is that size), and every picture on it is scaled by one
      factor into the new canvas, centered, in the same edit (one undo). Laying the film out again for the new canvas
      is the agent's (the inspector gives the words) */
@@ -2398,7 +2398,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         /* the source viewer's keys (it takes them first while it is up) */
         return;
       case 'range-clip': {
-        /* ⇧X: the range is the selected clips' span (CapCut's 以片段选定区域) */
+        /* ⇧X: the range is the selected clips' span */
         if (!selectedBlocks.length) return;
         take();
         setMarkedRange({ startMs: Math.min(...selectedBlocks.map((b) => b.startMs)), endMs: Math.max(...selectedBlocks.map((b) => b.endMs)) });
@@ -2407,7 +2407,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       case 'copy-attrs': if (!selectedBlocks.length) return; take(); if (once) copyAttrs(selectedBlocks); return;
       case 'paste-attrs': if (!selectedBlocks.length) return; take(); if (once) askPasteAttrs(selectedBlocks); return;
       case 'speed': {
-        /* ⌘R: the selected clip's speed, in the inspector (CapCut's 变速 panel) */
+        /* ⌘R: the selected clip's speed, in the inspector */
         if (selectedBlocks.length !== 1 || !once) return;
         take();
         setInspectorContent('selection');
@@ -2416,7 +2416,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         return;
       }
       case 'detach-audio': {
-        /* ⇧⌃S: the selected video's sound on a track of its own (CapCut's 分离音频) */
+        /* ⇧⌃S: the selected video's sound on a track of its own */
         const video = selectedBlocks.find((b) => b.kind === 'video' && b.clipId);
         if (!video || !once) return;
         take();
@@ -3033,7 +3033,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     {...tools.timeline}
                   />
                 </div>
-                {/* the audio meters, beside the timeline as Premiere's */}
+                {/* the audio meters, beside the timeline */}
                 <div className="absolute inset-y-0 right-0"><AudioMeters levels={tools.levels} playing={playing} /></div>
               </div>
             ) : null}

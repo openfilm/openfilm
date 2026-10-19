@@ -1,6 +1,6 @@
 /**
  * A mask edited on the picture (the inspector's Mask › Edit on picture): its outline over the clip or layer in hand,
- * turned with it, and CapCut's handles — a press inside moves it (anywhere in the box for a line or a band), the squares
+ * turned with it, and its handles — a press inside moves it (anywhere in the box for a line or a band), the squares
  * resize it, the round knob above turns it, the knob below pulled outward feathers it. The geometry is lib/stage-mask's.
  *
  * A drag shows on the picture as it goes (the session's preview, a frame at a time) and is written once, at the

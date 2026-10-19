@@ -123,7 +123,7 @@ const overlap = (a: { startMs: number; endMs: number }, b: { startMs: number; en
 /**
  * Copies put down, never cutting or moving what is there. Onto their track where that time is free; where it is taken
  * (by a clip there, or by another copy) the copies headed there all go to a new track beside it instead (newTrackSide),
- * and one more for each that would still overlap another. `keepOff` (the main track with the magnet, as CapCut's) is
+ * and one more for each that would still overlap another. `keepOff` (the main track with the magnet) is
  * always taken: copies headed there go to a new track right above it. Copies headed for a new track (`{ insert }`)
  * open one per track they came from, so a group keeps its rows. The inserts onto tracks that are there go first, then
  * the new tracks from the last place up, so every place written holds. `placed`: where each copy lands, by the id it
@@ -192,7 +192,7 @@ function placeCopies(
  * A paste: copied from one track, the copies go onto the track pointed at (`forceLane`) if any; from several, each
  * back onto its own. The group's earliest clip lands at `atMs`, the rest keep their spacing. Put down (`place`), they
  * never cut or move what is there: a taken spot opens a track beside it (placeCopies), and with the magnet a copy
- * headed for the main track goes to a new track right above it, as CapCut's. An insert makes room there instead,
+ * headed for the main track goes to a new track right above it. An insert makes room there instead,
  * pushing what follows on, on the tracks they go in on (with linkage, what rides on the main track along). Null when a
  * track it goes onto is locked or gone.
  */
@@ -233,7 +233,7 @@ export function pasteEdit(
 }
 
 /**
- * Copies of clips put down where a drag lets them go (⌥-drag, as CapCut's): the clips stay, a copy of each lands
+ * Copies of clips put down where a drag lets them go (⌥-drag): the clips stay, a copy of each lands
  * `deltaMs` later (earlier when negative) on its track or the one in `to`, never cutting what is there (placeCopies).
  * With the magnet, when the grabbed one's copy goes onto the main track, the copies headed there go in end to end at
  * the insert point under the hand (`pointerMs`), what follows moving on. Copies of clips linked together are linked to

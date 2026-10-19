@@ -321,7 +321,7 @@ export function strokeCss(s: Stroke): string | null {
 
 /* ───────────── stroke with a place: outline ───────────── */
 
-/** Where a stroke lies against the edge, as Figma's: inside it, across it, or outside it. */
+/** Where a stroke lies against the edge: inside it, across it, or outside it. */
 export type StrokePosition = 'inside' | 'center' | 'outside';
 /** A stroke and where it lies; `border`: read from an older `border` (written as an outline once changed). */
 export type PlacedStroke = Stroke & { position: StrokePosition; border?: true };
@@ -329,7 +329,7 @@ export type PlacedStroke = Stroke & { position: StrokePosition; border?: true };
 export const PLACED_STROKE_DEFAULT: PlacedStroke = { ...STROKE_DEFAULT, position: 'inside' };
 
 /**
- * A picture's stroke, as Figma draws one: an `outline` (it adds nothing to the box or the layout), its
+ * A picture's stroke: an `outline` (it adds nothing to the box or the layout), its
  * `outline-offset` saying where it lies (−width: inside, −width/2: across the edge, 0: outside). A `border` without an
  * outline is a stroke written before, inside the box. Undefined: none; null: one the panel cannot read.
  */
@@ -357,7 +357,7 @@ export function placedStrokeCss(s: PlacedStroke | null, was?: PlacedStroke | nul
 
 /* ───────────── inner shadow: an inset box-shadow ───────────── */
 
-/** A shadow cast inside the box, over its fill (Figma's inner shadow). */
+/** A shadow cast inside the box, over its fill (an inner shadow). */
 export type InnerShadow = { x: number; y: number; blur: number; spread: number; color: string };
 
 export const INNER_SHADOW_DEFAULT: InnerShadow = { x: 0, y: 4, blur: 12, spread: 0, color: '#00000066' };
@@ -387,7 +387,7 @@ export function innerShadowCss(s: InnerShadow | null): string | null {
 
 /* ───────────── background blur: backdrop-filter ───────────── */
 
-/** What is behind blurred (Figma's background blur): px; undefined when none, null when it is anything else. */
+/** What is behind blurred (a background blur): px; undefined when none, null when it is anything else. */
 export function backdropBlurOf(v: string | undefined): number | null | undefined {
   const s = (v ?? '').trim();
   if (!s || s === 'none') return undefined;

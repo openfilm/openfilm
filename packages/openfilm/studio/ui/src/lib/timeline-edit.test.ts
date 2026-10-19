@@ -469,7 +469,7 @@ test('the model joins a track spread over rows and leaves out drops not written 
   assert.deepEqual(m[0]!.clips.map((c) => [c.inMs, c.speed, c.sourceMs, c.link ?? null]), [[1500, 1, 9000, 'L'], [1500, 2, 9000, null]]);
 });
 
-/* ── the main track: magnet and linkage, as CapCut's ── */
+/* ── the main track: magnet and linkage ── */
 
 const ON = { magnet: true, linkage: true };
 /** A title track, the main track (the lowest picture track), a music bed and a sound effect. */

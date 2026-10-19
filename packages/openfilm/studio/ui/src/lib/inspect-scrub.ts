@@ -1,7 +1,7 @@
 /**
  * Dragging a number in the inspector: how many steps a horizontal drag of so many pixels is worth.
  *
- * The step is the field's own; as in Figma, Shift is ten times coarser and Alt ten times finer — the same rule as
+ * The step is the field's own; Shift is ten times coarser and Alt ten times finer — the same rule as
  * the arrow keys (Shift is ten steps).
  */
 

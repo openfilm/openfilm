@@ -234,8 +234,7 @@ function clamp(n: number, lo: number, hi: number): number {
 
 /**
  * Label and tick spacing, worked out separately: labels need room to read (≥96 px), ticks are lines and can sit
- * 12 px apart. One shared spacing forces a choice between overlapping labels and ticks too sparse to aim by (OpenCut's
- * approach, which it says is CapCut's table).
+ * 12 px apart. One shared spacing forces a choice between overlapping labels and ticks too sparse to aim by.
  *
  * Steps are in frames of the project's rate, then whole seconds, because frames are what gets lined up: a
  * "1/2/5 × 10ⁿ ms" family gives 200 ms steps that are neither whole seconds nor whole frames. A step shorter than a
@@ -421,7 +420,7 @@ export interface TimelineTrack {
   /** Row title. */
   name: string | null;
   /**
-   * The row's badge: `P1` / `V2` / `A1`, the Premiere / Resolve naming (pictures counted bottom up, sound top
+   * The row's badge: `P1` / `V2` / `A1` (pictures counted bottom up, sound top
    * down), one per drawn row (rows of one track spread by overlap each get their own, see badgeRows).
    */
   badge?: string;
@@ -440,7 +439,7 @@ export interface TimelineTrack {
   height?: number;
   /**
    * The main track's rows: the lowest picture track, where the magnet and linkage act (lib/timeline-edit mainTrackOf),
-   * marked and drawn taller as CapCut draws its main track.
+   * marked and drawn taller.
    */
   main?: boolean;
   blocks: TimelineBlock[];
@@ -654,7 +653,7 @@ function docTrackKind(track: Record<string, unknown>): string {
 }
 
 /**
- * Row badges, Premiere / Resolve style: P1, P2… for page tracks, V1… for picture tracks, A1… for sound tracks, counted
+ * Row badges: P1, P2… for page tracks, V1… for picture tracks, A1… for sound tracks, counted
  * from position and kind, never read from the film (filmTrackBadges).
  *
  * Counted per drawn row, not per film.html track: a track spread into four rows by overlap is A2, A3, A4, A5 and the

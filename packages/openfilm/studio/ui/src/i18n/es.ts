@@ -1362,7 +1362,7 @@ export const es: Words = {
     replaceFromComputer: "Desde tu ordenador…",
     replacePick: "Elige un archivo para reemplazar el clip",
   },
-  /* a clip's attributes copied onto others (lib/clip-attrs, components/PasteAttrsDialog), as CapCut's */
+  /* a clip's attributes copied onto others (lib/clip-attrs, components/PasteAttrsDialog) */
   clipAttrs: {
     title: 'Pegar atributos',
     picture: 'Imagen',

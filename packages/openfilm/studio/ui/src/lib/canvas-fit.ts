@@ -1,7 +1,7 @@
 /**
- * A film's canvas changing shape, as CapCut's does: the canvas takes the new shape with its short side kept (a
+ * A film's canvas changing shape: the canvas takes the new shape with its short side kept (a
  * 1920×1080 film made 3:4 is 1080×1440), and each picture is fitted to it on its own. A picture's place is read as
- * CapCut keeps it: its size as a share of the size that fits it whole in the canvas (1: it meets the canvas's edges
+ * two shares: its size as a share of the size that fits it whole in the canvas (1: it meets the canvas's edges
  * one way), and its center as a share of the canvas from the canvas's center. Both are kept, so a full-frame video
  * stays full-frame in any shape, a portrait photo on another clip fits by its own height, a title halfway up stays
  * halfway up, and shapes picked one after another never shrink anything.
@@ -56,7 +56,7 @@ const fitted = (ratio: number, canvas: Size): Size => (
 );
 
 /**
- * Each picture clip's box on the new canvas `to` (the old one is `from`), as CapCut fits each clip: the same share of
+ * Each picture clip's box on the new canvas `to` (the old one is `from`): the same share of
  * its fitted size, its center the same share of the canvas from the canvas's center. Sounds, and videos and stills
  * without a box (they are the canvas), are left out.
  */

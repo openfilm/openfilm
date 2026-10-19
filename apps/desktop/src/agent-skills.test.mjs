@@ -19,7 +19,7 @@ function world() {
   mkdirSync(project, { recursive: true });
   writeFileSync(join(project, 'film.html'), '<!doctype html>');
   /* Claude Code: the person's own, and claude.ai's synced ones (Anthropic's) */
-  skill(join(home, '.claude', 'skills', 'chatcut-voice'), 'voice');
+  skill(join(home, '.claude', 'skills', 'cutter-voice'), 'voice');
   skill(join(home, '.claude', 'skills', 'research'), 'research');
   skill(join(home, '.claude', 'skills', 'synced', 'bucket', 'pdf'), 'pdf');
   skill(join(project, '.claude', 'skills', 'team-style'), 'team-style');
@@ -31,7 +31,7 @@ function world() {
   skill(join(home, '.codex', 'plugins', 'cache', 'someone', 'pets', '0.1', 'skills', 'pet'), 'pet');
   /* MCP servers: Claude Code's (the person's, and one local to the project), Codex's (two its own apps put there, one
      of the person's), OpenCode's, Qwen Code's, Gemini CLI's, Copilot's */
-  writeFileSync(join(home, '.claude.json'), JSON.stringify({ mcpServers: { chatcut: { type: 'stdio', command: '/Apps/ChatCut/chatcut-mcp' }, notes: { type: 'http', url: 'http://127.0.0.1:9/mcp' } },
+  writeFileSync(join(home, '.claude.json'), JSON.stringify({ mcpServers: { cutter: { type: 'stdio', command: '/Apps/Cutter/cutter-mcp' }, notes: { type: 'http', url: 'http://127.0.0.1:9/mcp' } },
     projects: { [project]: { mcpServers: { local: { command: 'node' } } } } }));
   mkdirSync(join(home, '.codex'), { recursive: true });
   writeFileSync(join(home, '.codex', 'config.toml'), [
@@ -58,7 +58,7 @@ function world() {
 test("the person's own skills, as each agent keeps them, never its maker's", async () => {
   const { home, project } = world();
   assert.deepEqual((await ownSkills('claude', { cwd: project, home })).map((s) => [s.name, s.dirName]),
-    [['research', 'research'], ['team-style', 'team-style'], ['voice', 'chatcut-voice']], 'not claude.ai\'s synced ones');
+    [['research', 'research'], ['team-style', 'team-style'], ['voice', 'cutter-voice']], 'not claude.ai\'s synced ones');
   assert.deepEqual((await ownSkills('codex', { cwd: project, home })).map((s) => s.name), ['notes', 'openfilm', 'pet'], 'not .system, not OpenAI\'s plugins');
   assert.deepEqual((await ownSkills('gemini', { cwd: project, home })).map((s) => s.name), ['gem-notes', 'notes']);
   assert.deepEqual((await ownSkills('cursor', { cwd: project, home })), [], 'an agent whose skills are not read');
@@ -72,10 +72,10 @@ test("Claude Code: OpenFilm's skills as a plugin; the person's own skills and MC
   assert.deepEqual(JSON.parse(readFileSync(join(dir, '.claude-plugin', 'plugin.json'), 'utf8')).name, 'openfilm');
   assert.equal(realpathSync(join(dir, 'skills', 'brand')), realpathSync(join(w.project, 'skills', 'brand')), 'linked to the skill\'s own folder');
   assert.ok(existsSync(join(dir, '.agents', 'skills', 'lyric-pv', 'SKILL.md')), 'and readable as a skills folder');
-  assert.deepEqual(s.claude.settings.skillOverrides, { 'team-style': 'off', 'chatcut-voice': 'off' }, 'by its folder\'s name, as Claude Code names it; the one let in left on');
-  assert.deepEqual(s.claude.settings.deniedMcpServers, [{ serverName: 'chatcut' }, { serverName: 'local' }], 'its connectors not among them: they are not the person\'s');
+  assert.deepEqual(s.claude.settings.skillOverrides, { 'team-style': 'off', 'cutter-voice': 'off' }, 'by its folder\'s name, as Claude Code names it; the one let in left on');
+  assert.deepEqual(s.claude.settings.deniedMcpServers, [{ serverName: 'cutter' }, { serverName: 'local' }], 'its connectors not among them: they are not the person\'s');
   assert.deepEqual(s.log.hidden, ['team-style', 'voice']);
-  assert.deepEqual(s.log.mcpHidden, ['chatcut', 'local']);
+  assert.deepEqual(s.log.mcpHidden, ['cutter', 'local']);
 });
 
 test("Codex: each of the person's own not let in turned off by its file, OpenFilm's as an extra folder", async () => {
@@ -137,7 +137,7 @@ test('Qwen Code and Gemini CLI: a system-defaults file of the app\'s; Copilot: O
 
 test("the person's own MCP servers, as each agent keeps them, never its maker's", () => {
   const { home, project } = world();
-  assert.deepEqual(ownMcpServers('claude', { cwd: project, home }), [{ name: 'chatcut', detail: 'chatcut-mcp' }, { name: 'local', detail: 'node' }, { name: 'notes', detail: '127.0.0.1:9' }]);
+  assert.deepEqual(ownMcpServers('claude', { cwd: project, home }), [{ name: 'cutter', detail: 'cutter-mcp' }, { name: 'local', detail: 'node' }, { name: 'notes', detail: '127.0.0.1:9' }]);
   assert.deepEqual(ownMcpServers('codex', { home }), [{ name: 'my-db', detail: '127.0.0.1:8' }]);
   assert.deepEqual(ownMcpServers('opencode', { home }), [{ name: 'search', detail: 's.example.com' }]);
   assert.deepEqual(ownMcpServers('gemini', { home }), [{ name: 'gtool', detail: 'g.example.com' }]);

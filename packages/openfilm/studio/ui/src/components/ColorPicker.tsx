@@ -1,5 +1,5 @@
 /**
- * The color picker a swatch opens, drawn like Figma's: a saturation × brightness square, a hue strip,
+ * The color picker a swatch opens: a saturation × brightness square, a hue strip,
  * an opacity strip, the hex and the opacity as numbers, and the colors used lately.
  *
  * Dragging previews (the picture follows the pointer, nothing is written); letting go commits once.

@@ -1,6 +1,6 @@
 /**
- * Line height and letter spacing as Figma takes them: "Auto", a percentage, px — and for line height a bare number,
- * CSS's multiple of the size. What is written is plain CSS: `normal`, `120%`, `24px`, `1.2` for a line height;
+ * Line height and letter spacing as the inspector takes them: "Auto", a percentage, px — and for line height a bare
+ * number, CSS's multiple of the size. What is written is plain CSS: `normal`, `120%`, `24px`, `1.2` for a line height;
  * `normal`, `2px`, and a percentage of the size as `em` (`5%` → `0.05em`) for letter spacing.
  *
  * The font size menu's common sizes live here too.
@@ -10,7 +10,7 @@ export type MetricKind = 'line-height' | 'letter-spacing';
 /** A value as the field shows it: auto, or a number in a unit (`''`: a line height's multiple). */
 export type Metric = 'auto' | { n: number; unit: '' | 'px' | '%' };
 
-/** The sizes the font size menu offers, as Figma's does. */
+/** The sizes the font size menu offers. */
 export const FONT_SIZES = [12, 14, 16, 18, 20, 24, 28, 32, 36, 40, 48, 56, 64, 72, 80, 96, 120, 144, 160, 200] as const;
 
 const round = (n: number, d = 3) => Math.round(n * 10 ** d) / 10 ** d;

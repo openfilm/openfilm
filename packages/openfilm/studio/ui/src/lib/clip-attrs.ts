@@ -1,5 +1,5 @@
 /**
- * A clip's attributes copied onto other clips (CapCut's 复制属性 / 粘贴属性, ⌘⇧C / ⌘⇧V): the groups its paste dialog
+ * A clip's attributes copied onto other clips (⌘⇧C / ⌘⇧V): the groups its paste dialog
  * offers, all ticked unless unticked —
  *   · `place`: where the picture sits and how big it is, turned (`box`);
  *   · `blend`: how it shows through (`opacity`, `mix-blend-mode` in its style; the rest of its style stays);
