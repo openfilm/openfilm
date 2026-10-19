@@ -52,7 +52,7 @@ export async function checkAgent(id, pathDirs, { sessionMs = SESSION_MS } = {}) 
 
 /** The results as a Markdown table, for the job's summary. */
 export function summary(results, { platform = process.platform } = {}) {
-  const cell = (text) => String(text ?? '').replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
+  const cell = (text) => String(text ?? '').replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
   return [
     `### Agents on ${platform}`,
     '',
