@@ -64,15 +64,21 @@ const filmOf = (m: EditTrack[]) => ({ tracks: m.map((t) => ({ ...(t.locked ? { l
 const starts = (m: EditTrack[], ops: Op[]) => (applyOps(filmOf(m) as never, ops as never) as { tracks: { clips: { id: string; at?: number }[] }[] }).tracks
   .map((t) => t.clips.map((c) => [c.id, Math.round((c.at ?? 0) * 1000)]));
 
-test('⌥ → moves the selection a frame, on the frame grid, covering what is there', () => {
+test('⌥ → moves the selection a frame, on the frame grid, stopping against a clip in the way', () => {
   const m: EditTrack[] = [{ index: 0, clips: [clip('a', 0, 2), clip('b', 3, 4)] }, { index: 1, clips: [clip('c', 2, 3)] }];
   assert.deepEqual(starts(m, planNudge(m, ['a'], 1)!.ops)[0], [['a', 33], ['b', 3000]]);
   /* back from 0: nowhere to go */
   assert.equal(planNudge(m, ['a'], -1), null);
   assert.deepEqual(starts(m, planNudge(m, ['c'], -1)!.ops)[1], [['c', 1967]]);
-  /* b against a's end covers a frame of a */
+  /* b against a's end: nowhere to go, a is not cut */
   const tight: EditTrack[] = [{ index: 0, clips: [clip('a', 0, 2), clip('b', 2, 4)] }];
-  assert.deepEqual(starts(tight, planNudge(tight, ['b'], -1)!.ops)[0], [['a', 0], ['b', 1967]]);
+  assert.equal(planNudge(tight, ['b'], -1), null);
+  /* half a frame from a: b goes the half frame and stops against it */
+  const near: EditTrack[] = [{ index: 0, clips: [clip('a', 0, 2), clip('b', 2.02, 4)] }];
+  assert.deepEqual(starts(near, planNudge(near, ['b'], -1)!.ops)[0], [['a', 0], ['b', 2000]]);
+  /* moving together, they stop against what is not moving */
+  const both: EditTrack[] = [{ index: 0, clips: [clip('a', 0, 2), clip('b', 2, 4), clip('c', 4.02, 5)] }];
+  assert.deepEqual(starts(both, planNudge(both, ['a', 'b'], 1)!.ops)[0], [['a', 20], ['b', 2020], ['c', 4020]]);
   /* a locked track does not move */
   const locked: EditTrack[] = [{ index: 0, locked: true, clips: [clip('a', 1, 2)] }];
   assert.equal(planNudge(locked, ['a'], 1), null);

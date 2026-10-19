@@ -423,7 +423,8 @@ export function useBlockDrag(opts: {
       const flush = !grouped && snapping && drop.action !== 'insert'
         ? flushShiftMs({ startMs: out.startMs, endMs: out.endMs }, destLane?.occupied ?? [], SNAP_THRESHOLD_PX / pxPerMs)
         : null;
-      const editMode: MoveMode = moveEditMode(altNow);
+      /* a copy (⌥ at the press, often still held) is always put down: ⌥ inserts only a move */
+      const editMode: MoveMode = copy ? 'place' : moveEditMode(altNow);
       const settle = editMode === 'place' ? flush : null;
       const to = new Map<string, TrackDest>();
       if (drop.action === 'move') to.set(block.clipId!, drop.trackIndex);

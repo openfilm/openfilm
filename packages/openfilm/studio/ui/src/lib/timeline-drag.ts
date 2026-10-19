@@ -463,8 +463,8 @@ export interface DropLane {
 }
 
 /**
- * How a move is put down: where it is let go, never cutting what is there (a taken spot opens a track above it); with
- * ⌥ held it goes in between and what follows moves along, on every unlocked track (an insert).
+ * How a move is put down: where it is let go, never cutting what is there (a taken spot opens a track beside it, see
+ * newTrackSide); with ⌥ held it goes in between and what follows moves along, on every unlocked track (an insert).
  */
 export function moveEditMode(alt: boolean): 'insert' | 'place' {
   return alt ? 'insert' : 'place';
@@ -478,12 +478,12 @@ export function rangeOverlaps(
 }
 
 /**
- * Where a track that has to be opened goes: right after its source, one row down. The new track grew out of that one
- * (a copied page belongs next to its original), and badges count top to bottom, so inserting after renames no track
- * above — "my P1" stays P1.
+ * Where a track opened beside a taken one goes (film.html place): away from V1 and A1, the way the badges count
+ * (filmTrackBadges). A picture or page track opens right above it, so what is put there shows over what it was put
+ * on; a sound track right below it. Either way the track pointed at keeps its badge.
  */
-export function newTrackSide(fromDocIndex: number): number {
-  return fromDocIndex + 1;
+export function newTrackSide(docIndex: number, role?: string): number {
+  return role === 'audio' ? docIndex + 1 : docIndex;
 }
 
 /**

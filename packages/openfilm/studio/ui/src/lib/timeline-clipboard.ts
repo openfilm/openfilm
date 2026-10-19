@@ -9,10 +9,8 @@
  * back to their own tracks. Only clips copied from one track follow a track the person points at.
  */
 import type { Op } from '../api.ts';
-import { FILM_DOC_FILE } from './film.ts';
-
 import { newTrackSide } from './timeline-drag.ts';
-import { freshLink, planRoom, type EditMode, type EditModel, type EditPlan, type TrackDest } from './timeline-edit.ts';
+import { TOUCH_MS, freshLink, planRoom, type EditModel, type EditPlan, type Placed, type TrackDest } from './timeline-edit.ts';
 import type { TimelineBlock, TimelineTrack } from './timeline-layout';
 
 export type TimelineClipboardItem = {
@@ -22,20 +20,6 @@ export type TimelineClipboardItem = {
   /** The clip's length: a paste checks whether the spot is free. */
   durMs: number;
   lane: string;
-};
-
-export type TimelinePasteJob = {
-  /** The id of the clip copied. */
-  from: string;
-  atSec: number;
-  after: string | null;
-  lane: string;
-  /**
-   * When the spot is taken the copy does not stack on the original track (it would spread into two rows sharing a
-   * badge): it opens a track right after it. The first clip on each new track `{ insert: index }` opens it, the rest
-   * name it.
-   */
-  track?: number | { insert: number };
 };
 
 export function laneOfBlock(tracks: readonly TimelineTrack[], id: string): string | null {
@@ -55,24 +39,6 @@ export function trackByLane(
   const doc = /^doc-(\d+)/.exec(lane)?.[1];
   if (doc == null) return undefined;
   return tracks.find((tr) => tr.docIndex === Number(doc));
-}
-
-/**
- * The last clip of film.html track `index` — a paste goes after it. One track may be spread over several rows
- * (`doc-3#2`), so every row is scanned.
- */
-export function lastLocOfDocTrack(
-  tracks: readonly TimelineTrack[],
-  index: number,
-): string | null {
-  let best = -1;
-  for (const track of tracks) {
-    for (const b of track.blocks) {
-      const m = b.loc ? /#(\d+)\.(\d+)$/.exec(b.loc) : null;
-      if (m && Number(m[1]) === index) best = Math.max(best, Number(m[2]));
-    }
-  }
-  return best < 0 ? null : `${FILM_DOC_FILE}#${index}.${best}`;
 }
 
 export function clipboardItemsOf(
@@ -114,104 +80,6 @@ function docIndexOfLane(lane: string): number | null {
   return doc == null ? null : Number(doc);
 }
 
-type Range = { startMs: number; endMs: number };
-
-/**
- * Whether two clips would overlap on one track. The pasted start is rounded to the millisecond and clip ends are not,
- * so clips that meet end to end may share up to 1 ms; that is not an overlap.
- */
-function clashes(range: Range, others: readonly Range[]): boolean {
-  return others.some((o) => o.startMs < range.endMs - 1 && o.endMs > range.startMs + 1);
-}
-
-/**
- * The inserts one paste sends.
- *
- * `forceLane` = a track the person pointed at (right-click, or the selected clip's track): clips copied from one track
- * all go there. Clips copied from several tracks each go back to their own track, whatever was pointed at — stacking
- * them on one track would overlap a video with its own sound. The group's earliest clip lands at `atMs`, the rest
- * keep their spacing, across tracks too.
- *
- * The pasted clips are checked against what is on the track and against each other. A taken spot sends that track's
- * clips to a new track right after it (newTrackSide); clips that would still overlap each other there get one more
- * track each, so nothing on one track ever overlaps. Opening a track shifts the indexes below it, so groups that open
- * tracks go last, from the highest index down, and each group's new tracks are opened top to bottom.
- */
-export function pastePlan(
-  clipboard: readonly TimelineClipboardItem[],
-  tracks: readonly TimelineTrack[],
-  atMs: number,
-  forceLane?: string | null,
-): TimelinePasteJob[] {
-  if (!clipboard.length) return [];
-  const base = Math.min(...clipboard.map((item) => item.startMs));
-  const copiedTracks = new Set(clipboard.map((item) => docIndexOfLane(item.lane) ?? item.lane));
-  const force = forceLane && copiedTracks.size === 1 ? forceLane : null;
-  /* rows of one film.html track are one track here: clips pasted onto two of its rows still land on the same track */
-  const groups = new Map<string, { lane: string; items: TimelineClipboardItem[] }>();
-  for (const item of clipboard) {
-    const lane = force || item.lane;
-    const key = String(docIndexOfLane(lane) ?? lane);
-    const group = groups.get(key) ?? { lane, items: [] };
-    group.items.push(item);
-    groups.set(key, group);
-  }
-  const plans = [...groups.values()].map(({ lane, items }) => {
-    const docIndex = docIndexOfLane(lane);
-    const ranges = items.map((item) => {
-      const startMs = Math.round(atMs + (item.startMs - base));
-      return { item, startMs, endMs: startMs + item.durMs };
-    }).sort((a, b) => a.startMs - b.startMs);
-    /* one track may be spread over several rows: scan every row with this index */
-    const occupied = docIndex == null
-      ? []
-      : tracks
-        .filter((tr) => tr.docIndex === docIndex)
-        .flatMap((tr) => tr.blocks.map((b) => ({ startMs: b.startMs, endMs: b.endMs })));
-    const collides = docIndex != null && ranges.some((r, i) => clashes(r, occupied) || clashes(r, ranges.slice(0, i)));
-    return { lane, ranges, docIndex, collides };
-  });
-  plans.sort((a, b) => (
-    Number(a.collides) - Number(b.collides)
-    || (b.docIndex ?? -1) - (a.docIndex ?? -1)
-  ));
-
-  const out: TimelinePasteJob[] = [];
-  for (const { lane, ranges, docIndex, collides } of plans) {
-    if (collides) {
-      /* the spot is taken: the copies get tracks of their own right after the original, each filled without overlap */
-      const rows: (typeof ranges)[] = [];
-      for (const r of ranges) {
-        const row = rows.find((placed) => !clashes(r, placed));
-        if (row) row.push(r);
-        else rows.push([r]);
-      }
-      rows.forEach((row, n) => {
-        const insertAt = newTrackSide(docIndex!) + n;
-        row.forEach(({ item, startMs }, i) => {
-          out.push({ from: item.clipId, atSec: startMs / 1000, after: null, lane, track: i === 0 ? { insert: insertAt } : insertAt });
-        });
-      });
-      continue;
-    }
-    const after = docIndex == null ? null : lastLocOfDocTrack(tracks, docIndex);
-    for (const { item, startMs } of [...ranges].reverse()) {
-      out.push({ from: item.clipId, atSec: startMs / 1000, after, lane });
-    }
-  }
-  return out;
-}
-
-export function pasteDestLocked(
-  jobs: readonly TimelinePasteJob[],
-  tracks: readonly TimelineTrack[],
-): boolean {
-  /* jobs that open a new track do not land on a locked one: the lock only stops pasting into that track */
-  return jobs.some((job) => (
-    job.track == null && Boolean(job.lane && trackByLane(tracks, job.lane)?.locked)
-  ));
-}
-
 /**
  * The links copies get: copies of clips linked together and pasted together are linked to each other, with a link
  * of their own (not the originals', or moving a copy would move the original); a copy pasted without the clips its
@@ -242,12 +110,82 @@ export function copyLinks(clipIds: readonly string[], model: EditModel): Map<str
   return out;
 }
 
+/** A copy to put down: of clip `from`, at this time, onto this track; `source` is the track it was copied from. */
+type CopySpan = { from: string; startMs: number; endMs: number; dest: TrackDest; source: number };
+
+const overlap = (a: { startMs: number; endMs: number }, b: { startMs: number; endMs: number }): boolean => (
+  a.startMs < b.endMs - TOUCH_MS && a.endMs > b.startMs + TOUCH_MS
+);
+
+/**
+ * Copies put down, never cutting or moving what is there. Onto their track where that time is free; where it is taken
+ * (by a clip there, or by another copy) the copies headed there all go to a new track beside it instead (newTrackSide),
+ * and one more for each that would still overlap another. Copies headed for a new track (`{ insert }`) open one per
+ * track they came from, so a group keeps its rows. The inserts onto tracks that are there go first, then the new tracks
+ * from the last place up, so every place written holds. `placed`: where each copy lands, by the id it was copied from.
+ */
+function placeCopies(
+  model: EditModel,
+  spans: readonly CopySpan[],
+  links: ReadonlyMap<string, string | null>,
+): { ops: Op[]; placed: Map<string, Placed> } {
+  const there: CopySpan[] = [];
+  /* a new track: where it opens, and how low it ends among those opened at that place (higher = lower down) */
+  const opened: { at: number; low: number; key: string; spans: CopySpan[] }[] = [];
+  const openAt = (at: number, low: number, key: string, span: CopySpan) => {
+    const found = opened.find((o) => o.at === at && o.key === key);
+    if (found) found.spans.push(span);
+    else opened.push({ at, low, key, spans: [span] });
+  };
+  const byTrack = new Map<number, CopySpan[]>();
+  for (const s of spans) {
+    if (typeof s.dest === 'object') openAt(s.dest.insert, s.source, `from-${s.source}`, s);
+    else byTrack.set(s.dest, [...(byTrack.get(s.dest) ?? []), s]);
+  }
+  for (const [index, group] of byTrack) {
+    const track = model.find((t) => t.index === index);
+    const clips = track?.clips ?? [];
+    const taken = group.some((s, i) => clips.some((c) => overlap(s, c)) || group.slice(0, i).some((o) => overlap(s, o)));
+    if (!taken) {
+      there.push(...group);
+      continue;
+    }
+    const side = newTrackSide(index, track?.role);
+    const rows: CopySpan[][] = [];
+    for (const s of [...group].sort((a, b) => a.startMs - b.startMs)) {
+      const row = rows.find((r) => !r.some((o) => overlap(s, o)));
+      if (row) row.push(s);
+      else rows.push([s]);
+    }
+    /* the first row next to the track, the others further away: above a picture track, below a sound one */
+    rows.forEach((row, n) => {
+      for (const s of row) openAt(side, side === index ? -n : n, `beside-${index}-${n}`, s);
+    });
+  }
+  const insertOf = (s: CopySpan, track: TrackDest): Op => ({
+    op: 'insert',
+    from: s.from,
+    at: Math.round(s.startMs) / 1000,
+    track,
+    ...(links.has(s.from) ? { link: links.get(s.from)! } : {}),
+  });
+  const ops: Op[] = there.map((s) => insertOf(s, s.dest));
+  const placed = new Map<string, Placed>(there.map((s) => [s.from, { startMs: s.startMs, endMs: s.endMs, track: s.dest }]));
+  /* a track opened at a place goes above those opened there before it: the lowest of them opens first */
+  for (const o of [...opened].sort((a, b) => b.at - a.at || b.low - a.low)) {
+    [...o.spans].sort((a, b) => a.startMs - b.startMs).forEach((s, i) => {
+      ops.push(insertOf(s, i === 0 ? { insert: o.at } : o.at));
+      placed.set(s.from, { startMs: s.startMs, endMs: s.endMs, track: { insert: o.at } });
+    });
+  }
+  return { ops, placed };
+}
+
 /**
  * A paste: copied from one track, the copies go onto the track pointed at (`forceLane`) if any; from several, each
- * back onto its own. The group's earliest clip lands at `atMs`, the rest keep their spacing. An insert makes room there
- * (pushing what follows on, on every unlocked track); an overwrite takes that time off the tracks. The copies go in
- * first, so a clip pasted over itself is copied whole before it is cut. Null when a track it goes onto is locked or
- * gone.
+ * back onto its own. The group's earliest clip lands at `atMs`, the rest keep their spacing. Put down (`place`), they
+ * never cut or move what is there: a taken spot opens a track beside it (placeCopies). An insert makes room there
+ * instead, pushing what follows on, on every unlocked track. Null when a track it goes onto is locked or gone.
  */
 export function pasteEdit(
   clipboard: readonly TimelineClipboardItem[],
@@ -255,7 +193,7 @@ export function pasteEdit(
   model: EditModel,
   atMs: number,
   forceLane: string | null,
-  opts: { mode: EditMode },
+  opts: { mode: 'place' | 'insert' },
 ): Op[] | null {
   if (!clipboard.length) return [];
   const base = Math.min(...clipboard.map((item) => item.startMs));
@@ -268,21 +206,28 @@ export function pasteEdit(
   });
   if (spans.some((s) => s.track == null || s.locked)) return null;
   const links = copyLinks(clipboard.map((item) => item.clipId), model);
-  const insertOf = (s: Pick<(typeof spans)[number], 'item' | 'startMs'>, track: TrackDest): Op => ({
+  if (opts.mode === 'place') {
+    return placeCopies(model, spans.map((s) => ({
+      from: s.item.clipId, startMs: s.startMs, endMs: s.endMs, dest: s.track!, source: s.track!,
+    })), links).ops;
+  }
+  const insertOf = (s: (typeof spans)[number]): Op => ({
     op: 'insert',
     from: s.item.clipId,
     at: s.startMs / 1000,
-    track,
+    track: s.track!,
     ...(links.has(s.item.clipId) ? { link: links.get(s.item.clipId)! } : {}),
   });
-  const room = planRoom(model, spans.map((s) => ({ track: s.track!, startMs: s.startMs, endMs: s.endMs })), { mode: opts.mode });
-  return [...spans.map((s) => insertOf(s, s.track!)), ...room.ops];
+  /* the copies go in first, so a clip pasted inside itself is copied whole before the insert cuts it */
+  const room = planRoom(model, spans.map((s) => ({ track: s.track!, startMs: s.startMs, endMs: s.endMs })), { mode: 'insert' });
+  return [...spans.map(insertOf), ...room.ops];
 }
 
 /**
  * Copies of clips put down where a drag lets them go (⌥-drag): the clips stay, a copy of each lands `deltaMs` later
- * (earlier when negative) on its track or the one in `to`, covering what is under it. Copies of clips linked together
- * are linked to each other. Null when a track it goes onto is locked.
+ * (earlier when negative) on its track or the one in `to`, never cutting what is there (placeCopies). Copies of clips
+ * linked together are linked to each other. `placed`: where each copy lands, by the clip it copies. Null when a track
+ * it goes onto is locked.
  */
 export function planCopies(
   model: EditModel,
@@ -293,26 +238,11 @@ export function planCopies(
   if (!picked.length) return null;
   /* the group keeps its shape; none goes before 0 */
   const shift = Math.max(spec.deltaMs, -Math.min(...picked.map((x) => x.c.startMs)));
-  const spans = picked.map(({ c, track }) => {
+  const spans = picked.map(({ c, track }): CopySpan => {
     const startMs = Math.max(0, c.startMs + shift);
-    return { id: c.id, startMs, endMs: startMs + c.endMs - c.startMs, dest: spec.to?.get(c.id) ?? (track as TrackDest) };
+    return { from: c.id, startMs, endMs: startMs + c.endMs - c.startMs, dest: spec.to?.get(c.id) ?? track, source: track };
   });
   if (spans.some((s) => typeof s.dest === 'number' && model.find((t) => t.index === s.dest)?.locked)) return null;
-  const covering = spans.filter((s) => typeof s.dest === 'number');
-  const room = covering.length
-    ? planRoom(model, covering.map((s) => ({ track: s.dest as number, startMs: s.startMs, endMs: s.endMs })), { mode: 'overwrite' })
-    : { ops: [], placed: new Map(), shortMs: 0 };
-  const links = copyLinks(spec.ids, model);
-  const insertOf = (s: (typeof spans)[number]): Op => ({
-    op: 'insert', from: s.id, at: Math.round(s.startMs) / 1000, track: s.dest,
-    ...(links.has(s.id) ? { link: links.get(s.id)! } : {}),
-  });
-  /* the copies on tracks there are first; new tracks last, the lowest place first, so the places hold */
-  const opened = spans.filter((s) => typeof s.dest === 'object')
-    .sort((x, y) => (y.dest as { insert: number }).insert - (x.dest as { insert: number }).insert);
-  return {
-    ops: [...covering.map(insertOf), ...room.ops, ...opened.map(insertOf)],
-    placed: room.placed,
-    shortMs: room.shortMs,
-  };
+  const { ops, placed } = placeCopies(model, spans, copyLinks(spec.ids, model));
+  return { ops, placed, shortMs: 0 };
 }

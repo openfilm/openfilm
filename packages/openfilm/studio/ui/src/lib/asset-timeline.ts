@@ -182,8 +182,8 @@ export function assetDropSpot(
     if (edit || !rangeOverlaps(range, occupiedOf(tracks, target.docIndex ?? null, hit.lane))) {
       return { action: 'into', laneIndex: hit.lane, lane: target.lane, docIndex: target.docIndex ?? null, locked: false };
     }
-    /* the time is taken: no stacking, a new track right under this one (newTrackSide) */
-    if (target.docIndex != null) return newTrackSpot(tracks, newTrackSide(target.docIndex));
+    /* the time is taken: no stacking, a new track beside this one (newTrackSide) */
+    if (target.docIndex != null) return newTrackSpot(tracks, newTrackSide(target.docIndex, target.role));
     /* a row not on film.html cannot open a track: land on it as it is */
     return { action: 'into', laneIndex: hit.lane, lane: target.lane, docIndex: null, locked: false };
   }

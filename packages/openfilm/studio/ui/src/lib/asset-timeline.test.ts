@@ -4,7 +4,7 @@ import { assetClipElement, assetClipKindOf, assetDropInsert, assetDropSpot, asse
 import type { TimelineTrack } from './timeline-layout.ts';
 
 /* A file from the media pane lands on the row under the pointer — a track has no kind (SPEC) — or, where its time
-   is taken, on a new track right there; never somewhere else. */
+   is taken, on a new track right beside it; never somewhere else. */
 
 const row = (docIndex: number, role: TimelineTrack['role'], spans: [number, number][]): TimelineTrack => ({
   lane: `doc-${docIndex}`,
@@ -29,8 +29,9 @@ test('footage dropped on a free stretch of a page track goes onto it', () => {
   assert.equal(assetDropSpot(sound, tracks, { lane: 1, band: 'body' }, 10_000)?.action, 'into');
 });
 
-test('where the time is taken, a new track right under the row pointed at', () => {
-  assert.deepEqual(assetDropSpot(video, tracks, { lane: 0, band: 'body' }, 2000), { action: 'new-track', laneIndex: 1, docAt: 1 });
+test('where the time is taken, a new track right above a picture row, right below a sound row', () => {
+  assert.deepEqual(assetDropSpot(video, tracks, { lane: 0, band: 'body' }, 2000), { action: 'new-track', laneIndex: 0, docAt: 0 });
+  assert.deepEqual(assetDropSpot(video, tracks, { lane: 1, band: 'body' }, 2000), { action: 'new-track', laneIndex: 1, docAt: 1 });
   assert.deepEqual(assetDropSpot(video, tracks, { lane: 2, band: 'body' }, 2000), { action: 'new-track', laneIndex: 3, docAt: 3 });
 });
 
@@ -76,9 +77,9 @@ test('files dropped from the computer go one after another on one track, each fr
       { element: { src: still.path, time: [0, 4] }, at: 13.033, durMs: 4000, track: 0 },
     ],
   });
-  /* where the run does not fit, a new track opens under the row; the rest follow onto it */
+  /* where the run does not fit, a new track opens above the row; the rest follow onto it */
   const run = assetRunInsert([clip, still], tracks, { lane: 0, band: 'body' }, 6000);
-  assert.deepEqual('inserts' in run && run.inserts.map((i) => i.track), [{ insert: 1 }, 1]);
+  assert.deepEqual('inserts' in run && run.inserts.map((i) => i.track), [{ insert: 0 }, 0]);
   /* with an edit mode they go onto the row anyway: the edit makes room there */
   const onto = assetRunInsert([clip, still], tracks, { lane: 0, band: 'body' }, 6000, 'overwrite');
   assert.deepEqual('inserts' in onto && onto.inserts.map((i) => i.track), [0, 0]);

@@ -860,11 +860,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (!block?.clipId || (one!.prop !== 'speed' && one!.prop !== 'at')) return editBlocks(edits, true);
     const ids = [block.clipId, ...linkedIds(model, [block.clipId]).filter((id) => id !== block.clipId)];
     if (one!.prop === 'at') {
-      /* a start typed in: the clip (and those linked to it) moves as a drag would: it lands there and covers what is
-         under it. Never onto a new track */
+      /* a start typed in: the clip (and those linked to it) moves as a drag would: it lands there, or on a new track
+         beside its own when that time is taken; nothing there is cut */
       const startMs = Number(one!.value) * 1000 + (block.anchor?.parentStartMs ?? 0);
       if (!Number.isFinite(startMs)) return Promise.resolve(t('timeline.editFail'));
-      const plan = planMove(model, { ids, deltaMs: startMs - block.startMs, pointerMs: startMs, mode: 'overwrite' });
+      const plan = planMove(model, { ids, deltaMs: startMs - block.startMs, pointerMs: startMs, mode: 'place' });
       if (!plan) return Promise.resolve(t('timeline.trackLocked'));
       return plan.ops.length ? edit(plan.ops, clipStep('history.stepMoved', [block.clipId]), true) : Promise.resolve(null);
     }
@@ -969,9 +969,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     setClipboard(clipboardItemsOf(blocks, timelineTracks));
   }, [timelineTracks]);
   /**
-   * A paste (⌘V, the menu) at a time: onto the track pointed at (`lane`) or each copy's own, covering what is there
-   * (an overwrite, lib/timeline-clipboard pasteEdit). Never a new track. A clip cut since it was copied comes back as
-   * it was copied (under a new id).
+   * A paste (⌘V, the menu) at a time: onto the track pointed at (`lane`) or each copy's own, never cutting what is
+   * there: a taken spot opens a track beside it (lib/timeline-clipboard pasteEdit). A clip cut since it was copied
+   * comes back as it was copied (under a new id).
    */
   const pasteAt = React.useCallback((lane: string | null, atMs: number): Promise<string | null> => {
     if (!clipboard.length) return Promise.resolve(t('timeline.menuPasteEmpty'));
@@ -980,8 +980,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (missing > cut.length) toast.show(t('timeline.pasteGone'));
     const all = [...items, ...cut].sort((a, b) => a.startMs - b.startMs);
     if (!all.length) return Promise.resolve(null);
-    /* it covers what is there (an overwrite) */
-    const ops = pasteEdit(all, timelineTracks, editModel(), atMs, lane, { mode: 'overwrite' });
+    const ops = pasteEdit(all, timelineTracks, editModel(), atMs, lane, { mode: 'place' });
     if (!ops) return Promise.resolve(t('timeline.trackLocked'));
     const gone = new Set(cut.map((item) => item.clipId));
     const written = ops.map((op): Op => {

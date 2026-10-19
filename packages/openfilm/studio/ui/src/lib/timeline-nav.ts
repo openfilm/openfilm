@@ -4,7 +4,7 @@
  * the editor (components/ProjectView).
  */
 import { MIN_BLOCK_MS } from './timeline-drag.ts';
-import { planMove, type EditModel, type EditPlan } from './timeline-edit.ts';
+import { TOUCH_MS, planMove, type EditModel, type EditPlan } from './timeline-edit.ts';
 import { stepFrames } from './timecode.ts';
 import type { TimelineBlock, TimelineTrack } from './timeline-layout';
 
@@ -82,15 +82,26 @@ export function splitAllTargets(tracks: readonly TimelineTrack[], atMs: number):
 }
 
 /**
- * Clips (by id, the first leading) moved `frames` frames along their tracks, landing on the frame grid: a frame on,
- * they cut what they cover. Null when nothing can move (a locked track, the film's start).
+ * Clips (by id, the first leading) moved `frames` frames along their tracks, landing on the frame grid; a clip in the
+ * way stops them against it, uncut. Null when nothing can move (a locked track, the film's start, a clip right there).
  */
 export function planNudge(model: EditModel, ids: readonly string[], frames: number): EditPlan | null {
   const lead = model.flatMap((t) => t.clips).find((c) => c.id === ids[0]);
   if (!lead || !frames) return null;
-  const deltaMs = stepFrames(lead.startMs, frames) - lead.startMs;
-  if (!deltaMs) return null;
-  const plan = planMove(model, { ids, deltaMs, pointerMs: lead.startMs + deltaMs, mode: 'overwrite' });
+  let deltaMs = stepFrames(lead.startMs, frames) - lead.startMs;
+  /* the room before the nearest clip they would run into, on each of their tracks */
+  const moving = new Set(ids);
+  for (const t of model) {
+    const others = t.clips.filter((c) => !moving.has(c.id));
+    for (const c of t.clips.filter((x) => moving.has(x.id))) {
+      for (const o of others) {
+        if (deltaMs > 0 && o.startMs >= c.endMs - TOUCH_MS) deltaMs = Math.min(deltaMs, o.startMs - c.endMs);
+        if (deltaMs < 0 && o.endMs <= c.startMs + TOUCH_MS) deltaMs = Math.max(deltaMs, o.endMs - c.startMs);
+      }
+    }
+  }
+  if (Math.abs(deltaMs) <= TOUCH_MS) return null;
+  const plan = planMove(model, { ids, deltaMs, pointerMs: lead.startMs + deltaMs, mode: 'place' });
   return plan?.ops.length ? plan : null;
 }
 

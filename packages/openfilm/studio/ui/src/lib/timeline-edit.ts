@@ -18,7 +18,7 @@
  */
 import type { Op, PropValue } from '../api.ts';
 import type { TimelineTrack } from './timeline-layout';
-import { MIN_BLOCK_MS } from './timeline-drag.ts';
+import { MIN_BLOCK_MS, newTrackSide } from './timeline-drag.ts';
 import { frameMs } from './timecode.ts';
 
 /** Clips closer than this are touching: film.html rounds each time alone, to the millisecond. */
@@ -647,7 +647,7 @@ export interface MoveSpec {
 
 /**
  * Clips moved. Place: they land where they were let go; on a track where that time is taken they go instead to a new
- * track opened right above it, so nothing there is cut or moved. Overwrite: they land where they were let go and take
+ * track opened beside it (newTrackSide), so nothing there is cut or moved. Overwrite: they land where they were let go and take
  * that time off the tracks they land on. Either way the time they leave stays open. Insert: they are lifted out (the
  * time they took closes, as a ripple delete) and go in at the insert point of the track the grabbed one lands on,
  * pushing what comes after on (as an insert). A new track takes them as they are. Null when a track it would change
@@ -708,8 +708,8 @@ export function planMove(model: EditModel, spec: MoveSpec): (EditPlan & { landMs
     c.endMs = startMs + lenOf(c);
     c.startMs = startMs;
   }
-  /* placing: a track where any of them would touch a clip left there takes none of them; a new track right above it
-     takes them all (they never overlap each other there: the group keeps its shape, one track per track) */
+  /* placing: a track where any of them would overlap a clip left there takes none of them; a new track beside it takes
+     them all (they never overlap each other there: the group keeps its shape, one track per track) */
   const taken = new Set<number>();
   if (spec.mode === 'place') {
     for (const [id, c] of lifted) {
@@ -722,8 +722,9 @@ export function planMove(model: EditModel, spec: MoveSpec): (EditPlan & { landMs
   for (const [id, c] of lifted) {
     const dest = destOf(id);
     if (typeof dest === 'number' && taken.has(dest)) {
-      d.opened.set(id, dest);
-      openTrack(d, dest, `over-${dest}`).clips.push(c);
+      const side = newTrackSide(dest, trackAt(d, dest)?.role);
+      d.opened.set(id, side);
+      openTrack(d, side, `beside-${dest}`).clips.push(c);
       continue;
     }
     if (typeof dest === 'object') {
