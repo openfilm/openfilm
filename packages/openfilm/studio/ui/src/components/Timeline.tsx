@@ -94,7 +94,6 @@ import {
   gapsOf,
   insertPointOn,
   linkedIds,
-  magnetOn,
   mainTrackOf,
   planCloseGap,
   planCloseMainGaps,
@@ -2172,21 +2171,17 @@ export const Timeline = React.memo(function Timeline({
   }, [allBlocks, pxPerMs, snap, snapPointsMs]);
 
   /**
-   * How a drop from the media pane goes in. On the main track with the magnet: an insert (⌥: an overwrite). Elsewhere
-   * with the magnet, as CapCut's: no edit, so it never covers a clip — a taken spot opens a new track (⌥: an
-   * overwrite). Without the magnet: an overwrite (⌥: an insert).
+   * How a drop from the media pane goes in: it is put down, nothing on the timeline is cut, pushed or covered. Where
+   * it is let go is free: there; taken: on a new track. ⌥: an overwrite, asked for.
    */
-  const dropModeAt = React.useCallback((hit: { lane: number; band: DropBand }, alt: boolean): EditMode | undefined => {
-    const doc = hit.band === 'body' ? tracks[hit.lane]?.docIndex : undefined;
-    const { magnet } = prefsRef.current;
-    if (magnet && !magnetOn(modelRef.current, doc, magnet)) return alt ? 'overwrite' : undefined;
-    return magnetOn(modelRef.current, doc, magnet) !== alt ? 'insert' : 'overwrite';
-  }, [tracks]);
+  const dropModeAt = React.useCallback((_hit: { lane: number; band: DropBand }, alt: boolean): EditMode | undefined => (
+    alt ? 'overwrite' : undefined
+  ), []);
 
   /**
-   * Where a drop from the media pane lands and what it does there, for the preview and the drop alike. Onto the main
-   * track with the magnet (⌥: the other way): an insert at the insert point of the track (lib/timeline-edit insertPointOn),
-   * pushing what follows on; without: an overwrite where it was let go. The clips it pushes or cuts are drawn moved.
+   * Where a drop from the media pane lands and what it does there, for the preview and the drop alike: put down where
+   * it was let go, or on a new track when that spot is taken (dropModeAt). With ⌥, an overwrite there; the clips it
+   * cuts are drawn moved.
    */
   const assetLanding = React.useCallback((file: ResourceDragItem, clientX: number, clientY: number, altKey: boolean): AssetHint | null => {
     const laneHit = laneHitAtY(clientY);
