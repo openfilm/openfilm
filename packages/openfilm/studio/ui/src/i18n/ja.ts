@@ -402,6 +402,8 @@ export const ja: Words = {
     rangeTo: '終了',
     saveTo: '保存先',
     change: '変更…',
+    fileName: 'ファイル名',
+    fileNameHint: 'この書き出しで作るファイルはすべてこの名前に、中身（プラットフォーム、サイズ）を加えた名前になります。空欄ならプロジェクト名です。',
     pickTitle: '書き出しの保存先を選択',
     pickButton: '選択',
     summary: '{n} ファイル · {dur}',

@@ -403,6 +403,8 @@ export const en = {
     rangeTo: 'To',
     saveTo: 'Save to',
     change: 'Change…',
+    fileName: 'File name',
+    fileNameHint: 'Every file this export makes is named this, plus what it is (the platform, the size). Empty: the project’s name.',
     pickTitle: 'Choose where to save exports',
     pickButton: 'Choose',
     summary: '{n} file(s) · {dur}',

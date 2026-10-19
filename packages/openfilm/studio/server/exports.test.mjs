@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { homedir, tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createExports, exportCapabilities, exportsRoot, ExportError, frameBox, dimsForShortEdge, projectFiles, projectSizes } from './exports.mjs';
+import { createExports, exportCapabilities, exportName, exportsRoot, ExportError, frameBox, dimsForShortEdge, projectFiles, projectSizes } from './exports.mjs';
 import { encoders, hardwareEncoder } from '../../src/encoders.mjs';
 import { allocateLanes, containMotion, fadeKeyframes, frameSpan, nleRate, planNleTimeline, xmemlDocument } from './nle.mjs';
 import { pptxParts } from './slides.mjs';
@@ -350,6 +350,23 @@ test('subtitles: SRT, WebVTT or a transcript of the film\'s cues; a film without
   assert.match(none.error, /no subtitles/);
   assert.equal(await silent.subtitles(root), 0);
   assert.equal(await createExports({ captions: subtitles }).subtitles(root), 2);
+});
+
+test('the files\' name: what the person typed, less what a file system refuses; empty is the project\'s name', async () => {
+  assert.equal(exportName('My/Cut: final?.mp4'), 'My Cut final');
+  assert.equal(exportName('  ..hidden. '), 'hidden');
+  assert.equal(exportName('Trip 2026.v2'), 'Trip 2026.v2');
+  assert.equal(exportName('nul'), 'nul_');
+  assert.equal(exportName('???'), '');
+  assert.equal(exportName(42), '');
+  const exports = createExports({ captions: subtitles });
+  const folder = mkdtempSync(join(scratch, 'named-'));
+  const named = exports.startAll(project('Proj'), { folder, name: 'Launch: v2.srt', jobs: [{ kind: 'subtitles' }, { kind: 'subtitles', format: 'vtt', range: [1, 2] }] });
+  const done = await Promise.all(named.map((job) => ended(exports, job)));
+  assert.deepEqual(done.map((j) => basename(j.out)), ['Launch v2.srt', 'Launch v2 1-2s.vtt'], 'each adds what it is and its extension');
+  const [blank] = exports.startAll(project('Proj'), { folder, name: ' / ', jobs: [{ kind: 'subtitles' }] });
+  assert.equal(basename((await ended(exports, blank)).out), 'Proj.srt');
+  assert.throws(() => exports.startAll(project(), { folder, name: 7, jobs: [{ kind: 'subtitles' }] }), ExportError);
 });
 
 test('slides: a PowerPoint deck and a PDF, one page per scene, the scene named in the notes', ffmpeg, async () => {

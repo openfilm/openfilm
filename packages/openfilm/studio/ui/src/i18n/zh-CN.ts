@@ -403,6 +403,8 @@ export const zhCN: Words = {
     rangeTo: '终点',
     saveTo: '保存到',
     change: '更改…',
+    fileName: '文件名',
+    fileNameHint: '这次导出的每个文件都用这个名字，后面加上它是什么（平台、尺寸）。留空就用项目名。',
     pickTitle: '选择导出的保存位置',
     pickButton: '选择',
     summary: '{n} 个文件 · {dur}',

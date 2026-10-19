@@ -402,6 +402,8 @@ export const ko: Words = {
     rangeTo: '끝',
     saveTo: '저장 위치',
     change: '변경…',
+    fileName: '파일 이름',
+    fileNameHint: '이번 내보내기로 만드는 파일은 모두 이 이름에 무엇인지(플랫폼, 크기)를 붙여 저장됩니다. 비워 두면 프로젝트 이름을 씁니다.',
     pickTitle: '내보내기 저장 위치 선택',
     pickButton: '선택',
     summary: '파일 {n}개 · {dur}',

@@ -202,6 +202,22 @@ export function framing(stage, frame, fill, out, alpha) {
 
 const safeName = (/** @type {string} */ text) => text.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'OpenFilm';
 
+/** The extensions Studio's exports end in: one typed at the end of a name is dropped, as Studio adds the right one. */
+const EXPORT_EXT = /\.(mp4|m4v|mov|webm|gif|wav|m4a|mp3|srt|vtt|txt|png|jpe?g|zip|pptx|pdf|xml)$/i;
+
+/**
+ * The name a person gave an export's files: less what a file system refuses (see safeName), a dot or a space at either
+ * end (a hidden file on macOS, refused on Windows), and an extension they typed. A name Windows keeps for a device
+ * (`CON`, `NUL`, `COM1`…) gets a `_`. Empty when nothing is left: the project's name is used then.
+ * @param {unknown} text @returns {string}
+ */
+export function exportName(text) {
+  if (typeof text !== 'string') return '';
+  const clean = text.replace(/[\\/:*?"<>|\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim()
+    .replace(EXPORT_EXT, '').slice(0, 80).replace(/^[.\s]+|[.\s]+$/g, '');
+  return /^(con|prn|aux|nul|com\d|lpt\d)$/i.test(clean) ? `${clean}_` : clean;
+}
+
 /** A name in `dir` that is free: `name.ext`, else `name 2.ext`… */
 function freeFile(/** @type {string} */ dir, /** @type {string} */ name, /** @type {string} */ ext) {
   let candidate = join(dir, `${name}${ext}`);
@@ -1328,13 +1344,18 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       return { ...job };
     },
     /**
-     * Queue several exports at once (`{ jobs: [ask…], folder? }`): all of them, or, when one is wrong, none.
-     * @param {{ id: string, name: string, path: string }} project @param {{ jobs?: unknown, folder?: unknown }} body
+     * Queue several exports at once (`{ jobs: [ask…], folder?, name? }`): all of them, or, when one is wrong, none.
+     * `name`: what their files are called instead of the project's name (each still adds what it is: the platform, the
+     * size, the range).
+     * @param {{ id: string, name: string, path: string }} project @param {{ jobs?: unknown, folder?: unknown, name?: unknown }} body
      */
     startAll(project, body) {
       if (!Array.isArray(body?.jobs) || !body.jobs.length || body.jobs.length > 24) throw new ExportError('jobs: a list of 1 to 24 exports');
+      if (body.name !== undefined && typeof body.name !== 'string') throw new ExportError('name: a file name');
       const asks = body.jobs.map((ask) => checked(/** @type {ExportAsk} */ (ask)));
       const folder = folderOf(body.folder);
+      const name = exportName(body.name);
+      if (name) project = { ...project, name };
       /* asks the same but for their name (platforms that take the same frame, size and rate: 抖音, 快手, 视频号) are
          drawn once, and the others get that one's files */
       /** @type {Map<string, string>} */

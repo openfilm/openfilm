@@ -41,6 +41,7 @@ import {
   type ExportVideoCodec,
 } from '@/lib/export-spec';
 import {
+  exportFileName,
   formatBytes,
   formatFilmTime,
   listExports,
@@ -255,6 +256,9 @@ export function ExportCenter(props: ExportCenterProps) {
   const [nleSourceFps, setNleSourceFps] = React.useState<number | null>(null);
   /** The folder being typed after "Change…" (null when not editing). */
   const [folderDraft, setFolderDraft] = React.useState<string | null>(null);
+  /** What this export's files are called: the project's name until the person types another (kept for this export only). */
+  const defaultName = exportFileName(props.title) || props.title;
+  const [fileName, setFileName] = React.useState(defaultName);
 
   React.useEffect(() => {
     if (!open) return;
@@ -266,6 +270,7 @@ export function ExportCenter(props: ExportCenterProps) {
     setResult(null);
     setWorking(null);
     setFolderDraft(null);
+    setFileName(defaultName);
     setRange((r) => ({ ...r, on: false }));
     void listExports(props.projectId).then((r) => { setCan(r.can); setDraftApps({ jianying: Boolean(r.drafts?.jianying), capcut: Boolean(r.drafts?.capcut) }); setDefaultFolder(r.folder); setCaptionCount(r.subtitles ?? 0); setProjectSizes(r.project ?? null); }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -499,7 +504,8 @@ export function ExportCenter(props: ExportCenterProps) {
     }
     setWorking(t('exportCenter.queueing'));
     try {
-      const queued = await startExports(props.projectId, jobs, s.folder || undefined);
+      const name = exportFileName(fileName);
+      const queued = await startExports(props.projectId, jobs, s.folder || undefined, name && name !== defaultName ? name : undefined);
       props.onQueued?.(queued);
       onClose();
     } catch (e) {
@@ -552,7 +558,9 @@ export function ExportCenter(props: ExportCenterProps) {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[130] flex items-center justify-center bg-black/45 p-4 backdrop-blur-[2px]"
+      /* a plain dim, no backdrop blur: a blur over the whole window is drawn again on every frame of a wheel scroll in
+         the dialog, and the window flickered on macOS */
+      className="fixed inset-0 z-[130] flex items-center justify-center bg-black/50 p-4"
       onClick={() => { if (!working) onClose(); }}
     >
       <div
@@ -567,7 +575,7 @@ export function ExportCenter(props: ExportCenterProps) {
         {/* the list scrolls when the window is short; the note under it stays whole */}
         <nav className="flex min-h-0 w-[212px] shrink-0 flex-col border-r border-[var(--border-soft)] bg-[var(--surface-2)]">
           <h2 className="shrink-0 px-5 pb-2 pt-4 text-[15px] font-semibold tracking-tight text-[var(--text)]">{t('exportCenter.title')}</h2>
-          <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-3 pb-2">
+          <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain px-3 pb-2">
           {DESTS.map((d) => {
             const on = dest === d.id;
             return (
@@ -614,7 +622,8 @@ export function ExportCenter(props: ExportCenterProps) {
             </button>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4 pt-3">
+          {/* a wheel or trackpad scroll that reaches the end stops here, never moving (or bouncing) the page behind */}
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4 pt-3">
             <div className="flex flex-col gap-5">
               {dest === 'social' && (
                 <>
@@ -759,7 +768,7 @@ export function ExportCenter(props: ExportCenterProps) {
               {dest === 'alpha' && (
                 <>
                   <Field label={t('exportCenter.alphaSource')}>
-                    <div className="flex max-h-[200px] flex-col gap-1.5 overflow-y-auto pr-1">
+                    <div className="flex max-h-[200px] flex-col gap-1.5 overflow-y-auto overscroll-contain pr-1">
                       {[{ clipId: WHOLE_FILM, label: t('exportCenter.alphaWhole'), startMs: 0, durMs: totalMs }, ...blocks].map((b) => {
                         const on = (alphaBlock ? alphaBlock.clipId : WHOLE_FILM) === b.clipId;
                         return (
@@ -1110,10 +1119,11 @@ export function ExportCenter(props: ExportCenterProps) {
             </div>
           </div>
 
-          {/* bottom: where it goes (the folder, a click changes it), what comes out, and the primary button */}
+          {/* bottom: where it goes (the folder, a click changes it), what the files are called, what comes out, and the
+              primary button */}
           <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-3 border-t border-[var(--border-soft)] bg-[color-mix(in_srgb,var(--surface-2)_45%,transparent)] px-5 py-3.5">
             {toDrafts ? (
-              <div className="-ml-2 flex min-w-0 max-w-[340px] flex-1 items-center gap-2.5 px-2 py-1.5">
+              <div className="-ml-2 flex min-w-0 max-w-[260px] items-center gap-2.5 px-2 py-1.5">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--surface-2)] text-[var(--text-muted)] ring-1 ring-[var(--border)]">
                   <Clapperboard size={15} />
                 </span>
@@ -1144,7 +1154,7 @@ export function ExportCenter(props: ExportCenterProps) {
                 disabled={picking}
                 title={folder}
                 aria-label={`${t('exportCenter.saveTo')}: ${folder || '—'}. ${t('exportCenter.change')}`}
-                className="group -ml-2 flex min-w-0 max-w-[340px] flex-1 items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition hover:bg-[var(--bg-hover)] disabled:opacity-60"
+                className="group -ml-2 flex min-w-0 max-w-[260px] items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition hover:bg-[var(--bg-hover)] disabled:opacity-60"
               >
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--surface-2)] text-[var(--text-muted)] ring-1 ring-[var(--border)] transition group-hover:text-[var(--text)]">
                   {picking ? <Loader2 size={15} className="animate-spin" /> : <FolderOpen size={15} />}
@@ -1158,6 +1168,23 @@ export function ExportCenter(props: ExportCenterProps) {
                 </span>
               </button>
             )}
+            {/* the files' name: each file adds what it is (the platform, the size) and its extension */}
+            <label
+              title={t('exportCenter.fileNameHint')}
+              className="flex min-w-[120px] max-w-[220px] flex-1 cursor-text flex-col rounded-lg px-2 py-1.5 transition hover:bg-[var(--bg-hover)] focus-within:bg-[var(--bg-hover)]"
+            >
+              <span className="text-[11px] text-[var(--text-faint)]">{t('exportCenter.fileName')}</span>
+              <input
+                value={fileName}
+                placeholder={defaultName}
+                spellCheck={false}
+                disabled={Boolean(working)}
+                onChange={(e) => setFileName(e.target.value)}
+                onBlur={() => setFileName((v) => exportFileName(v) || defaultName)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }}
+                className="min-w-0 truncate bg-transparent text-[13px] font-medium text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]"
+              />
+            </label>
             <div className="ml-auto flex min-w-0 items-center gap-4">
               <div className="min-w-0 text-right text-[12px] leading-snug">
                 {result ? (

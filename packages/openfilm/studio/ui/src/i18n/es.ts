@@ -402,6 +402,8 @@ export const es: Words = {
     rangeTo: 'Hasta',
     saveTo: 'Guardar en',
     change: 'Cambiar…',
+    fileName: 'Nombre del archivo',
+    fileNameHint: 'Cada archivo de esta exportación lleva este nombre, más lo que es (la plataforma, el tamaño). Vacío: el nombre del proyecto.',
     pickTitle: 'Elige dónde guardar las exportaciones',
     pickButton: 'Elegir',
     summary: '{n} archivo(s) · {dur}',

@@ -103,9 +103,21 @@ export async function probeFps(projectId: string, path: string): Promise<number 
 }
 
 /** Queue exports, all or none. `folder`: where to write them (absolute, or ~/…); missing = the default folder. */
-export async function startExports(projectId: string, jobs: readonly ExportRequest[], folder?: string): Promise<ExportJob[]> {
-  const body = await call<{ exports: ExportJob[] }>(endpoint(projectId), { method: 'POST', json: { jobs, ...(folder ? { folder } : {}) } });
+/** `name`: what the files are called instead of the project's name (each adds what it is: the platform, the size). */
+export async function startExports(projectId: string, jobs: readonly ExportRequest[], folder?: string, name?: string): Promise<ExportJob[]> {
+  const body = await call<{ exports: ExportJob[] }>(endpoint(projectId), { method: 'POST', json: { jobs, ...(folder ? { folder } : {}), ...(name ? { name } : {}) } });
   return body.exports;
+}
+
+/**
+ * The name a person gives an export's files, as the server will use it (studio/server/exports.mjs exportName): less
+ * what a file system refuses, a dot or a space at either end and an extension typed (Studio adds the right one). Empty:
+ * the project's name.
+ */
+export function exportFileName(text: string): string {
+  const clean = text.replace(/[\\/:*?"<>|\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim()
+    .replace(/\.(mp4|m4v|mov|webm|gif|wav|m4a|mp3|srt|vtt|txt|png|jpe?g|zip|pptx|pdf|xml)$/i, '').slice(0, 80).replace(/^[.\s]+|[.\s]+$/g, '');
+  return /^(con|prn|aux|nul|com\d|lpt\d)$/i.test(clean) ? `${clean}_` : clean;
 }
 
 export async function cancelExport(projectId: string, jobId: string): Promise<void> {

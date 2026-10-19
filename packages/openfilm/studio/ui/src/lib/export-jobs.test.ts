@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { endedHeadline, formatFilmTime, type ExportJob, type ExportJobStatus } from './export-jobs.ts';
+import { endedHeadline, exportFileName, formatFilmTime, type ExportJob, type ExportJobStatus } from './export-jobs.ts';
+import { exportName } from '../../../server/exports.mjs';
 
 test('the dialog\'s times: tenths only where the time is not a whole second', () => {
   assert.equal(formatFilmTime(7500), '0:07.5');
@@ -25,4 +26,11 @@ test('the tray says how the exports ended: cancelled is not finished, and a mix 
   assert.deepEqual(headline('done', 'cancelled', 'cancelled'), { tone: 'ok', text: 'countDone, countCancelled' });
   assert.deepEqual(headline('cancelled', 'failed'), { tone: 'err', text: 'countCancelled, countFailed' });
   assert.deepEqual(headline('done', 'cancelled', 'failed'), { tone: 'err', text: 'countDone, countCancelled, countFailed' });
+});
+
+test('the files\' name the dialog shows back is the one the server writes', () => {
+  for (const typed of ['My/Cut: final?.mp4', '  ..hidden. ', 'Trip 2026.v2', 'COM1', 'a\tb\u0007c', '抖音 · 发布片.MOV', '???', 'x'.repeat(100)]) {
+    assert.equal(exportFileName(typed), exportName(typed), typed);
+  }
+  assert.equal(exportFileName('My/Cut: final?.mp4'), 'My Cut final');
 });
