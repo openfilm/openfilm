@@ -7,8 +7,9 @@
  * There is no play button or timecode here: the transport is under the picture (one place for one thing). The
  * timeline shows what the film looks like over time and is the one place to drag the playhead. Everything it changes
  * (move, trim, roll, slip, slide, split, delete, paste, a gap closed) is written back to film.html through the
- * callbacks; what an edit does to the other clips is planned in lib/timeline-edit, by the switches in the toolbar: the
- * magnet (insert and ripple, or overwrite), sync lock (ripples move every unlocked track) and linked clips.
+ * callbacks; what an edit does to the other clips is planned in lib/timeline-edit: a delete or a move leaves a gap and
+ * a clip put down covers what is there, unless the edit is a ripple or an insert, which moves what follows on every
+ * unlocked track.
  */
 import React from 'react';
 import { flushSync } from 'react-dom';
@@ -23,8 +24,6 @@ import {
   ListRestart,
   Lock,
   LockOpen,
-  Magnet,
-  Paperclip,
   MessageSquarePlus,
   MoreHorizontal,
   ChevronDown,
@@ -94,9 +93,7 @@ import {
   gapsOf,
   insertPointOn,
   linkedIds,
-  mainTrackOf,
   planCloseGap,
-  planCloseMainGaps,
   planCloseTrackGaps,
   planLink,
   planRemove,
@@ -109,7 +106,7 @@ import {
 } from '@/lib/timeline-edit';
 import { clipThumbId, indexClipThumbs, thumbIntoOrigin } from '@/lib/thumb-frame';
 import { THUMB_CELL_PX } from '@/lib/thumb-cache';
-import { followOf, useTimelinePrefs, writeTimelinePref } from '@/lib/timeline-prefs';
+import { useTimelinePrefs, writeTimelinePref } from '@/lib/timeline-prefs';
 import { STUDIO_REF_TYPE, type StudioRef } from '@/lib/host';
 import { orderedRange, rangeLabel, type FilmRange } from '@/lib/studio-refs';
 import { draftNumbersOf, sameClip, type ChatPoint, type DraftMarks } from '@/lib/chat-marks';
@@ -274,12 +271,11 @@ const TL = {
 function laneTone(track: TimelineTrack, selected: boolean): string {
   if (track.hidden) return TL.head;
   const tone = selected ? TL.laneOn : TL.lane;
-  /* the main track: a band of its own, a shade toward the text (lighter in the dark, darker in the light) */
-  return track.main ? `color-mix(in srgb, ${tone} 93%, var(--tl-text))` : tone;
+  return tone;
 }
 
-/** A row's height: the person's for its track (lib/track-heights), else the timeline's own (the main track taller). */
-function rowH(track: Pick<TimelineTrack, 'kind' | 'height' | 'main'>): number {
+/** A row's height: the person's for its track (lib/track-heights), else the timeline's own for its kind. */
+function rowH(track: Pick<TimelineTrack, 'kind' | 'height'>): number {
   return track.height ?? ownTrackHeight(track);
 }
 
@@ -287,7 +283,7 @@ function rowH(track: Pick<TimelineTrack, 'kind' | 'height' | 'main'>): number {
  * The height that shows every row (toolbar + ruler + rows + padding + range bar). The editor uses it for the
  * timeline's default height.
  */
-export function timelineFitHeight(tracks: readonly Pick<TimelineTrack, 'kind' | 'height' | 'main'>[]): number {
+export function timelineFitHeight(tracks: readonly Pick<TimelineTrack, 'kind' | 'height'>[]): number {
   const lanes = tracks.reduce((h, tr) => h + rowH(tr) + GAP, 0);
   return TOOLBAR_H + RULER_H + lanes + GAP + 2 * TL_VPAD + H_SCROLL_H;
 }
@@ -735,11 +731,9 @@ export interface TimelineCommands {
   /** Link the selected clips, or unlink them. */
   link: () => void;
   unlink: () => void;
-  /** The switches (see lib/timeline-prefs). */
-  toggleMagnet: () => void;
-  toggleLinkage: () => void;
   /** [ / ]: every clip before / after the playhead selected (lib/timeline-nav sideTargets). */
   selectSide: (dir: -1 | 1) => void;
+  /** The snapping switch (see lib/timeline-prefs). */
   toggleSnap: () => void;
   /**
    * ⌘B: split the selected clips at the playhead; with nothing selected, the clip under it on the targeted track (the
@@ -748,9 +742,9 @@ export interface TimelineCommands {
   split: () => void;
   /** ⇧⌘B: split every clip under the playhead, on every unlocked track. */
   splitAll: () => void;
-  /** ⌘X: copy the selected clips, then delete them (closing the gap with the magnet on, as ⌫ does). */
+  /** ⌘X: copy the selected clips, then delete them, leaving a gap (as ⌫ does). */
   cut: () => void;
-  /** ⌥← / ⌥→: move the selected clips `frames` frames, in the timeline's mode. */
+  /** ⌥← / ⌥→: move the selected clips `frames` frames, covering what they land on. */
   nudge: (frames: number) => void;
   /** ⇧Z: the whole film in view. */
   zoomFit: () => void;
@@ -1031,17 +1025,13 @@ export const Timeline = React.memo(function Timeline({
   };
 
   const [zoom, setZoom] = React.useState(ZOOM_DEFAULT);
-  /* the switches: snapping, the magnet (insert and ripple), sync lock, linked clips; kept on this machine */
+  /* the switch: snapping, kept on this machine */
   const prefs = useTimelinePrefs();
   const snap = prefs.snap;
   const prefsRef = React.useRef(prefs);
   prefsRef.current = prefs;
-  /** What turning the magnet on does to the film: the main track closes up (set once runPlan exists, below). */
-  const onMagnetOn = React.useRef<() => void>(() => {});
   const togglePref = React.useCallback((pref: keyof typeof prefs) => {
-    const on = !prefsRef.current[pref];
-    writeTimelinePref(pref, on);
-    if (pref === 'magnet' && on) onMagnetOn.current();
+    writeTimelinePref(pref, !prefsRef.current[pref]);
   }, []);
   const [assetHint, setAssetHint] = React.useState<AssetHint | null>(null);
   const [dropBusy, setDropBusy] = React.useState(false);
@@ -1051,8 +1041,6 @@ export const Timeline = React.memo(function Timeline({
   const [notice, setNotice] = React.useState<string | null>(null);
   /* the tracks as an edit sees them (lib/timeline-edit): every gesture plans on it */
   const model = React.useMemo(() => editModelOf(tracks, links), [tracks, links]);
-  /** The main track's film.html index: the magnet acts there. */
-  const mainDoc = React.useMemo(() => mainTrackOf(model), [model]);
   const modelRef = React.useRef(model);
   modelRef.current = model;
   /** Block ids → the same clips with every clip linked to them, unless `alone` (⌥). */
@@ -1755,18 +1743,10 @@ export const Timeline = React.memo(function Timeline({
       return now && Math.abs(now.startMs - g.startMs) < TOUCH_MS && Math.abs(now.endMs - g.endMs) < TOUCH_MS ? g : null;
     });
   }, [model]);
-  /* the magnet turned on closes up the main track, as CapCut's: its gaps go, in one step */
-  onMagnetOn.current = () => {
-    void runPlan(planCloseMainGaps(modelRef.current, followOf(prefsRef.current)), 'history.stepMainClosed');
-  };
-  /**
-   * Close a gap: what is after it moves back (with sync lock, on every unlocked track; on its own track alone when a
-   * synced track has no room, and a notice says so).
-   */
+  /** Close a gap: what is after it moves back, on every unlocked track (a ripple). */
   const closeGapOn = React.useCallback((g: { track: number; startMs: number; endMs: number }) => {
-    const plan = planCloseGap(modelRef.current, g.track, g, followOf(prefsRef.current));
-    void runPlan(plan, 'history.stepGapClosed', plan.alone ? t('timeline.gapClosedAlone') : undefined);
-  }, [runPlan, t]);
+    void runPlan(planCloseGap(modelRef.current, g.track, g), 'history.stepGapClosed');
+  }, [runPlan]);
   /** Close the gap picked. */
   const closeGap = React.useCallback(() => {
     const g = gap;
@@ -1994,10 +1974,10 @@ export const Timeline = React.memo(function Timeline({
   }, [msAtClientX, pxPerMs, splitSpots]);
 
   /**
-   * Delete clips: locked rows untouched. Planned (lib/timeline-edit) as one edit; with `ripple` the time they took
-   * closes (with sync lock on every unlocked track). Without onEditOps, one by one through onRemove(Many).
+   * Delete clips: locked rows untouched. Planned (lib/timeline-edit) as one edit; without `ripple` they leave a gap,
+   * with it the time they took closes on every unlocked track. Without onEditOps, one by one through onRemove(Many).
    */
-  const removeMany = React.useCallback(async (blocks: readonly TimelineBlock[], ripple: boolean | 'main' = false) => {
+  const removeMany = React.useCallback(async (blocks: readonly TimelineBlock[], ripple = false) => {
     const locked = new Set(
       tracks.filter((tr) => tr.locked).flatMap((tr) => tr.blocks.map((b) => b.id)),
     );
@@ -2008,7 +1988,7 @@ export const Timeline = React.memo(function Timeline({
     if (onEditOps) {
       const ids = targets.flatMap((b) => (b.clipId ? [b.clipId] : []));
       const label = ids.length <= 2 ? `history.stepRemoved|${ids.join(', ')}` : 'history.stepRemove';
-      await runPlan(planRemove(modelRef.current, ids, { ripple, ...followOf(prefsRef.current) }), label);
+      await runPlan(planRemove(modelRef.current, ids, { ripple }), label);
       return;
     }
     if (onRemoveMany) {
@@ -2025,40 +2005,33 @@ export const Timeline = React.memo(function Timeline({
   }, [onEditOps, onRemove, onRemoveMany, tracks, setSelected, runPlan]);
 
   /**
-   * Ripple delete (⇧Delete, the menu): what comes after closes the gap, on the clips' tracks and with sync lock every
-   * unlocked track, or with linkage the main track's, carrying the others. `'main'` (Delete with the magnet on): only
-   * the main track closes up, the others keep their gaps. One edit, one ⌘Z.
+   * Ripple delete (⇧Delete, the menu): what comes after closes the gap, on every unlocked track. One edit, one ⌘Z.
    */
-  const rippleRemove = React.useCallback(async (blocks: readonly TimelineBlock[], waited = false, how: true | 'main' = true) => {
+  const rippleRemove = React.useCallback(async (blocks: readonly TimelineBlock[], waited = false) => {
     /* a track with clips not drawn yet (an undo just put them back): wait for them, or the gap closes onto them */
     const ids = new Set(blocks.map((b) => b.id));
     if (!waited && tracks.some((tr) => tr.incomplete && tr.blocks.some((b) => ids.has(b.id)))) {
-      const wait = { keys: blocks.map((b) => b.clipId ?? b.id), how };
+      const wait = { keys: blocks.map((b) => b.clipId ?? b.id) };
       rippleWait.current = wait;
       /* past the wait it goes with what is drawn: a page that never loads must not block it for good */
       window.setTimeout(() => { if (rippleWait.current === wait) rippleRetry.current(true); }, RIPPLE_WAIT_MS);
       return;
     }
     rippleWait.current = null;
-    await removeMany(blocks, how);
+    await removeMany(blocks, true);
   }, [removeMany, tracks]);
   /* a waiting ripple delete goes once its tracks are whole, its clips found again by id (their places may have
      changed meanwhile) */
-  const rippleWait = React.useRef<{ keys: readonly string[]; how: true | 'main' } | null>(null);
+  const rippleWait = React.useRef<{ keys: readonly string[] } | null>(null);
   const rippleRetry = React.useRef((_late: boolean) => {});
   rippleRetry.current = (late: boolean) => {
     const wait = rippleWait.current;
     if (!wait) return;
     const mine = (b: TimelineBlock) => wait.keys.includes(b.clipId ?? b.id);
     if (!late && tracks.some((tr) => tr.incomplete && tr.blocks.some(mine))) return;
-    void rippleRemove(tracks.flatMap((tr) => tr.blocks).filter(mine), true, wait.how);
+    void rippleRemove(tracks.flatMap((tr) => tr.blocks).filter(mine), true);
   };
   React.useEffect(() => { rippleRetry.current(false); }, [tracks]);
-  /** Delete (⌫, ⌘X, the menu): with the magnet the main track closes up, the other tracks keep their gaps. */
-  const magnetRemove = React.useCallback(
-    (blocks: readonly TimelineBlock[]) => (prefsRef.current.magnet ? rippleRemove(blocks, false, 'main') : removeMany(blocks)),
-    [rippleRemove, removeMany],
-  );
 
   /* selected clips: Delete / Backspace deletes, ⌘C copies, ⌘V pastes at the playhead; not while typing */
   React.useEffect(() => {
@@ -2096,8 +2069,8 @@ export const Timeline = React.memo(function Timeline({
         }
         if ((!onRemove && !onRemoveMany && !onEditOps) || !picked.length) return;
         e.preventDefault();
-        /* with the magnet on a delete closes the gap it leaves, as ⇧Delete always does */
-        void (e.shiftKey ? rippleRemove(picked) : magnetRemove(picked));
+        /* ⌫ leaves a gap; ⇧⌫ closes it (a ripple delete) */
+        void (e.shiftKey ? rippleRemove(picked) : removeMany(picked));
         return;
       }
       const mod = e.metaKey || e.ctrlKey;
@@ -2128,7 +2101,7 @@ export const Timeline = React.memo(function Timeline({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     /* the playhead is read from a ref: as a dependency the listener would be swapped twenty times a second */
-  }, [onRemove, onRemoveMany, onEditOps, onCopy, onPaste, hasClipboard, removeMany, rippleRemove, magnetRemove, selected, tracks, setSelected, playable, zoomByStable, zoomToStable, gap, closeGap, pickedTransition, onTransition, onPickTransition]);
+  }, [onRemove, onRemoveMany, onEditOps, onCopy, onPaste, hasClipboard, removeMany, rippleRemove, selected, tracks, setSelected, playable, zoomByStable, zoomToStable, gap, closeGap, pickedTransition, onTransition, onPickTransition]);
 
   /* whether the last press was on the timeline (for ⌘A); capture phase, since presses here are often stopped */
   React.useEffect(() => {
@@ -2195,7 +2168,7 @@ export const Timeline = React.memo(function Timeline({
     let startMs = preview.startMs;
     if (docIndex != null && !preview.error && onEditOps && editMode) {
       if (editMode === 'insert') startMs = insertPointOn(modelRef.current, docIndex, pointerMs, startMs);
-      const plan = planRoom(modelRef.current, [{ track: docIndex, startMs, endMs: startMs + preview.endMs - preview.startMs }], { mode: editMode, ...followOf(prefsRef.current) });
+      const plan = planRoom(modelRef.current, [{ track: docIndex, startMs, endMs: startMs + preview.endMs - preview.startMs }], { mode: editMode });
       for (const [clipId, at] of plan.placed) {
         const b = allBlocks.find((x) => x.clipId === clipId);
         if (b) ghosts.set(b.id, at ? { startMs: at.startMs, endMs: at.endMs } : null);
@@ -2542,8 +2515,6 @@ export const Timeline = React.memo(function Timeline({
     }
     /* typing a name always has its field; a name given shows when the row has room for it */
     const nameLine = renamingHere || (Boolean(given) && h >= HEAD_NAME_MIN_H);
-    /* the main track is marked by its look (its band) and its hover title, not by a name or a badge that reads as a switch */
-    const mainHead = Boolean(track.main) && track.index === 1;
     /* the track a pill hovered in the app's chat points at */
     const chatLit = chatTrack != null && track.docIndex === chatTrack;
     const pose = `${liftingHead}:${lit}:${targeted}:${renamingHere}:${chatLit}`;
@@ -2565,8 +2536,7 @@ export const Timeline = React.memo(function Timeline({
         onPointerDown={(e) => startLaneReorder(e, laneIndex)}
         onDoubleClick={() => { if (onRenameTrack && track.docIndex != null && track.index === 1) setRenaming(track.docIndex); }}
         onContextMenu={(e) => openHeadMenu(e, track)}
-        title={mainHead ? `${laneTitle} · ${t('timeline.mainTrack')}` : laneTitle}
-        data-main-track={mainHead ? '' : undefined}
+        title={laneTitle}
         style={{
           marginTop: GAP,
           height: h,
@@ -3149,10 +3119,7 @@ export const Timeline = React.memo(function Timeline({
           })}
         {/* the cuts between clips that touch: dragged, a roll (one gets longer, the other shorter); not while a move
             is in hand, and not on a locked track */}
-        {/* a cut's roll handle: not on the main track with the magnet, where a cut's edges trim and what follows closes
-            up, as CapCut's (it has no roll) */}
-        {near && !track.locked && mode === 'select' && !(drag.preview?.mode === 'move' && !drag.preview.landed)
-          && !(prefs.magnet && track.docIndex != null && track.docIndex === mainDoc) ? cutsOf(track.blocks).map(([a, b]) => {
+        {near && !track.locked && mode === 'select' && !(drag.preview?.mode === 'move' && !drag.preview.landed) ? cutsOf(track.blocks).map(([a, b]) => {
           const pa = placedOf(a.id);
           const pb = placedOf(b.id);
           if (pa?.gone || pb?.gone || !drag.can(a).resize || !drag.can(b).resize) return null;
@@ -3250,7 +3217,7 @@ export const Timeline = React.memo(function Timeline({
     openBlockMenu, openLaneMenu, onEditBlocks, collapseIfClick, selectOne, setSelected, clipElements, thumbWindow, view.width,
     chatClip, chatDraft, placedOf, pickForTrim, gap, withLinked, runSplit, trackOverlay,
     fadeOfBlock, fadeDrag, startFade, transitions, transitionDrag, pickedTransition, onPickTransition, onTransition, startTransitionResize,
-    prefs.magnet, mainDoc, nearFirst, nearLast,
+    nearFirst, nearLast,
   ]);
 
   const tickMarks = React.useMemo(() => ticks.map(({ ms, label }) => {
@@ -3360,23 +3327,21 @@ export const Timeline = React.memo(function Timeline({
 
   /**
    * Ripple trim to the playhead (Q / W): `start` takes the head of the clip off up to the playhead, `end` its tail
-   * from it, and what follows closes up (with sync lock on every unlocked track; with linkage, on the main track, the
-   * other tracks along). On the clips given, else the selected ones the playhead is inside, else the main track's
-   * under it, else the topmost under it; the clips linked to them go along. After Q the playhead goes to the clip's
-   * start, where what was under it now is, as CapCut's.
+   * from it, and what follows closes up on every unlocked track. On the clips given, else the selected ones the
+   * playhead is inside, else the one under it on the targeted track, else the topmost under it; the clips linked to
+   * them go along. After Q the playhead goes to the clip's start, where what was under it now is.
    */
   const rippleTrimToPlayhead = React.useCallback((edge: 'start' | 'end', given?: readonly TimelineBlock[]) => {
     const atMs = timeMsRef.current;
     const lockedRow = (b: TimelineBlock) => tracks.some((tr) => tr.locked && tr.blocks.some((x) => x.id === b.id));
     const inside = (b: TimelineBlock) => Boolean(b.clipId) && !lockedRow(b) && atMs > b.startMs + TOUCH_MS && atMs < b.endMs - TOUCH_MS;
     const all = tracks.flatMap((tr) => tr.blocks);
-    const mainIndex = mainTrackOf(modelRef.current);
-    const onMain = tracks.filter((tr) => tr.docIndex != null && tr.docIndex === mainIndex).flatMap((tr) => tr.blocks);
-    const main = (given ?? all.filter((b) => selectedRef.current.includes(b.id))).find(inside) ?? onMain.find(inside) ?? all.find(inside);
-    if (!main?.clipId) return;
-    const ids = [main.clipId, ...linkedIds(modelRef.current, [main.clipId]).filter((id) => id !== main.clipId)];
-    const plan = planRippleTrimTo(modelRef.current, ids, edge, atMs, followOf(prefsRef.current));
-    void runPlan(plan, `history.stepRippleTrimmed|${main.clipId}`).then((done) => { if (done && edge === 'start') onSeek(main.startMs); });
+    const onTarget = tracks.filter((tr) => tr.lane === targetLaneRef.current).flatMap((tr) => tr.blocks);
+    const lead = (given ?? all.filter((b) => selectedRef.current.includes(b.id))).find(inside) ?? onTarget.find(inside) ?? all.find(inside);
+    if (!lead?.clipId) return;
+    const ids = [lead.clipId, ...linkedIds(modelRef.current, [lead.clipId]).filter((id) => id !== lead.clipId)];
+    const plan = planRippleTrimTo(modelRef.current, ids, edge, atMs);
+    void runPlan(plan, `history.stepRippleTrimmed|${lead.clipId}`).then((done) => { if (done && edge === 'start') onSeek(lead.startMs); });
   }, [tracks, runPlan, onSeek]);
 
   /** Link clips (one `data-link`), or unlink them. */
@@ -3400,8 +3365,6 @@ export const Timeline = React.memo(function Timeline({
       closeGap,
       link: () => linkBlocks(picked()),
       unlink: () => unlinkBlocks(picked()),
-      toggleMagnet: () => togglePref('magnet'),
-      toggleLinkage: () => togglePref('linkage'),
       selectSide: (dir) => { setSelected(sideTargets(tracks, timeMsRef.current, dir).map((b) => b.id)); },
       toggleSnap: () => togglePref('snap'),
       split: () => {
@@ -3416,20 +3379,19 @@ export const Timeline = React.memo(function Timeline({
         const clips = picked().filter((b) => b.loc);
         if (!clips.length) return;
         onCopy?.(clips);
-        void magnetRemove(clips);
+        void removeMany(clips);
       },
       nudge: (frames) => {
         const ids = picked().flatMap((b) => (b.clipId ? [b.clipId] : []));
         if (!ids.length) return;
-        /* with the magnet nothing is overwritten (on the main track or off it): into free time only */
-        const plan = planNudge(modelRef.current, ids, frames, { mode: prefsRef.current.magnet ? 'insert' : 'overwrite', ...followOf(prefsRef.current) });
+        const plan = planNudge(modelRef.current, ids, frames);
         if (plan) void runPlan(plan, 'history.stepMove');
       },
       zoomFit: () => zoomToStable(ZOOM_DEFAULT, { scroll: 0 }),
       target: () => tracks.find((tr) => tr.lane === targetLaneRef.current)?.docIndex ?? null,
     };
     return () => { commandsRef.current = null; };
-  }, [commandsRef, tracks, rippleTrimToPlayhead, closeGap, linkBlocks, unlinkBlocks, togglePref, withLinked, runSplit, onCopy, magnetRemove, runPlan, zoomToStable]);
+  }, [commandsRef, tracks, rippleTrimToPlayhead, closeGap, linkBlocks, unlinkBlocks, togglePref, withLinked, runSplit, onCopy, removeMany, runPlan, zoomToStable]);
 
   /** A fade's entry for a clip's edge: put there at its default length, in one step. */
   const transitionEntries = React.useCallback((cut: CutRef, kinds: readonly TransitionKind[]): ContextMenuEntry[] => kinds.map((kind) => ({
@@ -3493,7 +3455,7 @@ export const Timeline = React.memo(function Timeline({
           id: 'close-gaps',
           label: t('timeline.menuCloseGaps'),
           icon: <BetweenHorizontalStart size={14} />,
-          onSelect: () => { void runPlan(planCloseTrackGaps(modelRef.current, doc, followOf(prefsRef.current)), 'history.stepGapsClosed'); },
+          onSelect: () => { void runPlan(planCloseTrackGaps(modelRef.current, doc), 'history.stepGapsClosed'); },
         });
       }
       return entries;
@@ -3645,8 +3607,8 @@ export const Timeline = React.memo(function Timeline({
         disabled: pickedLocked || !picked.some((b) => b.loc),
         hint: pickedLocked ? t('timeline.trackLocked') : t('timeline.menuCopyNone'),
         shortcut: '⌫',
-        /* as ⌫: with the magnet on, the gap closes */
-        onSelect: () => { void magnetRemove(picked); },
+        /* as ⌫: a gap is left */
+        onSelect: () => { void removeMany(picked); },
       });
       if (onEditOps) {
         out.push({
@@ -3664,7 +3626,7 @@ export const Timeline = React.memo(function Timeline({
     return out;
   }, [
     menu, t, onSplit, onDetachAudio, onRemove, onRemoveMany, onCopy, onPaste, onExportBlock, mediaTrouble, relinkCandidates,
-    onRelink, hasClipboard, runSplit, removeMany, rippleRemove, magnetRemove, onEditOps, tracks, blockMenuExtra, headEntries, withLinked,
+    onRelink, hasClipboard, runSplit, removeMany, rippleRemove, onEditOps, tracks, blockMenuExtra, headEntries, withLinked,
     runPlan, closeGapOn, rippleTrimToPlayhead, linkBlocks, unlinkBlocks, transitions, onTransition, onPickTransition, transitionEntries,
   ]);
 
@@ -3740,7 +3702,7 @@ export const Timeline = React.memo(function Timeline({
       out.push({
         id: 'delete', label: t('timeline.removeBlock'), icon: <Trash2 size={14} />, shortcut: '⌫', danger: true,
         disabled: pickedLocked || !picked.some((b) => b.loc), hint: lockedHint,
-        onSelect: () => { void magnetRemove(picked); },
+        onSelect: () => { void removeMany(picked); },
       });
     }
     out.push({
@@ -3900,27 +3862,15 @@ export const Timeline = React.memo(function Timeline({
           ) : null}
         </div>
 
-        {/* the switches (lib/timeline-prefs), in CapCut's order: the main-track magnet, snapping, linkage */}
-        {onEditOps ? <>
-          <span data-timeline-magnet={prefs.magnet ? '1' : '0'}>
-            <ToolButton onClick={() => togglePref('magnet')} active={prefs.magnet} label={t('timeline.magnet')}
-              hint={prefs.magnet ? t('timeline.magnetOn') : t('timeline.magnetOff')}>
-              <Magnet size={15} />
-            </ToolButton>
-          </span>
+        {/* the switch (lib/timeline-prefs): snapping */}
+        {onEditOps ? (
           <span data-timeline-snap={snap ? '1' : '0'}>
             <ToolButton onClick={() => togglePref('snap')} active={snap} label={t('timeline.snap')}
               hint={snap ? t('timeline.snapOn') : t('timeline.snapOff')}>
               <SeparatorVertical size={15} />
             </ToolButton>
           </span>
-          <span data-timeline-linkage={prefs.linkage ? '1' : '0'}>
-            <ToolButton onClick={() => togglePref('linkage')} active={prefs.linkage} label={t('timeline.linkage')}
-              hint={prefs.linkage ? t('timeline.linkageOn') : t('timeline.linkageOff')}>
-              <Paperclip size={15} />
-            </ToolButton>
-          </span>
-        </> : null}
+        ) : null}
 
         <ToolButton
           onClick={() => zoomBy(1 / ZOOM_STEP)}

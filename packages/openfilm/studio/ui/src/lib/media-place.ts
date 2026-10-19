@@ -1,16 +1,16 @@
 /**
- * A file from the media pane put on the timeline without dragging it: its "+" button and Enter (in the timeline's edit
- * mode), and `,` / `.` from the source viewer (insert / overwrite, as Premiere's keys). The part of the file marked in
+ * A file from the media pane put on the timeline without dragging it: its "+" button and Enter (an overwrite), and
+ * `,` / `.` from the source viewer (insert / overwrite, as Premiere's keys). The part of the file marked in
  * the source viewer (I and O there), else all of it, as one clip — a video carries its own sound.
  *
  * Where it goes: at the playhead on the targeted track (the track last clicked on the timeline), or without one at
- * the end of the main track: the bottom picture track (V1) for a picture, a sound track for a sound (the first with
+ * the end of the bottom picture track (V1) for a picture, of a sound track for a sound (the first with
  * room, else a new one under the others).
  */
 import type { Op } from '../api.ts';
 import { assetClipElement, assetClipKindOf, dropDurMsOf, type StageSize } from './asset-timeline.ts';
 import type { ResourceDragItem } from './resource-drag';
-import { magnetOn, planRoom, soundTrackFor, TOUCH_MS, type EditMode, type EditModel, type TrackDest } from './timeline-edit.ts';
+import { planRoom, soundTrackFor, TOUCH_MS, type EditMode, type EditModel, type TrackDest } from './timeline-edit.ts';
 import { snapToFrame } from './timecode.ts';
 
 export type PlaceFile = Pick<ResourceDragItem, 'path' | 'kind' | 'durationMs' | 'endless' | 'reflows' | 'w' | 'h'>;
@@ -21,15 +21,12 @@ export type SourceRange = { inMs: number; outMs: number };
 export interface PlaceSpec {
   file: PlaceFile;
   range?: SourceRange | null;
-  /** The targeted track (film.html index), or null for the main one. */
+  /** The targeted track (film.html index), or null for the lowest picture track. */
   target: number | null;
   /** Where: the playhead (ms), or `end`, after the last clip of the track it goes on. */
   at: number | 'end';
-  /** Insert or overwrite; not given, the magnet decides: an insert on the main track when it is on. */
+  /** Insert or overwrite (not given: an overwrite). */
   mode?: EditMode;
-  magnet?: boolean;
-  sync: boolean;
-  linkage?: boolean;
   /** The canvas: a picture of another shape gets a box in its own (asset-timeline assetFitBox). */
   stage?: StageSize | null;
 }
@@ -75,18 +72,18 @@ export function placeMedia(model: EditModel, spec: PlaceSpec): PlacePlan {
       roomy = true;
     }
   } else {
-    /* the main track: the lowest picture track (V1), film.html's last picture track */
+    /* the lowest picture track (V1), film.html's last picture track */
     const pictures = model.filter((t) => !isSoundTrack(t.role));
-    const main = pictures.at(-1);
-    if (main?.locked) return { error: 'locked' };
-    track = main ? main.index : { insert: 0 };
+    const lowest = pictures.at(-1);
+    if (lowest?.locked) return { error: 'locked' };
+    track = lowest ? lowest.index : { insert: 0 };
   }
   const startMs = spec.at === 'end' ? (typeof track === 'number' ? endOf(track) : 0) : Math.max(0, snapToFrame(spec.at));
   const insert: Op = { op: 'insert', clip: made.element as never, at: Math.round(startMs) / 1000, track };
   if (typeof track !== 'number') return { ops: [insert], track, startMs, durMs: made.durMs };
   /* at the very end nothing follows: no room to make */
   const after = (model.find((t) => t.index === track)?.clips ?? []).some((c) => c.endMs > startMs + TOUCH_MS);
-  const mode = spec.mode ?? (magnetOn(model, track, spec.magnet ?? false) ? 'insert' : 'overwrite');
-  const room = after && !roomy ? planRoom(model, [{ track, startMs, endMs: startMs + made.durMs }], { mode, sync: spec.sync, linkage: spec.linkage }).ops : [];
+  const mode = spec.mode ?? 'overwrite';
+  const room = after && !roomy ? planRoom(model, [{ track, startMs, endMs: startMs + made.durMs }], { mode }).ops : [];
   return { ops: [insert, ...room], track, startMs, durMs: made.durMs };
 }

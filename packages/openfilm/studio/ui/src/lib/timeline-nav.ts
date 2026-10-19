@@ -4,7 +4,7 @@
  * the editor (components/ProjectView).
  */
 import { MIN_BLOCK_MS } from './timeline-drag.ts';
-import { planEdges, planMove, type EditMode, type EditModel, type EditPlan } from './timeline-edit.ts';
+import { planMove, type EditModel, type EditPlan } from './timeline-edit.ts';
 import { stepFrames } from './timecode.ts';
 import type { TimelineBlock, TimelineTrack } from './timeline-layout';
 
@@ -42,9 +42,8 @@ const lockedRows = (tracks: readonly TimelineTrack[]) => new Set(tracks.filter((
 
 /**
  * What ⌘B splits at the playhead: the selected clips it is inside; with nothing selected, the clip it is inside on the
- * main track (the lowest picture track), as CapCut; else on the targeted track (`targetLane`), else on the topmost
- * track that is seen and has one. Never a clip on a locked track. The clips linked to them are the caller's to add
- * (the Linked switch).
+ * targeted track (`targetLane`), else on the topmost track that is seen and has one. Never a clip on a locked track.
+ * The clips linked to them are the caller's to add (the Linked switch).
  */
 export function splitTargets(
   tracks: readonly TimelineTrack[],
@@ -55,10 +54,6 @@ export function splitTargets(
   const locked = lockedRows(tracks);
   const can = (b: TimelineBlock) => Boolean(b.loc && b.clipId) && !locked.has(b.id) && splitsAt(b, atMs);
   if (selectedIds.length) return tracks.flatMap((tr) => tr.blocks).filter((b) => selectedIds.includes(b.id) && can(b));
-  const pictures = tracks.filter((tr) => tr.docIndex != null && tr.role !== 'audio');
-  const mainIndex = pictures.length ? Math.max(...pictures.map((tr) => tr.docIndex!)) : null;
-  const main = tracks.filter((tr) => tr.docIndex === mainIndex && !tr.hidden).flatMap((tr) => tr.blocks).find(can);
-  if (main) return [main];
   const target = targetLane ? tracks.find((tr) => tr.lane === targetLane) : undefined;
   if (target) {
     const hit = target.blocks.find(can);
@@ -87,22 +82,16 @@ export function splitAllTargets(tracks: readonly TimelineTrack[], atMs: number):
 }
 
 /**
- * Clips (by id, the first leading) moved `frames` frames along their tracks, landing on the frame grid. With the
- * magnet (insert) they move into free time only and stop at a neighbor, as nothing is overwritten then; without it
- * (overwrite) they land a frame on and cut what they cover. Null when nothing can move (a locked track, a neighbor
- * right there, the film's start).
+ * Clips (by id, the first leading) moved `frames` frames along their tracks, landing on the frame grid: a frame on,
+ * they cut what they cover. Null when nothing can move (a locked track, the film's start).
  */
-export function planNudge(model: EditModel, ids: readonly string[], frames: number, opts: { mode: EditMode; sync: boolean }): EditPlan | null {
-  const main = model.flatMap((t) => t.clips).find((c) => c.id === ids[0]);
-  if (!main || !frames) return null;
-  const deltaMs = stepFrames(main.startMs, frames) - main.startMs;
+export function planNudge(model: EditModel, ids: readonly string[], frames: number): EditPlan | null {
+  const lead = model.flatMap((t) => t.clips).find((c) => c.id === ids[0]);
+  if (!lead || !frames) return null;
+  const deltaMs = stepFrames(lead.startMs, frames) - lead.startMs;
   if (!deltaMs) return null;
-  if (opts.mode === 'overwrite') {
-    const plan = planMove(model, { ids, deltaMs, pointerMs: main.startMs + deltaMs, mode: 'overwrite', sync: opts.sync });
-    return plan?.ops.length ? plan : null;
-  }
-  const plan = planEdges(model, ids.map((id) => ({ id, kind: 'shift' as const })), deltaMs);
-  return plan.ops.length ? plan : null;
+  const plan = planMove(model, { ids, deltaMs, pointerMs: lead.startMs + deltaMs, mode: 'overwrite' });
+  return plan?.ops.length ? plan : null;
 }
 
 /** A track's name as Studio keeps it (`.film/settings.json`): the clips it had when it was named find it again. */

@@ -26,7 +26,6 @@ import {
   groupLaneShift,
   moveDestFor,
   moveEditMode,
-  rangeOverlaps,
   snapTargetsFor,
   SNAP_THRESHOLD_PX,
   trimFence,
@@ -40,10 +39,8 @@ import {
 } from '@/lib/timeline-drag';
 import {
   linkedIds,
-  magnetOn,
   planEdges,
   planMove,
-  planRippleTrim,
   rollMoves,
   sourceLeftMs,
   type EditMode,
@@ -52,7 +49,7 @@ import {
   type TrackDest,
 } from '@/lib/timeline-edit';
 import { planCopies } from '@/lib/timeline-clipboard';
-import { followOf, type TimelinePrefs } from '@/lib/timeline-prefs';
+import type { TimelinePrefs } from '@/lib/timeline-prefs';
 import type { TimelineBlock, TimelineTrack } from '@/lib/timeline-layout';
 
 /** What a press on the timeline does: move a clip, trim one of its edges, roll a cut. */
@@ -156,10 +153,8 @@ function overHostPanel(ev: PointerEvent): boolean {
 }
 
 /** The history label of a gesture, naming the clip (see OperationHistory's stepText). */
-function stepOf(mode: GestureMode, ripple: boolean, clipId: string): string {
-  const key = mode === 'move' ? 'history.stepMoved'
-    : mode === 'roll' ? 'history.stepRolled'
-      : ripple ? 'history.stepRippleTrimmed' : 'history.stepTrimmed';
+function stepOf(mode: GestureMode, clipId: string): string {
+  const key = mode === 'move' ? 'history.stepMoved' : mode === 'roll' ? 'history.stepRolled' : 'history.stepTrimmed';
   return `${key}|${clipId}`;
 }
 
@@ -174,7 +169,7 @@ export function useBlockDrag(opts: {
   /** More times to snap to: the markers (ms). */
   snapPointsMs?: readonly number[];
   pxPerMs: number;
-  /** The timeline's switches: snapping, the magnet (insert / ripple), sync lock, linked clips. */
+  /** The timeline's switch: snapping. */
   prefs: TimelinePrefs;
   /** The timeline's scroller: it scrolls by itself when a drag reaches its left or right edge. */
   scrollEl?: React.RefObject<HTMLElement | null>;
@@ -250,7 +245,7 @@ export function useBlockDrag(opts: {
     const startY = e.clientY;
     const pointerId = e.pointerId;
     const pointerTarget = e.currentTarget;
-    const { pxPerMs, lanes, allBlocks, model, prefs } = latest.current;
+    const { pxPerMs, lanes, allBlocks, model } = latest.current;
     if (!(pxPerMs > 0)) return;
     // Keep receiving move/up when the pointer crosses a preview iframe.
     try { pointerTarget.setPointerCapture(pointerId); } catch { /* Detached target. */ }
@@ -289,10 +284,8 @@ export function useBlockDrag(opts: {
     const singleLanes = dropLanesOf(lanes, [block.id]);
     const groupLanes = crowd.length ? dropLanesOf(lanes, [block.id, ...crowd.map((b) => b.id)]) : singleLanes;
     const snapCache = new Map<string, SnapTarget[]>();
-    /* without the magnet a trim stops at the neighbors on the clip's own track (every row of it) */
+    /* a trim stops at the neighbors on the clip's own track (every row of it) */
     const fence = mode === 'trim-start' || mode === 'trim-end' ? trimFence(geom, singleLanes[homeLaneIndex]?.occupied ?? []) : undefined;
-    /* the magnet acts on the main track alone: a trim there ripples, elsewhere it stops at the neighbors */
-    const ripple = magnetOn(model, homeLane?.docIndex, prefs.magnet) && (mode === 'trim-start' || mode === 'trim-end');
 
     let dragging = false;
     let last: DragPreview | null = null;
@@ -341,19 +334,17 @@ export function useBlockDrag(opts: {
         let snappedTo: SnapTarget | null = null;
         let tip: GestureTip;
         if (mode === 'trim-start' || mode === 'trim-end') {
-          const out = applyDrag(geom, mode, deltaMs, targets, pxPerMs, block.room, undefined, ripple ? undefined : fence);
+          const out = applyDrag(geom, mode, deltaMs, targets, pxPerMs, block.room, undefined, fence);
           const edge = mode === 'trim-end' ? 'end' : 'start';
           const want = edge === 'end' ? out.endMs - geom.endMs : out.startMs - geom.startMs;
-          plan = ripple
-            ? planRippleTrim(m, ids, edge, want, followOf(p))
-            : planEdges(m, ids.map((id) => ({ id, kind: edge })), want);
+          plan = planEdges(m, ids.map((id) => ({ id, kind: edge })), want);
           if (plan.deltaMs === want) snappedTo = out.snappedTo;
           const own = plan.placed.get(block.clipId!);
           /* how much source is left past that edge once it moved (pulled out, the edge moves away from the clip) */
           const left = (sourceLeftMs(m, block.clipId!, edge) ?? Infinity) - (edge === 'end' ? plan.deltaMs : -plan.deltaMs);
           tip = {
-            kind: ripple ? 'ripple' : 'trim', deltaMs: plan.deltaMs, lengthMs: own ? own.endMs - own.startMs : geom.endMs - geom.startMs,
-            atMs: edge === 'end' || ripple ? (own?.endMs ?? geom.endMs) : (own?.startMs ?? geom.startMs), lane: homeLaneIndex,
+            kind: 'trim', deltaMs: plan.deltaMs, lengthMs: own ? own.endMs - own.startMs : geom.endMs - geom.startMs,
+            atMs: edge === 'end' ? (own?.endMs ?? geom.endMs) : (own?.startMs ?? geom.startMs), lane: homeLaneIndex,
             ...(left < 1 ? { sourceEnd: true } : {}),
           };
         } else {
@@ -416,19 +407,7 @@ export function useBlockDrag(opts: {
       const flush = !grouped && snapping && drop.action !== 'insert'
         ? flushShiftMs({ startMs: out.startMs, endMs: out.endMs }, destLane?.occupied ?? [], SNAP_THRESHOLD_PX / pxPerMs)
         : null;
-      /* along its own track (alone, or with its linked clips, none changing track), onto another clip: it goes in
-         between instead of cutting it (moveEditMode). Onto another, not one in hand: those move with it (dragged past
-         the gap to the next selected clip, it is not landing on that one) */
-      const alongOwnTrack = grouped ? shift.ok && shift.delta === 0 : drop.action === 'stay';
-      const wouldLand = { startMs: out.startMs + (flush?.shiftMs ?? 0), endMs: out.endMs + (flush?.shiftMs ?? 0) };
-      const overlaps = alongOwnTrack && rangeOverlaps(wouldLand, groupLanes[homeLaneIndex]?.occupied ?? []);
-      /* the track it lands on: the magnet inserts on the main track; elsewhere with the magnet it covers nothing (a clip
-         landing on another goes to a free track, see planMove), ⌥ inserting there */
-      const landsOn = groupOpens != null ? null : drop.action === 'move' ? drop.trackIndex : drop.action === 'insert' ? null : homeLane?.docIndex;
-      const onMain = magnetOn(m, landsOn, p.magnet);
-      const editMode: EditMode = p.magnet && !onMain
-        ? (altNow ? 'insert' : 'overwrite')
-        : moveEditMode({ magnet: onMain, alt: altNow, overlaps });
+      const editMode: EditMode = moveEditMode(altNow);
       const settle = editMode === 'overwrite' ? flush : null;
       const to = new Map<string, TrackDest>();
       if (drop.action === 'move') to.set(block.clipId!, drop.trackIndex);
@@ -442,8 +421,8 @@ export function useBlockDrag(opts: {
       const moveBy = out.startMs + (settle?.shiftMs ?? 0) - geom.startMs;
       /* ⌥ at the press: copies land there, the clips stay (planCopies) */
       const plan = outside || drop.action === 'refuse' || !shift.ok ? null : copy
-        ? planCopies(m, { ids, deltaMs: moveBy, pointerMs: grabMs + deltaMs, to, magnet: p.magnet, ...followOf(p) })
-        : planMove(m, { ids, deltaMs: moveBy, pointerMs: grabMs + deltaMs, to, mode: editMode, magnet: p.magnet, ...followOf(p) });
+        ? planCopies(m, { ids, deltaMs: moveBy, to })
+        : planMove(m, { ids, deltaMs: moveBy, pointerMs: grabMs + deltaMs, to, mode: editMode });
       lastPlan = plan;
       document.body.style.cursor = outside || copy ? 'copy' : 'grabbing';
       const landed = plan?.placed.get(block.clipId!);
@@ -608,7 +587,7 @@ export function useBlockDrag(opts: {
       pendingSaves.current += 1;
       setSaving(true);
       setPreview(held);
-      const label = copy ? `history.stepDuplicated|${block.clipId}` : stepOf(mode, ripple, block.clipId!);
+      const label = copy ? `history.stepDuplicated|${block.clipId}` : stepOf(mode, block.clipId!);
       void Promise.resolve().then(() => commit(ops, label)).catch((err: unknown) => (
         err instanceof Error ? err.message : String(err)
       )).then((err) => {

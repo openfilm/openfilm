@@ -463,14 +463,11 @@ export interface DropLane {
 }
 
 /**
- * How a move is put down. The magnet decides (insert: it goes in between and what follows moves along; overwrite: it
- * covers what is there), ⌥ held the other way. But a clip let go onto another clip of its own track goes in between
- * with the magnet off too, as an editor's main track does: dropped on a neighbor it means "put it here", never "cut the
- * neighbor"; ⌥ still overwrites then. Let go in free room, it stays where it was put. `overlaps`: the clip, where it
- * would land (flush against a neighbor if it looks flush), covers part of another clip on its own track.
+ * How a move is put down: it covers what is there (an overwrite); with ⌥ held it goes in between and what follows
+ * moves along, on every unlocked track (an insert).
  */
-export function moveEditMode({ magnet, alt, overlaps }: { magnet: boolean; alt: boolean; overlaps: boolean }): 'insert' | 'overwrite' {
-  return (magnet || overlaps) !== alt ? 'insert' : 'overwrite';
+export function moveEditMode(alt: boolean): 'insert' | 'overwrite' {
+  return alt ? 'insert' : 'overwrite';
 }
 
 export function rangeOverlaps(

@@ -438,11 +438,6 @@ export interface TimelineTrack {
   incomplete?: boolean;
   /** How tall the row is drawn, px, when the person set it (lib/track-heights); else the timeline's own for its kind. */
   height?: number;
-  /**
-   * The main track's rows: the lowest picture track, where the magnet acts (lib/timeline-edit mainTrackOf), marked and
-   * drawn taller as CapCut draws its main track.
-   */
-  main?: boolean;
   blocks: TimelineBlock[];
 }
 
@@ -1038,11 +1033,8 @@ export function layoutTracks(evaluated: TimelineFilm): TimelineTrack[] {
     );
   }
 
-  /* badges last, per drawn row top to bottom (see badgeRows); the main track marked (the lowest picture track) */
-  const badged = badgeRows(tracks);
-  const pictures = badged.filter((r) => r.role !== 'audio' && r.docIndex != null).map((r) => r.docIndex!);
-  const main = pictures.length ? Math.max(...pictures) : null;
-  return main == null ? badged : badged.map((r) => (r.docIndex === main ? { ...r, main: true } : r));
+  /* badges last, per drawn row top to bottom (see badgeRows) */
+  return badgeRows(tracks);
 }
 
 /**

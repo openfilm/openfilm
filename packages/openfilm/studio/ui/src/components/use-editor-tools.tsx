@@ -17,11 +17,10 @@ import {
 } from '@/lib/markers';
 import type { ClipEdit } from '@/lib/film-clip-edits';
 import { heardClips, toggleSolo } from '@/lib/solo';
-import { magnetOn, type EditMode, type EditModel } from '@/lib/timeline-edit';
+import type { EditModel } from '@/lib/timeline-edit';
 import type { KeyCommand } from '@/lib/timeline-keys';
 import type { TimelineBlock, TimelineTrack } from '@/lib/timeline-layout';
 import type { MediaListing } from '@/lib/workspace-resources';
-import { followOf, readTimelinePrefs } from '@/lib/timeline-prefs';
 import { ownTrackHeight, sizeOf, trackHeightsOf, withTrackHeight, TRACK_SIZES, type TrackSize } from '@/lib/track-heights';
 import type { Player } from '@/editor/player';
 import type { OutsideStep } from '@/editor/use-film';
@@ -258,10 +257,8 @@ export function useEditorTools({
     let still: string;
     try { still = await api.freezeFrame(projectId, block.src, srcMs); }
     catch (e) { toast.showError(t('editorTools.freezeFail').replace('{reason}', (e as Error).message)); return; }
-    const prefs = readTimelinePrefs();
-    const model = editModel();
-    const mode: EditMode = magnetOn(model, ti, prefs.magnet) ? 'insert' : 'overwrite';
-    const ops = planFreeze(model, { clip, track: ti, atMs: at, still, mode, ...followOf(prefs) });
+    /* the still goes in between at the playhead: what follows moves on, on every unlocked track */
+    const ops = planFreeze(editModel(), { clip, track: ti, atMs: at, still, mode: 'insert' });
     if (!ops) { toast.show(t('timeline.trackLocked')); return; }
     const failed = await edit(ops, `history.stepFroze|${clip.id}`);
     if (failed) toast.showError(failed);

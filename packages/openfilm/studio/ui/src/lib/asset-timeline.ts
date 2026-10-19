@@ -6,7 +6,7 @@
  *
  * There is one landing rule (assetDropSpot) and both the preview and the drop ask it, so a file lands where its
  * preview was drawn. Its first rule: never stack on a clip on the same track — stacked clips spread into two rows that
- * share a badge and look broken. With an edit mode (the timeline's magnet), a file dropped onto a track goes onto it
+ * share a badge and look broken. With an edit mode asked for (⌥: an overwrite), a file dropped onto a track goes onto it
  * whatever is there: an insert pushes it on, an overwrite cuts it out (lib/timeline-edit planRoom), and only the empty
  * space above or below the tracks opens a new one. Without one, a taken spot opens a new track, shown by a line.
  */

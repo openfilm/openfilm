@@ -6,10 +6,9 @@
  *                    track with room: a picture above the outgoing clip's track (the one right above when it is free
  *                    there, else a new one just above), a sound below. The incoming picture fades in over d while the
  *                    outgoing one stays whole under it, so the two blend (both fading would dip through the black
- *                    under them); sounds both fade, out and in. With the magnet on, what follows the cut moves d
- *                    earlier too (on the clips' tracks, and with sync lock every unlocked one), so no gap opens and
- *                    nothing comes apart; without it, what follows stays and a gap of d is left after the incoming
- *                    clip.
+ *                    under them); sounds both fade, out and in. With `ripple`, what follows the cut moves d
+ *                    earlier too, on every unlocked track, so no gap opens and nothing comes apart; without it, what
+ *                    follows stays and a gap of d is left after the incoming clip.
  *   Audio crossfade  the same, for two sounds (a sound track below).
  *   Dip to black     no clip moves: the outgoing clip fades out over d/2, the incoming one in over d/2. The picture dips
  *                    to what is under them: the stage's black where nothing is.
@@ -23,7 +22,7 @@
  *
  * On the timeline a transition is found again from the fades (findTransitions): two clips whose fades meet as one of
  * the above made them. Removed, its fades go and its clips come back as they were cut (the incoming clip back against
- * the outgoing one, on its track when there is room, what follows moving back with the magnet on); resized, the clips
+ * the outgoing one, on its track when there is room, what follows moving back with `ripple`); resized, the clips
  * move and the fades change by the difference.
  *
  * Pure: every plan is film.html's operations, one write and one undo step.
@@ -84,11 +83,8 @@ export function transitionSpan(tr: FilmTransition, durationMs: number): { startM
 }
 
 export interface TransitionOpts {
-  /** The magnet on the cut's track: an overlap closes up what follows, removing one opens it again. */
+  /** An overlap closes up what follows (on every unlocked track), removing one opens it again. */
   ripple: boolean;
-  sync: boolean;
-  /** Linkage (timeline-edit Follow): a ripple on the main track carries the other tracks. */
-  linkage?: boolean;
   /** Linked clips go with each other (the Linked switch, unless ⌥). */
   linked: boolean;
   /** The white page's path (dip to white). */
@@ -192,16 +188,15 @@ const free = (track: EditTrack, startMs: number, endMs: number, skip: ReadonlySe
   (c) => !skip.has(c.id) && c.startMs < endMs - TOUCH_MS && c.endMs > startMs + TOUCH_MS,
 );
 
-/** A ripple from a transition's edit, carrying what sync lock or linkage carries (timeline-edit follow). */
+/** A ripple from a transition's edit, carrying every unlocked track (timeline-edit follow). */
 function rippleThrough(
   d: Draft,
   point: number,
   deltaMs: number,
   edited: Iterable<number>,
-  opts: TransitionOpts,
   skip?: ReadonlySet<string>,
 ): void {
-  const f = follow(d, edited, opts);
+  const f = follow(d, edited);
   rippleAt(d, point, deltaMs, f.tracks, skip, f.bound);
 }
 
@@ -333,7 +328,7 @@ export function planTransition(model: EditModel, facts: FactsOf, kind: Transitio
      then put down d earlier where there is room (see landing) */
   const against = new Map(moving.map((m) => [m.clip.id, partnerTrack(d, facts, m.clip, m.clip.startMs, skip) ?? m.track.index]));
   for (const m of moving) m.track.clips = m.track.clips.filter((c) => c.id !== m.clip.id);
-  if (opts.ripple) rippleThrough(d, cutMs, -overlap, homes, opts);
+  if (opts.ripple) rippleThrough(d, cutMs, -overlap, homes);
   for (const m of moving) {
     m.clip.startMs -= overlap;
     m.clip.endMs -= overlap;
@@ -384,7 +379,7 @@ export function planRemoveTransition(model: EditModel, facts: FactsOf, tr: FilmT
     /* where each goes back to: against the clip it overlaps, on that one's track */
     const homes = moving.map((m) => ({ m, home: partnerTrack(d, facts, m.clip, m.clip.startMs + back, skip) }));
     const reached = new Set([a.track.index, ...homes.flatMap((h) => (h.home != null ? [h.home] : []))]);
-    if (opts.ripple) rippleThrough(d, a.clip.endMs, back, reached, opts, skip);
+    if (opts.ripple) rippleThrough(d, a.clip.endMs, back, reached, skip);
     for (const { m, home } of homes) {
       m.clip.startMs += back;
       m.clip.endMs += back;
@@ -404,7 +399,7 @@ export function planRemoveTransition(model: EditModel, facts: FactsOf, tr: FilmT
 
 /**
  * A transition made `durationMs` long: an overlap's incoming clips move by the difference (what follows with them,
- * with the magnet on), a dip's fades and white page change; each as far as its clips have room.
+ * with `ripple`), a dip's fades and white page change; each as far as its clips have room.
  */
 export function planResizeTransition(model: EditModel, facts: FactsOf, tr: FilmTransition, durationMs: number, opts: TransitionOpts): TransitionPlan {
   const d = draftOf(model);
@@ -440,7 +435,7 @@ export function planResizeTransition(model: EditModel, facts: FactsOf, tr: FilmT
   const delta = want - now;
   if (Math.abs(delta) < 0.5) return { ops: [], shortMs: 0 };
   for (const m of moving) { m.clip.startMs -= delta; m.clip.endMs -= delta; }
-  if (opts.ripple) rippleThrough(d, a.clip.endMs, -delta, [a.track.index], opts, skip);
+  if (opts.ripple) rippleThrough(d, a.clip.endMs, -delta, [a.track.index], skip);
   for (const c of outgoing) setFade(fades, facts, c, 'out', holds(d, facts, c.id, tr.b) ? 0 : want);
   for (const c of incoming) setFade(fades, facts, c, 'in', want);
   return opsOf(d, fades);
