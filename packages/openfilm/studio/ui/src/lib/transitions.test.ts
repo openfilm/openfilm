@@ -101,13 +101,13 @@ test('cross dissolve: the incoming clip goes above, d earlier, and fades in over
   assert.deepEqual(fades(back), {});
 });
 
-test('cross dissolve without a ripple leaves what follows where it is; with one every unlocked track closes up', () => {
+test('cross dissolve without a ripple leaves what follows where it is; with one the cut\'s track closes up', () => {
   const value = film([['a', 0, 4], ['b', 4, 8], ['c', 8, 10]], [['m', 0, 3], ['n', 9, 10]]);
   const { model, facts } = read(value);
   const still = apply(value, planTransition(model, facts, 'dissolve', { a: 'a', b: 'b' }, 1000, opts({ ripple: false })));
   assert.deepEqual(layout(still), [[['b', 3, 7]], [['a', 0, 4], ['c', 8, 10]], [['m', 0, 3], ['n', 9, 10]]]);
-  const synced = apply(value, planTransition(model, facts, 'dissolve', { a: 'a', b: 'b' }, 1000, opts()));
-  assert.deepEqual(layout(synced), [[['b', 3, 7]], [['a', 0, 4], ['c', 7, 9]], [['m', 0, 3], ['n', 8, 9]]]);
+  const closed = apply(value, planTransition(model, facts, 'dissolve', { a: 'a', b: 'b' }, 1000, opts()));
+  assert.deepEqual(layout(closed), [[['b', 3, 7]], [['a', 0, 4], ['c', 7, 9]], [['m', 0, 3], ['n', 9, 10]]]);
 });
 
 test('cross dissolve takes the incoming clip\'s linked sound along: it overlaps on a sound track below, the sounds crossfade', () => {

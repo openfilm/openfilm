@@ -13,13 +13,11 @@ import { snapToFrame } from './timecode.ts';
 export const DRAG_THRESHOLD_PX = 5;
 
 /**
- * Whether a press `dx`, `dy` px along has become a drag. A move lifts in either direction (up to another row); a roll,
- * a slip and a slide past the threshold sideways, so a click on a cut is a click (its transitions), not a roll; a
- * trimmed edge follows at once.
+ * Whether a press `dx`, `dy` px along has become a drag. A move lifts past the threshold in either direction (up to
+ * another row), so a click on a clip is a click; a trimmed edge follows at once.
  */
-export function dragLifted(mode: 'move' | 'trim-start' | 'trim-end' | 'roll' | 'slip' | 'slide', dx: number, dy: number): boolean {
+export function dragLifted(mode: DragMode, dx: number, dy: number): boolean {
   if (mode === 'move') return Math.abs(dx) >= DRAG_THRESHOLD_PX || Math.abs(dy) >= DRAG_THRESHOLD_PX;
-  if (mode === 'roll' || mode === 'slip' || mode === 'slide') return Math.abs(dx) >= DRAG_THRESHOLD_PX;
   return Math.abs(dx) >= 1;
 }
 

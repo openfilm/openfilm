@@ -10,7 +10,10 @@
  */
 import type { Op } from '../api.ts';
 import { newTrackSide } from './timeline-drag.ts';
-import { TOUCH_MS, freshLink, planRoom, type EditModel, type EditPlan, type Placed, type TrackDest } from './timeline-edit.ts';
+import {
+  TOUCH_MS, freshLink, insertPointOn, mainTrackOf, magnetOn, planRoom,
+  type EditModel, type EditPlan, type Placed, type Switches, type TrackDest,
+} from './timeline-edit.ts';
 import type { TimelineBlock, TimelineTrack } from './timeline-layout';
 
 export type TimelineClipboardItem = {
@@ -120,14 +123,17 @@ const overlap = (a: { startMs: number; endMs: number }, b: { startMs: number; en
 /**
  * Copies put down, never cutting or moving what is there. Onto their track where that time is free; where it is taken
  * (by a clip there, or by another copy) the copies headed there all go to a new track beside it instead (newTrackSide),
- * and one more for each that would still overlap another. Copies headed for a new track (`{ insert }`) open one per
- * track they came from, so a group keeps its rows. The inserts onto tracks that are there go first, then the new tracks
- * from the last place up, so every place written holds. `placed`: where each copy lands, by the id it was copied from.
+ * and one more for each that would still overlap another. `keepOff` (the main track with the magnet, as CapCut's) is
+ * always taken: copies headed there go to a new track right above it. Copies headed for a new track (`{ insert }`)
+ * open one per track they came from, so a group keeps its rows. The inserts onto tracks that are there go first, then
+ * the new tracks from the last place up, so every place written holds. `placed`: where each copy lands, by the id it
+ * was copied from.
  */
 function placeCopies(
   model: EditModel,
   spans: readonly CopySpan[],
   links: ReadonlyMap<string, string | null>,
+  keepOff: number | null = null,
 ): { ops: Op[]; placed: Map<string, Placed> } {
   const there: CopySpan[] = [];
   /* a new track: where it opens, and how low it ends among those opened at that place (higher = lower down) */
@@ -145,7 +151,8 @@ function placeCopies(
   for (const [index, group] of byTrack) {
     const track = model.find((t) => t.index === index);
     const clips = track?.clips ?? [];
-    const taken = group.some((s, i) => clips.some((c) => overlap(s, c)) || group.slice(0, i).some((o) => overlap(s, o)));
+    const taken = index === keepOff
+      || group.some((s, i) => clips.some((c) => overlap(s, c)) || group.slice(0, i).some((o) => overlap(s, o)));
     if (!taken) {
       there.push(...group);
       continue;
@@ -184,8 +191,10 @@ function placeCopies(
 /**
  * A paste: copied from one track, the copies go onto the track pointed at (`forceLane`) if any; from several, each
  * back onto its own. The group's earliest clip lands at `atMs`, the rest keep their spacing. Put down (`place`), they
- * never cut or move what is there: a taken spot opens a track beside it (placeCopies). An insert makes room there
- * instead, pushing what follows on, on every unlocked track. Null when a track it goes onto is locked or gone.
+ * never cut or move what is there: a taken spot opens a track beside it (placeCopies), and with the magnet a copy
+ * headed for the main track goes to a new track right above it, as CapCut's. An insert makes room there instead,
+ * pushing what follows on, on the tracks they go in on (with linkage, what rides on the main track along). Null when a
+ * track it goes onto is locked or gone.
  */
 export function pasteEdit(
   clipboard: readonly TimelineClipboardItem[],
@@ -193,7 +202,7 @@ export function pasteEdit(
   model: EditModel,
   atMs: number,
   forceLane: string | null,
-  opts: { mode: 'place' | 'insert' },
+  opts: { mode: 'place' | 'insert' } & Partial<Switches>,
 ): Op[] | null {
   if (!clipboard.length) return [];
   const base = Math.min(...clipboard.map((item) => item.startMs));
@@ -209,7 +218,7 @@ export function pasteEdit(
   if (opts.mode === 'place') {
     return placeCopies(model, spans.map((s) => ({
       from: s.item.clipId, startMs: s.startMs, endMs: s.endMs, dest: s.track!, source: s.track!,
-    })), links).ops;
+    })), links, opts.magnet ? mainTrackOf(model) : null).ops;
   }
   const insertOf = (s: (typeof spans)[number]): Op => ({
     op: 'insert',
@@ -219,19 +228,20 @@ export function pasteEdit(
     ...(links.has(s.item.clipId) ? { link: links.get(s.item.clipId)! } : {}),
   });
   /* the copies go in first, so a clip pasted inside itself is copied whole before the insert cuts it */
-  const room = planRoom(model, spans.map((s) => ({ track: s.track!, startMs: s.startMs, endMs: s.endMs })), { mode: 'insert' });
+  const room = planRoom(model, spans.map((s) => ({ track: s.track!, startMs: s.startMs, endMs: s.endMs })), { ...opts, mode: 'insert' });
   return [...spans.map(insertOf), ...room.ops];
 }
 
 /**
- * Copies of clips put down where a drag lets them go (⌥-drag): the clips stay, a copy of each lands `deltaMs` later
- * (earlier when negative) on its track or the one in `to`, never cutting what is there (placeCopies). Copies of clips
- * linked together are linked to each other. `placed`: where each copy lands, by the clip it copies. Null when a track
- * it goes onto is locked.
+ * Copies of clips put down where a drag lets them go (⌥-drag, as CapCut's): the clips stay, a copy of each lands
+ * `deltaMs` later (earlier when negative) on its track or the one in `to`, never cutting what is there (placeCopies).
+ * With the magnet, when the grabbed one's copy goes onto the main track, the copies headed there go in end to end at
+ * the insert point under the hand (`pointerMs`), what follows moving on. Copies of clips linked together are linked to
+ * each other. `placed`: where each copy lands, by the clip it copies. Null when a track it goes onto is locked.
  */
 export function planCopies(
   model: EditModel,
-  spec: { ids: readonly string[]; deltaMs: number; to?: ReadonlyMap<string, TrackDest> },
+  spec: { ids: readonly string[]; deltaMs: number; to?: ReadonlyMap<string, TrackDest>; pointerMs?: number } & Partial<Switches>,
 ): EditPlan | null {
   const clips = model.flatMap((t) => t.clips.map((c) => ({ c, track: t.index })));
   const picked = spec.ids.flatMap((id) => clips.filter((x) => x.c.id === id));
@@ -243,6 +253,27 @@ export function planCopies(
     return { from: c.id, startMs, endMs: startMs + c.endMs - c.startMs, dest: spec.to?.get(c.id) ?? track, source: track };
   });
   if (spans.some((s) => typeof s.dest === 'number' && model.find((t) => t.index === s.dest)?.locked)) return null;
-  const { ops, placed } = placeCopies(model, spans, copyLinks(spec.ids, model));
-  return { ops, placed, shortMs: 0 };
+  const links = copyLinks(spec.ids, model);
+  const main = mainTrackOf(model);
+  const lead = spans[0]!;
+  if (!(spec.magnet && main != null && lead.dest === main && magnetOn(model, main, true))) {
+    const { ops, placed } = placeCopies(model, spans, links, spec.magnet ? main : null);
+    return { ops, placed, shortMs: 0 };
+  }
+  /* onto the main track with the magnet: in end to end at the insert point, what follows (and rides on it) moving on */
+  const going = spans.filter((s) => s.dest === main).sort((a, b) => a.startMs - b.startMs);
+  let at = insertPointOn(model, main, spec.pointerMs ?? lead.startMs, lead.startMs);
+  const inserts: Op[] = [];
+  const placed = new Map<string, Placed>();
+  const startAt = at;
+  for (const s of going) {
+    const len = s.endMs - s.startMs;
+    inserts.push({ op: 'insert', from: s.from, at: Math.round(at) / 1000, track: main, ...(links.has(s.from) ? { link: links.get(s.from)! } : {}) });
+    placed.set(s.from, { startMs: at, endMs: at + len, track: main });
+    at += len;
+  }
+  const room = planRoom(model, [{ track: main, startMs: startAt, endMs: at }], { mode: 'insert', magnet: spec.magnet, linkage: spec.linkage });
+  const rest = placeCopies(model, spans.filter((s) => s.dest !== main), links, main);
+  for (const [id, p] of rest.placed) placed.set(id, p);
+  return { ops: [...inserts, ...room.ops, ...rest.ops], placed, shortMs: room.shortMs };
 }

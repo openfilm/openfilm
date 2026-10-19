@@ -18,6 +18,7 @@ import {
 import type { ClipEdit } from '@/lib/film-clip-edits';
 import { heardClips, toggleSolo } from '@/lib/solo';
 import type { EditModel } from '@/lib/timeline-edit';
+import { readTimelinePrefs, switchesOf } from '@/lib/timeline-prefs';
 import type { KeyCommand } from '@/lib/timeline-keys';
 import type { TimelineBlock, TimelineTrack } from '@/lib/timeline-layout';
 import type { MediaListing } from '@/lib/workspace-resources';
@@ -257,8 +258,9 @@ export function useEditorTools({
     let still: string;
     try { still = await api.freezeFrame(projectId, block.src, srcMs); }
     catch (e) { toast.showError(t('editorTools.freezeFail').replace('{reason}', (e as Error).message)); return; }
-    /* the still goes in between at the playhead: what follows moves on, on every unlocked track */
-    const ops = planFreeze(editModel(), { clip, track: ti, atMs: at, still, mode: 'insert' });
+    /* the still goes in between at the playhead, as CapCut's: what follows on that track moves on (with linkage, what
+       rides on the main track along) */
+    const ops = planFreeze(editModel(), { clip, track: ti, atMs: at, still, mode: 'insert', ...switchesOf(readTimelinePrefs()) });
     if (!ops) { toast.show(t('timeline.trackLocked')); return; }
     const failed = await edit(ops, `history.stepFroze|${clip.id}`);
     if (failed) toast.showError(failed);

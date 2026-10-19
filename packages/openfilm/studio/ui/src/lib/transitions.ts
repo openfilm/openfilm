@@ -83,7 +83,7 @@ export function transitionSpan(tr: FilmTransition, durationMs: number): { startM
 }
 
 export interface TransitionOpts {
-  /** An overlap closes up what follows (on every unlocked track), removing one opens it again. */
+  /** An overlap closes up what follows on its tracks (the main track's magnet), removing one opens it again. */
   ripple: boolean;
   /** Linked clips go with each other (the Linked switch, unless ⌥). */
   linked: boolean;
@@ -188,7 +188,7 @@ const free = (track: EditTrack, startMs: number, endMs: number, skip: ReadonlySe
   (c) => !skip.has(c.id) && c.startMs < endMs - TOUCH_MS && c.endMs > startMs + TOUCH_MS,
 );
 
-/** A ripple from a transition's edit, carrying every unlocked track (timeline-edit follow). */
+/** A ripple from a transition's edit, on the tracks it changes (timeline-edit follow). */
 function rippleThrough(
   d: Draft,
   point: number,

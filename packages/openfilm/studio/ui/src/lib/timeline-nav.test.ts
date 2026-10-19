@@ -30,21 +30,24 @@ test('the cuts ↑ / ↓ go to: every clip edge on tracks seen and not locked, o
   assert.equal(nextCut(points, 0, -1), null);
 });
 
-test('⌘B splits the selected clips under the playhead, else the targeted track\'s, else the top one seen', () => {
+test('⌘B splits the selected clips under the playhead, else the main track\'s, else the targeted track\'s, else the top one seen', () => {
   const tracks = [
     row(0, [['top', 0, 4]], { hidden: true }),
-    row(1, [['v', 0, 4]]),
+    row(1, [['v', 0, 4], ['v2', 9, 12]]),
     row(2, [['locked', 0, 4]], { locked: true }),
     row(3, [['s', 0, 4], ['s2', 4, 8]]),
+    row(4, [['m', 0, 12]], { role: 'audio', kind: 'audio' }),
   ];
   const ids = (bs: TimelineBlock[]) => bs.map((b) => b.clipId);
   assert.deepEqual(ids(splitTargets(tracks, ['b-s', 'b-s2', 'b-locked'], 2000, null)), ['s'], 'selected and under it, not locked');
   assert.deepEqual(ids(splitTargets(tracks, ['b-s2'], 2000, null)), [], 'a selection the playhead is not over: nothing');
-  assert.deepEqual(ids(splitTargets(tracks, [], 2000, 'doc-1')), ['v'], 'the targeted track');
-  assert.deepEqual(ids(splitTargets(tracks, [], 2000, 'doc-2')), [], 'a locked target: nothing');
-  assert.deepEqual(ids(splitTargets(tracks, [], 2000, null)), ['v'], 'no target: the top one seen, not a hidden one');
-  assert.deepEqual(ids(splitTargets(tracks, [], 4000, null)), [], 'on a cut there is nothing to split');
-  assert.deepEqual(ids(splitAllTargets(tracks, 2000)), ['top', 'v', 's']);
+  assert.deepEqual(ids(splitTargets(tracks, [], 2000, 'doc-1')), ['s'], 'the main track (the lowest picture track), as CapCut\'s');
+  /* past the main track's end: the targeted track, else the top one seen */
+  assert.deepEqual(ids(splitTargets(tracks, [], 10_000, 'doc-4')), ['m'], 'the targeted track');
+  assert.deepEqual(ids(splitTargets(tracks, [], 10_000, 'doc-2')), [], 'a locked target: nothing');
+  assert.deepEqual(ids(splitTargets(tracks, [], 10_000, null)), ['v2'], 'no target: the top one seen, not a hidden one');
+  assert.deepEqual(ids(splitTargets(tracks, [], 4000, 'doc-1')), [], 'on a cut there is nothing to split');
+  assert.deepEqual(ids(splitAllTargets(tracks, 2000)), ['top', 'v', 's', 'm']);
 });
 
 test('[ and ] select every clip with a part before or after the playhead, on tracks not locked', () => {

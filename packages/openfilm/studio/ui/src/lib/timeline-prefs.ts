@@ -1,17 +1,32 @@
 /**
- * The timeline's switch, kept on this machine across projects: `snap` (on by default): drags line up with edges and
- * the playhead; off means "it lands exactly where I let go".
+ * The timeline's switches, kept on this machine across projects, CapCut's, in its order and all on by default:
+ *   · `magnet` (主轨磁吸): the main track (the lowest picture track) stays closed up — a clip put on it goes in between,
+ *     one deleted or taken off it closes up after it, a trim or a new speed there moves what follows. Off, the main
+ *     track is like the others (lib/timeline-edit);
+ *   · `snap` (自动吸附): drags line up with edges and the playhead; off means "it lands exactly where I let go";
+ *   · `linkage` (联动): titles, overlays and sounds riding on a main-track clip move with it and go with it;
+ *   · `previewAxis` (预览轴): the picture follows the pointer over the timeline, the playhead staying where it is.
  *
  * Clips sharing a `data-link` (a video and its detached sound) are always selected and edited together; ⌥-click picks
- * one alone.
+ * one alone. The inspector reads the switches too (a slower speed pushes the next clip only with the magnet on), so a
+ * change is told to everyone listening.
  */
 import { useSyncExternalStore } from 'react';
 
-export type TimelinePrefs = { snap: boolean };
+import type { Switches } from './timeline-edit.ts';
+
+export type TimelinePrefs = { snap: boolean; magnet: boolean; linkage: boolean; previewAxis: boolean };
 type Pref = keyof TimelinePrefs;
 
-const DEFAULTS: TimelinePrefs = { snap: true };
-const KEY: Record<Pref, string> = { snap: 'openfilm.timeline.snap' };
+const DEFAULTS: TimelinePrefs = { snap: true, magnet: true, linkage: true, previewAxis: true };
+const KEY: Record<Pref, string> = {
+  snap: 'openfilm.timeline.snap',
+  /* new keys: the main track came back on 10-19 with CapCut's rules, so choices made for the switches before do not
+     carry over */
+  magnet: 'openfilm.timeline.mainTrackMagnet',
+  linkage: 'openfilm.timeline.mainTrackLinkage',
+  previewAxis: 'openfilm.timeline.previewAxis',
+};
 
 /** Without localStorage (private window), the choices last this session. */
 const memory: Partial<TimelinePrefs> = {};
@@ -27,8 +42,13 @@ function read(pref: Pref): boolean {
 }
 
 export function readTimelinePrefs(): TimelinePrefs {
-  current ??= { snap: read('snap') };
+  current ??= { snap: read('snap'), magnet: read('magnet'), linkage: read('linkage'), previewAxis: read('previewAxis') };
   return current;
+}
+
+/** What an edit is planned by (lib/timeline-edit Switches), from the switches. */
+export function switchesOf(prefs: Pick<TimelinePrefs, 'magnet' | 'linkage'>): Switches {
+  return { magnet: prefs.magnet, linkage: prefs.linkage };
 }
 
 export function writeTimelinePref(pref: Pref, on: boolean): void {

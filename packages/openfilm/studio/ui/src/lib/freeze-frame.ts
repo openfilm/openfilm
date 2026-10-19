@@ -1,11 +1,11 @@
 /**
  * Freeze frame: the frame of a video clip under the playhead, made a still (studio/server/files.mjs freezeFrame) and
- * put in at the playhead on the clip's track: an insert cuts the video there and what follows moves on by the still's
- * length, on every unlocked track; an overwrite has the still cover that much of the video after the playhead. The
- * still looks as the video does (its box, class and style).
+ * put in at the playhead on the clip's track: an insert cuts the video there and what follows on that track moves on
+ * by the still's length (with linkage, what rides on the main track along), as CapCut's; an overwrite has the still
+ * cover that much of the video after the playhead. The still looks as the video does (its box, class and style).
  */
 import type { Clip, Op } from '../api.ts';
-import { planRoom, type EditMode, type EditModel } from './timeline-edit.ts';
+import { planRoom, type EditMode, type EditModel, type Switches } from './timeline-edit.ts';
 import { snapToFrame } from './timecode.ts';
 import type { TimelineBlock } from './timeline-layout';
 
@@ -18,7 +18,7 @@ export function freezeSourceMs(block: Pick<TimelineBlock, 'startMs' | 'endMs' | 
   return Math.round((block.inMs ?? 0) + (atMs - block.startMs) * (block.speed ?? 1));
 }
 
-export interface FreezeSpec {
+export interface FreezeSpec extends Partial<Switches> {
   /** The video clip, as film.html has it. */
   clip: Clip;
   /** Its track (film.html index). */
@@ -44,6 +44,6 @@ export function planFreeze(model: EditModel, spec: FreezeSpec): Op[] | null {
     ...(cls ? { class: cls } : {}),
     ...(style ? { style } : {}),
   };
-  const room = planRoom(model, [{ track: spec.track, startMs, endMs: startMs + durMs }], { mode: spec.mode });
+  const room = planRoom(model, [{ track: spec.track, startMs, endMs: startMs + durMs }], { mode: spec.mode, magnet: spec.magnet, linkage: spec.linkage });
   return [{ op: 'insert', clip: still, at: Math.round(startMs) / 1000, track: spec.track }, ...room.ops];
 }

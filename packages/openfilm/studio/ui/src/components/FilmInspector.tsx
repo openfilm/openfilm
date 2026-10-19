@@ -37,6 +37,7 @@ import { plainClipRefusal, type ClipEdit } from '@/lib/film-clip-edits';
 import { clipFieldPart, clipFields, compactBox, transformOf } from '@/lib/stage-clip';
 import type { TimelineBlock } from '@/lib/timeline-layout';
 import { editsForMoves } from '@/lib/timeline-drag';
+import { useTimelinePrefs } from '@/lib/timeline-prefs';
 import { formatTimecode, FRAME_RATES, timecodeFps, useTimecodeFps } from '@/lib/timecode';
 import { MenuSelect } from './MenuSelect';
 import { CANVAS_SIDE, canvasSide } from '@/lib/canvas-fit';
@@ -137,6 +138,7 @@ function useCommitBeforeLeaving(): void {
 export const FilmInspector = React.memo(function FilmInspector({
   element,
   clips,
+  mainTrack,
   onEditClips,
   width,
   onClose,
@@ -178,6 +180,8 @@ export const FilmInspector = React.memo(function FilmInspector({
   element: StageElement | null;
   /** The clips selected on the timeline. A layer picked on the picture wins: one selection at a time. */
   clips?: readonly TimelineBlock[];
+  /** The main track's film.html index (timeline-edit mainTrackOf): the magnet acts there alone. */
+  mainTrack?: number | null;
   /** Writes clip properties, through the same queue as dragging on the timeline. Resolves to an error when refused. */
   onEditClips?: (edits: ClipEdit[]) => Promise<string | null>;
   /** The pane's width (dragged at the divider beside the viewer). */
@@ -307,6 +311,7 @@ export const FilmInspector = React.memo(function FilmInspector({
           <ClipPanel
             key={clip.id}
             block={clip}
+            onMain={mainTrack != null && parseFilmDocLoc(clip.loc ?? '')?.track === mainTrack}
             geometry={geometry && geometry.kind === 'clip' && geometry.loc === clip.loc ? geometry : null}
             onEdit={onEditClips}
             onPreviewClip={onPreviewClip}
@@ -1312,11 +1317,12 @@ function volumeEdits(blocks: readonly TimelineBlock[], apply: FieldApply): ClipE
 
 /**
  * How long a clip can run on the film: until its source runs out (none for a still, or a page, which holds its last
- * frame past its end), and not into the next clip on its track, as a trim on the timeline stops there.
+ * frame past its end), and not into the next clip on its track, as a trim on the timeline stops there — unless the
+ * timeline's magnet is on (`ripple`): then the next clip is pushed along.
  */
-function longestSec(block: TimelineBlock, durSec: number): number | undefined {
+function longestSec(block: TimelineBlock, durSec: number, ripple: boolean): number | undefined {
   const bySource = block.room?.tailMs != null ? durSec + block.room.tailMs / 1000 : Infinity;
-  const byNext = block.nextMs != null ? (block.nextMs - block.startMs) / 1000 : Infinity;
+  const byNext = block.nextMs != null && !ripple ? (block.nextMs - block.startMs) / 1000 : Infinity;
   const sec = Math.min(bySource, byNext);
   /* down to the ms: rounded up, the length would reach a millisecond into the next clip or past the file */
   return Number.isFinite(sec) ? Math.floor(sec * 1000 + 1e-6) / 1000 : undefined;
@@ -1369,13 +1375,15 @@ function clipsLook(
  * can only be looked at.
  */
 function ClipPanel({
-  block, geometry, stage, badges, onEdit, onPreviewClip, pageChangesOf, replaceEntries, clipLookOf, onPreviewLook, onStartCrop, onEditMask, maskAsk, onMaskAsked, fades,
+  block, onMain, geometry, stage, badges, onEdit, onPreviewClip, pageChangesOf, replaceEntries, clipLookOf, onPreviewLook, onStartCrop, onEditMask, maskAsk, onMaskAsked, fades,
   templateOf,
 }: {
   fades?: ReadonlyMap<string, FadeMs>;
   templateOf?: (block: TimelineBlock) => TemplateHost | null;
   replaceEntries?: (block: TimelineBlock) => ContextMenuEntry[];
   block: TimelineBlock;
+  /** On the main track, where the magnet acts. */
+  onMain: boolean;
   geometry?: StageGeometry | null;
   /** The film's stage: with the clip's own size, where it lands when it is not on screen to measure. */
   stage: { w: number; h: number };
@@ -1487,7 +1495,7 @@ function ClipPanel({
               <AdjustSection look={look} t={t} />
             </>
           ) : null}
-          {block.anchor?.move || block.anchor?.resize === 'end' ? <TimingSection t={t} block={block} commit={commit} /> : null}
+          {block.anchor?.move || block.anchor?.resize === 'end' ? <TimingSection t={t} block={block} onMain={onMain} commit={commit} /> : null}
           {blockHasVolume(block) ? (
             <Section id="sound" title={t('inspector.sound')}>
               <VolumeField value={linearVolumeOf(block)} t={t} onCommit={(apply) => commit(volumeEdits([block], apply))} />
@@ -1555,18 +1563,21 @@ function ReplaceButton({ block, entries, t }: { block: TimelineBlock; entries: (
  * `at` is written the way dragging writes it, from the parent window; `end` is `in point + length` in source time
  * when there is an in point, else (a still) the right edge in the parent window.
  */
-function TimingSection({ t, block, commit }: { t: T; block: TimelineBlock; commit: (edits: ClipEdit[]) => void }) {
+function TimingSection({ t, block, onMain, commit }: { t: T; block: TimelineBlock; onMain: boolean; commit: (edits: ClipEdit[]) => void }) {
   const [unit, setUnit] = useTimeUnit();
   const loc = block.loc!;
   const parentSec = (block.anchor?.parentStartMs ?? 0) / 1000;
   const durSec = (block.endMs - block.startMs) / 1000;
-  const maxDurSec = longestSec(block, durSec);
+  /* the timeline's magnet, on the main track: a longer clip pushes the next one along (a ripple), so the next one is
+     no limit */
+  const magnet = useTimelinePrefs().magnet && onMain;
+  const maxDurSec = longestSec(block, durSec, magnet);
   const k = block.speed ?? 1;
-  /* slowed down, the clip gets longer on the film: no slower than fits before the next clip */
+  /* slowed down, the clip gets longer on the film: without the magnet, no slower than fits before the next clip */
   const fitSpeed = block.nextMs != null && block.nextMs > block.startMs
     ? Math.ceil(((durSec * k) / ((block.nextMs - block.startMs) / 1000)) * 100) / 100
     : FILM_SPEED_MIN;
-  const minSpeed = Math.max(FILM_SPEED_MIN, fitSpeed);
+  const minSpeed = magnet ? FILM_SPEED_MIN : Math.max(FILM_SPEED_MIN, fitSpeed);
   const trimFrom = block.anchor?.trimFrom;
   const timecode = unit === 'timecode';
   /* a frame of the project's rate: the step of the arrows on a time field, and what a typed `12f` counts in */
@@ -1684,8 +1695,8 @@ function TimingSection({ t, block, commit }: { t: T; block: TimelineBlock; commi
           {t('inspector.inPointWhole')}
         </p>
       ) : null}
-      {/* why it cannot get slower: the next clip */}
-      {trimFrom != null && canSpeed && minSpeed > FILM_SPEED_MIN ? (
+      {/* why it cannot get slower: the next clip; the magnet would push it along instead */}
+      {trimFrom != null && canSpeed && !magnet && minSpeed > FILM_SPEED_MIN ? (
         <p data-speed-limit="" className="px-0.5 text-[10.5px] leading-snug text-[var(--text-faint)]">
           {t('inspector.speedLimit').replace('{n}', String(minSpeed))}
         </p>

@@ -117,3 +117,11 @@ test('every rate a project can have puts a labeled tick on each whole second, at
   }
 });
 
+
+test('the main track is marked: the lowest picture track, as the magnet takes it', () => {
+  const two = { stage: doc.stage, tracks: [{ clips: [{ src: 'assets/footage/product.mp4', id: 'top', time: [0, 2] }] }, doc.tracks[0]!] };
+  const top = { key: 'top#0.0', src: 'assets/footage/product.mp4', startMs: 0, durMs: 2000, inMs: 0, sourceDurMs: 10_000, loc: 'film.html#0.0', track: { index: 0, name: 'video', kind: 'video' }, clipId: 'top' };
+  const low = (id: string, clip: number, startMs: number, durMs: number, inMs: number) => ({ ...video(id, clip, startMs, durMs, inMs), loc: `film.html#1.${clip}`, track: { index: 1, name: 'video', kind: 'video' } });
+  const rows = layoutTracks({ scenes: [], sounds: [], captions: [], doc: two, videos: [top, low('open', 0, 0, 2000, 2000), low('open-b', 1, 2000, 2000, 4000), low('slow', 2, 4000, 6000, 6000)] });
+  assert.deepEqual(rows.map((r) => [r.docIndex, Boolean(r.main)]), [[0, false], [1, true]]);
+});

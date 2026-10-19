@@ -29,8 +29,8 @@ import { placeMedia, type SourceRange } from '@/lib/media-place';
 import { apartOnTracks, type ClipEdit } from '@/lib/film-clip-edits';
 import { mediaFetch, useMediaImages } from '@/lib/media-queue';
 import { clipboardItemsOf, clipboardNow, pasteEdit, type TimelineClipboardItem } from '@/lib/timeline-clipboard';
-import { editModelOf, freshLink, linkedIds, planMove, planRoom, planSpeed, soundTrackFor, type EditMode } from '@/lib/timeline-edit';
-import { readTimelinePrefs } from '@/lib/timeline-prefs';
+import { editModelOf, freshLink, linkedIds, magnetOn, mainTrackOf, planMove, planRippleTrim, planRoom, planSpeed, soundTrackFor, type EditMode } from '@/lib/timeline-edit';
+import { readTimelinePrefs, switchesOf } from '@/lib/timeline-prefs';
 import { fadeMsOf, type FadeMs } from '@/lib/clip-fade';
 import {
   findTransitions, planRemoveTransition, planResizeTransition, planTransition, TRANSITION_MS,
@@ -541,6 +541,13 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pause]);
   const scrubCommit = React.useCallback((ms: number) => { pause(); seek(ms); }, [pause, seek]);
+  /* the timeline's preview axis: the picture at the moment under the pointer, the clock and the playhead staying; null:
+     back to the playhead's picture. Not while playing (the picture is the film's then) */
+  const hoverPreview = React.useCallback((ms: number | null) => {
+    if (player.current.playing) return;
+    preview.current?.seek(pictureAt(ms == null ? player.current.time() : Math.max(0, ms / 1000)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* a seek asked for past the film's end as it was (the end of a clip just put on): made once the film is that long */
   const seekWhenLonger = React.useRef<number | null>(null);
@@ -571,6 +578,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   clipLinksRef.current = clipLinks;
   /** The timeline as an edit sees it now (lib/timeline-edit). */
   const editModel = React.useCallback(() => editModelOf(tracksRef.current, clipLinksRef.current), []);
+  /** The main track (the lowest picture track), where the magnet acts: the inspector asks. */
+  const mainTrack = React.useMemo(() => mainTrackOf(editModelOf(timelineTracks)), [timelineTracks]);
   const blocksRef = React.useRef<readonly TimelineBlock[]>([]);
   blocksRef.current = React.useMemo(() => timelineTracks.flatMap((tr) => tr.blocks), [timelineTracks]);
   /* the film's length: the preview's, unless it could not draw the film; that length is then of the film before
@@ -824,14 +833,15 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const pickedTr = filmTransitions.find((x) => x.key === pickedTransition) ?? null;
   /**
    * A transition put on a cut, made longer or shorter, or taken away (lib/transitions): planned on the timeline as it
-   * is (what follows an overlap closing up on every unlocked track, linked clips along), one write and one undo
-   * step. The menus put on
-   * fades only; other transitions are an agent's to write.
+   * is (on the main track with the magnet what follows an overlap closes up, linked clips along), one write and one
+   * undo step. The menus put on fades only; other transitions are an agent's to write.
    */
   const askTransition = React.useCallback(async (ask: TransitionAsk): Promise<string | null> => {
     const model = editModel();
-    /* an overlap closes up what follows, on every unlocked track: no gap opens after it */
-    const opts = { ripple: true, linked: true, whiteSrc: WHITE_SRC };
+    /* the magnet acts on the main track: there an overlap closes up what follows, no gap opens after it */
+    const cutClip = ask.kind === 'add' ? ask.cut.a : filmTransitions.find((x) => x.key === ask.key)?.a;
+    const cutTrack = model.find((tr) => tr.clips.some((c) => c.id === cutClip))?.index;
+    const opts = { ripple: magnetOn(model, cutTrack, readTimelinePrefs().magnet), linked: true, whiteSrc: WHITE_SRC };
     let plan: TransitionPlan;
     let label: string;
     if (ask.kind === 'add') {
@@ -850,28 +860,42 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   }, [editModel, clipFacts, filmTransitions, edit, t]);
   /**
    * The inspector's edits (its refusals it says beside its field). A new speed goes to the clips linked to the clip
-   * too; a speed too slow to fit before the next clip is refused, and the inspector says why.
+   * too. On the main track with the magnet (the timeline's switch) a speed or a length that makes the clip longer or
+   * shorter pushes or pulls what follows, as a ripple trim does; elsewhere a speed too slow to fit before the next clip
+   * is refused, and the inspector says why. With linkage what rides on the main track stays on its footage.
    */
   const editClips = React.useCallback((edits: ClipEdit[]): Promise<string | null> => {
     const [one] = edits;
     const block = one && edits.length === 1 ? blocksRef.current.find((b) => b.loc === one.loc) : undefined;
     if (block?.loc && lockedEdits(edits, filmRef.current).length) return Promise.resolve(t('timeline.trackLocked'));
     const model = editModel();
-    if (!block?.clipId || (one!.prop !== 'speed' && one!.prop !== 'at')) return editBlocks(edits, true);
+    const prefs = readTimelinePrefs();
+    const switches = switchesOf(prefs);
+    /* the magnet acts on the main track alone */
+    const magnet = magnetOn(model, model.find((tr) => tr.clips.some((c) => c.id === block?.clipId))?.index, prefs.magnet);
+    if (!block?.clipId || (one!.prop !== 'speed' && one!.prop !== 'at' && !(one!.prop === 'end' && magnet))) return editBlocks(edits, true);
     const ids = [block.clipId, ...linkedIds(model, [block.clipId]).filter((id) => id !== block.clipId)];
     if (one!.prop === 'at') {
-      /* a start typed in: the clip (and those linked to it) moves as a drag would: it lands there, or on a new track
-         beside its own when that time is taken; nothing there is cut */
+      /* a start typed in: the clip (and those linked to it) moves as a drag would: on the main track with the magnet
+         it goes in at the insert point there; elsewhere it lands there, or on a new track beside its own when that
+         time is taken. Nothing there is cut */
       const startMs = Number(one!.value) * 1000 + (block.anchor?.parentStartMs ?? 0);
       if (!Number.isFinite(startMs)) return Promise.resolve(t('timeline.editFail'));
-      const plan = planMove(model, { ids, deltaMs: startMs - block.startMs, pointerMs: startMs, mode: 'place' });
+      const plan = planMove(model, { ids, deltaMs: startMs - block.startMs, pointerMs: startMs, mode: 'place', ...switches });
       if (!plan) return Promise.resolve(t('timeline.trackLocked'));
       return plan.ops.length ? edit(plan.ops, clipStep('history.stepMoved', [block.clipId]), true) : Promise.resolve(null);
     }
-    const speed = typeof one!.value === 'number' ? one!.value : 1;
-    const plan = planSpeed(model, ids, speed, { ripple: false });
-    if (plan.slowest != null) return Promise.resolve(t('inspector.speedTooSlow').replace('{n}', String(plan.slowest)));
-    return plan.ops.length ? edit(plan.ops, `history.stepSpeed|${block.clipId}`, true) : Promise.resolve(null);
+    if (one!.prop === 'speed') {
+      const speed = typeof one!.value === 'number' ? one!.value : 1;
+      const plan = planSpeed(model, ids, speed, { ripple: magnet, ...switches });
+      if (plan.slowest != null) return Promise.resolve(t('inspector.speedTooSlow').replace('{n}', String(plan.slowest)));
+      return plan.ops.length ? edit(plan.ops, `history.stepSpeed|${block.clipId}`, true) : Promise.resolve(null);
+    }
+    /* a new length, with the magnet: a ripple trim of the tail by the difference (source seconds over the speed) */
+    const k = block.anchor?.trimFrom != null && block.speed ? block.speed : 1;
+    const deltaMs = ((Number(one!.value) - Number(one!.from ?? one!.value)) * 1000) / k;
+    const plan = planRippleTrim(model, ids, 'end', deltaMs, switches);
+    return plan.ops.length ? edit(plan.ops, `history.stepRippleTrimmed|${block.clipId}`, true) : Promise.resolve(null);
   }, [editBlocks, editModel, edit, t]);
   const removeBlock = React.useCallback((block: TimelineBlock): Promise<string | null> => {
     if (!block.clipId) return Promise.resolve(t('timeline.removeFail'));
@@ -970,8 +994,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   }, [timelineTracks]);
   /**
    * A paste (⌘V, the menu) at a time: onto the track pointed at (`lane`) or each copy's own, never cutting what is
-   * there: a taken spot opens a track beside it (lib/timeline-clipboard pasteEdit). A clip cut since it was copied
-   * comes back as it was copied (under a new id).
+   * there: a taken spot opens a track beside it, and with the magnet a copy for the main track goes right above it, as
+   * CapCut's (lib/timeline-clipboard pasteEdit). A clip cut since it was copied comes back as it was copied (under a
+   * new id).
    */
   const pasteAt = React.useCallback((lane: string | null, atMs: number): Promise<string | null> => {
     if (!clipboard.length) return Promise.resolve(t('timeline.menuPasteEmpty'));
@@ -980,7 +1005,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (missing > cut.length) toast.show(t('timeline.pasteGone'));
     const all = [...items, ...cut].sort((a, b) => a.startMs - b.startMs);
     if (!all.length) return Promise.resolve(null);
-    const ops = pasteEdit(all, timelineTracks, editModel(), atMs, lane, { mode: 'place' });
+    const ops = pasteEdit(all, timelineTracks, editModel(), atMs, lane, { mode: 'place', ...switchesOf(readTimelinePrefs()) });
     if (!ops) return Promise.resolve(t('timeline.trackLocked'));
     const gone = new Set(cut.map((item) => item.clipId));
     const written = ops.map((op): Op => {
@@ -996,7 +1021,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const roomFor = React.useCallback((spans: { track: number | { insert: number } | undefined; atSec: number; durMs: number }[], mode?: EditMode): Op[] => {
     const onTracks = spans.flatMap((s) => (typeof s.track === 'number' ? [{ track: s.track, startMs: Math.round(s.atSec * 1000), endMs: Math.round(s.atSec * 1000) + s.durMs }] : []));
     if (!mode || !onTracks.length) return [];
-    return planRoom(editModel(), onTracks, { mode }).ops;
+    return planRoom(editModel(), onTracks, { mode, ...switchesOf(readTimelinePrefs()) }).ops;
   }, [editModel]);
   const dropAsset = React.useCallback(async (file: ResourceDragItem, target: AssetDropTarget, atMs: number): Promise<string | null> => {
     const plan = assetDropInsert(file, timelineTracks, target, atMs, stageRef.current);
@@ -1040,7 +1065,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const addMedia = React.useCallback(async (file: WorkspaceResource, how: { mode?: EditMode; range?: SourceRange | null; atPlayhead?: boolean } = {}) => {
     const target = timelineCommands.current?.target() ?? null;
     const at = how.atPlayhead || target != null ? snapToFrame(timeRef.current) : 'end';
-    const plan = placeMedia(editModel(), { file, range: how.range ?? null, target, at, ...(how.mode ? { mode: how.mode } : {}), stage: stageRef.current });
+    const plan = placeMedia(editModel(), { file, range: how.range ?? null, target, at, ...(how.mode ? { mode: how.mode } : {}), ...switchesOf(readTimelinePrefs()), stage: stageRef.current });
     if ('error' in plan) { toast.show(plan.error === 'locked' ? t('timeline.trackLocked') : t('timeline.dropNotClip')); return; }
     const failed = await edit(plan.ops, 'history.stepDrop');
     if (failed) { toast.show(failed); return; }
@@ -1071,7 +1096,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       return;
     }
     const target = timelineCommands.current?.target() ?? null;
-    const plan = placeMedia(editModel(), { file, range: null, target, at: snapToFrame(timeRef.current), stage: stageRef.current });
+    const plan = placeMedia(editModel(), { file, range: null, target, at: snapToFrame(timeRef.current), ...switchesOf(readTimelinePrefs()), stage: stageRef.current });
     if ('error' in plan) { toast.show(plan.error === 'locked' ? t('timeline.trackLocked') : t('timeline.dropNotClip')); return; }
     const clip = taken.clip;
     const failed = await edit(plan.ops.map((op) => (op.op === 'insert' ? { ...op, clip: clip as never } : op)), 'history.stepDrop');
@@ -1770,13 +1795,14 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   /**
    * Duplicate (⌘D, the bar's, the picture menu's): copies right after the clips, each on its own track, going in
-   * between (what follows moves on, on every unlocked track), so nothing is covered; never a new track.
+   * between (what follows on that track moves on; with linkage, what rides on the main track along), so nothing is
+   * covered; never a new track.
    */
   const duplicateBlocks = React.useCallback(async (blocks: readonly TimelineBlock[]) => {
     const picked = blocks.filter((b) => b.clipId);
     if (!picked.length) return null;
     const tracks = tracksRef.current;
-    const ops = pasteEdit(clipboardItemsOf(picked, tracks), tracks, editModel(), Math.max(...picked.map((b) => b.endMs)), null, { mode: 'insert' });
+    const ops = pasteEdit(clipboardItemsOf(picked, tracks), tracks, editModel(), Math.max(...picked.map((b) => b.endMs)), null, { mode: 'insert', ...switchesOf(readTimelinePrefs()) });
     const failed = !ops ? t('timeline.trackLocked') : ops.length ? await edit(ops, picked.length <= 2 ? clipStep('history.stepDuplicated', picked.map((b) => b.clipId!)) : 'history.stepDuplicate') : null;
     if (failed) toast.show(failed);
     return failed;
@@ -2414,12 +2440,16 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       case 'select-left': case 'select-right': take(); if (once) commands.selectSide(cmd === 'select-left' ? -1 : 1); return;
       case 'ripple-start': take(); if (once) commands.rippleTrimStart(); return;
       case 'ripple-end': take(); if (once) commands.rippleTrimEnd(); return;
-      case 'toggle-snap': {
+      case 'toggle-snap': case 'toggle-magnet': case 'toggle-linkage': case 'toggle-preview-axis': {
         take();
         if (!once) return;
-        const on = !readTimelinePrefs().snap;
-        commands.toggleSnap();
-        toast.show(`${t('timeline.snap')} · ${t(`timeline.snap${on ? 'On' : 'Off'}`)}`);
+        const pref = cmd === 'toggle-snap' ? 'snap' : cmd === 'toggle-magnet' ? 'magnet' : cmd === 'toggle-linkage' ? 'linkage' : 'previewAxis';
+        const on = !readTimelinePrefs()[pref];
+        if (pref === 'snap') commands.toggleSnap();
+        else if (pref === 'magnet') commands.toggleMagnet();
+        else if (pref === 'linkage') commands.toggleLinkage();
+        else commands.togglePreviewAxis();
+        toast.show(`${t(`timeline.${pref}`)} · ${t(`timeline.${pref}${on ? 'On' : 'Off'}`)}`);
         return;
       }
       default:
@@ -2890,6 +2920,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                       store={geometryStore}
                       element={stageElement}
                       clips={selectedBlocks}
+                      mainTrack={mainTrack}
                       onEditClips={editClips}
                       width={inspectorShownWidth}
                       onClose={closeInspector}
@@ -2974,6 +3005,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     onSeek={(ms) => seek(ms)}
                     onScrubPreview={scrubPreview}
                     onScrubCommit={scrubCommit}
+                    onHoverPreview={hoverPreview}
                     onRemove={removeBlock}
                     onRemoveMany={removeBlocks}
                     onSplit={splitBlocks}

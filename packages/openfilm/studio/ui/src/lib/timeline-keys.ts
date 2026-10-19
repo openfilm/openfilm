@@ -16,7 +16,7 @@ export type KeyCommand =
   | 'frame-back' | 'frame-forward' | 'jump-back' | 'jump-forward'
   | 'nudge-back' | 'nudge-forward'
   | 'start' | 'end'
-  | 'zoom-fit' | 'toggle-snap'
+  | 'zoom-fit' | 'toggle-snap' | 'toggle-magnet' | 'toggle-linkage' | 'toggle-preview-axis'
   | 'range-clip' | 'speed' | 'detach-audio' | 'copy-attrs' | 'paste-attrs' | 'select-left' | 'select-right'
   | 'ripple-start' | 'ripple-end'
   | 'insert-source' | 'overwrite-source'
@@ -81,6 +81,8 @@ export function keyCommandOf(e: KeyPress, mac: boolean): KeyCommand | null {
   /* [ / ]: every clip before / after the playhead selected (CapCut's 向左全选 / 向右全选), read by where the key is */
   if (!e.shiftKey && !e.altKey && (e.code === 'BracketLeft' || e.key === '[')) return 'select-left';
   if (!e.shiftKey && !e.altKey && (e.code === 'BracketRight' || e.key === ']')) return 'select-right';
+  /* ~ (the key left of 1, with ⇧ or without): linkage on / off, as CapCut's */
+  if (e.code === 'Backquote' || e.key === '`' || e.key === '~') return e.altKey ? null : 'toggle-linkage';
   /* ⌥M / ⌥⇧M: the marker before; ⌥X: the range cleared (on a Mac ⌥ types another letter: read by where the key is) */
   if (e.altKey) return k === 'm' ? 'prev-marker' : k === 'x' && !e.shiftKey ? 'clear-range' : null;
   if (e.shiftKey) {
@@ -89,6 +91,7 @@ export function keyCommandOf(e: KeyPress, mac: boolean): KeyCommand | null {
       case 'o': return 'go-out';
       case 'l': return 'loop';
       case 'z': return 'zoom-fit';
+      case 'n': return 'toggle-magnet';
       case 'm': return 'next-marker';
       /* ⇧X: the range is the selected clips' (CapCut's 以片段选定区域) */
       case 'x': return 'range-clip';
@@ -103,6 +106,8 @@ export function keyCommandOf(e: KeyPress, mac: boolean): KeyCommand | null {
     case 'o': return 'mark-out';
     case 'x': return 'clear-range';
     case 'n': return 'toggle-snap';
+    case 'p': return 'toggle-magnet';
+    case 's': return 'toggle-preview-axis';
     case 'q': return 'ripple-start';
     case 'w': return 'ripple-end';
     case 'm': return 'add-marker';
@@ -176,7 +181,10 @@ export const SHORTCUTS: { group: 'groupPlayback' | 'groupMarks' | 'groupEdit' | 
       { label: 'selectMode', keys: [k('A'), k('V')] },
       { label: 'splitMode', keys: [k('B')] },
       { label: 'splitModeAll', keys: [k('', { shift: true })] },
+      { label: 'toggleMagnet', keys: [k('P'), k('N', { shift: true })] },
       { label: 'toggleSnap', keys: [k('N')] },
+      { label: 'toggleLinkage', keys: [k('~')] },
+      { label: 'togglePreviewAxis', keys: [k('S')] },
       { label: 'editModeSwap', keys: [k('', { alt: true })] },
       { label: 'copyDrag', keys: [k('', { alt: true })] },
     ],

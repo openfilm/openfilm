@@ -126,14 +126,14 @@ test('copies opening tracks in several places each open beside their own track',
 
 /* ── a paste that makes room, and ⌥-drag copies ── */
 
-test('a paste in insert mode makes room at the playhead on the track pointed at, and opens no track', () => {
+test('a paste in insert mode makes room at the playhead on the track pointed at alone, and opens no track', () => {
   const film: Film = { tracks: [{ clips: [filmClip('a', 0, 2), filmClip('b', 2, 2)] }, { clips: [filmClip('vo', 3, 1)] }] };
   const tracks = [track(0, [blockOf('a', 0, 0, 0, 2000), blockOf('b', 0, 1, 2000, 4000)]), track(1, [blockOf('vo', 1, 0, 3000, 4000)])];
   const model = editModelOf(tracks);
   const copied = clipboardItemsOf([tracks[0]!.blocks[0]!], tracks);
   const ops = pasteEdit(copied, tracks, model, 2000, 'doc-0', { mode: 'insert' })!;
   const out = applyOps(structuredClone(film) as never, ops as never) as unknown as Film;
-  assert.deepEqual(spans(out), [[['a', 0, null], ['a-2', 2, null], ['b', 4, null]], [['vo', 5, null]]]);
+  assert.deepEqual(spans(out), [[['a', 0, null], ['a-2', 2, null], ['b', 4, null]], [['vo', 3, null]]]);
 });
 
 test('a locked track refuses a paste', () => {
@@ -168,6 +168,31 @@ test('⌥-drag copies of several clips keep their spacing, together on one track
   /* b and c copied 2 s later: b's copy would cover c, so both copies go to a new track above, the gap between them kept */
   assert.deepEqual(run(planCopies(model, { ids: ['c', 'b'], deltaMs: 2000 })),
     [[['b-2', 4, null], ['c-2', 7, null]], [['a', 0, null], ['b', 2, null], ['c', 5, null]]]);
+});
+
+test('with the magnet a copy of a main-track clip pastes onto a new track right above the main track', () => {
+  const tracks = [
+    track(0, [blockOf('t', 0, 0, 0, 1000)], { role: 'mg' }),
+    track(1, [blockOf('a', 1, 0, 0, 2000), blockOf('b', 1, 1, 2000, 4000)], { role: 'video' }),
+  ];
+  const ops = pasteEdit(clipboardItemsOf([tracks[1]!.blocks[0]!], tracks), tracks, editModelOf(tracks), 9000, null, { mode: 'place', magnet: true, linkage: true })!;
+  const out = spans(applyOps(filmOfRows(tracks) as never, ops as never) as unknown as Film).map((t) => t.map(([id, at]) => [id, at]));
+  /* even where the main track is free (past its end): the main track is only changed by putting clips in between */
+  assert.deepEqual(out, [[['t', 0]], [['a-2', 9]], [['a', 0], ['b', 2]]]);
+});
+
+test('with the magnet ⌥-drag copies onto the main track go in between, what follows moving on', () => {
+  const film: Film = { tracks: [{ clips: [filmClip('t', 0, 1)] }, { clips: [filmClip('a', 0, 2), filmClip('b', 2, 2)] }] };
+  const tracks = [
+    track(0, [blockOf('t', 0, 0, 0, 1000)], { role: 'mg' }),
+    track(1, [blockOf('a', 1, 0, 0, 2000), blockOf('b', 1, 1, 2000, 4000)], { role: 'video' }),
+  ];
+  const model = editModelOf(tracks);
+  /* b copied and let go over the first half of a: the copy goes in before a */
+  const plan = planCopies(model, { ids: ['b'], deltaMs: -2000, pointerMs: 500, magnet: true, linkage: true })!;
+  const out = spans(applyOps(structuredClone(film) as never, plan.ops as never) as unknown as Film);
+  assert.deepEqual(out, [[['t', 2, null]], [['b-2', 0, null], ['a', 2, null], ['b', 4, null]]]);
+  assert.deepEqual(plan.placed.get('b'), { startMs: 0, endMs: 2000, track: 1 });
 });
 
 test('copies of linked clips pasted together are linked to each other, not to the originals', () => {

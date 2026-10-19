@@ -4,7 +4,7 @@
  * the editor (components/ProjectView).
  */
 import { MIN_BLOCK_MS } from './timeline-drag.ts';
-import { TOUCH_MS, planMove, type EditModel, type EditPlan } from './timeline-edit.ts';
+import { NO_SWITCHES, TOUCH_MS, mainTrackOf, planMove, type EditModel, type EditPlan, type Switches } from './timeline-edit.ts';
 import { stepFrames } from './timecode.ts';
 import type { TimelineBlock, TimelineTrack } from './timeline-layout';
 
@@ -42,8 +42,8 @@ const lockedRows = (tracks: readonly TimelineTrack[]) => new Set(tracks.filter((
 
 /**
  * What ⌘B splits at the playhead: the selected clips it is inside; with nothing selected, the clip it is inside on the
- * targeted track (`targetLane`), else on the topmost track that is seen and has one. Never a clip on a locked track.
- * The clips linked to them are the caller's to add (the Linked switch).
+ * main track (the lowest picture track), as CapCut's; else on the targeted track (`targetLane`), else on the topmost
+ * track that is seen and has one. Never a clip on a locked track. The clips linked to them are the caller's to add.
  */
 export function splitTargets(
   tracks: readonly TimelineTrack[],
@@ -54,6 +54,10 @@ export function splitTargets(
   const locked = lockedRows(tracks);
   const can = (b: TimelineBlock) => Boolean(b.loc && b.clipId) && !locked.has(b.id) && splitsAt(b, atMs);
   if (selectedIds.length) return tracks.flatMap((tr) => tr.blocks).filter((b) => selectedIds.includes(b.id) && can(b));
+  const pictures = tracks.filter((tr) => tr.docIndex != null && tr.role !== 'audio');
+  const mainIndex = pictures.length ? Math.max(...pictures.map((tr) => tr.docIndex!)) : null;
+  const main = tracks.filter((tr) => tr.docIndex === mainIndex && !tr.hidden).flatMap((tr) => tr.blocks).find(can);
+  if (main) return [main];
   const target = targetLane ? tracks.find((tr) => tr.lane === targetLane) : undefined;
   if (target) {
     const hit = target.blocks.find(can);
@@ -83,11 +87,14 @@ export function splitAllTargets(tracks: readonly TimelineTrack[], atMs: number):
 
 /**
  * Clips (by id, the first leading) moved `frames` frames along their tracks, landing on the frame grid; a clip in the
- * way stops them against it, uncut. Null when nothing can move (a locked track, the film's start, a clip right there).
+ * way stops them against it, uncut. Null when nothing can move (a locked track, the film's start, a clip right there,
+ * the main track with the magnet, which stays closed up).
  */
-export function planNudge(model: EditModel, ids: readonly string[], frames: number): EditPlan | null {
+export function planNudge(model: EditModel, ids: readonly string[], frames: number, sw: Switches = NO_SWITCHES): EditPlan | null {
   const lead = model.flatMap((t) => t.clips).find((c) => c.id === ids[0]);
   if (!lead || !frames) return null;
+  const main = mainTrackOf(model);
+  if (sw.magnet && model.find((t) => t.index === main)?.clips.some((c) => ids.includes(c.id))) return null;
   let deltaMs = stepFrames(lead.startMs, frames) - lead.startMs;
   /* the room before the nearest clip they would run into, on each of their tracks */
   const moving = new Set(ids);
@@ -101,7 +108,7 @@ export function planNudge(model: EditModel, ids: readonly string[], frames: numb
     }
   }
   if (Math.abs(deltaMs) <= TOUCH_MS) return null;
-  const plan = planMove(model, { ids, deltaMs, pointerMs: lead.startMs + deltaMs, mode: 'place' });
+  const plan = planMove(model, { ids, deltaMs, pointerMs: lead.startMs + deltaMs, mode: 'place', ...sw });
   return plan?.ops.length ? plan : null;
 }
 

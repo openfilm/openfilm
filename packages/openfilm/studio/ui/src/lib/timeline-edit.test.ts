@@ -9,7 +9,10 @@ import {
   gapsOf,
   insertPointOn,
   linkedIds,
+  hostOf,
+  mainTrackOf,
   planCloseGap,
+  planCloseMainGaps,
   planCloseTrackGaps,
   planEdges,
   planLink,
@@ -20,7 +23,7 @@ import {
   planRoom,
   planSpeed,
   planUnlink,
-  rollMoves,
+  ridesOn,
   soundTrackFor,
   sourceLeftMs,
   type EditClip,
@@ -96,26 +99,16 @@ test('a plain delete leaves the gap, on every track', () => {
   assert.deepEqual(after(m, planRemove(m, ['b'], { ripple: false })), [[['a', 0, 2], ['c', 5, 7]], [['vo', 6, 8]]]);
 });
 
-test('a ripple delete closes the gap on every unlocked track, never a locked one', () => {
+test('a ripple delete closes the gap on its own track; the other tracks stay (they follow only by linkage)', () => {
   const m = model([['a', 0, 2], ['b', 2, 5], ['c', 5, 7]], [['vo', 6, 8]], { locked: true, clips: [['bed', 5, 9]] });
   const plan = planRemove(m, ['b'], { ripple: true });
-  assert.deepEqual(after(m, plan), [[['a', 0, 2], ['c', 2, 4]], [['vo', 3, 5]], [['bed', 5, 9]]]);
+  assert.deepEqual(after(m, plan), [[['a', 0, 2], ['c', 2, 4]], [['vo', 6, 8]], [['bed', 5, 9]]]);
   assert.equal(plan.shortMs, 0);
 });
 
 test('a ripple delete leaves a clip that starts before the cut where it is: a music bed under it stays', () => {
   const m = model({ role: 'video', clips: [['a', 0, 2], ['b', 2, 5], ['c', 5, 7]] }, { role: 'audio', clips: [['bed', 0, 9]] });
   assert.deepEqual(after(m, planRemove(m, ['b'], { ripple: true })), [[['a', 0, 2], ['c', 2, 4]], [['bed', 0, 9]]]);
-});
-
-test('on another track what follows moves back only as far as there is room: nothing overlaps, no track opens', () => {
-  /* the B-roll starts before the cut (3 s) and stays; the clip after it can only move back to where it ends */
-  const m = model([['a', 0, 2], ['b', 2, 5], ['c', 5, 7]], [['broll', 3, 4.5], ['late', 6, 7]]);
-  const plan = planRemove(m, ['b'], { ripple: true });
-  const out = after(m, plan);
-  assert.deepEqual(out, [[['a', 0, 2], ['c', 2, 4]], [['broll', 3, 4.5], ['late', 4.5, 5.5]]]);
-  assert.equal(plan.shortMs, 0, 'the track edited closed whole');
-  apart(out);
 });
 
 test('linked clips are found by their link, and deleted together', () => {
@@ -125,12 +118,10 @@ test('linked clips are found by their link, and deleted together', () => {
   assert.deepEqual(out, [[['w', 0, 2]], [['x', 0, 1]]]);
 });
 
-test('clips deleted on several tracks at once close each stretch of time once', () => {
-  /* a title and a shot deleted at different times: each closes on every track, from the last back; c starts before
-     the title's time and stays there, then closes up behind a */
-  const m = model([['t1', 0, 1], ['t2', 5, 6]], [['a', 0, 2], ['b', 2, 3], ['c', 3, 9]]);
+test('clips deleted on several tracks at once close up on each of their tracks', () => {
+  const m = model([['t1', 0, 1], ['t2', 5, 6], ['t3', 7, 8]], [['a', 0, 2], ['b', 2, 3], ['c', 3, 9]]);
   const out = after(m, planRemove(m, ['b', 't2'], { ripple: true }));
-  assert.deepEqual(out, [[['t1', 0, 1]], [['a', 0, 2], ['c', 2, 8]]]);
+  assert.deepEqual(out, [[['t1', 0, 1], ['t3', 6, 7]], [['a', 0, 2], ['c', 2, 8]]]);
   apart(out);
 });
 
@@ -149,10 +140,10 @@ test('a gap is the empty time between clips, or before the first; not after the 
   assert.equal(gapAt(m, 0, 6000), null);
 });
 
-test('closing a gap moves what is after it back, on every unlocked track', () => {
+test('closing a gap moves what is after it back on its track', () => {
   const m = model([['a', 0, 2], ['b', 4, 5]], [['vo', 4, 6]], { locked: true, clips: [['bed', 4, 9]] });
   const gap = gapAt(m, 0, 3000)!;
-  assert.deepEqual(after(m, planCloseGap(m, 0, gap)), [[['a', 0, 2], ['b', 2, 3]], [['vo', 2, 4]], [['bed', 4, 9]]]);
+  assert.deepEqual(after(m, planCloseGap(m, 0, gap)), [[['a', 0, 2], ['b', 2, 3]], [['vo', 4, 6]], [['bed', 4, 9]]]);
   /* a gap on a locked track stays */
   const locked = model({ locked: true, clips: [['a', 0, 2], ['b', 4, 5]] });
   assert.deepEqual(planCloseGap(locked, 0, gap).ops, []);
@@ -169,12 +160,11 @@ test('a gap closes whole on its track, however little room another track has', (
   assert.deepEqual(after(m, plan), [[['top', 0, 5]], [['title', 0, 5], ['cards', 5, 10]], [['bed', 0, 15]]]);
 });
 
-test('all the gaps on a track closed at once, what follows on the other tracks along as far as it has room', () => {
+test('all the gaps on a track closed at once, on that track', () => {
   const m = model([['t1', 1, 2], ['t2', 4, 5]], [['a', 0, 3], ['b', 3, 6]], [['vo', 4.5, 5]]);
   assert.deepEqual(gapsOf(m, 0), [{ startMs: 0, endMs: 1000 }, { startMs: 2000, endMs: 4000 }]);
   const out = after(m, planCloseTrackGaps(m, 0));
-  /* the shots touch: a starts before both gaps' ends and b right after it, so the picture has no room */
-  assert.deepEqual(out, [[['t1', 0, 1], ['t2', 1, 2]], [['a', 0, 3], ['b', 3, 6]], [['vo', 1.5, 2]]]);
+  assert.deepEqual(out, [[['t1', 0, 1], ['t2', 1, 2]], [['a', 0, 3], ['b', 3, 6]], [['vo', 4.5, 5]]]);
   assert.deepEqual(planCloseTrackGaps(m, 1).ops, [], 'no gap on the picture track');
 });
 
@@ -249,14 +239,14 @@ test('an insert goes before or after the clip under the hand, in a gap where it 
   assert.equal(insertPointOn(m, 1, 4233, 4233), 0, 'the first clip on an empty track starts at 0');
 });
 
-test('insert pushes what comes after on, cutting a clip the point falls inside; the other tracks go along', () => {
+test('insert pushes what comes after on, cutting a clip the point falls inside, on the track it goes in on', () => {
   const m = model([['a', 0, 4], ['b', 4, 6]], [['vo', 1, 3], ['vo2', 5, 6]], { locked: true, clips: [['bed', 5, 9]] });
   const plan = planRoom(m, [{ track: 0, startMs: 2000, endMs: 3000 }], { mode: 'insert' });
   const out = after(m, plan);
   /* a is cut at 2 s: its rest a-b goes on with b, a second later */
   assert.deepEqual(out[0], [['a', 0, 2], ['a-b', 3, 5], ['b', 5, 7]]);
-  /* vo spans the point on another track: it stays whole, what is after it moves */
-  assert.deepEqual(out[1], [['vo', 1, 3], ['vo2', 6, 7]]);
+  /* another track stays as it is */
+  assert.deepEqual(out[1], [['vo', 1, 3], ['vo2', 5, 6]]);
   assert.deepEqual(out[2], [['bed', 5, 9]]);
   assert.deepEqual(timeOf(m, plan, 'a-b'), [2, 4], 'the rest plays on from where the cut was');
 });
@@ -375,21 +365,6 @@ test('a trim stops at the end of its source and at the shortest clip', () => {
   assert.equal(planEdges(m, [{ id: 'v', kind: 'end' }], -9000).deltaMs, -3900);
 });
 
-test('a roll moves the cut: one clip longer, the next shorter, the film the same length', () => {
-  const m = model([['a', 0, 4, { sourceMs: 10_000 }], ['b', 4, 8, { inMs: 2000 }], ['c', 8, 9]]);
-  const plan = planEdges(m, rollMoves(m, 'a', 'b', false), 1000);
-  assert.deepEqual(after(m, plan), [[['a', 0, 5], ['b', 5, 8], ['c', 8, 9]]]);
-  assert.deepEqual(timeOf(m, plan, 'b'), [3, 6], 'b starts a second later in its source');
-  /* back as far as b has source before its in point */
-  assert.equal(planEdges(m, rollMoves(m, 'a', 'b', false), -3000).deltaMs, -2000);
-});
-
-test('a roll takes linked cuts along', () => {
-  const m = model([['a', 0, 4, { link: 'x' }], ['b', 4, 8, { link: 'y', inMs: 2000 }]], [['as', 0, 4, { link: 'x' }], ['bs', 4, 8, { link: 'y', inMs: 2000 }]]);
-  const out = after(m, planEdges(m, rollMoves(m, 'a', 'b', true), 500));
-  assert.deepEqual(out, [[['a', 0, 4.5], ['b', 4.5, 8]], [['as', 0, 4.5], ['bs', 4.5, 8]]]);
-});
-
 test('a slip changes what a clip shows, not where or how long, inside its source', () => {
   const m = model([['v', 2, 4, { inMs: 3000, sourceMs: 6000 }]]);
   const plan = planEdges(m, [{ id: 'v', kind: 'slip' }], 1000);
@@ -402,27 +377,13 @@ test('a slip changes what a clip shows, not where or how long, inside its source
 
 /* ── ripple trims ── */
 
-test('a ripple trim of the tail moves what follows, on every unlocked track', () => {
+test('a ripple trim of the tail moves what follows on its own track alone', () => {
   const m = model([['a', 0, 4], ['b', 4, 6]], [['vo', 5, 6]], { locked: true, clips: [['bed', 4, 9]] });
   const plan = planRippleTrim(m, ['a'], 'end', -1000);
   assert.equal(plan.deltaMs, -1000);
-  assert.deepEqual(after(m, plan), [[['a', 0, 3], ['b', 3, 5]], [['vo', 4, 5]], [['bed', 4, 9]]]);
+  assert.deepEqual(after(m, plan), [[['a', 0, 3], ['b', 3, 5]], [['vo', 5, 6]], [['bed', 4, 9]]]);
   const longer = planRippleTrim(m, ['a'], 'end', 1500);
-  assert.deepEqual(after(m, longer), [[['a', 0, 5.5], ['b', 5.5, 7.5]], [['vo', 6.5, 7.5]], [['bed', 4, 9]]]);
-});
-
-test('a ripple trim closes its own track whole; another track moves back as far as it has room', () => {
-  /* vo spans the cut and vo2 follows it right away: nothing on that track can move back, so it stays */
-  const m = model([['a', 0, 4], ['b', 4, 6]], [['vo', 3.5, 5], ['vo2', 5, 6]]);
-  const plan = planRippleTrim(m, ['a'], 'end', -2000);
-  assert.equal(plan.deltaMs, -2000);
-  assert.deepEqual(after(m, plan), [[['a', 0, 2], ['b', 2, 4]], [['vo', 3.5, 5], ['vo2', 5, 6]]]);
-  /* with a second and a half of room, vo2 moves back that far */
-  const room = model([['a', 0, 4], ['b', 4, 6]], [['vo', 2, 3], ['vo2', 4.5, 5]]);
-  const some = planRippleTrim(room, ['a'], 'end', -2000);
-  assert.equal(some.deltaMs, -2000);
-  assert.deepEqual(after(room, some), [[['a', 0, 2], ['b', 2, 4]], [['vo', 2, 3], ['vo2', 3, 3.5]]]);
-  apart(after(room, some));
+  assert.deepEqual(after(m, longer), [[['a', 0, 5.5], ['b', 5.5, 7.5]], [['vo', 5, 6]], [['bed', 4, 9]]]);
 });
 
 test('a ripple trim of the head keeps the clip where it starts', () => {
@@ -436,17 +397,17 @@ test('a ripple trim of the head keeps the clip where it starts', () => {
 
 test('Q and W trim to the playhead and close up', () => {
   const m = model([['a', 0, 4], ['b', 4, 6]], [['vo', 4, 5]]);
-  assert.deepEqual(after(m, planRippleTrimTo(m, ['a'], 'start', 1000)!), [[['a', 0, 3], ['b', 3, 5]], [['vo', 3, 4]]]);
-  assert.deepEqual(after(m, planRippleTrimTo(m, ['a'], 'end', 1000)!), [[['a', 0, 1], ['b', 1, 3]], [['vo', 1, 2]]]);
+  assert.deepEqual(after(m, planRippleTrimTo(m, ['a'], 'start', 1000)!), [[['a', 0, 3], ['b', 3, 5]], [['vo', 4, 5]]]);
+  assert.deepEqual(after(m, planRippleTrimTo(m, ['a'], 'end', 1000)!), [[['a', 0, 1], ['b', 1, 3]], [['vo', 4, 5]]]);
   assert.equal(planRippleTrimTo(m, ['a'], 'end', 5000), null, 'the playhead is not over it');
 });
 
 /* ── speed ── */
 
-test('slower with a ripple pushes what follows on every track; without, it says how slow it can go', () => {
+test('slower with a ripple pushes what follows on its track; without, it says how slow it can go', () => {
   const m = model([['a', 0, 2], ['b', 3, 4]], [['vo', 3, 4]]);
   const pushed = planSpeed(m, ['a'], 0.5, { ripple: true });
-  assert.deepEqual(after(m, pushed), [[['a', 0, 4], ['b', 5, 6]], [['vo', 5, 6]]]);
+  assert.deepEqual(after(m, pushed), [[['a', 0, 4], ['b', 5, 6]], [['vo', 3, 4]]]);
   const held = planSpeed(m, ['a'], 0.5, { ripple: false });
   assert.deepEqual(held.ops, []);
   assert.equal(held.slowest, 0.67);
@@ -508,6 +469,107 @@ test('the model joins a track spread over rows and leaves out drops not written 
   assert.deepEqual(m[0]!.clips.map((c) => [c.inMs, c.speed, c.sourceMs, c.link ?? null]), [[1500, 1, 9000, 'L'], [1500, 2, 9000, null]]);
 });
 
+/* ── the main track: magnet and linkage, as CapCut's ── */
+
+const ON = { magnet: true, linkage: true };
+/** A title track, the main track (the lowest picture track), a music bed and a sound effect. */
+const filmWithMain = () => model(
+  { role: 'mg', clips: [['title', 5, 7], ['logo', 9, 10]] },
+  { role: 'video', clips: [['a', 0, 4], ['b', 4, 8], ['c', 8, 12]] },
+  { role: 'audio', clips: [['bed', 0, 12]] },
+  { role: 'audio', clips: [['sfx', 5, 6]] },
+);
+
+test('the main track is the lowest picture track; what rides on it starts over one of its clips', () => {
+  const m = filmWithMain();
+  assert.equal(mainTrackOf(m), 1);
+  const main = m[1]!;
+  assert.equal(hostOf(main, { startMs: 5000 })?.id, 'b');
+  assert.ok(ridesOn(main, { startMs: 5000, endMs: 7000 }), 'a title over b');
+  assert.ok(!ridesOn(main, { startMs: 0, endMs: 12_000 }), 'a music bed under several shots stays put');
+  assert.equal(hostOf(main, { startMs: 12_500 }), null, 'past the end of the main track nothing rides');
+});
+
+test('with the magnet a delete on the main track closes up; with linkage what rides on it goes too', () => {
+  const m = filmWithMain();
+  assert.deepEqual(after(m, planRemove(m, ['b'], { ripple: false, ...ON })), [
+    [['logo', 5, 6]],
+    [['a', 0, 4], ['c', 4, 8]],
+    [['bed', 0, 12]],
+  ]);
+  /* without linkage the main track closes up and the rest stays */
+  assert.deepEqual(after(m, planRemove(m, ['b'], { ripple: false, magnet: true, linkage: false })), [
+    [['title', 5, 7], ['logo', 9, 10]],
+    [['a', 0, 4], ['c', 4, 8]],
+    [['bed', 0, 12]],
+    [['sfx', 5, 6]],
+  ]);
+  /* without the magnet a gap is left; linkage still takes what rides on b */
+  assert.deepEqual(after(m, planRemove(m, ['b'], { ripple: false, magnet: false, linkage: true })), [
+    [['logo', 9, 10]],
+    [['a', 0, 4], ['c', 8, 12]],
+    [['bed', 0, 12]],
+  ]);
+});
+
+test('a clip past the end of the main track rides on nothing: deleting the last shot leaves it be', () => {
+  /* the bug behind removing the main track on 10-18: a leftover fragment on V1 dragged what came after it along */
+  const m = model({ role: 'mg', clips: [['late', 3, 5]] }, { role: 'video', clips: [['frag', 0, 1]] });
+  assert.deepEqual(after(m, planRemove(m, ['frag'], { ripple: false, ...ON })), [[['late', 3, 5]]]);
+});
+
+test('with the magnet a move along the main track reorders it; what rides on its clips goes with them', () => {
+  const m = filmWithMain();
+  /* c grabbed in its middle and let go over the first half of a */
+  const plan = planMove(m, { ids: ['c'], deltaMs: -9000, pointerMs: 1000, mode: 'place', ...ON })!;
+  assert.deepEqual(after(m, plan), [
+    [['logo', 1, 2], ['title', 9, 11]],
+    [['c', 0, 4], ['a', 4, 8], ['b', 8, 12]],
+    [['bed', 0, 12]],
+    [['sfx', 9, 10]],
+  ]);
+});
+
+test('with the magnet a clip put on the main track goes in between; one taken off it closes up after it', () => {
+  const m = model({ role: 'video', clips: [['ov', 20, 22]] }, { role: 'video', clips: [['a', 0, 4], ['b', 4, 8]] });
+  /* the overlay onto the main track over the first half of b: in before b */
+  const into = planMove(m, { ids: ['ov'], deltaMs: -15_000, pointerMs: 5000, to: new Map([['ov', 1]]), mode: 'place', ...ON })!;
+  assert.deepEqual(after(m, into), [[['a', 0, 4], ['ov', 4, 6], ['b', 6, 10]]]);
+  /* a taken up to the top track: the main track closes up behind it */
+  const off = planMove(m, { ids: ['a'], deltaMs: 0, pointerMs: 1000, to: new Map([['a', 0]]), mode: 'place', ...ON })!;
+  assert.deepEqual(after(m, off), [[['a', 0, 4], ['ov', 20, 22]], [['b', 0, 4]]]);
+});
+
+test('with linkage a ripple trim and a new speed on the main track keep what rides on its footage', () => {
+  const m = filmWithMain();
+  assert.deepEqual(after(m, planRippleTrim(m, ['a'], 'end', -1000, ON)), [
+    [['title', 4, 6], ['logo', 8, 9]],
+    [['a', 0, 3], ['b', 3, 7], ['c', 7, 11]],
+    [['bed', 0, 12]],
+    [['sfx', 4, 5]],
+  ]);
+  /* b twice as fast: the title a second into b goes half a second into it, c and its logo come 2 s earlier */
+  assert.deepEqual(after(m, planSpeed(m, ['b'], 2, { ripple: true, ...ON })), [
+    [['title', 4.5, 6.5], ['logo', 7, 8]],
+    [['a', 0, 4], ['b', 4, 6], ['c', 6, 10]],
+    [['bed', 0, 12]],
+    [['sfx', 4.5, 5.5]],
+  ]);
+});
+
+test('a clip linkage carries into another on its track goes to a free track nearby', () => {
+  /* n crosses two cuts (it rides on nothing) and stays; r rides on c and lands on it once b is gone */
+  const m = model({ role: 'mg', clips: [['n', 1.5, 4.5], ['r', 5.2, 5.8]] }, { role: 'video', clips: [['a', 0, 2], ['b', 2, 4], ['c', 4, 6]] });
+  const out = after(m, planRemove(m, ['b'], { ripple: false, ...ON }));
+  assert.deepEqual(out, [[['r', 3.2, 3.8]], [['n', 1.5, 4.5]], [['a', 0, 2], ['c', 2, 4]]]);
+  apart(out);
+});
+
+test('turning the magnet on closes up the main track, what rides on it along', () => {
+  const m = model({ role: 'mg', clips: [['t', 4.5, 5]] }, { role: 'video', clips: [['a', 1, 2], ['b', 4, 5]] });
+  assert.deepEqual(after(m, planCloseMainGaps(m, ON)), [[['t', 1.5, 2]], [['a', 0, 1], ['b', 1, 2]]]);
+});
+
 /* ── every plan keeps the film whole ── */
 
 test('no plan makes two clips on a track overlap', () => {
@@ -525,7 +587,7 @@ test('no plan makes two clips on a track overlap', () => {
     planMove(m, { ids: ['c'], deltaMs: -5000, pointerMs: 1000, mode: 'insert' }),
     planMove(m, { ids: ['a'], deltaMs: 4000, pointerMs: 5000, to: new Map([['a', 1]]), mode: 'insert' }),
     planRippleTrim(m, ['b'], 'end', 3000),
-    planEdges(m, rollMoves(m, 'a', 'b', true), 2000),
+    planEdges(m, [{ id: 'b', kind: 'end' }, { id: 'c', kind: 'start' }], 2000),
     planSpeed(m, ['d'], 0.25, { ripple: true }),
   ];
   for (const plan of plans) apart(after(m, plan!));
