@@ -1208,6 +1208,25 @@ export const Timeline = React.memo(function Timeline({
       would lay the page out again when a render has just changed it). */
   const laidPxRef = React.useRef(pxPerMs);
   const scrollLeftRef = React.useRef(0);
+  /**
+   * Clip labels kept at the view's left edge, so a clip wider than the view still says what it is. Only the labels of
+   * clips that edge runs through are moved, each by its own transform: a scroll restyles a handful of labels, where a
+   * CSS variable on the scroller had every clip's style worked out again on each step.
+   */
+  const pinnedRef = React.useRef(new Set<HTMLElement>());
+  const pinLabels = React.useCallback((scrollLeft: number) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const next = new Set<HTMLElement>();
+    for (const label of el.querySelectorAll<HTMLElement>('[data-pin]')) {
+      const shift = Math.max(0, Math.min(scrollLeft - Number(label.dataset.pin), Number(label.dataset.pinMax)));
+      if (!(shift > 0)) continue;
+      label.style.transform = `translateX(${shift}px)`;
+      next.add(label);
+    }
+    for (const label of pinnedRef.current) if (!next.has(label)) label.style.transform = '';
+    pinnedRef.current = next;
+  }, []);
   /** The canvas's width at a density (set once the canvas is worked out, below): the view never goes past its end. */
   const canvasPxAtRef = React.useRef<(px: number) => number>(() => 0);
   /** Something is in hand (a clip, the playhead, a marquee…): it is placed from the layout (set below). */
@@ -1338,9 +1357,10 @@ export const Timeline = React.memo(function Timeline({
       const before = previewRef.current;
       if (before && left !== want) previewRef.current = { ...before, offset: before.offset - (left - want) };
       if (rulerRef.current) rulerRef.current.scrollLeft = left;
-      el.style.setProperty('--tl-scroll-left', `${left}px`);
       if (left !== view.left) setView((cur) => ({ ...cur, left }));
     }
+    /* clips moved, or were drawn again: their labels pinned where the view is now */
+    pinLabels(scrollLeftRef.current);
     const p = previewRef.current;
     if (p && p.px !== pxPerMs && pxPerMs > 0) previewRef.current = { ...rebaseZoomPreview(p, p.px, pxPerMs), px: pxPerMs };
     laidPxRef.current = pxPerMs;
@@ -1383,10 +1403,10 @@ export const Timeline = React.memo(function Timeline({
     if (p) previewRef.current = { ...p, offset: p.offset - (left - scrollLeftRef.current) };
     scrollLeftRef.current = left;
     if (rulerRef.current) rulerRef.current.scrollLeft = left;
-    el.style.setProperty('--tl-scroll-left', `${left}px`);
+    pinLabels(left);
     if (p) drawZoom();
     setView((cur) => (cur.left === left ? cur : { ...cur, left }));
-  }, [drawZoom]);
+  }, [drawZoom, pinLabels]);
 
   /*
    * Where the browser has scroll timelines, the heads and the rows' backgrounds follow the vertical scroll on the
@@ -2945,14 +2965,9 @@ export const Timeline = React.memo(function Timeline({
                   className="pointer-events-none absolute inset-x-0 top-0 flex items-center overflow-hidden px-1.5"
                   style={{ height: INFO_H, background: 'rgba(0,0,0,0.3)' }}
                 >
-                  {/* pinned to the left of the view so a clip wider than the screen still says what it is; the scroll
-                      position comes from a CSS variable (set in onScroll), not React, so scrolling rebuilds nothing */}
-                  <span
-                    className="flex min-w-0 items-center gap-1"
-                    style={{
-                      transform: `translateX(clamp(0px, calc(var(--tl-scroll-left, 0px) - ${left}px), ${width - 48}px))`,
-                    }}
-                  >
+                  {/* pinned to the left of the view so a clip wider than the screen still says what it is (pinLabels,
+                      on scroll: scrolling rebuilds nothing) */}
+                  <span className="flex min-w-0 items-center gap-1" data-pin={left} data-pin-max={width - 48}>
                     {/* a voice says so before its name: it is what the subtitles are made from */}
                     {block.kind === 'voice' ? <Mic className="h-2.5 w-2.5 shrink-0 text-white/90" aria-hidden /> : null}
                     <span className="min-w-0 truncate text-[10px] font-medium leading-none text-white/95">
