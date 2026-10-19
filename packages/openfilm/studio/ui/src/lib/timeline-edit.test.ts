@@ -208,6 +208,35 @@ test('a clip moved away leaves its time open; nothing else moves', () => {
   assert.deepEqual(after(m, plan), [[['t1', 0, 1], ['b', 2, 4]], [['a', 0, 2], ['c', 4, 6]]]);
 });
 
+test('a clip put down on a taken spot goes to a new track right above it; nothing there is cut', () => {
+  const m = model([['img', 0, 1], ['x', 5, 6]], [['v', 0, 10]]);
+  const plan = planMove(m, { ids: ['img'], deltaMs: 3000, pointerMs: 3500, to: new Map([['img', 1]]), mode: 'place' })!;
+  assert.deepEqual(after(m, plan), [[['x', 5, 6]], [['img', 3, 4]], [['v', 0, 10]]]);
+  assert.deepEqual(plan.placed.get('img'), { startMs: 3000, endMs: 4000, track: { insert: 1 } });
+});
+
+test('a clip put down where the time is free lands on that track', () => {
+  const m = model([['img', 0, 1], ['x', 5, 6]], [['v', 0, 2]]);
+  const plan = planMove(m, { ids: ['img'], deltaMs: 3000, pointerMs: 3500, to: new Map([['img', 1]]), mode: 'place' })!;
+  assert.deepEqual(after(m, plan), [[['x', 5, 6]], [['v', 0, 2], ['img', 3, 4]]]);
+  /* touching a neighbor is not taking its time */
+  const flush = model([['a', 0, 1], ['b', 3, 4]]);
+  assert.deepEqual(after(flush, planMove(flush, { ids: ['a'], deltaMs: 2000, pointerMs: 2500, mode: 'place' })!), [[['a', 2, 3], ['b', 3, 4]]]);
+});
+
+test('a clip put down over its neighbor on its own track goes to a new track above', () => {
+  const m = model([['a', 0, 2], ['b', 2, 4]]);
+  const plan = planMove(m, { ids: ['a'], deltaMs: 1000, pointerMs: 2000, mode: 'place' })!;
+  assert.deepEqual(after(m, plan), [[['a', 1, 3]], [['b', 2, 4]]]);
+});
+
+test('clips put down together: only those whose spot is taken open a track', () => {
+  /* a picture and its sound: the picture lands on x, the sound in free time */
+  const m = model([['v', 0, 2, { link: 'v' }], ['x', 5, 9]], [['s', 0, 2, { link: 'v' }], ['y', 10, 12]]);
+  const plan = planMove(m, { ids: ['v', 's'], deltaMs: 4000, pointerMs: 5000, mode: 'place' })!;
+  assert.deepEqual(after(m, plan), [[['v', 4, 6]], [['x', 5, 9]], [['s', 4, 6], ['y', 10, 12]]]);
+});
+
 /* ── insert and overwrite ── */
 
 test('an insert goes before or after the clip under the hand, in a gap where it is put, past the end flush', () => {

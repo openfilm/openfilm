@@ -438,7 +438,7 @@ export function marqueeHits(
  * Which track a dragged clip lands on.
  *
  * A track has no kind (SPEC): any clip goes on any track. Onto a row it goes to that row's track, whatever is on it
- * there: the edit mode decides what happens to what it lands on (an insert pushes it on, an overwrite cuts it out).
+ * there: the edit mode decides what happens where it lands (put down, a taken spot opens a track; an insert pushes on).
  * Above or below every row it opens a new track there, the one gesture that does. Clips never swap.
  */
 export type TrackDrop =
@@ -463,11 +463,11 @@ export interface DropLane {
 }
 
 /**
- * How a move is put down: it covers what is there (an overwrite); with ⌥ held it goes in between and what follows
- * moves along, on every unlocked track (an insert).
+ * How a move is put down: where it is let go, never cutting what is there (a taken spot opens a track above it); with
+ * ⌥ held it goes in between and what follows moves along, on every unlocked track (an insert).
  */
-export function moveEditMode(alt: boolean): 'insert' | 'overwrite' {
-  return alt ? 'insert' : 'overwrite';
+export function moveEditMode(alt: boolean): 'insert' | 'place' {
+  return alt ? 'insert' : 'place';
 }
 
 export function rangeOverlaps(

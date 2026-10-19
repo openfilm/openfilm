@@ -630,6 +630,9 @@ export function planRoom(
 
 /* ── moving clips ── */
 
+/** How moved clips go down: `place` never touches what is there (a taken spot opens a track); see planMove. */
+export type MoveMode = EditMode | 'place';
+
 export interface MoveSpec {
   /** The clips in hand, the one grabbed first. */
   ids: readonly string[];
@@ -639,14 +642,16 @@ export interface MoveSpec {
   pointerMs: number;
   /** Clips going to another track (an index), or to a new one (`{ insert }`). The rest stay on theirs. */
   to?: ReadonlyMap<string, TrackDest>;
-  mode: EditMode;
+  mode: MoveMode;
 }
 
 /**
- * Clips moved. Overwrite: they land where they were let go and take that time off the tracks they land on; the time
- * they leave stays open. Insert: they are lifted out (the time they took closes, as a ripple delete) and go in at the
- * insert point of the track the grabbed one lands on, pushing what comes after on (as an insert). A new track takes
- * them as they are. Null when a track it would change is locked.
+ * Clips moved. Place: they land where they were let go; on a track where that time is taken they go instead to a new
+ * track opened right above it, so nothing there is cut or moved. Overwrite: they land where they were let go and take
+ * that time off the tracks they land on. Either way the time they leave stays open. Insert: they are lifted out (the
+ * time they took closes, as a ripple delete) and go in at the insert point of the track the grabbed one lands on,
+ * pushing what comes after on (as an insert). A new track takes them as they are. Null when a track it would change
+ * is locked.
  */
 export function planMove(model: EditModel, spec: MoveSpec): (EditPlan & { landMs: number }) | null {
   const d = draftOf(model);
@@ -698,11 +703,29 @@ export function planMove(model: EditModel, spec: MoveSpec): (EditPlan & { landMs
   }
 
   /* put them down */
-  for (const [id, c] of lifted) {
+  for (const c of lifted.values()) {
     const startMs = landMs + offset(c);
     c.endMs = startMs + lenOf(c);
     c.startMs = startMs;
+  }
+  /* placing: a track where any of them would touch a clip left there takes none of them; a new track right above it
+     takes them all (they never overlap each other there: the group keeps its shape, one track per track) */
+  const taken = new Set<number>();
+  if (spec.mode === 'place') {
+    for (const [id, c] of lifted) {
+      const dest = destOf(id);
+      if (typeof dest !== 'number') continue;
+      const clips = trackAt(d, dest)?.clips ?? [];
+      if (clips.some((x) => x.endMs > c.startMs + TOUCH_MS && x.startMs < c.endMs - TOUCH_MS)) taken.add(dest);
+    }
+  }
+  for (const [id, c] of lifted) {
     const dest = destOf(id);
+    if (typeof dest === 'number' && taken.has(dest)) {
+      d.opened.set(id, dest);
+      openTrack(d, dest, `over-${dest}`).clips.push(c);
+      continue;
+    }
     if (typeof dest === 'object') {
       /* a new track for each track the clips came from: a group keeps its rows */
       d.opened.set(id, dest.insert);

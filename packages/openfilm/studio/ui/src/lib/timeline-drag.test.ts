@@ -181,7 +181,7 @@ test('a press becomes a drag past the threshold: a click on a cut (a few px of j
   assert.equal(dragLifted('slip', 4, 0), false);
 });
 
-test('a move covers what is there; with ⌥ it goes in between', () => {
-  assert.equal(moveEditMode(false), 'overwrite');
+test('a move is put down without cutting what is there; with ⌥ it goes in between', () => {
+  assert.equal(moveEditMode(false), 'place');
   assert.equal(moveEditMode(true), 'insert');
 });

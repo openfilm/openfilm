@@ -43,9 +43,9 @@ import {
   planMove,
   rollMoves,
   sourceLeftMs,
-  type EditMode,
   type EditModel,
   type EditPlan,
+  type MoveMode,
   type TrackDest,
 } from '@/lib/timeline-edit';
 import { planCopies } from '@/lib/timeline-clipboard';
@@ -121,8 +121,10 @@ export interface DragPreview {
   /** Released: this only holds the clips' places until the write lands (and only while the old layout is shown). */
   landed: boolean;
   mode: GestureMode;
-  /** A move: whether it inserts (pushing what follows) or overwrites (cutting what it lands on). */
-  editMode: EditMode;
+  /** A move: put down (a taken spot opens a track) or inserted (pushing what follows on). */
+  editMode: MoveMode;
+  /** Clips in hand the move puts on a new track because their spot is taken: block id → the track's film.html place. */
+  opens: ReadonlyMap<string, number>;
   /** An insert onto a track: where it goes in (a line is drawn there). */
   insertAtMs: number | null;
   /** Where the clips the edit pushes, trims or cuts are drawn meanwhile, by block id; null: it goes. */
@@ -150,6 +152,20 @@ export interface BlockDrag {
 /** Whether the pointer is over the panel of the app around Studio (lib/host.ts `panel`). */
 function overHostPanel(ev: PointerEvent): boolean {
   return Boolean(document.elementFromPoint(ev.clientX, ev.clientY)?.closest('[data-studio-host-panel]'));
+}
+
+/** The clips in hand a plan puts on a new track: block id → the track's film.html place. */
+function opensOf(
+  plan: EditPlan | null,
+  blockOfClip: ReadonlyMap<string, TimelineBlock>,
+  inHand: ReadonlySet<string>,
+): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const [clipId, at] of plan?.placed ?? []) {
+    const b = blockOfClip.get(clipId);
+    if (b && inHand.has(b.id) && at && typeof at.track === 'object') out.set(b.id, at.track.insert);
+  }
+  return out;
 }
 
 /** The history label of a gesture, naming the clip (see OperationHistory's stepText). */
@@ -325,7 +341,7 @@ export function useBlockDrag(opts: {
       const base = {
         id: block.id, moves: [] as BlockMove[], landMoves: [] as BlockMove[], offsetY: 0, hoverLane: homeLaneIndex,
         band: 'body' as DropBand, drop: { action: 'stay' } as TrackDrop, laneDelta: 0, trackMoves: [], droppable: true,
-        landed: false, mode, editMode: 'overwrite' as EditMode, insertAtMs: null,
+        landed: false, mode, editMode: 'place' as MoveMode, opens: new Map<string, number>(), insertAtMs: null,
       };
 
       if (mode !== 'move') {
@@ -400,15 +416,15 @@ export function useBlockDrag(opts: {
       const drop = grouped ? { action: 'stay' as const } : moveDestFor(homeLane?.docIndex, singleLanes, hit.lane);
       /*
        * Looks flush: make it flush. The nearest snap target is often the playhead a few ms off a neighbor's edge —
-       * under a pixel on screen, but an overwrite would cut those ms off the neighbor (flushShiftMs). Only with
-       * snapping on, for one clip, overwriting.
+       * under a pixel on screen, but those ms would put it on a new track (flushShiftMs). Only with snapping on, for
+       * one clip, put down.
        */
       const destLane = drop.action === 'move' ? singleLanes.find((l) => l.docIndex === drop.trackIndex) : singleLanes[homeLaneIndex];
       const flush = !grouped && snapping && drop.action !== 'insert'
         ? flushShiftMs({ startMs: out.startMs, endMs: out.endMs }, destLane?.occupied ?? [], SNAP_THRESHOLD_PX / pxPerMs)
         : null;
-      const editMode: EditMode = moveEditMode(altNow);
-      const settle = editMode === 'overwrite' ? flush : null;
+      const editMode: MoveMode = moveEditMode(altNow);
+      const settle = editMode === 'place' ? flush : null;
       const to = new Map<string, TrackDest>();
       if (drop.action === 'move') to.set(block.clipId!, drop.trackIndex);
       if (drop.action === 'insert') to.set(block.clipId!, { insert: drop.at });
@@ -433,7 +449,7 @@ export function useBlockDrag(opts: {
         startMs: geom.startMs + deltaMs,
         endMs: geom.endMs + deltaMs,
         /* a push into contact counts as a snap too: the guide shows it landed against the neighbor */
-        snappedTo: plan && editMode === 'overwrite' ? (settle ? { ms: settle.edgeMs, kind: 'edge' as const } : out.snappedTo) : null,
+        snappedTo: plan && editMode === 'place' ? (settle ? { ms: settle.edgeMs, kind: 'edge' as const } : out.snappedTo) : null,
         moves: crowd.map((b) => ({ id: b.id, startMs: b.startMs + deltaMs, endMs: b.endMs + deltaMs })),
         landStartMs,
         landEndMs: landStartMs + (geom.endMs - geom.startMs),
@@ -450,6 +466,7 @@ export function useBlockDrag(opts: {
         trackMoves: shift.ok ? shift.moves : [],
         droppable: Boolean(plan),
         editMode,
+        opens: opensOf(plan, blockOfClip, inHand),
         insertAtMs: plan && editMode === 'insert' && drop.action !== 'insert' ? landStartMs : null,
         ghosts: plan ? ghostsOf(plan, inHand) : new Map(),
         tip: null,

@@ -3288,7 +3288,11 @@ export const Timeline = React.memo(function Timeline({
       const home = tracks.findIndex((tr) => tr.blocks.some((b) => b.id === id));
       const block = allBlocks.find((b) => b.id === id);
       if (!block || home < 0) continue;
-      const at = p.laneDelta
+      /* a spot that is taken: the new track the move opens above it */
+      const opens = p.opens.get(id);
+      const at = opens != null
+        ? moveLandingLane({ action: 'insert', at: opens }, tracks, home)
+        : p.laneDelta
         ? { laneIndex: home + p.laneDelta, newTrack: false }
         : moveLandingLane(id === p.id ? p.drop : { action: 'stay' }, tracks, home);
       /* the floating clip already sits at its own row and time: a slot there would just double it */
