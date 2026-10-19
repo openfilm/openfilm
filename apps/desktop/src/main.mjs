@@ -28,6 +28,7 @@ import { checkAgentProgram, closeEverySession, diagnoseAgent, listAgents, localA
 import { agentUsage, forgetAgentUsage } from './agent-usage.mjs';
 import { installOpenfilmCommand } from './openfilm-command.mjs';
 import { startUpdates } from './updates.mjs';
+import { stepAside } from './update-launch.mjs';
 import { ensureFfmpeg, ffmpegDir, ffmpegDownloadable, ffmpegIn, ffmpegOnPath } from './ffmpeg-runtime.mjs';
 import { PATH_SEP } from './environment.mjs';
 import { createTabs } from './tabs.mjs';
@@ -51,6 +52,10 @@ const log = (line) => { try { appendFileSync(join(LOGS, 'studio.log'), line); } 
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
+} else if (mac && app.isPackaged && stepAside({ dir: DATA, version: app.getVersion(), bundleId: IDENTITY.bundleId, execPath: process.execPath, argv: process.argv })) {
+  /* opened while the update quitting started is being installed: running now would stop it, so the new version opens
+     when it is done (update-launch.mjs) */
+  app.exit(0);
 } else {
   app.on('second-instance', () => focusWindow());
   app.whenReady().then(start).catch((error) => {
@@ -348,6 +353,36 @@ async function runStudio(env) {
 }
 
 async function start() {
+  /* updates (updates.mjs): Restart waits while an agent's turn runs or Studio exports, either would be lost */
+  updates = startUpdates({
+    dataDir: DATA,
+    productName: PRODUCT_NAME,
+    getWindow: () => win,
+    onState: (next) => broadcast('desktop:update', next),
+    prepareRestart: async () => {
+      if (localAgents?.isBusy()) return { ok: false, error: 'agent-busy' };
+      /* Studio's quit-when-idle answers 409 while it exports; otherwise the window's Studio stays (studio-process.mjs
+         `stays`, 423), and is stopped in beforeInstall. No answer: no Studio, no export to lose. */
+      const res = studio && await fetch(`${studio.origin}/api/quit`, {
+        method: 'POST', headers: { 'x-studio-key': studio.key, 'content-type': 'application/json' },
+        body: JSON.stringify({ whenIdle: true }), signal: AbortSignal.timeout(3000),
+      }).catch(() => null);
+      return res?.status === 409 ? { ok: false, error: 'exporting' } : { ok: true };
+    },
+    /* what before-quit would do, done first (`quitting`), so the quit Squirrel starts is not held up or cancelled */
+    beforeInstall: async () => {
+      quitting = true;
+      localAgents?.closeAll();
+      closeEverySession();
+      for (const v of views.values()) v.webContents.on('will-prevent-unload', (event) => event.preventDefault());
+      await studio?.quit();
+      updates?.close();
+    },
+  });
+  /* an update quitting did not install is installed now, before anything else opens (update-launch.mjs) */
+  const launch = await updates.installAtLaunch({ language: state.language });
+  if (launch.installing) return;
+
   const shellEnv = await loginShellEnvironment();
   const env = childEnvironment({
     shell: shellEnv,
@@ -393,6 +428,7 @@ async function start() {
     ...(windows ? { titleBarStyle: 'hidden', titleBarOverlay: overlayColours(theme), autoHideMenuBar: true, icon: here('../build/icon.png') } : {}),
   });
   if (state.maximized) win.maximize();
+  launch.dismiss();
 
   win.on('resize', layout);
   win.on('resized', saveState);
@@ -403,6 +439,12 @@ async function start() {
   win.on('closed', () => { win = null; views.clear(); app.quit(); });
 
   ipcMain.on('desktop:theme', (event, next) => { if (fromPage(event)) setTheme(next); });
+  /* the page's language, kept for what the app shows before a page is up (the update installed at launch) */
+  ipcMain.on('desktop:language', (event, next) => {
+    if (!fromPage(event) || typeof next !== 'string' || next === state.language) return;
+    state = { ...state, language: next.slice(0, 20) };
+    try { writeWindowState(DATA, state); } catch { /* kept until next time */ }
+  });
   ipcMain.handle('desktop:hello', (event) => {
     if (!fromPage(event)) throw new Error('not the window\'s page');
     return { flavor: FLAVOR, version: app.getVersion(), ffmpeg: ffmpegFound, update: updates?.snapshot() ?? null, chatOpen: state.chatOpen, chatWidth: state.chatWidth, chatMin: CHAT_MIN, studioMin: STUDIO_MIN, fullScreen: Boolean(win?.isFullScreen()) };
@@ -549,32 +591,6 @@ async function start() {
     return image && !image.isEmpty() ? image.toJPEG(88).toString('base64') : null;
   });
 
-  /* updates (updates.mjs): Restart waits while an agent's turn runs or Studio exports, either would be lost */
-  updates = startUpdates({
-    dataDir: DATA,
-    productName: PRODUCT_NAME,
-    getWindow: () => win,
-    onState: (next) => broadcast('desktop:update', next),
-    prepareRestart: async () => {
-      if (localAgents?.isBusy()) return { ok: false, error: 'agent-busy' };
-      /* Studio's quit-when-idle answers 409 while it exports; otherwise the window's Studio stays (studio-process.mjs
-         `stays`, 423), and is stopped in beforeInstall. No answer: no Studio, no export to lose. */
-      const res = studio && await fetch(`${studio.origin}/api/quit`, {
-        method: 'POST', headers: { 'x-studio-key': studio.key, 'content-type': 'application/json' },
-        body: JSON.stringify({ whenIdle: true }), signal: AbortSignal.timeout(3000),
-      }).catch(() => null);
-      return res?.status === 409 ? { ok: false, error: 'exporting' } : { ok: true };
-    },
-    /* what before-quit would do, done first (`quitting`), so the quit Squirrel starts is not held up or cancelled */
-    beforeInstall: async () => {
-      quitting = true;
-      localAgents?.closeAll();
-      closeEverySession();
-      for (const v of views.values()) v.webContents.on('will-prevent-unload', (event) => event.preventDefault());
-      await studio?.quit();
-      updates?.close();
-    },
-  });
   ipcMain.handle('desktop:update-restart', (event) => (fromPage(event) ? updates?.restart() : { ok: false }));
   /* Settings → About: the state now, and a check that answers with the state it ends in (no dialog) */
   ipcMain.handle('desktop:update-state', (event) => (fromPage(event) ? updates?.snapshot() ?? null : null));

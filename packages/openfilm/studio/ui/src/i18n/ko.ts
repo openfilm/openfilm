@@ -50,7 +50,7 @@ export const ko: Words = {
   /* the app's update, ready to install (Studio's top bar, in an app that has updates: lib/host.ts `update`) */
   update: {
     restart: '재시작하여 업데이트',
-    ready: 'OpenFilm {version} 준비가 끝났습니다. 지금 재시작하면 설치되고, 아니면 다음에 종료할 때 설치됩니다.',
+    ready: 'OpenFilm {version} 준비가 끝났습니다. 지금 재시작해 업데이트하거나, 종료할 때 자동으로 설치되어 다음에 열면 새 버전이 됩니다.',
     agentBusy: '에이전트가 아직 작업 중입니다. 끝난 뒤 재시작하세요.',
     exporting: '내보내는 중입니다. 끝난 뒤 재시작하세요.',
     installFailed: 'OpenFilm {version}을(를) 설치하지 못했습니다. OpenFilm을 종료했다가 다시 열면 설치됩니다.',

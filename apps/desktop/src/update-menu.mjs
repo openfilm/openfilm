@@ -25,7 +25,7 @@ export function createManualUpdateCheck({ controller, showMessage, focusWindow, 
         focusWindow();
         const { response } = await say({
           type: 'info', message: `${productName} ${next} is ready`,
-          detail: 'Restart now to install it, or it installs the next time you quit.',
+          detail: 'Restart now to update, or it installs when you quit and opens as the new version next time.',
           buttons: ['Restart', 'Later'], defaultId: 0, cancelId: 1,
         });
         if (response !== 0) return;

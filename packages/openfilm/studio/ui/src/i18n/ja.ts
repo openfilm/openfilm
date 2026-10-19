@@ -50,7 +50,7 @@ export const ja: Words = {
   /* the app's update, ready to install (Studio's top bar, in an app that has updates: lib/host.ts `update`) */
   update: {
     restart: '再起動してアップデート',
-    ready: 'OpenFilm {version} の準備ができました。今すぐ再起動してインストールするか、次に終了するときに自動でインストールされます。',
+    ready: 'OpenFilm {version} の準備ができました。今すぐ再起動して更新するか、終了時に自動でインストールされ、次に開くと新しいバージョンになります。',
     agentBusy: 'エージェントがまだ作業中です。終わってから再起動してください。',
     exporting: '書き出し中です。終わってから再起動してください。',
     installFailed: 'OpenFilm {version} をインストールできませんでした。OpenFilm を終了してもう一度開くとインストールされます。',

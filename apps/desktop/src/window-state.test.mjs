@@ -7,12 +7,12 @@ import { CHAT_DEFAULT, CHAT_MIN, placeOnDisplays, readWindowState, writeWindowSt
 
 test('a first launch has the defaults; a saved state comes back; odd values are made sensible', () => {
   const dir = mkdtempSync(join(tmpdir(), 'of-window-'));
-  assert.deepEqual(readWindowState(dir), { bounds: null, maximized: false, chatWidth: CHAT_DEFAULT, chatOpen: true, tabs: null });
+  assert.deepEqual(readWindowState(dir), { bounds: null, maximized: false, chatWidth: CHAT_DEFAULT, chatOpen: true, tabs: null, language: null });
   const tabs = { tabs: [{ projectId: 'a', title: 'Launch' }, { projectId: null, title: '' }], active: 1 };
-  writeWindowState(dir, { bounds: { x: 10, y: 20, width: 1400, height: 900 }, maximized: false, chatWidth: 500, chatOpen: false, tabs });
-  assert.deepEqual(readWindowState(dir), { bounds: { x: 10, y: 20, width: 1400, height: 900 }, maximized: false, chatWidth: 500, chatOpen: false, tabs });
-  writeFileSync(join(dir, 'window.json'), JSON.stringify({ bounds: { x: 0, y: 0, width: 10, height: 'tall' }, chatWidth: 12, tabs: 'many' }));
-  assert.deepEqual(readWindowState(dir), { bounds: null, maximized: false, chatWidth: CHAT_MIN, chatOpen: true, tabs: null });
+  writeWindowState(dir, { bounds: { x: 10, y: 20, width: 1400, height: 900 }, maximized: false, chatWidth: 500, chatOpen: false, tabs, language: 'zh-CN' });
+  assert.deepEqual(readWindowState(dir), { bounds: { x: 10, y: 20, width: 1400, height: 900 }, maximized: false, chatWidth: 500, chatOpen: false, tabs, language: 'zh-CN' });
+  writeFileSync(join(dir, 'window.json'), JSON.stringify({ bounds: { x: 0, y: 0, width: 10, height: 'tall' }, chatWidth: 12, tabs: 'many', language: 7 }));
+  assert.deepEqual(readWindowState(dir), { bounds: null, maximized: false, chatWidth: CHAT_MIN, chatOpen: true, tabs: null, language: null });
 });
 
 test('a window off every display comes back centered, keeping its size', () => {

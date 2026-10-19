@@ -34,6 +34,7 @@ interface Native {
   prefs: { get(): Promise<AppPrefs>; set(next: Partial<AppPrefs>): Promise<unknown>; onChange(listener: Listener<AppPrefs>): Stop };
   saveLayout(layout: { chatOpen: boolean; chatWidth: number }): void;
   setTheme(theme: Theme): void;
+  setLanguage(language: string): void;
   onFullScreen(listener: Listener<boolean>): Stop;
   onToggleChat(listener: Listener<void>): Stop;
   onStudioBrowser(listener: Listener<unknown>): Stop;
@@ -126,6 +127,9 @@ new MutationObserver(() => {
 /* the window behind the page, and the system's menus and dialogs, take the same theme */
 native.setTheme(theme.get());
 theme.on((next) => native.setTheme(next));
+/* and the app keeps the language, for the window it shows before the page (an update installed at launch) */
+native.setLanguage(language.get());
+language.on((next) => native.setLanguage(next));
 
 /* ── the project Studio shows (its address, /projects/<id>) ── */
 const project = signal<Project | null>(null);

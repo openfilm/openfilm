@@ -119,6 +119,8 @@ contextBridge.exposeInMainWorld('openfilmNative', {
   saveLayout: (layout) => ipcRenderer.send('desktop:layout', { chatOpen: layout?.chatOpen === true, chatWidth: Number(layout?.chatWidth) }),
   /* the page's theme, for the window behind it and the system's menus and dialogs */
   setTheme: (theme) => ipcRenderer.send('desktop:theme', theme === 'dark' ? 'dark' : 'light'),
+  /* the page's language, for what the app shows before a page is up */
+  setLanguage: (language) => ipcRenderer.send('desktop:language', String(language)),
   onFullScreen: on('desktop:full-screen'),
   /* View → Chat in the app's menu */
   onToggleChat: on('desktop:toggle-chat'),

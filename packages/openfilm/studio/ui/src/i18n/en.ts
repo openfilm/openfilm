@@ -51,7 +51,7 @@ export const en = {
   /* the app's update, ready to install (Studio's top bar, in an app that has updates: lib/host.ts `update`) */
   update: {
     restart: 'Restart to update',
-    ready: 'OpenFilm {version} is ready. Restart to install it, or it installs the next time you quit.',
+    ready: 'OpenFilm {version} is ready. Restart to update now, or it installs when you quit and opens as the new version next time.',
     agentBusy: 'An agent is still working. Restart when it has finished.',
     exporting: 'An export is running. Restart when it has finished.',
     installFailed: 'OpenFilm {version} could not install. Quit OpenFilm and open it again to install it.',

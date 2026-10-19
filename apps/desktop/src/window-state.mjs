@@ -1,6 +1,6 @@
 /**
  * What the window looked like when it was last closed: where it was, how wide the chat was, whether it was shown,
- * which tabs were open.
+ * which tabs were open, which language its page was in.
  * Kept in the app's data folder. Reads no Electron module, so `node --test` can use it.
  */
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
@@ -28,6 +28,8 @@ export function readWindowState(dir) {
     chatOpen: raw.chatOpen !== false,
     /* the tabs as left (tabs.mjs reads them with care) */
     tabs: raw.tabs && typeof raw.tabs === 'object' && Array.isArray(raw.tabs.tabs) ? { tabs: raw.tabs.tabs.slice(0, 50), active: Number(raw.tabs.active) || 0 } : null,
+    /* the language Studio was last shown in, for what the app shows before a page is up */
+    language: typeof raw.language === 'string' && raw.language.length <= 20 ? raw.language : null,
   };
 }
 

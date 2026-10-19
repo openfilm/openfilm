@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>OpenFilm</title>
+<style>
+  :root { color-scheme: light dark; }
+  html, body { height: 100%; margin: 0; }
+  body { display: grid; place-items: center; background: #f2f2f2; color: #1f1f1f; font: 13px/1.5 -apple-system, system-ui, sans-serif; -webkit-app-region: drag; user-select: none; cursor: default; }
+  @media (prefers-color-scheme: dark) { body { background: #111; color: #dadada; } }
+  main { width: 100%; padding: 0 28px; box-sizing: border-box; }
+  h1 { font-size: 14px; font-weight: 600; margin: 0 0 4px; }
+  p { margin: 0 0 14px; opacity: .65; }
+  .bar { position: relative; height: 4px; border-radius: 2px; overflow: hidden; background: color-mix(in srgb, currentColor 12%, transparent); }
+  .bar::after { content: ''; position: absolute; inset: 0 auto 0 0; width: 35%; border-radius: 2px; background: #1a93fe; animation: slide 1.2s ease-in-out infinite; }
+  @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+  @media (prefers-reduced-motion: reduce) { .bar::after { animation-duration: 3.6s; } }
+</style>
+</head>
+<body>
+<!-- A launch that installs the update quitting did not (update-launch.mjs): what it is doing, until the app restarts -->
+<main>
+  <h1 id="title"></h1>
+  <p id="detail"></p>
+  <div class="bar" role="progressbar" aria-busy="true"></div>
+</main>
+<script>
+  const words = new URLSearchParams(location.search);
+  document.documentElement.lang = words.get('lang') || 'en';
+  document.getElementById('title').textContent = words.get('title') || '';
+  document.getElementById('detail').textContent = words.get('detail') || '';
+  document.querySelector('.bar').setAttribute('aria-label', words.get('title') || '');
+</script>
+</body>
+</html>
