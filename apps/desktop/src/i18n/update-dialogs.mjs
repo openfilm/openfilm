@@ -1,0 +1,86 @@
+/**
+ * What the dialogs of "Check for Updates…" say (update-menu.mjs), in each of Studio's languages. `errors` has one
+ * line for each code of the update controller's `error`; Studio's top bar has its own words (its i18n, `update`).
+ */
+export const UPDATE_DIALOG_WORDS = {
+  en: {
+    title: 'Check for Updates', ok: 'OK', restart: 'Restart', later: 'Later',
+    upToDate: '{name} is up to date', version: 'Version {version}', betaVersion: 'Version {version} (beta)',
+    ready: '{name} {version} is ready', readyDetail: 'Restart now to update, or it installs when you quit and opens as the new version next time.',
+    notRestarting: 'Not restarting yet',
+    downloading: 'Downloading {name} {version}', downloadingDetail: 'It downloads in the background: keep working. A Restart button appears at the top left when it is ready.',
+    failed: 'Could not check for updates', failedDetail: '{error} {name} also tries again by itself.',
+    errors: {
+      offline: 'Could not reach the update service. Check your connection and try again.',
+      unavailable: 'Updates are unavailable right now. Please try again later.',
+      failed: 'Could not complete the update. Please try again later.',
+      'agent-busy': 'An agent is still working. Restart when it has finished.',
+      exporting: 'An export is running. Restart when it has finished.',
+      'install-failed': 'Could not install the update. Quit {name} and open it again to install it.',
+    },
+  },
+  'zh-CN': {
+    title: '检查更新', ok: '好', restart: '重启', later: '稍后',
+    upToDate: '{name} 已是最新版本', version: '版本 {version}', betaVersion: '版本 {version}（Beta）',
+    ready: '{name} {version} 已准备好', readyDetail: '现在重启即可更新；或者退出时自动安装，下次打开就是新版本。',
+    notRestarting: '暂时不能重启',
+    downloading: '正在下载 {name} {version}', downloadingDetail: '更新在后台下载，可以继续工作。下载好后，左上角会出现“重启”按钮。',
+    failed: '无法检查更新', failedDetail: '{error}{name} 之后也会自动再试。',
+    errors: {
+      offline: '无法连接更新服务。请检查网络后再试。',
+      unavailable: '现在无法更新，请稍后再试。',
+      failed: '更新没有完成，请稍后再试。',
+      'agent-busy': '智能体还在工作，等它完成后再重启。',
+      exporting: '正在导出，导出完成后再重启。',
+      'install-failed': '无法安装更新。退出 {name} 后重新打开即可安装。',
+    },
+  },
+  ja: {
+    title: 'アップデートを確認', ok: 'OK', restart: '再起動', later: 'あとで',
+    upToDate: '{name} は最新です', version: 'バージョン {version}', betaVersion: 'バージョン {version}（ベータ）',
+    ready: '{name} {version} の準備ができました', readyDetail: '今すぐ再起動して更新するか、終了時に自動でインストールされ、次に開くと新しいバージョンになります。',
+    notRestarting: 'まだ再起動できません',
+    downloading: '{name} {version} をダウンロードしています', downloadingDetail: 'バックグラウンドでダウンロードしています。作業を続けてください。準備ができると左上に「再起動」ボタンが表示されます。',
+    failed: 'アップデートを確認できませんでした', failedDetail: '{error}{name} はあとで自動的にもう一度試します。',
+    errors: {
+      offline: 'アップデートサービスに接続できませんでした。接続を確認してもう一度お試しください。',
+      unavailable: '現在アップデートを利用できません。しばらくしてからもう一度お試しください。',
+      failed: 'アップデートを完了できませんでした。しばらくしてからもう一度お試しください。',
+      'agent-busy': 'エージェントがまだ作業中です。終わってから再起動してください。',
+      exporting: '書き出し中です。終わってから再起動してください。',
+      'install-failed': 'アップデートをインストールできませんでした。{name} を終了してもう一度開くとインストールされます。',
+    },
+  },
+  ko: {
+    title: '업데이트 확인', ok: '확인', restart: '재시작', later: '나중에',
+    upToDate: '{name}이(가) 최신 버전입니다', version: '버전 {version}', betaVersion: '버전 {version} (베타)',
+    ready: '{name} {version} 준비가 끝났습니다', readyDetail: '지금 재시작해 업데이트하거나, 종료할 때 자동으로 설치되어 다음에 열면 새 버전이 됩니다.',
+    notRestarting: '아직 재시작할 수 없습니다',
+    downloading: '{name} {version} 다운로드 중', downloadingDetail: '백그라운드에서 다운로드하고 있으니 계속 작업하세요. 준비가 끝나면 왼쪽 위에 재시작 버튼이 나타납니다.',
+    failed: '업데이트를 확인하지 못했습니다', failedDetail: '{error} {name}이(가) 나중에 자동으로 다시 시도합니다.',
+    errors: {
+      offline: '업데이트 서비스에 연결하지 못했습니다. 연결을 확인하고 다시 시도하세요.',
+      unavailable: '지금은 업데이트를 사용할 수 없습니다. 잠시 후 다시 시도하세요.',
+      failed: '업데이트를 완료하지 못했습니다. 잠시 후 다시 시도하세요.',
+      'agent-busy': '에이전트가 아직 작업 중입니다. 끝난 뒤 재시작하세요.',
+      exporting: '내보내는 중입니다. 끝난 뒤 재시작하세요.',
+      'install-failed': '업데이트를 설치하지 못했습니다. {name}을(를) 종료했다가 다시 열면 설치됩니다.',
+    },
+  },
+  es: {
+    title: 'Buscar actualizaciones', ok: 'Aceptar', restart: 'Reiniciar', later: 'Más tarde',
+    upToDate: '{name} está actualizado', version: 'Versión {version}', betaVersion: 'Versión {version} (beta)',
+    ready: '{name} {version} está listo', readyDetail: 'Reinicia para actualizar ahora, o se instalará al salir y la próxima vez se abrirá la nueva versión.',
+    notRestarting: 'Todavía no se reinicia',
+    downloading: 'Descargando {name} {version}', downloadingDetail: 'Se descarga en segundo plano: sigue trabajando. Cuando esté listo, aparecerá un botón Reiniciar arriba a la izquierda.',
+    failed: 'No se pudo buscar actualizaciones', failedDetail: '{error} {name} también lo volverá a intentar por sí solo.',
+    errors: {
+      offline: 'No se pudo conectar con el servicio de actualizaciones. Revisa tu conexión y vuelve a intentarlo.',
+      unavailable: 'Las actualizaciones no están disponibles ahora. Vuelve a intentarlo más tarde.',
+      failed: 'No se pudo completar la actualización. Vuelve a intentarlo más tarde.',
+      'agent-busy': 'Un agente sigue trabajando. Reinicia cuando termine.',
+      exporting: 'Hay una exportación en curso. Reinicia cuando termine.',
+      'install-failed': 'No se pudo instalar la actualización. Sal de {name} y vuelve a abrirlo para instalarlo.',
+    },
+  },
+};

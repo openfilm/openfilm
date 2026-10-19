@@ -104,23 +104,8 @@ export function readyToInstall({ controller, subscribe, ms = LAUNCH_INSTALL_MS }
 }
 
 
-/**
- * The install window's language: the one Studio was last shown in, else the system's as Studio picks it (its i18n
- * `languageFor`): `zh-Hans-CN` and `zh` are Simplified Chinese, `es-MX` is Spanish.
- */
-export function installLanguage(saved, system = []) {
-  if (saved && saved in WORDS) return saved;
-  for (const tag of system) {
-    const lower = String(tag).toLowerCase();
-    if (lower.startsWith('zh')) {
-      if (/^zh-(hant|tw|hk|mo)\b/.test(lower)) continue;
-      return 'zh-CN';
-    }
-    const base = lower.split('-')[0];
-    if (base in WORDS) return base;
-  }
-  return 'en';
-}
+/** The install window's language: the app's (i18n/language.mjs). */
+export { appLanguage as installLanguage } from './i18n/language.mjs';
 
 export function installWords(language, { name, version }) {
   const fill = (text) => text.replaceAll('{name}', name).replaceAll('{version}', version);

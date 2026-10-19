@@ -10,16 +10,6 @@
  *   agent-busy | exporting | install-failed   Restart was refused or did not work (the update stays ready)
  */
 
-/** What the menu's dialogs say for each code; Studio's top bar has its own words (its i18n, `update`). */
-export const UPDATE_ERRORS = {
-  offline: 'Could not reach the update service. Check your connection and try again.',
-  unavailable: 'Updates are unavailable right now. Please try again later.',
-  failed: 'Could not complete the update. Please try again later.',
-  'agent-busy': 'An agent is still working. Restart when it has finished.',
-  exporting: 'An export is running. Restart when it has finished.',
-  'install-failed': 'Could not install the update. Quit OpenFilm and open it again to install it.',
-};
-
 const NETWORK_CODES = ['ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'ERR_INTERNET_DISCONNECTED', 'ERR_NETWORK_CHANGED'];
 
 /** Which kind of failure an updater error is: the feed missing or the host busy, the network, or anything else. */

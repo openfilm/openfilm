@@ -1,90 +1,133 @@
-/** The menu bar. Studio's own shortcuts live in its page; these are the window's, its tabs' among them. */
-import { Menu } from 'electron';
-
-const mac = process.platform === 'darwin';
+/**
+ * The menu bar, in Studio's language. Studio's own shortcuts live in its page; these are the window's, its tabs' among
+ * them. No Electron here (main.mjs builds the menu), so a test can read the template.
+ */
+import { MENU_WORDS } from './i18n/menu.mjs';
 
 /**
+ * `language`: one of Studio's (i18n/language.mjs `appLanguage`); every item is named in it, Electron's role items too.
  * `updates`: the packaged app's (updates.mjs), for "Check for Updates…" (the app menu on macOS, Help on Windows) and
  * "Beta Updates" (builds before they go to everyone); null from source, which has none.
  * `tabs`: a new tab (its launcher), the one in front closed, the one closed last opened again, the next or previous,
  * the nth (9: the last).
- * @param {{ productName: string, packaged: boolean, toggleChat: () => void, openProject: () => void, reload: () => void,
- *           devTools: () => void,
+ * @param {{ productName: string, packaged: boolean, language?: string, platform?: string, toggleChat: () => void,
+ *           openProject: () => void, reload: () => void, devTools: () => void,
  *           tabs: { open: () => void, close: () => void, reopen: () => void, step: (by: number) => void, pick: (n: number) => void },
  *           updates?: { check: () => Promise<void>, beta: boolean, setBeta: (on: boolean) => void } | null }} actions
+ * @returns {Electron.MenuItemConstructorOptions[]}
  */
-export function applicationMenu({ productName, packaged, toggleChat, openProject, reload, devTools, tabs, updates = null }) {
+export function menuTemplate({ productName, packaged, language = 'en', platform = process.platform, toggleChat, openProject, reload, devTools, tabs, updates = null }) {
+  const mac = platform === 'darwin';
+  const words = MENU_WORDS[language] ?? MENU_WORDS.en;
+  /** @param {keyof typeof MENU_WORDS.en} key */
+  const say = (key) => words[key].replaceAll('{name}', productName);
   /** @type {Electron.MenuItemConstructorOptions[]} */
   const updateItems = updates ? [
     {
-      label: 'Check for Updates…',
+      label: say('checkForUpdates'),
       /* off while its dialog is up, so a second click does not queue another */
       click: async (item) => {
         item.enabled = false;
         try { await updates.check(); } finally { item.enabled = true; }
       },
     },
-    { label: 'Beta Updates', type: 'checkbox', checked: updates.beta, click: (item) => updates.setBeta(item.checked) },
+    { label: say('betaUpdates'), type: 'checkbox', checked: updates.beta, click: (item) => updates.setBeta(item.checked) },
   ] : [];
+  /** @type {Electron.MenuItemConstructorOptions[]} */
+  const editItems = [
+    { role: 'undo', label: say('undo') },
+    { role: 'redo', label: say('redo') },
+    { type: 'separator' },
+    { role: 'cut', label: say('cut') },
+    { role: 'copy', label: say('copy') },
+    { role: 'paste', label: say('paste') },
+    ...(mac ? /** @type {Electron.MenuItemConstructorOptions[]} */ ([
+      { role: 'pasteAndMatchStyle', label: say('pasteAndMatchStyle') },
+      { role: 'delete', label: say('delete') },
+      { role: 'selectAll', label: say('selectAll') },
+      { type: 'separator' },
+      {
+        label: say('substitutions'),
+        submenu: [
+          { role: 'showSubstitutions', label: say('showSubstitutions') },
+          { type: 'separator' },
+          { role: 'toggleSmartQuotes', label: say('smartQuotes') },
+          { role: 'toggleSmartDashes', label: say('smartDashes') },
+          { role: 'toggleTextReplacement', label: say('textReplacement') },
+        ],
+      },
+      {
+        label: say('speech'),
+        submenu: [
+          { role: 'startSpeaking', label: say('startSpeaking') },
+          { role: 'stopSpeaking', label: say('stopSpeaking') },
+        ],
+      },
+    ]) : [
+      { role: 'delete', label: say('delete') },
+      { type: 'separator' },
+      { role: 'selectAll', label: say('selectAll') },
+    ]),
+  ];
   /** @type {Electron.MenuItemConstructorOptions[]} */
   const template = [
     ...(mac ? [{
       label: productName,
       submenu: [
-        { role: 'about' },
+        { role: 'about', label: say('about') },
         ...updateItems,
         { type: 'separator' },
-        { role: 'services' },
+        { role: 'services', label: say('services') },
         { type: 'separator' },
-        { role: 'hide' },
-        { role: 'hideOthers' },
-        { role: 'unhide' },
+        { role: 'hide', label: say('hide') },
+        { role: 'hideOthers', label: say('hideOthers') },
+        { role: 'unhide', label: say('showAll') },
         { type: 'separator' },
-        { role: 'quit' },
+        { role: 'quit', label: say('quit') },
       ],
     }] : []),
     {
-      label: 'File',
+      label: say('file'),
       submenu: [
-        { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: () => tabs.open() },
-        { label: 'Open Project…', accelerator: 'CmdOrCtrl+O', click: openProject },
+        { label: say('newTab'), accelerator: 'CmdOrCtrl+T', click: () => tabs.open() },
+        { label: say('openProject'), accelerator: 'CmdOrCtrl+O', click: openProject },
         { type: 'separator' },
-        { label: 'Close Tab', accelerator: 'CmdOrCtrl+W', click: () => tabs.close() },
-        { label: 'Reopen Closed Tab', accelerator: 'CmdOrCtrl+Shift+T', click: () => tabs.reopen() },
+        { label: say('closeTab'), accelerator: 'CmdOrCtrl+W', click: () => tabs.close() },
+        { label: say('reopenClosedTab'), accelerator: 'CmdOrCtrl+Shift+T', click: () => tabs.reopen() },
       ],
     },
-    { role: 'editMenu' },
+    { label: say('edit'), submenu: editItems },
     {
-      label: 'View',
+      label: say('view'),
       submenu: [
-        { label: 'Show Chat', type: 'normal', accelerator: 'CmdOrCtrl+Shift+L', click: toggleChat },
+        { label: say('showChat'), type: 'normal', accelerator: 'CmdOrCtrl+Shift+L', click: toggleChat },
         { type: 'separator' },
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
+        { role: 'resetZoom', label: say('actualSize') },
+        { role: 'zoomIn', label: say('zoomIn') },
+        { role: 'zoomOut', label: say('zoomOut') },
         { type: 'separator' },
-        { role: 'togglefullscreen' },
+        { role: 'togglefullscreen', label: say('toggleFullScreen') },
         ...(packaged ? [] : [
           { type: 'separator' },
-          { label: 'Reload', accelerator: 'CmdOrCtrl+Shift+R', click: reload },
-          { label: 'Developer Tools', accelerator: 'Alt+CmdOrCtrl+I', click: () => devTools() },
+          { label: say('reload'), accelerator: 'CmdOrCtrl+Shift+R', click: reload },
+          { label: say('developerTools'), accelerator: 'Alt+CmdOrCtrl+I', click: () => devTools() },
         ]),
       ],
     },
     {
-      label: 'Window',
+      label: say('window'),
       submenu: [
-        { role: 'minimize' },
-        { role: 'zoom' },
+        { role: 'minimize', label: say('minimize') },
+        { role: 'zoom', label: say('zoom') },
         { type: 'separator' },
-        { label: 'Show Next Tab', accelerator: 'Control+Tab', click: () => tabs.step(1) },
-        { label: 'Show Previous Tab', accelerator: 'Control+Shift+Tab', click: () => tabs.step(-1) },
-        /* ⌘1–⌘9, as in a browser: each a tab, 9 the last */
+        { label: say('showNextTab'), accelerator: 'Control+Tab', click: () => tabs.step(1) },
+        { label: say('showPreviousTab'), accelerator: 'Control+Shift+Tab', click: () => tabs.step(-1) },
+        /* ⌘1–⌘9, as in a browser: each a tab, 9 the last (hidden, so never read) */
         ...Array.from({ length: 9 }, (_, i) => ({ label: `Tab ${i + 1}`, accelerator: `CmdOrCtrl+${i + 1}`, visible: false, acceleratorWorksWhenHidden: true, click: () => tabs.pick(i + 1) })),
-        ...(mac ? [{ type: 'separator' }, { role: 'front' }] : []),
+        ...(mac ? [{ type: 'separator' }, { role: 'front', label: say('bringAllToFront') }] : []),
       ],
     },
-    ...(!mac && updateItems.length ? [{ role: 'help', submenu: updateItems }] : []),
+    ...(!mac && updateItems.length ? [{ role: 'help', label: say('help'), submenu: updateItems }] : []),
   ];
-  return Menu.buildFromTemplate(template);
+  return template;
 }
