@@ -120,7 +120,10 @@ test('a film\'s closure: its clips, what its pages load, subtitles beside its me
 });
 
 test('a clip\'s file is the film\'s whatever its name holds: quotes, #, ?, %', async () => {
-  const names = ["assets/it's \"1\".png", 'assets/a#b?.mp4', 'assets/100%.mp3', 'assets/{x}|^`.png'];
+  /* Windows takes no " ? | in a file name */
+  const names = process.platform === 'win32'
+    ? ["assets/it's 1.png", 'assets/a#b.mp4', 'assets/100%.mp3', 'assets/{x}^`.png']
+    : ["assets/it's \"1\".png", 'assets/a#b?.mp4', 'assets/100%.mp3', 'assets/{x}|^`.png'];
   const root = folder({
     'film.html': filmHtml({ stage: { w: 640, h: 360 }, tracks: [{ clips: names.map((src, i) => ({ id: `c${i}`, src, at: i, ...(/\.png$/.test(src) ? { time: [0, 1] } : {}) })) }] }),
     ...Object.fromEntries(names.map((n) => [n, 'x'])),

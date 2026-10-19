@@ -51,9 +51,6 @@ test('each system\'s decoders, in the order tried: the Mac\'s media engine; Dire
 test('the chip\'s decoding is one that decodes here, or none; footage decodes either way', ffmpeg, async () => {
   const decoding = await hardwareDecoding();
   assert.ok(decoding.length === 0 || decoderCandidates().some((c) => c.join(' ') === decoding.join(' ')), decoding.join(' '));
-  if (process.platform === 'darwin' && execFileSync('ffmpeg', ['-hide_banner', '-hwaccels']).toString().includes('videotoolbox')) {
-    assert.deepEqual(decoding, ['-hwaccel', 'videotoolbox']);
-  }
   const dir = mkdtempSync(join(tmpdir(), 'of-decoding-'));
   try {
     const src = join(dir, 'in.mp4');

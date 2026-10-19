@@ -70,8 +70,9 @@ test('a render runs below the person\'s own apps, with every process it starts',
     writeFileSync(join(dir, '.film', 'opened'), '');
     const child = spawn(process.execPath, [fileURLToPath(new URL('../bin/openfilm.mjs', import.meta.url)), 'render', '0-3', '--workers', '1', '--out', join(dir, 'out.mp4')], { cwd: dir, stdio: 'ignore' });
     const ended = new Promise((done) => child.on('exit', done));
-    let priority = 0;
-    for (const end = Date.now() + 20_000; priority === 0 && child.exitCode == null && Date.now() < end;) {
+    /* read until it is lowered: the process may start at another nice value (a CI runner's is not 0) */
+    let priority = null;
+    for (const end = Date.now() + 20_000; priority !== 10 && child.exitCode == null && Date.now() < end;) {
       try { priority = getPriority(/** @type {number} */ (child.pid)); } catch { break; }
       await new Promise((r) => setTimeout(r, 50));
     }
