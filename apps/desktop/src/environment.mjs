@@ -12,7 +12,7 @@
  * runs, so an agent installed meanwhile is found without restarting it. Reads no Electron module, so `node --test`
  * can use it.
  */
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { homedir, userInfo } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 
@@ -206,13 +206,27 @@ export function environmentCache(read, { forMs, fallback, now = Date.now }) {
   };
 }
 
+/**
+ * The registry's variables as a program started now has them: the person's over the system's, each `%NAME%` expanded
+ * (ComSpec is stored as %SystemRoot%\system32\cmd.exe), and PATH from windowsFreshPath in place of either Path.
+ */
+export function registryVariables({ machine = {}, user = {}, source = process.env } = {}) {
+  const raw = { ...machine, ...user };
+  const vars = { ...source, ...raw };
+  const env = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (key.toLowerCase() !== 'path') env[key] = expandWindowsVars(expandWindowsVars(value, vars), vars);
+  }
+  env.PATH = windowsFreshPath({ machine, user, source });
+  return env;
+}
+
 /** The registry's environment (Windows): null when neither part of it could be read. */
 async function readRegistry(source, timeoutMs) {
   const [machine, user] = await Promise.all([regQuery(REG_MACHINE, timeoutMs), regQuery(REG_USER, timeoutMs)]);
   if (!machine && !user) return null;
   pathSource = 'registry';
-  /* the person's own variables as they are now, over the system's */
-  return shellVariables({ ...machine, ...user, PATH: windowsFreshPath({ machine: machine ?? {}, user: user ?? {}, source }) }, homedir());
+  return shellVariables(registryVariables({ machine: machine ?? {}, user: user ?? {}, source }), homedir());
 }
 
 /** The login shell's variables (shellVariables): null when it gave no PATH (it failed, or took too long). */

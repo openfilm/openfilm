@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { environmentCache, expandWindowsVars, parseRegQuery, shellSubset, shellVariables, windowsFreshPath } from './environment.mjs';
+import { environmentCache, expandWindowsVars, parseRegQuery, registryVariables, shellSubset, shellVariables, windowsFreshPath } from './environment.mjs';
 
 const PROFILE = ['C:', 'Users', 'someone'].join('\\');
 
@@ -36,6 +36,16 @@ test("the PATH a program started now gets: the system's, the person's (with thei
     'C:\\Users\\someone\\AppData\\Local\\Microsoft\\WindowsApps', 'C:\\Users\\someone\\AppData\\Local\\nvm', 'C:\\nvm4w\\nodejs', 'C:\\Users\\someone\\AppData\\Roaming\\npm',
     'C:\\Old\\stale',
   ].join(';'));
+});
+
+test("the registry's variables are handed on expanded, so an agent finds cmd.exe through ComSpec", () => {
+  const machine = { ComSpec: '%SystemRoot%\\system32\\cmd.exe', SystemRoot: 'C:\\Windows', Path: '%SystemRoot%\\system32' };
+  const user = parseRegQuery(USER);
+  const env = registryVariables({ machine, user, source: { USERPROFILE: PROFILE } });
+  assert.equal(env.ComSpec, 'C:\\Windows\\system32\\cmd.exe');
+  assert.equal(env.TEMP, `${PROFILE}\\AppData\\Local\\Temp`);
+  assert.equal(env.Path, undefined, 'one PATH only');
+  assert.match(env.PATH, /^C:\\Windows\\system32;/);
 });
 
 test('the environment is read again once it is old, sooner when asked; a failed read keeps the last good one', async () => {
