@@ -1,19 +1,7 @@
 /**
- * Small rules of the Projects page: the name a new project is offered, how long its list is waited for, and when a
- * card asks again for a poster that is still being drawn.
+ * Small rules of the Projects page: how long its list is waited for, and when a card asks again for a poster that is
+ * still being drawn.
  */
-
-/**
- * The name a new project is offered: `base`, else "base 2", "base 3"… the first no listed project has (as Studio names
- * the folder: studio/server/projects.mjs createProject). Compared without case, as a disk that ignores it would.
- */
-export function newProjectName(base: string, names: readonly string[]): string {
-  const taken = new Set(names.map((n) => n.trim().toLowerCase()));
-  if (!taken.has(base.toLowerCase())) return base;
-  let n = 2;
-  while (taken.has(`${base} ${n}`.toLowerCase())) n++;
-  return `${base} ${n}`;
-}
 
 /** How long the list is waited for before the page says it could not load it (and offers to try again). */
 export const LIST_WAIT_MS = 15_000;

@@ -33,7 +33,7 @@ import { useLanguage, useT, type Language } from '@/i18n';
 import { limitTitleWidth, TITLE_MAX_WIDTH } from '@/lib/title';
 import type { Project } from '@/api';
 import { folderCounts, folderPosters, folderTrail, parentOf, visibleProjects, type LibrarySort, type ProjectFolder } from '@/lib/project-folders';
-import { newProjectName, posterRetryDelay, posterTry } from '@/lib/projects-page';
+import { posterRetryDelay, posterTry } from '@/lib/projects-page';
 import { ContextMenu } from './ContextMenu';
 import { ProjectMenu } from './ProjectMenu';
 import { ProjectCoverContext } from './ProjectCover';
@@ -72,11 +72,8 @@ export function ProjectsView({
   projects: LibraryProject[];
   /** A project is being created or opened; "New project" does not take a second click meanwhile. */
   creating?: boolean;
-  /**
-   * Make a project of this name (`exact`: as the person typed it, refused when taken) and open it. Resolves whether it
-   * was made: when not (said why), the name stays to change.
-   */
-  onNewProject: (name: string, exact: boolean) => Promise<boolean>;
+  /** "New project": made at once, named as Studio names it (Untitled, Untitled 2…), and opened. */
+  onNewProject: () => void;
   /** "Open folder…": a folder anywhere, opened as a project (the app's own dialog, else Studio's folder browser). */
   onOpenFolder: () => void;
   /** "Get from GitHub…": a repository or a folder in one, copied into the library and opened. */
@@ -122,8 +119,6 @@ export function ProjectsView({
   const [folderId, setFolderId] = React.useState<string | null>(null);
   const [moving, setMoving] = React.useState<LibraryProject | null>(null);
   const [renamingFolderId, setRenamingFolderId] = React.useState<string | null>(null);
-  /** "New project" asks for its name first: the name offered (as Studio would name it), while it is asked for */
-  const [newName, setNewName] = React.useState<string | null>(null);
   /* the folder looked at was deleted (here or elsewhere): back to all */
   React.useEffect(() => {
     if (folderId && !folders.some((f) => f.id === folderId)) setFolderId(null);
@@ -252,15 +247,7 @@ export function ProjectsView({
   }
 
   const showNew = folderId === null && !query.trim();
-  const newProps: NewProjectProps = {
-    creating,
-    naming: newName,
-    onNewProject: () => setNewName(newProjectName(t('project.untitled'), projects.map((p) => p.name))),
-    onCreate: onNewProject,
-    onCancelNew: () => setNewName(null),
-    onOpenFolder,
-    onGetFromGitHub,
-  };
+  const newProps: NewProjectProps = { creating, onNewProject, onOpenFolder, onGetFromGitHub };
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -569,98 +556,19 @@ function ProjectCardTitle({
 
 type NewProjectProps = {
   creating: boolean;
-  /** The name offered while the new project's name is asked for, else null. */
-  naming: string | null;
-  /** "New project": ask for its name. */
   onNewProject: () => void;
-  onCreate: (name: string, exact: boolean) => Promise<boolean>;
-  onCancelNew: () => void;
   onOpenFolder: () => void;
   onGetFromGitHub: () => void;
 };
 
-/**
- * The new project's name, typed where its name will show, offered as Studio would name it: Enter (or "New project"
- * clicked again, through `submit`) makes the project, Escape or leaving the field does not. Cleaned as a rename is;
- * left empty, it is the name offered.
- */
-function NewProjectName({ offered, size, submit, onCreate, onCancel }: {
-  offered: string;
-  size: 'card' | 'list';
-  /** Set to make the project with the name in the field. */
-  submit: React.RefObject<(() => void) | null>;
-  onCreate: (name: string, exact: boolean) => Promise<boolean>;
-  onCancel: () => void;
-}) {
-  const t = useT();
-  const [draft, setDraft] = React.useState(offered);
-  const input = React.useRef<HTMLInputElement>(null);
-  /* being made: the field may lose its focus meanwhile, which does not cancel it */
-  const making = React.useRef(false);
-
-  async function create() {
-    if (making.current) return;
-    const typed = limitTitleWidth(draft.replace(/\s+/g, ' ').trim(), TITLE_MAX_WIDTH);
-    making.current = true;
-    if (await onCreate(typed || offered, Boolean(typed) && typed !== offered)) return;
-    making.current = false;
-    input.current?.focus();
-  }
-  submit.current = () => void create();
-
-  return (
-    <input
-      ref={input}
-      autoFocus
-      value={draft}
-      aria-label={t('projects.newProjectName')}
-      placeholder={offered}
-      onChange={(event) => {
-        const next = event.target.value;
-        /* mid-composition (IME) the text is not final: limit it once composition ends */
-        setDraft((event.nativeEvent as InputEvent).isComposing ? next : limitTitleWidth(next, TITLE_MAX_WIDTH));
-      }}
-      onCompositionEnd={(event) => setDraft(limitTitleWidth(event.currentTarget.value, TITLE_MAX_WIDTH))}
-      onFocus={(event) => event.currentTarget.select()}
-      onBlur={() => { if (!making.current) onCancel(); }}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') {
-          if (event.nativeEvent.isComposing) return;
-          event.preventDefault();
-          void create();
-        }
-        if (event.key === 'Escape') {
-          event.preventDefault();
-          /* the popover would close on this Escape too */
-          event.stopPropagation();
-          if (!making.current) onCancel();
-        }
-      }}
-      className={`box-border w-full min-w-0 bg-transparent font-semibold text-[var(--text)] outline-none placeholder:text-[var(--text-faint)] ${size === 'card' ? 'h-7 text-[13px]' : 'text-[14px]'}`}
-    />
-  );
-}
-
-/**
- * "New project" clicked: its name is asked for; clicked again while it is, the project is made with the name in the
- * field. The press keeps the field focused, so leaving it does not cancel first.
- */
-function newProjectClick(naming: string | null, submit: React.RefObject<(() => void) | null>, onNewProject: () => void) {
-  return {
-    onMouseDown: (event: React.MouseEvent) => { if (naming != null) event.preventDefault(); },
-    onClick: () => { if (naming != null) submit.current?.(); else onNewProject(); },
-  };
-}
-
 /** The grid's first cell: start a new project, card-sized, so "new ones start here" reads at a glance. */
-function NewProjectCard({ creating, naming, onNewProject, onCreate, onCancelNew, onOpenFolder, onGetFromGitHub }: NewProjectProps) {
+function NewProjectCard({ creating, onNewProject, onOpenFolder, onGetFromGitHub }: NewProjectProps) {
   const t = useT();
-  const submit = React.useRef<(() => void) | null>(null);
   return (
     <article className="group min-w-0">
       <button
         type="button"
-        {...newProjectClick(naming, submit, onNewProject)}
+        onClick={onNewProject}
         disabled={creating}
         aria-busy={creating}
         className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--border-strong)] text-[var(--text-muted)] transition hover:border-[var(--text-faint)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-60"
@@ -670,24 +578,22 @@ function NewProjectCard({ creating, naming, onNewProject, onCreate, onCancelNew,
         </span>
         <span className="text-[13px] font-medium">{t('projects.newProject')}</span>
       </button>
-      {/* where the other cards have their name: the new one's, asked for; else starting from a film that exists */}
+      {/* where the other cards have their name: starting from a film that exists */}
       <div className="mt-2 flex">
-        {naming != null ? <NewProjectName offered={naming} size="card" submit={submit} onCreate={onCreate} onCancel={onCancelNew} />
-          : <ImportMenu creating={creating} onOpenFolder={onOpenFolder} onGetFromGitHub={onGetFromGitHub} className="-ml-1.5 h-7 px-1.5 text-[12.5px]" />}
+        <ImportMenu creating={creating} onOpenFolder={onOpenFolder} onGetFromGitHub={onGetFromGitHub} className="-ml-1.5 h-7 px-1.5 text-[12.5px]" />
       </div>
     </article>
   );
 }
 
 /** "New project" in the list view: the same entries, as a row. */
-function NewProjectListRow({ creating, naming, onNewProject, onCreate, onCancelNew, onOpenFolder, onGetFromGitHub }: NewProjectProps) {
+function NewProjectListRow({ creating, onNewProject, onOpenFolder, onGetFromGitHub }: NewProjectProps) {
   const t = useT();
-  const submit = React.useRef<(() => void) | null>(null);
   return (
     <article className="group flex min-w-0 items-center gap-3 py-4 sm:gap-4">
       <button
         type="button"
-        {...newProjectClick(naming, submit, onNewProject)}
+        onClick={onNewProject}
         disabled={creating}
         aria-busy={creating}
         className="flex aspect-video w-28 shrink-0 items-center justify-center rounded-md border border-dashed border-[var(--border-strong)] text-[var(--text-muted)] transition hover:border-[var(--text-faint)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-60 sm:w-36"
@@ -698,16 +604,14 @@ function NewProjectListRow({ creating, naming, onNewProject, onCreate, onCancelN
         </span>
       </button>
       <div className="min-w-0 flex-1">
-        {naming != null ? <NewProjectName offered={naming} size="list" submit={submit} onCreate={onCreate} onCancel={onCancelNew} /> : (
-          <button
-            type="button"
-            onClick={onNewProject}
-            disabled={creating}
-            className="text-left text-[14px] font-medium text-[var(--text)] hover:underline disabled:opacity-60"
-          >
-            {t('projects.newProject')}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={onNewProject}
+          disabled={creating}
+          className="text-left text-[14px] font-medium text-[var(--text)] hover:underline disabled:opacity-60"
+        >
+          {t('projects.newProject')}
+        </button>
       </div>
       <ImportMenu creating={creating} onOpenFolder={onOpenFolder} onGetFromGitHub={onGetFromGitHub} className="h-8 px-2.5 text-[12.5px]" />
     </article>

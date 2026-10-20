@@ -137,7 +137,6 @@ export const ja: Words = {
   projects: {
     newProject: '新規プロジェクト',
     localProjectFailed: 'プロジェクトを作成できませんでした。もう一度お試しください。',
-    newProjectName: '新しいプロジェクトの名前',
     loadFailed: 'プロジェクトを読み込めませんでした。',
     loadRetry: '再試行',
     revealFolder: `${FILES}で表示`,

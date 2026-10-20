@@ -137,7 +137,6 @@ export const ko: Words = {
   projects: {
     newProject: '새 프로젝트',
     localProjectFailed: '프로젝트를 만들지 못했습니다. 다시 시도하세요.',
-    newProjectName: '새 프로젝트 이름',
     loadFailed: '프로젝트를 불러오지 못했습니다.',
     loadRetry: '다시 시도',
     revealFolder: `${FILES}에서 보기`,

@@ -256,21 +256,15 @@ export function ProjectsPopover({
     if (wasOpen.current) latestClose.current();
   }, [currentProjectId]);
 
-  /**
-   * A new project named `name` (`exact`: as the person typed it, refused when taken), opened. Whether it was made: one
-   * that was not is said, and the name stays to change.
-   */
-  async function newProject(name: string, exact: boolean) {
+  /** A new project, named as Studio names it (Untitled, Untitled 2…), opened at once: it is renamed later. */
+  async function newProject() {
     setBusy('creating');
     try {
-      const project = await api.newProject(name, exact);
+      const project = await api.newProject(t('project.untitled'));
       go(project.id, 'creating');
-      return true;
-    } catch (e) {
+    } catch {
       setBusy(null);
-      /* a name that is taken: retrying can't help, so the message says what to do instead */
-      lib.flash(e instanceof ApiError && e.status === 409 ? t('projects.renameTaken').replace('{name}', name) : t('projects.localProjectFailed'));
-      return false;
+      lib.flash(t('projects.localProjectFailed'));
     }
   }
 
@@ -391,7 +385,7 @@ export function ProjectsPopover({
               heading={<LauncherSwitch view={view} onView={showView} />}
               projects={lib.projects}
               creating={busy !== null}
-              onNewProject={newProject}
+              onNewProject={() => void newProject()}
               onOpenFolder={() => void openFolder()}
               onGetFromGitHub={() => setGithub({})}
               onLocate={(project) => void locate(project)}
