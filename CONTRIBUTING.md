@@ -57,8 +57,8 @@ docs/                pictures for the README
 
 ## packages/openfilm: the format, the CLI and Studio
 
-`pnpm dev` runs Studio on port 4848, with its state, projects and exports in `packages/openfilm/.dev/`
-(git-ignored), apart from an OpenFilm you have installed. It opens a sample film in your browser, rebuilds the editor
+`pnpm dev` runs Studio on port 4848, with its state and exports in `packages/openfilm/.dev/` (git-ignored), beside an
+OpenFilm you have installed; its projects are in the library every OpenFilm shares. It opens a sample film in your browser, rebuilds the editor
 when `studio/ui` changes (reload the page), and restarts Studio when `studio/server` or `src` change. Ctrl+C stops it.
 
 `pnpm --filter openfilm test` runs its tests and `pnpm --filter openfilm typecheck` checks the server's and the
@@ -72,11 +72,13 @@ node --test --test-name-pattern="split" studio/server/film.test.mjs
 ### Trying a change with a coding agent
 
 While `pnpm dev` runs, `packages/openfilm/.dev/bin/openfilm` (`openfilm.cmd` on Windows) is your checkout's command
-on that Studio. Open Codex, Claude Code or any coding agent in `packages/openfilm/.dev/projects` (that Studio's library)
-and ask for a film: the AGENTS.md and CLAUDE.md `pnpm dev` writes there tell it to run that command instead of the
-skill's `npx -y openfilm@latest` (the release), and the manual names the same command, so it keeps using it. Elsewhere,
-tell your agent to run the command. Your films appear in the Studio `pnpm dev` opened, and an installed OpenFilm, its
-Studio on port 4747 and `~/.openfilm` are left alone.
+on that Studio. Ask Codex, Claude Code or any coding agent for a film and tell it to run that command instead of the
+skill's `npx -y openfilm@latest` (the release); the manual names the same command, so it keeps using it. Your films
+appear in the Studio `pnpm dev` opened. Its state is in `packages/openfilm/.dev/` and its port is its own, so an
+installed OpenFilm, its Studio on port 4747 and `~/.openfilm` are left alone; projects are the one thing they share:
+every OpenFilm uses the same library, the one Studio's Settings chose (kept in `~/.openfilm/prefs.json`, which
+`OPENFILM_SHARED_HOME` points it at), by default `~/Movies/OpenFilm/Projects` on macOS. A test that must stay apart
+sets `OPENFILM_LIBRARY` and leaves `OPENFILM_SHARED_HOME` unset.
 
 To make your checkout the `openfilm` your agents use everywhere, `npm link` in `packages/openfilm` (`npm unlink -g
 openfilm` undoes it). That one shares `~/.openfilm` and port 4747 with an installed OpenFilm; of two Studios, the
@@ -99,8 +101,9 @@ pnpm --filter @openfilm/desktop typecheck
 ```
 
 Run from source, the app is its own "OpenFilm Dev": its own name, data folder, Studio home and port, so it never
-shares anything with an installed OpenFilm. Its renamed copy of Electron lives in `apps/desktop/.dev/` (git-ignored),
-signed only for this machine: you need no certificate to run or change it. Its window's page imports Studio's editor
+shares a window or a Studio with an installed OpenFilm. Its projects are in the same library as every OpenFilm's.
+Its renamed copy of Electron lives in `apps/desktop/.dev/` (git-ignored), signed only for this machine: you need no
+certificate to run or change it. Its window's page imports Studio's editor
 from `packages/openfilm` as source, so a change to Studio shows in the app at its next start.
 
 `pnpm --filter @openfilm/desktop release` builds an installable app into `apps/desktop/.release/` (git-ignored),

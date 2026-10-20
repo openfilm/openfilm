@@ -1,17 +1,18 @@
 #!/usr/bin/env node
 // @ts-check
 /**
- * `npm run dev`: Studio from this checkout, apart from an installed OpenFilm. Its state, projects and exports are in
- * .dev/ (git-ignored), and it listens on port 4848 (OPENFILM_STUDIO_PORT for another). The editor is rebuilt when
+ * `npm run dev`: Studio from this checkout, beside an installed OpenFilm. Its state and exports are in .dev/
+ * (git-ignored), its projects in the same library as every OpenFilm's (the one ~/.openfilm says, by default
+ * ~/Movies/OpenFilm/Projects on macOS), and it listens on port 4848 (OPENFILM_STUDIO_PORT for another). The editor is rebuilt when
  * studio/ui changes (reload the page); Studio restarts when studio/server or src change. It opens a sample project in
  * your browser (OPENFILM_NO_BROWSER=1: it only prints the address). Ctrl+C stops it all.
  *
  * It also writes .dev/bin/openfilm (and openfilm.cmd on Windows): this checkout's command on this Studio, for your own
- * agent to try your changes with; and in .dev/projects (this Studio's library) an AGENTS.md and a CLAUDE.md saying so,
- * so an agent opened in that folder uses it without being told.
+ * agent to try your changes with.
  */
 import { spawn } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, watch, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -24,8 +25,9 @@ const env = {
   ...process.env,
   ...(existsSync(SKILLS) && !process.env.OPENFILM_OFFICIAL_SKILLS ? { OPENFILM_OFFICIAL_SKILLS: SKILLS } : {}),
   OPENFILM_HOME: join(DEV, 'home'),
-  OPENFILM_LIBRARY: join(DEV, 'projects'),
   OPENFILM_EXPORTS: join(DEV, 'exports'),
+  /* the person's library, wherever they chose to keep it (src/locations.mjs) */
+  OPENFILM_SHARED_HOME: process.env.OPENFILM_SHARED_HOME || join(homedir(), '.openfilm'),
   OPENFILM_STUDIO_PORT: process.env.OPENFILM_STUDIO_PORT || '4848',
   OPENFILM_NO_UPDATE_CHECK: '1',
   /* Studio itself, without the supervisor `openfilm open` gives it: this script starts it again when its code changes */
@@ -52,7 +54,7 @@ process.on('exit', () => {
 const BIN = join(DEV, 'bin');
 mkdirSync(BIN, { recursive: true });
 const CLI = join(ROOT, 'bin', 'openfilm.mjs');
-const SHARED = ['OPENFILM_HOME', 'OPENFILM_LIBRARY', 'OPENFILM_EXPORTS', 'OPENFILM_STUDIO_PORT', 'OPENFILM_NO_UPDATE_CHECK', 'OPENFILM_OFFICIAL_SKILLS'].filter((k) => env[k]);
+const SHARED = ['OPENFILM_HOME', 'OPENFILM_LIBRARY', 'OPENFILM_SHARED_HOME', 'OPENFILM_EXPORTS', 'OPENFILM_STUDIO_PORT', 'OPENFILM_NO_UPDATE_CHECK', 'OPENFILM_OFFICIAL_SKILLS'].filter((k) => env[k]);
 const sh = join(BIN, 'openfilm');
 writeFileSync(sh, `#!/bin/sh\n${SHARED.map((k) => `export ${k}='${env[k]}'`).join('\n')}\nOPENFILM_RUN="${sh}" exec '${process.execPath}' '${CLI}' "$@"\n`);
 chmodSync(sh, 0o755);
@@ -60,25 +62,10 @@ if (process.platform === 'win32') {
   writeFileSync(join(BIN, 'openfilm.cmd'), `@echo off\r\n${SHARED.map((k) => `set "${k}=${env[k]}"`).join('\r\n')}\r\nset "OPENFILM_RUN=%~f0"\r\n"${process.execPath}" "${CLI}" %*\r\n`);
 }
 
-/* an agent opened in this Studio's library (Codex reads AGENTS.md, Claude Code CLAUDE.md) makes its films with this
-   checkout, on this Studio: the skill's `npx openfilm@latest` is the release, on the Studio of an installed OpenFilm */
 const command = process.platform === 'win32' ? join(BIN, 'openfilm.cmd') : sh;
-const AGENT_NOTE = `# Films made with an OpenFilm checkout
-
-This folder is the library of the Studio that \`pnpm dev\` runs from an OpenFilm checkout. Here OpenFilm is that
-checkout: wherever a skill or the manual says \`openfilm\` or \`npx openfilm\`, run
-
-    ${command}
-
-and never \`npx openfilm\` (the published version, on another Studio). Run it with no arguments for the manual. Make
-each film in a folder of its own here; it shows in that Studio.
-`;
-mkdirSync(env.OPENFILM_LIBRARY, { recursive: true });
-writeFileSync(join(env.OPENFILM_LIBRARY, 'AGENTS.md'), AGENT_NOTE);
-writeFileSync(join(env.OPENFILM_LIBRARY, 'CLAUDE.md'), AGENT_NOTE);
 
 /* a small film to open: one page, drawn by frame(t) */
-const SAMPLE = join(DEV, 'projects', 'Sample');
+const SAMPLE = join(DEV, 'sample');
 if (!existsSync(join(SAMPLE, 'film.html'))) {
   mkdirSync(SAMPLE, { recursive: true });
   writeFileSync(join(SAMPLE, 'film.html'), `<meta name="viewport" content="width=1920, height=1080">
@@ -147,7 +134,7 @@ for (const end = Date.now() + 30_000; Date.now() < end; await new Promise((r) =>
     body: JSON.stringify({ path: SAMPLE, now: !quiet, fallback: 0 }),
   }).catch((e) => ({ ok: false, json: async () => ({ error: e.message }) }));
   const said = await res.json();
-  console.log(res.ok ? `\nStudio (dev)  ${said.url}\nhome          ${env.OPENFILM_HOME}\nyour agent    open it in ${env.OPENFILM_LIBRARY} (its AGENTS.md and CLAUDE.md say to run ${command}): this checkout, on this Studio\n` : `\ncould not open the sample: ${said.error}\n`);
+  console.log(res.ok ? `\nStudio (dev)  ${said.url}\nhome          ${env.OPENFILM_HOME}\nyour agent    tell it to run ${command}: this checkout, on this Studio\n` : `\ncould not open the sample: ${said.error}\n`);
   break;
 }
 

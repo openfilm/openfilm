@@ -1,20 +1,25 @@
 // @ts-check
 /**
- * Where OpenFilm keeps the person's work on this computer: the projects library (where new projects go) and the
- * exports folder. The library has a default and may be moved in Studio's Settings → General: Studio's `prefs.json`
- * (`projectsFolder`), read by Studio and by the `openfilm` command alike, so a project fetched from the command line
- * lands where Studio's go. OPENFILM_LIBRARY sets the default (a build, or a Studio kept apart); what the person chose
- * comes first. Projects made before stay where they are: the projects list knows them by their folder. Exports go to
- * the folder picked when exporting (the export dialog keeps the last one), else to the exports default.
+ * Where OpenFilm keeps the person's work on this computer: the projects library (one folder per project, the folders
+ * Studio's Projects list shows) and the exports folder. The library has a default and may be moved in Studio's
+ * Settings → General: Studio's `prefs.json` (`projectsFolder`), read by Studio and by the `openfilm` command alike, so
+ * a project fetched from the command line lands where Studio's go. A Studio with a home of its own (OPENFILM_HOME, as
+ * `pnpm dev` and the desktop app's dev and preview builds have) shares the person's library when OPENFILM_SHARED_HOME
+ * names the home that keeps it (~/.openfilm). OPENFILM_LIBRARY sets the default (a build, or a Studio kept apart);
+ * what the person chose comes first. Exports go to the folder picked when exporting (the export dialog keeps the last
+ * one), else to the exports default.
  *
  * Reads no Studio module, so the command can use it.
  */
-import { accessSync, constants, existsSync, mkdirSync, readFileSync, statfsSync } from 'node:fs';
+import { accessSync, constants, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statfsSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 
 /** Studio's own home (its settings and keys, not the person's work): OPENFILM_HOME, else ~/.openfilm. */
 export const studioHomeDir = () => process.env.OPENFILM_HOME || join(homedir(), '.openfilm');
+
+/** The Studio home whose prefs.json says where the library is: OPENFILM_SHARED_HOME, else Studio's own. */
+const choiceHome = () => process.env.OPENFILM_SHARED_HOME || studioHomeDir();
 
 /** Where new projects go unless the person chose: OPENFILM_LIBRARY, else ~/Movies/OpenFilm/Projects on macOS, ~/Videos/OpenFilm/Projects elsewhere. */
 export const libraryDefault = () => process.env.OPENFILM_LIBRARY
@@ -42,15 +47,43 @@ export const LOCATION_KEYS = /** @type {const} */ ({ projects: 'projectsFolder' 
 /** A folder the person chose, as kept in prefs.json: an absolute path, or null (none chosen, or not one). */
 export function chosenFolder(/** @type {'projectsFolder'} */ key) {
   try {
-    const value = JSON.parse(readFileSync(join(studioHomeDir(), 'prefs.json'), 'utf8'))?.[key];
+    const value = JSON.parse(readFileSync(join(choiceHome(), 'prefs.json'), 'utf8'))?.[key];
     return typeof value === 'string' && isAbsolute(value) ? resolve(value) : null;
   } catch {
     return null;
   }
 }
 
+/**
+ * Keep a folder the person chose (null: back to the default) in the prefs.json that holds it. The file is shared with
+ * every OpenFilm on this computer, older or newer: what this one does not know of it is written back as it was.
+ * @param {'projectsFolder'} key @param {string | null} value
+ */
+export function chooseFolder(key, value) {
+  const at = join(choiceHome(), 'prefs.json');
+  let kept = {};
+  try { const raw = JSON.parse(readFileSync(at, 'utf8')); if (raw && typeof raw === 'object' && !Array.isArray(raw)) kept = raw; } catch { /* none yet */ }
+  mkdirSync(choiceHome(), { recursive: true });
+  writeFileSync(`${at}.${process.pid}.tmp`, `${JSON.stringify({ ...kept, [key]: value }, null, 2)}\n`);
+  renameSync(`${at}.${process.pid}.tmp`, at);
+}
+
 /** Where new projects go: the folder the person chose, else the default. */
 export const libraryRoot = () => chosenFolder('projectsFolder') ?? libraryDefault();
+
+/**
+ * The projects in a library, by full path: its folders that hold a film (film.html, or Studio's `.film/id` for one
+ * that lost it), not hidden ones. Nothing deeper: a project is a folder of the library.
+ */
+export function libraryProjects(root = libraryRoot()) {
+  try {
+    return readdirSync(root, { withFileTypes: true })
+      .filter((d) => d.isDirectory() && !d.name.startsWith('.') && (existsSync(join(root, d.name, 'film.html')) || existsSync(join(root, d.name, '.film', 'id'))))
+      .map((d) => join(root, d.name));
+  } catch {
+    return [];
+  }
+}
 
 /** Where exports go when no folder is picked. */
 export const exportsRoot = () => exportsDefault();
@@ -68,11 +101,11 @@ export function freeSpace(/** @type {string} */ folder) {
 }
 
 /**
- * Each folder the person can choose, for Settings: where it is now, its default, whether it was chosen, and the free
- * space on its disk.
+ * Each folder the person can choose, for Settings: where it is now, its default, whether it was chosen, the free
+ * space on its disk, and how many projects are in it (Settings asks whether they move with it).
  */
 export function locations() {
-  const one = (/** @type {string} */ path, /** @type {string} */ fallback, /** @type {boolean} */ chosen) => ({ path, default: fallback, chosen, free: freeSpace(path) });
+  const one = (/** @type {string} */ path, /** @type {string} */ fallback, /** @type {boolean} */ chosen) => ({ path, default: fallback, chosen, free: freeSpace(path), count: libraryProjects(path).length });
   return {
     projects: one(libraryRoot(), libraryDefault(), chosenFolder('projectsFolder') !== null),
   };
@@ -87,8 +120,9 @@ export function usableFolder(value) {
   if (typeof value !== 'string' || !isAbsolute(value)) throw new Error('Choose a folder by its full path.');
   const path = resolve(value);
   if (dirname(path) === path) throw new Error('Choose a folder on that disk, not the disk itself.');
-  const home = resolve(studioHomeDir());
-  if (path === home || path.startsWith(home + sep)) throw new Error('OpenFilm keeps its own settings there: choose another folder.');
+  for (const home of new Set([resolve(studioHomeDir()), resolve(choiceHome())])) {
+    if (path === home || path.startsWith(home + sep)) throw new Error('OpenFilm keeps its own settings there: choose another folder.');
+  }
   try {
     mkdirSync(path, { recursive: true });
     accessSync(path, constants.W_OK);

@@ -5,7 +5,7 @@ import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
-import { agentLogCalls, codebuddyCalls, geminiCallsOf, logSwitches, opencodeCalls, ownLogging, qwenCalls, spanReceiver, splitRecords } from './agent-logs.mjs';
+import { agentLogCalls, codebuddyCalls, logSwitches, opencodeCalls, ownLogging, qwenCalls, spanReceiver } from './agent-logs.mjs';
 import { agentRecordCalls } from './agent-records.mjs';
 
 const at = (s) => new Date(Date.UTC(2026, 9, 15, 10, 0, s)).toISOString();
@@ -16,26 +16,19 @@ const jsonl = (rows) => `${rows.map((r) => JSON.stringify(r)).join('\n')}\n`;
 test('each agent is started with its own logging switch into a folder of its process, never over a setting of the person\'s', async () => {
   const base = temp('logs');
   const home = temp('home');
-  const gemini = await logSwitches('gemini', { base, home });
-  assert.equal(gemini.log.agent, 'gemini');
-  assert.ok(gemini.log.dir.startsWith(join(base, 'gemini')) && existsSync(gemini.log.dir));
-  assert.deepEqual(gemini.env, { GEMINI_TELEMETRY_ENABLED: 'true', GEMINI_TELEMETRY_TARGET: 'local', GEMINI_TELEMETRY_OUTFILE: join(gemini.log.dir, 'telemetry.log'), GEMINI_TELEMETRY_TRACES_ENABLED: 'true' });
-  assert.ok(!('GEMINI_TELEMETRY_LOG_PROMPTS' in gemini.env), 'prompt logging as the person has it (on by Gemini CLI\'s default)');
   const qwen = await logSwitches('qwen', { base, home });
+  assert.equal(qwen.log.agent, 'qwen');
+  assert.ok(qwen.log.dir.startsWith(join(base, 'qwen')) && existsSync(qwen.log.dir));
   assert.deepEqual(qwen.args, ['--openai-logging', '--openai-logging-dir', qwen.log.dir], 'its folder given, never the project\'s logs/openai');
   const codebuddy = await logSwitches('codebuddy', { base, home, shell: { DISABLE_TELEMETRY: '1' } });
   assert.deepEqual(codebuddy.env, { OTEL_LOG_RAW_API_BODIES: `file:${codebuddy.log.dir}` });
 
   assert.deepEqual((await logSwitches('codebuddy', { base, home })).log, { agent: 'codebuddy', none: 'sendsMore' }, 'its traces go to its makers: they would name each file');
   assert.deepEqual((await logSwitches('codebuddy', { base, home, shell: { OTEL_TRACES_EXPORTER: 'none' } })).log.dir ? 'on' : 'off', 'on');
-  assert.deepEqual((await logSwitches('gemini', { base, home, shell: { OTEL_EXPORTER_OTLP_ENDPOINT: 'http://x' } })).log, { agent: 'gemini', none: 'own' });
   assert.deepEqual((await logSwitches('opencode', { base, home, shell: { OPENCODE_CONFIG_CONTENT: '{}' } })).log, { agent: 'opencode', none: 'own' });
-  mkdirSync(join(home, '.gemini'), { recursive: true });
-  writeFileSync(join(home, '.gemini', 'settings.json'), '{ "telemetry": { "enabled": true, "target": "gcp" } }');
-  assert.equal(ownLogging('gemini', { home }), true, 'their own telemetry settings are left as they are');
   mkdirSync(join(home, '.qwen'), { recursive: true });
   writeFileSync(join(home, '.qwen', 'settings.json'), '{ "model": { "enableOpenAILogging": true } }');
-  assert.equal(ownLogging('qwen', { home }), true);
+  assert.equal(ownLogging('qwen', { home }), true, 'their own logging settings are left as they are');
   assert.equal(await logSwitches('cursor', { base, home }), null, 'no switch: Cursor makes its prompt on its servers');
   assert.equal(await logSwitches('qwen', { base: null, home }), null, 'Developer mode off');
 
@@ -86,57 +79,6 @@ test("Qwen Code's log: one request a file, its system message as the system prom
   assert.equal(own.thread.label, 'forked_query');
   assert.equal(own.answer, null);
   assert.equal(qwenCalls(dir, { sessionId: sid, from: t(4), to: t(5) }).length, 1, 'only the turn\'s');
-});
-
-test("Gemini CLI's telemetry: records split, each request whole from its log record, its span and its response", () => {
-  const sid = 'gem-1234';
-  const span = (spanId, promptId, extra) => ({ _spanContext: { traceId: 'tr', spanId }, name: 'llm_call', startTime: [1, 0], endTime: [2, 0], attributes: {
-    'gen_ai.prompt.name': promptId, 'gen_ai.conversation.id': sid,
-    'gen_ai.system_instructions': JSON.stringify('You are Gemini CLI. Never "}" a brace.'),
-    'gen_ai.tool.definitions': JSON.stringify([{ functionDeclarations: [{ name: 'run_shell_command', description: 'Run', parametersJsonSchema: { type: 'object' } }] }]),
-    ...extra } });
-  const log = (name, s, attributes, spanId) => ({ hrTime: [0, 0], ...(spanId ? { spanContext: { traceId: 'tr', spanId } } : {}), attributes: { 'session.id': sid, 'event.name': name, 'event.timestamp': at(s), ...attributes }, _body: name });
-  const records = [
-    log('gemini_cli.config', 0, { 'session.id': 'the-process' }),
-    log('gemini_cli.api_request', 1, { role: 'utility_router', prompt_id: 'classifier-1', model: 'flash', request_text: JSON.stringify([{ role: 'user', parts: [{ text: 'route' }] }]) }, 's0'),
-    log('gemini_cli.api_response', 1, { role: 'utility_router', prompt_id: 'classifier-1', model: 'flash', duration_ms: 5, response_text: '[]' }),
-    log('gemini_cli.api_request', 2, { role: 'main', prompt_id: 'p1', model: 'pro', auth_type: 'oauth', request_text: JSON.stringify([{ role: 'user', parts: [{ text: '<session_context>\nToday is…</session_context>' }, { text: 'Make a title' }] }]) }, 's1'),
-    log('gemini_cli.api_response', 4, { role: 'main', prompt_id: 'p1', model: 'pro', duration_ms: 1800, input_token_count: 120, cached_content_token_count: 100, output_token_count: 9, thoughts_token_count: 4,
-      response_text: JSON.stringify([{ candidates: [{ content: { role: 'model', parts: [{ text: 'pl', thought: true }, { text: 'an', thought: true }] } }] },
-        { candidates: [{ content: { role: 'model', parts: [{ functionCall: { id: 'f1', name: 'run_shell_command', args: { command: 'openfilm look' } } }] }, finishReason: 'STOP' }] }]) }),
-    log('gemini_cli.api_request', 6, { role: 'main', prompt_id: 'p1', model: 'pro', request_text: JSON.stringify([
-      { role: 'user', parts: [{ text: 'Make a title' }] },
-      { role: 'model', parts: [{ functionCall: { id: 'f1', name: 'run_shell_command', args: {} } }] },
-      { role: 'user', parts: [{ functionResponse: { id: 'f1', name: 'run_shell_command', response: { output: 'frames saved' } } }] }]) }, 's2'),
-    log('gemini_cli.api_error', 7, { role: 'main', prompt_id: 'p1', error: 'quota' }),
-    log('gemini_cli.api_request', 8, { 'session.id': 'other', role: 'main', prompt_id: 'p9', request_text: '[]' }, 's9'),
-    span('s0', 'classifier-1'), span('s1', 'p1'), span('s2', 'p1'),
-    { scopeMetrics: [{ metrics: [] }] },
-  ];
-  /* as Gemini CLI writes them: pretty JSON, one after the other */
-  const raw = records.map((r) => JSON.stringify(r, null, 2)).join('\n');
-  assert.equal(splitRecords(raw).length, records.length, 'split where each closes, a brace in a string kept');
-
-  const calls = geminiCallsOf(splitRecords(raw), { sessionId: sid });
-  assert.equal(calls.length, 3, 'not another session\'s');
-  const [router, first, second] = calls;
-  assert.equal(router.thread.label, 'utility_router', 'its own call, named');
-  assert.equal(first.systemPrompt, 'You are Gemini CLI. Never "}" a brace.');
-  assert.deepEqual(first.tools, [{ name: 'run_shell_command', description: 'Run', parameters: { type: 'object' } }]);
-  assert.deepEqual(first.messages, [
-    { role: 'context', as: 'user', label: 'session_context', content: [{ type: 'text', text: '<session_context>\nToday is…</session_context>' }] },
-    { role: 'user', content: [{ type: 'text', text: 'Make a title' }] },
-  ]);
-  assert.deepEqual(first.answer.content, [{ type: 'thinking', thinking: 'plan' }, { type: 'toolCall', id: 'f1', name: 'run_shell_command', arguments: { command: 'openfilm look' } }], 'a stream\'s chunks joined');
-  assert.deepEqual(first.answer.usage, { input: 20, cacheRead: 100, cacheWrite: 0, output: 13, reasoning: 4 });
-  assert.equal(first.answer.stopReason, 'STOP');
-  assert.equal(first.ms, 1800);
-  assert.equal(first.startedAt, t(2));
-  assert.deepEqual(first.settings, { model: 'pro', auth: 'oauth' });
-  assert.deepEqual(second.messages[2], { role: 'toolResult', toolCallId: 'f1', toolName: 'run_shell_command', content: [{ type: 'text', text: 'frames saved' }], isError: false });
-  assert.equal(second.answer.stopReason, 'error');
-  assert.equal(second.answer.errorMessage, 'quota');
-  assert.equal(geminiCallsOf(splitRecords(raw), { sessionId: sid, from: t(5), to: t(9) }).length, 1);
 });
 
 test("CodeBuddy's raw bodies: its index names each request's files and session; its helpers' named", () => {
@@ -236,7 +178,7 @@ test('a turn reads its requests from the log its agent was started with, named b
   const read = agentRecordCalls({ agent: 'qwen', sessionId: 's-12345678', log: switches.log, from: t(1), to: t(3) });
   assert.equal(read.calls.length, 1);
   assert.deepEqual(read.calls[0].source, { agent: 'qwen', file: switches.log.dir });
-  assert.equal(agentLogCalls({ agent: 'qwen', sessionId: 's-12345678', log: { agent: 'gemini', dir: switches.log.dir } }), null, 'another agent\'s log is not read');
+  assert.equal(agentLogCalls({ agent: 'qwen', sessionId: 's-12345678', log: { agent: 'opencode', dir: switches.log.dir } }), null, 'another agent\'s log is not read');
   assert.equal(agentRecordCalls({ agent: 'qwen', sessionId: 's-12345678', log: { agent: 'qwen', none: 'own' } }), null);
   assert.deepEqual(readdirSync(join(base, 'qwen')).length, 1);
 });

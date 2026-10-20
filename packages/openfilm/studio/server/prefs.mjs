@@ -5,12 +5,14 @@
  *
  *   proxies       light copies of heavy footage for the preview (proxies.mjs): on, and how tall
  *   seenVersion   the version whose "what's new" was last shown (null: none yet, a new install shows none)
- *   projectsFolder   where new projects go, when the person chose (null: the default; src/locations.mjs, which the
- *                 `openfilm` command reads too)
+ *   projectsFolder   where the projects library is, when the person chose (null: the default; src/locations.mjs,
+ *                 which the `openfilm` command reads too). Kept in the prefs.json of the home that holds the library
+ *                 (OPENFILM_SHARED_HOME, else this one), so every OpenFilm on the computer shares it.
  */
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 import { studioHome } from './projects.mjs';
+import { chooseFolder, chosenFolder } from '../../src/locations.mjs';
 
 /** @typedef {{ proxies: { on: boolean, height: 540 | 720 | 1080 }, seenVersion: string | null, projectsFolder: string | null }} Prefs */
 
@@ -38,7 +40,9 @@ const file = () => join(studioHome(), 'prefs.json');
 
 /** @returns {Prefs} */
 export function readPrefs() {
-  try { return prefsOf(JSON.parse(readFileSync(file(), 'utf8'))); } catch { return prefsOf(null); }
+  let own = null;
+  try { own = JSON.parse(readFileSync(file(), 'utf8')); } catch { /* none yet */ }
+  return { ...prefsOf(own), projectsFolder: chosenFolder('projectsFolder') };
 }
 
 /**
@@ -53,8 +57,11 @@ export function writePrefs(patch) {
   const at = file();
   let kept = {};
   try { const raw = JSON.parse(readFileSync(at, 'utf8')); if (raw && typeof raw === 'object' && !Array.isArray(raw)) kept = raw; } catch { /* none yet */ }
+  const { projectsFolder, ...own } = next;
   mkdirSync(studioHome(), { recursive: true });
-  writeFileSync(`${at}.${process.pid}.tmp`, `${JSON.stringify({ ...kept, ...next, proxies: { ...(/** @type {{ proxies?: object }} */ (kept).proxies ?? {}), ...next.proxies } }, null, 2)}\n`);
+  writeFileSync(`${at}.${process.pid}.tmp`, `${JSON.stringify({ ...kept, ...own, proxies: { ...(/** @type {{ proxies?: object }} */ (kept).proxies ?? {}), ...next.proxies } }, null, 2)}\n`);
   renameSync(`${at}.${process.pid}.tmp`, at);
+  /* where the library is: in the home that holds it (src/locations.mjs) */
+  if ('projectsFolder' in asked) chooseFolder('projectsFolder', projectsFolder);
   return next;
 }

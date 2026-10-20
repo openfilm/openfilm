@@ -11,6 +11,8 @@ export function ConfirmDialog({
   confirmLabel,
   cancelLabel,
   danger = false,
+  altLabel,
+  onAlt,
   onConfirm,
   onCancel,
 }: {
@@ -20,6 +22,9 @@ export function ConfirmDialog({
   confirmLabel?: string;
   cancelLabel?: string;
   danger?: boolean;
+  /** a second answer besides confirming, between Cancel and the confirm button */
+  altLabel?: string;
+  onAlt?: () => void;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -43,8 +48,8 @@ export function ConfirmDialog({
       if (e.key === 'Enter') {
         const target = e.target as Node | null;
         if (target && dialogRef.current?.contains(target)) {
-          // Enter on the Cancel button presses Cancel
-          if (target === cancelButtonRef.current) return;
+          // Enter on another button (Cancel, the second answer) presses that button
+          if (target instanceof HTMLButtonElement && target !== confirmButtonRef.current) return;
           e.preventDefault();
           onConfirm();
         }
@@ -78,6 +83,7 @@ export function ConfirmDialog({
             <CardButton ref={cancelButtonRef} weight="quiet" onClick={onCancel}>
               {cancelLabel ?? t('confirm.cancel')}
             </CardButton>
+            {altLabel && onAlt ? <CardButton onClick={onAlt}>{altLabel}</CardButton> : null}
             <CardButton ref={confirmButtonRef} weight={danger ? 'danger' : 'primary'} onClick={onConfirm}>
               {confirmLabel ?? t('confirm.ok')}
             </CardButton>

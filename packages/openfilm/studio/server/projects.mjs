@@ -1,6 +1,7 @@
 // @ts-check
 /**
- * Projects: folders, and the list of the ones opened recently (~/.openfilm/studio.json). A project is its folder, and
+ * Projects: folders, and the list of them (~/.openfilm/studio.json): every project in the library (src/locations.mjs,
+ * one folder each, found again at each listing) and the ones opened from elsewhere. A project is its folder, and
  * everything about it is in the folder, so moving or copying the folder moves or copies the project:
  *
  *   film.html, its pages and code, assets/   the work
@@ -16,14 +17,14 @@
 import { moveToTrash } from './trash.mjs';
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { EMPTY_FILM } from './film.mjs';
 import { FILM_FILE, filmHtml } from '../../src/film-doc.mjs';
 import { writeAtomic } from './atomic.mjs';
 import { coverAt } from './cover.mjs';
-import { libraryRoot } from '../../src/locations.mjs';
+import { libraryProjects, libraryRoot } from '../../src/locations.mjs';
 
 export const TOOL_DIR = '.film';
 
@@ -207,9 +208,40 @@ function filmDuration(/** @type {string} */ folder) {
   } catch { return null; }
 }
 
-/** The projects opened recently, most recent first; one whose folder is gone says so (`missing`). */
+/**
+ * The list follows the library: a project folder that came into it (made by an agent, copied in, a library moved here)
+ * joins the list, at the time its film last changed, or, when it is a listed project whose folder is gone (moved here
+ * outside Studio), the list points at it from now on; one that left it (deleted or moved away outside Studio) leaves
+ * the list. Nothing changes while the library's folder is not there (a disk not plugged in). Returns whether it changed.
+ * @param {StudioState} state
+ */
+async function followLibrary(state) {
+  const root = libraryRoot();
+  if (!existsSync(root)) return false;
+  const real = realpathSync(root);
+  const before = state.recent.length;
+  state.recent = state.recent.filter((r) => !((dirname(r.path) === real || dirname(r.path) === root) && !existsSync(r.path)));
+  let changed = state.recent.length !== before;
+  for (const found of libraryProjects(real)) {
+    if (state.recent.some((r) => r.path === found)) continue;
+    await mkdir(join(found, TOOL_DIR), { recursive: true });
+    await writeFile(join(found, TOOL_DIR, '.gitignore'), '*\n');
+    const id = await folderId(found, state);
+    changed = true;
+    /* folderId gave a copy its own id, so a listed one with this id is this project, moved */
+    const moved = state.recent.find((r) => r.id === id);
+    if (moved) { moved.path = found; continue; }
+    const film = statSync(join(found, FILM_FILE), { throwIfNoEntry: false }) ?? statSync(found);
+    state.recent.push({ id, path: found, openedAt: Math.round(film.mtimeMs) });
+  }
+  if (changed) state.recent.sort((a, b) => b.openedAt - a.openedAt);
+  return changed;
+}
+
+/** Every project of the library and the ones opened from elsewhere, most recent first; one whose folder is gone says so (`missing`). */
 export async function listProjects() {
   const state = await readState();
+  if (await followLibrary(state)) await writeState(state);
   const folders = new Set(state.folders.map((f) => f.id));
   /* a project in a folder that was deleted is back at the top level */
   return state.recent.map((r) => describe(r.folderId && !folders.has(r.folderId) ? { ...r, folderId: undefined } : r));
@@ -368,4 +400,52 @@ export async function forgetProject(/** @type {string} */ id) {
   const state = await readState();
   state.recent = state.recent.filter((r) => r.id !== id);
   await writeState(state);
+}
+
+/**
+ * Move the library: from now on new projects go to `to` (null: the default), and with `move`, the projects in the old
+ * library go with it, each folder whole (to "Name 2" when the new library already has a "Name"). Across disks a project
+ * is copied, then its old folder goes to the Trash. Anything else in the old folder stays. A project that cannot move
+ * stays where it is, in the list, and is named in `failed`.
+ * @param {string | null} to @param {{ move?: boolean, choose: (folder: string | null) => void }} options
+ */
+export async function moveLibrary(to, { move = false, choose }) {
+  const from = libraryRoot();
+  choose(to);
+  const into = libraryRoot();
+  /** @type {{ name: string, error: string }[]} */
+  const failed = [];
+  let moved = 0;
+  if (!move || resolve(from) === resolve(into) || !existsSync(from)) return { moved, failed };
+  await mkdir(into, { recursive: true });
+  const state = await readState();
+  const realFrom = realpathSync(from);
+  for (const folder of libraryProjects(from)) {
+    let target = join(into, basename(folder));
+    for (let n = 2; existsSync(target); n++) target = join(into, `${basename(folder)} ${n}`);
+    try {
+      try {
+        await rename(folder, target);
+      } catch (e) {
+        if (/** @type {NodeJS.ErrnoException} */ (e).code !== 'EXDEV') throw e;
+        try {
+          await cp(folder, target, { recursive: true, errorOnExist: true, force: false, preserveTimestamps: true });
+        } catch (copying) {
+          /* half a copy is no project: it goes, the original stays */
+          if (existsSync(target)) await moveToTrash(target).catch(() => {});
+          throw copying;
+        }
+        await moveToTrash(folder);
+      }
+    } catch (e) {
+      failed.push({ name: basename(folder), error: /** @type {Error} */ (e).message });
+      continue;
+    }
+    moved++;
+    const real = realpathSync(target);
+    const was = join(realFrom, basename(folder));
+    for (const r of state.recent) if (r.path === folder || r.path === was) r.path = real;
+  }
+  await writeState(state);
+  return { moved, failed };
 }

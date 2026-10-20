@@ -14,7 +14,7 @@ test('an agent that asks: yes for good where it offers that, else yes this once;
   assert.equal(allowOption({}), null);
 });
 
-test("the older model and mode lists (Gemini CLI's) read as the config options the chat's menu has", () => {
+test("the older model and mode lists read as the config options the chat's menu has", () => {
   const options = legacyOptions({
     models: { currentModelId: 'auto', availableModels: [{ modelId: 'auto', name: 'Auto' }, { modelId: 'pro', name: 'Pro', description: 'slow' }] },
     modes: { currentModeId: 'yolo', availableModes: [{ id: 'default', name: 'Default' }, { id: 'yolo', name: 'YOLO' }] },

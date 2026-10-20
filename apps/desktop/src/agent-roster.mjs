@@ -1,13 +1,13 @@
 /**
  * The agents the chat can use, as Settings → Agents shows them, and the person's choices about them:
  *
- *   · codex, claude, gemini, copilot, cursor, opencode, codebuddy, qwen, kimi — the person's own agents (agents.mjs):
- *     Codex, Claude Code, Gemini CLI, GitHub Copilot, Cursor, OpenCode, CodeBuddy, Qwen Code and Kimi. Each uses the
- *     account signed in on the computer as it is: connecting opens Terminal for its own sign-in command only when it
- *     is signed out, disconnecting only stops OpenFilm using it, and connecting again uses whichever account is signed
- *     in then (one switched in the agent or its maker's app). `account` says whose it is. Codex and Claude Code are
- *     shown in the chat's menu from the start; the others once the person connects one or switches it on. Codex is
- *     connected from the start, Claude Code once the person connects it.
+ *   · codex, claude, copilot, cursor, opencode, codebuddy, qwen, kimi — the person's own agents (agents.mjs): Codex,
+ *     Claude Code, GitHub Copilot, Cursor, OpenCode, CodeBuddy, Qwen Code and Kimi. Each uses the account signed in on
+ *     the computer as it is: connecting opens Terminal for its own sign-in command only when it is signed out,
+ *     disconnecting only stops OpenFilm using it, and connecting again uses whichever account is signed in then (one
+ *     switched in the agent or its maker's app). `account` says whose it is. Codex and Claude Code are shown in the
+ *     chat's menu from the start; the others once the person connects one or switches it on. Codex is connected from
+ *     the start, Claude Code once the person connects it.
  *   · byok — the app's own agent (Pi, pi-agent.mjs) on the person's own models, each set up on its own: the name the
  *     chat's menu shows, its service (an address on a standard API in one of three formats: the OpenAI Responses API
  *     (…/v1/responses), the OpenAI Chat Completions API (…/v1/chat/completions) or the Anthropic Messages API
@@ -35,10 +35,10 @@ import { join } from 'node:path';
 import { PI_APIS, modelEffort } from './pi-config.mjs';
 
 /** The person's own agents, as agents.mjs AGENTS has them. */
-export const OWN_AGENT_IDS = Object.freeze(['codex', 'claude', 'gemini', 'copilot', 'cursor', 'opencode', 'codebuddy', 'qwen', 'kimi']);
+export const OWN_AGENT_IDS = Object.freeze(['codex', 'claude', 'copilot', 'cursor', 'opencode', 'codebuddy', 'qwen', 'kimi']);
 export const AGENT_IDS = Object.freeze([...OWN_AGENT_IDS, 'byok']);
 export const AGENT_NAMES = Object.freeze({
-  codex: 'Codex', claude: 'Claude Code', gemini: 'Gemini CLI', copilot: 'GitHub Copilot', cursor: 'Cursor', opencode: 'OpenCode',
+  codex: 'Codex', claude: 'Claude Code', copilot: 'GitHub Copilot', cursor: 'Cursor', opencode: 'OpenCode',
   codebuddy: 'CodeBuddy', qwen: 'Qwen Code', kimi: 'Kimi', byok: 'Own key',
 });
 const isOwn = (id) => OWN_AGENT_IDS.includes(id);

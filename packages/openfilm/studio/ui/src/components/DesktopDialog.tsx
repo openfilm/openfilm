@@ -27,11 +27,10 @@ const FEATURES: { key: string; icon: React.ReactNode }[] = [
   { key: 'history', icon: <History size={15} strokeWidth={1.75} /> },
 ];
 
-/** The agents it finds on the computer, by their marks (Codex's is OpenAI's, Gemini CLI's is Google's). */
+/** The agents it finds on the computer, by their marks (Codex's is OpenAI's). */
 const AGENTS: { id: string; name: string }[] = [
   { id: 'claude', name: 'Claude Code' },
   { id: 'openai', name: 'Codex' },
-  { id: 'google', name: 'Gemini CLI' },
   { id: 'copilot', name: 'GitHub Copilot' },
   { id: 'cursor', name: 'Cursor' },
   { id: 'opencode', name: 'OpenCode' },

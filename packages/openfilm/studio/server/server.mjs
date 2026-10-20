@@ -29,7 +29,7 @@ import { ownHost, startPages } from './pages.mjs';
 import { HttpError, cookie, json, readJson } from './http.mjs';
 import { acceptWebSocket } from './websocket.mjs';
 import {
-  ProjectError, createFolder, createProject, deleteFolder, deleteProject, libraryRoot, listFolders, listProjects, locateProject, markOpened,
+  ProjectError, createFolder, createProject, deleteFolder, deleteProject, libraryRoot, listFolders, listProjects, locateProject, markOpened, moveLibrary,
   moveProjectToFolder, openProject, projectById, renameFolder, renameProject, studioHome, studioKey, TOOL_DIR,
 } from './projects.mjs';
 import { FetchError, createFetches, fetchFilm, parseRepoUrl } from './fetch-repo.mjs';
@@ -55,7 +55,7 @@ import { projectSettingsRoute } from './project-settings.mjs';
 import { markersRoute } from './markers.mjs';
 import { transitionPageRoutes } from './transition-pages.mjs';
 import { createAsks, getRoute, subtitleTranscriber, subtitleTranslator } from './get.mjs';
-import { LOCATION_KEYS, locations, usableFolder } from '../../src/locations.mjs';
+import { LOCATION_KEYS, chooseFolder, locations, usableFolder } from '../../src/locations.mjs';
 import { doctor } from '../../src/doctor.mjs';
 import { recentProblems } from '../../src/problems.mjs';
 import { exportDiagnostics } from './diagnostics.mjs';
@@ -373,6 +373,16 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* where new projects go (src/locations.mjs): the folder, its default, and its disk's free space; a POST opens it
        in the system's file manager */
     if (parts[0] === 'locations' && parts.length === 1 && req.method === 'GET') return json(res, 200, locations());
+    /* the library moved (projects.mjs moveLibrary): { path } (null: the default), and with `move` its projects go too */
+    if (parts[0] === 'locations' && parts[1] === 'projects' && parts.length === 2 && req.method === 'PUT') {
+      const { path: asked, move } = /** @type {{ path?: unknown, move?: unknown }} */ (await readJson(req) ?? {});
+      let to = null;
+      if (asked != null) {
+        try { to = usableFolder(asked); } catch (e) { throw new HttpError(400, /** @type {Error} */ (e).message); }
+      }
+      const done = await moveLibrary(to, { move: move === true, choose: (folder) => chooseFolder('projectsFolder', folder) });
+      return json(res, 200, { ...done, locations: locations() });
+    }
     if (parts[0] === 'locations' && parts[1] === 'projects' && parts.length === 2 && req.method === 'POST') {
       const folder = locations()[parts[1]].path;
       mkdirSync(folder, { recursive: true });
@@ -655,16 +665,6 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const videos = (await listFiles(project.path)).files.filter((f) => f.kind === 'video').map((f) => f.path);
       return json(res, 200, { on: true, height: proxies.height, states: await ensureProxies(project.path, videos, proxies.height) });
     }
-    /* what a link leads to copied into the project in its place (files.mjs collect) */
-    if (rest === 'files/collect' && req.method === 'POST') {
-      const { path: rel } = /** @type {{ path?: unknown }} */ (await readJson(req));
-      return json(res, 200, { path: await collect(project.path, String(rel ?? '')) });
-    }
-    /* a video's frame made a still beside it (files.mjs freezeFrame): the timeline's freeze frame */
-    if (rest === 'files/still' && req.method === 'POST') {
-      const { path: from, ms } = /** @type {{ path?: string, ms?: number }} */ (await readJson(req));
-      return json(res, 200, { path: await freezeFrame(project.path, String(from ?? ''), Number(ms)) });
-    }
     /* renders of the stretches the preview played late (preview-cache.mjs), asked for when not made yet: each one's
        name and state, at the proxies' size */
     if (rest === 'preview-cache' && (req.method === 'POST' || req.method === 'GET')) {
@@ -677,6 +677,16 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       if (!(rate > 0 && rate <= 240)) throw new HttpError(400, 'fps: a frame rate');
       const { proxies } = readPrefs();
       return json(res, 200, { late: list, ranges: list.length ? ensurePreviews(project.path, /** @type {[number, number][]} */ (list), rate, proxies.height) : [] });
+    }
+    /* what a link leads to copied into the project in its place (files.mjs collect) */
+    if (rest === 'files/collect' && req.method === 'POST') {
+      const { path: rel } = /** @type {{ path?: unknown }} */ (await readJson(req));
+      return json(res, 200, { path: await collect(project.path, String(rel ?? '')) });
+    }
+    /* a video's frame made a still beside it (files.mjs freezeFrame): the timeline's freeze frame */
+    if (rest === 'files/still' && req.method === 'POST') {
+      const { path: from, ms } = /** @type {{ path?: string, ms?: number }} */ (await readJson(req));
+      return json(res, 200, { path: await freezeFrame(project.path, String(from ?? ''), Number(ms)) });
     }
     if (rest === 'files') {
       const at = url.searchParams.get('path') ?? '';
@@ -1091,7 +1101,8 @@ async function clipPoster(root, base, clip, durationMs) {
 /** A file in the app the system opens it with. */
 function openFile(/** @type {string} */ file) {
   const [cmd, ...args] = opener(file);
-  try { spawn(cmd, args, { stdio: 'ignore', detached: true, windowsHide: true }).on('error', () => {}).unref(); } catch { /* nothing opens it */ }
+  /* never `windowsHide`: Explorer opens the folder's window, or the file's app, hidden as it was asked to start */
+  try { spawn(cmd, args, { stdio: 'ignore', detached: true }).on('error', () => {}).unref(); } catch { /* nothing opens it */ }
 }
 
 /** The person's browser, at `url`. */

@@ -22,7 +22,7 @@ export type AgentPick = LocalAgentId;
 
 type ConfigOptions = NonNullable<LocalAgentSessionInfo['configOptions']>;
 
-const AGENT_IDS: readonly LocalAgentId[] = ['codex', 'claude', 'gemini', 'copilot', 'cursor', 'opencode', 'codebuddy', 'qwen', 'kimi', 'byok'];
+const AGENT_IDS: readonly LocalAgentId[] = ['codex', 'claude', 'copilot', 'cursor', 'opencode', 'codebuddy', 'qwen', 'kimi', 'byok'];
 const isAgent = (v: unknown): v is LocalAgentId => AGENT_IDS.includes(v as LocalAgentId);
 
 interface Persisted {

@@ -149,7 +149,7 @@ test('records are found where each agent keeps them, and a turn reads its own re
   ]));
   assert.ok(findCodexRecord({ sessionId: 'th-56789', env }));
   assert.equal(agentRecordCalls({ agent: 'codex', sessionId: 'th-56789', env, from: 0, to: Infinity }).calls.length, 1);
-  assert.equal(agentRecordCalls({ agent: 'gemini', sessionId: 'x', env }), null, 'an agent whose record is not read');
+  assert.equal(agentRecordCalls({ agent: 'cursor', sessionId: 'x', env }), null, 'an agent whose record is not read');
 });
 
 test("Kimi's wire: each request from llm.request to step.end, with the system prompt and tools in effect and the model's own time", () => {

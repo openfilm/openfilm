@@ -7,7 +7,7 @@
  * are written one at a time (see editor/use-film.ts); the agent's writes come in through the folder's events.
  */
 import * as React from 'react';
-import { BookmarkPlus, ClipboardCopy, ClipboardPaste, GalleryVerticalEnd, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, TriangleAlert } from 'lucide-react';
+import { BookmarkPlus, ClipboardCopy, ClipboardPaste, GalleryVerticalEnd, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, Share, TriangleAlert } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
 import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type Op, type ProjectFilm, type ProjectSettings } from '@/api';
 import { useT } from '@/i18n';
@@ -2482,6 +2482,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const startRename = () => { setTitleEditWidth(titleBoxRef.current?.offsetWidth ?? null); setTitleDraft(title); setRenaming(true); };
   /* in an app with tabs: the tab says this project's title; the tabs are where the projects button and the title are */
   const inTabs = Boolean(studioHost?.tabs);
+  /* the film at the playhead, drawn by Studio as the projects list will show it */
+  const coverFromFrame = () => {
+    if (previewError || totalMs <= 0) { toast.show(t('project.filmNotReady')); return; }
+    void api.setCover(projectId, { ms: Math.max(0, Math.min(totalMs - 1, timeRef.current)) })
+      .then(() => toast.show(t('projects.coverSet')), () => toast.showError(t('projects.coverFailed')));
+  };
   /* the app's "New Tab" (its menu): the projects, to pick what the new tab shows */
   React.useEffect(() => studioHost?.tabs?.onPick(() => setProjectsOpen(true)), []);
   React.useEffect(() => { if (title) studioHost?.tabs?.report({ title }); }, [title]);
@@ -2640,7 +2646,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
               </Tooltip>}
             </div>
             {inTabs ? (
-              <TabStrip onRename={renameTab} onNew={() => setProjectsOpen(true)} maxLength={TITLE_MAX_CHARS} />
+              <TabStrip onRename={renameTab} onNew={() => setProjectsOpen(true)} onCoverFromFrame={coverFromFrame} maxLength={TITLE_MAX_CHARS} />
             ) : <div className="min-w-0 flex-1" />}
             <div ref={headerOpsRef} className="pointer-events-auto flex min-w-0 items-center justify-end gap-1">
               <ProjectLayoutMenu className={TOP_BTN}
@@ -2651,19 +2657,18 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 onTimeline={setTimelineOpen} onInspector={setInspectorOpen}
                 hostPanel={hostPanel ? { label: hostPanel.label, open: hostPanel.open, onChange: hostPanel.setOpen } : null} />
               <ProjectHistoryButton open={historyOpen} onClick={openHistory} className={TOP_BTN} />
-              <ProjectMenu className={TOP_BTN}
-                /* the film at the playhead, drawn by Studio as the projects list will show it */
-                onCoverFromFrame={() => {
-                  if (previewError || totalMs <= 0) { toast.show(t('project.filmNotReady')); return; }
-                  void api.setCover(projectId, { ms: Math.max(0, Math.min(totalMs - 1, timeRef.current)) })
-                    .then(() => toast.show(t('projects.coverSet')), () => toast.showError(t('projects.coverFailed')));
-                }}
-                onExport={() => {
-                  if (previewError) toast.showError(`${t('project.filmCannotExport')} ${previewError}`);
-                  else if (totalMs > 0) setExportOpen(true);
-                  else toast.show(t('project.filmNotReady'));
-                }}
-                onReveal={() => reveal('')} />
+              <Tooltip label={t('projectMenu.export')} side="bottom">
+                <button type="button" aria-label={t('projectMenu.export')} aria-haspopup="dialog" aria-expanded={exportOpen} className={TOP_BTN}
+                  onClick={() => {
+                    if (previewError) toast.showError(`${t('project.filmCannotExport')} ${previewError}`);
+                    else if (totalMs > 0) setExportOpen(true);
+                    else toast.show(t('project.filmNotReady'));
+                  }}>
+                  <Share size={16} />
+                </button>
+              </Tooltip>
+              {/* in an app's tabs these are in the tab's menu */}
+              {inTabs ? null : <ProjectMenu className={TOP_BTN} onCoverFromFrame={coverFromFrame} onReveal={() => reveal('')} />}
             </div>
             <div aria-hidden className="shrink-0 self-stretch" style={{ width: 'var(--titlebar-right-x)' }} />
           </div>

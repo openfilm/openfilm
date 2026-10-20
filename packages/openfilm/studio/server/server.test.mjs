@@ -717,3 +717,23 @@ test('a frame from a page larger than the cap closes its stream; small ones are 
   await closed;
   assert.ok(Buffer.concat(got).includes(Buffer.from([0x88, 2, 0x03, 0xf1])), 'a close saying the message was too big');
 });
+
+test('Settings moves the library: how many projects it holds, then the folder and, when asked, its projects', async () => {
+  const before = await (await api('/api/locations')).json();
+  const { project } = await (await api('/api/projects', { method: 'POST', body: { name: 'To move' } })).json();
+  assert.equal((await (await api('/api/locations')).json()).projects.count, before.projects.count + 1);
+  const to = join(scratch, 'Moved library');
+  const res = await api('/api/locations/projects', { method: 'PUT', body: { path: to, move: true } });
+  const done = await res.json();
+  assert.equal(res.status, 200);
+  assert.equal(done.failed.length, 0);
+  assert.equal(done.locations.projects.path, to);
+  assert.equal(done.locations.projects.chosen, true);
+  assert.ok(existsSync(join(to, 'To move', 'film.html')));
+  const listed = (await (await api('/api/projects')).json()).projects.find((p) => p.id === project.id);
+  assert.equal(listed.path, join(realpathSync(to), 'To move'), 'the same project, at its new folder');
+  assert.equal((await api('/api/locations/projects', { method: 'PUT', body: { path: 'relative' } })).status, 400);
+  const back = await (await api('/api/locations/projects', { method: 'PUT', body: { path: null, move: true } })).json();
+  assert.equal(back.locations.projects.chosen, false);
+  assert.ok(existsSync(join(back.locations.projects.path, 'To move', 'film.html')), 'and back to the default');
+});

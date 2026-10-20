@@ -22,8 +22,8 @@
  *                 request. No tools' definitions: Copilot does not keep them, and its OpenTelemetry makes no spans
  *                 over ACP.
  *
- * Gemini CLI, Qwen Code, CodeBuddy and OpenCode keep the conversation without the system prompt or the tools:
- * theirs are read from the logs they are started with (agent-logs.mjs). Cursor's prompt is made on its servers.
+ * Qwen Code, CodeBuddy and OpenCode keep the conversation without the system prompt or the tools: theirs are read
+ * from the logs they are started with (agent-logs.mjs). Cursor's prompt is made on its servers.
  *
  * Neither record is a public format: read for what it has, and whatever is not understood is left out, never a
  * failure. A request's messages are rebuilt from the record, as the agent keeps them: not the bytes on the wire.

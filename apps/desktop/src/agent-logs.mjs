@@ -1,14 +1,9 @@
 /**
- * What the person's own Gemini CLI, Qwen Code, CodeBuddy and OpenCode sent their models in a turn. Their own records
- * keep the conversation without the system prompt or the tools, so each is started with its own logging switch
- * (official, local only), writing into a folder of the app's for that one process, and a turn's requests are read
- * from there once it ends, in the shape agent-records.mjs gives Claude Code's, Codex's, Kimi's and Copilot's.
+ * What the person's own Qwen Code, CodeBuddy and OpenCode sent their models in a turn. Their own records keep the
+ * conversation without the system prompt or the tools, so each is started with its own logging switch (official, local
+ * only), writing into a folder of the app's for that one process, and a turn's requests are read from there once it
+ * ends, in the shape agent-records.mjs gives Claude Code's, Codex's, Kimi's and Copilot's.
  *
- *   Gemini CLI    its telemetry to a local file (GEMINI_TELEMETRY_TARGET=local, _OUTFILE): records of pretty JSON one
- *                 after the other. Each `gemini_cli.api_request` has the contents as sent (`request_text`), its
- *                 `llm_call` span (the same span id) the system instructions and the tools, the next
- *                 `gemini_cli.api_response` of its prompt id the answer's chunks and the usage. Prompts are in the
- *                 records by Gemini CLI's own default (logPrompts), which the app leaves as the person has it.
  *   Qwen Code     `--openai-logging --openai-logging-dir`: one JSON per request, the body sent (OpenAI's chat format:
  *                 its system message, messages, tools) and the answer whole, with the session it was for.
  *   CodeBuddy     its raw request and response bodies to files (OTEL_LOG_RAW_API_BODIES=file:<dir>), with an
@@ -34,7 +29,7 @@ import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 
 /** The agents started with a logging switch. */
-export const LOGGED_AGENTS = Object.freeze(['gemini', 'qwen', 'codebuddy', 'opencode']);
+export const LOGGED_AGENTS = Object.freeze(['qwen', 'codebuddy', 'opencode']);
 
 /** a process's logs are kept this long */
 const LOG_KEEP_DAYS = 7;
@@ -44,10 +39,10 @@ const LOG_MAX = 256 * 1024 * 1024;
 const RECEIVE_MAX = 64 * 1024 * 1024;
 
 /**
- * How long after a turn its requests are all in the log: Gemini CLI writes them in batches (every few seconds),
- * OpenCode sends them so; Qwen Code and CodeBuddy as each answer ends.
+ * How long after a turn its requests are all in the log: OpenCode sends them in batches (every few seconds); Qwen Code
+ * and CodeBuddy write each as its answer ends.
  */
-export const LOG_SETTLE_MS = Object.freeze({ gemini: 6000, opencode: 6000 });
+export const LOG_SETTLE_MS = Object.freeze({ opencode: 6000 });
 
 const str = (v) => (typeof v === 'string' ? v : v == null ? '' : JSON.stringify(v));
 const parse = (v, fallback = null) => { if (typeof v !== 'string') return v ?? fallback; try { return JSON.parse(v); } catch { return fallback; } };
@@ -69,9 +64,6 @@ const mentions = (file, re) => { try { return re.test(readFileSync(file, 'utf8')
 /** Whether the person has set the agent's telemetry or logging themselves: then the app leaves it as it is. */
 export function ownLogging(agent, { shell = {}, home = homedir(), cwd = '' } = {}) {
   switch (agent) {
-    case 'gemini':
-      return setInShell(shell, /^(GEMINI_TELEMETRY_|OTEL_)/)
-        || [join(home, '.gemini', 'settings.json'), cwd && join(cwd, '.gemini', 'settings.json')].some((f) => f && mentions(f, /"telemetry"\s*:/));
     case 'qwen':
       return [join(home, '.qwen', 'settings.json'), cwd && join(cwd, '.qwen', 'settings.json')].some((f) => f && mentions(f, /"enableOpenAILogging"\s*:\s*true/));
     case 'codebuddy': return setInShell(shell, /^OTEL_LOG_RAW_API_BODIES$/);
@@ -114,8 +106,6 @@ export async function logSwitches(agent, { base, shell = {}, home = homedir(), c
   mkdirSync(dir, { recursive: true });
   const on = { ...none, log: { agent, dir } };
   switch (agent) {
-    case 'gemini':
-      return { ...on, env: { GEMINI_TELEMETRY_ENABLED: 'true', GEMINI_TELEMETRY_TARGET: 'local', GEMINI_TELEMETRY_OUTFILE: join(dir, 'telemetry.log'), GEMINI_TELEMETRY_TRACES_ENABLED: 'true' } };
     case 'qwen':
       return { ...on, args: ['--openai-logging', '--openai-logging-dir', dir] };
     case 'codebuddy':
@@ -380,133 +370,6 @@ export function codebuddyCalls(dir, { sessionId, from = 0, to = Infinity } = {})
   return calls.sort((a, b) => a.startedAt - b.startedAt);
 }
 
-/* ── Gemini CLI ──────────────────────────────────────────────────────────── */
-
-/** The records of a Gemini CLI telemetry file: JSON values one after the other, each split where its braces close. */
-export function splitRecords(raw) {
-  const out = [];
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
-  let start = -1;
-  for (let i = 0; i < raw.length; i += 1) {
-    const c = raw[i];
-    if (inString) {
-      if (escaped) escaped = false;
-      else if (c === '\\') escaped = true;
-      else if (c === '"') inString = false;
-      continue;
-    }
-    if (c === '"') inString = true;
-    else if (c === '{' || c === '[') { if (depth++ === 0) start = i; }
-    else if ((c === '}' || c === ']') && depth > 0 && --depth === 0) {
-      try { out.push(JSON.parse(raw.slice(start, i + 1))); } catch { /* a record cut short */ }
-    }
-  }
-  return out;
-}
-
-/** a span's time ([seconds, nanoseconds]) in ms */
-const hrMs = (t) => (Array.isArray(t) ? Number(t[0]) * 1000 + Math.round(Number(t[1]) / 1e6) : null);
-
-/** Gemini's content parts, as the turn log has them; a function's response is a message of its own. */
-function geminiMessages(contents) {
-  const out = [];
-  for (const c of Array.isArray(contents) ? contents : []) {
-    let own = [];
-    const results = [];
-    for (const p of c?.parts ?? []) {
-      /* what Gemini CLI puts first by itself: the date, the system, the folder */
-      if (c.role !== 'model' && typeof p?.text === 'string' && /^\s*<session_context>/.test(p.text)) {
-        if (own.length) out.push({ role: 'user', content: own });
-        own = [];
-        out.push({ role: 'context', as: 'user', label: 'session_context', content: [text(p.text)] });
-      } else if (typeof p?.text === 'string') own.push(p.thought ? { type: 'thinking', thinking: p.text } : text(p.text));
-      else if (p?.functionCall) own.push({ type: 'toolCall', id: String(p.functionCall.id ?? ''), name: String(p.functionCall.name ?? ''), arguments: p.functionCall.args ?? {} });
-      else if (p?.functionResponse) {
-        const r = p.functionResponse;
-        const said = r.response?.output ?? r.response?.error ?? r.response;
-        results.push({ role: 'toolResult', toolCallId: String(r.id ?? ''), toolName: String(r.name ?? 'tool'), content: [text(str(said))], isError: r.response?.error != null });
-      } else if (p?.inlineData) own.push(picture(p.inlineData.mimeType, p.inlineData.data));
-      else if (p) own.push({ type: 'other', value: p });
-    }
-    if (own.length) out.push({ role: c.role === 'model' ? 'assistant' : 'user', content: own });
-    out.push(...results);
-  }
-  return out;
-}
-
-/** An answer's chunks (a stream's, as Gemini CLI keeps them) joined into its parts. */
-function geminiAnswer(chunks) {
-  const parts = [];
-  let finish = null;
-  for (const chunk of Array.isArray(chunks) ? chunks : [chunks]) {
-    const candidate = chunk?.candidates?.[0];
-    if (candidate?.finishReason) finish = candidate.finishReason;
-    for (const p of candidate?.content?.parts ?? []) {
-      const last = parts[parts.length - 1];
-      if (typeof p?.text === 'string') {
-        const kind = p.thought ? 'thinking' : 'text';
-        if (last?.type === kind) last[kind] += p.text;
-        else parts.push(kind === 'thinking' ? { type: 'thinking', thinking: p.text } : text(p.text));
-      } else if (p?.functionCall) parts.push({ type: 'toolCall', id: String(p.functionCall.id ?? ''), name: String(p.functionCall.name ?? ''), arguments: p.functionCall.args ?? {} });
-      else if (p) parts.push({ type: 'other', value: p });
-    }
-  }
-  return { parts, finish };
-}
-
-/** Gemini's tools (`[{ functionDeclarations: [...] }]`), each as the turn log has it. */
-const geminiTools = (tools) => (Array.isArray(tools) ? tools.flatMap((t) => (Array.isArray(t?.functionDeclarations)
-  ? t.functionDeclarations.map((f) => ({ name: f?.name, description: f?.description, parameters: f?.parametersJsonSchema ?? f?.parameters }))
-  : [{ name: Object.keys(t ?? {})[0] ?? 'tool', description: '', parameters: t }])) : null);
-
-/**
- * The requests of one session in Gemini CLI's telemetry records whose asking was between `from` and `to` (ms).
- * Calls Gemini CLI makes for itself (which model to use: role `utility_router`) are named as its own.
- */
-export function geminiCallsOf(records, { sessionId, from = 0, to = Infinity } = {}) {
-  const spans = new Map();
-  for (const r of records) if (r?._spanContext?.spanId && r.name === 'llm_call') spans.set(r._spanContext.spanId, r);
-  const logs = records.filter((r) => typeof r?.attributes?.['event.name'] === 'string' && (!sessionId || r.attributes['session.id'] === sessionId));
-  const calls = [];
-  logs.forEach((r, i) => {
-    const a = r.attributes;
-    if (a['event.name'] !== 'gemini_cli.api_request') return;
-    const at = ms(a['event.timestamp']) ?? hrMs(r.hrTime) ?? 0;
-    if (at < from || at > to) return;
-    /* its answer (or its error): the next of its prompt id after it */
-    const reply = logs.slice(i + 1).find((x) => x.attributes.prompt_id === a.prompt_id && /^gemini_cli\.api_(response|error)$/.test(x.attributes['event.name']));
-    const span = spans.get(r.spanContext?.spanId);
-    const sa = span?.attributes ?? {};
-    const system = parse(sa['gen_ai.system_instructions']);
-    const ra = reply?.attributes ?? {};
-    const { parts, finish } = geminiAnswer(parse(ra.response_text, []));
-    const input = Number(ra.input_token_count) || 0;
-    const cached = Number(ra.cached_content_token_count) || 0;
-    const thoughts = Number(ra.thoughts_token_count) || 0;
-    const answer = ra['event.name'] === 'gemini_cli.api_error'
-      ? { role: 'assistant', content: [], stopReason: 'error', errorMessage: str(ra.error ?? ra.error_message ?? 'error') }
-      : reply ? {
-        role: 'assistant', content: parts,
-        usage: { input: Math.max(0, input - cached), cacheRead: cached, cacheWrite: 0, output: (Number(ra.output_token_count) || 0) + thoughts, reasoning: thoughts },
-        stopReason: finish ?? (Array.isArray(ra.finish_reasons) ? ra.finish_reasons[0] : null) ?? null, ...(ra.model ? { responseModel: String(ra.model) } : {}),
-      } : null;
-    const role = String(a.role ?? 'main');
-    calls.push({
-      startedAt: at, ms: Number(ra.duration_ms) || (ms(ra['event.timestamp']) ?? at) - at,
-      messages: geminiMessages(parse(a.request_text, [])),
-      systemPrompt: typeof system === 'string' ? system : system ? str(system) : null,
-      tools: span ? geminiTools(parse(sa['gen_ai.tool.definitions'], [])) : null,
-      answer, settings: { model: a.model ?? null, auth: a.auth_type ?? null },
-      ...(role !== 'main' ? { thread: { id: role, label: role } } : {}),
-    });
-  });
-  return calls;
-}
-
-export const geminiCalls = (file, opts) => geminiCallsOf(splitRecords(readText(file)), opts);
-
 /* ── OpenCode ────────────────────────────────────────────────────────────── */
 
 /** The AI SDK's prompt (system, user, assistant, tool messages, each its parts), as the turn log has it. */
@@ -599,7 +462,6 @@ export function agentLogCalls({ agent, sessionId, log, from = 0, to = Infinity }
   if (!dir || !existsSync(dir)) return null;
   const opts = { sessionId, from, to };
   switch (agent) {
-    case 'gemini': return { file: join(dir, 'telemetry.log'), calls: geminiCalls(join(dir, 'telemetry.log'), opts) };
     case 'qwen': return { file: dir, calls: qwenCalls(dir, opts) };
     case 'codebuddy': return { file: join(dir, 'index.jsonl'), calls: codebuddyCalls(dir, opts) };
     case 'opencode': return { file: join(dir, 'spans.jsonl'), calls: opencodeCalls(join(dir, 'spans.jsonl'), opts) };

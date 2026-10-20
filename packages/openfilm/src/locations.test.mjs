@@ -1,11 +1,11 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { exportsRoot, libraryDefault, libraryRoot, locations, usableFolder } from './locations.mjs';
+import { exportsRoot, libraryDefault, libraryProjects, libraryRoot, locations, usableFolder } from './locations.mjs';
 
-const KEYS = ['OPENFILM_HOME', 'OPENFILM_LIBRARY', 'OPENFILM_EXPORTS'];
+const KEYS = ['OPENFILM_HOME', 'OPENFILM_LIBRARY', 'OPENFILM_EXPORTS', 'OPENFILM_SHARED_HOME'];
 let saved;
 let home;
 beforeEach(() => {
@@ -14,6 +14,7 @@ beforeEach(() => {
   process.env.OPENFILM_HOME = home;
   delete process.env.OPENFILM_LIBRARY;
   delete process.env.OPENFILM_EXPORTS;
+  delete process.env.OPENFILM_SHARED_HOME;
 });
 afterEach(() => {
   for (const k of KEYS) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; }
@@ -61,4 +62,27 @@ test('a folder offered is made and kept by its full path; a disk, Studio\'s own 
   assert.throws(() => usableFolder('Projects'), /full path/);
   assert.throws(() => usableFolder(process.platform === 'win32' ? 'C:\\' : '/'), /not the disk itself/);
   assert.throws(() => usableFolder(join(home, 'inside')), /own settings/);
+});
+
+test('a library\'s projects are its folders that hold a film; Settings counts them', () => {
+  const lib = join(home, 'lib');
+  process.env.OPENFILM_LIBRARY = lib;
+  for (const name of ['One', 'Two', '.hidden']) { mkdirSync(join(lib, name), { recursive: true }); writeFileSync(join(lib, name, 'film.html'), ''); }
+  mkdirSync(join(lib, 'Lost its film', '.film'), { recursive: true });
+  writeFileSync(join(lib, 'Lost its film', '.film', 'id'), 'abcdef');
+  mkdirSync(join(lib, 'Plain'));
+  writeFileSync(join(lib, 'notes.txt'), '');
+  assert.deepEqual(libraryProjects().map((p) => p.slice(lib.length + 1)).sort(), ['Lost its film', 'One', 'Two']);
+  assert.equal(locations().projects.count, 3);
+  assert.deepEqual(libraryProjects(join(home, 'none')), [], 'a folder not there holds none');
+});
+
+test('with a shared home, the folder chosen there is the library; a folder inside either home is refused', () => {
+  const shared = join(home, '..', `of-shared-${process.pid}`);
+  process.env.OPENFILM_SHARED_HOME = shared;
+  mkdirSync(shared, { recursive: true });
+  writeFileSync(join(shared, 'prefs.json'), JSON.stringify({ projectsFolder: join(home, 'X', 'Projects') }));
+  prefs({ projectsFolder: join(home, 'Own') });
+  assert.equal(libraryRoot(), join(home, 'X', 'Projects'), 'the shared one, not its own');
+  assert.throws(() => usableFolder(join(shared, 'inside')), /own settings/);
 });

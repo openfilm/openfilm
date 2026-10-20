@@ -390,6 +390,8 @@ async function start() {
     extra: {
       OPENFILM_HOME: IDENTITY.studioHome ?? process.env.OPENFILM_HOME ?? join(app.getPath('home'), '.openfilm'),
       ...((IDENTITY.library ?? process.env.OPENFILM_LIBRARY) ? { OPENFILM_LIBRARY: IDENTITY.library ?? process.env.OPENFILM_LIBRARY } : {}),
+      /* a flavour with a home of its own still shares the person's library (src/locations.mjs) */
+      ...(IDENTITY.sharedHome ? { OPENFILM_SHARED_HOME: IDENTITY.sharedHome } : {}),
       /* the app names Studio's home, which would put exports inside it (Studio's rule for a home kept apart): the
          Desktop, where `openfilm` puts them, unless this is a flavour with a home of its own */
       ...(IDENTITY.studioHome || process.env.OPENFILM_EXPORTS ? {} : { OPENFILM_EXPORTS: app.getPath('desktop') }),
@@ -512,7 +514,11 @@ async function start() {
        that has none of its own: the person's own ffmpeg and browsers are what the agent's commands use */
     binDir: installOpenfilmCommand(DATA, { ffmpeg: ffmpegHere, env: browsers }),
     fallbackDir: ffmpegHere,
-    env: { OPENFILM_HOME: env.OPENFILM_HOME, ...(env.OPENFILM_LIBRARY ? { OPENFILM_LIBRARY: env.OPENFILM_LIBRARY } : {}) },
+    env: {
+      OPENFILM_HOME: env.OPENFILM_HOME,
+      ...(env.OPENFILM_LIBRARY ? { OPENFILM_LIBRARY: env.OPENFILM_LIBRARY } : {}),
+      ...(env.OPENFILM_SHARED_HOME ? { OPENFILM_SHARED_HOME: env.OPENFILM_SHARED_HOME } : {}),
+    },
     harness: async (id) => roster?.harness(id) ?? null,
     /* Developer mode: an agent whose own record lacks what its model got logs it here (agent-logs.mjs) */
     logDir: () => (readPreferences(DATA).developer ? join(DATA, 'agent-logs') : null),

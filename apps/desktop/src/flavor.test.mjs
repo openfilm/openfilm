@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { FLAVORS, flavorName } from './flavor.mjs';
 
 test('which app this is: packaged, the release unless built as the preview; from source, dev when asked', () => {
@@ -17,7 +19,14 @@ test('the preview shares nothing with an installed OpenFilm or the dev app', () 
     assert.notEqual(preview.bundleId, other.bundleId);
     assert.notEqual(preview.studioPort, other.studioPort);
     assert.notEqual(preview.studioHome, other.studioHome);
-    assert.notEqual(preview.library, other.library);
   }
   assert.ok(preview.studioHome, 'its own Studio home, not the machine\'s ~/.openfilm');
+});
+
+test('every app makes its projects in the person\'s one library', () => {
+  for (const flavor of Object.values(FLAVORS)) {
+    assert.equal(flavor.library, null);
+    /* the folder the person chose for it is kept in the machine's Studio home */
+    assert.equal(flavor.sharedHome ?? join(homedir(), '.openfilm'), join(homedir(), '.openfilm'));
+  }
 });

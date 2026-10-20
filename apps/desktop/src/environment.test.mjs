@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { environmentCache, expandWindowsVars, parseRegQuery, registryVariables, shellSubset, shellVariables, windowsFreshPath } from './environment.mjs';
+import {
+  environmentCache, expandWindowsVars, macProxy, noProxyList, parseRegQuery, parseScutilProxy, proxyVariables, registryVariables,
+  shellSubset, shellVariables, windowsFreshPath, windowsProxy, withSystemProxy,
+} from './environment.mjs';
 
 const PROFILE = ['C:', 'Users', 'someone'].join('\\');
 
@@ -100,4 +103,81 @@ test("the agents get all the person's shell sets, but what the shell and its ter
   assert.deepEqual(Object.keys(all).sort(), ['ANTHROPIC_BASE_URL', 'GITHUB_TOKEN', 'HTTPS_PROXY', 'NODE_EXTRA_CA_CERTS', 'PATH']);
   assert.ok(all.PATH.startsWith('/opt/homebrew/bin:/usr/bin'));
   assert.deepEqual(Object.keys(shellSubset(all, '/home/me/')).sort(), ['HTTPS_PROXY', 'PATH']);
+});
+
+const SCUTIL = `<dictionary> {
+  ExceptionsList : <array> {
+    0 : *.local
+    1 : 169.254/16
+  }
+  FTPPassive : 1
+  HTTPEnable : 1
+  HTTPPort : 7897
+  HTTPProxy : 127.0.0.1
+  HTTPSEnable : 1
+  HTTPSPort : 7897
+  HTTPSProxy : 127.0.0.1
+  SOCKSEnable : 0
+  __SCOPED__ : <dictionary> {
+    en0 : <dictionary> {
+      HTTPSEnable : 1
+      HTTPSPort : 9999
+      HTTPSProxy : 10.0.0.9
+    }
+  }
+}
+`;
+
+const INTERNET = `\r
+HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\r
+    ProxyEnable    REG_DWORD    0x1\r
+    ProxyServer    REG_SZ    127.0.0.1:7897\r
+    ProxyOverride    REG_SZ    localhost;127.*;10.*;172.16.*;192.168.*;*.lan;<local>\r
+`;
+
+test("macOS's proxy is read from its top settings, not an interface's", () => {
+  const found = macProxy(parseScutilProxy(SCUTIL));
+  assert.deepEqual(found, { http: '127.0.0.1:7897', https: '127.0.0.1:7897', socks: null, bypass: ['*.local', '169.254/16'] });
+  assert.equal(macProxy(parseScutilProxy('<dictionary> {\n  HTTPEnable : 0\n  HTTPSEnable : 0\n}\n')), null);
+  assert.equal(macProxy(parseScutilProxy('')), null);
+});
+
+test("Windows's proxy is read from the Internet settings: one server for all, or one per kind; off is none", () => {
+  const settings = parseRegQuery(INTERNET, ['REG_SZ', 'REG_DWORD']);
+  assert.equal(settings.ProxyEnable, '0x1');
+  assert.deepEqual(windowsProxy(settings), {
+    http: '127.0.0.1:7897', https: '127.0.0.1:7897', socks: null,
+    bypass: ['localhost', '127.*', '10.*', '172.16.*', '192.168.*', '*.lan', '<local>'],
+  });
+  assert.deepEqual(windowsProxy({ ProxyEnable: '0x1', ProxyServer: 'http=127.0.0.1:8080;https=127.0.0.1:8443;socks=127.0.0.1:1080' }),
+    { http: '127.0.0.1:8080', https: '127.0.0.1:8443', socks: '127.0.0.1:1080', bypass: [''] });
+  assert.equal(windowsProxy({ ProxyEnable: '0x0', ProxyServer: '127.0.0.1:7897' }), null);
+  assert.equal(windowsProxy({ ProxyEnable: '0x1' }), null);
+  assert.equal(windowsProxy(), null);
+});
+
+test('the exceptions become NO_PROXY: this computer always, wildcards as domains and address ranges', () => {
+  assert.equal(noProxyList(['localhost', '127.*', '10.*', '172.16.*', '192.168.*', '*.lan', '<local>', 'intra*', 'example.com', '169.254/16']),
+    'localhost,127.0.0.1,::1,127.0.0.0/8,10.0.0.0/8,172.16.0.0/16,192.168.0.0/16,.lan,example.com,169.254.0.0/16');
+  assert.equal(noProxyList(), 'localhost,127.0.0.1,::1');
+});
+
+test("the system's proxy is given as the variables programs read, in both cases", () => {
+  const env = proxyVariables({ http: '127.0.0.1:7897', https: null, socks: null, bypass: ['*.lan'] });
+  assert.equal(env.HTTPS_PROXY, 'http://127.0.0.1:7897');
+  assert.equal(env.https_proxy, 'http://127.0.0.1:7897');
+  assert.equal(env.HTTP_PROXY, 'http://127.0.0.1:7897');
+  assert.equal(env.no_proxy, 'localhost,127.0.0.1,::1,.lan');
+  assert.equal(env.ALL_PROXY, undefined);
+  assert.deepEqual(proxyVariables({ http: null, https: null, socks: '127.0.0.1:1080', bypass: [] }).ALL_PROXY, 'socks5h://127.0.0.1:1080');
+  assert.equal(proxyVariables({ http: 'socks5://127.0.0.1:1080', https: null, socks: null, bypass: [] }).HTTPS_PROXY, 'socks5://127.0.0.1:1080');
+  assert.deepEqual(proxyVariables(null), {});
+});
+
+test("the person's own proxy wins over the system's; with none, the system's is added", () => {
+  const proxy = proxyVariables({ http: '127.0.0.1:7897', https: '127.0.0.1:7897', socks: null, bypass: [] });
+  const mine = { PATH: '/usr/bin', https_proxy: 'http://10.0.0.1:3128' };
+  assert.equal(withSystemProxy(mine, proxy), mine);
+  assert.deepEqual(withSystemProxy({ PATH: '/usr/bin', NO_PROXY: 'corp' }, proxy), { ...proxy, PATH: '/usr/bin', NO_PROXY: 'corp' });
+  assert.deepEqual(withSystemProxy({ PATH: '/usr/bin' }, {}), { PATH: '/usr/bin' });
 });

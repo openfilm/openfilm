@@ -15,8 +15,6 @@
  *                 but its own, OpenFilm's and those let in, and `mcp.<name>.enabled: false` (merged with the person's).
  *   Qwen Code     a system-defaults file of the app's (QWEN_CODE_SYSTEM_DEFAULTS_PATH): `skills.disabled`,
  *                 `skills.directories` (OpenFilm's), `mcp.excluded`. Its lists merge with the person's own.
- *   Gemini CLI    the same (GEMINI_CLI_SYSTEM_DEFAULTS_PATH): `skills.disabled`, `mcp.excluded`; it takes no other
- *                 skills folder, so OpenFilm's reach it when named in a message.
  *   Copilot       OpenFilm's through COPILOT_SKILLS_DIRS and `--disable-mcp-server` for the person's own servers; it
  *                 has no way to hide a skill, so it keeps all of the person's.
  *   Pi            OpenFilm's only.
@@ -39,9 +37,9 @@ const require = createRequire(import.meta.url);
 const skillsLib = () => import(require.resolve('openfilm/skills'));
 
 /** The agents whose own skills can be hidden in OpenFilm (byok: the app's own agent, Pi). */
-export const FILTERED_AGENTS = Object.freeze(['claude', 'codex', 'opencode', 'qwen', 'gemini', 'byok']);
+export const FILTERED_AGENTS = Object.freeze(['claude', 'codex', 'opencode', 'qwen', 'byok']);
 /** The agents whose own MCP servers can be hidden in OpenFilm. */
-export const MCP_AGENTS = Object.freeze(['claude', 'codex', 'opencode', 'qwen', 'gemini', 'copilot']);
+export const MCP_AGENTS = Object.freeze(['claude', 'codex', 'opencode', 'qwen', 'copilot']);
 
 /** a session's folder of links is kept this long (a conversation resumed later makes a new one) */
 const KEEP_MS = 2 * 24 * 60 * 60_000;
@@ -135,7 +133,6 @@ export async function ownSkills(agent, { cwd = '', env = {}, home = homedir() } 
       break;
     }
     case 'qwen': dirs = [join(env.QWEN_HOME || join(home, '.qwen'), 'skills'), join(home, '.agents', 'skills'), ...project(['.qwen/skills', '.agents/skills'])]; break;
-    case 'gemini': dirs = [join(home, '.gemini', 'skills'), join(home, '.agents', 'skills'), ...project(['.gemini/skills', '.agents/skills'])]; break;
     case 'copilot': dirs = [join(env.COPILOT_HOME || join(home, '.copilot'), 'skills'), join(home, '.agents', 'skills'), ...project(['.github/skills', '.agents/skills', '.claude/skills'])]; break;
     default: return [];
   }
@@ -200,7 +197,6 @@ export function ownMcpServers(agent, { cwd = '', env = {}, home = homedir() } = 
       break;
     }
     case 'qwen': found = [join(env.QWEN_HOME || join(home, '.qwen'), 'settings.json'), ...(cwd ? [join(cwd, '.qwen', 'settings.json')] : [])].flatMap((f) => entries(readJson(f)?.mcpServers)); break;
-    case 'gemini': found = [join(home, '.gemini', 'settings.json'), ...(cwd ? [join(cwd, '.gemini', 'settings.json')] : [])].flatMap((f) => entries(readJson(f)?.mcpServers)); break;
     case 'copilot': found = entries(readJson(join(env.COPILOT_HOME || join(home, '.copilot'), 'mcp-config.json'))?.mcpServers); break;
     default: return [];
   }
@@ -231,7 +227,7 @@ function linkFolder(base, skills) {
   return dir;
 }
 
-/** A system-defaults file of the app's for this session (Qwen Code's, Gemini CLI's), beside its links. */
+/** A system-defaults file of the app's for this session (Qwen Code's), beside its links. */
 function defaultsFile(dir, name, settings) {
   const file = join(dir, name);
   writeFileSync(file, `${JSON.stringify(settings, null, 2)}\n`);
@@ -277,15 +273,14 @@ export async function sessionSkills(agent, { cwd, env = {}, dataDir, mine, allow
       const mcp = Object.fromEntries(mcpHidden.map((n) => [n, { enabled: false }]));
       return { env: { OPENCODE_CONFIG_CONTENT: JSON.stringify({ skills: { paths: [join(dir, 'skills')] }, permission: { skill }, ...(mcpHidden.length ? { mcp } : {}) }) }, log };
     }
-    case 'qwen':
-    case 'gemini': {
-      const variable = agent === 'qwen' ? 'QWEN_CODE_SYSTEM_DEFAULTS_PATH' : 'GEMINI_CLI_SYSTEM_DEFAULTS_PATH';
+    case 'qwen': {
+      const variable = 'QWEN_CODE_SYSTEM_DEFAULTS_PATH';
       if (env[variable]) return { log: { ...log, filtered: false, mcpFiltered: false, unfiltered: `${variable} is the person's own` } };
       const settings = {
-        skills: { disabled: hidden.map((s) => s.name), ...(agent === 'qwen' ? { directories: [join(dir, 'skills')] } : {}) },
+        skills: { disabled: hidden.map((s) => s.name), directories: [join(dir, 'skills')] },
         ...(mcpHidden.length ? { mcp: { excluded: mcpHidden } } : {}),
       };
-      return { env: { [variable]: defaultsFile(dir, `${agent}-defaults.json`, settings) }, log: { ...log, settings } };
+      return { env: { [variable]: defaultsFile(dir, 'qwen-defaults.json', settings) }, log: { ...log, settings } };
     }
     case 'copilot':
       return {

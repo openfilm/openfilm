@@ -1,12 +1,12 @@
 /**
- * The chat's agents: the person's own Claude Code, Codex, Gemini CLI, GitHub Copilot, Cursor, OpenCode, CodeBuddy,
- * Qwen Code or Kimi, driven over the Agent Client Protocol (ACP): a child process speaking JSON-RPC over stdin/stdout.
+ * The chat's agents: the person's own Claude Code, Codex, GitHub Copilot, Cursor, OpenCode, CodeBuddy, Qwen Code or
+ * Kimi, driven over the Agent Client Protocol (ACP): a child process speaking JSON-RPC over stdin/stdout.
  * The app is the client: initialize, session/new (or session/resume for a conversation from before), session/prompt;
  * session/update draws the chat, and session/request_permission asks the person in the chat.
  *
  * Claude Code and Codex speak it through their makers' official adapters (`@agentclientprotocol/claude-agent-acp`,
- * `@agentclientprotocol/codex-acp`, Apache-2.0), which the app carries; the others speak it themselves (`gemini --acp`,
- * `opencode acp`, …), as the ACP registry (agentclientprotocol.com/registry) starts them.
+ * `@agentclientprotocol/codex-acp`, Apache-2.0), which the app carries; the others speak it themselves (`opencode acp`,
+ * `qwen --acp`, …), as the ACP registry (agentclientprotocol.com/registry) starts them.
  *
  * Why the person's own installation, never one bundled with the app:
  *   · size: each official program is 200–330 MB; the adapters are a few MB and take its path
@@ -71,7 +71,6 @@ export const AGENTS = Object.freeze({
     login: ['login'],
     systemPrompt: true,
   },
-  gemini: { label: 'Gemini CLI', args: ['--acp', '--approval-mode', 'yolo'], login: [], approve: true },
   copilot: { label: 'GitHub Copilot', args: ['--acp', '--allow-all'], login: ['login'], approve: true },
   cursor: { label: 'Cursor', args: ['--force', 'acp'], auth: ['status'], login: ['login'], authenticate: 'cursor_login', approve: true },
   opencode: { label: 'OpenCode', args: ['acp'], login: ['auth', 'login'], approve: true },
@@ -919,7 +918,7 @@ export class AgentSession {
     const resumed = Boolean(session);
     session ??= await this.conn.agent.request(acp.methods.agent.session.new, params).catch((e) => { throw signInError(this.spec.label, e); });
     this.sessionId = session.sessionId;
-    /* an agent on the older model and mode lists (Gemini CLI): the same choices, as config options */
+    /* an agent on the older model and mode lists: the same choices, as config options */
     this.legacy = !session.configOptions && Boolean(session.models || session.modes);
     if (resumed) this.instructions = null;
     this.info = {

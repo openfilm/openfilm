@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckSquare, Download, FolderInput, FolderOpen, FolderSearch, Image, ImageOff, ImagePlus, ListX, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { CheckSquare, FolderInput, FolderOpen, FolderSearch, Image, ImageOff, ImagePlus, ListX, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import { Tooltip } from './Tooltip';
 import { useT } from '@/i18n';
@@ -7,8 +7,8 @@ import { useT } from '@/i18n';
 /**
  * A project's "…" menu.
  *
- * Each item shows only when its callback is passed: the editor's top bar passes the current frame as the cover, Export
- * and Reveal in Finder; a card in the Projects popover passes Open / Rename / Select / Move to folder / Change cover /
+ * Each item shows only when its callback is passed: the editor's top bar, when it has no tabs (in tabs they are in the
+ * tab's menu), passes the current frame as the cover and Reveal in Finder; a card in the Projects popover passes Open / Rename / Select / Move to folder / Change cover /
  * Restore cover / Reveal / Delete, or Locate… and Remove from list when the
  * project's folder is gone. The order is fixed here, not by the props, so the same menu looks the same wherever it
  * appears. It is a ContextMenu hanging from the button: it flips above it near the bottom of the window, and Esc
@@ -22,7 +22,6 @@ export function ProjectMenu({
   onChangeCover,
   onRestoreCover,
   onCoverFromFrame,
-  onExport,
   onReveal,
   onLocate,
   onRemove,
@@ -43,7 +42,6 @@ export function ProjectMenu({
   onRestoreCover?: () => void;
   /** The film as the viewer shows it now made the project's cover. */
   onCoverFromFrame?: () => void;
-  onExport?: () => void;
   /** Show the project's folder in Finder / Explorer. */
   onReveal?: () => void;
   /** Pick the folder a project whose folder is gone is in now. */
@@ -76,7 +74,6 @@ export function ProjectMenu({
   add('cover', <ImagePlus size={15} />, t('projects.changeCover'), onChangeCover);
   add('coverFrame', <Image size={15} />, t('projects.coverFromFrame'), onCoverFromFrame);
   add('coverReset', <ImageOff size={15} />, t('projects.restoreCover'), onRestoreCover);
-  add('export', <Download size={15} />, t('projectMenu.export'), onExport);
   add('reveal', <FolderOpen size={15} />, t('projects.revealFolder'), onReveal);
   add('locate', <FolderSearch size={15} />, t('projects.locate'), onLocate);
   add('remove', <ListX size={15} />, t('projects.removeFromList'), onRemove);

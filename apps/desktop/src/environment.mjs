@@ -6,7 +6,7 @@
  * ANTHROPIC_BASE_URL and the like, which an agent started here would wrongly inherit. Opened from the Dock, it has
  * only PATH=/usr/bin:/bin:/usr/sbin:/sbin, where neither Homebrew's ffmpeg nor the person's `claude` can be found.
  * Both get the same answer: the OS identity variables, plus the PATH (and proxies, and where the agents keep their
- * sign-in) of the person's login shell. On Windows there is no login shell, and the PATH a program inherits from
+ * sign-in) of the person's login shell; with no proxy set there, the system's own (a proxy app's). On Windows there is no login shell, and the PATH a program inherits from
  * Explorer can be old (what an installer added since the person signed in is missing): the PATH is read where Windows
  * keeps it now, the registry (with the Windows system variables a program needs). Either is read again while the app
  * runs, so an agent installed meanwhile is found without restarting it. Reads no Electron module, so `node --test`
@@ -135,12 +135,12 @@ function captureLoginShell(shell, env, timeoutMs) {
   });
 }
 
-/** `reg query <key>` output, read: each value's name and its text (REG_SZ and REG_EXPAND_SZ only). */
-export function parseRegQuery(text) {
+/** `reg query <key>` output, read: each value's name and its text (of `types`: REG_SZ and REG_EXPAND_SZ). */
+export function parseRegQuery(text, types = ['REG_SZ', 'REG_EXPAND_SZ']) {
   const values = {};
   for (const line of String(text ?? '').split(/\r?\n/)) {
-    const m = /^\s{2,}(\S(?:.*?\S)?)\s{2,}(REG_SZ|REG_EXPAND_SZ)\s{2,}(.*)$/.exec(line);
-    if (m) values[m[1]] = m[3].trim();
+    const m = /^\s{2,}(\S(?:.*?\S)?)\s{2,}(REG_[A-Z_]+)\s{2,}(.*)$/.exec(line);
+    if (m && types.includes(m[2])) values[m[1]] = m[3].trim();
   }
   return values;
 }
@@ -171,10 +171,10 @@ export function windowsFreshPath({ machine = {}, user = {}, source = process.env
 const REG_MACHINE = 'HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment';
 const REG_USER = 'HKCU\\Environment';
 
-function regQuery(key, timeoutMs) {
+function regQuery(key, timeoutMs, types = undefined) {
   return new Promise((resolve) => {
     const reg = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'reg.exe');
-    execFile(reg, ['query', key], { timeout: timeoutMs, encoding: 'utf8', windowsHide: true }, (error, stdout) => resolve(error ? null : parseRegQuery(stdout)));
+    execFile(reg, ['query', key], { timeout: timeoutMs, encoding: 'utf8', windowsHide: true }, (error, stdout) => resolve(error ? null : parseRegQuery(stdout, types)));
   });
 }
 
@@ -238,16 +238,136 @@ async function readLoginShell(source, timeoutMs) {
   return shellVariables(parsed, base.HOME);
 }
 
+/* ── the system's proxy ──
+   A proxy app (Clash and the like) usually turns on the system's proxy only: browsers use it, and an agent's HTTPS
+   calls may too, but not every connection it makes (Codex's WebSocket to its model goes straight out, times out five
+   times, then falls back to HTTPS). Unless the person set proxy variables themselves, the agents are given the
+   system's proxy as HTTPS_PROXY, HTTP_PROXY and NO_PROXY, as a terminal with the proxy app's variables would have. */
+
+const SET_PROXY_KEYS = ['https_proxy', 'http_proxy', 'all_proxy'];
+const REG_INTERNET = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings';
+
+/**
+ * `scutil --proxy` output, read: the keys of its top dictionary (HTTPSEnable, HTTPSProxy, HTTPSPort…) and the entries
+ * of its ExceptionsList; the per-interface ones under __SCOPED__ left out.
+ */
+export function parseScutilProxy(text) {
+  const values = {};
+  const exceptions = [];
+  let depth = 0;
+  let list = null;
+  for (const line of String(text ?? '').split(/\r?\n/)) {
+    const m = /^\s*([^\s:][^:]*?)\s*:\s*(.*?)\s*$/.exec(line);
+    if (m && depth === 1 && !m[2].endsWith('{')) values[m[1]] = m[2];
+    if (m && depth === 2 && list === 'ExceptionsList') exceptions.push(m[2]);
+    if (line.trim().endsWith('{')) { depth += 1; if (depth === 2) list = m?.[1] ?? null; }
+    if (line.trim() === '}') { depth -= 1; if (depth < 2) list = null; }
+  }
+  return { values, exceptions };
+}
+
+/** macOS's proxy (parseScutilProxy's), each kind as host:port; null when none is on. */
+export function macProxy({ values = {}, exceptions = [] } = {}) {
+  const at = (kind, port) => (values[`${kind}Enable`] === '1' && values[`${kind}Proxy`] ? `${values[`${kind}Proxy`]}:${values[`${kind}Port`] || port}` : null);
+  const found = { http: at('HTTP', 80), https: at('HTTPS', 443), socks: at('SOCKS', 1080), bypass: exceptions };
+  return found.http || found.https || found.socks ? found : null;
+}
+
+/**
+ * Windows's proxy (the Internet settings' ProxyEnable, ProxyServer, ProxyOverride), each kind as host:port; null when
+ * it is off. ProxyServer is one `host:port` for all, or `http=…;https=…;socks=…`.
+ */
+export function windowsProxy(settings = {}) {
+  if (!/^(?:0x)?0*1$/i.test(String(settings.ProxyEnable ?? '').trim())) return null;
+  const server = String(settings.ProxyServer ?? '').trim();
+  if (!server) return null;
+  const by = {};
+  if (!server.includes('=')) by.http = by.https = server;
+  else {
+    for (const part of server.split(';')) {
+      const eq = part.indexOf('=');
+      if (eq > 0 && part.slice(eq + 1).trim()) by[part.slice(0, eq).trim().toLowerCase()] = part.slice(eq + 1).trim();
+    }
+  }
+  const found = { http: by.http ?? null, https: by.https ?? null, socks: by.socks ?? null, bypass: String(settings.ProxyOverride ?? '').split(';') };
+  return found.http || found.https || found.socks ? found : null;
+}
+
+/**
+ * A proxy's exceptions as NO_PROXY has them: this computer always; `*.example.com` as `.example.com`, `10.*` and
+ * `169.254/16` as address ranges; Windows's `<local>` and other wildcards, which NO_PROXY cannot say, left out.
+ */
+export function noProxyList(bypass = []) {
+  const out = ['localhost', '127.0.0.1', '::1'];
+  for (const raw of bypass) {
+    const entry = String(raw ?? '').trim();
+    if (!entry || entry === '<local>') continue;
+    let m;
+    if ((m = /^((?:\d{1,3}\.){1,3})\*$/.exec(entry))) {
+      const octets = m[1].slice(0, -1).split('.');
+      out.push(`${[...octets, '0', '0', '0'].slice(0, 4).join('.')}/${octets.length * 8}`);
+    } else if ((m = /^(\d{1,3}(?:\.\d{1,3}){0,3})\/(\d{1,2})$/.exec(entry))) {
+      out.push(`${[...m[1].split('.'), '0', '0', '0'].slice(0, 4).join('.')}/${m[2]}`);
+    } else if (entry.startsWith('*.') && !entry.slice(2).includes('*')) out.push(entry.slice(1));
+    else if (!entry.includes('*')) out.push(entry);
+  }
+  return [...new Set(out)].join(',');
+}
+
+/** A proxy (macProxy's, windowsProxy's) as the variables programs read, in both cases; none: {}. */
+export function proxyVariables(found) {
+  if (!found) return {};
+  const env = {};
+  const set = (key, value) => { env[key] = value; env[key.toLowerCase()] = value; };
+  const url = (at, scheme) => (/^[a-z][a-z\d+.-]*:\/\//i.test(at) ? at : `${scheme}://${at}`);
+  const https = found.https ?? found.http;
+  const http = found.http ?? found.https;
+  if (https) set('HTTPS_PROXY', url(https, 'http'));
+  if (http) set('HTTP_PROXY', url(http, 'http'));
+  if (!https && !http && found.socks) set('ALL_PROXY', url(found.socks, 'socks5h'));
+  set('NO_PROXY', noProxyList(found.bypass));
+  return env;
+}
+
+/**
+ * The person's variables, with the system's proxy (`proxy`, proxyVariables') unless they set one themselves; a
+ * NO_PROXY of theirs stays.
+ */
+export function withSystemProxy(env, proxy) {
+  if (Object.keys(env).some((key) => SET_PROXY_KEYS.includes(key.toLowerCase()) && env[key])) return env;
+  return { ...proxy, ...env };
+}
+
+/** The system's proxy as proxy variables (Windows, macOS); {} when none is on, or it could not be read. */
+async function systemProxyVariables(timeoutMs) {
+  if (windows) return proxyVariables(windowsProxy(await regQuery(REG_INTERNET, timeoutMs, ['REG_SZ', 'REG_DWORD']) ?? {}));
+  if (process.platform !== 'darwin') return {};
+  const text = await new Promise((resolve) => {
+    execFile('/usr/sbin/scutil', ['--proxy'], { timeout: timeoutMs, encoding: 'utf8' }, (error, stdout) => resolve(error ? '' : stdout));
+  });
+  return proxyVariables(macProxy(parseScutilProxy(text)));
+}
+
+/** The person's variables (the registry's, or the login shell's), with the system's proxy: null when they failed. */
+async function readPersonVariables(source, timeoutMs) {
+  const [env, proxy] = await Promise.all([
+    windows ? readRegistry(source, timeoutMs) : readLoginShell(source, timeoutMs),
+    systemProxyVariables(timeoutMs).catch(() => ({})),
+  ]);
+  return env && withSystemProxy(env, proxy);
+}
+
 let shellCache = null;
 /**
- * Everything the person's login shell sets (`shellVariables`); on Windows, the registry's. Read again after a minute
+ * Everything the person's login shell sets (`shellVariables`); on Windows, the registry's. With no proxy of their own
+ * there, the system's (withSystemProxy). Read again after a minute
  * (Windows: a few seconds), or sooner for a caller that asks (`maxAgeMs`: the agents' list, which is looked at again
  * as the person comes back from installing one; `staleOk`, the last one read while a new one is read for next time).
  * Never rejects: on failure, the last one read, else the fallback PATH.
  * What the agents are given, so they run with what they have in the person's terminal.
  */
 export function loginShellVariables({ source = process.env, timeoutMs = 5000, maxAgeMs, staleOk = false } = {}) {
-  shellCache ??= environmentCache(() => (windows ? readRegistry(source, timeoutMs) : readLoginShell(source, timeoutMs)), {
+  shellCache ??= environmentCache(() => readPersonVariables(source, timeoutMs), {
     forMs: windows ? 5000 : 60_000,
     fallback: () => {
       pathSource = windows ? 'process' : 'fallback';

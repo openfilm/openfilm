@@ -79,11 +79,13 @@ const p = (id: string) => `projects/${encodeURIComponent(id)}`;
 
 /** Studio's own preferences, the same for every project (studio/server/prefs.mjs). */
 export interface StudioPrefs { proxies: { on: boolean; height: 540 | 720 | 1080 }; seenVersion: string | null; projectsFolder: string | null }
-/** Where new projects and exports go (src/locations.mjs): the folder, its default, whether the person chose it, the free space on its disk. */
-export interface StudioLocation { path: string; default: string; chosen: boolean; free: number | null }
+/** Where the projects library is (src/locations.mjs): the folder, its default, whether the person chose it, the free space on its disk, how many projects are in it. */
+export interface StudioLocation { path: string; default: string; chosen: boolean; free: number | null; count: number }
 export interface StudioLocations { projects: StudioLocation }
 /** Said on the window when they change, for what plays by them (the preview's proxies). */
 export const PREFS_EVENT = 'openfilm:prefs';
+/** Said on the window when the library moved, for the Projects list. */
+export const LIBRARY_EVENT = 'openfilm:library';
 
 /** A problem as Studio keeps it (src/problems.mjs): when, what it was about, what it said. */
 export interface StudioProblem {
@@ -109,6 +111,13 @@ export const api = {
   prefs: () => call<StudioPrefs>('prefs'),
   /** where new projects and exports go, and the free space there */
   locations: () => call<StudioLocations>('locations'),
+  /** move the library to `path` (null: the default); with `move`, its projects go too (those that could not are in `failed`) */
+  moveLibrary: (path: string | null, move: boolean) => call<{ moved: number; failed: { name: string; error: string }[]; locations: StudioLocations }>('locations/projects', { method: 'PUT', json: { path, move } }).then((done) => {
+    window.dispatchEvent(new Event(LIBRARY_EVENT));
+    return done;
+  }),
+  /** a project's folder, shown in the system's file manager */
+  revealProject: (id: string) => call<object>(`projects/${encodeURIComponent(id)}/reveal`, { method: 'POST', json: {} }),
   /** one of them in the system's file manager */
   openLocation: (which: keyof StudioLocations) => call<{ ok: true }>(`locations/${which}`, { method: 'POST', json: {} }),
   setPrefs: (patch: { proxies?: Partial<StudioPrefs['proxies']>; seenVersion?: string; projectsFolder?: string | null }) => call<StudioPrefs>('prefs', { method: 'PATCH', json: patch }).then((prefs) => {

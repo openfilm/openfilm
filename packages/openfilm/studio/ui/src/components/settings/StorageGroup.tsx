@@ -1,13 +1,15 @@
 /**
- * Settings → General → Storage: where new projects go (studio/server's locations, src/locations.mjs). It shows its
- * folder and the free space on its disk, and can be changed (the system's folder dialog), opened in the file manager,
- * or set back to its default. Projects made before stay where they are. Exports have no setting: the export dialog
- * picks the folder and keeps the last one.
+ * Settings → General → Storage: the projects library, the folder every project is a folder of (studio/server's
+ * locations, src/locations.mjs). It shows its folder and the free space on its disk, and can be changed (the system's
+ * folder dialog), opened in the file manager, or set back to its default. When projects are in it, a change asks
+ * whether they move too; left behind, they stay where they are, and in the list. Exports have no setting: the export
+ * dialog picks the folder and keeps the last one.
  */
 import React from 'react';
 import { useT } from '@/i18n';
 import { api, type StudioLocation, type StudioLocations } from '@/api';
 import { studioHost } from '@/lib/host';
+import { ConfirmDialog } from '../ConfirmDialog';
 import { SettingsButton, SettingsField, SettingsGroup, SettingsItem, settingsError } from './ui';
 
 type Which = keyof StudioLocations;
@@ -24,29 +26,40 @@ export function StorageGroup() {
   const [error, setError] = React.useState<{ which: Which; text: string } | null>(null);
   /* where no folder dialog can open (a browser on another system), the path is typed */
   const [typing, setTyping] = React.useState<{ which: Which; text: string } | null>(null);
+  /* a new folder for a library with projects in it: whether they move too */
+  const [asking, setAsking] = React.useState<{ which: Which; folder: string | null } | null>(null);
+  const [note, setNote] = React.useState<{ which: Which; text: string } | null>(null);
   const load = React.useCallback(() => { void api.locations().then(setWhere).catch(() => {}); }, []);
   React.useEffect(load, [load]);
   if (!where) return null;
 
-  const keep = async (which: Which, folder: string | null) => {
+  const apply = async (which: Which, folder: string | null, move: boolean) => {
     setBusy(which);
     setError(null);
+    setNote(null);
     try {
-      await api.setPrefs({ projectsFolder: folder });
+      const done = await api.moveLibrary(folder, move);
       setTyping(null);
-      load();
+      setWhere(done.locations);
+      if (done.failed.length) setError({ which, text: t('settings.storage.moveFailed').replace('{names}', done.failed.map((f) => f.name).join(', ')) });
+      if (done.moved) setNote({ which, text: t('settings.storage.moved').replace('{count}', String(done.moved)) });
     } catch (e) {
       setError({ which, text: e instanceof Error ? e.message : String(e) });
     } finally {
       setBusy(null);
     }
   };
+  const keep = (which: Which, folder: string | null) => {
+    const now = where[which];
+    if (now.count > 0 && (folder ?? now.default) !== now.path) setAsking({ which, folder });
+    else void apply(which, folder, false);
+  };
   const change = async (which: Which) => {
     const ask = { title: t(`settings.storage.${which}Pick`), button: t('settings.storage.pickButton'), at: where[which].path };
     try {
       const pick = studioHost?.folders?.pick;
       const picked = pick ? await pick(ask) : await api.pickFolder(ask.title, ask.at);
-      if (picked) await keep(which, picked);
+      if (picked) keep(which, picked);
     } catch {
       setTyping({ which, text: where[which].path });
     }
@@ -60,7 +73,7 @@ export function StorageGroup() {
         <>
           <span className="block">{t(`settings.storage.${which}Hint`)}</span>
           {typing?.which === which ? (
-            <form className="mt-2 flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (typing.text.trim()) void keep(which, typing.text.trim()); }}>
+            <form className="mt-2 flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (typing.text.trim()) keep(which, typing.text.trim()); }}>
               <SettingsField autoFocus value={typing.text} onChange={(e) => setTyping({ which, text: e.target.value })} spellCheck={false}
                 aria-label={t(`settings.storage.${which}`)} className="font-mono text-[13px]"
                 onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setTyping(null); } }} />
@@ -70,15 +83,16 @@ export function StorageGroup() {
             <span className="mt-1 block break-all font-mono text-[13px] text-[var(--text)]" title={place.path}>{place.path}</span>
           )}
           {place.free != null ? <span className="mt-0.5 block text-[13px]">{t('settings.storage.free').replace('{size}', size(place.free))}</span> : null}
+          {note?.which === which ? <span className="mt-1 block text-[13px]" role="status">{note.text}</span> : null}
           {error?.which === which ? <span className={`mt-1 block ${settingsError}`} role="alert">{error.text}</span> : null}
         </>
       )}
       control={(
         <>
           {place.chosen ? (
-            <SettingsButton variant="quiet" disabled={busy === which} onClick={() => void keep(which, null)} title={place.default}>{t('settings.storage.reset')}</SettingsButton>
+            <SettingsButton variant="quiet" disabled={busy === which} onClick={() => keep(which, null)} title={place.default}>{t('settings.storage.reset')}</SettingsButton>
           ) : null}
-          <SettingsButton variant="quiet" onClick={() => void api.openLocation(which).catch(() => {})}>{t('settings.storage.show')}</SettingsButton>
+          <SettingsButton onClick={() => void api.openLocation(which).catch(() => {})}>{t('settings.storage.show')}</SettingsButton>
           <SettingsButton disabled={busy === which} onClick={() => void change(which)}>{t('settings.storage.change')}</SettingsButton>
         </>
       )}
@@ -88,6 +102,19 @@ export function StorageGroup() {
   return (
     <SettingsGroup title={t('settings.storage.group')}>
       {row('projects', where.projects)}
+      <ConfirmDialog
+        open={!!asking}
+        title={t('settings.storage.moveTitle')}
+        description={asking ? t('settings.storage.moveDesc')
+          .replace('{count}', String(where[asking.which].count))
+          .replace('{from}', where[asking.which].path)
+          .replace('{to}', asking.folder ?? where[asking.which].default) : undefined}
+        confirmLabel={t('settings.storage.moveYes')}
+        altLabel={t('settings.storage.moveNo')}
+        onConfirm={() => { const a = asking; setAsking(null); if (a) void apply(a.which, a.folder, true); }}
+        onAlt={() => { const a = asking; setAsking(null); if (a) void apply(a.which, a.folder, false); }}
+        onCancel={() => setAsking(null)}
+      />
     </SettingsGroup>
   );
 }

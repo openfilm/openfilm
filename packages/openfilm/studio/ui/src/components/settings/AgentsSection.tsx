@@ -2,9 +2,9 @@
  * Settings → Agents, inside an app that has a chat (lib/host.ts `agents`): the agents its chat can use, each connected
  * or not and shown in the chat's menu or not.
  *
- * Codex, Claude Code, Gemini CLI and the others are the person's own programs, on the account signed in on the
- * computer: connecting opens their own sign-in only when they are signed out (the app waits for it), disconnecting
- * only stops the app using them, and connecting again uses the account signed in then (switched in the agent itself).
+ * Codex, Claude Code and the others are the person's own programs, on the account signed in on the computer:
+ * connecting opens their own sign-in only when they are signed out (the app waits for it), disconnecting only stops
+ * the app using them, and connecting again uses the account signed in then (switched in the agent itself).
  * Claude Code's and Codex's rows say whose account it is, and Codex's what is left of its plan. Codex and Claude Code
  * are always listed under the person's agents, with the person's own key; the others there once switched on (connecting
  * one does), else under "More agents", with where to get them when they are not installed. The person's own key is on a service of theirs, with a model that reads pictures (the agent looks at its own frames).
@@ -46,7 +46,7 @@ function useHostAgents(): HostAgent[] | null {
 }
 
 /** The person's own agents (the app's AGENTS), in the roster's order. */
-const OWN: readonly HostAgentId[] = ['codex', 'claude', 'gemini', 'copilot', 'cursor', 'opencode', 'codebuddy', 'qwen', 'kimi'];
+const OWN: readonly HostAgentId[] = ['codex', 'claude', 'copilot', 'cursor', 'opencode', 'codebuddy', 'qwen', 'kimi'];
 /** whose maker's mark is its company's */
 function AgentMark({ id }: { id: HostAgentId }) {
   return id === 'byok' ? <KeyRound size={16} /> : <ProviderMark id={agentMark(id)} size={17} />;

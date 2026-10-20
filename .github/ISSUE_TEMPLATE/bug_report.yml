@@ -27,9 +27,9 @@ body:
         - Claude Code
         - Codex
         - Cursor
-        - Gemini CLI
         - Other (say which below)
     validations:
+      required: true
   - type: textarea
     id: report
     attributes:
@@ -41,7 +41,6 @@ body:
         from Settings → Developer → Export, after a look at it.
       render: text
     validations:
-      required: true
       required: true
   - type: textarea
     id: steps

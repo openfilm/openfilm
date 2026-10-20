@@ -116,15 +116,15 @@ test('one service with several models, kept before each model was set up on its 
 test("Codex and Claude Code are shown in the chat from the start, the person's other agents once connected or switched on", async () => {
   const dir = mkdtempSync(join(tmpdir(), 'of-roster-'));
   const found = (id, cli) => ({ id, cli, signedIn: true, install: 'https://example.test', setupRequired: null });
-  const r = roster(dir, undefined, { localAgents: async () => [found('codex', null), found('claude', null), found('gemini', { path: '/bin/gemini' }), found('kimi', null)] });
+  const r = roster(dir, undefined, { localAgents: async () => [found('codex', null), found('claude', null), found('opencode', { path: '/bin/opencode' }), found('kimi', null)] });
   const list = await r.refresh();
   const of = (id) => list.find((a) => a.id === id);
   assert.equal(of('codex').shown, true, 'not installed, still shown');
-  assert.equal(of('gemini').status, 'ready');
-  assert.equal(of('gemini').shown, false, 'installed, not chosen yet');
+  assert.equal(of('opencode').status, 'ready');
+  assert.equal(of('opencode').shown, false, 'installed, not chosen yet');
   assert.equal(of('kimi').status, 'missing');
-  await r.connect('gemini');
-  assert.equal(r.list().find((a) => a.id === 'gemini').shown, true, 'connected: chosen');
+  await r.connect('opencode');
+  assert.equal(r.list().find((a) => a.id === 'opencode').shown, true, 'connected: chosen');
   r.setShown('kimi', true);
   assert.equal(readChoices(dir).shown.kimi, true);
 });

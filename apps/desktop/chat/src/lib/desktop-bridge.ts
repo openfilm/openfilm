@@ -10,10 +10,10 @@
 import type { Balance } from './balance';
 
 /** The coding agents the shell can connect to its MCP endpoint. */
-export type DesktopAgentId = 'claude' | 'codex' | 'cursor' | 'copilot' | 'gemini' | 'opencode' | 'codebuddy' | 'devin';
+export type DesktopAgentId = 'claude' | 'codex' | 'cursor' | 'copilot' | 'opencode' | 'codebuddy' | 'devin';
 
-/** The chat's agents: the person's own (Codex, Claude Code, Gemini CLI, …), and the app's own on their own key. */
-export type LocalAgentId = 'claude' | 'codex' | 'gemini' | 'copilot' | 'cursor' | 'opencode' | 'codebuddy' | 'qwen' | 'kimi' | 'byok';
+/** The chat's agents: the person's own (Codex, Claude Code, Cursor, …), and the app's own on their own key. */
+export type LocalAgentId = 'claude' | 'codex' | 'copilot' | 'cursor' | 'opencode' | 'codebuddy' | 'qwen' | 'kimi' | 'byok';
 
 /** One agent as the app's roster has it (apps/desktop/src/agent-roster.mjs; Studio's lib/host.ts HostAgent). */
 export interface RosterAgent {

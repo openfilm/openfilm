@@ -5,8 +5,9 @@
  * spinner), a question waiting for the person (a dot), an export (its percent). A tab is shown by a click, closed by
  * its × or a middle click, moved by dragging. Any tab renames its project in place (`onRename`), double-clicked or from
  * its menu: its title becomes a field, its words selected. A tab behind takes the double-click's first click to come to
- * front, so its page renames on the second. A right-click opens a tab's menu: rename it, show its project's folder,
- * close it, the others or those to its right.
+ * front, so its page renames on the second. A right-click opens a tab's menu: rename it, make the frame under the
+ * playhead its project's cover (`onCoverFromFrame`, this page's tab only), show its project's folder, close it, the
+ * others or those to its right.
  */
 import React from 'react';
 import { Loader2, Plus, X } from 'lucide-react';
@@ -37,12 +38,13 @@ export function useHostTabs() {
 }
 
 /**
- * `onRename`: a tab's project renamed (this page's own or another's); resolves whether it was. `maxLength`: a name's
- * longest.
+ * `onRename`: a tab's project renamed (this page's own or another's); resolves whether it was. `onCoverFromFrame`:
+ * this page's film as the viewer shows it now made its project's cover. `maxLength`: a name's longest.
  */
-export function TabStrip({ onRename, onNew, maxLength }: {
+export function TabStrip({ onRename, onNew, onCoverFromFrame, maxLength }: {
   onRename?: (projectId: string, name: string) => Promise<boolean>;
   onNew?: () => void;
+  onCoverFromFrame?: () => void;
   maxLength?: number;
 }) {
   const t = useT();
@@ -93,6 +95,7 @@ export function TabStrip({ onRename, onNew, maxLength }: {
     const right = tabsToClose(tabs, id, 'right');
     return [
       { id: 'rename', label: t('projectMenu.rename'), disabled: !onRename, onSelect: () => startRename(tab) },
+      ...(onCoverFromFrame && id === self ? [{ id: 'cover-frame', label: t('projects.coverFromFrame'), onSelect: onCoverFromFrame }] : []),
       { id: 'reveal', label: t('projects.revealFolder'), onSelect: () => { void api.revealProject(tab.projectId).catch(() => {}); } },
       { id: 'sep', separator: true },
       { id: 'close', label: t('tabs.close'), onSelect: () => host.close(id) },
@@ -156,11 +159,13 @@ export function TabStrip({ onRename, onNew, maxLength }: {
                   />
                 ) : <span className="min-w-0 flex-1 truncate font-medium">{titleOf(tab)}</span>}
                 {tab.exporting != null ? <span className="shrink-0 font-mono text-[10.5px] text-[var(--text-faint)]">{Math.round(tab.exporting * 100)}%</span> : null}
+                {/* no tooltip of its own, nor the tab's title over it; pointed at, a background shows what a click hits */}
                 <button
                   type="button"
                   aria-label={t('tabs.close')}
+                  title=""
                   onClick={(e) => { e.stopPropagation(); host.close(tab.id); }}
-                  className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] ${tab.active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                  className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] text-[var(--text-faint)] transition hover:bg-[var(--bg-active)] hover:text-[var(--text)] ${tab.active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                 >
                   <X size={12} />
                 </button>

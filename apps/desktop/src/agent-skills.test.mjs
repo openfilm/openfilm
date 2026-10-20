@@ -30,7 +30,7 @@ function world() {
   skill(join(home, '.codex', 'plugins', 'cache', 'openai-curated', 'sites', '1.0', 'skills', 'sites'), 'sites');
   skill(join(home, '.codex', 'plugins', 'cache', 'someone', 'pets', '0.1', 'skills', 'pet'), 'pet');
   /* MCP servers: Claude Code's (the person's, and one local to the project), Codex's (two its own apps put there, one
-     of the person's), OpenCode's, Qwen Code's, Gemini CLI's, Copilot's */
+     of the person's), OpenCode's, Qwen Code's, Copilot's */
   writeFileSync(join(home, '.claude.json'), JSON.stringify({ mcpServers: { cutter: { type: 'stdio', command: '/Apps/Cutter/cutter-mcp' }, notes: { type: 'http', url: 'http://127.0.0.1:9/mcp' } },
     projects: { [project]: { mcpServers: { local: { command: 'node' } } } } }));
   mkdirSync(join(home, '.codex'), { recursive: true });
@@ -43,9 +43,7 @@ function world() {
   writeFileSync(join(home, '.config', 'opencode', 'opencode.jsonc'), '{\n  // mine\n  "mcp": { "search": { "type": "remote", "url": "https://s.example.com/mcp" }, },\n}');
   mkdirSync(join(home, '.qwen'), { recursive: true });
   writeFileSync(join(home, '.qwen', 'settings.json'), JSON.stringify({ mcpServers: { qtool: { command: 'qtool' } } }));
-  mkdirSync(join(home, '.gemini'), { recursive: true });
-  writeFileSync(join(home, '.gemini', 'settings.json'), JSON.stringify({ mcpServers: { gtool: { httpUrl: 'https://g.example.com/mcp' } } }));
-  skill(join(home, '.gemini', 'skills', 'gem-notes'), 'gem-notes');
+  skill(join(home, '.qwen', 'skills', 'qwen-notes'), 'qwen-notes');
   mkdirSync(join(home, '.copilot'), { recursive: true });
   writeFileSync(join(home, '.copilot', 'mcp-config.json'), JSON.stringify({ mcpServers: { ctool: { command: 'ctool' } } }));
   /* OpenFilm's: the project's and the person's own */
@@ -60,7 +58,7 @@ test("the person's own skills, as each agent keeps them, never its maker's", asy
   assert.deepEqual((await ownSkills('claude', { cwd: project, home })).map((s) => [s.name, s.dirName]),
     [['research', 'research'], ['team-style', 'team-style'], ['voice', 'cutter-voice']], 'not claude.ai\'s synced ones');
   assert.deepEqual((await ownSkills('codex', { cwd: project, home })).map((s) => s.name), ['notes', 'openfilm', 'pet'], 'not .system, not OpenAI\'s plugins');
-  assert.deepEqual((await ownSkills('gemini', { cwd: project, home })).map((s) => s.name), ['gem-notes', 'notes']);
+  assert.deepEqual((await ownSkills('qwen', { cwd: project, home })).map((s) => s.name), ['notes', 'qwen-notes']);
   assert.deepEqual((await ownSkills('cursor', { cwd: project, home })), [], 'an agent whose skills are not read');
 });
 
@@ -117,16 +115,14 @@ test("OpenFilm's own skill for terminal agents is known, never offered, and alwa
   assert.equal(s.claude.settings.skillOverrides.research, undefined);
 });
 
-test('Qwen Code and Gemini CLI: a system-defaults file of the app\'s; Copilot: OpenFilm\'s folder and its servers off', async () => {
+test('Qwen Code: a system-defaults file of the app\'s; Copilot: OpenFilm\'s folder and its servers off', async () => {
   const w = world();
   const qwen = await sessionSkills('qwen', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills') });
   const q = JSON.parse(readFileSync(qwen.env.QWEN_CODE_SYSTEM_DEFAULTS_PATH, 'utf8'));
   assert.deepEqual(q.mcp, { excluded: ['qtool'] });
+  assert.deepEqual(q.skills.disabled, ['notes', 'qwen-notes']);
   assert.match(q.skills.directories[0], /agent-skills\/.+\/skills$/);
-  const gemini = await sessionSkills('gemini', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills') });
-  const g = JSON.parse(readFileSync(gemini.env.GEMINI_CLI_SYSTEM_DEFAULTS_PATH, 'utf8'));
-  assert.deepEqual(g, { skills: { disabled: ['gem-notes', 'notes'] }, mcp: { excluded: ['gtool'] } }, 'no other skills folder for it to take');
-  const own = await sessionSkills('gemini', { cwd: w.project, home: w.home, dataDir: w.dataDir, env: { GEMINI_CLI_SYSTEM_DEFAULTS_PATH: '/theirs.json' } });
+  const own = await sessionSkills('qwen', { cwd: w.project, home: w.home, dataDir: w.dataDir, env: { QWEN_CODE_SYSTEM_DEFAULTS_PATH: '/theirs.json' } });
   assert.equal(own.env, undefined, 'a defaults file of the person\'s own is left as it is');
   assert.equal(own.log.filtered, false);
   const copilot = await sessionSkills('copilot', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills'), env: { COPILOT_SKILLS_DIRS: '/mine' } });
@@ -140,7 +136,6 @@ test("the person's own MCP servers, as each agent keeps them, never its maker's"
   assert.deepEqual(ownMcpServers('claude', { cwd: project, home }), [{ name: 'cutter', detail: 'cutter-mcp' }, { name: 'local', detail: 'node' }, { name: 'notes', detail: '127.0.0.1:9' }]);
   assert.deepEqual(ownMcpServers('codex', { home }), [{ name: 'my-db', detail: '127.0.0.1:8' }]);
   assert.deepEqual(ownMcpServers('opencode', { home }), [{ name: 'search', detail: 's.example.com' }]);
-  assert.deepEqual(ownMcpServers('gemini', { home }), [{ name: 'gtool', detail: 'g.example.com' }]);
   assert.deepEqual(ownMcpServers('cursor', { home }), []);
   assert.deepEqual(codexServers('[mcp_servers.a]\ncommand = "x"\n[mcp_servers.a.env]\ncommand = "not this"\n').map((s) => s.config), [{ command: 'x' }], 'a server\'s own tables are not servers');
 });

@@ -1,5 +1,5 @@
 /**
- * Where the person's own agents are (agents.mjs AGENTS: Claude Code, Codex, Gemini CLI, …). Only real installations count: a config folder survives an
+ * Where the person's own agents are (agents.mjs AGENTS: Claude Code, Codex, Cursor, …). Only real installations count: a config folder survives an
  * uninstall and is never evidence. On Windows an install by npm, pnpm or Yarn leaves a `.cmd` shim, which no program
  * can start without a shell: what it runs is used instead (cmdTarget), and one that cannot be read is started through
  * cmd.exe (agents.mjs). A program the person chose themselves (Settings → Agents → Locate) comes before any of these.
@@ -13,13 +13,12 @@ import { delimiter, dirname, isAbsolute, join } from 'node:path';
 export const AGENT_DOWNLOADS = Object.freeze({
   claude: 'https://claude.com/download',
   codex: 'https://developers.openai.com/codex',
-  gemini: 'https://geminicli.com',
   copilot: 'https://github.com/features/copilot/cli',
   cursor: 'https://cursor.com/cli',
   opencode: 'https://opencode.ai/download',
   codebuddy: 'https://www.codebuddy.cn/docs/cli/installation',
   qwen: 'https://github.com/QwenLM/qwen-code',
-  kimi: 'https://www.kimi.com/code',
+  kimi: 'https://www.kimi.com/code/docs/en/kimi-code-cli/guides/getting-started.html',
 });
 
 /**
@@ -29,7 +28,6 @@ export const AGENT_DOWNLOADS = Object.freeze({
 export const AGENT_PROGRAMS = Object.freeze({
   claude: { names: ['claude'] },
   codex: { names: ['codex'] },
-  gemini: { names: ['gemini'] },
   copilot: { names: ['copilot'] },
   /* Cursor's installer names it `agent`, and `cursor-agent` as before; a program called `agent` counts only when it is
      Cursor's (its own folder is cursor-agent), as other tools are called that too */

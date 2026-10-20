@@ -31,7 +31,7 @@ import type { Example } from '@/lib/project-sources';
 import { ExamplesSection } from './ProjectSources';
 import { useLanguage, useT, type Language } from '@/i18n';
 import { limitTitleWidth, TITLE_MAX_WIDTH } from '@/lib/title';
-import type { Project } from '@/api';
+import { api, type Project } from '@/api';
 import { folderCounts, folderPosters, folderTrail, parentOf, visibleProjects, type LibrarySort, type ProjectFolder } from '@/lib/project-folders';
 import { posterRetryDelay, posterTry } from '@/lib/projects-page';
 import { ContextMenu } from './ContextMenu';
@@ -758,7 +758,10 @@ function MissingActions({ onLocate, onRemove, compact = false }: { onLocate: () 
   );
 }
 
-/** A card's or row's "…". A project whose folder is gone can be located or leave the list: there is nothing to open or rename. */
+/**
+ * A card's or row's "…", with Reveal to show where its folder is. A project whose folder is gone can be located or
+ * leave the list: there is nothing to open, rename or reveal.
+ */
 function ItemMenu({
   project,
   onOpen,
@@ -779,6 +782,7 @@ function ItemMenu({
       onMoveToFolder={onMoveToFolder}
       onChangeCover={cover ? () => cover.change(project) : undefined}
       onRestoreCover={cover && project.cover ? () => cover.restore(project) : undefined}
+      onReveal={() => void api.revealProject(project.id).catch(() => {})}
       onDelete={onDelete}
       size={size}
     />

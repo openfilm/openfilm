@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createProject, forgetProject, listProjects, locateProject, openProject, projectById, renameProject, ProjectError } from './projects.mjs';
+import { createProject, forgetProject, listProjects, locateProject, moveLibrary, openProject, projectById, renameProject, ProjectError } from './projects.mjs';
+import { chooseFolder } from '../../src/locations.mjs';
 import { readFilmFile } from '../../src/film-doc.mjs';
 
 let scratch;
@@ -11,6 +12,7 @@ beforeEach(() => {
   scratch = mkdtempSync(join(tmpdir(), 'of-projects-'));
   process.env.OPENFILM_HOME = join(scratch, 'home');
   process.env.OPENFILM_LIBRARY = join(scratch, 'library');
+  delete process.env.OPENFILM_SHARED_HOME;
 });
 
 test('opening a new folder makes it a project: an empty film, .film/ with an id, kept out of git', async () => {
@@ -167,4 +169,85 @@ test('what a newer OpenFilm keeps in studio.json stays when this one writes it',
   const written = JSON.parse(readFileSync(join(process.env.OPENFILM_HOME, 'studio.json'), 'utf8'));
   assert.deepEqual(written.pinned, ['abc']);
   assert.equal(written.recent.length, 1);
+});
+
+/** A film folder made outside Studio (by an agent, copied in), as Studio has never seen it. */
+function filmFolder(/** @type {string} */ folder) {
+  mkdirSync(folder, { recursive: true });
+  writeFileSync(join(folder, 'film.html'), '{"stage":{"w":1920,"h":1080},"tracks":[]}');
+  return folder;
+}
+
+test('the list shows every project in the library, made in Studio or not; plain folders and hidden ones are not projects', async () => {
+  const made = await createProject('Made');
+  filmFolder(join(scratch, 'library', 'By agent'));
+  mkdirSync(join(scratch, 'library', 'Just a folder'));
+  filmFolder(join(scratch, 'library', '.hidden'));
+  const names = (await listProjects()).map((p) => p.name).sort();
+  assert.deepEqual(names, ['By agent', 'Made']);
+  const found = (await listProjects()).find((p) => p.name === 'By agent');
+  assert.equal(readFileSync(join(found.path, '.film', 'id'), 'utf8').trim(), found.id, 'it has an id, the same at the next listing');
+  assert.equal((await projectById(made.id)).name, 'Made');
+});
+
+test('a project deleted from the library outside Studio leaves the list; one opened from elsewhere stays, missing', async () => {
+  const inside = await createProject('Inside');
+  const outside = await openProject(join(scratch, 'elsewhere'));
+  renameSync(inside.path, join(scratch, 'gone'));
+  renameSync(outside.path, join(scratch, 'gone too'));
+  const listed = await listProjects();
+  assert.equal(listed.some((p) => p.id === inside.id), false);
+  assert.equal(listed.find((p) => p.id === outside.id)?.missing, true);
+});
+
+test('while the library\'s folder is not there (a disk unplugged), its projects stay in the list', async () => {
+  const p = await createProject('On a disk');
+  renameSync(join(scratch, 'library'), join(scratch, 'unplugged'));
+  assert.equal((await listProjects()).find((x) => x.id === p.id)?.missing, true);
+});
+
+test('moving the library with its projects: each folder whole, a name taken becomes "Name 2", the rest stays', async () => {
+  const a = await createProject('Alpha');
+  const b = await createProject('Beta');
+  writeFileSync(join(scratch, 'library', 'notes.txt'), 'mine');
+  const to = filmFolder(join(scratch, 'New', 'Beta'));
+  const done = await moveLibrary(join(scratch, 'New'), { move: true, choose: (f) => chooseFolder('projectsFolder', f) });
+  assert.deepEqual(done, { moved: 2, failed: [] });
+  const listed = await listProjects();
+  const real = realpathSync(join(scratch, 'New'));
+  assert.equal(listed.find((p) => p.id === a.id)?.path, join(real, 'Alpha'), 'the same project, at its new folder');
+  assert.equal(listed.find((p) => p.id === b.id)?.path, join(real, 'Beta 2'));
+  assert.ok(existsSync(join(to, 'film.html')), 'what was there already stays');
+  assert.ok(existsSync(join(scratch, 'library', 'notes.txt')), 'what is not a project stays');
+  assert.ok((await createProject('Next')).path.startsWith(real), 'new projects go to the new library');
+});
+
+test('moving the library without its projects: they stay where they are, still in the list', async () => {
+  const a = await createProject('Stays');
+  const done = await moveLibrary(join(scratch, 'Other'), { move: false, choose: (f) => chooseFolder('projectsFolder', f) });
+  assert.deepEqual(done, { moved: 0, failed: [] });
+  assert.equal((await listProjects()).find((p) => p.id === a.id)?.path, a.path);
+  assert.equal((await listProjects()).find((p) => p.id === a.id)?.missing, false);
+});
+
+test('a Studio with a home of its own shares the library the person chose, kept in the shared home', async () => {
+  process.env.OPENFILM_SHARED_HOME = join(scratch, 'machine');
+  const chosen = join(scratch, 'Chosen');
+  mkdirSync(process.env.OPENFILM_SHARED_HOME, { recursive: true });
+  writeFileSync(join(process.env.OPENFILM_SHARED_HOME, 'prefs.json'), JSON.stringify({ proxies: { on: false }, projectsFolder: chosen }));
+  assert.ok((await createProject('Shared')).path.startsWith(realpathSync(chosen)));
+  await moveLibrary(null, { move: false, choose: (f) => chooseFolder('projectsFolder', f) });
+  const machine = JSON.parse(readFileSync(join(process.env.OPENFILM_SHARED_HOME, 'prefs.json'), 'utf8'));
+  assert.deepEqual(machine, { proxies: { on: false }, projectsFolder: null }, 'only the folder changed, in the shared home');
+  assert.equal(existsSync(join(process.env.OPENFILM_HOME, 'prefs.json')), false, 'nothing in its own');
+});
+
+test('a listed project moved into the library outside Studio is the same project at its new folder, listed once', async () => {
+  const p = await openProject(join(scratch, 'elsewhere', 'Trip'));
+  mkdirSync(join(scratch, 'library'), { recursive: true });
+  renameSync(p.path, join(scratch, 'library', 'Trip'));
+  const listed = (await listProjects()).filter((x) => x.id === p.id);
+  assert.equal(listed.length, 1);
+  assert.equal(listed[0].path, join(realpathSync(scratch), 'library', 'Trip'));
+  assert.equal(listed[0].missing, false);
 });

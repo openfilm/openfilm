@@ -44,7 +44,7 @@ export function TurnLogButton({ project, turnId, live = false }: { project: stri
 }
 
 /** the agents started with a logging switch in Developer mode (src/agent-logs.mjs) */
-const LOGGED_AGENTS = ['gemini', 'qwen', 'codebuddy', 'opencode'];
+const LOGGED_AGENTS = ['qwen', 'codebuddy', 'opencode'];
 
 /** Why a turn has no model requests, as its agent and what it was started with say. */
 function noCallsReason(agent: string | null, log: Item | null | undefined): string {

@@ -618,6 +618,7 @@ function WorkSummary({ items, durationMs }: { items: AgentActivityItem[]; durati
   );
 }
 
+/** The agent each reply came from, by name (Gemini CLI: replies from when the app had it). */
 const AGENT_NAMES: Record<string, string> = {
   codex: 'Codex', claude: 'Claude Code', gemini: 'Gemini CLI', copilot: 'GitHub Copilot', cursor: 'Cursor',
   opencode: 'OpenCode', codebuddy: 'CodeBuddy', qwen: 'Qwen Code', kimi: 'Kimi',

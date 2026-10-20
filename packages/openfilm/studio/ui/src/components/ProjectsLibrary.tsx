@@ -18,7 +18,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2 } from 'lucide-react';
-import { api, ApiError } from '@/api';
+import { api, ApiError, LIBRARY_EVENT } from '@/api';
 import { useT } from '@/i18n';
 import { folderApi, folderCounts, folderTrail, type ProjectFolder } from '@/lib/project-folders';
 import { studioHost } from '@/lib/host';
@@ -89,6 +89,12 @@ function useProjectLibrary(open: boolean) {
       return { ...next, poster: posterOf(next) };
     }));
   }, []);
+  /* the library moved (Settings): its projects, where they are now */
+  React.useEffect(() => {
+    if (!open) return undefined;
+    window.addEventListener(LIBRARY_EVENT, reloadFolders);
+    return () => window.removeEventListener(LIBRARY_EVENT, reloadFolders);
+  }, [open, reloadFolders]);
 
   /**
    * How many of `ids` an agent is working in right now, read afresh (an agent may have started or finished since the
