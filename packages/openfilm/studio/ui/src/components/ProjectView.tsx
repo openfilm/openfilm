@@ -269,7 +269,10 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   personSteps.current = film.steps.done;
   const filmRef = React.useRef(film.film);
   filmRef.current = film.film;
-  React.useEffect(() => { if (film.error) toast.showError(film.error); }, [film.error, toast]);
+  /* on `showError`, which stays the same: `toast` is new with every message, so showing it would run this again, and
+     again (the editor gone) */
+  const { showError } = toast;
+  React.useEffect(() => { if (film.error) showError(film.error); }, [film.error, showError]);
 
   /* media facts (length, size, sound) of the project's videos, stills and sounds and its web pages, probed once each: a
      page without a duration has no end, and is dropped on the timeline with a length of its own; a picture's size
