@@ -580,12 +580,15 @@ type NewProjectProps = {
 };
 
 /**
- * The new project's name, typed where its name will show, offered as Studio would name it: Enter makes the project,
- * Escape or leaving the field does not. Cleaned as a rename is; left empty, it is the name offered.
+ * The new project's name, typed where its name will show, offered as Studio would name it: Enter (or "New project"
+ * clicked again, through `submit`) makes the project, Escape or leaving the field does not. Cleaned as a rename is;
+ * left empty, it is the name offered.
  */
-function NewProjectName({ offered, size, onCreate, onCancel }: {
+function NewProjectName({ offered, size, submit, onCreate, onCancel }: {
   offered: string;
   size: 'card' | 'list';
+  /** Set to make the project with the name in the field. */
+  submit: React.RefObject<(() => void) | null>;
   onCreate: (name: string, exact: boolean) => Promise<boolean>;
   onCancel: () => void;
 }) {
@@ -603,6 +606,7 @@ function NewProjectName({ offered, size, onCreate, onCancel }: {
     making.current = false;
     input.current?.focus();
   }
+  submit.current = () => void create();
 
   return (
     <input
@@ -637,14 +641,26 @@ function NewProjectName({ offered, size, onCreate, onCancel }: {
   );
 }
 
+/**
+ * "New project" clicked: its name is asked for; clicked again while it is, the project is made with the name in the
+ * field. The press keeps the field focused, so leaving it does not cancel first.
+ */
+function newProjectClick(naming: string | null, submit: React.RefObject<(() => void) | null>, onNewProject: () => void) {
+  return {
+    onMouseDown: (event: React.MouseEvent) => { if (naming != null) event.preventDefault(); },
+    onClick: () => { if (naming != null) submit.current?.(); else onNewProject(); },
+  };
+}
+
 /** The grid's first cell: start a new project, card-sized, so "new ones start here" reads at a glance. */
 function NewProjectCard({ creating, naming, onNewProject, onCreate, onCancelNew, onOpenFolder, onGetFromGitHub }: NewProjectProps) {
   const t = useT();
+  const submit = React.useRef<(() => void) | null>(null);
   return (
     <article className="group min-w-0">
       <button
         type="button"
-        onClick={onNewProject}
+        {...newProjectClick(naming, submit, onNewProject)}
         disabled={creating}
         aria-busy={creating}
         className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--border-strong)] text-[var(--text-muted)] transition hover:border-[var(--text-faint)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-60"
@@ -656,7 +672,7 @@ function NewProjectCard({ creating, naming, onNewProject, onCreate, onCancelNew,
       </button>
       {/* where the other cards have their name: the new one's, asked for; else starting from a film that exists */}
       <div className="mt-2 flex">
-        {naming != null ? <NewProjectName offered={naming} size="card" onCreate={onCreate} onCancel={onCancelNew} />
+        {naming != null ? <NewProjectName offered={naming} size="card" submit={submit} onCreate={onCreate} onCancel={onCancelNew} />
           : <ImportMenu creating={creating} onOpenFolder={onOpenFolder} onGetFromGitHub={onGetFromGitHub} className="-ml-1.5 h-7 px-1.5 text-[12.5px]" />}
       </div>
     </article>
@@ -666,11 +682,12 @@ function NewProjectCard({ creating, naming, onNewProject, onCreate, onCancelNew,
 /** "New project" in the list view: the same entries, as a row. */
 function NewProjectListRow({ creating, naming, onNewProject, onCreate, onCancelNew, onOpenFolder, onGetFromGitHub }: NewProjectProps) {
   const t = useT();
+  const submit = React.useRef<(() => void) | null>(null);
   return (
     <article className="group flex min-w-0 items-center gap-3 py-4 sm:gap-4">
       <button
         type="button"
-        onClick={onNewProject}
+        {...newProjectClick(naming, submit, onNewProject)}
         disabled={creating}
         aria-busy={creating}
         className="flex aspect-video w-28 shrink-0 items-center justify-center rounded-md border border-dashed border-[var(--border-strong)] text-[var(--text-muted)] transition hover:border-[var(--text-faint)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-60 sm:w-36"
@@ -681,7 +698,7 @@ function NewProjectListRow({ creating, naming, onNewProject, onCreate, onCancelN
         </span>
       </button>
       <div className="min-w-0 flex-1">
-        {naming != null ? <NewProjectName offered={naming} size="list" onCreate={onCreate} onCancel={onCancelNew} /> : (
+        {naming != null ? <NewProjectName offered={naming} size="list" submit={submit} onCreate={onCreate} onCancel={onCancelNew} /> : (
           <button
             type="button"
             onClick={onNewProject}
