@@ -731,14 +731,15 @@ const CUE_MS = 5000;
 const frameLengths = new Map();
 /**
  * How long a video clip's frames last, as the host that serves the film says (host.mjs, from ffprobe); null from a
- * server that cannot tell. Asked once a file.
+ * server that cannot tell, or that does not answer within 10 s (the request or its body). Asked once a file: a null
+ * stays, so a stalled lookup cannot hold this frame or the next one of the same file. The frame is drawn without it.
  */
 function frameOf(c) {
   const src = url(c.row.src);
   /* a video from another site: not the host's to say */
   if (src.origin !== location.origin) return Promise.resolve(null);
   if (!frameLengths.has(src.pathname)) {
-    frameLengths.set(src.pathname, fetch(new URL(`__film/frame-duration?of=${encodeURIComponent(src.pathname)}`, location.href))
+    frameLengths.set(src.pathname, fetch(new URL(`__film/frame-duration?of=${encodeURIComponent(src.pathname)}`, location.href), { signal: AbortSignal.timeout(10_000) })
       .then((r) => (r.ok ? r.json() : null)).then((said) => (said?.seconds > 0 ? said.seconds : null)).catch(() => null));
   }
   return frameLengths.get(src.pathname);

@@ -132,9 +132,12 @@ export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, ti
     /* A cancelled preview is normal: pipeline closes its file; its callback deliberately ignores the error. */
     const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? '');
     if (range && (range[1] || range[2])) {
-      /* `bytes=-500` is the last 500 bytes; an open end runs to the end of the file */
+      /* `bytes=-500` is the last 500 bytes. An open end (`bytes=X-`) is at most the next 8 MiB: one response must
+         not hold a connection for the rest of a long file. A browser keeps six HTTP/1.1 connections to a host, and
+         a frame's duration lookup waits behind them until one is free. */
       const start = range[1] ? Number(range[1]) : Math.max(0, stat.size - Number(range[2]));
-      const end = range[1] && range[2] ? Math.min(Number(range[2]), stat.size - 1) : stat.size - 1;
+      const end = range[1] && !range[2] ? Math.min(start + 8 * 1024 * 1024 - 1, stat.size - 1)
+        : range[1] && range[2] ? Math.min(Number(range[2]), stat.size - 1) : stat.size - 1;
       if (start > end || start >= stat.size) { res.writeHead(416, { ...headers, 'content-range': `bytes */${stat.size}` }).end(); return true; }
       res.writeHead(206, { ...headers, 'content-range': `bytes ${start}-${end}/${stat.size}`, 'content-length': end - start + 1 });
       pipeline(createReadStream(file, { start, end }), res, () => {});

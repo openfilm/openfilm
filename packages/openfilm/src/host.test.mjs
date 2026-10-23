@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import fs from 'node:fs';
-import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { get } from 'node:http';
 import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -58,6 +58,24 @@ test('cancelled media requests close their files so the project can be renamed',
     await site.close();
     mocked.mock.restore();
     syncBuiltinESMExports();
+  }
+});
+
+test('an open-ended media range returns at most 8 MiB', async () => {
+  const cap = 8 * 1024 * 1024;
+  const dir = mkdtempSync(join(tmpdir(), 'of-host-range-'));
+  const data = Buffer.alloc(cap + 2, '0123456789');
+  writeFileSync(join(dir, 'video.mp4'), data);
+  const site = await serve(dir);
+  try {
+    const res = await fetch(`${site.url}/video.mp4`, { headers: { range: 'bytes=1-' } });
+    assert.equal(res.status, 206);
+    assert.equal(res.headers.get('content-length'), String(cap));
+    assert.equal(res.headers.get('content-range'), `bytes 1-${cap}/${data.length}`);
+    assert.deepEqual(Buffer.from(await res.arrayBuffer()), data.subarray(1, cap + 1));
+  } finally {
+    await site.close();
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 

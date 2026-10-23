@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { cpSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FilmPage, launch, serve } from './host.mjs';
@@ -1023,5 +1024,28 @@ window.film = { duration: 4, width: 320, height: 180,
     assert.equal(seen.more, 0, `still seeking on its own: ${JSON.stringify(seen)}`);
   } finally {
     await s.close();
+  }
+});
+
+test('an exact frame is drawn when the frame duration never answers', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 40_000 }, async () => {
+  const dir = footage('of-duration-stall-');
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'v', src: 'a.mp4', time: [0, 4] }] }] }));
+  const stall = createServer(() => {});
+  await new Promise((done) => stall.listen(0, '127.0.0.1', done));
+  const s = await open(dir);
+  try {
+    const port = stall.address().port;
+    await s.film.page.route('**/__film/frame-duration?*', (route) => route.continue({ url: `http://127.0.0.1:${port}/stall` }));
+    const cancelled = s.film.page.waitForEvent('requestfailed', {
+      predicate: (request) => request.url() === `http://127.0.0.1:${port}/stall`, timeout: 25_000,
+    });
+    await Promise.all([s.film.seek(0.4), cancelled]);
+    const [video] = await videosNow(s.film);
+    assert.ok(video.shown && video.ready && Math.abs(video.time - 0.4) < 0.01, JSON.stringify(video));
+  } finally {
+    await s.close();
+    stall.closeAllConnections();
+    await new Promise((done) => stall.close(done));
+    rmSync(dir, { recursive: true, force: true });
   }
 });
