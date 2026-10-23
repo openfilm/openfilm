@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AgentSession, CLIENT_CAPABILITIES, agentDefaults, closeEverySession, planProblem, probeFolder, CODEX_UTF8_CMD, agentShell, allowOption, codexDeveloperInstructions, codexLaunchEnv, distinctOptions, errorCause, legacyOptions, powerShellScript, powerShellLine, powerShellWindowLaunch, terminalScript, checkAgentProgram, readAgentStatus, setChosenPaths, signInScript, turnError, signInError, codexTooOld, AGENTS, ownSignIn, codexServiceError, codexRefusal, codexNotice, explainFailure, stderrReason } from './agents.mjs';
+import { AgentSession, CLIENT_CAPABILITIES, agentDefaults, closeEverySession, planProblem, probeFolder, CODEX_UTF8_CMD, agentShell, allowOption, codexDeveloperInstructions, codexLaunchEnv, distinctOptions, errorCause, legacyOptions, powerShellScript, powerShellLine, powerShellWindowLaunch, terminalScript, checkAgentProgram, readAgentStatus, setChosenPaths, signInScript, turnError, signInError, codexTooOld, AGENTS, ownSignIn, codexServiceError, codexRefusal, codexNotice, explainFailure, stderrReason, withToolKind } from './agents.mjs';
 
 test('an agent that asks: yes for good where it offers that, else yes this once; nothing to say yes with is null', () => {
   const options = [
@@ -337,6 +337,52 @@ test('a turn whose agent waits on its model with nothing coming is stopped, and 
     session.close();
     setChosenPaths({});
   }
+});
+
+test('DeepSeek Harness: each step reaches the chat as it happens, with the kind its tool is, not as one "Working"', async () => {
+  /* dsh's ACP profile, as 0.0.1 sends a turn: its words as each message is done, every tool as kind `other` titled
+     by its name, and the turn's answer a while after */
+  const { dir, program } = await fakeAcpAgent('dsh', (m, send) => {
+    if (m.method !== 'session/prompt') return;
+    const update = (u) => send({ jsonrpc: '2.0', method: 'session/update', params: { sessionId: 's1', update: u } });
+    update({ sessionUpdate: 'agent_message_chunk', messageId: 'm1', content: { type: 'text', text: 'Reading the manual first.' } });
+    const tools = [['bash', { command: 'openfilm' }], ['read', { file_path: 'film.html' }], ['write', { file_path: 'a.html', content: '' }],
+      ['grep', { pattern: 'fill' }], ['web_search', { query: 'Alibaba 1999' }], ['todo_write', { todos: [] }]];
+    tools.forEach(([title, rawInput], i) => {
+      update({ sessionUpdate: 'tool_call', toolCallId: `c${i}`, title, kind: 'other', status: 'in_progress', rawInput });
+      update({ sessionUpdate: 'tool_call_update', toolCallId: `c${i}`, status: 'completed', content: [] });
+    });
+    setTimeout(() => send({ jsonrpc: '2.0', id: m.id, result: { stopReason: 'end_turn' } }), 300);
+  });
+  setChosenPaths({ deepseek: program });
+  let ended = false;
+  const heard = [];
+  const session = new AgentSession({ agent: 'deepseek', cwd: dir, onUpdate: (u) => heard.push({ ...u, ended }) });
+  try {
+    await session.start();
+    await session.prompt([{ type: 'text', text: 'Make a video about Alibaba' }]);
+    ended = true;
+    assert.ok(heard.length > 0 && heard.every((u) => !u.ended), 'all heard while the turn ran');
+    assert.equal(heard[0].content.text, 'Reading the manual first.');
+    const kinds = heard.filter((u) => u.sessionUpdate === 'tool_call').map((u) => [u.title, u.kind]);
+    assert.deepEqual(kinds, [['bash', 'execute'], ['read', 'read'], ['write', 'edit'], ['grep', 'search'], ['web_search', 'fetch'], ['todo_write', 'other']]);
+    assert.deepEqual(heard.find((u) => u.toolCallId === 'c0' && u.sessionUpdate === 'tool_call').rawInput, { command: 'openfilm' }, 'otherwise as it came');
+  } finally {
+    session.close();
+    setChosenPaths({});
+  }
+});
+
+test('a tool call keeps its kind unless the agent names its tools (toolKinds) and said `other`', () => {
+  const kinds = AGENTS.deepseek.toolKinds;
+  const call = { sessionUpdate: 'tool_call', toolCallId: 'c', title: 'bash', kind: 'other' };
+  assert.equal(withToolKind(call, kinds).kind, 'execute');
+  assert.equal(withToolKind({ ...call, kind: undefined }, kinds).kind, 'execute');
+  assert.equal(withToolKind({ ...call, kind: 'read' }, kinds).kind, 'read', 'a kind it gave is its own');
+  assert.equal(withToolKind(call, undefined), call, 'other agents: untouched');
+  assert.equal(withToolKind({ ...call, title: 'constructor' }, kinds).kind, 'other');
+  const update = { sessionUpdate: 'tool_call_update', toolCallId: 'c', title: 'bash', status: 'completed' };
+  assert.equal(withToolKind(update, kinds), update);
 });
 
 test('quitting closes every agent process, one opened only to ask included; asking runs in one empty folder of the app', async () => {

@@ -86,9 +86,28 @@ export const AGENTS = Object.freeze({
   kimi: { label: AGENT_DEFINITIONS.kimi.name, args: ['acp'], login: ['login'], approve: true },
   minimax: { label: AGENT_DEFINITIONS.minimax.name, args: ['acp'], login: ['login'], approve: true },
   /* DeepSeek Harness (`dsh`) speaks ACP as its `acp` profile. It has no sign-in command: the person signs in to their
-     DeepSeek account in its desktop app, or sets DEEPSEEK_API_KEY, so one found is connected */
-  deepseek: { label: AGENT_DEFINITIONS.deepseek.name, args: ['--profile', 'acp'], login: null, approve: true },
+     DeepSeek account in its desktop app, or sets DEEPSEEK_API_KEY, so one found is connected. It reports every tool
+     as kind `other`, titled by its name: `toolKinds` gives each the kind it is (see withToolKind) */
+  deepseek: { label: AGENT_DEFINITIONS.deepseek.name, args: ['--profile', 'acp'], login: null, approve: true,
+    toolKinds: {
+      bash: 'execute', pwsh: 'execute',
+      read: 'read', read_image: 'read',
+      write: 'edit', edit: 'edit', str_replace_editor: 'edit',
+      grep: 'search', glob: 'search',
+      web_search: 'fetch', web_fetch: 'fetch',
+    } },
 });
+
+/**
+ * A tool call with the kind its name says (`toolKinds`), for an agent that reports every tool as `other`. The chat
+ * draws an `other` call as the passing "Working" status, not a step: without its kind, a turn shows no step until
+ * it ends.
+ */
+export function withToolKind(update, toolKinds) {
+  if (!toolKinds || update?.sessionUpdate !== 'tool_call' || (update.kind ?? 'other') !== 'other') return update;
+  const kind = Object.hasOwn(toolKinds, update.title) ? toolKinds[update.title] : null;
+  return kind ? { ...update, kind } : update;
+}
 
 export const isAgentId = (id) => typeof id === 'string' && Object.hasOwn(AGENTS, id);
 
@@ -1108,7 +1127,7 @@ export class AgentSession {
         return answers ? { action: 'accept', content: formContent(questions, answers) } : { action: 'decline' };
       })
       .onNotification(acp.methods.client.session.update, (ctx) => {
-        const update = ctx.params.update;
+        const update = withToolKind(ctx.params.update, this.spec.toolKinds);
         if (SPOKE.has(update?.sessionUpdate)) this.spoke = true;
         this.heard = Date.now();
         const phase = agentPhase(update);

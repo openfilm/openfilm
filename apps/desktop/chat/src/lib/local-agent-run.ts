@@ -338,6 +338,7 @@ export class LocalAgentTurn {
       this.calls.set(String(u.toolCallId), {
         ...(typeof u.title === 'string' ? { title: u.title } : {}),
         ...(typeof u.kind === 'string' ? { kind: u.kind } : {}),
+        ...(u.rawInput != null ? { rawInput: u.rawInput } : {}),
         ...(tool ? { tool } : {}),
       });
       /* It asked the user through our MCP (ask_user): the question and options go on this row, and the panel shows the card */
@@ -382,8 +383,8 @@ export class LocalAgentTurn {
   /** acpUpdateToEvent only yields the closed-set fields; the file name / command reaches the next agent-act from here. */
   private pendingDetail: string | undefined;
   private pendingAsk: TranscriptItem['ask'];
-  /** Each call's first title and kind: later updates often carry only the fields that changed. */
-  private calls = new Map<string, { title?: string; kind?: string; tool?: string }>();
+  /** Each call's first title, kind and input: later updates often carry only the fields that changed. */
+  private calls = new Map<string, { title?: string; kind?: string; rawInput?: unknown; tool?: string }>();
   private thoughtNo = 0;
   private openThought: string | null = null;
 
@@ -468,7 +469,7 @@ export class LocalAgentTurn {
     const activity = localToolActivity(
       typeof u.title === 'string' ? u.title : first?.title,
       typeof u.kind === 'string' ? u.kind : first?.kind,
-      u.rawInput ?? {},
+      u.rawInput ?? first?.rawInput ?? {},
       { locations: u.locations, content: u.content },
     );
     if (!activity || activity.act !== item.act) return;
