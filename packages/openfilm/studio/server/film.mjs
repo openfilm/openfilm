@@ -14,6 +14,8 @@ import { join } from 'node:path';
 import { FILM_FILE, filmHtml, readFilm, readFilmFile } from '../../src/film-doc.mjs';
 import { EditError, applyOps } from './ops.mjs';
 import { writeAtomic } from './atomic.mjs';
+import { readAudioSmoothingMs } from './project-settings.mjs';
+import { audioSmoothingOp, explicitFadeIds } from './audio-smoothing.mjs';
 
 export { EditError };
 
@@ -77,15 +79,47 @@ export async function writeProjectFilm(root, value, before = '') {
  * operations by clip id. Returns the new text, revision, the value written and the checked edit. Throws EditError:
  * `conflict` when an operation names a clip that is gone, `invalid` when the result is not a film.
  * @param {string} root @param {string | null} base @param {Op[]} ops
+ * @param {{ replay?: boolean, repairAudio?: boolean }} [options]
  */
-export async function editProjectFilm(root, base, ops) {
+async function editProjectFilmNow(root, base, ops, options = {}) {
   const current = await readProjectFilm(root);
   /* a film.html that does not read is the agent's to fix: Studio never writes over it */
   if (!current.value && current.text.trim()) throw new EditError(current.problems.join('\n'), 'invalid');
-  const value = applyOps(/** @type {FilmValue} */ (structuredClone(current.value ?? EMPTY_FILM)), ops);
+  if (options.repairAudio && base !== current.rev) throw new EditError('film.html changed since its audio was checked; check again.', 'conflict');
+  const before = /** @type {FilmValue} */ (structuredClone(current.value ?? EMPTY_FILM));
+  const value = options.repairAudio ? structuredClone(before) : applyOps(structuredClone(before), ops);
+  const audioSmoothingMs = await readAudioSmoothingMs(root);
+  /* Undo/redo replays exact saved operations; it must never add the fades the person just undid. */
+  const automatic = options.replay ? null : audioSmoothingOp(options.repairAudio ? null : before, value, audioSmoothingMs, explicitFadeIds(ops));
+  if (automatic) applyOps(value, [automatic]);
   const { doc, problems } = readFilm(value);
   if (!doc) throw new EditError(problems.join('\n'), 'invalid');
-  const written = await writeProjectFilm(root, /** @type {FilmValue} */ (value), current.text);
-  return { ...written, value, doc, rebased: base != null && base !== current.rev };
+  /* An agent may write outside Studio while this edit is planned. Never knowingly overwrite its newer text. */
+  if ((await readProjectFilm(root)).rev !== current.rev) throw new EditError('film.html changed while the edit was being prepared; try again.', 'conflict');
+  const written = options.repairAudio && !automatic ? { text: current.text, rev: current.rev } : await writeProjectFilm(root, /** @type {FilmValue} */ (value), current.text);
+  return { ...written, value, doc, rebased: base != null && base !== current.rev, audioSmoothing: await projectAudioStatus(root, value),
+    ...(!options.replay && audioSmoothingMs ? { effective: { before, ops: automatic ? [...ops, automatic] : ops } } : {}),
+    ...(automatic ? { automatic } : {}) };
+}
+
+/** @type {Map<string, Promise<unknown>>} */
+const editsInFlight = new Map();
+/** Serialize Studio's edits per project, including their policy check and write. External writers are checked by revision.
+ * @param {string} root @param {string | null} base @param {Op[]} ops
+ * @param {{ replay?: boolean, repairAudio?: boolean }} [options]
+ */
+export function editProjectFilm(root, base, ops, options = {}) {
+  const turn = (editsInFlight.get(root) ?? Promise.resolve()).catch(() => {}).then(() => editProjectFilmNow(root, base, ops, options));
+  editsInFlight.set(root, turn);
+  const clear = () => { if (editsInFlight.get(root) === turn) editsInFlight.delete(root); };
+  void turn.then(clear, clear);
+  return turn;
+}
+
+/** Read-only validation for outside writes. No background rewrite of an agent's file. @param {string} root @param {FilmValue | null} value */
+export async function projectAudioStatus(root, value) {
+  const audioSmoothingMs = await readAudioSmoothingMs(root);
+  const op = value ? audioSmoothingOp(null, value, audioSmoothingMs) : null;
+  return { ms: audioSmoothingMs, pending: op?.op === 'props' ? op.edits.length : 0 };
 }
 

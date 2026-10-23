@@ -26,7 +26,8 @@ import { writeAtomic } from './atomic.mjs';
 import { coverAt } from './cover.mjs';
 import { libraryProjects, libraryRoot } from '../../src/locations.mjs';
 
-export const TOOL_DIR = '.film';
+export { TOOL_DIR } from './project-paths.mjs';
+import { TOOL_DIR } from './project-paths.mjs';
 
 /** What an export of the project may take besides the work, each a folder in `.film/` (see above); never the cache. */
 export const PROJECT_PARTS = /** @type {const} */ (['history', 'chat', 'logs']);

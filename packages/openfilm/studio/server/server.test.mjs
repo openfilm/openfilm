@@ -179,6 +179,30 @@ test('a project\'s event stream reports the agent writing film.html', async () =
   assert.ok(got.find((e) => e.type === 'film').rev);
 });
 
+test('audio policy over HTTP: new cuts are managed, outside writes checked, repair is revision guarded', async () => {
+  const { project } = await (await api('/api/projects', { method: 'POST', body: { name: 'Audio policy' } })).json();
+  const endpoint = `/api/projects/${project.id}`;
+  const initial = { stage: { w: 320, h: 180 }, tracks: [{ clips: [
+    { id: 'a', src: 'a.wav', time: [0, 1] }, { id: 'b', src: 'b.wav', at: 2, time: [0, 1] },
+  ] }] };
+  writeFileSync(join(project.path, 'film.html'), filmHtml(initial));
+  assert.equal((await api(`${endpoint}/settings`, { method: 'PATCH', body: { audioSmoothingMs: 10 } })).status, 200);
+  const edited = await (await api(`${endpoint}/edit`, { method: 'POST', body: { ops: [{ op: 'move', clip: 'b', at: 1 }] } })).json();
+  assert.ok(edited.automatic);
+  assert.equal(edited.audioSmoothing.pending, 0);
+  initial.tracks[0].clips[1].at = 1;
+  const outside = filmHtml(initial);
+  writeFileSync(join(project.path, 'film.html'), outside);
+  const checked = await (await api(endpoint)).json();
+  assert.deepEqual(checked.audioSmoothing, { ms: 10, pending: 2 });
+  assert.equal(readFileSync(join(project.path, 'film.html'), 'utf8'), outside);
+  assert.equal((await api(`${endpoint}/edit`, { method: 'POST', body: { base: 'old', ops: [], repairAudio: true } })).status, 409);
+  assert.equal((await api(`${endpoint}/edit`, { method: 'POST', body: { base: checked.rev, ops: [], repairAudio: true, replay: true } })).status, 400);
+  const fixed = await (await api(`${endpoint}/edit`, { method: 'POST', body: { base: checked.rev, ops: [], repairAudio: true } })).json();
+  assert.equal(fixed.audioSmoothing.pending, 0);
+  assert.equal(fixed.effective.ops.length, 1);
+});
+
 test('rename refreshes only its open pages, including writes still waiting to settle', { timeout: 10_000 }, async () => {
   const { project } = await (await api('/api/projects', { method: 'POST', body: { name: 'Refresh draft' } })).json();
   const before = await (await api(`/api/projects/${project.id}`)).json();

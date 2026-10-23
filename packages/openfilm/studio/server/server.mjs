@@ -21,7 +21,7 @@ import { pipeline } from 'node:stream';
 import { mkdir, readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { EditError, editProjectFilm, pageClipLook, readProjectFilm } from './film.mjs';
+import { EditError, editProjectFilm, pageClipLook, readProjectFilm, projectAudioStatus } from './film.mjs';
 import { FileError, bringIn, collect, extractAudio, freezeFrame, importFile, inside, listFiles, makeFolder, moveCheck, moveFile, readable, relink, trashFile } from './files.mjs';
 import { ExportError, createExports, draftApps, exportCapabilities, exportsRoot, projectSizes } from './exports.mjs';
 import { MediaError, frame, loudness, poster, probe, waveform } from './derived.mjs';
@@ -556,7 +556,10 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (await captionRoutes(req, res, project.path, rest, { translate: subtitleTranslator, transcribe: await subtitleTranscriber() })) return;
     /* ── end subtitles ── */
     /* the editor's settings of the project: its frame rate, its tracks' names (see project-settings.mjs) */
-    if (await projectSettingsRoute(req, res, project.path, rest)) return;
+    if (await projectSettingsRoute(req, res, project.path, rest)) {
+      if (req.method === 'PATCH') watchers.emit(project.path, { type: 'settings' });
+      return;
+    }
     /* its markers (markers.mjs): Studio's own, beside film.html */
     if (await markersRoute(req, res, project.path, rest)) return;
     /* the page under a dip to white, kept once (transition-pages.mjs) */
@@ -567,7 +570,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         const film = await readProjectFilm(project.path);
         /* opened: its card in the projects list gets a picture before the list first shows it */
         if (film.doc?.tracks.some((t) => t.clips.length)) warmFilmPoster(project.path, pages.folderUrl(project));
-        return json(res, 200, { project, folder: pages.folderUrl(project), ...film });
+        return json(res, 200, { project, folder: pages.folderUrl(project), ...film, audioSmoothing: await projectAudioStatus(project.path, film.value) });
       }
       if (req.method === 'PATCH') {
         const { name } = /** @type {{ name?: string }} */ (await readJson(req));
@@ -696,9 +699,12 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       throw new HttpError(404, 'no such history action');
     }
     if (rest === 'edit' && req.method === 'POST') {
-      const { base = null, ops } = /** @type {{ base?: string | null, ops?: import('./film.mjs').Op[] }} */ (await readJson(req));
+      const { base = null, ops, replay, repairAudio } = /** @type {{ base?: string | null, ops?: import('./film.mjs').Op[], replay?: boolean, repairAudio?: boolean }} */ (await readJson(req));
+      if (ops !== undefined && !Array.isArray(ops)) throw new HttpError(400, 'ops is a list of operations');
+      if ((replay !== undefined && typeof replay !== 'boolean') || (repairAudio !== undefined && typeof repairAudio !== 'boolean')) throw new HttpError(400, 'replay and repairAudio are booleans');
+      if (repairAudio && (replay || ops?.length)) throw new HttpError(400, 'repairAudio is a separate checked edit');
       try {
-        return json(res, 200, await editProjectFilm(project.path, base, ops ?? []));
+        return json(res, 200, await editProjectFilm(project.path, base, ops ?? [], { replay, repairAudio }));
       } catch (e) {
         if (!(e instanceof EditError)) throw e;
         /* the person's view is out of date or the edit cannot be: send the film as it is now with the reason */

@@ -169,6 +169,7 @@ import { Tooltip } from './Tooltip';
 import { unionBox, type ScreenBox } from '@/lib/selection-toolbar';
 import { useBlockDrag, type GestureTip } from './useBlockDrag';
 import { fadeEdits, fadeFromPointer, fadeHandleX, type FadeEdge, type FadeMs } from '@/lib/clip-fade';
+import { audioCutFadeOp } from '@/lib/audio-cut-fades';
 import { cutNear, transitionSpan, type CutRef, type FilmTransition, type TransitionAsk, type TransitionKind } from '@/lib/transitions';
 
 /** Track head column: kind badge + lock + hide + original sound. */
@@ -719,6 +720,8 @@ export interface TimelineProps {
    * top corner that is dragged inward to set them (written through onEditOps).
    */
   fades?: ReadonlyMap<string, FadeMs>;
+  /** Project policy controls shown beside the editing tools. */
+  toolbarExtra?: React.ReactNode;
   /** The transitions the fades make (lib/transitions findTransitions): a mark over each, picked, resized, deleted. */
   transitions?: readonly FilmTransition[];
   /** A transition put on a cut (the cut's menu, a clip's menu), resized or deleted. Null = done. */
@@ -991,6 +994,7 @@ export const Timeline = React.memo(function Timeline({
   onResizeTrack,
   onReplaceDrop,
   fades,
+  toolbarExtra,
   transitions,
   onTransition,
   pickedTransition = null,
@@ -3598,6 +3602,24 @@ export const Timeline = React.memo(function Timeline({
         onSelect: () => { void onDetachAudio(one); },
       });
     }
+    if (onEditOps && picked.some((b) => ['voice', 'music', 'sfx'].includes(b.kind))) {
+      const ids = picked.map((b) => b.id);
+      const options = [5, 10, 20].map((ms) => {
+        const op = audioCutFadeOp(tracks, ids, fades, ms);
+        return {
+          id: `audio-cut-fade-${ms}`, label: t('timeline.audioCutFadeDuration').replace('{ms}', String(ms)), disabled: !op,
+          hint: t('timeline.audioCutFadeNone'),
+          onSelect: () => {
+            if (op) void onEditOps([op], 'history.stepFade').then((err) => { if (err) setDropError(err); });
+          },
+        };
+      });
+      out.push({
+        id: 'audio-cut-fades', label: t('timeline.menuAudioCutFades'), icon: <Waves size={14} />,
+        note: t('timeline.audioCutFadeHint'), disabled: options.every((o) => o.disabled),
+        hint: t('timeline.audioCutFadeNone'), submenu: options,
+      });
+    }
     /* fades at the clip's start and end (lib/transitions) */
     if (one && onTransition && one.clipId && !pickedLocked) {
       const row = tracks.find((tr) => tr.blocks.some((b) => b.id === one.id));
@@ -3689,7 +3711,7 @@ export const Timeline = React.memo(function Timeline({
     }
     return out;
   }, [
-    menu, t, keyHint, onSplit, onDetachAudio, onRemove, onRemoveMany, onCopy, onPaste, onExportBlock, mediaTrouble, relinkCandidates,
+    menu, t, keyHint, onSplit, onDetachAudio, onRemove, onRemoveMany, onCopy, onPaste, onExportBlock, mediaTrouble, relinkCandidates, fades,
     onRelink, hasClipboard, runSplit, removeMany, rippleRemove, magnetRemove, onEditOps, tracks, blockMenuExtra, headEntries, withLinked,
     runPlan, closeGapOn, rippleTrimToPlayhead, linkBlocks, unlinkBlocks, transitions, onTransition, onPickTransition, transitionEntries,
   ]);
@@ -3896,6 +3918,7 @@ export const Timeline = React.memo(function Timeline({
           </ToolButton>
         ) : null}
 
+        {toolbarExtra}
         {/* the middle is for status: "Editing source…" and errors (not among the tools, where it would look like one) */}
         <div className="flex min-w-0 flex-1 items-center justify-center">
           {dropBusy || drag.saving ? (

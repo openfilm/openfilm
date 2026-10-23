@@ -18,7 +18,8 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { writeAtomic } from './atomic.mjs';
 import { HttpError, json, readJson } from './http.mjs';
-import { TOOL_DIR } from './projects.mjs';
+import { TOOL_DIR } from './project-paths.mjs';
+import { AUDIO_SMOOTHING_MS } from './audio-smoothing.mjs';
 
 export const PROJECT_SETTINGS_FILE = `${TOOL_DIR}/settings.json`;
 
@@ -27,7 +28,7 @@ export const FRAME_RATES = /** @type {const} */ ([23.976, 24, 25, 29.97, 30, 48,
 
 /** @typedef {{ name: string, index: number, clips: string[] }} TrackName */
 /** @typedef {{ height: number, index: number, clips: string[] }} TrackHeight */
-/** @typedef {{ fps?: number, trackNames?: TrackName[], trackHeights?: TrackHeight[] }} ProjectSettings */
+/** @typedef {{ fps?: number, trackNames?: TrackName[], trackHeights?: TrackHeight[], audioSmoothingMs?: number }} ProjectSettings */
 
 /** The heights a track can be drawn at, px (the editor's lib/track-heights.ts). */
 const TRACK_MIN_H = 28;
@@ -64,6 +65,7 @@ export function parseProjectSettings(raw) {
   if (!isRecord(raw)) return {};
   /** @type {ProjectSettings} */
   const out = {};
+  if (AUDIO_SMOOTHING_MS.includes(/** @type {5 | 10 | 20} */ (raw.audioSmoothingMs))) out.audioSmoothingMs = Number(raw.audioSmoothingMs);
   const fps = frameRateOf(raw.fps);
   if (fps != null) out.fps = fps;
   if (Array.isArray(raw.trackNames)) {
@@ -84,6 +86,21 @@ export async function readProjectSettings(root) {
   } catch { return {}; }
 }
 
+/** Enforcement must not silently turn a saved policy off when its settings cannot be read.
+ * @param {string} root @returns {Promise<number>}
+ */
+export async function readAudioSmoothingMs(root) {
+  let raw;
+  try { raw = JSON.parse(await readFile(join(root, PROJECT_SETTINGS_FILE), 'utf8')); }
+  catch (e) {
+    if (/** @type {NodeJS.ErrnoException} */ (e).code === 'ENOENT') return 0;
+    throw new HttpError(422, 'Cannot read .film/settings.json to check audio smoothing; repair the settings file first.');
+  }
+  if (!isRecord(raw) || !('audioSmoothingMs' in raw)) return 0;
+  if (!AUDIO_SMOOTHING_MS.includes(/** @type {5 | 10 | 20} */ (raw.audioSmoothingMs))) throw new HttpError(422, 'Invalid audioSmoothingMs in .film/settings.json: use 5, 10, 20 or remove the setting.');
+  return Number(raw.audioSmoothingMs);
+}
+
 /**
  * Change some settings, the rest kept: `null` takes one away. A rate that is not one of FRAME_RATES is refused.
  * @param {string} root @param {Record<string, unknown>} patch @returns {Promise<ProjectSettings>}
@@ -92,6 +109,11 @@ export async function patchProjectSettings(root, patch) {
   const now = await readProjectSettings(root);
   /** @type {Record<string, unknown>} */
   const next = { ...now };
+  if ('audioSmoothingMs' in patch) {
+    if (patch.audioSmoothingMs === null) delete next.audioSmoothingMs;
+    else if (!AUDIO_SMOOTHING_MS.includes(/** @type {5 | 10 | 20} */ (patch.audioSmoothingMs))) throw new HttpError(400, 'audioSmoothingMs: 5, 10, 20 or null (off)');
+    else next.audioSmoothingMs = patch.audioSmoothingMs;
+  }
   if ('fps' in patch) {
     if (patch.fps === null) delete next.fps;
     else if (frameRateOf(patch.fps) == null) throw new HttpError(400, `fps: one of ${FRAME_RATES.join(', ')}`);

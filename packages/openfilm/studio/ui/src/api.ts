@@ -25,10 +25,11 @@ export type Clip = { src: string; id: string; at?: number; time?: [number] | [nu
 export type Track = { clips: Clip[]; locked?: boolean; hidden?: boolean; muted?: boolean; attrs?: Record<string, string> };
 export type Film = { stage?: { w: number; h: number }; tracks: Track[] };
 /** `value`: film.html as read, every clip named (a clip with no id takes its file's name, as the server and preview do). */
-export type ProjectFilm = { project: Project; folder: string; text: string; rev: string; value: Film | null; doc: Film | null; problems: string[] };
+export type AudioSmoothingStatus = { ms: number; pending: number };
+export type ProjectFilm = { project: Project; folder: string; text: string; rev: string; value: Film | null; doc: Film | null; problems: string[]; audioSmoothing?: AudioSmoothingStatus };
 export type MediaFile = { path: string; kind: 'video' | 'image' | 'audio' | 'page' | 'other'; size: number; mtime: number; added?: number };
 /** A project's editor settings (studio/server/project-settings.mjs). */
-export type ProjectSettings = { fps?: number; trackNames?: { name: string; index: number; clips: string[] }[]; trackHeights?: { height: number; index: number; clips: string[] }[] };
+export type ProjectSettings = { fps?: number; trackNames?: { name: string; index: number; clips: string[] }[]; trackHeights?: { height: number; index: number; clips: string[] }[]; audioSmoothingMs?: number };
 export type Listing = { files: MediaFile[]; folders: string[]; pages: { path: string; size: number; mtime: number }[] };
 export type Op =
   | { op: 'set'; clip: string; field: string; value?: unknown }
@@ -145,12 +146,16 @@ export const api = {
   film: (id: string) => call<ProjectFilm>(p(id)),
   /** the person opened it here: the one `openfilm open` alone comes back to */
   opened: (id: string) => call<{ project: Project }>(`${p(id)}/opened`, { method: 'POST' }),
-  edit: (id: string, base: string | null, ops: Op[]) => call<{ text: string; rev: string; value: Film; doc: Film; rebased: boolean }>(`${p(id)}/edit`, { method: 'POST', json: { base, ops } }),
+  edit: (id: string, base: string | null, ops: Op[], options?: { replay?: boolean; repairAudio?: boolean }) => call<{
+    text: string; rev: string; value: Film; doc: Film; rebased: boolean; audioSmoothing?: AudioSmoothingStatus;
+    automatic?: Op;
+    effective?: { before: Film; ops: Op[] };
+  }>(`${p(id)}/edit`, { method: 'POST', json: { base, ops, ...options } }),
   files: (id: string) => call<Listing>(`${p(id)}/files`),
   /** the editor's settings of the project (`.film/settings.json`): its frame rate, its tracks' names */
   settings: (id: string) => call<{ settings: ProjectSettings }>(`${p(id)}/settings`).then((r) => r.settings),
   /** change some of them (null takes one away); answers them all as kept */
-  patchSettings: (id: string, patch: { fps?: number | null; trackNames?: ProjectSettings['trackNames'] | null; trackHeights?: ProjectSettings['trackHeights'] | null }) => (
+  patchSettings: (id: string, patch: { fps?: number | null; trackNames?: ProjectSettings['trackNames'] | null; trackHeights?: ProjectSettings['trackHeights'] | null; audioSmoothingMs?: number | null }) => (
     call<{ settings: ProjectSettings }>(`${p(id)}/settings`, { method: 'PATCH', json: patch }).then((r) => r.settings)
   ),
   /** its markers (`.film/markers.json`, lib/markers): the whole list, read and written */
@@ -200,7 +205,7 @@ export type FolderEvent = { type: 'film'; rev: string } | { type: 'files'; paths
   | { type: 'history-progress'; op: string; phase: string; done: number; total: number }
   | { type: 'ask'; ask: SpendAsk } | { type: 'asked'; id: string } | { type: 'notice'; notice: StudioNotice } | { type: 'project'; project: Project }
   /* the project was deleted, or its folder is not there any more: its pages leave it */
-  | { type: 'gone' };
+  | { type: 'settings' } | { type: 'gone' };
 
 /**
  * Listen to a stream of events (a WebSocket: a browser's six HTTP connections to Studio stay free for the page's

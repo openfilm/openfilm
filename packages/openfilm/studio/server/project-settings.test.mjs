@@ -3,9 +3,31 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { frameRateOf, parseProjectSettings, patchProjectSettings, PROJECT_SETTINGS_FILE, readProjectSettings } from './project-settings.mjs';
+import { frameRateOf, parseProjectSettings, patchProjectSettings, PROJECT_SETTINGS_FILE, readProjectSettings, readAudioSmoothingMs } from './project-settings.mjs';
 
 const folder = () => mkdtempSync(join(tmpdir(), 'of-settings-'));
+
+test('audio smoothing is opt-in, persisted per project, restricted to presets and removable', async () => {
+  const root = folder();
+  assert.equal((await readProjectSettings(root)).audioSmoothingMs, undefined);
+  assert.equal((await patchProjectSettings(root, { audioSmoothingMs: 10 })).audioSmoothingMs, 10);
+  assert.equal((await readProjectSettings(root)).audioSmoothingMs, 10);
+  await patchProjectSettings(root, { fps: 24 });
+  assert.equal((await readProjectSettings(root)).audioSmoothingMs, 10);
+  for (const bad of [true, '10', 0, 9, -1, {}, NaN]) await assert.rejects(patchProjectSettings(root, { audioSmoothingMs: bad }), /audioSmoothingMs/);
+  await patchProjectSettings(root, { audioSmoothingMs: null });
+  assert.equal((await readProjectSettings(root)).audioSmoothingMs, undefined);
+});
+
+test('enforcement refuses unreadable or invalid audio policy instead of silently disabling it', async () => {
+  const root = folder();
+  assert.equal(await readAudioSmoothingMs(root), 0);
+  mkdirSync(join(root, '.film'));
+  writeFileSync(join(root, PROJECT_SETTINGS_FILE), '{broken');
+  await assert.rejects(readAudioSmoothingMs(root), /Cannot read/);
+  writeFileSync(join(root, PROJECT_SETTINGS_FILE), '{"audioSmoothingMs":9}');
+  await assert.rejects(readAudioSmoothingMs(root), /Invalid audioSmoothingMs/);
+});
 
 test('a probed rate is named as editors name it; other rates are not project rates', () => {
   assert.equal(frameRateOf(29.97002997), 29.97);

@@ -14,11 +14,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { applyOps, EditError } from '../../../server/ops.mjs';
 import { filmHead } from '../../../../src/film-doc.mjs';
-import { api, ApiError, projectEvents, type Film, type Op } from '../api';
+import { api, ApiError, projectEvents, type Film, type Op, type AudioSmoothingStatus } from '../api';
 import { inverse } from './undo';
 import { dropStep, moveStep, nextStep, pushStep, type Steps } from './steps';
 
-export type FilmState = { value: Film; rev: string };
+export type FilmState = { value: Film; rev: string; audioSmoothing?: AudioSmoothingStatus };
 
 /**
  * One edit a person made here, undoable: what undoes it, what makes it again, and what to call it in the history.
@@ -77,7 +77,7 @@ export function useFilm(projectId: string, initial: FilmState | null, onChange: 
       return false;
     }
     if (brokenRev.current) { brokenRev.current = null; setBroken(null); setError(null); }
-    const next = { value: latest.value, rev: latest.rev };
+    const next = { value: latest.value, rev: latest.rev, audioSmoothing: latest.audioSmoothing };
     ref.current = next;
     setState(next);
     changed.current(next.value, 'server', filmHead(latest.text));
@@ -86,6 +86,7 @@ export function useFilm(projectId: string, initial: FilmState | null, onChange: 
 
   /* the agent's writes: the film becomes the folder's (an edit of ours still on its way is applied on top by the server) */
   useEffect(() => projectEvents(projectId, (event) => {
+    if (event.type === 'settings') { void queue.current.then(fromServer).catch(() => {}); return; }
     if (event.type !== 'film' || echoOf(event.rev)) return;
     /* the same text as here is news only after the file could not be read (written whole again) */
     if (event.rev === ref.current?.rev && !brokenRev.current) return;
@@ -99,14 +100,14 @@ export function useFilm(projectId: string, initial: FilmState | null, onChange: 
    */
   /* `quiet`: the caller says why it was refused itself (the inspector, beside its field), so `error` is not set.
      `one`: the step an undo or redo takes, moved to the other list once applied here */
-  const run = useCallback((ops: Op[], record: 'do' | 'undo' | 'redo' = 'do', label = 'history.stepEdit', quiet = false, one?: Step): Promise<string | null> => {
+  const run = useCallback((ops: Op[], record: 'do' | 'undo' | 'redo' = 'do', label = 'history.stepEdit', quiet = false, one?: Step, repairAudio = false): Promise<string | null> => {
     const current = ref.current;
-    if (!current || !ops.length) return Promise.resolve(null);
+    if (!current || (!ops.length && !repairAudio)) return Promise.resolve(null);
     /* film.html cannot be read: the edit could not be written, and shown it would draw the picture again from the
        broken file. Nothing changes; the note on the film already says why (`broken`) */
     if (brokenRev.current) return Promise.resolve(null);
     let after: Film;
-    try { after = applyOps(structuredClone(current.value), ops) as Film; }
+    try { after = repairAudio ? structuredClone(current.value) : applyOps(structuredClone(current.value), ops) as Film; }
     catch (e) {
       const why = e instanceof EditError ? e.message : String(e);
       if (!quiet) setError(why);
@@ -123,7 +124,11 @@ export function useFilm(projectId: string, initial: FilmState | null, onChange: 
     setSteps((s) => (record === 'do' ? pushStep(s, step) : one ? moveStep(s, one, record) : s));
     const written = queue.current.then(async (): Promise<string | null> => {
       try {
-        const done = await api.edit(projectId, ref.current?.rev ?? null, ops);
+        const done = await api.edit(projectId, repairAudio ? current.rev : ref.current?.rev ?? null, ops, { replay: record !== 'do', repairAudio });
+        if (done.effective && record === 'do' && (!repairAudio || done.automatic)) {
+          step.undo = inverse(done.effective.before, done.value, done.effective.ops);
+          step.redo = done.effective.ops;
+        } else if (repairAudio) setSteps((s) => dropStep(s, step));
         ours.current.delete(done.rev);
         ours.current.add(done.rev);
         pending.current -= 1;
@@ -132,12 +137,12 @@ export function useFilm(projectId: string, initial: FilmState | null, onChange: 
         /* every edit here written: the folder's film is the truth (another write came in under this one) */
         const theirs = pending.current === 0 ? done.value : null;
         if (theirs && (done.rebased || JSON.stringify(theirs) !== JSON.stringify(here.value))) {
-          ref.current = { value: theirs, rev: done.rev };
+          ref.current = { value: theirs, rev: done.rev, audioSmoothing: done.audioSmoothing };
           setState(ref.current);
           changed.current(theirs, 'server', filmHead(done.text));
         } else {
-          ref.current = { ...here, rev: done.rev };
-          setState((s) => (s ? { ...s, rev: done.rev } : s));
+          ref.current = { ...here, rev: done.rev, audioSmoothing: done.audioSmoothing };
+          setState((s) => (s ? { ...s, rev: done.rev, audioSmoothing: done.audioSmoothing } : s));
         }
         return null;
       } catch (e) {
@@ -145,7 +150,16 @@ export function useFilm(projectId: string, initial: FilmState | null, onChange: 
         const why = e instanceof ApiError ? e.message : String(e);
         /* what was not written is not a step to undo */
         if (record === 'do') setSteps((s) => ({ ...s, done: s.done.filter((x) => x !== step) }));
-        if (!(await fromServer())) {
+        let refreshed: boolean;
+        try { refreshed = await fromServer(); }
+        catch {
+          ref.current = current;
+          setState(current);
+          changed.current(current.value, 'server');
+          if (!quiet) setError(why);
+          return why;
+        }
+        if (!refreshed) {
           /* the folder's film cannot be read: back to the film as it was before this edit (the note on the film says
              why, so it is not said again) */
           ref.current = current;
@@ -184,29 +198,31 @@ export function useFilm(projectId: string, initial: FilmState | null, onChange: 
     void run(ops, kind, undefined, false, one).then((why) => { if (why) setSteps((s) => dropStep(s, one)); });
   }, [run, runOutside, setSteps]);
   const undo = useCallback(() => {
-    const one = nextStep(stepsRef.current, 'undo');
-    if (one) step(one, 'undo');
+    void queue.current.then(() => { const one = nextStep(stepsRef.current, 'undo'); if (one) step(one, 'undo'); });
   }, [step]);
   const redo = useCallback(() => {
-    const one = nextStep(stepsRef.current, 'redo');
-    if (one) step(one, 'redo');
+    void queue.current.then(() => { const one = nextStep(stepsRef.current, 'redo'); if (one) step(one, 'redo'); });
   }, [step]);
   /** Undo or redo until `done` steps are done (the edit history's rows: click one to go back or forward to it). */
   const rollbackTo = useCallback((done: number) => {
-    let { done: d, undone: u } = stepsRef.current;
-    while (d.length > done && d.length) { const one = d[d.length - 1]; step(one, 'undo'); u = [...u, one]; d = d.slice(0, -1); }
-    while (d.length < done && u.length) { const one = u[u.length - 1]; step(one, 'redo'); d = [...d, one]; u = u.slice(0, -1); }
+    void queue.current.then(() => {
+      let { done: d, undone: u } = stepsRef.current;
+      while (d.length > done && d.length) { const one = d[d.length - 1]; step(one, 'undo'); u = [...u, one]; d = d.slice(0, -1); }
+      while (d.length < done && u.length) { const one = u[u.length - 1]; step(one, 'redo'); d = [...d, one]; u = u.slice(0, -1); }
+    });
   }, [step]);
   const edit = useCallback((ops: Op[], label?: string, quiet?: boolean) => run(ops, 'do', label, quiet), [run]);
   /** An edit of another file, made already: kept as a step, so ⌘Z undoes it in turn with the film's. */
   const record = useCallback((label: string, outside: OutsideStep) => {
     setSteps((s) => pushStep(s, { undo: [], redo: [], label, at: Date.now(), outside }));
   }, [setSteps]);
+  const repairAudio = useCallback(() => run([], 'do', 'history.stepFade', false, undefined, true), [run]);
   /** The film was replaced as a whole (an earlier version put back): the edits made before are not undone into it. */
   const forget = useCallback(() => setSteps(() => ({ done: [], undone: [] })), [setSteps]);
 
   return {
     film: state?.value ?? null, rev: state?.rev ?? null, error, broken, edit, record, undo, redo, rollbackTo, forget, steps,
+    audioSmoothing: state?.audioSmoothing, repairAudio,
     canUndo: steps.done.length > 0, canRedo: steps.undone.length > 0, settled: () => queue.current,
   };
 }

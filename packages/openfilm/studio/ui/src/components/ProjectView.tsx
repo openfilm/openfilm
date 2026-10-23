@@ -52,6 +52,7 @@ import { factsOfProbe, mediaListingOf, resourceKindOf, srcHitsAsset, warmProject
 import { BrandLoadingScreen } from './BrandLoadingScreen';
 import { BrandLogo } from './BrandLogo';
 import { SettingsModal } from './settings/SettingsModal';
+import { AudioSmoothingControl } from './AudioSmoothingControl';
 import { useSettings } from './settings/use-settings';
 import { DesktopDialog } from './DesktopDialog';
 import type { ContextMenuEntry } from './ContextMenu';
@@ -255,7 +256,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const personSteps = React.useRef<readonly Step[]>([]);
   const settledEdits = React.useRef(new Set<PersonEdit>());
   /* the film as loaded: a new project name (a rename, or the snapshot a reconnecting page is sent) leaves it as it is */
-  const initial = React.useMemo(() => (loaded?.doc && loaded.value ? { value: loaded.value, rev: loaded.rev } : null), [loaded?.doc, loaded?.value, loaded?.rev]);
+  const initial = React.useMemo(() => (loaded?.doc && loaded.value ? { value: loaded.value, rev: loaded.rev, audioSmoothing: loaded.audioSmoothing } : null), [loaded?.doc, loaded?.value, loaded?.rev, loaded?.audioSmoothing]);
   React.useEffect(() => { if (initial) lastServerDoc.current = initial.value; }, [initial]);
   const film = useFilm(projectId, initial, React.useCallback((value: Film, kind: 'edit' | 'server', head?: string) => {
     preview.current?.update(value, head);
@@ -612,11 +613,26 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const [settings, setSettings] = React.useState<ProjectSettings | null>(null);
   React.useEffect(() => {
     setSettings(null);
-    void api.settings(projectId).then(setSettings, () => setSettings({}));
+    const reload = () => { void api.settings(projectId).then(setSettings, () => setSettings({})); };
+    reload();
+    return projectEvents(projectId, (event) => { if (event.type === 'settings') reload(); });
   }, [projectId]);
   const patchSettings = React.useCallback((patch: Parameters<typeof api.patchSettings>[1]) => {
     void api.patchSettings(projectId, patch).then(setSettings, (e: Error) => toast.showError(e.message));
   }, [projectId, toast]);
+  const [audioBusy, setAudioBusy] = React.useState(false);
+  const changeAudioSmoothing = async (ms: number | null) => {
+    setAudioBusy(true);
+    try { await film.settled(); setSettings(await api.patchSettings(projectId, { audioSmoothingMs: ms })); }
+    catch (e) { toast.showError(String(e instanceof Error ? e.message : e)); }
+    finally { setAudioBusy(false); }
+  };
+  const repairAudioSmoothing = async () => {
+    setAudioBusy(true);
+    try { await film.settled(); await film.repairAudio(); }
+    catch (e) { toast.showError(String(e instanceof Error ? e.message : e)); }
+    finally { setAudioBusy(false); }
+  };
   /* the rate frames are counted in: the project's own, else its first footage's (on the film by time, then the
      project's other videos), else 30 */
   const footageRate = React.useMemo(() => footageFps([
@@ -3059,6 +3075,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 <div className="absolute inset-0 flex min-h-0 min-w-0 flex-col" data-timeline-scope="main" style={{ right: METERS_W }}
                   onPointerDownCapture={() => { setBarAt('timeline'); if (pickedMedia) pickMedia(null); }}>
                   <Timeline
+                    toolbarExtra={<AudioSmoothingControl ms={settings?.audioSmoothingMs ?? 0}
+                      pending={film.audioSmoothing?.pending ?? 0} busy={audioBusy || settings === null}
+                      onChange={(ms) => { void changeAudioSmoothing(ms); }} onRepair={() => { void repairAudioSmoothing(); }} />}
                     blockMenuExtra={timelineMenuExtra}
                     chat={timelineChat}
                     {...(hostHover ? { onHoverBlock: hoverBlock } : {})}

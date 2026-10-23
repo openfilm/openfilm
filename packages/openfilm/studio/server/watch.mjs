@@ -29,7 +29,7 @@ const WRITING = /(^|[/\\])([^/\\]+\.[0-9a-f-]{8,}\.tmp|\.\d+\.\d+\.importing)$/;
  * @typedef {{ type: 'film', rev: string } | { type: 'files', paths?: string[] } | { type: 'history' } | { type: 'export', job: object }
  *   | { type: 'history-progress', op: string, phase: string, done: number, total: number } | { type: 'project', project: object }
  *   | { type: 'ask', ask: object } | { type: 'asked', id: string } | { type: 'notice', notice: object }
- *   | { type: 'gone' }} FolderEvent   `gone`: the project was deleted, or its folder is not there any more
+ *   | { type: 'settings' } | { type: 'gone' }} FolderEvent   `gone`: the project was deleted, or its folder is not there any more
  */
 
 /**

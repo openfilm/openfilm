@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { EditError, editProjectFilm, readProjectFilm, revOf } from './film.mjs';
+import { EditError, editProjectFilm, readProjectFilm, revOf, projectAudioStatus } from './film.mjs';
+import { patchProjectSettings } from './project-settings.mjs';
 import { filmHtml, readFilmFile } from '../../src/film-doc.mjs';
 
 const folder = (film) => {
@@ -13,6 +14,58 @@ const folder = (film) => {
 };
 const film = (...tracks) => ({ stage: { w: 1920, h: 1080 }, tracks: tracks.map((clips) => ({ clips })) });
 const onDisk = (root) => readFilmFile(readFileSync(join(root, 'film.html'), 'utf8')).value;
+
+test('server policy applies without a client asking, with exact replay and a read-only check for outside writes', async () => {
+  const value = film([{ id: 'a', src: 'a.wav', time: [0, 1] }, { id: 'b', src: 'b.wav', at: 2, time: [0, 1] }]);
+  const root = folder(value);
+  const move = [{ op: 'move', clip: 'b', at: 1 }];
+  let done = await editProjectFilm(root, null, move);
+  assert.equal(done.automatic, undefined, 'off by default');
+  await editProjectFilm(root, null, [{ op: 'move', clip: 'b', at: 2 }]);
+  await patchProjectSettings(root, { audioSmoothingMs: 10 });
+  done = await editProjectFilm(root, null, move);
+  assert.deepEqual(done.effective.before, value);
+  assert.equal(done.effective.ops.length, 2, 'original move plus the policy operation');
+  assert.deepEqual(done.doc.tracks[0].clips.map((c) => c.overrides), [[{ fade: [0, 0.01] }], [{ fade: [0.01, 0] }]]);
+  const restore = [{ op: 'move', clip: 'b', at: 2 }, { op: 'props', edits: ['a', 'b'].map((clip) => ({ clip, prop: 'fade', value: null })) }];
+  const undone = await editProjectFilm(root, null, restore, { replay: true });
+  assert.deepEqual(undone.doc, value);
+  const redone = await editProjectFilm(root, null, done.effective.ops, { replay: true });
+  assert.deepEqual(redone.doc, done.doc);
+  assert.equal(redone.automatic, undefined);
+
+  /* An agent writes a valid new seam directly. Reading/checking never alters it. */
+  value.tracks[0].clips[1].at = 1;
+  const external = filmHtml(value);
+  writeFileSync(join(root, 'film.html'), external);
+  const check = await readProjectFilm(root);
+  assert.deepEqual(await projectAudioStatus(root, check.value), { ms: 10, pending: 2 });
+  assert.equal(readFileSync(join(root, 'film.html'), 'utf8'), external);
+  await assert.rejects(editProjectFilm(root, 'stale', [], { repairAudio: true }), (e) => e.kind === 'conflict');
+  assert.equal(readFileSync(join(root, 'film.html'), 'utf8'), external);
+  const fixed = await editProjectFilm(root, check.rev, [], { repairAudio: true });
+  assert.equal(fixed.audioSmoothing.pending, 0);
+  assert.equal(fixed.effective.ops.length, 1);
+  const again = await editProjectFilm(root, fixed.rev, [], { repairAudio: true });
+  assert.equal(again.rev, fixed.rev);
+  assert.equal(again.automatic, undefined);
+});
+
+test('concurrent managed edits keep both writes, and direct fade removal is respected', async () => {
+  const root = folder(film([{ id: 'a', src: 'a.wav', time: [0, 1] }, { id: 'b', src: 'b.wav', at: 2, time: [0, 1] }]));
+  await patchProjectSettings(root, { audioSmoothingMs: 10 });
+  await Promise.all([
+    editProjectFilm(root, null, [{ op: 'move', clip: 'b', at: 1 }]),
+    editProjectFilm(root, null, [{ op: 'set', clip: 'a', field: 'volume', value: 0.5 }]),
+  ]);
+  const value = onDisk(root);
+  assert.equal(value.tracks[0].clips[0].volume, 0.5);
+  assert.equal(value.tracks[0].clips[1].at, 1);
+  assert.deepEqual(value.tracks[0].clips[0].overrides, [{ fade: [0, 0.01] }]);
+  const removed = await editProjectFilm(root, null, [{ op: 'props', edits: [{ clip: 'a', prop: 'fade', value: null }] }]);
+  assert.equal(removed.doc.tracks[0].clips[0].overrides, undefined);
+  assert.equal(removed.automatic, undefined);
+});
 
 test('a folder without film.html reads as empty, and the first insert makes the film', async () => {
   const root = folder();
