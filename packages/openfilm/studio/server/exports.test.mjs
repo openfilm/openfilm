@@ -1,6 +1,7 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
@@ -255,7 +256,8 @@ test('a cancelled export stops and leaves no file, and a bad ask is refused befo
   for (const bad of [{ kind: 'pdf' }, { kind: 'video', range: [3, 1] }, { kind: 'video', codec: 'av1' }, { kind: 'video', frame: '9:1' }, { kind: 'video', frame: 'wide' },
     { kind: 'audio', mix: false }, { kind: 'stills', range: [0, 1] }, { kind: 'gif', width: 5000 }, { kind: 'subtitles', format: 'ass' },
     { kind: 'slides', format: 'key' }, { kind: 'slides', range: [0, 1] }, { kind: 'nle', fps: 500 }, { kind: 'nle', audio: 'mix' }, { kind: 'nle', range: [0, 1] },
-    { kind: 'nle', format: 'fcpxml', alpha: 'png' }, { kind: 'nle', alpha: 'auto' }, { kind: 'nle', format: 'jianying', alpha: 'hevc_alpha' }, { kind: 'nle', format: 'jianying', alpha: 'prores4444' }]) {
+    { kind: 'nle', format: 'fcpxml', alpha: 'png' }, { kind: 'nle', alpha: 'auto' }, { kind: 'nle', format: 'jianying', alpha: 'hevc_alpha' }, { kind: 'nle', format: 'jianying', alpha: 'prores4444' },
+    { kind: 'nle', visuals: 'unknown' }, ...['fcpxml', 'jianying', 'capcut'].map(format => ({ kind: 'nle', format, visuals: 'source' }))]) {
     assert.throws(() => exports.start(project(), bad), ExportError, JSON.stringify(bad));
   }
 });
@@ -818,6 +820,68 @@ test('Final Cut Pro export packages FCPXML, rendered pages, audio and optional s
   }
 });
 
+test('XML full originals: copy and link preserve source trims, colors, audio handles and original bytes', { ...ffmpeg, timeout: 240_000 }, async () => {
+  const dir = join(scratch, 'Relink');
+  mkdirSync(join(dir, 'footage'), { recursive: true });
+  const source = join(dir, 'footage', 'Camera Original.mp4');
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i',
+    "color=red:size=160x90:rate=25:duration=12,drawbox=color=green:t=fill:enable='gte(t,4)',drawbox=color=blue:t=fill:enable='gte(t,8)'",
+    '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=12',
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-ac', '2', '-timecode', '01:00:00:00', source]);
+  const hash = file => createHash('sha256').update(readFileSync(file)).digest('hex');
+  const originalHash = hash(source);
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [
+    { id: 'plain-cut', src: 'footage/Camera Original.mp4', time: [4, 6] },
+    { id: 'faded-cut', src: 'footage/Camera Original.mp4', time: [4, 6], at: 2, overrides: [{ fade: [0, 0.4] }] },
+    { id: 'styled-cut', src: 'footage/Camera Original.mp4', time: [8, 10], at: 4, style: 'opacity: 1;' },
+  ] }] }));
+  for (const media of ['copy', 'link']) {
+    const done = await exported({ kind: 'nle', format: 'xml', visuals: 'source', media, audio: 'clips', fps: 25, subtitles: false }, `Originals-${media}`, dir);
+    const [{ error, found }] = await parseXml([readFileSync(done.out, 'utf8')], doc => {
+      const text = (node, selector) => node.querySelector(selector)?.textContent;
+      const clips = kind => [...doc.querySelectorAll(`sequence > media > ${kind} > track > clipitem`)].map(clip => ({
+        file: clip.querySelector(':scope > file').id,
+        times: ['start', 'end', 'in', 'out'].map(key => Number(text(clip, `:scope > ${key}`))),
+        keys: [...clip.querySelectorAll('filter keyframe when')].map(key => Number(key.textContent)),
+        values: [...clip.querySelectorAll('filter keyframe value')].map(key => Number(key.textContent)),
+        channel: Number(text(clip, 'sourcetrack > trackindex')),
+      }));
+      return { video: clips('video'), audio: clips('audio'), files: [...doc.querySelectorAll('file')].filter(f => f.querySelector('pathurl')).map(file => ({
+        id: file.id, path: text(file, 'pathurl'), duration: Number(text(file, ':scope > duration')),
+      })) };
+    });
+    assert.equal(error, null);
+    assert.equal(found.files.length, 1);
+    assert.equal(found.files[0].duration, 300, 'all 12 seconds remain available for extending edits');
+    assert.deepEqual(found.video.map(c => c.times), [[0, 50, 100, 150], [50, 100, 100, 150], [100, 150, 200, 250]]);
+    assert.deepEqual(found.audio.map(c => c.times), [...found.video, ...found.video].map(c => c.times));
+    assert.deepEqual(found.audio.map(c => c.channel), [1, 1, 1, 2, 2, 2]);
+    assert.deepEqual(found.audio[1].keys, [100, 140, 150], 'fade keys use source coordinates on the intact recording');
+    assert.deepEqual(found.video[1].keys, [100, 140, 150], 'native picture fade uses the same source coordinates');
+    assert.deepEqual(found.video[1].values, [100, 100, 0], 'picture opacity fades out over the last 0.4 seconds');
+    assert.ok([...found.video, ...found.audio].every(c => c.file === found.files[0].id));
+    const exportedSource = fileURLToPath(found.files[0].path.replace(/^file:\/\/localhost\//, 'file:///'));
+    assert.equal(hash(exportedSource), originalHash);
+    assert.equal(hash(source), originalHash, 'export never modifies the source');
+    assert.equal(exportedSource === source, media === 'link');
+    assert.equal(Number(probe(exportedSource, 'format=duration')), 12);
+    assert.deepEqual(done.outputs.filter(f => /\.(mov|wav)$/i.test(f)), [], 'effects do not create short replacements');
+    assert.equal(done.outputs.filter(f => /\.mp4$/i.test(f)).length, media === 'copy' ? 1 : 0);
+    for (const [i, clip] of found.video.entries()) {
+      const rgb = file => [...execFileSync('ffmpeg', ['-v', 'error', '-ss', String(clip.times[2] / 25), '-i', file,
+        '-frames:v', '1', '-vf', 'scale=1:1', '-pix_fmt', 'rgb24', '-f', 'rawvideo', '-'])];
+      const want = i === 2 ? [0, 0, 255] : [0, 128, 0];
+      assert.ok(near(rgb(exportedSource), want), `${media}: exported first frame is green/green/blue`);
+      assert.ok(near(rgb(source), want), `${media}: relinking with unchanged XML trims preserves green/green/blue`);
+    }
+  }
+  const appearance = await exported({ kind: 'nle', media: 'copy', fps: 25, subtitles: false }, 'Appearance', dir);
+  assert.deepEqual(appearance.outputs.filter(f => /\.mov$/i.test(f)).map(f => basename(f)), ['faded-cut.mov', 'styled-cut.mov']);
+  const [{ found }] = await parseXml([readFileSync(appearance.out, 'utf8')], doc => [...doc.querySelectorAll('sequence > media > video > track > clipitem > in')].map(c => Number(c.textContent)));
+  assert.deepEqual(found, [100, 0, 0], 'default appearance export still uses the rendered media coordinates');
+  assert.equal(hash(source), originalHash);
+});
+
 test('editing software: an xmeml folder; pages rendered with alpha, footage placed, sound as clips or stems, subtitles as SRT', { ...ffmpeg, timeout: 240_000 }, async () => {
   const cut = join(scratch, 'Cut');
   mkdirSync(join(cut, 'footage'), { recursive: true });
@@ -904,7 +968,7 @@ test('editing software: an xmeml folder; pages rendered with alpha, footage plac
     ['Cut.xml', 'media/Cut - footage.wav', 'media/Cut - voice.wav', 'media/badge.png', 'media/slow.mov', 'media/title-2.mov', 'media/title.mov']);
   const xml = readFileSync(stems.out, 'utf8');
   assert.match(xml, /<pathurl>file:\/\/localhost\/[^<]*\/Cut\/footage\/shot%20one\.mp4<\/pathurl>/, 'linked to the footage where it is');
-  assert.ok(!xml.includes('<link>'), 'a stem is not linked to a picture');
+  assert.ok([...xml.matchAll(/<link>[\s\S]*?<\/link>/g)].every(([link]) => !link.includes('<mediatype>video</mediatype>')), 'a stem is not linked to a picture');
 });
 
 test('剪映: the same timeline as a draft in 剪映\'s drafts folder, its media beside it, subtitles a text track', { ...ffmpeg, timeout: 240_000 }, async () => {
