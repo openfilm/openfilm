@@ -7,7 +7,7 @@ import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createExports, diskFull, exportCapabilities, exportsRoot, ExportError, frameBox, dimsForShortEdge, keepChanges, projectFiles, projectSizes, shareOf, writableFolder } from './exports.mjs';
 import { encoders, hardwareEncoder } from '../../src/encoders.mjs';
-import { allocateLanes, containMotion, fadeKeyframes, frameSpan, nleRate, planNleTimeline, xmemlDocument } from './nle.mjs';
+import { allocateLanes, containMotion, fadeKeyframes, frameSpan, nleRate, planNleTimeline, probeSource, xmemlDocument } from './nle.mjs';
 import { fcpxmlDocument } from './fcpxml.mjs';
 import { pptxParts } from './slides.mjs';
 import { filmSubtitleSrt, parseFilmSubtitleStyle } from './film-subtitle.mjs';
@@ -566,6 +566,31 @@ test('fades in the editor\'s timeline: a picture that fades is rendered; a sound
   assert.equal(sound.in, 0);
   assert.deepEqual(sound.levels, [{ when: 0, value: 0 }, { when: 13, value: 1 }]);
   assert.match(xmemlDocument(timeline), /<parameterid>level<\/parameterid>[\s\S]*<keyframe>\s*<when>0<\/when>\s*<value>0<\/value>\s*<\/keyframe>\s*<keyframe>\s*<when>13<\/when>/);
+});
+
+test('Premiere XML timecode matches a full video conversion without moving source-relative cuts', ffmpeg, async () => {
+  const folder = join(scratch, 'Source timecode');
+  mkdirSync(folder);
+  const source = join(folder, 'Camera Original.mkv');
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i',
+    'color=red:s=160x90:r=25:d=4[r];color=green:s=160x90:r=25:d=4[g];color=blue:s=160x90:r=25:d=4[b];[r][g][b]concat=n=3:v=1:a=0',
+    '-c:v', 'libx264', '-metadata', 'timecode=01:00:00:00', source]);
+  assert.equal((await probeSource(source)).timecode?.value, '01:00:00:00', 'Matroska uses uppercase TIMECODE metadata');
+  writeFileSync(join(folder, 'film.html'), filmHtml({ stage: { w: 160, h: 90 }, tracks: [
+    { clips: [{ id: 'plain-cut', src: 'Camera Original.mkv', at: 0, time: [4, 6] }] },
+  ] }));
+  const done = await exported({ kind: 'nle', format: 'xml', fps: 25, audio: 'clips', subtitles: false }, 'Source timecode', folder);
+  const converted = done.outputs.find((path) => path.endsWith('.mov'));
+  assert.ok(converted);
+  assert.equal((await probeSource(converted)).timecode?.value, '01:00:00:00');
+  const [{ error, found }] = await parseXml([readFileSync(done.out, 'utf8')], (doc) => {
+    const text = (selector) => doc.querySelector(selector)?.textContent;
+    return { source: text('file > timecode > string'), rate: text('file > timecode > rate > timebase'),
+      sequence: text('sequence > timecode > string'), start: text('clipitem > start'), end: text('clipitem > end'),
+      from: text('clipitem > in'), to: text('clipitem > out') };
+  });
+  assert.equal(error, null);
+  assert.deepEqual(found, { source: '01:00:00:00', rate: '25', sequence: '00:00:00:00', start: '0', end: '50', from: '100', to: '150' });
 });
 
 test('Final Cut Pro keeps source audio rows when an effect overlaps adjacent narration clips', () => {

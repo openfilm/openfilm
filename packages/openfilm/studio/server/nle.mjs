@@ -31,7 +31,7 @@ import { exactRate } from '../../src/rate.mjs';
 /**
  * @typedef {import('../../src/film-doc.mjs').FilmBox} FilmBox
  * @typedef {{ w?: number, h?: number, duration?: number, fps?: number, hasVideo?: boolean, hasAudio?: boolean,
- *   channels?: number, sampleRate?: number, alpha?: boolean }} SourceFacts
+ *   channels?: number, sampleRate?: number, alpha?: boolean, timecode?: NleTimecode }} SourceFacts
  * @typedef {{ id: string, kind: 'page' | 'video' | 'still', src: string, path: string, at: number, end: number,
  *   from: number, speed: number, box?: FilmBox, track: number, hidden: boolean, styled?: boolean, faded?: boolean,
  *   facts: SourceFacts | null }} NlePicture
@@ -48,6 +48,7 @@ import { exactRate } from '../../src/rate.mjs';
  *   stems?: SoundRole[], audioTracks?: 'roles' | 'source', alpha?: NleAlpha }} NlePlanOptions
  * @typedef {'png' | 'prores4444'} NleAlpha How a picture with alpha is written, in a MOV (default ProRes 4444)
  * @typedef {{ timebase: number, ntsc: boolean, fps: number }} NleRate
+ * @typedef {{ value: string, rate: NleRate }} NleTimecode
  * @typedef {{ kind: 'render', clip: string, frames: number }
  *   | { kind: 'copy', from: string }
  *   | { kind: 'link', from: string }
@@ -57,7 +58,7 @@ import { exactRate } from '../../src/rate.mjs';
  *   How a file is made: a clip rendered, a source cloned or pointed at, a still drawn to PNG, a source converted
  *   (`segment`: only those source seconds, at that speed, `seconds` long), a mixed stem
  * @typedef {{ id: string, name: string, path: string, job: NleMediaJob, durationFrames: number,
- *   video?: { w: number, h: number, alpha: boolean, still: boolean, fps?: number }, audio?: { channels: number, sampleRate: number } }} NleFile
+ *   video?: { w: number, h: number, alpha: boolean, still: boolean, fps?: number }, audio?: { channels: number, sampleRate: number }, timecode?: NleTimecode }} NleFile
  * @typedef {{ id: string, name: string, fileId: string, start: number, end: number, in: number, out: number, enabled: boolean,
  *   motion?: { scale: number, center: { h: number, v: number } }, gain?: number,
  *   levels?: { when: number, value: number }[], linkGroup?: string, sourceRow?: string }} NleClip
@@ -79,6 +80,20 @@ export function nleRate(fps) {
   const base = Math.max(1, Math.round(fps));
   const ntsc = exactRate(fps).den === 1001;
   return ntsc ? { timebase: base, ntsc: true, fps: (base * 1000) / 1001 } : { timebase: base, ntsc: false, fps: base };
+}
+
+/** A source's SMPTE address, only when its label and rate agree. @param {string | undefined} raw @param {number | undefined} fps @returns {NleTimecode | undefined} */
+export function sourceTimecode(raw, fps) {
+  const parts = /^(\d{2}):([0-5]\d):([0-5]\d)([:;.])(\d{2,3})$/.exec(raw ?? '');
+  if (!parts || !fps || fps <= 0 || fps >= 500) return;
+  const rate = nleRate(fps);
+  if (Math.abs(rate.fps - fps) > 0.001) return;
+  const hours = Number(parts[1]), minutes = Number(parts[2]), seconds = Number(parts[3]), frames = Number(parts[5]);
+  if (hours >= 24 || frames >= rate.timebase) return;
+  const drop = parts[4] !== ':';
+  if (drop && (!rate.ntsc || ![30, 60].includes(rate.timebase)
+    || (minutes % 10 !== 0 && seconds === 0 && frames < rate.timebase / 15))) return;
+  return { value: parts[0].replace('.', ';'), rate };
 }
 
 /** Seconds → sequence frames. @param {number} sec @param {NleRate} rate */
@@ -230,6 +245,7 @@ export function planNleTimeline(film, opts) {
         durationFrames: facts.duration ? Math.max(1, toFrame(facts.duration, rate)) : Math.max(1, minFrames),
         ...(video ? { video: { w: facts.w ?? stage.w, h: facts.h ?? stage.h, alpha: Boolean(facts.alpha), still: false, fps: facts.fps } } : {}),
         ...(audio ? { audio: converted ? { channels: audio.channels, sampleRate: 48_000 } : audio } : {}),
+        ...(!converted && facts.timecode ? { timecode: facts.timecode } : {}),
       });
       if (facts.duration) measured.add(file.id);
     }
@@ -396,9 +412,11 @@ export const nlePathUrl = (path) => pathToFileURL(path).href.replace(/^file:\/\/
 const bool = (/** @type {boolean} */ v) => (v ? 'TRUE' : 'FALSE');
 const num = (/** @type {number} */ n) => String(round6(n));
 const rateXml = (/** @type {NleRate} */ rate, /** @type {string} */ pad) => `${pad}<rate>\n${pad}  <timebase>${rate.timebase}</timebase>\n${pad}  <ntsc>${bool(rate.ntsc)}</ntsc>\n${pad}</rate>`;
-const timecodeXml = (/** @type {NleRate} */ rate, /** @type {string} */ pad) => [
-  `${pad}<timecode>`, rateXml(rate, `${pad}  `), `${pad}  <string>00:00:00:00</string>`, `${pad}  <frame>0</frame>`,
-  `${pad}  <displayformat>NDF</displayformat>`, `${pad}</timecode>`,
+const timecodeXml = (/** @type {NleRate} */ rate, /** @type {string} */ pad, /** @type {NleTimecode | undefined} */ source = undefined) => [
+  `${pad}<timecode>`, rateXml(source?.rate ?? rate, `${pad}  `),
+  `${pad}  <string>${xmlEscape(source?.value ?? '00:00:00:00')}</string>`,
+  // xmeml accepts the string and its own rate without a second, potentially conflicting frame count.
+  ...(source ? [] : [`${pad}  <frame>0</frame>`, `${pad}  <displayformat>NDF</displayformat>`]), `${pad}</timecode>`,
 ].join('\n');
 
 /** @param {NleFile} file @param {NleRate} rate @param {string} pad */
@@ -409,7 +427,7 @@ function fileXml(file, rate, pad) {
     `${pad}  <pathurl>${xmlEscape(nlePathUrl(file.path))}</pathurl>`,
     rateXml(rate, `${pad}  `),
     `${pad}  <duration>${file.durationFrames}</duration>`,
-    timecodeXml(rate, `${pad}  `),
+    timecodeXml(rate, `${pad}  `, file.timecode),
     `${pad}  <media>`,
   ];
   if (file.video) {
@@ -532,14 +550,14 @@ export function xmemlDocument(timeline) {
 export function probeSource(path) {
   return new Promise((done) => {
     const proc = spawn('ffprobe', ['-v', 'error', '-show_entries',
-      'format=duration,format_name:stream=codec_type,width,height,avg_frame_rate,r_frame_rate,channels,sample_rate,pix_fmt:stream_tags=alpha_mode',
+      'format=duration,format_name:format_tags=timecode:stream=codec_type,width,height,avg_frame_rate,r_frame_rate,channels,sample_rate,pix_fmt:stream_tags=alpha_mode,timecode',
       '-of', 'json', path], { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
     let out = '';
     proc.stdout.on('data', (c) => { out += c; });
     proc.on('error', () => done({}));
     proc.on('close', () => {
       try {
-        /** @type {{ format?: { duration?: string, format_name?: string }, streams?: { codec_type?: string, width?: number, height?: number, avg_frame_rate?: string, r_frame_rate?: string, channels?: number, sample_rate?: string, pix_fmt?: string, tags?: { alpha_mode?: string } }[] }} */
+        /** @type {{ format?: { duration?: string, format_name?: string, tags?: Record<string, string> }, streams?: { codec_type?: string, width?: number, height?: number, avg_frame_rate?: string, r_frame_rate?: string, channels?: number, sample_rate?: string, pix_fmt?: string, tags?: Record<string, string> }[] }} */
         const json = JSON.parse(out);
         const streams = json.streams ?? [];
         const v = streams.find((s) => s.codec_type === 'video');
@@ -548,11 +566,15 @@ export function probeSource(path) {
         const still = /image|png|mjpeg|jpeg|bmp|tiff/.test(json.format?.format_name ?? '');
         const fr = (/** @type {string | undefined} */ raw) => { const [n, d] = (raw ?? '').split('/').map(Number); return n && d ? n / d : undefined; };
         const fps = fr(v?.avg_frame_rate) ?? fr(v?.r_frame_rate);
+        const tagged = (/** @type {Record<string, string> | undefined} */ tags) => Object.entries(tags ?? {}).find(([key]) => key.toLowerCase() === 'timecode')?.[1];
+        const timecode = sourceTimecode(tagged(v?.tags) ?? tagged(json.format?.tags)
+          ?? tagged(streams.find((s) => s.codec_type === 'data' && tagged(s.tags))?.tags), fps);
         done({
           ...(v?.width ? { w: v.width } : {}),
           ...(v?.height ? { h: v.height } : {}),
           ...(Number.isFinite(sec) && sec > 0 && !still ? { duration: sec } : {}),
           ...(fps && fps < 500 && !still ? { fps } : {}),
+          ...(timecode && !still ? { timecode } : {}),
           hasVideo: Boolean(v),
           hasAudio: Boolean(a),
           ...(a?.channels ? { channels: a.channels } : {}),

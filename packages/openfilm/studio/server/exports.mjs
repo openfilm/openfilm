@@ -1486,7 +1486,11 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
           else if (make.kind === 'raster') {
             browser ??= await launch();
             await rasterize(browser, make.from, make.w, make.h, to);
-          } else if (make.kind === 'transcode') await transcode(make, to, signal, file.video);
+          } else if (make.kind === 'transcode') {
+            await transcode(make, to, signal, file.video);
+            // Full video conversions can retain timecode; use the produced file's metadata, not the original's.
+            if (!app && !fcp && file.video && !make.segment) file.timecode = (await probeSource(to)).timecode;
+          }
           update(job, { progress: Math.floor((0.9 + 0.08 * ((i + 1) / others.length)) * 100) / 100 });
         }
       } finally {
