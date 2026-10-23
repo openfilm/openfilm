@@ -892,11 +892,16 @@ export async function runLocalAgentTurn({
 }
 
 /** Whether a message sent while this turn runs can join it (the agent takes steering), rather than wait for its end. */
-export function canSteer(turnId: string): boolean {
+export function canSteer(turnId: string, prefs: Record<string, unknown> = {}): boolean {
   if (!desktopBridge()?.localAgents?.steer) return false;
   for (const [key, t] of turnByKey) {
     if (t.turnId !== turnId) continue;
-    for (const s of sessions.values()) if (s.key === key) return s.info.steering === true;
+    for (const s of sessions.values()) if (s.key === key) {
+      return s.info.steering === true && Object.entries(prefs).every(([id, value]) => {
+        const option = s.info.configOptions?.find((option) => option.id === id);
+        return !option || option.currentValue === value;
+      });
+    }
   }
   return false;
 }

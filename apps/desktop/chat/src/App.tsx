@@ -6,7 +6,7 @@
  * (lib/local-agent-run's saved turns).
  */
 import React from 'react';
-import { ArrowDown, Blocks, Coins, CornerDownLeft, LibraryBig, ListEnd, Loader2, Plus, ShieldQuestion, Square, SquareSlash, X } from 'lucide-react';
+import { ArrowDown, Blocks, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, ShieldQuestion, Square, SquareSlash, X } from 'lucide-react';
 import { buildPromptDisplay, type Turn } from '@openfilm/shared';
 import { useT, useUiLocale } from '@/i18n';
 import { ConversationSessionBar } from '@/components/ConversationSessionBar';
@@ -20,7 +20,7 @@ import { AddSkillDialog, type PickedSkill } from '@/components/AddSkill';
 import { SKILLS_CHANGED } from 'openfilm/studio-ui/lib/project-sources.ts';
 import { CardActions, CardButton, ComposerCard } from '@/components/ComposerCard';
 import { QueuedMessages } from '@/components/QueuedMessages';
-import { FollowUpQueue, followUpIntent } from '@/lib/follow-up-queue';
+import { FollowUpQueue } from '@/lib/follow-up-queue';
 import { LocalAgentQuestionCard } from '@/components/TurnQuestionCard';
 import { Tooltip } from '@/components/Tooltip';
 import { StickToBottomContext, useStickToBottom, useTailSpacer } from '@/components/useStickToBottom';
@@ -321,15 +321,6 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   const [studioRefs, setStudioRefs] = React.useState<Map<string, StudioRef>>(() => new Map());
   const queue = React.useMemo(() => messagesFor(`${project.id}:${project.path}:${sessionId}`), [project.id, project.path, sessionId]);
   const queued = React.useSyncExternalStore(queue.subscribe, queue.get);
-  const [queueing, setQueueing] = React.useState(() => {
-    try { return localStorage.getItem('openfilm.chat.queueing') !== 'off'; } catch { return true; }
-  });
-  const toggleQueueing = () => {
-    const next = !queueing;
-    setQueueing(next);
-    try { localStorage.setItem('openfilm.chat.queueing', next ? 'on' : 'off'); } catch { /* private window */ }
-    setFollowUpError(null);
-  };
   const mounted = React.useRef(true);
   React.useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   React.useEffect(() => app.chat.onPause?.(() => {
@@ -725,7 +716,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
         if (info.sessionId && fresh) {
           touchSession(sessionId, (s) => ({
             agentSessions: { ...s.agentSessions, [agent]: info.sessionId },
-            skillsGiven: givenAfter(s.skillsGiven, agent, info.sessionId, skills ?? [], { fresh }),
+            skillsGiven: givenAfter(s.skillsGiven, agent, info.sessionId, skills, { fresh }),
           }));
         }
       },
@@ -779,7 +770,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   const projectBusy = () => runningLocalTurns(projectKey).length > 0 || runs.current.size > 0;
   const canSteerMessage = (id: string) => {
     const message = queue.get().items.find((item) => item.id === id);
-    return Boolean(message && active && asset && message.by === asset.localAgent?.id && message.modelLabel === (asset.localAgent?.model ?? null) && steering);
+    return Boolean(message && active && asset && message.by === asset.localAgent?.id && steering && canSteer(asset.id, message.prefs));
   };
 
   async function dispatchQueued(steerId?: string): Promise<void> {
@@ -801,7 +792,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
       if (!mounted.current) { queue.release(message.id, t('composer.queuePaused')); return; }
       if (queue.get().pauseVersion !== pauseVersion || (!steerId && queue.get().paused)) { queue.release(message.id, queue.get().paused ?? t('composer.queuePaused')); return; }
       if (!steerId && projectBusy()) { queue.release(message.id, t('composer.queuePaused')); return; }
-      if (steerId && (!asset || !canSteer(asset.id))) { queue.release(message.id, t('composer.queueSteerRejected')); return; }
+      if (steerId && (!asset || !canSteer(asset.id, message.prefs))) { queue.release(message.id, t('composer.queueSteerRejected')); return; }
       if (steerId && asset) {
         const next = createLocalAgentTurn(message.id, message.by, ordered.length);
         const checkpoint = app.chat.snapshot(project.path, message.id).then(() => true, () => false);
@@ -879,10 +870,6 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     const effortOption = options?.find((option) => option.category === 'thought_level');
     const effort = effortOption && offeredOption(agent, la.roster, effortOption) ? summary.effort : null;
     const modelLabel = [summary.model, effort].filter(Boolean).join(' · ') || null;
-    const intent = followUpIntent({ running: active || projectBusy(), queueing,
-      steering: Boolean(active && asset && steering && agent === asset.localAgent?.id && modelLabel === (asset.localAgent?.model ?? null)),
-    });
-    if (intent === 'blocked') { setFollowUpError(t('composer.queueSteerUnavailable')); return; }
     thread.scrollToBottom({ smooth: true });
     const sendNow = !projectBusy() && queue.get().items.length === 0;
     const id = makeLocalAgentTurnId();
@@ -895,8 +882,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     setFollowUp(''); setFollowUpRefs([]); setStudioRefs(new Map()); setFileRefs([]); setSkillRefs([]);
     setFollowUpError(null);
     composerRef.current?.focus();
-    if (intent === 'steer') void dispatchQueued(id);
-    else if (sendNow) { queue.resume(); void dispatchQueued(); }
+    if (sendNow) { queue.resume(); void dispatchQueued(); }
   }
 
   /* Claiming is synchronous; StrictMode, repeated effects and double clicks cannot send an item twice. */
@@ -923,7 +909,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
 
   const agentName = agent === 'byok' ? t('composer.agentOwnKey') : la.roster?.find((a) => a.id === agent)?.name ?? agent;
 
-  const sendLabel = stopping ? t('project.stop') : active ? t(queueing ? 'composer.queueAdd' : 'composer.queueSteer') : t('project.sendFollowUp');
+  const sendLabel = stopping ? t('project.stop') : active ? t('composer.queueAdd') : t('project.sendFollowUp');
   const editComposerCard = (
     <div className="flex flex-col gap-1">
       {contextFull ? (
@@ -1063,10 +1049,6 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
       </div>
       <div className="flex items-center gap-0.5 px-0.5">
         <ModelPopover placement="top" align="start" />
-        <Tooltip label={t(queueing ? 'composer.queueTurnOff' : 'composer.queueTurnOn')}>
-          <button type="button" onClick={toggleQueueing} aria-pressed={queueing} aria-label={t(queueing ? 'composer.queueTurnOff' : 'composer.queueTurnOn')}
-            className="openfilm-composer-tool"><ListEnd size={15} /></button>
-        </Tooltip>
         <div className="min-w-0 flex-1" />
         <input
           ref={attachInputRef}
@@ -1227,7 +1209,6 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
                   {localTurn?.state.balance ? <BalanceNotice balance={localTurn.state.balance} /> : null}
                   {followUpError && <p className="text-xs text-[var(--err)]">{followUpError}</p>}
                   <QueuedMessages key={sessionId} items={queued.items} claimed={queued.claimed} uncertain={queued.uncertain} paused={queued.paused}
-                    queueing={queueing} onToggleQueueing={toggleQueueing}
                     canSteer={canSteerMessage} onSteer={(id) => { void dispatchQueued(id); }} onRemove={(id) => queue.remove(id)}
                     onEdit={editQueuedMessage}
                     onMove={(id, targetId) => queue.move(id, targetId)} onHold={(id) => queue.hold(id)}

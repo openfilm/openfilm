@@ -1,8 +1,3 @@
-/** Turning queueing off changes future input only; unsupported steering leaves that input untouched. */
-export function followUpIntent({ running, queueing, steering }: { running: boolean; queueing: boolean; steering: boolean }) {
-  return !running ? 'send' : queueing ? 'queue' : steering ? 'steer' : 'blocked';
-}
-
 /** Pending messages of one project conversation. Claim before preparing anything: a render or a second click
  * must never dispatch the same message twice. Sending still belongs to the chat's existing turn runner. */
 export class FollowUpQueue<T extends { id: string }> {

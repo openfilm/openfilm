@@ -150,8 +150,6 @@ export const es: Words = {
     openSettings: 'Abrir Configuración',
     queueReorder: 'Arrastra para reordenar; también puedes usar ↑/↓',
     queueMore: "Acciones del mensaje",
-    queueTurnOff: "Desactivar cola",
-    queueTurnOn: "Activar cola",
     queueTitle: "Mensajes pendientes",
     queueAdd: "Añadir a la cola",
     queueSteer: "Guiar ahora",

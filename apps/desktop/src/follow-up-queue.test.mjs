@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { FollowUpQueue, followUpIntent } from '../chat/src/lib/follow-up-queue.ts';
+import { FollowUpQueue } from '../chat/src/lib/follow-up-queue.ts';
 
 test('pending messages snapshot text, files, references and agent choices, then claim in FIFO order once', () => {
   const queue = new FollowUpQueue();
@@ -57,14 +57,6 @@ test('an explicit steer does not resume other pending messages, and a pause duri
   assert.ok(queue.get().pauseVersion > version);
 });
 
-
-test('queueing is explicit: off steers only when supported, otherwise input must be retained', () => {
-  assert.equal(followUpIntent({ running: false, queueing: false, steering: false }), 'send');
-  assert.equal(followUpIntent({ running: true, queueing: true, steering: true }), 'queue');
-  assert.equal(followUpIntent({ running: true, queueing: true, steering: false }), 'queue');
-  assert.equal(followUpIntent({ running: true, queueing: false, steering: true }), 'steer');
-  assert.equal(followUpIntent({ running: true, queueing: false, steering: false }), 'blocked');
-});
 
 test('taking a pending message back removes it immediately and never dispatches it until resubmitted', () => {
   const queue = new FollowUpQueue();

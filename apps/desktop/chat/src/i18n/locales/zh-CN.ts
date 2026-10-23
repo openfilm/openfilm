@@ -150,8 +150,6 @@ export const zhCN: Words = {
     openSettings: '打开设置',
     queueReorder: '拖动调整顺序，也可使用 ↑/↓ 键',
     queueMore: "消息操作",
-    queueTurnOff: "关闭排队",
-    queueTurnOn: "开启排队",
     queueTitle: "待发消息",
     queueAdd: "加入队列",
     queueSteer: "立即引导",

@@ -150,8 +150,6 @@ export const ko: Words = {
     openSettings: '설정 열기',
     queueReorder: '드래그하여 순서 변경, ↑/↓ 키로도 이동',
     queueMore: "메시지 작업",
-    queueTurnOff: "대기열 끄기",
-    queueTurnOn: "대기열 켜기",
     queueTitle: "대기 메시지",
     queueAdd: "대기열에 추가",
     queueSteer: "즉시 지시",

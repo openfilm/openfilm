@@ -150,8 +150,6 @@ export const ja: Words = {
     openSettings: '設定を開く',
     queueReorder: 'ドラッグで並べ替え、↑/↓ キーでも移動',
     queueMore: "メッセージ操作",
-    queueTurnOff: "キューをオフにする",
-    queueTurnOn: "キューをオンにする",
     queueTitle: "送信待ちのメッセージ",
     queueAdd: "キューに追加",
     queueSteer: "今すぐ指示",

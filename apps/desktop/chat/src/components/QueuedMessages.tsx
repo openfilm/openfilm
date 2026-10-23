@@ -1,11 +1,11 @@
 import React from 'react';
-import { CornerDownRight, GripVertical, ListEnd, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { CornerDownRight, GripVertical, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { useT } from '@/i18n';
 import { CardButton } from './ComposerCard';
 import { Popover } from './Popover';
 
 /** The pending messages sit behind the composer, with their own actions and scroll area. */
-export function QueuedMessages({ items, claimed, uncertain, paused, onResume, onSteer, onRemove, onEdit, onMove, onHold, canSteer, queueing, onToggleQueueing }: {
+export function QueuedMessages({ items, claimed, uncertain, paused, onResume, onSteer, onRemove, onEdit, onMove, onHold, canSteer }: {
   items: Array<{ id: string; instruction: string; modelLabel: string | null; files: Array<{ name: string }> }>;
   claimed: string | null;
   uncertain: string[];
@@ -17,8 +17,6 @@ export function QueuedMessages({ items, claimed, uncertain, paused, onResume, on
   onMove: (id: string, targetId: string) => void;
   onHold: (id: string | null) => void;
   canSteer: (id: string) => boolean;
-  queueing: boolean;
-  onToggleQueueing: () => void;
 }) {
   const t = useT();
   const [menu, setMenu] = React.useState<string | null>(null);
@@ -88,22 +86,11 @@ export function QueuedMessages({ items, claimed, uncertain, paused, onResume, on
                   if (event.key === 'Escape') {
                     event.preventDefault(); event.stopPropagation(); setMenu(null); onHold(null); editButton.current?.focus();
                   }
-                  if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
-                    event.preventDefault();
-                    const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'));
-                    const i = buttons.indexOf(document.activeElement as HTMLButtonElement);
-                    buttons[event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : (i + (event.key === 'ArrowUp' ? -1 : 1) + buttons.length) % buttons.length]?.focus();
-                  }
                 }}>
                   <button role="menuitem" type="button" autoFocus disabled={locked}
                     onClick={() => { setMenu(null); onEdit(item.id); }}
                     className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] text-[var(--text)] outline-none hover:bg-[var(--bg-hover)] focus-visible:bg-[var(--bg-hover)] disabled:opacity-40">
                     <Pencil size={15} />{t('composer.queueEdit')}
-                  </button>
-                  <button role="menuitem" type="button" onClick={() => {
-                    setMenu(null); onHold(null); onToggleQueueing(); editButton.current?.focus();
-                  }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] text-[var(--text)] outline-none hover:bg-[var(--bg-hover)] focus-visible:bg-[var(--bg-hover)]">
-                    <ListEnd size={15} />{t(queueing ? 'composer.queueTurnOff' : 'composer.queueTurnOn')}
                   </button>
                 </div>
               </Popover>

@@ -149,8 +149,6 @@ export const enUS = {
     openSettings: 'Open Settings',
     queueReorder: 'Drag to reorder; use ↑/↓ with the keyboard',
     queueMore: "Message actions",
-    queueTurnOff: "Turn off queueing",
-    queueTurnOn: "Turn on queueing",
     queueTitle: "Pending messages",
     queueAdd: "Add to queue",
     queueSteer: "Steer",
