@@ -74,6 +74,8 @@ let tabs = null;
 /** the page of each tab that has one (a tab left behind long enough has none until it is shown again) */
 /** @type {Map<string, WebContentsView>} */
 const views = new Map();
+/** Pending chat messages live in their page, so it must not be evicted silently. */
+const pendingByTab = new Map();
 let pagePresentation = null;
 /** the page in front */
 const activeView = () => views.get(pagePresentation?.currentId() ?? tabs?.activeId() ?? HOME) ?? null;
@@ -243,6 +245,7 @@ function destroyView(id) {
   const v = views.get(id);
   if (!v) return;
   views.delete(id);
+  pendingByTab.delete(id);
   win?.contentView.removeChildView(v);
   if (!v.webContents.isDestroyed()) v.webContents.close();
 }
@@ -254,10 +257,13 @@ async function closeTab(id) {
   if (!tabs || !win) return;
   const tab = tabs.get(id);
   if (!tab) return;
-  if (tab.working) {
+  if (tab.working || pendingByTab.get(id)) {
+    const pending = pendingByTab.get(id) > 0;
+    if (pending) views.get(id)?.webContents.send('desktop:chat:pause-queue');
     const { response } = await dialog.showMessageBox(win, {
       type: 'warning', buttons: ['Close Tab', 'Cancel'], defaultId: 1, cancelId: 1,
-      message: 'An agent is still working in this project.', detail: 'Closing the tab stops it.',
+      message: pending ? 'This project has pending messages.' : 'An agent is still working in this project.',
+      detail: pending ? 'Closing the tab discards its pending messages and stops its agents.' : 'Closing the tab stops it.',
     });
     if (response !== 0) return;
   }
@@ -426,7 +432,7 @@ async function start() {
     getWindow: () => win,
     onState: (next) => broadcast('desktop:update', next),
     prepareRestart: async () => {
-      if (localAgents?.isBusy()) return { ok: false, error: 'agent-busy' };
+      if (localAgents?.isBusy() || [...pendingByTab.values()].some(Boolean)) return { ok: false, error: 'agent-busy' };
       /* Studio's quit-when-idle answers 409 while it exports; otherwise the window's Studio stays (studio-process.mjs
          `stays`, 423), and is stopped in beforeInstall. No answer: no Studio, no export to lose. */
       const res = studio && await fetch(`${studio.origin}/api/quit`, {
@@ -503,7 +509,7 @@ async function start() {
   win.on('moved', saveState);
   win.on('enter-full-screen', () => broadcast('desktop:full-screen', true));
   win.on('leave-full-screen', () => broadcast('desktop:full-screen', false));
-  keepWindowOnClose(win, { mac, isQuitting: () => quitting, save: saveState });
+  keepWindowOnClose(win, { mac, isQuitting: () => quitting, save: saveState, quit: () => app.quit() });
   win.on('closed', () => { win = null; views.clear(); pagePresentation = null; app.quit(); });
 
   ipcMain.on('desktop:theme', (event, next) => { if (fromPage(event)) setTheme(next); });
@@ -542,6 +548,10 @@ async function start() {
     return fn(tabOf(event.sender), opts ?? {});
   });
   tabHandle('desktop:tabs:list', (self) => ({ self, tabs: tabs?.list() ?? [] }));
+  tabHandle('desktop:chat:pending', (self, { count }) => {
+    if (!self || !Number.isSafeInteger(count) || count < 0) throw new Error('not a pending message count');
+    if (count) pendingByTab.set(self, count); else pendingByTab.delete(self);
+  });
   tabHandle('desktop:tabs:new', (_self, { projectId }) => { newTab(projectId); return { ok: true }; });
   tabHandle('desktop:tabs:show', (_self, { id }) => { showTab(String(id)); return { ok: true }; });
   tabHandle('desktop:tabs:close', (self, { id }) => { void closeTab(typeof id === 'string' ? id : self); return { ok: true }; });
@@ -568,7 +578,7 @@ async function start() {
   /* Studio's "open this project", heard by each page: settled once here */
   tabHandle('desktop:tabs:open', (_self, { to }) => { openInTabs(to); return { ok: true }; });
   /* a tab left behind long enough lets its page go; it comes back when shown */
-  setInterval(() => { for (const id of tabs?.idle(IDLE_PAGE_MS) ?? []) dropView(id); }, 60_000).unref?.();
+  setInterval(() => { for (const id of tabs?.idle(IDLE_PAGE_MS) ?? []) if (!pendingByTab.get(id)) dropView(id); }, 60_000).unref?.();
 
   /* the agents: Studio's home and library go with them, so the `openfilm` they run finds this window's Studio */
   /* the person's own skills: Skills/ beside this app's projects (~/Movies/OpenFilm/Skills), as its `openfilm` finds them */
@@ -694,7 +704,16 @@ async function start() {
       toggleChat: () => activeView()?.webContents.send('desktop:toggle-chat'),
       openProject: () => void openProjectFolder(),
       openSettings: () => { focusWindow(); activeView()?.webContents.send('desktop:open-settings'); },
-      reload: () => activeView()?.webContents.reload(),
+      reload: async () => {
+        const view = activeView();
+        if (pendingByTab.get(tabOf(view?.webContents))) {
+          view?.webContents.send('desktop:chat:pause-queue');
+          const { response } = await dialog.showMessageBox(win, { type: 'warning', buttons: ['Reload and Discard', 'Cancel'], defaultId: 1, cancelId: 1,
+            message: 'This project has pending messages.', detail: 'Reloading discards its pending messages.' });
+          if (response !== 0) return;
+        }
+        view?.webContents.reload();
+      },
       devTools: () => activeView()?.webContents.toggleDevTools(),
       tabs: {
         /* the projects window, in the page in front, to pick the project a new tab shows */
@@ -742,7 +761,22 @@ process.on('SIGINT', () => app.quit());
 process.on('SIGTERM', () => app.quit());
 app.on('activate', () => focusWindow());
 app.on('window-all-closed', () => app.quit());
+let confirmingQueueQuit = false;
+let discardPendingOnQuit = false;
 app.on('before-quit', (event) => {
+  if (!quitting && !discardPendingOnQuit && [...pendingByTab.values()].some(Boolean)) {
+    event.preventDefault();
+    if (confirmingQueueQuit) return;
+    confirmingQueueQuit = true;
+    broadcast('desktop:chat:pause-queue');
+    const options = { type: 'warning', buttons: ['Quit and Discard', 'Cancel'], defaultId: 1, cancelId: 1,
+      message: 'There are pending chat messages.', detail: 'Quitting discards these messages. Cancel to review or send them.' };
+    void (win ? dialog.showMessageBox(win, options) : dialog.showMessageBox(options)).then(({ response }) => {
+      confirmingQueueQuit = false;
+      if (response === 0) { discardPendingOnQuit = true; app.quit(); }
+    }, () => { confirmingQueueQuit = false; });
+    return;
+  }
   quitAfterStudio(event, {
     quitting, markQuitting: () => { quitting = true; }, studio,
     /* and the ones opened only to ask (signed in? its options?), which belong to no chat */

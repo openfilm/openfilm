@@ -135,7 +135,17 @@ export function useDesktopAttachments(project: string) {
     return taken;
   }, []);
 
-  return { files, add, drop, take };
+  /** A queued message returned to the composer: its files already have paths; only their previews need remaking. */
+  const restore = React.useCallback((incoming: DesktopAttachment[]) => {
+    for (const file of current.current) if (file.previewUrl) URL.revokeObjectURL(file.previewUrl);
+    const restored = incoming.map(({ previewUrl: _oldPreview, ...file }) => ({
+      ...file, ...(file.file && !file.folder ? { previewUrl: URL.createObjectURL(file.file) } : {}),
+    }));
+    current.current = restored;
+    setFiles(restored);
+  }, []);
+
+  return { files, add, drop, take, restore };
 }
 
 /** What still keeps the message from going: a file still on its way, or one that could not be attached. */

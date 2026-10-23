@@ -63,6 +63,9 @@ interface AppBridge {
   setMenuOpen(open: boolean): void;
   /** the project's chat record, in its folder: conversations and finished turns (.film/chat), each turn's log (.film/logs) */
   chat: {
+    /** Pending messages keep their page alive; closing it or quitting asks before discarding them. */
+    pending?(count: number): Promise<void>;
+    onPause?(listener: () => void): () => void;
     load(project: string): Promise<{ sessions: unknown[]; last: string | null; turns: unknown[] }>;
     saveSessions(project: string, sessions: unknown[], last: string | null): Promise<unknown>;
     saveTurn(project: string, turn: unknown, items: unknown[]): Promise<unknown>;

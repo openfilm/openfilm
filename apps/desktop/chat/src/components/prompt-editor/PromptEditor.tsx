@@ -63,7 +63,7 @@ export interface PromptEditorHandle {
   /** Inserts ready-made text at the caret, or at the end if the editor was never focused. */
   insertText: (text: string) => void;
   /** Replaces everything with this text (with markers); pass an empty string to clear. */
-  setText: (text: string) => void;
+  setText: (text: string, references?: PromptReference[]) => void;
   clear: () => void;
 }
 
@@ -429,8 +429,9 @@ const HandlePlugin = React.forwardRef<
 
     React.useImperativeHandle(ref, () => ({
       focus: () => editor.focus(),
-      setText: (text) => {
-        editor.update(() => $renderValue(text, lookupRef.current, true));
+      setText: (text, references) => {
+        const lookup = references ? (id: string) => references.find((reference) => reference.id === id) : lookupRef.current;
+        editor.update(() => $renderValue(text, lookup, true));
       },
       clear: () => {
         editor.update(() => $renderValue('', lookupRef.current, true));

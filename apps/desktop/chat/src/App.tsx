@@ -19,13 +19,15 @@ import { ModelPopover } from '@/components/ModelPopover';
 import { AddSkillDialog, type PickedSkill } from '@/components/AddSkill';
 import { SKILLS_CHANGED } from 'openfilm/studio-ui/lib/project-sources.ts';
 import { CardActions, CardButton, ComposerCard } from '@/components/ComposerCard';
+import { QueuedMessages } from '@/components/QueuedMessages';
+import { FollowUpQueue } from '@/lib/follow-up-queue';
 import { LocalAgentQuestionCard } from '@/components/TurnQuestionCard';
 import { Tooltip } from '@/components/Tooltip';
 import { StickToBottomContext, useStickToBottom, useTailSpacer } from '@/components/useStickToBottom';
 import { PromptEditor, PromptPill, PromptPillHoverContext, PromptPillRevealContext, activatedSkillIds, fileReferenceId, fileReferencePath, promptReferenceToken, resolvePromptReferences, skillReferenceId, skillReferencePackage, splitPromptReferenceText, type MentionProvider, type PromptEditorHandle, type PromptEditorState, type PromptPillHover, type PromptReference } from '@/components/prompt-editor';
 import { filesFromTransfer, transferHasFiles } from '@/lib/composer-attachments';
 import { attachmentIcon } from '@/lib/project-resources';
-import { PROMPT_PICTURES_MAX, attachedPictures, attachedText, attachmentBlocker, formatFileSize, turnAttachments, useDesktopAttachments } from '@/lib/desktop-attachments';
+import { PROMPT_PICTURES_MAX, attachedPictures, attachedText, attachmentBlocker, formatFileSize, turnAttachments, useDesktopAttachments, type DesktopAttachment } from '@/lib/desktop-attachments';
 import { deriveProjectTurns } from '@/lib/project-versions';
 import { makePlaceholder, mergeAssetLists } from '@/lib/asset-lists';
 import { isEmptyBackgroundTurn } from '@/lib/unprompted';
@@ -51,6 +53,7 @@ import {
   useAgentCommands,
   useAgentContext,
   useLocalAgentTurn,
+  useTurnSteering,
   type LocalAgentTurn,
   type LocalTranscriptStore,
 } from '@/lib/local-agent-run';
@@ -74,6 +77,45 @@ import { inChat } from './lib/chat-layer';
 import { useProjectChat } from './lib/chat-store';
 import { givenAfter, pagesToSend } from './lib/skill-pages';
 import { ChatProjectContext, WaitingContext } from './lib/developer';
+
+interface ComposerDraft {
+  text: string;
+  references: PromptReference[];
+  studioRefs: Array<[string, StudioRef]>;
+  fileRefs: PromptReference[];
+  skillRefs: PromptReference[];
+}
+
+interface PendingMessage {
+  id: string;
+  conversation: string;
+  by: LocalAgentId;
+  prefs: Record<string, unknown>;
+  modelLabel: string | null;
+  instruction: string;
+  promptDisplay: Turn['promptDisplay'] | null;
+  files: DesktopAttachment[];
+  refs: StudioRef[];
+  stage: StudioSelection['stage'] | null;
+  skillNames: string[];
+  draft: ComposerDraft;
+}
+
+/* A project temporarily hidden or remounted keeps its pending messages in this page, scoped to its identity. */
+const pendingMessages = new Map<string, FollowUpQueue<PendingMessage>>();
+const pendingTurnWrites = new WeakMap<FollowUpQueue<PendingMessage>, () => Promise<unknown>>();
+function messagesFor(key: string) {
+  let queue = pendingMessages.get(key);
+  if (!queue) {
+    queue = new FollowUpQueue<PendingMessage>();
+    pendingMessages.set(key, queue);
+    queue.subscribe(() => {
+      const count = [...pendingMessages.values()].reduce((sum, queue) => sum + queue.get().items.length, 0);
+      void app.chat.pending?.(count).catch(() => {});
+    });
+  }
+  return queue;
+}
 
 const NO_ITEMS: TranscriptItem[] = [];
 const EMPTY_STORE: LocalTranscriptStore = { get: () => NO_ITEMS, subscribe: () => () => {} };
@@ -236,6 +278,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   const ordered = React.useMemo(() => [...turns].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt)), [turns]);
   const asset = ordered.at(-1);
   const active = isActive(asset);
+  const steering = useTurnSteering(asset?.id ?? null);
   const blank = ordered.length === 0;
   const opLog = React.useMemo(() => (blank ? [] : deriveProjectTurns(ordered, [], asset?.id ?? null)), [blank, ordered, asset?.id]);
 
@@ -276,7 +319,17 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   const [followUpRefs, setFollowUpRefs] = React.useState<PromptReference[]>([]);
   /** what the person pointed at in Studio for this message, by pill id */
   const [studioRefs, setStudioRefs] = React.useState<Map<string, StudioRef>>(() => new Map());
-  const [queued, setQueued] = React.useState(false);
+  const queue = React.useMemo(() => messagesFor(`${project.id}:${project.path}:${sessionId}`), [project.id, project.path, sessionId]);
+  const queued = React.useSyncExternalStore(queue.subscribe, queue.get);
+  const mounted = React.useRef(true);
+  React.useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  React.useEffect(() => app.chat.onPause?.(() => {
+    for (const pending of pendingMessages.values()) if (pending.get().items.length) pending.pause(t('composer.queuePaused'));
+  }), [t]);
+  React.useEffect(() => {
+    const count = [...pendingMessages.values()].reduce((sum, pending) => sum + pending.get().items.length, 0);
+    void app.chat.pending?.(count).catch(() => {});
+  }, []);
   const [followUpError, setFollowUpError] = React.useState<string | null>(null);
   const composerFiles = useDesktopAttachments(project.path);
   /* a file of the message being written, opened to look at */
@@ -570,15 +623,18 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     id: string, instruction: string, promptDisplay: Turn['promptDisplay'] | null, attachments: Turn['attachments'] = [],
     /* a turn the agent started by itself (a background task of its own came back): in its own conversation, maybe not
        the one shown, by the agent of that session */
-    { conversation = sessionId, by = agent, origin }: { conversation?: string; by?: LocalAgentId; origin?: 'background' } = {},
+    { conversation = sessionId, by = agent, origin, chosenPrefs, preparedTurn, checkpoint }: {
+      conversation?: string; by?: LocalAgentId; origin?: 'background'; chosenPrefs?: Record<string, unknown>;
+      preparedTurn?: LocalAgentTurn; checkpoint?: Promise<boolean>;
+    } = {},
   ): { turn: LocalAgentTurn; meta: LocalAgentTurnMeta; prefs: Record<string, unknown>; ready: Promise<boolean> } {
     const agent = by;
     const sessionId = conversation;
     const shown = conversation === shownSession.current;
-    const turn = createLocalAgentTurn(id, agent, ordered.length);
+    const turn = preparedTurn ?? createLocalAgentTurn(id, agent, ordered.length);
     const agentStore = useLocalAgents.getState();
     const options = agentOptions(agentStore, agent);
-    const prefs = effectivePrefs(agentStore.prefs, agent, agentStore.roster, options);
+    const prefs = chosenPrefs ?? effectivePrefs(agentStore.prefs, agent, agentStore.roster, options);
     const summary = agentModelSummary(options, prefs);
     /* how hard it thinks, as the menu offers it */
     const effortOption = options?.find((o) => o.category === 'thought_level');
@@ -603,7 +659,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     /* the project's files as the turn found them (read before the agent is sent anything); once the turn settles,
        what it changed in them is kept with it and shown under its reply. The turn settles first: comparing the files
        is not worth keeping the person waiting for */
-    const ready = app.chat.snapshot(project.path, id).then(() => true, () => false);
+    const ready = checkpoint ?? app.chat.snapshot(project.path, id).then(() => true, () => false);
     /* kept as it goes, not only once it ends: the app closed (or crashed) on a turn, it is still there, read back as
        interrupted, what it did so far shown and the next message going on from there */
     let keeping: ReturnType<typeof setTimeout> | null = null;
@@ -629,18 +685,20 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
 
   /**
    * Send a turn to the agent: what it is sent (`prepared`: the text, and the pictures) may take a moment to make. It
-   * settles the turn the agent's run ends on: this one, or the last message sent into it while it ran (steerTurn).
+   * settles the turn the agent's run ends on: this one, or the last message explicitly steered into it.
    */
-  function runTurn(opened: ReturnType<typeof openTurn>, prepared: Promise<{ text: string; images: PromptImage[]; skills?: string[] }>): void {
+  function runTurn(opened: ReturnType<typeof openTurn>, { text, images, skills }: { text: string; images: PromptImage[]; skills: string[] }): Promise<boolean> {
     const { turn, meta, prefs, ready } = opened;
+    const agent = meta.agent;
+    const sessionId = meta.sessionId;
     const id = meta.turnId;
     const finish = (lastTurnId: string | undefined, patch: Partial<Turn & TurnBalance>) => {
       settlers.current.get(lastTurnId ?? id)?.(patch);
       settlers.current.get(id)?.(patch);
     };
     /* the agent's own session of this conversation, gone on with (after a restart too); a new one is kept for next time */
-    const resume = sessions.find((s) => s.id === sessionId)?.agentSessions?.[agent] ?? null;
-    const run = Promise.all([prepared, ready]).then(([{ text, images, skills }]) => runLocalAgentTurn({
+    const resume = loadSessions(projectKey).find((s) => s.id === sessionId)?.agentSessions?.[agent] ?? null;
+    const run = ready.then(() => runLocalAgentTurn({
       projectId: projectKey,
       conversation: sessionId,
       resume,
@@ -658,12 +716,25 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
         if (info.sessionId && fresh) {
           touchSession(sessionId, (s) => ({
             agentSessions: { ...s.agentSessions, [agent]: info.sessionId },
-            skillsGiven: givenAfter(s.skillsGiven, agent, info.sessionId, skills ?? [], { fresh }),
+            skillsGiven: givenAfter(s.skillsGiven, agent, info.sessionId, skills, { fresh }),
           }));
         }
       },
     })).then(
-      ({ stopReason, lastTurnId }) => finish(lastTurnId, stopReason === 'cancelled' ? { status: 'cancelled', cancelReason: 'user' } : { status: 'ready' }),
+      async ({ stopReason, lastTurnId }) => {
+        const cancelled = stopReason === 'cancelled';
+        finish(lastTurnId, cancelled ? { status: 'cancelled', cancelReason: 'user' } : { status: 'ready' });
+        /* A queued successor starts only after the completed transcript is on disk, not merely rendered ready. */
+        const ended = localAgentTurn(lastTurnId ?? id) ?? turn;
+        const saved = loadLocalAgentTurns(projectKey, sessionId).find((entry) => entry.turn.id === (lastTurnId ?? id));
+        if (saved) {
+          const write = () => app.chat.saveTurn(projectKey, saved.turn, ended.items);
+          pendingTurnWrites.set(queue, write);
+          await write();
+          pendingTurnWrites.delete(queue);
+        }
+        return !cancelled;
+      },
       (error: unknown) => {
         /* the ACP adapter wraps the agent's own message as JSON-RPC "Internal error: …": the message is the reason */
         const reason = (error instanceof Error ? error.message : String(error)).replace(/^Internal error:\s*/i, '').trim() || String(error);
@@ -672,36 +743,112 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
         const lastTurnId = (error as { lastTurnId?: string } | null)?.lastTurnId;
         (localAgentTurn(lastTurnId ?? id) ?? turn).patch(balance ? { balance } : { error: reason });
         finish(lastTurnId, { status: 'error', error: reason, ...(balance ? { balance } : {}) });
+        return false;
       },
-    ).finally(() => { runs.current.delete(id); });
+    ).finally(() => { runs.current.delete(id); bump(); });
     runs.current.set(id, run);
+    return run;
   }
 
-  /**
-   * A message sent while a turn runs, as in the agent's own chat: into that turn, the agent reading it at its next step
-   * (an agent that takes steering). It shows as a turn of its own, what the agent says from then on under it, and the
-   * running one is done. One that did not join (the turn ended meanwhile) is sent once that run ends.
-   */
-  function steerTurn(fromId: string, opened: ReturnType<typeof openTurn>, prepared: Promise<{ text: string; images: PromptImage[]; skills?: string[] }>): void {
-    /* the agent's run going now (one at a time in a conversation): a message that did not join waits for it */
-    const run = [...runs.current.values()].at(-1) ?? Promise.resolve();
-    void Promise.all([prepared, opened.ready]).then(async ([{ text, images, skills }]) => {
-      if (await steerLocalAgentTurn(fromId, opened.turn, text, images)) {
-        settlers.current.get(fromId)?.({ status: 'ready' });
+  /** Read reference contents only when this captured message is actually dispatched. */
+  async function prepareMessage(message: PendingMessage) {
+    const refs = await Promise.all(message.refs.map(async (ref) => (ref.kind === 'example' && !ref.folder
+      ? { ...ref, folder: await app.exampleFolder?.(ref.id) } : ref)));
+    const session = loadSessions(projectKey).find((item) => item.id === message.conversation);
+    const skillNames = pagesToSend(message.skillNames, session?.skillsGiven, message.by, session?.agentSessions?.[message.by] ?? null);
+    const [pictures, skills] = await Promise.all([
+      referencePictures(refs, { project: project.path, turnId: message.id }),
+      skillNames.length && app.skills ? app.skills.texts(project.path, message.by, skillNames) : Promise.resolve([]),
+    ]);
+    return {
+      text: message.instruction + attachedText(message.files) + studioReferencesText(refs, { stage: message.stage, pictures: pictures.pictures }) + skills.map((skill) => `\n\n${skill.text}`).join(''),
+      images: [...pictures.images, ...await attachedPictures(message.files, PROMPT_PICTURES_MAX - pictures.images.length)],
+      skills: skills.map((skill) => skill.name),
+    };
+  }
+
+  const projectBusy = () => runningLocalTurns(projectKey).length > 0 || runs.current.size > 0;
+  const canSteerMessage = (id: string) => {
+    const message = queue.get().items.find((item) => item.id === id);
+    return Boolean(message && active && asset && message.by === asset.localAgent?.id && steering && canSteer(asset.id, message.prefs));
+  };
+
+  async function dispatchQueued(steerId?: string): Promise<void> {
+    if (!mounted.current || (!steerId && projectBusy())) return;
+    if (steerId && !canSteerMessage(steerId)) return;
+    const message = queue.claim(steerId);
+    if (!message) return;
+    const pauseVersion = queue.get().pauseVersion;
+    let opened: ReturnType<typeof openTurn> | undefined;
+    try {
+      const write = pendingTurnWrites.get(queue);
+      if (write) { await write(); pendingTurnWrites.delete(queue); }
+      const prepared = await prepareMessage(message);
+      const rememberSkills = () => {
+        if (prepared.skills.length) touchSession(message.conversation, (session) => ({
+          skillsGiven: givenAfter(session.skillsGiven, message.by, session.agentSessions?.[message.by] ?? null, prepared.skills),
+        }));
+      };
+      if (!mounted.current) { queue.release(message.id, t('composer.queuePaused')); return; }
+      if (queue.get().pauseVersion !== pauseVersion || (!steerId && queue.get().paused)) { queue.release(message.id, queue.get().paused ?? t('composer.queuePaused')); return; }
+      if (!steerId && projectBusy()) { queue.release(message.id, t('composer.queuePaused')); return; }
+      if (steerId && (!asset || !canSteer(asset.id, message.prefs))) { queue.release(message.id, t('composer.queueSteerRejected')); return; }
+      if (steerId && asset) {
+        const next = createLocalAgentTurn(message.id, message.by, ordered.length);
+        const checkpoint = app.chat.snapshot(project.path, message.id).then(() => true, () => false);
+        await checkpoint;
+        if (queue.get().pauseVersion !== pauseVersion) { queue.release(message.id, queue.get().paused ?? t('composer.queuePaused')); return; }
+        if (!await steerLocalAgentTurn(asset.id, next, prepared.text, prepared.images, () => {
+          rememberSkills();
+          openTurn(message.id, message.instruction, message.promptDisplay, turnAttachments(message.files), {
+            conversation: message.conversation, by: message.by, chosenPrefs: message.prefs, preparedTurn: next, checkpoint,
+          });
+        })) {
+          queue.release(message.id, t('composer.queueSteerRejected'));
+          return;
+        }
+        settlers.current.get(asset.id)?.({ status: 'ready' });
+        queue.complete(message.id);
         return;
       }
-      await run.catch(() => {});
-      runTurn(opened, Promise.resolve({ text, images, ...(skills ? { skills } : {}) }));
-    });
+      opened = openTurn(message.id, message.instruction, message.promptDisplay, turnAttachments(message.files), {
+        conversation: message.conversation, by: message.by, chosenPrefs: message.prefs,
+      });
+      rememberSkills();
+      const run = runTurn(opened, prepared);
+      queue.complete(message.id);
+      const ok = await run;
+      if (!ok) queue.pause(t('composer.queuePaused'));
+    } catch (error) {
+      const uncertain = (error as { code?: string })?.code === 'steer-unknown';
+      const reason = uncertain ? t('composer.queueUnknown') : error instanceof Error ? error.message : String(error);
+      if (opened) {
+        settlers.current.get(message.id)?.({ status: 'error', error: reason });
+        queue.pause(reason); queue.complete(message.id);
+      } else queue.release(message.id, reason, uncertain);
+    }
+    if (mounted.current && !queue.get().paused) void dispatchQueued();
+  }
+
+  function editQueuedMessage(id: string) {
+    if (composerFiles.files.some((file) => file.state === 'pending')) {
+      setFollowUpError(t('composer.filesPending')); queue.hold(null); return;
+    }
+    const message = queue.takeBack(id);
+    if (!message) { queue.hold(null); return; }
+    const { draft, files } = message;
+    setFollowUp(draft.text); setFollowUpRefs(draft.references); setStudioRefs(new Map(draft.studioRefs));
+    setFileRefs(draft.fileRefs); setSkillRefs(draft.skillRefs);
+    composerFiles.restore(files);
+    composerRef.current?.setText(draft.text, draft.references);
+    composerRef.current?.focus();
+    setFollowUpError(null);
   }
 
   function submitFollowUp(): void {
     if (!followUpFilled) return;
-    /* while a turn runs: into it, for an agent that takes that; else it waits for the turn to end */
-    const steer = active && asset ? canSteer(asset.id) : false;
-    if (active && !steer) { setQueued(true); return; }
-    setQueued(false);
-    /* the sentence as the agent reads it: a pill becomes "[n: name]", and what each number is follows, in a block */
+    const blocker = attachmentBlocker(composerFiles.files, t);
+    if (blocker) { setFollowUpError(blocker); return; }
     const used: StudioRef[] = [];
     const instruction = resolvePromptReferences(followUp, (pillId, index) => {
       const ref = studioRefs.get(pillId);
@@ -709,55 +856,51 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
       used[index - 1] = ref;
       return `[${index}: ${refPill(pillId, ref).label}]`;
     }, (pillId) => { const name = skillReferencePackage(pillId); return name ? `skill “${name}”` : null; }).trim();
-    /* the skills it names, for this message: each one's SKILL.md follows it, unseen in the chat, the first time this
-       conversation's agent session meets that skill (lib/skill-pages) */
-    const agentSession = sessions.find((s) => s.id === sessionId)?.agentSessions?.[agent] ?? null;
-    const skillNames = pagesToSend(activatedSkillIds(followUpRefs), sessions.find((s) => s.id === sessionId)?.skillsGiven, agent, agentSession);
     if (!instruction) return;
-    const blocker = attachmentBlocker(composerFiles.files, t);
-    if (blocker) { setFollowUpError(blocker); return; }
-    setFollowUpError(null);
-    const promptDisplay = buildPromptDisplay(followUp, followUpRefs);
+    const content = {
+      instruction, promptDisplay: buildPromptDisplay(followUp, followUpRefs) ?? null,
+      files: composerFiles.files.map(({ previewUrl: _preview, ...file }) => file),
+      refs: used.filter(Boolean), stage: selection?.stage ?? null,
+      skillNames: activatedSkillIds(followUpRefs),
+      draft: { text: followUp, references: followUpRefs, studioRefs: [...studioRefs], fileRefs, skillRefs },
+    };
+    const options = agentOptions(la, agent);
+    const prefs = effectivePrefs(la.prefs, agent, la.roster, options);
+    const summary = agentModelSummary(options, prefs);
+    const effortOption = options?.find((option) => option.category === 'thought_level');
+    const effort = effortOption && offeredOption(agent, la.roster, effortOption) ? summary.effort : null;
+    const modelLabel = [summary.model, effort].filter(Boolean).join(' · ') || null;
     thread.scrollToBottom({ smooth: true });
-    composerRef.current?.clear();
-    setFollowUp('');
-    setFollowUpRefs([]);
-    setStudioRefs(new Map());
-    setFileRefs([]);
-    setSkillRefs([]);
-    const files = composerFiles.take();
+    const sendNow = !projectBusy() && queue.get().items.length === 0;
     const id = makeLocalAgentTurnId();
-    const said = instruction + attachedText(files);
-    const refs = used.filter(Boolean);
-    const stage = selection?.stage ?? null;
-    /* each reference's picture is kept in the project for the agent (the block names it), and sent to one that takes pictures */
-    const skillTexts = skillNames.length ? (app.skills?.texts(project.path, agent, skillNames).catch(() => []) ?? Promise.resolve([])) : Promise.resolve([]);
-    if (skillNames.length) touchSession(sessionId, (s) => ({ skillsGiven: givenAfter(s.skillsGiven, agent, agentSession, skillNames) }));
-    /* an example pointed at: its folder fetched now if it is not yet (the turn waits, as it waits for its reply) */
-    const withFolders = Promise.all(refs.map(async (ref) => (ref.kind === 'example' && !ref.folder
-      ? { ...ref, folder: await app.exampleFolder?.(ref.id).catch(() => undefined) } : ref)));
-    /* the pictures sent: the references' first, then the attached ones while there is room (the rest by their path) */
-    const prepared = withFolders.then((ready) => Promise.all([referencePictures(ready, { project: project.path, turnId: id }), skillTexts])
-      .then(async ([{ pictures, images }, skills]) => ({
-        text: said + studioReferencesText(ready, { stage, pictures }) + skills.map((s) => `\n\n${s.text}`).join(''),
-        images: [...images, ...await attachedPictures(files, PROMPT_PICTURES_MAX - images.length)],
-        skills: skills.map((s) => s.name),
-      })));
-    const opened = openTurn(id, instruction, promptDisplay ?? null, turnAttachments(files));
-    if (steer && asset) steerTurn(asset.id, opened, prepared);
-    else runTurn(opened, prepared);
+    queue.add({
+      id, conversation: sessionId, by: agent, prefs, modelLabel,
+      ...content,
+    });
+    composerFiles.take();
+    composerRef.current?.clear();
+    setFollowUp(''); setFollowUpRefs([]); setStudioRefs(new Map()); setFileRefs([]); setSkillRefs([]);
+    setFollowUpError(null);
+    composerRef.current?.focus();
+    if (sendNow) { queue.resume(); void dispatchQueued(); }
   }
 
-  /* queued while the turn ran (an agent that cannot take a message mid-turn): sent as soon as it ends */
-  React.useEffect(() => { if (queued && !active) submitFollowUp(); }, [queued, active]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* Claiming is synchronous; StrictMode, repeated effects and double clicks cannot send an item twice. */
+  React.useEffect(() => {
+    if (!active && !queue.get().claimed) {
+      if (asset?.status === 'error' || asset?.status === 'cancelled') {
+        if (queue.get().items.length && !queue.get().paused) queue.pause(t('composer.queuePaused'));
+      } else void dispatchQueued();
+    }
+  }, [active, asset?.status, queued, queue]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onNewSession = () => {
-    if (active) return;
+    if (active || projectBusy() || queued.claimed || queued.held) return;
     setSessionId(newSession().id);
     composerRef.current?.focus();
   };
   newConversation.current = onNewSession;
-  const onSelectSession = (id: string) => { if (!active) setSessionId(id); };
+  const onSelectSession = (id: string) => { if (!active && !projectBusy() && !queued.claimed && !queued.held) setSessionId(id); };
   const onRenameSession = async (title: string) => { touchSession(sessionId, () => ({ title })); };
   const shownSessions = React.useMemo(
     () => (sessions.some((s) => s.id === sessionId) ? sessions : [{ ...newSession(), id: sessionId }, ...sessions]),
@@ -766,6 +909,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
 
   const agentName = agent === 'byok' ? t('composer.agentOwnKey') : la.roster?.find((a) => a.id === agent)?.name ?? agent;
 
+  const sendLabel = stopping ? t('project.stop') : active ? t('composer.queueAdd') : t('project.sendFollowUp');
   const editComposerCard = (
     <div className="flex flex-col gap-1">
       {contextFull ? (
@@ -890,13 +1034,13 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
             />
           </div>
           {/* while it works: Stop, or Send once something is written (it goes into the turn, or after it); Esc stops */}
-          <Tooltip label={stopping ? t('project.stop') : t('project.sendFollowUp')} shortcut={stopping ? 'Esc' : 'Enter'}>
+          <Tooltip label={sendLabel} shortcut={stopping ? 'Esc' : 'Enter'}>
             <button
               type="button"
-              onClick={stopping ? () => { if (asset) void cancelLocalAgentTurn(asset.id); } : submitFollowUp}
+              onClick={stopping ? () => { queue.pause(t('composer.queuePaused')); if (asset) void cancelLocalAgentTurn(asset.id); } : submitFollowUp}
               disabled={stopping ? false : !followUpFilled}
               className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-[6px] text-[var(--text-dim)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:cursor-not-allowed disabled:text-[var(--text-faint)] disabled:hover:bg-transparent"
-              aria-label={stopping ? t('project.stop') : t('project.sendFollowUp')}
+              aria-label={sendLabel}
             >
               {stopping ? <Square size={14} /> : <CornerDownLeft size={14} />}
             </button>
@@ -939,7 +1083,10 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   React.useEffect(() => {
     if (!active || !asset) return undefined;
     /* only an Esc pressed in the chat: one in Studio closes Studio's menu or dialog, it does not stop the agent */
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape' && !event.defaultPrevented && inChat(event.target)) void cancelLocalAgentTurn(asset.id); };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || !inChat(event.target)) return;
+      queue.pause(t('composer.queuePaused')); void cancelLocalAgentTurn(asset.id);
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [active, asset]);
@@ -960,7 +1107,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
                   onNewSession={onNewSession}
                   onSelectSession={onSelectSession}
                   onRenameSession={onRenameSession}
-                  busy={active}
+                  busy={active || Boolean(queued.claimed || queued.held) || runs.current.size > 0}
                 />
                 <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
                   {/* the first message well below the session bar, as a chat app opens a conversation; the last well above
@@ -1061,13 +1208,11 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
                   ) : null}
                   {localTurn?.state.balance ? <BalanceNotice balance={localTurn.state.balance} /> : null}
                   {followUpError && <p className="text-xs text-[var(--err)]">{followUpError}</p>}
-                  {queued && active ? (
-                    <p role="status" className="flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
-                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent)]" />
-                      <span className="min-w-0 flex-1">{t('composer.queued')}</span>
-                      <button type="button" onClick={() => setQueued(false)} className="shrink-0 underline underline-offset-2 hover:text-[var(--text)]">{t('composer.queuedCancel')}</button>
-                    </p>
-                  ) : null}
+                  <QueuedMessages key={sessionId} items={queued.items} claimed={queued.claimed} uncertain={queued.uncertain} paused={queued.paused}
+                    canSteer={canSteerMessage} onSteer={(id) => { void dispatchQueued(id); }} onRemove={(id) => queue.remove(id)}
+                    onEdit={editQueuedMessage}
+                    onMove={(id, targetId) => queue.move(id, targetId)} onHold={(id) => queue.hold(id)}
+                    onResume={() => { queue.resume(); void dispatchQueued(); }} />
                   {editComposerCard}
                 </div>
               </div>

@@ -1,10 +1,13 @@
 /** Keep the macOS window available for Dock activation without ending Studio or agent sessions. */
-export function keepWindowOnClose(win, { mac, isQuitting, save }) {
+export function keepWindowOnClose(win, { mac, isQuitting, save, quit }) {
   win.on('close', (event) => {
     save();
     if (mac && !isQuitting()) {
       event.preventDefault();
       win.hide();
+    } else if (!isQuitting() && quit) {
+      event.preventDefault();
+      quit();
     }
   });
 }

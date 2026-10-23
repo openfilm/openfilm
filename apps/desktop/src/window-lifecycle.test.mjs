@@ -45,6 +45,19 @@ test('Windows and Linux window close still follows the existing quit path', () =
   assert.equal(saved, 1);
 });
 
+test('window close requests Quit before destroying pending messages; cancelling keeps the page alive', () => {
+  const win = new Window();
+  let quitting = false, requested = 0;
+  keepWindowOnClose(win, { mac: false, isQuitting: () => quitting, save: () => {}, quit: () => requested++ });
+  win.close();
+  assert.equal(requested, 1);
+  assert.equal(win.destroyed, false, 'a cancelled Quit must preserve the renderer and its pending messages');
+  quitting = true;
+  win.close();
+  assert.equal(win.destroyed, true, 'an approved Quit must be able to close the window');
+  assert.equal(requested, 1);
+});
+
 for (const platform of ['darwin', 'win32', 'linux']) {
   test(`Close Tab on ${platform} closes a project, and only macOS closes an empty window`, () => {
     const win = new Window(), closed = [];
