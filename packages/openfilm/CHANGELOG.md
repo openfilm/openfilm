@@ -1,5 +1,13 @@
 # openfilm
 
+## 0.2.6
+
+### Patch Changes
+
+- [#168](https://github.com/openfilm/openfilm/pull/168) [`619c163`](https://github.com/openfilm/openfilm/commit/619c163d2632e6e87e989049fec04dfc22188cd1) Thanks [@ZhangYukwiver](https://github.com/ZhangYukwiver)! - Find custom Jianying and CapCut draft folders when their settings quote paths containing commas or semicolons, so exports go to the folder the app uses. Also read escaped paths from older Qt settings.
+
+- [#175](https://github.com/openfilm/openfilm/pull/175) [`cf6cd6f`](https://github.com/openfilm/openfilm/commit/cf6cd6fa9b3d4ee50dd963853ee6ca4f8354ecf4) Thanks [@PazChen](https://github.com/PazChen)! - Exports: a video whose browser crashed or stopped answering is drawn once more in a new one, as an editing project's pages already were. A page or a file the browser could not load for want of the system's network buffers (`net::ERR_NO_BUFFER_SPACE`, seen on Windows) is drawn again too, instead of failing the export.
+
 ## 0.2.5
 
 ### Patch Changes

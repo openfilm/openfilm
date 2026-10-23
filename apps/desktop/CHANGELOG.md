@@ -1,5 +1,14 @@
 # @openfilm/desktop
 
+## 0.2.6
+
+### Patch Changes
+
+- [#175](https://github.com/openfilm/openfilm/pull/175) [`cf6cd6f`](https://github.com/openfilm/openfilm/commit/cf6cd6fa9b3d4ee50dd963853ee6ca4f8354ecf4) Thanks [@PazChen](https://github.com/PazChen)! - Windows: DeepSeek Harness installed with npm starts in the chat. The app's own Node now starts an agent's program as the main module, as Node would, so a program that runs only when it is the main one (DeepSeek Harness's `dsh`) no longer exits at once without a word.
+
+- Updated dependencies [[`619c163`](https://github.com/openfilm/openfilm/commit/619c163d2632e6e87e989049fec04dfc22188cd1), [`cf6cd6f`](https://github.com/openfilm/openfilm/commit/cf6cd6fa9b3d4ee50dd963853ee6ca4f8354ecf4)]:
+  - openfilm@0.2.6
+
 ## 0.2.5
 
 ### Patch Changes
