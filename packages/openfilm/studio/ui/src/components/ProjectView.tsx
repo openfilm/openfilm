@@ -1832,7 +1832,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     for (const b of what.blocks) refer(refOfBlock(b));
     if (what.range) refer(rangeRef(projectId, what.range, blocksRef.current));
   }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
-  /* the ruler points at time for the chat: a click, that moment; a drag, that span */
+  /* the ruler points at time for the chat: an Alt-click, that moment; an Alt-drag, that span */
   const referRuler = React.useCallback((what: { atMs: number } | { range: FilmRange }) => {
     const refer = studioHost?.refer;
     if (!refer) return;
