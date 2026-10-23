@@ -52,7 +52,16 @@ test('a service is added with a name the command line calls it by; its key is ne
 
 test('a request stays under the service\'s address', () => {
   assert.equal(targetOf('http://h:1/v1', '/audio/x?y=1').href, 'http://h:1/v1/audio/x?y=1');
-  for (const path of ['//evil.com/x', 'http://evil.com/', '/../admin', '/a/../../b', 'audio', '/a\\b']) assert.throws(() => targetOf('http://h:1/v1', path), path);
+  for (const path of ['//evil.com/x', 'http://evil.com/', 'localhost:8000/x', '/../admin', '/a/../../b', '../admin', 'a/../../b', '/a\\b']) {
+    assert.throws(() => targetOf('http://h:1/v1', path), /--path/, path);
+  }
+  /* without its leading /, as Git Bash leaves it */
+  assert.equal(targetOf('http://h:1/v1', 'audio/x?y=1').href, 'http://h:1/v1/audio/x?y=1');
+  assert.equal(targetOf('http://h:1/v1', '').href, targetOf('http://h:1/v1', '/').href);
+  /* with it, Git Bash made it a folder path: said so, with the two ways out */
+  for (const path of ['C:/Program Files/Git/speech', 'C:/Program Files/Git/', 'D:\\Git\\v1\\x']) {
+    assert.throws(() => targetOf('http://h:1/v1', path), /Git Bash turned --path into a folder path.*without its leading \/.*MSYS_NO_PATHCONV=1/, path);
+  }
 });
 
 test('JSON comes back as it is; the key goes in its header and never in what the agent reads', async () => {
