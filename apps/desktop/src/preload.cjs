@@ -88,6 +88,8 @@ contextBridge.exposeInMainWorld('openfilmNative', {
 
   /* the chat's record of a project (chat-store.mjs): conversations, finished turns (.film/chat), each turn's log (.film/logs) */
   chat: {
+    pending: (count) => ipcRenderer.invoke('desktop:chat:pending', { count }),
+    onPause: on('desktop:chat:pause-queue'),
     load: (project) => ipcRenderer.invoke('desktop:chat:load', { project }),
     saveSessions: (project, sessions, last) => ipcRenderer.invoke('desktop:chat:sessions', { project, sessions, last }),
     saveTurn: (project, turn, items) => ipcRenderer.invoke('desktop:chat:turn', { project, turn, items }),

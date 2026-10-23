@@ -847,6 +847,7 @@ export async function runLocalAgentTurn({
   /* a turn the agent was working on by itself ends as the person writes */
   endUnprompted(session.key);
   turnByKey.set(session.key, turn);
+  tellContext();
 
   /* Picked options: set only when they differ from what the session holds, the model first (it decides which efforts
      there are), then the rest one after another. An agent may change other options when one is set (MiniMax Code
@@ -883,6 +884,7 @@ export async function runLocalAgentTurn({
     turn.seal();
     ended.seal();
     turnByKey.delete(key);
+    tellContext();
     turnEndedAt.set(key, Date.now());
     if (current === turn || current === ended) current = null;
     if (meta) void bridge.ack?.(key, meta.turnId);
@@ -899,22 +901,36 @@ export function canSteer(turnId: string): boolean {
   return false;
 }
 
+/** A queued row follows the actual session handshake, including the gap between two consecutive turns. */
+export function useTurnSteering(turnId: string | null): boolean {
+  return React.useSyncExternalStore(
+    (listener) => { contextListeners.add(listener); return () => { contextListeners.delete(listener); }; },
+    () => Boolean(turnId && canSteer(turnId)),
+    () => false,
+  );
+}
+
 /**
  * A message sent while `fromTurnId` runs, into that turn, as in the agent's own chat: once it has joined, what the
  * agent says and does from then on goes to `next` (the message's own turn in the conversation), and `from` is done.
- * False when it did not join (the turn ended meanwhile, the agent refused): the caller sends it as a turn of its own.
+ * False when it definitely did not join. A lost reply is uncertain: the caller must not resend it automatically.
  */
-export async function steerLocalAgentTurn(fromTurnId: string, next: LocalAgentTurn, text: string, images?: PromptImage[]): Promise<boolean> {
+export async function steerLocalAgentTurn(fromTurnId: string, next: LocalAgentTurn, text: string, images?: PromptImage[], onAccepted?: () => void): Promise<boolean> {
   const bridge = desktopBridge()?.localAgents;
   const key = [...turnByKey].find(([, t]) => t.turnId === fromTurnId)?.[0];
   if (!bridge?.steer || !key) return false;
-  turns.set(next.turnId, next);
-  const r = await bridge.steer(key, text, images?.length ? images : undefined).catch(() => null);
+  const unknown = () => Object.assign(new Error('The steering result is unknown. Check the running reply before sending this message again.'), { code: 'steer-unknown' });
+  const r = await bridge.steer(key, text, images?.length ? images : undefined).catch(() => { throw unknown(); });
   const from = turnByKey.get(key);
-  if (!r?.ok || !from || from.turnId !== fromTurnId) return false;
+  if (!r?.ok) return false;
+  if (!from || from.turnId !== fromTurnId) throw unknown();
   await drain(from, 150, 1000);
+  if (turnByKey.get(key) !== from) throw unknown();
   from.seal();
   turnByKey.set(key, next);
+  /* Register its history before another promise can settle the agent's run on this new turn. */
+  try { onAccepted?.(); } catch { throw unknown(); }
+  tellContext();
   current = next;
   return true;
 }
