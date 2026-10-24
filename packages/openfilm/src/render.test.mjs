@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { getPriority, tmpdir, totalmem } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BrowserPool } from './browser-pool.mjs';
 import { encoders, hardwareEncoder } from './encoders.mjs';
@@ -234,6 +234,35 @@ document.body.style.background=${clearAt === null ? 'false' : `Math.abs(t-${clea
     assert.equal(started, 1, 'one browser for both pages');
   } finally {
     await pool.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('--subtitles burns the project\'s subtitles into its film, named as its render is; a page of it, or a film with none, is refused', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 180_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-render-subs-'));
+  try {
+    mkdirSync(join(dir, 'assets'));
+    writeFileSync(join(dir, 'page.html'), '<!doctype html><body style="margin:0;background:#204080"><script>window.film = { duration: 2, width: 640, height: 360, frame() {} };</script>');
+    writeFileSync(join(dir, 'film.html'), '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=640, height=360"></head>'
+      + '<body><section><iframe src="page.html"></iframe></section><section><audio src="assets/vo.wav"></audio></section></body></html>');
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=2', '-ac', '1', '-ar', '48000', join(dir, 'assets', 'vo.wav')]);
+    writeFileSync(join(dir, 'assets', 'vo.vtt'), 'WEBVTT\n\n00:00:00.500 --> 00:00:01.800\nBurned in\n');
+    const quiet = { workers: 1, silent: true, onProgress() {}, fps: 10 };
+    /* the bottom third of frame n, in grey, and how many of its pixels differ from another's */
+    const bottom = (file, n) => execFileSync('ffmpeg', ['-v', 'error', '-i', file, '-vf', `select=eq(n\\,${n}),crop=iw:ih/3:0:ih*2/3,format=gray`, '-frames:v', '1', '-f', 'rawvideo', '-']);
+    const changed = (a, b) => a.reduce((n, v, i) => n + (Math.abs(v - b[i]) > 48 ? 1 : 0), 0);
+    const plain = await render([dir], { ...quiet, out: join(dir, 'plain.mp4') });
+    const burned = await render([dir], { ...quiet, subtitles: true, out: join(dir, 'burned.mp4') });
+    assert.equal(changed(bottom(plain.out, 2), bottom(plain.out, 10)), 0, 'without it, the bottom of the picture stays the same');
+    assert.equal(changed(bottom(burned.out, 2), bottom(plain.out, 2)), 0, 'before the line, the picture is the film\'s');
+    assert.ok(changed(bottom(burned.out, 10), bottom(burned.out, 2)) > 200, 'during the line, it is drawn at the bottom');
+    assert.deepEqual(readdirSync(join(dir, '.film', 'cache', 'export')).filter((n) => n.startsWith('burn-')), [], 'the burn page is removed');
+    const past = await render([dir, '1-5'], { ...quiet, subtitles: true });
+    assert.equal(basename(past.out), `${basename(dir)}-1-2.mp4`, 'a range past the end is named as it was rendered, as a plain render names it');
+    await assert.rejects(render([join(dir, 'page.html')], { ...quiet, subtitles: true }), /into the project's film: render the project's folder, not page\.html/);
+    rmSync(join(dir, 'assets', 'vo.vtt'));
+    await assert.rejects(render([dir], { ...quiet, subtitles: true, out: join(dir, 'none.mp4') }), /no subtitles to burn in/);
+  } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });

@@ -1,7 +1,7 @@
 // film render: the deliverable. Frames are rendered in parallel page instances, averaged
 // over the shutter for motion blur, encoded with tagged BT.709 color, and muxed with the mix of the film's sounds.
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { availableParallelism, freemem, totalmem } from 'node:os';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { clipKind, FILM_FILE } from './film-doc.mjs';
@@ -9,7 +9,8 @@ import { broken, encoders, FRAMES_709, hardwareEncoder, hardwareOptions, prores7
 import { FilmPage, launch } from './host.mjs';
 import { exactRate, ffmpegRate } from './rate.mjs';
 import { browserCopies, filmVideos } from './seekable.mjs';
-import { ffmpeg, filmSound, fmt, kill, mix, open, outDir, parseTarget, shown, UsageError, write } from './shared.mjs';
+import { ffmpeg, filmSound, fmt, kill, locate, mix, open, outDir, parseTarget, shown, UsageError, write } from './shared.mjs';
+import { burned } from './burn.mjs';
 
 const BT709 = ['-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv'];
 const TAG_709 = ['-bsf:v', 'h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0'];
@@ -77,6 +78,22 @@ export async function render(args, opts = {}) {
   const started = Date.now();
   const { film: target, at, range } = parseTarget(args);
   if (at != null) throw new UsageError(`render takes a range (for example ${at}-${at + 2}), not one time; for one frame use openfilm look ${at}`);
+  /* --subtitles: the project's film drawn around by a page that burns its subtitles in (the export's own, burn.mjs),
+     rendered in its place, from the project's folder, named as the film's own render is. Studio burns only the
+     project's film, so a page of it is refused */
+  if (opts.subtitles) {
+    const loc = locate(target);
+    const own = existsSync(join(loc.root, FILM_FILE)) ? FILM_FILE : 'index.html';
+    if (decodeURI(loc.entry) !== own) throw new UsageError(`--subtitles burns the subtitles into the project's film: render the project's folder, not ${decodeURI(loc.entry)}`);
+    const { subtitlesForExport } = await import('../studio/server/captions.mjs');
+    const burn = await burned(loc.root, { burnSubtitles: true }, subtitlesForExport, !!opts.alpha);
+    if (!burn) throw new UsageError('--subtitles: the film has no subtitles to burn in');
+    try {
+      return await render([burn.dir, ...(range ? [`${range[0]}-${range[1]}`] : [])], { ...opts, subtitles: false, root: loc.root, nameAs: { dir: loc.dir, name: loc.name } });
+    } finally {
+      await burn.remove();
+    }
+  }
   /* `root`: the folder to serve (a host rendering an edit kept elsewhere in a project serves the project). The videos
      the pages ask for are noted, and served as their fast-seeking copies once there are some (seekable.mjs). */
   const videos = new Set();
@@ -98,7 +115,10 @@ export async function render(args, opts = {}) {
     await pool?.give(lent, { retire: true });
     throw e;
   }
-  const { entry, dir, name, site, browser, isFilm, root } = probe;
+  const { entry, site, browser, isFilm, root } = probe;
+  /* a burned-in render names the project it is for, not the page drawn for it */
+  const dir = opts.nameAs?.dir ?? probe.dir;
+  const name = opts.nameAs?.name ?? probe.name;
   const meta = probe.film.meta;
   await probe.film.close();
 

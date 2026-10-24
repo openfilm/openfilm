@@ -75,6 +75,8 @@ import { NLE_FPS, nleFps, planNleTimeline, probeSource, soundStem, xmemlDocument
 import { draftsRoot, jianyingDraft } from './jianying.mjs';
 import { slidesPdf, writePptx } from './slides.mjs';
 import { subtitlesForExport } from './captions.mjs';
+import { burned, even, frameBox, frameRatio, stageOf } from '../../src/burn.mjs';
+export { frameBox, frameRatio };
 import { filmSubtitleCuesInRange, filmSubtitleShown, filmSubtitleSrt, filmSubtitleTranscript, filmSubtitleVtt } from './film-subtitle.mjs';
 import { zipFiles } from './zip.mjs';
 import { inProject } from './files.mjs';
@@ -147,30 +149,8 @@ export const draftApps = () => ({ jianying: Boolean(defaultDrafts('jianying')), 
 
 /* ── delivery frames (the same arithmetic as the editor's lib/film-frame.ts) ── */
 
-/** A frame written `W:H` ("16:9", "2.39:1"), from 1:4 to 4:1: its width ÷ height, or null. @param {unknown} frame */
-export function frameRatio(frame) {
-  const m = typeof frame === 'string' ? /^(\d{1,4}(?:\.\d{1,3})?):(\d{1,4}(?:\.\d{1,3})?)$/.exec(frame) : null;
-  if (!m) return null;
-  const ratio = Number(m[1]) / Number(m[2]);
-  return Number.isFinite(ratio) && ratio >= 1 / 4 && ratio <= 4 ? ratio : null;
-}
 const MAX_DIM = 4096;
-const even = (/** @type {number} */ n) => Math.max(2, Math.round(n / 2) * 2);
 
-/**
- * The film (`stage`) fitted into a delivery frame: the frame's size (its long side follows the film's), its exact
- * shape (`ratio`: the frame's own, not its even-rounded pixels'), and the film's scale inside it (`contain`: whole,
- * with bars; `cover`: filling it, the overflow cut).
- * @param {{ w: number, h: number, ratio?: number }} stage @param {string} frame @param {'contain' | 'cover'} fill
- */
-export function frameBox(stage, frame, fill) {
-  const ratio = frame === 'native' ? null : frameRatio(frame);
-  /* native: the stage's own shape (a frame drawn as a page, with subtitles over it, keeps the frame's exact one) */
-  if (ratio == null) return { w: even(stage.w), h: even(stage.h), ratio: stage.ratio ?? stage.w / Math.max(1, stage.h), scale: 1 };
-  const box = stage.w / ratio >= stage.h ? { w: stage.w, h: stage.w / ratio } : { w: stage.h * ratio, h: stage.h };
-  const w = even(box.w), h = even(box.h);
-  return { w, h, ratio, scale: fill === 'cover' ? Math.max(w / stage.w, h / stage.h) : Math.min(w / stage.w, h / stage.h) };
-}
 
 /**
  * A box's size with its short side at `shortEdge` (even, no side over 4096), in the box's exact shape: a 16:9 frame
@@ -494,17 +474,6 @@ function run(args, signal, input) {
   });
 }
 
-/** The film's stage, from film.html (or, for a single page, from the page). @param {string} root */
-async function stageOf(root) {
-  const file = join(root, FILM_FILE);
-  if (existsSync(file)) {
-    const { doc } = readFilmFile(readFileSync(file, 'utf8'));
-    if (doc) return doc.stage;
-  }
-  const probe = await open(root);
-  try { return { w: probe.film.meta.width, h: probe.film.meta.height }; } finally { await probe.close(); }
-}
-
 /** The project's film.html, read. @param {string} root */
 function filmDoc(root) {
   const file = join(root, FILM_FILE);
@@ -559,69 +528,6 @@ async function clipFilm(root, clipId, { change = {}, doc = filmDoc(root) } = {})
   return { dir, stage: doc.stage, remove: () => tidy(dir) };
 }
 
-/**
- * The film inside its delivery frame with its subtitles drawn over it: a web page (SPEC.md: `window.film`) in the
- * project's .film showing the film (film.html's timeline, or the project's page) fitted into the frame, with bars or
- * cropped as asked, and over the whole frame each moment's subtitle line as the editor draws it (film-subtitle.mjs
- * `filmSubtitleFrameHtml`). It is rendered like the film itself, and its sound is the film's. `box` is the frame in the
- * film's pixels; `remove()` when done.
- * @param {string} root @param {{ w: number, h: number }} stage @param {string} frame @param {'contain' | 'cover'} fill
- * @param {Cue[]} cues @param {SubtitleStyle} style @param {boolean} [transparent] nothing behind the film (an alpha export)
- */
-async function burnFilm(root, stage, frame, fill, cues, style, transparent = false) {
-  const box = frameBox(stage, frame, fill);
-  const dir = join(root, '.film', 'cache', 'export', `burn-${process.pid}-${randomBytes(4).toString('hex')}`);
-  await mkdir(dir, { recursive: true });
-  await copyFile(fileURLToPath(new URL('./film-subtitle.mjs', import.meta.url)), join(dir, 'film-subtitle.mjs'));
-  const entry = existsSync(join(root, FILM_FILE)) ? `/${FILM_FILE}` : '/index.html';
-  const x = (box.w - stage.w * box.scale) / 2, y = (box.h - stage.h * box.scale) / 2;
-  const json = (/** @type {unknown} */ v) => JSON.stringify(v).replace(/</g, '\\u003c');
-  await writeFile(join(dir, 'index.html'), `<!doctype html>
-<html><head><meta charset="utf-8"><style>
-html,body{margin:0;width:${box.w}px;height:${box.h}px;overflow:hidden;background:${transparent ? 'transparent' : '#000'}}
-#film{position:absolute;left:${x}px;top:${y}px;width:${stage.w}px;height:${stage.h}px;border:0;transform:scale(${box.scale});transform-origin:0 0}
-#subs{position:absolute;left:0;top:0;width:${box.w}px;height:${box.h}px}
-</style></head><body><div id="subs"></div><script type="module">
-import { filmSubtitleFrameHtml } from './film-subtitle.mjs';
-const cues = ${json(cues)};
-const style = ${json({ ...style, on: true })};
-const size = { w: ${box.w}, h: ${box.h} };
-const subs = document.getElementById('subs');
-const el = document.createElement('iframe');
-el.id = 'film';
-let inner = null;
-const loaded = new Promise((ok) => el.addEventListener('load', ok, { once: true }));
-el.src = ${json(entry)};
-document.body.prepend(el);
-const ready = loaded.then(async () => {
-  const win = el.contentWindow;
-  const t0 = performance.now();
-  while (!(win.film && typeof win.film.frame === 'function')) {
-    if (performance.now() - t0 > 10000) throw new Error('the film did not set window.film');
-    await new Promise((r) => setTimeout(r, 20));
-  }
-  await (typeof win.film.ready === 'function' ? win.film.ready() : win.film.ready);
-  ${transparent ? "const clear = win.document.createElement('style'); clear.textContent = 'html, body { background: transparent !important; }'; win.document.head.append(clear);" : ''}
-  inner = win;
-});
-window.film = {
-  get duration() { return inner ? inner.film.duration : 0.001; },
-  width: size.w, height: size.h,
-  ready,
-  async frame(t) {
-    inner.filmHost?.time?.(t);
-    await inner.film.frame(t);
-    inner.filmHost?.settle?.(t);
-    subs.innerHTML = filmSubtitleFrameHtml(cues, style, size, t * 1000);
-    await document.fonts?.ready;
-  },
-};
-window.__filmCuts = () => inner?.__filmCuts?.() ?? null;
-window.__filmSounds = () => inner?.__filmSounds?.() ?? [];
-</script></body></html>
-`);
-  return { dir, box, remove: () => tidy(dir) };
-}
 
 const H264_CRF = { standard: 23, high: 18, master: 14 };
 const X265_CRF = { standard: 28, high: 23, master: 19 };
@@ -872,19 +778,8 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
     const { cues, style } = await captions(root);
     return { cues: filmSubtitleShown(cues, style).filter((c) => c.durMs > 0 && c.text.trim()), style };
   };
-  /**
-   * The film with its subtitles burned in, when the ask wants them and the film has some (else null): what to render
-   * instead of the project (see burnFilm).
-   * @param {string} root @param {Framing} ask @param {boolean} [transparent]
-   */
-  const burned = async (root, ask, transparent = false) => {
-    if (!ask.burnSubtitles) return null;
-    if (!(await subtitlesOf(root)).cues.length) return null;
-    /* the cues as stored: the page picks the shown language itself (filmSubtitleFrameHtml), and picking it twice
-       puts a bilingual line's translation under it twice */
-    const { cues, style } = await captions(root);
-    return burnFilm(root, await stageOf(root), ask.frame ?? 'native', ask.fill ?? 'contain', cues, style, transparent);
-  };
+  /** The film with its subtitles burned in, or null (burn.mjs). @param {string} root @param {Framing} ask @param {boolean} [transparent] */
+  const burnedOf = (root, ask, transparent = false) => burned(root, ask, captions, transparent);
 
   /**
    * render's frame count as the job's progress, its rate and what is left: `share` is the part of the whole job the
@@ -921,7 +816,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
     const codec = ask.codec ?? 'h264';
     const alpha = ALPHA_CODECS.has(codec);
     const clip = ask.clip ? await clipFilm(root, ask.clip) : null;
-    const burn = clip ? null : await burned(root, ask, alpha);
+    const burn = clip ? null : await burnedOf(root, ask, alpha);
     const scratch = codec === 'png' || codec === 'hevc_alpha' ? await mkdtemp(join(tmpdir(), 'openfilm-export-')) : null;
     try {
       const stage = clip?.stage ?? await stageOf(root);
@@ -1019,7 +914,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
   async function exportGif(job, root, dir, signal) {
     const ask = /** @type {GifAsk} */ (job.ask);
     const scratch = await mkdtemp(join(tmpdir(), 'openfilm-export-'));
-    const burn = await burned(root, ask);
+    const burn = await burnedOf(root, ask);
     try {
       /* with subtitles, the frame is the page drawn */
       const stage = burn ? burn.box : await stageOf(root);
@@ -1095,7 +990,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
    * @param {string} scratch @param {AbortSignal} signal
    */
   async function stillFrames(job, root, ask, ext, scratch, signal) {
-    const burn = await burned(root, ask);
+    const burn = await burnedOf(root, ask);
     /* footage the browser does not decode (ProRes; HEVC without a chip for it) drawn through a copy it plays: the film's
        video clips, the project's when the film is drawn inside a frame with its subtitles */
     const probe = await open(burn ? burn.dir : root, burn ? { root, playable: filmVideos(root, FILM_FILE) } : { playable: true }).catch(async (e) => { await burn?.remove(); throw e; });

@@ -81,7 +81,8 @@ openfilm skill remove <name>
   --fps <n>       frame rate, including decimals such as 29.97 (30)
   --4k            3840 px wide              --scale <n>     any device pixel ratio
   --blur          motion blur (8 samples)   --samples <n>   --shutter <0..1>
-  --alpha         transparent background    --workers <n>   parallel browsers`,
+  --alpha         transparent background    --workers <n>   parallel browsers
+  --subtitles     burn the project's subtitles in, in their own style`,
 };
 
 /* `openfilm` alone: the manual, the whole of what an agent needs to know. `get` takes any options its verb has,
@@ -127,7 +128,7 @@ try {
     allowPositionals: true,
     options: {
       count: { type: 'string' }, out: { type: 'string', short: 'o' }, '4k': { type: 'boolean' }, scale: { type: 'string' },
-      blur: { type: 'boolean' }, samples: { type: 'string' }, shutter: { type: 'string' }, alpha: { type: 'boolean' },
+      blur: { type: 'boolean' }, samples: { type: 'string' }, shutter: { type: 'string' }, alpha: { type: 'boolean' }, subtitles: { type: 'boolean' },
       fps: { type: 'string' }, workers: { type: 'string' }, help: { type: 'boolean', short: 'h' },
     },
   });
