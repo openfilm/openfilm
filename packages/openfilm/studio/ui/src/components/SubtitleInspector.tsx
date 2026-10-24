@@ -131,6 +131,15 @@ export function SubtitleInspector({ subtitles, width, onClose }: {
                 </>
               ) : null}
             </StyleLayer>
+            <StyleSlider
+              label={t('timeline.subtitleFade')}
+              value={s.fadeMs}
+              min={0}
+              max={1000}
+              step={50}
+              format={(v) => `${Math.round(v)} ms`}
+              onChange={(fadeMs) => set({ fadeMs })}
+            />
           </StyleGroup>
 
           <StyleGroup label={t('timeline.subtitleFontGroup')}>

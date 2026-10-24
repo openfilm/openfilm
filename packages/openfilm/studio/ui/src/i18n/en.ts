@@ -1281,6 +1281,7 @@ export const en = {
     subtitleKaraokeBox: 'Highlight box',
     subtitleKaraokeColor: 'Color',
     subtitleKaraokePop: 'Pop',
+    subtitleFade: 'Fade in and out',
     subtitleKaraokeTint: 'Highlight color',
     subtitleFamily: 'Typeface',
     subtitleFamilyDefault: 'Default',

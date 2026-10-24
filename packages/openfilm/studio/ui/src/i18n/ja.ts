@@ -1280,6 +1280,7 @@ export const ja: Words = {
     subtitleKaraokeBox: 'ハイライトボックス',
     subtitleKaraokeColor: 'カラー',
     subtitleKaraokePop: 'ポップ',
+    subtitleFade: 'フェードイン・アウト',
     subtitleKaraokeTint: 'ハイライトカラー',
     subtitleFamily: '書体',
     subtitleFamilyDefault: '既定',

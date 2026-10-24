@@ -16,6 +16,7 @@ import {
   FILM_SUBTITLE_SIZE_PCT_MIN,
   filmSubtitleAt,
   filmSubtitleCss,
+  filmSubtitleOpacity,
   filmSubtitleText,
   matchFilmSubtitleLook,
   parseFilmSubtitleStyle,
@@ -52,6 +53,7 @@ export const SUBTITLE_SIZE_PCT_MAX = FILM_SUBTITLE_SIZE_PCT_MAX;
 export const SUBTITLE_DEFAULT = FILM_SUBTITLE_DEFAULT;
 export const SUBTITLE_HOME_Y = FILM_SUBTITLE_HOME_Y;
 export const cueAt = filmSubtitleAt;
+export const subtitleOpacity = filmSubtitleOpacity;
 export const cueText = filmSubtitleText;
 export const matchSubtitleLook = matchFilmSubtitleLook;
 

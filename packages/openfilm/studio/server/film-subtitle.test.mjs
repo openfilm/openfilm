@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   FILM_SUBTITLE_DEFAULT, FILM_SUBTITLE_HOME_Y, FILM_SUBTITLE_LOOKS, FILM_SUBTITLE_PORTRAIT_Y, FILM_SUBTITLE_SIZE_PCT,
-  filmSubtitleAt, filmSubtitleCss, filmSubtitleCssText, filmSubtitleFrameHtml, filmSubtitleLanguageOf,
+  filmSubtitleAt, filmSubtitleCss, filmSubtitleCssText, filmSubtitleFrameHtml, filmSubtitleLanguageOf, filmSubtitleOpacity,
   filmSubtitleShown, filmSubtitleSrt, filmSubtitleStyleFor, filmSubtitleVtt, filmSubtitleWords, matchFilmSubtitleLook,
   parseFilmSubtitleStyle, sameFilmSubtitleLanguage,
 } from './film-subtitle.mjs';
@@ -96,4 +96,21 @@ test('a burned-in frame: the line in the frame\'s pixels, escaped, nothing when 
   assert.equal(filmSubtitleFrameHtml(cues, { ...D, on: false }, { w: 1920, h: 1080 }, 500), '');
   const karaoke = filmSubtitleFrameHtml([{ startMs: 0, durMs: 1000, text: 'aa bb' }], { ...D, karaoke: { mode: 'color', color: '#ff0000' } }, { w: 100, h: 100 }, 100);
   assert.match(karaoke, /<span style="color:#ff0000">aa<\/span> bb/);
+});
+
+test('a line fades in and out over fadeMs at its ends, off when 0, and the export draws the same opacity', () => {
+  const cue = { startMs: 1000, durMs: 2000, text: 'Fade me', clip: 'vo', src: 'a.wav', line: 0 };
+  assert.equal(filmSubtitleOpacity(cue, 1050, 100), 0.5, 'halfway in');
+  assert.equal(filmSubtitleOpacity(cue, 2000, 100), 1, 'whole in the middle');
+  assert.equal(filmSubtitleOpacity(cue, 2950, 100), 0.5, 'halfway out');
+  assert.equal(filmSubtitleOpacity(cue, 900, 100), 0, 'not yet');
+  assert.equal(filmSubtitleOpacity(cue, 2000, 0), 1, 'off');
+  assert.equal(filmSubtitleOpacity({ startMs: 0, durMs: 100 }, 25, 1000), 0.5, 'a short line fades for half its length each way');
+  assert.equal(parseFilmSubtitleStyle({ fadeMs: 150 }).fadeMs, 150);
+  assert.equal(parseFilmSubtitleStyle({ fadeMs: 9999 }).fadeMs, 1000, 'clamped');
+  assert.equal(parseFilmSubtitleStyle(null).fadeMs, 0, 'off by default');
+  const style = { ...parseFilmSubtitleStyle({ fadeMs: 100 }) };
+  const html = filmSubtitleFrameHtml([cue], style, { w: 640, h: 360 }, 1050);
+  assert.match(html, /opacity:0\.5/, 'the line is drawn half faded');
+  assert.doesNotMatch(filmSubtitleFrameHtml([cue], parseFilmSubtitleStyle(null), { w: 640, h: 360 }, 1050), /opacity/);
 });

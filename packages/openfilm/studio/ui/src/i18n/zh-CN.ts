@@ -1281,6 +1281,7 @@ export const zhCN: Words = {
     subtitleKaraokeBox: '高亮底框',
     subtitleKaraokeColor: '变色',
     subtitleKaraokePop: '弹跳',
+    subtitleFade: '淡入淡出',
     subtitleKaraokeTint: '高亮颜色',
     subtitleFamily: '字体',
     subtitleFamilyDefault: '默认',

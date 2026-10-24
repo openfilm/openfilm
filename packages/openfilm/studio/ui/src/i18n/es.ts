@@ -1280,6 +1280,7 @@ export const es: Words = {
     subtitleKaraokeBox: 'Caja de resaltado',
     subtitleKaraokeColor: 'Color',
     subtitleKaraokePop: 'Salto',
+    subtitleFade: 'Fundido de entrada y salida',
     subtitleKaraokeTint: 'Color de resaltado',
     subtitleFamily: 'Tipo de letra',
     subtitleFamilyDefault: 'Predeterminado',

@@ -24,6 +24,7 @@ import {
   SNAP_X,
   SNAP_Y,
   subtitleCss,
+  subtitleOpacity,
   type SubtitleCue,
   type SubtitleStyle,
 } from '@/lib/subtitles';
@@ -111,7 +112,7 @@ export function SubtitleOverlay({
         role={onMove ? 'presentation' : undefined}
         onPointerDown={onPointerDown}
         className={onMove ? 'cursor-move' : 'pointer-events-none'}
-        style={css.box as React.CSSProperties}
+        style={{ ...(css.box as React.CSSProperties), ...(cue && style.fadeMs ? { opacity: subtitleOpacity(cue, timeMs, style.fadeMs) } : {}) }}
       >
         <span
           style={{

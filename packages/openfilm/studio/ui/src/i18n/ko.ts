@@ -1280,6 +1280,7 @@ export const ko: Words = {
     subtitleKaraokeBox: '강조 상자',
     subtitleKaraokeColor: '색상',
     subtitleKaraokePop: '팝',
+    subtitleFade: '페이드 인·아웃',
     subtitleKaraokeTint: '강조 색상',
     subtitleFamily: '서체',
     subtitleFamilyDefault: '기본값',
