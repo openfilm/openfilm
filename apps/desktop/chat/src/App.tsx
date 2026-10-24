@@ -71,6 +71,7 @@ import { app, type FfmpegState, type Project, type SkillListing, type StudioRef,
 import { Divider } from './components/Divider';
 import { draftRefs, pillCard, refFromPill, refPill, sameStudioThing, selectionMoment, selectionRange, selectionRefs, studioReferencesText } from './studio-refs';
 import { inChat } from './lib/chat-layer';
+import { escStopper } from './lib/esc-stop';
 import { useProjectChat } from './lib/chat-store';
 import { givenAfter, pagesToSend } from './lib/skill-pages';
 import { ChatProjectContext, WaitingContext } from './lib/developer';
@@ -935,11 +936,12 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     </div>
   );
 
-  /* Esc stops the turn while it runs (the send button's other half) */
+  /* Esc stops the turn while it runs (the send button's other half): only one pressed in the chat, not held, and not
+     just after one in Studio (lib/esc-stop.ts) */
+  const escStops = React.useRef(escStopper());
   React.useEffect(() => {
     if (!active || !asset) return undefined;
-    /* only an Esc pressed in the chat: one in Studio closes Studio's menu or dialog, it does not stop the agent */
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape' && !event.defaultPrevented && inChat(event.target)) void cancelLocalAgentTurn(asset.id); };
+    const onKey = (event: KeyboardEvent) => { if (escStops.current(event, inChat(event.target))) void cancelLocalAgentTurn(asset.id); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [active, asset]);
