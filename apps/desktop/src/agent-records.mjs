@@ -556,6 +556,21 @@ export function copilotCallsOf(entries, { from = 0, to = Infinity } = {}) {
 
 export const copilotCalls = (file, { from = 0, to = Infinity } = {}) => copilotCallsOf(lines(file), { from, to });
 
+/**
+ * The model that answered a Copilot turn, by the name Copilot gives it ("GPT-6 Luna"): its last usage record from
+ * `from` (ms) on, or null. Copilot does not always name its model over ACP (1.0.98 to 1.0.103, on some accounts: its
+ * session's options are its mode and Allow All, and its "auto" picks the model), so the turn's footer takes this one.
+ */
+export function copilotModelOf(entries, { from = 0 } = {}) {
+  let model = null;
+  for (const e of entries) {
+    if (e?.type !== 'session.usage_record' || (ms(e.timestamp) ?? 0) < from) continue;
+    const name = e.data?.usage?.modelDisplayName || e.data?.usage?.model;
+    if (typeof name === 'string' && name) model = name;
+  }
+  return model;
+}
+
 /* ── all ─────────────────────────────────────────────────────────────────── */
 
 /**
@@ -577,6 +592,12 @@ export function agentRecordCalls({ agent, sessionId, cwd, from, to, env = {}, ho
   const read = { claude: claudeCalls, codex: codexCalls, kimi: kimiCalls, copilot: copilotCalls }[agent];
   const calls = read(file, { from, to });
   return { file, calls: calls.map((c) => ({ ...c, source: { agent, file } })) };
+}
+
+/** The model a turn ran on (from `from`, ms) as the agent's own record names it, or null: only Copilot's is read. */
+export function recordedModel({ agent, sessionId, from = 0, env = {}, home = homedir() }) {
+  const file = agent === 'copilot' ? findCopilotRecord({ sessionId, env, home }) : null;
+  return file ? copilotModelOf(lines(file), { from }) : null;
 }
 
 /**

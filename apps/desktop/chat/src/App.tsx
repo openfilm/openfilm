@@ -194,6 +194,8 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   function settleLocalTurn(meta: LocalAgentTurnMeta, turn: LocalAgentTurn, patch: Partial<Turn & TurnBalance>): Turn {
     const id = meta.turnId;
     finishRunningLocalTurn(id);
+    /* the model that answered, for an agent whose session names none (GitHub Copilot's): its footer says it */
+    if (turn.model) patch = { ...patch, localAgent: { id: meta.agent, model: turn.model } };
     const done: Turn = { ...(meta.turn as Turn), ...patch, updatedAt: new Date().toISOString() };
     primeStoredTranscript(id, turn.items);
     saveLocalAgentTurn(meta.projectId, done, turn.items);

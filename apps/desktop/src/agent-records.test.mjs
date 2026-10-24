@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { agentRecordCalls, claudeCallsOf, claudeProjectName, codexCallsOf, compactCalls, copilotCallsOf, findClaudeRecord, findCodexRecord, findCopilotRecord, findKimiRecord, kimiCallsOf } from './agent-records.mjs';
+import { agentRecordCalls, claudeCallsOf, claudeProjectName, codexCallsOf, compactCalls, copilotCallsOf, copilotModelOf, findClaudeRecord, findCodexRecord, findCopilotRecord, findKimiRecord, kimiCallsOf, recordedModel } from './agent-records.mjs';
 
 const at = (s) => new Date(Date.UTC(2026, 9, 15, 10, 0, s)).toISOString();
 const jsonl = (rows) => `${rows.map((r) => JSON.stringify(r)).join('\n')}\n`;
@@ -223,6 +223,32 @@ test("Copilot's events: a request for each usage record, its answer by its API c
   assert.ok(findCopilotRecord({ sessionId: 'cop-12345', home }));
   assert.equal(findCopilotRecord({ sessionId: '../../x', home }), null);
   assert.equal(agentRecordCalls({ agent: 'copilot', sessionId: 'cop-12345', home, from: Date.parse(at(7)), to: Date.parse(at(9)) }).calls.length, 1);
+});
+
+test("the model that answered a Copilot turn, by the name Copilot gives it in its usage records", () => {
+  /* GitHub Copilot 1.0.98 on Windows, its session naming no model over ACP: "auto" picks one, each request's usage
+     record names it */
+  const usage = (s, call, more = {}) => ({ type: 'session.usage_record', timestamp: at(s), data: { usage: {
+    model: 'gpt-6-luna', provider: { id: 'copilot', kind: 'copilot', label: 'GitHub Copilot' }, modelDisplayName: 'GPT-6 Luna',
+    inputTokens: 16912, outputTokens: 47, cacheReadTokens: 0, cacheWriteTokens: 16909, reasoningTokens: 26, duration: 2533, apiCallId: call, ...more } } });
+  const rows = [
+    { type: 'session.start', data: { sessionId: 'cop-67890' }, timestamp: at(0) },
+    { type: 'session.model_change', data: { previousModel: null, newModel: 'auto', source: 'startup' }, timestamp: at(1) },
+    { type: 'session.auto_mode_resolved', data: { chosenModel: 'gpt-6-luna', availableModels: ['gpt-6-luna'] }, timestamp: at(1) },
+    { type: 'user.message', data: { content: 'Make a title' }, timestamp: at(2) },
+    usage(5, 'a1'),
+    { type: 'assistant.message', data: { content: 'Done.', apiCallId: 'a1', model: 'gpt-6-luna' }, timestamp: at(5) },
+  ];
+  assert.equal(copilotModelOf(rows), 'GPT-6 Luna');
+  assert.equal(copilotModelOf(rows, { from: Date.parse(at(6)) }), null, 'no request in the turn: none');
+  assert.equal(copilotModelOf([...rows, usage(9, 'a2', { model: 'gpt-x', modelDisplayName: undefined })]), 'gpt-x', 'the last one, by its id when it has no name');
+
+  const home = mkdtempSync(join(tmpdir(), 'of-copilot-'));
+  mkdirSync(join(home, '.copilot', 'session-state', 'cop-67890'), { recursive: true });
+  writeFileSync(join(home, '.copilot', 'session-state', 'cop-67890', 'events.jsonl'), jsonl(rows));
+  assert.equal(recordedModel({ agent: 'copilot', sessionId: 'cop-67890', home, from: Date.parse(at(2)) }), 'GPT-6 Luna');
+  assert.equal(recordedModel({ agent: 'copilot', sessionId: 'cop-00000', home }), null);
+  assert.equal(recordedModel({ agent: 'claude', sessionId: 'cop-67890', home }), null, 'only Copilot is read');
 });
 
 test('compactCalls keeps each request only as far as it is new, and reads back whole', () => {

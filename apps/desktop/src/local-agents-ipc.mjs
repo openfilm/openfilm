@@ -14,7 +14,8 @@
  *   desktop:local-agents:prompt      { key, text, meta?, images? } → { ok, stopReason } | { ok: false, error }
  *                                    images: [{ data (base64), mimeType }], the pictures of the message's references,
  *                                    sent after the text to an agent that takes pictures (the text names their files
- *                                    either way)
+ *                                    either way); `model` beside the stopReason: the model that answered, for an
+ *                                    agent whose session names none (Copilot's, from its record)
  *   desktop:local-agents:steer       { key, text, images? } → { ok, outcome }   a message sent while a turn runs,
  *                                    into that turn (ok: it joined it); the page sends it as a turn of its own if not
  *   desktop:local-agents:adopt       { key, turnId | null, meta? }   what the agent does with nobody having written (a
@@ -48,7 +49,7 @@ import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { recordProblem, problemsFile } from 'openfilm/problems';
 import { LOG_SETTLE_MS } from './agent-logs.mjs';
-import { RECORDED_AGENTS, agentRecordCalls, compactCalls } from './agent-records.mjs';
+import { RECORDED_AGENTS, agentRecordCalls, compactCalls, recordedModel } from './agent-records.mjs';
 import { skillStore } from './agent-skills.mjs';
 import { AGENTS, AgentSession, HARNESS_AGENTS, isAgentId, isChatAgent, listAgents, openAgentSignIn, probeFolder } from './agents.mjs';
 import { loggedBlocks, logsDir, openLog, writeModelLog } from './chat-store.mjs';
@@ -331,6 +332,12 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
       activePrompts--;
       entry.running -= 1;
       onWorking(working());
+    }
+    /* an agent whose session names no model (GitHub Copilot, on some accounts): the one that answered, as its own
+       record says, for the turn's footer */
+    if (result.ok && !entry.info?.configOptions?.some((o) => o?.category === 'model')) {
+      const model = recordedModel({ agent: entry.agent, sessionId: entry.info?.sessionId, from, env: await loginShellVariables({ staleOk: true }) });
+      if (model) result = { ...result, model };
     }
     entry.lastUsed = Date.now();
     if (turn) {

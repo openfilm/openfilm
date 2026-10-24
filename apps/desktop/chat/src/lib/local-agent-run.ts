@@ -314,6 +314,9 @@ export class LocalAgentTurn {
   /** When its last update arrived (see drain). */
   lastEventAt = Date.now();
 
+  /** The model that answered, when its session names none (GitHub Copilot's, from its record): for the footer. */
+  model: string | null = null;
+
   apply(update: AcpUpdate): void {
     this.lastEventAt = Date.now();
     const kind = update.sessionUpdate;
@@ -877,6 +880,7 @@ export async function runLocalAgentTurn({
        listening only once they have stopped coming, or the saved reply ends mid-sentence. */
     await drain(last());
     if (!r.ok) throw Object.assign(new Error(r.error), { lastTurnId: last().turnId }, r.balance ? { balance: r.balance } : {});
+    turn.model = last().model = r.model ?? null;
     return { stopReason: r.stopReason, lastTurnId: last().turnId };
   } finally {
     const ended = last();

@@ -205,7 +205,8 @@ export interface DesktopBridge {
     >;
     /** `images`: pictures sent after the text, to an agent that takes them (the shell asks the session) */
     /** `balance`: the service the app's own agent runs on had no balance left for it */
-    prompt(key: string, text: string, meta?: LocalAgentTurnMeta, images?: PromptImage[]): Promise<{ ok: true; stopReason: string } | { ok: false; error: string; balance?: Balance }>;
+    /** `model`: the model that answered, for an agent whose session names none (GitHub Copilot's, from its record) */
+    prompt(key: string, text: string, meta?: LocalAgentTurnMeta, images?: PromptImage[]): Promise<{ ok: true; stopReason: string; model?: string } | { ok: false; error: string; balance?: Balance }>;
     /** Turns still held by the shell (a reload mid-turn). Older shells lack it. */
     running?(): Promise<LocalAgentRunningTurn[]>;
     /** The page has put this finished turn back: the shell forgets it. */
