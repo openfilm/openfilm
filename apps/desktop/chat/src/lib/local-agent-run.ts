@@ -29,6 +29,7 @@ import type { Balance } from '@/lib/balance';
 import { chatTurns, putChatTurn, type SavedTurn } from '@/lib/chat-store';
 import { app } from '../app-bridge';
 import { isEmptyBackgroundTurn, opensUnprompted } from '@/lib/unprompted';
+import { baseName, titleFile } from '@/lib/step-file';
 import { reduceTranscript, type TranscriptItem, type TranscriptPlanEntry } from '@/lib/agent-transcript';
 import {
   desktopBridge,
@@ -71,10 +72,6 @@ const DETAIL_MAX = 60;
 function clipDetail(text: string): string {
   const one = text.replace(/\s+/g, ' ').trim();
   return one.length > DETAIL_MAX ? `${one.slice(0, DETAIL_MAX - 1)}…` : one;
-}
-
-function baseName(path: string): string {
-  return path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? path;
 }
 
 /** The files this call touches: ACP's locations, and the path in diff content such as an edit's. */
@@ -168,9 +165,11 @@ export function localToolActivity(
   const files = touchedFiles(extra, input);
   const detail = (value: string | undefined) => (value ? { detail: value } : {});
   switch (kind) {
-    case 'read':
-      /* Codex viewing an image (View Image …) is a read too */
-      return { act: 'files.read', ...detail(filesDetail(files) ?? (name ? clipDetail(name.replace(/^(?:Read|View Image)\s+/i, '')) : undefined)) };
+    case 'read': {
+      /* Codex viewing an image (View Image …) is a read too. No path given, its title may be one */
+      const titled = titleFile(name);
+      return { act: 'files.read', ...detail(filesDetail(files) ?? (titled ? clipDetail(titled) : undefined)) };
+    }
     case 'search':
       if (/^web search/i.test(name)) return { act: 'research.search', ...(searchedFor(name, input) ? { query: searchedFor(name, input)! } : {}) };
       return { act: 'files.search', ...detail(searchedFor(name, input)) };
