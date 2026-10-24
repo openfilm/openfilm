@@ -1632,6 +1632,8 @@ export const ko: Words = {
       signedOut: '로그인하지 않음',
       waiting: '로그인을 기다리는 중…',
       waitingHint: '열린 창에서 로그인을 완료한 뒤 돌아오세요.',
+      waitingHintMinimax: '열린 창에서 로그인을 완료한 뒤 돌아오세요. 해외 MiniMax 계정은 그 창에서 사이트를 고를 수 없습니다. 터미널에서 mcode login --region global 을 실행한 뒤 다시 시작을 누르세요.',
+      waitingHintCodebuddy: '열린 창에서 로그인을 완료한 뒤 돌아오세요. 이 창은 CodeBuddy 자체 창이며 제목이 CodeBuddy입니다(OpenFilm이나 터미널이 아닙니다).',
       startAgain: '다시 시작',
       missing: '이 컴퓨터에 설치되어 있지 않음',
       claudeSetup: 'Claude 앱의 Code 탭을 한 번 열면 Claude Code가 설치됩니다',

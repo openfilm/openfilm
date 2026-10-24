@@ -1633,6 +1633,8 @@ export const es: Words = {
       signedOut: 'Sin sesión iniciada',
       waiting: 'Esperando a que inicies sesión…',
       waitingHint: 'Termina de iniciar sesión en la ventana que se abrió y vuelve aquí.',
+      waitingHintMinimax: 'Termina de iniciar sesión en la ventana que se abrió y vuelve aquí. Una cuenta internacional de MiniMax no puede elegir su sitio ahí: en una terminal, ejecuta mcode login --region global y luego pulsa Volver a empezar.',
+      waitingHintCodebuddy: 'Termina de iniciar sesión en la ventana que se abrió y vuelve aquí. Esa ventana es de CodeBuddy y su título es CodeBuddy, no OpenFilm ni una terminal.',
       startAgain: 'Volver a empezar',
       missing: 'No está instalado en este equipo',
       claudeSetup: 'Abre una vez la pestaña Code de la app de Claude para instalar Claude Code',

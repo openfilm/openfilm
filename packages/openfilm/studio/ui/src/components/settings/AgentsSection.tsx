@@ -27,6 +27,8 @@ import { missingActions } from '@/lib/agent-row';
 
 /** What is left of the plan: what Codex can say (the app's agent-usage.mjs; Claude Code's own report is wrong for Team accounts). */
 const PLAN_AGENTS: readonly HostAgentId[] = ['codex'];
+/** The words under an agent waiting for its sign-in, for those whose sign-in needs more than the usual hint. */
+const WAITING_HINTS: Partial<Record<HostAgentId, string>> = { minimax: 'settings.agents.waitingHintMinimax', codebuddy: 'settings.agents.waitingHintCodebuddy' };
 import { ProviderMark } from './ProviderMark';
 import { agentMark } from '@/lib/provider-marks';
 import { SettingsSelect } from './SettingsSelect';
@@ -337,7 +339,7 @@ export function AgentsSection() {
             ) : null}
             {agent.status === 'waiting' ? (
               <p className="text-[14.5px] leading-relaxed text-[var(--text-muted)]">
-                {t('settings.agents.waitingHint')}{' '}
+                {t(WAITING_HINTS[agent.id] ?? 'settings.agents.waitingHint')}{' '}
                 <button type="button" onClick={() => act(agent.id, () => host.connect(agent.id))} className="underline underline-offset-2 hover:text-[var(--text)]">{t('settings.agents.startAgain')}</button>
               </p>
             ) : null}

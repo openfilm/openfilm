@@ -1634,6 +1634,8 @@ export const en = {
       signedOut: 'Not signed in',
       waiting: 'Waiting for you to sign in…',
       waitingHint: 'Finish signing in in the window that opened, then come back.',
+      waitingHintMinimax: 'Finish signing in in the window that opened, then come back. An international MiniMax account can’t pick its site there: in a terminal, run mcode login --region global, then Start again.',
+      waitingHintCodebuddy: 'Finish signing in in the window that opened, then come back. That window is CodeBuddy’s own and is titled CodeBuddy, not OpenFilm or a terminal.',
       startAgain: 'Start again',
       missing: 'Not installed on this computer',
       claudeSetup: 'Open the Claude app’s Code tab once to install Claude Code',

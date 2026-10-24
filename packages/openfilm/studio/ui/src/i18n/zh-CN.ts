@@ -1634,6 +1634,8 @@ export const zhCN: Words = {
       signedOut: '未登录',
       waiting: '正在等待你完成登录…',
       waitingHint: '请在刚打开的窗口中完成登录，然后回到这里。',
+      waitingHintMinimax: '请在刚打开的窗口中完成登录，然后回到这里。国际版账号无法在该窗口选择站点：请在终端中运行 mcode login --region global，再点「重新开始」。',
+      waitingHintCodebuddy: '请在刚打开的窗口中完成登录，然后回到这里。该窗口是 CodeBuddy 自己的，标题为 CodeBuddy，不是 OpenFilm 或终端。',
       startAgain: '重新开始',
       missing: '这台电脑上尚未安装',
       claudeSetup: '打开一次 Claude 应用的 Code 标签页即可安装 Claude Code',

@@ -1633,6 +1633,8 @@ export const ja: Words = {
       signedOut: 'サインインしていません',
       waiting: 'サインインを待っています…',
       waitingHint: '開いたウィンドウでサインインを完了してから、戻ってきてください。',
+      waitingHintMinimax: '開いたウィンドウでサインインを完了してから、戻ってきてください。海外版の MiniMax アカウントは、そのウィンドウでサイトを選べません。ターミナルで mcode login --region global を実行し、「やり直す」を押してください。',
+      waitingHintCodebuddy: '開いたウィンドウでサインインを完了してから、戻ってきてください。このウィンドウは CodeBuddy 自身のもので、タイトルは CodeBuddy です（OpenFilm やターミナルではありません）。',
       startAgain: 'やり直す',
       missing: 'このコンピューターにインストールされていません',
       claudeSetup: 'Claude アプリの Code タブを一度開くと Claude Code がインストールされます',
