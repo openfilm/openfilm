@@ -190,10 +190,15 @@ export function windowsFreshPath({ machine = {}, user = {}, source = process.env
 const REG_MACHINE = 'HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment';
 const REG_USER = 'HKCU\\Environment';
 
-function regQuery(key, timeoutMs, types = undefined) {
+/**
+ * `reg query <key>`, read (parseRegQuery). reg writes in its console's code page, GBK on a Chinese Windows, where a
+ * folder named in Chinese came out as `E:\������װ`: the console is switched to UTF-8 first.
+ */
+export function regQuery(key, timeoutMs, types = undefined) {
   return new Promise((resolve) => {
-    const reg = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'reg.exe');
-    execFile(reg, ['query', key], { timeout: timeoutMs, encoding: 'utf8', windowsHide: true }, (error, stdout) => {
+    const system = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32');
+    const command = `chcp 65001 >nul && "${join(system, 'reg.exe')}" query "${key}"`;
+    execFile(join(system, 'cmd.exe'), ['/d', '/s', '/c', command], { timeout: timeoutMs, encoding: 'utf8', windowsHide: true, windowsVerbatimArguments: true }, (error, stdout) => {
       if (error) return resolve(null);
       const expandable = new Set();
       resolve({ values: parseRegQuery(stdout, expandable, types), expandable });

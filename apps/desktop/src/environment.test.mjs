@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import {
   childEnvironment, environmentCache, expandWindowsVars, lastPathSource, loginShellVariables, macProxy, noProxyList, parseRegQuery,
-  parseScutilProxy, proxyVariables, registryVariables, shellSubset, shellVariables, windowsFreshPath, windowsProxy, withSystemProxy,
+  parseScutilProxy, proxyVariables, regQuery, registryVariables, shellSubset, shellVariables, windowsFreshPath, windowsProxy, withSystemProxy,
 } from './environment.mjs';
 
 const PROFILE = ['C:', 'Users', 'someone'].join('\\');
@@ -85,6 +85,20 @@ test("on Windows, an agent given this machine's registry environment starts cmd.
   const r = spawnSync(process.execPath, ['-e', "process.stdout.write(require('node:child_process').execSync('echo ok', { encoding: 'utf8' }))"], { env, encoding: 'utf8' });
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdout.trim(), 'ok');
+});
+
+test("on Windows, a registry value naming folders in Chinese reads as it is, whatever the console's code page", { skip: process.platform !== 'win32' }, async () => {
+  const key = `HKCU\\Software\\OpenFilm test ${process.pid}`;
+  const path = 'E:\\软件安装;D:\\工具\\bin;C:\\plain';
+  const reg = (...args) => spawnSync('reg.exe', args, { windowsHide: true });
+  assert.equal(reg('add', key, '/v', 'Path', '/t', 'REG_EXPAND_SZ', '/d', path, '/f').status, 0);
+  try {
+    const read = await regQuery(key, 10_000);
+    assert.equal(read?.values.Path, path);
+    assert.ok(read?.expandable.has('Path'));
+  } finally {
+    reg('delete', key, '/f');
+  }
 });
 
 test('the environment is read again once it is old, sooner when asked; a failed read keeps the last good one', async () => {
