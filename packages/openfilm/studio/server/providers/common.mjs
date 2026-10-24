@@ -26,18 +26,24 @@ export async function call(service, url, init, ctx) {
   if (res.ok) return res;
   const text = await res.text().catch(() => '');
   if (outOfBalance(res.status, text)) throw noBalance(service);
-  if (res.status === 401 || res.status === 403) throw new Error(`${service} did not accept your key (${res.status}). Check it in Studio: Settings (the OpenFilm logo at the top left) → Providers.`);
   const reason = reasonOf(text).split(ctx.key).join('•••').slice(0, 500);
+  if (PAID_PLAN.test(text)) throw new Error(`${service} needs a paid plan for this, whatever the balance (${res.status})${reason ? `: ${reason}` : ''}`);
+  if (res.status === 401 || res.status === 403) throw new Error(`${service} did not accept your key (${res.status}). Check it in Studio: Settings (the OpenFilm logo at the top left) → Providers.`);
   throw new Error(`${service} answered ${res.status}${reason ? `: ${reason}` : ''}`);
 }
 
+/** What the account's plan does not include, balance or not: ElevenLabs' free plan and its music, or a voice from its library (a 402). */
+const PAID_PLAN = /paid_plan_required/i;
+
 /**
- * Whether a service's error says its account has no balance left for this, as each says it: 402 Payment Required;
- * Tavily's 432 and 433; OpenAI's `insufficient_quota` (a 429); ElevenLabs' `quota_exceeded` (a 401); fal's "Exhausted balance" (a 403, the
- * account locked until it is topped up); Gemini's depleted prepayment credits (a 429). A plain rate limit is not one.
+ * Whether a service's error says its account has no balance left for this, as each says it: 402 Payment Required
+ * (but a plan that does not include it); Tavily's 432 and 433; OpenAI's `insufficient_quota` (a 429); ElevenLabs'
+ * `quota_exceeded` (a 401); fal's "Exhausted balance" (a 403, the account locked until it is topped up); Gemini's
+ * depleted prepayment credits (a 429). A plain rate limit is not one.
  * @param {number} status @param {string} text the error's body
  */
 export function outOfBalance(status, text) {
+  if (PAID_PLAN.test(text)) return false;
   if (status === 402) return true;
   /* Tavily's plan and pay-as-you-go limits */
   if (status === 432 || status === 433) return true;
