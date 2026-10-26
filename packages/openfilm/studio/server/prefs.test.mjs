@@ -57,8 +57,10 @@ test('the keyboard shortcuts written are read back, and the rest of prefs.json s
   }
 });
 
-test('auto versions are off unless the person turned them on', () => {
+test('auto versions are off, and not listed, unless the person turned them on', () => {
   assert.equal(prefsOf(null).autoVersions, false);
+  assert.equal(prefsOf(null).showAutoVersions, false);
+  assert.equal(prefsOf({ showAutoVersions: true }).showAutoVersions, true);
   assert.equal(prefsOf({ autoVersions: 'yes' }).autoVersions, false);
   assert.equal(prefsOf({ autoVersions: true }).autoVersions, true);
 });

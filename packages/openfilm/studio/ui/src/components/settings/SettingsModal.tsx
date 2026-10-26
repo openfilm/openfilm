@@ -300,24 +300,29 @@ function PlaybackGroup() {
 }
 
 /**
- * Whether open projects save versions on their own while they are worked on (studio/server/auto-versions.mjs): off
- * unless the person turns it on; versions are theirs to save otherwise (Version history).
+ * Versions saved on their own (studio/server/auto-versions.mjs): whether open projects save them while they are worked
+ * on, and whether Version history lists them. Both off unless the person turns them on.
  */
 function VersionsGroup() {
   const t = useT();
-  const [on, setOn] = React.useState<boolean | null>(null);
-  React.useEffect(() => { void api.prefs().then((p) => setOn(p.autoVersions === true)).catch(() => {}); }, []);
-  if (on === null) return null;
-  const change = (next: boolean) => {
-    setOn(next);
-    void api.setPrefs({ autoVersions: next }).then((p) => setOn(p.autoVersions === true)).catch(() => setOn(!next));
+  const [prefs, setPrefs] = React.useState<StudioPrefs | null>(null);
+  React.useEffect(() => { void api.prefs().then(setPrefs).catch(() => {}); }, []);
+  if (!prefs) return null;
+  const change = (patch: { autoVersions?: boolean; showAutoVersions?: boolean }) => {
+    setPrefs({ ...prefs, ...patch });
+    void api.setPrefs(patch).then(setPrefs).catch(() => setPrefs(prefs));
   };
   return (
     <SettingsGroup title={t('settings.versions.group')}>
       <SettingsItem
         title={t('settings.versions.auto')}
         description={t('settings.versions.autoHint')}
-        control={<SettingsSwitch checked={on} onChange={change} label={t('settings.versions.auto')} />}
+        control={<SettingsSwitch checked={prefs.autoVersions === true} onChange={(on) => change({ autoVersions: on })} label={t('settings.versions.auto')} />}
+      />
+      <SettingsItem
+        title={t('settings.versions.show')}
+        description={t('settings.versions.showHint')}
+        control={<SettingsSwitch checked={prefs.showAutoVersions === true} onChange={(on) => change({ showAutoVersions: on })} label={t('settings.versions.show')} />}
       />
     </SettingsGroup>
   );

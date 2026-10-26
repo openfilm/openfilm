@@ -25,7 +25,7 @@ import { EditError, editProjectFilm, pageClipLook, readProjectFilm } from './fil
 import { FileError, bringIn, collect, extractAudio, freezeFrame, importFile, inside, listFiles, makeFolder, moveCheck, moveFile, readable, relink, trashFile } from './files.mjs';
 import { ExportError, createExports, draftApps, exportCapabilities, exportsRoot, projectSizes } from './exports.mjs';
 import { MediaError, frame, loudness, poster, probe, waveform } from './derived.mjs';
-import { HistoryError, copyVersion, historyFiles, log, renameVersion, restoreVersion, saveVersion, status as historyStatus } from './history.mjs';
+import { HistoryError, checkoutVersion, copyVersion, discardChanges, log, saveVersion, status as historyStatus, versionFilesChanged } from './history.mjs';
 import { createAutoVersions } from './auto-versions.mjs';
 import { ownHost, startPages } from './pages.mjs';
 import { HttpError, cookie, json, readJson } from './http.mjs';
@@ -42,7 +42,6 @@ import { readPrefs, writePrefs } from './prefs.mjs';
 import { ensureProxies } from './proxies.mjs';
 import { ensurePreviews, knownLate } from './preview-cache.mjs';
 import { npmOpenfilm, olderThanThis } from '../client.mjs';
-import { writeAtomic } from './atomic.mjs';
 import { createWatchers } from './watch.mjs';
 import { projectMissing } from './project-presence.mjs';
 import { installedFonts } from './fonts.mjs';
@@ -124,33 +123,14 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
   let updating = /** @type {{ status: 'updating' | 'failed', version: string, error?: string } | null} */ (null);
   /** whether an app's agent is working in the project at `path` now */
   const agentIn = (/** @type {string} */ path) => working().some((folder) => resolve(folder) === resolve(path));
-  /**
-   * A version just saved in the project at `root`: its pages hear of it, and its picture is drawn (it takes a moment)
-   * for its row in Version history, after which they hear again.
-   * @param {string} root @param {string | null} sha @param {{ moved?: boolean }} [o] `moved`: the folder's files changed
-   */
-  const versionSaved = (root, sha, { moved = false } = {}) => {
-    watchers.emit(root, { type: 'history', ...(moved ? { moved: true } : {}) });
-    if (!sha) return;
-    void listProjects()
-      .then((all) => {
-        const project = all.find((p) => p.path === root);
-        if (!project) return;
-        return pageFrame(root, pages.folderUrl(project), FILM_PAGE, -1, 480).then(async (jpeg) => {
-          const dir = join(root, TOOL_DIR, 'cache', 'commits');
-          await mkdir(dir, { recursive: true });
-          await writeAtomic(join(dir, `${sha}.jpg`), jpeg);
-          watchers.emit(root, { type: 'history' });
-        });
-      })
-      .catch(() => {});
-  };
+  /** The project at `root`'s history changed: its pages hear of it. `moved`: the folder's files changed with it. */
+  const historyChanged = (/** @type {string} */ root, { moved = false } = {}) => watchers.emit(root, { type: 'history', ...(moved ? { moved: true } : {}) });
   /* versions saved on their own (auto-versions.mjs), while the person has Auto versions on */
   const autoVersions = createAutoVersions({
     on: () => readPrefs().autoVersions,
     working: agentIn,
     roots: () => watchers.roots(),
-    save: async (root, kind) => versionSaved(root, await saveVersion(root, { kind })),
+    save: async (root, kind) => { if (await saveVersion(root, { kind })) historyChanged(root); },
   });
   autoVersions.start();
   /** how many editor pages have connected since Studio started: whether one opened an address `/open` gave out */
@@ -647,15 +627,13 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const page = url.searchParams.get('page');
       return json(res, 200, await projectFonts(project.path, page ? resolveIn('', page) : null));
     }
-    /* ── version history: a list of versions, kept with git (history.mjs) ──
-         GET    history[?limit=n]                → { status, versions, more }: the newest version, what changed since,
-                                                   the files a version holds against the folder's, and the versions,
-                                                   newest first (`more`: there are older ones)
-         GET    history/files                    → { held, ignored }: the files a version holds, and the others
-         GET    history/poster/:commit           the film's picture when the version was saved (404: none was taken)
-         POST   history/save      { name? }      save the folder as a version (with a name, or name the newest)
-         POST   history/restore   { commit }     the folder as that version holds it, saved as the newest version
-         PATCH  history/versions/:commit { name } name a version
+    /* ── version history: git as VS Code's Source Control shows it (history.mjs) ──
+         GET    history[?limit=n]                → { status, versions, more }: the version checked out and the changes
+                                                   against it, and the versions, newest first, with their parents
+         GET    history/versions/:commit         → { files }: what that version changed
+         POST   history/save      { message? }   commit the changes as a version
+         POST   history/discard                  the folder as the version checked out holds it
+         POST   history/checkout  { commit, discard? }   check out a version (no version is made)
          POST   history/copy      { commit, name } a new project holding that version → { project, missing }
        Every change tells the project's pages ({ type: 'history' }; `moved`: the folder's files changed, so Studio's
        state of the film is read again). While one runs, they hear how far it is ({ type: 'history-progress', op,
@@ -669,33 +647,24 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         const [state, { versions, more }] = await Promise.all([historyStatus(project.path, { onProgress: onProgress('load') }), log(project.path, { limit })]);
         return json(res, 200, { status: state, versions, more });
       }
-      if (history[0] === 'files' && history.length === 1 && req.method === 'GET') return json(res, 200, await historyFiles(project.path));
-      if (history[0] === 'poster' && history.length === 2 && req.method === 'GET') {
-        if (!/^[0-9a-f]{40}$/.test(history[1])) throw new HttpError(400, 'which version?');
-        const jpeg = await readFile(join(project.path, TOOL_DIR, 'cache', 'commits', `${history[1]}.jpg`)).catch(() => null);
-        if (!jpeg) throw new HttpError(404, 'no picture of that version');
-        res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'private, max-age=31536000, immutable', 'content-length': jpeg.length });
-        return res.end(jpeg);
-      }
+      if (history[0] === 'versions' && history.length === 2 && req.method === 'GET') return json(res, 200, { files: await versionFilesChanged(project.path, history[1]) });
       if (history[0] === 'save' && req.method === 'POST') {
-        const { name } = /** @type {{ name?: string }} */ (await readJson(req));
-        const sha = await saveVersion(project.path, { name: String(name ?? ''), onProgress: onProgress('save') });
-        versionSaved(project.path, sha);
+        const { message } = /** @type {{ message?: string }} */ (await readJson(req));
+        const sha = await saveVersion(project.path, { message: String(message ?? ''), onProgress: onProgress('save') });
+        historyChanged(project.path);
         return json(res, 200, { commit: sha });
       }
-      if (history[0] === 'restore' && req.method === 'POST') {
-        const { commit: target } = /** @type {{ commit?: string }} */ (await readJson(req));
-        const done = await restoreVersion(project.path, String(target ?? ''), { onProgress: onProgress('restore') });
-        if (done.before) versionSaved(project.path, done.before);
-        versionSaved(project.path, done.commit, { moved: true });
-        /* `missing`: media of that version history no longer has (left as it is in the folder) */
+      if (history[0] === 'discard' && req.method === 'POST') {
+        const done = await discardChanges(project.path, { onProgress: onProgress('discard') });
+        historyChanged(project.path, { moved: true });
         return json(res, 200, { ...done, ...(await readProjectFilm(project.path)) });
       }
-      if (history[0] === 'versions' && history.length === 2 && req.method === 'PATCH') {
-        const { name } = /** @type {{ name?: string }} */ (await readJson(req));
-        await renameVersion(project.path, history[1], String(name ?? ''));
-        watchers.emit(project.path, { type: 'history' });
-        return json(res, 200, {});
+      if (history[0] === 'checkout' && req.method === 'POST') {
+        const { commit: target, discard } = /** @type {{ commit?: string, discard?: boolean }} */ (await readJson(req));
+        const done = await checkoutVersion(project.path, String(target ?? ''), { discard: discard === true, onProgress: onProgress('checkout') });
+        historyChanged(project.path, { moved: true });
+        /* `missing`: media of that version history no longer has (left as it is in the folder) */
+        return json(res, 200, { ...done, ...(await readProjectFilm(project.path)) });
       }
       if (history[0] === 'copy' && req.method === 'POST') {
         const { commit: target, name } = /** @type {{ commit?: string, name?: string }} */ (await readJson(req));
