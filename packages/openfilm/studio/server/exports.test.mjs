@@ -26,6 +26,10 @@ function children(parent, pattern) {
   if (listed.status !== 0) throw new Error(`the process list did not answer: ${listed.error?.message ?? listed.stderr}`);
   return listed.stdout.split(/\r?\n/).filter((line) => new RegExp(pattern).test(line.slice(line.indexOf(' ') + 1))).map((line) => Number(line.split(' ')[0]));
 }
+/** End a process as a crash would; one gone already (a browser's helper, ended with the browser) is ended. */
+function end(pid) {
+  try { process.kill(pid, 'SIGKILL'); } catch (e) { if (/** @type {NodeJS.ErrnoException} */ (e).code !== 'ESRCH') throw e; }
+}
 /* the tests that end an export's processes find them in the process list, which on Windows (WMI) can stop answering */
 const processes = { skip: process.platform === 'win32' && (() => { try { children(process.pid, '.'); return false; } catch { return 'the process list does not answer'; } })() };
 let root, scratch;
@@ -246,7 +250,7 @@ test('a video whose browser is ended partway, as a crash would end it, is drawn 
     if (!browsers.length) await new Promise((r) => setTimeout(r, 25));
   }
   assert.ok(browsers.length, 'the film draws in a browser of the render process');
-  for (const pid of browsers) process.kill(pid, 'SIGKILL');
+  for (const pid of browsers) end(pid);
   const done = await ended(exports, job);
   assert.equal(done.status, 'done', done.error);
 });
@@ -1076,7 +1080,7 @@ test('剪映: the pages\' browsers, ended partway as a crash would end them, are
   assert.ok(worker, 'the pages draw in a process of their own');
   const browsers = children(worker, 'chrom');
   assert.ok(browsers.length, 'with browsers of its own');
-  for (const pid of browsers) process.kill(pid, 'SIGKILL');
+  for (const pid of browsers) end(pid);
   const done = await ended(exports, job);
   assert.equal(done.status, 'done', done.error);
   for (const id of ['a', 'b', 'c']) assert.equal(frameCount(join(dirname(done.out), 'media', `${id}.mov`)), 120, `${id}: every frame`);
