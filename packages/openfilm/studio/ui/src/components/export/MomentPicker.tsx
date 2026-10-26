@@ -4,8 +4,8 @@
  * beside it).
  *
  * The strip zooms and scrolls as the timeline does (Ctrl/⌘ + wheel or a pinch around the pointer, a sideways swipe or
- * Shift + wheel to scroll, the zoom bar under it), down to a second across. A click finds a moment, a double click adds
- * it. The frames picked are not all marked on it: the one selected below shows its dot there, to be dragged.
+ * Shift + wheel to scroll, the zoom bar under it), down to a second across. Pointer gestures only find a moment;
+ * adding one requires the Add frame button or Enter. The frames picked are not all marked on it: the one selected below shows its dot there, to be dragged.
  *
  * Every picture is the server's (pageframes.mjs), the film drawn as an export draws it, so what is seen here is what is
  * exported, burned subtitles aside. The server draws one frame at a time, a second or more each for a film with
@@ -13,14 +13,14 @@
  * never queues every frame passed over), then the strip in sight, nearest the moment shown first, then the frames
  * picked. All are drawn at one width, so a frame picked from the large picture is not drawn again.
  */
-import { Loader2, MoveHorizontal, Plus, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { Check, Loader2, MoveHorizontal, Plus, X, ZoomIn, ZoomOut } from 'lucide-react';
 import React from 'react';
 
 import { useT } from '@/i18n';
 import { ContextMenu, type ContextMenuEntry } from '@/components/ContextMenu';
 import {
   STRIP_WHOLE, clampView, cleanMoments, everyCount, everyMoments, filmFrameUrl, momentAt, sameFrame, sceneMiddles, stepFor, stripZoomMax,
-  toggleMoment, viewShowing, zoomView, type StripView,
+  viewShowing, zoomView, type StripView,
 } from '@/lib/export-moments';
 import { filmFrameBox, type FilmFrameBox, type FilmFrameFill, type FilmFrameId } from '@/lib/film-frame';
 import { formatRulerLabel, formatTimecode, stepFrames } from '@/lib/timecode';
@@ -112,15 +112,14 @@ export function MomentPicker(props: MomentPickerProps) {
     setSelected(null);
     if (list.length && !list.some((m) => sameFrame(m, cursor, fps))) goTo(list[0]!);
   };
-  /** add `ms`, selected; or take it out when it is picked */
-  const toggle = (ms: number) => {
+  /** Confirmation is idempotent: adding an already-picked frame never removes it. */
+  const add = (ms: number) => {
     const at = momentAt(ms, totalMs, fps);
-    const has = value.some((m) => sameFrame(m, at, fps));
-    if (!has && full) return;
-    onChange(toggleMoment(value, at, totalMs, fps, max));
-    setSelected(has ? null : at);
+    if (value.some((m) => sameFrame(m, at, fps))) { setSelected(at); return; }
+    if (full) return;
+    onChange(cleanMoments([...value, at], totalMs, fps, max));
+    setSelected(at);
   };
-  const add = (ms: number) => { if (!value.some((m) => sameFrame(m, ms, fps))) toggle(ms); else setSelected(momentAt(ms, totalMs, fps)); };
   const remove = (ms: number) => {
     onChange(value.filter((m) => !sameFrame(m, ms, fps)));
     if (selected != null && sameFrame(selected, ms, fps)) setSelected(null);
@@ -133,13 +132,15 @@ export function MomentPicker(props: MomentPickerProps) {
   const focus = () => rootRef.current?.focus({ preventScroll: true });
 
   const onKey = (e: React.KeyboardEvent) => {
+    // Buttons and fields keep their own keyboard behavior; Enter confirms the strip's preview only.
+    if (e.defaultPrevented || e.nativeEvent.isComposing || (e.target as Element).closest('button,input,select,textarea,[contenteditable]')) return;
     const step = (from: number, dir: 1 | -1) => (e.shiftKey ? momentAt(from + dir * 1000, totalMs, fps) : momentAt(stepFrames(from, dir, fps), totalMs, fps));
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       const dir = e.key === 'ArrowLeft' ? -1 : 1;
       /* Alt moves the frame selected; the arrows alone, the moment shown */
       if (e.altKey && selected != null) move(selected, step(selected, dir));
       else { goTo(step(cursor, dir)); if (selected != null && !sameFrame(selected, cursor, fps)) setSelected(null); }
-    } else if (e.key === 'Enter' && !e.nativeEvent.isComposing) toggle(cursor);
+    } else if (e.key === 'Enter') add(cursor);
     else if (e.key === 'Delete' || e.key === 'Backspace') {
       if (selected != null) remove(selected);
       else if (picked) remove(cursor);
@@ -190,13 +191,13 @@ export function MomentPicker(props: MomentPickerProps) {
       <Preview frames={frames} url={url(cursor)} box={box} ms={cursor} fps={fps}>
         <button
           type="button"
-          onClick={() => toggle(cursor)}
-          disabled={!picked && full}
-          className="absolute bottom-2.5 right-2.5 flex h-8 items-center gap-1.5 rounded-lg bg-black/65 px-3 text-[12.5px] font-medium text-white backdrop-blur-sm transition hover:bg-black/80 disabled:opacity-50"
+          onClick={() => add(cursor)}
+          disabled={picked || full}
+          className="flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)] disabled:opacity-50"
         >
-          {picked ? <X size={14} /> : <Plus size={14} />}
-          {t(picked ? 'exportCenter.moments.remove' : 'exportCenter.moments.add')}
-          <kbd className="ml-1 font-sans text-[11px] text-white/60">{picked ? '⌫' : '↵'}</kbd>
+          {picked ? <Check size={14} /> : <Plus size={14} />}
+          {t(picked ? 'exportCenter.moments.added' : 'exportCenter.moments.add')}
+          {!picked ? <kbd className="ml-1 font-sans text-[11px] text-[var(--text-faint)]">↵</kbd> : null}
         </button>
       </Preview>
 
@@ -214,7 +215,6 @@ export function MomentPicker(props: MomentPickerProps) {
         selected={selected}
         markers={markers}
         onCursor={(ms) => { setCursor(ms); if (selected != null && !sameFrame(selected, ms, fps)) setSelected(null); focus(); }}
-        onAdd={(ms) => { add(ms); focus(); }}
         onDragSelected={(ms) => setCursor(ms)}
         onMoveSelected={(to) => { if (selected != null) move(selected, to); focus(); }}
         label={t('exportCenter.moments.strip')}
@@ -243,7 +243,7 @@ export function MomentPicker(props: MomentPickerProps) {
       <p className="-mt-1.5 text-[11.5px] leading-relaxed text-[var(--text-faint)]">
         {t(value.length ? 'exportCenter.moments.selectHint' : 'exportCenter.moments.none')}
       </p>
-      <div className="grid gap-2.5" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${box.w >= box.h ? 136 : 108}px, 1fr))` }}>
+      <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(136px, 1fr))' }}>
         {value.map((ms, i) => {
           const on = selected != null && sameFrame(ms, selected, fps);
           return (
@@ -258,7 +258,7 @@ export function MomentPicker(props: MomentPickerProps) {
                 }}
                 aria-pressed={on}
                 aria-label={formatTimecode(ms, { fps })}
-                className={`relative overflow-hidden rounded-lg border-2 transition ${on ? 'border-[var(--accent)]' : 'border-transparent hover:border-[var(--border)]'}`}
+                className={`relative overflow-hidden border-2 transition ${on ? 'border-[var(--accent)]' : 'border-transparent hover:border-[var(--border)]'}`}
               >
                 <Framed box={box} src={frames.get(url(ms))} />
               </button>
@@ -267,24 +267,24 @@ export function MomentPicker(props: MomentPickerProps) {
                   {i + 1}
                 </span>
                 <span className={`min-w-0 truncate ${on ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>{formatTimecode(ms, { fps })}</span>
+                <button
+                  type="button"
+                  onClick={() => remove(ms)}
+                  aria-label={t('exportCenter.moments.remove')}
+                  className="ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--text-muted)] opacity-0 transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] focus-visible:opacity-100 group-hover:opacity-100"
+                >
+                  <X size={13} />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => remove(ms)}
-                aria-label={t('exportCenter.moments.remove')}
-                className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/65 text-white opacity-0 transition hover:bg-black/85 focus-visible:opacity-100 group-hover:opacity-100"
-              >
-                <X size={13} />
-              </button>
             </div>
           );
         })}
         {!picked && !full && (
           <button
             type="button"
-            onClick={() => toggle(cursor)}
+            onClick={() => add(cursor)}
             aria-label={t('exportCenter.moments.add')}
-            className="flex items-center justify-center self-start rounded-lg border border-dashed border-[var(--border)] text-[var(--text-faint)] transition hover:border-[var(--text-faint)] hover:text-[var(--text)]"
+            className="flex items-center justify-center self-start border border-dashed border-[var(--border)] text-[var(--text-faint)] transition hover:border-[var(--text-faint)] hover:text-[var(--text)]"
             style={{ aspectRatio: `${box.w} / ${box.h}` }}
           >
             <Plus size={18} />
@@ -372,27 +372,32 @@ function Preview({ frames, url, box, ms, fps, children }: {
   if (src) last.current = src;
   return (
     /* Grow with the export window; leave room for its controls on shorter displays. */
-    <div
-      className="mx-auto w-full overflow-hidden rounded-xl border border-[var(--border)]"
-      style={{ maxWidth: `calc(min(56dvh, 620px, max(180px, 100dvh - 380px)) * ${box.w / box.h})` }}
-    >
-      <Framed box={box} src={src ?? last.current}>
-        <span className="absolute bottom-2.5 left-2.5 rounded-md bg-black/65 px-2 py-1 font-mono text-[12px] tabular-nums text-white backdrop-blur-sm">
+    <div className="flex min-w-0 flex-col items-center gap-2">
+      <div
+        className="w-full overflow-hidden border border-[var(--border)]"
+        style={{ maxWidth: `calc(min(56dvh, 620px, max(180px, 100dvh - 380px)) * ${box.w / box.h})` }}
+      >
+        <Framed box={box} src={src ?? last.current}>
+          {src ? null : <Loader2 size={16} className="absolute right-3 top-3 animate-spin text-white/80" />}
+        </Framed>
+      </div>
+      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+        <span className="font-mono text-[12px] tabular-nums text-[var(--text-muted)]">
           {formatTimecode(ms, { fps })}
         </span>
-        {src ? null : <Loader2 size={16} className="absolute right-3 top-3 animate-spin text-white/80" />}
         {children}
-      </Framed>
+      </div>
     </div>
   );
 }
 
 /**
  * The film as a row of pictures under a ruler, the part in sight of `view`. Pressed or dragged, it moves the moment
- * shown; a double click adds the frame there. The frame selected below shows its dot above it, dragged to move it;
+ * shown, including double clicks. Items are selected or added with the controls below the strip.
+ * The frame selected below shows its dot above it, dragged to move it;
  * the film's markers are under it. Zoomed in, a bar under it shows and moves what is in sight.
  */
-function Strip({ stripRef, stripW, view, setView, msPerPx, cells, cellStep, totalMs, fps, cursor, selected, markers, onCursor, onAdd, onDragSelected, onMoveSelected, label }: {
+function Strip({ stripRef, stripW, view, setView, msPerPx, cells, cellStep, totalMs, fps, cursor, selected, markers, onCursor, onDragSelected, onMoveSelected, label, overlay }: {
   stripRef: React.RefObject<HTMLDivElement | null>;
   stripW: number;
   view: StripView;
@@ -407,10 +412,11 @@ function Strip({ stripRef, stripW, view, setView, msPerPx, cells, cellStep, tota
   selected: number | null;
   markers: readonly number[];
   onCursor: (ms: number) => void;
-  onAdd: (ms: number) => void;
   onDragSelected: (ms: number) => void;
   onMoveSelected: (to: number) => void;
   label: string;
+  /** Range selection shares this filmstrip, drawing its trim handles over the same frames. */
+  overlay?: React.ReactNode;
 }) {
   const x = (ms: number) => (ms - view.start) / msPerPx;
   const at = (clientX: number) => {
@@ -506,13 +512,13 @@ function Strip({ stripRef, stripW, view, setView, msPerPx, cells, cellStep, tota
       </div>
       <div
         ref={stripRef}
-        role="slider"
+        role={overlay ? 'group' : 'slider'}
         aria-label={label}
-        aria-valuemin={0}
-        aria-valuemax={Math.round(totalMs)}
-        aria-valuenow={Math.round(cursor)}
-        aria-valuetext={formatTimecode(cursor, { fps })}
-        className="relative cursor-pointer overflow-hidden rounded-md bg-black"
+        aria-valuemin={overlay ? undefined : 0}
+        aria-valuemax={overlay ? undefined : Math.round(totalMs)}
+        aria-valuenow={overlay ? undefined : Math.round(cursor)}
+        aria-valuetext={overlay ? undefined : formatTimecode(cursor, { fps })}
+        className="relative cursor-pointer overflow-hidden bg-black"
         style={{ height: STRIP_H }}
         onPointerDown={(e) => {
           if (e.button !== 0) return;
@@ -525,7 +531,6 @@ function Strip({ stripRef, stripW, view, setView, msPerPx, cells, cellStep, tota
           else setHover(at(e.clientX));
         }}
         onPointerLeave={() => setHover(null)}
-        onDoubleClick={(e) => onAdd(at(e.clientX))}
       >
         {cells.map((c) => (
           <span
@@ -538,6 +543,7 @@ function Strip({ stripRef, stripW, view, setView, msPerPx, cells, cellStep, tota
         ))}
         {/* past the film's end */}
         {x(totalMs) < stripW && <span className="absolute inset-y-0 right-0 bg-[var(--surface-2)]" style={{ left: x(totalMs) }} />}
+        {overlay}
         {pin != null && inSight(pin) && (
           <span className="pointer-events-none absolute inset-y-0 w-0.5 -translate-x-1/2 bg-[var(--accent)]" style={{ left: x(pin) }} />
         )}
@@ -630,3 +636,5 @@ function ZoomControls({ view, totalMs, setView, anchor, t }: {
     </div>
   );
 }
+
+export { Strip as Filmstrip, ZoomControls as FilmstripZoom, useFrames as useFilmFrames };

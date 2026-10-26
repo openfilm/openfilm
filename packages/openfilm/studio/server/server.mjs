@@ -25,8 +25,9 @@ import { EditError, editProjectFilm, pageClipLook, readProjectFilm } from './fil
 import { FileError, bringIn, collect, extractAudio, freezeFrame, importFile, inside, listFiles, makeFolder, moveCheck, moveFile, readable, relink, trashFile } from './files.mjs';
 import { ExportError, createExports, draftApps, exportCapabilities, exportsRoot, projectSizes } from './exports.mjs';
 import { MediaError, frame, loudness, poster, probe, waveform } from './derived.mjs';
-import { HistoryError, checkoutVersion, copyVersion, discardChanges, log, saveVersion, status as historyStatus, versionFilesChanged } from './history.mjs';
+import { HistoryError, checkoutVersion, copyVersion, deleteVersions, discardChanges, log, recoverVersions, saveVersion, status as historyStatus, versionFilesChanged } from './history.mjs';
 import { createAutoVersions } from './auto-versions.mjs';
+import { createHistoryPreviews } from './history-previews.mjs';
 import { ownHost, startPages } from './pages.mjs';
 import { HttpError, cookie, json, readJson } from './http.mjs';
 import { acceptWebSocket } from './websocket.mjs';
@@ -627,10 +628,11 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const page = url.searchParams.get('page');
       return json(res, 200, await projectFonts(project.path, page ? resolveIn('', page) : null));
     }
-    /* ── version history: git as VS Code's Source Control shows it (history.mjs) ──
+    /* ── version history (history.mjs) ──
          GET    history[?limit=n]                → { status, versions, more }: the version checked out and the changes
                                                    against it, and the versions, newest first, with their parents
          GET    history/versions/:commit         → { files }: what that version changed
+         GET    history/versions/:commit/preview → { folder, doc, missing }: a read-only copy on the film origin
          POST   history/save      { message? }   commit the changes as a version
          POST   history/discard                  the folder as the version checked out holds it
          POST   history/checkout  { commit, discard? }   check out a version (no version is made)
@@ -644,15 +646,30 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const onProgress = (op) => (/** @type {{ phase: string, done: number, total: number }} */ p) => watchers.emit(project.path, { type: 'history-progress', op, ...p });
       if (!history.length && req.method === 'GET') {
         const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 50, 1), 1000);
-        const [state, { versions, more }] = await Promise.all([historyStatus(project.path, { onProgress: onProgress('load') }), log(project.path, { limit })]);
-        return json(res, 200, { status: state, versions, more });
+        const [state, { versions, more, deletedCount }] = await Promise.all([historyStatus(project.path, { onProgress: onProgress('load') }), log(project.path, { limit, deleted: url.searchParams.get('deleted') === '1', includeDeletedCount: true })]);
+        return json(res, 200, { status: state, versions, more, deletedCount });
       }
       if (history[0] === 'versions' && history.length === 2 && req.method === 'GET') return json(res, 200, { files: await versionFilesChanged(project.path, history[1]) });
+      if (history[0] === 'versions' && history.length === 3 && history[2] === 'preview' && req.method === 'GET') {
+        const snapshot = await historyPreviews.get(project.path, history[1]);
+        const film = await readProjectFilm(snapshot.path);
+        return json(res, 200, {
+          folder: pages.folderUrl({ id: `${project.id}/history/${history[1]}`, path: snapshot.path }),
+          doc: film.doc, missing: snapshot.missing,
+        });
+      }
       if (history[0] === 'save' && req.method === 'POST') {
         const { message } = /** @type {{ message?: string }} */ (await readJson(req));
         const sha = await saveVersion(project.path, { message: String(message ?? ''), onProgress: onProgress('save') });
         historyChanged(project.path);
         return json(res, 200, { commit: sha });
+      }
+      if ((history[0] === 'delete' || history[0] === 'recover') && history.length === 1 && req.method === 'POST') {
+        const { commits } = /** @type {{ commits?: unknown }} */ (await readJson(req));
+        const done = history[0] === 'delete' ? await deleteVersions(project.path, commits) : await recoverVersions(project.path, commits);
+        if (history[0] === 'delete') await historyPreviews.invalidate(project.path, done.commits);
+        historyChanged(project.path);
+        return json(res, 200, done);
       }
       if (history[0] === 'discard' && req.method === 'POST') {
         const done = await discardChanges(project.path, { onProgress: onProgress('discard') });
@@ -991,6 +1008,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
   COOKIE = cookieName(address.port);
   FRAMED = framedCookieName(address.port);
   /* the film's port is the next one: when it is not free, the editor's is let go again, so a caller can try others */
+  const historyPreviews = createHistoryPreviews();
   const pages = await startPages({ port: port ? address.port + 1 : 0, editorOrigin: () => origin, secret: key, projects: listProjects }).catch(async (e) => {
     watchers.closeAll();
     await new Promise((done) => editor.close(() => done(undefined)));
@@ -1027,6 +1045,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     for (const socket of streamSockets) socket.destroy();
     await new Promise((done) => editor.close(() => done(undefined)));
     await exporting;
+    await historyPreviews.close();
   }
   return studio;
 }

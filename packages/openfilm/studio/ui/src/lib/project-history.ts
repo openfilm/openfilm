@@ -1,21 +1,27 @@
 /**
  * A project's version history as the Version history panel shows it, and the calls that change it
- * (studio/server/history.mjs): git as VS Code's Source Control shows it. The changes against the version checked
- * out, committed as a version; every version drawn as a graph; checking one out makes no version of its own.
+ * (studio/server/history.mjs). The dialog lists saved versions, plays their read-only snapshots, and shows the files
+ * each changed. Restoring a version checks it out; with unsaved edits the dialog offers to save them first.
  *
  *   GET    /api/projects/:id/history[?limit=n]             → { status, versions, more }
  *   GET    /api/projects/:id/history/versions/:commit      → { files }: what that version changed
+ *   GET    /api/projects/:id/history/versions/:commit/preview → { folder, doc, missing }: its read-only film
  *   POST   /api/projects/:id/history/save     { message? }
  *   POST   /api/projects/:id/history/discard
  *   POST   /api/projects/:id/history/checkout { commit, discard? }
  *   POST   /api/projects/:id/history/copy     { commit, name } → { project }
+ *   POST   /api/projects/:id/history/delete   { commits }   move records to Deleted (current version protected)
+ *   POST   /api/projects/:id/history/recover  { commits }   recover records without checking them out
  *
  * While an action runs, the project's events say how far it is ({ type: 'history-progress' }: HistoryProgress); when
  * it is done, `{ type: 'history', moved? }` (`moved`: the folder's files changed). A refusal comes with a `code`
  * ('nothing', 'dirty', 'none'), which the panel says in its own words.
  */
 
+import type { Film } from '@/api';
+
 export interface Counts { added: number; removed: number; edited: number }
+export interface VersionPreview { folder: string; doc: Film | null; missing: string[] }
 /** What changed, as the film tells it (see history.mjs Summary). */
 export interface Summary { scenes: Counts; sounds: Counts; stage: boolean; other: boolean }
 /** A file changed, by its path in the project, as git's status letters say it. */
@@ -42,7 +48,7 @@ export interface Version {
   /** the version a 'restore' of an earlier edition brought back */
   restored: string | null;
 }
-export interface HistoryState { status: HistoryStatus; versions: Version[]; more: boolean }
+export interface HistoryState { status: HistoryStatus; versions: Version[]; more: boolean; deletedCount: number }
 
 const KINDS = new Set<VersionKind>(['named', 'saved', 'auto', 'agent', 'before-restore', 'restore', 'upgrade', 'parked']);
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
@@ -63,7 +69,7 @@ const changeList = (raw: unknown): Change[] => (Array.isArray(raw) ? raw : []).f
 
 /** The server's answer, checked: anything unreadable is dropped rather than drawn as an empty row. */
 export function normalizeHistory(raw: unknown): HistoryState | null {
-  const body = raw as { status?: Record<string, unknown>; versions?: unknown; more?: unknown } | null;
+  const body = raw as { status?: Record<string, unknown>; versions?: unknown; more?: unknown; deletedCount?: unknown } | null;
   const s = body?.status;
   if (!s || typeof s !== 'object' || !Array.isArray(body.versions)) return null;
   const c = s.changes as Record<string, unknown> | null | undefined;
@@ -84,6 +90,7 @@ export function normalizeHistory(raw: unknown): HistoryState | null {
     status: { head: typeof s.head === 'string' ? s.head : null, branch: typeof s.branch === 'string' ? s.branch : null, changes },
     versions,
     more: body.more === true,
+    deletedCount: Math.max(0, num(body.deletedCount)),
   };
 }
 
@@ -109,8 +116,35 @@ export function versionLabel(v: Version, all: readonly Version[]): { key: string
   }
 }
 
-/** Saved on its own, not by the person: listed only when they asked for that (Settings › Advanced). */
+/** Saved on its own, not by the person: listed when the history type filter includes automatic versions. */
 export const isAutomatic = (v: Version) => v.kind === 'auto' || v.kind === 'agent' || v.kind === 'before-restore' || v.kind === 'upgrade';
+
+export const HISTORY_VERSION_TYPES = ['manual', 'auto', 'restore', 'other'] as const;
+export type HistoryVersionType = typeof HISTORY_VERSION_TYPES[number];
+
+export function historyVersionType(v: Version): HistoryVersionType {
+  if (isAutomatic(v)) return 'auto';
+  if (v.kind === 'restore') return 'restore';
+  return v.kind === 'parked' ? 'other' : 'manual';
+}
+
+/** Filters affect the list only; the selected preview and the current editing entry remain independent. */
+export function filterHistoryVersions(versions: readonly Version[], {
+  types, namedOnly, search, textOf,
+}: {
+  types: ReadonlySet<HistoryVersionType>;
+  namedOnly: boolean;
+  search: string;
+  textOf: (v: Version) => string;
+}): Version[] {
+  const fold = (s: string) => s.normalize('NFKC').toLocaleLowerCase();
+  const terms = fold(search).trim().split(/\s+/).filter(Boolean);
+  return versions.filter((v) => {
+    if (!types.has(historyVersionType(v)) || (namedOnly && (!v.name || v.kind === 'parked'))) return false;
+    const text = fold(textOf(v));
+    return terms.every((term) => text.includes(term));
+  });
+}
 
 /**
  * The versions the graph shows: all of them, or (`showAuto` false) those the person saved, and the one checked out
@@ -186,8 +220,9 @@ async function call<T = Record<string, unknown>>(projectId: string, path: string
 }
 
 export const historyApi = {
-  load: async (id: string, limit = 50) => {
-    const r = await call(id, `?limit=${limit}`);
+  preview: (id: string, commit: string) => call<VersionPreview>(id, `/versions/${encodeURIComponent(commit)}/preview`),
+  load: async (id: string, limit = 50, deleted = false) => {
+    const r = await call(id, `?limit=${limit}${deleted ? '&deleted=1' : ''}`);
     return r.ok ? normalizeHistory(r.body) : null;
   },
   versionFiles: async (id: string, commit: string): Promise<Change[] | null> => {
@@ -198,6 +233,8 @@ export const historyApi = {
   discard: (id: string) => call<{ missing?: string[] }>(id, '/discard', 'POST', {}),
   checkout: (id: string, commit: string, discard = false) => call<{ commit: string; missing?: string[] }>(id, '/checkout', 'POST', { commit, discard }),
   copy: (id: string, commit: string, name: string) => call<{ project: { id: string; name: string }; missing?: string[] }>(id, '/copy', 'POST', { commit, name }),
+  delete: (id: string, commits: string[]) => call<{ commits: string[] }>(id, '/delete', 'POST', { commits }),
+  recover: (id: string, commits: string[]) => call<{ commits: string[] }>(id, '/recover', 'POST', { commits }),
 };
 
 /** Which sentence a refusal gets: always our own words, never the server's text. */
@@ -205,6 +242,8 @@ export function historyErrorKey(result: { status: number; code: string | null })
   switch (result.code) {
     case 'nothing': return 'versions.errorNothing';
     case 'dirty': return 'versions.errorDirty';
+    case 'current': return 'versions.errorDeleteCurrent';
+    case 'deleted': return 'versions.errorDeleted';
     default: break;
   }
   if (result.status === 404 || result.status === 501 || result.status === 503) return 'versions.errorUnavailable';

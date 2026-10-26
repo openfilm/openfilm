@@ -783,3 +783,16 @@ export function filmSubtitleCuesInRange(cues, fromMs, toMs) {
   }
   return out;
 }
+
+/** Cues for selected stretches joined in list order, each moved to its position in the result.
+ * @template {FilmSubtitleCue} T
+ * @param {readonly T[]} cues @param {readonly (readonly [number, number])[]} ranges @returns {T[]}
+ */
+export function filmSubtitleCuesInRanges(cues, ranges) {
+  let offset = 0;
+  return ranges.flatMap(([from, to]) => {
+    const part = filmSubtitleCuesInRange(cues, from, to).map((cue) => ({ ...cue, startMs: cue.startMs + offset }));
+    offset += to - from;
+    return part;
+  });
+}

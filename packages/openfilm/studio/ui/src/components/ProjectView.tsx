@@ -2589,9 +2589,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     void subs.transcribe().then((r) => { if (!r.ok) setSubtitleProblem({ text: r.error ?? '', connect: !!r.needsTranscriber }); });
   }, [subs, subtitleProblem]);
   const [desktopOpen, setDesktopOpen] = React.useState(false);
-  const headerOpsRef = React.useRef<HTMLDivElement>(null);
   const [historyOpen, setHistoryOpen] = React.useState(false);
-  const [historyAnchor, setHistoryAnchor] = React.useState<{ x: number; y: number } | null>(null);
   const history = useProjectHistory(projectId, { onError: toast.showError, beforeChange: film.settled });
   const forgetSteps = React.useRef(film.forget);
   forgetSteps.current = film.forget;
@@ -2621,8 +2619,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     return () => { if (later) clearTimeout(later); stop(); };
   }, [projectId]);
   const openHistory = () => {
-    const rect = headerOpsRef.current?.getBoundingClientRect();
-    if (rect) setHistoryAnchor({ x: rect.right, y: rect.bottom + 4 });
+    pause();
     setHistoryOpen((v) => !v);
   };
   const [exportOpen, setExportOpen] = React.useState(false);
@@ -2719,7 +2716,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
             {inTabs ? (
               <TabStrip onRename={renameTab} onNew={() => setProjectsOpen(true)} onCoverFromFrame={coverFromFrame} maxLength={TITLE_MAX_CHARS} />
             ) : <div className="min-w-0 flex-1" />}
-            <div ref={headerOpsRef} className="pointer-events-auto flex min-w-0 items-center justify-end gap-1">
+            <div className="pointer-events-auto flex min-w-0 items-center justify-end gap-1">
               <ProjectLayoutMenu className={TOP_BTN}
                 /* an app that keeps the media in its own panel opens it there, from its own button: not a pane of Studio's */
                 assets={hostAssets ? null : assetsPaneOpen} onAssets={setAssetsPaneOpen}
@@ -3128,7 +3125,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         </div>
       </div>
 
-      <ProjectHistoryControls projectId={projectId} projectName={loaded?.project.name ?? ''} history={history} open={historyOpen} anchor={historyAnchor}
+      <ProjectHistoryControls projectId={projectId} projectName={loaded?.project.name ?? ''} history={history} open={historyOpen}
         onClose={() => setHistoryOpen(false)}
         onOpenProject={(id) => { setHistoryOpen(false); if (studioHost?.tabs) studioHost.tabs.open(id); else onProject(id); }} />
       <ProjectsPopover open={projectsOpen} currentProjectId={projectId} onOpen={(id) => { if (!studioHost?.tabs) setProjectsOpen(false); onProject(id); }} onCurrentRemoved={onLeave} onClose={() => setProjectsOpen(false)} />

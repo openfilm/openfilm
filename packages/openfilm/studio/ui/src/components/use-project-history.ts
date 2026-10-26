@@ -3,7 +3,7 @@
  *
  *   const history = useProjectHistory(projectId, { onError: toast.showError, beforeChange: film.settled });
  *   // on the project's `{ type: 'history' }` event: history.refresh()
- *   <ProjectHistoryControls history={history} open={open} anchor={anchor} onClose={…} />
+ *   <ProjectHistoryControls history={history} open={open} onClose={…} />
  *
  * It loads on mount (and when the project changes), after each of its own actions, and when `refresh()` is called.
  * A failed action is said through `onError`, but a checkout refused for changes ('dirty'), which the panel asks about.
@@ -34,6 +34,8 @@ export interface ProjectHistory {
   discard: () => Promise<boolean>;
   checkout: (commit: string, discard?: boolean) => Promise<HistoryResult<{ commit: string; missing?: string[] }>>;
   copy: (commit: string, name: string) => Promise<HistoryResult<{ project: { id: string; name: string }; missing?: string[] }>>;
+  delete: (commits: string[]) => Promise<boolean>;
+  recover: (commits: string[]) => Promise<boolean>;
 }
 
 export function useProjectHistory(projectId: string, {
@@ -109,5 +111,7 @@ export function useProjectHistory(projectId: string, {
     discard: async () => (await act('discard', async () => { await beforeChange?.(); return historyApi.discard(projectId); })).ok,
     checkout: (commit, discard = false) => act('checkout', async () => { await beforeChange?.(); return historyApi.checkout(projectId, commit, discard); }, ['dirty']),
     copy: (commit, name) => act('copy', () => historyApi.copy(projectId, commit, name)),
+    delete: async (commits) => (await act('delete', () => historyApi.delete(projectId, commits))).ok,
+    recover: async (commits) => (await act('recover', () => historyApi.recover(projectId, commits))).ok,
   };
 }

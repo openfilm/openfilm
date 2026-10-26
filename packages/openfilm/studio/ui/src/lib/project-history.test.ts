@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  graphRows, historyErrorKey, historyMoved, historyProgressOf, isAutomatic, normalizeHistory, shownVersions, versionLabel,
+  filterHistoryVersions, graphRows, HISTORY_VERSION_TYPES, historyErrorKey, historyMoved, historyProgressOf, historyVersionType, isAutomatic, normalizeHistory, shownVersions, versionLabel,
   type Version,
 } from './project-history.ts';
 
@@ -19,6 +19,8 @@ test('the server\'s answer is checked: what cannot be read is left out, not draw
   assert.deepEqual(read?.versions.map((v) => [v.commit, v.kind, v.name, v.parents]), [['abc', 'auto', '', ['def']], ['def', 'named', 'Old', []]]);
   assert.equal(read?.status.branch, 'main');
   assert.equal(read?.more, true);
+  assert.equal(read?.deletedCount, 0, 'older servers have no deleted records');
+  assert.equal(normalizeHistory({ status: {}, versions: [], deletedCount: 3 })?.deletedCount, 3);
   assert.equal(normalizeHistory({ status: { changes: null }, versions: [] })?.status.branch, null, 'a version checked out on its own');
 });
 
@@ -61,6 +63,24 @@ test('the graph: one lane for a line of versions; a second lane where a version 
   assert.equal(fork[0].width, 2);
 });
 
+test('history search combines names, times and type filters without forcing a hidden automatic version into the list', () => {
+  const versions = [
+    version({ commit: 'auto', kind: 'auto', name: '', at: 21 }),
+    version({ commit: 'named', kind: 'named', name: 'V２ 客户确认版', at: 20 }),
+    version({ commit: 'restore', kind: 'restore', at: 19 }),
+    version({ commit: 'saved', kind: 'saved', at: 18 }),
+  ];
+  const options = { types: new Set(HISTORY_VERSION_TYPES), namedOnly: false, search: '', textOf: (v: Version) => `${v.name} ${v.at}:30 ${historyVersionType(v)}` };
+  assert.deepEqual(filterHistoryVersions(versions, options), versions);
+  assert.deepEqual(filterHistoryVersions(versions, { ...options, search: ' v2  20:30 ' }).map((v) => v.commit), ['named'], 'case, full-width characters and multiple terms are normalized');
+  assert.deepEqual(filterHistoryVersions(versions, { ...options, types: new Set(['manual', 'restore']) }).map((v) => v.commit), ['named', 'restore', 'saved']);
+  assert.deepEqual(filterHistoryVersions(versions, { ...options, namedOnly: true }).map((v) => v.commit), ['named']);
+  assert.deepEqual(filterHistoryVersions(versions, { ...options, types: new Set() }), []);
+  assert.deepEqual(filterHistoryVersions(versions, { ...options, search: 'missing' }), []);
+  assert.equal(historyVersionType(version({ kind: 'before-restore' })), 'auto');
+  assert.equal(historyVersionType(version({ kind: 'parked' })), 'other');
+});
+
 test('a progress event is read only when it is one; a checkout says the folder moved', () => {
   assert.deepEqual(historyProgressOf({ type: 'history-progress', op: 'save', phase: 'store', done: 2, total: 5 }), { op: 'save', phase: 'store', done: 2, total: 5 });
   assert.equal(historyProgressOf({ type: 'history' }), null);
@@ -72,6 +92,8 @@ test('a progress event is read only when it is one; a checkout says the folder m
 test('a refusal is said in our own words', () => {
   assert.equal(historyErrorKey({ status: 409, code: 'nothing' }), 'versions.errorNothing');
   assert.equal(historyErrorKey({ status: 409, code: 'dirty' }), 'versions.errorDirty');
+  assert.equal(historyErrorKey({ status: 409, code: 'current' }), 'versions.errorDeleteCurrent');
+  assert.equal(historyErrorKey({ status: 409, code: 'deleted' }), 'versions.errorDeleted');
   assert.equal(historyErrorKey({ status: 501, code: null }), 'versions.errorUnavailable');
   assert.equal(historyErrorKey({ status: 500, code: null }), 'versions.errorGeneric');
 });

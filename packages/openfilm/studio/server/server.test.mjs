@@ -525,6 +525,74 @@ test('history: the person commits versions; checking one out makes none and tell
   assert.equal((await history('/restore', { commit })).status, 404, 'no restore that makes a version');
 });
 
+test('history previews play saved files and media on the film origin without changing the working project', async () => {
+  const { project } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'History preview') } })).json();
+  const history = (path = '', body) => api(`/api/projects/${project.id}/history${path}`, body ? { method: 'POST', body } : {});
+  const film = (w) => filmHtml({ stage: { w, h: 450 }, tracks: [{ clips: [{ id: 'title', src: 'title.html', at: 0, time: [0, 2] }] }] });
+  writeFileSync(join(project.path, 'film.html'), film(800));
+  writeFileSync(join(project.path, 'title.html'), '<!-- saved title --><img src="cover.png">');
+  writeFileSync(join(project.path, 'cover.png'), 'saved image bytes');
+  writeFileSync(join(project.path, '.film', 'settings.json'), '{"fps":24}');
+  const { commit: first } = await (await history('/save', { message: 'First' })).json();
+  writeFileSync(join(project.path, 'film.html'), film(1200));
+  writeFileSync(join(project.path, 'cover.png'), 'new image bytes');
+  const { commit: second } = await (await history('/save', { message: 'Second' })).json();
+  writeFileSync(join(project.path, 'title.html'), '<!-- unsaved title --><img src="cover.png">');
+  const before = await (await history()).json();
+  const previewPath = `/versions/${first}/preview`;
+  const [one, two] = await Promise.all([history(previewPath), history(previewPath)]);
+  assert.equal(one.status, 200);
+  const preview = await one.json();
+  assert.equal(preview.folder, (await two.json()).folder, 'concurrent requests share the complete snapshot');
+  assert.deepEqual(preview.doc.stage, { w: 800, h: 450 });
+  assert.deepEqual(preview.missing, []);
+  assert.equal(new URL(preview.folder).origin, studio.filmOrigin, 'film code runs apart from the editor');
+  assert.match(await (await fetch(`${preview.folder}title.html`)).text(), /saved title/);
+  assert.equal(await (await fetch(`${preview.folder}cover.png`)).text(), 'saved image bytes', 'same-name media comes from the selected version');
+  assert.equal((await fetch(`${preview.folder}%2efilm/settings.json`)).status, 404, 'snapshot internals stay private');
+  const newer = await (await history(`/versions/${second}/preview`)).json();
+  assert.notEqual(newer.folder, preview.folder);
+  assert.equal(await (await fetch(`${newer.folder}cover.png`)).text(), 'new image bytes');
+  assert.match(readFileSync(join(project.path, 'title.html'), 'utf8'), /unsaved title/);
+  const after = await (await history()).json();
+  assert.deepEqual(after, before, 'HEAD, changes and the version list are untouched');
+  assert.equal((await history('/versions/not-a-commit/preview')).status, 400);
+  assert.equal((await history(`/versions/${'0'.repeat(40)}/preview`)).status, 404);
+  assert.equal((await api(`/api/projects/${project.id}/history${previewPath}`, { key: null })).status, 401);
+});
+
+test('history deletion is selectable, authenticated, recoverable, and protects the version in use', async () => {
+  const { project } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'Delete history') } })).json();
+  const history = (path = '', body) => api(`/api/projects/${project.id}/history${path}`, body ? { method: 'POST', body } : {});
+  writeFileSync(join(project.path, 'film.html'), filmHtml({ stage: { w: 640, h: 360 }, tracks: [] }));
+  const { commit: first } = await (await history('/save', { message: 'First' })).json();
+  writeFileSync(join(project.path, 'film.html'), filmHtml({ stage: { w: 800, h: 450 }, tracks: [] }));
+  const { commit: second } = await (await history('/save', { message: 'Current' })).json();
+  const prepared = await (await history(`/versions/${first}/preview`)).json();
+  const before = await (await history()).json();
+  const protectedVersion = await history('/delete', { commits: [first, second] });
+  assert.equal(protectedVersion.status, 409);
+  assert.equal((await protectedVersion.json()).code, 'current');
+  assert.equal((await api(`/api/projects/${project.id}/history/delete`, { method: 'POST', key: null, body: { commits: [first] } })).status, 401);
+  const events = collect(`/api/projects/${project.id}/events`, (items) => items.some((event) => event.type === 'history'));
+  assert.equal((await history('/delete', { commits: [first] })).status, 200);
+  assert.ok((await events).some((event) => event.type === 'history' && !event.moved), 'deleting records does not reload the working film');
+  const after = await (await history()).json();
+  assert.deepEqual(after.status, before.status);
+  assert.deepEqual(after.versions.map((version) => version.commit), [second]);
+  assert.equal(after.deletedCount, 1);
+  const deleted = await (await history('?deleted=1')).json();
+  assert.deepEqual(deleted.versions.map((version) => version.commit), [first]);
+  assert.equal((await history(`/versions/${first}/preview`)).status, 409, 'prepared previews cannot bypass deletion');
+  assert.equal((await fetch(`${prepared.folder}film.html`)).status, 404, 'the prepared read-only snapshot was cleared');
+  assert.equal((await history('/recover', { commits: [first] })).status, 200);
+  const recovered = await (await history()).json();
+  assert.deepEqual(recovered.status, before.status);
+  assert.equal(recovered.deletedCount, 0);
+  assert.deepEqual(recovered.versions.map((version) => version.commit), [second, first]);
+  assert.equal((await history(`/versions/${first}/preview`)).status, 200);
+});
+
 test('a project whose folder is gone says so, never takes Studio down, and can be taken off the list', async () => {
   const { project } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'Gone') } })).json();
   rmSync(project.path, { recursive: true, force: true });

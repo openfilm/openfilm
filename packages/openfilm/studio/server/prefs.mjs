@@ -11,7 +11,7 @@
  *   keys          the keyboard shortcuts: the scheme in use and the custom ones (null: OpenFilm's). Kept as Studio's
  *                 page gives them, in shape only (keysOf); the page checks every action and key (ui/src/lib/keymap.ts).
  *   autoVersions  whether a project open in Studio saves versions of itself while it is worked on (auto-versions.mjs)
- *   showAutoVersions  whether Version history lists those versions among the person's
+ *   showAutoVersions  legacy visibility hint for older clients; the current history dialog uses its type filter
  */
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';

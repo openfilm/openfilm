@@ -14,7 +14,7 @@ export type MenuChoice = { value: string; label: string };
 export type MenuGroup = { label?: string; choices: MenuChoice[] };
 
 export function MenuSelect({
-  label, value, groups, onPick, onPreview, onRevert, disabled = false, className = '', size = 'sm', prefix,
+  label, value, groups, onPick, onPreview, onRevert, disabled = false, className = '', size = 'sm', prefix, menuWidth = 'trigger',
 }: {
   /** what it chooses, for screen readers (the field shows the choice) */
   label: string;
@@ -31,6 +31,8 @@ export function MenuSelect({
   size?: 'sm' | 'md';
   /** A word before the choice (Blend), as the inspector's other fields have their mark. */
   prefix?: string;
+  /** Long choices can size the open menu independently of a compact field. */
+  menuWidth?: 'trigger' | 'content';
 }) {
   const [open, setOpen] = React.useState(false);
   const [width, setWidth] = React.useState(0);
@@ -54,7 +56,7 @@ export function MenuSelect({
     if (!open && previewing.current) { previewing.current = false; onRevert?.(); }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* opened: as wide as the field, the chosen one in view and lit for the keys */
+  /* opened: at least as wide as the field, the chosen one in view and lit for the keys */
   React.useLayoutEffect(() => {
     if (!open) return;
     setWidth(triggerRef.current?.getBoundingClientRect().width ?? 0);
@@ -123,7 +125,12 @@ export function MenuSelect({
         onKeyDown={onKeyDown}
         onMouseLeave={() => show(undefined)}
         className="relative overflow-y-auto rounded-[8px] border border-[var(--border)] bg-[var(--panel)] p-1 shadow-[var(--shadow-lg)]"
-        style={{ width: Math.max(width, 160), maxHeight: 'min(320px, var(--popover-max-h, 320px))' }}
+        style={{
+          width: menuWidth === 'content' ? 'max-content' : Math.max(width, 160),
+          minWidth: Math.max(width, 160),
+          maxWidth: 'calc(100vw - 24px)',
+          maxHeight: 'min(320px, var(--popover-max-h, 320px))',
+        }}
       >
         {groups.map((group, g) => (
           <div key={group.label ?? g} role="group" aria-label={group.label}>

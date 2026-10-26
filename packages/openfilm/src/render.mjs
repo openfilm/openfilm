@@ -11,6 +11,7 @@ import { exactRate, ffmpegRate } from './rate.mjs';
 import { browserCopies, filmVideos } from './seekable.mjs';
 import { ffmpeg, filmSound, fmt, kill, locate, mix, open, outDir, parseTarget, shown, UsageError, write } from './shared.mjs';
 import { burned } from './burn.mjs';
+import { renderSelection, selectionClips, selectionFrame } from './render-ranges.mjs';
 
 const BT709 = ['-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv'];
 const TAG_709 = ['-bsf:v', 'h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0'];
@@ -77,6 +78,7 @@ export function outOfMemory(e, workers) {
 export async function render(args, opts = {}) {
   const started = Date.now();
   const { film: target, at, range } = parseTarget(args);
+  if (range && opts.ranges) throw new UsageError('choose a range or ranges, not both');
   if (at != null) throw new UsageError(`render takes a range (for example ${at}-${at + 2}), not one time; for one frame use openfilm look ${at}`);
   /* --subtitles: the project's film drawn around by a page that burns its subtitles in (the export's own, burn.mjs),
      rendered in its place, from the project's folder, named as the film's own render is. Studio burns only the
@@ -127,8 +129,11 @@ export async function render(args, opts = {}) {
   const fps = rate.fps;
   /* a page without a duration has no end: it is rendered by a range */
   const end = meta.duration ?? Infinity;
-  if (!range && meta.duration == null) { await probe.close(); await pool?.give(lent); throw new UsageError('this page has no duration, so it has no end: give a range to render, e.g. openfilm render 0-6'); }
-  const [from, to] = range ? [range[0], Math.min(range[1], end)] : [0, end];
+  if (!range && !opts.ranges && meta.duration == null) { await probe.close(); await pool?.give(lent); throw new UsageError('this page has no duration, so it has no end: give a range to render, e.g. openfilm render 0-6'); }
+  let selection = null;
+  try { if (opts.ranges) selection = renderSelection(opts.ranges, fps, end); }
+  catch (e) { await probe.close(); await pool?.give(lent); throw e; }
+  const [from, to] = selection ? [0, selection.duration] : range ? [range[0], Math.min(range[1], end)] : [0, end];
   const f0 = Math.round(from * fps);
   const f1 = Math.round(to * fps);
   const total = f1 - f0;
@@ -245,7 +250,8 @@ export async function render(args, opts = {}) {
       const stop = new AbortController();
       const quit = () => stop.abort();
       opts.signal?.addEventListener('abort', quit, { once: true });
-      const runs = parts.map((p) => encode(p, { fps, rate, samples, shutter, duration: end, first: f0, format: f, onFrame: progress, still: alpha ? 'png' : 'jpeg', opaque, signal: stop.signal }));
+      const runs = parts.map((p) => encode(p, { fps, rate, samples, shutter, duration: end, first: f0, format: f, onFrame: progress, still: alpha ? 'png' : 'jpeg', opaque, signal: stop.signal,
+        sourceFrame: selection ? (frame) => selectionFrame(selection.spans, frame) : (frame) => frame }));
       try {
         await unlessCancelled(Promise.all(runs));
       } catch (e) {
@@ -288,7 +294,8 @@ export async function render(args, opts = {}) {
     if (process.stderr.isTTY && !opts.onProgress) process.stderr.write('\n');
     for (const p of pages) problems.push(...p.problems);
 
-    const clips = opts.silent ? [] : await filmSound(probe, from);
+    const allClips = opts.silent ? [] : await filmSound(probe, selection ? 0 : from);
+    const clips = selection ? selectionClips(allClips, selection.spans) : allClips;
     if (opts.signal?.aborted) throw new Error('cancelled');
     const sound = clips.length ? join(work, `sound${extname(out) === '.mp4' ? '.m4a' : extname(out) === '.webm' ? '.webm' : '.wav'}`) : null;
     if (sound) await mix(clips, to - from, sound, format.audio);
@@ -318,6 +325,7 @@ export async function render(args, opts = {}) {
   return {
     out,
     encoder,
+    ...(selection ? { ranges: selection.spans.map((part) => [part.from, part.to]) } : {}),
     ...(clearFormat ? { clear } : {}),
     lines: [
       `→ ${shown(out)}`,
@@ -400,7 +408,7 @@ function alphaWatch() {
 }
 
 /** Frames [a, b) of one page into one file; sub-frames are averaged by ffmpeg (tmix) and every n-th kept. */
-async function encode({ film, a, b, file }, { fps, rate, samples, shutter, duration, first = a, format, onFrame, still, opaque, signal }) {
+async function encode({ film, a, b, file }, { fps, rate, samples, shutter, duration, first = a, format, onFrame, still, opaque, signal, sourceFrame = (frame) => frame }) {
   const blur = samples > 1 ? `tmix=frames=${samples},select='eq(mod(n\\,${samples})\\,${samples - 1})',setpts=N/((${ffmpegRate(rate)})*TB),` : '';
   const enc = ffmpeg(['-f', 'image2pipe', '-framerate', ffmpegRate(rate, samples), '-c:v', still === 'png' ? 'png' : 'mjpeg', '-i', '-',
     '-vf', blur + format.pix, '-r', ffmpegRate(rate), ...format.video, file], { input: true });
@@ -423,7 +431,7 @@ async function encode({ film, a, b, file }, { fps, rate, samples, shutter, durat
        two are taken and thrown away first, of the two frames before this part (of its first frame for the render's
        first part), so a frame is the same however many browsers share the render */
     for (const f of [a - 2, a - 1].map((n) => Math.max(first, n))) {
-      await film.seek(Math.min(Math.max(0, f / fps), duration - 1e-4));
+      await film.seek(Math.min(Math.max(0, sourceFrame(f) / fps), duration - 1e-4));
       await film.capture(still === 'png' ? { format: 'png' } : { format: 'jpeg', quality: 95 });
     }
     for (let f = a; f < b; f++) {
@@ -433,10 +441,10 @@ async function encode({ film, a, b, file }, { fps, rate, samples, shutter, durat
       }
       if (watch?.clear) {
         stop();
-        throw showsThrough(`by ${fmt(f / fps)}`);
+        throw showsThrough(`by ${fmt(sourceFrame(f) / fps)}`);
       }
       for (let k = 0; k < samples; k++) {
-        const t = (f + (samples > 1 ? (k / samples - 0.5) * shutter : 0)) / fps;
+        const t = (sourceFrame(f) + (samples > 1 ? (k / samples - 0.5) * shutter : 0)) / fps;
         await film.seek(Math.min(Math.max(0, t), duration - 1e-4));
         const frame = await film.capture(still === 'png' ? { format: 'png' } : { format: 'jpeg', quality: 95 });
         await Promise.race([write(enc.proc.stdin, frame), ended]);

@@ -36,6 +36,7 @@ import {
 } from './history-store.mjs';
 import { TOOL_DIR } from './projects.mjs';
 import { moveToTrash } from './trash.mjs';
+import { readDeletedVersions, writeDeletedVersions } from './history-deleted.mjs';
 
 export { HistoryError };
 
@@ -339,14 +340,19 @@ const ALL_VERSIONS = ['HEAD', '--branches', '--glob=refs/openfilm/kept/*', '--gl
 /**
  * The versions of the project, newest first, `limit` of them (more: there are older ones), each with its parents, so
  * they draw as a graph.
- * @param {string} root @param {{ limit?: number } & Options} [options] @returns {Promise<{ versions: Version[], more: boolean }>}
+ * @param {string} root @param {{ limit?: number, deleted?: boolean, includeDeletedCount?: boolean } & Options} [options] @returns {Promise<{ versions: Version[], more: boolean, deletedCount?: number }>}
  */
-export function log(root, { limit = 50, onProgress } = {}) {
+export function log(root, { limit = 50, deleted = false, includeDeletedCount = false, onProgress } = {}) {
   return queued(root, async () => {
     const gitDir = historyDir(root);
-    if (!existsSync(join(gitDir, 'HEAD')) || !ownHistory(gitDir)) return { versions: [], more: false };
+    if (!existsSync(join(gitDir, 'HEAD')) || !ownHistory(gitDir)) return { versions: [], more: false, ...(includeDeletedCount ? { deletedCount: 0 } : {}) };
     await ready(root, throttled(onProgress));
-    if (!(await headOf(root))) return { versions: [], more: false };
+    const head = await headOf(root);
+    if (!head) return { versions: [], more: false, ...(includeDeletedCount ? { deletedCount: 0 } : {}) };
+    const removed = await readDeletedVersions(gitDir);
+    removed.delete(head);
+    const extra = includeDeletedCount ? { deletedCount: removed.size } : {};
+    if (deleted && !removed.size) return { versions: [], more: false, ...extra };
     /** @type {Map<string, string>} */
     const names = new Map();
     const refs = await git(root, ['for-each-ref', '--sort=creatordate', '--format=%(objectname)%1f%(*objectname)%1f%(refname:strip=2)', 'refs/tags']);
@@ -355,12 +361,17 @@ export function log(root, { limit = 50, onProgress } = {}) {
       const sha = peeled || tag;
       if (sha && name) names.set(sha, decodeName(name));
     }
-    const out = await git(root, ['log', '--date-order', `--max-count=${limit + 1}`, '--format=%H%x1f%P%x1f%ct%x1f%s%x1f%b%x1e', ...ALL_VERSIONS, '--']);
+    const format = '--format=%H%x1f%P%x1f%ct%x1f%s%x1f%b%x1e';
+    const out = deleted
+      ? await git(root, ['log', '--no-walk=sorted', format, '--stdin', '--'], { input: [...removed.keys()].join('\n') + '\n' })
+      : await git(root, ['log', '--date-order', `--max-count=${limit + removed.size + 1}`, format, ...ALL_VERSIONS, '--']);
     /** @type {Version[]} */
     const versions = [];
     for (const record of out.split('\x1e')) {
       const [commit, parents = '', at, subject = '', body = ''] = record.replace(/^\n/, '').split('\x1f');
       if (!commit) continue;
+      if (!deleted && removed.has(commit)) continue;
+      if (deleted && !removed.has(commit)) continue;
       const said = /^Openfilm-Version: (\S+)$/m.exec(body)?.[1] ?? '';
       const parked = /^parked: (.*)$/.exec(subject);
       const kind = /** @type {Kind} */ (KINDS.has(said) ? said : parked ? 'parked' : 'named');
@@ -370,7 +381,22 @@ export function log(root, { limit = 50, onProgress } = {}) {
         restored: /^Openfilm-Restored: ([0-9a-f]+)$/m.exec(body)?.[1] ?? null,
       });
     }
-    return { versions: versions.slice(0, limit), more: versions.length > limit };
+    /** @param {string} id @returns {string[]} */
+    const nearest = (id) => {
+      const pending = [id], seen = new Set();
+      /** @type {string[]} */
+      const found = [];
+      while (pending.length) {
+        const next = pending.pop();
+        if (!next || seen.has(next)) continue;
+        seen.add(next);
+        const entry = removed.get(next);
+        if (entry) pending.push(...[...entry.parents].reverse()); else found.push(next);
+      }
+      return found;
+    };
+    const visible = deleted ? versions : versions.map((version) => ({ ...version, parents: [...new Set(version.parents.flatMap((parent) => nearest(parent)))] }));
+    return { versions: visible.slice(0, limit), more: visible.length > limit, ...extra };
   });
 }
 
@@ -409,7 +435,49 @@ async function resolveCommit(/** @type {string} */ root, /** @type {string} */ r
   if (!/^[0-9a-f]{7,64}$/.test(String(rev))) throw new HistoryError('which version?', 400, 'none');
   const full = (await git(root, ['rev-parse', '--verify', '--quiet', `${rev}^{commit}`]).catch(() => '')).trim();
   if (!full) throw new HistoryError('no such version', 404, 'none');
+  if ((await readDeletedVersions(historyDir(root))).has(full) && full !== await headOf(root)) throw new HistoryError('this version was deleted; recover it first', 409, 'deleted');
   return full;
+}
+
+/** Resolve a bounded selection in one Git call, before changing any records.
+ * @param {string} root @param {unknown} commits @returns {Promise<Map<string, string[]>>}
+ */
+async function selectedCommits(root, commits) {
+  if (!Array.isArray(commits) || !commits.length || commits.length > 1000 || !commits.every((id) => typeof id === 'string' && /^[0-9a-f]{7,64}$/.test(id))) throw new HistoryError('select 1 to 1000 versions', 400, 'selection');
+  const ids = [...new Set(/** @type {string[]} */ (commits))];
+  const out = await git(root, ['log', '--no-walk=unsorted', '--format=%H%x1f%P', '--stdin', '--'], { input: ids.join('\n') + '\n' }).catch(() => { throw new HistoryError('no such version', 404, 'none'); });
+  const found = new Map(out.trim().split('\n').filter(Boolean).map((line) => { const [id, parents = ''] = line.split('\x1f'); return [id, parents.split(' ').filter(Boolean)]; }));
+  if (ids.some((id) => ![...found.keys()].some((full) => full.startsWith(id)))) throw new HistoryError('no such version', 404, 'none');
+  return found;
+}
+
+/** Move selected records out of the active history. Snapshots stay recoverable; no working file or Git ref moves.
+ * @param {string} root @param {unknown} commits
+ */
+export function deleteVersions(root, commits) {
+  return queued(root, async () => {
+    await ready(root);
+    const found = await selectedCommits(root, commits);
+    if (found.has(await headOf(root) ?? '')) throw new HistoryError('the version currently in use cannot be deleted', 409, 'current');
+    const removed = await readDeletedVersions(historyDir(root));
+    for (const [id, parents] of found) if (!removed.has(id)) removed.set(id, { at: Date.now(), parents });
+    await writeDeletedVersions(historyDir(root), removed);
+    return { commits: [...found.keys()] };
+  });
+}
+
+/** Recover deleted records, without checking them out or changing any files.
+ * @param {string} root @param {unknown} commits
+ */
+export function recoverVersions(root, commits) {
+  return queued(root, async () => {
+    await ready(root);
+    const found = await selectedCommits(root, commits);
+    const removed = await readDeletedVersions(historyDir(root));
+    for (const id of found.keys()) removed.delete(id);
+    await writeDeletedVersions(historyDir(root), removed);
+    return { commits: [...found.keys()] };
+  });
 }
 
 /** The files a version holds, as they are in the folder now, kept as a tree (`head`: the version they are compared with). */

@@ -301,14 +301,14 @@ function PlaybackGroup() {
 
 /**
  * Versions saved on their own (studio/server/auto-versions.mjs): whether open projects save them while they are worked
- * on, and whether Version history lists them. Both off unless the person turns them on.
+ * on. Showing these versions is controlled by the type filter in Version history.
  */
 function VersionsGroup() {
   const t = useT();
   const [prefs, setPrefs] = React.useState<StudioPrefs | null>(null);
   React.useEffect(() => { void api.prefs().then(setPrefs).catch(() => {}); }, []);
   if (!prefs) return null;
-  const change = (patch: { autoVersions?: boolean; showAutoVersions?: boolean }) => {
+  const change = (patch: { autoVersions?: boolean }) => {
     setPrefs({ ...prefs, ...patch });
     void api.setPrefs(patch).then(setPrefs).catch(() => setPrefs(prefs));
   };
@@ -318,11 +318,6 @@ function VersionsGroup() {
         title={t('settings.versions.auto')}
         description={t('settings.versions.autoHint')}
         control={<SettingsSwitch checked={prefs.autoVersions === true} onChange={(on) => change({ autoVersions: on })} label={t('settings.versions.auto')} />}
-      />
-      <SettingsItem
-        title={t('settings.versions.show')}
-        description={t('settings.versions.showHint')}
-        control={<SettingsSwitch checked={prefs.showAutoVersions === true} onChange={(on) => change({ showAutoVersions: on })} label={t('settings.versions.show')} />}
       />
     </SettingsGroup>
   );

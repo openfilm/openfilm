@@ -1,9 +1,8 @@
 /**
  * The export center: the project menu's "Export".
  *
- * Organized by where the film is going, not by format: a platform, an editor, a GIF, the sound, stills. Each
- * destination has its own few settings and a one-line summary of what comes out, and one primary button says what
- * happens.
+ * Video files share one page: Default and platform presets fill the same editable encoding settings. Other
+ * destinations cover editing projects, transparent assets, GIFs, sound, stills and project files.
  *
  * Everything renders on this machine, in Studio's server (see lib/export-jobs): the dialog closes as soon as the
  * exports are queued, and the export tray follows them.
@@ -11,7 +10,7 @@
  * What was chosen last time for each destination is kept in this browser (localStorage) and comes back next time.
  */
 import {
-  AlertTriangle, AudioLines, Captions, Check, ChevronDown, Clapperboard, Film, FolderArchive, FolderOpen, Images, Layers, Loader2, MonitorPlay,
+  AlertTriangle, AudioLines, Captions, ChevronDown, Clapperboard, Film, FolderArchive, FolderOpen, Images, Layers, Loader2,
   Sparkles, X,
 } from 'lucide-react';
 import React from 'react';
@@ -22,21 +21,20 @@ import { studioHost } from '@/lib/host';
 import { MenuSelect } from '@/components/MenuSelect';
 import { CustomFrame } from '@/components/FramePicker';
 import { FRAME_RATES } from '@/lib/timecode';
+import { applyRangeDelivery, readExportRanges, requestDurationMs, type ExportRangeDraft, type RangeDelivery } from '@/lib/export-range';
 import { api } from '@/api';
+import { DEFAULT_VIDEO_EXPORT, legacySocialVideo, patchVideoExport, readVideoExport, videoExportPreset, type VideoExportSettings } from '@/lib/video-export-preset';
 import {
   CODEC_LABEL,
   EXPORT_ALPHA_CODECS,
   exportPresetsFor,
-  exportDimsForShortEdge,
   exportEstimateBytes,
   exportFilmPixels,
   exportFramedDims,
   exportGifDims,
   exportGifEstimateBytes,
   exportPreset,
-  presetFps,
   rangeMarks,
-  type ExportPresetGroup,
   type ExportQuality,
   type ExportVideoCodec,
 } from '@/lib/export-spec';
@@ -55,17 +53,18 @@ import {
   type ProjectSizes,
 } from '@/lib/export-jobs';
 import { FILM_FRAME_IDS, filmFrameBox, filmFrameRatio, type FilmFrameFill, type FilmFrameId } from '@/lib/film-frame';
-import { cleanMoments, loadSharedMoments, momentAt, MOMENTS_MAX, momentSeconds, saveMoments } from '@/lib/export-moments';
+import { cleanMoments, loadSharedMoments, MOMENTS_MAX, momentSeconds, saveMoments } from '@/lib/export-moments';
 import { MomentPicker } from './MomentPicker';
+import { RangePicker } from './RangePicker';
+import { LARGE_DIALOG, LARGE_DIALOG_BACKDROP } from '../dialog-chrome';
 
-type Dest = 'social' | 'video' | 'alpha' | 'nle' | 'gif' | 'audio' | 'subtitles' | 'images' | 'project';
+type Dest = 'video' | 'alpha' | 'nle' | 'gif' | 'audio' | 'subtitles' | 'images' | 'project';
 type ImageOutput = 'files' | 'zip' | 'pdf' | 'pptx';
 const IMAGE_OUTPUTS: readonly ImageOutput[] = ['files', 'zip', 'pdf', 'pptx'];
 
 const DESTS: readonly { id: Dest; icon: React.ReactNode }[] = [
   { id: 'video', icon: <Film size={16} /> },
   { id: 'nle', icon: <Clapperboard size={16} /> },
-  { id: 'social', icon: <MonitorPlay size={16} /> },
   { id: 'alpha', icon: <Layers size={16} /> },
   { id: 'gif', icon: <Sparkles size={16} /> },
   { id: 'audio', icon: <AudioLines size={16} /> },
@@ -94,21 +93,7 @@ const WHOLE_FILM = '__film__';
 
 interface Settings {
   dest: Dest;
-  presets: string[];
-  socialQuality: ExportQuality;
-  /** Burned-in subtitles on platform exports: each platform's habit, all, or none. */
-  socialSubs: 'auto' | 'on' | 'off';
-  video: {
-    codec: ExportVideoCodec;
-    shortEdge: number;
-    fps: number | 'source';
-    quality: ExportQuality;
-    frame: FrameChoice;
-    fill: FilmFrameFill;
-    audio: boolean;
-    burn: boolean;
-    sidecar: 'none' | 'srt' | 'vtt';
-  };
+  video: VideoExportSettings;
   gif: { width: number; fps: number; frame: FrameChoice; fill: FilmFrameFill; burn: boolean };
   /** `source`: a block's clip id, or the whole film. */
   alpha: { codec: ExportVideoCodec; source: string; shortEdge: number; scale: number; fps: number; audio: boolean };
@@ -129,12 +114,7 @@ interface Settings {
 
 const DEFAULTS: Settings = {
   dest: 'video',
-  presets: ['youtube'],
-  socialQuality: 'high',
-  socialSubs: 'auto',
-  video: {
-    codec: 'h264', shortEdge: 1080, fps: 'source', quality: 'high', frame: 'current', fill: 'contain', audio: true, burn: true, sidecar: 'none',
-  },
+  video: { ...DEFAULT_VIDEO_EXPORT },
   gif: { width: 640, fps: 15, frame: 'current', fill: 'contain', burn: true },
   alpha: { codec: 'prores4444', source: WHOLE_FILM, shortEdge: 1080, scale: 1, fps: 30, audio: true },
   audio: { format: 'wav', mix: true, stems: false },
@@ -147,12 +127,14 @@ const DEFAULTS: Settings = {
 
 const STORE_KEY = 'openfilm.exportCenter.v1';
 
-/** What was chosen last time; the first time, the defaults (哔哩哔哩 rather than YouTube in Chinese). */
-function loadSettings(language: string): Settings {
-  const first = language === 'zh-CN' ? { ...DEFAULTS, presets: ['bilibili'] } : DEFAULTS;
+/** Retain previous settings, including projects last exported from the former social-platform page. */
+function loadSettings(language: string, projectFps: number): Settings {
+  const first = DEFAULTS;
   try {
     const raw = JSON.parse(localStorage.getItem(STORE_KEY) ?? 'null') as (Omit<Partial<Settings>, 'dest'> & {
-      dest?: Dest | 'slides'; slides?: Omit<Settings['images'], 'as' | 'format'> & { format?: 'pdf' | 'pptx' };
+      dest?: Dest | 'social' | 'slides';
+      presets?: string[]; socialQuality?: ExportQuality; socialSubs?: 'auto' | 'on' | 'off';
+      slides?: Omit<Settings['images'], 'as' | 'format'> & { format?: 'pdf' | 'pptx' };
     }) | null;
     if (!raw || typeof raw !== 'object') return first;
     const nle = { ...DEFAULTS.nle, ...raw.nle };
@@ -163,13 +145,20 @@ function loadSettings(language: string): Settings {
       const { format, ...framing } = raw.slides ?? {};
       Object.assign(images, framing, { as: format === 'pdf' ? 'pdf' : 'pptx' });
     }
+    const offered = exportPresetsFor(language);
+    const previousPlatform = Array.isArray(raw.presets)
+      ? raw.presets.find((id) => offered.some((p) => p.id === id))
+      : language === 'zh-CN' ? 'bilibili' : 'youtube';
+    const video = raw.dest === 'social'
+      ? legacySocialVideo(previousPlatform ?? 'default', raw.socialQuality, raw.socialSubs, projectFps)
+      : readVideoExport(raw.video);
+    if (exportPreset(video.preset) && !offered.some((p) => p.id === video.preset)) video.preset = 'custom';
     return {
       ...DEFAULTS,
       ...raw,
-      dest: raw.dest === 'slides' ? 'images' : raw.dest ?? DEFAULTS.dest,
-      presets: Array.isArray(raw.presets) ? raw.presets.filter((id) => exportPreset(id)) : DEFAULTS.presets,
+      dest: raw.dest === 'slides' ? 'images' : raw.dest === 'social' ? 'video' : raw.dest ?? DEFAULTS.dest,
       /* sound starts on each time: switched off for one export and kept, every later one came out silent unnoticed */
-      video: { ...DEFAULTS.video, ...raw.video, audio: true },
+      video,
       gif: { ...DEFAULTS.gif, ...raw.gif },
       alpha: { ...DEFAULTS.alpha, ...raw.alpha, audio: true },
       audio: { ...DEFAULTS.audio, ...raw.audio },
@@ -197,7 +186,6 @@ const GIF_WIDTHS = [320, 480, 640, 800, 1080];
 const GIF_FPS = [10, 12, 15, 20, 24];
 const VIDEO_CODECS: ExportVideoCodec[] = ['h264', 'hevc', 'prores422hq', 'prores4444', 'hevc_alpha', 'vp9', 'png'];
 const ALPHA_SCALES = [0.5, 1, 2];
-const PRESET_GROUPS: ExportPresetGroup[] = ['landscape', 'vertical', 'feed'];
 /** The rates editors take; a source at another NTSC rate (23.976, 59.94) comes as the "source" choice. */
 const NLE_FPS = [23.976, 24, 25, 29.97, 30, 50, 59.94, 60];
 /** How a draft and an XML write their pages (exports.mjs), the default first. */
@@ -256,7 +244,7 @@ export interface ExportCenterProps {
 }
 
 /** What draws or plays the film, and so needs every file it uses. */
-const RENDERS: ReadonlySet<Dest> = new Set(['social', 'video', 'alpha', 'gif', 'audio', 'images']);
+const RENDERS: ReadonlySet<Dest> = new Set(['video', 'alpha', 'gif', 'audio', 'images']);
 
 export function ExportCenter(props: ExportCenterProps) {
   const { open, onClose } = props;
@@ -269,7 +257,9 @@ export function ExportCenter(props: ExportCenterProps) {
   const [draftApps, setDraftApps] = React.useState<{ jianying: boolean; capcut: boolean }>({ jianying: false, capcut: false });
   const [s, setS] = React.useState<Settings>(DEFAULTS);
   const [hydrated, setHydrated] = React.useState(false);
-  const [range, setRange] = React.useState<{ on: boolean; from: number; to: number }>({ on: false, from: 0, to: 0 });
+  const [range, setRange] = React.useState(false);
+  const [rangeParts, setRangeParts] = React.useState<ExportRangeDraft[]>([]);
+  const [rangeDelivery, setRangeDelivery] = React.useState<RangeDelivery>('separate');
   const [working, setWorking] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<{ ok: boolean; text: string } | null>(null);
   const [defaultFolder, setDefaultFolder] = React.useState<string>('');
@@ -288,7 +278,7 @@ export function ExportCenter(props: ExportCenterProps) {
 
   React.useEffect(() => {
     if (!open) return;
-    const loaded = loadSettings(language);
+    const loaded = loadSettings(language, props.projectFps ?? 30);
     setS(props.focusClipId
       ? { ...loaded, dest: 'alpha', alpha: { ...loaded.alpha, source: props.focusClipId } }
       : loaded);
@@ -299,7 +289,7 @@ export function ExportCenter(props: ExportCenterProps) {
     /* a name is this export's, not a setting: each visit starts from the project's own */
     setExportName(props.title);
     setNameTyped(false);
-    setRange((r) => ({ ...r, on: false }));
+    setRange(false);
     void listExports(props.projectId).then((r) => { setCan(r.can); setDraftApps({ jianying: Boolean(r.drafts?.jianying), capcut: Boolean(r.drafts?.capcut) }); setDefaultFolder(r.folder); setCaptionCount(r.subtitles ?? 0); setProjectSizes(r.project ?? null); }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -310,7 +300,7 @@ export function ExportCenter(props: ExportCenterProps) {
 
   React.useEffect(() => {
     if (!open) return undefined;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !working) onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented && !working) onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose, working]);
@@ -344,31 +334,27 @@ export function ExportCenter(props: ExportCenterProps) {
     return () => { live = false; };
   }, [open, footageSrc, props.projectId]);
 
-  /* where a part can start and end: the picture clips' edges, each named by its clips (rangeMarks) */
+  /* Clip edges remain shortcuts; the time fields can name any point in the film. */
   const boundaries = React.useMemo(() => rangeMarks(film?.scenes ?? [], totalMs), [film, totalMs]);
   React.useEffect(() => {
-    setRange((r) => ({ ...r, from: 0, to: totalMs }));
-  }, [totalMs]);
+    setRangeParts([{ id: 'initial', from: '0', to: String(Math.min(3000, totalMs) / 1000) }]);
+  }, [totalMs, props.projectId]);
 
-  const exportRange = range.on && range.to > range.from && (range.from > 0 || range.to < totalMs)
-    ? { fromMs: range.from, toMs: range.to }
-    : undefined;
-  const rangeMs = exportRange ? exportRange.toMs - exportRange.fromMs : totalMs;
-  const rangeSec: [number, number] | undefined = exportRange ? [exportRange.fromMs / 1000, exportRange.toMs / 1000] : undefined;
+  const projectFps = props.projectFps ?? 30;
+  const parsedRanges = readExportRanges(rangeParts, totalMs, projectFps);
+  const rangeMs = range && parsedRanges ? parsedRanges.reduce((n, [from, to]) => n + (to - from) * 1000, 0) : totalMs;
 
   const resolveFrame = (f: FrameChoice): FilmFrameId => (f === 'current' ? props.frame : f);
   /* 'source' is the project's own rate */
-  const projectFps = props.projectFps ?? 30;
   const fpsFor = (f: number | 'source'): number => (f === 'source' ? projectFps : f);
 
   /* All four deliveries share the same picks. Read the old separate lists on first use, without losing a selection. */
   const [moments, setMoments] = React.useState<number[]>([]);
   React.useEffect(() => {
     if (!open || !(totalMs > 0)) return;
-    const playhead = props.playheadMs != null && props.playheadMs > 0 && props.playheadMs < totalMs ? props.playheadMs : totalMs / 2;
-    const output = loadSettings(language).images.as;
+    const output = loadSettings(language, projectFps).images.as;
     const previous = output === 'pdf' || output === 'pptx' ? 'slides' : 'images';
-    const list = cleanMoments(loadSharedMoments(props.projectId, previous) ?? [momentAt(playhead, totalMs, projectFps)], totalMs, projectFps, MOMENTS_MAX.frames);
+    const list = cleanMoments(loadSharedMoments(props.projectId, previous) ?? [], totalMs, projectFps, MOMENTS_MAX.frames);
     setMoments(list);
     saveMoments(props.projectId, 'frames', list);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -379,7 +365,7 @@ export function ExportCenter(props: ExportCenterProps) {
   };
 
   const patch = <K extends keyof Settings>(key: K, value: Partial<Settings[K]> | Settings[K]) => {
-    setS((prev) => ({
+    setS((prev) => key === 'video' ? { ...prev, video: patchVideoExport(prev.video, value as Partial<VideoExportSettings>) } : ({
       ...prev,
       [key]: typeof value === 'object' && !Array.isArray(value) && value !== null
         ? { ...(prev[key] as object), ...(value as object) }
@@ -390,8 +376,12 @@ export function ExportCenter(props: ExportCenterProps) {
   const dest: Dest = DESTS.some((d) => d.id === s.dest) ? s.dest : 'video';
   const imageDocument = s.images.as === 'pdf' || s.images.as === 'pptx';
   const alphaBlock = blocks.find((b) => b.clipId === s.alpha.source);
+  const canRange = totalMs > 0 && (dest === 'video' || dest === 'gif' || dest === 'audio' || dest === 'subtitles' || (dest === 'alpha' && !alphaBlock));
+  const rangeInvalid = canRange && range && !parsedRanges;
+  const rangeError = rangeParts.length ? t('exportCenter.rangeInvalid').replace('{end}', String(totalMs / 1000)) : t('exportCenter.rangePickOne');
   /* how long what comes out is: one element alone is its own length, not the film's */
   const outMs = dest === 'alpha' && alphaBlock ? alphaBlock.durMs : rangeMs;
+  const selectedVideoPreset = exportPreset(s.video.preset);
   const videoCodec: ExportVideoCodec = codecAvailable(s.video.codec, can) && VIDEO_CODECS.includes(s.video.codec) ? s.video.codec : 'h264';
   const alphaCodec: ExportVideoCodec = EXPORT_ALPHA_CODECS.includes(s.alpha.codec) && codecAvailable(s.alpha.codec, can) ? s.alpha.codec : 'prores4444';
   const audioFormat = s.audio.format === 'mp3' && can && !can.mp3 ? 'wav' : s.audio.format;
@@ -419,36 +409,30 @@ export function ExportCenter(props: ExportCenterProps) {
   );
 
   /* ── the exports this screen asks for ── */
-  const requests = React.useMemo((): ExportRequest[] => {
-    const ranged = rangeSec ? { range: rangeSec } : {};
+  const baseRequests = React.useMemo((): ExportRequest[] => {
     /* subtitles drawn into the picture: only a film that has some */
     const burn = (on: boolean) => (captions > 0 && on ? { burnSubtitles: true } : {});
     switch (dest) {
-      case 'social':
-        return s.presets.map((id) => presets.find((p) => p.id === id) ?? null).filter((p) => p !== null).map((p) => ({
-          kind: 'video', codec: 'h264', frame: p.frame, fill: 'contain', shortEdge: p.shortEdge, fps: presetFps(p, projectFps),
-          quality: s.socialQuality, audio: true, preset: p.name, label: p.name,
-          ...burn(s.socialSubs === 'auto' ? p.burnSubtitles : s.socialSubs === 'on'), ...ranged,
-        }));
       case 'video': {
         const v = s.video;
         return [{
           kind: 'video', codec: videoCodec, frame: resolveFrame(v.frame), fill: v.fill, shortEdge: v.shortEdge, fps: fpsFor(v.fps),
-          quality: v.quality, audio: v.audio, label: codecName(videoCodec), ...burn(v.burn),
-          ...(captions > 0 && v.sidecar !== 'none' && videoCodec !== 'png' ? { sidecar: v.sidecar } : {}), ...ranged,
+          quality: v.quality, audio: v.audio, label: selectedVideoPreset?.name ?? codecName(videoCodec), ...burn(v.burn),
+          ...(selectedVideoPreset ? { preset: selectedVideoPreset.name } : {}),
+          ...(captions > 0 && v.sidecar !== 'none' && videoCodec !== 'png' ? { sidecar: v.sidecar } : {}),
         }];
       }
       case 'alpha': {
         const a = s.alpha;
         return alphaBlock
           ? [{ kind: 'video', codec: alphaCodec, clip: alphaBlock.clipId, scale: a.scale, fps: a.fps, quality: 'high', audio: a.audio, label: alphaBlock.label }]
-          : [{ kind: 'video', codec: alphaCodec, frame: 'native', shortEdge: a.shortEdge, fps: a.fps, quality: 'high', audio: a.audio, label: codecName(alphaCodec), ...ranged }];
+          : [{ kind: 'video', codec: alphaCodec, frame: 'native', shortEdge: a.shortEdge, fps: a.fps, quality: 'high', audio: a.audio, label: codecName(alphaCodec) }];
       }
       case 'gif':
-        return [{ kind: 'gif', frame: resolveFrame(s.gif.frame), fill: s.gif.fill, width: s.gif.width, fps: s.gif.fps, label: 'GIF', ...burn(s.gif.burn), ...ranged }];
+        return [{ kind: 'gif', frame: resolveFrame(s.gif.frame), fill: s.gif.fill, width: s.gif.width, fps: s.gif.fps, label: 'GIF', ...burn(s.gif.burn) }];
       case 'audio': {
         const stems = s.audio.stems;
-        return [{ kind: 'audio', format: audioFormat, stems, mix: stems ? s.audio.mix : true, label: t(stems ? 'exportCenter.audioStems' : 'exportCenter.audioMix'), ...ranged }];
+        return [{ kind: 'audio', format: audioFormat, stems, mix: stems ? s.audio.mix : true, label: t(stems ? 'exportCenter.audioStems' : 'exportCenter.audioMix') }];
       }
       case 'nle':
         return [{
@@ -456,7 +440,7 @@ export function ExportCenter(props: ExportCenterProps) {
           subtitles: s.nle.subtitles, label: nleApp === 'draft' ? tApp('exportCenter.nleDraftTitle') : `${NLE_APPS[nleApp].name} XML`,
         }];
       case 'subtitles':
-        return [{ kind: 'subtitles', format: s.subtitles.format, label: s.subtitles.format === 'txt' ? t('exportCenter.transcript') : s.subtitles.format.toUpperCase(), ...ranged }];
+        return [{ kind: 'subtitles', format: s.subtitles.format, label: s.subtitles.format === 'txt' ? t('exportCenter.transcript') : s.subtitles.format.toUpperCase() }];
       case 'images': {
         const at = momentSeconds(moments);
         if (!at.length) return [];
@@ -472,7 +456,11 @@ export function ExportCenter(props: ExportCenterProps) {
         }];
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dest, s, can, presets, nleApp, nleAlpha, draftApp, rangeSec?.[0], rangeSec?.[1], props.frame, blocks, nleSourceFps, captions, projectParts, moments]);
+  }, [dest, s, can, nleApp, nleAlpha, draftApp, props.frame, blocks, nleSourceFps, captions, projectParts, moments]);
+
+  const requests = React.useMemo(() => canRange && range && parsedRanges
+    ? applyRangeDelivery(baseRequests, parsedRanges, rangeDelivery) : baseRequests,
+  [baseRequests, canRange, range, parsedRanges, rangeDelivery]);
 
   /* a range, not a size: what is in the picture decides a video's or a GIF's size (export-spec.ts); sound is exact */
   const estBytes = React.useMemo(() => requests.reduce<[number, number]>(([low, high], r) => {
@@ -483,20 +471,20 @@ export function ExportCenter(props: ExportCenterProps) {
       const frame = r.frame ?? 'native', fill = r.fill ?? 'contain';
       const size = exportFramedDims(stage, frame, fill, r.shortEdge ?? Math.min(stage.w, stage.h));
       return add(exportEstimateBytes({
-        codec: r.codec, size, filmPixels: exportFilmPixels(stage, frame, fill, size), fps: r.fps, quality: r.quality, durationMs: rangeMs,
+        codec: r.codec, size, filmPixels: exportFilmPixels(stage, frame, fill, size), fps: r.fps, quality: r.quality, durationMs: requestDurationMs(r, totalMs),
         audio: r.audio && r.codec !== 'png' && !knownSilent,
       }));
     }
     if (r.kind === 'gif') {
       const frame = r.frame ?? 'native', fill = r.fill ?? 'contain';
       const size = exportGifDims(filmFrameBox(stage, frame, fill), r.width);
-      return add(exportGifEstimateBytes({ size, filmPixels: exportFilmPixels(stage, frame, fill, size), fps: r.fps, durationMs: rangeMs }));
+      return add(exportGifEstimateBytes({ size, filmPixels: exportFilmPixels(stage, frame, fill, size), fps: r.fps, durationMs: requestDurationMs(r, totalMs) }));
     }
     if (r.kind === 'audio') {
       /* 48 kHz 16-bit stereo; AAC and MP3 at 256k (exports.mjs SOUND_CODECS) */
       const per = r.format === 'wav' ? 192_000 : 32_000;
       const files = (r.mix ? 1 : 0) + (r.stems ? soundKinds.size : 0);
-      const bytes = per * (rangeMs / 1000) * Math.max(1, files);
+      const bytes = per * (requestDurationMs(r, totalMs) / 1000) * Math.max(1, files);
       return add([bytes, bytes]);
     }
     if (r.kind === 'project' && projectSizes) {
@@ -504,7 +492,7 @@ export function ExportCenter(props: ExportCenterProps) {
       return add([bytes, bytes]);
     }
     return [low, high];
-  }, [0, 0]), [requests, stage, rangeMs, soundKinds, knownSilent, projectSizes]);
+  }, [0, 0]), [requests, stage, totalMs, soundKinds, knownSilent, projectSizes]);
   /* "about 0.8 MB–8 MB"; one size when both ends read the same */
   const estText = estBytes[1] > 0 ? [...new Set(estBytes.map((b) => formatBytes(b)))].join('–') : '';
 
@@ -526,7 +514,7 @@ export function ExportCenter(props: ExportCenterProps) {
   const emptyReason = ((): string | null => {
     if (missingReason) return missingReason;
     if (!totalMs && dest !== 'project') return t('exportCenter.emptyFilm');
-    if (dest === 'social' && requests.length === 0) return t('exportCenter.pickPreset');
+    if (rangeInvalid) return rangeError;
     if (dest === 'images' && moments.length === 0) return t('exportCenter.pickMoments');
     if (dest === 'images' && imageDocument && moments.length > MOMENTS_MAX.slides) return t('exportCenter.imagePageLimit').replace('{n}', String(MOMENTS_MAX.slides));
     if (dest === 'subtitles' && captionCount != null && captions === 0) return t('exportCenter.noCaptions');
@@ -536,7 +524,7 @@ export function ExportCenter(props: ExportCenterProps) {
 
   /* ── doing it ── */
   const queue = async (jobs: ExportRequest[]) => {
-    if (working) return;
+    if (working || rangeInvalid) return;
     setResult(null);
     if (!folder) {
       setResult({ ok: false, text: t('exportCenter.noFolder') });
@@ -547,7 +535,7 @@ export function ExportCenter(props: ExportCenterProps) {
       /* the name typed here, unless there is none or its field is hidden (a draft is named by its app): every way out
          of this screen comes through here */
       const typed = nameTyped && !toDrafts ? exportName.trim() : '';
-      const named = typed ? jobs.map((job) => ({ ...job, name: typed })) : jobs;
+      const named = typed ? jobs.map((job, index) => ({ ...job, name: typed + (canRange && range && rangeDelivery === 'separate' && (parsedRanges?.length ?? 0) > 1 ? ` - ${String(index + 1).padStart(2, '0')}` : '') })) : jobs;
       const queued = await startExports(props.projectId, named, s.folder || undefined);
       props.onQueued?.(queued);
       onClose();
@@ -593,14 +581,14 @@ export function ExportCenter(props: ExportCenterProps) {
     <div
       /* a plain dim, no backdrop blur: a blur over the whole window is drawn again on every frame of a wheel scroll in
          the dialog, and the window flickered on macOS */
-      className="fixed inset-0 z-[130] flex items-center justify-center bg-black/50 p-3 sm:p-5 lg:p-6"
+      className={LARGE_DIALOG_BACKDROP}
       onClick={() => { if (!working) onClose(); }}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label={t('exportCenter.title')}
-        className="flex h-[84dvh] max-h-[940px] w-[88vw] max-w-[1520px] min-h-0 min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]"
+        className={LARGE_DIALOG}
         style={{ animation: 'openfilm-rise 0.16s ease-out both' }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -657,68 +645,33 @@ export function ExportCenter(props: ExportCenterProps) {
 
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4 pt-3">
             <div className="flex flex-col gap-5">
-              {dest === 'social' && (
-                <>
-                  {PRESET_GROUPS.map((group) => (
-                    <Field key={group} label={t(`exportCenter.group.${group}`)}>
-                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                        {presets.filter((p) => p.group === group).map((p) => {
-                          const on = s.presets.includes(p.id);
-                          const dims = exportDimsForShortEdge(filmFrameBox(stage, p.frame), p.shortEdge);
-                          const tooLong = p.maxDurationSec != null && rangeMs / 1000 > p.maxDurationSec;
-                          return (
-                            <button
-                              key={p.id}
-                              type="button"
-                              aria-pressed={on}
-                              onClick={() => patch('presets', on ? s.presets.filter((id) => id !== p.id) : [...s.presets, p.id])}
-                              className={`relative flex flex-col items-start gap-0.5 rounded-xl border px-3 py-2.5 text-left transition ${
-                                on ? 'border-[var(--text)] bg-[var(--bg-hover)]' : 'border-[var(--border)] hover:border-[var(--text-faint)]'
-                              }`}
-                            >
-                              <span className="flex w-full items-center gap-1.5">
-                                <AspectGlyph frame={p.frame} stage={stage} />
-                                <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-[var(--text)]">{p.name}</span>
-                                {on && <Check size={13} className="shrink-0 text-[var(--text)]" />}
-                              </span>
-                              <span className="text-[11px] tabular-nums text-[var(--text-faint)]">
-                                {dims.w}×{dims.h} · {presetFps(p, projectFps)}fps
-                              </span>
-                              {tooLong && (
-                                <span className="text-[10.5px] leading-snug text-[var(--warn)]">
-                                  {t('exportCenter.tooLong').replace('{max}', formatFilmTime(p.maxDurationSec! * 1000))}
-                                </span>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </Field>
-                  ))}
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <Field label={t('exportCenter.quality')}>
-                      <QualityPicker value={s.socialQuality} onChange={(q) => patch('socialQuality', q)} t={t} />
-                    </Field>
-                    {captions > 0 && (
-                      <Field label={t('exportCenter.burnSubtitles')}>
-                        <Segmented
-                          value={s.socialSubs}
-                          options={[
-                            { value: 'auto', label: t('exportCenter.subsAuto') },
-                            { value: 'on', label: t('exportCenter.subsOn') },
-                            { value: 'off', label: t('exportCenter.subsOff') },
-                          ]}
-                          onChange={(v) => patch('socialSubs', v)}
-                        />
-                      </Field>
-                    )}
-                  </div>
-                  <Hint>{t('exportCenter.socialHint')}</Hint>
-                </>
-              )}
-
               {dest === 'video' && (
                 <>
+                  <Field label={t('exportCenter.videoPreset')}>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                      <div className="inline-flex w-fit min-w-[128px] max-w-full">
+                        <MenuSelect
+                          className="max-w-[280px]"
+                          menuWidth="content"
+                          label={t('exportCenter.videoPreset')}
+                          value={s.video.preset}
+                          size="md"
+                          groups={[
+                            { choices: [{ value: 'default', label: t('exportCenter.presetDefault') }] },
+                            { label: t('exportCenter.platformPresets'), choices: presets.map((p) => ({ value: p.id, label: `${p.name} · ${p.frame}` })) },
+                            ...(s.video.preset === 'custom' ? [{ choices: [{ value: 'custom', label: t('exportCenter.presetCustom') }] }] : []),
+                          ]}
+                          onPick={(id) => { if (id !== 'custom') patch('video', videoExportPreset(id, projectFps)); }}
+                        />
+                      </div>
+                      <span className="text-[11px] leading-relaxed text-[var(--text-muted)]">
+                        {s.video.preset === 'custom' ? t('exportCenter.presetCustomHint') : selectedVideoPreset
+                          ? `${selectedVideoPreset.frame} · ${s.video.shortEdge === 2160 ? '4K' : `${s.video.shortEdge}p`} · ${fpsFor(s.video.fps)} fps`
+                          : t('exportCenter.presetDefaultHint')}
+                      </span>
+                    </div>
+                    {selectedVideoPreset?.maxDurationSec != null && rangeMs / 1000 > selectedVideoPreset.maxDurationSec ? <p className="mt-2 text-[11px] text-[var(--warn)]">{t('exportCenter.tooLong').replace('{max}', formatFilmTime(selectedVideoPreset.maxDurationSec * 1000))}</p> : null}
+                  </Field>
                   <Field label={t('exportCenter.codec')}>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                       {VIDEO_CODECS.map((c) => {
@@ -755,7 +708,7 @@ export function ExportCenter(props: ExportCenterProps) {
                       onChange={(shortEdge) => patch('video', { shortEdge })}
                     />
                   </Field>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="flex flex-wrap items-start gap-x-8 gap-y-4">
                     <Field label={t('exportCenter.fps')}>
                       <FpsSelect
                         label={t('exportCenter.fps')}
@@ -1120,42 +1073,29 @@ export function ExportCenter(props: ExportCenterProps) {
               )}
 
               {/* range: any destination with a picture or a sound over time can take a part */}
-              {(dest === 'social' || dest === 'video' || dest === 'gif' || dest === 'audio' || dest === 'subtitles' || (dest === 'alpha' && !alphaBlock)) && totalMs > 0 && (
+              {canRange && (
                 <Field label={t('exportCenter.range')}>
                   <Segmented
-                    value={range.on ? 'part' : 'all'}
+                    value={range ? 'part' : 'all'}
                     options={[
                       { value: 'all', label: `${t('exportCenter.rangeAll')} · ${formatFilmTime(totalMs)}` },
                       { value: 'part', label: t('exportCenter.rangePart') },
                     ]}
-                    onChange={(v) => setRange((r) => ({ ...r, on: v === 'part' }))}
+                    onChange={(v) => setRange(v === 'part')}
                   />
-                  {range.on && (
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-[var(--text-muted)]">
-                      <div className="flex w-[220px] min-w-0">
-                        <MenuSelect
-                          label={t('exportCenter.rangeFrom')}
-                          size="md"
-                          value={String(range.from)}
-                          groups={[{ choices: boundaries.starts.map((m) => ({ value: String(m.ms), label: [formatFilmTime(m.ms), m.title].filter(Boolean).join(' · ') })) }]}
-                          onPick={(v) => {
-                            const from = Number(v);
-                            setRange((r) => ({ ...r, from, to: r.to > from ? r.to : (boundaries.ends.find((m) => m.ms > from)?.ms ?? totalMs) }));
-                          }}
-                        />
-                      </div>
-                      <span>→</span>
-                      <div className="flex w-[220px] min-w-0">
-                        <MenuSelect
-                          label={t('exportCenter.rangeTo')}
-                          size="md"
-                          value={String(range.to)}
-                          groups={[{ choices: boundaries.ends.filter((m) => m.ms > range.from).map((m) => ({ value: String(m.ms), label: [formatFilmTime(m.ms), m.title].filter(Boolean).join(' · ') })) }]}
-                          onPick={(v) => setRange((r) => ({ ...r, to: Number(v) }))}
-                        />
-                      </div>
-                      <span className="tabular-nums">{formatFilmTime(rangeMs)}</span>
-                    </div>
+                  {range && (
+                    <RangePicker
+                      projectId={props.projectId}
+                      totalMs={totalMs}
+                      fps={projectFps}
+                      stage={stage}
+                      boundaries={boundaries}
+                      value={rangeParts}
+                      onChange={setRangeParts}
+                      delivery={rangeDelivery}
+                      onDelivery={setRangeDelivery}
+                      error={rangeInvalid ? rangeError : null}
+                    />
                   )}
                 </Field>
               )}
@@ -1324,13 +1264,16 @@ function FpsSelect({ label, value, rates, own, onPick }: {
   const all = [...new Set([...rates, ...(own ? [own.fps] : [])])].sort((a, b) => a - b);
   const name = (f: number) => `${f} fps${own && f === own.fps ? ` · ${own.note}` : ''}`;
   return (
-    <MenuSelect
-      size="md"
-      label={label}
-      value={String(value)}
-      groups={[{ choices: all.map((f) => ({ value: String(f), label: name(f) })) }]}
-      onPick={(v) => onPick(Number(v))}
-    />
+    <div className="inline-flex w-fit min-w-[132px] max-w-full">
+      <MenuSelect
+        size="md"
+        className="max-w-[180px]"
+        label={label}
+        value={String(value)}
+        groups={[{ choices: all.map((f) => ({ value: String(f), label: name(f) })) }]}
+        onPick={(v) => onPick(Number(v))}
+      />
+    </div>
   );
 }
 
