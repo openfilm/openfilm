@@ -85,6 +85,7 @@ import { ProjectLayoutMenu } from './ProjectLayoutMenu';
 import { ProjectMenu } from './ProjectMenu';
 import { ProjectHistoryButton, ProjectHistoryControls } from './ProjectHistoryControls';
 import { useProjectHistory } from './use-project-history';
+import { historyMoved } from '@/lib/project-history';
 import { ProjectsPopover } from './ProjectsLibrary';
 import { FilmFullscreenBar, useFullscreenKeys } from './FilmFullscreenBar';
 import { ViewerBar } from './ViewerBar';
@@ -2591,11 +2592,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const headerOpsRef = React.useRef<HTMLDivElement>(null);
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const [historyAnchor, setHistoryAnchor] = React.useState<{ x: number; y: number } | null>(null);
-  const history = useProjectHistory(projectId, {
-    onError: toast.showError,
-    onMoved: () => { film.forget(); void api.film(projectId).then((f) => { setLoaded(f); }); },
-    beforeCommit: film.settled,
-  });
+  const history = useProjectHistory(projectId, { onError: toast.showError, beforeChange: film.settled });
+  const forgetSteps = React.useRef(film.forget);
+  forgetSteps.current = film.forget;
   const refreshHistory = React.useRef(history.refresh);
   refreshHistory.current = history.refresh;
   const historyOpenRef = React.useRef(historyOpen);
@@ -2605,6 +2604,14 @@ export function ProjectView({ projectId, onProject, onLeave }: {
        changes, once the burst settles */
     let later: ReturnType<typeof setTimeout> | null = null;
     const stop = projectEvents(projectId, (e) => {
+      /* a version restored, here or in another window: the folder's files changed under the editor. Its undo steps
+         were of the film before, and the film, its settings, markers and subtitles are read again (each where it is
+         kept: use-editor-tools, use-subtitle-style, use-film-subtitles) */
+      if (historyMoved(e)) {
+        forgetSteps.current();
+        void api.film(projectId).then((f) => { setLoaded(f); }, () => {});
+        void api.settings(projectId).then(setSettings, () => {});
+      }
       if (e.type === 'history') { void refreshHistory.current(); return; }
       if ((e.type === 'film' || e.type === 'files') && historyOpenRef.current) {
         if (later) clearTimeout(later);
@@ -3121,7 +3128,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         </div>
       </div>
 
-      <ProjectHistoryControls projectId={projectId} history={history} open={historyOpen} anchor={historyAnchor} onClose={() => setHistoryOpen(false)} />
+      <ProjectHistoryControls projectId={projectId} projectName={loaded?.project.name ?? ''} history={history} open={historyOpen} anchor={historyAnchor}
+        onClose={() => setHistoryOpen(false)}
+        onOpenProject={(id) => { setHistoryOpen(false); if (studioHost?.tabs) studioHost.tabs.open(id); else onProject(id); }} />
       <ProjectsPopover open={projectsOpen} currentProjectId={projectId} onOpen={(id) => { if (!studioHost?.tabs) setProjectsOpen(false); onProject(id); }} onCurrentRemoved={onLeave} onClose={() => setProjectsOpen(false)} />
       {examplesOpen ? (
         <ExamplesDialog projectId={projectId} open={examplesOpen === true ? undefined : examplesOpen} onClose={() => setExamplesOpen(false)}

@@ -27,9 +27,11 @@ const WRITING = /(^|[/\\])([^/\\]+\.[0-9a-f-]{8,}\.tmp|\.\d+\.\d+\.importing)$/;
  * `files`: `paths` are the files that changed (folder relative), or none when the system could not say.
  * `ask` / `asked`: a question about spending for the person, and that it was answered; `notice`: something the person
  * is told, such as a provider with no balance left (get.mjs).
- * `history-progress`: how far a version history action is (history.mjs), `op` the action ('commit', 'checkout'…).
+ * `history`: the version history changed (history.mjs); `moved`: its action changed the folder's files (a version
+ * restored), so Studio's own state of the film is read again. `history-progress`: how far an action is, `op` which
+ * ('save', 'restore'…).
  * `project`: the project renamed, as it is now.
- * @typedef {{ type: 'film', rev: string } | { type: 'files', paths?: string[] } | { type: 'history' } | { type: 'export', job: object }
+ * @typedef {{ type: 'film', rev: string } | { type: 'files', paths?: string[] } | { type: 'history', moved?: boolean } | { type: 'export', job: object }
  *   | { type: 'history-progress', op: string, phase: string, done: number, total: number } | { type: 'project', project: object }
  *   | { type: 'ask', ask: object } | { type: 'asked', id: string } | { type: 'notice', notice: object }
  *   | { type: 'gone' }} FolderEvent   `gone`: the project was deleted, or its folder or film file is missing
@@ -144,14 +146,15 @@ export function watchTree(root, onChange, native = process.platform === 'darwin'
 
 /**
  * Every project someone is watching, and who: `subscribe` starts the folder's watcher with its first listener and stops
- * it with its last.
+ * it with its last. `onChange` hears every change of a watched folder itself (not what `emit` tells).
+ * @param {{ onChange?: (root: string, e: FolderEvent) => void }} [o]
  */
-export function createWatchers() {
+export function createWatchers({ onChange } = {}) {
   /** @typedef {{ root: string, listener: (e: FolderEvent) => void }} Subscription */
   /** @type {Map<string, { close: () => void, listeners: Set<Subscription> }>} */
   const byRoot = new Map();
   /** @param {string} root @param {Set<Subscription>} listeners */
-  const start = (root, listeners) => ({ listeners, close: watchFolder(root, (e) => { for (const { listener } of listeners) listener(e); }) });
+  const start = (root, listeners) => ({ listeners, close: watchFolder(root, (e) => { onChange?.(root, e); for (const { listener } of listeners) listener(e); }) });
   return {
     /** @param {string} root @param {(e: FolderEvent) => void} listener */
     subscribe(root, listener) {

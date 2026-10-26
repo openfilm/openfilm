@@ -59,7 +59,7 @@ const SECTION_WORDS: Record<SettingsSection, string | string[]> = {
   models: 'settings.models',
   developer: ['settings.developer', 'settings.report'],
   shortcuts: 'settings.shortcuts',
-  advanced: ['settings.advanced', 'settings.playback'],
+  advanced: ['settings.advanced', 'settings.versions', 'settings.playback'],
 };
 
 export interface SettingsModalProps {
@@ -299,11 +299,42 @@ function PlaybackGroup() {
   );
 }
 
-/** What is already set for the best experience, for whoever wants it otherwise: how the preview plays (PlaybackGroup). */
+/**
+ * Versions saved on their own (studio/server/auto-versions.mjs): whether open projects save them while they are worked
+ * on, and whether Version history lists them. Both off unless the person turns them on.
+ */
+function VersionsGroup() {
+  const t = useT();
+  const [prefs, setPrefs] = React.useState<StudioPrefs | null>(null);
+  React.useEffect(() => { void api.prefs().then(setPrefs).catch(() => {}); }, []);
+  if (!prefs) return null;
+  const change = (patch: { autoVersions?: boolean; showAutoVersions?: boolean }) => {
+    setPrefs({ ...prefs, ...patch });
+    void api.setPrefs(patch).then(setPrefs).catch(() => setPrefs(prefs));
+  };
+  return (
+    <SettingsGroup title={t('settings.versions.group')}>
+      <SettingsItem
+        title={t('settings.versions.auto')}
+        description={t('settings.versions.autoHint')}
+        control={<SettingsSwitch checked={prefs.autoVersions === true} onChange={(on) => change({ autoVersions: on })} label={t('settings.versions.auto')} />}
+      />
+      <SettingsItem
+        title={t('settings.versions.show')}
+        description={t('settings.versions.showHint')}
+        control={<SettingsSwitch checked={prefs.showAutoVersions === true} onChange={(on) => change({ showAutoVersions: on })} label={t('settings.versions.show')} />}
+      />
+    </SettingsGroup>
+  );
+}
+
+/** What is already set for the best experience, for whoever wants it otherwise: versions saved on their own
+ * (VersionsGroup), how the preview plays (PlaybackGroup). */
 function AdvancedSection() {
   const t = useT();
   return (
     <SettingsPage note={t('settings.advanced.intro')}>
+      <VersionsGroup />
       <PlaybackGroup />
     </SettingsPage>
   );

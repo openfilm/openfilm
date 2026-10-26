@@ -328,10 +328,10 @@ test('an open project keeps film, file, history and export events after rename w
     writeFileSync(join(renamed.path, 'scene.html'), '<p>after rename</p>');
     await waitFor((e) => e.type === 'film' && e.rev, 'the existing socket sees the new film revision');
     await waitFor((e) => e.type === 'files' && e.paths?.includes('scene.html'), 'the existing socket sees new files');
-    const committed = await api(`/api/projects/${project.id}/history/commit`, { method: 'POST', body: { message: 'After rename' } });
-    assert.equal(committed.status, 200);
+    const saved = await api(`/api/projects/${project.id}/history/save`, { method: 'POST', body: { name: 'After rename' } });
+    assert.equal(saved.status, 200);
     await waitFor((e) => e.type === 'history', 'the existing socket sees history changes');
-    assert.ok(events.some((e) => e.type === 'history-progress' && e.op === 'commit'));
+    assert.ok(events.some((e) => e.type === 'history-progress' && e.op === 'save'));
     const started = await api(`/api/projects/${project.id}/exports`, { method: 'POST', body: { kind: 'project', as: 'folder' } });
     assert.equal(started.status, 200);
     const job = (await started.json()).export;
@@ -370,7 +370,7 @@ test('the preview plays heavy footage from its proxy once made; what the file is
   mkdirSync(join(project.path, 'assets'), { recursive: true });
   const big = join(project.path, 'assets', 'big.mp4');
   execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=2560x1440:rate=25:duration=1', '-pix_fmt', 'yuv420p', big]);
-  assert.deepEqual(await (await api('/api/prefs')).json(), { proxies: { on: true, height: 720 }, seenVersion: null, projectsFolder: null, keys: null });
+  assert.deepEqual(await (await api('/api/prefs')).json(), { proxies: { on: true, height: 720 }, seenVersion: null, projectsFolder: null, keys: null, autoVersions: false, showAutoVersions: false });
   let answer;
   for (const end = Date.now() + 30_000; answer?.states?.['assets/big.mp4']?.state !== 'ready' && Date.now() < end;) {
     answer = await (await api(`/api/projects/${project.id}/proxies`, { method: 'POST', body: {} })).json();
@@ -383,7 +383,7 @@ test('the preview plays heavy footage from its proxy once made; what the file is
   assert.ok(played > 0 && played !== statSync(big).size, 'the proxy');
   assert.equal(await size('?film-facts=1'), statSync(big).size, 'what the file is: the file');
   /* off: the original, and no proxy asked for */
-  assert.deepEqual(await (await api('/api/prefs', { method: 'PATCH', body: { proxies: { on: false } } })).json(), { proxies: { on: false, height: 720 }, seenVersion: null, projectsFolder: null, keys: null });
+  assert.deepEqual(await (await api('/api/prefs', { method: 'PATCH', body: { proxies: { on: false } } })).json(), { proxies: { on: false, height: 720 }, seenVersion: null, projectsFolder: null, keys: null, autoVersions: false, showAutoVersions: false });
   assert.equal(await size(), statSync(big).size);
   assert.deepEqual((await (await api(`/api/projects/${project.id}/proxies`, { method: 'POST', body: {} })).json()).states, {});
   await api('/api/prefs', { method: 'PATCH', body: { proxies: { on: true } } });
@@ -487,33 +487,42 @@ test('files over the API: import a body of any size, list, move with film.html f
   }
 });
 
-test('history: nothing is committed on its own; the person commits, goes back as uncommitted changes, branches', async () => {
+test('history: the person commits versions; checking one out makes none and tells every page; a copy is a new project', async () => {
   const { project } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'History') } })).json();
   const history = (path = '', body, method = body ? 'POST' : 'GET') => api(`/api/projects/${project.id}/history${path}`, { method, ...(body ? { body } : {}) });
   writeFileSync(join(project.path, 'film.html'), filmHtml({ stage: { w: 640, h: 360 }, tracks: [] }));
   await api(`/api/projects/${project.id}/edit`, { method: 'POST', body: { ops: [{ op: 'stage', w: 800, h: 450 }] } });
   await new Promise((r) => setTimeout(r, 500));
   const before = await (await history()).json();
-  assert.deepEqual(before.commits, [], 'nothing committed by the agent\'s writes or the person\'s edits');
-  assert.ok(before.status.changes, 'they are uncommitted changes');
-  assert.equal((await history('/commit', { message: ' ' })).status, 400);
+  assert.deepEqual(before.versions, [], 'nothing committed by the agent\'s writes or the person\'s edits while Auto versions is off');
+  assert.deepEqual(before.status.changes.files.map((f) => f.change), ['added'], 'the changes, as files');
   const events = collect(`/api/projects/${project.id}/events`, (e) => e.some((x) => x.type === 'history'));
-  const { commit } = await (await history('/commit', { message: 'Wide' })).json();
-  assert.ok((await events).some((e) => e.type === 'history-progress' && e.op === 'commit'), 'how far it is, while it runs');
+  const { commit } = await (await history('/save', { message: 'Wide' })).json();
+  assert.ok((await events).some((e) => e.type === 'history-progress' && e.op === 'save'), 'how far it is, while it runs');
+  const nothing = await history('/save', {});
+  assert.equal(nothing.status, 409);
+  assert.equal((await nothing.json()).code, 'nothing', 'the editor says why in its own words');
   writeFileSync(join(project.path, 'film.html'), filmHtml({ stage: { w: 1, h: 1 }, tracks: [] }));
-  const dirty = await history('/restore', { commit });
+  const { commit: square } = await (await history('/save', { message: 'Square' })).json();
+  assert.deepEqual((await (await history(`/versions/${square}`)).json()).files, [{ path: 'film.html', change: 'modified' }]);
+  writeFileSync(join(project.path, 'film.html'), filmHtml({ stage: { w: 2, h: 2 }, tracks: [] }));
+  const dirty = await history('/checkout', { commit });
   assert.equal(dirty.status, 409);
-  assert.equal((await dirty.json()).code, 'dirty', 'the editor says why in its own words');
+  assert.equal((await dirty.json()).code, 'dirty');
+  const moved = collect(`/api/projects/${project.id}/events`, (e) => e.some((x) => x.type === 'history' && x.moved));
+  const back = await (await history('/checkout', { commit, discard: true })).json();
+  assert.deepEqual(back.doc.stage, { w: 800, h: 450 });
+  assert.ok(await moved, 'the pages read Studio\'s state of the film again');
+  const after = await (await history()).json();
+  assert.deepEqual([after.status.head, after.status.branch, after.status.changes], [commit, null, null]);
+  assert.deepEqual(after.versions.map((v) => v.name), ['Square', 'Wide'], 'no version of its own');
+  writeFileSync(join(project.path, 'film.html'), filmHtml({ stage: { w: 3, h: 3 }, tracks: [] }));
   const discarded = await (await history('/discard', {})).json();
   assert.deepEqual(discarded.doc.stage, { w: 800, h: 450 });
-  const branched = await (await history('/checkout', { branch: 'square', create: true })).json();
-  assert.equal(branched.parkedBack, true);
-  const after = await (await history()).json();
-  assert.equal(after.status.branch, 'square');
-  assert.deepEqual(after.status.files, { held: 1, heldBytes: after.status.files.heldBytes, ignored: 0 }, 'the film, and nothing else in the folder');
-  assert.deepEqual((await (await history('/files')).json()).held.map((f) => f.path), ['film.html']);
-  assert.deepEqual(after.commits.map((c) => c.message), ['Wide'], 'no commit of its own on the way');
-  assert.equal((await history('/branches/square', undefined, 'DELETE')).status, 409, 'not the branch checked out');
+  const copied = await (await history('/copy', { commit: square, name: 'History, square' })).json();
+  assert.equal(copied.project.name, 'History, square');
+  assert.match(readFileSync(join(copied.project.path, 'film.html'), 'utf8'), /width=1, height=1|"w":1|1x1|content="width=1/);
+  assert.equal((await history('/restore', { commit })).status, 404, 'no restore that makes a version');
 });
 
 test('a project whose folder is gone says so, never takes Studio down, and can be taken off the list', async () => {

@@ -2,12 +2,10 @@ import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, utimesSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  checkout, commitChanges, deleteBranch, discardChanges, historyFiles, log, mergeBranch, renameBranch, restoreCommit, status,
-} from './history.mjs';
+import { checkoutVersion, copyVersion, discardChanges, log, saveVersion, status, versionFilesChanged } from './history.mjs';
 import { replaceFile } from './atomic.mjs';
 
 let trash;
@@ -29,49 +27,77 @@ const project = () => {
   return root;
 };
 const gitEnv = (root) => ({ ...process.env, GIT_DIR: join(root, '.film', 'history'), GIT_WORK_TREE: root, GIT_CONFIG_NOSYSTEM: '1' });
-const gitOut = (root, args) => execFileSync('git', args, { cwd: root, env: gitEnv(root) }).toString();
-/** What the last commit holds. */
+const gitOut = (root, args, input) => execFileSync('git', args, { cwd: root, env: gitEnv(root), ...(input ? { input } : {}) }).toString();
+/** What a version holds. */
 const tracked = (root, rev = 'HEAD') => gitOut(root, ['ls-tree', '-r', '--name-only', rev]).trim().split('\n').filter(Boolean).sort();
 const rejects = (promise, code) => assert.rejects(promise, (e) => e.code === code);
 /** A file's bytes and when it was last written, to see that nothing touched it. */
 const mark = (path) => ({ bytes: readFileSync(path), mtime: statSync(path).mtimeMs });
 const old = (path) => { const t = new Date(Date.now() - 3600_000); utimesSync(path, t, t); };
+const versions = async (root, o) => (await log(root, o)).versions;
 
-test('nothing is committed unless the person commits, with their message; only the film\'s files are kept', async () => {
+test('nothing is committed unless the person commits; a version holds the project, but media the film does not use', async () => {
   const root = project();
   mkdirSync(join(root, 'assets'));
+  mkdirSync(join(root, 'node_modules', 'x'), { recursive: true });
+  mkdirSync(join(root, '.venv'));
   writeFileSync(join(root, 'assets', 'a.mp4'), 'video no clip uses');
+  writeFileSync(join(root, 'assets', 'still.png'), 'a picture no clip uses');
+  writeFileSync(join(root, 'notes.md'), 'the agent\'s notes');
+  writeFileSync(join(root, 'make.py'), 'print("the script that made it")');
+  writeFileSync(join(root, 'node_modules', 'x', 'index.js'), 'a package');
+  writeFileSync(join(root, '.venv', 'lib.py'), 'a tool\'s');
   writeFileSync(join(root, '.film', 'id'), 'x');
   writeFileSync(join(root, '.film', 'settings.json'), '{"fps":24}');
   const fresh = await status(root);
-  assert.equal(fresh.head, null, 'no commit yet');
-  assert.deepEqual(fresh.branches, []);
-  assert.equal(fresh.changes.summary.scenes.added, 1, 'all it holds is uncommitted');
-  assert.equal(fresh.files.held, 3);
-  assert.equal(fresh.files.ignored, 1, 'the video no clip uses');
-  assert.deepEqual(await log(root), []);
-  await rejects(commitChanges(root, '  '), 'message');
-  const first = await commitChanges(root, 'First cut');
-  assert.deepEqual(tracked(root), ['.film/settings.json', 'film.html', 'title.html']);
-  await rejects(commitChanges(root, 'Again'), 'nothing');
-  const [only] = await log(root);
+  assert.equal(fresh.head, null, 'no version yet');
+  assert.equal(fresh.changes.summary.scenes.added, 1, 'all it holds is new');
+  assert.deepEqual(fresh.changes.files.map((f) => [f.path, f.change]),
+    [['.film/settings.json', 'added'], ['film.html', 'added'], ['make.py', 'added'], ['notes.md', 'added'], ['title.html', 'added']],
+    'the changes, as files: not the media no clip uses, a package or a tool\'s folder');
+  assert.deepEqual(await log(root), { versions: [], more: false });
+  const first = await saveVersion(root);
+  assert.deepEqual(tracked(root), ['.film/settings.json', 'film.html', 'make.py', 'notes.md', 'title.html']);
+  await rejects(saveVersion(root, { message: 'Again' }), 'nothing');
+  const [only] = await versions(root);
   assert.equal(only.commit, first);
-  assert.equal(only.message, 'First cut');
-  assert.deepEqual(only.summary.scenes, { added: 1, removed: 0, edited: 0 });
-  const after = await status(root);
-  assert.equal(after.changes, null);
-  assert.deepEqual(after.branches.map((b) => [b.name, b.current, b.message]), [['main', true, 'First cut']]);
-  const files = await historyFiles(root);
-  assert.deepEqual(files.ignored.map((f) => f.path), ['assets/a.mp4']);
-  assert.deepEqual(files.held.map((f) => f.path), ['.film/settings.json', 'film.html', 'title.html']);
+  assert.deepEqual([only.kind, only.name, only.parents], ['saved', '', []]);
+  assert.equal((await status(root)).changes, null);
+  assert.equal((await status(root)).branch, 'main');
+  writeFileSync(join(root, 'title.html'), 'title, again');
+  assert.deepEqual((await status(root)).changes.files, [{ path: 'title.html', change: 'modified' }]);
+  const second = await saveVersion(root, { message: '  Second   cut ' });
+  assert.deepEqual((await versions(root)).map((v) => [v.kind, v.name, v.parents]), [['named', 'Second cut', [first]], ['saved', '', []]]);
+  assert.match(gitOut(root, ['log', '-1', '--format=%B']), /^Second cut\n\nOpenfilm-Version: named\n/, 'readable in git too');
+  assert.deepEqual(await versionFilesChanged(root, second), [{ path: 'title.html', change: 'modified' }], 'what a version changed');
+  assert.equal((await versionFilesChanged(root, first)).length, 5, 'the first: all it holds');
+  writeFileSync(join(root, 'notes.md'), 'more notes');
+  writeFileSync(join(root, '.film', 'markers.json'), '{"markers":[]}');
+  assert.deepEqual((await status(root)).changes.summary, { scenes: { added: 0, removed: 0, edited: 0 }, sounds: { added: 0, removed: 0, edited: 0 }, stage: false, other: false },
+    'notes and markers change nothing of the picture');
 });
 
-test('what a commit changed is told as the film: scenes and sounds added, removed and edited', async () => {
+test('a file a page names by a path it builds in code is kept, wherever it is', async () => {
+  const root = project();
+  mkdirSync(join(root, 'assets', 'fonts'), { recursive: true });
+  mkdirSync(join(root, 'src'));
+  writeFileSync(join(root, 'assets', 'fonts', 'Archivo-VF.ttf'), randomBytes(3000));
+  writeFileSync(join(root, 'src', 'type.js'), "const DIR = '../assets/fonts/'; export const fonts = [{ file: 'Archivo-VF.ttf' }].map((f) => DIR + f.file);");
+  writeFileSync(join(root, 'title.html'), '<script type="module" src="src/type.js"></script>');
+  await saveVersion(root, { message: 'With its font' });
+  assert.ok(tracked(root).includes('assets/fonts/Archivo-VF.ttf'));
+  const font = readFileSync(join(root, 'assets', 'fonts', 'Archivo-VF.ttf'));
+  writeFileSync(join(root, 'assets', 'fonts', 'Archivo-VF.ttf'), randomBytes(3000));
+  await discardChanges(root);
+  assert.deepEqual(readFileSync(join(root, 'assets', 'fonts', 'Archivo-VF.ttf')), font, 'it comes back');
+});
+
+test('what changed is told as the film too: scenes and sounds added, removed and edited', async () => {
   const root = project();
   mkdirSync(join(root, 'end'));
   writeFileSync(join(root, 'end', 'end.html'), 'end');
   writeFileSync(join(root, 'film.html'), film(page('title.html'), page('end/end.html', 5)));
-  await commitChanges(root, 'Two scenes');
+  await saveVersion(root, { message: 'Two scenes' });
   /* one scene's page rewritten, one gone, a sound added, and a stylesheet beside the pages changed */
   writeFileSync(join(root, 'title.html'), 'title, bigger');
   writeFileSync(join(root, 'look.css'), 'body {}');
@@ -81,10 +107,8 @@ test('what a commit changed is told as the film: scenes and sounds added, remove
   assert.deepEqual(changes.summary.scenes, { added: 0, removed: 1, edited: 1 });
   assert.deepEqual(changes.summary.sounds, { added: 1, removed: 0, edited: 0 });
   assert.equal(changes.summary.other, true, 'a file no clip names');
-  await commitChanges(root, 'Shorter, with music');
-  assert.deepEqual((await log(root))[0].summary, changes.summary, 'the commit tells the same');
-  assert.ok(!tracked(root).includes('end/end.html'), 'a page the film no longer uses leaves the version');
-  assert.ok(existsSync(join(root, 'end', 'end.html')), 'and stays in the folder');
+  await saveVersion(root, { message: 'Shorter, with music' });
+  assert.ok(tracked(root).includes('end/end.html'), 'a page the film no longer uses is still the project\'s');
 });
 
 test('media is kept by its content outside git, and comes back byte for byte', async () => {
@@ -96,7 +120,7 @@ test('media is kept by its content outside git, and comes back byte for byte', a
   writeFileSync(join(root, 'assets', 'shot.vtt'), 'WEBVTT\n');
   writeFileSync(join(root, 'assets', 'copy.mp4'), take1);
   writeFileSync(join(root, 'film.html'), film(video('assets/shot.mp4#t=1,2'), video('assets/copy.mp4', 3)));
-  const first = await commitChanges(root, 'Take 1');
+  const first = await saveVersion(root, { message: 'Take 1' });
   /* the tree holds a pointer; the store holds the bytes once */
   const pointer = gitOut(root, ['show', 'HEAD:assets/shot.mp4']);
   assert.match(pointer, /^openfilm-media 1\nsha256 [0-9a-f]{64}\nsize 3145728\n$/);
@@ -106,18 +130,63 @@ test('media is kept by its content outside git, and comes back byte for byte', a
   assert.ok(tracked(root).includes('assets/shot.vtt'), 'its subtitles beside it');
   writeFileSync(join(root, 'assets', 'shot.mp4'), take2);
   writeFileSync(join(root, 'assets', 'shot.vtt'), 'WEBVTT\n\n00:00.000 --> 00:01.000\nhi\n');
-  await commitChanges(root, 'Take 2');
-  await restoreCommit(root, first);
+  const second = await saveVersion(root, { message: 'Take 2' });
+  await checkoutVersion(root, first);
   assert.deepEqual(readFileSync(join(root, 'assets', 'shot.mp4')), take1, 'take 1, exactly');
   assert.equal(readFileSync(join(root, 'assets', 'shot.vtt'), 'utf8'), 'WEBVTT\n');
-  assert.equal((await status(root)).changes.count, 2, 'as uncommitted changes');
-  await discardChanges(root);
+  assert.equal((await status(root)).changes, null);
+  await checkoutVersion(root, second);
   assert.deepEqual(readFileSync(join(root, 'assets', 'shot.mp4')), take2);
 });
 
-test('discard puts back the last commit; files the film takes since go to the trash, others stay', async () => {
+test('checking out a version, as git: the folder holds its files, no version is made, and changes are not lost', async () => {
   const root = project();
-  await commitChanges(root, 'One');
+  const first = await saveVersion(root, { message: 'One' });
+  writeFileSync(join(root, 'title.html'), 'two');
+  writeFileSync(join(root, '.film', 'markers.json'), '{"markers":[{"id":"m1","t":1}]}');
+  mkdirSync(join(root, 'more'));
+  writeFileSync(join(root, 'more', 'extra.html'), 'extra');
+  writeFileSync(join(root, 'film.html'), film(page('title.html'), page('more/extra.html', 4)));
+  const second = await saveVersion(root, { message: 'Two' });
+  writeFileSync(join(root, 'title.html'), 'not committed');
+  await rejects(checkoutVersion(root, first), 'dirty');
+  assert.equal(readFileSync(join(root, 'title.html'), 'utf8'), 'not committed', 'refused: nothing touched');
+  const done = await checkoutVersion(root, first, { discard: true });
+  assert.equal(done.commit, first);
+  assert.equal(readFileSync(join(root, 'title.html'), 'utf8'), 'title');
+  assert.ok(!existsSync(join(root, 'more', 'extra.html')), 'a file the version checked out had and this one does not goes');
+  assert.ok(readdirSync(trash).includes('extra.html'), 'to the trash');
+  assert.ok(!existsSync(join(root, '.film', 'markers.json')), 'the version had no markers');
+  const now = await status(root);
+  assert.deepEqual([now.head, now.branch, now.changes], [first, null, null], 'checked out on its own, as git\'s detached HEAD');
+  assert.deepEqual((await versions(root)).map((v) => v.name), ['Two', 'One'], 'no version of its own');
+  /* back to the newest: main again */
+  await checkoutVersion(root, second);
+  assert.deepEqual([(await status(root)).branch, readFileSync(join(root, 'title.html'), 'utf8')], ['main', 'two']);
+  assert.ok(existsSync(join(root, '.film', 'markers.json')), 'and its markers');
+  await rejects(checkoutVersion(root, 'nothex'), 'none');
+  await rejects(checkoutVersion(root, second.replace(/./g, 'f')), 'none');
+});
+
+test('a commit on a version checked out goes on main from there; main\'s later versions stay on a line of their own', async () => {
+  const root = project();
+  const first = await saveVersion(root, { message: 'One' });
+  writeFileSync(join(root, 'title.html'), 'two');
+  const second = await saveVersion(root, { message: 'Two' });
+  await checkoutVersion(root, first);
+  writeFileSync(join(root, 'title.html'), 'another way');
+  const third = await saveVersion(root, { message: 'Another way' });
+  const now = await status(root);
+  assert.deepEqual([now.head, now.branch], [third, 'main']);
+  const list = await versions(root);
+  assert.deepEqual(list.map((v) => [v.name, v.parents]), [['Another way', [first]], ['Two', [first]], ['One', []]], 'every version, as a graph');
+  await checkoutVersion(root, second);
+  assert.equal(readFileSync(join(root, 'title.html'), 'utf8'), 'two', 'the later one can still be checked out');
+});
+
+test('discarding the changes puts back the version checked out; files made since go to the trash, others stay', async () => {
+  const root = project();
+  await saveVersion(root, { message: 'One' });
   writeFileSync(join(root, 'title.html'), 'changed');
   writeFileSync(join(root, 'new.html'), 'new, beside the page');
   writeFileSync(join(root, 'big.wav'), Buffer.alloc(2 << 20));
@@ -125,179 +194,103 @@ test('discard puts back the last commit; files the film takes since go to the tr
   assert.equal(readFileSync(join(root, 'title.html'), 'utf8'), 'title');
   assert.ok(!existsSync(join(root, 'new.html')));
   assert.ok(readdirSync(trash).includes('new.html'), 'to the trash, not away');
-  assert.ok(existsSync(join(root, 'big.wav')), 'the film does not use it');
+  assert.ok(existsSync(join(root, 'big.wav')), 'the film does not use it: not the history\'s');
   assert.equal((await status(root)).changes, null);
-  assert.equal((await log(root)).length, 1, 'nothing committed');
+  assert.equal((await versions(root)).length, 1, 'nothing committed');
 });
 
-test('going back to a commit puts its files in the folder as uncommitted changes; nothing is committed', async () => {
-  const root = project();
-  const first = await commitChanges(root, 'One');
-  writeFileSync(join(root, 'title.html'), 'two');
-  mkdirSync(join(root, 'more'));
-  writeFileSync(join(root, 'more', 'extra.html'), 'extra');
-  writeFileSync(join(root, 'film.html'), film(page('title.html'), page('more/extra.html', 4)));
-  await commitChanges(root, 'Two');
-  writeFileSync(join(root, 'title.html'), 'unsaved');
-  await rejects(restoreCommit(root, first), 'dirty');
-  await discardChanges(root);
-  await restoreCommit(root, first);
-  assert.equal(readFileSync(join(root, 'title.html'), 'utf8'), 'title');
-  assert.ok(existsSync(join(root, 'more', 'extra.html')), 'a file the film no longer uses stays in the folder');
-  const { changes } = await status(root);
-  assert.ok(changes, 'shown as uncommitted');
-  assert.deepEqual(changes.summary.scenes, { added: 0, removed: 1, edited: 1 });
-  assert.equal((await log(root)).length, 2, 'no commit of its own');
-  /* discarding comes back to where it was */
-  await discardChanges(root);
-  assert.equal(readFileSync(join(root, 'title.html'), 'utf8'), 'two');
-  await rejects(restoreCommit(root, 'nothex'), 'none');
-});
-
-test('restore, switch and merge write only the film\'s files that differ, and nothing else', async () => {
+test('checking out writes only the files that differ, and nothing else', async () => {
   const root = project();
   mkdirSync(join(root, 'renders'));
   writeFileSync(join(root, 'renders', 'frame-0001.exr'), randomBytes(1000));
   writeFileSync(join(root, 'render.log'), 'log');
   writeFileSync(join(root, 'same.html'), 'same in every version');
   writeFileSync(join(root, 'film.html'), film(page('title.html'), page('same.html', 3)));
-  const first = await commitChanges(root, 'One');
+  const first = await saveVersion(root, { message: 'One' });
   writeFileSync(join(root, 'title.html'), 'two');
-  await commitChanges(root, 'Two');
+  await saveVersion(root, { message: 'Two' });
   for (const f of ['renders/frame-0001.exr', 'render.log', 'same.html']) old(join(root, f));
   const before = Object.fromEntries(['renders/frame-0001.exr', 'render.log', 'same.html'].map((f) => [f, mark(join(root, f))]));
-  const untouched = () => { for (const [f, m] of Object.entries(before)) assert.deepEqual(mark(join(root, f)), m, `${f} untouched`); };
-  await restoreCommit(root, first);
-  untouched();
-  await discardChanges(root);
-  await checkout(root, { target: 'alt', create: true, from: first });
+  await checkoutVersion(root, first);
   assert.equal(readFileSync(join(root, 'title.html'), 'utf8'), 'title');
-  writeFileSync(join(root, 'title.html'), 'alt');
-  await commitChanges(root, 'Alt');
-  await checkout(root, { target: 'main' });
-  untouched();
-  await mergeBranch(root, { branch: 'alt', message: 'Merge alt', prefer: 'theirs' });
-  assert.equal(readFileSync(join(root, 'title.html'), 'utf8'), 'alt');
-  untouched();
-  assert.ok(!tracked(root).some((p) => p.startsWith('renders/') || p === 'render.log'));
+  for (const [f, m] of Object.entries(before)) assert.deepEqual(mark(join(root, f)), m, `${f} untouched`);
 });
 
-test('branches: a new one takes the changes along; switching leaves them on their branch and brings them back', async () => {
+test('a copy of a version is put in another folder, media and all', async () => {
   const root = project();
-  await rejects(checkout(root, { target: 'idea', create: true }), 'nothing');
-  await commitChanges(root, 'One');
-  writeFileSync(join(root, 'title.html'), 'on idea');
-  await checkout(root, { target: 'Snow idea', create: true });
-  let state = await status(root);
-  assert.equal(state.branch, 'Snow-idea', 'spaces become dashes');
-  assert.ok(state.changes, 'the changes came along');
-  await commitChanges(root, 'Snow');
-  /* back to main with something uncommitted: left on Snow-idea, and there again on coming back */
-  writeFileSync(join(root, 'title.html'), 'half done');
-  await checkout(root, { target: 'main' });
-  assert.equal(readFileSync(join(root, 'title.html'), 'utf8'), 'title');
-  state = await status(root);
-  assert.equal(state.changes, null);
-  assert.equal(state.branches.find((b) => b.name === 'Snow-idea').parked, true);
-  await checkout(root, { target: 'Snow-idea' });
-  assert.equal(readFileSync(join(root, 'title.html'), 'utf8'), 'half done');
-  assert.equal((await status(root)).branches.find((b) => b.name === 'Snow-idea').parked, false);
-  /* brought along: refused when it collides with what the other branch holds */
-  await rejects(checkout(root, { target: 'main', carry: 'bring' }), 'conflict');
-  assert.equal(readFileSync(join(root, 'title.html'), 'utf8'), 'half done', 'nothing moved');
-  /* brought along where it does not collide: it comes, and what the other branch holds comes too */
-  writeFileSync(join(root, 'title.html'), 'on idea');
-  writeFileSync(join(root, 'side.css'), 'body { color: red }');
-  await checkout(root, { target: 'main', carry: 'bring' });
-  assert.equal(readFileSync(join(root, 'title.html'), 'utf8'), 'title');
-  assert.equal(readFileSync(join(root, 'side.css'), 'utf8'), 'body { color: red }');
-  assert.deepEqual((await status(root)).changes?.count, 1, 'the new stylesheet came along, uncommitted');
-  await rejects(checkout(root, { target: 'main', create: true }), 'exists');
-  await rejects(checkout(root, { target: 'bad..name', create: true }), 'name');
-});
-
-test('a branch from an earlier commit; rename takes its parked changes; delete guards commits on no other branch', async () => {
-  const root = project();
-  const first = await commitChanges(root, 'One');
+  const shot = randomBytes(2 << 20);
+  writeFileSync(join(root, 'shot.mp4'), shot);
+  writeFileSync(join(root, 'film.html'), film(page('title.html'), video('shot.mp4', 2)));
+  const first = await saveVersion(root, { message: 'One' });
   writeFileSync(join(root, 'title.html'), 'two');
-  await commitChanges(root, 'Two');
-  await checkout(root, { target: 'from-one', create: true, from: first });
-  assert.equal(readFileSync(join(root, 'title.html'), 'utf8'), 'title');
-  writeFileSync(join(root, 'title.html'), 'alt');
-  await commitChanges(root, 'Alt');
-  writeFileSync(join(root, 'title.html'), 'parked');
-  await checkout(root, { target: 'main' });
-  await renameBranch(root, 'from-one', 'alt-take');
-  const branches = (await status(root)).branches;
-  assert.deepEqual(branches.map((b) => b.name).sort(), ['alt-take', 'main']);
-  assert.equal(branches.find((b) => b.name === 'alt-take').parked, true, 'its parked changes came with the name');
-  await checkout(root, { target: 'alt-take' });
-  assert.equal(readFileSync(join(root, 'title.html'), 'utf8'), 'parked');
-  await discardChanges(root);
-  await checkout(root, { target: 'main' });
-  await rejects(deleteBranch(root, 'main'), 'current');
-  await assert.rejects(deleteBranch(root, 'alt-take'), (e) => e.code === 'unmerged' && e.commits === 1);
-  await deleteBranch(root, 'alt-take', { force: true });
-  assert.deepEqual((await status(root)).branches.map((b) => b.name), ['main']);
+  await saveVersion(root, { message: 'Two' });
+  const into = mkdtempSync(join(tmpdir(), 'of-history-copy-'));
+  const { missing } = await copyVersion(root, first, into);
+  assert.deepEqual(missing, []);
+  assert.equal(readFileSync(join(into, 'title.html'), 'utf8'), 'title');
+  assert.deepEqual(readFileSync(join(into, 'shot.mp4')), shot);
+  assert.equal(readFileSync(join(root, 'title.html'), 'utf8'), 'two', 'the project stays as it is');
 });
 
-test('merge: a clean one, a collision that stops, and one where the person says whose side wins', async () => {
+test('the versions of every branch an earlier edition made, and the changes it parked, are listed and can be checked out', async () => {
   const root = project();
-  writeFileSync(join(root, 'end.html'), 'end');
-  writeFileSync(join(root, 'film.html'), film(page('title.html'), page('end.html', 5)));
-  await commitChanges(root, 'One');
-  await checkout(root, { target: 'ending', create: true });
-  writeFileSync(join(root, 'end.html'), 'new end');
-  await commitChanges(root, 'New ending');
-  await checkout(root, { target: 'main' });
-  assert.equal(await mergeBranch(root, { branch: 'ending', message: 'Merge ending' }), true);
-  assert.equal(readFileSync(join(root, 'end.html'), 'utf8'), 'new end');
-  assert.equal(await mergeBranch(root, { branch: 'ending', message: 'Again' }), false, 'nothing left to merge');
-  /* both change the title */
-  await checkout(root, { target: 'ending' });
-  writeFileSync(join(root, 'title.html'), 'theirs');
-  await commitChanges(root, 'Their title');
-  await checkout(root, { target: 'main' });
-  writeFileSync(join(root, 'title.html'), 'ours');
-  await rejects(mergeBranch(root, { branch: 'ending', message: 'x' }), 'dirty');
-  await commitChanges(root, 'Our title');
-  const before = (await log(root)).length;
-  await rejects(mergeBranch(root, { branch: 'ending', message: 'Merge' }), 'conflict');
-  assert.equal(readFileSync(join(root, 'title.html'), 'utf8'), 'ours', 'stopped: nothing changed');
-  assert.equal((await status(root)).changes, null);
-  assert.equal((await log(root)).length, before);
-  await mergeBranch(root, { branch: 'ending', message: 'Merge, their title', prefer: 'theirs' });
-  assert.equal(readFileSync(join(root, 'title.html'), 'utf8'), 'theirs');
-  const [merge] = await log(root);
-  assert.equal(merge.message, 'Merge, their title');
-  assert.equal(merge.parents.length, 2);
+  await saveVersion(root, { message: 'One' });
+  writeFileSync(join(root, 'title.html'), 'two');
+  const second = await saveVersion(root, { message: 'Two' });
+  /* an earlier edition's branch, and changes it left on it */
+  writeFileSync(join(root, 'title.html'), 'idea');
+  const idea = await saveVersion(root, { message: 'Idea' });
+  gitOut(root, ['update-ref', 'refs/heads/idea', idea]);
+  gitOut(root, ['update-ref', 'refs/heads/main', second]);
+  const parked = gitOut(root, ['commit-tree', `${idea}^{tree}`, '-p', idea, '-m', 'parked: idea']).trim();
+  gitOut(root, ['update-ref', 'refs/openfilm/parked/idea', parked]);
+  writeFileSync(join(root, 'title.html'), 'two');
+  const list = await versions(root);
+  assert.deepEqual(list.map((v) => [v.kind, v.name]).sort(), [['named', 'Idea'], ['named', 'One'], ['named', 'Two'], ['parked', 'idea']]);
+  await checkoutVersion(root, idea);
+  assert.equal(readFileSync(join(root, 'title.html'), 'utf8'), 'idea');
+  assert.equal((await status(root)).branch, 'idea', 'the branch whose tip it is');
+  const page2 = await log(root, { limit: 2 });
+  assert.equal(page2.versions.length, 2);
+  assert.equal(page2.more, true);
 });
 
-test('merge: film.html edits on both sides in different places come together line by line', async () => {
+test('on its own, a version is saved only when the film changed, never for notes, logs or markers', async () => {
   const root = project();
-  writeFileSync(join(root, 'a.html'), 'a');
-  writeFileSync(join(root, 'b.html'), 'b');
-  const base = ['title.html', 'a.html', 'b.html'];
-  const lines = (srcs) => film(...srcs.map((s, i) => page(s, i * 10)));
-  writeFileSync(join(root, 'film.html'), lines(base));
-  await commitChanges(root, 'Base');
-  await checkout(root, { target: 'other', create: true });
-  writeFileSync(join(root, 'film.html'), lines(base).replace('src="b.html" at="20"', 'src="b.html" at="25"'));
-  await commitChanges(root, 'Later b');
-  await checkout(root, { target: 'main' });
-  writeFileSync(join(root, 'film.html'), lines(base).replace('src="title.html" at="0"', 'src="title.html" at="1"'));
-  await commitChanges(root, 'Later title');
-  assert.equal(await mergeBranch(root, { branch: 'other', message: 'Both' }), true);
-  const merged = readFileSync(join(root, 'film.html'), 'utf8');
-  assert.match(merged, /src="title.html" at="1"/);
-  assert.match(merged, /src="b.html" at="25"/);
-  assert.equal((await status(root)).changes, null);
+  assert.ok(await saveVersion(root, { kind: 'auto' }), 'the first: all the film is new');
+  assert.equal(await saveVersion(root, { kind: 'auto' }), null, 'nothing changed');
+  writeFileSync(join(root, 'notes.md'), 'the agent\'s notes');
+  writeFileSync(join(root, 'render.log'), 'a log');
+  writeFileSync(join(root, '.film', 'markers.json'), '{"markers":[{"id":"m1","t":1}]}');
+  assert.equal(await saveVersion(root, { kind: 'agent' }), null, 'notes, a log and markers are not the film');
+  writeFileSync(join(root, 'title.html'), 'a new title');
+  const saved = await saveVersion(root, { kind: 'auto' });
+  assert.ok(saved, 'a scene changed');
+  assert.ok(tracked(root).includes('notes.md'), 'and the notes go with it');
+  assert.deepEqual((await versions(root)).map((v) => v.kind), ['auto', 'auto']);
+  writeFileSync(join(root, 'notes.md'), 'more notes');
+  assert.ok(await saveVersion(root), 'the person may save a version of anything that changed');
+});
+
+test('a history that lost its empty folders (a copy or a sync left them out) still works', async () => {
+  const root = project();
+  /* never saved yet, as a copy without empty folders leaves it: refs/ and objects/ gone */
+  await status(root);
+  rmSync(join(root, '.film', 'history', 'refs'), { recursive: true, force: true });
+  rmSync(join(root, '.film', 'history', 'objects'), { recursive: true, force: true });
+  assert.ok((await status(root)).changes, 'read');
+  assert.ok(await saveVersion(root, { message: 'One' }), 'and saved');
+  /* moved since, too: its settings name the folder where it was */
+  const config = join(root, '.film', 'history', 'config');
+  writeFileSync(config, readFileSync(config, 'utf8').replace(/worktree = .*/, 'worktree = /somewhere/else'));
+  rmSync(join(root, '.film', 'history', 'refs', 'tags'), { recursive: true, force: true });
+  assert.deepEqual((await versions(root)).map((v) => v.name), ['One']);
 });
 
 test('the folder\'s own .git is never touched', async () => {
   const root = project();
   execFileSync('git', ['init', '--quiet'], { cwd: root });
-  await commitChanges(root, 'saved');
+  await saveVersion(root);
   assert.match(execFileSync('git', ['status', '--porcelain'], { cwd: root }).toString(), /film\.html/, 'film.html is still untracked in the person\'s repository');
   assert.throws(() => execFileSync('git', ['rev-parse', '--verify', 'HEAD'], { cwd: root, stdio: 'ignore' }), 'and it has no commit');
 });
@@ -311,25 +304,25 @@ test('a history the folder brought with it never runs its commands: it is put as
   execFileSync('git', ['--git-dir', gitDir, 'config', 'core.fsmonitor', `echo fsmonitor >> '${ran}'; false`]);
   writeFileSync(join(gitDir, 'hooks', 'post-commit'), `#!/bin/sh\necho hook >> '${ran}'\n`);
   chmodSync(join(gitDir, 'hooks', 'post-commit'), 0o755);
-  assert.deepEqual(await log(root), [], 'not read either');
-  assert.ok(await commitChanges(root, 'saved'));
+  assert.deepEqual(await log(root), { versions: [], more: false }, 'not read either');
+  assert.ok(await saveVersion(root));
   assert.equal(existsSync(ran), false, 'nothing it named ran');
   assert.equal(readdirSync(join(root, '.film')).filter((n) => n.startsWith('history-from-elsewhere-')).length, 1, 'it is put aside, not deleted');
   assert.doesNotMatch(readFileSync(join(gitDir, 'config'), 'utf8'), /fsmonitor/);
-  assert.equal((await log(root)).length, 1);
+  assert.equal((await versions(root)).length, 1);
 
   /* a hook put into Studio's own history does not run either */
   mkdirSync(join(gitDir, 'hooks'), { recursive: true });
   writeFileSync(join(gitDir, 'hooks', 'post-commit'), `#!/bin/sh\necho hook >> '${ran}'\n`);
   chmodSync(join(gitDir, 'hooks', 'post-commit'), 0o755);
   writeFileSync(join(root, 'film.html'), film(page('title.html'), page('title.html', 3)));
-  assert.ok(await commitChanges(root, 'saved again'));
+  assert.ok(await saveVersion(root));
   assert.equal(existsSync(ran), false);
 });
 
 test('a project moved or renamed keeps its history: every call names the folder where it is now', async () => {
   const before = project();
-  await commitChanges(before, 'First cut');
+  await saveVersion(before, { message: 'First cut' });
   const gitDir = (root) => join(root, '.film', 'history');
   const worktree = (root) => execFileSync('git', ['--git-dir', gitDir(root), 'config', 'core.worktree'], { env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1' } }).toString().trim();
   /* as git init wrote it, and as an earlier Studio left it: where the folder was */
@@ -338,22 +331,24 @@ test('a project moved or renamed keeps its history: every call names the folder 
   /* the commit's tidy-up (git gc --auto) may still be running in the folder: Windows refuses the move for a moment */
   await replaceFile(before, root);
   assert.equal(worktree(root), before, 'the history still says the old folder');
-  assert.deepEqual((await log(root)).map((c) => c.message), ['First cut']);
+  assert.deepEqual((await versions(root)).map((v) => v.name), ['First cut']);
   assert.equal(worktree(root), root, 'and says the new one once used');
   assert.equal((await status(root)).changes, null, 'nothing looks changed');
   writeFileSync(join(root, 'end.html'), 'end');
   writeFileSync(join(root, 'film.html'), film(page('title.html'), page('end.html', 3)));
-  await commitChanges(root, 'Moved');
-  await checkout(root, { target: 'alt', create: true });
-  assert.deepEqual((await status(root)).branches.map((b) => [b.name, b.current]), [['alt', true], ['main', false]]);
-  assert.deepEqual((await log(root)).map((c) => c.message), ['Moved', 'First cut']);
+  await saveVersion(root, { message: 'Moved' });
+  assert.deepEqual((await versions(root)).map((v) => v.name), ['Moved', 'First cut']);
   assert.deepEqual(tracked(root), ['end.html', 'film.html', 'title.html']);
 });
 
-test('a commit an earlier edition made shows the name the person gave it', async () => {
+test('a version an earlier edition made shows the name the person gave it', async () => {
   const root = project();
-  await commitChanges(root, 'studio: named "Final"');
-  assert.equal((await log(root))[0].message, 'Final');
+  await saveVersion(root);
+  gitOut(root, ['update-ref', 'refs/heads/main', gitOut(root, ['commit-tree', 'HEAD^{tree}', '-m', 'studio: named "Final"']).trim()]);
+  gitOut(root, ['update-ref', 'refs/tags/v-' + Buffer.from('Older').toString('base64url'), 'HEAD']);
+  assert.deepEqual((await versions(root)).map((v) => [v.kind, v.name]), [['named', 'Older']]);
+  gitOut(root, ['update-ref', '-d', 'refs/tags/v-' + Buffer.from('Older').toString('base64url')]);
+  assert.deepEqual((await versions(root)).map((v) => [v.kind, v.name]), [['named', 'Final']]);
 });
 
 test('progress is told while an action runs', async () => {
@@ -361,7 +356,7 @@ test('progress is told while an action runs', async () => {
   writeFileSync(join(root, 'clip.mp4'), randomBytes(1 << 20));
   writeFileSync(join(root, 'film.html'), film(page('title.html'), video('clip.mp4', 2)));
   const seen = [];
-  await commitChanges(root, 'One', { onProgress: (p) => seen.push(p.phase) });
+  await saveVersion(root, { message: 'One', onProgress: (p) => seen.push(p.phase) });
   assert.ok(seen.includes('scan') && seen.includes('store'));
 });
 
@@ -415,21 +410,35 @@ test('an earlier Studio\'s history is brought up to date on first use: its versi
   assert.deepEqual(mark(join(root, 'render.log')), logNow);
   assert.ok(existsSync(join(root, '.film', 'history', 'openfilm.json')));
   assert.equal(readdirSync(trash).filter((n) => n.startsWith('history-before-cleanup-')).length >= 1, true, 'the old history went to the trash');
-  const commits = await log(root);
-  assert.deepEqual(commits.map((c) => c.message), ['History cleanup: the film\'s files only, its media kept from now on', 'v2', 'v1']);
-  assert.deepEqual(tracked(root), ['assets/shot.mp4', 'assets/vo.mp3', 'film.html', 'title.html'], 'the film\'s files only, its video added');
+  const commits = await versions(root);
+  assert.deepEqual(commits.filter((c) => c.kind !== 'parked').map((c) => [c.kind, c.name]), [['upgrade', ''], ['named', 'v2'], ['named', 'v1']]);
+  assert.deepEqual(tracked(root), ['assets/shot.mp4', 'assets/vo.mp3', 'film.html', 'render.log', 'title.html'], 'the project\'s files, its video added, not the renders');
   assert.deepEqual(tracked(root, 'HEAD~1'), ['assets/vo.mp3', 'film.html', 'title.html'], 'a version as it was, without what the film never used');
-  const newV1 = commits[2].commit;
+  const newV1 = commits.find((c) => c.name === 'v1').commit;
   assert.ok(existsSync(join(posters, `${newV1}.jpg`)), 'its picture under its new name');
   /* an old version comes back: its page and its sound, byte for byte */
-  await restoreCommit(root, newV1);
+  await checkoutVersion(root, newV1);
   assert.equal(readFileSync(join(root, 'title.html'), 'utf8'), 'title');
   assert.deepEqual(readFileSync(join(root, 'assets', 'vo.mp3')), vo1);
-  await discardChanges(root);
-  assert.equal(readFileSync(join(root, 'title.html'), 'utf8'), 'title two');
   /* the changes left on a branch are still there */
-  assert.equal((await status(root)).branches.find((b) => b.name === 'idea').parked, true);
-  await checkout(root, { target: 'idea' });
+  const parked = commits.find((c) => c.kind === 'parked');
+  assert.equal(parked.name, 'idea');
+  await checkoutVersion(root, parked.commit);
   assert.equal(readFileSync(join(root, 'title.html'), 'utf8'), 'idea, half done');
-  assert.ok(existsSync(join(root, 'renders', 'f2.exr')) && existsSync(join(root, 'render.log')), 'and nothing else was touched');
+  assert.ok(existsSync(join(root, 'renders', 'f2.exr')), 'what no version holds is never touched');
+  await checkoutVersion(root, commits[0].commit);
+  assert.equal(readFileSync(join(root, 'render.log'), 'utf8'), 'a long log', 'the newest, as it was');
+});
+
+test('a history that kept the film\'s files only is brought up to date: the project\'s others are added, nothing looks changed', async () => {
+  const root = project();
+  await saveVersion(root, { message: 'One' });
+  writeFileSync(join(root, '.film', 'history', 'openfilm.json'), '{"format":2}\n');
+  writeFileSync(join(root, 'notes.md'), 'notes a version did not keep before');
+  const before = mark(join(root, 'notes.md'));
+  assert.equal((await status(root)).changes, null);
+  assert.deepEqual((await versions(root)).map((v) => [v.kind, v.name]), [['upgrade', ''], ['named', 'One']]);
+  assert.ok(tracked(root).includes('notes.md'));
+  assert.deepEqual(mark(join(root, 'notes.md')), before, 'the person\'s files are not written');
+  assert.match(readFileSync(join(root, '.film', 'history', 'openfilm.json'), 'utf8'), /"format":3/);
 });

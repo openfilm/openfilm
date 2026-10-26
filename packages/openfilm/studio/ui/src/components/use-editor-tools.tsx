@@ -7,7 +7,7 @@
 import * as React from 'react';
 import { AudioLines, HardDriveUpload, Replace, Snowflake } from 'lucide-react';
 
-import { api, type Clip, type Film, type Op, type ProjectSettings } from '@/api';
+import { api, projectEvents, type Clip, type Film, type Op, type ProjectSettings } from '@/api';
 import { useT } from '@/i18n';
 import { canReplace, familyOfClip, replaceClip, type ReplaceFamily, type ReplaceFile } from '@/lib/clip-replace';
 import { freezeSourceMs, planFreeze } from '@/lib/freeze-frame';
@@ -16,6 +16,7 @@ import {
   addMarker, changeMarker, markerClip, nextMarker, parseMarkers, placeMarkers, removeMarker, type Marker, type PlacedMarker,
 } from '@/lib/markers';
 import type { ClipEdit } from '@/lib/film-clip-edits';
+import { historyMoved } from '@/lib/project-history';
 import { heardClips, toggleSolo } from '@/lib/solo';
 import type { EditModel } from '@/lib/timeline-edit';
 import { readTimelinePrefs, switchesOf } from '@/lib/timeline-prefs';
@@ -80,8 +81,8 @@ export function useEditorTools({
   const filmRef = React.useRef(film);
   filmRef.current = film;
 
-  /* ── markers: read once per project, written whole on each change (one at a time, in order), each change a step
-     of the history (⌘Z puts the list back as it was) ── */
+  /* ── markers: read once per project and again when a version is restored, written whole on each change (one at a
+     time, in order), each change a step of the history (⌘Z puts the list back as it was) ── */
   const [markers, setMarkers] = React.useState<Marker[]>([]);
   const markersRef = React.useRef(markers);
   markersRef.current = markers;
@@ -89,8 +90,10 @@ export function useEditorTools({
   React.useEffect(() => {
     let live = true;
     setMarkers([]);
-    void api.markers(projectId).then((raw) => { if (live) setMarkers(parseMarkers(raw)); }, () => {});
-    return () => { live = false; };
+    const load = () => { void api.markers(projectId).then((raw) => { if (live) setMarkers(parseMarkers(raw)); }, () => {}); };
+    load();
+    const stop = projectEvents(projectId, (event) => { if (historyMoved(event)) load(); });
+    return () => { live = false; stop(); };
   }, [projectId]);
   const writeMarkers = React.useCallback((next: Marker[]): Promise<string | null> => {
     setMarkers(next);

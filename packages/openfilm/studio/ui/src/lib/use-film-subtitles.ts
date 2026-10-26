@@ -26,6 +26,7 @@ import {
   type SubtitleTranscribeResult,
   type SubtitleTranslateResult,
 } from './subtitles';
+import { historyMoved } from './project-history';
 import { useSubtitleStyle } from './use-subtitle-style';
 
 /** Changes come in bursts (an agent writes several files): one request after they settle. */
@@ -69,7 +70,8 @@ export function useFilmSubtitles(projectId: string): FilmSubtitles {
     void refresh();
     let timer: ReturnType<typeof setTimeout> | null = null;
     const stop = projectEvents(projectId, (event) => {
-      if (event.type !== 'film' && event.type !== 'files') return;
+      /* a version restored may bring other corrections of the lines (Studio's own file, which no folder event tells) */
+      if (event.type !== 'film' && event.type !== 'files' && !historyMoved(event)) return;
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => { timer = null; void refresh(); }, REFRESH_MS);
     });

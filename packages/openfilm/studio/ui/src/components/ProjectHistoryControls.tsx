@@ -1,26 +1,25 @@
 /**
- * The Version history panel: git, as a person knows it from GitHub, told as a film.
+ * The Version history panel: git as VS Code's Source Control shows it.
  *
- *   ⑂ main ▾                  the branch checked out; its menu lists every branch (switch, merge, rename, delete) and
- *                             makes new ones
- *   Uncommitted changes       what the film has that the last commit does not, in scenes and sounds; a message and
- *                             Commit, or Discard
- *   History · main            the branch's commits, newest first, each with the film's picture when it was committed
- *                             and what it changed; ⋯ restores one (as uncommitted changes) or branches from it
- *   In history / Not in history   the film's files (what a commit keeps) and the folder's others, which history
- *                             leaves alone; each opens to its list
+ *   [ Message (⌘↵ to commit)      ]
+ *   [ ✓ Commit                    ]
+ *   ▾ Changes  3              ↶      the files changed against the version checked out (A, M, D); ↶ discards them
+ *   ▾ Graph                          every version, newest first, drawn as a graph; the one checked out has a hollow
+ *     ○ Another way   Current  12:04 dot and Current. A click lists what a version changed; ⋯ (or a right click):
+ *     ● Two                    11:58 Checkout, Copy as a new project
  *
- * Every commit is the person's, made with their message; nothing here commits on its own. Going back to a version
- * puts it in the folder as uncommitted changes; switching branches with changes asks whether to leave them on their
- * branch (they are there again on coming back) or bring them along. Data and actions come from `useProjectHistory`.
+ * Checking out a version makes no version of its own: the folder holds its files and the next commit goes from there.
+ * With changes, it asks first (commit them, or discard them and check out). Versions saved on their own (Auto
+ * versions) are listed only when Settings › Advanced says so. Data and actions come from `useProjectHistory`.
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown, ChevronRight, Clapperboard, GitBranch, GitMerge, Loader2, MoreHorizontal, Pencil, Plus, Tag, Trash2, Undo2, X } from 'lucide-react';
-import { useT } from '@/i18n';
-import { formatBytes } from '@/lib/export-jobs';
+import { Check, ChevronDown, ChevronRight, Copy, GitBranch, History, Loader2, MoreHorizontal, Undo2, X } from 'lucide-react';
+import { api, PREFS_EVENT } from '@/api';
+import { useLanguage, useT } from '@/i18n';
 import {
-  commitPoster, historyAge, historyApi, summaryParts, type Branch, type Commit, type HistoryFile, type HistoryFiles, type HistoryProgress, type Summary,
+  graphRows, historyApi, isAutomatic, shownVersions, versionLabel,
+  type Change, type GraphRow, type HistoryProgress, type Version,
 } from '@/lib/project-history';
 import { Card, CardActions, CardButton, POPOVER_CHROME } from './Card';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
@@ -28,16 +27,13 @@ import { Tooltip } from './Tooltip';
 import type { ProjectHistory } from './use-project-history';
 
 const PANEL_W = 400;
+/** A graph row's height, and a lane's width (px). */
+const ROW_H = 26;
+const LANE_W = 12;
+/** The graph's lanes, the first in the accent as VS Code draws the branch checked out. */
+const LANE_COLORS = ['var(--accent)', '#e3a33b', '#b57bee', '#3fb27f', '#e8735a', '#5fb3d9'];
 
 type Translate = (key: string) => string;
-
-function ageLabel(at: number, now: number, t: Translate): string {
-  const age = historyAge(at, now);
-  if (!age) return '';
-  if (age.unit === 'now') return t('history.justNow');
-  const key = age.unit === 'minute' ? 'history.minutesAgo' : age.unit === 'hour' ? 'history.hoursAgo' : 'history.daysAgo';
-  return t(key).replace('{n}', String(age.n));
-}
 
 /** How far an action is, in a few words: "Keeping media… 3 of 20". */
 function progressText(progress: HistoryProgress, t: Translate): string {
@@ -45,14 +41,46 @@ function progressText(progress: HistoryProgress, t: Translate): string {
   return t(key).replace('{done}', String(progress.done)).replace('{total}', String(progress.total));
 }
 
-/** What changed, as a short sentence: "2 scenes added · 1 sound edited". */
-function summaryText(summary: Summary, t: Translate): string {
-  return summaryParts(summary).map(({ key, n }) => t(`versions.${key}${n === 1 ? 'One' : ''}`).replace('{n}', String(n))).join(' · ');
+/** Times as the person's language writes them: today's as a clock time, others as a day. */
+function useWhen() {
+  const language = useLanguage();
+  return React.useMemo(() => {
+    const clock = new Intl.DateTimeFormat(language, { hour: 'numeric', minute: '2-digit' });
+    const day = new Intl.DateTimeFormat(language, { month: 'short', day: 'numeric' });
+    const dayYear = new Intl.DateTimeFormat(language, { year: 'numeric', month: 'short', day: 'numeric' });
+    return (at: number) => {
+      if (!(at > 0)) return '';
+      const d = new Date(at);
+      const now = new Date();
+      if (d.toDateString() === now.toDateString()) return clock.format(at);
+      return (d.getFullYear() === now.getFullYear() ? day : dayYear).format(at);
+    };
+  }, [language]);
+}
+
+/** A version's name as shown: its message, else what kind of version it is. */
+function labelOf(v: Version, all: readonly Version[], t: Translate, when: (at: number) => string): string {
+  const l = versionLabel(v, all);
+  if (!l.key) return l.name ?? '';
+  return t(l.key).replace('{name}', l.name ?? '').replace('{time}', l.at ? when(l.at) : '');
+}
+
+/** Whether Settings › Advanced lists versions saved on their own (read again when the settings change). */
+function useShowAuto(open: boolean): boolean {
+  const [show, setShow] = React.useState(false);
+  React.useEffect(() => {
+    if (!open) return undefined;
+    const read = () => { void api.prefs().then((p) => setShow(p.showAutoVersions === true)).catch(() => {}); };
+    read();
+    window.addEventListener(PREFS_EVENT, read);
+    return () => window.removeEventListener(PREFS_EVENT, read);
+  }, [open]);
+  return show;
 }
 
 /**
- * The top bar's Version history button (GitBranch). It carries `data-history-trigger`, which the panel's
- * click-outside check recognizes, so clicking it again toggles the panel instead of closing and reopening it.
+ * The top bar's Version history button. It carries `data-history-trigger`, which the panel's click-outside check
+ * recognizes, so clicking it again toggles the panel instead of closing and reopening it.
  */
 export function ProjectHistoryButton({ open, onClick, className }: {
   open: boolean;
@@ -70,7 +98,7 @@ export function ProjectHistoryButton({ open, onClick, className }: {
         data-history-trigger=""
         className={className}
       >
-        <GitBranch size={16} />
+        <History size={16} />
       </button>
     </Tooltip>
   );
@@ -78,25 +106,22 @@ export function ProjectHistoryButton({ open, onClick, className }: {
 
 /** The questions the panel asks, one at a time. */
 type Dialog =
-  | { kind: 'switch'; target: string }
-  | { kind: 'newBranch'; from?: Commit }
-  | { kind: 'newBranchCarry'; name: string; from: Commit }
-  | { kind: 'rename'; branch: string }
-  | { kind: 'delete'; branch: string }
-  | { kind: 'deleteForce'; branch: string; commits: number }
-  | { kind: 'merge'; branch: string }
-  | { kind: 'mergeConflict'; branch: string; message: string }
-  | { kind: 'restore'; commit: Commit }
-  | { kind: 'discard' };
+  | { kind: 'checkout'; version: Version }
+  | { kind: 'discard' }
+  | { kind: 'copy'; version: Version };
 
 export function ProjectHistoryControls({
   projectId,
+  projectName,
   history,
   open,
   anchor,
   onClose,
+  onOpenProject,
 }: {
   projectId: string;
+  /** the project's name: a copy is named after it */
+  projectName: string;
   history: ProjectHistory;
   open: boolean;
   /**
@@ -105,13 +130,19 @@ export function ProjectHistoryControls({
    */
   anchor?: { x: number; y: number } | null;
   onClose: () => void;
+  /** a copy was made: open it */
+  onOpenProject: (id: string) => void;
 }) {
   const t = useT();
+  const when = useWhen();
+  const showAuto = useShowAuto(open);
   const { state, busy, progress } = history;
   const panelRef = React.useRef<HTMLDivElement>(null);
   const [message, setMessage] = React.useState('');
   const [dialog, setDialog] = React.useState<Dialog | null>(null);
-  const [branchesOpen, setBranchesOpen] = React.useState(false);
+  const [changesOpen, setChangesOpen] = React.useState(true);
+  const [graphOpen, setGraphOpen] = React.useState(true);
+  const [expanded, setExpanded] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
   const dialogRef = React.useRef(dialog);
   dialogRef.current = dialog;
@@ -129,73 +160,52 @@ export function ProjectHistoryControls({
       if (target.closest?.('[data-history-trigger]')) return;
       onClose();
     };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !dialogRef.current) { if (branchesOpen) setBranchesOpen(false); else onClose(); }
-    };
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape' && !dialogRef.current) onClose(); };
     document.addEventListener('mousedown', onDown);
     window.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('mousedown', onDown);
       window.removeEventListener('keydown', onKey);
     };
-  }, [open, onClose, branchesOpen]);
+  }, [open, onClose]);
 
-  /* loaded again on opening: commits may have been made while it was closed */
+  /* loaded again on opening: versions may have been committed while it was closed */
   const { refresh } = history;
   React.useEffect(() => { if (open) void refresh(); }, [open, refresh]);
-  React.useEffect(() => { if (!open) { setBranchesOpen(false); setNotice(null); } }, [open]);
+  React.useEffect(() => { if (!open) { setExpanded(null); setNotice(null); } }, [open]);
+
+  const status = state?.status ?? null;
+  const all = React.useMemo(() => state?.versions ?? [], [state]);
+  const versions = React.useMemo(() => shownVersions(all, showAuto, status?.head ?? null), [all, showAuto, status?.head]);
+  const rows = React.useMemo(() => graphRows(versions), [versions]);
 
   if (!open) return null;
 
-  const now = Date.now();
-  const status = state?.status ?? null;
-  const commits = state?.commits ?? [];
-  const branch = status?.branch ?? 'main';
   const changes = status?.changes ?? null;
-  const committed = commits.length > 0;
-  const say = (text: string) => setNotice(text);
-
-  /* ── the actions, with their questions ── */
-  const switchTo = (target: string) => {
-    setBranchesOpen(false);
-    if (changes) { setDialog({ kind: 'switch', target }); return; }
-    void doCheckout({ branch: target });
-  };
-  const doCheckout = async (o: { branch: string; create?: boolean; from?: string; carry?: 'leave' | 'bring' }) => {
-    setDialog(null);
-    const result = await history.checkout(o);
-    if (!result.ok && result.code === 'conflict') say(t('versions.errorCarry'));
-    else if (result.ok && result.body.parkedBack === false) say(t('versions.parkedStuck'));
-    else if (result.ok) setNotice(null);
-  };
+  const label = (v: Version) => labelOf(v, all, t, when);
   const doCommit = async () => {
-    if (!message.trim()) return;
-    if (await history.commit(message.trim())) { setMessage(''); setNotice(null); }
+    if (!changes || busy) return;
+    if (await history.save(message.trim())) { setMessage(''); setNotice(null); }
   };
-  const doRestore = async (commit: Commit, discardFirst: boolean) => {
+  const doCheckout = async (version: Version, discard: boolean) => {
     setDialog(null);
-    if (discardFirst && !(await history.discard())) return;
-    const result = await history.restore(commit.commit);
-    if (result.ok) setMessage(t('versions.restoredMessage').replace('{name}', commit.message));
-    else if (result.code === 'dirty') setDialog({ kind: 'restore', commit });
+    const result = await history.checkout(version.commit, discard);
+    if (result.ok) setNotice(result.body.missing?.length ? t('versions.missing') : null);
+    else if (result.code === 'dirty') setDialog({ kind: 'checkout', version });
   };
-  const doDelete = async (name: string, force: boolean) => {
+  const doDiscard = async () => {
     setDialog(null);
-    const result = await history.remove(name, force);
-    if (!result.ok && result.code === 'unmerged') setDialog({ kind: 'deleteForce', branch: name, commits: result.commits ?? 1 });
+    await history.discard();
   };
-  const doMerge = async (name: string, text: string, prefer?: 'ours' | 'theirs') => {
+  const doCopy = async (version: Version, typed: string) => {
     setDialog(null);
-    const result = await history.merge({ branch: name, message: text, ...(prefer ? { prefer } : {}) });
-    if (!result.ok && result.code === 'conflict') setDialog({ kind: 'mergeConflict', branch: name, message: text });
-    else if (!result.ok && result.code === 'dirty') say(t('versions.errorDirty'));
-    else if (result.ok && result.body.merged === false) say(t('versions.nothingToMerge').replace('{name}', name).replace('{branch}', branch));
+    const result = await history.copy(version.commit, typed);
+    if (result.ok) onOpenProject(result.body.project.id);
   };
-
-  const commitMenu = (commit: Commit, head: boolean): ContextMenuEntry[] => [
-    ...(head && !changes ? [] : [{ id: 'restore', icon: <Undo2 size={14} />, label: t('versions.restore'), onSelect: () => setDialog({ kind: 'restore', commit }) }]),
-    { id: 'branch', icon: <GitBranch size={14} />, label: t('versions.branchFrom'), onSelect: () => setDialog({ kind: 'newBranch', from: commit }) },
-  ];
+  const checkout = (version: Version) => {
+    if (changes) setDialog({ kind: 'checkout', version });
+    else void doCheckout(version, false);
+  };
 
   return (
     <>
@@ -214,9 +224,8 @@ export function ProjectHistoryControls({
             maxHeight: `calc(100vh - ${(anchor ? anchor.y : 40) + 12}px)`,
           }}
         >
-          {/* the title, and the branch checked out */}
-          <div className="flex shrink-0 items-center gap-2 px-4 pb-2 pt-3">
-            <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--text)]">{t('versions.title')}</span>
+          <div className="flex shrink-0 items-center gap-2 py-2 pl-3.5 pr-2">
+            <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">{t('versions.title')}</span>
             {busy ? <Loader2 size={13} className="animate-spin text-[var(--text-faint)]" aria-label={t('versions.working')} /> : null}
             <button
               type="button"
@@ -227,463 +236,297 @@ export function ProjectHistoryControls({
               <X size={14} strokeWidth={1.75} />
             </button>
           </div>
-          {progress ? (
-            <div role="status" className="shrink-0 px-4 pb-2">
-              <div className="truncate text-[11.5px] text-[var(--text-muted)]">{progressText(progress, t)}</div>
-              <div className="mt-1 h-[3px] overflow-hidden rounded-full bg-[var(--surface-2)]">
-                <div className="h-full rounded-full bg-[var(--accent)] transition-[width] duration-150" style={{ width: `${progress.total ? Math.min(100, (progress.done / progress.total) * 100) : 0}%` }} />
-              </div>
+
+          {state === null && history.failed ? (
+            <div role="alert" className="flex flex-col items-center gap-2 px-4 pb-6 pt-4 text-center">
+              <p className="text-[12px] leading-relaxed text-[var(--text-muted)]">{t('versions.loadFailed')}</p>
+              <CardButton weight="secondary" onClick={() => void refresh()}>{t('versions.retry')}</CardButton>
             </div>
-          ) : null}
-          <div className="relative shrink-0 px-3 pb-2">
-            <button
-              type="button"
-              onClick={() => setBranchesOpen((v) => !v)}
-              disabled={!committed}
-              aria-expanded={branchesOpen}
-              aria-haspopup="listbox"
-              aria-label={t('versions.branchOf').replace('{branch}', branch)}
-              className="flex h-8 w-full items-center gap-2 rounded-lg border border-[var(--border)] px-2.5 text-left text-[12.5px] text-[var(--text)] transition hover:bg-[var(--bg-hover)] disabled:cursor-default disabled:opacity-60"
-            >
-              <GitBranch size={13} className="shrink-0 text-[var(--text-dim)]" />
-              <span className="min-w-0 flex-1 truncate font-medium">{branch}</span>
-              {committed ? (
-                <span className="shrink-0 text-[11.5px] text-[var(--text-faint)]">
-                  {t(status && status.branches.length === 1 ? 'versions.branchCountOne' : 'versions.branchCount').replace('{n}', String(status?.branches.length ?? 1))}
-                </span>
-              ) : null}
-              <ChevronDown size={13} className={`shrink-0 text-[var(--text-faint)] transition-transform ${branchesOpen ? 'rotate-180' : ''}`} />
-            </button>
-            {branchesOpen && status ? (
-              <BranchList
-                branches={status.branches}
-                current={branch}
-                now={now}
-                busy={busy !== null}
-                t={t}
-                onSwitch={switchTo}
-                onNew={() => { setBranchesOpen(false); setDialog({ kind: 'newBranch' }); }}
-                onMerge={(name) => { setBranchesOpen(false); setDialog({ kind: 'merge', branch: name }); }}
-                onRename={(name) => { setBranchesOpen(false); setDialog({ kind: 'rename', branch: name }); }}
-                onDelete={(name) => { setBranchesOpen(false); setDialog({ kind: 'delete', branch: name }); }}
-              />
-            ) : null}
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
-            {notice ? (
-              <p role="status" className="mb-2 rounded-lg bg-[var(--surface-2)] px-3 py-2 text-[12px] leading-relaxed text-[var(--text-dim)]">{notice}</p>
-            ) : null}
-
-            {/* what is not committed yet, and committing it */}
-            {state === null ? (
-              <div className="flex justify-center py-6"><Loader2 size={16} className="animate-spin text-[var(--text-faint)]" /></div>
-            ) : changes || !committed ? (
-              <section className="mb-3 rounded-xl border border-[var(--border)] p-2.5">
-                <div className="flex items-center gap-2.5">
-                  <Thumb src={`/api/projects/${encodeURIComponent(projectId)}/poster?v=${encodeURIComponent(`${status?.head ?? ''}:${changes?.count ?? 0}:${JSON.stringify(changes?.summary ?? null)}`)}`} large />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[12.5px] font-medium text-[var(--text)]">{t('versions.changesTitle')}</div>
-                    <div className="mt-0.5 line-clamp-2 text-[11.5px] leading-snug text-[var(--text-muted)]">
-                      {committed ? (changes ? summaryText(changes.summary, t) : '') : t('versions.firstCommitHint')}
-                    </div>
+          ) : state === null ? (
+            <div className="flex justify-center pb-6 pt-3"><Loader2 size={16} className="animate-spin text-[var(--text-faint)]" /></div>
+          ) : (
+            <div className="min-h-0 flex-1 overflow-y-auto pb-2">
+              {/* the message and Commit */}
+              <form className="grid gap-1.5 px-3 pb-2" onSubmit={(event) => { event.preventDefault(); void doCommit(); }}>
+                <textarea
+                  value={message}
+                  onChange={(event) => setMessage(event.target.value)}
+                  rows={1}
+                  maxLength={500}
+                  aria-label={t('versions.messagePlaceholder')}
+                  placeholder={t('versions.messagePlaceholder')}
+                  disabled={busy !== null}
+                  className="min-h-[28px] w-full resize-none rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-2 py-[5px] text-[12.5px] leading-[16px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)] focus:border-[var(--accent)]"
+                  onKeyDown={(event) => {
+                    event.stopPropagation();
+                    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void doCommit(); }
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={busy !== null || !changes}
+                  className="flex h-7 items-center justify-center gap-1.5 rounded-md bg-[var(--accent)] text-[12.5px] font-medium text-white transition hover:brightness-110 disabled:cursor-default disabled:opacity-40"
+                >
+                  {busy === 'save' ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                  {t('versions.commit')}
+                </button>
+              </form>
+              {progress ? (
+                <div role="status" className="px-3.5 pb-2">
+                  <div className="truncate text-[11px] text-[var(--text-muted)]">{progressText(progress, t)}</div>
+                  <div className="mt-1 h-[2px] overflow-hidden rounded-full bg-[var(--surface-2)]">
+                    <div className="h-full rounded-full bg-[var(--accent)] transition-[width] duration-150" style={{ width: `${progress.total ? Math.min(100, (progress.done / progress.total) * 100) : 0}%` }} />
                   </div>
                 </div>
-                <form
-                  className="mt-2.5 flex items-center gap-2"
-                  onSubmit={(event) => { event.preventDefault(); void doCommit(); }}
-                >
-                  <input
-                    value={message}
-                    onChange={(event) => setMessage(event.target.value)}
-                    maxLength={500}
-                    aria-label={t('versions.messagePlaceholder')}
-                    placeholder={t('versions.messagePlaceholder')}
-                    disabled={busy !== null}
-                    className="h-8 min-w-0 flex-1 rounded-lg bg-[var(--surface-2)] px-2.5 text-[12.5px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)] focus:ring-1 focus:ring-[var(--border-strong)]"
-                    onKeyDown={(event) => event.stopPropagation()}
-                  />
-                  <CardButton type="submit" weight="primary" disabled={busy !== null || !message.trim()}>
-                    {busy === 'commit' ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-                    {t('versions.commit')}
-                  </CardButton>
-                </form>
-                {committed ? (
-                  <button
-                    type="button"
-                    onClick={() => setDialog({ kind: 'discard' })}
-                    disabled={busy !== null}
-                    className="mt-1.5 px-0.5 text-[11.5px] text-[var(--text-faint)] transition hover:text-[var(--err)] disabled:opacity-50"
-                  >
-                    {t('versions.discard')}
-                  </button>
+              ) : null}
+              {notice ? <p role="status" className="mx-3 mb-2 rounded-md bg-[var(--surface-2)] px-2.5 py-1.5 text-[11.5px] leading-relaxed text-[var(--text-dim)]">{notice}</p> : null}
+
+              {/* the changes */}
+              <Section
+                title={t('versions.changes')}
+                count={changes?.count ?? 0}
+                open={changesOpen}
+                onToggle={() => setChangesOpen((v) => !v)}
+                action={changes && status?.head ? (
+                  <Tooltip label={t('versions.discardAll')} side="bottom">
+                    <button type="button" aria-label={t('versions.discardAll')} disabled={busy !== null} onClick={() => setDialog({ kind: 'discard' })}
+                      className="flex h-5 w-5 items-center justify-center rounded text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+                      <Undo2 size={13} />
+                    </button>
+                  </Tooltip>
                 ) : null}
-              </section>
-            ) : (
-              <p className="mb-3 flex items-center gap-1.5 px-1 text-[12px] text-[var(--text-faint)]">
-                <Check size={12} /> {t('versions.noChanges')}
-              </p>
-            )}
+              />
+              {changesOpen ? (
+                changes ? (
+                  <ul className="pb-1">
+                    {changes.files.map((f) => <FileRow key={f.path} file={f} indent={22} />)}
+                    {changes.count > changes.files.length ? (
+                      <li className="py-0.5 pl-[22px] text-[11px] text-[var(--text-faint)]">{t('versions.moreFiles').replace('{n}', String(changes.count - changes.files.length))}</li>
+                    ) : null}
+                  </ul>
+                ) : (
+                  <p className="pb-1.5 pl-[22px] text-[11.5px] text-[var(--text-faint)]">{t('versions.noChanges')}</p>
+                )
+              ) : null}
 
-            {/* the branch's commits */}
-            {committed ? (
-              <>
-                <div className="mb-1 px-1 text-[11.5px] font-medium text-[var(--text-faint)]">{t('versions.historyOf').replace('{branch}', branch)}</div>
-                <ol>
-                  {commits.map((commit, index) => (
-                    <CommitRow
-                      key={commit.commit}
-                      projectId={projectId}
-                      commit={commit}
-                      head={commit.commit === status?.head}
-                      last={index === commits.length - 1}
-                      age={ageLabel(commit.at, now, t)}
-                      busy={busy !== null}
-                      menu={commitMenu(commit, commit.commit === status?.head)}
-                      t={t}
-                    />
-                  ))}
-                </ol>
-              </>
-            ) : null}
-
-            {status?.files ? <FilesHeld projectId={projectId} files={status.files} t={t} /> : null}
-          </div>
+              {/* the graph */}
+              <Section title={t('versions.graph')} open={graphOpen} onToggle={() => setGraphOpen((v) => !v)} />
+              {graphOpen ? (
+                versions.length ? (
+                  <ol>
+                    {versions.map((v, i) => (
+                      <VersionRow
+                        key={v.commit}
+                        projectId={projectId}
+                        version={v}
+                        row={rows[i]}
+                        label={label(v)}
+                        time={when(v.at)}
+                        head={v.commit === status?.head}
+                        expanded={expanded === v.commit}
+                        busy={busy !== null}
+                        t={t}
+                        onToggle={() => setExpanded((cur) => (cur === v.commit ? null : v.commit))}
+                        onCheckout={() => checkout(v)}
+                        onCopy={() => setDialog({ kind: 'copy', version: v })}
+                      />
+                    ))}
+                    {state.more ? (
+                      <li>
+                        <button type="button" onClick={() => void history.showMore()} className="w-full py-1 pl-[22px] text-left text-[11.5px] text-[var(--text-muted)] transition hover:text-[var(--text)]">
+                          {t('versions.showMore')}
+                        </button>
+                      </li>
+                    ) : null}
+                  </ol>
+                ) : (
+                  <p className="pb-1.5 pl-[22px] text-[11.5px] text-[var(--text-faint)]">{t('versions.noVersions')}</p>
+                )
+              ) : null}
+            </div>
+          )}
         </div>,
         document.body,
       )}
       <Questions
         dialog={dialog}
-        branch={branch}
+        label={dialog && dialog.kind !== 'discard' ? label(dialog.version) : ''}
+        copyName={dialog && dialog.kind === 'copy' ? t('versions.copyDefault').replace('{project}', projectName).replace('{name}', label(dialog.version)) : ''}
         t={t}
         onCancel={() => setDialog(null)}
-        onSwitch={(target, carry) => void doCheckout({ branch: target, carry })}
-        onNewBranch={(name, from) => {
-          /* from where the folder is, or with nothing uncommitted: nothing to leave or bring */
-          if (!from || from.commit === status?.head || !changes) { void doCheckout({ branch: name, create: true, ...(from ? { from: from.commit } : {}) }); return; }
-          setDialog({ kind: 'newBranchCarry', name, from });
-        }}
-        onNewBranchCarry={(name, from, carry) => void doCheckout({ branch: name, create: true, from: from.commit, carry })}
-        onRename={(from, name) => { setDialog(null); void history.rename(from, name); }}
-        onDelete={(name, force) => void doDelete(name, force)}
-        onMerge={(name, text, prefer) => void doMerge(name, text, prefer)}
-        onRestore={(commit) => void doRestore(commit, Boolean(changes))}
-        onDiscard={() => { setDialog(null); void history.discard().then((done) => { if (done) setMessage(''); }); }}
-        dirty={Boolean(changes)}
+        onCheckout={(v) => void doCheckout(v, true)}
+        onDiscard={() => void doDiscard()}
+        onCopy={(v, typed) => void doCopy(v, typed)}
       />
     </>
   );
 }
 
-/**
- * What history keeps of the folder: the film's files, and the other files it leaves alone (renders, frames, other
- * takes). Each opens to its list, loaded when opened.
- */
-function FilesHeld({ projectId, files, t }: { projectId: string; files: HistoryFiles; t: Translate }) {
-  const [open, setOpen] = React.useState<'held' | 'ignored' | null>(null);
-  const [lists, setLists] = React.useState<{ held: HistoryFile[]; ignored: HistoryFile[] } | null>(null);
-  const toggle = (which: 'held' | 'ignored') => {
-    const next = open === which ? null : which;
-    setOpen(next);
-    if (next) void historyApi.files(projectId).then((l) => { if (l) setLists(l); });
-  };
-  const row = (which: 'held' | 'ignored', label: string) => (
-    <button
-      type="button"
-      onClick={() => toggle(which)}
-      aria-expanded={open === which}
-      className="flex w-full items-center gap-1 rounded-md px-1 py-0.5 text-left text-[11.5px] text-[var(--text-faint)] transition hover:text-[var(--text-dim)]"
-    >
-      {open === which ? <ChevronDown size={12} className="shrink-0" /> : <ChevronRight size={12} className="shrink-0" />}
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-    </button>
-  );
-  const n = (key: string, count: number) => t(count === 1 ? `${key}One` : key).replace('{n}', count.toLocaleString());
-  const list = open && lists ? lists[open] : null;
+/** A section's header, as VS Code's: a chevron, the title in capitals, a count, and an action on the right. */
+function Section({ title, count, open, onToggle, action }: { title: string; count?: number; open: boolean; onToggle: () => void; action?: React.ReactNode }) {
   return (
-    <div className="mt-3 border-t border-[var(--border)] pt-2">
-      {row('held', `${n('versions.heldFiles', files.held)} · ${formatBytes(files.heldBytes)}`)}
-      {files.ignored ? row('ignored', n('versions.ignoredFiles', files.ignored)) : null}
-      {open ? (
-        list ? (
-          <ul className="mt-1 max-h-[180px] overflow-y-auto rounded-lg bg-[var(--surface-2)] px-2 py-1.5">
-            {list.map((f) => (
-              <li key={f.path} className="flex items-center gap-2 py-[1px] text-[11px] text-[var(--text-muted)]" title={f.path}>
-                <span className="min-w-0 flex-1 truncate">{f.path}</span>
-                <span className="shrink-0 tabular-nums text-[var(--text-faint)]">{formatBytes(f.size)}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div className="flex justify-center py-2"><Loader2 size={13} className="animate-spin text-[var(--text-faint)]" /></div>
-        )
-      ) : null}
+    <div className="group flex h-[22px] items-center pr-2.5">
+      <button type="button" onClick={onToggle} aria-expanded={open} className="flex min-w-0 flex-1 items-center gap-1 pl-1.5 text-left">
+        {open ? <ChevronDown size={14} className="shrink-0 text-[var(--text-muted)]" /> : <ChevronRight size={14} className="shrink-0 text-[var(--text-muted)]" />}
+        <span className="truncate text-[11px] font-semibold uppercase tracking-wide text-[var(--text-dim)]">{title}</span>
+      </button>
+      {action}
+      {count ? <span className="ml-1.5 rounded-full bg-[var(--surface-2)] px-1.5 text-[10.5px] tabular-nums leading-[16px] text-[var(--text-muted)]">{count}</span> : null}
     </div>
   );
 }
 
-/** The film's picture at a commit (or now): a placeholder until there is one. */
-function Thumb({ src, large = false }: { src: string | null; large?: boolean }) {
-  const [failed, setFailed] = React.useState(false);
-  React.useEffect(() => { setFailed(false); }, [src]);
-  const size = large ? 'h-[45px] w-[80px]' : 'h-[34px] w-[60px]';
-  if (!src || failed) {
-    return (
-      <span className={`${size} flex shrink-0 items-center justify-center rounded-md bg-[var(--surface-2)] text-[var(--text-faint)]`}>
-        <Clapperboard size={large ? 16 : 13} />
-      </span>
-    );
-  }
-  return <img src={src} alt="" onError={() => setFailed(true)} className={`${size} shrink-0 rounded-md bg-black object-cover`} />;
+const LETTER = { added: 'A', modified: 'M', deleted: 'D' } as const;
+const LETTER_COLOR = { added: '#3fb27f', modified: '#e3a33b', deleted: '#e8735a' } as const;
+
+/** A changed file, as VS Code lists it: its name, its folder dimmed, and its status letter. */
+function FileRow({ file, indent }: { file: Change; indent: number }) {
+  const slash = file.path.lastIndexOf('/');
+  const name = file.path.slice(slash + 1);
+  const dir = slash < 0 ? '' : file.path.slice(0, slash);
+  return (
+    <li className="flex h-[22px] items-center gap-1.5 pr-3 hover:bg-[var(--bg-hover)]" style={{ paddingLeft: indent }} title={file.path}>
+      <span className={`min-w-0 shrink truncate text-[12px] ${file.change === 'deleted' ? 'text-[var(--text-muted)] line-through' : 'text-[var(--text-dim)]'}`}>{name}</span>
+      {dir ? <span className="min-w-0 flex-1 truncate text-[11px] text-[var(--text-faint)]">{dir}</span> : <span className="flex-1" />}
+      <span className="w-3 shrink-0 text-center text-[11px] font-semibold" style={{ color: LETTER_COLOR[file.change] }}>{LETTER[file.change]}</span>
+    </li>
+  );
 }
 
-function CommitRow({ projectId, commit, head, last, age, busy, menu, t }: {
-  projectId: string;
-  commit: Commit;
-  head: boolean;
-  last: boolean;
-  age: string;
-  busy: boolean;
-  menu: ContextMenuEntry[];
-  t: Translate;
-}) {
-  const [anchor, setAnchor] = React.useState<{ x: number; y: number; top: number } | null>(null);
-  const button = React.useRef<HTMLButtonElement>(null);
-  const merge = commit.parents.length > 1;
+const laneX = (i: number) => 9 + i * LANE_W;
+const laneColor = (i: number) => LANE_COLORS[i % LANE_COLORS.length];
+
+/** A row of the graph: the lanes through it, and its version's dot (hollow: the one checked out). */
+function GraphCell({ row, head }: { row: GraphRow; head: boolean }) {
+  const w = laneX(row.width - 1) + 9;
+  const mid = ROW_H / 2;
+  const path = (x1: number, y1: number, x2: number, y2: number) => (x1 === x2 ? `M${x1} ${y1}V${y2}` : `M${x1} ${y1}C${x1} ${(y1 + y2) / 2} ${x2} ${(y1 + y2) / 2} ${x2} ${y2}`);
   return (
-    <li className="group relative flex items-stretch gap-2">
-      {/* the rail: a line through the commits, a filled dot where the branch is */}
-      <span className="relative w-[12px] shrink-0" aria-hidden>
-        {!last ? <span className="absolute bottom-[-4px] left-[5.5px] top-[22px] w-px bg-[var(--border)]" /> : null}
-        <span className={`absolute left-[2px] top-[17px] h-[8px] w-[8px] rounded-full ${head ? 'bg-[var(--text)]' : 'border border-[var(--border-strong)] bg-[var(--bg-surface)]'}`} />
-      </span>
-      <div className={`mb-0.5 flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 py-1.5 transition ${head ? 'bg-[var(--bg-hover)]' : 'hover:bg-[var(--bg-hover)]'}`}>
-        <Thumb src={commitPoster(projectId, commit.commit)} />
-        <div className="min-w-0 flex-1" title={commit.body ? `${commit.message}\n\n${commit.body}` : commit.message}>
-          <div className="flex min-w-0 items-center gap-1.5">
-            {merge ? <GitMerge size={12} className="shrink-0 text-[var(--text-faint)]" /> : null}
-            <span className={`truncate text-[12.5px] leading-snug ${head ? 'font-medium text-[var(--text)]' : 'text-[var(--text-dim)]'}`}>{commit.message}</span>
-            {commit.tags.map((tag) => (
-              <span key={tag} className="flex shrink-0 items-center gap-0.5 rounded bg-[var(--surface-2)] px-1 text-[10.5px] text-[var(--text-muted)]"><Tag size={9} />{tag}</span>
-            ))}
-          </div>
-          <div className="mt-0.5 truncate text-[11px] text-[var(--text-faint)]">
-            {[summaryText(commit.summary, t), age, commit.commit.slice(0, 7)].filter(Boolean).join(' · ')}
-          </div>
-        </div>
-        {head ? <span className="shrink-0 text-[10.5px] text-[var(--text-muted)]">{t('versions.current')}</span> : null}
+    <svg width={w} height={ROW_H} className="shrink-0" aria-hidden>
+      {row.up.map((l) => <path key={`u${l.from}`} d={path(laneX(l.from), 0, laneX(l.to), mid)} stroke={laneColor(l.from)} strokeWidth={1.5} fill="none" />)}
+      {row.down.map((l) => <path key={`d${l.to}`} d={path(laneX(l.from), mid, laneX(l.to), ROW_H)} stroke={laneColor(l.to)} strokeWidth={1.5} fill="none" />)}
+      <circle cx={laneX(row.col)} cy={mid} r={head ? 4.5 : 3.5} fill={head ? 'var(--bg-surface)' : laneColor(row.col)} stroke={laneColor(row.col)} strokeWidth={head ? 2 : 0} />
+    </svg>
+  );
+}
+
+/** The lanes going on below a row, drawn straight through what it lists when it is opened. */
+function GraphThrough({ row }: { row: GraphRow }) {
+  const w = laneX(row.width - 1) + 9;
+  return (
+    <svg width={w} className="absolute inset-y-0 left-0" height="100%" preserveAspectRatio="none" aria-hidden>
+      {row.down.map((l) => <line key={l.to} x1={laneX(l.to)} x2={laneX(l.to)} y1="0" y2="100%" stroke={laneColor(l.to)} strokeWidth={1.5} />)}
+    </svg>
+  );
+}
+
+function VersionRow({ projectId, version, row, label, time, head, expanded, busy, t, onToggle, onCheckout, onCopy }: {
+  projectId: string;
+  version: Version;
+  row: GraphRow;
+  label: string;
+  time: string;
+  head: boolean;
+  expanded: boolean;
+  busy: boolean;
+  t: Translate;
+  onToggle: () => void;
+  onCheckout: () => void;
+  onCopy: () => void;
+}) {
+  const [menu, setMenu] = React.useState<{ x: number; y: number; top?: number } | null>(null);
+  const [files, setFiles] = React.useState<Change[] | null>(null);
+  const button = React.useRef<HTMLButtonElement>(null);
+  React.useEffect(() => {
+    if (!expanded || files) return;
+    void historyApi.versionFiles(projectId, version.commit).then((f) => setFiles(f ?? []));
+  }, [expanded, files, projectId, version.commit]);
+  const items: ContextMenuEntry[] = [
+    ...(head ? [] : [{ id: 'checkout', icon: <GitBranch size={14} />, label: t('versions.checkout'), onSelect: onCheckout }]),
+    { id: 'copy', icon: <Copy size={14} />, label: t('versions.copy'), onSelect: onCopy },
+  ];
+  const quiet = isAutomatic(version);
+  return (
+    <li>
+      <div
+        className={`group flex h-[26px] items-center pr-1.5 ${expanded ? 'bg-[var(--bg-active)]' : 'hover:bg-[var(--bg-hover)]'}`}
+        onContextMenu={(event) => { event.preventDefault(); setMenu({ x: event.clientX, y: event.clientY }); }}
+      >
+        <button type="button" onClick={onToggle} aria-expanded={expanded} className="flex h-full min-w-0 flex-1 items-center gap-1.5 text-left">
+          <GraphCell row={row} head={head} />
+          <span className={`min-w-0 truncate text-[12.5px] ${head ? 'font-medium text-[var(--text)]' : quiet ? 'text-[var(--text-muted)]' : 'text-[var(--text-dim)]'}`}>{label}</span>
+          {head ? <span className="shrink-0 rounded-full border border-[var(--accent)] px-1.5 text-[10px] leading-[15px] text-[var(--accent)]">{t('versions.current')}</span> : null}
+          <span className="min-w-[8px] flex-1" />
+          <span className="shrink-0 text-[11px] tabular-nums text-[var(--text-faint)] group-hover:hidden">{time}</span>
+        </button>
         <button
           ref={button}
           type="button"
           disabled={busy}
           aria-label={t('versions.moreActions')}
           aria-haspopup="menu"
-          aria-expanded={anchor != null}
+          aria-expanded={menu != null}
           onClick={(event) => {
             const box = event.currentTarget.getBoundingClientRect();
-            setAnchor((cur) => (cur ? null : { x: box.right, y: box.bottom + 4, top: box.top - 4 }));
+            setMenu((cur) => (cur ? null : { x: box.right, y: box.bottom + 4, top: box.top - 4 }));
           }}
-          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] ${anchor ? '' : 'opacity-0 focus-visible:opacity-100 group-hover:opacity-100'}`}
+          className={`h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] ${menu ? 'flex' : 'hidden group-hover:flex'}`}
         >
           <MoreHorizontal size={14} />
         </button>
-        {anchor ? <ContextMenu x={anchor.x} y={anchor.y} flipTo={anchor.top} align="end" trigger={button} onClose={() => setAnchor(null)} items={menu} /> : null}
+        {menu ? <ContextMenu x={menu.x} y={menu.y} flipTo={menu.top} align={menu.top != null ? 'end' : 'start'} trigger={button} onClose={() => setMenu(null)} items={items} /> : null}
       </div>
+      {expanded ? (
+        <div className="relative">
+          <GraphThrough row={row} />
+          {files ? (
+            <ul className="py-0.5">
+              {files.map((f) => <FileRow key={f.path} file={f} indent={laneX(row.width - 1) + 22} />)}
+            </ul>
+          ) : (
+            <div className="flex h-[22px] items-center" style={{ paddingLeft: laneX(row.width - 1) + 22 }}><Loader2 size={12} className="animate-spin text-[var(--text-faint)]" /></div>
+          )}
+        </div>
+      ) : null}
     </li>
   );
 }
 
-function BranchList({ branches, current, now, busy, t, onSwitch, onNew, onMerge, onRename, onDelete }: {
-  branches: Branch[];
-  current: string;
-  now: number;
-  busy: boolean;
-  t: Translate;
-  onSwitch: (name: string) => void;
-  onNew: () => void;
-  onMerge: (name: string) => void;
-  onRename: (name: string) => void;
-  onDelete: (name: string) => void;
-}) {
-  return (
-    <div
-      role="listbox"
-      aria-label={t('versions.branches')}
-      className="absolute left-3 right-3 top-[calc(100%-4px)] z-10 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] shadow-lg"
-      style={{ animation: 'openfilm-rise 0.12s ease-out both' }}
-    >
-      <div className="max-h-[280px] overflow-y-auto p-1">
-        {branches.map((b) => (
-          <BranchRow key={b.name} branch={b} current={b.name === current} currentName={current} now={now} busy={busy} t={t}
-            onSwitch={onSwitch} onMerge={onMerge} onRename={onRename} onDelete={onDelete} />
-        ))}
-      </div>
-      <button
-        type="button"
-        onClick={onNew}
-        disabled={busy}
-        className="flex w-full items-center gap-2 border-t border-[var(--border)] px-3 py-2 text-left text-[12.5px] text-[var(--text)] transition hover:bg-[var(--bg-hover)] disabled:opacity-50"
-      >
-        <Plus size={13} /> {t('versions.newBranch')}
-      </button>
-    </div>
-  );
-}
-
-function BranchRow({ branch, current, currentName, now, busy, t, onSwitch, onMerge, onRename, onDelete }: {
-  branch: Branch;
-  current: boolean;
-  currentName: string;
-  now: number;
-  busy: boolean;
-  t: Translate;
-  onSwitch: (name: string) => void;
-  onMerge: (name: string) => void;
-  onRename: (name: string) => void;
-  onDelete: (name: string) => void;
-}) {
-  const [anchor, setAnchor] = React.useState<{ x: number; y: number; top: number } | null>(null);
-  const button = React.useRef<HTMLButtonElement>(null);
-  const items: ContextMenuEntry[] = [
-    ...(current ? [] : [{ id: 'merge', icon: <GitMerge size={14} />, label: t('versions.mergeInto').replace('{branch}', currentName), onSelect: () => onMerge(branch.name) }]),
-    { id: 'rename', icon: <Pencil size={14} />, label: t('versions.rename'), onSelect: () => onRename(branch.name) },
-    ...(current ? [] : [
-      { id: 'sep', separator: true as const },
-      { id: 'delete', icon: <Trash2 size={14} />, label: t('versions.delete'), danger: true, onSelect: () => onDelete(branch.name) },
-    ]),
-  ];
-  return (
-    <div className="group flex items-center gap-1 rounded-lg transition hover:bg-[var(--bg-hover)]">
-      <button
-        type="button"
-        role="option"
-        aria-selected={current}
-        aria-label={branch.name}
-        disabled={busy}
-        onClick={() => (current ? undefined : onSwitch(branch.name))}
-        className="flex min-w-0 flex-1 items-start gap-2 px-2 py-1.5 text-left disabled:opacity-60"
-      >
-        <span className="mt-[3px] w-[13px] shrink-0">{current ? <Check size={13} className="text-[var(--text)]" /> : null}</span>
-        <span className="min-w-0 flex-1">
-          <span className={`block truncate text-[12.5px] ${current ? 'font-medium text-[var(--text)]' : 'text-[var(--text-dim)]'}`}>{branch.name}</span>
-          <span className="block truncate text-[11px] text-[var(--text-faint)]">
-            {[branch.message, ageLabel(branch.at, now, t)].filter(Boolean).join(' · ')}
-            {branch.parked ? <span className="text-[var(--accent)]"> · {t('versions.parked')}</span> : null}
-          </span>
-        </span>
-      </button>
-      <button
-        ref={button}
-        type="button"
-        disabled={busy}
-        aria-label={t('versions.moreActions')}
-        aria-haspopup="menu"
-        aria-expanded={anchor != null}
-        onClick={(event) => {
-          const box = event.currentTarget.getBoundingClientRect();
-          setAnchor((cur) => (cur ? null : { x: box.right, y: box.bottom + 4, top: box.top - 4 }));
-        }}
-        className={`mr-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[var(--text-faint)] transition hover:bg-[var(--surface-2)] hover:text-[var(--text)] ${anchor ? '' : 'opacity-0 focus-visible:opacity-100 group-hover:opacity-100'}`}
-      >
-        <MoreHorizontal size={14} />
-      </button>
-      {anchor ? <ContextMenu x={anchor.x} y={anchor.y} flipTo={anchor.top} align="end" trigger={button} onClose={() => setAnchor(null)} items={items} /> : null}
-    </div>
-  );
-}
-
 /** Every question the panel asks, as one dialog whose words and choices follow what is asked. */
-function Questions({ dialog, branch, dirty, t, onCancel, onSwitch, onNewBranch, onNewBranchCarry, onRename, onDelete, onMerge, onRestore, onDiscard }: {
+function Questions({ dialog, label, copyName, t, onCancel, onCheckout, onDiscard, onCopy }: {
   dialog: Dialog | null;
-  branch: string;
-  dirty: boolean;
+  label: string;
+  copyName: string;
   t: Translate;
   onCancel: () => void;
-  onSwitch: (target: string, carry: 'leave' | 'bring') => void;
-  onNewBranch: (name: string, from?: Commit) => void;
-  onNewBranchCarry: (name: string, from: Commit, carry: 'leave' | 'bring') => void;
-  onRename: (from: string, name: string) => void;
-  onDelete: (name: string, force: boolean) => void;
-  onMerge: (name: string, message: string, prefer?: 'ours' | 'theirs') => void;
-  onRestore: (commit: Commit) => void;
+  onCheckout: (v: Version) => void;
   onDiscard: () => void;
+  onCopy: (v: Version, name: string) => void;
 }) {
   const [value, setValue] = React.useState('');
   /* each question starts with its own default text */
   React.useEffect(() => {
-    if (!dialog) return;
-    setValue(dialog.kind === 'rename' ? dialog.branch : dialog.kind === 'merge' ? t('versions.mergeMessage').replace('{name}', dialog.branch) : '');
-  }, [dialog, t]);
+    if (dialog?.kind === 'copy') setValue(copyName);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dialog]);
   if (!dialog) return null;
-  const fill = (key: string, vars: Record<string, string | number> = {}) =>
-    Object.entries({ branch, ...vars }).reduce((s, [k, v]) => s.replaceAll(`{${k}}`, String(v)), t(key));
   const cancel = { label: t('versions.cancel'), weight: 'quiet' as const, onClick: onCancel };
-  const typed = value.trim();
-
   switch (dialog.kind) {
-    case 'switch':
+    case 'checkout':
       return (
-        <Ask title={fill('versions.switchTitle', { name: dialog.target })} body={fill('versions.switchBody')} onCancel={onCancel}
-          actions={[cancel,
-            { label: fill('versions.bringChanges', { name: dialog.target }), weight: 'secondary', onClick: () => onSwitch(dialog.target, 'bring') },
-            { label: fill('versions.leaveChanges'), weight: 'primary', onClick: () => onSwitch(dialog.target, 'leave') }]} />
-      );
-    case 'newBranchCarry':
-      return (
-        <Ask title={fill('versions.switchTitle', { name: dialog.name })} body={fill('versions.switchBody')} onCancel={onCancel}
-          actions={[cancel,
-            { label: fill('versions.bringChanges', { name: dialog.name }), weight: 'secondary', onClick: () => onNewBranchCarry(dialog.name, dialog.from, 'bring') },
-            { label: fill('versions.leaveChanges'), weight: 'primary', onClick: () => onNewBranchCarry(dialog.name, dialog.from, 'leave') }]} />
-      );
-    case 'newBranch':
-      return (
-        <Ask
-          title={dialog.from ? fill('versions.newBranchFromTitle', { name: dialog.from.message }) : t('versions.newBranchTitle')}
-          body={fill(dialog.from ? 'versions.newBranchFromBody' : dirty ? 'versions.newBranchBody' : 'versions.newBranchBodyClean')}
-          input={{ value, onChange: setValue, placeholder: t('versions.branchName') }}
-          onCancel={onCancel}
-          actions={[cancel, { label: t('versions.create'), weight: 'primary', disabled: !typed, onClick: () => onNewBranch(typed, dialog.from) }]} />
-      );
-    case 'rename':
-      return (
-        <Ask title={fill('versions.renameTitle', { name: dialog.branch })} input={{ value, onChange: setValue, placeholder: t('versions.branchName') }} onCancel={onCancel}
-          actions={[cancel, { label: t('versions.save'), weight: 'primary', disabled: !typed, onClick: () => onRename(dialog.branch, typed) }]} />
-      );
-    case 'delete':
-      return (
-        <Ask title={fill('versions.deleteTitle', { name: dialog.branch })} body={fill('versions.deleteBody', { name: dialog.branch })} onCancel={onCancel}
-          actions={[cancel, { label: t('versions.delete'), weight: 'danger', onClick: () => onDelete(dialog.branch, false) }]} />
-      );
-    case 'deleteForce':
-      return (
-        <Ask title={fill('versions.deleteForceTitle', { name: dialog.branch })}
-          body={fill(dialog.commits === 1 ? 'versions.deleteForceBodyOne' : 'versions.deleteForceBody', { name: dialog.branch, n: dialog.commits })} onCancel={onCancel}
-          actions={[cancel, { label: t('versions.deleteForce'), weight: 'danger', onClick: () => onDelete(dialog.branch, true) }]} />
-      );
-    case 'merge':
-      return (
-        <Ask title={fill('versions.mergeTitle', { name: dialog.branch })} body={dirty ? fill('versions.errorDirty') : fill('versions.mergeBody', { name: dialog.branch })}
-          input={dirty ? undefined : { value, onChange: setValue, placeholder: t('versions.messagePlaceholder') }} onCancel={onCancel}
-          actions={[cancel, { label: t('versions.mergeConfirm'), weight: 'primary', disabled: dirty || !typed, onClick: () => onMerge(dialog.branch, typed) }]} />
-      );
-    case 'mergeConflict':
-      return (
-        <Ask title={fill('versions.mergeConflictTitle', { name: dialog.branch })} body={fill('versions.mergeConflictBody', { name: dialog.branch })} onCancel={onCancel}
-          actions={[cancel,
-            { label: fill('versions.keepTheirs', { name: dialog.branch }), weight: 'secondary', onClick: () => onMerge(dialog.branch, dialog.message, 'theirs') },
-            { label: fill('versions.keepOurs'), weight: 'primary', onClick: () => onMerge(dialog.branch, dialog.message, 'ours') }]} />
-      );
-    case 'restore':
-      return (
-        <Ask title={fill('versions.restoreTitle', { name: dialog.commit.message })} body={fill(dirty ? 'versions.restoreDirtyBody' : 'versions.restoreBody')} onCancel={onCancel}
-          actions={[cancel, dirty
-            ? { label: t('versions.restoreDiscard'), weight: 'danger', onClick: () => onRestore(dialog.commit) }
-            : { label: t('versions.restoreConfirm'), weight: 'primary', onClick: () => onRestore(dialog.commit) }]} />
+        <Ask title={t('versions.dirtyTitle')} body={t('versions.dirtyBody').replace('{name}', label)} onCancel={onCancel}
+          actions={[cancel, { label: t('versions.discardAndCheckout'), weight: 'danger', onClick: () => onCheckout(dialog.version) }]} />
       );
     case 'discard':
       return (
         <Ask title={t('versions.discardTitle')} body={t('versions.discardBody')} onCancel={onCancel}
-          actions={[cancel, { label: t('versions.discard'), weight: 'danger', onClick: onDiscard }]} />
+          actions={[cancel, { label: t('versions.discardConfirm'), weight: 'danger', onClick: onDiscard }]} />
+      );
+    case 'copy':
+      return (
+        <Ask title={t('versions.copyTitle').replace('{name}', label)} body={t('versions.copyBody')}
+          input={{ value, onChange: setValue, placeholder: t('versions.copyName') }} onCancel={onCancel}
+          actions={[cancel, { label: t('versions.copyConfirm'), weight: 'primary', disabled: !value.trim(), onClick: () => onCopy(dialog.version, value.trim()) }]} />
       );
     default:
       return null;

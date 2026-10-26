@@ -4,9 +4,13 @@
  * and not in film.html, so an agent rewriting the film never resets it.
  *
  * A project whose style was never changed starts from the look this person used last (this browser remembers it,
- * see readLastSubtitleStyle), else the default; nothing is written for it until the person changes something.
+ * see readLastSubtitleStyle), else the default; nothing is written for it until the person changes something. A
+ * version restored (the project's `{ type: 'history', moved }` event) brings its own: read again.
  */
 import * as React from 'react';
+
+import { projectEvents } from '@/api';
+import { historyMoved } from './project-history';
 
 import {
   fetchSubtitleStyle,
@@ -28,6 +32,8 @@ export function useSubtitleStyle(projectId: string): [SubtitleStyle, React.Dispa
   const saved = React.useRef<string | null>(null);
   const styleRef = React.useRef(style);
   styleRef.current = style;
+  const [restored, setRestored] = React.useState(0);
+  React.useEffect(() => projectEvents(projectId, (event) => { if (historyMoved(event)) setRestored((n) => n + 1); }), [projectId]);
 
   React.useEffect(() => {
     saved.current = null;
@@ -45,7 +51,7 @@ export function useSubtitleStyle(projectId: string): [SubtitleStyle, React.Dispa
       if (!ask.signal.aborted) saved.current = '';
     });
     return () => ask.abort();
-  }, [projectId]);
+  }, [projectId, restored]);
 
   React.useEffect(() => {
     /* not loaded yet: writing now could overwrite the project's own style */

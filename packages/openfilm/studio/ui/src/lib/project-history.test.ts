@@ -1,48 +1,76 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { historyAge, historyErrorKey, historyProgressOf, normalizeHistory, summaryParts, type Summary } from './project-history.ts';
+import {
+  graphRows, historyErrorKey, historyMoved, historyProgressOf, isAutomatic, normalizeHistory, shownVersions, versionLabel,
+  type Version,
+} from './project-history.ts';
 
-const none = { added: 0, removed: 0, edited: 0 };
-const summary = (s: Partial<Summary>): Summary => ({ scenes: none, sounds: none, stage: false, other: false, ...s });
-
-test('what changed reads scenes before sounds, added before edited before removed', () => {
-  assert.deepEqual(summaryParts(summary({ scenes: { added: 2, removed: 1, edited: 3 }, sounds: { added: 1, removed: 0, edited: 0 } })), [
-    { key: 'scenesAdded', n: 2 }, { key: 'scenesEdited', n: 3 }, { key: 'scenesRemoved', n: 1 }, { key: 'soundsAdded', n: 1 },
-  ]);
-  assert.deepEqual(summaryParts(summary({ other: true })), [{ key: 'look', n: 0 }], 'a shared file changed: the look');
-  assert.deepEqual(summaryParts(summary({})), [{ key: 'same', n: 0 }]);
-});
+const version = (v: Partial<Version>): Version => ({ commit: 'c', parents: [], at: 0, kind: 'named', name: '', restored: null, ...v });
 
 test('the server\'s answer is checked: what cannot be read is left out, not drawn empty', () => {
   assert.equal(normalizeHistory(null), null);
-  assert.equal(normalizeHistory({ status: {} }), null);
+  assert.equal(normalizeHistory({ status: {} }), null, 'no versions list');
   const read = normalizeHistory({
-    status: { branch: 'main', head: 'abc', branches: [{ name: 'main', current: true }, { nope: 1 }], changes: { count: 2, summary: { scenes: { added: 1 } } } },
-    commits: [{ commit: 'abc', message: 'One', at: 5, summary: {} }, { message: 'no id' }],
+    status: { head: 'abc', branch: 'main', changes: { count: 2, summary: { scenes: { added: 1 } }, files: [{ path: 'a.html', change: 'added' }, { path: 'b.html', change: 'odd' }, { nope: 1 }] } },
+    versions: [{ commit: 'abc', parents: ['def', 7], kind: 'auto', at: 5 }, { kind: 'named' }, { commit: 'def', kind: 'dance', name: 'Old' }],
+    more: true,
   });
-  assert.equal(read?.status.branches.length, 1);
-  assert.deepEqual(read?.status.changes?.summary.scenes, { added: 1, removed: 0, edited: 0 });
-  assert.deepEqual(read?.commits.map((c) => c.message), ['One']);
-  assert.equal(normalizeHistory({ status: { branch: 'main', changes: null } })?.status.changes, null);
-  assert.equal(normalizeHistory({ status: { branch: 'main' } })?.status.files, null, 'an older Studio says nothing of the files');
-  assert.deepEqual(normalizeHistory({ status: { branch: 'main', files: { held: 3, heldBytes: '9', ignored: 2 } } })?.status.files, { held: 3, heldBytes: 0, ignored: 2 });
+  assert.deepEqual(read?.status.changes?.files, [{ path: 'a.html', change: 'added' }, { path: 'b.html', change: 'modified' }]);
+  assert.deepEqual(read?.versions.map((v) => [v.commit, v.kind, v.name, v.parents]), [['abc', 'auto', '', ['def']], ['def', 'named', 'Old', []]]);
+  assert.equal(read?.status.branch, 'main');
+  assert.equal(read?.more, true);
+  assert.equal(normalizeHistory({ status: { changes: null }, versions: [] })?.status.branch, null, 'a version checked out on its own');
 });
 
-test('a progress event is read only when it is one', () => {
-  assert.deepEqual(historyProgressOf({ type: 'history-progress', op: 'commit', phase: 'store', done: 2, total: 5 }), { op: 'commit', phase: 'store', done: 2, total: 5 });
+test('a version is called by its message, else by what it is', () => {
+  const named = version({ commit: 'a', name: 'Rough cut', at: 100 });
+  const auto = version({ commit: 'b', kind: 'auto', at: 200 });
+  const all = [named, auto];
+  assert.deepEqual(versionLabel(named, all), { key: '', name: 'Rough cut' });
+  assert.deepEqual(versionLabel(auto, all), { key: 'versions.kindAuto' });
+  assert.deepEqual(versionLabel(version({ kind: 'restore', restored: 'a' }), all), { key: 'versions.kindRestore', name: 'Rough cut' });
+  assert.deepEqual(versionLabel(version({ kind: 'restore', restored: 'b' }), all), { key: 'versions.kindRestoreAt', at: 200 });
+  assert.deepEqual(versionLabel(version({ kind: 'parked', name: 'idea' }), all), { key: 'versions.kindParked', name: 'idea' });
+  assert.deepEqual(versionLabel(version({ kind: 'saved' }), all), { key: 'versions.kindSaved' });
+  assert.equal(isAutomatic(auto), true);
+  assert.equal(isAutomatic(named), false);
+});
+
+test('versions saved on their own are hidden unless asked for; what they came from takes their place in the graph', () => {
+  const list = [
+    version({ commit: 'd', parents: ['c'] }),
+    version({ commit: 'c', kind: 'auto', parents: ['b'] }),
+    version({ commit: 'b', kind: 'agent', parents: ['a'] }),
+    version({ commit: 'a' }),
+  ];
+  assert.deepEqual(shownVersions(list, true, 'd').map((v) => v.commit), ['d', 'c', 'b', 'a']);
+  assert.deepEqual(shownVersions(list, false, 'd').map((v) => [v.commit, v.parents]), [['d', ['a']], ['a', []]]);
+  assert.deepEqual(shownVersions(list, false, 'c').map((v) => [v.commit, v.parents]), [['d', ['c']], ['c', ['a']], ['a', []]], 'the one checked out is always shown');
+});
+
+test('the graph: one lane for a line of versions; a second lane where a version was checked out and committed on', () => {
+  const line = graphRows([version({ commit: 'c', parents: ['b'] }), version({ commit: 'b', parents: ['a'] }), version({ commit: 'a' })]);
+  assert.deepEqual(line.map((r) => r.col), [0, 0, 0]);
+  assert.deepEqual(line[0], { col: 0, up: [], down: [{ from: 0, to: 0 }], width: 1 });
+  assert.deepEqual(line[2].down, [], 'the first version ends the line');
+  /* "Another way" committed on One after checking it out; "Two" stays on a line of its own */
+  const fork = graphRows([version({ commit: 'way', parents: ['one'] }), version({ commit: 'two', parents: ['one'] }), version({ commit: 'one' })]);
+  assert.deepEqual(fork.map((r) => r.col), [0, 1, 0]);
+  assert.deepEqual(fork[1].up, [{ from: 0, to: 0 }], 'the first line passes Two by');
+  assert.deepEqual(fork[2].up, [{ from: 0, to: 0 }, { from: 1, to: 0 }], 'both lines meet at One');
+  assert.equal(fork[0].width, 2);
+});
+
+test('a progress event is read only when it is one; a checkout says the folder moved', () => {
+  assert.deepEqual(historyProgressOf({ type: 'history-progress', op: 'save', phase: 'store', done: 2, total: 5 }), { op: 'save', phase: 'store', done: 2, total: 5 });
   assert.equal(historyProgressOf({ type: 'history' }), null);
   assert.equal(historyProgressOf({ type: 'history-progress', phase: 'dance' }), null);
-});
-
-test('how long ago; an unreadable time says nothing', () => {
-  assert.deepEqual(historyAge(1000, 30_000), { unit: 'now' });
-  assert.deepEqual(historyAge(0, 120_000), null);
-  assert.deepEqual(historyAge(60_000, 60_000 + 5 * 60_000), { unit: 'minute', n: 5 });
-  assert.deepEqual(historyAge(1, 1 + 3 * 3_600_000), { unit: 'hour', n: 3 });
-  assert.equal(historyAge(Number.NaN, 0), null);
+  assert.equal(historyMoved({ type: 'history', moved: true }), true);
+  assert.equal(historyMoved({ type: 'history' }), false);
 });
 
 test('a refusal is said in our own words', () => {
+  assert.equal(historyErrorKey({ status: 409, code: 'nothing' }), 'versions.errorNothing');
   assert.equal(historyErrorKey({ status: 409, code: 'dirty' }), 'versions.errorDirty');
   assert.equal(historyErrorKey({ status: 501, code: null }), 'versions.errorUnavailable');
   assert.equal(historyErrorKey({ status: 500, code: null }), 'versions.errorGeneric');
