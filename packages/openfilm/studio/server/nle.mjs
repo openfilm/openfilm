@@ -182,10 +182,13 @@ export function planNleTimeline(film, opts) {
   let fileSeq = 0, clipSeq = 0;
   const total = Math.max(1, toFrame(film.duration, rate));
 
+  /* one name to a disk that takes upper and lower case, or a letter written whole or as letter and accent (macOS:
+     `café` NFC and NFD), as the same: two such files would be one */
+  const sameOnDisk = (/** @type {string} */ name) => name.toLowerCase().normalize('NFC');
   const mediaPath = (/** @type {string} */ stem, /** @type {string} */ ext) => {
     let name = `${safeStem(stem)}.${ext}`;
-    for (let n = 2; names.has(name.toLowerCase()); n++) name = `${safeStem(stem)} (${n}).${ext}`;
-    names.add(name.toLowerCase());
+    for (let n = 2; names.has(sameOnDisk(name)); n++) name = `${safeStem(stem)} (${n}).${ext}`;
+    names.add(sameOnDisk(name));
     /* the system's own separators: a draft on Windows names its files with backslashes, as 剪映 does */
     return { name, path: join(opts.mediaDir, name) };
   };

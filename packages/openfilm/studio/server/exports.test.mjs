@@ -587,6 +587,19 @@ test('fades in the editor\'s timeline: a picture that fades is rendered; a sound
   assert.match(xmemlDocument(timeline), /<parameterid>level<\/parameterid>[\s\S]*<keyframe>\s*<when>0<\/when>\s*<value>0<\/value>\s*<\/keyframe>\s*<keyframe>\s*<when>13<\/when>/);
 });
 
+test('an editing project\'s copied files get names of their own when two differ only in case or in how an accent is written', () => {
+  const facts = { duration: 4, hasAudio: true, channels: 2, sampleRate: 48000 };
+  const sound = (id, src, at) => ({ id, src, path: join(scratch, src), at, from: 0, to: 2, speed: 1, volume: 1, enabled: true, role: 'voice', facts });
+  const nfc = 'caf\u00e9', nfd = 'cafe\u0301';
+  const timeline = planNleTimeline({ stage: { w: 320, h: 180 }, duration: 6, pictures: [], sounds: [
+    sound('a', `assets/a/${nfc}.wav`, 0), sound('b', `assets/b/${nfd}.wav`, 2), sound('c', `assets/c/CAF\u00c9.wav`, 4),
+  ] }, { title: 'Names', fps: 25, audio: 'clips', media: 'copy', mediaDir: '/out/media' });
+  const names = timeline.files.map((f) => f.name);
+  assert.equal(names.length, 3);
+  assert.equal(new Set(names.map((n) => n.toLowerCase().normalize('NFC'))).size, 3, names.join(', '));
+  assert.deepEqual(timeline.files.map((f) => f.job.from), ['a', 'b', 'c'].map((d, i) => join(scratch, `assets/${d}/${[nfc, nfd, 'CAF\u00c9'][i]}.wav`)));
+});
+
 test('Final Cut Pro keeps source audio rows when an effect overlaps adjacent narration clips', () => {
   const facts = { duration: 120, hasAudio: true, channels: 2, sampleRate: 48000 };
   const sound = (id, track, at, to) => ({ id, track, at, from: 0, to, speed: 1, volume: 1, enabled: true,
