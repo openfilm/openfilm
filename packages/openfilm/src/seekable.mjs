@@ -18,7 +18,8 @@ const SLOW_GOP_S = 0.5;
 const COPY_GOP_S = 0.25;
 /** A longer video is left as it is: copying it all could take longer than the render it would speed up. */
 const MAX_SECONDS = 10 * 60;
-/** Bigger than this is left as it is (H.264 stops at 4096 on a side in most decoders). */
+/** Bigger than this is not copied at its size (H.264 stops at 4096 on a side in most decoders): left as it is when it
+    plays, else copied scaled down to fit. */
 const MAX_SIDE = 4096;
 /** Changing how copies are made makes new ones. */
 const VERSION = 2;
@@ -71,9 +72,9 @@ const decodedAnywhere = (/** @type {{ codec_name?: string, pix_fmt?: string }} *
  * What a render needs of a video: a copy because its browser does not decode it here (`unplayable`: ProRes in any
  * browser, HEVC without a chip for it, 10-bit H.264…, asked of the browser itself with `plays`; `alpha` when its
  * picture has one to keep), or because it seeks slowly (`slow`, slowSeeking, only when `slow` is asked for); null for
- * neither.
+ * neither. `w` and `h` are the copy's size: `scaled` when that is smaller than the video's.
  * @param {string} file @param {{ plays?: (file: string) => Promise<boolean>, slow?: boolean }} [options]
- * @returns {Promise<{ why: 'unplayable' | 'slow', fps: number, w: number, h: number, alpha: boolean } | null>}
+ * @returns {Promise<{ why: 'unplayable' | 'slow', fps: number, w: number, h: number, alpha: boolean, scaled?: true } | null>}
  */
 export async function copyNeed(file, { plays, slow = true } = {}) {
   let info;
@@ -81,12 +82,20 @@ export async function copyNeed(file, { plays, slow = true } = {}) {
     info = JSON.parse(await probe(file, ['-select_streams', 'v:0', '-show_entries', 'stream=codec_name,width,height,pix_fmt,avg_frame_rate:stream_tags=alpha_mode', '-of', 'json']));
   } catch { return null; }
   const stream = info.streams?.[0];
-  if (!stream || stream.width > MAX_SIDE || stream.height > MAX_SIDE) return null;
+  if (!stream) return null;
+  const w = Number(stream.width), h = Number(stream.height);
   if (plays && !decodedAnywhere(stream) && !(await plays(file))) {
     const [n, d] = String(stream.avg_frame_rate).split('/').map(Number);
     const alpha = /^(yuva|rgba|bgra|argb|abgr|gbrap|ya)/.test(String(stream.pix_fmt)) || stream.tags?.alpha_mode === '1';
-    return { why: 'unplayable', fps: n > 0 && d > 0 ? n / d : 30, w: Number(stream.width), h: Number(stream.height), alpha };
+    const need = { why: /** @type {const} */ ('unplayable'), fps: n > 0 && d > 0 ? n / d : 30, w, h, alpha };
+    /* too big to copy at its size: scaled down to fit, its sides even. The film draws a video scaled to its clip's box,
+       which the original's size sets, so it is placed the same; left out, it would draw nothing at all */
+    const fit = MAX_SIDE / Math.max(w, h);
+    if (fit >= 1) return need;
+    const even = (/** @type {number} */ side) => Math.max(2, Math.round((side * fit) / 2) * 2);
+    return { ...need, w: even(w), h: even(h), scaled: /** @type {const} */ (true) };
   }
+  if (w > MAX_SIDE || h > MAX_SIDE) return null;
   const slowly = slow ? await slowSeeking(file) : null;
   return slowly ? { why: 'slow', fps: slowly.fps, w: slowly.w, h: slowly.h, alpha: false } : null;
 }
@@ -151,11 +160,12 @@ const firstFrame = (url) => new Promise((done) => {
 /**
  * The copies `browser` needs of `files` to show them (seekableCopies, kept in `root`'s cache), each file asked of the
  * browser itself through a page that loads it from the site at `origin`, which serves `root`. `slow`: slow-seeking
- * ones too. A map from a file to its copy; it never fails: a video that can't be copied stays as it is.
+ * ones too. A map from a file to its copy; it never fails: a video that can't be copied stays as it is, and is told
+ * to `failed`.
  * @param {import('playwright-core').Browser} browser @param {string} origin @param {string} root @param {string[]} files
- * @param {{ signal?: AbortSignal, slow?: boolean }} [options]
+ * @param {{ signal?: AbortSignal, slow?: boolean, failed?: (file: string) => void }} [options]
  */
-export async function browserCopies(browser, origin, root, files, { signal, slow = false } = {}) {
+export async function browserCopies(browser, origin, root, files, { signal, slow = false, failed } = {}) {
   if (!files.length) return new Map();
   /** @type {Promise<import('playwright-core').Page> | null} */
   let tester = null;
@@ -165,7 +175,7 @@ export async function browserCopies(browser, origin, root, files, { signal, slow
     return (await tester).evaluate(firstFrame, url).catch(() => false);
   };
   try {
-    return await seekableCopies(files, root, { signal, plays, slow });
+    return await seekableCopies(files, root, { signal, plays, slow, failed });
   } catch {
     return new Map();
   } finally {
@@ -175,12 +185,13 @@ export async function browserCopies(browser, origin, root, files, { signal, slow
 
 /**
  * The copy of each of `files` that needs one (copyNeed), made in `root`'s cache (or found there from before): a map
- * from a file to its copy. A file that is fine as it is, or whose copy fails, is not in it. `plays`: whether the
- * render's browser decodes a file; `slow`: whether slow-seeking ones get a copy too (a render of more than a moment).
+ * from a file to its copy. A file that is fine as it is, or whose copy fails, is not in it; one whose copy fails is
+ * told to `failed`. `plays`: whether the render's browser decodes a file; `slow`: whether slow-seeking ones get a copy
+ * too (a render of more than a moment).
  * @param {string[]} files @param {string} root
- * @param {{ signal?: AbortSignal, plays?: (file: string) => Promise<boolean>, slow?: boolean }} [options]
+ * @param {{ signal?: AbortSignal, plays?: (file: string) => Promise<boolean>, slow?: boolean, failed?: (file: string) => void }} [options]
  */
-export async function seekableCopies(files, root, { signal, plays, slow = true } = {}) {
+export async function seekableCopies(files, root, { signal, plays, slow = true, failed } = {}) {
   const copies = new Map();
   outDir(root, 'seek');
   /* two at a time: on the processor each one keeps several cores busy; on the graphics chip it leaves them free */
@@ -212,6 +223,7 @@ export async function seekableCopies(files, root, { signal, plays, slow = true }
       let result = await shared();
       if (result === 'cancelled' && !signal?.aborted) result = await shared();
       if (result === 'made') known(out);
+      else if (result === 'failed') failed?.(file);
     }
   };
   await Promise.all([worker(), worker()]);
@@ -225,7 +237,7 @@ const making = new Map();
  * `file`'s copy written to `out`, under a name of its own until it is whole: another process making the same copy
  * never writes the same file, and the one renamed last is kept (the same picture). One that cannot replace a copy
  * already there (Windows, while a browser reads it) uses that copy.
- * @param {string} file @param {string} out @param {{ fps: number, w: number, h: number, alpha: boolean }} need @param {AbortSignal} [signal]
+ * @param {string} file @param {string} out @param {{ fps: number, w: number, h: number, alpha: boolean, scaled?: true }} need @param {AbortSignal} [signal]
  * @returns {Promise<'made' | 'failed' | 'cancelled'>}
  */
 async function makeCopy(file, out, need, signal) {
@@ -239,6 +251,7 @@ async function makeCopy(file, out, need, signal) {
   const make = async (/** @type {string | null} */ encoder, /** @type {string[]} */ decoding) => {
     /* the same frames at the same times (passthrough: no frame is added or dropped), the picture only */
     const run = ffmpeg([...decoding, '-i', file, '-map', '0:v:0', '-an', '-sn', '-dn', '-fps_mode', 'passthrough',
+      ...(need.scaled ? ['-vf', `scale=${need.w}:${need.h}`] : []),
       ...(need.alpha ? ['-c:v', 'libvpx-vp9', '-pix_fmt', 'yuva420p', '-b:v', '0', '-crf', '18', '-row-mt', '1', '-deadline', 'realtime', '-cpu-used', '8',
         '-g', String(gop), '-keyint_min', String(gop), '-auto-alt-ref', '0']
         : encoder ? ['-pix_fmt', 'nv12', ...hardwareOptions(encoder, bits, { gop }), ...h264ColorTags(await colorTagsOf(file))]

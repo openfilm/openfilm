@@ -160,6 +160,8 @@ export async function render(args, opts = {}) {
   let format = chip ? { ...own, ...chip.format } : own;
   let encoder = chip?.encoder ?? encoderOf(own.video);
   const workers = Math.max(1, Math.min(pool ? lent.length : Number(opts.workers ?? defaultWorkers(machine(), total)), total));
+  /** @type {string[]} videos whose copy could not be made: drawn as they are, said as it happens and in the result */
+  const uncopied = [];
   /* the videos get copies this browser plays: those it does not decode here (ProRes; HEVC without a chip for it), and
      for a render of more than a moment those that seek slowly (seekable.mjs). A film's video clips load only when
      their time comes, so they are read from film.html (a page drawn around the project's film, as a burned-in
@@ -167,8 +169,13 @@ export async function render(args, opts = {}) {
   if (opts.seekable !== false) {
     const film = isFilm ? entry : opts.root ? FILM_FILE : null;
     const files = [...new Set([...videos, ...(film ? filmVideos(root, film) : [])])];
+    /* one the browser does not decode then fails its first frame, by its clip (timeline.mjs): never drawn black */
+    const failed = (/** @type {string} */ file) => {
+      uncopied.push(file);
+      console.error(`openfilm render: ${shown(file)}: a copy this browser plays could not be made, so it is drawn as it is`);
+    };
     try {
-      copies = await browserCopies(browser, site.url, root, files, { signal: opts.signal, slow: total >= fps * 2 });
+      copies = await browserCopies(browser, site.url, root, files, { signal: opts.signal, slow: total >= fps * 2, failed });
     } catch (e) {
       await probe.close();
       await pool?.give(lent, { retire: true });
@@ -315,6 +322,7 @@ export async function render(args, opts = {}) {
     lines: [
       `→ ${shown(out)}`,
       `  ${total} frames · ${fmt(to - from)} at ${Number(fps.toFixed(3))} fps · ${Math.round(meta.width * scale)}×${Math.round(meta.height * scale)}${samples > 1 ? ` · ${samples} samples/frame` : ''}${alpha ? ' · alpha' : ''} · ${workers} worker${workers > 1 ? 's' : ''} · ${encoder} · ${seconds.toFixed(1)} s`,
+      ...uncopied.map((file) => `✗ copy: ${shown(file)}: could not be made, drawn as it is`),
       ...problems.map((p) => `✗ ${p.kind === 'request' ? 'request' : 'page'}: ${p.message}`),
     ],
   };

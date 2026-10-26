@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile, execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { filmHtml } from './film-doc.mjs';
@@ -90,6 +90,48 @@ test('a render shows ProRes footage, which no browser decodes, through its copy'
     const [r, g, b] = execFileSync('ffmpeg', ['-v', 'error', '-ss', '0.2', '-i', done.out, '-frames:v', '1', '-vf', 'crop=4:4:160:90,format=rgb24', '-f', 'rawvideo', '-']);
     assert.ok(Math.abs(r - 0x20) < 16 && Math.abs(g - 0x60) < 16 && Math.abs(b - 0xc0) < 16, `the footage's colour: ${r},${g},${b}`);
   } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('footage too big for H.264 that the browser does not decode gets a copy scaled down to fit, and a render shows it', ffmpeg, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-seekable-big-'));
+  try {
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=0x2060c0:size=4400x2400:rate=10', '-t', '1', '-c:v', 'prores_ks', '-profile:v', '0', join(dir, 'a.mov')]);
+    assert.deepEqual(await copyNeed(join(dir, 'a.mov'), { plays: async () => false }), { why: 'unplayable', fps: 10, w: 4096, h: 2234, alpha: false, scaled: true });
+    writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'v', src: 'a.mov', at: 0, time: [0, 1] }] }] }));
+    const done = await render([dir, '0-0.5'], { out: join(dir, 'out.mp4'), workers: 1, silent: true, onProgress() {} });
+    const copy = readdirSync(join(dir, '.film/cache/seek')).filter((f) => f.endsWith('.mp4'));
+    assert.equal(copy.length, 1);
+    const size = execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', join(dir, '.film/cache/seek', copy[0])]).toString().trim();
+    assert.equal(size, '4096,2234');
+    const [r, g, b] = execFileSync('ffmpeg', ['-v', 'error', '-ss', '0.2', '-i', done.out, '-frames:v', '1', '-vf', 'crop=4:4:160:90,format=rgb24', '-f', 'rawvideo', '-']);
+    assert.ok(Math.abs(r - 0x20) < 16 && Math.abs(g - 0x60) < 16 && Math.abs(b - 0xc0) < 16, `the footage's colour: ${r},${g},${b}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a copy that could not be made is said, and footage the browser does not decode then fails the render by its clip', {
+  ...ffmpeg, skip: ffmpeg.skip || ((process.platform === 'win32' || process.getuid?.() === 0) && 'a folder it can\'t write to'),
+}, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-seekable-uncopied-'));
+  const seek = join(dir, '.film', 'cache', 'seek');
+  const error = console.error;
+  try {
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=0x2060c0:size=320x180:rate=30', '-t', '1', '-c:v', 'prores_ks', '-profile:v', '3', join(dir, 'a.mov')]);
+    writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'v', src: 'a.mov', at: 0, time: [0, 1] }] }] }));
+    /* the copy can't be written */
+    mkdirSync(seek, { recursive: true });
+    chmodSync(seek, 0o555);
+    const said = [];
+    console.error = (...args) => { said.push(args.join(' ')); };
+    await assert.rejects(render([dir, '0-0.5'], { out: join(dir, 'out.mp4'), workers: 1, silent: true, onProgress() {} }),
+      /clip "v" \(a\.mov\): this browser can't play its video/);
+    assert.ok(said.some((line) => line.includes('a.mov') && line.includes('could not be made')), said.join('\n'));
+  } finally {
+    console.error = error;
+    chmodSync(seek, 0o755);
     rmSync(dir, { recursive: true, force: true });
   }
 });
