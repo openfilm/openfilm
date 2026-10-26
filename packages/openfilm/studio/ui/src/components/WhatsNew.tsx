@@ -1,8 +1,9 @@
 /**
  * "What's new" after an update (lib/whats-new.ts): once Studio runs a newer version than the one whose notes were last
- * shown, the notes since then, in the language shown, grouped as new, improved and fixed, with the full changelog a
- * click away. Closing it marks this version seen. A new install shows nothing (it only remembers the version).
- * Settings › About shows this release's notes again, and Developer previews the newest (WHATS_NEW_EVENT).
+ * shown, the notes since then, in the language shown, grouped as new, improved and fixed; under them, scrolling on,
+ * every earlier release's, so the whole history reads in the person's language (the changelog on GitHub, a click
+ * away, is in English). Closing it marks this version seen. A new install shows nothing (it only remembers the
+ * version). Settings › About shows this release's notes again, and Developer previews the newest (WHATS_NEW_EVENT).
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
@@ -21,7 +22,6 @@ const KIND_ICON: Record<NoteKind, React.ReactNode> = {
 
 export function WhatsNew() {
   const t = useT();
-  const language = useLanguage();
   const [shown, setShown] = React.useState<ReleaseNotes[] | null>(null);
   /** the version to mark seen when closed (after an update), null when opened on asking */
   const [marking, setMarking] = React.useState<string | null>(null);
@@ -67,10 +67,9 @@ export function WhatsNew() {
 
   if (!shown || typeof document === 'undefined') return null;
   const newest = shown[0];
-  const date = (iso: string) => {
-    const d = new Date(`${iso}T12:00:00`);
-    return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString(language, { year: 'numeric', month: 'long', day: 'numeric' });
-  };
+  /* the releases before those shown, the newest first */
+  const oldest = shown[shown.length - 1];
+  const earlier = RELEASES.filter((r) => compareVersions(r.version, oldest.version) < 0);
 
   return createPortal(
     /* over Settings (z 10050), where About and Developer open it */
@@ -80,7 +79,7 @@ export function WhatsNew() {
         aria-modal="true"
         aria-labelledby="whats-new-title"
         onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[min(640px,88vh)] w-full max-w-[520px] flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]"
+        className="flex max-h-[min(760px,88vh)] w-full max-w-[560px] flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]"
       >
         <div className="flex items-start gap-3 px-6 pb-2 pt-6">
           <div className="min-w-0 flex-1">
@@ -95,35 +94,15 @@ export function WhatsNew() {
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-2">
-          {shown.map((release) => {
-            const notes = release.notes[language] ?? release.notes.en;
-            return (
-              <section key={release.version} className="py-3">
-                <p className="mb-2.5 text-[12.5px] text-[var(--text-muted)]">
-                  {shown.length > 1 ? `OpenFilm ${release.version} · ` : ''}{date(release.date)}
-                </p>
-                <div className="flex flex-col gap-3.5">
-                  {KINDS.map((kind) => {
-                    const items = notes.filter((n) => n.kind === kind);
-                    if (!items.length) return null;
-                    return (
-                      <div key={kind}>
-                        <p className="mb-1.5 flex items-center gap-1.5 text-[12.5px] font-semibold text-[var(--text)]">
-                          <span className="text-[var(--text-muted)]">{KIND_ICON[kind]}</span>
-                          {t(`whatsNew.kind.${kind}`)}
-                        </p>
-                        <ul className="flex flex-col gap-1.5 pl-5">
-                          {items.map((n, i) => (
-                            <li key={i} className="list-disc text-[13.5px] leading-[1.6] text-[var(--text-muted)] marker:text-[var(--text-faint)]">{n.text}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            );
-          })}
+          {shown.map((release) => <Release key={release.version} release={release} heading={shown.length > 1} />)}
+          {earlier.length > 0 && (
+            <>
+              <p className="mt-2 border-t border-[var(--border)] pt-4 text-[11.5px] font-medium uppercase tracking-[0.08em] text-[var(--text-faint)]">
+                {t('whatsNew.earlier')}
+              </p>
+              {earlier.map((release) => <Release key={release.version} release={release} heading />)}
+            </>
+          )}
         </div>
         <div className="flex items-center gap-3 border-t border-[var(--border)] px-6 py-4">
           <a href={CHANGELOG} target="_blank" rel="noreferrer"
@@ -138,6 +117,41 @@ export function WhatsNew() {
       </div>
     </div>,
     document.body,
+  );
+}
+
+/** One release's notes in the language shown, grouped as new, improved and fixed; `heading`: its version beside its date. */
+function Release({ release, heading }: { release: ReleaseNotes; heading: boolean }) {
+  const t = useT();
+  const language = useLanguage();
+  const notes = release.notes[language] ?? release.notes.en;
+  const d = new Date(`${release.date}T12:00:00`);
+  const date = Number.isNaN(d.getTime()) ? release.date : d.toLocaleDateString(language, { year: 'numeric', month: 'long', day: 'numeric' });
+  return (
+    <section className="py-3">
+      <p className="mb-2.5 text-[12.5px] text-[var(--text-muted)]">
+        {heading ? <span className="font-medium text-[var(--text)]">{`OpenFilm ${release.version} · `}</span> : null}{date}
+      </p>
+      <div className="flex flex-col gap-3.5">
+        {KINDS.map((kind) => {
+          const items = notes.filter((n) => n.kind === kind);
+          if (!items.length) return null;
+          return (
+            <div key={kind}>
+              <p className="mb-1.5 flex items-center gap-1.5 text-[12.5px] font-semibold text-[var(--text)]">
+                <span className="text-[var(--text-muted)]">{KIND_ICON[kind]}</span>
+                {t(`whatsNew.kind.${kind}`)}
+              </p>
+              <ul className="flex flex-col gap-1.5 pl-5">
+                {items.map((n, i) => (
+                  <li key={i} className="list-disc text-[13.5px] leading-[1.6] text-[var(--text-muted)] marker:text-[var(--text-faint)]">{n.text}</li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 

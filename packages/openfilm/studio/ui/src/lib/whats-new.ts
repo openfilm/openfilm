@@ -1,10 +1,12 @@
 /**
- * What each release brings, said to the person after an update: a few lines a release, in every language Studio
- * speaks (a release without them all does not compile), grouped as new, improved and fixed. The newest first.
+ * What each release brings, said to the person after an update, in every language Studio speaks (a release without them
+ * all does not compile), grouped as new, improved and fixed. The newest first. The dialog shows every release's under
+ * the newest, so this is the history people read in their own language: the changelog on GitHub is in English.
  *
  * Written when a release is made (the "Version packages" pull request): the changesets say everything that changed,
- * for the changelog; these say what a person would notice, in their words, at most six lines. A version without them
- * fails the tests (whats-new.test.ts), so that pull request cannot be merged until they are written.
+ * for the changelog; these say every change a person would notice, in their words, one line each (at most 24). A
+ * version without them fails the tests (whats-new.test.ts), so that pull request cannot be merged until they are
+ * written.
  *
  * After an update the release notes since the version last shown appear once (lib's notesToShow; Studio's prefs keep
  * `seenVersion`). A new install shows none: there is nothing it was updated from.

@@ -11,7 +11,7 @@
  * What was chosen last time for each destination is kept in this browser (localStorage) and comes back next time.
  */
 import {
-  AlertTriangle, AudioLines, Captions, Check, ChevronDown, Clapperboard, Download, Film, FolderArchive, FolderOpen, Images, Layers, Loader2, MonitorPlay, Presentation,
+  AlertTriangle, AudioLines, Captions, Check, ChevronDown, Clapperboard, Film, FolderArchive, FolderOpen, Images, Layers, Loader2, MonitorPlay, Presentation,
   Sparkles, X,
 } from 'lucide-react';
 import React from 'react';
@@ -55,6 +55,8 @@ import {
   type ProjectSizes,
 } from '@/lib/export-jobs';
 import { FILM_FRAME_IDS, filmFrameBox, filmFrameRatio, type FilmFrameFill, type FilmFrameId } from '@/lib/film-frame';
+import { cleanMoments, loadMoments, momentAt, MOMENTS_MAX, momentSeconds, saveMoments, sceneMiddles, type MomentsKind } from '@/lib/export-moments';
+import { MomentPicker } from './MomentPicker';
 
 type Dest = 'social' | 'video' | 'alpha' | 'nle' | 'gif' | 'audio' | 'subtitles' | 'images' | 'slides' | 'project';
 
@@ -230,8 +232,10 @@ export interface ExportCenterProps {
     /** Video clips not probed yet: the film is not known to be silent while there are any. */
     unprobed?: number;
   } | null;
-  /** Where the playhead is: the poster is that frame (the middle of the film without it). */
+  /** Where the playhead is: the image picked to begin with (the middle of the film without it). */
   playheadMs?: number;
+  /** The markers on the film (ms): the images or slides can be one at each. */
+  markersMs?: readonly number[];
   /** The timeline's motion-graphic blocks: a transparent export can be just one of them. */
   mgBlocks?: readonly { clipId: string; label: string; startMs: number; durMs: number }[];
   /** From a block's "Export this clip": opens on transparent assets with that block chosen. */
@@ -335,19 +339,6 @@ export function ExportCenter(props: ExportCenterProps) {
 
   /* where a part can start and end: the picture clips' edges, each named by its clips (rangeMarks) */
   const boundaries = React.useMemo(() => rangeMarks(film?.scenes ?? [], totalMs), [film, totalMs]);
-  /* one still from the middle of each picture clip (clips starting together give one): what the server makes */
-  const stillCount = React.useMemo(() => {
-    if (!film) return 1;
-    let lastAt = -Infinity;
-    let n = 0;
-    for (const sc of [...film.scenes].sort((a, b) => a.startMs - b.startMs)) {
-      if (!(sc.durMs > 0) || sc.startMs >= totalMs || sc.startMs - lastAt < 400) continue;
-      lastAt = sc.startMs;
-      n++;
-    }
-    return Math.max(1, Math.min(120, n));
-  }, [film, totalMs]);
-
   React.useEffect(() => {
     setRange((r) => ({ ...r, from: 0, to: totalMs }));
   }, [totalMs]);
@@ -362,6 +353,26 @@ export function ExportCenter(props: ExportCenterProps) {
   /* 'source' is the project's own rate */
   const projectFps = props.projectFps ?? 30;
   const fpsFor = (f: number | 'source'): number => (f === 'source' ? projectFps : f);
+
+  /* the moments the images and the slides take: what was picked for this project last time; else the frame at the
+     playhead (the film's middle when it is at the start, often a fade from black) and the middle of each scene */
+  const [moments, setMoments] = React.useState<Record<MomentsKind, number[]>>({ images: [], slides: [] });
+  React.useEffect(() => {
+    if (!open || !(totalMs > 0)) return;
+    const kept = (kind: MomentsKind) => cleanMoments(loadMoments(props.projectId, kind) ?? [], totalMs, projectFps, MOMENTS_MAX[kind]);
+    const playhead = props.playheadMs != null && props.playheadMs > 0 && props.playheadMs < totalMs ? props.playheadMs : totalMs / 2;
+    const images = kept('images');
+    const slides = kept('slides');
+    setMoments({
+      images: images.length ? images : [momentAt(playhead, totalMs, projectFps)],
+      slides: slides.length ? slides : sceneMiddles(film?.scenes ?? [], totalMs, projectFps, MOMENTS_MAX.slides),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, props.projectId, totalMs > 0]);
+  const pickMoments = (kind: MomentsKind, list: number[]) => {
+    setMoments((m) => ({ ...m, [kind]: list }));
+    saveMoments(props.projectId, kind, list);
+  };
 
   const patch = <K extends keyof Settings>(key: K, value: Partial<Settings[K]> | Settings[K]) => {
     setS((prev) => ({
@@ -441,16 +452,20 @@ export function ExportCenter(props: ExportCenterProps) {
         }];
       case 'subtitles':
         return [{ kind: 'subtitles', format: s.subtitles.format, label: s.subtitles.format === 'txt' ? t('exportCenter.transcript') : s.subtitles.format.toUpperCase(), ...ranged }];
-      case 'images':
-        return [{
-          kind: 'stills', format: s.images.format, shortEdge: s.images.shortEdge, frame: resolveFrame(s.images.frame), fill: s.images.fill,
-          label: t('exportCenter.stills'), ...burn(s.images.burn),
-        }];
-      case 'slides':
-        return [{
+      case 'images': {
+        /* one picture is a file of its own; several come in a zip */
+        const at = momentSeconds(moments.images);
+        const framing = { format: s.images.format, shortEdge: s.images.shortEdge, frame: resolveFrame(s.images.frame), fill: s.images.fill, ...burn(s.images.burn) };
+        if (at.length === 1) return [{ kind: 'poster', ...framing, at: at[0]!, label: t('exportCenter.dest.images') }];
+        return at.length ? [{ kind: 'stills', ...framing, at, label: t('exportCenter.summaryImages').replace('{n}', String(at.length)) }] : [];
+      }
+      case 'slides': {
+        const at = momentSeconds(moments.slides);
+        return at.length ? [{
           kind: 'slides', format: s.slides.format, shortEdge: s.slides.shortEdge, frame: resolveFrame(s.slides.frame), fill: s.slides.fill,
-          label: s.slides.format === 'pdf' ? 'PDF' : 'PowerPoint', ...burn(s.slides.burn),
-        }];
+          at, label: s.slides.format === 'pdf' ? 'PDF' : 'PowerPoint', ...burn(s.slides.burn),
+        }] : [];
+      }
       case 'project':
         return [{
           kind: 'project', as: s.project.as, parts: projectParts,
@@ -458,7 +473,7 @@ export function ExportCenter(props: ExportCenterProps) {
         }];
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dest, s, can, presets, nleApp, nleAlpha, draftApp, rangeSec?.[0], rangeSec?.[1], props.frame, blocks, nleSourceFps, captions, projectParts]);
+  }, [dest, s, can, presets, nleApp, nleAlpha, draftApp, rangeSec?.[0], rangeSec?.[1], props.frame, blocks, nleSourceFps, captions, projectParts, moments]);
 
   /* a range, not a size: what is in the picture decides a video's or a GIF's size (export-spec.ts); sound is exact */
   const estBytes = React.useMemo(() => requests.reduce<[number, number]>(([low, high], r) => {
@@ -512,6 +527,7 @@ export function ExportCenter(props: ExportCenterProps) {
     if (missingReason) return missingReason;
     if (!totalMs && dest !== 'project') return t('exportCenter.emptyFilm');
     if (dest === 'social' && requests.length === 0) return t('exportCenter.pickPreset');
+    if ((dest === 'images' || dest === 'slides') && moments[dest].length === 0) return t('exportCenter.pickMoments');
     if (dest === 'subtitles' && captionCount != null && captions === 0) return t('exportCenter.noCaptions');
     if (dest === 'audio' && knownSilent) return t('exportCenter.noAudio');
     return null;
@@ -539,16 +555,6 @@ export function ExportCenter(props: ExportCenterProps) {
     } finally {
       setWorking(null);
     }
-  };
-
-  /* the poster is the frame at the playhead; at the very start (often a fade from black) the film's middle */
-  const posterAt = props.playheadMs != null && props.playheadMs > 0 && props.playheadMs < totalMs ? props.playheadMs / 1000 : undefined;
-  const exportPoster = () => {
-    const at = posterAt;
-    void queue([{
-      kind: 'poster', format: s.images.format, shortEdge: s.images.shortEdge, frame: resolveFrame(s.images.frame), fill: s.images.fill,
-      label: t('exportCenter.poster'), ...(at != null ? { at } : {}), ...(captions > 0 && s.images.burn ? { burnSubtitles: true } : {}),
-    }]);
   };
 
   const commitFolder = () => {
@@ -593,7 +599,7 @@ export function ExportCenter(props: ExportCenterProps) {
         role="dialog"
         aria-modal="true"
         aria-label={t('exportCenter.title')}
-        className="flex h-[min(640px,calc(100vh-32px))] w-full max-w-[880px] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]"
+        className="flex h-[min(800px,calc(100vh-32px))] w-full max-w-[1120px] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]"
         style={{ animation: 'openfilm-rise 0.16s ease-out both' }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -1048,79 +1054,72 @@ export function ExportCenter(props: ExportCenterProps) {
                 </>
               )}
 
-              {dest === 'images' && (
-                <>
-                  <Field label={t('exportCenter.poster')}>
-                    <button
-                      type="button"
-                      onClick={exportPoster}
-                      disabled={Boolean(working) || !totalMs || !folder}
-                      className="inline-flex h-9 items-center gap-2 self-start rounded-lg border border-[var(--border)] px-3 text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)] disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      <Download size={14} />
-                      {posterAt != null ? t('exportCenter.posterAt').replace('{time}', formatFilmTime(posterAt * 1000)) : t('exportCenter.posterMiddle')}
-                    </button>
-                  </Field>
-                  <Field label={t('exportCenter.sceneStills')}>
-                    <p className="-mt-1 mb-1 text-[12px] text-[var(--text-muted)]">
-                      {t('exportCenter.sceneStillsDesc').replace('{n}', String(stillCount))}
-                    </p>
-                    <Segmented
-                      value={s.images.format}
-                      options={[{ value: 'png', label: 'PNG' }, { value: 'jpg', label: 'JPG' }]}
-                      onChange={(format) => patch('images', { format })}
-                    />
-                  </Field>
-                  <FrameField
-                    value={s.images.frame}
-                    fill={s.images.fill}
-                    current={props.frame}
+              {/* images and slides: the moments on the left, as large as the dialog allows; how they come out beside them */}
+              {(dest === 'images' || dest === 'slides') && (
+                <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_272px]">
+                  <MomentPicker
+                    key={dest}
+                    projectId={props.projectId}
+                    totalMs={totalMs}
+                    fps={projectFps}
                     stage={stage}
-                    onChange={(frame) => patch('images', { frame })}
-                    onFill={(fill) => patch('images', { fill })}
-                    t={t}
+                    frame={resolveFrame(s[dest].frame)}
+                    fill={s[dest].fill}
+                    scenes={film?.scenes ?? []}
+                    markersMs={props.markersMs ?? []}
+                    playheadMs={props.playheadMs}
+                    value={moments[dest]}
+                    onChange={(list) => pickMoments(dest, list)}
+                    max={MOMENTS_MAX[dest]}
+                    note={captions > 0 && s[dest].burn ? t('exportCenter.moments.noSubtitles') : undefined}
                   />
-                  <Field label={t('exportCenter.resolution')}>
-                    <Chips
-                      value={s.images.shortEdge}
-                      options={STILL_EDGES.map((p) => ({ value: p, label: p === 2160 ? '4K' : `${p}p` }))}
-                      onChange={(shortEdge) => patch('images', { shortEdge })}
-                    />
-                  </Field>
-                  {captions > 0 && (
-                    <Toggle checked={s.images.burn} onChange={(burn) => patch('images', { burn })} label={t('exportCenter.burnIn')} />
-                  )}
-                </>
-              )}
-
-              {dest === 'slides' && (
-                <>
-                  <Field label={t('exportCenter.format')}>
-                    <div className="grid grid-cols-2 gap-2">
-                      {(['pptx', 'pdf'] as const).map((f) => (
-                        <OptionCard
-                          key={f}
-                          on={s.slides.format === f}
-                          title={f === 'pptx' ? 'PowerPoint' : 'PDF'}
-                          desc={t(`exportCenter.slidesHint.${f}`)}
-                          onClick={() => patch('slides', { format: f })}
+                  <div className="flex min-w-0 flex-col gap-5">
+                    {dest === 'images' ? (
+                      <Field label={t('exportCenter.format')}>
+                        <Segmented
+                          value={s.images.format}
+                          options={[{ value: 'png', label: 'PNG' }, { value: 'jpg', label: 'JPG' }]}
+                          onChange={(format) => patch('images', { format })}
                         />
-                      ))}
-                    </div>
-                  </Field>
-                  <FrameField
-                    value={s.slides.frame}
-                    fill={s.slides.fill}
-                    current={props.frame}
-                    stage={stage}
-                    onChange={(frame) => patch('slides', { frame })}
-                    onFill={(fill) => patch('slides', { fill })}
-                    t={t}
-                  />
-                  {captions > 0 && (
-                    <Toggle checked={s.slides.burn} onChange={(burn) => patch('slides', { burn })} label={t('exportCenter.burnIn')} />
-                  )}
-                </>
+                      </Field>
+                    ) : (
+                      <Field label={t('exportCenter.format')}>
+                        <div className="grid grid-cols-2 gap-2">
+                          {(['pptx', 'pdf'] as const).map((f) => (
+                            <OptionCard
+                              key={f}
+                              on={s.slides.format === f}
+                              title={f === 'pptx' ? 'PowerPoint' : 'PDF'}
+                              desc={t(`exportCenter.slidesHint.${f}`)}
+                              onClick={() => patch('slides', { format: f })}
+                            />
+                          ))}
+                        </div>
+                      </Field>
+                    )}
+                    <FrameField
+                      value={s[dest].frame}
+                      fill={s[dest].fill}
+                      current={props.frame}
+                      stage={stage}
+                      onChange={(frame) => patch(dest, { frame })}
+                      onFill={(fill) => patch(dest, { fill })}
+                      t={t}
+                    />
+                    {dest === 'images' && (
+                      <Field label={t('exportCenter.resolution')}>
+                        <Chips
+                          value={s.images.shortEdge}
+                          options={STILL_EDGES.map((p) => ({ value: p, label: p === 2160 ? '4K' : `${p}p` }))}
+                          onChange={(shortEdge) => patch('images', { shortEdge })}
+                        />
+                      </Field>
+                    )}
+                    {captions > 0 && (
+                      <Toggle checked={s[dest].burn} onChange={(burn) => patch(dest, { burn })} label={t('exportCenter.burnIn')} />
+                    )}
+                  </div>
+                </div>
               )}
 
               {/* range: any destination with a picture or a sound over time can take a part */}
@@ -1230,7 +1229,10 @@ export function ExportCenter(props: ExportCenterProps) {
                 ) : (
                   <>
                     {/* a project is not a length of film: its size only */}
-                    {dest !== 'project' ? (
+                    {/* pictures are counted, not timed */}
+                    {dest === 'images' || dest === 'slides' ? (
+                      <span className="block text-[var(--text-muted)] tabular-nums">{momentsSummary(dest, moments[dest].length, t)}</span>
+                    ) : dest !== 'project' ? (
                       <span className="block text-[var(--text-muted)] tabular-nums">
                         {t('exportCenter.summary').replace('{n}', String(fileCount)).replace('{dur}', formatFilmTime(outMs))}
                       </span>
@@ -1258,6 +1260,12 @@ export function ExportCenter(props: ExportCenterProps) {
 }
 
 /* ── small parts ────────────────────────────────────────────────────────── */
+
+/** What the picked moments come out as: one picture, pictures in a zip, or pages. */
+function momentsSummary(kind: MomentsKind, n: number, t: (k: string) => string): string {
+  if (kind === 'slides') return t(n === 1 ? 'exportCenter.summarySlide' : 'exportCenter.summarySlides').replace('{n}', String(n));
+  return t(n === 1 ? 'exportCenter.summaryImage' : 'exportCenter.summaryImagesZip').replace('{n}', String(n));
+}
 
 /** A folder's own name, the last part of its path (the whole path is the button's tooltip). */
 function folderName(path: string): string {
