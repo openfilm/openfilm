@@ -701,6 +701,33 @@ function restPage(c) {
   else el.addEventListener('load', close, { once: true });
 }
 
+const PAGE_LOAD_MS = 30_000; // how long an exact frame waits for a page's pictures and fonts before it is drawn without them
+/** each page document's wait (see pageLoaded): a page opened again is a new document, waited for again */
+const pageLoads = new WeakMap();
+/**
+ * For an exact frame, wait until a page's document has loaded: its pictures (its images, its CSS backgrounds) and its
+ * fonts. Its film is ready before them unless its `ready` waits for them (SPEC §2), and a page without that showed its
+ * pictures in a preview but lost them in an export. One loaded already is drawn at once; one still loading after
+ * PAGE_LOAD_MS is drawn as it is, said once.
+ */
+function pageLoaded(c) {
+  const doc = c.win.document;
+  if (doc.readyState === 'complete' && doc.fonts.status === 'loaded') return null;
+  if (!pageLoads.has(doc)) {
+    let timer;
+    const late = new Promise((done) => { timer = setTimeout(() => done(false), PAGE_LOAD_MS); });
+    const loaded = Promise.all([
+      doc.readyState === 'complete' ? null : new Promise((done) => c.win.addEventListener('load', done, { once: true })),
+      doc.fonts.ready,
+    ]).then(() => true);
+    pageLoads.set(doc, Promise.race([loaded, late]).then((ok) => {
+      clearTimeout(timer);
+      if (!ok) console.error(`clip "${c.id}" (${c.src}): its page did not finish loading within ${PAGE_LOAD_MS / 1000} s (a picture or font): drawn without it`);
+    }));
+  }
+  return pageLoads.get(doc);
+}
+
 /**
  * Wake the videos and pages near t (those on at t always), and let those far from it rest. `only`: wake only those on
  * at t, and let none rest unless far too many are awake (a scrub: the rest is done once it stops, see draw). `exact`:
@@ -985,6 +1012,8 @@ async function drawClip(c, t, live, play, turn, coming, going) {
     try { await wake(c); } catch (e) { if (live) return; throw new Error(`clip "${c.id}" (${c.src}): ${e?.message ?? e}`); }
     if (!c.child || !c.shown) return;
   }
+  /* an exact frame shows the page's pictures: it waits for them, as a video clip's frame waits for its file */
+  if (!live) await pageLoaded(c);
   const local = sourceAt(c.span, t - c.at, c.row, c.native);
   c.win.filmHost?.time?.(local);
   /* a page's error says which clip and which of its own seconds, not only the film's t */

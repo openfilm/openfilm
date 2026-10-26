@@ -115,6 +115,27 @@ test('a page without a size, opened on its own, is 1920 × 1080', { timeout: 60_
   }
 });
 
+test('an exact frame of a page waits for its pictures, though its film is ready without them', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-picture-'));
+  /* a picture that takes 2 s to come: the page's window.film is there long before */
+  const slow = createServer((req, res) => setTimeout(() => res.writeHead(200, { 'content-type': 'image/svg+xml' })
+    .end('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="320" height="180" fill="red"/></svg>'), 2000));
+  await new Promise((done) => slow.listen(0, '127.0.0.1', done));
+  writeFileSync(join(dir, 'p.html'), page('p', 2).replace('<p>p</p>', `<img src="http://127.0.0.1:${slow.address().port}/red.svg" style="display:block">`));
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ src: 'p.html', id: 'p' }] }] }));
+  const s = await open(dir);
+  try {
+    await s.film.seek(1);
+    const [r, g, b] = await middleColour(s.film);
+    assert.ok(r > 200 && g < 80 && b < 80, `the page's picture, not its background (${r}, ${g}, ${b})`);
+  } finally {
+    await s.close();
+    slow.closeAllConnections();
+    await new Promise((done) => slow.close(done));
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 /* a page without a duration: it records the t it was last asked for */
 const endless = `<!doctype html><body style="margin:0;background:#246"><script>window.film={frame(t){window.lastT=t}}</script></body>`;
 
