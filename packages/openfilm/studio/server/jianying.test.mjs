@@ -75,10 +75,17 @@ test('footage plays its own sound at its level; other sounds are audio clips wit
   assert.equal(silent.info.tracks.find((t) => t.type === 'audio').segments[0].volume, 0, 'a sound not heard comes silent');
 });
 
-test('subtitles: a text track over all, one clip a cue, white with a dark edge, low in the picture', () => {
-  const { info } = jianyingDraft(plan(), { name: 'Film', folder: '/d/Film', root: '/d', cues: [{ text: '你好 world', startMs: 500, durMs: 1500 }, { text: ' ', startMs: 2000, durMs: 500 }] });
+test('subtitles: the app\'s own subtitle track over all, one subtitle a cue, white with a dark edge, low in the picture', () => {
+  const { info } = jianyingDraft(plan(), { name: 'Film', folder: '/d/Film', root: '/d', now: 1, cues: [{ text: '你好 world', startMs: 500, durMs: 1500 }, { text: ' ', startMs: 2000, durMs: 500 }] });
   const text = info.tracks.at(-1);
   assert.equal(text.type, 'text');
+  /* as the app keeps the subtitles it recognizes: a subtitle track, its lines of one subtitle task, in their language */
+  assert.equal(text.flag, 1);
+  const [line] = info.materials.texts;
+  assert.equal(line.type, 'subtitle');
+  assert.equal(line.recognize_text, '你好 world');
+  assert.equal(line.language, 'zh-CN');
+  assert.deepEqual(info.config.subtitle_taskinfo.map((t) => [t.id, t.type, t.language]), [[line.recognize_task_id, 10, 'zh-CN']]);
   assert.equal(text.segments.length, 1, 'an empty cue is left out');
   assert.deepEqual(text.segments[0].target_timerange, { start: 500_000, duration: 1_500_000 });
   assert.equal(text.segments[0].clip.transform.y, -0.8);
@@ -169,4 +176,13 @@ test('each file is in the draft\'s media library, once, and each material names 
   assert.equal(Object.values(kinds).filter((k) => k === 'video').length, 2, 'the page rendered and the footage');
   const shot = library.find((e) => e.file_Path.endsWith('a.mp4'));
   assert.deepEqual([shot.width, shot.height, shot.duration], [960, 540, 10_000_000]);
+});
+
+test('subtitles in the language shown: a translation picked is its own, Latin words without one are English, none no task', () => {
+  const cue = [{ text: 'Hola a todos', startMs: 0, durMs: 1000 }];
+  const lang = (/** @type {any} */ o) => jianyingDraft(plan(), { name: 'Film', folder: '/d/Film', root: '/d', cues: cue, ...o }).info.config.subtitle_taskinfo[0]?.language;
+  assert.equal(lang({ language: 'es' }), 'es-ES');
+  assert.equal(lang({ language: 'zh-Hant' }), 'zh-TW');
+  assert.equal(lang({}), 'en-US');
+  assert.deepEqual(jianyingDraft(plan(), { name: 'Film', folder: '/d/Film', root: '/d' }).info.config.subtitle_taskinfo, []);
 });

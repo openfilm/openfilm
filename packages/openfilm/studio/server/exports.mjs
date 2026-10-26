@@ -1153,9 +1153,9 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
     update(job, { encoder: prores && !app ? (await hardwareEncoder('prores', have)) ?? 'prores_ks' : 'png' });
     /* a source out of the project fails the export before anything is drawn */
     for (const track of doc.tracks) for (const row of track.clips) clipPath(root, row.src);
-    const { cues } = ask.subtitles === false ? { cues: [] } : await subtitlesOf(root).catch((error) => {
+    const { cues, style: shown } = ask.subtitles === false ? { cues: [], style: null } : await subtitlesOf(root).catch((error) => {
       if (fcp) throw error;
-      return { cues: [] };
+      return { cues: [], style: null };
     });
     const scratch = join(root, '.film', 'cache', 'export', `nle-${process.pid}-${randomBytes(4).toString('hex')}`);
     const final = freeFile(dir, baseName(job.name, ask), '');
@@ -1398,7 +1398,8 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       update(job, { phase: 'finishing', progress: 0.98 });
       if (app) {
         /* the app on Windows reads draft_content.json, on a Mac draft_info.json: the same draft in both */
-        const draft = jianyingDraft(timeline, { app, name: basename(final), folder: final, root: dir, cues });
+        /* the subtitles' language: a translation shown alone is in its own; else told from the words (jianying.mjs) */
+        const draft = jianyingDraft(timeline, { app, name: basename(final), folder: final, root: dir, cues, language: shown?.bilingual ? null : shown?.language });
         const info = JSON.stringify(draft.info);
         await writeFile(join(staging, 'draft_info.json'), info, 'utf8');
         await writeFile(join(staging, 'draft_content.json'), info, 'utf8');
