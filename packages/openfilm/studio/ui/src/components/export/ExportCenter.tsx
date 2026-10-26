@@ -600,7 +600,7 @@ export function ExportCenter(props: ExportCenterProps) {
         role="dialog"
         aria-modal="true"
         aria-label={t('exportCenter.title')}
-        className="flex h-[88dvh] max-h-[1000px] w-[92vw] max-w-[1600px] min-h-0 min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]"
+        className="flex h-[84dvh] max-h-[940px] w-[88vw] max-w-[1520px] min-h-0 min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]"
         style={{ animation: 'openfilm-rise 0.16s ease-out both' }}
         onClick={(e) => e.stopPropagation()}
       >

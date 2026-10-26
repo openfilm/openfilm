@@ -243,7 +243,7 @@ export function MomentPicker(props: MomentPickerProps) {
       <p className="-mt-1.5 text-[11.5px] leading-relaxed text-[var(--text-faint)]">
         {t(value.length ? 'exportCenter.moments.selectHint' : 'exportCenter.moments.none')}
       </p>
-      <div className="grid gap-2.5" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${box.w >= box.h ? 136 : 92}px, 1fr))` }}>
+      <div className="grid gap-2.5" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${box.w >= box.h ? 136 : 108}px, 1fr))` }}>
         {value.map((ms, i) => {
           const on = selected != null && sameFrame(ms, selected, fps);
           return (
@@ -261,11 +261,13 @@ export function MomentPicker(props: MomentPickerProps) {
                 className={`relative overflow-hidden rounded-lg border-2 transition ${on ? 'border-[var(--accent)]' : 'border-transparent hover:border-[var(--border)]'}`}
               >
                 <Framed box={box} src={frames.get(url(ms))} />
-                <span className={`absolute left-1.5 top-1.5 min-w-[20px] rounded-md px-1.5 py-0.5 text-center text-[11px] font-medium tabular-nums ${on ? 'bg-[var(--accent)] text-white' : 'bg-black/65 text-white/90'}`}>
+              </button>
+              <div className="flex min-w-0 items-center gap-1.5 text-[11px] tabular-nums">
+                <span className={`min-w-5 shrink-0 rounded-md px-1 py-0.5 text-center text-[10px] font-medium ${on ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg-hover)] text-[var(--text-muted)]'}`}>
                   {i + 1}
                 </span>
-              </button>
-              <span className={`text-[11px] tabular-nums ${on ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>{formatTimecode(ms, { fps })}</span>
+                <span className={`min-w-0 truncate ${on ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>{formatTimecode(ms, { fps })}</span>
+              </div>
               <button
                 type="button"
                 onClick={() => remove(ms)}
