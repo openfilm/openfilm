@@ -5,7 +5,7 @@ import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FilmPage, launch, serve, VideoNotShown } from './host.mjs';
+import { FilmPage, FrameError, launch, serve, VideoNotShown } from './host.mjs';
 import { open } from './shared.mjs';
 import { filmHead, filmHtml } from './film-doc.mjs';
 
@@ -221,6 +221,20 @@ test('a missing file stops a film, said by its name; an editor\'s preview (film-
   } finally {
     await browser.close();
     await site.close();
+  }
+});
+
+test('a video the browser can\'t decode fails an exact frame, said by its clip and file; watched, the film draws on', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-undecodable-'));
+  writeFileSync(join(dir, 'bad.mp4'), Buffer.alloc(20_000, 'not a video '));
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'v', src: 'bad.mp4', time: [0, 2] }] }] }));
+  const s = await open(dir);
+  try {
+    await assert.rejects(s.film.seek(0.5), (e) => e instanceof FrameError && /^clip "v" \(bad\.mp4\): this browser can't play its video/.test(e.message));
+    await s.film.page.evaluate(() => window.__filmEditor.watch(1));
+  } finally {
+    await s.close();
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 

@@ -757,13 +757,18 @@ function frameOf(c) {
   return frameLengths.get(src.pathname);
 }
 
-/** Wait for a video's file for an exact frame: too long is the film's error, said by the clip. */
-function loaded(c) {
+/**
+ * Wait for a video's file for an exact frame: too long, or a file this browser does not decode (one a render could
+ * not copy, see seekable.mjs), is the film's error, said by the clip. Drawn, it would show nothing: a black frame.
+ */
+async function loaded(c) {
   let timer;
   const late = new Promise((_, fail) => {
     timer = setTimeout(() => fail(new Error(`clip "${c.id}" (${c.src}): its video did not load within ${LOAD_MS / 1000} s`)), LOAD_MS);
   });
-  return Promise.race([wake(c), late]).finally(() => clearTimeout(timer));
+  await Promise.race([wake(c), late]).finally(() => clearTimeout(timer));
+  const error = c.el.error;
+  if (error) throw new Error(`clip "${c.id}" (${c.src}): this browser can't play its video${error.message ? ` (${error.message})` : ''}`);
 }
 
 /**
