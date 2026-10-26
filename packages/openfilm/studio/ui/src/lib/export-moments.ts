@@ -8,10 +8,10 @@
 import { FILM_DOC_FILE } from './film.ts';
 import { frameAt, frameMs } from './timecode.ts';
 
-export type MomentsKind = 'images' | 'slides';
+export type MomentsKind = 'images' | 'slides' | 'frames';
 
 /** The most each export takes (exports.mjs checks the same). */
-export const MOMENTS_MAX: Record<MomentsKind, number> = { images: 500, slides: 200 };
+export const MOMENTS_MAX: Record<MomentsKind, number> = { images: 500, slides: 200, frames: 500 };
 
 /** The film drawn at `ms`, `w` px wide, as Studio's server draws it for an export (pageframes.mjs). */
 export function filmFrameUrl(projectId: string, ms: number, w: number): string {
@@ -102,6 +102,12 @@ function readStore(): Store {
 export function loadMoments(projectId: string, kind: MomentsKind): number[] | null {
   const list = readStore()[projectId]?.[kind];
   return Array.isArray(list) ? list.filter((ms) => typeof ms === 'number' && Number.isFinite(ms)) : null;
+}
+
+/** One selection for every image delivery; migrate the previously used destination's picks on first use. */
+export function loadSharedMoments(projectId: string, previous: 'images' | 'slides'): number[] | null {
+  return loadMoments(projectId, 'frames') ?? loadMoments(projectId, previous)
+    ?? loadMoments(projectId, previous === 'images' ? 'slides' : 'images');
 }
 
 export function saveMoments(projectId: string, kind: MomentsKind, list: readonly number[]): void {

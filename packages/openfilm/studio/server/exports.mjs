@@ -24,9 +24,9 @@
  *       mix: `<name> - mix`; stems: voice, music, sound effects and the footage's own sound, each its own file
  *       (`<name> - voice`…), a sound grouped by where it is (assets/audio/music/…, assets/audio/sfx/…, anything
  *       else is voice) and a video's sound as the footage's (nle.mjs soundStem)
- *   { kind: 'stills', format?: 'png' | 'jpg', frame?, fill?, shortEdge?, at?: number[] }
+ *   { kind: 'stills', as?: 'files' | 'zip', format?: 'png' | 'jpg', frame?, fill?, shortEdge?, at?: number[] }
  *       one frame from the middle of each picture clip (or at the seconds `at`, each named by the scene it is in), zipped
- *       when there are several
+ *       when there are several unless `as` explicitly asks for separate files or a zip (even for one frame)
  *   { kind: 'poster', format?, frame?, fill?, shortEdge?, at?: number }   one frame (default: the middle)
  *   { kind: 'subtitles', format?: 'srt' (default) | 'vtt' | 'txt' }   the film's subtitle cues as a file (txt: a
  *       plain transcript); refused when the film has none
@@ -99,7 +99,7 @@ export { exportsRoot };
  *   fps?: number, quality?: Quality, audio?: boolean, clip?: string, preset?: string, sidecar?: 'srt' | 'vtt', hardware?: boolean }} VideoAsk
  * @typedef {Framing & { kind: 'gif', width?: number, fps?: number }} GifAsk
  * @typedef {{ kind: 'audio', format?: 'wav' | 'm4a' | 'mp3', mix?: boolean, stems?: boolean }} AudioAsk
- * @typedef {Framing & { kind: 'stills', format?: 'png' | 'jpg', shortEdge?: number, at?: number[] }} StillsAsk
+ * @typedef {Framing & { kind: 'stills', as?: 'files' | 'zip', format?: 'png' | 'jpg', shortEdge?: number, at?: number[] }} StillsAsk
  * @typedef {Framing & { kind: 'poster', format?: 'png' | 'jpg', shortEdge?: number, at?: number }} PosterAsk
  * @typedef {{ kind: 'subtitles', format?: 'srt' | 'vtt' | 'txt' }} SubtitlesAsk
  * @typedef {Framing & { kind: 'slides', format?: 'pptx' | 'pdf', shortEdge?: number, at?: number[] }} SlidesAsk
@@ -343,6 +343,7 @@ function checked(/** @type {ExportAsk} */ ask) {
     case 'stills':
     case 'poster':
       if (ask.range !== undefined) throw new ExportError('a still is a moment: give `at`, not a range');
+      if (ask.kind === 'stills' && ask.as !== undefined && ask.as !== 'files' && ask.as !== 'zip') throw new ExportError('stills as files or zip');
       if (ask.format !== undefined && ask.format !== 'png' && ask.format !== 'jpg') throw new ExportError('format: png or jpg');
       if (ask.kind === 'stills' && ask.at !== undefined && !(Array.isArray(ask.at) && ask.at.length <= 500 && ask.at.every((t) => isNum(t) && t >= 0))) {
         throw new ExportError('at: a list of seconds');
@@ -1075,17 +1076,28 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       const { files } = await stillFrames(job, root, ask, ext, scratch, signal);
       update(job, { phase: 'finishing' });
       const base = baseName(job.name, ask);
-      if (files.length === 1) {
-        const out = freeFile(dir, ask.kind === 'stills' ? `${base} ${files[0].name.replace(/\.\w+$/, '')}` : base, ext);
-        await writeFile(out, readFileSync(files[0].file));
-        update(job, { out, outputs: [out] });
-      } else {
+      const archive = ask.kind === 'stills' && (ask.as === 'zip' || (ask.as !== 'files' && files.length > 1));
+      if (archive) {
         const out = freeFile(dir, base, '.zip');
         const part = partialOf(out, job.id);
         update(job, { out: part, outputs: [part] });
         await zipFiles(part, files, signal);
         await renameSafely(part, out);
         update(job, { out, outputs: [out] });
+      } else {
+        /** @type {string[]} */
+        const outputs = [];
+        for (const file of files) {
+          if (signal.aborted) throw new Error('cancelled');
+          const out = freeFile(dir, ask.kind === 'stills' ? `${base} ${file.name.replace(/\.\w+$/, '')}` : base, ext);
+          const part = partialOf(out, job.id);
+          outputs.push(part);
+          update(job, { out: outputs[0], outputs: [...outputs] });
+          await copyFile(file.file, part, fsConstants.COPYFILE_FICLONE);
+          await renameSafely(part, out);
+          outputs[outputs.length - 1] = out;
+          update(job, { out: outputs[0], outputs: [...outputs] });
+        }
       }
     } finally {
       await tidy(scratch);

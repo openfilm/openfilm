@@ -21,7 +21,7 @@ export type ExportRequest = { range?: [number, number]; label?: string; name?: s
     clip?: string; scale?: number; preset?: string; sidecar?: 'srt' | 'vtt' })
   | (Framing & { kind: 'gif'; width: number; fps: number })
   | { kind: 'audio'; format: 'wav' | 'm4a' | 'mp3'; mix: boolean; stems: boolean }
-  | (Framing & { kind: 'stills'; format: 'png' | 'jpg'; shortEdge: number; at?: number[] })
+  | (Framing & { kind: 'stills'; as?: 'files' | 'zip'; format: 'png' | 'jpg'; shortEdge: number; at?: number[] })
   | (Framing & { kind: 'poster'; format: 'png' | 'jpg'; shortEdge: number; at?: number })
   | { kind: 'subtitles'; format: 'srt' | 'vtt' | 'txt' }
   | (Framing & { kind: 'slides'; format: 'pptx' | 'pdf'; shortEdge: number; at?: number[] })

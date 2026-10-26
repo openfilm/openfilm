@@ -269,7 +269,7 @@ test('a cancelled export stops and leaves no file, and a bad ask is refused befo
   assert.ok(!existsSync(running.out), 'the half-written file is gone');
   assert.deepEqual(readdirSync(exportsRoot()).filter((n) => n.startsWith('Cancel') || n.includes('.partial-')), [], 'nothing under its name, nothing half made');
   for (const bad of [{ kind: 'pdf' }, { kind: 'video', range: [3, 1] }, { kind: 'video', codec: 'av1' }, { kind: 'video', frame: '9:1' }, { kind: 'video', frame: 'wide' },
-    { kind: 'audio', mix: false }, { kind: 'stills', range: [0, 1] }, { kind: 'gif', width: 5000 }, { kind: 'subtitles', format: 'ass' },
+    { kind: 'audio', mix: false }, { kind: 'stills', range: [0, 1] }, { kind: 'stills', as: 'pdf' }, { kind: 'gif', width: 5000 }, { kind: 'subtitles', format: 'ass' },
     { kind: 'slides', format: 'key' }, { kind: 'slides', range: [0, 1] }, { kind: 'nle', fps: 500 }, { kind: 'nle', audio: 'mix' }, { kind: 'nle', range: [0, 1] },
     { kind: 'nle', format: 'fcpxml', alpha: 'png' }, { kind: 'nle', alpha: 'auto' }, { kind: 'nle', format: 'jianying', alpha: 'hevc_alpha' }, { kind: 'nle', format: 'jianying', alpha: 'prores4444' }]) {
     assert.throws(() => exports.start(project(), bad), ExportError, JSON.stringify(bad));
@@ -479,6 +479,20 @@ test('scene stills: the middle of each picture clip, zipped; a poster: one frame
   const jpg = readFileSync(poster.out);
   assert.equal(jpg[0], 0xff);
   assert.equal(probe(poster.out, 'stream=width,height'), '100,100');
+});
+
+test('picked frames export as separate images or an explicit zip, including a one-frame zip', ffmpeg, async () => {
+  const files = await exported({ kind: 'stills', as: 'files', format: 'png', shortEdge: 90, at: [0.2, 0.7] }, 'Separate');
+  assert.deepEqual(files.outputs.map((f) => basename(f)), ['Separate stills 01 title.png', 'Separate stills 02 badge.png']);
+  assert.equal(files.out, files.outputs[0]);
+  for (const file of files.outputs) assert.equal(probe(file, 'stream=width,height'), '160,90');
+  const original = readFileSync(files.outputs[0]);
+  const again = await exported({ kind: 'stills', as: 'files', format: 'png', shortEdge: 90, at: [0.2] }, 'Separate');
+  assert.notEqual(again.out, files.outputs[0], 'an existing image is never overwritten');
+  assert.deepEqual(readFileSync(files.outputs[0]), original);
+  const zip = await exported({ kind: 'stills', as: 'zip', format: 'jpg', shortEdge: 90, at: [0.2] }, 'One zipped');
+  assert.ok(zip.out.endsWith('.zip'));
+  assert.deepEqual(zipNames(zip.out).names, ['01 title.jpg']);
 });
 
 test('several exports at once, into a folder of the person\'s; one wrong ask queues none', ffmpeg, async () => {

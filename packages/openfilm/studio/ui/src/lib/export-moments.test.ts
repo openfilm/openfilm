@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  STRIP_WHOLE, clampView, cleanMoments, everyCount, everyMoments, filmFrameUrl, lastFrameMs, loadMoments, momentAt, momentSeconds, saveMoments, sceneMiddles,
+  STRIP_WHOLE, clampView, cleanMoments, everyCount, everyMoments, filmFrameUrl, lastFrameMs, loadMoments, loadSharedMoments, momentAt, momentSeconds, saveMoments, sceneMiddles,
   stepFor, stripZoomMax, toggleMoment, viewShowing, zoomView,
 } from './export-moments.ts';
 
@@ -89,4 +89,26 @@ test('the strip zooms around the pointer, up to a second across, and stays insid
   assert.equal(stepFor(100, 60, [1000, 5000, 10_000]), 10_000);
   assert.equal(stepFor(10, 60, [1000, 5000]), 1000);
   assert.equal(stepFor(1000, 60, [1000, 5000]), 5000);
+});
+
+test('the shared selection migrates old image or slide picks, then stays the same across output formats', () => {
+  const store = new Map<string, string>();
+  (globalThis as { localStorage?: unknown }).localStorage = {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => { store.set(k, v); },
+  };
+  try {
+    saveMoments('a', 'images', [1000, 2000]);
+    saveMoments('a', 'slides', [3000]);
+    assert.deepEqual(loadSharedMoments('a', 'images'), [1000, 2000]);
+    assert.deepEqual(loadSharedMoments('a', 'slides'), [3000]);
+    saveMoments('a', 'frames', [1000, 3000]);
+    assert.deepEqual(loadSharedMoments('a', 'slides'), [1000, 3000]);
+    assert.deepEqual(loadSharedMoments('a', 'images'), [1000, 3000]);
+    saveMoments('a', 'frames', []);
+    assert.deepEqual(loadSharedMoments('a', 'images'), [], 'clearing a selection does not resurrect old picks');
+    assert.equal(loadSharedMoments('unknown', 'images'), null);
+  } finally {
+    delete (globalThis as { localStorage?: unknown }).localStorage;
+  }
 });
