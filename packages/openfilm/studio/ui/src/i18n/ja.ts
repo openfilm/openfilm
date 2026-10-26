@@ -680,7 +680,7 @@ export const ja: Words = {
     dirtyBody: '先にコミットするか、変更を破棄して「{name}」をチェックアウトしてください。',
     discardAndCheckout: '破棄してチェックアウト',
     discardTitle: 'すべての変更を破棄しますか？',
-    discardBody: '作品はチェックアウト中のバージョンに戻ります。あとから追加したファイルはごみ箱に移動します。',
+    discardBody: `作品はチェックアウト中のバージョンに戻ります。あとから追加したファイルは${TRASH}に移動します。`,
     discardConfirm: 'すべての変更を破棄',
     copyTitle: '「{name}」のコピーを作成',
     copyBody: 'このバージョンから新しいプロジェクトを始めます。このプロジェクトはそのままです。',

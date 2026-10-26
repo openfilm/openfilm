@@ -680,7 +680,7 @@ export const es: Words = {
     dirtyBody: 'Confírmalos primero, o descártalos y desprotege «{name}».',
     discardAndCheckout: 'Descartar y desproteger',
     discardTitle: '¿Descartar todos los cambios?',
-    discardBody: 'La película vuelve a la versión desprotegida. Los archivos añadidos después se mueven a la papelera.',
+    discardBody: `La película vuelve a la versión desprotegida. Los archivos añadidos después se mueven a ${TRASH}.`,
     discardConfirm: 'Descartar todos los cambios',
     copyTitle: 'Hacer una copia de «{name}»',
     copyBody: 'Un proyecto nuevo empieza desde esta versión. Este proyecto queda como está.',

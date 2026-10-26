@@ -681,7 +681,7 @@ export const en = {
     dirtyBody: 'Commit them first, or discard them and check out “{name}”.',
     discardAndCheckout: 'Discard and check out',
     discardTitle: 'Discard all changes?',
-    discardBody: 'The film goes back to the version checked out. Files added since move to the trash.',
+    discardBody: `The film goes back to the version checked out. Files added since move to ${TRASH}.`,
     discardConfirm: 'Discard all changes',
     copyTitle: 'Make a copy of “{name}”',
     copyBody: 'A new project starts from this version. This project stays as it is.',

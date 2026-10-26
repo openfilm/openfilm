@@ -681,7 +681,7 @@ export const zhCN: Words = {
     dirtyBody: '请先提交，或放弃这些更改后签出「{name}」。',
     discardAndCheckout: '放弃更改并签出',
     discardTitle: '放弃所有更改？',
-    discardBody: '影片会回到当前签出的版本，之后新加的文件移到废纸篓。',
+    discardBody: `影片会回到当前签出的版本，之后新加的文件移到${TRASH}。`,
     discardConfirm: '放弃所有更改',
     copyTitle: '把「{name}」另存一份',
     copyBody: '从这个版本开始一个新项目，当前项目保持不变。',
