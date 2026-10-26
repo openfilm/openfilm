@@ -82,6 +82,7 @@ export { frameBox, frameRatio };
 import { filmSubtitleCuesInRange, filmSubtitleShown, filmSubtitleSrt, filmSubtitleTranscript, filmSubtitleVtt } from './film-subtitle.mjs';
 import { zipFiles } from './zip.mjs';
 import { inProject } from './files.mjs';
+import { filmClosure, folderView } from './closure.mjs';
 import { PROJECT_PARTS, TOOL_DIR } from './projects.mjs';
 import { exportsRoot } from '../../src/locations.mjs';
 import { recordProblem } from '../../src/problems.mjs';
@@ -395,15 +396,19 @@ const NOT_THE_PROJECT = new Set(['.git', 'node_modules', '.DS_Store']);
 
 /**
  * The files of the project at `root` its export takes, with their names in it ('/' between folders): its work (every
- * file but those of `.film/` and NOT_THE_PROJECT; a link to a file is followed, so the export has the media itself, a
- * link to a folder is not) with the subtitles' style, and the parts of `.film/` asked. Never the project's id (a copy
- * gets its own) nor its cache. `skip`: a folder not to take (where the export is being written, when it is inside).
+ * file but those of `.film/` and NOT_THE_PROJECT; a link to a file is followed, so the export has the media itself)
+ * with the subtitles' style, and the parts of `.film/` asked. A link to a folder (a whole footage library, often) is
+ * not taken whole: only the files in it the film uses (closure.mjs: a clip's file, its subtitles and transcripts, what
+ * a page loads), as files at the same places, so the copy plays. Never the project's id (a copy gets its own) nor its
+ * cache. `skip`: a folder not to take (where the export is being written, when it is inside).
  * @param {string} root @param {readonly ProjectPart[]} parts @param {string} [skip]
  * @returns {Promise<{ name: string, file: string, size: number }[]>}
  */
 export async function projectFiles(root, parts, skip) {
   /** @type {{ name: string, file: string, size: number }[]} */
   const files = [];
+  /** @type {Promise<Map<string, number>> | undefined} */
+  let used;
   const walk = async (/** @type {string} */ dir, /** @type {string} */ rel) => {
     const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
     for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
@@ -412,7 +417,12 @@ export async function projectFiles(root, parts, skip) {
       if (NOT_THE_PROJECT.has(entry.name) || (!rel && entry.name === TOOL_DIR) || path === skip) continue;
       const info = await stat(path).catch(() => null);
       if (info?.isDirectory() && !entry.isSymbolicLink()) await walk(path, name);
-      else if (info?.isFile()) files.push({ name, file: path, size: info.size });
+      else if (info?.isDirectory()) {
+        used ??= filmClosure(folderView(root));
+        for (const [file, size] of [...await used].filter(([f]) => f.startsWith(`${name}/`)).sort(([a], [b]) => a.localeCompare(b))) {
+          files.push({ name: file, file: join(root, ...file.split('/')), size });
+        }
+      } else if (info?.isFile()) files.push({ name, file: path, size: info.size });
     }
   };
   await walk(root, '');

@@ -1315,6 +1315,34 @@ test('a project exports as a zip holding its folder, or as the folder, each open
   assert.throws(() => createExports().start(project('My Film', dir), { kind: 'project', range: [0, 1] }), ExportError);
 });
 
+test('a project\'s export takes the files of a linked folder the film uses, as files, and leaves the rest of it out', async () => {
+  const dir = fullProject();
+  const library = join(dir, '..', 'Library');
+  const put = (rel, text = rel) => { mkdirSync(join(library, rel, '..'), { recursive: true }); writeFileSync(join(library, rel), text); };
+  put('ext.mp4');
+  put('ext.vtt');
+  put('ext.zh.vtt');
+  put('day2/b.wav');
+  put('unused.mp4');
+  put('day2/unused.wav');
+  /* a junction on Windows, which needs no Developer Mode; a symlink elsewhere (as Studio's link makes it) */
+  symlinkSync(library, join(dir, 'assets', 'linked'), 'junction');
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [
+    { clips: [{ src: 'assets/linked/ext.mp4', id: 'ext' }] },
+    { clips: [{ src: 'assets/linked/day2/b.wav', id: 'b', time: [0, 1] }] },
+  ] }));
+  const used = ['assets/linked/day2/b.wav', 'assets/linked/ext.mp4', 'assets/linked/ext.vtt', 'assets/linked/ext.zh.vtt'];
+  const names = (await projectFiles(dir, [])).map((f) => f.name);
+  assert.deepEqual(names.filter((n) => n.startsWith('assets/linked/')).sort(), used);
+  assert.ok((await projectSizes(dir)).work >= used.reduce((n, f) => n + f.slice('assets/linked/'.length).length, 0));
+  const entries = zipEntries((await exported({ kind: 'project' }, 'My Film', dir)).out);
+  assert.deepEqual([...entries.keys()].filter((n) => n.startsWith('My Film/assets/linked/')).sort(), used.map((n) => `My Film/${n}`));
+  assert.equal(entries.get('My Film/assets/linked/ext.mp4').toString(), 'ext.mp4');
+  const copied = (await exported({ kind: 'project', as: 'folder' }, 'My Film', dir)).out;
+  for (const n of used) assert.equal(readFileSync(join(copied, ...n.split('/')), 'utf8'), n.slice('assets/linked/'.length));
+  assert.ok(!existsSync(join(copied, 'assets', 'linked', 'unused.mp4')) && !existsSync(join(copied, 'assets', 'linked', 'day2', 'unused.wav')));
+});
+
 test('a project export named where it is asked for: the zip and the folder in it take that name', async () => {
   const dir = fullProject();
   const zipped = await exported({ kind: 'project', name: 'Hand-off' }, 'My Film', dir);
