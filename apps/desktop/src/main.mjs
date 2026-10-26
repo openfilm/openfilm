@@ -97,6 +97,7 @@ const tellFfmpeg = (state) => { ffmpegFound = state; broadcast('desktop:ffmpeg',
 /** @type {ReturnType<typeof startUpdates> | null} */
 let updates = null;
 let quitting = false;
+let cancelWindowClose = () => {};
 /** @type {ReturnType<typeof registerLocalAgentIpc> | null} */
 let localAgents = null;
 /** @type {ReturnType<typeof createRoster> | null} */
@@ -107,6 +108,7 @@ const BACKGROUND = { light: '#f2f2f2', dark: '#111111' };
 
 function focusWindow() {
   if (!win) return;
+  cancelWindowClose();
   if (win.isMinimized()) win.restore();
   win.show();
   win.focus();
@@ -503,7 +505,7 @@ async function start() {
   win.on('moved', saveState);
   win.on('enter-full-screen', () => broadcast('desktop:full-screen', true));
   win.on('leave-full-screen', () => broadcast('desktop:full-screen', false));
-  keepWindowOnClose(win, { mac, isQuitting: () => quitting, save: saveState });
+  cancelWindowClose = keepWindowOnClose(win, { mac, isQuitting: () => quitting, save: saveState });
   win.on('closed', () => { win = null; views.clear(); pagePresentation = null; app.quit(); });
 
   ipcMain.on('desktop:theme', (event, next) => { if (fromPage(event)) setTheme(next); });

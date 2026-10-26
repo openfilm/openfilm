@@ -369,8 +369,11 @@ function Preview({ frames, url, box, ms, fps, children }: {
   const last = React.useRef<string | undefined>(undefined);
   if (src) last.current = src;
   return (
-    /* as large as the dialog allows, a tall frame no taller than about half the window */
-    <div className="mx-auto w-full overflow-hidden rounded-xl border border-[var(--border)]" style={{ maxWidth: `calc(48vh * ${box.w / box.h})` }}>
+    /* Grow with the export window; leave room for its controls on shorter displays. */
+    <div
+      className="mx-auto w-full overflow-hidden rounded-xl border border-[var(--border)]"
+      style={{ maxWidth: `calc(min(68dvh, max(220px, 100dvh - 320px)) * ${box.w / box.h})` }}
+    >
       <Framed box={box} src={src ?? last.current}>
         <span className="absolute bottom-2.5 left-2.5 rounded-md bg-black/65 px-2 py-1 font-mono text-[12px] tabular-nums text-white backdrop-blur-sm">
           {formatTimecode(ms, { fps })}

@@ -592,14 +592,14 @@ export function ExportCenter(props: ExportCenterProps) {
     <div
       /* a plain dim, no backdrop blur: a blur over the whole window is drawn again on every frame of a wheel scroll in
          the dialog, and the window flickered on macOS */
-      className="fixed inset-0 z-[130] flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-[130] flex items-center justify-center bg-black/50 p-3 sm:p-5 lg:p-6"
       onClick={() => { if (!working) onClose(); }}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label={t('exportCenter.title')}
-        className="flex h-[min(800px,calc(100vh-32px))] w-full max-w-[1120px] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]"
+        className="flex h-full min-h-0 w-full min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]"
         style={{ animation: 'openfilm-rise 0.16s ease-out both' }}
         onClick={(e) => e.stopPropagation()}
       >
