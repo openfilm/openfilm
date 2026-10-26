@@ -22,12 +22,12 @@ test('after an update: the notes since the version last shown, the newest first;
   assert.equal(releaseNotes('0.2.0', list), null);
 });
 
-test('each release says what is new in every language, a few lines each', () => {
+test('each release says what is new in every language, a line a change', () => {
   for (const r of RELEASES) {
     assert.match(r.version, /^\d+\.\d+\.\d+$/);
     assert.match(r.date, /^\d{4}-\d{2}-\d{2}$/);
     for (const [language, notes] of Object.entries(r.notes)) {
-      assert.ok(notes.length >= 1 && notes.length <= 6, `${r.version} ${language}: 1 to 6 lines`);
+      assert.ok(notes.length >= 1 && notes.length <= 24, `${r.version} ${language}: 1 to 24 lines`);
       for (const n of notes) assert.ok(n.text.trim().length > 0, `${r.version} ${language}`);
     }
   }

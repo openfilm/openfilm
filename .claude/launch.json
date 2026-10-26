@@ -1,0 +1,10 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev",
+      "url": "http://127.0.0.1:4848",
+      "port": 4848
+    }
+  ]
+}

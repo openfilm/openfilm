@@ -25,12 +25,14 @@
  *       (`<name> - voice`…), a sound grouped by where it is (assets/audio/music/…, assets/audio/sfx/…, anything
  *       else is voice) and a video's sound as the footage's (nle.mjs soundStem)
  *   { kind: 'stills', format?: 'png' | 'jpg', frame?, fill?, shortEdge?, at?: number[] }
- *       one frame from the middle of each picture clip (or at the seconds `at`), zipped when there are several
+ *       one frame from the middle of each picture clip (or at the seconds `at`, each named by the scene it is in), zipped
+ *       when there are several
  *   { kind: 'poster', format?, frame?, fill?, shortEdge?, at?: number }   one frame (default: the middle)
  *   { kind: 'subtitles', format?: 'srt' (default) | 'vtt' | 'txt' }   the film's subtitle cues as a file (txt: a
  *       plain transcript); refused when the film has none
  *   { kind: 'slides', format?: 'pptx' (default) | 'pdf', frame?, fill?, shortEdge? (default 1080), at?: number[] }
- *       the scene stills bound as a deck (the scene's name in the speaker notes) or a PDF, one page each
+ *       the stills (each scene's middle, or the seconds `at`) bound as a deck (the scene's name in the speaker notes) or a
+ *       PDF, one page each
  *   { kind: 'nle', format?: 'xml' (default) | 'fcpxml' | 'jianying' | 'capcut', fps? (snapped to 23.976, 24, 25, 29.97, 30, 50, 59.94 or 60;
  *     default 30), audio?: 'clips' (default) | 'stems', media?: 'copy' (default) | 'link', subtitles?: boolean (default true),
  *     alpha?: 'auto' | 'png' | 'prores' | 'prores4444' }
@@ -1007,15 +1009,20 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       if (meta.duration == null && !picked) throw new ExportError('this page has no duration, so it has no middle or end: say which moments to export');
       const length = meta.duration ?? Infinity;
       const end = Math.max(0, length - 1e-3);
+      /* the film's scenes: a still or a slide is named by the one it is in (a page's speaker notes) */
+      const cuts = ask.kind === 'poster' ? []
+        : [.../** @type {{ id: string, at: number, end: number }[] | null} */ (await probe.film.page.evaluate(() => /** @type {any} */ (window).__filmCuts?.() ?? null)) ?? []]
+          .sort((a, b) => a.at - b.at);
+      /** the scene showing at `t`: of those that do, the one that started last */
+      const sceneAt = (/** @type {number} */ t) => cuts.findLast((c) => c.at <= t && t < c.end)?.id ?? '';
       /** @type {{ t: number, label: string }[]} */
       let moments;
       if (ask.kind === 'poster') moments = [{ t: Math.min(end, ask.at ?? length / 2), label: '' }];
-      else if (ask.at?.length) moments = ask.at.map((t) => ({ t: Math.min(end, t), label: '' }));
+      else if (ask.at?.length) moments = ask.at.map((t) => ({ t: Math.min(end, t), label: sceneAt(Math.min(end, t)) }));
       else {
-        const cuts = /** @type {{ id: string, at: number, end: number }[] | null} */ (await probe.film.page.evaluate(() => /** @type {any} */ (window).__filmCuts?.() ?? null));
         moments = [];
         let lastAt = -Infinity;
-        for (const c of [...(cuts ?? [])].sort((a, b) => a.at - b.at)) {
+        for (const c of cuts) {
           if (!(c.end > c.at) || c.at >= length || c.at - lastAt < 0.4) continue;
           lastAt = c.at;
           moments.push({ t: Math.min(end, (c.at + Math.min(c.end, length)) / 2), label: c.id });

@@ -467,6 +467,9 @@ test('scene stills: the middle of each picture clip, zipped; a poster: one frame
   const stills = await exported({ kind: 'stills', format: 'png', shortEdge: 90 });
   assert.equal(stills.out, join(exportsRoot(), 'Tiny stills.zip'));
   assert.deepEqual(zipNames(stills.out).names, ['01 title.png', '02 badge.png']);
+  /* the moments picked, each named by the scene it is in: of two showing, the one that started last */
+  const picked = await exported({ kind: 'stills', format: 'png', shortEdge: 90, at: [0.2, 0.7, 0.9] }, 'Picked');
+  assert.deepEqual(zipNames(picked.out).names, ['01 title.png', '02 badge.png', '03 badge.png']);
   const poster = await exported({ kind: 'poster', format: 'jpg', at: 0.25, frame: '1:1', shortEdge: 100 });
   assert.equal(poster.out, join(exportsRoot(), 'Tiny poster.jpg'));
   const jpg = readFileSync(poster.out);
@@ -530,6 +533,10 @@ test('slides: a PowerPoint deck and a PDF, one page per scene, the scene named i
       assert.ok(parts.has(resolved), `${name} → ${resolved}`);
     }
   }
+  /* the moments picked, a page each, each named by its scene */
+  const picked = zipEntries((await exported({ kind: 'slides', format: 'pptx', shortEdge: 180, at: [0.2, 0.3, 0.7] }, 'Picked')).out);
+  assert.ok(picked.has('ppt/slides/slide3.xml') && !picked.has('ppt/slides/slide4.xml'), 'three moments, three slides');
+  assert.deepEqual([1, 2, 3].map((n) => picked.get(`ppt/notesSlides/notesSlide${n}.xml`).toString().match(/<a:t>([^<]*)<\/a:t>/)?.[1]), ['title', 'title', 'badge']);
   const pdf = await exported({ kind: 'slides', format: 'pdf', shortEdge: 180, frame: '1:1' }, 'Deck');
   assert.equal(pdf.out, join(exportsRoot(), 'Deck.pdf'));
   const bytes = readFileSync(pdf.out).toString('latin1');

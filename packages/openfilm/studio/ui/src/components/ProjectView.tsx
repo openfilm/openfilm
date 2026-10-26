@@ -3149,6 +3149,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         frame="native"
         film={exportFilm as never}
         playheadMs={timeMs}
+        markersMs={tools.timeline.snapPointsMs}
         mgBlocks={mgBlocks}
         {...(exportClipId ? { focusClipId: exportClipId } : {})}
         onQueued={(jobs) => exportTrayRef.current?.push(jobs)}
