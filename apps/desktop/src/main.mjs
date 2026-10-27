@@ -9,9 +9,9 @@
  * in the page (shell/bridge.ts); this process does what only the app can: the window, the agents, files on the disk,
  * ffmpeg, updates (preload.cjs). The window opens straight into the last project.
  */
-import { BaseWindow, Menu, WebContentsView, app, clipboard, dialog, ipcMain, nativeTheme, safeStorage, screen, shell } from 'electron';
+import { BaseWindow, Menu, Notification, WebContentsView, app, clipboard, dialog, ipcMain, nativeTheme, safeStorage, screen, shell } from 'electron';
 import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FLAVOR, IDENTITY, PRODUCT_NAME } from './flavor.mjs';
 import { folderDialogOptions, programDialogOptions } from './folder-dialog.mjs';
@@ -27,7 +27,7 @@ import { registerLocalAgentIpc } from './local-agents-ipc.mjs';
 import { readPreferences, registerChatIpc } from './chat-ipc.mjs';
 import { registerSkillsIpc } from './skills-ipc.mjs';
 import { createRoster } from './agent-roster.mjs';
-import { checkAgentProgram, closeEverySession, diagnoseAgent, forgetAgentStatus, listAgents, localAgent, openAgentInstaller, openAgentSignIn, setChosenPaths, signOutAgent } from './agents.mjs';
+import { AGENTS, checkAgentProgram, closeEverySession, diagnoseAgent, forgetAgentStatus, listAgents, localAgent, openAgentInstaller, openAgentSignIn, setChosenPaths, signOutAgent } from './agents.mjs';
 import { agentUsage, forgetAgentUsage } from './agent-usage.mjs';
 import { installOpenfilmCommand } from './openfilm-command.mjs';
 import { startUpdates } from './updates.mjs';
@@ -36,6 +36,7 @@ import { ensureFfmpeg, ffmpegDir, ffmpegDownloadable, ffmpegIn, ffmpegOnPath } f
 import { PATH_SEP } from './environment.mjs';
 import { firstWindowsApps } from './windows-apps.mjs';
 import { createTabs, projectGone } from './tabs.mjs';
+import { turnNotice } from './turn-notices.mjs';
 
 const here = (path) => fileURLToPath(new URL(path, import.meta.url));
 const mac = process.platform === 'darwin';
@@ -383,6 +384,40 @@ function setTheme(next) {
   if (windows) win?.setTitleBarOverlay?.(overlayColours(theme));
 }
 
+/** the notifications shown and not yet clicked or closed: one let go is garbage collected, and its click lost (macOS) */
+const notices = new Set();
+
+/**
+ * A turn of the chat's done, stopped by an error, or waiting for the person's answer: a notification of the system's,
+ * while the window is not in front and Settings › General leaves them on (turn-notices.mjs). Clicking it brings the
+ * window back on that project's tab. The taskbar button flashes (Windows), the Dock icon bounces once (macOS).
+ * @param {{ kind: 'done' | 'failed' | 'asking', agent: string, cwd: string, meta: any, error?: string }} turn
+ */
+async function noticeTurn({ kind, agent, cwd, meta, error }) {
+  if (!win || !Notification.isSupported()) return;
+  const project = typeof meta?.projectTitle === 'string' && meta.projectTitle ? meta.projectTitle : basename(cwd);
+  const notice = turnNotice(kind, {
+    project, agent: agent === 'byok' ? null : AGENTS[agent]?.label ?? agent, error, inFront: win.isFocused() && win.isVisible(),
+    on: readPreferences(DATA).notify, language: appLanguage(state.language, app.getPreferredSystemLanguages()),
+  });
+  if (!notice) return;
+  const shown = new Notification({ title: notice.title, body: notice.body });
+  const done = () => notices.delete(shown);
+  shown.on('click', () => {
+    done();
+    focusWindow();
+    void (async () => {
+      if (!projectPaths.has(cwd)) projectPaths = new Map((await studioApi('/api/projects').catch(() => ({ projects: [] }))).projects.map((p) => [p.path, p.id]));
+      newTab(projectPaths.get(cwd));
+    })();
+  });
+  shown.on('close', done);
+  notices.add(shown);
+  shown.show();
+  if (windows) win.flashFrame(true);
+  else app.dock?.bounce('informational');
+}
+
 /** Tell Studio which folders the chat's agents are working in now. */
 function tellWorking(/** @type {string[]} */ folders) {
   studio?.child.postMessage({ type: 'working', folders });
@@ -505,6 +540,8 @@ async function start() {
   launch.dismiss();
 
   win.on('resize', layout);
+  /* the taskbar button a turn's notification set flashing (noticeTurn) stops once the window is in front */
+  if (windows) win.on('focus', () => win?.flashFrame(false));
   win.on('resized', saveState);
   win.on('moved', saveState);
   win.on('enter-full-screen', () => broadcast('desktop:full-screen', true));
@@ -595,6 +632,8 @@ async function start() {
     onWorking: tellWorking,
     /* a tab says when its agent waits for the person's answer */
     onAsking: (folders) => void tellTabsWorking({ asking: folders }),
+    /* a turn done, stopped or waiting, told by the system while the window is not in front */
+    onTurn: (turn) => void noticeTurn(turn),
     onConnectionResult: (id, error) => roster?.recordConnectionResult(id, error),
     /* the `openfilm` command first (with the app's ffmpeg and browser in it); the app's ffmpeg last, for a computer
        that has none of its own: the person's own ffmpeg and browsers are what the agent's commands use */

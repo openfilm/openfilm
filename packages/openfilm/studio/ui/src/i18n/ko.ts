@@ -1624,6 +1624,11 @@ export const ko: Words = {
       shortcuts: '키보드 단축키',
       advanced: '고급',
     },
+    notifications: {
+      group: '알림',
+      turns: '에이전트가 끝나면 알림',
+      turnsHint: 'OpenFilm이 앞에 있지 않을 때 한 차례가 끝나거나, 오류로 멈추거나, 답을 기다리면 시스템 알림을 보냅니다. 알림을 누르면 그 프로젝트가 열립니다.',
+    },
     appearance: {
       group: '모양',
       theme: '테마',

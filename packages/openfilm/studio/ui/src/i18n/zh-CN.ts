@@ -1629,6 +1629,11 @@ export const zhCN: Words = {
       shortcuts: '键盘快捷键',
       advanced: '高级',
     },
+    notifications: {
+      group: '通知',
+      turns: '智能体做完时提醒',
+      turnsHint: 'OpenFilm 不在前台时，一轮做完、出错中断、或在等你回答，都会发系统通知。点通知回到那个项目。',
+    },
     appearance: {
       group: '外观',
       theme: '主题',

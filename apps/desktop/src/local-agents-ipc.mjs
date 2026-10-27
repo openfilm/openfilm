@@ -53,6 +53,7 @@ import { skillStore } from './agent-skills.mjs';
 import { AGENTS, AgentSession, HARNESS_AGENTS, isAgentId, isChatAgent, listAgents, openAgentSignIn, optionsForModel, probeFolder } from './agents.mjs';
 import { loggedBlocks, logsDir, openLog, writeModelLog } from './chat-store.mjs';
 import { loginShellVariables } from './environment.mjs';
+import { turnOutcome } from './turn-notices.mjs';
 
 const TURN_LOG_MAX = 5000;
 /** what the agent sends between turns, kept for a turn of its own the page may open for it */
@@ -142,15 +143,16 @@ export function agentProblem(entry, step, e, turnId = null) {
  * `harness(id)` gives the app's own agent ('byok') what it runs with (agent-roster.mjs), resolved as
  * each session starts.
  * `onWorking` hears the folders agents are working in (a turn running there) each time they change; `onAsking` the
- * folders where an agent waits for the person's answer.
+ * folders where an agent waits for the person's answer. `onTurn` hears each turn done or stopped by an error (not one
+ * the person stopped) and each time an agent asks the person something, for the system's notifications (turn-notices.mjs).
  * `logDir()`, as each session starts: the folder for the logs an agent is started with (Developer mode on), or null.
  * `skills`: where the app keeps its record of skills (`dataDir`) and the person's own skills (`mine`): each session has its maker's skills and MCP servers, OpenFilm's skills, and of the person's own those let
  * in (agent-skills.mjs).
  * @param {{ trusted: (event: any) => boolean, binDir?: string | null, fallbackDir?: string | null, env?: Record<string, string>,
- *           harness?: (id: string) => Promise<any>, onWorking?: (folders: string[]) => void, onAsking?: (folders: string[]) => void, onConnectionResult?: (id: string, error: unknown | null) => void, logDir?: () => string | null,
+ *           harness?: (id: string) => Promise<any>, onWorking?: (folders: string[]) => void, onAsking?: (folders: string[]) => void, onTurn?: (turn: { kind: 'done' | 'failed' | 'asking', agent: string, cwd: string, meta: any, error?: string }) => void, onConnectionResult?: (id: string, error: unknown | null) => void, logDir?: () => string | null,
  *           skills?: { dataDir: string, mine: string } | null }} opts
  */
-export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbackDir = null, env = {}, harness = async () => null, log = () => {}, onWorking = () => {}, onAsking = () => {}, onConnectionResult = (_agent, _error) => {}, logDir = () => null, skills = null }) {
+export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbackDir = null, env = {}, harness = async () => null, log = () => {}, onWorking = () => {}, onAsking = () => {}, onTurn = (_turn) => {}, onConnectionResult = (_agent, _error) => {}, logDir = () => null, skills = null }) {
   const harnessFor = async (agent) => (HARNESS_AGENTS.includes(agent) ? harness(agent) : undefined);
   const skillRecord = skills ? skillStore(skills.dataDir) : null;
   /* what went wrong, kept in Studio's home with Studio's own problems (openfilm's problems.mjs), for its report */
@@ -275,12 +277,14 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
           pending.set(requestId, (optionId) => { pending.delete(requestId); tellAsking(); resolve(optionId); });
           send(entry, key, { kind: 'permission', requestId, params });
           tellAsking();
+          onTurn({ kind: 'asking', agent, cwd, meta: entry.turn?.meta ?? null });
         }),
         onQuestion: (ask) => new Promise((resolve) => {
           const requestId = randomUUID();
           pending.set(requestId, (answers) => { pending.delete(requestId); tellAsking(); resolve(answers); });
           send(entry, key, { kind: 'question', requestId, ...ask });
           tellAsking();
+          onTurn({ kind: 'asking', agent, cwd, meta: entry.turn?.meta ?? null });
         }),
         onExit: (info) => {
           /* ended by itself (not closed here), and not well: a problem */
@@ -371,6 +375,9 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
       void keepAgentRecord({ agent: entry.agent, sessionId: entry.info?.sessionId, cwd: entry.cwd, turnId: meta.turnId, from, to: entry.turnEnded, agentLog: entry.session.opened?.log, log });
       /* the page that asked may be gone (reloaded): say it on the channel too */
       if (!entry.sender.isDestroyed()) entry.sender.send('desktop:local-agents:event', { key, kind: 'done', turnId: meta.turnId, ...result });
+      /* done or stopped by an error, for a notification while the window is not in front; not one the person stopped */
+      const outcome = turnOutcome(result);
+      if (outcome) onTurn({ kind: outcome, agent: entry.agent, cwd: entry.cwd, meta, ...(result.ok ? {} : { error: result.error }) });
     }
     return result;
   });

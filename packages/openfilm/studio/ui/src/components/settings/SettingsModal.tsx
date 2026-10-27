@@ -243,9 +243,32 @@ function GeneralSection() {
           )}
         />
       </SettingsGroup>
+      {studioHost?.notifications ? <NotificationsGroup /> : null}
       <StorageGroup />
       {studioHost?.update?.onState ? <AppAboutGroup /> : <AboutGroup />}
     </SettingsPage>
+  );
+}
+
+/** In the app: the system's notification of a chat's turn done, stopped or waiting, while its window is not in front. */
+function NotificationsGroup() {
+  const t = useT();
+  const notifications = studioHost?.notifications;
+  const [on, setOn] = React.useState<boolean | null>(null);
+  React.useEffect(() => {
+    if (!notifications) return undefined;
+    void notifications.get().then(setOn);
+    return notifications.onChange(setOn);
+  }, [notifications]);
+  return (
+    <SettingsGroup title={t('settings.notifications.group')}>
+      <SettingsItem
+        title={t('settings.notifications.turns')}
+        description={t('settings.notifications.turnsHint')}
+        /* drawn once the app has said whether they are on: no switch slid on each time the page opens */
+        control={on === null ? null : <SettingsSwitch checked={on} label={t('settings.notifications.turns')} onChange={(next) => { setOn(next); void notifications?.set(next); }} />}
+      />
+    </SettingsGroup>
   );
 }
 
