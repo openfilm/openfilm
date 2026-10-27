@@ -56,6 +56,8 @@ import { loginShellVariables } from './environment.mjs';
 import { turnOutcome } from './turn-notices.mjs';
 
 const TURN_LOG_MAX = 5000;
+/** how long a question or permission waits for an answer before the system tells the person (noticeAsking) */
+const ASK_NOTICE_MS = 1500;
 /** what the agent sends between turns, kept for a turn of its own the page may open for it */
 const BETWEEN_TURNS_MAX = 500;
 /** a session nobody has spoken in for this long closes; how often that is looked at */
@@ -191,9 +193,16 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
     }
     if (!entry.sender.isDestroyed()) entry.sender.send('desktop:local-agents:event', { key, ...payload });
   };
+  /* an agent's question or permission, told by the system once it is still waiting a moment later: the page answers at
+     once one it has no turn for (one asked between turns), and that one is not the person's to answer */
+  const noticeAsking = (entry, requestId) => setTimeout(() => {
+    if (entry.pending.has(requestId) && !entry.closing) onTurn({ kind: 'asking', agent: entry.agent, cwd: entry.cwd, meta: entry.turn?.meta ?? null });
+  }, ASK_NOTICE_MS).unref?.();
   const close = (key) => {
     const entry = sessions.get(key);
     if (!entry) return;
+    /* closed here (quitting, the agent disconnected): its turn's end is not one to tell the person of */
+    entry.closing = true;
     for (const answer of entry.pending.values()) answer(null);
     entry.session.close();
     sessions.delete(key);
@@ -277,14 +286,14 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
           pending.set(requestId, (optionId) => { pending.delete(requestId); tellAsking(); resolve(optionId); });
           send(entry, key, { kind: 'permission', requestId, params });
           tellAsking();
-          onTurn({ kind: 'asking', agent, cwd, meta: entry.turn?.meta ?? null });
+          noticeAsking(entry, requestId);
         }),
         onQuestion: (ask) => new Promise((resolve) => {
           const requestId = randomUUID();
           pending.set(requestId, (answers) => { pending.delete(requestId); tellAsking(); resolve(answers); });
           send(entry, key, { kind: 'question', requestId, ...ask });
           tellAsking();
-          onTurn({ kind: 'asking', agent, cwd, meta: entry.turn?.meta ?? null });
+          noticeAsking(entry, requestId);
         }),
         onExit: (info) => {
           /* ended by itself (not closed here), and not well: a problem */
@@ -377,7 +386,7 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
       if (!entry.sender.isDestroyed()) entry.sender.send('desktop:local-agents:event', { key, kind: 'done', turnId: meta.turnId, ...result });
       /* done or stopped by an error, for a notification while the window is not in front; not one the person stopped */
       const outcome = turnOutcome(result);
-      if (outcome) onTurn({ kind: outcome, agent: entry.agent, cwd: entry.cwd, meta, ...(result.ok ? {} : { error: result.error }) });
+      if (outcome && !entry.closing) onTurn({ kind: outcome, agent: entry.agent, cwd: entry.cwd, meta, ...(result.ok ? {} : { error: result.error }) });
     }
     return result;
   });

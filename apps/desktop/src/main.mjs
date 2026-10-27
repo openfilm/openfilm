@@ -394,7 +394,7 @@ const notices = new Set();
  * @param {{ kind: 'done' | 'failed' | 'asking', agent: string, cwd: string, meta: any, error?: string }} turn
  */
 async function noticeTurn({ kind, agent, cwd, meta, error }) {
-  if (!win || !Notification.isSupported()) return;
+  if (!win || quitting || !Notification.isSupported()) return;
   const project = typeof meta?.projectTitle === 'string' && meta.projectTitle ? meta.projectTitle : basename(cwd);
   const notice = turnNotice(kind, {
     project, agent: agent === 'byok' ? null : AGENTS[agent]?.label ?? agent, error, inFront: win.isFocused() && win.isVisible(),

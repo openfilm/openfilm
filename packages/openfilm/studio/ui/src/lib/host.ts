@@ -151,6 +151,11 @@ export interface StudioHost {
    * answered, as it happened); `changes`, what each turn changed in the project's files, under its reply. `onChange`
    * tells of a change from anywhere and returns a way to stop.
    */
+  developer?: {
+    get: () => Promise<HostDeveloper>;
+    set: (next: Partial<HostDeveloper>) => Promise<unknown>;
+    onChange: (listener: (prefs: HostDeveloper) => void) => () => void;
+  };
   /**
    * The app's notifications, for Settings → General: the system's notification of a chat's turn done, stopped by an
    * error, or waiting for an answer, while the window is not in front (on, until switched off).
@@ -159,11 +164,6 @@ export interface StudioHost {
     get: () => Promise<boolean>;
     set: (on: boolean) => Promise<unknown>;
     onChange: (listener: (on: boolean) => void) => () => void;
-  };
-  developer?: {
-    get: () => Promise<HostDeveloper>;
-    set: (next: Partial<HostDeveloper>) => Promise<unknown>;
-    onChange: (listener: (prefs: HostDeveloper) => void) => () => void;
   };
   /**
    * The app shows each project in a tab of its own window and draws no tab strip of its own: Studio draws the tabs in
