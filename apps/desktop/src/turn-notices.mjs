@@ -5,6 +5,7 @@
  *
  * Pure: no Electron, so `node --test` runs it.
  */
+import { redact } from 'openfilm/problems';
 import { TURN_NOTICE_WORDS } from './i18n/turn-notices.mjs';
 
 /**
@@ -20,7 +21,8 @@ export function turnOutcome(result) {
 
 /**
  * A notification's title and words, or null for none: OpenFilm in front (the person sees the chat), or notifications
- * switched off. The project is the title; a long error is cut, the notification shows a line or two.
+ * switched off. The project is the title. An error is redacted, as a problem report is (a notification shows on the
+ * lock screen and stays in Notification Center and Action Center), and cut long: it shows a line or two.
  * @param {'done' | 'failed' | 'asking'} kind
  * @param {{ project: string, agent: string | null, error?: string, language: string, inFront: boolean, on: boolean }} o
  * `agent`: its name; null for the app's own agent (the own key), named "the agent".
@@ -28,7 +30,7 @@ export function turnOutcome(result) {
 export function turnNotice(kind, { project, agent, error = '', language, inFront, on }) {
   if (!on || inFront) return null;
   const words = /** @type {Record<string, Record<string, string>>} */ (TURN_NOTICE_WORDS)[language] ?? TURN_NOTICE_WORDS.en;
-  const why = error.replace(/\s+/g, ' ').trim();
+  const why = redact(error).replace(/\s+/g, ' ').trim();
   const body = words[kind].replace('{agent}', agent ?? words.agent).replace('{error}', why.length > 140 ? `${why.slice(0, 139)}…` : why);
   return { title: project, body };
 }

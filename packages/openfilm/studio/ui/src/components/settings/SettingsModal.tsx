@@ -53,7 +53,7 @@ const SECTION_ICON: Record<SettingsSection, React.ReactNode> = {
 
 /** what a search through each section reads: its name and every phrase it shows */
 const SECTION_WORDS: Record<SettingsSection, string | string[]> = {
-  general: ['settings.appearance', 'settings.storage'],
+  general: ['settings.appearance', 'settings.notifications', 'settings.storage'],
   agents: 'settings.agents',
   providers: 'settings.providers',
   models: 'settings.models',

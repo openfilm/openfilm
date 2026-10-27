@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { homedir } from 'node:os';
 import { turnNotice, turnOutcome } from './turn-notices.mjs';
 import { TURN_NOTICE_WORDS } from './i18n/turn-notices.mjs';
 import { LANGUAGES } from './i18n/language.mjs';
@@ -11,6 +12,8 @@ test('a turn done, stopped by an error, or waiting for an answer is told while O
   assert.deepEqual(turnNotice('asking', away), { title: 'Launch film', body: 'Codex is waiting for your answer.' });
   assert.deepEqual(turnNotice('failed', { ...away, error: 'Rate limit\nreached.' }), { title: 'Launch film', body: 'Codex stopped: Rate limit reached.' });
   assert.equal(turnNotice('failed', { ...away, error: 'x'.repeat(500) }).body.length < 170, true, 'a long error is cut');
+  const leaky = turnNotice('failed', { ...away, error: `${homedir()}/.codex/auth.json: bad key sk-abcdefghijklmnop1234 for a@b.com` }).body;
+  assert.equal(leaky, 'Codex stopped: ~/.codex/auth.json: bad key (key hidden) for (email)', 'no home folder, key or email on the lock screen');
   assert.deepEqual(turnNotice('done', { ...away, language: 'zh-CN' }), { title: 'Launch film', body: 'Codex 做完了。' });
   assert.deepEqual(turnNotice('done', { ...away, agent: null }), { title: 'Launch film', body: 'The agent has finished.' }, 'the own key has no name of its own');
   assert.deepEqual(turnNotice('done', { ...away, language: 'xx' }), { title: 'Launch film', body: 'Codex has finished.' }, 'an unknown language: English');

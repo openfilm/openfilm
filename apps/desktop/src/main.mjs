@@ -49,6 +49,8 @@ app.commandLine.appendSwitch('enable-blink-features', 'CanvasDrawElement');
 
 /* each flavour its own name, data folder and single-instance lock (flavor.mjs) */
 app.setName(PRODUCT_NAME);
+/* Windows shows a notification only for the app ID the Start menu shortcut carries: the installer's appId (release.mjs) */
+if (windows) app.setAppUserModelId(IDENTITY.bundleId);
 app.setPath('userData', IDENTITY.userData ?? join(app.getPath('appData'), PRODUCT_NAME));
 const DATA = app.getPath('userData');
 const LOGS = join(DATA, 'logs');
@@ -386,6 +388,8 @@ function setTheme(next) {
 
 /** the notifications shown and not yet clicked or closed: one let go is garbage collected, and its click lost (macOS) */
 const notices = new Set();
+/** how many of them a long session keeps: an older one is closed, in Notification Center and Action Center too */
+const NOTICES_KEPT = 20;
 
 /**
  * A turn of the chat's done, stopped by an error, or waiting for the person's answer: a notification of the system's,
@@ -413,6 +417,7 @@ async function noticeTurn({ kind, agent, cwd, meta, error }) {
   });
   shown.on('close', done);
   notices.add(shown);
+  for (const old of notices) { if (notices.size <= NOTICES_KEPT) break; notices.delete(old); old.close(); }
   shown.show();
   if (windows) win.flashFrame(true);
   else app.dock?.bounce('informational');
