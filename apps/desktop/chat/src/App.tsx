@@ -9,7 +9,7 @@ import React from 'react';
 import { ArrowDown, Blocks, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, ShieldQuestion, Square, SquareSlash, X } from 'lucide-react';
 import { buildPromptDisplay, type Turn } from '@openfilm/shared';
 import { useT, useUiLocale } from '@/i18n';
-import { ConversationSessionBar, SessionHistory } from '@/components/ConversationSessionBar';
+import { ConversationTabs } from '@/components/ConversationSessionBar';
 import { ProjectConversation, primeStoredTranscript } from '@/components/ProjectConversation';
 import { ProjectStarters } from '@/components/ProjectStarters';
 import { AttachmentPreview, type AttachmentPreviewItem } from '@/components/AttachmentPreview';
@@ -51,6 +51,7 @@ import {
   useAgentCommands,
   useAgentContext,
   useLocalAgentTurn,
+  useRunningLocalTurns,
   type LocalAgentTurn,
   type LocalTranscriptStore,
 } from '@/lib/local-agent-run';
@@ -87,6 +88,8 @@ const isActive = (turn: Turn | undefined) => turn?.status === 'generating' || tu
 
 /** how often a running turn is kept, at most (it changes with every word) */
 const KEEP_RUNNING_MS = 1500;
+/** where each project's open tabs are kept (+ `:<project folder>`) */
+const TABS_KEY = 'openfilm.chat.tabs';
 /** how full the agent's context gets before the chat says a new conversation would work better */
 const CONTEXT_NOTICE_SHARE = 0.85;
 
@@ -174,6 +177,17 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     return last && list.some((s) => s.id === last) ? last : list[0]?.id ?? newSession().id;
   });
   React.useEffect(() => { saveLastSession(projectKey, sessionId); }, [projectKey, sessionId]);
+  /* the conversations open as tabs, in their order, kept on this Mac (one archived since, or never said, is not) */
+  const tabsKey = `${TABS_KEY}:${projectKey}`;
+  const [tabs, setTabs] = React.useState<string[]>(() => {
+    let kept: unknown = null;
+    try { kept = JSON.parse(localStorage.getItem(tabsKey) ?? 'null'); } catch { /* unreadable: the one shown */ }
+    const live = new Set(loadSessions(projectKey).filter((s) => s.turns > 0 && !s.archived).map((s) => s.id));
+    const ids = Array.isArray(kept) ? kept.filter((id): id is string => typeof id === 'string' && live.has(id)) : [];
+    return ids.includes(sessionId) ? ids : [...ids, sessionId];
+  });
+  React.useEffect(() => { setTabs((ids) => (ids.includes(sessionId) ? ids : [...ids, sessionId])); }, [sessionId]);
+  React.useEffect(() => { try { localStorage.setItem(tabsKey, JSON.stringify(tabs)); } catch { /* kept for this launch only */ } }, [tabsKey, tabs]);
   const touchSession = React.useCallback((id: string, patch: (s: ProjectSessionItem) => Partial<ProjectSessionItem>) => {
     setSessions((list) => {
       const now = new Date().toISOString();
@@ -310,7 +324,8 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   const [followUpRefs, setFollowUpRefs] = React.useState<PromptReference[]>([]);
   /** what the person pointed at in Studio for this message, by pill id */
   const [studioRefs, setStudioRefs] = React.useState<Map<string, StudioRef>>(() => new Map());
-  const [queued, setQueued] = React.useState(false);
+  /** the conversation whose message waits for its turn to end (an agent that cannot take one mid-turn) */
+  const [queued, setQueued] = React.useState<string | null>(null);
   const [followUpError, setFollowUpError] = React.useState<string | null>(null);
   const composerFiles = useDesktopAttachments(project.path);
   /* a file of the message being written, opened to look at */
@@ -581,7 +596,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
 
   /** each open turn's way to settle (by turn id), and the agent's run each running turn belongs to */
   const settlers = React.useRef(new Map<string, (patch: Partial<Turn & TurnBalance>) => void>());
-  const runs = React.useRef(new Map<string, Promise<unknown>>());
+  const runs = React.useRef(new Map<string, { conversation: string; run: Promise<unknown> }>());
   /** the conversation shown now (a turn opened in another is kept, not shown) */
   const shownSession = React.useRef(sessionId);
   shownSession.current = sessionId;
@@ -720,7 +735,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
         finish(lastTurnId, { status: 'error', error: reason, ...(balance ? { balance } : {}) });
       },
     ).finally(() => { runs.current.delete(id); });
-    runs.current.set(id, run);
+    runs.current.set(id, { conversation: meta.sessionId, run });
   }
 
   /**
@@ -730,7 +745,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
    */
   function steerTurn(fromId: string, opened: ReturnType<typeof openTurn>, prepared: Promise<{ text: string; images: PromptImage[]; skills?: string[] }>): void {
     /* the agent's run going now (one at a time in a conversation): a message that did not join waits for it */
-    const run = [...runs.current.values()].at(-1) ?? Promise.resolve();
+    const run = [...runs.current.values()].filter((r) => r.conversation === opened.meta.sessionId).at(-1)?.run ?? Promise.resolve();
     void Promise.all([prepared, opened.ready]).then(async ([{ text, images, skills }]) => {
       if (await steerLocalAgentTurn(fromId, opened.turn, text, images)) {
         settlers.current.get(fromId)?.({ status: 'ready' });
@@ -745,8 +760,8 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     if (!followUpFilled) return;
     /* while a turn runs: into it, for an agent that takes that; else it waits for the turn to end */
     const steer = active && asset ? canSteer(asset.id) : false;
-    if (active && !steer) { setQueued(true); return; }
-    setQueued(false);
+    if (active && !steer) { setQueued(sessionId); return; }
+    setQueued(null);
     /* the sentence as the agent reads it: a pill becomes "[n: name]", and what each number is follows, in a block */
     const used: StudioRef[] = [];
     const instruction = resolvePromptReferences(followUp, (pillId, index) => {
@@ -795,25 +810,47 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   }
 
   /* queued while the turn ran (an agent that cannot take a message mid-turn): sent as soon as it ends */
-  React.useEffect(() => { if (queued && !active) submitFollowUp(); }, [queued, active]); // eslint-disable-line react-hooks/exhaustive-deps
+  React.useEffect(() => {
+    /* another tab shown meanwhile: the message stays written, not sent there */
+    if (queued && queued !== sessionId) setQueued(null);
+    else if (queued && !active) submitFollowUp();
+  }, [queued, active, sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /* each tab its own conversation, its agent at work whichever is shown: a new one, or another, any time */
   const onNewSession = () => {
-    if (active) return;
-    setSessionId(newSession().id);
+    const id = newSession().id;
+    setTabs((ids) => [...ids.slice(0, ids.indexOf(sessionId) + 1), id, ...ids.slice(ids.indexOf(sessionId) + 1)]);
+    setSessionId(id);
     composerRef.current?.focus();
   };
   newConversation.current = onNewSession;
-  const onSelectSession = (id: string) => { if (!active) setSessionId(id); };
-  const [historyOpen, setHistoryOpen] = React.useState(() => app.historyOpen());
+  const onSelectSession = (id: string) => { setSessionId(id); composerRef.current?.focus(); };
+  /** Its tab closed (it stays in the history, its turn running): the one beside it shown, or a new one for the last. */
+  const closeTab = (id: string) => {
+    const at = tabs.indexOf(id);
+    const rest = tabs.filter((x) => x !== id);
+    if (id === sessionId) {
+      const next = rest[Math.min(Math.max(at, 0), rest.length - 1)] ?? newSession().id;
+      if (!rest.includes(next)) rest.push(next);
+      setSessionId(next);
+    }
+    setTabs(rest);
+  };
+  const closeOtherTabs = (id: string) => { setTabs([id]); if (id !== sessionId) setSessionId(id); };
   const onRenameSession = (id: string, title: string) => editSession(id, { title });
   const onPinSession = (id: string, pinned: boolean) => editSession(id, { pinned });
-  /* the conversation shown, archived: a new one in its place (not while its turn runs) */
+  /* the conversations whose turn runs now, by the turn: their tabs turn, and they cannot be archived meanwhile */
+  const allRunning = useRunningLocalTurns();
+  const running = React.useMemo(
+    () => new Map(allRunning.filter((r) => r.projectId === projectKey).map((r) => [r.sessionId, r.id])),
+    [allRunning, projectKey],
+  );
+  /* archived: its tab closed too */
   const onArchiveSession = (id: string, archived: boolean) => {
-    if (archived && id === sessionId && active) return;
+    if (archived && running.has(id)) return;
     editSession(id, { archived });
-    if (archived && id === sessionId) onNewSession();
+    if (archived && tabs.includes(id)) closeTab(id);
   };
-  const toggleHistory = () => { app.setHistoryOpen(!historyOpen); setHistoryOpen(!historyOpen); };
   const shownSessions = React.useMemo(
     () => (sessions.some((s) => s.id === sessionId) ? sessions : [{ ...newSession(), id: sessionId }, ...sessions]),
     [sessions, sessionId],
@@ -1037,34 +1074,21 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
           <StickToBottomContext.Provider value={thread}>
             {/* with the assets open only the composer shows, at the bottom: the drawer above it is Studio's, and the two
                 read as one pane */}
-            {/* the history left of the conversation, a line between them (the column widens by it: shell/bridge.ts) */}
-            <div className={assetsOpen ? 'contents' : 'flex min-h-0 flex-1 gap-px bg-[var(--dock-line)]'}>
-            {historyOpen && !assetsOpen ? (
-              <div className="w-[220px] shrink-0 bg-[var(--dock-shell)]">
-                <SessionHistory
-                  sessions={shownSessions}
-                  currentSessionId={sessionId}
-                  onSelectSession={onSelectSession}
-                  onNewSession={onNewSession}
-                  onRenameSession={onRenameSession}
-                  onPinSession={onPinSession}
-                  onArchiveSession={onArchiveSession}
-                  busy={active}
-                />
-              </div>
-            ) : null}
             <aside className={`relative flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--dock-pane)] ${assetsOpen ? 'mt-auto shrink-0' : 'flex-1'}`}>
               {assetsOpen ? null : banners}
               <div className={`relative min-h-0 min-w-0 flex-1 flex-col ${assetsOpen ? 'hidden' : 'flex'}`}>
-                <ConversationSessionBar
+                <ConversationTabs
                   sessions={shownSessions}
+                  tabs={tabs}
                   currentSessionId={sessionId}
+                  running={running}
+                  onSelectSession={onSelectSession}
+                  onNewSession={onNewSession}
+                  onCloseTab={closeTab}
+                  onCloseOtherTabs={closeOtherTabs}
                   onRenameSession={onRenameSession}
                   onPinSession={onPinSession}
                   onArchiveSession={onArchiveSession}
-                  historyOpen={historyOpen}
-                  onToggleHistory={toggleHistory}
-                  busy={active}
                 />
                 <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
                   {/* the first message well below the session bar, as a chat app opens a conversation; the last well above
@@ -1180,18 +1204,17 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
                   ) : null}
                   {localTurn?.state.balance ? <BalanceNotice balance={localTurn.state.balance} /> : null}
                   {followUpError && <p className="text-xs text-[var(--err)]">{followUpError}</p>}
-                  {queued && active ? (
+                  {queued === sessionId && active ? (
                     <p role="status" className="flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
                       <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent)]" />
                       <span className="min-w-0 flex-1">{t('composer.queued')}</span>
-                      <button type="button" onClick={() => setQueued(false)} className="shrink-0 underline underline-offset-2 hover:text-[var(--text)]">{t('composer.queuedCancel')}</button>
+                      <button type="button" onClick={() => setQueued(null)} className="shrink-0 underline underline-offset-2 hover:text-[var(--text)]">{t('composer.queuedCancel')}</button>
                     </p>
                   ) : null}
                   {editComposerCard}
                 </div>
               </div>
             </aside>
-            </div>
           </StickToBottomContext.Provider>
         </WaitingContext.Provider>
       </PromptPillHoverContext.Provider>

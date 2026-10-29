@@ -54,12 +54,8 @@ interface AppBridge {
   /** the project's files (Studio's listing), for the @ menu */
   projectFiles(): Promise<{ files: Array<{ path: string; kind: string; size: number }>; pages?: Array<{ path: string; size: number }> }>;
   onSelection(listener: (selection: StudioSelection) => void): () => void;
-  /** the column's whole width, the history's included when it is open */
   setChatWidth(width: number, done?: boolean): void;
   setChatOpen(open: boolean): void;
-  /** the conversations' history, a pane left of the conversation: the column widens by it (kept across launches) */
-  historyOpen(): boolean;
-  setHistoryOpen(open: boolean): void;
   /** the project's assets, drawn by Studio over this column while open (main.mjs `assets`) */
   assetsOpen(): boolean;
   setAssetsOpen(open: boolean): void;

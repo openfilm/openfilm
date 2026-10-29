@@ -746,7 +746,7 @@ function listen(): void {
     if (event.kind === 'exit') {
       endUnprompted(event.key);
       for (const [k, s] of sessions) if (s.key === event.key) sessions.delete(k);
-      if (turn && !turn.state.error && turn === current) turn.patch({ error: 'The agent stopped unexpectedly.' });
+      if (turn && !turn.state.error) turn.patch({ error: 'The agent stopped unexpectedly.' });
       const waiter = doneWaiters.get(event.key);
       if (waiter) { doneWaiters.delete(event.key); waiter({ ok: false, error: 'The agent stopped unexpectedly.' }); }
       return;
