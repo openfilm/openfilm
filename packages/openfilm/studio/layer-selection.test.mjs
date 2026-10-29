@@ -20,9 +20,10 @@ const CARD = `<!doctype html><body style="margin:0;background:#222">
 
 /**
  * Studio on a project of one page clip (CARD, 1080 × 1920), the Layers panel open; `run` gets the page and helpers.
- * `chat`: inside an app with a chat, where ⌘ (Ctrl) held draws a box to point at instead of selecting.
+ * `chat`: inside an app with a chat, where ⌘ (Ctrl) held draws a box to point at instead of selecting. `again`: the
+ * page shown a second time after it, by another clip (a paste then gives the first clip a page of its own).
  */
-async function withCard(name, run, { chat = false } = {}) {
+async function withCard(name, run, { chat = false, again = false } = {}) {
   const scratch = await mkdtemp(join(tmpdir(), 'of-layer-selection-'));
   const names = ['HOME', 'SHARED_HOME', 'LIBRARY', 'SAVED', 'EXPORTS'];
   const saved = new Map(names.map((n) => [`OPENFILM_${n}`, process.env[`OPENFILM_${n}`]]));
@@ -32,7 +33,8 @@ async function withCard(name, run, { chat = false } = {}) {
     const root = join(process.env.OPENFILM_LIBRARY, name);
     await mkdir(root, { recursive: true });
     await writeFile(join(root, 'card.html'), CARD);
-    await writeFile(join(root, 'film.html'), filmHtml({ stage: { w: 1080, h: 1920 }, tracks: [{ clips: [{ id: 'card', src: 'card.html', time: [0, 4] }] }] }));
+    const clips = [{ id: 'card', src: 'card.html', time: [0, 4] }, ...(again ? [{ id: 'again', src: 'card.html', at: 4, time: [0, 4] }] : [])];
+    await writeFile(join(root, 'film.html'), filmHtml({ stage: { w: 1080, h: 1920 }, tracks: [{ clips }] }));
     const project = await openProject(root);
     studio = await startStudio({ port: 0, openBrowser: () => {} });
     browser = await chromium.launch({ headless: true, args: ['--use-angle=swiftshader'] });
@@ -76,6 +78,7 @@ async function withCard(name, run, { chat = false } = {}) {
       await page.mouse.up();
     };
     const pageText = () => readFile(join(root, 'card.html'), 'utf8');
+    const filmText = () => readFile(join(root, 'film.html'), 'utf8');
     const overrides = async () => {
       const { doc } = readFilmFile(await readFile(join(root, 'film.html'), 'utf8'));
       return doc.tracks[0].clips[0].overrides ?? [];
@@ -86,7 +89,7 @@ async function withCard(name, run, { chat = false } = {}) {
       await page.mouse.click(x, y);
       for (const key of keys) await page.keyboard.up(key);
     };
-    await run({ page, on, until, selection, away, drag, click, pageText, overrides });
+    await run({ page, on, until, selection, away, drag, click, pageText, filmText, overrides });
   } finally {
     await browser?.close();
     await studio?.close();
@@ -177,4 +180,55 @@ test('Shift-click adds a layer to what is selected or takes it away, the same on
     await is(['On time'], 'the picture and the rows are one selection');
     assert.deepEqual(await rows(), ['On time']);
   }, { chat: true });
+});
+
+test('a paste undone: no box stays where a copy went, and what is selected keeps the layers still there', { timeout: 150_000 }, async () => {
+  const boxedAt = (now, x, y) => now.boxes.some(([bx, by]) => bx === x && by === y);
+  /** The title, the line under it and the red box boxed, copied and pasted; their copies selected. */
+  const pasteThree = async ({ page, on, until, selection, drag }, written) => {
+    await drag(on(40, 150), on(560, 860));
+    await until(async () => (await selection()).many === 3, 'the box selects the three');
+    await page.keyboard.press('ControlOrMeta+c');
+    await page.waitForTimeout(200);
+    await page.keyboard.press('ControlOrMeta+v');
+    await until(written, 'the paste is written');
+    await until(async () => { const now = await selection(); return now.many === 3 && boxedAt(now, 124, 224); }, 'the copies are selected');
+  };
+
+  /* undone with the pointer resting on the red box's copy, where the red box itself is not: the copies go, and with
+     them every box on them, the outline under the pointer too */
+  await withCard('Undo', async (card) => {
+    const { page, on, until, selection, pageText } = card;
+    await pasteThree(card, async () => (await pageText()).includes('id="box1-copy"'));
+    const rest = on(410, 810);
+    await page.mouse.move(rest.x - 6, rest.y - 6);
+    await page.mouse.move(rest.x, rest.y);
+    await page.waitForTimeout(300);
+    await page.keyboard.press('ControlOrMeta+z');
+    await until(async () => !(await pageText()).includes('-copy'), 'the paste is undone');
+    /* (the page's own outline under the pointer is all there is: nothing of it is there now) */
+    const gone = async () => { const now = await selection(); return now.many === null && !now.rows.length && !now.boxes.some(([x]) => x === 124); };
+    await until(gone, 'no box is left where the copies were');
+    await page.waitForTimeout(1500);
+    assert.ok(await gone(), 'nor comes back');
+  });
+
+  /* another clip shows the page too, so the paste gives this clip a page of its own, and its undo gives the page back:
+     with the three and their copies selected together, the three stay selected */
+  await withCard('Undo shared', async (card) => {
+    const { page, on, until, selection, drag, filmText } = card;
+    await pasteThree(card, async () => (await filmText()).includes('card 2.html'));
+    await drag(on(40, 150), on(600, 900));
+    await until(async () => (await selection()).many === 6, 'the box selects the three and their copies');
+    await page.keyboard.press('ControlOrMeta+z');
+    await until(async () => !(await filmText()).includes('card 2.html'), 'the paste is undone');
+    const three = async () => {
+      const now = await selection();
+      return now.many === 3 && JSON.stringify(now.rows.sort()) === JSON.stringify(['#box1', 'On time', 'Parcel'])
+        && boxedAt(now, 100, 200) && !now.boxes.some(([x]) => x === 124);
+    };
+    await until(three, 'the three layers still in the page stay selected, with no box on a copy');
+    await page.waitForTimeout(1500);
+    assert.ok(await three(), 'and they stay so');
+  }, { again: true });
 });
