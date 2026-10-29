@@ -223,7 +223,7 @@ export interface FilmStageControl {
 }
 
 /** Layers to select on the picture, asked from elsewhere (see FilmStageSelectProps.selectRequest). */
-export interface FilmStageSelectRequest { layers: readonly { loc: string; clipLoc?: string }[]; seq: number }
+export interface FilmStageSelectRequest { layers: readonly { loc: string; clipLoc?: string }[]; toggle?: boolean; seq: number }
 
 /** One thing in hand on the picture, for a reference: what it is, and its box (stage px) when it is a layer. */
 export interface StagePick { element: StageElement; box: StageBox | null }
@@ -373,8 +373,9 @@ interface FilmStageSelectProps {
   onSelectClips?: (locs: readonly string[]) => void;
   /**
    * Select the layers at `loc` in the clips at `clipLoc` (the inspector's breadcrumb, the menu's Select parent, a row
-   * of the Layers panel, the copies a paste made): one is that one, several are selected together. `seq` goes up each
-   * time, so the same layers can be asked for twice.
+   * of the Layers panel, the copies a paste made): one is that one, several are selected together. `toggle`: each is
+   * added to what is selected, or taken from it when it is there already (a Shift-click on a Layers row). `seq` goes
+   * up each time, so the same layers can be asked for twice.
    */
   selectRequest?: FilmStageSelectRequest | null;
   /**
@@ -1247,6 +1248,8 @@ function FilmStageSelectImpl({
         || el?.closest('[data-popover-panel]')
       ) return;
       if (el?.closest('[data-timeline]') && !multiRef.current && (!pickedRef.current?.element || pickedRef.current.element.kind === 'clip')) return;
+      /* a Layers row Shift-clicked (⌘ / Ctrl too) adds its layer to what is selected, or takes it away */
+      if (el?.closest('[data-layers-panel] [role="treeitem"]') && (e.shiftKey || e.metaKey || e.ctrlKey)) return;
       dropPick();
       onSelectElement?.(null);
     };
@@ -1462,7 +1465,11 @@ function FilmStageSelectImpl({
       const layers = found.filter((layer): layer is StageLayer => layer != null);
       if (!layers.length || token !== pressSeq.current) return;
       setHover(null);
-      selectMany(layers);
+      if (!selectRequest.toggle) { selectMany(layers); return; }
+      /* as a Shift-click on the picture: each one added, or taken away when it is selected already */
+      let next = selectedLayers();
+      for (const layer of layers) next = next.some((b) => b.handle === layer.handle) ? next.filter((b) => b.handle !== layer.handle) : [...next, layer];
+      selectMany(next);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestSeq]);
@@ -2111,6 +2118,8 @@ function FilmStageSelectImpl({
     const vs = viewScaleNow();
     const held = pickedRef.current;
     e.stopPropagation();
+    /* two Shift-clicks in a row: each one added or took away (the second is not cut short), and nothing is typed into */
+    if (e.shiftKey && !cropRef.current) return;
     const token = ++pressSeq.current;
     /* where the double-click began, in the film's own pixels: its first click can open the inspector, and the picture
        shrinks under the hand before the second — taken where the second landed on screen, it typed in another line */
@@ -2703,10 +2712,12 @@ function FilmStageSelectImpl({
         const frame0 = scaleFrame(heldLayer0.frame, vs);
         const aabb0 = scaleBox(heldLayer0.rect, vs);
         const inside = insideBox(scaleBox(held.rect, vs), p.x, p.y);
+        /* Shift in its box: a click that takes it away, or a box that adds to it, as anywhere else (its handles still
+           scale and turn it) */
         const kind = layerKind === 'scale' ? 'scale'
           : layerKind === 'stretch' ? 'stretch'
             : layerKind === 'rotate' ? 'rotate'
-              : (layerKind === 'move' || inside) && !e.altKey ? 'move' : null;
+              : (layerKind === 'move' || inside) && !e.altKey && !e.shiftKey ? 'move' : null;
         const at = HANDLE_AT[layerHandle?.getAttribute('data-layer-handle') ?? ''] ?? { hx: 0, hy: 0 };
         if (kind) {
           if (nudge.current) flushNudge();
@@ -2747,8 +2758,9 @@ function FilmStageSelectImpl({
          the timeline (several: no handles) is not a press elsewhere */
       cycleFrom.current = e.altKey ? pickedRef.current?.layer?.handle ?? null : null;
       pressedFrom.current = pickedRef.current?.layer?.handle ?? null;
+      /* with Shift, what is selected stays drawn: the click or the box adds to it */
       const clearPrevious = () => {
-        dropPick();
+        if (!shiftBase.current?.length) dropPick();
         setHover(null);
       };
       const linked = linkedLocs ?? [];

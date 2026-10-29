@@ -18,8 +18,11 @@ const CARD = `<!doctype html><body style="margin:0;background:#222">
   <div id="box3" style="${at(100, 1200, 400, 300, 'background:#3a3')}"></div>
 <script>window.film={duration:4,frame(){}}</script></body>`;
 
-/** Studio on a project of one page clip (CARD, 1080 × 1920), the Layers panel open; `run` gets the page and helpers. */
-async function withCard(name, run) {
+/**
+ * Studio on a project of one page clip (CARD, 1080 × 1920), the Layers panel open; `run` gets the page and helpers.
+ * `chat`: inside an app with a chat, where ⌘ (Ctrl) held draws a box to point at instead of selecting.
+ */
+async function withCard(name, run, { chat = false } = {}) {
   const scratch = await mkdtemp(join(tmpdir(), 'of-layer-selection-'));
   const names = ['HOME', 'SHARED_HOME', 'LIBRARY', 'SAVED', 'EXPORTS'];
   const saved = new Map(names.map((n) => [`OPENFILM_${n}`, process.env[`OPENFILM_${n}`]]));
@@ -34,7 +37,10 @@ async function withCard(name, run) {
     studio = await startStudio({ port: 0, openBrowser: () => {} });
     browser = await chromium.launch({ headless: true, args: ['--use-angle=swiftshader'] });
     const page = await browser.newPage({ viewport: { width: 1400, height: 1000 }, locale: 'en-US', reducedMotion: 'reduce' });
-    await page.addInitScript(() => localStorage.setItem('openfilm.project.layers', '1'));
+    await page.addInitScript((withChat) => {
+      localStorage.setItem('openfilm.project.layers', '1');
+      if (withChat) window.openfilmHost = { version: 1, refer: () => {} };
+    }, chat);
     await page.goto(`${studio.origin}/projects/${project.id}?key=${studio.key}`);
     const film = page.locator('[data-viewer-picture] iframe').first();
     await film.waitFor({ state: 'visible' });
@@ -74,7 +80,13 @@ async function withCard(name, run) {
       const { doc } = readFilmFile(await readFile(join(root, 'film.html'), 'utf8'));
       return doc.tracks[0].clips[0].overrides ?? [];
     };
-    await run({ page, on, until, selection, away, drag, pageText, overrides });
+    /** A click on the film at (x, y), with these keys held. */
+    const click = async ({ x, y }, keys = []) => {
+      for (const key of keys) await page.keyboard.down(key);
+      await page.mouse.click(x, y);
+      for (const key of keys) await page.keyboard.up(key);
+    };
+    await run({ page, on, until, selection, away, drag, click, pageText, overrides });
   } finally {
     await browser?.close();
     await studio?.close();
@@ -109,4 +121,60 @@ test('layers boxed, copied and pasted: every copy is selected, and one drag move
     for (const o of moved) assert.deepEqual(o.t, moved[0].t);
     assert.ok(moved[0].t[1] > 100, 'moved down');
   });
+});
+
+test('Shift-click adds a layer to what is selected or takes it away, the same on the picture and in Layers', { timeout: 120_000 }, async () => {
+  await withCard('Shift', async ({ page, on, until, selection, drag, click }) => {
+    const rows = async () => (await selection()).rows.sort();
+    const is = (want, what) => until(async () => {
+      const now = await selection();
+      return now.many === (want.length > 1 ? want.length : null) && JSON.stringify(now.rows.sort()) === JSON.stringify([...want].sort());
+    }, what);
+    /* on the picture: the red box, then the blue one added, taken away again, then the red one taken away too */
+    await click(on(250, 700));
+    await is(['#box1'], 'a click selects the red box');
+    await click(on(750, 700), ['Shift']);
+    await is(['#box1', '#box2'], 'Shift-click adds the blue box');
+    await click(on(750, 700), ['Shift']);
+    await is(['#box1'], 'Shift-click on it again takes it away');
+    await click(on(250, 700), ['Shift']);
+    await is([], 'Shift-click on the one selected, inside its own box, takes it away (it is not moved)');
+    /* Shift and a box drawn: the layers in it are added */
+    await click(on(250, 700));
+    await is(['#box1'], 'the red box again');
+    await page.keyboard.down('Shift');
+    await drag(on(60, 1150), on(560, 1560));
+    await page.keyboard.up('Shift');
+    await is(['#box1', '#box3'], 'Shift and a box add the green box');
+    /* two Shift-clicks in a row on the title: added, then taken away; nothing is typed into */
+    await page.keyboard.press('Escape');
+    await is([], 'Esc lets go');
+    const title = on(300, 240);
+    await page.keyboard.down('Shift');
+    await page.mouse.move(title.x, title.y);
+    await page.mouse.down();
+    await page.mouse.up();
+    await page.waitForTimeout(120);
+    await page.mouse.down({ clickCount: 2 });
+    await page.mouse.up({ clickCount: 2 });
+    await page.keyboard.up('Shift');
+    await page.waitForTimeout(400);
+    assert.equal(await page.locator('[data-film-select][data-stage-busy]').count(), 0, 'no words are typed into');
+    await is([], 'a Shift double-click adds and takes away');
+
+    /* in Layers: a row selects; Shift-click on another adds it, on a selected one takes it away; ⌘ / Ctrl-click too */
+    const row = (text) => page.locator('[data-layers-panel] [role="treeitem"]').filter({ hasText: text });
+    await row('Parcel').click();
+    await is(['Parcel'], 'a row selects its layer');
+    await row('On time').click({ modifiers: ['Shift'] });
+    await is(['On time', 'Parcel'], 'Shift-click on a row adds its layer');
+    await row('Parcel').click({ modifiers: ['Shift'] });
+    await is(['On time'], 'Shift-click on a selected row takes its layer away');
+    await row('#box3').click({ modifiers: ['ControlOrMeta'] });
+    await is(['#box3', 'On time'], '⌘ / Ctrl-click on a row adds its layer too');
+    /* the picture shows the same: Shift-click there takes one away */
+    await click(on(300, 1350), ['Shift']);
+    await is(['On time'], 'the picture and the rows are one selection');
+    assert.deepEqual(await rows(), ['On time']);
+  }, { chat: true });
 });

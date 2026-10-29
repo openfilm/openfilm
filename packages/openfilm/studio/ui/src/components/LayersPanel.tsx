@@ -1,12 +1,13 @@
 /**
  * The Layers panel: what is on the picture at the playhead as layers, the top one first. Each picture clip shown is
  * a row; a page clip opens into its layers, each level in the order the page draws it. A row selects its layer on
- * the picture (and the picture's selection opens the rows down to it); its eye hides it, its lock keeps it from
- * being moved and its bin deletes it (lib/layer-delete; Delete or Backspace does too, for the layer in hand on the
- * picture, which a row's click makes it); its right-click takes its layer (a clip's row: the clip) in hand and opens
- * the picture's own menu for it, so the two menus are one; dragged up or down its own level, or into the level of a
- * row around it (which then moves, with all it holds: CSS restacks only within a level), it is restacked (z-index
- * overrides, studio/server/stage.js `restack`). Nothing is kept here: the tree is read from the pages each time they
+ * the picture, Shift-clicked (⌘ / Ctrl too) adds it to what is selected there or takes it away (and the picture's
+ * selection opens the rows down to each layer of it); its eye hides it, its lock keeps it from being moved and its
+ * bin deletes it (lib/layer-delete; Delete or Backspace does too, for the layer in hand on the picture, which a row's
+ * click makes it); its right-click takes its layer (a clip's row: the clip) in hand and opens the picture's own menu
+ * for it, so the two menus are one; dragged up or down its own level, or into the level of a row around it (which
+ * then moves, with all it holds: CSS restacks only within a level), it is restacked (z-index overrides,
+ * studio/server/stage.js `restack`). Nothing is kept here: the tree is read from the pages each time they
  * may have changed, and every change is an override of the page clip in film.html.
  */
 import React from 'react';
@@ -37,11 +38,12 @@ export interface LayersPanelProps {
   filmKey: unknown;
   /** A clip by its film.html id: how the timeline names it, and its place. */
   clipOf: (clipId: string) => { label: string; kind: string; loc?: string } | null;
-  /** The layer in hand on the picture. */
-  selected: { clipId?: string; loc: string | null } | null;
+  /** The layers in hand on the picture: one, several selected together, or none. */
+  selected: readonly { clipId?: string; loc: string | null }[];
   /** The clips selected (film.html places). */
   selectedClipLocs: readonly string[];
-  onSelectLayer: (clipId: string, loc: string) => void;
+  /** `toggle`: added to what is selected, or taken away (a Shift-click). */
+  onSelectLayer: (clipId: string, loc: string, toggle: boolean) => void;
   onSelectClip: (clipLoc: string) => void;
   /** The pointer is on a row (its layer outlined on the picture), or left them (null). */
   onPoint: (target: { clipId: string; loc: string } | null) => void;
@@ -91,17 +93,19 @@ export function LayersPanel(p: LayersPanelProps) {
     return () => window.clearInterval(id);
   }, [read, p.playing]);
 
-  /* the layer picked on the picture: the rows down to it opened, and it scrolled to */
+  /* the layers picked on the picture: the rows down to each opened, and the first scrolled to */
   const list = React.useRef<HTMLDivElement | null>(null);
-  const selClip = p.selected?.clipId;
-  const selLoc = p.selected?.loc ?? null;
+  const picked = p.selected.flatMap((s) => (s.clipId && s.loc ? [layerKey(s.clipId, s.loc)] : []));
+  const pickedKey = picked.join('\n');
   React.useEffect(() => {
-    if (!clips || !selClip || !selLoc) return;
-    setToggled((cur) => openTo(clips, cur, selClip, selLoc));
+    const keys = p.selected.flatMap((s) => (s.clipId && s.loc ? [{ clipId: s.clipId, loc: s.loc }] : []));
+    if (!clips || !keys.length) return;
+    setToggled((cur) => keys.reduce((open, s) => openTo(clips, open, s.clipId, s.loc), cur));
     requestAnimationFrame(() => {
-      list.current?.querySelector(`[data-layer-key="${CSS.escape(layerKey(selClip, selLoc))}"]`)?.scrollIntoView({ block: 'nearest' });
+      list.current?.querySelector(`[data-layer-key="${CSS.escape(layerKey(keys[0]!.clipId, keys[0]!.loc))}"]`)?.scrollIntoView({ block: 'nearest' });
     });
-  }, [clips, selClip, selLoc]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clips, pickedKey]);
 
   const lines = React.useMemo(() => (clips ? layerLines(clips, toggled) : []), [clips, toggled]);
   const toggleOpen = (line: LayerLine) => {
@@ -157,9 +161,9 @@ export function LayersPanel(p: LayersPanelProps) {
   const isSelected = (line: LayerLine) => {
     if (!line.row) {
       const loc = p.clipOf(line.clipId)?.loc;
-      return !p.selected && Boolean(loc && p.selectedClipLocs.includes(loc));
+      return !p.selected.length && Boolean(loc && p.selectedClipLocs.includes(loc));
     }
-    return p.selected?.clipId === line.clipId && p.selected.loc === line.row.loc;
+    return picked.includes(layerKey(line.clipId, line.row.loc));
   };
 
   return (
@@ -205,9 +209,9 @@ export function LayersPanel(p: LayersPanelProps) {
                 if (e.button !== 0 || !line.row) return;
                 press.current = { line, x: e.clientX, y: e.clientY, id: e.pointerId };
               }}
-              onClick={() => {
+              onClick={(e) => {
                 if (dragRef.current) return;
-                if (line.row) { p.onSelectLayer(line.clipId, line.row.loc); return; }
+                if (line.row) { p.onSelectLayer(line.clipId, line.row.loc, e.shiftKey || e.metaKey || e.ctrlKey); return; }
                 const loc = p.clipOf(line.clipId)?.loc;
                 if (loc) p.onSelectClip(loc);
               }}
@@ -244,7 +248,7 @@ function LayerLineRow({ line, top, t, clipOf, selected, dragging, onToggleOpen, 
   dragging: boolean;
   onToggleOpen: () => void;
   onPress: (e: React.PointerEvent) => void;
-  onClick: () => void;
+  onClick: (e: React.MouseEvent) => void;
   onPoint: () => void;
   onToggle: (what: 'hidden' | 'locked') => void;
   onDelete: () => void;

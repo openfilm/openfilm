@@ -1502,6 +1502,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const geometryStore = React.useMemo(() => createGeometryStore(), []);
   /* the viewer's zoom: only the picture and its fit button re-render as it changes (components/ViewerZoom) */
   const viewerZoom = React.useMemo(() => createViewerZoom(), []);
+  /* the layers selected together on the picture (its geometry's group), by name: the Layers panel shows each of them,
+     and is drawn again when they change, not with every frame they are dragged */
+  const groupKey = React.useSyncExternalStore(geometryStore.subscribe, () => groupLayersKey(geometryStore.get()));
   const [stageSelectRequest, setStageSelectRequest] = React.useState<FilmStageSelectRequest | null>(null);
   const [inlineTextFailure, setInlineTextFailure] = React.useState<{ loc: string; value: string; failure: StageEditFailure; seq: number } | null>(null);
   const setSelectedLocs = React.useCallback((locs: readonly string[]) => {
@@ -1960,9 +1963,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (failed) toast.show(failed);
     return failed;
   }, [editBlocks, toast]);
-  /* layers selected on the picture from here (several: together) */
-  const selectStageLayers = React.useCallback((layers: FilmStageSelectRequest['layers']) => {
-    setStageSelectRequest((cur) => ({ layers, seq: (cur?.seq ?? 0) + 1 }));
+  /* layers selected on the picture from here (several: together); `toggle`, each added or taken away, as a Shift-click */
+  const selectStageLayers = React.useCallback((layers: FilmStageSelectRequest['layers'], toggle = false) => {
+    setStageSelectRequest((cur) => ({ layers, ...(toggle ? { toggle } : {}), seq: (cur?.seq ?? 0) + 1 }));
   }, []);
   const selectStageParent = React.useCallback((loc: string, clipLoc?: string) => {
     selectStageLayers([{ loc, ...(clipLoc ? { clipLoc } : {}) }]);
@@ -1972,6 +1975,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const selectStageClips = React.useCallback((locs: readonly string[]) => { setStageElement(null); setSelectedLocs([...locs]); }, [setSelectedLocs]);
   /* ── the Layers panel: its rows select on the picture, outline there, hide, lock and restack (overrides) ── */
   const [pointedLayer, setPointedLayer] = React.useState<{ clipId: string; loc: string } | null>(null);
+  /* its rows selected: each layer of a group in hand, else the one layer */
+  const layersSelected = React.useMemo((): { clipId?: string; loc: string | null }[] => {
+    if (groupKey) return (JSON.parse(groupKey) as [string, string | null][]).map(([clipId, loc]) => ({ clipId, loc }));
+    return stageElement && stageElement.kind !== 'clip' ? [{ ...(stageElement.clipId ? { clipId: stageElement.clipId } : {}), loc: stageElement.loc }] : [];
+  }, [groupKey, stageElement]);
   const askStage = React.useCallback(<T,>(op: string, args: object = {}): Promise<T | null> => (
     preview.current?.stage?.<T>(op, args) ?? Promise.resolve(null)
   ), []);
@@ -1979,10 +1987,10 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const b = blocksRef.current.find((x) => x.clipId === clipId);
     return b ? { label: b.title, kind: b.kind, ...(b.loc ? { loc: b.loc } : {}) } : null;
   }, []);
-  const selectLayerRow = React.useCallback((clipId: string, loc: string) => {
+  const selectLayerRow = React.useCallback((clipId: string, loc: string, toggle = false) => {
     const clipLoc = blocksRef.current.find((b) => b.clipId === clipId)?.loc;
-    if (clipLoc) selectStageParent(loc, clipLoc);
-  }, [selectStageParent]);
+    if (clipLoc) selectStageLayers([{ loc, clipLoc }], toggle);
+  }, [selectStageLayers]);
   const layerElement = (clipId: string, at: string, n: number | undefined, label: string): StageElement => (
     { kind: 'box', loc: n ? `${at}#${n}` : at, label, clipId, ...(n ? { instance: n } : {}) }
   );
@@ -3124,7 +3132,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                       playing={playing}
                       filmKey={layersKey}
                       clipOf={layerClipOf}
-                      selected={stageElement && stageElement.kind !== 'clip' ? { ...(stageElement.clipId ? { clipId: stageElement.clipId } : {}), loc: stageElement.loc } : null}
+                      selected={layersSelected}
                       selectedClipLocs={selectedLocs}
                       onSelectLayer={selectLayerRow}
                       onSelectClip={selectStageClip}
@@ -3568,7 +3576,16 @@ interface GeometryStore {
   subscribe: (fn: () => void) => () => void;
 }
 
-/** Where the thing in hand is: only the inspector subscribes, so a drag re-renders the inspector, not the editor. */
+/** The layers of a group in hand (`[clipId, loc]` each), as one string; '' for none. */
+function groupLayersKey(g: StageGeometry | null): string {
+  const elements = g?.kind === 'group' ? g.group?.elements ?? [] : [];
+  return elements.length ? JSON.stringify(elements.map((e) => [e.clipId ?? '', e.loc])) : '';
+}
+
+/**
+ * Where the thing in hand is: only the inspector reads all of it, so a drag re-renders the inspector, not the editor
+ * (which reads only which layers a group has, groupLayersKey).
+ */
 function createGeometryStore(): GeometryStore {
   let value: StageGeometry | null = null;
   const listeners = new Set<() => void>();
