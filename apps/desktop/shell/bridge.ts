@@ -62,7 +62,13 @@ const events = <T,>() => signal<T>(undefined as T);
 /* ── the chat's column, left of Studio: open or not, how wide, and the assets drawer over it ── */
 const TOP_BAR = 32;
 const column = document.getElementById('of-chat')!;
-const layout = { open: true, width: 420, min: 340, studioMin: 640 };
+const layout = { open: true, width: 420, min: 340, studioMin: 640, history: false };
+/** the conversations' history, left of the conversation while open: the column is that much wider, the conversation
+    keeps its width (`layout.width`) */
+const HISTORY_WIDTH = 220;
+const HISTORY_KEY = 'openfilm.chat.history';
+try { layout.history = localStorage.getItem(HISTORY_KEY) === '1'; } catch { /* unreadable: closed */ }
+const historyWidth = () => (layout.history ? HISTORY_WIDTH : 0);
 /** the assets open in the column (Studio draws them, above the composer); `bottom`: the composer's height, all the
     chat shows then */
 const assets = { open: false, bottom: 120 };
@@ -70,7 +76,7 @@ const assetsSignal = signal(false);
 const chatOpenSignal = signal(true);
 
 /** The column's width as the window allows it: Studio keeps its least width, the chat its own while it fits. */
-const shownWidth = () => (layout.open ? Math.max(Math.min(layout.width, innerWidth - layout.studioMin), Math.min(layout.min, innerWidth)) : 0);
+const shownWidth = () => (layout.open ? Math.max(Math.min(layout.width + historyWidth(), innerWidth - layout.studioMin), Math.min(layout.min + historyWidth(), innerWidth)) : 0);
 const panelState = () => ({ open: layout.open, width: shownWidth(), assets: { open: assets.open && layout.open, bottom: assets.bottom } });
 const panelListeners = new Set<Listener<ReturnType<typeof panelState>>>();
 
@@ -98,9 +104,10 @@ function setChatOpen(open: boolean) {
   });
   native.saveLayout({ chatOpen: layout.open, chatWidth: layout.width });
 }
+/** `width`: the column's, the history's included */
 function setChatWidth(width: number, done = false) {
   if (!Number.isFinite(width)) return;
-  layout.width = Math.round(Math.max(layout.min, Math.min(width, innerWidth - layout.studioMin)));
+  layout.width = Math.round(Math.max(layout.min, Math.min(width, innerWidth - layout.studioMin) - historyWidth()));
   place();
   if (done) native.saveLayout({ chatOpen: layout.open, chatWidth: layout.width });
 }
@@ -112,6 +119,12 @@ function setAssetsOpen(open: boolean) {
     assetsSignal.set(assets.open);
     place();
   });
+}
+function setHistoryOpen(open: boolean) {
+  if (open === layout.history) return;
+  layout.history = open;
+  try { localStorage.setItem(HISTORY_KEY, open ? '1' : '0'); } catch { /* kept for this launch only */ }
+  place();
 }
 native.onToggleChat(() => setChatOpen(!layout.open));
 
@@ -392,8 +405,29 @@ function commandFor(ref: StudioRef): StudioCommand {
     if (!id) return { files: [] };
     try { return await (await fetch(`/api/projects/${encodeURIComponent(id)}/files`)).json(); } catch { return { files: [] }; }
   },
+  /* Studio's skills (its own listing, with their covers), for the cards of an empty conversation */
+  async starterSkills() {
+    const id = project.get()?.id;
+    if (!id) return [];
+    type Listed = { name: string; description: string; cover?: string; order?: number; off?: true; installed?: boolean; shown?: { title: Record<string, string> } };
+    try {
+      const body = await (await fetch(`/api/skills?project=${encodeURIComponent(id)}`)).json() as { skills?: Listed[] };
+      return (body.skills ?? [])
+        .filter((s): s is Listed & { cover: string } => Boolean(s.cover) && !s.off)
+        .sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER))
+        .map((s) => ({ name: s.name, description: s.description, cover: s.cover, title: s.shown?.title ?? null, installed: s.installed !== false }));
+    } catch { return []; }
+  },
+  async installSkill(name: string) {
+    const res = await fetch(`/api/skills/${encodeURIComponent(name)}/installed`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ installed: true }),
+    });
+    if (!res.ok) throw new Error(`Studio answered ${res.status}`);
+  },
   setChatWidth: (width: number, done?: boolean) => setChatWidth(width, done === true),
   setChatOpen,
+  historyOpen: () => layout.history,
+  setHistoryOpen,
   assetsOpen: () => assets.open,
   setAssetsOpen,
   onAssets: assetsSignal.on,

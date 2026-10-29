@@ -404,7 +404,10 @@ export function applyStudioHost(root: HTMLElement = document.documentElement) {
   const titlebar = studioHost?.titlebar;
   if (!titlebar) return;
   const set = (inset: unknown) => {
-    if (typeof inset === 'number' && inset >= 0) root.style.setProperty('--titlebar-logo-x', `${Math.max(6, Math.min(inset, 200))}px`);
+    if (typeof inset !== 'number' || inset < 0) return;
+    root.style.setProperty('--titlebar-logo-x', `${Math.max(6, Math.min(inset, 200))}px`);
+    /* the window's controls left of the logo (macOS, not full screen): a line between them (globals.css) */
+    root.toggleAttribute('data-titlebar-controls-left', inset > 6);
   };
   root.dataset.hostTitlebar = '';
   if (typeof titlebar.insetRight === 'number' && titlebar.insetRight > 0) root.style.setProperty('--titlebar-right-x', `${Math.min(titlebar.insetRight, 240)}px`);

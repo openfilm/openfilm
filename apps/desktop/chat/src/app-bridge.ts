@@ -49,11 +49,19 @@ interface AppBridge {
   draftRefsInStudio(refs: StudioRef[]): void;
   /** what the pointer is over in Studio (null: nothing it points at): pills pointing at the same thing light up */
   onStudioHover(listener: (ref: StudioRef | null) => void): () => void;
+  /** the skills an empty conversation offers (Studio's, with a cover, not turned off), in their order */
+  starterSkills(): Promise<StarterSkill[]>;
+  /** an official skill installed, to be used (Studio's Skills → Discover → Install) */
+  installSkill(name: string): Promise<void>;
   /** the project's files (Studio's listing), for the @ menu */
   projectFiles(): Promise<{ files: Array<{ path: string; kind: string; size: number }>; pages?: Array<{ path: string; size: number }> }>;
   onSelection(listener: (selection: StudioSelection) => void): () => void;
+  /** the column's whole width, the history's included when it is open */
   setChatWidth(width: number, done?: boolean): void;
   setChatOpen(open: boolean): void;
+  /** the conversations' history, a pane left of the conversation: the column widens by it (kept across launches) */
+  historyOpen(): boolean;
+  setHistoryOpen(open: boolean): void;
   /** the project's assets, drawn by Studio over this column while open (main.mjs `assets`) */
   assetsOpen(): boolean;
   setAssetsOpen(open: boolean): void;
@@ -121,6 +129,10 @@ export interface SkillInfo {
   /** how people see it (its openfilm.json): title, summary and who it is for and what it does, by language */
   shown?: { title: Record<string, string>; summary: Record<string, string>; details?: Record<string, string> };
 }
+
+/** A skill offered as a card: its cover's address, its title by language (none: its name), and whether agents get
+    it yet (an official one is installed to be used). */
+export interface StarterSkill { name: string; description: string; cover: string; title: Record<string, string> | null; installed: boolean }
 
 /** A skill fetched from an address, before it is kept: `replaces`, one of the person's has its name. */
 export interface SkillPreview { name: string; description: string; scripts: string[]; size: number; replaces: boolean }

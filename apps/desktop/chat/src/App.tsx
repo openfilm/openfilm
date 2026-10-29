@@ -9,7 +9,7 @@ import React from 'react';
 import { ArrowDown, Blocks, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, ShieldQuestion, Square, SquareSlash, X } from 'lucide-react';
 import { buildPromptDisplay, type Turn } from '@openfilm/shared';
 import { useT, useUiLocale } from '@/i18n';
-import { ConversationSessionBar } from '@/components/ConversationSessionBar';
+import { ConversationSessionBar, SessionHistory } from '@/components/ConversationSessionBar';
 import { ProjectConversation, primeStoredTranscript } from '@/components/ProjectConversation';
 import { ProjectStarters } from '@/components/ProjectStarters';
 import { AttachmentPreview, type AttachmentPreviewItem } from '@/components/AttachmentPreview';
@@ -370,7 +370,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   }, [skillListing, locale]);
   const skillPill = React.useCallback((skill: PickedSkill): PromptReference => {
     /* its title alone: what it does is in its hover card */
-    const pill: PromptReference = { id: skillReferenceId(skill.name), kind: 'skill', label: skillWords(skill.name, skill.description).title };
+    const pill: PromptReference = { id: skillReferenceId(skill.name), kind: 'skill', label: skill.title ?? skillWords(skill.name, skill.description).title };
     setSkillRefs((list) => (list.some((p) => p.id === pill.id) ? list : [...list, pill]));
     return pill;
   }, [skillWords]);
@@ -789,6 +789,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   };
   newConversation.current = onNewSession;
   const onSelectSession = (id: string) => { if (!active) setSessionId(id); };
+  const [historyOpen, setHistoryOpen] = React.useState(() => app.historyOpen());
   const onRenameSession = async (title: string) => { touchSession(sessionId, () => ({ title })); };
   const shownSessions = React.useMemo(
     () => (sessions.some((s) => s.id === sessionId) ? sessions : [{ ...newSession(), id: sessionId }, ...sessions]),
@@ -1013,15 +1014,23 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
           <StickToBottomContext.Provider value={thread}>
             {/* with the assets open only the composer shows, at the bottom: the drawer above it is Studio's, and the two
                 read as one pane */}
-            <aside className={`relative flex min-h-0 flex-col overflow-hidden bg-[var(--dock-pane)] ${assetsOpen ? 'mt-auto shrink-0' : 'flex-1'}`}>
+            {/* the history left of the conversation, a line between them (the column widens by it: shell/bridge.ts) */}
+            <div className={assetsOpen ? 'contents' : 'flex min-h-0 flex-1 gap-px bg-[var(--dock-line)]'}>
+            {historyOpen && !assetsOpen ? (
+              <div className="w-[220px] shrink-0 bg-[var(--dock-pane)]">
+                <SessionHistory sessions={shownSessions} currentSessionId={sessionId} onSelectSession={onSelectSession} busy={active} />
+              </div>
+            ) : null}
+            <aside className={`relative flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--dock-pane)] ${assetsOpen ? 'mt-auto shrink-0' : 'flex-1'}`}>
               {assetsOpen ? null : banners}
               <div className={`relative min-h-0 min-w-0 flex-1 flex-col ${assetsOpen ? 'hidden' : 'flex'}`}>
                 <ConversationSessionBar
                   sessions={shownSessions}
                   currentSessionId={sessionId}
                   onNewSession={onNewSession}
-                  onSelectSession={onSelectSession}
                   onRenameSession={onRenameSession}
+                  historyOpen={historyOpen}
+                  onToggleHistory={() => { app.setHistoryOpen(!historyOpen); setHistoryOpen(!historyOpen); }}
                   busy={active}
                 />
                 <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
@@ -1034,10 +1043,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
                   >
                     {blank ? (
                       <div ref={thread.contentRef}>
-                        <ProjectStarters
-                          onPick={(text) => { composerRef.current?.setText(text); composerRef.current?.focus(); }}
-                          onAttach={() => attachInputRef.current?.click()}
-                        />
+                        <ProjectStarters onSkill={(skill) => { pickSkill(skill); if (skill.installed) window.dispatchEvent(new Event(SKILLS_CHANGED)); }} />
                       </div>
                     ) : (
                       <div ref={thread.contentRef} className="min-w-0 shrink-0">
@@ -1152,6 +1158,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
                 </div>
               </div>
             </aside>
+            </div>
           </StickToBottomContext.Provider>
         </WaitingContext.Provider>
       </PromptPillHoverContext.Provider>

@@ -26,7 +26,8 @@ const droppedPath = (e: React.DragEvent) => {
 const dragsFiles = (e: React.DragEvent) => e.dataTransfer.types.includes('Files');
 
 /** A skill named in a message, as its pill. */
-export interface PickedSkill { name: string; description: string }
+/** `title`: as people see it, when the picker knows it before the chat's list does (a skill just installed) */
+export interface PickedSkill { name: string; description: string; title?: string }
 
 /** a size as people read it */
 const sizeOf = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`);

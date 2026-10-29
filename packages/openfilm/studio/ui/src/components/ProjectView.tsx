@@ -2720,7 +2720,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         <div className="relative z-10 grid min-h-0 min-w-0 flex-1" style={{ gridTemplateColumns: 'minmax(0, 1fr)', gridTemplateRows: 'auto minmax(0, 1fr)', gridTemplateAreas: '"bar" "main"' }}>
           {/* ── top bar: the title centered, whatever is on either side ── */}
-          <div data-titlebar className="relative flex h-8 min-w-0 items-center gap-1" style={{ gridArea: 'bar' }}>
+          <div data-titlebar className="relative flex h-8 min-w-0 items-center gap-1 px-[6px]" style={{ gridArea: 'bar' }}>
             {inTabs ? null : <div className="pointer-events-none absolute inset-0 flex min-w-0 items-center justify-center">
               <div className="pointer-events-auto flex min-w-0 max-w-full items-center">
                 {renaming ? (
@@ -2749,6 +2749,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
               </div>
             </div>}
             <div aria-hidden className="shrink-0 self-stretch" style={{ width: 'var(--titlebar-logo-x)' }} />
+            <div aria-hidden className="titlebar-line w-px shrink-0 self-stretch bg-[var(--border)]" />
             <div className="pointer-events-auto relative flex min-w-0 items-center gap-1">
               <Tooltip label={t('project.appMenu')} side="bottom">
                 <button type="button" aria-label={t('project.appMenu')} aria-haspopup="dialog"
