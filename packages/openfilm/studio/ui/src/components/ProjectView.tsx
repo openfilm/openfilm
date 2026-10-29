@@ -3202,7 +3202,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     </div>
                   </div>
                 ) : null}
-                <div className="relative flex min-h-0 flex-1 items-center justify-center px-3 py-2.5" style={{ containerType: 'size' }} {...pictureDropProps}
+                {/* select-none: a press here is the stage's (a click, a box drawn from the dark around the picture); the
+                    browser's own text selection went with it over the film's video and frames and tinted them blue */}
+                <div className="relative flex min-h-0 flex-1 select-none items-center justify-center px-3 py-2.5" style={{ containerType: 'size' }} {...pictureDropProps}
                   data-viewer-picture="" data-viewer-focus={viewerFocus ? '1' : '0'}>
                   {pictureDrop ? (
                     <div className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] ring-2 ring-inset ring-[var(--accent)]">
