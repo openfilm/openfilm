@@ -14,6 +14,8 @@ import { BrandLogo } from './BrandLogo';
 
 /** Three rows of two: the most used skills, in their order; the rest are a click away in the Community. */
 const SHOWN = 6;
+/** the cards as read last: another empty conversation shows them at once, read again behind them */
+let lastRead: StarterSkill[] | null = null;
 
 export function ProjectStarters({ onSkill }: {
   /** Names the skill in the composer (unsent) and focuses it. */
@@ -22,10 +24,13 @@ export function ProjectStarters({ onSkill }: {
   const t = useT();
   const locale = useUiLocale();
   /* null until read: the cards' places are kept meanwhile, so nothing below them moves when they arrive */
-  const [skills, setSkills] = React.useState<StarterSkill[] | null>(null);
+  const [skills, setSkills] = React.useState<StarterSkill[] | null>(lastRead);
   React.useEffect(() => {
     let live = true;
-    void app.starterSkills().then((list) => { if (live) setSkills(list.slice(0, SHOWN)); }, () => { if (live) setSkills([]); });
+    void app.starterSkills().then((list) => {
+      lastRead = list.slice(0, SHOWN);
+      if (live) setSkills(lastRead);
+    }, () => { if (live) setSkills((was) => was ?? []); });
     return () => { live = false; };
   }, []);
   const titleOf = (skill: StarterSkill) => {

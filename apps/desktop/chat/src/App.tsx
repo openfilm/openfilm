@@ -211,14 +211,21 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   }, [projectKey]);
 
   /* ── turns: the ones kept on this Mac, and the one running now ── */
-  const [turns, setTurns] = React.useState<Turn[]>([]);
-  const [rev, bump] = React.useReducer((n: number) => n + 1, 0);
-  React.useEffect(() => {
-    const saved = loadLocalAgentTurns(projectKey, sessionId);
+  const readTurns = (id: string): Turn[] => {
+    const saved = loadLocalAgentTurns(projectKey, id);
     for (const entry of saved) primeStoredTranscript(entry.turn.id, entry.items);
-    const live = runningLocalTurns(projectKey).filter((r) => r.sessionId === sessionId).map((r) => r.turn);
-    setTurns(mergeAssetLists([...saved.map((entry) => entry.turn), ...live], []));
-  }, [projectKey, sessionId, rev]);
+    const live = runningLocalTurns(projectKey).filter((r) => r.sessionId === id).map((r) => r.turn);
+    return mergeAssetLists([...saved.map((entry) => entry.turn), ...live], []);
+  };
+  const [turns, setTurns] = React.useState<Turn[]>(() => readTurns(sessionId));
+  const [rev, bump] = React.useReducer((n: number) => n + 1, 0);
+  /* read again in the render that shows another conversation (or is asked to), not after it: the one shown is never
+     drawn empty for a frame (the skills of a new one flashing in between) */
+  const [readFor, setReadFor] = React.useState({ session: sessionId, rev });
+  if (readFor.session !== sessionId || readFor.rev !== rev) {
+    setReadFor({ session: sessionId, rev });
+    setTurns(readTurns(sessionId));
+  }
 
   /** This turn is over: the Mac keeps it, the conversation shows it as it ended. */
   function settleLocalTurn(meta: LocalAgentTurnMeta, turn: LocalAgentTurn, patch: Partial<Turn & TurnBalance>): Turn {
