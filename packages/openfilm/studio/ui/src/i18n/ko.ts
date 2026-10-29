@@ -10,7 +10,7 @@ export const ko: Words = {
     desktop: '데스크톱',
   },
   /* the projects the app window has open (ProjectSwitcher), a new tab's launcher, and the examples (ExamplesGallery) */
-  switcher: { label: '프로젝트 전환', open: '열린 프로젝트', recent: '최근', all: '모든 프로젝트…', search: '프로젝트 검색', none: '일치하는 프로젝트가 없습니다', close: '닫기', working: '작업 중', asking: '답변 대기 중', exporting: '내보내는 중 {n}%' },
+  switcher: { label: '프로젝트 전환', open: '열린 프로젝트', recent: '최근', all: '모든 프로젝트…', close: '닫기', working: '작업 중', asking: '답변 대기 중', exporting: '내보내는 중 {n}%', cover: '표지로 설정', reveal: '폴더 보기' },
   launcher: { projects: '내 프로젝트', examples: '예시' },
   gallery: {
     chooseCover: "표지 선택",

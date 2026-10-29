@@ -13,7 +13,7 @@ export const ja: Words = {
     desktop: 'デスクトップ版',
   },
   /* the projects the app window has open (ProjectSwitcher), a new tab's launcher, and the examples (ExamplesGallery) */
-  switcher: { label: 'プロジェクトを切り替え', open: '開いている', recent: '最近', all: 'すべてのプロジェクト…', search: 'プロジェクトを検索', none: '一致するプロジェクトはありません', close: '閉じる', working: '作業中', asking: '回答待ち', exporting: '書き出し中 {n}%' },
+  switcher: { label: 'プロジェクトを切り替え', open: '開いている', recent: '最近', all: 'すべてのプロジェクト…', close: '閉じる', working: '作業中', asking: '回答待ち', exporting: '書き出し中 {n}%', cover: '表紙にする', reveal: 'フォルダを表示' },
   launcher: { projects: 'プロジェクト', examples: 'サンプル' },
   gallery: {
     chooseCover: "カバーを選択",

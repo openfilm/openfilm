@@ -14,7 +14,7 @@ export const en = {
     desktop: 'Desktop',
   },
   /* the projects the app window has open (ProjectSwitcher), a new tab's launcher, and the examples (ExamplesGallery) */
-  switcher: { label: 'Switch project', open: 'Open', recent: 'Recent', all: 'All projects…', search: 'Search projects', none: 'No matching projects', close: 'Close', working: 'Working', asking: 'Waiting for you', exporting: 'Exporting {n}%' },
+  switcher: { label: 'Switch project', open: 'Open', recent: 'Recent', all: 'All projects…', close: 'Close', working: 'Working', asking: 'Waiting for you', exporting: 'Exporting {n}%', cover: 'Set as cover', reveal: 'Show folder' },
   launcher: { projects: 'Projects', examples: 'Examples' },
   gallery: {
     chooseCover: "Choose cover",

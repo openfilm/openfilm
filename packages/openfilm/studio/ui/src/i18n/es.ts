@@ -13,7 +13,7 @@ export const es: Words = {
     desktop: 'Escritorio',
   },
   /* the projects the app window has open (ProjectSwitcher), a new tab's launcher, and the examples (ExamplesGallery) */
-  switcher: { label: 'Cambiar de proyecto', open: 'Abiertos', recent: 'Recientes', all: 'Todos los proyectos…', search: 'Buscar proyectos', none: 'Ningún proyecto coincide', close: 'Cerrar', working: 'Trabajando', asking: 'Esperando tu respuesta', exporting: 'Exportando {n}%' },
+  switcher: { label: 'Cambiar de proyecto', open: 'Abiertos', recent: 'Recientes', all: 'Todos los proyectos…', close: 'Cerrar', working: 'Trabajando', asking: 'Esperando tu respuesta', exporting: 'Exportando {n}%', cover: 'Usar de portada', reveal: 'Mostrar carpeta' },
   launcher: { projects: 'Proyectos', examples: 'Ejemplos' },
   gallery: {
     chooseCover: "Elegir portada",

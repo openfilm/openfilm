@@ -9,7 +9,7 @@ import React from 'react';
 import { ArrowDown, Blocks, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, ShieldQuestion, Square, SquareSlash, X } from 'lucide-react';
 import { buildPromptDisplay, type Turn } from '@openfilm/shared';
 import { useT, useUiLocale } from '@/i18n';
-import { ConversationTabs } from '@/components/ConversationSessionBar';
+import { ConversationBar } from '@/components/ConversationSessionBar';
 import { ProjectConversation, primeStoredTranscript } from '@/components/ProjectConversation';
 import { ProjectStarters } from '@/components/ProjectStarters';
 import { AttachmentPreview, type AttachmentPreviewItem } from '@/components/AttachmentPreview';
@@ -88,8 +88,7 @@ const isActive = (turn: Turn | undefined) => turn?.status === 'generating' || tu
 
 /** how often a running turn is kept, at most (it changes with every word) */
 const KEEP_RUNNING_MS = 1500;
-/** where each project's open tabs are kept (+ `:<project folder>`) */
-const TABS_KEY = 'openfilm.chat.tabs';
+
 /** how full the agent's context gets before the chat says a new conversation would work better */
 const CONTEXT_NOTICE_SHARE = 0.85;
 
@@ -177,17 +176,6 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     return last && list.some((s) => s.id === last) ? last : list[0]?.id ?? newSession().id;
   });
   React.useEffect(() => { saveLastSession(projectKey, sessionId); }, [projectKey, sessionId]);
-  /* the conversations open as tabs, in their order, kept on this Mac (one archived since, or never said, is not) */
-  const tabsKey = `${TABS_KEY}:${projectKey}`;
-  const [tabs, setTabs] = React.useState<string[]>(() => {
-    let kept: unknown = null;
-    try { kept = JSON.parse(localStorage.getItem(tabsKey) ?? 'null'); } catch { /* unreadable: the one shown */ }
-    const live = new Set(loadSessions(projectKey).filter((s) => s.turns > 0 && !s.archived).map((s) => s.id));
-    const ids = Array.isArray(kept) ? kept.filter((id): id is string => typeof id === 'string' && live.has(id)) : [];
-    return ids.includes(sessionId) ? ids : [...ids, sessionId];
-  });
-  React.useEffect(() => { setTabs((ids) => (ids.includes(sessionId) ? ids : [...ids, sessionId])); }, [sessionId]);
-  React.useEffect(() => { try { localStorage.setItem(tabsKey, JSON.stringify(tabs)); } catch { /* kept for this launch only */ } }, [tabsKey, tabs]);
   const touchSession = React.useCallback((id: string, patch: (s: ProjectSessionItem) => Partial<ProjectSessionItem>) => {
     setSessions((list) => {
       const now = new Date().toISOString();
@@ -854,41 +842,23 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
       return next;
     });
   }, [sessionId]);
-  /* each tab its own conversation, its agent at work whichever is shown: a new one, or another, any time; none while
+  /* each conversation's agent at work whichever is shown: a new one, or another, any time; none while
      the one shown is new itself (false) */
   const onNewSession = (): boolean => {
     if (blank && !running.has(sessionId)) { composerRef.current?.focus(); return false; }
-    const id = newSession().id;
-    setTabs((ids) => [...ids.slice(0, ids.indexOf(sessionId) + 1), id, ...ids.slice(ids.indexOf(sessionId) + 1)]);
-    setSessionId(id);
+    setSessionId(newSession().id);
     composerRef.current?.focus();
     return true;
   };
   newConversation.current = onNewSession;
   const onSelectSession = (id: string) => { setSessionId(id); composerRef.current?.focus(); };
-  /** Its tab closed (it stays in the history, its turn running): the one beside it shown, or a new one for the last. */
-  const closeTab = (id: string) => {
-    const at = tabs.indexOf(id);
-    const rest = tabs.filter((x) => x !== id);
-    if (id === sessionId) {
-      const next = rest[Math.min(Math.max(at, 0), rest.length - 1)] ?? newSession().id;
-      if (!rest.includes(next)) rest.push(next);
-      setSessionId(next);
-    }
-    setTabs(rest);
-  };
-  const closeOtherTabs = (id: string) => { setTabs([id]); if (id !== sessionId) setSessionId(id); };
-  const moveTab = (id: string, to: number) => setTabs((ids) => {
-    const rest = ids.filter((x) => x !== id);
-    return ids.includes(id) && to >= 0 ? [...rest.slice(0, to), id, ...rest.slice(to)] : ids;
-  });
   const onRenameSession = (id: string, title: string) => editSession(id, { title });
   const onPinSession = (id: string, pinned: boolean) => editSession(id, { pinned });
-  /* archived: its tab closed too */
+  /* the conversation shown, archived: a new one in its place */
   const onArchiveSession = (id: string, archived: boolean) => {
     if (archived && running.has(id)) return;
     editSession(id, { archived });
-    if (archived && tabs.includes(id)) closeTab(id);
+    if (archived && id === sessionId) setSessionId(newSession().id);
   };
   const shownSessions = React.useMemo(
     () => (sessions.some((s) => s.id === sessionId) ? sessions : [{ ...newSession(), id: sessionId }, ...sessions]),
@@ -1116,17 +1086,13 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
             <aside className={`relative flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--dock-pane)] ${assetsOpen ? 'mt-auto shrink-0' : 'flex-1'}`}>
               {assetsOpen ? null : banners}
               <div className={`relative min-h-0 min-w-0 flex-1 flex-col ${assetsOpen ? 'hidden' : 'flex'}`}>
-                <ConversationTabs
+                <ConversationBar
                   sessions={shownSessions}
-                  tabs={tabs}
                   currentSessionId={sessionId}
                   running={running}
                   unseen={unseen}
                   onSelectSession={onSelectSession}
                   onNewSession={onNewSession}
-                  onCloseTab={closeTab}
-                  onCloseOtherTabs={closeOtherTabs}
-                  onMoveTab={moveTab}
                   onRenameSession={onRenameSession}
                   onPinSession={onPinSession}
                   onArchiveSession={onArchiveSession}

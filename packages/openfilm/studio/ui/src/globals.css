@@ -212,10 +212,6 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* The line between the window's controls and the logo, as between the tabs: only when the controls are on the left. */
-.titlebar-line { display: none; }
-:root[data-titlebar-controls-left] .titlebar-line { display: block; }
-
 /* The editor is the whole screen: fixed, so the document itself never scrolls (100vw overflow, rubber banding). */
 .workspace-shell {
   position: fixed;
