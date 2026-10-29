@@ -1012,19 +1012,20 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     setClipboard(clipboardItemsOf(blocks, timelineTracks));
   }, [timelineTracks]);
   /**
-   * A paste (⌘V, the menu) at a time: onto the track pointed at (`lane`) or each copy's own, never cutting what is
+   * A paste (⌘V, the menu) at a time: onto the track given (`lane`; `pointed`: under the pointer, so copies from
+   * several tracks move there together) or each copy's own, never cutting what is
    * there: a taken spot opens a track beside it, and with the magnet a copy for the main track goes right above it
    * (lib/timeline-clipboard pasteEdit). A clip cut since it was copied comes back as it was copied (under a
    * new id).
    */
-  const pasteAt = React.useCallback((lane: string | null, atMs: number): Promise<string | null> => {
+  const pasteAt = React.useCallback((lane: string | null, atMs: number, pointed = false): Promise<string | null> => {
     if (!clipboard.length) return Promise.resolve(t('timeline.menuPasteEmpty'));
     const { items, missing } = clipboardNow(clipboard, timelineTracks);
     const cut = clipboard.filter((item) => !items.some((i) => i.clipId === item.clipId) && copiedClips.current.has(item.clipId));
     if (missing > cut.length) toast.show(t('timeline.pasteGone'));
     const all = [...items, ...cut].sort((a, b) => a.startMs - b.startMs);
     if (!all.length) return Promise.resolve(null);
-    const ops = pasteEdit(all, timelineTracks, editModel(), atMs, lane, { mode: 'place', ...switchesOf(readTimelinePrefs()) });
+    const ops = pasteEdit(all, timelineTracks, editModel(), atMs, lane, { mode: 'place', pointed, ...switchesOf(readTimelinePrefs()) });
     if (!ops) return Promise.resolve(t('timeline.trackLocked'));
     const gone = new Set(cut.map((item) => item.clipId));
     const written = ops.map((op): Op => {

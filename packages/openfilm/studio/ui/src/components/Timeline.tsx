@@ -61,7 +61,7 @@ import { keyAction, useKeyHint } from '@/lib/keymap-store';
 import { ownTrackHeight } from '@/lib/track-heights';
 import type { Op } from '@/api';
 import type { ClipEdit } from '@/lib/film-clip-edits';
-import { laneOfBlock } from '@/lib/timeline-clipboard';
+import { laneOfBlock, pasteLane, trackByLane } from '@/lib/timeline-clipboard';
 import { filmSrcIsStill, parseFilmDocLoc } from '@/lib/film';
 import {
   assetDropPreview,
@@ -666,7 +666,8 @@ export interface TimelineProps {
    * Paste at a time. `lane` = the whole group onto that row (right-click); `null` = each back to its own row
    * (keyboard, nothing selected).
    */
-  onPaste?: (lane: string | null, atMs: number) => Promise<string | null>;
+  /** `pointed`: the row was pointed at (clips copied from several tracks move there together). */
+  onPaste?: (lane: string | null, atMs: number, pointed?: boolean) => Promise<string | null>;
   /**
    * A file from the media pane dropped at this time and place. `target` is the timeline's landing answer (see
    * assetDropSpot) — the preview drew exactly it — with its edit mode onto a track (room made by planRoom). Null = done.
@@ -1810,6 +1811,8 @@ export const Timeline = React.memo(function Timeline({
   selectedRef.current = selected;
   /* whether the last press was on the timeline: ⌘A selects all clips only then */
   const activeRef = React.useRef(false);
+  /* the row the pointer is over, or left the timeline from (`inside` false) */
+  const pointerRowRef = React.useRef<{ lane: string | null; inside: boolean }>({ lane: null, inside: false });
 
   /** The pointer's y in the track content (with scroll, without the centering pad). */
   const contentY = React.useCallback((clientY: number): number => {
@@ -2172,16 +2175,21 @@ export const Timeline = React.memo(function Timeline({
       }
       if (action === 'paste') {
         if (!onPaste || !hasClipboard) return;
-        const lane = picked[0] ? laneOfBlock(tracks, picked[0].id) : null;
-        if (lane && tracks.find((tr) => tr.lane === lane)?.locked) return;
+        /* the row under the pointer; just left, still that row while the timeline is where the last press was */
+        const pointer = pointerRowRef.current;
+        const { lane, pointed } = pasteLane(tracks, pointer.inside || activeRef.current ? pointer.lane : null, picked[0]?.id ?? null);
         e.preventDefault();
-        void onPaste(lane, timeMsRef.current);
+        if (lane && trackByLane(tracks, lane)?.locked) {
+          setDropError(t('timeline.trackLocked'));
+          return;
+        }
+        void onPaste(lane, timeMsRef.current, pointed).then((err) => { if (err) setDropError(err); });
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     /* the playhead is read from a ref: as a dependency the listener would be swapped twenty times a second */
-  }, [onRemove, onRemoveMany, onEditOps, onCopy, onPaste, hasClipboard, removeMany, rippleRemove, magnetRemove, selected, tracks, setSelected, playable, zoomByStable, zoomToStable, gap, closeGap, pickedTransition, onTransition, onPickTransition]);
+  }, [onRemove, onRemoveMany, onEditOps, onCopy, onPaste, hasClipboard, removeMany, rippleRemove, magnetRemove, selected, tracks, setSelected, playable, zoomByStable, zoomToStable, gap, closeGap, pickedTransition, onTransition, onPickTransition, t]);
 
   /* whether the last press was on the timeline (for ⌘A); capture phase, since presses here are often stopped */
   React.useEffect(() => {
@@ -2192,6 +2200,27 @@ export const Timeline = React.memo(function Timeline({
     window.addEventListener('pointerdown', onDown, true);
     return () => window.removeEventListener('pointerdown', onDown, true);
   }, []);
+  /* the row under the pointer, for ⌘V. Above the rows (the ruler, the bar) none; between or below the rows, and once
+     the pointer has left the timeline, the row it was last over */
+  React.useEffect(() => {
+    const onMove = (e: PointerEvent): void => {
+      const el = scrollRef.current;
+      const root = el?.closest('[data-timeline]');
+      const inside = Boolean(root && e.target instanceof Node && root.contains(e.target));
+      if (!el || !inside) {
+        pointerRowRef.current = { ...pointerRowRef.current, inside: false };
+        return;
+      }
+      if (e.clientY < el.getBoundingClientRect().top) {
+        pointerRowRef.current = { lane: null, inside: true };
+        return;
+      }
+      const row = tracks[laneHitAtY(e.clientY).lane];
+      pointerRowRef.current = { lane: row?.lane ?? pointerRowRef.current.lane, inside: true };
+    };
+    window.addEventListener('pointermove', onMove, { capture: true, passive: true });
+    return () => window.removeEventListener('pointermove', onMove, { capture: true });
+  }, [tracks, laneHitAtY]);
 
   const [splitting, setSplitting] = React.useState(false);
 
@@ -3497,7 +3526,7 @@ export const Timeline = React.memo(function Timeline({
           shortcut: keyHint('paste'),
           disabled: !onPaste || !hasClipboard || !menu.lane || laneLocked,
           hint: laneLocked ? t('timeline.trackLocked') : t('timeline.menuPasteEmpty'),
-          onSelect: () => { if (menu.lane) void onPaste?.(menu.lane, menu.atMs); },
+          onSelect: () => { if (menu.lane) void onPaste?.(menu.lane, menu.atMs, true); },
         });
       }
       if (menu.gap && onEditOps) {
@@ -3637,15 +3666,15 @@ export const Timeline = React.memo(function Timeline({
       });
     }
     if (onPaste) {
-      const pasteLane = one ? laneOfBlock(tracks, one.id) : (picked[0] ? laneOfBlock(tracks, picked[0].id) : null);
+      const laneToPaste = one ? laneOfBlock(tracks, one.id) : (picked[0] ? laneOfBlock(tracks, picked[0].id) : null);
       out.push({
         id: 'paste',
         label: t('timeline.menuPaste'),
         icon: <ClipboardPaste size={14} />,
         shortcut: keyHint('paste'),
-        disabled: !hasClipboard || !pasteLane || pickedLocked,
+        disabled: !hasClipboard || !laneToPaste || pickedLocked,
         hint: pickedLocked ? t('timeline.trackLocked') : t('timeline.menuPasteEmpty'),
-        onSelect: () => { if (pasteLane) void onPaste(pasteLane, menu.atMs); },
+        onSelect: () => { if (laneToPaste) void onPaste(laneToPaste, menu.atMs); },
       });
     }
     /* exporting one clip is for MG only: its point is a transparent background, which only an MG page has */
