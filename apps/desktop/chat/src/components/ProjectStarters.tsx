@@ -12,8 +12,8 @@ import { useT, useUiLocale } from '@/i18n';
 import { app, type StarterSkill } from '../app-bridge';
 import { BrandLogo } from './BrandLogo';
 
-/** Four rows of two: the most used skills, in their order; the rest are a click away in the Community. */
-const SHOWN = 8;
+/** Three rows of two: the most used skills, in their order; the rest are a click away in the Community. */
+const SHOWN = 6;
 
 export function ProjectStarters({ onSkill }: {
   /** Names the skill in the composer (unsent) and focuses it. */

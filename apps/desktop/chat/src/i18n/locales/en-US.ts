@@ -235,7 +235,7 @@ export const enUS = {
     sessionHistoryEmpty: 'No matching chats',
     sessionSearchPlaceholder: 'Search chats…',
     stop: 'Stop',
-    untitledSession: 'New agent',
+    untitledSession: 'New Agent',
   },
   projectMenu: {
     archive: 'Archive',
@@ -245,7 +245,7 @@ export const enUS = {
     closeTab: 'Close',
     done: 'Done',
     failed: 'Failed',
-    newSession: 'New agent',
+    newSession: 'New Agent',
     pin: 'Pin',
     rename: 'Rename',
     running: 'Working',
