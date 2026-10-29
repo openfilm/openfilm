@@ -118,7 +118,7 @@ import { compactScale, type MgTransform, type NodeOverride, type OverridePivot, 
 import { usePreviewPrefs } from '@/lib/preview-prefs';
 import { isTypingTarget } from './typing-target';
 
-const PANE = 'relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[7px]';
+const PANE = 'relative flex min-h-0 min-w-0 flex-col overflow-hidden';
 /** The files a picture inside a page can be replaced with. */
 const PICTURE_FILE = /\.(png|jpe?g|gif|webp|avif|svg|bmp)$/i;
 /* ⌘ is the modifier on a Mac, Ctrl elsewhere (the editor's keys, lib/timeline-keys) */
@@ -2717,7 +2717,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const viewerReady = Boolean(info);
   return (
     <div className="workspace-shell flex flex-col bg-[var(--dock-shell)]">
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col" style={{ paddingLeft: DOCK_GAP, paddingRight: DOCK_GAP, paddingBottom: DOCK_GAP }}>
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         <div className="relative z-10 grid min-h-0 min-w-0 flex-1" style={{ gridTemplateColumns: 'minmax(0, 1fr)', gridTemplateRows: 'auto minmax(0, 1fr)', gridTemplateAreas: '"bar" "main"' }}>
           {/* ── top bar: the title centered, whatever is on either side ── */}
           <div data-titlebar className="relative flex h-8 min-w-0 items-center gap-1" style={{ gridArea: 'bar' }}>
@@ -2801,8 +2801,10 @@ export function ProjectView({ projectId, onProject, onLeave }: {
             <div aria-hidden className="shrink-0 self-stretch" style={{ width: 'var(--titlebar-right-x)' }} />
           </div>
 
-          {/* the app's own panel (lib/host.ts `panel`) sits right of this, under the top bar: room left for it */}
-          <section ref={dockColRef} className="relative flex min-h-0 min-w-0 flex-col" style={{ gridArea: 'main', ...(hostPanel?.open ? { marginRight: Math.max(0, hostPanel.width - DOCK_GAP) } : null) }}>
+          {/* the panes, edge to edge on the board of lines (--dock-line): a line under the top bar, and one beside the
+              app's own panel (lib/host.ts `panel`), which sits left of this, under the top bar: room left for it */}
+          <section ref={dockColRef} className="relative flex min-h-0 min-w-0 flex-col bg-[var(--dock-line)]"
+            style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...(hostPanel?.open ? { marginLeft: hostPanel.width, paddingLeft: DOCK_GAP } : null) }}>
             <div ref={viewerRowRef} className="relative flex min-h-0 min-w-0 flex-1 flex-row">
               {!hostAssets && assetsPaneOpen && assetsFit ? (
                 <>
@@ -3200,8 +3202,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
           panel keeps for itself (the panel goes on below it, so the two read as one) */}
       {hostAssets?.open && hostPanel ? <PanelSeam panel={hostPanel} bottom={hostAssets.bottom} /> : null}
       {hostAssets?.open && hostPanel ? (
-        <div className="fixed z-30 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-t-[7px] bg-[var(--dock-pane)]"
-          style={{ top: HOST_PANEL_TOP, right: DOCK_GAP, bottom: hostAssets.bottom, width: Math.max(0, hostPanel.width - 2 * DOCK_GAP) }}>
+        <div className="fixed z-30 flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--dock-pane)]"
+          style={{ top: HOST_PANEL_TOP + DOCK_GAP, left: 0, bottom: hostAssets.bottom, width: hostPanel.width }}>
           {mediaPool()}
         </div>
       ) : null}
@@ -3224,7 +3226,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         missingFiles={[...mediaTrouble].flatMap(([src, why]) => (why === 'missing' ? [src] : []))}
       />
       <PasteAttrsDialog attrs={pasteAttrsOpen ? copiedAttrs : null} onPaste={doPasteAttrs} onCancel={() => setPasteAttrsOpen(false)} />
-      <ExportTray ref={exportTrayRef} projectId={projectId} onError={toast.showError} inset={hostPanel?.open ? hostPanel.width : 0} />
+      <ExportTray ref={exportTrayRef} projectId={projectId} onError={toast.showError} />
       <SpendAsks projectId={projectId} />
       <Toast toast={toast.current} />
     </div>
@@ -3255,24 +3257,24 @@ function LiveGeometryInspector({ store, ...props }: Omit<React.ComponentProps<ty
 
 /**
  * The seam that sizes the app's panel while Studio's assets drawer covers it (the panel's own seam is under the
- * drawer then): the same 10 px strip at the column's left edge, dragged or moved with the arrow keys.
+ * drawer then): the same 10 px strip over the column's right edge, dragged or moved with the arrow keys.
  */
 function PanelSeam({ panel, bottom }: { panel: HostPanel; bottom: number }) {
   const drag = React.useRef<{ x: number; width: number } | null>(null);
   return (
     <div role="separator" aria-orientation="vertical" aria-label={panel.label} tabIndex={0}
       className="fixed z-[31] w-[10px] cursor-col-resize outline-none focus-visible:bg-[var(--border-strong)]"
-      style={{ top: HOST_PANEL_TOP, bottom, right: panel.width - 10 }}
+      style={{ top: HOST_PANEL_TOP, bottom, left: panel.width - 5 }}
       onPointerDown={(e) => {
         if (e.button !== 0) return;
         e.currentTarget.setPointerCapture(e.pointerId);
         drag.current = { x: e.screenX, width: panel.width };
         document.body.style.cursor = 'col-resize';
       }}
-      onPointerMove={(e) => { if (drag.current) panel.setWidth(drag.current.width + (drag.current.x - e.screenX)); }}
+      onPointerMove={(e) => { if (drag.current) panel.setWidth(drag.current.width + (e.screenX - drag.current.x)); }}
       onPointerUp={(e) => {
         if (!drag.current) return;
-        panel.setWidth(drag.current.width + (drag.current.x - e.screenX), true);
+        panel.setWidth(drag.current.width + (e.screenX - drag.current.x), true);
         drag.current = null;
         document.body.style.cursor = '';
       }}
@@ -3280,7 +3282,7 @@ function PanelSeam({ panel, bottom }: { panel: HostPanel; bottom: number }) {
       onKeyDown={(e) => {
         if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
         e.preventDefault();
-        panel.setWidth(panel.width + (e.key === 'ArrowLeft' ? 24 : -24), true);
+        panel.setWidth(panel.width + (e.key === 'ArrowRight' ? 24 : -24), true);
       }} />
   );
 }

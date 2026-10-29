@@ -3,9 +3,9 @@
 @source '../node_modules/openfilm/studio/ui/src';
 @source '../chat/src';
 
-/* the chat's column: beside Studio, under its top bar (bridge.ts places and sizes it); over Studio's panes and its
+/* the chat's column: left of Studio, under its top bar (bridge.ts places and sizes it); over Studio's panes and its
    assets drawer, under its menus and dialogs */
-#of-chat { position: fixed; right: 0; bottom: 0; height: auto; z-index: 40; background: transparent; }
+#of-chat { position: fixed; left: 0; bottom: 0; height: auto; z-index: 40; background: transparent; }
 #of-chat[hidden] { display: none; }
 /* the assets open: Studio's drawer is in the column, above the composer; only the chat's pane (its composer then)
    takes the pointer, the rest of the column is the drawer's */

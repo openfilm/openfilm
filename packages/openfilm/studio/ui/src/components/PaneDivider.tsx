@@ -6,8 +6,8 @@
  * wider pane or a taller timeline when working on a long edit. A fixed ratio always
  * shortchanges one of them, and only the user knows the trade-off at that moment.
  *
- * The gap between the panes is the seam, and the seam is the handle. Its
- * width must therefore equal the spacing between panes (DOCK_GAP); one pixel off makes it look crooked.
+ * The panes meet edge to edge, square, with a one-pixel line between them (DOCK_GAP); that line is the seam, and
+ * the seam is the handle. Its width must therefore equal the spacing between panes; one pixel off makes it look crooked.
  *
  * With a mouse the seam draws nothing. Hovering already turns the cursor into a resize arrow,
  * and while dragging the panes widen under the hand, which is the most direct feedback there
@@ -23,10 +23,10 @@
  */
 import React from 'react';
 
-/** Gap between panes (px); the workspace's outer margin uses the same value so the seams line up. */
-export const DOCK_GAP = 6;
+/** The line between panes (px): the board under them (--dock-line) showing through. */
+export const DOCK_GAP = 1;
 
-/** A 6px seam is too thin to grab with a mouse, so the grab area is widened to 14px using negative margins, without taking layout space. */
+/** A 1px seam is too thin to grab with a mouse, so the grab area is widened to 14px using negative margins, without taking layout space. */
 const GRAB = 14;
 const BLEED = (GRAB - DOCK_GAP) / 2;
 

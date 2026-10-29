@@ -70,9 +70,10 @@
 
   --app-content-bg: #fcfcfc;
 
-  /* the docked layout: panes float on a board one step darker; the seams are that board showing through */
+  /* the docked layout: panes edge to edge, square, a hairline between them (the board of lines showing through) */
   --dock-shell: #f2f2f2;
   --dock-pane: #fcfcfc;
+  --dock-line: #e3e3e3;
 
   --folder-back: #cbcbcb;
   --folder-front: #e0e0e0;
@@ -150,9 +151,10 @@
 
   --app-content-bg: rgb(17, 17, 17);
 
-  /* panes one step lighter than the near-black board, so they read as boards laid on it */
+  /* panes one step lighter than the near-black top bar, a lighter hairline between them */
   --dock-shell: #111111;
   --dock-pane: #181818;
+  --dock-line: #2a2a2a;
 
   --folder-back: #3a3a3a;
   --folder-front: #4d4d4d;

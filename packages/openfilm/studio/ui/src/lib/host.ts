@@ -48,7 +48,7 @@ export interface StudioHost {
    */
   onHover?: (ref: StudioRef | null) => void;
   /**
-   * A panel of the app's own on Studio's right, under the top bar (its chat), drawn by the app in Studio's page: Studio's
+   * A panel of the app's own on Studio's left, under the top bar (its chat), drawn by the app in Studio's page: Studio's
    * top bar runs over it; below the bar Studio leaves `width` px free for it while it is open, and its Layout menu
    * shows and hides it as it does its own panes. The panel's element carries `data-studio-host-panel`, so Studio's
    * shortcuts leave the keys pressed in it alone. `onChange` tells Studio of a new width, or of the panel opened or

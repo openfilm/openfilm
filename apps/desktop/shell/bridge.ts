@@ -59,7 +59,7 @@ function signal<T>(value: T) {
 }
 const events = <T,>() => signal<T>(undefined as T);
 
-/* ── the chat's column: open or not, how wide, and the assets drawer over it ── */
+/* ── the chat's column, left of Studio: open or not, how wide, and the assets drawer over it ── */
 const TOP_BAR = 32;
 const column = document.getElementById('of-chat')!;
 const layout = { open: true, width: 420, min: 340, studioMin: 640 };

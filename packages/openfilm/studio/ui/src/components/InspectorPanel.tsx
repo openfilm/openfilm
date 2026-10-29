@@ -10,7 +10,7 @@ export function InspectorPanel({ title, width, onClose, children }: {
 }) {
   const t = useT();
   return (
-    <aside aria-label={title} data-inspector-panel data-film-inspector className="relative flex min-h-0 min-w-0 shrink-0 flex-col overflow-hidden rounded-[7px] bg-[var(--dock-pane)] text-[var(--text)]" style={{ width }} onKeyDown={event => {
+    <aside aria-label={title} data-inspector-panel data-film-inspector className="relative flex min-h-0 min-w-0 shrink-0 flex-col overflow-hidden bg-[var(--dock-pane)] text-[var(--text)]" style={{ width }} onKeyDown={event => {
       if ((event.target as Element).closest('input, select, textarea, button')) event.stopPropagation();
     }}>
       <div className={PANE_BAR}>

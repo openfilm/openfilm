@@ -105,7 +105,7 @@ type T = ReturnType<typeof useT>;
 
 /* ───────────────────────────── skin ───────────────────────────── */
 
-const PANE = 'relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[7px]';
+const PANE = 'relative flex min-h-0 min-w-0 flex-col overflow-hidden';
 
 type AlignEdge = 'left' | 'hcenter' | 'right' | 'top' | 'vcenter' | 'bottom';
 

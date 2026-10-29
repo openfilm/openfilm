@@ -140,18 +140,19 @@ export function App({ initialProject, initialSelection, initialFfmpeg }: {
 
   const onProject = Boolean(project) && /^\/projects\//.test(location.pathname);
   return (
-    <div className={`relative flex h-full flex-col ${assetsOpen ? '' : 'bg-[var(--dock-shell)]'}`}>
+    <div className={`relative flex h-full flex-col ${assetsOpen ? '' : 'bg-[var(--dock-line)] pt-px'}`}>
       {addingSkill ? (
         <AddSkillDialog onClose={() => setAddingSkill(false)} onAdded={async () => { window.dispatchEvent(new Event(SKILLS_CHANGED)); }}
           onPick={onProject ? (skill) => app.useSkill?.(skill) : undefined}
           onMake={onProject ? () => window.dispatchEvent(new Event(MAKE_SKILL)) : undefined} />
       ) : null}
-      {/* under Studio's top bar (it runs over this, across the window): the seam on the left is the handle */}
+      {/* under Studio's top bar (it runs over this, across the window), a line below it: the seam on the right, the
+          line between this and Studio's panes, is the handle */}
       <Divider />
-      <div className="mb-[6px] ml-[6px] mr-[6px] flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col">
         {project && chatReady
           ? <ChatPane key={`${project.id}:${project.path}`} project={project} banners={banners} selection={selection && selection.projectId === project.id ? selection : null} assetsOpen={assetsOpen} />
-          : <aside className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden rounded-[7px] bg-[var(--dock-pane)]">{banners}<Loader2 size={16} className="animate-spin text-[var(--text-faint)]" /></aside>}
+          : <aside className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden bg-[var(--dock-pane)]">{banners}<Loader2 size={16} className="animate-spin text-[var(--text-faint)]" /></aside>}
       </div>
     </div>
   );
@@ -1012,7 +1013,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
           <StickToBottomContext.Provider value={thread}>
             {/* with the assets open only the composer shows, at the bottom: the drawer above it is Studio's, and the two
                 read as one pane */}
-            <aside className={`relative flex min-h-0 flex-col overflow-hidden bg-[var(--dock-pane)] ${assetsOpen ? 'mt-auto shrink-0 rounded-b-[7px]' : 'flex-1 rounded-[7px]'}`}>
+            <aside className={`relative flex min-h-0 flex-col overflow-hidden bg-[var(--dock-pane)] ${assetsOpen ? 'mt-auto shrink-0' : 'flex-1'}`}>
               {assetsOpen ? null : banners}
               <div className={`relative min-h-0 min-w-0 flex-1 flex-col ${assetsOpen ? 'hidden' : 'flex'}`}>
                 <ConversationSessionBar
