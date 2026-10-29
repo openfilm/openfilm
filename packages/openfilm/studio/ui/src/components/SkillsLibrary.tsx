@@ -328,8 +328,9 @@ function MoreMenu({ items }: { items: ContextMenuEntry[] }) {
 
 /**
  * A skill on its own, in place of the list: its preview (or picture) large on the left; on the right its title and
- * switch, kind and version, where it came from, who it is for and what it does, and at the bottom installing it or
- * Try now, then uninstalling it (an official one) or moving it to the trash (the person's own, a project's).
+ * switch, kind and version, where it came from, who it is for and what it does, and at the bottom Try now (installed
+ * or not: the skill is given to that conversation only), then installing it (agents take it up whenever it fits), or
+ * uninstalling it (an official one) or moving it to the trash (the person's own, a project's).
  */
 function SkillPage({ skill, projectId, onTurn, onInstall, onRemove, onTry, onCoverChanged }: {
   skill: SkillEntry; projectId: string | null; onTurn: (on: boolean) => void; onInstall: (on: boolean) => void;
@@ -403,19 +404,21 @@ function SkillPage({ skill, projectId, onTurn, onInstall, onRemove, onTry, onCov
           {details ? details.split('\n').map((line) => <p key={line} className="mt-3 text-[13.5px] leading-[22px] text-[var(--text-muted)]">{line}</p>) : null}
         </div>
         <div className="shrink-0 px-7 pb-7 pt-4">
-          {!installed ? (
-            <button type="button" onClick={() => onInstall(true)}
-              className="flex h-11 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--text)] text-[14px] font-medium text-[var(--bg)] transition hover:opacity-90"><Plus size={15} />{t('gallery.install')}</button>
-          ) : onTry ? (
+          {onTry ? (
             <button type="button" onClick={() => onTry(skill)} disabled={skill.off} title={skill.off ? t('gallery.tryOff') : undefined}
               className="flex h-11 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--text)] text-[14px] font-medium text-[var(--bg)] transition hover:opacity-90 disabled:opacity-40"><MessageSquarePlus size={15} />{t('gallery.tryNow')}</button>
           ) : null}
-          {installed ? (
+          {!installed ? (
+            <button type="button" onClick={() => onInstall(true)}
+              className={onTry
+                ? 'mt-2 flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] border border-[var(--border-strong)] text-[13px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)]'
+                : 'flex h-11 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--text)] text-[14px] font-medium text-[var(--bg)] transition hover:opacity-90'}><Plus size={15} />{t('gallery.install')}</button>
+          ) : (
             <button type="button" onClick={onRemove}
               className="mt-2 flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] text-[13px] text-[var(--text-muted)] transition hover:bg-[color-mix(in_srgb,var(--err)_12%,transparent)] hover:text-[var(--err)]">
               <Trash2 size={14} />{t(skill.source === 'official' ? 'gallery.uninstall' : 'gallery.remove')}
             </button>
-          ) : null}
+          )}
         </div>
       </div>
     </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { PanelLeft, Plus, Search } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { limitTitleWidth, SESSION_TITLE_MAX_WIDTH } from '@openfilm/shared';
 import { Tooltip } from './Tooltip';
 import { useT } from '@/i18n';
@@ -28,15 +28,15 @@ const RECENCY_I18N: Record<SessionRecencyKey, 'sidebar.searchToday' | 'sidebar.s
  */
 const TITLE_MAX = 'max-w-[15rem]';
 
-/** The history's switch: the bar's button, a step fainter until the pointer is on it. */
-const QUIET_BTN = PANE_BTN.replace('text-[var(--text-dim)]', 'text-[var(--text-faint)]');
+/** A row of the history: new, search, each conversation. */
+const ROW = 'flex h-8 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left text-[13px] transition';
 
 /**
- * The bar at the top of the conversation: the history's switch and the session's title on the left (none drawn
- * without one), new on the right.
+ * The bar at the top of the conversation: the session's title on the left, new on the right.
  *
- * The title comes from the first message, so it appears once something has been said. Clicking it renames, no
- * separate pencil. The switch opens the history as a pane left of the conversation (SessionHistory).
+ * The title comes from the first message ("Untitled chat" until then). Clicking it opens or closes the history, a
+ * pane left of the conversation (SessionHistory), as the title of a chat app's conversation does; a double click
+ * renames it.
  */
 export function ConversationSessionBar({
   sessions,
@@ -97,69 +97,51 @@ export function ConversationSessionBar({
 
   return (
     <div className={PANE_BAR}>
-      {/* These buttons sit at the top edge, so tooltips open downwards. The history's switch stays quiet, open or not:
-          the pane beside it says which. */}
-      {onToggleHistory ? (
-        <Tooltip label={t('project.sessionHistory')} side="bottom">
-          <button
-            type="button"
-            aria-label={t('project.sessionHistory')}
-            aria-expanded={historyOpen}
-            onClick={onToggleHistory}
-            className={QUIET_BTN}
-          >
-            <PanelLeft size={PANE_ICON} strokeWidth={1.75} />
-          </button>
-        </Tooltip>
-      ) : null}
-      {label ? (
-        renaming ? (
-          <input
-            autoFocus
-            value={draft}
-            onChange={(event) => {
-              const next = event.target.value;
-              if ((event.nativeEvent as InputEvent).isComposing) {
-                setDraft(next);
-                return;
-              }
-              setDraft(limitTitleWidth(next, SESSION_TITLE_MAX_WIDTH));
-            }}
-            onCompositionEnd={(event) => {
-              setDraft(limitTitleWidth(event.currentTarget.value, SESSION_TITLE_MAX_WIDTH));
-            }}
-            onBlur={() => void commitRename()}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') void commitRename();
-              if (event.key === 'Escape') {
-                setDraft(label);
-                setRenaming(false);
-              }
-            }}
-            style={titleEditWidth ? { width: titleEditWidth } : undefined}
-            className={`${TITLE_MAX} ${PANE_TITLE} box-border h-[22px] max-w-[min(15rem,calc(100%-52px))] bg-transparent px-1 outline-none`}
-          />
-        ) : onRenameSession ? (
-          <Tooltip label={t('projectMenu.rename')} side="bottom">
-            <button
-              ref={titleBoxRef}
-              type="button"
-              onClick={startRename}
-              className={`${TITLE_MAX} flex h-[22px] w-fit min-w-0 items-center rounded-md px-1 text-left transition hover:bg-[var(--bg-hover)]`}
-            >
-              <span title={label} className={PANE_TITLE}>
-                {label}
-              </span>
-            </button>
-          </Tooltip>
-        ) : (
-          <span
-            title={label}
-            className={`${TITLE_MAX} ${PANE_TITLE} px-1`}
-          >
-            {label}
+      {renaming ? (
+        <input
+          autoFocus
+          value={draft}
+          onChange={(event) => {
+            const next = event.target.value;
+            if ((event.nativeEvent as InputEvent).isComposing) {
+              setDraft(next);
+              return;
+            }
+            setDraft(limitTitleWidth(next, SESSION_TITLE_MAX_WIDTH));
+          }}
+          onCompositionEnd={(event) => {
+            setDraft(limitTitleWidth(event.currentTarget.value, SESSION_TITLE_MAX_WIDTH));
+          }}
+          onBlur={() => void commitRename()}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') void commitRename();
+            if (event.key === 'Escape') {
+              setDraft(label);
+              setRenaming(false);
+            }
+          }}
+          style={titleEditWidth ? { width: titleEditWidth } : undefined}
+          className={`${TITLE_MAX} ${PANE_TITLE} box-border h-[22px] max-w-[min(15rem,calc(100%-52px))] bg-transparent px-1.5 outline-none`}
+        />
+      ) : onToggleHistory ? (
+        /* one click: the history (the second of a double click leaves it as the first left it, and renames) */
+        <button
+          ref={titleBoxRef}
+          type="button"
+          aria-label={t('project.sessionHistory')}
+          aria-expanded={historyOpen}
+          onClick={(event) => { if (event.detail <= 1) onToggleHistory(); }}
+          onDoubleClick={startRename}
+          className={`${TITLE_MAX} flex h-[22px] w-fit min-w-0 items-center rounded-md px-1.5 text-left transition hover:bg-[var(--bg-hover)]`}
+        >
+          <span title={label || undefined} className={`${PANE_TITLE} ${label ? '' : 'text-[var(--text-faint)]'}`}>
+            {label || t('project.untitledSession')}
           </span>
-        )
+        </button>
+      ) : label ? (
+        <span title={label} className={`${TITLE_MAX} ${PANE_TITLE} px-1.5`}>
+          {label}
+        </span>
       ) : null}
       <span className="min-w-0 flex-1" />
       {onNewSession ? (
@@ -180,18 +162,21 @@ export function ConversationSessionBar({
 }
 
 /**
- * The project's conversations, left of the one shown (the bar's switch opens it): search on top, then groups for
- * today, yesterday, the past 7 days and earlier. While a turn runs another cannot be switched to (`busy`).
+ * The project's conversations, left of the one shown (its title opens it), laid out as a chat app's sidebar: new and
+ * search on top, then groups for today, yesterday, the past 7 days and earlier, a row each. While a turn runs neither
+ * new nor another conversation can be had (`busy`).
  */
 export function SessionHistory({
   sessions,
   currentSessionId,
   onSelectSession,
+  onNewSession,
   busy = false,
 }: {
   sessions: ProjectSessionItem[];
   currentSessionId: string;
   onSelectSession: (sessionId: string) => void;
+  onNewSession?: () => void;
   busy?: boolean;
 }) {
   const t = useT();
@@ -202,27 +187,41 @@ export function SessionHistory({
   const needle = query.trim().toLowerCase();
   const groups = groupSessionsByRecency(needle ? listed.filter((item) => labelOf(item).toLowerCase().includes(needle)) : listed);
 
-  /* the search, the groups' names and the rows' words start on one line, 14 px in */
   return (
     <nav aria-label={t('project.sessionHistory')} className="flex h-full min-h-0 w-full flex-col">
-      <div className="flex h-8 shrink-0 items-center px-2">
-        <label className="flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-md px-1.5 text-[var(--text-faint)] transition focus-within:bg-[var(--bg-hover)] hover:bg-[var(--bg-hover)]">
-          <Search size={12} strokeWidth={1.75} className="shrink-0" />
+      <div className="shrink-0 px-1.5 pt-1.5">
+        {onNewSession ? (
+          <button
+            type="button"
+            aria-disabled={busy || undefined}
+            title={busy ? t('project.sessionBusy') : undefined}
+            onClick={busy ? undefined : onNewSession}
+            className={`${ROW} text-[var(--text)] ${busy ? 'cursor-not-allowed opacity-50' : 'hover:bg-[var(--bg-hover)]'}`}
+          >
+            <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-[var(--bg-hover)]">
+              <Plus size={12} strokeWidth={2} />
+            </span>
+            <span className="truncate">{t('projectMenu.newSession')}</span>
+          </button>
+        ) : null}
+        <label className={`${ROW} cursor-text text-[var(--text)] focus-within:bg-[var(--bg-hover)] hover:bg-[var(--bg-hover)]`}>
+          <span className="flex w-[18px] shrink-0 justify-center"><Search size={14} strokeWidth={1.75} /></span>
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => { if (event.key === 'Escape') setQuery(''); }}
             placeholder={t('project.sessionSearchPlaceholder')}
-            className="min-w-0 flex-1 bg-transparent text-[12px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]"
+            className="min-w-0 flex-1 bg-transparent text-[var(--text)] outline-none placeholder:text-[var(--text)]"
           />
         </label>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto pb-2">
+      <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-3">
         {groups.length === 0 ? (
-          <div className="px-3.5 pt-2 text-[12px] text-[var(--text-faint)]">{t('project.sessionHistoryEmpty')}</div>
+          <div className="px-2 pt-5 text-[12px] text-[var(--text-faint)]">{t('project.sessionHistoryEmpty')}</div>
         ) : (
           groups.map((group) => (
-            <div key={group.key} className="pt-2">
-              <div className="px-3.5 pb-1 text-[11px] text-[var(--text-faint)]">{t(RECENCY_I18N[group.key])}</div>
+            <div key={group.key} className="pt-5">
+              <div className="px-2 pb-1.5 text-[11.5px] text-[var(--text-faint)]">{t(RECENCY_I18N[group.key])}</div>
               {group.items.map((item) => {
                 const active = item.id === currentSessionId;
                 const blocked = busy && !active;
@@ -234,7 +233,7 @@ export function SessionHistory({
                     aria-disabled={blocked || undefined}
                     title={blocked ? t('project.sessionBusy') : labelOf(item)}
                     onClick={() => { if (!active && !blocked) onSelectSession(item.id); }}
-                    className={`mx-2 flex h-7 w-[calc(100%-16px)] items-center rounded-md px-1.5 text-left text-[12.5px] transition ${
+                    className={`${ROW} ${
                       active ? 'bg-[var(--bg-hover)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'
                     } ${blocked ? 'cursor-not-allowed opacity-50 hover:bg-transparent' : ''}`}
                   >

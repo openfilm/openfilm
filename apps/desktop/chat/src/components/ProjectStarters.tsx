@@ -3,8 +3,8 @@
 /**
  * The conversation column of an empty project, before anything has been said: the question, then the skills as
  * cards, each its cover and its name, two to a row. A card names its skill in the message being written (Enter
- * starts it, or a few words more say what to make with it); an official one not installed yet is installed first, as
- * the Community's Install would, so the agent gets it. "More" opens the Community on Discover, all of OpenFilm's.
+ * starts it, or a few words more say what to make with it), installed or not: as the Community's Try now, the skill is
+ * given to that conversation, nothing installed. "More" opens the Community on Discover, all of OpenFilm's.
  */
 import React from 'react';
 import { ChevronRight } from 'lucide-react';
@@ -16,8 +16,8 @@ import { BrandLogo } from './BrandLogo';
 const SHOWN = 8;
 
 export function ProjectStarters({ onSkill }: {
-  /** Names the skill in the composer (unsent) and focuses it; `installed`: just now, the skills are read again. */
-  onSkill: (skill: { name: string; description: string; title: string; installed: boolean }) => void;
+  /** Names the skill in the composer (unsent) and focuses it. */
+  onSkill: (skill: { name: string; description: string; title: string }) => void;
 }) {
   const t = useT();
   const locale = useUiLocale();
@@ -31,13 +31,6 @@ export function ProjectStarters({ onSkill }: {
   const titleOf = (skill: StarterSkill) => {
     const words = skill.title;
     return (words ? words[locale] ?? words[locale.split('-')[0]!] ?? words.en : undefined) ?? skill.name;
-  };
-  const pick = async (skill: StarterSkill) => {
-    const words = { name: skill.name, description: skill.description, title: titleOf(skill) };
-    if (skill.installed) { onSkill({ ...words, installed: false }); return; }
-    try { await app.installSkill(skill.name); } catch { return; }
-    setSkills((list) => list?.map((s) => (s.name === skill.name ? { ...s, installed: true } : s)) ?? null);
-    onSkill({ ...words, installed: true });
   };
 
   return (
@@ -54,7 +47,7 @@ export function ProjectStarters({ onSkill }: {
               <button
                 type="button"
                 title={skill.description}
-                onClick={() => void pick(skill)}
+                onClick={() => onSkill({ name: skill.name, description: skill.description, title: titleOf(skill) })}
                 className="flex h-14 w-full min-w-0 items-center gap-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-2 text-left transition hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)]"
               >
                 <img src={skill.cover} alt="" loading="lazy" draggable={false} className="h-10 w-10 shrink-0 rounded-md bg-[var(--bg-hover)] object-cover" />

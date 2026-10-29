@@ -19,7 +19,7 @@ import { useT } from '@/i18n';
 import { studioHost, type CommunityItem } from '@/lib/host';
 import { seenExamples, seenSkills, sourcesApi, watchSkills, type Example, type SkillEntry } from '@/lib/project-sources';
 import { GitHubDialog } from './ProjectSources';
-import { SkillsLibrary } from './SkillsLibrary';
+import { SkillsLibrary, useSkillWords } from './SkillsLibrary';
 
 export type ExamplesMode = 'start' | 'reference';
 /** A part of an example picked to point at: none for the whole film. */
@@ -338,6 +338,7 @@ function ExampleDetail({ example, mode, onStart, onReference, categoryLabel }: {
  */
 export function ExamplesDialog({ projectId, open, onClose, onStarted }: { projectId: string; open?: CommunityItem; onClose: () => void; onStarted: (projectId: string) => void }) {
   const t = useT();
+  const skillWords = useSkillWords();
   const [starting, setStarting] = React.useState<Example | null>(null);
   const reference = (example: Example, part: ExamplePart) => {
     /* fetched meanwhile, so the message goes as soon as it is sent */
@@ -361,7 +362,7 @@ export function ExamplesDialog({ projectId, open, onClose, onStarted }: { projec
           onClose={onClose}
           onStart={setStarting}
           onReference={reference}
-          onTrySkill={(skill) => { studioHost?.useSkill?.({ name: skill.name, description: skill.description, newConversation: true }); onClose(); }}
+          onTrySkill={(skill) => { studioHost?.useSkill?.({ name: skill.name, description: skill.description, title: skillWords(skill).title, newConversation: true }); onClose(); }}
         />
       </div>
       {starting ? (

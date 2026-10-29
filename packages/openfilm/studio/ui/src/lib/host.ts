@@ -73,7 +73,7 @@ export interface StudioHost {
    * The app's chat names a skill in the message being written: the skills (opened from the chat, `show-examples`)
    * call this for one tried there, `newConversation` true (Try now: a new conversation with it named).
    */
-  useSkill?: (skill: { name: string; description: string; newConversation?: boolean }) => void;
+  useSkill?: (skill: { name: string; description: string; title?: string; newConversation?: boolean }) => void;
   /** The person's own skills, where the app keeps them: one added, the app's own way (from a link, a folder, or made
       with the agent). The Community's skills offer it. */
   skills?: { add: () => void };

@@ -7,7 +7,8 @@
  *                           own skills with whether each is let in (`filtered` false: it has them all, as in its own
  *                           terminal). OpenFilm's own skill for terminal agents is never among them (agent-skills isOurs).
  *   desktop:skills:texts    { project, agent, names } → [{ name, text }]   skills named in a message, as the agent reads
- *                           each (its folder and its SKILL.md whole)
+ *                           each (its folder and its SKILL.md whole): any of OpenFilm's but those turned off, an official one
+ *                           installed or not (Try now, a skill to start from)
  *   desktop:skills:preview  { url } | { folder } → { ok, id, skills: [{ name, description, scripts, size, replaces }] }
  *                           | { ok: false, error } | { ok: false, cancelled }   a GitHub or GitLab address fetched beside
  *                           the person's skills, or a folder on this computer (one dropped, or `folder` null: picked
@@ -92,9 +93,11 @@ export function registerSkillsIpc(ipcMain, { trusted, projects, dataDir, mine, p
 
   handle('desktop:skills:texts', async ({ project: path, agent, names }) => {
     const cwd = await project(path);
-    const { readSkill, skillText, usableSkills } = await lib();
+    const { listSkills, readSkill, skillText, skillsOff } = await lib();
     const wanted = Array.isArray(names) ? names.filter((n) => typeof n === 'string') : [];
-    const openfilm = new Map(usableSkills({ project: cwd, mine, ...(prefsHome ? { home: prefsHome } : {}) }).map((s) => [s.name, s]));
+    /* named in the message: any of OpenFilm's but those turned off, an official one installed or not (Try now) */
+    const off = new Set(skillsOff(prefsHome || undefined));
+    const openfilm = new Map(listSkills({ project: cwd, mine }).filter((s) => !off.has(s.name)).map((s) => [s.name, s]));
     const own = new Map((await agentOwn(agent, cwd)).map((s) => [s.name, s]));
     return wanted.flatMap((name) => {
       const skill = openfilm.get(name) ?? (own.has(name) ? readSkill(own.get(name).folder, 'mine') : null);

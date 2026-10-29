@@ -180,7 +180,7 @@ projectReady = follow();
 const selection = signal<StudioSelection | null>(null);
 const refer = events<StudioRef>();
 /* a skill picked in the examples (Studio's ExamplesDialog), to be named in the message; and "Add a skill" there */
-const skillPicked = events<{ name: string; description: string; newConversation?: boolean }>();
+const skillPicked = events<{ name: string; description: string; title?: string; newConversation?: boolean }>();
 const skillAdd = events<void>();
 /** what the pointer is over in Studio (null: nothing), for the chat to light its pills that point at it */
 const hover = signal<StudioRef | null>(null);
@@ -391,7 +391,7 @@ function commandFor(ref: StudioRef): StudioCommand {
   showExamples: (open?: CommunityItem) => command?.({ type: 'show-examples', ...(open ? { open } : {}) }),
   onUseSkill: skillPicked.on,
   onAddSkill: skillAdd.on,
-  useSkill: (skill: { name: string; description: string; newConversation?: boolean }) => skillPicked.set(skill),
+  useSkill: (skill: { name: string; description: string; title?: string; newConversation?: boolean }) => skillPicked.set(skill),
   /* a reference made in the chat (⌘L there, the @ menu) gets its picture as Studio's own do */
   withPicture: (ref: StudioRef) => { const done = pictured.then(() => withPicture(ref)); pictured = done.then(() => {}); return done; },
   /* what a pill hovered in the chat points at, lit in Studio while it is (null: none); and the references of the
@@ -409,20 +409,14 @@ function commandFor(ref: StudioRef): StudioCommand {
   async starterSkills() {
     const id = project.get()?.id;
     if (!id) return [];
-    type Listed = { name: string; description: string; cover?: string; order?: number; off?: true; installed?: boolean; shown?: { title: Record<string, string> } };
+    type Listed = { name: string; description: string; cover?: string; order?: number; off?: true; shown?: { title: Record<string, string> } };
     try {
       const body = await (await fetch(`/api/skills?project=${encodeURIComponent(id)}`)).json() as { skills?: Listed[] };
       return (body.skills ?? [])
         .filter((s): s is Listed & { cover: string } => Boolean(s.cover) && !s.off)
         .sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER))
-        .map((s) => ({ name: s.name, description: s.description, cover: s.cover, title: s.shown?.title ?? null, installed: s.installed !== false }));
+        .map((s) => ({ name: s.name, description: s.description, cover: s.cover, title: s.shown?.title ?? null }));
     } catch { return []; }
-  },
-  async installSkill(name: string) {
-    const res = await fetch(`/api/skills/${encodeURIComponent(name)}/installed`, {
-      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ installed: true }),
-    });
-    if (!res.ok) throw new Error(`Studio answered ${res.status}`);
   },
   setChatWidth: (width: number, done?: boolean) => setChatWidth(width, done === true),
   setChatOpen,

@@ -358,17 +358,22 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   /* a skill as people see it, in the language shown: its title, and what its page says (none: its name and the
      agent's description) */
   const locale = useUiLocale();
+  /* the skills named from a card or Try now, not installed so not in the listing: their words as they came */
+  const pickedSkills = React.useRef(new Map<string, PickedSkill>());
   const skillWords = React.useCallback((name: string, description = '') => {
     const shown = skillListing?.openfilm.find((s) => s.name === name)?.shown;
+    const picked = pickedSkills.current.get(name);
+    const about = description || picked?.description || '';
     const pick = (words?: Record<string, string>) => (words ? words[locale] ?? words[locale.split('-')[0]!] ?? words.en ?? Object.values(words)[0] : undefined);
     const summary = pick(shown?.summary);
     return {
-      title: pick(shown?.title) ?? name,
-      summary: summary ?? description,
-      text: shown ? [summary, ...(pick(shown.details)?.split('\n') ?? [])].filter((w): w is string => Boolean(w)) : description ? [description] : [],
+      title: pick(shown?.title) ?? picked?.title ?? name,
+      summary: summary ?? about,
+      text: shown ? [summary, ...(pick(shown.details)?.split('\n') ?? [])].filter((w): w is string => Boolean(w)) : about ? [about] : [],
     };
   }, [skillListing, locale]);
   const skillPill = React.useCallback((skill: PickedSkill): PromptReference => {
+    pickedSkills.current.set(skill.name, skill);
     /* its title alone: what it does is in its hover card */
     const pill: PromptReference = { id: skillReferenceId(skill.name), kind: 'skill', label: skill.title ?? skillWords(skill.name, skill.description).title };
     setSkillRefs((list) => (list.some((p) => p.id === pill.id) ? list : [...list, pill]));
@@ -1017,8 +1022,8 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
             {/* the history left of the conversation, a line between them (the column widens by it: shell/bridge.ts) */}
             <div className={assetsOpen ? 'contents' : 'flex min-h-0 flex-1 gap-px bg-[var(--dock-line)]'}>
             {historyOpen && !assetsOpen ? (
-              <div className="w-[220px] shrink-0 bg-[var(--dock-pane)]">
-                <SessionHistory sessions={shownSessions} currentSessionId={sessionId} onSelectSession={onSelectSession} busy={active} />
+              <div className="w-[220px] shrink-0 bg-[var(--dock-shell)]">
+                <SessionHistory sessions={shownSessions} currentSessionId={sessionId} onSelectSession={onSelectSession} onNewSession={onNewSession} busy={active} />
               </div>
             ) : null}
             <aside className={`relative flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--dock-pane)] ${assetsOpen ? 'mt-auto shrink-0' : 'flex-1'}`}>
@@ -1043,7 +1048,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
                   >
                     {blank ? (
                       <div ref={thread.contentRef}>
-                        <ProjectStarters onSkill={(skill) => { pickSkill(skill); if (skill.installed) window.dispatchEvent(new Event(SKILLS_CHANGED)); }} />
+                        <ProjectStarters onSkill={pickSkill} />
                       </div>
                     ) : (
                       <div ref={thread.contentRef} className="min-w-0 shrink-0">

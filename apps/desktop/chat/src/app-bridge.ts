@@ -36,7 +36,7 @@ interface AppBridge {
   showExamples?(open?: CommunityItem): void;
   /** a skill picked in the examples, to be named in the message */
   /** a skill picked or tried in Studio's skills: named in the message being written (`newConversation`: in a new one) */
-  onUseSkill?(listener: (skill: { name: string; description: string; newConversation?: boolean }) => void): () => void;
+  onUseSkill?(listener: (skill: { name: string; description: string; title?: string; newConversation?: boolean }) => void): () => void;
   /** "Add a skill" in the examples */
   onAddSkill?(listener: () => void): () => void;
   /** name a skill in the message being written (as one picked in the examples) */
@@ -51,8 +51,6 @@ interface AppBridge {
   onStudioHover(listener: (ref: StudioRef | null) => void): () => void;
   /** the skills an empty conversation offers (Studio's, with a cover, not turned off), in their order */
   starterSkills(): Promise<StarterSkill[]>;
-  /** an official skill installed, to be used (Studio's Skills → Discover → Install) */
-  installSkill(name: string): Promise<void>;
   /** the project's files (Studio's listing), for the @ menu */
   projectFiles(): Promise<{ files: Array<{ path: string; kind: string; size: number }>; pages?: Array<{ path: string; size: number }> }>;
   onSelection(listener: (selection: StudioSelection) => void): () => void;
@@ -130,9 +128,8 @@ export interface SkillInfo {
   shown?: { title: Record<string, string>; summary: Record<string, string>; details?: Record<string, string> };
 }
 
-/** A skill offered as a card: its cover's address, its title by language (none: its name), and whether agents get
-    it yet (an official one is installed to be used). */
-export interface StarterSkill { name: string; description: string; cover: string; title: Record<string, string> | null; installed: boolean }
+/** A skill offered as a card: its cover's address, and its title by language (none: its name). */
+export interface StarterSkill { name: string; description: string; cover: string; title: Record<string, string> | null }
 
 /** A skill fetched from an address, before it is kept: `replaces`, one of the person's has its name. */
 export interface SkillPreview { name: string; description: string; scripts: string[]; size: number; replaces: boolean }
