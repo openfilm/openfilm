@@ -222,6 +222,9 @@ export interface FilmStageControl {
   placeLayers(to: { x?: number; y?: number; w?: number; h?: number }): void;
 }
 
+/** Layers to select on the picture, asked from elsewhere (see FilmStageSelectProps.selectRequest). */
+export interface FilmStageSelectRequest { layers: readonly { loc: string; clipLoc?: string }[]; seq: number }
+
 /** One thing in hand on the picture, for a reference: what it is, and its box (stage px) when it is a layer. */
 export interface StagePick { element: StageElement; box: StageBox | null }
 
@@ -369,10 +372,11 @@ interface FilmStageSelectProps {
   /** Select these clips whole (a marquee around several): the timeline selects them, and they are outlined here. */
   onSelectClips?: (locs: readonly string[]) => void;
   /**
-   * Select the layer at `loc` in the clip at `clipLoc` (the inspector's breadcrumb, the menu's Select parent). `seq`
-   * goes up each time, so the same layer can be asked for twice.
+   * Select the layers at `loc` in the clips at `clipLoc` (the inspector's breadcrumb, the menu's Select parent, a row
+   * of the Layers panel, the copies a paste made): one is that one, several are selected together. `seq` goes up each
+   * time, so the same layers can be asked for twice.
    */
-  selectRequest?: { loc: string; clipLoc?: string; seq: number } | null;
+  selectRequest?: FilmStageSelectRequest | null;
   /**
    * Set here: shows the clip in hand with a transform patch while the inspector drags its X / Y / scale / turn (null:
    * its own again). Only the clip in hand can be shown.
@@ -1442,19 +1446,23 @@ function FilmStageSelectImpl({
     return () => { controlRef.current = null; };
   }, [ask, controlRef, elementOf, syncGeomSoon]);
 
-  /* the inspector's breadcrumb (and Select parent): select the layer at that place; not found, nothing changes */
+  /* the inspector's breadcrumb (and Select parent), the Layers panel, a paste: select the layers at those places (the
+     ones not found are passed over; none found, nothing changes) */
   const requestSeq = selectRequest?.seq;
   React.useEffect(() => {
     if (!selectRequest) return;
-    const clipLoc = selectRequest.clipLoc ?? pickedRef.current?.element?.clipLoc;
-    const at = clipLoc ? parseFilmDocLoc(clipLoc) : null;
-    const clipId = at ? doc.tracks[at.track]?.clips[at.clip]?.id : pickedRef.current?.layer?.clip;
-    if (!clipId) return;
+    const asked = selectRequest.layers.map(({ loc, clipLoc: own }) => {
+      const clipLoc = own ?? pickedRef.current?.element?.clipLoc;
+      const at = clipLoc ? parseFilmDocLoc(clipLoc) : null;
+      const clipId = at ? doc.tracks[at.track]?.clips[at.clip]?.id : pickedRef.current?.layer?.clip;
+      return clipId ? ask<StageLayer>('layer', { clip: clipId, loc, any: true }) : Promise.resolve(null);
+    });
     const token = ++pressSeq.current;
-    void ask<StageLayer>('layer', { clip: clipId, loc: selectRequest.loc, any: true }).then((layer) => {
-      if (!layer || token !== pressSeq.current) return;
+    void Promise.all(asked).then((found) => {
+      const layers = found.filter((layer): layer is StageLayer => layer != null);
+      if (!layers.length || token !== pressSeq.current) return;
       setHover(null);
-      commitHit(hitOf(layer));
+      selectMany(layers);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestSeq]);

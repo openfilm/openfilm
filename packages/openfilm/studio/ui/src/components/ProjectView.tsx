@@ -101,7 +101,7 @@ import { SpendAsks } from './SpendAsks';
 import { ExportCenter } from './export/ExportCenter';
 import { PasteAttrsDialog } from './PasteAttrsDialog';
 import { ExportTray, type ExportTrayHandle } from './export/ExportTray';
-import { FilmStageSelect, type FilmStageControl, type LayerGeometry, type StageClipEdit, type StagePick } from './FilmStageSelect';
+import { FilmStageSelect, type FilmStageControl, type FilmStageSelectRequest, type LayerGeometry, type StageClipEdit, type StagePick } from './FilmStageSelect';
 import { openSection } from './inspector-fields';
 import { FontScopeContext, type FontScope } from '@/lib/use-fonts';
 import { stageMenu, stageRecoveryMenu, type StageArrangeResult, type StageMenuContext, type StagePictureActions } from './stage-menu';
@@ -1092,8 +1092,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /**
    * The copied layers pasted (lib/layer-clipboard pasteGoals): each written into a page (lib/layer-paste), into its
    * own page as itself, into another page as it looks, the files it loads brought in first from another project.
-   * Every page written and film.html's changes are one step: one undo takes them all back. The first pasted layer is
-   * selected, to be moved. Null, or why not.
+   * Every page written and film.html's changes are one step: one undo takes them all back. The pasted layers are
+   * selected together, to be moved as one. Null, or why not.
    */
   const pasteLayers = React.useCallback((intoLoc: string | null): Promise<string | null> => {
     const run = pasting.current.then(() => pasteNowRef.current(intoLoc));
@@ -1136,8 +1136,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const ops: Op[] = [];
     const steps: OutsideStep[] = [];
     const sources = new Map<string, string>();
-    let first: { clip: string; at: string } | null = null;
     const made: string[] = [];
+    /* each copy, by its clip, to be selected once drawn */
+    const copies: { clip: string; at: string }[] = [];
     const undoAll = async () => { for (const st of [...steps].reverse()) await st.undo().catch(() => null); };
     for (const goal of goals) {
       const into = doc.tracks.flatMap((track) => track.clips).find((c) => c.id === goal.clip)!;
@@ -1172,8 +1173,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       if (typeof written === 'string') { await undoAll(); return written; }
       steps.push(written.step);
       if (written.src !== into.src) sources.set(into.src, written.src);
-      const at = out.ats.find(Boolean);
-      if (!first && at) first = { clip: into.id, at };
+      for (const at of out.ats) if (at) copies.push({ clip: into.id, at });
       made.push(...out.ats);
     }
     const outside: OutsideStep = {
@@ -1187,7 +1187,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     /* a clip given a page of its own: the layers copied from it are of that page now */
     const clips = board.clips.map((c) => (sources.has(c.src) ? { ...c, src: sources.get(c.src)! } : c));
     keepLayerBoard({ ...board, clips, pasted: { spot, n, ats: made } });
-    if (first) await selectPasted(first.clip, first.at, 40);
+    if (copies.length) await selectPasted(copies, 40);
     return null;
   };
   /**
@@ -1256,14 +1256,21 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       return e instanceof Error ? e.message : String(e);
     }
   };
-  /* what was pasted is selected once the picture draws it (a new page loads first) */
-  const selectPasted = async (clipId: string, layer: string, tries = 20) => {
+  /* what was pasted is selected, all of it together, once the picture draws it (a new page loads first); the copies
+     the picture never draws in that time are left out */
+  const selectPasted = async (copies: readonly { clip: string; at: string }[], tries = 20) => {
+    let there: { loc: string; clipLoc: string }[] = [];
     for (let k = 0; k < tries; k++) {
-      const loc = (filmRef.current as unknown as FilmDoc | null)?.tracks.flatMap((tr, ti) => tr.clips.map((c, ci) => (c.id === clipId ? filmDocLoc(ti, ci) : null))).find(Boolean);
-      const there = loc ? await preview.current?.stage?.<object>('layer', { clip: clipId, loc: layer, any: true }) : null;
-      if (loc && there) { selectStageParent(layer, loc); return; }
+      const doc = filmRef.current as unknown as FilmDoc | null;
+      const found = await Promise.all(copies.map(async ({ clip, at }) => {
+        const clipLoc = doc?.tracks.flatMap((tr, ti) => tr.clips.map((c, ci) => (c.id === clip ? filmDocLoc(ti, ci) : null))).find(Boolean);
+        return clipLoc && await preview.current?.stage?.<object>('layer', { clip, loc: at, any: true }) ? { loc: at, clipLoc } : null;
+      }));
+      there = found.filter((x): x is { loc: string; clipLoc: string } => x != null);
+      if (there.length === copies.length) break;
       await new Promise((done) => window.setTimeout(done, 150));
     }
+    if (there.length) selectStageLayers(there);
   };
   /**
    * A paste (⌘V, the menu) at a time: onto the track given (`lane`; `pointed`: under the pointer, so copies from
@@ -1495,7 +1502,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const geometryStore = React.useMemo(() => createGeometryStore(), []);
   /* the viewer's zoom: only the picture and its fit button re-render as it changes (components/ViewerZoom) */
   const viewerZoom = React.useMemo(() => createViewerZoom(), []);
-  const [stageSelectRequest, setStageSelectRequest] = React.useState<{ loc: string; clipLoc?: string; seq: number } | null>(null);
+  const [stageSelectRequest, setStageSelectRequest] = React.useState<FilmStageSelectRequest | null>(null);
   const [inlineTextFailure, setInlineTextFailure] = React.useState<{ loc: string; value: string; failure: StageEditFailure; seq: number } | null>(null);
   const setSelectedLocs = React.useCallback((locs: readonly string[]) => {
     const want = new Set(locs);
@@ -1953,9 +1960,13 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (failed) toast.show(failed);
     return failed;
   }, [editBlocks, toast]);
-  const selectStageParent = React.useCallback((loc: string, clipLoc?: string) => {
-    setStageSelectRequest((cur) => ({ loc, ...(clipLoc ? { clipLoc } : {}), seq: (cur?.seq ?? 0) + 1 }));
+  /* layers selected on the picture from here (several: together) */
+  const selectStageLayers = React.useCallback((layers: FilmStageSelectRequest['layers']) => {
+    setStageSelectRequest((cur) => ({ layers, seq: (cur?.seq ?? 0) + 1 }));
   }, []);
+  const selectStageParent = React.useCallback((loc: string, clipLoc?: string) => {
+    selectStageLayers([{ loc, ...(clipLoc ? { clipLoc } : {}) }]);
+  }, [selectStageLayers]);
   const selectStageClip = React.useCallback((clipLoc: string) => { setStageElement(null); setSelectedLocs([clipLoc]); }, [setSelectedLocs]);
   /* a marquee on the picture around several clips: the timeline selects them */
   const selectStageClips = React.useCallback((locs: readonly string[]) => { setStageElement(null); setSelectedLocs([...locs]); }, [setSelectedLocs]);
