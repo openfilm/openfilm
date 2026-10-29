@@ -57,6 +57,7 @@ import { providersRoute } from './providers/index.mjs';
 import { captionRoutes, writeSubtitleStyle } from './captions.mjs';
 import { projectSettingsRoute } from './project-settings.mjs';
 import { markersRoute } from './markers.mjs';
+import { canvasRoute } from './canvas.mjs';
 import { transitionPageRoutes } from './transition-pages.mjs';
 import { createAsks, getRoute, subtitleTranscriber, subtitleTranslator } from './get.mjs';
 import { LOCATION_KEYS, chooseFolder, locations, usableFolder } from '../../src/locations.mjs';
@@ -584,6 +585,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (await projectSettingsRoute(req, res, project.path, rest)) return;
     /* its markers (markers.mjs): Studio's own, beside film.html */
     if (await markersRoute(req, res, project.path, rest)) return;
+    /* its canvas (canvas.mjs): Studio's own board beside the edit */
+    if (await canvasRoute(req, res, project.path, rest)) return;
     /* the page under a dip to white, kept once (transition-pages.mjs) */
     if (await transitionPageRoutes(req, res, project.path, rest)) return;
     if (!rest) {

@@ -1,0 +1,103 @@
+// @ts-check
+/**
+ * A project's canvas (`.film/canvas.json`): the board beside the edit where its material is laid out, notes written,
+ * and what leads to what drawn. Studio's own, beside film.html, not in it (SPEC §1: an editor's own state lives in
+ * `.film/`): nothing on it is in the film until it is put on the timeline.
+ *
+ * A node is a note (`text`) or a file of the project (`path`, project-relative), at `x`, `y` on the board, `w` wide
+ * (and `h` high, for a note). An edge goes from one node to another.
+ *
+ *   GET canvas                    → { nodes, edges }
+ *   PUT canvas { nodes, edges }   → { nodes, edges }: the whole board, as kept
+ */
+import { mkdir, readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { writeAtomic } from './atomic.mjs';
+import { HttpError, json, readJson } from './http.mjs';
+import { TOOL_DIR } from './projects.mjs';
+
+export const CANVAS_FILE = `${TOOL_DIR}/canvas.json`;
+const MAX_NODES = 2000;
+const MAX_EDGES = 4000;
+const TEXT_MAX = 20000;
+/** how far from the origin a node may be, and how big, in board pixels */
+const FAR = 1e6;
+const SIZE_MIN = 40;
+const SIZE_MAX = 8000;
+
+/**
+ * @typedef {{ id: string, x: number, y: number, w?: number, h?: number } & ({ text: string } | { path: string })} CanvasNode
+ * @typedef {{ id: string, from: string, to: string }} CanvasEdge
+ * @typedef {{ nodes: CanvasNode[], edges: CanvasEdge[] }} Canvas
+ */
+
+/** @param {unknown} v @returns {v is Record<string, unknown>} */
+const isRecord = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
+/** @param {unknown} v */
+const isId = (v) => typeof v === 'string' && v.length > 0 && v.length <= 64;
+/** @param {unknown} v */
+const place = (v) => (typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= FAR ? Math.round(v) : null);
+/** @param {unknown} v */
+const size = (v) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(Math.min(SIZE_MAX, Math.max(SIZE_MIN, v))) : undefined);
+/** A project-relative path that stays in the project and out of Studio's own folder. @param {unknown} v */
+const projectPath = (v) => typeof v === 'string' && v.length > 0 && v.length <= 1024 && !v.startsWith('/') && !v.includes('\\')
+  && !v.split('/').some((part) => part === '..' || part === '' || part === TOOL_DIR);
+
+/** The canvas as kept: what is not a node or an edge is left out, and so is an edge to a node that is not there. @param {unknown} raw @returns {Canvas} */
+export function parseCanvas(raw) {
+  /** @type {Canvas} */
+  const out = { nodes: [], edges: [] };
+  if (!isRecord(raw)) return out;
+  const ids = new Set();
+  for (const n of Array.isArray(raw.nodes) ? raw.nodes : []) {
+    if (out.nodes.length >= MAX_NODES) break;
+    if (!isRecord(n) || !isId(n.id) || ids.has(n.id)) continue;
+    const x = place(n.x);
+    const y = place(n.y);
+    if (x == null || y == null) continue;
+    const w = size(n.w);
+    const h = size(n.h);
+    const box = { id: /** @type {string} */ (n.id), x, y, ...(w ? { w } : {}), ...(h ? { h } : {}) };
+    if (projectPath(n.path)) out.nodes.push({ ...box, path: /** @type {string} */ (n.path) });
+    else if (typeof n.text === 'string') out.nodes.push({ ...box, text: n.text.slice(0, TEXT_MAX) });
+    else continue;
+    ids.add(n.id);
+  }
+  const edges = new Set();
+  for (const e of Array.isArray(raw.edges) ? raw.edges : []) {
+    if (out.edges.length >= MAX_EDGES) break;
+    if (!isRecord(e) || !isId(e.id) || !ids.has(e.from) || !ids.has(e.to) || e.from === e.to) continue;
+    const key = `${e.from}>${e.to}`;
+    if (edges.has(key)) continue;
+    edges.add(key);
+    out.edges.push({ id: /** @type {string} */ (e.id), from: /** @type {string} */ (e.from), to: /** @type {string} */ (e.to) });
+  }
+  return out;
+}
+
+/** @param {string} root @returns {Promise<Canvas>} */
+export async function readCanvas(root) {
+  try {
+    return parseCanvas(JSON.parse(await readFile(join(root, CANVAS_FILE), 'utf8')));
+  } catch { return { nodes: [], edges: [] }; }
+}
+
+/** @param {string} root @param {unknown} canvas @returns {Promise<Canvas>} */
+export async function writeCanvas(root, canvas) {
+  if (!isRecord(canvas) || !Array.isArray(canvas.nodes)) throw new HttpError(400, 'canvas: { nodes: [{ id, x, y, text | path }], edges: [{ id, from, to }] }');
+  const kept = parseCanvas(canvas);
+  await mkdir(dirname(join(root, CANVAS_FILE)), { recursive: true });
+  await writeAtomic(join(root, CANVAS_FILE), `${JSON.stringify(kept, null, 1)}\n`);
+  return kept;
+}
+
+/**
+ * `canvas` of a project. True when it was this route.
+ * @param {import('./http.mjs').Req} req @param {import('./http.mjs').Res} res @param {string} root @param {string} rest
+ */
+export async function canvasRoute(req, res, root, rest) {
+  if (rest !== 'canvas') return false;
+  if (req.method === 'GET') { json(res, 200, await readCanvas(root)); return true; }
+  if (req.method === 'PUT') { json(res, 200, await writeCanvas(root, await readJson(req))); return true; }
+  return false;
+}

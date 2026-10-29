@@ -7,7 +7,7 @@
  * are written one at a time (see editor/use-film.ts); the agent's writes come in through the folder's events.
  */
 import * as React from 'react';
-import { BookmarkPlus, ClipboardCopy, ClipboardPaste, GalleryVerticalEnd, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings, Settings2, TriangleAlert, Upload } from 'lucide-react';
+import { BookmarkPlus, ClipboardCopy, ClipboardPaste, Film as FilmIcon, GalleryVerticalEnd, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings, Settings2, TriangleAlert, Upload, Workflow } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
 import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type Op, type ProjectFilm, type ProjectSettings } from '@/api';
 import { useT } from '@/i18n';
@@ -146,6 +146,12 @@ const TIMELINE_SHARE = 0.45;
 const TIMELINE_SPARE = 48;
 const VIEWER_BESIDE_ASSETS = 440;
 const TITLE_MAX_CHARS = 56;
+/* the canvas beside the edit (components/canvas): loaded the first time it is opened */
+const CanvasView = React.lazy(() => import('./canvas/CanvasView'));
+/** whether a project shows its canvas, kept on this computer by project */
+const CANVAS_KEY = 'openfilm.canvas.open';
+const canvasShown = (projectId: string) => { try { return localStorage.getItem(`${CANVAS_KEY}:${projectId}`) === '1'; } catch { return false; } };
+
 const TOP_BTN =
   'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]';
 
@@ -371,6 +377,17 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     [rawListing, facts, proxies],
   );
   React.useEffect(() => { if (listing) warmProjectMedia(projectId, listing, mediaSources); }, [projectId, listing, mediaSources]);
+  /* the canvas over the panes, or the edit: by project, as left */
+  const [canvasOpen, setCanvasOpenState] = React.useState(() => canvasShown(projectId));
+  /* opening it stops the film playing (the panes under it are hidden): the player's pause, set once it is made */
+  const pauseRef = React.useRef<() => void>(() => {});
+  React.useEffect(() => { setCanvasOpenState(canvasShown(projectId)); }, [projectId]);
+  const setCanvasOpen = React.useCallback((open: boolean) => {
+    if (open) pauseRef.current();
+    setCanvasOpenState(open);
+    try { localStorage.setItem(`${CANVAS_KEY}:${projectId}`, open ? '1' : '0'); } catch { /* for this launch only */ }
+  }, [projectId]);
+  const canvasFiles = React.useMemo(() => (listing ? [...listing.files, ...listing.pages] : []), [listing]);
   /* a file of the media pane as a reference: shown by its poster (a video, a page) or itself (a still, on Studio's
      origin: see stillUrl) */
   const refOfFile = React.useCallback((file: WorkspaceResource) => fileRef(file, file.kind === 'mg' ? mediaSources.pagePoster?.(file)
@@ -488,6 +505,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     preview.current?.seek(pictureAt(player.current.time()));
     for (const fn of listeners.current) fn();
   }, []);
+  pauseRef.current = pause;
   const toggle = React.useCallback(() => {
     stopShuttle();
     if (player.current.playing) { pause(); return; }
@@ -1084,16 +1102,21 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const target = timelineCommands.current?.target() ?? null;
     const at = how.atPlayhead || target != null ? snapToFrame(timeRef.current) : 'end';
     const plan = placeMedia(editModel(), { file, range: how.range ?? null, target, at, ...(how.mode ? { mode: how.mode } : {}), ...switchesOf(readTimelinePrefs()), stage: stageRef.current });
-    if ('error' in plan) { toast.show(plan.error === 'locked' ? t('timeline.trackLocked') : t('timeline.dropNotClip')); return; }
+    if ('error' in plan) { toast.show(plan.error === 'locked' ? t('timeline.trackLocked') : t('timeline.dropNotClip')); return false; }
     const failed = await edit(plan.ops, 'history.stepDrop');
-    if (failed) { toast.show(failed); return; }
+    if (failed) { toast.show(failed); return false; }
     if (how.atPlayhead) {
       const end = plan.startMs + plan.durMs;
       pause();
       if (end <= player.current.duration * 1000 + 1) seek(end);
       else seekWhenLonger.current = end;
     }
+    return true;
   }, [editModel, edit, pause, seek, t, toast]);
+  /* a file on the canvas put on the timeline: at its end, as the Assets' "+" does when nothing is picked */
+  const addFromCanvas = React.useCallback(async (file: WorkspaceResource) => {
+    if (await addMedia(file)) toast.show(t('canvas.added'));
+  }, [addMedia, t, toast]);
   /*
    * A thing of Saved put on the timeline without a drag (its "+", Enter, the source viewer's `,` and `.`): brought into
    * the project first, then as a file of the project goes (`how`), or a clip as it was saved, at the playhead on the
@@ -2770,6 +2793,17 @@ export function ProjectView({ projectId, onProject, onLeave }: {
               <TabStrip onRename={renameTab} onNew={() => setProjectsOpen(true)} onCoverFromFrame={coverFromFrame} maxLength={TITLE_MAX_CHARS} />
             ) : <div className="min-w-0 flex-1" />}
             <div className="pointer-events-auto flex min-w-0 items-center justify-end gap-1">
+              {/* the edit or the canvas, in the panes' place */}
+              <div role="radiogroup" aria-label={t('canvas.title')} className="mr-1 flex items-center gap-0.5 rounded-lg bg-[var(--bg-hover)] p-0.5">
+                {([[false, 'canvas.edit', FilmIcon], [true, 'canvas.title', Workflow]] as const).map(([open, label, Icon]) => (
+                  <Tooltip key={label} label={t(label)} side="bottom">
+                    <button type="button" role="radio" aria-checked={canvasOpen === open} aria-label={t(label)} onClick={() => setCanvasOpen(open)}
+                      className={`flex h-[22px] w-[26px] items-center justify-center rounded-md transition ${canvasOpen === open ? 'bg-[var(--surface)] text-[var(--text)] shadow-[0_1px_2px_rgba(0,0,0,0.15)]' : 'text-[var(--text-dim)] hover:text-[var(--text)]'}`}>
+                      <Icon size={14} />
+                    </button>
+                  </Tooltip>
+                ))}
+              </div>
               <ProjectLayoutMenu className={TOP_BTN}
                 /* an app that keeps the media in its own panel opens it there, from its own button: not a pane of Studio's */
                 assets={hostAssets ? null : assetsPaneOpen} onAssets={setAssetsPaneOpen}
@@ -2802,7 +2836,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
           {/* the panes, edge to edge on the board of lines (--dock-line): a line under the top bar, and one beside the
               app's own panel (lib/host.ts `panel`), which sits left of this, under the top bar: room left for it */}
           <section ref={dockColRef} className="relative flex min-h-0 min-w-0 flex-col bg-[var(--dock-line)]"
-            style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...(hostPanel?.open ? { marginLeft: HOST_PANEL_WIDTH, paddingLeft: DOCK_GAP } : null) }}>
+            style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...(hostPanel?.open ? { marginLeft: HOST_PANEL_WIDTH, paddingLeft: DOCK_GAP } : null), ...(canvasOpen ? { visibility: 'hidden' } : null) }}>
             <div ref={viewerRowRef} className="relative flex min-h-0 min-w-0 flex-1 flex-row">
               {!hostAssets && assetsPaneOpen && assetsFit ? (
                 <>
@@ -3183,6 +3217,17 @@ export function ProjectView({ projectId, onProject, onLeave }: {
               </div>
             ) : null}
           </section>
+          {/* the canvas in the panes' place: they stay laid out as they were, hidden under it */}
+          {canvasOpen ? (
+            <div className="relative z-[2] flex min-h-0 min-w-0 bg-[var(--dock-line)]"
+              style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...(hostPanel?.open ? { marginLeft: HOST_PANEL_WIDTH, paddingLeft: DOCK_GAP } : null) }}>
+              <div className="relative min-h-0 min-w-0 flex-1 bg-[var(--dock-pane)]">
+                <React.Suspense fallback={null}>
+                  <CanvasView projectId={projectId} files={canvasFiles} sources={mediaSources} onAddToFilm={(file) => { void addFromCanvas(file); }} onError={toast.showError} />
+                </React.Suspense>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
 

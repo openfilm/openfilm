@@ -159,6 +159,9 @@ export const api = {
   /** its markers (`.film/markers.json`, lib/markers): the whole list, read and written */
   markers: (id: string) => call<{ markers: unknown }>(`${p(id)}/markers`).then((r) => r.markers),
   putMarkers: (id: string, markers: unknown[]) => call<{ markers: unknown }>(`${p(id)}/markers`, { method: 'PUT', json: { markers } }).then((r) => r.markers),
+  /** its canvas (`.film/canvas.json`, components/canvas): the whole board, read and written */
+  canvas: (id: string) => call<{ nodes: unknown; edges: unknown }>(`${p(id)}/canvas`),
+  putCanvas: (id: string, canvas: { nodes: unknown[]; edges: unknown[] }) => call<{ nodes: unknown; edges: unknown }>(`${p(id)}/canvas`, { method: 'PUT', json: canvas }),
   /** the loudness of a part of a file's sound (its own seconds): integrated LUFS (null: silent) and true peak */
   loudness: (id: string, path: string, from: number, to: number) => call<{ lufs: number | null; peak: number | null }>(
     `${p(id)}/media?what=loudness&path=${encodeURIComponent(path)}&from=${from}&to=${to}`,
