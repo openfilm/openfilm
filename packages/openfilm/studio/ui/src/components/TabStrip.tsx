@@ -18,6 +18,12 @@ import { tabsToClose } from '@/lib/tab-menu';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import { Tooltip } from './Tooltip';
 
+/**
+ * Room on the top bar's left for the window's controls (lib/host.ts sets --titlebar-logo-x to where they end), less the
+ * bar's padding and the gap after it: the tabs start just right of them, as a browser's do.
+ */
+export const TITLEBAR_LEFT = 'max(0px, calc(var(--titlebar-logo-x) - 8px))';
+
 const TAB_TYPE = 'application/x-openfilm-tab';
 /* a second click this soon after this page's tab came to front ends a double-click begun on it while it was behind */
 const DOUBLE_CLICK_MS = 500;

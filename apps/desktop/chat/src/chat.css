@@ -559,6 +559,26 @@ body {
     opacity: 0.35;
   }
 }
+/* a conversation at work: its light breathes (ConversationSessionBar's StatusLight) */
+@keyframes openfilm-breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+.status-breathe {
+  animation: openfilm-breathe 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .status-breathe {
+    animation: none;
+  }
+}
 @keyframes openfilm-rise {
   from {
     opacity: 0;

@@ -67,7 +67,7 @@ import { cueAt, filmSubtitleStyleFor, filmSubtitleWords, sameFilmSubtitleLanguag
 import { DEFAULT_INSPECTOR, DOCK_GAP, DockPaneDivider, MIN_DOCK_H, MIN_INSPECTOR, MIN_STAGE_H, MIN_VIEWER, PaneDivider, usePaneSize } from './PaneDivider';
 import { PANE_BAR, PANE_BTN_ON, PANE_TOGGLE, PANE_TOGGLE_ICON } from './dock-pane-bar';
 import { Tooltip } from './Tooltip';
-import { TabStrip } from './TabStrip';
+import { TITLEBAR_LEFT, TabStrip } from './TabStrip';
 import { ExamplesDialog } from './ExamplesGallery';
 import { UpdateButton, WebUpdateButton } from './UpdateButton';
 import { MediaPool, type ImportProgress } from './MediaPool';
@@ -2747,8 +2747,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 )}
               </div>
             </div>}
-            <div aria-hidden className="shrink-0 self-stretch" style={{ width: 'var(--titlebar-logo-x)' }} />
-            <div className="pointer-events-auto relative flex min-w-0 items-center gap-1">
+            {/* the window's controls over this; what follows starts just right of them */}
+            <div aria-hidden className="shrink-0 self-stretch" style={{ width: TITLEBAR_LEFT }} />
+            <div className="pointer-events-auto relative flex min-w-0 items-center gap-1 empty:hidden">
               {inTabs ? null : <Tooltip label={t('nav.projects')} side="bottom">
                 <button type="button" aria-label={t('nav.projects')} onClick={() => setProjectsOpen((v) => !v)}
                   className={`${TOP_BTN} ${projectsOpen ? 'bg-[var(--bg-hover)] text-[var(--text)]' : ''}`}>

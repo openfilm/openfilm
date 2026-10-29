@@ -265,7 +265,11 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectKey]);
 
-  const ordered = React.useMemo(() => [...turns].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt)), [turns]);
+  /* the shown conversation's only: for the moment after another tab is shown, `turns` are still the last one's */
+  const ordered = React.useMemo(
+    () => turns.filter((turn) => turn.sessionId === sessionId).sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt)),
+    [turns, sessionId],
+  );
   const asset = ordered.at(-1);
   const active = isActive(asset);
   const blank = ordered.length === 0;
@@ -816,12 +820,42 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     else if (queued && !active) submitFollowUp();
   }, [queued, active, sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* each tab its own conversation, its agent at work whichever is shown: a new one, or another, any time */
-  const onNewSession = () => {
+  /* the conversations whose turn runs now, by the turn: their lights breathe, and they cannot be archived meanwhile */
+  const allRunning = useRunningLocalTurns();
+  const running = React.useMemo(
+    () => new Map(allRunning.filter((r) => r.projectId === projectKey).map((r) => [r.sessionId, r.id])),
+    [allRunning, projectKey],
+  );
+  /* those that stopped while another was shown, and how their last turn ended: lit until shown */
+  const [unseen, setUnseen] = React.useState<Map<string, 'done' | 'error'>>(() => new Map());
+  const wasRunning = React.useRef(running);
+  React.useEffect(() => {
+    const ended = [...wasRunning.current.keys()].filter((id) => !running.has(id) && id !== shownSession.current);
+    wasRunning.current = running;
+    if (!ended.length) return;
+    setUnseen((map) => {
+      const next = new Map(map);
+      for (const id of ended) next.set(id, loadLocalAgentTurns(projectKey, id).at(-1)?.turn.status === 'error' ? 'error' : 'done');
+      return next;
+    });
+  }, [running, projectKey]);
+  React.useEffect(() => {
+    setUnseen((map) => {
+      if (!map.has(sessionId)) return map;
+      const next = new Map(map);
+      next.delete(sessionId);
+      return next;
+    });
+  }, [sessionId]);
+  /* each tab its own conversation, its agent at work whichever is shown: a new one, or another, any time; none while
+     the one shown is new itself (false) */
+  const onNewSession = (): boolean => {
+    if (blank && !running.has(sessionId)) { composerRef.current?.focus(); return false; }
     const id = newSession().id;
     setTabs((ids) => [...ids.slice(0, ids.indexOf(sessionId) + 1), id, ...ids.slice(ids.indexOf(sessionId) + 1)]);
     setSessionId(id);
     composerRef.current?.focus();
+    return true;
   };
   newConversation.current = onNewSession;
   const onSelectSession = (id: string) => { setSessionId(id); composerRef.current?.focus(); };
@@ -837,14 +871,12 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     setTabs(rest);
   };
   const closeOtherTabs = (id: string) => { setTabs([id]); if (id !== sessionId) setSessionId(id); };
+  const moveTab = (id: string, to: number) => setTabs((ids) => {
+    const rest = ids.filter((x) => x !== id);
+    return ids.includes(id) && to >= 0 ? [...rest.slice(0, to), id, ...rest.slice(to)] : ids;
+  });
   const onRenameSession = (id: string, title: string) => editSession(id, { title });
   const onPinSession = (id: string, pinned: boolean) => editSession(id, { pinned });
-  /* the conversations whose turn runs now, by the turn: their tabs turn, and they cannot be archived meanwhile */
-  const allRunning = useRunningLocalTurns();
-  const running = React.useMemo(
-    () => new Map(allRunning.filter((r) => r.projectId === projectKey).map((r) => [r.sessionId, r.id])),
-    [allRunning, projectKey],
-  );
   /* archived: its tab closed too */
   const onArchiveSession = (id: string, archived: boolean) => {
     if (archived && running.has(id)) return;
@@ -1082,10 +1114,12 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
                   tabs={tabs}
                   currentSessionId={sessionId}
                   running={running}
+                  unseen={unseen}
                   onSelectSession={onSelectSession}
                   onNewSession={onNewSession}
                   onCloseTab={closeTab}
                   onCloseOtherTabs={closeOtherTabs}
+                  onMoveTab={moveTab}
                   onRenameSession={onRenameSession}
                   onPinSession={onPinSession}
                   onArchiveSession={onArchiveSession}
