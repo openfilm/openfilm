@@ -238,8 +238,18 @@ export const enUS = {
     untitledSession: 'Untitled chat',
   },
   projectMenu: {
+    archive: 'Archive',
+    archived: 'Archived',
+    hideChats: 'Hide chats',
+    more: 'More',
     newSession: 'New session',
+    pin: 'Pin',
+    pinned: 'Pinned',
     rename: 'Rename',
+    running: 'Working',
+    showChats: 'Show chats',
+    unarchive: 'Unarchive',
+    unpin: 'Unpin',
   },
   sidebar: {
     searchEarlier: 'Earlier',

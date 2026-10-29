@@ -237,8 +237,18 @@ export const es: Words = {
     untitledSession: 'Chat sin título',
   },
   projectMenu: {
+    archive: 'Archivar',
+    archived: 'Archivados',
+    hideChats: 'Ocultar chats',
+    more: 'Más',
     newSession: 'Nueva sesión',
+    pin: 'Fijar',
+    pinned: 'Fijados',
     rename: 'Cambiar nombre',
+    running: 'Trabajando',
+    showChats: 'Mostrar chats',
+    unarchive: 'Desarchivar',
+    unpin: 'Dejar de fijar',
   },
   sidebar: {
     searchEarlier: 'Anteriores',

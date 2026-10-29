@@ -20,6 +20,10 @@ export interface ProjectSessionItem {
   agentSessions?: Record<string, string>;
   /** The skills whose SKILL.md each agent's session has had in this conversation (lib/skill-pages), by agent. */
   skillsGiven?: SkillsGiven;
+  /** Kept on top of the history, under Pinned. */
+  pinned?: boolean;
+  /** Out of the history's days, under Archived at its foot; still opened from there. */
+  archived?: boolean;
 }
 
 export type SessionRecencyKey = 'today' | 'yesterday' | 'week' | 'earlier';

@@ -185,6 +185,16 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
       return out;
     });
   }, [projectKey]);
+  /* renamed, pinned or archived: changed where it is, its day kept (touchSession's is for being talked in) */
+  const editSession = React.useCallback((id: string, patch: Partial<ProjectSessionItem>) => {
+    setSessions((list) => {
+      const out = list.some((s) => s.id === id)
+        ? list.map((s) => (s.id === id ? { ...s, ...patch } : s))
+        : [{ ...newSession(), id, ...patch }, ...list];
+      saveSessions(projectKey, out);
+      return out;
+    });
+  }, [projectKey]);
 
   /* ── turns: the ones kept on this Mac, and the one running now ── */
   const [turns, setTurns] = React.useState<Turn[]>([]);
@@ -795,7 +805,15 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   newConversation.current = onNewSession;
   const onSelectSession = (id: string) => { if (!active) setSessionId(id); };
   const [historyOpen, setHistoryOpen] = React.useState(() => app.historyOpen());
-  const onRenameSession = async (title: string) => { touchSession(sessionId, () => ({ title })); };
+  const onRenameSession = (id: string, title: string) => editSession(id, { title });
+  const onPinSession = (id: string, pinned: boolean) => editSession(id, { pinned });
+  /* the conversation shown, archived: a new one in its place (not while its turn runs) */
+  const onArchiveSession = (id: string, archived: boolean) => {
+    if (archived && id === sessionId && active) return;
+    editSession(id, { archived });
+    if (archived && id === sessionId) onNewSession();
+  };
+  const toggleHistory = () => { app.setHistoryOpen(!historyOpen); setHistoryOpen(!historyOpen); };
   const shownSessions = React.useMemo(
     () => (sessions.some((s) => s.id === sessionId) ? sessions : [{ ...newSession(), id: sessionId }, ...sessions]),
     [sessions, sessionId],
@@ -1023,7 +1041,16 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
             <div className={assetsOpen ? 'contents' : 'flex min-h-0 flex-1 gap-px bg-[var(--dock-line)]'}>
             {historyOpen && !assetsOpen ? (
               <div className="w-[220px] shrink-0 bg-[var(--dock-shell)]">
-                <SessionHistory sessions={shownSessions} currentSessionId={sessionId} onSelectSession={onSelectSession} onNewSession={onNewSession} busy={active} />
+                <SessionHistory
+                  sessions={shownSessions}
+                  currentSessionId={sessionId}
+                  onSelectSession={onSelectSession}
+                  onNewSession={onNewSession}
+                  onRenameSession={onRenameSession}
+                  onPinSession={onPinSession}
+                  onArchiveSession={onArchiveSession}
+                  busy={active}
+                />
               </div>
             ) : null}
             <aside className={`relative flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--dock-pane)] ${assetsOpen ? 'mt-auto shrink-0' : 'flex-1'}`}>
@@ -1032,10 +1059,11 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
                 <ConversationSessionBar
                   sessions={shownSessions}
                   currentSessionId={sessionId}
-                  onNewSession={onNewSession}
                   onRenameSession={onRenameSession}
+                  onPinSession={onPinSession}
+                  onArchiveSession={onArchiveSession}
                   historyOpen={historyOpen}
-                  onToggleHistory={() => { app.setHistoryOpen(!historyOpen); setHistoryOpen(!historyOpen); }}
+                  onToggleHistory={toggleHistory}
                   busy={active}
                 />
                 <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">

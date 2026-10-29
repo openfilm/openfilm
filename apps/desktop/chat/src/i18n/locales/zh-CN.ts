@@ -237,8 +237,18 @@ export const zhCN: Words = {
     untitledSession: '未命名对话',
   },
   projectMenu: {
+    archive: '归档',
+    archived: '已归档',
+    hideChats: '隐藏会话列表',
+    more: '更多',
     newSession: '新会话',
+    pin: '置顶',
+    pinned: '已置顶',
     rename: '重命名',
+    running: '进行中',
+    showChats: '显示会话列表',
+    unarchive: '取消归档',
+    unpin: '取消置顶',
   },
   sidebar: {
     searchEarlier: '更早',

@@ -237,8 +237,18 @@ export const ja: Words = {
     untitledSession: '無題のチャット',
   },
   projectMenu: {
+    archive: 'アーカイブ',
+    archived: 'アーカイブ済み',
+    hideChats: 'チャット一覧を隠す',
+    more: 'その他',
     newSession: '新しいセッション',
+    pin: 'ピン留め',
+    pinned: 'ピン留め',
     rename: '名前を変更',
+    running: '作業中',
+    showChats: 'チャット一覧を表示',
+    unarchive: 'アーカイブを解除',
+    unpin: 'ピン留めを外す',
   },
   sidebar: {
     searchEarlier: 'それ以前',

@@ -233,8 +233,18 @@ export const ko: Words = {
     untitledSession: '제목 없는 채팅',
   },
   projectMenu: {
+    archive: '보관',
+    archived: '보관됨',
+    hideChats: '채팅 목록 숨기기',
+    more: '더 보기',
     newSession: '새 세션',
+    pin: '고정',
+    pinned: '고정됨',
     rename: '이름 바꾸기',
+    running: '작업 중',
+    showChats: '채팅 목록 보기',
+    unarchive: '보관 해제',
+    unpin: '고정 해제',
   },
   sidebar: {
     searchEarlier: '이전',
