@@ -49,6 +49,7 @@ import { useLoadedThumbs } from '@/lib/use-loaded-thumbs';
 import { droppedOverrides, overrideTarget, undoneFields, type DroppedEdits, type PersonEdit } from '@/lib/dropped-overrides';
 import { filmFrameBox, type FilmFrameId } from '@/lib/film-frame';
 import { canvasFor, firstPictureSize, fitToCanvas } from '@/lib/canvas-fit';
+import { decodes, type PlayCheck } from '@/lib/decodes';
 import { factsOfProbe, mediaListingOf, resourceKindOf, srcHitsAsset, warmProjectMedia, type MediaListing, type MediaProxy, type MediaResult, type MediaSources, type WorkspaceResource } from '@/lib/workspace-resources';
 import { BrandLoadingScreen } from './BrandLoadingScreen';
 import { BrandLogo } from './BrandLogo';
@@ -337,7 +338,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   mediaSourcesRef.current = mediaSources;
   /*
    * proxies (studio/server/proxies.mjs): asked for the project's heavy footage whenever its files change or the
-   * preferences do, followed while they are made. One ready for footage on the film, or other preferences, load the
+   * preferences do, followed while they are made, and for the footage this browser does not decode (lib/decodes.ts),
+   * whose proxy is all it shows, proxies on or off. One ready for footage on the film, or other preferences, load the
    * preview again behind the picture, so it plays what it should.
    */
   const [proxies, setProxies] = React.useState<Record<string, MediaProxy>>({});
@@ -352,17 +354,24 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (!rawListing) return undefined;
     let alive = true;
     let timer = 0;
-    let before: Record<string, MediaProxy> = {};
+    let before: Record<string, MediaProxy> | null = null;
+    let undecoded: string[] = [];
     const ask = async () => {
-      const answer = await fetch(`/api/projects/${encodeURIComponent(projectId)}/proxies`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
-        .then((r) => (r.ok ? r.json() : null), () => null) as { states?: Record<string, MediaProxy> } | null;
+      const answer = await fetch(`/api/projects/${encodeURIComponent(projectId)}/proxies`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ undecoded }) })
+        .then((r) => (r.ok ? r.json() : null), () => null) as { states?: Record<string, MediaProxy>; checks?: Record<string, PlayCheck> } | null;
       if (!alive || !answer) return;
       const states = answer.states ?? {};
       setProxies(states);
-      const now = Object.keys(states).filter((path) => states[path]!.state === 'ready' && before[path] && before[path]!.state !== 'ready');
+      /* made since the last answer, or found made for footage just said not to decode (the server had not heard yet) */
+      const now = before ? Object.keys(states).filter((path) => states[path]!.state === 'ready' && (before![path]?.state !== 'ready' || (states[path]!.needed && !before![path]?.needed))) : [];
       if (now.some((path) => blocksRef.current.some((b) => b.src && srcHitsAsset(b.src, path)))) preview.current?.reload?.();
       before = states;
-      if (Object.values(states).some((s) => s.state === 'waiting' || s.state === 'making')) timer = window.setTimeout(() => { void ask(); }, 1500);
+      const found = (await Promise.all(Object.entries(answer.checks ?? {}).map(async ([path, check]) => ((await decodes(check)) ? [] : [path])))).flat();
+      if (!alive) return;
+      const told = found.every((path) => undecoded.includes(path));
+      undecoded = found;
+      if (!told) void ask();
+      else if (Object.values(states).some((s) => s.state === 'waiting' || s.state === 'making')) timer = window.setTimeout(() => { void ask(); }, 1500);
     };
     void ask();
     return () => { alive = false; window.clearTimeout(timer); };
@@ -2064,6 +2073,18 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       .find((b) => b.src && mediaTrouble.get(b.src) === 'missing' && timeMs >= b.startMs && timeMs < b.endMs);
     return hit?.src ? hit.src.split('/').pop() ?? hit.src : null;
   }, [mediaTrouble, timelineTracks, timeMs]);
+  /** The footage of a clip under the playhead (on a track that is seen) that this browser does not decode and whose
+      proxy is not made yet (or could not be): the viewer says so over the picture, which is empty meanwhile. */
+  const preparingHere = React.useMemo(() => {
+    const pending = Object.entries(proxies).filter(([, p]) => p.needed && p.state !== 'ready');
+    if (!pending.length) return null;
+    for (const b of timelineTracks.filter((tr) => !tr.hidden).flatMap((tr) => tr.blocks)) {
+      if (!b.src || timeMs < b.startMs || timeMs >= b.endMs) continue;
+      const hit = pending.find(([path]) => srcHitsAsset(b.src!, path));
+      if (hit) return { path: hit[0], ...hit[1] };
+    }
+    return null;
+  }, [proxies, timelineTracks, timeMs]);
   const relinkCandidates = React.useCallback((src: string): string[] => {
     const name = src.split('/').pop()?.toLowerCase();
     return name ? (rawListing?.files ?? []).filter((f) => f.path.split('/').pop()?.toLowerCase() === name && f.path !== src).map((f) => f.path) : [];
@@ -2978,6 +2999,25 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                         {missingHere && !fullscreen ? (
                           <div data-preview-missing="" className="pointer-events-none absolute left-2 top-2 z-10 max-w-[80%] truncate rounded-[4px] bg-black/75 px-2 py-1 text-[11px] text-white">
                             {t('project.previewMissing').replace('{file}', missingHere)}
+                          </div>
+                        ) : null}
+                        {preparingHere ? (
+                          <div data-preview-preparing="" className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-4">
+                            <div role="status" className="flex max-w-[min(26rem,85%)] flex-col items-center gap-1.5 rounded-lg bg-black/70 px-4 py-3 text-center text-white">
+                              <span className={`break-words text-[13px] ${preparingHere.state === 'failed' ? 'text-white/85' : 'text-sweep relative'}`}>
+                                {preparingHere.state === 'failed' ? t('project.previewPrepareFailed').replace('{reason}', preparingHere.reason ?? '')
+                                  : preparingHere.state === 'making' ? t('project.previewPreparing').replace('{p}', String(Math.round((preparingHere.ratio ?? 0) * 100)))
+                                    : t('project.previewPreparingWait')}
+                              </span>
+                              {preparingHere.state !== 'failed' ? (
+                                <span className="h-0.5 w-40 max-w-full overflow-hidden rounded-full bg-white/15">
+                                  <span className="block h-full rounded-full bg-white/70 transition-[width] duration-500" style={{ width: `${Math.round((preparingHere.state === 'making' ? preparingHere.ratio ?? 0 : 0) * 100)}%` }} />
+                                </span>
+                              ) : null}
+                              <span className="text-[11px] leading-snug text-white/55">
+                                {preparingHere.state === 'failed' ? preparingHere.path.split('/').pop() : t('project.previewPreparingWhy').replace('{file}', preparingHere.path.split('/').pop() ?? preparingHere.path)}
+                              </span>
+                            </div>
                           </div>
                         ) : null}
                         {!viewerReady && !empty && !previewError ? (

@@ -1,6 +1,6 @@
 import { Download, File as FileIcon } from 'lucide-react';
 import { useT } from '@/i18n';
-import { formatClipDuration, formatFileSize, type WorkspaceResource, type WorkspaceResourceKind } from '@/lib/workspace-resources';
+import { formatClipDuration, formatFileSize, proxyText, type WorkspaceResource, type WorkspaceResourceKind } from '@/lib/workspace-resources';
 import { InspectorPanel } from './InspectorPanel';
 import { KIND_ICON } from './MediaPreview';
 
@@ -73,15 +73,8 @@ function AssetFields({ file }: { file: WorkspaceResource }) {
   if (file.mtimeMs) {
     rows.push({ label: t('assets.propModified'), value: new Date(file.mtimeMs).toLocaleString() });
   }
-  /* heavy footage's proxy for the preview: being made, ready, or not to be */
-  if (file.proxy) {
-    const { state, ratio } = file.proxy;
-    rows.push({
-      label: t('assets.propProxy'),
-      value: state === 'making' ? t('media.proxyMaking').replace('{p}', String(Math.round((ratio ?? 0) * 100)))
-        : state === 'waiting' ? t('media.proxyWaiting') : state === 'failed' ? t('media.proxyFailed') : t('media.proxyReady'),
-    });
-  }
+  /* heavy footage's proxy for the preview, or the copy this browser plays it from: being made, ready, or not to be */
+  if (file.proxy) rows.push({ label: t('assets.propProxy'), value: proxyText(file.proxy, t) });
   /* a link to media kept elsewhere (a NAS): where it is, or that it cannot be reached now */
   if (file.link) {
     rows.push({ label: t('assets.propLinked'), value: file.link.missing ? `${file.link.to} (${t('media.linkMissing')})` : file.link.to });

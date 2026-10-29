@@ -60,7 +60,20 @@ export interface SavedBundle {
   overrides?: readonly FilmOverride[];
 }
 
-export interface MediaProxy { state: 'waiting' | 'making' | 'ready' | 'failed'; ratio?: number }
+/** A proxy of footage for the preview: `needed` when this browser does not decode the footage (nothing shows without
+    it); `reason`, why it could not be made. */
+export interface MediaProxy { state: 'waiting' | 'making' | 'ready' | 'failed'; ratio?: number; needed?: boolean; reason?: string }
+
+/** What to say of a proxy (`t`: the UI's words): of one this browser needs, that the footage is being prepared to play. */
+export function proxyText(proxy: MediaProxy, t: (path: string) => string): string {
+  const percent = String(Math.round((proxy.ratio ?? 0) * 100));
+  if (proxy.needed) {
+    return proxy.state === 'making' ? t('media.copyMaking').replace('{p}', percent) : proxy.state === 'waiting' ? t('media.copyWaiting')
+      : proxy.state === 'failed' ? t('media.copyFailed').replace('{reason}', proxy.reason ?? '') : t('media.copyReady');
+  }
+  return proxy.state === 'making' ? t('media.proxyMaking').replace('{p}', percent) : proxy.state === 'waiting' ? t('media.proxyWaiting')
+    : proxy.state === 'failed' ? (proxy.reason ? t('media.proxyFailedWhy').replace('{reason}', proxy.reason) : t('media.proxyFailed')) : t('media.proxyReady');
+}
 
 /** Where a linked file or folder is kept (`to`, a full path); `missing`: it cannot be reached (a NAS that is off). */
 export interface MediaLink { to: string; missing?: boolean }

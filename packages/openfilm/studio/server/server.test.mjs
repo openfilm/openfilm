@@ -376,7 +376,7 @@ test('the preview plays heavy footage from its proxy once made; what the file is
     answer = await (await api(`/api/projects/${project.id}/proxies`, { method: 'POST', body: {} })).json();
     if (answer.states['assets/big.mp4']?.state !== 'ready') await new Promise((r) => setTimeout(r, 150));
   }
-  assert.deepEqual(answer, { on: true, height: 720, states: { 'assets/big.mp4': { state: 'ready' } } });
+  assert.deepEqual(answer, { on: true, height: 720, states: { 'assets/big.mp4': { state: 'ready' } }, checks: {} });
   const { folder } = await (await api(`/api/projects/${project.id}`)).json();
   const size = async (q = '') => (await (await fetch(`${folder}assets/big.mp4${q}`)).arrayBuffer()).byteLength;
   const played = await size();
@@ -386,6 +386,20 @@ test('the preview plays heavy footage from its proxy once made; what the file is
   assert.deepEqual(await (await api('/api/prefs', { method: 'PATCH', body: { proxies: { on: false } } })).json(), { proxies: { on: false, height: 720 }, seenVersion: null, projectsFolder: null, keys: null, autoVersions: false, showAutoVersions: false });
   assert.equal(await size(), statSync(big).size);
   assert.deepEqual((await (await api(`/api/projects/${project.id}/proxies`, { method: 'POST', body: {} })).json()).states, {});
+  /* footage the editor's browser does not decode: its proxy is made and played, off as on */
+  const hevc = join(project.path, 'assets', 'drone.mp4');
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=1280x720:rate=25:duration=1', '-c:v', 'libx265', '-pix_fmt', 'yuv420p10le', '-tag:v', 'hvc1', '-x265-params', 'log-level=error', hevc]);
+  answer = await (await api(`/api/projects/${project.id}/proxies`, { method: 'POST', body: {} })).json();
+  assert.deepEqual(answer.checks, { 'assets/drone.mp4': { type: 'video/mp4; codecs="hvc1.2.4.L93.B0"', width: 1280, height: 720, fps: 25 } }, 'what the editor asks its browser');
+  assert.deepEqual(answer.states, {}, 'not said yet');
+  for (const end = Date.now() + 30_000; answer?.states?.['assets/drone.mp4']?.state !== 'ready' && Date.now() < end;) {
+    answer = await (await api(`/api/projects/${project.id}/proxies`, { method: 'POST', body: { undecoded: ['assets/drone.mp4', '../elsewhere.mp4'] } })).json();
+    if (answer.states['assets/drone.mp4']?.state !== 'ready') await new Promise((r) => setTimeout(r, 150));
+  }
+  assert.deepEqual(answer.states, { 'assets/drone.mp4': { state: 'ready', needed: true } });
+  const served = (await (await fetch(`${folder}assets/drone.mp4`)).arrayBuffer()).byteLength;
+  assert.ok(served > 0 && served !== statSync(hevc).size, 'its proxy');
+  assert.equal(await size(), statSync(big).size, 'the heavy one still the original');
   await api('/api/prefs', { method: 'PATCH', body: { proxies: { on: true } } });
 });
 

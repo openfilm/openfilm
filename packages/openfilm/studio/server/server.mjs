@@ -40,7 +40,7 @@ import { BrowseError, browseFolder, browsePlaces } from './browse.mjs';
 import { exampleFile, exampleFolder, listExamples } from './examples.mjs';
 import { pickFiles, pickFolder } from './folder-picker.mjs';
 import { readPrefs, writePrefs } from './prefs.mjs';
-import { ensureProxies } from './proxies.mjs';
+import { ensureProxies, playChecks } from './proxies.mjs';
 import { ensurePreviews, knownLate } from './preview-cache.mjs';
 import { npmOpenfilm, olderThanThis } from '../client.mjs';
 import { createWatchers } from './watch.mjs';
@@ -733,12 +733,15 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       return json(res, 200, { path: where ? await relink(project.path, String(rel ?? ''), where) : null });
     }
     /* the proxies the preview plays heavy footage from (proxies.mjs), asked for when not made yet: each heavy video's
-       state. Off: none */
+       state (off: none), and each one's the editor's browser does not decode (`undecoded`, which it tells by `checks`)
+       on or off */
     if (rest === 'proxies' && req.method === 'POST') {
       const { proxies } = readPrefs();
-      if (!proxies.on) return json(res, 200, { on: false, height: proxies.height, states: {} });
+      const { undecoded } = /** @type {{ undecoded?: unknown }} */ (await readJson(req));
       const videos = (await listFiles(project.path)).files.filter((f) => f.kind === 'video').map((f) => f.path);
-      return json(res, 200, { on: true, height: proxies.height, states: await ensureProxies(project.path, videos, proxies.height) });
+      const told = Array.isArray(undecoded) ? undecoded.filter((rel) => typeof rel === 'string' && videos.includes(rel)) : [];
+      const states = await ensureProxies(project.path, videos, proxies.height, { on: proxies.on, undecoded: told });
+      return json(res, 200, { on: proxies.on, height: proxies.height, states, checks: await playChecks(project.path, videos) });
     }
     /* renders of the stretches the preview played late (preview-cache.mjs), asked for when not made yet: each one's
        name and state, at the proxies' size */
