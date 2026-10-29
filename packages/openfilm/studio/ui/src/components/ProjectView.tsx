@@ -7,7 +7,7 @@
  * are written one at a time (see editor/use-film.ts); the agent's writes come in through the folder's events.
  */
 import * as React from 'react';
-import { BookmarkPlus, ClipboardCopy, ClipboardPaste, GalleryVerticalEnd, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, Trash2, TriangleAlert, Upload } from 'lucide-react';
+import { BookmarkPlus, ClipboardCopy, ClipboardPaste, GalleryVerticalEnd, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, TriangleAlert, Upload } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
 import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type Op, type ProjectFilm, type ProjectSettings } from '@/api';
 import { useT } from '@/i18n';
@@ -23,7 +23,7 @@ import { layoutTracks, type TimelineBlock, type TimelineTrack } from '@/lib/time
 import { filmClipKind, filmDocLoc, filmSrcIsPage, filmSrcKind, filmTrackBadges, parseFilmDocLoc, type FilmBox, type FilmDoc, type FilmOverride } from '@/lib/film';
 import { exactRate, footageFps, setTimecodeFps, snapToFrame, stepFrames } from '@/lib/timecode';
 import { JUMP_FRAMES, loopBack, playStart, shuttleRate } from '@/lib/timeline-keys';
-import { comboOf, hintOf, parseCombo } from '@/lib/keymap';
+import { comboOf, parseCombo } from '@/lib/keymap';
 import { currentKeymap, keyAction, useKeyHint } from '@/lib/keymap-store';
 import { attrsOf, pasteAttrs, type AttrGroup, type CopiedAttrs } from '@/lib/clip-attrs';
 import { cutPoints, namedTrack, nextCut, trackNamesOf } from '@/lib/timeline-nav';
@@ -104,7 +104,7 @@ import { ExportTray, type ExportTrayHandle } from './export/ExportTray';
 import { FilmStageSelect, type FilmStageControl, type LayerGeometry, type StageClipEdit, type StagePick } from './FilmStageSelect';
 import { openSection } from './inspector-fields';
 import { FontScopeContext, type FontScope } from '@/lib/use-fonts';
-import { copyPasteEntries, stageMenu, stageRecoveryMenu, type StageArrangeResult, type StageMenuContext, type StagePictureActions } from './stage-menu';
+import { stageMenu, stageRecoveryMenu, type StageArrangeResult, type StageMenuContext, type StagePictureActions } from './stage-menu';
 import type { StageEditFailure, StageTextEdit } from './FilmInspector';
 import { layerTarget, pageClipOf, recoverLayer } from '@/lib/stage-layers';
 import { pictureStyle, relativeTo, type TemplateControls } from '@/lib/template-controls';
@@ -561,7 +561,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     shuttleFrame.current = requestAnimationFrame(step);
   }, [pause, seek, stopShuttle]);
   React.useEffect(() => () => { if (shuttleFrame.current) cancelAnimationFrame(shuttleFrame.current); }, []);
-  /* the selection bar's Play range: from its start, stopping at its end */
+  /* Play range (its key, the ruler's menu): from its start, stopping at its end */
   const playRange = React.useCallback((range: FilmRange) => {
     pause();
     if (!(player.current.duration > 0)) return;
@@ -702,7 +702,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const onDown = (e: PointerEvent) => {
       const el = e.target as Element | null;
       if (el?.closest?.('[data-viewer-picture]')) { setViewerFocus(true); return; }
-      if (el?.closest?.('[data-film-inspector], [data-selection-toolbar], [role="menu"], [data-popover-panel]')) return;
+      if (el?.closest?.('[data-film-inspector], [role="menu"], [data-popover-panel]')) return;
       setViewerFocus(false);
     };
     window.addEventListener('pointerdown', onDown, true);
@@ -760,8 +760,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const src = stageClipLoc ? blocksRef.current.find((b) => b.loc === stageClipLoc)?.src : undefined;
     return { projectId, folder, page: src && filmSrcIsPage(src) ? src : null, tick: filesTick };
   }, [projectId, folder, stageClipLoc, filesTick, timelineTracks]);
-  /* where the selection bar goes (components/SelectionToolbar): the picture or the timeline, whichever was last pressed */
-  const [barAt, setBarAt] = React.useState<'timeline' | 'stage'>('timeline');
   const stageElementRef = React.useRef(stageElement);
   stageElementRef.current = stageElement;
   /* the inspector shows a media file, or what is selected */
@@ -1650,9 +1648,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     return layerRef(el, { projectId: refSource.current.projectId, ms: timeRef.current, box: pick.box, stage: stageRef.current });
   };
   /**
-   * What ⌘L references (and the selection bar's "Add to chat"): the subtitle line picked, else the layer picked in the
-   * picture (each of several), else each clip selected and the range, else the line at the playhead (the subtitle
-   * panel open), else the moment.
+   * What ⌘L references: the subtitle line picked, else the layer picked in the picture (each of several), else each
+   * clip selected and the range, else the line at the playhead (the subtitle panel open), else the moment.
    */
   const selectedRefs = (): StudioRef[] => {
     const line = pickedSubtitleRef();
@@ -1989,28 +1986,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     setPointedLayer(null);
     void deleteLayers([layerElement(clipId, at, row.instance, row.label)]).then((f) => { if (f) toast.show(f); });
   }, [deleteLayers, toast]); // eslint-disable-line react-hooks/exhaustive-deps
-  /* a Layers row's right-click menu: Copy and Paste as on the picture, and Delete as its bin */
-  const layerRowMenu = React.useCallback((clipId: string, row: LayerRow): readonly ContextMenuEntry[] => {
-    const at = row.instance ? row.loc.slice(0, -`#${row.instance}`.length) : row.loc;
-    const clipLoc = blocksRef.current.find((b) => b.clipId === clipId)?.loc;
-    const element = { ...layerElement(clipId, at, row.instance, row.label), ...(clipLoc ? { clipLoc } : {}) };
-    const isLocked = (loc: string) => Boolean(tracksRef.current.find((tr) => tr.blocks.some((b) => b.loc === loc))?.locked);
-    const paste = (loc: string) => {
-      const lane = tracksRef.current.find((tr) => tr.blocks.some((b) => b.loc === loc))?.lane ?? null;
-      void (layerBoardRef.current ? pasteLayers(loc) : pasteAt(lane, timeRef.current)).then((f) => { if (f) toast.show(f); });
-    };
-    return [
-      ...copyPasteEntries([element], {
-        copyLayers: (list) => { void copyLayers(list).then((f) => { if (f) toast.show(f); }); },
-        clip: { isLocked, canPaste: () => clipboard.length > 0 || layerBoardRef.current != null, paste },
-      }, t),
-      { id: 'delete-sep', separator: true },
-      {
-        id: 'delete', label: t('timeline.removeBlock'), icon: <Trash2 size={14} />, danger: true, shortcut: hintOf(currentKeymap(), 'remove', MAC),
-        disabled: row.locked, hint: t('stageMenu.lockedHint'), onSelect: () => deleteLayerRow(clipId, row),
-      },
-    ];
-  }, [copyLayers, pasteLayers, pasteAt, clipboard, deleteLayerRow, t, toast]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* a Layers row's right-click: the picture's own menu, its layer (or clip) taken in hand there first */
+  const openLayerMenu = React.useCallback((target: { clipId: string; loc?: string }, at: { x: number; y: number }) => {
+    const clipLoc = blocksRef.current.find((b) => b.clipId === target.clipId)?.loc;
+    if (clipLoc) stageControl.current?.openMenu({ clipLoc, ...(target.loc != null ? { loc: target.loc } : {}) }, at);
+  }, []);
   const restackLayers = React.useCallback((clipId: string, edits: StageArrangeResult['edits']) => {
     void editStageOverrides(edits.map(({ target, style }) => ({ element: layerElement(clipId, target.at, target.n, target.at), patch: { style } as OverrideGeometry })))
       .then((f) => { if (f) toast.show(f); });
@@ -2147,9 +2127,10 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     },
   }, t), [editStageOverrides, selectStageParent, selectStageClip, splitBlocks, copyBlocks, copyLayers, pasteLayers, clipboard, timelineTracks, pasteAt, editBlocks, removeBlocks, t, toast, pictureActions]); // eslint-disable-line react-hooks/exhaustive-deps
   /*
-   * "Reference in chat", first on the menus of a clip, a layer and a track, when the app around Studio has a chat.
-   * The references are made when it is chosen: a layer right-clicked is measured just after its menu opens. ⌘L does
-   * the same for what is selected (the clips or the layer right-clicked are), so a clip's and a layer's item says so.
+   * "Reference in chat", first on the menus of a clip, a layer and a track, a line under it, when the app around Studio
+   * has a chat. The references are made when it is chosen: a layer right-clicked is measured just after its menu
+   * opens. ⌘L does the same for what is selected (the clips or the layer right-clicked are), so a clip's and a layer's
+   * item says so.
    */
   const referEntry = (refs: () => StudioRef[], withKey = true): ContextMenuEntry[] => {
     const refer = studioHost?.refer;
@@ -2160,22 +2141,27 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       onSelect: () => { for (const ref of refs()) refer(ref); },
     }];
   };
+  /** Two groups of menu entries, a line between them when both have some. */
+  const menuGroups = (a: readonly ContextMenuEntry[], b: readonly ContextMenuEntry[]): ContextMenuEntry[] => (a.length && b.length ? [...a, { id: `${a[a.length - 1]!.id}-sep`, separator: true }, ...b] : [...a, ...b]);
+  /* the picture's menu, and so the Layers panel's (one menu: the row's layer is taken in hand on the picture first);
+     several layers in hand are referenced each where it is drawn */
   const stageMenuWithRefer = React.useCallback((el: StageElement, ctx: StageMenuContext): readonly ContextMenuEntry[] => {
     const entries = stageMenuFor(el, ctx);
     const block = el.clipLoc ? blocksRef.current.find((b) => b.loc === el.clipLoc) : null;
     const whole = el.kind === 'clip' || el.isMgOuter;
-    const extra = whole && !block ? [] : [...referEntry(() => [whole ? refOfBlock(block!) : refOfLayer(el)]), ...(whole && block ? saveEntry([block]) : [])];
-    return extra.length ? [...extra, ...(entries.length ? [{ id: 'refer-sep', separator: true } as const] : []), ...entries] : entries;
+    const refs = (): StudioRef[] => (ctx.multi
+      ? (stageControl.current?.picked() ?? []).flatMap((p) => refOfStagePick(p) ?? [])
+      : [whole ? refOfBlock(block!) : refOfLayer(el)]);
+    const refer = whole && !block ? [] : referEntry(refs);
+    return menuGroups(refer, menuGroups(whole && block ? saveEntry([block]) : [], entries));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stageMenuFor, t, keyHint, saveBlocks]);
-  /** Two groups of menu entries, a line between them when both have some. */
-  const menuGroups = (a: ContextMenuEntry[], b: ContextMenuEntry[]): ContextMenuEntry[] => (a.length && b.length ? [...a, { id: 'tools-sep', separator: true }, ...b] : [...a, ...b]);
   /* copy and paste attributes, in the clip menu */
   const attrsEntries = (blocks: readonly TimelineBlock[]): ContextMenuEntry[] => [
     { id: 'copy-attrs', label: t('clipAttrs.copy'), icon: <ClipboardCopy size={14} />, shortcut: keyHint('copy-attrs'), disabled: blocks.length !== 1, onSelect: () => copyAttrs(blocks) },
     { id: 'paste-attrs', label: t('clipAttrs.pasteMenu'), icon: <ClipboardPaste size={14} />, shortcut: keyHint('paste-attrs'), disabled: !copiedAttrs, hint: t('clipAttrs.nothing'), onSelect: () => askPasteAttrs(blocks) },
   ];
-  const timelineMenuExtra = React.useCallback((blocks: readonly TimelineBlock[]) => (blocks.length ? menuGroups(menuGroups([...referEntry(() => blocks.map(refOfBlock)), ...saveEntry(blocks)], tools.menuExtra(blocks)), attrsEntries(blocks)) : []), [t, keyHint, tools.menuExtra, copiedAttrs, copyAttrs, askPasteAttrs, saveBlocks]); // eslint-disable-line react-hooks/exhaustive-deps
+  const timelineMenuExtra = React.useCallback((blocks: readonly TimelineBlock[]) => (blocks.length ? menuGroups(referEntry(() => blocks.map(refOfBlock)), menuGroups(menuGroups(saveEntry(blocks), tools.menuExtra(blocks)), attrsEntries(blocks))) : []), [t, keyHint, tools.menuExtra, copiedAttrs, copyAttrs, askPasteAttrs, saveBlocks]); // eslint-disable-line react-hooks/exhaustive-deps
   const trackMenuExtra = React.useCallback((track: TimelineTrack) => {
     const docIndex = track.docIndex;
     const refer = docIndex == null || !studioHost?.refer ? [] : referEntry(() => { const ref = trackRef(tracksRef.current, docIndex); return ref ? [ref] : []; }, false);
@@ -2190,12 +2176,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (!refer) return;
     refer('atMs' in what ? momentRef(projectId, what.atMs) : rangeRef(projectId, what.range, blocksRef.current));
   }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
-  const referFromStage = React.useCallback((picks: StagePick[]) => {
-    const refer = studioHost?.refer;
-    if (!refer) return;
-    for (const p of picks) { const ref = refOfStagePick(p); if (ref) refer(ref); }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  /* the bar's Mask: the inspector open on its Mask section (the shapes are picked there) */
   /* the picture's Mask menu: the shape goes to the clip's Mask section (put on, its handles shown), opened */
   const [maskAsk, setMaskAsk] = React.useState<{ shape: MaskShape | 'none'; clipLoc: string; n: number } | null>(null);
   const maskAsked = React.useCallback(() => setMaskAsk(null), []);
@@ -2209,7 +2189,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     }, 60);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   /**
-   * Duplicate (⌘D, the bar's, the picture menu's): copies right after the clips, each on its own track, going in
+   * Duplicate (⌘D, the clip menus'): copies right after the clips, each on its own track, going in
    * between (what follows on that track moves on; with linkage, what rides on the main track along), so nothing is
    * covered; never a new track.
    */
@@ -3140,7 +3120,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                       onPoint={setPointedLayer}
                       onToggle={toggleLayerRow}
                       onDelete={deleteLayerRow}
-                      rowMenu={layerRowMenu}
+                      onMenu={openLayerMenu}
                       onRestack={restackLayers}
                       onNotify={toast.show}
                       width={layersShownWidth}
@@ -3223,7 +3203,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                   </div>
                 ) : null}
                 <div className="relative flex min-h-0 flex-1 items-center justify-center px-3 py-2.5" style={{ containerType: 'size' }} {...pictureDropProps}
-                  data-viewer-picture="" data-viewer-focus={viewerFocus ? '1' : '0'} onPointerDownCapture={() => setBarAt('stage')}>
+                  data-viewer-picture="" data-viewer-focus={viewerFocus ? '1' : '0'}>
                   {pictureDrop ? (
                     <div className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] ring-2 ring-inset ring-[var(--accent)]">
                       <span className="rounded-md bg-[var(--surface)] px-2.5 py-1 text-[12.5px] text-[var(--text)] shadow-sm">{t('project.dropOnPicture')}</span>
@@ -3309,8 +3289,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                                 flashBox={flashBox}
                                 chat={chatOnPicture}
                                 {...(hostHover ? { onHoverLayer: hoverLayer } : {})}
-                                selectionBar={barAt === 'stage'}
-                                {...(studioHost?.refer ? { onRefer: referFromStage } : {})}
                                 onStartMask={openMaskSection}
                                 pointLayer={pointedLayer}
                                 onDropPicture={putLayerPicture}
@@ -3459,7 +3437,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
             {timelineOpen && value ? (
               <div className={`${PANE} shrink-0 bg-[var(--dock-pane)]`} style={{ height: timelineShownHeight }}>
                 <div className="absolute inset-0 flex min-h-0 min-w-0 flex-col" data-timeline-scope="main" style={{ right: METERS_W }}
-                  onPointerDownCapture={() => { setBarAt('timeline'); if (pickedMedia) pickMedia(null); }}>
+                  onPointerDownCapture={() => { if (pickedMedia) pickMedia(null); }}>
                   <Timeline
                     blockMenuExtra={timelineMenuExtra}
                     chat={timelineChat}
@@ -3475,7 +3453,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     commandsRef={timelineCommands}
                     trackNames={trackNames}
                     onRenameTrack={renameTrack}
-                    selectionBar={barAt === 'timeline'}
                     onDuplicate={duplicateBlocks}
                     onPlayRange={playRange}
                     thumbs={shownThumbs}

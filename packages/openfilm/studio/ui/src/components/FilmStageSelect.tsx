@@ -33,18 +33,11 @@
  * point winning. What is written is always film.html: a clip's `box`, a page's `overrides`, through the callbacks.
  */
 import * as React from 'react';
-import { currentKeymap, keyAction } from '@/lib/keymap-store';
-import { hintOf } from '@/lib/keymap';
+import { keyAction } from '@/lib/keymap-store';
 import type { KeyPress } from '@/lib/timeline-keys';
 import { doubleClickAim, keepPress, type Press } from '@/lib/double-press';
-import {
-  AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignHorizontalDistributeCenter,
-  AlignStartHorizontal, AlignStartVertical, AlignVerticalDistributeCenter, Crop as CropIcon, MessageSquarePlus,
-  MoreHorizontal, SquareDashed,
-} from 'lucide-react';
 
-import { ContextMenu, type ContextMenuEntry, type ContextMenuItem } from '@/components/ContextMenu';
-import { SelectionToolbar, type SelectionToolEntry } from '@/components/SelectionToolbar';
+import { ContextMenu, type ContextMenuEntry } from '@/components/ContextMenu';
 import { MgOutline } from '@/components/MgOutline';
 import { FRAME_BLUE, GestureHint, StageTransformFrame, type FrameGeometry } from '@/components/StageTransformFrame';
 import { StageMaskOverlay } from '@/components/StageMaskOverlay';
@@ -66,7 +59,7 @@ import {
   positionOf, roundOf, transformOfVisible, visibleFrame, type CropAspect, type Rect,
 } from '@/lib/stage-crop';
 import {
-  alignShift, groupDragged, type GroupDrag, type GroupPull, HANDLE_AT, insideBox, layerInGroup, pullGroup, insideFrame, movedOffset, pivotCenter, resizedFrame, sameClientRect, sameGuides,
+  alignShift, distributeShifts, groupDragged, type GroupDrag, type GroupPull, HANDLE_AT, insideBox, layerInGroup, pullGroup, insideFrame, movedOffset, pivotCenter, resizedFrame, sameClientRect, sameGuides,
   sameLayerGeometry, scaledLayer, turnedLayer, unionRect, type AlignEdge, type ClientBox, type FramePivot,
   type LayerGeometry, type StageFrame,
 } from '@/lib/stage-gesture';
@@ -78,7 +71,6 @@ import { layerTarget } from '@/lib/stage-layers';
 import { regionBox, regionClipIds, regionTexts } from '@/lib/studio-refs';
 import type { StageBox } from '@/lib/host';
 import { samePictureMarks, type PictureMarks } from '@/lib/chat-marks';
-import { distributeShifts } from '@/lib/selection-toolbar';
 import { trackLockedAt } from '@/lib/track-lock';
 import { peekResourceDrag, readResourceDragData, RESOURCE_DRAG_TYPE } from '@/lib/resource-drag';
 import {
@@ -214,6 +206,11 @@ export interface FilmStageControl {
   editMask(session: MaskSession | null): void;
   /** What is in hand on the picture (each of several layers, a layer, a whole clip), where it is drawn (stage px). */
   picked(): StagePick[];
+  /**
+   * The menu of a layer of the clip at `clipLoc` (a whole clip without `loc`) at `at` (client px), as a right-click on
+   * it here opens it: it is taken in hand first. The Layers panel's rows open theirs so, the very same menu.
+   */
+  openMenu(target: { clipLoc: string; loc?: string }, at: { x: number; y: number }): void;
   /** Write now what the arrow keys moved and is not written yet: before an undo, or any other edit. */
   flushPending(): void;
   /** These layers deleted: let go of them if they are in hand, so no frame stays on what is gone. */
@@ -414,11 +411,7 @@ interface FilmStageSelectProps {
   chat?: PictureMarks | null;
   /** The pointer came onto a layer of a page (where it is drawn, stage px), or left it (null). */
   onHoverLayer?: (hit: { element: StageElement; box: StageBox } | null) => void;
-  /** The bar beside what is in hand (SelectionToolbar) is the picture's: the person is working here, not on the timeline. */
-  selectionBar?: boolean;
-  /** The bar's first button, "Add to chat": what is in hand. Without it the bar has no such button. */
-  onRefer?: (picks: StagePick[]) => void;
-  /** The bar's Mask, a menu of shapes: the one picked is put on the clip in hand, its handles on the picture. */
+  /** A clip's menu's Mask, its shapes: the one picked is put on the clip in hand, its handles on the picture. */
   onStartMask?: (shape: MaskShape | 'none', clipLoc: string) => void;
   /** A layer pointed at from elsewhere (a row of the Layers panel), outlined as the one under the pointer is. */
   pointLayer?: { clipId: string; loc: string } | null;
@@ -434,7 +427,7 @@ interface FilmStageSelectProps {
 function FilmStageSelectImpl({
   previewRef, stage, doc, spans, timeMs, playing, onPause, onSelectElement, onEditClip, linkedLocs, onSelectClips, selectRequest,
   clipPreviewRef, lookPreviewRef, controlRef, onTransformLayer, onTransformLayers, onEditTextInline, onGeometry, menuFor, recoveryMenu,
-  onRegion, regionHint, flashBox, chat, onHoverLayer, selectionBar = false, onRefer, onStartMask, pointLayer, arrowsMove = true, onDropPicture,
+  onRegion, regionHint, flashBox, chat, onHoverLayer, onStartMask, pointLayer, arrowsMove = true, onDropPicture,
 }: FilmStageSelectProps) {
   const arrowsMoveRef = React.useRef(arrowsMove);
   arrowsMoveRef.current = arrowsMove;
@@ -476,7 +469,6 @@ function FilmStageSelectImpl({
     /** What a move or a scale can snap to (stage px), counted once at the press. */
     snapTargets: readonly { x: number; y: number; w: number; h: number }[];
   } | null>(null);
-  const stageLayer = React.useRef<HTMLDivElement | null>(null);
   const [filmOffset, setFilmOffset] = React.useState({ left: 0, top: 0, width: 0, height: 0 });
   const liveTRef = React.useRef<MgTransform | null>(null);
   /** For an inspector preview in `liveT`: film.html's box of the clip when it began, as JSON. */
@@ -747,6 +739,15 @@ function FilmStageSelectImpl({
     const rects = items.map((it) => scaleBox(it.layer.rect, vs));
     const u = unionRect(rects);
     const shifts = rects.map((r) => alignShift(edge, r, u));
+    shiftLayers(items, (i) => shifts[i]!.dx, (i) => shifts[i]!.dy);
+    onTransformLayers(items.map((it) => ({ element: it.element, g: it.now })));
+  };
+  /** Space three or more layers evenly (as the inspector does several clips): one save. */
+  const distributeMany = (axis: 'x' | 'y') => {
+    const items = multiItemsNow();
+    if (items.length < 3 || !onTransformLayers) return;
+    const vs = viewScaleNow();
+    const shifts = distributeShifts(items.map((it) => scaleBox(it.layer.rect, vs)), axis);
     shiftLayers(items, (i) => shifts[i]!.dx, (i) => shifts[i]!.dy);
     onTransformLayers(items.map((it) => ({ element: it.element, g: it.now })));
   };
@@ -1235,7 +1236,6 @@ function FilmStageSelectImpl({
       if (
         inHostPanel(el)
         || el?.closest('[data-film-select]')
-        || el?.closest('[data-selection-toolbar]')
         || el?.closest('[role="menu"]')
         || el?.closest('[data-film-inspector]')
         || el?.closest('[role="separator"]')
@@ -1435,6 +1435,7 @@ function FilmStageSelectImpl({
       startCrop: () => startCropRef.current(),
       editMask: setMaskSession,
       picked: () => pickedItemsRef.current(),
+      openMenu: (target, at) => openMenuForRef.current(target, at),
       flushPending: () => flushPendingRef.current(),
       placeLayers: (to) => placeLayersRef.current(to),
     };
@@ -1999,8 +2000,8 @@ function FilmStageSelectImpl({
     if (combined.length) setMenu({ x: at.x, y: at.y, items: combined });
   };
   /**
-   * The menu of what is in hand (several layers, a layer, a whole clip), opened at `p` (overlay px): the right-click's
-   * and the selection bar's (its tools are this menu's items). A delete leaves no frame behind (the thing is gone).
+   * The menu of what is in hand (several layers, a layer, a whole clip), opened at `p` (overlay px): the right-click's,
+   * here or on a row of the Layers panel. A delete leaves no frame behind (the thing is gone).
    */
   const heldMenu = (p: { x: number; y: number }): readonly ContextMenuEntry[] => {
     if (!menuFor) return [];
@@ -2014,19 +2015,62 @@ function FilmStageSelectImpl({
         at: p,
         multi: many.map((i) => i.element),
         align: (edge) => alignMany(edge),
+        ...(many.length >= 3 && onTransformLayers ? { distribute: distributeMany } : {}),
       }));
     }
     const held = pickedRef.current;
     const element = held?.element;
     if (!element) return [];
     const layer = held.layer;
+    const whole = element.kind === 'clip' || element.isMgOuter;
     return dropOnDelete(menuFor(element, {
       locked: Boolean(layer?.locked),
       ...(element.text && onEditTextInline && layer ? { editText: () => { startTextEditRef.current(); } } : {}),
+      ...(whole && element.clipKind === 'video' && onEditClip ? { crop: () => { startCrop(); } } : {}),
+      ...(whole && onStartMask && element.clipLoc ? { mask: maskEntries(element, onStartMask) } : {}),
       arrange: layer ? arrangeOf(layer.handle) : null,
       at: p,
     }));
   };
+  /** A whole clip's Mask shapes, the one it has now checked. */
+  const maskEntries = (element: StageElement, start: NonNullable<FilmStageSelectProps['onStartMask']>): ContextMenuEntry[] => {
+    const clipLoc = element.clipLoc!;
+    const at = parseFilmDocLoc(clipLoc);
+    const style = at ? docRef.current.tracks[at.track]?.clips[at.clip]?.style ?? '' : '';
+    const now = maskOf(declared(style, 'mask-image'), declared(style, 'mask-composite'), element.mgBox ?? null);
+    const shapeNow = now === undefined ? 'none' : now?.shape ?? null;
+    return (['none', ...MASK_SHAPES] as const).map((shape) => ({
+      id: `mask-${shape}`,
+      label: t(`inspector.maskShapes.${shape}`),
+      icon: <MaskGlyph shape={shape} />,
+      checked: shape === shapeNow,
+      onSelect: () => start(shape, clipLoc),
+    }));
+  };
+  /* the Layers panel's right-click (FilmStageControl.openMenu): taken in hand, then this menu, as on the picture */
+  const openMenuFor = (target: { clipLoc: string; loc?: string }, at: { x: number; y: number }) => {
+    if (!menuFor) return;
+    const p = local({ clientX: at.x, clientY: at.y });
+    const token = ++pressSeq.current;
+    if (target.loc == null) {
+      const info = infoOf(target.clipLoc);
+      if (!info || !shownNow(info.id)) return;
+      commitHit(describeClip(info, stage));
+      openMenuAt(at, heldMenu(p));
+      return;
+    }
+    const placed = parseFilmDocLoc(target.clipLoc);
+    const clipId = placed ? docRef.current.tracks[placed.track]?.clips[placed.clip]?.id : undefined;
+    if (!clipId) return;
+    void ask<StageLayer>('layer', { clip: clipId, loc: target.loc, any: true }).then((layer) => {
+      if (!layer || token !== pressSeq.current) return;
+      setHover(null);
+      commitHit(hitOf(layer));
+      openMenuAt(at, heldMenu(p));
+    });
+  };
+  const openMenuForRef = React.useRef(openMenuFor);
+  openMenuForRef.current = openMenuFor;
   const onStageContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     if (!menuFor) return;
@@ -2451,7 +2495,7 @@ function FilmStageSelectImpl({
   /* the clip of a pill hovered in the app's chat, where it is drawn now */
   const chatClip = chat?.clipLoc ? clipInfo(doc, spans, stage, chat.clipLoc) : null;
 
-  /* ── the bar beside what is in hand (SelectionToolbar): its tools are the menu's items ── */
+  /* ── what is in hand, for the references made of it (FilmStageControl.picked) ── */
   const t = useT();
   const stageBoxOf = (r: ClientBox): StageBox => ({ x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) });
   const pickedItems = (): StagePick[] => {
@@ -2464,122 +2508,6 @@ function FilmStageSelectImpl({
   };
   const pickedItemsRef = React.useRef(pickedItems);
   pickedItemsRef.current = pickedItems;
-  /** Space several layers evenly (as the inspector does several clips): one save. */
-  const distributeMany = (axis: 'x' | 'y') => {
-    const items = multiItemsNow();
-    if (items.length < 3 || !onTransformLayers) return;
-    const vs = viewScaleNow();
-    const shifts = distributeShifts(items.map((it) => scaleBox(it.layer.rect, vs)), axis);
-    shiftLayers(items, (i) => shifts[i]!.dx, (i) => shifts[i]!.dy);
-    onTransformLayers(items.map((it) => ({ element: it.element, g: it.now })));
-  };
-  const heldEl = picked?.element;
-  const barKind = !selectionBar || !picked ? null : multi ? 'layers' : !heldEl ? null : heldEl.kind === 'clip' || heldEl.isMgOuter ? 'clip' : 'layer';
-  const barTools = ((): SelectionToolEntry[] => {
-    if (!barKind) return [];
-    const out: SelectionToolEntry[] = [];
-    const entries = heldMenu({ x: 0, y: 0 });
-    const find = (id: string): ContextMenuItem | null => {
-      for (const e of entries) {
-        if ('separator' in e) continue;
-        if (e.id === id) return e;
-        for (const sub of e.submenu ?? []) if (!('separator' in sub) && sub.id === id) return sub;
-      }
-      return null;
-    };
-    const tools: SelectionToolEntry[] = [];
-    const fromMenu = (id: string, icon?: React.ReactNode) => {
-      const item = find(id);
-      if (!item) return;
-      /* an item with a submenu (Replace picture): its list hangs from the button */
-      const sub = item.submenu;
-      tools.push({
-        id, label: item.label, icon: icon ?? item.icon,
-        ...(item.shortcut ? { shortcut: item.shortcut } : {}), ...(item.hint ? { hint: item.hint } : {}),
-        ...(item.disabled || (sub && !sub.length) ? { disabled: true } : {}), ...(item.danger ? { danger: true } : {}),
-        onSelect: (button) => {
-          if (!sub) { item.onSelect?.(); return; }
-          const r = button.getBoundingClientRect();
-          openMenuAt({ x: r.left, y: r.bottom + 4 }, sub);
-        },
-      });
-    };
-    if (barKind === 'layer') for (const id of ['edit-text', 'replace-picture', 'front', 'back', 'hide', 'reset']) fromMenu(id);
-    if (barKind === 'clip') {
-      if (heldEl?.clipKind === 'video' && onEditClip) tools.push({ id: 'crop', label: t('selectionBar.crop'), icon: <CropIcon size={14} />, shortcut: 'C', onSelect: () => { startCrop(); } });
-      if (onStartMask && heldEl?.clipLoc) {
-        const clipLoc = heldEl.clipLoc;
-        tools.push({
-          id: 'mask', label: t('selectionBar.mask'), icon: <SquareDashed size={14} />,
-          onSelect: (button) => {
-            const r = button.getBoundingClientRect();
-            const at = parseFilmDocLoc(clipLoc);
-            const style = at ? docRef.current.tracks[at.track]?.clips[at.clip]?.style ?? '' : '';
-            const box = heldEl?.mgBox ?? null;
-            const now = maskOf(declared(style, 'mask-image'), declared(style, 'mask-composite'), box);
-            const shapeNow = now === undefined ? 'none' : now?.shape ?? null;
-            openMenuAt({ x: r.left, y: r.bottom + 4 }, (['none', ...MASK_SHAPES] as const).map((shape) => ({
-              id: `mask-${shape}`,
-              label: t(`inspector.maskShapes.${shape}`),
-              icon: <MaskGlyph shape={shape} />,
-              checked: shape === shapeNow,
-              onSelect: () => onStartMask(shape, clipLoc),
-            })));
-          },
-        });
-      }
-      fromMenu('reset');
-    }
-    if (barKind === 'layers') {
-      fromMenu('align-left', <AlignStartVertical size={14} />);
-      fromMenu('align-hcenter', <AlignCenterVertical size={14} />);
-      fromMenu('align-right', <AlignEndVertical size={14} />);
-      fromMenu('align-top', <AlignStartHorizontal size={14} />);
-      fromMenu('align-vcenter', <AlignCenterHorizontal size={14} />);
-      fromMenu('align-bottom', <AlignEndHorizontal size={14} />);
-      if ((multi?.length ?? 0) >= 3 && onTransformLayers) {
-        tools.push({ id: 'distribute-x', label: t('inspector.distributeH'), icon: <AlignHorizontalDistributeCenter size={14} />, onSelect: () => distributeMany('x') });
-        tools.push({ id: 'distribute-y', label: t('inspector.distributeV'), icon: <AlignVerticalDistributeCenter size={14} />, onSelect: () => distributeMany('y') });
-      }
-    }
-    out.push(...tools);
-    if (entries.length) {
-      out.push({
-        id: 'more', label: t('selectionBar.more'), icon: <MoreHorizontal size={14} />,
-        onSelect: (button) => {
-          const r = button.getBoundingClientRect();
-          openMenuAt({ x: r.left, y: r.bottom + 4 }, heldMenu(local({ clientX: r.left + r.width / 2, clientY: r.bottom })));
-        },
-      });
-    }
-    return out;
-  })();
-  /* where it is drawn (overlay px): its frame (turned: the box around it), else its shape, else several's union */
-  const aabbOf = (f: FrameGeometry): ClientBox => { const a = frameAabb(f); return { left: a.x, top: a.y, width: a.w, height: a.h }; };
-  const barBox = !barKind || !picked ? null : mgFrame ? aabbOf(mgFrame) : layerFrame ? aabbOf(layerFrame) : scaleBox(picked.layer?.rect ?? picked.rect, vsNow);
-  const barBoxRef = React.useRef(barBox);
-  barBoxRef.current = barBox;
-  /* inside the viewer: from its top (its bar of buttons) to the bottom of the picture's area (not over the transport) */
-  const measureBar = () => {
-    const box = barBoxRef.current;
-    const film = stageLayer.current?.getBoundingClientRect();
-    if (!box || !film) return null;
-    const pane = host.current?.closest('[data-viewer-pane]')?.getBoundingClientRect();
-    const area = host.current?.closest('[data-viewer-picture]')?.getBoundingClientRect() ?? pane;
-    const top = pane?.top ?? 0;
-    const bounds = area
-      ? { left: area.left, top, width: area.width, height: area.bottom - top }
-      : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
-    return { anchor: { left: film.left + box.left, top: film.top + box.top, width: box.width, height: box.height }, bounds };
-  };
-  const barKey = !barKind ? null
-    : barKind === 'layers' ? `layers:${(multi ?? []).map((i) => i.layer.handle).join(',')}`
-      : barKind === 'clip' ? `clip:${heldEl?.clipLoc ?? ''}` : `layer:${heldEl?.loc ?? ''}:${picked?.layer?.handle ?? ''}`;
-  const barLead = barKind && onRefer ? {
-    id: 'refer', label: t('selectionBar.addToChat'), icon: <MessageSquarePlus size={14} />, shortcut: hintOf(currentKeymap(), 'refer', MAC),
-    onSelect: () => onRefer(pickedItems()),
-  } : null;
-  const barLabel = barKind === 'layers' ? t('selectionBar.layers').replace('{n}', String(multi?.length ?? 0)) : undefined;
 
   /**
    * A press: on the picture, or on the dark around it (a marquee starts there too, so what sits
@@ -2981,7 +2909,6 @@ function FilmStageSelectImpl({
       onLostPointerCapture={endPointer}
     >
       <div
-        ref={stageLayer}
         className="absolute overflow-visible"
         style={{
           left: filmOffset.width ? filmOffset.left : 0,
@@ -3106,15 +3033,6 @@ function FilmStageSelectImpl({
           </>
         ) : null}
       </div>
-      <SelectionToolbar
-        selection={barKey}
-        measure={measureBar}
-        hidden={Boolean(playing || dragging || cropping || maskSession || regionDraft || draftRect || editingText != null)}
-        lead={barLead}
-        {...(barLabel ? { label: barLabel } : {})}
-        tools={barTools}
-        ariaLabel={t('selectionBar.toolbar')}
-      />
     </div>
   );
 }
@@ -3151,8 +3069,6 @@ export const FilmStageSelect = React.memo(FilmStageSelectImpl, (a, b) => (
   && a.flashBox?.seq === b.flashBox?.seq
   && samePictureMarks(a.chat, b.chat)
   && a.onHoverLayer === b.onHoverLayer
-  && Boolean(a.selectionBar) === Boolean(b.selectionBar)
-  && a.onRefer === b.onRefer
   && a.onStartMask === b.onStartMask
   && a.pointLayer?.clipId === b.pointLayer?.clipId
   && a.pointLayer?.loc === b.pointLayer?.loc

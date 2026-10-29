@@ -3,10 +3,11 @@
  * a row; a page clip opens into its layers, each level in the order the page draws it. A row selects its layer on
  * the picture (and the picture's selection opens the rows down to it); its eye hides it, its lock keeps it from
  * being moved and its bin deletes it (lib/layer-delete; Delete or Backspace does too, for the layer in hand on the
- * picture, which a row's click makes it); its right-click menu copies, pastes (lib/layer-clipboard) and deletes; dragged up or down its own level, or into the level of a row around it
- * (which then moves, with all it holds: CSS restacks only within a level), it is restacked (z-index overrides,
- * studio/server/stage.js `restack`). Nothing is kept here: the tree is read from the pages each time they may have
- * changed, and every change is an override of the page clip in film.html.
+ * picture, which a row's click makes it); its right-click takes its layer (a clip's row: the clip) in hand and opens
+ * the picture's own menu for it, so the two menus are one; dragged up or down its own level, or into the level of a
+ * row around it (which then moves, with all it holds: CSS restacks only within a level), it is restacked (z-index
+ * overrides, studio/server/stage.js `restack`). Nothing is kept here: the tree is read from the pages each time they
+ * may have changed, and every change is an override of the page clip in film.html.
  */
 import React from 'react';
 import {
@@ -17,7 +18,6 @@ import {
   layerKey, layerLines, movedOrder, moverFor, openTo, sameTree, type LayerClip, type LayerLine, type LayerRow, type LayerRowKind,
 } from '@/lib/layers-tree';
 import type { StageArrangeResult } from './stage-menu';
-import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import { PANE_BAR, PANE_BTN, PANE_ICON, PANE_TITLE } from './dock-pane-bar';
 import { Tooltip } from './Tooltip';
 
@@ -49,8 +49,8 @@ export interface LayersPanelProps {
   onToggle: (clipId: string, row: LayerRow, what: 'hidden' | 'locked') => void;
   /** A row's bin: its layer deleted. */
   onDelete: (clipId: string, row: LayerRow) => void;
-  /** A row's right-click menu (its layer is selected first). */
-  rowMenu: (clipId: string, row: LayerRow) => readonly ContextMenuEntry[];
+  /** A row's right-click at `at` (client px): the picture's menu for its layer (no `loc`: its clip), taken in hand. */
+  onMenu: (target: { clipId: string; loc?: string }, at: { x: number; y: number }) => void;
   /** A level restacked: the overrides to write in the clip, or why nothing was (a message). */
   onRestack: (clipId: string, edits: StageArrangeResult['edits']) => void;
   onNotify: (message: string) => void;
@@ -67,7 +67,6 @@ export function LayersPanel(p: LayersPanelProps) {
   const [toggled, setToggled] = React.useState<ReadonlySet<string>>(() => new Set());
   const askRef = React.useRef(p.ask);
   askRef.current = p.ask;
-  const [menu, setMenu] = React.useState<{ x: number; y: number; items: readonly ContextMenuEntry[] } | null>(null);
 
   /* the tree, read again when the picture may have changed: a seek, the film edited, and while it plays */
   const read = React.useCallback(async () => {
@@ -216,11 +215,8 @@ export function LayersPanel(p: LayersPanelProps) {
               onToggle={(what) => { if (line.row) p.onToggle(line.clipId, line.row, what); }}
               onDelete={() => { if (line.row) p.onDelete(line.clipId, line.row); }}
               onMenu={(e) => {
-                if (!line.row) return;
                 e.preventDefault();
-                p.onSelectLayer(line.clipId, line.row.loc);
-                const items = p.rowMenu(line.clipId, line.row);
-                if (items.length) setMenu({ x: e.clientX, y: e.clientY, items });
+                p.onMenu({ clipId: line.clipId, ...(line.row ? { loc: line.row.loc } : {}) }, { x: e.clientX, y: e.clientY });
               }} />
           ))}
           {drag ? (
@@ -235,7 +231,6 @@ export function LayersPanel(p: LayersPanelProps) {
           ) : null}
         </div>
       </div>
-      {menu ? <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} /> : null}
     </div>
   );
 }

@@ -9,8 +9,8 @@
  */
 import type * as React from 'react';
 import {
-  BringToFront, ClipboardPaste, Copy as CopyIcon, CopyPlus, CornerLeftUp, Download, Eye, EyeOff, HardDriveUpload, ImageIcon,
-  ImageUp, Layers, Lock, RotateCcw, Scissors, SendToBack, Trash2, Type as TypeIcon, Unlock,
+  BringToFront, ClipboardPaste, Copy as CopyIcon, CopyPlus, CornerLeftUp, Crop as CropIcon, Download, Eye, EyeOff, HardDriveUpload,
+  ImageIcon, ImageUp, Layers, Lock, RotateCcw, Scissors, SendToBack, SquareDashed, Trash2, Type as TypeIcon, Unlock,
 } from 'lucide-react';
 
 import type { ContextMenuEntry } from '@/components/ContextMenu';
@@ -45,6 +45,12 @@ export interface StageMenuContext {
   multi?: readonly StageElement[];
   /** Line them up with an edge / middle of their union box (one save). */
   align?: (edge: AlignEdge) => void;
+  /** Space three or more evenly across or down (one save), under Align. */
+  distribute?: (axis: 'x' | 'y') => void;
+  /** Crop the video or still in hand in place (C); only for one that can be. */
+  crop?: () => void;
+  /** A whole clip's Mask: the shapes, the one on it checked (the picture's own: they open its Mask section). */
+  mask?: readonly ContextMenuEntry[];
   /** The layer (or a layer around it) is locked. */
   locked?: boolean;
 }
@@ -145,11 +151,8 @@ function list() {
   };
 }
 
-/**
- * Copy and Paste for layers: the layers copied, and what was copied last (layers or clips) pasted over their clip. The
- * Layers panel's rows have them too.
- */
-export function copyPasteEntries(
+/** Copy and Paste for layers: the layers copied, and what was copied last (layers or clips) pasted over their clip. */
+function copyPasteEntries(
   layers: readonly StageElement[],
   actions: { copyLayers?: StageMenuActions['copyLayers']; clip?: Pick<StageClipActions, 'isLocked' | 'canPaste' | 'paste'> },
   t: T,
@@ -182,12 +185,20 @@ export function stageMenu(el: StageElement, ctx: StageMenuContext, actions: Stag
     const allLocked = many.every((x) => x.override?.lock);
     if (ctx.align) {
       const align = ctx.align;
+      const distribute = ctx.distribute;
       m.push({
         id: 'align', label: t('stageMenu.align'), icon: <Layers size={14} />,
-        submenu: ([
-          ['left', 'inspector.alignLeft'], ['hcenter', 'inspector.alignHCenter'], ['right', 'inspector.alignRight'],
-          ['top', 'inspector.alignTop'], ['vcenter', 'inspector.alignVCenter'], ['bottom', 'inspector.alignBottom'],
-        ] as const).map(([edge, key]) => ({ id: `align-${edge}`, label: t(key), onSelect: () => align(edge) })),
+        submenu: [
+          ...([
+            ['left', 'inspector.alignLeft'], ['hcenter', 'inspector.alignHCenter'], ['right', 'inspector.alignRight'],
+            ['top', 'inspector.alignTop'], ['vcenter', 'inspector.alignVCenter'], ['bottom', 'inspector.alignBottom'],
+          ] as const).map(([edge, key]) => ({ id: `align-${edge}`, label: t(key), onSelect: () => align(edge) })),
+          ...(distribute ? [
+            { id: 'distribute-sep', separator: true } as const,
+            { id: 'distribute-x', label: t('inspector.distributeH'), onSelect: () => distribute('x') },
+            { id: 'distribute-y', label: t('inspector.distributeV'), onSelect: () => distribute('y') },
+          ] : []),
+        ],
       });
     }
     m.push({
@@ -232,6 +243,9 @@ export function stageMenu(el: StageElement, ctx: StageMenuContext, actions: Stag
       onSelect: () => clip.paste(clipLoc),
     });
     m.push({ id: 'duplicate', label: t('stageMenu.duplicate'), icon: <CopyPlus size={14} />, disabled: trackLocked, hint: lockedHint, onSelect: () => clip.duplicate(clipLoc) });
+    m.sep();
+    if (ctx.crop) m.push({ id: 'crop', label: t('stageMenu.crop'), icon: <CropIcon size={14} />, shortcut: 'C', disabled: trackLocked, hint: lockedHint, onSelect: ctx.crop });
+    if (ctx.mask) m.push({ id: 'mask', label: t('stageMenu.mask'), icon: <SquareDashed size={14} />, disabled: trackLocked, hint: lockedHint, submenu: ctx.mask });
     m.sep();
     m.push({ id: 'front', label: t('stageMenu.front'), icon: <BringToFront size={14} />, disabled: trackLocked, hint: lockedHint, onSelect: () => clip.bringToFront(clipLoc) });
     m.push({ id: 'back', label: t('stageMenu.back'), icon: <SendToBack size={14} />, disabled: trackLocked, hint: lockedHint, onSelect: () => clip.sendToBack(clipLoc) });

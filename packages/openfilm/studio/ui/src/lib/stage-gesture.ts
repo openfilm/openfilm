@@ -201,6 +201,29 @@ export function alignShift(edge: AlignEdge, rect: ClientBox, union: ClientBox): 
 }
 
 /**
+ * Spread boxes evenly along an axis: the first and the last stay, the ones between move so the gaps between
+ * neighbors are equal. The move of each box, in the order given; fewer than three move nowhere.
+ */
+export function distributeShifts(boxes: readonly ClientBox[], axis: 'x' | 'y'): Array<{ dx: number; dy: number }> {
+  const none = boxes.map(() => ({ dx: 0, dy: 0 }));
+  if (boxes.length < 3) return none;
+  const start = (b: ClientBox) => (axis === 'x' ? b.left : b.top);
+  const size = (b: ClientBox) => (axis === 'x' ? b.width : b.height);
+  const order = boxes.map((b, i) => ({ b, i })).sort((p, q) => start(p.b) - start(q.b));
+  const first = order[0]!.b;
+  const last = order[order.length - 1]!.b;
+  const span = start(last) + size(last) - start(first);
+  const gap = (span - order.reduce((s, { b }) => s + size(b), 0)) / (order.length - 1);
+  let cursor = start(first);
+  for (const { b, i } of order) {
+    const d = cursor - start(b);
+    none[i] = axis === 'x' ? { dx: d, dy: 0 } : { dx: 0, dy: d };
+    cursor += size(b) + gap;
+  }
+  return none;
+}
+
+/**
  * How several whole clips are being dragged together (stage px): moved by (dx, dy); scaled by (kx, ky) about the
  * corner or edge that stays (`anchor`), the same on both axes from a corner; or turned by `turn` degrees about the
  * middle of their frame (`anchor`).

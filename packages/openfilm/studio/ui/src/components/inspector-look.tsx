@@ -279,7 +279,7 @@ export function MaskSection({
   /** Whose mask, for the stage's handles. */
   target?: MaskSession['target'] | null;
   onEditMask?: (session: MaskSession | null) => void;
-  /** A shape picked on the picture (the selection bar's Mask): put on, with its handles, once. */
+  /** A shape picked on the picture (its clip menu's Mask): put on, with its handles, once. */
   ask?: { shape: MaskShape | 'none'; n: number } | null;
   onAsked?: () => void;
 }) {

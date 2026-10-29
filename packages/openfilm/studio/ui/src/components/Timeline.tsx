@@ -27,7 +27,6 @@ import {
   Magnet,
   Paperclip,
   MessageSquarePlus,
-  MoreHorizontal,
   ChevronDown,
   ChevronUp,
   MousePointer2,
@@ -163,9 +162,7 @@ import { MarkerGlyph } from './TimelineMarkers';
 import { SUBTITLE_ROW_H, SubtitleRow, SubtitleRowHead, useSubtitleRowShown, type SubtitleRowHandle, type SubtitleRowSpec } from './SubtitleRow';
 import { SoloButton, TrackResizeHandle } from './timeline-head-extras';
 import { clipAtPoint, markReplaceTarget } from './replace-drop';
-import { SelectionToolbar, type SelectionToolEntry } from './SelectionToolbar';
 import { Tooltip } from './Tooltip';
-import { unionBox, type ScreenBox } from '@/lib/selection-toolbar';
 import { useBlockDrag, type GestureTip } from './useBlockDrag';
 import { fadeEdits, fadeFromPointer, fadeHandleX, type FadeEdge, type FadeMs } from '@/lib/clip-fade';
 import { canChangeSpeed, roundSpeed } from '@/lib/clip-speed';
@@ -574,19 +571,14 @@ export interface TimelineProps {
   /** With it, the range's label can be dragged into the app's chat (STUDIO_REF_TYPE), and says the key that refers it. */
   rangeRef?: (range: FilmRange) => StudioRef;
   /**
-   * The bar beside the selection (SelectionToolbar) is the timeline's: the person is working here, not on the picture.
-   * It is about the clips selected, the range marked or the point picked on the ruler, whichever was picked last.
-   */
-  selectionBar?: boolean;
-  /**
    * With the app's chat: the ruler points at time for it with ⌘ (Ctrl on Windows) held, as a box is drawn on the
    * picture. A ⌘-click there is that moment, a ⌘-drag that span, each one a pill in the chat. A plain click or drag
    * moves the playhead, as without it.
    */
   onReferRuler?: (what: { atMs: number } | { range: FilmRange }) => void;
-  /** The bar's Duplicate: copies of the clips right after them. */
+  /** The clip menu's Duplicate: copies of the clips right after them. */
   onDuplicate?: (blocks: readonly TimelineBlock[]) => Promise<string | null>;
-  /** The bar's Play range: from the range's start, stopping at its end. */
+  /** The ruler menu's Play range: from the range's start, stopping at its end. */
   onPlayRange?: (range: FilmRange) => void;
   totalMs: number;
   /**
@@ -812,7 +804,7 @@ function TrimHandle({
   picked: boolean;
   /** Grab width; narrower on narrow clips so the handles do not cover the whole clip. */
   hit?: number;
-  /** It changes the clip's speed instead (the clip toolbar's Speed): its bar always shows, in the accent. */
+  /** It changes the clip's speed instead (Speed on): its bar always shows, in the accent. */
   speed?: boolean;
   onDown: (e: React.PointerEvent) => void;
 }) {
@@ -940,7 +932,6 @@ export const Timeline = React.memo(function Timeline({
   onHoverBlock,
   onRangeChange,
   rangeRef,
-  selectionBar = false,
   onReferRuler,
   onDuplicate,
   onPlayRange,
@@ -1110,8 +1101,6 @@ export const Timeline = React.memo(function Timeline({
   const playheadMove = React.useRef<((x: number) => void) | null>(null);
   /** When the time was last told upward (see SCRUB_TELL_MS). */
   const lastTold = React.useRef(0);
-  /** What the selection bar is about: what was picked last (the clips, the range, a point on the ruler). */
-  const [barFocus, setBarFocus] = React.useState<'clips' | 'range' | 'point' | null>(null);
   /* select or split: a mode, because a rough cut is a dozen cuts in a row */
   const [selectedMode, setMode] = React.useState<TimelineMode>('select');
   const mode = onSplit ? selectedMode : 'select';
@@ -1213,7 +1202,7 @@ export const Timeline = React.memo(function Timeline({
      far. Laid out on each step, a film of hundreds of clips spent most of every frame on it. */
   /** The gesture under way, against what is laid out at `px` (null: none). */
   const previewRef = React.useRef<(ZoomPreview & { px: number }) | null>(null);
-  /** A gesture is drawn by transforms: the selection bar hides, the ruler draws on past the canvas. */
+  /** A gesture is drawn by transforms: the ruler draws on past the canvas. */
   const [zooming, setZooming] = React.useState(false);
   const zoomingRef = React.useRef(false);
   /** The scroll a zoom just laid out goes to, before paint (see the layout effect below). */
@@ -1640,7 +1629,7 @@ export const Timeline = React.memo(function Timeline({
   /* A scrub follows the pointer from pointerdown to pointerup even outside the timeline (listeners on window). Each
      frame previews, release commits: hundreds of seeks would make the sound tear. With snapping on, the line snaps to
      clip edges and markers. A click without dragging takes the same path, and pauses. */
-  const startScrub = React.useCallback((e: React.PointerEvent, fromRuler = false) => {
+  const startScrub = React.useCallback((e: React.PointerEvent) => {
     if (e.button !== 0 || !playable) return;
     e.preventDefault();
     const targets = snap ? snapTargetsFor(allBlocks, '', 0, undefined, snapPointsMs).filter((t) => t.kind !== 'playhead') : [];
@@ -1665,7 +1654,7 @@ export const Timeline = React.memo(function Timeline({
     const flush = (): void => {
       raf = 0;
       at = timeAt(atX);
-      /* the line every frame, outside React; what else shows the time here (the selection bar), a few times a second */
+      /* the line every frame, outside React; what else shows the time here, a few times a second */
       moveLine();
       const now = performance.now();
       if (now - lastState >= SCRUB_STATE_MS) { lastState = now; setScrubMs(at); }
@@ -1697,8 +1686,6 @@ export const Timeline = React.memo(function Timeline({
       setScrubMs(null);
       onScrubCommit(at);
       warmPlayheadAt(ev.clientX, ev.clientY, at);
-      /* a point picked on the ruler: the selection bar is about the moment there */
-      if (fromRuler) setBarFocus('point');
     };
     window.addEventListener('pointermove', move, { passive: true });
     window.addEventListener('pointerup', up);
@@ -1918,6 +1905,18 @@ export const Timeline = React.memo(function Timeline({
   const rulerPointerX = React.useRef<number | null>(null);
   /* the ruler's own menu, open (rulerMenu) */
   const [rulerMenuAt, setRulerMenuAt] = React.useState<{ x: number; y: number; items: ContextMenuEntry[] } | null>(null);
+  /** The ruler's menu: the range marked (play it, clear it) first, then the editor's (rulerMenu). */
+  const rulerItems = (atMs: number): ContextMenuEntry[] => {
+    const marked: ContextMenuEntry[] = [];
+    if (range && onPlayRange) {
+      marked.push({ id: 'play-range', label: t('timeline.menuPlayRange'), icon: <Play size={14} />, shortcut: keyHint('play-range'), onSelect: () => onPlayRange(range) });
+    }
+    if (range && onRangeChange) {
+      marked.push({ id: 'clear-range', label: t('timeline.menuClearRange'), icon: <X size={14} />, shortcut: keyHint('clear-range'), onSelect: () => onRangeChange(null) });
+    }
+    const own = rulerMenu?.(atMs) ?? [];
+    return marked.length && own.length ? [...marked, { id: 'range-sep', separator: true }, ...own] : [...marked, ...own];
+  };
   const hoverRuler = React.useCallback((e: React.PointerEvent) => {
     if (!onReferRuler || !playable) return;
     rulerPointerX.current = e.clientX;
@@ -2788,8 +2787,8 @@ export const Timeline = React.memo(function Timeline({
     if (e.button !== 0 || selectedRef.current.includes(block.id)) return;
     setSelected(withLinked([block.id], e.altKey));
   }, [setSelected, withLinked]);
-  /* ── speed: the clip toolbar's Speed turns the selected clips' edges into speed handles (lib/clip-speed), until Esc,
-     a click anywhere else, the button again or another selection ── */
+  /* ── speed: Speed (in the clip menu, and beside Split in the toolbar) turns the selected clips' edges into speed
+     handles (lib/clip-speed), until Esc, a click anywhere else, Speed again or another selection ── */
   const selectedKey = selected.join('|');
   /** The selection the speed handles are on. */
   const [speedFor, setSpeedFor] = React.useState<string | null>(null);
@@ -2798,8 +2797,8 @@ export const Timeline = React.memo(function Timeline({
   const cancelDrag = drag.cancel;
   React.useEffect(() => {
     if (!speedOn) return undefined;
-    /* before the timeline's own Esc (which clears the selection) and the toolbar's: this one ends the speed alone, and
-       a handle pressed but not yet dragged with it. Not while a menu, a popover or a dialog is open: that Esc is theirs */
+    /* before the timeline's own Esc (which clears the selection): this one ends the speed alone, and a handle pressed
+       but not yet dragged with it. Not while a menu, a popover or a dialog is open: that Esc is theirs */
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || inHandRef.current || isTypingTarget(e.target) || inHostPanel(e.target)) return;
       if (document.querySelector('[data-popover-panel], [role="menu"], [role="listbox"], [role="dialog"]')) return;
@@ -2808,8 +2807,12 @@ export const Timeline = React.memo(function Timeline({
       cancelDrag();
       setSpeedFor(null);
     };
+    /* not a press on Speed itself (it turns it off), in a menu, nor the right-click that opens the clip's menu (which
+       shows it on) */
     const onDown = (e: PointerEvent) => {
-      if ((e.target as Element | null)?.closest?.('[data-speed-handle], [data-tool="speed"]')) return;
+      const el = e.target as Element | null;
+      if (el?.closest?.('[data-speed-handle], [data-timeline-speed], [role="menu"]')) return;
+      if (e.button === 2 && el?.closest?.('[data-block-id]')) return;
       setSpeedFor(null);
     };
     window.addEventListener('keydown', onKey, true);
@@ -3278,7 +3281,7 @@ export const Timeline = React.memo(function Timeline({
                 }) : null}
                 {/* the speed handles on: a knob at each top corner, where the fade handles were; dragged as its edge is */}
                 {speeding && able.resize && width > 18 && !floating ? (['start', 'end'] as const).filter((edge) => edge === 'end' || able.move).map((edge) => (
-                  <span key={`speed-${edge}`} role="presentation" data-speed-handle={edge} title={t('selectionBar.speedHandle')}
+                  <span key={`speed-${edge}`} role="presentation" data-speed-handle={edge} title={t('timeline.speedHandle')}
                     className="absolute top-[1px] z-[5] flex h-[13px] w-[13px] -translate-x-1/2 cursor-ew-resize items-center justify-center rounded-full text-white shadow-[0_0_2px_rgba(0,0,0,.5)]"
                     style={{ left: edge === 'start' ? 7 : width - 7, background: 'var(--tl-accent)' }}
                     onPointerDown={(e) => { e.stopPropagation(); pickForTrim(e, block); drag.start(e, block, edge === 'start' ? 'speed-start' : 'speed-end'); }}
@@ -3660,6 +3663,15 @@ export const Timeline = React.memo(function Timeline({
         onSelect: () => { rippleTrimToPlayhead('end', [one]); },
       });
     }
+    /* its speed by its edges (lib/clip-speed): on, the edge handles change the speed instead of trimming */
+    if (onEditOps && picked.some((b) => b.clipId)) {
+      const speedable = picked.some((b) => b.clipId && canChangeSpeed(b));
+      out.push({
+        id: 'speed', label: t('timeline.speed'), checked: speedOn,
+        disabled: pickedLocked || !speedable, hint: pickedLocked ? t('timeline.trackLocked') : t('timeline.speedNone'),
+        onSelect: () => setSpeedFor(speedOn ? null : selectedKey),
+      });
+    }
     /* clips that go together: link them, or take them apart */
     if (onEditOps) {
       const ids = picked.flatMap((b) => (b.clipId ? [b.clipId] : []));
@@ -3688,6 +3700,17 @@ export const Timeline = React.memo(function Timeline({
         disabled: !heard || pickedLocked,
         hint: pickedLocked ? t('timeline.trackLocked') : t('timeline.menuDetachAudioNone'),
         onSelect: () => { void onDetachAudio(one); },
+      });
+    }
+    /* a clip's own sound: film.html's `volume` 0 is silent; unmuted it plays as is (the inspector sets a level) */
+    const sounding = picked.filter((b) => b.loc && parseFilmDocLoc(b.loc) != null
+      && (b.kind === 'voice' || b.kind === 'sfx' || b.kind === 'music' || Boolean(b.ownAudio)));
+    if (onEditBlocks && sounding.length) {
+      const allSilent = sounding.every((b) => b.silent);
+      out.push({
+        id: 'mute', label: t(allSilent ? 'timeline.menuUnmute' : 'timeline.menuMute'), icon: allSilent ? <Volume2 size={14} /> : <VolumeX size={14} />,
+        disabled: pickedLocked, hint: t('timeline.trackLocked'),
+        onSelect: () => { void onEditBlocks(sounding.map((b) => ({ loc: b.loc!, prop: 'volume', value: allSilent ? null : 0 }))); },
       });
     }
     /* fades at the clip's start and end (lib/transitions) */
@@ -3741,6 +3764,13 @@ export const Timeline = React.memo(function Timeline({
         onSelect: () => { if (laneToPaste) void onPaste(laneToPaste, menu.atMs); },
       });
     }
+    if (onDuplicate) {
+      out.push({
+        id: 'duplicate', label: t('stageMenu.duplicate'), icon: <CopyPlus size={14} />, shortcut: keyHint('duplicate'),
+        disabled: pickedLocked || !picked.some((b) => b.clipId), hint: pickedLocked ? t('timeline.trackLocked') : t('timeline.menuCopyNone'),
+        onSelect: () => { void onDuplicate(picked.filter((b) => b.clipId)); },
+      });
+    }
     /* exporting one clip is for MG only: its point is a transparent background, which only an MG page has */
     if (onExportBlock && one?.kind === 'mg') {
       out.push({
@@ -3784,138 +3814,13 @@ export const Timeline = React.memo(function Timeline({
     menu, t, keyHint, onSplit, onDetachAudio, onRemove, onRemoveMany, onCopy, onPaste, onExportBlock, mediaTrouble, relinkCandidates,
     onRelink, hasClipboard, runSplit, removeMany, rippleRemove, magnetRemove, onEditOps, tracks, blockMenuExtra, headEntries, withLinked,
     runPlan, closeGapOn, rippleTrimToPlayhead, linkBlocks, unlinkBlocks, transitions, onTransition, onPickTransition, transitionEntries,
+    speedOn, selectedKey, onEditBlocks, onDuplicate,
   ]);
 
-  /* ── the bar beside the selection (SelectionToolbar): what was picked last, the clips, the range or a point ── */
-  const selKey = selected.join('|');
-  React.useEffect(() => { setBarFocus((f) => (selKey ? 'clips' : f === 'clips' ? null : f)); }, [selKey]);
-  const rangeKey = range ? `${Math.round(range.startMs)}-${Math.round(range.endMs)}` : '';
-  React.useEffect(() => { setBarFocus((f) => (rangeKey ? 'range' : f === 'range' ? null : f)); }, [rangeKey]);
-  React.useEffect(() => { if (playing) setBarFocus((f) => (f === 'point' ? null : f)); }, [playing]);
-  const barKind = !selectionBar ? null
-    : barFocus === 'point' && playable ? 'point'
-      : barFocus === 'range' && range ? 'range'
-        : selectedBlocks.length ? 'clips' : range ? 'range' : null;
-  const barTools = ((): SelectionToolEntry[] => {
-    if (!barKind) return [];
-    const nowMs = scrubMs ?? timeMs;
-    const out: SelectionToolEntry[] = [];
-    const lockedBlock = (b: TimelineBlock) => tracks.some((tr) => tr.locked && tr.blocks.some((row) => row.id === b.id));
-    /* the clips the playhead is inside, as the split button and ⌘B have it (all of them in one edit) */
-    const underPlayhead = selectedBlocks.filter((b) => b.loc && !lockedBlock(b) && drag.can(b).resize
-      && nowMs > b.startMs + MIN_BLOCK_MS && nowMs < b.endMs - MIN_BLOCK_MS);
-    const splitAll = async () => { await runSplit(underPlayhead, nowMs); };
-    if (barKind === 'point') {
-      if (onSplit && selectedBlocks.length) {
-        out.push({
-          id: 'split', label: t('selectionBar.splitSelected'), icon: <Scissors size={14} />, shortcut: keyHint('split'),
-          disabled: !underPlayhead.length || splitting, hint: t('selectionBar.splitNone'), onSelect: () => { void splitAll(); },
-        });
-      }
-      return out;
-    }
-    if (barKind === 'range' && range) {
-      if (onPlayRange) out.push({ id: 'play-range', label: t('selectionBar.playRange'), icon: <Play size={14} />, onSelect: () => onPlayRange(range) });
-      if (onRangeChange) out.push({ id: 'clear-range', label: t('selectionBar.clearRange'), icon: <X size={14} />, shortcut: keyHint('clear-range'), onSelect: () => onRangeChange(null) });
-      return out;
-    }
-    const picked = selectedBlocks;
-    const pickedLocked = picked.some(lockedBlock);
-    const lockedHint = t('timeline.trackLocked');
-    if (onSplit) {
-      out.push({
-        id: 'split', label: t('timeline.menuSplitHere'), icon: <Scissors size={14} />, shortcut: keyHint('split'),
-        disabled: !underPlayhead.length || splitting, hint: pickedLocked ? lockedHint : t('timeline.menuSplitOutside'), onSelect: () => { void splitAll(); },
-      });
-    }
-    if (onDuplicate) {
-      out.push({
-        id: 'duplicate', label: t('stageMenu.duplicate'), icon: <CopyPlus size={14} />, disabled: pickedLocked || !picked.some((b) => b.clipId), hint: lockedHint,
-        onSelect: () => { void onDuplicate(picked.filter((b) => b.clipId)); },
-      });
-    }
-    /* its speed by its edges (lib/clip-speed): the button turns the edge handles into speed handles, and back */
-    if (onEditOps && picked.some((b) => b.clipId)) {
-      const speedable = picked.some((b) => b.clipId && canChangeSpeed(b));
-      out.push({
-        id: 'speed', label: t('selectionBar.speed'), icon: <Gauge size={14} />, active: speedOn,
-        disabled: pickedLocked || !speedable, hint: pickedLocked ? lockedHint : t('selectionBar.speedNone'),
-        onSelect: () => setSpeedFor(speedOn ? null : selectedKey),
-      });
-    }
-    /* a clip's own sound: film.html's `volume` 0 is silent; unmuted it plays as is (the inspector sets a level) */
-    const sounding = picked.filter((b) => b.loc && parseFilmDocLoc(b.loc) != null
-      && (b.kind === 'voice' || b.kind === 'sfx' || b.kind === 'music' || Boolean(b.ownAudio)));
-    if (onEditBlocks && sounding.length) {
-      const allSilent = sounding.every((b) => b.silent);
-      out.push({
-        id: 'mute', label: t(allSilent ? 'selectionBar.unmute' : 'selectionBar.mute'), icon: allSilent ? <Volume2 size={14} /> : <VolumeX size={14} />,
-        disabled: pickedLocked, hint: lockedHint,
-        onSelect: () => { void onEditBlocks(sounding.map((b) => ({ loc: b.loc!, prop: 'volume', value: allSilent ? null : 0 }))); },
-      });
-    }
-    /* clips that go together: one button to link them, or to take them apart (what the selection is now) */
-    if (onEditOps && picked.length > 1) {
-      const ids = picked.flatMap((b) => (b.clipId ? [b.clipId] : []));
-      const linked = ids.length > 1 && !planLink(model, ids).length;
-      out.push({
-        id: 'link', label: t(linked ? 'timeline.menuUnlink' : 'timeline.menuLink'), icon: linked ? <Link2Off size={14} /> : <Link2 size={14} />,
-        disabled: pickedLocked, hint: lockedHint, onSelect: () => { (linked ? unlinkBlocks : linkBlocks)(picked); },
-      });
-    }
-    if (onRemove || onRemoveMany || onEditOps) {
-      out.push({
-        id: 'delete', label: t('timeline.removeBlock'), icon: <Trash2 size={14} />, shortcut: keyHint('remove'), danger: true,
-        disabled: pickedLocked || !picked.some((b) => b.loc), hint: lockedHint,
-        onSelect: () => { void magnetRemove(picked); },
-      });
-    }
-    out.push({
-      id: 'more', label: t('selectionBar.more'), icon: <MoreHorizontal size={14} />,
-      onSelect: (button) => {
-        const r = button.getBoundingClientRect();
-        setMenu({ x: r.left, y: r.bottom + 4, blocks: picked, lane: null, atMs: timeMsRef.current });
-      },
-    });
-    return out;
-  })();
-  const clipCount = selectedBlocks.length;
-  const clipsWord = clipCount === 1 ? t('selectionBar.oneClip') : t('selectionBar.clips').replace('{n}', String(clipCount));
-  const barLabel = barKind === 'point' || !clipCount ? undefined
-    : range ? t('selectionBar.plusRange').replace('{what}', clipsWord)
-      : clipCount > 1 ? clipsWord : undefined;
-  /* the clips' union box (their blocks as drawn), the range or the playhead on the ruler; in the track area across.
-     A range's or a point's bar goes over the timeline's toolbar row, just above the ruler; a clip's stays among the
-     tracks, under the ruler */
-  const measureBar = () => {
-    const root = rootRef.current;
-    const scroller = scrollRef.current;
-    const ruler = rulerRef.current;
-    if (!root || !scroller || !ruler || !barKind) return null;
-    const sr = scroller.getBoundingClientRect();
-    const rr = root.getBoundingClientRect();
-    const rl = ruler.getBoundingClientRect();
-    const bounds = { left: sr.left, top: rr.top, width: sr.width, height: sr.bottom - rr.top };
-    if (barKind === 'clips') {
-      /* with the clips, clear of the other clips where it can be (it covered the clips on the track above), never over
-         the ruler (a bar there took the clicks meant to move the playhead) or the timeline's own buttons */
-      const ids = new Set(selected);
-      const rect = (el: Element): ScreenBox => { const r = el.getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height }; };
-      const clips = [...(contentRef.current?.querySelectorAll<HTMLElement>('[data-block-id]') ?? [])];
-      const anchor = unionBox(clips.filter((el) => ids.has(el.dataset.blockId ?? '')).map(rect));
-      const avoid = clips.filter((el) => !ids.has(el.dataset.blockId ?? '')).map(rect);
-      const keepOff = [rect(ruler), ...[...(toolbarRef.current?.querySelectorAll('button, input') ?? [])].map(rect)];
-      return anchor ? { anchor, bounds, avoid, keepOff } : null;
-    }
-    const x = (ms: number) => sr.left + ms * pxPerMs - scroller.scrollLeft;
-    const anchor = barKind === 'range' && range
-      ? { left: x(range.startMs), top: rl.top, width: Math.max(1, (range.endMs - range.startMs) * pxPerMs), height: rl.height }
-      : { left: x(scrubMs ?? timeMs), top: rl.top, width: 0, height: rl.height };
-    /* just over the ruler: the toolbar row above it is the room there is */
-    return { anchor, bounds, gap: 2 };
-  };
   inHandRef.current = Boolean(drag.preview || assetHint || marquee || rangeDraft || referDraft || scrubbing || laneOrder || fadeDrag || transitionDrag);
-  const barKey = !barKind ? null : barKind === 'clips' ? `clips:${selKey}` : barKind === 'range' ? `range:${rangeKey}` : 'point';
+  /* the toolbar's Speed: on and off for the selection, as in its clips' menu (not on a locked track) */
+  const speedable = selectedBlocks.some((b) => b.clipId && canChangeSpeed(b))
+    && !selectedBlocks.some((b) => tracks.some((tr) => tr.locked && tr.blocks.some((row) => row.id === b.id)));
 
   return (
     /* no background on the outer box: the pane's rounded corners come from the pane's own background */
@@ -3986,6 +3891,14 @@ export const Timeline = React.memo(function Timeline({
           >
             <Scissors size={16} />
           </ToolButton>
+        ) : null}
+        {/* Speed, for the clips selected (lit while on): a mode of their edges, so beside Split, which also acts on them */}
+        {onEditOps ? (
+          <span data-timeline-speed={speedOn ? '1' : '0'}>
+            <ToolButton onClick={() => setSpeedFor(speedOn ? null : selectedKey)} disabled={!speedable && !speedOn} active={speedOn} label={t('timeline.speed')}>
+              <Gauge size={15} />
+            </ToolButton>
+          </span>
         ) : null}
 
         {/* the middle is for status: "Editing source…" and errors (not among the tools, where it would look like one) */}
@@ -4159,17 +4072,15 @@ export const Timeline = React.memo(function Timeline({
               aria-valuetext={`${formatTimecode(timeMs)} / ${formatTimecode(totalMs)}`}
               onPointerDown={(e) => (e.shiftKey && onRangeChange ? startRange(e)
                 : referKeyHeld(e) && onReferRuler ? startRefer(e)
-                  : startScrub(e, true))}
+                  : startScrub(e))}
               onKeyDown={onKeyDown}
               onPointerMove={hoverRuler}
               onPointerLeave={() => { rulerPointerX.current = null; setRulerHoverMs(null); }}
-              onContextMenu={rulerMenu ? (e) => {
+              onContextMenu={rulerMenu || range ? (e) => {
                 e.preventDefault();
-                const items = rulerMenu(Math.max(0, Math.min(totalMs, msAtClientX(e.clientX))));
+                const items = rulerItems(Math.max(0, Math.min(totalMs, msAtClientX(e.clientX))));
                 if (items.length) setRulerMenuAt({ x: e.clientX, y: e.clientY, items });
               } : undefined}
-              /* the point picked on the ruler is let go with the timeline's focus */
-              onBlur={() => setBarFocus((f) => (f === 'point' ? null : f))}
               className="relative h-full touch-none select-none outline-none"
               /* pointing at time for the chat (⌘ held): a crosshair, as on the picture, and the moment under it drawn */
               style={{ width: trackPx, cursor: rulerHoverMs != null || referDraft ? 'crosshair' : 'default' }}
@@ -4473,15 +4384,6 @@ export const Timeline = React.memo(function Timeline({
           </>
         );
       })() : null}
-
-      <SelectionToolbar
-        selection={barKey}
-        measure={measureBar}
-        hidden={playing || scrubbing || zooming || Boolean(marquee || rangeDraft || referDraft || drag.preview || laneOrder || assetHint)}
-        {...(barLabel ? { label: barLabel } : {})}
-        tools={barTools}
-        ariaLabel={t('selectionBar.toolbar')}
-      />
 
       {/* the context menu; with no items (read-only) the browser's own menu shows instead of an empty box */}
       {menu && menuItems.length ? (

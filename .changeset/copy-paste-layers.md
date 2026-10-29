@@ -2,7 +2,7 @@
 "openfilm": patch
 ---
 
-Studio: layers inside a page can be copied and pasted, as in a design tool. Select one or more on the picture or in the Layers panel, then press ⌘C / Ctrl+C or choose Copy in the layer's menu (a Layers row now has a right-click menu with Copy, Paste and Delete). Paste with ⌘V / Ctrl+V or Paste in a menu.
+Studio: layers inside a page can be copied and pasted, as in a design tool. Select one or more on the picture or in the Layers panel, then press ⌘C / Ctrl+C or choose Copy in the layer's menu (a Layers row's right-click menu has them too). Paste with ⌘V / Ctrl+V or Paste in a menu.
 
 The copy is a new, independent element written into the page's HTML right after the original, or last in its parent when the page's CSS would restyle what is next to it. It gets new ids (`<id>-copy`). The page's CSS for the old ids is repeated for the new ones in the page's head, and the clip's changes to the original (styles, moves, words) are written into it. Scripts and `on…` handlers inside it are left out, so the page's code runs once. It is placed 24 px lower and to the right, each paste at the same spot on top of the one before, and selected so it can be moved at once. From then on it is an ordinary layer: it shows in the Layers panel, moves, exports and is deleted like any other. When other clips also show that page, this clip first gets its own copy of the page (`<name> 2.html`), so the other clips stay as they were.
 

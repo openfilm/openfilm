@@ -63,7 +63,7 @@ function writeClosed(id: string, closed: boolean): void {
   for (const fn of closedListeners) fn();
 }
 
-/** Unfold a section (the selection bar's Mask opens the inspector there); `data-section` finds it to scroll to. */
+/** Unfold a section (a clip menu's Mask opens the inspector there); `data-section` finds it to scroll to. */
 export function openSection(id: string): void {
   if (readClosed()[id] !== false) writeClosed(id, false);
 }
