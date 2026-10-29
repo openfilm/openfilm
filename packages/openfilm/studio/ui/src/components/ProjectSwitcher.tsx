@@ -1,5 +1,5 @@
 /**
- * The project in front, named at the top bar's left, and the way to another, as an editor's: one project shows at a
+ * The project in front, named at the top bar's middle, and the way to another, as an editor's: one project shows at a
  * time, the others the app has open stay as they were behind it (their agents at work), and a click on the name lists
  * them, then the recent ones, then All projects (`onAll`). An open project has a light while it has something to say:
  * breathing while its agent works, amber while it waits for an answer, its percent while it exports; the name has a dot
@@ -13,12 +13,6 @@ import { api, type Project } from '@/api';
 import { useT } from '@/i18n';
 import { studioHost, type HostTab } from '@/lib/host';
 import { Popover } from './Popover';
-
-/**
- * Room on the top bar's left for the window's controls (lib/host.ts sets --titlebar-logo-x to where they end), and a
- * little more: what follows starts a step away from them, as a design app's does, not pressed against them.
- */
-export const TITLEBAR_LEFT = 'calc(var(--titlebar-logo-x) + 6px)';
 
 /** how many recent projects the list shows (the rest are in All projects) */
 const RECENT = 8;

@@ -1347,7 +1347,7 @@ export const es: Words = {
     subtitlesMakeOne: 'Crear subtítulos: un clip de voz aún no tiene transcripción',
     subtitlesMake: 'Crear subtítulos: {n} clips con voz aún no tienen transcripción',
     subtitlesMaking: 'Creando subtítulos…',
-    subtitlesConnect: 'Para crear subtítulos hace falta un servicio de transcripción: conecta uno en Configuración (el engranaje, arriba a la derecha) → Proveedores',
+    subtitlesConnect: 'Para crear subtítulos hace falta un servicio de transcripción: conecta uno en Configuración (el logotipo de OpenFilm, arriba a la izquierda) → Proveedores',
     subtitlesFailed: 'No se pudieron crear los subtítulos: {error}',
     subtitleLines: 'Líneas',
     subtitleLineAt: 'La línea en {time}',
@@ -1368,7 +1368,7 @@ export const es: Words = {
     subtitleTranslateFailed: 'No se pudo traducir ahora mismo.',
     subtitleTranslateNetwork: 'No se pudo conectar con el servicio de traducción.',
     subtitleTranslateRetry: 'Reintentar',
-    subtitleTranslateConnect: 'Conecta un servicio de traducción en Configuración (el engranaje, arriba a la derecha) → Proveedores.',
+    subtitleTranslateConnect: 'Conecta un servicio de traducción en Configuración (el logotipo de OpenFilm, arriba a la izquierda) → Proveedores.',
     subtitleSize: 'Tamaño',
     subtitleLook: {
       outline: 'Con contorno (predeterminado)',

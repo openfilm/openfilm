@@ -7,7 +7,7 @@
  * are written one at a time (see editor/use-film.ts); the agent's writes come in through the folder's events.
  */
 import * as React from 'react';
-import { ArrowLeftRight, BookmarkPlus, ClipboardCopy, ClipboardPaste, Film as FilmIcon, GalleryVerticalEnd, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings, Settings2, TriangleAlert, Upload, Workflow } from 'lucide-react';
+import { ArrowLeftRight, BookmarkPlus, ClipboardCopy, ClipboardPaste, Film as FilmIcon, GalleryVerticalEnd, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, TriangleAlert, Upload, Workflow } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
 import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type Op, type ProjectFilm, type ProjectSettings } from '@/api';
 import { useT } from '@/i18n';
@@ -54,7 +54,7 @@ import { BrandLoadingScreen } from './BrandLoadingScreen';
 import { SettingsModal } from './settings/SettingsModal';
 import { useSettings } from './settings/use-settings';
 import { DesktopDialog } from './DesktopDialog';
-import type { ContextMenuEntry } from './ContextMenu';
+import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import { HOST_PANEL_WIDTH, studioHost, useHostPanel, type CommunityItem, type HostPanel, type StageBox, type StudioCommand, type StudioRef } from '../lib/host';
 import { clipRef, fileRef, layerRef, markRange, momentRef, rangeRef, regionRef, stillUrl, subtitleRef, trackRef, type ClipFrameSource, type FilmRange } from '@/lib/studio-refs';
 import { boxNow, chatPointOf, draftBoxesAt, draftMarksOf, sameClip, NO_DRAFT, type DraftMarks, type PictureMarks } from '@/lib/chat-marks';
@@ -67,7 +67,8 @@ import { cueAt, filmSubtitleStyleFor, filmSubtitleWords, sameFilmSubtitleLanguag
 import { DEFAULT_INSPECTOR, DOCK_GAP, DockPaneDivider, MIN_DOCK_H, MIN_INSPECTOR, MIN_STAGE_H, MIN_VIEWER, PaneDivider, usePaneSize } from './PaneDivider';
 import { PANE_BAR, PANE_BTN_ON, PANE_TOGGLE, PANE_TOGGLE_ICON } from './dock-pane-bar';
 import { Tooltip } from './Tooltip';
-import { ProjectSwitcher, TITLEBAR_LEFT } from './ProjectSwitcher';
+import { ProjectSwitcher } from './ProjectSwitcher';
+import { BrandLogo } from './BrandLogo';
 import { ExamplesDialog } from './ExamplesGallery';
 import { UpdateButton, WebUpdateButton } from './UpdateButton';
 import { MediaPool, type ImportProgress } from './MediaPool';
@@ -82,7 +83,7 @@ import { useEditorTools } from './use-editor-tools';
 import { AudioMeters, METERS_W } from './AudioMeters';
 import { trackFlagStep, type SessionTimeline } from './OperationHistory';
 import { ProjectLayoutMenu } from './ProjectLayoutMenu';
-import { ProjectMenu } from './ProjectMenu';
+import { projectMenuItems } from './ProjectMenu';
 import { ProjectHistoryButton, ProjectHistoryControls } from './ProjectHistoryControls';
 import { useProjectHistory } from './use-project-history';
 import { historyMoved } from '@/lib/project-history';
@@ -2653,6 +2654,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     }
   };
   const [projectsOpen, setProjectsOpen] = React.useState(false);
+  /* the title's menu, where it was right-clicked */
+  const [titleMenu, setTitleMenu] = React.useState<{ x: number; y: number } | null>(null);
   /* the examples over the film, opened from the app's chat */
   /* the Community over the film: closed, open on its list (true), or on one skill's or example's page */
   const [examplesOpen, setExamplesOpen] = React.useState<boolean | CommunityItem>(false);
@@ -2763,22 +2766,33 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         <div className="relative z-10 grid min-h-0 min-w-0 flex-1" style={{ gridTemplateColumns: 'minmax(0, 1fr)', gridTemplateRows: 'auto minmax(0, 1fr)', gridTemplateAreas: '"bar" "main"' }}>
           {/* ── top bar: the title centered, whatever is on either side ── */}
           <div data-titlebar className="relative flex h-8 min-w-0 items-center gap-1 px-[6px]" style={{ gridArea: 'bar' }}>
-            {inTabs ? null : <div className="pointer-events-none absolute inset-0 flex min-w-0 items-center justify-center">
-              <div className="pointer-events-auto flex min-w-0 max-w-full items-center">
-                {titleField}
+            {/* the title centered (in an app that keeps several projects open, the way to the others too); a right click is its menu */}
+            <div className="pointer-events-none absolute inset-0 flex min-w-0 items-center justify-center">
+              <div className="pointer-events-auto flex min-w-0 max-w-full items-center"
+                onContextMenu={(e) => { if (renaming) return; e.preventDefault(); setTitleMenu({ x: e.clientX, y: e.clientY }); }}>
+                {inTabs && !renaming ? <ProjectSwitcher name={title} onAll={() => setProjectsOpen(true)} onRename={startRename} /> : titleField}
               </div>
-            </div>}
-            {/* the window's controls over this; what follows starts just right of them */}
-            <div aria-hidden className="shrink-0 self-stretch" style={{ width: TITLEBAR_LEFT }} />
-            <div className="pointer-events-auto relative flex min-w-0 items-center gap-1 empty:hidden">
-              {inTabs && renaming ? titleField
-                : inTabs ? <ProjectSwitcher name={title} onAll={() => setProjectsOpen(true)} onRename={startRename} /> : null}
-              {inTabs ? null : <Tooltip label={t('nav.projects')} side="bottom">
+            </div>
+            {titleMenu ? (
+              <ContextMenu x={titleMenu.x} y={titleMenu.y} onClose={() => setTitleMenu(null)}
+                items={projectMenuItems(t, { onRename: startRename, onCoverFromFrame: coverFromFrame, onReveal: () => reveal('') })} />
+            ) : null}
+            {/* the window's controls over this, a line after them, then the logo (Settings) and the projects */}
+            <div aria-hidden className="shrink-0 self-stretch" style={{ width: 'var(--titlebar-logo-x)' }} />
+            <div aria-hidden className="titlebar-line w-px shrink-0 self-stretch bg-[var(--border)]" />
+            <div className="pointer-events-auto relative flex min-w-0 items-center gap-1">
+              <Tooltip label={t('project.appMenu')} side="bottom">
+                <button type="button" aria-label={t('project.appMenu')} aria-haspopup="dialog" onClick={() => setSettingsOpen('general')}
+                  className="flex h-[26px] w-[26px] items-center justify-center rounded-md text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)]">
+                  <BrandLogo size={15} />
+                </button>
+              </Tooltip>
+              <Tooltip label={t('nav.projects')} side="bottom">
                 <button type="button" aria-label={t('nav.projects')} onClick={() => setProjectsOpen((v) => !v)}
                   className={`${TOP_BTN} ${projectsOpen ? 'bg-[var(--bg-hover)] text-[var(--text)]' : ''}`}>
                   <GalleryVerticalEnd size={15} />
                 </button>
-              </Tooltip>}
+              </Tooltip>
               <UpdateButton />
               <WebUpdateButton />
               {!studioHost && <Tooltip label={t('desktop.title')} side="bottom">
@@ -2817,12 +2831,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                   <Upload size={16} />
                 </button>
               </Tooltip>
-              <Tooltip label={t('project.appMenu')} side="bottom">
-                <button type="button" aria-label={t('project.appMenu')} aria-haspopup="dialog" onClick={() => setSettingsOpen('general')} className={TOP_BTN}>
-                  <Settings size={16} />
-                </button>
-              </Tooltip>
-              <ProjectMenu className={TOP_BTN} onRename={inTabs ? startRename : undefined} onCoverFromFrame={coverFromFrame} onReveal={() => reveal('')} />
             </div>
             <div aria-hidden className="shrink-0 self-stretch" style={{ width: 'var(--titlebar-right-x)' }} />
           </div>
