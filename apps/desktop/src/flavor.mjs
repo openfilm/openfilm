@@ -11,6 +11,9 @@
  *   · dev     — `pnpm --filter @openfilm/desktop start`: this repository's code, with its own Studio home.
  *   · bench   — `node bench/run.mjs`: this repository's code, everything (data, Studio home, projects) in the throwaway
  *               folder the benchmark names in OPENFILM_BENCH_DIR, so a run never touches a person's dev or installed app.
+ *   · next    — `pnpm --filter @openfilm/desktop start` with OPENFILM_NEXT_DIR: the local next/0.3 branch, "OpenFilm
+ *               Next", everything (data, Studio home, preferences, projects) in that folder, so 0.3 work never meets the
+ *               dev app or a person's projects. Local to next/0.3: drop it before 0.3 goes into main.
  *
  * Reads no Electron module, so `node --test` can use it.
  */
@@ -39,6 +42,13 @@ const BENCH = Object.freeze({
   studioHome: join(benchDir, 'home'), library: join(benchDir, 'projects'), sharedHome: null, userData: join(benchDir, 'data'),
 });
 
+const nextDir = process.env.OPENFILM_NEXT_DIR ?? '';
+export const NEXT = Object.freeze({
+  productName: 'OpenFilm Next', bundleId: 'dev.openfilm.desktop.next', studioPort: 4797,
+  studioHome: join(nextDir, 'desktop', 'home'), library: join(nextDir, 'Projects'), sharedHome: join(nextDir, 'shared'),
+  userData: join(nextDir, 'desktop', 'data'),
+});
+
 /** What the app's package says it was built as (`release --preview` writes `openfilmFlavor`). */
 function builtFlavor() {
   try {
@@ -50,9 +60,10 @@ export function flavorName(env = process.env, isPackaged = packaged, built = isP
   if (isPackaged) return built === 'preview' ? 'preview' : 'release';
   if (env.OPENFILM_DESKTOP_FLAVOR === 'dev') return 'dev';
   if (env.OPENFILM_DESKTOP_FLAVOR === 'bench' && env.OPENFILM_BENCH_DIR) return 'bench';
+  if (env.OPENFILM_DESKTOP_FLAVOR === 'next' && env.OPENFILM_NEXT_DIR) return 'next';
   return 'release';
 }
 
 export const FLAVOR = flavorName();
-export const IDENTITY = FLAVOR === 'bench' ? BENCH : FLAVORS[FLAVOR];
+export const IDENTITY = FLAVOR === 'bench' ? BENCH : FLAVOR === 'next' ? NEXT : FLAVORS[FLAVOR];
 export const PRODUCT_NAME = IDENTITY.productName;
