@@ -7,7 +7,7 @@
  * are written one at a time (see editor/use-film.ts); the agent's writes come in through the folder's events.
  */
 import * as React from 'react';
-import { BookmarkPlus, ClipboardCopy, ClipboardPaste, Film as FilmIcon, GalleryVerticalEnd, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings, Settings2, TriangleAlert, Upload, Workflow } from 'lucide-react';
+import { ArrowLeftRight, BookmarkPlus, ClipboardCopy, ClipboardPaste, Film as FilmIcon, GalleryVerticalEnd, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings, Settings2, TriangleAlert, Upload, Workflow } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
 import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type Op, type ProjectFilm, type ProjectSettings } from '@/api';
 import { useT } from '@/i18n';
@@ -67,7 +67,7 @@ import { cueAt, filmSubtitleStyleFor, filmSubtitleWords, sameFilmSubtitleLanguag
 import { DEFAULT_INSPECTOR, DOCK_GAP, DockPaneDivider, MIN_DOCK_H, MIN_INSPECTOR, MIN_STAGE_H, MIN_VIEWER, PaneDivider, usePaneSize } from './PaneDivider';
 import { PANE_BAR, PANE_BTN_ON, PANE_TOGGLE, PANE_TOGGLE_ICON } from './dock-pane-bar';
 import { Tooltip } from './Tooltip';
-import { TITLEBAR_LEFT, TabStrip } from './TabStrip';
+import { ProjectSwitcher, TITLEBAR_LEFT } from './ProjectSwitcher';
 import { ExamplesDialog } from './ExamplesGallery';
 import { UpdateButton, WebUpdateButton } from './UpdateButton';
 import { MediaPool, type ImportProgress } from './MediaPool';
@@ -2625,7 +2625,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     return { title, durationMs: totalMs, tracks: tracks.length, clips: tracks.reduce((n, tr) => n + tr.clips.length, 0), empty, badges: filmTrackBadges(tracks) };
   }, [title, totalMs, film.film?.tracks, empty]);
   const startRename = () => { setTitleEditWidth(titleBoxRef.current?.offsetWidth ?? null); setTitleDraft(title); setRenaming(true); };
-  /* in an app with tabs: the tab says this project's title; the tabs are where the projects button and the title are */
+  /* in an app that keeps several projects open (its tabs): the title at the bar's left is the way to the others */
   const inTabs = Boolean(studioHost?.tabs);
   /* the film at the playhead, drawn by Studio as the projects list will show it */
   const coverFromFrame = () => {
@@ -2651,12 +2651,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       renameError(e, next);
       return false;
     }
-  };
-  /* a tab renamed in the tab strip: this page's project, as its title is, or another tab's (its page hears it) */
-  const renameTab = async (id: string, name: string) => {
-    if (id === projectId) return commitTitle(name);
-    try { await api.rename(id, name); return true; }
-    catch (e) { renameError(e, name); return false; }
   };
   const [projectsOpen, setProjectsOpen] = React.useState(false);
   /* the examples over the film, opened from the app's chat */
@@ -2737,6 +2731,32 @@ export function ProjectView({ projectId, onProject, onLeave }: {
 
   const value = film.film;
   const viewerReady = Boolean(info);
+  /* the project's name, renamed in place: centered on the bar, or at its left where the app keeps several projects */
+  const titleField = (
+    renaming ? (
+      <input
+        autoFocus
+        value={titleDraft}
+        onChange={(e) => setTitleDraft(e.target.value)}
+        onBlur={() => void commitTitle()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') void commitTitle();
+          if (e.key === 'Escape') { setTitleDraft(title); setRenaming(false); }
+        }}
+        placeholder={t('project.untitled')}
+        maxLength={TITLE_MAX_CHARS}
+        style={titleEditWidth ? { width: titleEditWidth } : undefined}
+        className="box-border h-[26px] max-w-full rounded-md bg-transparent px-2 text-[13px] font-medium text-[var(--text-muted)] outline-none"
+      />
+    ) : (
+      <Tooltip label={t('projectMenu.rename')} side="bottom">
+        <button ref={titleBoxRef} type="button" onClick={startRename}
+          className="flex h-[26px] w-fit min-w-0 max-w-[24ch] items-center rounded-md px-2 transition hover:bg-[var(--bg-hover)]">
+          <span className="min-w-0 truncate text-[13px] font-medium text-[var(--text-muted)]">{clampTitle(title || t('project.untitled'))}</span>
+        </button>
+      </Tooltip>
+    )
+  );
   return (
     <div className="workspace-shell flex flex-col bg-[var(--dock-shell)]">
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
@@ -2745,34 +2765,14 @@ export function ProjectView({ projectId, onProject, onLeave }: {
           <div data-titlebar className="relative flex h-8 min-w-0 items-center gap-1 px-[6px]" style={{ gridArea: 'bar' }}>
             {inTabs ? null : <div className="pointer-events-none absolute inset-0 flex min-w-0 items-center justify-center">
               <div className="pointer-events-auto flex min-w-0 max-w-full items-center">
-                {renaming ? (
-                  <input
-                    autoFocus
-                    value={titleDraft}
-                    onChange={(e) => setTitleDraft(e.target.value)}
-                    onBlur={() => void commitTitle()}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') void commitTitle();
-                      if (e.key === 'Escape') { setTitleDraft(title); setRenaming(false); }
-                    }}
-                    placeholder={t('project.untitled')}
-                    maxLength={TITLE_MAX_CHARS}
-                    style={titleEditWidth ? { width: titleEditWidth } : undefined}
-                    className="box-border h-[26px] max-w-full rounded-md bg-transparent px-2 text-[13px] font-medium text-[var(--text-muted)] outline-none"
-                  />
-                ) : (
-                  <Tooltip label={t('projectMenu.rename')} side="bottom">
-                    <button ref={titleBoxRef} type="button" onClick={startRename}
-                      className="flex h-[26px] w-fit min-w-0 max-w-[24ch] items-center rounded-md px-2 transition hover:bg-[var(--bg-hover)]">
-                      <span className="min-w-0 truncate text-[13px] font-medium text-[var(--text-muted)]">{clampTitle(title || t('project.untitled'))}</span>
-                    </button>
-                  </Tooltip>
-                )}
+                {titleField}
               </div>
             </div>}
             {/* the window's controls over this; what follows starts just right of them */}
             <div aria-hidden className="shrink-0 self-stretch" style={{ width: TITLEBAR_LEFT }} />
             <div className="pointer-events-auto relative flex min-w-0 items-center gap-1 empty:hidden">
+              {inTabs && renaming ? titleField
+                : inTabs ? <ProjectSwitcher name={title} onAll={() => setProjectsOpen(true)} onRename={startRename} /> : null}
               {inTabs ? null : <Tooltip label={t('nav.projects')} side="bottom">
                 <button type="button" aria-label={t('nav.projects')} onClick={() => setProjectsOpen((v) => !v)}
                   className={`${TOP_BTN} ${projectsOpen ? 'bg-[var(--bg-hover)] text-[var(--text)]' : ''}`}>
@@ -2789,21 +2789,16 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 </button>
               </Tooltip>}
             </div>
-            {inTabs ? (
-              <TabStrip onRename={renameTab} onNew={() => setProjectsOpen(true)} onCoverFromFrame={coverFromFrame} maxLength={TITLE_MAX_CHARS} />
-            ) : <div className="min-w-0 flex-1" />}
+            <div className="min-w-0 flex-1" />
             <div className="pointer-events-auto flex min-w-0 items-center justify-end gap-1">
-              {/* the edit or the canvas, in the panes' place */}
-              <div role="radiogroup" aria-label={t('canvas.title')} className="mr-1 flex items-center gap-0.5 rounded-lg bg-[var(--bg-hover)] p-0.5">
-                {([[false, 'canvas.edit', FilmIcon], [true, 'canvas.title', Workflow]] as const).map(([open, label, Icon]) => (
-                  <Tooltip key={label} label={t(label)} side="bottom">
-                    <button type="button" role="radio" aria-checked={canvasOpen === open} aria-label={t(label)} onClick={() => setCanvasOpen(open)}
-                      className={`flex h-[22px] w-[26px] items-center justify-center rounded-md transition ${canvasOpen === open ? 'bg-[var(--surface)] text-[var(--text)] shadow-[0_1px_2px_rgba(0,0,0,0.15)]' : 'text-[var(--text-dim)] hover:text-[var(--text)]'}`}>
-                      <Icon size={14} />
-                    </button>
-                  </Tooltip>
-                ))}
-              </div>
+              {/* the edit or the canvas, in the panes' place: the one shown, and a click for the other */}
+              <Tooltip label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} side="bottom">
+                <button type="button" aria-label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} aria-pressed={canvasOpen} onClick={() => setCanvasOpen(!canvasOpen)}
+                  className="flex h-[26px] shrink-0 items-center gap-1 rounded-md pl-1.5 pr-1 text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+                  {canvasOpen ? <Workflow size={15} /> : <FilmIcon size={15} />}
+                  <ArrowLeftRight size={10} className="text-[var(--text-faint)]" />
+                </button>
+              </Tooltip>
               <ProjectLayoutMenu className={TOP_BTN}
                 /* an app that keeps the media in its own panel opens it there, from its own button: not a pane of Studio's */
                 assets={hostAssets ? null : assetsPaneOpen} onAssets={setAssetsPaneOpen}
@@ -2827,8 +2822,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                   <Settings size={16} />
                 </button>
               </Tooltip>
-              {/* in an app's tabs these are in the tab's menu */}
-              {inTabs ? null : <ProjectMenu className={TOP_BTN} onCoverFromFrame={coverFromFrame} onReveal={() => reveal('')} />}
+              <ProjectMenu className={TOP_BTN} onRename={inTabs ? startRename : undefined} onCoverFromFrame={coverFromFrame} onReveal={() => reveal('')} />
             </div>
             <div aria-hidden className="shrink-0 self-stretch" style={{ width: 'var(--titlebar-right-x)' }} />
           </div>

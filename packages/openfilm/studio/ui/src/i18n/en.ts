@@ -13,8 +13,8 @@ export const en = {
     projects: 'Projects',
     desktop: 'Desktop',
   },
-  /* the app window's tabs (TabStrip), a new tab's launcher, and the examples (ExamplesGallery) */
-  tabs: { label: 'Tabs', new: 'Open a project', close: 'Close tab', closeOthers: 'Close other tabs', closeRight: 'Close tabs to the right' },
+  /* the projects the app window has open (ProjectSwitcher), a new tab's launcher, and the examples (ExamplesGallery) */
+  switcher: { label: 'Switch project', open: 'Open', recent: 'Recent', all: 'All projects…', search: 'Search projects', none: 'No matching projects', close: 'Close', working: 'Working', asking: 'Waiting for you', exporting: 'Exporting {n}%' },
   launcher: { projects: 'Projects', examples: 'Examples' },
   gallery: {
     chooseCover: "Choose cover",
@@ -1317,7 +1317,8 @@ export const en = {
   },
   canvas: {
     title: 'Canvas',
-    edit: 'Edit',
+    toEdit: 'Switch to the edit',
+    toCanvas: 'Switch to the canvas',
     note: 'Note',
     notePlaceholder: 'Write a note…',
     addNote: 'Add a note',

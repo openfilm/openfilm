@@ -12,8 +12,8 @@ export const es: Words = {
     projects: 'Proyectos',
     desktop: 'Escritorio',
   },
-  /* the app window's tabs (TabStrip), a new tab's launcher, and the examples (ExamplesGallery) */
-  tabs: { label: 'Pestañas', new: 'Abrir un proyecto', close: 'Cerrar pestaña', closeOthers: 'Cerrar las demás pestañas', closeRight: 'Cerrar las pestañas a la derecha' },
+  /* the projects the app window has open (ProjectSwitcher), a new tab's launcher, and the examples (ExamplesGallery) */
+  switcher: { label: 'Cambiar de proyecto', open: 'Abiertos', recent: 'Recientes', all: 'Todos los proyectos…', search: 'Buscar proyectos', none: 'Ningún proyecto coincide', close: 'Cerrar', working: 'Trabajando', asking: 'Esperando tu respuesta', exporting: 'Exportando {n}%' },
   launcher: { projects: 'Proyectos', examples: 'Ejemplos' },
   gallery: {
     chooseCover: "Elegir portada",
@@ -1316,7 +1316,8 @@ export const es: Words = {
   },
   canvas: {
     title: 'Lienzo',
-    edit: 'Edición',
+    toEdit: 'Cambiar a la edición',
+    toCanvas: 'Cambiar al lienzo',
     note: 'Nota',
     notePlaceholder: 'Escribe una nota…',
     addNote: 'Añadir una nota',

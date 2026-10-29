@@ -12,8 +12,8 @@ export const ja: Words = {
     projects: 'プロジェクト',
     desktop: 'デスクトップ版',
   },
-  /* the app window's tabs (TabStrip), a new tab's launcher, and the examples (ExamplesGallery) */
-  tabs: { label: 'タブ', new: 'プロジェクトを開く', close: 'タブを閉じる', closeOthers: '他のタブを閉じる', closeRight: '右側のタブを閉じる' },
+  /* the projects the app window has open (ProjectSwitcher), a new tab's launcher, and the examples (ExamplesGallery) */
+  switcher: { label: 'プロジェクトを切り替え', open: '開いている', recent: '最近', all: 'すべてのプロジェクト…', search: 'プロジェクトを検索', none: '一致するプロジェクトはありません', close: '閉じる', working: '作業中', asking: '回答待ち', exporting: '書き出し中 {n}%' },
   launcher: { projects: 'プロジェクト', examples: 'サンプル' },
   gallery: {
     chooseCover: "カバーを選択",
@@ -1316,7 +1316,8 @@ export const ja: Words = {
   },
   canvas: {
     title: 'キャンバス',
-    edit: '編集',
+    toEdit: '編集に切り替え',
+    toCanvas: 'キャンバスに切り替え',
     note: 'メモ',
     notePlaceholder: 'メモを書く…',
     addNote: 'メモを追加',

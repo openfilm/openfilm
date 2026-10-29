@@ -157,9 +157,9 @@ export interface StudioHost {
     onChange: (listener: (prefs: HostDeveloper) => void) => () => void;
   };
   /**
-   * The app shows each project in a tab of its own window and draws no tab strip of its own: Studio draws the tabs in
-   * its top bar (where the projects button and the title are otherwise), with a `+` that opens the projects window to
-   * pick the project a new tab shows (`open`; one open already is shown). With no tab open the page is at `/`, and
+   * The app keeps each open project in a tab of its own window, one shown at a time, and draws nothing of them: Studio
+   * names the one in front at its top bar's left, the way to the others and to the recent ones (ProjectSwitcher,
+   * `open`: one open already is shown). With no tab open the page is at `/`, and
    * Studio shows the projects there. `list` gives the tabs and which is this page's (`self`); `onChange` every change.
    * A page `report`s what it shows (its title, an export's progress, its project gone: its tab closes), and `retitle`s
    * another tab whose project it renamed. Studio's

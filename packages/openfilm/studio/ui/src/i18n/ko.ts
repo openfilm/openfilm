@@ -9,8 +9,8 @@ export const ko: Words = {
     projects: '프로젝트',
     desktop: '데스크톱',
   },
-  /* the app window's tabs (TabStrip), a new tab's launcher, and the examples (ExamplesGallery) */
-  tabs: { label: '탭', new: '프로젝트 열기', close: '탭 닫기', closeOthers: '다른 탭 닫기', closeRight: '오른쪽 탭 닫기' },
+  /* the projects the app window has open (ProjectSwitcher), a new tab's launcher, and the examples (ExamplesGallery) */
+  switcher: { label: '프로젝트 전환', open: '열린 프로젝트', recent: '최근', all: '모든 프로젝트…', search: '프로젝트 검색', none: '일치하는 프로젝트가 없습니다', close: '닫기', working: '작업 중', asking: '답변 대기 중', exporting: '내보내는 중 {n}%' },
   launcher: { projects: '내 프로젝트', examples: '예시' },
   gallery: {
     chooseCover: "표지 선택",
@@ -1313,7 +1313,8 @@ export const ko: Words = {
   },
   canvas: {
     title: '캔버스',
-    edit: '편집',
+    toEdit: '편집으로 전환',
+    toCanvas: '캔버스로 전환',
     note: '메모',
     notePlaceholder: '메모를 쓰세요…',
     addNote: '메모 추가',
