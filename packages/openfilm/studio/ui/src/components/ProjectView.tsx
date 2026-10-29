@@ -55,7 +55,7 @@ import { SettingsModal } from './settings/SettingsModal';
 import { useSettings } from './settings/use-settings';
 import { DesktopDialog } from './DesktopDialog';
 import type { ContextMenuEntry } from './ContextMenu';
-import { studioHost, useHostPanel, type CommunityItem, type HostPanel, type StageBox, type StudioCommand, type StudioRef } from '../lib/host';
+import { HOST_PANEL_WIDTH, studioHost, useHostPanel, type CommunityItem, type HostPanel, type StageBox, type StudioCommand, type StudioRef } from '../lib/host';
 import { clipRef, fileRef, layerRef, markRange, momentRef, rangeRef, regionRef, stillUrl, subtitleRef, trackRef, type ClipFrameSource, type FilmRange } from '@/lib/studio-refs';
 import { boxNow, chatPointOf, draftBoxesAt, draftMarksOf, sameClip, NO_DRAFT, type DraftMarks, type PictureMarks } from '@/lib/chat-marks';
 import { usePageChanges } from './use-page-changes';
@@ -2802,7 +2802,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
           {/* the panes, edge to edge on the board of lines (--dock-line): a line under the top bar, and one beside the
               app's own panel (lib/host.ts `panel`), which sits left of this, under the top bar: room left for it */}
           <section ref={dockColRef} className="relative flex min-h-0 min-w-0 flex-col bg-[var(--dock-line)]"
-            style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...(hostPanel?.open ? { marginLeft: hostPanel.width, paddingLeft: DOCK_GAP } : null) }}>
+            style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...(hostPanel?.open ? { marginLeft: HOST_PANEL_WIDTH, paddingLeft: DOCK_GAP } : null) }}>
             <div ref={viewerRowRef} className="relative flex min-h-0 min-w-0 flex-1 flex-row">
               {!hostAssets && assetsPaneOpen && assetsFit ? (
                 <>
@@ -3200,8 +3200,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
           panel keeps for itself (the panel goes on below it, so the two read as one) */}
       {hostAssets?.open && hostPanel ? <PanelSeam panel={hostPanel} bottom={hostAssets.bottom} /> : null}
       {hostAssets?.open && hostPanel ? (
-        <div className="fixed z-30 flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--dock-pane)]"
-          style={{ top: HOST_PANEL_TOP + DOCK_GAP, left: 0, bottom: hostAssets.bottom, width: hostPanel.width }}>
+        <div className="fixed z-30 flex min-h-0 min-w-0 flex-col overflow-hidden border-t border-[var(--dock-line)] bg-[var(--dock-pane)]"
+          style={{ top: HOST_PANEL_TOP, left: 0, bottom: hostAssets.bottom, width: HOST_PANEL_WIDTH }}>
           {mediaPool()}
         </div>
       ) : null}
@@ -3262,7 +3262,7 @@ function PanelSeam({ panel, bottom }: { panel: HostPanel; bottom: number }) {
   return (
     <div role="separator" aria-orientation="vertical" aria-label={panel.label} tabIndex={0}
       className="fixed z-[31] w-[10px] cursor-col-resize outline-none focus-visible:bg-[var(--border-strong)]"
-      style={{ top: HOST_PANEL_TOP, bottom, left: panel.width - 5 }}
+      style={{ top: HOST_PANEL_TOP, bottom, left: `calc(${HOST_PANEL_WIDTH} - 5px)` }}
       onPointerDown={(e) => {
         if (e.button !== 0) return;
         e.currentTarget.setPointerCapture(e.pointerId);

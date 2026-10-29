@@ -423,6 +423,15 @@ export type HostPanel = {
   setWidth: (width: number, done?: boolean) => void;
 };
 
+/**
+ * The panel's width as --host-panel-width on the page, set the moment the app tells it: what sits beside the panel
+ * reads it from there, so while the panel's seam is dragged the two move in the same frame, before Studio renders.
+ */
+export const HOST_PANEL_WIDTH = 'var(--host-panel-width, 0px)';
+function keepPanelWidth({ open, width }: { open: boolean; width: number }) {
+  document.documentElement.style.setProperty('--host-panel-width', `${open ? width : 0}px`);
+}
+
 export function useHostPanel(): HostPanel | null {
   const panel = studioHost?.panel;
   const read = (next: { open: boolean; width: number; assets?: { open: boolean; bottom: number } }) => ({
@@ -432,7 +441,15 @@ export function useHostPanel(): HostPanel | null {
     bottom: Math.max(0, Number(next.assets?.bottom) || 0),
   });
   const [state, setState] = React.useState(() => (panel ? read(panel) : null));
-  React.useEffect(() => { panel?.onChange((next) => setState(read(next))); }, [panel]);
+  React.useEffect(() => {
+    if (!panel) return;
+    keepPanelWidth(read(panel));
+    panel.onChange((next) => {
+      const now = read(next);
+      keepPanelWidth(now);
+      setState(now);
+    });
+  }, [panel]);
   if (!panel || !state) return null;
   const setAssetsOpen = panel.setAssetsOpen;
   return {

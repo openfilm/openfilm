@@ -222,7 +222,10 @@ export function ConversationTabs({
     <div className="relative flex h-8 shrink-0 items-stretch bg-[var(--dock-shell)]">
       {/* the line under the bar, which the tab shown stands over */}
       <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-[var(--dock-line)]" />
-      <div ref={stripRef} role="tablist" className="flex min-w-0 flex-1 items-stretch overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {/* the tabs keep their width; more than fit scroll sideways, by the wheel too */}
+      <div ref={stripRef} role="tablist"
+        onWheel={(event) => { if (!event.deltaX && event.deltaY) event.currentTarget.scrollLeft += event.deltaY; }}
+        className="flex min-w-0 flex-1 items-stretch overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {tabs.map((id) => {
           const shown = id === currentSessionId;
           const label = labelOf(id);
@@ -253,7 +256,7 @@ export function ConversationTabs({
               onDrop={(event) => event.preventDefault()}
               onDragEnd={() => { dragged.current = null; }}
               style={renaming?.id === id && renaming.width ? { width: renaming.width, minWidth: renaming.width, maxWidth: renaming.width } : undefined}
-              className={`group relative flex min-w-[64px] max-w-[200px] shrink cursor-default items-center gap-1.5 border-r border-[var(--dock-line)] pl-2.5 pr-1 text-[12px] transition ${
+              className={`group relative flex max-w-[200px] shrink-0 cursor-default items-center gap-1.5 border-r border-[var(--dock-line)] pl-2.5 pr-1 text-[12px] transition ${
                 shown ? 'z-[1] bg-[var(--dock-pane)] text-[var(--text)]' : 'text-[var(--text-faint)] hover:text-[var(--text-muted)]'
               }`}
             >
