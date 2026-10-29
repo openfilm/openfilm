@@ -242,7 +242,6 @@ export const enUS = {
     asking: 'Waiting for you',
     closeOtherTabs: 'Close others',
     closeTab: 'Close',
-    more: 'More',
     newSession: 'New session',
     pin: 'Pin',
     rename: 'Rename',

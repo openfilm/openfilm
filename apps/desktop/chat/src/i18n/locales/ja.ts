@@ -241,7 +241,6 @@ export const ja: Words = {
     asking: '回答待ち',
     closeOtherTabs: 'ほかを閉じる',
     closeTab: '閉じる',
-    more: 'その他',
     newSession: '新しいセッション',
     pin: 'ピン留め',
     rename: '名前を変更',

@@ -237,7 +237,6 @@ export const ko: Words = {
     asking: '답변 대기 중',
     closeOtherTabs: '다른 탭 닫기',
     closeTab: '닫기',
-    more: '더 보기',
     newSession: '새 세션',
     pin: '고정',
     rename: '이름 바꾸기',

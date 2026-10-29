@@ -241,7 +241,6 @@ export const zhCN: Words = {
     asking: '等你回答',
     closeOtherTabs: '关闭其他',
     closeTab: '关闭',
-    more: '更多',
     newSession: '新会话',
     pin: '置顶',
     rename: '重命名',

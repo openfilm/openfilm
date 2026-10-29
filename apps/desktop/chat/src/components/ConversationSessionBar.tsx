@@ -1,13 +1,16 @@
 'use client';
 
 import React from 'react';
-import { Archive, ArchiveRestore, ChevronRight, Clock, Loader2, MessageSquare, MoreHorizontal, Pencil, Pin, PinOff, Plus, Search, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Archive, ArchiveRestore, ChevronRight, Clock, Loader2, Pencil, Pin, PinOff, Plus, Search, X } from 'lucide-react';
 import { limitTitleWidth, SESSION_TITLE_MAX_WIDTH } from '@openfilm/shared';
 import { Popover, keepFocus } from './Popover';
 import { Tooltip } from './Tooltip';
 import { useT } from '@/i18n';
 import type { ProjectSessionItem } from '@/lib/project-sessions';
 import { useLocalAgentTurn } from '@/lib/local-agent-run';
+import { chatLayer } from '@/lib/chat-layer';
+import { useChatMenu } from '@/lib/chat-menu';
 import { PANE_BTN, PANE_ICON } from './dock-pane-bar';
 
 /** What a conversation's menus do: rename, pin, archive. */
@@ -59,8 +62,8 @@ function SessionMenu({ entries, onClose }: { entries: MenuEntry[]; onClose: () =
 }
 
 /** A title being renamed, in place: Enter or leaving keeps it, Esc lets it go (`onDone(null)`). */
-function TitleInput({ initial, width, className, onDone }: {
-  initial: string; width?: number | null; className: string; onDone: (title: string | null) => void;
+function TitleInput({ initial, width, placeholder, className, onDone }: {
+  initial: string; width?: number | null; placeholder?: string; className: string; onDone: (title: string | null) => void;
 }) {
   const [draft, setDraft] = React.useState(initial);
   const done = React.useRef(false);
@@ -85,30 +88,30 @@ function TitleInput({ initial, width, className, onDone }: {
         if (event.key === 'Enter') finish(draft);
         if (event.key === 'Escape') finish(null);
       }}
+      placeholder={placeholder}
       style={width ? { width } : undefined}
       className={className}
     />
   );
 }
 
-/** The tab's mark: a running conversation turns, one whose agent asks something has a dot; the others, a bubble. */
+/** The tab's mark: a running conversation turns, one whose agent asks something has a dot; the others have none. */
 function TabMark({ turnId }: { turnId: string | null }) {
   const t = useT();
   const live = useLocalAgentTurn(turnId);
   if (live && (live.state.question || live.state.permission)) {
     return <span aria-label={t('projectMenu.asking')} className="flex h-3.5 w-3.5 shrink-0 items-center justify-center"><span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" /></span>;
   }
-  if (turnId) return <Loader2 size={13} aria-label={t('projectMenu.running')} className="shrink-0 animate-spin text-[var(--text-faint)]" />;
-  return <MessageSquare size={13} strokeWidth={1.75} className="shrink-0" />;
+  return turnId ? <Loader2 size={13} aria-label={t('projectMenu.running')} className="shrink-0 animate-spin text-[var(--text-faint)]" /> : null;
 }
 
 /**
  * The bar at the top of the conversation, as a code editor's agents: the open conversations as tabs, each its own
- * agent at work at once; on the right a new one, the history (search, all of them, those archived), and a menu for
- * the one shown (rename, pin, archive, close).
+ * agent at work at once; on the right a new one and the history (search, all of them, those archived).
  *
- * A tab's title comes from its first message ("Untitled chat" until then); a double click renames it, a middle click
- * closes it. Closing a tab leaves its conversation in the history, and its turn running.
+ * A tab's title comes from its first message ("Untitled chat" until then). A right click opens its menu (rename, pin,
+ * archive, close, close the others), a double click renames it in its own width, a middle click closes it. Closing a
+ * tab leaves its conversation in the history, and its turn running.
  */
 export function ConversationTabs({
   sessions,
@@ -139,11 +142,11 @@ export function ConversationTabs({
   const untitled = t('project.untitledSession');
   const byId = new Map(sessions.map((s) => [s.id, s]));
   const labelOf = (id: string) => byId.get(id)?.title.trim() || untitled;
-  const current = byId.get(currentSessionId);
-  const said = Boolean(current?.turns);
-  const [renaming, setRenaming] = React.useState<string | null>(null);
-  const [menuOpen, setMenuOpen] = React.useState(false);
+  /* renamed in place, the tab keeping the width it had */
+  const [renaming, setRenaming] = React.useState<{ id: string; width: number } | null>(null);
   const [historyOpen, setHistoryOpen] = React.useState(false);
+  /** a tab's menu, where it was right-clicked */
+  const [menu, setMenu] = React.useState<{ id: string; x: number; y: number } | null>(null);
 
   /* the tab shown kept in sight in a row of many */
   const stripRef = React.useRef<HTMLDivElement | null>(null);
@@ -151,14 +154,23 @@ export function ConversationTabs({
     stripRef.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [currentSessionId, tabs.length]);
 
-  const entries: MenuEntry[] = [
-    ...(onRenameSession ? [{ id: 'rename', label: t('projectMenu.rename'), hint: 'R', onSelect: () => setRenaming(currentSessionId) }] : []),
-    ...(onPinSession ? [{ id: 'pin', label: t(current?.pinned ? 'projectMenu.unpin' : 'projectMenu.pin'), hint: 'P', disabled: !said, onSelect: () => onPinSession(currentSessionId, !current?.pinned) }] : []),
-    ...(onArchiveSession ? [{ id: 'archive', label: t(current?.archived ? 'projectMenu.unarchive' : 'projectMenu.archive'), hint: 'A', disabled: !said || (running.has(currentSessionId) && !current?.archived), onSelect: () => onArchiveSession(currentSessionId, !current?.archived) }] : []),
-    'separator',
-    { id: 'close', label: t('projectMenu.closeTab'), onSelect: () => onCloseTab(currentSessionId) },
-    { id: 'close-others', label: t('projectMenu.closeOtherTabs'), disabled: tabs.length < 2, onSelect: () => onCloseOtherTabs(currentSessionId) },
-  ];
+  const startRename = (id: string) => {
+    if (!onRenameSession) return;
+    const tab = stripRef.current?.querySelector<HTMLElement>(`[data-session="${CSS.escape(id)}"]`);
+    setRenaming({ id, width: tab?.getBoundingClientRect().width ?? 0 });
+  };
+  const entriesFor = (id: string): MenuEntry[] => {
+    const item = byId.get(id);
+    const said = Boolean(item?.turns);
+    return [
+      ...(onRenameSession ? [{ id: 'rename', label: t('projectMenu.rename'), hint: 'R', onSelect: () => startRename(id) }] : []),
+      ...(onPinSession ? [{ id: 'pin', label: t(item?.pinned ? 'projectMenu.unpin' : 'projectMenu.pin'), hint: 'P', disabled: !said, onSelect: () => onPinSession(id, !item?.pinned) }] : []),
+      ...(onArchiveSession ? [{ id: 'archive', label: t(item?.archived ? 'projectMenu.unarchive' : 'projectMenu.archive'), hint: 'A', disabled: !said || (running.has(id) && !item?.archived), onSelect: () => onArchiveSession(id, !item?.archived) }] : []),
+      'separator',
+      { id: 'close', label: t('projectMenu.closeTab'), onSelect: () => onCloseTab(id) },
+      { id: 'close-others', label: t('projectMenu.closeOtherTabs'), disabled: tabs.length < 2, onSelect: () => onCloseOtherTabs(id) },
+    ];
+  };
 
   return (
     <div className="relative flex h-8 shrink-0 items-stretch bg-[var(--dock-shell)]">
@@ -172,21 +184,25 @@ export function ConversationTabs({
             <div
               key={id}
               role="tab"
+              data-session={id}
               aria-selected={shown}
               title={label}
               onClick={() => { if (!shown) onSelectSession(id); }}
-              onDoubleClick={() => { if (onRenameSession) setRenaming(id); }}
+              onDoubleClick={() => startRename(id)}
               onAuxClick={(event) => { if (event.button === 1) onCloseTab(id); }}
-              className={`group relative flex min-w-[88px] max-w-[200px] shrink cursor-default items-center gap-1.5 border-r border-[var(--dock-line)] pl-2.5 pr-1 text-[12px] transition ${
+              onContextMenu={(event) => { event.preventDefault(); setMenu({ id, x: event.clientX, y: event.clientY }); }}
+              style={renaming?.id === id && renaming.width ? { width: renaming.width, minWidth: renaming.width, maxWidth: renaming.width } : undefined}
+              className={`group relative flex min-w-[64px] max-w-[200px] shrink cursor-default items-center gap-1.5 border-r border-[var(--dock-line)] pl-2.5 pr-1 text-[12px] transition ${
                 shown ? 'z-[1] bg-[var(--dock-pane)] text-[var(--text)]' : 'text-[var(--text-faint)] hover:text-[var(--text-muted)]'
               }`}
             >
               <TabMark turnId={running.get(id) ?? null} />
-              {renaming === id ? (
+              {renaming?.id === id ? (
                 <TitleInput
                   initial={byId.get(id)?.title.trim() ?? ''}
+                  placeholder={untitled}
                   onDone={(title) => { setRenaming(null); if (title) onRenameSession?.(id, title); }}
-                  className="h-[22px] min-w-0 flex-1 bg-transparent text-[12px] text-[var(--text)] outline-none"
+                  className="h-[22px] w-0 min-w-0 flex-1 bg-transparent text-[12px] text-[var(--text)] outline-none"
                 />
               ) : (
                 <span className="min-w-0 flex-1 truncate">{label}</span>
@@ -231,21 +247,51 @@ export function ConversationTabs({
             onArchiveSession={onArchiveSession}
           />
         </Popover>
-        <Popover
-          open={menuOpen}
-          onOpenChange={setMenuOpen}
-          align="end"
-          trigger={(
-            <button type="button" aria-label={t('projectMenu.more')} aria-haspopup="menu" aria-expanded={menuOpen}
-              className={`${PANE_BTN} ${menuOpen ? 'bg-[var(--bg-hover)] text-[var(--text)]' : ''}`}>
-              <MoreHorizontal size={PANE_ICON} strokeWidth={1.75} />
-            </button>
-          )}
-        >
-          <SessionMenu entries={entries} onClose={() => setMenuOpen(false)} />
-        </Popover>
       </div>
+      {menu ? <TabMenu at={menu} entries={entriesFor(menu.id)} onClose={() => setMenu(null)} /> : null}
     </div>
+  );
+}
+
+/** A tab's menu, where it was right-clicked: closed by a click elsewhere, Esc, or the window losing focus. */
+function TabMenu({ at, entries, onClose }: { at: { x: number; y: number }; entries: MenuEntry[]; onClose: () => void }) {
+  const panelRef = React.useRef<HTMLDivElement | null>(null);
+  useChatMenu(true);
+  const latest = React.useRef(onClose);
+  latest.current = onClose;
+  React.useEffect(() => {
+    const close = (event: Event) => {
+      if (event.type === 'pointerdown' && panelRef.current?.contains(event.target as Node)) return;
+      latest.current();
+    };
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') latest.current(); };
+    window.addEventListener('pointerdown', close, true);
+    window.addEventListener('blur', close);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('pointerdown', close, true);
+      window.removeEventListener('blur', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, []);
+  return createPortal(
+    <div
+      ref={panelRef}
+      data-popover-panel="true"
+      style={{
+        position: 'fixed',
+        left: Math.max(6, Math.min(at.x, window.innerWidth - 200)),
+        top: at.y + 2,
+        zIndex: 10000,
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--border-strong)',
+        borderRadius: 16,
+        boxShadow: '0 16px 40px -8px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.18)',
+      }}
+    >
+      <SessionMenu entries={entries} onClose={onClose} />
+    </div>,
+    chatLayer(),
   );
 }
 

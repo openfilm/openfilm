@@ -7,7 +7,7 @@
  * are written one at a time (see editor/use-film.ts); the agent's writes come in through the folder's events.
  */
 import * as React from 'react';
-import { BookmarkPlus, ClipboardCopy, ClipboardPaste, GalleryVerticalEnd, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, TriangleAlert, Upload } from 'lucide-react';
+import { BookmarkPlus, ClipboardCopy, ClipboardPaste, GalleryVerticalEnd, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings, Settings2, TriangleAlert, Upload } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
 import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type Op, type ProjectFilm, type ProjectSettings } from '@/api';
 import { useT } from '@/i18n';
@@ -51,7 +51,6 @@ import { filmFrameBox, type FilmFrameId } from '@/lib/film-frame';
 import { canvasFor, firstPictureSize, fitToCanvas } from '@/lib/canvas-fit';
 import { factsOfProbe, mediaListingOf, resourceKindOf, srcHitsAsset, warmProjectMedia, type MediaListing, type MediaProxy, type MediaResult, type MediaSources, type WorkspaceResource } from '@/lib/workspace-resources';
 import { BrandLoadingScreen } from './BrandLoadingScreen';
-import { BrandLogo } from './BrandLogo';
 import { SettingsModal } from './settings/SettingsModal';
 import { useSettings } from './settings/use-settings';
 import { DesktopDialog } from './DesktopDialog';
@@ -2749,15 +2748,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
               </div>
             </div>}
             <div aria-hidden className="shrink-0 self-stretch" style={{ width: 'var(--titlebar-logo-x)' }} />
-            <div aria-hidden className="titlebar-line w-px shrink-0 self-stretch bg-[var(--border)]" />
             <div className="pointer-events-auto relative flex min-w-0 items-center gap-1">
-              <Tooltip label={t('project.appMenu')} side="bottom">
-                <button type="button" aria-label={t('project.appMenu')} aria-haspopup="dialog"
-                  onClick={() => setSettingsOpen('general')}
-                  className="flex h-[26px] w-[26px] items-center justify-center rounded-md text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)]">
-                  <BrandLogo size={15} />
-                </button>
-              </Tooltip>
               {inTabs ? null : <Tooltip label={t('nav.projects')} side="bottom">
                 <button type="button" aria-label={t('nav.projects')} onClick={() => setProjectsOpen((v) => !v)}
                   className={`${TOP_BTN} ${projectsOpen ? 'bg-[var(--bg-hover)] text-[var(--text)]' : ''}`}>
@@ -2794,6 +2785,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     else toast.show(t('project.filmNotReady'));
                   }}>
                   <Upload size={16} />
+                </button>
+              </Tooltip>
+              <Tooltip label={t('project.appMenu')} side="bottom">
+                <button type="button" aria-label={t('project.appMenu')} aria-haspopup="dialog" onClick={() => setSettingsOpen('general')} className={TOP_BTN}>
+                  <Settings size={16} />
                 </button>
               </Tooltip>
               {/* in an app's tabs these are in the tab's menu */}

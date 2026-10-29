@@ -241,7 +241,6 @@ export const es: Words = {
     asking: 'Esperando tu respuesta',
     closeOtherTabs: 'Cerrar las demás',
     closeTab: 'Cerrar',
-    more: 'Más',
     newSession: 'Nueva sesión',
     pin: 'Fijar',
     rename: 'Cambiar nombre',
