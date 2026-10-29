@@ -1,5 +1,6 @@
 /**
- * A clip's fades on the timeline: the handles at its top corners, dragged inward, and the ramp drawn over it.
+ * A clip's fades on the timeline: the handles at its ends, where its sound starts, dragged inward, and the slope drawn
+ * from them.
  *
  * A fade is kept in film.html as the clip's own entry of its `overrides` (`{ "fade": [in, out] }`, seconds; see
  * SPEC §1): the timeline writes it with the `fade` prop (studio/server/ops.mjs), one edit for the clip and the clips
