@@ -91,11 +91,15 @@ export function useMediaImage(url: string | null | undefined, wanted = true): st
   return url && LOADED.has(url) ? url : ready;
 }
 
-/** The pictures of `urls` (by any key) that have had their turn: what can be drawn now. */
+/**
+ * The pictures of `urls` (by any key) that have had their turn: what can be drawn now. A key whose address changed
+ * (its file made again) keeps the last one it had until the new one has had its turn, as useMediaImage does.
+ */
 export function useMediaImages(urls: Readonly<Record<string, string>>): Readonly<Record<string, string>> {
   const [ready, setReady] = React.useState<ReadonlySet<string>>(() => new Set());
   const wanted = React.useRef(urls);
   wanted.current = urls;
+  const last = React.useRef<Record<string, string>>({});
   React.useEffect(() => {
     for (const url of new Set(Object.values(urls))) {
       if (ready.has(url)) continue;
@@ -103,5 +107,13 @@ export function useMediaImages(urls: Readonly<Record<string, string>>): Readonly
         .then((had) => { if (had !== null) setReady((cur) => (cur.has(url) ? cur : new Set(cur).add(url))); });
     }
   }, [urls]); // eslint-disable-line react-hooks/exhaustive-deps
-  return React.useMemo(() => Object.fromEntries(Object.entries(urls).filter(([, url]) => ready.has(url) || LOADED.has(url))), [urls, ready]);
+  return React.useMemo(() => {
+    const shown: Record<string, string> = {};
+    for (const [key, url] of Object.entries(urls)) {
+      const had = ready.has(url) || LOADED.has(url) ? url : last.current[key];
+      if (had) shown[key] = had;
+    }
+    last.current = shown;
+    return shown;
+  }, [urls, ready]);
 }
