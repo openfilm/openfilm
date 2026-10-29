@@ -2787,8 +2787,8 @@ export const Timeline = React.memo(function Timeline({
     if (e.button !== 0 || selectedRef.current.includes(block.id)) return;
     setSelected(withLinked([block.id], e.altKey));
   }, [setSelected, withLinked]);
-  /* ── speed: Speed (in the clip menu, and beside Split in the toolbar) turns the selected clips' edges into speed
-     handles (lib/clip-speed), until Esc, a click anywhere else, Speed again or another selection ── */
+  /* ── speed: Speed in the clip's right-click menu turns the selected clips' edges into speed handles (lib/clip-speed),
+     until Esc, a click anywhere else, Speed again or another selection ── */
   const selectedKey = selected.join('|');
   /** The selection the speed handles are on. */
   const [speedFor, setSpeedFor] = React.useState<string | null>(null);
@@ -2807,11 +2807,11 @@ export const Timeline = React.memo(function Timeline({
       cancelDrag();
       setSpeedFor(null);
     };
-    /* not a press on Speed itself (it turns it off), in a menu, nor the right-click that opens the clip's menu (which
-       shows it on) */
+    /* not a press in a menu (Speed there turns it off), nor the right-click that opens the clip's menu (which shows it
+       on) */
     const onDown = (e: PointerEvent) => {
       const el = e.target as Element | null;
-      if (el?.closest?.('[data-speed-handle], [data-timeline-speed], [role="menu"]')) return;
+      if (el?.closest?.('[data-speed-handle], [role="menu"]')) return;
       if (e.button === 2 && el?.closest?.('[data-block-id]')) return;
       setSpeedFor(null);
     };
@@ -2974,7 +2974,7 @@ export const Timeline = React.memo(function Timeline({
             /* its fades: as written, or as the handle in hand has them */
             const fade = fadeOfBlock(block);
             const fadeTip = fadeDrag?.block === block.id ? fadeDrag.edge : '';
-            /* the Speed button on: its edges change its speed instead of trimming it */
+            /* Speed on: its edges change its speed instead of trimming it */
             const speeding = speedOn && picked && !track.locked && canChangeSpeed(block);
             const pose = `${startMs}:${endMs}:${!!live}:${gone}:${lifting}:${floating ? drag.preview?.offsetY : ''}:${picked}:${Math.round(winFrom)}-${Math.round(winTo)}:${trouble ?? ''}:${chatLit}:${chatNumbers.join(',')}:${fade[0]}-${fade[1]}:${fadeTip}:${speeding}`;
             const cached = clipElements.get(block.id);
@@ -3818,16 +3818,13 @@ export const Timeline = React.memo(function Timeline({
   ]);
 
   inHandRef.current = Boolean(drag.preview || assetHint || marquee || rangeDraft || referDraft || scrubbing || laneOrder || fadeDrag || transitionDrag);
-  /* the toolbar's Speed: on and off for the selection, as in its clips' menu (not on a locked track) */
-  const speedable = selectedBlocks.some((b) => b.clipId && canChangeSpeed(b))
-    && !selectedBlocks.some((b) => tracks.some((tr) => tr.locked && tr.blocks.some((row) => row.id === b.id)));
 
   return (
     /* no background on the outer box: the pane's rounded corners come from the pane's own background */
     <div
       ref={rootRef}
       data-timeline=""
-      /* the Speed button on: the picture's Esc leaves it to the timeline (FilmStageSelect) */
+      /* Speed on: the picture's Esc leaves it to the timeline (FilmStageSelect) */
       data-speed-mode={speedOn ? '' : undefined}
       className="relative isolate overflow-hidden flex min-h-0 min-w-0 flex-1 flex-col"
       /* any press here takes focus out of a text field: most presses preventDefault (which also stops the browser's
@@ -3891,14 +3888,6 @@ export const Timeline = React.memo(function Timeline({
           >
             <Scissors size={16} />
           </ToolButton>
-        ) : null}
-        {/* Speed, for the clips selected (lit while on): a mode of their edges, so beside Split, which also acts on them */}
-        {onEditOps ? (
-          <span data-timeline-speed={speedOn ? '1' : '0'}>
-            <ToolButton onClick={() => setSpeedFor(speedOn ? null : selectedKey)} disabled={!speedable && !speedOn} active={speedOn} label={t('timeline.speed')}>
-              <Gauge size={15} />
-            </ToolButton>
-          </span>
         ) : null}
 
         {/* the middle is for status: "Editing source…" and errors (not among the tools, where it would look like one) */}

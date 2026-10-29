@@ -1,6 +1,6 @@
 /**
- * A clip's speed, as Studio sets it: by dragging its edges on the timeline (the clip toolbar's Speed button turns a
- * clip's edge handles into speed handles), or on the inspector's slider. The clip keeps the part of its source it
+ * A clip's speed, as Studio sets it: by dragging its edges on the timeline (Speed in the clip's right-click menu turns
+ * its edge handles into speed handles), or on the inspector's slider. The clip keeps the part of its source it
  * plays, so what changes is its length on the film, and its speed is that source over the new length.
  *
  * Written as the clip's `speed` (SPEC §1: SPEED_MIN to SPEED_MAX, 0.1× to 100×, its sound keeping its pitch), with
