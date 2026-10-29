@@ -161,8 +161,6 @@ export const ko: Words = {
     routeNoKeyNoAccount: '이 모델은 DeepSeek API 키가 필요하지만 이 컴퓨터에는 설정되어 있지 않습니다. DeepSeek Harness에서 DeepSeek 계정에 로그인하거나 모델 설정에 API 키를 추가하세요.',
     useAccountModel: '{model} 사용',
     accountModelPicked: '{model}(으)로 바꿨습니다. 메시지를 다시 보내세요.',
-    removeFile: '파일 제거',
-    removeImage: '이미지 제거',
     speed: '속도',
     thumbOnly: '메시지에는 썸네일만 남겨 두었습니다. 원본은 원래 위치에 있고, 붙여 넣은 파일은 프로젝트에 저장되어 있습니다.',
   },

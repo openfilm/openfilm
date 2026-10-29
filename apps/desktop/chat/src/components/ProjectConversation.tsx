@@ -31,6 +31,7 @@ import { ChatProjectContext, useDeveloperMode, useShowChanges } from '@/lib/deve
 import { isVideoAttachment } from '@/lib/composer-attachments';
 import { desktopBridge } from '@/lib/desktop-bridge';
 import { attachmentPlace } from '@/lib/attachment-place';
+import { attachmentPillPictures } from '@/lib/attachment-pills';
 import { ATTACHMENT_CARD, ATTACHMENT_THUMB, AttachmentCardBody, PlayMark } from './AttachmentCard';
 
 /** What past turns get as "no live process". One constant: a new array each time would defeat the memo. */
@@ -309,6 +310,11 @@ const ConversationTurn = React.memo(function ConversationTurn({
   /* Two users need this node: one measures its distance from the viewport (whether to fetch the process), the
      other the last turn's height (the space below). One callback rather than a wrapper div, which would change
      the flex gaps. */
+  /* the thumbnails of the files brought in, by their pills (null for a message from before they were pills) */
+  const pillPictures = React.useMemo(
+    () => attachmentPillPictures(entry.promptDisplay, entry.attachments),
+    [entry.promptDisplay, entry.attachments],
+  );
   const attach = React.useCallback((node: HTMLDivElement | null) => {
     shell.current = node;
     rootRef?.(node);
@@ -355,7 +361,9 @@ const ConversationTurn = React.memo(function ConversationTurn({
       <div className="group/ask flex min-w-0 flex-col gap-1">
       <div className="flex justify-end">
         <div className="flex max-w-[88%] flex-col gap-1.5 rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2">
-          {entry.attachments.length > 0 && <TurnAttachments items={entry.attachments} />}
+          {/* files brought in are pills in the sentence, with their thumbnails; a message from before that shows
+              them in a row of their own */}
+          {entry.attachments.length > 0 && !pillPictures && <TurnAttachments items={entry.attachments} />}
           {/* The sent message must look like it did in the composer: an asset picked there is a pill, and turning
               it into a bare workspace path after Enter would disown what the user saw. With the original text,
               render the pills; otherwise the expanded prompt, which is the same for plain text and is all that
@@ -363,7 +371,7 @@ const ConversationTurn = React.memo(function ConversationTurn({
           {entry.promptDisplay || entry.prompt.trim() ? (
             <p className="whitespace-pre-wrap break-words text-[14px] leading-[1.65] text-[var(--chat-text)]">
               {entry.promptDisplay
-                ? <PromptWithPills display={entry.promptDisplay} />
+                ? <PromptWithPills display={entry.promptDisplay} {...(pillPictures ? { pictures: pillPictures } : {})} />
                 : entry.prompt}
             </p>
           ) : null}

@@ -165,8 +165,6 @@ export const enUS = {
     routeNoKeyNoAccount: 'This model needs a DeepSeek API key, and none is set up on this computer. Sign in to your DeepSeek account in DeepSeek Harness, or add an API key in its model settings.',
     useAccountModel: 'Use {model}',
     accountModelPicked: 'Switched to {model}. Send your message again.',
-    removeFile: 'Remove file',
-    removeImage: 'Remove image',
     speed: 'Speed',
     thumbOnly: 'A thumbnail kept with the message. The original stays where it was, or in the project if it was pasted.',
   },

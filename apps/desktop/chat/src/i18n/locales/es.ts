@@ -165,8 +165,6 @@ export const es: Words = {
     routeNoKeyNoAccount: 'Este modelo necesita una clave de API de DeepSeek y no hay ninguna configurada en este equipo. Inicia sesión con tu cuenta de DeepSeek en DeepSeek Harness o añade una clave de API en su configuración de modelos.',
     useAccountModel: 'Usar {model}',
     accountModelPicked: 'Cambiado a {model}. Vuelve a enviar el mensaje.',
-    removeFile: 'Quitar archivo',
-    removeImage: 'Quitar imagen',
     speed: 'Velocidad',
     thumbOnly: 'Una miniatura guardada con el mensaje. El original sigue donde estaba, o en el proyecto si se pegó.',
   },

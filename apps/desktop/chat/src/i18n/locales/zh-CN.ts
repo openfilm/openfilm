@@ -165,8 +165,6 @@ export const zhCN: Words = {
     routeNoKeyNoAccount: '这个模型要用 DeepSeek 的 API key，这台电脑上还没有配置。请在 DeepSeek Harness 里登录 DeepSeek 账号，或在它的模型设置里填上 API key。',
     useAccountModel: '换成 {model}',
     accountModelPicked: '已换成 {model}，再发一次即可。',
-    removeFile: '移除文件',
-    removeImage: '移除图片',
     speed: '速度',
     thumbOnly: '消息中只保留了缩略图。原文件还在原来的位置；粘贴的文件保存在项目里。',
   },

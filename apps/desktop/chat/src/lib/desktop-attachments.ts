@@ -1,20 +1,23 @@
 /**
- * The files brought into a message (dragged in, pasted, picked with +): a row of thumbnails (a picture's own, a
- * video's frame) and names above the sentence. Any number, and folders too. A file or folder from the disk stays where
- * it is: the message names its path, as an agent's own chat does, and the agent copies into the project what the film
- * uses. Only a pasted one, which has no path, is kept in the project (.film/attachments/). The message says where they
- * are (attachedText), the bubble shows their names and thumbnails. Pictures are also sent to the agent beside the text,
- * as one pasted in its own chat is, to an agent that takes pictures (attachedPictures).
+ * The files brought into a message (dragged in, pasted, picked with +): each a pill in the sentence, with its
+ * thumbnail (a picture's own, a video's frame) and name (lib/attachment-pills). Any number, and folders too. A file or
+ * folder from the disk stays where it is: the message names its path where its pill is, as an agent's own chat does,
+ * and the agent copies into the project what the film uses. Only a pasted one, which has no path, is kept in the
+ * project (.film/attachments/). Pictures are also sent to the agent beside the text, as one pasted in its own chat
+ * is, to an agent that takes pictures (attachedPictures), in the order of their pills.
  */
 import React from 'react';
 import type { TurnAttachment } from '@openfilm/shared';
 import { isImageAttachment, isVideoAttachment, makeAttachmentThumb, readFileDataUrl, videoFrameDataUrl } from '@/lib/composer-attachments';
-import { attachmentKind } from '@/lib/project-resources';
 import { app } from '../app-bridge';
 import type { PromptImage } from '@/lib/desktop-bridge';
 import { attachedPicture } from '@/lib/ref-pictures';
+import { newAttachmentPillId } from '@/lib/attachment-pills';
+
+export { formatFileSize } from '@/lib/attachment-pills';
 
 export interface DesktopAttachment {
+  /** its pill's id in the sentence */
   id: string;
   name: string;
   kind: 'image' | 'document';
@@ -40,14 +43,6 @@ export const PROMPT_PICTURES_MAX = 20;
 /** thumbnails made at once: a folder's worth of photos read all together would hold every one of them in memory */
 const THUMBS_AT_ONCE = 4;
 
-const SIZE_UNITS = ['B', 'KB', 'MB', 'GB'];
-export function formatFileSize(bytes: number): string {
-  let value = bytes;
-  let unit = 0;
-  while (value >= 1024 && unit < SIZE_UNITS.length - 1) { value /= 1024; unit += 1; }
-  return `${unit ? value.toFixed(value < 10 ? 1 : 0) : value} ${SIZE_UNITS[unit]}`;
-}
-
 export function useDesktopAttachments(project: string) {
   const [files, setFiles] = React.useState<DesktopAttachment[]>([]);
   const patch = (id: string, next: Partial<DesktopAttachment>) => setFiles((list) => list.map((f) => (f.id === id ? { ...f, ...next } : f)));
@@ -66,12 +61,13 @@ export function useDesktopAttachments(project: string) {
     next();
   }, []);
 
-  const add = React.useCallback((incoming: File[]) => {
+  /** Takes the files in; their records come back at once, for their pills to go into the sentence. */
+  const add = React.useCallback((incoming: File[]): DesktopAttachment[] => {
     const bridge = (window as unknown as { openfilmDesktop?: { pathForFile?: (f: File) => string } }).openfilmDesktop;
     const items = incoming.map((file) => {
       const image = isImageAttachment(file);
       const item: DesktopAttachment = {
-        id: `a${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
+        id: newAttachmentPillId(),
         name: file.name || (image ? 'image.png' : 'file'),
         kind: image ? 'image' : 'document',
         mediaType: file.type,
@@ -113,29 +109,26 @@ export function useDesktopAttachments(project: string) {
         .then((r) => patch(item.id, { state: 'ready', path: r.path }))
         .catch((error: unknown) => patch(item.id, { state: 'failed', error: error instanceof Error ? error.message : String(error) }));
     }
+    return items.map(({ item }) => item);
   }, [project, thumbnail]);
 
-  const drop = React.useCallback((id: string) => {
-    setFiles((list) => {
-      const gone = list.find((f) => f.id === id);
-      if (gone?.previewUrl) URL.revokeObjectURL(gone.previewUrl);
-      return list.filter((f) => f.id !== id);
-    });
-  }, []);
-
-  /** Hand over the files for sending; the composer is empty of them after. */
+  /**
+   * Hand over the files whose pills are sent, in that order; the composer is empty of files after, those whose pill
+   * was taken out too (kept until now only so an undo could bring the pill back).
+   */
   const current = React.useRef(files);
   current.current = files;
-  const take = React.useCallback((): DesktopAttachment[] => {
-    const taken = current.current;
+  const take = React.useCallback((ids: readonly string[]): DesktopAttachment[] => {
+    const byId = new Map(current.current.map((f) => [f.id, f]));
+    const taken = ids.flatMap((id) => byId.get(id) ?? []);
     /* sent: the message keeps their thumbnails, the agent their paths */
-    for (const f of taken) if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+    for (const f of current.current) if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
     current.current = [];
     setFiles([]);
     return taken;
   }, []);
 
-  return { files, add, drop, take };
+  return { files, add, take };
 }
 
 /** What still keeps the message from going: a file still on its way, or one that could not be attached. */
@@ -147,19 +140,9 @@ export function attachmentBlocker(files: readonly DesktopAttachment[], t: (path:
     : null;
 }
 
-/** After the message, for the agent: where the files are. A folder's path ends in "/". */
-export function attachedText(files: readonly DesktopAttachment[]): string {
-  const placed = files.filter((f) => f.path);
-  if (!placed.length) return '';
-  const line = (f: DesktopAttachment) => (f.folder
-    ? `- ${f.path!.replace(/[\\/]+$/, '')}/ (folder)`
-    : `- ${f.path} (${attachmentKind({ name: f.name, mediaType: f.mediaType })}, ${formatFileSize(f.size)})`);
-  return `\n\nAttached files:\n${placed.map(line).join('\n')}`;
-}
-
 /**
- * The pictures among them, as their agent is sent them: the first `room`, in the order they were attached (the rest go
- * by their path only). Read now, as the message goes: a folder's worth of photos would not all be sent anyway.
+ * The pictures among them, as their agent is sent them: the first `room`, in the order given (their pills' order; the
+ * rest go by their path only). Read now, as the message goes: a folder's worth of photos would not all be sent anyway.
  */
 export async function attachedPictures(files: readonly DesktopAttachment[], room: number): Promise<PromptImage[]> {
   const wanted = files.filter((f) => f.kind === 'image' && f.file).slice(0, Math.max(0, room));

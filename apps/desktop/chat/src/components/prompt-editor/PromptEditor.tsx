@@ -34,6 +34,8 @@ import {
   PromptReferenceNode,
 } from './PromptReferenceNode';
 import { MentionMenuPlugin, type MentionMenuConfig } from './MentionMenuPlugin';
+import { $edgeCharacter, MovePillsPlugin, placeAtPoint } from './MovePillsPlugin';
+import { spacesAroundPill } from './pill-spacing';
 import { matchSlashTrigger } from './mention-menu';
 import type { PromptPillCard } from './PromptPill';
 import {
@@ -97,6 +99,12 @@ export interface PromptEditorProps {
   /** What clicking a pill does; without it, pills are not clickable. */
   onReveal?: (reference: PromptReference) => void;
   revealLabel?: string;
+  /** Pills whose thing is not ready yet (a file on its way) or could not be had; they show it. */
+  pillState?: (reference: PromptReference) => 'pending' | 'failed' | null;
+  /** Pills a click opens to look at (a file brought in), with no "where it is" hint. */
+  pillOpens?: (reference: PromptReference) => boolean;
+  /** Drags the host drops at the pointer (files, things from Studio): while over the text, a caret shows where. */
+  showsDropCaret?: (data: DataTransfer) => boolean;
   removeLabel: string;
   placeholder: string;
   ariaLabel?: string;
@@ -133,6 +141,9 @@ export const PromptEditor = React.forwardRef<PromptEditorHandle, PromptEditorPro
       describe,
       onReveal,
       revealLabel,
+      pillState,
+      pillOpens,
+      showsDropCaret,
       removeLabel,
       placeholder,
       ariaLabel,
@@ -158,9 +169,12 @@ export const PromptEditor = React.forwardRef<PromptEditorHandle, PromptEditorPro
         ...(onReveal ? { onReveal } : {}),
         ...(revealLabel ? { revealLabel } : {}),
         ...(describe ? { describe } : {}),
+        ...(pillState ? { pillState } : {}),
+        ...(pillOpens ? { opens: pillOpens } : {}),
+        lookup,
         removeLabel,
       }),
-      [onReveal, removeLabel, revealLabel, describe],
+      [onReveal, removeLabel, revealLabel, describe, pillState, pillOpens, lookup],
     );
 
     const initialConfig = React.useMemo(
@@ -210,6 +224,7 @@ export const PromptEditor = React.forwardRef<PromptEditorHandle, PromptEditorPro
           <SubmitPlugin onSubmit={onSubmit} />
           <TransferReferencesPlugin onTransferReferences={onTransferReferences} />
           <PasteFilesPlugin onPasteFiles={onPasteFiles} />
+          <MovePillsPlugin {...(showsDropCaret ? { showsCaret: showsDropCaret } : {})} />
           <EditablePlugin editable={!disabled} />
           <ChangePlugin onChange={onChange} lookup={lookup} />
           <HandlePlugin ref={ref} lookupRef={lookupRef} autoFocus={autoFocus} />
@@ -349,11 +364,13 @@ function PasteFilesPlugin({ onPasteFiles }: { onPasteFiles?: (files: File[]) => 
 }
 
 /**
- * Inserts references into the sentence, each followed by a space, as the `@` menu does.
+ * Inserts references into the sentence, each followed by a space, as the `@` menu does;
+ * one dropped against a word gets a space before it too, and none is added after when
+ * one already follows.
  *
- * `point` is the drop position. If it falls in the text, the caret moves there first;
- * otherwise (on a pill, on the card's empty space, or a DOM position that does not map
- * back) they go to the caret, or the end if the editor was never focused.
+ * `point` is the drop position. If it falls in the text, the caret moves there first (on
+ * a pill, beside it); otherwise (on the card's empty space, or a DOM position that does
+ * not map back) they go to the caret, or the end if the editor was never focused.
  */
 function insertReferencesAt(
   editor: LexicalEditor,
@@ -363,14 +380,26 @@ function insertReferencesAt(
   if (!references.length) return;
   editor.update(() => {
     const root = editor.getRootElement();
-    const range = point && root ? document.caretRangeFromPoint(point.x, point.y) : null;
-    if (range && root?.contains(range.startContainer)) {
+    const place = point && root ? placeAtPoint(root, point.x, point.y) : null;
+    if (place) {
+      const range = document.createRange();
+      range.setStart(place.node, place.offset);
+      range.collapse(true);
       const dropped = $createRangeSelection();
       dropped.applyDOMRange(range);
       if (dropped.anchor.key !== 'root') $setSelection(dropped);
     }
     if (!$isRangeSelection($getSelection())) $getRoot().selectEnd();
-    $insertNodes(references.flatMap((reference) => [$createPromptReferenceNode(reference), $createTextNode(' ')]));
+    const nodes = references.flatMap((reference) => [$createPromptReferenceNode(reference), $createTextNode(' ')]);
+    $insertNodes(nodes);
+    const first = nodes[0]!;
+    if (spacesAroundPill($edgeCharacter(first.getPreviousSibling(), 'last'), '').before) first.insertBefore($createTextNode(' '));
+    const space = nodes[nodes.length - 1]!;
+    const next = space.getNextSibling();
+    if (space.isAttached() && space.getTextContent() === ' ' && /^\s/.test($edgeCharacter(next, 'first'))) {
+      space.remove();
+      if ($isTextNode(next)) next.select(1, 1);
+    }
   });
   editor.focus();
 }

@@ -165,8 +165,6 @@ export const ja: Words = {
     routeNoKeyNoAccount: 'このモデルには DeepSeek の API キーが必要ですが、このコンピューターには設定されていません。DeepSeek Harness で DeepSeek アカウントにサインインするか、モデル設定で API キーを追加してください。',
     useAccountModel: '{model} を使う',
     accountModelPicked: '{model} に切り替えました。もう一度送信してください。',
-    removeFile: 'ファイルを削除',
-    removeImage: '画像を削除',
     speed: '速度',
     thumbOnly: 'メッセージにはサムネイルだけが残ります。元のファイルは元の場所にあります。貼り付けたものはプロジェクトに保存されています。',
   },

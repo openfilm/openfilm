@@ -12,7 +12,7 @@
 
 import React from 'react';
 import {
-  Blocks, Brackets, Captions, Clapperboard, Clock3, Crop, Film, Mic, MousePointer2, Music, Paperclip,
+  Blocks, Brackets, Captions, Clapperboard, Clock3, Crop, Film, Loader2, Mic, MousePointer2, Music, Paperclip,
   Quote, Rows3, Shapes, SquareDashed, Video, Waves,
 } from 'lucide-react';
 import {
@@ -239,15 +239,19 @@ const noSubscribe = () => () => {};
 export function PromptPill({
   reference,
   onClick,
+  clickable = Boolean(onClick),
   onMouseDown,
   title,
   trailing,
   card,
   hint,
+  state,
 }: {
   reference: StoredPromptReference;
   /** Only when clicking leads somewhere; without it the pill is read-only. */
   onClick?: (event: React.MouseEvent) => void;
+  /** Whether it looks clickable; by default, whether it has `onClick` (the editor's pills all take a click, to keep the caret). */
+  clickable?: boolean;
   /** A press on it: in the editor, where the caret goes. */
   onMouseDown?: (event: React.MouseEvent) => void;
   title?: string;
@@ -257,6 +261,8 @@ export function PromptPill({
   card?: PromptPillCard | null;
   /** The small line under the card (what clicking does), since the card replaces the native title. */
   hint?: string;
+  /** A file still on its way (a spinner over its picture), or one that could not be had (a red edge). */
+  state?: 'pending' | 'failed';
 }) {
   const Icon = iconFor(reference.kind);
   const tone = PILL_TONE[reference.kind as PromptReferenceKind];
@@ -285,12 +291,12 @@ export function PromptPill({
          size) is 18.7px at 14px/22px, with room on both sides. */
       className={`mx-[1px] inline-flex h-[1.45em] max-w-[240px] select-none items-center gap-[5px] rounded-[6px] pl-[3px] align-middle text-[0.9em] font-medium leading-none text-[var(--text)] ring-1 ring-inset transition-[background-color,box-shadow] ${
         trailing ? 'pr-[3px]' : 'pr-1.5'
-      } ${onClick ? 'cursor-pointer' : ''}`}
+      } ${clickable ? 'cursor-pointer' : ''}`}
       style={{
         background: tone
-          ? `color-mix(in srgb, ${tone} ${onClick ? 11 : 9}%, var(--surface))`
+          ? `color-mix(in srgb, ${tone} ${clickable ? 11 : 9}%, var(--surface))`
           : 'var(--surface-2)',
-        ['--tw-ring-color' as string]: tone ? `color-mix(in srgb, ${tone} 26%, transparent)` : 'var(--border)',
+        ['--tw-ring-color' as string]: state === 'failed' ? 'var(--danger)' : tone ? `color-mix(in srgb, ${tone} 26%, transparent)` : 'var(--border)',
         /* Lit from elsewhere: a solid border (over the faint ring) and a deeper fill */
         ...(lit ? {
           background: tone ? `color-mix(in srgb, ${tone} 24%, var(--surface))` : 'var(--bg-hover)',
@@ -299,8 +305,13 @@ export function PromptPill({
       }}
       data-pill-kind={reference.kind}
       data-pill-lit={lit ? '' : undefined}
+      data-pill-state={state}
     >
-      {pictured ? (
+      {state === 'pending' ? (
+        <span className="flex h-[1.05em] w-[1.05em] shrink-0 items-center justify-center text-[var(--text-muted)]">
+          <Loader2 size={10} className="shrink-0 animate-spin" />
+        </span>
+      ) : pictured ? (
         /* A picture replaces the icon: it shows what part of the frame is meant */
         <span
           aria-hidden
@@ -354,8 +365,11 @@ export function PromptWithPills({
   display,
   onReveal,
   revealLabel,
+  pictures,
 }: {
   display: PromptDisplay;
+  /** Pictures kept apart from the pills, by pill id (a file brought in keeps its thumbnail with the message's attachments). */
+  pictures?: ReadonlyMap<string, string>;
   /** Clicking a pill in history: seek to its moment and point it out in the picture, as in the editor. */
   onReveal?: (reference: StoredPromptReference) => void;
   revealLabel?: string;
@@ -374,8 +388,10 @@ export function PromptWithPills({
         if (segment.kind === 'text') {
           return <React.Fragment key={index}>{segment.value}</React.Fragment>;
         }
-        const reference = byId.get(segment.id);
-        if (!reference) return null;
+        const kept = byId.get(segment.id);
+        if (!kept) return null;
+        const picture = kept.image ? undefined : pictures?.get(kept.id);
+        const reference = picture ? { ...kept, image: { src: picture } } : kept;
         const reveal = onRevealRef && canRevealPill(reference) ? onRevealRef : undefined;
         return (
           <PromptPill
