@@ -394,8 +394,8 @@ export type StudioCommand =
      that skill's or example's page (a pill of one clicked) */
   | { type: 'show-examples'; open?: CommunityItem };
 
-/** A skill or an example in the Community, to open on its page. */
-export type CommunityItem = { kind: 'skill'; name: string } | { kind: 'example'; id: string };
+/** A skill or an example in the Community, to open on its page; or `discover`, OpenFilm's skills to install. */
+export type CommunityItem = { kind: 'skill'; name: string } | { kind: 'example'; id: string } | { kind: 'discover' };
 
 export const studioHost: StudioHost | null = (globalThis as { openfilmHost?: StudioHost }).openfilmHost ?? null;
 

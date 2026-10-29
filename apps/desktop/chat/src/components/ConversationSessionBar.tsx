@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { PanelLeft, Plus } from 'lucide-react';
+import { PanelLeft, Plus, Search } from 'lucide-react';
 import { limitTitleWidth, SESSION_TITLE_MAX_WIDTH } from '@openfilm/shared';
 import { Tooltip } from './Tooltip';
 import { useT } from '@/i18n';
@@ -10,7 +10,7 @@ import {
   type ProjectSessionItem,
   type SessionRecencyKey,
 } from '@/lib/project-sessions';
-import { PANE_BAR, PANE_BTN, PANE_BTN_ON, PANE_ICON, PANE_TITLE } from './dock-pane-bar';
+import { PANE_BAR, PANE_BTN, PANE_ICON, PANE_TITLE } from './dock-pane-bar';
 
 const RECENCY_I18N: Record<SessionRecencyKey, 'sidebar.searchToday' | 'sidebar.searchYesterday' | 'sidebar.searchPrevious7Days' | 'sidebar.searchEarlier'> = {
   today: 'sidebar.searchToday',
@@ -27,6 +27,9 @@ const RECENCY_I18N: Record<SessionRecencyKey, 'sidebar.searchToday' | 'sidebar.s
  * while the bar has room to spare.
  */
 const TITLE_MAX = 'max-w-[15rem]';
+
+/** The history's switch: the bar's button, a step fainter until the pointer is on it. */
+const QUIET_BTN = PANE_BTN.replace('text-[var(--text-dim)]', 'text-[var(--text-faint)]');
 
 /**
  * The bar at the top of the conversation: the history's switch and the session's title on the left (none drawn
@@ -94,7 +97,8 @@ export function ConversationSessionBar({
 
   return (
     <div className={PANE_BAR}>
-      {/* These buttons sit at the top edge, so tooltips open downwards. */}
+      {/* These buttons sit at the top edge, so tooltips open downwards. The history's switch stays quiet, open or not:
+          the pane beside it says which. */}
       {onToggleHistory ? (
         <Tooltip label={t('project.sessionHistory')} side="bottom">
           <button
@@ -102,9 +106,9 @@ export function ConversationSessionBar({
             aria-label={t('project.sessionHistory')}
             aria-expanded={historyOpen}
             onClick={onToggleHistory}
-            className={`${PANE_BTN} ${historyOpen ? PANE_BTN_ON : ''}`}
+            className={QUIET_BTN}
           >
-            <PanelLeft size={PANE_ICON} />
+            <PanelLeft size={PANE_ICON} strokeWidth={1.75} />
           </button>
         </Tooltip>
       ) : null}
@@ -198,23 +202,27 @@ export function SessionHistory({
   const needle = query.trim().toLowerCase();
   const groups = groupSessionsByRecency(needle ? listed.filter((item) => labelOf(item).toLowerCase().includes(needle)) : listed);
 
+  /* the search, the groups' names and the rows' words start on one line, 14 px in */
   return (
     <nav aria-label={t('project.sessionHistory')} className="flex h-full min-h-0 w-full flex-col">
-      <div className={PANE_BAR}>
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder={t('project.sessionSearchPlaceholder')}
-          className="h-[22px] min-w-0 flex-1 bg-transparent px-1 text-[12px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]"
-        />
+      <div className="flex h-8 shrink-0 items-center px-2">
+        <label className="flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-md px-1.5 text-[var(--text-faint)] transition focus-within:bg-[var(--bg-hover)] hover:bg-[var(--bg-hover)]">
+          <Search size={12} strokeWidth={1.75} className="shrink-0" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={t('project.sessionSearchPlaceholder')}
+            className="min-w-0 flex-1 bg-transparent text-[12px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]"
+          />
+        </label>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto pb-2">
         {groups.length === 0 ? (
-          <div className="px-2.5 py-3 text-[12px] text-[var(--text-faint)]">{t('project.sessionHistoryEmpty')}</div>
+          <div className="px-3.5 pt-2 text-[12px] text-[var(--text-faint)]">{t('project.sessionHistoryEmpty')}</div>
         ) : (
           groups.map((group) => (
-            <div key={group.key}>
-              <div className="px-2.5 pb-1 pt-2.5 text-[11px] font-medium text-[var(--text-faint)]">{t(RECENCY_I18N[group.key])}</div>
+            <div key={group.key} className="pt-2">
+              <div className="px-3.5 pb-1 text-[11px] text-[var(--text-faint)]">{t(RECENCY_I18N[group.key])}</div>
               {group.items.map((item) => {
                 const active = item.id === currentSessionId;
                 const blocked = busy && !active;
@@ -224,10 +232,10 @@ export function SessionHistory({
                     type="button"
                     aria-current={active || undefined}
                     aria-disabled={blocked || undefined}
-                    title={blocked ? t('project.sessionBusy') : undefined}
+                    title={blocked ? t('project.sessionBusy') : labelOf(item)}
                     onClick={() => { if (!active && !blocked) onSelectSession(item.id); }}
-                    className={`mx-1.5 flex w-[calc(100%-12px)] items-center rounded-md px-1.5 py-[6px] text-left text-[12.5px] leading-tight transition ${
-                      active ? 'bg-[var(--bg-active)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'
+                    className={`mx-2 flex h-7 w-[calc(100%-16px)] items-center rounded-md px-1.5 text-left text-[12.5px] transition ${
+                      active ? 'bg-[var(--bg-hover)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'
                     } ${blocked ? 'cursor-not-allowed opacity-50 hover:bg-transparent' : ''}`}
                   >
                     <span className="min-w-0 flex-1 truncate">{labelOf(item)}</span>

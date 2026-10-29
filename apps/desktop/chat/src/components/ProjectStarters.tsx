@@ -4,7 +4,7 @@
  * The conversation column of an empty project, before anything has been said: the question, then the skills as
  * cards, each its cover and its name, two to a row. A card names its skill in the message being written (Enter
  * starts it, or a few words more say what to make with it); an official one not installed yet is installed first, as
- * the Community's Install would, so the agent gets it. "More" opens the Community, every skill and example.
+ * the Community's Install would, so the agent gets it. "More" opens the Community on Discover, all of OpenFilm's.
  */
 import React from 'react';
 import { ChevronRight } from 'lucide-react';
@@ -69,7 +69,7 @@ export function ProjectStarters({ onSkill }: {
         <div className="mt-4 flex justify-center">
           <button
             type="button"
-            onClick={() => app.showExamples?.()}
+            onClick={() => app.showExamples?.({ kind: 'discover' })}
             className="inline-flex items-center gap-0.5 rounded-md px-2 py-1 text-[13px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
           >
             {t('starter.more')}

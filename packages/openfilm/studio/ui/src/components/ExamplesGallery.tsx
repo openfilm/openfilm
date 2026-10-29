@@ -70,6 +70,8 @@ export function ExamplesGallery({ mode, projectId = null, heading, initial, onCl
   React.useEffect(() => {
     const want = pending.current;
     if (!want) return;
+    /* the skills' Discover: the view the gallery opens on (SkillsLibrary `initialView`) */
+    if (want.kind === 'discover') { pending.current = undefined; return; }
     if (want.kind === 'skill') {
       const skill = skills.find((k) => k.name === want.name);
       if (skill) { pending.current = undefined; setView('skills'); setOpened({ kind: 'skill', skill }); }
@@ -115,6 +117,7 @@ export function ExamplesGallery({ mode, projectId = null, heading, initial, onCl
   let body: React.ReactNode;
   if (view === 'skills') {
     body = <SkillsLibrary skills={skills} setSkills={setSkills} projectId={projectId} opened={opened?.kind === 'skill' ? opened.skill : null}
+      {...(initial?.kind === 'discover' ? { initialView: 'discover' as const } : {})}
       onOpen={(skill) => setOpened({ kind: 'skill', skill })} onBack={() => setOpened(null)} {...(onTrySkill ? { onTry: onTrySkill } : {})} />;
   } else if (examples == null) {
     body = <Empty text={t('gallery.loading')} />;

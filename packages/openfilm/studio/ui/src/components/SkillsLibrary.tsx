@@ -48,7 +48,7 @@ export function useSkillWords() {
 /** An official one not installed is in the catalog only; the person's own and a project's are installed already. */
 const installedOf = (skill: SkillEntry) => skill.installed !== false;
 
-export function SkillsLibrary({ skills, setSkills, projectId, opened, onOpen, onBack, onTry }: {
+export function SkillsLibrary({ skills, setSkills, projectId, opened, onOpen, onBack, onTry, initialView }: {
   skills: SkillEntry[];
   setSkills: React.Dispatch<React.SetStateAction<SkillEntry[]>>;
   projectId: string | null;
@@ -59,10 +59,12 @@ export function SkillsLibrary({ skills, setSkills, projectId, opened, onOpen, on
   onBack: () => void;
   /** Try now: a new conversation with the skill named (none: Studio without the app's chat) */
   onTry?: (skill: SkillEntry) => void;
+  /** the view it opens on (none: Installed when anything is, else Discover) */
+  initialView?: SkillsView;
 }) {
   const t = useT();
   const words = useSkillWords();
-  const [view, setView] = React.useState<SkillsView>(() => (skills.some(installedOf) ? 'installed' : 'discover'));
+  const [view, setView] = React.useState<SkillsView>(() => initialView ?? (skills.some(installedOf) ? 'installed' : 'discover'));
   const [kind, setKind] = React.useState<Kind>('all');
   const [query, setQuery] = React.useState('');
   const [removing, setRemoving] = React.useState<SkillEntry | null>(null);
