@@ -1333,7 +1333,7 @@ export const en = {
     subtitlesMakeOne: 'Make subtitles: a voice clip has no transcript yet',
     subtitlesMake: 'Make subtitles: {n} clips with speech have no transcript yet',
     subtitlesMaking: 'Making subtitles…',
-    subtitlesConnect: 'Making subtitles needs a service that transcribes: connect one in Settings (the OpenFilm logo at the top left) → Providers',
+    subtitlesConnect: 'Making subtitles needs a service that transcribes: connect one in Settings (the gear at the top right) → Providers',
     subtitlesFailed: 'Subtitles could not be made: {error}',
     subtitleLines: 'Lines',
     subtitleLineAt: 'The line at {time}',
@@ -1354,7 +1354,7 @@ export const en = {
     subtitleTranslateFailed: "Couldn't translate right now.",
     subtitleTranslateNetwork: "Couldn't reach the translation service.",
     subtitleTranslateRetry: 'Retry',
-    subtitleTranslateConnect: 'Connect a service that translates in Settings (the OpenFilm logo at the top left) → Providers.',
+    subtitleTranslateConnect: 'Connect a service that translates in Settings (the gear at the top right) → Providers.',
     subtitleSize: 'Size',
     subtitleLook: {
       outline: 'Outlined (default)',

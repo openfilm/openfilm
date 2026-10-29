@@ -1332,7 +1332,7 @@ export const ja: Words = {
     subtitlesMakeOne: '字幕を作成：書き起こしのない音声クリップが 1 個あります',
     subtitlesMake: '字幕を作成：書き起こしのない発話クリップが {n} 個あります',
     subtitlesMaking: '字幕を作成中…',
-    subtitlesConnect: '字幕の作成には文字起こしサービスが必要です。設定（左上の OpenFilm ロゴ）→ プロバイダーで接続してください',
+    subtitlesConnect: '字幕の作成には文字起こしサービスが必要です。設定（右上の歯車）→ プロバイダーで接続してください',
     subtitlesFailed: '字幕を作成できませんでした：{error}',
     subtitleLines: '行',
     subtitleLineAt: '{time} の行',
@@ -1353,7 +1353,7 @@ export const ja: Words = {
     subtitleTranslateFailed: '現在翻訳できません。',
     subtitleTranslateNetwork: '翻訳サービスに接続できませんでした。',
     subtitleTranslateRetry: '再試行',
-    subtitleTranslateConnect: '設定（左上の OpenFilm ロゴ）→ プロバイダーで翻訳サービスを接続してください。',
+    subtitleTranslateConnect: '設定（右上の歯車）→ プロバイダーで翻訳サービスを接続してください。',
     subtitleSize: 'サイズ',
     subtitleLook: {
       outline: '縁取り（既定）',

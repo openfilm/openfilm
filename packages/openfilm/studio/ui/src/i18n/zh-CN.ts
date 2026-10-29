@@ -1333,7 +1333,7 @@ export const zhCN: Words = {
     subtitlesMakeOne: '生成字幕：有一个人声片段还没有文字稿',
     subtitlesMake: '生成字幕：有 {n} 个含语音的片段还没有文字稿',
     subtitlesMaking: '正在生成字幕…',
-    subtitlesConnect: '生成字幕需要一个语音转写服务：请在设置（左上角的 OpenFilm 标志）→ 服务商中连接一个',
+    subtitlesConnect: '生成字幕需要一个语音转写服务：请在设置（右上角的齿轮）→ 服务商中连接一个',
     subtitlesFailed: '无法生成字幕：{error}',
     subtitleLines: '字幕行',
     subtitleLineAt: '{time} 处的字幕',
@@ -1354,7 +1354,7 @@ export const zhCN: Words = {
     subtitleTranslateFailed: '暂时无法翻译。',
     subtitleTranslateNetwork: '无法连接到翻译服务。',
     subtitleTranslateRetry: '重试',
-    subtitleTranslateConnect: '请在设置（左上角的 OpenFilm 标志）→ 服务商中连接一个翻译服务。',
+    subtitleTranslateConnect: '请在设置（右上角的齿轮）→ 服务商中连接一个翻译服务。',
     subtitleSize: '大小',
     subtitleLook: {
       outline: '描边（默认）',

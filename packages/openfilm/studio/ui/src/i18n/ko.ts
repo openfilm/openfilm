@@ -1329,7 +1329,7 @@ export const ko: Words = {
     subtitlesMakeOne: '자막 만들기: 음성 클립 1개에 아직 대본이 없습니다',
     subtitlesMake: '자막 만들기: 음성이 있는 클립 {n}개에 아직 대본이 없습니다',
     subtitlesMaking: '자막 만드는 중…',
-    subtitlesConnect: '자막을 만들려면 음성 인식 서비스가 필요합니다. 설정(왼쪽 위 OpenFilm 로고) → 제공업체에서 연결하세요',
+    subtitlesConnect: '자막을 만들려면 음성 인식 서비스가 필요합니다. 설정(오른쪽 위 톱니바퀴) → 제공업체에서 연결하세요',
     subtitlesFailed: '자막을 만들지 못했습니다: {error}',
     subtitleLines: '자막 줄',
     subtitleLineAt: '{time}의 자막',
@@ -1350,7 +1350,7 @@ export const ko: Words = {
     subtitleTranslateFailed: '지금은 번역할 수 없습니다.',
     subtitleTranslateNetwork: '번역 서비스에 연결할 수 없습니다.',
     subtitleTranslateRetry: '다시 시도',
-    subtitleTranslateConnect: '설정(왼쪽 위 OpenFilm 로고) → 제공업체에서 번역 서비스를 연결하세요.',
+    subtitleTranslateConnect: '설정(오른쪽 위 톱니바퀴) → 제공업체에서 번역 서비스를 연결하세요.',
     subtitleSize: '크기',
     subtitleLook: {
       outline: '외곽선(기본값)',
