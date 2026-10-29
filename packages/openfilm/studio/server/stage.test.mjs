@@ -507,6 +507,7 @@ test('a layer to be written into its page or another: where it is laid out, the 
   <h1 id="title" style="margin:0 0 4px;font:700 20px sans-serif" onclick="go()">Every <b>parcel</b></h1>
   <p class="note" style="margin:0">On time</p>
   <p class="note" style="margin:0">Late</p>
+  <span id="tag" style="display:inline-block;padding:3px 5px;font:15.3px sans-serif">One line, as it was</span>
   <svg id="logo" width="20" height="10"><linearGradient id="g"/><rect fill="url(#g)" width="20" height="10"/></svg>
 </div>
 <script>window.film={duration:2,frame(){}}</script></body>`);
@@ -523,10 +524,13 @@ test('a layer to be written into its page or another: where it is laid out, the 
     assert.match(title.snapshot.html, /^<h1 id="title" style="[^"]*position: absolute; left: 10px; top: 10px;[^"]*">Every <b style="[^"]*color: rgb\(0, 0, 255\)/);
     assert.ok(!/ class=|onclick/.test(title.snapshot.html), 'no class (another page\'s CSS does not reach it), no handler');
     assert.match(logo.snapshot.html, /id="g"/, 'its ids kept, to be made new ones where it goes');
+    /* a box as wide as its words: its size to the fraction, as a copy needs it to keep its words on one line */
+    const [tag] = await stage.ask('layerSource', { clip: 'card', of: [{ at: '#tag' }] });
+    assert.ok(tag.place.width % 1 !== 0, `a width with its fraction (${tag.place.width})`);
     /* copies of both notes: the first's goes after the second (right after it, the page's :nth-child(3) would color
        the other), and nothing the clip points at is another element then */
     const after = await stage.ask('afterCopy', { clip: 'card', of: [{ at: '#col > p:nth-of-type(1)' }, { at: '#col > p:nth-of-type(2)' }] });
-    const kids = ['h1', 'p', 'p', 'svg'];
+    const kids = ['h1', 'p', 'p', 'span', 'svg'];
     assert.deepEqual([after.places, after.moved], [[{ after: 2, siblings: kids }, { after: 2, siblings: kids }], [null, null, null]]);
   } finally {
     await stage.close();

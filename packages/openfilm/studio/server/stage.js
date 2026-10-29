@@ -1574,7 +1574,20 @@
         n = n.offsetParent;
         if (n && n !== box) { left += n.clientLeft; top += n.clientTop; }
       }
-      return { position, left, top, width: el.offsetWidth, height: el.offsetHeight };
+      /* its size as laid out, fractions kept: offsetWidth rounds, and a copy 0.4px narrower wraps its words */
+      const cs = view.getComputedStyle(el);
+      const edges = (/** @type {string[]} */ ...names) => names.reduce((sum, n) => sum + (parseFloat(cs.getPropertyValue(n)) || 0), 0);
+      const exact = (/** @type {string} */ size, /** @type {number} */ rounded, /** @type {string[]} */ sides) => {
+        const v = parseFloat(size);
+        if (!Number.isFinite(v)) return rounded;
+        const outer = cs.boxSizing === 'border-box' ? v : v + edges(...sides);
+        return Math.abs(outer - rounded) < 1 ? outer : rounded;
+      };
+      return {
+        position, left, top,
+        width: exact(cs.width, el.offsetWidth, ['padding-left', 'padding-right', 'border-left-width', 'border-right-width']),
+        height: exact(cs.height, el.offsetHeight, ['padding-top', 'padding-bottom', 'border-top-width', 'border-bottom-width']),
+      };
     }
     if (el.localName !== 'svg' || el.ownerSVGElement) return null;
     /* an <svg> in the page: no offset*; its box from where it is drawn, in what places it (its offset parent's) */
