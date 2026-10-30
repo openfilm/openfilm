@@ -36,6 +36,8 @@ export interface ResourceDragItem {
   fps?: number;
   /** A saved thing (lib/saved), not a file of the project: its files are brought in as it lands. */
   saved?: string;
+  /** Not a clip but what goes on one (a look, lib/library) or on a cut (a fade): dropped there, not on a track. */
+  apply?: 'look' | 'fade';
 }
 
 const KINDS: readonly ResourceKind[] = ['video', 'image', 'audio', 'mg', 'other'];
@@ -104,6 +106,7 @@ function normalizeResourceDragItem(value: unknown): ResourceDragItem | null {
     ...(h === undefined ? {} : { h }),
     ...(fps === undefined ? {} : { fps }),
     ...(typeof item.saved === 'string' && item.saved ? { saved: item.saved } : {}),
+    ...(item.apply === 'look' || item.apply === 'fade' ? { apply: item.apply } : {}),
   };
 }
 

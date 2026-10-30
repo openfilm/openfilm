@@ -669,6 +669,11 @@ export interface TimelineProps {
    */
   onDropAsset?: (file: ResourceDragItem, target: AssetDropTarget, atMs: number) => Promise<string | null>;
   /**
+   * What goes on a clip or a cut rather than on a track (a drag's `apply`, lib/library): a look dropped on a clip (its
+   * block id), a fade on the cut nearest where it was let go. Null = done.
+   */
+  onApplyDrop?: (file: ResourceDragItem, at: { blockId: string } | { cut: CutRef }) => Promise<string | null>;
+  /**
    * Files from the computer dropped at this time and place: imported into the media pane, then placed where they were
    * dropped (`hit` is the row under the pointer, as assetDropSpot reads it). Null = done.
    */
@@ -959,6 +964,7 @@ export const Timeline = React.memo(function Timeline({
   onPaste,
   onExportBlock,
   onDropAsset,
+  onApplyDrop,
   onDropFiles,
   hasClipboard,
   thumbs,
@@ -1044,6 +1050,8 @@ export const Timeline = React.memo(function Timeline({
     if (pref === 'magnet' && on) onMagnetOn.current();
   }, []);
   const [assetHint, setAssetHint] = React.useState<AssetHint | null>(null);
+  /* a fade dragged over the timeline: the cut it would go on, shown by the snap guide */
+  const [applyCutMs, setApplyCutMs] = React.useState<number | null>(null);
   const [dropBusy, setDropBusy] = React.useState(false);
   /* what went wrong (a drop, an edit), or what an edit could not do: said in the toolbar until dismissed */
   const [dropError, setDropError] = React.useState<string | null>(null);
@@ -2236,9 +2244,9 @@ export const Timeline = React.memo(function Timeline({
   const [splitting, setSplitting] = React.useState(false);
 
   const acceptAssetDrag = React.useCallback((e: React.DragEvent): boolean => (
-    (Boolean(onDropAsset) && e.dataTransfer.types.includes(RESOURCE_DRAG_TYPE))
+    (Boolean(onDropAsset || onApplyDrop) && e.dataTransfer.types.includes(RESOURCE_DRAG_TYPE))
     || (Boolean(onDropFiles) && isComputerFileDrag(e.dataTransfer))
-  ), [onDropAsset, onDropFiles]);
+  ), [onDropAsset, onApplyDrop, onDropFiles]);
 
   /**
    * The time under the pointer for a drop — unlike msAtClientX, not clamped to the film: a drop is what makes the film
@@ -2262,6 +2270,23 @@ export const Timeline = React.memo(function Timeline({
       : { ms: raw, target: null };
     return snapped.target ? snapped : { ms: snapToFrame(raw), target: null };
   }, [allBlocks, pxPerMs, snap, snapPointsMs]);
+
+  /**
+   * Where a thing that is no clip would go (a drag's `apply`): a look on the clip under the pointer, a fade on the cut
+   * nearest it on the row under the pointer (within a few pixels' reach). Null: nowhere there.
+   */
+  const applyTarget = React.useCallback((file: ResourceDragItem, clientX: number, clientY: number): { blockId: string } | { cut: CutRef & { atMs: number } } | null => {
+    if (file.apply === 'look') {
+      const blockId = clipAtPoint(clientX, clientY);
+      const block = blockId ? allBlocks.find((b) => b.id === blockId) : undefined;
+      /* a picture's: a page, a video or a still */
+      return blockId && block?.clipId && (block.kind === 'mg' || block.kind === 'video') ? { blockId } : null;
+    }
+    const row = tracks[laneHitAtY(clientY).lane];
+    if (row?.docIndex == null || pxPerMs <= 0) return null;
+    const cut = cutNear(modelRef.current, row.docIndex, dropMsAtClientX(clientX), 24 / pxPerMs);
+    return cut ? { cut } : null;
+  }, [allBlocks, tracks, laneHitAtY, dropMsAtClientX, pxPerMs]);
 
   /**
    * How a drop from the media pane goes in. Onto the main track with the magnet: in between two clips at the insert
@@ -2320,6 +2345,15 @@ export const Timeline = React.memo(function Timeline({
     /* the preview reads the file kept at dragstart: during a drag Safari often only exposes text/plain. A file from
        the computer is only a type until it is dropped: drawn by its kind, at a default length */
     const file = isComputerFileDrag(e.dataTransfer) ? computerFileDragItem(e.dataTransfer, t('timeline.dropFromComputer')) : peekResourceDrag();
+    /* a look: a ring round the clip it would go on; a fade: the guide on the cut */
+    if (file?.apply) {
+      const at = onApplyDrop ? applyTarget(file, e.clientX, e.clientY) : null;
+      markReplaceTarget(at && 'blockId' in at ? at.blockId : null);
+      setApplyCutMs(at && 'cut' in at ? at.cut.atMs : null);
+      setAssetHint(null);
+      e.dataTransfer.dropEffect = at ? 'copy' : 'none';
+      return;
+    }
     /* ⇧ over a clip: the file takes its place (onReplaceDrop), shown by a ring round it, not by a landing */
     const over = onReplaceDrop && e.shiftKey && !isComputerFileDrag(e.dataTransfer) ? clipAtPoint(e.clientX, e.clientY) : null;
     markReplaceTarget(over);
@@ -2327,11 +2361,12 @@ export const Timeline = React.memo(function Timeline({
     const next = file ? assetLanding(file, e.clientX, e.clientY, e.altKey) : null;
     e.dataTransfer.dropEffect = next && !next.error ? 'copy' : 'none';
     setAssetHint((cur) => (sameAssetHint(cur, next) ? cur : next));
-  }, [acceptAssetDrag, assetLanding, t, onReplaceDrop]);
+  }, [acceptAssetDrag, assetLanding, t, onReplaceDrop, onApplyDrop, applyTarget]);
 
   const onAssetDragLeave = React.useCallback((e: React.DragEvent) => {
     if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
     setAssetHint(null);
+    setApplyCutMs(null);
     markReplaceTarget(null);
   }, []);
 
@@ -2340,7 +2375,15 @@ export const Timeline = React.memo(function Timeline({
     e.preventDefault();
     e.stopPropagation();
     setAssetHint(null);
+    setApplyCutMs(null);
     markReplaceTarget(null);
+    const applying = readResourceDragData(e.dataTransfer) ?? peekResourceDrag();
+    if (applying?.apply) {
+      const at = onApplyDrop ? applyTarget(applying, e.clientX, e.clientY) : null;
+      if (!at || !onApplyDrop) return;
+      void onApplyDrop(applying, 'cut' in at ? { cut: { a: at.cut.a, b: at.cut.b } } : at).then((err) => { if (err) setDropError(err); });
+      return;
+    }
     const replaced = onReplaceDrop && e.shiftKey && !isComputerFileDrag(e.dataTransfer) ? clipAtPoint(e.clientX, e.clientY) : null;
     const replacing = replaced ? tracks.flatMap((tr) => tr.blocks).find((b) => b.id === replaced && b.clipId) : undefined;
     const dragged = replacing ? readResourceDragData(e.dataTransfer) ?? peekResourceDrag() : null;
@@ -2374,7 +2417,7 @@ export const Timeline = React.memo(function Timeline({
       },
       () => { setDropBusy(false); },
     );
-  }, [acceptAssetDrag, assetLanding, dropAt, dropMsAtClientX, laneHitAtY, onDropAsset, onDropFiles, onEditOps, tracks, onReplaceDrop]);
+  }, [acceptAssetDrag, assetLanding, dropAt, dropMsAtClientX, laneHitAtY, onDropAsset, onDropFiles, onEditOps, tracks, onReplaceDrop, onApplyDrop, applyTarget]);
 
   /**
    * Split clips at a time (the playhead by default), in one edit: those it is not inside, or on a locked track, are
@@ -3550,7 +3593,7 @@ export const Timeline = React.memo(function Timeline({
 
   /* the snap guide when snapped (to an edge, zero, a marker or the playhead) and landing right there (useBlockDrag
      landsFlush): over the playhead too, so the person sees it caught */
-  const snapGuideMs = drag.preview?.snappedTo ? drag.preview.snappedTo.ms : (assetHint?.snapGuideMs ?? null);
+  const snapGuideMs = drag.preview?.snappedTo ? drag.preview.snappedTo.ms : (assetHint?.snapGuideMs ?? applyCutMs ?? null);
 
   /** The selected clips, in timeline order. */
   const selectedBlocks = React.useMemo(

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { builtInRoot, libraryFile, libraryIndex } from './library.mjs';
+import { builtInRoot, libraryFavorites, libraryFile, libraryIndex, setLibraryFavorites } from './library.mjs';
 import { takeSaved } from './saved.mjs';
 
 const index = /** @type {{ groups: Record<string, { id: string }[]>, items: any[] }} */ (libraryIndex());
@@ -50,4 +50,17 @@ test('a page of the library is taken into a project as a copy under saved/openfi
   const sound = await takeSaved(root, 'openfilm/sounds/whoosh.m4a');
   assert.deepEqual(sound, { path: 'assets/whoosh.m4a' });
   await assert.rejects(() => takeSaved(root, 'openfilm/../package.json'));
+});
+
+test('the starred things are kept in the shared prefs, those of the library only, each once', () => {
+  const before = process.env.OPENFILM_SHARED_HOME;
+  process.env.OPENFILM_SHARED_HOME = mkdtempSync(join(tmpdir(), 'of-library-home-'));
+  try {
+    assert.deepEqual(libraryFavorites(), []);
+    assert.deepEqual(setLibraryFavorites(['effects/snow', 'nope/none', 'effects/snow', 7, 'filters/bw']), ['effects/snow', 'filters/bw']);
+    assert.deepEqual(libraryFavorites(), ['effects/snow', 'filters/bw']);
+    assert.deepEqual(setLibraryFavorites('all'), []);
+  } finally {
+    if (before === undefined) delete process.env.OPENFILM_SHARED_HOME; else process.env.OPENFILM_SHARED_HOME = before;
+  }
 });

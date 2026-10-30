@@ -31,6 +31,7 @@ import { anyLocked, lockedEdits } from '@/lib/track-lock';
 import { placeMedia, type SourceRange } from '@/lib/media-place';
 import { BUILT_IN, builtInItem, cutTrack, cutsOf, libraryDragItem, nameOf, onCut, withLook, type LibraryItem } from '@/lib/library';
 import { LibraryDrawer, type LibraryActions } from '@/components/library/LibraryDrawer';
+import { LibraryTrial } from '@/components/library/LibraryTrial';
 import { apartOnTracks, type ClipEdit } from '@/lib/film-clip-edits';
 import { mediaFetch, useMediaImages } from '@/lib/media-queue';
 import { clipboardItemsOf, clipboardNow, laneOfBlock, pasteEdit, type TimelineClipboardItem } from '@/lib/timeline-clipboard';
@@ -1435,16 +1436,22 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     else if (pickedMedia) void addMedia(pickedMedia, { mode, range, atPlayhead: true });
   }, [addMedia, placeSaved, pickedMedia, pickedSaved]);
   /*
-   * OpenFilm's library in the assets drawer (components/library/LibraryDrawer, lib/library): a page or a sound taken
-   * into the project and put at the playhead (a sound as a file of the project goes; a page on a new track at the top,
-   * a transition's middle on the cut nearest the playhead), a look written into the picked clips' style, a fade made on
-   * a cut as the timeline's menu makes one.
+   * OpenFilm's library in the assets drawer (components/library/LibraryDrawer, lib/library). A click tries a thing in
+   * the viewer, nothing written (components/library/LibraryTrial; a look through the stage's look preview, on the clip
+   * it would go on). A double click, Enter or "+" puts it in: a page or a sound taken into the project and put at the
+   * playhead (a sound as a file of the project goes, a page on a new track at the top, a transition's middle on the
+   * cut), a look written into the clips' style, a fade made on a cut as the timeline's menu makes one; what was put
+   * in is then picked on the timeline, so the inspector shows what can be changed in it. A drag onto the timeline
+   * goes through dropAsset, or for a look or a fade through applyDrop.
    */
   const language = useLanguage();
-  const libraryActions = React.useMemo<LibraryActions>(() => {
+  const [libraryTrial, setLibraryTrial] = React.useState<LibraryItem | null>(null);
+  /* playing, the film is what is watched: the try goes */
+  React.useEffect(() => { if (playing) setLibraryTrial(null); }, [playing]);
+  const library = React.useMemo(() => {
     const picked = () => selectedBlocks.flatMap((b) => (b.clipId ? [b.clipId] : []));
     const target = () => timelineCommands.current?.target() ?? null;
-    /* the cut nearest the playhead (or at the picked clip), and the track it is on */
+    /* the cut a transition goes on: the picked clip's, else the one nearest the playhead; and the track it is on */
     const cutHere = () => {
       const model = editModel();
       const cut = cutForClick(model, 'dissolve', picked(), timeRef.current, target());
@@ -1454,17 +1461,47 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       const edge = after ?? before;
       return cut && edge ? { cut, atMs: after ? after.startMs : before!.endMs, track: edge.track } : null;
     };
+    /* the clips a look goes on: the picked pictures, else the main track's clip under the playhead */
+    const lookTargets = (): { loc: string; style: string | undefined }[] => {
+      const pics = selectedBlocks.flatMap((b) => {
+        const clip = b.clipId && b.loc ? filmClipOf(b.clipId) : null;
+        return clip && !clip.sound && filmSrcKind(clip.src) !== 'sound' ? [{ loc: b.loc!, style: clip.style }] : [];
+      });
+      if (pics.length) return pics;
+      const model = editModel();
+      const main = mainTrackOf(model);
+      const ms = timeRef.current;
+      const under = model.find((tr) => tr.index === main)?.clips.find((c) => ms >= c.startMs && ms < c.endMs);
+      const block = under ? blocksRef.current.find((b) => b.clipId === under.id) : undefined;
+      const clip = under ? filmClipOf(under.id) : null;
+      return block?.loc && clip ? [{ loc: block.loc, style: clip.style }] : [];
+    };
+    /* what was just put in, picked on the timeline once it is drawn there */
+    const pickAdded = (before: ReadonlySet<string>) => {
+      let left = 30;
+      const find = () => {
+        const block = blocksRef.current.find((b) => b.clipId && !before.has(b.clipId));
+        if (block) { setStageElement(null); setSelectedKeys([block.clipId ?? block.id]); return; }
+        if (--left > 0) requestAnimationFrame(find);
+      };
+      requestAnimationFrame(find);
+    };
+    const clipIds = () => new Set(blocksRef.current.flatMap((b) => (b.clipId ? [b.clipId] : [])));
+    const look = (item: LibraryItem, on: { loc: string; style: string | undefined }[]) => {
+      if (!on.length) { toast.show(t('assetDrawer.pickClips')); return; }
+      void editBlocks(on.map((c) => ({ loc: c.loc, prop: 'style', value: withLook(c.style, item.filter ?? null) }))).then((err) => {
+        if (err) toast.showError(err);
+        else toast.show(t('assetDrawer.looked').replace('{name}', nameOf(item.name, language)).replace('{n}', String(on.length)));
+      });
+    };
+    const fade = (item: LibraryItem, cut: { a: string | null; b: string | null } | null) => {
+      if (!cut || !item.fade) { toast.show(t('assetDrawer.noCut')); return; }
+      void askTransition({ kind: 'add', type: item.fade, cut }).then((err) => { if (err) toast.show(err); });
+    };
     const place = async (item: LibraryItem) => {
       const name = nameOf(item.name, language);
       const drag = libraryDragItem(item, name);
       if (!drag) return;
-      let taken: Awaited<ReturnType<typeof api.takeSaved>>;
-      try { taken = await api.takeSaved(projectId, `${BUILT_IN}/${item.id}`); } catch (e) { toast.show(e instanceof Error ? e.message : String(e)); return; }
-      if ('path' in taken) {
-        await addMedia({ path: taken.path, name, dir: '', size: 0, kind: 'audio', mtimeMs: 0, ...(drag.durationMs ? { durationMs: drag.durationMs } : {}) }, { atPlayhead: true });
-        return;
-      }
-      if (!('clip' in taken)) return;
       let at = snapToFrame(timeRef.current) / 1000;
       let track: number | { insert: number } = { insert: 0 };
       if (item.place === 'cut') {
@@ -1473,29 +1510,51 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         at = Math.max(0, Math.round(here.atMs - (item.durationMs ?? 0) / 2) / 1000);
         track = cutTrack(timelineTracks, here.track, at, item.durationMs ?? 0);
       }
+      let taken: Awaited<ReturnType<typeof api.takeSaved>>;
+      try { taken = await api.takeSaved(projectId, `${BUILT_IN}/${item.id}`); } catch (e) { toast.show(e instanceof Error ? e.message : String(e)); return; }
+      const before = clipIds();
+      if ('path' in taken) {
+        if (await addMedia({ path: taken.path, name, dir: '', size: 0, kind: 'audio', mtimeMs: 0, ...(drag.durationMs ? { durationMs: drag.durationMs } : {}) }, { atPlayhead: true })) {
+          toast.show(t('assetDrawer.added').replace('{name}', name));
+          pickAdded(before);
+        }
+        return;
+      }
+      if (!('clip' in taken)) return;
       const failed = await edit([{ op: 'insert', clip: taken.clip as never, at, track }], 'history.stepDrop');
-      if (failed) toast.show(failed);
+      if (failed) { toast.show(failed); return; }
+      toast.show(t('assetDrawer.added').replace('{name}', name));
+      pickAdded(before);
     };
-    return {
-      place: (item) => { void place(item); },
-      look: (item) => {
-        const pics = selectedBlocks.flatMap((b) => {
-          const clip = b.clipId && b.loc ? filmClipOf(b.clipId) : null;
-          return clip && !clip.sound && filmSrcKind(clip.src) !== 'sound' ? [{ loc: b.loc!, style: clip.style }] : [];
-        });
-        if (!pics.length) { toast.show(t('assetDrawer.pickClips')); return; }
-        void editBlocks(pics.map((c) => ({ loc: c.loc, prop: 'style', value: withLook(c.style, item.filter ?? null) }))).then((err) => {
-          if (err) toast.showError(err);
-          else toast.show(t('assetDrawer.looked').replace('{name}', nameOf(item.name, language)).replace('{n}', String(pics.length)));
-        });
+    const actions: LibraryActions = {
+      add: (item) => {
+        setLibraryTrial(null);
+        if (item.kind === 'look') look(item, lookTargets());
+        else if (item.kind === 'fade') fade(item, cutHere()?.cut ?? null);
+        else void place(item);
       },
-      fade: (item) => {
-        const here = item.fade ? cutHere() : null;
-        if (!here || !item.fade) { toast.show(t('assetDrawer.noCut')); return; }
-        void askTransition({ kind: 'add', type: item.fade, cut: here.cut }).then((err) => { if (err) toast.show(err); });
-      },
+      tryOut: (item) => setLibraryTrial(item),
     };
+    /* a look or a fade dropped on the timeline (Timeline onApplyDrop): on that clip, on that cut */
+    const applyDrop = async (file: ResourceDragItem, at: { blockId: string } | { cut: { a: string | null; b: string | null } }): Promise<string | null> => {
+      const item = builtInItem(file.saved);
+      if (!item) return null;
+      setLibraryTrial(null);
+      if ('cut' in at) { fade(item, at.cut); return null; }
+      const block = blocksRef.current.find((b) => b.id === at.blockId);
+      const clip = block?.clipId ? filmClipOf(block.clipId) : null;
+      look(item, block?.loc && clip ? [{ loc: block.loc, style: clip.style }] : []);
+      return null;
+    };
+    return { actions, applyDrop, lookTargets };
   }, [language, selectedBlocks, editModel, projectId, addMedia, timelineTracks, edit, filmClipOf, editBlocks, askTransition, t, toast]);
+  /* a look tried: shown on the clips it would go on, taken off when the try ends */
+  React.useEffect(() => {
+    if (libraryTrial?.kind !== 'look') return undefined;
+    const on = library.lookTargets();
+    for (const c of on) previewLook(c.loc, withLook(c.style, libraryTrial.filter ?? null) ?? '');
+    return () => { for (const c of on) previewLook(c.loc, null); };
+  }, [libraryTrial]); // eslint-disable-line react-hooks/exhaustive-deps
   /* clips (and files) kept to use again in any project (lib/saved, studio/server/saved.mjs): the timeline's, the
      picture's and the media pane's "Add to Saved" */
   const saveThings = React.useCallback(async (what: Parameters<typeof api.save>[1], n: number) => {
@@ -1642,7 +1701,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (paths.length && paths.every(Boolean)) return savedActions.bring(paths, into);
     return savedActions.upload(files, into, onProgress, t('assets.uploadFailed'));
   }, [t]);
-  const mediaPool = () => (mediaScope === 'saved' ? (
+  /* `inDrawer`: in the assets drawer, whose side bar switches between the project's media and Saved */
+  const mediaPool = (inDrawer = false) => (mediaScope === 'saved' ? (
     <MediaPool
       key="saved"
       projectId={SAVED}
@@ -1659,7 +1719,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       onBring={(paths, into) => savedActions.bring(paths, into)}
       links={false}
       scope="saved"
-      onScope={switchMedia}
+      onScope={inDrawer ? undefined : switchMedia}
       onAdd={(file) => void placeSaved(file)}
     />
   ) : (
@@ -1686,7 +1746,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       onCollect={onCollect}
       onSave={saveFiles}
       scope="project"
-      onScope={switchMedia}
+      onScope={inDrawer ? undefined : switchMedia}
       {...(studioHost?.refer ? { fileRef: refOfFile, onRefer: studioHost.refer } : {})}
       reveal={revealMedia}
       litPath={chatPoint?.file ?? null}
@@ -3427,6 +3487,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                               />
                             ) : null}
                           </Preview>
+                          {/* a thing of the library tried from the assets drawer: over the picture, nothing written */}
+                          {libraryTrial && !fullscreen ? <LibraryTrial item={libraryTrial} /> : null}
                         </div>
                         {!viewerReady && !empty && !previewError ? (
                           <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black">
@@ -3615,6 +3677,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     onCopy={copyBlocks}
                     onPaste={pasteAt}
                     onDropAsset={dropAsset}
+                    onApplyDrop={library.applyDrop}
                     onDropFiles={dropFiles}
                     onExportBlock={openClipExport}
                     hasClipboard={clipboard.length > 0 || layerBoard != null}
@@ -3676,7 +3739,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       {hostAssets?.open && hostPanel ? (
         <div className="fixed z-30 flex min-h-0 min-w-0 flex-col overflow-hidden border-t border-[var(--dock-line)] bg-[var(--dock-pane)]"
           style={{ top: HOST_PANEL_TOP, left: 0, bottom: hostAssets.bottom, width: HOST_PANEL_WIDTH }}>
-          <LibraryDrawer media={mediaPool()} actions={libraryActions} />
+          <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} actions={library.actions} />
         </div>
       ) : null}
       <DesktopDialog open={desktopOpen} onClose={() => setDesktopOpen(false)} />

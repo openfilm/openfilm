@@ -11,6 +11,9 @@
  *                          fade   one of Studio's transitions (ui lib/transitions), made of fades
  *   library/<id>/…       the things themselves
  *
+ * The things the person starred are kept in the shared prefs.json (`libraryFavorites`, their ids), so every OpenFilm on
+ * this computer shows the same ones.
+ *
  * A thing is taken into a project as a thing of Saved is (saved.mjs takeSaved), by its path `openfilm/<id>`: copied,
  * a bundle's files to `saved/openfilm/<id as one name>/` there (`effects-snow`), a file into assets/. Nothing here is
  * ever written.
@@ -18,6 +21,7 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { setSharedPref, sharedPref } from '../../src/locations.mjs';
 import { inside } from './files.mjs';
 
 /** What a path names the library by (`openfilm/<id>`), as `saved/` names Saved. */
@@ -45,3 +49,22 @@ export function libraryFile(/** @type {unknown} */ rel) {
   try { file = inside(builtInRoot(), rel); } catch { return null; }
   return existsSync(file) && statSync(file).isFile() ? file : null;
 }
+
+/** Where the starred things are kept in the shared prefs.json. */
+const FAVORITES = 'libraryFavorites';
+
+/** The ids the person starred, in the order they were starred, those still in the library only. */
+export function libraryFavorites() {
+  const kept = sharedPref(FAVORITES);
+  const ids = new Set((/** @type {{ items: { id: string }[] }} */ (libraryIndex())).items.map((item) => item.id));
+  return Array.isArray(kept) ? [...new Set(kept.filter((id) => typeof id === 'string' && ids.has(id)))] : [];
+}
+
+/** Keep `ids` as the starred ones (those not in the library left out). Returns them as kept. */
+export function setLibraryFavorites(/** @type {unknown} */ ids) {
+  const known = new Set((/** @type {{ items: { id: string }[] }} */ (libraryIndex())).items.map((item) => item.id));
+  const next = Array.isArray(ids) ? [...new Set(ids.filter((id) => typeof id === 'string' && known.has(id)))] : [];
+  setSharedPref(FAVORITES, next);
+  return next;
+}
+

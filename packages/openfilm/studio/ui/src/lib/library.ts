@@ -80,17 +80,20 @@ export const nameOf = (names: LibraryNames, lang: Language): string => names[lan
 
 /** A file of the library by its place there. */
 export const libraryUrl = (rel: string): string => `/api/library/file?path=${encodeURIComponent(rel)}`;
+/** A page of the library, served as a page (for a try over the viewer's picture). */
+export const pageUrl = (item: LibraryItem): string => `/api/library/page?path=${encodeURIComponent(`${item.id}/files/${item.src ?? ''}`)}`;
 export const posterUrl = (item: LibraryItem): string => libraryUrl(`${item.id}/poster.jpg`);
 export const previewUrl = (item: LibraryItem): string => libraryUrl(`${item.id}/preview.mp4`);
 export const waveUrl = (item: LibraryItem): string => libraryUrl(`sounds/waves/${item.id.split('/').pop()!.replace(/\.[^.]+$/, '')}.png`);
 
 /**
- * What a drag of a page or a sound carries to the timeline (lib/resource-drag): its own page or file for the kind and
- * the preview's length, and its `openfilm/` path to be taken into the project as it lands. Null for a look or a fade:
- * they are not clips.
+ * What a drag carries to the timeline (lib/resource-drag): a page or a sound its own page or file for the kind and the
+ * preview's length, and its `openfilm/` path to be taken into the project as it lands; a look or a fade what it goes
+ * on (`apply`: a clip, a cut), being no clip itself.
  */
 export function libraryDragItem(item: LibraryItem, name: string): ResourceDragItem | null {
   const saved = `${BUILT_IN}/${item.id}`;
+  if (item.kind === 'look' || item.kind === 'fade') return { path: saved, name, kind: 'other', saved, apply: item.kind };
   if (item.kind === 'sound') return { path: saved, name, kind: 'audio', ...(item.durationMs ? { durationMs: item.durationMs } : {}), saved };
   if (item.kind !== 'page' || !item.src) return null;
   return {
@@ -144,4 +147,34 @@ export function cutTrack(tracks: Spans, track: number | { insert: number } | und
   const start = atSec * 1000, end = start + durationMs;
   const lane = tracks.find((tr) => tr.docIndex === track);
   return lane?.blocks.some((b) => b.clipId && b.startMs < end - 1 && b.endMs > start + 1) ? { insert: track } : track;
+}
+
+let favorites: readonly string[] | null = null;
+const starred = new Set<() => void>();
+const tellStarred = () => { for (const fn of starred) fn(); };
+
+/** The things the person starred (their ids), kept for every OpenFilm on this computer; empty until read. */
+export function useLibraryFavorites(): readonly string[] {
+  const seen = React.useSyncExternalStore(
+    (fn) => { starred.add(fn); return () => { starred.delete(fn); }; },
+    () => favorites,
+    () => favorites,
+  );
+  React.useEffect(() => {
+    if (favorites) return;
+    void fetch('/api/library/favorites', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null), () => null).then((body: { ids?: string[] } | null) => {
+      if (body && Array.isArray(body.ids)) { favorites = body.ids; tellStarred(); }
+    });
+  }, []);
+  return seen ?? [];
+}
+
+/** Star a thing, or take its star away: shown at once, then kept. */
+export function toggleFavorite(id: string): void {
+  const had = favorites ?? [];
+  favorites = had.includes(id) ? had.filter((x) => x !== id) : [...had, id];
+  tellStarred();
+  void fetch('/api/library/favorites', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids: favorites }) })
+    .then((r) => (r.ok ? r.json() : null), () => null)
+    .then((body: { ids?: string[] } | null) => { if (body && Array.isArray(body.ids)) { favorites = body.ids; tellStarred(); } });
 }

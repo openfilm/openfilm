@@ -51,7 +51,7 @@ import { installedFonts } from './fonts.mjs';
 import { projectFonts, resolveIn } from './project-fonts.mjs';
 import { FILM_PAGE, PageFrameError, closePageFrames, filmPoster, pageFacts, pageFrame, warmFilmPoster } from './pageframes.mjs';
 import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCover, setCoverFromFile } from './cover.mjs';
-import { libraryFile, libraryIndex } from './library.mjs';
+import { libraryFavorites, libraryFile, libraryIndex, setLibraryFavorites } from './library.mjs';
 import { SavedError, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
 import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { moveToTrash } from './trash.mjs';
@@ -405,10 +405,22 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         return res.end(jpeg);
       }
     }
-    /* OpenFilm's library (library.mjs): what is in it, and its files (a poster, a preview, a sound, a waveform) */
-    if (parts[0] === 'library' && req.method === 'GET') {
-      if (parts.length === 1) return json(res, 200, libraryIndex());
-      if (parts[1] === 'file' && parts.length === 2) return sendMedia(req, res, libraryFile(url.searchParams.get('path')), { keep: true });
+    /* OpenFilm's library (library.mjs): what is in it, its files (a poster, a preview, a page, a sound, a waveform), and
+       the things the person starred */
+    if (parts[0] === 'library') {
+      if (parts.length === 1 && req.method === 'GET') return json(res, 200, libraryIndex());
+      if (parts[1] === 'file' && parts.length === 2 && req.method === 'GET') return sendMedia(req, res, libraryFile(url.searchParams.get('path')), { keep: true });
+      /* a page of it, as a page: what a click tries over the viewer's picture */
+      if (parts[1] === 'page' && parts.length === 2 && req.method === 'GET') {
+        const page = libraryFile(url.searchParams.get('path'));
+        if (!page || !/\.html?$/i.test(page)) throw new HttpError(404, 'no such page');
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'private, max-age=3600' });
+        return res.end(readFileSync(page));
+      }
+      if (parts[1] === 'favorites' && parts.length === 2) {
+        if (req.method === 'GET') return json(res, 200, { ids: libraryFavorites() });
+        if (req.method === 'PUT') return json(res, 200, { ids: setLibraryFavorites((/** @type {{ ids?: unknown }} */ (await readJson(req) ?? {})).ids) });
+      }
     }
     /* Studio's own preferences, the same for every project (prefs.mjs) */
     if (parts[0] === 'prefs' && parts.length === 1) {

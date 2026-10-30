@@ -6,7 +6,7 @@ const page: LibraryItem = { id: 'effects/snow', cat: 'effect', group: 'ambience'
 const sound: LibraryItem = { id: 'sounds/whoosh.m4a', cat: 'sound', group: 'transition', name: { en: 'Whoosh' }, kind: 'sound', durationMs: 700 };
 const look: LibraryItem = { id: 'filters/bw', cat: 'filter', group: 'mono', name: { en: 'Black and white' }, kind: 'look', filter: 'grayscale(1)' };
 
-test('a page or a sound is dragged as a thing to take into the project; a look is not a clip', () => {
+test('a page or a sound is dragged as a thing to take into the project; a look as what goes on a clip', () => {
   assert.deepEqual(libraryDragItem(page, 'Snow'), {
     path: 'openfilm/effects/snow/files/snow.html', name: 'Snow', kind: 'mg', durationMs: 4000, reflows: true, saved: 'openfilm/effects/snow',
   });
@@ -14,7 +14,7 @@ test('a page or a sound is dragged as a thing to take into the project; a look i
   assert.equal(sticker?.w, 400);
   assert.equal(sticker?.reflows, undefined);
   assert.deepEqual(libraryDragItem(sound, 'Whoosh'), { path: 'openfilm/sounds/whoosh.m4a', name: 'Whoosh', kind: 'audio', durationMs: 700, saved: 'openfilm/sounds/whoosh.m4a' });
-  assert.equal(libraryDragItem(look, 'B&W'), null);
+  assert.deepEqual(libraryDragItem(look, 'B&W'), { path: 'openfilm/filters/bw', name: 'B&W', kind: 'other', saved: 'openfilm/filters/bw', apply: 'look' });
 });
 
 test('a transition page put down near a cut has its middle on the cut; far from one it stays', () => {
