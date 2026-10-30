@@ -2009,6 +2009,8 @@ export const es: Words = {
       cancel: 'Cancelar',
       keyEnding: 'Clave terminada en {last4}',
       useEnv: 'Usar la clave de ${env}',
+      keyless: 'Funciona sin clave: las búsquedas de tu agente y las direcciones que lee se envían a {name}. Una clave amplía sus límites.',
+      addKey: 'Añadir una clave',
       own: {
         title: "Servicios personalizados",
         note: "Servicios que no están arriba, tantos como quieras: uno que ejecutes en este ordenador o uno en línea (tu propia voz, un servidor de transcripción, una API que no está en la lista), con cualquier interfaz. OpenFilm no los llama por sí mismo: tu agente lee tu descripción y los llama, y sus claves se quedan en este ordenador, fuera de la vista del agente. También puedes hablarle de un servicio en el chat; si necesita clave, añádelo aquí para que la clave no aparezca en la conversación.",

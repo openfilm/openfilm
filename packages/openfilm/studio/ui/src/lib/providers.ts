@@ -19,6 +19,8 @@ export interface OwnProvider {
   keysUrl: string;
   /** the environment variable a key is (or would be) read from */
   env: string;
+  /** it works without a key: connected with one click, a key added for higher limits (then it has `last4`) */
+  keyless?: boolean;
   /** where its key comes from: kept by Studio, the environment, or none (not connected) */
   source: 'file' | 'env' | null;
   /** the environment has a key for it, connected or not: connecting can use that one */

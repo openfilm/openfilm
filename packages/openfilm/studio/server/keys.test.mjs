@@ -14,7 +14,7 @@ before(async () => {
   const scratch = mkdtempSync(join(tmpdir(), 'of-keys-'));
   process.env.OPENFILM_HOME = join(scratch, 'home');
   process.env.OPENFILM_LIBRARY = join(scratch, 'library');
-  for (const name of ['ELEVENLABS_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'FAL_KEY', 'PEXELS_API_KEY', 'PIXABAY_API_KEY', 'BRAVE_API_KEY', 'TAVILY_API_KEY', 'GROQ_API_KEY', 'AZURE_SPEECH_KEY', 'AZURE_SPEECH_REGION']) delete process.env[name];
+  for (const name of ['ELEVENLABS_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'FAL_KEY', 'PEXELS_API_KEY', 'PIXABAY_API_KEY', 'BRAVE_API_KEY', 'TAVILY_API_KEY', 'GROQ_API_KEY', 'AZURE_SPEECH_KEY', 'AZURE_SPEECH_REGION', 'KEENABLE_API_KEY']) delete process.env[name];
   studio = await startStudio({ port: 0, openBrowser: (url) => opened.push(url) });
 });
 after(() => studio.close());
@@ -46,6 +46,16 @@ test('a key pasted in Studio wins over the environment\'s, which counts unless d
   assert.deepEqual(providerKey(google, kept, { GOOGLE_API_KEY: 'env-google-1234' }), { key: 'env-google-1234', source: 'env', env: 'GOOGLE_API_KEY' });
   assert.equal(providerKey(google, { ...kept, off: ['google'] }, { GOOGLE_API_KEY: 'env-google-1234' }), null);
   assert.equal(providerKey(google, { keys: {}, use: {}, model: {}, off: [] }, {}), null);
+});
+
+test('a keyless provider connected without a key has the key \'\'; the environment\'s still lifts its limits; others need one', () => {
+  const keenable = { id: 'keenable', env: 'KEENABLE_API_KEY', keyless: true };
+  const connected = { keys: { keenable: '' }, use: {}, model: {}, off: [] };
+  assert.deepEqual(providerKey(keenable, connected, {}), { key: '', source: 'file', env: 'KEENABLE_API_KEY' });
+  assert.deepEqual(providerKey(keenable, connected, { KEENABLE_API_KEY: 'kn-env-0123456789' }), { key: 'kn-env-0123456789', source: 'env', env: 'KEENABLE_API_KEY' });
+  assert.equal(providerKey(keenable, { keys: {}, use: {}, model: {}, off: [] }, {}), null, 'not connected');
+  assert.equal(providerKey(keenable, { ...connected, off: ['keenable'] }, {}), null);
+  assert.equal(providerKey(elevenlabs, { keys: { elevenlabs: '' }, use: {}, model: {}, off: [] }, {}), null);
 });
 
 test('a pasted key is trimmed, and refused when it is not one key', () => {
@@ -96,6 +106,22 @@ test('the providers API: keys go in and never come back out; choices for each ki
   assert.equal((await api('/api/providers/acme/key', { method: 'PUT', body: { key: 'k-0123456789' } })).status, 404);
   assert.equal((await api('/api/providers/openai/key', { method: 'PUT', body: { key: 'no' } })).status, 400);
   assert.equal((await fetch(`${studio.origin}/api/providers`)).status, 401);
+});
+
+test('a keyless provider connects with one click, no key, and takes a key later; the others still need one', async () => {
+  let state = await (await api('/api/providers/keenable/key', { method: 'PUT', body: { key: '' } })).json();
+  let keenable = state.providers.find((p) => p.id === 'keenable');
+  assert.deepEqual([keenable.keyless, keenable.source, keenable.last4], [true, 'file', null]);
+  assert.equal(state.use['web-search'], 'keenable', 'connecting fills web search, which nothing served');
+  assert.equal(JSON.parse(readFileSync(providersFile(), 'utf8')).keys.keenable, '');
+  state = await (await api('/api/providers/keenable/key', { method: 'PUT', body: { key: 'kn-test-12345678' } })).json();
+  keenable = state.providers.find((p) => p.id === 'keenable');
+  assert.deepEqual([keenable.source, keenable.last4], ['file', '5678']);
+  state = await (await api('/api/providers/keenable/key', { method: 'DELETE' })).json();
+  assert.equal(state.providers.find((p) => p.id === 'keenable').source, null);
+  assert.equal(state.use['web-search'], null);
+  assert.equal((await api('/api/providers/tavily/key', { method: 'PUT', body: { key: '' } })).status, 400);
+  assert.equal(state.providers.find((p) => p.id === 'tavily').keyless, undefined);
 });
 
 test('a provider\'s own page for its balance opens in the person\'s browser, for every provider alike', async () => {

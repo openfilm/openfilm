@@ -8,14 +8,14 @@ import { chooseProvider, listProviders, shownChoices } from './index.mjs';
 before(() => {
   /* this machine's own keys must not decide these */
   process.env.OPENFILM_HOME = mkdtempSync(join(tmpdir(), 'of-routing-'));
-  for (const name of ['ELEVENLABS_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'FAL_KEY', 'PEXELS_API_KEY', 'PIXABAY_API_KEY', 'BRAVE_API_KEY', 'TAVILY_API_KEY', 'GROQ_API_KEY', 'AZURE_SPEECH_KEY', 'DOUBAO_ASR_API_KEY', 'MIMO_API_KEY']) delete process.env[name];
+  for (const name of ['ELEVENLABS_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'FAL_KEY', 'PEXELS_API_KEY', 'PIXABAY_API_KEY', 'BRAVE_API_KEY', 'TAVILY_API_KEY', 'GROQ_API_KEY', 'AZURE_SPEECH_KEY', 'DOUBAO_ASR_API_KEY', 'MIMO_API_KEY', 'KEENABLE_API_KEY']) delete process.env[name];
 });
 
 const settings = (keys = {}, use = {}) => ({ keys, use, model: {} });
 const id = async (promise) => (await promise)?.id ?? null;
 
 test('the own-key providers, in the order Settings lists them', () => {
-  assert.deepEqual(listProviders().map((p) => p.id), ['elevenlabs', 'openai', 'google', 'fal', 'pexels', 'pixabay', 'brave', 'tavily', 'groq', 'azure', 'doubao', 'mimo']);
+  assert.deepEqual(listProviders().map((p) => p.id), ['elevenlabs', 'openai', 'google', 'fal', 'pexels', 'pixabay', 'brave', 'tavily', 'groq', 'azure', 'doubao', 'mimo', 'keenable']);
 });
 
 test('nothing serves a kind of media nobody chose, even with a key that could', async () => {
@@ -46,6 +46,17 @@ test('--via names one: it must exist, do the verb and have a key, or it says why
   await assert.rejects(chooseProvider('sfx', { via: 'acme', settings: settings(keys) }), /no provider "acme"/);
   await assert.rejects(chooseProvider('video', { via: 'elevenlabs', settings: settings(keys) }), /ElevenLabs does not do video/);
   await assert.rejects(chooseProvider('image', { via: 'openai', settings: settings(keys) }), /no OpenAI key.*OPENAI_API_KEY/);
+});
+
+test('a keyless provider serves nothing until the person connects it; connected without a key it serves with none', async () => {
+  assert.equal(await id(chooseProvider('web-search', { settings: settings({}, { 'web-search': 'keenable' }) })), null);
+  await assert.rejects(chooseProvider('web-fetch', { via: 'keenable', settings: settings() }), /Keenable is not connected.*no key needed.*KEENABLE_API_KEY/);
+  const connected = settings({ keenable: '' }, { 'web-search': 'keenable' });
+  assert.equal(await id(chooseProvider('web-search', { settings: connected })), 'keenable');
+  assert.equal(await id(chooseProvider('web-fetch', { settings: connected })), 'keenable');
+  assert.equal(await id(chooseProvider('web-search', { via: 'keenable', settings: settings({ keenable: '' }) })), 'keenable');
+  /* a key kept as '' connects only a provider that works without one */
+  await assert.rejects(chooseProvider('web-search', { via: 'tavily', settings: settings({ tavily: '' }) }), /no Tavily key/);
 });
 
 test('a key in the environment counts as much as a kept one', async () => {

@@ -34,7 +34,7 @@ const EDGE_PAD = 8;
 const ARROW_INSET = 12;
 
 export function Tooltip({
-  label, shortcut, side = 'top', children,
+  label, shortcut, side = 'top', wrap = false, children,
 }: {
   /** Empty string/undefined = no tooltip right now (e.g. a "Restore" button sitting on the current version); the child is passed through untouched. */
   label: string | undefined;
@@ -42,6 +42,8 @@ export function Tooltip({
   shortcut?: string;
   /** Which side the tooltip appears on. Top-bar buttons use `bottom`; everything else defaults to above. */
   side?: 'top' | 'bottom';
+  /** A sentence rather than a name: it wraps at a reading width instead of staying on one line. */
+  wrap?: boolean;
   /** The element the tooltip attaches to. Must accept a ref and mouse events. */
   children: React.ReactElement;
 }): React.ReactElement {
@@ -137,7 +139,7 @@ export function Tooltip({
           <div
             ref={bubble}
             role="tooltip"
-            className={`pointer-events-none fixed z-[10200] -translate-x-1/2 whitespace-nowrap rounded-[8px] px-2.5 py-[5px] text-[12px] font-medium shadow-md ${
+            className={`pointer-events-none fixed z-[10200] -translate-x-1/2 ${wrap ? 'w-max max-w-[280px] whitespace-normal leading-snug' : 'whitespace-nowrap'} rounded-[8px] px-2.5 py-[5px] text-[12px] font-medium shadow-md ${
               side === 'bottom' ? '' : '-translate-y-full'
             }`}
             style={{
