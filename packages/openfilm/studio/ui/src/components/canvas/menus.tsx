@@ -90,11 +90,11 @@ export function AddMenu({ menu, files, templates, onKind, onUpload, onFile, onTe
     : { left, top: Math.min(menu.screen.y, window.innerHeight - 440) };
   let n = -1;
   return (
-    <div ref={ref} className="fixed z-[200] w-[264px] overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--panel)] p-1.5 shadow-[0_16px_40px_rgba(0,0,0,0.4)]" style={place}>
+    <div ref={ref} className="fixed z-[200] w-[264px] overflow-hidden rounded-[14px] border border-[var(--cv-float-line)] bg-[var(--cv-float)] p-1.5 shadow-[var(--cv-float-shadow)]" style={place}>
       <label className="flex h-8 items-center gap-2 px-2 text-[13px]">
         {view === 'kinds' ? null : (
           <button type="button" aria-label={t('canvas.menu.back')} onClick={() => { setView('kinds'); setActive(0); }}
-            className="-ml-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded text-[var(--text-faint)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+            className="-ml-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded text-[var(--cv-label)] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">
             <ChevronRight size={14} className="rotate-180" />
           </button>
         )}
@@ -109,28 +109,28 @@ export function AddMenu({ menu, files, templates, onKind, onUpload, onFile, onTe
             else if (event.key === 'Enter') flat[active]?.run();
           }}
           placeholder={t(menu.from ? 'canvas.menu.searchHere' : 'canvas.menu.search')}
-          className="min-w-0 flex-1 bg-transparent text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]"
+          className="min-w-0 flex-1 bg-transparent text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-label)]"
         />
-        <Search size={14} className="shrink-0 text-[var(--text-faint)]" />
+        <Search size={14} className="shrink-0 text-[var(--cv-label)]" />
       </label>
       <div className="max-h-[380px] overflow-y-auto">
         {sections.filter((s) => s.rows.length).map((section) => (
           <div key={section.title} className="pt-1">
-            <div className="px-2 pb-1 pt-1.5 text-[11.5px] text-[var(--text-faint)]">{section.title}</div>
+            <div className="px-2 pb-1 pt-1.5 text-[11.5px] text-[var(--cv-label)]">{section.title}</div>
             {section.rows.map((row) => {
               n += 1;
               const i = n;
               return (
                 <button key={row.key} type="button" onMouseEnter={() => setActive(i)} onClick={row.run}
-                  className={`flex h-9 w-full min-w-0 items-center gap-2.5 rounded-lg px-2 text-left text-[13.5px] ${i === active ? 'bg-[var(--bg-hover)] text-[var(--text)]' : 'text-[var(--text)]'}`}>
-                  <span className="shrink-0 text-[var(--text-muted)]">{row.icon}</span>
+                  className={`flex h-9 w-full min-w-0 items-center gap-2.5 rounded-lg px-2 text-left text-[13.5px] ${i === active ? 'bg-[var(--cv-float-hover)] text-[var(--cv-ink)]' : 'text-[var(--cv-ink)]'}`}>
+                  <span className="shrink-0 text-[var(--cv-label)]">{row.icon}</span>
                   <span className="min-w-0 flex-1 truncate">{row.label}</span>
-                  {row.badge ? <span className="shrink-0 rounded bg-[var(--surface-2)] px-1.5 text-[10.5px] text-[var(--text-faint)]">{row.badge}</span> : null}
-                  {row.more ? <ChevronRight size={14} className="shrink-0 text-[var(--text-faint)]" /> : null}
+                  {row.badge ? <span className="shrink-0 rounded bg-[var(--cv-float-hover)] px-1.5 text-[10.5px] text-[var(--cv-label)]">{row.badge}</span> : null}
+                  {row.more ? <ChevronRight size={14} className="shrink-0 text-[var(--cv-label)]" /> : null}
                   {row.remove && i === active ? (
                     <span role="button" tabIndex={-1} aria-label={t('canvas.removeTemplate')} title={t('canvas.removeTemplate')}
                       onClick={(event) => { event.stopPropagation(); row.remove!(); }}
-                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--text-faint)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]">
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--cv-label)] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">
                       <X size={12} />
                     </span>
                   ) : null}
@@ -139,7 +139,7 @@ export function AddMenu({ menu, files, templates, onKind, onUpload, onFile, onTe
             })}
           </div>
         ))}
-        {flat.length ? null : <div className="flex h-9 items-center px-2 text-[12.5px] text-[var(--text-faint)]">{t('canvas.nothing')}</div>}
+        {flat.length ? null : <div className="flex h-9 items-center px-2 text-[12.5px] text-[var(--cv-label)]">{t('canvas.nothing')}</div>}
       </div>
     </div>
   );

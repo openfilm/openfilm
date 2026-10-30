@@ -19,9 +19,9 @@ import { useBoard, type BoardNode, type MakeData } from './board';
 const MOD = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform) ? '⌘' : 'Ctrl+';
 /** the lengths offered for each kind, in seconds */
 const MAKE_LENGTHS: Partial<Record<MakeData['make'], number[]>> = { video: [4, 5, 6, 8, 10, 15], sfx: [1, 2, 3, 5, 10], music: [15, 30, 60, 120] };
-const CARD = 'rounded-[14px] border border-[var(--border)] bg-[var(--panel)] shadow-[0_12px_32px_rgba(0,0,0,0.35)]';
-const CHIP = 'flex h-7 items-center gap-1.5 rounded-lg bg-[var(--surface-2)] px-2.5 text-[12.5px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]';
-const PICK = 'flex h-8 min-w-0 items-center gap-1.5 rounded-lg px-2 text-[12.5px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]';
+const CARD = 'rounded-[14px] border border-[var(--cv-float-line)] bg-[var(--cv-float)] shadow-[var(--cv-float-shadow)]';
+const CHIP = 'flex h-7 items-center gap-1.5 rounded-lg bg-[var(--cv-float-hover)] px-2.5 text-[12.5px] text-[var(--cv-label)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]';
+const PICK = 'flex h-8 min-w-0 items-center gap-1.5 rounded-lg px-2 text-[12.5px] text-[var(--cv-label)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]';
 
 /** A shape as a little frame of it (16:9 wide, 9:16 tall). */
 function RatioIcon({ ratio, size = 16 }: { ratio: string; size?: number }) {
@@ -39,13 +39,13 @@ export function ActionBar({ id, file }: { id: string; file: WorkspaceResource | 
   const t = useT();
   const board = useBoard();
   if (board.readOnly || !file) return null;
-  const btn = 'flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]';
+  const btn = 'flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] text-[var(--cv-label)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]';
   return (
     <NodeToolbar nodeId={id} isVisible={board.single === id} position={Position.Top} offset={34}>
       <div className={`nodrag nopan flex items-center gap-0.5 p-1 ${CARD}`}>
         {file.kind !== 'other' ? <button type="button" className={btn} onClick={() => board.addToFilm(file)}><Clapperboard size={14} />{t('canvas.addToFilm')}</button> : null}
         {board.reveal ? <button type="button" className={btn} onClick={() => board.reveal!(file.path)}><FolderSearch size={14} />{t('canvas.actions.reveal')}</button> : null}
-        <span className="mx-0.5 h-4 w-px bg-[var(--border)]" />
+        <span className="mx-0.5 h-4 w-px bg-[var(--cv-float-line)]" />
         <Tooltip label={t('canvas.actions.download')}>
           <a href={board.sources.file(file)} download={file.name} aria-label={t('canvas.actions.download')} className={btn}><Download size={14} /></a>
         </Tooltip>
@@ -65,15 +65,15 @@ function Listing<T>({ rows, picked, onPick, empty }: {
     <div className={`max-h-[320px] w-[280px] overflow-y-auto p-1 ${CARD}`}>
       {rows.length ? rows.map((row) => (
         <button key={row.key} type="button" onClick={() => onPick(row.value)}
-          className="flex w-full min-w-0 items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-[13px] text-[var(--text)] hover:bg-[var(--bg-hover)]">
-          {row.icon ? <span className="shrink-0 text-[var(--text-faint)]">{row.icon}</span> : null}
+          className="flex w-full min-w-0 items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-[13px] text-[var(--cv-ink)] hover:bg-[var(--cv-float-hover)]">
+          {row.icon ? <span className="shrink-0 text-[var(--cv-label)]">{row.icon}</span> : null}
           <span className="min-w-0 flex-1">
             <span className="block truncate">{row.label}</span>
-            {row.note ? <span className="block truncate text-[11.5px] text-[var(--text-faint)]">{row.note}</span> : null}
+            {row.note ? <span className="block truncate text-[11.5px] text-[var(--cv-label)]">{row.note}</span> : null}
           </span>
-          {picked === row.key ? <Check size={14} className="shrink-0 text-[var(--text-muted)]" /> : null}
+          {picked === row.key ? <Check size={14} className="shrink-0 text-[var(--cv-label)]" /> : null}
         </button>
-      )) : <div className="px-2 py-2 text-[12.5px] text-[var(--text-faint)]">{empty}</div>}
+      )) : <div className="px-2 py-2 text-[12.5px] text-[var(--cv-label)]">{empty}</div>}
     </div>
   );
 }
@@ -152,11 +152,11 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
               const file = input.path ? board.fileOf(input.path) : null;
               const src = thumb(file);
               return (
-                <div key={input.edge} className="group/input relative h-14 w-14 overflow-hidden rounded-lg bg-[var(--surface-2)] ring-1 ring-[var(--border)]"
+                <div key={input.edge} className="group/input relative h-14 w-14 overflow-hidden rounded-lg bg-[var(--cv-float-hover)] ring-1 ring-[var(--border)]"
                   title={input.text ?? file?.name ?? input.path}>
                   {src ? <img src={src} alt="" className="h-full w-full object-cover" />
-                    : input.text != null ? <span className="block h-full w-full overflow-hidden px-1 pb-1 pt-5 text-[9.5px] leading-tight text-[var(--text-muted)]">{input.text}</span>
-                      : <span className="flex h-full w-full items-center justify-center text-[var(--text-faint)]">{file?.kind === 'audio' ? <Music size={16} /> : <Video size={16} />}</span>}
+                    : input.text != null ? <span className="block h-full w-full overflow-hidden px-1 pb-1 pt-5 text-[9.5px] leading-tight text-[var(--cv-label)]">{input.text}</span>
+                      : <span className="flex h-full w-full items-center justify-center text-[var(--cv-label)]">{file?.kind === 'audio' ? <Music size={16} /> : <Video size={16} />}</span>}
                   <span className="absolute left-1 top-1 flex h-4 min-w-4 items-center justify-center rounded bg-black/70 px-1 text-[10px] font-medium text-white">{i + 1}</span>
                   <button type="button" aria-label={t('canvas.removeWire')} onClick={() => board.unwire(input.edge)}
                     className="absolute right-0.5 top-0.5 hidden h-4 w-4 items-center justify-center rounded bg-black/70 text-white group-hover/input:flex"><X size={10} /></button>
@@ -175,7 +175,7 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
             else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); board.make(id); }
           }}
           placeholder={t(`canvas.panel.placeholder.${data.make}`)}
-          className="mt-2.5 w-full resize-none bg-transparent px-0.5 text-[13.5px] leading-relaxed text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]"
+          className="mt-2.5 w-full resize-none bg-transparent px-0.5 text-[13.5px] leading-relaxed text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-label)]"
         />
         <div className="mt-1.5 flex min-w-0 items-center gap-1">
           {choices.length ? (
@@ -201,7 +201,7 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
           )}
           {spec ? (
             <>
-              <span className="mx-0.5 h-4 w-px bg-[var(--border)]" />
+              <span className="mx-0.5 h-4 w-px bg-[var(--cv-float-line)]" />
               <Popover open={open === 'spec'} onOpenChange={(v) => setOpen(v ? 'spec' : null)} placement="auto"
                 trigger={(
                   <button type="button" className={PICK} onClick={() => setOpen(open === 'spec' ? null : 'spec')}>
@@ -211,11 +211,11 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
                 <div className={`w-[340px] p-3 ${CARD}`}>
                   {ratios ? (
                     <>
-                      <div className="mb-2 text-[12px] text-[var(--text-faint)]">{t('canvas.make.ratio')}</div>
+                      <div className="mb-2 text-[12px] text-[var(--cv-label)]">{t('canvas.make.ratio')}</div>
                       <div className="grid grid-cols-5 gap-1.5">
                         {ratios.map((r) => (
                           <button key={r} type="button" onClick={() => setOpts({ ratio: r })}
-                            className={`flex h-14 flex-col items-center justify-center gap-1 rounded-lg border text-[11.5px] transition ${r === ratio ? 'border-[var(--text-muted)] bg-[var(--bg-hover)] text-[var(--text)]' : 'border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)]'}`}>
+                            className={`flex h-14 flex-col items-center justify-center gap-1 rounded-lg border text-[11.5px] transition ${r === ratio ? 'border-[var(--cv-ring)] bg-[var(--cv-float-hover)] text-[var(--cv-ink)]' : 'border-[var(--cv-float-line)] text-[var(--cv-label)] hover:text-[var(--cv-ink)]'}`}>
                             <RatioIcon ratio={r} size={18} />{r}
                           </button>
                         ))}
@@ -224,11 +224,11 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
                   ) : null}
                   {lengths ? (
                     <>
-                      <div className={`mb-2 text-[12px] text-[var(--text-faint)] ${ratios ? 'mt-3' : ''}`}>{t('canvas.make.length')}</div>
+                      <div className={`mb-2 text-[12px] text-[var(--cv-label)] ${ratios ? 'mt-3' : ''}`}>{t('canvas.make.length')}</div>
                       <div className="grid grid-cols-6 gap-1.5">
                         {lengths.map((n) => (
                           <button key={n} type="button" onClick={() => setOpts({ sec: n })}
-                            className={`h-8 rounded-lg border text-[12px] transition ${n === sec ? 'border-[var(--text-muted)] bg-[var(--bg-hover)] text-[var(--text)]' : 'border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)]'}`}>
+                            className={`h-8 rounded-lg border text-[12px] transition ${n === sec ? 'border-[var(--cv-ring)] bg-[var(--cv-float-hover)] text-[var(--cv-ink)]' : 'border-[var(--cv-float-line)] text-[var(--cv-label)] hover:text-[var(--cv-ink)]'}`}>
                             {t('canvas.make.seconds').replace('{n}', String(n))}
                           </button>
                         ))}
@@ -237,11 +237,11 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
                   ) : null}
                   {data.make === 'video' ? (
                     <>
-                      <div className="mb-2 mt-3 text-[12px] text-[var(--text-faint)]">{t('canvas.panel.pictures')}</div>
+                      <div className="mb-2 mt-3 text-[12px] text-[var(--cv-label)]">{t('canvas.panel.pictures')}</div>
                       <div className="grid grid-cols-2 gap-1.5">
                         {([false, true] as const).map((frames) => (
                           <button key={String(frames)} type="button" onClick={() => setOpts({ frames: frames || undefined })}
-                            className={`h-8 rounded-lg border text-[12px] transition ${Boolean(data.opts?.frames) === frames ? 'border-[var(--text-muted)] bg-[var(--bg-hover)] text-[var(--text)]' : 'border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)]'}`}>
+                            className={`h-8 rounded-lg border text-[12px] transition ${Boolean(data.opts?.frames) === frames ? 'border-[var(--cv-ring)] bg-[var(--cv-float-hover)] text-[var(--cv-ink)]' : 'border-[var(--cv-float-line)] text-[var(--cv-label)] hover:text-[var(--cv-ink)]'}`}>
                             {frames ? t('canvas.make.frames') : t('canvas.make.refs')}
                           </button>
                         ))}
@@ -253,7 +253,7 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
             </>
           ) : null}
           <span className="flex-1" />
-          {unused ? <span className="mr-1 truncate text-[11.5px] text-[var(--text-faint)]">{t('canvas.make.unused').replace('{n}', String(unused))}</span> : null}
+          {unused ? <span className="mr-1 truncate text-[11.5px] text-[var(--cv-label)]">{t('canvas.make.unused').replace('{n}', String(unused))}</span> : null}
           {run ? (
             <Tooltip label={t('canvas.make.stop')}>
               <button type="button" aria-label={t('canvas.make.stop')} onClick={() => board.stop(id)}
@@ -279,7 +279,7 @@ export function CutPanel({ id, count }: { id: string; count: number }) {
   return (
     <NodeToolbar nodeId={id} isVisible={board.single === id && !board.readOnly} position={Position.Bottom} offset={14}>
       <div className={`nodrag nopan flex w-[min(420px,80vw)] items-center gap-3 p-3 ${CARD}`}>
-        <span className="min-w-0 flex-1 text-[12.5px] leading-snug text-[var(--text-muted)]">{count ? t('canvas.cut.how') : t('canvas.cut.empty')}</span>
+        <span className="min-w-0 flex-1 text-[12.5px] leading-snug text-[var(--cv-label)]">{count ? t('canvas.cut.how') : t('canvas.cut.empty')}</span>
         <button type="button" disabled={!count} onClick={() => board.sendToFilm(id)}
           className="flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-[var(--text)] px-4 text-[13px] font-medium text-[var(--bg)] transition hover:opacity-90 disabled:opacity-30">
           <Clapperboard size={14} />{t('canvas.cut.send')}

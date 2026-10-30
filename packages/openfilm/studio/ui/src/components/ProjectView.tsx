@@ -7,7 +7,7 @@
  * are written one at a time (see editor/use-film.ts); the agent's writes come in through the folder's events.
  */
 import * as React from 'react';
-import { BookmarkPlus, ClipboardCopy, ClipboardPaste, Film as FilmIcon, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, TriangleAlert, Upload, Workflow } from 'lucide-react';
+import { ArrowLeftRight, BookmarkPlus, ClipboardCopy, ClipboardPaste, Film as FilmIcon, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, TriangleAlert, Upload, Workflow } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
 import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type Op, type ProjectFilm, type ProjectSettings } from '@/api';
 import { useT } from '@/i18n';
@@ -2791,15 +2791,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                   <BrandLogo size={15} />
                 </button>
               </Tooltip>
-              {/* the canvas or the edit, in the panes' place: where a film's material is made, and where it is cut */}
-              <div role="tablist" aria-label={t('canvas.title')} className="ml-1 flex h-[26px] items-center rounded-lg bg-[var(--surface-2)] p-0.5">
-                {([true, false] as const).map((canvas) => (
-                  <button key={String(canvas)} type="button" role="tab" aria-selected={canvasOpen === canvas} onClick={() => setCanvasOpen(canvas)}
-                    className={`flex h-[22px] items-center gap-1.5 rounded-md px-2.5 text-[12px] transition ${canvasOpen === canvas ? 'bg-[var(--bg)] text-[var(--text)] shadow-[0_1px_2px_rgba(0,0,0,0.25)]' : 'text-[var(--text-dim)] hover:text-[var(--text)]'}`}>
-                    {canvas ? <Workflow size={13} /> : <FilmIcon size={13} />}{t(canvas ? 'canvas.tabCanvas' : 'canvas.tabEdit')}
-                  </button>
-                ))}
-              </div>
               <UpdateButton />
               <WebUpdateButton />
               {!studioHost && <Tooltip label={t('desktop.title')} side="bottom">
@@ -2812,6 +2803,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
             </div>
             <div className="min-w-0 flex-1" />
             <div className="pointer-events-auto flex min-w-0 items-center justify-end gap-1">
+              {/* the edit's own: its panes, its versions, its export (the canvas has its own bars) */}
+              {canvasOpen ? null : (<>
               <ProjectLayoutMenu className={TOP_BTN}
                 /* an app that keeps the media in its own panel opens it there, from its own button: not a pane of Studio's */
                 assets={hostAssets ? null : assetsPaneOpen} onAssets={setAssetsPaneOpen}
@@ -2828,6 +2821,15 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     else toast.show(t('project.filmNotReady'));
                   }}>
                   <Upload size={16} />
+                </button>
+              </Tooltip>
+              </>)}
+              {/* the edit or the canvas, in the panes' place: the one shown, and a click for the other */}
+              <Tooltip label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} side="bottom">
+                <button type="button" aria-label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} aria-pressed={canvasOpen} onClick={() => setCanvasOpen(!canvasOpen)}
+                  className="flex h-[26px] shrink-0 items-center gap-1 rounded-md pl-1.5 pr-1 text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+                  {canvasOpen ? <Workflow size={15} /> : <FilmIcon size={15} />}
+                  <ArrowLeftRight size={10} className="text-[var(--text-faint)]" />
                 </button>
               </Tooltip>
             </div>

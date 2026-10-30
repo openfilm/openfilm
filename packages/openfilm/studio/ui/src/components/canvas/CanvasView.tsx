@@ -56,7 +56,7 @@ const PASTE_STEP = 32;
 /** the room between a node and what is added beside it */
 const BESIDE = 120;
 /** a wire into or out of the node selected */
-const LIT = '#4f8cff';
+const LIT = 'var(--cv-edge-lit)';
 
 const MOD = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform) ? '⌘' : 'Ctrl+';
 const SHIFT = MOD === '⌘' ? '⇧⌘' : 'Ctrl+Shift+';
@@ -589,10 +589,10 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
       const lit = single != null && (e.source === single || e.target === single);
       return {
         ...e,
-        ...(lit ? { style: { stroke: LIT, strokeWidth: 2 }, zIndex: 1 } : {}),
+        ...(lit ? { style: { stroke: LIT, strokeWidth: 2.25 }, zIndex: 1 } : {}),
         ...(place.has(e.id) ? {
           label: String(place.get(e.id)), labelBgPadding: [5, 2] as [number, number], labelBgBorderRadius: 4,
-          labelStyle: { fontSize: 11, fill: lit ? '#fff' : 'var(--text-muted)' }, labelBgStyle: { fill: lit ? LIT : 'var(--surface)' },
+          labelStyle: { fontSize: 11, fontWeight: 500, fill: lit ? '#fff' : 'var(--cv-label)' }, labelBgStyle: { fill: lit ? LIT : 'var(--cv-float)', stroke: 'var(--cv-float-line)' },
         } : {}),
       };
     });
@@ -691,7 +691,8 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
           onSelectionDragStart={willChange}
           onConnect={(connection: Connection) => {
             willChange();
-            setEdges((list) => [...list, { ...connection, id: canvasId('e'), data: { order: nextOrder(docNow(), connection.target) } } as Edge]);
+            /* drawn from a ⊕, it meets the card at its side, as every wire does */
+            setEdges((list) => [...list, { id: canvasId('e'), source: connection.source, target: connection.target, data: { order: nextOrder(docNow(), connection.target) } }]);
           }}
           onConnectEnd={(event, state: FinalConnectionState) => {
             /* let go on the board: what to add there, joined to that wire */
@@ -732,7 +733,7 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
           proOptions={{ hideAttribution: true }}
           className={`openfilm-canvas ${tool === 'hand' ? 'cursor-grab' : ''}`}
         >
-          <Background variant={BackgroundVariant.Dots} gap={22} size={1.3} />
+          <Background variant={BackgroundVariant.Dots} gap={24} size={1.4} />
           {map ? (
             <MiniMap position="bottom-left" pannable zoomable style={{ marginBottom: 64 }}
               nodeColor={(n) => (n.type === 'frame' ? 'transparent' : n.type === 'note' ? 'var(--surface-3)' : 'var(--text-faint)')}
@@ -760,14 +761,14 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
         ) : null}
         {ready && nodes.length === 0 ? (
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-4">
-            <div className="text-[15px] font-medium text-[var(--text)]">{t('canvas.start.title')}</div>
-            <div className="max-w-[380px] text-center text-[13px] leading-relaxed text-[var(--text-faint)]">{t('canvas.empty')}</div>
+            <div className="text-[16px] font-medium tracking-[-0.01em] text-[var(--cv-ink)]">{t('canvas.start.title')}</div>
+            <div className="max-w-[400px] text-center text-[13px] leading-relaxed text-[var(--cv-label)]">{t('canvas.empty')}</div>
             <div className="pointer-events-auto flex flex-wrap justify-center gap-2">
               {templates.slice(0, 4).map((template) => (
                 <button key={template.id} type="button"
                   onClick={() => { const box = rootRef.current!.getBoundingClientRect(); void layTemplate(template, flow.screenToFlowPosition({ x: box.left + 80, y: box.top + 120 }))
                     .then(() => requestAnimationFrame(() => { void flow.fitView({ padding: 0.2, maxZoom: 1, duration: 200 }); })); }}
-                  className="flex h-9 items-center gap-1.5 rounded-xl border border-[var(--border)] bg-[var(--panel)] px-3.5 text-[13px] text-[var(--text-muted)] transition hover:text-[var(--text)]">
+                  className="flex h-9 items-center gap-1.5 rounded-xl border border-[var(--cv-float-line)] bg-[var(--cv-float)] px-3.5 text-[13px] text-[var(--cv-label)] shadow-[var(--cv-float-shadow)] transition hover:text-[var(--cv-ink)]">
                   <LayoutTemplate size={14} />{template.name}
                 </button>
               ))}
