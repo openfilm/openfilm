@@ -1247,7 +1247,7 @@ function FilmStageSelectImpl({
         requestAnimationFrame(() => { if (document.activeElement === focus) focus.blur(); });
         return;
       }
-      /* the timeline's speed mode on (its Speed button): that Esc ends it, and the selection stays */
+      /* the timeline's speed mode on (the clip menu's Speed): that Esc ends it, and the selection stays */
       if (document.querySelector('[data-timeline][data-speed-mode]')) return;
       /* a panel open over the inspector (the color picker, the font list, a menu) closes on its own Esc: the
          selection stays */
