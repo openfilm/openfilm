@@ -81,10 +81,11 @@ openfilm skill remove <name>
                          a making node's make, prompt, model, opts, versions and the one shown, path) and wires
                          (from, to, order: what goes into a node, in that order)
   canvas apply <steps>   steps on it, all taken or none: a JSON list, a .json file, or - to read it
-    {"op":"add","kind":"note|file|image|video|sfx|music|group","id":"…", text | path | prompt, via, model,
+    {"op":"add","kind":"note|file|image|video|sfx|music|cut|group","id":"…", text | path | prompt, via, model,
       opts: {ratio, sec, frames}, name, color, x, y, w, h, group: "<group id>", inputs: ["<id>", …], around: ["<id>", …]}
                          a node; its id names it for later steps. Without x, y it goes right of its inputs (wired into
-                         it in that order), else below the rest. A group made around nodes holds them.
+                         it in that order), else below the rest. A group made around nodes holds them. A cut is
+                         the order what is wired into it goes onto the timeline in, when the person sends it there.
     {"op":"set","id":"…", …}   {"op":"remove","id":"…"}   {"op":"wire","from":"…","to":"…"}   {"op":"unwire",…}
     {"op":"version","id":"…","path":"assets/…"}   a file made with \`openfilm get\` as a making node's newest version
 

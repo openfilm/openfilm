@@ -8,7 +8,8 @@
  * `color`) or a node that makes something with the person's services (`make`: image, video, sfx or music; its
  * `prompt`, `via` and `model`, its `opts`, the files it made, `versions`, the one shown `path`, and `made` what it was
  * asked when it last made one), at `x`, `y` on the board, `w` wide (and `h` high, for a note or a group). A node in a
- * group names it (`parent`), and its `x`, `y` are from the group's corner; one an agent put there names it (`by`). An
+ * group names it (`parent`), and its `x`, `y` are from the group's corner; one an agent put there names it (`by`). A
+ * cut (`cut`) is the order what is wired into it goes onto the timeline in. An
  * edge goes from one node to another, `order` its place among those into that node.
  *
  *   GET canvas                    → { nodes, edges }
@@ -45,7 +46,7 @@ const VERSIONS_MAX = 50;
 const SHORT_MAX = 120;
 
 /**
- * @typedef {{ id: string, x: number, y: number, w?: number, h?: number, parent?: string, by?: { agent: string, session?: string } } & ({ text: string } | { path: string } | { group: string, color: string } | { make: string })} CanvasNode
+ * @typedef {{ id: string, x: number, y: number, w?: number, h?: number, parent?: string, by?: { agent: string, session?: string } } & ({ text: string } | { path: string } | { group: string, color: string } | { make: string } | { cut: true })} CanvasNode
  * @typedef {{ id: string, from: string, to: string, order?: number }} CanvasEdge
  * @typedef {{ nodes: CanvasNode[], edges: CanvasEdge[] }} Canvas
  */
@@ -79,6 +80,7 @@ export function parseCanvas(raw) {
     const box = { id: /** @type {string} */ (n.id), x, y, ...(w ? { w } : {}), ...(h ? { h } : {}) };
     const parent = { ...(isId(n.parent) ? { parent: /** @type {string} */ (n.parent) } : {}), ...readBy(n.by) };
     if (MAKE_KINDS.includes(String(n.make))) out.nodes.push({ ...box, ...parent, ...readMake(n), make: String(n.make) });
+    else if (n.cut === true) out.nodes.push({ ...box, ...parent, cut: true });
     else if (projectPath(n.path)) out.nodes.push({ ...box, ...parent, path: /** @type {string} */ (n.path) });
     else if (typeof n.text === 'string') out.nodes.push({ ...box, ...parent, text: n.text.slice(0, TEXT_MAX) });
     else if (typeof n.group === 'string') {
@@ -174,7 +176,7 @@ const GROUP_PAD = 32;
 export class CanvasOpError extends Error {}
 
 /** what kind of node, as its size is guessed: @param {CanvasNode} n */
-const kindOf = (n) => ('group' in n ? 'group' : 'make' in n ? 'make' : 'path' in n ? 'file' : 'note');
+const kindOf = (n) => ('group' in n ? 'group' : 'make' in n || 'cut' in n ? 'make' : 'path' in n ? 'file' : 'note');
 /** a node's box on the board (in a group: the group's corner added) @param {CanvasNode} n @param {Map<string, CanvasNode>} byId */
 function boxOf(n, byId) {
   const size = KIND_SIZE[kindOf(n)];
@@ -244,16 +246,17 @@ export async function applyCanvasOps(canvas, ops, { by, exists }) {
       if (kind === 'note') fields = { text: typeof op.text === 'string' ? op.text : '' };
       else if (kind === 'file') fields = { path: await file(op.path, 'path') };
       else if (kind === 'group') fields = { group: typeof op.name === 'string' ? op.name : 'Group', color: op.color };
+      else if (kind === 'cut') fields = { cut: true };
       else if (MAKE_KINDS.includes(kind)) {
         const path = op.path === undefined ? undefined : await file(op.path, 'path');
         fields = { make: kind, prompt: op.prompt, via: op.via, model: op.model, opts: op.opts, ...(path ? { versions: [path], path } : {}) };
-      } else throw new CanvasOpError(`${step}: kind is one of note, file, image, video, sfx, music, group`);
+      } else throw new CanvasOpError(`${step}: kind is one of note, file, image, video, sfx, music, cut, group`);
       const inputs = Array.isArray(op.inputs) ? op.inputs.map((input) => node(input).id) : [];
       const around = kind === 'group' && Array.isArray(op.around) ? op.around.map((a) => node(a)) : [];
       const group = op.group === undefined ? undefined : node(op.group);
       if (group && !('group' in group)) throw new CanvasOpError(`${step}: ${group.id} is not a group`);
       const ids = byId();
-      const size = KIND_SIZE[MAKE_KINDS.includes(kind) ? 'make' : kind];
+      const size = KIND_SIZE[MAKE_KINDS.includes(kind) || kind === 'cut' ? 'make' : kind];
       let x = Number.isFinite(op.x) ? op.x : null;
       let y = Number.isFinite(op.y) ? op.y : null;
       let w = Number.isFinite(op.w) ? op.w : undefined;

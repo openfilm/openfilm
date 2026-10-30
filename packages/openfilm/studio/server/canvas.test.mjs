@@ -121,3 +121,7 @@ test("an agent's steps are all taken or none, and a wrong one says which and why
   await wrong([{ op: 'add', kind: 'note', id: 'a' }], /there is a node a on the board already/);
   assert.deepEqual(board, { nodes: [{ id: 'a', x: 0, y: 0, text: '' }], edges: [] }, 'nothing was changed');
 });
+
+test('a cut keeps only that it is one, with its place', () => {
+  assert.deepEqual(parseCanvas({ nodes: [{ id: 'c', x: 1, y: 2, w: 320, cut: true, text: 'ignored' }], edges: [] }).nodes, [{ id: 'c', x: 1, y: 2, w: 320, cut: true }]);
+});

@@ -7,7 +7,7 @@
  * are written one at a time (see editor/use-film.ts); the agent's writes come in through the folder's events.
  */
 import * as React from 'react';
-import { ArrowLeftRight, BookmarkPlus, ClipboardCopy, ClipboardPaste, Film as FilmIcon, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, TriangleAlert, Upload, Workflow } from 'lucide-react';
+import { BookmarkPlus, ClipboardCopy, ClipboardPaste, Film as FilmIcon, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, TriangleAlert, Upload, Workflow } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
 import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type Op, type ProjectFilm, type ProjectSettings } from '@/api';
 import { useT } from '@/i18n';
@@ -1118,6 +1118,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     }
     return true;
   }, [editModel, edit, pause, seek, t, toast]);
+  /* a cut on the canvas: its files at the timeline's end, one after the other, then the edit shown */
+  const sendFromCanvas = React.useCallback(async (list: WorkspaceResource[]) => {
+    for (const file of list) if (!(await addMedia(file))) return;
+    toast.show(t('canvas.cut.sent').replace('{n}', String(list.length)));
+    setCanvasOpen(false);
+  }, [addMedia, t, toast]); // eslint-disable-line react-hooks/exhaustive-deps
   /* a file on the canvas put on the timeline: at its end, as the Assets' "+" does when nothing is picked */
   const addFromCanvas = React.useCallback(async (file: WorkspaceResource) => {
     if (await addMedia(file)) toast.show(t('canvas.added'));
@@ -1448,6 +1454,15 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* what the app's chat points at (lib/chat-marks): the pill hovered there, the references of the message being written */
   const [chatRef, setChatRef] = React.useState<StudioRef | null>(null);
   const [draftMarks, setDraftMarks] = React.useState<DraftMarks>(NO_DRAFT);
+  /** a file of the project shown in the Assets: opened there, picked and scrolled to */
+  const showFile = (path: string) => {
+    const file = listing ? [...listing.pages, ...listing.files].find((f) => f.path === path) : undefined;
+    if (!file) return;
+    if (hostAssets) hostAssets.setOpen(true);
+    else setAssetsPaneOpen(true);
+    pickMedia(file);
+    setRevealMedia((cur) => ({ path: file.path, seq: (cur?.seq ?? 0) + 1 }));
+  };
   const hostCommands = React.useRef<(command: StudioCommand) => void>(() => {});
   hostCommands.current = (command) => {
     if (command.type === 'highlight') { setChatRef(command.ref ?? null); return; }
@@ -1486,15 +1501,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       return;
     }
     if (command.type === 'show-node' && typeof command.id === 'string') { setCanvasOpen(true); setCanvasFocus({ id: command.id, n: Date.now() }); return; }
-    if (command.type === 'show-file') {
-      const file = listing ? [...listing.pages, ...listing.files].find((f) => f.path === command.path) : undefined;
-      if (!file) return;
-      if (hostAssets) hostAssets.setOpen(true);
-      else setAssetsPaneOpen(true);
-      pickMedia(file);
-      setRevealMedia((cur) => ({ path: file.path, seq: (cur?.seq ?? 0) + 1 }));
-      return;
-    }
+    if (command.type === 'show-file') { showFile(command.path); return; }
     if (command.type !== 'select-clip') return;
     const block = blocksRef.current.find((b) => (command.id && b.clipId === command.id) || (command.loc && b.loc === command.loc));
     if (!block) return;
@@ -2784,6 +2791,15 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                   <BrandLogo size={15} />
                 </button>
               </Tooltip>
+              {/* the canvas or the edit, in the panes' place: where a film's material is made, and where it is cut */}
+              <div role="tablist" aria-label={t('canvas.title')} className="ml-1 flex h-[26px] items-center rounded-lg bg-[var(--surface-2)] p-0.5">
+                {([true, false] as const).map((canvas) => (
+                  <button key={String(canvas)} type="button" role="tab" aria-selected={canvasOpen === canvas} onClick={() => setCanvasOpen(canvas)}
+                    className={`flex h-[22px] items-center gap-1.5 rounded-md px-2.5 text-[12px] transition ${canvasOpen === canvas ? 'bg-[var(--bg)] text-[var(--text)] shadow-[0_1px_2px_rgba(0,0,0,0.25)]' : 'text-[var(--text-dim)] hover:text-[var(--text)]'}`}>
+                    {canvas ? <Workflow size={13} /> : <FilmIcon size={13} />}{t(canvas ? 'canvas.tabCanvas' : 'canvas.tabEdit')}
+                  </button>
+                ))}
+              </div>
               <UpdateButton />
               <WebUpdateButton />
               {!studioHost && <Tooltip label={t('desktop.title')} side="bottom">
@@ -2796,14 +2812,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
             </div>
             <div className="min-w-0 flex-1" />
             <div className="pointer-events-auto flex min-w-0 items-center justify-end gap-1">
-              {/* the edit or the canvas, in the panes' place: the one shown, and a click for the other */}
-              <Tooltip label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} side="bottom">
-                <button type="button" aria-label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} aria-pressed={canvasOpen} onClick={() => setCanvasOpen(!canvasOpen)}
-                  className="flex h-[26px] shrink-0 items-center gap-1 rounded-md pl-1.5 pr-1 text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
-                  {canvasOpen ? <Workflow size={15} /> : <FilmIcon size={15} />}
-                  <ArrowLeftRight size={10} className="text-[var(--text-faint)]" />
-                </button>
-              </Tooltip>
               <ProjectLayoutMenu className={TOP_BTN}
                 /* an app that keeps the media in its own panel opens it there, from its own button: not a pane of Studio's */
                 assets={hostAssets ? null : assetsPaneOpen} onAssets={setAssetsPaneOpen}
@@ -3219,6 +3227,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                   <CanvasView projectId={projectId} folder={loaded?.project.path ?? ''} files={canvasFiles} sources={mediaSources} onAddToFilm={(file) => { void addFromCanvas(file); }}
                     onImportFiles={(dropped) => onImport(dropped, 'assets', () => {})} onOpenSettings={() => setSettingsOpen('providers')}
                     focus={canvasFocus} insert={canvasInsert} onRefer={studioHost?.refer ? (refs) => { for (const ref of refs) studioHost?.refer?.(ref); } : undefined}
+                    onSendToFilm={(list) => { void sendFromCanvas(list); }} onReveal={(path) => { setCanvasOpen(false); showFile(path); }}
+                    {...(hostPanel ? { onAskAgent: () => hostPanel.setOpen(true) } : {})}
                     onError={toast.showError} onNotice={(message) => toast.show(message)} />
                 </React.Suspense>
               </div>

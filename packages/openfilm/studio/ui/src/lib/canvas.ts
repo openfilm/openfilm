@@ -21,6 +21,8 @@ export interface CanvasNode {
   color?: GroupColor;
   /** the group it is in (its x, y then from the group's corner) */
   parent?: string;
+  /** a cut: what is wired into it, in its order, goes onto the timeline */
+  cut?: true;
   /** who put it here, when not the person: an agent, in which of its conversations */
   by?: { agent: string; session?: string };
   /**
@@ -83,6 +85,7 @@ export function readCanvasDoc(raw: unknown): CanvasDoc {
     };
     const make = MAKE_KINDS.find((k) => k === n.make);
     if (make) nodes.push({ ...box, ...parent, ...readMake(n), make });
+    else if (n.cut === true) nodes.push({ ...box, ...parent, cut: true });
     else if (typeof n.path === 'string' && n.path) nodes.push({ ...box, ...parent, path: n.path });
     else if (typeof n.text === 'string') nodes.push({ ...box, ...parent, text: n.text });
     else if (typeof n.group === 'string') {

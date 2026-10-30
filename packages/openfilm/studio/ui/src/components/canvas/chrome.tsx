@@ -1,0 +1,224 @@
+/**
+ * What is round the board: the toolbar at its foot (add, select or move, templates, undo and redo, the keys, the
+ * agent), the bar at its bottom left (every node in a list, the overview map, how far it is zoomed), the list itself,
+ * and a file seen whole over the board.
+ */
+import React from 'react';
+import { useReactFlow, useStore } from '@xyflow/react';
+import {
+  Hand, Keyboard, LayoutTemplate, Map as MapIcon, MessageSquare, MousePointer2, PanelLeft, Plus, Redo2, Scissors, Search, Type as TypeIcon, Undo2, X,
+} from 'lucide-react';
+import { useT } from '@/i18n';
+import { setResourceDragData } from '@/lib/resource-drag';
+import type { MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
+import { Popover } from '../Popover';
+import { Tooltip } from '../Tooltip';
+import type { BoardNode, MakeData } from './board';
+import { KIND_ICON, MAKE_ICON } from './nodes';
+
+const MOD = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform) ? '⌘' : 'Ctrl+';
+const BAR = 'flex items-center rounded-[14px] border border-[var(--border)] bg-[var(--panel)] p-1 shadow-[0_8px_24px_rgba(0,0,0,0.3)]';
+const TOOL = 'flex h-9 w-9 items-center justify-center rounded-[10px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]';
+const ON = '!bg-[var(--bg-hover)] !text-[var(--text)]';
+
+/** The toolbar at the board's foot. */
+export function BottomToolbar({ adding, onAdd, tool, onTool, onTemplates, onUndo, onRedo, onAsk }: {
+  adding: boolean;
+  onAdd: (from: DOMRect) => void;
+  tool: 'select' | 'hand';
+  onTool: (tool: 'select' | 'hand') => void;
+  onTemplates: (from: DOMRect) => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  onAsk?: () => void;
+}) {
+  const t = useT();
+  const [keys, setKeys] = React.useState(false);
+  const rows: Array<[string, string]> = [
+    [t('canvas.keys.add'), '/'], [t('canvas.keys.select'), 'V'], [t('canvas.keys.hand'), `H · ${t('canvas.keys.space')}`],
+    [t('canvas.keys.undo'), `${MOD}Z`], [t('canvas.keys.redo'), `⇧${MOD}Z`], [t('canvas.copy'), `${MOD}C`], [t('canvas.paste'), `${MOD}V`],
+    [t('canvas.duplicate'), `${MOD}D`], [t('canvas.groupThem'), `${MOD}G`], [t('canvas.ungroup'), `⇧${MOD}G`], [t('canvas.selectAll'), `${MOD}A`],
+    [t('host.refer'), `${MOD}L`], [t('canvas.make.run'), `${MOD}↵`], [t('canvas.remove'), '⌫'],
+  ];
+  return (
+    <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2">
+      <div className={`pointer-events-auto ${BAR}`}>
+        <Tooltip label={`${t('canvas.toolbar.add')} · /`} side="top">
+          <button type="button" aria-label={t('canvas.toolbar.add')} onClick={(event) => onAdd(event.currentTarget.getBoundingClientRect())}
+            className={`${TOOL} ${adding ? ON : '!bg-[var(--text)] !text-[var(--bg)] hover:opacity-90'}`}>
+            {adding ? <X size={18} /> : <Plus size={18} />}
+          </button>
+        </Tooltip>
+        <span className="mx-1 h-5 w-px bg-[var(--border)]" />
+        <Tooltip label={`${t('canvas.keys.select')} · V`} side="top">
+          <button type="button" aria-label={t('canvas.keys.select')} onClick={() => onTool('select')} className={`${TOOL} ${tool === 'select' ? ON : ''}`}><MousePointer2 size={17} /></button>
+        </Tooltip>
+        <Tooltip label={`${t('canvas.keys.hand')} · H`} side="top">
+          <button type="button" aria-label={t('canvas.keys.hand')} onClick={() => onTool('hand')} className={`${TOOL} ${tool === 'hand' ? ON : ''}`}><Hand size={17} /></button>
+        </Tooltip>
+        <Tooltip label={t('canvas.menu.templates')} side="top">
+          <button type="button" aria-label={t('canvas.menu.templates')} onClick={(event) => onTemplates(event.currentTarget.getBoundingClientRect())} className={TOOL}><LayoutTemplate size={17} /></button>
+        </Tooltip>
+        <span className="mx-1 h-5 w-px bg-[var(--border)]" />
+        <Tooltip label={`${t('canvas.keys.undo')} · ${MOD}Z`} side="top">
+          <button type="button" aria-label={t('canvas.keys.undo')} onClick={onUndo} className={TOOL}><Undo2 size={17} /></button>
+        </Tooltip>
+        <Tooltip label={`${t('canvas.keys.redo')} · ⇧${MOD}Z`} side="top">
+          <button type="button" aria-label={t('canvas.keys.redo')} onClick={onRedo} className={TOOL}><Redo2 size={17} /></button>
+        </Tooltip>
+        <Popover open={keys} onOpenChange={setKeys} placement="top" align="center"
+          trigger={(
+            <Tooltip label={t('canvas.keys.title')} side="top">
+              <button type="button" aria-label={t('canvas.keys.title')} onClick={() => setKeys((v) => !v)} className={`${TOOL} ${keys ? ON : ''}`}><Keyboard size={17} /></button>
+            </Tooltip>
+          )}>
+          <div className="w-[280px] rounded-[14px] border border-[var(--border)] bg-[var(--panel)] p-3 shadow-[0_12px_32px_rgba(0,0,0,0.35)]">
+            <div className="mb-2 text-[12.5px] font-medium text-[var(--text)]">{t('canvas.keys.title')}</div>
+            {rows.map(([what, key]) => (
+              <div key={what} className="flex h-7 items-center justify-between text-[12.5px]">
+                <span className="text-[var(--text-muted)]">{what}</span>
+                <kbd className="rounded bg-[var(--surface-2)] px-1.5 font-sans text-[11.5px] text-[var(--text)]">{key}</kbd>
+              </div>
+            ))}
+          </div>
+        </Popover>
+      </div>
+      {onAsk ? (
+        <button type="button" onClick={onAsk} className={`pointer-events-auto h-[46px] gap-2 px-3.5 text-[13px] font-medium text-[var(--text)] hover:bg-[var(--bg-hover)] ${BAR}`}>
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-indigo-500 text-white"><MessageSquare size={13} /></span>
+          {t('canvas.toolbar.ask')}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+/** The bar at the board's bottom left: the list of nodes, the overview map, and how far it is zoomed. */
+export function ZoomBar({ outline, onOutline, map, onMap }: { outline: boolean; onOutline: () => void; map: boolean; onMap: () => void }) {
+  const t = useT();
+  const flow = useReactFlow();
+  const zoom = useStore((s) => s.transform[2]);
+  const [open, setOpen] = React.useState(false);
+  const row = 'flex h-8 w-full items-center justify-between rounded-lg px-2 text-[12.5px] text-[var(--text)] hover:bg-[var(--bg-hover)]';
+  const act = (run: () => void) => () => { run(); setOpen(false); };
+  return (
+    <div className="pointer-events-auto absolute bottom-4 left-4 z-20 flex items-center gap-0.5 rounded-[12px] border border-[var(--border)] bg-[var(--panel)] p-0.5 shadow-[0_8px_24px_rgba(0,0,0,0.3)]">
+      <Tooltip label={t('canvas.outline.title')} side="top">
+        <button type="button" aria-label={t('canvas.outline.title')} onClick={onOutline} className={`${TOOL} !h-8 !w-8 ${outline ? ON : ''}`}><PanelLeft size={16} /></button>
+      </Tooltip>
+      <Tooltip label={t('canvas.toolbar.map')} side="top">
+        <button type="button" aria-label={t('canvas.toolbar.map')} onClick={onMap} className={`${TOOL} !h-8 !w-8 ${map ? ON : ''}`}><MapIcon size={16} /></button>
+      </Tooltip>
+      <Popover open={open} onOpenChange={setOpen} placement="top"
+        trigger={(
+          <button type="button" onClick={() => setOpen((v) => !v)}
+            className="h-8 min-w-[52px] rounded-[10px] px-2 text-[12.5px] tabular-nums text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+            {Math.round(zoom * 100)}%
+          </button>
+        )}>
+        <div className="w-[200px] rounded-[12px] border border-[var(--border)] bg-[var(--panel)] p-1 shadow-[0_12px_32px_rgba(0,0,0,0.35)]">
+          <button type="button" className={row} onClick={act(() => { void flow.zoomIn({ duration: 150 }); })}>{t('canvas.zoom.in')}<kbd className="font-sans text-[11px] text-[var(--text-faint)]">{MOD}+</kbd></button>
+          <button type="button" className={row} onClick={act(() => { void flow.zoomOut({ duration: 150 }); })}>{t('canvas.zoom.out')}<kbd className="font-sans text-[11px] text-[var(--text-faint)]">{MOD}-</kbd></button>
+          <button type="button" className={row} onClick={act(() => { void flow.fitView({ padding: 0.2, maxZoom: 1, duration: 200 }); })}>{t('canvas.fit')}<kbd className="font-sans text-[11px] text-[var(--text-faint)]">⇧1</kbd></button>
+          <button type="button" className={row} onClick={act(() => { void flow.zoomTo(1, { duration: 150 }); })}>{t('canvas.zoom.actual')}<kbd className="font-sans text-[11px] text-[var(--text-faint)]">⇧0</kbd></button>
+        </div>
+      </Popover>
+    </div>
+  );
+}
+
+/** A node as the list names it: a small picture of it, and what it is. */
+function nodeRow(n: BoardNode, fileOf: (path: string) => WorkspaceResource | null, sources: MediaSources, t: (key: string) => string) {
+  if (n.type === 'note') return { label: n.data.text.trim().split('\n')[0]?.slice(0, 40) || t('canvas.kinds.note'), kind: t('canvas.kinds.note'), icon: <TypeIcon size={15} /> };
+  if (n.type === 'frame') return { label: n.data.label, kind: t('canvas.group'), icon: <LayoutTemplate size={15} /> };
+  if (n.type === 'cut') return { label: t('canvas.kinds.cut'), kind: t('canvas.kinds.cut'), icon: <Scissors size={15} /> };
+  const path = (n.data as { path?: string }).path;
+  const file = path ? fileOf(path) : null;
+  const src = file ? (file.kind === 'image' ? sources.file(file) : sources.poster?.(file)) : undefined;
+  const kind = n.type === 'make' ? t(`canvas.make.${(n.data as MakeData).make}`) : file ? t(`canvas.outline.kind.${file.kind}`) : '';
+  const Icon = n.type === 'make' ? MAKE_ICON[(n.data as MakeData).make] : KIND_ICON[file?.kind ?? 'other'];
+  return {
+    label: n.type === 'make' ? ((n.data as MakeData).prompt?.trim().slice(0, 40) || kind) : file?.name ?? path ?? '',
+    kind,
+    icon: src ? <img src={src} alt="" className="h-full w-full object-cover" /> : <Icon size={15} />,
+  };
+}
+
+/** Every node of the board in a list (a click shows it), and the Assets' files (dragged or clicked onto the board). */
+export function Outline({ nodes, files, fileOf, sources, onShow, onAddFile, onClose }: {
+  nodes: readonly BoardNode[];
+  files: readonly WorkspaceResource[];
+  fileOf: (path: string) => WorkspaceResource | null;
+  sources: MediaSources;
+  onShow: (id: string) => void;
+  onAddFile: (file: WorkspaceResource) => void;
+  onClose: () => void;
+}) {
+  const t = useT();
+  const [tab, setTab] = React.useState<'board' | 'assets'>('board');
+  const [query, setQuery] = React.useState('');
+  const needle = query.trim().toLowerCase();
+  const rows = nodes.map((n) => ({ id: n.id, ...nodeRow(n, fileOf, sources, t) })).filter((r) => !needle || r.label.toLowerCase().includes(needle));
+  const media = files.filter((f) => f.kind !== 'other' && (!needle || f.name.toLowerCase().includes(needle)));
+  const tabBtn = (which: 'board' | 'assets') => `h-7 rounded-lg px-3 text-[12.5px] ${tab === which ? 'bg-[var(--bg-hover)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`;
+  return (
+    <div className="pointer-events-auto absolute bottom-[68px] left-4 top-4 z-20 flex w-[272px] flex-col overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--panel)] shadow-[0_12px_32px_rgba(0,0,0,0.35)]">
+      <div className="flex items-center gap-1 p-2">
+        <button type="button" className={tabBtn('board')} onClick={() => setTab('board')}>{t('canvas.outline.board')}</button>
+        <button type="button" className={tabBtn('assets')} onClick={() => setTab('assets')}>{t('canvas.outline.assets')}</button>
+        <span className="flex-1" />
+        <button type="button" aria-label={t('canvas.outline.close')} onClick={onClose} className={`${TOOL} !h-7 !w-7`}><X size={14} /></button>
+      </div>
+      <label className="mx-2 mb-1 flex h-8 items-center gap-2 rounded-lg bg-[var(--surface-2)] px-2 text-[12.5px]">
+        <Search size={13} className="shrink-0 text-[var(--text-faint)]" />
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('canvas.outline.search')}
+          className="min-w-0 flex-1 bg-transparent text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]" />
+      </label>
+      <div className="min-h-0 flex-1 overflow-y-auto p-1">
+        {tab === 'board' ? rows.map((row) => (
+          <button key={row.id} type="button" onClick={() => onShow(row.id)}
+            className="flex w-full min-w-0 items-center gap-2.5 rounded-lg px-1.5 py-1 text-left hover:bg-[var(--bg-hover)]">
+            <span className="flex h-8 w-11 shrink-0 items-center justify-center overflow-hidden rounded bg-[var(--surface-2)] text-[var(--text-faint)]">{row.icon}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[12.5px] text-[var(--text)]">{row.label}</span>
+              <span className="block truncate text-[11px] text-[var(--text-faint)]">{row.kind}</span>
+            </span>
+          </button>
+        )) : media.map((file) => {
+          const src = file.kind === 'image' ? sources.file(file) : sources.poster?.(file);
+          const Icon = KIND_ICON[file.kind];
+          return (
+            <button key={file.path} type="button" draggable onClick={() => onAddFile(file)}
+              onDragStart={(event) => setResourceDragData(event.dataTransfer, { path: file.path, name: file.name, kind: file.kind, ...(file.durationMs ? { durationMs: file.durationMs } : {}) })}
+              className="flex w-full min-w-0 items-center gap-2.5 rounded-lg px-1.5 py-1 text-left hover:bg-[var(--bg-hover)]">
+              <span className="flex h-8 w-11 shrink-0 items-center justify-center overflow-hidden rounded bg-[var(--surface-2)] text-[var(--text-faint)]">
+                {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : <Icon size={15} />}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[12.5px] text-[var(--text)]">{file.name}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="border-t border-[var(--border)] px-3 py-2 text-[11.5px] text-[var(--text-faint)]">
+        {tab === 'board' ? t('canvas.outline.count').replace('{n}', String(nodes.length)) : t('canvas.outline.files').replace('{n}', String(media.length))}
+      </div>
+    </div>
+  );
+}
+
+/** A file seen whole over the board: a picture, a clip with its controls, a sound; Escape or a click outside closes it. */
+export function Viewer({ file, sources, onClose }: { file: WorkspaceResource; sources: MediaSources; onClose: () => void }) {
+  const t = useT();
+  const src = sources.file(file);
+  return (
+    <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/85 p-10" onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <button type="button" aria-label={t('canvas.outline.close')} onClick={onClose}
+        className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"><X size={18} /></button>
+      <div className="absolute left-5 top-5 max-w-[60%] truncate text-[13px] text-white/80">{file.name}</div>
+      {file.kind === 'image' ? <img src={src} alt="" className="max-h-full max-w-full object-contain" />
+        : file.kind === 'video' ? <video src={src} controls autoPlay playsInline className="max-h-full max-w-full" />
+          : file.kind === 'audio' ? <audio src={src} controls autoPlay className="w-[min(520px,80%)]" />
+            : <div className="text-white/70">{file.name}</div>}
+    </div>
+  );
+}
