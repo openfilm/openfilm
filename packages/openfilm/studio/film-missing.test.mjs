@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { mkdir, mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright-core';
@@ -64,3 +65,25 @@ test('film.html deleted and written again 3 s later (an agent replacing it whole
   await page.waitForURL((url) => url.pathname !== address, { timeout: 10_000 });
 });
 
+test('film.html deleted for good: the notice stays, the history lists its versions, and restoring one brings film.html back (#304)', { timeout: 90_000 }, async (t) => {
+  const { root, page, address, api } = await open(t, 'Lost');
+  const saved = await api('/history/save', { method: 'POST', body: JSON.stringify({ message: 'Kept cut' }) });
+  assert.equal(saved.status, 200);
+  await unlink(join(root, 'film.html'));
+  await notice(page).waitFor({ state: 'visible', timeout: 5000 });
+  await page.waitForTimeout(3000);
+  assert.ok(await notice(page).isVisible(), 'still said');
+  assert.equal(new URL(page.url()).pathname, address, 'the project is still open');
+  /* the history opens, with the version saved before */
+  await page.getByRole('button', { name: 'Version history' }).first().click();
+  await page.getByText('Kept cut', { exact: true }).first().click();
+  await page.getByRole('button', { name: 'Restore this version' }).click();
+  /* nothing to save first: it says so, and restores */
+  await page.getByText('film.html is missing, so there is nothing to save first.').waitFor({ state: 'visible' });
+  await page.getByRole('button', { name: 'Restore this version' }).last().click();
+  await page.getByText('Version restored.').waitFor({ state: 'visible', timeout: 10_000 });
+  assert.equal(existsSync(join(root, 'film.html')), true);
+  assert.equal(await readFile(join(root, 'film.html'), 'utf8'), film('card.html'));
+  await notice(page).waitFor({ state: 'detached', timeout: 5000 });
+  assert.equal(new URL(page.url()).pathname, address);
+});

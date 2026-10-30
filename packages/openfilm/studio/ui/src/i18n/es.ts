@@ -726,6 +726,7 @@ export const es: Words = {
     restore: "Restaurar esta versión",
     restoreTitle: "¿Restaurar «{name}»?",
     restoreBody: "El proyecto volverá a esta versión. Tus otras versiones guardadas seguirán disponibles.",
+    restoreMissingFilmBody: "Falta film.html, así que no hay nada que guardar antes. El proyecto volverá a esta versión, con su film.html; los archivos cambiados desde entonces no se conservan.",
     saveRestoreBody: "Primero se guardará tu edición actual como una versión, para que puedas volver a ella más adelante.",
     saveAndRestore: "Guardar la edición actual y restaurar",
     namePlaceholder: "Nombre de la versión (opcional)",

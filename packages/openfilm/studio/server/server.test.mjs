@@ -637,6 +637,30 @@ test('a removed film keeps the project open but says so; nothing writes the film
   assert.equal((await api('/api/health')).status, 200);
 });
 
+test('without film.html the history still lists, restores and discards: a version that has it brings it back (#304)', async () => {
+  const { project } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'Film lost') } })).json();
+  const history = (path = '', body) => api(`/api/projects/${project.id}/history${path}`, body ? { method: 'POST', body } : {});
+  const kept = filmHtml({ stage: { w: 640, h: 360 }, tracks: [] });
+  writeFileSync(join(project.path, 'film.html'), kept);
+  const { commit } = await (await history('/save', { message: 'Kept' })).json();
+  rmSync(join(project.path, 'film.html'));
+  const listed = await history();
+  assert.equal(listed.status, 200);
+  const { status, versions } = await listed.json();
+  assert.equal(status.filmMissing, true);
+  assert.deepEqual(versions.map((v) => v.commit), [commit]);
+  assert.equal((await history(`/versions/${commit}`)).status, 200);
+  /* restored (its changes are only what went with film.html): film.html is back as the version had it */
+  const restored = await history('/checkout', { commit, discard: true });
+  assert.equal(restored.status, 200);
+  assert.equal(readFileSync(join(project.path, 'film.html'), 'utf8'), kept);
+  assert.equal((await (await history()).json()).status.filmMissing, undefined);
+  /* or discarded: the same */
+  rmSync(join(project.path, 'film.html'));
+  assert.equal((await history('/discard', {})).status, 200);
+  assert.equal(readFileSync(join(project.path, 'film.html'), 'utf8'), kept);
+});
+
 test('a page gone mid-request (its connection reset) ends only its own stream, never Studio', async () => {
   const { port } = new URL(studio.origin);
   const upgrade = (path, key) => `GET ${path} HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n`

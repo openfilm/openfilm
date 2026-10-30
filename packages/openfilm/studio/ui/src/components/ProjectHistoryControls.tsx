@@ -301,8 +301,11 @@ export function ProjectHistoryControls({
   };
   const restore = async (v: Version, saveFirst: boolean) => {
     setDialog(null);
-    if (saveFirst && !(await history.save(''))) return;
-    const result = await history.checkout(v.commit);
+    /* film.html missing: there is nothing to save (a version without it would be empty), and the folder goes back as
+       the version has it, film.html with it */
+    const filmMissing = !!status?.filmMissing;
+    if (saveFirst && !filmMissing && !(await history.save(''))) return;
+    const result = await history.checkout(v.commit, filmMissing);
     if (result.ok) {
       setSelected(v.commit);
       setNotice(result.body.missing?.length ? t('versions.missing') : t('versions.restored'));
@@ -361,7 +364,7 @@ export function ProjectHistoryControls({
     ? t('versions.discardBody')
     : dialog.kind === 'delete'
     ? t('versions.deleteBody')
-    : t(changes ? 'versions.saveRestoreBody' : 'versions.restoreBody');
+    : t(status?.filmMissing ? 'versions.restoreMissingFilmBody' : changes ? 'versions.saveRestoreBody' : 'versions.restoreBody');
   let previousDay = '';
   return (
     <>
@@ -824,7 +827,7 @@ export function ProjectHistoryControls({
                   ? 'versions.discardConfirm'
                   : dialog.kind === 'delete'
                   ? 'versions.deleteConfirm'
-                  : changes
+                  : changes && !status?.filmMissing
                   ? 'versions.saveAndRestore'
                   : 'versions.restore'
               ),

@@ -597,8 +597,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         : 'This project’s folder is not there any more: it was moved, renamed or deleted.', { code: missing === 'film' ? 'missing-film' : 'missing' });
     };
     /* film.html missing from a folder still there (an agent writing it again, or it lost): the project stays open, and
-       says so; what writes the film waits for it */
-    const filmOptional = (!rest && req.method === 'GET') || rest === 'opened';
+       says so; its version history is there to bring film.html back from; what writes the film waits for it */
+    const filmOptional = (!rest && req.method === 'GET') || rest === 'opened' || parts[2] === 'history';
     if (!(!rest && req.method === 'DELETE')) {
       requireProject({ film: !filmOptional });
     }

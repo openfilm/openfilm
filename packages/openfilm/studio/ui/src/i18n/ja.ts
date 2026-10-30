@@ -726,6 +726,7 @@ export const ja: Words = {
     restore: "このバージョンを復元",
     restoreTitle: "「{name}」を復元しますか？",
     restoreBody: "プロジェクトはこのバージョンに戻ります。ほかの保存済みバージョンはそのまま残ります。",
+    restoreMissingFilmBody: "film.html が見つからないため、先に保存できるものはありません。プロジェクトはこのバージョンに戻り、film.html も戻ります。その後に変更したファイルは保持されません。",
     saveRestoreBody: "まず現在の編集をバージョンとして保存するので、あとで戻れます。",
     saveAndRestore: "現在の編集を保存して復元",
     namePlaceholder: "バージョン名（任意）",

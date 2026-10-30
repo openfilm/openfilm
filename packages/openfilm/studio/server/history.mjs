@@ -25,7 +25,7 @@
  * Every action takes an optional `onProgress` (history-store.mjs Progress) to say how far it is; a history an earlier
  * Studio made is brought up to date on first use (history-migrate.mjs).
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { FILM_FILE, kindOf, readFilmFile } from '../../src/film-doc.mjs';
@@ -282,7 +282,7 @@ const filmChanged = (/** @type {Summary} */ summary) => summary.stage || summary
   || [summary.scenes, summary.sounds].some((c) => c.added || c.removed || c.edited);
 
 /**
- * @typedef {{ head: string | null, branch: string | null, changes: { count: number, summary: Summary, files: Change[] } | null }} Status
+ * @typedef {{ head: string | null, branch: string | null, changes: { count: number, summary: Summary, files: Change[] } | null, filmMissing?: boolean }} Status
  *   `branch`: the branch checked out (null: a version checked out on its own, as git's detached HEAD)
  */
 
@@ -292,7 +292,8 @@ const LISTED = 500;
 /**
  * Where the history is: the version checked out (null: none yet), and what the folder holds that it does not: the
  * files added, modified and deleted, and what that does to the film (null: nothing). A project never saved holds all
- * it has as changes.
+ * it has as changes. `filmMissing`: the folder has no film.html, so all the version holds counts as deleted, and
+ * checking out a version (or discarding) is how it comes back.
  * @param {string} root @param {Options} [o] @returns {Promise<Status>}
  */
 export function status(root, { onProgress } = {}) {
@@ -303,9 +304,12 @@ export function status(root, { onProgress } = {}) {
     const changes = files.length
       ? { count: files.length, summary: await summarize(root, head, null, files.map((p) => p.path)), files: files.slice(0, LISTED) }
       : null;
-    return { head, branch: head ? (await currentBranch(root)) || null : 'main', changes };
+    return { head, branch: head ? (await currentBranch(root)) || null : 'main', changes, ...(filmIsMissing(root) ? { filmMissing: true } : {}) };
   });
 }
+
+/** Whether the folder at `root` has no film.html (a version then holds none of its files: versionFiles). */
+const filmIsMissing = (/** @type {string} */ root) => !statSync(join(root, FILM_FILE), { throwIfNoEntry: false })?.isFile();
 
 /**
  * What a version is, as its trailer says: `named` (saved by the person with a message), `saved` (by the person,

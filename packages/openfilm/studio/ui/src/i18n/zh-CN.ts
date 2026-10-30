@@ -760,6 +760,7 @@ export const zhCN: Words = {
     restore: '恢复此版本',
     restoreTitle: '恢复「{name}」？',
     restoreBody: '项目将回到这个版本，其他已保存的版本仍然保留。',
+    restoreMissingFilmBody: 'film.html 不见了，所以没有可以先保存的内容。项目将回到这个版本，film.html 也会一起回来；之后改动过的文件不会保留。',
     saveRestoreBody: '会先把当前修改保存为一个版本，之后可以随时找回，再恢复所选版本。',
     saveAndRestore: '保存当前进度并恢复',
     namePlaceholder: '版本名称（可选）',

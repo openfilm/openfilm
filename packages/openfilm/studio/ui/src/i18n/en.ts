@@ -760,6 +760,7 @@ export const en = {
     restore: 'Restore this version',
     restoreTitle: 'Restore “{name}”?',
     restoreBody: 'The project will return to this version. Your other saved versions will remain available.',
+    restoreMissingFilmBody: 'film.html is missing, so there is nothing to save first. The project will return to this version, film.html with it; files changed since are not kept.',
     saveRestoreBody: 'Your current edits will be saved as a version first, so you can return to them later.',
     saveAndRestore: 'Save current edits and restore',
     namePlaceholder: 'Version name (optional)',

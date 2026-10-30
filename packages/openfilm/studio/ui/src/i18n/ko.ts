@@ -723,6 +723,7 @@ export const ko: Words = {
     restore: "이 버전 복원",
     restoreTitle: "“{name}”을(를) 복원할까요?",
     restoreBody: "프로젝트가 이 버전으로 돌아갑니다. 저장된 다른 버전은 그대로 남습니다.",
+    restoreMissingFilmBody: "film.html이 없어 먼저 저장할 것이 없습니다. 프로젝트가 이 버전으로 돌아가며 film.html도 함께 돌아옵니다. 그 뒤에 바뀐 파일은 유지되지 않습니다.",
     saveRestoreBody: "현재 편집을 먼저 버전으로 저장하므로 나중에 다시 돌아올 수 있습니다.",
     saveAndRestore: "현재 편집 저장 후 복원",
     namePlaceholder: "버전 이름 (선택)",

@@ -33,6 +33,8 @@ export interface HistoryStatus {
   branch: string | null;
   /** what the folder holds that the version checked out does not; null: nothing */
   changes: { count: number; summary: Summary; files: Change[] } | null;
+  /** the folder has no film.html: there is nothing to save, and restoring a version brings it back */
+  filmMissing?: boolean;
 }
 /** How far an action is: `phase` reading the files, keeping media, writing files, or updating the history. */
 export interface HistoryProgress { op: string; phase: 'scan' | 'store' | 'write' | 'migrate'; done: number; total: number }
@@ -87,7 +89,7 @@ export function normalizeHistory(raw: unknown): HistoryState | null {
     }];
   });
   return {
-    status: { head: typeof s.head === 'string' ? s.head : null, branch: typeof s.branch === 'string' ? s.branch : null, changes },
+    status: { head: typeof s.head === 'string' ? s.head : null, branch: typeof s.branch === 'string' ? s.branch : null, changes, ...(s.filmMissing === true ? { filmMissing: true } : {}) },
     versions,
     more: body.more === true,
     deletedCount: Math.max(0, num(body.deletedCount)),
