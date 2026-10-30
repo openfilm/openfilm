@@ -1,7 +1,7 @@
 // film render: the deliverable. Frames are rendered in parallel page instances, averaged
 // over the shutter for motion blur, encoded with tagged BT.709 color, and muxed with the mix of the film's sounds.
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { availableParallelism, freemem, totalmem } from 'node:os';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { clipKind, FILM_FILE } from './film-doc.mjs';
@@ -12,6 +12,7 @@ import { browserCopies, filmVideos } from './seekable.mjs';
 import { ffmpeg, filmSound, fmt, kill, locate, mix, open, outDir, parseTarget, shown, UsageError, write } from './shared.mjs';
 import { burned } from './burn.mjs';
 import { renderSelection, selectionClips, selectionFrame } from './render-ranges.mjs';
+import { chunkStore, chunksOf, settingsOf, signature } from './render-resume.mjs';
 
 const BT709 = ['-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv'];
 const TAG_709 = ['-bsf:v', 'h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0'];
@@ -99,10 +100,13 @@ export async function render(args, opts = {}) {
   /* `root`: the folder to serve (a host rendering an edit kept elsewhere in a project serves the project). The videos
      the pages ask for are noted, and served as their fast-seeking copies once there are some (seekable.mjs). */
   const videos = new Set();
+  /** @type {Map<string, string>} each file the pages asked for, as it was when first asked: what the chunks are drawn from */
+  const used = new Map();
   /** @type {Map<string, string>} */
   let copies = new Map();
   const swap = (/** @type {string} */ file) => {
     if (clipKind(file) === 'video') videos.add(file);
+    if (!used.has(file)) used.set(file, signature(file));
     return copies.get(file) ?? null;
   };
   /* `browsers` (a BrowserPool): the render borrows `workers` of its browsers, draws in a tab of its own in each, and
@@ -164,6 +168,7 @@ export async function render(args, opts = {}) {
   const chip = opts.format || opts.hardware === false ? null : await chipFormat(extname(out).toLowerCase(), size, fps);
   let format = chip ? { ...own, ...chip.format } : own;
   let encoder = chip?.encoder ?? encoderOf(own.video);
+  let onChip = !!chip;
   const workers = Math.max(1, Math.min(pool ? lent.length : Number(opts.workers ?? defaultWorkers(machine(), total)), total));
   /** @type {string[]} videos whose copy could not be made: drawn as they are, said as it happens and in the result */
   const uncopied = [];
@@ -189,23 +194,34 @@ export async function render(args, opts = {}) {
   }
 
   if (!process.stderr.isTTY && !opts.onProgress) process.stderr.write(`  rendering ${total} frames with ${workers} browser${workers > 1 ? 's' : ''}…\n`);
-  /* a pool's process draws several renders at once, each of its own film folder (Studio's export makes one per page) */
-  const work = join(outDir(dir, 'render'), `.parts-${process.pid}`);
-  mkdirSync(work, { recursive: true });
+  /* the film in chunks, kept when the render stops: the next render of `out` (or of `resumeAs`, a host writing a
+     partial file first) with the same settings, from files as they were, draws only the chunks not there
+     (render-resume.mjs). A pool's process draws several renders at once, each into a folder of its own */
+  const store = chunkStore(outDir(dir, 'render'), opts.resumeAs ?? out, extname(out));
+  const work = store.folder;
+  const chunks = chunksOf(f0, f1, fps);
+  const settingsFor = (/** @type {typeof format} */ f) => settingsOf({ entry, root, frames: [f0, f1], fps: ffmpegRate(rate), size, scale, samples, shutter, alpha,
+    duration: Number.isFinite(end) ? end : null, spans: selection?.spans ?? null, format: f });
+  /* chunks a render that stopped drew with alpha, or without the chip after it gave up, are drawn on so */
+  if (clearFormat && store.kept === settingsFor(clearFormat)) { clear = true; format = clearFormat; encoder = encoderOf(format.video); }
+  else if (chip && store.kept === settingsFor(own)) { onChip = false; format = own; encoder = encoderOf(own.video); }
+  let reused = 0;
   let done = 0;
+  let drawn = 0;
   /* a terminal gets a live counter; an agent's shell (no TTY) a line every tenth, so a long render never looks hung */
   let t0 = Date.now();
   let told = 0;
   const progress = () => {
     done++;
-    if (done === 1) t0 = Date.now(); // the rate from the first frame on: starting the browsers is not a frame's cost
+    drawn++;
+    if (drawn === 1) t0 = Date.now(); // the rate from the first frame drawn on: starting the browsers is not a frame's cost
     /* a host showing its own progress (Studio's export) is told each frame, and the terminal is left alone */
     if (opts.onProgress) { opts.onProgress(done, total); return; }
     if (process.stderr.isTTY) { process.stderr.write(`\r  ${done}/${total} frames`); return; }
     const tenth = Math.floor((done / total) * 10);
     if (tenth > told && done < total) {
       told = tenth;
-      const left = ((Date.now() - t0) / Math.max(1, done - 1)) * (total - done) / 1000;
+      const left = ((Date.now() - t0) / Math.max(1, drawn - 1)) * (total - done) / 1000;
       process.stderr.write(`  ${done}/${total} frames · about ${Math.ceil(left)} s left\n`);
     }
   };
@@ -243,21 +259,36 @@ export async function render(args, opts = {}) {
     const pages = await unlessCancelled(Promise.all(opening));
     /* a film paints its stage behind its clips (black, or its own background): with alpha, only what the clips draw is kept */
     if (alpha && isFilm) await Promise.all(pages.map((p) => p.page.addStyleTag({ content: 'html, body { background: transparent !important; }' })));
-    const per = Math.ceil(total / workers);
-    const parts = pages.map((film, i) => ({ film, a: f0 + i * per, b: Math.min(f1, f0 + (i + 1) * per), file: join(work, `part-${i}${extname(out)}`) })).filter((p) => p.a < p.b);
-    /** Every part, encoded with `f`: one that fails stops the others before its error is told. @param {typeof format} f @param {boolean} opaque */
+    /**
+     * The chunks not there yet, encoded with `f`, each tab taking the next in turn: one that fails stops the others
+     * before its error is told. Those drawn with `f` before (a render that stopped) are counted done.
+     * @param {typeof format} f @param {boolean} opaque
+     */
     const encodeAll = async (f, opaque) => {
+      store.start(settingsFor(f));
+      const left = chunks.filter((c) => !store.done(c));
+      reused = chunks.length - left.length;
+      done = total - left.reduce((n, c) => n + c.b - c.a, 0);
+      drawn = 0;
+      told = Math.floor((done / total) * 10);
+      if (reused && !opts.onProgress && !process.stderr.isTTY) process.stderr.write(`  ${done} of ${total} frames were drawn by a render that stopped: drawing the rest\n`);
+      if (done) opts.onProgress?.(done, total);
       const stop = new AbortController();
       const quit = () => stop.abort();
       opts.signal?.addEventListener('abort', quit, { once: true });
-      const runs = parts.map((p) => encode(p, { fps, rate, samples, shutter, duration: end, first: f0, format: f, onFrame: progress, still: alpha ? 'png' : 'jpeg', opaque, signal: stop.signal,
-        sourceFrame: selection ? (frame) => selectionFrame(selection.spans, frame) : (frame) => frame }));
+      const runs = pages.map(async (film) => {
+        for (let c = left.shift(); c && !stop.signal.aborted; c = left.shift()) {
+          await encode({ film, a: c.a, b: c.b, file: store.drawing(c) }, { fps, rate, samples, shutter, duration: end, first: f0, format: f, onFrame: progress, still: alpha ? 'png' : 'jpeg', opaque, signal: stop.signal,
+            sourceFrame: selection ? (frame) => selectionFrame(selection.spans, frame) : (frame) => frame });
+          store.finished(c, used);
+        }
+      });
       try {
         await unlessCancelled(Promise.all(runs));
       } catch (e) {
         stop.abort();
         if (e !== gone) await Promise.allSettled(runs);
-        throw e === gone ? e : outOfMemory(e, parts.length);
+        throw e === gone ? e : outOfMemory(e, pages.length);
       } finally {
         opts.signal?.removeEventListener('abort', quit);
       }
@@ -273,8 +304,6 @@ export async function render(args, opts = {}) {
         clear = true;
         format = clearFormat;
         encoder = encoderOf(format.video);
-        done = 0;
-        told = 0;
         await encodeAll(format, false);
       }
     };
@@ -283,12 +312,11 @@ export async function render(args, opts = {}) {
     } catch (e) {
       /* the chip's encoder gave up partway (a driver, a size it does not take): the frames again without it, and the
          rest of this launch does without it */
-      if (!chip || clear || opts.signal?.aborted || !/^ffmpeg/.test(e instanceof Error ? e.message : '')) throw e;
+      if (!chip || !onChip || clear || opts.signal?.aborted || !/^ffmpeg/.test(e instanceof Error ? e.message : '')) throw e;
       broken(chip.encoder);
+      onChip = false;
       format = own;
       encoder = encoderOf(own.video);
-      done = 0;
-      told = 0;
       await drawAll(format);
     }
     if (process.stderr.isTTY && !opts.onProgress) process.stderr.write('\n');
@@ -303,18 +331,18 @@ export async function render(args, opts = {}) {
     /* the parts straight into `out`, with the sound: a page's frames are on the disk twice at most while it is written,
        not three times (a long page drawn as PNG for an editing project is gigabytes). A part with nothing to add is
        `out` already, moved into place */
-    if (parts.length > 1 || sound || after.length || !moved(parts[0].file, out)) {
+    const parts = chunks.map((c) => store.file(c));
+    if (parts.length > 1 || sound || after.length || !moved(parts[0], out)) {
       /* names, not paths: concat reads them beside the list, and a path can hold a `'` (C:\\Users\\O'Brien) */
-      if (parts.length > 1) writeFileSync(join(work, 'list.txt'), parts.map((p) => `file '${basename(p.file)}'`).join('\n'));
-      const video = parts.length > 1 ? ['-f', 'concat', '-safe', '0', '-i', join(work, 'list.txt')] : ['-i', parts[0].file];
+      if (parts.length > 1) writeFileSync(join(work, 'list.txt'), parts.map((p) => `file '${basename(p)}'`).join('\n'));
+      const video = parts.length > 1 ? ['-f', 'concat', '-safe', '0', '-i', join(work, 'list.txt')] : ['-i', parts[0]];
       await ffmpeg([...video, ...(sound ? ['-i', sound, '-map', '0:v', '-map', '1:a'] : []), '-c', 'copy', ...after, out]).done;
     }
     failed = false;
   } finally {
-    /* Windows lets go of a file a moment after ffmpeg exits, and later still after one that failed: a folder it
-       still holds is left behind rather than told in place of what went wrong */
     for (const off of unwatch) off();
-    try { rmSync(work, { recursive: true, force: true, maxRetries: 5 }); } catch {}
+    /* a render that ended takes its chunks away; one that stopped keeps those it finished for the next */
+    store.close(!failed);
     await Promise.allSettled(browsers.map((b) => b.close()));
     if (pool) await Promise.allSettled(tabs.map((p) => p.close()));
     await probe.close();
@@ -330,6 +358,7 @@ export async function render(args, opts = {}) {
     lines: [
       `→ ${shown(out)}`,
       `  ${total} frames · ${fmt(to - from)} at ${Number(fps.toFixed(3))} fps · ${Math.round(meta.width * scale)}×${Math.round(meta.height * scale)}${samples > 1 ? ` · ${samples} samples/frame` : ''}${alpha ? ' · alpha' : ''} · ${workers} worker${workers > 1 ? 's' : ''} · ${encoder} · ${seconds.toFixed(1)} s`,
+      ...(reused ? [`  ${reused} of ${chunks.length} chunks were drawn by a render that stopped, and used`] : []),
       ...uncopied.map((file) => `✗ copy: ${shown(file)}: could not be made, drawn as it is`),
       ...problems.map((p) => `✗ ${p.kind === 'request' ? 'request' : 'page'}: ${p.message}`),
     ],
@@ -415,8 +444,9 @@ async function encode({ film, a, b, file }, { fps, rate, samples, shutter, durat
   /* a page drawn opaque: its alpha read beside the encoder, every frame */
   const watch = opaque ? alphaWatch() : null;
   /* a cancelled render stops its encoder at once: the frames ffmpeg still holds are thrown away, not encoded (a 4K
-     encode takes seconds to drain); the parts folder goes with it (see render's finally) */
-  const stop = () => { kill(enc.proc); if (watch) kill(watch.proc); };
+     encode takes seconds to drain); the chunk it was writing goes with it (see render's finally) */
+  let stopped = false;
+  const stop = () => { stopped = true; kill(enc.proc); if (watch) kill(watch.proc); };
   enc.proc.stdin.on('error', () => {});
   /* a watch that ends before the last frame cannot say the page is opaque */
   const unwatched = watch?.ended.then(() => { throw showsThrough('(its alpha could not be read)'); });
@@ -456,6 +486,9 @@ async function encode({ film, a, b, file }, { fps, rate, samples, shutter, durat
     signal?.removeEventListener('abort', stop);
     enc.proc.stdin.end();
     watch?.proc.stdin.end();
+    /* stopped: told once ffmpeg has exited, so the part it was writing can be removed (Windows keeps a file open
+       until then, and a kill there takes a moment) */
+    if (stopped) await Promise.allSettled([enc.done, watch?.ended]);
   }
   await enc.done;
   /* opaque only when every frame was read and none let anything through */

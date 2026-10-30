@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { getPriority, tmpdir, totalmem } from 'node:os';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,6 +10,7 @@ import { encoders, hardwareEncoder } from './encoders.mjs';
 import { filmHtml } from './film-doc.mjs';
 import { launch } from './host.mjs';
 import { defaultWorkers, machine, outOfMemory, render } from './render.mjs';
+import { chunkFolder } from './render-resume.mjs';
 
 const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })();
 
@@ -90,19 +91,53 @@ test('an encoder that fails to start fails the render with ffmpeg\'s error, inst
   }
 });
 
-test('a failed encode is the error told, even when its parts folder cannot be removed', { skip: (!hasFfmpeg && 'no ffmpeg') || (process.platform === 'win32' && 'no read-only folders') || (process.getuid?.() === 0 && 'root removes anything'), timeout: 60_000 }, async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'of-render-held-'));
-  /* the folder this render encodes its parts in, made read-only with a file in it: as Windows holds the files of an
-     encoder still exiting, the folder cannot be removed */
-  const work = join(dir, '.film', 'cache', 'render', `.parts-${process.pid}`);
+test('a failed encode is the error told, and leaves no chunk cut off nor a claim on its folder', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-render-failed-'));
+  const out = join(dir, 'out.mp4');
   try {
     writeFileSync(join(dir, 'index.html'), '<!doctype html><body><script>window.film = { duration: 1, width: 320, height: 180, frame() {} };</script>');
-    mkdirSync(work, { recursive: true });
-    writeFileSync(join(work, 'held'), '');
-    chmodSync(work, 0o555);
-    await assert.rejects(render([dir], { out: join(dir, 'out.mp4'), workers: 1, onProgress() {}, format: { video: ['-c:v', 'no_such_encoder'] } }), /^Error: ffmpeg: .*no_such_encoder/);
+    await assert.rejects(render([dir], { out, workers: 1, onProgress() {}, format: { video: ['-c:v', 'no_such_encoder'] } }), /^Error: ffmpeg: .*no_such_encoder/);
+    assert.deepEqual(readdirSync(chunkFolder(join(dir, '.film', 'cache', 'render'), out)), ['resume.json']);
   } finally {
-    chmodSync(work, 0o755);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a render stopped partway is resumed from the chunks it finished, frame for frame the same as one drawn whole; a film changed meanwhile is drawn again', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 240_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-render-resume-'));
+  const page = (hue) => `<!doctype html><body style="margin:0"><script>window.film = { duration: 4, width: 320, height: 180, frame(t) { document.body.style.background = \`hsl(\${${hue} + t * 90}, 80%, 50%)\`; } };</script>`;
+  const frames = (file) => execFileSync('ffmpeg', ['-v', 'error', '-i', file, '-map', '0:v', '-f', 'framemd5', '-'], { encoding: 'utf8' }).split('\n').filter((l) => /^\d/.test(l)).map((l) => l.split(',').at(-1).trim());
+  /* the software encoder: what a chip's encoder makes of the same frames may differ by a bit, run to run */
+  const opts = { workers: 1, hardware: false };
+  const out = join(dir, 'resumed.mp4');
+  const stopAt = async (frame) => {
+    const stop = new AbortController();
+    await assert.rejects(render([dir], { ...opts, out, signal: stop.signal, onProgress(done) { if (done >= frame) stop.abort(); } }), /cancelled/);
+  };
+  try {
+    writeFileSync(join(dir, 'index.html'), page(0));
+    /* four chunks of a second: stopped in the third, the first two are kept */
+    await stopAt(70);
+    const kept = chunkFolder(join(dir, '.film', 'cache', 'render'), out);
+    assert.deepEqual(readdirSync(kept).sort(), ['chunk-0-30.mp4', 'chunk-30-60.mp4', 'resume.json']);
+    const told = [];
+    const resumed = await render([dir], { ...opts, out, onProgress(done) { told.push(done); } });
+    assert.ok(resumed.lines.includes('  2 of 4 chunks were drawn by a render that stopped, and used'), resumed.lines.join('\n'));
+    assert.equal(told[0], 60, 'its progress starts at the frames kept');
+    assert.equal(existsSync(kept), false, 'a render that ended takes its chunks away');
+    const whole = await render([dir], { ...opts, out: join(dir, 'whole.mp4') });
+    assert.equal(whole.lines.some((l) => /chunks were drawn/.test(l)), false);
+    const resumedFrames = frames(resumed.out);
+    assert.equal(resumedFrames.length, 120);
+    assert.deepEqual(resumedFrames, frames(whole.out));
+
+    /* stopped again, then the page changed: every chunk is drawn anew */
+    await stopAt(40);
+    writeFileSync(join(dir, 'index.html'), page(180));
+    const changed = await render([dir], { ...opts, out });
+    assert.equal(changed.lines.some((l) => /chunks were drawn/.test(l)), false);
+    assert.notDeepEqual(frames(changed.out), resumedFrames);
+  } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
@@ -175,7 +210,7 @@ window.film={duration:2,width:960,height:540,frame(t){els.forEach((d,k)=>{const 
   }
 });
 
-test('a render is written once: its parts straight into the file with the sound, and one part with nothing to add moved there', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 180_000 }, async () => {
+test('a render is written once: its chunks straight into the file with the sound, and one chunk with nothing to add moved there', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 180_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'of-render-once-'));
   try {
     writeFileSync(join(dir, 'p.html'), '<!doctype html><body style="margin:0"><script>window.film = { duration: 1, width: 320, height: 180, frame(t) { document.body.style.background = `hsl(${t * 360}, 80%, 50%)`; } };</script>');
@@ -187,11 +222,11 @@ test('a render is written once: its parts straight into the file with the sound,
       assert.equal(Number(streams.find((s) => s.codec_type === 'video')?.nb_read_frames), 30, `${ext} by ${workers}: its frames`);
       assert.ok(Math.abs(Number(streams.find((s) => s.codec_type === 'audio')?.duration) - 1) < 0.05, `${ext} by ${workers}: its sound`);
     }
-    /* the part a browser writes is the file, not copied: the same one on the disk */
-    const part = join(dir, '.film', 'cache', 'render', `.parts-${process.pid}`, 'part-0.mov');
+    /* the chunk a browser writes is the file, not copied: the same one on the disk */
+    const quiet = join(dir, 'quiet.mov');
+    const part = join(chunkFolder(join(dir, '.film', 'cache', 'render'), quiet), 'drawing-0-30.mov');
     let ino = null;
     const look = setInterval(() => { if (existsSync(part)) ino = statSync(part).ino; }, 5);
-    const quiet = join(dir, 'quiet.mov');
     try {
       await render([dir], { out: quiet, workers: 1, silent: true, onProgress() {} });
     } finally {
