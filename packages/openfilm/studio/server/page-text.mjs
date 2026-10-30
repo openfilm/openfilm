@@ -11,6 +11,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { FileError, inside, trashFile } from './files.mjs';
+import { filesWritten } from './person-edits.mjs';
 
 const PAGE = /\.html?$/i;
 
@@ -59,9 +60,9 @@ export async function readPage(root, rel) {
  * no page there yet), in the encoding it has. Its new rev (null once taken away). `undo`: the write takes back one of
  * Studio's own (a paste undone), for what keeps track of Studio's writes.
  * @param {string} root @param {unknown} rel @param {string | null} text @param {string | null} expect
- * @param {{ undo?: boolean }} [_how]
+ * @param {{ undo?: boolean }} [how]
  */
-export async function writePage(root, rel, text, expect, _how = {}) {
+export async function writePage(root, rel, text, expect, { undo = false } = {}) {
   const abs = pagePath(root, rel);
   const bytes = existsSync(abs) ? await readFile(abs) : null;
   const now = bytes ? revOf(bytes) : null;
@@ -70,11 +71,14 @@ export async function writePage(root, rel, text, expect, _how = {}) {
   }
   if (text == null) {
     if (bytes) await trashFile(root, /** @type {string} */ (rel));
+    filesWritten(root, { [/** @type {string} */ (rel)]: bytes }, { [/** @type {string} */ (rel)]: null }, { undo });
     return { rev: null };
   }
   if (typeof text !== 'string') throw new FileError('the page\'s text, please');
   const out = encode(text, bytes ? decode(bytes).bytewise : false, /** @type {string} */ (rel));
   await mkdir(dirname(abs), { recursive: true });
   await writeFile(abs, out);
+  /* kept over an agent's write of the page from an older copy (person-edits.mjs), as the bytes written */
+  filesWritten(root, { [/** @type {string} */ (rel)]: bytes }, { [/** @type {string} */ (rel)]: out }, { undo });
   return { rev: revOf(out) };
 }
