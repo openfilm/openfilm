@@ -703,8 +703,9 @@ export interface TimelineProps {
   /** A file from the media pane dropped with ⇧ on a clip: it takes the clip's place (lib/clip-replace). */
   onReplaceDrop?: (block: TimelineBlock, file: ResourceDragItem) => void;
   /**
-   * Each clip's fades, ms (clip id → [in, out]; lib/clip-fade): drawn as a slope over the clip, with a handle at each
-   * end of the selected clip, where its sound starts, that is dragged inward to set them (written through onEditOps).
+   * Each clip's fades, ms (clip id → [in, out]; lib/clip-fade): a handle at each end of the clip under the pointer, at
+   * the bottom of its picture (a sound's: the top of its waveform), that is dragged inward to set them (written through
+   * onEditOps). Nothing else is drawn for them: where the handle sits says how long they are.
    */
   fades?: ReadonlyMap<string, FadeMs>;
   /** The transitions the fades make (lib/transitions findTransitions): a mark over each, picked, resized, deleted. */
@@ -2827,7 +2828,10 @@ export const Timeline = React.memo(function Timeline({
     };
   }, [speedOn, cancelDrag]);
 
-  /* ── fades: each clip's slope, and the handles at its ends that set it (lib/clip-fade) ── */
+  /* ── the clip under the pointer: its fade handles and volume line show on it alone, selected or not ── */
+  const [pointedBlock, setPointedBlock] = React.useState<string | null>(null);
+
+  /* ── fades: the handles at each clip's ends that set them (lib/clip-fade) ── */
   const fadesRef = React.useRef(fades);
   fadesRef.current = fades;
   /** A fade handle in hand: the clips it sets (with those linked at the same edge), which edge, how long, whose. */
@@ -2883,7 +2887,7 @@ export const Timeline = React.memo(function Timeline({
     window.addEventListener('pointercancel', up);
   }, [onEditOps, pickForTrim, tracks, withLinked, fps, dropMsAtClientX]);
 
-  /* ── volume: the line across a selected clip's sound, dragged up or down (lib/clip-volume) ── */
+  /* ── volume: the line across the sound of the clip under the pointer, dragged up or down (lib/clip-volume) ── */
   /** The volume line in hand: whose, at what volume, and where along the clip the hand is (px), for its label. */
   const [volumeDrag, setVolumeDrag] = React.useState<{ block: string; volume: number; x: number } | null>(null);
   /**
@@ -2917,6 +2921,10 @@ export const Timeline = React.memo(function Timeline({
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', up);
   }, [onEditBlocks, pickForTrim]);
+
+  /* the clip whose fade handles and volume line show: none while a box is drawn, clips are moved or trimmed, or a
+     handle or line is in hand (its clip keeps its own until let go) */
+  const hoveredBlock = marquee || drag.preview || fadeDrag || volumeDrag ? null : pointedBlock;
 
   /* ── transitions: a mark over each, picked, resized by its edges, deleted (lib/transitions) ── */
   /** A transition's edge in hand: how long it is now. */
@@ -3022,7 +3030,10 @@ export const Timeline = React.memo(function Timeline({
             const volume = volumeTip ? volumeTip.volume : volumeOf(block);
             /* Speed on: its edges change its speed instead of trimming it */
             const speeding = speedOn && picked && !track.locked && canChangeSpeed(block);
-            const pose = `${startMs}:${endMs}:${!!live}:${gone}:${lifting}:${floating ? drag.preview?.offsetY : ''}:${picked}:${Math.round(winFrom)}-${Math.round(winTo)}:${trouble ?? ''}:${chatLit}:${chatNumbers.join(',')}:${fade[0]}-${fade[1]}:${fadeTip}:${volume}:${volumeTip ? Math.round(volumeTip.x) : ''}:${speeding}`;
+            /* its fade handles and volume line: on the clip under the pointer, and on the one whose handle or line is
+               in hand until it is let go */
+            const pointed = hoveredBlock === block.id || Boolean(fadeTip) || Boolean(volumeTip);
+            const pose = `${startMs}:${endMs}:${!!live}:${gone}:${lifting}:${floating ? drag.preview?.offsetY : ''}:${picked}:${Math.round(winFrom)}-${Math.round(winTo)}:${trouble ?? ''}:${chatLit}:${chatNumbers.join(',')}:${fade[0]}-${fade[1]}:${fadeTip}:${volume}:${volumeTip ? Math.round(volumeTip.x) : ''}:${speeding}:${pointed}`;
             const cached = clipElements.get(block.id);
             if (cached?.pose === pose) return cached.node;
             /* on whole pixels: a fractional left and width blur the edges, and a cut between two clips is the key
@@ -3059,14 +3070,18 @@ export const Timeline = React.memo(function Timeline({
             const previewH = Math.max(6, h - INFO_H - (soundBand ? AUDIO_BAND_H : 0));
             const bandAudio = visual && !!block.ownAudio && !block.silent;
             /* where its sound starts: the top of a video's audio band, or of a sound's waveform (a page's or a still's
-               picture, which has none). The fade handles sit on it at the clip's ends, and the volume line is across it */
+               picture, which has none). The volume line is across it */
             const soundTop = soundBand ? h - AUDIO_BAND_H : INFO_H;
-            /* the volume line: on the selected clip, when it is heard, with nothing else on its edges */
-            const volumeLine = picked && !floating && !speeding && mode === 'select' && !track.locked && width > 18
+            /* the fade handles: on the bottom of the picture (a video's, where its audio band starts; a page's or a
+               still's, just inside the clip's bottom), or on the top of a sound's waveform */
+            const fadeY = soundBand ? h - AUDIO_BAND_H : visual ? h - FADE_DOT_INSET : INFO_H;
+            /* the volume line: on the clip under the pointer, when it is heard, with nothing else on its edges */
+            const volumeLine = pointed && !floating && !speeding && mode === 'select' && !track.locked && width > 18
               && Boolean(onEditBlocks && block.loc) && (visual ? bandAudio : hasVolume(block));
             const lineY = soundTop + volumeLineY(volume, h - soundTop);
             /* the labels of a drag go over the picture on a video, and down over the waveform on a sound */
             const tipUp = soundTop > h / 2;
+            const fadeTipUp = fadeY > h / 2;
             const node = (
               <div
                 key={block.id}
@@ -3145,8 +3160,10 @@ export const Timeline = React.memo(function Timeline({
                   if (able.move) drag.start(e, block, 'move', inGroup ? current : own);
                 }}
                 onContextMenu={(e) => openBlockMenu(e, block)}
-                onPointerEnter={() => hoverBlockRef.current?.(block)}
-                onPointerLeave={() => hoverBlockRef.current?.(null)}
+                onPointerEnter={() => { hoverBlockRef.current?.(block); setPointedBlock(block.id); }}
+                /* after a box or a drag the pointer may already be on it: the next move says so */
+                onPointerMove={() => setPointedBlock(block.id)}
+                onPointerLeave={() => { hoverBlockRef.current?.(null); setPointedBlock((id) => (id === block.id ? null : id)); }}
               >
                 <div
                   className="absolute inset-0 overflow-hidden rounded-[3px]"
@@ -3273,26 +3290,6 @@ export const Timeline = React.memo(function Timeline({
                     durMs={waveDurMs}
                   />
                 ) : null}
-                {/* its fades: a slope from the handle down to the clip's bottom corner, the part faded shaded; over a
-                    video's picture, above its sound, the faded part darkens toward the edge */}
-                {soundTop > INFO_H ? fade.map((ms, i) => (ms > 0 ? (
-                  <span key={i} aria-hidden className="pointer-events-none absolute z-[1]" style={{
-                    top: INFO_H, height: soundTop - INFO_H, width: Math.min(width, ms * pxPerMs), [i ? 'right' : 'left']: 0,
-                    background: `linear-gradient(to ${i ? 'left' : 'right'}, rgba(0,0,0,0.5), transparent)`,
-                  }} />
-                ) : null)) : null}
-                {fade[0] > 0 || fade[1] > 0 ? (
-                  <svg aria-hidden data-fade-ramp={`${fade[0]}-${fade[1]}`} className="pointer-events-none absolute inset-0 z-[1]" width={width} height={h}>
-                    {fade[0] > 0 ? (() => {
-                      const x = Math.min(width, fade[0] * pxPerMs);
-                      return <><polygon points={`0,${soundTop} ${x},${soundTop} 0,${h}`} fill="rgba(0,0,0,0.4)" /><line x1={0} y1={h} x2={x} y2={soundTop} stroke="rgba(255,255,255,0.85)" strokeWidth={1} /></>;
-                    })() : null}
-                    {fade[1] > 0 ? (() => {
-                      const x = Math.max(0, width - fade[1] * pxPerMs);
-                      return <><polygon points={`${x},${soundTop} ${width},${soundTop} ${width},${h}`} fill="rgba(0,0,0,0.4)" /><line x1={x} y1={soundTop} x2={width} y2={h} stroke="rgba(255,255,255,0.85)" strokeWidth={1} /></>;
-                    })() : null}
-                  </svg>
-                ) : null}
                 </div>
                 {/* frame and handles stay while trimming (the hand is on one of them); hidden while the clip floats */}
                 {picked && !floating ? <SelectFrame speed={speeding} /> : null}
@@ -3341,9 +3338,10 @@ export const Timeline = React.memo(function Timeline({
                     ) : null}
                   </span>
                 ) : null}
-                {/* fade handles on the selected clip, a dot just inside each end where its sound starts: dragged inward,
-                    the clip fades in or out, its slope starting at the dot (lib/clip-fade) */}
-                {picked && onEditOps && block.clipId && !track.locked && width > 18 && !floating && mode === 'select' && !speeding ? (['in', 'out'] as const).map((edge) => {
+                {/* fade handles on the clip under the pointer, a dot just inside each end, on the bottom of its picture or
+                    the top of its waveform: dragged inward, the clip fades in or out, the dot where the fade ends
+                    (lib/clip-fade) */}
+                {pointed && onEditOps && block.clipId && !track.locked && width > 18 && !floating && mode === 'select' && !speeding ? (['in', 'out'] as const).map((edge) => {
                   const ms = edge === 'in' ? fade[0] : fade[1];
                   const x = fadeHandleX(edge, ms, width, pxPerMs, FADE_DOT_INSET);
                   const what = t(edge === 'in' ? 'inspector.fadeIn' : 'inspector.fadeOut');
@@ -3351,13 +3349,13 @@ export const Timeline = React.memo(function Timeline({
                     <span key={edge} role="presentation" data-fade-handle={edge}
                       title={t('transitions.handle').replace('{what}', what).replace('{s}', (ms / 1000).toFixed(2))}
                       className="group/fade absolute z-[5] flex h-[13px] w-[13px] -translate-x-1/2 -translate-y-1/2 cursor-ew-resize items-center justify-center"
-                      style={{ left: x, top: soundTop }}
+                      style={{ left: x, top: fadeY }}
                       onPointerDown={(e) => startFade(e, block, edge)}
                     >
                       <span aria-hidden className={`pointer-events-none box-border rounded-full border-2 border-solid bg-black shadow-[0_0_2px_rgba(0,0,0,.5)] transition-transform ${fadeTip === edge ? 'scale-[1.25]' : 'group-hover/fade:scale-[1.25]'}`}
                         style={{ width: FADE_DOT, height: FADE_DOT, borderColor: '#fff' }} />
                       {fadeTip === edge ? (
-                        <span className={`pointer-events-none absolute left-1/2 ${tipUp ? 'bottom-[14px]' : 'top-[14px]'} -translate-x-1/2 whitespace-nowrap rounded-[4px] px-1.5 py-[1px] text-[10.5px] font-medium leading-[15px] text-white tabular-nums shadow-[0_1px_4px_rgba(0,0,0,.35)]`}
+                        <span className={`pointer-events-none absolute left-1/2 ${fadeTipUp ? 'bottom-[14px]' : 'top-[14px]'} -translate-x-1/2 whitespace-nowrap rounded-[4px] px-1.5 py-[1px] text-[10.5px] font-medium leading-[15px] text-white tabular-nums shadow-[0_1px_4px_rgba(0,0,0,.35)]`}
                           style={{ background: 'var(--tl-accent)' }}>
                           {t('transitions.fadeTip').replace('{what}', what).replace('{s}', (ms / 1000).toFixed(2))}
                         </span>
@@ -3443,7 +3441,7 @@ export const Timeline = React.memo(function Timeline({
     openBlockMenu, openLaneMenu, onEditBlocks, collapseIfClick, selectOne, setSelected, clipElements, thumbWindow, view.width,
     chatClip, chatDraft, placedOf, pickForTrim, gap, withLinked, runSplit, trackOverlay,
     fadeOfBlock, fadeDrag, startFade, volumeDrag, startVolume, transitions, transitionDrag, pickedTransition, onPickTransition, onTransition, startTransitionResize,
-    nearFirst, nearLast, speedOn,
+    nearFirst, nearLast, speedOn, hoveredBlock,
   ]);
 
   const tickMarks = React.useMemo(() => ticks.map(({ ms, label }) => {

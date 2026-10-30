@@ -1,6 +1,6 @@
 /**
- * A clip's fades on the timeline: the handles at its ends, where its sound starts, dragged inward, and the slope drawn
- * from them.
+ * A clip's fades on the timeline: the handles at its ends, on the bottom of its picture or the top of its waveform,
+ * dragged inward. Where a handle sits is where its fade ends; nothing else is drawn for them.
  *
  * A fade is kept in film.html as the clip's own entry of its `overrides` (`{ "fade": [in, out] }`, seconds; see
  * SPEC §1): the timeline writes it with the `fade` prop (studio/server/ops.mjs), one edit for the clip and the clips
@@ -36,8 +36,8 @@ export function fadeFromPointer(edge: FadeEdge, pointerMs: number, clip: { start
 }
 
 /**
- * Where a fade's handle sits in a clip `widthPx` wide: px from its left edge, where the fade's slope starts, but never
- * nearer either end than `insetPx`, so the handle stays inside the clip (a short fade's slope starts under it).
+ * Where a fade's handle sits in a clip `widthPx` wide: px from its left edge, where the fade ends, but never nearer
+ * either end than `insetPx`, so the handle stays inside the clip (a short fade ends under it).
  */
 export function fadeHandleX(edge: FadeEdge, fadeMs: number, widthPx: number, pxPerMs: number, insetPx = 0): number {
   const inset = Math.min(insetPx, widthPx / 2);
