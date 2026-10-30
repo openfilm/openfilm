@@ -3216,7 +3216,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                   <CanvasView projectId={projectId} folder={loaded?.project.path ?? ''} files={canvasFiles} sources={mediaSources} onAddToFilm={(file) => { void addFromCanvas(file); }}
                     onImportFiles={(dropped) => onImport(dropped, 'assets', () => {})} onOpenSettings={() => setSettingsOpen('providers')}
                     focus={canvasFocus} onRefer={studioHost?.refer ? (refs) => { for (const ref of refs) studioHost?.refer?.(ref); } : undefined}
-                    onError={toast.showError} />
+                    onError={toast.showError} onNotice={(message) => toast.show(message)} />
                 </React.Suspense>
               </div>
             </div>

@@ -58,6 +58,7 @@ import { captionRoutes, writeSubtitleStyle } from './captions.mjs';
 import { projectSettingsRoute } from './project-settings.mjs';
 import { markersRoute } from './markers.mjs';
 import { agentCanvasRoute, canvasRoute } from './canvas.mjs';
+import { projectTemplatesRoute, templatesRoute } from './canvas-templates.mjs';
 import { transitionPageRoutes } from './transition-pages.mjs';
 import { createAsks, getRoute, subtitleTranscriber, subtitleTranslator } from './get.mjs';
 import { LOCATION_KEYS, chooseFolder, locations, usableFolder } from '../../src/locations.mjs';
@@ -317,6 +318,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
 
     /* ── `openfilm canvas`: an agent's steps on a project's canvas, shown on the board at once (canvas.mjs) ── */
     if (parts[0] === 'canvas' && parts.length === 1) return agentCanvasRoute(req, res, (root) => watchers.emit(root, { type: 'canvas' }));
+    /* the person's canvas templates, the same for every project (canvas-templates.mjs) */
+    if (parts[0] === 'canvas-templates') return templatesRoute(req, res, parts.slice(1));
 
     /* the system's folder dialog, opened here for a page in a browser (folder-picker.mjs): { path } (null: cancelled);
        501 when this system has none Studio can open */
@@ -590,6 +593,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (await markersRoute(req, res, project.path, rest)) return;
     /* its canvas (canvas.mjs): Studio's own board beside the edit */
     if (await canvasRoute(req, res, project.path, rest)) return;
+    if (await projectTemplatesRoute(req, res, project.path, rest)) return;
     /* the page under a dip to white, kept once (transition-pages.mjs) */
     if (await transitionPageRoutes(req, res, project.path, rest)) return;
     if (!rest) {

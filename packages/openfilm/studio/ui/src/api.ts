@@ -162,6 +162,12 @@ export const api = {
   /** its canvas (`.film/canvas.json`, components/canvas): the whole board, read and written */
   canvas: (id: string) => call<{ nodes: unknown; edges: unknown }>(`${p(id)}/canvas`),
   putCanvas: (id: string, canvas: { nodes: unknown[]; edges: unknown[] }) => call<{ nodes: unknown; edges: unknown }>(`${p(id)}/canvas`, { method: 'PUT', json: canvas }),
+  /** the person's canvas templates (studio/server/canvas-templates.mjs): listed, kept from a project's board, laid down on one, removed */
+  canvasTemplates: () => call<{ templates: Array<{ id: string; name: string; nodes: number; created: number }> }>('canvas-templates').then((r) => r.templates),
+  saveCanvasTemplate: (id: string, name: string, board: { nodes: unknown[]; edges: unknown[] }) =>
+    call<{ template: { id: string; name: string; nodes: number } }>(`${p(id)}/canvas-templates`, { method: 'POST', json: { name, ...board } }).then((r) => r.template),
+  useCanvasTemplate: (id: string, template: string) => call<{ nodes: unknown; edges: unknown }>(`${p(id)}/canvas-templates/${encodeURIComponent(template)}`, { method: 'POST' }),
+  removeCanvasTemplate: (template: string) => call<Record<string, never>>(`canvas-templates/${encodeURIComponent(template)}`, { method: 'DELETE' }),
   /** the loudness of a part of a file's sound (its own seconds): integrated LUFS (null: silent) and true peak */
   loudness: (id: string, path: string, from: number, to: number) => call<{ lufs: number | null; peak: number | null }>(
     `${p(id)}/media?what=loudness&path=${encodeURIComponent(path)}&from=${from}&to=${to}`,

@@ -26,7 +26,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
-  AudioLines, Bot, ChevronLeft, ChevronRight, Clapperboard, FileQuestion, Image as ImageIcon, Loader2, Music, Plus, Search, Sparkles, Square,
+  AudioLines, Bot, ChevronLeft, LayoutTemplate, Play, X, ChevronRight, Clapperboard, FileQuestion, Image as ImageIcon, Loader2, Music, Plus, Search, Sparkles, Square,
   StickyNote, Trash2, Video,
 } from 'lucide-react';
 import { useT } from '@/i18n';
@@ -37,6 +37,7 @@ import {
   type CanvasDoc, type CanvasHistory, type CanvasNode, type GroupColor, type MakeKind, type MediaOf,
 } from '@/lib/canvas';
 import { useProviders, type ProvidersState } from '@/lib/providers';
+import { builtInTemplates, type CanvasTemplate } from '@/lib/canvas-templates';
 import { RESOURCE_DRAG_TYPE, isComputerFileDrag, readResourceDragData } from '@/lib/resource-drag';
 import type { MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
 import type { StudioRef } from '@/lib/host';
@@ -102,9 +103,10 @@ const runWatchers = new Set<() => void>();
 const runsChanged = () => { runsVersion += 1; for (const watch of runWatchers) watch(); };
 const useRuns = () => React.useSyncExternalStore((watch) => { runWatchers.add(watch); return () => { runWatchers.delete(watch); }; }, () => runsVersion);
 
-async function startRun(project: string, folder: string, node: string, request: ReturnType<typeof makeRequest>, pick: { via?: string; model?: string }, key: string, nothing: string) {
+/** Whether it made one (false: it failed, was stopped, or was being made already). */
+async function startRun(project: string, folder: string, node: string, request: ReturnType<typeof makeRequest>, pick: { via?: string; model?: string }, key: string, nothing: string): Promise<boolean> {
   const id = `${project}/${node}`;
-  if (runs.has(id)) return;
+  if (runs.has(id)) return false;
   const abort = new AbortController();
   runs.set(id, { started: Date.now(), abort });
   runErrors.delete(id);
@@ -121,8 +123,10 @@ async function startRun(project: string, folder: string, node: string, request: 
       const doc = readCanvasDoc(await api.canvas(project));
       await api.putCanvas(project, { ...doc, nodes: doc.nodes.map((n) => (n.id === node ? withVersion(n, made) : n)) });
     }
+    return true;
   } catch (e) {
     if (!abort.signal.aborted) runErrors.set(id, e instanceof Error ? e.message : String(e));
+    return false;
   } finally {
     runs.delete(id);
     runsChanged();
@@ -161,6 +165,10 @@ interface Board {
   unused: ReadonlyMap<string, number>;
   make: (id: string) => void;
   stop: (id: string) => void;
+  /** a group: whether it has nodes that make something, whether one is at it, and all of them made in order */
+  makesIn: (group: string) => number;
+  busyIn: (group: string) => boolean;
+  makeAll: (group: string) => void;
   openSettings: () => void;
 }
 const BoardContext = React.createContext<Board | null>(null);
@@ -362,6 +370,14 @@ function FrameNodeView({ id, data, selected }: NodeProps<FrameNode>) {
         ) : (
           <span className="truncate rounded-md px-2.5 py-1 text-[13px] font-medium text-white" style={{ background: paint.chip }}>{data.label || t('canvas.group')}</span>
         )}
+        {board.makesIn(id) && !editing ? (
+          <Tooltip label={t('canvas.makeAllTip')}>
+            <button type="button" disabled={board.busyIn(id)} onClick={() => board.makeAll(id)}
+              className="nodrag ml-1.5 flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-[12px] font-medium text-white disabled:opacity-60" style={{ background: paint.chip }}>
+              {board.busyIn(id) ? <Loader2 size={12} className="animate-spin" /> : <Play size={11} />}{t('canvas.makeAll')}
+            </button>
+          </Tooltip>
+        ) : null}
       </div>
     </div>
   );
@@ -532,11 +548,14 @@ const NODE_TYPES = { file: FileNodeView, note: NoteNodeView, frame: FrameNodeVie
 interface MenuAt { screen: { x: number; y: number }; at: { x: number; y: number }; from?: { node: string; side: 'source' | 'target' } }
 
 /** The menu of what to add where it opened: a note, or a file of the project, searched; Enter takes the first. */
-function AddMenu({ menu, files, onNote, onMake, onFile, onClose }: {
+function AddMenu({ menu, files, templates, onNote, onMake, onTemplate, onRemoveTemplate, onFile, onClose }: {
   menu: MenuAt;
   files: readonly WorkspaceResource[];
+  templates: readonly CanvasTemplate[];
   onNote: () => void;
   onMake: (kind: MakeKind) => void;
+  onTemplate: (template: CanvasTemplate) => void;
+  onRemoveTemplate: (template: CanvasTemplate) => void;
   onFile: (file: WorkspaceResource) => void;
   onClose: () => void;
 }) {
@@ -545,12 +564,17 @@ function AddMenu({ menu, files, onNote, onMake, onFile, onClose }: {
   const [active, setActive] = React.useState(0);
   const needle = query.trim().toLowerCase();
   const shown = files.filter((f) => f.kind !== 'other' && (!needle || f.name.toLowerCase().includes(needle) || f.path.toLowerCase().includes(needle))).slice(0, MENU_FILES);
-  const items: Array<{ key: string; label: string; icon: React.ReactNode; run: () => void }> = [
+  const items: Array<{ key: string; label: string; icon: React.ReactNode; run: () => void; remove?: () => void }> = [
     ...(!needle || t('canvas.note').toLowerCase().includes(needle) ? [{ key: 'note', label: t('canvas.note'), icon: <StickyNote size={14} />, run: onNote }] : []),
     ...MAKE_KINDS.filter((k) => !needle || t(`canvas.make.${k}`).toLowerCase().includes(needle)).map((k) => {
       const Icon = MAKE_ICON[k];
       return { key: `make:${k}`, label: t(`canvas.make.${k}`), icon: <Icon size={14} />, run: () => onMake(k) };
     }),
+    /* laid down where wires do not lead: a template has its own */
+    ...(menu.from ? [] : templates.filter((tp) => !needle || tp.name.toLowerCase().includes(needle)).map((tp) => ({
+      key: `template:${tp.id}`, label: tp.name, icon: <LayoutTemplate size={14} />, run: () => onTemplate(tp),
+      ...(tp.builtIn ? {} : { remove: () => onRemoveTemplate(tp) }),
+    }))),
     ...shown.map((f) => {
       const Icon = KIND_ICON[f.kind];
       return { key: f.path, label: f.name, icon: <Icon size={14} />, run: () => onFile(f) };
@@ -587,6 +611,13 @@ function AddMenu({ menu, files, onNote, onMake, onFile, onClose }: {
             className={`flex h-8 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left text-[13px] ${i === active ? 'bg-[var(--bg-hover)] text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>
             <span className="shrink-0 text-[var(--text-faint)]">{item.icon}</span>
             <span className="min-w-0 flex-1 truncate">{item.label}</span>
+            {item.remove && i === active ? (
+              <span role="button" tabIndex={-1} aria-label={t('canvas.removeTemplate')} title={t('canvas.removeTemplate')}
+                onClick={(event) => { event.stopPropagation(); item.remove!(); }}
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--text-faint)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+                <X size={12} />
+              </span>
+            ) : null}
           </button>
         ))}
         {items.length ? null : <div className="flex h-8 items-center px-2 text-[12.5px] text-[var(--text-faint)]">{t('canvas.nothing')}</div>}
@@ -598,7 +629,7 @@ function AddMenu({ menu, files, onNote, onMake, onFile, onClose }: {
 /** what was copied last, on any board of this page: pasted with new ids, a step further each time */
 let clipboard: { doc: CanvasDoc; pasted: number } | null = null;
 
-function Board({ projectId, folder, files, sources, onAddToFilm, onImportFiles, onOpenSettings, onError, focus, onRefer }: CanvasViewProps) {
+function Board({ projectId, folder, files, sources, onAddToFilm, onImportFiles, onOpenSettings, onError, onNotice, focus, onRefer }: CanvasViewProps) {
   const t = useT();
   const flow = useReactFlow<BoardNode, Edge>();
   const [nodes, setNodes, onNodesChange] = useNodesState<BoardNode>([]);
@@ -776,15 +807,74 @@ function Board({ projectId, folder, files, sources, onAddToFilm, onImportFiles, 
     }
     return { stale, unused };
   }, [nodes, edges, mediaOf]);
-  const makeNow = (id: string) => {
+  const makeNow = (id: string): Promise<boolean> => {
     const doc = docNow();
     const node = doc.nodes.find((n) => n.id === id);
-    if (!node?.make || !folder) return;
+    if (!node?.make || !folder) return Promise.resolve(false);
     const inputs = inputsOf(doc, id, mediaOf);
     const request = makeRequest(node as MakingNode, inputs, makeName(node as MakingNode));
-    if (!String(request.args.prompt).trim()) { runErrors.set(`${projectId}/${id}`, t('canvas.make.noWords')); runsChanged(); return; }
+    if (!String(request.args.prompt).trim()) { runErrors.set(`${projectId}/${id}`, t('canvas.make.noWords')); runsChanged(); return Promise.resolve(false); }
     const pick = node.via ? { via: node.via, ...(node.model ? { model: node.model } : {}) } : {};
-    void startRun(projectId, folder, id, request, pick, inputsKey(node, inputs), t('canvas.make.nothing'));
+    return startRun(projectId, folder, id, request, pick, inputsKey(node, inputs), t('canvas.make.nothing'));
+  };
+  /**
+   * Everything a group makes, in the order its wires say: what feeds another is made first, and what waits for it is
+   * made after it, with it. What is made already and has not changed since is left (and so is what only it feeds); what
+   * failed stops what it feeds.
+   */
+  const makeAll = async (group: string) => {
+    const start = docNow();
+    const members = start.nodes.filter((n) => n.parent === group && n.make).map((n) => n.id);
+    const inGroup = new Set(members);
+    const feeds = new Map(members.map((id) => [id, start.edges.filter((e) => e.to === id && inGroup.has(e.from)).map((e) => e.from)]));
+    const need = new Set(members.filter((id) => {
+      const n = start.nodes.find((m) => m.id === id)!;
+      return !n.path || isStale(n, inputsOf(start, id, mediaOf));
+    }));
+    for (let grew = true; grew;) {
+      grew = false;
+      for (const id of members) if (!need.has(id) && feeds.get(id)!.some((f) => need.has(f))) { need.add(id); grew = true; }
+    }
+    if (!need.size) { onNotice(t('canvas.upToDate')); return; }
+    const done = new Set(members.filter((id) => !need.has(id)));
+    const failed = new Set<string>();
+    for (;;) {
+      const ready = [...need].filter((id) => !done.has(id) && !failed.has(id) && feeds.get(id)!.every((f) => done.has(f)));
+      if (!ready.length) break;
+      await Promise.all(ready.map(async (id) => { (await makeNow(id) ? done : failed).add(id); }));
+      /* what was made is on the board before what it feeds is asked */
+      await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
+    }
+  };
+
+  /* ── templates: the person's own, and OpenFilm's ── */
+  const [ownTemplates, setOwnTemplates] = React.useState<CanvasTemplate[]>([]);
+  const loadTemplates = () => { void api.canvasTemplates().then(setOwnTemplates, () => {}); };
+  React.useEffect(loadTemplates, []);
+  const builtIns = React.useMemo(() => builtInTemplates((key) => t(`canvas.templates.${key}`)), [t]);
+  const templates = React.useMemo(() => [...ownTemplates, ...builtIns], [ownTemplates, builtIns]);
+  /** a template laid down with its corner at `at`: every node new */
+  const layTemplate = async (template: CanvasTemplate, at: { x: number; y: number }) => {
+    try {
+      const doc = template.builtIn ? builtIns.find((b) => b.id === template.id)!.doc : readCanvasDoc(await api.useCanvasTemplate(projectId, template.id));
+      add(copyOf(doc, new Set(doc.nodes.filter((n) => !n.parent).map((n) => n.id)), at));
+    } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+  };
+  /** a group kept as a template, by its name, with what is in it and the wires between them */
+  const keepTemplate = async (group: string) => {
+    const doc = docNow();
+    const node = doc.nodes.find((n) => n.id === group);
+    if (!node) return;
+    const part = copyOf(doc, new Set([group]), { x: 0, y: 0 });
+    try {
+      const kept = await api.saveCanvasTemplate(projectId, node.group || t('canvas.group'), part);
+      onNotice(t('canvas.templateKept').replace('{name}', kept.name));
+      loadTemplates();
+    } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+  };
+  const removeTemplate = async (template: CanvasTemplate) => {
+    setOwnTemplates((list) => list.filter((tp) => tp.id !== template.id));
+    await api.removeCanvasTemplate(template.id).catch((e: unknown) => { onError(e instanceof Error ? e.message : String(e)); loadTemplates(); });
   };
   /* what is made while this board is shown comes onto it (and can be undone, as any change) */
   React.useEffect(() => {
@@ -812,8 +902,11 @@ function Board({ projectId, folder, files, sources, onAddToFilm, onImportFiles, 
     unused: making.unused,
     make: makeNow,
     stop: (id) => runs.get(`${projectId}/${id}`)?.abort.abort(),
+    makesIn: (group) => nodes.filter((n) => n.parentId === group && n.type === 'make').length,
+    busyIn: (group) => nodes.some((n) => n.parentId === group && runs.has(`${projectId}/${n.id}`)),
+    makeAll: (group) => { void makeAll(group); },
     openSettings: onOpenSettings,
-  }), [byPath, sources, onAddToFilm, setNodes, editing, providers, runsSeen, making, projectId, folder, onOpenSettings]); // eslint-disable-line react-hooks/exhaustive-deps
+  }), [byPath, sources, onAddToFilm, setNodes, editing, providers, runsSeen, making, projectId, folder, onOpenSettings, nodes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── adding: a note, a file, joined to the wire it came from ── */
   const place = (node: BoardNode, from?: MenuAt['from']) => {
@@ -961,6 +1054,8 @@ function Board({ projectId, folder, files, sources, onAddToFilm, onImportFiles, 
       ...(onRefer ? [{ id: 'refer', label: t('host.refer'), shortcut: `${MOD}L`, onSelect: () => { refer(); } }] : []),
       { id: 'copy', label: t('canvas.copy'), shortcut: `${MOD}C`, onSelect: () => { copy(); } },
       { id: 'duplicate', label: t('canvas.duplicate'), shortcut: `${MOD}D`, onSelect: duplicate },
+      ...(node.type === 'frame' && board.makesIn(node.id) ? [{ id: 'all', label: t('canvas.makeAll'), icon: <Play size={15} />, disabled: board.busyIn(node.id), onSelect: () => { void makeAll(node.id); } }] : []),
+      ...(node.type === 'frame' ? [{ id: 'template', label: t('canvas.keepTemplate'), icon: <LayoutTemplate size={15} />, onSelect: () => { void keepTemplate(node.id); } }] : []),
       ...(node.type === 'frame'
         ? [{ id: 'ungroup', label: t('canvas.ungroup'), shortcut: `${SHIFT}G`, onSelect: ungroup }]
         : node.parentId ? [] : [{ id: 'group', label: t('canvas.groupThem'), shortcut: `${MOD}G`, onSelect: group }]),
@@ -1081,8 +1176,18 @@ function Board({ projectId, folder, files, sources, onAddToFilm, onImportFiles, 
           </Tooltip>
         </div>
         {ready && nodes.length === 0 ? (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-4">
             <div className="max-w-[340px] text-center text-[13px] leading-relaxed text-[var(--text-faint)]">{t('canvas.empty')}</div>
+            <div className="pointer-events-auto flex flex-wrap justify-center gap-2">
+              {templates.slice(0, 4).map((template) => (
+                <button key={template.id} type="button"
+                  onClick={() => { const box = rootRef.current!.getBoundingClientRect(); void layTemplate(template, flow.screenToFlowPosition({ x: box.left + 80, y: box.top + 120 }))
+                    .then(() => requestAnimationFrame(() => { void flow.fitView({ padding: 0.2, maxZoom: 1, duration: 200 }); })); }}
+                  className="flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-[12.5px] text-[var(--text-muted)] transition hover:text-[var(--text)]">
+                  <LayoutTemplate size={13} />{template.name}
+                </button>
+              ))}
+            </div>
           </div>
         ) : null}
         {menu ? (
@@ -1092,6 +1197,9 @@ function Board({ projectId, folder, files, sources, onAddToFilm, onImportFiles, 
             onClose={() => setMenu(null)}
             onNote={() => { setMenu(null); addNote(menu.at, menu.from); }}
             onMake={(kind) => { setMenu(null); addMake(kind, menu.at, menu.from); }}
+            templates={templates}
+            onTemplate={(template) => { setMenu(null); void layTemplate(template, menu.at); }}
+            onRemoveTemplate={(template) => { void removeTemplate(template); }}
             onFile={(file) => { setMenu(null); addFile(file.path, menu.at, menu.from); }}
           />
         ) : null}
@@ -1113,6 +1221,8 @@ export interface CanvasViewProps {
   onImportFiles: (files: File[]) => Promise<string[]>;
   /** where the person connects a service to make with */
   onOpenSettings: () => void;
+  /** a word that something went as asked (a template kept) */
+  onNotice: (message: string) => void;
   /** the selected nodes into the chat as references (⌘L); none: no chat here */
   onRefer?: (refs: StudioRef[]) => void;
   /** a node to show (a chat's reference to it clicked): selected and in view; `n` is new each time */
