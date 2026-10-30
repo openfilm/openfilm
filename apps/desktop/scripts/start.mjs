@@ -13,12 +13,10 @@ import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launcherEnvironment, loginShellEnvironment } from '../src/environment.mjs';
-import { FLAVORS, NEXT } from '../src/flavor.mjs';
+import { FLAVORS } from '../src/flavor.mjs';
 
-/* OPENFILM_NEXT_DIR: "OpenFilm Next", the next/0.3 branch kept apart from the dev app (src/flavor.mjs) */
-const flavor = process.env.OPENFILM_NEXT_DIR ? 'next' : 'dev';
-process.env.OPENFILM_DESKTOP_FLAVOR = flavor;
-const identity = flavor === 'next' ? NEXT : FLAVORS.dev;
+process.env.OPENFILM_DESKTOP_FLAVOR = 'dev';
+const identity = FLAVORS.dev;
 const require = createRequire(import.meta.url);
 const desktop = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2).filter((a) => a !== '--no-build');
@@ -34,7 +32,7 @@ if (process.platform === 'darwin') {
   const version = require('electron/package.json').version;
   const productVersion = require('../package.json').version;
   /* .dev/ is git-ignored */
-  const runtime = join(desktop, '.dev', 'runtime', `${version}-openfilm-${flavor}-v2-${productVersion}`);
+  const runtime = join(desktop, '.dev', 'runtime', `${version}-openfilm-dev-v2-${productVersion}`);
   const bundle = join(runtime, `${identity.productName}.app`);
   const marker = join(runtime, 'ready');
   /* the executable keeps Electron's own name: Electron decides `app.isPackaged` from it. The name people see comes
