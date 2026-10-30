@@ -4,8 +4,8 @@
  * together; and after them on every menu, Show… / Unlock… for the layers that cannot be clicked any more. Items that
  * cannot run stay, grayed, with the reason.
  *
- * Layer changes are overrides (the editor writes film.html), a delete too (lib/layer-delete); the clip's actions are
- * the editor's, passed in.
+ * Layer changes are overrides (the editor writes film.html), a delete too (lib/layer-delete); a copy of layers is
+ * pasted as new elements of a page (lib/layer-clipboard); the clip's actions are the editor's, passed in.
  */
 import type * as React from 'react';
 import {
@@ -79,6 +79,8 @@ export interface StageMenuActions {
   editOverrides(list: ReadonlyArray<{ element: StageElement; patch: OverrideGeometry | null }>): void;
   /** Layers deleted from their clips (lib/layer-delete): one save, one undo step; without it a layer has no Delete. */
   deleteLayers?(elements: readonly StageElement[]): void;
+  /** Layers copied (lib/layer-clipboard); without it a layer has no Copy. Paste is the clip's (it pastes what was copied). */
+  copyLayers?(elements: readonly StageElement[]): void;
   /** Select the layer at `loc` in the clip at `clipLoc` (a parent). */
   selectParent(loc: string, clipLoc?: string): void;
   /** Select the whole clip (as on the timeline). */
@@ -143,6 +145,31 @@ function list() {
   };
 }
 
+/**
+ * Copy and Paste for layers: the layers copied, and what was copied last (layers or clips) pasted over their clip. The
+ * Layers panel's rows have them too.
+ */
+export function copyPasteEntries(
+  layers: readonly StageElement[],
+  actions: { copyLayers?: StageMenuActions['copyLayers']; clip?: Pick<StageClipActions, 'isLocked' | 'canPaste' | 'paste'> },
+  t: T,
+): ContextMenuEntry[] {
+  const copy = actions.copyLayers;
+  const clip = actions.clip;
+  const clipLoc = layers[0]?.clipLoc;
+  const out: ContextMenuEntry[] = [];
+  if (copy) out.push({ id: 'copy-layers', label: t('timeline.menuCopy'), icon: <CopyIcon size={14} />, shortcut: hintOf(currentKeymap(), 'copy', MAC), onSelect: () => copy(layers) });
+  if (clip && clipLoc) {
+    const trackLocked = clip.isLocked(clipLoc);
+    out.push({
+      id: 'paste-layers', label: t('timeline.menuPaste'), icon: <ClipboardPaste size={14} />, shortcut: hintOf(currentKeymap(), 'paste', MAC),
+      disabled: trackLocked || !clip.canPaste(), hint: trackLocked ? t('timeline.trackLocked') : t('timeline.menuPasteEmpty'),
+      onSelect: () => clip.paste(clipLoc),
+    });
+  }
+  return out;
+}
+
 export function stageMenu(el: StageElement, ctx: StageMenuContext, actions: StageMenuActions, t: T): readonly ContextMenuEntry[] {
   const m = list();
   const lockKeys = shortcutHint('L', { mod: true, shift: true });
@@ -171,6 +198,8 @@ export function stageMenu(el: StageElement, ctx: StageMenuContext, actions: Stag
       id: 'lock', label: allLocked ? t('stageMenu.unlock') : t('stageMenu.lock'), icon: allLocked ? <Unlock size={14} /> : <Lock size={14} />, shortcut: lockKeys,
       onSelect: () => actions.editOverrides(many.map((x) => ({ element: x, patch: { lock: !allLocked } }))),
     });
+    m.sep();
+    for (const entry of copyPasteEntries(many, actions, t)) m.push(entry);
     const deleteLayers = actions.deleteLayers;
     if (deleteLayers) {
       m.sep();
@@ -269,6 +298,8 @@ export function stageMenu(el: StageElement, ctx: StageMenuContext, actions: Stag
   const clipLoc = el.clipLoc;
   if (clipLoc) m.push({ id: 'clip', label: t('stageMenu.selectClip'), icon: <Layers size={14} />, onSelect: () => actions.selectClip(clipLoc) });
   const words = el.text?.value;
+  m.sep();
+  for (const entry of copyPasteEntries([el], actions, t)) m.push(entry);
   if (words) m.push({ id: 'copy-text', label: t('stageMenu.copyText'), icon: <CopyIcon size={14} />, onSelect: () => { void navigator.clipboard?.writeText(words).catch(() => {}); } });
   const deleteLayers = actions.deleteLayers;
   if (deleteLayers) {

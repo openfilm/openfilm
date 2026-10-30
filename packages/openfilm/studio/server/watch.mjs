@@ -1,12 +1,15 @@
 // @ts-check
 /**
  * What changes in a project folder while someone watches it: film.html (`film`, with its new revision) or any other
- * file (`files`: a page, a picture, a sound). One watcher per open project, shared by every page showing it, closed when
- * the last one leaves. Studio's own folders and the usual build and dependency folders are not watched.
+ * file (`files`: a page, a picture, a sound). A write of someone else's is merged with the person's edits first
+ * (person-edits.mjs), so the pages hear of the film and the files as they end up. One watcher per open project, shared
+ * by every page showing it, closed when the last one leaves. Studio's own folders and the usual build and dependency
+ * folders are not watched.
  */
 import { readdirSync, watch } from 'node:fs';
 import { join } from 'node:path';
-import { readProjectFilm } from './film.mjs';
+import { readProjectFilm, settleProjectFilm } from './film.mjs';
+import { settleFiles } from './person-edits.mjs';
 import { FILM_FILE } from '../../src/film-doc.mjs';
 import { projectMissing } from './project-presence.mjs';
 
@@ -70,14 +73,18 @@ export function watchFolder(root, send) {
       pending.clear();
       paths = new Set();
       if (kinds.includes('film')) {
-        const { rev } = await readProjectFilm(root).catch(() => ({ rev: '' }));
+        const { rev } = await settleProjectFilm(root, { stable: true }).catch(() => ({ rev: '' }));
         /* the same text written again (an editor's save, Studio's own write echoed back) is no change */
         if (closed) return;
         /* deleted during the read: wait for presence to settle instead of publishing an empty film */
         if (projectMissing(root)) { pending.add('film'); return; }
         if (rev && rev !== lastRev) { lastRev = rev; send({ type: 'film', rev }); }
       }
-      if (kinds.includes('files')) send(changed ? { type: 'files', paths: [...changed] } : { type: 'files' });
+      if (kinds.includes('files')) {
+        await settleFiles(root, changed ? [...changed] : null);
+        if (closed) return;
+        send(changed ? { type: 'files', paths: [...changed] } : { type: 'files' });
+      }
     } finally {
       checking = false;
       if (!closed && !gone && pending.size) schedule();

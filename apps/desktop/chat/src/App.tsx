@@ -6,7 +6,7 @@
  * (lib/local-agent-run's saved turns).
  */
 import React from 'react';
-import { ArrowDown, Blocks, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, ShieldQuestion, Square, SquareSlash, X } from 'lucide-react';
+import { ArrowDown, Blocks, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, ShieldQuestion, Square, X } from 'lucide-react';
 import { buildPromptDisplay, type Turn } from '@openfilm/shared';
 import { useT, useUiLocale } from '@/i18n';
 import { ConversationSessionBar } from '@/components/ConversationSessionBar';
@@ -46,7 +46,6 @@ import {
   restingItems,
   saveLocalAgentTurn,
   steerLocalAgentTurn,
-  useAgentCommands,
   useAgentContext,
   useLocalAgentTurn,
   type LocalAgentTurn,
@@ -60,7 +59,7 @@ import { BalanceNotice } from '@/components/BalanceNotice';
 import { CopyDiagnostics } from '@/components/CopyDiagnostics';
 import { accountName, accountTrouble } from '@/lib/account-trouble';
 import { accountModel, accountModelOf, routeWithoutKey } from '@/lib/route-without-key';
-import { readStudioFilm } from '@/lib/studio-film';
+import { keptNote, readStudioFilm } from '@/lib/studio-film';
 import { studioRefsFromTransfer, transferHasStudioRefs } from '@/lib/studio-transfer';
 import { agentModelSummary, agentOptions, currentAgent, effectivePrefs, offeredOption, useLocalAgents } from '@/state/local-agent-store';
 import { useLiveActivityFromStore } from '@/lib/live-activity';
@@ -364,7 +363,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   const [contextNoticeOff, setContextNoticeOff] = React.useState<string | null>(null);
   const contextFull = Boolean(agentContext && agentContext.size > 0 && agentContext.used / agentContext.size >= CONTEXT_NOTICE_SHARE) && contextNoticeOff !== sessionId;
 
-  /* the skills this message can name (the Skills button, and `/`) */
+  /* the skills this message can name (the Skills button, and `@`) */
   const [skillListing, setSkillListing] = React.useState<SkillListing | null>(null);
   const reloadSkills = React.useCallback(async () => {
     const next = await app.skills?.list(project.path, agent).catch(() => null);
@@ -414,42 +413,6 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     window.addEventListener(MAKE_SKILL, make);
     return () => { window.removeEventListener(SKILLS_CHANGED, changed); window.removeEventListener(MAKE_SKILL, make); };
   }, [reloadSkills, skillListing, t]);
-  /* the agent's own skills hidden in OpenFilm: not offered among its commands either */
-  const hiddenSkills = React.useMemo(() => new Set((skillListing?.own.filtered ? skillListing.own.skills.filter((s) => !s.allowed) : []).map((s) => s.name)), [skillListing]);
-
-  /* the agent's own commands, a `/` at the start of the message, as in its own chat: they go as typed; above them, the
-     skills, each a pill */
-  const agentCommands = useAgentCommands(agent);
-  const commandMenu = React.useMemo(() => (agentCommands.length || nameableSkills.length ? {
-    label: t('composer.commands'),
-    providers: [...(nameableSkills.length ? [{
-      id: 'skills',
-      groupLabel: t('skills.button'),
-      items: nameableSkills.map((skill) => ({
-        id: skillReferenceId(skill.name),
-        kind: 'skill' as const,
-        icon: Blocks,
-        label: skillWords(skill.name).title,
-        ...(skillWords(skill.name, skill.description).summary ? { detail: skillWords(skill.name, skill.description).summary, describes: true } : {}),
-        keywords: [skill.name, skillWords(skill.name).title],
-        select: () => skillPill(skill),
-      })),
-    }] : []), ...(agentCommands.length ? [{
-      id: 'commands',
-      groupLabel: t('composer.commands'),
-      items: agentCommands.filter((c) => !hiddenSkills.has(c.name)).map((c) => ({
-        id: `command:${c.name}`,
-        kind: 'file' as const,
-        icon: SquareSlash,
-        label: `/${c.name}`,
-        /* what it does, cut to the row */
-        ...(c.description ? { detail: c.description, describes: true } : {}),
-        /* found by its name, as in the agent's own chat (its description would put a word in it first) */
-        keywords: [c.name],
-        select: () => ({ text: `/${c.name}` }),
-      })),
-    }] : [])],
-  } : undefined), [agentCommands, nameableSkills, hiddenSkills, skillPill, skillWords, t]);
   const mentionProviders = React.useMemo<MentionProvider[]>(() => {
     const picked = selection?.refs ?? [];
     const range = selection ? selectionRange(selection) : null;
@@ -496,8 +459,27 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
           };
         }),
       },
+      /* the skills, each the pill the Skills button makes: after the files, which people reach for most and which stop
+         at 20. Every one, uncut: an agent's own can be a hundred or more, and a person may not remember the name to type */
+      {
+        id: 'skills',
+        groupLabel: t('skills.button'),
+        limit: Infinity,
+        items: nameableSkills.map((skill) => {
+          const words = skillWords(skill.name, skill.description);
+          return {
+            id: skillReferenceId(skill.name),
+            kind: 'skill' as const,
+            label: words.title,
+            /* what it does, cut to the row */
+            ...(words.summary ? { detail: words.summary, describes: true } : {}),
+            keywords: [skill.name],
+            select: () => skillPill(skill),
+          };
+        }),
+      },
     ];
-  }, [selection, mentionFiles, t, takeStudioRefs]);
+  }, [selection, mentionFiles, nameableSkills, skillWords, skillPill, t, takeStudioRefs]);
   const onComposerChange = React.useCallback((state: PromptEditorState) => {
     setFollowUp(state.text);
     setFollowUpRefs(state.references);
@@ -695,7 +677,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
    * Send a turn to the agent: what it is sent (`prepared`: the text, and the pictures) may take a moment to make. It
    * settles the turn the agent's run ends on: this one, or the last message sent into it while it ran (steerTurn).
    */
-  function runTurn(opened: ReturnType<typeof openTurn>, prepared: Promise<{ text: string; images: PromptImage[]; skills?: string[] }>): void {
+  function runTurn(opened: ReturnType<typeof openTurn>, prepared: Promise<{ text: string; images: PromptImage[]; skills?: string[]; said?: () => void }>): void {
     const { turn, meta, prefs, ready } = opened;
     const id = meta.turnId;
     const finish = (lastTurnId: string | undefined, patch: Partial<Turn & TurnBalance>) => {
@@ -704,7 +686,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     };
     /* the agent's own session of this conversation, gone on with (after a restart too); a new one is kept for next time */
     const resume = sessions.find((s) => s.id === sessionId)?.agentSessions?.[agent] ?? null;
-    const run = Promise.all([prepared, ready]).then(([{ text, images, skills }]) => runLocalAgentTurn({
+    const run = Promise.all([prepared, ready]).then(([{ text, images, skills, said }]) => runLocalAgentTurn({
       projectId: projectKey,
       conversation: sessionId,
       resume,
@@ -716,6 +698,8 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
       options: prefs,
       meta,
       onOptions: (options) => useLocalAgents.getState().noteOptions(agent, options),
+      /* Studio's note in the message reached the agent: Studio counts it told (lib/studio-film keptNote) */
+      onStarted: said,
       onSessionInfo: (info) => {
         /* a session it could not take up again has none of the skills' pages from before: those of this message only */
         const fresh = !info.resumed || info.sessionId !== resume;
@@ -746,16 +730,17 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
    * (an agent that takes steering). It shows as a turn of its own, what the agent says from then on under it, and the
    * running one is done. One that did not join (the turn ended meanwhile) is sent once that run ends.
    */
-  function steerTurn(fromId: string, opened: ReturnType<typeof openTurn>, prepared: Promise<{ text: string; images: PromptImage[]; skills?: string[] }>): void {
+  function steerTurn(fromId: string, opened: ReturnType<typeof openTurn>, prepared: Promise<{ text: string; images: PromptImage[]; skills?: string[]; said?: () => void }>): void {
     /* the agent's run going now (one at a time in a conversation): a message that did not join waits for it */
     const run = [...runs.current.values()].at(-1) ?? Promise.resolve();
-    void Promise.all([prepared, opened.ready]).then(async ([{ text, images, skills }]) => {
+    void Promise.all([prepared, opened.ready]).then(async ([{ text, images, skills, said }]) => {
       if (await steerLocalAgentTurn(fromId, opened.turn, text, images)) {
+        said?.();
         settlers.current.get(fromId)?.({ status: 'ready' });
         return;
       }
       await run.catch(() => {});
-      runTurn(opened, Promise.resolve({ text, images, ...(skills ? { skills } : {}) }));
+      runTurn(opened, Promise.resolve({ text, images, ...(skills ? { skills } : {}), ...(said ? { said } : {}) }));
     });
   }
 
@@ -809,11 +794,13 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
       ? { ...ref, folder: await app.exampleFolder?.(ref.id).catch(() => undefined) } : ref)));
     /* the pictures sent: the references' first, then the files brought in, in the order of their pills, while there is
        room (the rest by their path) */
-    const prepared = withFolders.then((ready) => Promise.all([referencePictures(ready, { project: project.path, turnId: id }), skillTexts])
-      .then(async ([{ pictures, images }, skills]) => ({
-        text: instruction + studioReferencesText(ready, { stage, pictures }) + skills.map((s) => `\n\n${s.text}`).join(''),
+    /* what the person changed while the agent last worked that Studio kept over its writes, said with this message */
+    const prepared = withFolders.then((ready) => Promise.all([referencePictures(ready, { project: project.path, turnId: id }), skillTexts, keptNote(project.id, sessionId)])
+      .then(async ([{ pictures, images }, skills, kept]) => ({
+        text: instruction + studioReferencesText(ready, { stage, pictures }) + kept.text + skills.map((s) => `\n\n${s.text}`).join(''),
         images: [...images, ...await attachedPictures(files, PROMPT_PICTURES_MAX - images.length)],
         skills: skills.map((s) => s.name),
+        said: kept.said,
       })));
     const opened = openTurn(id, instruction, promptDisplay ?? null, turnAttachments(files));
     if (steer && asset) steerTurn(asset.id, opened, prepared);
@@ -931,7 +918,6 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
               pillOpens={opensPill}
               showsDropCaret={showsDropCaret}
               mentions={{ providers: mentionProviders, label: t('mention.menu'), onOpen: loadMentionFiles }}
-              commands={commandMenu}
             />
           </div>
           {/* while it works: Stop, or Send once something is written (it goes into the turn, or after it); Esc stops */}

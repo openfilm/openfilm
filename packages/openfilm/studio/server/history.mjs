@@ -50,7 +50,7 @@ const historyDir = (/** @type {string} */ root) => join(root, TOOL_DIR, 'history
  * taken from the history's settings (its `core.worktree` is where the folder was when the history was made, and a
  * project moved or renamed since would have every call fail). Its hooks are never run (history-store.mjs gitRun).
  */
-async function git(/** @type {string} */ root, /** @type {string[]} */ args, /** @type {{ input?: string }} */ o = {}) {
+async function git(/** @type {string} */ root, /** @type {string[]} */ args, /** @type {{ input?: string | Buffer }} */ o = {}) {
   const gitDir = historyDir(root);
   if (!ownHistory(gitDir)) throw new HistoryError('this project\'s version history was not made by Studio, so Studio does not use it', 409);
   /* a history being made has no settings of its own to put right yet */
@@ -600,6 +600,35 @@ export function checkoutVersion(root, commit, { discard = false, onProgress } = 
     else await git(root, ['update-ref', '--no-deref', 'HEAD', full]);
     return { commit: full, missing };
   });
+}
+
+/** Where the texts of merges are kept aside, one ref each: no list of versions reads them (ALL_VERSIONS). */
+export const MERGES_REFS = 'refs/openfilm/merges/';
+/** How many are kept per project: the oldest go (and their texts, once git tidies the history). */
+export const MERGES_KEPT = 50;
+
+/**
+ * Keep `files` (a name and its text or bytes each) aside in the history, out of every list of versions: a commit of its own
+ * with `message`, under MERGES_REFS by the time it was made, the last MERGES_KEPT kept. What a merge of the person's
+ * edits over an agent's write read and wrote (person-edits.mjs), so a merge can always be undone by hand:
+ * `git --git-dir .film/history for-each-ref refs/openfilm/merges`, then `git show <ref>:agent.html`. It waits for no
+ * history action (git writes objects and refs of its own safely beside one); a history not made yet is made first,
+ * in turn, as opening the project's versions would.
+ * @param {string} root @param {Record<string, string | Buffer>} files @param {string} message
+ */
+export async function keepAside(root, files, message) {
+  if (!existsSync(join(historyDir(root), 'HEAD'))) await queued(root, () => ready(root));
+  const entries = [];
+  for (const [name, text] of Object.entries(files)) {
+    const blob = (await git(root, ['hash-object', '-w', '--stdin'], { input: text })).trim();
+    entries.push(`100644 blob ${blob}\t${name}\n`);
+  }
+  const tree = (await git(root, ['mktree'], { input: entries.join('') })).trim();
+  const commit = (await git(root, ['commit-tree', tree, '-m', message.slice(0, 2000)])).trim();
+  await git(root, ['update-ref', `${MERGES_REFS}${String(Date.now()).padStart(15, '0')}-${commit.slice(0, 8)}`, commit, '']);
+  const refs = (await git(root, ['for-each-ref', '--sort=refname', '--format=%(refname)', MERGES_REFS])).split('\n').filter(Boolean);
+  for (const ref of refs.slice(0, Math.max(0, refs.length - MERGES_KEPT))) await git(root, ['update-ref', '-d', ref]);
+  return commit;
 }
 
 /**

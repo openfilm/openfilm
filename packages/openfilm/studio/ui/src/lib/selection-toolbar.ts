@@ -41,38 +41,30 @@ function intersects(a: ScreenBox, b: ScreenBox): boolean {
 }
 
 /**
- * The free place for the bar nearest to where it would go (`left`, `top`): first on that line, sliding sideways past
- * what is in the way, then on lines further up or down. Null when nothing in the area is free.
+ * The free place on the line at `top` nearest to `want` for the bar's left edge, between `minLeft` and `maxLeft`:
+ * sliding sideways past what is in the way. Null when nothing there is free.
  */
-function freePlace(
-  want: { left: number; top: number },
+function freeLeft(
+  want: number,
+  top: number,
   size: { width: number; height: number },
-  area: { minLeft: number; maxLeft: number; minTop: number; maxTop: number },
+  minLeft: number,
+  maxLeft: number,
   avoid: readonly ScreenBox[],
-  step = 4,
-): { left: number; top: number } | null {
-  const tops: number[] = [];
-  for (let d = 0; want.top - d >= area.minTop || want.top + d <= area.maxTop; d += step) {
-    if (want.top - d >= area.minTop) tops.push(want.top - d);
-    if (d && want.top + d <= area.maxTop) tops.push(want.top + d);
-  }
-  for (const top of tops) {
-    /* what is in the way on this line, as stretches of x the bar's left edge cannot take */
-    const blocked = avoid
-      .filter((b) => b.top < top + size.height && top < b.top + b.height)
-      .map((b) => [b.left - size.width, b.left + b.width] as const)
-      .sort((a, b) => a[0] - b[0]);
-    let best: number | null = null;
-    const consider = (x: number) => {
-      if (x < area.minLeft - 0.5 || x > area.maxLeft + 0.5) return;
-      if (blocked.some(([from, to]) => x > from && x < to)) return;
-      if (best == null || Math.abs(x - want.left) < Math.abs(best - want.left)) best = x;
-    };
-    consider(Math.min(Math.max(want.left, area.minLeft), area.maxLeft));
-    for (const [from, to] of blocked) { consider(from); consider(to); }
-    if (best != null) return { left: Math.round(best), top: Math.round(top) };
-  }
-  return null;
+): number | null {
+  /* what is in the way on this line, as stretches of x the bar's left edge cannot take */
+  const blocked = avoid
+    .filter((b) => b.top < top + size.height && top < b.top + b.height)
+    .map((b) => [b.left - size.width, b.left + b.width] as const);
+  let best: number | null = null;
+  const consider = (x: number) => {
+    if (x < minLeft - 0.5 || x > maxLeft + 0.5) return;
+    if (blocked.some(([from, to]) => x > from && x < to)) return;
+    if (best == null || Math.abs(x - want) < Math.abs(best - want)) best = x;
+  };
+  consider(Math.min(Math.max(want, minLeft), maxLeft));
+  for (const [from, to] of blocked) { consider(from); consider(to); }
+  return best;
 }
 
 export function placeToolbar(opts: {
@@ -85,15 +77,18 @@ export function placeToolbar(opts: {
   gap?: number;
   edge?: number;
   /**
-   * What it must not cover (the clips around the selection, the ruler): it goes to the nearest place clear of them,
-   * above or below the selection first; where nothing is clear, as without.
+   * What it had better not cover (the clips around the selection): it slides along the selection, above it then below
+   * it, to the nearest place clear of them; where nothing beside it is clear, above it all the same.
    */
   avoid?: readonly ScreenBox[];
+  /** What it never covers, even then (the ruler, the timeline's own buttons): below the selection instead. */
+  keepOff?: readonly ScreenBox[];
 }): ToolbarPlacement | null {
   const { anchor, size, bounds, gap = TOOLBAR_GAP, edge = TOOLBAR_EDGE } = opts;
   const seen = overlapBox(anchor, bounds);
   if (!seen) return null;
-  if (opts.avoid?.length && size.width > 0) {
+  const keepOff = opts.keepOff ?? [];
+  if ((opts.avoid?.length || keepOff.length) && size.width > 0) {
     const area = {
       minLeft: bounds.left + edge,
       maxLeft: bounds.left + bounds.width - edge - size.width,
@@ -104,15 +99,35 @@ export function placeToolbar(opts: {
     const above = seen.top - gap - size.height;
     const below = seen.top + seen.height + gap;
     /* never over the selection itself either */
-    const avoid = [...opts.avoid, anchor];
-    if (area.maxLeft >= area.minLeft && area.maxTop >= area.minTop) {
-      for (const [top, side] of [[above, 'above'], [below, 'below']] as const) {
+    const avoid = [...(opts.avoid ?? []), ...keepOff, anchor];
+    /* it stays with the selection: its middle over the part that can be seen. Free to slide anywhere along the line,
+       it went past the end of every clip when the clips on the track above ran on (2026-10-29) */
+    const clampLeft = (x: number) => Math.min(Math.max(x, area.minLeft), area.maxLeft);
+    const minLeft = clampLeft(seen.left - size.width / 2);
+    const maxLeft = clampLeft(seen.left + seen.width - size.width / 2);
+    const sides = [[above, 'above'], [below, 'below']] as const;
+    if (area.maxLeft >= area.minLeft) {
+      for (const [top, side] of sides) {
         if (top < area.minTop || top > area.maxTop) continue;
-        const box = { left: Math.min(Math.max(centred, area.minLeft), area.maxLeft), top, width: size.width, height: size.height };
-        if (!avoid.some((b) => intersects(box, b))) return { left: Math.round(box.left), top: Math.round(top), side };
+        const left = freeLeft(centred, top, size, minLeft, maxLeft, avoid);
+        if (left != null) return { left: Math.round(left), top: Math.round(top), side };
       }
-      const free = freePlace({ left: centred, top: above >= area.minTop ? above : below }, size, area, avoid);
-      if (free) return { ...free, side: free.top + size.height <= seen.top ? 'above' : 'below' };
+      /* nothing free right beside it: above it all the same (over the track above), else below, off what it never
+         covers */
+      const left = clampLeft(centred);
+      for (const [top, side] of sides) {
+        if (top < area.minTop || top > area.maxTop) continue;
+        const box = { left, top, width: size.width, height: size.height };
+        if (!keepOff.some((b) => intersects(box, b))) return { left: Math.round(left), top: Math.round(top), side };
+      }
+      /* neither (a pane so short it shows the ruler and one track): down from above it past what it never covers, over
+         the clip itself if it must */
+      if (keepOff.length) {
+        const hitAt = (top: number) => keepOff.find((b) => intersects({ left, top, width: size.width, height: size.height }, b));
+        let top = Math.min(Math.max(above, area.minTop), area.maxTop);
+        for (let hit = hitAt(top); hit && top <= area.maxTop; hit = hitAt(top)) top = hit.top + hit.height + edge;
+        if (top <= area.maxTop) return { left: Math.round(left), top: Math.round(top), side: top + size.height <= seen.top ? 'above' : 'below' };
+      }
     }
   }
   /* across: centered on what can be seen of it, inside the area (an area narrower than the bar: its left edge) */

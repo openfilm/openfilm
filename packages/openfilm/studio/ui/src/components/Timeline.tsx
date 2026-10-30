@@ -55,6 +55,7 @@ import {
   Pencil,
   TriangleAlert,
   Blend,
+  Gauge,
 } from 'lucide-react';
 import { useT } from '@/i18n';
 import { keyAction, useKeyHint } from '@/lib/keymap-store';
@@ -156,7 +157,7 @@ import { BlockWaveform } from './BlockWaveform';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import type { PlaybackClock } from './LiveTime';
 import { CaptionsIcon } from './player-controls/controls-bar';
-import { isTypingTarget } from './typing-target';
+import { inHostPanel, isTypingTarget } from './typing-target';
 import { Popover } from './Popover';
 import { MarkerGlyph } from './TimelineMarkers';
 import { SUBTITLE_ROW_H, SubtitleRow, SubtitleRowHead, useSubtitleRowShown, type SubtitleRowHandle, type SubtitleRowSpec } from './SubtitleRow';
@@ -167,6 +168,8 @@ import { Tooltip } from './Tooltip';
 import { unionBox, type ScreenBox } from '@/lib/selection-toolbar';
 import { useBlockDrag, type GestureTip } from './useBlockDrag';
 import { fadeEdits, fadeFromPointer, fadeHandleX, type FadeEdge, type FadeMs } from '@/lib/clip-fade';
+import { canChangeSpeed, roundSpeed } from '@/lib/clip-speed';
+import { speedText } from '@/lib/playback-speed';
 import { cutNear, transitionSpan, type CutRef, type FilmTransition, type TransitionAsk, type TransitionKind } from '@/lib/transitions';
 
 /** Track head column: kind badge + lock + hide + original sound. */
@@ -800,6 +803,7 @@ function TrimHandle({
   edge,
   picked,
   hit = SELECT_HIT,
+  speed = false,
   onDown,
 }: {
   edge: 'start' | 'end';
@@ -807,12 +811,15 @@ function TrimHandle({
   picked: boolean;
   /** Grab width; narrower on narrow clips so the handles do not cover the whole clip. */
   hit?: number;
+  /** It changes the clip's speed instead (the clip toolbar's Speed): its bar always shows, in the accent. */
+  speed?: boolean;
   onDown: (e: React.PointerEvent) => void;
 }) {
   return (
     <span
       role="presentation"
       data-trim={edge}
+      data-speed-handle={speed ? edge : undefined}
       className="group/trim absolute inset-y-0 z-[2] cursor-ew-resize"
       /* picked, the grab straddles the edge (the selection frame outside, the clip's own edge inside): a person reaches
          for the clip's edge, and grabbing just inside it moved the whole clip instead (UI test, 2026-10-03). Not where
@@ -828,7 +835,7 @@ function TrimHandle({
       {/* a bar shows on hover: an invisible handle gives no hint it can be pulled */}
       <span
         aria-hidden
-        className="pointer-events-none absolute inset-y-[3px] w-[3px] rounded-full bg-[var(--tl-select)] opacity-0 transition-opacity group-hover/trim:opacity-90"
+        className={`pointer-events-none absolute inset-y-[3px] w-[3px] rounded-full transition-opacity ${speed ? 'bg-[var(--tl-accent)] opacity-100' : 'bg-[var(--tl-select)] opacity-0 group-hover/trim:opacity-90'}`}
         style={edge === 'start' ? { right: picked ? hit : undefined, left: picked ? undefined : 1 } : { left: picked ? hit : undefined, right: picked ? undefined : 1 }}
       />
     </span>
@@ -2752,6 +2759,38 @@ export const Timeline = React.memo(function Timeline({
     if (e.button !== 0 || selectedRef.current.includes(block.id)) return;
     setSelected(withLinked([block.id], e.altKey));
   }, [setSelected, withLinked]);
+  /* ── speed: the clip toolbar's Speed turns the selected clips' edges into speed handles (lib/clip-speed), until Esc,
+     a click anywhere else, the button again or another selection ── */
+  const selectedKey = selected.join('|');
+  /** The selection the speed handles are on. */
+  const [speedFor, setSpeedFor] = React.useState<string | null>(null);
+  const speedOn = speedFor != null && speedFor === selectedKey;
+  React.useEffect(() => { if (speedFor != null && speedFor !== selectedKey) setSpeedFor(null); }, [speedFor, selectedKey]);
+  const cancelDrag = drag.cancel;
+  React.useEffect(() => {
+    if (!speedOn) return undefined;
+    /* before the timeline's own Esc (which clears the selection) and the toolbar's: this one ends the speed alone, and
+       a handle pressed but not yet dragged with it. Not while a menu, a popover or a dialog is open: that Esc is theirs */
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || inHandRef.current || isTypingTarget(e.target) || inHostPanel(e.target)) return;
+      if (document.querySelector('[data-popover-panel], [role="menu"], [role="listbox"], [role="dialog"]')) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      cancelDrag();
+      setSpeedFor(null);
+    };
+    const onDown = (e: PointerEvent) => {
+      if ((e.target as Element | null)?.closest?.('[data-speed-handle], [data-tool="speed"]')) return;
+      setSpeedFor(null);
+    };
+    window.addEventListener('keydown', onKey, true);
+    window.addEventListener('pointerdown', onDown, true);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('pointerdown', onDown, true);
+    };
+  }, [speedOn, cancelDrag]);
+
   /* ── fades: each clip's ramp, and the handles at its top corners that set it (lib/clip-fade) ── */
   const fadesRef = React.useRef(fades);
   fadesRef.current = fades;
@@ -2903,7 +2942,9 @@ export const Timeline = React.memo(function Timeline({
             /* its fades: as written, or as the handle in hand has them */
             const fade = fadeOfBlock(block);
             const fadeTip = fadeDrag?.block === block.id ? fadeDrag.edge : '';
-            const pose = `${startMs}:${endMs}:${!!live}:${gone}:${lifting}:${floating ? drag.preview?.offsetY : ''}:${picked}:${Math.round(winFrom)}-${Math.round(winTo)}:${trouble ?? ''}:${chatLit}:${chatNumbers.join(',')}:${fade[0]}-${fade[1]}:${fadeTip}`;
+            /* the Speed button on: its edges change its speed instead of trimming it */
+            const speeding = speedOn && picked && !track.locked && canChangeSpeed(block);
+            const pose = `${startMs}:${endMs}:${!!live}:${gone}:${lifting}:${floating ? drag.preview?.offsetY : ''}:${picked}:${Math.round(winFrom)}-${Math.round(winTo)}:${trouble ?? ''}:${chatLit}:${chatNumbers.join(',')}:${fade[0]}-${fade[1]}:${fadeTip}:${speeding}`;
             const cached = clipElements.get(block.id);
             if (cached?.pose === pose) return cached.node;
             /* on whole pixels: a fractional left and width blur the edges, and a cut between two clips is the key
@@ -2917,8 +2958,12 @@ export const Timeline = React.memo(function Timeline({
             const poster = block.src ? posters?.[block.src] : undefined;
             const trimFromMs = block.inMs ?? Math.round((block.anchor?.trimFrom ?? 0) * 1000);
             /* thumbnails are keyed by the source's ms: a sped-up clip covers `speed` times as much source as film */
-            const thumbSpeed = block.speed && block.speed > 0 ? block.speed : 1;
-            const intoOrigin = thumbIntoOrigin({
+            const ownSpeed = block.speed && block.speed > 0 ? block.speed : 1;
+            /* a speed in hand keeps the clip's source and changes its length: the same source, squeezed or spread */
+            const speedLive = live && (drag.preview?.mode === 'speed-start' || drag.preview?.mode === 'speed-end')
+              && Math.abs(endMs - startMs - (block.endMs - block.startMs)) >= 0.5;
+            const thumbSpeed = speedLive ? ((block.endMs - block.startMs) * ownSpeed) / Math.max(1, endMs - startMs) : ownSpeed;
+            const intoOrigin = speedLive ? trimFromMs : thumbIntoOrigin({
               committedStart: block.startMs,
               committedEnd: block.endMs,
               visualStart: startMs,
@@ -2926,6 +2971,9 @@ export const Timeline = React.memo(function Timeline({
               trimFromMs,
               speed: thumbSpeed,
             });
+            /* the source under the clip as drawn, for its waveform: a left trim moves the in point, a speed does not */
+            const waveInMs = (block.inMs ?? 0) + (!speedLive && endMs === block.endMs ? (startMs - block.startMs) * ownSpeed : 0);
+            const waveDurMs = (endMs - startMs) * thumbSpeed;
             /* a video has three bands (info / preview / its sound); a page or a still two (info / preview), a sound two
                (info / waveform) */
             const visual = block.kind === 'mg' || block.kind === 'video';
@@ -3041,7 +3089,13 @@ export const Timeline = React.memo(function Timeline({
                     </span>
                     {width > 64 ? (
                       <span className="shrink-0 text-[10px] leading-none tabular-nums text-white/70">
-                        {block.noLength ? t('timeline.noLength') : `${((endMs - startMs) / 1000).toFixed(1)}s`}
+                        {block.noLength ? t('timeline.noLength') : `${((endMs - startMs) / 1000).toFixed(endMs - startMs < 1000 ? 2 : 1)}s`}
+                      </span>
+                    ) : null}
+                    {/* the speed handles on: the speed they set, as it is now */}
+                    {speeding && width > 96 ? (
+                      <span data-clip-speed="" className="shrink-0 text-[10px] font-medium leading-none tabular-nums text-white/95">
+                        {speedText(roundSpeed(thumbSpeed))}
                       </span>
                     ) : null}
                   </span>
@@ -3099,9 +3153,8 @@ export const Timeline = React.memo(function Timeline({
                         color="var(--tl-wave-band)"
                         visiblePx={{ from: winFrom, to: winTo }}
                         /* the source span under this block: film length × the clip's speed */
-                        inMs={(block.inMs ?? 0)
-                          + (endMs === block.endMs ? (startMs - block.startMs) * (block.speed ?? 1) : 0)}
-                        durMs={(endMs - startMs) * (block.speed ?? 1)}
+                        inMs={waveInMs}
+                        durMs={waveDurMs}
                       />
                     ) : null}
                   </span>
@@ -3129,9 +3182,8 @@ export const Timeline = React.memo(function Timeline({
                     height={Math.max(6, h - INFO_H - 2)}
                     color="var(--tl-wave)"
                     visiblePx={{ from: winFrom, to: winTo }}
-                    inMs={(block.inMs ?? 0)
-                      + (endMs === block.endMs ? (startMs - block.startMs) * (block.speed ?? 1) : 0)}
-                    durMs={(endMs - startMs) * (block.speed ?? 1)}
+                    inMs={waveInMs}
+                    durMs={waveDurMs}
                   />
                 ) : null}
                 {/* its fades: the part faded shaded, a line where it ramps (picture and sound alike) */}
@@ -3161,19 +3213,21 @@ export const Timeline = React.memo(function Timeline({
                         edge="start"
                         picked={picked && !touching.has(`${block.id}:start`)}
                         hit={trimHit(width)}
-                        onDown={(e) => { e.stopPropagation(); pickForTrim(e, block); drag.start(e, block, 'trim-start'); }}
+                        speed={speeding}
+                        onDown={(e) => { e.stopPropagation(); pickForTrim(e, block); drag.start(e, block, speeding ? 'speed-start' : 'trim-start'); }}
                       />
                     ) : null}
                     <TrimHandle
                       edge="end"
                       picked={picked && !touching.has(`${block.id}:end`)}
                       hit={trimHit(width)}
-                      onDown={(e) => { e.stopPropagation(); pickForTrim(e, block); drag.start(e, block, 'trim-end'); }}
+                      speed={speeding}
+                      onDown={(e) => { e.stopPropagation(); pickForTrim(e, block); drag.start(e, block, speeding ? 'speed-end' : 'trim-end'); }}
                     />
                   </>
                 ) : null}
                 {/* fade handles at the top corners: dragged inward, the clip fades in or out (lib/clip-fade) */}
-                {onEditOps && block.clipId && !track.locked && width > 18 && !floating && mode === 'select' ? (['in', 'out'] as const).map((edge) => {
+                {onEditOps && block.clipId && !track.locked && width > 18 && !floating && mode === 'select' && !speeding ? (['in', 'out'] as const).map((edge) => {
                   const ms = edge === 'in' ? fade[0] : fade[1];
                   const x = Math.max(5, Math.min(width - 5, fadeHandleX(edge, ms, width, pxPerMs)));
                   const what = t(edge === 'in' ? 'inspector.fadeIn' : 'inspector.fadeOut');
@@ -3193,6 +3247,16 @@ export const Timeline = React.memo(function Timeline({
                     </span>
                   );
                 }) : null}
+                {/* the speed handles on: a knob at each top corner, where the fade handles were; dragged as its edge is */}
+                {speeding && able.resize && width > 18 && !floating ? (['start', 'end'] as const).filter((edge) => edge === 'end' || able.move).map((edge) => (
+                  <span key={`speed-${edge}`} role="presentation" data-speed-handle={edge} title={t('selectionBar.speedHandle')}
+                    className="absolute top-[1px] z-[5] flex h-[13px] w-[13px] -translate-x-1/2 cursor-ew-resize items-center justify-center rounded-full text-white shadow-[0_0_2px_rgba(0,0,0,.5)]"
+                    style={{ left: edge === 'start' ? 7 : width - 7, background: 'var(--tl-accent)' }}
+                    onPointerDown={(e) => { e.stopPropagation(); pickForTrim(e, block); drag.start(e, block, edge === 'start' ? 'speed-start' : 'speed-end'); }}
+                  >
+                    <Gauge size={9} strokeWidth={2.5} aria-hidden />
+                  </span>
+                )) : null}
               </div>
             );
             clipElements.set(block.id, { pose, node });
@@ -3271,7 +3335,7 @@ export const Timeline = React.memo(function Timeline({
     openBlockMenu, openLaneMenu, onEditBlocks, collapseIfClick, selectOne, setSelected, clipElements, thumbWindow, view.width,
     chatClip, chatDraft, placedOf, pickForTrim, gap, withLinked, runSplit, trackOverlay,
     fadeOfBlock, fadeDrag, startFade, transitions, transitionDrag, pickedTransition, onPickTransition, onTransition, startTransitionResize,
-    nearFirst, nearLast,
+    nearFirst, nearLast, speedOn,
   ]);
 
   const tickMarks = React.useMemo(() => ticks.map(({ ms, label }) => {
@@ -3741,6 +3805,15 @@ export const Timeline = React.memo(function Timeline({
         onSelect: () => { void onDuplicate(picked.filter((b) => b.clipId)); },
       });
     }
+    /* its speed by its edges (lib/clip-speed): the button turns the edge handles into speed handles, and back */
+    if (onEditOps && picked.some((b) => b.clipId)) {
+      const speedable = picked.some((b) => b.clipId && canChangeSpeed(b));
+      out.push({
+        id: 'speed', label: t('selectionBar.speed'), icon: <Gauge size={14} />, active: speedOn,
+        disabled: pickedLocked || !speedable, hint: pickedLocked ? lockedHint : t('selectionBar.speedNone'),
+        onSelect: () => setSpeedFor(speedOn ? null : selectedKey),
+      });
+    }
     /* a clip's own sound: film.html's `volume` 0 is silent; unmuted it plays as is (the inspector sets a level) */
     const sounding = picked.filter((b) => b.loc && parseFilmDocLoc(b.loc) != null
       && (b.kind === 'voice' || b.kind === 'sfx' || b.kind === 'music' || Boolean(b.ownAudio)));
@@ -3795,19 +3868,15 @@ export const Timeline = React.memo(function Timeline({
     const rl = ruler.getBoundingClientRect();
     const bounds = { left: sr.left, top: rr.top, width: sr.width, height: sr.bottom - rr.top };
     if (barKind === 'clips') {
-      /* never over another clip (it covered the clips on the track above), nor over the ruler (a bar there took the
-         clicks meant to move the playhead) or the timeline's own buttons: the nearest place clear of them, among the
-         tracks or, when they are full, in the middle of the timeline's toolbar row */
+      /* with the clips, clear of the other clips where it can be (it covered the clips on the track above), never over
+         the ruler (a bar there took the clicks meant to move the playhead) or the timeline's own buttons */
       const ids = new Set(selected);
       const rect = (el: Element): ScreenBox => { const r = el.getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height }; };
       const clips = [...(contentRef.current?.querySelectorAll<HTMLElement>('[data-block-id]') ?? [])];
       const anchor = unionBox(clips.filter((el) => ids.has(el.dataset.blockId ?? '')).map(rect));
-      const avoid = [
-        ...clips.filter((el) => !ids.has(el.dataset.blockId ?? '')).map(rect),
-        rect(ruler),
-        ...[...(toolbarRef.current?.querySelectorAll('button, input') ?? [])].map(rect),
-      ];
-      return anchor ? { anchor, bounds, avoid } : null;
+      const avoid = clips.filter((el) => !ids.has(el.dataset.blockId ?? '')).map(rect);
+      const keepOff = [rect(ruler), ...[...(toolbarRef.current?.querySelectorAll('button, input') ?? [])].map(rect)];
+      return anchor ? { anchor, bounds, avoid, keepOff } : null;
     }
     const x = (ms: number) => sr.left + ms * pxPerMs - scroller.scrollLeft;
     const anchor = barKind === 'range' && range
@@ -3824,6 +3893,8 @@ export const Timeline = React.memo(function Timeline({
     <div
       ref={rootRef}
       data-timeline=""
+      /* the Speed button on: the picture's Esc leaves it to the timeline (FilmStageSelect) */
+      data-speed-mode={speedOn ? '' : undefined}
       className="relative isolate overflow-hidden flex min-h-0 min-w-0 flex-1 flex-col"
       /* any press here takes focus out of a text field: most presses preventDefault (which also stops the browser's
          own blur), and a focused field would keep eating Space */
@@ -4398,17 +4469,21 @@ function signedSeconds(ms: number): string {
   return `${ms < 0 ? '\u2212' : '+'}${s} s`;
 }
 
-/** The label beside the edge in hand while trimming, rolling, slipping or sliding: what, how far, how long now. */
+/**
+ * The label beside the edge in hand while trimming, rolling, slipping or sliding: what, how far, how long now; for a
+ * speed, the speed and how long now.
+ */
 function GestureLabel({ tip, left, top }: { tip: GestureTip; left: number; top: number }) {
   const t = useT();
   const what = t(`timeline.tip.${tip.kind}`);
   return (
     <div
       data-gesture-tip={tip.kind}
-      className="pointer-events-none absolute z-[70] -translate-x-1/2 whitespace-nowrap rounded-[4px] px-1.5 py-[2px] text-[10.5px] font-medium leading-[15px] text-white tabular-nums shadow-[0_1px_4px_rgba(0,0,0,.35)]"
-      style={{ left, top: Math.max(0, top - 21), background: 'var(--tl-accent)' }}
+      className="pointer-events-none absolute z-[70] whitespace-nowrap rounded-[4px] px-1.5 py-[2px] text-[10.5px] font-medium leading-[15px] text-white tabular-nums shadow-[0_1px_4px_rgba(0,0,0,.35)]"
+      /* centred on the edge, but never cut off at the film's start (a clip at 0 s made 100× has its edge there) */
+      style={{ left, top: Math.max(0, top - 21), transform: `translateX(max(-50%, ${-left}px))`, background: 'var(--tl-accent)' }}
     >
-      {what} {signedSeconds(tip.deltaMs)}
+      {what} {tip.speed != null ? speedText(roundSpeed(tip.speed)) : signedSeconds(tip.deltaMs)}
       {tip.lengthMs != null ? <span className="opacity-75"> · {(tip.lengthMs / 1000).toFixed(2)} s</span> : null}
       {/* the source ends here: why the edge stops */}
       {tip.sourceEnd ? <span> · {t('timeline.tip.sourceEnd')}</span> : null}

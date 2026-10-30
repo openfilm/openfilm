@@ -77,10 +77,10 @@ export function useSubtitleEdits(projectId: string, {
         const next = make(cues, clipSpanOf(clip));
         if (typeof next === 'string') return next;
         const { before, after } = await saveSourceSubtitles(projectId, src, next);
-        const put = (from: typeof before, to: typeof before) => async () => {
-          try { await restoreSubtitleFiles(projectId, src, from, to); await refresh(); return null; } catch (e) { return e instanceof Error ? e.message : String(e); }
+        const put = (from: typeof before, to: typeof before, undo: boolean) => async () => {
+          try { await restoreSubtitleFiles(projectId, src, from, to, undo); await refresh(); return null; } catch (e) { return e instanceof Error ? e.message : String(e); }
         };
-        record(label, { undo: put(after, before), redo: put(before, after) });
+        record(label, { undo: put(after, before, true), redo: put(before, after, false) });
         await refresh();
         return null;
       } catch (e) {

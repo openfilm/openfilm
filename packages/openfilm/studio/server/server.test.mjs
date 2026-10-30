@@ -159,12 +159,17 @@ test('read, edit by id, and a stale edit on a clip the agent removed comes back 
   const added = await (await api(`/api/projects/${project.id}/edit`, { method: 'POST', body: { base: read.rev, ops: [{ op: 'insert', clip: { src: 'title.html' } }] } })).json();
   assert.equal(added.doc.tracks[0].clips[0].id, 'title');
 
-  writeFileSync(join(project.path, 'film.html'), filmHtml({ stage: { w: 1920, h: 1080 }, tracks: [] }));
-  const stale = await api(`/api/projects/${project.id}/edit`, { method: 'POST', body: { base: added.rev, ops: [{ op: 'set', clip: 'title', field: 'at', value: 2 }] } });
+  /* the agent's own clip, which it removes from the latest copy (one written over an older copy that lacks it would be
+     kept: person-edits.mjs) */
+  writeFileSync(join(project.path, 'film.html'), filmHtml({ stage: { w: 1920, h: 1080 }, tracks: [{ clips: [{ id: 'title', src: 'title.html' }, { id: 'card', src: 'card.html', at: 5 }] }] }));
+  const seen = await (await api(`/api/projects/${project.id}`)).json();
+  const moved = await (await api(`/api/projects/${project.id}/edit`, { method: 'POST', body: { base: seen.rev, ops: [{ op: 'set', clip: 'title', field: 'at', value: 1 }] } })).json();
+  writeFileSync(join(project.path, 'film.html'), filmHtml({ stage: { w: 1920, h: 1080 }, tracks: [{ clips: [{ id: 'title', src: 'title.html', at: 1 }] }] }));
+  const stale = await api(`/api/projects/${project.id}/edit`, { method: 'POST', body: { base: moved.rev, ops: [{ op: 'set', clip: 'card', field: 'at', value: 2 }] } });
   assert.equal(stale.status, 409);
   const body = await stale.json();
-  assert.match(body.error, /"title"/);
-  assert.deepEqual(body.doc.tracks, []);
+  assert.match(body.error, /"card"/);
+  assert.deepEqual(body.doc.tracks[0].clips.map((c) => c.id), ['title']);
 
   const bad = await api(`/api/projects/${project.id}/edit`, { method: 'POST', body: { ops: [{ op: 'insert', clip: { src: 'notes.txt' } }] } });
   assert.equal(bad.status, 422);
@@ -502,10 +507,11 @@ test('history: the person commits versions; checking one out makes none and tell
   const nothing = await history('/save', {});
   assert.equal(nothing.status, 409);
   assert.equal((await nothing.json()).code, 'nothing', 'the editor says why in its own words');
-  writeFileSync(join(project.path, 'film.html'), filmHtml({ stage: { w: 1, h: 1 }, tracks: [] }));
+  /* the person's own stage, in Studio: one written from outside over it would be put back (person-edits.mjs) */
+  await api(`/api/projects/${project.id}/edit`, { method: 'POST', body: { ops: [{ op: 'stage', w: 1, h: 1 }] } });
   const { commit: square } = await (await history('/save', { message: 'Square' })).json();
   assert.deepEqual((await (await history(`/versions/${square}`)).json()).files, [{ path: 'film.html', change: 'modified' }]);
-  writeFileSync(join(project.path, 'film.html'), filmHtml({ stage: { w: 2, h: 2 }, tracks: [] }));
+  writeFileSync(join(project.path, 'film.html'), filmHtml({ stage: { w: 1, h: 1 }, tracks: [{ clips: [{ id: 'a', src: 'a.html' }] }] }));
   const dirty = await history('/checkout', { commit });
   assert.equal(dirty.status, 409);
   assert.equal((await dirty.json()).code, 'dirty');

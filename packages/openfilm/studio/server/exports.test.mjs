@@ -130,6 +130,51 @@ async function parseXml(texts, query = () => null) {
 }
 const frameCount = (file) => parseInt(execFileSync('ffprobe', ['-v', 'error', '-count_packets', '-select_streams', 'v:0', '-show_entries', 'stream=nb_read_packets', '-of', 'csv=p=0', file]).toString(), 10);
 
+test('a 16× clip exports its trimmed picture and pitch-preserved sound at the shortened duration', ffmpeg, async () => {
+  const folder = join(scratch, 'Fast');
+  mkdirSync(folder);
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:size=160x90:rate=10:duration=8[a];color=c=red:size=160x90:rate=10:duration=32[b];[a][b]concat=n=2:v=1:a=0',
+    '-f', 'lavfi', '-i', 'sine=frequency=880:duration=8[a];sine=frequency=440:duration=32[b];[a][b]concat=n=2:v=0:a=1', '-shortest', '-pix_fmt', 'yuv420p', '-c:a', 'aac', join(folder, 'source.mp4')]);
+  writeFileSync(join(folder, 'film.html'), filmHtml({ stage: { w: 160, h: 90 }, tracks: [
+    { clips: [{ src: 'source.mp4', id: 'fast', time: [8, 40], speed: 16 }] },
+  ] }));
+  const done = await exported({ kind: 'video', fps: 10, hardware: false }, 'Fast', folder);
+  assert.equal(frameCount(done.out), 20, '32 source seconds become 2 seconds at 10 fps');
+  const [red, green, blue] = firstFrame(done.out).at(80, 45);
+  assert.ok(red > 200 && green < 80 && blue < 50, `the source's red picture is present: ${red},${green},${blue}`);
+  const pcm = execFileSync('ffmpeg', ['-v', 'error', '-ss', '0.05', '-i', done.out, '-t', '1', '-ac', '1', '-ar', '48000', '-f', 's16le', '-']);
+  const samples = new Int16Array(pcm.buffer, pcm.byteOffset, pcm.length / 2);
+  assert.ok(samples.length >= 47000, 'sound lasts through the clip');
+  let crossings = 0;
+  for (let i = 1; i < samples.length; i++) if (samples[i - 1] <= 0 && samples[i] > 0) crossings++;
+  assert.ok(Math.abs(crossings - 440) < 5, `pitch stays 440 Hz: ${crossings}`);
+});
+
+test('the ends of the range: a 100× clip and a 0.1× one export at their length, every frame there, the pitch kept', ffmpeg, async () => {
+  /* 100 source seconds at 100× are 1 s; 1 source second at 0.1× is 10 s */
+  for (const [name, seconds, speed, frames] of [['Fastest', 100, 100, 10], ['Slowest', 1, 0.1, 100]]) {
+    const folder = join(scratch, name);
+    mkdirSync(folder);
+    execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', `color=c=red:size=160x90:rate=10:duration=${seconds}`,
+      '-f', 'lavfi', '-i', `sine=frequency=440:duration=${seconds}`, '-shortest', '-pix_fmt', 'yuv420p', '-c:a', 'aac', join(folder, 'source.mp4')]);
+    writeFileSync(join(folder, 'film.html'), filmHtml({ stage: { w: 160, h: 90 }, tracks: [
+      { clips: [{ src: 'source.mp4', id: 'clip', time: [0, seconds], speed }] },
+    ] }));
+    const done = await exported({ kind: 'video', fps: 10, hardware: false }, name, folder);
+    assert.equal(frameCount(done.out), frames, `${name}: ${seconds} source seconds at ${speed}× are ${frames / 10} s at 10 fps`);
+    const length = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', done.out], { encoding: 'utf8' }));
+    assert.ok(Math.abs(length - frames / 10) < 0.1, `${name}: ${length} s`);
+    const [red] = firstFrame(done.out).at(80, 45);
+    assert.ok(red > 200, `${name}: the picture is there`);
+    const pcm = execFileSync('ffmpeg', ['-v', 'error', '-ss', '0.05', '-i', done.out, '-t', '0.9', '-ac', '1', '-ar', '48000', '-f', 's16le', '-']);
+    const samples = new Int16Array(pcm.buffer, pcm.byteOffset, pcm.length / 2);
+    assert.ok(samples.length >= 0.85 * 48000, `${name}: the sound lasts through the clip`);
+    let crossings = 0;
+    for (let i = 1; i < samples.length; i++) if (samples[i - 1] <= 0 && samples[i] > 0) crossings++;
+    assert.ok(Math.abs(crossings - 396) < 8, `${name}: the pitch stays 440 Hz: ${crossings} in 0.9 s`);
+  }
+});
+
 test('the exports folder: OPENFILM_EXPORTS, else `exports` in OPENFILM_HOME, else the Movies folder', () => {
   const env = { exports: process.env.OPENFILM_EXPORTS, home: process.env.OPENFILM_HOME };
   try {

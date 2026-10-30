@@ -21,11 +21,13 @@ import { pipeline } from 'node:stream';
 import { mkdir, readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { EditError, editProjectFilm, pageClipLook, readProjectFilm } from './film.mjs';
+import { EditError, editProjectFilm, pageClipLook, readProjectFilm, settleProjectFilm } from './film.mjs';
+import { readPage, writePage } from './page-text.mjs';
 import { FileError, bringIn, collect, extractAudio, freezeFrame, importFile, inside, listFiles, makeFolder, moveCheck, moveFile, readable, relink, trashFile } from './files.mjs';
 import { ExportError, createExports, draftApps, exportCapabilities, exportsRoot, projectSizes } from './exports.mjs';
 import { MediaError, frame, loudness, poster, probe, waveform } from './derived.mjs';
-import { HistoryError, checkoutVersion, copyVersion, deleteVersions, discardChanges, log, recoverVersions, saveVersion, status as historyStatus, versionFilesChanged } from './history.mjs';
+import { HistoryError, checkoutVersion, copyVersion, deleteVersions, discardChanges, keepAside, log, recoverVersions, saveVersion, status as historyStatus, versionFilesChanged } from './history.mjs';
+import * as personEdits from './person-edits.mjs';
 import { createAutoVersions } from './auto-versions.mjs';
 import { createHistoryPreviews } from './history-previews.mjs';
 import { ownHost, startPages } from './pages.mjs';
@@ -49,7 +51,7 @@ import { installedFonts } from './fonts.mjs';
 import { projectFonts, resolveIn } from './project-fonts.mjs';
 import { FILM_PAGE, PageFrameError, closePageFrames, filmPoster, pageFacts, pageFrame, warmFilmPoster } from './pageframes.mjs';
 import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCover, setCoverFromFile } from './cover.mjs';
-import { SavedError, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
+import { SavedError, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
 import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { moveToTrash } from './trash.mjs';
 import { listSkills, removeSkill, setSkillCover, setSkillInstalled, setSkillOn, skillOrigins, skillsInstalled, skillsOff } from '../../src/skills.mjs';
@@ -124,6 +126,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
   let updating = /** @type {{ status: 'updating' | 'failed', version: string, error?: string } | null} */ (null);
   /** whether an app's agent is working in the project at `path` now */
   const agentIn = (/** @type {string} */ path) => working().some((folder) => resolve(folder) === resolve(path));
+  /* the person's edits kept over an agent's writes, the texts a merge read and wrote kept aside in the history */
+  personEdits.configure({ keep: keepAside });
   /** The project at `root`'s history changed: its pages hear of it. `moved`: the folder's files changed with it. */
   const historyChanged = (/** @type {string} */ root, { moved = false } = {}) => watchers.emit(root, { type: 'history', ...(moved ? { moved: true } : {}) });
   /* versions saved on their own (auto-versions.mjs), while the person has Auto versions on */
@@ -308,6 +312,21 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     /* ── own keys and who makes each kind of media (Settings → Providers): never a key back; see providers/index.mjs ── */
     if (parts[0] === 'providers') return providersRoute(req, res, parts.slice(1), { openBrowser });
+    /* what the person changed in a project while an agent worked, kept over its writes: the note for the agent named
+       `agent`, which its `openfilm` command prints, answered at once ({ id, line }, line null when nothing); it counts
+       as told once the command says it printed it (POST kept/said { id }; person-edits.mjs) */
+    if (parts[0] === 'kept' && parts.length === 1 && req.method === 'GET') {
+      const folder = url.searchParams.get('folder');
+      if (!folder || !isAbsolute(folder)) return json(res, 200, { line: null });
+      /* as projects are named: by the folder's real path */
+      let root = resolve(folder);
+      try { root = realpathSync(root); } catch { /* as given */ }
+      return json(res, 200, personEdits.noteFor(root, (url.searchParams.get('agent') || 'pid:unknown').slice(0, 200)) ?? { line: null });
+    }
+    if (parts[0] === 'kept' && parts[1] === 'said' && parts.length === 2 && req.method === 'POST') {
+      const { id } = /** @type {{ id?: unknown }} */ (await readJson(req));
+      return json(res, 200, { ok: typeof id === 'string' && personEdits.noteSaid(id) });
+    }
     /* ── `openfilm get`: media from a provider, landed in the project; spending is asked here first (see get.mjs) ── */
     if (parts[0] === 'get') {
       making += req.method === 'POST' ? 1 : 0;
@@ -589,7 +608,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (!rest) {
       /* `folder`: the project's files on the film's origin, where the preview loads them */
       if (req.method === 'GET') {
-        const film = await readProjectFilm(project.path);
+        const film = await settleProjectFilm(project.path);
         requireProject();
         /* opened: its card in the projects list gets a picture before the list first shows it */
         if (film.doc?.tracks.some((t) => t.clips.length)) warmFilmPoster(project.path, pages.folderUrl(project));
@@ -667,6 +686,9 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       }
       if (history[0] === 'save' && req.method === 'POST') {
         const { message } = /** @type {{ message?: string }} */ (await readJson(req));
+        /* a write of the agent's not merged yet is merged first, so the version has the person's edits */
+        await settleProjectFilm(project.path);
+        await personEdits.settleFiles(project.path);
         const sha = await saveVersion(project.path, { message: String(message ?? ''), onProgress: onProgress('save') });
         historyChanged(project.path);
         return json(res, 200, { commit: sha });
@@ -679,12 +701,15 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         return json(res, 200, done);
       }
       if (history[0] === 'discard' && req.method === 'POST') {
+        /* the folder goes back as a version had it: the person's edits before are not kept over it */
+        personEdits.filmReplaced(project.path);
         const done = await discardChanges(project.path, { onProgress: onProgress('discard') });
         historyChanged(project.path, { moved: true });
         return json(res, 200, { ...done, ...(await readProjectFilm(project.path)) });
       }
       if (history[0] === 'checkout' && req.method === 'POST') {
         const { commit: target, discard } = /** @type {{ commit?: string, discard?: boolean }} */ (await readJson(req));
+        personEdits.filmReplaced(project.path);
         const done = await checkoutVersion(project.path, String(target ?? ''), { discard: discard === true, onProgress: onProgress('checkout') });
         historyChanged(project.path, { moved: true });
         /* `missing`: media of that version history no longer has (left as it is in the folder) */
@@ -698,10 +723,14 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       }
       throw new HttpError(404, 'no such history action');
     }
+    /* the chat's next message: the note for its agent (`agent`: app:<conversation>), as `GET /api/kept` gives one */
+    if (rest === 'kept' && req.method === 'GET') {
+      return json(res, 200, personEdits.noteFor(project.path, (url.searchParams.get('agent') || 'app:unknown').slice(0, 200)) ?? { line: null });
+    }
     if (rest === 'edit' && req.method === 'POST') {
-      const { base = null, ops } = /** @type {{ base?: string | null, ops?: import('./film.mjs').Op[] }} */ (await readJson(req));
+      const { base = null, ops, undo } = /** @type {{ base?: string | null, ops?: import('./film.mjs').Op[], undo?: boolean }} */ (await readJson(req));
       try {
-        return json(res, 200, await editProjectFilm(project.path, base, ops ?? []));
+        return json(res, 200, await editProjectFilm(project.path, base, ops ?? [], { undo: undo === true }));
       } catch (e) {
         if (!(e instanceof EditError)) throw e;
         /* the person's view is out of date or the edit cannot be: send the film as it is now with the reason */
@@ -821,6 +850,20 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (rest === 'saved/take' && req.method === 'POST') {
       const { path: from } = /** @type {{ path?: unknown }} */ (await readJson(req) ?? {});
       return json(res, 200, await savedCall(() => takeSaved(project.path, from)));
+    }
+    /* a page as text, read and written by what Studio writes into a page (layers pasted, page-text.mjs) */
+    if (rest === 'page' && req.method === 'GET') return json(res, 200, await readPage(project.path, url.searchParams.get('path')));
+    if (rest === 'page' && req.method === 'PUT') {
+      const { path: at, text, expect, undo } = /** @type {{ path?: unknown, text?: unknown, expect?: unknown, undo?: unknown }} */ (await readJson(req) ?? {});
+      if (text !== null && typeof text !== 'string') throw new HttpError(400, 'the page\'s text, please');
+      return json(res, 200, await writePage(project.path, at, text, typeof expect === 'string' ? expect : null, { undo: undo === true }));
+    }
+    /* a clip of another project brought into this one, with the files it needs (layers pasted from there) */
+    if (rest === 'bring' && req.method === 'POST') {
+      const { from, clip } = /** @type {{ from?: unknown, clip?: any }} */ (await readJson(req) ?? {});
+      const source = typeof from === 'string' ? await projectById(from).catch(() => null) : null;
+      if (!source || source.missing) throw new HttpError(404, 'The project it was copied from is not there any more.');
+      return json(res, 200, await savedCall(() => bringClip(project.path, source.path, clip, source.name)));
     }
     /* what Studio works out from a media file: its length and size, a poster, a frame, a waveform (see derived.mjs) */
     if (rest === 'media' && req.method === 'GET') {

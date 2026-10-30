@@ -255,9 +255,9 @@ export async function saveSourceSubtitles(projectId: string, src: string, cues: 
   }).catch(() => null));
 }
 
-/** Put a source's transcript files back as `to`, if they are still as `from` left them. */
-export async function restoreSubtitleFiles(projectId: string, src: string, from: SubtitleSnapshot, to: SubtitleSnapshot): Promise<void> {
+/** Put a source's transcript files back as `to`, if they are still as `from` left them. `undo`: an edit undone. */
+export async function restoreSubtitleFiles(projectId: string, src: string, from: SubtitleSnapshot, to: SubtitleSnapshot, undo = false): Promise<void> {
   await answer(await fetch(subtitlesApi(projectId, 'captions/files'), {
-    method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ src, from, to }),
+    method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ src, from, to, ...(undo ? { undo: true } : {}) }),
   }).catch(() => null));
 }

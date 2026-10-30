@@ -53,8 +53,6 @@ export interface LocalAgentSessionInfo {
   resumed?: boolean;
   /** a message sent while it works can join the running turn (`steer`) */
   steering?: boolean;
-  /** its commands, as a session opened only to ask said them (`probe`): ACP's availableCommands */
-  commands?: unknown[];
   agentInfo: { name: string; title?: string; version?: string } | null;
   authMethods: Array<{ id: string; name: string; description?: string }>;
   /** Whether our MCP tools were handed over (not when the agent does not take HTTP). */

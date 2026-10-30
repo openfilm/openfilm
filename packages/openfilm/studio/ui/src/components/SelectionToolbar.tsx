@@ -31,6 +31,8 @@ export interface SelectionTool {
   /** Why it cannot be pressed (said in its tooltip). */
   hint?: string;
   danger?: boolean;
+  /** A mode it turns on and off (the timeline's Speed): shown pressed while on. */
+  active?: boolean;
   /** `button`: where a menu it opens hangs from. */
   onSelect: (button: HTMLButtonElement) => void;
 }
@@ -46,7 +48,7 @@ export function SelectionToolbar({
    * Where the selection is on screen and the area the bar stays in (and the room between, when not the usual; what it
    * must not cover); null when it cannot be seen.
    */
-  measure: () => { anchor: ScreenBox; bounds: ScreenBox; gap?: number; avoid?: readonly ScreenBox[] } | null;
+  measure: () => { anchor: ScreenBox; bounds: ScreenBox; gap?: number; avoid?: readonly ScreenBox[]; keepOff?: readonly ScreenBox[] } | null;
   /** Kept away for now (a drag, playback): shown again when it ends. */
   hidden?: boolean;
   /** The first button, always: "Add to chat" (none without a chat). */
@@ -88,7 +90,7 @@ export function SelectionToolbar({
     const el = ref.current;
     const next = m ? placeToolbar({
       anchor: m.anchor, size: { width: el?.offsetWidth ?? 0, height: el?.offsetHeight ?? 0 }, bounds: m.bounds,
-      ...(m.gap != null ? { gap: m.gap } : {}), ...(m.avoid ? { avoid: m.avoid } : {}),
+      ...(m.gap != null ? { gap: m.gap } : {}), ...(m.avoid ? { avoid: m.avoid } : {}), ...(m.keepOff ? { keepOff: m.keepOff } : {}),
     }) : null;
     setPos((cur) => (cur && next && cur.left === next.left && cur.top === next.top && cur.side === next.side ? cur : next));
   });
@@ -138,6 +140,7 @@ function ToolbarButton({ tool, side }: { tool: SelectionTool; side: 'top' | 'bot
         aria-label={tool.label}
         /* aria-disabled, not disabled: a disabled button gets no hover, and its tooltip says why it cannot be pressed */
         aria-disabled={tool.disabled || undefined}
+        {...(tool.active != null ? { 'aria-pressed': tool.active } : {})}
         data-tool={tool.id}
         /* no focus from a click: the next Space plays instead of pressing this again */
         onMouseDown={(e) => e.preventDefault()}
@@ -145,7 +148,9 @@ function ToolbarButton({ tool, side }: { tool: SelectionTool; side: 'top' | 'bot
         className={`flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[6px] outline-none transition focus-visible:ring-1 focus-visible:ring-[var(--border-strong)] ${
           tool.disabled
             ? 'cursor-default text-[var(--text-faint)]'
-            : tool.danger
+            : tool.active
+              ? 'bg-[var(--tl-accent)] text-white'
+              : tool.danger
               ? 'text-[var(--text-dim)] hover:bg-[var(--bg-hover)] hover:text-[var(--err)]'
               : 'text-[var(--text-dim)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'
         }`}

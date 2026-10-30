@@ -17,6 +17,15 @@ const roundTrip = (f: Film, ops: Op[]) => {
 const ids = (f: Film) => f.tracks.map((t) => t.clips.map((c) => `${c.id}@${c.at ?? 0}`));
 const props = (...edits: [string, string, unknown][]): Op[] => [{ op: 'props', edits: edits.map(([clip, prop, value]) => ({ clip, prop, value: value as never })) }];
 
+test('a high clip speed is undone and redone without changing its source trim', () => {
+  const f = film([{ src: 'v.mp4', id: 'v', time: [8, 72] }]);
+  const edits = props(['v', 'speed', 16]);
+  const after = roundTrip(f, edits);
+  assert.equal(after.tracks[0].clips[0].speed, 16);
+  assert.deepEqual(after.tracks[0].clips[0].time, [8, 72]);
+  assert.deepEqual(apply(apply(after, inverse(f, after, edits)), edits), after);
+});
+
 test('moves: along a track, to another, onto a new one, with the emptied track going and coming back', () => {
   const f = film([{ src: 'a.html', id: 'a' }, { src: 'b.html', id: 'b', at: 6 }], [{ src: 'v.mp4', id: 'v', time: [0, 3] }], [{ src: 's.wav', id: 's' }]);
   assert.deepEqual(ids(roundTrip(f, props(['a', 'at', 1.5]))), [['a@1.5', 'b@6'], ['v@0'], ['s@0']]);

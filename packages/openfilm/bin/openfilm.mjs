@@ -112,7 +112,18 @@ if (RAW.length === 1 && (RAW[0] === '--version' || RAW[0] === '-v')) {
   process.exit(0);
 }
 if (RAW[0] !== 'update') await updateNotice(RAW[0] === 'open');
+/**
+ * What the person changed in Studio while the agent worked and Studio kept, said once before a command's answer, on
+ * stderr (stdout stays the command's own); Studio hears it was said once it is printed.
+ */
+const keptNotice = async (/** @type {string} */ from = '.') => {
+  const note = await (await import('../studio/client.mjs')).keptNote(from).catch(() => null);
+  if (!note) return;
+  console.error(note.line);
+  await note.said();
+};
 if (RAW[0] === 'get') {
+  await keptNotice();
   let result;
   try { result = await (await import('../studio/client.mjs')).getMedia(RAW.slice(1), (line) => console.error(line)); }
   catch (e) { result = { code: 1, lines: [`openfilm get: ${e.message}`] }; }
@@ -266,6 +277,7 @@ if (RAW[0] === 'get') {
       for (const line of shown.lines) console.error(line);
       if (!shown.ok) console.error(`${RUN} ${cmd}: carrying on without Studio`);
     }
+    await keptNotice(project);
   }
 
   /** The first run on a machine has no browser yet: fetch Playwright's Chromium once, then run the command again. */

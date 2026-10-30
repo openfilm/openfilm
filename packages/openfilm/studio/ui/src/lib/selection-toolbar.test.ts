@@ -63,22 +63,47 @@ test('distributing keeps the first and the last and evens the gaps, in the order
   assert.deepEqual(distributeShifts(boxes.slice(0, 2), 'y').map((s) => s.dy), [0, 0]);
 });
 
-test('over the timeline the bar covers no other clip: it slides along, then goes to a free line', () => {
+test('over the timeline the bar covers no other clip where it can: it slides along the selection, then below it', () => {
   /* a clip on the middle track, clips on the tracks above and below it */
   const anchor = { left: 400, top: 300, width: 200, height: 40 };
-  const rowAbove = { left: 0, top: 250, width: 700, height: 40 };
+  const rowAbove = { left: 0, top: 250, width: 500, height: 40 };
   const rowBelow = { left: 0, top: 350, width: 1000, height: 40 };
-  /* above it there is a clip up to x 700: the bar slides right of it */
+  /* above it there is a clip up to x 500: the bar slides right of it, its middle still over the clip */
   const at = placeToolbar({ anchor, size, bounds, avoid: [rowAbove, rowBelow] })!;
-  assert.equal(at.top, 300 - 6 - 28);
-  assert.ok(at.left >= 700, `${at.left} is past the clip above`);
-  /* both lines full: the nearest free line, here the top of the area */
-  const full = placeToolbar({ anchor, size, bounds, avoid: [{ ...rowAbove, width: 1000 }, rowBelow, { left: 0, top: 120, width: 1000, height: 100 }] })!;
-  const box = { ...full, width: size.width, height: size.height };
-  for (const b of [{ ...rowAbove, width: 1000 }, rowBelow, { left: 0, top: 120, width: 1000, height: 100 }, anchor]) {
-    assert.ok(!(box.left < b.left + b.width && b.left < box.left + box.width && box.top < b.top + b.height && b.top < box.top + box.height), 'covers nothing');
-  }
-  /* nowhere free: as without (above it) */
-  const none = placeToolbar({ anchor, size, bounds, avoid: [{ left: 0, top: 0, width: 1000, height: 1000 }] });
+  assert.deepEqual(at, { left: 500, top: 300 - 6 - 28, side: 'above' });
+  /* the track above taken all along it, the one below free there: below */
+  const under = placeToolbar({ anchor, size, bounds, avoid: [{ ...rowAbove, width: 1000 }, { ...rowBelow, left: 700 }] })!;
+  assert.deepEqual(under, { left: 440, top: 300 + 40 + 6, side: 'below' });
+});
+
+test('with the tracks around it full, the bar stays over the clip, not at the first free place far off', () => {
+  /* the first clip of a track, with clips end to end above and below it running far past it (2026-10-29: the bar went
+     past the end of every clip, where the line above was free) */
+  const anchor = { left: 90, top: 300, width: 530, height: 40 };
+  const rowAbove = { left: 90, top: 250, width: 820, height: 40 };
+  const rowBelow = { left: 90, top: 350, width: 820, height: 40 };
+  const at = placeToolbar({ anchor, size, bounds, avoid: [rowAbove, rowBelow] })!;
+  assert.deepEqual(at, { left: 90 + 265 - 60, top: 300 - 6 - 28, side: 'above' });
+  /* half scrolled out of the area: over the half still shown */
+  const half = placeToolbar({ anchor: { ...anchor, left: -265 }, size, bounds, avoid: [rowAbove, rowBelow] })!;
+  assert.deepEqual([half.left, half.side], [Math.round(265 / 2 - 60), 'above']);
+});
+
+test('never over the ruler: a clip on the top track with the track below full gets its bar below, over that track', () => {
+  const anchor = { left: 400, top: 150, width: 200, height: 40 };
+  const ruler = { left: 0, top: 120, width: 1000, height: 24 };
+  const rowBelow = { left: 0, top: 200, width: 1000, height: 40 };
+  const at = placeToolbar({ anchor, size, bounds, avoid: [rowBelow], keepOff: [ruler] })!;
+  assert.deepEqual(at, { left: 440, top: 150 + 40 + 6, side: 'below' });
+  /* nowhere free at all: above it, as without */
+  const none = placeToolbar({ anchor: { left: 400, top: 300, width: 200, height: 40 }, size, bounds, avoid: [{ left: 0, top: 0, width: 1000, height: 1000 }] });
   assert.deepEqual(none, { left: 440, top: 266, side: 'above' });
+});
+
+test('in a pane that shows only the ruler and one track, the bar goes under the ruler, over the clip, never on the ruler', () => {
+  const short = { left: 0, top: 100, width: 1000, height: 110 };
+  const ruler = { left: 0, top: 104, width: 1000, height: 20 };
+  const anchor = { left: 400, top: 130, width: 200, height: 70 };
+  const at = placeToolbar({ anchor, size, bounds: short, avoid: [], keepOff: [ruler] })!;
+  assert.deepEqual(at, { left: 440, top: 104 + 20 + 4, side: 'below' });
 });

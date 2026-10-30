@@ -54,8 +54,16 @@ test('a film.html that does not read is never written over', async () => {
 
 test('an edit that would break the film is refused with the reason', async () => {
   const root = folder(film([{ src: 'clip.mp4', id: 'clip' }]));
-  await assert.rejects(editProjectFilm(root, null, [{ op: 'set', clip: 'clip', field: 'speed', value: 9 }]), (e) => e.kind === 'invalid' && /speed/.test(e.message));
+  await assert.rejects(editProjectFilm(root, null, [{ op: 'set', clip: 'clip', field: 'speed', value: 101 }]), (e) => e.kind === 'invalid' && /speed/.test(e.message));
   await assert.rejects(editProjectFilm(root, null, [{ op: 'set', clip: 'clip', field: 'kind', value: 'x' }]), (e) => e.kind === 'invalid');
+});
+
+test('editing a clip to 16× saves its speed without changing the source trim', async () => {
+  const root = folder(film([{ src: 'clip.mp4', id: 'clip', time: [8, 72] }]));
+  const base = (await readProjectFilm(root)).rev;
+  await editProjectFilm(root, base, [{ op: 'set', clip: 'clip', field: 'speed', value: 16 }]);
+  assert.equal(onDisk(root).tracks[0].clips[0].speed, 16);
+  assert.deepEqual(onDisk(root).tracks[0].clips[0].time, [8, 72]);
 });
 
 test('move: to another time, an existing track, or a new track; empty tracks go', async () => {

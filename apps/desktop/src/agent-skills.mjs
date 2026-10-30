@@ -29,7 +29,7 @@
  * A session's OpenFilm skills are a folder of the app's, links to each skill's own folder (agent-skills/<id>/skills),
  * as each agent reads a plugin or a skills folder. Reads no Electron module, so `node --test` can use it.
  */
-import { mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
@@ -210,11 +210,21 @@ export function ownMcpServers(agent, { cwd = '', env = {}, home = homedir() } = 
 
 /* ── a session's switches ────────────────────────────────────────────────── */
 
+/** Remove an expired session's links before its own folder, never anything they point at. */
+function removeSession(dir) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isSymbolicLink()) unlinkSync(path);
+    else if (entry.isDirectory()) removeSession(path);
+  }
+  rmSync(dir, { recursive: true, force: true });
+}
+
 /** A folder of links to OpenFilm's skills, as a Claude Code plugin and as a skills folder (`skills`, `.agents/skills`). */
 function linkFolder(base, skills) {
   mkdirSync(base, { recursive: true });
   for (const name of subdirs(base)) {
-    try { if (Date.now() - statSync(join(base, name)).mtimeMs > KEEP_MS) rmSync(join(base, name), { recursive: true, force: true }); } catch { /* in use */ }
+    try { if (Date.now() - statSync(join(base, name)).mtimeMs > KEEP_MS) removeSession(join(base, name)); } catch { /* in use */ }
   }
   const dir = join(base, `${Date.now().toString(36)}-${process.pid}-${Math.random().toString(36).slice(2, 8)}`);
   const link = process.platform === 'win32' ? 'junction' : 'dir';
