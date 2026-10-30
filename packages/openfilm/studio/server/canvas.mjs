@@ -4,8 +4,9 @@
  * and what leads to what drawn. Studio's own, beside film.html, not in it (SPEC §1: an editor's own state lives in
  * `.film/`): nothing on it is in the film until it is put on the timeline.
  *
- * A node is a note (`text`) or a file of the project (`path`, project-relative), at `x`, `y` on the board, `w` wide
- * (and `h` high, for a note). An edge goes from one node to another.
+ * A node is a note (`text`), a file of the project (`path`, project-relative) or a group (`group`, its name, and a
+ * `color`), at `x`, `y` on the board, `w` wide (and `h` high, for a note or a group). A node in a group names it
+ * (`parent`), and its `x`, `y` are from the group's corner. An edge goes from one node to another.
  *
  *   GET canvas                    → { nodes, edges }
  *   PUT canvas { nodes, edges }   → { nodes, edges }: the whole board, as kept
@@ -25,8 +26,12 @@ const FAR = 1e6;
 const SIZE_MIN = 40;
 const SIZE_MAX = 8000;
 
+/** a group's colors, as the board draws them */
+const GROUP_COLORS = ['gray', 'red', 'orange', 'yellow', 'green', 'blue', 'purple'];
+const NAME_MAX = 80;
+
 /**
- * @typedef {{ id: string, x: number, y: number, w?: number, h?: number } & ({ text: string } | { path: string })} CanvasNode
+ * @typedef {{ id: string, x: number, y: number, w?: number, h?: number, parent?: string } & ({ text: string } | { path: string } | { group: string, color: string })} CanvasNode
  * @typedef {{ id: string, from: string, to: string }} CanvasEdge
  * @typedef {{ nodes: CanvasNode[], edges: CanvasEdge[] }} Canvas
  */
@@ -58,11 +63,18 @@ export function parseCanvas(raw) {
     const w = size(n.w);
     const h = size(n.h);
     const box = { id: /** @type {string} */ (n.id), x, y, ...(w ? { w } : {}), ...(h ? { h } : {}) };
-    if (projectPath(n.path)) out.nodes.push({ ...box, path: /** @type {string} */ (n.path) });
-    else if (typeof n.text === 'string') out.nodes.push({ ...box, text: n.text.slice(0, TEXT_MAX) });
+    const parent = isId(n.parent) ? { parent: /** @type {string} */ (n.parent) } : {};
+    if (projectPath(n.path)) out.nodes.push({ ...box, ...parent, path: /** @type {string} */ (n.path) });
+    else if (typeof n.text === 'string') out.nodes.push({ ...box, ...parent, text: n.text.slice(0, TEXT_MAX) });
+    else if (typeof n.group === 'string') {
+      out.nodes.push({ ...box, group: n.group.trim().slice(0, NAME_MAX), color: GROUP_COLORS.includes(String(n.color)) ? String(n.color) : 'gray' });
+    }
     else continue;
     ids.add(n.id);
   }
+  /* in a group only when that group is on the board (a group is in none) */
+  const groups = new Set(out.nodes.flatMap((n) => ('group' in n ? [n.id] : [])));
+  for (const n of out.nodes) if (n.parent && !groups.has(n.parent)) delete n.parent;
   const edges = new Set();
   for (const e of Array.isArray(raw.edges) ? raw.edges : []) {
     if (out.edges.length >= MAX_EDGES) break;

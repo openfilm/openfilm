@@ -33,6 +33,25 @@ test('a canvas keeps notes and project files as nodes, and edges between nodes i
   assert.deepEqual(parseCanvas([]), { nodes: [], edges: [] });
 });
 
+test('a group has a name and a color of the board\'s; a node is in a group only when that group is there', () => {
+  assert.deepEqual(parseCanvas({
+    nodes: [
+      { id: 'g', x: 0, y: 0, w: 600, h: 400, group: ' Opening ', color: 'blue' },
+      { id: 'h', x: 0, y: 500, group: 'Ending', color: 'mauve', parent: 'g' },
+      { id: 'a', x: 20, y: 40, text: 'in it', parent: 'g' },
+      { id: 'b', x: 20, y: 40, path: 'assets/a.mp4', parent: 'gone' },
+      { id: 'c', x: 20, y: 40, text: 'in a note', parent: 'a' },
+    ],
+    edges: [],
+  }).nodes, [
+    { id: 'g', x: 0, y: 0, w: 600, h: 400, group: 'Opening', color: 'blue' },
+    { id: 'h', x: 0, y: 500, group: 'Ending', color: 'gray' },
+    { id: 'a', x: 20, y: 40, parent: 'g', text: 'in it' },
+    { id: 'b', x: 20, y: 40, path: 'assets/a.mp4' },
+    { id: 'c', x: 20, y: 40, text: 'in a note' },
+  ]);
+});
+
 test('a project keeps its canvas in .film/canvas.json, outside film.html', async () => {
   const root = mkdtempSync(join(tmpdir(), 'of-canvas-'));
   try {
