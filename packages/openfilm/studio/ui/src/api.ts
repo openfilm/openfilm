@@ -173,6 +173,18 @@ export const api = {
   setCover: (id: string, from: { file: Blob } | { path: string } | { ms: number }) => call<{ cover: number | null }>(`${p(id)}/cover`,
     'file' in from ? { method: 'PUT', body: from.file, headers: { 'content-type': 'application/octet-stream' } } : { method: 'POST', json: from }).then((r) => r.cover),
   clearCover: (id: string) => call<{ cover: null }>(`${p(id)}/cover`, { method: 'DELETE' }).then(() => null),
+  /**
+   * Something made with the person's services, as `openfilm get <verb>` makes it (studio/server/get.mjs): answered
+   * once it is made, with its receipt (JSON, as text), or why not. A video asks the person first (SpendAsks). Not a
+   * write a reload waits for: it may take minutes, and aborting it (`signal`) stops it.
+   */
+  make: async (folder: string, verb: string, args: Record<string, unknown>, pick: { via?: string; model?: string }, signal?: AbortSignal) => {
+    const res = await fetch('/api/get', { method: 'POST', signal, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ folder, verb, args, ...pick }) });
+    if (res.status === 401) markLocked();
+    const body = await res.json().catch(() => ({})) as { ok?: boolean; text?: string; error?: string };
+    if (!res.ok || !body.ok) throw new Error(body.text ?? body.error ?? `Studio answered ${res.status}`);
+    return body.text ?? '';
+  },
   answerAsk: (askId: string, allow: boolean) => call<{ answered: boolean }>(`get/asks/${encodeURIComponent(askId)}`, { method: 'POST', json: { allow } }),
   /** the provider's own page for its balance, opened in the person's browser */
   openBilling: (providerId: string) => call<Record<string, never>>(`providers/${encodeURIComponent(providerId)}/billing`, { method: 'POST' }),

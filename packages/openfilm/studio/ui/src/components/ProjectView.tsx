@@ -3210,8 +3210,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
               style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...(hostPanel?.open ? { marginLeft: HOST_PANEL_WIDTH, paddingLeft: DOCK_GAP } : null) }}>
               <div className="relative min-h-0 min-w-0 flex-1 bg-[var(--dock-pane)]">
                 <React.Suspense fallback={null}>
-                  <CanvasView projectId={projectId} files={canvasFiles} sources={mediaSources} onAddToFilm={(file) => { void addFromCanvas(file); }}
-                    onImportFiles={(dropped) => onImport(dropped, 'assets', () => {})} onError={toast.showError} />
+                  <CanvasView projectId={projectId} folder={loaded?.project.path ?? ''} files={canvasFiles} sources={mediaSources} onAddToFilm={(file) => { void addFromCanvas(file); }}
+                    onImportFiles={(dropped) => onImport(dropped, 'assets', () => {})} onOpenSettings={() => setSettingsOpen('providers')}
+                    onError={toast.showError} />
                 </React.Suspense>
               </div>
             </div>

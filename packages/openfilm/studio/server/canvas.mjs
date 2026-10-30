@@ -4,9 +4,12 @@
  * and what leads to what drawn. Studio's own, beside film.html, not in it (SPEC §1: an editor's own state lives in
  * `.film/`): nothing on it is in the film until it is put on the timeline.
  *
- * A node is a note (`text`), a file of the project (`path`, project-relative) or a group (`group`, its name, and a
- * `color`), at `x`, `y` on the board, `w` wide (and `h` high, for a note or a group). A node in a group names it
- * (`parent`), and its `x`, `y` are from the group's corner. An edge goes from one node to another.
+ * A node is a note (`text`), a file of the project (`path`, project-relative), a group (`group`, its name, and a
+ * `color`) or a node that makes something with the person's services (`make`: image, video, sfx or music; its
+ * `prompt`, `via` and `model`, its `opts`, the files it made, `versions`, the one shown `path`, `made` what it was asked
+ * for that one, and `by`, the agent that put it there), at `x`, `y` on the board, `w` wide (and `h` high, for a note
+ * or a group). A node in a group names it (`parent`), and its `x`, `y` are from the group's corner. An edge goes from
+ * one node to another, `order` its place among those into that node.
  *
  *   GET canvas                    → { nodes, edges }
  *   PUT canvas { nodes, edges }   → { nodes, edges }: the whole board, as kept
@@ -30,9 +33,14 @@ const SIZE_MAX = 8000;
 const GROUP_COLORS = ['gray', 'red', 'orange', 'yellow', 'green', 'blue', 'purple'];
 const NAME_MAX = 80;
 
+/** what a node can make, and how much of what it made it keeps */
+const MAKE_KINDS = ['image', 'video', 'sfx', 'music'];
+const VERSIONS_MAX = 50;
+const SHORT_MAX = 120;
+
 /**
- * @typedef {{ id: string, x: number, y: number, w?: number, h?: number, parent?: string } & ({ text: string } | { path: string } | { group: string, color: string })} CanvasNode
- * @typedef {{ id: string, from: string, to: string }} CanvasEdge
+ * @typedef {{ id: string, x: number, y: number, w?: number, h?: number, parent?: string } & ({ text: string } | { path: string } | { group: string, color: string } | { make: string })} CanvasNode
+ * @typedef {{ id: string, from: string, to: string, order?: number }} CanvasEdge
  * @typedef {{ nodes: CanvasNode[], edges: CanvasEdge[] }} Canvas
  */
 
@@ -64,7 +72,8 @@ export function parseCanvas(raw) {
     const h = size(n.h);
     const box = { id: /** @type {string} */ (n.id), x, y, ...(w ? { w } : {}), ...(h ? { h } : {}) };
     const parent = isId(n.parent) ? { parent: /** @type {string} */ (n.parent) } : {};
-    if (projectPath(n.path)) out.nodes.push({ ...box, ...parent, path: /** @type {string} */ (n.path) });
+    if (MAKE_KINDS.includes(String(n.make))) out.nodes.push({ ...box, ...parent, ...readMake(n), make: String(n.make) });
+    else if (projectPath(n.path)) out.nodes.push({ ...box, ...parent, path: /** @type {string} */ (n.path) });
     else if (typeof n.text === 'string') out.nodes.push({ ...box, ...parent, text: n.text.slice(0, TEXT_MAX) });
     else if (typeof n.group === 'string') {
       out.nodes.push({ ...box, group: n.group.trim().slice(0, NAME_MAX), color: GROUP_COLORS.includes(String(n.color)) ? String(n.color) : 'gray' });
@@ -82,9 +91,34 @@ export function parseCanvas(raw) {
     const key = `${e.from}>${e.to}`;
     if (edges.has(key)) continue;
     edges.add(key);
-    out.edges.push({ id: /** @type {string} */ (e.id), from: /** @type {string} */ (e.from), to: /** @type {string} */ (e.to) });
+    const order = typeof e.order === 'number' && Number.isInteger(e.order) && e.order >= 0 && e.order < MAX_EDGES ? { order: e.order } : {};
+    out.edges.push({ id: /** @type {string} */ (e.id), from: /** @type {string} */ (e.from), to: /** @type {string} */ (e.to), ...order });
   }
   return out;
+}
+
+/** A making node's own fields, as kept (its kind aside). @param {Record<string, unknown>} n */
+function readMake(n) {
+  /** @param {unknown} v */
+  const short = (v) => (typeof v === 'string' && v.length > 0 && v.length <= SHORT_MAX ? v : undefined);
+  const o = isRecord(n.opts) ? n.opts : {};
+  const opts = {
+    ...(short(o.ratio) ? { ratio: o.ratio } : {}),
+    ...(typeof o.sec === 'number' && Number.isFinite(o.sec) && o.sec > 0 && o.sec <= 600 ? { sec: o.sec } : {}),
+    ...(o.frames === true ? { frames: true } : {}),
+  };
+  const versions = (Array.isArray(n.versions) ? n.versions : []).filter(projectPath).slice(-VERSIONS_MAX);
+  const by = isRecord(n.by) && short(n.by.agent) ? { agent: n.by.agent, ...(short(n.by.session) ? { session: n.by.session } : {}) } : undefined;
+  const fields = {
+    prompt: typeof n.prompt === 'string' ? n.prompt.slice(0, TEXT_MAX) : '',
+    via: short(n.via), model: short(n.model),
+    opts: Object.keys(opts).length ? opts : undefined,
+    versions: versions.length ? versions : undefined,
+    path: versions.includes(n.path) ? n.path : versions.at(-1),
+    made: short(n.made),
+    by,
+  };
+  return Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
 }
 
 /** @param {string} root @returns {Promise<Canvas>} */

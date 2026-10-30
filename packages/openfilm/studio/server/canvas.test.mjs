@@ -69,3 +69,19 @@ test('a project keeps its canvas in .film/canvas.json, outside film.html', async
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('a making node keeps what it made in the project, the one shown among them; an edge its place', () => {
+  const kept = parseCanvas({
+    nodes: [
+      { id: 'm', x: 0, y: 0, make: 'video', prompt: 'dawn', model: 'seedance', opts: { sec: 6, frames: true, x: 1 },
+        versions: ['assets/video/a.mp4', '../out.mp4', 'assets/video/b.mp4'], path: 'assets/video/a.mp4', by: { agent: 'codex' } },
+      { id: 'n', x: 0, y: 0, text: 'cold' },
+      { id: 'q', x: 0, y: 0, make: 'hologram', path: 'assets/a.png' },
+    ],
+    edges: [{ id: 'e', from: 'n', to: 'm', order: 2 }, { id: 'f', from: 'q', to: 'm', order: -1 }],
+  });
+  assert.deepEqual(kept.nodes[0], { id: 'm', x: 0, y: 0, make: 'video', prompt: 'dawn', model: 'seedance', opts: { sec: 6, frames: true },
+    versions: ['assets/video/a.mp4', 'assets/video/b.mp4'], path: 'assets/video/a.mp4', by: { agent: 'codex' } });
+  assert.deepEqual(kept.nodes[2], { id: 'q', x: 0, y: 0, path: 'assets/a.png' }, 'not a kind it can make: a file');
+  assert.deepEqual(kept.edges, [{ id: 'e', from: 'n', to: 'm', order: 2 }, { id: 'f', from: 'q', to: 'm' }]);
+});
