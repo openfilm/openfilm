@@ -23,9 +23,9 @@ test('a kind is offered when any provider makes it, connected or not', () => {
 
 test('Providers lists the recommended ones first, in their order, and the rest under More by name, open when one is connected', () => {
   const p = (id: string, name: string, source: 'file' | 'env' | null = null) => ({ id, name, source });
-  const all = [p('pexels', 'Pexels'), p('elevenlabs', 'ElevenLabs'), p('azure', 'Microsoft Azure'), p('brave', 'Brave Search'), p('openai', 'OpenAI'), p('google', 'Google')];
+  const all = [p('pexels', 'Pexels'), p('elevenlabs', 'ElevenLabs'), p('azure', 'Microsoft Azure'), p('brave', 'Brave Search'), p('openai', 'OpenAI'), p('google', 'Google'), p('openfilm', 'OpenFilm')];
   const groups = providerGroups(all);
-  assert.deepEqual(groups.recommended.map((x) => x.id), ['openai', 'azure', 'google', 'elevenlabs']);
+  assert.deepEqual(groups.recommended.map((x) => x.id), ['openai', 'openfilm', 'azure', 'google', 'elevenlabs']);
   assert.deepEqual(groups.more.map((x) => x.id), ['brave', 'pexels']);
   assert.equal(groups.open, false);
   assert.equal(providerGroups([...all, p('groq', 'Groq', 'file')]).open, true);

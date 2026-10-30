@@ -24,6 +24,7 @@ import { GitHubDialog } from './ProjectSources';
 /* an example's canvas, only looked at: the board's code is loaded when one is shown */
 const CanvasPreview = React.lazy(() => import('./canvas/CanvasView').then((m) => ({ default: m.CanvasPreview })));
 import { SkillsLibrary, useSkillWords } from './SkillsLibrary';
+import { LARGE_DIALOG_SIZE } from './dialog-chrome';
 
 export type ExamplesMode = 'start' | 'reference';
 /** A part of an example picked to point at: none for the whole film. */
@@ -407,8 +408,7 @@ export function ExamplesDialog({ projectId, open, onClose, onStarted, onUseCanva
     <>
       <div className="fixed inset-0 z-[10040] bg-black/60" onMouseDown={onClose} />
       <div role="dialog" aria-modal="true" aria-label={t('gallery.community')}
-        className="fixed left-1/2 top-1/2 z-[10050] flex -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-[var(--border-strong)] bg-[var(--app-content-bg)] shadow-[0_24px_64px_rgba(0,0,0,0.35)]"
-        style={{ width: 'min(1200px, calc(100vw - 64px))', height: 'min(800px, calc(100vh - 80px))' }}>
+        className={`fixed left-1/2 top-1/2 z-[10050] flex ${LARGE_DIALOG_SIZE} -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-[var(--border-strong)] bg-[var(--app-content-bg)] shadow-[0_24px_64px_rgba(0,0,0,0.35)]`}>
         <ExamplesGallery
           mode="reference"
           projectId={projectId}

@@ -57,8 +57,8 @@ export function couldMake(state: ProvidersState, verb: ProviderVerb): string[] {
   return state.providers.filter((p) => !p.source && p.verbs.includes(verb)).map((p) => p.name).sort((a, b) => a.localeCompare(b));
 }
 
-/** The providers Settings › Providers shows first, in this order: the large media services. */
-export const RECOMMENDED_PROVIDERS = ['openai', 'azure', 'google', 'elevenlabs'];
+/** The providers Settings › Providers shows first, in this order: the large media services, and OpenFilm's own. */
+export const RECOMMENDED_PROVIDERS = ['openai', 'openfilm', 'azure', 'google', 'elevenlabs'];
 
 /**
  * Settings › Providers' two groups: the recommended ones in RECOMMENDED_PROVIDERS' order, then the rest by name.
