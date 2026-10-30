@@ -26,7 +26,7 @@ import { readPage, writePage } from './page-text.mjs';
 import { FileError, bringIn, collect, extractAudio, freezeFrame, importFile, inside, listFiles, makeFolder, moveCheck, moveFile, readable, relink, trashFile } from './files.mjs';
 import { ExportError, createExports, draftApps, exportCapabilities, exportsRoot, projectSizes } from './exports.mjs';
 import { MediaError, frame, loudness, poster, probe, waveform } from './derived.mjs';
-import { HistoryError, checkoutVersion, copyVersion, deleteVersions, discardChanges, keepAside, log, recoverVersions, saveVersion, status as historyStatus, versionFilesChanged } from './history.mjs';
+import { HistoryError, checkoutVersion, copyVersion, deleteVersions, discardChanges, keepAside, log, recoverVersions, restoreFilm, saveVersion, status as historyStatus, versionFilesChanged } from './history.mjs';
 import * as personEdits from './person-edits.mjs';
 import { createAutoVersions } from './auto-versions.mjs';
 import { createHistoryPreviews } from './history-previews.mjs';
@@ -669,6 +669,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
          POST   history/save      { message? }   commit the changes as a version
          POST   history/discard                  the folder as the version checked out holds it
          POST   history/checkout  { commit, discard? }   check out a version (no version is made)
+         POST   history/film      { commit }     film.html missing: only film.html put back as that version has it
          POST   history/copy      { commit, name } a new project holding that version → { project, missing }
        Every change tells the project's pages ({ type: 'history' }; `moved`: the folder's files changed, so Studio's
        state of the film is read again). While one runs, they hear how far it is ({ type: 'history-progress', op,
@@ -720,6 +721,13 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         const done = await checkoutVersion(project.path, String(target ?? ''), { discard: discard === true, onProgress: onProgress('checkout') });
         historyChanged(project.path, { moved: true });
         /* `missing`: media of that version history no longer has (left as it is in the folder) */
+        return json(res, 200, { ...done, ...(await readProjectFilm(project.path)) });
+      }
+      if (history[0] === 'film' && history.length === 1 && req.method === 'POST') {
+        const { commit: target } = /** @type {{ commit?: string }} */ (await readJson(req));
+        personEdits.filmReplaced(project.path);
+        const done = await restoreFilm(project.path, String(target ?? ''), { onProgress: onProgress('restore') });
+        historyChanged(project.path, { moved: true });
         return json(res, 200, { ...done, ...(await readProjectFilm(project.path)) });
       }
       if (history[0] === 'copy' && req.method === 'POST') {

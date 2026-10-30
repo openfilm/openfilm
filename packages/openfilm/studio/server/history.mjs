@@ -293,7 +293,7 @@ const LISTED = 500;
  * Where the history is: the version checked out (null: none yet), and what the folder holds that it does not: the
  * files added, modified and deleted, and what that does to the film (null: nothing). A project never saved holds all
  * it has as changes. `filmMissing`: the folder has no film.html, so all the version holds counts as deleted, and
- * checking out a version (or discarding) is how it comes back.
+ * restoreFilm is how it comes back.
  * @param {string} root @param {Options} [o] @returns {Promise<Status>}
  */
 export function status(root, { onProgress } = {}) {
@@ -608,6 +608,25 @@ export function checkoutVersion(root, commit, { discard = false, onProgress } = 
     if (branch) await git(root, ['symbolic-ref', 'HEAD', branch]);
     else await git(root, ['update-ref', '--no-deref', 'HEAD', full]);
     return { commit: full, missing };
+  });
+}
+
+/**
+ * film.html missing: put back only film.html, as version `commit` has it. Every other file stays as it is (none written
+ * over, none to the trash: an agent's other work is kept), and the version checked out does not change. Refused when
+ * film.html is there again ('dirty': restoring the version is then the way) or the version has none ('no-film').
+ * @param {string} root @param {string} commit @param {Options} [o]
+ */
+export function restoreFilm(root, commit, { onProgress } = {}) {
+  return queued(root, async () => {
+    const progress = throttled(onProgress);
+    const repo = await ready(root, progress);
+    const full = await resolveCommit(root, commit);
+    if (!filmIsMissing(root)) throw new HistoryError('film.html is there: restore the whole version instead', 409, 'dirty');
+    const version = await readVersion(repo, full);
+    if (!version.has(FILM_FILE)) throw new HistoryError('that version has no film.html', 409, 'no-film');
+    await writeFiles(repo, version, { paths: [FILM_FILE], progress });
+    return { commit: full };
   });
 }
 

@@ -301,11 +301,17 @@ export function ProjectHistoryControls({
   };
   const restore = async (v: Version, saveFirst: boolean) => {
     setDialog(null);
-    /* film.html missing: there is nothing to save (a version without it would be empty), and the folder goes back as
-       the version has it, film.html with it */
-    const filmMissing = !!status?.filmMissing;
-    if (saveFirst && !filmMissing && !(await history.save(''))) return;
-    const result = await history.checkout(v.commit, filmMissing);
+    /* film.html missing: there is nothing to save (a version without it would be empty), and only film.html comes
+       back from the version: the other files, an agent's work among them, stay as they are. Back meanwhile
+       ('dirty'): asked again, as a whole version */
+    if (status?.filmMissing) {
+      const result = await history.restoreFilm(v.commit);
+      if (result.ok) { setSelected(v.commit); setNotice(t('versions.filmRestored')); }
+      else if (result.code === 'dirty') setDialog({ kind: 'restore', version: v });
+      return;
+    }
+    if (saveFirst && !(await history.save(''))) return;
+    const result = await history.checkout(v.commit);
     if (result.ok) {
       setSelected(v.commit);
       setNotice(result.body.missing?.length ? t('versions.missing') : t('versions.restored'));
@@ -827,7 +833,9 @@ export function ProjectHistoryControls({
                   ? 'versions.discardConfirm'
                   : dialog.kind === 'delete'
                   ? 'versions.deleteConfirm'
-                  : changes && !status?.filmMissing
+                  : status?.filmMissing
+                  ? 'versions.restoreFilmOnly'
+                  : changes
                   ? 'versions.saveAndRestore'
                   : 'versions.restore'
               ),

@@ -637,7 +637,7 @@ test('a removed film keeps the project open but says so; nothing writes the film
   assert.equal((await api('/api/health')).status, 200);
 });
 
-test('without film.html the history still lists, restores and discards: a version that has it brings it back (#304)', async () => {
+test('without film.html the history still lists, restores and discards: a version that has it brings back film.html alone (#304)', async () => {
   const { project } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'Film lost') } })).json();
   const history = (path = '', body) => api(`/api/projects/${project.id}/history${path}`, body ? { method: 'POST', body } : {});
   const kept = filmHtml({ stage: { w: 640, h: 360 }, tracks: [] });
@@ -655,12 +655,19 @@ test('without film.html the history still lists, restores and discards: a versio
   assert.equal(empty.status, 409);
   assert.equal((await empty.json()).code, 'missing-film');
   assert.deepEqual((await (await history()).json()).versions.map((v) => v.commit), [commit]);
-  /* restored (its changes are only what went with film.html): film.html is back as the version had it */
-  const restored = await history('/checkout', { commit, discard: true });
+  /* restored: only film.html comes back as the version had it; the agent's other work stays as it is */
+  writeFileSync(join(project.path, 'notes.md'), 'the agent\'s notes');
+  const restored = await history('/film', { commit });
   assert.equal(restored.status, 200);
   assert.equal(readFileSync(join(project.path, 'film.html'), 'utf8'), kept);
+  assert.equal(readFileSync(join(project.path, 'notes.md'), 'utf8'), 'the agent\'s notes');
   assert.equal((await (await history()).json()).status.filmMissing, undefined);
-  /* or discarded: the same */
+  /* back meanwhile: the whole version is the way, not this */
+  assert.equal((await (await history('/film', { commit })).json()).code, 'dirty');
+  /* a whole version checked out, or the changes discarded, bring it back too */
+  rmSync(join(project.path, 'film.html'));
+  assert.equal((await history('/checkout', { commit, discard: true })).status, 200);
+  assert.equal(readFileSync(join(project.path, 'film.html'), 'utf8'), kept);
   rmSync(join(project.path, 'film.html'));
   assert.equal((await history('/discard', {})).status, 200);
   assert.equal(readFileSync(join(project.path, 'film.html'), 'utf8'), kept);

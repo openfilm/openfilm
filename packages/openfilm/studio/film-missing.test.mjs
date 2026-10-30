@@ -65,10 +65,13 @@ test('film.html deleted and written again 3 s later (an agent replacing it whole
   await page.waitForURL((url) => url.pathname !== address, { timeout: 10_000 });
 });
 
-test('film.html deleted for good: the notice stays, the history lists its versions, and restoring one brings film.html back (#304)', { timeout: 90_000 }, async (t) => {
+test('film.html deleted for good: the notice stays, the history lists its versions, and restoring one brings back film.html alone (#304)', { timeout: 90_000 }, async (t) => {
   const { root, page, address, api } = await open(t, 'Lost');
   const saved = await api('/history/save', { method: 'POST', body: JSON.stringify({ message: 'Kept cut' }) });
   assert.equal(saved.status, 200);
+  /* the agent's other work since that version, then film.html gone */
+  await writeFile(join(root, 'card.html'), card('Changed by the agent'));
+  await writeFile(join(root, 'notes.md'), 'the agent\'s notes');
   await unlink(join(root, 'film.html'));
   await notice(page).waitFor({ state: 'visible', timeout: 5000 });
   await page.waitForTimeout(3000);
@@ -78,12 +81,14 @@ test('film.html deleted for good: the notice stays, the history lists its versio
   await page.getByRole('button', { name: 'Version history' }).first().click();
   await page.getByText('Kept cut', { exact: true }).first().click();
   await page.getByRole('button', { name: 'Restore this version' }).click();
-  /* nothing to save first: it says so, and restores */
-  await page.getByText('film.html is missing, so there is nothing to save first.').waitFor({ state: 'visible' });
-  await page.getByRole('button', { name: 'Restore this version' }).last().click();
-  await page.getByText('Version restored.').waitFor({ state: 'visible', timeout: 10_000 });
+  /* only film.html comes back: it says so, and does so */
+  await page.getByText('film.html is missing, so only film.html comes back').waitFor({ state: 'visible' });
+  await page.getByRole('button', { name: 'Restore film.html' }).click();
+  await page.getByText('film.html restored from this version.').waitFor({ state: 'visible', timeout: 10_000 });
   assert.equal(existsSync(join(root, 'film.html')), true);
   assert.equal(await readFile(join(root, 'film.html'), 'utf8'), film('card.html'));
+  assert.equal(await readFile(join(root, 'card.html'), 'utf8'), card('Changed by the agent'), 'the other changed file is untouched');
+  assert.equal(await readFile(join(root, 'notes.md'), 'utf8'), 'the agent\'s notes', 'and the new one is still there');
   await notice(page).waitFor({ state: 'detached', timeout: 5000 });
   assert.equal(new URL(page.url()).pathname, address);
 });

@@ -5,7 +5,7 @@ import { randomBytes } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { checkoutVersion, copyVersion, discardChanges, log, saveVersion, status, versionFilesChanged } from './history.mjs';
+import { checkoutVersion, copyVersion, discardChanges, log, restoreFilm, saveVersion, status, versionFilesChanged } from './history.mjs';
 import { replaceFile } from './atomic.mjs';
 
 let trash;
@@ -460,4 +460,22 @@ test('without film.html nothing is saved: the person is told why, a version on i
   writeFileSync(join(root, 'film.html'), film(page('title.html'), sound('a.mp3')));
   assert.ok(await saveVersion(root, { message: 'Back' }));
   assert.ok(tracked(root).includes('film.html'));
+});
+
+test('film.html missing: only it comes back from a version; every other file stays, none to the trash, the version checked out unchanged (#304)', async () => {
+  const root = project();
+  const first = await saveVersion(root, { message: 'First' });
+  writeFileSync(join(root, 'title.html'), 'the agent\'s new title');
+  writeFileSync(join(root, 'notes.md'), 'the agent\'s notes');
+  const kept = readFileSync(join(root, 'film.html'), 'utf8');
+  rmSync(join(root, 'film.html'));
+  const trashed = readdirSync(trash).length;
+  assert.deepEqual(await restoreFilm(root, first), { commit: first });
+  assert.equal(readFileSync(join(root, 'film.html'), 'utf8'), kept);
+  assert.equal(readFileSync(join(root, 'title.html'), 'utf8'), 'the agent\'s new title', 'not written over');
+  assert.equal(readFileSync(join(root, 'notes.md'), 'utf8'), 'the agent\'s notes', 'not sent to the trash');
+  assert.equal(readdirSync(trash).length, trashed);
+  assert.equal((await status(root)).head, first);
+  /* film.html there: the whole version is the way */
+  await rejects(restoreFilm(root, first), 'dirty');
 });

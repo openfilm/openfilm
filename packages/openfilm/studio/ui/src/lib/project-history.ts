@@ -9,6 +9,7 @@
  *   POST   /api/projects/:id/history/save     { message? }
  *   POST   /api/projects/:id/history/discard
  *   POST   /api/projects/:id/history/checkout { commit, discard? }
+ *   POST   /api/projects/:id/history/film     { commit }   film.html missing: only film.html put back from it
  *   POST   /api/projects/:id/history/copy     { commit, name } → { project }
  *   POST   /api/projects/:id/history/delete   { commits }   move records to Deleted (current version protected)
  *   POST   /api/projects/:id/history/recover  { commits }   recover records without checking them out
@@ -33,7 +34,7 @@ export interface HistoryStatus {
   branch: string | null;
   /** what the folder holds that the version checked out does not; null: nothing */
   changes: { count: number; summary: Summary; files: Change[] } | null;
-  /** the folder has no film.html: there is nothing to save, and restoring a version brings it back */
+  /** the folder has no film.html: there is nothing to save, and restoring a version brings back only film.html */
   filmMissing?: boolean;
 }
 /** How far an action is: `phase` reading the files, keeping media, writing files, or updating the history. */
@@ -234,6 +235,8 @@ export const historyApi = {
   save: (id: string, message: string) => call<{ commit: string }>(id, '/save', 'POST', { message }),
   discard: (id: string) => call<{ missing?: string[] }>(id, '/discard', 'POST', {}),
   checkout: (id: string, commit: string, discard = false) => call<{ commit: string; missing?: string[] }>(id, '/checkout', 'POST', { commit, discard }),
+  /** film.html missing: only it put back, as the version has it; the other files are left as they are */
+  restoreFilm: (id: string, commit: string) => call<{ commit: string }>(id, '/film', 'POST', { commit }),
   copy: (id: string, commit: string, name: string) => call<{ project: { id: string; name: string }; missing?: string[] }>(id, '/copy', 'POST', { commit, name }),
   delete: (id: string, commits: string[]) => call<{ commits: string[] }>(id, '/delete', 'POST', { commits }),
   recover: (id: string, commits: string[]) => call<{ commits: string[] }>(id, '/recover', 'POST', { commits }),
@@ -244,6 +247,7 @@ export function historyErrorKey(result: { status: number; code: string | null })
   switch (result.code) {
     case 'nothing': return 'versions.errorNothing';
     case 'missing-film': return 'versions.errorMissingFilm';
+    case 'no-film': return 'versions.errorNoFilm';
     case 'dirty': return 'versions.errorDirty';
     case 'current': return 'versions.errorDeleteCurrent';
     case 'deleted': return 'versions.errorDeleted';

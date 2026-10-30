@@ -92,6 +92,7 @@ test('a progress event is read only when it is one; a checkout says the folder m
 test('a refusal is said in our own words', () => {
   assert.equal(historyErrorKey({ status: 409, code: 'nothing' }), 'versions.errorNothing');
   assert.equal(historyErrorKey({ status: 409, code: 'missing-film' }), 'versions.errorMissingFilm');
+  assert.equal(historyErrorKey({ status: 409, code: 'no-film' }), 'versions.errorNoFilm');
   assert.equal(historyErrorKey({ status: 409, code: 'dirty' }), 'versions.errorDirty');
   assert.equal(historyErrorKey({ status: 409, code: 'current' }), 'versions.errorDeleteCurrent');
   assert.equal(historyErrorKey({ status: 409, code: 'deleted' }), 'versions.errorDeleted');
