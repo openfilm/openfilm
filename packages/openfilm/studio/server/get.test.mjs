@@ -454,7 +454,7 @@ test('openfilm get: what can be got here, connected, partly or not at all; wrong
       `Not connected here: ${unconnected('image')}. ${CONNECT_ONE}`].join('\n')}\n`);
     const unavailable = get(root, 'image', '--out', 'hero', '--prompt', 'a key');
     assert.equal(unavailable.status, 1);
-    assert.match(unavailable.stdout, /^Not connected here: image \(fal\.ai, Google or OpenAI\)\. .*with the person's own key/);
+    assert.match(unavailable.stdout, /^Not connected here: image \(fal\.ai, Google, OpenAI or OpenFilm\)\. .*with the person's own key/);
     assert.equal(unavailable.stdout, `Not connected here: ${unconnected('image')}. ${CONNECT_ONE} Tell the person. `
       + 'Until then, make it in code, or use a service the person has a key for (with its API docs), and save it under assets/.\n');
 
