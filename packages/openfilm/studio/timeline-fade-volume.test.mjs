@@ -15,7 +15,7 @@ const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: '
 const card = `<!doctype html><body style="margin:0;background:#111"><h1 style="margin:40px;font:700 40px sans-serif;color:#fff">Every parcel</h1>
 <script>window.film={duration:4,frame(){}}</script></body>`;
 
-test('the clip under the pointer, and it alone, has a fade dot just inside each end on the bottom of its picture (a sound: the top of its waveform) and a hairline across its sound for its volume; no slope, no bars on its edges', { timeout: 90_000, skip: !hasFfmpeg && 'no ffmpeg' }, async () => {
+test('the clip under the pointer, and it alone, has a fade dot just inside each end on the bottom of its picture (a sound: the top of its waveform) and a hairline across its sound for its volume, its waveform as loud as the volume makes it; no slope, no bars on its edges', { timeout: 90_000, skip: !hasFfmpeg && 'no ffmpeg' }, async () => {
   const scratch = await mkdtemp(join(tmpdir(), 'of-fade-volume-'));
   const names = ['HOME', 'SHARED_HOME', 'LIBRARY', 'SAVED', 'EXPORTS'];
   const saved = new Map(names.map((name) => [`OPENFILM_${name}`, process.env[`OPENFILM_${name}`]]));
@@ -25,7 +25,8 @@ test('the clip under the pointer, and it alone, has a fade dot just inside each 
     const root = join(process.env.OPENFILM_LIBRARY, 'Levels');
     await mkdir(join(root, 'assets'), { recursive: true });
     execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=25:duration=4', '-f', 'lavfi', '-i', 'sine=frequency=220:duration=4', '-shortest', '-pix_fmt', 'yuv420p', join(root, 'assets', 'clip.mp4')]);
-    execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=330:duration=4', join(root, 'assets', 'tune.wav')]);
+    /* a loud tone, half of full scale: raised 6 dB it reaches the top, more and it clips */
+    execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', "aevalsrc='0.5*sin(2*PI*330*t)':d=4", join(root, 'assets', 'tune.wav')]);
     await writeFile(join(root, 'card.html'), card);
     await writeFile(join(root, 'film.html'), filmHtml({
       stage: { w: 320, h: 180 },
@@ -168,6 +169,51 @@ test('the clip under the pointer, and it alone, has a fade dot just inside each 
     await page.mouse.up();
     await until(async () => (await page.locator('[data-block-frame]').count()) === 3, 'the box selects the clips');
     assert.deepEqual(await shown(), [], 'clips selected by a box show no dots');
+
+    /* the sound's waveform as loud as it plays: taller while its line is raised, before it is let go; past full scale
+       capped at the top with the clipped part tinted; back as it was on Undo; a line when muted */
+    await page.keyboard.press('Escape');
+    const drawn = () => sound.locator('canvas[data-wave-volume]').evaluate((c) => {
+      const { data, width, height } = c.getContext('2d').getImageData(0, 0, c.width, c.height);
+      let top = height; let warm = 0;
+      for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
+        const i = (y * width + x) * 4;
+        if (data[i + 3] < 40) continue;
+        top = Math.min(top, y);
+        if (data[i] > 180 && data[i] > data[i + 2] + 80) warm += 1;
+      }
+      const scale = c.height / c.getBoundingClientRect().height;
+      return { peak: (height - top) / scale, band: height / scale, warm, volume: Number(c.getAttribute('data-wave-volume')) };
+    });
+    const hover = async () => { await page.mouse.move(soundBox.x + soundBox.width / 3, soundBox.y + soundBox.height - 4); };
+    await hover();
+    await until(async () => (await sound.locator('[data-volume-line]').count()) === 1, 'the sound shows its line');
+    const asIs = await drawn();
+    assert.equal(asIs.volume, 1);
+    assert.ok(asIs.peak > asIs.band * 0.4 && asIs.peak < asIs.band * 0.6 && asIs.warm === 0, `half the band as is (${JSON.stringify(asIs)})`);
+    /* where the line puts a volume (lib/clip-volume volumeLineY), its area all under the sound's name */
+    const lineFor = (v) => soundBox.y + 15 + (soundBox.height - 15) * (1 - Math.cbrt(v / 5));
+    const soundLine = middle(await sound.locator('[data-volume-line]').boundingBox());
+    await page.mouse.move(soundLine.x, soundLine.y);
+    await page.mouse.down();
+    await page.mouse.move(soundLine.x, lineFor(1.6), { steps: 4 });
+    await until(async () => (await drawn()).peak > asIs.peak + asIs.band * 0.2, 'taller while the line is in hand');
+    const held = await drawn();
+    assert.equal(held.warm, 0, `+4 dB: louder, not yet clipping (${JSON.stringify(held)})`);
+    await page.mouse.move(soundLine.x, lineFor(4), { steps: 4 });
+    await page.mouse.up();
+    await until(async () => (await clipOf('tune'))?.volume > 3, 'the volume is written');
+    const loud = await drawn();
+    assert.ok(Math.abs(loud.peak - loud.band) <= 0.5 && loud.warm > 0, `+12 dB: capped at the top, the clipped part tinted (${JSON.stringify(loud)})`);
+    await page.locator('button[aria-label^="Undo"]').click();
+    await until(async () => (await clipOf('tune'))?.volume == null, 'Undo puts it back');
+    await hover();
+    await until(async () => Math.abs((await drawn()).peak - asIs.peak) <= 0.5, 'drawn as it was');
+    assert.equal((await drawn()).warm, 0);
+    await sound.click({ button: 'right', position: { x: 40, y: 25 } });
+    await page.getByRole('menuitem', { name: 'Mute', exact: true }).click();
+    await until(async () => (await clipOf('tune'))?.volume === 0, 'muted');
+    await until(async () => (await drawn()).peak <= 1, 'a muted sound is a line');
   } finally {
     await browser?.close();
     await studio?.close();

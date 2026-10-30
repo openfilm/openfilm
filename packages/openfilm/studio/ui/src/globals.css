@@ -105,6 +105,8 @@
   /* waveforms on blocks (canvas reads these back from the element) */
   --tl-wave: rgba(0, 110, 108, 0.82);
   --tl-wave-band: rgba(0, 96, 102, 0.8);
+  /* the part of a waveform a clip's volume pushes past full scale: it will distort */
+  --tl-wave-clip: #f2711c;
   --tl-scene: #3f9b9b;
   --tl-video: #5385bd;
   --tl-voice: #6f62b0;
@@ -183,6 +185,7 @@
   --tl-select: #ffffff;
   --tl-wave: rgba(12, 168, 164, 0.9);
   --tl-wave-band: rgba(0, 119, 125, 0.85);
+  --tl-wave-clip: #ff8a3d;
   --tl-tick: rgba(255, 255, 255, 0.12);
   --tl-scene: #1d5c60;
   --tl-video: #2d4f7c;

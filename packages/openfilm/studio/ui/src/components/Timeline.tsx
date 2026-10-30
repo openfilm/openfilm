@@ -3255,6 +3255,9 @@ export const Timeline = React.memo(function Timeline({
                         width={width}
                         height={AUDIO_BAND_H - 2}
                         color="var(--tl-wave-band)"
+                        clipColor="var(--tl-wave-clip)"
+                        /* as loud as it plays: the volume as written, or as the line in hand has it */
+                        volume={volume}
                         visiblePx={{ from: winFrom, to: winTo }}
                         /* the source span under this block: film length × the clip's speed */
                         inMs={waveInMs}
@@ -3285,6 +3288,8 @@ export const Timeline = React.memo(function Timeline({
                     width={width}
                     height={Math.max(6, h - INFO_H - 2)}
                     color="var(--tl-wave)"
+                    clipColor="var(--tl-wave-clip)"
+                    volume={volume}
                     visiblePx={{ from: winFrom, to: winTo }}
                     inMs={waveInMs}
                     durMs={waveDurMs}
