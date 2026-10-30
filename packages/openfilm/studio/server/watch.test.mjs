@@ -12,7 +12,7 @@ const until = async (ready) => {
   assert.ok(ready(), 'the presence change was reported');
 };
 
-test('a deleted film leaves its editor even when its folder and caches remain; no empty film is published', async () => {
+test('a deleted film is said missing once, never gone, while its folder remains; no empty film is published', async () => {
   const root = mkdtempSync(join(tmpdir(), 'of-watch-film-gone-'));
   writeFileSync(join(root, 'film.html'), 'original');
   mkdirSync(join(root, '.film'));
@@ -22,10 +22,33 @@ test('a deleted film leaves its editor even when its folder and caches remain; n
     await settle(600);
     seen.length = 0;
     rmSync(join(root, 'film.html'));
-    await until(() => seen.some((e) => e.type === 'gone'));
+    await until(() => seen.some((e) => e.type === 'film-missing'));
     writeFileSync(join(root, '.film', 'cache'), 'cache written after deletion');
-    await settle(1200);
-    assert.deepEqual(seen, [{ type: 'gone' }]);
+    await settle(2200);
+    assert.deepEqual(seen, [{ type: 'film-missing' }]);
+  } finally {
+    stop();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a film deleted and written again seconds later (an agent replacing it whole) comes back as a film, the same text too', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-watch-film-back-'));
+  writeFileSync(join(root, 'film.html'), 'original');
+  const seen = [];
+  const stop = watchFolder(root, (event) => seen.push(event));
+  try {
+    await settle(600);
+    seen.length = 0;
+    rmSync(join(root, 'film.html'));
+    await until(() => seen.some((e) => e.type === 'film-missing'));
+    await settle(1500);
+    writeFileSync(join(root, 'film.html'), 'original');
+    await until(() => seen.some((e) => e.type === 'film'));
+    assert.deepEqual(seen, [{ type: 'film-missing' }, { type: 'film', rev: revOf('original') }]);
+    /* gone again, then for good with its folder: gone */
+    rmSync(root, { recursive: true, force: true });
+    await until(() => seen.some((e) => e.type === 'gone'));
   } finally {
     stop();
     rmSync(root, { recursive: true, force: true });

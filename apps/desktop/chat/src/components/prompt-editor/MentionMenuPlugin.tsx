@@ -37,7 +37,6 @@ import {
   matchMentionTrigger,
   type MentionEntry,
   type MentionProvider,
-  type MentionTrigger,
 } from './mention-menu';
 import { chatLayer } from '@/lib/chat-layer';
 
@@ -52,8 +51,6 @@ export interface MentionMenuConfig {
    * The file list is fetched only then: most sessions never mention a file.
    */
   onOpen?: () => void;
-  /** When typing opens it: an `@` (the default), or a `/` at the start (the agent's commands, matchSlashTrigger). */
-  trigger?: (textBeforeCursor: string) => MentionTrigger | null;
 }
 
 /** Lexical requires options to subclass MenuOption (it attaches a ref for scrolling). */
@@ -66,7 +63,7 @@ class MentionMenuOption extends MenuOption {
   }
 }
 
-export function MentionMenuPlugin({ providers, label, onOpen, trigger: match = matchMentionTrigger }: MentionMenuConfig) {
+export function MentionMenuPlugin({ providers, label, onOpen }: MentionMenuConfig) {
   const [editor] = useLexicalComposerContext();
   const [query, setQuery] = React.useState('');
 
@@ -86,10 +83,8 @@ export function MentionMenuPlugin({ providers, label, onOpen, trigger: match = m
   const handleOpen = React.useCallback(() => onOpenRef.current?.(), []);
   const handleQueryChange = React.useCallback((value: string | null) => setQuery(value ?? ''), []);
 
-  const matchRef = React.useRef(match);
-  matchRef.current = match;
   const triggerFn = React.useCallback((text: string): MenuTextMatch | null => {
-    const trigger = matchRef.current(text);
+    const trigger = matchMentionTrigger(text);
     if (!trigger) return null;
     /* No matches, no menu: an open menu takes the arrow keys, so an empty one would lock
        them while the user probably wants to move the caret. */
@@ -105,18 +100,6 @@ export function MentionMenuPlugin({ providers, label, onOpen, trigger: match = m
     (option: MentionMenuOption, nodeToReplace: TextNode | null, closeMenu: () => void) => {
       const { item } = option.entry;
       const picked = item.disabled ? null : item.select();
-      /* a command goes in as its words, with a space for what follows */
-      if (picked && 'text' in picked) {
-        editor.update(() => {
-          const node = $createTextNode(`${picked.text} `);
-          if (nodeToReplace) nodeToReplace.replace(node);
-          else $insertNodes([node]);
-          node.select();
-          closeMenu();
-        });
-        keepCaretInComposer(editor);
-        return;
-      }
       const references = picked ? [picked].flat() : [];
       /* A disabled item yields nothing, but the menu still closes: an open menu takes
          Enter, so the next Enter would not send. Same when select() returns nothing
@@ -287,6 +270,20 @@ function MentionMenu({
     };
   }, [editorRoot]);
 
+  /* The arrow keys' row kept in view. Lexical scrolls only a menu inside its own anchor (`#typeahead-menu`), and this
+     one is in the chat layer, so past the rows that fit, the selection went on below the menu's edge. */
+  React.useEffect(() => {
+    if (selectedIndex == null) return;
+    const row = options[selectedIndex]?.ref?.current;
+    /* back at the first row: its group's title too */
+    if (selectedIndex === 0) row?.parentElement?.scrollTo({ top: 0 });
+    else {
+      /* the first row of a later group: its title too, above it */
+      if (options[selectedIndex]!.entry.firstOfGroup) row?.previousElementSibling?.scrollIntoView({ block: 'nearest' });
+      row?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [selectedIndex, options]);
+
   if (!style) return null;
   return (
     <div
@@ -301,7 +298,7 @@ function MentionMenu({
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-1.5">
         {options.map((option, index) => {
           const { item, groupLabel, firstOfGroup } = option.entry;
-          const Icon = item.icon ?? (item.kind === 'file' ? fileIcon(item.label) : PILL_ICON[item.kind]);
+          const Icon = item.kind === 'file' ? fileIcon(item.label) : PILL_ICON[item.kind];
           const selected = index === selectedIndex;
           return (
             <React.Fragment key={option.key}>

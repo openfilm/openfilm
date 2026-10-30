@@ -131,7 +131,6 @@ export const es: Words = {
   composer: {
     contextFull: 'Esta conversación ya es larga. Una nueva funcionará mejor.',
     contextFullNew: 'Nueva conversación',
-    commands: 'Comandos',
     agentLoading: 'Cargando…',
     agentNone: 'Agente',
     agentNoneShown: 'No hay ningún agente activado para el chat.',
@@ -165,8 +164,6 @@ export const es: Words = {
     routeNoKeyNoAccount: 'Este modelo necesita una clave de API de DeepSeek y no hay ninguna configurada en este equipo. Inicia sesión con tu cuenta de DeepSeek en DeepSeek Harness o añade una clave de API en su configuración de modelos.',
     useAccountModel: 'Usar {model}',
     accountModelPicked: 'Cambiado a {model}. Vuelve a enviar el mensaje.',
-    removeFile: 'Quitar archivo',
-    removeImage: 'Quitar imagen',
     speed: 'Velocidad',
     thumbOnly: 'Una miniatura guardada con el mensaje. El original sigue donde estaba, o en el proyecto si se pegó.',
   },
@@ -224,8 +221,8 @@ export const es: Words = {
     assets: 'Recursos',
     addAttachment: 'Añadir archivos',
     close: 'Cerrar',
-    composerPlaceholder: 'Di qué cambiar. Escribe @ para señalar un archivo, un momento o lo que seleccionaste',
-    composerPlaceholderBlank: 'Describe tu película. Escribe @ para usar un archivo de este proyecto',
+    composerPlaceholder: 'Di qué cambiar. Escribe @ para un archivo, una skill, un momento o lo que seleccionaste',
+    composerPlaceholderBlank: 'Describe tu película. Escribe @ para añadir un archivo o una skill',
     dismiss: 'Descartar',
     jumpToLatest: 'Ir a lo más reciente',
     loadingMessages: 'Cargando la conversación…',
@@ -393,5 +390,15 @@ export const es: Words = {
     added: 'Nuevo',
     removed: 'Eliminado',
     changed: 'Cambiado',
+  },
+  /** a turn that ended with film.html gone: under its reply, put it back as the turn found it (lib/film-restore) */
+  filmRestore: {
+    lost: 'En este turno se eliminó film.html y ahora no está.',
+    restore: 'Restaurar film.html como estaba antes de este turno',
+    restoring: 'Restaurando…',
+    restored: 'film.html ha vuelto como estaba antes de este turno.',
+    exists: 'film.html ya ha vuelto, así que se ha dejado como está.',
+    gone: 'La copia de antes de este turno ya no se conserva. Restaura film.html desde el Historial de versiones.',
+    failed: 'No se pudo restaurar film.html. Inténtalo de nuevo o restáuralo desde el Historial de versiones.',
   },
 };

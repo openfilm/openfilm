@@ -17,7 +17,7 @@ import {
   type LocalAgentSessionInfo,
   type RosterAgent,
 } from '@/lib/desktop-bridge';
-import { forgetLocalAgentSessions, keepCommands, readCommands } from '@/lib/local-agent-run';
+import { forgetLocalAgentSessions } from '@/lib/local-agent-run';
 
 export type AgentPick = LocalAgentId;
 
@@ -259,7 +259,6 @@ export const useLocalAgents = create<LocalAgentStore>((set, get) => ({
       const r = await api.probe(agent, model).catch((e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e), code: undefined }));
       // A newer model pick wins; an older response must not replace its effort list.
       if (currentKey() !== key || !get().roster?.some((a) => a.id === agent && a.shown && a.status === 'ready')) return;
-      if (r.ok && r.info.commands?.length) keepCommands(agent, readCommands({ availableCommands: r.info.commands }));
       if (r.ok && r.info.configOptions?.length) get().noteOptions(agent, r.info.configOptions);
       /* the ones kept from before stay when this launch's ask fails */
       else if (!kept || model != null) set({ optionsError: { ...get().optionsError, [agent]: r.ok ? { text: 'no options' } : { text: r.error, ...(r.code ? { code: r.code } : {}) } } });

@@ -2,7 +2,7 @@
 // in host.mjs); the file's own elements are the clips: an <iframe> a web page, a <video>, an <img> a still, an
 // <audio> a sound for the mix. Where each plays and sits is what film-doc.mjs reads in the file, the same reading
 // Studio plays and exports by; how each looks is the file's own CSS. Track 0, the first <section>, is on top.
-import { clipFade, clipSpan, clipTag, declarations, fadeGain, filmHead, fittedFade, kindOf, parseFilm, pictureRect, readFilmFile, sourceAt, srcHref } from './film-doc.mjs';
+import { MEDIA_RATE_MAX, MEDIA_RATE_MIN, clipFade, clipSpan, clipTag, declarations, fadeGain, filmHead, fittedFade, kindOf, mediaPlays, parseFilm, pictureRect, readFilmFile, sourceAt, srcHref } from './film-doc.mjs';
 import { override, restore } from './overrides.mjs';
 
 /* the file as written (without what the host puts in it), read as every reader reads it */
@@ -253,12 +253,22 @@ const START_LAG = 0.08;   // s: how long play() takes to get a video going
 /** Keep a playing video at `want` as the film plays at `rate`: its pace nudged when it drifts, sought when far off. */
 function roll(c, want, rate) {
   const v = c.el;
+  const speed = (c.span.speed ?? 1) * rate;
+  /* a clip × viewer rate the browser does not play (faster than 16×, slower than 1/16×): the film is followed by
+     seeking, as when autoplay is refused */
+  if (!mediaPlays(speed)) {
+    if (!v.paused) v.pause();
+    c.steer = 0; c.off = 0;
+    step(c, want);
+    return;
+  }
   const drift = v.currentTime - want;
   if (Math.abs(drift) > ROLL_SEEK || v.ended) { v.currentTime = want; c.steer = 0; c.off = 0; }
   else if (Math.abs(drift) > ROLL_STEER) { c.off = (c.off ?? 0) + 1; if (c.off >= 2) c.steer = drift > 0 ? -1 : 1; }
   else { c.off = 0; if (Math.abs(drift) < ROLL_SETTLE) c.steer = 0; }
-  /* the pace is written only when it changes: each write is work for the media pipeline */
-  const pace = (c.span.speed ?? 1) * rate * (1 + (c.steer ?? 0) * ROLL_NUDGE);
+  /* the pace is written only when it changes (each write is work for the media pipeline), and nudged within those
+     rates: a 16× clip a little behind would ask the browser for 16.48×, and it throws */
+  const pace = Math.max(MEDIA_RATE_MIN, Math.min(MEDIA_RATE_MAX, speed * (1 + (c.steer ?? 0) * ROLL_NUDGE)));
   if (Math.abs(v.playbackRate - pace) > 1e-4) v.playbackRate = pace;
   if (v.paused) v.play().catch((e) => { if (e?.name === 'NotAllowedError') c.held = true; });
   c.lastWant = want;
@@ -362,7 +372,7 @@ function getReady(c, lead, rate) {
     v.currentTime = cue;
     c.cued = c.lastWant = cue;
   }
-  if (lead < rolling + START_LAG * rate && v.paused && !v.seeking && !c.held) {
+  if (mediaPlays(speed * rate) && lead < rolling + START_LAG * rate && v.paused && !v.seeking && !c.held) {
     v.playbackRate = speed * rate;
     v.play().catch((e) => { if (e?.name === 'NotAllowedError') c.held = true; });
   }

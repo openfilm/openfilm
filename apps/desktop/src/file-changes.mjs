@@ -7,9 +7,12 @@
  * Any other file (media, a large file) is compared by its size and time only, and says no lines. Studio's own folder
  * (.film), hidden folders and node_modules are not read.
  *
+ * film.html is kept whole whatever its size (up to FILM_MAX): a turn that ends with it gone (`filmLost`) can put it
+ * back as it was (`restoreFilm`), since the film is the project.
+ *
  * Reads no Electron module, so `node --test` can use it.
  */
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
 import { structuredPatch } from 'diff';
 
@@ -26,6 +29,9 @@ const LINES_MAX = 400;
 const TURN_LINES_MAX = 2000;
 /** a diff that takes longer than this gives up: the file says it changed, with no lines */
 const DIFF_MS = 1500;
+/** the project's film, at its top, and how large a one is kept whole to put back */
+export const FILM = 'film.html';
+const FILM_MAX = 32 * 1024 * 1024;
 
 /**
  * @typedef {{ size: number, mtimeMs: number, text?: string }} Seen
@@ -59,10 +65,11 @@ export async function snapshot(root) {
       try { info = await stat(abs); } catch { continue; }
       /** @type {Seen} */
       const seen = { size: info.size, mtimeMs: info.mtimeMs };
-      if (TEXT.test(entry.name) && info.size <= TEXT_MAX && kept + info.size <= KEEP_MAX) {
+      const path = relative(root, abs).split(sep).join('/');
+      if (path === FILM ? info.size <= FILM_MAX : TEXT.test(entry.name) && info.size <= TEXT_MAX && kept + info.size <= KEEP_MAX) {
         try { seen.text = await readFile(abs, 'utf8'); kept += info.size; } catch { /* gone meanwhile */ }
       }
-      files.set(relative(root, abs).split(sep).join('/'), seen);
+      files.set(path, seen);
     }
   };
   await walk(root, 0);
@@ -90,11 +97,12 @@ function clip(hunks, max) {
 
 /**
  * What changed between a snapshot and the folder now: the files added, removed and changed, in path order (an
- * empty list: nothing changed). `cut`: the folder was too large to read whole.
+ * empty list: nothing changed). `cut`: the folder was too large to read whole. `filmLost`: film.html was there (and
+ * kept whole) and is not now: removed, and not written again by the end; `restoreFilm` puts it back.
  *
  * @param {string} root
  * @param {Snapshot} before
- * @returns {Promise<{ files: FileChange[], cut: boolean }>}
+ * @returns {Promise<{ files: FileChange[], cut: boolean, filmLost?: true }>}
  */
 export async function changes(root, before) {
   const after = await snapshot(root);
@@ -122,5 +130,17 @@ export async function changes(root, before) {
     lines -= kept.reduce((n, hunk) => n + hunk.lines.length, 0);
     out.push({ path, change, added, removed, hunks: kept, ...(dropped ? { cut: true } : {}) });
   }
-  return { files: out, cut: before.cut || after.cut };
+  const filmLost = before.files.get(FILM)?.text != null && !after.files.has(FILM);
+  return { files: out, cut: before.cut || after.cut, ...(filmLost ? { filmLost: true } : {}) };
+}
+
+/**
+ * Put film.html back in `root` as a snapshot had it (`text`), only where there is none now: one written meanwhile (by
+ * the agent, by Studio's history) is never written over. → 'restored', or 'exists'.
+ * @param {string} root @param {string} text @returns {Promise<'restored' | 'exists'>}
+ */
+export async function restoreFilm(root, text) {
+  try { await writeFile(join(root, FILM), text, { flag: 'wx' }); }
+  catch (e) { if (/** @type {NodeJS.ErrnoException} */ (e).code === 'EEXIST') return 'exists'; throw e; }
+  return 'restored';
 }

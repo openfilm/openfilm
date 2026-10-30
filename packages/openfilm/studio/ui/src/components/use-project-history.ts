@@ -33,6 +33,8 @@ export interface ProjectHistory {
   save: (message: string) => Promise<boolean>;
   discard: () => Promise<boolean>;
   checkout: (commit: string, discard?: boolean) => Promise<HistoryResult<{ commit: string; missing?: string[] }>>;
+  /** film.html missing: only it put back from `commit`, every other file left as it is */
+  restoreFilm: (commit: string) => Promise<HistoryResult<{ commit: string }>>;
   copy: (commit: string, name: string) => Promise<HistoryResult<{ project: { id: string; name: string }; missing?: string[] }>>;
   delete: (commits: string[]) => Promise<boolean>;
   recover: (commits: string[]) => Promise<boolean>;
@@ -110,6 +112,7 @@ export function useProjectHistory(projectId: string, {
     save: async (message) => (await act('save', async () => { await beforeChange?.(); return historyApi.save(projectId, message); })).ok,
     discard: async () => (await act('discard', async () => { await beforeChange?.(); return historyApi.discard(projectId); })).ok,
     checkout: (commit, discard = false) => act('checkout', async () => { await beforeChange?.(); return historyApi.checkout(projectId, commit, discard); }, ['dirty']),
+    restoreFilm: (commit) => act('checkout', async () => { await beforeChange?.(); return historyApi.restoreFilm(projectId, commit); }, ['dirty']),
     copy: (commit, name) => act('copy', () => historyApi.copy(projectId, commit, name)),
     delete: async (commits) => (await act('delete', () => historyApi.delete(projectId, commits))).ok,
     recover: async (commits) => (await act('recover', () => historyApi.recover(projectId, commits))).ok,

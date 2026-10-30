@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createTabs } from './tabs.mjs';
+import { createTabs, projectGone } from './tabs.mjs';
 
 const ids = () => { let n = 0; return () => `t${++n}`; };
 
@@ -74,4 +74,25 @@ test('projects gone take their tabs together: the front to the nearest that stay
   /* a project with no tab changes nothing */
   assert.deepEqual(tabs.closeProjects(['nope']).closed, []);
   assert.equal(tabs.get(tabs.activeId()).projectId, 'y');
+});
+
+test('a project is gone for its tab when it is off the list or its folder is; missing only film.html, it stays (#304)', () => {
+  const projects = [
+    { id: 'here', missing: false },
+    { id: 'rewriting', missing: true, missingReason: 'film' },
+    { id: 'moved', missing: true, missingReason: 'folder' },
+    { id: 'older', missing: true },
+  ];
+  /* an agent's tool that deletes film.html and adds it whole a while later: the tab, and the agent in it, stay */
+  assert.equal(projectGone(projects, 'rewriting'), false);
+  assert.equal(projectGone(projects, 'here'), false);
+  assert.equal(projectGone(projects, 'moved'), true);
+  assert.equal(projectGone(projects, 'older'), true, 'missing for no reason said: its folder');
+  assert.equal(projectGone(projects, 'deleted'), true, 'off the list');
+  /* so a tab closes only for those */
+  const tabs = createTabs({ newId: ids() });
+  for (const p of projects) tabs.open({ projectId: p.id });
+  tabs.open({ projectId: 'deleted' });
+  tabs.closeProjects(tabs.list().map((t) => t.projectId).filter((id) => projectGone(projects, id)));
+  assert.deepEqual(tabs.list().map((t) => t.projectId).sort(), ['here', 'rewriting']);
 });

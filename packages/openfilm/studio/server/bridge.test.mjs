@@ -61,6 +61,23 @@ test('an edit changed in place while the first moment is still drawing is drawn 
   assert.deepEqual(page.said.filter((m) => m.type === 'seeked').map((m) => m.t), [5, 5]);
 });
 
+test('edits that come one after another while a moment is drawing: the draw that shows them says so under the last edit\'s seq', async () => {
+  const page = filmPage();
+  await page.settle();
+  page.send({ type: 'seek', t: 2, seq: 1, behind: true });
+  await page.settle();
+  /* two edits while 2 s is still drawing: the first queues a draw, the second finds it waiting */
+  await page.send({ type: 'update', film: {}, seq: 2 });
+  await page.settle();
+  await page.send({ type: 'update', film: {}, seq: 3 });
+  await page.settle();
+  page.drawn[0].done();
+  await page.settle();
+  page.drawn[1].done();
+  await page.settle();
+  assert.deepEqual(page.said.filter((m) => m.type === 'seeked').map((m) => [m.t, m.seq]), [[2, 1], [2, 3]]);
+});
+
 test('a load of the film behind the picture shown says its first moment is drawn only once it is, however long that takes', async () => {
   const page = filmPage();
   await page.settle();

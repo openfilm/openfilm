@@ -6,7 +6,7 @@
  * width, and the height only when it does not follow from the picture.
  */
 import { pictureRect } from '../../../../src/film-doc.mjs';
-import type { FilmBox, FilmSrcKind } from '@/lib/film';
+import { parseFilmDocLoc, type FilmBox, type FilmDoc, type FilmSrcKind } from './film.ts';
 import type { MgBox, MgTransform } from '@/lib/stage-types';
 
 /**
@@ -57,4 +57,15 @@ export function clipFieldPart(field: 'x' | 'y' | 'w' | 'h', n: number, box: MgBo
   /* not rounded: what is written is px (see compactBox), and a rounded factor would land off the typed number */
   const k = field === 'w' ? n / (box.w || 1) : n / (box.h || 1);
   return { scaleX: k, scaleY: k };
+}
+
+/**
+ * Whether a look the inspector shows on a clip, not kept yet (`live`: its clip, and film.html's style it was shown
+ * over), still stands: film.html's style for the clip is still that one. Once it is another (the look kept, then maybe
+ * undone back to the same style), the look shown is over, and is never shown again, on another load of the film either.
+ */
+export function liveLookStands(doc: FilmDoc, live: { clipLoc: string; written: string }): boolean {
+  const at = parseFilmDocLoc(live.clipLoc);
+  const clip = at ? doc.tracks[at.track]?.clips[at.clip] : undefined;
+  return Boolean(clip) && (clip?.style ?? '') === live.written;
 }

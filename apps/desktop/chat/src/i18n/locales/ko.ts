@@ -127,7 +127,6 @@ export const ko: Words = {
   composer: {
     contextFull: '대화가 길어졌습니다. 새 대화를 시작하면 더 잘 됩니다.',
     contextFullNew: '새 대화',
-    commands: '명령',
     agentLoading: '불러오는 중…',
     agentNone: '에이전트',
     agentNoneShown: '채팅에 켜 둔 에이전트가 없습니다.',
@@ -161,8 +160,6 @@ export const ko: Words = {
     routeNoKeyNoAccount: '이 모델은 DeepSeek API 키가 필요하지만 이 컴퓨터에는 설정되어 있지 않습니다. DeepSeek Harness에서 DeepSeek 계정에 로그인하거나 모델 설정에 API 키를 추가하세요.',
     useAccountModel: '{model} 사용',
     accountModelPicked: '{model}(으)로 바꿨습니다. 메시지를 다시 보내세요.',
-    removeFile: '파일 제거',
-    removeImage: '이미지 제거',
     speed: '속도',
     thumbOnly: '메시지에는 썸네일만 남겨 두었습니다. 원본은 원래 위치에 있고, 붙여 넣은 파일은 프로젝트에 저장되어 있습니다.',
   },
@@ -220,8 +217,8 @@ export const ko: Words = {
     assets: '에셋',
     addAttachment: '파일 추가',
     close: '닫기',
-    composerPlaceholder: '무엇을 바꿀지 말해 주세요. @를 입력하면 파일, 순간, 선택한 항목을 가리킬 수 있습니다',
-    composerPlaceholderBlank: '만들고 싶은 영상을 설명해 주세요. @를 입력하면 이 프로젝트의 파일을 쓸 수 있습니다',
+    composerPlaceholder: '무엇을 바꿀지 말해 주세요. @를 입력하면 파일, 스킬, 순간, 선택한 항목을 가리킬 수 있습니다',
+    composerPlaceholderBlank: '만들고 싶은 영상을 설명해 주세요. @를 입력하면 파일이나 스킬을 넣을 수 있습니다',
     dismiss: '닫기',
     jumpToLatest: '최신 메시지로 이동',
     loadingMessages: '대화를 불러오는 중…',
@@ -389,5 +386,15 @@ export const ko: Words = {
     added: '새 파일',
     removed: '삭제됨',
     changed: '변경됨',
+  },
+  /** a turn that ended with film.html gone: under its reply, put it back as the turn found it (lib/film-restore) */
+  filmRestore: {
+    lost: '이번 턴에서 film.html이 삭제되어 지금은 없습니다.',
+    restore: 'film.html을 이번 턴 이전 상태로 복원',
+    restoring: '복원하는 중…',
+    restored: 'film.html을 이번 턴 이전 상태로 복원했습니다.',
+    exists: 'film.html이 이미 돌아와 있어 그대로 두었습니다.',
+    gone: '이번 턴 이전의 사본은 더 이상 보관되지 않습니다. 버전 기록에서 film.html을 복원하세요.',
+    failed: 'film.html을 복원할 수 없습니다. 다시 시도하거나 버전 기록에서 복원하세요.',
   },
 };

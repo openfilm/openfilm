@@ -10,14 +10,16 @@
  * second, hidden frame that replaces the shown one once its first picture is drawn whole (its videos loaded, however
  * long that takes), and is told the edits made meanwhile. Either way the picture never goes black for an edit.
  */
-import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { forwardRef, useContext, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { flushSync } from 'react-dom';
 import type { Film } from '../api';
 import { useT } from '@/i18n';
 import type { ClipSpan } from '@/lib/film-shape';
 import type { Anchor, Sound } from './player';
-import { pageScaleFor, reloaded, shownAfter, updateKeys, type Frame } from './preview-frames';
+import { heldNext, reloaded, shownAfter, updateKeys, zoomedPageScale, type Frame } from './preview-frames';
 import { usePreviewPrefs } from '@/lib/preview-prefs';
 import { chromiumBased } from '@/lib/browser';
+import { PictureZoom } from '@/lib/viewer-zoom';
 
 /** How far the film's frame reaches past the picture's box on each side, in px (see the `stage-frames` clip). */
 const BLEED = 1;
@@ -102,6 +104,8 @@ type Props = {
 const CLOCK_PINGS = 5;
 /** How long the viewer keeps another size before the film is loaded again for it (ms): not at each step of a drag. */
 const RESCALE_MS = 600;
+/** How often a load held back for a drag or a line typed in place looks whether it may be shown, ms. */
+const HOLD_POLL_MS = 100;
 
 export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folder, stage, time, fps, onInfo, onKey, onError, onPlayed, onSpans, children }, ref) {
   const t = useT();
@@ -125,7 +129,11 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
    * the film again behind the picture.
    */
   const { fitPages } = usePreviewPrefs();
-  const pageScale = fitPages && fit.w > 0 ? pageScaleFor(fit.k, window.devicePixelRatio || 1) : null;
+  /* for the zoom the picture settled at: one on the move only scales it (components/ViewerZoom) */
+  const zoom = useContext(PictureZoom);
+  const pageScale = fitPages && fit.w > 0 ? zoomedPageScale(fit.k, zoom.z, zoom.drawn, window.devicePixelRatio || 1, stage) : null;
+  const busyRef = useRef(zoom.busy);
+  busyRef.current = zoom.busy;
   const scaleOf = useRef(new Map<number, number | null>());
   const framesRef = useRef(frames);
   framesRef.current = frames;
@@ -186,7 +194,7 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
     if (!ref) {
       ref = (el) => {
         if (el) { elements.current.set(key, el); return; }
-        elements.current.delete(key); up.current.delete(key); clocks.current.delete(key); scaleOf.current.delete(key); refs.current.delete(key);
+        elements.current.delete(key); up.current.delete(key); clocks.current.delete(key); scaleOf.current.delete(key); refs.current.delete(key); updateSeq.current.delete(key);
       };
       refs.current.set(key, ref);
     }
@@ -218,7 +226,10 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
       if (head != null) latestHead.current = head;
       /* a film that failed is loaded again as it is now, rather than changed in place */
       if (!shownRef.current || failedRef.current) { reload(); return; }
-      for (const key of updateKeys(shownRef.current.key, up.current)) post(key, { type: 'update', film, head: latestHead.current, seq: ++seq.current });
+      for (const key of updateKeys(shownRef.current.key, up.current)) {
+        updateSeq.current.set(key, ++seq.current);
+        post(key, { type: 'update', film, head: latestHead.current, seq: seq.current });
+      }
     },
     preview(clip, overrides) {
       post(shownRef.current?.key, { type: 'preview', clip, overrides });
@@ -266,6 +277,56 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
     tell({ event: 'reset' });
   }, [shownKey]);
 
+  /**
+   * Show the frame `key`, drawn at `t`: the film playing, it plays on from the line; still, the playhead may have moved
+   * while it drew, and seeks went to the frame shown then.
+   */
+  const show = (key: number, t: number, swap: boolean) => {
+    setFrames((list) => shownAfter(list, key));
+    if (swap && line.current) tellPlay(key);
+    else if (swap && Math.abs(time() - t) > 1e-6) post(key, { type: 'seek', t: time(), seq: ++seq.current });
+  };
+  const showRef = useRef(show);
+  showRef.current = show;
+  /** The seq of the last film update sent to each frame: a frame behind the picture is shown once it has drawn it. */
+  const updateSeq = useRef(new Map<number, number>());
+  /** Whether a frame behind the picture must wait (see 'seeked'): something under way, or the film it has drawn is old. */
+  const mustWait = (key: number, drawn: number) => busyRef.current() || (updateSeq.current.get(key) ?? 0) > drawn;
+  const mustWaitRef = useRef(mustWait);
+  mustWaitRef.current = mustWait;
+  /*
+   * A load held back (see 'seeked'): shown when it may be, let go when another load took its place. A zoom not drawn
+   * for yet is waited for, and a load made for a zoom since left is replaced by one for the zoom now, not shown first.
+   */
+  const held = useRef<{ key: number; t: number; seq: number } | null>(null);
+  const [holding, setHolding] = useState(false);
+  const pageScaleRef = useRef(pageScale);
+  pageScaleRef.current = pageScale;
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+  useEffect(() => {
+    if (!holding) return undefined;
+    let free = performance.now();
+    const timer = setInterval(() => {
+      const h = held.current;
+      const busy = busyRef.current();
+      const zoomPending = zoomRef.current.z !== zoomRef.current.drawn;
+      if (busy || zoomPending) free = performance.now();
+      const next = !h ? 'drop' : heldNext({
+        there: framesRef.current.some((f) => f.key === h.key), busy, zoomPending,
+        sent: updateSeq.current.get(h.key) ?? 0, drawn: h.seq, waited: performance.now() - free,
+        scale: scaleOf.current.get(h.key), needed: pageScaleRef.current,
+      });
+      if (next === 'wait') return;
+      held.current = null;
+      setHolding(false);
+      if (next === 'load') reload();
+      else if (next === 'show' && h) showRef.current(h.key, h.t, true);
+    }, HOLD_POLL_MS);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [holding]);
+
   /* the folder (a project) changed: start over */
   useEffect(() => {
     updates.current = 0;
@@ -289,7 +350,10 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
         if (Number(m.origin) > 0) clocks.current.set(key, { offset: performance.timeOrigin - Number(m.origin), rtt: Infinity });
         for (let i = 0; i < CLOCK_PINGS; i++) setTimeout(() => post(key, { type: 'clock', ping: performance.now() }), 40 * i);
         /* the film changed here while this frame was loading: it gets the latest before its first picture */
-        if ((born.current.get(key) ?? 0) < updates.current && latest.current) post(key, { type: 'update', film: latest.current, head: latestHead.current, seq: ++seq.current });
+        if ((born.current.get(key) ?? 0) < updates.current && latest.current) {
+          updateSeq.current.set(key, ++seq.current);
+          post(key, { type: 'update', film: latest.current, head: latestHead.current, seq: seq.current });
+        }
         /* behind the picture shown: its first picture is waited for whole (its videos loaded), as it replaces that one */
         const behind = shownRef.current != null && shownRef.current.key !== key;
         post(key, { type: 'seek', t: time(), seq: ++seq.current, ...(behind ? { behind: true } : {}) });
@@ -307,11 +371,14 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
         if (line.current && key === shownRef.current?.key) tellPlay(key);
       } else if (m.type === 'seeked') {
         const swap = !framesRef.current.find((f) => f.key === key)?.ready;
-        setFrames((list) => shownAfter(list, key));
-        /* shown now: the film playing, it plays on from the line; still, the playhead may have moved while it drew,
-           and seeks went to the frame shown then */
-        if (swap && line.current) tellPlay(key);
-        else if (swap && Math.abs(time() - Number(m.t)) > 1e-6) post(key, { type: 'seek', t: time(), seq: ++seq.current });
+        /* a load behind the picture, ready while a drag or a line typed in place is under way, or before it has drawn
+           the film as it is now: shown once it may be (the first load, with nothing shown yet, is shown at once) */
+        if (swap && shownRef.current && (mustWaitRef.current(key, Number(m.seq)) || held.current?.key === key)) {
+          held.current = { key, t: Number(m.t), seq: Math.max(Number(m.seq) || 0, held.current?.key === key ? held.current.seq : 0) };
+          setHolding(true);
+          return;
+        }
+        showRef.current(key, Number(m.t), swap);
       } else if (m.type === 'updated') {
         if (m.inPlace) onInfo(m as FilmInfo);
         else reload();
@@ -334,6 +401,18 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
           });
           tell({ event: 'key', key });
           onKeyRef.current?.(key);
+        } else if (m.event === 'wheel') {
+          /* a wheel over the film while its words are typed in (the frame has the pointer then): sent on from the
+             frame, at its place on screen, for the viewer's zoom */
+          const el = elements.current.get(key);
+          const r = el?.getBoundingClientRect();
+          if (!el || !r) return;
+          el.dispatchEvent(new WheelEvent('wheel', {
+            clientX: r.left + (Number(m.x) * r.width) / stage.w, clientY: r.top + (Number(m.y) * r.height) / stage.h,
+            deltaX: Number(m.deltaX) || 0, deltaY: Number(m.deltaY) || 0, deltaMode: Number(m.deltaMode) || 0,
+            ctrlKey: Boolean(m.ctrlKey), metaKey: Boolean(m.metaKey), shiftKey: Boolean(m.shiftKey), buttons: Number(m.buttons) || 0,
+            bubbles: true, cancelable: true,
+          }));
         } else if (m.event === 'typing') {
           tell({ event: 'typing', handle: Number(m.handle), value: String(m.value ?? '') });
         } else if (m.event === 'text') {
@@ -362,18 +441,23 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
     /* measured now, before the first picture: the film loads once, for this size */
     if (el.clientWidth > 0 && el.clientHeight > 0) size(el.clientWidth, el.clientHeight);
     setMeasured(true);
-    const observer = new ResizeObserver(([entry]) => size(entry.contentRect.width, entry.contentRect.height));
+    /* sized before the frame is painted: a pinch moves the picture's box every frame, and the film keeps up with it */
+    const observer = new ResizeObserver(([entry]) => flushSync(() => size(entry.contentRect.width, entry.contentRect.height)));
     observer.observe(el);
     return () => observer.disconnect();
   }, [stage.w, stage.h]);
 
   /* a load keeps the scale it was made with */
   if (measured) for (const f of frames) if (!scaleOf.current.has(f.key)) scaleOf.current.set(f.key, pageScale);
-  /* the viewer kept another size (fullscreen, a pane resized), or the switch changed: the film loads again behind */
+  /* the viewer kept another size (fullscreen, a pane resized), or the switch changed: the film loads again behind; at
+     once for a zoom that has settled (it waited already) */
   const shownScale = shown ? scaleOf.current.get(shown.key) : undefined;
+  const drawnFor = useRef(zoom.drawn);
+  const zoomSettled = drawnFor.current !== zoom.drawn;
+  useEffect(() => { drawnFor.current = zoom.drawn; }, [zoom.drawn]);
   useEffect(() => {
     if (!shown || shownScale === undefined || shownScale === pageScale || frames.some((f) => !f.ready)) return undefined;
-    const timer = setTimeout(reload, RESCALE_MS);
+    const timer = setTimeout(reload, zoomSettled ? 0 : RESCALE_MS);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageScale, shownScale, shown?.key, frames.length]);
@@ -397,13 +481,14 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
             allow="autoplay"
             scrolling="no"
             title="film"
-            /* the one loading is transparent, not hidden: the film is on another site, in a process of its own, and a
-               frame hidden from there is not drawn at all, so a page that waits to draw (an image's decode()) would
-               never be ready */
+            /* the one loading is all but transparent, not hidden: the film is on another site, in a process of its own,
+               and a frame hidden from there is not drawn at all, so a page that waits to draw (an image's decode()) would
+               never be ready; nor quite 0, or it is not put on screen at all, and is blank for a moment when it is shown */
+            data-loading={f === shown ? undefined : ''}
             style={{
               width: stage.w, height: stage.h,
               transform: `translate(${-BLEED}px, ${-BLEED}px) scale(${(fit.w + 2 * BLEED) / stage.w}, ${(fit.h + 2 * BLEED) / stage.h})`,
-              ...(f === shown ? {} : { opacity: 0, pointerEvents: 'none' }),
+              ...(f === shown ? {} : { opacity: 0.001, pointerEvents: 'none' }),
             }}
           />
         ))}

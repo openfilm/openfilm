@@ -107,8 +107,7 @@ export function MediaPreview({
 
 /**
  * A sound's waveform: 1px columns from the bottom, each as tall as the loudest peak under it, scaled to the file's own
- * peak as on the timeline (normalizeWavePeaks): drawn as recorded, a quiet bed is a line along the bottom of a dark
- * tile. Without a waveform (it could not be read), the sound's icon.
+ * peak (normalizeWavePeaks): drawn as recorded, a quiet bed is a line along the bottom of a dark tile. Without a waveform (it could not be read), the sound's icon.
  */
 function AudioPreview({ file, sources }: { file: WorkspaceResource; sources: MediaSources }) {
   const wrapRef = React.useRef<HTMLSpanElement>(null);

@@ -158,7 +158,14 @@ export function ContextMenu({
     if (inSub && subPos) subRef.current?.focus({ preventScroll: true });
   }, [inSub, subPos]);
 
+  /* Read through a ref, so the listeners below stay put for the menu's life. Re-added whenever the owner passed a new
+     onClose, they missed the very press that should close the menu: another window listener ahead of them (the
+     picture letting go of what is in hand) re-rendered the owner mid-press, and a listener swapped during an event
+     does not hear it (the Layers panel's menu stayed open, 2026-10-29). */
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
   React.useEffect(() => {
+    const onClose = (): void => onCloseRef.current();
     const close = (e: Event): void => {
       /* A press inside the menu itself is not an outside click. Scrolling closes it (except the
          menu's own, when it is taller than the window): the menu is pinned to screen coordinates,
@@ -192,7 +199,7 @@ export function ContextMenu({
       window.removeEventListener('blur', close);
       window.removeEventListener('keydown', onEsc, true);
     };
-  }, [onClose, trigger, showSub]);
+  }, [trigger, showSub]);
 
   const run = React.useCallback((item: ContextMenuItem) => {
     if (item.disabled || item.submenu) return;

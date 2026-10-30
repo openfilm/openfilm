@@ -291,6 +291,23 @@ export async function saveFile(root, rel, o = {}) {
   return libraryPath(path);
 }
 
+/** A place made a name a page's address takes as it is, part by part. */
+const placeName = (/** @type {string} */ rel) => rel.split('/').map((part) => part.normalize('NFKC').replace(/[^\p{L}\p{N}._-]+/gu, '-').replace(/^-+|-+$/g, '') || 'saved').join('/');
+
+/**
+ * `files` (places in folder `from`) copied to the same places in folder `to`. A file there already (copied before,
+ * maybe changed since in that project) stays as it is.
+ * @param {string} from @param {string[]} files @param {string} to
+ */
+async function copyIn(from, files, to) {
+  for (const rel of files) {
+    const dest = join(to, rel);
+    if ((await stat(dest).catch(() => null))?.isFile()) continue;
+    await mkdir(dirname(dest), { recursive: true });
+    await copyFile(join(from, rel), dest);
+  }
+}
+
 /**
  * What a project needs to use a thing of the library (`path`, a `saved/` path, or an `openfilm/` one for a thing of
  * OpenFilm's own library, library.mjs): a file imported into its assets/ (as one from the computer is), or a bundle's
@@ -313,18 +330,30 @@ export async function takeSaved(root, path) {
   /* its place in the project: the library's, made a name a page's address takes as it is */
   /* OpenFilm's things one folder each under saved/openfilm/ (`effects-snow`), so their pages are no deeper than a
      project's pages are looked for (files.mjs listFiles) */
-  const base = `saved/${(builtIn ? `${BUILT_IN}/${rel.replaceAll('/', '-')}` : rel).split('/').map((part) => part.normalize('NFKC').replace(/[^\p{L}\p{N}._-]+/gu, '-').replace(/^-+|-+$/g, '') || 'saved').join('/')}`;
+  const base = `saved/${placeName(builtIn ? `${BUILT_IN}/${rel.replaceAll('/', '-')}` : rel)}`;
   const from = join(at, 'files');
+  const files = [];
   for (const entry of await readdir(from, { recursive: true, withFileTypes: true }).catch(() => [])) {
-    if (!entry.isFile()) continue;
-    const src = join(entry.parentPath ?? entry.path, entry.name);
-    const to = join(root, base, src.slice(from.length + 1));
-    /* there already (taken before, maybe changed since in this project): it stays as it is */
-    if ((await stat(to).catch(() => null))?.isFile()) continue;
-    await mkdir(dirname(to), { recursive: true });
-    await copyFile(src, to);
+    if (entry.isFile()) files.push(join(entry.parentPath ?? entry.path, entry.name).slice(from.length + 1));
   }
+  await copyIn(from, files, join(root, base));
   if (item.kind === 'page') return { path: `${base}/${item.path}` };
   if (item.kind === 'group') return { clips: item.clips.map((/** @type {any} */ c) => ({ track: c.track, at: c.at, clip: { ...c.clip, src: `${base}/${c.clip.src}` } })) };
   return { clip: { ...item.clip, src: `${base}/${item.clip.src}` } };
+}
+
+/**
+ * A clip of the project at `fromRoot` brought into the project at `root` (layers pasted from there, lib/layer-clipboard):
+ * its file and what it loads copied to `pasted/<name>/` here (`name`: that project's), at the places they had there,
+ * so a page's own references still find what they name; copied before, what is there is used. The clip, with its
+ * file's place here.
+ * @param {string} root @param {string} fromRoot @param {Record<string, unknown> & { src: string }} clip @param {string} name
+ */
+export async function bringClip(root, fromRoot, clip, name) {
+  if (typeof clip?.src !== 'string' || !clip.src) throw new SavedError('a clip with its file, please', 400);
+  const files = await clipFiles(fromRoot, clip);
+  if (!files.includes(clip.src)) throw new SavedError('That clip’s file is not in its project any more.', 404);
+  const base = `pasted/${placeName(cleanName(name) || 'project')}`;
+  await copyIn(fromRoot, files, join(root, base));
+  return { clip: { ...clip, src: `${base}/${clip.src}` } };
 }

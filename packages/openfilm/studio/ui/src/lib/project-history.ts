@@ -9,13 +9,14 @@
  *   POST   /api/projects/:id/history/save     { message? }
  *   POST   /api/projects/:id/history/discard
  *   POST   /api/projects/:id/history/checkout { commit, discard? }
+ *   POST   /api/projects/:id/history/film     { commit }   film.html missing: only film.html put back from it
  *   POST   /api/projects/:id/history/copy     { commit, name } → { project }
  *   POST   /api/projects/:id/history/delete   { commits }   move records to Deleted (current version protected)
  *   POST   /api/projects/:id/history/recover  { commits }   recover records without checking them out
  *
  * While an action runs, the project's events say how far it is ({ type: 'history-progress' }: HistoryProgress); when
  * it is done, `{ type: 'history', moved? }` (`moved`: the folder's files changed). A refusal comes with a `code`
- * ('nothing', 'dirty', 'none'), which the panel says in its own words.
+ * ('nothing', 'dirty', 'none', 'missing-film'), which the panel says in its own words.
  */
 
 import type { Film } from '@/api';
@@ -33,6 +34,8 @@ export interface HistoryStatus {
   branch: string | null;
   /** what the folder holds that the version checked out does not; null: nothing */
   changes: { count: number; summary: Summary; files: Change[] } | null;
+  /** the folder has no film.html: there is nothing to save, and restoring a version brings back only film.html */
+  filmMissing?: boolean;
 }
 /** How far an action is: `phase` reading the files, keeping media, writing files, or updating the history. */
 export interface HistoryProgress { op: string; phase: 'scan' | 'store' | 'write' | 'migrate'; done: number; total: number }
@@ -87,7 +90,7 @@ export function normalizeHistory(raw: unknown): HistoryState | null {
     }];
   });
   return {
-    status: { head: typeof s.head === 'string' ? s.head : null, branch: typeof s.branch === 'string' ? s.branch : null, changes },
+    status: { head: typeof s.head === 'string' ? s.head : null, branch: typeof s.branch === 'string' ? s.branch : null, changes, ...(s.filmMissing === true ? { filmMissing: true } : {}) },
     versions,
     more: body.more === true,
     deletedCount: Math.max(0, num(body.deletedCount)),
@@ -232,6 +235,8 @@ export const historyApi = {
   save: (id: string, message: string) => call<{ commit: string }>(id, '/save', 'POST', { message }),
   discard: (id: string) => call<{ missing?: string[] }>(id, '/discard', 'POST', {}),
   checkout: (id: string, commit: string, discard = false) => call<{ commit: string; missing?: string[] }>(id, '/checkout', 'POST', { commit, discard }),
+  /** film.html missing: only it put back, as the version has it; the other files are left as they are */
+  restoreFilm: (id: string, commit: string) => call<{ commit: string }>(id, '/film', 'POST', { commit }),
   copy: (id: string, commit: string, name: string) => call<{ project: { id: string; name: string }; missing?: string[] }>(id, '/copy', 'POST', { commit, name }),
   delete: (id: string, commits: string[]) => call<{ commits: string[] }>(id, '/delete', 'POST', { commits }),
   recover: (id: string, commits: string[]) => call<{ commits: string[] }>(id, '/recover', 'POST', { commits }),
@@ -241,6 +246,8 @@ export const historyApi = {
 export function historyErrorKey(result: { status: number; code: string | null }): string {
   switch (result.code) {
     case 'nothing': return 'versions.errorNothing';
+    case 'missing-film': return 'versions.errorMissingFilm';
+    case 'no-film': return 'versions.errorNoFilm';
     case 'dirty': return 'versions.errorDirty';
     case 'current': return 'versions.errorDeleteCurrent';
     case 'deleted': return 'versions.errorDeleted';

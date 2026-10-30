@@ -127,6 +127,40 @@ export function movedOrder(siblings: readonly LayerRow[], from: number, to: numb
   return rest.map((r) => r.branch);
 }
 
+/** A line's part in the selection: selected, inside a selected one, or neither. */
+export type RowTone = 'on' | 'in' | null;
+
+/**
+ * Each line's part in the selection: 'on' selected, 'in' inside a selected one (a group's layers, a clip's), else
+ * null. Lines come in tree order, so what a line holds follows it, deeper.
+ */
+export function selectionTones(lines: readonly LayerLine[], isSelected: (line: LayerLine) => boolean): RowTone[] {
+  let under: number | null = null;
+  return lines.map((line) => {
+    if (under != null && line.depth <= under) under = null;
+    if (isSelected(line)) { under ??= line.depth; return 'on'; }
+    return under != null ? 'in' : null;
+  });
+}
+
+/**
+ * The layer rows shown from `a` to `b` (either way round), in tree order: the rows a Shift-click selects. A row inside
+ * another of them is left out: the one around it holds it already (and is not moved twice).
+ */
+export function rowsBetween(lines: readonly LayerLine[], a: LayerLine, b: LayerLine): LayerLine[] {
+  const i = lines.indexOf(a);
+  const j = lines.indexOf(b);
+  if (i < 0 || j < 0) return [];
+  const span = lines.slice(Math.min(i, j), Math.max(i, j) + 1).filter((l) => l.row);
+  const keys = new Set(span.map((l) => l.key));
+  const byKey = new Map(lines.map((l) => [l.key, l]));
+  const inside = (l: LayerLine) => {
+    for (let up = byKey.get(l.parentKey); up; up = byKey.get(up.parentKey)) if (keys.has(up.key)) return true;
+    return false;
+  };
+  return span.filter((l) => !inside(l));
+}
+
 /** Two reads of the tree are the same picture of it (the panel redraws only when they differ). */
 export function sameTree(a: readonly LayerClip[] | null, b: readonly LayerClip[] | null): boolean {
   return JSON.stringify(a) === JSON.stringify(b);

@@ -7,9 +7,20 @@
  * Rules: a project is in one tab at most; a tab is always a project's (a project is picked first, in the projects
  * window, and its tab opens); with none open, the window shows the projects; a tab closed can be opened again, last
  * closed first. A project gone (deleted, its folder gone) takes its tabs with it at once, all of them together, and
- * none of them can be opened again (`closeProjects`).
+ * none of them can be opened again (`closeProjects`). A project missing only its film.html is not gone (`projectGone`).
  */
 import { randomUUID } from 'node:crypto';
+
+/**
+ * Whether the project `projectId` is gone, by Studio's list of projects (`/api/projects`): off the list (deleted), or
+ * its folder missing. One whose folder is there but film.html is not stays: an agent at work in it may be writing the
+ * film again (a tool that deletes the file, then adds it whole), and closing its tab would stop that agent for good.
+ * @param {Array<{ id: string, missing?: boolean, missingReason?: string }>} projects @param {string} projectId
+ */
+export function projectGone(projects, projectId) {
+  const found = projects.find((p) => p.id === projectId);
+  return !found || (Boolean(found.missing) && found.missingReason !== 'film');
+}
 
 /**
  * @typedef {{ id: string, projectId: string, title: string, working: boolean, asking: boolean,

@@ -1,12 +1,15 @@
 // @ts-check
 /**
  * What changes in a project folder while someone watches it: film.html (`film`, with its new revision) or any other
- * file (`files`: a page, a picture, a sound). One watcher per open project, shared by every page showing it, closed when
- * the last one leaves. Studio's own folders and the usual build and dependency folders are not watched.
+ * file (`files`: a page, a picture, a sound). A write of someone else's is merged with the person's edits first
+ * (person-edits.mjs), so the pages hear of the film and the files as they end up. One watcher per open project, shared
+ * by every page showing it, closed when the last one leaves. Studio's own folders and the usual build and dependency
+ * folders are not watched.
  */
 import { readdirSync, watch } from 'node:fs';
 import { join } from 'node:path';
-import { readProjectFilm } from './film.mjs';
+import { readProjectFilm, settleProjectFilm } from './film.mjs';
+import { settleFiles } from './person-edits.mjs';
 import { FILM_FILE } from '../../src/film-doc.mjs';
 import { projectMissing } from './project-presence.mjs';
 
@@ -14,7 +17,7 @@ import { projectMissing } from './project-presence.mjs';
 const IGNORED = /^(\.[^/\\]+|node_modules|dist|build)([/\\]|$)/;
 /** How long changes are gathered before one event: an agent writes a file in several chunks, and often several files. */
 const SETTLE_MS = 120;
-/** How long missing project files are rechecked before their pages are told the project is gone. */
+/** How long missing project files are rechecked before their pages are told (the project gone, or its film.html). */
 const GONE_RECHECK_MS = 400;
 /** A deleted root is not reliably reported by every file system's watcher. */
 const PRESENCE_MS = 1000;
@@ -34,7 +37,9 @@ const WRITING = /(^|[/\\])([^/\\]+\.[0-9a-f-]{8,}\.tmp|\.\d+\.\d+\.importing)$/;
  * @typedef {{ type: 'film', rev: string } | { type: 'files', paths?: string[] } | { type: 'history', moved?: boolean } | { type: 'export', job: object }
  *   | { type: 'history-progress', op: string, phase: string, done: number, total: number } | { type: 'project', project: object }
  *   | { type: 'ask', ask: object } | { type: 'asked', id: string } | { type: 'notice', notice: object }
- *   | { type: 'canvas' } | { type: 'gone' }} FolderEvent   `gone`: the project was deleted, or its folder or film file is missing
+ *   | { type: 'canvas' } | { type: 'film-missing' } | { type: 'gone' }} FolderEvent   `gone`: the project was deleted, or
+ *   its folder is missing. `film-missing`: its folder is there but film.html is not (being written again, or lost): the
+ *   project stays open, and its pages hear of the film (`film`) once it is back
  */
 
 /**
@@ -51,6 +56,8 @@ export function watchFolder(root, send) {
   let closed = false;
   let checking = false;
   let gone = false;
+  /* film.html missing from a folder still there, and said so */
+  let filmMissing = false;
   readProjectFilm(root).then((f) => { lastRev = f.rev; }, () => {});
 
   const flush = async () => {
@@ -60,24 +67,37 @@ export function watchFolder(root, send) {
     try {
       /* A missing film is not an empty one. Recheck after a short grace period: editors can replace files while
          saving, and a rename in Studio moves the subscription to its new folder, closing this watcher. */
-      if (projectMissing(root)) {
+      let missing = projectMissing(root);
+      if (missing) {
         await new Promise((done) => setTimeout(done, GONE_RECHECK_MS));
         if (closed) return;
-        if (projectMissing(root)) { gone = true; pending.clear(); send({ type: 'gone' }); return; }
+        missing = projectMissing(root);
+        if (missing === 'folder') { gone = true; pending.clear(); send({ type: 'gone' }); return; }
       }
+      /* Only the folder going ends the project. film.html alone can be missing for minutes while an agent writes it
+         again (a tool that deletes the file, then adds it whole): its pages are told, and the film once it is back,
+         even with the same text as before */
+      if (missing === 'film') {
+        pending.delete('film');
+        if (!filmMissing) { filmMissing = true; lastRev = ''; send({ type: 'film-missing' }); }
+      } else if (filmMissing) { filmMissing = false; pending.add('film'); }
       const kinds = [...pending];
       const changed = paths;
       pending.clear();
       paths = new Set();
       if (kinds.includes('film')) {
-        const { rev } = await readProjectFilm(root).catch(() => ({ rev: '' }));
+        const { rev } = await settleProjectFilm(root, { stable: true }).catch(() => ({ rev: '' }));
         /* the same text written again (an editor's save, Studio's own write echoed back) is no change */
         if (closed) return;
         /* deleted during the read: wait for presence to settle instead of publishing an empty film */
         if (projectMissing(root)) { pending.add('film'); return; }
         if (rev && rev !== lastRev) { lastRev = rev; send({ type: 'film', rev }); }
       }
-      if (kinds.includes('files')) send(changed ? { type: 'files', paths: [...changed] } : { type: 'files' });
+      if (kinds.includes('files')) {
+        await settleFiles(root, changed ? [...changed] : null);
+        if (closed) return;
+        send(changed ? { type: 'files', paths: [...changed] } : { type: 'files' });
+      }
     } finally {
       checking = false;
       if (!closed && !gone && pending.size) schedule();
@@ -96,7 +116,12 @@ export function watchFolder(root, send) {
     }
     schedule();
   });
-  const presence = setInterval(() => { if (!closed && !gone && projectMissing(root)) schedule(); }, PRESENCE_MS);
+  /* the folder gone, or film.html gone or back since last said */
+  const presence = setInterval(() => {
+    if (closed || gone) return;
+    const missing = projectMissing(root);
+    if (missing === 'folder' || (missing === 'film') !== filmMissing) schedule();
+  }, PRESENCE_MS);
   presence.unref();
   return () => { closed = true; clearInterval(presence); if (timer) clearTimeout(timer); close(); };
 }

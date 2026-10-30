@@ -1078,12 +1078,15 @@ export function planRippleTrimTo(model: EditModel, ids: readonly string[], edge:
  * film changes. With `ripple` what comes after on their tracks follows; without, a clip that would run into the next
  * one cannot get that slow: `slowest` says how slow it can go, and nothing changes. With linkage what rides on a
  * main-track clip stays on its footage.
+ *
+ * `edge` is the edge that moves (the timeline's speed handles): the end, or, without `ripple`, the start, each clip
+ * keeping its end, and then the clip before it is the limit. Rippling, the start stays: what follows moves instead.
  */
 export function planSpeed(
   model: EditModel,
   ids: readonly string[],
   speed: number,
-  opts: { ripple: boolean } & Partial<Switches>,
+  opts: { ripple: boolean; edge?: 'start' | 'end' } & Partial<Switches>,
 ): EditPlan & { slowest?: number } {
   const d = draftOf(model);
   const rides = opts.linkage ? ridesOf(d, mainTrackOf(model), new Set(ids)) : new Map<string, Ride>();
@@ -1092,17 +1095,12 @@ export function planSpeed(
   if (!main || !(speed > 0)) return emptyPlan();
   const grow = (c: EditClip) => (lenOf(c) * c.speed) / speed - lenOf(c);
   if (!opts.ripple) {
-    /* each may grow only into the free time after it */
-    let slowest = 0;
-    for (const { track, clip } of parts) {
-      const next = track.clips.filter((x) => x !== clip && x.startMs >= clip.endMs - TOUCH_MS);
-      if (!next.length) continue;
-      const free = Math.max(0, Math.min(...next.map((x) => x.startMs)) - clip.endMs);
-      slowest = Math.max(slowest, (lenOf(clip) * clip.speed) / (lenOf(clip) + free));
-    }
+    const head = opts.edge === 'start';
+    const slowest = slowestOf(parts, head);
     if (speed < slowest - 1e-9) return { ...emptyPlan(), slowest: Math.ceil(slowest * 100) / 100 };
     for (const { clip } of parts) {
-      clip.endMs += grow(clip);
+      if (head) clip.startMs -= grow(clip);
+      else clip.endMs += grow(clip);
       clip.speed = speed;
     }
     carry(d, rides);
@@ -1119,6 +1117,39 @@ export function planSpeed(
   rippleAt(d, point, by, tracks, skip, bound);
   carry(d, rides);
   return planOf(d);
+}
+
+/**
+ * How slow clips can get without a ripple: each grows only into the free time after it (its head: before it, back to
+ * the film's start).
+ */
+function slowestOf(parts: readonly { track: EditTrack; clip: EditClip }[], head: boolean): number {
+  let slowest = 0;
+  for (const { track, clip } of parts) {
+    let free: number;
+    if (head) {
+      const prev = track.clips.filter((x) => x !== clip && x.endMs <= clip.startMs + TOUCH_MS);
+      free = Math.max(0, clip.startMs - Math.max(0, ...prev.map((x) => x.endMs)));
+    } else {
+      const next = track.clips.filter((x) => x !== clip && x.startMs >= clip.endMs - TOUCH_MS);
+      if (!next.length) continue;
+      free = Math.max(0, Math.min(...next.map((x) => x.startMs)) - clip.endMs);
+    }
+    slowest = Math.max(slowest, (lenOf(clip) * clip.speed) / (lenOf(clip) + free));
+  }
+  return slowest;
+}
+
+/**
+ * The slowest speed planSpeed takes without a ripple for clips (the first and those linked to it, set together): on
+ * the hundredth, up; 0 when none of them has a clip after it. What the inspector's slider shades as out of reach.
+ */
+export function slowestSpeed(model: EditModel, ids: readonly string[]): number {
+  const parts = ids.flatMap((id) => model.flatMap((track) => {
+    const clip = track.clips.find((c) => c.id === id);
+    return clip && !track.locked && !clip.still ? [{ track, clip }] : [];
+  }));
+  return Math.ceil(slowestOf(parts, false) * 100) / 100;
 }
 
 /* ── where a sound taken off a video goes ── */

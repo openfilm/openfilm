@@ -131,7 +131,6 @@ export const enUS = {
   composer: {
     contextFull: 'This conversation is getting long. A new one will work better.',
     contextFullNew: 'New conversation',
-    commands: 'Commands',
     agentLoading: 'Loading…',
     agentNone: 'Agent',
     agentNoneShown: 'No agent is switched on for the chat.',
@@ -165,8 +164,6 @@ export const enUS = {
     routeNoKeyNoAccount: 'This model needs a DeepSeek API key, and none is set up on this computer. Sign in to your DeepSeek account in DeepSeek Harness, or add an API key in its model settings.',
     useAccountModel: 'Use {model}',
     accountModelPicked: 'Switched to {model}. Send your message again.',
-    removeFile: 'Remove file',
-    removeImage: 'Remove image',
     speed: 'Speed',
     thumbOnly: 'A thumbnail kept with the message. The original stays where it was, or in the project if it was pasted.',
   },
@@ -225,8 +222,8 @@ export const enUS = {
     assets: 'Assets',
     addAttachment: 'Add files',
     close: 'Close',
-    composerPlaceholder: 'Say what to change. Type @ to point at a file, a moment or what you selected',
-    composerPlaceholderBlank: 'Describe your film. Type @ to use a file from this project',
+    composerPlaceholder: 'Say what to change. Type @ for a file, a skill, a moment or what you selected',
+    composerPlaceholderBlank: 'Describe your film. Type @ to add a file or a skill',
     dismiss: 'Dismiss',
     jumpToLatest: 'Jump to latest',
     loadingMessages: 'Loading conversation…',
@@ -394,5 +391,15 @@ export const enUS = {
     added: 'New',
     removed: 'Deleted',
     changed: 'Changed',
+  },
+  /** a turn that ended with film.html gone: under its reply, put it back as the turn found it (lib/film-restore) */
+  filmRestore: {
+    lost: 'film.html was removed in this turn and is not there now.',
+    restore: 'Restore film.html as it was before this turn',
+    restoring: 'Restoring…',
+    restored: 'film.html is back as it was before this turn.',
+    exists: 'film.html is back already, so it was left as it is.',
+    gone: 'The copy from before this turn is no longer kept. Restore film.html from Version history.',
+    failed: 'film.html could not be restored. Try again, or restore it from Version history.',
   },
 };

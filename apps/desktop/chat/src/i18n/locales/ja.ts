@@ -131,7 +131,6 @@ export const ja: Words = {
   composer: {
     contextFull: 'この会話は長くなっています。新しい会話のほうがうまくいきます。',
     contextFullNew: '新しい会話',
-    commands: 'コマンド',
     agentLoading: '読み込み中…',
     agentNone: 'エージェント',
     agentNoneShown: 'チャットで使えるエージェントがオンになっていません。',
@@ -165,8 +164,6 @@ export const ja: Words = {
     routeNoKeyNoAccount: 'このモデルには DeepSeek の API キーが必要ですが、このコンピューターには設定されていません。DeepSeek Harness で DeepSeek アカウントにサインインするか、モデル設定で API キーを追加してください。',
     useAccountModel: '{model} を使う',
     accountModelPicked: '{model} に切り替えました。もう一度送信してください。',
-    removeFile: 'ファイルを削除',
-    removeImage: '画像を削除',
     speed: '速度',
     thumbOnly: 'メッセージにはサムネイルだけが残ります。元のファイルは元の場所にあります。貼り付けたものはプロジェクトに保存されています。',
   },
@@ -224,8 +221,8 @@ export const ja: Words = {
     assets: '素材',
     addAttachment: 'ファイルを追加',
     close: '閉じる',
-    composerPlaceholder: '変更したい内容を入力。@ でファイル、タイミング、選択中のものを指定できます',
-    composerPlaceholderBlank: '作りたい映像を説明してください。@ でこのプロジェクトのファイルを使えます',
+    composerPlaceholder: '変更したい内容を入力。@ でファイル、スキル、タイミング、選択中のものを指定できます',
+    composerPlaceholderBlank: '作りたい映像を説明してください。@ でファイルやスキルを追加できます',
     dismiss: '閉じる',
     jumpToLatest: '最新へ移動',
     loadingMessages: '会話を読み込み中…',
@@ -393,5 +390,15 @@ export const ja: Words = {
     added: '新規',
     removed: '削除',
     changed: '変更',
+  },
+  /** a turn that ended with film.html gone: under its reply, put it back as the turn found it (lib/film-restore) */
+  filmRestore: {
+    lost: 'このターンで film.html が削除され、今はありません。',
+    restore: 'film.html をこのターンの前の状態に戻す',
+    restoring: '復元しています…',
+    restored: 'film.html をこのターンの前の状態に戻しました。',
+    exists: 'film.html はすでに戻っているため、そのままにしました。',
+    gone: 'このターンの前のコピーはもう保持されていません。バージョン履歴から film.html を復元してください。',
+    failed: 'film.html を復元できませんでした。もう一度試すか、バージョン履歴から復元してください。',
   },
 };

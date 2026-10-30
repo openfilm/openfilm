@@ -201,6 +201,9 @@
          Playing, the next frame draws it */
       if (inPlace && line) lastT = null;
       else if (inPlace && !next) { next = { t: asked, seq: m.seq }; draw(); }
+      /* a draw already waiting draws it too: it says so under this update's seq, which the editor waits for (a load
+         behind the picture is shown once it has drawn the film as it is now) */
+      else if (inPlace) next.seq = Math.max(Number(next.seq) || 0, Number(m.seq) || 0);
     }
     if (m.type === 'renders') editor()?.renders?.(m.list);
     if (m.type === 'preview') editor()?.preview(m.clip, m.overrides);

@@ -17,7 +17,8 @@ import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { FILM_FILE, clipKind } from '../../src/film-doc.mjs';
 import { addLinkedPlaces, readableLink } from '../../src/media-links.mjs';
-import { readProjectFilm, writeProjectFilm } from './film.mjs';
+import { changeProjectFilm, readProjectFilm } from './film.mjs';
+import { filesWritten } from './person-edits.mjs';
 import { TOOL_DIR } from './projects.mjs';
 import { moveToTrash } from './trash.mjs';
 import { linkKind, rewriteLinks } from './page-links.mjs';
@@ -366,7 +367,11 @@ async function relinkAfterMove(root, from, to, sidecars = []) {
     const text = await readFile(abs, 'utf8').catch(() => null);
     if (text == null) continue;
     const next = rewriteLinks(text, kind, posix(dirname(was)), posix(dirname(file)), where);
-    if (next.changed) { await writeFile(abs, next.text); changed++; }
+    if (next.changed) {
+      await writeFile(abs, next.text);
+      filesWritten(root, { [file]: text }, { [file]: next.text });
+      changed++;
+    }
   }
   return changed;
 }
@@ -454,17 +459,19 @@ function sameEntry(/** @type {string} */ a, /** @type {string} */ b) {
 
 /** Point every clip whose src is `from` (or inside the folder `from`) at `to`. Returns how many moved. */
 async function repoint(/** @type {string} */ root, /** @type {string} */ from, /** @type {string} */ to) {
-  const film = await readProjectFilm(root);
-  if (!film.value) return 0;
-  let moved = 0;
-  for (const track of film.value.tracks) {
-    for (const clip of track.clips) {
-      if (clip.src === from) { clip.src = to; moved++; }
-      else if (clip.src.startsWith(`${from}/`)) { clip.src = to + clip.src.slice(from.length); moved++; }
+  /* as any edit of Studio's: after a write of the agent's is merged, and kept over the next one */
+  const done = await changeProjectFilm(root, (value, film) => {
+    if (!film.value) return null;
+    let moved = 0;
+    for (const track of value.tracks) {
+      for (const clip of track.clips) {
+        if (clip.src === from) { clip.src = to; moved++; }
+        else if (clip.src.startsWith(`${from}/`)) { clip.src = to + clip.src.slice(from.length); moved++; }
+      }
     }
-  }
-  if (moved) await writeProjectFilm(root, film.value, film.text);
-  return moved;
+    return moved ? { value, moved } : null;
+  });
+  return done?.moved ?? 0;
 }
 
 /**

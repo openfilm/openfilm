@@ -50,6 +50,9 @@ test('a film time is the source time its clip plays there', () => {
   assert.deepEqual(span, { atMs: 10000, fromMs: 4000, speed: 2 });
   assert.equal(toSourceMs(span, 11000), 6000);
   assert.equal(toFilmMs(span, 6000), 11000);
+  const fast = clipSpanOf({ at: 2, time: [8, 72], speed: 16 });
+  assert.equal(toSourceMs(fast, 3000), 24000);
+  assert.equal(toFilmMs(fast, 24000), 3000);
   assert.deepEqual(clipSpanOf({}), { atMs: 0, fromMs: 0, speed: 1 });
 });
 

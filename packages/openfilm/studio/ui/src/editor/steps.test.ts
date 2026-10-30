@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { applyOps, EditError } from '../../../server/ops.mjs';
 import type { Film, Op } from '../api';
-import { dropStep, moveStep, nextStep, pushStep, type Steps } from './steps.ts';
+import { dropStep, inTurn, moveStep, nextStep, pushStep, type Steps } from './steps.ts';
 import { inverse } from './undo.ts';
 
 /* The edit history as the editor keeps it (use-film): ⌘Z pressed again and again goes back step by step and stops at
@@ -94,4 +94,25 @@ test('moving or dropping a step touches that step only', () => {
   for (let i = 0; i < 120; i++) long = pushStep(long, { undo: [], redo: [], label: String(i) });
   assert.equal(long.done.length, 100);
   assert.equal(long.done[0].label, '20');
+});
+
+test('two undos pressed at once: the second looks for its step once the first is taken, its writes done', async () => {
+  /* a move (film.html alone), then a paste (its page written first, its film.html part after) */
+  let s: Steps<string> = { done: ['move', 'paste'], undone: [] };
+  const turn = inTurn();
+  const written: string[] = [];
+  const undo = () => turn(async () => {
+    const one = nextStep(s, 'undo');
+    if (!one) return;
+    s = moveStep(s, one, 'undo');
+    if (one === 'paste') { await new Promise((done) => setTimeout(done, 20)); written.push('paste: page'); }
+    written.push(`${one}: film`);
+  });
+  await Promise.all([undo(), undo()]);
+  assert.deepEqual(written, ['paste: page', 'paste: film', 'move: film']);
+  assert.deepEqual(s, { done: [], undone: ['paste', 'move'] });
+  /* one that fails is done too: the next one is taken */
+  const order: string[] = [];
+  await Promise.all([turn(() => { throw new Error('refused'); }).catch(() => order.push('failed')), turn(() => { order.push('next'); })]);
+  assert.deepEqual(order, ['failed', 'next']);
 });

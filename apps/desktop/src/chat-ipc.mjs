@@ -13,7 +13,9 @@
  *   desktop:chat:paths     { paths } → [{ path, folder, size? } | { path, error }]   files and folders dragged in
  *   desktop:chat:unsaved   { project, except? } → [{ turnId, events }]   turns with a log and no saved record
  *   desktop:chat:snapshot  { project, turnId }     the project's files as a turn starts (file-changes.mjs), kept here
- *   desktop:chat:changes   { project, turnId } → { files, cut } | null   what the turn changed in them since
+ *   desktop:chat:changes   { project, turnId } → { files, cut, filmLost? } | null   what the turn changed in them since
+ *   desktop:chat:restore-film { project, turnId } → { ok } | { ok: false, code: 'exists' | 'gone' }   film.html put
+ *                          back as that turn found it, when the turn ended with it gone (`filmLost`)
  *   desktop:prefs          → { developer, changes } and `desktop:prefs:set` either; told on `desktop:prefs`
  *
  * `project` is a folder path, and only one Studio has as a project is read or written: the page cannot point the
@@ -24,7 +26,7 @@ import { join, resolve } from 'node:path';
 import { RECORDED_AGENTS, agentRecordCalls, compactCalls } from './agent-records.mjs';
 import { chatDir, describePaths, loadChat, readLog, saveAttachment, saveRefImage, saveSessions, saveTurn, unsavedTurns } from './chat-store.mjs';
 import { loginShellVariables } from './environment.mjs';
-import { changes, snapshot } from './file-changes.mjs';
+import { FILM, changes, restoreFilm, snapshot } from './file-changes.mjs';
 
 /** a turn's requests are those its agent's record has from a moment before it began to a moment after it ended */
 const RECORD_MARGIN_MS = 1000;
@@ -102,11 +104,27 @@ export function registerChatIpc(ipcMain, { trusted, projects, dataDir, reveal, t
     while (snapshots.size > SNAPSHOTS_MAX) snapshots.delete(snapshots.keys().next().value);
     return { ok: true };
   });
+  /* film.html as each turn that ended with it gone found it, by the turn: put back when the person asks */
+  const lostFilms = new Map();
   handle('desktop:chat:changes', async ({ project: path, turnId }) => {
     const dir = await project(path);
     const kept = snapshots.get(turnId);
     snapshots.delete(turnId);
-    return kept && kept.dir === dir ? changes(dir, kept.taken) : null;
+    if (!kept || kept.dir !== dir) return null;
+    const found = await changes(dir, kept.taken);
+    if (found.filmLost) {
+      lostFilms.set(turnId, { dir, text: kept.taken.files.get(FILM)?.text ?? '' });
+      while (lostFilms.size > SNAPSHOTS_MAX) lostFilms.delete(lostFilms.keys().next().value);
+    }
+    return found;
+  });
+  handle('desktop:chat:restore-film', async ({ project: path, turnId }) => {
+    const dir = await project(path);
+    const kept = lostFilms.get(turnId);
+    if (!kept || kept.dir !== dir) return { ok: false, code: 'gone' };
+    const done = await restoreFilm(dir, kept.text);
+    lostFilms.delete(turnId);
+    return done === 'restored' ? { ok: true } : { ok: false, code: 'exists' };
   });
   handle('desktop:chat:reveal', async ({ project: path, turnId }) => {
     const dir = await project(path);

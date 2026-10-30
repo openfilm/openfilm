@@ -4,7 +4,10 @@ import React from 'react';
 import { X } from 'lucide-react';
 import {
   $getNodeByKey,
+  $getSelection,
+  $setSelection,
   DecoratorNode,
+  type BaseSelection,
   type LexicalNode,
   type NodeKey,
   type SerializedLexicalNode,
@@ -50,6 +53,9 @@ export class PromptReferenceNode extends DecoratorNode<React.JSX.Element> {
 
   createDOM(): HTMLElement {
     const dom = document.createElement('span');
+    /* Dragged to move it within the sentence (MovePillsPlugin); not editable, or the browser would not drag it. */
+    dom.draggable = true;
+    dom.contentEditable = 'false';
     dom.style.display = 'inline-flex';
     dom.style.verticalAlign = 'middle';
     /* Room on each side, outside this box: a click there is in the text (the caret goes
@@ -104,6 +110,12 @@ interface PromptReferencePillHandlers {
   removeLabel: string;
   /** What the hover card says. */
   describe?: (reference: PromptReference) => PromptPillCard | null;
+  /** The pill as the host has it now (a file's thumbnail comes in after the pill is in the sentence). */
+  lookup?: (id: string) => PromptReference | undefined;
+  /** A pill whose thing is not ready yet, or could not be had: a file still on its way, or one that failed. */
+  pillState?: (reference: PromptReference) => 'pending' | 'failed' | null;
+  /** Pills that open when clicked (to look at a file brought in) rather than lead somewhere in the film. */
+  opens?: (reference: PromptReference) => boolean;
 }
 
 /* Pills render into the contentEditable through a portal, and context crosses portals,
@@ -113,40 +125,69 @@ export const PromptReferenceContext =
 
 function PromptReferencePill({
   nodeKey,
-  reference,
+  reference: inserted,
 }: {
   nodeKey: NodeKey;
   reference: PromptReference;
 }) {
   const [editor] = useLexicalComposerContext();
   const handlers = React.useContext(PromptReferenceContext);
+  const reference = handlers?.lookup?.(inserted.id) ?? inserted;
+  const opens = handlers?.opens?.(reference) ?? false;
   /* Not every reference leads somewhere in the film: a file is on disk, with no moment or
      picture. Such pills drop the pointer cursor and hint, so they do not look clickable. */
-  const reveal = canRevealPill(reference) ? handlers?.onReveal : undefined;
+  const reveal = canRevealPill(reference) || opens ? handlers?.onReveal : undefined;
+  const revealLabel = opens ? undefined : handlers?.revealLabel;
+  const state = handlers?.pillState?.(reference) ?? null;
+  /* A press may start a drag (the browser's, so it is not held back), and a click on the pill goes where it points
+     with the caret where it was: the press remembers the caret, and the click puts it back. */
+  const before = React.useRef<{ selection: BaseSelection | null; focused: Element | null } | null>(null);
+  const restore = () => {
+    const was = before.current;
+    before.current = null;
+    if (!was) return;
+    const root = editor.getRootElement();
+    if (!root?.contains(was.focused)) {
+      /* the focus was elsewhere: it goes back there */
+      editor.blur();
+      if (was.focused instanceof HTMLElement && was.focused !== document.body) was.focused.focus({ preventScroll: true });
+      return;
+    }
+    editor.update(() => {
+      const selection = was.selection?.clone() ?? null;
+      /* The editor has not read the click's caret yet, so the one it holds looks unchanged: marked dirty, the page's
+         caret is set back to it too. */
+      if (selection) selection.dirty = true;
+      $setSelection(selection);
+    });
+  };
 
   return (
     <PromptPill
       reference={reference}
+      {...(state ? { state } : {})}
       card={handlers?.describe?.(reference) ?? null}
-      /* A click on the pill goes where it points; the caret stays where it was. Left to the
-         browser, a press on something not editable puts the caret at the start of the text. */
       onMouseDown={(event: React.MouseEvent) => {
-        if (event.button === 0) event.preventDefault();
+        if (event.button !== 0) return;
+        before.current = {
+          selection: editor.getEditorState().read(() => $getSelection()?.clone() ?? null),
+          focused: document.activeElement,
+        };
       }}
-      {...(reveal && handlers?.revealLabel ? { hint: handlers.revealLabel } : {})}
-      {...(reveal ? {
-        onClick: (event: React.MouseEvent) => {
-          event.preventDefault();
-          reveal(reference);
-        },
-      } : {})}
-      {...(reveal && handlers?.revealLabel ? { title: `${reference.label} · ${handlers.revealLabel}` } : {})}
+      {...(reveal && revealLabel ? { hint: revealLabel } : {})}
+      onClick={(event: React.MouseEvent) => {
+        event.preventDefault();
+        restore();
+        reveal?.(reference);
+      }}
+      clickable={Boolean(reveal)}
+      {...(reveal && revealLabel ? { title: `${reference.label} · ${revealLabel}` } : {})}
       trailing={(
         <button
           type="button"
           aria-label={handlers?.removeLabel}
           /* Keep focus in the editor on mouse down, so typing continues after removing. */
-          onMouseDown={(event) => event.preventDefault()}
+          onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();

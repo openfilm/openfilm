@@ -84,7 +84,7 @@ export async function slowSeeking(file) {
 }
 
 /** Every Chromium decodes these by itself, with its own decoders, on any machine: no need to ask it. */
-const decodedAnywhere = (/** @type {{ codec_name?: string, pix_fmt?: string }} */ s) =>
+export const decodedAnywhere = (/** @type {{ codec_name?: string, pix_fmt?: string }} */ s) =>
   (s.codec_name === 'h264' && ['yuv420p', 'yuvj420p'].includes(String(s.pix_fmt))) || ['vp8', 'vp9', 'av1'].includes(String(s.codec_name));
 
 /**

@@ -104,6 +104,7 @@ contextBridge.exposeInMainWorld('openfilmNative', {
     unsaved: (project, except) => ipcRenderer.invoke('desktop:chat:unsaved', { project, except }),
     snapshot: (project, turnId) => ipcRenderer.invoke('desktop:chat:snapshot', { project, turnId }),
     changes: (project, turnId) => ipcRenderer.invoke('desktop:chat:changes', { project, turnId }),
+    restoreFilm: (project, turnId) => ipcRenderer.invoke('desktop:chat:restore-film', { project, turnId }),
   },
   /* the composer's Skills button (skills-ipc.mjs) */
   skills: {

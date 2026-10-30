@@ -24,8 +24,8 @@ When no service the person connected can make what the film needs, make it in co
 ask whether they have a key for a service that can.
 
 To search the web, run `openfilm get web-search --query "…"`; to read a page, `openfilm get web-fetch --url …` (it
-saves the page's text in the project). Both work once the person has connected a web search service (Brave Search or
-Tavily); until then, read public pages with `curl`.
+saves the page's text in the project). Both work once the person has connected a web search service (Brave Search,
+Keenable or Tavily); until then, read public pages with `curl`.
 
 ## Asking
 

@@ -33,6 +33,29 @@ export async function readStudioFilm(projectId: string): Promise<FilmDoc | null>
   }
 }
 
+/**
+ * What the person changed in Studio while the agent worked that its writes would have undone, kept by Studio, as a
+ * block for the next message to the agent of `conversation` (empty when nothing), and `said`, to call once the agent
+ * has the message (its turn started): only then does Studio count it told. Studio gives it once to each agent: to its
+ * `openfilm` commands or here, whichever asks first.
+ */
+export async function keptNote(projectId: string, conversation: string): Promise<{ text: string; said: () => void }> {
+  const none = { text: '', said: () => {} };
+  try {
+    const agent = encodeURIComponent(`app:${conversation}`);
+    const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/kept?agent=${agent}`, { signal: AbortSignal.timeout(READ_WAIT_MS) });
+    if (!res.ok) return none;
+    const { id, line } = await res.json() as { id?: string; line?: string | null };
+    if (!line || !id) return none;
+    const said = () => {
+      void fetch('/api/kept/said', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id }) }).catch(() => {});
+    };
+    return { text: `\n\n<studio_note>${line}</studio_note>`, said };
+  } catch {
+    return none;
+  }
+}
+
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
   return () => { listeners.delete(listener); };

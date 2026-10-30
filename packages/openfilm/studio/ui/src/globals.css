@@ -67,6 +67,11 @@
 
   --bg-hover: rgba(0, 0, 0, 0.045);
   --bg-active: rgba(0, 0, 0, 0.08);
+  /* the layers selected in the Layers panel: a muted blue, the picture's selection hue; what a selected layer holds
+     is a paler one, and the hovered row is lined */
+  --layer-selected: #dce9fb;
+  --layer-selected-in: #eff5fd;
+  --layer-hover-line: rgba(13, 153, 255, 0.45);
 
   --app-content-bg: #fcfcfc;
 
@@ -101,6 +106,8 @@
   /* waveforms on blocks (canvas reads these back from the element) */
   --tl-wave: rgba(0, 110, 108, 0.82);
   --tl-wave-band: rgba(0, 96, 102, 0.8);
+  /* the part of a waveform a clip's volume pushes past full scale: it will distort */
+  --tl-wave-clip: #f2711c;
   --tl-scene: #3f9b9b;
   --tl-video: #5385bd;
   --tl-voice: #6f62b0;
@@ -148,6 +155,9 @@
 
   --bg-hover: rgba(255, 255, 255, 0.06);
   --bg-active: rgba(255, 255, 255, 0.1);
+  --layer-selected: #333c58;
+  --layer-selected-in: #23283a;
+  --layer-hover-line: rgba(116, 146, 230, 0.55);
 
   --app-content-bg: rgb(17, 17, 17);
 
@@ -177,6 +187,7 @@
   --tl-select: #ffffff;
   --tl-wave: rgba(12, 168, 164, 0.9);
   --tl-wave-band: rgba(0, 119, 125, 0.85);
+  --tl-wave-clip: #ff8a3d;
   --tl-tick: rgba(255, 255, 255, 0.12);
   --tl-scene: #1d5c60;
   --tl-video: #2d4f7c;

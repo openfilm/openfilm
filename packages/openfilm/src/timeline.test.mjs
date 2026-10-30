@@ -993,6 +993,80 @@ async function playFor(film, seconds, fps = 30) {
   }, [seconds, fps]);
 }
 
+test('fast clips play, preroll and scrub at the correct source time even beyond the browser rate limit', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 120_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-fast-roll-'));
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=160x90:rate=10:duration=24', '-pix_fmt', 'yuv420p', '-g', '5', join(dir, 'clip.mp4')]);
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 160, h: 90 }, tracks: [
+    { clips: [{ id: 'clip', src: 'clip.mp4', at: 1, time: [8, 24], speed: 16 }] },
+  ] }));
+  const s = await open(dir);
+  try {
+    const result = await s.film.page.evaluate(async () => {
+      const v = document.getElementById('clip');
+      const draw = async (t, rate) => {
+        await window.__filmEditor.watch(t, { rate, now: t });
+        if (v.seeking) await new Promise((resolve) => v.addEventListener('seeked', resolve, { once: true }));
+        return { time: v.currentTime, rate: v.playbackRate, paused: v.paused };
+      };
+      await window.__filmEditor.watch(0);
+      /* In the early-start interval: preroll must not try to assign 64×. */
+      await draw(0.6, 4);
+      await draw(1.1, 4);
+      const fast = await draw(1.5, 4);
+      await window.__filmEditor.watch(1.25);
+      const still = { time: v.currentTime, paused: v.paused };
+      /* A video behind by 0.1 s is nudged faster on its second draw: 16 × 1.03 must not throw. */
+      await draw(1.26, 1);
+      await draw(1.26, 1);
+      const boundary = { rate: v.playbackRate };
+      const resumed = await draw(1.4, 0.5);
+      return { fast, still, boundary, resumed };
+    });
+    assert.ok(result.fast.paused && Math.abs(result.fast.time - 16) < 0.05, JSON.stringify(result));
+    assert.ok(result.still.paused && Math.abs(result.still.time - 12) < 0.05, JSON.stringify(result));
+    assert.ok(result.boundary.rate <= 16, JSON.stringify(result));
+    assert.ok(result.resumed.rate <= 8.24 && result.resumed.rate >= 7.76, JSON.stringify(result));
+  } finally {
+    await s.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a clip slower than a browser plays (0.1× at the viewer\'s 0.25×) is followed by its frames; at 1× it rolls at 0.1×', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 120_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-slow-roll-'));
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=160x90:rate=10:duration=4', '-pix_fmt', 'yuv420p', '-g', '5', join(dir, 'clip.mp4')]);
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 160, h: 90 }, tracks: [
+    { clips: [{ id: 'clip', src: 'clip.mp4', time: [1, 3], speed: 0.1 }] },
+  ] }));
+  const s = await open(dir);
+  try {
+    const result = await s.film.page.evaluate(async () => {
+      const v = document.getElementById('clip');
+      const errors = [];
+      window.addEventListener('error', (e) => errors.push(e.message));
+      const draw = async (t, rate) => {
+        await window.__filmEditor.watch(t, { rate, now: t });
+        if (v.seeking) await new Promise((resolve) => v.addEventListener('seeked', resolve, { once: true }));
+        return { time: v.currentTime, rate: v.playbackRate, paused: v.paused };
+      };
+      await window.__filmEditor.watch(0);
+      /* 1/40: no rate the browser takes; sought instead, 5 film seconds into it being half a source second in */
+      await draw(4.9, 0.25);
+      const slow = await draw(5, 0.25);
+      /* at the viewer's 1× it is 0.1×, which a browser plays */
+      await draw(6, 1);
+      const rolling = await draw(6.05, 1);
+      return { slow, rolling, errors };
+    });
+    assert.ok(result.slow.paused && Math.abs(result.slow.time - 1.5) < 0.05, JSON.stringify(result));
+    assert.ok(!result.rolling.paused && result.rolling.rate >= 1 / 16 && Math.abs(result.rolling.rate - 0.1) < 0.01, JSON.stringify(result));
+    assert.deepEqual(result.errors, []);
+  } finally {
+    await s.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('playing, a video plays by itself on the film\'s clock, not sought frame by frame; a still moment stops it there', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 120_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'of-roll-'));
   execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=30:duration=4', '-pix_fmt', 'yuv420p', '-g', '15', join(dir, 'clip.mp4')]);

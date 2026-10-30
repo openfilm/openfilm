@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clipKey, layerKey, layerLines, movedOrder, moverFor, openTo, type LayerClip, type LayerRow } from './layers-tree.ts';
+import {
+  clipKey, layerKey, layerLines, movedOrder, moverFor, openTo, rowsBetween, selectionTones, type LayerClip, type LayerRow,
+} from './layers-tree.ts';
 
 const row = (loc: string, branch: number, children: LayerRow[] = []): LayerRow => ({
   handle: branch, branch, loc, tag: 'div', kind: children.length ? 'group' : 'box', label: loc, hidden: false, locked: false, off: false, children,
@@ -65,4 +67,35 @@ test('a dragged row lands in its own level or in that of a row around it, which 
   /* a clip, another clip: nowhere */
   assert.equal(moverFor(lines, at('#title'), lines[0]!), null);
   assert.equal(moverFor(lines, at('#title'), lines.find((l) => l.key === clipKey('v1'))!), null);
+});
+
+test('a Shift-click range is the rows shown between the two, either way round; a closed group\'s rows are not in it', () => {
+  const open = layerLines(clips, new Set([layerKey('intro', '#card'), layerKey('intro', '#logo')]));
+  const line = (loc: string) => open.find((l) => l.row?.loc === loc)!;
+  const locs = (a: string, b: string, lines = open) => rowsBetween(lines, lines.find((l) => l.row?.loc === a)!, lines.find((l) => l.row?.loc === b)!).map((l) => l.row!.loc);
+  assert.deepEqual(locs('#title', '#bg'), ['#title', '#logo', '#bg'], 'the row around #mark holds it: #mark is not taken twice');
+  assert.deepEqual(locs('#bg', '#title'), ['#title', '#logo', '#bg'], 'upwards: the same rows, in tree order');
+  assert.deepEqual(locs('#mark', '#bg'), ['#mark', '#bg'], 'from inside a group to below it');
+  assert.deepEqual(locs('#card', '#footer'), ['#card', '#footer'], 'a group in the range holds what is inside it');
+  /* #logo closed: #mark is not shown, and not in the range */
+  const shut = layerLines(clips, new Set([layerKey('intro', '#card')]));
+  assert.deepEqual(locs('#title', '#bg', shut), ['#title', '#logo', '#bg']);
+  assert.ok(!locs('#title', '#bg', shut).includes('#mark'));
+  assert.deepEqual(rowsBetween(open, line('#title'), line('#title')).map((l) => l.row!.loc), ['#title'], 'one row: itself');
+});
+
+test('the rows selected are \'on\', what a selected one holds is \'in\', the rest neither', () => {
+  const open = layerLines(clips, new Set([layerKey('intro', '#card'), layerKey('intro', '#logo')]));
+  const tones = (picked: string[]) => {
+    const t = selectionTones(open, (l) => Boolean(l.row && picked.includes(l.row.loc)));
+    return open.map((l, i) => `${l.row?.loc ?? l.key}:${t[i] ?? '-'}`);
+  };
+  assert.deepEqual(tones(['#card']), [
+    'clip:intro:-', '#card:on', '#title:in', '#logo:in', '#mark:in', '#bg:in', '#footer:-', 'clip:v1:-',
+  ]);
+  assert.deepEqual(tones(['#logo', '#footer']), [
+    'clip:intro:-', '#card:-', '#title:-', '#logo:on', '#mark:in', '#bg:-', '#footer:on', 'clip:v1:-',
+  ]);
+  /* a selected row inside a selected one is 'on', and what follows the inner one is still inside the outer */
+  assert.deepEqual(tones(['#card', '#logo']).slice(1, 6), ['#card:on', '#title:in', '#logo:on', '#mark:in', '#bg:in']);
 });

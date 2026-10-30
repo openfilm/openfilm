@@ -157,9 +157,9 @@ test('a film runs no script, and holds nothing but tracks of clips', () => {
 });
 
 test('what the value says wrong is said at the clip\'s line', () => {
-  const found = said(page([['<img src="a.png#t=0,2">'], ['<video id="x" src="a.mp4#t=5,2"></video>', '<video id="x" src="b.mp4" speed="9"></video>']]));
+  const found = said(page([['<img src="a.png#t=0,2">'], ['<video id="x" src="a.mp4#t=5,2"></video>', '<video id="x" src="b.mp4" speed="101"></video>']]));
   assert.match(found, /film\.html:11: its part of the file \(#t=5,2\) has to end after it starts/);
-  assert.match(found, /film\.html:12: speed has to be a number from 0.25 to 4/);
+  assert.match(found, /film\.html:12: speed has to be a number from 0.1 to 100/);
 });
 
 test('media fragments: seconds, a start alone, clock times', () => {
@@ -169,6 +169,24 @@ test('media fragments: seconds, a start alone, clock times', () => {
   assert.deepEqual(clip('a.mp4#t=,6').time, [0, 6]);
   assert.deepEqual(clip('a.mp4#t=npt:1:02.5,1:10').time, [62.5, 70]);
   assert.equal(clip('a.mp4#t=0').time, undefined);
+});
+
+test('fast and slow video and sound clips keep their speed, source trim and duration through a save', () => {
+  for (const src of ['a.mp4', 'a.wav']) for (const speed of [0.1, 0.25, 4.25, 8, 16, 50]) {
+    const value = film({ src, id: 'fast', at: 2, time: [8, 72], speed });
+    assert.equal(problems(value), '');
+    const saved = readFilmFile(filmHtml(value));
+    assert.deepEqual(saved.problems, []);
+    const clip = saved.doc.tracks[0].clips[0];
+    assert.equal(clip.speed, speed);
+    assert.deepEqual(clip.time, [8, 72]);
+    const span = clipSpan(clip, 80);
+    assert.equal(span.length, 64 / speed);
+    assert.equal(sourceAt(span, 1, clip, 80), 8 + speed);
+  }
+  for (const speed of [0, 0.09, 100.01, Infinity, NaN]) {
+    assert.match(problems(film({ src: 'a.mp4', speed })), /speed has to be a number/);
+  }
 });
 
 /* ── the value ── */

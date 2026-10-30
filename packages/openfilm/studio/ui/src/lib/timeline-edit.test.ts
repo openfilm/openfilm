@@ -22,6 +22,7 @@ import {
   planRippleTrimTo,
   planRoom,
   planSpeed,
+  slowestSpeed,
   planUnlink,
   ridesOn,
   soundTrackFor,
@@ -412,6 +413,31 @@ test('slower with a ripple pushes what follows on its track; without, it says ho
   assert.deepEqual(held.ops, []);
   assert.equal(held.slowest, 0.67);
   assert.deepEqual(after(m, planSpeed(m, ['a'], 0.8, { ripple: false })), [[['a', 0, 2.5], ['b', 3, 4]], [['vo', 3, 4]]]);
+});
+
+test('a speed set from the start edge keeps each clip\'s end, back to the clip before; rippling, the start stays', () => {
+  const m = model([['p', 0, 1], ['a', 2, 4], ['b', 4, 5]], [['vo', 4, 5]]);
+  assert.deepEqual(after(m, planSpeed(m, ['a'], 2, { ripple: false, edge: 'start' })), [[['p', 0, 1], ['a', 3, 4], ['b', 4, 5]], [['vo', 4, 5]]]);
+  assert.deepEqual(after(m, planSpeed(m, ['a'], 0.8, { ripple: false, edge: 'start' })), [[['p', 0, 1], ['a', 1.5, 4], ['b', 4, 5]], [['vo', 4, 5]]]);
+  /* 1 s free before it: no slower than 2 s of source over 3 s */
+  const held = planSpeed(m, ['a'], 0.5, { ripple: false, edge: 'start' });
+  assert.deepEqual([held.ops, held.slowest], [[], 0.67]);
+  /* the first clip on its track goes back to the film's start, no further */
+  assert.equal(planSpeed(model([['a', 1, 2]]), ['a'], 0.25, { ripple: false, edge: 'start' }).slowest, 0.5);
+  assert.deepEqual(after(m, planSpeed(m, ['a'], 0.5, { ripple: true, edge: 'start' })), [[['p', 0, 1], ['a', 2, 6], ['b', 6, 7]], [['vo', 4, 5]]]);
+});
+
+test('how slow clips can go without the magnet: the clips linked to it counted, as planSpeed refuses', () => {
+  /* a video free for 2 s after it, its sound (linked) with another sound right after it */
+  const m = model([['v', 0, 2, { link: 'k' }], ['w', 4, 5]], [['s', 0, 2, { link: 'k' }], ['x', 2, 3]]);
+  assert.equal(slowestSpeed(m, ['v']), 0.5, 'the video alone: 2 s of source over 4 s');
+  assert.equal(slowestSpeed(m, ['v', 's']), 1, 'its sound can get no longer');
+  assert.equal(planSpeed(m, ['v', 's'], 0.5, { ripple: false }).slowest, slowestSpeed(m, ['v', 's']));
+  assert.ok(planSpeed(m, ['v', 's'], slowestSpeed(m, ['v', 's']), { ripple: false }).slowest == null);
+  /* nothing after them: no limit */
+  assert.equal(slowestSpeed(model([['a', 0, 2]]), ['a']), 0);
+  /* 2 s of source over 3 s, up to the hundredth */
+  assert.equal(slowestSpeed(model([['a', 0, 2], ['b', 3, 4]]), ['a']), 0.67);
 });
 
 test('linked clips get the speed together', () => {

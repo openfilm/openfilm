@@ -131,7 +131,6 @@ export const zhCN: Words = {
   composer: {
     contextFull: '这段对话已经很长了，开个新对话效果更好。',
     contextFullNew: '新对话',
-    commands: '命令',
     agentLoading: '正在加载…',
     agentNone: '智能体',
     agentNoneShown: '对话中尚未开启任何智能体。',
@@ -165,8 +164,6 @@ export const zhCN: Words = {
     routeNoKeyNoAccount: '这个模型要用 DeepSeek 的 API key，这台电脑上还没有配置。请在 DeepSeek Harness 里登录 DeepSeek 账号，或在它的模型设置里填上 API key。',
     useAccountModel: '换成 {model}',
     accountModelPicked: '已换成 {model}，再发一次即可。',
-    removeFile: '移除文件',
-    removeImage: '移除图片',
     speed: '速度',
     thumbOnly: '消息中只保留了缩略图。原文件还在原来的位置；粘贴的文件保存在项目里。',
   },
@@ -224,8 +221,8 @@ export const zhCN: Words = {
     assets: '素材',
     addAttachment: '添加文件',
     close: '关闭',
-    composerPlaceholder: '说说要改什么。输入 @ 可指向文件、某个时刻或当前选中的内容',
-    composerPlaceholderBlank: '描述你的影片。输入 @ 可使用此项目中的文件',
+    composerPlaceholder: '说说要改什么。输入 @ 可指向文件、skill、某个时刻或当前选中的内容',
+    composerPlaceholderBlank: '描述你的影片。输入 @ 可加入文件或 skill',
     dismiss: '关闭',
     jumpToLatest: '跳到最新',
     loadingMessages: '正在加载对话…',
@@ -393,5 +390,15 @@ export const zhCN: Words = {
     added: '新增',
     removed: '已删除',
     changed: '已修改',
+  },
+  /** a turn that ended with film.html gone: under its reply, put it back as the turn found it (lib/film-restore) */
+  filmRestore: {
+    lost: '这一轮删除了 film.html，现在它不在了。',
+    restore: '把 film.html 恢复成这一轮之前的样子',
+    restoring: '正在恢复…',
+    restored: 'film.html 已恢复成这一轮之前的样子。',
+    exists: 'film.html 已经回来了，所以保持原样。',
+    gone: '这一轮之前的副本已不再保留。请从“版本历史”恢复 film.html。',
+    failed: '无法恢复 film.html。请重试，或从“版本历史”恢复。',
   },
 };

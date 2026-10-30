@@ -5,8 +5,8 @@
  * places (`film.html#t.c`), and a place copied before then would paste whichever clip sits there now. A paste copies
  * the clip as film.html has it then; a clip that is gone by then is reported, not swapped for another.
  *
- * Start times are kept so several clips keep their spacing; tracks are kept so clips copied from several tracks go
- * back to their own tracks. Only clips copied from one track follow a track the person points at.
+ * Start times are kept so several clips keep their spacing; tracks are kept so clips copied from several tracks keep
+ * their rows: back onto their own tracks, or moved together to the track the person points at.
  */
 import type { Op } from '../api.ts';
 import { newTrackSide } from './timeline-drag.ts';
@@ -30,6 +30,20 @@ export function laneOfBlock(tracks: readonly TimelineTrack[], id: string): strin
     if (track.blocks.some((b) => b.id === id)) return track.lane;
   }
   return null;
+}
+
+/**
+ * The track a paste (⌘V) goes onto: the track row under the pointer (`pointed`), else the selected clip's row, else none
+ * (each copy back onto its own). `pointed` in the answer: the row was pointed at, so copies from several tracks move
+ * there together (pasteEdit); a selected clip's row takes only copies from one track.
+ */
+export function pasteLane(
+  tracks: readonly TimelineTrack[],
+  pointedLane: string | null,
+  pickedId: string | null,
+): { lane: string | null; pointed: boolean } {
+  if (tracks.find((tr) => tr.lane === pointedLane)?.docIndex != null) return { lane: pointedLane, pointed: true };
+  return { lane: pickedId ? laneOfBlock(tracks, pickedId) : null, pointed: false };
 }
 
 /** The row by name; when a spread row is gone, the same film.html track. */
@@ -189,8 +203,10 @@ function placeCopies(
 }
 
 /**
- * A paste: copied from one track, the copies go onto the track pointed at (`forceLane`) if any; from several, each
- * back onto its own. The group's earliest clip lands at `atMs`, the rest keep their spacing. Put down (`place`), they
+ * A paste: copied from one track, the copies go onto the track given (`forceLane`) if any. From several, each goes
+ * back onto its own; when that track was pointed at (`pointed`), the group's top track goes onto it instead and the
+ * others keep their distance below it, past the last track on new tracks. The group's earliest clip lands at `atMs`,
+ * the rest keep their spacing. Put down (`place`), they
  * never cut or move what is there: a taken spot opens a track beside it (placeCopies), and with the magnet a copy
  * headed for the main track goes to a new track right above it. An insert makes room there instead,
  * pushing what follows on, on the tracks they go in on (with linkage, what rides on the main track along). Null when a
@@ -202,24 +218,34 @@ export function pasteEdit(
   model: EditModel,
   atMs: number,
   forceLane: string | null,
-  opts: { mode: 'place' | 'insert' } & Partial<Switches>,
+  opts: { mode: 'place' | 'insert'; pointed?: boolean } & Partial<Switches>,
 ): Op[] | null {
   if (!clipboard.length) return [];
   const base = Math.min(...clipboard.map((item) => item.startMs));
   const copiedTracks = new Set(clipboard.map((item) => docIndexOfLane(item.lane) ?? item.lane));
   const force = forceLane && copiedTracks.size === 1 ? forceLane : null;
+  /* several tracks moved together onto the track pointed at: by how many tracks */
+  const top = Math.min(...clipboard.map((item) => trackByLane(tracks, item.lane)?.docIndex ?? Infinity));
+  const to = forceLane && !force && opts.pointed ? trackByLane(tracks, forceLane)?.docIndex : undefined;
+  const shift = to != null && Number.isFinite(top) ? to - top : 0;
+  const count = Math.max(-1, ...model.map((t) => t.index)) + 1;
   const spans = clipboard.map((item) => {
-    const row = trackByLane(tracks, force || item.lane);
+    const own = trackByLane(tracks, force || item.lane);
+    const doc = own?.docIndex == null ? undefined : own.docIndex + shift;
+    const row = shift ? tracks.find((tr) => tr.docIndex === doc) : own;
+    const track: TrackDest | undefined = doc != null && doc >= count ? { insert: count } : row?.docIndex;
     const startMs = Math.round(Math.max(0, atMs) + (item.startMs - base));
-    return { item, track: row?.docIndex, locked: Boolean(row?.locked), startMs, endMs: startMs + item.durMs };
+    return { item, track, source: own?.docIndex, locked: Boolean(row?.locked), startMs, endMs: startMs + item.durMs };
   });
   if (spans.some((s) => s.track == null || s.locked)) return null;
   const links = copyLinks(clipboard.map((item) => item.clipId), model);
   if (opts.mode === 'place') {
     return placeCopies(model, spans.map((s) => ({
-      from: s.item.clipId, startMs: s.startMs, endMs: s.endMs, dest: s.track!, source: s.track!,
+      from: s.item.clipId, startMs: s.startMs, endMs: s.endMs, dest: s.track!, source: s.source!,
     })), links, opts.magnet ? mainTrackOf(model) : null).ops;
   }
+  /* insert mode opens no track: copies that would go past the last one are refused */
+  if (spans.some((s) => typeof s.track !== 'number')) return null;
   const insertOf = (s: (typeof spans)[number]): Op => ({
     op: 'insert',
     from: s.item.clipId,
@@ -228,7 +254,7 @@ export function pasteEdit(
     ...(links.has(s.item.clipId) ? { link: links.get(s.item.clipId)! } : {}),
   });
   /* the copies go in first, so a clip pasted inside itself is copied whole before the insert cuts it */
-  const room = planRoom(model, spans.map((s) => ({ track: s.track!, startMs: s.startMs, endMs: s.endMs })), { ...opts, mode: 'insert' });
+  const room = planRoom(model, spans.map((s) => ({ track: s.track as number, startMs: s.startMs, endMs: s.endMs })), { ...opts, mode: 'insert' });
   return [...spans.map(insertOf), ...room.ops];
 }
 

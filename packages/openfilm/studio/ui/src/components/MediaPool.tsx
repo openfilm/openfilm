@@ -53,6 +53,7 @@ import {
   formatClipDuration,
   formatFileSize,
   mediaNameMatches,
+  proxyText,
   renameChangesKind,
   renamedPath,
   resourceKindOf,
@@ -517,9 +518,8 @@ export function MediaPool({
     ...(onReveal ? [{ id: 'reveal', label: t('projects.revealFolder'), icon: <FolderOpen size={14} />, onSelect: () => onReveal(path) }] : []),
     { id: 'copy', label: t('media.copyPath'), icon: <Copy size={14} />, onSelect: () => { void navigator.clipboard?.writeText(path).catch(() => {}); } },
   ];
-  /** What to say of a proxy. */
-  const proxyText = (proxy: MediaProxy) => (proxy.state === 'making' ? t('media.proxyMaking').replace('{p}', String(Math.round((proxy.ratio ?? 0) * 100)))
-    : proxy.state === 'waiting' ? t('media.proxyWaiting') : proxy.state === 'failed' ? t('media.proxyFailed') : t('media.proxyReady'));
+  /** A proxy's mark: ready, or (one this browser needs) being prepared or failed. */
+  const proxyMark = (proxy: MediaProxy) => (proxy.state === 'ready' ? t('media.proxy') : proxy.state === 'failed' ? t('media.copyFailedMark') : t('media.copyMark'));
   /** Where a file or folder is linked from (a NAS), if it is a link. */
   const linkOf = (key: string): MediaLink | undefined => {
     const item = itemByKey.get(key);
@@ -1006,7 +1006,7 @@ export function MediaPool({
                 selected={chosen.includes(item.file.path)}
                 lit={litPath === item.file.path}
                 {...(item.file.link ? { linkLabel: item.file.link.missing ? t('media.linkMissing') : t('media.linkedFrom').replace('{path}', item.file.link.to) } : {})}
-                {...(item.file.proxy ? { proxyLabel: proxyText(item.file.proxy), proxyMark: t('media.proxy') } : {})}
+                {...(item.file.proxy ? { proxyLabel: proxyText(item.file.proxy, t), proxyMark: proxyMark(item.file.proxy) } : {})}
                 renaming={renaming === item.file.path}
                 {...(fileRef ? { studioRef: () => fileRef(item.file) } : {})}
                 moving={() => dragKeys(item.file.path)}
@@ -1315,10 +1315,15 @@ function FileTile(p: {
           ) : p.file.link ? (
             <span className="absolute bottom-1 left-1 z-10 flex h-4 w-4 items-center justify-center rounded bg-black/65 text-white" title={p.linkLabel}><Link2 size={10} /></span>
           ) : null}
-          {/* heavy footage's proxy: its making along the bottom, then a mark */}
+          {/* heavy footage's proxy: its making along the bottom, then a mark. Footage this browser does not decode is
+              marked while it is prepared to play, or when it could not be */}
           {p.file.proxy?.state === 'ready' ? (
             <span className="absolute right-1 top-1 z-10 rounded bg-black/65 px-1 text-[9.5px] font-semibold uppercase leading-[15px] tracking-wide text-white/90" title={p.proxyLabel}>{p.proxyMark}</span>
-          ) : p.file.proxy && p.file.proxy.state !== 'failed' ? (
+          ) : null}
+          {p.file.proxy?.needed && p.file.proxy.state !== 'ready' ? (
+            <span className={`absolute right-1 top-1 z-10 rounded px-1 text-[9.5px] font-semibold leading-[15px] text-white/90 ${p.file.proxy.state === 'failed' ? 'bg-[var(--danger,#e5484d)]' : 'bg-black/65'}`} title={p.proxyLabel}>{p.proxyMark}</span>
+          ) : null}
+          {p.file.proxy && p.file.proxy.state !== 'ready' && p.file.proxy.state !== 'failed' ? (
             <span className="absolute inset-x-0 bottom-0 z-10 h-1" title={p.proxyLabel}><UploadBar ratio={p.file.proxy.state === 'making' ? p.file.proxy.ratio ?? 0 : -1} /></span>
           ) : null}
           {/* a bundle of Saved: a component, and how many clips a group holds */}

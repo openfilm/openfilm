@@ -37,13 +37,14 @@ A folder:
 
 - The viewport is the film's frame, in CSS pixels; without it, 1920×1080.
 - Each `<section>` is a track of clips that do not overlap; any clip goes on any track. The sections are the tracks as Studio's timeline shows them, top first: the first one's pictures are on top, so titles go before the footage they cover, and the background last. What a page does not paint is transparent; a moment with no clip is black.
+- Put a new clip on a track that is free at its time and holds clips like it: titles with titles, footage with footage, sound with sound. Add a track only for a clip that must be over or under one already there at that time, and leave no track empty.
 - A track the person `locked` is theirs: change nothing on it. A `hidden` track shows and plays nothing; a `muted` one plays no sound.
 - A clip is an element: `<iframe>` a page, `<video>`, `<img>` a picture, `<audio>` a sound.
   - `src`: its file, relative to film.html. `#t=in,out` says which seconds of it play, `#t=in` to its end; without it, all of them. A picture, or a page without a `duration`, needs `#t=0,length`: how long it stays.
   - `at`: where it starts in the film, in seconds; without it, 0.
   - `left`, `top`, `width`, `height` in its `style` (px) and `rotate` (degrees, clockwise): where it sits. Without them, a video or picture is the stage, and a page is its own size, centered. With only `width` or `height`, the other keeps its proportions.
   - Its look is CSS, in `class` or `style`: a video or picture fits whole in its box unless you say otherwise (`object-fit: cover` crops it to the box). The film's CSS holds still; what moves is a page.
-  - `speed` (video and sound): 0.25 to 4. The clip lasts `(out − in) / speed` seconds. To make it faster or slower, change `speed` only: never make the file again at another speed, nor move its `.vtt`'s times. Its subtitles follow `speed` on their own.
+  - `speed` (video and sound): 0.1 to 100. The clip lasts `(out − in) / speed` seconds. To make it faster or slower, change `speed` only: never make the file again at another speed, nor move its `.vtt`'s times. Its subtitles follow `speed` on their own.
   - `volume` (video and sound): 1 is the file's own level; `muted` silences it.
   - `id`: a name, unique in the film; without it, the file's name.
   - `overrides`: the person's changes made in Studio. Keep them as they are.

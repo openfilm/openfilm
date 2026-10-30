@@ -149,6 +149,29 @@ that you are taking it, and open one before starting a large change, so nobody d
 
 ## Adding a media provider
 
+### Which services are built in
+
+A built-in provider reads as a service OpenFilm vouches for: people hand it their keys, their prompts and their
+footage. So we hold one standard for every one:
+
+- **An internationally known company, or a leading name in its field**, offering **its own** service (its own models,
+  its own index, its own voices). These can be proposed directly.
+- **Any other service** is welcome to show it belongs: open an issue first, before writing code, with material on
+  - **scale**: the requests it serves, the customers or products that rely on it;
+  - **stability**: its uptime, how long it has run, how it announces changes and retires models;
+  - **privacy and security**: what it keeps of a request, for how long, where, and who can see it (its policy,
+    links to it).
+
+  We look at it with you, and say yes or no with the reason before you spend time on a pull request.
+- **A service that resells or routes other companies' models** is not built in, however good its API: those models
+  reach OpenFilm through their makers, or through a provider that is already built in.
+
+Every service, built in or not, works with OpenFilm today through **Settings › Providers › Custom services**: any
+HTTP service with its address, a key if it has one, and a few words about it; the agent calls it from there, and the
+key stays on the computer.
+
+### What its pull request comes with
+
 A provider is one file in [studio/server/providers/](packages/openfilm/studio/server/providers/) that keeps the
 contract in `contract.mjs`, listed in `OWN` in `index.mjs`; [groq.mjs](packages/openfilm/studio/server/providers/groq.mjs)
 is a small one to start from. Its pull request comes with:
