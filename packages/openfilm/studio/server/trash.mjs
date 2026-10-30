@@ -7,7 +7,9 @@
  *            where moving into ~/.Trash is not (a program without Full Disk Access); before it, ~/.Trash (with " 2",
  *            " 3" on a name already there)
  *   Linux    the freedesktop trash: ~/.local/share/Trash/{files,info}, with the .trashinfo that lets it be restored
- *   Windows  the Recycle Bin, through PowerShell
+ *   Windows  the Recycle Bin, through PowerShell. An item the Recycle Bin cannot take (on a network or removable
+ *            drive, bigger than the bin holds, a bin set to delete right away) is refused and left where it is: the
+ *            shell's own answer would be to delete it for good, without a word
  */
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -15,10 +17,52 @@ import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, extname, join } from 'node:path';
 import { promisify } from 'node:util';
+import { HttpError } from './http.mjs';
 
 const run = promisify(execFile);
 /** macOS's own command for the Trash (macOS 15 and later). */
 const MAC_TRASH = '/usr/bin/trash';
+
+/** PowerShell's exit code when the item in $env:OPENFILM_TRASH cannot go to the Recycle Bin; the reason is its output. */
+const CANNOT_RECYCLE = 3;
+/**
+ * Windows: the item in $env:OPENFILM_TRASH to the Recycle Bin, once it is known the bin takes it. The shell recycles
+ * only on a fixed drive, whose bin holds items up to a size (the person's setting, a policy's, or about a twentieth of
+ * the drive when neither was set) and is not set to delete right away; anything else it deletes for good, asking only
+ * through the confirmations `OnlyErrorDialogs` turns off. So those are checked first, by the shell's own settings.
+ */
+const RECYCLE = `
+$ErrorActionPreference = 'Stop'
+function Refuse($why) { Write-Output $why; exit ${CANNOT_RECYCLE} }
+function Size($bytes) { if ($bytes -ge 1GB) { [string][math]::Round($bytes / 1GB, 1) + ' GB' } else { [string][math]::Round($bytes / 1MB, 1) + ' MB' } }
+$root = [System.IO.Path]::GetPathRoot($env:OPENFILM_TRASH)
+if ($root.StartsWith('\\\\')) { Refuse 'it is on a network drive, which has no Recycle Bin' }
+$item = Get-Item -LiteralPath $env:OPENFILM_TRASH -Force
+$drive = New-Object System.IO.DriveInfo($root)
+switch ([string]$drive.DriveType) {
+  'Fixed' { }
+  'Network' { Refuse 'it is on a network drive, which has no Recycle Bin' }
+  'Removable' { Refuse 'it is on a removable drive, which has no Recycle Bin' }
+  default { Refuse ('drive ' + $root + ' has no Recycle Bin') }
+}
+$letter = $root.Substring(0, 2)
+$percent = $null
+foreach ($hive in @('HKCU', 'HKLM')) {
+  $policy = Get-ItemProperty -Path ($hive + ':\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer') -ErrorAction SilentlyContinue
+  if ($policy.NoRecycleFiles -eq 1) { Refuse 'a policy here has the Recycle Bin delete files right away' }
+  if ($null -ne $policy.RecycleBinSize) { $percent = [double]$policy.RecycleBinSize }
+}
+$bin = $null
+$volume = [string](mountvol $letter /L)
+if ($volume -match '\\{[0-9A-Fa-f-]+\\}') { $bin = Get-ItemProperty -Path ('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\BitBucket\\Volume\\' + $Matches[0]) -ErrorAction SilentlyContinue }
+if ($bin.NukeOnDelete -eq 1) { Refuse ('the Recycle Bin of drive ' + $letter + ' is set to delete files right away') }
+$holds = if ($null -ne $percent) { $drive.TotalSize * $percent / 100 } elseif ($null -ne $bin.MaxCapacity) { [double]$bin.MaxCapacity * 1MB } else { $drive.TotalSize * 0.05 }
+$size = if ($item.PSIsContainer) { [double](Get-ChildItem -LiteralPath $item.FullName -Recurse -Force -File | Measure-Object -Property Length -Sum).Sum } else { [double]$item.Length }
+if ($size -gt $holds) { Refuse ('it is ' + (Size $size) + ', more than the Recycle Bin of drive ' + $letter + ' holds (' + (Size $holds) + ')') }
+Add-Type -AssemblyName Microsoft.VisualBasic
+if ($item.PSIsContainer) { [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory($item.FullName, 'OnlyErrorDialogs', 'SendToRecycleBin') }
+else { [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($item.FullName, 'OnlyErrorDialogs', 'SendToRecycleBin') }
+`;
 
 /** A name in `dir` that is free: `name`, else `name 2.ext`, `name 3.ext`… */
 function freeName(/** @type {string} */ dir, /** @type {string} */ name) {
@@ -39,9 +83,13 @@ export async function moveToTrash(path) {
     return;
   }
   if (process.platform === 'win32') {
-    const kind = (await import('node:fs')).statSync(path).isDirectory() ? 'DeleteDirectory' : 'DeleteFile';
-    const script = `Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.FileIO.FileSystem]::${kind}($env:OPENFILM_TRASH, 'OnlyErrorDialogs', 'SendToRecycleBin')`;
-    await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { env: { ...process.env, OPENFILM_TRASH: path }, windowsHide: true });
+    try {
+      await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', RECYCLE], { env: { ...process.env, OPENFILM_TRASH: path }, windowsHide: true });
+    } catch (e) {
+      const { code, stdout } = /** @type {{ code?: unknown, stdout?: string }} */ (e);
+      if (code !== CANNOT_RECYCLE) throw e;
+      throw new HttpError(409, `${basename(path)} cannot go to the Recycle Bin: ${String(stdout).trim()}. It was left where it is; File Explorer can delete it for good`);
+    }
     return;
   }
   if (process.platform === 'darwin' && existsSync(MAC_TRASH)) {
