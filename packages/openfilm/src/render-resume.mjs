@@ -163,7 +163,7 @@ export function chunkStore(renderDir, out, ext) {
       try {
         if (ok || busy) rmSync(folder, { recursive: true, force: true, maxRetries: 5 });
         else {
-          for (const entry of readdirSync(folder)) if (entry.startsWith('drawing-')) rmSync(join(folder, entry), { force: true });
+          for (const entry of readdirSync(folder)) if (entry.startsWith('drawing-')) rmSync(join(folder, entry), { recursive: true, force: true, maxRetries: 5 });
           rmSync(join(folder, OWNER), { force: true });
         }
       } catch { /* left: removed or used by a later render */ }

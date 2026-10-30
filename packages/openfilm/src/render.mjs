@@ -444,8 +444,9 @@ async function encode({ film, a, b, file }, { fps, rate, samples, shutter, durat
   /* a page drawn opaque: its alpha read beside the encoder, every frame */
   const watch = opaque ? alphaWatch() : null;
   /* a cancelled render stops its encoder at once: the frames ffmpeg still holds are thrown away, not encoded (a 4K
-     encode takes seconds to drain); the parts folder goes with it (see render's finally) */
-  const stop = () => { kill(enc.proc); if (watch) kill(watch.proc); };
+     encode takes seconds to drain); the chunk it was writing goes with it (see render's finally) */
+  let stopped = false;
+  const stop = () => { stopped = true; kill(enc.proc); if (watch) kill(watch.proc); };
   enc.proc.stdin.on('error', () => {});
   /* a watch that ends before the last frame cannot say the page is opaque */
   const unwatched = watch?.ended.then(() => { throw showsThrough('(its alpha could not be read)'); });
@@ -485,6 +486,9 @@ async function encode({ film, a, b, file }, { fps, rate, samples, shutter, durat
     signal?.removeEventListener('abort', stop);
     enc.proc.stdin.end();
     watch?.proc.stdin.end();
+    /* stopped: told once ffmpeg has exited, so the part it was writing can be removed (Windows keeps a file open
+       until then, and a kill there takes a moment) */
+    if (stopped) await Promise.allSettled([enc.done, watch?.ended]);
   }
   await enc.done;
   /* opaque only when every frame was read and none let anything through */
