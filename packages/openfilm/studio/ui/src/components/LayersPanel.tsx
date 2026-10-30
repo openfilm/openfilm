@@ -1,14 +1,15 @@
 /**
- * The Layers panel: what is on the picture at the playhead as layers, the top one first. Each picture clip shown is
- * a row; a page clip opens into its layers, each level in the order the page draws it. A row selects its layer on
- * the picture, Shift-clicked (⌘ / Ctrl too) adds it to what is selected there or takes it away (and the picture's
- * selection opens the rows down to each layer of it); its eye hides it, its lock keeps it from being moved and its
- * bin deletes it (lib/layer-delete; Delete or Backspace does too, for the layer in hand on the picture, which a row's
- * click makes it); its right-click takes its layer (a clip's row: the clip) in hand and opens the picture's own menu
- * for it, so the two menus are one; dragged up or down its own level, or into the level of a row around it (which
- * then moves, with all it holds: CSS restacks only within a level), it is restacked (z-index overrides,
- * studio/server/stage.js `restack`). Nothing is kept here: the tree is read from the pages each time they
- * may have changed, and every change is an override of the page clip in film.html.
+ * The Layers panel: what is on the picture at the playhead as layers, the top one first. Each picture clip shown is a
+ * row; a page clip opens into its layers, each level in the order the page draws it. A row selects its layer on the
+ * picture; ⌘-clicked (Ctrl) it adds it to what is selected there or takes it away, Shift-clicked it selects the rows
+ * shown from the last one clicked to it (and the picture's selection opens the rows down to each layer of it). Rows
+ * selected one after another are one block, and what a selected layer holds is tinted with it. Its eye hides it, its
+ * lock keeps it from being moved and its bin deletes it (lib/layer-delete; Delete or Backspace does too, for the layer
+ * in hand on the picture, which a row's click makes it); its right-click takes its layer (a clip's row: the clip) in
+ * hand and opens the picture's own menu for it, so the two menus are one; dragged up or down its own level, or into the
+ * level of a row around it (which then moves, with all it holds: CSS restacks only within a level), it is restacked
+ * (z-index overrides, studio/server/stage.js `restack`). Nothing is kept here: the tree is read from the pages each
+ * time they may have changed, and every change is an override of the page clip in film.html.
  */
 import React from 'react';
 import {
@@ -16,7 +17,8 @@ import {
 } from 'lucide-react';
 import { useT } from '@/i18n';
 import {
-  layerKey, layerLines, movedOrder, moverFor, openTo, sameTree, type LayerClip, type LayerLine, type LayerRow, type LayerRowKind,
+  layerKey, layerLines, movedOrder, moverFor, openTo, rowsBetween, sameTree, selectionTones,
+  type LayerClip, type LayerLine, type LayerRow, type LayerRowKind, type RowTone,
 } from '@/lib/layers-tree';
 import type { StageArrangeResult } from './stage-menu';
 import { PANE_BAR, PANE_BTN, PANE_ICON, PANE_TITLE } from './dock-pane-bar';
@@ -42,8 +44,8 @@ export interface LayersPanelProps {
   selected: readonly { clipId?: string; loc: string | null }[];
   /** The clips selected (film.html places). */
   selectedClipLocs: readonly string[];
-  /** `toggle`: added to what is selected, or taken away (a Shift-click). */
-  onSelectLayer: (clipId: string, loc: string, toggle: boolean) => void;
+  /** Select these layers together; `toggle`: each added to what is selected, or taken away (a ⌘-click). */
+  onSelectLayers: (layers: readonly { clipId: string; loc: string }[], toggle: boolean) => void;
   onSelectClip: (clipLoc: string) => void;
   /** The pointer is on a row (its layer outlined on the picture), or left them (null). */
   onPoint: (target: { clipId: string; loc: string } | null) => void;
@@ -165,6 +167,29 @@ export function LayersPanel(p: LayersPanelProps) {
     }
     return picked.includes(layerKey(line.clipId, line.row.loc));
   };
+  /* each line selected ('on'), inside one selected ('in': what it holds, tinted with it), or neither */
+  const tones = selectionTones(lines, isSelected);
+
+  /* the row a Shift-click selects from: the last one clicked, else the last layer selected (on the picture too) */
+  const anchor = React.useRef<string | null>(null);
+  const clickRow = (line: LayerLine, e: React.MouseEvent) => {
+    if (!line.row) {
+      const loc = p.clipOf(line.clipId)?.loc;
+      if (loc) p.onSelectClip(loc);
+      return;
+    }
+    const add = e.metaKey || e.ctrlKey;
+    const from = e.shiftKey ? lines.find((l) => l.key === (anchor.current && picked.includes(anchor.current) ? anchor.current : picked[picked.length - 1])) : null;
+    if (from) {
+      /* the rows shown between the two (a closed group's are not), with ⌘ (Ctrl) added to what is selected */
+      const range = rowsBetween(lines, from, line).map((l) => ({ clipId: l.clipId, loc: l.row!.loc }));
+      const kept = add ? p.selected.flatMap((s) => (s.clipId && s.loc && !range.some((r) => r.clipId === s.clipId && r.loc === s.loc) ? [{ clipId: s.clipId, loc: s.loc }] : [])) : [];
+      p.onSelectLayers([...kept, ...range], false);
+      return;
+    }
+    anchor.current = line.key;
+    p.onSelectLayers([{ clipId: line.clipId, loc: line.row.loc }], add || e.shiftKey);
+  };
 
   return (
     <div data-layers-panel className="relative flex h-full min-h-0 flex-col" style={{ width: p.width }}
@@ -203,18 +228,14 @@ export function LayersPanel(p: LayersPanelProps) {
         <div className="relative" style={{ height: lines.length * ROW_H }}>
           {lines.map((line, i) => (
             <LayerLineRow key={line.key} line={line} top={i * ROW_H} t={t} clipOf={p.clipOf}
-              selected={isSelected(line)} dragging={drag?.line.key === line.key || drag?.mover.key === line.key}
+              tone={tones[i]!} joinUp={Boolean(tones[i - 1])} joinDown={Boolean(tones[i + 1])}
+              dragging={drag?.line.key === line.key || drag?.mover.key === line.key}
               onToggleOpen={() => toggleOpen(line)}
               onPress={(e) => {
                 if (e.button !== 0 || !line.row) return;
                 press.current = { line, x: e.clientX, y: e.clientY, id: e.pointerId };
               }}
-              onClick={(e) => {
-                if (dragRef.current) return;
-                if (line.row) { p.onSelectLayer(line.clipId, line.row.loc, e.shiftKey || e.metaKey || e.ctrlKey); return; }
-                const loc = p.clipOf(line.clipId)?.loc;
-                if (loc) p.onSelectClip(loc);
-              }}
+              onClick={(e) => { if (!dragRef.current) clickRow(line, e); }}
               onPoint={() => p.onPoint(line.row ? { clipId: line.clipId, loc: line.row.loc } : null)}
               onToggle={(what) => { if (line.row) p.onToggle(line.clipId, line.row, what); }}
               onDelete={() => { if (line.row) p.onDelete(line.clipId, line.row); }}
@@ -239,12 +260,16 @@ export function LayersPanel(p: LayersPanelProps) {
   );
 }
 
-function LayerLineRow({ line, top, t, clipOf, selected, dragging, onToggleOpen, onPress, onClick, onPoint, onToggle, onDelete, onMenu }: {
+function LayerLineRow({ line, top, t, clipOf, tone, joinUp, joinDown, dragging, onToggleOpen, onPress, onClick, onPoint, onToggle, onDelete, onMenu }: {
   line: LayerLine;
   top: number;
   t: ReturnType<typeof useT>;
   clipOf: LayersPanelProps['clipOf'];
-  selected: boolean;
+  /** Selected, inside a selected one, or neither. */
+  tone: RowTone;
+  /** The line above (below) is in the selection too: one block with it, rounded only at the block's ends. */
+  joinUp: boolean;
+  joinDown: boolean;
   dragging: boolean;
   onToggleOpen: () => void;
   onPress: (e: React.PointerEvent) => void;
@@ -260,6 +285,11 @@ function LayerLineRow({ line, top, t, clipOf, selected, dragging, onToggleOpen, 
   const label = row ? row.label : (clip?.label ?? line.clipId);
   /* not drawn now, or hidden by the person: the row is there, dimmed (it can be shown or picked from here) */
   const dim = Boolean(row && (row.off || row.hidden));
+  const selected = tone === 'on';
+  const fill = selected ? 'bg-[var(--layer-selected)] text-[var(--text)]'
+    : tone === 'in' ? 'bg-[var(--layer-selected-in)] text-[var(--text)] hover:shadow-[inset_0_0_0_1px_var(--layer-hover-line)]'
+      : 'text-[var(--text-dim)] hover:shadow-[inset_0_0_0_1px_var(--layer-hover-line)]';
+  const corners = tone ? `${joinUp ? '' : 'rounded-t-[5px]'} ${joinDown ? '' : 'rounded-b-[5px]'}` : 'rounded-[5px]';
   const flag = (what: 'hidden' | 'locked', on: boolean, OnIcon: typeof Eye, OffIcon: typeof Eye, onLabel: string, offLabel: string) => (
     <Tooltip label={on ? onLabel : offLabel} side="bottom">
       <button type="button" aria-label={on ? onLabel : offLabel} aria-pressed={on}
@@ -273,7 +303,8 @@ function LayerLineRow({ line, top, t, clipOf, selected, dragging, onToggleOpen, 
   return (
     <div role="treeitem" aria-level={line.depth + 1} aria-selected={selected} aria-expanded={line.canOpen ? line.open : undefined}
       data-layer-key={line.key}
-      className={`group absolute inset-x-1 flex items-center gap-1 rounded-md pr-1 text-[12.5px] ${selected ? 'bg-[var(--bg-active)] text-[var(--text)]' : 'text-[var(--text-dim)] hover:bg-[var(--bg-hover)]'} ${dragging ? 'opacity-50' : ''}`}
+      data-layer-tone={tone ?? undefined}
+      className={`group absolute inset-x-1 flex items-center gap-1 pr-1 text-[12.5px] ${corners} ${fill} ${dragging ? 'opacity-50' : ''}`}
       style={{ top, height: ROW_H, paddingLeft: 4 + line.depth * INDENT }}
       title={row?.off && !row.hidden ? t('layers.notNow') : undefined}
       onPointerDown={onPress} onClick={onClick} onPointerEnter={onPoint} onContextMenu={onMenu}>
@@ -285,7 +316,7 @@ function LayerLineRow({ line, top, t, clipOf, selected, dragging, onToggleOpen, 
           <ChevronRight size={12} className={`transition-transform ${line.open ? 'rotate-90' : ''}`} />
         </button>
       ) : <span className="w-4 shrink-0" />}
-      <Icon size={13} className={`shrink-0 ${dim ? 'opacity-40' : 'text-[var(--text-muted)]'}`} aria-hidden />
+      <Icon size={13} className={`shrink-0 ${dim ? 'opacity-40' : tone ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`} aria-hidden />
       <span className={`min-w-0 flex-1 truncate ${row ? '' : 'font-medium text-[var(--text)]'} ${dim ? 'opacity-45' : ''}`}>{label}</span>
       {row && !row.locked ? (
         <Tooltip label={t('layers.delete')} side="bottom">

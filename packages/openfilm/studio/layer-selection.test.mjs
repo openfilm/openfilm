@@ -126,7 +126,7 @@ test('layers boxed, copied and pasted: every copy is selected, and one drag move
   });
 });
 
-test('Shift-click adds a layer to what is selected or takes it away, the same on the picture and in Layers', { timeout: 120_000 }, async () => {
+test('Shift-click on the picture, ⌘ / Ctrl-click in Layers, adds a layer to what is selected or takes it away', { timeout: 120_000 }, async () => {
   await withCard('Shift', async ({ page, on, until, selection, drag, click }) => {
     const rows = async () => (await selection()).rows.sort();
     const is = (want, what) => until(async () => {
@@ -165,21 +165,62 @@ test('Shift-click adds a layer to what is selected or takes it away, the same on
     assert.equal(await page.locator('[data-film-select][data-stage-busy]').count(), 0, 'no words are typed into');
     await is([], 'a Shift double-click adds and takes away');
 
-    /* in Layers: a row selects; Shift-click on another adds it, on a selected one takes it away; ⌘ / Ctrl-click too */
+    /* in Layers: a row selects; ⌘ / Ctrl-click on another adds it, on a selected one takes it away */
     const row = (text) => page.locator('[data-layers-panel] [role="treeitem"]').filter({ hasText: text });
     await row('Parcel').click();
     await is(['Parcel'], 'a row selects its layer');
-    await row('On time').click({ modifiers: ['Shift'] });
-    await is(['On time', 'Parcel'], 'Shift-click on a row adds its layer');
-    await row('Parcel').click({ modifiers: ['Shift'] });
-    await is(['On time'], 'Shift-click on a selected row takes its layer away');
+    await row('On time').click({ modifiers: ['ControlOrMeta'] });
+    await is(['On time', 'Parcel'], '⌘ / Ctrl-click on a row adds its layer');
+    await row('Parcel').click({ modifiers: ['ControlOrMeta'] });
+    await is(['On time'], '⌘ / Ctrl-click on a selected row takes its layer away');
     await row('#box3').click({ modifiers: ['ControlOrMeta'] });
-    await is(['#box3', 'On time'], '⌘ / Ctrl-click on a row adds its layer too');
+    await is(['#box3', 'On time'], '⌘ / Ctrl-click on a row apart from it adds that one too');
     /* the picture shows the same: Shift-click there takes one away */
     await click(on(300, 1350), ['Shift']);
     await is(['On time'], 'the picture and the rows are one selection');
     assert.deepEqual(await rows(), ['On time']);
   }, { chat: true });
+});
+
+test('in Layers, Shift-click selects the rows shown from the last one clicked, and the rows selected are one block', { timeout: 120_000 }, async () => {
+  await withCard('Range', async ({ page, on, until, selection, click }) => {
+    const is = (want, what) => until(async () => {
+      const now = await selection();
+      return now.many === (want.length > 1 ? want.length : null) && JSON.stringify(now.rows.sort()) === JSON.stringify([...want].sort());
+    }, what);
+    const row = (text) => page.locator('[data-layers-panel] [role="treeitem"]').filter({ hasText: text });
+    /** The rows in the selection, top to bottom: each one's words, its part ('on' selected, 'in' inside one
+        selected) and which of its corners are round (t top, b bottom). */
+    const block = () => page.evaluate(() => [...document.querySelectorAll('[data-layers-panel] [data-layer-tone]')].map((r) => {
+      const cs = getComputedStyle(r);
+      const round = (v) => parseFloat(v) > 0;
+      return [r.textContent, r.getAttribute('data-layer-tone'), `${round(cs.borderTopLeftRadius) ? 't' : ''}${round(cs.borderBottomLeftRadius) ? 'b' : ''}`];
+    }));
+    /* the page's levels, the top one first: the green, blue and red boxes, then the words */
+    await row('#box3').click();
+    await is(['#box3'], 'a row selects its layer');
+    assert.deepEqual(await block(), [['#box3', 'on', 'tb']], 'one row: round at both ends');
+    await row('On time').click({ modifiers: ['Shift'] });
+    await is(['#box3', '#box2', '#box1', 'On time'], 'Shift-click selects every row from the first to it');
+    assert.deepEqual(await block(), [['#box3', 'on', 't'], ['#box2', 'on', ''], ['#box1', 'on', ''], ['On time', 'on', 'b']],
+      'the four are one block, round only at its top and its bottom');
+    await row('#box2').click({ modifiers: ['Shift'] });
+    await is(['#box3', '#box2'], 'a Shift-click again runs from the same row: the range is shorter');
+    /* ⌘ / Ctrl-click: apart from the others, a block of its own */
+    await row('Parcel').click({ modifiers: ['ControlOrMeta'] });
+    await is(['#box3', '#box2', 'Parcel'], '⌘ / Ctrl-click adds a row apart');
+    assert.deepEqual(await block(), [['#box3', 'on', 't'], ['#box2', 'on', 'b'], ['Parcel', 'on', 'tb']], 'two blocks');
+    /* the range then runs from the row ⌘-clicked last, and ⌘ / Ctrl with Shift keeps the rows selected before */
+    await row('#box1').click({ modifiers: ['Shift', 'ControlOrMeta'] });
+    await is(['#box3', '#box2', '#box1', 'On time', 'Parcel'], '⌘ / Ctrl-Shift-click adds the rows from the last one clicked');
+    /* the picture and the rows are one selection: Shift-click there takes one away, and the rows follow */
+    await click(on(300, 1350), ['Shift']);
+    await is(['#box2', '#box1', 'On time', 'Parcel'], 'a Shift-click on the picture takes the green box away');
+    await click(on(250, 700));
+    await is(['#box1'], 'a click on the picture selects one row');
+    await row('Parcel').click({ modifiers: ['Shift'] });
+    await is(['#box1', 'On time', 'Parcel'], 'a range from the layer selected on the picture');
+  });
 });
 
 test('a paste undone: no box stays where a copy went, and what is selected keeps the layers still there', { timeout: 150_000 }, async () => {

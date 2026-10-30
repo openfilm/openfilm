@@ -377,7 +377,7 @@ interface FilmStageSelectProps {
   /**
    * Select the layers at `loc` in the clips at `clipLoc` (the inspector's breadcrumb, the menu's Select parent, a row
    * of the Layers panel, the copies a paste made): one is that one, several are selected together. `toggle`: each is
-   * added to what is selected, or taken from it when it is there already (a Shift-click on a Layers row). `seq` goes
+   * added to what is selected, or taken from it when it is there already (a ⌘-click on a Layers row). `seq` goes
    * up each time, so the same layers can be asked for twice.
    */
   selectRequest?: FilmStageSelectRequest | null;
@@ -1272,7 +1272,8 @@ function FilmStageSelectImpl({
         || el?.closest('[data-popover-panel]')
       ) return;
       if (el?.closest('[data-timeline]') && !multiRef.current && (!pickedRef.current?.element || pickedRef.current.element.kind === 'clip')) return;
-      /* a Layers row Shift-clicked (⌘ / Ctrl too) adds its layer to what is selected, or takes it away */
+      /* a Layers row ⌘-clicked (Ctrl) adds its layer to what is selected or takes it away, Shift-clicked selects the
+         rows from the last one clicked: what is selected now is still needed */
       if (el?.closest('[data-layers-panel] [role="treeitem"]') && (e.shiftKey || e.metaKey || e.ctrlKey)) return;
       dropPick();
       onSelectElement?.(null);
@@ -3167,7 +3168,8 @@ function Box({ rect, frame, tone, fading }: {
           ? { left: turned.cx - turned.w / 2, top: turned.cy - turned.h / 2, width: turned.w, height: turned.h, transform: `rotate(${turned.r}deg)` }
           : { left: rect.left, top: rect.top, width: rect.width, height: rect.height }),
         border: tone === 'picked' || tone === 'region' ? `2px solid ${PICK_BLUE}` : `1px solid ${PICK_BLUE}`,
-        ...(tone === 'draft' ? { background: 'rgba(12,140,232,.13)' } : {}),
+        /* a marquee: a thin line round a very light fill, what it goes over still plain under it */
+        ...(tone === 'draft' ? { background: 'rgba(13,153,255,.07)' } : {}),
         ...(tone === 'region' ? { background: 'rgba(12,140,232,.2)', borderRadius: 3, transition: 'opacity 300ms ease-out', opacity: fading ? 0 : 1 } : {}),
         ...(tone === 'picked' ? { background: 'rgba(12,140,232,.06)', boxShadow: '0 0 0 1px rgba(255,255,255,.45)' } : {}),
         ...(tone === 'chat' ? { border: `2px solid ${CHAT_TONE}`, borderRadius: 3, background: `color-mix(in srgb, ${CHAT_TONE} 10%, transparent)`, boxShadow: '0 0 0 1px rgba(255,255,255,.45)' } : {}),

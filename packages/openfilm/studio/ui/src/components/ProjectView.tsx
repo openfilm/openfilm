@@ -1987,9 +1987,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const b = blocksRef.current.find((x) => x.clipId === clipId);
     return b ? { label: b.title, kind: b.kind, ...(b.loc ? { loc: b.loc } : {}) } : null;
   }, []);
-  const selectLayerRow = React.useCallback((clipId: string, loc: string, toggle = false) => {
-    const clipLoc = blocksRef.current.find((b) => b.clipId === clipId)?.loc;
-    if (clipLoc) selectStageLayers([{ loc, clipLoc }], toggle);
+  const selectLayerRows = React.useCallback((layers: readonly { clipId: string; loc: string }[], toggle = false) => {
+    const found = layers.flatMap(({ clipId, loc }) => {
+      const clipLoc = blocksRef.current.find((b) => b.clipId === clipId)?.loc;
+      return clipLoc ? [{ loc, clipLoc }] : [];
+    });
+    if (found.length) selectStageLayers(found, toggle);
   }, [selectStageLayers]);
   const layerElement = (clipId: string, at: string, n: number | undefined, label: string): StageElement => (
     { kind: 'box', loc: n ? `${at}#${n}` : at, label, clipId, ...(n ? { instance: n } : {}) }
@@ -3134,7 +3137,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                       clipOf={layerClipOf}
                       selected={layersSelected}
                       selectedClipLocs={selectedLocs}
-                      onSelectLayer={selectLayerRow}
+                      onSelectLayers={selectLayerRows}
                       onSelectClip={selectStageClip}
                       onPoint={setPointedLayer}
                       onToggle={toggleLayerRow}

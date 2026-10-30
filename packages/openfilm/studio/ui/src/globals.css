@@ -67,6 +67,11 @@
 
   --bg-hover: rgba(0, 0, 0, 0.045);
   --bg-active: rgba(0, 0, 0, 0.08);
+  /* the layers selected in the Layers panel: a muted blue, the picture's selection hue; what a selected layer holds
+     is a paler one, and the hovered row is lined */
+  --layer-selected: #dce9fb;
+  --layer-selected-in: #eff5fd;
+  --layer-hover-line: rgba(13, 153, 255, 0.45);
 
   --app-content-bg: #fcfcfc;
 
@@ -147,6 +152,9 @@
 
   --bg-hover: rgba(255, 255, 255, 0.06);
   --bg-active: rgba(255, 255, 255, 0.1);
+  --layer-selected: #333c58;
+  --layer-selected-in: #23283a;
+  --layer-hover-line: rgba(116, 146, 230, 0.55);
 
   --app-content-bg: rgb(17, 17, 17);
 
