@@ -553,47 +553,6 @@ const sessions = new Map<string, LiveSession>();
 export function forgetLocalAgentSessions(agent: LocalAgentId): void {
   for (const [k, s] of sessions) if (s.agent === agent) sessions.delete(k);
 }
-/* ── the agent's own commands (its `/` menu: built-in ones, the person's skills and custom commands), as its sessions
-   say them (ACP available_commands_update). Kept by agent: the last list any of its sessions gave, so a new
-   conversation has them before its first message. A list that comes before its session is known here waits for it. */
-
-export interface AgentCommand { name: string; description: string; hint: string | null }
-
-/* kept between launches (this page's storage), so the menu has them before the agent's first session */
-const COMMANDS_KEY = 'openfilm.agent-commands.v1';
-const commandsByAgent = new Map<LocalAgentId, AgentCommand[]>((() => {
-  try { return Object.entries(JSON.parse(localStorage.getItem(COMMANDS_KEY) ?? '{}')) as Array<[LocalAgentId, AgentCommand[]]>; } catch { return []; }
-})());
-const unclaimedCommands = new Map<string, AgentCommand[]>();
-const commandListeners = new Set<() => void>();
-const NO_COMMANDS: AgentCommand[] = [];
-
-/** The commands as ACP lists them (`availableCommands`: { name, description, input?.hint }). */
-export function readCommands(update: Record<string, unknown>): AgentCommand[] {
-  const list = Array.isArray(update.availableCommands) ? update.availableCommands as Array<Record<string, unknown>> : [];
-  return list.flatMap((c) => (typeof c?.name === 'string' && c.name ? [{
-    name: c.name.replace(/^\//, ''),
-    description: typeof c.description === 'string' ? c.description : '',
-    hint: typeof (c.input as { hint?: unknown } | null)?.hint === 'string' ? (c.input as { hint: string }).hint : null,
-  }] : []));
-}
-
-/** The agent's commands as one of its sessions said them (the menu's probe too). */
-export function keepCommands(agent: LocalAgentId, list: AgentCommand[]): void {
-  commandsByAgent.set(agent, list);
-  try { localStorage.setItem(COMMANDS_KEY, JSON.stringify(Object.fromEntries(commandsByAgent))); } catch { /* kept for this launch */ }
-  for (const listener of commandListeners) listener();
-}
-
-/** The agent's commands, for the composer's `/` menu (empty until one of its sessions has said them). */
-export function useAgentCommands(agent: LocalAgentId): AgentCommand[] {
-  return React.useSyncExternalStore(
-    (listener) => { commandListeners.add(listener); return () => { commandListeners.delete(listener); }; },
-    () => commandsByAgent.get(agent) ?? NO_COMMANDS,
-    () => NO_COMMANDS,
-  );
-}
-
 /* ── how full the agent's context is (ACP usage_update): tokens in the conversation now, of its context window, as
    the agent's own chat shows it. By session: each conversation has its own. ── */
 
@@ -726,13 +685,6 @@ function listen(): void {
       if (origin && origin.kind !== 'human' && unprompted.has(event.key)) endUnprompted(event.key);
       return;
     }
-    if (event.kind === 'update' && event.update.sessionUpdate === 'available_commands_update') {
-      const list = readCommands(event.update);
-      const agent = [...sessions.values()].find((s) => s.key === event.key)?.agent;
-      if (agent) keepCommands(agent, list);
-      else unclaimedCommands.set(event.key, list);
-      return;
-    }
     const turn = turnByKey.get(event.key);
     if (event.kind === 'done') {
       const waiter = doneWaiters.get(event.key);
@@ -855,8 +807,6 @@ export async function runLocalAgentTurn({
     session = { key: started.key, agent, cwd, info: started.info, projectId, conversation };
     sessions.set(sessionKey, session);
     tellContext();
-    const said = unclaimedCommands.get(started.key);
-    if (said) { unclaimedCommands.delete(started.key); keepCommands(agent, said); }
     onSessionInfo?.(started.info);
   }
   /* a turn the agent was working on by itself ends as the person writes */

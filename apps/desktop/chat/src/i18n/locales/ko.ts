@@ -127,7 +127,6 @@ export const ko: Words = {
   composer: {
     contextFull: '대화가 길어졌습니다. 새 대화를 시작하면 더 잘 됩니다.',
     contextFullNew: '새 대화',
-    commands: '명령',
     agentLoading: '불러오는 중…',
     agentNone: '에이전트',
     agentNoneShown: '채팅에 켜 둔 에이전트가 없습니다.',
@@ -217,8 +216,8 @@ export const ko: Words = {
     assets: '에셋',
     addAttachment: '파일 추가',
     close: '닫기',
-    composerPlaceholder: '무엇을 바꿀지 말해 주세요. @를 입력하면 파일, 순간, 선택한 항목을 가리킬 수 있습니다',
-    composerPlaceholderBlank: '만들고 싶은 영상을 설명해 주세요. @를 입력하면 이 프로젝트의 파일을 쓸 수 있습니다',
+    composerPlaceholder: '무엇을 바꿀지 말해 주세요. @를 입력하면 파일, 스킬, 순간, 선택한 항목을 가리킬 수 있습니다',
+    composerPlaceholderBlank: '만들고 싶은 영상을 설명해 주세요. @를 입력하면 파일이나 스킬을 넣을 수 있습니다',
     dismiss: '닫기',
     jumpToLatest: '최신 메시지로 이동',
     loadingMessages: '대화를 불러오는 중…',
