@@ -1063,6 +1063,18 @@ export const es: Words = {
     speed: 'Velocidad',
   },
   inspector: {
+    workspace: {
+      categories: "Categorías de propiedades",
+      source: "Origen",
+      tabs: {
+        properties: "Propiedades",
+        adjust: "Ajustes",
+        effects: "Efectos",
+        sound: "Audio",
+        advanced: "Avanzado",
+        info: "Info.",
+      },
+    },
     fades: 'Fundidos',
     fadeIn: 'Fundido de entrada',
     fadeOut: 'Fundido de salida',

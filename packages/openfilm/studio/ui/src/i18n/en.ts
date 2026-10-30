@@ -1064,6 +1064,18 @@ export const en = {
     speed: 'Speed',
   },
   inspector: {
+    workspace: {
+      categories: "Property categories",
+      source: "Source",
+      tabs: {
+        properties: "Properties",
+        adjust: "Adjust",
+        effects: "Effects",
+        sound: "Audio",
+        advanced: "Advanced",
+        info: "Info",
+      },
+    },
     fades: 'Fades',
     fadeIn: 'Fade in',
     fadeOut: 'Fade out',

@@ -1064,6 +1064,18 @@ export const zhCN: Words = {
     speed: '播放速度',
   },
   inspector: {
+    workspace: {
+      categories: "属性分类",
+      source: "素材",
+      tabs: {
+        properties: "属性",
+        adjust: "调节",
+        effects: "效果",
+        sound: "声音",
+        advanced: "高级",
+        info: "信息",
+      },
+    },
     fades: '淡入淡出',
     fadeIn: '淡入',
     fadeOut: '淡出',

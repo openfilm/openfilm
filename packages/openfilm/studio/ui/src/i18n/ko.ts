@@ -1060,6 +1060,18 @@ export const ko: Words = {
     speed: '재생 속도',
   },
   inspector: {
+    workspace: {
+      categories: "속성 분류",
+      source: "원본",
+      tabs: {
+        properties: "속성",
+        adjust: "조정",
+        effects: "효과",
+        sound: "오디오",
+        advanced: "고급",
+        info: "정보",
+      },
+    },
     fades: '페이드',
     fadeIn: '페이드 인',
     fadeOut: '페이드 아웃',

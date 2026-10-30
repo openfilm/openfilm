@@ -1063,6 +1063,18 @@ export const ja: Words = {
     speed: '再生速度',
   },
   inspector: {
+    workspace: {
+      categories: "プロパティの分類",
+      source: "素材",
+      tabs: {
+        properties: "属性",
+        adjust: "調整",
+        effects: "エフェクト",
+        sound: "音声",
+        advanced: "詳細",
+        info: "情報",
+      },
+    },
     fades: 'フェード',
     fadeIn: 'フェードイン',
     fadeOut: 'フェードアウト',
