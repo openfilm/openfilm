@@ -6,7 +6,7 @@
  * (lib/local-agent-run's saved turns).
  */
 import React from 'react';
-import { ArrowDown, Blocks, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, ShieldQuestion, Square, SquareSlash, X } from 'lucide-react';
+import { ArrowDown, Blocks, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, ShieldQuestion, Square, X } from 'lucide-react';
 import { buildPromptDisplay, type Turn } from '@openfilm/shared';
 import { useT, useUiLocale } from '@/i18n';
 import { ConversationSessionBar } from '@/components/ConversationSessionBar';
@@ -48,7 +48,6 @@ import {
   restingItems,
   saveLocalAgentTurn,
   steerLocalAgentTurn,
-  useAgentCommands,
   useAgentContext,
   useLocalAgentTurn,
   type LocalAgentTurn,
@@ -347,7 +346,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   const [contextNoticeOff, setContextNoticeOff] = React.useState<string | null>(null);
   const contextFull = Boolean(agentContext && agentContext.size > 0 && agentContext.used / agentContext.size >= CONTEXT_NOTICE_SHARE) && contextNoticeOff !== sessionId;
 
-  /* the skills this message can name (the Skills button, and `/`) */
+  /* the skills this message can name (the Skills button, and `@`) */
   const [skillListing, setSkillListing] = React.useState<SkillListing | null>(null);
   const reloadSkills = React.useCallback(async () => {
     const next = await app.skills?.list(project.path, agent).catch(() => null);
@@ -397,42 +396,6 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     window.addEventListener(MAKE_SKILL, make);
     return () => { window.removeEventListener(SKILLS_CHANGED, changed); window.removeEventListener(MAKE_SKILL, make); };
   }, [reloadSkills, skillListing, t]);
-  /* the agent's own skills hidden in OpenFilm: not offered among its commands either */
-  const hiddenSkills = React.useMemo(() => new Set((skillListing?.own.filtered ? skillListing.own.skills.filter((s) => !s.allowed) : []).map((s) => s.name)), [skillListing]);
-
-  /* the agent's own commands, a `/` at the start of the message, as in its own chat: they go as typed; above them, the
-     skills, each a pill */
-  const agentCommands = useAgentCommands(agent);
-  const commandMenu = React.useMemo(() => (agentCommands.length || nameableSkills.length ? {
-    label: t('composer.commands'),
-    providers: [...(nameableSkills.length ? [{
-      id: 'skills',
-      groupLabel: t('skills.button'),
-      items: nameableSkills.map((skill) => ({
-        id: skillReferenceId(skill.name),
-        kind: 'skill' as const,
-        icon: Blocks,
-        label: skillWords(skill.name).title,
-        ...(skillWords(skill.name, skill.description).summary ? { detail: skillWords(skill.name, skill.description).summary, describes: true } : {}),
-        keywords: [skill.name, skillWords(skill.name).title],
-        select: () => skillPill(skill),
-      })),
-    }] : []), ...(agentCommands.length ? [{
-      id: 'commands',
-      groupLabel: t('composer.commands'),
-      items: agentCommands.filter((c) => !hiddenSkills.has(c.name)).map((c) => ({
-        id: `command:${c.name}`,
-        kind: 'file' as const,
-        icon: SquareSlash,
-        label: `/${c.name}`,
-        /* what it does, cut to the row */
-        ...(c.description ? { detail: c.description, describes: true } : {}),
-        /* found by its name, as in the agent's own chat (its description would put a word in it first) */
-        keywords: [c.name],
-        select: () => ({ text: `/${c.name}` }),
-      })),
-    }] : [])],
-  } : undefined), [agentCommands, nameableSkills, hiddenSkills, skillPill, skillWords, t]);
   const mentionProviders = React.useMemo<MentionProvider[]>(() => {
     const picked = selection?.refs ?? [];
     const range = selection ? selectionRange(selection) : null;
@@ -479,8 +442,27 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
           };
         }),
       },
+      /* the skills, each the pill the Skills button makes: after the files, which people reach for most and which stop
+         at 20. Every one, uncut: an agent's own can be a hundred or more, and a person may not remember the name to type */
+      {
+        id: 'skills',
+        groupLabel: t('skills.button'),
+        limit: Infinity,
+        items: nameableSkills.map((skill) => {
+          const words = skillWords(skill.name, skill.description);
+          return {
+            id: skillReferenceId(skill.name),
+            kind: 'skill' as const,
+            label: words.title,
+            /* what it does, cut to the row */
+            ...(words.summary ? { detail: words.summary, describes: true } : {}),
+            keywords: [skill.name],
+            select: () => skillPill(skill),
+          };
+        }),
+      },
     ];
-  }, [selection, mentionFiles, t, takeStudioRefs]);
+  }, [selection, mentionFiles, nameableSkills, skillWords, skillPill, t, takeStudioRefs]);
   const onComposerChange = React.useCallback((state: PromptEditorState) => {
     setFollowUp(state.text);
     setFollowUpRefs(state.references);
@@ -939,7 +921,6 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
               contentClassName="text-[14px] leading-[22px] text-[var(--chat-text)]"
               onPasteFiles={(files) => composerFiles.add(files)}
               mentions={{ providers: mentionProviders, label: t('mention.menu'), onOpen: loadMentionFiles }}
-              commands={commandMenu}
             />
           </div>
           {/* while it works: Stop, or Send once something is written (it goes into the turn, or after it); Esc stops */}

@@ -3,7 +3,7 @@
  * a row; a page clip opens into its layers, each level in the order the page draws it. A row selects its layer on
  * the picture (and the picture's selection opens the rows down to it); its eye hides it, its lock keeps it from
  * being moved and its bin deletes it (lib/layer-delete; Delete or Backspace does too, for the layer in hand on the
- * picture, which a row's click makes it); dragged up or down its own level, or into the level of a row around it
+ * picture, which a row's click makes it); its right-click menu copies, pastes (lib/layer-clipboard) and deletes; dragged up or down its own level, or into the level of a row around it
  * (which then moves, with all it holds: CSS restacks only within a level), it is restacked (z-index overrides,
  * studio/server/stage.js `restack`). Nothing is kept here: the tree is read from the pages each time they may have
  * changed, and every change is an override of the page clip in film.html.
@@ -17,6 +17,7 @@ import {
   layerKey, layerLines, movedOrder, moverFor, openTo, sameTree, type LayerClip, type LayerLine, type LayerRow, type LayerRowKind,
 } from '@/lib/layers-tree';
 import type { StageArrangeResult } from './stage-menu';
+import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import { PANE_BAR, PANE_BTN, PANE_ICON, PANE_TITLE } from './dock-pane-bar';
 import { Tooltip } from './Tooltip';
 
@@ -48,6 +49,8 @@ export interface LayersPanelProps {
   onToggle: (clipId: string, row: LayerRow, what: 'hidden' | 'locked') => void;
   /** A row's bin: its layer deleted. */
   onDelete: (clipId: string, row: LayerRow) => void;
+  /** A row's right-click menu (its layer is selected first). */
+  rowMenu: (clipId: string, row: LayerRow) => readonly ContextMenuEntry[];
   /** A level restacked: the overrides to write in the clip, or why nothing was (a message). */
   onRestack: (clipId: string, edits: StageArrangeResult['edits']) => void;
   onNotify: (message: string) => void;
@@ -64,6 +67,7 @@ export function LayersPanel(p: LayersPanelProps) {
   const [toggled, setToggled] = React.useState<ReadonlySet<string>>(() => new Set());
   const askRef = React.useRef(p.ask);
   askRef.current = p.ask;
+  const [menu, setMenu] = React.useState<{ x: number; y: number; items: readonly ContextMenuEntry[] } | null>(null);
 
   /* the tree, read again when the picture may have changed: a seek, the film edited, and while it plays */
   const read = React.useCallback(async () => {
@@ -210,7 +214,14 @@ export function LayersPanel(p: LayersPanelProps) {
               }}
               onPoint={() => p.onPoint(line.row ? { clipId: line.clipId, loc: line.row.loc } : null)}
               onToggle={(what) => { if (line.row) p.onToggle(line.clipId, line.row, what); }}
-              onDelete={() => { if (line.row) p.onDelete(line.clipId, line.row); }} />
+              onDelete={() => { if (line.row) p.onDelete(line.clipId, line.row); }}
+              onMenu={(e) => {
+                if (!line.row) return;
+                e.preventDefault();
+                p.onSelectLayer(line.clipId, line.row.loc);
+                const items = p.rowMenu(line.clipId, line.row);
+                if (items.length) setMenu({ x: e.clientX, y: e.clientY, items });
+              }} />
           ))}
           {drag ? (
             <div aria-hidden className="pointer-events-none absolute right-2 h-0.5 rounded-full bg-[var(--accent)]"
@@ -224,11 +235,12 @@ export function LayersPanel(p: LayersPanelProps) {
           ) : null}
         </div>
       </div>
+      {menu ? <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} /> : null}
     </div>
   );
 }
 
-function LayerLineRow({ line, top, t, clipOf, selected, dragging, onToggleOpen, onPress, onClick, onPoint, onToggle, onDelete }: {
+function LayerLineRow({ line, top, t, clipOf, selected, dragging, onToggleOpen, onPress, onClick, onPoint, onToggle, onDelete, onMenu }: {
   line: LayerLine;
   top: number;
   t: ReturnType<typeof useT>;
@@ -241,6 +253,7 @@ function LayerLineRow({ line, top, t, clipOf, selected, dragging, onToggleOpen, 
   onPoint: () => void;
   onToggle: (what: 'hidden' | 'locked') => void;
   onDelete: () => void;
+  onMenu: (e: React.MouseEvent) => void;
 }) {
   const row = line.row;
   const clip = row ? null : clipOf(line.clipId);
@@ -264,7 +277,7 @@ function LayerLineRow({ line, top, t, clipOf, selected, dragging, onToggleOpen, 
       className={`group absolute inset-x-1 flex items-center gap-1 rounded-md pr-1 text-[12.5px] ${selected ? 'bg-[var(--bg-active)] text-[var(--text)]' : 'text-[var(--text-dim)] hover:bg-[var(--bg-hover)]'} ${dragging ? 'opacity-50' : ''}`}
       style={{ top, height: ROW_H, paddingLeft: 4 + line.depth * INDENT }}
       title={row?.off && !row.hidden ? t('layers.notNow') : undefined}
-      onPointerDown={onPress} onClick={onClick} onPointerEnter={onPoint}>
+      onPointerDown={onPress} onClick={onClick} onPointerEnter={onPoint} onContextMenu={onMenu}>
       {line.canOpen ? (
         <button type="button" aria-label={t(line.open ? 'layers.collapse' : 'layers.expand')}
           onPointerDown={(e) => e.stopPropagation()}

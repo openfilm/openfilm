@@ -131,7 +131,6 @@ export const zhCN: Words = {
   composer: {
     contextFull: '这段对话已经很长了，开个新对话效果更好。',
     contextFullNew: '新对话',
-    commands: '命令',
     agentLoading: '正在加载…',
     agentNone: '智能体',
     agentNoneShown: '对话中尚未开启任何智能体。',
@@ -221,8 +220,8 @@ export const zhCN: Words = {
     assets: '素材',
     addAttachment: '添加文件',
     close: '关闭',
-    composerPlaceholder: '说说要改什么。输入 @ 可指向文件、某个时刻或当前选中的内容',
-    composerPlaceholderBlank: '描述你的影片。输入 @ 可使用此项目中的文件',
+    composerPlaceholder: '说说要改什么。输入 @ 可指向文件、skill、某个时刻或当前选中的内容',
+    composerPlaceholderBlank: '描述你的影片。输入 @ 可加入文件或 skill',
     dismiss: '关闭',
     jumpToLatest: '跳到最新',
     loadingMessages: '正在加载对话…',

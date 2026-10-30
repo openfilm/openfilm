@@ -183,6 +183,17 @@ export const api = {
   takeSaved: (id: string, path: string) => call<{ clip: Record<string, unknown> & { src: string } } | { clips: SavedGroupClip[] } | { path: string }>(
     `${p(id)}/saved/take`, { method: 'POST', json: { path } },
   ),
+  /** a page of the project as text, with its rev (studio/server/page-text.mjs) */
+  readPage: (id: string, path: string) => call<{ text: string; rev: string }>(`${p(id)}/page?path=${encodeURIComponent(path)}`),
+  /** a page written (text null: taken away) when it is still the page of rev `expect` (null: none there yet); its new
+      rev. `undo`: the write takes back one of Studio's (a paste undone) */
+  writePage: (id: string, path: string, text: string | null, expect: string | null, undo = false) => (
+    call<{ rev: string | null }>(`${p(id)}/page`, { method: 'PUT', json: { path, text, expect, ...(undo ? { undo: true } : {}) } }).then((r) => r.rev)
+  ),
+  /** a clip of project `from` brought into this one with the files it needs (layers pasted from there): its src here */
+  bringClip: (id: string, from: string, clip: Record<string, unknown> & { src: string }) => (
+    call<{ clip: Record<string, unknown> & { src: string } }>(`${p(id)}/bring`, { method: 'POST', json: { from, clip } }).then((r) => r.clip)
+  ),
 };
 
 /** A clip of a saved group: its track counted from the group's top one, its time in seconds from the group's start. */

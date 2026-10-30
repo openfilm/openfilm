@@ -131,7 +131,6 @@ export const es: Words = {
   composer: {
     contextFull: 'Esta conversación ya es larga. Una nueva funcionará mejor.',
     contextFullNew: 'Nueva conversación',
-    commands: 'Comandos',
     agentLoading: 'Cargando…',
     agentNone: 'Agente',
     agentNoneShown: 'No hay ningún agente activado para el chat.',
@@ -221,8 +220,8 @@ export const es: Words = {
     assets: 'Recursos',
     addAttachment: 'Añadir archivos',
     close: 'Cerrar',
-    composerPlaceholder: 'Di qué cambiar. Escribe @ para señalar un archivo, un momento o lo que seleccionaste',
-    composerPlaceholderBlank: 'Describe tu película. Escribe @ para usar un archivo de este proyecto',
+    composerPlaceholder: 'Di qué cambiar. Escribe @ para un archivo, una skill, un momento o lo que seleccionaste',
+    composerPlaceholderBlank: 'Describe tu película. Escribe @ para añadir un archivo o una skill',
     dismiss: 'Descartar',
     jumpToLatest: 'Ir a lo más reciente',
     loadingMessages: 'Cargando la conversación…',
