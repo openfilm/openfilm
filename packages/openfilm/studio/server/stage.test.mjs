@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { HOST_FLAG, folderFiles, launch } from '../../src/host.mjs';
 import { filmHtml } from '../../src/film-doc.mjs';
+import { cssEscape, pastedPage } from '../ui/src/lib/layer-paste.ts';
 
 const STAGE = readFileSync(new URL('./stage.js', import.meta.url), 'utf8');
 
@@ -16,7 +17,7 @@ const STAGE = readFileSync(new URL('./stage.js', import.meta.url), 'utf8');
 const samePlace = (now, was, message) => assert.ok(now.every((v, i) => Math.abs(v - was[i]) < 0.5), `${message} (${JSON.stringify(now)}, was ${JSON.stringify(was)})`);
 
 /** A film served with Studio's stage in it, the page itself standing in for the editor (its own origin). */
-async function stageOf(dir) {
+async function stageOf(dir, query = '') {
   let files = null;
   const server = createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
@@ -30,7 +31,7 @@ async function stageOf(dir) {
   const page = await browser.newPage({ viewport: { width: 320, height: 180 } });
   /* a setup that fails closes what it opened: a browser left open keeps the test file, and the run, from ending */
   try {
-    await page.goto(`${origin}/film.html`);
+    await page.goto(`${origin}/film.html${query}`);
     /* window.film may not be there yet when the page has loaded */
     await page.waitForFunction(() => Boolean(window.film));
     await page.evaluate(async () => { await window.film.ready; await window.film.frame(0.5); });
@@ -49,7 +50,7 @@ async function stageOf(dir) {
     window.addEventListener('message', hear);
     window.postMessage({ source: 'openfilm-studio', type: 'stage', seq, op, ...args }, '*');
   }), { op, args, seq: ++seq });
-  return { ask, page, close };
+  return { ask, page, close, browser };
 }
 
 test('a click on a page\'s backdrop (a box filling the page) takes the clip, not the box; a smaller box is taken', { timeout: 60_000 }, async () => {
@@ -72,6 +73,27 @@ test('a click on a page\'s backdrop (a box filling the page) takes the clip, not
     assert.equal(root?.kind, 'box');
     assert.notEqual(root.handle, card.handle);
     assert.equal((await stage.ask('hit', { x: 150, y: 160, from: root.handle, detail: true }))?.handle, root.handle);
+  } finally {
+    await stage.close();
+  }
+});
+
+test('handles are counted from the load of the film: one kept from an earlier load names nothing, and the layer is found by its selector', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-stage-handles-'));
+  writeFileSync(join(dir, 'card.html'), `<!doctype html><body style="margin:0">
+  <h1 id="title" style="position:absolute;left:20px;top:20px;margin:0;font:700 24px sans-serif">Every parcel</h1>
+  <div id="card" style="position:absolute;left:200px;top:100px;width:80px;height:50px;background:#f60"></div>
+<script>window.film={duration:2,frame(){}}</script></body>`);
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'card', src: 'card.html' }] }] }));
+  const stage = await stageOf(dir, '?load=3');
+  try {
+    const title = await stage.ask('hit', { x: 40, y: 30, detail: true });
+    const card = await stage.ask('hit', { x: 240, y: 125, detail: true });
+    assert.ok(title.handle > 3 * 2 ** 32 && card.handle > 3 * 2 ** 32, 'counted from the load');
+    /* the card's handle in the first load of the film was a small number, maybe the title's here once: never now */
+    const kept = await stage.ask('layer', { handle: card.handle - 3 * 2 ** 32, clip: card.clip, at: card.at, n: card.n });
+    assert.equal(kept?.handle, card.handle, 'found by its selector: the card, not another layer');
+    assert.equal(kept?.kind, 'box');
   } finally {
     await stage.close();
   }
@@ -470,6 +492,228 @@ test('a deleted layer has no row in the Layers tree; what points only at it or i
       targets: [{ at: '#card' }, { at: '#title' }, { at: '.note' }, { at: '.note', n: 1 }, { at: '.note', n: 2 }, { at: '#nothing' }, {}],
     });
     assert.deepEqual(within, [true, true, false, true, false, false, false]);
+  } finally {
+    await stage.close();
+  }
+});
+
+test('a layer to be written into its page or another: where it is laid out, the changes in it, and how it looks', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-stage-source-'));
+  writeFileSync(join(dir, 'card.html'), `<!doctype html><head><style>
+#title, p { letter-spacing: 1px } @supports (display: grid) { @layer base { #title b { color: rgb(255, 0, 0) } } }
+#col > p:nth-child(3) { color: rgb(0, 128, 0) }
+</style></head><body style="margin:0">
+<div id="col" style="position:absolute;left:10px;top:10px;width:200px">
+  <h1 id="title" style="margin:0 0 4px;font:700 20px sans-serif" onclick="go()">Every <b>parcel</b></h1>
+  <p class="note" style="margin:0">On time</p>
+  <p class="note" style="margin:0">Late</p>
+  <svg id="logo" width="20" height="10"><linearGradient id="g"/><rect fill="url(#g)" width="20" height="10"/></svg>
+</div>
+<script>window.film={duration:2,frame(){}}</script></body>`);
+  const overrides = [{ at: '#title b', style: { color: 'blue' } }, { at: '#col > p:nth-of-type(2)', t: [4, 0] }, { at: '.note', n: 2, text: 'Very late' }];
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'card', src: 'card.html', overrides }] }] }));
+  const stage = await stageOf(dir);
+  try {
+    const [title, late, logo] = await stage.ask('layerSource', { clip: 'card', of: [{ at: '#title' }, { at: '.note', n: 2 }, { at: '#logo' }] });
+    assert.deepEqual([title.at, title.tag, title.id, title.text], ['#title', 'h1', 'title', 'Every parcel']);
+    assert.deepEqual([title.place.position, title.place.left, title.place.top], ['static', 0, 0]);
+    assert.deepEqual(title.tweaks, [{ path: [0], tag: 'b', style: { color: 'blue' } }]);
+    assert.equal(late.text, 'Late', 'its words as the page has them, not as the clip changed them');
+    assert.ok(logo.place && logo.place.width === 20 && logo.place.height === 10 && Number.isFinite(logo.place.left), `an <svg> is measured too (${JSON.stringify(logo.place)})`);
+    assert.match(title.snapshot.html, /^<h1 id="title" style="[^"]*position: absolute; left: 10px; top: 10px;[^"]*">Every <b style="[^"]*color: rgb\(0, 0, 255\)/);
+    assert.ok(!/ class=|onclick/.test(title.snapshot.html), 'no class (another page\'s CSS does not reach it), no handler');
+    assert.match(logo.snapshot.html, /id="g"/, 'its ids kept, to be made new ones where it goes');
+    /* copies of both notes: the first's goes after the second (right after it, the page's :nth-child(3) would color
+       the other), and nothing the clip points at is another element then */
+    const after = await stage.ask('afterCopy', { clip: 'card', of: [{ at: '#col > p:nth-of-type(1)' }, { at: '#col > p:nth-of-type(2)' }] });
+    const kids = ['h1', 'p', 'p', 'svg'];
+    assert.deepEqual([after.places, after.moved], [[{ after: 2, siblings: kids }, { after: 2, siblings: kids }], [null, null, null]]);
+  } finally {
+    await stage.close();
+  }
+});
+
+test('a layer the page\'s code moved in it: known by its words as the page has them', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-stage-moved-'));
+  writeFileSync(join(dir, 'card.html'), `<!doctype html><body style="margin:0"><div id="col"><p class="note">First in file</p><p class="note">Second in file</p></div>
+<script>document.getElementById('col').prepend(Object.assign(document.createElement('p'), { className: 'note', textContent: 'made by script' }));
+window.film={duration:2,frame(){}}</script></body>`);
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'card', src: 'card.html' }] }] }));
+  const stage = await stageOf(dir);
+  try {
+    const [layer] = await stage.ask('layerSource', { clip: 'card', of: [{ at: '#col > p.note:nth-of-type(2)' }] });
+    assert.equal(layer.text, 'First in file');
+  } finally {
+    await stage.close();
+  }
+});
+
+test('a copy written right after a layer: what the clip counted after it points at what it found', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-stage-after-'));
+  writeFileSync(join(dir, 'card.html'), `<!doctype html><body style="margin:0"><div id="col"><p id="a">A</p><p id="b">B</p><p>C</p></div>
+<script>window.film={duration:2,frame(){}}</script></body>`);
+  const overrides = [{ at: '#col > p:nth-of-type(3)', style: { color: 'red' } }, { at: 'p', n: 2, t: [4, 0] }];
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'card', src: 'card.html', overrides }] }] }));
+  const stage = await stageOf(dir);
+  try {
+    const after = await stage.ask('afterCopy', { clip: 'card', of: [{ at: '#a' }, { at: '#b' }] });
+    assert.deepEqual([after.places, after.moved], [[{ after: 0, siblings: ['p', 'p', 'p'] }, { after: 1, siblings: ['p', 'p', 'p'] }], ['#col > p:nth-of-type(5)', '#b']], 'both copies counted at once');
+  } finally {
+    await stage.close();
+  }
+});
+
+test('a copy goes where the page\'s CSS draws nothing beside it otherwise: not where a :last-child or :nth-child would move', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-stage-place-'));
+  writeFileSync(join(dir, 'card.html'), `<!doctype html><head><style>#col p:nth-child(2) { color: rgb(255, 0, 0) } #col p:last-child { color: rgb(0, 128, 0) }</style></head>
+<body style="margin:0"><div id="col"><p id="a">A</p><p id="b">B</p><p id="c">C</p></div><script>window.film={duration:2,frame(){}}</script></body>`);
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'card', src: 'card.html' }] }] }));
+  const stage = await stageOf(dir);
+  try {
+    const siblings = ['p', 'p', 'p'];
+    assert.deepEqual((await stage.ask('afterCopy', { clip: 'card', of: [{ at: '#a' }] })).places, [{ after: 1, siblings }], 'A: after B');
+    assert.deepEqual((await stage.ask('afterCopy', { clip: 'card', of: [{ at: '#c' }] })).places, [{ after: 1, siblings }], 'C: before it');
+    assert.deepEqual((await stage.ask('afterCopy', { clip: 'card', of: [{ at: '#b' }] })).places, [{ after: 1, siblings }], 'B: right after it');
+    /* and so drawn: B red, C green, with a copy of A written there */
+    const colors = await stage.page.evaluate(() => {
+      const doc = document.querySelector('iframe').contentDocument;
+      const copy = doc.getElementById('a').cloneNode(true);
+      copy.id = 'a-copy';
+      doc.getElementById('b').after(copy);
+      const out = ['b', 'c'].map((id) => getComputedStyle(doc.getElementById(id)).color);
+      copy.remove();
+      return out;
+    });
+    assert.deepEqual(colors, ['rgb(255, 0, 0)', 'rgb(0, 128, 0)']);
+  } finally {
+    await stage.close();
+  }
+});
+
+/**
+ * A paste into its own page, as the editor makes it (layerSource, afterCopy, lib/layer-paste pastedPage), the page
+ * then drawn as written: per element asked, `props` of it and of its copy, and the color of every other element.
+ */
+async function pastedLook(css, body, id, props, at = 0.5, pseudos = []) {
+  const dir = mkdtempSync(join(tmpdir(), 'of-stage-look-'));
+  const page = `<!doctype html><head><style>${css}</style></head><body style="margin:0">${body}<script>window.film={duration:2,frame(){}}</script></body>`;
+  writeFileSync(join(dir, 'card.html'), page);
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'card', src: 'card.html' }] }] }));
+  const stage = await stageOf(dir);
+  try {
+    const [layer] = await stage.ask('layerSource', { clip: 'card', of: [{ at: `#${cssEscape(id)}` }] });
+    const after = await stage.ask('afterCopy', { clip: 'card', of: [{ at: `#${cssEscape(id)}` }] });
+    const target = await stage.page.evaluate((id) => {
+      const doc = document.querySelector('iframe').contentDocument;
+      const shapeOf = (el) => ({ tag: el.localName, children: [...el.children].map(shapeOf) });
+      const el = doc.getElementById(id);
+      const path = [];
+      const tags = [];
+      for (let n = el; n !== doc.body; n = n.parentElement) { path.unshift([...n.parentElement.children].indexOf(n)); tags.unshift(n.localName); }
+      return { path, tags, shape: shapeOf(el) };
+    }, id);
+    const out = pastedPage(page, [{ layer, target, place: after.places[0], look: after.looks[0] }], 0);
+    const drawn = await stage.browser.newPage();
+    try {
+      await drawn.setContent(out.text);
+      return await drawn.evaluate(({ id, props, at, pseudos }) => {
+        for (const a of document.getAnimations()) { a.pause(); a.currentTime = at * 1000; }
+        const look = (el) => [
+          ...props.map((p) => getComputedStyle(el).getPropertyValue(p)),
+          ...pseudos.map((pe) => { const cs = getComputedStyle(el, pe); return `${pe} ${cs.content} ${cs.color} ${cs.fontSize}`; }),
+        ];
+        const deep = (el) => [...el.querySelectorAll('*')].map((n) => look(n).join(' '));
+        const copy = document.getElementById(`${id}-copy`);
+        const others = [...document.querySelectorAll('body *:not(script)')].filter((e) => !e.closest('[id$="-copy"]')).map((e) => `${e.id || e.localName}:${getComputedStyle(e).color}`);
+        return { el: look(document.getElementById(id)), copy: look(copy), inside: [deep(document.getElementById(id)), deep(copy)], others };
+      }, { id, props, at, pseudos });
+    } finally { await drawn.close(); }
+  } finally {
+    await stage.close();
+  }
+}
+
+test('a copy looks as its original where the page\'s rules give it a look by its place, and the others stay as they were', { timeout: 120_000 }, async () => {
+  const col = '<div id="col"><p id="a">A<b>!</b></p><p id="b">B</p><p id="c">C</p></div>';
+  const cases = [
+    ['first-child, last-child, p + p', '#col p:first-child{color:red} #col p:last-child{color:green} #col > p + p{border-top:2px solid blue}', ['a', 'c'], ['color', 'border-top-width']],
+    ['a heavier rule still wins', '#col p:first-child{color:red} #col #a{color:blue}', ['a'], ['color']],
+    ['a rule only the copy gets: what it would inherit', '#col{color:rgb(200, 100, 0)} #col p + p{color:blue}', ['a'], ['color']],
+    ['a rule only the copy gets, against a shorthand', '#col p{border:2px solid red} #col p + p{border-top-color:blue}', ['a'], ['border-top-color', 'border-top-width']],
+    ['in a @media, weighed as written', '@media (min-width: 1px){ #col p:first-child{color:red} } #col p{color:blue}', ['a'], ['color']],
+    ['in a @layer', '@layer base { #col p:first-child{color:red} } #col p{color:blue}', ['a'], ['color']],
+    ['nested', '#col { & p:first-child{color:red} }', ['a'], ['color']],
+    ['nested id rule', '#col { & #a{color:red} }', ['a'], ['color']],
+    ['!important', '#col p:first-child{color:red !important} #col #a{color:blue}', ['a'], ['color']],
+    ['a rule of its id, a rule naming it in :not()', '#a{font-weight:700} #col p:not(#a){color:blue}', ['a'], ['color', 'font-weight']],
+    ['an id rule of what is in it, in its at-rules', '@supports (display: grid) { @layer base { #a b{color:red} } } #col b{color:blue}', ['a'], ['color']],
+  ];
+  for (const [name, css, ids, props] of cases) {
+    for (const id of ids) {
+      const before = await pastedLook(css, col, 'b', ['color']).then((x) => x.others);
+      const seen = await pastedLook(css, col, id, props);
+      assert.deepEqual(seen.copy, seen.el, `${name}: the copy of ${id} looks as ${id}`);
+      assert.deepEqual(seen.inside[1], seen.inside[0], `${name}: and what is in it`);
+      assert.deepEqual(seen.others, before, `${name}: the others as they were`);
+    }
+  }
+});
+
+test('an id starting with a digit: the copy\'s rules find it, its id rules are said again of it', { timeout: 60_000 }, async () => {
+  const seen = await pastedLook('#col p:first-child{color:red} #\\31 st{font-weight:700}', '<div id="col"><p id="1st">A</p><p id="b">B</p></div>', '1st', ['color', 'font-weight']);
+  assert.deepEqual(seen.copy, seen.el);
+  assert.deepEqual(seen.el, ['rgb(255, 0, 0)', '700']);
+});
+
+test('a one-digit id, and an id with a dot: the copy keeps its id rules, and only its own', { timeout: 60_000 }, async () => {
+  const one = await pastedLook('#\\31 {font-weight:700} #col p:first-child{color:red}', '<div id="col"><p id="1">A</p><p id="b">B</p></div>', '1', ['color', 'font-weight']);
+  assert.deepEqual(one.copy, one.el);
+  assert.deepEqual(one.el, ['rgb(255, 0, 0)', '700']);
+  const dot = await pastedLook('#a\\.b{color:blue} #a{font-weight:700}', '<div id="col"><p id="a">A</p><p id="a.b">B</p></div>', 'a', ['color', 'font-weight']);
+  assert.deepEqual(dot.copy, dot.el);
+  assert.ok(dot.others.includes('a.b:rgb(0, 0, 255)'), 'the other one as it was');
+});
+
+test('a copy keeps the rules of its pseudo-elements: ::before, ::after, ::first-letter, ::marker, ::placeholder, ::selection', { timeout: 120_000 }, async () => {
+  const pseudos = ['::before', '::after', '::first-letter', '::marker', '::placeholder', '::selection'];
+  const cases = [
+    ['of its id', '#a::before{content:"\\2605";color:red} #a::after{content:"!"} #a::first-letter{font-size:30px} #a::selection{color:green}', '<div id="col"><p id="a">A</p><p id="b">B</p></div>', 'a'],
+    ['by its place', '#col p:first-child::before{content:"1. "} #col p + p::after{content:" (more)"}', '<div id="col"><p id="a">A</p><p id="b">B</p></div>', 'a'],
+    ['a list\'s marker', '#lst li:first-child::marker{color:red}', '<ul id="lst"><li id="a">A</li><li id="b">B</li></ul>', 'a'],
+    ['a field\'s placeholder', '#in::placeholder{color:red}', '<div id="col"><input id="in" placeholder="Name"></div>', 'in'],
+  ];
+  for (const [name, css, body, id] of cases) {
+    const seen = await pastedLook(css, body, id, ['color'], 0.5, pseudos);
+    assert.deepEqual(seen.copy, seen.el, `${name}: the copy's pseudo-elements as its original's`);
+  }
+});
+
+test('a rule of what names an id in the copy (a label\'s for) finds the copy\'s, renamed as it is', { timeout: 60_000 }, async () => {
+  const seen = await pastedLook('label[for="x"]{color:purple} a[href="#x"]{font-weight:700}', '<div id="col"><div id="f"><label for="x">Name</label><a href="#x">go</a><input id="x"></div></div>', 'f', ['color', 'font-weight']);
+  assert.deepEqual(seen.inside[1], seen.inside[0]);
+  assert.ok(seen.inside[0][0].startsWith('rgb(128, 0, 128)'), seen.inside[0][0]);
+});
+
+test('what a copy keeps from its original\'s place stays live: var(), currentColor and an animation', { timeout: 60_000 }, async () => {
+  const css = ':root{--accent: rgb(255, 0, 0)} @keyframes in { from { opacity: 0 } to { opacity: 1 } } #col p:first-child { color: var(--accent); border: 2px solid currentColor; animation: in 1s linear both }';
+  const col = '<div id="col"><p id="a">A</p><p id="b">B</p></div>';
+  for (const at of [0.25, 0.75]) {
+    const seen = await pastedLook(css, col, 'a', ['color', 'border-top-color', 'opacity'], at);
+    assert.deepEqual(seen.copy, seen.el, `at ${at}s`);
+    assert.equal(seen.el[2], String(at));
+  }
+});
+
+test('a copy whose id needs escaping is found by the selector a paste says (to be selected)', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-stage-select-'));
+  writeFileSync(join(dir, 'card.html'), '<!doctype html><body style="margin:0"><p id="1st-copy">A</p><p id="a:b-copy">B</p><script>window.film={duration:2,frame(){}}</script></body>');
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'card', src: 'card.html' }] }] }));
+  const stage = await stageOf(dir);
+  try {
+    for (const id of ['1st-copy', 'a:b-copy']) {
+      const layer = await stage.ask('layer', { clip: 'card', loc: `#${cssEscape(id)}`, any: true });
+      assert.equal(layer?.label, id === '1st-copy' ? 'A' : 'B', id);
+    }
   } finally {
     await stage.close();
   }

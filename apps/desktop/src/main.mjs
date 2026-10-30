@@ -34,6 +34,7 @@ import { startUpdates } from './updates.mjs';
 import { stepAside } from './update-launch.mjs';
 import { ensureFfmpeg, ffmpegDir, ffmpegDownloadable, ffmpegIn, ffmpegOnPath } from './ffmpeg-runtime.mjs';
 import { PATH_SEP } from './environment.mjs';
+import { firstWindowsApps } from './windows-apps.mjs';
 import { createTabs } from './tabs.mjs';
 
 const here = (path) => fileURLToPath(new URL(path, import.meta.url));
@@ -450,6 +451,8 @@ async function start() {
   /* an update quitting did not install is installed now, before anything else opens (update-launch.mjs) */
   const launch = await updates.installAtLaunch({ language: state.language });
   if (launch.installing) return;
+  /* Windows' registered apps, read from now on: the first look at the agents and a conversation reopened at once wait for them */
+  if (windows) void firstWindowsApps();
 
   const shellEnv = await loginShellEnvironment();
   const env = childEnvironment({

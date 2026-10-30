@@ -38,6 +38,7 @@ import * as acp from '@agentclientprotocol/sdk';
 import { PATH_SEP, childEnvironment, lastPathSource, loginShellEnvironment, loginShellVariables, shellSubset } from './environment.mjs';
 import { AGENT_PROGRAMS, HOME_BIN_CANDIDATES, chosenProgram, claudeUpdate, claudeVersion, codexAppCopies, codexVersion, desktopApp, detectAgentInstallation, installCommand, laterVersion, notTheAgent, searchReport } from './agent-installation.mjs';
 import { logSwitches } from './agent-logs.mjs';
+import { afterFirstReading, firstWindowsApps, refreshWindowsApps } from './windows-apps.mjs';
 import { mergeConfig, sessionSkills } from './agent-skills.mjs';
 import { nodeBinary } from './node-runtime.mjs';
 import { outOfBalance } from './pi-config.mjs';
@@ -240,6 +241,16 @@ function windowsSlowSearch({ fresh = false } = {}) {
   return value;
 }
 
+/**
+ * The slower search and the apps Windows has registered, waited for three seconds at most: what comes later is there on
+ * the next look. The first reading of the registrations is waited for however long it takes (it holds nothing): the
+ * chat asks for the agents once as it loads, and one known only from its registration would stay not installed there.
+ */
+const windowsSlowerLook = () => Promise.all([
+  firstWindowsApps(),
+  Promise.race([Promise.all([windowsSlowSearch(), refreshWindowsApps()]), new Promise((done) => setTimeout(done, 3000).unref?.())]),
+]);
+
 /** Where this agent was looked for, beyond the PATH. */
 const searchDirs = () => [...HOME_BIN_CANDIDATES(), ...(slowFound.npmPrefix ? [slowFound.npmPrefix] : [])];
 
@@ -256,6 +267,9 @@ export function resolveAgentCli(id, { pathDirs = [] } = {}) {
   });
   return found.cli ? { path: found.cli, source: found.source } : null;
 }
+
+/** resolveAgentCli, for starting, signing in or out: right after launch, it waits for Windows' registrations when the program is not found without them. */
+const findAgentCli = (id, options) => afterFirstReading(() => resolveAgentCli(id, options));
 
 function run(cmd, args, timeoutMs = 10_000, { cwd, env, options } = {}) {
   return new Promise((resolve) => {
@@ -336,7 +350,7 @@ export async function diagnoseAgent(id, { appVersion = '' } = {}) {
   const spec = AGENTS[id];
   if (!spec) return null;
   const shell = await loginShellEnvironment({ maxAgeMs: 0 });
-  const slow = await windowsSlowSearch({ fresh: true });
+  const [slow] = await Promise.all([windowsSlowSearch({ fresh: true }), refreshWindowsApps({ maxAge: 0 })]);
   const pathDirs = shell.PATH.split(PATH_SEP);
   const found = resolveAgentCli(id, { pathDirs });
   const names = AGENT_PROGRAMS[id]?.names ?? [id];
@@ -562,7 +576,7 @@ export async function agentSignInMethods(id) {
   const spec = AGENTS[id];
   if (!spec?.acpSignIn) return [];
   const shell = agentShell(id, await loginShellVariables());
-  const cli = resolveAgentCli(id, { pathDirs: shell.PATH.split(PATH_SEP) });
+  const cli = await findAgentCli(id, { pathDirs: shell.PATH.split(PATH_SEP) });
   if (!cli) return [];
   const launch = adapterLaunch(id, cli.path);
   const child = spawn(launch.cmd, launch.args, { ...OWN_GROUP, env: childEnvironment({ shell, extra: launch.env }), stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true });
@@ -599,7 +613,7 @@ const SIGN_IN_DIR = () => join(tmpdir(), 'openfilm-sign-in');
 export async function openAgentSignIn(id, { track = false } = {}) {
   const spec = AGENTS[id];
   const pathDirs = (await loginShellEnvironment()).PATH.split(PATH_SEP);
-  const cli = spec ? resolveAgentCli(id, { pathDirs }) : null;
+  const cli = spec ? await findAgentCli(id, { pathDirs }) : null;
   if (!spec || !cli) return { ok: false, error: `${spec?.label ?? id} is not installed on this computer.` };
   if (spec.login === null) return { ok: false, error: `Sign in in ${spec.label} itself.` };
   asked.delete(id);
@@ -651,7 +665,7 @@ export async function openAgentSignIn(id, { track = false } = {}) {
 export async function signOutAgent(id) {
   const spec = AGENTS[id];
   if (!spec?.logout) return { ok: false, error: `${spec?.label ?? id} has no sign-out command: switch accounts in ${spec?.label ?? id} itself.` };
-  const cli = resolveAgentCli(id, { pathDirs: (await loginShellEnvironment()).PATH.split(PATH_SEP) });
+  const cli = await findAgentCli(id, { pathDirs: (await loginShellEnvironment()).PATH.split(PATH_SEP) });
   if (!cli) return { ok: false, error: `${spec.label} is not installed on this computer.` };
   const shell = agentShell(id, await loginShellVariables());
   const how = starting(cli.path, spec.logout);
@@ -696,7 +710,7 @@ export async function listAgents({ ids = Object.keys(AGENTS), statusIds = ids, f
     // Enabled agents start first. Background discovery never opens a disabled agent's ACP/auth session.
     if (!checkSignIn) await new Promise((done) => setImmediate(done));
     if (windows && !resolveAgentCli(id, { pathDirs })) {
-      await Promise.race([windowsSlowSearch(), new Promise((done) => setTimeout(done, 3000).unref?.())]);
+      await windowsSlowerLook();
     }
     const agent = await agentOnComputer(id, pathDirs, { fresh, checkSignIn });
     onAgent(agent);
@@ -709,7 +723,7 @@ export async function localAgent(id, { fresh = false } = {}) {
   if (!isAgentId(id)) throw new Error(`No agent ${id}`);
   const pathDirs = (await loginShellEnvironment({ maxAgeMs: 10_000 })).PATH.split(PATH_SEP);
   if (windows && !resolveAgentCli(id, { pathDirs })) {
-    await Promise.race([windowsSlowSearch(), new Promise((done) => setTimeout(done, 3000).unref?.())]);
+    await windowsSlowerLook();
   }
   return agentOnComputer(id, pathDirs, { fresh });
 }
@@ -1176,7 +1190,7 @@ export class AgentSession {
     this.step = 'start';
     const shell = agentShell(this.opts.agent, await loginShellVariables({ staleOk: true }));
     const harness = this.opts.harness ?? null;
-    const cli = harness ? null : resolveAgentCli(this.opts.agent, { pathDirs: shell.PATH.split(PATH_SEP) });
+    const cli = harness ? null : await findAgentCli(this.opts.agent, { pathDirs: shell.PATH.split(PATH_SEP) });
     if (!harness && !cli) throw Object.assign(new Error(`${this.spec.label} is not installed on this computer.`), { code: 'not-installed' });
     this.cli = cli;
     /* one whose ACP sign-in takes up its own (Cursor's `authenticate`) opens the maker's sign-in page in the browser and
