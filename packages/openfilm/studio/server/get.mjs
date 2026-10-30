@@ -35,7 +35,7 @@ import { dropTranscripts, readTranscript, transcriptIsCurrent, transcriptPath, w
 import { inside } from './files.mjs';
 import { HttpError, json, readJson } from './http.mjs';
 import { kindOf, modelFor, providerKey } from './keys.mjs';
-import { chooseProvider, listProviders, providerSettings } from './providers/index.mjs';
+import { chooseProvider, freshProviders, listProviders, providerSettings } from './providers/index.mjs';
 import { CALL_TIMEOUT_SEC, callService, servicesHelp } from './custom-services.mjs';
 
 /**
@@ -129,8 +129,8 @@ export const VERBS = /** @type {Record<string, VerbSpec>} */ ({
 export const WEB_VERBS = ['web-search', 'web-fetch'];
 
 /** Where the person connects a service and picks its models, said the same way everywhere. */
-export const WHERE_TO_CONNECT = 'In Studio, the OpenFilm logo at the top left opens Settings: connect a service under Providers, '
-  + 'with the person\'s own key, then choose the model for each kind of media under Services.';
+export const WHERE_TO_CONNECT = 'In Studio, the OpenFilm logo at the top left opens Settings: under Services the person chooses the model '
+  + 'for each kind of media, and connects its service there (signing in, or with their own key).';
 /** The services that make `verb`, by name: "fal.ai, Google or OpenAI". @param {string} verb */
 const makers = (verb) => {
   const names = listProviders().filter((p) => /** @type {readonly string[]} */ (p.verbs).includes(verb)).map((p) => p.name).sort((a, b) => a.localeCompare(b));
@@ -148,7 +148,7 @@ const nothing = () => 'Nothing is connected for media here: each kind works only
 
 /** What `call` says when the person has added no service of their own. */
 const NO_OWN_SERVICES = 'The person has added no services of their own. In Studio, the OpenFilm logo at the top left opens Settings: '
-  + 'they add one under Providers (its address, its key if it takes one, and what it does).';
+  + 'they add one under Services (its address, its key if it takes one, and what it does).';
 
 /** Each kind of media, in words (finding voices is part of voice-over). */
 const WORDS = /** @type {Record<string, string>} */ ({
@@ -527,6 +527,8 @@ function show(receipt) {
  */
 export async function catalog(only, { web = false } = {}) {
   if (only !== undefined && !VERBS[only]) throw new HttpError(400, `there is no ${only}; there is ${Object.keys(VERBS).join(', ')}`);
+  /* what each service offers now, to name the ones that would make what is not connected */
+  await freshProviders();
   const settings = await providerSettings();
   /* the person's own services: `call`, listed with each of them, whenever there is one */
   const own = settings.custom;

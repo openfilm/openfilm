@@ -1869,7 +1869,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   hostCommands.current = (command) => {
     if (command.type === 'highlight') { setChatRef(command.ref ?? null); return; }
     if (command.type === 'draft-refs') { setDraftMarks(draftMarksOf(Array.isArray(command.refs) ? command.refs : [])); return; }
-    if (command.type === 'settings') { setSettingsOpen(command.section ?? 'agents'); return; }
+    if (command.type === 'settings') { setSettingsOpen(command.section === 'providers' ? 'models' : command.section ?? 'agents'); return; }
     if (command.type === 'show-examples') { setExamplesOpen(command.open ?? true); return; }
     if (command.type === 'seek' && Number.isFinite(command.time)) { pause(); seek(command.time * 1000); return; }
     if ((command.type === 'show-range' || command.type === 'show-subtitle') && Number.isFinite(command.start) && Number.isFinite(command.end)) {
@@ -3115,7 +3115,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* making subtitles: what went wrong, shown on the CC button; with no service to transcribe, it opens Providers */
   const [subtitleProblem, setSubtitleProblem] = React.useState<{ text: string; connect: boolean } | null>(null);
   const makeSubtitles = React.useCallback(() => {
-    if (subtitleProblem?.connect) { setSettingsOpen('providers'); setSubtitleProblem(null); return; }
+    if (subtitleProblem?.connect) { setSettingsOpen('models'); setSubtitleProblem(null); return; }
     setSubtitleProblem(null);
     void subs.transcribe().then((r) => { if (!r.ok) setSubtitleProblem({ text: r.error ?? '', connect: !!r.needsTranscriber }); });
   }, [subs, subtitleProblem]);
@@ -3703,7 +3703,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 <LoadBoundary title={t('canvas.loadFailed')} action={t('canvas.reload')}>
                   <React.Suspense fallback={null}>
                     <CanvasView projectId={projectId} folder={loaded?.project.path ?? ''} files={canvasFiles} sources={mediaSources} onAddToFilm={(file) => { void addFromCanvas(file); }}
-                      onImportFiles={(dropped) => onImport(dropped, 'assets', () => {})} onOpenSettings={() => setSettingsOpen('providers')}
+                      onImportFiles={(dropped) => onImport(dropped, 'assets', () => {})} onOpenSettings={() => setSettingsOpen('models')}
                       focus={canvasFocus} insert={canvasInsert} onRefer={studioHost?.refer ? (refs) => { for (const ref of refs) studioHost?.refer?.(ref); } : undefined}
                       onSendToFilm={(list) => { void sendFromCanvas(list); }} onReveal={(path) => { setCanvasOpen(false); showFile(path); }}
                       {...(hostPanel ? { chat: { open: hostPanel.open, toggle: () => hostPanel.setOpen(!hostPanel.open) } } : {})}

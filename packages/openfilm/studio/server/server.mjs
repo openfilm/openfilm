@@ -315,7 +315,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       if (to) openBrowser(to);
       return json(res, 200, {});
     }
-    /* ── own keys and who makes each kind of media (Settings → Providers): never a key back; see providers/index.mjs ── */
+    /* ── own keys and who makes each kind of media (Settings → Services): never a key back; see providers/index.mjs ── */
     if (parts[0] === 'providers') return providersRoute(req, res, parts.slice(1), { openBrowser });
     /* what the person changed in a project while an agent worked, kept over its writes: the note for the agent named
        `agent`, which its `openfilm` command prints, answered at once ({ id, line }, line null when nothing); it counts

@@ -1,5 +1,5 @@
 /**
- * The person's own keys for media services and who makes each kind of media, with which model ("fal.ai · Seedance 2.0"), as Settings → Providers and Models show them.
+ * The person's own keys for media services and who makes each kind of media, with which model ("fal.ai · Seedance 2.0"), as Settings → Services shows them.
  *
  * Studio's server keeps the keys (studio/server/keys.mjs): this page sends a key once, when it is added, and only ever
  * gets back where a key comes from and its last four characters.
@@ -60,22 +60,14 @@ export interface ProvidersState {
   signingIn: { provider: string | null; error: string | null; errorFor: string | null };
 }
 
-/** The providers, not connected, that would make `verb` once connected, by name (as every list of providers is). */
-export function couldMake(state: ProvidersState, verb: ProviderVerb): string[] {
-  return state.providers.filter((p) => !p.source && p.verbs.includes(verb)).map((p) => p.name).sort((a, b) => a.localeCompare(b));
-}
+/** The providers Settings › Services lists first to connect, in this order: the large media services, and OpenFilm's own. */
+export const RECOMMENDED_PROVIDERS = ['openai', 'openfilm', 'azure', 'google', 'elevenlabs', 'openrouter'];
 
-/** The providers Settings › Providers shows first, in this order: the large media services, and OpenFilm's own. */
-export const RECOMMENDED_PROVIDERS = ['openai', 'openfilm', 'azure', 'google', 'elevenlabs'];
-
-/**
- * Settings › Providers' two groups: the recommended ones in RECOMMENDED_PROVIDERS' order, then the rest by name.
- * `open` says whether More starts open: when one of its providers is connected, so a connection is never hidden.
- */
-export function providerGroups<P extends Pick<OwnProvider, 'id' | 'name' | 'source'>>(providers: readonly P[]) {
+/** The providers to connect in two groups: the recommended ones in RECOMMENDED_PROVIDERS' order, then the rest by name. */
+export function providerGroups<P extends Pick<OwnProvider, 'id' | 'name'>>(providers: readonly P[]) {
   const recommended = RECOMMENDED_PROVIDERS.map((id) => providers.find((p) => p.id === id)).filter((p): p is P => Boolean(p));
   const more = providers.filter((p) => !RECOMMENDED_PROVIDERS.includes(p.id)).sort((a, b) => a.name.localeCompare(b.name));
-  return { recommended, more, open: more.some((p) => p.source) };
+  return { recommended, more };
 }
 
 /**
@@ -129,7 +121,7 @@ export interface ProvidersHook {
   removeService: (id: string) => Promise<void>;
 }
 
-/** The providers while Settings → Providers or Models is shown. */
+/** The providers while Settings → Services is shown. */
 export function useProviders(): ProvidersHook {
   const [state, setState] = React.useState<ProvidersState | null>(null);
   const [problem, setProblem] = React.useState<string | null>(null);

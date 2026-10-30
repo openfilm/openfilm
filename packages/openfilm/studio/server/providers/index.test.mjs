@@ -5,6 +5,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chooseProvider, listProviders, shownChoices } from './index.mjs';
 
+/* OpenFilm's service is asked what it offers: nowhere here (a port that refuses at once) */
+process.env.OPENFILM_API_URL ??= 'http://127.0.0.1:9';
+
 before(() => {
   /* this machine's own keys must not decide these */
   process.env.OPENFILM_HOME = mkdtempSync(join(tmpdir(), 'of-routing-'));
@@ -15,7 +18,7 @@ const settings = (keys = {}, use = {}) => ({ keys, use, model: {} });
 const id = async (promise) => (await promise)?.id ?? null;
 
 test('the own-key providers, in the order Settings lists them', () => {
-  assert.deepEqual(listProviders().map((p) => p.id), ['elevenlabs', 'openai', 'google', 'fal', 'pexels', 'pixabay', 'brave', 'tavily', 'groq', 'azure', 'doubao', 'mimo', 'keenable', 'openfilm']);
+  assert.deepEqual(listProviders().map((p) => p.id), ['elevenlabs', 'openai', 'google', 'fal', 'openrouter', 'pexels', 'pixabay', 'brave', 'tavily', 'groq', 'azure', 'doubao', 'mimo', 'keenable', 'openfilm']);
 });
 
 test('nothing serves a kind of media nobody chose, even with a key that could', async () => {

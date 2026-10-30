@@ -1,9 +1,9 @@
 // @ts-check
 /**
- * Which provider serves each verb of `openfilm get`, and the API of Studio's Settings → Providers and Models.
+ * Which provider serves each verb of `openfilm get`, and the API of Studio's Settings → Services.
  *
- * A person's own key for ElevenLabs, OpenAI, Google (the Gemini API), fal.ai, Groq, Microsoft Azure (Azure AI Speech), Pexels, Pixabay,
- * Brave Search, Tavily or OpenFilm pays that service directly for what it can do. Each makes a kind of media with the model the person chose for
+ * A person's own key for ElevenLabs, OpenAI, Google (the Gemini API), fal.ai, OpenRouter, Groq, Microsoft Azure (Azure AI Speech), Pexels,
+ * Pixabay, Brave Search, Tavily or OpenFilm pays that service directly for what it can do. Each makes a kind of media with the model the person chose for
  * it (the provider's first unless they did). Keenable also works with no key: connected with one click, a key lifts its limits.
  * Who serves a verb: `--via <provider>` on the command, else the person's choice for that kind of media in Settings (`use`),
  * while it can; else nothing does. Every provider is treated alike: a kind with no choice goes to the first provider,
@@ -20,6 +20,7 @@ import elevenlabs from './elevenlabs.mjs';
 import openai from './openai.mjs';
 import google from './google.mjs';
 import fal from './fal.mjs';
+import openrouter from './openrouter.mjs';
 import pexels from './pexels.mjs';
 import pixabay from './pixabay.mjs';
 import brave from './brave.mjs';
@@ -38,12 +39,15 @@ import openfilm from './openfilm.mjs';
  */
 
 /** The providers paid with the person's own key. */
-const OWN = [elevenlabs, openai, google, fal, pexels, pixabay, brave, tavily, groq, azure, doubao, mimo, keenable, openfilm];
+const OWN = [elevenlabs, openai, google, fal, openrouter, pexels, pixabay, brave, tavily, groq, azure, doubao, mimo, keenable, openfilm];
 
 /** The kinds of media the person chooses a provider and model for (Settings → Services). */
 const USE_VERBS = /** @type {Verb[]} */ (['tts', 'music', 'sfx', 'asr', 'image', 'image-search', 'video', 'translate', 'web-search']);
 
 export const listProviders = () => OWN;
+
+/** The models of the providers whose service says what it offers (`refresh`), brought up to date. */
+export const freshProviders = (/** @type {{ force?: boolean }} */ options = {}) => Promise.all(OWN.map((p) => p.refresh?.(options))).then(() => OWN);
 
 /**
  * The provider `id` when it can serve `verb` now. `strict` (asked for by name on the command): a sentence saying why
@@ -57,8 +61,8 @@ async function named(id, verb, settings, strict) {
   if (!provider.verbs.includes(verb)) return fail(`${provider.name} does not do ${verb}.`);
   if (!providerKey(provider, settings)) {
     return fail(provider.keyless
-      ? `${provider.name} is not connected: connect it in Studio (the OpenFilm logo at the top left opens Settings → Providers), no key needed, or set ${provider.env}.`
-      : `There is no ${provider.name} key: add one in Studio (the OpenFilm logo at the top left opens Settings → Providers) or set ${provider.env}.`);
+      ? `${provider.name} is not connected: connect it in Studio (the OpenFilm logo at the top left opens Settings → Services), no key needed, or set ${provider.env}.`
+      : `There is no ${provider.name} key: add one in Studio (the OpenFilm logo at the top left opens Settings → Services) or set ${provider.env}.`);
   }
   return provider;
 }
@@ -90,6 +94,8 @@ export async function chooseProvider(verb, { via, settings } = {}) {
   const saved = settings ?? await providerSettings();
   /* every provider that speaks also lists its voices; one that searches the web reads its pages */
   const kind = /** @type {Verb} */ (kindOf(verb));
+  /* what the one it would be offers now */
+  await OWN.find((p) => p.id === (via || saved.use[kind]))?.refresh?.();
   if (via) return named(via, kind, saved, true);
   const chosen = saved.use[kind];
   if (!chosen) return null;
@@ -117,8 +123,9 @@ export function shownChoices(settings) {
   };
 }
 
-/** What Settings → Providers and Models show. Never a key: where it comes from and its last four characters. */
+/** What Settings → Services shows. Never a key: where it comes from and its last four characters. */
 async function state() {
+  await freshProviders();
   const settings = await readSettings();
   return {
     providers: OWN.map((p) => {
@@ -199,6 +206,7 @@ export async function providersRoute(req, res, parts, { openBrowser }) {
       await startSignIn(/** @type {Provider & { signIn: NonNullable<Provider['signIn']> }} */ (provider), {
         openBrowser,
         done: async ({ key, email }) => {
+          await provider.refresh?.({ force: true });
           await changeSettings((s) => {
             s.keys[id] = key;
             if (email) s.accounts[id] = email; else delete s.accounts[id];
@@ -218,11 +226,13 @@ export async function providersRoute(req, res, parts, { openBrowser }) {
       const on = (/** @type {import('../keys.mjs').ProviderSettings} */ s) => { s.off = s.off.filter((id) => id !== provider.id); };
       if (body.env === true) {
         if (!envKey(provider)) throw new HttpError(400, `${provider.env} is not set here`);
+        await provider.refresh?.();
         await changeSettings((s) => { on(s); fill(s); });
         return json(res, 200, await state());
       }
       let key;
       try { key = provider.keyless && body.key === '' ? '' : cleanKey(body.key); if (key) provider.checkKey?.(key); } catch (e) { throw new HttpError(400, /** @type {Error} */ (e).message); }
+      await provider.refresh?.();
       await changeSettings((s) => { s.keys[provider.id] = key; on(s); fill(s); });
       return json(res, 200, await state());
     }
@@ -241,6 +251,7 @@ export async function providersRoute(req, res, parts, { openBrowser }) {
     }
   }
   if (parts.length === 1 && parts[0] === 'use' && req.method === 'PUT') {
+    await freshProviders();
     const { verb, provider, model } = /** @type {{ verb?: unknown, provider?: unknown, model?: unknown }} */ (await readJson(req));
     const kind = USE_VERBS.find((v) => v === verb);
     if (!kind) throw new HttpError(400, `verb: one of ${USE_VERBS.join(', ')}`);

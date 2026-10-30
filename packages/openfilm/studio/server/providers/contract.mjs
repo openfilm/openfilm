@@ -79,6 +79,7 @@
  *   models?: Partial<Record<Verb, { id: string, name: string }[]>>,
  *   checkKey?: (key: string) => void,
  *   signIn?: import('../sign-in.mjs').SignIn,
+ *   refresh?: (options?: { force?: boolean }) => Promise<void>,
  *   keyless?: boolean,
  *   speechFormat?: 'mp3',
  *   run: (verb: Verb, args: Record<string, unknown>, ctx: RunContext) => Promise<RunResult>,
@@ -89,6 +90,9 @@
  * is pasted instead of at the first run. Only for what the provider knows without calling anyone: it must not fetch.
  * `signIn`: connected by signing in on the provider's website instead of pasting a key (sign-in.mjs); the key it
  * gives is kept like a pasted one.
+ * `refresh`: its `models` (and `verbs`) are what its service offers now, asked again before they are shown or used
+ * (`force`: now, not when last asked a while ago); it never throws, and keeps what it had when the service cannot be
+ * reached.
  * `keyless`: it also works with no key (a free tier), so the person can connect it with one click and add a key for
  * higher limits. Connected without one, its `key` is ''. Like every provider, it serves nothing until it is connected.
  * `billingUrl`: the provider's own page where the person tops up its balance. A run that fails because the account has

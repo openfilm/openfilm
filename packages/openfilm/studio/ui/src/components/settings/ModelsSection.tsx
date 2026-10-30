@@ -1,17 +1,26 @@
 /**
- * Settings → Services: which connected provider, and which of its models, makes each kind of media. One of the models
- * of a provider the person has a key for ("ElevenLabs · Eleven v3"), or none, listed by the providers' names, none put
- * first. Connecting a provider fills the kinds that have none, with its first model; the person changes any here.
- * Under them, the person's custom services, which their agent calls itself (CustomServices).
+ * Settings → Services: what makes each kind of media, and the services that can. Each kind of media is one of the
+ * models of a connected service ("ElevenLabs · Multilingual v2"), or none. Its menu also lists what the services not
+ * connected yet would make it with: picking one of those opens that service's sign-in or key right under the kind
+ * (ProviderRow), and once it is connected, the model picked makes it. Connecting a service fills the kinds that have
+ * none, with its first model. Writing, translating and looking at pictures are the agent's own model's (Settings →
+ * Agents); subtitles and web search are here too, for what Studio does without the agent.
+ *
+ * Under them, the services connected and the others (ServicesAccounts), then the person's custom services, which their
+ * agent calls itself (CustomServices).
  */
 import React from 'react';
-import { Check, ChevronDown, ChevronRight } from 'lucide-react';
-import { useLanguage, useT } from '@/i18n';
-import { USE_VERBS, couldMake, offered, useProviders, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
+import { Check, ChevronDown } from 'lucide-react';
+import { useT } from '@/i18n';
+import { USE_VERBS, offered, providerGroups, useProviders, type OwnProvider, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
 import { Popover } from '@/components/Popover';
 import { ProviderMark } from './ProviderMark';
-import { SettingsButton, SettingsGroup, SettingsItem, SettingsPage, settingsError } from './ui';
-import { CustomServices, customProblem } from './CustomServices';
+import { ProviderRow, ServicesAccounts } from './ProvidersSection';
+import { SettingsGroup, SettingsInset, SettingsItem, SettingsPage } from './ui';
+import { CustomServices } from './CustomServices';
+
+/** The kinds that are media; the others (subtitles, the web) are listed after them. */
+const MEDIA: ProviderVerb[] = ['tts', 'music', 'sfx', 'asr', 'image', 'image-search', 'video'];
 
 /** One thing a kind of media can be made with: a provider and its model. */
 interface Choice {
@@ -19,54 +28,63 @@ interface Choice {
   provider: string;
   providerName: string;
   name: string;
-  pick: { model?: string };
+  model: string;
 }
 
-export function ModelsSection({ onConnect }: { onConnect: () => void }) {
+export function ModelsSection() {
   const t = useT();
   const hook = useProviders();
-  const providers = hook.state;
-  const anything = Boolean(providers?.providers.some((p) => p.source));
+  const state = hook.state;
+  const row = (verb: ProviderVerb) => <ModelRow key={verb} verb={verb} hook={hook} />;
+  const others = USE_VERBS.filter((verb) => !MEDIA.includes(verb) && state && offered(state, verb));
 
   return (
     <SettingsPage note={t('settings.models.desc')}>
-      {providers && !anything ? (
-        <SettingsGroup>
-          <SettingsItem description={t('settings.models.nothing')} title={t('settings.models.goConnect')}
-            control={<SettingsButton onClick={onConnect}>{t('settings.models.goConnect')}</SettingsButton>} />
-        </SettingsGroup>
-      ) : null}
-      {providers ? (
-        <SettingsGroup>
-          {USE_VERBS.filter((verb) => offered(providers, verb)).map((verb) => <ModelRow key={verb} verb={verb} hook={hook} onConnect={onConnect} />)}
-        </SettingsGroup>
+      {state ? (
+        <>
+          <SettingsGroup title={t('settings.models.groupMedia')}>{MEDIA.filter((verb) => offered(state, verb)).map(row)}</SettingsGroup>
+          {others.length ? <SettingsGroup title={t('settings.models.groupText')} footnote={t('settings.models.textNote')}>{others.map(row)}</SettingsGroup> : null}
+          <ServicesAccounts hook={hook} />
+        </>
       ) : null}
       <CustomServices hook={hook} />
-      {/* a custom service's problem is said under its form */}
-      {hook.problem && !customProblem(hook) ? <p className={settingsError}>{hook.problem}</p> : null}
     </SettingsPage>
   );
 }
 
-/** One kind of media and what makes it, picked from the connected providers' models. */
-function ModelRow({ verb, hook, onConnect }: { verb: ProviderVerb; hook: ProvidersHook; onConnect: () => void }) {
+/** The choices for a kind of media from these providers: each of its models, by provider, providers by name. */
+function choicesOf(providers: readonly OwnProvider[], verb: ProviderVerb): Choice[] {
+  return [...providers].sort((a, b) => a.name.localeCompare(b.name)).flatMap((p) => (p.models[verb] ?? [])
+    .map((m) => ({ value: `${p.id}:${m.id}`, provider: p.id, providerName: p.name, name: m.name, model: m.id })));
+}
+
+/**
+ * One kind of media and what makes it: a model of a connected provider, or one of a provider not connected yet, which
+ * is connected right here first.
+ */
+function ModelRow({ verb, hook }: { verb: ProviderVerb; hook: ProvidersHook }) {
   const t = useT();
   const state = hook.state!;
   const label = t(`settings.providers.verbs.${verb}`);
   const chosen = state.use[verb] ?? '';
-
-  const choices: Choice[] = [];
-  for (const p of state.providers) {
-    if (!((p.source && p.verbs.includes(verb)) || p.id === chosen)) continue;
-    for (const m of p.models[verb] ?? []) choices.push({ value: `${p.id}:${m.id}`, provider: p.id, providerName: p.name, name: m.name, pick: { model: m.id } });
-  }
-  /* by the providers' names; each provider's models stay in its own order (the sort is stable) */
-  choices.sort((a, b) => a.providerName.localeCompare(b.providerName));
+  const makes = state.providers.filter((p) => p.verbs.includes(verb) || p.id === chosen);
+  const connected = makes.filter((p) => p.source);
+  /* the ones to connect: the recommended first, as the list of services has them */
+  const groups = providerGroups(makes.filter((p) => !p.source));
+  const waiting = [...groups.recommended, ...groups.more];
   const firstOf = (id: string) => state.providers.find((p) => p.id === id)?.models[verb]?.[0]?.id;
   const value = chosen ? `${chosen}:${state.model[verb] ?? firstOf(chosen) ?? ''}` : '';
-  const current = choices.find((c) => c.value === value);
-  /* nothing connected makes it: the providers that would, once connected */
-  const could = couldMake(state, verb);
+  const choices = choicesOf(connected, verb);
+  const current = choices.find((c) => c.value === value) ?? null;
+
+  /* a model of a provider not connected: its sign-in or key under the row, and the model once it is connected */
+  const [pending, setPending] = React.useState<Choice | null>(null);
+  const pendingProvider = pending ? state.providers.find((p) => p.id === pending.provider) : undefined;
+  React.useEffect(() => {
+    if (!pending || !pendingProvider?.source) return;
+    setPending(null);
+    void hook.choose(verb, pending.provider, { model: pending.model });
+  }, [pending, pendingProvider?.source, hook, verb]);
 
   return (
     <SettingsItem
@@ -75,42 +93,67 @@ function ModelRow({ verb, hook, onConnect }: { verb: ProviderVerb; hook: Provide
       control={(
         <ModelPicker
           label={label}
-          choices={choices}
-          current={current ?? null}
+          groups={[
+            ...groupsOf(choices),
+            ...waiting.map((p) => ({ provider: p.id, name: p.name, connect: p.signIn ? t('settings.providers.signIn') : t('settings.providers.addKey'), choices: choicesOf([p], verb) })),
+          ]}
+          current={pending ?? current}
           busy={hook.busy === verb}
-          could={could}
-          onConnect={onConnect}
-          onPick={(choice) => void hook.choose(verb, choice?.provider ?? '', choice?.pick)}
+          onPick={(choice) => {
+            if (choice && !connected.some((p) => p.id === choice.provider)) { setPending(choice); return; }
+            setPending(null);
+            void hook.choose(verb, choice?.provider ?? '', choice ? { model: choice.model } : undefined);
+          }}
         />
       )}
-    />
+    >
+      {pending && pendingProvider ? (
+        <div className="pt-3">
+          <SettingsInset>
+            <p className="text-[14px] text-[var(--text-muted)]">
+              {t('settings.models.connectFirst').replaceAll('{model}', pending.name).replaceAll('{name}', pending.providerName)}
+            </p>
+            <ProviderRow provider={pendingProvider} hook={hook} asking onClose={() => setPending(null)} />
+          </SettingsInset>
+        </div>
+      ) : null}
+    </SettingsItem>
   );
 }
 
-/**
- * The button showing what makes a kind of media, and the menu of every model it could be, by provider. With nothing
- * connected that makes it, it names the providers that would and goes to connect one.
- */
-function ModelPicker({ label, choices, current, busy, could, onConnect, onPick }: {
-  label: string;
-  choices: Choice[];
-  current: Choice | null;
-  busy: boolean;
-  /** the names of the providers, not connected, that make this kind of media */
-  could: string[];
-  onConnect: () => void;
-  onPick: (choice: Choice | null) => void;
-}) {
-  const t = useT();
-  const language = useLanguage();
-  const [open, setOpen] = React.useState(false);
-  const list = React.useRef<HTMLDivElement>(null);
-  const empty = choices.length === 0;
-  const groups = choices.reduce<{ provider: string; name: string; choices: Choice[] }[]>((all, c) => {
+/** Choices by provider, in the order given. */
+function groupsOf(choices: Choice[]): Group[] {
+  return choices.reduce<Group[]>((all, c) => {
     const group = all.find((g) => g.provider === c.provider);
     if (group) group.choices.push(c); else all.push({ provider: c.provider, name: c.providerName, choices: [c] });
     return all;
   }, []);
+}
+
+/** A provider's models in the menu; `connect`: it is not connected yet, and how it would be. */
+interface Group {
+  provider: string;
+  name: string;
+  connect?: string;
+  choices: Choice[];
+}
+
+/**
+ * The button showing what makes a kind of media, and the menu of every model it could be: the connected providers'
+ * first, then the others', each saying how it connects.
+ */
+function ModelPicker({ label, groups, current, busy, onPick }: {
+  label: string;
+  groups: Group[];
+  current: Choice | null;
+  busy: boolean;
+  onPick: (choice: Choice | null) => void;
+}) {
+  const t = useT();
+  const [open, setOpen] = React.useState(false);
+  const list = React.useRef<HTMLDivElement>(null);
+  const ready = groups.filter((g) => !g.connect);
+  const toConnect = groups.filter((g) => g.connect);
 
   /* the menu opens on the chosen one; the arrow keys move between them */
   React.useEffect(() => {
@@ -127,32 +170,29 @@ function ModelPicker({ label, choices, current, busy, could, onConnect, onPick }
   };
   const pick = (choice: Choice | null) => { setOpen(false); if (choice?.value !== current?.value) onPick(choice); };
 
-  const option = (choice: Choice | null, text: string) => {
+  const option = (choice: Choice | null, text: string, muted = false) => {
     const selected = (choice?.value ?? '') === (current?.value ?? '');
     return (
       <button key={choice?.value ?? ''} type="button" role="option" aria-selected={selected} onClick={() => pick(choice)}
-        className="flex h-9 w-full items-center gap-2 rounded-[6px] px-2 text-left text-[14.5px] text-[var(--text)] outline-none hover:bg-[var(--bg-hover)] focus-visible:bg-[var(--bg-hover)]">
+        className={`flex h-9 w-full items-center gap-2 rounded-[6px] px-2 text-left text-[14.5px] outline-none hover:bg-[var(--bg-hover)] focus-visible:bg-[var(--bg-hover)] ${muted ? 'text-[var(--text-muted)]' : 'text-[var(--text)]'}`}>
         <span className="min-w-0 flex-1 truncate">{text}</span>
         {selected ? <Check size={17} className="shrink-0 text-[var(--text-muted)]" /> : null}
       </button>
     );
   };
+  const heading = (group: Group) => (
+    <div className="flex items-center gap-1.5 px-2 pb-1 pt-1.5 text-[14px] font-medium text-[var(--text-muted)]">
+      <ProviderMark id={group.provider} size={15} /><span className="min-w-0 flex-1 truncate">{group.name}</span>
+      {group.connect ? <span className="shrink-0 text-[13px] font-normal text-[var(--text-faint)]">{group.connect}</span> : null}
+    </div>
+  );
 
-  const connect = could.length
-    ? t('settings.models.connectNamed').replace('{names}', new Intl.ListFormat(language, { type: 'disjunction' }).format(could))
-    : t('settings.models.goConnect');
-  const trigger = empty ? (
-    <button type="button" aria-label={`${label}: ${connect}`} title={connect} disabled={busy} onClick={onConnect}
-      className="flex h-10 w-[280px] items-center gap-2 rounded-[8px] border border-[var(--border)] px-3 text-left text-[14.5px] text-[var(--text-muted)] transition hover:border-[var(--border-strong)] hover:text-[var(--text)] disabled:opacity-60">
-      <span className="min-w-0 flex-1 truncate">{connect}</span>
-      <ChevronRight size={15} className="shrink-0" />
-    </button>
-  ) : (
+  const trigger = (
     <button type="button" aria-label={label} aria-haspopup="listbox" aria-expanded={open} disabled={busy}
       className={`flex h-10 w-[280px] items-center gap-2 rounded-[8px] border px-3 text-left text-[14.5px] text-[var(--text)] transition disabled:opacity-60 ${open ? 'border-[var(--text-muted)]' : 'border-[var(--border)] hover:border-[var(--border-strong)]'}`}>
       {current ? <ProviderMark id={current.provider} size={15} /> : null}
       <span className={`min-w-0 flex-1 truncate ${current ? '' : 'text-[var(--text-muted)]'}`}>
-        {current ? `${current.providerName} · ${current.name}` : t('settings.models.none')}
+        {current ? `${current.providerName} · ${current.name}` : t('settings.models.choose')}
       </span>
       <ChevronDown size={15} className="shrink-0 text-[var(--text-muted)]" />
     </button>
@@ -160,18 +200,27 @@ function ModelPicker({ label, choices, current, busy, could, onConnect, onPick }
 
   return (
     <div className="shrink-0">
-      <Popover open={open && !empty} onOpenChange={setOpen} placement="auto" align="end" layer={10060} trigger={trigger}>
+      <Popover open={open} onOpenChange={setOpen} placement="auto" align="end" layer={10060} trigger={trigger}>
         <div ref={list} role="listbox" aria-label={label} onKeyDown={onKeyDown}
-          className="max-h-[min(360px,var(--popover-max-h))] w-[288px] overflow-y-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-1 shadow-[var(--shadow-lg)]">
-          {groups.map((group) => (
+          className="max-h-[min(420px,var(--popover-max-h))] w-[320px] overflow-y-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-1 shadow-[var(--shadow-lg)]">
+          {ready.map((group) => (
             <div key={group.provider} className="mb-1" role="group" aria-label={group.name}>
-              <div className="flex items-center gap-1.5 px-2 pb-1 pt-1.5 text-[14px] font-medium text-[var(--text-muted)]">
-                <ProviderMark id={group.provider} size={15} />{group.name}
-              </div>
+              {heading(group)}
               {group.choices.map((c) => option(c, c.name))}
             </div>
           ))}
-          <div className="border-t border-[var(--border-soft)] pt-1">{option(null, t('settings.models.none'))}</div>
+          {current ? <div className="border-t border-[var(--border-soft)] py-1">{option(null, t('settings.models.none'))}</div> : null}
+          {toConnect.length ? (
+            <div className={ready.length || current ? 'border-t border-[var(--border-soft)] pt-1' : ''}>
+              <div className="px-2 pb-0.5 pt-1.5 text-[12.5px] font-medium uppercase tracking-[0.04em] text-[var(--text-faint)]">{t('settings.models.toConnect')}</div>
+              {toConnect.map((group) => (
+                <div key={group.provider} className="mb-1" role="group" aria-label={`${group.name}: ${group.connect}`}>
+                  {heading(group)}
+                  {group.choices.map((c) => option(c, c.name, true))}
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
       </Popover>
     </div>

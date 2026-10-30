@@ -2,4 +2,4 @@
 "openfilm": minor
 ---
 
-OpenFilm is one more provider in Settings → Providers: a key made in your OpenFilm account makes voice-over, sound, music, transcripts, pictures, video, translations and web searches with the models of the other providers, paid from your OpenFilm balance.
+OpenFilm is one more provider: signed in to your OpenFilm account, it makes voice-over, sound, music, transcripts, pictures and video with other providers' models, paid from your OpenFilm balance. Which models it offers comes from the service itself, so it lists only what it can make now.

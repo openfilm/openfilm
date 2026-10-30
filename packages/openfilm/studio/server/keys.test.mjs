@@ -7,6 +7,9 @@ import { changeSettings, cleanKey, modelFor, providerKey, providersFile, readSet
 import { listProviders } from './providers/index.mjs';
 import { startStudio } from './server.mjs';
 
+/* OpenFilm's service is asked what it offers: nowhere here (a port that refuses at once) */
+process.env.OPENFILM_API_URL ??= 'http://127.0.0.1:9';
+
 const KEY = 'xi-secret-key-abcdef1234';
 let studio;
 const opened = [];

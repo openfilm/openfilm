@@ -1,13 +1,13 @@
 /**
  * Settings, opened from the logo at the top left: a search and the sections in groups on the left, the section on the
  * right as a page of titled groups. General (the theme and the language), Agents (in an app with a chat: the agents
- * it can use), Providers (the person's own keys for media services), Models (which provider and model makes each kind
- * of media), the keyboard shortcuts, Advanced and Developer; the search finds a section by any phrase on it. At the
+ * it can use), Services (which model makes each kind of media, and the services connected for it), the keyboard
+ * shortcuts, Advanced and Developer; the search finds a section by any phrase on it. At the
  * foot of the nav, quietly, where OpenFilm lives: its code, the examples and the website.
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { X, Settings2, Keyboard, Sun, Moon, Monitor, Plug, Boxes, Bot, Search, SquareTerminal, Loader2, SlidersHorizontal } from 'lucide-react';
+import { X, Settings2, Keyboard, Sun, Moon, Monitor, Boxes, Bot, Search, SquareTerminal, Loader2, SlidersHorizontal } from 'lucide-react';
 import { LANGUAGES, phrasesUnder, useLanguage, useLanguageChoice, useT, type LanguageChoice } from '@/i18n';
 import { studioHost, type HostDeveloper, type HostUpdateState } from '@/lib/host';
 import { showWhatsNew } from '@/lib/whats-new';
@@ -18,7 +18,6 @@ import { api, type StudioPrefs, type StudioVersion } from '@/api';
 import { AgentsSection } from './AgentsSection';
 import { DiagnosticsGroup } from './DiagnosticsGroup';
 import { ModelsSection } from './ModelsSection';
-import { ProvidersSection } from './ProvidersSection';
 import { SettingsSelect } from './SettingsSelect';
 import { ShortcutsSection } from './ShortcutsSection';
 import { SettingsButton, SettingsGroup, SettingsItem, SettingsPage, SettingsSegmented, SettingsSwitch } from './ui';
@@ -26,12 +25,12 @@ import { useThemeMode, type ThemeMode } from './theme';
 import { StorageGroup } from './StorageGroup';
 import { LARGE_DIALOG_SIZE } from '../dialog-chrome';
 
-export type SettingsSection = 'general' | 'agents' | 'providers' | 'models' | 'developer' | 'shortcuts' | 'advanced';
+export type SettingsSection = 'general' | 'agents' | 'models' | 'developer' | 'shortcuts' | 'advanced';
 
 /* the nav, in groups: what OpenFilm does, then help (Agents only inside an app with a chat: lib/host.ts `agents`;
    Advanced for what is already set for the best experience; Developer always, for its diagnostics) */
 const NAV: Array<{ group: 'settings' | 'help'; sections: SettingsSection[] }> = [
-  { group: 'settings', sections: ['general', ...(studioHost?.agents ? ['agents' as const] : []), 'providers', 'models'] },
+  { group: 'settings', sections: ['general', ...(studioHost?.agents ? ['agents' as const] : []), 'models'] },
   { group: 'help', sections: ['shortcuts', 'advanced', 'developer'] },
 ];
 
@@ -45,7 +44,6 @@ const LINKS = [
 const SECTION_ICON: Record<SettingsSection, React.ReactNode> = {
   general: <Settings2 size={18} strokeWidth={1.75} />,
   agents: <Bot size={18} strokeWidth={1.75} />,
-  providers: <Plug size={18} strokeWidth={1.75} />,
   models: <Boxes size={18} strokeWidth={1.75} />,
   developer: <SquareTerminal size={18} strokeWidth={1.75} />,
   shortcuts: <Keyboard size={18} strokeWidth={1.75} />,
@@ -56,8 +54,7 @@ const SECTION_ICON: Record<SettingsSection, React.ReactNode> = {
 const SECTION_WORDS: Record<SettingsSection, string | string[]> = {
   general: ['settings.appearance', 'settings.storage'],
   agents: 'settings.agents',
-  providers: 'settings.providers',
-  models: 'settings.models',
+  models: ['settings.models', 'settings.providers'],
   developer: ['settings.developer', 'settings.report'],
   shortcuts: 'settings.shortcuts',
   advanced: ['settings.advanced', 'settings.versions', 'settings.playback'],
@@ -192,8 +189,7 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
             {showing ? <h2 id="settings-title" className="mb-7 text-[22px] font-semibold tracking-[-0.015em] text-[var(--text)]">{t(`settings.sections.${showing}`)}</h2> : null}
             {showing === 'general' && <GeneralSection />}
             {showing === 'agents' && <AgentsSection />}
-            {showing === 'providers' && <ProvidersSection />}
-            {showing === 'models' && <ModelsSection onConnect={() => { setQuery(''); setSection('providers'); }} />}
+            {showing === 'models' && <ModelsSection />}
             {showing === 'developer' && <DeveloperSection />}
             {showing === 'shortcuts' && <ShortcutsSection />}
             {showing === 'advanced' && <AdvancedSection />}

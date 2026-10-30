@@ -29,7 +29,7 @@ export async function call(service, url, init, ctx) {
   /* with no key (a keyless provider) there is nothing to blank out */
   const reason = (ctx.key ? reasonOf(text).split(ctx.key).join('•••') : reasonOf(text)).slice(0, 500);
   if (PAID_PLAN.test(text)) throw new Error(`${service} needs a paid plan for this (${res.status})${reason ? `: ${reason}` : ''}`);
-  if (res.status === 401 || res.status === 403) throw new Error(`${service} did not accept your key (${res.status}). Check it in Studio: Settings (the OpenFilm logo at the top left) → Providers.`);
+  if (res.status === 401 || res.status === 403) throw new Error(`${service} did not accept your key (${res.status}). Check it in Studio: Settings (the OpenFilm logo at the top left) → Services.`);
   throw new Error(`${service} answered ${res.status}${reason ? `: ${reason}` : ''}`);
 }
 

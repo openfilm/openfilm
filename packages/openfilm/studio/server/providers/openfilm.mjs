@@ -1,64 +1,53 @@
 // @ts-check
 /**
  * OpenFilm, connected by signing in to the person's OpenFilm account (`signIn`, sign-in.mjs; a key made at
- * openfilm.dev/account, or OPENFILM_API_KEY, works too): the models of the other providers here, run by OpenFilm's
- * service with its keys and paid from the person's OpenFilm balance. A model is `<provider>/<its model>`,
- * e.g. `elevenlabs/eleven_v4`. One run is one `POST /v1/media/run`: the verb, the model, the flags, and the project
- * files the flags name; the answer is what that provider made, as it made it. It runs asynchronously (a clip takes
- * minutes): a 202, then `GET /v1/media/run?key=` until it is done.
+ * openfilm.dev/account, or OPENFILM_API_KEY, works too): media made with other providers' models, run by OpenFilm's
+ * service with its keys and paid from the person's OpenFilm balance. What it offers is the service's to say
+ * (`GET /v1/media/models`, read again every few minutes by `refresh`): only models it can run now, each
+ * `<provider>/<its model>`, e.g. `elevenlabs/eleven_v4`. One run is one `POST /v1/media/run`: the verb, the model, the
+ * flags, and the project files the flags name; the answer is what that provider made, as it made it. It runs
+ * asynchronously (a clip takes minutes): a 202, then `GET /v1/media/run?key=` until it is done.
  */
 import { randomUUID } from 'node:crypto';
-import { billedBy, call, modelOf, serviceUrl, sleep } from './common.mjs';
+import { billedBy, call, serviceUrl, sleep } from './common.mjs';
 
-/** @typedef {import('./contract.mjs').Provider} Provider @typedef {import('./contract.mjs').RunContext} RunContext */
+/**
+ * @typedef {import('./contract.mjs').Provider} Provider @typedef {import('./contract.mjs').RunContext} RunContext
+ * @typedef {import('./contract.mjs').Verb} Verb
+ */
 
 const NAME = 'OpenFilm';
 /** How often a run that is still going is asked about (tests make it short). */
 export const polling = { ms: 3000 };
 
-/** @param {string} id @param {string} name */
-const m = (id, name) => ({ id, name });
+/** The kinds of media the service may offer; listing voices goes with voice-over. */
+const KINDS = /** @type {Verb[]} */ (['tts', 'sfx', 'music', 'asr', 'image-search', 'image', 'video']);
+/** How long what the service offers is taken as it was, and how soon to ask again when it could not be reached. */
+const FRESH_MS = 5 * 60_000;
+const RETRY_MS = 30_000;
 
-/** What it makes each kind of media with, its default first. */
-const MODELS = {
-  tts: [
-    m('elevenlabs/eleven_multilingual_v2', 'ElevenLabs Multilingual v2'),
-    m('elevenlabs/eleven_v4', 'ElevenLabs Eleven v4'),
-    m('elevenlabs/eleven_flash_v2_5', 'ElevenLabs Flash v2.5'),
-  ],
-  sfx: [
-    m('elevenlabs/eleven_text_to_sound_v2', 'ElevenLabs Sound Effects v2'),
-    m('fal/fal-ai/stable-audio-25/text-to-audio', 'Stable Audio 2.5'),
-  ],
-  music: [
-    m('elevenlabs/music_v2_5', 'ElevenLabs Music v2.5'),
-    m('fal/fal-ai/lyria2', 'Lyria 2'),
-    m('fal/fal-ai/stable-audio-25/text-to-audio', 'Stable Audio 2.5'),
-  ],
-  asr: [
-    m('elevenlabs/scribe_v2', 'ElevenLabs Scribe v2'),
-    m('google/gemini-3.5-transcribe', 'Gemini 3.5 Transcribe'),
-    m('openai/whisper-1', 'Whisper'),
-  ],
-  image: [
-    m('google/gemini-3.1-flash-image', 'Gemini 3.1 Flash Image'),
-    m('google/gemini-3-pro-image', 'Nano Banana Pro'),
-    m('openai/gpt-image-2', 'GPT Image 2'),
-    m('fal/fal-ai/flux-2-pro', 'FLUX.2 [pro]'),
-  ],
-  video: [
-    m('fal/seedance-2.0-fast', 'Seedance 2.0 Fast'),
-    m('fal/seedance-2.0', 'Seedance 2.0'),
-    m('fal/kling-3.0-standard', 'Kling 3.0 Standard'),
-    m('fal/kling-3.0-pro', 'Kling 3.0 Pro'),
-  ],
-  translate: [
-    m('google/gemini-3.8-flash', 'Gemini 3.8 Flash'),
-    m('openai/gpt-6.1-sol', 'GPT-6.1 Sol'),
-  ],
-  'image-search': [m('pexels/photos', 'Pexels')],
-  'web-search': [m('tavily/basic', 'Tavily Search'), m('tavily/advanced', 'Tavily Advanced Search')],
-};
+/** What it makes each kind of media with, its default first, as the service last said (changed in place). */
+const MODELS = /** @type {Partial<Record<Verb, { id: string, name: string }[]>>} */ ({});
+/** The verbs of those kinds (changed in place). */
+const VERBS = /** @type {Verb[]} */ ([]);
+let askAfter = 0;
+/** @type {Promise<void> | null} */
+let asking = null;
+
+/** What the service offers, taken in: the kinds it knows, each model an id and a name. */
+function take(/** @type {unknown} */ offer) {
+  const models = /** @type {Record<string, unknown>} */ (offer && typeof offer === 'object' ? offer : {});
+  for (const kind of Object.keys(MODELS)) delete MODELS[/** @type {Verb} */ (kind)];
+  VERBS.length = 0;
+  for (const kind of KINDS) {
+    const list = (Array.isArray(models[kind]) ? models[kind] : [])
+      .filter((m) => m && typeof m.id === 'string' && typeof m.name === 'string')
+      .map((m) => ({ id: m.id, name: m.name }));
+    if (!list.length) continue;
+    MODELS[kind] = list;
+    VERBS.push(kind, ...(kind === 'tts' ? /** @type {Verb[]} */ (['voice']) : []));
+  }
+}
 
 /** A flag's value that may name a project file: a short relative path with an extension, nothing else. */
 const PATHLIKE = /^(?![/\\])(?!.*\.\.)[^\s:*?"<>|]{1,240}\.[A-Za-z0-9]{1,5}$/;
@@ -81,7 +70,8 @@ async function inputsOf(args, ctx) {
 }
 
 /** Where the service is: openfilm.dev, or OPENFILM_API_URL (a local one, for developing it). */
-const SITE = serviceUrl('API', 'https://openfilm.dev');
+const service = () => serviceUrl('API', 'https://openfilm.dev');
+const SITE = service();
 const ACCOUNT = `${SITE}/account`;
 
 /** @type {Provider} */
@@ -92,19 +82,36 @@ export default {
   keysUrl: ACCOUNT,
   billingUrl: ACCOUNT,
   signIn: { page: `${ACCOUNT}/connect`, token: `${SITE}/api/connect/token`, revoke: `${SITE}/api/connect/revoke` },
-  verbs: ['voice', 'tts', 'sfx', 'music', 'asr', 'image-search', 'image', 'video', 'translate', 'web-search', 'web-fetch'],
+  verbs: VERBS,
   models: MODELS,
+  refresh({ force = false } = {}) {
+    if (!force && Date.now() < askAfter) return Promise.resolve();
+    asking ??= (async () => {
+      try {
+        const res = await fetch(`${service()}/v1/media/models`, { signal: AbortSignal.timeout(5000) });
+        if (!res.ok) throw new Error(String(res.status));
+        take((/** @type {{ models?: unknown }} */ (await res.json())).models);
+        askAfter = Date.now() + FRESH_MS;
+      } catch {
+        /* unreachable: what it offered last stays, and it is asked again soon */
+        askAfter = Date.now() + RETRY_MS;
+      } finally {
+        asking = null;
+      }
+    })();
+    return asking;
+  },
   /* every model it runs takes MP3 speech, and it is the smallest to send */
   speechFormat: 'mp3',
   checkKey(key) {
     if (!key.startsWith('ofk_')) throw new Error('An OpenFilm key starts with ofk_: make one at openfilm.dev/account.');
   },
   async run(verb, args, ctx) {
-    const base = serviceUrl('API', 'https://openfilm.dev');
+    const base = service();
     const headers = { authorization: `Bearer ${ctx.key}` };
     const runKey = randomUUID();
-    const kind = verb === 'voice' ? 'tts' : verb === 'web-fetch' ? 'web-search' : verb;
-    const body = { verb, model: modelOf(MODELS, /** @type {import('./contract.mjs').Verb} */ (kind), ctx), args, inputs: await inputsOf(args, ctx) };
+    /* no model chosen: the service's default for that kind */
+    const body = { verb, ...(ctx.model ? { model: ctx.model } : {}), args, inputs: await inputsOf(args, ctx) };
     let res = await call(NAME, `${base}/v1/media/run`, {
       method: 'POST',
       headers: { ...headers, 'content-type': 'application/json', 'idempotency-key': runKey, prefer: 'respond-async' },

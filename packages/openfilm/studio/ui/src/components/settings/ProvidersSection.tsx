@@ -1,41 +1,44 @@
 /**
- * Settings → Providers: the services `openfilm get` gets voices, music, sound effects, transcripts, images, video and
- * web searches from. The recommended ones first (lib/providers RECOMMENDED_PROVIDERS), the rest under More, folded
- * until opened (open from the start when one of them is connected).
+ * The services connected under Settings → Services (ServicesAccounts), and connecting one more: what
+ * `openfilm get` gets voices, music, sound effects, transcripts, images, video and web searches from. A service
+ * connected is listed with what can be done with it; Connect a service opens the others, the recommended ones first
+ * (lib/providers RECOMMENDED_PROVIDERS), the rest under More, folded until opened.
  *
- * ElevenLabs, OpenAI, Google, Microsoft Azure, fal.ai, Groq, Pexels, Pixabay, Brave Search and Tavily connect with the person's
+ * ElevenLabs, OpenAI, Google, Microsoft Azure, fal.ai, OpenRouter, Groq, Pexels, Pixabay, Brave Search and Tavily connect with the person's
  * own key, which pays that service directly when it charges (a key in the environment shows as such and stays there).
  * OpenFilm connects by signing in to the person's OpenFilm account in their browser (SignInRow).
  * Keenable also works without one: Connect connects it at once, and a key can be added after, for higher limits.
- * Which of them makes each kind of media, and with which model, is Settings → Services, with the person's own custom
- * services (CustomServices).
+ * A service can also be connected from a kind of media's menu, by picking one of its models (ModelsSection).
  */
 import React from 'react';
 import { ChevronRight, CircleHelp, ExternalLink, LogIn, Plus } from 'lucide-react';
 import { useT } from '@/i18n';
-import { AZURE_SERVICES, azureKey, providerGroups, useProviders, type OwnProvider, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
+import { AZURE_SERVICES, azureKey, providerGroups, type OwnProvider, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
 import { Tooltip } from '../Tooltip';
 import { customProblem } from './CustomServices';
 import { ProviderMark } from './ProviderMark';
-import { SettingsButton, SettingsField, SettingsGroup, SettingsInset, SettingsItem, SettingsPage, SettingsStatus, settingsError, settingsLink } from './ui';
+import { SettingsButton, SettingsField, SettingsGroup, SettingsInset, SettingsItem, SettingsStatus, settingsError, settingsLink } from './ui';
 
-/** What a provider can make, in the order Models lists it (listing voices goes without saying with voice-over). */
+/** What a provider can make, in the order Services lists it (listing voices goes without saying with voice-over). */
 const ABILITY_ORDER: ProviderVerb[] = ['tts', 'music', 'sfx', 'asr', 'image', 'image-search', 'video', 'translate', 'web-search'];
 
-
-export function ProvidersSection() {
+/**
+ * The services connected, and the others to connect: folded under Connect a service while one is connected, listed
+ * straight away while none is.
+ */
+export function ServicesAccounts({ hook }: { hook: ProvidersHook }) {
   const t = useT();
-  const providers = useProviders();
-  const rows = providers.state?.providers ?? [];
-  const groups = providerGroups(rows);
+  const rows = hook.state?.providers ?? [];
+  const connected = rows.filter((p) => p.source || hook.state?.signingIn.provider === p.id);
+  const groups = providerGroups(rows.filter((p) => !connected.includes(p)));
+  const [adding, setAdding] = React.useState(false);
   /* folded until opened; a refused key under More opens it, so its reason shows */
   const [moreOpen, setMoreOpen] = React.useState<boolean | null>(null);
-  const showMore = moreOpen ?? (groups.open || groups.more.some((p) => p.id === providers.problemFor));
-
-  return (
-    <SettingsPage note={t('settings.providers.desc')}>
-      <SettingsGroup title={t('settings.providers.groupRecommended')} footnote={t('settings.providers.keyNote')}>
-        {groups.recommended.map((provider) => <ProviderRow key={provider.id} provider={provider} hook={providers} />)}
+  const showMore = moreOpen ?? groups.more.some((p) => p.id === hook.problemFor);
+  const others = (
+    <>
+      <SettingsGroup title={t('settings.providers.groupRecommended')} footnote={connected.length ? null : t('settings.providers.keyNote')}>
+        {groups.recommended.map((provider) => <ProviderRow key={provider.id} provider={provider} hook={hook} />)}
       </SettingsGroup>
       {groups.more.length ? (
         <SettingsGroup title={(
@@ -46,13 +49,31 @@ export function ProvidersSection() {
             <span className="text-[var(--text-faint)]">{groups.more.length}</span>
           </button>
         )}>
-          {showMore ? groups.more.map((provider) => <ProviderRow key={provider.id} provider={provider} hook={providers} />) : null}
+          {showMore ? groups.more.map((provider) => <ProviderRow key={provider.id} provider={provider} hook={hook} />) : null}
         </SettingsGroup>
       ) : null}
+    </>
+  );
+
+  return (
+    <>
+      {connected.length ? (
+        <SettingsGroup title={t('settings.providers.groupConnected')} footnote={t('settings.providers.keyNote')}>
+          {connected.map((provider) => <ProviderRow key={provider.id} provider={provider} hook={hook} />)}
+          <div className="py-3">
+            <button type="button" aria-expanded={adding} onClick={() => setAdding(!adding)}
+              className="inline-flex items-center gap-1.5 rounded-md text-[15px] text-[var(--text-muted)] transition hover:text-[var(--text)]">
+              <ChevronRight size={15} className={`transition-transform ${adding ? 'rotate-90' : ''}`} aria-hidden />
+              {t('settings.providers.connectAnother')}
+            </button>
+          </div>
+        </SettingsGroup>
+      ) : null}
+      {hook.state && (!connected.length || adding) ? others : null}
       {/* a key that was refused says why under its own field (KeyRow), not down here past the list; a custom service's
-          under its form (Settings → Services) */}
-      {providers.problem && !rows.some((p) => p.id === providers.problemFor) && !customProblem(providers) ? <p className={settingsError}>{providers.problem}</p> : null}
-    </SettingsPage>
+          under its form */}
+      {hook.problem && !rows.some((p) => p.id === hook.problemFor) && !customProblem(hook) ? <p className={settingsError}>{hook.problem}</p> : null}
+    </>
   );
 }
 
@@ -84,9 +105,14 @@ function abilityPhrase(verbs: readonly ProviderVerb[], t: (key: string) => strin
   return words.length > 1 ? `${words.slice(0, -1).join(', ')} ${t('settings.providers.and')} ${words.at(-1)}` : words[0] ?? '';
 }
 
-/** A provider, connected the way it is: by signing in on its website, or with a key. */
-function ProviderRow({ provider, hook }: { provider: OwnProvider; hook: ProvidersHook }) {
-  return provider.signIn && provider.source !== 'env' ? <SignInRow provider={provider} hook={hook} /> : <KeyRow provider={provider} hook={hook} />;
+/**
+ * A provider, connected the way it is: by signing in on its website, or with a key. `asking`: its key's field open from
+ * the start (connecting it from a kind of media's menu), and `onClose` when it closes unsaved.
+ */
+export function ProviderRow({ provider, hook, asking = false, onClose }: { provider: OwnProvider; hook: ProvidersHook; asking?: boolean; onClose?: () => void }) {
+  return provider.signIn && provider.source !== 'env'
+    ? <SignInRow provider={provider} hook={hook} />
+    : <KeyRow provider={provider} hook={hook} asking={asking} onClose={onClose} />;
 }
 
 /**
@@ -129,9 +155,9 @@ function SignInRow({ provider, hook }: { provider: OwnProvider; hook: ProvidersH
  * A service paid with the person's own key: connected by pasting one (kept here, or read from the environment). One that
  * works without a key (`keyless`) connects with one click, and takes a key afterwards.
  */
-function KeyRow({ provider, hook }: { provider: OwnProvider; hook: ProvidersHook }) {
+function KeyRow({ provider, hook, asking, onClose }: { provider: OwnProvider; hook: ProvidersHook; asking: boolean; onClose?: () => void }) {
   const t = useT();
-  const [adding, setAdding] = React.useState(false);
+  const [adding, setAdding] = React.useState(asking);
   const [draft, setDraft] = React.useState('');
   /* Microsoft Azure: each service its own region and key (AZURE_SERVICES), kept as `<region>:<key>` */
   const azure = provider.id === 'azure';
@@ -142,10 +168,10 @@ function KeyRow({ provider, hook }: { provider: OwnProvider; hook: ProvidersHook
   const keyless = Boolean(provider.keyless);
   const keyWanted = !provider.source || (keyless && !provider.last4);
 
-  const close = () => { setAdding(false); setDraft(''); setRegion(''); };
+  const close = (saved = false) => { setAdding(false); setDraft(''); setRegion(''); if (!saved) onClose?.(); };
   const save = async () => {
     if (!key || saving) return;
-    if (await hook.saveKey(provider.id, key)) close();
+    if (await hook.saveKey(provider.id, key)) close(true);
   };
   const pasteLabel = azure ? t('settings.providers.key') : t('settings.providers.pasteKey').replaceAll('{name}', provider.name);
 
@@ -209,13 +235,13 @@ function KeyRow({ provider, hook }: { provider: OwnProvider; hook: ProvidersHook
                 aria-label={pasteLabel}
                 className="flex-1 font-mono placeholder:font-sans"
               />
-              <SettingsButton variant="quiet" onClick={close}>{t('settings.providers.cancel')}</SettingsButton>
+              <SettingsButton variant="quiet" onClick={() => close()}>{t('settings.providers.cancel')}</SettingsButton>
               <SettingsButton type="submit" variant="primary" disabled={!key || saving}>{t('settings.providers.save')}</SettingsButton>
             </div>
             {hook.problem && hook.problemFor === provider.id ? <p className={settingsError} role="alert">{hook.problem}</p> : null}
             {/* the environment has a key for it: connect with that one, nothing to paste */}
             {provider.envKey ? (
-              <button type="button" disabled={saving} onClick={() => void hook.useEnvKey(provider.id).then((ok) => { if (ok) close(); })} className={`${settingsLink} self-start text-[14.5px]`}>
+              <button type="button" disabled={saving} onClick={() => void hook.useEnvKey(provider.id).then((ok) => { if (ok) close(true); })} className={`${settingsLink} self-start text-[14.5px]`}>
                 {t('settings.providers.useEnv').replaceAll('{env}', provider.env)}
               </button>
             ) : null}
