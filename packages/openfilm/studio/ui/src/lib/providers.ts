@@ -24,6 +24,10 @@ export interface OwnProvider {
   /** the environment has a key for it, connected or not: connecting can use that one */
   envKey: boolean;
   last4: string | null;
+  /** connected by signing in on its website instead of pasting a key (OpenFilm) */
+  signIn: boolean;
+  /** signed in: the account's email */
+  account: string | null;
 }
 
 /**
@@ -50,6 +54,8 @@ export interface ProvidersState {
   use: Record<string, string | null>;
   /** the model each kind of media is made with */
   model: Record<string, string | null>;
+  /** a sign-in waiting for the person's browser (`provider`), and why the last one failed */
+  signingIn: { provider: string | null; error: string | null; errorFor: string | null };
 }
 
 /** The providers, not connected, that would make `verb` once connected, by name (as every list of providers is). */
@@ -111,6 +117,9 @@ export interface ProvidersHook {
   saveKey: (id: string, key: string) => Promise<boolean>;
   removeKey: (id: string) => Promise<void>;
   useEnvKey: (id: string) => Promise<boolean>;
+  /** a provider with `signIn`: its website opened in the person's browser to sign in; `cancelSignIn` drops it */
+  signIn: (id: string) => Promise<void>;
+  cancelSignIn: (id: string) => Promise<void>;
   /** who makes that kind of media: a provider id with its model, or '' (none) */
   choose: (verb: ProviderVerb, provider: string, pick?: { model?: string }) => Promise<void>;
   /** one of the person's own services added (id null) or changed; resolves whether it was kept */
@@ -143,6 +152,14 @@ export function useProviders(): ProvidersHook {
     return () => { live = false; window.clearTimeout(timer); };
   }, []);
 
+  /* a sign-in finishes in the browser: asked again every couple of seconds while it waits */
+  const waiting = state?.signingIn?.provider ?? null;
+  React.useEffect(() => {
+    if (!waiting) return;
+    const timer = window.setInterval(() => { void call('').then(setState, () => {}); }, 2000);
+    return () => window.clearInterval(timer);
+  }, [waiting]);
+
   const change = React.useCallback(async (what: string, path: string, init: { method: string; json?: unknown }) => {
     setBusy(what);
     setProblem(null);
@@ -156,6 +173,8 @@ export function useProviders(): ProvidersHook {
     saveKey: (id, key) => change(id, `/${encodeURIComponent(id)}/key`, { method: 'PUT', json: { key } }),
     removeKey: async (id) => { await change(id, `/${encodeURIComponent(id)}/key`, { method: 'DELETE' }); },
     useEnvKey: (id) => change(id, `/${encodeURIComponent(id)}/key`, { method: 'PUT', json: { env: true } }),
+    signIn: async (id) => { await change(id, `/${encodeURIComponent(id)}/sign-in`, { method: 'POST' }); },
+    cancelSignIn: async (id) => { await change(id, `/${encodeURIComponent(id)}/sign-in/cancel`, { method: 'POST' }); },
     choose: async (verb, provider, pick) => { await change(verb, '/use', { method: 'PUT', json: { verb, provider: provider || null, ...pick } }); },
     saveService: (id, fields) => change(id ?? 'custom', id ? `/custom/${encodeURIComponent(id)}` : '/custom', { method: id ? 'PUT' : 'POST', json: fields }),
     removeService: async (id) => { await change(id, `/custom/${encodeURIComponent(id)}`, { method: 'DELETE' }); },

@@ -5,7 +5,8 @@
  *
  * Kept in ~/.openfilm/providers.json, readable by this user only (0600, in a 0700 folder), written whole and atomically:
  *   { "keys": { "<provider id>": "<key>" }, "use": { "<verb>": "<provider id>" }, "model": { "<verb>": "<model id>" },
- *     "custom": [ the person's own services (custom-services.mjs), each with its key ] }
+ *     "custom": [ the person's own services (custom-services.mjs), each with its key ],
+ *     "accounts": { "<provider id>": "<email>" } (who a provider signed in to, sign-in.mjs, is connected as) }
  * A kind of media with no model (or one its provider no longer has) is made with the provider's first. Listing voices
  * goes with voice-over: same provider, same model.
  *
@@ -28,7 +29,7 @@ import { keptServices } from './custom-services.mjs';
  * `off`: the providers disconnected while the environment has a key for them (that key is not used). `custom`: the
  * person's own services.
  * @typedef {{ keys: Record<string, string>, use: Record<string, string>, model: Record<string, string>, off: string[],
- *   custom: import('./custom-services.mjs').CustomService[] }} ProviderSettings
+ *   custom: import('./custom-services.mjs').CustomService[], accounts: Record<string, string> }} ProviderSettings
  */
 
 /** Where the keys and choices are kept: ~/.openfilm/providers.json. */
@@ -50,8 +51,8 @@ export async function readSettings(file = providersFile()) {
     /* 'auto' was a choice once: it means none now */
     const use = Object.fromEntries(Object.entries(strings(raw.use)).filter(([, id]) => id !== 'auto'));
     const off = Array.isArray(raw.off) ? raw.off.filter((id) => typeof id === 'string') : [];
-    return /** @type {ProviderSettings} */ ({ keys: strings(raw.keys), use, model: strings(raw.model), off, custom: keptServices(raw.custom) });
-  } catch { return /** @type {ProviderSettings} */ ({ keys: {}, use: {}, model: {}, off: [], custom: [] }); }
+    return /** @type {ProviderSettings} */ ({ keys: strings(raw.keys), use, model: strings(raw.model), off, custom: keptServices(raw.custom), accounts: strings(raw.accounts) });
+  } catch { return /** @type {ProviderSettings} */ ({ keys: {}, use: {}, model: {}, off: [], custom: [], accounts: {} }); }
 }
 
 /**

@@ -78,6 +78,7 @@
  *   verbs: Verb[],
  *   models?: Partial<Record<Verb, { id: string, name: string }[]>>,
  *   checkKey?: (key: string) => void,
+ *   signIn?: import('../sign-in.mjs').SignIn,
  *   speechFormat?: 'mp3',
  *   run: (verb: Verb, args: Record<string, unknown>, ctx: RunContext) => Promise<RunResult>,
  * }} Provider
@@ -85,6 +86,8 @@
  * (Settings → Services shows "ElevenLabs · Multilingual v2").
  * `checkKey`: throws a sentence when a pasted key cannot work as it is (Azure's must carry its region), shown where it
  * is pasted instead of at the first run. Only for what the provider knows without calling anyone: it must not fetch.
+ * `signIn`: connected by signing in on the provider's website instead of pasting a key (sign-in.mjs); the key it
+ * gives is kept like a pasted one.
  * `billingUrl`: the provider's own page where the person tops up its balance. A run that fails because the account has
  * no balance left throws an Error with `code: 'balance'` (common.mjs `noBalance`), the same for every provider: the
  * person is told in Studio, with this page, and the agent is told to stop.

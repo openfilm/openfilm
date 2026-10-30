@@ -5,11 +5,12 @@
  *
  * ElevenLabs, OpenAI, Google, Microsoft Azure, fal.ai, Groq, Pexels, Pixabay, Brave Search and Tavily connect with the person's
  * own key, which pays that service directly when it charges (a key in the environment shows as such and stays there).
+ * OpenFilm connects by signing in to the person's OpenFilm account in their browser (SignInRow).
  * Which of them makes each kind of media, and with which model, is Settings → Services, with the person's own custom
  * services (CustomServices).
  */
 import React from 'react';
-import { ChevronRight, ExternalLink, Plus } from 'lucide-react';
+import { ChevronRight, ExternalLink, LogIn, Plus } from 'lucide-react';
 import { useT } from '@/i18n';
 import { AZURE_SERVICES, azureKey, providerGroups, useProviders, type OwnProvider, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
 import { customProblem } from './CustomServices';
@@ -32,7 +33,7 @@ export function ProvidersSection() {
   return (
     <SettingsPage note={t('settings.providers.desc')}>
       <SettingsGroup title={t('settings.providers.groupRecommended')} footnote={t('settings.providers.keyNote')}>
-        {groups.recommended.map((provider) => <KeyRow key={provider.id} provider={provider} hook={providers} />)}
+        {groups.recommended.map((provider) => <ProviderRow key={provider.id} provider={provider} hook={providers} />)}
       </SettingsGroup>
       {groups.more.length ? (
         <SettingsGroup title={(
@@ -43,7 +44,7 @@ export function ProvidersSection() {
             <span className="text-[var(--text-faint)]">{groups.more.length}</span>
           </button>
         )}>
-          {showMore ? groups.more.map((provider) => <KeyRow key={provider.id} provider={provider} hook={providers} />) : null}
+          {showMore ? groups.more.map((provider) => <ProviderRow key={provider.id} provider={provider} hook={providers} />) : null}
         </SettingsGroup>
       ) : null}
       {/* a key that was refused says why under its own field (KeyRow), not down here past the list; a custom service's
@@ -79,6 +80,47 @@ function Connected({ children }: { children?: React.ReactNode }) {
 function abilityPhrase(verbs: readonly ProviderVerb[], t: (key: string) => string) {
   const words = verbs.map((v, i) => (i ? t(`settings.providers.verbs.${v}`).toLowerCase() : t(`settings.providers.verbs.${v}`)));
   return words.length > 1 ? `${words.slice(0, -1).join(', ')} ${t('settings.providers.and')} ${words.at(-1)}` : words[0] ?? '';
+}
+
+/** A provider, connected the way it is: by signing in on its website, or with a key. */
+function ProviderRow({ provider, hook }: { provider: OwnProvider; hook: ProvidersHook }) {
+  return provider.signIn && provider.source !== 'env' ? <SignInRow provider={provider} hook={hook} /> : <KeyRow provider={provider} hook={hook} />;
+}
+
+/**
+ * A provider connected by signing in to the person's account on its website, in their browser: signed in as their
+ * email, waiting for the browser (with a way to stop waiting), or not yet.
+ */
+function SignInRow({ provider, hook }: { provider: OwnProvider; hook: ProvidersHook }) {
+  const t = useT();
+  const busy = hook.busy === provider.id;
+  const signing = hook.state?.signingIn;
+  const waiting = signing?.provider === provider.id;
+  const problem = (hook.problemFor === provider.id ? hook.problem : null) ?? (signing?.errorFor === provider.id ? signing.error : null);
+  return (
+    <Row
+      id={provider.id}
+      name={provider.name}
+      badge={provider.source ? <Connected>{provider.account ? <span className="text-[var(--text-faint)]">{provider.account}</span> : null}</Connected> : null}
+      action={provider.source ? (
+        <div className="flex items-center gap-1">
+          <a href={provider.keysUrl} target="_blank" rel="noreferrer" className={`${settingsLink} text-[14px]`}>
+            {t('settings.providers.manageAccount')}<ExternalLink size={12} />
+          </a>
+          <SettingsButton variant="quiet" disabled={busy} onClick={() => void hook.removeKey(provider.id)}>{t('settings.providers.signOut')}</SettingsButton>
+        </div>
+      ) : waiting ? (
+        <SettingsButton variant="quiet" disabled={busy} onClick={() => void hook.cancelSignIn(provider.id)}>{t('settings.providers.cancel')}</SettingsButton>
+      ) : (
+        <SettingsButton disabled={busy} onClick={() => void hook.signIn(provider.id)}>
+          <LogIn size={15} strokeWidth={2} />{t('settings.providers.signIn')}
+        </SettingsButton>
+      )}
+      below={problem && !provider.source ? <p className={`${settingsError} pl-[34px]`} role="alert">{problem}</p> : null}
+    >
+      {waiting ? t('settings.providers.signingIn') : abilityPhrase(ABILITY_ORDER.filter((v) => provider.verbs.includes(v)), t)}
+    </Row>
+  );
 }
 
 /** A service paid with the person's own key: connected by pasting one (kept here, or read from the environment). */

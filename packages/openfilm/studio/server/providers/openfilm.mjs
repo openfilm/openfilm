@@ -1,7 +1,8 @@
 // @ts-check
 /**
- * OpenFilm with the person's own key (made at openfilm.dev/account): the models of the other providers here, run by
- * OpenFilm's service with its keys and paid from the person's OpenFilm balance. A model is `<provider>/<its model>`,
+ * OpenFilm, connected by signing in to the person's OpenFilm account (`signIn`, sign-in.mjs; a key made at
+ * openfilm.dev/account, or OPENFILM_API_KEY, works too): the models of the other providers here, run by OpenFilm's
+ * service with its keys and paid from the person's OpenFilm balance. A model is `<provider>/<its model>`,
  * e.g. `elevenlabs/eleven_v4`. One run is one `POST /v1/media/run`: the verb, the model, the flags, and the project
  * files the flags name; the answer is what that provider made, as it made it. It runs asynchronously (a clip takes
  * minutes): a 202, then `GET /v1/media/run?key=` until it is done.
@@ -80,7 +81,8 @@ async function inputsOf(args, ctx) {
 }
 
 /** Where the service is: openfilm.dev, or OPENFILM_API_URL (a local one, for developing it). */
-const ACCOUNT = `${serviceUrl('API', 'https://openfilm.dev')}/account`;
+const SITE = serviceUrl('API', 'https://openfilm.dev');
+const ACCOUNT = `${SITE}/account`;
 
 /** @type {Provider} */
 export default {
@@ -89,6 +91,7 @@ export default {
   env: 'OPENFILM_API_KEY',
   keysUrl: ACCOUNT,
   billingUrl: ACCOUNT,
+  signIn: { page: `${ACCOUNT}/connect`, token: `${SITE}/api/connect/token`, revoke: `${SITE}/api/connect/revoke` },
   verbs: ['voice', 'tts', 'sfx', 'music', 'asr', 'image-search', 'image', 'video', 'translate', 'web-search', 'web-fetch'],
   models: MODELS,
   /* every model it runs takes MP3 speech, and it is the smallest to send */

@@ -15,6 +15,7 @@
 import { HttpError, json, readJson } from '../http.mjs';
 import { changeSettings, cleanKey, envKey, kindOf, modelFor, providerKey, readSettings } from '../keys.mjs';
 import { shownService, withService } from '../custom-services.mjs';
+import { cancelSignIn, signInState, signOut, startSignIn } from '../sign-in.mjs';
 import elevenlabs from './elevenlabs.mjs';
 import openai from './openai.mjs';
 import google from './google.mjs';
@@ -119,8 +120,13 @@ async function state() {
       const key = providerKey(p, settings);
       /* `envKey`: the environment has one (connected or not), so connecting can use it */
       const inEnv = envKey(p);
-      return { id: p.id, name: p.name, verbs: p.verbs, models: p.models ?? {}, keysUrl: p.keysUrl, env: key?.env ?? inEnv?.env ?? p.env, envKey: Boolean(inEnv), source: key?.source ?? null, last4: key ? key.key.slice(-4) : null };
+      return {
+        id: p.id, name: p.name, verbs: p.verbs, models: p.models ?? {}, keysUrl: p.keysUrl, env: key?.env ?? inEnv?.env ?? p.env, envKey: Boolean(inEnv), source: key?.source ?? null, last4: key ? key.key.slice(-4) : null,
+        /* connected by signing in (sign-in.mjs), and as whom */
+        signIn: Boolean(p.signIn), account: key?.source === 'file' ? settings.accounts[p.id] ?? null : null,
+      };
     }),
+    signingIn: signInState(),
     ...shownChoices(settings),
     custom: settings.custom.map(shownService),
   };
@@ -139,6 +145,12 @@ async function state() {
  *   PUT    /api/providers/use       { verb, provider, model? }  who serves that kind of media (an id, or null: none),
  *                                       and with which of its models (its first when none is given)
  *   POST   /api/providers/:id/billing → {}, the provider's own page for its balance opened in the person's browser
+ *   POST   /api/providers/:id/sign-in         a provider with `signIn`: its website opened in the person's browser to
+ *                                       sign in (sign-in.mjs); the state's `signingIn` says who is waiting, and why
+ *                                       the last one failed; the key it gives is kept like a pasted one, with
+ *                                       `account` (the email it is connected as)
+ *   POST   /api/providers/:id/sign-in/cancel  the waiting sign-in dropped
+ *   (DELETE /api/providers/:id/key signs a signed-in provider out: its key revoked there, then forgotten)
  *   POST   /api/providers/custom   { name, url, key?, auth?, note? }   one of the person's own services added
  *                                       (custom-services.mjs); the state has `custom: [{ id, name, url, auth, note,
  *                                       last4 }]`
@@ -170,6 +182,26 @@ export async function providersRoute(req, res, parts, { openBrowser }) {
     openBrowser(provider.billingUrl);
     return json(res, 200, {});
   }
+  if (parts[1] === 'sign-in' && req.method === 'POST' && parts.length <= 3) {
+    const provider = OWN.find((p) => p.id === parts[0]);
+    if (!provider?.signIn) throw new HttpError(404, 'no such provider to sign in to');
+    if (parts[2] === 'cancel') cancelSignIn();
+    else if (parts.length === 2) {
+      const id = provider.id;
+      await startSignIn(/** @type {Provider & { signIn: NonNullable<Provider['signIn']> }} */ (provider), {
+        openBrowser,
+        done: async ({ key, email }) => {
+          await changeSettings((s) => {
+            s.keys[id] = key;
+            if (email) s.accounts[id] = email; else delete s.accounts[id];
+            s.off = s.off.filter((x) => x !== id);
+            fill(s);
+          });
+        },
+      });
+    } else throw new HttpError(404, 'no such API');
+    return json(res, 200, await state());
+  }
   if (parts.length === 2 && parts[1] === 'key') {
     const provider = OWN.find((p) => p.id === parts[0]);
     if (!provider) throw new HttpError(404, 'no such provider');
@@ -187,8 +219,11 @@ export async function providersRoute(req, res, parts, { openBrowser }) {
       return json(res, 200, await state());
     }
     if (req.method === 'DELETE') {
+      const kept = (await readSettings()).keys[provider.id];
+      if (provider.signIn && kept) await signOut(/** @type {Provider & { signIn: NonNullable<Provider['signIn']> }} */ (provider), kept);
       await changeSettings((s) => {
         delete s.keys[provider.id];
+        delete s.accounts[provider.id];
         if (envKey(provider) && !s.off.includes(provider.id)) s.off.push(provider.id);
         /* what a provider that can no longer be used made goes to what else makes it */
         if (!providerKey(provider, s)) for (const [verb, id] of Object.entries(s.use)) if (id === provider.id) delete s.use[verb];
