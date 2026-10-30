@@ -186,7 +186,9 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
             className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-[8px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
             <X size={19} strokeWidth={1.75} />
           </button>
+          {/* one column in the middle of whatever room the window gives */}
           <div key={showing ?? 'none'} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-10 pb-12 pt-9">
+            <div className="mx-auto w-full max-w-[920px]">
             {showing ? <h2 id="settings-title" className="mb-7 text-[22px] font-semibold tracking-[-0.015em] text-[var(--text)]">{t(`settings.sections.${showing}`)}</h2> : null}
             {showing === 'general' && <GeneralSection />}
             {showing === 'agents' && <AgentsSection />}
@@ -195,6 +197,7 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
             {showing === 'developer' && <DeveloperSection />}
             {showing === 'shortcuts' && <ShortcutsSection />}
             {showing === 'advanced' && <AdvancedSection />}
+            </div>
           </div>
         </div>
       </div>

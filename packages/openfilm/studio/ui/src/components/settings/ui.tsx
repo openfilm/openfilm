@@ -9,7 +9,7 @@ import React from 'react';
 /** A section's body: an optional note, then its groups. */
 export function SettingsPage({ note, children }: { note?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="flex max-w-[880px] flex-col">
+    <div className="flex flex-col">
       {note ? <p className="mb-8 text-[14.5px] leading-relaxed text-[var(--text-muted)]">{note}</p> : null}
       {children}
     </div>
