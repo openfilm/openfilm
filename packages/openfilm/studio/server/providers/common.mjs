@@ -213,6 +213,33 @@ export const mp3Seconds = (/** @type {Uint8Array} */ bytes, kbps = 128) => round
 
 export const round = (/** @type {number} */ s) => Math.round(s * 1000) / 1000;
 
+/** How long an MP4 plays, from its movie header (`moov` › `mvhd`), null when it has none. */
+export function mp4Seconds(/** @type {Uint8Array} */ bytes) {
+  const b = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  /* the box called `type` between `from` and `to`, as [where its contents start, where it ends] */
+  const box = (/** @type {string} */ type, from = 0, to = b.length) => {
+    for (let at = from; at + 8 <= to;) {
+      let size = b.readUInt32BE(at), head = 8;
+      if (size === 1 && at + 16 <= to) { size = Number(b.readBigUInt64BE(at + 8)); head = 16; }
+      else if (size === 0) size = to - at;
+      if (size < head) return null;
+      if (b.toString('ascii', at + 4, at + 8) === type) return [at + head, Math.min(at + size, to)];
+      at += size;
+    }
+    return null;
+  };
+  const moov = box('moov');
+  const mvhd = moov && box('mvhd', moov[0], moov[1]);
+  if (!mvhd) return null;
+  const [at, end] = mvhd;
+  /* version 1 has 64-bit times; version 0, 32-bit ones */
+  const long = b[at] === 1;
+  if (at + (long ? 32 : 20) > end) return null;
+  const scale = b.readUInt32BE(at + (long ? 20 : 12));
+  const length = long ? Number(b.readBigUInt64BE(at + 24)) : b.readUInt32BE(at + 16);
+  return scale ? round(length / scale) : null;
+}
+
 /** A picture's pixel size from its header (PNG, JPEG, WebP), null when it is none of those. */
 export function imageSize(/** @type {Uint8Array} */ bytes) {
   const b = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
