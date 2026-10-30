@@ -183,10 +183,11 @@ export const api = {
   clearCover: (id: string) => call<{ cover: null }>(`${p(id)}/cover`, { method: 'DELETE' }).then(() => null),
   /**
    * Something made with the person's services, as `openfilm get <verb>` makes it (studio/server/get.mjs): answered
-   * once it is made, with its receipt (JSON, as text), or why not. A video asks the person first (SpendAsks). Not a
-   * write a reload waits for: it may take minutes, and aborting it (`signal`) stops it.
+   * once it is made, with its receipt (JSON, as text), or why not. A video asks the person first (SpendAsks), unless
+   * `yes`: the person asked for it themselves (a node's Make). Not a write a reload waits for: it may take minutes,
+   * and aborting it (`signal`) stops it.
    */
-  make: async (folder: string, verb: string, args: Record<string, unknown>, pick: { via?: string; model?: string }, signal?: AbortSignal) => {
+  make: async (folder: string, verb: string, args: Record<string, unknown>, pick: { via?: string; model?: string; yes?: boolean }, signal?: AbortSignal) => {
     const res = await fetch('/api/get', { method: 'POST', signal, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ folder, verb, args, ...pick }) });
     if (res.status === 401) markLocked();
     const body = await res.json().catch(() => ({})) as { ok?: boolean; text?: string; error?: string };

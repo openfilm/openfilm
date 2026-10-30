@@ -1385,6 +1385,7 @@ export const ja: Words = {
       },
     },
     cut: {
+      waiting: 'クリップをつなぐと編集へ送れます',
       count: '{n} クリップ',
       empty: '動画や画像のノードをつなぐと、つないだ順に編集へ送れます',
       how: 'つないだ順に、タイムラインの最後へ並べます',
@@ -1426,8 +1427,9 @@ export const ja: Words = {
       searchHere: '検索',
     },
     toolbar: {
+      chatShow: 'チャットを表示',
+      chatHide: 'チャットを隠す',
       add: 'ノードを追加',
-      ask: 'エージェントに聞く',
       map: 'ミニマップ',
     },
     keys: {
@@ -1445,13 +1447,10 @@ export const ja: Words = {
       actual: '実寸 100%',
     },
     outline: {
-      title: 'アセット管理',
-      board: 'キャンバス',
-      assets: '素材',
+      title: 'キャンバスの要素',
       close: '閉じる',
       search: '検索',
       count: '{n} ノード',
-      files: '{n} 素材',
       kind: {
         image: '画像',
         video: '動画',
@@ -1463,6 +1462,8 @@ export const ja: Words = {
     start: {
       title: 'ここで素材を作りましょう',
     },
+    loadFailed: 'キャンバスを読み込めませんでした',
+    reload: '再読み込み',
     make: {
       ai: 'AI生成',
       image: '画像',

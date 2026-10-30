@@ -106,10 +106,10 @@ test('what is wired into a node comes in its edges\' order; words and pictures, 
   const v = doc.nodes[5] as typeof doc.nodes[5] & { make: 'video' };
   assert.deepEqual(makeRequest(v, inputs, 'push'), {
     verb: 'video', unused: 0,
-    args: { out: 'push', prompt: 'cold blue dawn\n\na slow push in', duration: 5, 'input-reference': ['assets/a.png', 'assets/image/b.png'] },
+    args: { out: 'push', prompt: 'cold blue dawn\n\na slow push in', duration: '5', 'input-reference': ['assets/a.png', 'assets/image/b.png'] },
   });
   assert.deepEqual(makeRequest({ ...v, opts: { frames: true, sec: 99, ratio: '9:16' } }, inputs, 'push').args,
-    { out: 'push', prompt: 'cold blue dawn\n\na slow push in', duration: 30, 'aspect-ratio': '9:16', 'first-frame': 'assets/a.png', 'last-frame': 'assets/image/b.png' });
+    { out: 'push', prompt: 'cold blue dawn\n\na slow push in', duration: '30', 'aspect-ratio': '9:16', 'first-frame': 'assets/a.png', 'last-frame': 'assets/image/b.png' });
   assert.equal(makeRequest({ ...v, make: 'image' }, inputs, 'still').unused, 2, 'a picture is made from words only');
   assert.match(makeName({ ...v, prompt: 'A slow push-in, at dawn!' }, 36), /^a-slow-push-in-10$/);
   assert.match(makeName({ ...v, prompt: '黎明' }, 36), /^video-10$/);

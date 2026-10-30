@@ -6,10 +6,9 @@
 import React from 'react';
 import { useReactFlow, useStore } from '@xyflow/react';
 import {
-  Hand, Keyboard, LayoutTemplate, Map as MapIcon, MessageSquare, MousePointer2, PanelLeft, Plus, Redo2, Scissors, Search, Type as TypeIcon, Undo2, X,
+  Hand, Keyboard, LayoutTemplate, ListTree, Map as MapIcon, MousePointer2, PanelLeftClose, PanelLeftOpen, Plus, Redo2, Scissors, Search, Type as TypeIcon, Undo2, X,
 } from 'lucide-react';
 import { useT } from '@/i18n';
-import { setResourceDragData } from '@/lib/resource-drag';
 import type { MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
 import { Popover } from '../Popover';
 import { Tooltip } from '../Tooltip';
@@ -21,8 +20,8 @@ const BAR = 'flex items-center rounded-[14px] border border-[var(--cv-float-line
 const TOOL = 'flex h-9 w-9 items-center justify-center rounded-[10px] text-[var(--cv-label)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]';
 const ON = '!bg-[var(--cv-float-hover)] !text-[var(--cv-ink)]';
 
-/** The toolbar at the board's foot. */
-export function BottomToolbar({ adding, onAdd, tool, onTool, onTemplates, onUndo, onRedo, onAsk }: {
+/** The toolbar at the board's foot: what is added and how the board is moved. */
+export function BottomToolbar({ adding, onAdd, tool, onTool, onTemplates, onUndo, onRedo }: {
   adding: boolean;
   onAdd: (from: DOMRect) => void;
   tool: 'select' | 'hand';
@@ -30,7 +29,6 @@ export function BottomToolbar({ adding, onAdd, tool, onTool, onTemplates, onUndo
   onTemplates: (from: DOMRect) => void;
   onUndo: () => void;
   onRedo: () => void;
-  onAsk?: () => void;
 }) {
   const t = useT();
   const [keys, setKeys] = React.useState(false);
@@ -83,17 +81,26 @@ export function BottomToolbar({ adding, onAdd, tool, onTool, onTemplates, onUndo
           </div>
         </Popover>
       </div>
-      {onAsk ? (
-        <button type="button" onClick={onAsk} className={`pointer-events-auto h-[46px] gap-2 px-3.5 text-[13px] font-medium text-[var(--cv-ink)] hover:bg-[var(--cv-float-hover)] ${BAR}`}>
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-indigo-500 text-white"><MessageSquare size={13} /></span>
-          {t('canvas.toolbar.ask')}
-        </button>
-      ) : null}
     </div>
   );
 }
 
-/** The bar at the board's bottom left: the list of nodes, the overview map, and how far it is zoomed. */
+/** The chat beside the board, folded away or back, from the board's bottom left. */
+export function ChatToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  const t = useT();
+  const label = t(open ? 'canvas.toolbar.chatHide' : 'canvas.toolbar.chatShow');
+  return (
+    <div className="pointer-events-auto absolute bottom-4 left-4 z-20 flex items-center rounded-[12px] border border-[var(--cv-float-line)] bg-[var(--cv-float)] p-0.5 shadow-[var(--cv-float-shadow)]">
+      <Tooltip label={label} side="top">
+        <button type="button" aria-label={label} aria-pressed={open} onClick={onToggle} className={`${TOOL} !h-8 !w-8`}>
+          {open ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
+        </button>
+      </Tooltip>
+    </div>
+  );
+}
+
+/** The bar at the board's bottom right: the list of what is on the board, the overview map, and how far it is zoomed. */
 export function ZoomBar({ outline, onOutline, map, onMap }: { outline: boolean; onOutline: () => void; map: boolean; onMap: () => void }) {
   const t = useT();
   const flow = useReactFlow();
@@ -102,14 +109,14 @@ export function ZoomBar({ outline, onOutline, map, onMap }: { outline: boolean; 
   const row = 'flex h-8 w-full items-center justify-between rounded-lg px-2 text-[12.5px] text-[var(--cv-ink)] hover:bg-[var(--cv-float-hover)]';
   const act = (run: () => void) => () => { run(); setOpen(false); };
   return (
-    <div className="pointer-events-auto absolute bottom-4 left-4 z-20 flex items-center gap-0.5 rounded-[12px] border border-[var(--cv-float-line)] bg-[var(--cv-float)] p-0.5 shadow-[var(--cv-float-shadow)]">
+    <div className="pointer-events-auto absolute bottom-4 right-4 z-20 flex items-center gap-0.5 rounded-[12px] border border-[var(--cv-float-line)] bg-[var(--cv-float)] p-0.5 shadow-[var(--cv-float-shadow)]">
       <Tooltip label={t('canvas.outline.title')} side="top">
-        <button type="button" aria-label={t('canvas.outline.title')} onClick={onOutline} className={`${TOOL} !h-8 !w-8 ${outline ? ON : ''}`}><PanelLeft size={16} /></button>
+        <button type="button" aria-label={t('canvas.outline.title')} onClick={onOutline} className={`${TOOL} !h-8 !w-8 ${outline ? ON : ''}`}><ListTree size={16} /></button>
       </Tooltip>
       <Tooltip label={t('canvas.toolbar.map')} side="top">
         <button type="button" aria-label={t('canvas.toolbar.map')} onClick={onMap} className={`${TOOL} !h-8 !w-8 ${map ? ON : ''}`}><MapIcon size={16} /></button>
       </Tooltip>
-      <Popover open={open} onOpenChange={setOpen} placement="top"
+      <Popover open={open} onOpenChange={setOpen} placement="top" align="end"
         trigger={(
           <button type="button" onClick={() => setOpen((v) => !v)}
             className="h-8 min-w-[52px] rounded-[10px] px-2 text-[12.5px] tabular-nums text-[var(--cv-label)] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">
@@ -144,28 +151,22 @@ function nodeRow(n: BoardNode, fileOf: (path: string) => WorkspaceResource | nul
   };
 }
 
-/** Every node of the board in a list (a click shows it), and the Assets' files (dragged or clicked onto the board). */
-export function Outline({ nodes, files, fileOf, sources, onShow, onAddFile, onClose }: {
+/** What is on the board, in a list (a click shows it): the board's own, not the Assets (the chat beside it has those). */
+export function Outline({ nodes, fileOf, sources, onShow, onClose }: {
   nodes: readonly BoardNode[];
-  files: readonly WorkspaceResource[];
   fileOf: (path: string) => WorkspaceResource | null;
   sources: MediaSources;
   onShow: (id: string) => void;
-  onAddFile: (file: WorkspaceResource) => void;
   onClose: () => void;
 }) {
   const t = useT();
-  const [tab, setTab] = React.useState<'board' | 'assets'>('board');
   const [query, setQuery] = React.useState('');
   const needle = query.trim().toLowerCase();
-  const rows = nodes.map((n) => ({ id: n.id, ...nodeRow(n, fileOf, sources, t) })).filter((r) => !needle || r.label.toLowerCase().includes(needle));
-  const media = files.filter((f) => f.kind !== 'other' && (!needle || f.name.toLowerCase().includes(needle)));
-  const tabBtn = (which: 'board' | 'assets') => `h-7 rounded-lg px-3 text-[12.5px] ${tab === which ? 'bg-[var(--cv-float-hover)] text-[var(--cv-ink)]' : 'text-[var(--cv-label)] hover:text-[var(--cv-ink)]'}`;
+  const rows = nodes.map((n) => ({ id: n.id, ...nodeRow(n, fileOf, sources, t) })).filter((r) => !needle || r.label.toLowerCase().includes(needle) || r.kind.toLowerCase().includes(needle));
   return (
-    <div className="pointer-events-auto absolute bottom-[68px] left-4 top-4 z-20 flex w-[272px] flex-col overflow-hidden rounded-[14px] border border-[var(--cv-float-line)] bg-[var(--cv-float)] shadow-[var(--cv-float-shadow)]">
-      <div className="flex items-center gap-1 p-2">
-        <button type="button" className={tabBtn('board')} onClick={() => setTab('board')}>{t('canvas.outline.board')}</button>
-        <button type="button" className={tabBtn('assets')} onClick={() => setTab('assets')}>{t('canvas.outline.assets')}</button>
+    <div className="pointer-events-auto absolute bottom-[68px] right-4 top-4 z-20 flex w-[272px] flex-col overflow-hidden rounded-[14px] border border-[var(--cv-float-line)] bg-[var(--cv-float)] shadow-[var(--cv-float-shadow)]">
+      <div className="flex items-center gap-1 py-2 pl-3.5 pr-2">
+        <span className="text-[13px] font-medium text-[var(--cv-ink)]">{t('canvas.outline.title')}</span>
         <span className="flex-1" />
         <button type="button" aria-label={t('canvas.outline.close')} onClick={onClose} className={`${TOOL} !h-7 !w-7`}><X size={14} /></button>
       </div>
@@ -175,7 +176,7 @@ export function Outline({ nodes, files, fileOf, sources, onShow, onAddFile, onCl
           className="min-w-0 flex-1 bg-transparent text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-label)]" />
       </label>
       <div className="min-h-0 flex-1 overflow-y-auto p-1">
-        {tab === 'board' ? rows.map((row) => (
+        {rows.map((row) => (
           <button key={row.id} type="button" onClick={() => onShow(row.id)}
             className="flex w-full min-w-0 items-center gap-2.5 rounded-lg px-1.5 py-1 text-left hover:bg-[var(--cv-float-hover)]">
             <span className="flex h-8 w-11 shrink-0 items-center justify-center overflow-hidden rounded bg-[var(--cv-float-hover)] text-[var(--cv-label)]">{row.icon}</span>
@@ -184,24 +185,9 @@ export function Outline({ nodes, files, fileOf, sources, onShow, onAddFile, onCl
               <span className="block truncate text-[11px] text-[var(--cv-label)]">{row.kind}</span>
             </span>
           </button>
-        )) : media.map((file) => {
-          const src = file.kind === 'image' ? sources.file(file) : sources.poster?.(file);
-          const Icon = KIND_ICON[file.kind];
-          return (
-            <button key={file.path} type="button" draggable onClick={() => onAddFile(file)}
-              onDragStart={(event) => setResourceDragData(event.dataTransfer, { path: file.path, name: file.name, kind: file.kind, ...(file.durationMs ? { durationMs: file.durationMs } : {}) })}
-              className="flex w-full min-w-0 items-center gap-2.5 rounded-lg px-1.5 py-1 text-left hover:bg-[var(--cv-float-hover)]">
-              <span className="flex h-8 w-11 shrink-0 items-center justify-center overflow-hidden rounded bg-[var(--cv-float-hover)] text-[var(--cv-label)]">
-                {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : <Icon size={15} />}
-              </span>
-              <span className="min-w-0 flex-1 truncate text-[12.5px] text-[var(--cv-ink)]">{file.name}</span>
-            </button>
-          );
-        })}
+        ))}
       </div>
-      <div className="border-t border-[var(--cv-float-line)] px-3 py-2 text-[11.5px] text-[var(--cv-label)]">
-        {tab === 'board' ? t('canvas.outline.count').replace('{n}', String(nodes.length)) : t('canvas.outline.files').replace('{n}', String(media.length))}
-      </div>
+      <div className="border-t border-[var(--cv-float-line)] px-3.5 py-2 text-[11.5px] text-[var(--cv-label)]">{t('canvas.outline.count').replace('{n}', String(nodes.length))}</div>
     </div>
   );
 }

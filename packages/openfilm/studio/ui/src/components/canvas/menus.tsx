@@ -78,6 +78,14 @@ export function AddMenu({ menu, files, templates, onKind, onUpload, onFile, onTe
           ];
   const flat = sections.flatMap((s) => s.rows);
   const ref = React.useRef<HTMLDivElement>(null);
+  /* the search has the keys, even after the press that opened it (a ⊕: its wire's start) has had its say */
+  const search = React.useRef<HTMLInputElement>(null);
+  React.useEffect(() => {
+    const focus = () => search.current?.focus({ preventScroll: true });
+    focus();
+    const later = requestAnimationFrame(() => requestAnimationFrame(focus));
+    return () => cancelAnimationFrame(later);
+  }, [view]);
   React.useEffect(() => {
     const away = (event: PointerEvent) => { if (!ref.current?.contains(event.target as globalThis.Node)) onClose(); };
     window.addEventListener('pointerdown', away, true);
@@ -99,7 +107,7 @@ export function AddMenu({ menu, files, templates, onKind, onUpload, onFile, onTe
           </button>
         )}
         <input
-          autoFocus
+          ref={search}
           value={query}
           onChange={(event) => { setQuery(event.target.value); setActive(0); }}
           onKeyDown={(event) => {

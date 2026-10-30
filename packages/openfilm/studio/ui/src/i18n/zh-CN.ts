@@ -1386,6 +1386,7 @@ export const zhCN: Words = {
       },
     },
     cut: {
+      waiting: '连入片段后就能送到剪辑台',
       count: '{n} 个片段',
       empty: '连入视频或图片节点，按连线顺序送到剪辑台',
       how: '按连线顺序，依次放到时间线末尾',
@@ -1427,8 +1428,9 @@ export const zhCN: Words = {
       searchHere: '搜索',
     },
     toolbar: {
+      chatShow: '展开对话栏',
+      chatHide: '收起对话栏',
       add: '添加节点',
-      ask: '问 Agent',
       map: '小地图',
     },
     keys: {
@@ -1446,13 +1448,10 @@ export const zhCN: Words = {
       actual: '实际大小 100%',
     },
     outline: {
-      title: '资产管理',
-      board: '画布',
-      assets: '素材',
+      title: '画布元素',
       close: '关闭',
       search: '搜索',
       count: '共 {n} 个节点',
-      files: '共 {n} 个素材',
       kind: {
         image: '图片',
         video: '视频',
@@ -1464,6 +1463,8 @@ export const zhCN: Words = {
     start: {
       title: '从这里开始做素材',
     },
+    loadFailed: '画布没能载入',
+    reload: '重新载入',
     make: {
       ai: 'AI生成',
       image: '图片',

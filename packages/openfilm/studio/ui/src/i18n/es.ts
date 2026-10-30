@@ -1385,6 +1385,7 @@ export const es: Words = {
       },
     },
     cut: {
+      waiting: 'Conecta clips para enviarlos a la edición',
       count: '{n} clips',
       empty: 'Conecta nodos de vídeo o imagen y envíalos a la edición en el orden de sus conexiones',
       how: 'En el orden de las conexiones, uno tras otro al final de la línea de tiempo',
@@ -1426,8 +1427,9 @@ export const es: Words = {
       searchHere: 'Buscar',
     },
     toolbar: {
+      chatShow: 'Mostrar el chat',
+      chatHide: 'Ocultar el chat',
       add: 'Añadir un nodo',
-      ask: 'Preguntar al agente',
       map: 'Minimapa',
     },
     keys: {
@@ -1445,13 +1447,10 @@ export const es: Words = {
       actual: 'Tamaño real 100%',
     },
     outline: {
-      title: 'Gestor de recursos',
-      board: 'Lienzo',
-      assets: 'Recursos',
+      title: 'Elementos del lienzo',
       close: 'Cerrar',
       search: 'Buscar',
       count: '{n} nodos',
-      files: '{n} recursos',
       kind: {
         image: 'Imagen',
         video: 'Vídeo',
@@ -1463,6 +1462,8 @@ export const es: Words = {
     start: {
       title: 'Crea aquí tu material',
     },
+    loadFailed: 'No se pudo cargar el lienzo',
+    reload: 'Cargar de nuevo',
     make: {
       ai: 'Hecho con IA',
       image: 'Imagen',

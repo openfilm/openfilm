@@ -1386,6 +1386,7 @@ export const en = {
       },
     },
     cut: {
+      waiting: 'Wire clips in to send them to the edit',
       count: '{n} clips',
       empty: 'Wire in video or picture nodes, then send them to the edit in their wires’ order',
       how: 'In the wires’ order, one after another at the end of the timeline',
@@ -1427,8 +1428,9 @@ export const en = {
       searchHere: 'Search',
     },
     toolbar: {
+      chatShow: 'Show the chat',
+      chatHide: 'Hide the chat',
       add: 'Add a node',
-      ask: 'Ask the agent',
       map: 'Overview map',
     },
     keys: {
@@ -1446,13 +1448,10 @@ export const en = {
       actual: 'Actual size 100%',
     },
     outline: {
-      title: 'Asset manager',
-      board: 'Canvas',
-      assets: 'Media',
+      title: 'Canvas elements',
       close: 'Close',
       search: 'Search',
       count: '{n} nodes',
-      files: '{n} files',
       kind: {
         image: 'Picture',
         video: 'Video',
@@ -1464,6 +1463,8 @@ export const en = {
     start: {
       title: 'Make your material here',
     },
+    loadFailed: 'The canvas could not load',
+    reload: 'Load again',
     make: {
       ai: 'AI made',
       image: 'Image',

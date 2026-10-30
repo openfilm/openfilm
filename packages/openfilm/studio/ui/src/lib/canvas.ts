@@ -232,14 +232,15 @@ export function isStale(node: CanvasNode, inputs: readonly MakeInput[]): boolean
  * (pictures for a picture, a clip, a sound) is counted in `unused`.
  */
 export function makeRequest(node: CanvasNode & { make: MakeKind }, inputs: readonly MakeInput[], name: string):
-  { verb: MakeKind; args: Record<string, string | number | string[]>; unused: number } {
+  { verb: MakeKind; args: Record<string, string | string[]>; unused: number } {
   const words = [...inputs.flatMap((i) => ('text' in i ? [i.text] : [])), (node.prompt ?? '').trim()].filter(Boolean).join('\n\n');
   const pictures = inputs.flatMap((i) => ('media' in i && i.media === 'image' ? [i.path] : []));
   const others = inputs.filter((i) => 'media' in i && i.media !== 'image').length;
-  const args: Record<string, string | number | string[]> = { out: name, prompt: words };
+  /* as `openfilm get` is given them: words, as on its command line */
+  const args: Record<string, string | string[]> = { out: name, prompt: words };
   const opts = node.opts ?? {};
   const seconds = MAKE_SECONDS[node.make];
-  if (seconds) args[node.make === 'video' ? 'duration' : 'sec'] = Math.min(seconds.max, Math.max(seconds.min, opts.sec ?? seconds.default));
+  if (seconds) args[node.make === 'video' ? 'duration' : 'sec'] = String(Math.min(seconds.max, Math.max(seconds.min, opts.sec ?? seconds.default)));
   let used = 0;
   if (node.make === 'image') args.ratio = opts.ratio ?? '16:9';
   if (node.make === 'video') {

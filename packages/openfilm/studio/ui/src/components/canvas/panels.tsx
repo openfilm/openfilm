@@ -279,7 +279,7 @@ export function CutPanel({ id, count }: { id: string; count: number }) {
   return (
     <NodeToolbar nodeId={id} isVisible={board.single === id && !board.readOnly} position={Position.Bottom} offset={14}>
       <div className={`nodrag nopan flex w-[min(420px,80vw)] items-center gap-3 p-3 ${CARD}`}>
-        <span className="min-w-0 flex-1 text-[12.5px] leading-snug text-[var(--cv-label)]">{count ? t('canvas.cut.how') : t('canvas.cut.empty')}</span>
+        <span className="min-w-0 flex-1 text-[12.5px] leading-snug text-[var(--cv-label)]">{count ? t('canvas.cut.how') : t('canvas.cut.waiting')}</span>
         <button type="button" disabled={!count} onClick={() => board.sendToFilm(id)}
           className="flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-[var(--text)] px-4 text-[13px] font-medium text-[var(--bg)] transition hover:opacity-90 disabled:opacity-30">
           <Clapperboard size={14} />{t('canvas.cut.send')}

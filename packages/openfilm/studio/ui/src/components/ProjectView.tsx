@@ -40,6 +40,7 @@ import {
   type ClipFacts, type TransitionAsk, type TransitionPlan,
 } from '@/lib/transitions';
 import { frameMs } from '@/lib/timecode';
+import { LoadBoundary } from './canvas/LoadBoundary';
 import { splitHalves } from '@/lib/timeline-split';
 import { assetDropInsert, assetRunInsert, assetRunMs, pendingDropOf, soundLaneHit, withPendingBlocks, type AssetDropTarget, type AssetLaneHit, type AssetRunInsert, type PendingDrop } from '@/lib/asset-timeline';
 import { isComputerFileDrag, type ResourceDragItem } from '@/lib/resource-drag';
@@ -3225,14 +3226,16 @@ export function ProjectView({ projectId, onProject, onLeave }: {
             <div className="relative z-[2] flex min-h-0 min-w-0 bg-[var(--dock-line)]"
               style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...(hostPanel?.open ? { marginLeft: HOST_PANEL_WIDTH, paddingLeft: DOCK_GAP } : null) }}>
               <div className="relative min-h-0 min-w-0 flex-1 bg-[var(--dock-pane)]">
-                <React.Suspense fallback={null}>
-                  <CanvasView projectId={projectId} folder={loaded?.project.path ?? ''} files={canvasFiles} sources={mediaSources} onAddToFilm={(file) => { void addFromCanvas(file); }}
-                    onImportFiles={(dropped) => onImport(dropped, 'assets', () => {})} onOpenSettings={() => setSettingsOpen('providers')}
-                    focus={canvasFocus} insert={canvasInsert} onRefer={studioHost?.refer ? (refs) => { for (const ref of refs) studioHost?.refer?.(ref); } : undefined}
-                    onSendToFilm={(list) => { void sendFromCanvas(list); }} onReveal={(path) => { setCanvasOpen(false); showFile(path); }}
-                    {...(hostPanel ? { onAskAgent: () => hostPanel.setOpen(true) } : {})}
-                    onError={toast.showError} onNotice={(message) => toast.show(message)} />
-                </React.Suspense>
+                <LoadBoundary title={t('canvas.loadFailed')} action={t('canvas.reload')}>
+                  <React.Suspense fallback={null}>
+                    <CanvasView projectId={projectId} folder={loaded?.project.path ?? ''} files={canvasFiles} sources={mediaSources} onAddToFilm={(file) => { void addFromCanvas(file); }}
+                      onImportFiles={(dropped) => onImport(dropped, 'assets', () => {})} onOpenSettings={() => setSettingsOpen('providers')}
+                      focus={canvasFocus} insert={canvasInsert} onRefer={studioHost?.refer ? (refs) => { for (const ref of refs) studioHost?.refer?.(ref); } : undefined}
+                      onSendToFilm={(list) => { void sendFromCanvas(list); }} onReveal={(path) => { setCanvasOpen(false); showFile(path); }}
+                      {...(hostPanel ? { chat: { open: hostPanel.open, toggle: () => hostPanel.setOpen(!hostPanel.open) } } : {})}
+                      onError={toast.showError} onNotice={(message) => toast.show(message)} />
+                  </React.Suspense>
+                </LoadBoundary>
               </div>
             </div>
           ) : null}

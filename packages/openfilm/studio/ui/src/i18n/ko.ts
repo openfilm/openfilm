@@ -1382,6 +1382,7 @@ export const ko: Words = {
       },
     },
     cut: {
+      waiting: '클립을 연결하면 편집으로 보낼 수 있습니다',
       count: '클립 {n}개',
       empty: '동영상이나 이미지 노드를 연결하면, 연결한 순서대로 편집으로 보낼 수 있습니다',
       how: '연결한 순서대로 타임라인 끝에 차례로 놓습니다',
@@ -1423,8 +1424,9 @@ export const ko: Words = {
       searchHere: '검색',
     },
     toolbar: {
+      chatShow: '채팅 펼치기',
+      chatHide: '채팅 접기',
       add: '노드 추가',
-      ask: '에이전트에게 묻기',
       map: '미니맵',
     },
     keys: {
@@ -1442,13 +1444,10 @@ export const ko: Words = {
       actual: '실제 크기 100%',
     },
     outline: {
-      title: '에셋 관리',
-      board: '캔버스',
-      assets: '소재',
+      title: '캔버스 요소',
       close: '닫기',
       search: '검색',
       count: '노드 {n}개',
-      files: '소재 {n}개',
       kind: {
         image: '이미지',
         video: '동영상',
@@ -1460,6 +1459,8 @@ export const ko: Words = {
     start: {
       title: '여기서 소재를 만드세요',
     },
+    loadFailed: '캔버스를 불러오지 못했습니다',
+    reload: '다시 불러오기',
     make: {
       ai: 'AI 생성',
       image: '이미지',

@@ -42,7 +42,7 @@ import {
   BoardContext, CUT_W, boxOf, choicesFor, defaultChoice, fromFlow, inputViews, runErrors, runs, runsChanged, shownBoards, startRun, toFlow, useRuns,
   type Board, type BoardNode, type FrameData, type FrameNode, type MakingNode, type Side, type SpawnKind,
 } from './board';
-import { BottomToolbar, Outline, Viewer, ZoomBar } from './chrome';
+import { BottomToolbar, ChatToggle, Outline, Viewer, ZoomBar } from './chrome';
 import { AddMenu, type MenuAt } from './menus';
 import { FRAME_COLOR, NODE_TYPES } from './nodes';
 
@@ -70,7 +70,7 @@ const unselectEdges = (list: Edge[]) => (list.some((e) => e.selected) ? list.map
 /** what was copied last, on any board of this page: pasted with new ids, a step further each time */
 let clipboard: { doc: CanvasDoc; pasted: number } | null = null;
 
-function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFilm, onImportFiles, onOpenSettings, onReveal, onAskAgent, onError, onNotice, focus, insert, onRefer }: CanvasViewProps) {
+function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFilm, onImportFiles, onOpenSettings, onReveal, chat, onError, onNotice, focus, insert, onRefer }: CanvasViewProps) {
   const t = useT();
   const flow = useReactFlow<BoardNode, Edge>();
   const [nodes, setNodes, onNodesChange] = useNodesState<BoardNode>([]);
@@ -405,6 +405,29 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
 
   const selected = nodes.filter((n) => n.selected);
   const single = selected.length === 1 ? selected[0]!.id : null;
+  /* the one selected, with its panel under it, kept on the screen: the board moves as much as it takes */
+  React.useEffect(() => {
+    if (!single) return undefined;
+    const frame = requestAnimationFrame(() => {
+      const box = rootRef.current?.getBoundingClientRect();
+      const el = rootRef.current?.querySelector(`.react-flow__node[data-id="${CSS.escape(single)}"]`);
+      if (!box || !el) return;
+      const node = el.getBoundingClientRect();
+      const type = now.current.nodes.find((n) => n.id === single)?.type;
+      const panel = type === 'make' ? { w: Math.min(600, box.width * 0.8), h: 250 } : type === 'cut' ? { w: 420, h: 80 } : { w: 0, h: 0 };
+      const mid = node.left + node.width / 2;
+      const left = Math.min(node.left, mid - panel.w / 2);
+      const right = Math.max(node.right, mid + panel.w / 2);
+      const bottom = node.bottom + (panel.h ? panel.h + 14 : 0);
+      const pad = 24;
+      const dx = left < box.left + pad ? box.left + pad - left : right > box.right - pad ? box.right - pad - right : 0;
+      const dy = bottom > box.bottom - 80 ? Math.max(box.bottom - 80 - bottom, box.top + 60 - node.top) : node.top < box.top + 50 ? box.top + 50 - node.top : 0;
+      if (!dx && !dy) return;
+      const view = flow.getViewport();
+      void flow.setViewport({ ...view, x: view.x + dx, y: view.y + dy }, { duration: 220 });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [single]); // eslint-disable-line react-hooks/exhaustive-deps
   const board = React.useMemo<Board>(() => ({
     files,
     fileOf: (path) => byPath.get(path) ?? null,
@@ -702,6 +725,17 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
             /* a press on the ⊕ without a drag is its click (its menu), not a wire */
             const start = flow.flowToScreenPosition(state.from);
             if (Math.hypot(point.clientX - start.x, point.clientY - start.y) < 8) return;
+            /* let go anywhere on a node: wired to it */
+            const onto = document.elementsFromPoint(point.clientX, point.clientY)
+              .map((el) => el.closest<HTMLElement>('.react-flow__node')).find((el) => el && el.dataset.id !== state.fromNode!.id);
+            const target = onto?.dataset.id ? now.current.nodes.find((n) => n.id === onto.dataset.id) : undefined;
+            if (target && target.type !== 'frame') {
+              const [source, into] = from === 'source' ? [state.fromNode.id, target.id] : [target.id, state.fromNode.id];
+              if (now.current.edges.some((e) => e.source === source && e.target === into)) return;
+              willChange();
+              setEdges((list) => [...list, { id: canvasId('e'), source, target: into, data: { order: nextOrder(docNow(), into) } }]);
+              return;
+            }
             openMenu(point.clientX, point.clientY, { node: state.fromNode.id, side: from });
           }}
           isValidConnection={(c) => c.source !== c.target}
@@ -735,7 +769,7 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
         >
           <Background variant={BackgroundVariant.Dots} gap={24} size={1.4} />
           {map ? (
-            <MiniMap position="bottom-left" pannable zoomable style={{ marginBottom: 64 }}
+            <MiniMap position="bottom-right" pannable zoomable style={{ marginBottom: 64 }}
               nodeColor={(n) => (n.type === 'frame' ? 'transparent' : n.type === 'note' ? 'var(--surface-3)' : 'var(--text-faint)')}
               nodeStrokeColor={(n) => (n.type === 'frame' ? FRAME_COLOR[(n.data as FrameData).color].line : 'transparent')} />
           ) : null}
@@ -752,12 +786,11 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
           onTemplates={(from) => { setContext(null); setMenu({ screen: { x: from.left, y: from.top }, above: true, at: middle(), view: 'templates' }); }}
           onUndo={() => step(true)}
           onRedo={() => step(false)}
-          {...(onAskAgent ? { onAsk: () => { refer(); onAskAgent(); } } : {})}
         />
+        {chat ? <ChatToggle open={chat.open} onToggle={chat.toggle} /> : null}
         <ZoomBar outline={outline} onOutline={() => setOutline((v) => !v)} map={map} onMap={() => setMap((v) => !v)} />
         {outline ? (
-          <Outline nodes={nodes} files={files} fileOf={board.fileOf} sources={sources} onShow={showNode}
-            onAddFile={(file) => addFile(file.path, middle())} onClose={() => setOutline(false)} />
+          <Outline nodes={nodes} fileOf={board.fileOf} sources={sources} onShow={showNode} onClose={() => setOutline(false)} />
         ) : null}
         {ready && nodes.length === 0 ? (
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-4">
@@ -817,8 +850,8 @@ export interface CanvasViewProps {
   onOpenSettings: () => void;
   /** a file shown in the Assets */
   onReveal?: (path: string) => void;
-  /** the chat beside the board, the nodes selected in its message (the toolbar's agent button) */
-  onAskAgent?: () => void;
+  /** the chat beside the board: open or folded away, and the button at the board's bottom left that does it */
+  chat?: { open: boolean; toggle: () => void };
   /** a word that something went as asked (a template kept) */
   onNotice: (message: string) => void;
   /** the selected nodes into the chat as references (⌘L); none: no chat here */

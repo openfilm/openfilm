@@ -113,7 +113,8 @@ export async function startRun(project: string, folder: string, node: string, re
   runErrors.delete(id);
   runsChanged();
   try {
-    const receipt = JSON.parse(await api.make(folder, request.verb, request.args, pick, abort.signal)) as { src?: string; images?: Array<{ src?: string }> };
+    /* the person pressed Make on it: what it costs is not asked again, as an agent's would be */
+    const receipt = JSON.parse(await api.make(folder, request.verb, request.args, { ...pick, yes: true }, abort.signal)) as { src?: string; images?: Array<{ src?: string }> };
     const path = receipt.src ?? receipt.images?.[0]?.src;
     if (!path) throw new Error(nothing);
     const made = { path, made: key };
