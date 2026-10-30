@@ -35,7 +35,7 @@ import { stepAside } from './update-launch.mjs';
 import { ensureFfmpeg, ffmpegDir, ffmpegDownloadable, ffmpegIn, ffmpegOnPath } from './ffmpeg-runtime.mjs';
 import { PATH_SEP } from './environment.mjs';
 import { firstWindowsApps } from './windows-apps.mjs';
-import { createTabs } from './tabs.mjs';
+import { createTabs, projectGone } from './tabs.mjs';
 
 const here = (path) => fileURLToPath(new URL(path, import.meta.url));
 const mac = process.platform === 'darwin';
@@ -311,7 +311,8 @@ function openInTabs(to) {
  * first time, the last project's; none: the projects.
  */
 async function openTabs() {
-  const projects = (await studioApi('/api/projects').catch(() => ({ projects: [] }))).projects.filter((p) => !p.missing);
+  const listed = (await studioApi('/api/projects').catch(() => ({ projects: [] }))).projects;
+  const projects = listed.filter((p) => !projectGone(listed, p.id));
   tabs = createTabs({ saved: state.tabs ?? null });
   /* a tab of a project no longer there is left out, and not kept to open again */
   const known = new Set(projects.map((p) => p.id));
@@ -535,7 +536,7 @@ async function start() {
   /* the chat's record of each project (in the project's .film/chat and .film/logs) and the app's own preferences */
   registerChatIpc(ipcMain, {
     trusted: fromPage,
-    projects: async () => (await studioApi('/api/projects')).projects.filter((p) => !p.missing).map((p) => p.path),
+    projects: async () => { const { projects } = await studioApi('/api/projects'); return projects.filter((p) => !projectGone(projects, p.id)).map((p) => p.path); },
     dataDir: DATA,
     reveal: (path) => shell.showItemInFolder(path),
     tell: (channel, value) => broadcast(channel, value),
@@ -554,8 +555,15 @@ async function start() {
   /* what a page shows now: its project's title, an export's progress; or its project gone */
   tabHandle('desktop:tabs:report', (self, { title, exporting, gone }) => {
     if (!tabs) return { ok: false };
-    /* its project gone (deleted, in this page or another; its folder gone): its tab closes, without asking */
-    if (gone === true) { const tab = tabs.get(self); if (tab) projectsGone([tab.projectId]); return { ok: true }; }
+    /* its project gone (deleted, in this page or another; its folder gone): its tab closes, without asking. Asked of
+       Studio first: a tab closed stops its agent, and a project missing only film.html is not gone (tabs.mjs projectGone) */
+    if (gone === true) {
+      const tab = tabs.get(self);
+      if (tab) {
+        void studioApi('/api/projects').then(({ projects }) => { if (projectGone(projects, tab.projectId)) projectsGone([tab.projectId]); }, () => {});
+      }
+      return { ok: true };
+    }
     tabs.report(self, { ...(typeof title === 'string' ? { title: title.slice(0, 200) } : {}), ...(exporting !== undefined ? { exporting: typeof exporting === 'number' ? exporting : null } : {}) });
     tellTabs();
     return { ok: true };
@@ -606,7 +614,7 @@ async function start() {
   /* the composer's Skills button */
   registerSkillsIpc(ipcMain, {
     trusted: fromPage,
-    projects: async () => (await studioApi('/api/projects')).projects.filter((p) => !p.missing).map((p) => p.path),
+    projects: async () => { const { projects } = await studioApi('/api/projects'); return projects.filter((p) => !projectGone(projects, p.id)).map((p) => p.path); },
     dataDir: DATA,
     mine: mySkills,
     prefsHome,

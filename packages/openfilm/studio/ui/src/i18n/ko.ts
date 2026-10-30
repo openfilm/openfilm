@@ -634,6 +634,7 @@ export const ko: Words = {
     previewBrowser: '이 페이지는 현재 브라우저가 지원하지 않는 기능을 사용합니다. 영상은 Chromium으로 그리고 내보내므로 Studio를 Chrome이나 Edge에서 여세요.',
     previewMissing: '미디어 없음: {file} · 클립 오른쪽 클릭으로 다시 연결',
     filmEmptyHint: '미디어를 타임라인으로 끌어와 영상을 시작하거나, 에이전트에게 만들어 달라고 요청하세요.',
+    filmMissing: 'film.html이 없습니다. 다시 쓰는 중일 수 있습니다. 보통은 저절로 돌아옵니다. 돌아오지 않으면 버전 기록에서, 또는 에이전트의 턴 이전 상태로 복원하세요.',
     filmBroken: '지금은 film.html을 읽을 수 없어 Studio가 마지막 상태의 영상을 보여 줍니다. 문제가 해결될 때까지 여기서 한 편집은 저장할 수 없습니다:',
     filmNotReady: '비디오가 아직 준비되지 않았습니다',
     filmCannotExport: '영상을 그릴 수 없는 동안에는 내보낼 수 없습니다:',

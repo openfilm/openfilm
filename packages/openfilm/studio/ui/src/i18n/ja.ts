@@ -637,6 +637,7 @@ export const ja: Words = {
     previewBrowser: 'このページは、お使いのブラウザにない機能を使っています。映像は Chromium で描画・書き出しされるため、Studio は Chrome か Edge で開いてください。',
     previewMissing: 'メディアなし：{file} · クリップを右クリックで再リンク',
     filmEmptyHint: 'メディアをタイムラインにドラッグして映像を作り始めるか、エージェントに作成を頼んでください。',
+    filmMissing: 'film.html が見つかりません。書き直されている途中かもしれません。通常は自動で戻ります。戻らない場合は、バージョン履歴またはエージェントのターン前の状態から復元してください。',
     filmBroken: '現在 film.html を読み込めないため、Studio は最後の状態の映像を表示しています。修正されるまで、ここでの編集は保存できません：',
     filmNotReady: 'ビデオはまだ準備できていません',
     filmCannotExport: '映像を描画できない間は書き出せません：',

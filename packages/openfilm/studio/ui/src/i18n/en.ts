@@ -638,6 +638,7 @@ export const en = {
     previewBrowser: 'This page uses something your browser doesn\'t have. Films are drawn and exported with Chromium: open Studio in Chrome or Edge.',
     previewMissing: 'Media not found: {file} · right-click its clip to relink',
     filmEmptyHint: 'Drag media onto the timeline to start your film, or ask your agent to make one.',
+    filmMissing: 'film.html is missing — it may be being rewritten. It comes back on its own; if not, restore it from History or from before the agent’s turn.',
     filmBroken: 'film.html can’t be read right now, so Studio shows the film as it last was, and edits here can’t be saved until it’s fixed:',
     filmNotReady: 'The video isn’t ready yet',
     filmCannotExport: 'The film can’t be exported while it can’t be drawn:',

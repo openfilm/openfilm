@@ -216,6 +216,10 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const [filesTick, setFilesTick] = React.useState(0);
   const [loaded, setLoaded] = React.useState<ProjectFilm | null>(null);
   const [failure, setFailure] = React.useState<string | null>(null);
+  /** film.html is missing from the folder (an agent writing it again, or it lost): said on the picture until it is back */
+  const [filmMissing, setFilmMissing] = React.useState(false);
+  const filmMissingRef = React.useRef(filmMissing);
+  filmMissingRef.current = filmMissing;
   /** why the picture could not draw the film (shown on the stage; the timeline then places clips by film.html alone) */
   const [previewError, setPreviewError] = React.useState<string | null>(null);
   const previewErrorRef = React.useRef(previewError);
@@ -228,7 +232,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* ── the project, its film and its files ── */
   React.useEffect(() => {
     /* a project the list no longer has (deleted meanwhile, a tab of it opened again): gone, so this page leaves it */
-    api.film(projectId).then(setLoaded, (e: Error) => { if (e instanceof ApiError && (e.status === 404 || e.status === 410)) leaveRef.current(); else setFailure(e.message); });
+    api.film(projectId).then((l) => { setLoaded(l); setFilmMissing(Boolean(l.filmMissing)); }, (e: Error) => { if (e instanceof ApiError && (e.status === 404 || e.status === 410)) leaveRef.current(); else setFailure(e.message); });
     void api.opened(projectId).catch(() => {});
     const loadFiles = () => api.files(projectId).then(setRawListing, () => {});
     void loadFiles();
@@ -238,6 +242,14 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       if (previewErrorRef.current && (event.type === 'film' || event.type === 'files')) { preview.current?.reload?.(); }
       /* deleted (here, in another tab, by an agent), or its folder gone: this page leaves it (with tabs, its tab closes) */
       if (event.type === 'gone') { leaveRef.current(); return; }
+      /* film.html alone gone: the project stays open (an agent at work in it goes on), and the picture says so until
+         the film is back; a page opened while it was missing reads it then */
+      if (event.type === 'film-missing') { setFilmMissing(true); return; }
+      if (event.type === 'film' && event.rev && filmMissingRef.current) {
+        filmMissingRef.current = false;
+        setFilmMissing(false);
+        void api.film(projectId).then((l) => setLoaded((cur) => (cur && !cur.doc ? l : cur)), () => {});
+      }
       /* renamed from another tab, or the projects list */
       if (event.type === 'project') { setLoaded((l) => (l ? { ...l, project: event.project } : l)); return; }
       if (event.type !== 'files') return;
@@ -3195,6 +3207,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                       <span className="rounded-md bg-[var(--surface)] px-2.5 py-1 text-[12.5px] text-[var(--text)] shadow-sm">{t('project.dropOnPicture')}</span>
                     </div>
                   ) : null}
+                  {filmMissing ? (
+                    <div data-film-missing="" className="pointer-events-none absolute inset-x-0 top-3 z-20 flex justify-center px-4">
+                      <p role="status" className="max-w-[min(30rem,90%)] rounded-lg bg-black/70 px-3.5 py-2 text-center text-[12.5px] leading-snug text-white/90">{t('project.filmMissing')}</p>
+                    </div>
+                  ) : null}
                   {value ? (
                     <div ref={stageFullRef} className={`relative flex h-full w-full items-center justify-center ${fullscreen ? 'bg-black' : ''}`}
                       style={{ containerType: 'size' }} onClick={fullscreen ? toggle : undefined}>
@@ -3301,7 +3318,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                       ) : null}
                     </div>
                   ) : (
-                    <p className="max-w-[280px] text-center text-[12.5px] text-[var(--text-faint)]">{loaded.problems.join(' ') || t('project.filmEmptyHint')}</p>
+                    filmMissing ? null : <p className="max-w-[280px] text-center text-[12.5px] text-[var(--text-faint)]">{loaded.problems.join(' ') || t('project.filmEmptyHint')}</p>
                   )}
                 </div>
                 {film.broken ? (

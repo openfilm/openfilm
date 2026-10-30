@@ -609,18 +609,23 @@ test('a project whose folder is gone says so, never takes Studio down, and can b
   assert.ok(!(await (await api('/api/projects')).json()).projects.some((p) => p.id === project.id));
 });
 
-test('a removed film is unavailable before opening or editing; remaining files are preserved on removal', async () => {
+test('a removed film keeps the project open but says so; nothing writes the film until it is back; remaining files are preserved on removal', async () => {
   const { project } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'Film removed externally') } })).json();
   rmSync(join(project.path, 'film.html'));
   writeFileSync(join(project.path, 'keep.txt'), 'remaining work');
+  /* the project itself opens (its page says film.html is missing), and so does its stream, which says so at once */
+  const opened = await api(`/api/projects/${project.id}`);
+  assert.equal(opened.status, 200);
+  assert.equal((await opened.json()).filmMissing, true);
+  assert.equal((await api(`/api/projects/${project.id}/opened`, { method: 'POST' })).status, 200);
+  const told = await collect(`/api/projects/${project.id}/events`, (events) => events.some((e) => e.type === 'film-missing'));
+  assert.ok(told.some((e) => e.type === 'film-missing') && !told.some((e) => e.type === 'gone'));
   for (const [rest, options] of [
-    ['', {}],
-    ['/opened', { method: 'POST' }],
     ['/files', {}],
     ['/edit', { method: 'POST', body: { ops: [{ op: 'insert', clip: { src: 'title.html' } }] } }],
   ]) {
     const response = await api(`/api/projects/${project.id}${rest}`, options);
-    assert.equal(response.status, 410, rest || 'opening the project');
+    assert.equal(response.status, 410, rest);
     assert.equal((await response.json()).code, 'missing-film');
   }
   assert.ok(!existsSync(join(project.path, 'film.html')), 'opening or editing never recreates the removed film');

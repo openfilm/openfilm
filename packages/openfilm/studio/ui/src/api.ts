@@ -26,7 +26,8 @@ export type Clip = { src: string; id: string; at?: number; time?: [number] | [nu
 export type Track = { clips: Clip[]; locked?: boolean; hidden?: boolean; muted?: boolean; attrs?: Record<string, string> };
 export type Film = { stage?: { w: number; h: number }; tracks: Track[] };
 /** `value`: film.html as read, every clip named (a clip with no id takes its file's name, as the server and preview do). */
-export type ProjectFilm = { project: Project; folder: string; text: string; rev: string; value: Film | null; doc: Film | null; problems: string[] };
+/** `filmMissing`: the folder is there but film.html is not (read as an empty film; see FolderEvent `film-missing`). */
+export type ProjectFilm = { project: Project; folder: string; text: string; rev: string; value: Film | null; doc: Film | null; problems: string[]; filmMissing?: boolean };
 export type MediaFile = { path: string; kind: 'video' | 'image' | 'audio' | 'page' | 'other'; size: number; mtime: number; added?: number };
 /** A project's editor settings (studio/server/project-settings.mjs). */
 export type ProjectSettings = { fps?: number; trackNames?: { name: string; index: number; clips: string[] }[]; trackHeights?: { height: number; index: number; clips: string[] }[] };
@@ -214,7 +215,10 @@ export type StudioNotice = { id: string; kind: 'balance'; provider: string; prov
 export type FolderEvent = { type: 'film'; rev: string } | { type: 'files'; paths?: string[] } | { type: 'history' } | { type: 'export'; job: ExportJob } | { type: 'open'; to: string }
   | { type: 'history-progress'; op: string; phase: string; done: number; total: number }
   | { type: 'ask'; ask: SpendAsk } | { type: 'asked'; id: string } | { type: 'notice'; notice: StudioNotice } | { type: 'project'; project: Project }
-  /* the project was deleted, or its folder or film file is missing: its pages leave it */
+  /* its folder is there but film.html is not (an agent writing it again, or it lost): the project stays open and
+     says so, until a `film` event says it is back */
+  | { type: 'film-missing' }
+  /* the project was deleted, or its folder is missing: its pages leave it */
   | { type: 'gone' };
 
 /**
@@ -328,8 +332,8 @@ export function projectEvents(id: string, on: (event: FolderEvent) => void): () 
     /* back after Studio was away: the film, the files and the history may all have changed meanwhile */
     const stop = listen(`${p(id)}/events`, tell, {
       onBack: () => { tell({ type: 'film', rev: '' }); tell({ type: 'files' }); tell({ type: 'history' }); },
-      /* off the list, or missing its folder or film file: gone (an unreadable list says nothing) */
-      gone: () => call<{ projects: Project[] }>('projects').then((r) => { const found = r.projects.find((x) => x.id === id); return !found || Boolean(found.missing); }),
+      /* off the list, or missing its folder: gone (an unreadable list says nothing). Missing only film.html is not */
+      gone: () => call<{ projects: Project[] }>('projects').then((r) => { const found = r.projects.find((x) => x.id === id); return !found || (found.missing && found.missingReason !== 'film'); }),
     });
     stream = { stop, listeners };
     streams.set(id, stream);

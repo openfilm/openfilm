@@ -638,6 +638,7 @@ export const zhCN: Words = {
     previewBrowser: '这个页面用到了当前浏览器不支持的功能。影片是用 Chromium 绘制和导出的，请在 Chrome 或 Edge 里打开 Studio。',
     previewMissing: '媒体丢失：{file} · 右键片段重新链接',
     filmEmptyHint: '把媒体拖到时间轴上开始制作影片，或让智能体帮你做一部。',
+    filmMissing: 'film.html 不见了——可能正在被重写。它会自己回来；如果没有，可以从“版本历史”或智能体这一轮之前的状态恢复。',
     filmBroken: '目前无法读取 film.html，因此 Studio 显示的是影片上一次的样子；修复之前，这里的编辑无法保存：',
     filmNotReady: '视频尚未就绪',
     filmCannotExport: '影片无法绘制，因此无法导出：',
