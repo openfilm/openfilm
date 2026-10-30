@@ -1342,6 +1342,7 @@ export const ja: Words = {
     addHere: 'ここに追加…',
     removeWire: '接続を削除',
     colors: { gray: 'グレー', red: 'レッド', orange: 'オレンジ', yellow: 'イエロー', green: 'グリーン', blue: 'ブルー', purple: 'パープル' },
+    gone: 'そのノードはもうキャンバスにありません',
     make: {
       image: '画像',
       video: '動画',

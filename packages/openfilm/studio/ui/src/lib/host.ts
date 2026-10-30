@@ -330,6 +330,9 @@ export interface StudioRefImage { src?: string; viewer?: boolean; crop?: StageBo
  *   · example  an example film (ExamplesGallery), or a part of it (`start`–`end`, a `segment` it names): where it comes
  *             from (`url`), and its folder on this computer to read how it is made (`folder`: fetched by the app
  *             when the message is sent, if not yet)
+ *   · node     a node of the project's canvas (components/canvas): its id there, what it is (`nodeKind`: note, file,
+ *             group, or what it makes: image, video, sfx, music), its words (a note's `text`, a making node's
+ *             `prompt`), its file (`path`: a file, or the version a making node shows) and how many versions it made
  *   · subtitle a line of the film's subtitles (the subtitle panel), or words picked inside one: their span on the film,
  *             the words, the language they are in when a translation is shown (`lang`), the line's number in the panel
  *             (`index`, from 1), and each word's own span when the transcript has word times (`words`)
@@ -345,6 +348,7 @@ export type StudioRef = (
   | { kind: 'range'; start: number; end: number; clipIds: string[] }
   | { kind: 'track'; track: number; label: string; clipIds: string[] }
   | { kind: 'file'; path: string; fileKind: string; duration?: number; w?: number; h?: number }
+  | { kind: 'node'; id: string; nodeKind: string; label: string; text?: string; prompt?: string; path?: string; versions?: number }
   | { kind: 'subtitle'; start: number; end: number; text: string; lang?: string | null; index?: number; words?: Array<{ text: string; start: number; end: number }> }
   | { kind: 'example'; id: string; title: string; url: string; folder?: string; start?: number; end?: number; segment?: string; description?: string }
 ) & { image?: StudioRefImage };
@@ -385,6 +389,8 @@ export type StudioCommand =
   | { type: 'show-box'; time: number; box: StageBox }
   | { type: 'show-track'; track: number }
   | { type: 'show-file'; path: string }
+  /* a node of the canvas: the canvas opened, the node selected and in view */
+  | { type: 'show-node'; id: string }
   | { type: 'show-subtitle'; start: number; end: number }
   | { type: 'highlight'; ref: StudioRef | null }
   | { type: 'draft-refs'; refs: StudioRef[] }

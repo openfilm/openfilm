@@ -133,7 +133,10 @@ film.html and the project's files.
 
 In your replies you can point at things in Studio for the person: [[clip:ID]] (a clip, by its id in film.html),
 [[t:SECONDS]] (a moment), [[range:START-END]] (a stretch, in seconds), [[track:N]] (a track, 0 is the first) and
-[[file:PATH]] (a file of the project). They show as links that open it in Studio.`;
+[[file:PATH]] (a file of the project). They show as links that open it in Studio.
+
+A canvas node the person points at (\`canvas node \`ID\`\`) is on the project's canvas, beside the film and not in it:
+read the board with \`openfilm canvas\` and change it with \`openfilm canvas apply\`.`;
 
 /** What the agent is told about where it is, on top of its own instructions. */
 export const INSTRUCTIONS = `You are working inside OpenFilm, a desktop app for making videos. Beside this chat the person sees OpenFilm Studio,
@@ -1219,7 +1222,9 @@ export class AgentSession {
     const native = cli && !this.spec.adapter ? starting(cli.path, [...this.spec.args, ...(this.logging?.args ?? []), ...(skills?.args ?? [])]) : null;
     /* what a failure names: the agent's program and its own words, as the person would run it (not our logging or skills) */
     this.command = native ? [cli.path, ...this.spec.args] : null;
-    const extra = { ...agentDefaults(this.opts.agent, shell), ...this.opts.env, ...(native ? native.env : node.env), ...(cli && this.spec.env ? this.spec.env(cli.path) : {}), ...own, ...skills?.env, ...this.logging?.env };
+    /* who it is, as `openfilm canvas` marks what it puts on the board (OPENFILM_AGENT) */
+    const extra = { ...agentDefaults(this.opts.agent, shell), ...this.opts.env, ...(native ? native.env : node.env), ...(cli && this.spec.env ? this.spec.env(cli.path) : {}), ...own, ...skills?.env, ...this.logging?.env,
+      OPENFILM_AGENT: this.spec.label };
     /* OpenCode's inline configuration carries both its skills and, in Developer mode, its logging */
     if (skills?.env?.OPENCODE_CONFIG_CONTENT && this.logging?.env?.OPENCODE_CONFIG_CONTENT) {
       extra.OPENCODE_CONFIG_CONTENT = JSON.stringify(mergeConfig(JSON.parse(skills.env.OPENCODE_CONFIG_CONTENT), JSON.parse(this.logging.env.OPENCODE_CONFIG_CONTENT)));

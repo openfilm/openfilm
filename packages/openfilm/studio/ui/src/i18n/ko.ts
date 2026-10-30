@@ -1339,6 +1339,7 @@ export const ko: Words = {
     addHere: '여기에 추가…',
     removeWire: '연결 삭제',
     colors: { gray: '회색', red: '빨강', orange: '주황', yellow: '노랑', green: '초록', blue: '파랑', purple: '보라' },
+    gone: '그 노드는 더 이상 캔버스에 없습니다',
     make: {
       image: '이미지',
       video: '동영상',

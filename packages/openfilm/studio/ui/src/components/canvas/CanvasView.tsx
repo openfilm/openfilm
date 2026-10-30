@@ -30,7 +30,7 @@ import {
   StickyNote, Trash2, Video,
 } from 'lucide-react';
 import { useT } from '@/i18n';
-import { api } from '@/api';
+import { api, projectEvents } from '@/api';
 import {
   FILE_W, GROUP_COLORS, IMAGE_RATIOS, MAKE_KINDS, MAKE_MEDIA, MAKE_SECONDS, MAKE_W, NOTE_H, NOTE_W, VIDEO_RATIOS, canvasId, canvasKey, copyOf,
   emptyHistory, inputsKey, inputsOf, isStale, makeName, makeRequest, nextOrder, readCanvasDoc, redo, remember, reorder, undo, withVersion,
@@ -39,6 +39,7 @@ import {
 import { useProviders, type ProvidersState } from '@/lib/providers';
 import { RESOURCE_DRAG_TYPE, isComputerFileDrag, readResourceDragData } from '@/lib/resource-drag';
 import type { MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
+import type { StudioRef } from '@/lib/host';
 import { useThemeChanges } from '@/lib/theme-changes';
 import { ContextMenu, type ContextMenuEntry } from '../ContextMenu';
 import { Tooltip } from '../Tooltip';
@@ -58,8 +59,8 @@ const MENU_FILES = 8;
 const MOD = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform) ? '⌘' : 'Ctrl+';
 const SHIFT = MOD === '⌘' ? '⇧⌘' : 'Ctrl+Shift+';
 
-type FileData = { path: string };
-type NoteData = { text: string };
+type FileData = { path: string; by?: CanvasNode['by'] };
+type NoteData = { text: string; by?: CanvasNode['by'] };
 type FrameData = { label: string; color: GroupColor };
 type MakeData = Pick<CanvasNode, 'prompt' | 'via' | 'model' | 'opts' | 'versions' | 'path' | 'made' | 'by'> & { make: MakeKind };
 type FileNode = Node<FileData, 'file'>;
@@ -175,8 +176,9 @@ function toFlow(doc: CanvasDoc): { nodes: BoardNode[]; edges: Edge[] } {
         const { id: _id, x: _x, y: _y, w: _w, h: _h, parent: _parent, text: _text, group: _group, color: _color, ...data } = n;
         return { ...base, type: 'make', width: n.w ?? MAKE_W, data: { ...data, make: n.make } };
       }
-      if (n.path != null) return { ...base, type: 'file', width: n.w ?? FILE_W, data: { path: n.path } };
-      return { ...base, type: 'note', width: n.w ?? NOTE_W, height: n.h ?? NOTE_H, data: { text: n.text ?? '' } };
+      const by = n.by ? { by: n.by } : {};
+      if (n.path != null) return { ...base, type: 'file', width: n.w ?? FILE_W, data: { path: n.path, ...by } };
+      return { ...base, type: 'note', width: n.w ?? NOTE_W, height: n.h ?? NOTE_H, data: { text: n.text ?? '', ...by } };
     }),
     edges: doc.edges.map((e) => ({ id: e.id, source: e.from, target: e.to, ...(e.order != null ? { data: { order: e.order } } : {}) })),
   };
@@ -188,10 +190,11 @@ function fromFlow(nodes: readonly BoardNode[], edges: readonly Edge[]): CanvasDo
       const box = { id: n.id, x: Math.round(n.position.x), y: Math.round(n.position.y), ...(n.parentId ? { parent: n.parentId } : {}) };
       const w = Math.round(n.width ?? n.measured?.width ?? (n.type === 'note' ? NOTE_W : n.type === 'make' ? MAKE_W : FILE_W));
       const h = () => Math.round(n.height ?? n.measured?.height ?? NOTE_H);
-      if (n.type === 'file') return { ...box, w, path: n.data.path };
+      const by = 'by' in n.data && n.data.by ? { by: n.data.by } : {};
+      if (n.type === 'file') return { ...box, ...by, w, path: n.data.path };
       if (n.type === 'make') return { ...box, w, ...n.data };
       if (n.type === 'frame') return { id: n.id, x: box.x, y: box.y, w, h: h(), group: n.data.label, color: n.data.color };
-      return { ...box, w, h: h(), text: n.data.text };
+      return { ...box, ...by, w, h: h(), text: n.data.text };
     }),
     edges: edges.map((e) => ({ id: e.id, from: e.source, to: e.target, ...(typeof e.data?.order === 'number' ? { order: e.data.order } : {}) })),
   };
@@ -209,6 +212,16 @@ const RESIZE_HANDLE = '!h-2 !w-2 !rounded-sm !border !border-[var(--text)] !bg-[
 const unselectEdges = (list: Edge[]) => (list.some((e) => e.selected) ? list.map((e) => (e.selected ? { ...e, selected: false } : e)) : list);
 /** zoomed out past FAR: drawn as outlines */
 const farSelector = (s: { transform: [number, number, number] }) => s.transform[2] < FAR;
+
+/** Who put a node on the board, when an agent did. */
+function ByAgent({ by }: { by: NonNullable<CanvasNode['by']> }) {
+  const t = useT();
+  return (
+    <span className="pointer-events-auto ml-auto flex shrink-0 items-center gap-1" title={t('canvas.make.by').replace('{agent}', by.agent)}>
+      <Bot size={11} />{by.agent}
+    </span>
+  );
+}
 
 /** A node's buttons over it while it is the one selected: add it to the timeline, remove it from the board. */
 function NodeButtons({ id, file }: { id: string; file?: WorkspaceResource | null }) {
@@ -251,6 +264,7 @@ function FileNodeView({ id, data, selected }: NodeProps<FileNode>) {
         handleClassName={RESIZE_HANDLE} onResizeStart={board.willChange} />
       <div className="pointer-events-none absolute -top-5 left-0 right-0 flex items-center gap-1.5 truncate text-[11px] text-[var(--text-faint)]">
         <Icon size={11} className="shrink-0" /><span className="truncate">{name}</span>
+        {data.by ? <ByAgent by={data.by} /> : null}
       </div>
       <div className={`overflow-hidden rounded-[10px] border bg-[var(--surface)] ${selected ? 'border-[var(--text)]' : 'border-[var(--border)]'}`}>
         {far ? (
@@ -296,8 +310,9 @@ function NoteNodeView({ id, data, selected }: NodeProps<NoteNode>) {
       <NodeButtons id={id} />
       <NodeResizer isVisible={selected} minWidth={140} minHeight={60} lineClassName="!border-transparent"
         handleClassName={RESIZE_HANDLE} onResizeStart={board.willChange} />
-      <div className="pointer-events-none absolute -top-5 left-0 flex items-center gap-1.5 text-[11px] text-[var(--text-faint)]">
+      <div className="pointer-events-none absolute -top-5 left-0 right-0 flex items-center gap-1.5 text-[11px] text-[var(--text-faint)]">
         <StickyNote size={11} />{t('canvas.note')}
+        {data.by ? <ByAgent by={data.by} /> : null}
       </div>
       <div className={`flex h-full w-full overflow-hidden rounded-[10px] border bg-[var(--surface-2)] ${selected || editing ? 'border-[var(--text)]' : 'border-[var(--border)]'}`}>
         {editing ? (
@@ -407,7 +422,7 @@ function MakeNodeView({ id, data, selected }: NodeProps<MakeNode>) {
             <span className="rounded px-1 text-[10.5px] font-medium text-amber-500">{t('canvas.make.stale')}</span>
           </span>
         ) : null}
-        {data.by ? <span className="flex shrink-0 items-center gap-1" title={t('canvas.make.by').replace('{agent}', data.by.agent)}><Bot size={11} />{data.by.agent}</span> : null}
+        {data.by ? <ByAgent by={data.by} /> : null}
       </div>
       <div className={`overflow-hidden rounded-[10px] border bg-[var(--surface)] ${selected ? 'border-[var(--text)]' : 'border-[var(--border)]'}`}>
         <div className="relative w-full bg-[var(--surface-2)]" style={media === 'audio' ? undefined : { aspectRatio: `${w} / ${h}` }}>
@@ -583,7 +598,7 @@ function AddMenu({ menu, files, onNote, onMake, onFile, onClose }: {
 /** what was copied last, on any board of this page: pasted with new ids, a step further each time */
 let clipboard: { doc: CanvasDoc; pasted: number } | null = null;
 
-function Board({ projectId, folder, files, sources, onAddToFilm, onImportFiles, onOpenSettings, onError }: CanvasViewProps) {
+function Board({ projectId, folder, files, sources, onAddToFilm, onImportFiles, onOpenSettings, onError, focus, onRefer }: CanvasViewProps) {
   const t = useT();
   const flow = useReactFlow<BoardNode, Edge>();
   const [nodes, setNodes, onNodesChange] = useNodesState<BoardNode>([]);
@@ -631,6 +646,19 @@ function Board({ projectId, folder, files, sources, onAddToFilm, onImportFiles, 
     }, (e: unknown) => { if (live) { setReady(true); onError(t('canvas.saveFailed').replace('{error}', e instanceof Error ? e.message : String(e))); } });
     return () => { live = false; };
   }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* what an agent changed (`openfilm canvas apply`) comes onto the board at once, and ⌘Z takes it back as any change */
+  React.useEffect(() => projectEvents(projectId, (event) => {
+    if (event.type !== 'canvas') return;
+    void api.canvas(projectId).then((raw) => {
+      const doc = readCanvasDoc(raw);
+      const key = canvasKey(doc);
+      saved.current = key;
+      if (key === canvasKey(docNow())) return;
+      willChange();
+      show(doc, selectedIds());
+    }, () => {});
+  }), [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* written a moment after the last change that says something new (a selection says nothing) */
   React.useEffect(() => {
@@ -831,6 +859,39 @@ function Board({ projectId, folder, files, sources, onAddToFilm, onImportFiles, 
     }
   };
 
+  /* ── the chat: nodes as references (⌘L), and a node a reference points at shown ── */
+  const refOf = (n: BoardNode): StudioRef | null => {
+    const words = (text: string, fallback: string) => text.replace(/\s+/g, ' ').trim().slice(0, 60) || fallback;
+    const picture = (path: string | undefined) => {
+      const file = path ? byPath.get(path) : undefined;
+      const src = !file ? undefined : file.kind === 'image' ? sources.file(file) : file.kind === 'video' ? sources.poster?.(file) : file.kind === 'mg' ? sources.pagePoster?.(file) : undefined;
+      return src ? { image: { src } } : {};
+    };
+    if (n.type === 'note') return { kind: 'node', id: n.id, nodeKind: 'note', label: words(n.data.text, t('canvas.note')), text: n.data.text };
+    if (n.type === 'frame') return { kind: 'node', id: n.id, nodeKind: 'group', label: n.data.label || t('canvas.group') };
+    if (n.type === 'file') {
+      return { kind: 'node', id: n.id, nodeKind: 'file', label: byPath.get(n.data.path)?.name ?? n.data.path.split('/').pop() ?? n.data.path, path: n.data.path, ...picture(n.data.path) };
+    }
+    return {
+      kind: 'node', id: n.id, nodeKind: n.data.make, label: words(n.data.prompt ?? '', t(`canvas.make.${n.data.make}`)), prompt: n.data.prompt ?? '',
+      ...(n.data.path ? { path: n.data.path } : {}), ...(n.data.versions?.length ? { versions: n.data.versions.length } : {}), ...picture(n.data.path),
+    };
+  };
+  const refer = () => {
+    if (!onRefer) return false;
+    const refs = now.current.nodes.filter((n) => n.selected).flatMap((n) => refOf(n) ?? []);
+    if (!refs.length) return false;
+    onRefer(refs);
+    return true;
+  };
+  React.useEffect(() => {
+    if (!focus || !ready) return;
+    const node = now.current.nodes.find((n) => n.id === focus.id);
+    if (!node) { onError(t('canvas.gone')); return; }
+    setNodes((list) => list.map((n) => ({ ...n, selected: n.id === focus.id })));
+    requestAnimationFrame(() => { void flow.fitView({ nodes: [{ id: focus.id }], padding: 0.6, maxZoom: 1, duration: 250 }); });
+  }, [focus, ready]); // eslint-disable-line react-hooks/exhaustive-deps
+
   /* ── keys: the board's own, and the page's while nothing else has them (a menu closed, a node drawn again): the
      board covers the edit, so Studio's ⌘Z, Space and the rest are not to act on a film out of sight ── */
   const onKeyDown = (event: KeyboardEvent) => {
@@ -850,6 +911,7 @@ function Board({ projectId, folder, files, sources, onAddToFilm, onImportFiles, 
     else if (mod && key === 'd') { done(); duplicate(); }
     else if (mod && key === 'a') { done(); selectAll(); }
     else if (mod && key === 'g') { done(); if (event.shiftKey) ungroup(); else group(); }
+    else if (mod && key === 'l') { if (refer()) done(); }
     else if (!mod && (key === 'backspace' || key === 'delete')) { done(); removeSelected(); }
     else if (!mod && key === '/') {
       done();
@@ -896,6 +958,7 @@ function Board({ projectId, folder, files, sources, onAddToFilm, onImportFiles, 
         : { id: 'make', label: node.data.versions?.length ? t('canvas.make.again') : t('canvas.make.run'), icon: <Sparkles size={15} />, shortcut: `${MOD}↵`,
           disabled: !board.choices(node.data.make).length, hint: t('canvas.make.noService'), onSelect: () => makeNow(node.id) }] : []),
       ...(file && file.kind !== 'other' ? [{ id: 'film', label: t('canvas.addToFilm'), icon: <Clapperboard size={15} />, onSelect: () => onAddToFilm(file) }, { id: 's0', separator: true as const }] : []),
+      ...(onRefer ? [{ id: 'refer', label: t('host.refer'), shortcut: `${MOD}L`, onSelect: () => { refer(); } }] : []),
       { id: 'copy', label: t('canvas.copy'), shortcut: `${MOD}C`, onSelect: () => { copy(); } },
       { id: 'duplicate', label: t('canvas.duplicate'), shortcut: `${MOD}D`, onSelect: duplicate },
       ...(node.type === 'frame'
@@ -1050,6 +1113,10 @@ export interface CanvasViewProps {
   onImportFiles: (files: File[]) => Promise<string[]>;
   /** where the person connects a service to make with */
   onOpenSettings: () => void;
+  /** the selected nodes into the chat as references (⌘L); none: no chat here */
+  onRefer?: (refs: StudioRef[]) => void;
+  /** a node to show (a chat's reference to it clicked): selected and in view; `n` is new each time */
+  focus?: { id: string; n: number } | null;
   onError: (message: string) => void;
 }
 

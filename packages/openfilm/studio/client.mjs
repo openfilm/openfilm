@@ -271,6 +271,35 @@ function projectAround(from) {
 }
 
 /**
+ * `openfilm canvas`: the canvas of the project around the current folder, as JSON; `openfilm canvas apply <steps>`
+ * takes an agent's steps on it (a JSON list, a .json file, or - for standard input; see applyCanvasOps in
+ * server/canvas.mjs), all or none, and Studio shows them on the board at once. What it adds is the agent's that runs it
+ * (OPENFILM_AGENT, and OPENFILM_SESSION when it says which conversation).
+ * @param {string[]} args @param {(line: string) => void} [say] @returns {Promise<{ ok: boolean, usage?: boolean, lines: string[] }>}
+ */
+export async function canvasCommand(args, say) {
+  const [verb, given] = args;
+  if (verb !== undefined && verb !== 'apply') return { ok: false, usage: true, lines: ['openfilm canvas: `canvas` shows the board, `canvas apply <steps>` changes it'] };
+  const folder = projectAround('.');
+  if (!folder) return { ok: false, usage: true, lines: [`openfilm canvas: ${resolve('.')} is not in a project; \`openfilm open\` makes one`] };
+  /** @type {unknown} */
+  let ops;
+  if (verb === 'apply') {
+    if (given === undefined) return { ok: false, usage: true, lines: ['openfilm canvas apply: the steps, as JSON: [{"op":"add","kind":"note","text":"…"}], a .json file, or - to read them'] };
+    const text = given === '-' ? readFileSync(0, 'utf8') : given.trim().startsWith('[') ? given : readFileSync(given, 'utf8');
+    try { ops = JSON.parse(text); } catch (e) { return { ok: false, usage: true, lines: [`openfilm canvas apply: the steps are not JSON: ${/** @type {Error} */ (e).message}`] }; }
+  }
+  const agent = process.env.OPENFILM_AGENT;
+  const by = agent ? { agent, ...(process.env.OPENFILM_SESSION ? { session: process.env.OPENFILM_SESSION } : {}) } : undefined;
+  const run = await ensureStudio(say);
+  const answer = await post(run, '/api/canvas', { folder, ...(ops === undefined ? {} : { ops }), ...(by ? { by } : {}) });
+  if (!answer?.ok) return { ok: false, usage: answer?.code === 2, lines: [`openfilm canvas: ${answer?.text ?? answer?.error ?? 'Studio did not say how it went'}`] };
+  if (ops === undefined) return { ok: true, lines: [JSON.stringify(answer.canvas, null, 1)] };
+  const { nodes, edges } = answer.canvas;
+  return { ok: true, lines: [`Done${answer.added.length ? `: added ${answer.added.join(', ')}` : ''}. The board has ${nodes.length} nodes and ${edges.length} wires; the person sees it now.`] };
+}
+
+/**
  * `openfilm get [verb] [--option value …] [--yes]`: media for the project around the current folder, made by Studio
  * (started when needed). Without a verb (or with --help): what can be got here now. `--via <provider>` and
  * `--model <id>` override the person's choices in Studio's Settings (Models) for one run; the listing leaves them

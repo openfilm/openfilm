@@ -8,12 +8,13 @@ const USAGE = `openfilm — a film is a function of time: given t, it draws that
   openfilm look    [what] [t | a-b]    check the film and draw it: a contact sheet with its sound and loudness
   openfilm render  [a-b]               the MP4, saved beside film.html
   openfilm get     [what] [--options]  voice-over, music, sound effects, transcripts, images, video, from a connected service
+  openfilm canvas  [apply <steps>]     the canvas beside the edit: read it, or lay out notes, files and what to make on it
   openfilm skills                      the skills this film can be made with; \`openfilm skill <name>\` prints one
   openfilm update                      the newest OpenFilm; Studio starts again on it
   openfilm doctor                      what this computer has for OpenFilm, to paste into an issue
 
   Run with no arguments for the manual; \`openfilm <command> --help\` for one command's options; --version for the version.
-  look, render and get work on the project around the current folder.
+  look, render, get and canvas work on the project around the current folder.
   Exit status: 0 done, 1 the film or the command failed (the output says why), 2 not a project or a wrong command.`;
 
 /* one command's help: what it does, what it takes, where its output goes */
@@ -71,6 +72,25 @@ openfilm skill remove <name>
   opened in Studio first, so the person watches it.
 
   --count <n>     frames in a sheet (12)`,
+  canvas: `openfilm canvas [apply <steps>]
+
+  The project's canvas: a board beside the edit where the person lays out notes, the project's files and nodes that
+  make a picture, a clip or a sound, wired into each other. Nothing on it is in the film until it is put on the timeline.
+
+  canvas                 the board as JSON: nodes (id, x, y; a note's text, a file's path, a group's name and color,
+                         a making node's make, prompt, model, opts, versions and the one shown, path) and wires
+                         (from, to, order: what goes into a node, in that order)
+  canvas apply <steps>   steps on it, all taken or none: a JSON list, a .json file, or - to read it
+    {"op":"add","kind":"note|file|image|video|sfx|music|group","id":"…", text | path | prompt, via, model,
+      opts: {ratio, sec, frames}, name, color, x, y, w, h, group: "<group id>", inputs: ["<id>", …], around: ["<id>", …]}
+                         a node; its id names it for later steps. Without x, y it goes right of its inputs (wired into
+                         it in that order), else below the rest. A group made around nodes holds them.
+    {"op":"set","id":"…", …}   {"op":"remove","id":"…"}   {"op":"wire","from":"…","to":"…"}   {"op":"unwire",…}
+    {"op":"version","id":"…","path":"assets/…"}   a file made with \`openfilm get\` as a making node's newest version
+
+  A making node is asked its prompt with the notes wired into it first; pictures wired into a video are its references
+  (or, with opts.frames, its first and last frames). The person presses Make, or you make it with \`openfilm get\` and
+  add the file as a version. The person sees each change on the board at once.`,
   render: `openfilm render [a-b]
 
   Render the project around the current folder to video.
@@ -167,6 +187,7 @@ if (RAW[0] === 'get') {
         return m.render(args, opts);
       }));
     },
+    canvas: () => import('../studio/client.mjs').then((m) => m.canvasCommand(args, (line) => console.error(line))),
     update: () => import('../studio/client.mjs').then((m) => m.updateOpenfilm((line) => console.error(line))),
     skills: () => import('../src/skills-cli.mjs').then((m) => m.skillsCommand(RUN)),
     skill: () => import('../src/skills-cli.mjs').then((m) => m.skillCommand(args, RUN)),

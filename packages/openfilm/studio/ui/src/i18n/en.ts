@@ -1343,6 +1343,7 @@ export const en = {
     addHere: 'Add here…',
     removeWire: 'Remove connection',
     colors: { gray: 'Gray', red: 'Red', orange: 'Orange', yellow: 'Yellow', green: 'Green', blue: 'Blue', purple: 'Purple' },
+    gone: 'That node is no longer on the canvas',
     make: {
       image: 'Image',
       video: 'Video',

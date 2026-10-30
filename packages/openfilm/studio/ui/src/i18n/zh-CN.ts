@@ -1343,6 +1343,7 @@ export const zhCN: Words = {
     addHere: '在此添加…',
     removeWire: '删除连线',
     colors: { gray: '灰色', red: '红色', orange: '橙色', yellow: '黄色', green: '绿色', blue: '蓝色', purple: '紫色' },
+    gone: '画布上已没有这个节点',
     make: {
       image: '图片',
       video: '视频',

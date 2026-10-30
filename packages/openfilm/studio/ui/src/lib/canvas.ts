@@ -21,6 +21,8 @@ export interface CanvasNode {
   color?: GroupColor;
   /** the group it is in (its x, y then from the group's corner) */
   parent?: string;
+  /** who put it here, when not the person: an agent, in which of its conversations */
+  by?: { agent: string; session?: string };
   /**
    * a node that makes something (MAKE_KINDS) with the person's services: what it is asked (`prompt`, and the words and
    * pictures wired into it), by which service and model (none: the person's choice in Settings) and its options; what
@@ -34,8 +36,6 @@ export interface CanvasNode {
   versions?: string[];
   /** what it was asked when it last made one (inputsKey): when that is not what it would be asked now, it is stale */
   made?: string;
-  /** who put it here, when not the person: an agent, in which of its conversations */
-  by?: { agent: string; session?: string };
 }
 
 /** What a node can make, as `get` names it. */
@@ -76,14 +76,18 @@ export function readCanvasDoc(raw: unknown): CanvasDoc {
   for (const n of Array.isArray(doc?.nodes) ? doc.nodes as Array<Record<string, unknown>> : []) {
     if (!n || typeof n.id !== 'string' || ids.has(n.id) || !num(n.x) || !num(n.y)) continue;
     const box = { id: n.id, x: n.x, y: n.y, ...(num(n.w) ? { w: n.w } : {}), ...(num(n.h) ? { h: n.h } : {}) };
-    const parent = typeof n.parent === 'string' ? { parent: n.parent } : {};
+    const by = n.by as { agent?: unknown; session?: unknown } | undefined;
+    const parent = {
+      ...(typeof n.parent === 'string' ? { parent: n.parent } : {}),
+      ...(by && typeof by.agent === 'string' && by.agent ? { by: { agent: by.agent, ...(typeof by.session === 'string' && by.session ? { session: by.session } : {}) } } : {}),
+    };
     const make = MAKE_KINDS.find((k) => k === n.make);
     if (make) nodes.push({ ...box, ...parent, ...readMake(n), make });
     else if (typeof n.path === 'string' && n.path) nodes.push({ ...box, ...parent, path: n.path });
     else if (typeof n.text === 'string') nodes.push({ ...box, ...parent, text: n.text });
     else if (typeof n.group === 'string') {
       const color = GROUP_COLORS.find((c) => c === n.color) ?? 'gray';
-      nodes.push({ ...box, group: n.group, color });
+      nodes.push({ ...box, ...(parent.by ? { by: parent.by } : {}), group: n.group, color });
     }
     else continue;
     ids.add(n.id);
@@ -104,7 +108,6 @@ function readMake(n: Record<string, unknown>): Omit<CanvasNode, 'id' | 'x' | 'y'
     ...(o.frames === true ? { frames: true } : {}),
   };
   const versions = Array.isArray(n.versions) ? n.versions.filter((v): v is string => typeof v === 'string' && v.length > 0) : [];
-  const by = n.by as { agent?: unknown; session?: unknown } | undefined;
   const fields = {
     prompt: typeof n.prompt === 'string' ? n.prompt : '',
     via: str(n.via), model: str(n.model),
@@ -112,7 +115,6 @@ function readMake(n: Record<string, unknown>): Omit<CanvasNode, 'id' | 'x' | 'y'
     versions: versions.length ? versions : undefined,
     path: str(n.path) && versions.includes(n.path as string) ? n.path as string : versions.at(-1),
     made: str(n.made),
-    by: by && typeof by.agent === 'string' && by.agent ? { agent: by.agent, ...(str(by.session) ? { session: by.session as string } : {}) } : undefined,
   };
   return Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
 }

@@ -330,6 +330,7 @@ function commandFor(ref: StudioRef): StudioCommand {
     case 'range': return { type: 'show-range', start: ref.start, end: ref.end };
     case 'track': return { type: 'show-track', track: ref.track };
     case 'file': return { type: 'show-file', path: ref.path };
+    case 'node': return { type: 'show-node', id: ref.id };
     case 'subtitle': return { type: 'show-subtitle', start: ref.start, end: ref.end };
     /* another film: the examples, where it came from */
     case 'example': return { type: 'show-examples', open: { kind: 'example', id: ref.id } };

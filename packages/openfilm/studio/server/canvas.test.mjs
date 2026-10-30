@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CANVAS_FILE, parseCanvas, readCanvas, writeCanvas } from './canvas.mjs';
+import { CANVAS_FILE, CanvasOpError, applyCanvasOps, parseCanvas, readCanvas, writeCanvas } from './canvas.mjs';
 
 test('a canvas keeps notes and project files as nodes, and edges between nodes it has', () => {
   assert.deepEqual(parseCanvas({
@@ -84,4 +84,40 @@ test('a making node keeps what it made in the project, the one shown among them;
     versions: ['assets/video/a.mp4', 'assets/video/b.mp4'], path: 'assets/video/a.mp4', by: { agent: 'codex' } });
   assert.deepEqual(kept.nodes[2], { id: 'q', x: 0, y: 0, path: 'assets/a.png' }, 'not a kind it can make: a file');
   assert.deepEqual(kept.edges, [{ id: 'e', from: 'n', to: 'm', order: 2 }, { id: 'f', from: 'q', to: 'm' }]);
+});
+
+test("an agent's steps: added where they go, wired in order, kept as its", async () => {
+  const exists = async (/** @type {string} */ path) => ['assets/a.png', 'assets/image/b.png'].includes(path);
+  const { canvas, added } = await applyCanvasOps({ nodes: [{ id: 'n0', x: 0, y: 0, w: 240, h: 140, text: 'there' }], edges: [] }, [
+    { op: 'add', kind: 'note', id: 'mood', text: 'cold blue dawn' },
+    { op: 'add', kind: 'file', id: 'ref', path: 'assets/a.png', x: 400, y: 220 },
+    { op: 'add', kind: 'video', id: 'shot', prompt: 'a slow push in', inputs: ['ref', 'mood'], opts: { sec: 6 } },
+    { op: 'version', id: 'shot', path: 'assets/image/b.png' },
+    { op: 'add', kind: 'group', id: 'g', name: 'Opening', color: 'blue', around: ['mood', 'ref'] },
+    { op: 'set', id: 'mood', text: 'warm dusk' },
+  ], { by: { agent: 'codex', session: 's1' }, exists });
+  assert.deepEqual(added, ['mood', 'ref', 'shot', 'g']);
+  const by = (/** @type {string} */ id) => /** @type {any} */ (canvas.nodes.find((n) => n.id === id));
+  assert.deepEqual({ x: by('mood').x + by('g').x, y: by('mood').y + by('g').y }, { x: 0, y: 220 }, 'below what was there, where it stays in its group');
+  assert.equal(by('mood').text, 'warm dusk');
+  assert.equal(by('mood').parent, 'g');
+  assert.deepEqual(by('mood').by, { agent: 'codex', session: 's1' });
+  assert.equal(by('n0').by, undefined, 'what was there is as it was');
+  assert.equal(by('shot').x, 400 + 280 + 80, 'right of its inputs');
+  assert.deepEqual(by('shot').versions, ['assets/image/b.png']);
+  assert.deepEqual(canvas.edges.map((e) => [e.from, e.to, e.order]), [['ref', 'shot', 0], ['mood', 'shot', 1]]);
+});
+
+test("an agent's steps are all taken or none, and a wrong one says which and why", async () => {
+  const exists = async () => false;
+  const board = { nodes: [{ id: 'a', x: 0, y: 0, text: '' }], edges: [] };
+  const wrong = async (/** @type {unknown[]} */ ops, /** @type {RegExp} */ said) =>
+    assert.rejects(applyCanvasOps(board, ops, { exists }), (e) => e instanceof CanvasOpError && said.test(e.message));
+  await wrong([{ op: 'add', kind: 'note', id: 'b' }, { op: 'wire', from: 'b', to: 'zzz' }], /step 2: there is no node "zzz"/);
+  await wrong([{ op: 'add', kind: 'file', path: 'assets/none.png' }], /step 1: assets\/none.png is not in the project/);
+  await wrong([{ op: 'add', kind: 'hologram' }], /kind is one of/);
+  await wrong([{ op: 'set', id: 'a', prompt: 'x' }], /a note node has no prompt/);
+  await wrong([{ op: 'version', id: 'a', path: 'assets/x.png' }], /does not make anything/);
+  await wrong([{ op: 'add', kind: 'note', id: 'a' }], /there is a node a on the board already/);
+  assert.deepEqual(board, { nodes: [{ id: 'a', x: 0, y: 0, text: '' }], edges: [] }, 'nothing was changed');
 });

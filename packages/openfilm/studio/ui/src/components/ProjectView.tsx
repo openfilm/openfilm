@@ -379,6 +379,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   React.useEffect(() => { if (listing) warmProjectMedia(projectId, listing, mediaSources); }, [projectId, listing, mediaSources]);
   /* the canvas over the panes, or the edit: by project, as left */
   const [canvasOpen, setCanvasOpenState] = React.useState(() => canvasShown(projectId));
+  /** the canvas node a chat's reference asked to be shown (`n`: each time again) */
+  const [canvasFocus, setCanvasFocus] = React.useState<{ id: string; n: number } | null>(null);
   /* opening it stops the film playing (the panes under it are hidden): the player's pause, set once it is made */
   const pauseRef = React.useRef<() => void>(() => {});
   React.useEffect(() => { setCanvasOpenState(canvasShown(projectId)); }, [projectId]);
@@ -1480,6 +1482,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       setSelectedKeys(keys);
       return;
     }
+    if (command.type === 'show-node' && typeof command.id === 'string') { setCanvasOpen(true); setCanvasFocus({ id: command.id, n: Date.now() }); return; }
     if (command.type === 'show-file') {
       const file = listing ? [...listing.pages, ...listing.files].find((f) => f.path === command.path) : undefined;
       if (!file) return;
@@ -3212,6 +3215,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 <React.Suspense fallback={null}>
                   <CanvasView projectId={projectId} folder={loaded?.project.path ?? ''} files={canvasFiles} sources={mediaSources} onAddToFilm={(file) => { void addFromCanvas(file); }}
                     onImportFiles={(dropped) => onImport(dropped, 'assets', () => {})} onOpenSettings={() => setSettingsOpen('providers')}
+                    focus={canvasFocus} onRefer={studioHost?.refer ? (refs) => { for (const ref of refs) studioHost?.refer?.(ref); } : undefined}
                     onError={toast.showError} />
                 </React.Suspense>
               </div>

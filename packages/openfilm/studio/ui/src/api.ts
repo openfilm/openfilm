@@ -217,6 +217,8 @@ export type StudioNotice = { id: string; kind: 'balance'; provider: string; prov
 export type FolderEvent = { type: 'film'; rev: string } | { type: 'files'; paths?: string[] } | { type: 'history' } | { type: 'export'; job: ExportJob } | { type: 'open'; to: string }
   | { type: 'history-progress'; op: string; phase: string; done: number; total: number }
   | { type: 'ask'; ask: SpendAsk } | { type: 'asked'; id: string } | { type: 'notice'; notice: StudioNotice } | { type: 'project'; project: Project }
+  /* an agent changed the canvas (`openfilm canvas apply`) */
+  | { type: 'canvas' }
   /* the project was deleted, or its folder or film file is missing: its pages leave it */
   | { type: 'gone' };
 

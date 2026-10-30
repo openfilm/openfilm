@@ -1342,6 +1342,7 @@ export const es: Words = {
     addHere: 'Añadir aquí…',
     removeWire: 'Eliminar conexión',
     colors: { gray: 'Gris', red: 'Rojo', orange: 'Naranja', yellow: 'Amarillo', green: 'Verde', blue: 'Azul', purple: 'Morado' },
+    gone: 'Ese nodo ya no está en el lienzo',
     make: {
       image: 'Imagen',
       video: 'Vídeo',

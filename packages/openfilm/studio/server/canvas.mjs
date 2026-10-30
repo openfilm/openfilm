@@ -6,16 +6,22 @@
  *
  * A node is a note (`text`), a file of the project (`path`, project-relative), a group (`group`, its name, and a
  * `color`) or a node that makes something with the person's services (`make`: image, video, sfx or music; its
- * `prompt`, `via` and `model`, its `opts`, the files it made, `versions`, the one shown `path`, `made` what it was asked
- * for that one, and `by`, the agent that put it there), at `x`, `y` on the board, `w` wide (and `h` high, for a note
- * or a group). A node in a group names it (`parent`), and its `x`, `y` are from the group's corner. An edge goes from
- * one node to another, `order` its place among those into that node.
+ * `prompt`, `via` and `model`, its `opts`, the files it made, `versions`, the one shown `path`, and `made` what it was
+ * asked when it last made one), at `x`, `y` on the board, `w` wide (and `h` high, for a note or a group). A node in a
+ * group names it (`parent`), and its `x`, `y` are from the group's corner; one an agent put there names it (`by`). An
+ * edge goes from one node to another, `order` its place among those into that node.
  *
  *   GET canvas                    → { nodes, edges }
- *   PUT canvas { nodes, edges }   → { nodes, edges }: the whole board, as kept
+ *   PUT canvas { nodes, edges }   → { nodes, edges }: the whole board, as kept (the board in Studio writes it)
+ *
+ * An agent changes it a step at a time (`openfilm canvas`, studio/client.mjs), each step checked and all of them kept
+ * or none (applyCanvasOps): the board shown in Studio takes them at once (a `canvas` event).
+ *
+ *   POST /api/canvas { folder, ops?, by? } → { ok: true, canvas, added } or { ok: false, text }
  */
-import { mkdir, readFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { mkdir, readFile, stat } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
+import { FILM_FILE } from '../../src/film-doc.mjs';
 import { writeAtomic } from './atomic.mjs';
 import { HttpError, json, readJson } from './http.mjs';
 import { TOOL_DIR } from './projects.mjs';
@@ -39,7 +45,7 @@ const VERSIONS_MAX = 50;
 const SHORT_MAX = 120;
 
 /**
- * @typedef {{ id: string, x: number, y: number, w?: number, h?: number, parent?: string } & ({ text: string } | { path: string } | { group: string, color: string } | { make: string })} CanvasNode
+ * @typedef {{ id: string, x: number, y: number, w?: number, h?: number, parent?: string, by?: { agent: string, session?: string } } & ({ text: string } | { path: string } | { group: string, color: string } | { make: string })} CanvasNode
  * @typedef {{ id: string, from: string, to: string, order?: number }} CanvasEdge
  * @typedef {{ nodes: CanvasNode[], edges: CanvasEdge[] }} Canvas
  */
@@ -71,12 +77,12 @@ export function parseCanvas(raw) {
     const w = size(n.w);
     const h = size(n.h);
     const box = { id: /** @type {string} */ (n.id), x, y, ...(w ? { w } : {}), ...(h ? { h } : {}) };
-    const parent = isId(n.parent) ? { parent: /** @type {string} */ (n.parent) } : {};
+    const parent = { ...(isId(n.parent) ? { parent: /** @type {string} */ (n.parent) } : {}), ...readBy(n.by) };
     if (MAKE_KINDS.includes(String(n.make))) out.nodes.push({ ...box, ...parent, ...readMake(n), make: String(n.make) });
     else if (projectPath(n.path)) out.nodes.push({ ...box, ...parent, path: /** @type {string} */ (n.path) });
     else if (typeof n.text === 'string') out.nodes.push({ ...box, ...parent, text: n.text.slice(0, TEXT_MAX) });
     else if (typeof n.group === 'string') {
-      out.nodes.push({ ...box, group: n.group.trim().slice(0, NAME_MAX), color: GROUP_COLORS.includes(String(n.color)) ? String(n.color) : 'gray' });
+      out.nodes.push({ ...box, ...readBy(n.by), group: n.group.trim().slice(0, NAME_MAX), color: GROUP_COLORS.includes(String(n.color)) ? String(n.color) : 'gray' });
     }
     else continue;
     ids.add(n.id);
@@ -97,6 +103,14 @@ export function parseCanvas(raw) {
   return out;
 }
 
+/** Who put a node there, when an agent did: `{ by: { agent, session? } }`, else nothing. @param {unknown} by */
+function readBy(by) {
+  /** @param {unknown} v */
+  const short = (v) => (typeof v === 'string' && v.length > 0 && v.length <= SHORT_MAX ? v : undefined);
+  if (!isRecord(by) || !short(by.agent)) return {};
+  return { by: { agent: /** @type {string} */ (by.agent), ...(short(by.session) ? { session: /** @type {string} */ (by.session) } : {}) } };
+}
+
 /** A making node's own fields, as kept (its kind aside). @param {Record<string, unknown>} n */
 function readMake(n) {
   /** @param {unknown} v */
@@ -108,7 +122,6 @@ function readMake(n) {
     ...(o.frames === true ? { frames: true } : {}),
   };
   const versions = (Array.isArray(n.versions) ? n.versions : []).filter(projectPath).slice(-VERSIONS_MAX);
-  const by = isRecord(n.by) && short(n.by.agent) ? { agent: n.by.agent, ...(short(n.by.session) ? { session: n.by.session } : {}) } : undefined;
   const fields = {
     prompt: typeof n.prompt === 'string' ? n.prompt.slice(0, TEXT_MAX) : '',
     via: short(n.via), model: short(n.model),
@@ -116,7 +129,6 @@ function readMake(n) {
     versions: versions.length ? versions : undefined,
     path: versions.includes(n.path) ? n.path : versions.at(-1),
     made: short(n.made),
-    by,
   };
   return Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
 }
@@ -146,4 +158,198 @@ export async function canvasRoute(req, res, root, rest) {
   if (req.method === 'GET') { json(res, 200, await readCanvas(root)); return true; }
   if (req.method === 'PUT') { json(res, 200, await writeCanvas(root, await readJson(req))); return true; }
   return false;
+}
+
+/* ── an agent's steps ─────────────────────────────────────────────────────── */
+
+const MAKE_W = 320;
+const KIND_SIZE = /** @type {Record<string, { w: number, h: number }>} */ ({
+  note: { w: 240, h: 140 }, file: { w: 280, h: 160 }, group: { w: 480, h: 320 }, make: { w: MAKE_W, h: 320 },
+});
+/** the room left between what an agent adds and what is there */
+const GAP = 80;
+const GROUP_PAD = 32;
+
+/** An agent's step that cannot be taken: which, and why. */
+export class CanvasOpError extends Error {}
+
+/** what kind of node, as its size is guessed: @param {CanvasNode} n */
+const kindOf = (n) => ('group' in n ? 'group' : 'make' in n ? 'make' : 'path' in n ? 'file' : 'note');
+/** a node's box on the board (in a group: the group's corner added) @param {CanvasNode} n @param {Map<string, CanvasNode>} byId */
+function boxOf(n, byId) {
+  const size = KIND_SIZE[kindOf(n)];
+  const w = n.w ?? size.w;
+  /* a file's picture and its name above it; a making node's, under it its words, options and what it says */
+  const h = n.h ?? (kindOf(n) === 'file' ? Math.round(w * 9 / 16) + 24 : kindOf(n) === 'make' ? Math.round(w * 9 / 16) + 260 : size.h);
+  const parent = n.parent ? byId.get(n.parent) : undefined;
+  return { x: n.x + (parent?.x ?? 0), y: n.y + (parent?.y ?? 0), w, h };
+}
+
+/**
+ * The board after an agent's steps, each checked: all are taken or none (a CanvasOpError says which step and why).
+ * A step is one of
+ *   { op: 'add', kind: note|file|image|video|sfx|music|group, id?, text?, path?, prompt?, via?, model?, opts?, name?,
+ *     color?, x?, y?, w?, h?, group?, inputs?: [id…], around?: [id…] }
+ *       a new node (`id` names it for later steps; else one is made). Where it goes, unless `x`, `y` say (on the
+ *       board, also in a group): right of its `inputs`, which are wired into it in that order, else below the rest.
+ *       `group`: the group it goes in; a group made `around` nodes holds them.
+ *   { op: 'set', id, …the fields above that the node has }   { op: 'remove', id }   (a group's nodes go with it)
+ *   { op: 'wire', from, to, order? }   { op: 'unwire', from, to }
+ *   { op: 'version', id, path }   a file of the project as the newest version of a node that makes something
+ * `by`: the agent taking them, kept on what it adds. `exists(path)`: whether a file is in the project.
+ * @param {Canvas} canvas @param {unknown} ops @param {{ by?: unknown, exists: (path: string) => Promise<boolean> }} how
+ * @returns {Promise<{ canvas: Canvas, added: string[] }>}
+ */
+export async function applyCanvasOps(canvas, ops, { by, exists }) {
+  if (!Array.isArray(ops)) throw new CanvasOpError('ops is a list of steps, e.g. [{"op":"add","kind":"note","text":"…"}]');
+  const nodes = canvas.nodes.map((n) => ({ ...n }));
+  let edges = canvas.edges.map((e) => ({ ...e }));
+  const byId = () => new Map(nodes.map((n) => [n.id, n]));
+  const added = /** @type {string[]} */ ([]);
+  const who = readBy(by);
+  let fresh = 0;
+  const newId = (/** @type {string} */ prefix) => {
+    for (;;) { const id = `${prefix}${Date.now().toString(36)}${(fresh++).toString(36)}`; if (!nodes.some((n) => n.id === id)) return id; }
+  };
+  for (const [i, raw] of ops.entries()) {
+    const step = `step ${i + 1}`;
+    if (!isRecord(raw)) throw new CanvasOpError(`${step}: a step is an object with an op`);
+    const op = /** @type {Record<string, any>} */ (raw);
+    /** @param {unknown} id */
+    const node = (id) => {
+      const n = nodes.find((m) => m.id === id);
+      if (!n) throw new CanvasOpError(`${step}: there is no node ${JSON.stringify(id)} on the board`);
+      return n;
+    };
+    /** @param {unknown} path @param {string} what */
+    const file = async (path, what) => {
+      if (!projectPath(path)) throw new CanvasOpError(`${step}: ${what} is a path in the project, e.g. assets/image/dawn.png`);
+      if (!(await exists(/** @type {string} */ (path)))) throw new CanvasOpError(`${step}: ${path} is not in the project`);
+      return /** @type {string} */ (path);
+    };
+    const wire = (/** @type {string} */ from, /** @type {string} */ to, /** @type {unknown} */ order) => {
+      if (from === to) throw new CanvasOpError(`${step}: a node is not wired into itself`);
+      if (edges.some((e) => e.from === from && e.to === to)) return;
+      const next = edges.filter((e) => e.to === to).reduce((max, e) => Math.max(max, (e.order ?? -1) + 1), 0);
+      const place = typeof order === 'number' && Number.isInteger(order) && order >= 0 ? order : next;
+      edges.push({ id: newId('e'), from, to, order: place });
+    };
+    if (op.op === 'add') {
+      const kind = String(op.kind);
+      const id = op.id === undefined ? newId('n') : op.id;
+      if (!isId(id)) throw new CanvasOpError(`${step}: id is a short name, up to 64 characters`);
+      if (nodes.some((n) => n.id === id)) throw new CanvasOpError(`${step}: there is a node ${id} on the board already`);
+      /** @type {Record<string, unknown>} */
+      let fields;
+      if (kind === 'note') fields = { text: typeof op.text === 'string' ? op.text : '' };
+      else if (kind === 'file') fields = { path: await file(op.path, 'path') };
+      else if (kind === 'group') fields = { group: typeof op.name === 'string' ? op.name : 'Group', color: op.color };
+      else if (MAKE_KINDS.includes(kind)) {
+        const path = op.path === undefined ? undefined : await file(op.path, 'path');
+        fields = { make: kind, prompt: op.prompt, via: op.via, model: op.model, opts: op.opts, ...(path ? { versions: [path], path } : {}) };
+      } else throw new CanvasOpError(`${step}: kind is one of note, file, image, video, sfx, music, group`);
+      const inputs = Array.isArray(op.inputs) ? op.inputs.map((input) => node(input).id) : [];
+      const around = kind === 'group' && Array.isArray(op.around) ? op.around.map((a) => node(a)) : [];
+      const group = op.group === undefined ? undefined : node(op.group);
+      if (group && !('group' in group)) throw new CanvasOpError(`${step}: ${group.id} is not a group`);
+      const ids = byId();
+      const size = KIND_SIZE[MAKE_KINDS.includes(kind) ? 'make' : kind];
+      let x = Number.isFinite(op.x) ? op.x : null;
+      let y = Number.isFinite(op.y) ? op.y : null;
+      let w = Number.isFinite(op.w) ? op.w : undefined;
+      let h = Number.isFinite(op.h) ? op.h : undefined;
+      if (around.length) {
+        /* round what it holds, as a group made on the board is */
+        const boxes = around.map((n) => boxOf(n, ids));
+        const x0 = Math.min(...boxes.map((b) => b.x)); const y0 = Math.min(...boxes.map((b) => b.y));
+        x ??= x0 - GROUP_PAD; y ??= y0 - GROUP_PAD - 20;
+        w ??= Math.max(...boxes.map((b) => b.x + b.w)) - x0 + 2 * GROUP_PAD;
+        h ??= Math.max(...boxes.map((b) => b.y + b.h)) - y0 + 2 * GROUP_PAD + 20;
+      } else if (x === null || y === null) {
+        const from = inputs.map((input) => boxOf(/** @type {CanvasNode} */ (ids.get(input)), ids));
+        const all = nodes.filter((n) => !n.parent).map((n) => boxOf(n, ids));
+        if (from.length) { x ??= Math.max(...from.map((b) => b.x + b.w)) + GAP; y ??= from[0].y; }
+        else if (all.length) { x ??= Math.min(...all.map((b) => b.x)); y ??= Math.max(...all.map((b) => b.y + b.h)) + GAP; }
+        else { x ??= 0; y ??= 0; }
+      }
+      /** @type {Record<string, unknown>} */
+      const made = { id, x, y, ...(w ? { w } : kind === 'group' ? { w: size.w } : {}), ...(h ? { h } : kind === 'group' ? { h: size.h } : {}), ...fields, ...who };
+      if (group) { made.parent = group.id; made.x = /** @type {number} */ (made.x) - group.x; made.y = /** @type {number} */ (made.y) - group.y; }
+      const [kept] = parseCanvas({ nodes: [...(group ? [group] : []), made], edges: [] }).nodes.slice(group ? 1 : 0);
+      if (!kept) throw new CanvasOpError(`${step}: this node could not be kept`);
+      nodes.push(/** @type {CanvasNode} */ (kept));
+      for (const n of around) {
+        if ('group' in n) throw new CanvasOpError(`${step}: a group is not put in another group`);
+        const at = boxOf(n, ids);
+        n.parent = id; n.x = at.x - /** @type {number} */ (kept.x); n.y = at.y - /** @type {number} */ (kept.y);
+      }
+      for (const input of inputs) wire(input, id, undefined);
+      added.push(id);
+    } else if (op.op === 'set') {
+      const n = node(op.id);
+      const { op: _op, id: _id, kind: _kind, ...change } = op;
+      if ('path' in n && !('make' in n) && change.path !== undefined) change.path = await file(change.path, 'path');
+      if ('make' in n && change.path !== undefined) {
+        if (!(/** @type {{ versions?: string[] }} */ (n).versions ?? []).includes(change.path)) throw new CanvasOpError(`${step}: path names one of its versions; a new one is added with op version`);
+      }
+      if ('group' in n && change.name !== undefined) { change.group = change.name; delete change.name; }
+      /* where it goes is said on the board, as for a new node: in a group, from the group's corner */
+      const parent = n.parent ? byId().get(n.parent) : undefined;
+      if (parent && Number.isFinite(change.x)) change.x -= parent.x;
+      if (parent && Number.isFinite(change.y)) change.y -= parent.y;
+      const allowed = new Set(['x', 'y', 'w', 'h', ...('text' in n ? ['text'] : []), ...('make' in n ? ['prompt', 'via', 'model', 'opts', 'path'] : []),
+        ...('group' in n ? ['group', 'color'] : []), ...('path' in n && !('make' in n) ? ['path'] : [])]);
+      const odd = Object.keys(change).filter((k) => !allowed.has(k));
+      if (odd.length) throw new CanvasOpError(`${step}: a ${kindOf(n)} node has no ${odd.join(', ')}; it has ${[...allowed].join(', ')}`);
+      const [kept] = parseCanvas({ nodes: [{ ...n, ...change }], edges: [] }).nodes;
+      if (!kept) throw new CanvasOpError(`${step}: ${n.id} could not be kept so`);
+      nodes[nodes.indexOf(n)] = { ...kept, ...(n.parent ? { parent: n.parent } : {}) };
+    } else if (op.op === 'remove') {
+      const n = node(op.id);
+      const gone = new Set([n.id, ...nodes.filter((m) => m.parent === n.id).map((m) => m.id)]);
+      for (let k = nodes.length - 1; k >= 0; k--) if (gone.has(nodes[k].id)) nodes.splice(k, 1);
+      edges = edges.filter((e) => !gone.has(e.from) && !gone.has(e.to));
+    } else if (op.op === 'wire') {
+      wire(node(op.from).id, node(op.to).id, op.order);
+    } else if (op.op === 'unwire') {
+      const before = edges.length;
+      edges = edges.filter((e) => !(e.from === op.from && e.to === op.to));
+      if (edges.length === before) throw new CanvasOpError(`${step}: there is no wire from ${op.from} to ${op.to}`);
+    } else if (op.op === 'version') {
+      const n = node(op.id);
+      if (!('make' in n)) throw new CanvasOpError(`${step}: ${n.id} does not make anything; a file goes on the board with op add, kind file`);
+      const path = await file(op.path, 'path');
+      const m = /** @type {CanvasNode & { versions?: string[], path?: string, made?: string }} */ (n);
+      m.versions = [...(m.versions ?? []).filter((v) => v !== path), path];
+      m.path = path;
+      delete m.made;
+    } else throw new CanvasOpError(`${step}: op is one of add, set, remove, wire, unwire, version`);
+  }
+  const kept = parseCanvas({ nodes, edges });
+  if (kept.nodes.length < nodes.length) throw new CanvasOpError(`the board would have more than ${MAX_NODES} nodes`);
+  return { canvas: kept, added };
+}
+
+/**
+ * Studio's `/api/canvas` (the CLI, with the launch key): `{ folder, ops?, by? }` → the board after the steps, kept and
+ * shown at once (`changed`), or why not. Without steps: the board as it is.
+ * @param {import('./http.mjs').Req} req @param {import('./http.mjs').Res} res @param {(root: string) => void} changed
+ */
+export async function agentCanvasRoute(req, res, changed) {
+  if (req.method !== 'POST') throw new HttpError(404, 'no such API');
+  const body = /** @type {{ folder?: unknown, ops?: unknown, by?: unknown }} */ (await readJson(req));
+  const root = resolve(String(body.folder ?? ''));
+  if (!(await stat(join(root, FILM_FILE)).catch(() => null))?.isFile()) return json(res, 200, { ok: false, code: 2, text: `${root} is not a project; \`openfilm open\` makes one` });
+  const canvas = await readCanvas(root);
+  if (body.ops === undefined) return json(res, 200, { ok: true, canvas, added: [] });
+  try {
+    const exists = async (/** @type {string} */ path) => Boolean((await stat(join(root, path)).catch(() => null))?.isFile());
+    const after = await applyCanvasOps(canvas, body.ops, { by: body.by, exists });
+    const kept = await writeCanvas(root, after.canvas);
+    changed(root);
+    return json(res, 200, { ok: true, canvas: kept, added: after.added });
+  } catch (e) {
+    if (!(e instanceof CanvasOpError)) throw e;
+    return json(res, 200, { ok: false, code: 2, text: e.message });
+  }
 }

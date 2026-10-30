@@ -39,6 +39,7 @@ const idOf = (ref: StudioRef): string => {
     case 'range': return `studio:range:${ref.start}-${ref.end}`;
     case 'track': return `studio:track:${ref.track}`;
     case 'file': return `studio:file:${ref.path}`;
+    case 'node': return `studio:node:${ref.id}`;
     case 'subtitle': return `studio:subtitle:${ref.start}-${ref.end}${ref.lang ? `:${ref.lang}` : ''}`;
     case 'example': return `studio:example:${ref.id}${ref.end ? `:${ref.start ?? 0}-${ref.end}` : ''}`;
   }
@@ -71,6 +72,8 @@ export function refPill(id: string | undefined, ref: StudioRef): PromptReference
       ...(ref.w && ref.h ? { detail: `${ref.w}×${ref.h}` } : ref.duration ? { detail: clock(ref.duration) } : {}),
     };
     case 'subtitle': return { ...base, kind: 'subtitle', label: clipped(ref.text, 40) || span(ref.start, ref.end) };
+    /* a node of the canvas: its words, or its file's name */
+    case 'node': return { ...base, kind: 'card', label: clipped(ref.label, 40) };
     /* an example: its title, and the part when one was picked */
     case 'example': return { ...base, kind: 'example', label: clipped(ref.title, 40), ...(ref.segment ? { detail: ref.segment } : ref.end ? { detail: `${clock(ref.start ?? 0)}–${clock(ref.end)}` } : {}) };
   }
@@ -125,6 +128,7 @@ export function sameStudioThing(a: StudioRef, b: StudioRef): boolean {
     case 'range': return b.kind === 'range' && near(a.start, b.start) && near(a.end, b.end);
     case 'track': return b.kind === 'track' && a.track === b.track;
     case 'file': return b.kind === 'file' && a.path === b.path;
+    case 'node': return b.kind === 'node' && a.id === b.id;
     case 'subtitle': return b.kind === 'subtitle' && near(a.start, b.start) && near(a.end, b.end) && (a.lang ?? null) === (b.lang ?? null);
     case 'example': return b.kind === 'example' && a.id === b.id && near(a.start ?? 0, b.start ?? 0) && near(a.end ?? 0, b.end ?? 0);
   }
@@ -217,6 +221,12 @@ export function pillCard(pill: { id: string; label: string; target?: Record<stri
       if (ref.w && ref.h) row('size', `${ref.w}×${ref.h}`);
       if (ref.duration) row('length', `${ref.duration.toFixed(1)} s`);
       break;
+    case 'node':
+      row('node', `${ref.id} · ${ref.nodeKind}`);
+      row('words', ref.text ? `“${words(ref.text, 120)}”` : ref.prompt ? `“${words(ref.prompt, 120)}”` : null);
+      row('path', ref.path);
+      row('versions', ref.versions);
+      break;
     case 'subtitle':
       row('words', ref.text ? `“${ref.text}”` : null);
       row('span', `${ref.start.toFixed(2)}–${ref.end.toFixed(2)} s`);
@@ -273,6 +283,15 @@ function refLine(ref: StudioRef): string {
       const facts = [ref.fileKind, ref.w && ref.h ? `${ref.w}×${ref.h}` : null, ref.duration ? sec(ref.duration) : null].filter(Boolean);
       return `file ${ref.path}${facts.length ? ` (${facts.join(', ')})` : ''}`;
     }
+    /* not in the film: the canvas beside it, changed with `openfilm canvas apply` */
+    case 'node': return [
+      `canvas node \`${ref.id}\` (${ref.nodeKind}${ref.nodeKind === 'note' || ref.nodeKind === 'file' || ref.nodeKind === 'group' ? '' : ' maker'})`,
+      ref.text ? `text ${quote(ref.text, 300)}` : null,
+      ref.prompt ? `prompt ${quote(ref.prompt, 300)}` : null,
+      ref.nodeKind === 'group' ? `name ${quote(ref.label, 80)}` : null,
+      ref.path ? `${ref.nodeKind === 'file' ? 'file' : 'shows'} ${ref.path}` : null,
+      ref.versions ? `${ref.versions} version${ref.versions === 1 ? '' : 's'}` : null,
+    ].filter(Boolean).join(' · ');
     case 'subtitle': return [
       `subtitle ${ref.start.toFixed(3)}–${ref.end.toFixed(3)} s ${quote(ref.text, 300)}${ref.lang ? ` (${ref.lang})` : ''}`,
       typeof ref.index === 'number' ? `line ${ref.index}` : null,
