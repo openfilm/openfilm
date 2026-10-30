@@ -205,6 +205,11 @@ test('fade handles: dragged inward on the frame grid, never past the other fade;
   assert.equal(fadeHandleX('in', 500, 200, 0.1), 50);
   assert.equal(fadeHandleX('out', 500, 200, 0.1), 150);
   assert.equal(fadeHandleX('out', 5000, 200, 0.1), 0);
+  /* kept inside the clip: no nearer an end than the inset, and a fade longer than that starts at the handle */
+  assert.equal(fadeHandleX('in', 0, 200, 0.1, 5), 5);
+  assert.equal(fadeHandleX('out', 0, 200, 0.1, 5), 195);
+  assert.equal(fadeHandleX('in', 500, 200, 0.1, 5), 50);
+  assert.equal(fadeHandleX('out', 5000, 200, 0.1, 5), 5);
   const edits = fadeEdits('out', 800, { id: 'v', startMs: 0, endMs: 4000, fade: [200, 0] }, [
     { id: 's', startMs: 0, endMs: 4000, fade: [0, 0] },
     { id: 'other', startMs: 0, endMs: 3000, fade: [0, 0] },

@@ -66,7 +66,10 @@ test('a click only selects; a right click gives the whole menu, Reference first,
     assert.equal(await page.locator('[data-timeline] button[aria-label^="Speed"]').count(), 0);
     await page.getByRole('menuitem', { name: /^Speed/ }).click();
     await until(() => page.locator('[data-timeline][data-speed-mode]').count(), 'Speed turns the edges into speed handles');
-    assert.ok(await video.locator('[data-speed-handle]').count() > 0, 'the clip shows its speed handles');
+    assert.ok(await video.locator('[data-speed-handle]').count() > 0, 'the clip\'s edges change its speed');
+    /* said by the frame's color alone: no bars or dots on its edges */
+    assert.equal(await video.locator('[data-block-frame="speed"]').count(), 1);
+    assert.equal(await video.locator('[data-speed-handle] *, [data-trim] *, [data-fade-handle]').count(), 0, 'nothing drawn on its edges');
     await video.click({ button: 'right', position: { x: 20, y: 10 } });
     await until(async () => (await menu())?.some((row) => row.startsWith('speed|✓')), 'Speed is checked in the menu');
     await page.getByRole('menuitem', { name: /^Copy attributes/ }).click();

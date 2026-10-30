@@ -752,19 +752,26 @@ export interface TimelineCommands {
 
 /** The selection frame: thin top and bottom, wide sides, drawn outside the clip. The hit area is wider still. */
 const SELECT_Y = 1;
-const SELECT_X = 2;
+const SELECT_X = 3;
 const SELECT_HIT = 8;
+/** A fade handle's dot: this wide, its centre this far in from the clip's end, so it sits inside the selection frame. */
+const FADE_DOT = 8;
+const FADE_DOT_INSET = FADE_DOT / 2;
 /** What the app's chat points at (a pill hovered there): an accent ring and its glow, around a clip or a track's head. */
 const CHAT_RING = '0 0 0 2px var(--tl-accent), 0 0 10px 1px color-mix(in srgb, var(--tl-accent) 60%, transparent)';
 /* the sides (trim handles) are solid, top and bottom lighter; theme color (--tl-select) so it shows on light lanes */
 const SELECT_EDGE_X = 'var(--tl-select)';
 const SELECT_EDGE_Y = 'color-mix(in srgb, var(--tl-select) 70%, transparent)';
 
-function SelectFrame() {
+/* Speed on: the same frame in the accent, its edges changing the speed instead of trimming */
+const SPEED_EDGE_X = 'var(--tl-accent)';
+const SPEED_EDGE_Y = 'color-mix(in srgb, var(--tl-accent) 70%, transparent)';
+
+function SelectFrame({ speed = false }: { speed?: boolean }) {
   return (
     <span
       aria-hidden
-      data-block-frame=""
+      data-block-frame={speed ? 'speed' : ''}
       className="pointer-events-none absolute rounded-[3px]"
       style={{
         top: -SELECT_Y,
@@ -773,7 +780,7 @@ function SelectFrame() {
         right: -SELECT_X,
         boxSizing: 'border-box',
         borderStyle: 'solid',
-        borderColor: `${SELECT_EDGE_Y} ${SELECT_EDGE_X}`,
+        borderColor: speed ? `${SPEED_EDGE_Y} ${SPEED_EDGE_X}` : `${SELECT_EDGE_Y} ${SELECT_EDGE_X}`,
         borderWidth: `${SELECT_Y}px ${SELECT_X}px`,
       }}
     />
@@ -797,6 +804,7 @@ function TrimHandle({
   picked,
   hit = SELECT_HIT,
   speed = false,
+  title,
   onDown,
 }: {
   edge: 'start' | 'end';
@@ -804,16 +812,19 @@ function TrimHandle({
   picked: boolean;
   /** Grab width; narrower on narrow clips so the handles do not cover the whole clip. */
   hit?: number;
-  /** It changes the clip's speed instead (Speed on): its bar always shows, in the accent. */
+  /** It changes the clip's speed instead (Speed on): only the frame's color says so. */
   speed?: boolean;
+  title?: string;
   onDown: (e: React.PointerEvent) => void;
 }) {
+  /* nothing drawn: the clip's own edge, lit by the selection frame, is what is pulled; the cursor says it can be */
   return (
     <span
       role="presentation"
       data-trim={edge}
       data-speed-handle={speed ? edge : undefined}
-      className="group/trim absolute inset-y-0 z-[2] cursor-ew-resize"
+      title={title}
+      className="absolute inset-y-0 z-[2] cursor-ew-resize"
       /* picked, the grab straddles the edge (the selection frame outside, the clip's own edge inside): a person reaches
          for the clip's edge, and grabbing just inside it moved the whole clip instead (UI test, 2026-10-03). Not where
          another clip touches it: outside is that clip's own edge, which trims that clip (a press there never rolls) */
@@ -824,14 +835,7 @@ function TrimHandle({
           : { right: picked ? -hit : 0 }),
       }}
       onPointerDown={onDown}
-    >
-      {/* a bar shows on hover: an invisible handle gives no hint it can be pulled */}
-      <span
-        aria-hidden
-        className={`pointer-events-none absolute inset-y-[3px] w-[3px] rounded-full transition-opacity ${speed ? 'bg-[var(--tl-accent)] opacity-100' : 'bg-[var(--tl-select)] opacity-0 group-hover/trim:opacity-90'}`}
-        style={edge === 'start' ? { right: picked ? hit : undefined, left: picked ? undefined : 1 } : { left: picked ? hit : undefined, right: picked ? undefined : 1 }}
-      />
-    </span>
+    />
   );
 }
 
@@ -2857,7 +2861,11 @@ export const Timeline = React.memo(function Timeline({
     let ms = edge === 'in' ? own[0] : own[1];
     const ids = going.map((b) => b.id);
     setFadeDrag({ ids, block: block.id, edge, ms });
+    /* the dot sits a few px inside the clip's end: a hand that shakes on it must not set a fade that long */
+    let moved = false;
     const move = (ev: PointerEvent) => {
+      if (!moved && Math.abs(ev.clientX - e.clientX) < 3) return;
+      moved = true;
       ms = fadeFromPointer(edge, dropMsAtClientX(ev.clientX), block, other, frame);
       setFadeDrag({ ids, block: block.id, edge, ms });
     };
@@ -3287,7 +3295,7 @@ export const Timeline = React.memo(function Timeline({
                 ) : null}
                 </div>
                 {/* frame and handles stay while trimming (the hand is on one of them); hidden while the clip floats */}
-                {picked && !floating ? <SelectFrame /> : null}
+                {picked && !floating ? <SelectFrame speed={speeding} /> : null}
                 {chatNumbers.length ? <ChatNumbers numbers={chatNumbers} /> : null}
                 {/* handles on clips down to 6 px wide (short sounds zoomed out are often a dozen pixels), each never more
                     than a quarter of the clip: the middle half always takes the press that selects or moves it. Pressing
@@ -3300,6 +3308,7 @@ export const Timeline = React.memo(function Timeline({
                         picked={picked && !touching.has(`${block.id}:start`)}
                         hit={trimHit(width)}
                         speed={speeding}
+                        title={speeding ? t('timeline.speedHandle') : undefined}
                         onDown={(e) => { e.stopPropagation(); pickForTrim(e, block); drag.start(e, block, speeding ? 'speed-start' : 'trim-start'); }}
                       />
                     ) : null}
@@ -3308,12 +3317,13 @@ export const Timeline = React.memo(function Timeline({
                       picked={picked && !touching.has(`${block.id}:end`)}
                       hit={trimHit(width)}
                       speed={speeding}
+                      title={speeding ? t('timeline.speedHandle') : undefined}
                       onDown={(e) => { e.stopPropagation(); pickForTrim(e, block); drag.start(e, block, speeding ? 'speed-end' : 'trim-end'); }}
                     />
                   </>
                 ) : null}
-                {/* the volume line across its sound: quiet until hovered; dragged up or down (lib/clip-volume). Its grab
-                    leaves the trim handles their edges */}
+                {/* the volume line across its sound: a hairline (one device pixel), barely there until hovered; dragged up or
+                    down (lib/clip-volume). Its grab, wider than it, leaves the trim handles their edges */}
                 {volumeLine ? (
                   <span role="presentation" data-volume-line={volume}
                     title={`${t('inspector.gainDb')} ${volumeText(volume)}`}
@@ -3321,8 +3331,8 @@ export const Timeline = React.memo(function Timeline({
                     style={{ top: lineY, left: trimHit(width), right: trimHit(width) }}
                     onPointerDown={(e) => startVolume(e, block, h - soundTop)}
                   >
-                    <span aria-hidden className={`pointer-events-none absolute top-[3px] h-px transition-opacity ${volumeTip ? 'opacity-100' : 'opacity-50 group-hover/vol:opacity-95'}`}
-                      style={{ left: -trimHit(width), right: -trimHit(width), background: 'rgba(255,255,255,0.95)' }} />
+                    <span aria-hidden className={`pointer-events-none absolute top-[3px] h-px origin-top transition-opacity [@media(min-resolution:2dppx)]:scale-y-50 ${volumeTip ? 'opacity-60' : 'opacity-30 group-hover/vol:opacity-60'}`}
+                      style={{ left: -trimHit(width), right: -trimHit(width), background: '#fff' }} />
                     {volumeTip ? (
                       <span className={`pointer-events-none absolute ${tipUp ? 'bottom-[8px]' : 'top-[8px]'} -translate-x-1/2 whitespace-nowrap rounded-[4px] px-1.5 py-[1px] text-[10.5px] font-medium leading-[15px] text-white tabular-nums shadow-[0_1px_4px_rgba(0,0,0,.35)]`}
                         style={{ left: Math.max(36, Math.min(width - 36, volumeTip.x)) - trimHit(width), background: 'var(--tl-accent)' }}>
@@ -3331,11 +3341,11 @@ export const Timeline = React.memo(function Timeline({
                     ) : null}
                   </span>
                 ) : null}
-                {/* fade handles on the selected clip, a dot at each end where its sound starts: dragged inward, the clip
-                    fades in or out (lib/clip-fade) */}
+                {/* fade handles on the selected clip, a dot just inside each end where its sound starts: dragged inward,
+                    the clip fades in or out, its slope starting at the dot (lib/clip-fade) */}
                 {picked && onEditOps && block.clipId && !track.locked && width > 18 && !floating && mode === 'select' && !speeding ? (['in', 'out'] as const).map((edge) => {
                   const ms = edge === 'in' ? fade[0] : fade[1];
-                  const x = fadeHandleX(edge, ms, width, pxPerMs);
+                  const x = fadeHandleX(edge, ms, width, pxPerMs, FADE_DOT_INSET);
                   const what = t(edge === 'in' ? 'inspector.fadeIn' : 'inspector.fadeOut');
                   return (
                     <span key={edge} role="presentation" data-fade-handle={edge}
@@ -3344,8 +3354,8 @@ export const Timeline = React.memo(function Timeline({
                       style={{ left: x, top: soundTop }}
                       onPointerDown={(e) => startFade(e, block, edge)}
                     >
-                      <span aria-hidden className={`pointer-events-none box-border h-[10px] w-[10px] rounded-full border-2 border-solid bg-black shadow-[0_0_2px_rgba(0,0,0,.5)] transition-transform ${fadeTip === edge ? 'scale-[1.2]' : 'group-hover/fade:scale-[1.2]'}`}
-                        style={{ borderColor: '#fff' }} />
+                      <span aria-hidden className={`pointer-events-none box-border rounded-full border-2 border-solid bg-black shadow-[0_0_2px_rgba(0,0,0,.5)] transition-transform ${fadeTip === edge ? 'scale-[1.25]' : 'group-hover/fade:scale-[1.25]'}`}
+                        style={{ width: FADE_DOT, height: FADE_DOT, borderColor: '#fff' }} />
                       {fadeTip === edge ? (
                         <span className={`pointer-events-none absolute left-1/2 ${tipUp ? 'bottom-[14px]' : 'top-[14px]'} -translate-x-1/2 whitespace-nowrap rounded-[4px] px-1.5 py-[1px] text-[10.5px] font-medium leading-[15px] text-white tabular-nums shadow-[0_1px_4px_rgba(0,0,0,.35)]`}
                           style={{ background: 'var(--tl-accent)' }}>
@@ -3355,18 +3365,6 @@ export const Timeline = React.memo(function Timeline({
                     </span>
                   );
                 }) : null}
-                {/* the speed handles on: in the fade handles' place, a dot at each end filled with the accent; dragged
-                    as its edge is */}
-                {speeding && able.resize && width > 18 && !floating ? (['start', 'end'] as const).filter((edge) => edge === 'end' || able.move).map((edge) => (
-                  <span key={`speed-${edge}`} role="presentation" data-speed-handle={edge} title={t('timeline.speedHandle')}
-                    className="group/speed absolute z-[5] flex h-[13px] w-[13px] -translate-x-1/2 -translate-y-1/2 cursor-ew-resize items-center justify-center"
-                    style={{ left: edge === 'start' ? 0 : width, top: soundTop }}
-                    onPointerDown={(e) => { e.stopPropagation(); pickForTrim(e, block); drag.start(e, block, edge === 'start' ? 'speed-start' : 'speed-end'); }}
-                  >
-                    <span aria-hidden className="pointer-events-none box-border h-[10px] w-[10px] rounded-full border-2 border-solid shadow-[0_0_2px_rgba(0,0,0,.5)] transition-transform group-hover/speed:scale-[1.2]"
-                      style={{ background: 'var(--tl-accent)', borderColor: '#fff' }} />
-                  </span>
-                )) : null}
               </div>
             );
             clipElements.set(block.id, { pose, node });

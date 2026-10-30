@@ -35,9 +35,13 @@ export function fadeFromPointer(edge: FadeEdge, pointerMs: number, clip: { start
   return Math.round(Math.max(0, Math.min(room, fit)) * 1000) / 1000;
 }
 
-/** Where a fade's handle sits in a clip `widthPx` wide: px from its left edge. */
-export function fadeHandleX(edge: FadeEdge, fadeMs: number, widthPx: number, pxPerMs: number): number {
-  const px = Math.min(widthPx, fadeMs * pxPerMs);
+/**
+ * Where a fade's handle sits in a clip `widthPx` wide: px from its left edge, where the fade's slope starts, but never
+ * nearer either end than `insetPx`, so the handle stays inside the clip (a short fade's slope starts under it).
+ */
+export function fadeHandleX(edge: FadeEdge, fadeMs: number, widthPx: number, pxPerMs: number, insetPx = 0): number {
+  const inset = Math.min(insetPx, widthPx / 2);
+  const px = Math.max(inset, Math.min(widthPx - inset, fadeMs * pxPerMs));
   return edge === 'in' ? px : widthPx - px;
 }
 
