@@ -814,6 +814,7 @@ export const en = {
     kindParked: 'Changes left on “{name}”',
     loadFailed: 'Version history couldn’t be read. Try again; if it keeps failing, restart OpenFilm.',
     retry: 'Try again',
+    errorMissingFilm: 'film.html is missing, so there is nothing to save as a version. Restore it first: from a version here, or from before the agent’s turn.',
     errorNothing: 'There are no changes to save.',
     errorDirty: 'Commit or discard the changes first.',
     errorUnavailable: 'Version history is unavailable right now. Please try again later.',

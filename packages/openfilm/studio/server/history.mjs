@@ -523,11 +523,16 @@ async function commitFolder(repo, kind, text, progress) {
 /**
  * Commit the folder as a version. By the person: `message` is theirs (none: 'saved'); with nothing changed it is
  * refused ('nothing'). On its own (`kind` 'auto' or 'agent'): null unless the film changed (filmChanged). Returns the
- * version.
+ * version. Without film.html there is none to save (it would hold nothing: versionFiles): refused ('missing-film'), and
+ * on its own, null.
  * @param {string} root @param {{ message?: string, kind?: 'auto' | 'agent' } & Options} [o] @returns {Promise<string | null>}
  */
 export function saveVersion(root, { message = '', kind, onProgress } = {}) {
   return queued(root, async () => {
+    if (filmIsMissing(root)) {
+      if (kind) return null;
+      throw new HistoryError('film.html is missing, so there is nothing to save: restore it first', 409, 'missing-film');
+    }
     const text = String(message ?? '').trim().replace(/\s+/g, ' ').slice(0, 200);
     const repo = await ready(root, throttled(onProgress));
     /* on its own, only when the film changed: notes, logs and scripts an agent writes, or markers, are kept with the

@@ -814,6 +814,7 @@ export const zhCN: Words = {
     kindParked: '留在「{name}」上的改动',
     loadFailed: '版本历史读取失败。请重试；如果一直失败，请重启 OpenFilm。',
     retry: '重试',
+    errorMissingFilm: 'film.html 不见了，所以没有可以保存为版本的内容。请先恢复它：从这里的某个版本，或从智能体这一轮之前的状态。',
     errorNothing: '没有需要保存的修改。',
     errorDirty: '请先提交或放弃更改。',
     errorUnavailable: '版本历史暂时不可用，请稍后再试。',

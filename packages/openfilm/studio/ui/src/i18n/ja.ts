@@ -813,6 +813,7 @@ export const ja: Words = {
     kindParked: '「{name}」に残された変更',
     loadFailed: 'バージョン履歴を読み込めませんでした。もう一度お試しください。続く場合は OpenFilm を再起動してください。',
     retry: '再試行',
+    errorMissingFilm: 'film.html が見つからないため、バージョンとして保存できるものがありません。まず復元してください：ここにあるバージョンから、またはエージェントのターン前の状態から。',
     errorNothing: 'コミットする変更はありません。',
     errorDirty: '先に変更をコミットするか破棄してください。',
     errorUnavailable: 'バージョン履歴は現在利用できません。しばらくしてからもう一度お試しください。',

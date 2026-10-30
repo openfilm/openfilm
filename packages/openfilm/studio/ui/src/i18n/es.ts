@@ -813,6 +813,7 @@ export const es: Words = {
     kindParked: 'Cambios dejados en «{name}»',
     loadFailed: 'No se pudo leer el historial de versiones. Inténtalo de nuevo; si sigue fallando, reinicia OpenFilm.',
     retry: 'Reintentar',
+    errorMissingFilm: 'Falta film.html, así que no hay nada que guardar como versión. Restáuralo primero: desde una versión de aquí o desde antes del turno del agente.',
     errorNothing: 'No hay cambios que confirmar.',
     errorDirty: 'Confirma o descarta los cambios primero.',
     errorUnavailable: 'El historial de versiones no está disponible ahora. Inténtalo más tarde.',

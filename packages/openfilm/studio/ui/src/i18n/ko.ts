@@ -810,6 +810,7 @@ export const ko: Words = {
     kindParked: '“{name}”에 남겨 둔 변경',
     loadFailed: '버전 기록을 읽지 못했습니다. 다시 시도하고, 계속 실패하면 OpenFilm을 다시 시작하세요.',
     retry: '다시 시도',
+    errorMissingFilm: 'film.html이 없어 버전으로 저장할 것이 없습니다. 먼저 복원하세요: 여기의 버전에서, 또는 에이전트의 턴 이전 상태로.',
     errorNothing: '커밋할 변경 사항이 없습니다.',
     errorDirty: '먼저 변경 사항을 커밋하거나 취소하세요.',
     errorUnavailable: '지금은 버전 기록을 사용할 수 없습니다. 잠시 후 다시 시도하세요.',

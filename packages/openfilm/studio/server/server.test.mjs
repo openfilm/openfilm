@@ -650,6 +650,11 @@ test('without film.html the history still lists, restores and discards: a versio
   assert.equal(status.filmMissing, true);
   assert.deepEqual(versions.map((v) => v.commit), [commit]);
   assert.equal((await history(`/versions/${commit}`)).status, 200);
+  /* nothing to save: an empty version is never made */
+  const empty = await history('/save', { message: 'Empty' });
+  assert.equal(empty.status, 409);
+  assert.equal((await empty.json()).code, 'missing-film');
+  assert.deepEqual((await (await history()).json()).versions.map((v) => v.commit), [commit]);
   /* restored (its changes are only what went with film.html): film.html is back as the version had it */
   const restored = await history('/checkout', { commit, discard: true });
   assert.equal(restored.status, 200);

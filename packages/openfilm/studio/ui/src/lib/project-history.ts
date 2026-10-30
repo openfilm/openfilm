@@ -15,7 +15,7 @@
  *
  * While an action runs, the project's events say how far it is ({ type: 'history-progress' }: HistoryProgress); when
  * it is done, `{ type: 'history', moved? }` (`moved`: the folder's files changed). A refusal comes with a `code`
- * ('nothing', 'dirty', 'none'), which the panel says in its own words.
+ * ('nothing', 'dirty', 'none', 'missing-film'), which the panel says in its own words.
  */
 
 import type { Film } from '@/api';
@@ -243,6 +243,7 @@ export const historyApi = {
 export function historyErrorKey(result: { status: number; code: string | null }): string {
   switch (result.code) {
     case 'nothing': return 'versions.errorNothing';
+    case 'missing-film': return 'versions.errorMissingFilm';
     case 'dirty': return 'versions.errorDirty';
     case 'current': return 'versions.errorDeleteCurrent';
     case 'deleted': return 'versions.errorDeleted';

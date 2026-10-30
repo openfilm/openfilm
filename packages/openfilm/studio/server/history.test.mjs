@@ -444,3 +444,20 @@ test('a history that kept the film\'s files only is brought up to date: the proj
   assert.deepEqual(mark(join(root, 'notes.md')), before, 'the person\'s files are not written');
   assert.match(readFileSync(join(root, '.film', 'history', 'openfilm.json'), 'utf8'), /"format":3/);
 });
+
+test('without film.html nothing is saved: the person is told why, a version on its own is not made (#304)', async () => {
+  const root = project();
+  const first = await saveVersion(root, { message: 'First' });
+  writeFileSync(join(root, 'notes.md'), 'the agent\'s notes');
+  rmSync(join(root, 'film.html'));
+  await rejects(saveVersion(root, { message: 'Empty' }), 'missing-film');
+  await rejects(saveVersion(root), 'missing-film');
+  assert.equal(await saveVersion(root, { kind: 'auto' }), null);
+  assert.equal(await saveVersion(root, { kind: 'agent' }), null);
+  assert.deepEqual((await versions(root)).map((v) => v.commit), [first], 'no version was made');
+  assert.equal((await status(root)).filmMissing, true);
+  /* back, the film saves again */
+  writeFileSync(join(root, 'film.html'), film(page('title.html'), sound('a.mp3')));
+  assert.ok(await saveVersion(root, { message: 'Back' }));
+  assert.ok(tracked(root).includes('film.html'));
+});
