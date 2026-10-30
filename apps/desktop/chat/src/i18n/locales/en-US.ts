@@ -412,4 +412,14 @@ export const enUS = {
     removed: 'Deleted',
     changed: 'Changed',
   },
+  /** a turn that ended with film.html gone: under its reply, put it back as the turn found it (lib/film-restore) */
+  filmRestore: {
+    lost: 'film.html was removed in this turn and is not there now.',
+    restore: 'Restore film.html as it was before this turn',
+    restoring: 'Restoring…',
+    restored: 'film.html is back as it was before this turn.',
+    exists: 'film.html is back already, so it was left as it is.',
+    gone: 'The copy from before this turn is no longer kept. Restore film.html from Version history.',
+    failed: 'film.html could not be restored. Try again, or restore it from Version history.',
+  },
 };

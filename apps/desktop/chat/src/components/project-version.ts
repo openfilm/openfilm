@@ -32,6 +32,8 @@ export interface ProjectVersion {
   settledAt?: string;
   /** what the turn changed in the project's files (lib/file-changes); none when nothing did */
   fileChanges?: FileChange[];
+  /** the turn ended with film.html gone: offered back as the turn found it (lib/film-restore) */
+  filmLost?: boolean;
   /** 'background': the agent started it by itself, a background task of its own having come back (no message) */
   origin?: 'background';
 }

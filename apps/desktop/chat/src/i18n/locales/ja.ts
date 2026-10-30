@@ -411,4 +411,14 @@ export const ja: Words = {
     removed: '削除',
     changed: '変更',
   },
+  /** a turn that ended with film.html gone: under its reply, put it back as the turn found it (lib/film-restore) */
+  filmRestore: {
+    lost: 'このターンで film.html が削除され、今はありません。',
+    restore: 'film.html をこのターンの前の状態に戻す',
+    restoring: '復元しています…',
+    restored: 'film.html をこのターンの前の状態に戻しました。',
+    exists: 'film.html はすでに戻っているため、そのままにしました。',
+    gone: 'このターンの前のコピーはもう保持されていません。バージョン履歴から film.html を復元してください。',
+    failed: 'film.html を復元できませんでした。もう一度試すか、バージョン履歴から復元してください。',
+  },
 };

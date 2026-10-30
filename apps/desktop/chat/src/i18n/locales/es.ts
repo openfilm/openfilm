@@ -411,4 +411,14 @@ export const es: Words = {
     removed: 'Eliminado',
     changed: 'Cambiado',
   },
+  /** a turn that ended with film.html gone: under its reply, put it back as the turn found it (lib/film-restore) */
+  filmRestore: {
+    lost: 'En este turno se eliminó film.html y ahora no está.',
+    restore: 'Restaurar film.html como estaba antes de este turno',
+    restoring: 'Restaurando…',
+    restored: 'film.html ha vuelto como estaba antes de este turno.',
+    exists: 'film.html ya ha vuelto, así que se ha dejado como está.',
+    gone: 'La copia de antes de este turno ya no se conserva. Restaura film.html desde el Historial de versiones.',
+    failed: 'No se pudo restaurar film.html. Inténtalo de nuevo o restáuralo desde el Historial de versiones.',
+  },
 };

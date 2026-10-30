@@ -46,6 +46,8 @@ export interface ProjectVersionEntry {
   settledAt?: string;
   /** What the turn changed in the project's files (lib/file-changes); none when nothing did. */
   fileChanges?: FileChange[];
+  /** The turn ended with film.html gone: offered back as the turn found it (lib/film-restore), while the app runs. */
+  filmLost?: boolean;
   /** 'background': the agent started it by itself, a background task of its own having come back (no message) */
   origin?: 'background';
 }
@@ -110,6 +112,7 @@ export function deriveProjectTurns(
       current: asset.id === selectedId,
       ...frameOf(asset),
       ...(fileChanges ? { fileChanges } : {}),
+      ...((asset as Turn & { filmLost?: unknown }).filmLost === true ? { filmLost: true } : {}),
       ...((asset as Turn & { origin?: unknown }).origin === 'background' ? { origin: 'background' as const } : {}),
     };
   });

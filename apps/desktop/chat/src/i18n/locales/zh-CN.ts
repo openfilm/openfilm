@@ -411,4 +411,14 @@ export const zhCN: Words = {
     removed: '已删除',
     changed: '已修改',
   },
+  /** a turn that ended with film.html gone: under its reply, put it back as the turn found it (lib/film-restore) */
+  filmRestore: {
+    lost: '这一轮删除了 film.html，现在它不在了。',
+    restore: '把 film.html 恢复成这一轮之前的样子',
+    restoring: '正在恢复…',
+    restored: 'film.html 已恢复成这一轮之前的样子。',
+    exists: 'film.html 已经回来了，所以保持原样。',
+    gone: '这一轮之前的副本已不再保留。请从“版本历史”恢复 film.html。',
+    failed: '无法恢复 film.html。请重试，或从“版本历史”恢复。',
+  },
 };

@@ -27,6 +27,7 @@ import { relativeTime, useMinuteTick } from '@/lib/relative-time';
 import { isPendingAssetId } from '@/lib/asset-lists';
 import { TurnLogButton } from './TurnLog';
 import { FileChangesList } from './FileChangesList';
+import { FilmRestoreOffer } from './FilmRestoreOffer';
 import { ChatProjectContext, useDeveloperMode, useShowChanges } from '@/lib/developer';
 import { isVideoAttachment } from '@/lib/composer-attachments';
 import { desktopBridge } from '@/lib/desktop-bridge';
@@ -403,6 +404,7 @@ const ConversationTurn = React.memo(function ConversationTurn({
 
       {/* What this turn changed in the project's files, as a coding agent's app lists them (Settings → Developer
           turns it off). No "version N · switch to it" link: going back belongs to the top bar's history. */}
+      {settled && entry.filmLost ? <FilmRestoreOffer turnId={entry.assetId} /> : null}
       {settled && showChanges && entry.fileChanges?.length ? <FileChangesList changes={entry.fileChanges} /> : null}
 
       {/* The status and hover actions occupy separate rows. An empty status takes no room; a visible status

@@ -77,9 +77,11 @@ interface AppBridge {
     describePaths(paths: string[]): Promise<Array<{ path: string; folder: boolean; size?: number } | { path: string; error: string }>>;
     /** the turns with a log and no saved record (src/chat-store.mjs unsavedTurns), but those of `except` */
     unsaved?(project: string, except?: string[]): Promise<Array<{ turnId: string; events: TurnLog['events'] }>>;
-    /** the project's files as a turn starts, kept by the app; then what the turn changed in them (src/file-changes.mjs) */
+    /** the project's files as a turn starts, kept by the app; then what the turn changed in them (src/file-changes.mjs).
+        `filmLost`: the turn ended with film.html gone, which `restoreFilm` puts back as the turn found it */
     snapshot(project: string, turnId: string): Promise<unknown>;
-    changes(project: string, turnId: string): Promise<{ files: FileChange[]; cut: boolean } | null>;
+    changes(project: string, turnId: string): Promise<{ files: FileChange[]; cut: boolean; filmLost?: boolean } | null>;
+    restoreFilm?(project: string, turnId: string): Promise<{ ok: true } | { ok: false; code: 'exists' | 'gone' }>;
   };
   /** what an agent's command asks before it spends (a video clip), and what it tells the person (a provider with no
       balance left), worded by Studio: shown above the composer until answered; the command waits for a question */
