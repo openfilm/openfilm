@@ -73,6 +73,13 @@ export const ko: Words = {
     project: '이 프로젝트',
     addSkill: '스킬 추가',
     cat: { launch: '제품 출시', explainer: '해설', slides: '슬라이드를 영상으로', captions: '자막과 타이틀', ads: '광고', commerce: '판매 포인트', music: '음악' },
+    film: '영상',
+    canvas: '캔버스',
+    canvasHint: '만들 때 쓴 캔버스: 드래그해 둘러보고, 핀치로 확대',
+    useCanvas: '이 캔버스 사용',
+    explain: '만드는 법 설명 듣기',
+    explainAsk: '이 영상이 어떻게 만들어졌는지, 비슷한 것을 만들 수 있도록 단계별로 설명해 주세요:',
+    explainAskCanvas: '이 영상이 어떻게 만들어졌는지 캔버스를 따라, 비슷한 것을 만들 수 있도록 단계별로 설명해 주세요:',
   },
   /* the app's update, ready to install (Studio's top bar, in an app that has updates: lib/host.ts `update`) */
   update: {
@@ -1353,6 +1360,7 @@ export const ko: Words = {
       storyboard: '스토리보드: 세 개의 샷',
       storyboardShot: '샷 {n}: 보이는 것',
     },
+    exampleCopied: '예제의 캔버스를 내 캔버스 아래에 놓았습니다. 파일은 {folder}에 있습니다',
     make: {
       image: '이미지',
       video: '동영상',

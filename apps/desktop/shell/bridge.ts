@@ -169,6 +169,7 @@ const refer = events<StudioRef>();
 /* a skill picked in the examples (Studio's ExamplesDialog), to be named in the message; and "Add a skill" there */
 const skillPicked = events<{ name: string; description: string; title?: string; newConversation?: boolean }>();
 const skillAdd = events<void>();
+const asked = events<{ text: string; refs: StudioRef[] }>();
 /** what the pointer is over in Studio (null: nothing), for the chat to light its pills that point at it */
 const hover = signal<StudioRef | null>(null);
 let command: ((command: StudioCommand) => void) | null = null;
@@ -300,6 +301,7 @@ const host: StudioHost = {
   tabs: native.tabs,
   useSkill: (skill) => skillPicked.set(skill),
   skills: { add: () => skillAdd.set(undefined) },
+  ask: (request) => { if (!layout.open) setChatOpen(true); asked.set(request); },
 };
 (window as unknown as { openfilmHost: StudioHost }).openfilmHost = host;
 
@@ -378,6 +380,7 @@ function commandFor(ref: StudioRef): StudioCommand {
   /* the composer's examples button: the examples over the film, to point at one or name a skill */
   showExamples: (open?: CommunityItem) => command?.({ type: 'show-examples', ...(open ? { open } : {}) }),
   onUseSkill: skillPicked.on,
+  onAsk: asked.on,
   onAddSkill: skillAdd.on,
   useSkill: (skill: { name: string; description: string; title?: string; newConversation?: boolean }) => skillPicked.set(skill),
   /* a reference made in the chat (⌘L there, the @ menu) gets its picture as Studio's own do */

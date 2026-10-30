@@ -76,6 +76,13 @@ export const es: Words = {
     project: 'Este proyecto',
     addSkill: 'Añadir una skill',
     cat: { launch: 'Lanzamientos', explainer: 'Explicaciones', slides: 'Diapositivas a vídeo', captions: 'Subtítulos y títulos', ads: 'Anuncios', commerce: 'Puntos de venta', music: 'Música' },
+    film: 'Película',
+    canvas: 'Lienzo',
+    canvasHint: 'El lienzo con el que se hizo: arrastra para recorrerlo, pellizca para ampliar',
+    useCanvas: 'Usar este lienzo',
+    explain: 'Explicar cómo se hizo',
+    explainAsk: 'Explica paso a paso cómo se hizo esta película, para que pueda hacer una parecida:',
+    explainAskCanvas: 'Explica paso a paso cómo se hizo esta película, siguiendo su lienzo, para que pueda hacer una parecida:',
   },
   /* the app's update, ready to install (Studio's top bar, in an app that has updates: lib/host.ts `update`) */
   update: {
@@ -1356,6 +1363,7 @@ export const es: Words = {
       storyboard: 'Guion gráfico: tres planos',
       storyboardShot: 'Plano {n}: lo que se ve',
     },
+    exampleCopied: 'El lienzo del ejemplo está en el tuyo, debajo de lo que había; sus archivos están en {folder}',
     make: {
       image: 'Imagen',
       video: 'Vídeo',

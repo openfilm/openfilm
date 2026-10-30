@@ -57,8 +57,8 @@ import { providersRoute } from './providers/index.mjs';
 import { captionRoutes, writeSubtitleStyle } from './captions.mjs';
 import { projectSettingsRoute } from './project-settings.mjs';
 import { markersRoute } from './markers.mjs';
-import { agentCanvasRoute, canvasRoute } from './canvas.mjs';
-import { projectTemplatesRoute, templatesRoute } from './canvas-templates.mjs';
+import { CANVAS_FILE, agentCanvasRoute, canvasRoute, readCanvas } from './canvas.mjs';
+import { copyBoardInto, projectTemplatesRoute, templatesRoute } from './canvas-templates.mjs';
 import { transitionPageRoutes } from './transition-pages.mjs';
 import { createAsks, getRoute, subtitleTranscriber, subtitleTranslator } from './get.mjs';
 import { LOCATION_KEYS, chooseFolder, locations, usableFolder } from '../../src/locations.mjs';
@@ -439,15 +439,16 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     /* an example's folder on this computer, to point an agent at (examples.mjs exampleFolder) */
     if (parts[0] === 'examples' && parts.length === 3 && parts[2] === 'folder' && req.method === 'POST') {
-      try {
-        const folder = await exampleFolder(decodeURIComponent(parts[1]), {
-          home: studioHome(),
-          fetchFolder: (address, into) => fetchFilm(parseRepoUrl(address), { library: into }),
-        });
-        return json(res, 200, { folder });
-      } catch (e) {
-        throw new HttpError(e instanceof FetchError ? e.status : 404, e instanceof Error ? e.message : String(e));
-      }
+      return json(res, 200, { folder: await exampleFolderHere(decodeURIComponent(parts[1])) });
+    }
+    /* an example's canvas, when it has one (null: none), and the files it shows: looked at, not changed */
+    if (parts[0] === 'examples' && parts.length === 3 && parts[2] === 'canvas' && req.method === 'GET') {
+      const folder = await exampleFolderHere(decodeURIComponent(parts[1]));
+      return json(res, 200, { canvas: existsSync(join(folder, CANVAS_FILE)) ? await readCanvas(folder) : null });
+    }
+    if (parts[0] === 'examples' && parts[2] === 'files' && parts.length > 3 && req.method === 'GET') {
+      const folder = await exampleFolderHere(decodeURIComponent(parts[1]));
+      return sendMedia(req, res, inside(folder, parts.slice(3).map(decodeURIComponent).join('/')), { keep: true });
     }
     /* the skills a project can be made with (../../src/skills.mjs): its own, the person's, the official ones */
     if (parts[0] === 'skills' && parts.length === 1 && req.method === 'GET') {
@@ -594,6 +595,13 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* its canvas (canvas.mjs): Studio's own board beside the edit */
     if (await canvasRoute(req, res, project.path, rest)) return;
     if (await projectTemplatesRoute(req, res, project.path, rest)) return;
+    /* an example's canvas laid down on this one: its files copied into assets/examples/<id>/ (canvas-templates.mjs) */
+    if (rest.startsWith('example-canvas/') && req.method === 'POST') {
+      const id = decodeURIComponent(rest.slice('example-canvas/'.length));
+      const folder = await exampleFolderHere(id);
+      if (!existsSync(join(folder, CANVAS_FILE))) throw new HttpError(404, 'This example has no canvas.');
+      return json(res, 200, await copyBoardInto(project.path, folder, await readCanvas(folder), `assets/examples/${id}`));
+    }
     /* the page under a dip to white, kept once (transition-pages.mjs) */
     if (await transitionPageRoutes(req, res, project.path, rest)) return;
     if (!rest) {
@@ -1206,6 +1214,18 @@ function systemBrowser(/** @type {string} */ url) {
   try { spawn(cmd, args, { stdio: 'ignore', detached: true, windowsHide: true }).on('error', () => {}).unref(); } catch { /* no browser to open */ }
 }
 
+
+/**
+ * An example's folder on this computer, fetched when it is not (examples.mjs exampleFolder); what went wrong, as an
+ * HTTP error, when it cannot be. @param {string} id
+ */
+async function exampleFolderHere(id) {
+  try {
+    return await exampleFolder(id, { home: studioHome(), fetchFolder: (address, into) => fetchFilm(parseRepoUrl(address), { library: into }) });
+  } catch (e) {
+    throw new HttpError(e instanceof FetchError ? e.status : 404, e instanceof Error ? e.message : String(e));
+  }
+}
 
 /**
  * A picture or a video from this computer, a range answered as one (a preview is seeked in); none: 404.

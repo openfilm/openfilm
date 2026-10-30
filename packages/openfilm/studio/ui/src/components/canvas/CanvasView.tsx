@@ -170,6 +170,8 @@ interface Board {
   busyIn: (group: string) => boolean;
   makeAll: (group: string) => void;
   openSettings: () => void;
+  /** a board only looked at (an example's): nothing on it is changed, made or wired */
+  readOnly?: boolean;
 }
 const BoardContext = React.createContext<Board | null>(null);
 
@@ -236,6 +238,7 @@ function NodeButtons({ id, file }: { id: string; file?: WorkspaceResource | null
   const t = useT();
   const board = React.useContext(BoardContext)!;
   const btn = 'flex h-7 items-center gap-1.5 rounded-md px-2 text-[12px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]';
+  if (board.readOnly) return null;
   return (
     <NodeToolbar position={Position.Top} offset={30}>
       <div className="flex items-center gap-0.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-0.5 shadow-[0_4px_14px_rgba(0,0,0,0.18)]">
@@ -286,9 +289,11 @@ function FileNodeView({ id, data, selected }: NodeProps<FileNode>) {
         ) : file.kind === 'video' ? (
           over || selected ? (
             <video src={board.sources.file(file)} poster={board.sources.poster?.(file)} muted loop playsInline autoPlay className="block aspect-video w-full bg-black object-contain" />
-          ) : picture(board.sources.poster?.(file))
+          ) : board.sources.poster?.(file) ? picture(board.sources.poster(file))
+            : <video src={board.sources.file(file)} muted playsInline preload="metadata" className="block aspect-video w-full bg-black object-contain" />
         ) : file.kind === 'mg' ? (
-          picture(board.sources.pagePoster?.(file))
+          board.sources.pagePoster?.(file) ? picture(board.sources.pagePoster(file))
+            : <div className="flex aspect-video w-full items-center justify-center bg-[var(--surface-2)] text-[var(--text-faint)]"><Clapperboard size={22} /></div>
         ) : file.kind === 'audio' ? (
           <div className="flex items-center gap-2 p-2.5">
             <Music size={16} className="shrink-0 text-[var(--text-faint)]" />
@@ -448,7 +453,8 @@ function MakeNodeView({ id, data, selected }: NodeProps<MakeNode>) {
             media === 'image' ? <img src={board.sources.file(file)} alt="" draggable={false} className="block h-full w-full bg-black object-contain" />
             : media === 'video' ? (over || selected
               ? <video src={board.sources.file(file)} poster={board.sources.poster?.(file)} muted loop playsInline autoPlay className="block h-full w-full bg-black object-contain" />
-              : <img src={board.sources.poster?.(file)} alt="" draggable={false} className="block h-full w-full bg-black object-contain" />)
+              : board.sources.poster?.(file) ? <img src={board.sources.poster(file)} alt="" draggable={false} className="block h-full w-full bg-black object-contain" />
+                : <video src={board.sources.file(file)} muted playsInline preload="metadata" className="block h-full w-full bg-black object-contain" />)
             : <div className="flex items-center gap-2 p-2.5"><audio src={board.sources.file(file)} controls preload="none" className="nodrag h-8 min-w-0 flex-1" /></div>
           ) : (
             <div className={`flex h-full flex-col items-center justify-center gap-1.5 text-[12px] text-[var(--text-faint)] ${media === 'audio' ? 'h-14 flex-row' : ''}`}>
@@ -468,7 +474,11 @@ function MakeNodeView({ id, data, selected }: NodeProps<MakeNode>) {
             </div>
           ) : null}
         </div>
-        {far ? null : (
+        {far ? null : board.readOnly ? (
+          <div className="whitespace-pre-wrap break-words border-t border-[var(--border)] p-2.5 text-[12.5px] leading-relaxed text-[var(--text)]">
+            {data.prompt || <span className="text-[var(--text-faint)]">{t('canvas.make.prompt')}</span>}
+          </div>
+        ) : (
           <div className="nodrag nowheel flex cursor-default flex-col gap-1.5 border-t border-[var(--border)] p-2">
             <textarea
               value={data.prompt ?? ''}
@@ -629,7 +639,7 @@ function AddMenu({ menu, files, templates, onNote, onMake, onTemplate, onRemoveT
 /** what was copied last, on any board of this page: pasted with new ids, a step further each time */
 let clipboard: { doc: CanvasDoc; pasted: number } | null = null;
 
-function Board({ projectId, folder, files, sources, onAddToFilm, onImportFiles, onOpenSettings, onError, onNotice, focus, onRefer }: CanvasViewProps) {
+function Board({ projectId, folder, files, sources, onAddToFilm, onImportFiles, onOpenSettings, onError, onNotice, focus, insert, onRefer }: CanvasViewProps) {
   const t = useT();
   const flow = useReactFlow<BoardNode, Edge>();
   const [nodes, setNodes, onNodesChange] = useNodesState<BoardNode>([]);
@@ -985,6 +995,26 @@ function Board({ projectId, folder, files, sources, onAddToFilm, onImportFiles, 
     requestAnimationFrame(() => { void flow.fitView({ nodes: [{ id: focus.id }], padding: 0.6, maxZoom: 1, duration: 250 }); });
   }, [focus, ready]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /* a board copied in (an example's): laid down below what is there, and shown */
+  const laid = React.useRef<number | null>(null);
+  React.useEffect(() => {
+    if (!insert || !ready || laid.current === insert.n) return;
+    laid.current = insert.n;
+    /* below the lowest thing there, as it is drawn */
+    const here = now.current.nodes.filter((n) => !n.parentId);
+    const at = here.length
+      ? { x: Math.min(...here.map((n) => n.position.x)), y: Math.max(...here.map((n) => n.position.y + (n.measured?.height ?? n.height ?? NOTE_H))) + 160 }
+      : { x: 0, y: 0 };
+    const top = insert.doc.nodes.filter((n) => !n.parent);
+    const x0 = top.length ? Math.min(...top.map((n) => n.x)) : 0;
+    const y0 = top.length ? Math.min(...top.map((n) => n.y)) : 0;
+    const copy = copyOf(insert.doc, new Set(top.map((n) => n.id)), { x: at.x - x0, y: at.y - y0 });
+    add(copy);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      void flow.fitView({ nodes: copy.nodes.filter((n) => !n.parent).map((n) => ({ id: n.id })), padding: 0.15, maxZoom: 1, duration: 250 });
+    }));
+  }, [insert, ready]); // eslint-disable-line react-hooks/exhaustive-deps
+
   /* ── keys: the board's own, and the page's while nothing else has them (a menu closed, a node drawn again): the
      board covers the edit, so Studio's ⌘Z, Space and the rest are not to act on a film out of sight ── */
   const onKeyDown = (event: KeyboardEvent) => {
@@ -1227,7 +1257,81 @@ export interface CanvasViewProps {
   onRefer?: (refs: StudioRef[]) => void;
   /** a node to show (a chat's reference to it clicked): selected and in view; `n` is new each time */
   focus?: { id: string; n: number } | null;
+  /** a board to lay down below what is there (an example's canvas, copied in): its nodes new; `n` is new each time */
+  insert?: { doc: CanvasDoc; n: number } | null;
   onError: (message: string) => void;
+}
+
+/** what a file is, by its name, for a board whose files are not the project's (an example's) */
+function kindByName(path: string): WorkspaceResource['kind'] {
+  const ext = path.split('.').pop()?.toLowerCase() ?? '';
+  if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'avif'].includes(ext)) return 'image';
+  if (['mp4', 'webm', 'mov', 'm4v'].includes(ext)) return 'video';
+  if (['mp3', 'wav', 'm4a', 'ogg', 'aac', 'flac'].includes(ext)) return 'audio';
+  return ext === 'html' ? 'mg' : 'other';
+}
+
+const NOTHING = new Set<string>();
+const NONE = new Map<string, number>();
+
+/**
+ * A board only looked at: an example film's canvas, shown in the Community. It pans and zooms; nothing on it moves,
+ * is written in or made. `fileUrl` is where each file it shows is read from.
+ */
+function Preview({ doc, fileUrl }: { doc: CanvasDoc; fileUrl: (path: string) => string }) {
+  const themeChanges = useThemeChanges();
+  const dark = React.useMemo(() => document.documentElement.dataset.theme === 'dark', [themeChanges]); // eslint-disable-line react-hooks/exhaustive-deps
+  const flow = React.useMemo(() => toFlow(doc), [doc]);
+  const board = React.useMemo<Board>(() => {
+    const files = new Map<string, WorkspaceResource>();
+    for (const n of doc.nodes) for (const path of [n.path, ...(n.versions ?? [])]) {
+      if (path && !files.has(path)) {
+        files.set(path, { path, name: path.split('/').pop() ?? path, dir: path.split('/').slice(0, -1).join('/'), size: 0, kind: kindByName(path), mtimeMs: 0 } as WorkspaceResource);
+      }
+    }
+    const nothing = () => {};
+    return {
+      fileOf: (path) => files.get(path) ?? null,
+      sources: { file: (file) => fileUrl(file.path), wave: () => '' },
+      addToFilm: nothing, setData: nothing, remove: nothing, willChange: nothing, editing: null, edit: nothing,
+      choices: () => [], fallback: () => null, run: () => undefined, error: () => undefined, stale: NOTHING, unused: NONE,
+      make: nothing, stop: nothing, makesIn: () => 0, busyIn: () => false, makeAll: nothing, openSettings: nothing, readOnly: true,
+    };
+  }, [doc, fileUrl]);
+  return (
+    <BoardContext.Provider value={board}>
+      <ReactFlow<BoardNode, Edge>
+        nodes={flow.nodes}
+        edges={flow.edges}
+        nodeTypes={NODE_TYPES}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        elementsSelectable={false}
+        colorMode={dark ? 'dark' : 'light'}
+        panOnScroll
+        zoomOnPinch
+        zoomOnScroll={false}
+        zoomOnDoubleClick={false}
+        fitView
+        fitViewOptions={{ padding: 0.15, maxZoom: 1 }}
+        minZoom={0.1}
+        maxZoom={4}
+        proOptions={{ hideAttribution: true }}
+        className="openfilm-canvas"
+      >
+        <Background variant={BackgroundVariant.Dots} gap={20} size={1.2} />
+        <Controls position="bottom-left" showInteractive={false} fitViewOptions={{ padding: 0.15, maxZoom: 1 }} />
+      </ReactFlow>
+    </BoardContext.Provider>
+  );
+}
+
+export function CanvasPreview(props: { doc: CanvasDoc; fileUrl: (path: string) => string }) {
+  return (
+    <ReactFlowProvider>
+      <Preview {...props} />
+    </ReactFlowProvider>
+  );
 }
 
 export default function CanvasView(props: CanvasViewProps) {

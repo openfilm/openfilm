@@ -76,6 +76,13 @@ export const ja: Words = {
     project: 'このプロジェクト',
     addSkill: 'スキルを追加',
     cat: { launch: '製品発表', explainer: '解説', slides: 'スライドを動画に', captions: '字幕とテロップ', ads: '広告', commerce: 'セールスポイント', music: '音楽' },
+    film: '映像',
+    canvas: 'キャンバス',
+    canvasHint: '制作に使われたキャンバス：ドラッグで見回し、ピンチでズーム',
+    useCanvas: 'このキャンバスを使う',
+    explain: '作り方を説明してもらう',
+    explainAsk: 'この映像がどう作られたか、同じようなものを作れるよう一歩ずつ説明してください：',
+    explainAskCanvas: 'この映像がどう作られたか、キャンバスに沿って、同じようなものを作れるよう一歩ずつ説明してください：',
   },
   /* the app's update, ready to install (Studio's top bar, in an app that has updates: lib/host.ts `update`) */
   update: {
@@ -1356,6 +1363,7 @@ export const ja: Words = {
       storyboard: '絵コンテ：3ショット',
       storyboardShot: 'ショット {n}：見えるもの',
     },
+    exampleCopied: '例のキャンバスをあなたのキャンバスの下に置きました。ファイルは {folder} にあります',
     make: {
       image: '画像',
       video: '動画',

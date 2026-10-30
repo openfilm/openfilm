@@ -300,9 +300,10 @@ function refLine(ref: StudioRef): string {
     case 'example': return [
       `example film ${quote(ref.title, 80)} (another OpenFilm film, not this one: read its film.html and pages for how it is made)`,
       ref.folder ? `folder ${ref.folder}` : 'its folder could not be fetched: read it at its source',
+      ref.canvas ? 'its canvas, the steps it was made with, is .film/canvas.json in its folder (`openfilm canvas` run there prints it)' : null,
       ref.end ? `its ${ref.start?.toFixed(3) ?? '0.000'}–${ref.end.toFixed(3)} s${ref.segment ? ` (${quote(ref.segment, 60)})` : ''}` : 'the whole film',
       `source ${ref.url}`,
-    ].join(' · ');
+    ].filter(Boolean).join(' · ');
   }
 }
 

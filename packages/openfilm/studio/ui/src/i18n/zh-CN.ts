@@ -77,6 +77,13 @@ export const zhCN: Words = {
     project: '本项目',
     addSkill: '添加 skill',
     cat: { launch: '产品发布', explainer: '科普讲解', slides: '幻灯片转视频', captions: '字幕与花字', ads: '广告', commerce: '电商卖点', music: '音乐' },
+    film: '影片',
+    canvas: '画布',
+    canvasHint: '它制作时用的画布：拖动查看，双指缩放',
+    useCanvas: '使用这个画布',
+    explain: '讲解它是怎么做的',
+    explainAsk: '一步步讲解这部影片是怎么做出来的，好让我做一部类似的：',
+    explainAskCanvas: '对照它的画布，一步步讲解这部影片是怎么做出来的，好让我做一部类似的：',
   },
   /* the app's update, ready to install (Studio's top bar, in an app that has updates: lib/host.ts `update`) */
   update: {
@@ -1357,6 +1364,7 @@ export const zhCN: Words = {
       storyboard: '分镜：三个镜头',
       storyboardShot: '镜头 {n}：画面里有什么',
     },
+    exampleCopied: '示例的画布已放在你的画布下方，它的文件在 {folder}',
     make: {
       image: '图片',
       video: '视频',

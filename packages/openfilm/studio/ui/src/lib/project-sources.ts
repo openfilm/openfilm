@@ -117,6 +117,8 @@ export const sourcesApi = {
   examples: () => call<{ examples: Example[] }>('examples').then((r) => (seen.examples = r.examples), () => seen.examples ?? []),
   /** an example's folder on this computer, fetched when needed (for an agent to read how it is made) */
   exampleFolder: (id: string) => call<{ folder: string }>(`examples/${encodeURIComponent(id)}/folder`, 'POST').then((r) => r.folder),
+  /** an example's canvas, the steps it was made with (null: it has none), fetched with its folder */
+  exampleCanvas: (id: string) => call<{ canvas: unknown }>(`examples/${encodeURIComponent(id)}/canvas`).then((r) => r.canvas),
   skills: (projectId?: string | null) => call<{ skills: SkillEntry[] }>(`skills${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`)
     .then((r) => { seen.skills.set(projectId ?? '', r.skills); return r.skills; }, () => seenSkills(projectId) ?? []),
   setSkillCover: async (name: string, cover: string | null, projectId?: string | null): Promise<string | null> => {

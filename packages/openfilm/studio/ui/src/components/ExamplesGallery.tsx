@@ -14,11 +14,15 @@
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Clapperboard, ExternalLink, Play, X } from 'lucide-react';
+import { ArrowLeft, Clapperboard, ExternalLink, MessageCircleQuestion, Play, Workflow, X } from 'lucide-react';
 import { useT } from '@/i18n';
 import { studioHost, type CommunityItem } from '@/lib/host';
 import { seenExamples, seenSkills, sourcesApi, watchSkills, type Example, type SkillEntry } from '@/lib/project-sources';
+import { readCanvasDoc, type CanvasDoc } from '@/lib/canvas';
 import { GitHubDialog } from './ProjectSources';
+
+/* an example's canvas, only looked at: the board's code is loaded when one is shown */
+const CanvasPreview = React.lazy(() => import('./canvas/CanvasView').then((m) => ({ default: m.CanvasPreview })));
 import { SkillsLibrary, useSkillWords } from './SkillsLibrary';
 
 export type ExamplesMode = 'start' | 'reference';
@@ -43,7 +47,7 @@ export function TitleSwitch<T extends string>({ items, value, onChange }: { item
   );
 }
 
-export function ExamplesGallery({ mode, projectId = null, heading, initial, onClose, onStart, onReference, onTrySkill }: {
+export function ExamplesGallery({ mode, projectId = null, heading, initial, onClose, onStart, onReference, onTrySkill, onUseCanvas, onExplain }: {
   mode: ExamplesMode;
   /** open on this skill's or example's page (a pill of one clicked in the chat) */
   initial?: CommunityItem;
@@ -56,6 +60,10 @@ export function ExamplesGallery({ mode, projectId = null, heading, initial, onCl
   onReference?: (example: Example, part: ExamplePart) => void;
   /** Try now on a skill: a new conversation in the app's chat with it named */
   onTrySkill?: (skill: SkillEntry) => void;
+  /** an example's canvas laid down on the project's */
+  onUseCanvas?: (example: Example) => void;
+  /** "Explain how it's made": a question for the chat, with the example (`canvas`: it has one) */
+  onExplain?: (example: Example, canvas: boolean) => void;
 }) {
   const t = useT();
   /* the Community (over a film) opens on its skills; the projects window shows the examples only */
@@ -141,7 +149,7 @@ export function ExamplesGallery({ mode, projectId = null, heading, initial, onCl
   if (opened?.kind === 'example') {
     body = (
       <>
-        <ExampleDetail example={opened.example} mode={mode} onStart={onStart} onReference={onReference} categoryLabel={kindLabel} />
+        <ExampleDetail example={opened.example} mode={mode} onStart={onStart} onReference={onReference} onUseCanvas={onUseCanvas} onExplain={onExplain} categoryLabel={kindLabel} />
         <div hidden>{body}</div>
       </>
     );
@@ -248,11 +256,24 @@ function ExampleCard({ example, label, onOpen }: { example: Example; label: stri
  * An example on its own: its preview with sound, its parts on a strip (one picked by a click, a stretch by dragging
  * across them; none: the whole film), and what to do with it.
  */
-function ExampleDetail({ example, mode, onStart, onReference, categoryLabel }: {
+function ExampleDetail({ example, mode, onStart, onReference, onUseCanvas, onExplain, categoryLabel }: {
   example: Example; mode: ExamplesMode; onStart: (example: Example) => void;
   onReference?: (example: Example, part: ExamplePart) => void; categoryLabel: (c: string) => string;
+  onUseCanvas?: (example: Example) => void; onExplain?: (example: Example, canvas: boolean) => void;
 }) {
   const t = useT();
+  /* its canvas, the steps it was made with: read with its folder (undefined: not yet; null: it has none) */
+  const [board, setBoard] = React.useState<CanvasDoc | null | undefined>(undefined);
+  const [view, setView] = React.useState<'film' | 'canvas'>('film');
+  React.useEffect(() => {
+    let live = true;
+    setBoard(undefined);
+    setView('film');
+    sourcesApi.exampleCanvas(example.id).then((raw) => { if (live) setBoard(raw ? readCanvasDoc(raw) : null); }, () => { if (live) setBoard(null); });
+    return () => { live = false; };
+  }, [example.id]);
+  const fileUrl = React.useCallback((path: string) => `/api/examples/${encodeURIComponent(example.id)}/files/${path.split('/').map(encodeURIComponent).join('/')}`, [example.id]);
+  const showCanvas = view === 'canvas' && board;
   const video = React.useRef<HTMLVideoElement>(null);
   const [part, setPart] = React.useState<ExamplePart>(null);
   const duration = example.duration ?? example.segments.at(-1)?.to ?? 0;
@@ -273,11 +294,28 @@ function ExampleDetail({ example, mode, onStart, onReference, categoryLabel }: {
     <div className="px-6 pb-10">
       <div className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] gap-7">
         <div>
-          <div className="relative aspect-video overflow-hidden rounded-[12px] bg-black ring-1 ring-[var(--border)]">
-            {example.video ? <video ref={video} src={example.video} poster={example.poster ?? undefined} controls playsInline className="absolute inset-0 h-full w-full object-contain" />
-              : <Picture example={example} playing={false} fit="contain" />}
-          </div>
-          {duration ? (
+          {board ? (
+            <div className="mb-2 flex gap-1" role="tablist">
+              {(['film', 'canvas'] as const).map((which) => (
+                <button key={which} type="button" role="tab" aria-selected={view === which} onClick={() => setView(which)}
+                  className={`flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] transition ${view === which ? 'bg-[var(--bg-hover)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}>
+                  {which === 'film' ? <Clapperboard size={13} /> : <Workflow size={13} />}{t(`gallery.${which}`)}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {showCanvas ? (
+            <div className="relative aspect-video overflow-hidden rounded-[12px] bg-[var(--dock-pane)] ring-1 ring-[var(--border)]">
+              <React.Suspense fallback={null}><CanvasPreview doc={board} fileUrl={fileUrl} /></React.Suspense>
+            </div>
+          ) : (
+            <div className="relative aspect-video overflow-hidden rounded-[12px] bg-black ring-1 ring-[var(--border)]">
+              {example.video ? <video ref={video} src={example.video} poster={example.poster ?? undefined} controls playsInline className="absolute inset-0 h-full w-full object-contain" />
+                : <Picture example={example} playing={false} fit="contain" />}
+            </div>
+          )}
+          {showCanvas ? <p className="mt-1.5 text-[11.5px] text-[var(--text-faint)]">{t('gallery.canvasHint')}</p> : null}
+          {duration && !showCanvas ? (
             <div className="mt-3">
               <div className="mb-1.5 flex items-center justify-between text-[11.5px] text-[var(--text-faint)]">
                 <span>{t('gallery.parts')}</span>
@@ -321,6 +359,18 @@ function ExampleDetail({ example, mode, onStart, onReference, categoryLabel }: {
               <button type="button" onClick={secondary.run}
                 className="h-10 rounded-[10px] border border-[var(--border)] text-[13.5px] text-[var(--text)] transition hover:bg-[var(--bg-hover)]">{secondary.label}</button>
             ) : null}
+            {board && onUseCanvas ? (
+              <button type="button" onClick={() => onUseCanvas(example)}
+                className="flex h-10 items-center justify-center gap-1.5 rounded-[10px] border border-[var(--border)] text-[13.5px] text-[var(--text)] transition hover:bg-[var(--bg-hover)]">
+                <Workflow size={14} />{t('gallery.useCanvas')}
+              </button>
+            ) : null}
+            {onExplain ? (
+              <button type="button" disabled={board === undefined} onClick={() => onExplain(example, Boolean(board))}
+                className="flex h-10 items-center justify-center gap-1.5 rounded-[10px] border border-[var(--border)] text-[13.5px] text-[var(--text)] transition hover:bg-[var(--bg-hover)] disabled:opacity-50">
+                <MessageCircleQuestion size={14} />{t('gallery.explain')}
+              </button>
+            ) : null}
           </div>
           <p className="mt-3 text-[12px] leading-[17px] text-[var(--text-faint)]">{mode === 'reference' ? t('gallery.referenceHow') : t('gallery.startHow')}</p>
           <a href={example.url} target="_blank" rel="noreferrer" className="mt-auto flex items-center gap-1.5 pt-6 text-[12px] text-[var(--text-dim)] hover:text-[var(--text)]"><ExternalLink size={13} />{t('gallery.viewSource')}</a>
@@ -336,7 +386,11 @@ function ExampleDetail({ example, mode, onStart, onReference, categoryLabel }: {
  * when the message is sent), a skill is named in it (lib/host.ts `useSkill`), and an example can still be started
  * from, as a new project (`onStarted`).
  */
-export function ExamplesDialog({ projectId, open, onClose, onStarted }: { projectId: string; open?: CommunityItem; onClose: () => void; onStarted: (projectId: string) => void }) {
+export function ExamplesDialog({ projectId, open, onClose, onStarted, onUseCanvas }: {
+  projectId: string; open?: CommunityItem; onClose: () => void; onStarted: (projectId: string) => void;
+  /** an example's canvas laid down on this project's */
+  onUseCanvas: (example: Example) => void;
+}) {
   const t = useT();
   const skillWords = useSkillWords();
   const [starting, setStarting] = React.useState<Example | null>(null);
@@ -363,6 +417,15 @@ export function ExamplesDialog({ projectId, open, onClose, onStarted }: { projec
           onStart={setStarting}
           onReference={reference}
           onTrySkill={(skill) => { studioHost?.useSkill?.({ name: skill.name, description: skill.description, title: skillWords(skill).title, newConversation: true }); onClose(); }}
+          onUseCanvas={(example) => { onUseCanvas(example); onClose(); }}
+          {...(studioHost?.ask ? { onExplain: (example: Example, canvas: boolean) => {
+            void sourcesApi.exampleFolder(example.id).catch(() => {});
+            studioHost?.ask?.({
+              text: t(canvas ? 'gallery.explainAskCanvas' : 'gallery.explainAsk'),
+              refs: [{ kind: 'example', id: example.id, title: example.title, url: example.url, ...(example.description ? { description: example.description } : {}), ...(canvas ? { canvas: true } : {}) }],
+            });
+            onClose();
+          } } : {})}
         />
       </div>
       {starting ? (

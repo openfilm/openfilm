@@ -522,6 +522,16 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     requestAnimationFrame(() => { composerRef.current?.insertReference(pill!); composerRef.current?.focus(); });
   }), [takeStudioRefs]);
 
+  /* a question Studio wrote for the person (an example's "Explain how it's made"): in the composer, for them to send */
+  React.useEffect(() => app.onAsk?.((request) => {
+    const pills = takeStudioRefs(request.refs);
+    requestAnimationFrame(() => {
+      composerRef.current?.setText(request.text);
+      composerRef.current?.insertReferences(pills);
+      composerRef.current?.focus();
+    });
+  }), [takeStudioRefs]);
+
   /* Studio's things pasted into the composer, or dropped on its words: pills there */
   const onTransferReferences = React.useCallback((data: DataTransfer) => {
     const refs = studioRefsFromTransfer(data);

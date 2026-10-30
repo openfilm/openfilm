@@ -10,6 +10,8 @@
  *   POST   /api/projects/:id/canvas-templates      { name, nodes, edges } → { template }: kept from that project
  *   POST   /api/projects/:id/canvas-templates/:tid → { nodes, edges }: its files copied into the project's assets/,
  *                                                     ready to be laid down
+ *
+ * An example film's canvas is laid down the same way (copyBoardInto), what it made with it.
  */
 import { randomBytes } from 'node:crypto';
 import { copyFile, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
@@ -105,32 +107,60 @@ export async function saveTemplate(root, name, board) {
   return { id, name: title, nodes: nodes.length, created: template.created };
 }
 
+/** what goes from one board to another: a picture, a clip, a sound (a page needs the pages and files it loads) */
+const MEDIA = /\.(png|jpe?g|webp|gif|avif|mp4|webm|mov|m4v|mp3|wav|m4a|ogg|aac|flac)$/i;
+
 /**
- * A template ready for the project at `root`: its files copied into `assets/templates/<its name>/` (a name taken there
- * gets a number), its board naming them there. @param {string} root @param {string} id
+ * A board from `from` (a template's folder, an example film) ready for the project at `root`: each media file it shows
+ * (a file node's, what a making node made) copied into `into` there (a name taken there gets a number), its board
+ * naming them there; a file `from` has not, or that is not media, is left out, with its wires.
+ * @param {string} root @param {string} from @param {unknown} board @param {string} into
+ */
+export async function copyBoardInto(root, from, board, into) {
+  const { nodes, edges } = parseCanvas(board);
+  await mkdir(join(root, into), { recursive: true });
+  const taken = new Set((await readdir(join(root, into)).catch(() => [])).map((f) => f.toLowerCase()));
+  /** @type {Map<string, string | null>} */
+  const placed = new Map();
+  const place = async (/** @type {string} */ path) => {
+    if (!placed.has(path)) {
+      const source = join(from, path);
+      if (!MEDIA.test(path) || !(await stat(source).catch(() => null))?.isFile()) placed.set(path, null);
+      else {
+        const file = freeName(basename(path), taken);
+        await copyFile(source, join(root, into, file));
+        placed.set(path, `${into}/${file}`);
+      }
+    }
+    return placed.get(path) ?? null;
+  };
+  const kept = [];
+  for (const n of nodes) {
+    const node = /** @type {Record<string, any>} */ ({ ...n });
+    if ('make' in node) {
+      const versions = (await Promise.all((node.versions ?? []).map(place))).filter(Boolean);
+      const shown = node.path ? await place(node.path) : null;
+      if (versions.length) { node.versions = versions; node.path = shown && versions.includes(shown) ? shown : versions.at(-1); }
+      else { delete node.versions; delete node.path; delete node.made; }
+    } else if ('path' in node) {
+      node.path = await place(node.path);
+      if (!node.path) continue;
+    }
+    kept.push(node);
+  }
+  return parseCanvas({ nodes: kept, edges });
+}
+
+/**
+ * A template ready for the project at `root`: its files copied into `assets/templates/<its name>/` (copyBoardInto).
+ * @param {string} root @param {string} id
  */
 export async function useTemplate(root, id) {
   if (!ID.test(id)) throw new HttpError(404, 'no such template');
   const dir = join(templatesDir(), id);
   const kept = await readFile(join(dir, 'template.json'), 'utf8').then(JSON.parse, () => null);
   if (!kept) throw new HttpError(404, 'no such template');
-  const into = `assets/templates/${slug(String(kept.name ?? id))}`;
-  await mkdir(join(root, into), { recursive: true });
-  const taken = new Set((await readdir(join(root, into)).catch(() => [])).map((f) => f.toLowerCase()));
-  /** @type {Map<string, string>} */
-  const placed = new Map();
-  const nodes = [];
-  for (const n of Array.isArray(kept.nodes) ? kept.nodes : []) {
-    if (typeof n?.path !== 'string') { nodes.push(n); continue; }
-    if (!placed.has(n.path)) {
-      if (!/^files\/[^/\\]+$/.test(n.path)) continue;
-      const file = freeName(basename(n.path), taken);
-      await copyFile(join(dir, n.path), join(root, into, file));
-      placed.set(n.path, `${into}/${file}`);
-    }
-    nodes.push({ ...n, path: placed.get(n.path) });
-  }
-  return parseCanvas({ nodes, edges: kept.edges });
+  return copyBoardInto(root, dir, kept, `assets/templates/${slug(String(kept.name ?? id))}`);
 }
 
 /** `/api/canvas-templates[/:id]`: the list, and one removed. @param {import('./http.mjs').Req} req @param {import('./http.mjs').Res} res @param {string[]} parts */

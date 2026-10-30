@@ -37,6 +37,8 @@ interface AppBridge {
   /** a skill picked in the examples, to be named in the message */
   /** a skill picked or tried in Studio's skills: named in the message being written (`newConversation`: in a new one) */
   onUseSkill?(listener: (skill: { name: string; description: string; title?: string; newConversation?: boolean }) => void): () => void;
+  /** a question Studio writes for the person (lib/host.ts `ask`): its words in the composer, then its references */
+  onAsk?(listener: (request: { text: string; refs: StudioRef[] }) => void): () => void;
   /** "Add a skill" in the examples */
   onAddSkill?(listener: () => void): () => void;
   /** name a skill in the message being written (as one picked in the examples) */

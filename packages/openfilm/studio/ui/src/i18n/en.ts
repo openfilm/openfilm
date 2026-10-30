@@ -77,6 +77,13 @@ export const en = {
     project: 'This project',
     addSkill: 'Add a skill',
     cat: { launch: 'Product launches', explainer: 'Explainers', slides: 'Slides to video', captions: 'Captions and titles', ads: 'Ads', commerce: 'Selling points', music: 'Music' },
+    film: 'Film',
+    canvas: 'Canvas',
+    canvasHint: 'The canvas it was made on: drag to look around, pinch to zoom',
+    useCanvas: 'Use this canvas',
+    explain: 'Explain how it’s made',
+    explainAsk: 'Explain how this film was made, step by step, so I can make one like it:',
+    explainAskCanvas: 'Explain how this film was made, step by step, following its canvas, so I can make one like it:',
   },
   /* the app's update, ready to install (Studio's top bar, in an app that has updates: lib/host.ts `update`) */
   update: {
@@ -1357,6 +1364,7 @@ export const en = {
       storyboard: 'Storyboard: three shots',
       storyboardShot: 'Shot {n}: what we see',
     },
+    exampleCopied: 'The example’s canvas is on yours below what was there; its files are in {folder}',
     make: {
       image: 'Image',
       video: 'Video',

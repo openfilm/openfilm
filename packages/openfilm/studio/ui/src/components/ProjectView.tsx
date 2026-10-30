@@ -55,6 +55,7 @@ import { SettingsModal } from './settings/SettingsModal';
 import { useSettings } from './settings/use-settings';
 import { DesktopDialog } from './DesktopDialog';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
+import { readCanvasDoc, type CanvasDoc } from '../lib/canvas';
 import { HOST_PANEL_WIDTH, studioHost, useHostPanel, type CommunityItem, type HostPanel, type StageBox, type StudioCommand, type StudioRef } from '../lib/host';
 import { clipRef, fileRef, layerRef, markRange, momentRef, rangeRef, regionRef, stillUrl, subtitleRef, trackRef, type ClipFrameSource, type FilmRange } from '@/lib/studio-refs';
 import { boxNow, chatPointOf, draftBoxesAt, draftMarksOf, sameClip, NO_DRAFT, type DraftMarks, type PictureMarks } from '@/lib/chat-marks';
@@ -381,6 +382,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const [canvasOpen, setCanvasOpenState] = React.useState(() => canvasShown(projectId));
   /** the canvas node a chat's reference asked to be shown (`n`: each time again) */
   const [canvasFocus, setCanvasFocus] = React.useState<{ id: string; n: number } | null>(null);
+  /** a board to lay down on the canvas (an example's, copied in) */
+  const [canvasInsert, setCanvasInsert] = React.useState<{ doc: CanvasDoc; n: number } | null>(null);
   /* opening it stops the film playing (the panes under it are hidden): the player's pause, set once it is made */
   const pauseRef = React.useRef<() => void>(() => {});
   React.useEffect(() => { setCanvasOpenState(canvasShown(projectId)); }, [projectId]);
@@ -3215,7 +3218,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 <React.Suspense fallback={null}>
                   <CanvasView projectId={projectId} folder={loaded?.project.path ?? ''} files={canvasFiles} sources={mediaSources} onAddToFilm={(file) => { void addFromCanvas(file); }}
                     onImportFiles={(dropped) => onImport(dropped, 'assets', () => {})} onOpenSettings={() => setSettingsOpen('providers')}
-                    focus={canvasFocus} onRefer={studioHost?.refer ? (refs) => { for (const ref of refs) studioHost?.refer?.(ref); } : undefined}
+                    focus={canvasFocus} insert={canvasInsert} onRefer={studioHost?.refer ? (refs) => { for (const ref of refs) studioHost?.refer?.(ref); } : undefined}
                     onError={toast.showError} onNotice={(message) => toast.show(message)} />
                 </React.Suspense>
               </div>
@@ -3231,7 +3234,14 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       {examplesOpen ? (
         <ExamplesDialog projectId={projectId} open={examplesOpen === true ? undefined : examplesOpen} onClose={() => setExamplesOpen(false)}
           /* a film started from an example: in a tab of its own where there are tabs, else here */
-          onStarted={(id) => { if (studioHost?.tabs) studioHost.tabs.open(id); else onProject(id); }} />
+          onStarted={(id) => { if (studioHost?.tabs) studioHost.tabs.open(id); else onProject(id); }}
+          onUseCanvas={(example) => {
+            void api.exampleCanvasInto(projectId, example.id).then((raw) => {
+              setCanvasOpen(true);
+              setCanvasInsert({ doc: readCanvasDoc(raw), n: Date.now() });
+              toast.show(t('canvas.exampleCopied').replace('{folder}', `assets/examples/${example.id}/`));
+            }, (e: unknown) => toast.showError(e instanceof Error ? e.message : String(e)));
+          }} />
       ) : null}
       <SettingsModal open={settingsOpen !== null} section={settingsOpen ?? undefined} onClose={() => setSettingsOpen(null)} />
       {/* the host app's media drawer (panel.assets): over its panel, under Studio's top bar, down to the `bottom` px the

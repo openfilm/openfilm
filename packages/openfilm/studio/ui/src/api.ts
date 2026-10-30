@@ -167,6 +167,8 @@ export const api = {
   saveCanvasTemplate: (id: string, name: string, board: { nodes: unknown[]; edges: unknown[] }) =>
     call<{ template: { id: string; name: string; nodes: number } }>(`${p(id)}/canvas-templates`, { method: 'POST', json: { name, ...board } }).then((r) => r.template),
   useCanvasTemplate: (id: string, template: string) => call<{ nodes: unknown; edges: unknown }>(`${p(id)}/canvas-templates/${encodeURIComponent(template)}`, { method: 'POST' }),
+  /** an example's canvas laid down on this project's: its files copied into assets/examples/<id>/, its board naming them */
+  exampleCanvasInto: (id: string, example: string) => call<{ nodes: unknown; edges: unknown }>(`${p(id)}/example-canvas/${encodeURIComponent(example)}`, { method: 'POST' }),
   removeCanvasTemplate: (template: string) => call<Record<string, never>>(`canvas-templates/${encodeURIComponent(template)}`, { method: 'DELETE' }),
   /** the loudness of a part of a file's sound (its own seconds): integrated LUFS (null: silent) and true peak */
   loudness: (id: string, path: string, from: number, to: number) => call<{ lufs: number | null; peak: number | null }>(

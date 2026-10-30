@@ -438,6 +438,9 @@ export async function projectFiles(root, parts, skip) {
   if (existsSync(style)) files.push({ name: `${TOOL_DIR}/subtitles.json`, file: style, size: statSync(style).size });
   const settings = join(root, TOOL_DIR, 'settings.json');
   if (existsSync(settings)) files.push({ name: `${TOOL_DIR}/settings.json`, file: settings, size: statSync(settings).size });
+  /* its canvas: how it was laid out and made, with the film */
+  const canvas = join(root, TOOL_DIR, 'canvas.json');
+  if (existsSync(canvas)) files.push({ name: `${TOOL_DIR}/canvas.json`, file: canvas, size: statSync(canvas).size });
   for (const part of parts) await walk(join(root, TOOL_DIR, part), `${TOOL_DIR}/${part}`);
   return files;
 }

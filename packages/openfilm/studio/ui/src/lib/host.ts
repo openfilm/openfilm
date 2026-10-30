@@ -38,6 +38,11 @@ export interface StudioHost {
    */
   refer?: (ref: StudioRef) => void;
   /**
+   * A question for the chat, written for the person: `text` in the message being written, `refs` as its references
+   * (the examples' "Explain how it's made"). Sent only when the person sends it.
+   */
+  ask?: (request: { text: string; refs: StudioRef[] }) => void;
+  /**
    * What is selected in the project shown and where the playhead is, each time either changes (the time a few times
    * a second while playing): what a chat's "@current selection" and "@current time" point at.
    */
@@ -329,7 +334,7 @@ export interface StudioRefImage { src?: string; viewer?: boolean; crop?: StageBo
  *   · file    a file of the project (the media pane): its path, kind, and length / size when known
  *   · example  an example film (ExamplesGallery), or a part of it (`start`–`end`, a `segment` it names): where it comes
  *             from (`url`), and its folder on this computer to read how it is made (`folder`: fetched by the app
- *             when the message is sent, if not yet)
+ *             when the message is sent, if not yet); `canvas` when its folder has the canvas it was made on
  *   · node     a node of the project's canvas (components/canvas): its id there, what it is (`nodeKind`: note, file,
  *             group, or what it makes: image, video, sfx, music), its words (a note's `text`, a making node's
  *             `prompt`), its file (`path`: a file, or the version a making node shows) and how many versions it made
@@ -350,7 +355,7 @@ export type StudioRef = (
   | { kind: 'file'; path: string; fileKind: string; duration?: number; w?: number; h?: number }
   | { kind: 'node'; id: string; nodeKind: string; label: string; text?: string; prompt?: string; path?: string; versions?: number }
   | { kind: 'subtitle'; start: number; end: number; text: string; lang?: string | null; index?: number; words?: Array<{ text: string; start: number; end: number }> }
-  | { kind: 'example'; id: string; title: string; url: string; folder?: string; start?: number; end?: number; segment?: string; description?: string }
+  | { kind: 'example'; id: string; title: string; url: string; folder?: string; start?: number; end?: number; segment?: string; description?: string; canvas?: boolean }
 ) & { image?: StudioRefImage };
 
 /**
