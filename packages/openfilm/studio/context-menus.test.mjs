@@ -9,6 +9,9 @@ import { filmHtml } from '../src/film-doc.mjs';
 import { openProject } from './server/projects.mjs';
 import { startStudio } from './server/server.mjs';
 
+/** Reference in chat's shortcut as the menu shows it on this computer */
+const REFER_KEYS = process.platform === 'darwin' ? '⌘L' : 'Ctrl+L';
+
 const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })();
 
 test('a click only selects; a right click gives the whole menu, Reference first, the same in Layers and on the picture', { timeout: 90_000, skip: !hasFfmpeg && 'no ffmpeg' }, async () => {
@@ -57,7 +60,7 @@ test('a click only selects; a right click gives the whole menu, Reference first,
     await video.click({ button: 'right', position: { x: 20, y: 10 } });
     await until(async () => (await menu())?.length, 'the clip menu opens');
     const clipMenu = await menu();
-    assert.deepEqual(clipMenu.slice(0, 2), ['refer|Reference in chat⌘L', '-']);
+    assert.deepEqual(clipMenu.slice(0, 2), [`refer|Reference in chat${REFER_KEYS}`, '-']);
     for (const id of ['duplicate', 'speed', 'mute', 'copy-attrs']) assert.ok(clipMenu.some((row) => row.startsWith(`${id}|`)), id);
     /* Speed is checked while on, and the timeline's toolbar has it too */
     await page.getByRole('menuitem', { name: /^Speed/ }).click();
@@ -74,7 +77,7 @@ test('a click only selects; a right click gives the whole menu, Reference first,
     await row.click({ button: 'right' });
     await until(async () => (await menu())?.length, 'the Layers menu opens');
     const layersMenu = await menu();
-    assert.deepEqual(layersMenu.slice(0, 2), ['refer|Reference in chat⌘L', '-']);
+    assert.deepEqual(layersMenu.slice(0, 2), [`refer|Reference in chat${REFER_KEYS}`, '-']);
     for (const id of ['edit-text', 'front', 'hide', 'lock', 'reset', 'copy-layers', 'delete']) assert.ok(layersMenu.some((row) => row.startsWith(`${id}|`)), id);
     assert.equal(await row.getAttribute('aria-selected'), 'true');
     /* a press anywhere else closes it (the picture letting go re-rendered the panel under the press, 2026-10-29) */

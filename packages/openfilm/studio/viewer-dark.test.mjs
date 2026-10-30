@@ -45,7 +45,8 @@ test('a click or a box in the dark around the picture selects no text: the pictu
     const pickedLayers = () => page.locator('[data-layers-panel] [role="treeitem"][aria-selected="true"]').allTextContents();
     const wholeClip = () => page.locator('[data-mg-kind]').count();
 
-    await page.locator('[data-layers-panel] [role="treeitem"]').filter({ hasText: 'Every day' }).waitFor({ state: 'visible' });
+    /* a slow machine takes a while to open the project and fill its Layers */
+    await page.locator('[data-layers-panel] [role="treeitem"]').filter({ hasText: 'Every day' }).waitFor({ state: 'visible', timeout: 120_000 });
     const film = await page.locator('[data-viewer-picture] iframe').first().boundingBox();
     const area = await page.locator('[data-viewer-picture]').boundingBox();
     const scale = film.width / 1080;
