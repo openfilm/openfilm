@@ -22,7 +22,8 @@
  * or its maker's app where they share it (Codex, DeepSeek Harness).
  *
  * The agent works the way it would in a terminal: in the project's folder, with the `openfilm` command on its PATH
- * (this app's copy, so its Studio is the one in the window) and a few lines saying where it is (INSTRUCTIONS).
+ * (this app's copy, so its Studio is the one in the window) and a few lines saying where it is and naming that command
+ * by its whole path (agentInstructions).
  *
  * Reads no Electron module, so `node --test` can use it.
  */
@@ -41,6 +42,7 @@ import { logSwitches } from './agent-logs.mjs';
 import { afterFirstReading, firstWindowsApps, refreshWindowsApps } from './windows-apps.mjs';
 import { mergeConfig, sessionSkills } from './agent-skills.mjs';
 import { nodeBinary } from './node-runtime.mjs';
+import { openfilmCommand } from './openfilm-command.mjs';
 import { outOfBalance } from './pi-config.mjs';
 import { AGENT_DEFINITIONS } from './agent-definitions.mjs';
 
@@ -135,18 +137,31 @@ In your replies you can point at things in Studio for the person: [[clip:ID]] (a
 [[t:SECONDS]] (a moment), [[range:START-END]] (a stretch, in seconds), [[track:N]] (a track, 0 is the first) and
 [[file:PATH]] (a file of the project). They show as links that open it in Studio.`;
 
-/** What the agent is told about where it is, on top of its own instructions. */
-export const INSTRUCTIONS = `You are working inside OpenFilm, a desktop app for making videos. Beside this chat the person sees OpenFilm Studio,
+/**
+ * What the agent is told about where it is, on top of its own instructions. `command`: the app's `openfilm` by its
+ * whole path (openfilmCommand), named in place of the one on the PATH, which the agent's shell may not find first.
+ */
+export function agentInstructions(command = null) {
+  const run = command ?? 'openfilm';
+  const which = command
+    ? `That is this app's own \`openfilm\` command, on the Studio beside you: run it by
+that path every time, as its manual does, not as \`openfilm\` (your shell may find another one first) and not as
+\`npx openfilm\`, whatever a skill says.`
+    : `Use the \`openfilm\` command on your PATH (this app's own, on the Studio beside you), not
+\`npx openfilm\`, whatever a skill says.`;
+  return `You are working inside OpenFilm, a desktop app for making videos. Beside this chat the person sees OpenFilm Studio,
 the video editor, showing the project in your working directory; it updates live as you save files.
 
 The project is an OpenFilm film: pages with window.film, cut together by film.html. Before you change anything, run
-\`openfilm\` with no arguments and read the manual it prints; follow it. Use the \`openfilm\` command on your PATH (this
-app's own, on the Studio beside you), not \`npx openfilm\`, whatever a skill says. Studio is already open on this
-project: you never need \`openfilm open\` and never open Studio in a browser. Run \`openfilm look\` after each change
+\`${run}\` with no arguments and read the manual it prints; follow it. ${which} Studio is already open on this
+project: you never need \`${run} open\` and never open Studio in a browser. Run \`${run} look\` after each change
 to see what you made. Render the MP4 only when the person asks for it; they can also export from Studio. Reply in the
 language the person writes in.
 
 ${STUDIO_REFERENCES}`;
+}
+
+export const INSTRUCTIONS = agentInstructions();
 
 /**
  * The app's own agent's whole system prompt, in place of Pi's (a coding assistant's, with Pi's own docs): who it is,
@@ -182,6 +197,20 @@ export function codexDeveloperInstructions(toml) {
       : ({ n: '\n', t: '\t', r: '\r', '"': '"', '\\': '\\' })[c] ?? c));
   }
   return text.trim() || null;
+}
+
+/**
+ * What Codex's adapter starts Codex with on top of its config.toml (CODEX_CONFIG): the app's instructions after the
+ * person's own (`theirs`), and the PATH the session has (`path`), kept for each command. Codex runs a command after
+ * the person's shell profile is read again (its shell snapshot), whose PATH can put another `openfilm` before the
+ * app's; the PATH its config sets is kept. A dotted key leaves the rest of their shell_environment_policy as it is.
+ * Not on Windows, which has no such snapshot.
+ */
+export function codexSessionConfig(instructions, { theirs = null, path, platform = process.platform }) {
+  return {
+    developer_instructions: theirs ? `${theirs}\n\n${instructions}` : instructions,
+    ...(platform === 'win32' ? {} : { 'shell_environment_policy.set.PATH': path }),
+  };
 }
 
 /** Codex's config.toml: in CODEX_HOME when the person's shell sets it, else ~/.codex. */
@@ -1200,7 +1229,7 @@ export class AgentSession {
     }
     const node = nodeRuntime();
     const path = [this.opts.binDir, shell.PATH, this.opts.fallbackDir].filter(Boolean).join(PATH_SEP);
-    const instructions = INSTRUCTIONS;
+    const instructions = agentInstructions(this.opts.binDir ? openfilmCommand(this.opts.binDir) : null);
     /* the app's own agent: what Pi runs with (its whole system prompt is ours), and the web search of `openfilm get`
        (OPENFILM_GET_WEB lists it) */
     const own = !harness ? {} : {
@@ -1229,7 +1258,7 @@ export class AgentSession {
     if (this.spec.adapter === AGENTS.codex.adapter) {
       this.ownLogs = shell.CODEX_HOME || join(homedir(), '.codex');
       const theirs = codexDeveloperInstructions(codexConfigText(shell));
-      env.CODEX_CONFIG = JSON.stringify(mergeConfig({ developer_instructions: theirs ? `${theirs}\n\n${instructions}` : instructions }, skills?.codexConfig ?? {}));
+      env.CODEX_CONFIG = JSON.stringify(mergeConfig(codexSessionConfig(instructions, { theirs, path }), skills?.codexConfig ?? {}));
     }
     /* the others have no place for it: the session's first message carries it */
     this.instructions = harness || this.spec.systemPrompt ? null : instructions;
