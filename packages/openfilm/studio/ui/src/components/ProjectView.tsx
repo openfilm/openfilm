@@ -10,7 +10,7 @@ import * as React from 'react';
 import { ArrowLeftRight, BookmarkPlus, ClipboardCopy, ClipboardPaste, Film as FilmIcon, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, TriangleAlert, Upload, Workflow } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
 import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type Op, type ProjectFilm, type ProjectSettings } from '@/api';
-import { useT } from '@/i18n';
+import { useLanguage, useT } from '@/i18n';
 import { useFilm, type Step } from '@/editor/use-film';
 import { Player } from '@/editor/player';
 import { Preview, type FilmInfo, type PlayedReport, type PreviewHandle } from '@/editor/Preview';
@@ -29,6 +29,8 @@ import { attrsOf, pasteAttrs, type AttrGroup, type CopiedAttrs } from '@/lib/cli
 import { cutPoints, namedTrack, nextCut, trackNamesOf } from '@/lib/timeline-nav';
 import { anyLocked, lockedEdits } from '@/lib/track-lock';
 import { placeMedia, type SourceRange } from '@/lib/media-place';
+import { BUILT_IN, builtInItem, cutTrack, cutsOf, libraryDragItem, nameOf, onCut, withLook, type LibraryItem } from '@/lib/library';
+import { LibraryDrawer, type LibraryActions } from '@/components/library/LibraryDrawer';
 import { apartOnTracks, type ClipEdit } from '@/lib/film-clip-edits';
 import { mediaFetch, useMediaImages } from '@/lib/media-queue';
 import { clipboardItemsOf, clipboardNow, pasteEdit, type TimelineClipboardItem } from '@/lib/timeline-clipboard';
@@ -36,7 +38,7 @@ import { editModelOf, freshLink, linkedIds, magnetOn, mainTrackOf, planMove, pla
 import { readTimelinePrefs, switchesOf } from '@/lib/timeline-prefs';
 import { fadeMsOf, type FadeMs } from '@/lib/clip-fade';
 import {
-  findTransitions, planRemoveTransition, planResizeTransition, planTransition, TRANSITION_MS,
+  cutForClick, findTransitions, planRemoveTransition, planResizeTransition, planTransition, TRANSITION_MS,
   type ClipFacts, type TransitionAsk, type TransitionPlan,
 } from '@/lib/transitions';
 import { frameMs } from '@/lib/timecode';
@@ -1081,6 +1083,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       }
       const clip = taken.clip;
       const durMs = file.durationMs ?? assetRunMs([file]);
+      /* a transition of OpenFilm's library (lib/library): its middle on the cut it was put near, never pushing or
+         cutting what is under it */
+      if (builtInItem(file.saved)?.place === 'cut') {
+        const at = onCut(plan.at, durMs, cutsOf(timelineTracks));
+        return edit([{ op: 'insert', clip: clip as never, at, track: cutTrack(timelineTracks, plan.track, at, durMs) }], 'history.stepDrop');
+      }
       return edit([
         { op: 'insert', clip: clip as never, at: plan.at, ...(plan.track != null ? { track: plan.track } : {}) },
         ...roomFor([{ track: plan.track, atSec: plan.at, durMs }], target.edit),
@@ -1159,6 +1167,68 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (pickedMedia && pickedSaved) void placeSaved(pickedMedia, { mode, range, atPlayhead: true });
     else if (pickedMedia) void addMedia(pickedMedia, { mode, range, atPlayhead: true });
   }, [addMedia, placeSaved, pickedMedia, pickedSaved]);
+  /*
+   * OpenFilm's library in the assets drawer (components/library/LibraryDrawer, lib/library): a page or a sound taken
+   * into the project and put at the playhead (a sound as a file of the project goes; a page on a new track at the top,
+   * a transition's middle on the cut nearest the playhead), a look written into the picked clips' style, a fade made on
+   * a cut as the timeline's menu makes one.
+   */
+  const language = useLanguage();
+  const libraryActions = React.useMemo<LibraryActions>(() => {
+    const picked = () => selectedBlocks.flatMap((b) => (b.clipId ? [b.clipId] : []));
+    const target = () => timelineCommands.current?.target() ?? null;
+    /* the cut nearest the playhead (or at the picked clip), and the track it is on */
+    const cutHere = () => {
+      const model = editModel();
+      const cut = cutForClick(model, 'dissolve', picked(), timeRef.current, target());
+      const clips = model.flatMap((tr) => tr.clips.map((c) => ({ ...c, track: tr.index })));
+      const after = clips.find((c) => c.id === cut?.b);
+      const before = clips.find((c) => c.id === cut?.a);
+      const edge = after ?? before;
+      return cut && edge ? { cut, atMs: after ? after.startMs : before!.endMs, track: edge.track } : null;
+    };
+    const place = async (item: LibraryItem) => {
+      const name = nameOf(item.name, language);
+      const drag = libraryDragItem(item, name);
+      if (!drag) return;
+      let taken: Awaited<ReturnType<typeof api.takeSaved>>;
+      try { taken = await api.takeSaved(projectId, `${BUILT_IN}/${item.id}`); } catch (e) { toast.show(e instanceof Error ? e.message : String(e)); return; }
+      if ('path' in taken) {
+        await addMedia({ path: taken.path, name, dir: '', size: 0, kind: 'audio', mtimeMs: 0, ...(drag.durationMs ? { durationMs: drag.durationMs } : {}) }, { atPlayhead: true });
+        return;
+      }
+      if (!('clip' in taken)) return;
+      let at = snapToFrame(timeRef.current) / 1000;
+      let track: number | { insert: number } = { insert: 0 };
+      if (item.place === 'cut') {
+        const here = cutHere();
+        if (!here) { toast.show(t('assetDrawer.noCut')); return; }
+        at = Math.max(0, Math.round(here.atMs - (item.durationMs ?? 0) / 2) / 1000);
+        track = cutTrack(timelineTracks, here.track, at, item.durationMs ?? 0);
+      }
+      const failed = await edit([{ op: 'insert', clip: taken.clip as never, at, track }], 'history.stepDrop');
+      if (failed) toast.show(failed);
+    };
+    return {
+      place: (item) => { void place(item); },
+      look: (item) => {
+        const pics = selectedBlocks.flatMap((b) => {
+          const clip = b.clipId && b.loc ? filmClipOf(b.clipId) : null;
+          return clip && !clip.sound && filmSrcKind(clip.src) !== 'sound' ? [{ loc: b.loc!, style: clip.style }] : [];
+        });
+        if (!pics.length) { toast.show(t('assetDrawer.pickClips')); return; }
+        void editBlocks(pics.map((c) => ({ loc: c.loc, prop: 'style', value: withLook(c.style, item.filter ?? null) }))).then((err) => {
+          if (err) toast.showError(err);
+          else toast.show(t('assetDrawer.looked').replace('{name}', nameOf(item.name, language)).replace('{n}', String(pics.length)));
+        });
+      },
+      fade: (item) => {
+        const here = item.fade ? cutHere() : null;
+        if (!here || !item.fade) { toast.show(t('assetDrawer.noCut')); return; }
+        void askTransition({ kind: 'add', type: item.fade, cut: here.cut }).then((err) => { if (err) toast.show(err); });
+      },
+    };
+  }, [language, selectedBlocks, editModel, projectId, addMedia, timelineTracks, edit, filmClipOf, editBlocks, askTransition, t, toast]);
   /* clips (and files) kept to use again in any project (lib/saved, studio/server/saved.mjs): the timeline's, the
      picture's and the media pane's "Add to Saved" */
   const saveThings = React.useCallback(async (what: Parameters<typeof api.save>[1], n: number) => {
@@ -3265,7 +3335,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       {hostAssets?.open && hostPanel ? (
         <div className="fixed z-30 flex min-h-0 min-w-0 flex-col overflow-hidden border-t border-[var(--dock-line)] bg-[var(--dock-pane)]"
           style={{ top: HOST_PANEL_TOP, left: 0, bottom: hostAssets.bottom, width: HOST_PANEL_WIDTH }}>
-          {mediaPool()}
+          <LibraryDrawer media={mediaPool()} actions={libraryActions} />
         </div>
       ) : null}
       <DesktopDialog open={desktopOpen} onClose={() => setDesktopOpen(false)} />

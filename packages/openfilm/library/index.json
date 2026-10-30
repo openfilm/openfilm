@@ -1,0 +1,1879 @@
+{
+ "version": 1,
+ "groups": {
+  "transition": [
+   {
+    "id": "fade",
+    "name": {
+     "en": "Dissolve",
+     "zh-CN": "叠化",
+     "ja": "ディゾルブ",
+     "ko": "디졸브",
+     "es": "Fundido"
+    }
+   },
+   {
+    "id": "light",
+    "name": {
+     "en": "Light",
+     "zh-CN": "光效",
+     "ja": "光",
+     "ko": "빛",
+     "es": "Luz"
+    }
+   },
+   {
+    "id": "cover",
+    "name": {
+     "en": "Cover",
+     "zh-CN": "遮挡",
+     "ja": "カバー",
+     "ko": "가림",
+     "es": "Cubrir"
+    }
+   },
+   {
+    "id": "shape",
+    "name": {
+     "en": "Shapes",
+     "zh-CN": "形状",
+     "ja": "形",
+     "ko": "도형",
+     "es": "Formas"
+    }
+   },
+   {
+    "id": "glitch",
+    "name": {
+     "en": "Glitch",
+     "zh-CN": "故障",
+     "ja": "グリッチ",
+     "ko": "글리치",
+     "es": "Fallo"
+    }
+   }
+  ],
+  "effect": [
+   {
+    "id": "texture",
+    "name": {
+     "en": "Texture",
+     "zh-CN": "纹理",
+     "ja": "テクスチャ",
+     "ko": "질감",
+     "es": "Textura"
+    }
+   },
+   {
+    "id": "light",
+    "name": {
+     "en": "Light",
+     "zh-CN": "光效",
+     "ja": "光",
+     "ko": "빛",
+     "es": "Luz"
+    }
+   },
+   {
+    "id": "ambience",
+    "name": {
+     "en": "Ambience",
+     "zh-CN": "氛围",
+     "ja": "雰囲気",
+     "ko": "분위기",
+     "es": "Ambiente"
+    }
+   },
+   {
+    "id": "rhythm",
+    "name": {
+     "en": "Rhythm",
+     "zh-CN": "节奏",
+     "ja": "リズム",
+     "ko": "리듬",
+     "es": "Ritmo"
+    }
+   },
+   {
+    "id": "frame",
+    "name": {
+     "en": "Frames",
+     "zh-CN": "边框",
+     "ja": "フレーム",
+     "ko": "프레임",
+     "es": "Marcos"
+    }
+   },
+   {
+    "id": "retro",
+    "name": {
+     "en": "Retro",
+     "zh-CN": "复古",
+     "ja": "レトロ",
+     "ko": "레트로",
+     "es": "Retro"
+    }
+   }
+  ],
+  "filter": [
+   {
+    "id": "film",
+    "name": {
+     "en": "Film",
+     "zh-CN": "胶片",
+     "ja": "フィルム",
+     "ko": "필름",
+     "es": "Película"
+    }
+   },
+   {
+    "id": "cinema",
+    "name": {
+     "en": "Cinema",
+     "zh-CN": "电影",
+     "ja": "シネマ",
+     "ko": "시네마",
+     "es": "Cine"
+    }
+   },
+   {
+    "id": "portrait",
+    "name": {
+     "en": "Portrait",
+     "zh-CN": "人像",
+     "ja": "ポートレート",
+     "ko": "인물",
+     "es": "Retrato"
+    }
+   },
+   {
+    "id": "food",
+    "name": {
+     "en": "Food",
+     "zh-CN": "美食",
+     "ja": "フード",
+     "ko": "음식",
+     "es": "Comida"
+    }
+   },
+   {
+    "id": "scenery",
+    "name": {
+     "en": "Scenery",
+     "zh-CN": "风景",
+     "ja": "風景",
+     "ko": "풍경",
+     "es": "Paisaje"
+    }
+   },
+   {
+    "id": "vintage",
+    "name": {
+     "en": "Vintage",
+     "zh-CN": "复古",
+     "ja": "ヴィンテージ",
+     "ko": "빈티지",
+     "es": "Vintage"
+    }
+   },
+   {
+    "id": "mono",
+    "name": {
+     "en": "Black and white",
+     "zh-CN": "黑白",
+     "ja": "モノクロ",
+     "ko": "흑백",
+     "es": "Blanco y negro"
+    }
+   }
+  ],
+  "text": [
+   {
+    "id": "title",
+    "name": {
+     "en": "Titles",
+     "zh-CN": "标题",
+     "ja": "タイトル",
+     "ko": "타이틀",
+     "es": "Títulos"
+    }
+   },
+   {
+    "id": "lower",
+    "name": {
+     "en": "Names and places",
+     "zh-CN": "人名地点",
+     "ja": "名前と場所",
+     "ko": "이름과 장소",
+     "es": "Nombres y lugares"
+    }
+   },
+   {
+    "id": "badge",
+    "name": {
+     "en": "Badges",
+     "zh-CN": "贴纸字",
+     "ja": "バッジ",
+     "ko": "배지",
+     "es": "Insignias"
+    }
+   },
+   {
+    "id": "data",
+    "name": {
+     "en": "Numbers",
+     "zh-CN": "数据",
+     "ja": "数字",
+     "ko": "숫자",
+     "es": "Números"
+    }
+   },
+   {
+    "id": "caption",
+    "name": {
+     "en": "Captions",
+     "zh-CN": "字幕",
+     "ja": "字幕",
+     "ko": "자막",
+     "es": "Subtítulos"
+    }
+   }
+  ],
+  "sticker": [
+   {
+    "id": "animated",
+    "name": {
+     "en": "Animated",
+     "zh-CN": "动态",
+     "ja": "アニメーション",
+     "ko": "움직이는",
+     "es": "Animados"
+    }
+   }
+  ],
+  "sound": [
+   {
+    "id": "transition",
+    "name": {
+     "en": "Transitions",
+     "zh-CN": "转场",
+     "ja": "トランジション",
+     "ko": "전환",
+     "es": "Transiciones"
+    }
+   },
+   {
+    "id": "ui",
+    "name": {
+     "en": "Interface",
+     "zh-CN": "界面",
+     "ja": "インターフェース",
+     "ko": "인터페이스",
+     "es": "Interfaz"
+    }
+   },
+   {
+    "id": "impact",
+    "name": {
+     "en": "Impacts",
+     "zh-CN": "打击",
+     "ja": "インパクト",
+     "ko": "타격",
+     "es": "Impactos"
+    }
+   },
+   {
+    "id": "ambience",
+    "name": {
+     "en": "Ambience",
+     "zh-CN": "环境",
+     "ja": "環境音",
+     "ko": "환경음",
+     "es": "Ambiente"
+    }
+   }
+  ]
+ },
+ "items": [
+  {
+   "id": "transitions/dissolve",
+   "cat": "transition",
+   "group": "fade",
+   "name": {
+    "en": "Cross dissolve",
+    "zh-CN": "叠化",
+    "ja": "クロスディゾルブ",
+    "ko": "크로스 디졸브",
+    "es": "Fundido encadenado"
+   },
+   "kind": "fade",
+   "fade": "dissolve"
+  },
+  {
+   "id": "transitions/dip-black",
+   "cat": "transition",
+   "group": "fade",
+   "name": {
+    "en": "Dip to black",
+    "zh-CN": "闪黑",
+    "ja": "黒にフェード",
+    "ko": "검은색으로",
+    "es": "Fundido a negro"
+   },
+   "kind": "fade",
+   "fade": "dip-black"
+  },
+  {
+   "id": "transitions/dip-white",
+   "cat": "transition",
+   "group": "fade",
+   "name": {
+    "en": "Dip to white",
+    "zh-CN": "闪白",
+    "ja": "白にフェード",
+    "ko": "흰색으로",
+    "es": "Fundido a blanco"
+   },
+   "kind": "fade",
+   "fade": "dip-white"
+  },
+  {
+   "id": "transitions/light-sweep",
+   "cat": "transition",
+   "group": "light",
+   "name": {
+    "en": "Light sweep",
+    "zh-CN": "光斑扫过",
+    "ja": "光のスイープ",
+    "ko": "빛 스윕",
+    "es": "Barrido de luz"
+   },
+   "place": "cut",
+   "kind": "page",
+   "durationMs": 800,
+   "src": "light-sweep.html"
+  },
+  {
+   "id": "transitions/flare",
+   "cat": "transition",
+   "group": "light",
+   "name": {
+    "en": "Flare",
+    "zh-CN": "镜头光晕",
+    "ja": "フレア",
+    "ko": "플레어",
+    "es": "Destello"
+   },
+   "place": "cut",
+   "kind": "page",
+   "durationMs": 800,
+   "src": "flare.html"
+  },
+  {
+   "id": "transitions/film-burn",
+   "cat": "transition",
+   "group": "light",
+   "name": {
+    "en": "Film burn",
+    "zh-CN": "胶片烧灼",
+    "ja": "フィルムバーン",
+    "ko": "필름 번",
+    "es": "Película quemada"
+   },
+   "place": "cut",
+   "kind": "page",
+   "durationMs": 800,
+   "src": "film-burn.html"
+  },
+  {
+   "id": "transitions/wipe",
+   "cat": "transition",
+   "group": "cover",
+   "name": {
+    "en": "Color wipe",
+    "zh-CN": "色块擦除",
+    "ja": "カラーワイプ",
+    "ko": "컬러 와이프",
+    "es": "Barrido de color"
+   },
+   "place": "cut",
+   "kind": "page",
+   "durationMs": 800,
+   "src": "wipe.html"
+  },
+  {
+   "id": "transitions/shutter",
+   "cat": "transition",
+   "group": "cover",
+   "name": {
+    "en": "Shutter",
+    "zh-CN": "快门",
+    "ja": "シャッター",
+    "ko": "셔터",
+    "es": "Obturador"
+   },
+   "place": "cut",
+   "kind": "page",
+   "durationMs": 800,
+   "src": "shutter.html"
+  },
+  {
+   "id": "transitions/iris",
+   "cat": "transition",
+   "group": "cover",
+   "name": {
+    "en": "Iris",
+    "zh-CN": "圆形收缩",
+    "ja": "アイリス",
+    "ko": "아이리스",
+    "es": "Iris"
+   },
+   "place": "cut",
+   "kind": "page",
+   "durationMs": 800,
+   "src": "iris.html"
+  },
+  {
+   "id": "transitions/blinds",
+   "cat": "transition",
+   "group": "cover",
+   "name": {
+    "en": "Blinds",
+    "zh-CN": "百叶窗",
+    "ja": "ブラインド",
+    "ko": "블라인드",
+    "es": "Persianas"
+   },
+   "place": "cut",
+   "kind": "page",
+   "durationMs": 800,
+   "src": "blinds.html"
+  },
+  {
+   "id": "transitions/ink",
+   "cat": "transition",
+   "group": "cover",
+   "name": {
+    "en": "Ink",
+    "zh-CN": "墨迹晕开",
+    "ja": "インク",
+    "ko": "잉크",
+    "es": "Tinta"
+   },
+   "place": "cut",
+   "kind": "page",
+   "durationMs": 1000,
+   "src": "ink.html"
+  },
+  {
+   "id": "transitions/heart",
+   "cat": "transition",
+   "group": "shape",
+   "name": {
+    "en": "Heart",
+    "zh-CN": "爱心",
+    "ja": "ハート",
+    "ko": "하트",
+    "es": "Corazón"
+   },
+   "place": "cut",
+   "kind": "page",
+   "durationMs": 800,
+   "src": "heart.html"
+  },
+  {
+   "id": "transitions/star",
+   "cat": "transition",
+   "group": "shape",
+   "name": {
+    "en": "Star",
+    "zh-CN": "星星",
+    "ja": "星",
+    "ko": "별",
+    "es": "Estrella"
+   },
+   "place": "cut",
+   "kind": "page",
+   "durationMs": 800,
+   "src": "star.html"
+  },
+  {
+   "id": "transitions/glitch",
+   "cat": "transition",
+   "group": "glitch",
+   "name": {
+    "en": "Glitch",
+    "zh-CN": "信号故障",
+    "ja": "グリッチ",
+    "ko": "글리치",
+    "es": "Fallo"
+   },
+   "place": "cut",
+   "kind": "page",
+   "durationMs": 600,
+   "src": "glitch.html"
+  },
+  {
+   "id": "transitions/static",
+   "cat": "transition",
+   "group": "glitch",
+   "name": {
+    "en": "TV static",
+    "zh-CN": "雪花噪点",
+    "ja": "砂嵐",
+    "ko": "TV 노이즈",
+    "es": "Estática"
+   },
+   "place": "cut",
+   "kind": "page",
+   "durationMs": 600,
+   "src": "static.html"
+  },
+  {
+   "id": "effects/grain",
+   "cat": "effect",
+   "group": "texture",
+   "name": {
+    "en": "Film grain",
+    "zh-CN": "胶片颗粒",
+    "ja": "フィルムグレイン",
+    "ko": "필름 그레인",
+    "es": "Grano de película"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "grain.html"
+  },
+  {
+   "id": "effects/vignette",
+   "cat": "effect",
+   "group": "texture",
+   "name": {
+    "en": "Vignette",
+    "zh-CN": "暗角",
+    "ja": "ビネット",
+    "ko": "비네팅",
+    "es": "Viñeta"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "vignette.html"
+  },
+  {
+   "id": "effects/scratches",
+   "cat": "effect",
+   "group": "texture",
+   "name": {
+    "en": "Old film",
+    "zh-CN": "老电影划痕",
+    "ja": "古いフィルム",
+    "ko": "오래된 필름",
+    "es": "Película antigua"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "scratches.html"
+  },
+  {
+   "id": "effects/scanlines",
+   "cat": "effect",
+   "group": "texture",
+   "name": {
+    "en": "Scan lines",
+    "zh-CN": "扫描线",
+    "ja": "走査線",
+    "ko": "스캔 라인",
+    "es": "Líneas de barrido"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "scanlines.html"
+  },
+  {
+   "id": "effects/light-leak",
+   "cat": "effect",
+   "group": "light",
+   "name": {
+    "en": "Light leak",
+    "zh-CN": "漏光",
+    "ja": "ライトリーク",
+    "ko": "빛 번짐",
+    "es": "Fuga de luz"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "light-leak.html"
+  },
+  {
+   "id": "effects/lens-flare",
+   "cat": "effect",
+   "group": "light",
+   "name": {
+    "en": "Lens flare",
+    "zh-CN": "镜头光斑",
+    "ja": "レンズフレア",
+    "ko": "렌즈 플레어",
+    "es": "Destello de lente"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "lens-flare.html"
+  },
+  {
+   "id": "effects/light-rays",
+   "cat": "effect",
+   "group": "light",
+   "name": {
+    "en": "Light rays",
+    "zh-CN": "丁达尔光",
+    "ja": "光芒",
+    "ko": "빛줄기",
+    "es": "Rayos de luz"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "light-rays.html"
+  },
+  {
+   "id": "effects/snow",
+   "cat": "effect",
+   "group": "ambience",
+   "name": {
+    "en": "Snow",
+    "zh-CN": "下雪",
+    "ja": "雪",
+    "ko": "눈",
+    "es": "Nieve"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "snow.html"
+  },
+  {
+   "id": "effects/rain",
+   "cat": "effect",
+   "group": "ambience",
+   "name": {
+    "en": "Rain",
+    "zh-CN": "下雨",
+    "ja": "雨",
+    "ko": "비",
+    "es": "Lluvia"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "rain.html"
+  },
+  {
+   "id": "effects/sparkles",
+   "cat": "effect",
+   "group": "ambience",
+   "name": {
+    "en": "Sparkles",
+    "zh-CN": "星光闪烁",
+    "ja": "きらめき",
+    "ko": "반짝임",
+    "es": "Destellos"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "sparkles.html"
+  },
+  {
+   "id": "effects/confetti",
+   "cat": "effect",
+   "group": "ambience",
+   "name": {
+    "en": "Confetti",
+    "zh-CN": "彩带",
+    "ja": "紙吹雪",
+    "ko": "색종이",
+    "es": "Confeti"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "confetti.html"
+  },
+  {
+   "id": "effects/petals",
+   "cat": "effect",
+   "group": "ambience",
+   "name": {
+    "en": "Petals",
+    "zh-CN": "樱花",
+    "ja": "桜吹雪",
+    "ko": "벚꽃",
+    "es": "Pétalos"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "petals.html"
+  },
+  {
+   "id": "effects/bubbles",
+   "cat": "effect",
+   "group": "ambience",
+   "name": {
+    "en": "Bubbles",
+    "zh-CN": "气泡",
+    "ja": "泡",
+    "ko": "거품",
+    "es": "Burbujas"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "bubbles.html"
+  },
+  {
+   "id": "effects/flash",
+   "cat": "effect",
+   "group": "rhythm",
+   "name": {
+    "en": "Flash",
+    "zh-CN": "闪白",
+    "ja": "フラッシュ",
+    "ko": "플래시",
+    "es": "Destello"
+   },
+   "kind": "page",
+   "durationMs": 1000,
+   "src": "flash.html"
+  },
+  {
+   "id": "effects/heartbeat",
+   "cat": "effect",
+   "group": "rhythm",
+   "name": {
+    "en": "Heartbeat",
+    "zh-CN": "心跳",
+    "ja": "鼓動",
+    "ko": "심장 박동",
+    "es": "Latido"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "heartbeat.html"
+  },
+  {
+   "id": "effects/glitch",
+   "cat": "effect",
+   "group": "rhythm",
+   "name": {
+    "en": "Glitch",
+    "zh-CN": "信号故障",
+    "ja": "グリッチ",
+    "ko": "글리치",
+    "es": "Fallo"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "glitch.html"
+  },
+  {
+   "id": "effects/letterbox",
+   "cat": "effect",
+   "group": "frame",
+   "name": {
+    "en": "Letterbox",
+    "zh-CN": "宽银幕",
+    "ja": "シネスコ",
+    "ko": "시네마 바",
+    "es": "Formato cine"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "letterbox.html"
+  },
+  {
+   "id": "effects/polaroid",
+   "cat": "effect",
+   "group": "frame",
+   "name": {
+    "en": "Instant photo",
+    "zh-CN": "拍立得",
+    "ja": "インスタント写真",
+    "ko": "즉석 사진",
+    "es": "Foto instantánea"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "polaroid.html"
+  },
+  {
+   "id": "effects/film-strip",
+   "cat": "effect",
+   "group": "frame",
+   "name": {
+    "en": "Film strip",
+    "zh-CN": "胶片边框",
+    "ja": "フィルム枠",
+    "ko": "필름 프레임",
+    "es": "Tira de película"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "film-strip.html"
+  },
+  {
+   "id": "effects/viewfinder",
+   "cat": "effect",
+   "group": "frame",
+   "name": {
+    "en": "Camera viewfinder",
+    "zh-CN": "取景框 REC",
+    "ja": "ファインダー",
+    "ko": "뷰파인더",
+    "es": "Visor de cámara"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "viewfinder.html"
+  },
+  {
+   "id": "effects/neon-frame",
+   "cat": "effect",
+   "group": "frame",
+   "name": {
+    "en": "Neon frame",
+    "zh-CN": "霓虹边框",
+    "ja": "ネオン枠",
+    "ko": "네온 테두리",
+    "es": "Marco de neón"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "neon-frame.html"
+  },
+  {
+   "id": "effects/vhs",
+   "cat": "effect",
+   "group": "retro",
+   "name": {
+    "en": "VHS",
+    "zh-CN": "VHS 录像带",
+    "ja": "VHS",
+    "ko": "VHS",
+    "es": "VHS"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "vhs.html"
+  },
+  {
+   "id": "filters/warm-film",
+   "cat": "filter",
+   "group": "film",
+   "name": {
+    "en": "Warm film",
+    "zh-CN": "胶片暖",
+    "ja": "暖かいフィルム",
+    "ko": "따뜻한 필름",
+    "es": "Película cálida"
+   },
+   "kind": "look",
+   "filter": "sepia(0.25) saturate(1.15) contrast(1.05) brightness(1.03) hue-rotate(-8deg)"
+  },
+  {
+   "id": "filters/cool-film",
+   "cat": "filter",
+   "group": "film",
+   "name": {
+    "en": "Cool film",
+    "zh-CN": "胶片冷",
+    "ja": "クールなフィルム",
+    "ko": "차가운 필름",
+    "es": "Película fría"
+   },
+   "kind": "look",
+   "filter": "saturate(0.9) contrast(1.08) hue-rotate(12deg) brightness(0.98)"
+  },
+  {
+   "id": "filters/golden",
+   "cat": "filter",
+   "group": "film",
+   "name": {
+    "en": "Golden",
+    "zh-CN": "金色年代",
+    "ja": "ゴールデン",
+    "ko": "골든",
+    "es": "Dorado"
+   },
+   "kind": "look",
+   "filter": "sepia(0.45) saturate(1.3) contrast(1.05)"
+  },
+  {
+   "id": "filters/teal-orange",
+   "cat": "filter",
+   "group": "cinema",
+   "name": {
+    "en": "Teal and orange",
+    "zh-CN": "青橙",
+    "ja": "ティール&オレンジ",
+    "ko": "틸 앤 오렌지",
+    "es": "Verde azulado y naranja"
+   },
+   "kind": "look",
+   "filter": "saturate(1.3) contrast(1.1) hue-rotate(-12deg)"
+  },
+  {
+   "id": "filters/cinematic",
+   "cat": "filter",
+   "group": "cinema",
+   "name": {
+    "en": "Cinematic",
+    "zh-CN": "电影感",
+    "ja": "シネマティック",
+    "ko": "시네마틱",
+    "es": "Cinematográfico"
+   },
+   "kind": "look",
+   "filter": "contrast(1.18) saturate(0.85) brightness(0.92)"
+  },
+  {
+   "id": "filters/moody",
+   "cat": "filter",
+   "group": "cinema",
+   "name": {
+    "en": "Moody",
+    "zh-CN": "暗调",
+    "ja": "ムーディー",
+    "ko": "무디",
+    "es": "Sombrío"
+   },
+   "kind": "look",
+   "filter": "brightness(0.78) contrast(1.2) saturate(0.9)"
+  },
+  {
+   "id": "filters/fresh",
+   "cat": "filter",
+   "group": "portrait",
+   "name": {
+    "en": "Fresh",
+    "zh-CN": "日系清新",
+    "ja": "さわやか",
+    "ko": "산뜻한",
+    "es": "Fresco"
+   },
+   "kind": "look",
+   "filter": "brightness(1.12) saturate(0.85) contrast(0.92) hue-rotate(6deg)"
+  },
+  {
+   "id": "filters/cream",
+   "cat": "filter",
+   "group": "portrait",
+   "name": {
+    "en": "Cream",
+    "zh-CN": "奶油",
+    "ja": "クリーム",
+    "ko": "크림",
+    "es": "Crema"
+   },
+   "kind": "look",
+   "filter": "brightness(1.08) sepia(0.15) saturate(0.9) contrast(0.9)"
+  },
+  {
+   "id": "filters/muted",
+   "cat": "filter",
+   "group": "portrait",
+   "name": {
+    "en": "Muted",
+    "zh-CN": "低饱和",
+    "ja": "彩度低め",
+    "ko": "저채도",
+    "es": "Apagado"
+   },
+   "kind": "look",
+   "filter": "saturate(0.55)"
+  },
+  {
+   "id": "filters/soft-gray",
+   "cat": "filter",
+   "group": "portrait",
+   "name": {
+    "en": "Soft gray",
+    "zh-CN": "高级灰",
+    "ja": "ソフトグレー",
+    "ko": "소프트 그레이",
+    "es": "Gris suave"
+   },
+   "kind": "look",
+   "filter": "saturate(0.4) contrast(1.1) brightness(0.95)"
+  },
+  {
+   "id": "filters/tasty",
+   "cat": "filter",
+   "group": "food",
+   "name": {
+    "en": "Tasty",
+    "zh-CN": "美食暖",
+    "ja": "おいしそう",
+    "ko": "맛있게",
+    "es": "Apetitoso"
+   },
+   "kind": "look",
+   "filter": "saturate(1.35) sepia(0.12) brightness(1.06)"
+  },
+  {
+   "id": "filters/crisp",
+   "cat": "filter",
+   "group": "food",
+   "name": {
+    "en": "Crisp",
+    "zh-CN": "鲜亮",
+    "ja": "くっきり",
+    "ko": "선명하게",
+    "es": "Nítido"
+   },
+   "kind": "look",
+   "filter": "saturate(1.2) contrast(1.12) brightness(1.04)"
+  },
+  {
+   "id": "filters/night-blue",
+   "cat": "filter",
+   "group": "scenery",
+   "name": {
+    "en": "Night blue",
+    "zh-CN": "夜景蓝",
+    "ja": "夜の青",
+    "ko": "밤의 파랑",
+    "es": "Azul nocturno"
+   },
+   "kind": "look",
+   "filter": "hue-rotate(18deg) saturate(1.2) brightness(0.9) contrast(1.1)"
+  },
+  {
+   "id": "filters/cyber",
+   "cat": "filter",
+   "group": "scenery",
+   "name": {
+    "en": "Cyber",
+    "zh-CN": "赛博紫",
+    "ja": "サイバー",
+    "ko": "사이버",
+    "es": "Ciber"
+   },
+   "kind": "look",
+   "filter": "hue-rotate(-40deg) saturate(1.5) contrast(1.15)"
+  },
+  {
+   "id": "filters/sunset",
+   "cat": "filter",
+   "group": "scenery",
+   "name": {
+    "en": "Sunset",
+    "zh-CN": "落日",
+    "ja": "夕焼け",
+    "ko": "노을",
+    "es": "Atardecer"
+   },
+   "kind": "look",
+   "filter": "sepia(0.35) saturate(1.5) hue-rotate(-18deg)"
+  },
+  {
+   "id": "filters/winter",
+   "cat": "filter",
+   "group": "scenery",
+   "name": {
+    "en": "Winter",
+    "zh-CN": "冬日",
+    "ja": "冬",
+    "ko": "겨울",
+    "es": "Invierno"
+   },
+   "kind": "look",
+   "filter": "saturate(0.7) hue-rotate(15deg) brightness(1.08)"
+  },
+  {
+   "id": "filters/faded",
+   "cat": "filter",
+   "group": "vintage",
+   "name": {
+    "en": "Faded",
+    "zh-CN": "复古褪色",
+    "ja": "色あせ",
+    "ko": "바랜 색",
+    "es": "Desvaído"
+   },
+   "kind": "look",
+   "filter": "sepia(0.3) saturate(0.7) contrast(0.85) brightness(1.08)"
+  },
+  {
+   "id": "filters/hong-kong",
+   "cat": "filter",
+   "group": "vintage",
+   "name": {
+    "en": "Hong Kong 90s",
+    "zh-CN": "港风",
+    "ja": "香港90年代",
+    "ko": "홍콩 90년대",
+    "es": "Hong Kong 90"
+   },
+   "kind": "look",
+   "filter": "saturate(1.4) contrast(1.15) hue-rotate(-6deg) sepia(0.12)"
+  },
+  {
+   "id": "filters/bw",
+   "cat": "filter",
+   "group": "mono",
+   "name": {
+    "en": "Black and white",
+    "zh-CN": "黑白",
+    "ja": "モノクロ",
+    "ko": "흑백",
+    "es": "Blanco y negro"
+   },
+   "kind": "look",
+   "filter": "grayscale(1)"
+  },
+  {
+   "id": "filters/bw-contrast",
+   "cat": "filter",
+   "group": "mono",
+   "name": {
+    "en": "High-contrast black and white",
+    "zh-CN": "高反差黑白",
+    "ja": "ハイコントラスト",
+    "ko": "고대비 흑백",
+    "es": "Blanco y negro contrastado"
+   },
+   "kind": "look",
+   "filter": "grayscale(1) contrast(1.5)"
+  },
+  {
+   "id": "filters/sepia",
+   "cat": "filter",
+   "group": "mono",
+   "name": {
+    "en": "Sepia",
+    "zh-CN": "怀旧棕",
+    "ja": "セピア",
+    "ko": "세피아",
+    "es": "Sepia"
+   },
+   "kind": "look",
+   "filter": "sepia(0.9) contrast(1.05)"
+  },
+  {
+   "id": "text/title-cinema",
+   "cat": "text",
+   "group": "title",
+   "name": {
+    "en": "Cinematic title",
+    "zh-CN": "片名·电影感",
+    "ja": "映画風タイトル",
+    "ko": "시네마틱 타이틀",
+    "es": "Título de cine"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "title-cinema.html"
+  },
+  {
+   "id": "text/title-bold",
+   "cat": "text",
+   "group": "title",
+   "name": {
+    "en": "Bold title",
+    "zh-CN": "大标题·粗黑",
+    "ja": "太字タイトル",
+    "ko": "굵은 타이틀",
+    "es": "Título en negrita"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "title-bold.html"
+  },
+  {
+   "id": "text/title-outline",
+   "cat": "text",
+   "group": "title",
+   "name": {
+    "en": "Outline title",
+    "zh-CN": "描边标题",
+    "ja": "アウトライン",
+    "ko": "외곽선 타이틀",
+    "es": "Título contorno"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "title-outline.html"
+  },
+  {
+   "id": "text/title-neon",
+   "cat": "text",
+   "group": "title",
+   "name": {
+    "en": "Neon",
+    "zh-CN": "霓虹",
+    "ja": "ネオン",
+    "ko": "네온",
+    "es": "Neón"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "title-neon.html"
+  },
+  {
+   "id": "text/title-gradient",
+   "cat": "text",
+   "group": "title",
+   "name": {
+    "en": "Gradient",
+    "zh-CN": "渐变字",
+    "ja": "グラデーション",
+    "ko": "그라데이션",
+    "es": "Degradado"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "title-gradient.html"
+  },
+  {
+   "id": "text/typewriter",
+   "cat": "text",
+   "group": "title",
+   "name": {
+    "en": "Typewriter",
+    "zh-CN": "打字机",
+    "ja": "タイプライター",
+    "ko": "타자기",
+    "es": "Máquina de escribir"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "typewriter.html"
+  },
+  {
+   "id": "text/chapter",
+   "cat": "text",
+   "group": "title",
+   "name": {
+    "en": "Chapter",
+    "zh-CN": "章节号",
+    "ja": "チャプター",
+    "ko": "챕터",
+    "es": "Capítulo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "chapter.html"
+  },
+  {
+   "id": "text/quote",
+   "cat": "text",
+   "group": "title",
+   "name": {
+    "en": "Quote",
+    "zh-CN": "引用",
+    "ja": "引用",
+    "ko": "인용",
+    "es": "Cita"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "quote.html"
+  },
+  {
+   "id": "text/lower-simple",
+   "cat": "text",
+   "group": "lower",
+   "name": {
+    "en": "Lower third",
+    "zh-CN": "下三分之一·简约",
+    "ja": "ロワーサード",
+    "ko": "하단 자막",
+    "es": "Rótulo inferior"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "lower-simple.html"
+  },
+  {
+   "id": "text/lower-block",
+   "cat": "text",
+   "group": "lower",
+   "name": {
+    "en": "Lower third, block",
+    "zh-CN": "下三分之一·色块",
+    "ja": "ロワーサード・ブロック",
+    "ko": "하단 자막 블록",
+    "es": "Rótulo en bloque"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "lower-block.html"
+  },
+  {
+   "id": "text/location",
+   "cat": "text",
+   "group": "lower",
+   "name": {
+    "en": "Location",
+    "zh-CN": "地点标注",
+    "ja": "場所",
+    "ko": "장소",
+    "es": "Ubicación"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "location.html"
+  },
+  {
+   "id": "text/bubble",
+   "cat": "text",
+   "group": "badge",
+   "name": {
+    "en": "Speech bubble",
+    "zh-CN": "对话气泡",
+    "ja": "吹き出し",
+    "ko": "말풍선",
+    "es": "Bocadillo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "bubble.html"
+  },
+  {
+   "id": "text/follow",
+   "cat": "text",
+   "group": "badge",
+   "name": {
+    "en": "Follow button",
+    "zh-CN": "关注按钮",
+    "ja": "フォローボタン",
+    "ko": "팔로우 버튼",
+    "es": "Botón seguir"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "follow.html"
+  },
+  {
+   "id": "text/price",
+   "cat": "text",
+   "group": "badge",
+   "name": {
+    "en": "Price tag",
+    "zh-CN": "价格标签",
+    "ja": "値札",
+    "ko": "가격표",
+    "es": "Etiqueta de precio"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "price.html"
+  },
+  {
+   "id": "text/countdown",
+   "cat": "text",
+   "group": "data",
+   "name": {
+    "en": "Countdown",
+    "zh-CN": "倒计时",
+    "ja": "カウントダウン",
+    "ko": "카운트다운",
+    "es": "Cuenta atrás"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "countdown.html"
+  },
+  {
+   "id": "text/progress",
+   "cat": "text",
+   "group": "data",
+   "name": {
+    "en": "Progress bar",
+    "zh-CN": "进度条",
+    "ja": "プログレスバー",
+    "ko": "진행 바",
+    "es": "Barra de progreso"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "progress.html"
+  },
+  {
+   "id": "text/subtitle-box",
+   "cat": "text",
+   "group": "caption",
+   "name": {
+    "en": "Boxed caption",
+    "zh-CN": "黑底字幕",
+    "ja": "黒帯字幕",
+    "ko": "박스 자막",
+    "es": "Subtítulo con caja"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "subtitle-box.html"
+  },
+  {
+   "id": "stickers/arrow-down",
+   "cat": "sticker",
+   "group": "animated",
+   "name": {
+    "en": "Arrow, bouncing",
+    "zh-CN": "向下箭头",
+    "ja": "下向き矢印",
+    "ko": "아래 화살표",
+    "es": "Flecha abajo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "arrow-down.html",
+   "w": 400,
+   "h": 400
+  },
+  {
+   "id": "stickers/tap",
+   "cat": "sticker",
+   "group": "animated",
+   "name": {
+    "en": "Tap here",
+    "zh-CN": "点击",
+    "ja": "タップ",
+    "ko": "탭",
+    "es": "Toca aquí"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "tap.html",
+   "w": 400,
+   "h": 400
+  },
+  {
+   "id": "stickers/heart",
+   "cat": "sticker",
+   "group": "animated",
+   "name": {
+    "en": "Heart",
+    "zh-CN": "爱心",
+    "ja": "ハート",
+    "ko": "하트",
+    "es": "Corazón"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "heart.html",
+   "w": 400,
+   "h": 400
+  },
+  {
+   "id": "stickers/sparkle",
+   "cat": "sticker",
+   "group": "animated",
+   "name": {
+    "en": "Sparkle",
+    "zh-CN": "闪光",
+    "ja": "キラキラ",
+    "ko": "반짝",
+    "es": "Brillo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "sparkle.html",
+   "w": 400,
+   "h": 400
+  },
+  {
+   "id": "stickers/star",
+   "cat": "sticker",
+   "group": "animated",
+   "name": {
+    "en": "Star",
+    "zh-CN": "星星",
+    "ja": "星",
+    "ko": "별",
+    "es": "Estrella"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "star.html",
+   "w": 400,
+   "h": 400
+  },
+  {
+   "id": "stickers/check",
+   "cat": "sticker",
+   "group": "animated",
+   "name": {
+    "en": "Check mark",
+    "zh-CN": "对勾",
+    "ja": "チェック",
+    "ko": "체크",
+    "es": "Marca de verificación"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "check.html",
+   "w": 400,
+   "h": 400
+  },
+  {
+   "id": "stickers/cross",
+   "cat": "sticker",
+   "group": "animated",
+   "name": {
+    "en": "Cross",
+    "zh-CN": "叉",
+    "ja": "バツ",
+    "ko": "엑스",
+    "es": "Cruz"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "cross.html",
+   "w": 400,
+   "h": 400
+  },
+  {
+   "id": "stickers/circle",
+   "cat": "sticker",
+   "group": "animated",
+   "name": {
+    "en": "Circle it",
+    "zh-CN": "圈出来",
+    "ja": "丸で囲む",
+    "ko": "동그라미",
+    "es": "Círculo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "circle.html",
+   "w": 500,
+   "h": 300
+  },
+  {
+   "id": "stickers/underline",
+   "cat": "sticker",
+   "group": "animated",
+   "name": {
+    "en": "Underline",
+    "zh-CN": "划重点",
+    "ja": "アンダーライン",
+    "ko": "밑줄",
+    "es": "Subrayado"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "underline.html",
+   "w": 600,
+   "h": 120
+  },
+  {
+   "id": "stickers/pin",
+   "cat": "sticker",
+   "group": "animated",
+   "name": {
+    "en": "Location pin",
+    "zh-CN": "定位",
+    "ja": "位置ピン",
+    "ko": "위치 핀",
+    "es": "Ubicación"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "pin.html",
+   "w": 400,
+   "h": 400
+  },
+  {
+   "id": "stickers/arrow-right",
+   "cat": "sticker",
+   "group": "animated",
+   "name": {
+    "en": "Arrow, pointing",
+    "zh-CN": "向右箭头",
+    "ja": "右向き矢印",
+    "ko": "오른쪽 화살표",
+    "es": "Flecha derecha"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "arrow-right.html",
+   "w": 400,
+   "h": 400
+  },
+  {
+   "id": "sounds/whoosh.m4a",
+   "cat": "sound",
+   "group": "transition",
+   "name": {
+    "en": "Whoosh",
+    "zh-CN": "嗖·快速",
+    "ja": "シュッ",
+    "ko": "휙",
+    "es": "Zumbido"
+   },
+   "kind": "sound",
+   "durationMs": 700
+  },
+  {
+   "id": "sounds/whoosh-low.m4a",
+   "cat": "sound",
+   "group": "transition",
+   "name": {
+    "en": "Low whoosh",
+    "zh-CN": "嗖·低沉",
+    "ja": "低いシュッ",
+    "ko": "낮은 휙",
+    "es": "Zumbido grave"
+   },
+   "kind": "sound",
+   "durationMs": 1200
+  },
+  {
+   "id": "sounds/swish.m4a",
+   "cat": "sound",
+   "group": "transition",
+   "name": {
+    "en": "Swish",
+    "zh-CN": "刷",
+    "ja": "スウィッシュ",
+    "ko": "쉭",
+    "es": "Silbido"
+   },
+   "kind": "sound",
+   "durationMs": 350
+  },
+  {
+   "id": "sounds/riser.m4a",
+   "cat": "sound",
+   "group": "transition",
+   "name": {
+    "en": "Riser",
+    "zh-CN": "上升音",
+    "ja": "ライザー",
+    "ko": "라이저",
+    "es": "Subida"
+   },
+   "kind": "sound",
+   "durationMs": 2200
+  },
+  {
+   "id": "sounds/drop.m4a",
+   "cat": "sound",
+   "group": "transition",
+   "name": {
+    "en": "Drop",
+    "zh-CN": "下落音",
+    "ja": "ドロップ",
+    "ko": "드롭",
+    "es": "Caída"
+   },
+   "kind": "sound",
+   "durationMs": 1400
+  },
+  {
+   "id": "sounds/ding.m4a",
+   "cat": "sound",
+   "group": "ui",
+   "name": {
+    "en": "Ding",
+    "zh-CN": "叮",
+    "ja": "チーン",
+    "ko": "띵",
+    "es": "Ding"
+   },
+   "kind": "sound",
+   "durationMs": 1400
+  },
+  {
+   "id": "sounds/pop.m4a",
+   "cat": "sound",
+   "group": "ui",
+   "name": {
+    "en": "Pop",
+    "zh-CN": "啵",
+    "ja": "ポン",
+    "ko": "뽁",
+    "es": "Pop"
+   },
+   "kind": "sound",
+   "durationMs": 150
+  },
+  {
+   "id": "sounds/click.m4a",
+   "cat": "sound",
+   "group": "ui",
+   "name": {
+    "en": "Click",
+    "zh-CN": "点击",
+    "ja": "クリック",
+    "ko": "클릭",
+    "es": "Clic"
+   },
+   "kind": "sound",
+   "durationMs": 60
+  },
+  {
+   "id": "sounds/typing.m4a",
+   "cat": "sound",
+   "group": "ui",
+   "name": {
+    "en": "Typing",
+    "zh-CN": "键盘打字",
+    "ja": "タイピング",
+    "ko": "타자",
+    "es": "Tecleo"
+   },
+   "kind": "sound",
+   "durationMs": 1750
+  },
+  {
+   "id": "sounds/shutter.m4a",
+   "cat": "sound",
+   "group": "ui",
+   "name": {
+    "en": "Camera shutter",
+    "zh-CN": "相机快门",
+    "ja": "シャッター音",
+    "ko": "카메라 셔터",
+    "es": "Obturador"
+   },
+   "kind": "sound",
+   "durationMs": 300
+  },
+  {
+   "id": "sounds/buzz.m4a",
+   "cat": "sound",
+   "group": "ui",
+   "name": {
+    "en": "Phone buzz",
+    "zh-CN": "手机震动",
+    "ja": "振動",
+    "ko": "진동",
+    "es": "Vibración"
+   },
+   "kind": "sound",
+   "durationMs": 900
+  },
+  {
+   "id": "sounds/notify.m4a",
+   "cat": "sound",
+   "group": "ui",
+   "name": {
+    "en": "Notification",
+    "zh-CN": "提示音",
+    "ja": "通知音",
+    "ko": "알림음",
+    "es": "Notificación"
+   },
+   "kind": "sound",
+   "durationMs": 800
+  },
+  {
+   "id": "sounds/tick.m4a",
+   "cat": "sound",
+   "group": "ui",
+   "name": {
+    "en": "Clock ticking",
+    "zh-CN": "时钟滴答",
+    "ja": "時計の音",
+    "ko": "시계 똑딱",
+    "es": "Tictac"
+   },
+   "kind": "sound",
+   "durationMs": 2000
+  },
+  {
+   "id": "sounds/boom.m4a",
+   "cat": "sound",
+   "group": "impact",
+   "name": {
+    "en": "Boom",
+    "zh-CN": "重低音",
+    "ja": "ブーム",
+    "ko": "붐",
+    "es": "Estruendo"
+   },
+   "kind": "sound",
+   "durationMs": 1600
+  },
+  {
+   "id": "sounds/hit.m4a",
+   "cat": "sound",
+   "group": "impact",
+   "name": {
+    "en": "Hit",
+    "zh-CN": "打击",
+    "ja": "ヒット",
+    "ko": "타격",
+    "es": "Golpe"
+   },
+   "kind": "sound",
+   "durationMs": 500
+  },
+  {
+   "id": "sounds/kick.m4a",
+   "cat": "sound",
+   "group": "impact",
+   "name": {
+    "en": "Kick drum",
+    "zh-CN": "鼓点",
+    "ja": "キック",
+    "ko": "킥",
+    "es": "Bombo"
+   },
+   "kind": "sound",
+   "durationMs": 450
+  },
+  {
+   "id": "sounds/heartbeat.m4a",
+   "cat": "sound",
+   "group": "impact",
+   "name": {
+    "en": "Heartbeat",
+    "zh-CN": "心跳",
+    "ja": "心音",
+    "ko": "심장 소리",
+    "es": "Latido"
+   },
+   "kind": "sound",
+   "durationMs": 1600
+  },
+  {
+   "id": "sounds/zap.m4a",
+   "cat": "sound",
+   "group": "impact",
+   "name": {
+    "en": "Zap",
+    "zh-CN": "电流",
+    "ja": "ザップ",
+    "ko": "지직",
+    "es": "Descarga"
+   },
+   "kind": "sound",
+   "durationMs": 400
+  },
+  {
+   "id": "sounds/rain.m4a",
+   "cat": "sound",
+   "group": "ambience",
+   "name": {
+    "en": "Rain",
+    "zh-CN": "雨声",
+    "ja": "雨音",
+    "ko": "빗소리",
+    "es": "Lluvia"
+   },
+   "kind": "sound",
+   "durationMs": 8000
+  },
+  {
+   "id": "sounds/wind.m4a",
+   "cat": "sound",
+   "group": "ambience",
+   "name": {
+    "en": "Wind",
+    "zh-CN": "风声",
+    "ja": "風の音",
+    "ko": "바람 소리",
+    "es": "Viento"
+   },
+   "kind": "sound",
+   "durationMs": 8000
+  }
+ ]
+}

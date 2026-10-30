@@ -44,6 +44,7 @@
     "TRADEMARK.md",
     "bin",
     "skills",
+    "library",
     "examples-index",
     "src",
     "!src/*.test.mjs",

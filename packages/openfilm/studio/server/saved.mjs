@@ -27,6 +27,7 @@ import { savedRoot } from '../../src/locations.mjs';
 import { STUDIO_STATE, filmClosure, folderView } from './closure.mjs';
 import { readProjectFilm } from './film.mjs';
 import { cleanName, importFile, inside, kindOf } from './files.mjs';
+import { BUILT_IN, builtInRoot } from './library.mjs';
 
 export class SavedError extends Error {
   /** @param {string} message @param {number} status */
@@ -291,15 +292,17 @@ export async function saveFile(root, rel, o = {}) {
 }
 
 /**
- * What a project needs to use a thing of the library (`path`, a `saved/` path): a file imported into its assets/ (as
- * one from the computer is), or a bundle's files copied to `saved/<its place>/` there (a file there already is kept as
- * it is) and the clip, a group's clips or the page, with their files' places there.
+ * What a project needs to use a thing of the library (`path`, a `saved/` path, or an `openfilm/` one for a thing of
+ * OpenFilm's own library, library.mjs): a file imported into its assets/ (as one from the computer is), or a bundle's
+ * files copied to `saved/<its place>/` there (a file there already is kept as it is) and the clip, a group's clips or
+ * the page, with their files' places there. OpenFilm's things go to `saved/openfilm/<its place, one name>/`.
  * @param {string} root @param {unknown} path
  * @returns {Promise<{ clip: Record<string, unknown> & { src: string } } | { clips: { track: number, at: number, clip: Record<string, unknown> & { src: string } }[] } | { path: string }>}
  */
 export async function takeSaved(root, path) {
-  const lib = await libraryRoot();
-  const rel = libraryRel(path);
+  const builtIn = typeof path === 'string' && path.startsWith(`${BUILT_IN}/`);
+  const lib = builtIn ? builtInRoot() : await libraryRoot();
+  const rel = builtIn ? /** @type {string} */ (path).slice(BUILT_IN.length + 1) : libraryRel(path);
   if (!rel) throw new SavedError('a thing in Saved, please', 400);
   const at = inside(lib, rel);
   const info = await stat(at).catch(() => null);
@@ -308,7 +311,9 @@ export async function takeSaved(root, path) {
   const item = await readBundle(at);
   if (!item) throw new SavedError('That is a folder: open it and pick what is in it.', 400);
   /* its place in the project: the library's, made a name a page's address takes as it is */
-  const base = `saved/${rel.split('/').map((part) => part.normalize('NFKC').replace(/[^\p{L}\p{N}._-]+/gu, '-').replace(/^-+|-+$/g, '') || 'saved').join('/')}`;
+  /* OpenFilm's things one folder each under saved/openfilm/ (`effects-snow`), so their pages are no deeper than a
+     project's pages are looked for (files.mjs listFiles) */
+  const base = `saved/${(builtIn ? `${BUILT_IN}/${rel.replaceAll('/', '-')}` : rel).split('/').map((part) => part.normalize('NFKC').replace(/[^\p{L}\p{N}._-]+/gu, '-').replace(/^-+|-+$/g, '') || 'saved').join('/')}`;
   const from = join(at, 'files');
   for (const entry of await readdir(from, { recursive: true, withFileTypes: true }).catch(() => [])) {
     if (!entry.isFile()) continue;

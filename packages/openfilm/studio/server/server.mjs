@@ -49,6 +49,7 @@ import { installedFonts } from './fonts.mjs';
 import { projectFonts, resolveIn } from './project-fonts.mjs';
 import { FILM_PAGE, PageFrameError, closePageFrames, filmPoster, pageFacts, pageFrame, warmFilmPoster } from './pageframes.mjs';
 import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCover, setCoverFromFile } from './cover.mjs';
+import { libraryFile, libraryIndex } from './library.mjs';
 import { SavedError, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
 import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { moveToTrash } from './trash.mjs';
@@ -382,6 +383,11 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'private, max-age=86400', 'content-length': jpeg.length });
         return res.end(jpeg);
       }
+    }
+    /* OpenFilm's library (library.mjs): what is in it, and its files (a poster, a preview, a sound, a waveform) */
+    if (parts[0] === 'library' && req.method === 'GET') {
+      if (parts.length === 1) return json(res, 200, libraryIndex());
+      if (parts[1] === 'file' && parts.length === 2) return sendMedia(req, res, libraryFile(url.searchParams.get('path')), { keep: true });
     }
     /* Studio's own preferences, the same for every project (prefs.mjs) */
     if (parts[0] === 'prefs' && parts.length === 1) {
