@@ -251,11 +251,18 @@ async function make(abs, out, size, fps, seconds, progress, encoder, decoding, s
       const at = /out_time_us=(\d+)/.exec(String(d).split('\n').reverse().join('\n'));
       if (at && seconds > 0) progress(Math.min(0.99, Number(at[1]) / 1e6 / seconds));
     });
-    proc.on('error', (e) => { rmSync(part, { force: true }); fail(e); });
+    /* the part is removed once ffmpeg has let go of it: a stopped one (its signal) is still writing it when the error
+       comes, and Windows refuses to delete a file a process holds open */
+    const drop = () => { try { rmSync(part, { force: true, maxRetries: 5, retryDelay: 100 }); } catch { /* the next run writes over it */ } };
+    let stopped = /** @type {Error | null} */ (null);
+    proc.on('error', (e) => {
+      if (proc.pid === undefined) { drop(); fail(e); return; }
+      stopped = e;
+    });
     proc.on('close', (code) => {
-      if (code === 0 && existsSync(part)) { renameSync(part, out); done(undefined); return; }
-      rmSync(part, { force: true });
-      fail(new Error(err.trim() || `ffmpeg exit ${code}`));
+      if (!stopped && code === 0 && existsSync(part)) { renameSync(part, out); done(undefined); return; }
+      drop();
+      fail(stopped ?? new Error(err.trim() || `ffmpeg exit ${code}`));
     });
   });
 }
