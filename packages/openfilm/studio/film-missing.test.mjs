@@ -32,7 +32,8 @@ async function open(t, name) {
     await browser.close();
     await studio.close();
     for (const [n, v] of saved) { if (v === undefined) delete process.env[n]; else process.env[n] = v; }
-    await rm(scratch, { recursive: true, force: true });
+    /* Windows lets go of a folder a moment after Studio stops watching it */
+    await rm(scratch, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   });
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, locale: 'en-US', reducedMotion: 'reduce' });
   const address = `/projects/${project.id}`;
