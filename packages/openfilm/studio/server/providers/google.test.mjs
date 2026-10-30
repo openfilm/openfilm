@@ -1,7 +1,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import google, { polling } from './google.mjs';
+import google from './google.mjs';
 
 const KEY = 'AIza-test-0123456789';
 /** A fake Gemini API on 127.0.0.1: `reply` answers each request; `seen` keeps them. */
@@ -22,7 +22,6 @@ before(async () => {
   await new Promise((done) => server.listen(0, '127.0.0.1', done));
   base = `http://127.0.0.1:${server.address().port}`;
   process.env.OPENFILM_GOOGLE_URL = base;
-  polling.ms = 5;
 });
 after(() => server.close());
 
@@ -86,49 +85,80 @@ test('a picture: the ratio and size asked, the extension from what came back, tr
   await assert.rejects(google.run('image', { out: 'x', prompt: 'y' }, ctx()), /no image \(SAFETY\)/);
 });
 
-test('a video: started, asked after until done, downloaded with the key; the length Veo makes', async () => {
-  let asks = 0;
-  reply = (call) => {
-    if (call.url.pathname.endsWith(':predictLongRunning')) return [200, { name: 'models/veo-3.1-generate-preview/operations/op1' }];
-    if (call.url.pathname === '/v1beta/models/veo-3.1-generate-preview/operations/op1') {
-      asks += 1;
-      return [200, asks < 3 ? { name: 'op1', done: false } : { name: 'op1', done: true, response: { generateVideoResponse: { generatedSamples: [{ video: { uri: `${base}/files/clip.mp4?alt=media` } }] } } }];
-    }
-    if (call.url.pathname === '/files/clip.mp4') return [call.headers['x-goog-api-key'] === KEY ? 200 : 403, Buffer.from('mp4 bytes')];
-    return [404, {}];
-  };
-  const first = Buffer.alloc(33);
-  first.writeUInt32BE(0x89504e47, 0);
-  first.writeUInt32BE(720, 16);
-  first.writeUInt32BE(1280, 20);
-  const result = await google.run('video', { out: 'shot', prompt: 'a slow push in', duration: 5, 'first-frame': 'assets/image/first.png' }, ctx({ 'assets/image/first.png': new Uint8Array(first) }));
-  const started = JSON.parse(seen.find((c) => c.url.pathname.endsWith(':predictLongRunning')).body);
-  assert.equal(started.instances[0].prompt, 'a slow push in');
-  assert.equal(started.instances[0].image.inlineData.mimeType, 'image/png');
-  /* a tall first frame makes a tall clip; 5 s becomes 6, the nearest Veo makes */
-  assert.deepEqual(started.parameters, { aspectRatio: '9:16', durationSeconds: 6 });
-  assert.equal(asks, 3);
+/** An MP4 that is just its movie header: `seconds` long, at 1000 ticks a second. */
+function mp4(seconds) {
+  const box = Buffer.alloc(108);
+  box.writeUInt32BE(108, 0);
+  box.write('mvhd', 4, 'ascii');
+  box.writeUInt32BE(1000, 20);
+  box.writeUInt32BE(seconds * 1000, 24);
+  return box;
+}
+/** A completed interaction with one video made. */
+const made = (bytes) => ({ id: 'v1_1', status: 'completed', steps: [
+  { type: 'user_input', content: [{ type: 'text', text: 'ignored' }] },
+  { type: 'model_output', content: [{ type: 'video', mime_type: 'video/mp4', data: Buffer.from(bytes).toString('base64') }] },
+] });
+/** A PNG header `w` × `h`. */
+function png(w, h) {
+  const bytes = Buffer.alloc(33);
+  bytes.writeUInt32BE(0x89504e47, 0);
+  bytes.writeUInt32BE(w, 16);
+  bytes.writeUInt32BE(h, 20);
+  return new Uint8Array(bytes);
+}
+
+test('a video: Gemini Omni asked through an interaction, its length read from the clip', async () => {
+  const clip = mp4(6);
+  reply = (call) => call.url.pathname === '/v1beta/interactions' ? [200, made(clip)] : [404, {}];
+  const result = await google.run('video', { out: 'shot', prompt: 'a slow push in', duration: 5, 'first-frame': 'assets/image/first.png' }, ctx({ 'assets/image/first.png': png(720, 1280) }));
+  const call = seen.at(-1);
+  assert.equal(call.headers['x-goog-api-key'], KEY);
+  const sent = JSON.parse(call.body);
+  assert.equal(sent.model, 'gemini-omni-1.1-flash');
+  assert.equal(sent.store, false);
+  /* a tall first frame makes a tall clip */
+  assert.deepEqual(sent.response_format, { type: 'video', aspect_ratio: '9:16', resolution: '720p' });
+  assert.equal(sent.input.length, 2);
+  assert.equal(sent.input[0].type, 'image');
+  assert.equal(sent.input[0].mime_type, 'image/png');
+  assert.equal(sent.input[1].text, '[# Sources <FIRST_FRAME>@Image1] a slow push in');
   assert.equal(result.files[0].path, 'assets/video/shot.mp4');
-  assert.equal(Buffer.from(result.files[0].bytes).toString(), 'mp4 bytes');
+  assert.deepEqual(Buffer.from(result.files[0].bytes), clip);
   assert.deepEqual({ ...result.index[0], from: undefined }, { src: 'assets/video/shot.mp4', kind: 'video', w: 720, h: 1280, dur: 6, hasAudio: true, from: undefined });
-  assert.match(result.receipt.notes[0], /4, 6 or 8 second/);
+  assert.equal(result.index[0].from.prompt, 'a slow push in');
+  assert.match(result.receipt.notes[0], /--duration: Gemini Omni sets the length/);
 });
 
-test('a video that fails says why; a cancelled run stops asking', async () => {
-  reply = (call) => call.url.pathname.endsWith(':predictLongRunning') ? [200, { name: 'operations/op2' }] : [200, { done: true, error: { code: 3, message: 'prompt was blocked' } }];
-  await assert.rejects(google.run('video', { out: 'x', prompt: 'y' }, ctx()), /Veo could not make the clip: prompt was blocked/);
-  let asks = 0;
-  reply = (call) => { if (!call.url.pathname.endsWith(':predictLongRunning')) asks += 1; return [200, call.url.pathname.endsWith(':predictLongRunning') ? { name: 'operations/op3' } : { done: false }]; };
+test('a video\'s first and last frames and references are tagged in order; a last frame alone is left out', async () => {
+  reply = () => [200, made(mp4(4))];
+  const files = { 'a.png': png(1280, 720), 'b.png': png(1280, 720), 'c.jpg': png(10, 10), 'd.jpg': png(10, 10) };
+  await google.run('video', { out: 'x', prompt: 'y', 'first-frame': 'a.png', 'last-frame': 'b.png', 'input-reference': ['c.jpg', 'd.jpg'], 'aspect-ratio': '4:3' }, ctx(files));
+  let sent = JSON.parse(seen.at(-1).body);
+  assert.equal(sent.input.length, 5);
+  assert.deepEqual(sent.input.slice(0, 4).map((part) => part.mime_type), ['image/png', 'image/png', 'image/jpeg', 'image/jpeg']);
+  assert.equal(sent.input[4].text, '[# Sources <FIRST_FRAME>@Image1 <LAST_FRAME>@Image2] [# References <IMAGE_REF_0>@Image3 <IMAGE_REF_1>@Image4] y');
+  assert.equal(sent.response_format.aspect_ratio, '16:9');
+
+  const result = await google.run('video', { out: 'x', prompt: 'y', 'last-frame': 'b.png', 'input-reference': 'c.jpg' }, ctx(files));
+  sent = JSON.parse(seen.at(-1).body);
+  assert.equal(sent.input.length, 2);
+  assert.equal(sent.input[1].text, '[# References <IMAGE_REF_0>@Image1] y');
+  assert.match(result.receipt.notes[0], /--last-frame/);
+  assert.equal(result.index[0].from.lastFrame, undefined);
+});
+
+test('a video that is not made says why; a cancelled run stops waiting', async () => {
+  reply = () => [200, { status: 'completed', steps: [{ type: 'model_output', content: [{ type: 'text', text: 'I can\'t make that.' }] }] }];
+  await assert.rejects(google.run('video', { out: 'x', prompt: 'y' }, ctx()), /Gemini Omni made no clip: I can't make that\./);
+  reply = () => [400, { error: { code: 400, message: 'prompt was blocked' } }];
+  await assert.rejects(google.run('video', { out: 'x', prompt: 'y' }, ctx()), /Google answered 400: prompt was blocked/);
+  reply = () => new Promise(() => {});
   const stop = new AbortController();
   const run = google.run('video', { out: 'x', prompt: 'y' }, ctx({}, stop.signal));
-  await new Promise((done) => setTimeout(done, 40));
-  stop.abort();
-  await assert.rejects(run);
-  /* a poll sent just before the stop may still arrive; none may start after it */
   await new Promise((done) => setTimeout(done, 20));
-  const after = asks;
-  await new Promise((done) => setTimeout(done, 60));
-  assert.equal(asks, after);
+  stop.abort();
+  await assert.rejects(run, { name: 'AbortError' });
 });
 
 test('translation: JSON asked for, the lines back in order', async () => {
@@ -139,17 +169,4 @@ test('translation: JSON asked for, the lines back in order', async () => {
   assert.equal(sent.generationConfig.responseMimeType, 'application/json');
   assert.match(sent.systemInstruction.parts[0].text, /exactly 2 strings/);
   assert.deepEqual(result.receipt.lines, ['Bonjour.', 'Au revoir.']);
-});
-
-test('a video\'s address elsewhere is not downloaded with the key', async () => {
-  const elsewhere = base.replace('127.0.0.1', 'localhost');
-  let keyed = 0;
-  reply = (call) => {
-    if (call.headers.host.startsWith('localhost') && call.headers['x-goog-api-key']) keyed += 1;
-    if (call.url.pathname.endsWith(':predictLongRunning')) return [200, { name: 'models/veo-3.1-generate-preview/operations/op2', done: true,
-      response: { generateVideoResponse: { generatedSamples: [{ video: { uri: `${elsewhere}/files/clip.mp4` } }] } } }];
-    return [200, Buffer.from('mp4 bytes')];
-  };
-  await assert.rejects(google.run('video', { out: 'x', prompt: 'y' }, ctx()), /not its own; your key was not sent there/);
-  assert.equal(keyed, 0);
 });

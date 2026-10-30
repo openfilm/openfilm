@@ -1,12 +1,11 @@
 // @ts-check
 /**
- * Google's Gemini API with the person's own key: pictures, video (Veo), voice-over, transcription and subtitle
+ * Google's Gemini API with the person's own key: pictures, video (Gemini Omni), voice-over, transcription and subtitle
  * translation. REST API (https://ai.google.dev/api), key in `x-goog-api-key`. Pictures, speech and text come from
- * `generateContent`; transcription uses Gemini Transcribe through the Interactions API; a video is a long-running
- * operation, asked after until it is done. Generated speech has no word timings and comes as raw PCM, wrapped here in
- * a WAV file.
+ * `generateContent`; transcription and video go through the Interactions API. Generated speech has no word timings and
+ * comes as raw PCM, wrapped here in a WAV file.
  */
-import { RATIO_SIZE, billedBy, call, clamp, download, extOf, imageSize, landing, list, madePicture, mimeOf, modelOf, needed, notes, number, ownAddress, serviceUrl, sleep, speechUpload, text, translatedLines, translationAsk, wav, wavSeconds } from './common.mjs';
+import { RATIO_SIZE, billedBy, call, clamp, extOf, imageSize, landing, list, madePicture, mimeOf, modelOf, needed, notes, number, ownAddress, round, serviceUrl, speechUpload, text, translatedLines, translationAsk, wav, wavSeconds } from './common.mjs';
 
 /** @typedef {import('./contract.mjs').Provider} Provider @typedef {import('./contract.mjs').RunContext} RunContext */
 
@@ -20,11 +19,7 @@ const MODELS = {
     { id: 'gemini-3-pro-image', name: 'Nano Banana Pro' },
     { id: 'gemini-3.1-flash-lite-image', name: 'Gemini 3.1 Flash-Lite Image' },
   ],
-  video: [
-    { id: 'veo-3.1-generate-preview', name: 'Veo 3.1' },
-    { id: 'veo-3.1-fast-generate-preview', name: 'Veo 3.1 Fast' },
-    { id: 'veo-3.1-lite-generate-preview', name: 'Veo 3.1 Lite' },
-  ],
+  video: [{ id: 'gemini-omni-1.1-flash', name: 'Gemini Omni Flash' }],
   translate: [
     { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash' },
     { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash-Lite' },
@@ -42,9 +37,6 @@ const VOICES = /** @type {[string, string][]} */ ([
   ['Laomedeia', 'Upbeat'], ['Achernar', 'Soft'], ['Alnilam', 'Firm'], ['Schedar', 'Even'], ['Gacrux', 'Mature'], ['Pulcherrima', 'Forward'],
   ['Achird', 'Friendly'], ['Zubenelgenubi', 'Casual'], ['Vindemiatrix', 'Gentle'], ['Sadachbia', 'Lively'], ['Sadaltager', 'Knowledgeable'], ['Sulafat', 'Warm'],
 ]);
-
-/** How long to wait between asking after a video (tests make it short). */
-export const polling = { ms: 10_000 };
 
 /** @type {Provider} */
 export default {
@@ -234,8 +226,9 @@ function inline(/** @type {any} */ body, /** @type {string} */ what) {
 }
 
 /**
- * A Veo clip: 4, 6 or 8 seconds (8 with reference pictures), 16:9 or 9:16 at 720p, with sound. Started as an
- * operation, then asked after until it is done or the run is cancelled.
+ * A Gemini Omni clip: 16:9 or 9:16 at 720p, with sound. The model sets its length (3 to 10 seconds) from the prompt,
+ * so it is read from the file. Pictures go in as inline images; a tag at the start of the prompt says which is the first
+ * frame, the last frame or a reference (https://ai.google.dev/gemini-api/docs/omni).
  * @param {Record<string, unknown>} args @param {RunContext} ctx @param {string} base
  * @param {(url: string, init?: RequestInit) => Promise<Response>} send
  */
@@ -245,53 +238,61 @@ async function video(args, ctx, base, send) {
   const model = modelOf(MODELS, 'video', ctx);
   const said = [];
   const first = text(args['first-frame']);
-  const last = text(args['last-frame']);
-  let refs = list(args['input-reference']);
-  if (refs.length > 3) { said.push('Veo takes 3 reference pictures: the rest were left out'); refs = refs.slice(0, 3); }
+  let last = text(args['last-frame']);
+  const refs = list(args['input-reference']);
+  if (last && !first) { said.push('--last-frame: Gemini Omni takes a last frame only with a first frame, so it was left out'); last = ''; }
+  if (number(args.duration) !== null) said.push('--duration: Gemini Omni sets the length (3 to 10 s) from the prompt; say it there');
 
-  /* the nearest length Veo makes, the longer one on a tie */
-  const asked = number(args.duration) ?? 8;
-  const seconds = refs.length ? 8 : [4, 6, 8].reduce((best, s) => Math.abs(s - asked) <= Math.abs(best - asked) ? s : best, 8);
-  if (seconds !== asked) said.push(`Veo makes 4, 6 or 8 second clips${refs.length ? ' (8 with reference pictures)' : ''}: ${seconds} s`);
-
-  const picture = async (/** @type {string} */ file) => ({ inlineData: { mimeType: mimeOf(file), data: Buffer.from(await ctx.read(file)).toString('base64') } });
-  const instance = {
-    prompt,
-    ...(first ? { image: await picture(first) } : {}),
-    ...(last ? { lastFrame: await picture(last) } : {}),
-    ...(refs.length ? { referenceImages: await Promise.all(refs.map(async (r) => ({ image: await picture(r), referenceType: 'asset' }))) } : {}),
-  };
+  /* the pictures in order, each bound to its role by `@ImageN` (from 1) */
+  const pictures = [first, last, ...refs].filter(Boolean);
+  const sources = [first && '<FIRST_FRAME>@Image1', last && '<LAST_FRAME>@Image2'].filter(Boolean);
+  const tags = [
+    ...(sources.length ? [`[# Sources ${sources.join(' ')}]`] : []),
+    ...(refs.length ? [`[# References ${refs.map((_, i) => `<IMAGE_REF_${i}>@Image${sources.length + i + 1}`).join(' ')}]`] : []),
+  ];
+  const input = [
+    ...await Promise.all(pictures.map(async (file) => ({ type: 'image', mime_type: mimeOf(file), data: Buffer.from(await ctx.read(file)).toString('base64') }))),
+    { type: 'text', text: [...tags, prompt].join(' ') },
+  ];
   /* with a first frame and no ratio asked, the picture's own shape decides */
   let ratio = text(args['aspect-ratio']);
   if (!ratio && first) { const size = imageSize(await ctx.read(first)); ratio = size && size.h > size.w ? '9:16' : '16:9'; }
   const tall = ['9:16', '3:4', '2:3', '9:21'].includes(ratio);
   const aspectRatio = tall ? '9:16' : '16:9';
-  if (ratio && ratio !== aspectRatio && ratio !== 'adaptive') said.push(`Veo makes 16:9 or 9:16 clips: ${aspectRatio}`);
+  if (ratio && ratio !== aspectRatio && ratio !== 'adaptive') said.push(`Gemini Omni makes 16:9 or 9:16 clips: ${aspectRatio}`);
 
-  const started = await (await send(`${base}/v1beta/models/${model}:predictLongRunning`, {
-    method: 'POST', body: JSON.stringify({ instances: [instance], parameters: { aspectRatio, durationSeconds: seconds } }),
-  })).json();
-  const name = text(started?.name);
-  if (!name) throw new Error(`${NAME} did not start the video.`);
-  /** @type {any} */
-  let op = started;
-  while (!op?.done) {
-    await sleep(polling.ms, ctx.signal);
-    op = await (await send(`${base}/v1beta/${name}`)).json();
+  /* store: false keeps the person's pictures and clip off Google's interaction history */
+  const body = /** @type {any} */ (await (await send(`${base}/v1beta/interactions`, {
+    method: 'POST',
+    body: JSON.stringify({ model, input, response_format: { type: 'video', aspect_ratio: aspectRatio, resolution: '720p' }, store: false }),
+  })).json());
+  const clip = interactionContents(body).find((/** @type {any} */ part) => part?.type === 'video' && typeof part?.data === 'string');
+  if (!clip) {
+    const why = interactionText(body) || (body?.status && body.status !== 'completed' ? body.status : '');
+    throw new Error(`Gemini Omni made no clip${why ? `: ${why}` : ''}.`);
   }
-  if (op.error) throw new Error(`Veo could not make the clip: ${text(op.error.message) || JSON.stringify(op.error)}`);
-  const result = op.response?.generateVideoResponse;
-  const uri = text(result?.generatedSamples?.[0]?.video?.uri);
-  if (!uri) throw new Error(`Veo made no clip${result?.raiMediaFilteredReasons ? `: ${[].concat(result.raiMediaFilteredReasons).join('; ')}` : ''}.`);
-  const { bytes } = await download(NAME, ownAddress(NAME, uri, base), ctx, { headers: { 'x-goog-api-key': ctx.key } });
+  const bytes = new Uint8Array(Buffer.from(clip.data, 'base64'));
+  const seconds = mp4Seconds(bytes);
   const [width, height] = tall ? [720, 1280] : [1280, 720];
   return {
     files: [{ path, bytes }],
-    index: [{ src: path, kind: 'video', w: width, h: height, dur: seconds, hasAudio: true, from: {
-      mode: 'generate', prompt, provider: 'google', model, resolution: '720p', sec: seconds,
+    index: [{ src: path, kind: 'video', w: width, h: height, ...(seconds !== null ? { dur: seconds } : {}), hasAudio: true, from: {
+      mode: 'generate', prompt, provider: 'google', model, resolution: '720p', ...(seconds !== null ? { sec: seconds } : {}),
       ...(first ? { firstFrame: first } : {}), ...(last ? { lastFrame: last } : {}), ...(refs.length ? { refs } : {}),
     } }],
     receipt: { provider: 'google', model, src: path, dur: seconds, width, height, hasAudio: true, resolution: '720p', ...notes(said) },
     cost: billedBy(NAME),
   };
+}
+
+/** An MP4's length from its movie header (`mvhd`), or null when it has none. @param {Uint8Array} bytes */
+function mp4Seconds(bytes) {
+  const at = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).indexOf('mvhd');
+  if (at < 0 || at + 36 > bytes.length) return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  /* version 1 has 64-bit times */
+  const wide = bytes[at + 4] === 1;
+  const scale = view.getUint32(at + (wide ? 24 : 16));
+  const length = wide ? Number(view.getBigUint64(at + 28)) : view.getUint32(at + 20);
+  return scale ? round(length / scale) : null;
 }
