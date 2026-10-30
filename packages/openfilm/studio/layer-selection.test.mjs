@@ -273,3 +273,59 @@ test('a paste undone: no box stays where a copy went, and what is selected keeps
     assert.ok(await three(), 'and they stay so');
   }, { again: true });
 });
+
+test('a layer dragged again and again is drawn every frame on its way, and no other outline comes up as each drag is written', { timeout: 120_000 }, async () => {
+  await withCard('Drag', async ({ page, on, until, click, overrides }) => {
+    await click(on(300, 240));
+    await until(async () => (await page.locator('[data-layers-panel] [role="treeitem"][aria-selected="true"]').allTextContents()).includes('Parcel'), 'a click selects the title');
+    /* every frame of the page: where the title is drawn, and whether it is; every frame of Studio: the outlines on the picture */
+    /* the page clip in the film as it stays (the film may be loaded once more as Studio opens) */
+    const cardFrame = () => page.frames().find((f) => f.url().includes('card.html'));
+    let card = cardFrame();
+    for (let still = 0; still < 10; ) {
+      await page.waitForTimeout(200);
+      const now = cardFrame();
+      still = now && now === card ? still + 1 : 0;
+      card = now;
+    }
+    await card.evaluate(() => {
+      window.titleFrames = [];
+      const tick = () => {
+        const el = document.getElementById('title');
+        const r = el.getBoundingClientRect();
+        const cs = getComputedStyle(el);
+        window.titleFrames.push({ x: r.left, y: r.top, drawn: r.width > 0 && cs.visibility === 'visible' && cs.display !== 'none' && Number(cs.opacity) > 0 });
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    await page.evaluate(() => {
+      window.outlineFrames = [];
+      const tick = () => {
+        window.outlineFrames.push([...document.querySelectorAll('[data-film-select] div')].filter((d) => /solid/.test(d.style.border)).length);
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    /* three drags down and to the right in many small steps, each let go and written before the next */
+    let at = on(300, 240);
+    await page.mouse.move(at.x, at.y);
+    for (let n = 1; n <= 3; n += 1) {
+      await page.mouse.down();
+      for (let i = 1; i <= 20; i += 1) await page.mouse.move(at.x + (40 * i) / 20, at.y + (60 * i) / 20);
+      await page.mouse.up();
+      at = { x: at.x + 40, y: at.y + 60 };
+      await until(async () => (await overrides()).length === 1 && (await overrides())[0].t[1] > 60 * n, `drag ${n} is written`);
+      /* what the write sets off (the selection measured again, the outline under the pointer asked again) */
+      await page.waitForTimeout(600);
+    }
+    const frames = await card.evaluate(() => window.titleFrames);
+    const outlines = await page.evaluate(() => window.outlineFrames);
+    assert.ok(frames.length > 60, `the page drew ${frames.length} frames`);
+    assert.equal(frames.filter((f) => !f.drawn).length, 0, 'the title is drawn in every frame');
+    const back = frames.findIndex((f, i) => i > 0 && (f.x < frames[i - 1].x - 0.5 || f.y < frames[i - 1].y - 0.5));
+    assert.equal(back, -1, `the title never goes back (frame ${back})`);
+    assert.ok(frames.at(-1).y > frames[0].y + 150, 'it went down with the hand');
+    assert.equal(outlines.filter((n) => n !== 1).length, 0, `the selection's outline alone, every frame (${outlines.filter((n) => n !== 1).length} of ${outlines.length} frames had another or none)`);
+  });
+});

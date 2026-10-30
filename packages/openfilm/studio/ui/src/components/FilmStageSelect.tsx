@@ -1556,13 +1556,14 @@ function FilmStageSelectImpl({
     return () => { live = false; };
   }, [pointClip, pointLoc, pointAgain, ask]);
   /* the picture drawn anew under the pointer (an undo, the agent's write, another load of the film): what it rests on
-     is asked again, so no outline stays where a layer went */
+     is asked again, so no outline stays where a layer went. Only an outline shown: none comes up with the pointer
+     still (a drag's own write would outline what the pointer rests on as the drag lets go) */
   rehoverRef.current = () => {
     if (pointed.current) setPointAgain((n) => n + 1);
     const at = moveAt.current;
     const r = filmRect();
     const busy = gestureRef.current || layerDrag.current || multiDrag.current || layersPull.current || clipsDrag.current || draftRef.current || cropRef.current || textEdit.current;
-    if (!at || !r || busy || !r.width) return;
+    if (!hover || !at || !r || busy || !r.width) return;
     const vs = r.width / stage.w;
     hoverQueue.push({ x: (at.cx - r.left) / vs, y: (at.cy - r.top) / vs, from: pickedRef.current?.layer?.handle ?? null });
   };
@@ -2863,6 +2864,9 @@ function FilmStageSelectImpl({
       onPointerDown={pressDown}
       onPointerMove={(e) => {
         pointerAt.current = local(e);
+        /* where the pointer is, through a drag too: once the drag is written, what is under it is asked again
+           (rehoverRef), and the place it was pressed at would outline what the layer was dragged off */
+        moveAt.current = { cx: e.clientX, cy: e.clientY, shift: e.shiftKey, alt: e.altKey };
         if (cropDrag.current) { stepCrop(local(e), e.shiftKey); return; }
         if (onRegion) {
           const p = local(e);
@@ -2951,7 +2955,6 @@ function FilmStageSelectImpl({
           }
           return;
         }
-        moveAt.current = { cx: e.clientX, cy: e.clientY, shift: e.shiftKey, alt: e.altKey };
         if (!moveRaf.current) moveRaf.current = requestAnimationFrame(flushMove);
       }}
       onPointerLeave={() => {
