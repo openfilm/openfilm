@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { codexServers, mergeConfig, ownMcpServers, ownSkills, sessionSkills, skillStore } from './agent-skills.mjs';
 
 /* which official skills are installed is read from Studio's prefs.json: a scratch home, never the person's */
@@ -109,6 +109,20 @@ test("OpenCode: every skill denied but its own, OpenFilm's and those let in; Pi:
   assert.deepEqual(kimi.log, { openfilm: names, allowed: [], mcpAllowed: [], filtered: false, mcpFiltered: false });
   /* a link (a junction on Windows) to the project's own folder */
   assert.equal(realpathSync(join(pi.piSkills.paths[0], 'brand')), realpathSync(join(w.project, 'skills', 'brand')));
+});
+
+test('expired session cleanup unlinks skills without removing their real folders', async () => {
+  const w = world();
+  const first = await sessionSkills('byok', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills'), prefsHome: w.openfilmHome });
+  const expired = dirname(first.piSkills.paths[0]);
+  const old = Date.now() / 1000 - 3 * 24 * 60 * 60;
+  utimesSync(expired, old, old);
+  const second = await sessionSkills('byok', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills'), prefsHome: w.openfilmHome });
+  assert.notEqual(dirname(second.piSkills.paths[0]), expired);
+  assert.equal(existsSync(expired), false, 'the expired session itself is removed');
+  assert.equal(readFileSync(join(w.project, 'skills', 'brand', 'SKILL.md'), 'utf8').includes('name: brand'), true, 'the project skill is untouched');
+  assert.equal(readFileSync(join(w.openfilmHome, 'skills', 'lyric-pv', 'SKILL.md'), 'utf8').includes('name: lyric-pv'), true, 'the personal skill is untouched');
+  assert.equal(realpathSync(join(second.piSkills.paths[0], 'brand')), realpathSync(join(w.project, 'skills', 'brand')), 'the next session links to the same skill again');
 });
 
 test("an OpenFilm skill the person turned off is given to no session", async () => {

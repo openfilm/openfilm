@@ -131,7 +131,6 @@ export const ja: Words = {
   composer: {
     contextFull: 'この会話は長くなっています。新しい会話のほうがうまくいきます。',
     contextFullNew: '新しい会話',
-    commands: 'コマンド',
     agentLoading: '読み込み中…',
     agentNone: 'エージェント',
     agentNoneShown: 'チャットで使えるエージェントがオンになっていません。',
@@ -221,8 +220,8 @@ export const ja: Words = {
     assets: '素材',
     addAttachment: 'ファイルを追加',
     close: '閉じる',
-    composerPlaceholder: '変更したい内容を入力。@ でファイル、タイミング、選択中のものを指定できます',
-    composerPlaceholderBlank: '作りたい映像を説明してください。@ でこのプロジェクトのファイルを使えます',
+    composerPlaceholder: '変更したい内容を入力。@ でファイル、スキル、タイミング、選択中のものを指定できます',
+    composerPlaceholderBlank: '作りたい映像を説明してください。@ でファイルやスキルを追加できます',
     dismiss: '閉じる',
     jumpToLatest: '最新へ移動',
     loadingMessages: '会話を読み込み中…',

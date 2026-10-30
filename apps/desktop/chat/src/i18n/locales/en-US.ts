@@ -131,7 +131,6 @@ export const enUS = {
   composer: {
     contextFull: 'This conversation is getting long. A new one will work better.',
     contextFullNew: 'New conversation',
-    commands: 'Commands',
     agentLoading: 'Loading…',
     agentNone: 'Agent',
     agentNoneShown: 'No agent is switched on for the chat.',
@@ -222,8 +221,8 @@ export const enUS = {
     assets: 'Assets',
     addAttachment: 'Add files',
     close: 'Close',
-    composerPlaceholder: 'Say what to change. Type @ to point at a file, a moment or what you selected',
-    composerPlaceholderBlank: 'Describe your film. Type @ to use a file from this project',
+    composerPlaceholder: 'Say what to change. Type @ for a file, a skill, a moment or what you selected',
+    composerPlaceholderBlank: 'Describe your film. Type @ to add a file or a skill',
     dismiss: 'Dismiss',
     jumpToLatest: 'Jump to latest',
     loadingMessages: 'Loading conversation…',
