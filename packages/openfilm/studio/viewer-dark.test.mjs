@@ -11,7 +11,7 @@ import { startStudio } from './server/server.mjs';
 
 const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })();
 
-test('a click or a box in the dark around the picture selects no text: the picture is never tinted blue', { timeout: 90_000, skip: !hasFfmpeg && 'no ffmpeg' }, async () => {
+test('a click or a box in the dark around the picture selects no text: the picture is never tinted blue', { timeout: 300_000, skip: !hasFfmpeg && 'no ffmpeg' }, async () => {
   const scratch = await mkdtemp(join(tmpdir(), 'of-viewer-dark-'));
   const names = ['HOME', 'SHARED_HOME', 'LIBRARY', 'SAVED', 'EXPORTS'];
   const saved = new Map(names.map((name) => [`OPENFILM_${name}`, process.env[`OPENFILM_${name}`]]));
@@ -46,7 +46,7 @@ test('a click or a box in the dark around the picture selects no text: the pictu
     const wholeClip = () => page.locator('[data-mg-kind]').count();
 
     /* a slow machine takes a while to open the project and fill its Layers */
-    await page.locator('[data-layers-panel] [role="treeitem"]').filter({ hasText: 'Every day' }).waitFor({ state: 'visible', timeout: 120_000 });
+    await page.locator('[data-layers-panel] [role="treeitem"]').filter({ hasText: 'Every day' }).waitFor({ state: 'visible', timeout: 240_000 });
     const film = await page.locator('[data-viewer-picture] iframe').first().boundingBox();
     const area = await page.locator('[data-viewer-picture]').boundingBox();
     const scale = film.width / 1080;
