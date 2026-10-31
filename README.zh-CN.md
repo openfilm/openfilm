@@ -158,3 +158,12 @@ pnpm test
 
 格式、命令行工具、Studio 和桌面版均采用 [MIT](LICENSE) 许可证。OpenFilm 的名称和 Logo 是商标：见
 [TRADEMARK.md](TRADEMARK.md)。
+
+## Star 趋势
+
+<a href="https://www.star-history.com/#openfilm/openfilm&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=openfilm/openfilm&type=Date&theme=dark">
+    <img alt="openfilm/openfilm 的 Star 趋势" src="https://api.star-history.com/svg?repos=openfilm/openfilm&type=Date">
+  </picture>
+</a>
