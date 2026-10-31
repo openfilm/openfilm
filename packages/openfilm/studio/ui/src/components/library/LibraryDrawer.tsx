@@ -83,14 +83,19 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions }: {
      picked on the timeline and the picture, which a look or a transition goes on */
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col outline-none" tabIndex={-1} onKeyDown={onKey}>
-      <nav data-studio-host-panel="" className="flex shrink-0 overflow-x-auto border-b border-[var(--dock-line)] px-0.5 pb-0.5 pt-1 [scrollbar-width:none]">
+      {/* the categories keep their own spacing however wide the panel is; more than fit scroll sideways (a wheel too) */}
+      <nav
+        data-studio-host-panel=""
+        onWheel={(e) => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) e.currentTarget.scrollLeft += e.deltaY; }}
+        className="flex shrink-0 gap-1 overflow-x-auto border-b border-[var(--dock-line)] px-1.5 pb-0.5 pt-1 [mask-image:linear-gradient(to_right,black_calc(100%-20px),transparent)] [scrollbar-width:none]"
+      >
         {CATEGORIES.map(({ id, icon: Icon }) => (
           <button
             key={id}
             type="button"
             onClick={() => show(id)}
             aria-pressed={cat === id}
-            className={`flex min-w-[44px] flex-1 flex-col items-center gap-0.5 whitespace-nowrap px-0.5 pb-1 pt-1 text-[11px] ${cat === id ? 'text-[var(--tl-accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
+            className={`flex min-w-[48px] shrink-0 flex-col items-center gap-0.5 whitespace-nowrap px-2 pb-1 pt-1 text-[11px] ${cat === id ? 'text-[var(--tl-accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
           >
             <Icon size={18} strokeWidth={1.6} />
             {t(`assetDrawer.cat_${id}`)}
@@ -98,16 +103,17 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions }: {
         ))}
       </nav>
       <div className="flex min-h-0 flex-1">
-        <nav data-studio-host-panel="" className="flex w-[84px] shrink-0 flex-col overflow-y-auto border-r border-[var(--dock-line)] py-2">
+        {/* as wide as its longest line (up to a limit), so no group's name is cut */}
+        <nav data-studio-host-panel="" className="flex min-w-[76px] max-w-[136px] shrink-0 flex-col overflow-y-auto border-r border-[var(--dock-line)] py-2">
           {cat === 'media' ? (
             <>
-              <SideItem head on={mediaScope === 'project'} onClick={() => onMediaScope('project')}>{t('assetDrawer.mediaProject')}</SideItem>
-              <SideItem head on={mediaScope === 'saved'} onClick={() => onMediaScope('saved')}>{t('assetDrawer.mediaSaved')}</SideItem>
+              <SideItem on={mediaScope === 'project'} onClick={() => onMediaScope('project')}>{t('assetDrawer.mediaProject')}</SideItem>
+              <SideItem on={mediaScope === 'saved'} onClick={() => onMediaScope('saved')}>{t('assetDrawer.mediaSaved')}</SideItem>
             </>
           ) : (
             <>
-              <SideItem head on={group === FAVORITES && !q} onClick={() => pickGroup(FAVORITES)}>{t('assetDrawer.favorites')}</SideItem>
-              <SideItem head on={!group && !q} onClick={() => pickGroup('')}>{t('assetDrawer.all')}</SideItem>
+              <SideItem on={group === FAVORITES && !q} onClick={() => pickGroup(FAVORITES)}>{t('assetDrawer.favorites')}</SideItem>
+              <SideItem on={!group && !q} onClick={() => pickGroup('')}>{t('assetDrawer.all')}</SideItem>
               {(index?.groups[cat] ?? []).map((g) => (
                 <SideItem key={g.id} on={group === g.id && !q} onClick={() => pickGroup(g.id)}>{nameOf(g.name, lang)}</SideItem>
               ))}
@@ -158,14 +164,15 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions }: {
   );
 }
 
-/** One line of the side bar: a heading of its own (all, the starred, the media's two) or a group, indented. */
-function SideItem({ head, on, onClick, children }: { head?: boolean; on: boolean; onClick: () => void; children: React.ReactNode }) {
+/** One line of the side bar: the starred, all, a group (or the media's two), each as the others. */
+function SideItem({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={on}
-      className={`truncate py-1.5 pr-2 text-left text-[12px] ${head ? 'pl-3 font-semibold' : 'pl-5'} ${on ? 'text-[var(--tl-accent)]' : head ? 'text-[var(--text)] hover:text-[var(--tl-accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
+      title={typeof children === 'string' ? children : undefined}
+      className={`truncate whitespace-nowrap px-3 py-1.5 text-left text-[12px] ${on ? 'font-medium text-[var(--tl-accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
     >
       {children}
     </button>
