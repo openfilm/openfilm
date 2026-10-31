@@ -2258,8 +2258,6 @@ export const ja: Words = {
       keyEnding: '末尾が {last4} のキー',
       useEnv: '環境変数 ${env} のキーを使う',
       signingIn: 'ブラウザでサインインを完了してください…',
-      manageAccount: 'アカウント',
-      switchAccount: 'アカウントを切り替え',
       keyless: 'キーなしで使えます。エージェントの検索内容と読み込むアドレスは {name} に送られます。キーを追加すると上限が上がります。',
       addKey: 'キーを追加',
       own: {

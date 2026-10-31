@@ -2259,8 +2259,6 @@ export const en = {
       keyEnding: 'Key ending in {last4}',
       useEnv: 'Use the key in ${env}',
       signingIn: 'Finish signing in in your browser…',
-      manageAccount: 'Your account',
-      switchAccount: 'Switch account',
       keyless: "Works without a key: your agent's searches and the addresses it reads go to {name}. A key lifts its limits.",
       addKey: 'Add a key',
       own: {

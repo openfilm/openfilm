@@ -2254,8 +2254,6 @@ export const ko: Words = {
       keyEnding: '{last4}(으)로 끝나는 키',
       useEnv: '환경 변수 ${env}의 키 사용',
       signingIn: '브라우저에서 로그인을 완료하세요…',
-      manageAccount: '내 계정',
-      switchAccount: '계정 전환',
       keyless: '키 없이 사용할 수 있습니다. 에이전트의 검색어와 읽는 주소는 {name}(으)로 전송됩니다. 키를 추가하면 한도가 늘어납니다.',
       addKey: '키 추가',
       own: {

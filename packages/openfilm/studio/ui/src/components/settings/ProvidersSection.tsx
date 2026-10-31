@@ -185,26 +185,18 @@ function Connection({ provider, hook, header }: {
   const pasteLabel = azure ? t('settings.providers.key') : t('settings.providers.pasteKey').replaceAll('{name}', provider.name);
   const escape = (e: React.KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); close(); } };
 
+  /* one line that may wrap as text: the dot, Connected, and as whom (an account's email, or a key's last four) */
   const status = provider.source ? (
-    <span className="inline-flex items-center gap-1.5 text-[var(--text-muted)]">
-      <span className="h-1.5 w-1.5 rounded-full bg-[var(--ok)]" aria-hidden />
+    <span className="min-w-0 text-[var(--text-muted)]">
+      <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-[var(--ok)] align-middle" aria-hidden />
       {t('settings.providers.connected')}
-      {provider.account ? <span className="text-[var(--text-faint)]">· {provider.account}</span> : null}
-      {!provider.account && provider.last4 ? <span className="font-mono tabular-nums text-[var(--text-faint)]" aria-label={t('settings.providers.keyEnding').replaceAll('{last4}', provider.last4)}>· •••• {provider.last4}</span> : null}
+      {provider.account ? <span className="text-[var(--text-faint)]"> · {provider.account}</span> : null}
+      {!provider.account && provider.last4 ? <span className="font-mono tabular-nums text-[var(--text-faint)]" aria-label={t('settings.providers.keyEnding').replaceAll('{last4}', provider.last4)}> · •••• {provider.last4}</span> : null}
     </span>
   ) : waiting ? <span className="text-[var(--text-muted)]">{t('settings.providers.signingIn')}</span> : null;
 
   const action = provider.source ? (
     <>
-      {signIn ? (
-        <>
-          <a href={provider.keysUrl} target="_blank" rel="noreferrer" className={`${settingsLink} mr-2 text-[14px]`}>{t('settings.providers.manageAccount')}<ExternalLink size={12} /></a>
-          {/* another account: this one disconnected, and its website asked again (where "Use another account" is) */}
-          <SettingsButton variant="quiet" disabled={busy} onClick={() => void hook.removeKey(provider.id).then(() => hook.signIn(provider.id))}>
-            {t('settings.providers.switchAccount')}
-          </SettingsButton>
-        </>
-      ) : null}
       {keyWanted && !adding ? <SettingsButton variant="quiet" onClick={() => setAdding(true)}>{t('settings.providers.addKey')}</SettingsButton> : null}
       <SettingsButton variant="quiet" disabled={busy} onClick={() => void hook.removeKey(provider.id)}>{t('settings.providers.disconnect')}</SettingsButton>
     </>
