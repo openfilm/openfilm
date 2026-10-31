@@ -27,9 +27,15 @@ const OWNER = 'owner';
 /** Folders a render in this process is drawing into now: a second render of the same file draws apart. */
 const held = new Set();
 
-/** Frames [f0, f1) in chunks of a second to `CHUNK_SECONDS`, the last one shorter. @param {number} f0 @param {number} f1 @param {number} fps */
+/**
+ * Frames [f0, f1) in chunks of a second to `CHUNK_SECONDS`, the last one shorter. A chunk is a whole number of seconds
+ * (`round(fps)` frames each: 30 at 29.97, 24 at 23.976), so its length is whole milliseconds and the seams between
+ * chunks stay on the frame grid: a chunk of 38 frames at 30 fps (1.2667 s) would lose up to a millisecond at each.
+ * @param {number} f0 @param {number} f1 @param {number} fps
+ */
 export function chunksOf(f0, f1, fps) {
-  const size = Math.max(1, Math.min(Math.round(CHUNK_SECONDS * fps), Math.max(Math.round(fps), Math.ceil((f1 - f0) / CHUNKS))));
+  const second = Math.max(1, Math.round(fps));
+  const size = Math.min(CHUNK_SECONDS * second, Math.max(second, Math.ceil((f1 - f0) / CHUNKS / second) * second));
   const chunks = [];
   for (let a = f0; a < f1; a += size) chunks.push({ a, b: Math.min(f1, a + size) });
   return chunks;
@@ -99,9 +105,9 @@ export function sweep(renderDir, now = Date.now()) {
  * The chunks of a render of `out`. `kept`: the settings the chunks there were drawn with, when every file they were
  * drawn from is as it was (else null: nothing there is used). `start(settings)` uses them when the settings are those,
  * and empties the folder when not; `done(chunk)` says whether a chunk is there, whole; `file(chunk)` and
- * `drawing(chunk)` name it whole and while it is drawn; `finished(chunk, files)` renames a chunk drawn whole into
- * place and notes the files its film asked for so far. `close(ok)`: a render that ended removes the folder, one that
- * stopped keeps its whole chunks. When another render of the same file is drawing (`private`), this one draws in a
+ * `drawing(chunk)` name it whole and while it is drawn; `finished(chunk, files)` notes the files its film asked for so
+ * far, then renames a chunk drawn whole into place. `close(ok)`: a render that ended (or was cancelled) removes the
+ * folder, one that stopped on its own keeps its whole chunks. When another render of the same file is drawing (`private`), this one draws in a
  * folder of its own, removed however it ends.
  * @param {string} renderDir @param {string} out @param {string} ext the chunks' container (`.mp4`)
  */
@@ -138,7 +144,7 @@ export function chunkStore(renderDir, out, ext) {
     start(next) {
       if (next !== manifest?.settings || busy) { empty(); files = {}; }
       /* a chunk cut off as it was drawn (the process ended): drawn again */
-      else for (const entry of readdirSync(folder)) if (entry.startsWith('drawing-')) rmSync(join(folder, entry), { force: true });
+      else for (const entry of readdirSync(folder)) if (entry.startsWith('drawing-')) rmSync(join(folder, entry), { force: true, maxRetries: 5 });
       manifest = null;
       settings = next;
       save();
@@ -151,9 +157,11 @@ export function chunkStore(renderDir, out, ext) {
     drawing: (c) => join(folder, `drawing-${c.a}-${c.b}${ext}`),
     /** @param {{ a: number, b: number }} c @param {Map<string, string>} used */
     finished(c, used) {
-      renameSync(join(folder, `drawing-${c.a}-${c.b}${ext}`), join(folder, name(c)));
+      /* the files it was drawn from first, then the chunk: a process ending between the two leaves no chunk whose
+         files are not known */
       for (const [file, was] of used) files[file] ??= was;
       save();
+      renameSync(join(folder, `drawing-${c.a}-${c.b}${ext}`), join(folder, name(c)));
     },
     /** @param {boolean} ok */
     close(ok) {

@@ -76,7 +76,7 @@ export async function open(target, opts = {}) {
   }
   /** @type {Map<string, string>} */
   const copies = new Map();
-  const site = await serve(loc.root, { swap: (file) => opts.swap?.(file) ?? copies.get(file) ?? null });
+  const site = await serve(loc.root, { swap: (file) => opts.swap?.(file) ?? copies.get(file) ?? null, missed: opts.missed });
   const lent = opts.browser ?? null;
   let browser;
   try { browser = lent ?? await launch(opts.launch); }

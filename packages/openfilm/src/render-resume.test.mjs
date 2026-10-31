@@ -8,7 +8,7 @@ import { chunkFolder, chunkStore, chunksOf, settingsOf, signature, sweep } from 
 
 const scratch = () => mkdtempSync(join(tmpdir(), 'of-resume-'));
 
-test('a film is cut in chunks of a second to ten, by its frames alone: every frame once, in order', () => {
+test('a film is cut in chunks of whole seconds, one to ten, by its frames alone: every frame once, in order, each seam on a whole millisecond', () => {
   const cover = (chunks, f0, f1) => {
     assert.equal(chunks[0].a, f0);
     assert.equal(chunks.at(-1).b, f1);
@@ -19,11 +19,16 @@ test('a film is cut in chunks of a second to ten, by its frames alone: every fra
   cover(long, 0, 54_000);
   assert.equal(long.length, 180);
   assert.equal(long[0].b, 300);
-  /* thirty seconds: sixteen chunks or so, for the browsers to share */
+  /* thirty seconds: two-second chunks, fifteen of them, for the browsers to share (never 56 frames: 1.8667 s is no
+     whole number of milliseconds, and each seam would slip off the frame grid) */
   const short = chunksOf(0, 900, 30);
   cover(short, 0, 900);
-  assert.equal(short[0].b, 57);
-  assert.equal(short.length, 16);
+  assert.equal(short[0].b, 60);
+  assert.equal(short.length, 15);
+  /* the common rates that are not whole: a chunk is round(fps) frames, 1001 ms exactly */
+  assert.equal(chunksOf(0, 600, 29.97)[0].b, 60);
+  assert.equal(chunksOf(0, 2000, 23.976)[0].b, 144);
+  assert.equal(chunksOf(0, 100_000, 59.94)[0].b, 600);
   /* a second or less: one chunk; a stretch of a film starts where it starts */
   assert.deepEqual(chunksOf(0, 30, 30), [{ a: 0, b: 30 }]);
   cover(chunksOf(95, 400, 30), 95, 400);

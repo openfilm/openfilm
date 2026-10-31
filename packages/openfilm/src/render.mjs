@@ -100,8 +100,10 @@ export async function render(args, opts = {}) {
   /* `root`: the folder to serve (a host rendering an edit kept elsewhere in a project serves the project). The videos
      the pages ask for are noted, and served as their fast-seeking copies once there are some (seekable.mjs). */
   const videos = new Set();
-  /** @type {Map<string, string>} each file the pages asked for, as it was when first asked: what the chunks are drawn from */
+  /** @type {Map<string, string>} each file the pages asked for, as it was when first asked: what the chunks are drawn
+   * from. One asked for and not there (or refused: a link out of the folder) is '' — the page draws otherwise once it is */
   const used = new Map();
+  const missed = (/** @type {string} */ file) => { if (!used.has(file)) used.set(file, ''); };
   /** @type {Map<string, string>} */
   let copies = new Map();
   const swap = (/** @type {string} */ file) => {
@@ -116,7 +118,7 @@ export async function render(args, opts = {}) {
   let failed = true;
   let probe;
   try {
-    probe = await open(target, { ...(opts.root ? { root: opts.root } : {}), swap, ...(pool ? { browser: lent[0] } : {}) });
+    probe = await open(target, { ...(opts.root ? { root: opts.root } : {}), swap, missed, ...(pool ? { browser: lent[0] } : {}) });
   } catch (e) {
     await pool?.give(lent, { retire: true });
     throw e;
@@ -341,8 +343,9 @@ export async function render(args, opts = {}) {
     failed = false;
   } finally {
     for (const off of unwatch) off();
-    /* a render that ended takes its chunks away; one that stopped keeps those it finished for the next */
-    store.close(!failed);
+    /* a render that ended takes its chunks away, and so does one cancelled on purpose (a 4K export's chunks are tens of
+       GB, out of sight); one that stopped on its own (an error, a crash, the app quit) keeps those it finished for the next */
+    store.close(!failed || !!opts.signal?.aborted);
     await Promise.allSettled(browsers.map((b) => b.close()));
     if (pool) await Promise.allSettled(tabs.map((p) => p.close()));
     await probe.close();

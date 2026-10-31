@@ -892,7 +892,8 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
             const { format } = encoding(codec, quality, size, fps ?? 30, have);
             await run(['-i', frames, '-map', '0:v:0', '-map', '0:a?', '-vf', /** @type {{ pix: string }} */ (format).pix, ...format.video, '-c:a', 'copy', part], signal);
           } else {
-            /* named by the file it makes, not the partial one: an export stopped midway is resumed by the next (render-resume.mjs) */
+            /* named by the file it makes, not the partial one: an export the app quit or crashed in is resumed by the next
+               (render-resume.mjs); one cancelled here leaves nothing */
             const rendered = await renderTo(job, target, part, { ...opts, resumeAs: out }, signal);
             selectedRanges = rendered.ranges ?? null;
           }
