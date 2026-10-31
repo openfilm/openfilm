@@ -1,6 +1,6 @@
 /**
  * Settings → Services: the services there are, as chips that open each one's card (ServicesBar), and what makes each
- * kind of media: one of the models of a connected service ("Multilingual v2 · ElevenLabs"), or none. A kind's menu
+ * kind of media: one of the models of a connected service (its mark and the model's name), or none. A kind's menu
  * lists every service that makes it with its models: the connected ones to choose from, then the others, whose
  * models are shown as what connecting would bring, each opening that service's card. Connecting a service fills the
  * kinds that have none, with its first model.
@@ -24,7 +24,6 @@ import { CustomServices } from './CustomServices';
 interface Choice {
   value: string;
   provider: string;
-  providerName: string;
   name: string;
   model: string;
 }
@@ -65,7 +64,7 @@ function ModelRow({ verb, hook, onConnect }: { verb: ProviderVerb; hook: Provide
   const firstOf = (id: string) => state.providers.find((p) => p.id === id)?.models[verb]?.[0]?.id;
   const value = chosen ? `${chosen}:${state.model[verb] ?? firstOf(chosen) ?? ''}` : '';
   const choicesOf = (p: OwnProvider): Choice[] => (p.models[verb] ?? [])
-    .map((m) => ({ value: `${p.id}:${m.id}`, provider: p.id, providerName: p.name, name: m.name, model: m.id }));
+    .map((m) => ({ value: `${p.id}:${m.id}`, provider: p.id, name: m.name, model: m.id }));
   const current = order.connected.flatMap(choicesOf).find((c) => c.value === value) ?? null;
   const Icon = KIND_ICON[verb];
 
@@ -157,7 +156,7 @@ function ModelPicker({ label, connected, waiting, choicesOf, current, busy, onPi
       className={`flex h-10 w-[300px] items-center gap-2.5 rounded-[9px] border px-3 text-left text-[14.5px] text-[var(--text)] transition disabled:opacity-60 ${open ? 'border-[var(--text-muted)]' : 'border-[var(--border)] hover:border-[var(--border-strong)]'}`}>
       {current ? <ProviderMark id={current.provider} size={15} /> : null}
       <span className={`min-w-0 flex-1 truncate ${current ? '' : 'text-[var(--text-muted)]'}`}>
-        {current ? <>{current.name}<span className="text-[var(--text-faint)]"> · {current.providerName}</span></> : t('settings.models.choose')}
+        {current ? current.name : t('settings.models.choose')}
       </span>
       <ChevronDown size={15} className="shrink-0 text-[var(--text-muted)]" />
     </button>
