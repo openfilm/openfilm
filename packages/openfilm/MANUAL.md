@@ -41,6 +41,7 @@ A folder:
 - A track the person `locked` is theirs: change nothing on it. A `hidden` track shows and plays nothing; a `muted` one plays no sound.
 - A clip is an element: `<iframe>` a page, `<video>`, `<img>` a picture, `<audio>` a sound.
   - `src`: its file, relative to film.html. `#t=in,out` says which seconds of it play, `#t=in` to its end; without it, all of them. A picture, or a page without a `duration`, needs `#t=0,length`: how long it stays.
+  - A page's `src` may carry a query, `step.html?n=2#t=0,4`, which the page reads in `location.search`: one page, several clips, each with its own words.
   - `at`: where it starts in the film, in seconds; without it, 0.
   - `left`, `top`, `width`, `height` in its `style` (px) and `rotate` (degrees, clockwise): where it sits. Without them, a video or picture is the stage, and a page is its own size, centered. With only `width` or `height`, the other keeps its proportions.
   - Its look is CSS, in `class` or `style`: a video or picture fits whole in its box unless you say otherwise (`object-fit: cover` crops it to the box). The film's CSS holds still; what moves is a page.

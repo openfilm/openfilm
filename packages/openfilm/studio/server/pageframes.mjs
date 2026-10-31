@@ -58,11 +58,12 @@ export const FILM_PAGE = FILM_FILE;
  * `ms` past the page's end draws its last frame; `ms` < 0 draws the middle (its poster). `overrides`: a page clip's
  * (SPEC §1), drawn with it, so its pictures on the timeline show what was changed in it. `size`: a page clip's, the
  * CSS pixels a page without a size of its own is laid out at (SPEC §1), as the film lays it out; without one it is
- * 1920 × 1080, as a page opened on its own.
+ * 1920 × 1080, as a page opened on its own. `query`: a page clip's (SPEC §1), what the page reads in its
+ * location.search: one file asked with two queries is two pictures.
  * @param {string} root @param {string} base @param {string} rel @param {number} ms @param {number} width
- * @param {object[] | null} [overrides] @param {{ w: number, h: number } | null} [size]
+ * @param {{ overrides?: object[] | null, size?: { w: number, h: number } | null, query?: string | null }} [clip]
  */
-export async function pageFrame(root, base, rel, ms, width, overrides = null, size = null) {
+export async function pageFrame(root, base, rel, ms, width, { overrides = null, size = null, query = null } = {}) {
   const w = Math.max(32, Math.min(960, Math.round(width / 2) * 2 || 160));
   /* `rel` is the request's: a page of the project only, never one reached by `../` or a link out of the folder */
   const page = inProject(root, rel);
@@ -71,7 +72,7 @@ export async function pageFrame(root, base, rel, ms, width, overrides = null, si
   /* `black`: how frames are drawn (frames drawn on white before are not reused) */
   const tweaks = overrides?.some((o) => o && typeof o === 'object' && 'at' in o) ? JSON.stringify(overrides) : '';
   const laid = size ? `${Math.round(size.w)}x${Math.round(size.h)}` : '';
-  const key = createHash('sha256').update(`black\0${rel}\0${Math.round(ms)}\0${w}${tweaks ? `\0${tweaks}` : ''}${laid ? `\0${laid}` : ''}`).digest('hex').slice(0, 24);
+  const key = createHash('sha256').update(`black\0${rel}\0${Math.round(ms)}\0${w}${tweaks ? `\0${tweaks}` : ''}${laid ? `\0${laid}` : ''}${query ? `\0?${query}` : ''}`).digest('hex').slice(0, 24);
   const dir = join(root, TOOL_DIR, 'cache', 'pageframes');
   const file = join(dir, `${key}.jpg`);
   /* a frame is good while every file the page loaded to draw it is as it was then: the page, and its styles, code,
@@ -97,7 +98,7 @@ export async function pageFrame(root, base, rel, ms, width, overrides = null, si
     if (rel === FILM_PAGE) await filmCopies(root, base, info);
     /* a page drawn with tweaks is one of its own: the page kept open for another clip of the same file has none */
     const drawn = tweaks ? `${version}:${createHash('sha256').update(tweaks).digest('hex').slice(0, 12)}` : version;
-    const { jpeg, duration, loaded } = await draw(pageUrl(base, rel), ms, w, drawn, base, tweaks ? overrides : null, laid ? size : null).catch((e) => {
+    const { jpeg, duration, loaded } = await draw(pageUrl(base, rel, query), ms, w, drawn, base, tweaks ? overrides : null, laid ? size : null).catch((e) => {
       failures.set(id, { error: e, at: Date.now() });
       if (failures.size > 500) failures.delete(failures.keys().next().value ?? '');
       throw e;
@@ -211,8 +212,15 @@ export function warmFilmPoster(root, base) {
 /** Where the whole film's length is kept, in `.film/cache/`: `{ film: '<film.html mtime>:<size>', duration }`. */
 export const FILM_DURATION = 'film-duration.json';
 
-/** The page `rel` of the folder served at `base`, on the film's origin. */
-const pageUrl = (/** @type {string} */ base, /** @type {string} */ rel) => `${base.replace(/\/$/, '')}/${rel.split('/').map(encodeURIComponent).join('/')}`;
+/** The page `rel` of the folder served at `base`, on the film's origin, asked with its clip's `query` when it has one. */
+const pageUrl = (/** @type {string} */ base, /** @type {string} */ rel, /** @type {string | null} */ query = null) => {
+  const page = `${base.replace(/\/$/, '')}/${rel.split('/').map(encodeURIComponent).join('/')}`;
+  if (!query) return page;
+  /* as the film's browser reads the clip's src: the query encoded where an address needs it, its words kept */
+  const url = new URL(page);
+  url.search = query;
+  return url.href;
+};
 
 /** Close the browser, and draw no first posters (Studio is stopping). */
 export async function closePageFrames() {

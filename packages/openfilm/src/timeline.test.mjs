@@ -33,6 +33,33 @@ test('a hidden track\'s clips are still placed for an editor, but neither drawn 
   }
 });
 
+test('a page\'s query reaches it: one page, several clips, each reading its own location.search', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-query-'));
+  /* the page says what it was asked with, and its length is its query's */
+  writeFileSync(join(dir, 'step.html'), `<!doctype html><body><script>const q=new URLSearchParams(location.search);
+window.said={n:q.get('n'),title:q.get('title')};window.film={duration:Number(q.get('n')),width:320,height:180,frame(){}}</script></body>`);
+  const film = { stage: { w: 320, h: 180 }, tracks: [{ clips: [
+    { src: 'step.html', query: 'n=1&title=安装 DSH', id: 's1' },
+    { src: 'step.html', query: 'n=2&title=登录、领赠金', id: 's2', at: 1 },
+  ] }] };
+  writeFileSync(join(dir, 'film.html'), filmHtml(film));
+  const s = await open(dir);
+  const said = () => s.film.page.evaluate(() => [...document.querySelectorAll('iframe')].map((el) => el.contentWindow.said));
+  try {
+    assert.deepEqual(await s.film.page.evaluate(() => window.__filmSpans().map((c) => [c.id, c.at, c.end])), [['s1', 0, 1], ['s2', 1, 3]]);
+    await s.film.seek(2);
+    assert.deepEqual(await said(), [{ n: '1', title: '安装 DSH' }, { n: '2', title: '登录、领赠金' }]);
+    /* the same clip asked with another query is opened again with it */
+    film.tracks[0].clips[1] = { ...film.tracks[0].clips[1], query: 'n=3&title=启动' };
+    assert.equal(await s.film.page.evaluate((v) => window.__filmEditor.update(v), film), true);
+    await s.film.seek(2);
+    assert.deepEqual((await said())[1], { n: '3', title: '启动' });
+    assert.deepEqual(await s.film.page.evaluate(() => window.__filmSpans().map((c) => [c.id, c.at, c.end])), [['s1', 0, 1], ['s2', 1, 4]]);
+  } finally {
+    await s.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 /** `seconds` of silence as a WAV (8 kHz, mono, 16 bit): a sound file the browser reads without a codec. */
 function silence(seconds) {
   const data = Math.round(8000 * seconds) * 2;

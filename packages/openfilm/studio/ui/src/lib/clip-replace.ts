@@ -49,6 +49,8 @@ export function replaceClip(clip: Clip, durMs: number, file: ReplaceFile): Repla
     edits.push({ prop: 'time', value: [0, secs(plays)] });
     if (page) edits.push({ prop: 'speed', value: null }, { prop: 'volume', value: null });
   }
+  /* a page's query is what that page reads: another file is asked without it */
+  if (clip.query) edits.push({ prop: 'query', value: null });
   /* a page's tweaks are of that page's elements: another file has none of them. Its fades (the entry without `at`) are
      the clip's own, and stay */
   if (clip.overrides) {

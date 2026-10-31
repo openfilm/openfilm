@@ -15,7 +15,9 @@ export interface StudioVersion { version: string; latest: string | null; newer: 
 
 /** `cover`: when the person set a cover of its own (studio/server/cover.mjs), absent when it has none. */
 export type Project = { id: string; path: string; name: string; openedAt: number; missing: boolean; missingReason?: 'folder' | 'film'; working?: boolean; cover?: number };
-export type Clip = { src: string; id: string; at?: number; time?: [number] | [number, number];
+export type Clip = { src: string; id: string;
+  /** a page's query, after the `?` of its address: what the page reads in location.search */
+  query?: string; at?: number; time?: [number] | [number, number];
   box?: { x: number; y: number; w?: number; h?: number; r?: number }; volume?: number; speed?: number; overrides?: unknown[];
   /** a page that sets no size of its own: the px it is laid out at (the stage's without it) */
   size?: { w: number; h: number };

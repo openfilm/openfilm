@@ -71,6 +71,15 @@ export function srcHref(src) {
   return ADDRESS.test(src) ? src : src.replace(/[%#?]/g, (c) => encodeURIComponent(c));
 }
 
+/**
+ * The address a clip opens, without its part (`#t=`): its file's (srcHref), and a page's query (`?n=1`, what the page
+ * reads in its `location.search`).
+ */
+export function clipHref(clip) {
+  const href = srcHref(clip.src);
+  return typeof clip.query === 'string' && clip.query ? `${href}?${clip.query}` : href;
+}
+
 /** The path a src attribute names: its escapes read (`%23` is `#`), a `%` that escapes nothing kept as it is. */
 function srcPath(value) {
   if (ADDRESS.test(value)) return value;
@@ -120,7 +129,7 @@ const pair = (v, ok) => Array.isArray(v) && v.length === 2 && ok(v[0]) && ok(v[1
 
 /** The fields each kind of clip takes, in the order they are written back. */
 const CLIP_FIELDS = {
-  page: ['src', 'id', 'at', 'time', 'box', 'size', 'class', 'style', 'overrides', 'attrs'],
+  page: ['src', 'query', 'id', 'at', 'time', 'box', 'size', 'class', 'style', 'overrides', 'attrs'],
   video: ['src', 'id', 'at', 'time', 'box', 'volume', 'speed', 'class', 'style', 'overrides', 'attrs'],
   still: ['src', 'id', 'at', 'time', 'box', 'class', 'style', 'overrides', 'attrs'],
   sound: ['src', 'id', 'sound', 'at', 'time', 'volume', 'speed', 'overrides', 'attrs'],
@@ -135,6 +144,8 @@ const STYLE_KEY = /^(?:[a-zA-Z]{1,40}|--[A-Za-z0-9_-]{1,60})$/;
 const BOX_FIELDS = ['x', 'y', 'w', 'h', 'r'];
 /** The largest side a page is laid out at (`size`): a stage's. */
 const PAGE_SIZE_MAX = 8192;
+/** The longest query a page's address carries (`query`, after its `?`). */
+const PAGE_QUERY_MAX = 2000;
 /** A copy of `row` with only `fields`, in that order: what is written back reads the same every time. */
 const ordered = (row, fields) => Object.fromEntries(fields.filter((k) => row[k] !== undefined).map((k) => [k, row[k]]));
 const TRACK_FIELDS = ['clips', 'locked', 'hidden', 'muted', 'attrs'];
@@ -205,7 +216,9 @@ function readClip(raw, where, problems) {
   }
   const kind = kindOf(raw);
   if (!kind) {
-    problems.push(`${at}src has to be a web page (.html), a video, a picture or a sound file — "${raw.src}" is none of them.`);
+    const q = ADDRESS.test(raw.src) ? -1 : raw.src.indexOf('?');
+    const query = q > 0 && isPage(raw.src.slice(0, q)) ? ` A page's query is a field of its own: { "src": "${raw.src.slice(0, q)}", "query": "${raw.src.slice(q + 1)}" }.` : '';
+    problems.push(`${at}src has to be a web page (.html), a video, a picture or a sound file — "${raw.src}" is none of them.${query}`);
     return null;
   }
   const before = problems.length;
@@ -230,6 +243,11 @@ function readClip(raw, where, problems) {
     problems.push(`${at}speed has to be a number from ${SPEED_MIN} to ${SPEED_MAX}.`);
   }
   if (raw.box !== undefined && kind !== 'sound') checkBox(raw.box, at, problems);
+  if (raw.query !== undefined && kind === 'page' && !(typeof raw.query === 'string' && raw.query && raw.query.length <= PAGE_QUERY_MAX && !/[#\t\n\r\f\v]/.test(raw.query) && raw.query[0] !== '?')) {
+    problems.push(`${at}query is what the page reads in its location.search, as its address writes it after the ?, like "n=1&title=Intro": text up to ${PAGE_QUERY_MAX} characters, with no # (that begins the part of the page: #t=), tab or line break.`);
+  } else if (typeof raw.query === 'string' && [...new URLSearchParams(raw.query).keys()].some((k) => k.startsWith('film-'))) {
+    problems.push(`${at}query: a name that begins with film- is the host's (film-host, film-facts…), not the page's — "${raw.query}".`);
+  }
   if (raw.size !== undefined && !(isObject(raw.size) && Object.keys(raw.size).length === 2 && [raw.size.w, raw.size.h].every((v) => Number.isInteger(v) && v > 0 && v <= PAGE_SIZE_MAX))) {
     problems.push(`${at}size is the px a page is laid out at, whole numbers up to ${PAGE_SIZE_MAX}: { "w": 1920, "h": 1080 }.`);
   }
@@ -490,7 +508,8 @@ export function pictureRect(kind, own, stage, box) {
 /*
  * A film is a web page. Its <head> is the page's own (styles, fonts, the stage's size as the viewport); its <body> is
  * the tracks, each a <section>, the first on top, and each track's clips: <iframe> a web page, <video>, <img> a still,
- * <audio> a sound. Which seconds of its source a clip plays is a media fragment on its src (`a.mp4#t=2,6`); where it
+ * <audio> a sound. A page's src may carry a query, what the page reads in its location.search (`step.html?n=1`).
+ * Which seconds of its source a clip plays is a media fragment on its src (`a.mp4#t=2,6`); where it
  * starts on the film, `at`; where its picture sits, `left`, `top`, `width`, `height` and `rotate` in its own style;
  * how it looks, any other CSS. The reader below takes no more than that, and says where anything else is.
  */
@@ -684,6 +703,17 @@ function named(tag) {
   return `<${tag.name}${id ? ` id="${id}"` : src ? ` src="${src}"` : ''}>`;
 }
 
+/** What a `?` in a src of the wrong kind says, for its problem: '' when it has none. */
+function queryHint(raw, kind) {
+  if (kind === 'page') return raw.query !== undefined ? ' A ? in the file\'s name is written %3F.' : '';
+  const q = typeof raw.src === 'string' && !ADDRESS.test(raw.src) ? raw.src.indexOf('?') : -1;
+  if (q < 0) return '';
+  const file = raw.src.slice(0, q);
+  return clipKind(file) === kind
+    ? ` Only a web page (<iframe>) reads a query (?…): a ${kind} plays its file, src="${file}". A ? in the file's name is written %3F.`
+    : ' A ? in the file\'s name is written %3F.';
+}
+
 /** One clip's element as the value's clip (unchecked: readFilm checks it), or null with what is wrong said. */
 function clipOfTag(tag, where, problems) {
   const kind = KIND_OF_TAG[tag.name];
@@ -704,8 +734,12 @@ function clipOfTag(tag, where, problems) {
     }
     if (name === 'id') { if (value) raw.id = value; }
     else if (name === 'src') {
+      /* read as a browser reads an address: the file's path, then a page's query (`?`), then its part (`#`) */
       const hash = value.indexOf('#');
-      raw.src = srcPath(hash < 0 ? value : value.slice(0, hash));
+      const address = hash < 0 ? value : value.slice(0, hash);
+      const q = kind === 'page' && !ADDRESS.test(address) ? address.indexOf('?') : -1;
+      raw.src = srcPath(q < 0 ? address : address.slice(0, q));
+      if (q >= 0 && q + 1 < address.length) raw.query = address.slice(q + 1);
       if (hash >= 0) {
         const m = /^t=([^,]*)(?:,(.*))?$/.exec(value.slice(hash + 1));
         const from = m ? fragmentSeconds(m[1]) : NaN;
@@ -754,7 +788,7 @@ function clipOfTag(tag, where, problems) {
   if (typeof raw.src !== 'string' || !raw.src) problems.push(`${where}: a clip needs src, its file (relative to ${FILM_FILE}).`);
   else if (clipKind(raw.src) !== kind && !raw.sound) {
     const is = clipKind(raw.src);
-    problems.push(`${where}: "${raw.src}" is ${is ? `a ${is === 'page' ? 'web page' : is}, a clip of <${TAG_OF_KIND[is]}>` : 'no clip a film plays (a web page, a video, a picture or a sound)'} — <${tag.name}> is for ${kind === 'page' ? 'a web page (.html)' : `a ${kind}`}.`);
+    problems.push(`${where}: "${raw.src}" is ${is ? `a ${is === 'page' ? 'web page' : is}, a clip of <${TAG_OF_KIND[is]}>` : 'no clip a film plays (a web page, a video, a picture or a sound)'} — <${tag.name}> is for ${kind === 'page' ? 'a web page (.html)' : `a ${kind}`}.${queryHint(raw, kind)}`);
   }
   return problems.length > before ? null : raw;
 }
@@ -903,7 +937,7 @@ export function clipTag(clip) {
   const tag = TAG_OF_KIND[kind];
   const t = clip.time;
   const num = (n) => String(Number(n.toFixed(3)));
-  const src = srcHref(clip.src) + (t ? (t.length === 2 ? `#t=${num(t[0])},${num(t[1])}` : `#t=${num(t[0])}`) : '');
+  const src = (kind === 'page' ? clipHref(clip) : srcHref(clip.src)) + (t ? (t.length === 2 ? `#t=${num(t[0])},${num(t[1])}` : `#t=${num(t[0])}`) : '');
   const parts = [];
   if (clip.id) parts.push(`id="${escapeAttr(clip.id)}"`);
   parts.push(`src="${escapeAttr(src)}"`);

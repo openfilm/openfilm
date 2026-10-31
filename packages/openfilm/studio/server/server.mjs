@@ -905,7 +905,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const clipId = what === 'frame' ? url.searchParams.get('clip') : null;
       const look = clipId && isPage(at) ? await pageClipLook(project.path, clipId) : null;
       const page = isPage(at) && (what === 'poster' || what === 'frame')
-        ? () => pageFrame(project.path, pages.folderUrl(project), at, what === 'poster' ? -1 : Number(url.searchParams.get('ms')), what === 'poster' ? 480 : Number(url.searchParams.get('w')), look?.overrides ?? null, look?.size ?? null).catch((e) => {
+        ? () => pageFrame(project.path, pages.folderUrl(project), at, what === 'poster' ? -1 : Number(url.searchParams.get('ms')), what === 'poster' ? 480 : Number(url.searchParams.get('w')), look ?? {}).catch((e) => {
           throw new HttpError(e instanceof PageFrameError ? 404 : 422, String(e?.message ?? e));
         })
         : null;
@@ -1229,7 +1229,7 @@ async function savedCall(fn) {
  * A saved clip's picture, from the middle of what it shows: a page drawn with the changes made in it, a video's frame,
  * a still's own; a sound has none.
  * @param {string} root @param {string} base the project's folder as the pages are served (pageframes.mjs)
- * @param {{ src: string, time?: unknown, overrides?: unknown, size?: unknown }} clip @param {number} durationMs
+ * @param {{ src: string, query?: unknown, time?: unknown, overrides?: unknown, size?: unknown }} clip @param {number} durationMs
  * @returns {Promise<Buffer | null>}
  */
 async function clipPoster(root, base, clip, durationMs) {
@@ -1238,7 +1238,13 @@ async function clipPoster(root, base, clip, durationMs) {
   const ms = durationMs > 0 ? from + durationMs / 2 : -1;
   /* laid out at the clip's size, as the film lays it out (a page without one of its own is the clip's `size`) */
   const size = /** @type {{ w?: number, h?: number } | undefined} */ (clip.size);
-  if (kind === 'page') return pageFrame(root, base, clip.src, ms, 480, Array.isArray(clip.overrides) ? clip.overrides : null, size?.w && size?.h ? { w: size.w, h: size.h } : null);
+  if (kind === 'page') {
+    return pageFrame(root, base, clip.src, ms, 480, {
+      overrides: Array.isArray(clip.overrides) ? clip.overrides : null,
+      size: size?.w && size?.h ? { w: size.w, h: size.h } : null,
+      query: typeof clip.query === 'string' && clip.query ? clip.query : null,
+    });
+  }
   if (kind === 'video') return frame(root, clip.src, Math.max(0, ms), 480);
   if (kind === 'still') return poster(root, clip.src);
   return null;
