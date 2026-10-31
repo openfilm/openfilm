@@ -61,8 +61,9 @@ test('film.html deleted and written again 3 s later (an agent replacing it whole
   await page.locator('[data-viewer-picture] iframe').first().waitFor({ state: 'attached' });
   assert.equal(new URL(page.url()).pathname, address);
   assert.equal(await page.getByText('film.html is empty').count(), 0, 'no empty film was shown');
-  /* its whole folder gone: the page leaves it, as before (with tabs, its tab closes) */
-  await rm(root, { recursive: true, force: true });
+  /* its whole folder gone: the page leaves it, as before (with tabs, its tab closes). Studio may still be drawing the
+     new film into .film/cache as the folder goes: a folder that gains a file under the removal is removed again */
+  await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   await page.waitForURL((url) => url.pathname !== address, { timeout: 10_000 });
 });
 
