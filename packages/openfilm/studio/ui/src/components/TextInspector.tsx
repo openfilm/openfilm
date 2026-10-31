@@ -68,8 +68,9 @@ export function TextInspector({ host, commit }: { host: PropsHost; commit: (next
         </Line>
         <Line label={t('textInspector.size')}>
           <Row>
-            <NumField label={t('textInspector.size')} value={num(vars['--size'])} unit="vw" step={0.5} min={1} max={60}
-              onPreview={(n) => paint('--size', `${n}vw`)} onRevert={revert} onCommit={(n) => setVar('--size', `${n}vw`)} />
+            {/* of the clip's box: how tall the words are in it (they never spill out of it) */}
+            <NumField label={t('textInspector.size')} value={num(vars['--size'])} unit="%" step={1} min={5} max={100}
+              onPreview={(n) => paint('--size', `${n}vh`)} onRevert={revert} onCommit={(n) => setVar('--size', `${n}vh`)} />
             <SelectField label={t('textInspector.weight')} value={vars['--weight'] ?? '800'}
               options={['200', '300', '400', '500', '600', '700', '800', '900'].map((w) => ({ value: w, label: w }))}
               onPreview={(w) => paint('--weight', w)} onRevert={revert} onCommit={(w) => setVar('--weight', w)} />

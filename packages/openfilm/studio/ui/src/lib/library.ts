@@ -28,6 +28,9 @@ export interface LibraryItem {
   src?: string;
   w?: number;
   h?: number;
+  /** Of the picture's height its box takes when put in (libraryBox), and whether it goes low (a line below). */
+  fit?: number;
+  low?: boolean;
   /** A transition page: its middle goes on the cut. */
   place?: 'cut';
   /** A look: the CSS `filter` it writes. */
@@ -268,13 +271,16 @@ export function withRootVars(overrides: readonly unknown[] | undefined, vars: Re
 }
 
 /**
- * Where a thing of the library with a size of its own (a sticker) goes on the picture when put in: in its middle, a
- * third of the picture's height, as wide as its own shape says (the page is fitted whole inside its box). Null for one
- * without a size: it covers the picture, as a page does.
+ * Where a thing of the library with a shape of its own (a sticker, a line of words) goes on the picture when put in:
+ * in its middle (a line below, `low`, near the bottom), `fit` of the picture's height (a third by default), as wide as
+ * its shape says but no wider than nine tenths of the picture. Null for one without a shape: it covers the picture.
  */
-export function libraryBox(item: Pick<LibraryItem, 'w' | 'h'> | null | undefined, stage: { w: number; h: number }): { x: number; y: number; w: number; h: number } | null {
+export function libraryBox(item: Pick<LibraryItem, 'w' | 'h' | 'fit' | 'low'> | null | undefined, stage: { w: number; h: number }): { x: number; y: number; w: number; h: number } | null {
   if (!item?.w || !item.h) return null;
-  const h = Math.round(stage.h * 0.3);
-  const w = Math.round(h * (item.w / item.h));
-  return { x: Math.round((stage.w - w) / 2), y: Math.round((stage.h - h) / 2), w, h };
+  let h = Math.round(stage.h * (item.fit ?? 0.3));
+  let w = Math.round(h * (item.w / item.h));
+  const most = Math.round(stage.w * 0.9);
+  if (w > most) { w = most; h = Math.round(w * (item.h / item.w)); }
+  const y = item.low ? Math.round(stage.h * 0.84 - h / 2) : Math.round((stage.h - h) / 2);
+  return { x: Math.round((stage.w - w) / 2), y, w, h };
 }

@@ -44,13 +44,13 @@ const GROUPS = [
   { id: 'out', name: N('groups/out') },
 ];
 
-/** The basic lines: words of each size, as a page is laid out. */
+/** The basic lines: words of each size, as a page is laid out (the size is their box's, `fit` of the picture's height). */
 const BASIC = [
-  ['title', N('basic/title'), { '--size': '9vw', '--weight': '900', '--font': DISPLAY }],
-  ['subtitle', N('basic/subtitle'), { '--size': '5vw', '--weight': '700' }],
-  ['body', N('basic/body'), { '--size': '3.6vw', '--weight': '500', '--in': 'fade' }],
-  ['note', N('basic/note'), { '--size': '2.6vw', '--weight': '500', '--box': 'rgba(0,0,0,0.55)', '--box-pad': '0.35em 0.7em', '--box-radius': '0.3em', '--in': 'fade' }],
-  ['lower', N('basic/lower'), { '--size': '3.6vw', '--weight': '600', '--y': '86%', '--stroke': '0.08em', '--in': 'fade' }],
+  ['title', N('basic/title'), { '--weight': '900', '--font': DISPLAY }, { fit: 0.2 }],
+  ['subtitle', N('basic/subtitle'), { '--weight': '700' }, { fit: 0.11 }],
+  ['body', N('basic/body'), { '--weight': '500', '--in': 'fade' }, { fit: 0.08 }],
+  ['note', N('basic/note'), { '--size': '52vh', '--weight': '500', '--box': 'rgba(0,0,0,0.55)', '--box-pad': '0.35em 0.7em', '--box-radius': '0.3em', '--in': 'fade' }, { fit: 0.08 }],
+  ['lower', N('basic/lower'), { '--weight': '600', '--stroke': '0.08em', '--in': 'fade' }, { fit: 0.08, low: true }],
 ];
 
 /** Word art: a look made of a fill, a stroke, shadows, a glow and a box. */
@@ -115,8 +115,10 @@ const OUT = [
 
 const items = [];
 /* the text itself: the default line */
-items.push({ id: 'text/text', cat: 'text', group: 'basic', name: N('text'), kind: 'page', durationMs: 3000, src: 'text.html' });
-for (const [slug, name, vars] of BASIC) items.push({ id: `text/looks/${slug}`, cat: 'text', group: 'basic', name, kind: 'textstyle', vars });
+/* a line of words is a wide box of its own when put in (UI lib/library libraryBox), not the whole picture */
+const LINE = { w: 1600, h: 260, fit: 0.14 };
+items.push({ id: 'text/text', cat: 'text', group: 'basic', name: N('text'), kind: 'page', durationMs: 3000, src: 'text.html', ...LINE });
+for (const [slug, name, vars, shape] of BASIC) items.push({ id: `text/looks/${slug}`, cat: 'text', group: 'basic', name, kind: 'textstyle', vars, ...LINE, ...shape });
 for (const [slug, name, vars] of WORDART) items.push({ id: `text/looks/${slug}`, cat: 'text', group: 'wordart', name, kind: 'textstyle', vars });
 for (const [slug, name] of IN) items.push({ id: `text/motions/in-${slug}`, cat: 'text', group: 'in', name, kind: 'textmotion', vars: { '--in': slug, '--in-time': slug === 'type' ? '1.2s' : '0.6s' } });
 for (const [slug, name] of LOOP) items.push({ id: `text/motions/loop-${slug}`, cat: 'text', group: 'loop', name, kind: 'textmotion', vars: { '--loop': slug } });
@@ -153,10 +155,17 @@ if (!process.argv.includes('--no-pictures')) {
       cpSync(join(LIB, 'text', 'text', 'files'), join(work, 'item'), { recursive: true });
       writeFileSync(join(work, 'ground.html'), GROUND);
       const motion = item.kind === 'textmotion';
-      const vars = { '--size': '18vw', '--wrap': 'pre', ...(item.vars ?? {}), '--clip-length': '2s', ...(motion ? {} : { '--in': 'none' }) };
-      if (item.vars?.['--size']) vars['--size'] = item.group === 'basic' ? `max(10vw, calc(${item.vars['--size']} * 2.2))` : '16vw';
+      const vars = { ...(item.vars ?? {}), '--clip-length': '2s', ...(motion ? {} : { '--in': 'none' }) };
+      /* in the box it is put in with (a basic line's own, else a line's), larger so it reads in a small card: the
+         basic lines as they are to each other, looks and motions alike */
+      const shape = { ...LINE, ...(item.group === 'basic' ? { fit: (item.fit ?? LINE.fit) * 1.5, low: item.low } : { fit: 0.3 }) };
+      let bh = Math.round(H * shape.fit);
+      let bw = Math.round(bh * (shape.w / shape.h));
+      if (bw > W * 0.9) { bw = Math.round(W * 0.9); bh = Math.round(bw * (shape.h / shape.w)); }
+      const by = shape.low ? Math.round(H * 0.84 - bh / 2) : Math.round((H - bh) / 2);
+      const place = `left: ${Math.round((W - bw) / 2)}px; top: ${by}px; width: ${bw}px; height: ${bh}px`;
       const overrides = JSON.stringify([{ at: ':root', style: vars }, { at: '.t', text: 'Aa 字' }]).replaceAll("'", '&#39;');
-      writeFileSync(join(work, 'film.html'), `<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=${W}, height=${H}">\n</head>\n<body>\n<section>\n  <iframe src="item/text.html#t=0,2" overrides='${overrides}'></iframe>\n</section>\n<section>\n  <iframe src="ground.html#t=0,2"></iframe>\n</section>\n</body>\n</html>\n`);
+      writeFileSync(join(work, 'film.html'), `<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=${W}, height=${H}">\n</head>\n<body>\n<section>\n  <iframe src="item/text.html#t=0,2" size="${bw}x${bh}" style="${place}" overrides='${overrides}'></iframe>\n</section>\n<section>\n  <iframe src="ground.html#t=0,2"></iframe>\n</section>\n</body>\n</html>\n`);
       const out = join(work, 'out.mp4');
       await render([work, '0-2'], { out, fps: 30, quiet: true });
       ffmpeg('-i', out, '-vf', 'scale=320:180', '-c:v', 'libx264', '-crf', '30', '-preset', 'slow', '-pix_fmt', 'yuv420p', '-an', '-movflags', '+faststart', join(dir, 'preview.mp4'));

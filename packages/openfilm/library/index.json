@@ -1216,7 +1216,10 @@
    },
    "kind": "page",
    "durationMs": 3000,
-   "src": "text.html"
+   "src": "text.html",
+   "w": 1600,
+   "h": 260,
+   "fit": 0.14
   },
   {
    "id": "text/looks/title",
@@ -1231,10 +1234,12 @@
    },
    "kind": "textstyle",
    "vars": {
-    "--size": "9vw",
     "--weight": "900",
     "--font": "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif"
-   }
+   },
+   "w": 1600,
+   "h": 260,
+   "fit": 0.2
   },
   {
    "id": "text/looks/subtitle",
@@ -1249,9 +1254,11 @@
    },
    "kind": "textstyle",
    "vars": {
-    "--size": "5vw",
     "--weight": "700"
-   }
+   },
+   "w": 1600,
+   "h": 260,
+   "fit": 0.11
   },
   {
    "id": "text/looks/body",
@@ -1266,10 +1273,12 @@
    },
    "kind": "textstyle",
    "vars": {
-    "--size": "3.6vw",
     "--weight": "500",
     "--in": "fade"
-   }
+   },
+   "w": 1600,
+   "h": 260,
+   "fit": 0.08
   },
   {
    "id": "text/looks/note",
@@ -1284,13 +1293,16 @@
    },
    "kind": "textstyle",
    "vars": {
-    "--size": "2.6vw",
+    "--size": "52vh",
     "--weight": "500",
     "--box": "rgba(0,0,0,0.55)",
     "--box-pad": "0.35em 0.7em",
     "--box-radius": "0.3em",
     "--in": "fade"
-   }
+   },
+   "w": 1600,
+   "h": 260,
+   "fit": 0.08
   },
   {
    "id": "text/looks/lower",
@@ -1305,12 +1317,14 @@
    },
    "kind": "textstyle",
    "vars": {
-    "--size": "3.6vw",
     "--weight": "600",
-    "--y": "86%",
     "--stroke": "0.08em",
     "--in": "fade"
-   }
+   },
+   "w": 1600,
+   "h": 260,
+   "fit": 0.08,
+   "low": true
   },
   {
    "id": "text/looks/white-black",

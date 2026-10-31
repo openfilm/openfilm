@@ -81,3 +81,9 @@ test('a sticker goes in the middle of the picture, a third of its height, in its
   assert.deepEqual(libraryBox({ w: 400, h: 200 }, { w: 1920, h: 1080 }), { x: 636, y: 378, w: 648, h: 324 });
   assert.equal(libraryBox({}, { w: 1920, h: 1080 }), null);
 });
+
+test('a line of words goes in a wide box of its own: no wider than the picture allows, a line below near the bottom', () => {
+  assert.deepEqual(libraryBox({ w: 1600, h: 260, fit: 0.14 }, { w: 1920, h: 1080 }), { x: 496, y: 465, w: 929, h: 151 });
+  assert.deepEqual(libraryBox({ w: 1600, h: 260, fit: 0.14 }, { w: 1080, h: 1920 }), { x: 54, y: 881, w: 972, h: 158 });
+  assert.equal(libraryBox({ w: 1600, h: 260, fit: 0.1, low: true }, { w: 1920, h: 1080 })!.y, 853);
+});

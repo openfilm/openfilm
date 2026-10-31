@@ -14,7 +14,8 @@
  */
 :root {
   --font: 'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif;
-  --size: 7vw;
+  /* of the clip's box: the words are as tall as this part of it, and never wider or taller than all of it */
+  --size: 62vh;
   --weight: 800;
   --color: #ffffff;
   --fill: none;
@@ -29,8 +30,6 @@
   /* a long line wraps; pre keeps it one line */
   --wrap: pre-wrap;
   --italic: normal;
-  --x: 50%;
-  --y: 50%;
   --align: center;
   /* how it comes in, moves while shown, goes out: an animation's name (none: still) and how long */
   --in: rise;
@@ -43,9 +42,9 @@
   --clip-length: 3600s;
 }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+.stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
 .box {
-  position: fixed; left: var(--x); top: var(--y); translate: -50% -50%;
-  max-width: 92vw; text-align: var(--align);
+  max-width: 96vw; text-align: var(--align); scale: var(--fit, 1);
   background: var(--box); padding: var(--box-pad); border-radius: var(--box-radius);
 }
 .t {
@@ -99,7 +98,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: transparent;
 </style>
 </head>
 <body>
-<div class="box"><span class="t">Your words here</span></div>
+<div class="stage"><div class="box"><span class="t">Your words here</span></div></div>
 <script>
 /*
  * A page of OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS animations are held at t by the
@@ -110,7 +109,18 @@ try {
   const tried = JSON.parse(new URLSearchParams(location.search).get('vars') ?? 'null');
   if (tried && typeof tried === 'object') for (const [k, v] of Object.entries(tried)) if (k.startsWith('--')) document.documentElement.style.setProperty(k, String(v));
 } catch { /* not tried: the clip's own */ }
-window.film = { frame() {} };
+/* the words fitted to the clip's box: never wider or taller than it (a long line is made smaller, not cut) */
+const box = document.querySelector('.box');
+const fit = () => {
+  box.style.setProperty('--fit', '1');
+  const k = Math.min(1, (innerWidth * 0.98) / box.offsetWidth, (innerHeight * 0.98) / box.offsetHeight);
+  box.style.setProperty('--fit', String(Math.round(k * 1000) / 1000));
+};
+/* fitted again whenever its variables or its words change (a host sets them after a frame is drawn) */
+new MutationObserver(fit).observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
+new MutationObserver(fit).observe(box, { subtree: true, characterData: true, childList: true });
+document.fonts?.ready.then(fit);
+window.film = { frame() { fit(); } };
 if (!window.filmHost) {
   const t0 = performance.now();
   const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };

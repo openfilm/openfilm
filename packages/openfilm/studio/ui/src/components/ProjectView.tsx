@@ -1353,7 +1353,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       }
       /* a sticker of the library: in the middle of the picture at a size it reads, not over all of it */
       const box = libraryBox(builtInItem(file.saved), stageRef.current ?? { w: 1920, h: 1080 });
-      const clip = box ? { ...taken.clip, box } : taken.clip;
+      const clip = box ? { ...taken.clip, box, size: { w: box.w, h: box.h } } : taken.clip;
       const durMs = file.durationMs ?? assetRunMs([file]);
       /* a transition of OpenFilm's library (lib/library): its middle on the cut it was put near, never pushing or
          cutting what is under it */
@@ -1513,7 +1513,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       const on = textTargets();
       if (!on.length) {
         const text = builtInItem(`${BUILT_IN}/${TEXT_COMPONENT}`);
-        if (text) void place(text, vars, nameOf(item.name, language));
+        /* its box the basic line's own (a title's taller), else the text's */
+        if (text) void place(text, vars, nameOf(item.name, language), item.w ? item : text);
         return;
       }
       void editBlocks(on.map((c) => ({ loc: c.loc, prop: 'overrides', value: withRootVars(c.overrides as unknown[] | undefined, vars) as never }))).then((err) => {
@@ -1521,8 +1522,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         else toast.show(t('assetDrawer.looked').replace('{name}', nameOf(item.name, language)).replace('{n}', String(on.length)));
       });
     };
-    /** `vars`: the page's CSS variables set on the clip put in (a text style or motion on new words), named `as`. */
-    const place = async (item: LibraryItem, vars?: Record<string, string>, as?: string) => {
+    /** `vars`: the page's CSS variables set on the clip put in (a text style or motion on new words), named `as`, its box
+        `shape`'s (libraryBox). */
+    const place = async (item: LibraryItem, vars?: Record<string, string>, as?: string, shape: LibraryItem = item) => {
       const name = as ?? nameOf(item.name, language);
       const drag = libraryDragItem(item, name);
       if (!drag) return;
@@ -1545,8 +1547,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         return;
       }
       if (!('clip' in taken)) return;
-      const box = libraryBox(item, stageRef.current ?? { w: 1920, h: 1080 });
-      const clip = { ...taken.clip, ...(box ? { box } : {}), ...(vars ? { overrides: withRootVars((taken.clip as { overrides?: unknown[] }).overrides, vars) } : {}) };
+      /* in a box of its own, the page drawn at the box's size (not the picture's, shrunk into it) */
+      const box = libraryBox(shape, stageRef.current ?? { w: 1920, h: 1080 });
+      const clip = { ...taken.clip, ...(box ? { box, size: { w: box.w, h: box.h } } : {}), ...(vars ? { overrides: withRootVars((taken.clip as { overrides?: unknown[] }).overrides, vars) } : {}) };
       const failed = await edit([{ op: 'insert', clip: clip as never, at, track }], 'history.stepDrop');
       if (failed) { toast.show(failed); return; }
       toast.show(t('assetDrawer.added').replace('{name}', name));
