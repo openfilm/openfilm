@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cutTrack, cutsOf, libraryDragItem, lookOf, onCut, withLook, type LibraryItem } from './library.ts';
+import { cutTrack, cutsOf, fromLibrary, libraryDragItem, lookOf, onCut, withLook, type LibraryItem } from './library.ts';
 
 const page: LibraryItem = { id: 'effects/snow', cat: 'effect', group: 'ambience', name: { en: 'Snow' }, kind: 'page', durationMs: 4000, src: 'snow.html' };
 const sound: LibraryItem = { id: 'sounds/whoosh.m4a', cat: 'sound', group: 'transition', name: { en: 'Whoosh' }, kind: 'sound', durationMs: 700 };
@@ -40,4 +40,12 @@ test('a transition page goes on the track dropped on when it has room, else on a
   assert.deepEqual(cutTrack(tracks, 1, 4.6, 800), { insert: 1 });
   assert.deepEqual(cutTrack(tracks, { insert: 2 }, 4.6, 800), { insert: 2 });
   assert.deepEqual(cutTrack(tracks, undefined, 4.6, 800), { insert: 0 });
+});
+
+test('a project file came from the library when it is a page taken from it, or one of its sounds by its name', () => {
+  assert.ok(fromLibrary('saved/openfilm/effects-snow/snow.html', [page, sound]));
+  assert.ok(fromLibrary('assets/whoosh.m4a', [page, sound]));
+  assert.ok(!fromLibrary('assets/voice/whoosh.m4a', [page, sound]));
+  assert.ok(!fromLibrary('assets/talk.mp4', [page, sound]));
+  assert.ok(!fromLibrary('saved/mine/clip.html', [page, sound]));
 });

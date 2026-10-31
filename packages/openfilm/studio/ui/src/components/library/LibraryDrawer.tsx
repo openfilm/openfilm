@@ -11,7 +11,7 @@
  * it among the favorites, for every project.
  */
 import React from 'react';
-import { ChevronDown, Pause, Play, Plus, Search, Star } from 'lucide-react';
+import { AudioLines, ChevronDown, Pause, Play, Plus, Search, Star } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import {
@@ -42,8 +42,9 @@ export interface LibraryActions {
 
 export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServices }: {
   media: React.ReactNode;
-  mediaScope: 'project' | 'saved';
-  onMediaScope: (next: 'project' | 'saved') => void;
+  /** the project's own media, what it took from the library, or Saved */
+  mediaScope: 'project' | 'picked' | 'saved';
+  onMediaScope: (next: 'project' | 'picked' | 'saved') => void;
   actions: LibraryActions;
   /** Settings › Services: where a voice's service is connected */
   onServices: () => void;
@@ -88,6 +89,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
     ? (voices?.providers ?? []).map((s) => ({ id: s.id, name: s.name }))
     : (index?.groups[cat as LibraryCategory] ?? []).map((g) => ({ id: g.id, name: nameOf(g.name, lang) }));
   const askMusic = studioHost?.ask;
+  const groupName = (id: string) => own.find((g) => g.id === id)?.name ?? '';
 
   /* the bars and the library's things are the app's panel's (data-studio-host-panel): a press there keeps what is
      picked on the timeline and the picture, which a look or a transition goes on */
@@ -122,7 +124,14 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
           <nav data-studio-host-panel="" className="flex min-w-0 flex-1 flex-col gap-1 overflow-y-auto border-r border-[var(--dock-line)] px-2 py-2.5">
             {cat === 'media' ? (
               <>
-                <SideBox on={mediaScope === 'project'} onClick={() => onMediaScope('project')}>{t('assetDrawer.mediaProject')}</SideBox>
+                {/* what came into this project, folded: its own media, then what it took from the library; then Saved */}
+                <SideBox on={mediaScope !== 'saved' && folded} open={!folded} onClick={fold}>{t('assetDrawer.mediaImport')}</SideBox>
+                {folded ? null : (
+                  <div className="flex flex-col pb-1">
+                    <SideLine on={mediaScope === 'project'} onClick={() => onMediaScope('project')}>{t('assetDrawer.mediaProject')}</SideLine>
+                    <SideLine on={mediaScope === 'picked'} onClick={() => onMediaScope('picked')}>{t('assetDrawer.mediaPicked')}</SideLine>
+                  </div>
+                )}
                 <SideBox on={mediaScope === 'saved'} onClick={() => onMediaScope('saved')}>{t('assetDrawer.mediaSaved')}</SideBox>
               </>
             ) : (
@@ -168,7 +177,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
                 ) : cat === 'sound' || cat === 'music' ? (
                   <div className="flex flex-col gap-0.5">
                     {items.map((it) => (
-                      <SoundRow key={it.id} item={it} lang={lang} picked={picked === it.id} kept={favorites.includes(it.id)}
+                      <SoundRow key={it.id} item={it} lang={lang} group={groupName(it.group)} picked={picked === it.id} kept={favorites.includes(it.id)}
                         onPick={() => pick(it)} onAdd={() => actions.add(it)} />
                     ))}
                   </div>
@@ -346,13 +355,34 @@ function Card({ item, lang, picked, kept, square, onPick, onAdd }: {
 /* the sound playing in the drawer: one at a time */
 let playingSound: HTMLAudioElement | null = null;
 
-function SoundRow({ item, lang, picked, kept, onPick, onAdd }: {
-  item: LibraryItem; lang: ReturnType<typeof useLanguage>; picked: boolean; kept: boolean; onPick: () => void; onAdd: () => void;
+/* a sound's tile, tinted by its group so the kinds of sound read apart down the list */
+const TINTS = ['#3b6fd8', '#8a4fd8', '#d8507a', '#d88a3b', '#3bab8a', '#5f8fa8'];
+const tintOf = (group: string) => TINTS[[...group].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % TINTS.length]!;
+
+/**
+ * A sound or a piece of music: its tile (playing it under the pointer), its name, group and length, and its waveform
+ * across the row, lit in the accent as far as it has played.
+ */
+function SoundRow({ item, lang, group, picked, kept, onPick, onAdd }: {
+  item: LibraryItem; lang: ReturnType<typeof useLanguage>; group: string; picked: boolean; kept: boolean; onPick: () => void; onAdd: () => void;
 }) {
   const t = useT();
   const [playing, setPlaying] = React.useState(false);
+  const [played, setPlayed] = React.useState(0);
   const audio = React.useRef<HTMLAudioElement | null>(null);
   React.useEffect(() => () => { audio.current?.pause(); }, []);
+  /* how far it has played, each frame while it plays */
+  React.useEffect(() => {
+    if (!playing) return undefined;
+    let frame = 0;
+    const tick = () => {
+      const a = audio.current;
+      if (a?.duration) setPlayed(a.currentTime / a.duration);
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [playing]);
   /* a click picks it and plays it; a click on it again stops it */
   const click = () => {
     onPick();
@@ -361,15 +391,18 @@ function SoundRow({ item, lang, picked, kept, onPick, onAdd }: {
     audio.current ??= new Audio(libraryUrl(item.id));
     const a = audio.current;
     a.currentTime = 0;
+    setPlayed(0);
     a.onpause = () => setPlaying(false);
-    a.onended = () => setPlaying(false);
+    a.onended = () => { setPlaying(false); setPlayed(0); };
     playingSound = a;
     void a.play().then(() => setPlaying(true), () => setPlaying(false));
   };
   const name = nameOf(item.name, lang);
+  const lit = Math.round(played * 1000) / 10;
+  const tint = tintOf(item.group);
   return (
     <div
-      className={`group relative grid cursor-default select-none grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lg px-2 py-2 ${picked ? 'bg-[var(--surface-2)]' : 'hover:bg-[var(--surface-2)]'}`}
+      className={`group relative grid cursor-default select-none grid-cols-[44px_minmax(0,1fr)] items-center gap-3 rounded-lg px-2 py-2 ${picked ? 'bg-[var(--surface-2)]' : 'hover:bg-[var(--surface-2)]'}`}
       draggable
       onDragStart={dragOf(item, name)}
       onDragEnd={() => clearResourceDrag()}
@@ -377,19 +410,39 @@ function SoundRow({ item, lang, picked, kept, onPick, onAdd }: {
       onDoubleClick={onAdd}
       title={name}
     >
-      <span aria-label={playing ? t('assetDrawer.stop') : t('assetDrawer.play')} className={`grid h-10 w-10 place-items-center rounded-md bg-[var(--bg-hover)] ${picked ? 'text-[var(--tl-accent)]' : 'text-[var(--text-muted)] group-hover:text-[var(--text)]'}`}>
-        {playing ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
-      </span>
-      <span className="min-w-0">
-        <span className={`block truncate text-[12.5px] font-medium ${picked ? 'text-[var(--tl-accent)]' : 'text-[var(--text)]'}`}>{name}</span>
-        <span className="mt-0.5 flex items-center gap-2">
-          <img src={waveUrl(item)} alt="" draggable={false} className="h-3 w-[88px] object-fill opacity-55" />
-          <span className="text-[10.5px] text-[var(--text-faint)]">{t('assetDrawer.seconds').replace('{s}', String(Math.round((item.durationMs ?? 0) / 100) / 10))}</span>
+      <span
+        aria-label={playing ? t('assetDrawer.stop') : t('assetDrawer.play')}
+        className="relative grid h-11 w-11 place-items-center overflow-hidden rounded-lg text-white"
+        style={{ background: `linear-gradient(140deg, ${tint}, color-mix(in srgb, ${tint} 45%, #101010))` }}
+      >
+        <AudioLines size={18} strokeWidth={1.8} className={`opacity-85 ${playing ? 'hidden' : 'group-hover:hidden'}`} />
+        <span className={`absolute inset-0 place-items-center bg-black/30 ${playing ? 'grid' : 'hidden group-hover:grid'}`}>
+          {playing ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" className="translate-x-px" />}
         </span>
       </span>
-      <span className="flex items-center gap-1.5">
-        <StarButton item={item} kept={kept} className={kept ? 'text-[#ffd35a]' : 'invisible text-[var(--text-faint)] hover:text-[var(--text)] group-hover:visible'} />
-        <AddButton item={item} onAdd={onAdd} className="invisible grid h-[22px] w-[22px] place-items-center rounded-full bg-[var(--tl-accent)] text-black group-hover:visible" />
+      <span className="flex min-w-0 flex-col gap-1.5">
+        <span className="flex min-w-0 items-center gap-2">
+          <span className={`truncate text-[12.5px] font-medium ${picked || playing ? 'text-[var(--tl-accent)]' : 'text-[var(--text)]'}`}>{name}</span>
+          <span className="shrink-0 text-[11px] text-[var(--text-faint)]">{group}</span>
+          <span className="ml-auto shrink-0 text-[11px] tabular-nums text-[var(--text-faint)] group-hover:hidden">
+            {t('assetDrawer.seconds').replace('{s}', String(Math.round((item.durationMs ?? 0) / 100) / 10))}
+          </span>
+          <span className="ml-auto hidden shrink-0 items-center gap-1.5 group-hover:flex">
+            <StarButton item={item} kept={kept} className={kept ? 'text-[#ffd35a]' : 'text-[var(--text-faint)] hover:text-[var(--text)]'} />
+            <AddButton item={item} onAdd={onAdd} className="grid h-[22px] w-[22px] place-items-center rounded-full bg-[var(--tl-accent)] text-black" />
+          </span>
+          {kept ? <Star size={11} fill="#ffd35a" strokeWidth={0} className="shrink-0 group-hover:hidden" /> : null}
+        </span>
+        {/* its waveform as a mask: lit as far as it has played, the rest quiet */}
+        <span
+          aria-hidden
+          className="block h-[18px] w-full"
+          style={{
+            WebkitMaskImage: `url(${waveUrl(item)})`, maskImage: `url(${waveUrl(item)})`,
+            WebkitMaskSize: '100% 100%', maskSize: '100% 100%',
+            background: `linear-gradient(to right, var(--tl-accent) ${lit}%, var(--text-faint) ${lit}%)`,
+          }}
+        />
       </span>
     </div>
   );

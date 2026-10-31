@@ -29,7 +29,7 @@ import { attrsOf, pasteAttrs, type AttrGroup, type CopiedAttrs } from '@/lib/cli
 import { cutPoints, namedTrack, nextCut, trackNamesOf } from '@/lib/timeline-nav';
 import { anyLocked, lockedEdits } from '@/lib/track-lock';
 import { placeMedia, type SourceRange } from '@/lib/media-place';
-import { BUILT_IN, builtInItem, cutTrack, cutsOf, libraryDragItem, nameOf, onCut, withLook, type LibraryItem } from '@/lib/library';
+import { BUILT_IN, builtInItem, cutTrack, cutsOf, fromLibrary, libraryDragItem, nameOf, onCut, useLibraryIndex, withLook, type LibraryItem } from '@/lib/library';
 import { LibraryDrawer, type LibraryActions } from '@/components/library/LibraryDrawer';
 import { LibraryTrial } from '@/components/library/LibraryTrial';
 import { apartOnTracks, type ClipEdit } from '@/lib/film-clip-edits';
@@ -140,7 +140,9 @@ const PICTURE_FILE = /\.(png|jpe?g|gif|webp|avif|svg|bmp)$/i;
 /* ⌘ is the modifier on a Mac, Ctrl elsewhere (the editor's keys, lib/timeline-keys) */
 const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 /** Which the media pane shows, the project's media or Saved: kept while Studio is open, across projects. */
-const MEDIA_SCOPE: { current: 'project' | 'saved' } = { current: 'project' };
+/** The media shown: the project's own, what it took from the library (`picked`), or Saved. */
+type MediaScope = 'project' | 'picked' | 'saved';
+const MEDIA_SCOPE: { current: MediaScope } = { current: 'project' };
 /** where the app's panel starts: under Studio's top bar (its h-8) */
 const HOST_PANEL_TOP = 32;
 
@@ -1692,8 +1694,16 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const layersFit = !rowWidth || layersShownWidth >= 180;
   const layersShown = layersPaneOpen && layersFit;
   /* the media pane shows the project's media, or Saved (lib/saved): the same pane, the button beside Upload switches */
-  const [mediaScope, setMediaScope] = React.useState<'project' | 'saved'>(() => MEDIA_SCOPE.current);
-  const switchMedia = React.useCallback((next: 'project' | 'saved') => { MEDIA_SCOPE.current = next; setMediaScope(next); }, []);
+  const [mediaScope, setMediaScope] = React.useState<MediaScope>(() => MEDIA_SCOPE.current);
+  const switchMedia = React.useCallback((next: MediaScope) => { MEDIA_SCOPE.current = next; setMediaScope(next); }, []);
+  /* the drawer's media apart: the project's own, and what it took from the library (lib/library fromLibrary) */
+  const libraryIndex = useLibraryIndex();
+  const scopedListing = React.useMemo(() => {
+    if (!listing || mediaScope === 'saved') return listing;
+    const picked = mediaScope === 'picked';
+    const keep = (f: { path: string }) => fromLibrary(f.path, libraryIndex?.items ?? null) === picked;
+    return { ...listing, files: listing.files.filter(keep), pages: listing.pages.filter(keep) };
+  }, [listing, mediaScope, libraryIndex]);
   const savedListing = useSavedListing(mediaScope === 'saved');
   const savedImport = React.useCallback((files: File[], into: string, onProgress: ImportProgress) => {
     /* in the app a dropped file's path is known: copied on this computer, not sent through the page */
@@ -1724,9 +1734,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     />
   ) : (
     <MediaPool
-      key="project"
+      key={mediaScope}
       projectId={projectId}
-      listing={listing}
+      listing={inDrawer ? scopedListing : listing}
       sources={mediaSources}
       usedSrcs={usedSrcs}
       selectedPath={pickedSaved ? null : pickedMedia?.path ?? null}
@@ -3578,7 +3588,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                       speedFloorOf={speedFloorOf}
                       onEditClips={editClips}
                       width={inspectorShownWidth}
-                      onClose={closeInspector}
                       onEditStyle={editStageStyle}
                       onEditSimilar={editStageStyleSimilar}
                       countSimilar={countSimilar}

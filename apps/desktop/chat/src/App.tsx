@@ -1135,18 +1135,15 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
 
               <div ref={composerBlockRef} className={`relative flex shrink-0 flex-col px-4 pb-1.5 ${assetsOpen ? 'pt-2' : ''}`}>
                 <div className="flex flex-col gap-2">
-                  {/* the assets open over a conversation: the way back to it, saying when its turn is still running */}
-                  {assetsOpen && turns.length ? (
+                  {/* the assets open while a conversation's turn runs: a pill back to it */}
+                  {assetsOpen && running.has(sessionId) ? (
                     <button type="button" onClick={() => app.setAssetsOpen(false)}
-                      className="flex h-8 items-center gap-2 rounded-md bg-[var(--surface-2)] px-3 text-left text-[12px] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
-                      <ArrowLeft size={14} className="shrink-0" />
-                      <span className="font-medium text-[var(--text)]">{t('project.backToChat')}</span>
-                      {running.has(sessionId) ? (
-                        <span className="ml-auto flex items-center gap-1.5 text-[11.5px]">
-                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--accent)]" />
-                          {t('project.chatRunning')}
-                        </span>
-                      ) : null}
+                      className="flex h-7 items-center gap-1.5 self-center rounded-full border border-[var(--border)] bg-[var(--surface-2)] pl-2.5 pr-3 text-[12px] font-medium text-[var(--text)] shadow-[0_2px_10px_rgba(0,0,0,0.3)] hover:bg-[var(--bg-hover)]">
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--accent)]" />
+                      {t('project.chatRunning')}
+                      <span className="text-[var(--text-faint)]">·</span>
+                      <ArrowLeft size={13} />
+                      {t('project.backToChat')}
                     </button>
                   ) : null}
                   {spendAsk ? (

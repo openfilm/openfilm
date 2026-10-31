@@ -144,10 +144,11 @@
   --tooltip-text: rgb(240, 240, 240);
   --tooltip-border: rgba(255, 255, 255, 0.16);
 
-  --accent: #1a93fe;
-  --accent-soft: rgba(26, 147, 254, 0.12);
+  /* one highlight everywhere: what is picked or shown is the timeline's teal, in every pane */
+  --accent: #45c2b4;
+  --accent-soft: rgba(69, 194, 180, 0.12);
   --on-accent: #ffffff;
-  --text-selection: rgba(26, 147, 254, 0.45);
+  --text-selection: rgba(69, 194, 180, 0.4);
 
   --ok: #5eb92d;
   --warn: #ffbf36;

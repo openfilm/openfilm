@@ -75,6 +75,16 @@ export function builtInItem(path: string | null | undefined): LibraryItem | null
   return index.items.find((item) => item.id === id) ?? null;
 }
 
+/**
+ * Whether a project file came from the library: a page taken from it (its bundle under `saved/openfilm/`, as the
+ * server's takeSaved puts it), or one of its sounds, put in assets/ under its own name.
+ */
+export function fromLibrary(path: string, items: readonly LibraryItem[] | null = index?.items ?? null): boolean {
+  if (path.startsWith(`saved/${BUILT_IN}/`)) return true;
+  const sound = /^assets\/([^/]+)$/.exec(path)?.[1];
+  return Boolean(sound && items?.some((item) => item.kind === 'sound' && item.id === `sounds/${sound}`));
+}
+
 /** Its name in `lang`, else English. */
 export const nameOf = (names: LibraryNames, lang: Language): string => names[lang] ?? names.en;
 
