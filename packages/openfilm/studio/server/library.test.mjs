@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { builtInRoot, libraryFavorites, libraryFile, libraryIndex, setLibraryFavorites } from './library.mjs';
+import { builtInRoot, libraryFavorites, libraryFile, libraryIndex, libraryVoices, setLibraryFavorites, voiceKey } from './library.mjs';
 import { takeSaved } from './saved.mjs';
 
 const index = /** @type {{ groups: Record<string, { id: string }[]>, items: any[] }} */ (libraryIndex());
@@ -62,5 +62,32 @@ test('the starred things are kept in the shared prefs, those of the library only
     assert.deepEqual(setLibraryFavorites('all'), []);
   } finally {
     if (before === undefined) delete process.env.OPENFILM_SHARED_HOME; else process.env.OPENFILM_SHARED_HOME = before;
+  }
+});
+
+test('the voices are the voice-over services\' own, each once, said as `openfilm get tts` takes them; a star can be on one', async () => {
+  const { providers, voices } = /** @type {{ providers: any[], voices: any[] }} */ (libraryVoices());
+  assert.deepEqual(providers.map((p) => p.id), ['elevenlabs', 'inworld', 'cartesia']);
+  assert.ok(providers.every((p) => p.models.length && p.models.every((/** @type {any} */ m) => m.id && m.name)));
+  const seen = new Set();
+  for (const v of voices) {
+    const key = voiceKey(v);
+    assert.ok(!seen.has(key), `${key} twice`);
+    seen.add(key);
+    assert.ok(providers.some((p) => p.id === v.provider), `${key}: no such service`);
+    assert.ok(v.id && v.name, `${key}: an id and a name`);
+    assert.ok([null, 'm', 'f', 'n'].includes(v.gender) && [null, 'young', 'middle', 'old'].includes(v.age), `${key}: gender, age`);
+    assert.ok(Array.isArray(v.tags));
+    if (v.sample) assert.match(v.sample, new RegExp(`^voices/${v.provider}/[\\w.-]+\\.m4a$`));
+  }
+  for (const p of providers) assert.ok(voices.some((v) => v.provider === p.id), `${p.id} has voices`);
+  const home = mkdtempSync(join(tmpdir(), 'of-voices-'));
+  const was = process.env.OPENFILM_SHARED_HOME;
+  process.env.OPENFILM_SHARED_HOME = home;
+  try {
+    assert.deepEqual(setLibraryFavorites([voiceKey(voices[0]), 'voice:nobody/none']), [voiceKey(voices[0])]);
+    assert.deepEqual(libraryFavorites(), [voiceKey(voices[0])]);
+  } finally {
+    if (was === undefined) delete process.env.OPENFILM_SHARED_HOME; else process.env.OPENFILM_SHARED_HOME = was;
   }
 });

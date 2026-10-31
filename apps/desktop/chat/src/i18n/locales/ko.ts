@@ -188,6 +188,7 @@ export const ko: Words = {
       file: '파일',
       subtitle: '자막',
       example: '예시 영상',
+      voice: '보이스',
       node: '캔버스 노드',
     },
     node: '노드',
@@ -212,6 +213,7 @@ export const ko: Words = {
     line: '줄',
     example: '예시',
     part: '구간',
+    service: '서비스',
   },
   project: {
     assets: '에셋',

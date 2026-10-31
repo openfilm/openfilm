@@ -192,6 +192,7 @@ export const ja: Words = {
       file: 'ファイル',
       subtitle: '字幕',
       example: 'サンプル映像',
+      voice: 'ボイス',
       node: 'キャンバスのノード',
     },
     node: 'ノード',
@@ -216,6 +217,7 @@ export const ja: Words = {
     line: '行',
     example: 'サンプル',
     part: 'パート',
+    service: 'サービス',
   },
   project: {
     assets: '素材',

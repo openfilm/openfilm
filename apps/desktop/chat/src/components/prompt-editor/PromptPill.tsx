@@ -12,7 +12,7 @@
 
 import React from 'react';
 import {
-  Blocks, Brackets, Captions, Clapperboard, Clock3, Crop, Film, Loader2, Mic, MousePointer2, Music, Paperclip,
+  AudioLines, Blocks, Brackets, Captions, Clapperboard, Clock3, Crop, Film, Loader2, Mic, MousePointer2, Music, Paperclip,
   Quote, Rows3, Shapes, SquareDashed, Video, Waves,
 } from 'lucide-react';
 import {
@@ -45,6 +45,8 @@ export const PILL_ICON: Record<PromptReferenceKind, React.ComponentType<{ size?:
   skill: Blocks,
   /* An example film (another film, not this one): a clapperboard. */
   example: Clapperboard,
+  /* A voice of the library, to speak a voice-over in: a sound's lines, not a clip's microphone. */
+  voice: AudioLines,
   /* Timeline clips: the icon follows the clip's kind on the timeline, so the pill
      matches the clip the user just picked. */
   clipMg: Shapes,

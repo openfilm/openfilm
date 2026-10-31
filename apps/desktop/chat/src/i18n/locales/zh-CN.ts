@@ -192,6 +192,7 @@ export const zhCN: Words = {
       file: '文件',
       subtitle: '字幕',
       example: '示例影片',
+      voice: '音色',
       node: '画布节点',
     },
     node: '节点',
@@ -216,6 +217,7 @@ export const zhCN: Words = {
     line: '序号',
     example: '示例',
     part: '片段',
+    service: '服务',
   },
   project: {
     assets: '素材',

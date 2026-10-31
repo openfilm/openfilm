@@ -10,6 +10,9 @@
  *                          look   a CSS `filter`, written into a clip's style
  *                          fade   one of Studio's transitions (ui lib/transitions), made of fades
  *   library/<id>/…       the things themselves
+ *   library/voices.json  the voices to speak a voice-over in: the ready-made voices of the voice-over services OpenFilm
+ *                        offers, each with its service's own sample (voices/<service>/<voice>.m4a); made by
+ *                        scripts/library-voices.mjs from those services' own lists
  *
  * The things the person starred are kept in the shared prefs.json (`libraryFavorites`, their ids), so every OpenFilm on
  * this computer shows the same ones.
@@ -30,16 +33,36 @@ export const BUILT_IN = 'openfilm';
 /** The library's folder. */
 export const builtInRoot = () => process.env.OPENFILM_BUILT_IN_LIBRARY || fileURLToPath(new URL('../../library', import.meta.url));
 
-/** @type {{ file: string, mtime: number, index: unknown } | null} */
-let kept = null;
+/** @type {Map<string, { mtime: number, value: unknown }>} */
+const kept = new Map();
 
-/** The library's index as library/index.json has it; read again when the file changes. */
-export function libraryIndex() {
-  const file = join(builtInRoot(), 'index.json');
-  if (!existsSync(file)) return { version: 1, groups: {}, items: [] };
+/** A JSON file of the library as it is (`empty` when there is none); read again when it changes. @param {string} name @param {unknown} empty */
+function read(name, empty) {
+  const file = join(builtInRoot(), name);
+  if (!existsSync(file)) return empty;
   const mtime = statSync(file).mtimeMs;
-  if (kept?.file !== file || kept.mtime !== mtime) kept = { file, mtime, index: JSON.parse(readFileSync(file, 'utf8')) };
-  return kept.index;
+  const was = kept.get(file);
+  if (was?.mtime === mtime) return was.value;
+  const value = JSON.parse(readFileSync(file, 'utf8'));
+  kept.set(file, { mtime, value });
+  return value;
+}
+
+/** The library's index as library/index.json has it. */
+export const libraryIndex = () => read('index.json', { version: 1, groups: {}, items: [] });
+
+/** The voices as library/voices.json has them: the services (each with its voice-over models) and their voices. */
+export const libraryVoices = () => read('voices.json', { version: 1, providers: [], voices: [] });
+
+/** A voice's id among the starred things: `voice:<service>/<its id there>`. */
+export const voiceKey = (/** @type {{ provider: string, id: string }} */ v) => `voice:${v.provider}/${v.id}`;
+
+/** Every id a star can be on: the index's things and the voices. */
+function starrable() {
+  return new Set([
+    ...(/** @type {{ items: { id: string }[] }} */ (libraryIndex())).items.map((item) => item.id),
+    ...(/** @type {{ voices: { provider: string, id: string }[] }} */ (libraryVoices())).voices.map(voiceKey),
+  ]);
 }
 
 /** A file of the library by its place there (a poster, a preview, a page, a sound), or null when there is none. */
@@ -53,16 +76,16 @@ export function libraryFile(/** @type {unknown} */ rel) {
 /** Where the starred things are kept in the shared prefs.json. */
 const FAVORITES = 'libraryFavorites';
 
-/** The ids the person starred, in the order they were starred, those still in the library only. */
+/** The ids the person starred (a voice's is voiceKey's), in the order they were starred, those still in the library only. */
 export function libraryFavorites() {
-  const kept = sharedPref(FAVORITES);
-  const ids = new Set((/** @type {{ items: { id: string }[] }} */ (libraryIndex())).items.map((item) => item.id));
-  return Array.isArray(kept) ? [...new Set(kept.filter((id) => typeof id === 'string' && ids.has(id)))] : [];
+  const starred = sharedPref(FAVORITES);
+  const ids = starrable();
+  return Array.isArray(starred) ? [...new Set(starred.filter((id) => typeof id === 'string' && ids.has(id)))] : [];
 }
 
 /** Keep `ids` as the starred ones (those not in the library left out). Returns them as kept. */
 export function setLibraryFavorites(/** @type {unknown} */ ids) {
-  const known = new Set((/** @type {{ items: { id: string }[] }} */ (libraryIndex())).items.map((item) => item.id));
+  const known = starrable();
   const next = Array.isArray(ids) ? [...new Set(ids.filter((id) => typeof id === 'string' && known.has(id)))] : [];
   setSharedPref(FAVORITES, next);
   return next;

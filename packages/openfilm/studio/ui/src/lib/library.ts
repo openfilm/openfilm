@@ -13,7 +13,7 @@ import { declared, withDeclarations } from './clip-look.ts';
 /** What a path names OpenFilm's library by, as `saved/` names Saved. */
 export const BUILT_IN = 'openfilm';
 
-export type LibraryCategory = 'transition' | 'effect' | 'filter' | 'text' | 'sticker' | 'sound';
+export type LibraryCategory = 'transition' | 'effect' | 'filter' | 'text' | 'sticker' | 'sound' | 'music';
 export type LibraryNames = Partial<Record<Language, string>> & { en: string };
 
 export interface LibraryItem {

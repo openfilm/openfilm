@@ -192,6 +192,7 @@ export const es: Words = {
       file: 'Archivo',
       subtitle: 'Subtítulo',
       example: 'Película de ejemplo',
+      voice: 'Voz',
       node: 'Nodo del lienzo',
     },
     node: 'Nodo',
@@ -216,6 +217,7 @@ export const es: Words = {
     line: 'Línea',
     example: 'Ejemplo',
     part: 'Parte',
+    service: 'Servicio',
   },
   project: {
     assets: 'Recursos',

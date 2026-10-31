@@ -5,3 +5,6 @@ node_modules/
 studio/ui/dist/
 /film.html
 .dev/
+!library/**/preview.mp4
+# voice samples: published with the library, not kept in git (scripts/library-voices.mjs makes them)
+library/voices/

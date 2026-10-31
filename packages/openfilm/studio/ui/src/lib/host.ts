@@ -342,6 +342,10 @@ export interface StudioRefImage { src?: string; viewer?: boolean; crop?: StageBo
  *             the words, the language they are in when a translation is shown (`lang`), the line's number in the panel
  *             (`index`, from 1), and each word's own span when the transcript has word times (`words`)
  *
+ *   · voice    a voice of the library (the assets drawer's Voices) to speak a voice-over in: its service (`provider`,
+ *             named `service`), its `id` there, and how the agent speaks in it now (`via`: the provider `openfilm get tts`
+ *             runs, `models`: those it may name; none: not connected yet)
+ *
  * `image` is the picture its pill shows and the agent is given (see StudioRefImage): a clip's own frame, the viewer as
  * it is for a moment, a region and a layer, none for a range or a subtitle line.
  */
@@ -356,6 +360,7 @@ export type StudioRef = (
   | { kind: 'node'; id: string; nodeKind: string; label: string; text?: string; prompt?: string; path?: string; versions?: number }
   | { kind: 'subtitle'; start: number; end: number; text: string; lang?: string | null; index?: number; words?: Array<{ text: string; start: number; end: number }> }
   | { kind: 'example'; id: string; title: string; url: string; folder?: string; start?: number; end?: number; segment?: string; description?: string; canvas?: boolean }
+  | { kind: 'voice'; provider: string; service: string; id: string; name: string; via: string | null; models: string[]; language?: string | null; description?: string | null }
 ) & { image?: StudioRefImage };
 
 /**

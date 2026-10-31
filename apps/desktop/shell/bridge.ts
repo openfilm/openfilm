@@ -336,6 +336,8 @@ function commandFor(ref: StudioRef): StudioCommand {
     case 'subtitle': return { type: 'show-subtitle', start: ref.start, end: ref.end };
     /* another film: the examples, where it came from */
     case 'example': return { type: 'show-examples', open: { kind: 'example', id: ref.id } };
+    /* a voice: Services, where its service is connected */
+    case 'voice': return { type: 'settings', section: 'providers' };
   }
 }
 

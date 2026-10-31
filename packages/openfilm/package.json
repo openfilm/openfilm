@@ -45,6 +45,7 @@
     "bin",
     "skills",
     "library",
+    "!library/voices",
     "examples-index",
     "src",
     "!src/*.test.mjs",

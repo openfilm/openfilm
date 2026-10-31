@@ -1,6 +1,6 @@
 /**
  * What the person points at in Studio, in the chat. In the composer it is a pill (a clip by its kind, a layer, a
- * region of the picture, a moment, a range, a track, a file, a subtitle line or words in it), with the picture Studio gave it; in the message the agent
+ * region of the picture, a moment, a range, a track, a file, a subtitle line or words in it, a voice of the library), with the picture Studio gave it; in the message the agent
  * reads it is a number in the sentence ("[1: title]") and a line of a <studio_references> block after the message,
  * saying what that number is by film.html id, time, box and file, and where its picture was put.
  *
@@ -42,6 +42,7 @@ const idOf = (ref: StudioRef): string => {
     case 'node': return `studio:node:${ref.id}`;
     case 'subtitle': return `studio:subtitle:${ref.start}-${ref.end}${ref.lang ? `:${ref.lang}` : ''}`;
     case 'example': return `studio:example:${ref.id}${ref.end ? `:${ref.start ?? 0}-${ref.end}` : ''}`;
+    case 'voice': return `studio:voice:${ref.provider}/${ref.id}`;
   }
 };
 
@@ -76,6 +77,8 @@ export function refPill(id: string | undefined, ref: StudioRef): PromptReference
     case 'node': return { ...base, kind: 'card', label: clipped(ref.label, 40) };
     /* an example: its title, and the part when one was picked */
     case 'example': return { ...base, kind: 'example', label: clipped(ref.title, 40), ...(ref.segment ? { detail: ref.segment } : ref.end ? { detail: `${clock(ref.start ?? 0)}–${clock(ref.end)}` } : {}) };
+    /* a voice: its name, and its service */
+    case 'voice': return { ...base, kind: 'voice', label: clipped(ref.name, 40), detail: ref.service };
   }
 }
 
@@ -131,6 +134,7 @@ export function sameStudioThing(a: StudioRef, b: StudioRef): boolean {
     case 'node': return b.kind === 'node' && a.id === b.id;
     case 'subtitle': return b.kind === 'subtitle' && near(a.start, b.start) && near(a.end, b.end) && (a.lang ?? null) === (b.lang ?? null);
     case 'example': return b.kind === 'example' && a.id === b.id && near(a.start ?? 0, b.start ?? 0) && near(a.end ?? 0, b.end ?? 0);
+    case 'voice': return b.kind === 'voice' && a.provider === b.provider && a.id === b.id;
   }
 }
 
@@ -238,9 +242,13 @@ export function pillCard(pill: { id: string; label: string; target?: Record<stri
       row('part', ref.segment ?? (ref.end ? span(ref.start ?? 0, ref.end) : null));
       row('path', ref.folder ?? null);
       break;
+    case 'voice':
+      row('service', ref.service);
+      row('language', ref.language);
+      break;
   }
   /* an example: what it is, as its page says */
-  return { title: t(`refCard.title.${ref.kind}`), rows, ...(ref.kind === 'example' && ref.description ? { text: [ref.description] } : {}) };
+  return { title: t(`refCard.title.${ref.kind}`), rows, ...((ref.kind === 'example' || ref.kind === 'voice') && ref.description ? { text: [ref.description] } : {}) };
 }
 
 /* the agent's numbers: seconds to the millisecond, as film.html writes them */
@@ -304,6 +312,14 @@ function refLine(ref: StudioRef): string {
       ref.end ? `its ${ref.start?.toFixed(3) ?? '0.000'}–${ref.end.toFixed(3)} s${ref.segment ? ` (${quote(ref.segment, 60)})` : ''}` : 'the whole film',
       `source ${ref.url}`,
     ].filter(Boolean).join(' · ');
+    /* not in the film: a voice to make the voice-over in, at its service */
+    case 'voice': {
+      const model = ref.models[0];
+      const how = ref.via
+        ? `speak in it with \`openfilm get tts --via ${ref.via}${model ? ` --model ${model}` : ''} --voice ${ref.id}\`${ref.models.length > 1 ? ` (models: ${ref.models.join(', ')})` : ''}`
+        : `not connected: the person connects ${ref.service} or OpenFilm in Studio's Settings › Services first`;
+      return [`voice ${quote(ref.name, 80)} of ${ref.service} for voice-over, id \`${ref.id}\``, ref.language ? `speaks ${ref.language}` : null, how].filter(Boolean).join(' · ');
+    }
   }
 }
 

@@ -1,8 +1,9 @@
 /**
  * The assets drawer's library (in the app's panel, over the chat, its composer under it), laid out as an editor's
- * library is: the categories along the top — the media (the project's and Saved, the media pane as it was), then
- * OpenFilm's own audio, text, stickers, effects, transitions and filters (lib/library) — and a category's groups down
- * the left, its things beside them. What is shown is in the accent color, nothing behind it.
+ * library is: the categories along the top — the media (the project's and Saved, the media pane as it was), the
+ * voices to speak a voice-over in, then OpenFilm's own sounds, music, text, stickers, filters, effects and transitions
+ * (lib/library) — and down the left the starred ones and the library's own, its groups under it. What is shown is in
+ * the accent color; a category's icon fills faintly too.
  *
  * A thing plays in its card while the pointer rests on it. A click picks it and tries it in the viewer, on the picture
  * there (nothing is written; Esc, a click on it again, or another category takes it away); a sound is heard. A double
@@ -10,30 +11,27 @@
  * it among the favorites, for every project.
  */
 import React from 'react';
-import { ArrowRightLeft, Aperture, Clapperboard, Music, Pause, Play, Plus, Search, Sparkles, Star, Sticker, Type } from 'lucide-react';
+import { ChevronDown, Pause, Play, Plus, Search, Star } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
+import { studioHost } from '@/lib/host';
 import {
   libraryDragItem, libraryUrl, nameOf, posterUrl, previewUrl, toggleFavorite, useLibraryFavorites, useLibraryIndex, waveUrl,
   type LibraryCategory, type LibraryItem,
 } from '@/lib/library';
 import { clearResourceDrag, setResourceDragData } from '@/lib/resource-drag';
+import { useLibraryVoices } from '@/lib/library-voices';
+import { CategoryIcon, Empty } from './icons';
+import { STARRED, VoicesPane } from './VoicesPane';
 
-type Category = 'media' | LibraryCategory;
-const CATEGORIES: { id: Category; icon: React.ComponentType<{ size?: number; strokeWidth?: number }> }[] = [
-  { id: 'media', icon: Clapperboard },
-  { id: 'sound', icon: Music },
-  { id: 'text', icon: Type },
-  { id: 'sticker', icon: Sticker },
-  { id: 'effect', icon: Sparkles },
-  { id: 'transition', icon: ArrowRightLeft },
-  { id: 'filter', icon: Aperture },
-];
+type Category = 'media' | 'voice' | LibraryCategory;
+const CATEGORIES: Category[] = ['media', 'voice', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition'];
 
 /** The side bar's starred line: a category's things the person starred ('' is all of it, else one of its groups). */
-const FAVORITES = '★';
+const FAVORITES = STARRED;
 
-/* the category shown and the line picked in each, kept while the drawer closes and opens again */
-const SHOWN = { cat: 'media' as Category, group: {} as Partial<Record<Category, string>> };
+/* the category shown, the line picked in each, and whether the library's own groups are folded, kept while the
+   drawer closes and opens again */
+const SHOWN = { cat: 'media' as Category, group: {} as Partial<Record<Category, string>>, folded: false };
 
 export interface LibraryActions {
   /** A double click, Enter or "+": a page or a sound at the playhead (a transition on the cut), a look on the clip. */
@@ -42,18 +40,22 @@ export interface LibraryActions {
   tryOut: (item: LibraryItem | null) => void;
 }
 
-export function LibraryDrawer({ media, mediaScope, onMediaScope, actions }: {
+export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServices }: {
   media: React.ReactNode;
   mediaScope: 'project' | 'saved';
   onMediaScope: (next: 'project' | 'saved') => void;
   actions: LibraryActions;
+  /** Settings › Services: where a voice's service is connected */
+  onServices: () => void;
 }) {
   const t = useT();
   const lang = useLanguage();
   const index = useLibraryIndex();
   const favorites = useLibraryFavorites();
+  const voices = useLibraryVoices();
   const [cat, setCat] = React.useState<Category>(SHOWN.cat);
   const [group, setGroup] = React.useState<string>(SHOWN.group[SHOWN.cat] ?? '');
+  const [folded, setFolded] = React.useState(SHOWN.folded);
   const [query, setQuery] = React.useState('');
   const [picked, setPicked] = React.useState<string | null>(null);
   const tryOut = React.useRef(actions.tryOut);
@@ -63,7 +65,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions }: {
     if (item?.kind !== 'sound') tryOut.current(item);
   };
   const show = (next: Category) => { SHOWN.cat = next; setCat(next); setGroup(SHOWN.group[next] ?? ''); setQuery(''); pick(null); };
-  const pickGroup = (next: string) => { SHOWN.group[cat] = next; setGroup(next); };
+  const pickGroup = (next: string) => { SHOWN.group[cat] = next; setGroup(next); setQuery(''); };
+  const fold = () => { SHOWN.folded = !folded; setFolded(!folded); };
   /* the drawer closed: what was tried goes with it */
   React.useEffect(() => () => tryOut.current(null), []);
 
@@ -79,6 +82,12 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions }: {
     if (e.key === 'Enter') { e.preventDefault(); actions.add(pickedItem); }
   };
 
+  /* the library's own lines under its fold: all of it, then its groups (a voice's: the services) */
+  const own = cat === 'voice'
+    ? (voices?.providers ?? []).map((s) => ({ id: s.id, name: s.name }))
+    : (index?.groups[cat as LibraryCategory] ?? []).map((g) => ({ id: g.id, name: nameOf(g.name, lang) }));
+  const askMusic = studioHost?.ask;
+
   /* the bars and the library's things are the app's panel's (data-studio-host-panel): a press there keeps what is
      picked on the timeline and the picture, which a look or a transition goes on */
   return (
@@ -87,68 +96,76 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions }: {
       <nav
         data-studio-host-panel=""
         onWheel={(e) => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) e.currentTarget.scrollLeft += e.deltaY; }}
-        className="flex shrink-0 gap-1 overflow-x-auto border-b border-[var(--dock-line)] px-1.5 pb-0.5 pt-1 [mask-image:linear-gradient(to_right,black_calc(100%-20px),transparent)] [scrollbar-width:none]"
+        className="flex shrink-0 overflow-x-auto border-b border-[var(--dock-line)] px-1 [mask-image:linear-gradient(to_right,black_calc(100%-20px),transparent)] [scrollbar-width:none]"
       >
-        {CATEGORIES.map(({ id, icon: Icon }) => (
+        {CATEGORIES.map((id) => (
           <button
             key={id}
             type="button"
             onClick={() => show(id)}
             aria-pressed={cat === id}
-            className={`flex min-w-[48px] shrink-0 flex-col items-center gap-0.5 whitespace-nowrap px-2 pb-1 pt-1 text-[11px] ${cat === id ? 'text-[var(--tl-accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
+            className={`flex min-w-[50px] shrink-0 flex-col items-center gap-[3px] whitespace-nowrap px-2 pb-1.5 pt-2 text-[11.5px] font-medium ${cat === id ? 'text-[var(--tl-accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
           >
-            <Icon size={18} strokeWidth={1.6} />
+            <CategoryIcon id={id} on={cat === id} />
             {t(`assetDrawer.cat_${id}`)}
           </button>
         ))}
       </nav>
       <div className="flex min-h-0 flex-1">
         {/* as wide as its longest line (up to a limit), so no group's name is cut */}
-        <nav data-studio-host-panel="" className="flex min-w-[76px] max-w-[136px] shrink-0 flex-col overflow-y-auto border-r border-[var(--dock-line)] py-2">
+        <nav data-studio-host-panel="" className="flex min-w-[104px] max-w-[148px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-[var(--dock-line)] px-2 py-2.5">
           {cat === 'media' ? (
             <>
-              <SideItem on={mediaScope === 'project'} onClick={() => onMediaScope('project')}>{t('assetDrawer.mediaProject')}</SideItem>
-              <SideItem on={mediaScope === 'saved'} onClick={() => onMediaScope('saved')}>{t('assetDrawer.mediaSaved')}</SideItem>
+              <SideBox on={mediaScope === 'project'} onClick={() => onMediaScope('project')}>{t('assetDrawer.mediaProject')}</SideBox>
+              <SideBox on={mediaScope === 'saved'} onClick={() => onMediaScope('saved')}>{t('assetDrawer.mediaSaved')}</SideBox>
             </>
           ) : (
             <>
-              <SideItem on={group === FAVORITES && !q} onClick={() => pickGroup(FAVORITES)}>{t('assetDrawer.favorites')}</SideItem>
-              <SideItem on={!group && !q} onClick={() => pickGroup('')}>{t('assetDrawer.all')}</SideItem>
-              {(index?.groups[cat] ?? []).map((g) => (
-                <SideItem key={g.id} on={group === g.id && !q} onClick={() => pickGroup(g.id)}>{nameOf(g.name, lang)}</SideItem>
-              ))}
+              <SideBox on={group === FAVORITES && !q} onClick={() => pickGroup(FAVORITES)}>{t('assetDrawer.favorites')}</SideBox>
+              <SideBox on={group !== FAVORITES && folded && !q} open={!folded} onClick={fold}>
+                {t(cat === 'voice' ? 'assetDrawer.services' : 'assetDrawer.official')}
+              </SideBox>
+              {folded ? null : (
+                <div className="flex flex-col pb-1">
+                  <SideLine on={!group && !q} onClick={() => pickGroup('')}>{t('assetDrawer.all')}</SideLine>
+                  {own.map((g) => <SideLine key={g.id} on={group === g.id && !q} onClick={() => pickGroup(g.id)}>{g.name}</SideLine>)}
+                </div>
+              )}
             </>
           )}
         </nav>
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col" data-studio-host-panel={cat === 'media' ? undefined : ''}>
           {cat === 'media' ? media : (
             <>
-              <div className="px-2.5 pb-1.5 pt-2">
-                <label className="flex min-w-0 items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[var(--text-faint)]">
-                  <Search size={13} />
+              <div className="px-3 pb-2 pt-2.5">
+                <label className="flex h-8 min-w-0 items-center gap-2 rounded-md bg-[var(--surface-2)] px-2.5 text-[var(--text-faint)] focus-within:ring-1 focus-within:ring-[var(--tl-accent)]">
+                  <Search size={14} />
                   <input
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder={t('assetDrawer.search').replace('{what}', t(`assetDrawer.cat_${cat}`))}
-                    className="min-w-0 flex-1 bg-transparent text-[12px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]"
+                    className="min-w-0 flex-1 bg-transparent text-[12.5px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]"
                   />
                 </label>
               </div>
-              {/* a click on nothing lets the picked thing go */}
-              <div className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-3 pt-1" onClick={(e) => { if (e.target === e.currentTarget) pick(null); }}>
+              {cat === 'voice' ? <VoicesPane group={group} query={query} favorites={favorites} onServices={onServices} onAll={() => pickGroup('')} /> : (
+              /* a click on nothing lets the picked thing go */
+              <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-0.5" onClick={(e) => { if (e.target === e.currentTarget) pick(null); }}>
                 {!items.length ? (
-                  <p className="px-2 py-8 text-center text-[12px] leading-relaxed text-[var(--text-faint)]">
-                    {q ? t('assetDrawer.nothing').replace('{q}', query.trim()) : group === FAVORITES ? t('assetDrawer.noFavorites') : ''}
-                  </p>
-                ) : cat === 'sound' ? (
-                  <div className="flex flex-col">
+                  q ? <Empty icon="search" text={t('assetDrawer.nothing').replace('{q}', query.trim())} />
+                    : group === FAVORITES ? <Empty icon="star" text={t('assetDrawer.noFavorites')} action={t('assetDrawer.seeAll')} onAction={() => pickGroup('')} />
+                      : cat === 'music' ? <Empty icon="music" text={t('assetDrawer.musicSoon')} action={askMusic ? t('assetDrawer.musicMake') : undefined}
+                        onAction={() => askMusic?.({ text: t('assetDrawer.musicAsk'), refs: [] })} />
+                        : null
+                ) : cat === 'sound' || cat === 'music' ? (
+                  <div className="flex flex-col gap-0.5">
                     {items.map((it) => (
                       <SoundRow key={it.id} item={it} lang={lang} picked={picked === it.id} kept={favorites.includes(it.id)}
                         onPick={() => pick(it)} onAdd={() => actions.add(it)} />
                     ))}
                   </div>
                 ) : (
-                  <div className={`grid gap-x-2 gap-y-2.5 ${cat === 'sticker' ? 'grid-cols-[repeat(auto-fill,minmax(64px,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(92px,1fr))]'}`}>
+                  <div className={`grid gap-x-2.5 gap-y-3 ${cat === 'sticker' ? 'grid-cols-[repeat(auto-fill,minmax(68px,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(96px,1fr))]'}`}>
                     {items.map((it) => (
                       <Card key={it.id} item={it} lang={lang} picked={picked === it.id} kept={favorites.includes(it.id)} square={cat === 'sticker'}
                         onPick={() => pick(picked === it.id ? null : it)} onAdd={() => actions.add(it)} />
@@ -156,6 +173,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions }: {
                   </div>
                 )}
               </div>
+              )}
             </>
           )}
         </div>
@@ -164,15 +182,32 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions }: {
   );
 }
 
-/** One line of the side bar: the starred, all, a group (or the media's two), each as the others. */
-function SideItem({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
+/** A line of the side bar of its own (the starred, the library's own, the media's two): a box. `open`: it folds the lines under it. */
+function SideBox({ on, open, onClick, children }: { on: boolean; open?: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={open === undefined ? on : undefined}
+      aria-expanded={open}
+      title={typeof children === 'string' ? children : undefined}
+      className={`flex h-8 shrink-0 items-center justify-between gap-1 rounded-md bg-[var(--surface-2)] px-2.5 text-left text-[12px] font-medium hover:bg-[var(--bg-hover)] ${on ? 'text-[var(--tl-accent)]' : 'text-[var(--text)]'}`}
+    >
+      <span className="truncate whitespace-nowrap">{children}</span>
+      {open === undefined ? null : <ChevronDown size={13} className={`shrink-0 text-[var(--text-faint)] transition-transform ${open ? 'rotate-180' : ''}`} />}
+    </button>
+  );
+}
+
+/** A line under the library's own: all of it, or a group. */
+function SideLine({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={on}
       title={typeof children === 'string' ? children : undefined}
-      className={`truncate whitespace-nowrap px-3 py-1.5 text-left text-[12px] ${on ? 'font-medium text-[var(--tl-accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
+      className={`truncate whitespace-nowrap px-2.5 py-1.5 text-left text-[12px] ${on ? 'font-medium text-[var(--tl-accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
     >
       {children}
     </button>
@@ -237,15 +272,15 @@ function Card({ item, lang, picked, kept, square, onPick, onAdd }: {
       onDoubleClick={onAdd}
       title={name}
     >
-      <div className={`relative overflow-hidden rounded-[5px] ${square ? 'aspect-square bg-[var(--surface-2)]' : 'aspect-video bg-black'} ${picked ? 'outline outline-2 -outline-offset-1 outline-[var(--tl-accent)]' : 'outline outline-1 outline-[var(--border)]'}`}>
+      <div className={`relative overflow-hidden rounded-md bg-[var(--surface-2)] ${square ? 'aspect-square' : 'aspect-video'} ${picked ? 'ring-2 ring-[var(--tl-accent)]' : 'ring-1 ring-transparent group-hover:ring-[var(--text-faint)]'}`}>
         {item.kind === 'look'
           ? <img src={SAMPLE} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" style={{ filter: item.filter }} />
           : <img src={posterUrl(item)} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />}
         {hover && item.kind !== 'look' ? <video src={previewUrl(item)} autoPlay loop muted playsInline className="absolute inset-0 h-full w-full object-cover" /> : null}
-        <StarButton item={item} kept={kept} className={`absolute right-1 top-1 h-[18px] w-[18px] place-items-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.7)] ${kept ? 'grid text-[#ffd35a]' : 'hidden text-white group-hover:grid'}`} />
-        <AddButton item={item} onAdd={onAdd} className="absolute bottom-1 right-1 hidden h-5 w-5 place-items-center rounded-full bg-[var(--tl-accent)] text-black shadow group-hover:grid" />
+        <StarButton item={item} kept={kept} className={`absolute right-1 top-1 h-5 w-5 place-items-center rounded-full bg-black/45 ${kept ? 'grid text-[#ffd35a]' : 'hidden text-white group-hover:grid'}`} />
+        <AddButton item={item} onAdd={onAdd} className="absolute bottom-1 right-1 hidden h-[22px] w-[22px] place-items-center rounded-full bg-[var(--tl-accent)] text-black shadow-md group-hover:grid" />
       </div>
-      <div className={`mt-1 truncate text-[11px] ${picked ? 'text-[var(--tl-accent)]' : 'text-[var(--text-dim)]'}`}>{name}</div>
+      <div className={`mt-1.5 truncate px-0.5 text-[11.5px] ${picked ? 'text-[var(--tl-accent)]' : 'text-[var(--text-muted)] group-hover:text-[var(--text)]'}`}>{name}</div>
     </div>
   );
 }
@@ -276,7 +311,7 @@ function SoundRow({ item, lang, picked, kept, onPick, onAdd }: {
   const name = nameOf(item.name, lang);
   return (
     <div
-      className="group relative grid cursor-default select-none grid-cols-[34px_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-1.5 py-1.5 hover:bg-[var(--bg-hover)]"
+      className={`group relative grid cursor-default select-none grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lg px-2 py-2 ${picked ? 'bg-[var(--surface-2)]' : 'hover:bg-[var(--surface-2)]'}`}
       draggable
       onDragStart={dragOf(item, name)}
       onDragEnd={() => clearResourceDrag()}
@@ -284,19 +319,19 @@ function SoundRow({ item, lang, picked, kept, onPick, onAdd }: {
       onDoubleClick={onAdd}
       title={name}
     >
-      <span aria-label={playing ? t('assetDrawer.stop') : t('assetDrawer.play')} className={`grid h-[34px] w-[34px] place-items-center rounded-md bg-[var(--surface-2)] ${picked ? 'text-[var(--tl-accent)]' : 'text-[var(--text-muted)]'}`}>
-        {playing ? <Pause size={13} /> : <Play size={13} />}
+      <span aria-label={playing ? t('assetDrawer.stop') : t('assetDrawer.play')} className={`grid h-10 w-10 place-items-center rounded-md bg-[var(--bg-hover)] ${picked ? 'text-[var(--tl-accent)]' : 'text-[var(--text-muted)] group-hover:text-[var(--text)]'}`}>
+        {playing ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
       </span>
       <span className="min-w-0">
-        <span className={`block truncate text-[12px] ${picked ? 'text-[var(--tl-accent)]' : 'text-[var(--text)]'}`}>{name}</span>
-        <span className="flex items-center gap-1.5">
+        <span className={`block truncate text-[12.5px] font-medium ${picked ? 'text-[var(--tl-accent)]' : 'text-[var(--text)]'}`}>{name}</span>
+        <span className="mt-0.5 flex items-center gap-2">
           <img src={waveUrl(item)} alt="" draggable={false} className="h-3 w-[88px] object-fill opacity-55" />
           <span className="text-[10.5px] text-[var(--text-faint)]">{t('assetDrawer.seconds').replace('{s}', String(Math.round((item.durationMs ?? 0) / 100) / 10))}</span>
         </span>
       </span>
       <span className="flex items-center gap-1.5">
         <StarButton item={item} kept={kept} className={kept ? 'text-[#ffd35a]' : 'invisible text-[var(--text-faint)] hover:text-[var(--text)] group-hover:visible'} />
-        <AddButton item={item} onAdd={onAdd} className="invisible grid h-5 w-5 place-items-center rounded-full bg-[var(--tl-accent)] text-black group-hover:visible" />
+        <AddButton item={item} onAdd={onAdd} className="invisible grid h-[22px] w-[22px] place-items-center rounded-full bg-[var(--tl-accent)] text-black group-hover:visible" />
       </span>
     </div>
   );

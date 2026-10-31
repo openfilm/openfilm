@@ -193,6 +193,7 @@ export const enUS = {
       file: 'File',
       subtitle: 'Subtitle',
       example: 'Example film',
+      voice: 'Voice',
       node: 'Canvas node',
     },
     node: 'Node',
@@ -217,6 +218,7 @@ export const enUS = {
     line: 'Line',
     example: 'Example',
     part: 'Part',
+    service: 'Service',
   },
   project: {
     assets: 'Assets',
