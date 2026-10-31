@@ -45,6 +45,25 @@ test('ProRes exports measured on Windows (prores_ks) fall inside the range shown
   within(prores('prores422hq', 1080), 135_670_000, 'detailed footage, 422 HQ 1080p');
 });
 
+test('ProRes 4444 by prores_ks goes past its rate on detailed footage, inside the range shown for it; the Mac\'s engine keeps the rate as the top', () => {
+  const prores4444 = (shortEdge: number, durationMs: number, proresKs: boolean) =>
+    exportEstimateBytes({ codec: 'prores4444', size: { w: Math.round(shortEdge * 16 / 9), h: shortEdge }, fps: 30, quality: 'high', durationMs, audio: false, proresKs });
+  /* a fractal zoom made at 1080p, 5 s */
+  within(prores4444(720, 5_000, true), 142_595_069, 'detailed footage, 4444 720p');
+  within(prores4444(1080, 5_000, true), 269_098_972, 'detailed footage, 4444 1080p');
+  /* made at 4K, 2 s */
+  within(prores4444(720, 2_000, true), 56_319_425, 'detailed footage from 4K, 4444 720p');
+  within(prores4444(1080, 2_000, true), 106_056_338, 'detailed footage from 4K, 4444 1080p');
+  within(prores4444(2160, 2_000, true), 288_519_823, 'detailed footage from 4K, 4444 4K');
+  /* a title card still inside, at the same bottom */
+  within(prores4444(720, 5_000, true), 9_947_711, 'title card, 4444 720p');
+  const rate = 330e6 / 8;
+  const [k0, k1] = prores4444(1080, 1_000, true);
+  assert.ok(Math.abs(k0 / rate - 0.04) < 0.001 && Math.abs(k1 / rate - 1.6) < 0.01, `prores_ks ${k0}–${k1}`);
+  const [c0, c1] = prores4444(1080, 1_000, false);
+  assert.ok(Math.abs(c0 / rate - 0.04) < 0.001 && Math.abs(c1 / rate - 1.1) < 0.01, `the Mac's engine ${c0}–${c1}`);
+});
+
 test('bars cost nothing; half the length is half the size; a CRF range is 16× wide, ProRes from a twenty-fifth of its rate to its rate', () => {
   const size = exportFramedDims(stage, '9:16', 'contain', 1080);
   assert.deepEqual(size, { w: 1080, h: 1920 });

@@ -152,6 +152,9 @@ const FIXED_SPREAD: readonly [number, number] = [0.9, 1.1];
 /* ProRes spends what each picture needs, up to about its rate: detailed footage comes to the rate, a title card on a
    plain background to a twentieth or a tenth of it, a plain frame alone to a fortieth (by its pixels, at any size) */
 const PRORES_SPREAD: readonly [number, number] = [0.04, 1.1];
+/* ffmpeg's prores_ks (Windows, Linux) spends past Apple's 4444 rate on a detailed picture, the further the more detail
+   each pixel holds: a fractal zoom came to 0.87× of it at 4K, 1.3× at 1080p and 1.56× at 720p */
+const PRORES_KS_4444_SPREAD: readonly [number, number] = [0.04, 1.6];
 
 /** How a CRF file's size follows the settings: the quality's CRF, the codec at its CRF. */
 const QUALITY_SIZE: Record<ExportQuality, number> = { standard: 0.58, high: 1, master: 1.6 };
@@ -184,6 +187,8 @@ export function exportEstimateBytes(spec: {
   quality: ExportQuality;
   durationMs: number;
   audio: boolean;
+  /** ProRes encoded by ffmpeg's prores_ks, not by the Mac's media engine */
+  proresKs?: boolean;
 }): [number, number] {
   const sec = Math.max(0, spec.durationMs) / 1000;
   const px = spec.size.w * spec.size.h;
@@ -192,7 +197,7 @@ export function exportEstimateBytes(spec: {
   switch (spec.codec) {
     /* ProRes's rate: 422 HQ about 220 Mbps at 1080p30, 4444 about 330, scaled by pixels × fps */
     case 'prores422hq': videoBps = 220_000_000 * (px / (1920 * 1080)) * (spec.fps / 30); spread = PRORES_SPREAD; break;
-    case 'prores4444': videoBps = 330_000_000 * (px / (1920 * 1080)) * (spec.fps / 30); spread = PRORES_SPREAD; break;
+    case 'prores4444': videoBps = 330_000_000 * (px / (1920 * 1080)) * (spec.fps / 30); spread = spec.proresKs ? PRORES_KS_4444_SPREAD : PRORES_SPREAD; break;
     /* HEVC with alpha (VideoToolbox) is given its bitrate */
     case 'hevc_alpha': videoBps = givenBitrate(spec.size, spec.fps, spec.quality, 0.8); break;
     /* a PNG sequence of motion graphics compresses well: about a byte per pixel */
