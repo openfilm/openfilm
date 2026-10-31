@@ -103,6 +103,13 @@ export const AGENTS = Object.freeze({
       grep: 'search', glob: 'search',
       web_search: 'fetch', web_fetch: 'fetch',
     } },
+  /* Qoder speaks ACP natively (`qoder --acp`); `qoder login` signs in through the browser */
+  qoder: { label: AGENT_DEFINITIONS.qoder.name, args: ['--acp'], login: ['login'], approve: true },
+  /* WorkBuddy runs on CodeBuddy's CLI, which speaks ACP the same way (`--acp`); it signs in on its first run */
+  workbuddy: { label: AGENT_DEFINITIONS.workbuddy.name, args: ['--acp', '--permission-mode', 'bypassPermissions'], login: [], approve: true },
+  /* ZCode speaks its own protocol over stdio (`zcode app-server`): the app carries an adapter (zcode-acp-server)
+     that bridges it to ACP, told where the program is by ZCODE_BIN. `zcode login` signs in through the browser */
+  zcode: { label: AGENT_DEFINITIONS.zcode.name, adapter: 'zcode-acp-server', env: (path) => ({ ZCODE_BIN: path }), login: ['login'], approve: true },
 });
 
 /**

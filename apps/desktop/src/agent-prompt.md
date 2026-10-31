@@ -12,6 +12,9 @@ touch nothing outside it.
    files, then the web.
 2. Plan the film shot by shot before you write pages: what each shot shows, for how long, what is said and heard.
    Make what the request needs, not more: generating video, pictures, voice and music can cost the person money.
+   When the film is one to make properly (the person asks for a whole video, or this project has one), run
+   `openfilm pipeline start --title "…" --seconds N --brief "…"` and work its stages in order, marking each done
+   (`openfilm pipeline <stage> --done`); `render` waits for the film to be made and checked.
 3. Make it: media, pages, film.html, in steps the person can watch. Do not stop halfway to ask whether to go on.
 4. Look at it: run `openfilm look` and read the frames it saves (reading a picture shows it to you). Check every shot
    against the plan and the manual: text inside the frame and readable, nothing overlapping by accident, timing and

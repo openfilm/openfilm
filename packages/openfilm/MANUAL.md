@@ -80,6 +80,26 @@ Run them in the film's folder. Each one's `--help` lists its options:
 - `npx openfilm render`: the MP4, beside film.html (30 fps unless `--fps`). Only when the person asks for the file: you check with `look`, and the person exports from Studio.
 - `npx openfilm get`: voice-over, music, sound effects, transcripts, images, image search, video and web search. Each kind works only once the person has connected a service that makes it, with their own key, in Studio (Settings → Providers); Studio's subtitle translation too. Run it alone to see what works now and which services make the rest. When a kind is not connected, tell the person which services make it and where they connect one. A video clip costs a lot: the person confirms it in Studio first.
 - `npx openfilm skills`: the skills this film can be made with, each a way of making a kind of film. When the person names one, or one fits what they ask, `npx openfilm skill <name>` prints it: read it whole and follow it. Its folder is only read: copy what the film uses into the project.
+- `npx openfilm install-skill [agent...]`: once, when the person asks: OpenFilm's skill copied into where an agent (claude, codex, zcode, qoder, workbuddy, deepseek and others) reads its skills from, so it knows OpenFilm without being told. Without agent names, every one found on the computer.
+
+## The pipeline
+
+`npx openfilm pipeline` is the production line a film goes through, and where this one stands. It needs no starting:
+make the film as this manual says, any way you like. When the person asks for a video made properly, or the film is
+one of several, start it — the stages become a line the person can read, and `render` holds until the film is made
+and checked.
+
+    npx openfilm pipeline start --title "A 20-second launch video" --seconds 20 --brief "what it says, to whom, in what tone"
+    npx openfilm pipeline                        where things stand, and the next thing to do
+    npx openfilm pipeline script --done          a stage's work is finished (the stages go in order)
+
+The stages, each leaving its work in the project: **brief** (`.film/pipeline/brief.md`, what the film says, to whom,
+how long, in what tone) → **script** (the words, and the shots in order) → **storyboard** (one entry per shot: its
+page, seconds, media, on-screen text) → **assets** (the voice, music, pictures and video, from `get` or your own) →
+**assembly** (the pages cut together by film.html) → **review** (`look` run, its sheets read, what it found fixed) →
+**deliver** (render or export, only as the person asked). A stage is marked done when what it leaves is in the
+project, not when you mean to write it. If the person changes direction, change the stage's work and carry on; the
+line is a plan, not a cage.
 
 The words of a sound or a video are a WebVTT beside it with the same name (`vo/1.wav` → `vo/1.vtt`): a cue per subtitle line, a timestamp tag at each word. Studio makes the film's subtitles from them; never draw subtitles in a page.
 

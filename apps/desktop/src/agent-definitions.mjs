@@ -12,6 +12,9 @@ const definitions = {
   kimi: { name: 'Kimi', install: 'https://www.kimi.com/code/docs/en/kimi-code-cli/guides/getting-started.html' },
   minimax: { name: 'MiniMax Code', install: 'https://www.npmjs.com/package/@minimax-ai/code' },
   deepseek: { name: 'DeepSeek Harness', install: 'https://www.deepseek.com/harness/' },
+  qoder: { name: 'Qoder', install: 'https://docs.qoder.com/cli/installation' },
+  workbuddy: { name: 'WorkBuddy', install: 'https://www.workbuddy.ai/download' },
+  zcode: { name: 'ZCode', install: 'https://github.com/zai-org/ZCode' },
   byok: { name: 'Own key', install: null },
 };
 

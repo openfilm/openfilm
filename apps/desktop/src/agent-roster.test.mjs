@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRoster, keyAddress, probeRequest, readChoices } from './agent-roster.mjs';
+import { OWN_AGENT_IDS } from './agent-definitions.mjs';
 import { LANGUAGES as STUDIO_LANGUAGES } from '../../../packages/openfilm/studio/ui/src/i18n/index.ts';
 import { ownModelError } from '../../../packages/openfilm/studio/ui/src/lib/agent-row.ts';
 
@@ -37,7 +38,7 @@ test('startup publishes each result before a slow background discovery ends; onl
   try {
     await new Promise((done) => setImmediate(done));
     assert.deepEqual(requested.statusIds, ['codex']);
-    assert.equal(requested.ids.length, 10, 'disabled agents are still discovered automatically');
+    assert.equal(requested.ids.length, OWN_AGENT_IDS.length, 'disabled agents are still discovered automatically');
     assert.equal(requested.ids[0], 'codex', 'enabled agents are scheduled first');
     assert.equal(r.list().find((a) => a.id === 'codex').status, 'ready');
     assert.equal(r.list().find((a) => a.id === 'cursor').status, 'checking');

@@ -45,7 +45,9 @@ npx skills add openfilm/openfilm
 
 也可以从 [openfilm.dev](https://openfilm.dev) 或 [Releases](https://github.com/openfilm/openfilm/releases)
 下载 macOS 或 Windows 桌面版：就是 Studio，旁边多了一个对话窗口，接上你已有的智能体。它自带 ffmpeg 和无界面浏览器，
-不用另外安装。
+不用另外安装。对话窗口走 Agent Client Protocol，能接 Claude Code、Codex、GitHub Copilot、Cursor、OpenCode、
+CodeBuddy、WorkBuddy、Qoder、Qwen Code、Kimi、MiniMax、DeepSeek Harness（DSH）和 ZCode，也有用你自己的 key 的
+内置智能体。
 
 制作、剪辑和渲染片子都不需要账号。需要生成配音、音乐、图片和视频时，在 Studio 的设置 → 服务商里，用你自己的 key
 连接你在用的服务（ElevenLabs、OpenAI、Google、fal 等）。
@@ -66,10 +68,18 @@ openfilm open   [folder | url]    # 在 Studio 里打开片子：新建、打开
 openfilm look   [what] [t | a-b]  # 检查片子、某个页面或媒体文件：缩略图总览、单帧或一段区间
 openfilm render [a-b]             # 渲染成 MP4；--4k、--blur（运动模糊）、--alpha（.webm / .mov）
 openfilm get    [what]            # 用你接入的服务生成配音、音乐、音效、字幕转写、图片和视频
+openfilm pipeline [stage --done]  # 制作流水线：开始、查看进度、把某个阶段标记为完成
+openfilm install-skill [agent...] # 把 OpenFilm 的 skill 装进智能体读 skill 的目录（claude、codex、zcode、qoder 等）
 ```
 
 `openfilm <命令> --help` 列出某个命令的选项；单独运行 `openfilm get` 会列出能生成什么，以及怎么在 Studio 里用你
 自己的 key 接入服务。
+
+`openfilm pipeline` 把视频制作变成流水线：brief（创意）→ script（脚本）→ storyboard（分镜）→ assets（素材）→
+assembly（合成）→ review（审查）→ deliver（交付），每个阶段都把成果留在项目里。用 `openfilm pipeline start`
+开始之后，`render` 会等片子做完并通过检查。`openfilm install-skill` 把 OpenFilm 介绍给会读 skill 的智能体
+（Claude Code、Codex、ZCode、Qoder、WorkBuddy、DeepSeek Harness 等）——这是纯浏览器（web）模式下用终端智能体的
+方式。
 
 ## Studio
 

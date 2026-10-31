@@ -40,6 +40,16 @@ export const AGENT_PROGRAMS = Object.freeze({
   deepseek: { names: ['dsh'], dirs: (home, win, apps = ['/Applications', join(home, 'Applications')]) => (win
     ? [join(localAppData(home), 'Programs', 'DeepSeek Harness', 'resources', 'runtime', 'cli', 'bin')]
     : apps.map((dir) => dirname(join(dir, 'DeepSeek Harness.app', DSH_IN_APP)))) },
+  /* Qoder CLI, by npm or its installer */
+  qoder: { names: ['qoder'] },
+  /* WorkBuddy runs on CodeBuddy's CLI (@tencent-ai/codebuddy-code), so a `codebuddy` command counts; a
+     `workbuddy` command of its own, when its maker ships one, comes first. Its installer keeps it in
+     %LOCALAPPDATA%\codebuddy\bin on Windows, as CodeBuddy's does */
+  workbuddy: { names: ['workbuddy', 'codebuddy', 'cbc'], dirs: (home, win) => (win ? [join(localAppData(home), 'codebuddy', 'bin')] : []) },
+  /* ZCode's desktop app carries its CLI (resources/glm/zcode.cjs); a standalone install puts `zcode` on the PATH */
+  zcode: { names: ['zcode'], dirs: (home, win, apps = ['/Applications', join(home, 'Applications')]) => (win
+    ? [join(localAppData(home), 'Programs', 'ZCode', 'resources', 'glm')]
+    : apps.map((dir) => join(dir, 'ZCode.app', 'Contents', 'Resources', 'glm'))) },
 });
 
 /* where DeepSeek Harness is inside DeepSeek Harness.app, its desktop app (macOS) */
@@ -318,7 +328,9 @@ export const HOME_BIN_CANDIDATES = (home = homedir()) => (windows
   : [join(home, '.local', 'bin'), '/opt/homebrew/bin', '/usr/local/bin']);
 
 /** What a program is called on Windows, in the order cmd.exe tries (an extensionless file there is a shell script). */
-const WIN_SUFFIXES = ['.exe', '.cmd', '.bat'];
+/* .cjs: a CLI a maker's desktop app carries as a script (ZCode's resources/glm/zcode.cjs), which the app starts
+   with its own Node (agents.mjs starting) */
+const WIN_SUFFIXES = ['.exe', '.cmd', '.bat', '.cjs'];
 const isCmdScript = (path) => /\.(?:cmd|bat)$/i.test(path);
 
 /**

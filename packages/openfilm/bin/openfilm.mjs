@@ -9,6 +9,8 @@ const USAGE = `openfilm — a film is a function of time: given t, it draws that
   openfilm render  [a-b]               the MP4, saved beside film.html
   openfilm get     [what] [--options]  voice-over, music, sound effects, transcripts, images, video, from a connected service
   openfilm skills                      the skills this film can be made with; \`openfilm skill <name>\` prints one
+  openfilm install-skill [agent...]    put OpenFilm's skill where a coding agent reads its skills from
+  openfilm pipeline [stage --done]     the production line: the stages a film goes through, and where this one stands
   openfilm update                      the newest OpenFilm; Studio starts again on it
   openfilm doctor                      what this computer has for OpenFilm, to paste into an issue
 
@@ -48,6 +50,17 @@ openfilm skill remove <name>
   remove   move one of yours to the trash, where you can take it back
 
   Yours are kept in Skills/ beside the projects (~/Movies/OpenFilm/Skills on macOS; OPENFILM_SKILLS names another).`,
+  'install-skill': `openfilm install-skill [agent...]
+
+  Make OpenFilm known to a coding agent that reads skills: its skill (run \`openfilm\`, read the manual) is copied
+  into each folder the agent reads skills from. This is the terminal way to use OpenFilm in web mode (Studio in a
+  browser, no desktop app); the desktop app does not need it.
+
+  agent   claude codex opencode qwen copilot codebuddy workbuddy qoder zcode deepseek
+          without any: every one of these found on this computer
+
+  The folders are the agents' own (for Claude Code ~/.claude/skills, for ZCode ~/.zcode/skills, …) and the shared
+  ~/.agents/skills where that is read too. An install of the same skill is replaced; nothing else is touched.`,
   update: `openfilm update
 
   The newest OpenFilm from npm, and Studio started again on it once nothing is being exported or made; pages open on
@@ -131,6 +144,13 @@ if (RAW[0] === 'get') {
   /* the process ends by itself, as after the other commands: process.exit() here, after the answer is printed,
      aborts Node 24.17 on Windows (`Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)`, exit status 127) */
   process.exitCode = result.code;
+}
+if (RAW[0] === 'pipeline') {
+  let result;
+  try { result = await (await import('../src/pipeline-cli.mjs')).pipelineCommand(RAW.slice(1), RUN); }
+  catch (e) { console.error(`${RUN} pipeline: ${e.message}`); process.exit(2); }
+  for (const line of result.lines) console.log(line);
+  process.exitCode = result.ok === false ? (result.usage ? 2 : 1) : 0;
 } else {
   /* the help speaks the name this was run as: `openfilm` or `npx openfilm` */
   const named = (text) => text.replace(/^( {2})?openfilm(?= )/gm, `$1${RUN}`).replace('`openfilm <command>', `\`${RUN} <command>`);
@@ -181,6 +201,8 @@ if (RAW[0] === 'get') {
     update: () => import('../studio/client.mjs').then((m) => m.updateOpenfilm((line) => console.error(line))),
     skills: () => import('../src/skills-cli.mjs').then((m) => m.skillsCommand(RUN)),
     skill: () => import('../src/skills-cli.mjs').then((m) => m.skillCommand(args, RUN)),
+    'install-skill': () => import('../src/install-skill.mjs').then((m) => m.installSkill(args)),
+    pipeline: () => import('../src/pipeline-cli.mjs').then((m) => m.pipelineCommand(args, RUN)),
     doctor: () => import('../src/doctor.mjs').then(async (m) => {
       const report = await m.doctor({ run: RUN });
       return { ok: report.ok, lines: [report.text] };
@@ -271,6 +293,12 @@ if (RAW[0] === 'get') {
     const target = args.find((a) => !/^\d+(\.\d+)?(-\d+(\.\d+)?)?$/.test(a));
     const project = around('.') ?? (target ? around(target) : null);
     if (!project) { console.error(`${RUN} ${cmd}: ${resolve('.')} is not in a project; \`${RUN} open\` makes one and shows it in Studio`); process.exit(2); }
+    /* a started production line wants the film made and checked before it renders (src/pipeline.mjs) */
+    if (cmd === 'render') {
+      const { readPipeline, renderGate } = await import('../src/pipeline.mjs');
+      const gate = renderGate(readPipeline(project));
+      if (gate) { console.error(`${RUN} render: ${gate}`); process.exit(1); }
+    }
     /* a project Studio has never shown (copied, cloned, forked): show it now, so the person watches from the start */
     if (!existsSync(join(project, '.film', 'opened'))) {
       const shown = await open(project);

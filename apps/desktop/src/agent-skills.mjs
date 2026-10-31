@@ -137,6 +137,14 @@ export async function ownSkills(agent, { cwd = '', env = {}, home = homedir() } 
     }
     case 'qwen': dirs = [join(env.QWEN_HOME || join(home, '.qwen'), 'skills'), join(home, '.agents', 'skills'), ...project(['.qwen/skills', '.agents/skills'])]; break;
     case 'copilot': dirs = [join(env.COPILOT_HOME || join(home, '.copilot'), 'skills'), join(home, '.agents', 'skills'), ...project(['.github/skills', '.agents/skills', '.claude/skills'])]; break;
+    case 'qoder': dirs = [join(home, '.qoder', 'skills'), join(home, '.agents', 'skills'), ...project(['.qoder/skills', '.agents/skills'])]; break;
+    /* WorkBuddy runs on CodeBuddy's CLI, which keeps skills in ~/.codebuddy/skills (CODEBUDDY_CONFIG_DIR moves it) */
+    case 'workbuddy': {
+      const codebuddy = env.CODEBUDDY_CONFIG_DIR || join(home, '.codebuddy');
+      dirs = [join(codebuddy, 'skills'), join(home, '.agents', 'skills'), ...project(['.codebuddy/skills', '.agents/skills'])];
+      break;
+    }
+    case 'zcode': dirs = [join(home, '.zcode', 'skills'), join(home, '.agents', 'skills'), ...project(['.zcode/skills', '.agents/skills'])]; break;
     default: return [];
   }
   const seen = new Map();

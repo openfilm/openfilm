@@ -41,6 +41,34 @@ test("an agent is found by any of its names, and in its own installer's folder o
   assert.equal(detectAgentInstallation('codebuddy', { ...none, pathDirs: [bin] }).cli, join(bin, 'cbc'));
 });
 
+test('Qoder is found by its own name; WorkBuddy by the CodeBuddy CLI it runs on; ZCode in its desktop app or on the PATH', () => {
+  const home = mkdtempSync(join(tmpdir(), 'of-home-'));
+  const none = { home, env: { PATH: '' }, pathDirs: [], applicationDirs: [] };
+  assert.equal(detectAgentInstallation('qoder', none).cli, null);
+  assert.equal(detectAgentInstallation('workbuddy', none).cli, null);
+  assert.equal(detectAgentInstallation('zcode', none).cli, null);
+  const win = process.platform === 'win32';
+  const bin = join(home, 'bin');
+  mkdirSync(bin);
+  /* on Windows a npm install leaves a .cmd shim (cmdTarget of an empty one is the shim itself) */
+  const shim = (name) => put(join(bin, win ? `${name}.cmd` : name), '', 0o755);
+  const qoder = shim('qoder');
+  const cb = shim('codebuddy');
+  assert.equal(detectAgentInstallation('qoder', { ...none, pathDirs: [bin] }).cli, qoder);
+  /* WorkBuddy runs on CodeBuddy's CLI: a `codebuddy` command counts, a `workbuddy` one comes first */
+  assert.equal(detectAgentInstallation('workbuddy', { ...none, pathDirs: [bin] }).cli, cb);
+  const wb = shim('workbuddy');
+  assert.equal(detectAgentInstallation('workbuddy', { ...none, pathDirs: [bin] }).cli, wb);
+  if (win) {
+    const zcode = put(join(home, 'AppData', 'Local', 'Programs', 'ZCode', 'resources', 'glm', 'zcode.cjs'), '');
+    assert.equal(detectAgentInstallation('zcode', none).cli, zcode);
+  } else {
+    const apps = join(home, 'Applications');
+    const zcode = put(join(apps, 'ZCode.app', 'Contents', 'Resources', 'glm', 'zcode.cjs'), '', 0o755);
+    assert.equal(detectAgentInstallation('zcode', { ...none, applicationDirs: [apps] }).cli, zcode);
+  }
+});
+
 test("DeepSeek Harness is found inside its desktop app on a Mac, which carries the command, and from the app the person chooses", () => {
   if (process.platform === 'win32') return;
   const home = mkdtempSync(join(tmpdir(), 'of-home-'));
