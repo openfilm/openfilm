@@ -1,8 +1,8 @@
 /**
- * The services connected under Settings → Services (ServicesAccounts), and connecting one more: what
- * `openfilm get` gets voices, music, sound effects, transcripts, images, video and web searches from. A service
- * connected is listed with what can be done with it; Connect a service opens the others, the recommended ones first
- * (lib/providers RECOMMENDED_PROVIDERS), the rest under More, folded until opened.
+ * The services at the top of Settings → Services (ServicesBar): what `openfilm get` gets voices, music, sound
+ * effects, transcripts, images, video and web searches from, each a chip, the connected ones first, then the
+ * recommended ones (lib/providers RECOMMENDED_PROVIDERS), the rest behind "N more". A chip opens the service's card:
+ * connecting it, how it is paid, and what it makes with which models.
  *
  * ElevenLabs, OpenAI, Google, Microsoft Azure, fal.ai, OpenRouter, Groq, Pexels, Pixabay, Brave Search and Tavily connect with the person's
  * own key, which pays that service directly when it charges (a key in the environment shows as such and stays there).
@@ -11,69 +11,112 @@
  * A service can also be connected from a kind of media's menu, by picking one of its models (ModelsSection).
  */
 import React from 'react';
-import { ChevronRight, CircleHelp, ExternalLink, LogIn, Plus } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { ChevronRight, CircleHelp, ExternalLink, LogIn, Plus, X } from 'lucide-react';
 import { useT } from '@/i18n';
 import { AZURE_SERVICES, azureKey, providerGroups, type OwnProvider, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
 import { Tooltip } from '../Tooltip';
 import { customProblem } from './CustomServices';
 import { ProviderMark } from './ProviderMark';
-import { SettingsButton, SettingsField, SettingsGroup, SettingsInset, SettingsItem, SettingsStatus, settingsError, settingsLink } from './ui';
+import { SettingsButton, SettingsField, SettingsInset, SettingsItem, SettingsStatus, settingsError, settingsLink } from './ui';
 
 /** What a provider can make, in the order Services lists it (listing voices goes without saying with voice-over). */
 const ABILITY_ORDER: ProviderVerb[] = ['tts', 'music', 'sfx', 'asr', 'image', 'image-search', 'video', 'translate', 'web-search'];
 
 /**
- * The services connected, and the others to connect: folded under Connect a service while one is connected, listed
- * straight away while none is.
+ * Every service as a chip at the top of Services: the connected ones first (with a dot), then the recommended ones,
+ * then the rest behind "N more". A chip opens the service's card (ProviderDialog).
  */
-export function ServicesAccounts({ hook }: { hook: ProvidersHook }) {
+export function ServicesBar({ hook }: { hook: ProvidersHook }) {
   const t = useT();
   const rows = hook.state?.providers ?? [];
-  const connected = rows.filter((p) => p.source || hook.state?.signingIn.provider === p.id);
-  const groups = providerGroups(rows.filter((p) => !connected.includes(p)));
-  const [adding, setAdding] = React.useState(false);
-  /* folded until opened; a refused key under More opens it, so its reason shows */
-  const [moreOpen, setMoreOpen] = React.useState<boolean | null>(null);
-  const showMore = moreOpen ?? groups.more.some((p) => p.id === hook.problemFor);
-  const others = (
-    <>
-      <SettingsGroup title={t('settings.providers.groupRecommended')} footnote={connected.length ? null : t('settings.providers.keyNote')}>
-        {groups.recommended.map((provider) => <ProviderRow key={provider.id} provider={provider} hook={hook} />)}
-      </SettingsGroup>
-      {groups.more.length ? (
-        <SettingsGroup title={(
-          <button type="button" aria-expanded={showMore} onClick={() => setMoreOpen(!showMore)}
-            className="-ml-1 inline-flex items-center gap-1 rounded-md px-1 transition hover:text-[var(--text)]">
-            <ChevronRight size={14} className={`transition-transform ${showMore ? 'rotate-90' : ''}`} aria-hidden />
-            {t('settings.providers.groupMore')}
-            <span className="text-[var(--text-faint)]">{groups.more.length}</span>
-          </button>
-        )}>
-          {showMore ? groups.more.map((provider) => <ProviderRow key={provider.id} provider={provider} hook={hook} />) : null}
-        </SettingsGroup>
-      ) : null}
-    </>
+  const isOn = (p: OwnProvider) => Boolean(p.source) || hook.state?.signingIn.provider === p.id;
+  const connected = rows.filter(isOn).sort((a, b) => a.name.localeCompare(b.name));
+  const groups = providerGroups(rows.filter((p) => !isOn(p)));
+  const [all, setAll] = React.useState(false);
+  const [shown, setShown] = React.useState<string | null>(null);
+  const showing = rows.find((p) => p.id === shown) ?? null;
+  const chip = (p: OwnProvider) => (
+    <button key={p.id} type="button" onClick={() => setShown(p.id)}
+      className={`inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-[14px] transition hover:border-[var(--border-strong)] hover:text-[var(--text)] ${isOn(p) ? 'border-[var(--border-strong)] text-[var(--text)]' : 'border-[var(--border)] text-[var(--text-muted)]'}`}>
+      <ProviderMark id={p.id} size={15} />
+      {p.name}
+      {isOn(p) ? <span className="h-1.5 w-1.5 rounded-full bg-[var(--ok)]" aria-label={t('settings.providers.connected')} /> : null}
+    </button>
   );
-
+  if (!hook.state) return null;
   return (
-    <>
-      {connected.length ? (
-        <SettingsGroup title={t('settings.providers.groupConnected')} footnote={t('settings.providers.keyNote')}>
-          {connected.map((provider) => <ProviderRow key={provider.id} provider={provider} hook={hook} />)}
-          <div className="py-3">
-            <button type="button" aria-expanded={adding} onClick={() => setAdding(!adding)}
-              className="inline-flex items-center gap-1.5 rounded-md text-[15px] text-[var(--text-muted)] transition hover:text-[var(--text)]">
-              <ChevronRight size={15} className={`transition-transform ${adding ? 'rotate-90' : ''}`} aria-hidden />
-              {t('settings.providers.connectAnother')}
-            </button>
-          </div>
-        </SettingsGroup>
-      ) : null}
-      {hook.state && (!connected.length || adding) ? others : null}
-      {/* a key that was refused says why under its own field (KeyRow), not down here past the list; a custom service's
-          under its form */}
+    <div className="mb-10">
+      <div className="flex flex-wrap gap-2">
+        {connected.map(chip)}
+        {groups.recommended.map(chip)}
+        {all ? groups.more.map(chip) : null}
+        {groups.more.length ? (
+          <button type="button" aria-expanded={all} onClick={() => setAll(!all)}
+            className="inline-flex h-9 items-center gap-1 rounded-full px-3 text-[14px] text-[var(--text-faint)] transition hover:text-[var(--text)]">
+            {all ? t('settings.providers.fewer') : t('settings.providers.moreCount').replaceAll('{n}', String(groups.more.length))}
+            <ChevronRight size={14} className={`transition-transform ${all ? 'rotate-180' : ''}`} aria-hidden />
+          </button>
+        ) : null}
+      </div>
+      {/* a key that was refused says why under its own field, in its card; a custom service's under its form */}
       {hook.problem && !rows.some((p) => p.id === hook.problemFor) && !customProblem(hook) ? <p className={settingsError}>{hook.problem}</p> : null}
-    </>
+      {showing ? <ProviderDialog provider={showing} hook={hook} onClose={() => setShown(null)} /> : null}
+    </div>
+  );
+}
+
+/**
+ * A service's card, over Settings: connecting it (or how it is connected, and disconnecting), how it is paid, and each
+ * kind of media it makes with its models. Esc or a click beside it closes it, not Settings.
+ */
+function ProviderDialog({ provider, hook, onClose }: { provider: OwnProvider; hook: ProvidersHook; onClose: () => void }) {
+  const t = useT();
+  const close = React.useRef(onClose);
+  close.current = onClose;
+  React.useEffect(() => {
+    /* a field's own Esc (a key being pasted) closes only that field */
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || (e.target as HTMLElement | null)?.closest?.('input, textarea')) return;
+      e.preventDefault();
+      close.current();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, []);
+  const kinds = ABILITY_ORDER.filter((v) => provider.verbs.includes(v));
+  const paid = provider.signIn ? t('settings.providers.balanceNote').replaceAll('{name}', provider.name) : t('settings.providers.keyNote');
+
+  return createPortal(
+    <div className="fixed inset-0 z-[10070] grid place-items-center bg-black/40 p-6" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div role="dialog" aria-modal="true" aria-label={provider.name}
+        className="relative flex max-h-[80dvh] w-[600px] max-w-full flex-col overflow-y-auto rounded-[14px] border border-[var(--border)] bg-[var(--dock-pane)] px-6 pb-6 pt-3 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5)]">
+        <button type="button" onClick={onClose} aria-label={t('settings.done')}
+          className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-md text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+          <X size={16} />
+        </button>
+        <div className="pr-8"><ProviderRow provider={provider} hook={hook} /></div>
+        <p className="text-[13.5px] leading-relaxed text-[var(--text-faint)]">{paid}</p>
+        {kinds.length ? (
+          <div className="mt-5">
+            <h3 className="mb-1 text-[15px] font-semibold text-[var(--text)]">{t('settings.providers.makes')}</h3>
+            <div className="flex flex-col divide-y divide-[var(--border)]">
+              {kinds.map((verb) => (
+                <div key={verb} className="flex gap-4 py-3">
+                  <span className="w-[150px] shrink-0 text-[14.5px] text-[var(--text)]">{t(`settings.providers.verbs.${verb}`)}</span>
+                  <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+                    {(provider.models[verb] ?? []).map((m) => (
+                      <span key={m.id} className="rounded-md bg-[var(--fill-tsp)] px-2 py-0.5 text-[13.5px] text-[var(--text-muted)]">{m.name}</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>,
+    document.body,
   );
 }
 

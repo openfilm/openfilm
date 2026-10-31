@@ -6,8 +6,8 @@
  * none, with its first model. Writing, translating and looking at pictures are the agent's own model's (Settings →
  * Agents); subtitles and web search are here too, for what Studio does without the agent.
  *
- * Under them, the services connected and the others (ServicesAccounts), then the person's custom services, which their
- * agent calls itself (CustomServices).
+ * Above them, every service as a chip that opens its card (ServicesBar); under them, the person's custom services,
+ * which their agent calls itself (CustomServices).
  */
 import React from 'react';
 import { Check, ChevronDown } from 'lucide-react';
@@ -15,7 +15,7 @@ import { useT } from '@/i18n';
 import { USE_VERBS, offered, providerGroups, useProviders, type OwnProvider, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
 import { Popover } from '@/components/Popover';
 import { ProviderMark } from './ProviderMark';
-import { ProviderRow, ServicesAccounts } from './ProvidersSection';
+import { ProviderRow, ServicesBar } from './ProvidersSection';
 import { SettingsGroup, SettingsInset, SettingsItem, SettingsPage } from './ui';
 import { CustomServices } from './CustomServices';
 
@@ -42,9 +42,9 @@ export function ModelsSection() {
     <SettingsPage note={t('settings.models.desc')}>
       {state ? (
         <>
+          <ServicesBar hook={hook} />
           <SettingsGroup title={t('settings.models.groupMedia')}>{MEDIA.filter((verb) => offered(state, verb)).map(row)}</SettingsGroup>
           {others.length ? <SettingsGroup title={t('settings.models.groupText')} footnote={t('settings.models.textNote')}>{others.map(row)}</SettingsGroup> : null}
-          <ServicesAccounts hook={hook} />
         </>
       ) : null}
       <CustomServices hook={hook} />
