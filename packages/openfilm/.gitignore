@@ -10,3 +10,5 @@ studio/ui/dist/
 library/voices/
 # the sounds and music of library/audio.json, with their waveforms: published with the library likewise
 library/audio/
+# the emoji stickers of library/stickers.json: published with the library likewise
+library/stickers/emoji/

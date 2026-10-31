@@ -47,6 +47,7 @@
     "library",
     "!library/voices",
     "!library/audio",
+    "!library/stickers/emoji",
     "examples-index",
     "src",
     "!src/*.test.mjs",

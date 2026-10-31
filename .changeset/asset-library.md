@@ -11,3 +11,5 @@ Media in the library is what came into the project, folded under Imported: its o
 Sounds and Music hold about 5,400 sound effects and 1,200 pieces of music, each with its own name and group in five languages.
 
 Text starts from one line of words whose look and motion are its own to change: basic lines (title, subtitle, body, note, a line below), 36 word-art looks and motions in, while shown and out. Click one to see it; double-click it to put a new line in with it, or onto the words picked. A line's way out is timed by its clip, however long it is trimmed.
+
+Stickers hold about 1,200 emoji in 3D, Microsoft's Fluent Emoji, named in five languages and grouped (faces, people, animals and nature, food, activities, travel, objects, symbols); each comes in with a pop, at its own size in the middle of the picture.

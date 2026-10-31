@@ -10,6 +10,7 @@
  *                          look   a CSS `filter`, written into a clip's style
  *                          fade   one of Studio's transitions (ui lib/transitions), made of fades
  *   library/<id>/…       the things themselves
+ *   library/stickers.json  emoji stickers, each a bundle under stickers/emoji/ (published with the library likewise)
  *   library/audio.json   more sounds and music, as index.json says its own (`audio/<sfx|music>/<name>.mp3`, each with its
  *                        waveform beside it in waves/), the files published with the library rather than kept in git
  *   library/voices.json  the voices to speak a voice-over in: the ready-made voices of the voice-over services OpenFilm
@@ -50,24 +51,32 @@ function read(name, empty) {
   return value;
 }
 
-/** @type {{ own: unknown, audio: unknown, index: unknown } | null} */
+/** The library's other catalogs, each written by its script: its things shown with the index's own. */
+const CATALOGS = ['audio.json', 'stickers.json'];
+
+/** @type {{ parts: unknown[], index: unknown } | null} */
 let merged = null;
 
 /**
- * The library's index: library/index.json, and the sounds and music of library/audio.json with it (their groups
- * after its own, their things after its own).
+ * The library's index: library/index.json, and the things of each of CATALOGS with it (the sounds and music of
+ * audio.json, the emoji of stickers.json): their groups after its own, their things after its own.
  */
 export function libraryIndex() {
   const own = /** @type {{ version: number, groups: Record<string, unknown[]>, items: unknown[] }} */ (read('index.json', { version: 1, groups: {}, items: [] }));
-  const audio = /** @type {{ groups?: Record<string, { id: string }[]>, items?: unknown[] } | null} */ (read('audio.json', null));
-  if (!audio) return own;
-  if (merged?.own === own && merged.audio === audio) return merged.index;
+  const more = /** @type {({ groups?: Record<string, { id: string }[]>, items?: unknown[] } | null)[]} */ (CATALOGS.map((name) => read(name, null)));
+  const parts = [own, ...more];
+  if (merged && merged.parts.length === parts.length && merged.parts.every((p, i) => p === parts[i])) return merged.index;
   const groups = { ...own.groups };
-  for (const [cat, list] of Object.entries(audio.groups ?? {})) {
-    const have = new Set((/** @type {{ id: string }[]} */ (groups[cat] ?? [])).map((g) => g.id));
-    groups[cat] = [...(groups[cat] ?? []), ...list.filter((g) => !have.has(g.id))];
+  const items = [...own.items];
+  for (const catalog of more) {
+    if (!catalog) continue;
+    for (const [cat, list] of Object.entries(catalog.groups ?? {})) {
+      const have = new Set((/** @type {{ id: string }[]} */ (groups[cat] ?? [])).map((g) => g.id));
+      groups[cat] = [...(groups[cat] ?? []), ...list.filter((g) => !have.has(g.id))];
+    }
+    items.push(...(catalog.items ?? []));
   }
-  merged = { own, audio, index: { ...own, groups, items: [...own.items, ...(audio.items ?? [])] } };
+  merged = { parts, index: { ...own, groups, items } };
   return merged.index;
 }
 

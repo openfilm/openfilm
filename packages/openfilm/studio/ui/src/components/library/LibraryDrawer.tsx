@@ -80,7 +80,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
 
   const q = query.trim().toLowerCase();
   const items = (index?.items ?? []).filter((item) => item.cat === cat && (q
-    ? Object.values(item.name).some((n) => n?.toLowerCase().includes(q))
+    ? [...Object.values(item.name), ...(item.tags ?? [])].some((n) => n?.toLowerCase().includes(q))
     : group === FAVORITES ? favorites.includes(item.id) : !group || item.group === group));
   const pickedItem = picked ? index?.items.find((i) => i.id === picked) ?? null : null;
 
@@ -373,7 +373,7 @@ function Card({ item, lang, picked, kept, square, onPick, onAdd }: {
         {item.kind === 'look'
           ? <img src={SAMPLE} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" style={{ filter: item.filter }} />
           : <img src={posterUrl(item)} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />}
-        {hover && item.kind !== 'look' ? <video src={previewUrl(item)} autoPlay loop muted playsInline className="absolute inset-0 h-full w-full object-cover" /> : null}
+        {hover && item.kind !== 'look' && !item.still ? <video src={previewUrl(item)} autoPlay loop muted playsInline className="absolute inset-0 h-full w-full object-cover" /> : null}
         <StarButton item={item} kept={kept} className={`absolute right-1 top-1 h-5 w-5 place-items-center rounded-full bg-black/45 ${kept ? 'grid text-[#ffd35a]' : 'hidden text-white group-hover:grid'}`} />
         <AddButton item={item} onAdd={onAdd} className="absolute bottom-1 right-1 hidden h-[22px] w-[22px] place-items-center rounded-full bg-[var(--tl-accent)] text-black shadow-md group-hover:grid" />
       </div>

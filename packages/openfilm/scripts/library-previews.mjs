@@ -42,11 +42,11 @@ function filmFor(item, about) {
     const s = 0.5 * H;
     const w = Math.round(s * (about.w / about.h));
     top = `<iframe src="${src}#t=0,2" style="left: ${(W - w) / 2}px; top: ${(H - s) / 2}px; width: ${w}px; height: ${s}px"${props}></iframe>`;
-    under = '<img src="c.jpg#t=0,2" style="object-fit: cover; filter: brightness(0.55)">';
+    under = '<iframe src="ground.html#t=0,2"></iframe>';
     posterAt = 1.2;
   } else {
     top = `<iframe src="${src}#t=0,2"${props}></iframe>`;
-    /* text on a plain ground (library-ground.mjs), anything else over a still */
+    /* text on a plain ground (library-ground.mjs, as a sticker is), anything else over a still */
     under = item.cat === 'text' ? '<iframe src="ground.html#t=0,2"></iframe>' : '<img src="b.jpg#t=0,2" style="object-fit: cover">';
     /* a beat's flash is over soon after it starts */
     posterAt = item.cat === 'text' ? 1.6 : item.group === 'rhythm' ? 0.18 : 0.8;

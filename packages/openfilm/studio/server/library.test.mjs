@@ -17,7 +17,10 @@ test('every thing of the library is there, named in each language, in a group of
     ids.add(item.id);
     for (const lang of LANGS) assert.ok(item.name?.[lang], `${item.id} has no ${lang} name`);
     assert.ok(index.groups[item.cat]?.some((g) => g.id === item.group), `${item.id}: no group ${item.group} in ${item.cat}`);
-    if (item.kind === 'page') {
+    /* the things published apart from git (the emoji, the sounds and music) are checked where they are there */
+    const apart = /^(stickers\/emoji|audio)\//.test(item.id);
+    if (item.kind === 'page' && apart) assert.ok(item.poster && item.still, `${item.id}: its own picture`);
+    if (item.kind === 'page' && !apart) {
       const about = JSON.parse(readFileSync(join(builtInRoot(), item.id, 'saved.json'), 'utf8'));
       assert.equal(about.kind, 'clip');
       assert.ok(existsSync(join(builtInRoot(), item.id, 'files', about.clip.src)), `${item.id}: its page`);
