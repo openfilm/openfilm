@@ -1,12 +1,12 @@
 /**
  * Settings → Services: the services there are, as chips that open each one's card (ServicesBar), and what makes each
  * kind of media: one of the models of a connected service ("Multilingual v2 · ElevenLabs"), or none. A kind's menu
- * lists the connected services' models, and under them the services not connected that would make it, each a
- * Connect that opens its card. Connecting a service fills the kinds that have none, with its first model.
+ * lists every service that makes it with its models: the connected ones to choose from, then the others, whose
+ * models are shown as what connecting would bring, each opening that service's card. Connecting a service fills the
+ * kinds that have none, with its first model.
  *
- * Only media is chosen here. Writing, translating subtitles, looking at pictures and searching the web are the agent's
- * own work, with its own model; a service connected that translates or searches is used for that without being chosen
- * (the server fills every kind).
+ * Media, and web search for an agent that has none of its own. Writing, translating subtitles and looking at pictures
+ * are the agent's own work, with its own model.
  *
  * Under them, the person's custom services, which their agent calls itself (CustomServices).
  */
@@ -16,7 +16,7 @@ import { useT } from '@/i18n';
 import { MEDIA_VERBS, offered, providerOrder, useProviders, type OwnProvider, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
 import { Popover } from '@/components/Popover';
 import { ProviderMark } from './ProviderMark';
-import { AddProviderDialog, ProviderDialog, ServicesBar } from './ProvidersSection';
+import { AddProviderDialog, KIND_ICON, ProviderDialog, ServicesBar } from './ProvidersSection';
 import { SettingsGroup, SettingsItem, SettingsPage } from './ui';
 import { CustomServices } from './CustomServices';
 
@@ -35,24 +35,25 @@ export function ModelsSection() {
   const state = hook.state;
   /* the card open over the page: a provider's id, or 'add' */
   const [card, setCard] = React.useState<string | null>(null);
-  const custom = React.useRef<HTMLDivElement>(null);
+  /* asks the custom services to open their form (counted, so asking again opens it again) */
+  const [addCustom, setAddCustom] = React.useState(0);
   const shown = state?.providers.find((p) => p.id === card) ?? null;
+  const row = (verb: ProviderVerb) => <ModelRow key={verb} verb={verb} hook={hook} onConnect={setCard} />;
 
   return (
     <SettingsPage note={t('settings.models.desc')}>
       {state ? (
         <>
           <ServicesBar hook={hook} onOpen={setCard} />
-          <SettingsGroup title={t('settings.models.groupMedia')}>
-            {MEDIA_VERBS.filter((verb) => offered(state, verb)).map((verb) => <ModelRow key={verb} verb={verb} hook={hook} onConnect={setCard} />)}
-          </SettingsGroup>
+          <SettingsGroup title={t('settings.models.groupMedia')}>{MEDIA_VERBS.filter((verb) => offered(state, verb)).map(row)}</SettingsGroup>
+          {offered(state, 'web-search') ? (
+            <SettingsGroup title={t('settings.models.groupAgent')} footnote={t('settings.models.agentNote')}>{row('web-search')}</SettingsGroup>
+          ) : null}
         </>
       ) : null}
-      <div ref={custom}><CustomServices hook={hook} /></div>
+      <CustomServices hook={hook} adding={addCustom} />
       {shown ? <ProviderDialog provider={shown} hook={hook} onClose={() => setCard(null)} /> : null}
-      {card === 'add' ? (
-        <AddProviderDialog onClose={() => setCard(null)} onCustom={() => { setCard(null); custom.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} />
-      ) : null}
+      {card === 'add' ? <AddProviderDialog onClose={() => setCard(null)} onCustom={() => { setCard(null); setAddCustom((n) => n + 1); }} /> : null}
     </SettingsPage>
   );
 }
@@ -66,21 +67,22 @@ function ModelRow({ verb, hook, onConnect }: { verb: ProviderVerb; hook: Provide
   const order = providerOrder(state.providers.filter((p) => p.verbs.includes(verb) || p.id === chosen));
   const firstOf = (id: string) => state.providers.find((p) => p.id === id)?.models[verb]?.[0]?.id;
   const value = chosen ? `${chosen}:${state.model[verb] ?? firstOf(chosen) ?? ''}` : '';
-  const choices: Choice[] = order.connected.flatMap((p) => (p.models[verb] ?? [])
-    .map((m) => ({ value: `${p.id}:${m.id}`, provider: p.id, providerName: p.name, name: m.name, model: m.id })));
-  const current = choices.find((c) => c.value === value) ?? null;
+  const choicesOf = (p: OwnProvider): Choice[] => (p.models[verb] ?? [])
+    .map((m) => ({ value: `${p.id}:${m.id}`, provider: p.id, providerName: p.name, name: m.name, model: m.id }));
+  const current = order.connected.flatMap(choicesOf).find((c) => c.value === value) ?? null;
+  const Icon = KIND_ICON[verb];
 
   return (
     <SettingsItem
+      mark={Icon ? <Icon size={17} strokeWidth={1.75} /> : undefined}
       title={label}
       description={t(`settings.models.about.${verb}`)}
       control={(
         <ModelPicker
           label={label}
-          verb={verb}
           connected={order.connected}
           waiting={[...order.recommended, ...order.more]}
-          choices={choices}
+          choicesOf={choicesOf}
           current={current}
           busy={hook.busy === verb}
           onPick={(choice) => void hook.choose(verb, choice?.provider ?? '', choice ? { model: choice.model } : undefined)}
@@ -92,15 +94,15 @@ function ModelRow({ verb, hook, onConnect }: { verb: ProviderVerb; hook: Provide
 }
 
 /**
- * The button showing what makes a kind of media, and its menu: each connected service with its models, None, then
- * the services not connected that make it, one line each with Connect (its card).
+ * The button showing what makes a kind of media, and its menu: every service that makes it, each with its models.
+ * The connected ones first, to choose from (and None); then the others, their models shown as what connecting brings,
+ * each opening its card to connect it.
  */
-function ModelPicker({ label, verb, connected, waiting, choices, current, busy, onPick, onConnect }: {
+function ModelPicker({ label, connected, waiting, choicesOf, current, busy, onPick, onConnect }: {
   label: string;
-  verb: ProviderVerb;
   connected: OwnProvider[];
   waiting: OwnProvider[];
-  choices: Choice[];
+  choicesOf: (p: OwnProvider) => Choice[];
   current: Choice | null;
   busy: boolean;
   onPick: (choice: Choice | null) => void;
@@ -109,37 +111,49 @@ function ModelPicker({ label, verb, connected, waiting, choices, current, busy, 
   const t = useT();
   const [open, setOpen] = React.useState(false);
   const list = React.useRef<HTMLDivElement>(null);
+  const FOCUSABLE = '[role="option"], [data-connect]';
 
-  /* the menu opens on the chosen one; the arrow keys move between them */
+  /* the menu opens on the chosen one; the arrow keys move between everything in it */
   React.useEffect(() => {
     if (!open) return;
-    const r = requestAnimationFrame(() => (list.current?.querySelector<HTMLElement>('[aria-selected="true"]') ?? list.current?.querySelector<HTMLElement>('[role="option"], [data-connect]'))?.focus());
+    const r = requestAnimationFrame(() => (list.current?.querySelector<HTMLElement>('[aria-selected="true"]') ?? list.current?.querySelector<HTMLElement>(FOCUSABLE))?.focus());
     return () => cancelAnimationFrame(r);
   }, [open]);
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
     e.preventDefault();
-    const options = Array.from(list.current?.querySelectorAll<HTMLElement>('[role="option"], [data-connect]') ?? []);
+    const options = Array.from(list.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []);
     const at = options.indexOf(document.activeElement as HTMLElement);
     options[(at + (e.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length]?.focus();
   };
   const pick = (choice: Choice | null) => { setOpen(false); if (choice?.value !== current?.value) onPick(choice); };
+  const connect = (id: string) => { setOpen(false); onConnect(id); };
 
+  const rowClass = 'flex w-full items-center gap-2.5 rounded-[7px] px-2.5 text-left outline-none hover:bg-[var(--bg-hover)] focus-visible:bg-[var(--bg-hover)]';
   const option = (choice: Choice | null, text: string) => {
     const selected = (choice?.value ?? '') === (current?.value ?? '');
     return (
       <button key={choice?.value ?? ''} type="button" role="option" aria-selected={selected} onClick={() => pick(choice)}
-        className={`flex h-9 w-full items-center gap-2 rounded-[7px] pl-[38px] pr-3 text-left text-[14px] outline-none hover:bg-[var(--bg-hover)] focus-visible:bg-[var(--bg-hover)] ${choice ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>
+        className={`${rowClass} h-9 pl-[38px] text-[14px] ${choice ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>
         <span className="min-w-0 flex-1 truncate">{text}</span>
-        {selected ? <Check size={16} className="shrink-0 text-[var(--text)]" /> : null}
+        {selected ? <Check size={16} className="shrink-0" /> : null}
       </button>
     );
   };
-  const heading = (p: OwnProvider) => (
-    <div className="flex h-8 items-center gap-2.5 px-3 text-[12.5px] font-medium text-[var(--text-faint)]">
-      <span className="flex w-4 justify-center"><ProviderMark id={p.id} size={15} /></span>{p.name}
-    </div>
-  );
+  /* a provider's name over its models; a provider not connected says so, and its name connects it */
+  const heading = (p: OwnProvider, connectable: boolean) => {
+    const inner = (
+      <>
+        <span className="flex w-4 justify-center"><ProviderMark id={p.id} size={15} /></span>
+        <span className="min-w-0 flex-1 truncate">{p.name}</span>
+        {connectable ? <span className="shrink-0 text-[12.5px] font-normal text-[var(--text-faint)] group-hover:text-[var(--text)]">{t('settings.providers.connect')}</span> : null}
+      </>
+    );
+    return connectable ? (
+      <button type="button" data-connect onClick={() => connect(p.id)}
+        className={`${rowClass} group h-8 text-[13px] font-medium text-[var(--text-muted)]`}>{inner}</button>
+    ) : <div className="flex h-8 items-center gap-2.5 px-2.5 text-[13px] font-medium text-[var(--text-muted)]">{inner}</div>;
+  };
 
   const trigger = (
     <button type="button" aria-label={label} aria-haspopup="listbox" aria-expanded={open} disabled={busy}
@@ -156,33 +170,28 @@ function ModelPicker({ label, verb, connected, waiting, choices, current, busy, 
     <div className="shrink-0">
       <Popover open={open} onOpenChange={setOpen} placement="auto" align="end" layer={10060} trigger={trigger}>
         <div ref={list} role="listbox" aria-label={label} onKeyDown={onKeyDown}
-          className="max-h-[min(440px,var(--popover-max-h))] w-[340px] overflow-y-auto rounded-[12px] border border-[var(--border)] bg-[var(--surface)] p-1.5 shadow-[var(--shadow-lg)]">
+          className="max-h-[min(480px,var(--popover-max-h))] w-[340px] overflow-y-auto rounded-[12px] border border-[var(--border)] bg-[var(--surface)] p-1.5 shadow-[var(--shadow-lg)]">
           {connected.map((p) => (
             <div key={p.id} role="group" aria-label={p.name} className="pb-1">
-              {heading(p)}
-              {choices.filter((c) => c.provider === p.id).map((c) => option(c, c.name))}
+              {heading(p, false)}
+              {choicesOf(p).map((c) => option(c, c.name))}
             </div>
           ))}
           {connected.length ? option(null, t('settings.models.none')) : null}
           {waiting.length ? (
             <div className={connected.length ? 'mt-1.5 border-t border-[var(--border-soft)] pt-1.5' : ''}>
-              <div className="flex h-8 items-center px-3 text-[12.5px] font-medium text-[var(--text-faint)]">{t('settings.models.notConnected')}</div>
-              {waiting.map((p) => {
-                const count = (p.models[verb] ?? []).length;
-                return (
-                  <button key={p.id} type="button" data-connect onClick={() => { setOpen(false); onConnect(p.id); }}
-                    className="group flex h-10 w-full items-center gap-2.5 rounded-[7px] px-3 text-left outline-none hover:bg-[var(--bg-hover)] focus-visible:bg-[var(--bg-hover)]">
-                    <span className="flex w-4 justify-center text-[var(--text-muted)]"><ProviderMark id={p.id} size={15} /></span>
-                    <span className="min-w-0 flex-1 truncate text-[14px] text-[var(--text-muted)] group-hover:text-[var(--text)]">
-                      {p.name}
-                      {count ? <span className="text-[var(--text-faint)]"> · {t(count === 1 ? 'settings.models.oneModel' : 'settings.models.models').replaceAll('{n}', String(count))}</span> : null}
-                    </span>
-                    <span className="shrink-0 rounded-full border border-[var(--border)] px-2.5 py-0.5 text-[12.5px] text-[var(--text-muted)] group-hover:border-[var(--border-strong)] group-hover:text-[var(--text)]">
-                      {t('settings.providers.connect')}
-                    </span>
-                  </button>
-                );
-              })}
+              <div className="px-2.5 pb-1 pt-1.5 text-[12px] text-[var(--text-faint)]">{t('settings.models.notConnected')}</div>
+              {waiting.map((p) => (
+                <div key={p.id} role="group" aria-label={`${p.name}: ${t('settings.providers.connect')}`} className="pb-1">
+                  {heading(p, true)}
+                  {choicesOf(p).map((c) => (
+                    <button key={c.value} type="button" tabIndex={-1} onClick={() => connect(p.id)}
+                      className={`${rowClass} h-8 pl-[38px] text-[13.5px] text-[var(--text-faint)] hover:text-[var(--text-muted)]`}>
+                      <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                    </button>
+                  ))}
+                </div>
+              ))}
             </div>
           ) : null}
         </div>

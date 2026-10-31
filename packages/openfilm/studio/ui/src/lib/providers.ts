@@ -97,11 +97,21 @@ export const offered = (state: ProvidersState, verb: ProviderVerb) => state.prov
 
 /** The kinds of media the person chooses a provider for, in the order they are listed. */
 export const USE_VERBS: ProviderVerb[] = ['tts', 'music', 'sfx', 'asr', 'image', 'image-search', 'video', 'translate', 'web-search'];
-/**
- * The kinds Settings › Services shows: media. Translating subtitles and searching the web are the agent's own work;
- * a provider connected that does them is used for them without being chosen (the server fills each kind).
- */
+/** The kinds of media Settings › Services lets the person choose what makes. */
 export const MEDIA_VERBS: ProviderVerb[] = ['tts', 'music', 'sfx', 'asr', 'image', 'image-search', 'video'];
+/**
+ * Every kind Settings › Services shows: media, and web search for an agent that has none of its own. Translating
+ * subtitles is the agent's model's work; a provider connected that translates is used for it without being chosen
+ * (the server fills each kind).
+ */
+export const SERVICE_VERBS: ProviderVerb[] = [...MEDIA_VERBS, 'web-search'];
+
+/** Each provider's website, as its card links it. */
+export const PROVIDER_SITES: Readonly<Record<string, string>> = {
+  openfilm: 'openfilm.dev', openai: 'openai.com', google: 'ai.google.dev', azure: 'azure.microsoft.com', elevenlabs: 'elevenlabs.io',
+  openrouter: 'openrouter.ai', fal: 'fal.ai', groq: 'groq.com', mimo: 'platform.xiaomimimo.com', doubao: 'volcengine.com',
+  pexels: 'pexels.com', pixabay: 'pixabay.com', brave: 'brave.com/search/api', tavily: 'tavily.com', keenable: 'keenable.ai',
+};
 
 async function call<T = ProvidersState>(path: string, init?: { method: string; json?: unknown }): Promise<T> {
   const res = await fetch(`/api/providers${path}`, {
