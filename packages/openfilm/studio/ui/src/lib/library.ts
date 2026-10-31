@@ -93,7 +93,8 @@ export function fromLibrary(path: string, items: readonly LibraryItem[] | null =
 export const nameOf = (names: LibraryNames, lang: Language): string => names[lang] ?? names.en;
 
 /** A file of the library by its place there. */
-export const libraryUrl = (rel: string): string => `/api/library/file?path=${encodeURIComponent(rel)}`;
+/* `v`: the pictures were drawn again in place (2026-10-31): a copy kept from before is not used */
+export const libraryUrl = (rel: string): string => `/api/library/file?path=${encodeURIComponent(rel)}&v=2`;
 /** A page of the library, served as a page (for a try over the viewer's picture). */
 export const pageUrl = (item: LibraryItem): string => `/api/library/pages/${`${item.id}/files/${item.src ?? ''}`.split('/').map(encodeURIComponent).join('/')}`;
 export const posterUrl = (item: LibraryItem): string => libraryUrl(`${item.id}/poster.jpg`);
@@ -264,4 +265,16 @@ export function withRootVars(overrides: readonly unknown[] | undefined, vars: Re
   if (root) root.style = style;
   else list.push({ at: ':root', style });
   return list;
+}
+
+/**
+ * Where a thing of the library with a size of its own (a sticker) goes on the picture when put in: in its middle, a
+ * third of the picture's height, as wide as its own shape says (the page is fitted whole inside its box). Null for one
+ * without a size: it covers the picture, as a page does.
+ */
+export function libraryBox(item: Pick<LibraryItem, 'w' | 'h'> | null | undefined, stage: { w: number; h: number }): { x: number; y: number; w: number; h: number } | null {
+  if (!item?.w || !item.h) return null;
+  const h = Math.round(stage.h * 0.3);
+  const w = Math.round(h * (item.w / item.h));
+  return { x: Math.round((stage.w - w) / 2), y: Math.round((stage.h - h) / 2), w, h };
 }

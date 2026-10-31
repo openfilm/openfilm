@@ -412,7 +412,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (parts[0] === 'library') {
       if (parts.length === 1 && req.method === 'GET') return json(res, 200, libraryIndex());
       if (parts[1] === 'voices' && parts.length === 2 && req.method === 'GET') return json(res, 200, libraryVoices());
-      if (parts[1] === 'file' && parts.length === 2 && req.method === 'GET') return sendMedia(req, res, libraryFile(url.searchParams.get('path')), { keep: true });
+      if (parts[1] === 'file' && parts.length === 2 && req.method === 'GET') return sendMedia(req, res, libraryFile(url.searchParams.get('path')), { check: true });
       /* a page of it, as a page: what a click tries over the viewer's picture */
       if (parts[1] === 'pages' && parts.length > 2 && req.method === 'GET') {
         /* a page of it, as a page, and what it loads beside it by its own place (its fonts, its pictures): what a click
@@ -420,8 +420,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         const file = libraryFile(parts.slice(2).join('/'));
         if (!file) throw new HttpError(404, 'no such file');
         const type = /** @type {Record<string, string>} */ ({ '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.otf': 'font/otf' })[extname(file).toLowerCase()];
-        if (!type) return sendMedia(req, res, file, { keep: true });
-        res.writeHead(200, { 'content-type': type, 'cache-control': 'private, max-age=3600' });
+        if (!type) return sendMedia(req, res, file, { check: true });
+        res.writeHead(200, { 'content-type': type, 'cache-control': 'private, no-cache' });
         return res.end(readFileSync(file));
       }
       if (parts[1] === 'favorites' && parts.length === 2) {
@@ -1317,14 +1317,15 @@ async function exampleFolderHere(id) {
  * A picture or a video from this computer, a range answered as one (a preview is seeked in); none: 404.
  * @param {import('node:http').IncomingMessage} req @param {import('node:http').ServerResponse} res @param {string | null | undefined} file
  */
-function sendMedia(req, res, file, { keep = false } = {}) {
+function sendMedia(req, res, file, { keep = false, check = false } = {}) {
   if (!file || !existsSync(file) || !statSync(file).isFile()) throw new HttpError(404, 'no such file');
   const { size, mtimeMs } = statSync(file);
   /* `keep`: a picture that changes only with its file (a skill's cover, an example's poster) is kept by the browser
      an hour, and then only asked whether it changed */
   const tag = `"${size.toString(36)}-${Math.round(mtimeMs).toString(36)}"`;
-  const kept = keep ? { etag: tag, 'cache-control': 'private, max-age=3600' } : {};
-  if (keep && req.headers['if-none-match'] === tag) { res.writeHead(304, kept); res.end(); return undefined; }
+  /* `check`: one that may be drawn again in place (the library's pictures): kept, but asked about each time */
+  const kept = keep ? { etag: tag, 'cache-control': 'private, max-age=3600' } : check ? { etag: tag, 'cache-control': 'private, no-cache' } : {};
+  if ((keep || check) && req.headers['if-none-match'] === tag) { res.writeHead(304, kept); res.end(); return undefined; }
   const type = {
     '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif', '.avif': 'image/avif', '.svg': 'image/svg+xml',
     '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime',

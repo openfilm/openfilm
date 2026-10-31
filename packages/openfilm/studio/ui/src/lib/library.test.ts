@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { coverLook, cutTrack, cutsOf, fromLibrary, isTextClip, withRootVars, libraryDragItem, lookOf, onCut, soundLook, waveUrl, withLook, type LibraryItem } from './library.ts';
+import { coverLook, libraryBox, cutTrack, cutsOf, fromLibrary, isTextClip, withRootVars, libraryDragItem, lookOf, onCut, soundLook, waveUrl, withLook, type LibraryItem } from './library.ts';
 
 const page: LibraryItem = { id: 'effects/snow', cat: 'effect', group: 'ambience', name: { en: 'Snow' }, kind: 'page', durationMs: 4000, src: 'snow.html' };
 const sound: LibraryItem = { id: 'sounds/whoosh.m4a', cat: 'sound', group: 'transition', name: { en: 'Whoosh' }, kind: 'sound', durationMs: 700 };
@@ -51,8 +51,8 @@ test('a project file came from the library when it is a page taken from it, or o
 });
 
 test('a sound\'s waveform is beside it in waves/', () => {
-  assert.equal(waveUrl(sound), '/api/library/file?path=sounds%2Fwaves%2Fwhoosh.png');
-  assert.equal(waveUrl({ ...sound, id: 'audio/music/cozy-morning-3f2a1c.mp3', cat: 'music' }), '/api/library/file?path=audio%2Fmusic%2Fwaves%2Fcozy-morning-3f2a1c.png');
+  assert.equal(waveUrl(sound), '/api/library/file?path=sounds%2Fwaves%2Fwhoosh.png&v=2');
+  assert.equal(waveUrl({ ...sound, id: 'audio/music/cozy-morning-3f2a1c.mp3', cat: 'music' }), '/api/library/file?path=audio%2Fmusic%2Fwaves%2Fcozy-morning-3f2a1c.png&v=2');
 });
 
 test('a sound\'s tile and a track\'s cover are its own, the same each time, in its group\'s colors', () => {
@@ -75,4 +75,9 @@ test('a text style or motion is the text component\'s variables, set in its clip
     withRootVars([{ fade: [0.2, 0] }, { at: ':root', style: { '--clip-length': '3s', '--color': 'blue' } }, { at: '.t', text: 'Hi' }], { '--color': 'red', '--in': 'pop' }),
     [{ fade: [0.2, 0] }, { at: ':root', style: { '--clip-length': '3s', '--color': 'red', '--in': 'pop' } }, { at: '.t', text: 'Hi' }],
   );
+});
+
+test('a sticker goes in the middle of the picture, a third of its height, in its own shape; a page without a size covers it', () => {
+  assert.deepEqual(libraryBox({ w: 400, h: 200 }, { w: 1920, h: 1080 }), { x: 636, y: 378, w: 648, h: 324 });
+  assert.equal(libraryBox({}, { w: 1920, h: 1080 }), null);
 });

@@ -29,7 +29,7 @@ import { attrsOf, pasteAttrs, type AttrGroup, type CopiedAttrs } from '@/lib/cli
 import { cutPoints, namedTrack, nextCut, trackNamesOf } from '@/lib/timeline-nav';
 import { anyLocked, lockedEdits } from '@/lib/track-lock';
 import { placeMedia, type SourceRange } from '@/lib/media-place';
-import { BUILT_IN, TEXT_COMPONENT, builtInItem, cutTrack, cutsOf, fromLibrary, isTextClip, libraryDragItem, nameOf, onCut, useLibraryIndex, withLook, withRootVars, type LibraryItem } from '@/lib/library';
+import { BUILT_IN, TEXT_COMPONENT, builtInItem, cutTrack, cutsOf, fromLibrary, isTextClip, libraryBox, libraryDragItem, nameOf, onCut, useLibraryIndex, withLook, withRootVars, type LibraryItem } from '@/lib/library';
 import { LibraryDrawer, type LibraryActions } from '@/components/library/LibraryDrawer';
 import { LibraryTrial } from '@/components/library/LibraryTrial';
 import { apartOnTracks, type ClipEdit } from '@/lib/film-clip-edits';
@@ -1351,7 +1351,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         const { saved: _from, ...rest } = file;
         return dropAssetRef.current({ ...rest, path: taken.path }, target, atMs);
       }
-      const clip = taken.clip;
+      /* a sticker of the library: in the middle of the picture at a size it reads, not over all of it */
+      const box = libraryBox(builtInItem(file.saved), stageRef.current ?? { w: 1920, h: 1080 });
+      const clip = box ? { ...taken.clip, box } : taken.clip;
       const durMs = file.durationMs ?? assetRunMs([file]);
       /* a transition of OpenFilm's library (lib/library): its middle on the cut it was put near, never pushing or
          cutting what is under it */
@@ -1543,7 +1545,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         return;
       }
       if (!('clip' in taken)) return;
-      const clip = vars ? { ...taken.clip, overrides: withRootVars((taken.clip as { overrides?: unknown[] }).overrides, vars) } : taken.clip;
+      const box = libraryBox(item, stageRef.current ?? { w: 1920, h: 1080 });
+      const clip = { ...taken.clip, ...(box ? { box } : {}), ...(vars ? { overrides: withRootVars((taken.clip as { overrides?: unknown[] }).overrides, vars) } : {}) };
       const failed = await edit([{ op: 'insert', clip: clip as never, at, track }], 'history.stepDrop');
       if (failed) { toast.show(failed); return; }
       toast.show(t('assetDrawer.added').replace('{name}', name));
