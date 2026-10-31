@@ -68,6 +68,8 @@ export function PropertiesSection({ host, commit }: {
   const [renaming, setRenaming] = React.useState<string | null>(null);
   const overrides = host.overrides();
   const props = host.props();
+  /* a clip's length is Studio's to keep (studio/server/ops.mjs), not the person's to set: not shown */
+  const shown = props.filter((p) => !(p.type === 'var' && p.var === '--clip-length'));
   const kept = JSON.stringify(overrides ?? []);
   React.useEffect(() => {
     let live = true;
@@ -170,9 +172,9 @@ export function PropertiesSection({ host, commit }: {
         </span>
       )}
     >
-      {!props.length ? (
+      {!shown.length ? (
         <p className="text-[10.5px] leading-[15px] text-[var(--text-faint)]">{t('inspector.propsEmpty')}</p>
-      ) : props.map((prop) => (
+      ) : shown.map((prop) => (
         <div key={prop.name} {...pointing(prop)} onContextMenu={(e) => rowMenu(e, prop)}>
           <Line
             label={renaming === prop.name ? (
@@ -192,7 +194,7 @@ export function PropertiesSection({ host, commit }: {
           </Line>
         </div>
       ))}
-      {!controls && props.length ? (
+      {!controls && shown.length ? (
         <p className="text-[10.5px] leading-[15px] text-[var(--text-faint)]">{t('inspector.templateOffPicture')}</p>
       ) : null}
       {menu ? <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} /> : null}
