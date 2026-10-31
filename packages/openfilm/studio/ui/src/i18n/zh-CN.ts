@@ -945,6 +945,8 @@ export const zhCN: Words = {
     musicSoon: '音乐库正在准备中',
     musicMake: '让 agent 生成一段',
     musicAsk: '为这部片子生成一段背景音乐，放到时间线上：',
+    seek: '拖动进度',
+    close: '关闭',
   },
   saved: {
     title: '收藏',

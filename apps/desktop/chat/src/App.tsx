@@ -6,7 +6,7 @@
  * (lib/local-agent-run's saved turns).
  */
 import React from 'react';
-import { ArrowDown, ArrowLeft, Blocks, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, ShieldQuestion, Square, X } from 'lucide-react';
+import { ArrowDown, Blocks, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, ShieldQuestion, Square, X } from 'lucide-react';
 import { buildPromptDisplay, type Turn } from '@openfilm/shared';
 import { useT, useUiLocale } from '@/i18n';
 import { ConversationBar } from '@/components/ConversationSessionBar';
@@ -305,8 +305,8 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   const [scrolled, setScrolled] = React.useState(false);
   const tail = useTailSpacer(thread.viewport, thread.pinIfFollowing, active);
   const composerRef = React.useRef<PromptEditorHandle>(null);
-  /* the composer and what stands on it (a question, a permission, the way back to the conversation): its height is
-     all this view keeps while the assets are open, the drawer above meeting it */
+  /* the composer and what stands on it (a question, a permission): its height is all this view keeps while the assets
+     are open, the drawer above meeting it */
   const composerBlockRef = React.useRef<HTMLDivElement>(null);
   React.useLayoutEffect(() => {
     const block = composerBlockRef.current;
@@ -818,6 +818,8 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     const blocker = attachmentBlocker(attached, t);
     if (blocker) { setFollowUpError(blocker); return; }
     setFollowUpError(null);
+    /* sent with the assets open: they close (as they were, for next time) and the conversation shows */
+    if (assetsOpen) app.setAssetsOpen(false);
     const promptDisplay = buildPromptDisplay(followUp, followUpRefs.map(sentPill));
     thread.scrollToBottom({ smooth: true });
     composerRef.current?.clear();
@@ -1135,17 +1137,6 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
 
               <div ref={composerBlockRef} className={`relative flex shrink-0 flex-col px-4 pb-1.5 ${assetsOpen ? 'pt-2' : ''}`}>
                 <div className="flex flex-col gap-2">
-                  {/* the assets open while a conversation's turn runs: a pill back to it */}
-                  {assetsOpen && running.has(sessionId) ? (
-                    <button type="button" onClick={() => app.setAssetsOpen(false)}
-                      className="flex h-7 items-center gap-1.5 self-center rounded-full border border-[var(--border)] bg-[var(--surface-2)] pl-2.5 pr-3 text-[12px] font-medium text-[var(--text)] shadow-[0_2px_10px_rgba(0,0,0,0.3)] hover:bg-[var(--bg-hover)]">
-                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--accent)]" />
-                      {t('project.chatRunning')}
-                      <span className="text-[var(--text-faint)]">·</span>
-                      <ArrowLeft size={13} />
-                      {t('project.backToChat')}
-                    </button>
-                  ) : null}
                   {spendAsk ? (
                     <ComposerCard role="alertdialog" icon={<Coins size={14} />} title={spendAsk.title}
                       body={spendAsk.body ? <span className="break-words">{spendAsk.body}</span> : undefined}>

@@ -189,3 +189,57 @@ export function toggleFavorite(id: string): void {
     .then((r) => (r.ok ? r.json() : null), () => null)
     .then((body: { ids?: string[] } | null) => { if (body && Array.isArray(body.ids)) { favorites = body.ids; tellStarred(); } });
 }
+
+/** A number from 0 to 1 that a string always gives (FNV-1a), the `n`th of a string's own. */
+export function seeded(text: string, n: number): number {
+  let h = 2166136261 ^ n;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+  h = Math.imul(h ^ (h >>> 15), 2246822507);
+  return ((h ^ (h >>> 13)) >>> 0) / 4294967296;
+}
+
+/* each group of sounds its own colors (a hue and how far it ranges), each mood of music its own */
+const SOUND_HUES: Record<string, [number, number]> = {
+  transition: [220, 50], ui: [180, 35], impact: [355, 35], ambience: [150, 40], foley: [28, 30], nature: [95, 45],
+  animals: [48, 30], people: [320, 35], tech: [205, 40], cartoon: [290, 60], stings: [42, 25], vehicles: [210, 20],
+};
+const MUSIC_HUES: Record<string, [number, number, number]> = {
+  /* hue, range, how bright */
+  upbeat: [28, 40, 62], warm: [22, 30, 58], emotional: [235, 45, 46], calm: [185, 40, 52], cinematic: [38, 25, 40],
+  tense: [355, 25, 32], electronic: [285, 80, 50], lofi: [265, 60, 48], playful: [320, 90, 64], corporate: [210, 25, 50],
+  festive: [0, 120, 52],
+};
+const spot = (x: number, y: number, r: number, color: string) => `radial-gradient(circle at ${x}% ${y}%, ${color} 0%, transparent ${r}%)`;
+
+/** A sound's tile: soft light in its group's colors, its own arrangement of them (from its id), the same each time. */
+export function soundLook(item: Pick<LibraryItem, 'id' | 'group'>): { background: string } {
+  const [from, span] = SOUND_HUES[item.group] ?? [200, 40];
+  const hue = (n: number) => Math.round((from + seeded(item.id, n) * span + 360) % 360);
+  const spots = [0, 1, 2].map((i) => spot(Math.round(10 + seeded(item.id, 10 + i) * 80), Math.round(10 + seeded(item.id, 20 + i) * 80),
+    Math.round(40 + seeded(item.id, 30 + i) * 30), `hsl(${hue(i + 1)} 70% ${Math.round(52 + seeded(item.id, 40 + i) * 18)}%)`));
+  return { background: `${spots.join(', ')}, hsl(${hue(0)} 45% 26%)` };
+}
+
+/**
+ * A piece of music's cover: its mood's colors as soft light, and one motif of its own (rings, a sun, stripes or
+ * waves, from its id), the same each time. Drawn, not a picture: free, small, and no rights to clear.
+ */
+export function coverLook(item: Pick<LibraryItem, 'id' | 'group'>): { background: string } {
+  const [from, span, light] = MUSIC_HUES[item.group] ?? [210, 60, 50];
+  const s = (n: number) => seeded(item.id, n);
+  const hue = (n: number) => Math.round((from + s(n) * span + 360) % 360);
+  /* the last light leans off its mood's colors, so covers of one mood still differ */
+  const glow = [0, 1, 2].map((i) => spot(Math.round(s(10 + i) * 100), Math.round(s(20 + i) * 100), Math.round(40 + s(30 + i) * 35),
+    `hsl(${i === 2 ? (hue(3) + 40 + Math.round(s(43) * 50)) % 360 : hue(i + 1)} 78% ${Math.round(light + (s(40 + i) - 0.5) * 26)}%)`));
+  const line = `hsl(${hue(5)} 90% 94% / 0.32)`;
+  const x = Math.round(25 + s(50) * 50);
+  const y = Math.round(25 + s(51) * 50);
+  const motifs = [
+    `repeating-radial-gradient(circle at ${x}% ${y}%, transparent 0 9px, ${line} 9px 10px)`,
+    `radial-gradient(circle at ${x}% ${y}%, hsl(${hue(6)} 95% 78% / 0.85) 0 14%, transparent 15%)`,
+    `repeating-linear-gradient(${Math.round(s(52) * 180)}deg, transparent 0 7px, ${line} 7px 8px)`,
+    `repeating-radial-gradient(ellipse 160% 60% at 50% ${y + 40}%, transparent 0 8px, ${line} 8px 9px)`,
+  ];
+  const motif = motifs[Math.floor(s(53) * motifs.length)]!;
+  return { background: `${motif}, ${glow.join(', ')}, hsl(${hue(0)} 50% ${Math.round(light * 0.45)}%)` };
+}

@@ -941,6 +941,8 @@ export const ko: Words = {
     musicSoon: '음악 라이브러리를 준비하고 있습니다',
     musicMake: '에이전트에게 만들어 달라기',
     musicAsk: '이 영상의 배경 음악을 만들어 타임라인에 넣어 주세요: ',
+    seek: '재생 위치',
+    close: '닫기',
   },
   saved: {
     title: '보관함',

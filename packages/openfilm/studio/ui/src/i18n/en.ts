@@ -945,6 +945,8 @@ export const en = {
     musicSoon: 'The music library is on its way.',
     musicMake: 'Make music with your agent',
     musicAsk: 'Make a piece of background music for this film and put it on the timeline: ',
+    seek: 'Move through it',
+    close: 'Close',
   },
   saved: {
     title: 'Saved',

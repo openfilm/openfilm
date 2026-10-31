@@ -145,10 +145,10 @@
   --tooltip-border: rgba(255, 255, 255, 0.16);
 
   /* one highlight everywhere: what is picked or shown is the timeline's teal, in every pane */
-  --accent: #45c2b4;
-  --accent-soft: rgba(69, 194, 180, 0.12);
+  --accent: #2ed3c6;
+  --accent-soft: rgba(46, 211, 198, 0.12);
   --on-accent: #ffffff;
-  --text-selection: rgba(69, 194, 180, 0.4);
+  --text-selection: rgba(46, 211, 198, 0.4);
 
   --ok: #5eb92d;
   --warn: #ffbf36;
@@ -184,7 +184,7 @@
   --tl-faint: rgba(255, 255, 255, 0.4);
   /* white playhead on near black; selection white too (teal disappears on the darkened blocks) */
   --tl-playhead: #ffffff;
-  --tl-accent: #45c2b4;
+  --tl-accent: #2ed3c6;
   --tl-select: #ffffff;
   --tl-wave: rgba(12, 168, 164, 0.9);
   --tl-wave-band: rgba(0, 119, 125, 0.85);

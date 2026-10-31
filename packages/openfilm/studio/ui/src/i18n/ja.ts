@@ -944,6 +944,8 @@ export const ja: Words = {
     musicSoon: '音楽ライブラリは準備中です',
     musicMake: 'エージェントに作ってもらう',
     musicAsk: 'この映像の BGM を作って、タイムラインに置いてください：',
+    seek: '再生位置',
+    close: '閉じる',
   },
   saved: {
     title: 'コレクション',

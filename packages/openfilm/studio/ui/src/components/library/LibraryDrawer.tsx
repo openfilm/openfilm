@@ -11,15 +11,16 @@
  * it among the favorites, for every project.
  */
 import React from 'react';
-import { AudioLines, ChevronDown, Pause, Play, Plus, Search, Star } from 'lucide-react';
+import { ChevronDown, Plus, Search, Star } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import {
-  libraryDragItem, libraryUrl, nameOf, posterUrl, previewUrl, toggleFavorite, useLibraryFavorites, useLibraryIndex, waveUrl,
+  libraryDragItem, libraryUrl, nameOf, posterUrl, previewUrl, toggleFavorite, useLibraryFavorites, useLibraryIndex,
   type LibraryCategory, type LibraryItem,
 } from '@/lib/library';
 import { clearResourceDrag, setResourceDragData } from '@/lib/resource-drag';
 import { useLibraryVoices } from '@/lib/library-voices';
+import { MiniPlayer, MusicCard, SoundRow, usePlayer } from './AudioList';
 import { CategoryIcon, Empty } from './icons';
 import { FEATURED, STARRED, VoicesPane } from './VoicesPane';
 
@@ -93,6 +94,9 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
     : (index?.groups[cat as LibraryCategory] ?? []).map((g) => ({ id: g.id, name: nameOf(g.name, lang) }));
   const askMusic = studioHost?.ask;
   const groupName = (id: string) => own.find((g) => g.id === id)?.name ?? '';
+  /* what a sound or a piece of music plays in, under the list */
+  const player = usePlayer();
+  const dragProps = (item: LibraryItem) => ({ onDragStart: dragOf(item, nameOf(item.name, lang)), onDragEnd: () => clearResourceDrag() });
   /* a long list (thousands of sounds) is drawn a page at a time, from its top again when what it lists changes */
   const [drawn, setDrawn] = React.useState(PAGE);
   React.useEffect(() => setDrawn(PAGE), [cat, group, query]);
@@ -174,7 +178,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
                 </label>
               </div>
               {cat === 'voice' ? <VoicesPane group={group} query={query} favorites={favorites} onServices={onServices} onAll={() => pickGroup('')} /> : (
-              /* a click on nothing lets the picked thing go */
+              <>
+              {/* a click on nothing lets the picked thing go; the player is under the list */}
               <div
                 className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-0.5"
                 onClick={(e) => { if (e.target === e.currentTarget) pick(null); }}
@@ -186,11 +191,18 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
                       : cat === 'music' ? <Empty icon="music" text={t('assetDrawer.musicSoon')} action={askMusic ? t('assetDrawer.musicMake') : undefined}
                         onAction={() => askMusic?.({ text: t('assetDrawer.musicAsk'), refs: [] })} />
                         : null
-                ) : cat === 'sound' || cat === 'music' ? (
+                ) : cat === 'sound' ? (
                   <div className="flex flex-col gap-0.5">
                     {items.slice(0, drawn).map((it) => (
-                      <SoundRow key={it.id} item={it} lang={lang} group={groupName(it.group)} picked={picked === it.id} kept={favorites.includes(it.id)}
-                        onPick={() => pick(it)} onAdd={() => actions.add(it)} />
+                      <SoundRow key={it.id} item={it} name={nameOf(it.name, lang)} group={groupName(it.group)} picked={picked === it.id} player={player}
+                        kept={favorites.includes(it.id)} addTip={addTip(it, t)} onPick={() => pick(it)} onAdd={() => actions.add(it)} drag={dragProps(it)} />
+                    ))}
+                  </div>
+                ) : cat === 'music' ? (
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2">
+                    {items.slice(0, drawn).map((it) => (
+                      <MusicCard key={it.id} item={it} name={nameOf(it.name, lang)} group={groupName(it.group)} picked={picked === it.id} player={player}
+                        kept={favorites.includes(it.id)} addTip={addTip(it, t)} onPick={() => pick(it)} onAdd={() => actions.add(it)} drag={dragProps(it)} />
                     ))}
                   </div>
                 ) : (
@@ -202,6 +214,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
                   </div>
                 )}
               </div>
+              <MiniPlayer player={player} name={player.item ? nameOf(player.item.name, lang) : ''} group={player.item ? groupName(player.item.group) : ''} />
+              </>
               )}
             </>
           )}
@@ -360,109 +374,6 @@ function Card({ item, lang, picked, kept, square, onPick, onAdd }: {
         <AddButton item={item} onAdd={onAdd} className="absolute bottom-1 right-1 hidden h-[22px] w-[22px] place-items-center rounded-full bg-[var(--tl-accent)] text-black shadow-md group-hover:grid" />
       </div>
       <div className={`mt-1.5 truncate px-0.5 text-[11.5px] ${picked ? 'text-[var(--tl-accent)]' : 'text-[var(--text-muted)] group-hover:text-[var(--text)]'}`}>{name}</div>
-    </div>
-  );
-}
-
-/** A sound's length as the list says it: seconds under a minute (0.7 s), else minutes and seconds (1:04). */
-function lengthOf(ms: number, t: (path: string) => string): string {
-  if (ms < 60_000) return t('assetDrawer.seconds').replace('{s}', String(Math.round(ms / 100) / 10));
-  const s = Math.round(ms / 1000);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-}
-
-/* the sound playing in the drawer: one at a time */
-let playingSound: HTMLAudioElement | null = null;
-
-/* a sound's tile, tinted by its group so the kinds of sound read apart down the list */
-const TINTS = ['#3b6fd8', '#8a4fd8', '#d8507a', '#d88a3b', '#3bab8a', '#5f8fa8'];
-const tintOf = (group: string) => TINTS[[...group].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % TINTS.length]!;
-
-/**
- * A sound or a piece of music: its tile (playing it under the pointer), its name, group and length, and its waveform
- * across the row, lit in the accent as far as it has played.
- */
-function SoundRow({ item, lang, group, picked, kept, onPick, onAdd }: {
-  item: LibraryItem; lang: ReturnType<typeof useLanguage>; group: string; picked: boolean; kept: boolean; onPick: () => void; onAdd: () => void;
-}) {
-  const t = useT();
-  const [playing, setPlaying] = React.useState(false);
-  const [played, setPlayed] = React.useState(0);
-  const audio = React.useRef<HTMLAudioElement | null>(null);
-  React.useEffect(() => () => { audio.current?.pause(); }, []);
-  /* how far it has played, each frame while it plays */
-  React.useEffect(() => {
-    if (!playing) return undefined;
-    let frame = 0;
-    const tick = () => {
-      const a = audio.current;
-      if (a?.duration) setPlayed(a.currentTime / a.duration);
-      frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, [playing]);
-  /* a click picks it and plays it; a click on it again stops it */
-  const click = () => {
-    onPick();
-    if (playing) { audio.current?.pause(); return; }
-    playingSound?.pause();
-    audio.current ??= new Audio(libraryUrl(item.id));
-    const a = audio.current;
-    a.currentTime = 0;
-    setPlayed(0);
-    a.onpause = () => setPlaying(false);
-    a.onended = () => { setPlaying(false); setPlayed(0); };
-    playingSound = a;
-    void a.play().then(() => setPlaying(true), () => setPlaying(false));
-  };
-  const name = nameOf(item.name, lang);
-  const lit = Math.round(played * 1000) / 10;
-  const tint = tintOf(item.group);
-  return (
-    <div
-      className={`group relative grid cursor-default select-none grid-cols-[44px_minmax(0,1fr)] items-center gap-3 rounded-lg px-2 py-2 ${picked ? 'bg-[var(--surface-2)]' : 'hover:bg-[var(--surface-2)]'}`}
-      draggable
-      onDragStart={dragOf(item, name)}
-      onDragEnd={() => clearResourceDrag()}
-      onClick={click}
-      onDoubleClick={onAdd}
-      title={name}
-    >
-      <span
-        aria-label={playing ? t('assetDrawer.stop') : t('assetDrawer.play')}
-        className="relative grid h-11 w-11 place-items-center overflow-hidden rounded-lg text-white"
-        style={{ background: `linear-gradient(140deg, ${tint}, color-mix(in srgb, ${tint} 45%, #101010))` }}
-      >
-        <AudioLines size={18} strokeWidth={1.8} className={`opacity-85 ${playing ? 'hidden' : 'group-hover:hidden'}`} />
-        <span className={`absolute inset-0 place-items-center bg-black/30 ${playing ? 'grid' : 'hidden group-hover:grid'}`}>
-          {playing ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" className="translate-x-px" />}
-        </span>
-      </span>
-      <span className="flex min-w-0 flex-col gap-1.5">
-        <span className="flex min-w-0 items-center gap-2">
-          <span className={`truncate text-[12.5px] font-medium ${picked || playing ? 'text-[var(--tl-accent)]' : 'text-[var(--text)]'}`}>{name}</span>
-          <span className="shrink-0 text-[11px] text-[var(--text-faint)]">{group}</span>
-          <span className="ml-auto shrink-0 text-[11px] tabular-nums text-[var(--text-faint)] group-hover:hidden">
-            {lengthOf(item.durationMs ?? 0, t)}
-          </span>
-          <span className="ml-auto hidden shrink-0 items-center gap-1.5 group-hover:flex">
-            <StarButton item={item} kept={kept} className={kept ? 'text-[#ffd35a]' : 'text-[var(--text-faint)] hover:text-[var(--text)]'} />
-            <AddButton item={item} onAdd={onAdd} className="grid h-[22px] w-[22px] place-items-center rounded-full bg-[var(--tl-accent)] text-black" />
-          </span>
-          {kept ? <Star size={11} fill="#ffd35a" strokeWidth={0} className="shrink-0 group-hover:hidden" /> : null}
-        </span>
-        {/* its waveform as a mask: lit as far as it has played, the rest quiet */}
-        <span
-          aria-hidden
-          className="block h-[18px] w-full"
-          style={{
-            WebkitMaskImage: `url(${waveUrl(item)})`, maskImage: `url(${waveUrl(item)})`,
-            WebkitMaskSize: '100% 100%', maskSize: '100% 100%',
-            background: `linear-gradient(to right, var(--tl-accent) ${lit}%, var(--text-faint) ${lit}%)`,
-          }}
-        />
-      </span>
     </div>
   );
 }

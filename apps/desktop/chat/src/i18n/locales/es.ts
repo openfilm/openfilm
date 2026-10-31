@@ -221,8 +221,6 @@ export const es: Words = {
   },
   project: {
     assets: 'Recursos',
-    backToChat: 'Volver a la conversación',
-    chatRunning: 'En curso',
     addAttachment: 'Añadir archivos',
     close: 'Cerrar',
     composerPlaceholder: 'Di qué cambiar. Escribe @ para un archivo, una skill, un momento o lo que seleccionaste',

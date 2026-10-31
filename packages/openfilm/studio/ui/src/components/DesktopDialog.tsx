@@ -55,7 +55,7 @@ const DARK: React.CSSProperties = {
   '--border': 'rgba(255, 255, 255, 0.08)',
   '--dock-shell': '#121414',
   '--tl-playhead': '#ffffff',
-  '--tl-accent': '#45c2b4',
+  '--tl-accent': '#2ed3c6',
   '--tl-wave': 'rgba(12, 168, 164, 0.9)',
   background: [
     'radial-gradient(90% 70% at 0% 0%, color-mix(in srgb, #5ecb92 34%, transparent), transparent 70%)',

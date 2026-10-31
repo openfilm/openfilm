@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cutTrack, cutsOf, fromLibrary, libraryDragItem, lookOf, onCut, waveUrl, withLook, type LibraryItem } from './library.ts';
+import { coverLook, cutTrack, cutsOf, fromLibrary, libraryDragItem, lookOf, onCut, soundLook, waveUrl, withLook, type LibraryItem } from './library.ts';
 
 const page: LibraryItem = { id: 'effects/snow', cat: 'effect', group: 'ambience', name: { en: 'Snow' }, kind: 'page', durationMs: 4000, src: 'snow.html' };
 const sound: LibraryItem = { id: 'sounds/whoosh.m4a', cat: 'sound', group: 'transition', name: { en: 'Whoosh' }, kind: 'sound', durationMs: 700 };
@@ -53,4 +53,16 @@ test('a project file came from the library when it is a page taken from it, or o
 test('a sound\'s waveform is beside it in waves/', () => {
   assert.equal(waveUrl(sound), '/api/library/file?path=sounds%2Fwaves%2Fwhoosh.png');
   assert.equal(waveUrl({ ...sound, id: 'audio/music/cozy-morning-3f2a1c.mp3', cat: 'music' }), '/api/library/file?path=audio%2Fmusic%2Fwaves%2Fcozy-morning-3f2a1c.png');
+});
+
+test('a sound\'s tile and a track\'s cover are its own, the same each time, in its group\'s colors', () => {
+  const a = { id: 'audio/sfx/door-knock-1a2b3c.mp3', group: 'foley' };
+  const b = { id: 'audio/sfx/rain-on-glass-4d5e6f.mp3', group: 'foley' };
+  assert.deepEqual(soundLook(a), soundLook({ ...a }));
+  assert.notDeepEqual(soundLook(a), soundLook(b));
+  const hues = (look: { background: string }) => [...look.background.matchAll(/hsl\((\d+) /g)].map((m) => Number(m[1]));
+  assert.ok(hues(soundLook(a)).every((h) => h >= 28 && h <= 58), 'foley is amber');
+  const track = { id: 'audio/music/cozy-morning-abc123.mp3', group: 'calm' };
+  assert.deepEqual(coverLook(track), coverLook({ ...track }));
+  assert.notDeepEqual(coverLook(track), coverLook({ ...track, id: 'audio/music/night-drive-def456.mp3' }));
 });

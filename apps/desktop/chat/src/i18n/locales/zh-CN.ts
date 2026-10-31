@@ -221,8 +221,6 @@ export const zhCN: Words = {
   },
   project: {
     assets: '素材',
-    backToChat: '返回对话',
-    chatRunning: '对话进行中',
     addAttachment: '添加文件',
     close: '关闭',
     composerPlaceholder: '说说要改什么。输入 @ 可指向文件、skill、某个时刻或当前选中的内容',

@@ -1,73 +1,77 @@
 /**
- * The assets drawer's category icons, drawn for OpenFilm: a 24 px grid, 1.6 px round strokes. The one shown (`on`)
- * fills its main shape in its own color, so the shown category reads at a glance without a box behind it.
+ * The assets drawer's category icons, drawn for OpenFilm: a 24 px grid, 1.6 px round strokes. The one shown (`on`) is
+ * solid: its main shape filled in its own color, the marks inside it cut out of it in the panel's color (an open
+ * shape, the sound's burst and the text's letter, is drawn bolder instead), so the shown category reads at a glance
+ * without a box behind it.
  */
 import React from 'react';
 
-type Draw = (fill: { fill?: string; fillOpacity?: number }) => React.ReactNode;
+/** `fill`: the main shape's; `ink`: the marks inside it; `cut`: a solid mark inside it */
+type Paint = { fill: React.SVGProps<SVGPathElement>; ink: React.SVGProps<SVGPathElement>; cut: React.SVGProps<SVGPathElement> };
+type Draw = (p: Paint) => React.ReactNode;
 
 const DRAWN: Record<string, Draw> = {
   /* footage: a frame in front of another, playing */
-  media: (fill) => (
+  media: ({ fill, cut }) => (
     <>
       <path d="M7 3.6h11.4A2.6 2.6 0 0 1 21 6.2v8.4" />
       <path d="M5.6 6.8h10.8a2.6 2.6 0 0 1 2.6 2.6v8.2a2.6 2.6 0 0 1-2.6 2.6H5.6A2.6 2.6 0 0 1 3 17.6V9.4a2.6 2.6 0 0 1 2.6-2.6Z" {...fill} />
-      <path d="M9.4 10.6v5.2l4.3-2.6Z" fill="currentColor" />
+      <path d="M9.4 10.6v5.2l4.3-2.6Z" {...cut} />
     </>
   ),
   /* a voice: a speech bubble, a voice's wave in it */
-  voice: (fill) => (
+  voice: ({ fill, ink }) => (
     <>
       <path d="M6.6 4h10.8A2.6 2.6 0 0 1 20 6.6v7.8a2.6 2.6 0 0 1-2.6 2.6H10.6L6.4 20.4V17h0.2A2.6 2.6 0 0 1 4 14.4V6.6A2.6 2.6 0 0 1 6.6 4Z" {...fill} />
-      <path d="M8.4 9.4v2.2M10.8 7.8v5.4M13.2 8.8v3.4M15.6 9.8v1.4" />
+      <path d="M8.4 9.4v2.2M10.8 7.8v5.4M13.2 8.8v3.4M15.6 9.8v1.4" {...ink} />
     </>
   ),
   /* a sound: a short burst, struck once */
-  sound: (fill) => (
+  sound: () => (
     <>
-      <path d="M3.5 12h2.2l2-5 3.1 10 2.4-7.2 1.6 2.2h2" {...fill} />
+      <path d="M3.5 12h2.2l2-5 3.1 10 2.4-7.2 1.6 2.2h2" />
       <path d="M19.4 8.6l1.6-1.4M19.6 12h2M19.4 15.4l1.6 1.4" />
     </>
   ),
   /* music: a record, its groove and label */
-  music: (fill) => (
+  music: ({ fill, ink }) => (
     <>
-      <circle cx="12" cy="12" r="8.4" {...fill} />
-      <circle cx="12" cy="12" r="2.4" />
-      <path d="M12 6.4a5.6 5.6 0 0 1 5.4 4.1" />
+      <circle cx="12" cy="12" r="8.4" {...(fill as React.SVGProps<SVGCircleElement>)} />
+      <circle cx="12" cy="12" r="2.4" {...(ink as React.SVGProps<SVGCircleElement>)} />
+      <path d="M12 6.4a5.6 5.6 0 0 1 5.4 4.1" {...ink} />
     </>
   ),
   /* text: a title letter, and lines of words beside it */
-  text: (fill) => (
+  text: () => (
     <>
-      <path d="M3.6 6.4V5h10.2v1.4M8.7 5v14M6.8 19h3.8" {...fill} />
+      <path d="M3.6 6.4V5h10.2v1.4M8.7 5v14M6.8 19h3.8" />
       <path d="M15.6 10.6h4.8M15.6 14.6h4.8M13.6 18.6h6.8" />
     </>
   ),
   /* a sticker: its corner peeling */
-  sticker: (fill) => (
+  sticker: ({ fill, ink }) => (
     <>
       <path d="M20.2 12.6V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v10.2a3 3 0 0 0 3 3h5.6Z" {...fill} />
       <path d="M12.6 20.2c0-4.2 3.4-7.6 7.6-7.6h-3.6a4 4 0 0 0-4 4Z" />
-      <path d="M8.4 9.2v.2M12.4 9.2v.2M8 13c.9 1.1 2.6 1.4 3.9.6" />
+      <path d="M8.4 9.2v.2M12.4 9.2v.2M8 13c.9 1.1 2.6 1.4 3.9.6" {...ink} />
     </>
   ),
   /* a filter: a lens, tinted in bands */
-  filter: (fill) => (
+  filter: ({ fill, ink }) => (
     <>
-      <circle cx="12" cy="12" r="8.2" {...fill} />
-      <path d="M8.2 4.9v14.2M12 3.8v16.4M15.8 4.9v14.2" />
+      <circle cx="12" cy="12" r="8.2" {...(fill as React.SVGProps<SVGCircleElement>)} />
+      <path d="M8.2 4.9v14.2M12 3.8v16.4M15.8 4.9v14.2" {...ink} />
     </>
   ),
   /* an effect: a spark, and a smaller one */
-  effect: (fill) => (
+  effect: ({ fill }) => (
     <>
       <path d="M9.8 3.4 11.6 8l4.6 1.8-4.6 1.8-1.8 4.6L8 11.6 3.4 9.8 8 8Z" {...fill} />
-      <path d="m17.4 13.6.9 2.3 2.3.9-2.3.9-.9 2.3-.9-2.3-2.3-.9 2.3-.9Z" />
+      <path d="m17.4 13.6.9 2.3 2.3.9-2.3.9-.9 2.3-.9-2.3-2.3-.9 2.3-.9Z" {...fill} />
     </>
   ),
   /* a transition: one picture wiping to the next */
-  transition: (fill) => (
+  transition: ({ fill }) => (
     <>
       <path d="M5.6 5.6h7.6l-3.4 12.8H5.6A2.6 2.6 0 0 1 3 15.8V8.2a2.6 2.6 0 0 1 2.6-2.6Z" {...fill} />
       <path d="M15.6 5.6h2.8A2.6 2.6 0 0 1 21 8.2v7.6a2.6 2.6 0 0 1-2.6 2.6h-6.2" />
@@ -76,12 +80,16 @@ const DRAWN: Record<string, Draw> = {
   ),
 };
 
+/* the marks inside a solid shape are cut out of it in the panel's own color */
+const SOLID: Paint = { fill: { fill: 'currentColor' }, ink: { stroke: 'var(--dock-pane)' }, cut: { fill: 'var(--dock-pane)', stroke: 'var(--dock-pane)' } };
+const LINE: Paint = { fill: {}, ink: {}, cut: { fill: 'currentColor' } };
+
 export function CategoryIcon({ id, on, size = 22 }: { id: string; on: boolean; size?: number }) {
   const draw = DRAWN[id];
   if (!draw) return null;
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      {draw(on ? { fill: 'currentColor', fillOpacity: 0.4 } : {})}
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={on ? 2 : 1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {draw(on ? SOLID : LINE)}
     </svg>
   );
 }

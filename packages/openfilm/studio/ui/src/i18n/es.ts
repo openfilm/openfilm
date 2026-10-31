@@ -944,6 +944,8 @@ export const es: Words = {
     musicSoon: 'La biblioteca de música está en camino.',
     musicMake: 'Pídesela a tu agente',
     musicAsk: 'Haz una música de fondo para esta película y ponla en la línea de tiempo: ',
+    seek: 'Avanzar',
+    close: 'Cerrar',
   },
   saved: {
     title: 'Guardados',

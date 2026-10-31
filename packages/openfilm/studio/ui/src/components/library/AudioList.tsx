@@ -1,0 +1,224 @@
+/**
+ * The library's sounds and music as the assets drawer lists them: a sound a row (its tile in its group's colors with
+ * its group's mark, its name, length and waveform), a piece of music a card (its drawn cover, name, mood and length),
+ * and one player under the list for what was clicked: play and pause, how far it has played, dragged to any moment.
+ * Rows and cards keep their size under the pointer: their buttons are always there, only shown on it.
+ */
+import React from 'react';
+import {
+  AudioWaveform, Bell, Car, Cat, Cpu, Footprints, Laugh, Leaf, MousePointerClick, Pause, Play, Plus, Star, Users, Wind, X, Zap,
+  type LucideIcon,
+} from 'lucide-react';
+import { useT } from '@/i18n';
+import { coverLook, libraryUrl, soundLook, toggleFavorite, waveUrl, type LibraryItem } from '@/lib/library';
+
+/** each group of sounds its mark on its tile */
+const MARKS: Record<string, LucideIcon> = {
+  transition: Wind, ui: MousePointerClick, impact: Zap, ambience: AudioWaveform, foley: Footprints, nature: Leaf,
+  animals: Cat, people: Users, tech: Cpu, cartoon: Laugh, stings: Bell, vehicles: Car,
+};
+
+/** A length as the list says it: seconds under a minute (0.7 s), else minutes and seconds (1:04). */
+export function lengthOf(ms: number, t: (path: string) => string): string {
+  if (ms < 60_000) return t('assetDrawer.seconds').replace('{s}', String(Math.round(ms / 100) / 10));
+  return clock(ms / 1000);
+}
+const clock = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+
+export interface Player {
+  item: LibraryItem | null;
+  playing: boolean;
+  /** seconds played, and its length */
+  time: number;
+  duration: number;
+  /** play it from the start (or go on, when it is the one paused); pause it when it plays */
+  toggle: (item: LibraryItem) => void;
+  seek: (sec: number) => void;
+  close: () => void;
+}
+
+/* one sound at a time in the drawer */
+let audio: HTMLAudioElement | null = null;
+
+/** The drawer's player: what plays, how far, and its controls. Stops when the drawer goes. */
+export function usePlayer(): Player {
+  const [item, setItem] = React.useState<LibraryItem | null>(null);
+  const [playing, setPlaying] = React.useState(false);
+  const [time, setTime] = React.useState(0);
+  const [duration, setDuration] = React.useState(0);
+  React.useEffect(() => () => { audio?.pause(); audio = null; }, []);
+  React.useEffect(() => {
+    if (!playing) return undefined;
+    let frame = 0;
+    const tick = () => { if (audio) setTime(audio.currentTime); frame = requestAnimationFrame(tick); };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [playing]);
+  const toggle = (next: LibraryItem) => {
+    if (item?.id === next.id && audio) {
+      if (playing) audio.pause();
+      else void audio.play().catch(() => setPlaying(false));
+      return;
+    }
+    audio?.pause();
+    const a = new Audio(libraryUrl(next.id));
+    audio = a;
+    setItem(next);
+    setTime(0);
+    setDuration((next.durationMs ?? 0) / 1000);
+    a.onloadedmetadata = () => { if (Number.isFinite(a.duration)) setDuration(a.duration); };
+    a.onplay = () => setPlaying(true);
+    a.onpause = () => setPlaying(false);
+    a.onended = () => { setPlaying(false); setTime(0); };
+    void a.play().catch(() => setPlaying(false));
+  };
+  return {
+    item, playing, time, duration, toggle,
+    seek: (sec) => { if (audio) { audio.currentTime = sec; setTime(sec); } },
+    close: () => { audio?.pause(); audio = null; setItem(null); setPlaying(false); setTime(0); },
+  };
+}
+
+/** A press on a button of a row or card: not its click, nor its double click. */
+const own = { onDoubleClick: (e: React.MouseEvent) => e.stopPropagation() };
+
+function Buttons({ item, kept, addTip, onAdd, always }: { item: LibraryItem; kept: boolean; addTip: string; onAdd: () => void; always?: boolean }) {
+  const t = useT();
+  const show = always ? '' : 'invisible group-hover:visible';
+  return (
+    <span className="flex shrink-0 items-center gap-1">
+      <button type="button" aria-label={t(kept ? 'assetDrawer.unstar' : 'assetDrawer.star')} aria-pressed={kept} {...own}
+        onClick={(e) => { e.stopPropagation(); toggleFavorite(item.id); }}
+        className={`grid h-6 w-6 place-items-center rounded-full ${kept ? 'visible text-[#ffd35a]' : `${show} text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]`}`}>
+        <Star size={13} fill={kept ? 'currentColor' : 'none'} strokeWidth={kept ? 0 : 1.8} />
+      </button>
+      <button type="button" title={addTip} aria-label={addTip} {...own} onClick={(e) => { e.stopPropagation(); onAdd(); }}
+        className={`grid h-6 w-6 place-items-center rounded-full bg-[var(--tl-accent)] text-black ${show}`}>
+        <Plus size={13} strokeWidth={3} />
+      </button>
+    </span>
+  );
+}
+
+/** A sound's tile: its group's colors and mark; play or pause on it under the pointer and while it plays. */
+function Tile({ item, playing, size, cover }: { item: LibraryItem; playing: boolean; size: number; cover?: boolean }) {
+  const look = React.useMemo(() => (cover ? coverLook(item) : soundLook(item)), [item, cover]);
+  const Mark = MARKS[item.group] ?? AudioWaveform;
+  return (
+    <span className="relative grid shrink-0 place-items-center overflow-hidden rounded-lg text-white" style={{ width: size, height: size }}>
+      <span className={`absolute -inset-1 ${cover ? '' : 'blur-[2px]'}`} style={look} />
+      {cover ? null : <Mark size={size * 0.38} strokeWidth={1.8} className={`relative drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)] ${playing ? 'opacity-0' : 'opacity-90 group-hover:opacity-0'}`} />}
+      <span className={`absolute inset-0 grid place-items-center bg-black/35 ${playing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+        <span className="grid h-7 w-7 place-items-center rounded-full bg-black/45">
+          {playing ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" className="translate-x-px" />}
+        </span>
+      </span>
+    </span>
+  );
+}
+
+/** Its waveform as a mask: lit in the accent as far as it has played, the rest quiet. */
+function Wave({ item, played }: { item: LibraryItem; played: number }) {
+  const lit = Math.round(played * 1000) / 10;
+  return (
+    <span aria-hidden className="block h-4 w-full" style={{
+      WebkitMaskImage: `url(${waveUrl(item)})`, maskImage: `url(${waveUrl(item)})`, WebkitMaskSize: '100% 100%', maskSize: '100% 100%',
+      background: `linear-gradient(to right, var(--tl-accent) ${lit}%, var(--text-faint) ${lit}%)`,
+    }} />
+  );
+}
+
+export function SoundRow({ item, name, group, picked, player, kept, addTip, onPick, onAdd, drag }: {
+  item: LibraryItem; name: string; group: string; picked: boolean; player: Player; kept: boolean; addTip: string;
+  onPick: () => void; onAdd: () => void; drag: React.HTMLAttributes<HTMLDivElement>;
+}) {
+  const t = useT();
+  const mine = player.item?.id === item.id;
+  return (
+    <div
+      {...drag}
+      draggable
+      className={`group grid h-[60px] cursor-default select-none grid-cols-[44px_minmax(0,1fr)] items-center gap-3 rounded-lg px-2 ${picked || mine ? 'bg-[var(--surface-2)]' : 'hover:bg-[var(--surface-2)]'}`}
+      onClick={() => { onPick(); player.toggle(item); }}
+      onDoubleClick={onAdd}
+      title={name}
+    >
+      <Tile item={item} playing={mine && player.playing} size={44} />
+      <span className="flex min-w-0 flex-col justify-center gap-1">
+        <span className="flex h-6 min-w-0 items-center gap-2">
+          <span className={`truncate text-[12.5px] font-medium ${picked || mine ? 'text-[var(--tl-accent)]' : 'text-[var(--text)]'}`}>{name}</span>
+          <span className="shrink-0 text-[11px] text-[var(--text-faint)]">{group}</span>
+          <span className="ml-auto shrink-0 text-[11px] tabular-nums text-[var(--text-faint)]">{lengthOf(item.durationMs ?? 0, t)}</span>
+          <Buttons item={item} kept={kept} addTip={addTip} onAdd={onAdd} />
+        </span>
+        <Wave item={item} played={mine && player.duration ? player.time / player.duration : 0} />
+      </span>
+    </div>
+  );
+}
+
+export function MusicCard({ item, name, group, picked, player, kept, addTip, onPick, onAdd, drag }: {
+  item: LibraryItem; name: string; group: string; picked: boolean; player: Player; kept: boolean; addTip: string;
+  onPick: () => void; onAdd: () => void; drag: React.HTMLAttributes<HTMLDivElement>;
+}) {
+  const t = useT();
+  const mine = player.item?.id === item.id;
+  return (
+    <div
+      {...drag}
+      draggable
+      className={`group flex h-[92px] cursor-default select-none gap-2.5 rounded-xl p-2 ring-1 ${picked || mine ? 'bg-[var(--surface-2)] ring-[var(--tl-accent)]' : 'bg-[var(--surface)] ring-transparent hover:bg-[var(--surface-2)]'}`}
+      onClick={() => { onPick(); player.toggle(item); }}
+      onDoubleClick={onAdd}
+      title={name}
+    >
+      <Tile item={item} playing={mine && player.playing} size={76} cover />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className={`line-clamp-2 text-[12.5px] font-medium leading-[17px] ${picked || mine ? 'text-[var(--tl-accent)]' : 'text-[var(--text)]'}`}>{name}</span>
+        <span className="mt-0.5 truncate text-[11px] text-[var(--text-faint)]">{group} · {lengthOf(item.durationMs ?? 0, t)}</span>
+        <span className="mt-auto flex justify-end"><Buttons item={item} kept={kept} addTip={addTip} onAdd={onAdd} always /></span>
+      </span>
+    </div>
+  );
+}
+
+/** The player under the list: what was clicked, play or pause, and how far it has played, dragged to any moment. */
+export function MiniPlayer({ player, name, group }: { player: Player; name: string; group: string }) {
+  const t = useT();
+  const { item } = player;
+  const [dragged, setDragged] = React.useState<number | null>(null);
+  if (!item) return null;
+  const at = dragged ?? player.time;
+  const length = player.duration || (item.durationMs ?? 0) / 1000;
+  /* a short sound by tenths of a second, anything longer as minutes and seconds */
+  const say = (sec: number) => (length < 10 ? `${sec.toFixed(1)}` : clock(sec));
+  return (
+    <div className="flex h-[60px] shrink-0 items-center gap-3 border-t border-[var(--dock-line)] bg-[var(--surface)] px-3" data-studio-host-panel="">
+      <span className="group cursor-default" onClick={() => player.toggle(item)}>
+        <Tile item={item} playing={player.playing} size={40} cover={item.cat === 'music'} />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="flex min-w-0 items-baseline gap-2">
+          <span className="truncate text-[12.5px] font-medium text-[var(--text)]">{name}</span>
+          <span className="shrink-0 text-[11px] text-[var(--text-faint)]">{group}</span>
+        </span>
+        <span className="flex items-center gap-2 text-[11px] tabular-nums">
+          <span className="text-[var(--tl-accent)]">{say(at)}</span>
+          <input
+            type="range" min={0} max={Math.max(length, 0.01)} step={0.01} value={Math.min(at, length)}
+            aria-label={t('assetDrawer.seek')}
+            onChange={(e) => setDragged(Number(e.target.value))}
+            onPointerUp={() => { if (dragged !== null) { player.seek(dragged); setDragged(null); } }}
+            onKeyUp={() => { if (dragged !== null) { player.seek(dragged); setDragged(null); } }}
+            className="h-1 min-w-0 flex-1 cursor-pointer accent-[var(--tl-accent)]"
+          />
+          <span className="text-[var(--text-faint)]">{say(length)}</span>
+        </span>
+      </span>
+      <button type="button" aria-label={t('assetDrawer.close')} onClick={player.close}
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[var(--surface-2)] text-[var(--text-muted)] hover:text-[var(--text)]">
+        <X size={14} />
+      </button>
+    </div>
+  );
+}

@@ -230,11 +230,11 @@
 
   --ink: #dadada;
   /* one highlight everywhere: what is picked or shown is the timeline's teal, in every pane */
-  --accent: #45c2b4;
-  --accent-2: #5ccfc2;
-  --accent-hover: #5ccfc2;
-  --accent-soft: rgba(69, 194, 180, 0.12);
-  --accent-glow: rgba(69, 194, 180, 0.2);
+  --accent: #2ed3c6;
+  --accent-2: #5fe3d8;
+  --accent-hover: #5fe3d8;
+  --accent-soft: rgba(46, 211, 198, 0.12);
+  --accent-glow: rgba(46, 211, 198, 0.2);
   --on-accent: #ffffff;
 
   --ok: #5eb92d;
@@ -258,7 +258,7 @@
   --app-nav-text-dim: rgb(170, 170, 170);
   --app-nav-brand: rgb(255, 255, 255);
 
-  --grad-accent: linear-gradient(135deg, #45c2b4 0%, #3aa99c 100%);
+  --grad-accent: linear-gradient(135deg, #2ed3c6 0%, #22b3a8 100%);
   --hairline: rgba(255, 255, 255, 0.08);
   --highlight: rgba(255, 255, 255, 0.1);
   --card-bg: #1c1c1c;
@@ -296,7 +296,7 @@
   --tl-faint: rgba(255, 255, 255, 0.4);
   --tl-playhead: #ffffff;
   /* The playhead stays white, clearest on near black; the zoom slider uses the brand teal. */
-  --tl-accent: #45c2b4;
+  --tl-accent: #2ed3c6;
   /* The selection ring is white: teal wouldn't show on the dark blocks. */
   --tl-select: #ffffff;
   --tl-wave: rgba(12, 168, 164, 0.9);
@@ -346,11 +346,11 @@
     --ink: #dadada;
     --brand-text: rgb(255, 252, 225);
     /* one highlight everywhere: what is picked or shown is the timeline's teal, in every pane */
-    --accent: #45c2b4;
-    --accent-2: #5ccfc2;
-    --accent-hover: #5ccfc2;
-    --accent-soft: rgba(69, 194, 180, 0.12);
-    --accent-glow: rgba(69, 194, 180, 0.2);
+    --accent: #2ed3c6;
+    --accent-2: #5fe3d8;
+    --accent-hover: #5fe3d8;
+    --accent-soft: rgba(46, 211, 198, 0.12);
+    --accent-glow: rgba(46, 211, 198, 0.2);
     --ok: #5eb92d;
     --warn: #ffbf36;
     --err: #eb4d4d;
@@ -367,7 +367,7 @@
     --app-nav-text: rgb(250, 250, 250);
     --app-nav-text-dim: rgb(170, 170, 170);
     --app-nav-brand: rgb(255, 255, 255);
-    --grad-accent: linear-gradient(135deg, #45c2b4 0%, #3aa99c 100%);
+    --grad-accent: linear-gradient(135deg, #2ed3c6 0%, #22b3a8 100%);
     --hairline: rgba(255, 255, 255, 0.08);
     --highlight: rgba(255, 255, 255, 0.1);
     --card-bg: #1c1c1c;
@@ -398,7 +398,7 @@
     --tl-text: rgba(255, 255, 255, 0.7);
     --tl-faint: rgba(255, 255, 255, 0.4);
     --tl-playhead: #ffffff;
-    --tl-accent: #45c2b4;
+    --tl-accent: #2ed3c6;
     --tl-select: #ffffff;
     --tl-wave: rgba(12, 168, 164, 0.9);
     --tl-wave-band: rgba(0, 119, 125, 0.85);

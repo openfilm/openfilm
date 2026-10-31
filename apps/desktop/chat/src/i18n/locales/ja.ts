@@ -221,8 +221,6 @@ export const ja: Words = {
   },
   project: {
     assets: '素材',
-    backToChat: '会話に戻る',
-    chatRunning: '進行中',
     addAttachment: 'ファイルを追加',
     close: '閉じる',
     composerPlaceholder: '変更したい内容を入力。@ でファイル、スキル、タイミング、選択中のものを指定できます',
