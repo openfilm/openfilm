@@ -69,7 +69,17 @@ export function indexClipThumbs(
  */
 export function overridesToken(overrides: readonly unknown[] | undefined): string {
   if (!overrides?.some((o) => typeof o === 'object' && o !== null && 'at' in o)) return '';
-  const text = JSON.stringify(overrides);
+  return hashToken(JSON.stringify(overrides));
+}
+/**
+ * A page clip's own look for its thumbnails: its overrides (overridesToken) and the query its page is asked with
+ * (SPEC §1), which the page draws by. '' when it has neither: its pictures are its file's.
+ */
+export function pageClipToken(clip: { overrides?: readonly unknown[]; query?: string }): string {
+  const tweaks = overridesToken(clip.overrides);
+  return clip.query ? hashToken(`${tweaks}?${clip.query}`) : tweaks;
+}
+function hashToken(text: string): string {
   let h = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193); }
   return (h >>> 0).toString(36);

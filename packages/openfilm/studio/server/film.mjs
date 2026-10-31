@@ -48,17 +48,19 @@ export async function readProjectFilm(root) {
 }
 
 /**
- * How a page clip is drawn, by its id, as film.html has it now: its overrides (SPEC §1, null when none) and the size
- * its page is laid out at (its `size`, null when it has none). What its thumbnails are drawn with; null when no clip
- * has that id.
+ * How a page clip is drawn, by its id, as film.html has it now: its overrides (SPEC §1, null when none), the size
+ * its page is laid out at (its `size`, null when it has none) and the query its page is asked with (null when none).
+ * What its thumbnails are drawn with; null when no clip has that id.
  * @param {string} root @param {string} id
- * @returns {Promise<{ overrides: object[] | null, size: { w: number, h: number } | null } | null>}
+ * @returns {Promise<{ overrides: object[] | null, size: { w: number, h: number } | null, query: string | null } | null>}
  */
 export async function pageClipLook(root, id) {
   const { value } = await readProjectFilm(root);
   for (const track of value?.tracks ?? []) {
     for (const clip of track.clips ?? []) {
-      if (clip.id === id) return { overrides: clip.overrides?.length ? clip.overrides : null, size: clip.size?.w && clip.size?.h ? clip.size : null };
+      if (clip.id === id) {
+        return { overrides: clip.overrides?.length ? clip.overrides : null, size: clip.size?.w && clip.size?.h ? clip.size : null, query: clip.query || null };
+      }
     }
   }
   return null;

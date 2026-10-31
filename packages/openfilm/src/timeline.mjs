@@ -2,7 +2,7 @@
 // in host.mjs); the file's own elements are the clips: an <iframe> a web page, a <video>, an <img> a still, an
 // <audio> a sound for the mix. Where each plays and sits is what film-doc.mjs reads in the file, the same reading
 // Studio plays and exports by; how each looks is the file's own CSS. Track 0, the first <section>, is on top.
-import { MEDIA_RATE_MAX, MEDIA_RATE_MIN, clipFade, clipSpan, clipTag, declarations, fadeGain, filmHead, fittedFade, kindOf, mediaPlays, parseFilm, pictureRect, readFilmFile, sourceAt, srcHref } from './film-doc.mjs';
+import { MEDIA_RATE_MAX, MEDIA_RATE_MIN, clipFade, clipHref, clipSpan, clipTag, declarations, fadeGain, filmHead, fittedFade, kindOf, mediaPlays, parseFilm, pictureRect, readFilmFile, sourceAt, srcHref } from './film-doc.mjs';
 import { override, restore } from './overrides.mjs';
 
 /* the file as written (without what the host puts in it), read as every reader reads it */
@@ -658,7 +658,8 @@ function wakePage(c) {
     el.setAttribute('scrolling', 'no');
     /* still open (closed while it loaded, see restPage): taken up again as it is; else the document there now
        (blank) is not the page's, and its window.film, if any, is gone once the page commits */
-    const href = url(c.row.src).href;
+    /* its file, with its query: what the page reads in its location.search */
+    const href = new URL(clipHref(c.row), location.href).href;
     const before = el.getAttribute('src') === href ? null : el.contentDocument;
     if (before) el.src = href;
     const t0 = performance.now();
@@ -871,7 +872,7 @@ let progress = 0;
 async function load(row, track, ti, el) {
   const kind = kindOf(row);
   /* the element's own style as the file wrote it, its place (left, top…) included: place() writes over that */
-  const c = { kind, id: row.id, src: row.src, track: ti, el, node: el, touched: new Map(), found: [], drawn: false, shown: false, css: el.getAttribute('style') ?? '' };
+  const c = { kind, id: row.id, src: row.src, query: row.query ?? '', track: ti, el, node: el, touched: new Map(), found: [], drawn: false, shown: false, css: el.getAttribute('style') ?? '' };
   if (kind === 'sound') {
     /* a sound is heard in the mix (see hear), never by its element */
     el.pause?.();
@@ -1120,7 +1121,8 @@ async function change(value, look) {
   const next = parseFilm(value);
   const rows = next.tracks.flatMap((track, ti) => track.clips.map((row) => ({ row, track, ti })));
   const byId = new Map(clips.map((c) => [c.id, c]));
-  const kept = (row) => { const c = byId.get(row.id); return c && c.src === row.src && c.kind === kindOf(row) ? c : null; };
+  /* a page asked with another query is another page: opened again */
+  const kept = (row) => { const c = byId.get(row.id); return c && c.src === row.src && c.query === (row.query ?? '') && c.kind === kindOf(row) ? c : null; };
   /* each new element right after the one before it on its track, where that one is */
   const fresh = [];
   let before = null;

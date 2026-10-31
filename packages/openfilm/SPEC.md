@@ -53,6 +53,10 @@ where, and CSS that says how each looks. A page draws a shot.
   - `src`: its file, relative to film.html. Which seconds of it play is a media fragment: `#t=in,out` in the file's
     own seconds, `#t=in` to its end; without one, all of it. A still, or a page without a `duration`, has no end:
     its `#t=0,length` is required, and is how long it stays.
+  - A page's `src` may carry a query before its fragment, `step.html?n=2&title=Sign%20in#t=0,4`: the page is opened
+    with it and reads it in `location.search`, so one page can be several clips, each with its own words. Its frame
+    is still a function of t alone (§3): the query is fixed for the clip. Names that begin with `film-` are the host's.
+    A file's name with `?` in it is written `%3F`; a video, a still or a sound takes no query.
   - `id`: unique across the film; without it, the file's name.
   - `at`: where it starts on the film, in seconds from 0 (default 0).
   - `speed` on videos and sounds: the playback rate, 0.1 to 100, sound keeping its pitch. The clip lasts

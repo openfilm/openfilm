@@ -46,7 +46,7 @@ import { splitHalves } from '@/lib/timeline-split';
 import { assetDropInsert, assetRunInsert, assetRunMs, pendingDropOf, soundLaneHit, withPendingBlocks, type AssetDropTarget, type AssetLaneHit, type AssetRunInsert, type PendingDrop } from '@/lib/asset-timeline';
 import { isComputerFileDrag, type ResourceDragItem } from '@/lib/resource-drag';
 import { ladderStepMs, THUMB_CELL_PX, thumbAnchorTimes } from '@/lib/thumb-cache';
-import { clipThumbId, overridesToken } from '@/lib/thumb-frame';
+import { clipThumbId, pageClipToken } from '@/lib/thumb-frame';
 import { useLoadedThumbs } from '@/lib/use-loaded-thumbs';
 import { droppedOverrides, overrideTarget, undoneFields, type DroppedEdits, type PersonEdit } from '@/lib/dropped-overrides';
 import { filmFrameBox, type FilmFrameId } from '@/lib/film-frame';
@@ -2262,12 +2262,13 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* a sound made again in place is heard as it is now, not as it was decoded */
   React.useEffect(() => { player.current.setVersions((src) => mtimeOf.get(src)); }, [mtimeOf]);
   refSource.current = { projectId, version: (path) => mtimeOf.get(path) };
-  /* a page clip's pictures are drawn with the changes made inside it (its overrides), by its id: changed, asked again */
+  /* a page clip's pictures are drawn with the changes made inside it (its overrides) and the query its page is asked
+     with, by its id: changed, asked again */
   const tweakTokens = React.useMemo(() => {
     const out = new Map<string, string>();
     for (const track of film.film?.tracks ?? []) {
       for (const clip of track.clips) {
-        const token = clip.id && filmSrcIsPage(clip.src) ? overridesToken(clip.overrides) : '';
+        const token = clip.id && filmSrcIsPage(clip.src) ? pageClipToken(clip) : '';
         if (token) out.set(clip.id!, token);
       }
     }

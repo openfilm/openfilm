@@ -43,6 +43,8 @@ export type FilmOverride = {
 /** A clip. Which fields it takes follows what its file is (film-doc.mjs CLIP_FIELDS). */
 export type FilmClip = {
   src: string;
+  /** pages: the query its address carries, after the `?` (`n=1&title=Intro`): what the page reads in location.search */
+  query?: string;
   id: string;
   at?: number;
   time?: FilmTimeSpan;
@@ -93,6 +95,8 @@ export declare function isStill(src: string): boolean;
 export declare function isPage(src: string): boolean;
 /** A clip's src as an address: its path with `%`, `#` and `?` escaped; a src with a scheme as written. */
 export declare function srcHref(src: string): string;
+/** The address a clip opens, without its `#t=`: its file's (srcHref), and a page's `?query`. */
+export declare function clipHref(clip: { src: string; query?: unknown }): string;
 export declare function soundRole(src: string): 'voice' | 'music' | 'sfx';
 export declare function clipKind(src: unknown): FilmClipKind | null;
 export declare function hasPicture(src: unknown): boolean;

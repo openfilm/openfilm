@@ -43,6 +43,12 @@ test('a page in a page\'s place loses the old page\'s tweaks', () => {
   assert.deepEqual(clip, { id: 'card', src: 'scenes/b.html', time: [0, 3] });
 });
 
+test('a page asked with a query loses it to the file in its place: the query is what that page reads', () => {
+  const step: Clip = { id: 'step', src: 'step.html', query: 'n=2&title=Sign in', time: [0, 3], box: { x: 0, y: 40 } };
+  assert.deepEqual(replaced(step, 3000, { path: 'scenes/b.html', kind: 'page', endless: true }).clip, { id: 'step', src: 'scenes/b.html', time: [0, 3], box: { x: 0, y: 40 } });
+  assert.deepEqual(replaced(step, 3000, { path: 'assets/b.mp4', kind: 'video', durationMs: 60_000 }).clip, { id: 'step', src: 'assets/b.mp4', time: [0, 3], box: { x: 0, y: 40 } });
+});
+
 test('a sound takes a sound, or a video\'s own sound; never a picture', () => {
   const bed: Clip = { id: 'bed', src: 'assets/bed.mp3', time: [0, 10], volume: 0.4 };
   assert.deepEqual(replaced(bed, 10_000, { path: 'assets/other.wav', kind: 'audio', durationMs: 30_000 }).clip, { ...bed, src: 'assets/other.wav' });

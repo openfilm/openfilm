@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clipFade, clipIdFor, clipKind, clipSpan, fadeGain, filmHtml, kindOf, parseFilm, pictureRect, readFilm, readFilmFile, soundRole, sourceAt, srcHref } from './film-doc.mjs';
+import { clipFade, clipHref, clipIdFor, clipKind, clipSpan, fadeGain, filmHtml, kindOf, parseFilm, pictureRect, readFilm, readFilmFile, soundRole, sourceAt, srcHref } from './film-doc.mjs';
 
 const film = (clip) => ({ stage: { w: 1920, h: 1080 }, tracks: [{ clips: [clip] }] });
 const problems = (value) => readFilm(value).problems.join('\n');
@@ -86,6 +86,43 @@ test('a src written by hand: its escapes are read, a bare % is a %, an address i
   assert.equal(srcHref('https://x.test/a.mp4?v=1#x'), 'https://x.test/a.mp4?v=1#x');
 });
 
+test('a page\'s src may carry a query: read as a browser reads it, kept apart from the file, written back the same', () => {
+  const text = page([[
+    '<iframe id="s1" src="step.html?n=1&amp;title=安装 DSH#t=0,3" at="1"></iframe>',
+    '<iframe id="s2" src="step.html?n=2&title=登录、领赠金" at="4"></iframe>',
+    '<iframe id="s3" src="parts/a%20b.html?speed=2"></iframe>',
+  ]]);
+  const { value, doc, problems: found } = readFilmFile(text);
+  assert.deepEqual(found, []);
+  assert.deepEqual(doc.tracks[0].clips, [
+    { src: 'step.html', query: 'n=1&title=安装 DSH', id: 's1', at: 1, time: [0, 3] },
+    { src: 'step.html', query: 'n=2&title=登录、领赠金', id: 's2', at: 4 },
+    { src: 'parts/a b.html', query: 'speed=2', id: 's3' },
+  ]);
+  assert.deepEqual(doc.tracks[0].clips.map(clipHref), ['step.html?n=1&title=安装 DSH', 'step.html?n=2&title=登录、领赠金', 'parts/a b.html?speed=2']);
+  assert.equal(filmHtml(value, text), text, 'unchanged, the same text');
+  value.tracks[0].clips[1].at = 5;
+  value.tracks[0].clips[2].query = 'speed=3';
+  const out = filmHtml(value, text);
+  assert.ok(out.includes('<iframe id="s2" src="step.html?n=2&amp;title=登录、领赠金" at="5"></iframe>'));
+  assert.ok(out.includes('<iframe id="s3" src="parts/a b.html?speed=3"></iframe>'));
+  assert.deepEqual(readFilmFile(out).doc.tracks[0].clips.map((c) => c.query), ['n=1&title=安装 DSH', 'n=2&title=登录、领赠金', 'speed=3']);
+  assert.deepEqual(readFilmFile(page([['<iframe src="title.html?#t=0,2"></iframe>']])).doc.tracks[0].clips, [{ src: 'title.html', id: 'title', time: [0, 2] }], 'an empty query is none');
+});
+test('a query is a page\'s: a ? in a file\'s name is %3F, media take none, and a wrong one is told', () => {
+  assert.deepEqual(filmHtml({ stage: { w: 1920, h: 1080 }, tracks: [{ clips: [{ src: 'why?.html', id: 'w', time: [0, 1] }] }] }).match(/src="[^"]*"/)[0], 'src="why%3F.html#t=0,1"');
+  assert.deepEqual(readFilmFile(page([['<iframe src="why%3F.html?n=1#t=0,1"></iframe>']])).doc.tracks[0].clips[0], { src: 'why?.html', query: 'n=1', id: 'why', time: [0, 1] });
+  assert.match(said(page([['<iframe src="why?.html#t=0,1"></iframe>']])), /"why" is no clip a film plays.*A \? in the file's name is written %3F/);
+  assert.match(said(page([['<video src="a.mp4?v=1"></video>']])), /Only a web page \(<iframe>\) reads a query \(\?…\): a video plays its file, src="a\.mp4"/);
+  assert.deepEqual(readFilmFile(page([['<img src="what?.png#t=0,1">']])).doc.tracks[0].clips[0].src, 'what?.png', 'a picture\'s name is read as before');
+  const clip = (extra) => problems(film({ src: 'step.html', id: 's', time: [0, 1], ...extra }));
+  assert.equal(clip({ query: 'n=1' }), '');
+  assert.match(clip({ query: '?n=1' }), /query is what the page reads/);
+  assert.match(clip({ query: 'n=1#t=0,1' }), /no #/);
+  assert.match(clip({ query: 'film-host=0' }), /film- is the host's/);
+  assert.match(problems(film({ src: 'a.mp4', id: 'a', query: 'v=1' })), /unrecognised field: query/);
+  assert.match(problems(film({ src: 'step.html?n=1', id: 's', time: [0, 1] })), /A page's query is a field of its own: \{ "src": "step.html", "query": "n=1" \}/);
+});
 test('a new film is a whole page; a box at 0, 0 is written as one', () => {
   const out = filmHtml({ stage: { w: 1080, h: 1920 }, tracks: [{ clips: [{ src: 'a.mp4', id: 'a', box: { x: 0, y: 0 }, time: [0, 2] }] }] });
   assert.equal(out, '<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=1080, height=1920">\n</head>\n<body>\n'

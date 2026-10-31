@@ -109,6 +109,20 @@ test('a page\'s thumbnail follows the files the page loads: a stylesheet it shar
   assert.ok(!blue.body.equals(red.body), 'the page drawn again with its new style');
 });
 
+test('a page clip\'s thumbnail is its page asked with the clip\'s query: two clips of one page, two pictures', async () => {
+  const { project } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'Asked') } })).json();
+  writeFileSync(join(project.path, 'p.html'), '<!doctype html><body style="margin:0"><script>document.body.style.background = new URLSearchParams(location.search).get("bg") || "#fff"; window.film = { duration: 2, frame() {} };</script></body>');
+  writeFileSync(join(project.path, 'film.html'), filmHtml({ tracks: [{ clips: [
+    { id: 'red', src: 'p.html', query: 'bg=%23f00' },
+    { id: 'blue', src: 'p.html', query: 'bg=%2300f', at: 2 },
+  ] }] }));
+  const frame = async (clip) => Buffer.from(await (await api(`/api/projects/${project.id}/media?what=frame&path=p.html&ms=500&w=160${clip ? `&clip=${clip}` : ''}`)).arrayBuffer());
+  const [red, blue, plain] = [await frame('red'), await frame('blue'), await frame(null)];
+  assert.ok(!red.equals(blue), 'each clip\'s own query');
+  assert.ok(!red.equals(plain) && !blue.equals(plain), 'the page alone is asked without one');
+  assert.ok(red.equals(await frame('red')), 'kept, by its query');
+});
+
 test('a page clip\'s thumbnail shows the changes made in it (its overrides): another change, another picture', async () => {
   const { project } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'Tweaked') } })).json();
   writeFileSync(join(project.path, 'p.html'), '<!doctype html><body style="margin:0;background:#fff"><div id="box" style="width:960px;height:1080px;background:#f00"></div><script>window.film = { duration: 2, frame() {} };</script></body>');
