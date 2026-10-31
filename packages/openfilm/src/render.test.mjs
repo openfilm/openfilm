@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { getPriority, tmpdir, totalmem } from 'node:os';
 import { basename, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { BrowserPool } from './browser-pool.mjs';
 import { encoders, hardwareEncoder } from './encoders.mjs';
 import { filmHtml } from './film-doc.mjs';
@@ -103,23 +103,28 @@ test('a failed encode is the error told, and leaves no chunk cut off nor a claim
   }
 });
 
-test('a render stopped partway is resumed from the chunks it finished, frame for frame the same as one drawn whole; a film changed meanwhile is drawn again', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 240_000 }, async () => {
+test('a render whose process died partway is resumed from the chunks it finished, frame for frame the same as one drawn whole; one cancelled on purpose leaves none', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 300_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'of-render-resume-'));
   const page = (hue) => `<!doctype html><body style="margin:0"><script>window.film = { duration: 4, width: 320, height: 180, frame(t) { document.body.style.background = \`hsl(\${${hue} + t * 90}, 80%, 50%)\`; } };</script>`;
   const frames = (file) => execFileSync('ffmpeg', ['-v', 'error', '-i', file, '-map', '0:v', '-f', 'framemd5', '-'], { encoding: 'utf8' }).split('\n').filter((l) => /^\d/.test(l)).map((l) => l.split(',').at(-1).trim());
   /* the software encoder: what a chip's encoder makes of the same frames may differ by a bit, run to run */
   const opts = { workers: 1, hardware: false };
   const out = join(dir, 'resumed.mp4');
-  const stopAt = async (frame) => {
-    const stop = new AbortController();
-    await assert.rejects(render([dir], { ...opts, out, signal: stop.signal, onProgress(done) { if (done >= frame) stop.abort(); } }), /cancelled/);
-  };
+  const kept = chunkFolder(join(dir, '.film', 'cache', 'render'), out);
+  /* a render in a process of its own, killed outright once it has drawn `frame` frames: a crash, the app quit */
+  const diedAt = (frame) => new Promise((done, fail) => {
+    const script = `import { render } from ${JSON.stringify(pathToFileURL(fileURLToPath(new URL('./render.mjs', import.meta.url))).href)};
+      render([${JSON.stringify(dir)}], { workers: 1, hardware: false, out: ${JSON.stringify(out)}, onProgress(n) { if (n >= ${frame}) process.kill(process.pid, 'SIGKILL'); } }).then(() => { console.error('ended'); process.exit(3); });`;
+    const child = spawn(process.execPath, ['--input-type=module', '-e', script], { stdio: ['ignore', 'ignore', 'pipe'] });
+    let err = '';
+    child.stderr.on('data', (d) => { err += d; });
+    child.on('exit', (code, signal) => (signal === 'SIGKILL' || (process.platform === 'win32' && code === 1) ? done() : fail(new Error(`the render was not killed: exit ${code} ${signal}\n${err}`))));
+  });
   try {
     writeFileSync(join(dir, 'index.html'), page(0));
-    /* four chunks of a second: stopped in the third, the first two are kept */
-    await stopAt(70);
-    const kept = chunkFolder(join(dir, '.film', 'cache', 'render'), out);
-    assert.deepEqual(readdirSync(kept).sort(), ['chunk-0-30.mp4', 'chunk-30-60.mp4', 'resume.json']);
+    /* four chunks of a second: died in the third, the first two are kept */
+    await diedAt(70);
+    assert.deepEqual(readdirSync(kept).filter((n) => n.startsWith('chunk-')).sort(), ['chunk-0-30.mp4', 'chunk-30-60.mp4']);
     const told = [];
     const resumed = await render([dir], { ...opts, out, onProgress(done) { told.push(done); } });
     assert.ok(resumed.lines.includes('  2 of 4 chunks were drawn by a render that stopped, and used'), resumed.lines.join('\n'));
@@ -131,13 +136,67 @@ test('a render stopped partway is resumed from the chunks it finished, frame for
     assert.equal(resumedFrames.length, 120);
     assert.deepEqual(resumedFrames, frames(whole.out));
 
-    /* stopped again, then the page changed: every chunk is drawn anew */
-    await stopAt(40);
+    /* cancelled on purpose: nothing kept (an export's chunks are large, and out of sight) */
+    const stop = new AbortController();
+    await assert.rejects(render([dir], { ...opts, out, signal: stop.signal, onProgress(done) { if (done >= 70) stop.abort(); } }), /cancelled/);
+    assert.equal(existsSync(kept), false, 'a cancelled render leaves no chunks');
+
+    /* died again, then the page changed: every chunk is drawn anew */
+    await diedAt(40);
     writeFileSync(join(dir, 'index.html'), page(180));
     const changed = await render([dir], { ...opts, out });
     assert.equal(changed.lines.some((l) => /chunks were drawn/.test(l)), false);
     assert.notDeepEqual(frames(changed.out), resumedFrames);
   } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a file a page asked for and did not find is part of what its chunks were drawn from: once it is there, a render that died is not resumed', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 300_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-render-missing-'));
+  const out = join(dir, 'out.mp4');
+  const kept = chunkFolder(join(dir, '.film', 'cache', 'render'), out);
+  const frames = (file) => execFileSync('ffmpeg', ['-v', 'error', '-i', file, '-map', '0:v', '-f', 'framemd5', '-'], { encoding: 'utf8' }).split('\n').filter((l) => /^\d/.test(l)).map((l) => l.split(',').at(-1).trim());
+  /* a logo over the picture, from a file not there yet: the page draws without it */
+  const logo = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==', 'base64');
+  try {
+    writeFileSync(join(dir, 'index.html'), `<!doctype html><body style="margin:0;background:#246"><img id="logo" src="logo.png" style="position:absolute;left:0;top:0;width:160px;height:90px"><script>window.film = { duration: 4, width: 320, height: 180, frame(t) {} };</script>`);
+    const script = `import { render } from ${JSON.stringify(pathToFileURL(fileURLToPath(new URL('./render.mjs', import.meta.url))).href)};
+      render([${JSON.stringify(dir)}], { workers: 1, hardware: false, out: ${JSON.stringify(out)}, onProgress(n) { if (n >= 70) process.kill(process.pid, 'SIGKILL'); } }).then(() => process.exit(3));`;
+    await new Promise((done, fail) => spawn(process.execPath, ['--input-type=module', '-e', script], { stdio: 'ignore' })
+      .on('exit', (code, signal) => (signal === 'SIGKILL' || (process.platform === 'win32' && code === 1) ? done() : fail(new Error(`not killed: ${code} ${signal}`)))));
+    assert.deepEqual(readdirSync(kept).filter((n) => n.startsWith('chunk-')).sort(), ['chunk-0-30.mp4', 'chunk-30-60.mp4']);
+    const manifest = JSON.parse(readFileSync(join(kept, 'resume.json'), 'utf8'));
+    assert.equal(manifest.files[join(dir, 'logo.png')], '', 'the file missing is known, as missing');
+    writeFileSync(join(dir, 'logo.png'), logo);
+    const after = await render([dir], { workers: 1, hardware: false, out });
+    assert.equal(after.lines.some((l) => /chunks were drawn/.test(l)), false, 'nothing drawn without the logo is used');
+    const all = frames(after.out);
+    assert.equal(all.length, 120);
+    assert.equal(new Set(all).size, 1, 'every frame alike: the logo is on the first second as on the last');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a failed encode is the error told, even when its chunk folder cannot be removed', { skip: (!hasFfmpeg && 'no ffmpeg') || (process.platform === 'win32' && 'no read-only folders') || (process.getuid?.() === 0 && 'root removes anything'), timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-render-held-'));
+  const out = join(dir, 'out.mp4');
+  /* the folder this render keeps its chunks in, with a file in it, in a read-only folder: it cannot be removed, as on
+     Windows while an encoder still exiting holds a file of it */
+  const renderDir = join(dir, '.film', 'cache', 'render');
+  const kept = chunkFolder(renderDir, out);
+  try {
+    writeFileSync(join(dir, 'index.html'), '<!doctype html><body><script>window.film = { duration: 1, width: 320, height: 180, frame() {} };</script>');
+    mkdirSync(kept, { recursive: true });
+    writeFileSync(join(kept, 'held'), '');
+    chmodSync(renderDir, 0o555);
+    await assert.rejects(render([dir], { out, workers: 1, onProgress() {}, format: { video: ['-c:v', 'no_such_encoder'] } }), /^Error: ffmpeg: .*no_such_encoder/);
+    const stop = new AbortController();
+    stop.abort();
+    await assert.rejects(render([dir], { out, workers: 1, onProgress() {}, signal: stop.signal }), /^Error: cancelled/);
+  } finally {
+    chmodSync(renderDir, 0o755);
     rmSync(dir, { recursive: true, force: true });
   }
 });

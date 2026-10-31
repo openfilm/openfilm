@@ -90,7 +90,9 @@ test('the served folder is all a page reads: no way out through .., a link or a 
   symlinkSync(scratch, join(root, 'assets', 'up'));
   /* a link that stays inside is followed */
   symlinkSync(join(root, 'assets', 'a.txt'), join(root, 'same.txt'));
-  const site = await serve(root);
+  /* what a page asked for and did not get, for a render to key its chunks on: a file not there, a link refused */
+  const missed = [];
+  const site = await serve(root, { missed: (file) => missed.push(file) });
   try {
     const get = async (path) => { const r = await fetch(site.url + path); return [r.status, await r.text()]; };
     assert.deepEqual(await get('/assets/a.txt'), [200, 'mine']);
@@ -100,7 +102,11 @@ test('the served folder is all a page reads: no way out through .., a link or a 
     assert.notEqual((await get('/%2e%2e/secret.txt'))[1], 'secret');
     assert.notEqual((await get('/assets/..%2f..%2fsecret.txt'))[1], 'secret');
     assert.equal((await get('/%E0%A4%A'))[0], 400);
+    assert.equal((await get('/assets/logo.png'))[0], 404);
     assert.deepEqual(await get('/assets/a.txt'), [200, 'mine'], 'and it still serves');
+    /* (`/../secret.txt` is the folder's own secret.txt, asked for and not there) */
+    assert.deepEqual(missed, [join(root, 'assets', 'notes.txt'), join(root, 'assets', 'up', 'secret.txt'), join(root, 'secret.txt'), join(root, 'assets', 'logo.png')],
+      'the links refused and the files not there; never a file served, nor an address out of the folder');
   } finally {
     await site.close();
   }
