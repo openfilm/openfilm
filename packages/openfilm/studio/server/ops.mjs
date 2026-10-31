@@ -209,6 +209,7 @@ export function applyOps(value, ops) {
   /* after the whole edit, so every operation in it names tracks as the ones before it left them */
   dropEmptyTracks(value);
   fitFades(value);
+  fitClipLengths(value);
   return value;
 }
 
@@ -235,6 +236,36 @@ function fitFades(/** @type {FilmValue} */ value) {
       const k = Math.max(0, length) / (fade[0] + fade[1]);
       const down = (/** @type {number} */ v) => Math.floor(v * k * 1000) / 1000;
       setField(clip, 'fade', [down(fade[0]), down(fade[1])]);
+    }
+  }
+}
+
+/** The component property that is its clip's length, kept by Studio: a page times its way out by it. */
+export const CLIP_LENGTH = '--clip-length';
+
+/**
+ * A page that offers its clip's length as a property (a `var` named CLIP_LENGTH in its `data-props`) told it, in
+ * seconds, as its `:root` override: after every edit, so an insert, a trim or a split leaves it right. A page does
+ * not know how long its clip plays (only `t`); this is how one that ends with a motion (words going out) times it.
+ */
+function fitClipLengths(/** @type {FilmValue} */ value) {
+  for (const track of value.tracks) {
+    for (const clip of track.clips) {
+      const raw = /** @type {{ attrs?: Record<string, string>, overrides?: Record<string, unknown>[], time?: unknown }} */ (clip);
+      const time = raw.time;
+      if (!Array.isArray(time) || time.length !== 2 || !raw.attrs?.['data-props']?.includes(CLIP_LENGTH)) continue;
+      let props;
+      try { props = JSON.parse(raw.attrs['data-props']); } catch { continue; }
+      if (!Array.isArray(props) || !props.some((p) => p?.type === 'var' && p.var === CLIP_LENGTH)) continue;
+      const length = `${round(Number(time[1]) - Number(time[0]))}s`;
+      const list = Array.isArray(raw.overrides) ? raw.overrides.map((o) => ({ ...o })) : [];
+      const root = list.find((o) => o?.at === ':root' && o.n === undefined);
+      const style = /** @type {Record<string, string>} */ ({ ...(/** @type {{ style?: Record<string, string> }} */ (root ?? {}).style ?? {}) });
+      if (style[CLIP_LENGTH] === length) continue;
+      style[CLIP_LENGTH] = length;
+      if (root) root.style = style;
+      else list.push({ at: ':root', style });
+      setField(clip, 'overrides', /** @type {PropValue} */ (/** @type {unknown} */ (list)));
     }
   }
 }

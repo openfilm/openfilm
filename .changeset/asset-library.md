@@ -9,3 +9,5 @@ Voices lists the ready-made voices of ElevenLabs (Eleven v4), Inworld (TTS-2) an
 Media in the library is what came into the project, folded under Imported: its own media, and what it took from the library; then Saved. Sounds show their waveform across the row, lit as they play. One highlight color, the timeline's teal, in every pane.
 
 Sounds and Music hold about 5,400 sound effects and 1,200 pieces of music, each with its own name and group in five languages.
+
+Text starts from one line of words whose look and motion are its own to change: basic lines (title, subtitle, body, note, a line below), 36 word-art looks and motions in, while shown and out. Click one to see it; double-click it to put a new line in with it, or onto the words picked. A line's way out is timed by its clip, however long it is trimmed.

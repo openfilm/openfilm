@@ -1,0 +1,116 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Text</title>
+<style>
+/* the display fonts it comes with (SIL Open Font License: fonts/*-OFL.txt) */
+@font-face { font-family: 'Smiley Sans'; src: url(fonts/SmileySans.woff2) format('woff2'); font-display: block; }
+@font-face { font-family: 'ZCOOL KuaiLe'; src: url(fonts/ZCOOLKuaiLe.ttf) format('truetype'); font-display: block; }
+/*
+ * A line of words, all of it the clip's to change through CSS variables (its component properties): the words, the
+ * font, size and color; a word-art look (a fill, a stroke, shadows, a glow, a box behind); and how it comes in, moves
+ * while it shows, and goes out. A look or a motion from the library is only values of these variables.
+ */
+:root {
+  --font: 'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif;
+  --size: 7vw;
+  --weight: 800;
+  --color: #ffffff;
+  --fill: none;
+  --stroke: 0;
+  --stroke-color: #000000;
+  --shadow: none;
+  --glow: none;
+  --box: transparent;
+  --box-pad: 0;
+  --box-radius: 0;
+  --spacing: 0.02em;
+  /* a long line wraps; pre keeps it one line */
+  --wrap: pre-wrap;
+  --italic: normal;
+  --x: 50%;
+  --y: 50%;
+  --align: center;
+  /* how it comes in, moves while shown, goes out: an animation's name (none: still) and how long */
+  --in: rise;
+  --in-time: 0.5s;
+  --loop: none;
+  --loop-time: 1.6s;
+  --out: none;
+  --out-time: 0.4s;
+  /* the clip's length on the film (Studio keeps it): when the way out starts */
+  --clip-length: 3600s;
+}
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+.box {
+  position: fixed; left: var(--x); top: var(--y); translate: -50% -50%;
+  max-width: 92vw; text-align: var(--align);
+  background: var(--box); padding: var(--box-pad); border-radius: var(--box-radius);
+}
+.t {
+  display: inline-block; white-space: var(--wrap);
+  font-family: var(--font); font-size: var(--size); font-weight: var(--weight); font-style: var(--italic);
+  letter-spacing: var(--spacing); line-height: 1.15;
+  color: var(--color);
+  background: var(--fill); -webkit-background-clip: text; background-clip: text;
+  -webkit-text-stroke: var(--stroke) var(--stroke-color); paint-order: stroke fill;
+  text-shadow: var(--shadow);
+  filter: var(--glow);
+  animation:
+    var(--in) var(--in-time) cubic-bezier(.2, .8, .2, 1) both,
+    var(--loop) var(--loop-time) ease-in-out var(--in-time) infinite,
+    var(--out) var(--out-time) cubic-bezier(.6, 0, .8, .2) calc(var(--clip-length) - var(--out-time)) forwards;
+}
+
+/* coming in */
+@keyframes fade { from { opacity: 0; } }
+@keyframes rise { from { opacity: 0; transform: translateY(0.6em); } }
+@keyframes drop { from { opacity: 0; transform: translateY(-0.8em); } }
+@keyframes pop { 0% { opacity: 0; transform: scale(0.4); } 70% { transform: scale(1.08); } 100% { transform: scale(1); } }
+@keyframes zoom { from { opacity: 0; transform: scale(1.6); filter: blur(6px); } }
+@keyframes blur { from { opacity: 0; filter: blur(14px); } }
+@keyframes slide-left { from { opacity: 0; transform: translateX(-1.2em); } }
+@keyframes slide-right { from { opacity: 0; transform: translateX(1.2em); } }
+@keyframes wipe { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes type { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes stamp { 0% { opacity: 0; transform: scale(2.4) rotate(-8deg); } 60% { opacity: 1; transform: scale(0.94) rotate(0); } 100% { transform: scale(1); } }
+@keyframes spin-in { from { opacity: 0; transform: rotate(-90deg) scale(0.5); } }
+@keyframes flip-in { from { opacity: 0; transform: perspective(600px) rotateX(90deg); } }
+@keyframes bounce-in { 0% { opacity: 0; transform: translateY(-1.4em); } 55% { opacity: 1; transform: translateY(0.12em); } 75% { transform: translateY(-0.06em); } 100% { transform: translateY(0); } }
+
+/* while it shows */
+@keyframes float { 50% { transform: translateY(-0.12em); } }
+@keyframes pulse { 50% { transform: scale(1.06); } }
+@keyframes wiggle { 25% { transform: rotate(-3deg); } 75% { transform: rotate(3deg); } }
+@keyframes shake { 20% { transform: translateX(-0.04em); } 40% { transform: translateX(0.04em); } 60% { transform: translateX(-0.03em); } 80% { transform: translateX(0.03em); } }
+@keyframes breathe { 50% { opacity: 0.55; } }
+@keyframes swing { 50% { transform: rotate(4deg); } }
+@keyframes flicker { 0%, 100% { opacity: 1; } 8% { opacity: 0.4; } 10% { opacity: 1; } 52% { opacity: 0.7; } 54% { opacity: 1; } }
+
+/* going out */
+@keyframes fade-out { to { opacity: 0; } }
+@keyframes sink { to { opacity: 0; transform: translateY(0.6em); } }
+@keyframes lift { to { opacity: 0; transform: translateY(-0.8em); } }
+@keyframes shrink { to { opacity: 0; transform: scale(0.4); } }
+@keyframes blur-out { to { opacity: 0; filter: blur(14px); } }
+@keyframes wipe-out { from { clip-path: inset(0 0 0 0); } to { clip-path: inset(0 0 0 100%); } }
+@keyframes zoom-out { to { opacity: 0; transform: scale(1.6); filter: blur(6px); } }
+</style>
+</head>
+<body>
+<div class="box"><span class="t">Your words here</span></div>
+<script>
+/*
+ * A page of OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS animations are held at t by the
+ * host.
+ */
+window.film = { frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

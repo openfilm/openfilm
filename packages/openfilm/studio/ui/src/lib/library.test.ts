@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { coverLook, cutTrack, cutsOf, fromLibrary, libraryDragItem, lookOf, onCut, soundLook, waveUrl, withLook, type LibraryItem } from './library.ts';
+import { coverLook, cutTrack, cutsOf, fromLibrary, isTextClip, withRootVars, libraryDragItem, lookOf, onCut, soundLook, waveUrl, withLook, type LibraryItem } from './library.ts';
 
 const page: LibraryItem = { id: 'effects/snow', cat: 'effect', group: 'ambience', name: { en: 'Snow' }, kind: 'page', durationMs: 4000, src: 'snow.html' };
 const sound: LibraryItem = { id: 'sounds/whoosh.m4a', cat: 'sound', group: 'transition', name: { en: 'Whoosh' }, kind: 'sound', durationMs: 700 };
@@ -65,4 +65,14 @@ test('a sound\'s tile and a track\'s cover are its own, the same each time, in i
   const track = { id: 'audio/music/cozy-morning-abc123.mp3', group: 'calm' };
   assert.deepEqual(coverLook(track), coverLook({ ...track }));
   assert.notDeepEqual(coverLook(track), coverLook({ ...track, id: 'audio/music/night-drive-def456.mp3' }));
+});
+
+test('a text style or motion is the text component\'s variables, set in its clip\'s :root entry beside the rest', () => {
+  assert.ok(isTextClip('saved/openfilm/text-text/text.html'));
+  assert.ok(!isTextClip('saved/openfilm/text-title-bold/title-bold.html'));
+  assert.deepEqual(withRootVars(undefined, { '--color': 'red' }), [{ at: ':root', style: { '--color': 'red' } }]);
+  assert.deepEqual(
+    withRootVars([{ fade: [0.2, 0] }, { at: ':root', style: { '--clip-length': '3s', '--color': 'blue' } }, { at: '.t', text: 'Hi' }], { '--color': 'red', '--in': 'pop' }),
+    [{ fade: [0.2, 0] }, { at: ':root', style: { '--clip-length': '3s', '--color': 'red', '--in': 'pop' } }, { at: '.t', text: 'Hi' }],
+  );
 });

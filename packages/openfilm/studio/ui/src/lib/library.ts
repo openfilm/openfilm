@@ -22,7 +22,7 @@ export interface LibraryItem {
   cat: LibraryCategory;
   group: string;
   name: LibraryNames;
-  kind: 'page' | 'sound' | 'look' | 'fade';
+  kind: 'page' | 'sound' | 'look' | 'fade' | 'textstyle' | 'textmotion';
   durationMs?: number;
   /** A page: its clip's page (in its bundle's files/, with the stretch it plays), and a size of its own. */
   src?: string;
@@ -32,6 +32,8 @@ export interface LibraryItem {
   place?: 'cut';
   /** A look: the CSS `filter` it writes. */
   filter?: string;
+  /** A text style (word art) or a text motion: values of the text component's variables (library/text/text). */
+  vars?: Record<string, string>;
   /** A fade: which of the timeline's transitions. */
   fade?: Extract<TransitionKind, 'dissolve' | 'dip-black' | 'dip-white'>;
 }
@@ -242,4 +244,22 @@ export function coverLook(item: Pick<LibraryItem, 'id' | 'group'>): { background
   ];
   const motif = motifs[Math.floor(s(53) * motifs.length)]!;
   return { background: `${motif}, ${glow.join(', ')}, hsl(${hue(0)} 50% ${Math.round(light * 0.45)}%)` };
+}
+
+/** The library's text component: a line of words whose look and motion are its CSS variables. */
+export const TEXT_COMPONENT = 'text/text';
+/** Where a project keeps it once taken (server takeSaved: `saved/openfilm/<id as one name>/`). */
+const TEXT_IN_PROJECT = `saved/${BUILT_IN}/${TEXT_COMPONENT.replace('/', '-')}/`;
+
+/** Whether a clip is the text component, which a text style or motion goes on. */
+export const isTextClip = (src: string | undefined): boolean => Boolean(src?.split('#')[0]?.startsWith(TEXT_IN_PROJECT));
+
+/** A clip's overrides with `vars` set in its `:root` entry (the page's CSS variables), the rest as they were. */
+export function withRootVars(overrides: readonly unknown[] | undefined, vars: Record<string, string>): Record<string, unknown>[] {
+  const list = (overrides ?? []).map((o) => ({ ...(o as Record<string, unknown>) }));
+  const root = list.find((o) => o.at === ':root' && o.n === undefined);
+  const style = { ...((root?.style as Record<string, string> | undefined) ?? {}), ...vars };
+  if (root) root.style = style;
+  else list.push({ at: ':root', style });
+  return list;
 }

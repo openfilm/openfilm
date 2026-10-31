@@ -29,7 +29,7 @@ import { attrsOf, pasteAttrs, type AttrGroup, type CopiedAttrs } from '@/lib/cli
 import { cutPoints, namedTrack, nextCut, trackNamesOf } from '@/lib/timeline-nav';
 import { anyLocked, lockedEdits } from '@/lib/track-lock';
 import { placeMedia, type SourceRange } from '@/lib/media-place';
-import { BUILT_IN, builtInItem, cutTrack, cutsOf, fromLibrary, libraryDragItem, nameOf, onCut, useLibraryIndex, withLook, type LibraryItem } from '@/lib/library';
+import { BUILT_IN, TEXT_COMPONENT, builtInItem, cutTrack, cutsOf, fromLibrary, isTextClip, libraryDragItem, nameOf, onCut, useLibraryIndex, withLook, withRootVars, type LibraryItem } from '@/lib/library';
 import { LibraryDrawer, type LibraryActions } from '@/components/library/LibraryDrawer';
 import { LibraryTrial } from '@/components/library/LibraryTrial';
 import { apartOnTracks, type ClipEdit } from '@/lib/film-clip-edits';
@@ -1500,8 +1500,28 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       if (!cut || !item.fade) { toast.show(t('assetDrawer.noCut')); return; }
       void askTransition({ kind: 'add', type: item.fade, cut }).then((err) => { if (err) toast.show(err); });
     };
-    const place = async (item: LibraryItem) => {
-      const name = nameOf(item.name, language);
+    /* the text component's clips picked, which a text style or motion goes on */
+    const textTargets = () => selectedBlocks.flatMap((b) => {
+      const clip = b.clipId && b.loc ? filmClipOf(b.clipId) : null;
+      return clip && b.loc && isTextClip(clip.src) ? [{ loc: b.loc, overrides: clip.overrides }] : [];
+    });
+    /* a text style or motion: on the words picked; none picked, a new line of words with it at the playhead */
+    const textLook = (item: LibraryItem) => {
+      const vars = item.vars ?? {};
+      const on = textTargets();
+      if (!on.length) {
+        const text = builtInItem(`${BUILT_IN}/${TEXT_COMPONENT}`);
+        if (text) void place(text, vars, nameOf(item.name, language));
+        return;
+      }
+      void editBlocks(on.map((c) => ({ loc: c.loc, prop: 'overrides', value: withRootVars(c.overrides as unknown[] | undefined, vars) as never }))).then((err) => {
+        if (err) toast.showError(err);
+        else toast.show(t('assetDrawer.looked').replace('{name}', nameOf(item.name, language)).replace('{n}', String(on.length)));
+      });
+    };
+    /** `vars`: the page's CSS variables set on the clip put in (a text style or motion on new words), named `as`. */
+    const place = async (item: LibraryItem, vars?: Record<string, string>, as?: string) => {
+      const name = as ?? nameOf(item.name, language);
       const drag = libraryDragItem(item, name);
       if (!drag) return;
       let at = snapToFrame(timeRef.current) / 1000;
@@ -1523,7 +1543,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         return;
       }
       if (!('clip' in taken)) return;
-      const failed = await edit([{ op: 'insert', clip: taken.clip as never, at, track }], 'history.stepDrop');
+      const clip = vars ? { ...taken.clip, overrides: withRootVars((taken.clip as { overrides?: unknown[] }).overrides, vars) } : taken.clip;
+      const failed = await edit([{ op: 'insert', clip: clip as never, at, track }], 'history.stepDrop');
       if (failed) { toast.show(failed); return; }
       toast.show(t('assetDrawer.added').replace('{name}', name));
       pickAdded(before);
@@ -1533,6 +1554,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         setLibraryTrial(null);
         if (item.kind === 'look') look(item, lookTargets());
         else if (item.kind === 'fade') fade(item, cutHere()?.cut ?? null);
+        else if (item.kind === 'textstyle' || item.kind === 'textmotion') textLook(item);
         else void place(item);
       },
       tryOut: (item) => setLibraryTrial(item),

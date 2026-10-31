@@ -1,6 +1,7 @@
 /**
  * A thing of the library tried in the viewer (a click in the assets drawer, LibraryDrawer), over the picture there and
- * nothing written: a page laid over it (a sticker in its middle, at a size it can be seen), a transition's preview, and
+ * nothing written: a page laid over it (a sticker in its middle, at a size it can be seen), the preview of a transition
+ * or of a text look or motion, and
  * for a look only the word that it is tried (the look itself is on the clip, through the stage's look preview).
  */
 import { useLanguage, useT } from '@/i18n';
@@ -22,7 +23,7 @@ export function LibraryTrial({ item }: { item: LibraryItem }) {
           style={sticker ? { aspectRatio: `${item.w} / ${item.h}`, colorScheme: 'normal' } : { colorScheme: 'normal' }}
         />
       ) : null}
-      {item.cat === 'transition' ? <video src={previewUrl(item)} autoPlay loop muted playsInline className="absolute inset-0 h-full w-full object-cover" /> : null}
+      {item.cat === 'transition' || item.kind === 'textstyle' || item.kind === 'textmotion' ? <video src={previewUrl(item)} autoPlay loop muted playsInline className="absolute inset-0 h-full w-full object-cover" /> : null}
       <div className="absolute left-2 top-2 rounded bg-black/70 px-2 py-0.5 text-[11px] text-white">{t('assetDrawer.trying').replace('{name}', nameOf(item.name, lang))}</div>
     </div>
   );
