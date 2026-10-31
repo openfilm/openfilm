@@ -603,6 +603,16 @@ export const es: Words = {
     speedNormal: 'Normal',
     seek: 'Buscar',
   },
+  recycle: {
+    refused: `“{name}” se queda donde está: {why}. ${FILES} puede eliminarlo definitivamente.`,
+    network: 'está en una unidad de red, que no tiene Papelera de reciclaje',
+    removable: 'está en una unidad extraíble, que no tiene Papelera de reciclaje',
+    noBin: 'la unidad {drive} no tiene Papelera de reciclaje',
+    noVolume: 'Windows no indicó qué volumen es la unidad {drive}, así que no se pudo comprobar la configuración de su Papelera',
+    policy: 'una directiva aquí hace que la Papelera de reciclaje elimine los archivos de inmediato',
+    nuke: 'la Papelera de reciclaje de la unidad {drive} está configurada para eliminar los archivos de inmediato',
+    tooBig: 'ocupa {size}, más de lo que admite la Papelera de reciclaje de la unidad {drive} ({holds})',
+  },
   project: {
     projects: 'Proyectos',
     previewStageMount: 'Dibujando el primer fotograma',

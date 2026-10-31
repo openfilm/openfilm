@@ -7,7 +7,9 @@ async function wordsOn(platform: string, file: string, name: string): Promise<st
   Object.defineProperty(globalThis, 'navigator', { value: { platform }, configurable: true });
   try {
     const module = await import(`../i18n/${file}?${platform}`);
-    return JSON.stringify(module[name]);
+    /* the Recycle Bin's refusals (recycle.*) come only from a Windows server, whatever shows them: they name it as it is */
+    const { recycle, ...words } = module[name];
+    return JSON.stringify(words);
   } finally {
     if (before) Object.defineProperty(globalThis, 'navigator', before);
   }

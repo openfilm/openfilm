@@ -604,6 +604,16 @@ export const en = {
     speedNormal: 'Normal',
     seek: 'Seek',
   },
+  recycle: {
+    refused: `“{name}” stays where it is: {why}. ${FILES} can delete it for good.`,
+    network: 'it is on a network drive, which has no Recycle Bin',
+    removable: 'it is on a removable drive, which has no Recycle Bin',
+    noBin: 'drive {drive} has no Recycle Bin',
+    noVolume: 'Windows did not say which volume drive {drive} is, so its Recycle Bin’s settings could not be checked',
+    policy: 'a policy here has the Recycle Bin delete files right away',
+    nuke: 'the Recycle Bin of drive {drive} is set to delete files right away',
+    tooBig: 'it is {size}, more than the Recycle Bin of drive {drive} holds ({holds})',
+  },
   project: {
     projects: 'Projects',
     previewStageMount: 'Drawing the first frame',
