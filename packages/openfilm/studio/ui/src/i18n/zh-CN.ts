@@ -1573,6 +1573,7 @@ export const zhCN: Words = {
     subtitleTranslateNetwork: '无法连接到翻译服务。',
     subtitleTranslateRetry: '重试',
     subtitleTranslateConnect: '请在设置（左上角的 OpenFilm 标志）→ 服务中连接一个翻译服务。',
+    subtitleTranslateAgent: '翻译字幕用你的 Agent 自己的模型：请在设置（左上角的 OpenFilm 标志）→ 智能体中连接一个 Agent。',
     subtitleSize: '大小',
     subtitleLook: {
       outline: '描边（默认）',
@@ -2292,11 +2293,8 @@ export const zhCN: Words = {
     },
     models: {
       desc: '影片里每种媒体由谁来生成。写作、翻译字幕和看图是你的 Agent 自己的工作，用它自己的模型完成。',
-      groupMedia: '媒体',
       choose: '选择模型',
       notConnected: '未连接',
-      groupAgent: '给 Agent 用',
-      agentNote: '只给自己不能搜索网页的 Agent 使用。',
       none: '无',
       about: {
         tts: '朗读脚本，并寻找合适的音色',
@@ -2307,7 +2305,7 @@ export const zhCN: Words = {
         'image-search': '在网络上查找图片',
         video: '根据描述或图片生成视频片段',
         translate: '将字幕翻译成其他语言',
-        'web-search': '搜索网页并读取页面内容',
+        'web-search': '搜索网页并读取内容，给自己不能上网搜索的 Agent 用',
       },
     },
   },

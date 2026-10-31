@@ -389,8 +389,32 @@ function tellWorking(/** @type {string[]} */ folders) {
   void tellTabsWorking({ working: folders });
 }
 
+/** Studio's questions for the person's agent that are being answered, by id: each stops with its controller. */
+const asked = new Map();
+
+/**
+ * Studio asks the person's agent a question of its own (studio-process.mjs askAgent): the agent the chat last started a
+ * conversation with, else the first one ready in Settings → Agents, answers with its own model and no chat. None ready:
+ * `code: 'no-agent'`, so Studio says to connect one.
+ * @type {import('./studio.mjs').AskHandler}
+ */
+function answerStudio(message, reply) {
+  if (message.type === 'ask-cancel') { asked.get(message.id)?.abort(); return; }
+  const ready = (roster?.list() ?? []).filter((a) => a.status === 'ready').map((a) => a.id);
+  const last = localAgents?.lastAgent();
+  const agent = last && ready.includes(last) ? last : ready[0];
+  if (!agent || !localAgents) { reply({ type: 'answer', id: message.id, error: 'No agent is connected.', code: 'no-agent' }); return; }
+  const stop = new AbortController();
+  asked.set(message.id, stop);
+  localAgents.ask(agent, String(message.text ?? ''), stop.signal)
+    .then((text) => reply({ type: 'answer', id: message.id, text }))
+    .catch((error) => { if (!stop.signal.aborted) reply({ type: 'answer', id: message.id, error: error?.message ?? String(error), ...(error?.code ? { code: String(error.code) } : {}) }); })
+    .finally(() => asked.delete(message.id));
+}
+
 async function runStudio(env) {
   studio = await startWindowStudio({
+    onAsk: answerStudio,
     home: env.OPENFILM_HOME,
     port: IDENTITY.studioPort,
     /* Studio serves the window's page as its editor (shell/: its editor with the chat beside it) */

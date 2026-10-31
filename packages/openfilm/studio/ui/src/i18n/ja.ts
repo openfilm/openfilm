@@ -1572,6 +1572,7 @@ export const ja: Words = {
     subtitleTranslateNetwork: '翻訳サービスに接続できませんでした。',
     subtitleTranslateRetry: '再試行',
     subtitleTranslateConnect: '設定（左上の OpenFilm ロゴ）→ サービスで翻訳サービスを接続してください。',
+    subtitleTranslateAgent: '字幕の翻訳にはエージェント自身のモデルを使います。設定（左上の OpenFilm ロゴ）→ エージェントで接続してください。',
     subtitleSize: 'サイズ',
     subtitleLook: {
       outline: '縁取り（既定）',
@@ -2291,11 +2292,8 @@ export const ja: Words = {
     },
     models: {
       desc: '映画の各種メディアを何で作るか。文章、字幕の翻訳、画像の読み取りはエージェント自身の仕事で、エージェントのモデルが行います。',
-      groupMedia: 'メディア',
       choose: 'モデルを選択',
       notConnected: '未接続',
-      groupAgent: 'エージェント向け',
-      agentNote: '自分でウェブを検索できないエージェントだけが使います。',
       none: 'なし',
       about: {
         tts: '台本を読み上げ、読み上げる声を探します',
@@ -2306,7 +2304,7 @@ export const ja: Words = {
         'image-search': 'Web から画像を探します',
         video: '説明や画像からビデオクリップを作成します',
         translate: '字幕を別の言語に翻訳します',
-        'web-search': 'Web を検索してページを読みます',
+        'web-search': 'ウェブを検索してページを読みます。自分で検索できないエージェント向け',
       },
     },
   },

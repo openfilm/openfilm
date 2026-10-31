@@ -105,10 +105,12 @@ export function desktopInstaller(os, arch, base = DESKTOP_FILES) {
  * `onQuit`: what `POST /api/quit` does (by default, close); `stays`: it does nothing and says so (an app's Studio,
  * which its window needs). `editorDir`: the built editor to serve (by default studio/ui/dist); an app that builds
  * Studio's editor into a page of its own (its chat beside it) serves that one. `working`: the folders an app's agent
- * is working in right now (an app with a chat), which cannot be renamed or deleted meanwhile. Resolves once both servers listen.
- * @param {{ port?: number, key?: string, openBrowser?: (url: string) => void, advertise?: boolean, onQuit?: () => void, stays?: boolean, editorDir?: string, working?: () => string[] }} [options]
+ * is working in right now (an app with a chat), which cannot be renamed or deleted meanwhile. `askAgent`: in an app with
+ * a chat, one question answered by the person's agent's own model, for Studio's own work that needs a model
+ * (translating subtitles); without it, that goes to a service connected for it. Resolves once both servers listen.
+ * @param {{ port?: number, key?: string, openBrowser?: (url: string) => void, advertise?: boolean, onQuit?: () => void, stays?: boolean, editorDir?: string, working?: () => string[], askAgent?: import('./get.mjs').AskAgent }} [options]
  */
-export async function startStudio({ port = 4747, key, openBrowser = systemBrowser, advertise = false, onQuit, stays = false, editorDir = EDITOR_DIR, working = () => [] } = {}) {
+export async function startStudio({ port = 4747, key, openBrowser = systemBrowser, advertise = false, onQuit, stays = false, editorDir = EDITOR_DIR, working = () => [], askAgent } = {}) {
   let COOKIE = cookieName(port);
   let FRAMED = framedCookieName(port);
   /** The key from either session cookie. */
@@ -629,7 +631,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       requireProject({ film: !filmOptional });
     }
     /* ── subtitles: the film's lines, the person's subtitle style, translation (see captions.mjs) ── */
-    if (await captionRoutes(req, res, project.path, rest, { translate: subtitleTranslator, transcribe: await subtitleTranscriber() })) return;
+    if (await captionRoutes(req, res, project.path, rest, { translate: (root) => subtitleTranslator(root, { askAgent }), transcribe: await subtitleTranscriber() })) return;
     /* ── end subtitles ── */
     /* the editor's settings of the project: its frame rate, its tracks' names (see project-settings.mjs) */
     if (await projectSettingsRoute(req, res, project.path, rest)) return;

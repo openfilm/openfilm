@@ -5,15 +5,15 @@
  * models are shown as what connecting would bring, each opening that service's card. Connecting a service fills the
  * kinds that have none, with its first model.
  *
- * Media, and web search for an agent that has none of its own. Writing, translating subtitles and looking at pictures
- * are the agent's own work, with its own model.
+ * Media, and web search (for an agent that has none of its own), in one list. Writing, translating subtitles and
+ * looking at pictures are the agent's own work, with its own model.
  *
  * Under them, the person's custom services, which their agent calls itself (CustomServices).
  */
 import React from 'react';
 import { Check, ChevronDown } from 'lucide-react';
 import { useT } from '@/i18n';
-import { MEDIA_VERBS, offered, providerOrder, useProviders, type OwnProvider, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
+import { SERVICE_VERBS, offered, providerOrder, useProviders, type OwnProvider, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
 import { Popover } from '@/components/Popover';
 import { ProviderMark } from './ProviderMark';
 import { AddProviderDialog, KIND_ICON, ProviderDialog, ServicesBar } from './ProvidersSection';
@@ -45,10 +45,7 @@ export function ModelsSection() {
       {state ? (
         <>
           <ServicesBar hook={hook} onOpen={setCard} />
-          <SettingsGroup title={t('settings.models.groupMedia')}>{MEDIA_VERBS.filter((verb) => offered(state, verb)).map(row)}</SettingsGroup>
-          {offered(state, 'web-search') ? (
-            <SettingsGroup title={t('settings.models.groupAgent')} footnote={t('settings.models.agentNote')}>{row('web-search')}</SettingsGroup>
-          ) : null}
+          <SettingsGroup>{SERVICE_VERBS.filter((verb) => offered(state, verb)).map(row)}</SettingsGroup>
         </>
       ) : null}
       <CustomServices hook={hook} adding={addCustom} />

@@ -1569,6 +1569,7 @@ export const ko: Words = {
     subtitleTranslateNetwork: '번역 서비스에 연결할 수 없습니다.',
     subtitleTranslateRetry: '다시 시도',
     subtitleTranslateConnect: '설정(왼쪽 위 OpenFilm 로고) → 서비스에서 번역 서비스를 연결하세요.',
+    subtitleTranslateAgent: '자막 번역에는 에이전트 자체 모델을 씁니다. 설정(왼쪽 위 OpenFilm 로고) → 에이전트에서 연결하세요.',
     subtitleSize: '크기',
     subtitleLook: {
       outline: '외곽선(기본값)',
@@ -2287,11 +2288,8 @@ export const ko: Words = {
     },
     models: {
       desc: '영화의 각 미디어를 무엇으로 만들지 정합니다. 글쓰기, 자막 번역, 이미지 읽기는 에이전트가 자체 모델로 하는 일입니다.',
-      groupMedia: '미디어',
       choose: '모델 선택',
       notConnected: '연결 안 됨',
-      groupAgent: '에이전트용',
-      agentNote: '스스로 웹을 검색할 수 없는 에이전트만 사용합니다.',
       none: '없음',
       about: {
         tts: '대본을 읽고, 읽을 음성을 찾습니다',
@@ -2302,7 +2300,7 @@ export const ko: Words = {
         'image-search': '웹에서 이미지를 찾습니다',
         video: '설명이나 이미지로 비디오 클립을 만듭니다',
         translate: '자막을 다른 언어로 번역합니다',
-        'web-search': '웹을 검색하고 페이지를 읽습니다',
+        'web-search': '웹을 검색하고 페이지를 읽습니다. 스스로 검색할 수 없는 에이전트용',
       },
     },
   },

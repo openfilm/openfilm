@@ -345,6 +345,28 @@ test('subtitles translate through the provider chosen for it: each line its own,
   assert.equal(await subtitleTranslator(root), null);
 });
 
+test('in the app, the agent translates subtitles with its own model: the lines asked as JSON, its answer read even with words around it', async () => {
+  const root = project({ stage: { w: 1920, h: 1080 }, tracks: [{ clips: [{ id: 'vo', src: 'assets/audio/vo/intro.mp3' }] }] });
+  await runGet(root, 'tts', { out: 'intro', text: SAID, voice: 'v-1' });
+  const asked = [];
+  const askAgent = async (text) => { asked.push(text); return 'Here they are:\n```json\n{"lines": ["Hallo.", "Wie geht es dir?"]}\n```'; };
+  const result = await translateFilmSubtitles(root, 'de', { translate: await subtitleTranslator(root, { askAgent }) });
+  assert.deepEqual(result.translated, ['assets/audio/vo/intro.mp3']);
+  assert.match(asked[0], /"de"/);
+  assert.match(asked[0], /"lines":\["Hello there.","How are you\?"\]/);
+  const { cues } = await filmCaptions(root, { duration: async () => 2.8 });
+  assert.deepEqual(cues.map((c) => c.alt?.de), ['Hallo.', 'Wie geht es dir?']);
+
+  /* no agent ready: the service connected for translating does it; with none, the route says to connect one */
+  const none = async () => { throw Object.assign(new Error('No agent is connected.'), { code: 'no-agent' }); };
+  await changeSettings((s) => { s.keys.openai = 'openai-test-0123456789'; s.use.translate = 'openai'; });
+  const before = calls.length;
+  assert.deepEqual((await translateFilmSubtitles(root, 'fr', { translate: await subtitleTranslator(root, { askAgent: none }) })).translated, ['assets/audio/vo/intro.mp3']);
+  assert.equal(calls.length, before + 1);
+  await changeSettings((s) => { delete s.keys.openai; });
+  await assert.rejects(translateFilmSubtitles(root, 'es', { translate: await subtitleTranslator(root, { askAgent: none }) }), (e) => e.status === 409 && e.code === 'no-translator');
+});
+
 test('Studio: GET /api/get lists what can be got, never who makes it; a video run asks the page showing the project', async () => {
   const studio = await startStudio({ port: 0, openBrowser: () => {}, quietMs: 150 });
   try {

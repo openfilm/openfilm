@@ -1573,6 +1573,7 @@ export const en = {
     subtitleTranslateNetwork: "Couldn't reach the translation service.",
     subtitleTranslateRetry: 'Retry',
     subtitleTranslateConnect: 'Connect a service that translates in Settings (the OpenFilm logo at the top left) → Services.',
+    subtitleTranslateAgent: 'Translating subtitles uses your agent\'s own model: connect an agent in Settings (the OpenFilm logo at the top left) → Agents.',
     subtitleSize: 'Size',
     subtitleLook: {
       outline: 'Outlined (default)',
@@ -2292,11 +2293,8 @@ export const en = {
     },
     models: {
       desc: 'What makes each kind of media in your films. Writing, translating subtitles and looking at pictures are your agent\'s own work, with its own model.',
-      groupMedia: 'Media',
       choose: 'Choose a model',
       notConnected: 'Not connected',
-      groupAgent: 'For your agent',
-      agentNote: 'Used only by an agent that cannot search the web on its own.',
       none: 'None',
       about: {
         tts: 'Speaks a script, and finds voices to speak it',
@@ -2307,7 +2305,7 @@ export const en = {
         'image-search': 'Finds pictures on the web',
         video: 'Makes a video clip from a description or a picture',
         translate: 'Translates subtitles into another language',
-        'web-search': 'Searches the web and reads its pages',
+        'web-search': 'Searches the web and reads its pages, for an agent that cannot on its own',
       },
     },
   },

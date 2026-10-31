@@ -17,7 +17,8 @@
  * the person, in the Studio pages showing the project (a `notice` event, with where to top it up), and to the agent,
  * which stops. Nothing anyone reads here carries an amount: that is on each provider's own page.
  *
- * Subtitle translation goes through the provider chosen for `translate` too (`subtitleTranslator`, for captions.mjs).
+ * Subtitle translation (`subtitleTranslator`, for captions.mjs) is the person's agent's own model's work in an app with
+ * a chat (`askAgent`), else it goes through the provider chosen for `translate`.
  *
  * Web search and reading web pages (WEB_VERBS) are listed only for an agent without web tools of its own: the app's
  * own agents say so with OPENFILM_GET_WEB=1 (the CLI asks for them); an agent like Claude Code or Codex searches with
@@ -36,6 +37,7 @@ import { inside } from './files.mjs';
 import { HttpError, json, readJson } from './http.mjs';
 import { kindOf, modelFor, providerKey } from './keys.mjs';
 import { chooseProvider, freshProviders, listProviders, providerSettings } from './providers/index.mjs';
+import { translatedLines, translationAsk } from './providers/common.mjs';
 import { CALL_TIMEOUT_SEC, callService, servicesHelp } from './custom-services.mjs';
 
 /**
@@ -551,10 +553,42 @@ export async function catalog(only, { web = false } = {}) {
 }
 
 /**
- * Subtitle translation for captions.mjs, through the provider chosen for `translate`; null when none can.
- * @param {string} root @returns {Promise<TranslateLines | null>}
+ * One question answered by the person's agent's own model, with no chat (an app with a chat, studio-process.mjs):
+ * its words, whole. Throws `code: 'no-agent'` when no agent is ready.
+ * @typedef {(text: string, signal?: AbortSignal) => Promise<string>} AskAgent
  */
-export async function subtitleTranslator(root) {
+
+/** The JSON in an agent's answer: all of it, or from its first `{` to its last `}` when the agent wrapped it in words. */
+const jsonIn = (/** @type {string} */ answer) => {
+  const from = answer.indexOf('{'), to = answer.lastIndexOf('}');
+  return from >= 0 && to > from ? answer.slice(from, to + 1) : answer;
+};
+
+/**
+ * Subtitle translation for captions.mjs: by the person's agent's own model when Studio is in an app with a chat
+ * (`askAgent`), else through the provider chosen for `translate`; null when neither can. With no agent ready, the
+ * provider does it when there is one, else it is `code: 'not-connected'`.
+ * @param {string} root @param {{ askAgent?: AskAgent | null }} [options] @returns {Promise<TranslateLines | null>}
+ */
+export async function subtitleTranslator(root, { askAgent = null } = {}) {
+  const byProvider = await providerTranslator(root);
+  if (!askAgent) return byProvider;
+  return async (job) => {
+    const ask = translationAsk(job.lines, job.language);
+    let answer;
+    try {
+      answer = await askAgent(`${ask.system}\n\n${ask.user}`, job.signal);
+    } catch (e) {
+      if (/** @type {{ code?: unknown }} */ (e)?.code !== 'no-agent') throw e;
+      if (byProvider) return byProvider(job);
+      throw Object.assign(new Error('No agent is connected to translate the subtitles.'), { code: 'not-connected' });
+    }
+    return translatedLines(jsonIn(answer), ask.count);
+  };
+}
+
+/** Subtitle translation through the provider chosen for `translate`; null when none can. @param {string} root */
+async function providerTranslator(root) {
   const settings = await providerSettings();
   const provider = await chooseProvider('translate', { settings });
   if (!provider) return null;

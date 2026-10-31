@@ -1572,6 +1572,7 @@ export const es: Words = {
     subtitleTranslateNetwork: 'No se pudo conectar con el servicio de traducción.',
     subtitleTranslateRetry: 'Reintentar',
     subtitleTranslateConnect: 'Conecta un servicio de traducción en Configuración (el logotipo de OpenFilm, arriba a la izquierda) → Servicios.',
+    subtitleTranslateAgent: 'Traducir subtítulos usa el propio modelo de tu agente: conecta uno en Configuración (el logotipo de OpenFilm, arriba a la izquierda) → Agentes.',
     subtitleSize: 'Tamaño',
     subtitleLook: {
       outline: 'Con contorno (predeterminado)',
@@ -2291,11 +2292,8 @@ export const es: Words = {
     },
     models: {
       desc: 'Qué crea cada tipo de medio de tus películas. Escribir, traducir subtítulos y mirar imágenes es trabajo de tu agente, con su propio modelo.',
-      groupMedia: 'Medios',
       choose: 'Elegir un modelo',
       notConnected: 'Sin conectar',
-      groupAgent: 'Para tu agente',
-      agentNote: 'Solo lo usa un agente que no puede buscar en la web por sí mismo.',
       none: 'Ninguno',
       about: {
         tts: 'Lee un guion en voz alta y encuentra voces para leerlo',
@@ -2306,7 +2304,7 @@ export const es: Words = {
         'image-search': 'Busca imágenes en la web',
         video: 'Crea un clip de video a partir de una descripción o una imagen',
         translate: 'Traduce los subtítulos a otro idioma',
-        'web-search': 'Busca en la web y lee sus páginas',
+        'web-search': 'Busca en la web y lee sus páginas, para un agente que no puede hacerlo por sí mismo',
       },
     },
   },

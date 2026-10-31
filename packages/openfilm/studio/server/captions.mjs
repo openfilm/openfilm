@@ -329,7 +329,7 @@ function wordsOfLines(lines) {
   });
 }
 
-export const CONNECT_TRANSLATOR = 'Connect a service that translates in Studio: Settings (the OpenFilm logo at the top left) → Services.';
+export const CONNECT_TRANSLATOR = 'Translating subtitles needs your agent (in the app: Settings → Agents) or a service that translates (Settings → Services); the OpenFilm logo at the top left opens Settings.';
 
 /**
  * Translate the film's voices into `language` (one of FILM_SUBTITLE_LANGUAGES): each source heard in the film that has

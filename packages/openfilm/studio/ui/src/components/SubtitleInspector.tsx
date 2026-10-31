@@ -1,7 +1,7 @@
 import React from 'react';
 import { Loader2, MessageSquarePlus } from 'lucide-react';
 import { useT } from '@/i18n';
-import { STUDIO_REF_TYPE, type StudioRef } from '@/lib/host';
+import { STUDIO_REF_TYPE, studioHost, type StudioRef } from '@/lib/host';
 import {
   FILM_SUBTITLE_KARAOKE_DEFAULT, FILM_SUBTITLE_LANGUAGES, joinColor, matchSubtitleLook, sameFilmSubtitleLanguage, splitColor,
   SUBTITLE_DEFAULT, SUBTITLE_LOOKS, SUBTITLE_LOOK_IDS, SUBTITLE_SIZE_PCT_MAX, SUBTITLE_SIZE_PCT_MIN, subtitleCss,
@@ -554,7 +554,8 @@ function SubtitleLanguage({ style, set, translate, sourceLanguage }: {
   /* a saved language that is the voices' own is just the original */
   const chosen = style.language && !sameFilmSubtitleLanguage(style.language, sourceLanguage ?? null) ? style.language : null;
   const network = state.error !== null && /fetch failed|network|socket|TLS|ECONN|timed? ?out|HTTP 5\d\d/i.test(state.error);
-  const failure = state.needsTranslator ? 'timeline.subtitleTranslateConnect' : network ? 'timeline.subtitleTranslateNetwork' : 'timeline.subtitleTranslateFailed';
+  /* in the app, the agent translates (its own model); elsewhere a service that translates does */
+  const failure = state.needsTranslator ? (studioHost?.agents ? 'timeline.subtitleTranslateAgent' : 'timeline.subtitleTranslateConnect') : network ? 'timeline.subtitleTranslateNetwork' : 'timeline.subtitleTranslateFailed';
   return (
     <StyleGroup label={t('timeline.subtitleLanguageGroup')}>
       <div className="flex min-h-8 items-center gap-2 py-1">

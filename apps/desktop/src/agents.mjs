@@ -1155,12 +1155,14 @@ export class AgentSession {
    *           onUpdate?: (update: any) => void, onPermission?: (params: any) => Promise<string | null>,
    *           onQuestion?: (ask: { message: string, toolCallId: string | null, questions: any[] }) => Promise<Record<string, { label?: string, text?: string }> | null>,
    *           onExit?: (info: { code: number | null, stderr: string }) => void,
-   *           onSend?: (sent: { prompt: any[], _meta?: any }) => void, stallMs?: number }} opts
+   *           onSend?: (sent: { prompt: any[], _meta?: any }) => void, stallMs?: number, answerOnly?: boolean }} opts
    * `onSend` hears each message as it goes to the agent, whole (the app's words before the first one's, for an agent
    * told them there); `opened`, once started, says what it was started and opened with.
    * `skills`: the session has its maker's skills and MCP servers, OpenFilm's skills, and of the person's own only those
    * let in (`allowed`, `mcpAllowed`), each agent told by its own switch (agent-skills.mjs); `opened.skills` says how.
    * `stallMs`: how long the agent may wait on its model with nothing coming (MODEL_STALL_MS) before the turn is stopped.
+ * `answerOnly`: it may only answer (Studio's own questions): every permission it asks is refused, even what the app
+ * lets every agent do.
    * `logDir` (Developer mode): an agent whose own record lacks what its model got is started with its own logging
    * switch, writing under this folder (agent-logs.mjs); `opened.log` says where.
    */
@@ -1280,7 +1282,8 @@ export class AgentSession {
     const stream = acp.ndJsonStream(Writable.toWeb(this.child.stdin), Readable.toWeb(this.child.stdout));
     this.conn = acp.client({ name: 'openfilm-desktop' })
       .onRequest(acp.methods.client.session.requestPermission, async (ctx) => {
-        const optionId = (this.spec.approve ? allowOption(ctx.params) : null)
+        /* a session that may only answer is never given a permission, not even what every agent is let do */
+        const optionId = (this.spec.approve && !this.opts.answerOnly ? allowOption(ctx.params) : null)
           ?? (this.opts.onPermission ? await this.opts.onPermission(ctx.params) : null);
         return optionId ? { outcome: { outcome: 'selected', optionId } } : { outcome: { outcome: 'cancelled' } };
       })

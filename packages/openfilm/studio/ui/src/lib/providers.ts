@@ -97,14 +97,11 @@ export const offered = (state: ProvidersState, verb: ProviderVerb) => state.prov
 
 /** The kinds of media the person chooses a provider for, in the order they are listed. */
 export const USE_VERBS: ProviderVerb[] = ['tts', 'music', 'sfx', 'asr', 'image', 'image-search', 'video', 'translate', 'web-search'];
-/** The kinds of media Settings › Services lets the person choose what makes. */
-export const MEDIA_VERBS: ProviderVerb[] = ['tts', 'music', 'sfx', 'asr', 'image', 'image-search', 'video'];
 /**
- * Every kind Settings › Services shows: media, and web search for an agent that has none of its own. Translating
- * subtitles is the agent's model's work; a provider connected that translates is used for it without being chosen
- * (the server fills each kind).
+ * Every kind Settings › Services lets the person choose what makes: media, and web search for an agent that has none
+ * of its own. Translating subtitles is the agent's model's work.
  */
-export const SERVICE_VERBS: ProviderVerb[] = [...MEDIA_VERBS, 'web-search'];
+export const SERVICE_VERBS: ProviderVerb[] = ['tts', 'music', 'sfx', 'asr', 'image', 'image-search', 'video', 'web-search'];
 
 /** Each provider's website, as its card links it. */
 export const PROVIDER_SITES: Readonly<Record<string, string>> = {
