@@ -414,11 +414,15 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       if (parts[1] === 'voices' && parts.length === 2 && req.method === 'GET') return json(res, 200, libraryVoices());
       if (parts[1] === 'file' && parts.length === 2 && req.method === 'GET') return sendMedia(req, res, libraryFile(url.searchParams.get('path')), { keep: true });
       /* a page of it, as a page: what a click tries over the viewer's picture */
-      if (parts[1] === 'page' && parts.length === 2 && req.method === 'GET') {
-        const page = libraryFile(url.searchParams.get('path'));
-        if (!page || !/\.html?$/i.test(page)) throw new HttpError(404, 'no such page');
-        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'private, max-age=3600' });
-        return res.end(readFileSync(page));
+      if (parts[1] === 'pages' && parts.length > 2 && req.method === 'GET') {
+        /* a page of it, as a page, and what it loads beside it by its own place (its fonts, its pictures): what a click
+           tries over the viewer's picture */
+        const file = libraryFile(parts.slice(2).join('/'));
+        if (!file) throw new HttpError(404, 'no such file');
+        const type = /** @type {Record<string, string>} */ ({ '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.otf': 'font/otf' })[extname(file).toLowerCase()];
+        if (!type) return sendMedia(req, res, file, { keep: true });
+        res.writeHead(200, { 'content-type': type, 'cache-control': 'private, max-age=3600' });
+        return res.end(readFileSync(file));
       }
       if (parts[1] === 'favorites' && parts.length === 2) {
         if (req.method === 'GET') return json(res, 200, { ids: libraryFavorites() });

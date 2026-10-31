@@ -15,6 +15,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { render } from '../src/render.mjs';
 import { closeBrowsers } from '../src/host.mjs';
+import { GROUND } from './library-ground.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const LIB = join(HERE, '..', 'library');
@@ -141,7 +142,7 @@ writeFileSync(join(LIB, 'index.json'), `${JSON.stringify(index, null, 1)}\n`);
 console.log(`${items.length} text things in library/index.json`);
 
 if (!process.argv.includes('--no-pictures')) {
-  /* what each one shows: the words "Aa 字" (both scripts), its look or motion on them, over a still */
+  /* what each one shows: the words "Aa 字" (both scripts), its look or motion on them, on a plain ground */
   const asked = process.argv.slice(2).filter((a) => !a.startsWith('--'));
   for (const item of items) {
     if (asked.length && !asked.includes(item.id)) continue;
@@ -150,12 +151,12 @@ if (!process.argv.includes('--no-pictures')) {
     mkdirSync(dir, { recursive: true });
     try {
       cpSync(join(LIB, 'text', 'text', 'files'), join(work, 'item'), { recursive: true });
-      cpSync(join(SAMPLES, 'a.jpg'), join(work, 'a.jpg'));
+      writeFileSync(join(work, 'ground.html'), GROUND);
       const motion = item.kind === 'textmotion';
       const vars = { '--size': '18vw', '--wrap': 'pre', ...(item.vars ?? {}), '--clip-length': '2s', ...(motion ? {} : { '--in': 'none' }) };
       if (item.vars?.['--size']) vars['--size'] = item.group === 'basic' ? `max(10vw, calc(${item.vars['--size']} * 2.2))` : '16vw';
       const overrides = JSON.stringify([{ at: ':root', style: vars }, { at: '.t', text: 'Aa 字' }]).replaceAll("'", '&#39;');
-      writeFileSync(join(work, 'film.html'), `<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=${W}, height=${H}">\n</head>\n<body>\n<section>\n  <iframe src="item/text.html#t=0,2" overrides='${overrides}'></iframe>\n</section>\n<section>\n  <img src="a.jpg#t=0,2" style="object-fit: cover; filter: brightness(0.5)">\n</section>\n</body>\n</html>\n`);
+      writeFileSync(join(work, 'film.html'), `<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=${W}, height=${H}">\n</head>\n<body>\n<section>\n  <iframe src="item/text.html#t=0,2" overrides='${overrides}'></iframe>\n</section>\n<section>\n  <iframe src="ground.html#t=0,2"></iframe>\n</section>\n</body>\n</html>\n`);
       const out = join(work, 'out.mp4');
       await render([work, '0-2'], { out, fps: 30, quiet: true });
       ffmpeg('-i', out, '-vf', 'scale=320:180', '-c:v', 'libx264', '-crf', '30', '-preset', 'slow', '-pix_fmt', 'yuv420p', '-an', '-movflags', '+faststart', join(dir, 'preview.mp4'));

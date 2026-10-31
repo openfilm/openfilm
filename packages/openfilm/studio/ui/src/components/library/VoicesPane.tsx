@@ -193,7 +193,7 @@ function VoiceRow({ voice, service, access, showService, picked, sounding, kept,
           {...own}
           className={kept ? 'text-[#ffd35a]' : 'invisible text-[var(--text-faint)] hover:text-[var(--text)] group-hover:visible'}
         >
-          <Star size={13} fill="currentColor" strokeWidth={0} />
+          <Star size={13} fill={kept ? 'currentColor' : 'none'} strokeWidth={kept ? 0 : 2} />
         </button>
         {access ? (
           <button type="button" title={useTip} aria-label={useTip} onClick={(e) => { e.stopPropagation(); onUse(); }} {...own}

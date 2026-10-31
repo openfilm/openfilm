@@ -943,7 +943,6 @@ export const es: Words = {
     addPlayhead: 'Añadir en el cabezal',
     addCut: 'Añadir al corte (el del clip elegido, si no el más cercano al cabezal)',
     addLook: 'Usar en los clips elegidos (si no, en el clip bajo el cabezal)',
-    trying: 'Vista previa: {name} (Esc para quitarla)',
     added: 'Añadido a la línea de tiempo: {name}',
     pickClips: 'Pon el cabezal sobre un clip de imagen o elige uno en la línea de tiempo.',
     noCut: 'Aquí no hay dos clips seguidos entre los que poner una transición.',

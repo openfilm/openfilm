@@ -15,6 +15,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { render } from '../src/render.mjs';
 import { closeBrowsers } from '../src/host.mjs';
+import { GROUND } from './library-ground.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const LIB = join(HERE, '..', 'library');
@@ -45,7 +46,8 @@ function filmFor(item, about) {
     posterAt = 1.2;
   } else {
     top = `<iframe src="${src}#t=0,2"${props}></iframe>`;
-    under = `<img src="${item.cat === 'text' ? 'a.jpg' : 'b.jpg'}#t=0,2" style="object-fit: cover${item.cat === 'text' ? '; filter: brightness(0.6)' : ''}">`;
+    /* text on a plain ground (library-ground.mjs), anything else over a still */
+    under = item.cat === 'text' ? '<iframe src="ground.html#t=0,2"></iframe>' : '<img src="b.jpg#t=0,2" style="object-fit: cover">';
     /* a beat's flash is over soon after it starts */
     posterAt = item.cat === 'text' ? 1.6 : item.group === 'rhythm' ? 0.18 : 0.8;
   }
@@ -74,6 +76,7 @@ for (const item of index.items) {
   try {
     if (about) cpSync(join(dir, 'files'), join(work, 'item'), { recursive: true });
     for (const s of ['a.jpg', 'b.jpg', 'c.jpg']) cpSync(join(SAMPLES, s), join(work, s));
+    writeFileSync(join(work, 'ground.html'), GROUND);
     writeFileSync(join(work, 'white.html'), '<!doctype html><style>html,body{margin:0;height:100%;background:#fff}</style><script>window.film={frame(){}}</script>');
     const { html, posterAt } = about ? filmFor(item, about) : fadeFilm(item);
     writeFileSync(join(work, 'film.html'), html);

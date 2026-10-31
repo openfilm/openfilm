@@ -1,6 +1,7 @@
 /**
  * The library's sounds and music as the assets drawer lists them: a sound a row (its tile in its group's colors with
- * its group's mark, its name, length and waveform), a piece of music a card (its drawn cover, name, mood and length),
+ * its group's mark, its name, length and waveform), a piece of music a card (its cover, else one drawn, its name, mood
+ * and length),
  * and one player under the list for what was clicked: play and pause, how far it has played, dragged to any moment.
  * Rows and cards keep their size under the pointer: their buttons are always there, only shown on it.
  */
@@ -107,6 +108,7 @@ function Tile({ item, playing, size, cover }: { item: LibraryItem; playing: bool
   return (
     <span className="relative grid shrink-0 place-items-center overflow-hidden rounded-lg text-white" style={{ width: size, height: size }}>
       <span className={`absolute -inset-1 ${cover ? '' : 'blur-[2px]'}`} style={look} />
+      {cover && item.cover ? <img src={libraryUrl(item.cover)} alt="" draggable={false} loading="lazy" className="absolute inset-0 h-full w-full object-cover" /> : null}
       {cover ? null : <Mark size={size * 0.38} strokeWidth={1.8} className={`relative drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)] ${playing ? 'opacity-0' : 'opacity-90 group-hover:opacity-0'}`} />}
       <span className={`absolute inset-0 grid place-items-center bg-black/35 ${playing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
         <span className="grid h-7 w-7 place-items-center rounded-full bg-black/45">
@@ -204,14 +206,8 @@ export function MiniPlayer({ player, name, group }: { player: Player; name: stri
         </span>
         <span className="flex items-center gap-2 text-[11px] tabular-nums">
           <span className="text-[var(--tl-accent)]">{say(at)}</span>
-          <input
-            type="range" min={0} max={Math.max(length, 0.01)} step={0.01} value={Math.min(at, length)}
-            aria-label={t('assetDrawer.seek')}
-            onChange={(e) => setDragged(Number(e.target.value))}
-            onPointerUp={() => { if (dragged !== null) { player.seek(dragged); setDragged(null); } }}
-            onKeyUp={() => { if (dragged !== null) { player.seek(dragged); setDragged(null); } }}
-            className="h-1 min-w-0 flex-1 cursor-pointer accent-[var(--tl-accent)]"
-          />
+          <Scrub at={Math.min(at, length)} length={length} label={t('assetDrawer.seek')}
+            onDrag={setDragged} onLet={(sec) => { player.seek(sec); setDragged(null); }} />
           <span className="text-[var(--text-faint)]">{say(length)}</span>
         </span>
       </span>
@@ -219,6 +215,44 @@ export function MiniPlayer({ player, name, group }: { player: Player; name: stri
         className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[var(--surface-2)] text-[var(--text-muted)] hover:text-[var(--text)]">
         <X size={14} />
       </button>
+    </div>
+  );
+}
+
+/** How far it has played, as a plain bar: pressed or dragged anywhere along it to go there; arrows step a second. */
+function Scrub({ at, length, label, onDrag, onLet }: {
+  at: number; length: number; label: string; onDrag: (sec: number) => void; onLet: (sec: number) => void;
+}) {
+  const bar = React.useRef<HTMLDivElement>(null);
+  const held = React.useRef(false);
+  const secAt = (x: number) => {
+    const r = bar.current!.getBoundingClientRect();
+    return Math.min(1, Math.max(0, (x - r.left) / r.width)) * length;
+  };
+  const lit = length ? Math.min(100, (at / length) * 100) : 0;
+  return (
+    <div
+      ref={bar}
+      role="slider"
+      tabIndex={0}
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={Math.round(length)}
+      aria-valuenow={Math.round(at)}
+      className="group/scrub relative h-4 min-w-0 flex-1 cursor-pointer outline-none"
+      onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); held.current = true; onDrag(secAt(e.clientX)); }}
+      onPointerMove={(e) => { if (held.current) onDrag(secAt(e.clientX)); }}
+      onPointerUp={(e) => { if (!held.current) return; held.current = false; onLet(secAt(e.clientX)); }}
+      onPointerCancel={() => { held.current = false; }}
+      onKeyDown={(e) => {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        e.preventDefault();
+        onLet(Math.min(length, Math.max(0, at + (e.key === 'ArrowRight' ? 1 : -1))));
+      }}
+    >
+      <span className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-[var(--bg-hover)]" />
+      <span className="absolute left-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-[var(--tl-accent)]" style={{ width: `${lit}%` }} />
+      <span className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--tl-accent)] transition-transform group-hover/scrub:scale-125" style={{ left: `${lit}%` }} />
     </div>
   );
 }

@@ -105,6 +105,11 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: transparent;
  * A page of OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS animations are held at t by the
  * host.
  */
+/* tried from the library (its address says a look or a motion, `?vars=` its variables as JSON): shown with them */
+try {
+  const tried = JSON.parse(new URLSearchParams(location.search).get('vars') ?? 'null');
+  if (tried && typeof tried === 'object') for (const [k, v] of Object.entries(tried)) if (k.startsWith('--')) document.documentElement.style.setProperty(k, String(v));
+} catch { /* not tried: the clip's own */ }
 window.film = { frame() {} };
 if (!window.filmHost) {
   const t0 = performance.now();

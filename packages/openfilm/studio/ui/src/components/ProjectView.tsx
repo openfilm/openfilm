@@ -3520,7 +3520,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                             ) : null}
                           </Preview>
                           {/* a thing of the library tried from the assets drawer: over the picture, nothing written */}
-                          {libraryTrial && !fullscreen ? <LibraryTrial item={libraryTrial} /> : null}
+                          {libraryTrial && !fullscreen ? <LibraryTrial item={libraryTrial} onLetGo={() => setLibraryTrial(null)} /> : null}
                         </div>
                         {!viewerReady && !empty && !previewError ? (
                           <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black">

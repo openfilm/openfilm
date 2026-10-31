@@ -32,6 +32,8 @@ export interface LibraryItem {
   place?: 'cut';
   /** A look: the CSS `filter` it writes. */
   filter?: string;
+  /** A piece of music's cover, by its place in the library (none: one drawn, coverLook). */
+  cover?: string;
   /** A text style (word art) or a text motion: values of the text component's variables (library/text/text). */
   vars?: Record<string, string>;
   /** A fade: which of the timeline's transitions. */
@@ -93,7 +95,7 @@ export const nameOf = (names: LibraryNames, lang: Language): string => names[lan
 /** A file of the library by its place there. */
 export const libraryUrl = (rel: string): string => `/api/library/file?path=${encodeURIComponent(rel)}`;
 /** A page of the library, served as a page (for a try over the viewer's picture). */
-export const pageUrl = (item: LibraryItem): string => `/api/library/page?path=${encodeURIComponent(`${item.id}/files/${item.src ?? ''}`)}`;
+export const pageUrl = (item: LibraryItem): string => `/api/library/pages/${`${item.id}/files/${item.src ?? ''}`.split('/').map(encodeURIComponent).join('/')}`;
 export const posterUrl = (item: LibraryItem): string => libraryUrl(`${item.id}/poster.jpg`);
 export const previewUrl = (item: LibraryItem): string => libraryUrl(`${item.id}/preview.mp4`);
 /** A sound's waveform, beside it in waves/ (`sounds/whoosh.m4a` → `sounds/waves/whoosh.png`). */

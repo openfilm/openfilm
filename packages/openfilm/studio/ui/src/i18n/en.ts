@@ -944,7 +944,6 @@ export const en = {
     addPlayhead: 'Add at the playhead',
     addCut: 'Add to the cut (the picked clip’s, else the one nearest the playhead)',
     addLook: 'Use on the picked clips (else the clip under the playhead)',
-    trying: 'Preview: {name} (Esc to stop)',
     added: 'Added to the timeline: {name}',
     pickClips: 'Put the playhead on a picture clip, or pick one on the timeline.',
     noCut: 'There are no two clips side by side here to put a transition between.',

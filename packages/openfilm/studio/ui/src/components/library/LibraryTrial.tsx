@@ -1,30 +1,45 @@
 /**
  * A thing of the library tried in the viewer (a click in the assets drawer, LibraryDrawer), over the picture there and
- * nothing written: a page laid over it (a sticker in its middle, at a size it can be seen), the preview of a transition
- * or of a text look or motion, and
- * for a look only the word that it is tried (the look itself is on the clip, through the stage's look preview).
+ * nothing written: a page laid over it (a sticker in its middle, at a size it can be seen); a text look or motion on
+ * the text component's own words, in the middle; a transition's preview. A look is tried on the clip itself, through
+ * the stage's look preview. A click on it lets it go.
  */
-import { useLanguage, useT } from '@/i18n';
-import { nameOf, pageUrl, previewUrl, type LibraryItem } from '@/lib/library';
+import * as React from 'react';
+import { useLanguage } from '@/i18n';
+import { TEXT_COMPONENT, builtInItem, BUILT_IN, nameOf, pageUrl, previewUrl, type LibraryItem } from '@/lib/library';
 
-export function LibraryTrial({ item }: { item: LibraryItem }) {
-  const t = useT();
+/* a motion tried again and again: in, a while shown, out */
+const MOTION_SECONDS = 2.6;
+
+export function LibraryTrial({ item, onLetGo }: { item: LibraryItem; onLetGo: () => void }) {
   const lang = useLanguage();
-  const page = item.kind === 'page' && item.cat !== 'transition';
+  const text = item.kind === 'textstyle' || item.kind === 'textmotion';
+  const page = (item.kind === 'page' && item.cat !== 'transition') || text;
   /* a sticker has a size of its own: shown as a third of the picture's height, in its middle */
-  const sticker = page && item.w && item.h;
+  const sticker = item.kind === 'page' && item.w && item.h;
+  /* a motion is shown from its start again, each time it has gone */
+  const [round, setRound] = React.useState(0);
+  React.useEffect(() => {
+    if (item.kind !== 'textmotion') return undefined;
+    const timer = window.setInterval(() => setRound((r) => r + 1), (MOTION_SECONDS + 0.6) * 1000);
+    return () => window.clearInterval(timer);
+  }, [item]);
+  const component = text ? builtInItem(`${BUILT_IN}/${TEXT_COMPONENT}`) : null;
+  const src = text && component
+    ? `${pageUrl(component)}?vars=${encodeURIComponent(JSON.stringify({ '--clip-length': `${MOTION_SECONDS}s`, ...(item.vars ?? {}) }))}`
+    : page ? pageUrl(item) : null;
   return (
-    <div data-library-trial="" className="pointer-events-none absolute inset-0 z-[6] overflow-hidden">
-      {page ? (
+    <div data-library-trial="" className="absolute inset-0 z-[6] cursor-default overflow-hidden" onPointerDown={(e) => { e.stopPropagation(); onLetGo(); }}>
+      {src ? (
         <iframe
+          key={round}
           title={nameOf(item.name, lang)}
-          src={pageUrl(item)}
-          className={sticker ? 'absolute left-1/2 top-1/2 h-[36%] -translate-x-1/2 -translate-y-1/2 border-0' : 'absolute inset-0 h-full w-full border-0'}
+          src={src}
+          className={`pointer-events-none border-0 ${sticker ? 'absolute left-1/2 top-1/2 h-[36%] -translate-x-1/2 -translate-y-1/2' : 'absolute inset-0 h-full w-full'}`}
           style={sticker ? { aspectRatio: `${item.w} / ${item.h}`, colorScheme: 'normal' } : { colorScheme: 'normal' }}
         />
       ) : null}
-      {item.cat === 'transition' || item.kind === 'textstyle' || item.kind === 'textmotion' ? <video src={previewUrl(item)} autoPlay loop muted playsInline className="absolute inset-0 h-full w-full object-cover" /> : null}
-      <div className="absolute left-2 top-2 rounded bg-black/70 px-2 py-0.5 text-[11px] text-white">{t('assetDrawer.trying').replace('{name}', nameOf(item.name, lang))}</div>
+      {item.cat === 'transition' ? <video src={previewUrl(item)} autoPlay loop muted playsInline className="pointer-events-none absolute inset-0 h-full w-full object-cover" /> : null}
     </div>
   );
 }

@@ -944,7 +944,6 @@ export const zhCN: Words = {
     addPlayhead: '添加到轨道（播放头）',
     addCut: '加到切点（所选片段的，否则离播放头最近的）',
     addLook: '用到所选片段（没选就用到播放头下的片段）',
-    trying: '预览：{name}（Esc 取消）',
     added: '已添加至当前时间线：{name}',
     pickClips: '把播放头放到画面片段上，或在时间线上选中片段。',
     noCut: '当前位置没有相邻的两段，无法添加转场。',

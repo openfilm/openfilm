@@ -69,7 +69,9 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
     setPicked(item?.id ?? null);
     if (item?.kind !== 'sound') tryOut.current(item);
   };
-  const show = (next: Category) => { SHOWN.cat = next; setCat(next); setGroup(SHOWN.group[next] ?? ''); setQuery(''); pick(null); };
+  /* another category: what played in the last one stops and its player goes */
+  const closePlayer = React.useRef<() => void>(() => {});
+  const show = (next: Category) => { SHOWN.cat = next; setCat(next); setGroup(SHOWN.group[next] ?? ''); setQuery(''); pick(null); closePlayer.current(); };
   const pickGroup = (next: string) => { SHOWN.group[cat] = next; setGroup(next); setQuery(''); };
   const fold = () => { SHOWN.folded = !folded; setFolded(!folded); };
   const [rail, setRail] = React.useState(railWidth);
@@ -96,6 +98,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
   const groupName = (id: string) => own.find((g) => g.id === id)?.name ?? '';
   /* what a sound or a piece of music plays in, under the list */
   const player = usePlayer();
+  closePlayer.current = player.close;
   const dragProps = (item: LibraryItem) => ({ onDragStart: dragOf(item, nameOf(item.name, lang)), onDragEnd: () => clearResourceDrag() });
   /* a long list (thousands of sounds) is drawn a page at a time, from its top again when what it lists changes */
   const [drawn, setDrawn] = React.useState(PAGE);
@@ -332,7 +335,8 @@ function StarButton({ item, kept, className }: { item: LibraryItem; kept: boolea
       {...own}
       className={className}
     >
-      <Star size={13} fill="currentColor" strokeWidth={0} />
+      {/* hollow until starred, then filled in the star's own color */}
+      <Star size={13} fill={kept ? 'currentColor' : 'none'} strokeWidth={kept ? 0 : 2} />
     </button>
   );
 }
