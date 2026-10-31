@@ -60,14 +60,24 @@ export interface ProvidersState {
   signingIn: { provider: string | null; error: string | null; errorFor: string | null };
 }
 
-/** The providers Settings › Services lists first to connect, in this order: the large media services, and OpenFilm's own. */
-export const RECOMMENDED_PROVIDERS = ['openai', 'openfilm', 'azure', 'google', 'elevenlabs', 'openrouter'];
+/** The providers Settings › Services shows first, in this order: OpenFilm's own, then the large media services. */
+export const RECOMMENDED_PROVIDERS = ['openfilm', 'openai', 'google', 'azure', 'elevenlabs', 'openrouter'];
 
-/** The providers to connect in two groups: the recommended ones in RECOMMENDED_PROVIDERS' order, then the rest by name. */
-export function providerGroups<P extends Pick<OwnProvider, 'id' | 'name'>>(providers: readonly P[]) {
-  const recommended = RECOMMENDED_PROVIDERS.map((id) => providers.find((p) => p.id === id)).filter((p): p is P => Boolean(p));
-  const more = providers.filter((p) => !RECOMMENDED_PROVIDERS.includes(p.id)).sort((a, b) => a.name.localeCompare(b.name));
-  return { recommended, more };
+/**
+ * The providers in the order Services lists them: the connected ones first, then the others; within each, the
+ * recommended ones in RECOMMENDED_PROVIDERS' order, then the rest by name. `more`: the others not recommended, which
+ * wait behind "N more".
+ */
+export function providerOrder<P extends Pick<OwnProvider, 'id' | 'name' | 'source'>>(providers: readonly P[]) {
+  const rank = (p: P) => { const at = RECOMMENDED_PROVIDERS.indexOf(p.id); return at === -1 ? RECOMMENDED_PROVIDERS.length : at; };
+  const sorted = [...providers].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+  const connected = sorted.filter((p) => p.source);
+  const others = sorted.filter((p) => !p.source);
+  return {
+    connected,
+    recommended: others.filter((p) => RECOMMENDED_PROVIDERS.includes(p.id)),
+    more: others.filter((p) => !RECOMMENDED_PROVIDERS.includes(p.id)),
+  };
 }
 
 /**
@@ -87,6 +97,11 @@ export const offered = (state: ProvidersState, verb: ProviderVerb) => state.prov
 
 /** The kinds of media the person chooses a provider for, in the order they are listed. */
 export const USE_VERBS: ProviderVerb[] = ['tts', 'music', 'sfx', 'asr', 'image', 'image-search', 'video', 'translate', 'web-search'];
+/**
+ * The kinds Settings › Services shows: media. Translating subtitles and searching the web are the agent's own work;
+ * a provider connected that does them is used for them without being chosen (the server fills each kind).
+ */
+export const MEDIA_VERBS: ProviderVerb[] = ['tts', 'music', 'sfx', 'asr', 'image', 'image-search', 'video'];
 
 async function call<T = ProvidersState>(path: string, init?: { method: string; json?: unknown }): Promise<T> {
   const res = await fetch(`/api/providers${path}`, {

@@ -115,7 +115,7 @@ distribute one, read [TRADEMARK.md](TRADEMARK.md): a fork published as its own n
 `packages/openfilm/product.json` says where the desktop app looks for updates. It is empty in the repository, so a
 desktop build of your own never looks for them. The official feed is in `product.official.json`; the package npm
 publishes and the official desktop app carry it. Media services are connected with your own keys: in Studio,
-Settings → Providers, or each service's variable in the environment (`ELEVENLABS_API_KEY`, `OPENAI_API_KEY`, …).
+Settings → Services, or each service's variable in the environment (`ELEVENLABS_API_KEY`, `OPENAI_API_KEY`, …).
 
 ## Releases
 
@@ -166,7 +166,7 @@ footage. So we hold one standard for every one:
 - **A service that resells or routes other companies' models** is not built in, however good its API: those models
   reach OpenFilm through their makers, or through a provider that is already built in.
 
-Every service, built in or not, works with OpenFilm today through **Settings › Providers › Custom services**: any
+Every service, built in or not, works with OpenFilm today through **Settings › Services › Custom services**: any
 HTTP service with its address, a key if it has one, and a few words about it; the agent calls it from there, and the
 key stays on the computer.
 

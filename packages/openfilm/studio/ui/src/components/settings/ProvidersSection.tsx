@@ -1,8 +1,9 @@
 /**
  * The services at the top of Settings → Services (ServicesBar): what `openfilm get` gets voices, music, sound
  * effects, transcripts, images, video and web searches from, each a chip, the connected ones first, then the
- * recommended ones (lib/providers RECOMMENDED_PROVIDERS), the rest behind "N more". A chip opens the service's card:
- * connecting it, how it is paid, and what it makes with which models.
+ * recommended ones (lib/providers RECOMMENDED_PROVIDERS), the rest behind "N more", and last, adding one. A chip opens
+ * the service's card (ProviderDialog): connecting it, how it is paid, and what it makes with which models. Connecting
+ * is Connect for every service, whether it then asks for a key or for signing in on its website.
  *
  * ElevenLabs, OpenAI, Google, Microsoft Azure, fal.ai, OpenRouter, Groq, Pexels, Pixabay, Brave Search and Tavily connect with the person's
  * own key, which pays that service directly when it charges (a key in the environment shows as such and stays there).
@@ -12,9 +13,9 @@
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronRight, CircleHelp, ExternalLink, LogIn, Plus, X } from 'lucide-react';
+import { ChevronRight, CircleHelp, ExternalLink, Plus, X } from 'lucide-react';
 import { useT } from '@/i18n';
-import { AZURE_SERVICES, azureKey, providerGroups, type OwnProvider, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
+import { AZURE_SERVICES, MEDIA_VERBS, azureKey, providerOrder, type OwnProvider, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
 import { Tooltip } from '../Tooltip';
 import { customProblem } from './CustomServices';
 import { ProviderMark } from './ProviderMark';
@@ -23,59 +24,58 @@ import { SettingsButton, SettingsField, SettingsInset, SettingsItem, SettingsSta
 /** What a provider can make, in the order Services lists it (listing voices goes without saying with voice-over). */
 const ABILITY_ORDER: ProviderVerb[] = ['tts', 'music', 'sfx', 'asr', 'image', 'image-search', 'video', 'translate', 'web-search'];
 
+/** Where a new built-in provider is proposed, and what it needs. */
+const ADDING_PROVIDERS = 'https://github.com/openfilm/openfilm/blob/main/CONTRIBUTING.md#adding-a-media-provider';
+
 /**
  * Every service as a chip at the top of Services: the connected ones first (with a dot), then the recommended ones,
- * then the rest behind "N more". A chip opens the service's card (ProviderDialog).
+ * then the rest behind "N more", each part in the default order (lib/providers providerOrder); last, adding one.
+ * A chip opens the service's card (`onOpen` with its id, or 'add').
  */
-export function ServicesBar({ hook }: { hook: ProvidersHook }) {
+export function ServicesBar({ hook, onOpen }: { hook: ProvidersHook; onOpen: (id: string) => void }) {
   const t = useT();
   const rows = hook.state?.providers ?? [];
-  const isOn = (p: OwnProvider) => Boolean(p.source) || hook.state?.signingIn.provider === p.id;
-  const connected = rows.filter(isOn).sort((a, b) => a.name.localeCompare(b.name));
-  const groups = providerGroups(rows.filter((p) => !isOn(p)));
+  const order = providerOrder(rows);
   const [all, setAll] = React.useState(false);
-  const [shown, setShown] = React.useState<string | null>(null);
-  const showing = rows.find((p) => p.id === shown) ?? null;
   const chip = (p: OwnProvider) => (
-    <button key={p.id} type="button" onClick={() => setShown(p.id)}
-      className={`inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-[14px] transition hover:border-[var(--border-strong)] hover:text-[var(--text)] ${isOn(p) ? 'border-[var(--border-strong)] text-[var(--text)]' : 'border-[var(--border)] text-[var(--text-muted)]'}`}>
+    <button key={p.id} type="button" onClick={() => onOpen(p.id)}
+      className={`inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-[14px] transition hover:border-[var(--border-strong)] hover:text-[var(--text)] ${p.source ? 'border-[var(--border-strong)] text-[var(--text)]' : 'border-[var(--border)] text-[var(--text-muted)]'}`}>
       <ProviderMark id={p.id} size={15} />
       {p.name}
-      {isOn(p) ? <span className="h-1.5 w-1.5 rounded-full bg-[var(--ok)]" aria-label={t('settings.providers.connected')} /> : null}
+      {p.source ? <span className="h-1.5 w-1.5 rounded-full bg-[var(--ok)]" aria-label={t('settings.providers.connected')} /> : null}
     </button>
   );
   if (!hook.state) return null;
   return (
     <div className="mb-10">
       <div className="flex flex-wrap gap-2">
-        {connected.map(chip)}
-        {groups.recommended.map(chip)}
-        {all ? groups.more.map(chip) : null}
-        {groups.more.length ? (
+        {order.connected.map(chip)}
+        {order.recommended.map(chip)}
+        {all ? order.more.map(chip) : null}
+        {order.more.length ? (
           <button type="button" aria-expanded={all} onClick={() => setAll(!all)}
             className="inline-flex h-9 items-center gap-1 rounded-full px-3 text-[14px] text-[var(--text-faint)] transition hover:text-[var(--text)]">
-            {all ? t('settings.providers.fewer') : t('settings.providers.moreCount').replaceAll('{n}', String(groups.more.length))}
+            {all ? t('settings.providers.fewer') : t('settings.providers.moreCount').replaceAll('{n}', String(order.more.length))}
             <ChevronRight size={14} className={`transition-transform ${all ? 'rotate-180' : ''}`} aria-hidden />
           </button>
         ) : null}
+        <button type="button" onClick={() => onOpen('add')}
+          className="inline-flex h-9 items-center gap-1.5 rounded-full border border-dashed border-[var(--border)] px-3.5 text-[14px] text-[var(--text-muted)] transition hover:border-[var(--border-strong)] hover:text-[var(--text)]">
+          <Plus size={15} aria-hidden />{t('settings.providers.addProvider')}
+        </button>
       </div>
       {/* a key that was refused says why under its own field, in its card; a custom service's under its form */}
       {hook.problem && !rows.some((p) => p.id === hook.problemFor) && !customProblem(hook) ? <p className={settingsError}>{hook.problem}</p> : null}
-      {showing ? <ProviderDialog provider={showing} hook={hook} onClose={() => setShown(null)} /> : null}
     </div>
   );
 }
 
-/**
- * A service's card, over Settings: connecting it (or how it is connected, and disconnecting), how it is paid, and each
- * kind of media it makes with its models. Esc or a click beside it closes it, not Settings.
- */
-function ProviderDialog({ provider, hook, onClose }: { provider: OwnProvider; hook: ProvidersHook; onClose: () => void }) {
+/** A card over Settings. Esc or a click beside it closes it, not Settings; a field's own Esc closes only that field. */
+function Card({ label, onClose, children }: { label: string; onClose: () => void; children: React.ReactNode }) {
   const t = useT();
   const close = React.useRef(onClose);
   close.current = onClose;
   React.useEffect(() => {
-    /* a field's own Esc (a key being pasted) closes only that field */
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented || (e.target as HTMLElement | null)?.closest?.('input, textarea')) return;
       e.preventDefault();
@@ -84,39 +84,76 @@ function ProviderDialog({ provider, hook, onClose }: { provider: OwnProvider; ho
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
   }, []);
-  const kinds = ABILITY_ORDER.filter((v) => provider.verbs.includes(v));
-  const paid = provider.signIn ? t('settings.providers.balanceNote').replaceAll('{name}', provider.name) : t('settings.providers.keyNote');
-
   return createPortal(
     <div className="fixed inset-0 z-[10070] grid place-items-center bg-black/40 p-6" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div role="dialog" aria-modal="true" aria-label={provider.name}
-        className="relative flex max-h-[80dvh] w-[600px] max-w-full flex-col overflow-y-auto rounded-[14px] border border-[var(--border)] bg-[var(--dock-pane)] px-6 pb-6 pt-3 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5)]">
+      <div role="dialog" aria-modal="true" aria-label={label}
+        className="relative flex max-h-[84dvh] w-[600px] max-w-full flex-col overflow-y-auto rounded-[14px] border border-[var(--border)] bg-[var(--dock-pane)] px-6 pb-6 pt-3 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5)]">
         <button type="button" onClick={onClose} aria-label={t('settings.done')}
           className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-md text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
           <X size={16} />
         </button>
-        <div className="pr-8"><ProviderRow provider={provider} hook={hook} /></div>
-        <p className="text-[13.5px] leading-relaxed text-[var(--text-faint)]">{paid}</p>
-        {kinds.length ? (
-          <div className="mt-5">
-            <h3 className="mb-1 text-[15px] font-semibold text-[var(--text)]">{t('settings.providers.makes')}</h3>
-            <div className="flex flex-col divide-y divide-[var(--border)]">
-              {kinds.map((verb) => (
-                <div key={verb} className="flex gap-4 py-3">
-                  <span className="w-[150px] shrink-0 text-[14.5px] text-[var(--text)]">{t(`settings.providers.verbs.${verb}`)}</span>
-                  <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
-                    {(provider.models[verb] ?? []).map((m) => (
-                      <span key={m.id} className="rounded-md bg-[var(--fill-tsp)] px-2 py-0.5 text-[13.5px] text-[var(--text-muted)]">{m.name}</span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
+        {children}
       </div>
     </div>,
     document.body,
+  );
+}
+
+/**
+ * A service's card: connecting it (or how it is connected, and disconnecting), how it is paid, and every kind of
+ * media with the models it makes it with, or that it does not.
+ */
+export function ProviderDialog({ provider, hook, onClose }: { provider: OwnProvider; hook: ProvidersHook; onClose: () => void }) {
+  const t = useT();
+  /* every kind of media, and what else it does (web search, subtitles) when it does */
+  const kinds = [...MEDIA_VERBS, ...ABILITY_ORDER.filter((v) => !MEDIA_VERBS.includes(v) && provider.verbs.includes(v))];
+  const paid = provider.signIn ? t('settings.providers.balanceNote').replaceAll('{name}', provider.name) : t('settings.providers.keyNote');
+  return (
+    <Card label={provider.name} onClose={onClose}>
+      <div className="pr-8"><ProviderRow provider={provider} hook={hook} /></div>
+      <p className="text-[13.5px] leading-relaxed text-[var(--text-faint)]">{paid}</p>
+      <h3 className="mb-1 mt-6 text-[15px] font-semibold text-[var(--text)]">{t('settings.providers.makes')}</h3>
+      <div className="flex flex-col divide-y divide-[var(--border)]">
+        {kinds.map((verb) => {
+          const models = provider.verbs.includes(verb) ? provider.models[verb] ?? [] : [];
+          return (
+            <div key={verb} className="flex items-baseline gap-4 py-3">
+              <span className={`w-[150px] shrink-0 text-[14.5px] ${models.length ? 'text-[var(--text)]' : 'text-[var(--text-faint)]'}`}>{t(`settings.providers.verbs.${verb}`)}</span>
+              {models.length ? (
+                <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+                  {models.map((m) => <span key={m.id} className="rounded-md bg-[var(--fill-tsp)] px-2 py-0.5 text-[13.5px] text-[var(--text-muted)]">{m.name}</span>)}
+                </div>
+              ) : <span className="text-[13.5px] text-[var(--text-faint)]">{t('settings.providers.notOffered')}</span>}
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+/** Adding a provider: what a built-in one has to be, and the custom services every other one works through today. */
+export function AddProviderDialog({ onCustom, onClose }: { onCustom: () => void; onClose: () => void }) {
+  const t = useT();
+  return (
+    <Card label={t('settings.providers.addTitle')} onClose={onClose}>
+      <h2 className="mt-2 pr-8 text-[19px] font-semibold tracking-[-0.01em] text-[var(--text)]">{t('settings.providers.addTitle')}</h2>
+      <p className="mt-2 text-[14.5px] leading-relaxed text-[var(--text-muted)]">{t('settings.providers.addIntro')}</p>
+      <ul className="mt-4 flex flex-col gap-3">
+        {(['addKnown', 'addOther', 'addCustom'] as const).map((key) => (
+          <li key={key} className="flex gap-3 text-[14.5px] leading-relaxed text-[var(--text)]">
+            <span className="mt-[9px] h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--text-faint)]" aria-hidden />
+            <span>{t(`settings.providers.${key}`)}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-6 flex flex-wrap items-center gap-2">
+        <SettingsButton variant="primary" onClick={onCustom}>{t('settings.providers.addCustomAction')}</SettingsButton>
+        <a href={ADDING_PROVIDERS} target="_blank" rel="noreferrer" className={`${settingsLink} ml-2 text-[14.5px]`}>
+          {t('settings.providers.addHow')}<ExternalLink size={12} />
+        </a>
+      </div>
+    </Card>
   );
 }
 
@@ -178,13 +215,13 @@ function SignInRow({ provider, hook }: { provider: OwnProvider; hook: ProvidersH
           <a href={provider.keysUrl} target="_blank" rel="noreferrer" className={`${settingsLink} text-[14px]`}>
             {t('settings.providers.manageAccount')}<ExternalLink size={12} />
           </a>
-          <SettingsButton variant="quiet" disabled={busy} onClick={() => void hook.removeKey(provider.id)}>{t('settings.providers.signOut')}</SettingsButton>
+          <SettingsButton variant="quiet" disabled={busy} onClick={() => void hook.removeKey(provider.id)}>{t('settings.providers.disconnect')}</SettingsButton>
         </div>
       ) : waiting ? (
         <SettingsButton variant="quiet" disabled={busy} onClick={() => void hook.cancelSignIn(provider.id)}>{t('settings.providers.cancel')}</SettingsButton>
       ) : (
         <SettingsButton disabled={busy} onClick={() => void hook.signIn(provider.id)}>
-          <LogIn size={15} strokeWidth={2} />{t('settings.providers.signIn')}
+          <Plus size={15} strokeWidth={2} />{t('settings.providers.connect')}
         </SettingsButton>
       )}
       below={problem && !provider.source ? <p className={`${settingsError} pl-[34px]`} role="alert">{problem}</p> : null}
