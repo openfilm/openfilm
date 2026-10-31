@@ -178,8 +178,9 @@ function VoiceRow({ voice, service, access, showService, picked, sounding, kept,
       <VoiceAvatar voice={voice} sounding={sounding} label={sounding ? t('assetDrawer.stop') : t('assetDrawer.play')} />
       <span className="min-w-0">
         <span className="flex min-w-0 items-baseline gap-1.5">
-          <span className={`truncate text-[12.5px] font-medium ${picked ? 'text-[var(--tl-accent)]' : 'text-[var(--text)]'}`}>{voice.name}</span>
-          <span className="truncate text-[11px] text-[var(--text-faint)]">{facts}</span>
+          {/* the name keeps its room; the facts after it give theirs up first */}
+          <span className={`shrink-[0.2] truncate text-[12.5px] font-medium ${picked ? 'text-[var(--tl-accent)]' : 'text-[var(--text)]'}`}>{voice.name}</span>
+          <span className="min-w-0 shrink-[5] truncate text-[11px] text-[var(--text-faint)]">{facts}</span>
         </span>
         <span className="mt-0.5 block truncate text-[11.5px] text-[var(--text-muted)]">{voice.description ?? voice.tags.join(', ')}</span>
       </span>

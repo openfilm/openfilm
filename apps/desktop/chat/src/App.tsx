@@ -6,7 +6,7 @@
  * (lib/local-agent-run's saved turns).
  */
 import React from 'react';
-import { ArrowDown, Blocks, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, ShieldQuestion, Square, X } from 'lucide-react';
+import { ArrowDown, ArrowLeft, Blocks, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, ShieldQuestion, Square, X } from 'lucide-react';
 import { buildPromptDisplay, type Turn } from '@openfilm/shared';
 import { useT, useUiLocale } from '@/i18n';
 import { ConversationBar } from '@/components/ConversationSessionBar';
@@ -305,13 +305,13 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   const [scrolled, setScrolled] = React.useState(false);
   const tail = useTailSpacer(thread.viewport, thread.pinIfFollowing, active);
   const composerRef = React.useRef<PromptEditorHandle>(null);
-  /* the composer and what stands on it (a question, a permission): its height, with the 6 px under the pane, is all
-     this view keeps while the assets are open */
+  /* the composer and what stands on it (a question, a permission, the way back to the conversation): its height is
+     all this view keeps while the assets are open, the drawer above meeting it */
   const composerBlockRef = React.useRef<HTMLDivElement>(null);
   React.useLayoutEffect(() => {
     const block = composerBlockRef.current;
     if (!block) return undefined;
-    const tell = () => app.setComposerHeight(Math.ceil(block.getBoundingClientRect().height) + 6);
+    const tell = () => app.setComposerHeight(Math.ceil(block.getBoundingClientRect().height));
     tell();
     const seen = new ResizeObserver(tell);
     seen.observe(block);
@@ -1135,6 +1135,20 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
 
               <div ref={composerBlockRef} className={`relative flex shrink-0 flex-col px-4 pb-1.5 ${assetsOpen ? 'pt-2' : ''}`}>
                 <div className="flex flex-col gap-2">
+                  {/* the assets open over a conversation: the way back to it, saying when its turn is still running */}
+                  {assetsOpen && turns.length ? (
+                    <button type="button" onClick={() => app.setAssetsOpen(false)}
+                      className="flex h-8 items-center gap-2 rounded-md bg-[var(--surface-2)] px-3 text-left text-[12px] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+                      <ArrowLeft size={14} className="shrink-0" />
+                      <span className="font-medium text-[var(--text)]">{t('project.backToChat')}</span>
+                      {running.has(sessionId) ? (
+                        <span className="ml-auto flex items-center gap-1.5 text-[11.5px]">
+                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--accent)]" />
+                          {t('project.chatRunning')}
+                        </span>
+                      ) : null}
+                    </button>
+                  ) : null}
                   {spendAsk ? (
                     <ComposerCard role="alertdialog" icon={<Coins size={14} />} title={spendAsk.title}
                       body={spendAsk.body ? <span className="break-words">{spendAsk.body}</span> : undefined}>

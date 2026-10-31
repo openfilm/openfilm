@@ -217,6 +217,8 @@ export const ko: Words = {
   },
   project: {
     assets: '에셋',
+    backToChat: '대화로 돌아가기',
+    chatRunning: '진행 중',
     addAttachment: '파일 추가',
     close: '닫기',
     composerPlaceholder: '무엇을 바꿀지 말해 주세요. @를 입력하면 파일, 스킬, 순간, 선택한 항목을 가리킬 수 있습니다',

@@ -67,6 +67,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
   const show = (next: Category) => { SHOWN.cat = next; setCat(next); setGroup(SHOWN.group[next] ?? ''); setQuery(''); pick(null); };
   const pickGroup = (next: string) => { SHOWN.group[cat] = next; setGroup(next); setQuery(''); };
   const fold = () => { SHOWN.folded = !folded; setFolded(!folded); };
+  const [rail, setRail] = React.useState(railWidth);
   /* the drawer closed: what was tried goes with it */
   React.useEffect(() => () => tryOut.current(null), []);
 
@@ -115,29 +116,32 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
         </nav>
       </div>
       <div className="flex min-h-0 flex-1">
-        {/* as wide as its longest line (up to a limit), so no group's name is cut */}
-        <nav data-studio-host-panel="" className="flex min-w-[104px] max-w-[148px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-[var(--dock-line)] px-2 py-2.5">
-          {cat === 'media' ? (
-            <>
-              <SideBox on={mediaScope === 'project'} onClick={() => onMediaScope('project')}>{t('assetDrawer.mediaProject')}</SideBox>
-              <SideBox on={mediaScope === 'saved'} onClick={() => onMediaScope('saved')}>{t('assetDrawer.mediaSaved')}</SideBox>
-            </>
-          ) : (
-            <>
-              <SideBox on={group === FAVORITES && !q} onClick={() => pickGroup(FAVORITES)}>{t('assetDrawer.favorites')}</SideBox>
-              {cat === 'voice' ? <SideBox on={group === FEATURED && !q} onClick={() => pickGroup(FEATURED)}>{t('assetDrawer.featured')}</SideBox> : null}
-              <SideBox on={group !== FAVORITES && group !== FEATURED && folded && !q} open={!folded} onClick={fold}>
-                {t(cat === 'voice' ? 'assetDrawer.services' : 'assetDrawer.official')}
-              </SideBox>
-              {folded ? null : (
-                <div className="flex flex-col pb-1">
-                  <SideLine on={!group && !q} onClick={() => pickGroup('')}>{t('assetDrawer.all')}</SideLine>
-                  {own.map((g) => <SideLine key={g.id} on={group === g.id && !q} onClick={() => pickGroup(g.id)}>{g.name}</SideLine>)}
-                </div>
-              )}
-            </>
-          )}
-        </nav>
+        {/* as wide as the person dragged its edge (RAIL), kept for next time */}
+        <div className="relative flex shrink-0" style={{ width: rail }}>
+          <RailEdge width={rail} onWidth={setRail} />
+          <nav data-studio-host-panel="" className="flex min-w-0 flex-1 flex-col gap-1 overflow-y-auto border-r border-[var(--dock-line)] px-2 py-2.5">
+            {cat === 'media' ? (
+              <>
+                <SideBox on={mediaScope === 'project'} onClick={() => onMediaScope('project')}>{t('assetDrawer.mediaProject')}</SideBox>
+                <SideBox on={mediaScope === 'saved'} onClick={() => onMediaScope('saved')}>{t('assetDrawer.mediaSaved')}</SideBox>
+              </>
+            ) : (
+              <>
+                <SideBox on={group === FAVORITES && !q} onClick={() => pickGroup(FAVORITES)}>{t('assetDrawer.favorites')}</SideBox>
+                {cat === 'voice' ? <SideBox on={group === FEATURED && !q} onClick={() => pickGroup(FEATURED)}>{t('assetDrawer.featured')}</SideBox> : null}
+                <SideBox on={group !== FAVORITES && group !== FEATURED && folded && !q} open={!folded} onClick={fold}>
+                  {t(cat === 'voice' ? 'assetDrawer.services' : 'assetDrawer.official')}
+                </SideBox>
+                {folded ? null : (
+                  <div className="flex flex-col pb-1">
+                    <SideLine on={!group && !q} onClick={() => pickGroup('')}>{t('assetDrawer.all')}</SideLine>
+                    {own.map((g) => <SideLine key={g.id} on={group === g.id && !q} onClick={() => pickGroup(g.id)}>{g.name}</SideLine>)}
+                  </div>
+                )}
+              </>
+            )}
+          </nav>
+        </div>
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col" data-studio-host-panel={cat === 'media' ? undefined : ''}>
           {cat === 'media' ? media : (
             <>
@@ -182,6 +186,56 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** How wide the side bar may be dragged, and where its width is kept on this computer. */
+const RAIL = { min: 88, max: 220, start: 112, key: 'openfilm.library.rail' };
+const clampRail = (w: number) => Math.round(Math.min(RAIL.max, Math.max(RAIL.min, w)));
+function railWidth(): number {
+  try { const w = Number(localStorage.getItem(RAIL.key)); return w ? clampRail(w) : RAIL.start; } catch { return RAIL.start; }
+}
+
+/** The side bar's right edge: dragged (or arrowed) to make it wider or narrower, within RAIL. */
+function RailEdge({ width, onWidth }: { width: number; onWidth: (w: number) => void }) {
+  const drag = React.useRef<{ x: number; width: number } | null>(null);
+  const keep = (w: number) => { try { localStorage.setItem(RAIL.key, String(w)); } catch { /* kept for this time only */ } };
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-valuemin={RAIL.min}
+      aria-valuemax={RAIL.max}
+      aria-valuenow={width}
+      tabIndex={0}
+      data-studio-host-panel=""
+      className="group/edge absolute inset-y-0 -right-[4px] z-10 w-[7px] cursor-col-resize outline-none"
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        e.currentTarget.setPointerCapture(e.pointerId);
+        drag.current = { x: e.clientX, width };
+        document.body.style.cursor = 'col-resize';
+      }}
+      onPointerMove={(e) => { if (drag.current) onWidth(clampRail(drag.current.width + e.clientX - drag.current.x)); }}
+      onPointerUp={(e) => {
+        if (!drag.current) return;
+        const w = clampRail(drag.current.width + e.clientX - drag.current.x);
+        drag.current = null;
+        document.body.style.cursor = '';
+        onWidth(w);
+        keep(w);
+      }}
+      onPointerCancel={() => { drag.current = null; document.body.style.cursor = ''; }}
+      onKeyDown={(e) => {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        e.preventDefault();
+        const w = clampRail(width + (e.key === 'ArrowRight' ? 12 : -12));
+        onWidth(w);
+        keep(w);
+      }}
+    >
+      <span className="absolute inset-y-0 left-[3px] w-px bg-transparent group-hover/edge:bg-[var(--tl-accent)] group-focus-visible/edge:bg-[var(--tl-accent)]" />
     </div>
   );
 }

@@ -222,6 +222,8 @@ export const enUS = {
   },
   project: {
     assets: 'Assets',
+    backToChat: 'Back to the conversation',
+    chatRunning: 'Working',
     addAttachment: 'Add files',
     close: 'Close',
     composerPlaceholder: 'Say what to change. Type @ for a file, a skill, a moment or what you selected',
