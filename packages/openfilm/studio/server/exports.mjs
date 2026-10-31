@@ -39,7 +39,8 @@
  *       a folder an editing program opens (see nle.mjs): `<name>.xml` (xmeml: Premiere Pro, DaVinci Resolve) or `<name>.fcpxml` (Final Cut Pro), each
  *       web page rendered with its alpha to a MOV in media/ (`alpha`, for a draft: `auto`, the default, a page with no
  *       clear pixel in any frame as H.264 and the others as lossless PNG, each picture kept once for as long as it
- *       shows; `png`, every page so; `prores`, 422 HQ and 4444 the same way. For xml ProRes 4444, the default, or PNG;
+ *       shows, and footage or a still drawn so with no picture under it on the film's background, opaque; `png`, every
+ *       page with its alpha; `prores`, 422 HQ and 4444 the same way. For xml ProRes 4444, the default, or PNG;
  *       for fcpxml ProRes 4444. 剪映 shows a VP9 WebM's alpha black, and lossless H.264 off its colors),
  *       footage, stills and sounds cloned there (`link`:
  *       pointed at where they are), the sound as clips or as mixed stems, `<name>.srt` when there are subtitles.
@@ -76,7 +77,7 @@ import { filmVideos } from '../../src/seekable.mjs';
 import { FILM_FILE, clipFade, filmHtml, fittedFade, kindOf, pictureRect, readFilmFile } from '../../src/film-doc.mjs';
 import { layerBlocks, rowBadges, trackKind } from './track-layout.mjs';
 import { fcpxmlDocument } from './fcpxml.mjs';
-import { NLE_FPS, nleFps, planNleTimeline, probeSource, soundStem, xmemlDocument } from './nle.mjs';
+import { frameSpan, NLE_FPS, nleFps, planNleTimeline, probeSource, soundStem, xmemlDocument } from './nle.mjs';
 import { draftsRoot, jianyingDraft } from './jianying.mjs';
 import { slidesPdf, writePptx } from './slides.mjs';
 import { subtitlesForExport } from './captions.mjs';
@@ -1354,7 +1355,15 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
         const time = p.kind === 'video' ? [p.from, Math.min(native, p.from + (frames / timeline.rate.fps) * p.speed)] : [p.from, p.from + frames / timeline.rate.fps];
         /* a draft's page with no clear pixel in any frame needs no alpha (each frame's alpha is read as it is drawn, so
            it is what Studio shows): written opaque as it is drawn, nothing written twice. At the first pixel that shows
-           through it is drawn again with its alpha: as lossless PNG, or as ProRes 4444 (`prores`) */
+           through it is drawn again with its alpha: as lossless PNG, or as ProRes 4444 (`prores`). A draft's footage or
+           still with no picture under it while it shows (on the lowest track) is drawn on the film's own background, as
+           the film shows it: opaque, never a lossless PNG of every frame of a video. Under it is on the sequence's
+           frames, so a clip just before it, ending a hair past its cut, is not */
+        const own = frameSpan(p.at, p.end, timeline.rate);
+        const ground = app && alpha !== 'png' && p.kind !== 'page' && !pictures.some((q) => {
+          const span = frameSpan(q.at, q.end, timeline.rate);
+          return q !== p && q.track >= p.track && span.start < own.end && own.start < span.end;
+        });
         let clear = true;
         try {
           const one = await clipFilm(root, id, { change: { time }, doc });
@@ -1362,7 +1371,8 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
             /** @param {Record<string, unknown>} how */
             const draw = async (how) => {
               const result = await pool.render([one.dir], {
-                root, alpha: true, silent: true, fps: timeline.rate.fps, out: staged(file), signal: stop.signal, workers, ...how,
+                root, alpha: !ground, silent: true, fps: timeline.rate.fps, out: staged(file), signal: stop.signal, workers,
+                ...(ground ? { format: how.format } : how),
                 /* a page drawn again counts from where it was: it holds until the second drawing passes it */
                 onProgress: (/** @type {number} */ done) => {
                   drawnFrames.set(file.id, Math.max(drawnFrames.get(file.id) ?? 0, done));

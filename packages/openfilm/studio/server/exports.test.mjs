@@ -1123,6 +1123,30 @@ document.body.style.background=${clearAt === null ? 'false' : `Math.abs(t-${clea
   assert.equal(probe(png('solid.mov'), 'stream=codec_name'), 'png', 'all PNG when asked');
 });
 
+test('剪映: footage drawn with a look of its own and nothing under it is opaque on the film\'s background; over another, with its alpha', { ...ffmpeg, timeout: 240_000 }, async () => {
+  const dir = join(scratch, 'Ground');
+  mkdirSync(dir, { recursive: true });
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=red:size=320x180:rate=25:duration=1', '-pix_fmt', 'yuv420p', join(dir, 'red.mp4')]);
+  const corners = 'left: 0; top: 0; width: 320px; height: 180px; border-radius: 60px';
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [
+    { clips: [{ src: 'red.mp4', id: 'over', style: corners }] },
+    { clips: [{ src: 'red.mp4', id: 'under', style: corners }, { src: 'red.mp4', id: 'alone', at: 0.9999999, style: corners }] },
+  ] }).replace('</head>', '<style>html, body { background: rgb(32, 64, 160); }</style></head>'));
+  const drafts = join(scratch, 'Ground drafts');
+  mkdirSync(drafts, { recursive: true });
+  const exports = createExports({ captions: subtitles, drafts: (app) => (app === 'jianying' ? drafts : null) });
+  const done = await ended(exports, exports.start(project('Ground', dir), { kind: 'nle', format: 'jianying', fps: 25, subtitles: false }));
+  assert.equal(done.status, 'done', done.error);
+  const media = (name) => join(dirname(done.out), 'media', name);
+  /* `alone` has nothing under it (`under` ends where it starts, give or take a hair): what the film shows there, its round corners on the film's background, as H.264 */
+  assert.equal(probe(media('alone.mov'), 'stream=codec_name,pix_fmt'), 'h264,yuv420p');
+  assert.ok(near(firstFrame(media('alone.mov')).at(2, 2), [32, 64, 160]), `corner: ${firstFrame(media('alone.mov')).at(2, 2)}`);
+  assert.ok(near(firstFrame(media('alone.mov')).at(160, 90), [255, 0, 0], 40), 'the footage itself');
+  /* `under` has `over` on the track above at the same time, yet nothing under it: opaque too; `over` keeps its alpha */
+  assert.equal(probe(media('under.mov'), 'stream=codec_name'), 'h264');
+  assert.equal(probe(media('over.mov'), 'stream=codec_name,pix_fmt'), 'png,rgba');
+});
+
 test('剪映: a page that fails stops the export, its error said, nothing left behind', { ...ffmpeg, timeout: 240_000 }, async () => {
   const dir = join(scratch, 'Broken');
   mkdirSync(dir, { recursive: true });
