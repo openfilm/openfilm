@@ -20,7 +20,8 @@
  *                                         no new frame, whether a render played, and per half second of film [its start,
  *                                         refreshes, late]
  *            { type: 'updated', seq, inPlace, duration, sounds, spans }   (inPlace false: load the page again)
- *            { type: 'spans', spans }             a page opened for the first time said its own length and size
+ *            { type: 'spans', spans }             a page opened for the first time said its own length and size, or
+ *                                         a page that came on is shown (drawn): the editor reads the picture again
  *            { type: 'picked', seq, target }      (null: nothing there)
  *            { type: 'error', message }           the film or a page failed
  *
@@ -65,7 +66,11 @@
       await f.ready;
       up = f;
       post({ type: 'ready', ...facts(f), origin: performance.timeOrigin });
-      if (editor()) editor().learned = () => post({ type: 'spans', spans: facts(f).spans });
+      if (editor()) {
+        const spans = () => post({ type: 'spans', spans: facts(f).spans });
+        editor().learned = spans;
+        editor().appeared = spans;
+      }
       return f;
     } catch (e) { fail(e); return null; }
   });

@@ -605,7 +605,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* ── the timeline: film.html + where the preview placed each clip ── */
   const spans = React.useMemo(() => info?.spans ?? [], [info]);
   /* the Layers panel reads its tree again when film.html changes, and when the preview drew the film anew (a page
-     written: a layer pasted into it, or the agent's edit) */
+     written: a layer pasted into it, or the agent's edit) or showed a page that came on (its spans come again; the page
+     is in the tree only once drawn) */
   const layersKey = React.useMemo(() => ({}), [film.film, info]); // eslint-disable-line react-hooks/exhaustive-deps
   /* a file's length draws a clip that plays to its end before the preview places it (a split's second half, a drop) */
   const mediaFacts = React.useMemo<MediaFacts>(() => new Map([...facts].map(([path, f]) => [path, { audio: f.audio, ...(f.durationMs ? { duration: f.durationMs / 1000 } : {}) }])), [facts]);
