@@ -85,7 +85,7 @@
  *   run: (verb: Verb, args: Record<string, unknown>, ctx: RunContext) => Promise<RunResult>,
  * }} Provider
  * `models`: the models it can make each kind of media with, its default first, each with the name people know it by
- * (Settings → Services shows "ElevenLabs · Multilingual v2").
+ * (Settings → Services shows "ElevenLabs · Eleven v4").
  * `checkKey`: throws a sentence when a pasted key cannot work as it is (Azure's must carry its region), shown where it
  * is pasted instead of at the first run. Only for what the provider knows without calling anyone: it must not fetch.
  * `signIn`: connected by signing in on the provider's website instead of pasting a key (sign-in.mjs); the key it

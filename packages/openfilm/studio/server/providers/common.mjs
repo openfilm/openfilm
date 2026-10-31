@@ -180,6 +180,27 @@ export function wordsFromCharacters(chars, starts, ends, dur = null) {
   return words;
 }
 
+/**
+ * Words with their times from per-word timings, as services that time words give them: a token with no letter or
+ * digit (a space, punctuation) stays with the word before it. Times are clamped to the file's length.
+ * @param {unknown[]} tokens @param {unknown[]} starts @param {unknown[]} ends @param {number | null} [dur]
+ */
+export function wordsFromTokens(tokens, starts, ends, dur = null) {
+  /** @type {{ token: string, start: number, end: number }[]} */
+  const words = [];
+  const cut = (/** @type {number} */ t) => dur === null ? t : Math.min(t, dur);
+  tokens.forEach((raw, i) => {
+    const token = text(raw);
+    if (!token) return;
+    const start = cut(Number(starts[i]) || 0);
+    const end = cut(Number(ends[i]) || start);
+    const last = words.at(-1);
+    if (!/[\p{L}\p{N}]/u.test(token)) { if (last) { last.token += token; last.end = Math.max(last.end, end); } return; }
+    words.push({ token, start, end });
+  });
+  return words;
+}
+
 /** 16-bit mono PCM as a WAV file. */
 export function wav(/** @type {Uint8Array} */ pcm, rate = 24000) {
   const head = Buffer.alloc(44);

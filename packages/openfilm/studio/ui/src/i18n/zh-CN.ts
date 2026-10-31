@@ -2222,6 +2222,8 @@ export const zhCN: Words = {
         google: 'Google 的 Gemini API（来自 Google AI Studio）：Gemini 配音与转写、Nano Banana 图片和 Veo 视频，一个 key 全部搞定。',
         azure: '微软的云服务。Azure AI Speech 提供数百种自然音色，覆盖一百多种语言。',
         elevenlabs: 'AI 音频领域的领先者：几十种语言的逼真配音，以及音乐、音效和逐词计时的文字稿。',
+        inworld: 'Inworld 的实时语音：富有表现力、逐词计时的配音，支持数百种语言。',
+        cartesia: 'Cartesia 的 Sonic 语音：快速、自然、逐词计时的配音，支持四十多种语言。',
         openrouter: '一个 key 用上多家的模型：来自 Google、OpenAI、字节跳动、快手等的图片和视频，由 OpenRouter 计费。',
         fal: '快速的生成式媒体平台：Seedance 和可灵视频、FLUX 图片、音乐和音效。',
         groq: '用自研芯片做极速推理：Whisper 转写和 Orpheus 音色，几秒就好。',

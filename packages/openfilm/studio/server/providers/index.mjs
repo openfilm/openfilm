@@ -2,7 +2,7 @@
 /**
  * Which provider serves each verb of `openfilm get`, and the API of Studio's Settings → Services.
  *
- * A person's own key for ElevenLabs, OpenAI, Google (the Gemini API), fal.ai, OpenRouter, Groq, Microsoft Azure (Azure AI Speech), Pexels,
+ * A person's own key for ElevenLabs, Inworld, Cartesia, OpenAI, Google (the Gemini API), fal.ai, OpenRouter, Groq, Microsoft Azure (Azure AI Speech), Pexels,
  * Pixabay, Brave Search, Tavily or OpenFilm pays that service directly for what it can do. Each makes a kind of media with the model the person chose for
  * it (the provider's first unless they did). Keenable also works with no key: connected with one click, a key lifts its limits.
  * Who serves a verb: `--via <provider>` on the command, else the person's choice for that kind of media in Settings (`use`),
@@ -17,6 +17,8 @@ import { changeSettings, cleanKey, envKey, kindOf, modelFor, providerKey, readSe
 import { shownService, withService } from '../custom-services.mjs';
 import { cancelSignIn, signInState, signOut, startSignIn } from '../sign-in.mjs';
 import elevenlabs from './elevenlabs.mjs';
+import inworld from './inworld.mjs';
+import cartesia from './cartesia.mjs';
 import openai from './openai.mjs';
 import google from './google.mjs';
 import fal from './fal.mjs';
@@ -39,7 +41,7 @@ import openfilm from './openfilm.mjs';
  */
 
 /** The providers paid with the person's own key. */
-const OWN = [elevenlabs, openai, google, fal, openrouter, pexels, pixabay, brave, tavily, groq, azure, doubao, mimo, keenable, openfilm];
+const OWN = [elevenlabs, inworld, cartesia, openai, google, fal, openrouter, pexels, pixabay, brave, tavily, groq, azure, doubao, mimo, keenable, openfilm];
 
 /** The kinds of media the person chooses a provider and model for (Settings → Services). */
 const USE_VERBS = /** @type {Verb[]} */ (['tts', 'music', 'sfx', 'asr', 'image', 'image-search', 'video', 'translate', 'web-search']);

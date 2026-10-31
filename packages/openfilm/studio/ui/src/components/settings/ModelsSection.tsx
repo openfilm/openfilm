@@ -61,8 +61,10 @@ function ModelRow({ verb, hook, onConnect }: { verb: ProviderVerb; hook: Provide
   const label = t(`settings.providers.verbs.${verb}`);
   const chosen = state.use[verb] ?? '';
   const order = providerOrder(state.providers.filter((p) => p.verbs.includes(verb) || p.id === chosen));
-  const firstOf = (id: string) => state.providers.find((p) => p.id === id)?.models[verb]?.[0]?.id;
-  const value = chosen ? `${chosen}:${state.model[verb] ?? firstOf(chosen) ?? ''}` : '';
+  /* the model chosen, or the provider's first when it has none or no longer makes it (as a run does) */
+  const models = state.providers.find((p) => p.id === chosen)?.models[verb] ?? [];
+  const model = models.find((m) => m.id === state.model[verb]) ?? models[0];
+  const value = chosen ? `${chosen}:${model?.id ?? ''}` : '';
   const choicesOf = (p: OwnProvider): Choice[] => (p.models[verb] ?? [])
     .map((m) => ({ value: `${p.id}:${m.id}`, provider: p.id, name: m.name, model: m.id }));
   const current = order.connected.flatMap(choicesOf).find((c) => c.value === value) ?? null;

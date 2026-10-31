@@ -129,7 +129,7 @@ test('tts: the file lands, its timed words a WebVTT beside it, and the receipt s
   const [run] = calls;
   assert.equal(run.path, '/v1/text-to-speech/v-1/with-timestamps');
   assert.equal(run.headers['xi-api-key'], 'elevenlabs-test-0123456789');
-  assert.deepEqual(JSON.parse(run.body), { text: SAID, model_id: 'eleven_multilingual_v2' });
+  assert.deepEqual(JSON.parse(run.body), { text: SAID, model_id: 'eleven_v4' });
 
   assert.match(readFileSync(join(root, 'assets/audio/vo/intro.vtt'), 'utf8'), /00:00:01\.800 --> 00:00:02\.800\nHow <00:00:02\.050>are <00:00:02\.250>you\?/);
   const transcript = await readTranscript(root, 'assets/audio/vo/intro.mp3');
@@ -196,12 +196,12 @@ test('not enough balance: the agent is told to stop and where the person tops it
 
 test('the model: the person\'s choice for each kind of media, the provider\'s first otherwise, --model for one run', async () => {
   const root = project();
-  await changeSettings((s) => { s.model = { tts: 'eleven_v4', music: 'music_v2' }; });
+  await changeSettings((s) => { s.model = { tts: 'eleven_v4_turbo', music: 'music_v2' }; });
   const modelOf = async (verb, args, options) => {
     await runGet(root, verb, args, options);
     return JSON.parse(calls.at(-1).body).model_id;
   };
-  assert.equal(await modelOf('tts', { out: 'intro', text: SAID, voice: 'v-1' }), 'eleven_v4');
+  assert.equal(await modelOf('tts', { out: 'intro', text: SAID, voice: 'v-1' }), 'eleven_v4_turbo');
   assert.equal(await modelOf('music', { out: 'bed', prompt: 'calm pad' }), 'music_v2');
   assert.equal(await modelOf('sfx', { out: 'ding', prompt: 'a chime' }), 'eleven_text_to_sound_v2', 'the first');
   assert.equal(await modelOf('music', { out: 'bed', prompt: 'calm pad' }, { model: 'music_v2_5' }), 'music_v2_5');
@@ -463,7 +463,7 @@ test('openfilm get: what can be got here, connected, partly or not at all; wrong
     assert.equal(nothing.stdout, 'Nothing is connected for media here: each kind works only once the person connects a service that makes it (below). '
       + 'Until then, make sound and pictures in code, or use a service the person has a key for (with its API docs), and save them under assets/. '
       + `\`openfilm get <what> --help\` shows what one kind takes (${media.join(', ')}).\n\n${services()}\n`);
-    assert.match(services(), /^Media services, each used with the person's own key: Brave Search \(web search\), Doubao \(transcripts\), ElevenLabs \(voice-over, sound effects, music, transcripts\), fal\.ai \(images, video, music, sound effects\), .*, Microsoft Azure \(voice-over\), .*, Tavily \(web search\), Xiaomi MiMo \(voice-over, transcripts\)\. In Studio, the OpenFilm logo at the top left opens Settings/);
+    assert.match(services(), /^Media services, each used with the person's own key: Brave Search \(web search\), Cartesia \(voice-over\), Doubao \(transcripts\), ElevenLabs \(voice-over, sound effects, music, transcripts\), fal\.ai \(images, video, music, sound effects\), .*, Microsoft Azure \(voice-over\), .*, Tavily \(web search\), Xiaomi MiMo \(voice-over, transcripts\)\. In Studio, the OpenFilm logo at the top left opens Settings/);
 
     /* partly: what is connected, then one line for the rest with the services that make each, then the services there
        are; never who makes what is connected */

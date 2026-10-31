@@ -2221,6 +2221,8 @@ export const es: Words = {
         google: 'La API de Gemini de Google, desde Google AI Studio: voces y transcripción de Gemini, imágenes de Nano Banana y vídeo de Veo, con una sola clave.',
         azure: 'La nube de Microsoft. Azure AI Speech habla con cientos de voces naturales en más de cien idiomas.',
         elevenlabs: 'Líder en audio con IA: voz en off realista en decenas de idiomas, música, efectos de sonido y transcripciones con cada palabra en su tiempo.',
+        inworld: 'Las voces en tiempo real de Inworld: voz en off expresiva con cada palabra en su tiempo, en cientos de idiomas.',
+        cartesia: 'Las voces Sonic de Cartesia: voz en off rápida y natural con cada palabra en su tiempo, en más de cuarenta idiomas.',
         openrouter: 'Una clave para modelos de muchos creadores: imágenes y vídeo de Google, OpenAI, ByteDance, Kuaishou y otros, facturados por OpenRouter.',
         fal: 'Una plataforma rápida de medios generativos: vídeo de Seedance y Kling, imágenes FLUX, música y efectos de sonido.',
         groq: 'Inferencia muy rápida en sus propios chips: transcripción con Whisper y voces de Orpheus en segundos.',

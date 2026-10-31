@@ -2222,6 +2222,8 @@ export const en = {
         google: 'Google\'s Gemini API, from Google AI Studio: Gemini voices and transcription, Nano Banana pictures and Veo video, with one key.',
         azure: 'Microsoft\'s cloud. Azure AI Speech speaks hundreds of natural voices across more than a hundred languages.',
         elevenlabs: 'A leader in AI audio: lifelike voice-over in dozens of languages, music, sound effects and transcripts timed word by word.',
+        inworld: 'Inworld\'s realtime voices: expressive speech timed word by word, in hundreds of languages.',
+        cartesia: 'Cartesia\'s Sonic voices: fast, natural speech timed word by word, in over forty languages.',
         openrouter: 'One key for many makers\' models: pictures and video from Google, OpenAI, ByteDance, Kuaishou and others, billed by OpenRouter.',
         fal: 'A fast platform for generative media: Seedance and Kling video, FLUX pictures, music and sound effects.',
         groq: 'Very fast inference on its own chips: Whisper transcription and Orpheus voices, in seconds.',

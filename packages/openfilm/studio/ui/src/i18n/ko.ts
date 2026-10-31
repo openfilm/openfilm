@@ -2217,6 +2217,8 @@ export const ko: Words = {
         google: 'Google AI Studio의 Gemini API: Gemini 음성과 받아쓰기, Nano Banana 이미지, Veo 비디오를 키 하나로.',
         azure: 'Microsoft의 클라우드입니다. Azure AI Speech는 100개가 넘는 언어로 수백 가지 자연스러운 음성을 제공합니다.',
         elevenlabs: 'AI 오디오의 선두 주자: 수십 개 언어의 생생한 내레이션, 음악, 효과음, 단어 단위 타이밍이 있는 대본.',
+        inworld: 'Inworld의 실시간 음성: 표현력 있고 단어 단위 타이밍이 있는 내레이션, 수백 개 언어 지원.',
+        cartesia: 'Cartesia의 Sonic 음성: 빠르고 자연스러우며 단어 단위 타이밍이 있는 내레이션, 40개 이상 언어 지원.',
         openrouter: '키 하나로 여러 회사의 모델을: Google, OpenAI, ByteDance, Kuaishou 등의 이미지와 비디오를 OpenRouter가 청구합니다.',
         fal: '빠른 생성형 미디어 플랫폼: Seedance와 Kling 비디오, FLUX 이미지, 음악, 효과음.',
         groq: '자체 칩으로 하는 초고속 추론: Whisper 받아쓰기와 Orpheus 음성을 몇 초 만에.',

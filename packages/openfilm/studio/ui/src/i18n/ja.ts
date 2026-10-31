@@ -2221,6 +2221,8 @@ export const ja: Words = {
         google: 'Google AI Studio の Gemini API：Gemini の音声と書き起こし、Nano Banana の画像、Veo のビデオを一つのキーで。',
         azure: 'Microsoft のクラウド。Azure AI Speech は百以上の言語で数百の自然な音声を話します。',
         elevenlabs: 'AI オーディオの先駆者：数十言語のリアルなナレーション、音楽、効果音、単語単位でタイミングの付いた書き起こし。',
+        inworld: 'Inworld のリアルタイム音声：表現豊かで単語単位のタイミング付きナレーション。数百の言語に対応。',
+        cartesia: 'Cartesia の Sonic 音声：速く自然で単語単位のタイミング付きナレーション。40 以上の言語に対応。',
         openrouter: '一つのキーで多くのメーカーのモデルを：Google、OpenAI、ByteDance、Kuaishou などの画像とビデオ。請求は OpenRouter から。',
         fal: '高速な生成メディアのプラットフォーム：Seedance と Kling のビデオ、FLUX の画像、音楽、効果音。',
         groq: '自社チップによる超高速推論：Whisper の書き起こしと Orpheus の音声を数秒で。',
