@@ -23,46 +23,75 @@ const run = promisify(execFile);
 /** macOS's own command for the Trash (macOS 15 and later). */
 const MAC_TRASH = '/usr/bin/trash';
 
-/** PowerShell's exit code when the item in $env:OPENFILM_TRASH cannot go to the Recycle Bin; the reason is its output. */
+/** PowerShell's exit code when the item in $env:OPENFILM_TRASH cannot go to the Recycle Bin; why is its output (JSON). */
 const CANNOT_RECYCLE = 3;
 /**
  * Windows: the item in $env:OPENFILM_TRASH to the Recycle Bin, once it is known the bin takes it. The shell recycles
  * only on a fixed drive, whose bin holds items up to a size (the person's setting, a policy's, or about a twentieth of
  * the drive when neither was set) and is not set to delete right away; anything else it deletes for good, asking only
- * through the confirmations `OnlyErrorDialogs` turns off. So those are checked first, by the shell's own settings.
+ * through the confirmations `OnlyErrorDialogs` turns off. So those are checked first, by the shell's own settings, and
+ * a drive whose bin cannot be looked up (no volume id: a `subst` drive, a volume mounted in a folder) is refused too.
+ * A folder's size is its own files': a link in it (a NAS folder linked into a project) is not followed, as
+ * `Get-ChildItem -Recurse` of Windows PowerShell would.
  */
 const RECYCLE = `
 $ErrorActionPreference = 'Stop'
-function Refuse($why) { Write-Output $why; exit ${CANNOT_RECYCLE} }
+function Refuse($why, $drive, $size, $holds) { Write-Output (ConvertTo-Json -Compress @{ why = $why; drive = $drive; size = $size; holds = $holds }); exit ${CANNOT_RECYCLE} }
 function Size($bytes) { if ($bytes -ge 1GB) { [string][math]::Round($bytes / 1GB, 1) + ' GB' } else { [string][math]::Round($bytes / 1MB, 1) + ' MB' } }
+function Measure($dir) {
+  $sum = [double]0
+  foreach ($e in @(Get-ChildItem -LiteralPath $dir -Force)) {
+    if ($e.Attributes -band [IO.FileAttributes]::ReparsePoint) { continue }
+    if ($e.PSIsContainer) { $sum += Measure $e.FullName } else { $sum += $e.Length }
+  }
+  $sum
+}
 $root = [System.IO.Path]::GetPathRoot($env:OPENFILM_TRASH)
-if ($root.StartsWith('\\\\')) { Refuse 'it is on a network drive, which has no Recycle Bin' }
+if ($root.StartsWith('\\\\')) { Refuse 'network' $root }
 $item = Get-Item -LiteralPath $env:OPENFILM_TRASH -Force
 $drive = New-Object System.IO.DriveInfo($root)
+$letter = $root.Substring(0, 2)
 switch ([string]$drive.DriveType) {
   'Fixed' { }
-  'Network' { Refuse 'it is on a network drive, which has no Recycle Bin' }
-  'Removable' { Refuse 'it is on a removable drive, which has no Recycle Bin' }
-  default { Refuse ('drive ' + $root + ' has no Recycle Bin') }
+  'Network' { Refuse 'network' $letter }
+  'Removable' { Refuse 'removable' $letter }
+  default { Refuse 'no-bin' $letter }
 }
-$letter = $root.Substring(0, 2)
 $percent = $null
 foreach ($hive in @('HKCU', 'HKLM')) {
   $policy = Get-ItemProperty -Path ($hive + ':\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer') -ErrorAction SilentlyContinue
-  if ($policy.NoRecycleFiles -eq 1) { Refuse 'a policy here has the Recycle Bin delete files right away' }
+  if ($policy.NoRecycleFiles -eq 1) { Refuse 'policy' $letter }
   if ($null -ne $policy.RecycleBinSize) { $percent = [double]$policy.RecycleBinSize }
 }
-$bin = $null
 $volume = [string](mountvol $letter /L)
-if ($volume -match '\\{[0-9A-Fa-f-]+\\}') { $bin = Get-ItemProperty -Path ('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\BitBucket\\Volume\\' + $Matches[0]) -ErrorAction SilentlyContinue }
-if ($bin.NukeOnDelete -eq 1) { Refuse ('the Recycle Bin of drive ' + $letter + ' is set to delete files right away') }
+if ($volume -notmatch '\\{[0-9A-Fa-f-]+\\}') { Refuse 'no-volume' $letter }
+$bin = Get-ItemProperty -Path ('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\BitBucket\\Volume\\' + $Matches[0]) -ErrorAction SilentlyContinue
+if ($bin.NukeOnDelete -eq 1) { Refuse 'nuke' $letter }
 $holds = if ($null -ne $percent) { $drive.TotalSize * $percent / 100 } elseif ($null -ne $bin.MaxCapacity) { [double]$bin.MaxCapacity * 1MB } else { $drive.TotalSize * 0.05 }
-$size = if ($item.PSIsContainer) { [double](Get-ChildItem -LiteralPath $item.FullName -Recurse -Force -File | Measure-Object -Property Length -Sum).Sum } else { [double]$item.Length }
-if ($size -gt $holds) { Refuse ('it is ' + (Size $size) + ', more than the Recycle Bin of drive ' + $letter + ' holds (' + (Size $holds) + ')') }
+$size = if ($item.PSIsContainer) { Measure $item.FullName } else { [double]$item.Length }
+if ($size -gt $holds) { Refuse 'too-big' $letter (Size $size) (Size $holds) }
 Add-Type -AssemblyName Microsoft.VisualBasic
 if ($item.PSIsContainer) { [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory($item.FullName, 'OnlyErrorDialogs', 'SendToRecycleBin') }
 else { [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($item.FullName, 'OnlyErrorDialogs', 'SendToRecycleBin') }
 `;
+
+/** @typedef {{ why: 'network' | 'removable' | 'no-bin' | 'no-volume' | 'policy' | 'nuke' | 'too-big', drive: string, size?: string, holds?: string }} Refusal */
+
+/**
+ * Why `name` cannot go to the Recycle Bin, as Studio's API says it: the reason the check gave, in English; Studio's UI
+ * says the same from the answer's `why` in the person's language.
+ * @param {string} name @param {Refusal} r
+ */
+export function recycleRefused(name, r) {
+  const why = r.why === 'network' ? 'it is on a network drive, which has no Recycle Bin'
+    : r.why === 'removable' ? 'it is on a removable drive, which has no Recycle Bin'
+    : r.why === 'no-bin' ? `drive ${r.drive} has no Recycle Bin`
+    : r.why === 'no-volume' ? `Windows did not say which volume drive ${r.drive} is, so its Recycle Bin's settings could not be checked`
+    : r.why === 'policy' ? 'a policy here has the Recycle Bin delete files right away'
+    : r.why === 'nuke' ? `the Recycle Bin of drive ${r.drive} is set to delete files right away`
+    : `it is ${r.size}, more than the Recycle Bin of drive ${r.drive} holds (${r.holds})`;
+  return `${name} cannot go to the Recycle Bin: ${why}. It was left where it is; File Explorer can delete it for good`;
+}
 
 /** A name in `dir` that is free: `name`, else `name 2.ext`, `name 3.ext`… */
 function freeName(/** @type {string} */ dir, /** @type {string} */ name) {
@@ -88,7 +117,9 @@ export async function moveToTrash(path) {
     } catch (e) {
       const { code, stdout } = /** @type {{ code?: unknown, stdout?: string }} */ (e);
       if (code !== CANNOT_RECYCLE) throw e;
-      throw new HttpError(409, `${basename(path)} cannot go to the Recycle Bin: ${String(stdout).trim()}. It was left where it is; File Explorer can delete it for good`);
+      /** @type {Refusal} */
+      const why = JSON.parse(String(stdout));
+      throw new HttpError(409, recycleRefused(basename(path), why), { code: 'recycle', name: basename(path), ...why });
     }
     return;
   }

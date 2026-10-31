@@ -10,6 +10,7 @@ import { mediaFetch } from './media-queue';
 import {
   factsOfProbe, mediaListingOf, type FilesListing, type MediaFacts, type MediaListing, type MediaResult, type MediaSources,
 } from './workspace-resources';
+import { recycleRefusalOf } from './recycle.ts';
 
 /** The library's top folder as its paths name it. */
 export const SAVED = 'saved';
@@ -85,7 +86,7 @@ export function useSavedListing(on: boolean): MediaListing | null {
   ) : null), [raw, facts]);
 }
 
-const result = async (res: Response): Promise<MediaResult> => (res.ok ? 'ok' : res.status === 409 ? 'taken' : 'failed');
+const result = async (res: Response): Promise<MediaResult> => (res.ok ? 'ok' : res.status === 409 ? recycleRefusalOf(await res.json().catch(() => null)) ?? 'taken' : 'failed');
 const send = (method: string, url: string, body: unknown) => fetch(url, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
 /** The media pane's changes, made in the library; each reads it again. */

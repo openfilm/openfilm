@@ -603,6 +603,16 @@ export const ja: Words = {
     speedNormal: '標準',
     seek: 'シーク',
   },
+  recycle: {
+    refused: `「{name}」はそのまま残しました：{why}。${FILES}で完全に削除できます。`,
+    network: 'ネットワークドライブ上にあり、ごみ箱がありません',
+    removable: 'リムーバブルドライブ上にあり、ごみ箱がありません',
+    noBin: 'ドライブ {drive} にはごみ箱がありません',
+    noVolume: 'ドライブ {drive} がどのボリュームか Windows が示さず、ごみ箱の設定を確認できませんでした',
+    policy: 'ここのポリシーで、ごみ箱はファイルをすぐに削除します',
+    nuke: 'ドライブ {drive} のごみ箱は、ファイルをすぐに削除する設定です',
+    tooBig: 'サイズが {size} で、ドライブ {drive} のごみ箱の容量（{holds}）を超えています',
+  },
   project: {
     projects: 'プロジェクト',
     previewStageMount: '最初のフレームを描画中',

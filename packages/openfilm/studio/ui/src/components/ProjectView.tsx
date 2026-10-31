@@ -54,6 +54,7 @@ import { canvasFor, firstPictureSize, fitToCanvas } from '@/lib/canvas-fit';
 import { createViewerZoom } from '@/lib/viewer-zoom';
 import { decodes, type PlayCheck } from '@/lib/decodes';
 import { factsOfProbe, mediaListingOf, resourceKindOf, srcHitsAsset, warmProjectMedia, type MediaListing, type MediaProxy, type MediaResult, type MediaSources, type WorkspaceResource } from '@/lib/workspace-resources';
+import { recycleRefusalOf } from '@/lib/recycle';
 import { BrandLoadingScreen } from './BrandLoadingScreen';
 import { BrandLogo } from './BrandLogo';
 import { SettingsModal } from './settings/SettingsModal';
@@ -2375,7 +2376,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
 
   /* ── media pane actions ── */
   const projectApi = `/api/projects/${encodeURIComponent(projectId)}`;
-  const mediaResult = async (res: Response): Promise<MediaResult> => (res.ok ? 'ok' : res.status === 409 ? 'taken' : 'failed');
+  const mediaResult = async (res: Response): Promise<MediaResult> => (res.ok ? 'ok' : res.status === 409 ? recycleRefusalOf(await res.json().catch(() => null)) ?? 'taken' : 'failed');
   /* media kept on this computer (files.mjs bringIn): picked in the system's dialog (the app's own for a folder, when
      it has one; 'no-dialog' where there is none), copied in (cloned where the disk can) or linked where it is kept (a
      NAS). A link pointed elsewhere, or copied into the project in its place */

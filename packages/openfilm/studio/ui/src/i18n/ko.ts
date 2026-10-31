@@ -600,6 +600,16 @@ export const ko: Words = {
     speedNormal: '보통',
     seek: '탐색',
   },
+  recycle: {
+    refused: `“{name}”은(는) 그대로 두었습니다: {why}. ${FILES}에서 완전히 삭제할 수 있습니다.`,
+    network: '네트워크 드라이브에 있어 휴지통이 없습니다',
+    removable: '이동식 드라이브에 있어 휴지통이 없습니다',
+    noBin: '드라이브 {drive}에는 휴지통이 없습니다',
+    noVolume: 'Windows가 드라이브 {drive}이(가) 어떤 볼륨인지 알려주지 않아 휴지통 설정을 확인할 수 없습니다',
+    policy: '이곳의 정책이 휴지통에서 파일을 바로 삭제하게 합니다',
+    nuke: '드라이브 {drive}의 휴지통이 파일을 바로 삭제하도록 설정되어 있습니다',
+    tooBig: '크기가 {size}로, 드라이브 {drive}의 휴지통 용량({holds})을 넘습니다',
+  },
   project: {
     projects: '프로젝트',
     previewStageMount: '첫 프레임을 그리는 중',

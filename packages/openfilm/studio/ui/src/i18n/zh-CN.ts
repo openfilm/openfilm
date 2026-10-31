@@ -604,6 +604,16 @@ export const zhCN: Words = {
     speedNormal: '正常',
     seek: '播放进度',
   },
+  recycle: {
+    refused: `“{name}”留在原处：{why}。可在${FILES}中永久删除。`,
+    network: '它在网络驱动器上，没有回收站',
+    removable: '它在可移动驱动器上，没有回收站',
+    noBin: '驱动器 {drive} 没有回收站',
+    noVolume: 'Windows 没有说明驱动器 {drive} 是哪个卷，无法检查其回收站设置',
+    policy: '此处的策略让回收站直接删除文件',
+    nuke: '驱动器 {drive} 的回收站被设为直接删除文件',
+    tooBig: '它有 {size}，超过了驱动器 {drive} 回收站的容量（{holds}）',
+  },
   project: {
     projects: '项目',
     previewStageMount: '正在绘制第一帧',
