@@ -809,12 +809,17 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
    * @param {ExportJob} job @param {number} share
    */
   const frames = (job, share = 0.96) => {
+    /* the rate from the first frame drawn on: drawing starts after the first report (a resumed render's first says
+       the frames a render that stopped drew), and again after one that counts from fewer (drawn again) */
     let first = 0;
+    let from = -1;
+    let drawing = false;
     let told = 0;
     return (/** @type {number} */ done, /** @type {number} */ total) => {
       const now = Date.now();
-      if (done === 1) first = now;
-      const rate = done > 1 ? (done - 1) / Math.max(0.001, (now - first) / 1000) : 0;
+      if (from < 0 || done < from) { from = done; first = now; drawing = false; }
+      else if (!drawing && done > from) { from = done; first = now; drawing = true; }
+      const rate = done > from ? (done - from) / Math.max(0.001, (now - first) / 1000) : 0;
       if (now - told < 200 && done < total) return;
       told = now;
       update(job, {
@@ -889,7 +894,9 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
             const { format } = encoding(codec, quality, size, fps ?? 30, have);
             await run(['-i', frames, '-map', '0:v:0', '-map', '0:a?', '-vf', /** @type {{ pix: string }} */ (format).pix, ...format.video, '-c:a', 'copy', part], signal);
           } else {
-            const rendered = await renderTo(job, target, part, opts, signal);
+            /* named by the file it makes, not the partial one: an export the app quit or crashed in is resumed by the next
+               (render-resume.mjs); one cancelled here leaves nothing */
+            const rendered = await renderTo(job, target, part, { ...opts, resumeAs: out }, signal);
             selectedRanges = rendered.ranges ?? null;
           }
         } catch (e) {
@@ -899,7 +906,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
           broken(hw);
           ({ encoder, opts } = how(null));
           update(job, { encoder, framesDone: 0, progress: 0, etaMs: null });
-          const rendered = await renderTo(job, target, part, opts, signal);
+          const rendered = await renderTo(job, target, part, { ...opts, resumeAs: out }, signal);
           selectedRanges = rendered.ranges ?? null;
         }
         await renameSafely(part, out);
