@@ -907,6 +907,7 @@ export const ja: Words = {
     mediaProject: 'プロジェクト',
     mediaSaved: '保存済み',
     favorites: 'お気に入り',
+    featured: 'おすすめ',
     all: 'すべて',
     search: '{what}を検索',
     nothing: '「{q}」は見つかりません。',

@@ -76,11 +76,11 @@ const DRAWN: Record<string, Draw> = {
   ),
 };
 
-export function CategoryIcon({ id, on }: { id: string; on: boolean }) {
+export function CategoryIcon({ id, on, size = 22 }: { id: string; on: boolean; size?: number }) {
   const draw = DRAWN[id];
   if (!draw) return null;
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       {draw(on ? { fill: 'currentColor', fillOpacity: 0.22 } : {})}
     </svg>
   );

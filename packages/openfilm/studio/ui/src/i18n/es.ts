@@ -907,6 +907,7 @@ export const es: Words = {
     mediaProject: 'Proyecto',
     mediaSaved: 'Guardado',
     favorites: 'Favoritos',
+    featured: 'Destacadas',
     all: 'Todo',
     search: 'Buscar {what}',
     nothing: 'Aquí no hay nada llamado «{q}».',

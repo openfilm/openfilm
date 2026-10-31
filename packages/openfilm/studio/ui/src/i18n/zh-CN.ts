@@ -908,6 +908,7 @@ export const zhCN: Words = {
     mediaProject: '项目素材',
     mediaSaved: '收藏',
     favorites: '收藏',
+    featured: '精选',
     all: '全部',
     search: '搜索{what}',
     nothing: '这里没有叫“{q}”的。',

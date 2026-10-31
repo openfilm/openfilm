@@ -21,7 +21,7 @@ import {
 import { clearResourceDrag, setResourceDragData } from '@/lib/resource-drag';
 import { useLibraryVoices } from '@/lib/library-voices';
 import { CategoryIcon, Empty } from './icons';
-import { STARRED, VoicesPane } from './VoicesPane';
+import { FEATURED, STARRED, VoicesPane } from './VoicesPane';
 
 type Category = 'media' | 'voice' | LibraryCategory;
 const CATEGORIES: Category[] = ['media', 'voice', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition'];
@@ -92,25 +92,28 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
      picked on the timeline and the picture, which a look or a transition goes on */
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col outline-none" tabIndex={-1} onKeyDown={onKey}>
-      {/* the categories keep their own spacing however wide the panel is; more than fit scroll sideways (a wheel too) */}
-      <nav
-        data-studio-host-panel=""
-        onWheel={(e) => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) e.currentTarget.scrollLeft += e.deltaY; }}
-        className="flex shrink-0 overflow-x-auto border-b border-[var(--dock-line)] px-1 [mask-image:linear-gradient(to_right,black_calc(100%-20px),transparent)] [scrollbar-width:none]"
-      >
-        {CATEGORIES.map((id) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => show(id)}
-            aria-pressed={cat === id}
-            className={`flex min-w-[50px] shrink-0 flex-col items-center gap-[3px] whitespace-nowrap px-2 pb-1.5 pt-2 text-[11.5px] font-medium ${cat === id ? 'text-[var(--tl-accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
-          >
-            <CategoryIcon id={id} on={cat === id} />
-            {t(`assetDrawer.cat_${id}`)}
-          </button>
-        ))}
-      </nav>
+      {/* the categories, as high as the inspector's tabs beside it (40 px) so their lines meet; they keep their own
+          spacing however wide the panel is, and more than fit scroll sideways (a wheel too), fading at the edge while
+          the line under them runs whole */}
+      <div className="h-10 shrink-0 border-b border-[var(--dock-line)]" data-studio-host-panel="">
+        <nav
+          onWheel={(e) => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) e.currentTarget.scrollLeft += e.deltaY; }}
+          className="flex h-full overflow-x-auto px-1 [mask-image:linear-gradient(to_right,black_calc(100%-20px),transparent)] [scrollbar-width:none]"
+        >
+          {CATEGORIES.map((id) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => show(id)}
+              aria-pressed={cat === id}
+              className={`flex h-full min-w-[46px] shrink-0 flex-col items-center justify-center gap-px whitespace-nowrap px-2 text-[10.5px] font-medium leading-[13px] ${cat === id ? 'text-[var(--tl-accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
+            >
+              <CategoryIcon id={id} on={cat === id} size={18} />
+              {t(`assetDrawer.cat_${id}`)}
+            </button>
+          ))}
+        </nav>
+      </div>
       <div className="flex min-h-0 flex-1">
         {/* as wide as its longest line (up to a limit), so no group's name is cut */}
         <nav data-studio-host-panel="" className="flex min-w-[104px] max-w-[148px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-[var(--dock-line)] px-2 py-2.5">
@@ -122,7 +125,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
           ) : (
             <>
               <SideBox on={group === FAVORITES && !q} onClick={() => pickGroup(FAVORITES)}>{t('assetDrawer.favorites')}</SideBox>
-              <SideBox on={group !== FAVORITES && folded && !q} open={!folded} onClick={fold}>
+              {cat === 'voice' ? <SideBox on={group === FEATURED && !q} onClick={() => pickGroup(FEATURED)}>{t('assetDrawer.featured')}</SideBox> : null}
+              <SideBox on={group !== FAVORITES && group !== FEATURED && folded && !q} open={!folded} onClick={fold}>
                 {t(cat === 'voice' ? 'assetDrawer.services' : 'assetDrawer.official')}
               </SideBox>
               {folded ? null : (

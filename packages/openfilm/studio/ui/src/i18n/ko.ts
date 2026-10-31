@@ -904,6 +904,7 @@ export const ko: Words = {
     mediaProject: '프로젝트',
     mediaSaved: '보관함',
     favorites: '즐겨찾기',
+    featured: '추천',
     all: '전체',
     search: '{what} 검색',
     nothing: '“{q}”(이)라는 항목이 없습니다.',

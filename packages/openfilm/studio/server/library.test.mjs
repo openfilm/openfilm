@@ -78,9 +78,15 @@ test('the voices are the voice-over services\' own, each once, said as `openfilm
     assert.ok(v.id && v.name, `${key}: an id and a name`);
     assert.ok([null, 'm', 'f', 'n'].includes(v.gender) && [null, 'young', 'middle', 'old'].includes(v.age), `${key}: gender, age`);
     assert.ok(Array.isArray(v.tags));
+    assert.equal(typeof v.featured, 'boolean', `${key}: featured or not`);
+    assert.ok(v.uses === null || v.uses >= 0, `${key}: uses`);
     if (v.sample) assert.match(v.sample, new RegExp(`^voices/${v.provider}/[\\w.-]+\\.m4a$`));
   }
   for (const p of providers) assert.ok(voices.some((v) => v.provider === p.id), `${p.id} has voices`);
+  /* ElevenLabs: its own voices and its library's featured ones, picked, first */
+  const eleven = voices.filter((v) => v.provider === 'elevenlabs');
+  assert.ok(eleven.length > 300 && eleven.filter((v) => v.featured).length >= 50);
+  assert.ok(eleven.findIndex((v) => !v.featured) > eleven.findLastIndex((v) => v.featured));
   const home = mkdtempSync(join(tmpdir(), 'of-voices-'));
   const was = process.env.OPENFILM_SHARED_HOME;
   process.env.OPENFILM_SHARED_HOME = home;

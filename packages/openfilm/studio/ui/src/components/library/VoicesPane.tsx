@@ -11,12 +11,16 @@ import { studioHost } from '@/lib/host';
 import { toggleFavorite } from '@/lib/library';
 import { Empty } from './icons';
 import {
-  languageOf, sampleUrl, useLibraryVoices, useServices, voiceAccess, voiceKey, voiceRef,
+  languageOf, sampleUrl, useLibraryVoices, useServices, voiceAccess, voiceKey, voiceLook, voiceRef,
   type LibraryVoice, type VoiceAccess, type VoiceService,
 } from '@/lib/library-voices';
 
 /** The side bar's line for the starred voices (as the drawer's FAVORITES). */
 export const STARRED = '★';
+/** The side bar's line for the voices their services picked. */
+export const FEATURED = 'featured';
+/* rows drawn at first, and more each time the list is scrolled near its end */
+const PAGE = 80;
 
 /* the languages offered first, in this order, after the person's own */
 const FIRST = ['en', 'zh', 'ja', 'ko', 'es'];
@@ -25,7 +29,7 @@ const FIRST = ['en', 'zh', 'ja', 'ko', 'es'];
 let playing: HTMLAudioElement | null = null;
 
 export function VoicesPane({ group, query, favorites, onServices, onAll }: {
-  /** '' all, STARRED, or a service's id */
+  /** '' all, STARRED, FEATURED, or a service's id */
   group: string;
   query: string;
   favorites: readonly string[];
@@ -45,7 +49,8 @@ export function VoicesPane({ group, query, favorites, onServices, onAll }: {
   React.useEffect(() => () => { playing?.pause(); }, []);
 
   const byId = React.useMemo(() => new Map((library?.providers ?? []).map((s) => [s.id, s])), [library]);
-  const shown = (library?.voices ?? []).filter((v) => (group === STARRED ? favorites.includes(voiceKey(v)) : !group || v.provider === group));
+  const shown = (library?.voices ?? []).filter((v) => (group === STARRED ? favorites.includes(voiceKey(v))
+    : group === FEATURED ? v.featured : !group || v.provider === group));
   const q = query.trim().toLowerCase();
   const voices = shown.filter((v) => (!language || languageOf(v) === language) && (!gender || v.gender === gender)
     && (!q || [v.name, v.description, v.accent, ...v.tags].some((s) => s?.toLowerCase().includes(q))));
@@ -59,6 +64,9 @@ export function VoicesPane({ group, query, favorites, onServices, onAll }: {
     return [...count.keys()].sort((a, b) => rank(a) - rank(b) || count.get(b)! - count.get(a)! || a.localeCompare(b));
   }, [shown, lang]);
   const languageName = useLanguageName(lang);
+  /* a long list is drawn a page at a time, from its top again when what it lists changes */
+  const [drawn, setDrawn] = React.useState(PAGE);
+  React.useEffect(() => setDrawn(PAGE), [group, query, language, gender]);
 
   const play = (v: LibraryVoice) => {
     const key = voiceKey(v);
@@ -77,6 +85,8 @@ export function VoicesPane({ group, query, favorites, onServices, onAll }: {
   const use = (v: LibraryVoice) => {
     const service = byId.get(v.provider);
     if (!service) return;
+    /* not connected yet: where to connect it */
+    if (!access[v.provider]) { onServices(); return; }
     if (studioHost?.refer) studioHost.refer(voiceRef(v, service, access[v.provider]));
     else void navigator.clipboard?.writeText(v.id);
   };
@@ -109,16 +119,20 @@ export function VoicesPane({ group, query, favorites, onServices, onAll }: {
         <span className="ml-auto whitespace-nowrap text-[10.5px] text-[var(--text-faint)]">{t('assetDrawer.voiceCount').replace('{n}', String(voices.length))}</span>
       </div>
       {/* a click on nothing lets the picked voice go */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3" onClick={(e) => { if (e.target === e.currentTarget) { playing?.pause(); setPicked(null); } }}>
+      <div
+        className="min-h-0 flex-1 overflow-y-auto px-3 pb-3"
+        onClick={(e) => { if (e.target === e.currentTarget) { playing?.pause(); setPicked(null); } }}
+        onScroll={(e) => { const el = e.currentTarget; if (el.scrollTop + el.clientHeight > el.scrollHeight - 600 && drawn < voices.length) setDrawn(drawn + PAGE); }}
+      >
         {!voices.length ? (
           !library ? null
             : q || language || gender ? <Empty icon="search" text={t('assetDrawer.nothing').replace('{q}', query.trim() || languageName(language) || '')} />
               : group === STARRED ? <Empty icon="star" text={t('assetDrawer.noFavorites')} action={t('assetDrawer.seeAll')} onAction={onAll} /> : null
-        ) : voices.map((v) => {
+        ) : voices.slice(0, drawn).map((v) => {
           const key = voiceKey(v);
           return (
             <VoiceRow
-              key={key} voice={v} service={byId.get(v.provider)} access={access[v.provider]} showService={group === '' || group === STARRED}
+              key={key} voice={v} service={byId.get(v.provider)} access={access[v.provider]} showService={group === '' || group === STARRED || group === FEATURED}
               picked={picked === key} sounding={sounding === key} kept={favorites.includes(key)} languageName={languageName}
               onPlay={() => play(v)} onUse={() => use(v)} onServices={onServices}
             />
@@ -161,12 +175,7 @@ function VoiceRow({ voice, service, access, showService, picked, sounding, kept,
       onDoubleClick={onUse}
       title={[voice.name, voice.description, voice.tags.join(', ')].filter(Boolean).join('\n')}
     >
-      <span
-        aria-label={sounding ? t('assetDrawer.stop') : t('assetDrawer.play')}
-        className={`grid h-10 w-10 place-items-center rounded-full bg-[var(--bg-hover)] ${picked ? 'text-[var(--tl-accent)]' : voice.sample ? 'text-[var(--text-muted)] group-hover:text-[var(--text)]' : 'text-[var(--text-faint)] opacity-50'}`}
-      >
-        {sounding ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
-      </span>
+      <VoiceAvatar voice={voice} sounding={sounding} label={sounding ? t('assetDrawer.stop') : t('assetDrawer.play')} />
       <span className="min-w-0">
         <span className="flex min-w-0 items-baseline gap-1.5">
           <span className={`truncate text-[12.5px] font-medium ${picked ? 'text-[var(--tl-accent)]' : 'text-[var(--text)]'}`}>{voice.name}</span>
@@ -198,5 +207,28 @@ function VoiceRow({ voice, service, access, showService, picked, sounding, kept,
         )}
       </span>
     </div>
+  );
+}
+
+/**
+ * A voice's picture (lib/library-voices voiceLook): a soft orb in its kind's colors, its service's pick marked with a
+ * star; under the pointer, or while it plays, it is the button that plays it.
+ */
+function VoiceAvatar({ voice, sounding, label }: { voice: LibraryVoice; sounding: boolean; label: string }) {
+  const look = React.useMemo(() => voiceLook(voice), [voice]);
+  return (
+    <span aria-label={label} className="relative grid h-10 w-10 shrink-0 place-items-center">
+      <span className="absolute inset-0 overflow-hidden rounded-full">
+        <span className="absolute -inset-1 blur-[3px]" style={look} />
+      </span>
+      <span className={`absolute inset-0 grid place-items-center rounded-full bg-black/45 text-white ${sounding ? '' : 'opacity-0 group-hover:opacity-100'} ${voice.sample ? '' : 'text-white/40'}`}>
+        {sounding ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" className="translate-x-px" />}
+      </span>
+      {voice.featured ? (
+        <span className="absolute -right-0.5 -top-0.5 grid h-[15px] w-[15px] place-items-center rounded-full bg-[var(--surface-2)] text-[var(--tl-accent)] ring-2 ring-[var(--dock-pane)]">
+          <Star size={9} fill="currentColor" strokeWidth={0} />
+        </span>
+      ) : null}
+    </span>
   );
 }

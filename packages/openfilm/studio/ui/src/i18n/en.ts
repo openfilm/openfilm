@@ -908,6 +908,7 @@ export const en = {
     mediaProject: 'Project',
     mediaSaved: 'Saved',
     favorites: 'Favorites',
+    featured: 'Featured',
     all: 'All',
     search: 'Search {what}',
     nothing: 'Nothing called “{q}” here.',

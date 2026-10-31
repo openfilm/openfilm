@@ -8,8 +8,16 @@
  *   ELEVENLABS_API_KEY=… INWORLD_API_KEY=… CARTESIA_API_KEY=… node scripts/library-voices.mjs
  *
  * Listing voices and their samples costs nothing with any of them. A sample already here is kept; a service without
- * a key keeps what voices.json had for it. Cartesia lists a thousand voices: those it gives a sample of are the ones
- * it shows, and the ones kept.
+ * a key keeps what voices.json had for it.
+ *
+ *   ElevenLabs  its own voices (premade), every voice its Voice Library features, and the most used of the library in
+ *               each language (its twenty thousand are too many to browse): only those billed at its usual rate,
+ *               with a notice period before they leave, and without live moderation
+ *   Inworld     all its own voices
+ *   Cartesia    all its public voices; those without a sample of its own have none here either
+ *
+ * `featured`: the service picked it (ElevenLabs' own voices and the ones its library features); `uses`: how much it is
+ * used, where the service says (ElevenLabs: characters spoken in a year), to list the most used first.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -23,7 +31,8 @@ const SAMPLE_SECONDS = 15;
 
 /**
  * @typedef {{ provider: string, id: string, name: string, description: string | null, gender: 'm' | 'f' | 'n' | null,
- *   age: 'young' | 'middle' | 'old' | null, language: string | null, accent: string | null, tags: string[], sample: string | null }} Voice
+ *   age: 'young' | 'middle' | 'old' | null, language: string | null, accent: string | null, tags: string[], sample: string | null,
+ *   featured: boolean, uses: number | null }} Voice
  * @typedef {{ voice: Voice, fetch: () => Promise<Uint8Array | null> }} Found
  */
 
@@ -68,22 +77,63 @@ async function bytes(url, headers = {}) {
   }
 }
 
-/** ElevenLabs' premade voices; "Bella - Professional, Bright, Warm" is Bella, those three words her tags. @param {string} key @returns {Promise<Found[]>} */
+/* ElevenLabs' library: how many of the most used are kept in each language (the rest of the world's: `OTHER`) */
+const ELEVEN_LANGUAGES = { en: 240, zh: 60, ja: 60, ko: 60, es: 60, fr: 30, de: 30, pt: 30, it: 30, hi: 30, ar: 30, ru: 30, tr: 20, pl: 20, nl: 20, id: 20, vi: 20 };
+
+/** "Bella - Professional, Bright, Warm" is Bella, those three words her tags. @param {string} full */
+const nameAndTags = (full) => {
+  const [name, ...rest] = full.split(/\s+-\s+/);
+  return { name: name?.trim() || full, tags: rest.join(' - ').split(',').map(str).filter(Boolean) };
+};
+
+/**
+ * ElevenLabs' own voices, the ones its Voice Library features, and the most used there in each language.
+ * @param {string} key @returns {Promise<Found[]>}
+ */
 async function elevenlabs(key) {
-  const body = await json('https://api.elevenlabs.io/v2/voices?category=premade&page_size=100', { 'xi-api-key': key });
-  return (body.voices ?? []).map((/** @type {any} */ v) => {
-    const [name, ...rest] = str(v.name).split(/\s+-\s+/);
+  const auth = { 'xi-api-key': key };
+  /** @type {Map<string, Found>} */
+  const found = new Map();
+  const own = await json('https://api.elevenlabs.io/v2/voices?category=premade&page_size=100', auth);
+  for (const v of own.voices ?? []) {
     const labels = v.labels ?? {};
-    const tags = [...rest.join(' - ').split(',').map(str), words(labels.use_case)].filter(Boolean);
-    return {
+    const { name, tags } = nameAndTags(str(v.name));
+    found.set(str(v.voice_id), {
       voice: {
-        provider: 'elevenlabs', id: str(v.voice_id), name: name || str(v.voice_id), description: str(v.description) || null,
+        provider: 'elevenlabs', id: str(v.voice_id), name, description: str(v.description) || null,
         gender: sex(labels.gender), age: ageOf(labels.age), language: str(labels.language) || null, accent: words(labels.accent) || null,
-        tags: [...new Set(tags)], sample: null,
+        tags: [...new Set([...tags, words(labels.use_case)].filter(Boolean))], sample: null, featured: true, uses: null,
       },
       fetch: () => (v.preview_url ? bytes(v.preview_url) : Promise.resolve(null)),
-    };
-  });
+    });
+  }
+  /** a voice of the library, when it is billed as any other, will not leave at once, and is not moderated live */
+  const take = (/** @type {any} */ v) => {
+    const id = str(v.voice_id);
+    if (!id || found.has(id) || (v.rate ?? 1) !== 1 || v.fiat_rate || !(v.notice_period >= 30) || v.live_moderation_enabled) return false;
+    const { name, tags } = nameAndTags(str(v.name));
+    found.set(id, {
+      voice: {
+        provider: 'elevenlabs', id, name, description: str(v.description) || null, gender: sex(v.gender), age: ageOf(v.age),
+        language: str(v.locale) || str(v.language) || null, accent: words(v.accent) || null,
+        tags: [...new Set([...tags, words(v.descriptive), words(v.use_case)].filter(Boolean))], sample: null,
+        featured: v.featured === true, uses: typeof v.usage_character_count_1y === 'number' ? v.usage_character_count_1y : null,
+      },
+      fetch: () => (v.preview_url ? bytes(v.preview_url) : Promise.resolve(null)),
+    });
+    return true;
+  };
+  const library = (/** @type {string} */ query) => json(`https://api.elevenlabs.io/v1/shared-voices?page_size=100&${query}`, auth);
+  for (const v of (await library('featured=true')).voices ?? []) take(v);
+  for (const [language, most] of Object.entries(ELEVEN_LANGUAGES)) {
+    let kept = 0;
+    for (let page = 0; kept < most && page < 10; page++) {
+      const body = await library(`language=${language}&sort=usage_character_count_1y&page=${page}`);
+      for (const v of body.voices ?? []) if (kept < most && take(v)) kept++;
+      if (!body.has_more) break;
+    }
+  }
+  return [...found.values()];
 }
 
 /** Inworld's own voices (its system voices); a sample is asked for each, a few a second (its limit is lower). @param {string} key @returns {Promise<Found[]>} */
@@ -94,7 +144,7 @@ async function inworld(key) {
     voice: {
       provider: 'inworld', id: str(v.voiceId), name: str(v.displayName) || str(v.voiceId), description: str(v.description) || null,
       gender: sex(v.gender), age: ageOf(v.ageGroup), language: str(v.languageCode) || null, accent: null,
-      tags: (Array.isArray(v.tags) ? v.tags : []).map(words).filter(Boolean), sample: null,
+      tags: (Array.isArray(v.tags) ? v.tags : []).map(words).filter(Boolean), sample: null, featured: false, uses: null,
     },
     fetch: async () => {
       await sleep(350);
@@ -104,7 +154,7 @@ async function inworld(key) {
   }));
 }
 
-/** Cartesia's public voices that it gives a sample of. @param {string} key @returns {Promise<Found[]>} */
+/** Cartesia's public voices. @param {string} key @returns {Promise<Found[]>} */
 async function cartesia(key) {
   const auth = { authorization: `Bearer ${key}`, 'cartesia-version': '2026-08-14' };
   /** @type {any[]} */
@@ -115,15 +165,15 @@ async function cartesia(key) {
     if (!body.has_more || !body.next_page) break;
     after = body.next_page;
   }
-  return all.filter((v) => v.preview_file_url && v.access === 'public').map((v) => {
+  return all.filter((v) => v.access === 'public').map((v) => {
     const native = (Array.isArray(v.accents) ? v.accents : []).find((/** @type {any} */ a) => a?.is_native);
     return {
       voice: {
         provider: 'cartesia', id: str(v.id), name: str(v.name) || str(v.id), description: str(v.description) || null,
         gender: sex(v.gender), age: null, language: str(native?.locale) || str(v.language) || null, accent: words(native?.accent) || null,
-        tags: str(v.tagline) ? [str(v.tagline)] : [], sample: null,
+        tags: str(v.tagline) ? [str(v.tagline)] : [], sample: null, featured: false, uses: null,
       },
-      fetch: () => bytes(v.preview_file_url, auth),
+      fetch: () => (v.preview_file_url ? bytes(v.preview_file_url, auth) : Promise.resolve(null)),
     };
   });
 }
@@ -151,7 +201,9 @@ for (const provider of PROVIDERS) {
     voices.push(...kept);
     continue;
   }
-  const found = (await list(key)).filter((f) => f.voice.id).sort((a, b) => a.voice.name.localeCompare(b.voice.name));
+  /* the service's picks first, then the most used, then by name */
+  const found = (await list(key)).filter((f) => f.voice.id).sort((a, b) => Number(b.voice.featured) - Number(a.voice.featured)
+    || (b.voice.uses ?? 0) - (a.voice.uses ?? 0) || a.voice.name.localeCompare(b.voice.name));
   mkdirSync(join(LIBRARY, 'voices', provider.id), { recursive: true });
   let made = 0;
   for (const { voice, fetch: sample } of found) {
@@ -167,5 +219,11 @@ for (const provider of PROVIDERS) {
   console.log(`${provider.name}: ${found.length} voices, ${made} samples made, ${found.filter((f) => f.voice.sample).length} with a sample`);
 }
 
+/* Mandarin as the other services say it (ElevenLabs says `cmn`) */
+for (const v of voices) if (v.language) v.language = v.language.replace(/^cmn\b/, 'zh');
+/* within each service: its picks, then those with a sample to hear, then the most used, then by name */
+const order = PROVIDERS.map((p) => p.id);
+voices.sort((a, b) => order.indexOf(a.provider) - order.indexOf(b.provider) || Number(b.featured) - Number(a.featured)
+  || Number(Boolean(b.sample)) - Number(Boolean(a.sample)) || (b.uses ?? 0) - (a.uses ?? 0) || a.name.localeCompare(b.name));
 writeFileSync(OUT, `${JSON.stringify({ version: 1, providers: PROVIDERS, voices }, null, 1)}\n`);
 console.log(`${voices.length} voices → ${OUT}`);

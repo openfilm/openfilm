@@ -1,8 +1,8 @@
 /**
  * The library's voices (studio/server/library.mjs, library/voices.json): the ready-made voices of the voice-over
- * services OpenFilm offers, each with its service's own sample, and whether the person can speak in one now: with the
- * service's own key, or through OpenFilm when the person signed in and OpenFilm offers that service's models
- * (Settings › Services, lib/providers). A voice chosen is a reference in the chat (lib/host StudioRef `voice`): the
+ * services OpenFilm offers, each with its service's own sample, and whether the person can speak in one now: through
+ * OpenFilm, the default, when the person signed in and OpenFilm offers that service's models, else with the service's
+ * own key (Settings › Services, lib/providers). A voice chosen is a reference in the chat (lib/host StudioRef `voice`): the
  * agent makes the voice-over in it.
  */
 import React from 'react';
@@ -24,6 +24,10 @@ export interface LibraryVoice {
   tags: string[];
   /** its sample in the library, when there is one */
   sample: string | null;
+  /** its service picked it (ElevenLabs' own voices, and those its library features) */
+  featured?: boolean;
+  /** how much it is used, where its service says (characters spoken in a year) */
+  uses?: number | null;
 }
 
 export interface VoiceService { id: string; name: string; models: { id: string; name: string }[] }
@@ -64,8 +68,8 @@ export const sampleUrl = (v: LibraryVoice): string | null => (v.sample ? library
 export const languageOf = (v: LibraryVoice): string | null => v.language?.split(/[-_]/)[0]?.toLowerCase() || null;
 
 /**
- * How each of `services` is reached with what Settings › Services has: its own key first (the person's own account),
- * else OpenFilm signed in and offering its models (`<service>/<model>`); absent: not at all.
+ * How each of `services` is reached with what Settings › Services has: through OpenFilm first, signed in and offering
+ * its models (`<service>/<model>`), else its own key; absent: not at all.
  */
 export function voiceAccess(services: readonly VoiceService[], state: Pick<ProvidersState, 'providers'> | null): Record<string, VoiceAccess> {
   const out: Record<string, VoiceAccess> = {};
@@ -73,11 +77,11 @@ export function voiceAccess(services: readonly VoiceService[], state: Pick<Provi
   const own = (id: string): OwnProvider | undefined => state.providers.find((p) => p.id === id && p.source);
   const openfilm = own('openfilm');
   for (const service of services) {
+    const through = openfilm?.models.tts?.map((m) => m.id).filter((id) => id.startsWith(`${service.id}/`)) ?? [];
+    if (through.length) { out[service.id] = { via: 'openfilm', models: through }; continue; }
     const direct = own(service.id);
     const offered = direct?.models.tts?.map((m) => m.id).filter((id) => service.models.some((m) => m.id === id)) ?? [];
-    if (direct && offered.length) { out[service.id] = { via: service.id, models: offered }; continue; }
-    const through = openfilm?.models.tts?.map((m) => m.id).filter((id) => id.startsWith(`${service.id}/`)) ?? [];
-    if (through.length) out[service.id] = { via: 'openfilm', models: through };
+    if (direct && offered.length) out[service.id] = { via: service.id, models: offered };
   }
   return out;
 }
@@ -101,4 +105,38 @@ export function voiceRef(v: LibraryVoice, service: VoiceService, access: VoiceAc
     kind: 'voice', provider: v.provider, service: service.name, id: v.id, name: v.name,
     via: access?.via ?? null, models: access?.models ?? [], language: v.language, description: v.description,
   };
+}
+
+/** A number from 0 to 1 that a string always gives (FNV-1a), the `n`th of a string's own. */
+function seeded(text: string, n: number): number {
+  let h = 2166136261 ^ n;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+  h = Math.imul(h ^ (h >>> 15), 2246822507);
+  return ((h ^ (h >>> 13)) >>> 0) / 4294967296;
+}
+
+/* each kind of voice its own colors: a woman's warm (rose to coral and violet), a man's cool (teal to indigo), any
+   other's green; an older voice deeper and quieter, a young one brighter */
+const HUES: Record<'f' | 'm' | 'n', [number, number]> = { f: [300, 70], m: [180, 70], n: [85, 70] };
+const TONE: Record<'young' | 'middle' | 'old', { s: number; l: number }> = { young: { s: 78, l: 66 }, middle: { s: 62, l: 56 }, old: { s: 42, l: 44 } };
+
+/**
+ * A voice's picture, drawn from what kind of voice it is and its id, the same each time: a soft orb of three colored
+ * light spots on a ground of its color, as CSS backgrounds.
+ */
+export function voiceLook(v: Pick<LibraryVoice, 'provider' | 'id' | 'gender' | 'age'>): { background: string } {
+  const key = `${v.provider}/${v.id}`;
+  const [from, span] = HUES[v.gender === 'f' || v.gender === 'm' ? v.gender : 'n'];
+  const tone = TONE[v.age ?? 'middle'];
+  const hue = (n: number) => Math.round((from + seeded(key, n) * span) % 360);
+  const spots = [0, 1, 2, 3].map((i) => {
+    const x = Math.round(10 + seeded(key, 10 + i) * 80);
+    const y = Math.round(10 + seeded(key, 20 + i) * 80);
+    const r = Math.round(26 + seeded(key, 30 + i) * 30);
+    /* the last spot is the light catching it: paler and brighter */
+    const l = i === 3 ? Math.min(tone.l + 22, 90) : tone.l + Math.round((seeded(key, 40 + i) - 0.5) * 34);
+    const sat = i === 3 ? Math.round(tone.s * 0.5) : tone.s;
+    return `radial-gradient(circle at ${x}% ${y}%, hsl(${hue(i + 1)} ${sat}% ${l}%) 0%, transparent ${r}%)`;
+  });
+  return { background: `${spots.join(', ')}, hsl(${hue(0)} ${Math.round(tone.s * 0.6)}% ${tone.l - 26}%)` };
 }
