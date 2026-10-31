@@ -197,7 +197,13 @@ function Connection({ provider, hook, header }: {
   const action = provider.source ? (
     <>
       {signIn ? (
-        <a href={provider.keysUrl} target="_blank" rel="noreferrer" className={`${settingsLink} mr-2 text-[14px]`}>{t('settings.providers.manageAccount')}<ExternalLink size={12} /></a>
+        <>
+          <a href={provider.keysUrl} target="_blank" rel="noreferrer" className={`${settingsLink} mr-2 text-[14px]`}>{t('settings.providers.manageAccount')}<ExternalLink size={12} /></a>
+          {/* another account: this one disconnected, and its website asked again (where "Use another account" is) */}
+          <SettingsButton variant="quiet" disabled={busy} onClick={() => void hook.removeKey(provider.id).then(() => hook.signIn(provider.id))}>
+            {t('settings.providers.switchAccount')}
+          </SettingsButton>
+        </>
       ) : null}
       {keyWanted && !adding ? <SettingsButton variant="quiet" onClick={() => setAdding(true)}>{t('settings.providers.addKey')}</SettingsButton> : null}
       <SettingsButton variant="quiet" disabled={busy} onClick={() => void hook.removeKey(provider.id)}>{t('settings.providers.disconnect')}</SettingsButton>

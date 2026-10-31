@@ -2259,6 +2259,7 @@ export const es: Words = {
       useEnv: 'Usar la clave de ${env}',
       signingIn: 'Termina de iniciar sesión en tu navegador…',
       manageAccount: 'Tu cuenta',
+      switchAccount: 'Cambiar de cuenta',
       keyless: 'Funciona sin clave: las búsquedas de tu agente y las direcciones que lee se envían a {name}. Una clave amplía sus límites.',
       addKey: 'Añadir una clave',
       own: {

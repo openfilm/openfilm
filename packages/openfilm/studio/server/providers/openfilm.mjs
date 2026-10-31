@@ -1,7 +1,7 @@
 // @ts-check
 /**
- * OpenFilm, connected by signing in to the person's OpenFilm account (`signIn`, sign-in.mjs; a key made at
- * openfilm.dev/account, or OPENFILM_API_KEY, works too): media made with other providers' models, run by OpenFilm's
+ * OpenFilm, connected by signing in to the person's OpenFilm account (`signIn`, sign-in.mjs: the computer gets a key
+ * of its own, which OPENFILM_API_KEY can also hold): media made with other providers' models, run by OpenFilm's
  * service with its keys and paid from the person's OpenFilm balance. What it offers is the service's to say
  * (`GET /v1/media/models`, read again every few minutes by `refresh`): only models it can run now, each
  * `<provider>/<its model>`, e.g. `elevenlabs/eleven_v4`. One run is one `POST /v1/media/run`: the verb, the model, the
@@ -104,7 +104,7 @@ export default {
   /* every model it runs takes MP3 speech, and it is the smallest to send */
   speechFormat: 'mp3',
   checkKey(key) {
-    if (!key.startsWith('ofk_')) throw new Error('An OpenFilm key starts with ofk_: make one at openfilm.dev/account.');
+    if (!key.startsWith('ofk_')) throw new Error('An OpenFilm key starts with ofk_: connect OpenFilm in Settings → Services instead.');
   },
   async run(verb, args, ctx) {
     const base = service();

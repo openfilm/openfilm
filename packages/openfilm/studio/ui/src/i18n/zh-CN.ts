@@ -2260,6 +2260,7 @@ export const zhCN: Words = {
       useEnv: '使用环境变量 ${env} 里的密钥',
       signingIn: '请在浏览器里完成登录…',
       manageAccount: '你的账户',
+      switchAccount: '切换账号',
       keyless: '无需密钥即可使用：你的智能体搜索的内容和读取的网址会发送给 {name}。添加密钥可提高用量上限。',
       addKey: '添加密钥',
       own: {
