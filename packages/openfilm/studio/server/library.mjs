@@ -10,6 +10,8 @@
  *                          look   a CSS `filter`, written into a clip's style
  *                          fade   one of Studio's transitions (ui lib/transitions), made of fades
  *   library/<id>/…       the things themselves
+ *   library/audio.json   more sounds and music, as index.json says its own (`audio/<sfx|music>/<name>.mp3`, each with its
+ *                        waveform beside it in waves/), the files published with the library rather than kept in git
  *   library/voices.json  the voices to speak a voice-over in: the ready-made voices of the voice-over services OpenFilm
  *                        offers, each with its service's own sample (voices/<service>/<voice>.m4a); made by
  *                        scripts/library-voices.mjs from those services' own lists
@@ -48,8 +50,26 @@ function read(name, empty) {
   return value;
 }
 
-/** The library's index as library/index.json has it. */
-export const libraryIndex = () => read('index.json', { version: 1, groups: {}, items: [] });
+/** @type {{ own: unknown, audio: unknown, index: unknown } | null} */
+let merged = null;
+
+/**
+ * The library's index: library/index.json, and the sounds and music of library/audio.json with it (their groups
+ * after its own, their things after its own).
+ */
+export function libraryIndex() {
+  const own = /** @type {{ version: number, groups: Record<string, unknown[]>, items: unknown[] }} */ (read('index.json', { version: 1, groups: {}, items: [] }));
+  const audio = /** @type {{ groups?: Record<string, { id: string }[]>, items?: unknown[] } | null} */ (read('audio.json', null));
+  if (!audio) return own;
+  if (merged?.own === own && merged.audio === audio) return merged.index;
+  const groups = { ...own.groups };
+  for (const [cat, list] of Object.entries(audio.groups ?? {})) {
+    const have = new Set((/** @type {{ id: string }[]} */ (groups[cat] ?? [])).map((g) => g.id));
+    groups[cat] = [...(groups[cat] ?? []), ...list.filter((g) => !have.has(g.id))];
+  }
+  merged = { own, audio, index: { ...own, groups, items: [...own.items, ...(audio.items ?? [])] } };
+  return merged.index;
+}
 
 /** The voices as library/voices.json has them: the services (each with its voice-over models) and their voices. */
 export const libraryVoices = () => read('voices.json', { version: 1, providers: [], voices: [] });

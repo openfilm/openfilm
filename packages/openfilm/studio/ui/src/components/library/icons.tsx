@@ -1,6 +1,6 @@
 /**
  * The assets drawer's category icons, drawn for OpenFilm: a 24 px grid, 1.6 px round strokes. The one shown (`on`)
- * fills its main shape faintly in its own color, so the shown category reads at a glance without a box behind it.
+ * fills its main shape in its own color, so the shown category reads at a glance without a box behind it.
  */
 import React from 'react';
 
@@ -81,7 +81,7 @@ export function CategoryIcon({ id, on, size = 22 }: { id: string; on: boolean; s
   if (!draw) return null;
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      {draw(on ? { fill: 'currentColor', fillOpacity: 0.22 } : {})}
+      {draw(on ? { fill: 'currentColor', fillOpacity: 0.4 } : {})}
     </svg>
   );
 }

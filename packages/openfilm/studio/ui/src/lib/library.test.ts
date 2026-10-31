@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cutTrack, cutsOf, fromLibrary, libraryDragItem, lookOf, onCut, withLook, type LibraryItem } from './library.ts';
+import { cutTrack, cutsOf, fromLibrary, libraryDragItem, lookOf, onCut, waveUrl, withLook, type LibraryItem } from './library.ts';
 
 const page: LibraryItem = { id: 'effects/snow', cat: 'effect', group: 'ambience', name: { en: 'Snow' }, kind: 'page', durationMs: 4000, src: 'snow.html' };
 const sound: LibraryItem = { id: 'sounds/whoosh.m4a', cat: 'sound', group: 'transition', name: { en: 'Whoosh' }, kind: 'sound', durationMs: 700 };
@@ -48,4 +48,9 @@ test('a project file came from the library when it is a page taken from it, or o
   assert.ok(!fromLibrary('assets/voice/whoosh.m4a', [page, sound]));
   assert.ok(!fromLibrary('assets/talk.mp4', [page, sound]));
   assert.ok(!fromLibrary('saved/mine/clip.html', [page, sound]));
+});
+
+test('a sound\'s waveform is beside it in waves/', () => {
+  assert.equal(waveUrl(sound), '/api/library/file?path=sounds%2Fwaves%2Fwhoosh.png');
+  assert.equal(waveUrl({ ...sound, id: 'audio/music/cozy-morning-3f2a1c.mp3', cat: 'music' }), '/api/library/file?path=audio%2Fmusic%2Fwaves%2Fcozy-morning-3f2a1c.png');
 });

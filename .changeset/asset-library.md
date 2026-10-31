@@ -7,3 +7,5 @@ The assets drawer has a library: its categories along the top (Media, Audio, Voi
 Voices lists the ready-made voices of ElevenLabs (Eleven v4), Inworld (TTS-2) and Cartesia (Sonic 3.6), as each service lists them, by service, language and gender. Click one to hear its sample; double-click it, press Enter or click its + to put it in the chat, and your agent makes the voice-over in it. A voice whose service is not connected yet says where to connect it.
 
 Media in the library is what came into the project, folded under Imported: its own media, and what it took from the library; then Saved. Sounds show their waveform across the row, lit as they play. One highlight color, the timeline's teal, in every pane.
+
+Sounds and Music hold about 5,400 sound effects and 1,200 pieces of music, each with its own name and group in five languages.

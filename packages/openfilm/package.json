@@ -46,6 +46,7 @@
     "skills",
     "library",
     "!library/voices",
+    "!library/audio",
     "examples-index",
     "src",
     "!src/*.test.mjs",

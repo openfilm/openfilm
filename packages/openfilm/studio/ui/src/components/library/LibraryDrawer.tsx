@@ -29,6 +29,9 @@ const CATEGORIES: Category[] = ['media', 'voice', 'sound', 'music', 'text', 'sti
 /** The side bar's starred line: a category's things the person starred ('' is all of it, else one of its groups). */
 const FAVORITES = STARRED;
 
+/* rows of a long list drawn at first, and more each time it is scrolled near its end */
+const PAGE = 80;
+
 /* the category shown, the line picked in each, and whether the library's own groups are folded, kept while the
    drawer closes and opens again */
 const SHOWN = { cat: 'media' as Category, group: {} as Partial<Record<Category, string>>, folded: false };
@@ -90,6 +93,9 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
     : (index?.groups[cat as LibraryCategory] ?? []).map((g) => ({ id: g.id, name: nameOf(g.name, lang) }));
   const askMusic = studioHost?.ask;
   const groupName = (id: string) => own.find((g) => g.id === id)?.name ?? '';
+  /* a long list (thousands of sounds) is drawn a page at a time, from its top again when what it lists changes */
+  const [drawn, setDrawn] = React.useState(PAGE);
+  React.useEffect(() => setDrawn(PAGE), [cat, group, query]);
 
   /* the bars and the library's things are the app's panel's (data-studio-host-panel): a press there keeps what is
      picked on the timeline and the picture, which a look or a transition goes on */
@@ -109,8 +115,10 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
               type="button"
               onClick={() => show(id)}
               aria-pressed={cat === id}
-              className={`flex h-full min-w-[46px] shrink-0 flex-col items-center justify-center gap-px whitespace-nowrap px-2 text-[10.5px] font-medium leading-[13px] ${cat === id ? 'text-[var(--tl-accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
+              className={`relative flex h-full min-w-[46px] shrink-0 flex-col items-center justify-center gap-px whitespace-nowrap px-2 text-[10.5px] leading-[13px] ${cat === id ? 'font-semibold text-[var(--tl-accent)]' : 'font-medium text-[var(--text-muted)] hover:text-[var(--text)]'}`}
             >
+              {/* the one shown: its color, its icon filled, and a line under it */}
+              {cat === id ? <span aria-hidden className="absolute inset-x-2 bottom-0 h-[2px] rounded-full bg-[var(--tl-accent)]" /> : null}
               <CategoryIcon id={id} on={cat === id} size={18} />
               {t(`assetDrawer.cat_${id}`)}
             </button>
@@ -167,7 +175,11 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
               </div>
               {cat === 'voice' ? <VoicesPane group={group} query={query} favorites={favorites} onServices={onServices} onAll={() => pickGroup('')} /> : (
               /* a click on nothing lets the picked thing go */
-              <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-0.5" onClick={(e) => { if (e.target === e.currentTarget) pick(null); }}>
+              <div
+                className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-0.5"
+                onClick={(e) => { if (e.target === e.currentTarget) pick(null); }}
+                onScroll={(e) => { const el = e.currentTarget; if (el.scrollTop + el.clientHeight > el.scrollHeight - 800 && drawn < items.length) setDrawn(drawn + PAGE); }}
+              >
                 {!items.length ? (
                   q ? <Empty icon="search" text={t('assetDrawer.nothing').replace('{q}', query.trim())} />
                     : group === FAVORITES ? <Empty icon="star" text={t('assetDrawer.noFavorites')} action={t('assetDrawer.seeAll')} onAction={() => pickGroup('')} />
@@ -176,7 +188,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
                         : null
                 ) : cat === 'sound' || cat === 'music' ? (
                   <div className="flex flex-col gap-0.5">
-                    {items.map((it) => (
+                    {items.slice(0, drawn).map((it) => (
                       <SoundRow key={it.id} item={it} lang={lang} group={groupName(it.group)} picked={picked === it.id} kept={favorites.includes(it.id)}
                         onPick={() => pick(it)} onAdd={() => actions.add(it)} />
                     ))}
@@ -352,6 +364,13 @@ function Card({ item, lang, picked, kept, square, onPick, onAdd }: {
   );
 }
 
+/** A sound's length as the list says it: seconds under a minute (0.7 s), else minutes and seconds (1:04). */
+function lengthOf(ms: number, t: (path: string) => string): string {
+  if (ms < 60_000) return t('assetDrawer.seconds').replace('{s}', String(Math.round(ms / 100) / 10));
+  const s = Math.round(ms / 1000);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
 /* the sound playing in the drawer: one at a time */
 let playingSound: HTMLAudioElement | null = null;
 
@@ -425,7 +444,7 @@ function SoundRow({ item, lang, group, picked, kept, onPick, onAdd }: {
           <span className={`truncate text-[12.5px] font-medium ${picked || playing ? 'text-[var(--tl-accent)]' : 'text-[var(--text)]'}`}>{name}</span>
           <span className="shrink-0 text-[11px] text-[var(--text-faint)]">{group}</span>
           <span className="ml-auto shrink-0 text-[11px] tabular-nums text-[var(--text-faint)] group-hover:hidden">
-            {t('assetDrawer.seconds').replace('{s}', String(Math.round((item.durationMs ?? 0) / 100) / 10))}
+            {lengthOf(item.durationMs ?? 0, t)}
           </span>
           <span className="ml-auto hidden shrink-0 items-center gap-1.5 group-hover:flex">
             <StarButton item={item} kept={kept} className={kept ? 'text-[#ffd35a]' : 'text-[var(--text-faint)] hover:text-[var(--text)]'} />

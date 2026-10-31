@@ -25,7 +25,9 @@ test('every thing of the library is there, named in each language, in a group of
       for (const f of ['poster.jpg', 'preview.mp4']) assert.ok(libraryFile(`${item.id}/${f}`), `${item.id}: ${f}`);
       if (about.clip.attrs?.['data-props']) assert.ok(Array.isArray(JSON.parse(about.clip.attrs['data-props'])));
     }
-    if (item.kind === 'sound') assert.ok(libraryFile(item.id), `${item.id}: the sound`);
+    /* its own sounds are in git; audio.json's are published with the library */
+    if (item.kind === 'sound' && item.id.startsWith('sounds/')) assert.ok(libraryFile(item.id), `${item.id}: the sound`);
+    if (item.kind === 'sound') assert.match(item.id, /^(sounds|audio\/(sfx|music))\/[\w.-]+\.(m4a|mp3)$/);
     if (item.kind === 'look') assert.match(item.filter, /^[a-z-]+\(.+\)$/);
     if (item.kind === 'fade') assert.ok(['dissolve', 'dip-black', 'dip-white'].includes(item.fade));
   }

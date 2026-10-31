@@ -77,12 +77,12 @@ export function builtInItem(path: string | null | undefined): LibraryItem | null
 
 /**
  * Whether a project file came from the library: a page taken from it (its bundle under `saved/openfilm/`, as the
- * server's takeSaved puts it), or one of its sounds, put in assets/ under its own name.
+ * server's takeSaved puts it), or one of its sounds or pieces of music, put in assets/ under its own name.
  */
 export function fromLibrary(path: string, items: readonly LibraryItem[] | null = index?.items ?? null): boolean {
   if (path.startsWith(`saved/${BUILT_IN}/`)) return true;
   const sound = /^assets\/([^/]+)$/.exec(path)?.[1];
-  return Boolean(sound && items?.some((item) => item.kind === 'sound' && item.id === `sounds/${sound}`));
+  return Boolean(sound && items?.some((item) => item.kind === 'sound' && item.id.endsWith(`/${sound}`)));
 }
 
 /** Its name in `lang`, else English. */
@@ -94,7 +94,8 @@ export const libraryUrl = (rel: string): string => `/api/library/file?path=${enc
 export const pageUrl = (item: LibraryItem): string => `/api/library/page?path=${encodeURIComponent(`${item.id}/files/${item.src ?? ''}`)}`;
 export const posterUrl = (item: LibraryItem): string => libraryUrl(`${item.id}/poster.jpg`);
 export const previewUrl = (item: LibraryItem): string => libraryUrl(`${item.id}/preview.mp4`);
-export const waveUrl = (item: LibraryItem): string => libraryUrl(`sounds/waves/${item.id.split('/').pop()!.replace(/\.[^.]+$/, '')}.png`);
+/** A sound's waveform, beside it in waves/ (`sounds/whoosh.m4a` → `sounds/waves/whoosh.png`). */
+export const waveUrl = (item: LibraryItem): string => libraryUrl(item.id.replace(/([^/]+)\.[^./]+$/, 'waves/$1.png'));
 
 /**
  * What a drag carries to the timeline (lib/resource-drag): a page or a sound its own page or file for the kind and the
