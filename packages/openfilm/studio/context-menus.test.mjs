@@ -56,6 +56,8 @@ test('a click only selects; a right click gives the whole menu, Reference first,
     /* a clip on the timeline: Reference, a line, then the rest, with what its bar had (Duplicate, Speed, Mute) */
     const video = page.locator('[data-block-id]').nth(1);
     await video.waitFor({ state: 'visible' });
+    /* its sound known: the file is probed (ffprobe) after the clip is drawn, and Mute is in the menu only once it is */
+    await video.locator('[data-audio-band="on"]').waitFor({ state: 'attached' });
     await video.click({ position: { x: 20, y: 10 } });
     await video.click({ button: 'right', position: { x: 20, y: 10 } });
     await until(async () => (await menu())?.length, 'the clip menu opens');

@@ -21,6 +21,8 @@
  *                                         refreshes, late]
  *            { type: 'updated', seq, inPlace, duration, sounds, spans }   (inPlace false: load the page again)
  *            { type: 'spans', spans }             a page opened for the first time said its own length and size
+ *            { type: 'shown' }                    a page that came on is shown (its first frame drawn): it is in the
+ *                                         picture only now, and an editor that lists what shows reads it again
  *            { type: 'picked', seq, target }      (null: nothing there)
  *            { type: 'error', message }           the film or a page failed
  *
@@ -65,7 +67,10 @@
       await f.ready;
       up = f;
       post({ type: 'ready', ...facts(f), origin: performance.timeOrigin });
-      if (editor()) editor().learned = () => post({ type: 'spans', spans: facts(f).spans });
+      if (editor()) {
+        editor().learned = () => post({ type: 'spans', spans: facts(f).spans });
+        editor().appeared = () => post({ type: 'shown' });
+      }
       return f;
     } catch (e) { fail(e); return null; }
   });
