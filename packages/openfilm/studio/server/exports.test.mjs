@@ -316,9 +316,17 @@ test('a cancelled export stops and leaves no file, and a bad ask is refused befo
   for (const bad of [{ kind: 'pdf' }, { kind: 'video', range: [3, 1] }, { kind: 'video', codec: 'av1' }, { kind: 'video', frame: '9:1' }, { kind: 'video', frame: 'wide' },
     { kind: 'audio', mix: false }, { kind: 'stills', range: [0, 1] }, { kind: 'stills', as: 'pdf' }, { kind: 'gif', width: 5000 }, { kind: 'subtitles', format: 'ass' },
     { kind: 'slides', format: 'key' }, { kind: 'slides', range: [0, 1] }, { kind: 'nle', fps: 500 }, { kind: 'nle', audio: 'mix' }, { kind: 'nle', range: [0, 1] },
-    { kind: 'nle', format: 'fcpxml', alpha: 'png' }, { kind: 'nle', alpha: 'auto' }, { kind: 'nle', format: 'jianying', alpha: 'hevc_alpha' }, { kind: 'nle', format: 'jianying', alpha: 'prores4444' }]) {
+    { kind: 'video', loudness: -3 }, { kind: 'video', loudness: '-14' }, { kind: 'nle', format: 'fcpxml', alpha: 'png' }, { kind: 'nle', alpha: 'auto' }, { kind: 'nle', format: 'jianying', alpha: 'hevc_alpha' }, { kind: 'nle', format: 'jianying', alpha: 'prores4444' }]) {
     assert.throws(() => exports.start(project(), bad), ExportError, JSON.stringify(bad));
   }
+});
+
+test('a video exported at a loudness has its sound there, true peaks under -1 dBTP (render --loudness, #323)', ffmpeg, async () => {
+  const { loudnessOf } = await import('../../src/loudness.mjs');
+  const done = await exported({ kind: 'video', loudness: -23 }, 'Loud');
+  const { lufs, peak } = await loudnessOf(/** @type {string} */ (done.out));
+  assert.ok(Math.abs(lufs - -23) <= 0.5, `integrated loudness ${lufs}`);
+  assert.ok(peak <= -1, `true peak ${peak}`);
 });
 
 test('what an export Studio could not finish left behind goes before the next one; what a running Studio is making stays', ffmpeg, async () => {

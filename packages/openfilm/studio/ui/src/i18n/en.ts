@@ -384,6 +384,8 @@ export const en = {
     subtitles: 'Subtitles',
     burnIn: 'Burn subtitles into the picture',
     noSidecar: 'No file',
+    loudnessAsMixed: 'As mixed',
+    loudnessHint: 'The whole film brought to this loudness, true peaks under -1 dBTP. -14 for YouTube and streaming, -16 for podcasts, -23 for broadcast.',
     gifWidth: 'Size',
     gifHint: 'Tip: pick a range of a few seconds. A 10-second GIF at 640px is usually a few MB.',
     format: 'Format',

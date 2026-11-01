@@ -383,6 +383,8 @@ export const es: Words = {
     subtitles: 'Subtítulos',
     burnIn: 'Incrustar los subtítulos en la imagen',
     noSidecar: 'Sin archivo',
+    loudnessAsMixed: 'Como está mezclado',
+    loudnessHint: 'Toda la película a esta sonoridad, con picos reales por debajo de -1 dBTP. -14 para YouTube y streaming, -16 para pódcast, -23 para televisión.',
     gifWidth: 'Tamaño',
     gifHint: 'Consejo: elige un intervalo de pocos segundos. Un GIF de 10 segundos a 640 px suele ocupar unos pocos MB.',
     format: 'Formato',
