@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { FrameError, launch, SOFTWARE_GL } from './host.mjs';
+import { LOUDNESS_SLACK, TRUE_PEAK } from './loudness.mjs';
 import { blockDiff, checkSound, cutText, fileOf, ffmpeg, filmSound, fmt, hash, homeFor, mix, open, outDir, parseTarget, SAME_LIMIT, shown, shuffled, spread, UsageError } from './shared.mjs';
 
 const MEDIA = /\.(mp4|mov|m4v|webm|mkv|avi|png|jpe?g|webp|gif|mp3|wav|m4a|aac|ogg|flac)$/i;
@@ -125,6 +126,8 @@ export async function look(args, opts = {}) {
     }
     sounds.push(...listSounds(s, m, at != null ? [at, at] : range ?? [0, end], warnings));
     if (s.loudness) sounds.push(s.loudness);
+    /* --loudness: how far the mix is from the target a render or an export would bring it to */
+    if (opts.loudness != null && s.mixLoudness) sounds.push(`♪ target  ${towards(s.mixLoudness, opts.loudness)}`);
   }
 
   /* every web page drawn in this frame, checked for text a viewer cannot read whole */
@@ -253,6 +256,17 @@ function listSounds(s, m, [a, b], warnings) {
   return lines;
 }
 
+/**
+ * How far a mix's loudness is from `target` LUFS and the true-peak ceiling, and what brings it there.
+ * @param {{ lufs: number, peak: number }} mix @param {number} target
+ */
+function towards(mix, target) {
+  const off = mix.lufs - target;
+  const level = Math.abs(off) <= LOUDNESS_SLACK ? `on ${target} LUFS` : `${Math.abs(off).toFixed(1)} LU ${off > 0 ? 'above' : 'below'} ${target} LUFS`;
+  const peak = mix.peak > TRUE_PEAK ? `, true peak ${(mix.peak - TRUE_PEAK).toFixed(1)} dB over ${TRUE_PEAK} dBTP` : '';
+  return `${level}${peak}${level.startsWith('on') && !peak ? '' : `: render --loudness=${target} (or the export's loudness) brings it there`}`;
+}
+
 /** The mix of [from, to) as a PNG waveform, or null when the film has no sound. */
 async function waveform(s, from, to) {
   const clips = await filmSound(s, from);
@@ -268,6 +282,7 @@ async function waveform(s, from, to) {
     const lufs = /I:\s*(-?[\d.]+) LUFS/.exec(meter.slice(meter.lastIndexOf('Summary')))?.[1];
     const peak = /Peak:\s*(-?[\d.]+|-inf) dBFS/.exec(meter.slice(meter.lastIndexOf('Summary')))?.[1];
     if (lufs) s.loudness = `♪ mix     ${lufs} LUFS integrated${peak ? ` · true peak ${peak} dBTP` : ''}`;
+    if (lufs) s.mixLoudness = { lufs: Number(lufs), peak: peak && peak !== '-inf' ? Number(peak) : -Infinity };
     return readFileSync(png);
   } finally {
     rmSync(wav, { force: true });
