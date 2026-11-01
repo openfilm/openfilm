@@ -10,7 +10,7 @@ export const ko: Words = {
     desktop: '데스크톱',
   },
   /* the projects the app window has open (ProjectSwitcher), a new tab's launcher, and the examples (ExamplesGallery) */
-  switcher: { label: '프로젝트 전환', open: '열린 프로젝트', recent: '최근', all: '모든 프로젝트…', close: '닫기', working: '작업 중', asking: '답변 대기 중', exporting: '내보내는 중 {n}%', cover: '표지로 설정', reveal: '폴더 보기' },
+  switcher: { oneClip: '클립 1개', clips: '클립 {n}개', label: '프로젝트 전환', open: '다른 열린 프로젝트', all: '모든 프로젝트…', close: '닫기', working: '작업 중', asking: '답변 대기 중', exporting: '내보내는 중 {n}%', cover: '현재 프레임을 표지로 설정', reveal: '폴더 보기' },
   launcher: { projects: '내 프로젝트', examples: '예시' },
   gallery: {
     chooseCover: "표지 선택",
@@ -180,7 +180,7 @@ export const ko: Words = {
     moveToFolder: '폴더로 이동',
     changeCover: '커버 변경…',
     restoreCover: '자동 커버로 되돌리기',
-    coverFromFrame: '현재 화면을 커버로 설정',
+    coverFromFrame: '현재 프레임을 표지로 설정',
     setAsCover: '프로젝트 커버로 설정',
     coverSet: '커버를 설정했습니다',
     coverFailed: '커버로 사용할 수 없습니다.',
@@ -1105,6 +1105,21 @@ export const ko: Words = {
     speed: '재생 속도',
   },
   inspector: {
+    workspace: {
+      categories: "속성 분류",
+      source: "원본",
+      tabs: {
+        text: "텍스트",
+        wordart: "꾸밈 글자",
+        motion: "애니메이션",
+        properties: "속성",
+        adjust: "조정",
+        effects: "효과",
+        sound: "오디오",
+        advanced: "고급",
+        info: "정보",
+      },
+    },
     fades: '페이드',
     fadeIn: '페이드 인',
     fadeOut: '페이드 아웃',
@@ -2309,6 +2324,7 @@ export const ko: Words = {
       balanceNote: '{name} 잔액에서 결제됩니다. 이 컴퓨터에서 한 번 로그인하면 여기 있는 모든 모델을 쓸 수 있습니다.',
       connect: '연결',
       disconnect: '연결 해제',
+      account: '계정 보기',
       connected: '연결됨',
       keyNote: '내 키로 서비스에 직접 결제합니다. 키는 이 컴퓨터에만 저장되며 해당 서비스로만 전송됩니다.',
       getKey: '{name} 키 받기',
@@ -2324,7 +2340,6 @@ export const ko: Words = {
       keyless: '키 없이 사용할 수 있습니다. 에이전트의 검색어와 읽는 주소는 {name}(으)로 전송됩니다. 키를 추가하면 한도가 늘어납니다.',
       addKey: '키 추가',
       own: {
-      account: '계정 보기',
         title: "사용자 지정 서비스",
         note: "위 목록에 없는 서비스를 개수 제한 없이 추가할 수 있습니다. 이 컴퓨터에서 실행하는 것이든 온라인이든 괜찮습니다(내 목소리, 음성 인식 서버, 목록에 없는 API 등). 인터페이스는 자유입니다. OpenFilm이 직접 호출하지는 않습니다. 에이전트가 설명을 읽고 호출하며, 키는 이 컴퓨터에 남고 에이전트에게는 보이지 않습니다. 여기에 추가하지 않고 채팅에서 에이전트에게 알려 줄 수도 있습니다. 키가 필요한 서비스는 여기에 추가하면 키가 대화에 나오지 않습니다.",
         add: "사용자 지정 서비스 추가",

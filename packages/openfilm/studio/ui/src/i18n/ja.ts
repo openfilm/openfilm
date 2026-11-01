@@ -13,7 +13,7 @@ export const ja: Words = {
     desktop: 'デスクトップ版',
   },
   /* the projects the app window has open (ProjectSwitcher), a new tab's launcher, and the examples (ExamplesGallery) */
-  switcher: { label: 'プロジェクトを切り替え', open: '開いている', recent: '最近', all: 'すべてのプロジェクト…', close: '閉じる', working: '作業中', asking: '回答待ち', exporting: '書き出し中 {n}%', cover: '表紙にする', reveal: 'フォルダを表示' },
+  switcher: { oneClip: '1 クリップ', clips: '{n} クリップ', label: 'プロジェクトを切り替え', open: 'ほかの開いているプロジェクト', all: 'すべてのプロジェクト…', close: '閉じる', working: '作業中', asking: '回答待ち', exporting: '書き出し中 {n}%', cover: '現在のフレームを表紙に', reveal: 'フォルダを表示' },
   launcher: { projects: 'プロジェクト', examples: 'サンプル' },
   gallery: {
     chooseCover: "カバーを選択",
@@ -183,7 +183,7 @@ export const ja: Words = {
     moveToFolder: 'フォルダーへ移動',
     changeCover: 'カバーを変更…',
     restoreCover: '自動のカバーに戻す',
-    coverFromFrame: '現在のフレームをカバーにする',
+    coverFromFrame: '現在のフレームを表紙に',
     setAsCover: 'プロジェクトのカバーにする',
     coverSet: 'カバーを設定しました',
     coverFailed: 'カバーにできませんでした。',
@@ -1108,6 +1108,21 @@ export const ja: Words = {
     speed: '再生速度',
   },
   inspector: {
+    workspace: {
+      categories: "プロパティの分類",
+      source: "素材",
+      tabs: {
+        text: "テキスト",
+        wordart: "デコ文字",
+        motion: "アニメ",
+        properties: "属性",
+        adjust: "調整",
+        effects: "エフェクト",
+        sound: "音声",
+        advanced: "詳細",
+        info: "情報",
+      },
+    },
     fades: 'フェード',
     fadeIn: 'フェードイン',
     fadeOut: 'フェードアウト',
@@ -2313,6 +2328,7 @@ export const ja: Words = {
       balanceNote: '{name} の残高から支払われます。このコンピュータで一度サインインすれば、ここにあるモデルをすべて使えます。',
       connect: '接続',
       disconnect: '接続を解除',
+      account: 'アカウントを見る',
       connected: '接続済み',
       keyNote: 'キーはサービスに直接支払います。キーはこのコンピューターに保存され、そのサービス以外には送信されません。',
       getKey: '{name} のキーを取得',
@@ -2328,7 +2344,6 @@ export const ja: Words = {
       keyless: 'キーなしで使えます。エージェントの検索内容と読み込むアドレスは {name} に送られます。キーを追加すると上限が上がります。',
       addKey: 'キーを追加',
       own: {
-      account: 'アカウントを見る',
         title: "カスタムサービス",
         note: "上に一覧にないサービスをいくつでも追加できます。このコンピュータで動かしているものでもオンラインのものでも構いません（自分の声、文字起こしサーバー、一覧にない API など）。インターフェースは自由です。OpenFilm 自体は呼び出しません。エージェントが説明を読んで呼び出し、キーはこのコンピュータに残り、エージェントからは見えません。ここに追加せず、チャットでエージェントに伝えることもできます。キーが必要なサービスはここに追加すると、キーが会話に出ません。",
         add: "カスタムサービスを追加",

@@ -13,7 +13,7 @@ export const es: Words = {
     desktop: 'Escritorio',
   },
   /* the projects the app window has open (ProjectSwitcher), a new tab's launcher, and the examples (ExamplesGallery) */
-  switcher: { label: 'Cambiar de proyecto', open: 'Abiertos', recent: 'Recientes', all: 'Todos los proyectos…', close: 'Cerrar', working: 'Trabajando', asking: 'Esperando tu respuesta', exporting: 'Exportando {n}%', cover: 'Usar de portada', reveal: 'Mostrar carpeta' },
+  switcher: { oneClip: '1 clip', clips: '{n} clips', label: 'Cambiar de proyecto', open: 'Otros proyectos abiertos', all: 'Todos los proyectos…', close: 'Cerrar', working: 'Trabajando', asking: 'Esperando tu respuesta', exporting: 'Exportando {n}%', cover: 'Usar fotograma actual de portada', reveal: 'Mostrar carpeta' },
   launcher: { projects: 'Proyectos', examples: 'Ejemplos' },
   gallery: {
     chooseCover: "Elegir portada",
@@ -183,7 +183,7 @@ export const es: Words = {
     moveToFolder: 'Mover a carpeta',
     changeCover: 'Cambiar portada…',
     restoreCover: 'Usar la portada automática',
-    coverFromFrame: 'Usar este fotograma como portada',
+    coverFromFrame: 'Usar fotograma actual de portada',
     setAsCover: 'Usar como portada del proyecto',
     coverSet: 'Portada establecida',
     coverFailed: 'No se pudo usar como portada.',
@@ -1108,6 +1108,21 @@ export const es: Words = {
     speed: 'Velocidad',
   },
   inspector: {
+    workspace: {
+      categories: "Categorías de propiedades",
+      source: "Origen",
+      tabs: {
+        text: "Texto",
+        wordart: "Arte",
+        motion: "Movimiento",
+        properties: "Propiedades",
+        adjust: "Ajustes",
+        effects: "Efectos",
+        sound: "Audio",
+        advanced: "Avanzado",
+        info: "Info.",
+      },
+    },
     fades: 'Fundidos',
     fadeIn: 'Fundido de entrada',
     fadeOut: 'Fundido de salida',
@@ -2313,6 +2328,7 @@ export const es: Words = {
       balanceNote: 'Se paga con tu saldo de {name}: inicia sesión una vez en este ordenador y podrás usar todos estos modelos.',
       connect: 'Conectar',
       disconnect: 'Desconectar',
+      account: 'Ver cuenta',
       connected: 'Conectado',
       keyNote: 'Tu clave paga directamente al servicio. Se queda en este equipo y solo se envía a su propio servicio.',
       getKey: 'Obtener una clave de {name}',
@@ -2328,7 +2344,6 @@ export const es: Words = {
       keyless: 'Funciona sin clave: las búsquedas de tu agente y las direcciones que lee se envían a {name}. Una clave amplía sus límites.',
       addKey: 'Añadir una clave',
       own: {
-      account: 'Ver cuenta',
         title: "Servicios personalizados",
         note: "Servicios que no están arriba, tantos como quieras: uno que ejecutes en este ordenador o uno en línea (tu propia voz, un servidor de transcripción, una API que no está en la lista), con cualquier interfaz. OpenFilm no los llama por sí mismo: tu agente lee tu descripción y los llama, y sus claves se quedan en este ordenador, fuera de la vista del agente. También puedes hablarle de un servicio en el chat; si necesita clave, añádelo aquí para que la clave no aparezca en la conversación.",
         add: "Añadir un servicio personalizado",

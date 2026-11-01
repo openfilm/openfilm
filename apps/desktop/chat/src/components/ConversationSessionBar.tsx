@@ -1,15 +1,16 @@
 'use client';
 
 import React from 'react';
-import { Archive, ArchiveRestore, ChevronDown, ChevronRight, Pencil, Pin, PinOff, Plus, Search } from 'lucide-react';
+import { Archive, ArchiveRestore, ChevronDown, ChevronRight, MessageCircle, Pencil, Pin, PinOff, Plus, Search } from 'lucide-react';
 import { limitTitleWidth, SESSION_TITLE_MAX_WIDTH } from '@openfilm/shared';
 import { Popover, keepFocus } from './Popover';
 import { Tooltip } from './Tooltip';
 import { useT } from '@/i18n';
 import type { ProjectSessionItem } from '@/lib/project-sessions';
 import { useLocalAgentTurn } from '@/lib/local-agent-run';
-import { useHoverOpen } from 'openfilm/studio-ui/lib/hover-open.ts';
 import { PANE_BAR, PANE_TITLE } from './dock-pane-bar';
+import { useHoverOpen } from 'openfilm/studio-ui/lib/hover-open.ts';
+import menu from 'openfilm/studio-ui/components/WorkspaceMenu.module.css';
 
 /** What a conversation's menus do: rename, pin, archive. */
 interface SessionActions {
@@ -19,9 +20,10 @@ interface SessionActions {
 }
 
 /** A title being renamed, in place: Enter or leaving keeps it, Esc lets it go (`onDone(null)`). */
-function TitleInput({ initial, width, placeholder, className, onDone }: {
-  initial: string; width?: number | null; placeholder?: string; className: string; onDone: (title: string | null) => void;
+function TitleInput({ initial, placeholder, className, onDone }: {
+  initial: string; placeholder?: string; className: string; onDone: (title: string | null) => void;
 }) {
+  const t = useT();
   const [draft, setDraft] = React.useState(initial);
   const done = React.useRef(false);
   const finish = (title: string | null) => {
@@ -33,6 +35,7 @@ function TitleInput({ initial, width, placeholder, className, onDone }: {
   return (
     <input
       autoFocus
+      aria-label={t('projectMenu.rename')}
       value={draft}
       onFocus={(event) => event.currentTarget.select()}
       onChange={(event) => {
@@ -42,11 +45,13 @@ function TitleInput({ initial, width, placeholder, className, onDone }: {
       onCompositionEnd={(event) => setDraft(limitTitleWidth(event.currentTarget.value, SESSION_TITLE_MAX_WIDTH))}
       onBlur={() => finish(draft)}
       onKeyDown={(event) => {
-        if (event.key === 'Enter') finish(draft);
-        if (event.key === 'Escape') finish(null);
+        if (event.nativeEvent.isComposing) return;
+        if (event.key === 'Enter' || event.key === 'Escape') {
+          event.preventDefault(); event.stopPropagation();
+          finish(event.key === 'Enter' ? draft : null);
+        }
       }}
       placeholder={placeholder}
-      style={width ? { width } : undefined}
       className={className}
     />
   );
@@ -86,13 +91,7 @@ const LIGHT: Record<SessionStatus, string> = {
   error: 'bg-[#ef4444]',
 };
 
-/**
- * The bar at the top of the conversation: the one shown, named as the project is in the top bar, with its card while
- * the pointer rests on the name (a click keeps it; openfilm/studio-ui/lib/hover-open): New Agent, what can be done to
- * this one (rename, pin, archive), and the project's conversations, searched, each with its light (StatusLight). Any
- * of them may be at work at once; the name has the light of another while one works, waits or ended unseen. A double
- * click on the name renames it. New on a conversation where nothing was said yet makes no other: a word says so.
- */
+/** The conversation's hover card keeps its actions, search and history; double clicking renames in place. */
 export function ConversationBar({
   sessions,
   currentSessionId,
@@ -106,12 +105,9 @@ export function ConversationBar({
 }: SessionActions & {
   sessions: ProjectSessionItem[];
   currentSessionId: string;
-  /** the conversations whose turn runs now, and that turn */
   running: Map<string, string>;
-  /** the conversations that stopped while another was shown, and how, until they are shown */
   unseen: Map<string, 'done' | 'error'>;
   onSelectSession: (sessionId: string) => void;
-  /** false: the one shown is new already, and no other was made */
   onNewSession: () => boolean;
 }) {
   const t = useT();
@@ -121,95 +117,75 @@ export function ConversationBar({
   const label = current?.title.trim() || untitled;
   const said = Boolean(current?.turns);
   const [renaming, setRenaming] = React.useState(false);
-  React.useEffect(() => { setRenaming(false); }, [currentSessionId]);
-  /* New on a new conversation: said for a moment, under it */
+  React.useEffect(() => { setRenaming(false); hover.dismiss(); }, [currentSessionId, hover.dismiss]);
   const [alreadyNew, setAlreadyNew] = React.useState(false);
   React.useEffect(() => {
-    if (!alreadyNew) return undefined;
-    const done = setTimeout(() => setAlreadyNew(false), 1800);
-    return () => clearTimeout(done);
+    if (!alreadyNew) return;
+    const timer = setTimeout(() => setAlreadyNew(false), 1800);
+    return () => clearTimeout(timer);
   }, [alreadyNew]);
-  /* another conversation's light on the name: one at work (or waiting) first, else one that ended unseen */
   const otherRunning = [...running].find(([id]) => id !== currentSessionId)?.[1] ?? null;
   const otherUnseen = [...unseen].find(([id]) => id !== currentSessionId)?.[1];
-  const go = (run: () => void) => { hover.setOpen(false); run(); };
-  const action = 'flex h-7 items-center gap-1.5 rounded-md px-2 text-[12px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:pointer-events-none disabled:opacity-40';
+  const go = (run: () => void) => { hover.dismiss(); run(); };
 
   return (
     <div className={PANE_BAR}>
-      {renaming ? (
-        <TitleInput
-          initial={current?.title.trim() ?? ''}
-          placeholder={untitled}
-          onDone={(title) => { setRenaming(false); if (title) onRenameSession?.(currentSessionId, title); }}
-          className={`${PANE_TITLE} box-border h-[22px] w-[15rem] max-w-full bg-transparent px-1.5 text-[var(--text)] outline-none`}
-        />
-      ) : (
-        <Popover
-          open={hover.open}
-          onOpenChange={hover.setOpen}
+      <div data-conversation-title className="relative inline-flex min-w-0 max-w-full">
+        <Popover open={hover.open && !renaming} onOpenChange={(next) => { if (next) hover.setOpen(true); else hover.dismiss(); }} bare
           trigger={(
-            <button
-              type="button"
-              aria-haspopup="dialog"
-              aria-expanded={hover.open}
-              {...hover.trigger}
-              onDoubleClick={() => { if (onRenameSession) { hover.setOpen(false); setRenaming(true); } }}
-              className={`flex h-[22px] min-w-0 max-w-[16rem] items-center gap-1.5 rounded-md px-1.5 transition hover:bg-[var(--bg-hover)] ${hover.open ? 'bg-[var(--bg-hover)]' : ''}`}
+            <button {...hover.trigger} type="button" aria-haspopup="dialog" aria-expanded={hover.open && !renaming}
+              aria-hidden={renaming || undefined} tabIndex={renaming ? -1 : undefined}
+              onClick={(event) => { event.stopPropagation(); hover.toggle(); }}
+              onDoubleClick={() => { if (onRenameSession) { hover.dismiss(); setRenaming(true); } }}
+              className={`flex h-[22px] min-w-0 max-w-[16rem] items-center gap-1.5 rounded px-1.5 outline-none transition-colors hover:bg-[var(--bg-hover)] focus-visible:shadow-[inset_0_0_0_1px_var(--accent)] ${renaming ? 'invisible' : ''}`}
             >
-              <span title={label} className={`${PANE_TITLE} ${current?.title.trim() ? '' : 'text-[var(--text-faint)]'}`}>{label}</span>
+              <span className={`${PANE_TITLE} ${current?.title.trim() ? '' : 'text-[var(--text-faint)]'}`}>{label}</span>
               {otherRunning || otherUnseen ? <StatusLight turnId={otherRunning} unseen={otherUnseen} /> : null}
-              <ChevronDown size={13} className="shrink-0 text-[var(--text-faint)]" />
+              <ChevronDown size={12} className="shrink-0 text-[var(--text-faint)]" />
             </button>
           )}
         >
-          <div {...hover.card} className="flex w-[320px] flex-col">
-            <div className="p-1">
-              <button type="button" onClick={() => { if (onNewSession()) hover.setOpen(false); else setAlreadyNew(true); }}
-                className="flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] text-[var(--text)] transition hover:bg-[var(--bg-hover)]">
-                <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-[var(--bg-hover)]"><Plus size={12} strokeWidth={2} /></span>
-                <span className="min-w-0 flex-1 truncate">{t('projectMenu.newSession')}</span>
-                {alreadyNew ? <span role="status" className="shrink-0 text-[11.5px] text-[var(--text-faint)]">{t('project.alreadyNew')}</span> : null}
-              </button>
-            </div>
+          <div {...hover.card} data-conversation-menu role="dialog" aria-label={t('project.sessionHistory')} className={menu.menu}>
             {said ? (
-              <div className="flex flex-wrap gap-0.5 border-t border-[var(--border)] px-1.5 py-1">
-                {onRenameSession ? <button type="button" className={action} onClick={() => go(() => setRenaming(true))}><Pencil size={13} />{t('projectMenu.rename')}</button> : null}
-                {onPinSession ? (
-                  <button type="button" className={action} onClick={() => onPinSession(currentSessionId, !current?.pinned)}>
-                    {current?.pinned ? <PinOff size={13} /> : <Pin size={13} />}{t(current?.pinned ? 'projectMenu.unpin' : 'projectMenu.pin')}
-                  </button>
-                ) : null}
-                {onArchiveSession ? (
-                  <button type="button" className={action} disabled={running.has(currentSessionId) && !current?.archived}
+              <div className={menu.currentGroup} role="group" aria-label={t('project.currentSession')}>
+                <div className={menu.actions}>
+                  {onRenameSession ? <button type="button" className={menu.action} onClick={() => go(() => setRenaming(true))}><Pencil size={12} /><span>{t('projectMenu.rename')}</span></button> : null}
+                  {onPinSession ? <button type="button" className={menu.action} onClick={() => onPinSession(currentSessionId, !current?.pinned)}>
+                    {current?.pinned ? <PinOff size={12} /> : <Pin size={12} />}<span>{t(current?.pinned ? 'projectMenu.unpin' : 'projectMenu.pin')}</span>
+                  </button> : null}
+                  {onArchiveSession ? <button type="button" className={menu.action} disabled={running.has(currentSessionId) && !current?.archived}
                     onClick={() => go(() => onArchiveSession(currentSessionId, !current?.archived))}>
-                    {current?.archived ? <ArchiveRestore size={13} /> : <Archive size={13} />}{t(current?.archived ? 'projectMenu.unarchive' : 'projectMenu.archive')}
-                  </button>
-                ) : null}
+                    {current?.archived ? <ArchiveRestore size={12} /> : <Archive size={12} />}<span>{t(current?.archived ? 'projectMenu.unarchive' : 'projectMenu.archive')}</span>
+                  </button> : null}
+                </div>
               </div>
             ) : null}
-            <div className="border-t border-[var(--border)]">
-              <SessionHistory
-                sessions={sessions}
-                currentSessionId={currentSessionId}
-                running={running}
-                unseen={unseen}
-                onSelectSession={(id) => go(() => onSelectSession(id))}
-                onRenameSession={onRenameSession}
-                onPinSession={onPinSession}
-                onArchiveSession={onArchiveSession}
-              />
+            <div className={menu.chatHeader}>
+              <button type="button" onClick={() => { if (onNewSession()) hover.dismiss(); else setAlreadyNew(true); }} className={menu.newButton}>
+                <Plus size={13} strokeWidth={1.75} /><span>{t('projectMenu.newSession')}</span>
+              </button>
             </div>
+            {alreadyNew ? <div role="status" className={menu.notice}>{t('project.alreadyNew')}</div> : null}
+            <SessionHistory sessions={sessions} currentSessionId={currentSessionId} running={running} unseen={unseen}
+              onSelectSession={(id) => go(() => onSelectSession(id))}
+              onRenameSession={onRenameSession} onPinSession={onPinSession} onArchiveSession={onArchiveSession} />
           </div>
         </Popover>
-      )}
+        {/* Keep the hidden title's size while its input is in front of it. */}
+        {renaming ? (
+          <TitleInput initial={current?.title.trim() ?? ''} placeholder={untitled}
+            onDone={(title) => { setRenaming(false); if (title) onRenameSession?.(currentSessionId, title); }}
+            className={`${PANE_TITLE} absolute inset-0 box-border h-[22px] w-full bg-transparent py-0 pl-1.5 ${otherRunning || otherUnseen ? 'pr-[43px]' : 'pr-6'} leading-[18px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]`}
+          />
+        ) : null}
+      </div>
       <span className="min-w-0 flex-1" />
     </div>
   );
 }
 
 /** A conversation's own buttons in the history, on hover: pin, rename, archive. */
-const ROW_BTN = 'flex h-6 w-6 items-center justify-center rounded-md text-[var(--text-dim)] transition hover:bg-[var(--bg-active)] hover:text-[var(--text)] disabled:pointer-events-none disabled:opacity-40';
+const ROW_BTN = menu.iconButton;
 
 /** One conversation in the history: its title, a running one turning; on hover its buttons. */
 function SessionRow({ item, label, active, turnId, unseen, onSelect, onRenameSession, onPinSession, onArchiveSession }: SessionActions & {
@@ -218,27 +194,26 @@ function SessionRow({ item, label, active, turnId, unseen, onSelect, onRenameSes
   const running = Boolean(turnId);
   const t = useT();
   const [renaming, setRenaming] = React.useState(false);
+  const icon = item.pinned ? <Pin size={13} className={menu.rowIcon} /> : <MessageCircle size={13} className={menu.rowIcon} />;
   return (
-    <div className={`group flex h-8 min-w-0 items-center rounded-lg transition ${
-      active || renaming ? 'bg-[var(--bg-hover)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'
-    }`}>
+    <div className={`group ${menu.row} ${active ? menu.active : ''} ${renaming ? menu.editing : ''}`}>
       {renaming ? (
-        <TitleInput
+        <>{icon}<TitleInput
           initial={item.title.trim()}
           onDone={(title) => { setRenaming(false); if (title) onRenameSession?.(item.id, title); }}
-          className="mx-2 h-full min-w-0 flex-1 bg-transparent text-[13px] text-[var(--text)] outline-none"
-        />
+          className="h-full min-w-0 flex-1 bg-transparent text-[12px] text-[var(--text)] outline-none"
+        /></>
       ) : (
-        <button type="button" aria-current={active || undefined} title={label} onClick={onSelect}
-          className="flex h-full min-w-0 flex-1 items-center pl-2 text-left text-[13px]">
-          <span className="min-w-0 flex-1 truncate">{label}</span>
+        <button type="button" aria-current={active || undefined} onClick={onSelect}
+          className={menu.primary}>
+          {icon}<span className={menu.rowName}>{label}</span>
         </button>
       )}
       {turnId || unseen ? (
-        <span className="mr-2 flex shrink-0 group-hover:hidden"><StatusLight turnId={turnId} unseen={unseen} /></span>
+        <span className={menu.rowStatus}><StatusLight turnId={turnId} unseen={unseen} /></span>
       ) : null}
       {renaming ? null : (
-        <div className="mr-1 hidden shrink-0 items-center group-hover:flex">
+        <div className={menu.rowActions}>
           {onPinSession && !item.archived ? (
             <Tooltip label={t(item.pinned ? 'projectMenu.unpin' : 'projectMenu.pin')} side="bottom">
               <button type="button" aria-label={t(item.pinned ? 'projectMenu.unpin' : 'projectMenu.pin')} onMouseDown={keepFocus}
@@ -269,7 +244,7 @@ function SessionRow({ item, label, active, turnId, unseen, onSelect, onRenameSes
 }
 
 /**
- * The project's conversations, from the bar's clock: a search on top, then each that said something, pinned first, then
+ * The project's conversations: search, then each that said something, pinned first, then
  * the latest; those archived folded at the foot (opened by the search too). Picking one shows it, as a tab.
  */
 function SessionHistory({
@@ -306,26 +281,26 @@ function SessionHistory({
   );
 
   return (
-    <div className="flex flex-col p-1">
-      <label className="flex h-8 items-center gap-2 px-2 text-[13px] text-[var(--text)]">
+    <div className="flex min-h-0 flex-col">
+      <label className={menu.search}>
         <Search size={13} strokeWidth={1.75} className="shrink-0 text-[var(--text-faint)]" />
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder={t('project.sessionSearchPlaceholder')}
+          aria-label={t('project.sessionSearchPlaceholder')}
           className="min-w-0 flex-1 bg-transparent text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]"
         />
       </label>
-      <div className="max-h-[360px] overflow-y-auto">
-        {live.length ? live.map(row) : (
-          <div className="flex h-8 items-center justify-center text-[12.5px] text-[var(--text-faint)]">{t('project.sessionHistoryEmpty')}</div>
-        )}
+      <div className={menu.history}>
+        {live.map(row)}
+        {!listed.length ? <div className={menu.empty}><MessageCircle size={20} strokeWidth={1.5} /><span>{t(needle ? 'project.sessionHistoryEmpty' : 'project.sessionHistoryNoChats')}</span></div> : null}
         {archived.length ? (
           <>
             <button type="button" aria-expanded={showArchived} onClick={() => setArchivedOpen((open) => !open)}
-              className="flex h-8 w-full items-center gap-1.5 rounded-lg px-2 text-left text-[13px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+              className={`${menu.row} ${menu.archivedToggle}`}>
               <ChevronRight size={13} className={`shrink-0 transition ${showArchived ? 'rotate-90' : ''}`} />
-              {t('projectMenu.archived')}
+              <span className={menu.rowName}>{t('projectMenu.archived')}</span><span className="text-[11px] text-[var(--text-faint)]">{archived.length}</span>
             </button>
             {showArchived ? archived.map(row) : null}
           </>

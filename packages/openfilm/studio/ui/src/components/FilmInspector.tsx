@@ -3,8 +3,8 @@
  *
  * One property model wherever a thing is: a whole clip on the timeline (a video, a still, a page), a layer inside a
  * page on the picture, several of either, and the film itself when nothing is selected. The same sections in the
- * same order, by how often they are used — position and size, crop and fill, appearance, adjustments, effects,
- * timing, sound, and the raw CSS folded away under Advanced — each with the same controls (inspector-fields) over
+ * task categories — position and size, crop and fill, appearance, adjustments, effects,
+ * timing, sound, and the raw CSS under Advanced — each with the same controls (inspector-fields) over
  * the same standard CSS (inspector-look, lib/clip-look). What is written is a clip's `style` (film.html), a layer's
  * override (`overrides`), or a clip's own attributes (`at`, `src`'s fragment, `speed`, `volume`, `class`): nothing
  * film.html does not already say.
@@ -17,9 +17,9 @@
 import * as React from 'react';
 import {
   AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignHorizontalDistributeCenter,
-  AlignStartHorizontal, AlignStartVertical, AlignVerticalDistributeCenter, ArrowRightToLine, AudioLines, Captions,
-  Check, ChevronRight, CircleAlert, Clapperboard, Copy, Diamond, Film, Gauge, Image as ImageIcon, Link2, Maximize2, MousePointerClick,
-  Lock, MoveHorizontal, Music, Replace, RotateCcw, Scissors, Shapes, Sparkles, Square, Type, Unlink2, Video, Volume2, X,
+  AlignStartHorizontal, AlignStartVertical, AlignVerticalDistributeCenter, ArrowRightToLine,
+  Check, CircleAlert, Copy, Diamond, Gauge, Link2, Maximize2, MousePointerClick,
+  MoveHorizontal, Replace, RotateCcw, Scissors, Sparkles, Unlink2, X,
 } from 'lucide-react';
 
 import {
@@ -45,7 +45,6 @@ import { CANVAS_SIDE, canvasSide, originalShape, shaped } from '@/lib/canvas-fit
 import { filmFrameOf, filmFrameRatio, type FilmFrameId } from '@/lib/film-frame';
 import { CANVAS_RATIOS, canvasRatioLabel } from './FramePicker';
 import { declared, withDeclarations, type ClipLook } from '@/lib/clip-look';
-import { PANE_BAR, PANE_BTN, PANE_ICON, PANE_TITLE } from './dock-pane-bar';
 import { Tooltip } from './Tooltip';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import {
@@ -65,9 +64,12 @@ import type { MaskShape } from '@/lib/clip-mask';
 import type { FadeMs } from '@/lib/clip-fade';
 import type { FoundKind } from '@/lib/transitions';
 import { PictureInput, PropertiesSection, type PropsHost } from './PropertiesSection';
+import { TextInspector } from './TextInspector';
+import { isTextClip } from '@/lib/library';
 import { propOf, withProp, withoutProp, type ComponentProp } from '@/lib/component-props';
 import { layerTarget } from '@/lib/stage-layers';
 import type { StagePictureActions } from './stage-menu';
+import { InspectorCategory, InspectorEditable, InspectorReadOnly, InspectorWorkspace } from './InspectorWorkspace';
 
 /** A change of a layer's words (kept as its `text` override). `expect` is what it said before: painted back on refusal. */
 export type StageTextEdit = {
@@ -149,7 +151,6 @@ export const FilmInspector = React.memo(function FilmInspector({
   speedFloorOf,
   onEditClips,
   width,
-  onClose,
   onEditStyle,
   onEditSimilar,
   countSimilar,
@@ -202,7 +203,6 @@ export const FilmInspector = React.memo(function FilmInspector({
   onEditClips?: (edits: ClipEdit[]) => Promise<string | null>;
   /** The pane's width (dragged at the divider beside the viewer). */
   width: number;
-  onClose: () => void;
   /** Writes a style. Resolves to an error when refused (the panel then paints the old value back). */
   onEditStyle: (loc: string, patch: StageElementStyle) => Promise<string | null>;
   /** A style for every layer like this one (its tag and classes) in the film's pages: "All like it". */
@@ -288,29 +288,12 @@ export const FilmInspector = React.memo(function FilmInspector({
   const stageSize = stage ?? FILM_DEFAULT_STAGE;
 
   return (
-    <div
-      data-film-inspector
-      className={`${PANE} shrink-0 bg-[var(--dock-pane)]`}
-      style={{ width }}
-    >
-      <div className={PANE_BAR}>
-        <span className={`${PANE_TITLE} px-1`}>{t('inspector.panel')}</span>
-        <span className="min-w-0 flex-1" />
-        <Tooltip label={t('inspector.hide')} side="bottom">
-          <button type="button" onClick={onClose} aria-label={t('inspector.hide')} className={PANE_BTN}>
-            <X size={PANE_ICON} />
-          </button>
-        </Tooltip>
-      </div>
-      {locked && (layer || clip || many) ? (
-        <div role="status" data-inspector-locked="" className="mx-2 mb-1 flex items-center gap-1.5 rounded-md bg-[var(--fill-tsp)] px-2 py-1 text-[11px] text-[var(--text-muted)]">
-          <Lock size={12} className="shrink-0" aria-hidden />
-          <span className="min-w-0">{t('inspector.trackLocked')}</span>
-        </div>
-      ) : null}
-      {/* a locked track's clip: every field off (the edits are refused anyway, see lib/track-lock) */}
-      <fieldset disabled={locked && Boolean(layer || clip || many)} className="contents">
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-6">
+    <InspectorReadOnly.Provider value={locked && Boolean(layer || clip || many)}>
+      <div
+        data-film-inspector
+        className={`${PANE} shrink-0 bg-[var(--dock-pane)]`}
+        style={{ width }}
+      >
         {layer ? (
           <LayerPanel
             key={`${layer.loc}|${layer.clipLoc ?? ''}`}
@@ -370,8 +353,7 @@ export const FilmInspector = React.memo(function FilmInspector({
           <FilmPanel t={t} stage={stageSize} draft={canvasDraft} film={film ?? null} onCanvas={onCanvas} onCanvasPreview={onCanvasPreview} original={canvasOriginal ?? null} rate={rate ?? null} />
         )}
       </div>
-      </fieldset>
-    </div>
+    </InspectorReadOnly.Provider>
   );
 });
 
@@ -449,12 +431,7 @@ function FilmPanel({
     </div>
   );
   return (
-    <>
-      <Header
-        icon={<Film size={13} />}
-        name={film?.title || t('inspector.film')}
-        meta={`${stage.w} × ${stage.h}${film ? ` · ${formatTimecode(film.durationMs)}` : ''}`}
-      />
+    <InspectorWorkspace kind="film">
       <Section id="film-stage" title={t('inspector.stage')}>
         {canvas ? (
           <MenuSelect
@@ -505,40 +482,21 @@ function FilmPanel({
           </div>
         </Section>
       ) : null}
-      <div className="flex flex-col items-center px-6 pt-8 text-center">
+      <InspectorCategory tab="properties"><div className="flex flex-col items-center px-6 pt-8 text-center">
         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--fill-tsp)] text-[var(--text-muted)]">
           <MousePointerClick size={15} strokeWidth={1.75} />
         </div>
         <p className="mt-2 text-[11.5px] leading-relaxed text-[var(--text-faint)]">{t('inspector.empty')}</p>
-      </div>
-    </>
+      </div></InspectorCategory>
+    </InspectorWorkspace>
   );
 }
 
 /* ───────────────────────────── header ───────────────────────────── */
 
-function kindIcon(kind: string, size = 14): React.ReactNode {
-  switch (kind) {
-    case 'text': return <Type size={size} />;
-    case 'image': return <ImageIcon size={size} />;
-    case 'shape': return <Shapes size={size} />;
-    case 'box': return <Square size={size} />;
-    case 'mg': return <Clapperboard size={size} />;
-    case 'video': return <Video size={size} />;
-    case 'voice': return <AudioLines size={size} />;
-    case 'sfx': return <Volume2 size={size} />;
-    case 'caption': return <Captions size={size} />;
-    default: return <Music size={size} />;
-  }
-}
-
 function layerKindLabel(t: T, kind: StageElement['kind']): string {
-  return t(
-    kind === 'text' ? 'inspector.kindText'
-      : kind === 'image' ? 'inspector.kindImage'
-        : kind === 'shape' ? 'inspector.kindShape'
-          : 'inspector.kindBox',
-  );
+  return t(kind === 'text' ? 'inspector.kindText' : kind === 'image' ? 'inspector.kindImage'
+    : kind === 'shape' ? 'inspector.kindShape' : 'inspector.kindBox');
 }
 
 /** What a clip is, by its file (as the media panel names them): the timeline's voice / music / sfx are all a sound. */
@@ -551,58 +509,6 @@ function clipWhat(block: TimelineBlock): ClipWhat {
     return kind === 'mg' ? 'page' : kind === 'audio' ? 'audio' : filmSrcIsStill(block.src) ? 'image' : 'video';
   }
   return block.kind === 'mg' ? 'page' : block.kind === 'video' ? 'video' : 'audio';
-}
-
-function clipIcon(what: ClipWhat, size = 14): React.ReactNode {
-  return kindIcon(what === 'page' ? 'mg' : what === 'audio' ? 'voice' : what, size);
-}
-
-function clipKindLabel(t: T, what: ClipWhat): string {
-  return t(
-    what === 'page' ? 'inspector.kindPage'
-      : what === 'video' ? 'inspector.kindVideo'
-        : what === 'image' ? 'inspector.kindImage'
-          : what === 'caption' ? 'inspector.kindCaption'
-            : 'inspector.kindAudio',
-  );
-}
-
-/**
- * The header row: the kind's icon and the name, big enough to tell at a glance which thing this is; its track's
- * badge; the rest (kind, time, source file) is one gray line under it.
- */
-function Header({
-  icon, name, meta, mono, badge, action,
-}: {
-  icon: React.ReactNode;
-  name: string;
-  meta: string;
-  /** Source file / asset path: monospace, truncated. */
-  mono?: string;
-  /** The track it is on (V1). */
-  badge?: string;
-  /** A button at the right (a clip's Replace). */
-  action?: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center gap-2 px-3 pb-2 pt-2.5">
-      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[5px] bg-[var(--fill-tsp)] text-[var(--text-muted)]">
-        {icon}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-[12px] font-semibold leading-[16px] text-[var(--text)]" title={name}>{name}</span>
-          {badge ? (
-            <span className="shrink-0 rounded-[3px] bg-[var(--accent-soft)] px-1 font-mono text-[9.5px] font-medium leading-[14px] text-[var(--text-muted)]">{badge}</span>
-          ) : null}
-        </div>
-        <div className="truncate text-[10.5px] leading-[14px] text-[var(--text-faint)] tabular-nums" title={mono}>
-          {mono ? `${meta} · ${mono}` : meta}
-        </div>
-      </div>
-      {action}
-    </div>
-  );
 }
 
 /**
@@ -671,55 +577,6 @@ function LockToggle({ t, locked, onChange }: { t: T; locked: boolean; onChange?:
   );
 }
 
-/**
- * Breadcrumb: the clip › outer layers › this layer, each a step back out. The picture always picks the innermost
- * layer; to change the card around it, step out here.
- */
-function Breadcrumb({
-  element, onSelectParent, onSelectClip,
-}: {
-  element: StageElement;
-  onSelectParent?: (loc: string, clipLoc?: string) => void;
-  onSelectClip?: (clipLoc: string) => void;
-}) {
-  const parents = [...(element.parents ?? [])].reverse();
-  if (!element.clipLoc && !parents.length) return null;
-  const crumb = 'min-w-0 max-w-[7.5rem] shrink truncate rounded-[4px] px-1 py-0.5 text-[10.5px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]';
-  return (
-    <nav className="-mt-0.5 flex min-w-0 flex-wrap items-center gap-y-0.5 px-2.5 pb-2" aria-label="breadcrumb">
-      {element.clipLoc ? (
-        <button
-          type="button"
-          className={`${crumb} font-medium`}
-          onClick={() => onSelectClip?.(element.clipLoc!)}
-          disabled={!onSelectClip}
-          title={element.clipId}
-        >
-          {element.clipId ?? element.clipLoc}
-        </button>
-      ) : null}
-      {parents.map((p) => (
-        <React.Fragment key={p.loc}>
-          <ChevronRight size={11} className="shrink-0 text-[var(--text-faint)]" />
-          <button
-            type="button"
-            className={crumb}
-            onClick={() => onSelectParent?.(p.loc, element.clipLoc)}
-            disabled={!onSelectParent}
-            title={p.label}
-          >
-            {p.label}
-          </button>
-        </React.Fragment>
-      ))}
-      <ChevronRight size={11} className="shrink-0 text-[var(--text-faint)]" />
-      <span className="min-w-0 max-w-[7.5rem] truncate px-1 py-0.5 text-[10.5px] font-medium text-[var(--text)]">
-        {element.label}
-      </span>
-    </nav>
-  );
-}
-
 /** A refused change: why. */
 function RefusalBanner({
   message, onDismiss, t,
@@ -783,7 +640,7 @@ type Scope = 'one' | 'all' | 'similar';
 
 function LayerPanel({
   element, geometry, inlineTextFailure, onEditStyle, onEditSimilar, countSimilar, onPreviewStyle, onEditText, onPreviewText,
-  onEditOverride, onPreviewOverride, onSelectParent, onSelectClip, onEditMask, pictures, layerProps,
+  onEditOverride, onPreviewOverride, onEditMask, pictures, layerProps,
 }: {
   element: StageElement;
   geometry?: StageGeometry | null;
@@ -975,11 +832,9 @@ function LayerPanel({
     .join('; ');
 
   return (
-    <>
-      <Header icon={kindIcon(kind, 13)} name={element.label} meta={layerKindLabel(t, kind)} />
-      <Breadcrumb element={element} onSelectParent={onSelectParent} onSelectClip={onSelectClip} />
+    <InspectorWorkspace kind="layer">
       {copies || likeIt ? (
-        <div className="px-3 pb-2.5">
+        <InspectorEditable><div className="px-3 pb-2.5">
           <Segmented
             label={t('inspector.scope')}
             value={scope}
@@ -996,7 +851,7 @@ function LayerPanel({
               }] : []),
             ]}
           />
-        </div>
+        </div></InspectorEditable>
       ) : null}
       {refusal ? (
         <RefusalBanner message={refusal} onDismiss={() => setRefusal(null)} t={t} />
@@ -1197,7 +1052,7 @@ function LayerPanel({
         />
       ) : null}
       </React.Fragment>
-    </>
+    </InspectorWorkspace>
   );
 }
 
@@ -1383,12 +1238,7 @@ function GroupPanel({ geometry, group, layers, onEditLayers, onPlace, t }: {
   }) : null;
   const allText = targets.length > 0 && targets.every((l) => l.kind === 'text' && !isSvgTextTag(l.tag ?? ''));
   return (
-    <>
-      <Header
-        icon={group.kinds.length === 1 ? kindIcon(group.kinds[0]!, 13) : <Shapes size={13} />}
-        name={t('inspector.multiLayers').replace('{n}', String(group.n))}
-        meta={group.kinds.map((k) => layerKindLabel(t, k)).join(' · ')}
-      />
+    <InspectorWorkspace kind="multiple" label={t('inspector.multiLayers').replace('{n}', String(group.n))}>
       {refusal ? <RefusalBanner message={refusal} onDismiss={() => setRefusal(null)} t={t} /> : null}
       <Section id="position" title={t('inspector.position')}>
         <Row>{cell(t('inspector.x'), geometry.x, 'x')}{cell(t('inspector.y'), geometry.y, 'y')}</Row>
@@ -1405,7 +1255,7 @@ function GroupPanel({ geometry, group, layers, onEditLayers, onPlace, t }: {
           <AdjustSection look={look} t={t} />
         </>
       ) : null}
-    </>
+    </InspectorWorkspace>
   );
 }
 
@@ -1492,7 +1342,7 @@ function clipsLook(
  * can only be looked at.
  */
 function ClipPanel({
-  block, onMain, speedFloor, geometry, stage, badges, onEdit, onPreviewClip, pageChangesOf, replaceEntries, clipLookOf, onPreviewLook, onStartCrop, onEditMask, maskAsk,
+  block, onMain, speedFloor, geometry, stage, onEdit, onPreviewClip, pageChangesOf, replaceEntries, clipLookOf, onPreviewLook, onStartCrop, onEditMask, maskAsk,
   onMaskAsked, fades, propsHostOf,
 }: {
   fades?: ReadonlyMap<string, FadeMs>;
@@ -1543,8 +1393,6 @@ function ClipPanel({
   const lookOf = picture && clipLookOf && loc ? clipLookOf(loc) : null;
   const target: ClipTarget | null = lookOf && loc ? { loc, css: lookOf.css, look: lookOf.look } : null;
   const look = target ? clipsLook([target], commit, onPreviewLook) : null;
-  const at = parseFilmDocLoc(loc ?? '');
-  const badge = at ? badges?.[at.track] : undefined;
   /* the same host while the same clip is in hand: the section reads the page again when its overrides change */
   const propsHost = React.useMemo(
     () => (block.kind === 'mg' && docLoc && propsHostOf ? propsHostOf(block) : null),
@@ -1553,15 +1401,8 @@ function ClipPanel({
   );
 
   return (
-    <>
-      <Header
-        icon={clipIcon(what, 13)}
-        name={block.title || block.clipId || clipKindLabel(t, what)}
-        meta={`${clipKindLabel(t, what)} · ${formatTimecode(block.startMs)} – ${formatTimecode(block.endMs)}`}
-        {...(block.src ? { mono: block.src } : {})}
-        {...(badge ? { badge } : {})}
-        {...(editable && block.clipId && replaceEntries ? { action: <ReplaceButton block={block} entries={replaceEntries} t={t} /> } : {})}
-      />
+    /* a line of words of the library's text component remembers its own category, Text the first time */
+    <InspectorWorkspace kind={isTextClip(block.src) ? 'text' : what}>
       {refusal ? (
         <RefusalBanner message={refusal} onDismiss={() => setRefusal(null)} t={t} />
       ) : null}
@@ -1572,7 +1413,10 @@ function ClipPanel({
       ) : (
         <>
           {/* a page's properties first: what it offers to change */}
-          {propsHost ? (
+          {/* a line of words of the library's text component: its own text, word art and motion; any other page its properties */}
+          {propsHost && isTextClip(block.src) ? (
+            <TextInspector host={propsHost} commit={(next) => commit([{ loc: loc!, prop: 'overrides', value: (next.length ? next : null) as unknown as Record<string, unknown> | null }])} />
+          ) : propsHost ? (
             <PropertiesSection host={propsHost} commit={(next) => commit([{ loc: loc!, prop: 'overrides', value: next as unknown as Record<string, unknown> | null }])} />
           ) : null}
           {picture && own && geo ? (
@@ -1635,6 +1479,12 @@ function ClipPanel({
               t={t}
             />
           ) : null}
+          {block.src && replaceEntries && block.clipId ? (
+            <Section id="source" title={t('inspector.workspace.source')}>
+              <p className="break-all text-[11px] text-[var(--text-muted)]">{block.src}</p>
+              <ReplaceButton block={block} entries={replaceEntries} t={t} />
+            </Section>
+          ) : null}
           {target && lookOf ? (
             <AdvancedSection
               t={t}
@@ -1647,7 +1497,7 @@ function ClipPanel({
           ) : null}
         </>
       )}
-    </>
+    </InspectorWorkspace>
   );
 }
 
@@ -2225,7 +2075,6 @@ function MultiClipPanel({
       setRefusal(plainClipRefusal(failed));
     });
   };
-  const kinds = [...new Set(blocks.map(clipWhat))];
   const placed = blocks.map((b) => placedOf(b, stage));
   const allPlaced = onEdit && placed.every(Boolean) ? placed as Placed[] : null;
   const targets: ClipTarget[] = [];
@@ -2296,12 +2145,7 @@ function MultiClipPanel({
   };
 
   return (
-    <>
-      <Header
-        icon={kinds.length === 1 ? clipIcon(kinds[0]!, 13) : kindIcon('mg', 13)}
-        name={t('inspector.multi').replace('{n}', String(blocks.length))}
-        meta={kinds.map((k) => clipKindLabel(t, k)).join(' · ')}
-      />
+    <InspectorWorkspace kind="multiple">
       {refusal ? (
         <RefusalBanner message={refusal} onDismiss={() => setRefusal(null)} t={t} />
       ) : null}
@@ -2343,7 +2187,7 @@ function MultiClipPanel({
           <VolumeField value={volume} t={t} onCommit={(apply) => commit(volumeEdits(blocks, apply))} />
         </Section>
       ) : null}
-    </>
+    </InspectorWorkspace>
   );
 }
 
@@ -2393,8 +2237,7 @@ function TransitionPanel({ t, pick }: { t: T; pick: TransitionPick }) {
   const fps = useTimecodeFps();
   const [refusal, setRefusal] = React.useState<string | null>(null);
   return (
-    <>
-      <Header icon={<Film size={13} />} name={t(`transitions.${pick.kind}`)} meta={t('inspector.transition')} />
+    <InspectorWorkspace kind="transition">
       {refusal ? <RefusalBanner message={refusal} onDismiss={() => setRefusal(null)} t={t} /> : null}
       <Section id="transition" title={t('inspector.transition')}>
         <Row>
@@ -2410,7 +2253,7 @@ function TransitionPanel({ t, pick }: { t: T; pick: TransitionPick }) {
           {t('inspector.transitionRemove')}
         </button>
       </Section>
-    </>
+    </InspectorWorkspace>
   );
 }
 

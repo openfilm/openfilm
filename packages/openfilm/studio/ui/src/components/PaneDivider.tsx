@@ -35,19 +35,19 @@ const BLEED = (GRAB - DOCK_GAP) / 2;
  * any narrower and the inputs pile on top of each other. The viewer keeps room for the
  * picture and its transport bar.
  */
-export const MIN_INSPECTOR = 240;
+export const MIN_INSPECTOR = 280;
 export const MIN_VIEWER = 280;
 
 /**
  * Default inspector width when first opened.
  *
- * The minimum (240) is the "any narrower and it breaks" line, not a comfortable width. Each
+ * The minimum (280) is the "any narrower and it breaks" line, not a comfortable width. Each
  * number field sits next to a label; narrower and the two columns get only a dozen or so
  * pixels each, and the font-name field collapses to an ellipsis. The first impression would be
  * a cramped column, and people do not think to drag it wider; they assume that is how the
  * panel looks. Users who have resized it are unaffected: usePaneSize stores their own value.
  */
-export const DEFAULT_INSPECTOR = 300;
+export const DEFAULT_INSPECTOR = 360;
 
 /**
  * Height limits for the pane below the viewer (the timeline).

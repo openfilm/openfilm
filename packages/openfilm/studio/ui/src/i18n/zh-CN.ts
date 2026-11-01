@@ -14,7 +14,7 @@ export const zhCN: Words = {
     desktop: '桌面版',
   },
   /* the projects the app window has open (ProjectSwitcher), a new tab's launcher, and the examples (ExamplesGallery) */
-  switcher: { label: '切换项目', open: '已打开', recent: '最近', all: '全部项目…', close: '关闭', working: '进行中', asking: '等你回答', exporting: '导出中 {n}%', cover: '设为封面', reveal: '打开文件夹' },
+  switcher: { oneClip: '1 个片段', clips: '{n} 个片段', label: '切换项目', open: '其它已打开', all: '全部项目…', close: '关闭', working: '进行中', asking: '等你回答', exporting: '导出中 {n}%', cover: '设置当前帧为封面', reveal: '打开文件夹' },
   launcher: { projects: '我的项目', examples: '示例' },
   gallery: {
     chooseCover: "选择封面",
@@ -184,7 +184,7 @@ export const zhCN: Words = {
     moveToFolder: '移到文件夹',
     changeCover: '更换封面…',
     restoreCover: '恢复自动封面',
-    coverFromFrame: '将当前画面设为封面',
+    coverFromFrame: '设置当前帧为封面',
     setAsCover: '设为项目封面',
     coverSet: '已设为封面',
     coverFailed: '无法用它做封面。',
@@ -1109,6 +1109,21 @@ export const zhCN: Words = {
     speed: '播放速度',
   },
   inspector: {
+    workspace: {
+      categories: "属性分类",
+      source: "素材",
+      tabs: {
+        text: "文本",
+        wordart: "花字",
+        motion: "动画",
+        properties: "属性",
+        adjust: "调节",
+        effects: "效果",
+        sound: "声音",
+        advanced: "高级",
+        info: "信息",
+      },
+    },
     fades: '淡入淡出',
     fadeIn: '淡入',
     fadeOut: '淡出',
@@ -2314,6 +2329,7 @@ export const zhCN: Words = {
       balanceNote: '从你的 {name} 余额中扣费：在这台电脑上登录一次，这里的所有模型就都能用。',
       connect: '连接',
       disconnect: '断开连接',
+      account: '查看账户',
       connected: '已连接',
       keyNote: '你的密钥直接向该服务付费。它只保存在这台电脑上，且只会发送给对应的服务。',
       getKey: '获取 {name} 密钥',
@@ -2329,7 +2345,6 @@ export const zhCN: Words = {
       keyless: '无需密钥即可使用：你的智能体搜索的内容和读取的网址会发送给 {name}。添加密钥可提高用量上限。',
       addKey: '添加密钥',
       own: {
-      account: '查看账户',
         title: "自定义服务",
         note: "上面没列出的服务都可以加在这里，数量不限：本机运行的或线上的都行（你自己的声音、语音转写服务、没列出的 API），接口可以完全自定义。OpenFilm 不会自动调用它们：智能体读你写的说明来调用，密钥只留在这台电脑上，智能体看不到。也可以不加在这里，直接在对话里把服务告诉智能体；需要密钥的服务建议加在这里，密钥就不会出现在对话中。",
         add: "添加自定义服务",

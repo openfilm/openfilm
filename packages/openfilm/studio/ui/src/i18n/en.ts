@@ -14,7 +14,7 @@ export const en = {
     desktop: 'Desktop',
   },
   /* the projects the app window has open (ProjectSwitcher), a new tab's launcher, and the examples (ExamplesGallery) */
-  switcher: { label: 'Switch project', open: 'Open', recent: 'Recent', all: 'All projects…', close: 'Close', working: 'Working', asking: 'Waiting for you', exporting: 'Exporting {n}%', cover: 'Set as cover', reveal: 'Show folder' },
+  switcher: { oneClip: '1 clip', clips: '{n} clips', label: 'Switch project', open: 'Other open projects', all: 'All projects…', close: 'Close', working: 'Working', asking: 'Waiting for you', exporting: 'Exporting {n}%', cover: 'Set current frame as cover', reveal: 'Show folder' },
   launcher: { projects: 'Projects', examples: 'Examples' },
   gallery: {
     chooseCover: "Choose cover",
@@ -184,7 +184,7 @@ export const en = {
     moveToFolder: 'Move to folder',
     changeCover: 'Change cover…',
     restoreCover: 'Use the automatic cover',
-    coverFromFrame: 'Use this frame as the cover',
+    coverFromFrame: 'Set current frame as cover',
     setAsCover: 'Set as project cover',
     coverSet: 'Cover set',
     coverFailed: 'Couldn’t use that as the cover.',
@@ -1109,6 +1109,21 @@ export const en = {
     speed: 'Speed',
   },
   inspector: {
+    workspace: {
+      categories: "Property categories",
+      source: "Source",
+      tabs: {
+        text: "Text",
+        wordart: "Word art",
+        motion: "Motion",
+        properties: "Properties",
+        adjust: "Adjust",
+        effects: "Effects",
+        sound: "Audio",
+        advanced: "Advanced",
+        info: "Info",
+      },
+    },
     fades: 'Fades',
     fadeIn: 'Fade in',
     fadeOut: 'Fade out',
@@ -2314,6 +2329,7 @@ export const en = {
       balanceNote: 'Paid from your {name} balance: sign in once on this computer, and every model here is yours to use.',
       connect: 'Connect',
       disconnect: 'Disconnect',
+      account: 'View account',
       connected: 'Connected',
       keyNote: 'Your key pays the service directly. It stays on this computer and goes only to its own service.',
       getKey: 'Get your {name} key',
@@ -2329,7 +2345,6 @@ export const en = {
       keyless: "Works without a key: your agent's searches and the addresses it reads go to {name}. A key lifts its limits.",
       addKey: 'Add a key',
       own: {
-      account: 'View account',
         title: "Custom services",
         note: "Services not listed above, as many as you like: one you run on this computer or one online (your own voice, a transcription server, an API not listed), with any interface. OpenFilm doesn't call them itself: your agent reads your description and calls them, and their keys stay on this computer, out of the agent's sight. You can also tell your agent about a service in the chat instead; set it up here when it takes a key, so the key stays out of the conversation.",
         add: "Add a custom service",

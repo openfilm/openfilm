@@ -1,8 +1,7 @@
 /**
  * The window of an app with tabs (lib/host.ts `tabs`) when no project is open: an empty window (its top bar still
  * drags it) and the projects window over it, only with nothing behind to close it to. The project picked opens in its
- * tab. Shown while projects are open too (a tab's page that could not load), its top bar has the switcher to them, so
- * they can always be reached. The top bar stays above the projects window's shade, in the window's color like the system's
+ * tab. The top bar stays above the projects window's shade, in the window's color like the system's
  * window buttons beside it: its logo opens Settings, as a project's does.
  */
 import { BrandLogo } from './BrandLogo';
@@ -29,8 +28,7 @@ export function Launcher({ onOpen }: { onOpen: (projectId: string) => void }) {
             <BrandLogo size={15} />
           </button>
         </Tooltip>
-        {/* projects open in the window, behind a page that could not load: reached from here */}
-        {tabs.length ? <div className="flex min-w-0 flex-1 justify-center"><ProjectCard onOpen={(id) => onOpen(id)} onAll={() => {}} /></div> : null}
+        {tabs.length ? <div className="flex min-w-0 flex-1 justify-center"><ProjectCard onAll={() => {}} /></div> : null}
       </div>
       <ProjectsPopover open currentProjectId="" onOpen={onOpen} onCurrentRemoved={() => {}} />
       <SettingsModal open={settings !== null} section={settings ?? undefined} onClose={() => setSettings(null)} />
