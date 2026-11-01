@@ -1,0 +1,1163 @@
+{
+  "version": 1,
+  "groups": {
+    "text": [
+      {
+        "id": "callout",
+        "name": {
+          "en": "Callouts",
+          "zh-CN": "标注",
+          "ja": "注釈",
+          "ko": "콜아웃",
+          "es": "Anotaciones"
+        }
+      },
+      {
+        "id": "social",
+        "name": {
+          "en": "Social",
+          "zh-CN": "互动引导",
+          "ja": "SNS誘導",
+          "ko": "소셜",
+          "es": "Redes sociales"
+        }
+      },
+      {
+        "id": "commerce",
+        "name": {
+          "en": "Shopping",
+          "zh-CN": "电商",
+          "ja": "ショッピング",
+          "ko": "쇼핑",
+          "es": "Compras"
+        }
+      },
+      {
+        "id": "info",
+        "name": {
+          "en": "Explainers",
+          "zh-CN": "知识",
+          "ja": "解説",
+          "ko": "정보",
+          "es": "Explicativos"
+        }
+      },
+      {
+        "id": "chapter",
+        "name": {
+          "en": "Chapters",
+          "zh-CN": "章节",
+          "ja": "チャプター",
+          "ko": "챕터",
+          "es": "Capítulos"
+        }
+      },
+      {
+        "id": "ending",
+        "name": {
+          "en": "Endings",
+          "zh-CN": "片尾",
+          "ja": "エンディング",
+          "ko": "엔딩",
+          "es": "Finales"
+        }
+      },
+      {
+        "id": "variety",
+        "name": {
+          "en": "Reactions",
+          "zh-CN": "综艺",
+          "ja": "バラエティ",
+          "ko": "예능",
+          "es": "Reacciones"
+        }
+      },
+      {
+        "id": "bubble",
+        "name": {
+          "en": "Chats",
+          "zh-CN": "对话",
+          "ja": "チャット",
+          "ko": "대화",
+          "es": "Chats"
+        }
+      },
+      {
+        "id": "news",
+        "name": {
+          "en": "News",
+          "zh-CN": "新闻",
+          "ja": "ニュース",
+          "ko": "뉴스",
+          "es": "Noticias"
+        }
+      },
+      {
+        "id": "location",
+        "name": {
+          "en": "Time and place",
+          "zh-CN": "时间地点",
+          "ja": "日時と場所",
+          "ko": "시간과 장소",
+          "es": "Fecha y lugar"
+        }
+      },
+      {
+        "id": "festival",
+        "name": {
+          "en": "Holidays",
+          "zh-CN": "节日",
+          "ja": "季節イベント",
+          "ko": "기념일",
+          "es": "Fiestas"
+        }
+      }
+    ]
+  },
+  "items": [
+    {
+      "id": "text/title-stagger",
+      "cat": "text",
+      "group": "title",
+      "name": {
+        "en": "Bouncing title",
+        "zh-CN": "标题·弹跳字",
+        "ja": "弾むタイトル",
+        "ko": "통통 타이틀",
+        "es": "Título rebote"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "title-stagger.html",
+      "w": 1000,
+      "h": 500,
+      "fit": 0.36
+    },
+    {
+      "id": "text/title-split",
+      "cat": "text",
+      "group": "title",
+      "name": {
+        "en": "Split reveal title",
+        "zh-CN": "标题·上下分割",
+        "ja": "上下に開くタイトル",
+        "ko": "분할 타이틀",
+        "es": "Título dividido"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "title-split.html",
+      "w": 1000,
+      "h": 500,
+      "fit": 0.36
+    },
+    {
+      "id": "text/title-sweep",
+      "cat": "text",
+      "group": "title",
+      "name": {
+        "en": "Sweep box title",
+        "zh-CN": "标题·扫光框",
+        "ja": "スイープ枠タイトル",
+        "ko": "스윕 박스 타이틀",
+        "es": "Título con barrido"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "title-sweep.html",
+      "w": 1000,
+      "h": 400,
+      "fit": 0.3
+    },
+    {
+      "id": "text/title-serif",
+      "cat": "text",
+      "group": "title",
+      "name": {
+        "en": "Minimal serif title",
+        "zh-CN": "标题·极简衬线",
+        "ja": "ミニマル明朝タイトル",
+        "ko": "미니멀 세리프 타이틀",
+        "es": "Título serif mínimo"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "title-serif.html",
+      "w": 1000,
+      "h": 400,
+      "fit": 0.3
+    },
+    {
+      "id": "text/title-slab",
+      "cat": "text",
+      "group": "title",
+      "name": {
+        "en": "Color slab title",
+        "zh-CN": "标题·色块",
+        "ja": "カラーブロックタイトル",
+        "ko": "컬러 블록 타이틀",
+        "es": "Título en bloque"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "title-slab.html",
+      "w": 1000,
+      "h": 500,
+      "fit": 0.36
+    },
+    {
+      "id": "text/title-glitch",
+      "cat": "text",
+      "group": "title",
+      "name": {
+        "en": "Glitch title",
+        "zh-CN": "标题·故障风",
+        "ja": "グリッチタイトル",
+        "ko": "글리치 타이틀",
+        "es": "Título glitch"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "title-glitch.html",
+      "w": 1000,
+      "h": 400,
+      "fit": 0.3
+    },
+    {
+      "id": "text/title-script",
+      "cat": "text",
+      "group": "title",
+      "name": {
+        "en": "Handwritten title",
+        "zh-CN": "标题·手写",
+        "ja": "手書き風タイトル",
+        "ko": "손글씨 타이틀",
+        "es": "Título manuscrito"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "title-script.html",
+      "w": 1000,
+      "h": 400,
+      "fit": 0.3
+    },
+    {
+      "id": "text/lower-corporate",
+      "cat": "text",
+      "group": "lower",
+      "name": {
+        "en": "Name card, business",
+        "zh-CN": "人物名片·商务",
+        "ja": "ネームカード・ビジネス",
+        "ko": "이름 카드·비즈니스",
+        "es": "Rótulo de nombre, empresa"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "lower-corporate.html",
+      "w": 1200,
+      "h": 300,
+      "fit": 0.2
+    },
+    {
+      "id": "text/lower-vlog",
+      "cat": "text",
+      "group": "lower",
+      "name": {
+        "en": "Name card, vlog",
+        "zh-CN": "人物名片·Vlog",
+        "ja": "ネームカード・Vlog",
+        "ko": "이름 카드·브이로그",
+        "es": "Rótulo de nombre, vlog"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "lower-vlog.html",
+      "w": 1200,
+      "h": 300,
+      "fit": 0.2
+    },
+    {
+      "id": "text/lower-news",
+      "cat": "text",
+      "group": "lower",
+      "name": {
+        "en": "Name card, news",
+        "zh-CN": "人物名片·新闻",
+        "ja": "ネームカード・ニュース",
+        "ko": "이름 카드·뉴스",
+        "es": "Rótulo de nombre, noticias"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "lower-news.html",
+      "w": 1200,
+      "h": 300,
+      "fit": 0.2
+    },
+    {
+      "id": "text/lower-elegant",
+      "cat": "text",
+      "group": "lower",
+      "name": {
+        "en": "Name card, elegant",
+        "zh-CN": "人物名片·优雅",
+        "ja": "ネームカード・エレガント",
+        "ko": "이름 카드·우아함",
+        "es": "Rótulo de nombre, elegante"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "lower-elegant.html",
+      "w": 1200,
+      "h": 300,
+      "fit": 0.2
+    },
+    {
+      "id": "text/lower-neon",
+      "cat": "text",
+      "group": "lower",
+      "name": {
+        "en": "Name card, neon",
+        "zh-CN": "人物名片·霓虹",
+        "ja": "ネームカード・ネオン",
+        "ko": "이름 카드·네온",
+        "es": "Rótulo de nombre, neón"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "lower-neon.html",
+      "w": 1200,
+      "h": 300,
+      "fit": 0.2
+    },
+    {
+      "id": "text/lower-handle",
+      "cat": "text",
+      "group": "lower",
+      "name": {
+        "en": "Account card",
+        "zh-CN": "社交账号卡",
+        "ja": "アカウントカード",
+        "ko": "계정 카드",
+        "es": "Tarjeta de cuenta"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "lower-handle.html",
+      "w": 1200,
+      "h": 300,
+      "fit": 0.2
+    },
+    {
+      "id": "text/lower-guest",
+      "cat": "text",
+      "group": "lower",
+      "name": {
+        "en": "Guest with number",
+        "zh-CN": "嘉宾介绍·编号",
+        "ja": "ゲスト紹介・番号",
+        "ko": "게스트 소개·번호",
+        "es": "Invitado con número"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "lower-guest.html",
+      "w": 1200,
+      "h": 300,
+      "fit": 0.2
+    },
+    {
+      "id": "text/callout-leader",
+      "cat": "text",
+      "group": "callout",
+      "name": {
+        "en": "Leader line callout",
+        "zh-CN": "引线标注",
+        "ja": "引き出し線の注釈",
+        "ko": "지시선 콜아웃",
+        "es": "Anotación con línea"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "callout-leader.html",
+      "w": 600,
+      "h": 300,
+      "fit": 0.26
+    },
+    {
+      "id": "text/callout-note",
+      "cat": "text",
+      "group": "callout",
+      "name": {
+        "en": "Note with pointer",
+        "zh-CN": "便签标注",
+        "ja": "ポインター付きメモ",
+        "ko": "말풍선 메모",
+        "es": "Nota con puntero"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "callout-note.html",
+      "w": 640,
+      "h": 320,
+      "fit": 0.26
+    },
+    {
+      "id": "text/callout-step",
+      "cat": "text",
+      "group": "callout",
+      "name": {
+        "en": "Step callout",
+        "zh-CN": "步骤标注",
+        "ja": "ステップ注釈",
+        "ko": "단계 콜아웃",
+        "es": "Paso numerado"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "callout-step.html",
+      "w": 800,
+      "h": 250,
+      "fit": 0.2
+    },
+    {
+      "id": "text/callout-tip",
+      "cat": "text",
+      "group": "callout",
+      "name": {
+        "en": "Tip card",
+        "zh-CN": "小贴士",
+        "ja": "ヒントカード",
+        "ko": "팁 카드",
+        "es": "Consejo"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "callout-tip.html",
+      "w": 800,
+      "h": 300,
+      "fit": 0.24
+    },
+    {
+      "id": "text/callout-proscons",
+      "cat": "text",
+      "group": "callout",
+      "name": {
+        "en": "Pros and cons",
+        "zh-CN": "优缺点",
+        "ja": "メリット・デメリット",
+        "ko": "장단점",
+        "es": "Pros y contras"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "callout-proscons.html",
+      "w": 1000,
+      "h": 500,
+      "fit": 0.4
+    },
+    {
+      "id": "text/social-subscribe",
+      "cat": "text",
+      "group": "social",
+      "name": {
+        "en": "Subscribe and bell",
+        "zh-CN": "订阅提醒",
+        "ja": "登録とベル",
+        "ko": "구독과 알림",
+        "es": "Suscríbete y campana"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "social-subscribe.html",
+      "w": 900,
+      "h": 250,
+      "fit": 0.18
+    },
+    {
+      "id": "text/social-actions",
+      "cat": "text",
+      "group": "social",
+      "name": {
+        "en": "Like, comment, share",
+        "zh-CN": "点赞评论转发",
+        "ja": "いいね・コメント・シェア",
+        "ko": "좋아요·댓글·공유",
+        "es": "Me gusta, comenta, comparte"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "social-actions.html",
+      "w": 900,
+      "h": 300,
+      "fit": 0.22
+    },
+    {
+      "id": "text/social-follow",
+      "cat": "text",
+      "group": "social",
+      "name": {
+        "en": "Follow pill",
+        "zh-CN": "关注胶囊",
+        "ja": "フォローピル",
+        "ko": "팔로우 캡슐",
+        "es": "Píldora de seguir"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "social-follow.html",
+      "w": 900,
+      "h": 220,
+      "fit": 0.16
+    },
+    {
+      "id": "text/social-swipe",
+      "cat": "text",
+      "group": "social",
+      "name": {
+        "en": "Swipe up",
+        "zh-CN": "上滑查看",
+        "ja": "上にスワイプ",
+        "ko": "위로 스와이프",
+        "es": "Desliza hacia arriba"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "social-swipe.html",
+      "w": 400,
+      "h": 500,
+      "fit": 0.4
+    },
+    {
+      "id": "text/social-linkbio",
+      "cat": "text",
+      "group": "social",
+      "name": {
+        "en": "Link in bio",
+        "zh-CN": "主页链接",
+        "ja": "プロフのリンク",
+        "ko": "프로필 링크",
+        "es": "Enlace en la bio"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "social-linkbio.html",
+      "w": 800,
+      "h": 250,
+      "fit": 0.18
+    },
+    {
+      "id": "text/shop-strike",
+      "cat": "text",
+      "group": "commerce",
+      "name": {
+        "en": "Sale price",
+        "zh-CN": "划线价",
+        "ja": "セール価格",
+        "ko": "할인가",
+        "es": "Precio rebajado"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "shop-strike.html",
+      "w": 800,
+      "h": 400,
+      "fit": 0.3
+    },
+    {
+      "id": "text/shop-burst",
+      "cat": "text",
+      "group": "commerce",
+      "name": {
+        "en": "Discount burst",
+        "zh-CN": "折扣爆炸贴",
+        "ja": "割引バースト",
+        "ko": "할인 버스트",
+        "es": "Estallido de descuento"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "shop-burst.html",
+      "w": 500,
+      "h": 500,
+      "fit": 0.34
+    },
+    {
+      "id": "text/shop-coupon",
+      "cat": "text",
+      "group": "commerce",
+      "name": {
+        "en": "Coupon",
+        "zh-CN": "优惠券",
+        "ja": "クーポン",
+        "ko": "쿠폰",
+        "es": "Cupón"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "shop-coupon.html",
+      "w": 900,
+      "h": 350,
+      "fit": 0.26
+    },
+    {
+      "id": "text/shop-limited",
+      "cat": "text",
+      "group": "commerce",
+      "name": {
+        "en": "Limited time",
+        "zh-CN": "限时抢购",
+        "ja": "タイムセール",
+        "ko": "타임 세일",
+        "es": "Tiempo limitado"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "shop-limited.html",
+      "w": 900,
+      "h": 200,
+      "fit": 0.14
+    },
+    {
+      "id": "text/shop-specs",
+      "cat": "text",
+      "group": "commerce",
+      "name": {
+        "en": "Spec list",
+        "zh-CN": "参数列表",
+        "ja": "スペック一覧",
+        "ko": "사양 목록",
+        "es": "Lista de especificaciones"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "shop-specs.html",
+      "w": 700,
+      "h": 500,
+      "fit": 0.42
+    },
+    {
+      "id": "text/shop-buy",
+      "cat": "text",
+      "group": "commerce",
+      "name": {
+        "en": "Buy now button",
+        "zh-CN": "立即购买",
+        "ja": "今すぐ購入",
+        "ko": "지금 구매",
+        "es": "Comprar ya"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "shop-buy.html",
+      "w": 700,
+      "h": 220,
+      "fit": 0.16
+    },
+    {
+      "id": "text/info-list",
+      "cat": "text",
+      "group": "info",
+      "name": {
+        "en": "Numbered list",
+        "zh-CN": "要点列表",
+        "ja": "番号リスト",
+        "ko": "번호 목록",
+        "es": "Lista numerada"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "info-list.html",
+      "w": 800,
+      "h": 500,
+      "fit": 0.4
+    },
+    {
+      "id": "text/info-count",
+      "cat": "text",
+      "group": "info",
+      "name": {
+        "en": "Counting number",
+        "zh-CN": "数字滚动",
+        "ja": "カウントアップ",
+        "ko": "숫자 카운트업",
+        "es": "Cifra que sube"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "info-count.html",
+      "w": 800,
+      "h": 400,
+      "fit": 0.3
+    },
+    {
+      "id": "text/info-compare",
+      "cat": "text",
+      "group": "info",
+      "name": {
+        "en": "Before and after",
+        "zh-CN": "前后对比",
+        "ja": "ビフォーアフター",
+        "ko": "전후 비교",
+        "es": "Antes y después"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "info-compare.html",
+      "w": 1000,
+      "h": 450,
+      "fit": 0.34
+    },
+    {
+      "id": "text/info-timeline",
+      "cat": "text",
+      "group": "info",
+      "name": {
+        "en": "Timeline",
+        "zh-CN": "时间轴",
+        "ja": "タイムライン",
+        "ko": "타임라인",
+        "es": "Línea de tiempo"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "info-timeline.html",
+      "w": 1200,
+      "h": 350,
+      "fit": 0.26
+    },
+    {
+      "id": "text/info-define",
+      "cat": "text",
+      "group": "info",
+      "name": {
+        "en": "Definition card",
+        "zh-CN": "名词解释",
+        "ja": "用語カード",
+        "ko": "용어 카드",
+        "es": "Definición"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "info-define.html",
+      "w": 900,
+      "h": 400,
+      "fit": 0.3
+    },
+    {
+      "id": "text/info-quote",
+      "cat": "text",
+      "group": "info",
+      "name": {
+        "en": "Quote card",
+        "zh-CN": "金句卡",
+        "ja": "名言カード",
+        "ko": "명언 카드",
+        "es": "Tarjeta de cita"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "info-quote.html",
+      "w": 1000,
+      "h": 450,
+      "fit": 0.34
+    },
+    {
+      "id": "text/chapter-number",
+      "cat": "text",
+      "group": "chapter",
+      "name": {
+        "en": "Chapter title",
+        "zh-CN": "章节标题",
+        "ja": "章タイトル",
+        "ko": "챕터 제목",
+        "es": "Título de capítulo"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "chapter-number.html",
+      "w": 1000,
+      "h": 450,
+      "fit": 0.34
+    },
+    {
+      "id": "text/chapter-later",
+      "cat": "text",
+      "group": "chapter",
+      "name": {
+        "en": "Time skip",
+        "zh-CN": "时间跳转",
+        "ja": "時間経過",
+        "ko": "시간 경과",
+        "es": "Salto de tiempo"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "chapter-later.html",
+      "w": 900,
+      "h": 300,
+      "fit": 0.24
+    },
+    {
+      "id": "text/chapter-part",
+      "cat": "text",
+      "group": "chapter",
+      "name": {
+        "en": "Part divider",
+        "zh-CN": "篇章分隔",
+        "ja": "パート区切り",
+        "ko": "파트 구분",
+        "es": "Separador de parte"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "chapter-part.html",
+      "w": 1000,
+      "h": 350,
+      "fit": 0.28
+    },
+    {
+      "id": "text/end-thanks",
+      "cat": "text",
+      "group": "ending",
+      "name": {
+        "en": "Thanks for watching",
+        "zh-CN": "感谢观看",
+        "ja": "ご視聴ありがとう",
+        "ko": "시청 감사",
+        "es": "Gracias por ver"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "end-thanks.html",
+      "w": 1000,
+      "h": 500,
+      "fit": 0.38
+    },
+    {
+      "id": "text/end-credits",
+      "cat": "text",
+      "group": "ending",
+      "name": {
+        "en": "Credits roll",
+        "zh-CN": "片尾字幕",
+        "ja": "エンドロール",
+        "ko": "엔딩 크레딧",
+        "es": "Créditos finales"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "end-credits.html",
+      "w": 800,
+      "h": 900,
+      "fit": 0.8
+    },
+    {
+      "id": "text/end-seeyou",
+      "cat": "text",
+      "group": "ending",
+      "name": {
+        "en": "See you next time",
+        "zh-CN": "下期见",
+        "ja": "また次回",
+        "ko": "다음에 만나요",
+        "es": "Hasta la próxima"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "end-seeyou.html",
+      "w": 1000,
+      "h": 400,
+      "fit": 0.3
+    },
+    {
+      "id": "text/var-wow",
+      "cat": "text",
+      "group": "variety",
+      "name": {
+        "en": "WOW",
+        "zh-CN": "综艺字·WOW",
+        "ja": "バラエティ文字・WOW",
+        "ko": "예능 자막·WOW",
+        "es": "WOW"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "var-wow.html",
+      "w": 600,
+      "h": 400,
+      "fit": 0.34
+    },
+    {
+      "id": "text/var-noway",
+      "cat": "text",
+      "group": "variety",
+      "name": {
+        "en": "NO WAY",
+        "zh-CN": "综艺字·不会吧",
+        "ja": "バラエティ文字・まさか",
+        "ko": "예능 자막·말도 안 돼",
+        "es": "¡NO PUEDE SER!"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "var-noway.html",
+      "w": 700,
+      "h": 350,
+      "fit": 0.3
+    },
+    {
+      "id": "text/var-lol",
+      "cat": "text",
+      "group": "variety",
+      "name": {
+        "en": "LOL",
+        "zh-CN": "综艺字·笑死",
+        "ja": "バラエティ文字・爆笑",
+        "ko": "예능 자막·ㅋㅋ",
+        "es": "JAJAJA"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "var-lol.html",
+      "w": 600,
+      "h": 350,
+      "fit": 0.3
+    },
+    {
+      "id": "text/var-omg",
+      "cat": "text",
+      "group": "variety",
+      "name": {
+        "en": "OMG",
+        "zh-CN": "综艺字·天哪",
+        "ja": "バラエティ文字・マジ!?",
+        "ko": "예능 자막·헐",
+        "es": "¡DIOS MÍO!"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "var-omg.html",
+      "w": 600,
+      "h": 400,
+      "fit": 0.34
+    },
+    {
+      "id": "text/chat-thread",
+      "cat": "text",
+      "group": "bubble",
+      "name": {
+        "en": "Chat bubbles",
+        "zh-CN": "聊天气泡",
+        "ja": "チャット吹き出し",
+        "ko": "채팅 말풍선",
+        "es": "Burbujas de chat"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "chat-thread.html",
+      "w": 700,
+      "h": 600,
+      "fit": 0.5
+    },
+    {
+      "id": "text/chat-notify",
+      "cat": "text",
+      "group": "bubble",
+      "name": {
+        "en": "Message alert",
+        "zh-CN": "消息通知",
+        "ja": "メッセージ通知",
+        "ko": "메시지 알림",
+        "es": "Aviso de mensaje"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "chat-notify.html",
+      "w": 900,
+      "h": 250,
+      "fit": 0.2
+    },
+    {
+      "id": "text/chat-thought",
+      "cat": "text",
+      "group": "bubble",
+      "name": {
+        "en": "Thought bubble",
+        "zh-CN": "思考气泡",
+        "ja": "考え中の吹き出し",
+        "ko": "생각 풍선",
+        "es": "Burbuja de pensamiento"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "chat-thought.html",
+      "w": 700,
+      "h": 450,
+      "fit": 0.36
+    },
+    {
+      "id": "text/news-breaking",
+      "cat": "text",
+      "group": "news",
+      "name": {
+        "en": "Breaking news bar",
+        "zh-CN": "突发新闻条",
+        "ja": "速報バー",
+        "ko": "속보 바",
+        "es": "Última hora"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "news-breaking.html",
+      "w": 1600,
+      "h": 260,
+      "fit": 0.17
+    },
+    {
+      "id": "text/news-ticker",
+      "cat": "text",
+      "group": "news",
+      "name": {
+        "en": "News ticker",
+        "zh-CN": "滚动字幕",
+        "ja": "ニュースティッカー",
+        "ko": "뉴스 티커",
+        "es": "Rótulo deslizante"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "news-ticker.html",
+      "w": 1920,
+      "h": 110,
+      "fit": 0.07
+    },
+    {
+      "id": "text/news-headline",
+      "cat": "text",
+      "group": "news",
+      "name": {
+        "en": "Headline card",
+        "zh-CN": "新闻标题卡",
+        "ja": "見出しカード",
+        "ko": "헤드라인 카드",
+        "es": "Titular"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "news-headline.html",
+      "w": 1000,
+      "h": 450,
+      "fit": 0.34
+    },
+    {
+      "id": "text/place-pin",
+      "cat": "text",
+      "group": "location",
+      "name": {
+        "en": "Map pin",
+        "zh-CN": "地点定位",
+        "ja": "位置ピン",
+        "ko": "위치 핀",
+        "es": "Pin de lugar"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "place-pin.html",
+      "w": 900,
+      "h": 300,
+      "fit": 0.22
+    },
+    {
+      "id": "text/place-date",
+      "cat": "text",
+      "group": "location",
+      "name": {
+        "en": "Calendar date",
+        "zh-CN": "日期",
+        "ja": "日付カード",
+        "ko": "날짜 카드",
+        "es": "Fecha de calendario"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "place-date.html",
+      "w": 500,
+      "h": 500,
+      "fit": 0.34
+    },
+    {
+      "id": "text/place-weather",
+      "cat": "text",
+      "group": "location",
+      "name": {
+        "en": "Weather card",
+        "zh-CN": "天气卡",
+        "ja": "天気カード",
+        "ko": "날씨 카드",
+        "es": "Tiempo"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "place-weather.html",
+      "w": 700,
+      "h": 350,
+      "fit": 0.28
+    },
+    {
+      "id": "text/fest-newyear",
+      "cat": "text",
+      "group": "festival",
+      "name": {
+        "en": "Happy New Year",
+        "zh-CN": "新年快乐",
+        "ja": "新年あけまして",
+        "ko": "새해 복 많이",
+        "es": "Feliz Año Nuevo"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "fest-newyear.html",
+      "w": 1000,
+      "h": 500,
+      "fit": 0.38
+    },
+    {
+      "id": "text/fest-xmas",
+      "cat": "text",
+      "group": "festival",
+      "name": {
+        "en": "Merry Christmas",
+        "zh-CN": "圣诞快乐",
+        "ja": "メリークリスマス",
+        "ko": "메리 크리스마스",
+        "es": "Feliz Navidad"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "fest-xmas.html",
+      "w": 1000,
+      "h": 500,
+      "fit": 0.38
+    },
+    {
+      "id": "text/fest-birthday",
+      "cat": "text",
+      "group": "festival",
+      "name": {
+        "en": "Happy Birthday",
+        "zh-CN": "生日快乐",
+        "ja": "ハッピーバースデー",
+        "ko": "생일 축하해",
+        "es": "Feliz cumpleaños"
+      },
+      "kind": "page",
+      "durationMs": 4000,
+      "src": "fest-birthday.html",
+      "w": 1000,
+      "h": 500,
+      "fit": 0.38
+    }
+  ]
+}
