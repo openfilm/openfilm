@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "flare-whip.html"
+  },
+  "durationMs": 700
+}

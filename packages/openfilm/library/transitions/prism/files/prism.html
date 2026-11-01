@@ -1,0 +1,103 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Prism</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Light split into a rainbow sweeps diagonally across the frame, flashes white over the cut, and its spectrum
+ * trails off the far side. It lasts 0.9 s and covers the cut at its middle: put its middle on the cut. A page of
+ * OpenFilm's library (CC0): what it shows at t comes from t alone, drawn in parts of the frame so it fits a stage
+ * of any shape.
+ */
+const D = 0.9;
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+/* how far u is through [a, b], from 0 to 1 */
+const seg = (u, a, b) => clamp((u - a) / (b - a));
+/* 0 at a, 1 at b, 0 again at c */
+const tri = (u, a, b, c) => (u < b ? seg(u, a, b) : 1 - seg(u, b, c));
+const mix = (a, b, x) => a + (b - a) * x;
+const inOut = (x) => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2);
+/* a fixed random number in [0, 1) for each n: the same on every frame */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+
+/* the spectrum, red to violet */
+const SPECTRUM = ['255, 60, 80', '255, 150, 40', '255, 230, 60', '80, 230, 120', '60, 200, 255', '90, 110, 255', '190, 90, 255'];
+
+function draw(u) {
+  const L = Math.hypot(W, H), band = L * 0.28;
+  const lead = mix(-0.8, 0.8, inOut(seg(u, 0.1, 0.43))) * L;
+  const tail = mix(-0.8, 0.8, inOut(seg(u, 0.57, 0.9))) * L;
+  g.save();
+  g.translate(W / 2, H / 2);
+  g.rotate(-0.38);
+  /* the white body between the edges */
+  g.fillStyle = '#fff';
+  if (lead > tail) g.fillRect(tail, -L, lead - tail, 2 * L);
+  /* a spectrum ahead of the leading edge and behind the trailing one */
+  const edge = (x, dir) => {
+    const sp = g.createLinearGradient(x, 0, x + dir * band, 0);
+    sp.addColorStop(0, 'rgba(255, 255, 255, 1)');
+    SPECTRUM.forEach((c, i) => sp.addColorStop(0.12 + (i / (SPECTRUM.length - 1)) * 0.7, `rgba(${c}, ${0.9 - i * 0.05})`));
+    sp.addColorStop(1, 'rgba(190, 90, 255, 0)');
+    g.fillStyle = sp;
+    g.fillRect(Math.min(x, x + dir * band), -L, band, 2 * L);
+  };
+  if (u < 0.5) edge(lead, 1);
+  else edge(tail, -1);
+  /* thin refracted lines running ahead */
+  const k = u < 0.5 ? tri(u, 0, 0.3, 0.45) : tri(u, 0.55, 0.7, 1);
+  g.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 9; i++) {
+    const x = (u < 0.5 ? lead + band : tail - band) + (u < 0.5 ? 1 : -1) * L * (0.05 + 0.25 * hash(i)) * k;
+    g.fillStyle = `rgba(${SPECTRUM[i % SPECTRUM.length]}, ${0.55 * k})`;
+    g.fillRect(x, -L, 2 + hash(i + 3) * 5, 2 * L);
+  }
+  g.restore();
+  /* a white flash over the cut */
+  const f = tri(u, 0.36, 0.5, 0.64);
+  if (f > 0) {
+    const fl = g.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, L * 0.6);
+    fl.addColorStop(0, `rgba(255, 255, 255, ${f})`);
+    fl.addColorStop(1, `rgba(255, 255, 255, ${f * 0.3})`);
+    g.fillStyle = fl;
+    g.fillRect(0, 0, W, H);
+  }
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>
