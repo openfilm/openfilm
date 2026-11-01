@@ -1,13 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
-import { look } from './look.mjs';
+import { look, watchLines } from './look.mjs';
+import { watch } from './watch.mjs';
 import { filmHtml } from './film-doc.mjs';
 import { chromium } from 'playwright-core';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 
 /** The PNGs a media sheet embeds, as { width, height, depth, alpha }: look's browser is watched as it is given its page. */
 function sheetCells(t) {
@@ -203,4 +204,63 @@ test('clips that overlap on a track are told; touching ones, a millisecond of ro
   film(1.9995);
   const touching = await look([dir], { count: 2 });
   assert.ok(!touching.lines.some((l) => /clips overlap/.test(l)), touching.lines.join('\n'));
+});
+
+/** A 22 s film at 30 fps: a moving pattern, and the faults asked for (ffmpeg filters on its frames n). */
+function faultyFilm(file, video, freeze) {
+  /* frozen frames take their picture from a second copy of the pattern */
+  const still = freeze ? `split[m][r];[m][r]freezeframes=first=${freeze[0]}:last=${freeze[1]}:replace=${freeze[0]}` : 'null';
+  const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-filter_complex', `testsrc2=s=320x180:r=30:d=22,${still},${['null', ...video].join(',')}[v]`,
+    '-map', '[v]', '-c:v', 'libx264', '-crf', '18', '-pix_fmt', 'yuv420p', file]);
+  assert.equal(r.status, 0, String(r.stderr));
+  return file;
+}
+
+test('look --full watches every frame of a video: each planted fault is told at its time, a clean film has none (#324)', { timeout: 120_000 }, async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-look-full-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = faultyFilm(join(dir, 'faults.mp4'), [
+    "negate=enable='between(n,60,62)'", // 2 s: three frames unlike their neighbours
+    "drawbox=enable='eq(n,120)':color=white:t=fill", // 4 s: one white frame
+    "drawbox=enable='between(n,240,245)':color=white:t=fill", // 8 s: a 0.2 s white flash
+    "drawbox=enable='between(n,540,554)':color=black:t=fill", // 18–18.5 s: black
+  ], [300, 509]); // 10–17 s: still
+  const r = await look([file], { full: true, count: 2 });
+  assert.equal(r.ok, true);
+  const told = r.lines.filter((l) => l.startsWith('! '));
+  /** a line of `kind` whose time (or stretch) holds `t` */
+  const at = (kind, t) => told.some((l) => {
+    const m = new RegExp(`^! ${kind} at ([0-9.]+)s(?:–([0-9.]+)s)?:`).exec(l);
+    return m && Number(m[1]) - 0.25 <= t && t <= Number(m[2] ?? m[1]) + 0.25;
+  });
+  assert.ok(at('jumping frame', 2.05), told.join('\n'));
+  assert.ok(at('jumping frame', 4), told.join('\n'));
+  assert.ok(at('white flash', 8), told.join('\n'));
+  assert.ok(told.some((l) => { const m = /^! still picture at ([\d.]+)s–([\d.]+)s/.exec(l); return m && Number(m[1]) <= 10.2 && Number(m[2]) >= 16.8; }), told.join('\n'));
+  assert.ok(at('black', 18.2), told.join('\n'));
+  assert.equal(told.length, 5, told.join('\n'));
+  /* a stretch watches only that stretch, its times still the file's */
+  assert.deepEqual((await watch(file, { fps: 30, from: 7, length: 2 })).map((f) => [f.kind, f.from]), [['flash', 8]]);
+  /* a clean film: nothing, said as such */
+  const clean = faultyFilm(join(dir, 'clean.mp4'), []);
+  assert.deepEqual(await watch(clean, { fps: 30 }), []);
+  assert.deepEqual(await watchLines(clean, 30, 0, 22), ['✓ every frame watched at 30 fps: no white flash, jumping frame, still picture or black']);
+});
+
+test('look --full of a project watches its rendered film, and says when film.html changed after it; without one it asks for a render', { timeout: 60_000 }, async (t) => {
+  const { writeFileSync, utimesSync } = await import('node:fs');
+  const dir = mkdtempSync(join(tmpdir(), 'of-look-rendered-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [] }));
+  await assert.rejects(look([dir], { full: true }), /has not been rendered yet/);
+  const name = basename(dir);
+  const video = faultyFilm(join(dir, `${name}.mp4`), []);
+  const fresh = await look([dir], { full: true, count: 2 });
+  assert.ok(fresh.lines[0].startsWith(`${name}.mp4`), fresh.lines.join('\n'));
+  assert.ok(fresh.lines.some((l) => l.startsWith('✓ every frame watched')), fresh.lines.join('\n'));
+  assert.ok(!fresh.lines.some((l) => /changed after/.test(l)));
+  const old = new Date(Date.now() - 60_000);
+  utimesSync(video, old, old);
+  const stale = await look([dir], { full: true, count: 2 });
+  assert.match(stale.lines[1], /^! film\.html changed after .*\.mp4 was rendered/);
 });
