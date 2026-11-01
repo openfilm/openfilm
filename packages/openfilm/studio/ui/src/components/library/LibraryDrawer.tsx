@@ -371,7 +371,7 @@ function Card({ item, lang, picked, kept, square, onPick, onAdd }: {
     >
       <div className={`relative overflow-hidden rounded-md bg-[var(--surface-2)] ${square ? 'aspect-square' : 'aspect-video'} ${picked ? 'ring-2 ring-[var(--tl-accent)]' : 'ring-1 ring-transparent group-hover:ring-[var(--text-faint)]'}`}>
         {item.kind === 'look'
-          ? <img src={SAMPLE} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" style={{ filter: item.filter }} />
+          ? <img src={item.sample ? libraryUrl(item.sample) : SAMPLE} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" style={{ filter: item.filter }} />
           : <img src={posterUrl(item)} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />}
         {hover && item.kind !== 'look' && !item.still ? <video src={previewUrl(item)} autoPlay loop muted playsInline className="absolute inset-0 h-full w-full object-cover" /> : null}
         <StarButton item={item} kept={kept} className={`absolute right-1 top-1 h-5 w-5 place-items-center rounded-full bg-black/45 ${kept ? 'grid text-[#ffd35a]' : 'hidden text-white group-hover:grid'}`} />

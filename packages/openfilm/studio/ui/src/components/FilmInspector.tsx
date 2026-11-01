@@ -55,7 +55,7 @@ import {
 import { SPEED_STOPS, exactSpeed, lengthAtSpeed, roundSpeed, sliderKeyPosition, speedAtPosition, speedPosition } from '@/lib/clip-speed';
 import { speedText } from '@/lib/playback-speed';
 import {
-  AdjustSection, AdvancedSection, AppearanceSection, CropSection, EffectsSection, FillSection, MaskSection, NEUTRAL, StrokeSection,
+  AdjustSection, AdvancedSection, AppearanceSection, CropSection, EffectsSection, FillSection, FilterSection, MaskSection, NEUTRAL, StrokeSection,
   TypographySection, camelOf,
   isNeutral, kebabOf, rawDeclarations,
 } from './inspector-look';
@@ -1613,6 +1613,7 @@ function ClipPanel({
               <AppearanceSection look={look} t={t} radius />
               <StrokeSection look={look} t={t} />
               <EffectsSection look={look} t={t} />
+              <FilterSection look={look} t={t} />
               <AdjustSection look={look} t={t} />
             </>
           ) : null}
@@ -2333,6 +2334,7 @@ function MultiClipPanel({
           <AppearanceSection look={look} t={t} radius />
           <StrokeSection look={look} t={t} />
           <EffectsSection look={look} t={t} />
+          <FilterSection look={look} t={t} />
           <AdjustSection look={look} t={t} />
         </>
       ) : null}

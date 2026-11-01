@@ -13,7 +13,7 @@ import {
   SquareDashed, Star, Strikethrough, Underline,
 } from 'lucide-react';
 
-import type { useT } from '@/i18n';
+import { useLanguage, type useT } from '@/i18n';
 import {
   ADJUST_KEYS, BLEND_MODES, FADE_DEFAULT, INNER_SHADOW_DEFAULT, PLACED_STROKE_DEFAULT, SHADOW_DEFAULT, adjustOf, backdropBlurCss,
   backdropBlurOf, cropCss, cropForRatio, cropOf, cropRatio, filterParts, framingCss, framingOf, innerShadowCss, innerShadowOf,
@@ -26,6 +26,8 @@ import {
 } from '@/lib/clip-mask';
 import type { MaskSession } from '@/lib/stage-mask';
 import { previewSettled, type Look, type LookEdit, type LookRead, type LookSet } from '@/lib/look';
+import { gradeFilter, gradeOf, withGrade } from '@/lib/grade';
+import { nameOf, useLibraryIndex } from '@/lib/library';
 import { knownAvailable, stylesOf } from '@/lib/font-menu';
 import {
   NAMED_WEIGHTS, isItalic, joinFontFamily, parseStyleValue, snapStyle, splitFontFamily, styleOptions, styleValue, weightKey, weightNumber,
@@ -854,6 +856,47 @@ export function AdjustSection({ look, t }: { look: Look; t: T }) {
           />
         );
       })}
+    </Section>
+  );
+}
+
+/**
+ * The library's filter the picture wears (lib/grade), when it has one: its name, how strong it is (0 leaves the
+ * picture as it is), and "−" to take it off. Filters are put on from the library; the adjustments go after one.
+ */
+export function FilterSection({ look, t }: { look: Look; t: T }) {
+  const lang = useLanguage();
+  const index = useLibraryIndex();
+  const now = look.common((read) => gradeOf(read('filter')));
+  const item = now && now !== MIXED ? index?.items.find((i) => i.id === now.id && i.grade) : undefined;
+  if (!item?.grade || !now || now === MIXED) return null;
+  const grade = item.grade;
+  const edit = (apply: FieldApply): LookEdit => (read) => {
+    const n = Math.max(0, Math.min(100, Math.round(apply((gradeOf(read('filter'))?.amount ?? 1) * 100))));
+    return { filter: withGrade(read('filter'), gradeFilter(item.id, grade, n / 100)) };
+  };
+  return (
+    <Section
+      id="filter"
+      title={t('inspector.filter')}
+      aside={(
+        <SectionAction label={t('inspector.filterRemove')} onClick={() => look.commit((read) => ({ filter: withGrade(read('filter'), null) }))}>
+          <Minus size={12} />
+        </SectionAction>
+      )}
+    >
+      <p className="truncate text-[11.5px] font-medium text-[var(--text)]">{nameOf(item.name, lang)}</p>
+      <SliderField
+        label={t('inspector.filterAmount')}
+        value={Math.round(now.amount * 100)}
+        min={0}
+        max={100}
+        neutral={0}
+        unit="%"
+        onPreview={(_, apply) => look.preview(edit(apply))}
+        onCommit={(_, apply) => look.commit(edit(apply))}
+        onRevert={() => look.revert()}
+      />
     </Section>
   );
 }

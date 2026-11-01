@@ -9,6 +9,7 @@ import type { Language } from '../i18n';
 import type { ResourceDragItem } from './resource-drag';
 import type { TransitionKind } from './transitions';
 import { declared, withDeclarations } from './clip-look.ts';
+import { gradeFilter, gradeOf, withGrade, type Grade } from './grade.ts';
 
 /** What a path names OpenFilm's library by, as `saved/` names Saved. */
 export const BUILT_IN = 'openfilm';
@@ -33,8 +34,11 @@ export interface LibraryItem {
   low?: boolean;
   /** A transition page: its middle goes on the cut. */
   place?: 'cut';
-  /** A look: the CSS `filter` it writes. */
+  /** A look: its color grade (lib/grade), and the CSS `filter` it writes at full strength (made from the grade as the index is read). */
+  grade?: Grade;
   filter?: string;
+  /** A look: the picture it is shown on in the drawer, by its place in the library (its group's). */
+  sample?: string;
   /** Its picture in the drawer when not its bundle's poster.jpg (an emoji's own picture), by its place in the library. */
   poster?: string;
   /** Nothing moves in it to preview under the pointer. */
@@ -63,7 +67,11 @@ function readIndex(): Promise<LibraryIndex | null> {
   reading ??= fetch('/api/library', { cache: 'no-store' })
     .then((r) => (r.ok ? r.json() : null), () => null)
     .then((body: LibraryIndex | null) => {
-      if (body && Array.isArray(body.items)) { index = body; for (const fn of listeners) fn(); }
+      if (body && Array.isArray(body.items)) {
+        for (const item of body.items) if (item.grade && !item.filter) item.filter = gradeFilter(item.id, item.grade);
+        index = body;
+        for (const fn of listeners) fn();
+      }
       else reading = null;
       return index;
     });
@@ -143,16 +151,20 @@ export function onCut(atSec: number, durationMs: number, cutsSec: readonly numbe
   return best == null ? atSec : Math.max(0, Math.round((best - half) * 1000) / 1000);
 }
 
-/** A clip's style with a look's filter in place of its own (null: none of its own left). */
+/**
+ * A clip's style with a look's filter in place of the look it has (null `filter`: taken off), its own adjustments
+ * kept (lib/grade). Null: no style left.
+ */
 export function withLook(style: string | undefined, filter: string | null): string | null {
-  const next = withDeclarations(style ?? '', { filter });
+  const next = withDeclarations(style ?? '', { filter: withGrade(declared(style ?? '', 'filter'), filter) });
   return next || null;
 }
 
-/** The look a clip's style has, when it is one of the library's. */
-export function lookOf(style: string | undefined, items: readonly LibraryItem[]): LibraryItem | null {
-  const filter = declared(style ?? '', 'filter');
-  return filter ? items.find((item) => item.kind === 'look' && item.filter === filter) ?? null : null;
+/** The look a clip's style has, when it is one of the library's, and how strong (0–1). */
+export function lookOf(style: string | undefined, items: readonly LibraryItem[]): { item: LibraryItem; amount: number } | null {
+  const now = gradeOf(declared(style ?? '', 'filter'));
+  const item = now && items.find((i) => i.kind === 'look' && i.id === now.id);
+  return item && now ? { item, amount: now.amount } : null;
 }
 
 type Spans = readonly { docIndex?: number | null; blocks: readonly { clipId?: string | null; startMs: number; endMs: number }[] }[];

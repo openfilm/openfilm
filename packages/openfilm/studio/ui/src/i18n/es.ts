@@ -1295,6 +1295,9 @@ export const es: Words = {
     },
     adjust: 'Ajustes',
     adjustCustom: 'Su filtro está escrito a mano: cámbialo en Avanzado.',
+    filter: 'Filtro',
+    filterAmount: 'Intensidad',
+    filterRemove: 'Quitar filtro',
     adjustKeys: {
       brightness: 'Brillo',
       contrast: 'Contraste',

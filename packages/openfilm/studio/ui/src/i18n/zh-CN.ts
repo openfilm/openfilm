@@ -1296,6 +1296,9 @@ export const zhCN: Words = {
     },
     adjust: '调色',
     adjustCustom: '它的滤镜是手写的：请在“高级”中修改。',
+    filter: '滤镜',
+    filterAmount: '强度',
+    filterRemove: '移除滤镜',
     adjustKeys: {
       brightness: '亮度',
       contrast: '对比度',

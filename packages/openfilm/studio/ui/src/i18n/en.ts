@@ -1296,6 +1296,9 @@ export const en = {
     },
     adjust: 'Adjust',
     adjustCustom: 'Its filter is written by hand: change it under Advanced.',
+    filter: 'Filter',
+    filterAmount: 'Strength',
+    filterRemove: 'Remove filter',
     adjustKeys: {
       brightness: 'Brightness',
       contrast: 'Contrast',

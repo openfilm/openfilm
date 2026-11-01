@@ -1292,6 +1292,9 @@ export const ko: Words = {
     },
     adjust: '조정',
     adjustCustom: '필터가 직접 작성되어 있습니다. "고급"에서 바꾸세요.',
+    filter: '필터',
+    filterAmount: '강도',
+    filterRemove: '필터 제거',
     adjustKeys: {
       brightness: '밝기',
       contrast: '대비',

@@ -1295,6 +1295,9 @@ export const ja: Words = {
     },
     adjust: '調整',
     adjustCustom: 'フィルターは手書きです。「詳細」で変更してください。',
+    filter: 'フィルター',
+    filterAmount: '強さ',
+    filterRemove: 'フィルターを外す',
     adjustKeys: {
       brightness: '明るさ',
       contrast: 'コントラスト',

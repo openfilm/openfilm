@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { coverLook, libraryBox, cutTrack, cutsOf, fromLibrary, isTextClip, withRootVars, libraryDragItem, lookOf, onCut, soundLook, waveUrl, withLook, type LibraryItem } from './library.ts';
+import { gradeFilter } from './grade.ts';
 
 const page: LibraryItem = { id: 'effects/snow', cat: 'effect', group: 'ambience', name: { en: 'Snow' }, kind: 'page', durationMs: 4000, src: 'snow.html' };
 const sound: LibraryItem = { id: 'sounds/whoosh.m4a', cat: 'sound', group: 'transition', name: { en: 'Whoosh' }, kind: 'sound', durationMs: 700 };
@@ -26,10 +27,13 @@ test('a transition page put down near a cut has its middle on the cut; far from 
   assert.equal(onCut(0.1, 800, [0.2]), 0);
 });
 
-test('a look takes the place of the clip\'s own filter and keeps the rest of its style', () => {
-  assert.equal(withLook('object-fit: cover; filter: blur(2px)', 'grayscale(1)'), 'object-fit: cover; filter: grayscale(1)');
-  assert.equal(withLook('filter: grayscale(1)', null), null);
-  assert.equal(lookOf('object-fit: cover; filter: grayscale(1)', [look])?.id, 'filters/bw');
+test('a look goes on before the clip\'s own adjustments, in place of the last look, and is read back with its strength', () => {
+  const bw = gradeFilter('filters/bw', { sat: 0 });
+  const on = withLook('object-fit: cover; filter: blur(2px)', bw);
+  assert.equal(on, `object-fit: cover; filter: ${bw} blur(2px)`);
+  assert.equal(withLook(on!, null), 'object-fit: cover; filter: blur(2px)');
+  assert.equal(withLook(`filter: ${bw}`, null), null);
+  assert.deepEqual(lookOf(`object-fit: cover; filter: ${gradeFilter('filters/bw', { sat: 0 }, 0.4)}`, [look]), { item: look, amount: 0.4 });
   assert.equal(lookOf('filter: blur(1px)', [look]), null);
 });
 
