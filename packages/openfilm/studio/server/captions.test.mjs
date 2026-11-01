@@ -73,6 +73,20 @@ test('subtitles leave out fillers and false starts', () => {
   assert.equal(captionText('um...'), '');
 });
 
+test('"um" is printed where it is a word: in Portuguese and German, not in English (#330)', async () => {
+  assert.equal(captionText('um dia em Salem.'), 'um dia em Salem.');
+  assert.equal(captionText('Um dia em Salem.'), 'Um dia em Salem.');
+  assert.equal(captionText('porque esse é um'), 'porque esse é um');
+  assert.equal(captionText('Wir treffen uns um acht Uhr.'), 'Wir treffen uns um acht Uhr.');
+  assert.equal(captionText('Um, so we start at eight.'), 'so we start at eight.');
+  assert.equal(captionText('um dia em Salem.', false), 'dia em Salem.', 'told otherwise, it is a hesitation');
+  /* "Um ano depois." alone reads as no language; the transcript it is in reads as Portuguese */
+  const vtt = 'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nEra uma vez uma cidade.\n\n00:00:02.000 --> 00:00:04.000\nUm ano depois.\n';
+  const root = project([{ clips: [{ id: 'vo', src: 'assets/vo.mp3' }] }], { 'assets/vo.vtt': vtt });
+  assert.deepEqual((await filmCaptions(root, noProbe)).cues.map((c) => c.text), ['Era uma vez uma cidade.', 'Um ano depois.']);
+  assert.equal(captionText('Um ano depois.'), 'ano depois.');
+});
+
 test('a voice clip says its transcript\'s lines where it sits on the film, each word timed, each line traced to its source', async () => {
   const root = project([{ clips: [{ id: 'vo', src: 'assets/vo.mp3', at: 10 }] }], { 'assets/vo.vtt': VTT });
   const { cues, untranscribed } = await filmCaptions(root, noProbe);
