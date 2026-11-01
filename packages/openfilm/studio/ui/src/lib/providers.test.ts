@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { azureKey, couldMake, offered, providerGroups, type OwnProvider, type ProviderVerb, type ProvidersState } from './providers.ts';
+import { azureKey, chosenModel, couldMake, offered, providerGroups, type OwnProvider, type ProviderVerb, type ProvidersState } from './providers.ts';
 
 const own = (id: string, name: string, verbs: ProviderVerb[], source: OwnProvider['source'] = null): OwnProvider =>
   ({ id, name, verbs, models: {}, keysUrl: '', env: '', source, last4: null });
@@ -14,6 +14,15 @@ test('the providers that would make a kind, once connected, by name', () => {
   assert.deepEqual(couldMake(state, 'image'), ['fal.ai', 'OpenAI'], 'one connected already is not asked for');
   assert.deepEqual(couldMake(state, 'image-search'), [], 'nothing here finds pictures');
   assert.deepEqual(couldMake(state, 'translate'), []);
+});
+
+test('the model a kind is made with: the one picked, else the provider\'s first, as for one it no longer makes', () => {
+  const google = { ...own('google', 'Google', ['video'], 'file'), models: { video: [{ id: 'gemini-omni-1.1-flash', name: 'Gemini Omni Flash' }, { id: 'later', name: 'Later' }] } };
+  const at = (model: string | null): ProvidersState => ({ ...state, providers: [google], use: { video: 'google' }, model: { video: model } });
+  assert.equal(chosenModel(at('later'), 'video'), 'later');
+  assert.equal(chosenModel(at(null), 'video'), 'gemini-omni-1.1-flash');
+  assert.equal(chosenModel(at('veo-3.1-generate-preview'), 'video'), 'gemini-omni-1.1-flash', 'a retired model is not shown as none');
+  assert.equal(chosenModel({ ...at('later'), use: {} }, 'video'), undefined, 'nothing chosen makes it');
 });
 
 test('a kind is offered when any provider makes it, connected or not', () => {

@@ -59,6 +59,15 @@ export function couldMake(state: ProvidersState, verb: ProviderVerb): string[] {
   return state.providers.filter((p) => !p.source && p.verbs.includes(verb)).map((p) => p.name).sort((a, b) => a.localeCompare(b));
 }
 
+/**
+ * The model `verb` is made with by the provider chosen for it: the one picked, or the provider's first when none is, or
+ * when the one picked is one it no longer makes (a retired model), as the server takes it.
+ */
+export function chosenModel(state: ProvidersState, verb: ProviderVerb): string | undefined {
+  const models = state.providers.find((p) => p.id === state.use[verb])?.models[verb] ?? [];
+  return (models.find((m) => m.id === state.model[verb]) ?? models[0])?.id;
+}
+
 /** The providers Settings › Providers shows first, in this order: the large media services. */
 export const RECOMMENDED_PROVIDERS = ['openai', 'azure', 'google', 'elevenlabs'];
 
