@@ -107,3 +107,18 @@ test('undoing a delete the agent already put back: the clip is not put back twic
   /* the agent writes the film back as it was, then the person presses ⌘Z */
   assert.deepEqual(apply(structuredClone(f), undo), f);
 });
+
+test('a clip\'s keyframes set, changed, cut and taken away come back exactly', () => {
+  const start = film([{ id: 'v', src: 'v.mp4', time: [0, 6] }]);
+  const set = props(['v', 'motion', { scale: [{ t: 0, v: 1 }, { t: 2, v: 1.3, ease: 'ease-out' }] }]);
+  const keyed = apply(start, set);
+  /* undone, the film has no keyframes left (an emptied set: written, it takes them out of the file) */
+  assert.deepEqual(apply(keyed, inverse(start, keyed, set)), { ...start, keyframes: {} });
+  /* it had keyframes: undone, the film has them as they were (an emptied map is none) */
+  const changed = apply(keyed, props(['v', 'motion', { scale: [{ t: 0, v: 1 }, { t: 4, v: 2 }] }]));
+  assert.deepEqual(apply(changed, inverse(keyed, changed, props(['v', 'motion', null]))), keyed);
+  const cut: Op[] = [{ op: 'split', clip: 'v', left: { end: 3 }, right: { at: 3, start: 3 }, rightId: 'w' }];
+  const halves = apply(keyed, cut);
+  assert.ok(halves.keyframes?.['w--scale']);
+  assert.deepEqual(apply(halves, inverse(keyed, halves, cut)), keyed);
+});

@@ -39,8 +39,8 @@ export function LibraryTrial({ item, onLetGo }: { item: LibraryItem; onLetGo: ()
           style={sticker ? { aspectRatio: `${item.w} / ${item.h}`, colorScheme: 'normal' } : { colorScheme: 'normal' }}
         />
       ) : null}
-      {/* a transition, and a template (its places filled with photos), as drawn: they need clips to be seen */}
-      {item.cat === 'transition' || item.kind === 'group' ? <video src={previewUrl(item)} autoPlay loop muted playsInline className="pointer-events-none absolute inset-0 h-full w-full object-cover" /> : null}
+      {/* a transition, a template (its places filled with photos) and a clip's motion, as drawn: they need clips to be seen */}
+      {item.cat === 'transition' || item.kind === 'group' || item.kind === 'motion' ? <video src={previewUrl(item)} autoPlay loop muted playsInline className="pointer-events-none absolute inset-0 h-full w-full object-cover" /> : null}
     </div>
   );
 }

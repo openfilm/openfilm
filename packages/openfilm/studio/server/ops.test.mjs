@@ -164,3 +164,12 @@ test('keyframes: set by name; a cut clip\'s right half and a copy move by keyfra
   assert.deepEqual(gone.keyframes, { fade: 'to { opacity: 0 }' });
   assert.throws(() => applyOps(film(), [{ op: 'keyframes', set: { 'bad name': 'x' } }]), EditError);
 });
+
+test('motion: a clip\'s keyframes by property, written as its animations and the film\'s @keyframes', () => {
+  const f = applyOps(film(), [{ op: 'props', edits: [{ clip: 'v', prop: 'motion', value: { opacity: [{ t: 0, v: 0 }, { t: 0.5, v: 1, ease: 'ease-out' }] } }] }]);
+  assert.equal(f.tracks[1].clips[0].style, 'animation: v--opacity 0.5s linear both');
+  assert.equal(f.keyframes['v--opacity'], '0% { opacity: 0 } 100% { opacity: 1; animation-timing-function: cubic-bezier(0, 0, 0.58, 1) }');
+  const none = applyOps(f, [{ op: 'props', edits: [{ clip: 'v', prop: 'motion', value: null }] }]);
+  assert.equal(none.tracks[1].clips[0].style, undefined);
+  assert.deepEqual(none.keyframes, {});
+});

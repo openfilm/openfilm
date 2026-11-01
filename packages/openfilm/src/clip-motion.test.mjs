@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { animationsOf, readMotion, shiftMotion, valueAt, withAnimations, writeMotion } from './clip-motion.mjs';
+import { animationsOf, readMotion, shiftMotion, valueAt, withAnimations, withPreset, writeMotion } from './clip-motion.mjs';
 
 const clip = { id: 'intro', style: 'object-fit: cover; animation: shake .3s linear both' };
 const motion = {
@@ -38,4 +38,16 @@ test('the keyframes of a clip cut at a second, its second part from there', () =
 test('a style\'s animations, read and written whole', () => {
   assert.deepEqual(animationsOf('animation: a 1s cubic-bezier(0, 0, .5, 1) both, b 2s'), ['a 1s cubic-bezier(0, 0, .5, 1) both', 'b 2s']);
   assert.equal(withAnimations('opacity: .5; animation: a 1s', []), 'opacity: .5');
+});
+
+test('a preset goes in its slot, the last one there off, timed from the clip\'s start or end', () => {
+  const zoom = { name: 'motion-in-zoom', body: 'from { scale: .6 }', secs: 0.5, ease: 'ease-out' };
+  const keyed = 'object-fit: cover; animation: v--scale 2s linear both';
+  const a = withPreset(keyed, 'in', zoom);
+  assert.equal(a, 'object-fit: cover; animation: motion-in-zoom 0.5s ease-out backwards, v--scale 2s linear both');
+  const b = withPreset(a, 'out', { name: 'motion-out-fade', body: 'to { opacity: 0 }', secs: 0.4, ease: 'ease-in' });
+  assert.match(b, /motion-out-fade 0\.4s ease-in calc\(var\(--clip-length\) - 0\.4s\) forwards, v--scale/);
+  const c = withPreset(b, 'in', { ...zoom, name: 'motion-in-pop' });
+  assert.doesNotMatch(c, /motion-in-zoom/);
+  assert.equal(withPreset(withPreset(c, 'in', null), 'out', null), keyed);
 });

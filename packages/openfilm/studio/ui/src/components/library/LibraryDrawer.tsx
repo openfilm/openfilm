@@ -312,7 +312,7 @@ function SideLine({ on, onClick, children }: { on: boolean; onClick: () => void;
 
 /** Where its "+" (and a double click) puts it, said in its tooltip. */
 function addTip(item: LibraryItem, t: (path: string) => string): string {
-  return t(item.cat === 'transition' ? 'assetDrawer.addCut' : item.kind === 'look' ? 'assetDrawer.addLook' : 'assetDrawer.addPlayhead');
+  return t(item.cat === 'transition' ? 'assetDrawer.addCut' : item.kind === 'look' || item.kind === 'motion' ? 'assetDrawer.addLook' : 'assetDrawer.addPlayhead');
 }
 
 /** What a drag of `item` carries to the timeline (or the chat). */

@@ -23,7 +23,7 @@ export interface LibraryItem {
   cat: LibraryCategory;
   group: string;
   name: LibraryNames;
-  kind: 'page' | 'sound' | 'look' | 'fade' | 'textstyle' | 'textmotion' | 'group';
+  kind: 'page' | 'sound' | 'look' | 'fade' | 'textstyle' | 'textmotion' | 'group' | 'motion';
   durationMs?: number;
   /** A page: its clip's page (in its bundle's files/, with the stretch it plays), and a size of its own. */
   src?: string;
@@ -52,6 +52,9 @@ export interface LibraryItem {
   /** A template (a group of clips): how many of its clips are places for the person's own pictures, and its music (a piece of the library's, by its id). */
   slots?: number;
   music?: string;
+  /** A motion preset (src/clip-motion.mjs withPreset): how a clip comes in, goes out, moves while shown; on a cut, the
+   *  clip before it goes out and the one after comes in. */
+  motion?: Partial<Record<'in' | 'out' | 'loop', { name: string; body: string; secs: number; ease: string }>>;
   /** A fade: which of the timeline's transitions. */
   fade?: Extract<TransitionKind, 'dissolve' | 'dip-black' | 'dip-white'>;
 }

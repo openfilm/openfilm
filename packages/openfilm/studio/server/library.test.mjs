@@ -38,6 +38,13 @@ test('every thing of the library is there, named in each language, in a group of
       for (const c of ['all', 'r', 'g', 'b']) if (item.grade[c]) assert.ok(item.grade[c].every((v) => v >= 0 && v <= 1), `${item.id}: ${c} within 0–1`);
       if (item.sample) assert.ok(libraryFile(item.sample), `${item.id}: its sample`);
     }
+    /* a motion preset: each slot's keyframes named for it, read as CSS, drawn */
+    if (item.kind === 'motion') {
+      const slots = Object.entries(item.motion ?? {});
+      assert.ok(slots.length && slots.every(([slot, p]) => ['in', 'out', 'loop'].includes(slot) && p.name.startsWith(`motion-${slot}-`) && /\{[^}]*:[^}]*\}/.test(p.body) && p.secs > 0), `${item.id}: its motion`);
+      if (item.place === 'cut') assert.ok(item.motion.in && item.motion.out, `${item.id}: a camera move goes out of one clip and into the next`);
+      for (const f of ['poster.jpg', 'preview.mp4']) assert.ok(libraryFile(`${item.id}/${f}`), `${item.id}: ${f}`);
+    }
     /* a template: its clips' pages there, its places for pictures counted, its music one of the library's */
     if (item.kind === 'group') {
       const about = JSON.parse(readFileSync(join(builtInRoot(), item.id, 'saved.json'), 'utf8'));

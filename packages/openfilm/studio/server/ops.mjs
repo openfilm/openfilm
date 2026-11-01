@@ -30,7 +30,7 @@ import { MOTION_PROPS, animationsOf, motionName, readMotion, shiftMotion, withAn
 /**
  * One property of one clip, as the timeline, the inspector and the picture write it: a field of the clip (`at`,
  * `start` / `end` = its trim in source seconds, `volume`, `speed`, `box`, `overrides`, `link` = its `data-link`, `fade` = its
- * fades `[in, out]` in seconds, kept in its `overrides`, …), a flag of
+ * fades `[in, out]` in seconds, kept in its `overrides`, `motion` = its keyframes by property (src/clip-motion.mjs), …), a flag of
  * its track (`locked` / `hidden` / `muted`), the track it goes to (`track`: an index, or `{ insert: index }` for a
  * new track there), or the order of the tracks (`trackOrder`: `{ from, to }`). `null` removes the field.
  * @typedef {{ clip: string, prop: string, value: PropValue }} PropEdit
@@ -76,6 +76,8 @@ const SETTABLE = new Set(['at', 'time', 'box', 'size', 'volume', 'speed', 'overr
 /** @param {FilmValue} value @param {Op[]} ops */
 export function applyOps(value, ops) {
   if (!Array.isArray(ops) || !ops.length) throw new EditError('an edit needs at least one operation', 'invalid');
+  /* a film that had no keyframes keeps none said when the edit leaves it none (an empty set says: take them away) */
+  const hadKeyframes = value.keyframes !== undefined;
   for (const op of ops) {
     switch (op.op) {
       case 'set': {
@@ -224,6 +226,7 @@ export function applyOps(value, ops) {
   fitFades(value);
   fitClipLengths(value);
   ownMotion(value);
+  if (!hadKeyframes && value.keyframes && !Object.keys(value.keyframes).length) delete value.keyframes;
   return value;
 }
 
@@ -301,7 +304,8 @@ function ownMotion(/** @type {FilmValue} */ value) {
     });
     if (changed) clip.style = withAnimations(/** @type {string | undefined} */ (clip.style), next);
   }
-  for (const name of Object.keys(value.keyframes)) if (own.test(name) && !used.has(name)) delete value.keyframes[name];
+  /* Studio's own (a clip's keyframes, the library's presets) go when nothing moves by them */
+  for (const name of Object.keys(value.keyframes)) if ((own.test(name) || /^motion-(in|out|loop)-/.test(name)) && !used.has(name)) delete value.keyframes[name];
 }
 
 function fitClipLengths(/** @type {FilmValue} */ value) {
@@ -418,6 +422,16 @@ function applyProps(/** @type {FilmValue} */ value, /** @type {PropEdit[]} */ ed
   const resort = new Set(/** @type {Track[]} */ ([]));
   for (const e of fields) {
     const at = find(value, e.clip);
+    /* its keyframes (src/clip-motion.mjs), each property's at seconds of the clip: written as its animations and the
+       film's @keyframes of its name */
+    if (e.prop === 'motion') {
+      const written = writeMotion(/** @type {{ id: string, style?: string }} */ (at.clip), /** @type {import('../../src/clip-motion.mjs').Motion} */ (e.value ?? {}));
+      if (written.style) at.clip.style = written.style; else delete at.clip.style;
+      const kf = { ...value.keyframes };
+      for (const [n, body] of Object.entries(written.keyframes)) { if (body == null) delete kf[n]; else kf[n] = body; }
+      value.keyframes = kf;
+      continue;
+    }
     setField(at.clip, e.prop, snapTime(e.prop, e.value));
     if (e.prop === 'at') resort.add(value.tracks[at.t]);
   }

@@ -2,7 +2,7 @@
 // in host.mjs); the file's own elements are the clips: an <iframe> a web page, a <video>, an <img> a still, an
 // <audio> a sound for the mix. Where each plays and sits is what film-doc.mjs reads in the file, the same reading
 // Studio plays and exports by; how each looks is the file's own CSS. Track 0, the first <section>, is on top.
-import { MEDIA_RATE_MAX, MEDIA_RATE_MIN, clipFade, clipSpan, clipTag, declarations, fadeGain, filmHead, fittedFade, kindOf, mediaPlays, parseFilm, pictureRect, readFilmFile, sourceAt, srcHref } from './film-doc.mjs';
+import { MEDIA_RATE_MAX, MEDIA_RATE_MIN, clipFade, clipSpan, clipTag, declarations, fadeGain, filmHead, fittedFade, keyframeBlocks, kindOf, mediaPlays, parseFilm, pictureRect, readFilmFile, sourceAt, srcHref } from './film-doc.mjs';
 import { override, restore } from './overrides.mjs';
 
 /* the file as written (without what the host puts in it), read as every reader reads it */
@@ -11,9 +11,14 @@ own.searchParams.set('film-host', '0');
 const ownText = await (await fetch(own, { cache: 'no-store' })).text();
 const read = readFilmFile(ownText);
 /* what the tracks and the stage are not (the styles, the fonts): changed, the film is loaded again, not changed in
-   place. The stage is the viewport's size, and changes in place (see change) */
+   place. The stage is the viewport's size, and the keyframes its clips move by are a value of the film's: both change
+   in place (see change) */
 const VIEWPORT = /<meta\b[^>]*\bname\s*=\s*["']?viewport\b[^>]*>/i;
-const styleOf = (text) => text.replace(VIEWPORT, '');
+const styleOf = (text) => {
+  let out = text.replace(VIEWPORT, '');
+  for (const k of keyframeBlocks(out).reverse()) out = out.slice(0, k.start) + out.slice(k.end);
+  return out;
+};
 const head = styleOf(filmHead(ownText));
 if (!read.doc) throw new Error(read.problems.length === 1 ? read.problems[0] : `film.html has ${read.problems.length} problems:\n  ${read.problems.join('\n  ')}`);
 let doc = read.doc;
@@ -1125,6 +1130,18 @@ function element(row) {
   return el;
 }
 
+/**
+ * The film's keyframes after an edit: all of them in a <style> of their own at the end of the head, so each one there
+ * stands over the one of its name the film was loaded with (a running animation takes its keyframes' change).
+ */
+let keyframesStyle = null;
+function keyframesNow(keyframes) {
+  if (!keyframes) return;
+  keyframesStyle ??= document.head.appendChild(document.createElement('style'));
+  const text = Object.entries(keyframes).map(([name, body]) => `@keyframes ${name} { ${body} }`).join('\n');
+  if (keyframesStyle.textContent !== text) keyframesStyle.textContent = text;
+}
+
 /** Track `ti`'s section; one more is made after the last for a track the film did not have when it loaded. */
 function sectionOf(ti, track) {
   while (sections.length <= ti) {
@@ -1146,6 +1163,7 @@ function sectionOf(ti, track) {
 async function change(value, look) {
   if (look != null && styleOf(look) !== head) return false;
   const next = parseFilm(value);
+  keyframesNow(value.keyframes);
   const rows = next.tracks.flatMap((track, ti) => track.clips.map((row) => ({ row, track, ti })));
   const byId = new Map(clips.map((c) => [c.id, c]));
   const kept = (row) => { const c = byId.get(row.id); return c && c.src === row.src && c.kind === kindOf(row) ? c : null; };

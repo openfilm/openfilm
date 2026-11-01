@@ -24,7 +24,8 @@ export type Clip = { src: string; id: string; at?: number; time?: [number] | [nu
   /** its look: class names for the film's styles, and its own CSS */
   class?: string; style?: string; attrs?: Record<string, string> };
 export type Track = { clips: Clip[]; locked?: boolean; hidden?: boolean; muted?: boolean; attrs?: Record<string, string> };
-export type Film = { stage?: { w: number; h: number }; tracks: Track[] };
+/** `keyframes`: the film's @keyframes by name (its clips' own, Studio's: src/clip-motion.mjs). */
+export type Film = { stage?: { w: number; h: number }; tracks: Track[]; keyframes?: Record<string, string> };
 /** `value`: film.html as read, every clip named (a clip with no id takes its file's name, as the server and preview do). */
 /** `filmMissing`: the folder is there but film.html is not (read as an empty film; see FolderEvent `film-missing`). */
 export type ProjectFilm = { project: Project; folder: string; text: string; rev: string; value: Film | null; doc: Film | null; problems: string[]; filmMissing?: boolean };
@@ -43,7 +44,8 @@ export type Op =
   | { op: 'reorder'; from: number; to: number }
   | { op: 'props'; edits: PropEdit[] }
   | { op: 'stage'; w: number; h: number }
-  | { op: 'fields'; clip: string; fields: Record<string, unknown> };
+  | { op: 'fields'; clip: string; fields: Record<string, unknown> }
+  | { op: 'keyframes'; set: Record<string, string | null> };
 
 /** A value a clip's property takes (null removes it). */
 export type PropValue = number | string | boolean | readonly number[] | Record<string, unknown> | null;

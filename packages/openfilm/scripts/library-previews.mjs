@@ -19,6 +19,7 @@ import { closeBrowsers } from '../src/host.mjs';
 import { GROUND } from './library-ground.mjs';
 import { libraryIndex } from '../studio/server/library.mjs';
 import { filmHtml } from '../src/film-doc.mjs';
+import { withPreset } from '../src/clip-motion.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const LIB = join(HERE, '..', 'library');
@@ -108,7 +109,40 @@ function groupFilm(item, about, work) {
   return { html: filmHtml({ stage: { w: W, h: H }, tracks: tracks.map((t) => t ?? { clips: [] }) }), posterAt, length: about.durationMs / 1000 };
 }
 
+/**
+ * A motion preset (library/catalogs/motions.json) on the stills: a camera move across a cut from one to the other, else
+ * the way in, out or the loop of one still two seconds long.
+ */
+function motionFilm(item) {
+  const m = item.motion;
+  const style = (slots) => slots.reduce((s, slot) => (m[slot] ? withPreset(s, slot, m[slot]) : s), 'object-fit: cover');
+  const keyframes = Object.fromEntries(Object.values(m).map((p) => [p.name, p.body]));
+  const clips = item.place === 'cut'
+    ? [{ id: 'a', src: 'a.jpg', time: [0, 1], style: style(['out']) }, { id: 'b', src: 'b.jpg', at: 1, time: [0, 1], style: style(['in']) }]
+    : [{ id: 'a', src: 'b.jpg', time: [0, 2], style: style(['in', 'out', 'loop']) }];
+  const posterAt = item.place === 'cut' ? 1 - m.out.secs * 0.4 : m.in ? m.in.secs * 0.45 : m.out ? 2 - m.out.secs * 0.55 : 0.8;
+  return { html: filmHtml({ stage: { w: W, h: H }, tracks: [{ clips }], keyframes }), posterAt };
+}
+
 for (const item of index.items) {
+  if (item.kind === 'motion' && (!asked.length || asked.includes(item.id))) {
+    const dir = join(LIB, item.id);
+    mkdirSync(dir, { recursive: true });
+    const work = mkdtempSync(join(tmpdir(), 'openfilm-library-'));
+    try {
+      for (const s of ['a.jpg', 'b.jpg']) cpSync(join(SAMPLES, s), join(work, s));
+      const { html, posterAt } = motionFilm(item);
+      writeFileSync(join(work, 'film.html'), html);
+      const out = join(work, 'out.mp4');
+      await render([work, '0-2'], { out, fps: 30, quiet: true });
+      ffmpeg('-i', out, '-vf', 'scale=320:180', '-c:v', 'libx264', '-crf', '30', '-preset', 'slow', '-pix_fmt', 'yuv420p', '-an', '-movflags', '+faststart', join(dir, 'preview.mp4'));
+      ffmpeg('-ss', String(posterAt), '-i', out, '-frames:v', '1', '-vf', 'scale=320:180', '-q:v', '5', join(dir, 'poster.jpg'));
+      console.log(`→ library/${item.id}`);
+    } finally {
+      rmSync(work, { recursive: true, force: true });
+    }
+    continue;
+  }
   if (item.kind === 'group' && (!asked.length || asked.includes(item.id))) {
     const dir = join(LIB, item.id);
     const about = JSON.parse(readFileSync(join(dir, 'saved.json'), 'utf8'));

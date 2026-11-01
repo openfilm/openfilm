@@ -713,6 +713,8 @@ export interface TimelineProps {
    * onEditOps). Nothing else is drawn for them: where the handle sits says how long they are.
    */
   fades?: ReadonlyMap<string, FadeMs>;
+  /** A clip's keyframes, its own seconds (src/clip-motion.mjs): diamonds along the bottom of the picked clip, each a seek. */
+  keyTimesOf?: (clipId: string) => readonly number[];
   /** The transitions the fades make (lib/transitions findTransitions): a mark over each, picked, resized, deleted. */
   transitions?: readonly FilmTransition[];
   /** A transition put on a cut (the cut's menu, a clip's menu), resized or deleted. Null = done. */
@@ -990,6 +992,7 @@ export const Timeline = React.memo(function Timeline({
   onResizeTrack,
   onReplaceDrop,
   fades,
+  keyTimesOf,
   transitions,
   onTransition,
   pickedTransition = null,
@@ -3408,6 +3411,19 @@ export const Timeline = React.memo(function Timeline({
                           {t('transitions.fadeTip').replace('{what}', what).replace('{s}', (ms / 1000).toFixed(2))}
                         </span>
                       ) : null}
+                    </span>
+                  );
+                }) : null}
+                {/* its keyframes, picked: a diamond each along its bottom edge, a click takes the playhead there */}
+                {keyTimesOf && block.clipId && selected.includes(block.id) && width > 12 ? keyTimesOf(block.clipId).map((s) => {
+                  const x = s * 1000 * pxPerMs;
+                  if (x < 0 || x > width) return null;
+                  return (
+                    <span key={`k${s}`} role="presentation" data-keyframe={s} title={t('inspector.keyframes')}
+                      className="absolute bottom-[1px] z-[5] grid h-[11px] w-[11px] -translate-x-1/2 cursor-pointer place-items-center"
+                      style={{ left: x }}
+                      onPointerDown={(e) => { e.stopPropagation(); onSeek(startMs + s * 1000); }}>
+                      <svg width="9" height="9" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1 11 6 6 11 1 6Z" fill="#fff" stroke="rgba(0,0,0,.55)" strokeWidth="1.2" /></svg>
                     </span>
                   );
                 }) : null}

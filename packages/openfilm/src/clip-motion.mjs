@@ -113,6 +113,7 @@ export function readMotion(clip, keyframes) {
     const body = prop && keyframes?.[name];
     const d = Number.parseFloat(dur ?? '');
     if (!prop || body == null || !(d > 0)) continue;
+    /** @type {Key[]} */
     const keys = [];
     for (const { pct, d: ds } of stops(body)) {
       if (ds[prop] == null) continue;
@@ -209,4 +210,27 @@ export function shiftMotion(/** @type {Motion} */ motion, /** @type {number} */ 
     if (kept.length) out[prop] = kept;
   }
   return out;
+}
+
+/** How a clip comes in, goes out or moves while it shows: a preset of the library's (library/catalogs/motions.json). */
+/** @typedef {{ name: string, body: string, secs: number, ease: string }} Preset */
+/** @typedef {'in' | 'out' | 'loop'} PresetSlot */
+
+/**
+ * A style with a preset in its slot, the one there before taken off (null: just taken off). In from the clip's start,
+ * filling backwards; out timed from its end (`--clip-length`), filling forwards; a loop over and over. Filling only
+ * that way, a preset that changes the clip's filter leaves the clip's own look on it the rest of the time.
+ * @param {string | undefined} style @param {PresetSlot} slot @param {Preset | null} preset
+ */
+export function withPreset(style, slot, preset) {
+  const kept = animationsOf(style).filter((e) => !e.split(/\s+/)[0].startsWith(`motion-${slot}-`));
+  if (!preset) return withAnimations(style, kept);
+  const s = `${round(preset.secs, 3)}s`;
+  const entry = slot === 'in' ? `${preset.name} ${s} ${preset.ease} backwards`
+    : slot === 'out' ? `${preset.name} ${s} ${preset.ease} calc(var(--clip-length) - ${s}) forwards`
+      : `${preset.name} ${s} ${preset.ease} infinite`;
+  /* before the clip's own keyframes, so a property it keys itself is the one that shows */
+  const own = kept.findIndex((e) => /--(translate|scale|rotate|opacity)$/.test(e.split(/\s+/)[0]));
+  kept.splice(own < 0 ? kept.length : own, 0, entry);
+  return withAnimations(style, kept);
 }
