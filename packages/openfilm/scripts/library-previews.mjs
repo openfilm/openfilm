@@ -16,13 +16,15 @@ import { fileURLToPath } from 'node:url';
 import { render } from '../src/render.mjs';
 import { closeBrowsers } from '../src/host.mjs';
 import { GROUND } from './library-ground.mjs';
+import { libraryIndex } from '../studio/server/library.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const LIB = join(HERE, '..', 'library');
 const SAMPLES = join(HERE, 'library-samples');
 const W = 640, H = 360;
 
-const index = JSON.parse(readFileSync(join(LIB, 'index.json'), 'utf8'));
+/* every thing of the library: its index and its other catalogs, as Studio shows them */
+const index = /** @type {{ items: any[] }} */ (libraryIndex());
 const asked = process.argv.slice(2);
 const ffmpeg = (...args) => { const r = spawnSync('ffmpeg', ['-v', 'error', '-y', ...args], { stdio: 'inherit' }); if (r.status !== 0) throw new Error(`ffmpeg ${args.join(' ')}`); };
 
@@ -38,10 +40,13 @@ function filmFor(item, about) {
     top = `<iframe src="${src}" at="${(1 - d / 2).toFixed(3)}"${props}></iframe>`;
     under = '<img src="a.jpg#t=0,1" style="object-fit: cover"><img src="b.jpg#t=0,1" at="1" style="object-fit: cover">';
     posterAt = 1 - d * 0.3;
-  } else if (about.w && about.h) {
-    const s = 0.5 * H;
-    const w = Math.round(s * (about.w / about.h));
-    top = `<iframe src="${src}#t=0,2" style="left: ${(W - w) / 2}px; top: ${(H - s) / 2}px; width: ${w}px; height: ${s}px"${props}></iframe>`;
+  } else if ((item.w ?? about.w) && (item.h ?? about.h)) {
+    /* a thing of its own size (a sticker, a text template): in the middle, drawn at its box's size */
+    const ow = item.w ?? about.w, oh = item.h ?? about.h;
+    let s = Math.round(0.5 * H);
+    let w = Math.round(s * (ow / oh));
+    if (w > W * 0.9) { w = Math.round(W * 0.9); s = Math.round(w * (oh / ow)); }
+    top = `<iframe src="${src}#t=0,2" size="${w}x${s}" style="left: ${Math.round((W - w) / 2)}px; top: ${Math.round((H - s) / 2)}px; width: ${w}px; height: ${s}px"${props}></iframe>`;
     under = '<iframe src="ground.html#t=0,2"></iframe>';
     posterAt = 1.2;
   } else {
@@ -68,7 +73,8 @@ function fadeFilm(item) {
 }
 
 for (const item of index.items) {
-  if ((item.kind !== 'page' && item.kind !== 'fade') || (asked.length && !asked.includes(item.id))) continue;
+  /* a thing with a picture of its own (an emoji) has nothing to draw */
+  if ((item.kind !== 'page' && item.kind !== 'fade') || item.still || (asked.length && !asked.includes(item.id))) continue;
   const dir = join(LIB, item.id);
   const about = item.kind === 'page' ? JSON.parse(readFileSync(join(dir, 'saved.json'), 'utf8')) : null;
   const work = mkdtempSync(join(tmpdir(), 'openfilm-library-'));

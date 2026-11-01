@@ -24,7 +24,7 @@
  * a bundle's files to `saved/openfilm/<id as one name>/` there (`effects-snow`), a file into assets/. Nothing here is
  * ever written.
  */
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setSharedPref, sharedPref } from '../../src/locations.mjs';
@@ -51,19 +51,24 @@ function read(name, empty) {
   return value;
 }
 
-/** The library's other catalogs, each written by its script: its things shown with the index's own. */
-const CATALOGS = ['audio.json', 'stickers.json'];
+/**
+ * The library's other catalogs, each written by its script or by hand: its things shown with the index's own. The
+ * sounds and music (audio.json), the emoji (stickers.json), and each catalog in catalogs/ (stickers, effects,
+ * transitions, text, templates made as pages), by its name.
+ */
+const catalogNames = () => ['audio.json', 'stickers.json',
+  ...(existsSync(join(builtInRoot(), 'catalogs')) ? readdirSync(join(builtInRoot(), 'catalogs')).filter((f) => f.endsWith('.json')).sort().map((f) => `catalogs/${f}`) : [])];
 
 /** @type {{ parts: unknown[], index: unknown } | null} */
 let merged = null;
 
 /**
- * The library's index: library/index.json, and the things of each of CATALOGS with it (the sounds and music of
+ * The library's index: library/index.json, and the things of each other catalog with it (the sounds and music of
  * audio.json, the emoji of stickers.json): their groups after its own, their things after its own.
  */
 export function libraryIndex() {
   const own = /** @type {{ version: number, groups: Record<string, unknown[]>, items: unknown[] }} */ (read('index.json', { version: 1, groups: {}, items: [] }));
-  const more = /** @type {({ groups?: Record<string, { id: string }[]>, items?: unknown[] } | null)[]} */ (CATALOGS.map((name) => read(name, null)));
+  const more = /** @type {({ groups?: Record<string, { id: string }[]>, items?: unknown[] } | null)[]} */ (catalogNames().map((name) => read(name, null)));
   const parts = [own, ...more];
   if (merged && merged.parts.length === parts.length && merged.parts.every((p, i) => p === parts[i])) return merged.index;
   const groups = { ...own.groups };
