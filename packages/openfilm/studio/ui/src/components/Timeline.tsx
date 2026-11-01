@@ -153,7 +153,7 @@ import { OperationHistory, type SessionTimeline } from './OperationHistory';
 import { BlockThumbs } from './BlockThumbs';
 import { BlockWaveform } from './BlockWaveform';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
-import { LANE_H, LANE_PAD, MotionLaneHeads, MotionLaneRows, type MotionLanes } from './MotionLanes';
+import { MotionLaneHeads, MotionLaneRows, lanesHeight, type MotionLanes } from './MotionLanes';
 import type { PlaybackClock } from './LiveTime';
 import { CaptionsIcon } from './player-controls/controls-bar';
 import { inHostPanel, isTypingTarget } from './typing-target';
@@ -1010,7 +1010,7 @@ export const Timeline = React.memo(function Timeline({
     return tracksIn.map((tr) => {
       if (done || !tr.blocks.some((b) => b.clipId === motionLanes.clipId)) return tr;
       done = true;
-      return { ...tr, extra: motionLanes.rows.length * LANE_H + LANE_PAD };
+      return { ...tr, extra: lanesHeight(motionLanes) };
     });
   }, [tracksIn, motionLanes]);
   /* the project's frame rate: the ruler's labels, the frame grid and the arrow keys' steps */

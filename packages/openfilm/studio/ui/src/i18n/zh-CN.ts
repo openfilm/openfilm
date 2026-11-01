@@ -1302,6 +1302,7 @@ export const zhCN: Words = {
     transform: '变换',
     stopwatchOn: '开始动画（在播放头处打关键帧）',
     stopwatchOff: '停止动画（删除它的关键帧，保留播放头处的值）',
+    keyGraph: '曲线图（⇧F3）',
     keyPosition: '位置',
     keyScale: '缩放',
     keyRotate: '旋转',

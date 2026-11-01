@@ -10,8 +10,9 @@ import * as React from 'react';
 import { ArrowLeftRight, BookmarkPlus, ClipboardCopy, ClipboardPaste, Film as FilmIcon, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, TriangleAlert, Upload, Workflow } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
 import { MOTION_PROPS, readMotion, valueAt, withPreset, type Motion, type MotionProp } from '../../../../src/clip-motion.mjs';
-import { easedMotion, keyId, keyedBox, movedKeys, parseKeyId, withoutKeys, type EaseCommand } from '@/lib/motion-keys';
+import { copiedKeys, easeOfBezier, easedMotion, keyId, keyedBox, movedKeys, parseKeyId, pastedKeys, poseAt, withoutKeys, type CopiedKeys, type EaseCommand } from '@/lib/motion-keys';
 import type { MotionLanes } from './MotionLanes';
+import type { MotionPathKeys } from './MotionPath';
 import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type Op, type ProjectFilm, type ProjectSettings, type SavedGroupClip } from '@/api';
 import { useLanguage, useT } from '@/i18n';
 import { useFilm, type OutsideStep, type Step } from '@/editor/use-film';
@@ -889,6 +890,14 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const clip = block?.clipId ? film.film?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === block.clipId) : null;
     return clip ? readMotion(clip as { id: string; style?: string }, film.film?.keyframes) : {};
   }, [film.film]);
+  /* where a clip's keyframes have its picture at the playhead: its frame on the picture is drawn there */
+  const poseOf = React.useCallback((clipId: string) => {
+    const block = blocksRef.current.find((b) => b.clipId === clipId);
+    if (!block) return null;
+    const local = Math.min(Math.max((timeRef.current - block.startMs) / 1000, 0), (block.endMs - block.startMs) / 1000);
+    return poseAt(motionOfBlock(block), local);
+  }, [motionOfBlock]);
+  const stagePoseKey = motionBlock?.clipId && !playing ? JSON.stringify(poseOf(motionBlock.clipId)) : '';
   /* the picked clip's keyframes rewritten; the ones picked follow where they went */
   const rewriteMotion = React.useCallback((next: Motion, picked?: ReadonlySet<string>) => {
     if (!motionBlock?.loc) return;
@@ -914,6 +923,31 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     rewriteMotion(easedMotion(motion, pickedKeys, what));
   }, [pickedKeys, motionBlock, motionOfBlock, rewriteMotion]);
   const keyFrameS = 1 / Math.max(1, projectFps);
+  /* keyframes copied (⌘C with keyframes picked): ⌘V puts them on the picked clip at the playhead, until something
+     else is copied */
+  const keyClipRef = React.useRef<CopiedKeys | null>(null);
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      if (e.key === 'F3' && e.shiftKey && motionBlock) { e.preventDefault(); setMotionGraph((on) => !on); return; }
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
+      const key = e.key.toLowerCase();
+      if (key === 'c' || key === 'x') {
+        keyClipRef.current = key === 'c' && pickedKeys.size ? copiedKeys(motionOfBlock(motionBlock), pickedKeys) : null;
+        if (!keyClipRef.current) return;
+      } else if (key === 'v' && keyClipRef.current && motionBlock) {
+        const local = (timeRef.current - motionBlock.startMs) / 1000;
+        if (local < -keyFrameS / 2 || local > (motionBlock.endMs - motionBlock.startMs) / 1000 + keyFrameS / 2) return;
+        const pasted = pastedKeys(motionOfBlock(motionBlock), keyClipRef.current, Math.max(0, local), keyFrameS);
+        rewriteMotion(pasted.motion, pasted.picked);
+      } else return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [pickedKeys, motionBlock, motionOfBlock, rewriteMotion, keyFrameS]);
   React.useEffect(() => {
     if (!pickedKeys.size) return undefined;
     const onKey = (e: KeyboardEvent) => {
@@ -931,6 +965,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     return () => window.removeEventListener('keydown', onKey, true);
   }, [pickedKeys, keyCommand, keyFrameS]);
   const MOTION_LABEL: Record<MotionProp, string> = { translate: 'inspector.keyPosition', scale: 'inspector.keyScale', rotate: 'inspector.keyRotate', opacity: 'inspector.keyOpacity' };
+  /* the picked clip's rows drawn as a graph (⇧F3, or its button) */
+  const [motionGraph, setMotionGraph] = React.useState(false);
   const motionLanes = React.useMemo<MotionLanes | null>(() => {
     if (!motionBlock?.clipId) return null;
     const motion = motionOfBlock(motionBlock);
@@ -959,9 +995,43 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       },
       onSeek: seek,
       onMenu: (e) => setKeyMenu({ x: e.clientX, y: e.clientY }),
-      labels: { prev: t('inspector.keyPrev'), next: t('inspector.keyNext'), add: t('inspector.keyAdd'), remove: t('inspector.keyRemove') },
+      graph: motionGraph,
+      onGraph: () => setMotionGraph((on) => !on),
+      onCurve: (prop, at, curve) => {
+        const ease = easeOfBezier(curve);
+        rewriteMotion({ ...motion, [prop]: (motion[prop] ?? []).map((k) => {
+          if (k.t !== at) return k;
+          const { ease: _was, ...rest } = k;
+          return ease ? { ...rest, ease } : rest;
+        }) });
+      },
+      onKeyEdit: (prop, at, to) => {
+        const keys = (motion[prop] ?? []).filter((k) => k.t === at || Math.abs(k.t - to.t) >= keyFrameS / 2);
+        const next = keys.map((k) => (k.t === at ? { ...k, t: to.t, v: to.v } : k)).sort((a, b) => a.t - b.t);
+        rewriteMotion({ ...motion, [prop]: next }, new Set([keyId(prop, to.t)]));
+      },
+      labels: { prev: t('inspector.keyPrev'), next: t('inspector.keyNext'), add: t('inspector.keyAdd'), remove: t('inspector.keyRemove'), graph: t('inspector.keyGraph') },
     };
-  }, [motionBlock, motionOfBlock, pickedKeys, timeMs, keyFrameS, keyCommand, rewriteMotion, seek, t]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [motionBlock, motionOfBlock, pickedKeys, timeMs, keyFrameS, keyCommand, rewriteMotion, seek, t, motionGraph]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* the picked clip's position keyframes, drawn on the picture as its path; the same picks as its timeline rows */
+  const motionPath = React.useMemo<MotionPathKeys | null>(() => {
+    if (!motionBlock?.clipId || playing) return null;
+    const motion = motionOfBlock(motionBlock);
+    const keys = motion.translate;
+    if (!keys?.length) return null;
+    return {
+      clipId: motionBlock.clipId, keys, fps: projectFps,
+      picked: new Set(keys.filter((k) => pickedKeys.has(keyId('translate', k.t))).map((k) => k.t)),
+      onPick: (at, mode) => setPickedKeys((was) => {
+        const id = keyId('translate', at);
+        if (mode === 'set') return new Set([id]);
+        const next = new Set(was);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        return next;
+      }),
+      onMove: (at, v) => rewriteMotion({ ...motion, translate: keys.map((k) => (k.t === at ? { ...k, v } : k)) }),
+    };
+  }, [motionBlock, motionOfBlock, pickedKeys, playing, projectFps, rewriteMotion]);
   const keyMenuItems: ContextMenuEntry[] = [
     { id: 'easy', label: t('inspector.eases.ease-in-out'), shortcut: 'F9', onSelect: () => keyCommand('easy') },
     { id: 'easy-in', label: t('inspector.eases.ease-in'), shortcut: '⇧F9', onSelect: () => keyCommand('easy-in') },
@@ -3670,6 +3740,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                                 doc={value as unknown as FilmDoc}
                                 spans={spans}
                                 timeMs={timeMs}
+                                poseOf={poseOf}
+                                poseKey={stagePoseKey}
+                                motionPath={motionPath}
                                 playing={playing}
                                 onPause={pause}
                                 onSelectElement={selectStageElement}

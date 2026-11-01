@@ -1302,6 +1302,7 @@ export const en = {
     transform: 'Transform',
     stopwatchOn: 'Animate this (sets a keyframe at the playhead)',
     stopwatchOff: 'Stop animating (removes its keyframes, keeps the value at the playhead)',
+    keyGraph: 'Graph (⇧F3)',
     keyPosition: 'Position',
     keyScale: 'Scale',
     keyRotate: 'Rotation',

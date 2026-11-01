@@ -1301,6 +1301,7 @@ export const es: Words = {
     transform: 'Transformar',
     stopwatchOn: 'Animar (pone un fotograma clave en el cabezal)',
     stopwatchOff: 'Dejar de animar (quita sus fotogramas clave y conserva el valor del cabezal)',
+    keyGraph: 'Gráfico (⇧F3)',
     keyPosition: 'Posición',
     keyScale: 'Escala',
     keyRotate: 'Rotación',

@@ -1298,6 +1298,7 @@ export const ko: Words = {
     transform: '변형',
     stopwatchOn: '애니메이션 시작 (재생 헤드에 키프레임)',
     stopwatchOff: '애니메이션 중지 (키프레임을 지우고 재생 헤드의 값을 유지)',
+    keyGraph: '그래프 (⇧F3)',
     keyPosition: '위치',
     keyScale: '크기',
     keyRotate: '회전',

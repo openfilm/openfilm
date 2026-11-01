@@ -9,7 +9,7 @@
  *
  * Pure: no React, no DOM, so `node --test` runs it.
  */
-import { MOTION_PROPS, valueAt, type Key, type Motion, type MotionProp } from '../../../../src/clip-motion.mjs';
+import { EASES, MOTION_PROPS, valueAt, type Key, type Motion, type MotionProp } from '../../../../src/clip-motion.mjs';
 
 /** A picked keyframe, `<property>@<seconds>`. */
 export const keyId = (prop: MotionProp, t: number) => `${prop}@${t}`;
@@ -23,8 +23,27 @@ export function parseKeyId(id: string): { prop: MotionProp; t: number } | null {
 /** How a keyframe goes in or out. */
 export type Side = 'linear' | 'ease' | 'hold';
 
-const startsSlow = (ease: string | undefined) => ease === 'ease-in' || ease === 'ease-in-out' || ease === 'ease';
-const endsSlow = (ease: string | undefined) => ease === 'ease-out' || ease === 'ease-in-out' || ease === 'ease';
+/** A segment's easing as its curve's two handles, x1 y1 x2 y2 (null: held). */
+export type Bezier = [number, number, number, number];
+const LINEAR: Bezier = [1 / 3, 1 / 3, 2 / 3, 2 / 3];
+export function bezierOf(ease: string | undefined): Bezier | null {
+  if (ease === 'hold') return null;
+  const css = ease && ease in EASES ? EASES[ease as keyof typeof EASES] : ease ?? 'linear';
+  const m = /cubic-bezier\(([^)]+)\)/.exec(css);
+  const n = m ? m[1]!.split(',').map(Number) : [];
+  return n.length === 4 && n.every(Number.isFinite) ? (n as Bezier) : [...LINEAR];
+}
+/** A curve back to an easing: a name where it is one, no easing where it is a straight line. */
+export function easeOfBezier(b: Bezier): string | undefined {
+  const r = b.map((n) => Math.round(n * 1000) / 1000) as Bezier;
+  if (Math.abs(r[0] - r[1]) < 0.002 && Math.abs(r[2] - r[3]) < 0.002) return undefined;
+  const css = `cubic-bezier(${r.join(', ')})`;
+  const named = Object.entries(EASES).find(([, v]) => v === css);
+  return named ? named[0] : css;
+}
+/* a segment starts (ends) slow where its curve leaves (reaches) its keyframe flatter than a straight line */
+const startsSlow = (ease: string | undefined) => { const b = bezierOf(ease); return Boolean(b && b[0] > 0.01 && b[1] < b[0] - 0.02); };
+const endsSlow = (ease: string | undefined) => { const b = bezierOf(ease); return Boolean(b && b[2] < 0.99 && 1 - b[3] < 1 - b[2] - 0.02); };
 const segment = (start: boolean, end: boolean) => (start && end ? 'ease-in-out' : start ? 'ease-in' : end ? 'ease-out' : undefined);
 
 /** Each keyframe's way in (from the one before) and out (to the one after); null where it has no neighbour. */
@@ -161,4 +180,76 @@ export function keyedBox(was: Box, now: Box, own: { w: number; h: number }, moti
     keyed = true;
   }
   return keyed ? { box, motion: next } : null;
+}
+
+/** Where a clip's keyframes have moved its picture at a moment: its middle by `dx`, `dy`, its size by `s`, turned by `r`. */
+export interface ClipPose { dx: number; dy: number; s: number; r: number }
+type Placed = { x: number; y: number; scaleX: number; scaleY: number; rotate: number };
+
+/** The pose at the clip's second `t`; null when nothing of its place moves. */
+export function poseAt(motion: Motion, t: number): ClipPose | null {
+  if (!motion.translate?.length && !motion.scale?.length && !motion.rotate?.length) return null;
+  const [dx, dy] = valueAt('translate', motion.translate, t) as [number, number];
+  return { dx, dy, s: valueAt('scale', motion.scale, t) as number, r: valueAt('rotate', motion.rotate, t) as number };
+}
+
+/** A picture placed at `p` (its top left, its scale of its own size `own`, its turn) as its pose shows it. */
+export function posed(p: Placed, own: { w: number; h: number }, pose: ClipPose | null): Placed {
+  if (!pose) return p;
+  const w = own.w * p.scaleX, h = own.h * p.scaleY;
+  return {
+    x: p.x + pose.dx + (w * (1 - pose.s)) / 2, y: p.y + pose.dy + (h * (1 - pose.s)) / 2,
+    scaleX: p.scaleX * pose.s, scaleY: p.scaleY * pose.s, rotate: p.rotate + pose.r,
+  };
+}
+
+/** Back from where the pose shows a picture to its own place (a pose that sizes it to nothing is taken as none). */
+export function unposed(p: Placed, own: { w: number; h: number }, pose: ClipPose | null): Placed {
+  if (!pose) return p;
+  const s = Math.abs(pose.s) > 1e-6 ? pose.s : 1;
+  const w = (own.w * p.scaleX) / s, h = (own.h * p.scaleY) / s;
+  return {
+    x: p.x - pose.dx - (w * (1 - s)) / 2, y: p.y - pose.dy - (h * (1 - s)) / 2,
+    scaleX: p.scaleX / s, scaleY: p.scaleY / s, rotate: p.rotate - pose.r,
+  };
+}
+
+/** Keyframes copied: each property's, their times from the earliest of them all. */
+export type CopiedKeys = Partial<Record<MotionProp, Key[]>>;
+
+/** The picked keyframes, copied. */
+export function copiedKeys(motion: Motion, picked: ReadonlySet<string>): CopiedKeys | null {
+  const out: CopiedKeys = {};
+  let first = Infinity;
+  for (const prop of MOTION_PROPS) {
+    const keys = (motion[prop] ?? []).filter((k) => picked.has(keyId(prop, k.t)));
+    if (!keys.length) continue;
+    out[prop] = keys.map((k) => ({ ...k }));
+    first = Math.min(first, keys[0]!.t);
+  }
+  if (!Number.isFinite(first)) return null;
+  for (const prop of MOTION_PROPS) out[prop]?.forEach((k) => { k.t = Math.round((k.t - first) * 1000) / 1000; });
+  return out;
+}
+
+/**
+ * Copied keyframes pasted with the earliest at `t` (the clip's second), each property's into its own; one already
+ * within half a frame of a pasted one is replaced. `picked`: the pasted ones, as they are picked after.
+ */
+export function pastedKeys(motion: Motion, copied: CopiedKeys, t: number, frame: number): { motion: Motion; picked: Set<string> } {
+  const next: Motion = { ...motion };
+  const picked = new Set<string>();
+  for (const prop of MOTION_PROPS) {
+    const add = copied[prop];
+    if (!add?.length) continue;
+    let keys = [...(motion[prop] ?? [])];
+    for (const k of add) {
+      const at = Math.round((t + k.t) * 1000) / 1000;
+      keys = keys.filter((o) => Math.abs(o.t - at) >= frame / 2);
+      keys.push({ ...k, t: at });
+      picked.add(keyId(prop, at));
+    }
+    next[prop] = keys.sort((a, b) => a.t - b.t);
+  }
+  return { motion: next, picked };
 }

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { easedMotion, keyId, keyedBox, movedKeys, parseKeyId, sidesOf, withEase, withoutKeys } from './motion-keys.ts';
+import { bezierOf, copiedKeys, easeOfBezier, easedMotion, keyId, pastedKeys, keyedBox, movedKeys, parseKeyId, poseAt, posed, sidesOf, unposed, withEase, withoutKeys } from './motion-keys.ts';
 
 const keys = [{ t: 0, v: 1 }, { t: 1, v: 2 }, { t: 2, v: 1 }];
 
@@ -51,4 +51,41 @@ test('a box moved, turned or sized while those properties move is a keyframe the
   assert.equal(keyedBox({ x: 0, y: 0 }, { x: 0, y: 0, w: 600 }, own, { translate: motion.translate }, 1, 0.04), null);
   /* nothing moving: the box is the box */
   assert.equal(keyedBox({ x: 0 }, { x: 5 }, own, {}, 0, 0.04), null);
+});
+
+test('the picture where its keyframes have it, and back to its own place', () => {
+  const own = { w: 400, h: 200 };
+  const place = { x: 100, y: 50, scaleX: 1, scaleY: 1, rotate: 10 };
+  const pose = poseAt({ translate: [{ t: 0, v: [0, 0] }, { t: 2, v: [200, -100] }], scale: [{ t: 0, v: 2 }] }, 1);
+  assert.deepEqual(pose, { dx: 100, dy: -50, s: 2, r: 0 });
+  /* twice the size about its middle (300, 150), the middle moved to (400, 100) */
+  const shown = posed(place, own, pose);
+  assert.deepEqual(shown, { x: 0, y: -100, scaleX: 2, scaleY: 2, rotate: 10 });
+  assert.deepEqual(unposed(shown, own, pose), place);
+  /* dragged 30 px on the picture: its own place 30 px on */
+  assert.deepEqual(unposed({ ...shown, x: shown.x + 30 }, own, pose), { ...place, x: 130 });
+  assert.equal(poseAt({ opacity: [{ t: 0, v: 0 }] }, 0), null);
+});
+
+test('copied keyframes paste with the earliest at the playhead, each into its own property', () => {
+  const motion = { scale: [{ t: 0, v: 1 }, { t: 1, v: 2, ease: 'ease-out' }], opacity: [{ t: 1.5, v: 0 }] };
+  const copied = copiedKeys(motion, new Set([keyId('scale', 1), keyId('opacity', 1.5)]));
+  assert.deepEqual(copied, { scale: [{ t: 0, v: 2, ease: 'ease-out' }], opacity: [{ t: 0.5, v: 0 }] });
+  const { motion: pasted, picked } = pastedKeys(motion, copied!, 2, 0.04);
+  assert.deepEqual(pasted.scale?.map((k) => [k.t, k.v]), [[0, 1], [1, 2], [2, 2]]);
+  assert.deepEqual(pasted.opacity?.map((k) => [k.t, k.v]), [[1.5, 0], [2.5, 0]]);
+  assert.deepEqual([...picked], ['scale@2', 'opacity@2.5']);
+  /* onto one already there: it takes its place */
+  assert.deepEqual(pastedKeys(motion, copied!, 0.01, 0.04).motion.scale?.map((k) => [k.t, k.v]), [[0.01, 2], [1, 2]]);
+  assert.equal(copiedKeys(motion, new Set()), null);
+});
+
+test('an easing as its curve and back: names stay names, a straight line is no easing', () => {
+  assert.deepEqual(bezierOf('ease-out'), [0, 0, 0.58, 1]);
+  assert.equal(bezierOf('hold'), null);
+  assert.equal(easeOfBezier(bezierOf(undefined)!), undefined);
+  assert.equal(easeOfBezier([0.42, 0, 0.58, 1]), 'ease-in-out');
+  assert.equal(easeOfBezier([0.25, 0.1, 0.25, 1.4]), 'cubic-bezier(0.25, 0.1, 0.25, 1.4)');
+  /* a curve of one's own still reads as eased on the way it is flat */
+  assert.deepEqual(sidesOf([{ t: 0, v: 0, ease: 'cubic-bezier(0.6, 0, 0.7, 0.7)' }, { t: 1, v: 1 }]), [{ in: null, out: 'ease' }, { in: 'linear', out: null }]);
 });

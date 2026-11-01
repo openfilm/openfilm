@@ -1301,6 +1301,7 @@ export const ja: Words = {
     transform: 'トランスフォーム',
     stopwatchOn: 'アニメーションを開始（再生ヘッドにキーフレーム）',
     stopwatchOff: 'アニメーションを停止（キーフレームを削除し、再生ヘッドの値を残す）',
+    keyGraph: 'グラフ（⇧F3）',
     keyPosition: '位置',
     keyScale: 'スケール',
     keyRotate: '回転',
