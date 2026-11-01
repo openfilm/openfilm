@@ -27,8 +27,11 @@ export function recycleRefusalOf(body: unknown): RecycleRefusal | null {
 
 const KEY: Record<RecycleRefusal['why'], string> = { network: 'network', removable: 'removable', 'no-bin': 'noBin', 'no-volume': 'noVolume', policy: 'policy', nuke: 'nuke', 'too-big': 'tooBig' };
 
+/** `{key}` in `words` filled with `value` as it is (a replacement string would read `$&` or `$1` in a file's name). */
+const fill = (words: string, key: string, value: string) => words.replace(`{${key}}`, () => value);
+
 /** The refusal said whole: the item, why, and that it stays where it is. */
 export function recycleRefusalWords(t: (path: string) => string, r: RecycleRefusal): string {
-  const why = t(`recycle.${KEY[r.why]}`).replace('{drive}', r.drive).replace('{size}', r.size ?? '').replace('{holds}', r.holds ?? '');
-  return t('recycle.refused').replace('{name}', r.name).replace('{why}', why);
+  const why = fill(fill(fill(t(`recycle.${KEY[r.why]}`), 'drive', r.drive), 'size', r.size ?? ''), 'holds', r.holds ?? '');
+  return fill(fill(t('recycle.refused'), 'name', r.name), 'why', why);
 }

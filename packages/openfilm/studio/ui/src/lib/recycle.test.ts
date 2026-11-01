@@ -22,6 +22,9 @@ test('the refusal is said whole, in the language of the UI, with the item, the d
   assert.match(recycleRefusalWords(t, { code: 'recycle', why: 'network', name: 'take.wav', drive: '\\\\nas\\films\\' }), /^“take\.wav” stays where it is: it is on a network drive, which has no Recycle Bin\. /);
   assert.match(recycleRefusalWords(t, { code: 'recycle', why: 'nuke', name: 'Trip', drive: 'E:' }), /the Recycle Bin of drive E: is set to delete files right away/);
   assert.match(recycleRefusalWords(t, { code: 'recycle', why: 'no-volume', name: 'Trip', drive: 'S:' }), /drive S:/);
+  /* a name that would mean something to a replacement string stays as it is */
+  assert.match(recycleRefusalWords(t, { code: 'recycle', why: 'nuke', name: 'take $& $1 $$.wav', drive: 'E:' }), /^“take \$& \$1 \$\$\.wav” stays where it is: the Recycle Bin of drive E:/);
+  assert.match(recycleRefusalWords(t, { code: 'recycle', why: 'too-big', name: 'a.mp4', drive: 'C:\\mnt\\x', size: '2 MB', holds: '1 MB' }), /drive C:\\mnt\\x holds \(1 MB\)/);
   const zh = recycleRefusalWords(tOf(zhCN), { code: 'recycle', why: 'too-big', name: 'render.mp4', drive: 'D:', size: '12.4 GB', holds: '5 GB' });
   assert.match(zh, /render\.mp4/);
   assert.match(zh, /12\.4 GB/);

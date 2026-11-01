@@ -29,53 +29,65 @@ const CANNOT_RECYCLE = 3;
  * Windows: the item in $env:OPENFILM_TRASH to the Recycle Bin, once it is known the bin takes it. The shell recycles
  * only on a fixed drive, whose bin holds items up to a size (the person's setting, a policy's, or about a twentieth of
  * the drive when neither was set) and is not set to delete right away; anything else it deletes for good, asking only
- * through the confirmations `OnlyErrorDialogs` turns off. So those are checked first, by the shell's own settings, and
- * a drive whose bin cannot be looked up (no volume id: a `subst` drive, a volume mounted in a folder) is refused too.
- * A folder's size is its own files': a link in it (a NAS folder linked into a project) is not followed, as
- * `Get-ChildItem -Recurse` of Windows PowerShell would.
+ * through the confirmations `OnlyErrorDialogs` turns off. So those are checked first, by the shell's own settings, for
+ * the volume the item is on: the one of its mount points (a letter, or a folder a volume is mounted in) that the path
+ * starts with, as `mountvol` lists them; a path on none (a `subst` drive) is refused too. A folder's size is its own
+ * files': a link in it (a NAS folder linked into a project) is not followed, as `Get-ChildItem -Recurse` of Windows
+ * PowerShell would. The functions' names are no aliases of PowerShell's, which come before functions (`Measure` was
+ * Measure-Object's: it measured nothing, and a folder over the bin's size went for good).
  */
 const RECYCLE = `
 $ErrorActionPreference = 'Stop'
 function Refuse($why, $drive, $size, $holds) { Write-Output (ConvertTo-Json -Compress @{ why = $why; drive = $drive; size = $size; holds = $holds }); exit ${CANNOT_RECYCLE} }
-function Size($bytes) { if ($bytes -ge 1GB) { [string][math]::Round($bytes / 1GB, 1) + ' GB' } else { [string][math]::Round($bytes / 1MB, 1) + ' MB' } }
-function Measure($dir) {
+function Format-Size($bytes) { if ($bytes -ge 1GB) { [string][math]::Round($bytes / 1GB, 1) + ' GB' } else { [string][math]::Round($bytes / 1MB, 1) + ' MB' } }
+function Get-OwnSize($dir) {
   $sum = [double]0
   foreach ($e in @(Get-ChildItem -LiteralPath $dir -Force)) {
     if ($e.Attributes -band [IO.FileAttributes]::ReparsePoint) { continue }
-    if ($e.PSIsContainer) { $sum += Measure $e.FullName } else { $sum += $e.Length }
+    if ($e.PSIsContainer) { $sum += Get-OwnSize $e.FullName } else { $sum += $e.Length }
   }
   $sum
 }
 $root = [System.IO.Path]::GetPathRoot($env:OPENFILM_TRASH)
 if ($root.StartsWith('\\\\')) { Refuse 'network' $root }
 $item = Get-Item -LiteralPath $env:OPENFILM_TRASH -Force
-$drive = New-Object System.IO.DriveInfo($root)
-$letter = $root.Substring(0, 2)
-switch ([string]$drive.DriveType) {
-  'Fixed' { }
-  'Network' { Refuse 'network' $letter }
-  'Removable' { Refuse 'removable' $letter }
-  default { Refuse 'no-bin' $letter }
+$mount = $null
+$volume = $null
+$id = $null
+foreach ($line in @(mountvol)) {
+  $text = $line.Trim()
+  if ($text -match '^\\\\\\\\\\?\\\\Volume\\{[0-9A-Fa-f-]+\\}\\\\$') { $id = $text; continue }
+  if ($null -ne $id -and $text -match '^[A-Za-z]:\\\\' -and $item.FullName.StartsWith($text, [StringComparison]::OrdinalIgnoreCase) -and ($null -eq $mount -or $text.Length -gt $mount.Length)) { $mount = $text; $volume = $id }
+}
+if ($null -eq $mount) { Refuse 'no-volume' $item.FullName.Substring(0, 2) }
+$drive = $mount.TrimEnd('\\')
+$disk = Get-CimInstance Win32_Volume -Filter ("DeviceID = '" + $volume.Replace('\\', '\\\\') + "'")
+if ($null -eq $disk) { Refuse 'no-volume' $drive }
+switch ([int]$disk.DriveType) {
+  3 { }
+  4 { Refuse 'network' $drive }
+  2 { Refuse 'removable' $drive }
+  default { Refuse 'no-bin' $drive }
 }
 $percent = $null
 foreach ($hive in @('HKCU', 'HKLM')) {
   $policy = Get-ItemProperty -Path ($hive + ':\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer') -ErrorAction SilentlyContinue
-  if ($policy.NoRecycleFiles -eq 1) { Refuse 'policy' $letter }
+  if ($policy.NoRecycleFiles -eq 1) { Refuse 'policy' $drive }
   if ($null -ne $policy.RecycleBinSize) { $percent = [double]$policy.RecycleBinSize }
 }
-$volume = [string](mountvol $letter /L)
-if ($volume -notmatch '\\{[0-9A-Fa-f-]+\\}') { Refuse 'no-volume' $letter }
-$bin = Get-ItemProperty -Path ('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\BitBucket\\Volume\\' + $Matches[0]) -ErrorAction SilentlyContinue
-if ($bin.NukeOnDelete -eq 1) { Refuse 'nuke' $letter }
-$holds = if ($null -ne $percent) { $drive.TotalSize * $percent / 100 } elseif ($null -ne $bin.MaxCapacity) { [double]$bin.MaxCapacity * 1MB } else { $drive.TotalSize * 0.05 }
-$size = if ($item.PSIsContainer) { Measure $item.FullName } else { [double]$item.Length }
-if ($size -gt $holds) { Refuse 'too-big' $letter (Size $size) (Size $holds) }
+$guid = [regex]::Match($volume, '\\{[0-9A-Fa-f-]+\\}').Value
+$bin = Get-ItemProperty -Path ('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\BitBucket\\Volume\\' + $guid) -ErrorAction SilentlyContinue
+if ($bin.NukeOnDelete -eq 1) { Refuse 'nuke' $drive }
+$holds = if ($null -ne $percent) { [double]$disk.Capacity * $percent / 100 } elseif ($null -ne $bin.MaxCapacity) { [double]$bin.MaxCapacity * 1MB } else { [double]$disk.Capacity * 0.05 }
+$size = if ($item.PSIsContainer) { Get-OwnSize $item.FullName } else { [double]$item.Length }
+if ($size -gt $holds) { Refuse 'too-big' $drive (Format-Size $size) (Format-Size $holds) }
 Add-Type -AssemblyName Microsoft.VisualBasic
 if ($item.PSIsContainer) { [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory($item.FullName, 'OnlyErrorDialogs', 'SendToRecycleBin') }
 else { [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($item.FullName, 'OnlyErrorDialogs', 'SendToRecycleBin') }
 `;
 
-/** @typedef {{ why: 'network' | 'removable' | 'no-bin' | 'no-volume' | 'policy' | 'nuke' | 'too-big', drive: string, size?: string, holds?: string }} Refusal */
+/** @typedef {{ why: 'network' | 'removable' | 'no-bin' | 'no-volume' | 'policy' | 'nuke' | 'too-big', drive: string, size?: string, holds?: string }} Refusal
+ * `drive`: the volume's mount point (`D:`, or the folder a volume is mounted in, `C:\mnt\x`), or a network path's root */
 
 /**
  * Why `name` cannot go to the Recycle Bin, as Studio's API says it: the reason the check gave, in English; Studio's UI

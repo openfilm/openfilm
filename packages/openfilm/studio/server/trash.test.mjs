@@ -95,7 +95,7 @@ test('on Windows, a file and a folder go to the Recycle Bin', { skip: !win && 'W
   assert.equal(recycled(`shot-${id}`), 1, 'the folder is in the bin');
 });
 
-test('on Windows, an item the Recycle Bin of its drive would not keep is refused, and stays: bigger than it holds, or a bin that deletes right away; a folder is measured without the links in it', { skip: !ci && 'Windows CI only: it sets the Recycle Bin\'s settings' }, async (t) => {
+test('on Windows, an item the Recycle Bin of its drive would not keep is refused, and stays: a file or a folder bigger than it holds, or a bin that deletes right away; a folder is measured without the links in it', { skip: !ci && 'Windows CI only: it sets the Recycle Bin\'s settings' }, async (t) => {
   const root = realTrash(t);
   const volume = ps(`mountvol ${root.slice(0, 2)} /L`).match(/\{[0-9A-Fa-f-]+\}/)?.[0];
   assert.ok(volume, 'the drive has a volume id');
@@ -116,6 +116,15 @@ test('on Windows, an item the Recycle Bin of its drive would not keep is refused
   await assert.rejects(moveToTrash(big), (e) => e.status === 409 && /^render\.mp4 cannot go to the Recycle Bin: it is 2 MB, more than the Recycle Bin of drive [A-Z]: holds \(1 MB\)\. It was left where it is/.test(e.message)
     && e.extra.code === 'recycle' && e.extra.why === 'too-big' && e.extra.name === 'render.mp4' && /^[A-Z]:$/.test(e.extra.drive) && e.extra.size === '2 MB' && e.extra.holds === '1 MB');
   assert.equal(existsSync(big), true, 'left where it was');
+  /* a folder over what the bin holds, by its files at every depth: refused whole (the size function once bore the
+     name of a PowerShell alias, measured nothing, and such a folder went for good) */
+  const shots = join(root, 'Shots');
+  mkdirSync(join(shots, 'day1'), { recursive: true });
+  writeFileSync(join(shots, 'day1', 'a.mp4'), Buffer.alloc(2 ** 20));
+  writeFileSync(join(shots, 'b.mp4'), Buffer.alloc(2 ** 20));
+  await assert.rejects(moveToTrash(shots), (e) => e.status === 409 && /^Shots cannot go to the Recycle Bin: it is 2 MB, more than the Recycle Bin of drive [A-Z]: holds \(1 MB\)/.test(e.message)
+    && e.extra.why === 'too-big' && e.extra.name === 'Shots' && e.extra.size === '2 MB' && e.extra.holds === '1 MB');
+  assert.equal(existsSync(join(shots, 'day1', 'a.mp4')), true, 'the folder stays, whole');
   /* a project linking a folder kept elsewhere (a NAS): the link's target is not its size, nor followed */
   const project = join(root, 'Trip');
   const elsewhere = join(root, 'nas');

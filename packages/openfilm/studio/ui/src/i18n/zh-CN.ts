@@ -610,9 +610,9 @@ export const zhCN: Words = {
     removable: '它在可移动驱动器上，没有回收站',
     noBin: '驱动器 {drive} 没有回收站',
     noVolume: 'Windows 没有说明驱动器 {drive} 是哪个卷，无法检查其回收站设置',
-    policy: '此处的策略让回收站直接删除文件',
+    policy: '系统策略设为直接删除文件，不放入回收站',
     nuke: '驱动器 {drive} 的回收站被设为直接删除文件',
-    tooBig: '它有 {size}，超过了驱动器 {drive} 回收站的容量（{holds}）',
+    tooBig: '它大小为 {size}，超过了驱动器 {drive} 回收站的容量（{holds}）',
   },
   project: {
     projects: '项目',
