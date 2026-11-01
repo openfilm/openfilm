@@ -1105,6 +1105,34 @@
    ]
   },
   {
+   "id": "stickers/emoji/face-savoring-food",
+   "cat": "sticker",
+   "group": "faces",
+   "name": {
+    "en": "face savoring food",
+    "zh-CN": "好吃",
+    "ja": "にこにこぺろり",
+    "ko": "맛있는 음식을 음미하는 얼굴",
+    "es": "cara saboreando comida"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/face-savoring-food/files/emoji.png",
+   "still": true,
+   "tags": [
+    "delicious",
+    "face",
+    "face savoring food",
+    "savouring",
+    "smile",
+    "yum"
+   ]
+  },
+  {
    "id": "stickers/emoji/face-screaming-in-fear",
    "cat": "sticker",
    "group": "faces",
@@ -1265,6 +1293,59 @@
    ]
   },
   {
+   "id": "stickers/emoji/face-with-monocle",
+   "cat": "sticker",
+   "group": "faces",
+   "name": {
+    "en": "face with monocle",
+    "zh-CN": "带单片眼镜的脸",
+    "ja": "モノクルを付けた顔",
+    "ko": "단안경을 쓴 얼굴",
+    "es": "cara con monóculo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/face-with-monocle/files/emoji.png",
+   "still": true,
+   "tags": [
+    "face with monocle",
+    "stuffy"
+   ]
+  },
+  {
+   "id": "stickers/emoji/face-with-open-eyes-and-hand-over-mouth",
+   "cat": "sticker",
+   "group": "faces",
+   "name": {
+    "en": "face with open eyes and hand over mouth",
+    "zh-CN": "睁眼捂嘴",
+    "ja": "目を開けて口に手を当てた顔",
+    "ko": "눈을 뜨고 손으로 입을 가린 얼굴",
+    "es": "cara con ojos abiertos y boca tapada"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/face-with-open-eyes-and-hand-over-mouth/files/emoji.png",
+   "still": true,
+   "tags": [
+    "amazement",
+    "awe",
+    "disbelief",
+    "embarrass",
+    "face with open eyes and hand over mouth",
+    "scared",
+    "surprise"
+   ]
+  },
+  {
    "id": "stickers/emoji/face-with-open-mouth",
    "cat": "sticker",
    "group": "faces",
@@ -1289,6 +1370,57 @@
     "mouth",
     "open",
     "sympathy"
+   ]
+  },
+  {
+   "id": "stickers/emoji/face-with-peeking-eye",
+   "cat": "sticker",
+   "group": "faces",
+   "name": {
+    "en": "face with peeking eye",
+    "zh-CN": "偷看",
+    "ja": "指の間からのぞき見る顔",
+    "ko": "한쪽 눈을 가리고 훔쳐보는 얼굴",
+    "es": "cara tapada con ojo espiando"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/face-with-peeking-eye/files/emoji.png",
+   "still": true,
+   "tags": [
+    "captivated",
+    "face with peeking eye",
+    "peep",
+    "stare"
+   ]
+  },
+  {
+   "id": "stickers/emoji/face-with-raised-eyebrow",
+   "cat": "sticker",
+   "group": "faces",
+   "name": {
+    "en": "face with raised eyebrow",
+    "zh-CN": "挑眉",
+    "ja": "眉を上げた顔",
+    "ko": "눈썹을 치켜올린 얼굴",
+    "es": "cara con ceja alzada"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/face-with-raised-eyebrow/files/emoji.png",
+   "still": true,
+   "tags": [
+    "distrust",
+    "face with raised eyebrow",
+    "skeptic"
    ]
   },
   {
@@ -1424,6 +1556,33 @@
    ]
   },
   {
+   "id": "stickers/emoji/face-with-thermometer",
+   "cat": "sticker",
+   "group": "faces",
+   "name": {
+    "en": "face with thermometer",
+    "zh-CN": "发烧",
+    "ja": "熱がある顔",
+    "ko": "체온계를 물고 있는 얼굴",
+    "es": "cara con termómetro"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/face-with-thermometer/files/emoji.png",
+   "still": true,
+   "tags": [
+    "face",
+    "face with thermometer",
+    "ill",
+    "sick",
+    "thermometer"
+   ]
+  },
+  {
    "id": "stickers/emoji/face-with-tongue",
    "cat": "sticker",
    "group": "faces",
@@ -1473,6 +1632,32 @@
     "mouth",
     "quiet",
     "silent"
+   ]
+  },
+  {
+   "id": "stickers/emoji/fearful-face",
+   "cat": "sticker",
+   "group": "faces",
+   "name": {
+    "en": "fearful face",
+    "zh-CN": "害怕",
+    "ja": "青ざめ",
+    "ko": "두려워하는 얼굴",
+    "es": "cara asustada"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/fearful-face/files/emoji.png",
+   "still": true,
+   "tags": [
+    "face",
+    "fear",
+    "fearful",
+    "scared"
    ]
   },
   {
@@ -2953,6 +3138,30 @@
    ]
   },
   {
+   "id": "stickers/emoji/purple-heart",
+   "cat": "sticker",
+   "group": "faces",
+   "name": {
+    "en": "purple heart",
+    "zh-CN": "紫心",
+    "ja": "紫のハート",
+    "ko": "보라색 하트",
+    "es": "corazón morado"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/purple-heart/files/emoji.png",
+   "still": true,
+   "tags": [
+    "purple",
+    "purple heart"
+   ]
+  },
+  {
    "id": "stickers/emoji/red-heart",
    "cat": "sticker",
    "group": "faces",
@@ -4342,6 +4551,217 @@
    ]
   },
   {
+   "id": "stickers/emoji/artist",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "artist",
+    "zh-CN": "艺术家",
+    "ja": "芸術家",
+    "ko": "화가",
+    "es": "artista"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/artist/files/emoji.png",
+   "still": true,
+   "tags": [
+    "artist",
+    "palette"
+   ]
+  },
+  {
+   "id": "stickers/emoji/astronaut",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "astronaut",
+    "zh-CN": "宇航员",
+    "ja": "宇宙飛行士",
+    "ko": "우주비행사",
+    "es": "astronauta"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/astronaut/files/emoji.png",
+   "still": true,
+   "tags": [
+    "astronaut",
+    "rocket"
+   ]
+  },
+  {
+   "id": "stickers/emoji/baby",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "baby",
+    "zh-CN": "小宝贝",
+    "ja": "赤ん坊",
+    "ko": "아기",
+    "es": "bebé"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/baby/files/emoji.png",
+   "still": true,
+   "tags": [
+    "baby",
+    "young"
+   ]
+  },
+  {
+   "id": "stickers/emoji/baby-angel",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "baby angel",
+    "zh-CN": "小天使",
+    "ja": "天使",
+    "ko": "아기 천사",
+    "es": "bebé ángel"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/baby-angel/files/emoji.png",
+   "still": true,
+   "tags": [
+    "angel",
+    "baby",
+    "face",
+    "fairy tale",
+    "fantasy"
+   ]
+  },
+  {
+   "id": "stickers/emoji/backhand-index-pointing-down",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "backhand index pointing down",
+    "zh-CN": "反手食指向下指",
+    "ja": "下指差し",
+    "ko": "아래쪽을 가리키는 손등",
+    "es": "dorso de mano con índice hacia abajo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/backhand-index-pointing-down/files/emoji.png",
+   "still": true,
+   "tags": [
+    "backhand",
+    "backhand index pointing down",
+    "down",
+    "finger",
+    "hand",
+    "point"
+   ]
+  },
+  {
+   "id": "stickers/emoji/backhand-index-pointing-left",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "backhand index pointing left",
+    "zh-CN": "反手食指向左指",
+    "ja": "左指差し",
+    "ko": "왼쪽을 가리키는 손등",
+    "es": "dorso de mano con índice a la izquierda"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/backhand-index-pointing-left/files/emoji.png",
+   "still": true,
+   "tags": [
+    "backhand",
+    "backhand index pointing left",
+    "finger",
+    "hand",
+    "index",
+    "point"
+   ]
+  },
+  {
+   "id": "stickers/emoji/backhand-index-pointing-right",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "backhand index pointing right",
+    "zh-CN": "反手食指向右指",
+    "ja": "右指差し",
+    "ko": "오른쪽을 가리키는 손등",
+    "es": "dorso de mano con índice a la derecha"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/backhand-index-pointing-right/files/emoji.png",
+   "still": true,
+   "tags": [
+    "backhand",
+    "backhand index pointing right",
+    "finger",
+    "hand",
+    "index",
+    "point"
+   ]
+  },
+  {
+   "id": "stickers/emoji/backhand-index-pointing-up",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "backhand index pointing up",
+    "zh-CN": "反手食指向上指",
+    "ja": "手の甲上指差し",
+    "ko": "위쪽을 가리키는 손등",
+    "es": "dorso de mano con índice hacia arriba"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/backhand-index-pointing-up/files/emoji.png",
+   "still": true,
+   "tags": [
+    "backhand",
+    "backhand index pointing up",
+    "finger",
+    "hand",
+    "point",
+    "up"
+   ]
+  },
+  {
    "id": "stickers/emoji/biting-lip",
    "cat": "sticker",
    "group": "people",
@@ -4395,6 +4815,30 @@
    ]
   },
   {
+   "id": "stickers/emoji/boy",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "boy",
+    "zh-CN": "男孩",
+    "ja": "男の子",
+    "ko": "남자 아이",
+    "es": "niño"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/boy/files/emoji.png",
+   "still": true,
+   "tags": [
+    "boy",
+    "young"
+   ]
+  },
+  {
    "id": "stickers/emoji/brain",
    "cat": "sticker",
    "group": "people",
@@ -4416,6 +4860,32 @@
    "tags": [
     "brain",
     "intelligent"
+   ]
+  },
+  {
+   "id": "stickers/emoji/breast-feeding",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "breast-feeding",
+    "zh-CN": "母乳喂养",
+    "ja": "授乳",
+    "ko": "모유 수유",
+    "es": "lactancia materna"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/breast-feeding/files/emoji.png",
+   "still": true,
+   "tags": [
+    "baby",
+    "breast",
+    "breast-feeding",
+    "nursing"
    ]
   },
   {
@@ -4469,6 +4939,232 @@
    ]
   },
   {
+   "id": "stickers/emoji/call-me-hand",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "call me hand",
+    "zh-CN": "给我打电话",
+    "ja": "電話の合図",
+    "ko": "전화를 걸라는 손 모양",
+    "es": "mano haciendo el gesto de llamar"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/call-me-hand/files/emoji.png",
+   "still": true,
+   "tags": [
+    "call",
+    "call me hand",
+    "hand"
+   ]
+  },
+  {
+   "id": "stickers/emoji/child",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "child",
+    "zh-CN": "儿童",
+    "ja": "子供",
+    "ko": "어린이",
+    "es": "infante"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/child/files/emoji.png",
+   "still": true,
+   "tags": [
+    "child",
+    "gender-neutral",
+    "unspecified gender",
+    "young"
+   ]
+  },
+  {
+   "id": "stickers/emoji/clapping-hands",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "clapping hands",
+    "zh-CN": "鼓掌",
+    "ja": "拍手",
+    "ko": "손뼉",
+    "es": "manos aplaudiendo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/clapping-hands/files/emoji.png",
+   "still": true,
+   "tags": [
+    "clap",
+    "clapping hands",
+    "hand"
+   ]
+  },
+  {
+   "id": "stickers/emoji/construction-worker",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "construction worker",
+    "zh-CN": "建筑工人",
+    "ja": "建設作業員",
+    "ko": "건설 노동자",
+    "es": "profesional de la construcción"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/construction-worker/files/emoji.png",
+   "still": true,
+   "tags": [
+    "construction",
+    "hat",
+    "worker"
+   ]
+  },
+  {
+   "id": "stickers/emoji/cook",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "cook",
+    "zh-CN": "厨师",
+    "ja": "コック",
+    "ko": "요리사",
+    "es": "chef"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/cook/files/emoji.png",
+   "still": true,
+   "tags": [
+    "chef",
+    "cook"
+   ]
+  },
+  {
+   "id": "stickers/emoji/crossed-fingers",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "crossed fingers",
+    "zh-CN": "交叉的手指",
+    "ja": "指をクロス",
+    "ko": "검지와 중지 크로스",
+    "es": "dedos cruzados"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/crossed-fingers/files/emoji.png",
+   "still": true,
+   "tags": [
+    "cross",
+    "crossed fingers",
+    "finger",
+    "hand",
+    "luck"
+   ]
+  },
+  {
+   "id": "stickers/emoji/detective",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "detective",
+    "zh-CN": "侦探",
+    "ja": "探偵",
+    "ko": "탐정",
+    "es": "detective"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/detective/files/emoji.png",
+   "still": true,
+   "tags": [
+    "detective",
+    "sleuth",
+    "spy"
+   ]
+  },
+  {
+   "id": "stickers/emoji/ear",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "ear",
+    "zh-CN": "耳朵",
+    "ja": "耳",
+    "ko": "귀",
+    "es": "oreja"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/ear/files/emoji.png",
+   "still": true,
+   "tags": [
+    "body",
+    "ear"
+   ]
+  },
+  {
+   "id": "stickers/emoji/ear-with-hearing-aid",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "ear with hearing aid",
+    "zh-CN": "戴助听器的耳朵",
+    "ja": "補聴器を付けた耳",
+    "ko": "보청기를 낀 귀",
+    "es": "oreja con audífono"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/ear-with-hearing-aid/files/emoji.png",
+   "still": true,
+   "tags": [
+    "accessibility",
+    "ear with hearing aid",
+    "hard of hearing"
+   ]
+  },
+  {
    "id": "stickers/emoji/eye",
    "cat": "sticker",
    "group": "people",
@@ -4518,6 +5214,163 @@
    ]
   },
   {
+   "id": "stickers/emoji/factory-worker",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "factory worker",
+    "zh-CN": "工人",
+    "ja": "溶接工",
+    "ko": "공장 직원",
+    "es": "profesional industrial"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/factory-worker/files/emoji.png",
+   "still": true,
+   "tags": [
+    "assembly",
+    "factory",
+    "industrial",
+    "worker"
+   ]
+  },
+  {
+   "id": "stickers/emoji/farmer",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "farmer",
+    "zh-CN": "农民",
+    "ja": "農家",
+    "ko": "농부",
+    "es": "profesional de la agricultura"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/farmer/files/emoji.png",
+   "still": true,
+   "tags": [
+    "farmer",
+    "gardener",
+    "rancher"
+   ]
+  },
+  {
+   "id": "stickers/emoji/firefighter",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "firefighter",
+    "zh-CN": "消防员",
+    "ja": "消防士",
+    "ko": "소방관",
+    "es": "bombero"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/firefighter/files/emoji.png",
+   "still": true,
+   "tags": [
+    "firefighter",
+    "firetruck"
+   ]
+  },
+  {
+   "id": "stickers/emoji/flexed-biceps",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "flexed biceps",
+    "zh-CN": "肌肉",
+    "ja": "力こぶ",
+    "ko": "알통",
+    "es": "bíceps flexionado"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/flexed-biceps/files/emoji.png",
+   "still": true,
+   "tags": [
+    "biceps",
+    "comic",
+    "flex",
+    "flexed biceps",
+    "muscle"
+   ]
+  },
+  {
+   "id": "stickers/emoji/folded-hands",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "folded hands",
+    "zh-CN": "双手合十",
+    "ja": "祈り",
+    "ko": "기도",
+    "es": "manos en oración"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/folded-hands/files/emoji.png",
+   "still": true,
+   "tags": [
+    "ask",
+    "folded hands",
+    "hand",
+    "high 5",
+    "high five",
+    "please",
+    "pray",
+    "thanks"
+   ]
+  },
+  {
+   "id": "stickers/emoji/foot",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "foot",
+    "zh-CN": "脚",
+    "ja": "足",
+    "ko": "한쪽 발",
+    "es": "pie"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/foot/files/emoji.png",
+   "still": true,
+   "tags": [
+    "foot",
+    "kick",
+    "stomp"
+   ]
+  },
+  {
    "id": "stickers/emoji/footprints",
    "cat": "sticker",
    "group": "people",
@@ -4541,6 +5394,109 @@
     "footprint",
     "footprints",
     "print"
+   ]
+  },
+  {
+   "id": "stickers/emoji/girl",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "girl",
+    "zh-CN": "女孩",
+    "ja": "女の子",
+    "ko": "여자 아이",
+    "es": "niña"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/girl/files/emoji.png",
+   "still": true,
+   "tags": [
+    "girl",
+    "Virgo",
+    "young",
+    "zodiac"
+   ]
+  },
+  {
+   "id": "stickers/emoji/guard",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "guard",
+    "zh-CN": "卫兵",
+    "ja": "衛兵",
+    "ko": "근위병",
+    "es": "guardia"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/guard/files/emoji.png",
+   "still": true,
+   "tags": [
+    "guard"
+   ]
+  },
+  {
+   "id": "stickers/emoji/hand-with-fingers-splayed",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "hand with fingers splayed",
+    "zh-CN": "手掌",
+    "ja": "開いた手",
+    "ko": "쫙 편 손바닥",
+    "es": "mano abierta"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/hand-with-fingers-splayed/files/emoji.png",
+   "still": true,
+   "tags": [
+    "finger",
+    "hand",
+    "hand with fingers splayed",
+    "splayed"
+   ]
+  },
+  {
+   "id": "stickers/emoji/hand-with-index-finger-and-thumb-crossed",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "hand with index finger and thumb crossed",
+    "zh-CN": "食指与拇指交叉的手",
+    "ja": "親指と人差し指をクロス",
+    "ko": "엄지와 중지를 교차한 손",
+    "es": "mano con dedo índice y pulgar cruzados"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/hand-with-index-finger-and-thumb-crossed/files/emoji.png",
+   "still": true,
+   "tags": [
+    "expensive",
+    "hand with index finger and thumb crossed",
+    "heart",
+    "love",
+    "money",
+    "snap"
    ]
   },
   {
@@ -4568,6 +5524,291 @@
     "handshake",
     "meeting",
     "shake"
+   ]
+  },
+  {
+   "id": "stickers/emoji/health-worker",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "health worker",
+    "zh-CN": "卫生工作者",
+    "ja": "医者",
+    "ko": "의료인",
+    "es": "profesional sanitario"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/health-worker/files/emoji.png",
+   "still": true,
+   "tags": [
+    "doctor",
+    "health worker",
+    "healthcare",
+    "nurse",
+    "therapist"
+   ]
+  },
+  {
+   "id": "stickers/emoji/heart-hands",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "heart hands",
+    "zh-CN": "做成心形的双手",
+    "ja": "ハート形の手",
+    "ko": "손 하트",
+    "es": "manos formando un corazón"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/heart-hands/files/emoji.png",
+   "still": true,
+   "tags": [
+    "heart hands",
+    "love"
+   ]
+  },
+  {
+   "id": "stickers/emoji/horse-racing",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "horse racing",
+    "zh-CN": "赛马",
+    "ja": "競馬",
+    "ko": "승마",
+    "es": "carrera de caballos"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/horse-racing/files/emoji.png",
+   "still": true,
+   "tags": [
+    "horse",
+    "jockey",
+    "racehorse",
+    "racing"
+   ]
+  },
+  {
+   "id": "stickers/emoji/index-pointing-at-the-viewer",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "index pointing at the viewer",
+    "zh-CN": "指向观察者的食指",
+    "ja": "人を指差している手",
+    "ko": "보는 사람을 가리키는 검지",
+    "es": "dedo índice apuntándote a ti"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/index-pointing-at-the-viewer/files/emoji.png",
+   "still": true,
+   "tags": [
+    "index pointing at the viewer",
+    "point",
+    "you"
+   ]
+  },
+  {
+   "id": "stickers/emoji/index-pointing-up",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "index pointing up",
+    "zh-CN": "食指向上指",
+    "ja": "上指差し",
+    "ko": "위쪽을 가리키는 손",
+    "es": "dedo índice hacia arriba"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/index-pointing-up/files/emoji.png",
+   "still": true,
+   "tags": [
+    "finger",
+    "hand",
+    "index",
+    "index pointing up",
+    "point",
+    "up"
+   ]
+  },
+  {
+   "id": "stickers/emoji/judge",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "judge",
+    "zh-CN": "法官",
+    "ja": "裁判官",
+    "ko": "판사",
+    "es": "fiscal"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/judge/files/emoji.png",
+   "still": true,
+   "tags": [
+    "judge",
+    "justice",
+    "scales"
+   ]
+  },
+  {
+   "id": "stickers/emoji/left-facing-fist",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "left-facing fist",
+    "zh-CN": "朝左的拳头",
+    "ja": "左向きのこぶし",
+    "ko": "왼쪽을 향하는 주먹",
+    "es": "puño hacia la izquierda"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/left-facing-fist/files/emoji.png",
+   "still": true,
+   "tags": [
+    "fist",
+    "left-facing fist",
+    "leftwards"
+   ]
+  },
+  {
+   "id": "stickers/emoji/leftwards-hand",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "leftwards hand",
+    "zh-CN": "向左的手",
+    "ja": "左に向けた手",
+    "ko": "왼쪽으로 향하는 손바닥",
+    "es": "mano hacia la izquierda"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/leftwards-hand/files/emoji.png",
+   "still": true,
+   "tags": [
+    "hand",
+    "left",
+    "leftward",
+    "leftwards hand"
+   ]
+  },
+  {
+   "id": "stickers/emoji/leftwards-pushing-hand",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "leftwards pushing hand",
+    "zh-CN": "向左推",
+    "ja": "左向きに押している手",
+    "ko": "왼쪽으로 밀치는 손",
+    "es": "mano empujando hacia la izquierda"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/leftwards-pushing-hand/files/emoji.png",
+   "still": true,
+   "tags": [
+    "high five",
+    "leftward",
+    "leftwards pushing hand",
+    "push",
+    "refuse",
+    "stop",
+    "wait"
+   ]
+  },
+  {
+   "id": "stickers/emoji/leg",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "leg",
+    "zh-CN": "腿",
+    "ja": "脚",
+    "ko": "한쪽 다리",
+    "es": "pierna"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/leg/files/emoji.png",
+   "still": true,
+   "tags": [
+    "kick",
+    "leg",
+    "limb"
+   ]
+  },
+  {
+   "id": "stickers/emoji/love-you-gesture",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "love-you gesture",
+    "zh-CN": "爱你的手势",
+    "ja": "アイラブユー",
+    "ko": "사랑을 표시하는 손",
+    "es": "gesto de te quiero"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/love-you-gesture/files/emoji.png",
+   "still": true,
+   "tags": [
+    "hand",
+    "ILY",
+    "love-you gesture"
    ]
   },
   {
@@ -4599,6 +5840,641 @@
    ]
   },
   {
+   "id": "stickers/emoji/man",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man",
+    "zh-CN": "男人",
+    "ja": "男性",
+    "ko": "남자",
+    "es": "hombre"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man/files/emoji.png",
+   "still": true,
+   "tags": [
+    "adult",
+    "man"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-artist",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man artist",
+    "zh-CN": "男艺术家",
+    "ja": "男性の芸術家",
+    "ko": "남자 화가",
+    "es": "artista hombre"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-artist/files/emoji.png",
+   "still": true,
+   "tags": [
+    "artist",
+    "man",
+    "palette"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-astronaut",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man astronaut",
+    "zh-CN": "男宇航员",
+    "ja": "男性宇宙飛行士",
+    "ko": "남자 우주비행사",
+    "es": "astronauta hombre"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-astronaut/files/emoji.png",
+   "still": true,
+   "tags": [
+    "astronaut",
+    "man",
+    "rocket"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-bald",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man: bald",
+    "zh-CN": "man: bald",
+    "ja": "man: bald",
+    "ko": "man: bald",
+    "es": "man: bald"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-bald/files/emoji.png",
+   "still": true,
+   "tags": [
+    "adult",
+    "bald",
+    "man"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-beard",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man: beard",
+    "zh-CN": "有络腮胡子的男人",
+    "ja": "あごひげの男性",
+    "ko": "수염 난 남자",
+    "es": "hombre: barba"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-beard/files/emoji.png",
+   "still": true,
+   "tags": [
+    "beard",
+    "man",
+    "man: beard"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-biking",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man biking",
+    "zh-CN": "男生骑自行车",
+    "ja": "自転車に乗る男",
+    "ko": "자전거 타는 남자",
+    "es": "hombre en bicicleta"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-biking/files/emoji.png",
+   "still": true,
+   "tags": [
+    "bicycle",
+    "biking",
+    "cyclist",
+    "man"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-blonde-hair",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man: blond hair",
+    "zh-CN": "金发男",
+    "ja": "金髪の男性",
+    "ko": "금발 남자",
+    "es": "hombre rubio"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-blonde-hair/files/emoji.png",
+   "still": true,
+   "tags": [
+    "blond",
+    "blond-haired man",
+    "hair",
+    "man",
+    "man: blond hair"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-bouncing-ball",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man bouncing ball",
+    "zh-CN": "男生玩球",
+    "ja": "バスケットボールをする男",
+    "ko": "공 가진 남자",
+    "es": "hombre botando un balón"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-bouncing-ball/files/emoji.png",
+   "still": true,
+   "tags": [
+    "ball",
+    "man",
+    "man bouncing ball"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-bowing",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man bowing",
+    "zh-CN": "男生鞠躬",
+    "ja": "おじぎする男",
+    "ko": "절하는 남자",
+    "es": "hombre haciendo una reverencia"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-bowing/files/emoji.png",
+   "still": true,
+   "tags": [
+    "apology",
+    "bowing",
+    "favor",
+    "gesture",
+    "man",
+    "sorry"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-cartwheeling",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man cartwheeling",
+    "zh-CN": "男生侧手翻",
+    "ja": "側転する男",
+    "ko": "옆돌기하는 남자",
+    "es": "hombre dando una voltereta lateral"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-cartwheeling/files/emoji.png",
+   "still": true,
+   "tags": [
+    "cartwheel",
+    "gymnastics",
+    "man",
+    "man cartwheeling"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-climbing",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man climbing",
+    "zh-CN": "攀爬的男人",
+    "ja": "山を登る男",
+    "ko": "클라이밍하는 남자",
+    "es": "hombre escalando"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-climbing/files/emoji.png",
+   "still": true,
+   "tags": [
+    "climber",
+    "man climbing"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-construction-worker",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man construction worker",
+    "zh-CN": "男建筑工人",
+    "ja": "男性の建設作業員",
+    "ko": "건설 현장 남자 노동자",
+    "es": "profesional de la construcción hombre"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-construction-worker/files/emoji.png",
+   "still": true,
+   "tags": [
+    "construction",
+    "man",
+    "worker"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-cook",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man cook",
+    "zh-CN": "男厨师",
+    "ja": "男性のコック",
+    "ko": "남자 요리사",
+    "es": "chef hombre"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-cook/files/emoji.png",
+   "still": true,
+   "tags": [
+    "chef",
+    "cook",
+    "man"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-curly-hair",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man: curly hair",
+    "zh-CN": "man: curly hair",
+    "ja": "man: curly hair",
+    "ko": "man: curly hair",
+    "es": "man: curly hair"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-curly-hair/files/emoji.png",
+   "still": true,
+   "tags": [
+    "adult",
+    "curly hair",
+    "man"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-dancing",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man dancing",
+    "zh-CN": "跳舞的男人",
+    "ja": "踊る男",
+    "ko": "남자 댄서",
+    "es": "hombre bailando"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-dancing/files/emoji.png",
+   "still": true,
+   "tags": [
+    "dance",
+    "dancing",
+    "man"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-deaf",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "deaf man",
+    "zh-CN": "失聪的男人",
+    "ja": "耳の不自由な男性",
+    "ko": "청각장애가 있는 남자",
+    "es": "hombre sordo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-deaf/files/emoji.png",
+   "still": true,
+   "tags": [
+    "deaf",
+    "man"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-detective",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man detective",
+    "zh-CN": "男侦探",
+    "ja": "男性の探偵",
+    "ko": "남자 탐정",
+    "es": "detective hombre"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-detective/files/emoji.png",
+   "still": true,
+   "tags": [
+    "detective",
+    "man",
+    "sleuth",
+    "spy"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-elf",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man elf",
+    "zh-CN": "男小精灵",
+    "ja": "男のエルフ",
+    "ko": "남자 엘프",
+    "es": "elfo hombre"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-elf/files/emoji.png",
+   "still": true,
+   "tags": [
+    "magical",
+    "man elf"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-facepalming",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man facepalming",
+    "zh-CN": "男生捂脸",
+    "ja": "ひたいに手をあてる男",
+    "ko": "골치 아파하는 남자",
+    "es": "hombre con la mano en la frente"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-facepalming/files/emoji.png",
+   "still": true,
+   "tags": [
+    "disbelief",
+    "exasperation",
+    "facepalm",
+    "man",
+    "man facepalming"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-factory-worker",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man factory worker",
+    "zh-CN": "男工人",
+    "ja": "男性の溶接工",
+    "ko": "공장 남자 직원",
+    "es": "profesional industrial hombre"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-factory-worker/files/emoji.png",
+   "still": true,
+   "tags": [
+    "assembly",
+    "factory",
+    "industrial",
+    "man",
+    "worker"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-fairy",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man fairy",
+    "zh-CN": "仙人",
+    "ja": "男の妖精",
+    "ko": "남자 요정",
+    "es": "hada hombre"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-fairy/files/emoji.png",
+   "still": true,
+   "tags": [
+    "man fairy",
+    "Oberon",
+    "Puck"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-farmer",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man farmer",
+    "zh-CN": "农夫",
+    "ja": "農家の男性",
+    "ko": "남자 농부",
+    "es": "profesional de la agricultura hombre"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-farmer/files/emoji.png",
+   "still": true,
+   "tags": [
+    "farmer",
+    "gardener",
+    "man",
+    "rancher"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-feeding-baby",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man feeding baby",
+    "zh-CN": "哺乳的男人",
+    "ja": "授乳する男性",
+    "ko": "수유 중인 남자",
+    "es": "hombre alimentando a bebé"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-feeding-baby/files/emoji.png",
+   "still": true,
+   "tags": [
+    "baby",
+    "feeding",
+    "man",
+    "nursing"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-firefighter",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man firefighter",
+    "zh-CN": "男消防员",
+    "ja": "男性消防士",
+    "ko": "남자 소방관",
+    "es": "bombero hombre"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-firefighter/files/emoji.png",
+   "still": true,
+   "tags": [
+    "firefighter",
+    "firetruck",
+    "man"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-frowning",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man frowning",
+    "zh-CN": "皱眉男",
+    "ja": "しかめ面の男",
+    "ko": "찌푸린 남자",
+    "es": "hombre frunciendo el ceño"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-frowning/files/emoji.png",
+   "still": true,
+   "tags": [
+    "frowning",
+    "gesture",
+    "man"
+   ]
+  },
+  {
    "id": "stickers/emoji/man-genie",
    "cat": "sticker",
    "group": "people",
@@ -4620,6 +6496,1323 @@
    "tags": [
     "djinn",
     "man genie"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-gesturing-no",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man gesturing NO",
+    "zh-CN": "禁止手势男",
+    "ja": "ダメのポーズをする男",
+    "ko": "안 된다는 제스처를 하는 남자",
+    "es": "hombre haciendo el gesto de \"no\""
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-gesturing-no/files/emoji.png",
+   "still": true,
+   "tags": [
+    "forbidden",
+    "gesture",
+    "hand",
+    "man",
+    "man gesturing NO",
+    "prohibited"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-gesturing-ok",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man gesturing OK",
+    "zh-CN": "OK手势男",
+    "ja": "OKのポーズをする男",
+    "ko": "오케이라는 제스처를 하는 남자",
+    "es": "hombre haciendo el gesto de \"de acuerdo\""
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-gesturing-ok/files/emoji.png",
+   "still": true,
+   "tags": [
+    "gesture",
+    "hand",
+    "man",
+    "man gesturing OK",
+    "OK"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-getting-haircut",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man getting haircut",
+    "zh-CN": "男生理发",
+    "ja": "散髪される男",
+    "ko": "남자 헤어컷",
+    "es": "hombre cortándose el pelo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-getting-haircut/files/emoji.png",
+   "still": true,
+   "tags": [
+    "haircut",
+    "man",
+    "man getting haircut"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-getting-massage",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man getting massage",
+    "zh-CN": "男生按摩",
+    "ja": "フェイスマッサージ中の男",
+    "ko": "마사지 받는 남자",
+    "es": "hombre recibiendo masaje"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-getting-massage/files/emoji.png",
+   "still": true,
+   "tags": [
+    "face",
+    "man",
+    "man getting massage",
+    "massage"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-golfing",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man golfing",
+    "zh-CN": "男生打高尔夫",
+    "ja": "ゴルフをする男",
+    "ko": "골프치는 남자",
+    "es": "hombre jugando al golf"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-golfing/files/emoji.png",
+   "still": true,
+   "tags": [
+    "golf",
+    "man",
+    "man golfing"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-guard",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man guard",
+    "zh-CN": "男卫兵",
+    "ja": "男性の衛兵",
+    "ko": "남자 근위병",
+    "es": "guardia hombre"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-guard/files/emoji.png",
+   "still": true,
+   "tags": [
+    "guard",
+    "man"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-health-worker",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man health worker",
+    "zh-CN": "男医生",
+    "ja": "男性の医者",
+    "ko": "남자 의료인",
+    "es": "profesional sanitario hombre"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-health-worker/files/emoji.png",
+   "still": true,
+   "tags": [
+    "doctor",
+    "healthcare",
+    "man",
+    "man health worker",
+    "nurse",
+    "therapist"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-in-lotus-position",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man in lotus position",
+    "zh-CN": "盘腿的男人",
+    "ja": "ヨガのポーズをする男",
+    "ko": "가부좌한 남자",
+    "es": "hombre en posición de loto"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-in-lotus-position/files/emoji.png",
+   "still": true,
+   "tags": [
+    "man in lotus position",
+    "meditation",
+    "yoga"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-in-manual-wheelchair",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man in manual wheelchair",
+    "zh-CN": "坐手动轮椅的男人",
+    "ja": "手動式車椅子の男性",
+    "ko": "수동 휠체어를 탄 남자",
+    "es": "hombre en silla de ruedas manual"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-in-manual-wheelchair/files/emoji.png",
+   "still": true,
+   "tags": [
+    "accessibility",
+    "man",
+    "man in manual wheelchair",
+    "wheelchair"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-in-manual-wheelchair-facing-right",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man in manual wheelchair facing right",
+    "zh-CN": "man in manual wheelchair facing right",
+    "ja": "man in manual wheelchair facing right",
+    "ko": "man in manual wheelchair facing right",
+    "es": "man in manual wheelchair facing right"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-in-manual-wheelchair-facing-right/files/emoji.png",
+   "still": true,
+   "tags": [
+    "accessibility",
+    "man",
+    "man in manual wheelchair",
+    "wheelchair"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-in-motorized-wheelchair",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man in motorized wheelchair",
+    "zh-CN": "坐电动轮椅的男人",
+    "ja": "電動車椅子の男性",
+    "ko": "전동 휠체어를 탄 남자",
+    "es": "hombre en silla de ruedas eléctrica"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-in-motorized-wheelchair/files/emoji.png",
+   "still": true,
+   "tags": [
+    "accessibility",
+    "man",
+    "man in motorized wheelchair",
+    "wheelchair"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-in-motorized-wheelchair-facing-right",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man in motorized wheelchair facing right",
+    "zh-CN": "man in motorized wheelchair facing right",
+    "ja": "man in motorized wheelchair facing right",
+    "ko": "man in motorized wheelchair facing right",
+    "es": "man in motorized wheelchair facing right"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-in-motorized-wheelchair-facing-right/files/emoji.png",
+   "still": true,
+   "tags": [
+    "accessibility",
+    "man",
+    "man in motorized wheelchair",
+    "wheelchair"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-in-steamy-room",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man in steamy room",
+    "zh-CN": "蒸房里的男人",
+    "ja": "サウナに入る男",
+    "ko": "사우나 하는 남자",
+    "es": "hombre en una sauna"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-in-steamy-room/files/emoji.png",
+   "still": true,
+   "tags": [
+    "man in steamy room",
+    "sauna",
+    "steam room"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-in-tuxedo",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man in tuxedo",
+    "zh-CN": "穿礼服的男人",
+    "ja": "タキシードの男性",
+    "ko": "턱시도를 입은 남자",
+    "es": "hombre con esmoquin"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-in-tuxedo/files/emoji.png",
+   "still": true,
+   "tags": [
+    "man",
+    "man in tuxedo",
+    "tuxedo"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-judge",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man judge",
+    "zh-CN": "男法官",
+    "ja": "男性の裁判官",
+    "ko": "남자 판사",
+    "es": "fiscal hombre"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-judge/files/emoji.png",
+   "still": true,
+   "tags": [
+    "judge",
+    "justice",
+    "man",
+    "scales"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-juggling",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man juggling",
+    "zh-CN": "男生抛接杂耍",
+    "ja": "ジャグリングをする男",
+    "ko": "저글링하는 남자",
+    "es": "hombre haciendo malabares"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-juggling/files/emoji.png",
+   "still": true,
+   "tags": [
+    "juggling",
+    "man",
+    "multitask"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-kneeling",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man kneeling",
+    "zh-CN": "跪下的男人",
+    "ja": "正座する男性",
+    "ko": "무릎을 꿇은 남자",
+    "es": "hombre de rodillas"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-kneeling/files/emoji.png",
+   "still": true,
+   "tags": [
+    "kneeling",
+    "man"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-kneeling-facing-right",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man kneeling facing right",
+    "zh-CN": "man kneeling facing right",
+    "ja": "man kneeling facing right",
+    "ko": "man kneeling facing right",
+    "es": "man kneeling facing right"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-kneeling-facing-right/files/emoji.png",
+   "still": true,
+   "tags": [
+    "kneeling",
+    "man"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-lifting-weights",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man lifting weights",
+    "zh-CN": "男生举重",
+    "ja": "重量挙げをする男",
+    "ko": "남자 역도 선수",
+    "es": "hombre levantando pesas"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-lifting-weights/files/emoji.png",
+   "still": true,
+   "tags": [
+    "man",
+    "man lifting weights",
+    "weight lifter"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-mage",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man mage",
+    "zh-CN": "男法师",
+    "ja": "男の魔法使い",
+    "ko": "남자 마법사",
+    "es": "mago"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-mage/files/emoji.png",
+   "still": true,
+   "tags": [
+    "man mage",
+    "sorcerer",
+    "wizard"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-mechanic",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man mechanic",
+    "zh-CN": "男技工",
+    "ja": "男性の整備士",
+    "ko": "남자 정비공",
+    "es": "profesional de la mecánica hombre"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-mechanic/files/emoji.png",
+   "still": true,
+   "tags": [
+    "electrician",
+    "man",
+    "mechanic",
+    "plumber",
+    "tradesperson"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-merpeople",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "merman",
+    "zh-CN": "男人鱼",
+    "ja": "マーマン",
+    "ko": "남자 인어",
+    "es": "sirena hombre"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-merpeople/files/emoji.png",
+   "still": true,
+   "tags": [
+    "merman",
+    "Triton"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-mountain-biking",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man mountain biking",
+    "zh-CN": "男生骑山地车",
+    "ja": "マウンテンバイクに乗る男",
+    "ko": "산악 자전거 타는 남자",
+    "es": "hombre en bicicleta de montaña"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-mountain-biking/files/emoji.png",
+   "still": true,
+   "tags": [
+    "bicycle",
+    "bike",
+    "cyclist",
+    "man",
+    "man mountain biking",
+    "mountain"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-office-worker",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man office worker",
+    "zh-CN": "男白领",
+    "ja": "男性会社員",
+    "ko": "남자 회사원",
+    "es": "oficinista hombre"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-office-worker/files/emoji.png",
+   "still": true,
+   "tags": [
+    "architect",
+    "business",
+    "man",
+    "man office worker",
+    "manager",
+    "white-collar"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-pilot",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man pilot",
+    "zh-CN": "男飞行员",
+    "ja": "男性パイロット",
+    "ko": "남자 기장",
+    "es": "piloto hombre"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-pilot/files/emoji.png",
+   "still": true,
+   "tags": [
+    "man",
+    "pilot",
+    "plane"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-playing-handball",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man playing handball",
+    "zh-CN": "男生玩手球",
+    "ja": "ハンドボールをする男",
+    "ko": "핸드볼하는 남자",
+    "es": "hombre jugando al balonmano"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-playing-handball/files/emoji.png",
+   "still": true,
+   "tags": [
+    "handball",
+    "man",
+    "man playing handball"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-playing-water-polo",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man playing water polo",
+    "zh-CN": "男生玩水球",
+    "ja": "水球をする男",
+    "ko": "수구하는 남자",
+    "es": "hombre jugando al waterpolo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-playing-water-polo/files/emoji.png",
+   "still": true,
+   "tags": [
+    "man",
+    "man playing water polo",
+    "water polo"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-police-officer",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man police officer",
+    "zh-CN": "男警察",
+    "ja": "男性警察官",
+    "ko": "남자 경찰관",
+    "es": "agente de policía hombre"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-police-officer/files/emoji.png",
+   "still": true,
+   "tags": [
+    "cop",
+    "man",
+    "officer",
+    "police"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-pouting",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man pouting",
+    "zh-CN": "撅嘴男",
+    "ja": "不機嫌な男",
+    "ko": "뾰로통한 남자",
+    "es": "hombre haciendo pucheros"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-pouting/files/emoji.png",
+   "still": true,
+   "tags": [
+    "gesture",
+    "man",
+    "pouting"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-raising-hand",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man raising hand",
+    "zh-CN": "男生举手",
+    "ja": "手を挙げる男",
+    "ko": "한 손 든 남자",
+    "es": "hombre con la mano levantada"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-raising-hand/files/emoji.png",
+   "still": true,
+   "tags": [
+    "gesture",
+    "man",
+    "man raising hand",
+    "raising hand"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-red-hair",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man: red hair",
+    "zh-CN": "man: red hair",
+    "ja": "man: red hair",
+    "ko": "man: red hair",
+    "es": "man: red hair"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-red-hair/files/emoji.png",
+   "still": true,
+   "tags": [
+    "adult",
+    "man",
+    "red hair"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-rowing-boat",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man rowing boat",
+    "zh-CN": "男生划船",
+    "ja": "ボートをこぐ男",
+    "ko": "노젓는 남자",
+    "es": "hombre remando en un bote"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-rowing-boat/files/emoji.png",
+   "still": true,
+   "tags": [
+    "boat",
+    "man",
+    "man rowing boat",
+    "rowboat"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-running",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man running",
+    "zh-CN": "男生跑步",
+    "ja": "走る男",
+    "ko": "뛰는 남자",
+    "es": "hombre corriendo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-running/files/emoji.png",
+   "still": true,
+   "tags": [
+    "man",
+    "marathon",
+    "racing",
+    "running"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-running-facing-right",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man running facing right",
+    "zh-CN": "man running facing right",
+    "ja": "man running facing right",
+    "ko": "man running facing right",
+    "es": "man running facing right"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-running-facing-right/files/emoji.png",
+   "still": true,
+   "tags": [
+    "man",
+    "marathon",
+    "racing",
+    "running"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-scientist",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man scientist",
+    "zh-CN": "男科学家",
+    "ja": "男性科学者",
+    "ko": "남자 과학자",
+    "es": "profesional de la ciencia hombre"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-scientist/files/emoji.png",
+   "still": true,
+   "tags": [
+    "biologist",
+    "chemist",
+    "engineer",
+    "man",
+    "physicist",
+    "scientist"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-shrugging",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man shrugging",
+    "zh-CN": "男生耸肩",
+    "ja": "お手上げする男",
+    "ko": "어깨를 으쓱하는 남자",
+    "es": "hombre encogido de hombros"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-shrugging/files/emoji.png",
+   "still": true,
+   "tags": [
+    "doubt",
+    "ignorance",
+    "indifference",
+    "man",
+    "man shrugging",
+    "shrug"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-singer",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man singer",
+    "zh-CN": "男歌手",
+    "ja": "男性歌手",
+    "ko": "남자 가수",
+    "es": "cantante hombre"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-singer/files/emoji.png",
+   "still": true,
+   "tags": [
+    "actor",
+    "entertainer",
+    "man",
+    "rock",
+    "singer",
+    "star"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-standing",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man standing",
+    "zh-CN": "站立的男人",
+    "ja": "立つ男",
+    "ko": "서 있는 남자",
+    "es": "hombre de pie"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-standing/files/emoji.png",
+   "still": true,
+   "tags": [
+    "man",
+    "standing"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-student",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man student",
+    "zh-CN": "男学生",
+    "ja": "男子学生",
+    "ko": "남학생",
+    "es": "estudiante hombre"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-student/files/emoji.png",
+   "still": true,
+   "tags": [
+    "graduate",
+    "man",
+    "student"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-superhero",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man superhero",
+    "zh-CN": "男超级英雄",
+    "ja": "男性のスーパーヒーロー",
+    "ko": "남자 히어로",
+    "es": "superhéroe"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-superhero/files/emoji.png",
+   "still": true,
+   "tags": [
+    "good",
+    "hero",
+    "man",
+    "man superhero",
+    "superpower"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-supervillain",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man supervillain",
+    "zh-CN": "男超级大坏蛋",
+    "ja": "男性の悪役",
+    "ko": "남자 슈퍼 악당",
+    "es": "supervillano"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-supervillain/files/emoji.png",
+   "still": true,
+   "tags": [
+    "criminal",
+    "evil",
+    "man",
+    "man supervillain",
+    "superpower",
+    "villain"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-surfing",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man surfing",
+    "zh-CN": "男生冲浪",
+    "ja": "サーフィンする男",
+    "ko": "서핑하는 남자",
+    "es": "hombre haciendo surf"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-surfing/files/emoji.png",
+   "still": true,
+   "tags": [
+    "man",
+    "surfing"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-swimming",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man swimming",
+    "zh-CN": "男生游泳",
+    "ja": "泳ぐ男",
+    "ko": "수영하는 남자",
+    "es": "hombre nadando"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-swimming/files/emoji.png",
+   "still": true,
+   "tags": [
+    "man",
+    "man swimming",
+    "swim"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-teacher",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man teacher",
+    "zh-CN": "男老师",
+    "ja": "男性の教師",
+    "ko": "남교사",
+    "es": "docente hombre"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-teacher/files/emoji.png",
+   "still": true,
+   "tags": [
+    "instructor",
+    "man",
+    "professor",
+    "teacher"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-technologist",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man technologist",
+    "zh-CN": "男程序员",
+    "ja": "男性技術者",
+    "ko": "남자 기술 전문가",
+    "es": "profesional de la tecnología hombre"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-technologist/files/emoji.png",
+   "still": true,
+   "tags": [
+    "coder",
+    "developer",
+    "inventor",
+    "man",
+    "software",
+    "technologist"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-tipping-hand",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man tipping hand",
+    "zh-CN": "前台男",
+    "ja": "案内する男",
+    "ko": "손바닥 꺾은 남자",
+    "es": "empleado de mostrador de información"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-tipping-hand/files/emoji.png",
+   "still": true,
+   "tags": [
+    "man",
+    "man tipping hand",
+    "sassy",
+    "tipping hand"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-vampire",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man vampire",
+    "zh-CN": "男吸血鬼",
+    "ja": "男の吸血鬼",
+    "ko": "남자 뱀파이어",
+    "es": "vampiro hombre"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-vampire/files/emoji.png",
+   "still": true,
+   "tags": [
+    "Dracula",
+    "man vampire",
+    "undead"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-walking",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man walking",
+    "zh-CN": "男行人",
+    "ja": "歩く男",
+    "ko": "걷는 남자",
+    "es": "hombre caminando"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-walking/files/emoji.png",
+   "still": true,
+   "tags": [
+    "hike",
+    "man",
+    "man walking",
+    "walk"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-walking-facing-right",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man walking facing right",
+    "zh-CN": "man walking facing right",
+    "ja": "man walking facing right",
+    "ko": "man walking facing right",
+    "es": "man walking facing right"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-walking-facing-right/files/emoji.png",
+   "still": true,
+   "tags": [
+    "hike",
+    "man",
+    "man walking",
+    "walk"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-wearing-turban",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man wearing turban",
+    "zh-CN": "戴头巾的男人",
+    "ja": "ターバンの男性",
+    "ko": "터번을 쓰고 있는 남자",
+    "es": "hombre con turbante"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-wearing-turban/files/emoji.png",
+   "still": true,
+   "tags": [
+    "man",
+    "man wearing turban",
+    "turban"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-white-hair",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man: white hair",
+    "zh-CN": "man: white hair",
+    "ja": "man: white hair",
+    "ko": "man: white hair",
+    "es": "man: white hair"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-white-hair/files/emoji.png",
+   "still": true,
+   "tags": [
+    "adult",
+    "man",
+    "white hair"
    ]
   },
   {
@@ -4647,6 +7840,83 @@
     "men",
     "men with bunny ears",
     "partying"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-with-veil",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man with veil",
+    "zh-CN": "戴头纱的男人",
+    "ja": "ベールの男性",
+    "ko": "면사포를 쓴 남자",
+    "es": "hombre con velo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-with-veil/files/emoji.png",
+   "still": true,
+   "tags": [
+    "man",
+    "man with veil",
+    "veil"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-with-white-cane",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man with white cane",
+    "zh-CN": "拄盲杖的男人",
+    "ja": "杖をついた男性",
+    "ko": "지팡이를 든 남자",
+    "es": "hombre con bastón"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-with-white-cane/files/emoji.png",
+   "still": true,
+   "tags": [
+    "accessibility",
+    "blind",
+    "man",
+    "man with white cane"
+   ]
+  },
+  {
+   "id": "stickers/emoji/man-with-white-cane-facing-right",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "man with white cane facing right",
+    "zh-CN": "man with white cane facing right",
+    "ja": "man with white cane facing right",
+    "ko": "man with white cane facing right",
+    "es": "man with white cane facing right"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/man-with-white-cane-facing-right/files/emoji.png",
+   "still": true,
+   "tags": [
+    "accessibility",
+    "blind",
+    "man",
+    "man with white cane"
    ]
   },
   {
@@ -4700,6 +7970,32 @@
    ]
   },
   {
+   "id": "stickers/emoji/mechanic",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "mechanic",
+    "zh-CN": "技工",
+    "ja": "整備士",
+    "ko": "정비공",
+    "es": "profesional de la mecánica"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/mechanic/files/emoji.png",
+   "still": true,
+   "tags": [
+    "electrician",
+    "mechanic",
+    "plumber",
+    "tradesperson"
+   ]
+  },
+  {
    "id": "stickers/emoji/mechanical-arm",
    "cat": "sticker",
    "group": "people",
@@ -4750,6 +8046,31 @@
    ]
   },
   {
+   "id": "stickers/emoji/middle-finger",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "middle finger",
+    "zh-CN": "竖中指",
+    "ja": "立てた中指",
+    "ko": "중지",
+    "es": "dedo corazón hacia arriba"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/middle-finger/files/emoji.png",
+   "still": true,
+   "tags": [
+    "finger",
+    "hand",
+    "middle finger"
+   ]
+  },
+  {
    "id": "stickers/emoji/mouth",
    "cat": "sticker",
    "group": "people",
@@ -4771,6 +8092,392 @@
    "tags": [
     "lips",
     "mouth"
+   ]
+  },
+  {
+   "id": "stickers/emoji/mrs-claus",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "Mrs. Claus",
+    "zh-CN": "圣诞奶奶",
+    "ja": "女性のサンタ",
+    "ko": "산타할머니",
+    "es": "Mamá Noel"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/mrs-claus/files/emoji.png",
+   "still": true,
+   "tags": [
+    "celebration",
+    "Christmas",
+    "claus",
+    "mother",
+    "Mrs.",
+    "Mrs. Claus"
+   ]
+  },
+  {
+   "id": "stickers/emoji/mx-claus",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "Mx Claus",
+    "zh-CN": "圣诞人",
+    "ja": "サンタさん",
+    "ko": "산타",
+    "es": "Noel"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/mx-claus/files/emoji.png",
+   "still": true,
+   "tags": [
+    "Claus, christmas",
+    "mx claus"
+   ]
+  },
+  {
+   "id": "stickers/emoji/nail-polish",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "nail polish",
+    "zh-CN": "涂指甲油",
+    "ja": "マニキュアを塗る手",
+    "ko": "매니큐어",
+    "es": "pintarse las uñas"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/nail-polish/files/emoji.png",
+   "still": true,
+   "tags": [
+    "care",
+    "cosmetics",
+    "manicure",
+    "nail",
+    "polish"
+   ]
+  },
+  {
+   "id": "stickers/emoji/ninja",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "ninja",
+    "zh-CN": "忍者",
+    "ja": "忍者",
+    "ko": "닌자",
+    "es": "ninja"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/ninja/files/emoji.png",
+   "still": true,
+   "tags": [
+    "fighter",
+    "hidden",
+    "ninja",
+    "stealth"
+   ]
+  },
+  {
+   "id": "stickers/emoji/nose",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "nose",
+    "zh-CN": "鼻子",
+    "ja": "鼻",
+    "ko": "코",
+    "es": "nariz"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/nose/files/emoji.png",
+   "still": true,
+   "tags": [
+    "body",
+    "nose"
+   ]
+  },
+  {
+   "id": "stickers/emoji/office-worker",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "office worker",
+    "zh-CN": "白领",
+    "ja": "会社員",
+    "ko": "회사원",
+    "es": "oficinista"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/office-worker/files/emoji.png",
+   "still": true,
+   "tags": [
+    "architect",
+    "business",
+    "manager",
+    "office worker",
+    "white-collar"
+   ]
+  },
+  {
+   "id": "stickers/emoji/ok-hand",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "OK hand",
+    "zh-CN": "OK",
+    "ja": "OKの手",
+    "ko": "오케이를 표시한 손",
+    "es": "señal de aprobación con la mano"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/ok-hand/files/emoji.png",
+   "still": true,
+   "tags": [
+    "hand",
+    "OK"
+   ]
+  },
+  {
+   "id": "stickers/emoji/old-man",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "old man",
+    "zh-CN": "老爷爷",
+    "ja": "おじいさん",
+    "ko": "할아버지",
+    "es": "anciano"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/old-man/files/emoji.png",
+   "still": true,
+   "tags": [
+    "adult",
+    "man",
+    "old"
+   ]
+  },
+  {
+   "id": "stickers/emoji/old-woman",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "old woman",
+    "zh-CN": "老奶奶",
+    "ja": "おばあさん",
+    "ko": "할머니",
+    "es": "anciana"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/old-woman/files/emoji.png",
+   "still": true,
+   "tags": [
+    "adult",
+    "old",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/older-person",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "older person",
+    "zh-CN": "老年人",
+    "ja": "お年寄り",
+    "ko": "노인",
+    "es": "persona mayor"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/older-person/files/emoji.png",
+   "still": true,
+   "tags": [
+    "adult",
+    "gender-neutral",
+    "old",
+    "older person",
+    "unspecified gender"
+   ]
+  },
+  {
+   "id": "stickers/emoji/oncoming-fist",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "oncoming fist",
+    "zh-CN": "出拳",
+    "ja": "グー",
+    "ko": "주먹 전면",
+    "es": "puño cerrado"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/oncoming-fist/files/emoji.png",
+   "still": true,
+   "tags": [
+    "clenched",
+    "fist",
+    "hand",
+    "oncoming fist",
+    "punch"
+   ]
+  },
+  {
+   "id": "stickers/emoji/open-hands",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "open hands",
+    "zh-CN": "张开双手",
+    "ja": "両手のひら",
+    "ko": "양손을 모아서 벌린 모양",
+    "es": "manos abiertas"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/open-hands/files/emoji.png",
+   "still": true,
+   "tags": [
+    "hand",
+    "open",
+    "open hands"
+   ]
+  },
+  {
+   "id": "stickers/emoji/palm-down-hand",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "palm down hand",
+    "zh-CN": "掌心向下的手",
+    "ja": "下に向けた手",
+    "ko": "손바닥을 아래로 향한 손",
+    "es": "mano con la palma hacia abajo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/palm-down-hand/files/emoji.png",
+   "still": true,
+   "tags": [
+    "dismiss",
+    "drop",
+    "palm down hand",
+    "shoo"
+   ]
+  },
+  {
+   "id": "stickers/emoji/palm-up-hand",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "palm up hand",
+    "zh-CN": "掌心向上的手",
+    "ja": "上に向けた手",
+    "ko": "손바닥을 위로 향한 손",
+    "es": "mano con la palma hacia arriba"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/palm-up-hand/files/emoji.png",
+   "still": true,
+   "tags": [
+    "beckon",
+    "catch",
+    "come",
+    "offer",
+    "palm up hand"
+   ]
+  },
+  {
+   "id": "stickers/emoji/palms-up-together",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "palms up together",
+    "zh-CN": "掌心向上托起",
+    "ja": "手のひらを揃えた両手",
+    "ko": "내민 두 손",
+    "es": "palmas hacia arriba juntas"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/palms-up-together/files/emoji.png",
+   "still": true,
+   "tags": [
+    "palms up together",
+    "prayer"
    ]
   },
   {
@@ -4801,6 +8508,393 @@
    ]
   },
   {
+   "id": "stickers/emoji/person",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person",
+    "zh-CN": "成人",
+    "ja": "大人",
+    "ko": "사람",
+    "es": "persona adulta"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person/files/emoji.png",
+   "still": true,
+   "tags": [
+    "adult",
+    "gender-neutral",
+    "person",
+    "unspecified gender"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-bald",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person: bald",
+    "zh-CN": "person: bald",
+    "ja": "person: bald",
+    "ko": "person: bald",
+    "es": "person: bald"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-bald/files/emoji.png",
+   "still": true,
+   "tags": [
+    "adult",
+    "bald",
+    "gender-neutral",
+    "person",
+    "unspecified gender"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-beard",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person: beard",
+    "zh-CN": "有胡子的人",
+    "ja": "あごひげの人",
+    "ko": "수염 난 사람",
+    "es": "persona con barba"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-beard/files/emoji.png",
+   "still": true,
+   "tags": [
+    "beard",
+    "person",
+    "person: beard"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-biking",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person biking",
+    "zh-CN": "骑自行车",
+    "ja": "自転車に乗る人",
+    "ko": "자전거 타는 사람",
+    "es": "persona en bicicleta"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-biking/files/emoji.png",
+   "still": true,
+   "tags": [
+    "bicycle",
+    "biking",
+    "cyclist",
+    "person biking"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-blonde-hair",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person: blond hair",
+    "zh-CN": "金色头发的人",
+    "ja": "金髪の人",
+    "ko": "금발인 사람",
+    "es": "persona adulta rubia"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-blonde-hair/files/emoji.png",
+   "still": true,
+   "tags": [
+    "blond",
+    "blond-haired person",
+    "hair",
+    "person: blond hair"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-bouncing-ball",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person bouncing ball",
+    "zh-CN": "玩球",
+    "ja": "バスケットボールをする人",
+    "ko": "공을 갖고 있는 사람",
+    "es": "persona botando un balón"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-bouncing-ball/files/emoji.png",
+   "still": true,
+   "tags": [
+    "ball",
+    "person bouncing ball"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-bowing",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person bowing",
+    "zh-CN": "鞠躬",
+    "ja": "おじぎする人",
+    "ko": "절하는 사람",
+    "es": "persona haciendo una reverencia"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-bowing/files/emoji.png",
+   "still": true,
+   "tags": [
+    "apology",
+    "bow",
+    "gesture",
+    "person bowing",
+    "sorry"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-cartwheeling",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person cartwheeling",
+    "zh-CN": "侧手翻",
+    "ja": "側転する人",
+    "ko": "옆돌기하는 사람",
+    "es": "persona haciendo voltereta lateral"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-cartwheeling/files/emoji.png",
+   "still": true,
+   "tags": [
+    "cartwheel",
+    "gymnastics",
+    "person cartwheeling"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-climbing",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person climbing",
+    "zh-CN": "攀爬的人",
+    "ja": "山を登る人",
+    "ko": "클라이밍하는 사람",
+    "es": "persona escalando"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-climbing/files/emoji.png",
+   "still": true,
+   "tags": [
+    "climber",
+    "person climbing"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-curly-hair",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person: curly hair",
+    "zh-CN": "person: curly hair",
+    "ja": "person: curly hair",
+    "ko": "person: curly hair",
+    "es": "person: curly hair"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-curly-hair/files/emoji.png",
+   "still": true,
+   "tags": [
+    "adult",
+    "curly hair",
+    "gender-neutral",
+    "person",
+    "unspecified gender"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-deaf",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "deaf person",
+    "zh-CN": "失聪者",
+    "ja": "耳の不自由な人",
+    "ko": "청각 장애가 있는 사람",
+    "es": "persona sorda"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-deaf/files/emoji.png",
+   "still": true,
+   "tags": [
+    "accessibility",
+    "deaf",
+    "deaf person",
+    "ear",
+    "hear"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-elf",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "elf",
+    "zh-CN": "小精灵",
+    "ja": "エルフ",
+    "ko": "엘프",
+    "es": "elfo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-elf/files/emoji.png",
+   "still": true,
+   "tags": [
+    "elf",
+    "magical"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-facepalming",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person facepalming",
+    "zh-CN": "捂脸",
+    "ja": "ひたいに手をあてる人",
+    "ko": "골치 아파하는 사람",
+    "es": "persona con la mano en la frente"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-facepalming/files/emoji.png",
+   "still": true,
+   "tags": [
+    "disbelief",
+    "exasperation",
+    "face",
+    "palm",
+    "person facepalming"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-fairy",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "fairy",
+    "zh-CN": "精灵",
+    "ja": "妖精",
+    "ko": "요정",
+    "es": "hada"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-fairy/files/emoji.png",
+   "still": true,
+   "tags": [
+    "fairy",
+    "Oberon",
+    "Puck",
+    "Titania"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-feeding-baby",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person feeding baby",
+    "zh-CN": "哺乳的人",
+    "ja": "授乳する人",
+    "ko": "수유 중인 사람",
+    "es": "persona alimentando a bebé"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-feeding-baby/files/emoji.png",
+   "still": true,
+   "tags": [
+    "baby",
+    "feeding",
+    "nursing",
+    "person"
+   ]
+  },
+  {
    "id": "stickers/emoji/person-fencing",
    "cat": "sticker",
    "group": "people",
@@ -4824,6 +8918,31 @@
     "fencing",
     "person fencing",
     "sword"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-frowning",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person frowning",
+    "zh-CN": "皱眉",
+    "ja": "しかめ面の人",
+    "ko": "찌푸린 사람",
+    "es": "persona frunciendo el ceño"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-frowning/files/emoji.png",
+   "still": true,
+   "tags": [
+    "frown",
+    "gesture",
+    "person frowning"
    ]
   },
   {
@@ -4851,6 +8970,1086 @@
    ]
   },
   {
+   "id": "stickers/emoji/person-gesturing-no",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person gesturing NO",
+    "zh-CN": "禁止手势",
+    "ja": "ダメのポーズをする人",
+    "ko": "안 된다는 제스처를 하는 사람",
+    "es": "persona haciendo el gesto de \"no\""
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-gesturing-no/files/emoji.png",
+   "still": true,
+   "tags": [
+    "forbidden",
+    "gesture",
+    "hand",
+    "person gesturing NO",
+    "prohibited"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-gesturing-ok",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person gesturing OK",
+    "zh-CN": "OK手势",
+    "ja": "OKのポーズをする人",
+    "ko": "오케이라는 제스처를 하는 사람",
+    "es": "persona haciendo el gesto de \"de acuerdo\""
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-gesturing-ok/files/emoji.png",
+   "still": true,
+   "tags": [
+    "gesture",
+    "hand",
+    "OK",
+    "person gesturing OK"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-getting-haircut",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person getting haircut",
+    "zh-CN": "理发",
+    "ja": "散髪される人",
+    "ko": "헤어컷",
+    "es": "persona cortándose el pelo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-getting-haircut/files/emoji.png",
+   "still": true,
+   "tags": [
+    "barber",
+    "beauty",
+    "haircut",
+    "parlor",
+    "person getting haircut"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-getting-massage",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person getting massage",
+    "zh-CN": "按摩",
+    "ja": "フェイスマッサージ中の人",
+    "ko": "마사지 받는 사람",
+    "es": "persona recibiendo masaje"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-getting-massage/files/emoji.png",
+   "still": true,
+   "tags": [
+    "face",
+    "massage",
+    "person getting massage",
+    "salon"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-golfing",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person golfing",
+    "zh-CN": "打高尔夫的人",
+    "ja": "ゴルフをする人",
+    "ko": "골프치는 사람",
+    "es": "persona jugando al golf"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-golfing/files/emoji.png",
+   "still": true,
+   "tags": [
+    "ball",
+    "golf",
+    "person golfing"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-in-bed",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person in bed",
+    "zh-CN": "躺在床上的人",
+    "ja": "ベッドに寝る人",
+    "ko": "침대에 누운 사람",
+    "es": "persona en la cama"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-in-bed/files/emoji.png",
+   "still": true,
+   "tags": [
+    "hotel",
+    "person in bed",
+    "sleep"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-in-lotus-position",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person in lotus position",
+    "zh-CN": "盘腿的人",
+    "ja": "ヨガのポーズをする人",
+    "ko": "가부좌한 사람",
+    "es": "persona en posición de loto"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-in-lotus-position/files/emoji.png",
+   "still": true,
+   "tags": [
+    "meditation",
+    "person in lotus position",
+    "yoga"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-in-manual-wheelchair",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person in manual wheelchair",
+    "zh-CN": "坐手动轮椅的人",
+    "ja": "手動式車椅子の人",
+    "ko": "수동 휠체어를 탄 사람",
+    "es": "persona en silla de ruedas manual"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-in-manual-wheelchair/files/emoji.png",
+   "still": true,
+   "tags": [
+    "accessibility",
+    "person in manual wheelchair",
+    "wheelchair"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-in-manual-wheelchair-facing-right",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person in manual wheelchair facing right",
+    "zh-CN": "person in manual wheelchair facing right",
+    "ja": "person in manual wheelchair facing right",
+    "ko": "person in manual wheelchair facing right",
+    "es": "person in manual wheelchair facing right"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-in-manual-wheelchair-facing-right/files/emoji.png",
+   "still": true,
+   "tags": [
+    "accessibility",
+    "person in manual wheelchair",
+    "wheelchair"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-in-motorized-wheelchair",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person in motorized wheelchair",
+    "zh-CN": "坐电动轮椅的人",
+    "ja": "電動車椅子の人",
+    "ko": "전동 휠체어를 탄 사람",
+    "es": "persona en silla de ruedas eléctrica"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-in-motorized-wheelchair/files/emoji.png",
+   "still": true,
+   "tags": [
+    "accessibility",
+    "person in motorized wheelchair",
+    "wheelchair"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-in-motorized-wheelchair-facing-right",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person in motorized wheelchair facing right",
+    "zh-CN": "person in motorized wheelchair facing right",
+    "ja": "person in motorized wheelchair facing right",
+    "ko": "person in motorized wheelchair facing right",
+    "es": "person in motorized wheelchair facing right"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-in-motorized-wheelchair-facing-right/files/emoji.png",
+   "still": true,
+   "tags": [
+    "accessibility",
+    "person in motorized wheelchair",
+    "wheelchair"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-in-steamy-room",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person in steamy room",
+    "zh-CN": "蒸房里的人",
+    "ja": "サウナに入る人",
+    "ko": "사우나 하는 사람",
+    "es": "persona en una sauna"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-in-steamy-room/files/emoji.png",
+   "still": true,
+   "tags": [
+    "person in steamy room",
+    "sauna",
+    "steam room"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-in-suit-levitating",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person in suit levitating",
+    "zh-CN": "西装革履的人",
+    "ja": "浮いてるビジネスマン",
+    "ko": "공중에 떠 있는 정장 입은 남자",
+    "es": "persona trajeada levitando"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-in-suit-levitating/files/emoji.png",
+   "still": true,
+   "tags": [
+    "business",
+    "person",
+    "person in suit levitating",
+    "suit"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-in-tuxedo",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person in tuxedo",
+    "zh-CN": "穿燕尾服的人",
+    "ja": "タキシードの人",
+    "ko": "턱시도를 입은 사람",
+    "es": "persona con esmoquin"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-in-tuxedo/files/emoji.png",
+   "still": true,
+   "tags": [
+    "groom",
+    "person",
+    "person in tuxedo",
+    "tuxedo"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-juggling",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person juggling",
+    "zh-CN": "抛接杂耍",
+    "ja": "ジャグリングをする人",
+    "ko": "저글링하는 사람",
+    "es": "persona haciendo malabares"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-juggling/files/emoji.png",
+   "still": true,
+   "tags": [
+    "balance",
+    "juggle",
+    "multitask",
+    "person juggling",
+    "skill"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-kneeling",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person kneeling",
+    "zh-CN": "下跪者",
+    "ja": "正座する人",
+    "ko": "무릎을 꿇은 사람",
+    "es": "persona de rodillas"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-kneeling/files/emoji.png",
+   "still": true,
+   "tags": [
+    "kneel",
+    "kneeling",
+    "person kneeling"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-kneeling-facing-right",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person kneeling facing right",
+    "zh-CN": "person kneeling facing right",
+    "ja": "person kneeling facing right",
+    "ko": "person kneeling facing right",
+    "es": "person kneeling facing right"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-kneeling-facing-right/files/emoji.png",
+   "still": true,
+   "tags": [
+    "kneel",
+    "kneeling",
+    "person kneeling"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-lifting-weights",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person lifting weights",
+    "zh-CN": "举重",
+    "ja": "重量挙げをする人",
+    "ko": "역도 선수",
+    "es": "persona levantando pesas"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-lifting-weights/files/emoji.png",
+   "still": true,
+   "tags": [
+    "lifter",
+    "person lifting weights",
+    "weight"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-mage",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "mage",
+    "zh-CN": "法师",
+    "ja": "魔法使い",
+    "ko": "마법사",
+    "es": "persona maga"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-mage/files/emoji.png",
+   "still": true,
+   "tags": [
+    "mage",
+    "sorcerer",
+    "sorceress",
+    "witch",
+    "wizard"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-merpeople",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "merperson",
+    "zh-CN": "人鱼",
+    "ja": "人魚",
+    "ko": "인어",
+    "es": "persona sirena"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-merpeople/files/emoji.png",
+   "still": true,
+   "tags": [
+    "mermaid",
+    "merman",
+    "merperson",
+    "merwoman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-mountain-biking",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person mountain biking",
+    "zh-CN": "骑山地车",
+    "ja": "マウンテンバイクに乗る人",
+    "ko": "산악 자전거 타는 사람",
+    "es": "persona en bicicleta de montaña"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-mountain-biking/files/emoji.png",
+   "still": true,
+   "tags": [
+    "bicycle",
+    "bicyclist",
+    "bike",
+    "cyclist",
+    "mountain",
+    "person mountain biking"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-playing-handball",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person playing handball",
+    "zh-CN": "手球",
+    "ja": "ハンドボールをする人",
+    "ko": "핸드볼하는 사람",
+    "es": "persona jugando al balonmano"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-playing-handball/files/emoji.png",
+   "still": true,
+   "tags": [
+    "ball",
+    "handball",
+    "person playing handball"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-playing-water-polo",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person playing water polo",
+    "zh-CN": "水球",
+    "ja": "水球をする人",
+    "ko": "수구하는 사람",
+    "es": "persona jugando al waterpolo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-playing-water-polo/files/emoji.png",
+   "still": true,
+   "tags": [
+    "person playing water polo",
+    "polo",
+    "water"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-pouting",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person pouting",
+    "zh-CN": "撅嘴",
+    "ja": "不機嫌な人",
+    "ko": "뾰로통한 사람",
+    "es": "persona haciendo pucheros"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-pouting/files/emoji.png",
+   "still": true,
+   "tags": [
+    "gesture",
+    "person pouting",
+    "pouting"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-raising-hand",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person raising hand",
+    "zh-CN": "举手",
+    "ja": "手を挙げる人",
+    "ko": "한 손 든 사람",
+    "es": "persona con la mano levantada"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-raising-hand/files/emoji.png",
+   "still": true,
+   "tags": [
+    "gesture",
+    "hand",
+    "happy",
+    "person raising hand",
+    "raised"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-red-hair",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person: red hair",
+    "zh-CN": "person: red hair",
+    "ja": "person: red hair",
+    "ko": "person: red hair",
+    "es": "person: red hair"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-red-hair/files/emoji.png",
+   "still": true,
+   "tags": [
+    "adult",
+    "gender-neutral",
+    "person",
+    "red hair",
+    "unspecified gender"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-rowing-boat",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person rowing boat",
+    "zh-CN": "划艇",
+    "ja": "ボートをこぐ人",
+    "ko": "노젓는 사람",
+    "es": "persona remando en un bote"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-rowing-boat/files/emoji.png",
+   "still": true,
+   "tags": [
+    "boat",
+    "person rowing boat",
+    "rowboat"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-running",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person running",
+    "zh-CN": "跑步者",
+    "ja": "走る人",
+    "ko": "뛰는 사람",
+    "es": "persona corriendo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-running/files/emoji.png",
+   "still": true,
+   "tags": [
+    "marathon",
+    "person running",
+    "running"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-running-facing-right",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person running facing right",
+    "zh-CN": "person running facing right",
+    "ja": "person running facing right",
+    "ko": "person running facing right",
+    "es": "person running facing right"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-running-facing-right/files/emoji.png",
+   "still": true,
+   "tags": [
+    "marathon",
+    "person running",
+    "running"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-shrugging",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person shrugging",
+    "zh-CN": "耸肩",
+    "ja": "お手上げする人",
+    "ko": "어깨를 으쓱하는 사람",
+    "es": "persona encogida de hombros"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-shrugging/files/emoji.png",
+   "still": true,
+   "tags": [
+    "doubt",
+    "ignorance",
+    "indifference",
+    "person shrugging",
+    "shrug"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-standing",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person standing",
+    "zh-CN": "站立者",
+    "ja": "立つ人",
+    "ko": "서 있는 사람",
+    "es": "persona de pie"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-standing/files/emoji.png",
+   "still": true,
+   "tags": [
+    "person standing",
+    "stand",
+    "standing"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-superhero",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "superhero",
+    "zh-CN": "超级英雄",
+    "ja": "スーパーヒーロー",
+    "ko": "히로인",
+    "es": "personaje de superhéroe"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-superhero/files/emoji.png",
+   "still": true,
+   "tags": [
+    "good",
+    "hero",
+    "heroine",
+    "superhero",
+    "superpower"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-supervillain",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "supervillain",
+    "zh-CN": "超级大坏蛋",
+    "ja": "悪役",
+    "ko": "슈퍼 악당",
+    "es": "personaje de supervillano"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-supervillain/files/emoji.png",
+   "still": true,
+   "tags": [
+    "criminal",
+    "evil",
+    "superpower",
+    "supervillain",
+    "villain"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-surfing",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person surfing",
+    "zh-CN": "冲浪",
+    "ja": "サーフィンする人",
+    "ko": "서핑하는 사람",
+    "es": "persona haciendo surf"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-surfing/files/emoji.png",
+   "still": true,
+   "tags": [
+    "person surfing",
+    "surfing"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-swimming",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person swimming",
+    "zh-CN": "游泳",
+    "ja": "泳ぐ人",
+    "ko": "수영하는 사람",
+    "es": "persona nadando"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-swimming/files/emoji.png",
+   "still": true,
+   "tags": [
+    "person swimming",
+    "swim"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-taking-bath",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person taking bath",
+    "zh-CN": "洗澡的人",
+    "ja": "風呂に入る人",
+    "ko": "목욕하는 사람",
+    "es": "persona en la bañera"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-taking-bath/files/emoji.png",
+   "still": true,
+   "tags": [
+    "bath",
+    "bathtub",
+    "person taking bath"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-tipping-hand",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person tipping hand",
+    "zh-CN": "前台",
+    "ja": "案内する人",
+    "ko": "손바닥 꺾은 사람",
+    "es": "persona de mostrador de información"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-tipping-hand/files/emoji.png",
+   "still": true,
+   "tags": [
+    "hand",
+    "help",
+    "information",
+    "person tipping hand",
+    "sassy",
+    "tipping"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-vampire",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "vampire",
+    "zh-CN": "吸血鬼",
+    "ja": "吸血鬼",
+    "ko": "뱀파이어",
+    "es": "vampiro"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-vampire/files/emoji.png",
+   "still": true,
+   "tags": [
+    "Dracula",
+    "undead",
+    "vampire"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-walking",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person walking",
+    "zh-CN": "行人",
+    "ja": "歩く人",
+    "ko": "보행자",
+    "es": "persona caminando"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-walking/files/emoji.png",
+   "still": true,
+   "tags": [
+    "hike",
+    "person walking",
+    "walk",
+    "walking"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-walking-facing-right",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person walking facing right",
+    "zh-CN": "person walking facing right",
+    "ja": "person walking facing right",
+    "ko": "person walking facing right",
+    "es": "person walking facing right"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-walking-facing-right/files/emoji.png",
+   "still": true,
+   "tags": [
+    "hike",
+    "person walking",
+    "walk",
+    "walking"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-wearing-turban",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person wearing turban",
+    "zh-CN": "戴头巾的人",
+    "ja": "ターバンの人",
+    "ko": "터번을 쓰고 있는 사람",
+    "es": "persona con turbante"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-wearing-turban/files/emoji.png",
+   "still": true,
+   "tags": [
+    "person wearing turban",
+    "turban"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-white-hair",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person: white hair",
+    "zh-CN": "person: white hair",
+    "ja": "person: white hair",
+    "ko": "person: white hair",
+    "es": "person: white hair"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-white-hair/files/emoji.png",
+   "still": true,
+   "tags": [
+    "adult",
+    "gender-neutral",
+    "person",
+    "unspecified gender",
+    "white hair"
+   ]
+  },
+  {
    "id": "stickers/emoji/person-with-bunny-ears",
    "cat": "sticker",
    "group": "people",
@@ -4874,6 +10073,138 @@
     "dancer",
     "partying",
     "people with bunny ears"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-with-crown",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person with crown",
+    "zh-CN": "戴王冠的人",
+    "ja": "王冠をかぶった人",
+    "ko": "왕관을 쓴 사람",
+    "es": "persona con corona"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-with-crown/files/emoji.png",
+   "still": true,
+   "tags": [
+    "monarch",
+    "noble",
+    "person with crown",
+    "regal",
+    "royalty"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-with-skullcap",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person with skullcap",
+    "zh-CN": "戴瓜皮帽的人",
+    "ja": "中華帽の男性",
+    "ko": "중국 전통 모자를 쓰고 있는 남자",
+    "es": "persona con gorro chino"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-with-skullcap/files/emoji.png",
+   "still": true,
+   "tags": [
+    "cap",
+    "gua pi mao",
+    "hat",
+    "person",
+    "person with skullcap",
+    "skullcap"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-with-veil",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person with veil",
+    "zh-CN": "戴头纱的人",
+    "ja": "ベールの人",
+    "ko": "면사포를 쓴 사람",
+    "es": "persona con velo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-with-veil/files/emoji.png",
+   "still": true,
+   "tags": [
+    "bride",
+    "person",
+    "person with veil",
+    "veil",
+    "wedding"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-with-white-cane",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person with white cane",
+    "zh-CN": "拄盲杖的人",
+    "ja": "杖をついた人",
+    "ko": "지팡이를 든 사람",
+    "es": "persona con bastón"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-with-white-cane/files/emoji.png",
+   "still": true,
+   "tags": [
+    "accessibility",
+    "blind",
+    "person with white cane"
+   ]
+  },
+  {
+   "id": "stickers/emoji/person-with-white-cane-facing-right",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "person with white cane facing right",
+    "zh-CN": "person with white cane facing right",
+    "ja": "person with white cane facing right",
+    "ko": "person with white cane facing right",
+    "es": "person with white cane facing right"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/person-with-white-cane-facing-right/files/emoji.png",
+   "still": true,
+   "tags": [
+    "accessibility",
+    "blind",
+    "person with white cane"
    ]
   },
   {
@@ -4927,6 +10258,552 @@
    ]
   },
   {
+   "id": "stickers/emoji/pilot",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "pilot",
+    "zh-CN": "飞行员",
+    "ja": "パイロット",
+    "ko": "기장",
+    "es": "piloto"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/pilot/files/emoji.png",
+   "still": true,
+   "tags": [
+    "pilot",
+    "plane"
+   ]
+  },
+  {
+   "id": "stickers/emoji/pinched-fingers",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "pinched fingers",
+    "zh-CN": "捏手指",
+    "ja": "上向きにすぼめた手",
+    "ko": "꼬집는 손가락",
+    "es": "dedos juntos apuntando hacia arriba"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/pinched-fingers/files/emoji.png",
+   "still": true,
+   "tags": [
+    "fingers",
+    "hand gesture",
+    "interrogation",
+    "pinched",
+    "sarcastic"
+   ]
+  },
+  {
+   "id": "stickers/emoji/pinching-hand",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "pinching hand",
+    "zh-CN": "捏合的手势",
+    "ja": "つまんでいる指",
+    "ko": "꼬집는 손",
+    "es": "mano pellizcando"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/pinching-hand/files/emoji.png",
+   "still": true,
+   "tags": [
+    "pinching hand",
+    "small amount"
+   ]
+  },
+  {
+   "id": "stickers/emoji/police-officer",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "police officer",
+    "zh-CN": "警察",
+    "ja": "警察官",
+    "ko": "경찰관",
+    "es": "agente de policía"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/police-officer/files/emoji.png",
+   "still": true,
+   "tags": [
+    "cop",
+    "officer",
+    "police"
+   ]
+  },
+  {
+   "id": "stickers/emoji/pregnant-man",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "pregnant man",
+    "zh-CN": "怀孕的男人",
+    "ja": "妊夫",
+    "ko": "임신한 남자",
+    "es": "hombre embarazado"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/pregnant-man/files/emoji.png",
+   "still": true,
+   "tags": [
+    "belly",
+    "bloated",
+    "full",
+    "pregnant",
+    "pregnant man"
+   ]
+  },
+  {
+   "id": "stickers/emoji/pregnant-person",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "pregnant person",
+    "zh-CN": "怀孕的人",
+    "ja": "妊娠した人",
+    "ko": "임신한 사람",
+    "es": "persona embarazada"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/pregnant-person/files/emoji.png",
+   "still": true,
+   "tags": [
+    "belly",
+    "bloated",
+    "full",
+    "pregnant",
+    "pregnant person"
+   ]
+  },
+  {
+   "id": "stickers/emoji/pregnant-woman",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "pregnant woman",
+    "zh-CN": "孕妇",
+    "ja": "妊婦",
+    "ko": "임산부",
+    "es": "mujer embarazada"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/pregnant-woman/files/emoji.png",
+   "still": true,
+   "tags": [
+    "pregnant",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/prince",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "prince",
+    "zh-CN": "王子",
+    "ja": "プリンス",
+    "ko": "왕자",
+    "es": "príncipe"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/prince/files/emoji.png",
+   "still": true,
+   "tags": [
+    "prince"
+   ]
+  },
+  {
+   "id": "stickers/emoji/princess",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "princess",
+    "zh-CN": "公主",
+    "ja": "プリンセス",
+    "ko": "공주",
+    "es": "princesa"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/princess/files/emoji.png",
+   "still": true,
+   "tags": [
+    "fairy tale",
+    "fantasy",
+    "princess"
+   ]
+  },
+  {
+   "id": "stickers/emoji/raised-back-of-hand",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "raised back of hand",
+    "zh-CN": "立起的手背",
+    "ja": "手の甲",
+    "ko": "손등",
+    "es": "dorso de la mano"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/raised-back-of-hand/files/emoji.png",
+   "still": true,
+   "tags": [
+    "backhand",
+    "raised",
+    "raised back of hand"
+   ]
+  },
+  {
+   "id": "stickers/emoji/raised-fist",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "raised fist",
+    "zh-CN": "举起拳头",
+    "ja": "げんこつ",
+    "ko": "주먹",
+    "es": "puño en alto"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/raised-fist/files/emoji.png",
+   "still": true,
+   "tags": [
+    "clenched",
+    "fist",
+    "hand",
+    "punch",
+    "raised fist"
+   ]
+  },
+  {
+   "id": "stickers/emoji/raised-hand",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "raised hand",
+    "zh-CN": "举起手",
+    "ja": "挙手",
+    "ko": "손바닥",
+    "es": "mano levantada"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/raised-hand/files/emoji.png",
+   "still": true,
+   "tags": [
+    "hand",
+    "high 5",
+    "high five",
+    "raised hand"
+   ]
+  },
+  {
+   "id": "stickers/emoji/raising-hands",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "raising hands",
+    "zh-CN": "举双手",
+    "ja": "バンザイ",
+    "ko": "만세",
+    "es": "manos levantadas celebrando"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/raising-hands/files/emoji.png",
+   "still": true,
+   "tags": [
+    "celebration",
+    "gesture",
+    "hand",
+    "hooray",
+    "raised",
+    "raising hands"
+   ]
+  },
+  {
+   "id": "stickers/emoji/right-facing-fist",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "right-facing fist",
+    "zh-CN": "朝右的拳头",
+    "ja": "右向きのこぶし",
+    "ko": "오른쪽을 향하는 주먹",
+    "es": "puño hacia la derecha"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/right-facing-fist/files/emoji.png",
+   "still": true,
+   "tags": [
+    "fist",
+    "right-facing fist",
+    "rightwards"
+   ]
+  },
+  {
+   "id": "stickers/emoji/rightwards-hand",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "rightwards hand",
+    "zh-CN": "向右的手",
+    "ja": "右に向けた手",
+    "ko": "오른쪽으로 향하는 손등",
+    "es": "mano hacia la derecha"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/rightwards-hand/files/emoji.png",
+   "still": true,
+   "tags": [
+    "hand",
+    "right",
+    "rightward",
+    "rightwards hand"
+   ]
+  },
+  {
+   "id": "stickers/emoji/rightwards-pushing-hand",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "rightwards pushing hand",
+    "zh-CN": "向右推",
+    "ja": "右向きに押している手",
+    "ko": "오른쪽으로 밀치는 손",
+    "es": "mano empujando hacia la derecha"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/rightwards-pushing-hand/files/emoji.png",
+   "still": true,
+   "tags": [
+    "high five",
+    "push",
+    "refuse",
+    "rightward",
+    "rightwards pushing hand",
+    "stop",
+    "wait"
+   ]
+  },
+  {
+   "id": "stickers/emoji/santa-claus",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "Santa Claus",
+    "zh-CN": "圣诞老人",
+    "ja": "サンタ",
+    "ko": "산타클로스",
+    "es": "Papá Noel"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/santa-claus/files/emoji.png",
+   "still": true,
+   "tags": [
+    "celebration",
+    "Christmas",
+    "claus",
+    "father",
+    "santa",
+    "Santa Claus"
+   ]
+  },
+  {
+   "id": "stickers/emoji/scientist",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "scientist",
+    "zh-CN": "科学家",
+    "ja": "科学者",
+    "ko": "과학자",
+    "es": "profesional de la ciencia"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/scientist/files/emoji.png",
+   "still": true,
+   "tags": [
+    "biologist",
+    "chemist",
+    "engineer",
+    "physicist",
+    "scientist"
+   ]
+  },
+  {
+   "id": "stickers/emoji/selfie",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "selfie",
+    "zh-CN": "自拍",
+    "ja": "セルフィー",
+    "ko": "셀카",
+    "es": "selfi"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/selfie/files/emoji.png",
+   "still": true,
+   "tags": [
+    "camera",
+    "phone",
+    "selfie"
+   ]
+  },
+  {
+   "id": "stickers/emoji/sign-of-the-horns",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "sign of the horns",
+    "zh-CN": "摇滚",
+    "ja": "角の指サイン",
+    "ko": "뿔 모양 손짓",
+    "es": "mano haciendo el signo de cuernos"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/sign-of-the-horns/files/emoji.png",
+   "still": true,
+   "tags": [
+    "finger",
+    "hand",
+    "horns",
+    "rock-on",
+    "sign of the horns"
+   ]
+  },
+  {
+   "id": "stickers/emoji/singer",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "singer",
+    "zh-CN": "歌手",
+    "ja": "歌手",
+    "ko": "가수",
+    "es": "cantante"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/singer/files/emoji.png",
+   "still": true,
+   "tags": [
+    "actor",
+    "entertainer",
+    "rock",
+    "singer",
+    "star"
+   ]
+  },
+  {
    "id": "stickers/emoji/skier",
    "cat": "sticker",
    "group": "people",
@@ -4949,6 +10826,32 @@
     "ski",
     "skier",
     "snow"
+   ]
+  },
+  {
+   "id": "stickers/emoji/snowboarder",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "snowboarder",
+    "zh-CN": "滑雪板",
+    "ja": "スノーボーダー",
+    "ko": "스노보드 타는 사람",
+    "es": "practicante de snowboard"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/snowboarder/files/emoji.png",
+   "still": true,
+   "tags": [
+    "ski",
+    "snow",
+    "snowboard",
+    "snowboarder"
    ]
   },
   {
@@ -4976,6 +10879,136 @@
     "silhouette",
     "speak",
     "speaking"
+   ]
+  },
+  {
+   "id": "stickers/emoji/student",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "student",
+    "zh-CN": "学生",
+    "ja": "学生",
+    "ko": "학생",
+    "es": "estudiante"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/student/files/emoji.png",
+   "still": true,
+   "tags": [
+    "graduate",
+    "student"
+   ]
+  },
+  {
+   "id": "stickers/emoji/teacher",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "teacher",
+    "zh-CN": "老师",
+    "ja": "教師",
+    "ko": "교사",
+    "es": "docente"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/teacher/files/emoji.png",
+   "still": true,
+   "tags": [
+    "instructor",
+    "professor",
+    "teacher"
+   ]
+  },
+  {
+   "id": "stickers/emoji/technologist",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "technologist",
+    "zh-CN": "程序员",
+    "ja": "技術者",
+    "ko": "기술 전문가",
+    "es": "profesional de la tecnología"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/technologist/files/emoji.png",
+   "still": true,
+   "tags": [
+    "coder",
+    "developer",
+    "inventor",
+    "software",
+    "technologist"
+   ]
+  },
+  {
+   "id": "stickers/emoji/thumbs-down",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "thumbs down",
+    "zh-CN": "拇指向下",
+    "ja": "サムズダウン",
+    "ko": "내린 엄지",
+    "es": "pulgar hacia abajo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/thumbs-down/files/emoji.png",
+   "still": true,
+   "tags": [
+    "-1",
+    "down",
+    "hand",
+    "thumb",
+    "thumbs down"
+   ]
+  },
+  {
+   "id": "stickers/emoji/thumbs-up",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "thumbs up",
+    "zh-CN": "拇指向上",
+    "ja": "サムズアップ",
+    "ko": "올린 엄지",
+    "es": "pulgar hacia arriba"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/thumbs-up/files/emoji.png",
+   "still": true,
+   "tags": [
+    "+1",
+    "hand",
+    "thumb",
+    "thumbs up",
+    "up"
    ]
   },
   {
@@ -5053,6 +11086,717 @@
    ]
   },
   {
+   "id": "stickers/emoji/victory-hand",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "victory hand",
+    "zh-CN": "胜利手势",
+    "ja": "Vサイン",
+    "ko": "브이 표시",
+    "es": "mano con señal de victoria"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/victory-hand/files/emoji.png",
+   "still": true,
+   "tags": [
+    "hand",
+    "v",
+    "victory"
+   ]
+  },
+  {
+   "id": "stickers/emoji/vulcan-salute",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "vulcan salute",
+    "zh-CN": "瓦肯举手礼",
+    "ja": "バルカンの挨拶",
+    "ko": "벌칸식 인사",
+    "es": "saludo vulcano"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/vulcan-salute/files/emoji.png",
+   "still": true,
+   "tags": [
+    "finger",
+    "hand",
+    "spock",
+    "vulcan",
+    "vulcan salute"
+   ]
+  },
+  {
+   "id": "stickers/emoji/waving-hand",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "waving hand",
+    "zh-CN": "挥手",
+    "ja": "手を振る",
+    "ko": "흔드는 손",
+    "es": "mano saludando"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/waving-hand/files/emoji.png",
+   "still": true,
+   "tags": [
+    "hand",
+    "wave",
+    "waving"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman",
+    "zh-CN": "女人",
+    "ja": "女性",
+    "ko": "여자",
+    "es": "mujer"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman/files/emoji.png",
+   "still": true,
+   "tags": [
+    "adult",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-artist",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman artist",
+    "zh-CN": "女艺术家",
+    "ja": "女性の芸術家",
+    "ko": "여자 화가",
+    "es": "artista mujer"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-artist/files/emoji.png",
+   "still": true,
+   "tags": [
+    "artist",
+    "palette",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-astronaut",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman astronaut",
+    "zh-CN": "女宇航员",
+    "ja": "女性宇宙飛行士",
+    "ko": "여자 우주비행사",
+    "es": "astronauta mujer"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-astronaut/files/emoji.png",
+   "still": true,
+   "tags": [
+    "astronaut",
+    "rocket",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-bald",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman: bald",
+    "zh-CN": "woman: bald",
+    "ja": "woman: bald",
+    "ko": "woman: bald",
+    "es": "woman: bald"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-bald/files/emoji.png",
+   "still": true,
+   "tags": [
+    "adult",
+    "bald",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-beard",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman: beard",
+    "zh-CN": "有络腮胡子的女人",
+    "ja": "あごひげの女性",
+    "ko": "수염 난 여자",
+    "es": "mujer: barba"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-beard/files/emoji.png",
+   "still": true,
+   "tags": [
+    "beard",
+    "woman",
+    "woman: beard"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-biking",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman biking",
+    "zh-CN": "女生骑自行车",
+    "ja": "自転車に乗る女",
+    "ko": "자전거 타는 여자",
+    "es": "mujer en bicicleta"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-biking/files/emoji.png",
+   "still": true,
+   "tags": [
+    "bicycle",
+    "biking",
+    "cyclist",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-blonde-hair",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman: blond hair",
+    "zh-CN": "金发女",
+    "ja": "金髪の女性",
+    "ko": "금발 여자",
+    "es": "mujer rubia"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-blonde-hair/files/emoji.png",
+   "still": true,
+   "tags": [
+    "blond-haired woman",
+    "blonde",
+    "hair",
+    "woman",
+    "woman: blond hair"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-bouncing-ball",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman bouncing ball",
+    "zh-CN": "女生玩球",
+    "ja": "バスケットボールをする女",
+    "ko": "공 가진 여자",
+    "es": "mujer botando un balón"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-bouncing-ball/files/emoji.png",
+   "still": true,
+   "tags": [
+    "ball",
+    "woman",
+    "woman bouncing ball"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-bowing",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman bowing",
+    "zh-CN": "女生鞠躬",
+    "ja": "おじぎする女",
+    "ko": "절하는 여자",
+    "es": "mujer haciendo una reverencia"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-bowing/files/emoji.png",
+   "still": true,
+   "tags": [
+    "apology",
+    "bowing",
+    "favor",
+    "gesture",
+    "sorry",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-cartwheeling",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman cartwheeling",
+    "zh-CN": "女生侧手翻",
+    "ja": "側転する女",
+    "ko": "옆돌기하는 여자",
+    "es": "mujer dando una voltereta lateral"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-cartwheeling/files/emoji.png",
+   "still": true,
+   "tags": [
+    "cartwheel",
+    "gymnastics",
+    "woman",
+    "woman cartwheeling"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-climbing",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman climbing",
+    "zh-CN": "攀爬的女人",
+    "ja": "山を登る女",
+    "ko": "클라이밍하는 여자",
+    "es": "mujer escalando"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-climbing/files/emoji.png",
+   "still": true,
+   "tags": [
+    "climber",
+    "woman climbing"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-construction-worker",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman construction worker",
+    "zh-CN": "女建筑工人",
+    "ja": "女性の建設作業員",
+    "ko": "건설 현장 여자 노동자",
+    "es": "profesional de la construcción mujer"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-construction-worker/files/emoji.png",
+   "still": true,
+   "tags": [
+    "construction",
+    "woman",
+    "worker"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-cook",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman cook",
+    "zh-CN": "女厨师",
+    "ja": "女性のコック",
+    "ko": "여자 요리사",
+    "es": "chef mujer"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-cook/files/emoji.png",
+   "still": true,
+   "tags": [
+    "chef",
+    "cook",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-curly-hair",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman: curly hair",
+    "zh-CN": "woman: curly hair",
+    "ja": "woman: curly hair",
+    "ko": "woman: curly hair",
+    "es": "woman: curly hair"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-curly-hair/files/emoji.png",
+   "still": true,
+   "tags": [
+    "adult",
+    "curly hair",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-dancing",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman dancing",
+    "zh-CN": "跳舞的女人",
+    "ja": "踊る女",
+    "ko": "여자 댄서",
+    "es": "mujer bailando"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-dancing/files/emoji.png",
+   "still": true,
+   "tags": [
+    "dance",
+    "dancing",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-deaf",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "deaf woman",
+    "zh-CN": "失聪的女人",
+    "ja": "耳の不自由な女性",
+    "ko": "청각장애가 있는 여자",
+    "es": "mujer sorda"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-deaf/files/emoji.png",
+   "still": true,
+   "tags": [
+    "deaf",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-detective",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman detective",
+    "zh-CN": "女侦探",
+    "ja": "女性の探偵",
+    "ko": "여자 탐정",
+    "es": "detective mujer"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-detective/files/emoji.png",
+   "still": true,
+   "tags": [
+    "detective",
+    "sleuth",
+    "spy",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-elf",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman elf",
+    "zh-CN": "女小精灵",
+    "ja": "女のエルフ",
+    "ko": "여자 엘프",
+    "es": "elfa"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-elf/files/emoji.png",
+   "still": true,
+   "tags": [
+    "magical",
+    "woman elf"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-facepalming",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman facepalming",
+    "zh-CN": "女生捂脸",
+    "ja": "ひたいに手をあてる女",
+    "ko": "골치 아파하는 여자",
+    "es": "mujer con la mano en la frente"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-facepalming/files/emoji.png",
+   "still": true,
+   "tags": [
+    "disbelief",
+    "exasperation",
+    "facepalm",
+    "woman",
+    "woman facepalming"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-factory-worker",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman factory worker",
+    "zh-CN": "女工人",
+    "ja": "女性の溶接工",
+    "ko": "공장 여자 직원",
+    "es": "profesional industrial mujer"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-factory-worker/files/emoji.png",
+   "still": true,
+   "tags": [
+    "assembly",
+    "factory",
+    "industrial",
+    "woman",
+    "worker"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-fairy",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman fairy",
+    "zh-CN": "仙女",
+    "ja": "女の妖精",
+    "ko": "여자 요정",
+    "es": "hada mujer"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-fairy/files/emoji.png",
+   "still": true,
+   "tags": [
+    "Titania",
+    "woman fairy"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-farmer",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman farmer",
+    "zh-CN": "农妇",
+    "ja": "農家の女性",
+    "ko": "여자 농부",
+    "es": "profesional de la agricultura mujer"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-farmer/files/emoji.png",
+   "still": true,
+   "tags": [
+    "farmer",
+    "gardener",
+    "rancher",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-feeding-baby",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman feeding baby",
+    "zh-CN": "哺乳的女人",
+    "ja": "授乳する女性",
+    "ko": "수유 중인 여자",
+    "es": "mujer alimentando a bebé"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-feeding-baby/files/emoji.png",
+   "still": true,
+   "tags": [
+    "baby",
+    "feeding",
+    "nursing",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-firefighter",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman firefighter",
+    "zh-CN": "女消防员",
+    "ja": "女性消防士",
+    "ko": "여자 소방관",
+    "es": "bombera"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-firefighter/files/emoji.png",
+   "still": true,
+   "tags": [
+    "firefighter",
+    "firetruck",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-frowning",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman frowning",
+    "zh-CN": "皱眉女",
+    "ja": "しかめ面の女",
+    "ko": "찌푸린 여자",
+    "es": "mujer frunciendo el ceño"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-frowning/files/emoji.png",
+   "still": true,
+   "tags": [
+    "frowning",
+    "gesture",
+    "woman"
+   ]
+  },
+  {
    "id": "stickers/emoji/woman-genie",
    "cat": "sticker",
    "group": "people",
@@ -5074,6 +11818,1323 @@
    "tags": [
     "djinn",
     "woman genie"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-gesturing-no",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman gesturing NO",
+    "zh-CN": "禁止手势女",
+    "ja": "ダメのポーズをする女",
+    "ko": "안 된다는 제스처를 하는 여자",
+    "es": "mujer haciendo el gesto de \"no\""
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-gesturing-no/files/emoji.png",
+   "still": true,
+   "tags": [
+    "forbidden",
+    "gesture",
+    "hand",
+    "prohibited",
+    "woman",
+    "woman gesturing NO"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-gesturing-ok",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman gesturing OK",
+    "zh-CN": "OK手势女",
+    "ja": "OKのポーズをする女",
+    "ko": "오케이라는 제스처를 하는 여자",
+    "es": "mujer haciendo el gesto de \"de acuerdo\""
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-gesturing-ok/files/emoji.png",
+   "still": true,
+   "tags": [
+    "gesture",
+    "hand",
+    "OK",
+    "woman",
+    "woman gesturing OK"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-getting-haircut",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman getting haircut",
+    "zh-CN": "女生理发",
+    "ja": "散髪される女",
+    "ko": "여자 헤어컷",
+    "es": "mujer cortándose el pelo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-getting-haircut/files/emoji.png",
+   "still": true,
+   "tags": [
+    "haircut",
+    "woman",
+    "woman getting haircut"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-getting-massage",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman getting massage",
+    "zh-CN": "女生按摩",
+    "ja": "フェイスマッサージ中の女",
+    "ko": "마사지 받는 여자",
+    "es": "mujer recibiendo masaje"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-getting-massage/files/emoji.png",
+   "still": true,
+   "tags": [
+    "face",
+    "massage",
+    "woman",
+    "woman getting massage"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-golfing",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman golfing",
+    "zh-CN": "女生打高尔夫",
+    "ja": "ゴルフをする女",
+    "ko": "골프치는 여자",
+    "es": "mujer jugando al golf"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-golfing/files/emoji.png",
+   "still": true,
+   "tags": [
+    "golf",
+    "woman",
+    "woman golfing"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-guard",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman guard",
+    "zh-CN": "女卫兵",
+    "ja": "女性の衛兵",
+    "ko": "여자 근위병",
+    "es": "guardia mujer"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-guard/files/emoji.png",
+   "still": true,
+   "tags": [
+    "guard",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-health-worker",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman health worker",
+    "zh-CN": "女医生",
+    "ja": "女性の医者",
+    "ko": "여자 의료인",
+    "es": "profesional sanitario mujer"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-health-worker/files/emoji.png",
+   "still": true,
+   "tags": [
+    "doctor",
+    "healthcare",
+    "nurse",
+    "therapist",
+    "woman",
+    "woman health worker"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-in-lotus-position",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman in lotus position",
+    "zh-CN": "盘腿的女人",
+    "ja": "ヨガのポーズをする女",
+    "ko": "가부좌한 여자",
+    "es": "mujer en posición de loto"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-in-lotus-position/files/emoji.png",
+   "still": true,
+   "tags": [
+    "meditation",
+    "woman in lotus position",
+    "yoga"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-in-manual-wheelchair",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman in manual wheelchair",
+    "zh-CN": "坐手动轮椅的女人",
+    "ja": "手動式車椅子の女性",
+    "ko": "수동 휠체어를 탄 여자",
+    "es": "mujer en silla de ruedas manual"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-in-manual-wheelchair/files/emoji.png",
+   "still": true,
+   "tags": [
+    "accessibility",
+    "wheelchair",
+    "woman",
+    "woman in manual wheelchair"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-in-manual-wheelchair-facing-right",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman in manual wheelchair facing right",
+    "zh-CN": "woman in manual wheelchair facing right",
+    "ja": "woman in manual wheelchair facing right",
+    "ko": "woman in manual wheelchair facing right",
+    "es": "woman in manual wheelchair facing right"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-in-manual-wheelchair-facing-right/files/emoji.png",
+   "still": true,
+   "tags": [
+    "accessibility",
+    "wheelchair",
+    "woman",
+    "woman in manual wheelchair"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-in-motorized-wheelchair",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman in motorized wheelchair",
+    "zh-CN": "坐电动轮椅的女人",
+    "ja": "電動車椅子の女性",
+    "ko": "전동 휠체어를 탄 여자",
+    "es": "mujer en silla de ruedas eléctrica"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-in-motorized-wheelchair/files/emoji.png",
+   "still": true,
+   "tags": [
+    "accessibility",
+    "wheelchair",
+    "woman",
+    "woman in motorized wheelchair"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-in-motorized-wheelchair-facing-right",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman in motorized wheelchair",
+    "zh-CN": "坐电动轮椅的女人",
+    "ja": "電動車椅子の女性",
+    "ko": "전동 휠체어를 탄 여자",
+    "es": "mujer en silla de ruedas eléctrica"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-in-motorized-wheelchair-facing-right/files/emoji.png",
+   "still": true,
+   "tags": [
+    "accessibility",
+    "wheelchair",
+    "woman",
+    "woman in motorized wheelchair"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-in-steamy-room",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman in steamy room",
+    "zh-CN": "蒸房里的女人",
+    "ja": "サウナに入る女",
+    "ko": "사우나 하는 여자",
+    "es": "mujer en una sauna"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-in-steamy-room/files/emoji.png",
+   "still": true,
+   "tags": [
+    "sauna",
+    "steam room",
+    "woman in steamy room"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-in-tuxedo",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman in tuxedo",
+    "zh-CN": "穿礼服的女人",
+    "ja": "タキシードの女性",
+    "ko": "턱시도를 입은 여자",
+    "es": "mujer con esmoquin"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-in-tuxedo/files/emoji.png",
+   "still": true,
+   "tags": [
+    "tuxedo",
+    "woman",
+    "woman in tuxedo"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-judge",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman judge",
+    "zh-CN": "女法官",
+    "ja": "女性の裁判官",
+    "ko": "여자 판사",
+    "es": "fiscal mujer"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-judge/files/emoji.png",
+   "still": true,
+   "tags": [
+    "judge",
+    "justice",
+    "scales",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-juggling",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman juggling",
+    "zh-CN": "女生抛接杂耍",
+    "ja": "ジャグリングをする女",
+    "ko": "저글링하는 여자",
+    "es": "mujer haciendo malabares"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-juggling/files/emoji.png",
+   "still": true,
+   "tags": [
+    "juggling",
+    "multitask",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-kneeling",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman kneeling",
+    "zh-CN": "跪下的女人",
+    "ja": "正座する女性",
+    "ko": "무릎을 꿇은 여자",
+    "es": "mujer de rodillas"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-kneeling/files/emoji.png",
+   "still": true,
+   "tags": [
+    "kneeling",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-kneeling-facing-right",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman kneeling facing right",
+    "zh-CN": "woman kneeling facing right",
+    "ja": "woman kneeling facing right",
+    "ko": "woman kneeling facing right",
+    "es": "woman kneeling facing right"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-kneeling-facing-right/files/emoji.png",
+   "still": true,
+   "tags": [
+    "kneeling",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-lifting-weights",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman lifting weights",
+    "zh-CN": "女生举重",
+    "ja": "重量挙げをする女",
+    "ko": "여자 역도 선수",
+    "es": "mujer levantando pesas"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-lifting-weights/files/emoji.png",
+   "still": true,
+   "tags": [
+    "weight lifter",
+    "woman",
+    "woman lifting weights"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-mage",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman mage",
+    "zh-CN": "女法师",
+    "ja": "女の魔法使い",
+    "ko": "여자 마법사",
+    "es": "maga"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-mage/files/emoji.png",
+   "still": true,
+   "tags": [
+    "sorceress",
+    "witch",
+    "woman mage"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-mechanic",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman mechanic",
+    "zh-CN": "女技工",
+    "ja": "女性の整備士",
+    "ko": "여자 정비공",
+    "es": "profesional de la mecánica mujer"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-mechanic/files/emoji.png",
+   "still": true,
+   "tags": [
+    "electrician",
+    "mechanic",
+    "plumber",
+    "tradesperson",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-merpeople",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "mermaid",
+    "zh-CN": "美人鱼",
+    "ja": "マーメイド",
+    "ko": "여자 인어",
+    "es": "sirena"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-merpeople/files/emoji.png",
+   "still": true,
+   "tags": [
+    "mermaid",
+    "merwoman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-mountain-biking",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman mountain biking",
+    "zh-CN": "女生骑山地车",
+    "ja": "マウンテンバイクに乗る女",
+    "ko": "산악 자전거 타는 여자",
+    "es": "mujer en bicicleta de montaña"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-mountain-biking/files/emoji.png",
+   "still": true,
+   "tags": [
+    "bicycle",
+    "bike",
+    "biking",
+    "cyclist",
+    "mountain",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-office-worker",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman office worker",
+    "zh-CN": "女白领",
+    "ja": "女性会社員",
+    "ko": "여자 회사원",
+    "es": "oficinista mujer"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-office-worker/files/emoji.png",
+   "still": true,
+   "tags": [
+    "architect",
+    "business",
+    "manager",
+    "white-collar",
+    "woman",
+    "woman office worker"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-pilot",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman pilot",
+    "zh-CN": "女飞行员",
+    "ja": "女性パイロット",
+    "ko": "여자 기장",
+    "es": "piloto mujer"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-pilot/files/emoji.png",
+   "still": true,
+   "tags": [
+    "pilot",
+    "plane",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-playing-handball",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman playing handball",
+    "zh-CN": "女生玩手球",
+    "ja": "ハンドボールをする女",
+    "ko": "핸드볼하는 여자",
+    "es": "mujer jugando al balonmano"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-playing-handball/files/emoji.png",
+   "still": true,
+   "tags": [
+    "handball",
+    "woman",
+    "woman playing handball"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-playing-water-polo",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman playing water polo",
+    "zh-CN": "女生玩水球",
+    "ja": "水球をする女",
+    "ko": "수구하는 여자",
+    "es": "mujer jugando al waterpolo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-playing-water-polo/files/emoji.png",
+   "still": true,
+   "tags": [
+    "water polo",
+    "woman",
+    "woman playing water polo"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-police-officer",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman police officer",
+    "zh-CN": "女警察",
+    "ja": "女性警察官",
+    "ko": "여자 경찰관",
+    "es": "agente de policía mujer"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-police-officer/files/emoji.png",
+   "still": true,
+   "tags": [
+    "cop",
+    "officer",
+    "police",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-pouting",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman pouting",
+    "zh-CN": "撅嘴女",
+    "ja": "不機嫌な女",
+    "ko": "뾰로통한 여자",
+    "es": "mujer haciendo pucheros"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-pouting/files/emoji.png",
+   "still": true,
+   "tags": [
+    "gesture",
+    "pouting",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-raising-hand",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman raising hand",
+    "zh-CN": "女生举手",
+    "ja": "手を挙げる女",
+    "ko": "한 손 든 여자",
+    "es": "mujer con la mano levantada"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-raising-hand/files/emoji.png",
+   "still": true,
+   "tags": [
+    "gesture",
+    "raising hand",
+    "woman",
+    "woman raising hand"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-red-hair",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman: red hair",
+    "zh-CN": "woman: red hair",
+    "ja": "woman: red hair",
+    "ko": "woman: red hair",
+    "es": "woman: red hair"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-red-hair/files/emoji.png",
+   "still": true,
+   "tags": [
+    "adult",
+    "red hair",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-rowing-boat",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman rowing boat",
+    "zh-CN": "女生划船",
+    "ja": "ボートをこぐ女",
+    "ko": "노젓는 여자",
+    "es": "mujer remando en un bote"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-rowing-boat/files/emoji.png",
+   "still": true,
+   "tags": [
+    "boat",
+    "rowboat",
+    "woman",
+    "woman rowing boat"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-running",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman running",
+    "zh-CN": "女生跑步",
+    "ja": "走る女",
+    "ko": "뛰는 여자",
+    "es": "mujer corriendo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-running/files/emoji.png",
+   "still": true,
+   "tags": [
+    "marathon",
+    "racing",
+    "running",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-running-facing-right",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman running facing right",
+    "zh-CN": "woman running facing right",
+    "ja": "woman running facing right",
+    "ko": "woman running facing right",
+    "es": "woman running facing right"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-running-facing-right/files/emoji.png",
+   "still": true,
+   "tags": [
+    "marathon",
+    "racing",
+    "running",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-scientist",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman scientist",
+    "zh-CN": "女科学家",
+    "ja": "女性科学者",
+    "ko": "여자 과학자",
+    "es": "profesional de la ciencia mujer"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-scientist/files/emoji.png",
+   "still": true,
+   "tags": [
+    "biologist",
+    "chemist",
+    "engineer",
+    "physicist",
+    "scientist",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-shrugging",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman shrugging",
+    "zh-CN": "女生耸肩",
+    "ja": "お手上げする女",
+    "ko": "어깨를 으쓱하는 여자",
+    "es": "mujer encogida de hombros"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-shrugging/files/emoji.png",
+   "still": true,
+   "tags": [
+    "doubt",
+    "ignorance",
+    "indifference",
+    "shrug",
+    "woman",
+    "woman shrugging"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-singer",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman singer",
+    "zh-CN": "女歌手",
+    "ja": "女性歌手",
+    "ko": "여자 가수",
+    "es": "cantante mujer"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-singer/files/emoji.png",
+   "still": true,
+   "tags": [
+    "actor",
+    "entertainer",
+    "rock",
+    "singer",
+    "star",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-standing",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman standing",
+    "zh-CN": "站立的女人",
+    "ja": "立つ女",
+    "ko": "서 있는 여자",
+    "es": "mujer de pie"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-standing/files/emoji.png",
+   "still": true,
+   "tags": [
+    "standing",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-student",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman student",
+    "zh-CN": "女学生",
+    "ja": "女子学生",
+    "ko": "여학생",
+    "es": "estudiante mujer"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-student/files/emoji.png",
+   "still": true,
+   "tags": [
+    "graduate",
+    "student",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-superhero",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman superhero",
+    "zh-CN": "女超级英雄",
+    "ja": "女性のスーパーヒーロー",
+    "ko": "여자 히어로",
+    "es": "superheroína"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-superhero/files/emoji.png",
+   "still": true,
+   "tags": [
+    "good",
+    "hero",
+    "heroine",
+    "superpower",
+    "woman",
+    "woman superhero"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-supervillain",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman supervillain",
+    "zh-CN": "女超级大坏蛋",
+    "ja": "女性の悪役",
+    "ko": "여자 슈퍼 악당",
+    "es": "supervillana"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-supervillain/files/emoji.png",
+   "still": true,
+   "tags": [
+    "criminal",
+    "evil",
+    "superpower",
+    "villain",
+    "woman",
+    "woman supervillain"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-surfing",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman surfing",
+    "zh-CN": "女生冲浪",
+    "ja": "サーフィンする女",
+    "ko": "서핑하는 여자",
+    "es": "mujer haciendo surf"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-surfing/files/emoji.png",
+   "still": true,
+   "tags": [
+    "surfing",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-swimming",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman swimming",
+    "zh-CN": "女生游泳",
+    "ja": "泳ぐ女",
+    "ko": "수영하는 여자",
+    "es": "mujer nadando"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-swimming/files/emoji.png",
+   "still": true,
+   "tags": [
+    "swim",
+    "woman",
+    "woman swimming"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-teacher",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman teacher",
+    "zh-CN": "女老师",
+    "ja": "女性の教師",
+    "ko": "여교사",
+    "es": "docente mujer"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-teacher/files/emoji.png",
+   "still": true,
+   "tags": [
+    "instructor",
+    "professor",
+    "teacher",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-technologist",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman technologist",
+    "zh-CN": "女程序员",
+    "ja": "女性技術者",
+    "ko": "여자 기술 전문가",
+    "es": "profesional de la tecnología mujer"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-technologist/files/emoji.png",
+   "still": true,
+   "tags": [
+    "coder",
+    "developer",
+    "inventor",
+    "software",
+    "technologist",
+    "woman"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-tipping-hand",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman tipping hand",
+    "zh-CN": "前台女",
+    "ja": "案内する女",
+    "ko": "손바닥 꺾은 여자",
+    "es": "empleada de mostrador de información"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-tipping-hand/files/emoji.png",
+   "still": true,
+   "tags": [
+    "sassy",
+    "tipping hand",
+    "woman",
+    "woman tipping hand"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-vampire",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman vampire",
+    "zh-CN": "女吸血鬼",
+    "ja": "女の吸血鬼",
+    "ko": "여자 뱀파이어",
+    "es": "vampiresa"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-vampire/files/emoji.png",
+   "still": true,
+   "tags": [
+    "undead",
+    "woman vampire"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-walking",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman walking",
+    "zh-CN": "女行人",
+    "ja": "歩く女",
+    "ko": "걷는 여자",
+    "es": "mujer caminando"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-walking/files/emoji.png",
+   "still": true,
+   "tags": [
+    "hike",
+    "walk",
+    "woman",
+    "woman walking"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-walking-facing-right",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman walking facing right",
+    "zh-CN": "woman walking facing right",
+    "ja": "woman walking facing right",
+    "ko": "woman walking facing right",
+    "es": "woman walking facing right"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-walking-facing-right/files/emoji.png",
+   "still": true,
+   "tags": [
+    "hike",
+    "walk",
+    "woman",
+    "woman walking"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-wearing-turban",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman wearing turban",
+    "zh-CN": "戴头巾的女人",
+    "ja": "ターバンの女性",
+    "ko": "터번을 쓰고 있는 여자",
+    "es": "mujer con turbante"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-wearing-turban/files/emoji.png",
+   "still": true,
+   "tags": [
+    "turban",
+    "woman",
+    "woman wearing turban"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-white-hair",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman: white hair",
+    "zh-CN": "woman: white hair",
+    "ja": "woman: white hair",
+    "ko": "woman: white hair",
+    "es": "woman: white hair"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-white-hair/files/emoji.png",
+   "still": true,
+   "tags": [
+    "adult",
+    "white hair",
+    "woman"
    ]
   },
   {
@@ -5101,6 +13162,110 @@
     "partying",
     "women",
     "women with bunny ears"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-with-headscarf",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman with headscarf",
+    "zh-CN": "带头饰的女人",
+    "ja": "スカーフの女性",
+    "ko": "머리에 스카프를 두른 여자",
+    "es": "mujer con hiyab"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-with-headscarf/files/emoji.png",
+   "still": true,
+   "tags": [
+    "headscarf",
+    "hijab",
+    "mantilla",
+    "tichel",
+    "woman with headscarf"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-with-veil",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman with veil",
+    "zh-CN": "戴头纱的女人",
+    "ja": "ベールの女性",
+    "ko": "면사포를 쓴 여자",
+    "es": "mujer con velo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-with-veil/files/emoji.png",
+   "still": true,
+   "tags": [
+    "veil",
+    "woman",
+    "woman with veil"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-with-white-cane",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman with white cane",
+    "zh-CN": "拄盲杖的女人",
+    "ja": "杖をついた女性",
+    "ko": "지팡이를 든 여자",
+    "es": "mujer con bastón"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-with-white-cane/files/emoji.png",
+   "still": true,
+   "tags": [
+    "accessibility",
+    "blind",
+    "woman",
+    "woman with white cane"
+   ]
+  },
+  {
+   "id": "stickers/emoji/woman-with-white-cane-facing-right",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "woman with white cane facing right",
+    "zh-CN": "woman with white cane facing right",
+    "ja": "woman with white cane facing right",
+    "ko": "woman with white cane facing right",
+    "es": "woman with white cane facing right"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/woman-with-white-cane-facing-right/files/emoji.png",
+   "still": true,
+   "tags": [
+    "accessibility",
+    "blind",
+    "woman",
+    "woman with white cane"
    ]
   },
   {
@@ -5151,6 +13316,31 @@
     "undead",
     "walking dead",
     "woman zombie"
+   ]
+  },
+  {
+   "id": "stickers/emoji/writing-hand",
+   "cat": "sticker",
+   "group": "people",
+   "name": {
+    "en": "writing hand",
+    "zh-CN": "写字",
+    "ja": "書いている手",
+    "ko": "글을 쓰고 있는 손",
+    "es": "mano escribiendo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/writing-hand/files/emoji.png",
+   "still": true,
+   "tags": [
+    "hand",
+    "write",
+    "writing hand"
    ]
   },
   {
@@ -6304,6 +14494,33 @@
     "fallen leaf",
     "falling",
     "leaf"
+   ]
+  },
+  {
+   "id": "stickers/emoji/feather",
+   "cat": "sticker",
+   "group": "nature",
+   "name": {
+    "en": "feather",
+    "zh-CN": "羽毛",
+    "ja": "羽",
+    "ko": "깃털",
+    "es": "pluma"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/feather/files/emoji.png",
+   "still": true,
+   "tags": [
+    "bird",
+    "feather",
+    "flight",
+    "light",
+    "plumage"
    ]
   },
   {
@@ -12989,6 +21206,33 @@
    ]
   },
   {
+   "id": "stickers/emoji/field-hockey",
+   "cat": "sticker",
+   "group": "activities",
+   "name": {
+    "en": "field hockey",
+    "zh-CN": "曲棍球",
+    "ja": "ホッケー",
+    "ko": "필드 하키",
+    "es": "hockey sobre hierba"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/field-hockey/files/emoji.png",
+   "still": true,
+   "tags": [
+    "ball",
+    "field",
+    "game",
+    "hockey",
+    "stick"
+   ]
+  },
+  {
    "id": "stickers/emoji/firecracker",
    "cat": "sticker",
    "group": "activities",
@@ -14318,6 +22562,33 @@
    ]
   },
   {
+   "id": "stickers/emoji/teddy-bear",
+   "cat": "sticker",
+   "group": "activities",
+   "name": {
+    "en": "teddy bear",
+    "zh-CN": "泰迪熊",
+    "ja": "テディベア",
+    "ko": "테디 베어",
+    "es": "osito de peluche"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/teddy-bear/files/emoji.png",
+   "still": true,
+   "tags": [
+    "plaything",
+    "plush",
+    "stuffed",
+    "teddy bear",
+    "toy"
+   ]
+  },
+  {
    "id": "stickers/emoji/tennis",
    "cat": "sticker",
    "group": "activities",
@@ -14443,6 +22714,31 @@
    ]
   },
   {
+   "id": "stickers/emoji/volleyball",
+   "cat": "sticker",
+   "group": "activities",
+   "name": {
+    "en": "volleyball",
+    "zh-CN": "排球",
+    "ja": "バレーボール",
+    "ko": "배구공",
+    "es": "pelota de voleibol"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/volleyball/files/emoji.png",
+   "still": true,
+   "tags": [
+    "ball",
+    "game",
+    "volleyball"
+   ]
+  },
+  {
    "id": "stickers/emoji/wind-chime",
    "cat": "sticker",
    "group": "activities",
@@ -14519,6 +22815,31 @@
     "crochet",
     "knit",
     "yarn"
+   ]
+  },
+  {
+   "id": "stickers/emoji/yo-yo",
+   "cat": "sticker",
+   "group": "activities",
+   "name": {
+    "en": "yo-yo",
+    "zh-CN": "悠悠球",
+    "ja": "ヨーヨー",
+    "ko": "요요",
+    "es": "yoyó"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/yo-yo/files/emoji.png",
+   "still": true,
+   "tags": [
+    "fluctuate",
+    "toy",
+    "yo-yo"
    ]
   },
   {
@@ -15072,6 +23393,54 @@
    ]
   },
   {
+   "id": "stickers/emoji/canoe",
+   "cat": "sticker",
+   "group": "travel",
+   "name": {
+    "en": "canoe",
+    "zh-CN": "独木舟",
+    "ja": "カヌー",
+    "ko": "카누",
+    "es": "canoa"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/canoe/files/emoji.png",
+   "still": true,
+   "tags": [
+    "boat",
+    "canoe"
+   ]
+  },
+  {
+   "id": "stickers/emoji/carousel-horse",
+   "cat": "sticker",
+   "group": "travel",
+   "name": {
+    "en": "carousel horse",
+    "zh-CN": "旋转木马",
+    "ja": "メリーゴーランド",
+    "ko": "회전 목마",
+    "es": "caballo de tiovivo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/carousel-horse/files/emoji.png",
+   "still": true,
+   "tags": [
+    "carousel",
+    "horse"
+   ]
+  },
+  {
    "id": "stickers/emoji/castle",
    "cat": "sticker",
    "group": "travel",
@@ -15272,6 +23641,31 @@
    ]
   },
   {
+   "id": "stickers/emoji/cloud-with-lightning",
+   "cat": "sticker",
+   "group": "travel",
+   "name": {
+    "en": "cloud with lightning",
+    "zh-CN": "打雷",
+    "ja": "雷雲",
+    "ko": "번개구름",
+    "es": "nube con rayo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/cloud-with-lightning/files/emoji.png",
+   "still": true,
+   "tags": [
+    "cloud",
+    "cloud with lightning",
+    "lightning"
+   ]
+  },
+  {
    "id": "stickers/emoji/cloud-with-lightning-and-rain",
    "cat": "sticker",
    "group": "travel",
@@ -15396,6 +23790,30 @@
     "magnetic",
     "navigation",
     "orienteering"
+   ]
+  },
+  {
+   "id": "stickers/emoji/construction",
+   "cat": "sticker",
+   "group": "travel",
+   "name": {
+    "en": "construction",
+    "zh-CN": "施工",
+    "ja": "工事中",
+    "ko": "공사 중",
+    "es": "obras"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/construction/files/emoji.png",
+   "still": true,
+   "tags": [
+    "barrier",
+    "construction"
    ]
   },
   {
@@ -15704,6 +24122,34 @@
    ]
   },
   {
+   "id": "stickers/emoji/eleven-thirty",
+   "cat": "sticker",
+   "group": "travel",
+   "name": {
+    "en": "eleven-thirty",
+    "zh-CN": "十一点半",
+    "ja": "11時半",
+    "ko": "열한 시 반",
+    "es": "once y media"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/eleven-thirty/files/emoji.png",
+   "still": true,
+   "tags": [
+    "11",
+    "11:30",
+    "clock",
+    "eleven",
+    "eleven-thirty",
+    "thirty"
+   ]
+  },
+  {
    "id": "stickers/emoji/factory",
    "cat": "sticker",
    "group": "travel",
@@ -15725,6 +24171,56 @@
    "tags": [
     "building",
     "factory"
+   ]
+  },
+  {
+   "id": "stickers/emoji/ferris-wheel",
+   "cat": "sticker",
+   "group": "travel",
+   "name": {
+    "en": "ferris wheel",
+    "zh-CN": "摩天轮",
+    "ja": "観覧車",
+    "ko": "관람차",
+    "es": "noria de feria"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/ferris-wheel/files/emoji.png",
+   "still": true,
+   "tags": [
+    "amusement park",
+    "ferris",
+    "wheel"
+   ]
+  },
+  {
+   "id": "stickers/emoji/ferry",
+   "cat": "sticker",
+   "group": "travel",
+   "name": {
+    "en": "ferry",
+    "zh-CN": "渡轮",
+    "ja": "フェリー",
+    "ko": "페리",
+    "es": "ferri"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/ferry/files/emoji.png",
+   "still": true,
+   "tags": [
+    "boat",
+    "ferry",
+    "passenger"
    ]
   },
   {
@@ -17148,6 +25644,31 @@
    ]
   },
   {
+   "id": "stickers/emoji/motorway",
+   "cat": "sticker",
+   "group": "travel",
+   "name": {
+    "en": "motorway",
+    "zh-CN": "高速公路",
+    "ja": "高速道路",
+    "ko": "고속도로",
+    "es": "autopista"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/motorway/files/emoji.png",
+   "still": true,
+   "tags": [
+    "highway",
+    "motorway",
+    "road"
+   ]
+  },
+  {
    "id": "stickers/emoji/mount-fuji",
    "cat": "sticker",
    "group": "travel",
@@ -17426,6 +25947,30 @@
    ]
   },
   {
+   "id": "stickers/emoji/oil-drum",
+   "cat": "sticker",
+   "group": "travel",
+   "name": {
+    "en": "oil drum",
+    "zh-CN": "石油桶",
+    "ja": "ドラム缶",
+    "ko": "기름통",
+    "es": "barril de petróleo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/oil-drum/files/emoji.png",
+   "still": true,
+   "tags": [
+    "drum",
+    "oil"
+   ]
+  },
+  {
    "id": "stickers/emoji/oncoming-automobile",
    "cat": "sticker",
    "group": "travel",
@@ -17549,6 +26094,34 @@
     "clock",
     "o’clock",
     "one"
+   ]
+  },
+  {
+   "id": "stickers/emoji/one-thirty",
+   "cat": "sticker",
+   "group": "travel",
+   "name": {
+    "en": "one-thirty",
+    "zh-CN": "一点半",
+    "ja": "1時半",
+    "ko": "한 시 반",
+    "es": "una y media"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/one-thirty/files/emoji.png",
+   "still": true,
+   "tags": [
+    "1",
+    "1:30",
+    "clock",
+    "one",
+    "one-thirty",
+    "thirty"
    ]
   },
   {
@@ -19219,6 +27792,31 @@
    "poster": "stickers/emoji/tram/files/emoji.png",
    "still": true,
    "tags": [
+    "tram",
+    "trolleybus"
+   ]
+  },
+  {
+   "id": "stickers/emoji/tram-car",
+   "cat": "sticker",
+   "group": "travel",
+   "name": {
+    "en": "tram car",
+    "zh-CN": "有轨电车",
+    "ja": "路面電車",
+    "ko": "트램 차량",
+    "es": "vagón de tranvía"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/tram-car/files/emoji.png",
+   "still": true,
+   "tags": [
+    "car",
     "tram",
     "trolleybus"
    ]
@@ -21725,6 +30323,32 @@
    ]
   },
   {
+   "id": "stickers/emoji/elevator",
+   "cat": "sticker",
+   "group": "objects",
+   "name": {
+    "en": "elevator",
+    "zh-CN": "电梯",
+    "ja": "エレベーター",
+    "ko": "엘리베이터",
+    "es": "ascensor"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/elevator/files/emoji.png",
+   "still": true,
+   "tags": [
+    "accessibility",
+    "elevator",
+    "hoist",
+    "lift"
+   ]
+  },
+  {
    "id": "stickers/emoji/envelope",
    "cat": "sticker",
    "group": "objects",
@@ -21775,6 +30399,34 @@
     "envelope",
     "envelope with arrow",
     "outgoing"
+   ]
+  },
+  {
+   "id": "stickers/emoji/euro-banknote",
+   "cat": "sticker",
+   "group": "objects",
+   "name": {
+    "en": "euro banknote",
+    "zh-CN": "欧元",
+    "ja": "ユーロ札",
+    "ko": "유로",
+    "es": "billete de euro"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/euro-banknote/files/emoji.png",
+   "still": true,
+   "tags": [
+    "banknote",
+    "bill",
+    "currency",
+    "euro",
+    "money",
+    "note"
    ]
   },
   {
@@ -27833,6 +36485,32 @@
    ]
   },
   {
+   "id": "stickers/emoji/fast-reverse-button",
+   "cat": "sticker",
+   "group": "symbols",
+   "name": {
+    "en": "fast reverse button",
+    "zh-CN": "快退按钮",
+    "ja": "早戻しボタン",
+    "ko": "되감기 버튼",
+    "es": "retroceso rápido"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/fast-reverse-button/files/emoji.png",
+   "still": true,
+   "tags": [
+    "arrow",
+    "double",
+    "fast reverse button",
+    "rewind"
+   ]
+  },
+  {
    "id": "stickers/emoji/fast-up-button",
    "cat": "sticker",
    "group": "symbols",
@@ -27855,6 +36533,57 @@
     "arrow",
     "double",
     "fast up button"
+   ]
+  },
+  {
+   "id": "stickers/emoji/fast-forward-button",
+   "cat": "sticker",
+   "group": "symbols",
+   "name": {
+    "en": "fast-forward button",
+    "zh-CN": "快进按钮",
+    "ja": "早送りボタン",
+    "ko": "빨리 감기 버튼",
+    "es": "avance rápido"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/fast-forward-button/files/emoji.png",
+   "still": true,
+   "tags": [
+    "arrow",
+    "double",
+    "fast",
+    "fast-forward button",
+    "forward"
+   ]
+  },
+  {
+   "id": "stickers/emoji/female-sign",
+   "cat": "sticker",
+   "group": "symbols",
+   "name": {
+    "en": "female sign",
+    "zh-CN": "女性符号",
+    "ja": "女性のマーク",
+    "ko": "여성 기호",
+    "es": "signo femenino"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/female-sign/files/emoji.png",
+   "still": true,
+   "tags": [
+    "female sign",
+    "woman"
    ]
   },
   {
@@ -30860,6 +39589,30 @@
    ]
   },
   {
+   "id": "stickers/emoji/right-arrow-curving-left",
+   "cat": "sticker",
+   "group": "symbols",
+   "name": {
+    "en": "right arrow curving left",
+    "zh-CN": "右转弯箭头",
+    "ja": "右カーブ矢印",
+    "ko": "오른쪽에서 왼쪽으로 꺾는 화살표",
+    "es": "flecha derecha curvándose a la izquierda"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/right-arrow-curving-left/files/emoji.png",
+   "still": true,
+   "tags": [
+    "arrow",
+    "right arrow curving left"
+   ]
+  },
+  {
    "id": "stickers/emoji/right-arrow-curving-up",
    "cat": "sticker",
    "group": "symbols",
@@ -31214,6 +39967,32 @@
     "top",
     "TOP arrow",
     "up"
+   ]
+  },
+  {
+   "id": "stickers/emoji/trade-mark",
+   "cat": "sticker",
+   "group": "symbols",
+   "name": {
+    "en": "trade mark",
+    "zh-CN": "商标",
+    "ja": "商標マーク",
+    "ko": "상표",
+    "es": "símbolo de marca comercial"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/trade-mark/files/emoji.png",
+   "still": true,
+   "tags": [
+    "mark",
+    "tm",
+    "trade mark",
+    "trademark"
    ]
   },
   {
@@ -31780,6 +40559,31 @@
     "punctuation",
     "question",
     "white question mark"
+   ]
+  },
+  {
+   "id": "stickers/emoji/white-small-square",
+   "cat": "sticker",
+   "group": "symbols",
+   "name": {
+    "en": "white small square",
+    "zh-CN": "白色小方块",
+    "ja": "白四角小",
+    "ko": "작은 흰색 사각형",
+    "es": "cuadrado blanco pequeño"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "emoji.html",
+   "w": 256,
+   "h": 256,
+   "fit": 0.3,
+   "poster": "stickers/emoji/white-small-square/files/emoji.png",
+   "still": true,
+   "tags": [
+    "geometric",
+    "square",
+    "white small square"
    ]
   },
   {
