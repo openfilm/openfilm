@@ -128,8 +128,23 @@ const LEANS_BACK = new Set(['\u4e86', '\u7684', '\u7740', '\u8fc7', '\u4eec', '\
 /* words that lean on the one after (to the, by, 用, 把): a cut after them leaves them hanging */
 const LEANS_FORWARD = new Set(['a', 'an', 'the', 'to', 'of', 'in', 'on', 'at', 'by', 'for', 'with', 'from', 'into', 'about', 'my', 'your', 'our',
   'their', 'his', 'her', 'its', 'this', 'these', 'those', 'very', '\u628a', '\u88ab', '\u7ed9', '\u5bf9', '\u4ece', '\u5411', '\u8ddf', '\u7528', '\u5728', '\u5c06']);
-/* hesitations, which the printed subtitle leaves out (captions.mjs): they count for nothing in a piece's length */
+/* hesitations, which the printed subtitle leaves out (captions.mjs): they count for nothing in a piece's length; "um"
+   only where it is not a word (umIsWord) */
 const FILLERS = new Set(['\u5443', '\u55ef', '\u989d', 'uh', 'um', 'erm', 'mm', 'mmm', 'hmm', 'mhm']);
+/* common words of Portuguese ("um": a, one) and German ("um": around, at), none of them English or Spanish */
+const UM_IS_A_WORD_IN = new Set(['n\u00e3o', '\u00e9', 'em', 'com', 'uma', 'isso', 'esse', 'essa', 'est\u00e1',
+  's\u00e3o', 'voc\u00ea', 'ele', 'ela', 'eu', 'muito', 'tamb\u00e9m', 'das', 'ao', 'pelo', 'pela', 'num', 'numa',
+  'und', 'der', 'die', 'ist', 'nicht', 'ich', 'zu', 'mit', 'sich', 'ein', 'eine', 'einen', 'auf', 'wir', 'sie', 'auch', 'den', 'dem', 'uhr']);
+
+/**
+ * Whether "um" in a text is a word, not a hesitation: the text reads as Portuguese or German (one word in ten, fillers
+ * aside, is one of theirs). Elsewhere it is the English "um".
+ * @param {string} t
+ */
+export function umIsWord(t) {
+  const words = (t.toLowerCase().match(/\p{L}+/gu) ?? []).filter((w) => !FILLERS.has(w));
+  return words.length > 0 && words.filter((w) => UM_IS_A_WORD_IN.has(w)).length * 10 >= words.length;
+}
 const CJK_PARTICLES = ['\u7684\u8bdd', '\u5427', '\u5462', '\u554a', '\u5417', '\u5440', '\u561b'];
 
 /** @param {string} t @param {number} i */
@@ -217,6 +232,7 @@ function coresOf(t) {
 /** @param {string} t @returns {Atom[]} */
 function atomsOf(t) {
   const cores = coresOf(t);
+  const um = umIsWord(t);
   return cores.map((c, k) => {
     const from = k === 0 ? 0 : leadStart(t, cores[k - 1].to, c.from);
     const to = k + 1 < cores.length ? leadStart(t, c.to, cores[k + 1].from) : t.length;
@@ -225,7 +241,7 @@ function atomsOf(t) {
       from, coreFrom: c.from, coreTo: c.to, to, core, trail: t.slice(c.to, to), lead: t.slice(from, c.from), cjk: c.cjk,
       number: /^\p{N}[\p{N}.,:]*$/u.test(core),
       /* a CJK character is a unit, a word two: CJK ≥ 4 characters, Latin ≥ 2 words */
-      units: FILLERS.has(core.toLowerCase()) ? 0 : c.cjk ? [...core].length : 2,
+      units: FILLERS.has(core.toLowerCase()) && !(um && core.toLowerCase() === 'um') ? 0 : c.cjk ? [...core].length : 2,
       start: 0, end: 0,
     };
   });
