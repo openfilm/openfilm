@@ -1,0 +1,117 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Heart burst</title>
+<style>
+  /* what a clip of it may change: the hearts' color, how many burst out (0 to 1), how often */
+  :root { --color: #ff4f86; --amount: 1; --speed: 1; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Hearts bursting out: every beat a pop of light low in the picture flings a handful of glossy hearts up and out;
+ * they pop to size, slow down, float upward wobbling and shrink away. A page of OpenFilm's library (CC0): every
+ * heart's place is worked out from t alone.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const probe = document.createElement('canvas').getContext('2d');
+const rgb = (name, fallback) => {
+  probe.fillStyle = fallback; probe.fillStyle = css(name) || fallback;
+  const s = probe.fillStyle;
+  return s[0] === '#' ? [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number);
+};
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+// the outline of a heart one unit across, from the classic parametric curve
+const HEART = Array.from({ length: 48 }, (_, i) => {
+  const a = (i / 48) * 6.283, s = Math.sin(a);
+  return [16 * s * s * s / 34, -(13 * Math.cos(a) - 5 * Math.cos(2 * a) - 2 * Math.cos(3 * a) - Math.cos(4 * a)) / 34];
+});
+function heart(x, y, size, turn) {
+  const c = Math.cos(turn), s = Math.sin(turn);
+  ctx.beginPath();
+  HEART.forEach(([hx, hy], i) => {
+    const px = x + (hx * c - hy * s) * size, py = y + (hx * s + hy * c) * size;
+    i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+  });
+  ctx.closePath();
+}
+const PER = 12, LIFE = 2.4, PERIOD = 1.3;
+const tint = (c, k) => c.map((v) => Math.round(k > 0 ? v + (255 - v) * k : v * (1 + k)));
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, u = Math.min(w, h) / 100;
+    const amount = num('--amount', 1), speed = Math.max(0.1, num('--speed', 1)), base = rgb('--color', '#ff4f86');
+    const tt = t * speed + 0.9;                                  // start with hearts already in the air
+    const last = Math.floor(tt / PERIOD);
+    ctx.lineJoin = 'round';
+    for (let k = last - Math.ceil(LIFE / PERIOD); k <= last; k++) {
+      const s0 = tt - k * PERIOD;
+      if (s0 < 0 || s0 > LIFE) continue;
+      const ox = w * (0.5 + (hash(k * 1.91) - 0.5) * 0.4), oy = h * (0.72 + hash(k * 2.7) * 0.1);
+      // the pop of light where they come from
+      if (s0 < 0.45) {
+        const q = s0 / 0.45, r = (4 + q * 22) * u;
+        ctx.lineWidth = 1.4 * u * (1 - q); ctx.strokeStyle = `rgba(255,255,255,${0.9 * (1 - q)})`;
+        ctx.beginPath(); ctx.arc(ox, oy, r, 0, 6.283); ctx.stroke();
+        // and a few sparks flying off it
+        ctx.fillStyle = `rgba(255,255,255,${1 - q})`;
+        for (let j = 0; j < 10; j++) {
+          const a = hash(k * 5.3 + j) * 6.283, d = r * (0.9 + hash(k * 8.1 + j) * 0.5);
+          ctx.beginPath(); ctx.arc(ox + Math.cos(a) * d, oy + Math.sin(a) * d, 0.6 * u * (1 - q), 0, 6.283); ctx.fill();
+        }
+      }
+      const hearts = [];
+      for (let i = 0; i < PER; i++) {
+        const r = (q) => hash(k * 31.3 + i * 4.7 + q);
+        if (r(9) > amount) continue;
+        const s = s0 - r(1) * 0.12;
+        if (s < 0) continue;
+        const a = -Math.PI / 2 + (r(2) - 0.5) * 2.9, v = (70 + r(3) * 90) * u;
+        const go = (1 - Math.exp(-3.2 * s)) / 3.2;               // flung out, slowed by the air
+        const x = ox + Math.cos(a) * v * go + Math.sin(s * 3 + r(4) * 6) * 1.5 * u;
+        const y = oy + Math.sin(a) * v * go - s * s * 7 * u;     // and drifting up
+        const pop = Math.min(1, s / 0.22), grow = 1 + 2.4 * Math.pow(1 - pop, 2) * Math.sin(pop * 3.1) * 0.25;
+        const fade = Math.max(0, (s - (LIFE - 0.7)) / 0.7);
+        const size = (4.5 + Math.pow(r(5), 1.5) * 8) * u * pop * grow * (1 - fade * 0.5);
+        hearts.push({ x, y, size, turn: Math.sin(s * 4 + r(6) * 6) * 0.3, alpha: 1 - fade, shade: r(7) });
+      }
+      for (const p of hearts) {
+        if (p.size <= 0.1) continue;
+        const c = tint(base, (p.shade - 0.5) * 0.6);
+        ctx.globalAlpha = p.alpha;
+        heart(p.x, p.y, p.size, p.turn);
+        const g = ctx.createLinearGradient(p.x, p.y - p.size * 0.4, p.x, p.y + p.size * 0.4);
+        g.addColorStop(0, `rgb(${tint(c, 0.35)})`); g.addColorStop(1, `rgb(${tint(c, -0.2)})`);
+        ctx.fillStyle = g; ctx.fill();
+        ctx.lineWidth = Math.max(1, p.size * 0.09); ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.stroke();
+        // gloss
+        ctx.fillStyle = 'rgba(255,255,255,0.8)';
+        ctx.beginPath(); ctx.ellipse(p.x - p.size * 0.2, p.y - p.size * 0.16, p.size * 0.11, p.size * 0.06, p.turn - 0.7, 0, 6.283); ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

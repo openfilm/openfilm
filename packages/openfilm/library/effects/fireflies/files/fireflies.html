@@ -1,0 +1,98 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Fireflies</title>
+<style>
+  /* what a clip of it may change: the light's color, how many fly (0 to 1), how fast they wander */
+  :root { --color: #c8ff5a; --amount: 1; --speed: 1; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Fireflies at dusk: small lights wandering on lazy curving paths, mostly low in the frame, each glowing up and
+ * dying away on its own rhythm; the near ones large and soft. A page of OpenFilm's library (CC0): every light's
+ * place and glow is worked out from t alone.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const probe = document.createElement('canvas').getContext('2d');
+const rgb = (name, fallback) => {
+  probe.fillStyle = fallback; probe.fillStyle = css(name) || fallback;
+  const s = probe.fillStyle;
+  return s[0] === '#' ? [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number);
+};
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+// a soft round glow, drawn once for each color: a hot white core fading out through the color
+const sprites = new Map();
+function sprite(c) {
+  const key = c.join();
+  if (sprites.has(key)) return sprites.get(key);
+  const g = document.createElement('canvas'); g.width = g.height = 128;
+  const x = g.getContext('2d'), r = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+  const hot = c.map((v) => Math.round(v + (255 - v) * 0.7));
+  r.addColorStop(0, `rgba(${hot},1)`); r.addColorStop(0.18, `rgba(${c},0.85)`); r.addColorStop(0.45, `rgba(${c},0.22)`); r.addColorStop(1, `rgba(${c},0)`);
+  x.fillStyle = r; x.fillRect(0, 0, 128, 128);
+  sprites.set(key, g);
+  return g;
+}
+const N = 60;
+const flies = Array.from({ length: N }, (_, i) => {
+  const r = (k) => hash(i * 13.37 + k);
+  const depth = r(1);
+  return {
+    x: r(2), y: 0.25 + Math.pow(r(3), 0.7) * 0.7, depth, order: r(4),
+    // three slow waves for each axis make a path that wanders without repeating soon
+    fx: [0.11 + r(5) * 0.12, 0.23 + r(6) * 0.2, 0.5 + r(7) * 0.4], fy: [0.09 + r(8) * 0.1, 0.27 + r(9) * 0.2, 0.6 + r(10) * 0.4],
+    px: [r(11), r(12), r(13)].map((v) => v * 6.283), py: [r(14), r(15), r(16)].map((v) => v * 6.283),
+    rate: 0.25 + r(17) * 0.35, beat: r(18), hue: r(19),
+  };
+});
+// a firefly's glow over one of its cycles: a quick swell, a slower fade, then dark
+const pulse = (p) => (p < 0.12 ? Math.sin((p / 0.12) * Math.PI / 2) : p < 0.55 ? Math.pow(Math.cos(((p - 0.12) / 0.43) * Math.PI / 2), 2) : 0);
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, u = Math.min(w, h) / 100;
+    const amount = num('--amount', 1), speed = num('--speed', 1), base = rgb('--color', '#c8ff5a');
+    const tt = t * speed;
+    ctx.globalCompositeOperation = 'lighter';
+    for (const f of flies) {
+      if (f.order > amount) continue;
+      const reach = 0.06 + f.depth * 0.08;
+      const x = (f.x + reach * (Math.sin(tt * f.fx[0] + f.px[0]) + 0.5 * Math.sin(tt * f.fx[1] + f.px[1]) + 0.2 * Math.sin(tt * f.fx[2] + f.px[2]))) * w;
+      const y = (f.y + reach * 0.7 * (Math.sin(tt * f.fy[0] + f.py[0]) + 0.5 * Math.sin(tt * f.fy[1] + f.py[1]) + 0.25 * Math.sin(tt * f.fy[2] + f.py[2]))) * h;
+      const glow = 0.08 + 0.92 * pulse((tt * f.rate + f.beat) % 1);
+      const c = base.map((v, k) => Math.max(0, Math.min(255, Math.round(v + (f.hue - 0.5) * [60, 10, -20][k]))));
+      const img = sprite(c);
+      const core = (0.4 + f.depth * f.depth * 1.6) * u;
+      // a wide faint halo, then the bright body
+      ctx.globalAlpha = 0.4 * glow;
+      ctx.drawImage(img, x - core * 9, y - core * 9, core * 18, core * 18);
+      ctx.globalAlpha = (f.depth > 0.85 ? 0.55 : 1) * glow;
+      ctx.drawImage(img, x - core * 2.5, y - core * 2.5, core * 5, core * 5);
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

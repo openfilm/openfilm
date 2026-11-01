@@ -3,7 +3,8 @@
  * The pictures of the library's pages (library/index.json): for each page, a poster (poster.jpg) and a two-second
  * preview (preview.mp4) beside its saved.json, drawn by the renderer itself over the sample stills in
  * scripts/library-samples/ (made by the OpenFilm contributors). A transition is drawn on a cut from one still to the
- * other, its middle on the cut, and so is each of the timeline's fades; a sticker in the middle of a still. And the
+ * other, its middle on the cut, and so is each of the timeline's fades; a sticker in the middle of a still; a template
+ * whole, its places for pictures filled with the filters' sample photos. And the
  * picture the looks are shown on (library/filters/sample.jpg), and each sound's waveform (library/sounds/waves/).
  *
  *   node scripts/library-previews.mjs [id …]
@@ -17,6 +18,7 @@ import { render } from '../src/render.mjs';
 import { closeBrowsers } from '../src/host.mjs';
 import { GROUND } from './library-ground.mjs';
 import { libraryIndex } from '../studio/server/library.mjs';
+import { filmHtml } from '../src/film-doc.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const LIB = join(HERE, '..', 'library');
@@ -50,7 +52,8 @@ function filmFor(item, about) {
     under = '<iframe src="ground.html#t=0,2"></iframe>';
     posterAt = 1.2;
   } else {
-    top = `<iframe src="${src}#t=0,2"${props}></iframe>`;
+    /* with its clip's own style (a light's blend with the picture under it) */
+    top = `<iframe src="${src}#t=0,2"${about.clip.style ? ` style="${about.clip.style}"` : ''}${props}></iframe>`;
     /* text on a plain ground (library-ground.mjs, as a sticker is), anything else over a still */
     under = item.cat === 'text' ? '<iframe src="ground.html#t=0,2"></iframe>' : '<img src="b.jpg#t=0,2" style="object-fit: cover">';
     /* a beat's flash is over soon after it starts */
@@ -72,7 +75,58 @@ function fadeFilm(item) {
   return { html, posterAt: 0.95 };
 }
 
+/* the templates' photos for the places of the person's pictures (library-templates.json names them, the filters' samples) */
+const templateDefs = new Map(JSON.parse(readFileSync(join(HERE, 'library-templates.json'), 'utf8')).templates.map((d) => [`templates/${d.id}`, d]));
+
+/** A template (a group): its clips laid out on the preview's picture, its places filled with photos, all of its length. */
+function groupFilm(item, about, work) {
+  const photos = templateDefs.get(item.id)?.photos ?? ['film', 'fresh', 'scenery', 'portrait'];
+  const tracks = [];
+  let slot = 0;
+  for (const { track, at, clip } of about.clips) {
+    let c = { ...clip, at, src: `item/${clip.src}` };
+    if (clip.src === 'slot.html') {
+      const photo = `p${slot}.jpg`;
+      cpSync(join(LIB, 'filters', 'samples', `${photos[slot % photos.length]}.jpg`), join(work, photo));
+      c = { at, src: photo, time: clip.time, style: 'object-fit: cover' };
+      slot += 1;
+    }
+    const place = clip.attrs?.['data-place'];
+    if (place && clip.size) {
+      /* as Studio lays it out (lib/library placedGroup) */
+      const p = JSON.parse(place);
+      let h = Math.round(H * (p.fit ?? 0.3)), w = Math.round(h * (clip.size.w / clip.size.h));
+      if (w > Math.round(W * 0.92)) { w = Math.round(W * 0.92); h = Math.round(w * (clip.size.h / clip.size.w)); }
+      const x = Math.max(0, Math.min(W - w, Math.round(W * (p.x ?? 0.5) - w / 2))), y = Math.max(0, Math.min(H - h, Math.round(H * (p.y ?? 0.5) - h / 2)));
+      const { 'data-place': _p, ...attrs } = clip.attrs;
+      c = { ...c, box: { x, y, w, h }, size: { w, h }, attrs };
+    }
+    (tracks[track] ??= { clips: [] }).clips.push(c);
+  }
+  const marks = about.clips.filter((c) => c.clip.attrs?.['data-place']);
+  const posterAt = Math.min(about.durationMs / 1000 - 0.2, (marks[0]?.at ?? 0) + 1.4);
+  return { html: filmHtml({ stage: { w: W, h: H }, tracks: tracks.map((t) => t ?? { clips: [] }) }), posterAt, length: about.durationMs / 1000 };
+}
+
 for (const item of index.items) {
+  if (item.kind === 'group' && (!asked.length || asked.includes(item.id))) {
+    const dir = join(LIB, item.id);
+    const about = JSON.parse(readFileSync(join(dir, 'saved.json'), 'utf8'));
+    const work = mkdtempSync(join(tmpdir(), 'openfilm-library-'));
+    try {
+      cpSync(join(dir, 'files'), join(work, 'item'), { recursive: true });
+      const { html, posterAt, length } = groupFilm(item, about, work);
+      writeFileSync(join(work, 'film.html'), html);
+      const out = join(work, 'out.mp4');
+      await render([work, `0-${length}`], { out, fps: 30, quiet: true });
+      ffmpeg('-i', out, '-vf', 'scale=320:180', '-c:v', 'libx264', '-crf', '30', '-preset', 'slow', '-pix_fmt', 'yuv420p', '-an', '-movflags', '+faststart', join(dir, 'preview.mp4'));
+      ffmpeg('-ss', String(posterAt), '-i', out, '-frames:v', '1', '-vf', 'scale=320:180', '-q:v', '5', join(dir, 'poster.jpg'));
+      console.log(`→ library/${item.id}`);
+    } finally {
+      rmSync(work, { recursive: true, force: true });
+    }
+    continue;
+  }
   /* a thing with a picture of its own (an emoji) has nothing to draw */
   if ((item.kind !== 'page' && item.kind !== 'fade') || item.still || (asked.length && !asked.includes(item.id))) continue;
   const dir = join(LIB, item.id);

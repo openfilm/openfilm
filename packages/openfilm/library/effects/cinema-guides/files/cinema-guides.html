@@ -1,0 +1,133 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Cinema guides</title>
+<style>
+  /* what a clip of it may change: the guides' color, how dark the mask outside the 2.39 frame is (0 to 1) */
+  :root { --color: #ffffff; --amount: 0.82; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * A director's monitor: the picture masked to a 2.39:1 frame worked out from the stage's shape, thin action-safe and
+ * title-safe guides, corner marks, a center cross, and the camera's readouts in the mask: timecode running at 24
+ * frames a second, a blinking REC. A page of OpenFilm's library (CC0): what it shows at t comes from t alone.
+ */
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const probe = document.createElement('canvas').getContext('2d');
+const rgb = (name, fallback) => {
+  probe.fillStyle = fallback; probe.fillStyle = css(name) || fallback;
+  const s = probe.fillStyle;
+  return s[0] === '#' ? [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number);
+};
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+const pad = (n) => String(n).padStart(2, '0');
+const MONO = 'ui-monospace, "SF Mono", Menlo, Consolas, monospace';
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, u = Math.min(w, h) / 100;
+    const c = rgb('--color', '#ffffff'), mask = Math.max(0, Math.min(1, num('--amount', 0.82)));
+    const line = (a) => `rgba(${c},${a})`;
+    // the 2.39 frame: as wide as the stage when the stage is wider than tall, else as tall as fits
+    let fw = w, fh = w / 2.39;
+    if (fh > h) { fh = h; fw = h * 2.39; }
+    const fx = (w - fw) / 2, fy = (h - fh) / 2;
+    ctx.fillStyle = `rgba(6,7,9,${mask})`;
+    ctx.fillRect(0, 0, w, fy); ctx.fillRect(0, fy + fh, w, h - fy - fh);
+    ctx.fillRect(0, fy, fx, fh); ctx.fillRect(fx + fw, fy, w - fx - fw, fh);
+    // the frame line, with a hairline glow
+    ctx.lineWidth = Math.max(1, 0.18 * u);
+    ctx.strokeStyle = line(0.75);
+    ctx.strokeRect(fx + 0.5, fy + 0.5, fw - 1, fh - 1);
+    // action safe (93%) dashed, title safe (80%) thin
+    const box = (k, a, dash) => {
+      ctx.setLineDash(dash); ctx.strokeStyle = line(a);
+      ctx.strokeRect(fx + fw * (1 - k) / 2, fy + fh * (1 - k) / 2, fw * k, fh * k);
+    };
+    ctx.lineWidth = Math.max(1, 0.12 * u);
+    box(0.93, 0.38, [0.8 * u, 0.6 * u]);
+    box(0.8, 0.28, []);
+    ctx.setLineDash([]);
+    // corner marks of the title-safe box
+    ctx.lineWidth = Math.max(1, 0.28 * u);
+    ctx.strokeStyle = line(0.85);
+    const L = Math.min(fw, fh) * 0.07;
+    for (const [sx, sy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+      const x = fx + fw * (0.1 + sx * 0.8), y = fy + fh * (0.1 + sy * 0.8), dx = sx ? -1 : 1, dy = sy ? -1 : 1;
+      ctx.beginPath(); ctx.moveTo(x, y + dy * L); ctx.lineTo(x, y); ctx.lineTo(x + dx * L, y); ctx.stroke();
+    }
+    // the center cross, with a gap in the middle
+    const cx = fx + fw / 2, cy = fy + fh / 2, C = Math.min(fw, fh) * 0.045, g = C * 0.3;
+    ctx.lineWidth = Math.max(1, 0.2 * u);
+    ctx.beginPath();
+    ctx.moveTo(cx - C, cy); ctx.lineTo(cx - g, cy); ctx.moveTo(cx + g, cy); ctx.lineTo(cx + C, cy);
+    ctx.moveTo(cx, cy - C); ctx.lineTo(cx, cy - g); ctx.moveTo(cx, cy + g); ctx.lineTo(cx, cy + C);
+    ctx.stroke();
+    // thirds, very faint
+    ctx.lineWidth = 1; ctx.strokeStyle = line(0.12);
+    ctx.beginPath();
+    for (const k of [1 / 3, 2 / 3]) { ctx.moveTo(fx + fw * k, fy); ctx.lineTo(fx + fw * k, fy + fh); ctx.moveTo(fx, fy + fh * k); ctx.lineTo(fx + fw, fy + fh * k); }
+    ctx.stroke();
+    // readouts: in the mask band when there is room, else just inside the frame
+    const size = Math.max(9, 2.3 * u);
+    ctx.font = `600 ${size}px ${MONO}`;
+    ctx.textBaseline = 'middle';
+    const band = fy > size * 2.2;
+    const gap = Math.min(fy / 2, size * 1.8), topY = band ? fy - gap : fy + size * 1.4, botY = band ? fy + fh + gap : fy + fh - size * 1.4;
+    const left = Math.max(fx, 0) + 2.5 * u, right = Math.min(fx + fw, w) - 2.5 * u;
+    const f = Math.floor(t * 24) + 4327 * 24, tc = `${pad(Math.floor(f / 86400) % 24)}:${pad(Math.floor(f / 1440) % 60)}:${pad(Math.floor(f / 24) % 60)}:${pad(f % 24)}`;
+    const text = (s, x, y, align, a) => { ctx.textAlign = align; ctx.fillStyle = line(a); ctx.fillText(s, x, y); };
+    ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = band ? 0 : 0.6 * u;
+    text('A CAM  ·  2.39:1', left, topY, 'left', 0.9);
+    text(`TC ${tc}`, w / 2, topY, 'center', 0.95);
+    text('ISO 800  5600K', right, topY, 'right', 0.75);
+    text('T2.8  180°  24p', left, botY, 'left', 0.75);
+    text('S03 · 12A · T4', w / 2, botY, 'center', 0.75);
+    // REC: a red dot breathing once a second
+    const blink = 0.35 + 0.65 * (0.5 + 0.5 * Math.cos(t * Math.PI * 2));
+    ctx.textAlign = 'right';
+    const recW = ctx.measureText('REC').width;
+    ctx.fillStyle = line(0.95); ctx.fillText('REC', right, botY);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = `rgba(255,48,48,${blink})`;
+    ctx.shadowColor = `rgba(255,40,40,${blink})`; ctx.shadowBlur = 1.2 * u;
+    ctx.beginPath(); ctx.arc(right - recW - size * 0.75, botY, size * 0.36, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+    // audio meters at the right edge of the frame, dancing on a hash of the frame number
+    const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+    const mh = fh * 0.28, mx = fx + fw - 2.2 * u, my = fy + fh / 2 + mh / 2;
+    for (let ch = 0; ch < 2; ch++) {
+      const k = Math.floor(t * 12);
+      const lerp = (t * 12) % 1, lv = hash(k * 2 + ch) * (1 - lerp) + hash(k * 2 + 2 + ch) * lerp;
+      const level = 0.35 + 0.5 * lv;
+      const x = mx - ch * 1.1 * u, segs = 14;
+      for (let i = 0; i < segs; i++) {
+        const on = i / segs < level, y = my - (i + 1) * mh / segs;
+        ctx.fillStyle = i > 11 ? `rgba(255,70,60,${on ? 0.9 : 0.15})` : i > 9 ? `rgba(255,210,60,${on ? 0.9 : 0.15})` : `rgba(90,230,120,${on ? 0.85 : 0.15})`;
+        ctx.fillRect(x - 0.35 * u, y + 0.12 * u, 0.7 * u, mh / segs - 0.24 * u);
+      }
+    }
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

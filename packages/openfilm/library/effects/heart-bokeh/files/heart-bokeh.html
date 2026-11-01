@@ -1,0 +1,123 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Heart bokeh</title>
+<style>
+  /* what a clip of it may change: the two colors of the lights, how many show (0 to 1), how fast they drift */
+  :root { --color: #ff8db8; --accent: #ffd08a; --amount: 1; --speed: 1; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Heart-shaped bokeh: out-of-focus lights seen through a lens with a heart in it, pink and gold, drifting slowly up
+ * and breathing, with small round lights far behind. A page of OpenFilm's library (CC0): every light's place is
+ * worked out from t alone.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const probe = document.createElement('canvas').getContext('2d');
+const rgb = (name, fallback) => {
+  probe.fillStyle = fallback; probe.fillStyle = css(name) || fallback;
+  const s = probe.fillStyle;
+  return s[0] === '#' ? [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number);
+};
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+// a soft round glow, drawn once for each color: a hot white core fading out through the color
+const sprites = new Map();
+function sprite(c) {
+  const key = c.join();
+  if (sprites.has(key)) return sprites.get(key);
+  const g = document.createElement('canvas'); g.width = g.height = 128;
+  const x = g.getContext('2d'), r = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+  const hot = c.map((v) => Math.round(v + (255 - v) * 0.7));
+  r.addColorStop(0, `rgba(${hot},1)`); r.addColorStop(0.18, `rgba(${c},0.85)`); r.addColorStop(0.45, `rgba(${c},0.22)`); r.addColorStop(1, `rgba(${c},0)`);
+  x.fillStyle = r; x.fillRect(0, 0, 128, 128);
+  sprites.set(key, g);
+  return g;
+}
+const HEART = Array.from({ length: 60 }, (_, i) => {
+  const a = (i / 60) * 6.283, s = Math.sin(a);
+  return [16 * s * s * s / 34, -(13 * Math.cos(a) - 5 * Math.cos(2 * a) - 2 * Math.cos(3 * a) - Math.cos(4 * a)) / 34 - 0.07];
+});
+// a heart of light as a lens draws it: a flat disc, a little brighter at its rim, soft at the edge
+const hearts = new Map();
+function heartSprite(c) {
+  const key = c.join();
+  if (hearts.has(key)) return hearts.get(key);
+  const S = 160, g = document.createElement('canvas'); g.width = g.height = S;
+  const x = g.getContext('2d');
+  x.filter = 'blur(4px)';
+  x.translate(S / 2, S / 2);
+  x.beginPath();
+  HEART.forEach(([hx, hy], i) => (i ? x.lineTo(hx * S * 0.8, hy * S * 0.8) : x.moveTo(hx * S * 0.8, hy * S * 0.8)));
+  x.closePath();
+  const r = x.createRadialGradient(0, 0, 0, 0, 0, S * 0.45);
+  r.addColorStop(0, `rgba(${c},0.45)`); r.addColorStop(0.8, `rgba(${c},0.6)`); r.addColorStop(1, `rgba(${c},0.85)`);
+  x.fillStyle = r; x.fill();
+  x.lineWidth = 5; x.strokeStyle = `rgba(${c.map((v) => Math.round(v + (255 - v) * 0.5))},0.9)`; x.stroke();
+  hearts.set(key, g);
+  return g;
+}
+const N = 38, M = 50;
+const lights = Array.from({ length: N + M }, (_, i) => {
+  const r = (k) => hash(i * 11.7 + k);
+  const round = i >= N;
+  return {
+    round, x: r(1), y: r(2), order: r(3),
+    size: round ? 1 + r(4) * 2.5 : 4 + Math.pow(r(4), 1.5) * 12,     // in vmin
+    rise: (round ? 0.008 : 0.015) + r(5) * 0.03, sway: 1 + r(6) * 3, swayF: 0.2 + r(7) * 0.4, phase: r(8) * 6.283,
+    gold: r(9) < 0.35, breath: 0.5 + r(10) * 1.2, alpha: round ? 0.25 + r(11) * 0.4 : 0.35 + r(11) * 0.45,
+    tilt: (r(12) - 0.5) * 0.5,
+  };
+});
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, u = Math.min(w, h) / 100;
+    const amount = num('--amount', 1), speed = num('--speed', 1);
+    const A = rgb('--color', '#ff8db8'), B = rgb('--accent', '#ffd08a');
+    ctx.globalCompositeOperation = 'lighter';
+    for (const l of lights) {
+      if (l.order > amount) continue;
+      const tt = t * speed;
+      const span = 1 + l.size * u * 2 / h;
+      const y = (1 + l.size * u / h - ((l.y + tt * l.rise) % 1) * span) * h;
+      const x = l.x * w + Math.sin(tt * l.swayF + l.phase) * l.sway * u;
+      const b = 0.5 + 0.5 * Math.sin(t * l.breath + l.phase);
+      const c = l.gold ? B : A;
+      const d = l.size * u * (0.94 + 0.08 * b);
+      ctx.globalAlpha = l.alpha * (0.75 + 0.25 * b);
+      if (l.round) {
+        ctx.drawImage(sprite(c), x - d, y - d, d * 2, d * 2);
+      } else {
+        ctx.save();
+        ctx.translate(x, y); ctx.rotate(l.tilt + Math.sin(tt * 0.3 + l.phase) * 0.12);
+        ctx.drawImage(heartSprite(c), -d / 2, -d / 2, d, d);
+        ctx.restore();
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

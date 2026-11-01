@@ -1,0 +1,111 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Glitter</title>
+<style>
+  /* what a clip of it may change: how much glitter shows (0 to 1), how fast it drifts and flashes */
+  :root { --amount: 1; --speed: 1; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Glitter: a fine dust of flakes drifting down, each catching the light for a moment and flashing a color of the
+ * rainbow, the brightest throwing out a star. A page of OpenFilm's library (CC0): every flake comes from t alone.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+// a soft round glow, drawn once for each color: a hot white core fading out through the color
+const sprites = new Map();
+function sprite(c) {
+  const key = c.join();
+  if (sprites.has(key)) return sprites.get(key);
+  const g = document.createElement('canvas'); g.width = g.height = 128;
+  const x = g.getContext('2d'), r = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+  const hot = c.map((v) => Math.round(v + (255 - v) * 0.7));
+  r.addColorStop(0, `rgba(${hot},1)`); r.addColorStop(0.18, `rgba(${c},0.85)`); r.addColorStop(0.45, `rgba(${c},0.22)`); r.addColorStop(1, `rgba(${c},0)`);
+  x.fillStyle = r; x.fillRect(0, 0, 128, 128);
+  sprites.set(key, g);
+  return g;
+}
+// twelve hues of light, a glow for each
+const HUES = Array.from({ length: 12 }, (_, i) => {
+  const h = i / 12, f = (n) => { const k = (n + h * 12) % 12; return 0.5 - 0.5 * Math.max(-1, Math.min(k - 3, 9 - k, 1)); };
+  return [f(0), f(8), f(4)].map((v) => Math.round(255 * (0.55 + 0.45 * v)));
+});
+const N = 900;
+const flakes = Array.from({ length: N }, (_, i) => {
+  const r = (k) => hash(i * 5.71 + k);
+  return {
+    x: r(1), y: r(2), order: r(3), fall: 0.01 + r(4) * 0.035, drift: (r(5) - 0.5) * 0.02,
+    rate: 2 + r(6) * 5, phase: r(7) * 6.283, hue: r(8), size: 0.22 + Math.pow(r(9), 2.5) * 0.6,
+    star: r(10) < 0.1, spin: r(11) * 6.283,
+  };
+});
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, u = Math.min(w, h) / 100;
+    const amount = num('--amount', 1), speed = num('--speed', 1), tt = t * speed;
+    ctx.globalCompositeOperation = 'lighter';
+    for (const f of flakes) {
+      if (f.order > amount) continue;
+      const x = (((f.x + tt * f.drift) % 1) + 1) % 1 * w, y = ((f.y + tt * f.fall) % 1) * h;
+      // a flash: most of the time a dim fleck, for a moment a burst of color
+      const s = Math.max(0, Math.sin(tt * f.rate + f.phase));
+      const flash = Math.pow(s, 14);
+      // the middle of the picture gets a little less, to keep what is there clear
+      const dx = x / w - 0.5, dy = y / h - 0.5, edge = Math.min(1, 0.55 + Math.hypot(dx * 1.4, dy * 1.4));
+      const c = HUES[Math.floor((f.hue * 12 + tt * 0.4) % 12)];
+      const d = f.size * u;
+      ctx.globalAlpha = (0.25 + 0.15 * s) * edge;
+      ctx.fillStyle = `rgb(${c})`;
+      ctx.fillRect(x - d / 2, y - d / 2, d, d);
+      if (flash > 0.02) {
+        const g = d * (1.6 + 3.4 * flash) * (f.star ? 1.8 : 1);
+        ctx.globalAlpha = flash * edge;
+        ctx.drawImage(sprite(c), x - g, y - g, g * 2, g * 2);
+        if (f.star && flash > 0.3) {
+          // a thin star of light, turning
+          const L = (3 + 5 * flash) * u * f.size * 1.6, th = 0.1 * u, a = f.spin + tt * 0.5;
+          ctx.globalAlpha = flash * edge;
+          ctx.fillStyle = `rgb(${c.map((v) => Math.round(v + (255 - v) * 0.6))})`;
+          ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+          ctx.beginPath();
+          ctx.moveTo(-L, 0); ctx.lineTo(0, -th); ctx.lineTo(L, 0); ctx.lineTo(0, th); ctx.closePath();
+          ctx.moveTo(0, -L); ctx.lineTo(th, 0); ctx.lineTo(0, L); ctx.lineTo(-th, 0); ctx.closePath();
+          ctx.fill();
+          ctx.rotate(Math.PI / 4); ctx.scale(0.45, 0.45);
+          ctx.beginPath();
+          ctx.moveTo(-L, 0); ctx.lineTo(0, -th); ctx.lineTo(L, 0); ctx.lineTo(0, th); ctx.closePath();
+          ctx.moveTo(0, -L); ctx.lineTo(th, 0); ctx.lineTo(0, L); ctx.lineTo(-th, 0); ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>
