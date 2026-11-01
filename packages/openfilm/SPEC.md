@@ -42,7 +42,8 @@ where, and CSS that says how each looks. A page draws a shot.
 ```
 
 - The stage, the frame in CSS pixels, is the viewport: `<meta name="viewport" content="width=…, height=…">`;
-  without one, 1920 × 1080. The head is the film's own (styles, fonts), with no script: what moves is a page.
+  without one, 1920 × 1080. The head is the film's own (styles, fonts, the `@keyframes` its clips move by), with no
+  script.
 - The body is the tracks, each a `<section>`, in the order a timeline shows them: the first on top (a host stacks
   them; a page's own paint order does not). A track has no kind: any clip goes on any track. A track's clips do not
   overlap; overlapping pictures (a picture-in-picture, a title over footage) sit on different tracks. A track may be
@@ -70,8 +71,15 @@ where, and CSS that says how each looks. A page draws a shot.
     stage. A page is fitted whole inside its box, centered; without one it is its own size, centered, so a page
     without a size covers the stage.
   - How a picture looks is CSS: its `class` and the rest of its `style` (`border-radius`, `clip-path`, `mask`,
-    `filter`, `opacity`, `mix-blend-mode`…), and the film's `<style>`. The film's CSS has no time: what moves is a
-    page.
+    `filter`, `opacity`, `mix-blend-mode`…), and the film's `<style>`.
+  - How a picture moves is CSS animation: its `animation` (in its `style` or by its `class`), by `@keyframes` in the
+    film's `<style>`. An animation runs on the clip's own time, 0 at its `at`, and a host holds it at each frame as it
+    holds a page's (§4). Keyframes move a picture with `translate` (stage px, `vw` and `vh` of the stage), `rotate` and
+    `scale`, on top of its box: about its box's center, its box unchanged. They may change any other property of its
+    look (`opacity`, `filter`, `clip-path`…), never what places it. On every picture a host sets `--clip-length`, how
+    long the clip is on the film (`4.2s`), so a way out can be timed from its end:
+    `animation: out .6s ease-in calc(var(--clip-length) - .6s) both`. A `transition`, whose progress is history, is an
+    error.
   - `overrides` are the person's changes made in Studio, as JSON, a list of entries. An entry with `at` (a CSS
     selector), on a page clip only, tweaks an element of the page, applied by the host after each frame: optional `n`
     (which match, from 1), `t` (translate px), `s` (scale), `r` (rotate degrees) as the independent CSS transform
@@ -82,7 +90,7 @@ where, and CSS that says how each looks. A page draws a shot.
     nothing in the picture). An entry without `at`, at most one, on any clip, is the clip's own: `fade: [in, out]`,
     seconds (0 or more, to the millisecond, together no longer than the clip): its picture's opacity and its sound's
     gain ramp linearly from 0 to 1 over its first `in` seconds and from 1 to 0 over its last `out` seconds, times its
-    own opacity and volume.
+    own opacity and volume (as its animation has its opacity at that moment).
   - `alt`, `title`, `lang`, `dir`, `data-*` and `aria-*` are kept and say nothing to the film.
 - Times (`at`, the fragment's) are seconds to the millisecond: a host rounds them to three decimals as it reads them,
   and an editor writes no more (no frame shows a finer difference). Each is rounded alone, so clips on a track that

@@ -89,18 +89,41 @@ function hostFacts(href) {
  * Put a clip's element where film-doc's pictureRect says its picture lands in `box`. A page is drawn at its own size
  * (`c.nw` × `c.nh`) and scaled into place; a video or still is laid out at its box's size, so the file's CSS for it
  * (object-fit, border-radius, a mask) speaks in stage px. `c.w` × `c.h` is the element's own frame either way.
- * Everything that places it is written here, on the element itself: nothing in the file's CSS moves a clip.
+ * Everything that places it is written here, on the element itself: nothing in the file's CSS moves a clip. Its
+ * animation's `translate`, `rotate` and `scale` (SPEC §1) go on top: its origin is its box's middle on the stage, and
+ * the placing transform is written around it, so they move it in stage px and turn and size it about that middle.
  */
 function place(c, box) {
   const at = pictureRect(c.kind, { w: c.nw, h: c.nh }, stage, box);
   const page = c.kind === 'page';
   c.w = page ? c.nw : at.w; c.h = page ? c.nh : at.h;
   const k = page ? ` scale(${at.w / c.nw}, ${at.h / c.nh})` : '';
+  const cx = at.x + at.w / 2, cy = at.y + at.h / 2;
   Object.assign(c.el.style, {
     position: 'absolute', left: '0', top: '0', right: 'auto', bottom: 'auto', margin: '0', translate: 'none', rotate: 'none', scale: 'none',
-    width: c.w + 'px', height: c.h + 'px', transformOrigin: '0 0',
-    transform: `translate(${at.x + at.w / 2}px, ${at.y + at.h / 2}px) rotate(${at.r}deg) translate(${-at.w / 2}px, ${-at.h / 2}px)${k}`,
+    width: c.w + 'px', height: c.h + 'px', transformOrigin: `${cx}px ${cy}px`,
+    /* T(−origin) · placing · T(origin), the first two of which cancel: about the origin it is the placing alone */
+    transform: `rotate(${at.r}deg) translate(${-at.w / 2}px, ${-at.h / 2}px)${k} translate(${cx}px, ${cy}px)`,
   });
+}
+
+/**
+ * A clip's animations (SPEC §1) held at its own time, `t − at`: paused here first, so the clock that holds the rest
+ * of the document's at the film's t (FILM_CLOCK's settle) leaves them be. `c.moves`: it has any.
+ */
+function hold(c, t) {
+  if (!c.moves) return;
+  const list = c.el.getAnimations();
+  c.moves = list.length > 0;
+  for (const a of list) {
+    if (a.playState !== 'paused') a.pause();
+    a.currentTime = (t - c.at) * 1000;
+  }
+}
+/** Whether a clip's look has it move, read again whenever its look changes, and its animations held at once. */
+function moving(c) {
+  c.moves = Boolean(c.el.getAnimations?.().length);
+  if (c.moves) hold(c, shownT ?? c.at);
 }
 
 /**
@@ -125,6 +148,9 @@ function dress(c, row) {
   if (!c.el) return;
   if ((c.el.getAttribute('class') ?? '') !== (row.class ?? '')) { unfade(c); c.base = undefined; c.el.setAttribute('class', row.class ?? ''); refade(c); }
   wear(c, row.style ?? '');
+  /* how long it is on the film, for an animation timed from its end */
+  if (c.span) c.el.style.setProperty('--clip-length', `${Math.round(c.span.length * 1000) / 1000}s`);
+  moving(c);
   if (c.kind === 'page' && !c.el.style.border) c.el.style.border = '0';
   c.el.style.zIndex = String(doc.tracks.length - c.ti); // track 0 on top
   /* a page coming on shows once it is drawn (see draw) */
@@ -140,7 +166,8 @@ function fadeAt(c, t) {
   c.fadeT = t;
   const k = c.fade ? fadeGain(t - c.at, c.span.length, c.fade) : 1;
   if (k >= 1) { unfade(c); return; }
-  if (c.base == null) { unfade(c); c.base = Number(getComputedStyle(c.el).opacity); }
+  /* an animated opacity is read as it is at this moment (the clip's animation already held at t) */
+  if (c.base == null || c.moves) { unfade(c); c.base = Number(getComputedStyle(c.el).opacity); }
   c.el.style.setProperty('opacity', String(c.base * k), 'important');
   c.faded = true;
 }
@@ -991,6 +1018,7 @@ async function drawClip(c, t, live, play, turn, coming, going) {
   if (live && appears && c.kind === 'page') { c.coming = turn; coming.push(c); }
   else if (live && !on && c.el.style.visibility === 'visible') going.push(c);
   else c.el.style.visibility = on ? 'visible' : 'hidden';
+  hold(c, t);
   if (on) fadeAt(c, t);
   if (!on) {
     if (c.kind !== 'video') return;
@@ -1209,8 +1237,30 @@ async function cue(c, row, track, t, fresh) {
   } finally { cueing.delete(c); }
 }
 
-/** Where a clip's own pixel (x, y) is on the stage: its placement, as the browser applies it. */
-const matrixOf = (c) => new DOMMatrix(getComputedStyle(c.el).transform);
+/**
+ * Where a clip's own pixel (x, y) is on the stage: its placement and its animation's translate, rotate and scale at
+ * this moment, about its origin, as the browser applies them.
+ */
+function matrixOf(c) {
+  const css = getComputedStyle(c.el);
+  const [ox, oy] = css.transformOrigin.split(' ').map(parseFloat);
+  const m = new DOMMatrix().translateSelf(ox, oy);
+  if (css.translate && css.translate !== 'none') {
+    const [x = '0', y = '0', z = '0'] = css.translate.split(' ');
+    m.translateSelf(parseFloat(x), parseFloat(y), parseFloat(z));
+  }
+  if (css.rotate && css.rotate !== 'none') {
+    const parts = css.rotate.split(' ');
+    const deg = parseFloat(parts.pop());
+    const axis = parts.length === 3 ? parts.map(Number) : parts[0] === 'x' ? [1, 0, 0] : parts[0] === 'y' ? [0, 1, 0] : [0, 0, 1];
+    m.rotateAxisAngleSelf(axis[0], axis[1], axis[2], deg);
+  }
+  if (css.scale && css.scale !== 'none') {
+    const [sx, sy = sx, sz = '1'] = css.scale.split(' ');
+    m.scaleSelf(parseFloat(sx), parseFloat(sy), parseFloat(sz));
+  }
+  return m.multiplySelf(new DOMMatrix(css.transform)).translateSelf(-ox, -oy);
+}
 const toStage = (c, x, y) => { const p = matrixOf(c).transformPoint(new DOMPoint(x, y)); return [p.x, p.y]; };
 
 /** A selector that finds this element in its page (a unique id or class, else its path), and which match it is. */
