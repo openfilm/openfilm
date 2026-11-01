@@ -4,7 +4,8 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { FrameError, launch, SOFTWARE_GL } from './host.mjs';
-import { blockDiff, checkSound, cutText, fileOf, ffmpeg, filmSound, fmt, hash, homeFor, mix, open, outDir, parseTarget, SAME_LIMIT, shown, shuffled, spread, UsageError } from './shared.mjs';
+import { blockDiff, checkSound, cutText, fileOf, ffmpeg, filmSound, fmt, hash, homeFor, locate, mix, open, outDir, parseTarget, SAME_LIMIT, shown, shuffled, spread, UsageError } from './shared.mjs';
+import { watch } from './watch.mjs';
 
 const MEDIA = /\.(mp4|mov|m4v|webm|mkv|avi|png|jpe?g|webp|gif|mp3|wav|m4a|aac|ogg|flac)$/i;
 const CELL_WIDTH = 480;
@@ -19,6 +20,7 @@ const hasDecoder = (name) => {
 export async function look(args, opts = {}) {
   const { film: target, at, range } = parseTarget(args);
   if (MEDIA.test(target)) return lookMedia(target, at, range, opts);
+  if (opts.full) return lookRendered(target, at, range, opts);
   let s;
   /* `playable`: footage the browser does not decode (ProRes; HEVC without a chip for it) is looked at through a copy it plays */
   try { s = await open(target, { root: opts.root, offline: opts.offline, network: opts.network, transparent: true, launch: opts.launch, playable: true }); }
@@ -330,8 +332,44 @@ async function sheet(browser, shots, meta, from, to, wave, marks, label = 'sound
 }
 
 /**
+ * `look --full` of a project: its rendered film (what `render` wrote beside film.html, the newest when there are
+ * several), looked at as a video file with every frame watched (lookMedia).
+ */
+async function lookRendered(target, at, range, opts) {
+  const { dir, name, isFilm } = locate(target, opts.root);
+  const made = ['.mp4', '.mov', '.webm'].map((ext) => join(dir, `${name}${ext}`)).filter((f) => existsSync(f))
+    .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
+  if (!made.length) throw new UsageError(`${name} has not been rendered yet: look --full watches every frame of the rendered film, so render it first (openfilm render), or give look a video file with --full`);
+  const result = await lookMedia(made[0], at, range, opts);
+  const source = join(dir, isFilm ? 'film.html' : 'index.html');
+  /* the rendered film is the film as it was then */
+  if (existsSync(source) && statSync(source).mtimeMs > statSync(made[0]).mtimeMs) {
+    result.lines.splice(1, 0, `! ${basename(source)} changed after ${basename(made[0])} was rendered: this is the film as it was then; render again to watch it as it is`);
+  }
+  return result;
+}
+
+/** How a finding is named in look's lines. */
+const FAULT = { flash: 'white flash', jump: 'jumping frame', still: 'still picture', dark: 'black' };
+
+/**
+ * Every frame of a video watched (watch.mjs), in [from, to), as look's lines: one per finding, or one saying there is
+ * none. A still picture may be meant (an end card, a held frame): it is said, the person judges it.
+ * @param {string} file @param {number} fps @param {number} from @param {number} to
+ */
+export async function watchLines(file, fps, from, to) {
+  if (!process.stderr.isTTY) process.stderr.write(`  watching every frame (${fmt(from)}–${fmt(to)})…\n`);
+  const found = await watch(file, { fps, from, length: to - from });
+  if (!found.length) return [`✓ every frame watched at ${Number(fps.toFixed(3))} fps: no white flash, jumping frame, still picture or black`];
+  const lines = found.slice(0, 40).map((f) => `! ${FAULT[f.kind]} at ${f.to - f.from > 0.15 ? `${fmt(f.from)}–${fmt(f.to)}` : fmt(f.from)}: ${f.detail}${f.kind === 'still' ? ' (fine if meant: an end card, a held frame)' : ''}`);
+  if (found.length > 40) lines.push(`! … and ${found.length - 40} more`);
+  return lines;
+}
+
+/**
  * A media file on its own, to choose what to use from it: frames across the file (or a range, or one second at
  * full size) and its own sound, from ffmpeg. Output goes to the project's .film/cache/look (see homeFor).
+ * `full`: a video's every frame is watched too (watchLines), as a rendered film is checked.
  */
 async function lookMedia(target, at, range, opts) {
   const file = resolve(target);
@@ -361,7 +399,10 @@ async function lookMedia(target, at, range, opts) {
     const png = readFileSync(out); rmSync(out, { force: true }); return png;
   };
   const files = [];
+  const watched = [];
+  if (opts.full && (!video || still)) watched.push(`! --full watches a video's frames; ${basename(file)} has none to watch`);
   if (video && (at != null || still)) {
+    if (opts.full && !still) watched.push('! --full watches a stretch of frames, not one: give a range (a-b) or none');
     const t = still ? 0 : Math.min(Math.max(0, at), Math.max(0, dur - 0.04));
     const out = join(dir, still ? `${name}.png` : `${name}-${fmt(t)}.png`);
     writeFileSync(out, grab(t)); files.push(out);
@@ -383,6 +424,7 @@ async function lookMedia(target, at, range, opts) {
       writeFileSync(out, await sheet(browser, shots, { width: w || 1920, height: h || 1080 }, from, to, wave, [], 'its sound'));
       files.push(out);
     } finally { await browser.close(); }
+    if (opts.full && video && !still) watched.push(...await watchLines(file, fps ?? 30, from, to));
   }
-  return { ok: true, lines: [head, ...files.map((f) => `→ ${shown(f)}`)], files };
+  return { ok: true, lines: [head, ...watched, ...files.map((f) => `→ ${shown(f)}`)], files };
 }
