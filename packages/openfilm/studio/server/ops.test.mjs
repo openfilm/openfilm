@@ -140,3 +140,36 @@ test('a page that offers its clip\'s length is told it after every edit: an inse
   const other = applyOps(film(), [{ op: 'insert', clip: { src: 'x.html', id: 'x', time: [0, 2] }, at: 12, track: 0 }]);
   assert.equal(other.tracks[0].clips.find((c) => c.id === 'x').overrides, undefined);
 });
+
+test('keyframes: set by name; a cut clip\'s right half and a copy move by keyframes of their own; unused ones go', () => {
+  const style = 'animation: v--scale 4s linear both';
+  const moving = () => applyOps(film(), [
+    { op: 'props', edits: [{ clip: 'v', prop: 'style', value: style }] },
+    { op: 'keyframes', set: { 'v--scale': '0% { scale: 1 } 100% { scale: 2 }', fade: 'to { opacity: 0 }' } },
+  ]);
+  const f = moving();
+  assert.deepEqual(f.keyframes, { 'v--scale': '0% { scale: 1 } 100% { scale: 2 }', fade: 'to { opacity: 0 }' });
+  /* cut 1 s in: the right half starts where the left was then */
+  const cut = applyOps(moving(), [{ op: 'split', clip: 'v', left: { end: 3 }, right: { at: 1, start: 3 }, rightId: 'v2' }]);
+  const right = cut.tracks[1].clips[1];
+  assert.equal(right.style, 'animation: v2--scale 3s linear both');
+  assert.equal(cut.keyframes['v2--scale'], '0% { scale: 1.25 } 100% { scale: 2 }');
+  assert.equal(cut.keyframes['v--scale'], f.keyframes['v--scale']);
+  /* a copy has its own */
+  const copy = applyOps(moving(), [{ op: 'insert', from: 'v', at: 12, track: 1 }]);
+  assert.equal(copy.tracks[1].clips[1].style, 'animation: v-2--scale 4s linear both');
+  assert.equal(copy.keyframes['v-2--scale'], f.keyframes['v--scale']);
+  /* the clip gone, its keyframes go; others stay */
+  const gone = applyOps(moving(), [{ op: 'remove', clip: 'v' }]);
+  assert.deepEqual(gone.keyframes, { fade: 'to { opacity: 0 }' });
+  assert.throws(() => applyOps(film(), [{ op: 'keyframes', set: { 'bad name': 'x' } }]), EditError);
+});
+
+test('motion: a clip\'s keyframes by property, written as its animations and the film\'s @keyframes', () => {
+  const f = applyOps(film(), [{ op: 'props', edits: [{ clip: 'v', prop: 'motion', value: { opacity: [{ t: 0, v: 0 }, { t: 0.5, v: 1, ease: 'ease-out' }] } }] }]);
+  assert.equal(f.tracks[1].clips[0].style, 'animation: v--opacity 0.5s linear both');
+  assert.equal(f.keyframes['v--opacity'], '0% { opacity: 0 } 100% { opacity: 1; animation-timing-function: cubic-bezier(0, 0, 0.58, 1) }');
+  const none = applyOps(f, [{ op: 'props', edits: [{ clip: 'v', prop: 'motion', value: null }] }]);
+  assert.equal(none.tracks[1].clips[0].style, undefined);
+  assert.deepEqual(none.keyframes, {});
+});

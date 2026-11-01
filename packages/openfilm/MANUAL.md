@@ -43,7 +43,9 @@ A folder:
   - `src`: its file, relative to film.html. `#t=in,out` says which seconds of it play, `#t=in` to its end; without it, all of them. A picture, or a page without a `duration`, needs `#t=0,length`: how long it stays.
   - `at`: where it starts in the film, in seconds; without it, 0.
   - `left`, `top`, `width`, `height` in its `style` (px) and `rotate` (degrees, clockwise): where it sits. Without them, a video or picture is the stage, and a page is its own size, centered. With only `width` or `height`, the other keeps its proportions.
-  - Its look is CSS, in `class` or `style`: a video or picture fits whole in its box unless you say otherwise (`object-fit: cover` crops it to the box). The film's CSS holds still; what moves is a page.
+  - Its look is CSS, in `class` or `style`: a video or picture fits whole in its box unless you say otherwise (`object-fit: cover` crops it to the box).
+  - It moves by CSS animation: `animation` in its `style`, its `@keyframes` in film.html's `<style>`. Its time starts at the clip's `at`. Move it with `translate` (px, or `vw`/`vh` of the stage), `scale` and `rotate`, never `transform`, `left` or `top`: these go on top of its box, about its center. `--clip-length` is how long the clip is (`4.2s`): time a way out from its end with it. For example a slow push in and a push out to the left:
+    `<style>@keyframes push { from { scale: 1 } to { scale: 1.1 } } @keyframes out { to { translate: -100vw 0 } }</style>` … `style="animation: push var(--clip-length) linear both, out .5s ease-in calc(var(--clip-length) - .5s) both"`. A transition between two clips is the two overlapping on two tracks, each with its own animation.
   - `speed` (video and sound): 0.1 to 100. The clip lasts `(out − in) / speed` seconds. To make it faster or slower, change `speed` only: never make the file again at another speed, nor move its `.vtt`'s times. Its subtitles follow `speed` on their own.
   - `volume` (video and sound): 1 is the file's own level; `muted` silences it.
   - `id`: a name, unique in the film; without it, the file's name.

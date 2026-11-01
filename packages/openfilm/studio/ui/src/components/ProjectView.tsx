@@ -9,6 +9,7 @@
 import * as React from 'react';
 import { ArrowLeftRight, BookmarkPlus, ClipboardCopy, ClipboardPaste, Film as FilmIcon, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, TriangleAlert, Upload, Workflow } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
+import { readMotion, withPreset } from '../../../../src/clip-motion.mjs';
 import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type Op, type ProjectFilm, type ProjectSettings, type SavedGroupClip } from '@/api';
 import { useLanguage, useT } from '@/i18n';
 import { useFilm, type OutsideStep, type Step } from '@/editor/use-film';
@@ -122,7 +123,7 @@ import {
 import { idsIn, pastedElsewhere, pastedPage, withoutPaste, withPaste, type PasteItem, type PasteLayer, type PastedPage } from '@/lib/layer-paste';
 import { pasteTargets, targetById } from '@/lib/layer-paste-target';
 import type { PropsHost } from './PropertiesSection';
-import type { LayerPropsActions } from './FilmInspector';
+import type { ClipMotionHost, LayerPropsActions } from './FilmInspector';
 import { SAVED, refreshSaved, savedActions, savedSources, useSavedListing } from '@/lib/saved';
 import { batchMap } from '@/lib/batch-map';
 import { groupInsertAt, groupInsertOps } from '@/lib/saved-insert';
@@ -860,6 +861,22 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (mapped.some((e) => !e.clip)) return Promise.resolve(t('timeline.editFail'));
     return edit([{ op: 'props', edits: mapped as { clip: string; prop: string; value: never }[] }], editStepLabel(edits, tracksRef.current), quiet);
   }, [edit, t]);
+  /* a clip's keyframes, its own seconds, as the timeline marks them on the picked clip */
+  const keyTimesOf = React.useCallback((id: string) => {
+    const clip = film.film?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === id);
+    if (!clip) return [];
+    const motion = readMotion(clip as { id: string; style?: string }, film.film?.keyframes);
+    return [...new Set(Object.values(motion).flatMap((keys) => (keys ?? []).map((k) => k.t)))].sort((a, b) => a - b);
+  }, [film.film]);
+  /* the inspector's keyframes: a clip's (src/clip-motion.mjs), the playhead, and going to a moment */
+  const motionHost = React.useMemo<ClipMotionHost>(() => ({
+    of: (id) => {
+      const clip = film.film?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === id);
+      return clip ? readMotion(clip as { id: string; style?: string }, film.film?.keyframes) : {};
+    },
+    playheadMs: timeMs,
+    onSeek: seek,
+  }), [film.film, timeMs, seek]);
   /** An edit the timeline planned (lib/timeline-edit), as it planned it: one write, one undo step. */
   const editOps = React.useCallback((ops: Op[], label: string) => edit(ops, label), [edit]);
 
@@ -1512,6 +1529,34 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         else toast.show(t('assetDrawer.looked').replace('{name}', nameOf(item.name, language)).replace('{n}', String(on.length)));
       });
     };
+    /* a motion preset (src/clip-motion.mjs withPreset): on the picked clips, in its slots; a camera move on the cut
+       nearest, the clip before it going out and the one after it coming in. Its keyframes go in the film's style */
+    const motion = (item: LibraryItem) => {
+      const presets = item.motion ?? {};
+      const keyframes = Object.fromEntries(Object.values(presets).map((p) => [p!.name, p!.body]));
+      const styled: { clip: string; prop: string; value: string | null }[] = [];
+      if (item.place === 'cut') {
+        const cut = cutHere()?.cut ?? null;
+        if (!cut) { toast.show(t('assetDrawer.noCut')); return; }
+        for (const [id, slot] of [[cut.a, 'out'], [cut.b, 'in']] as const) {
+          const clip = id ? filmClipOf(id) : null;
+          if (clip && presets[slot]) styled.push({ clip: clip.id, prop: 'style', value: withPreset(clip.style, slot, presets[slot]!) || null });
+        }
+      } else {
+        for (const c of lookTargets()) {
+          const id = clipIdAt(filmRef.current, c.loc);
+          if (!id) continue;
+          let style = c.style;
+          for (const slot of ['in', 'out', 'loop'] as const) if (presets[slot]) style = withPreset(style, slot, presets[slot]!);
+          styled.push({ clip: id, prop: 'style', value: style || null });
+        }
+      }
+      if (!styled.length) { toast.show(t('assetDrawer.pickClips')); return; }
+      void edit([{ op: 'keyframes', set: keyframes }, { op: 'props', edits: styled as never }], 'history.stepDrop').then((err) => {
+        if (err) toast.showError(err);
+        else toast.show(t('assetDrawer.added').replace('{name}', nameOf(item.name, language)));
+      });
+    };
     const fade = (item: LibraryItem, cut: { a: string | null; b: string | null } | null) => {
       if (!cut || !item.fade) { toast.show(t('assetDrawer.noCut')); return; }
       void askTransition({ kind: 'add', type: item.fade, cut }).then((err) => { if (err) toast.show(err); });
@@ -1582,6 +1627,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         setLibraryTrial(null);
         if (item.kind === 'look') look(item, lookTargets());
         else if (item.kind === 'fade') fade(item, cutHere()?.cut ?? null);
+        else if (item.kind === 'motion') motion(item);
         else if (item.kind === 'textstyle' || item.kind === 'textmotion') textLook(item);
         else void place(item);
       },
@@ -3671,6 +3717,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                       onPlaceLayers={(to) => stageControl.current?.placeLayers(to)}
                       locked={inspectorLocked}
                       rate={frameRate}
+                      motion={motionHost}
                       fades={clipFades}
                       transition={pickedTr && !selectedBlocks.length ? {
                         kind: pickedTr.kind,
@@ -3729,6 +3776,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     onEditOps={editOps}
                     links={clipLinks}
                     fades={clipFades}
+                    keyTimesOf={keyTimesOf}
                     transitions={filmTransitions}
                     onTransition={askTransition}
                     pickedTransition={pickedTr?.key ?? null}

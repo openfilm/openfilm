@@ -72,6 +72,7 @@ export function inverse(before: Film, after: Film, ops: Op[]): Op[] {
     if (op.op === 'track') { undo.push({ op: 'track', track: op.track, field: op.field, value: Boolean(before.tracks[op.track]?.[op.field]) }); continue; }
     if (op.op === 'reorder') { undo.push({ op: 'reorder', from: op.to, to: op.from }); continue; }
     if (op.op === 'stage') { const { w, h } = before.stage ?? DEFAULT_STAGE; undo.push({ op: 'stage', w, h }); continue; }
+    if (op.op === 'keyframes') continue;
     if (op.op === 'insert') { for (const [id] of now) if (!was.has(id)) ids.add(id); continue; }
     if (op.op === 'props') {
       for (const e of op.edits) {
@@ -122,6 +123,11 @@ export function inverse(before: Film, after: Film, ops: Op[]): Op[] {
     const changed = [...new Set([...fieldsOf(old.row), ...fieldsOf(cur.row)])].filter((field) => JSON.stringify(then[field]) !== JSON.stringify(nowRow[field]));
     if (changed.length) undo.push({ op: 'fields', clip: id, fields: Object.fromEntries(changed.map((field) => [field, field in then ? copy(then[field]) : null])) });
   }
+  /* the film's keyframes the edit changed (a clip's own, as its motion was set, cut or copied) back as they were */
+  const kfBefore = before.keyframes ?? {}, kfAfter = after.keyframes ?? {};
+  const kfBack = Object.fromEntries([...new Set([...Object.keys(kfBefore), ...Object.keys(kfAfter)])]
+    .filter((n) => kfBefore[n] !== kfAfter[n]).map((n) => [n, kfBefore[n] ?? null]));
+  if (Object.keys(kfBack).length) undo.unshift({ op: 'keyframes', set: kfBack });
   return reopenTracks(undo.reverse(), gone);
 }
 

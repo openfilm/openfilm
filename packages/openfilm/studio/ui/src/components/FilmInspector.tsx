@@ -54,6 +54,8 @@ import {
 } from './inspector-fields';
 import { SPEED_STOPS, exactSpeed, lengthAtSpeed, roundSpeed, sliderKeyPosition, speedAtPosition, speedPosition } from '@/lib/clip-speed';
 import { speedText } from '@/lib/playback-speed';
+import type { Motion } from '../../../../src/clip-motion.mjs';
+import { KeyframesSection } from './KeyframesSection';
 import {
   AdjustSection, AdvancedSection, AppearanceSection, CropSection, EffectsSection, FillSection, FilterSection, MaskSection, NEUTRAL, StrokeSection,
   TypographySection, camelOf,
@@ -142,6 +144,9 @@ function useCommitBeforeLeaving(): void {
   }, []);
 }
 
+/** A clip's keyframes by its id, the playhead (film ms), and going to a film moment. */
+export interface ClipMotionHost { of: (clipId: string) => Motion; playheadMs: number; onSeek: (ms: number) => void }
+
 export const FilmInspector = React.memo(function FilmInspector({
   element,
   clips,
@@ -183,6 +188,7 @@ export const FilmInspector = React.memo(function FilmInspector({
   locked = false,
   rate,
   fades,
+  motion,
   transition,
   propsHostOf,
   pictures,
@@ -269,6 +275,8 @@ export const FilmInspector = React.memo(function FilmInspector({
   rate?: { fps: number; fromFootage: boolean; onChange: (fps: number) => void } | null;
   /** Each clip's fades, ms (clip id → [in, out]): the Fades section's values. */
   fades?: ReadonlyMap<string, FadeMs>;
+  /** A clip's keyframes (src/clip-motion.mjs) by its id, where the playhead is, and going to a moment: the Keyframes section's. */
+  motion?: ClipMotionHost | null;
   /** The transition picked on the timeline (no clip selected): its kind and length, made longer or taken away here. */
   transition?: TransitionPick | null;
   /** A page clip's properties (PropertiesSection): read from its page, written as its overrides and its data-props. */
@@ -352,6 +360,8 @@ export const FilmInspector = React.memo(function FilmInspector({
             stage={stageSize}
             {...(fades ? { fades } : {})}
             {...(propsHostOf ? { propsHostOf } : {})}
+            {...(motion ? { motion } : {})}
+            {...(rate ? { fps: rate.fps } : {})}
           />
         ) : many ? (
           <MultiClipPanel
@@ -1493,9 +1503,11 @@ function clipsLook(
  */
 function ClipPanel({
   block, onMain, speedFloor, geometry, stage, badges, onEdit, onPreviewClip, pageChangesOf, replaceEntries, clipLookOf, onPreviewLook, onStartCrop, onEditMask, maskAsk,
-  onMaskAsked, fades, propsHostOf,
+  onMaskAsked, fades, propsHostOf, motion, fps = 30,
 }: {
   fades?: ReadonlyMap<string, FadeMs>;
+  motion?: ClipMotionHost;
+  fps?: number;
   propsHostOf?: (block: TimelineBlock) => PropsHost | null;
   replaceEntries?: (block: TimelineBlock) => ContextMenuEntry[];
   block: TimelineBlock;
@@ -1586,6 +1598,18 @@ function ClipPanel({
               value={clipTransform(block, own, stage)}
               onCommit={commit}
               {...(onPreviewClip ? { onPreview: (patch: Partial<MgTransform> | null) => onPreviewClip(loc!, patch) } : {})}
+            />
+          ) : null}
+          {/* its keyframes right under its place: they move it on top of its box */}
+          {picture && motion && block.clipId && docLoc ? (
+            <KeyframesSection
+              t={t}
+              motion={motion.of(block.clipId)}
+              local={motion.playheadMs >= block.startMs - 1 && motion.playheadMs <= block.endMs + 1 ? (motion.playheadMs - block.startMs) / 1000 : null}
+              length={(block.endMs - block.startMs) / 1000}
+              frame={1 / fps}
+              onCommit={(m) => void commit([{ loc: loc!, prop: 'motion', value: Object.keys(m).length ? (m as unknown as Record<string, unknown>) : null }])}
+              onSeek={(s) => motion.onSeek(block.startMs + s * 1000)}
             />
           ) : null}
           {/* the fades right under the place: used on most clips */}

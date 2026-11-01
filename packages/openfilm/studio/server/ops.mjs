@@ -5,10 +5,11 @@
  * no clock, nothing but the film's value.
  */
 import { FILM_FILE, clipFade, clipIdFor, clipKind, clipSpeed, kindOf } from '../../src/film-doc.mjs';
+import { MOTION_PROPS, animationsOf, motionName, readMotion, shiftMotion, withAnimations, writeMotion } from '../../src/clip-motion.mjs';
 
 /** @typedef {{ src: string, id: string, [field: string]: unknown }} Clip */
 /** @typedef {{ clips: Clip[], locked?: boolean, hidden?: boolean, muted?: boolean }} Track */
-/** @typedef {{ stage?: { w: number, h: number }, tracks: Track[] }} FilmValue */
+/** @typedef {{ stage?: { w: number, h: number }, tracks: Track[], keyframes?: Record<string, string> }} FilmValue */
 /**
  * @typedef {(
  *   | { op: 'set', clip: string, field: string, value?: unknown }
@@ -22,13 +23,14 @@ import { FILM_FILE, clipFade, clipIdFor, clipKind, clipSpeed, kindOf } from '../
  *   | { op: 'fields', clip: string, fields: Record<string, unknown> }
  *   | { op: 'track', track: number, field: 'locked' | 'hidden' | 'muted', value: boolean }
  *   | { op: 'reorder', from: number, to: number }
+ *   | { op: 'keyframes', set: Record<string, string | null> }
  * )} Op
  */
 /** @typedef {number | string | boolean | readonly number[] | Record<string, unknown> | null} PropValue */
 /**
  * One property of one clip, as the timeline, the inspector and the picture write it: a field of the clip (`at`,
  * `start` / `end` = its trim in source seconds, `volume`, `speed`, `box`, `overrides`, `link` = its `data-link`, `fade` = its
- * fades `[in, out]` in seconds, kept in its `overrides`, …), a flag of
+ * fades `[in, out]` in seconds, kept in its `overrides`, `motion` = its keyframes by property (src/clip-motion.mjs), …), a flag of
  * its track (`locked` / `hidden` / `muted`), the track it goes to (`track`: an index, or `{ insert: index }` for a
  * new track there), or the order of the tracks (`trackOrder`: `{ from, to }`). `null` removes the field.
  * @typedef {{ clip: string, prop: string, value: PropValue }} PropEdit
@@ -74,6 +76,8 @@ const SETTABLE = new Set(['at', 'time', 'box', 'size', 'volume', 'speed', 'overr
 /** @param {FilmValue} value @param {Op[]} ops */
 export function applyOps(value, ops) {
   if (!Array.isArray(ops) || !ops.length) throw new EditError('an edit needs at least one operation', 'invalid');
+  /* a film that had no keyframes keeps none said when the edit leaves it none (an empty set says: take them away) */
+  const hadKeyframes = value.keyframes !== undefined;
   for (const op of ops) {
     switch (op.op) {
       case 'set': {
@@ -155,6 +159,7 @@ export function applyOps(value, ops) {
           splitFades(left, right);
           for (const [prop, v] of Object.entries(op.left ?? {})) setField(left, prop, snapTime(prop, v));
           for (const [prop, v] of Object.entries(op.right ?? {})) setField(right, prop, snapTime(prop, v));
+          splitMotion(value, clip, right);
           value.tracks[t].clips.splice(c, 1, left, right);
           break;
         }
@@ -163,6 +168,7 @@ export function applyOps(value, ops) {
         const [restFrom, restTo] = op.restTime ?? [];
         if (!(typeof op.at === 'number' && op.at > 0) || !(restTo > restFrom)) throw new EditError('a split needs at and both halves\' time', 'invalid');
         const rest = { ...structuredClone(clip), id: op.restId && !usedIds(value).includes(op.restId) ? op.restId : clipIdFor(clip.src, usedIds(value)), at: round(op.at), time: op.restTime };
+        splitMotion(value, clip, rest);
         clip.time = op.time;
         splitFades(clip, rest);
         value.tracks[t].clips.splice(c + 1, 0, rest);
@@ -196,6 +202,15 @@ export function applyOps(value, ops) {
         }
         break;
       }
+      case 'keyframes': {
+        /* the film's @keyframes by name (a clip's own, Studio's, are `<clip id>--<property>`: src/clip-motion.mjs) */
+        const set = op.set && typeof op.set === 'object' ? Object.entries(op.set) : [];
+        if (!set.length || set.some(([n, b]) => !/^-?[A-Za-z_][\w-]*$/.test(n) || (b !== null && typeof b !== 'string'))) throw new EditError('keyframes are set by name, each its body or null', 'invalid');
+        const kf = { ...value.keyframes };
+        for (const [name, body] of set) { if (body === null) delete kf[name]; else kf[name] = body; }
+        value.keyframes = kf;
+        break;
+      }
       case 'stage': {
         /* the canvas's size (a new film's shape, picked before anything is placed on it) */
         if (!(Number.isInteger(op.w) && Number.isInteger(op.h) && op.w > 0 && op.h > 0 && op.w <= 8192 && op.h <= 8192)) throw new EditError('a stage is whole pixels, up to 8192', 'invalid');
@@ -210,6 +225,8 @@ export function applyOps(value, ops) {
   dropEmptyTracks(value);
   fitFades(value);
   fitClipLengths(value);
+  ownMotion(value);
+  if (!hadKeyframes && value.keyframes && !Object.keys(value.keyframes).length) delete value.keyframes;
   return value;
 }
 
@@ -248,6 +265,49 @@ export const CLIP_LENGTH = '--clip-length';
  * seconds, as its `:root` override: after every edit, so an insert, a trim or a split leaves it right. A page does
  * not know how long its clip plays (only `t`); this is how one that ends with a motion (words going out) times it.
  */
+/**
+ * The right half of a clip cut in two moves as the clip did from the cut on: its keyframes (src/clip-motion.mjs) are
+ * the clip's, moved back by how far into it the cut is, under its own name.
+ */
+function splitMotion(/** @type {FilmValue} */ value, /** @type {Clip} */ clip, /** @type {Clip} */ right) {
+  const motion = readMotion(/** @type {{ id: string, style?: string }} */ (clip), value.keyframes);
+  if (!Object.keys(motion).length) return;
+  const own = new Set(MOTION_PROPS.map((p) => motionName(clip.id, p)));
+  const style = withAnimations(/** @type {string | undefined} */ (right.style), animationsOf(/** @type {string | undefined} */ (right.style)).filter((e) => !own.has(e.split(/\s+/)[0])));
+  const shifted = shiftMotion(motion, -(Number(right.at ?? 0) - Number(clip.at ?? 0)));
+  const written = writeMotion({ id: right.id, style }, shifted);
+  if (written.style) right.style = written.style; else delete right.style;
+  value.keyframes = { ...value.keyframes };
+  for (const [n, b] of Object.entries(written.keyframes)) if (b != null) value.keyframes[n] = b;
+}
+
+/**
+ * Each clip's keyframes are its own: a copy of a clip (pasted, duplicated) gets copies of them under its own name, so
+ * changing one never changes the other; Studio's keyframes no clip moves by any more go.
+ */
+function ownMotion(/** @type {FilmValue} */ value) {
+  if (!value.keyframes) return;
+  const own = /^(.+)--(translate|scale|rotate|opacity)$/;
+  const used = new Set();
+  for (const clip of value.tracks.flatMap((t) => t.clips)) {
+    const entries = animationsOf(/** @type {string | undefined} */ (clip.style));
+    let changed = false;
+    const next = entries.map((e) => {
+      const [name, ...rest] = e.split(/\s+/);
+      const m = own.exec(name);
+      if (!m || m[1] === clip.id || value.keyframes?.[name] == null) { used.add(name); return e; }
+      const mine = `${clip.id}--${m[2]}`;
+      /** @type {Record<string, string>} */ (value.keyframes)[mine] ??= /** @type {Record<string, string>} */ (value.keyframes)[name];
+      used.add(mine);
+      changed = true;
+      return [mine, ...rest].join(' ');
+    });
+    if (changed) clip.style = withAnimations(/** @type {string | undefined} */ (clip.style), next);
+  }
+  /* Studio's own (a clip's keyframes, the library's presets) go when nothing moves by them */
+  for (const name of Object.keys(value.keyframes)) if ((own.test(name) || /^motion-(in|out|loop)-/.test(name)) && !used.has(name)) delete value.keyframes[name];
+}
+
 function fitClipLengths(/** @type {FilmValue} */ value) {
   for (const track of value.tracks) {
     for (const clip of track.clips) {
@@ -362,6 +422,16 @@ function applyProps(/** @type {FilmValue} */ value, /** @type {PropEdit[]} */ ed
   const resort = new Set(/** @type {Track[]} */ ([]));
   for (const e of fields) {
     const at = find(value, e.clip);
+    /* its keyframes (src/clip-motion.mjs), each property's at seconds of the clip: written as its animations and the
+       film's @keyframes of its name */
+    if (e.prop === 'motion') {
+      const written = writeMotion(/** @type {{ id: string, style?: string }} */ (at.clip), /** @type {import('../../src/clip-motion.mjs').Motion} */ (e.value ?? {}));
+      if (written.style) at.clip.style = written.style; else delete at.clip.style;
+      const kf = { ...value.keyframes };
+      for (const [n, body] of Object.entries(written.keyframes)) { if (body == null) delete kf[n]; else kf[n] = body; }
+      value.keyframes = kf;
+      continue;
+    }
     setField(at.clip, e.prop, snapTime(e.prop, e.value));
     if (e.prop === 'at') resort.add(value.tracks[at.t]);
   }
