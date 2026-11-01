@@ -170,13 +170,14 @@ function VoiceRow({ voice, service, access, showService, picked, sounding, kept,
   const useTip = access ? t('assetDrawer.useVoice') : t('assetDrawer.connectFirst').replace('{service}', service?.name ?? voice.provider);
   return (
     <div
-      className={`group relative grid cursor-default select-none grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lg px-2 py-2 ${picked ? 'bg-[var(--surface-2)]' : 'hover:bg-[var(--surface-2)]'}`}
+      className={`group relative grid cursor-default select-none grid-cols-[40px_minmax(0,1fr)] items-center gap-2.5 rounded-lg px-2 py-2 ${picked ? 'bg-[var(--surface-2)]' : 'hover:bg-[var(--surface-2)]'}`}
       onClick={onPlay}
       onDoubleClick={onUse}
       title={[voice.name, voice.description, voice.tags.join(', ')].filter(Boolean).join('\n')}
     >
       <VoiceAvatar voice={voice} sounding={sounding} label={sounding ? t('assetDrawer.stop') : t('assetDrawer.play')} />
-      <span className="min-w-0">
+      {/* the words take the whole row; only a star kept holds a little room at its end */}
+      <span className={`min-w-0 ${kept ? 'pr-5' : ''}`}>
         <span className="flex min-w-0 items-baseline gap-1.5">
           {/* the name keeps its room; the facts after it give theirs up first */}
           <span className={`shrink-[0.2] truncate text-[12.5px] font-medium ${picked ? 'text-[var(--tl-accent)]' : 'text-[var(--text)]'}`}>{voice.name}</span>
@@ -184,25 +185,26 @@ function VoiceRow({ voice, service, access, showService, picked, sounding, kept,
         </span>
         <span className="mt-0.5 block truncate text-[11.5px] text-[var(--text-muted)]">{voice.description ?? voice.tags.join(', ')}</span>
       </span>
-      <span className="flex items-center gap-1.5">
+      {/* what it offers, over the row's end under the pointer (the words fading out under it), else a star kept */}
+      <span className={`absolute inset-y-0 right-0 flex items-center gap-1.5 rounded-r-lg pl-6 pr-2 ${picked ? 'bg-[linear-gradient(to_right,transparent,var(--surface-2)_24px)]' : 'group-hover:bg-[linear-gradient(to_right,transparent,var(--surface-2)_24px)]'}`}>
         <button
           type="button"
           aria-label={t(kept ? 'assetDrawer.unstar' : 'assetDrawer.star')}
           aria-pressed={kept}
           onClick={(e) => { e.stopPropagation(); toggleFavorite(voiceKey(voice)); }}
           {...own}
-          className={kept ? 'text-[#ffd35a]' : 'invisible text-[var(--text-faint)] hover:text-[var(--text)] group-hover:visible'}
+          className={kept ? 'text-[#ffd35a]' : 'hidden text-[var(--text-faint)] hover:text-[var(--text)] group-hover:inline'}
         >
           <Star size={13} fill={kept ? 'currentColor' : 'none'} strokeWidth={kept ? 0 : 2} />
         </button>
         {access ? (
           <button type="button" title={useTip} aria-label={useTip} onClick={(e) => { e.stopPropagation(); onUse(); }} {...own}
-            className="invisible grid h-[22px] w-[22px] place-items-center rounded-full bg-[var(--tl-accent)] text-black group-hover:visible">
+            className="hidden h-[22px] w-[22px] place-items-center rounded-full bg-[var(--tl-accent)] text-black group-hover:grid">
             <Plus size={12} strokeWidth={3} />
           </button>
         ) : (
           <button type="button" title={useTip} onClick={(e) => { e.stopPropagation(); onServices(); }} {...own}
-            className="invisible whitespace-nowrap text-[11px] text-[var(--tl-accent)] hover:underline group-hover:visible">
+            className="hidden whitespace-nowrap text-[11px] text-[var(--tl-accent)] hover:underline group-hover:inline">
             {t('assetDrawer.connect')}
           </button>
         )}
