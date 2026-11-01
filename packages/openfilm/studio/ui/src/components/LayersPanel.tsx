@@ -73,7 +73,7 @@ export function LayersPanel(p: LayersPanelProps) {
   askRef.current = p.ask;
 
   /* the tree, read again when the picture may have changed: a seek, the film edited, a page that came on drawn (it
-     is in the tree only then; the picture's spans come again), and while it plays */
+     is in the tree only then; the picture says so), and while it plays */
   const read = React.useCallback(async () => {
     const next = await askRef.current<LayerClip[]>('tree');
     if (next && !sameTree(clipsRef.current, next)) setClips(next);
