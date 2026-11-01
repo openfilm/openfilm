@@ -1,0 +1,879 @@
+{
+ "version": 1,
+ "groups": {
+  "sticker": [
+   {
+    "id": "arrows",
+    "name": {
+     "en": "Arrows",
+     "zh-CN": "指示",
+     "ja": "矢印",
+     "ko": "화살표",
+     "es": "Flechas"
+    }
+   },
+   {
+    "id": "marks",
+    "name": {
+     "en": "Marks",
+     "zh-CN": "圈画",
+     "ja": "手描き",
+     "ko": "손그림",
+     "es": "Trazos"
+    }
+   },
+   {
+    "id": "emphasis",
+    "name": {
+     "en": "Emphasis",
+     "zh-CN": "强调",
+     "ja": "強調",
+     "ko": "강조",
+     "es": "Énfasis"
+    }
+   },
+   {
+    "id": "social",
+    "name": {
+     "en": "Social",
+     "zh-CN": "互动",
+     "ja": "ソーシャル",
+     "ko": "소셜",
+     "es": "Social"
+    }
+   },
+   {
+    "id": "badges",
+    "name": {
+     "en": "Badges",
+     "zh-CN": "标签",
+     "ja": "ラベル",
+     "ko": "배지",
+     "es": "Etiquetas"
+    }
+   },
+   {
+    "id": "deco",
+    "name": {
+     "en": "Decor",
+     "zh-CN": "装饰",
+     "ja": "デコ",
+     "ko": "꾸미기",
+     "es": "Adornos"
+    }
+   }
+  ]
+ },
+ "items": [
+  {
+   "id": "stickers/arrow-curve",
+   "cat": "sticker",
+   "group": "arrows",
+   "name": {
+    "en": "Curved arrow",
+    "zh-CN": "手绘弯箭头",
+    "ja": "手描きカーブ矢印",
+    "ko": "손그림 곡선 화살표",
+    "es": "Flecha curva"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "arrow-curve.html",
+   "w": 400,
+   "h": 400,
+   "fit": 0.32
+  },
+  {
+   "id": "stickers/arrow-loop",
+   "cat": "sticker",
+   "group": "arrows",
+   "name": {
+    "en": "Loop arrow",
+    "zh-CN": "绕圈箭头",
+    "ja": "ループ矢印",
+    "ko": "루프 화살표",
+    "es": "Flecha con bucle"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "arrow-loop.html",
+   "w": 500,
+   "h": 300,
+   "fit": 0.28
+  },
+  {
+   "id": "stickers/chevrons",
+   "cat": "sticker",
+   "group": "arrows",
+   "name": {
+    "en": "Chevrons",
+    "zh-CN": "箭头指引",
+    "ja": "シェブロン",
+    "ko": "방향 표시",
+    "es": "Chevrones"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "chevrons.html",
+   "w": 400,
+   "h": 200,
+   "fit": 0.2
+  },
+  {
+   "id": "stickers/cursor-click",
+   "cat": "sticker",
+   "group": "arrows",
+   "name": {
+    "en": "Cursor click",
+    "zh-CN": "鼠标点击",
+    "ja": "クリック",
+    "ko": "마우스 클릭",
+    "es": "Clic del cursor"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "cursor-click.html",
+   "w": 400,
+   "h": 400,
+   "fit": 0.3
+  },
+  {
+   "id": "stickers/swipe-up",
+   "cat": "sticker",
+   "group": "arrows",
+   "name": {
+    "en": "Swipe up",
+    "zh-CN": "上滑提示",
+    "ja": "上にスワイプ",
+    "ko": "위로 스와이프",
+    "es": "Desliza arriba"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "swipe-up.html",
+   "w": 300,
+   "h": 400,
+   "fit": 0.36
+  },
+  {
+   "id": "stickers/look-here",
+   "cat": "sticker",
+   "group": "arrows",
+   "name": {
+    "en": "Look here",
+    "zh-CN": "看这里",
+    "ja": "ここを見て",
+    "ko": "여기 보세요",
+    "es": "Mira aquí"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "look-here.html",
+   "w": 600,
+   "h": 240,
+   "fit": 0.2
+  },
+  {
+   "id": "stickers/scribble-circle",
+   "cat": "sticker",
+   "group": "marks",
+   "name": {
+    "en": "Circle it",
+    "zh-CN": "圈出重点",
+    "ja": "丸で囲む",
+    "ko": "동그라미 강조",
+    "es": "Rodear"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "scribble-circle.html",
+   "w": 600,
+   "h": 360,
+   "fit": 0.4
+  },
+  {
+   "id": "stickers/double-underline",
+   "cat": "sticker",
+   "group": "marks",
+   "name": {
+    "en": "Double underline",
+    "zh-CN": "双下划线",
+    "ja": "二重下線",
+    "ko": "이중 밑줄",
+    "es": "Doble subrayado"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "double-underline.html",
+   "w": 600,
+   "h": 160,
+   "fit": 0.16
+  },
+  {
+   "id": "stickers/highlight",
+   "cat": "sticker",
+   "group": "marks",
+   "name": {
+    "en": "Highlighter",
+    "zh-CN": "荧光笔",
+    "ja": "マーカー",
+    "ko": "형광펜",
+    "es": "Marcador"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "highlight.html",
+   "w": 600,
+   "h": 160,
+   "fit": 0.16
+  },
+  {
+   "id": "stickers/sketch-box",
+   "cat": "sticker",
+   "group": "marks",
+   "name": {
+    "en": "Sketch box",
+    "zh-CN": "手绘方框",
+    "ja": "手描き枠",
+    "ko": "손그림 박스",
+    "es": "Recuadro a mano"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "sketch-box.html",
+   "w": 600,
+   "h": 360,
+   "fit": 0.4
+  },
+  {
+   "id": "stickers/tick-list",
+   "cat": "sticker",
+   "group": "marks",
+   "name": {
+    "en": "Checklist",
+    "zh-CN": "打勾清单",
+    "ja": "チェックリスト",
+    "ko": "체크리스트",
+    "es": "Lista de tareas"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "tick-list.html",
+   "w": 500,
+   "h": 360,
+   "fit": 0.42
+  },
+  {
+   "id": "stickers/strike",
+   "cat": "sticker",
+   "group": "marks",
+   "name": {
+    "en": "Cross out",
+    "zh-CN": "划掉",
+    "ja": "取り消し線",
+    "ko": "취소선",
+    "es": "Tachar"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "strike.html",
+   "w": 600,
+   "h": 160,
+   "fit": 0.16
+  },
+  {
+   "id": "stickers/wavy-underline",
+   "cat": "sticker",
+   "group": "marks",
+   "name": {
+    "en": "Wavy underline",
+    "zh-CN": "波浪线",
+    "ja": "波線",
+    "ko": "물결 밑줄",
+    "es": "Subrayado ondulado"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "wavy-underline.html",
+   "w": 600,
+   "h": 120,
+   "fit": 0.13
+  },
+  {
+   "id": "stickers/focus-corners",
+   "cat": "sticker",
+   "group": "marks",
+   "name": {
+    "en": "Focus frame",
+    "zh-CN": "对焦框",
+    "ja": "フォーカス枠",
+    "ko": "포커스 프레임",
+    "es": "Marco de enfoque"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "focus-corners.html",
+   "w": 600,
+   "h": 360,
+   "fit": 0.42
+  },
+  {
+   "id": "stickers/comic-burst",
+   "cat": "sticker",
+   "group": "emphasis",
+   "name": {
+    "en": "Comic burst",
+    "zh-CN": "爆炸框",
+    "ja": "コミック吹き出し",
+    "ko": "만화 폭발",
+    "es": "Explosión cómic"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "comic-burst.html",
+   "w": 400,
+   "h": 400,
+   "fit": 0.36
+  },
+  {
+   "id": "stickers/speed-ring",
+   "cat": "sticker",
+   "group": "emphasis",
+   "name": {
+    "en": "Speed ring",
+    "zh-CN": "速度线",
+    "ja": "スピード線",
+    "ko": "스피드 라인",
+    "es": "Líneas de velocidad"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "speed-ring.html",
+   "w": 400,
+   "h": 400,
+   "fit": 0.45
+  },
+  {
+   "id": "stickers/sparkle-cluster",
+   "cat": "sticker",
+   "group": "emphasis",
+   "name": {
+    "en": "Sparkles",
+    "zh-CN": "闪闪发光",
+    "ja": "キラキラ",
+    "ko": "반짝반짝",
+    "es": "Destellos"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "sparkle-cluster.html",
+   "w": 400,
+   "h": 400,
+   "fit": 0.32
+  },
+  {
+   "id": "stickers/exclaim",
+   "cat": "sticker",
+   "group": "emphasis",
+   "name": {
+    "en": "Exclamation",
+    "zh-CN": "感叹号",
+    "ja": "びっくりマーク",
+    "ko": "느낌표",
+    "es": "Exclamación"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "exclaim.html",
+   "w": 300,
+   "h": 400,
+   "fit": 0.34
+  },
+  {
+   "id": "stickers/question",
+   "cat": "sticker",
+   "group": "emphasis",
+   "name": {
+    "en": "Question mark",
+    "zh-CN": "问号",
+    "ja": "はてな",
+    "ko": "물음표",
+    "es": "Interrogación"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "question.html",
+   "w": 300,
+   "h": 400,
+   "fit": 0.34
+  },
+  {
+   "id": "stickers/shine",
+   "cat": "sticker",
+   "group": "emphasis",
+   "name": {
+    "en": "Shine",
+    "zh-CN": "闪光",
+    "ja": "きらめき",
+    "ko": "빛반사",
+    "es": "Brillo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "shine.html",
+   "w": 400,
+   "h": 400,
+   "fit": 0.32
+  },
+  {
+   "id": "stickers/surprise-marks",
+   "cat": "sticker",
+   "group": "emphasis",
+   "name": {
+    "en": "Surprise marks",
+    "zh-CN": "惊讶符号",
+    "ja": "びっくり線",
+    "ko": "놀람 표시",
+    "es": "Marcas de sorpresa"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "surprise-marks.html",
+   "w": 300,
+   "h": 300,
+   "fit": 0.26
+  },
+  {
+   "id": "stickers/like",
+   "cat": "sticker",
+   "group": "social",
+   "name": {
+    "en": "Like",
+    "zh-CN": "点赞",
+    "ja": "いいね",
+    "ko": "좋아요",
+    "es": "Me gusta"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "like.html",
+   "w": 500,
+   "h": 240,
+   "fit": 0.2
+  },
+  {
+   "id": "stickers/subscribe",
+   "cat": "sticker",
+   "group": "social",
+   "name": {
+    "en": "Subscribe",
+    "zh-CN": "订阅按钮",
+    "ja": "登録ボタン",
+    "ko": "구독 버튼",
+    "es": "Suscribirse"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "subscribe.html",
+   "w": 600,
+   "h": 200,
+   "fit": 0.18
+  },
+  {
+   "id": "stickers/follow",
+   "cat": "sticker",
+   "group": "social",
+   "name": {
+    "en": "Follow",
+    "zh-CN": "关注按钮",
+    "ja": "フォロー",
+    "ko": "팔로우",
+    "es": "Seguir"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "follow.html",
+   "w": 460,
+   "h": 180,
+   "fit": 0.17
+  },
+  {
+   "id": "stickers/share",
+   "cat": "sticker",
+   "group": "social",
+   "name": {
+    "en": "Share",
+    "zh-CN": "分享",
+    "ja": "シェア",
+    "ko": "공유",
+    "es": "Compartir"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "share.html",
+   "w": 300,
+   "h": 300,
+   "fit": 0.26
+  },
+  {
+   "id": "stickers/comment",
+   "cat": "sticker",
+   "group": "social",
+   "name": {
+    "en": "Typing",
+    "zh-CN": "评论输入中",
+    "ja": "入力中",
+    "ko": "입력 중",
+    "es": "Escribiendo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "comment.html",
+   "w": 400,
+   "h": 320,
+   "fit": 0.28
+  },
+  {
+   "id": "stickers/bell",
+   "cat": "sticker",
+   "group": "social",
+   "name": {
+    "en": "Notification bell",
+    "zh-CN": "通知铃铛",
+    "ja": "通知ベル",
+    "ko": "알림 벨",
+    "es": "Campana"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "bell.html",
+   "w": 360,
+   "h": 360,
+   "fit": 0.3
+  },
+  {
+   "id": "stickers/thumbs-up",
+   "cat": "sticker",
+   "group": "social",
+   "name": {
+    "en": "Thumbs up",
+    "zh-CN": "大拇指",
+    "ja": "グッド",
+    "ko": "엄지척",
+    "es": "Pulgar arriba"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "thumbs-up.html",
+   "w": 360,
+   "h": 360,
+   "fit": 0.3
+  },
+  {
+   "id": "stickers/rec",
+   "cat": "sticker",
+   "group": "social",
+   "name": {
+    "en": "REC",
+    "zh-CN": "录制中",
+    "ja": "録画中",
+    "ko": "녹화 중",
+    "es": "Grabando"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "rec.html",
+   "w": 440,
+   "h": 140,
+   "fit": 0.12
+  },
+  {
+   "id": "stickers/live",
+   "cat": "sticker",
+   "group": "social",
+   "name": {
+    "en": "Live",
+    "zh-CN": "直播中",
+    "ja": "ライブ中",
+    "ko": "라이브",
+    "es": "En directo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "live.html",
+   "w": 400,
+   "h": 140,
+   "fit": 0.12
+  },
+  {
+   "id": "stickers/new-tag",
+   "cat": "sticker",
+   "group": "badges",
+   "name": {
+    "en": "NEW",
+    "zh-CN": "新品标签",
+    "ja": "NEWラベル",
+    "ko": "NEW 태그",
+    "es": "Nuevo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "new-tag.html",
+   "w": 360,
+   "h": 200,
+   "fit": 0.2
+  },
+  {
+   "id": "stickers/hot",
+   "cat": "sticker",
+   "group": "badges",
+   "name": {
+    "en": "HOT",
+    "zh-CN": "火爆",
+    "ja": "人気",
+    "ko": "HOT",
+    "es": "Popular"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "hot.html",
+   "w": 360,
+   "h": 180,
+   "fit": 0.18
+  },
+  {
+   "id": "stickers/sale-ribbon",
+   "cat": "sticker",
+   "group": "badges",
+   "name": {
+    "en": "SALE ribbon",
+    "zh-CN": "促销丝带",
+    "ja": "セールリボン",
+    "ko": "세일 리본",
+    "es": "Cinta de rebajas"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "sale-ribbon.html",
+   "w": 560,
+   "h": 220,
+   "fit": 0.2
+  },
+  {
+   "id": "stickers/discount",
+   "cat": "sticker",
+   "group": "badges",
+   "name": {
+    "en": "Discount",
+    "zh-CN": "折扣",
+    "ja": "割引",
+    "ko": "할인",
+    "es": "Descuento"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "discount.html",
+   "w": 340,
+   "h": 340,
+   "fit": 0.3
+  },
+  {
+   "id": "stickers/stamp",
+   "cat": "sticker",
+   "group": "badges",
+   "name": {
+    "en": "Stamp",
+    "zh-CN": "印章",
+    "ja": "スタンプ",
+    "ko": "도장",
+    "es": "Sello"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "stamp.html",
+   "w": 520,
+   "h": 240,
+   "fit": 0.22
+  },
+  {
+   "id": "stickers/price-tag",
+   "cat": "sticker",
+   "group": "badges",
+   "name": {
+    "en": "Price tag",
+    "zh-CN": "价格吊牌",
+    "ja": "値札",
+    "ko": "가격표",
+    "es": "Etiqueta de precio"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "price-tag.html",
+   "w": 300,
+   "h": 400,
+   "fit": 0.36
+  },
+  {
+   "id": "stickers/tips",
+   "cat": "sticker",
+   "group": "badges",
+   "name": {
+    "en": "Tips",
+    "zh-CN": "小贴士",
+    "ja": "ヒント",
+    "ko": "팁",
+    "es": "Consejo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "tips.html",
+   "w": 400,
+   "h": 160,
+   "fit": 0.16
+  },
+  {
+   "id": "stickers/step",
+   "cat": "sticker",
+   "group": "badges",
+   "name": {
+    "en": "Step number",
+    "zh-CN": "步骤序号",
+    "ja": "ステップ番号",
+    "ko": "단계 번호",
+    "es": "Número de paso"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "step.html",
+   "w": 300,
+   "h": 300,
+   "fit": 0.26
+  },
+  {
+   "id": "stickers/rating",
+   "cat": "sticker",
+   "group": "badges",
+   "name": {
+    "en": "Star rating",
+    "zh-CN": "评分星级",
+    "ja": "星評価",
+    "ko": "별점",
+    "es": "Valoración"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "rating.html",
+   "w": 600,
+   "h": 160,
+   "fit": 0.15
+  },
+  {
+   "id": "stickers/confetti",
+   "cat": "sticker",
+   "group": "deco",
+   "name": {
+    "en": "Confetti",
+    "zh-CN": "彩带礼花",
+    "ja": "紙吹雪",
+    "ko": "꽃가루",
+    "es": "Confeti"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "confetti.html",
+   "w": 400,
+   "h": 400,
+   "fit": 0.5
+  },
+  {
+   "id": "stickers/floating-hearts",
+   "cat": "sticker",
+   "group": "deco",
+   "name": {
+    "en": "Floating hearts",
+    "zh-CN": "飘爱心",
+    "ja": "浮かぶハート",
+    "ko": "떠오르는 하트",
+    "es": "Corazones flotantes"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "floating-hearts.html",
+   "w": 300,
+   "h": 500,
+   "fit": 0.5
+  },
+  {
+   "id": "stickers/twinkle-stars",
+   "cat": "sticker",
+   "group": "deco",
+   "name": {
+    "en": "Twinkling stars",
+    "zh-CN": "星光闪烁",
+    "ja": "きらめく星",
+    "ko": "반짝이는 별",
+    "es": "Estrellas brillantes"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "twinkle-stars.html",
+   "w": 500,
+   "h": 300,
+   "fit": 0.4
+  },
+  {
+   "id": "stickers/firework",
+   "cat": "sticker",
+   "group": "deco",
+   "name": {
+    "en": "Fireworks",
+    "zh-CN": "烟花",
+    "ja": "花火",
+    "ko": "불꽃놀이",
+    "es": "Fuegos artificiales"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "firework.html",
+   "w": 400,
+   "h": 400,
+   "fit": 0.5
+  },
+  {
+   "id": "stickers/ribbon",
+   "cat": "sticker",
+   "group": "deco",
+   "name": {
+    "en": "Ribbon swirl",
+    "zh-CN": "丝带飘舞",
+    "ja": "リボン",
+    "ko": "리본",
+    "es": "Cinta"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "ribbon.html",
+   "w": 600,
+   "h": 300,
+   "fit": 0.32
+  },
+  {
+   "id": "stickers/music-notes",
+   "cat": "sticker",
+   "group": "deco",
+   "name": {
+    "en": "Music notes",
+    "zh-CN": "音符飘动",
+    "ja": "音符",
+    "ko": "음표",
+    "es": "Notas musicales"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "music-notes.html",
+   "w": 300,
+   "h": 400,
+   "fit": 0.4
+  }
+ ]
+}

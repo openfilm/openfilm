@@ -31,7 +31,22 @@ test('every thing of the library is there, named in each language, in a group of
     /* its own sounds are in git; audio.json's are published with the library */
     if (item.kind === 'sound' && item.id.startsWith('sounds/')) assert.ok(libraryFile(item.id), `${item.id}: the sound`);
     if (item.kind === 'sound') assert.match(item.id, /^(sounds|audio\/(sfx|music))\/[\w.-]+\.(m4a|mp3)$/);
-    if (item.kind === 'look') assert.match(item.filter, /^[a-z-]+\(.+\)$/);
+    /* a filter is a color grade (studio/ui/src/lib/grade.ts): a channel mix, a saturation, tone curves, nothing else */
+    if (item.kind === 'look') {
+      assert.ok(item.grade && Object.keys(item.grade).length && Object.keys(item.grade).every((k) => ['mix', 'sat', 'all', 'r', 'g', 'b'].includes(k)), `${item.id}: its grade`);
+      if (item.grade.mix) assert.equal(item.grade.mix.length, 12);
+      for (const c of ['all', 'r', 'g', 'b']) if (item.grade[c]) assert.ok(item.grade[c].every((v) => v >= 0 && v <= 1), `${item.id}: ${c} within 0–1`);
+      if (item.sample) assert.ok(libraryFile(item.sample), `${item.id}: its sample`);
+    }
+    /* a template: its clips' pages there, its places for pictures counted, its music one of the library's */
+    if (item.kind === 'group') {
+      const about = JSON.parse(readFileSync(join(builtInRoot(), item.id, 'saved.json'), 'utf8'));
+      assert.equal(about.kind, 'group');
+      for (const c of about.clips) assert.ok(existsSync(join(builtInRoot(), item.id, 'files', c.clip.src)), `${item.id}: ${c.clip.src}`);
+      assert.equal(about.clips.filter((c) => c.clip.src === 'slot.html').length, item.slots);
+      if (item.music) assert.equal(index.items.find((i) => i.id === item.music)?.cat, 'music', `${item.id}: its music`);
+      for (const f of ['poster.jpg', 'preview.mp4']) assert.ok(libraryFile(`${item.id}/${f}`), `${item.id}: ${f}`);
+    }
     if (item.kind === 'fade') assert.ok(['dissolve', 'dip-black', 'dip-white'].includes(item.fade));
   }
 });

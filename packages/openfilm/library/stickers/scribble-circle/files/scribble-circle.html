@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Circle it</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+:root { --color: #ff3b30; }
+svg { width: 100vw; height: 100vh; display: block; overflow: visible; }
+svg { filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
+path { fill: none; stroke: var(--color); stroke-width: 10; stroke-linecap: round; stroke-linejoin: round; }
+.d { stroke-dasharray: 1 2; stroke-dashoffset: 1.01; animation: draw var(--l, 0.45s) cubic-bezier(.6, .05, .3, 1) var(--d, 0s) both; }
+@keyframes draw { from { stroke-dashoffset: 1.01; opacity: 0; } 1% { opacity: 1; } to { stroke-dashoffset: 0; opacity: 1; } }
+.p { transform-origin: 300px 180px; animation: p 1.6s ease-in-out 0.7s infinite; }
+@keyframes p { 50% { transform: scale(1.025); } }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 600 360"><defs><filter id="boil" filterUnits="userSpaceOnUse" x="-60" y="-36" width="720" height="432"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="1"/><feDisplacementMap in="SourceGraphic" scale="5" xChannelSelector="R" yChannelSelector="G"/></filter></defs><g filter="url(#boil)"><g class="p">
+<path class="d" pathLength="1" style="--l: 0.62s" d="M517.9 95.8 C511 91.9 492.3 78.8 476.6 71.9 C461 65.1 443 59.1 424.2 54.7 C405.3 50.2 384.5 46.9 363.7 45.2 C342.8 43.4 320.5 43.1 298.9 44.2 C277.4 45.3 255.1 47.9 234.2 51.8 C213.4 55.7 192.6 61.1 173.9 67.4 C155.2 73.8 137.3 81.6 121.9 90.1 C106.5 98.5 92.7 108.2 81.6 118.2 C70.5 128.2 61.5 139.1 55.3 150 C49.1 160.9 45.5 172.4 44.5 183.5 C43.5 194.6 45.3 206 49.4 216.7 C53.5 227.4 60.4 238 69.3 247.6 C78.2 257.3 89.7 266.5 102.6 274.5 C115.6 282.6 130.9 289.9 147.1 295.9 C163.3 301.9 181.5 307 200.1 310.6 C218.6 314.3 238.6 316.7 258.4 317.8 C278.3 318.8 299 318.6 319.1 317 C339.1 315.4 359.5 312.3 378.6 308.1 C397.7 303.9 416.6 298.3 433.7 291.7 C450.8 285 467.1 277.1 481.2 268.4 C495.2 259.7 508 249.8 518.1 239.5 C528.3 229.1 536.5 217.9 542.1 206.5 C547.6 195.2 550.8 183.1 551.2 171.5 C551.7 159.8 549.5 147.7 544.8 136.4 C540.1 125 532.7 113.7 523.1 103.5 C513.5 93.2 501.1 83.4 487.2 74.9 C473.4 66.4 457 58.6 439.8 52.5 C422.6 46.3 403.3 41.2 383.9 37.8 C364.6 34.3 343.8 32.3 323.5 31.9 C303.3 31.4 272.7 34.7 262.6 35.2"/>
+</g></g></svg>
+<script>
+/*
+ * A loop drawn round something by hand, a little more than once, its line alive as a pen line is. Its color is the
+ * clip's to change. A page of OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS animations
+ * are held at t by the host.
+ */
+const noise = [...document.querySelectorAll('feTurbulence')];
+window.film = {
+  width: 600,
+  height: 360,
+  frame(t) {
+    for (const n of noise) n.setAttribute('seed', String(1 + (Math.floor(t * 8) % 4)));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>
