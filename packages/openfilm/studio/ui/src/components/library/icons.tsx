@@ -78,6 +78,13 @@ const DRAWN: Record<string, Draw> = {
       <path d="M17 9.6l-1.6 4.8" />
     </>
   ),
+  /* a template: a picture laid out, one big place and two small */
+  template: ({ fill, ink }) => (
+    <>
+      <path d="M5.6 3.8h12.8A2.6 2.6 0 0 1 21 6.4v11.2a2.6 2.6 0 0 1-2.6 2.6H5.6A2.6 2.6 0 0 1 3 17.6V6.4a2.6 2.6 0 0 1 2.6-2.6Z" {...fill} />
+      <path d="M13 3.8v16.4M13 12h8" {...ink} />
+    </>
+  ),
 };
 
 /* the marks inside a solid shape are cut out of it in the panel's own color */

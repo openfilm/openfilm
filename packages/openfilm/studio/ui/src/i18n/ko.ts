@@ -925,6 +925,8 @@ export const ko: Words = {
     cat_effect: '효과',
     cat_transition: '전환',
     cat_filter: '필터',
+    cat_template: '템플릿',
+    slots: '{n}개 클립',
     mediaImport: '가져오기',
     mediaProject: '소재',
     mediaPicked: '라이브러리에서',

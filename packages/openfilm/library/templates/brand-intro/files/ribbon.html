@@ -1,0 +1,99 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Ribbon spiral</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+:root { --color: #7b5cff; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * A ribbon in your colour, led by a yellow and a rose one, spirals out from the middle until it fills the frame
+ * over the cut; then its tail spirals out after it. It lasts 1 s and covers the cut at its middle: put its middle
+ * on the cut. A page of OpenFilm's library (CC0): what it shows at t comes from t alone, drawn in parts of the
+ * frame so it fits a stage of any shape.
+ */
+const D = 1;
+const DEFAULT = '#7b5cff';
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+const TAU = Math.PI * 2;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+/* how far u is through [a, b], from 0 to 1 */
+const seg = (u, a, b) => clamp((u - a) / (b - a));
+const inOut = (x) => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2);
+/* the colour the page is given (its --color), read on each frame */
+const color = () => getComputedStyle(document.documentElement).getPropertyValue('--color').trim() || DEFAULT;
+
+let path = null;
+let pathFor = '';
+/* a spiral from the middle out past the corners, as points with how far along each one is */
+const points = () => {
+  if (pathFor === `${W}x${H}`) return path;
+  const sp = H * 0.3, turns = Math.hypot(W, H) / 2 / sp + 1.2, n = Math.ceil(turns * 90), out = [];
+  let len = 0;
+  for (let i = 0; i <= n; i++) {
+    const a = (i / n) * turns * TAU, r = (sp * a) / TAU;
+    const q = { x: W / 2 + r * Math.cos(a), y: H / 2 + r * Math.sin(a), at: 0, w: sp * 1.1 };
+    if (i) len += Math.hypot(q.x - out[i - 1].x, q.y - out[i - 1].y);
+    q.at = len;
+    out.push(q);
+  }
+  out.forEach((q) => { q.at /= len; });
+  path = out;
+  pathFor = `${W}x${H}`;
+  return path;
+};
+/* the stretch of the ribbon from a to b (parts of its length) */
+const stretch = (a, b, style) => {
+  if (b <= a) return;
+  const pts = points().filter((q) => q.at >= a && q.at <= b);
+  if (pts.length < 2) return;
+  g.strokeStyle = style;
+  g.lineWidth = pts[0].w;
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
+  g.beginPath();
+  pts.forEach((q, i) => (i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y)));
+  g.stroke();
+};
+
+function draw(u) {
+  const c = color();
+  stretch(inOut(seg(u, 0.5, 0.88)), inOut(seg(u, 0, 0.32)), '#ffcf3f');
+  stretch(inOut(seg(u, 0.53, 0.94)), inOut(seg(u, 0.02, 0.37)), '#ff4f6d');
+  stretch(inOut(seg(u, 0.56, 1)), inOut(seg(u, 0.04, 0.42)), c);
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

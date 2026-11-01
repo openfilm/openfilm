@@ -1,0 +1,303 @@
+{
+ "version": 1,
+ "groups": {
+  "template": [
+   {
+    "id": "vlog",
+    "name": {
+     "en": "Vlog",
+     "zh-CN": "Vlog",
+     "ja": "Vlog",
+     "ko": "브이로그",
+     "es": "Vlog"
+    }
+   },
+   {
+    "id": "intro",
+    "name": {
+     "en": "Openers",
+     "zh-CN": "片头",
+     "ja": "オープニング",
+     "ko": "오프닝",
+     "es": "Aperturas"
+    }
+   },
+   {
+    "id": "beat",
+    "name": {
+     "en": "On the beat",
+     "zh-CN": "卡点",
+     "ja": "ビート合わせ",
+     "ko": "비트",
+     "es": "Al ritmo"
+    }
+   },
+   {
+    "id": "promo",
+    "name": {
+     "en": "Shop",
+     "zh-CN": "电商",
+     "ja": "ショップ",
+     "ko": "쇼핑",
+     "es": "Tienda"
+    }
+   },
+   {
+    "id": "memory",
+    "name": {
+     "en": "Memories",
+     "zh-CN": "回忆",
+     "ja": "思い出",
+     "ko": "추억",
+     "es": "Recuerdos"
+    }
+   },
+   {
+    "id": "holiday",
+    "name": {
+     "en": "Holidays",
+     "zh-CN": "节日",
+     "ja": "イベント",
+     "ko": "기념일",
+     "es": "Fiestas"
+    }
+   },
+   {
+    "id": "knowledge",
+    "name": {
+     "en": "Explainers",
+     "zh-CN": "知识",
+     "ja": "解説",
+     "ko": "지식",
+     "es": "Explicativos"
+    }
+   }
+  ]
+ },
+ "items": [
+  {
+   "id": "templates/travel-vlog",
+   "cat": "template",
+   "group": "vlog",
+   "name": {
+    "en": "Travel diary",
+    "zh-CN": "旅行日记",
+    "ja": "旅の日記",
+    "ko": "여행 일기",
+    "es": "Diario de viaje"
+   },
+   "kind": "group",
+   "durationMs": 11000,
+   "slots": 4,
+   "music": "audio/music/plucky-light-underscore-f5be3b.mp3"
+  },
+  {
+   "id": "templates/weekend-vlog",
+   "cat": "template",
+   "group": "vlog",
+   "name": {
+    "en": "Weekend vlog",
+    "zh-CN": "周末Vlog",
+    "ja": "週末Vlog",
+    "ko": "주말 브이로그",
+    "es": "Vlog de fin de semana"
+   },
+   "kind": "group",
+   "durationMs": 10600,
+   "slots": 5,
+   "music": "audio/music/cafe-tape-piano-8646df.mp3"
+  },
+  {
+   "id": "templates/cinema-open",
+   "cat": "template",
+   "group": "intro",
+   "name": {
+    "en": "Film opening",
+    "zh-CN": "电影开场",
+    "ja": "映画のオープニング",
+    "ko": "영화 오프닝",
+    "es": "Apertura de cine"
+   },
+   "kind": "group",
+   "durationMs": 10000,
+   "slots": 3,
+   "music": "audio/music/cinematic-bloom-swell-7cb0bd.mp3"
+  },
+  {
+   "id": "templates/brand-intro",
+   "cat": "template",
+   "group": "intro",
+   "name": {
+    "en": "Brand opener",
+    "zh-CN": "品牌开场",
+    "ja": "ブランドオープニング",
+    "ko": "브랜드 오프닝",
+    "es": "Apertura de marca"
+   },
+   "kind": "group",
+   "durationMs": 8000,
+   "slots": 3,
+   "music": "audio/music/confident-tech-launch-4c279b.mp3"
+  },
+  {
+   "id": "templates/beat-cut",
+   "cat": "template",
+   "group": "beat",
+   "name": {
+    "en": "Quick cuts",
+    "zh-CN": "卡点快剪",
+    "ja": "クイックカット",
+    "ko": "빠른 컷",
+    "es": "Cortes rápidos"
+   },
+   "kind": "group",
+   "durationMs": 6800,
+   "slots": 9,
+   "music": "audio/music/bright-electro-pop-groove-d9ec8e.mp3"
+  },
+  {
+   "id": "templates/comic-cuts",
+   "cat": "template",
+   "group": "beat",
+   "name": {
+    "en": "Comic beats",
+    "zh-CN": "综艺卡点",
+    "ja": "バラエティ",
+    "ko": "예능 비트",
+    "es": "Ritmo cómico"
+   },
+   "kind": "group",
+   "durationMs": 5200,
+   "slots": 4,
+   "music": "audio/music/wonky-synth-versus-pulse-3bf0a8.mp3"
+  },
+  {
+   "id": "templates/product-promo",
+   "cat": "template",
+   "group": "promo",
+   "name": {
+    "en": "New product",
+    "zh-CN": "新品推广",
+    "ja": "新商品",
+    "ko": "신제품",
+    "es": "Producto nuevo"
+   },
+   "kind": "group",
+   "durationMs": 10600,
+   "slots": 4,
+   "music": "audio/music/corporate-electronic-groove-78bc80.mp3"
+  },
+  {
+   "id": "templates/flash-sale",
+   "cat": "template",
+   "group": "promo",
+   "name": {
+    "en": "Flash sale",
+    "zh-CN": "限时促销",
+    "ja": "タイムセール",
+    "ko": "타임 세일",
+    "es": "Oferta relámpago"
+   },
+   "kind": "group",
+   "durationMs": 7600,
+   "slots": 3,
+   "music": "audio/music/playful-electronic-pop-c27b46.mp3"
+  },
+  {
+   "id": "templates/old-days",
+   "cat": "template",
+   "group": "memory",
+   "name": {
+    "en": "Old days",
+    "zh-CN": "旧时光",
+    "ja": "あの頃",
+    "ko": "그 시절",
+    "es": "Viejos tiempos"
+   },
+   "kind": "group",
+   "durationMs": 12600,
+   "slots": 4,
+   "music": "audio/music/americana-nocturne-guitar-ccb2da.mp3"
+  },
+  {
+   "id": "templates/love-story",
+   "cat": "template",
+   "group": "memory",
+   "name": {
+    "en": "Love story",
+    "zh-CN": "恋爱日记",
+    "ja": "ラブストーリー",
+    "ko": "러브 스토리",
+    "es": "Historia de amor"
+   },
+   "kind": "group",
+   "durationMs": 11600,
+   "slots": 4,
+   "music": "audio/music/garden-serenade-piano-strings-5533fa.mp3"
+  },
+  {
+   "id": "templates/birthday",
+   "cat": "template",
+   "group": "holiday",
+   "name": {
+    "en": "Birthday",
+    "zh-CN": "生日快乐",
+    "ja": "誕生日",
+    "ko": "생일 축하",
+    "es": "Cumpleaños"
+   },
+   "kind": "group",
+   "durationMs": 9000,
+   "slots": 3,
+   "music": "audio/music/birthday-celebration-piano-52fa16.mp3"
+  },
+  {
+   "id": "templates/new-year",
+   "cat": "template",
+   "group": "holiday",
+   "name": {
+    "en": "New Year",
+    "zh-CN": "新年快乐",
+    "ja": "新年",
+    "ko": "새해",
+    "es": "Año Nuevo"
+   },
+   "kind": "group",
+   "durationMs": 9200,
+   "slots": 3,
+   "music": "audio/music/tang-banquet-pipa-88468c.mp3"
+  },
+  {
+   "id": "templates/how-to",
+   "cat": "template",
+   "group": "knowledge",
+   "name": {
+    "en": "Step by step",
+    "zh-CN": "干货步骤",
+    "ja": "ステップ解説",
+    "ko": "단계별 설명",
+    "es": "Paso a paso"
+   },
+   "kind": "group",
+   "durationMs": 14200,
+   "slots": 5,
+   "music": "audio/music/minimal-tech-ambient-25420d.mp3"
+  },
+  {
+   "id": "templates/news-flash",
+   "cat": "template",
+   "group": "knowledge",
+   "name": {
+    "en": "News flash",
+    "zh-CN": "新闻快报",
+    "ja": "ニュース速報",
+    "ko": "뉴스 속보",
+    "es": "Noticia de última hora"
+   },
+   "kind": "group",
+   "durationMs": 10000,
+   "slots": 3,
+   "music": "audio/music/minimal-data-documentary-pulse-bb6f8d.mp3"
+  }
+ ]
+}

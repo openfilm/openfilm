@@ -928,6 +928,8 @@ export const ja: Words = {
     cat_effect: 'エフェクト',
     cat_transition: 'トランジション',
     cat_filter: 'フィルター',
+    cat_template: 'テンプレート',
+    slots: '{n} 素材',
     mediaImport: '読み込み',
     mediaProject: '素材',
     mediaPicked: 'ライブラリから',

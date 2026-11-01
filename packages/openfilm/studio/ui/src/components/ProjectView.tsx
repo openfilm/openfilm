@@ -9,7 +9,7 @@
 import * as React from 'react';
 import { ArrowLeftRight, BookmarkPlus, ClipboardCopy, ClipboardPaste, Film as FilmIcon, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, TriangleAlert, Upload, Workflow } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
-import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type Op, type ProjectFilm, type ProjectSettings } from '@/api';
+import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type Op, type ProjectFilm, type ProjectSettings, type SavedGroupClip } from '@/api';
 import { useLanguage, useT } from '@/i18n';
 import { useFilm, type OutsideStep, type Step } from '@/editor/use-film';
 import { Player } from '@/editor/player';
@@ -29,7 +29,7 @@ import { attrsOf, pasteAttrs, type AttrGroup, type CopiedAttrs } from '@/lib/cli
 import { cutPoints, namedTrack, nextCut, trackNamesOf } from '@/lib/timeline-nav';
 import { anyLocked, lockedEdits } from '@/lib/track-lock';
 import { placeMedia, type SourceRange } from '@/lib/media-place';
-import { BUILT_IN, TEXT_COMPONENT, builtInItem, cutTrack, cutsOf, fromLibrary, isTextClip, libraryBox, libraryDragItem, nameOf, onCut, useLibraryIndex, withLook, withRootVars, type LibraryItem } from '@/lib/library';
+import { BUILT_IN, TEXT_COMPONENT, builtInItem, cutTrack, cutsOf, fromLibrary, isTextClip, libraryBox, libraryDragItem, nameOf, onCut, placedGroup, useLibraryIndex, withLook, withRootVars, type LibraryItem } from '@/lib/library';
 import { LibraryDrawer, type LibraryActions } from '@/components/library/LibraryDrawer';
 import { LibraryTrial } from '@/components/library/LibraryTrial';
 import { apartOnTracks, type ClipEdit } from '@/lib/film-clip-edits';
@@ -1337,6 +1337,20 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (!mode || !onTracks.length) return [];
     return planRoom(editModel(), onTracks, { mode, ...switchesOf(readTimelinePrefs()) }).ops;
   }, [editModel]);
+  /* a group of Saved or the library, laid out for this picture (lib/library placedGroup); a template of the library has
+     its music (one of the library's) taken in too, on a track of its own under it, fading out at its end */
+  const templateClips = React.useCallback(async (saved: string | undefined, clips: SavedGroupClip[]): Promise<SavedGroupClip[]> => {
+    const placed = placedGroup(clips, stageRef.current ?? { w: 1920, h: 1080 });
+    const item = builtInItem(saved);
+    const music = item?.music ? builtInItem(`${BUILT_IN}/${item.music}`) : null;
+    if (!item?.music || !music) return placed;
+    let taken: Awaited<ReturnType<typeof api.takeSaved>>;
+    try { taken = await api.takeSaved(projectId, `${BUILT_IN}/${item.music}`); } catch { return placed; }
+    if (!('path' in taken)) return placed;
+    const len = Math.min(item.durationMs ?? 0, music.durationMs ?? Infinity) / 1000;
+    const below = Math.max(...placed.map((c) => c.track)) + 1;
+    return [...placed, { track: below, at: 0, clip: { src: taken.path, time: [0, len], overrides: [{ fade: [0, Math.min(1.5, len / 3)] }] } }];
+  }, [projectId]);
   const dropAsset = React.useCallback(async (file: ResourceDragItem, target: AssetDropTarget, atMs: number): Promise<string | null> => {
     const plan = assetDropInsert(file, timelineTracks, target, atMs, stageRef.current);
     if ('error' in plan) return plan.error === 'locked' ? t('timeline.trackLocked') : t('timeline.dropNotClip');
@@ -1346,7 +1360,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       let taken: Awaited<ReturnType<typeof api.takeSaved>>;
       try { taken = await api.takeSaved(projectId, file.saved); } catch (e) { return e instanceof Error ? e.message : String(e); }
       /* a group: its tracks new ones, where it was dropped */
-      if ('clips' in taken) return edit(groupInsertOps(taken.clips, plan.at, groupInsertAt(plan.track), editModel()), 'history.stepDrop');
+      if ('clips' in taken) return edit(groupInsertOps(await templateClips(file.saved, taken.clips), plan.at, groupInsertAt(plan.track), editModel()), 'history.stepDrop');
       if ('path' in taken) {
         const { saved: _from, ...rest } = file;
         return dropAssetRef.current({ ...rest, path: taken.path }, target, atMs);
@@ -1544,6 +1558,14 @@ export function ProjectView({ projectId, onProject, onLeave }: {
           toast.show(t('assetDrawer.added').replace('{name}', name));
           pickAdded(before);
         }
+        return;
+      }
+      /* a template: its tracks new ones at the top, from the playhead, laid out for this picture */
+      if ('clips' in taken) {
+        const failed = await edit(groupInsertOps(await templateClips(`${BUILT_IN}/${item.id}`, taken.clips), at, groupInsertAt(track), editModel()), 'history.stepDrop');
+        if (failed) { toast.show(failed); return; }
+        toast.show(t('assetDrawer.added').replace('{name}', name));
+        pickAdded(before);
         return;
       }
       if (!('clip' in taken)) return;

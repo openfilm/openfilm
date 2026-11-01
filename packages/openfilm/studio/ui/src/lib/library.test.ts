@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { coverLook, libraryBox, cutTrack, cutsOf, fromLibrary, isTextClip, withRootVars, libraryDragItem, lookOf, onCut, soundLook, waveUrl, withLook, type LibraryItem } from './library.ts';
+import { coverLook, libraryBox, cutTrack, cutsOf, fromLibrary, isTextClip, withRootVars, libraryDragItem, lookOf, onCut, placedGroup, soundLook, waveUrl, withLook, type LibraryItem } from './library.ts';
 import { gradeFilter } from './grade.ts';
 
 const page: LibraryItem = { id: 'effects/snow', cat: 'effect', group: 'ambience', name: { en: 'Snow' }, kind: 'page', durationMs: 4000, src: 'snow.html' };
@@ -90,4 +90,17 @@ test('a line of words goes in a wide box of its own: no wider than the picture a
   assert.deepEqual(libraryBox({ w: 1600, h: 260, fit: 0.14 }, { w: 1920, h: 1080 }), { x: 496, y: 465, w: 929, h: 151 });
   assert.deepEqual(libraryBox({ w: 1600, h: 260, fit: 0.14 }, { w: 1080, h: 1920 }), { x: 54, y: 881, w: 972, h: 158 });
   assert.equal(libraryBox({ w: 1600, h: 260, fit: 0.1, low: true }, { w: 1920, h: 1080 })!.y, 853);
+});
+
+test('a template\'s clip with a place of its own is laid out for the picture, wide or tall, and the place goes', () => {
+  const clips = [
+    { track: 0, at: 0, clip: { src: 'title.html', size: { w: 1200, h: 300 }, attrs: { 'data-place': '{"x":0.5,"y":0.8,"fit":0.2}' } } },
+    { track: 1, at: 0, clip: { src: 'slot.html', style: 'object-fit: cover' } },
+  ];
+  const wide = placedGroup(clips, { w: 1920, h: 1080 });
+  assert.deepEqual(wide[0]!.clip, { src: 'title.html', size: { w: 864, h: 216 }, box: { x: 528, y: 756, w: 864, h: 216 } });
+  assert.equal(wide[1], clips[1]);
+  /* tall: no wider than the picture */
+  const tall = placedGroup(clips, { w: 1080, h: 1920 });
+  assert.deepEqual(tall[0]!.clip.box, { x: 43, y: 1412, w: 994, h: 249 });
 });

@@ -14,7 +14,7 @@ import { gradeFilter, gradeOf, withGrade, type Grade } from './grade.ts';
 /** What a path names OpenFilm's library by, as `saved/` names Saved. */
 export const BUILT_IN = 'openfilm';
 
-export type LibraryCategory = 'transition' | 'effect' | 'filter' | 'text' | 'sticker' | 'sound' | 'music';
+export type LibraryCategory = 'transition' | 'effect' | 'filter' | 'text' | 'sticker' | 'sound' | 'music' | 'template';
 export type LibraryNames = Partial<Record<Language, string>> & { en: string };
 
 export interface LibraryItem {
@@ -23,7 +23,7 @@ export interface LibraryItem {
   cat: LibraryCategory;
   group: string;
   name: LibraryNames;
-  kind: 'page' | 'sound' | 'look' | 'fade' | 'textstyle' | 'textmotion';
+  kind: 'page' | 'sound' | 'look' | 'fade' | 'textstyle' | 'textmotion' | 'group';
   durationMs?: number;
   /** A page: its clip's page (in its bundle's files/, with the stretch it plays), and a size of its own. */
   src?: string;
@@ -49,6 +49,9 @@ export interface LibraryItem {
   cover?: string;
   /** A text style (word art) or a text motion: values of the text component's variables (library/text/text). */
   vars?: Record<string, string>;
+  /** A template (a group of clips): how many of its clips are places for the person's own pictures, and its music (a piece of the library's, by its id). */
+  slots?: number;
+  music?: string;
   /** A fade: which of the timeline's transitions. */
   fade?: Extract<TransitionKind, 'dissolve' | 'dip-black' | 'dip-white'>;
 }
@@ -128,6 +131,7 @@ export function libraryDragItem(item: LibraryItem, name: string): ResourceDragIt
   const saved = `${BUILT_IN}/${item.id}`;
   if (item.kind === 'look' || item.kind === 'fade') return { path: saved, name, kind: 'other', saved, apply: item.kind };
   if (item.kind === 'sound') return { path: saved, name, kind: 'audio', ...(item.durationMs ? { durationMs: item.durationMs } : {}), saved };
+  if (item.kind === 'group') return { path: saved, name, kind: 'mg', ...(item.durationMs ? { durationMs: item.durationMs } : {}), saved };
   if (item.kind !== 'page' || !item.src) return null;
   return {
     path: `${saved}/files/${item.src.split('#')[0]}`,
@@ -137,6 +141,35 @@ export function libraryDragItem(item: LibraryItem, name: string): ResourceDragIt
     ...(item.w && item.h ? { w: item.w, h: item.h } : { reflows: true }),
     saved,
   };
+}
+
+/** Where a template's clip goes on any picture (its `data-place`): its middle, and its height of the picture's. */
+export const PLACE_ATTR = 'data-place';
+type GroupClip = { track: number; at: number; clip: Record<string, unknown> & { attrs?: Record<string, string> } };
+
+/**
+ * A template's clips (a group of the library) made for this picture: one with a place of its own (`data-place`,
+ * `{"x":0.5,"y":0.82,"fit":0.18}` with its page's own `size`) gets a box there at that share of the picture's
+ * height, at most as wide as the picture, so one template fits wide and tall films alike; the attribute goes.
+ */
+export function placedGroup<C extends GroupClip>(clips: readonly C[], stage: { w: number; h: number }): C[] {
+  return clips.map((c) => {
+    const raw = c.clip.attrs?.[PLACE_ATTR];
+    const size = c.clip.size as { w: number; h: number } | undefined;
+    if (!raw) return c;
+    const { [PLACE_ATTR]: _place, ...attrs } = c.clip.attrs!;
+    const clip: C['clip'] = { ...c.clip };
+    if (Object.keys(attrs).length) clip.attrs = attrs; else delete clip.attrs;
+    let place: { x?: number; y?: number; fit?: number };
+    try { place = JSON.parse(raw); } catch { return { ...c, clip }; }
+    if (!size?.w || !size.h) return { ...c, clip };
+    let h = Math.round(stage.h * (place.fit ?? 0.3));
+    let w = Math.round(h * (size.w / size.h));
+    const most = Math.round(stage.w * 0.92);
+    if (w > most) { w = most; h = Math.round(w * (size.h / size.w)); }
+    const x = Math.round(stage.w * (place.x ?? 0.5) - w / 2), y = Math.round(stage.h * (place.y ?? 0.5) - h / 2);
+    return { ...c, clip: { ...clip, box: { x: Math.max(0, Math.min(stage.w - w, x)), y: Math.max(0, Math.min(stage.h - h, y)), w, h }, size: { w, h } } };
+  });
 }
 
 /** A transition page put down near a cut: its start moved so its middle is on the cut, when one is that near. */

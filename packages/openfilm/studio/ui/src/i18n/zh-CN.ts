@@ -929,6 +929,8 @@ export const zhCN: Words = {
     cat_effect: '特效',
     cat_transition: '转场',
     cat_filter: '滤镜',
+    cat_template: '模板',
+    slots: '{n} 段',
     mediaImport: '导入',
     mediaProject: '素材',
     mediaPicked: '已选素材',

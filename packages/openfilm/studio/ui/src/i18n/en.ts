@@ -929,6 +929,8 @@ export const en = {
     cat_effect: 'Effects',
     cat_transition: 'Transitions',
     cat_filter: 'Filters',
+    cat_template: 'Templates',
+    slots: '{n} clips',
     mediaImport: 'Imported',
     mediaProject: 'Media',
     mediaPicked: 'From the library',

@@ -1,0 +1,309 @@
+{
+ "version": 2,
+ "kind": "group",
+ "clips": [
+  {
+   "track": 0,
+   "at": 5.8,
+   "clip": {
+    "src": "title-glitch.html",
+    "time": [
+     0,
+     1.6
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Title\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Second line\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Second accent\", \"type\": \"var\", \"var\": \"--accent2\"}]",
+     "data-place": "{\"x\":0.5,\"y\":0.5,\"fit\":0.3}"
+    },
+    "size": {
+     "w": 1000,
+     "h": 400
+    },
+    "overrides": [
+     {
+      "at": ".t1",
+      "text": "ON REPEAT"
+     }
+    ]
+   }
+  },
+  {
+   "track": 1,
+   "at": 0.5,
+   "clip": {
+    "src": "shock.html",
+    "time": [
+     0,
+     0.6
+    ]
+   }
+  },
+  {
+   "track": 1,
+   "at": 1.1,
+   "clip": {
+    "src": "rgb-split.html",
+    "time": [
+     0,
+     0.6
+    ]
+   }
+  },
+  {
+   "track": 1,
+   "at": 1.7,
+   "clip": {
+    "src": "shock.html",
+    "time": [
+     0,
+     0.6
+    ]
+   }
+  },
+  {
+   "track": 1,
+   "at": 2.3,
+   "clip": {
+    "src": "rgb-split.html",
+    "time": [
+     0,
+     0.6
+    ]
+   }
+  },
+  {
+   "track": 1,
+   "at": 2.9,
+   "clip": {
+    "src": "shock.html",
+    "time": [
+     0,
+     0.6
+    ]
+   }
+  },
+  {
+   "track": 1,
+   "at": 3.5,
+   "clip": {
+    "src": "rgb-split.html",
+    "time": [
+     0,
+     0.6
+    ]
+   }
+  },
+  {
+   "track": 1,
+   "at": 4.1,
+   "clip": {
+    "src": "shock.html",
+    "time": [
+     0,
+     0.6
+    ]
+   }
+  },
+  {
+   "track": 1,
+   "at": 4.9,
+   "clip": {
+    "src": "rgb-split.html",
+    "time": [
+     0,
+     0.6
+    ]
+   }
+  },
+  {
+   "track": 2,
+   "at": 0,
+   "clip": {
+    "src": "slot.html",
+    "time": [
+     0,
+     0.8
+    ],
+    "style": "object-fit: cover",
+    "overrides": [
+     {
+      "at": ":root",
+      "style": {
+       "--n": "'1'",
+       "--tone": "#3a2140"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "track": 2,
+   "at": 0.8,
+   "clip": {
+    "src": "slot.html",
+    "time": [
+     0,
+     0.6
+    ],
+    "style": "object-fit: cover",
+    "overrides": [
+     {
+      "at": ":root",
+      "style": {
+       "--n": "'2'",
+       "--tone": "#3a2140"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "track": 2,
+   "at": 1.4,
+   "clip": {
+    "src": "slot.html",
+    "time": [
+     0,
+     0.6
+    ],
+    "style": "object-fit: cover",
+    "overrides": [
+     {
+      "at": ":root",
+      "style": {
+       "--n": "'3'",
+       "--tone": "#3a2140"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "track": 2,
+   "at": 2,
+   "clip": {
+    "src": "slot.html",
+    "time": [
+     0,
+     0.6
+    ],
+    "style": "object-fit: cover",
+    "overrides": [
+     {
+      "at": ":root",
+      "style": {
+       "--n": "'4'",
+       "--tone": "#3a2140"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "track": 2,
+   "at": 2.6,
+   "clip": {
+    "src": "slot.html",
+    "time": [
+     0,
+     0.6
+    ],
+    "style": "object-fit: cover",
+    "overrides": [
+     {
+      "at": ":root",
+      "style": {
+       "--n": "'5'",
+       "--tone": "#3a2140"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "track": 2,
+   "at": 3.2,
+   "clip": {
+    "src": "slot.html",
+    "time": [
+     0,
+     0.6
+    ],
+    "style": "object-fit: cover",
+    "overrides": [
+     {
+      "at": ":root",
+      "style": {
+       "--n": "'6'",
+       "--tone": "#3a2140"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "track": 2,
+   "at": 3.8,
+   "clip": {
+    "src": "slot.html",
+    "time": [
+     0,
+     0.6
+    ],
+    "style": "object-fit: cover",
+    "overrides": [
+     {
+      "at": ":root",
+      "style": {
+       "--n": "'7'",
+       "--tone": "#3a2140"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "track": 2,
+   "at": 4.4,
+   "clip": {
+    "src": "slot.html",
+    "time": [
+     0,
+     0.8
+    ],
+    "style": "object-fit: cover",
+    "overrides": [
+     {
+      "at": ":root",
+      "style": {
+       "--n": "'8'",
+       "--tone": "#3a2140"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "track": 2,
+   "at": 5.2,
+   "clip": {
+    "src": "slot.html",
+    "time": [
+     0,
+     1.6
+    ],
+    "style": "object-fit: cover",
+    "overrides": [
+     {
+      "at": ":root",
+      "style": {
+       "--n": "'9'",
+       "--tone": "#3a2140"
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "durationMs": 6800
+}

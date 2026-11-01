@@ -928,6 +928,8 @@ export const es: Words = {
     cat_effect: 'Efectos',
     cat_transition: 'Transiciones',
     cat_filter: 'Filtros',
+    cat_template: 'Plantillas',
+    slots: '{n} clips',
     mediaImport: 'Importado',
     mediaProject: 'Medios',
     mediaPicked: 'De la biblioteca',

@@ -1,0 +1,58 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Your clip</title>
+<style>
+/*
+ * A template's place for the person's own picture: its number and what to do, until a video or a photo replaces it
+ * (the clip's Replace, or one dropped on it). A page of OpenFilm's library (CC0).
+ */
+:root {
+  --tone: #2b3340;
+  --n: '1';
+}
+html, body { margin: 0; height: 100%; overflow: hidden; }
+body {
+  background:
+    radial-gradient(120% 90% at 30% 20%, color-mix(in srgb, var(--tone) 70%, #ffffff) 0%, transparent 60%),
+    linear-gradient(160deg, var(--tone), color-mix(in srgb, var(--tone) 55%, #000000));
+  font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Helvetica Neue', Arial, sans-serif;
+  color: #fff;
+  display: grid; place-items: center;
+}
+/* a slow light across it, so a still frame of it never reads as a broken picture */
+.sheen {
+  position: fixed; inset: -20%;
+  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.08) 50%, transparent 60%);
+  animation: sheen 3.2s ease-in-out infinite;
+}
+@keyframes sheen { from { transform: translateX(-60%); } to { transform: translateX(60%); } }
+.mark { position: relative; display: grid; justify-items: center; gap: 2.2vmin; text-align: center; }
+.frame {
+  width: 22vmin; height: 15vmin; border-radius: 2.4vmin;
+  border: 0.45vmin dashed rgba(255, 255, 255, 0.55);
+  display: grid; place-items: center;
+}
+.frame::before { content: var(--n); font-size: 8vmin; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+.label { font-size: 3.6vmin; font-weight: 600; opacity: 0.92; }
+.hint { font-size: 2.3vmin; opacity: 0.55; }
+</style>
+</head>
+<body>
+<div class="sheen"></div>
+<div class="mark">
+  <div class="frame"></div>
+  <div class="label">Your clip</div>
+  <div class="hint">Replace with a video or photo</div>
+</div>
+<script>
+window.film = { frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

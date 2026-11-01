@@ -25,7 +25,7 @@ import { CategoryIcon, Empty } from './icons';
 import { FEATURED, STARRED, VoicesPane } from './VoicesPane';
 
 type Category = 'media' | 'voice' | LibraryCategory;
-const CATEGORIES: Category[] = ['media', 'voice', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition'];
+const CATEGORIES: Category[] = ['media', 'voice', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition', 'template'];
 
 /** The side bar's starred line: a category's things the person starred ('' is all of it, else one of its groups). */
 const FAVORITES = STARRED;
@@ -209,7 +209,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
                     ))}
                   </div>
                 ) : (
-                  <div className={`grid gap-x-2.5 gap-y-3 ${cat === 'sticker' ? 'grid-cols-[repeat(auto-fill,minmax(68px,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(96px,1fr))]'}`}>
+                  <div className={`grid gap-x-2.5 gap-y-3 ${cat === 'sticker' ? 'grid-cols-[repeat(auto-fill,minmax(68px,1fr))]' : cat === 'template' ? 'grid-cols-[repeat(auto-fill,minmax(140px,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(96px,1fr))]'}`}>
                     {items.map((it) => (
                       <Card key={it.id} item={it} lang={lang} picked={picked === it.id} kept={favorites.includes(it.id)} square={cat === 'sticker'}
                         onPick={() => pick(picked === it.id ? null : it)} onAdd={() => actions.add(it)} />
@@ -352,6 +352,17 @@ function AddButton({ item, onAdd, className }: { item: LibraryItem; onAdd: () =>
 
 const SAMPLE = libraryUrl('filters/sample.jpg');
 
+/** A template's clips for the person's own pictures, and how long it runs. */
+function TemplateBadge({ item }: { item: LibraryItem }) {
+  const t = useT();
+  const secs = Math.round((item.durationMs ?? 0) / 1000);
+  return (
+    <span className="pointer-events-none absolute bottom-1 left-1 rounded-[4px] bg-black/55 px-1.5 py-[1px] text-[10px] font-medium tabular-nums text-white">
+      {item.slots ? `${t('assetDrawer.slots').replace('{n}', String(item.slots))} · ` : ''}{secs}s
+    </span>
+  );
+}
+
 function Card({ item, lang, picked, kept, square, onPick, onAdd }: {
   item: LibraryItem; lang: ReturnType<typeof useLanguage>; picked: boolean; kept: boolean; square: boolean; onPick: () => void; onAdd: () => void;
 }) {
@@ -376,6 +387,7 @@ function Card({ item, lang, picked, kept, square, onPick, onAdd }: {
         {hover && item.kind !== 'look' && !item.still ? <video src={previewUrl(item)} autoPlay loop muted playsInline className="absolute inset-0 h-full w-full object-cover" /> : null}
         <StarButton item={item} kept={kept} className={`absolute right-1 top-1 h-5 w-5 place-items-center rounded-full bg-black/45 ${kept ? 'grid text-[#ffd35a]' : 'hidden text-white group-hover:grid'}`} />
         <AddButton item={item} onAdd={onAdd} className="absolute bottom-1 right-1 hidden h-[22px] w-[22px] place-items-center rounded-full bg-[var(--tl-accent)] text-black shadow-md group-hover:grid" />
+        {item.kind === 'group' ? <TemplateBadge item={item} /> : null}
       </div>
       <div className={`mt-1.5 truncate px-0.5 text-[11.5px] ${picked ? 'text-[var(--tl-accent)]' : 'text-[var(--text-muted)] group-hover:text-[var(--text)]'}`}>{name}</div>
     </div>
