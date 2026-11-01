@@ -2329,6 +2329,7 @@ export const en = {
       keyless: "Works without a key: your agent's searches and the addresses it reads go to {name}. A key lifts its limits.",
       addKey: 'Add a key',
       own: {
+      account: 'View account',
         title: "Custom services",
         note: "Services not listed above, as many as you like: one you run on this computer or one online (your own voice, a transcription server, an API not listed), with any interface. OpenFilm doesn't call them itself: your agent reads your description and calls them, and their keys stay on this computer, out of the agent's sight. You can also tell your agent about a service in the chat instead; set it up here when it takes a key, so the key stays out of the conversation.",
         add: "Add a custom service",

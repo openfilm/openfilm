@@ -3,8 +3,9 @@
  * effects, transcripts, images, video and web searches from, each a chip, the connected ones first, then the
  * recommended ones (lib/providers RECOMMENDED_PROVIDERS), the rest and adding one behind "N more".
  *
- * A chip opens the service's card (ProviderDialog): who it is, Connect (or how it is connected, and Disconnect), how
- * it is paid, and every kind it could make with the models it makes it with. Connect is the same for every service:
+ * A chip opens the service's card (ProviderDialog): who it is, Connect (or how it is connected, its account page for one
+ * signed in to, and Disconnect), how it is paid, and every kind it could make with the models it makes it with.
+ * Connect is the same for every service:
  * ElevenLabs, OpenAI, Google, Microsoft Azure, fal.ai, OpenRouter, Groq, Pexels, Pixabay, Brave Search and Tavily then
  * take the person's own key, which pays that service directly (a key in the environment shows as such and stays
  * there); OpenFilm signs in to the person's OpenFilm account in their browser; Keenable connects at once and takes a
@@ -17,7 +18,7 @@ import { useT } from '@/i18n';
 import { AZURE_SERVICES, PROVIDER_SITES, SERVICE_VERBS, azureKey, providerOrder, type OwnProvider, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
 import { customProblem } from './CustomServices';
 import { ProviderMark } from './ProviderMark';
-import { SettingsButton, SettingsField, settingsError, settingsLink } from './ui';
+import { SettingsButton, SettingsField, SettingsLinkButton, settingsError, settingsLink } from './ui';
 
 /** Where a new built-in provider is proposed, and what it needs. */
 const ADDING_PROVIDERS = 'https://github.com/openfilm/openfilm/blob/main/CONTRIBUTING.md#adding-a-media-provider';
@@ -197,6 +198,8 @@ function Connection({ provider, hook, header }: {
 
   const action = provider.source ? (
     <>
+      {/* signed in: the account's own page, where its balance, usage and computers are */}
+      {signIn ? <SettingsLinkButton href={provider.keysUrl}>{t('settings.providers.account')}<ExternalLink size={12} /></SettingsLinkButton> : null}
       {keyWanted && !adding ? <SettingsButton variant="quiet" onClick={() => setAdding(true)}>{t('settings.providers.addKey')}</SettingsButton> : null}
       <SettingsButton variant="quiet" disabled={busy} onClick={() => void hook.removeKey(provider.id)}>{t('settings.providers.disconnect')}</SettingsButton>
     </>
