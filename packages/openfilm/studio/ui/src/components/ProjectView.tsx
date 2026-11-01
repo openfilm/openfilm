@@ -9,7 +9,9 @@
 import * as React from 'react';
 import { ArrowLeftRight, BookmarkPlus, ClipboardCopy, ClipboardPaste, Film as FilmIcon, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, TriangleAlert, Upload, Workflow } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
-import { readMotion, withPreset } from '../../../../src/clip-motion.mjs';
+import { MOTION_PROPS, readMotion, valueAt, withPreset, type Motion, type MotionProp } from '../../../../src/clip-motion.mjs';
+import { easedMotion, keyId, keyedBox, movedKeys, parseKeyId, withoutKeys, type EaseCommand } from '@/lib/motion-keys';
+import type { MotionLanes } from './MotionLanes';
 import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type Op, type ProjectFilm, type ProjectSettings, type SavedGroupClip } from '@/api';
 import { useLanguage, useT } from '@/i18n';
 import { useFilm, type OutsideStep, type Step } from '@/editor/use-film';
@@ -852,22 +854,123 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     return filmEdit(ops, label, quiet, outside);
   }, [filmEdit]);
   /** `quiet`: the caller shows why an edit was refused itself (the inspector does, beside its field) */
-  const editBlocks = React.useCallback((asked: ClipEdit[], quiet = false): Promise<string | null> => {
+  const editBlocks = React.useCallback((given: ClipEdit[], quiet = false): Promise<string | null> => {
     const current = filmRef.current;
+    /* a box changed (on the picture, by its fields) while its position, scale or rotation moves: a keyframe at the
+       playhead for those, as an animation editor keys a value changed with its stopwatch on (lib/motion-keys keyedBox);
+       an edit that writes the clip's keyframes itself is taken as it is */
+    const asked = given.flatMap((e): ClipEdit[] => {
+      if (e.prop !== 'box' || !e.value || given.some((o) => o.loc === e.loc && o.prop === 'motion')) return [e];
+      const id = clipIdAt(current, e.loc);
+      const clip = id ? current?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === id) : null;
+      const block = blocksRef.current.find((bl) => bl.clipId === id);
+      if (!clip || !block?.size) return [e];
+      const local = (timeRef.current - block.startMs) / 1000;
+      if (local < 0 || local > (block.endMs - block.startMs) / 1000) return [e];
+      const motion = readMotion(clip as { id: string; style?: string }, current?.keyframes);
+      const keyed = keyedBox((clip.box ?? {}) as Record<string, number>, e.value as Record<string, number>, block.size, motion, local, 1 / Math.max(1, projectFps));
+      if (!keyed) return [e];
+      return [{ loc: e.loc, prop: 'box', value: Object.keys(keyed.box).length ? keyed.box as Record<string, number> : null }, { loc: e.loc, prop: 'motion', value: keyed.motion as unknown as Record<string, unknown> }];
+    });
     /* a locked track is the person's: nothing on it changes, whichever way the edit came (the picture, the inspector) */
     if (lockedEdits(asked, current).length) return Promise.resolve(t('timeline.trackLocked'));
     const edits = apartOnTracks(asked, blocksRef.current);
     const mapped = edits.map((e) => ({ clip: clipIdAt(current, e.loc), prop: e.prop, value: e.value }));
     if (mapped.some((e) => !e.clip)) return Promise.resolve(t('timeline.editFail'));
     return edit([{ op: 'props', edits: mapped as { clip: string; prop: string; value: never }[] }], editStepLabel(edits, tracksRef.current), quiet);
-  }, [edit, t]);
-  /* a clip's keyframes, its own seconds, as the timeline marks them on the picked clip */
-  const keyTimesOf = React.useCallback((id: string) => {
-    const clip = film.film?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === id);
-    if (!clip) return [];
-    const motion = readMotion(clip as { id: string; style?: string }, film.film?.keyframes);
-    return [...new Set(Object.values(motion).flatMap((keys) => (keys ?? []).map((k) => k.t)))].sort((a, b) => a - b);
+  }, [edit, t, projectFps]);
+  /* ── keyframes on the timeline (components/MotionLanes): the picked clip's moving properties as rows under its track,
+     the keyframes picked there, and what F9, Delete, ⌥←/→ and their menu do to them (lib/motion-keys) ── */
+  const [pickedKeys, setPickedKeys] = React.useState<ReadonlySet<string>>(() => new Set());
+  const [keyMenu, setKeyMenu] = React.useState<{ x: number; y: number } | null>(null);
+  const motionBlock = selectedBlocks.length === 1 && selectedBlocks[0]!.clipId && selectedBlocks[0]!.loc ? selectedBlocks[0]! : null;
+  React.useEffect(() => { setPickedKeys(new Set()); setKeyMenu(null); }, [motionBlock?.clipId]);
+  const motionOfBlock = React.useCallback((block: TimelineBlock | null): Motion => {
+    const clip = block?.clipId ? film.film?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === block.clipId) : null;
+    return clip ? readMotion(clip as { id: string; style?: string }, film.film?.keyframes) : {};
   }, [film.film]);
+  /* the picked clip's keyframes rewritten; the ones picked follow where they went */
+  const rewriteMotion = React.useCallback((next: Motion, picked?: ReadonlySet<string>) => {
+    if (!motionBlock?.loc) return;
+    if (picked) setPickedKeys(picked);
+    void editBlocks([{ loc: motionBlock.loc, prop: 'motion', value: Object.keys(next).length ? (next as unknown as Record<string, unknown>) : null }]).then((err) => { if (err) toast.showError(err); });
+  }, [motionBlock, editBlocks, toast]);
+  const keyCommand = React.useCallback((what: EaseCommand | 'delete' | { move: number }) => {
+    if (!pickedKeys.size) return;
+    const motion = motionOfBlock(motionBlock);
+    if (what === 'delete') { rewriteMotion(withoutKeys(motion, pickedKeys), new Set()); return; }
+    if (typeof what === 'object') {
+      const moved = movedKeys(motion, pickedKeys, what.move);
+      /* the picked ones, where they are now */
+      const now = new Set([...pickedKeys].flatMap((id) => {
+        const k = parseKeyId(id);
+        if (!k) return [];
+        const lowest = Math.min(...[...pickedKeys].map((x) => parseKeyId(x)).filter((x) => x?.prop === k.prop).map((x) => x!.t));
+        return [keyId(k.prop, Math.round((k.t + Math.max(what.move, -lowest)) * 1000) / 1000)];
+      }));
+      rewriteMotion(moved, now);
+      return;
+    }
+    rewriteMotion(easedMotion(motion, pickedKeys, what));
+  }, [pickedKeys, motionBlock, motionOfBlock, rewriteMotion]);
+  const keyFrameS = 1 / Math.max(1, projectFps);
+  React.useEffect(() => {
+    if (!pickedKeys.size) return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      let done = true;
+      if (e.key === 'F9') keyCommand(e.metaKey && e.shiftKey ? 'easy-out' : e.shiftKey ? 'easy-in' : 'easy');
+      else if (e.key === 'Backspace' || e.key === 'Delete') keyCommand('delete');
+      else if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) keyCommand({ move: (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 10 : 1) * keyFrameS });
+      else if (e.key === 'Escape') setPickedKeys(new Set());
+      else done = false;
+      if (done) { e.preventDefault(); e.stopPropagation(); }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [pickedKeys, keyCommand, keyFrameS]);
+  const MOTION_LABEL: Record<MotionProp, string> = { translate: 'inspector.keyPosition', scale: 'inspector.keyScale', rotate: 'inspector.keyRotate', opacity: 'inspector.keyOpacity' };
+  const motionLanes = React.useMemo<MotionLanes | null>(() => {
+    if (!motionBlock?.clipId) return null;
+    const motion = motionOfBlock(motionBlock);
+    const rows = MOTION_PROPS.filter((p) => motion[p]?.length).map((p) => ({ prop: p, label: t(MOTION_LABEL[p]), keys: motion[p]! }));
+    if (!rows.length) return null;
+    const startMs = motionBlock.startMs;
+    return {
+      clipId: motionBlock.clipId, startMs, endMs: motionBlock.endMs, rows, picked: pickedKeys, playheadMs: timeMs, frameMs: 1000 * keyFrameS,
+      onPick: (ids, mode) => setPickedKeys((was) => {
+        if (mode === 'set') return new Set(ids);
+        const next = new Set(was);
+        for (const id of ids) { if (mode === 'toggle' && next.has(id)) next.delete(id); else next.add(id); }
+        return next;
+      }),
+      onMove: (dt) => keyCommand({ move: dt }),
+      onToggleHere: (prop) => {
+        const local = (timeRef.current - startMs) / 1000;
+        const keys = motion[prop] ?? [];
+        const here = keys.find((k) => Math.abs(k.t - local) < keyFrameS / 2);
+        const rest = keys.filter((k) => k !== here);
+        if (!here) rest.push({ t: Math.round(local * 1000) / 1000, v: valueAt(prop, keys, local) });
+        rest.sort((a, b) => a.t - b.t);
+        const next = { ...motion };
+        if (rest.length) next[prop] = rest; else delete next[prop];
+        rewriteMotion(next);
+      },
+      onSeek: seek,
+      onMenu: (e) => setKeyMenu({ x: e.clientX, y: e.clientY }),
+      labels: { prev: t('inspector.keyPrev'), next: t('inspector.keyNext'), add: t('inspector.keyAdd'), remove: t('inspector.keyRemove') },
+    };
+  }, [motionBlock, motionOfBlock, pickedKeys, timeMs, keyFrameS, keyCommand, rewriteMotion, seek, t]); // eslint-disable-line react-hooks/exhaustive-deps
+  const keyMenuItems: ContextMenuEntry[] = [
+    { id: 'easy', label: t('inspector.eases.ease-in-out'), shortcut: 'F9', onSelect: () => keyCommand('easy') },
+    { id: 'easy-in', label: t('inspector.eases.ease-in'), shortcut: '⇧F9', onSelect: () => keyCommand('easy-in') },
+    { id: 'easy-out', label: t('inspector.eases.ease-out'), shortcut: '⌘⇧F9', onSelect: () => keyCommand('easy-out') },
+    { id: 'linear', label: t('inspector.eases.linear'), onSelect: () => keyCommand('linear') },
+    { id: 'hold', label: t('inspector.eases.hold'), onSelect: () => keyCommand('hold') },
+    { id: 'sep', separator: true },
+    { id: 'delete', label: t('inspector.keyRemove'), shortcut: '⌫', danger: true, onSelect: () => keyCommand('delete') },
+  ];
   /* the inspector's keyframes: a clip's (src/clip-motion.mjs), the playhead, and going to a moment */
   const motionHost = React.useMemo<ClipMotionHost>(() => ({
     of: (id) => {
@@ -3328,6 +3431,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 )}
               </div>
             </div>
+            {keyMenu ? <ContextMenu x={keyMenu.x} y={keyMenu.y} dense items={keyMenuItems} onClose={() => setKeyMenu(null)} /> : null}
             {titleMenu ? (
               <ContextMenu x={titleMenu.x} y={titleMenu.y} onClose={() => setTitleMenu(null)}
                 items={projectMenuItems(t, { onRename: startRename, onCoverFromFrame: coverFromFrame, onReveal: () => reveal('') })} />
@@ -3776,7 +3880,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     onEditOps={editOps}
                     links={clipLinks}
                     fades={clipFades}
-                    keyTimesOf={keyTimesOf}
+                    motionLanes={motionLanes}
                     transitions={filmTransitions}
                     onTransition={askTransition}
                     pickedTransition={pickedTr?.key ?? null}

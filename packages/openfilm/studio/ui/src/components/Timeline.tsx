@@ -153,6 +153,7 @@ import { OperationHistory, type SessionTimeline } from './OperationHistory';
 import { BlockThumbs } from './BlockThumbs';
 import { BlockWaveform } from './BlockWaveform';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
+import { LANE_H, LANE_PAD, MotionLaneHeads, MotionLaneRows, type MotionLanes } from './MotionLanes';
 import type { PlaybackClock } from './LiveTime';
 import { CaptionsIcon } from './player-controls/controls-bar';
 import { inHostPanel, isTypingTarget } from './typing-target';
@@ -285,7 +286,11 @@ function laneTone(track: TimelineTrack, selected: boolean): string {
 }
 
 /** A row's height: the person's for its track (lib/track-heights), else the timeline's own (the main track taller). */
-function rowH(track: Pick<TimelineTrack, 'kind' | 'height' | 'main'>): number {
+function rowH(track: Pick<TimelineTrack, 'kind' | 'height' | 'main' | 'extra'>): number {
+  return baseRowH(track) + (track.extra ?? 0);
+}
+/** The row's own height, without the moving properties under it: what its clips are drawn in. */
+function baseRowH(track: Pick<TimelineTrack, 'kind' | 'height' | 'main'>): number {
   return track.height ?? ownTrackHeight(track);
 }
 
@@ -713,8 +718,8 @@ export interface TimelineProps {
    * onEditOps). Nothing else is drawn for them: where the handle sits says how long they are.
    */
   fades?: ReadonlyMap<string, FadeMs>;
-  /** A clip's keyframes, its own seconds (src/clip-motion.mjs): diamonds along the bottom of the picked clip, each a seek. */
-  keyTimesOf?: (clipId: string) => readonly number[];
+  /** The picked clip's moving properties: rows under its track with their keyframes (components/MotionLanes). */
+  motionLanes?: MotionLanes | null;
   /** The transitions the fades make (lib/transitions findTransitions): a mark over each, picked, resized, deleted. */
   transitions?: readonly FilmTransition[];
   /** A transition put on a cut (the cut's menu, a clip's menu), resized or deleted. Null = done. */
@@ -934,7 +939,7 @@ function TimelineRangeBar({
  * `timeMs` changes every tick and gets through; the rows inside are memoized too so only the playhead moves.
  */
 export const Timeline = React.memo(function Timeline({
-  tracks,
+  tracks: tracksIn,
   blockMenuExtra,
   trackMenuExtra,
   onReferBlocks,
@@ -992,12 +997,22 @@ export const Timeline = React.memo(function Timeline({
   onResizeTrack,
   onReplaceDrop,
   fades,
-  keyTimesOf,
+  motionLanes,
   transitions,
   onTransition,
   pickedTransition = null,
   onPickTransition,
 }: TimelineProps) {
+  /* the picked clip's moving properties: rows under its track (an animation editor's property rows), the track taller */
+  const tracks = React.useMemo(() => {
+    if (!motionLanes?.rows.length) return tracksIn;
+    let done = false;
+    return tracksIn.map((tr) => {
+      if (done || !tr.blocks.some((b) => b.clipId === motionLanes.clipId)) return tr;
+      done = true;
+      return { ...tr, extra: motionLanes.rows.length * LANE_H + LANE_PAD };
+    });
+  }, [tracksIn, motionLanes]);
   /* the project's frame rate: the ruler's labels, the frame grid and the arrow keys' steps */
   const fps = useTimecodeFps();
   /* "now" for event handlers is read from a ref: as a dependency it would rebuild callbacks twenty times a second
@@ -2666,8 +2681,12 @@ export const Timeline = React.memo(function Timeline({
     tracks, t, onEditBlocks, startLaneReorder, toggleTrack, openHeadMenu, trackNames, onRenameTrack, solo, onResizeTrack,
   ]);
   /** The head column (outside the scroller, so drawn apart from the rows). */
+  /* a head with the picked clip's moving properties under it: their names and navigators */
+  const withLaneHeads = (track: TimelineTrack, node: React.ReactElement) => (track.extra && motionLanes
+    ? <div key={track.lane}>{node}<div style={{ height: track.extra, background: laneTone(track, false) }} className="rounded-l-[3px]"><MotionLaneHeads lanes={motionLanes} /></div></div>
+    : node);
   const heads = React.useMemo(() => tracks.map((track, laneIndex) => {
-    const h = rowH(track);
+    const h = baseRowH(track);
     const liftingHead = laneOrder?.fromLane === laneIndex;
     const canReorder = Boolean(onEditBlocks && track.docIndex != null);
     const canToggle = Boolean(onEditBlocks && (track.docIndex != null || track.blocks.some((b) => b.loc)));
@@ -2680,7 +2699,7 @@ export const Timeline = React.memo(function Timeline({
     const renamingHere = renaming != null && renaming === track.docIndex && track.index === 1;
     /* far from the view, only its place (the one being renamed or dragged keeps all of it) */
     if ((laneIndex < nearFirst || laneIndex > nearLast) && !renamingHere && !liftingHead) {
-      return <div key={track.lane} className="rounded-l-[3px]" style={{ marginTop: GAP, height: h, background: laneTone(track, lit) }} />;
+      return <div key={track.lane} className="rounded-l-[3px]" style={{ marginTop: GAP, height: rowH(track), background: laneTone(track, lit) }} />;
     }
     /* typing a name always has its field; a name given shows when the row has room for it */
     const nameLine = renamingHere || (Boolean(given) && h >= HEAD_NAME_MIN_H);
@@ -2690,7 +2709,7 @@ export const Timeline = React.memo(function Timeline({
     const chatLit = chatTrack != null && track.docIndex === chatTrack;
     const pose = `${liftingHead}:${lit}:${targeted}:${renamingHere}:${chatLit}`;
     const cached = headElements.get(track.lane);
-    if (cached?.pose === pose) return cached.node;
+    if (cached?.pose === pose) return withLaneHeads(track, cached.node);
     const node = (
       /* each head is its own block with gaps between, matching its row one to one */
       <div
@@ -2806,8 +2825,8 @@ export const Timeline = React.memo(function Timeline({
       </div>
     );
     headElements.set(track.lane, { pose, node });
-    return node;
-  }), [tracks, t, laneOrder, onEditBlocks, startLaneReorder, toggleTrack, selectedLanes, openHeadMenu, chatTrack, trackNames, targetLane, renaming, onRenameTrack, solo, onResizeTrack, nearFirst, nearLast, headElements]);
+    return withLaneHeads(track, node);
+  }), [tracks, t, laneOrder, onEditBlocks, startLaneReorder, toggleTrack, selectedLanes, openHeadMenu, chatTrack, trackNames, targetLane, renaming, onRenameTrack, solo, onResizeTrack, nearFirst, nearLast, headElements, motionLanes]);
 
   /* row backgrounds are fixed to the view and only follow vertical scroll; the clips move horizontally above them */
   const laneSkins = React.useMemo(() => tracks.map((track) => (
@@ -3020,7 +3039,7 @@ export const Timeline = React.memo(function Timeline({
       ? new Set([drag.preview.id, ...drag.preview.moves.map((m) => m.id)])
       : null;
     return tracks.map((track, laneIndex) => {
-    const h = rowH(track);
+    const h = baseRowH(track);
     const liftingHere = Boolean(liftingIds && track.blocks.some((b) => liftingIds.has(b.id)));
     /* a row far from the view keeps its place and its clips in hand, moving or selected (see rowsNear) */
     const near = laneIndex >= nearFirst && laneIndex <= nearLast;
@@ -3033,7 +3052,7 @@ export const Timeline = React.memo(function Timeline({
         style={{
           marginTop: GAP,
           width: '100%',
-          height: h,
+          height: rowH(track),
           /* no background here: it would scroll with the content (see laneSkins) */
           filter: track.hidden ? 'grayscale(1)' : undefined,
           /* the row with a lifted clip goes on top, or the rows below would cover the floating clip */
@@ -3042,6 +3061,7 @@ export const Timeline = React.memo(function Timeline({
         /* right-click on empty space: the track menu at this time (clips stop their own right-clicks) */
         onContextMenu={(e) => openLaneMenu(e, track.lane)}
       >
+          {track.extra && motionLanes ? <MotionLaneRows lanes={motionLanes} top={h} pxPerMs={pxPerMs} /> : null}
           {track.blocks.map((block) => {
             /* while dragging, drawn where the preview says (film.html only updates after the write); a clip the edit
                takes out is drawn faint where it is */
@@ -3140,12 +3160,13 @@ export const Timeline = React.memo(function Timeline({
                 data-media-trouble={trouble}
                 data-chat-lit={chatLit ? '' : undefined}
                 /* overflow is clipped on the inner box: the selection frame is drawn outside */
-                className={`group/block absolute inset-y-0 ${
+                className={`group/block absolute top-0 ${
                   lifting ? 'z-[12]' : picked || chatLit ? 'z-10' : live ? 'z-10' : ''
                 }`}
                 style={{
                   left,
                   width,
+                  height: h,
                   opacity: gone ? 0.25 : block.off ? 0.4 : floating ? 0.72 : 1,
                   /* follows the pointer up and down: a lifted clip really leaves its row */
                   transform: floating
@@ -3414,19 +3435,6 @@ export const Timeline = React.memo(function Timeline({
                     </span>
                   );
                 }) : null}
-                {/* its keyframes, picked: a diamond each along its bottom edge, a click takes the playhead there */}
-                {keyTimesOf && block.clipId && selected.includes(block.id) && width > 12 ? keyTimesOf(block.clipId).map((s) => {
-                  const x = s * 1000 * pxPerMs;
-                  if (x < 0 || x > width) return null;
-                  return (
-                    <span key={`k${s}`} role="presentation" data-keyframe={s} title={t('inspector.keyframes')}
-                      className="absolute bottom-[1px] z-[5] grid h-[11px] w-[11px] -translate-x-1/2 cursor-pointer place-items-center"
-                      style={{ left: x }}
-                      onPointerDown={(e) => { e.stopPropagation(); onSeek(startMs + s * 1000); }}>
-                      <svg width="9" height="9" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1 11 6 6 11 1 6Z" fill="#fff" stroke="rgba(0,0,0,.55)" strokeWidth="1.2" /></svg>
-                    </span>
-                  );
-                }) : null}
               </div>
             );
             clipElements.set(block.id, { pose, node });
@@ -3505,7 +3513,7 @@ export const Timeline = React.memo(function Timeline({
     openBlockMenu, openLaneMenu, onEditBlocks, collapseIfClick, selectOne, setSelected, clipElements, thumbWindow, view.width,
     chatClip, chatDraft, placedOf, pickForTrim, gap, withLinked, runSplit, trackOverlay,
     fadeOfBlock, fadeDrag, startFade, volumeDrag, startVolume, transitions, transitionDrag, pickedTransition, onPickTransition, onTransition, startTransitionResize,
-    nearFirst, nearLast, speedOn, hoveredBlock,
+    nearFirst, nearLast, speedOn, hoveredBlock, motionLanes,
   ]);
 
   const tickMarks = React.useMemo(() => ticks.map(({ ms, label }) => {

@@ -438,6 +438,8 @@ export interface TimelineTrack {
   incomplete?: boolean;
   /** How tall the row is drawn, px, when the person set it (lib/track-heights); else the timeline's own for its kind. */
   height?: number;
+  /** Room under the row's clips, px: the picked clip's moving properties (components/MotionLanes). */
+  extra?: number;
   /**
    * The main track's rows: the lowest picture track, where the magnet and linkage act (lib/timeline-edit mainTrackOf),
    * marked and drawn taller than the others.
