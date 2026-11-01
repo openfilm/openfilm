@@ -156,12 +156,20 @@ export const FILM_SUBTITLE_SIZE_PCT_MAX = 10;
  * A ready-made look, like a character style: picking one sets the whole set, and every value can still be changed
  * after. They stay because the combinations that read well are few; built from scratch, subtitles tend to sink into
  * the picture.
- * @typedef {'outline' | 'bar' | 'bold' | 'yellow' | 'clean'} FilmSubtitleLookId
+ * @typedef {'outline' | 'bar' | 'bold' | 'yellow' | 'clean' | 'soft-box' | 'white-box' | 'yellow-box' | 'news' | 'variety' | 'pink'
+ *   | 'blue-edge' | 'gold' | 'block' | 'neon' | 'cinema' | 'type' | 'thin'} FilmSubtitleLookId
  * @typedef {Pick<FilmSubtitleStyle, 'font' | 'fill' | 'stroke' | 'shadow' | 'box'>} FilmSubtitleLook
  */
 
 /** @type {readonly FilmSubtitleLookId[]} */
-export const FILM_SUBTITLE_LOOK_IDS = ['outline', 'bar', 'bold', 'yellow', 'clean'];
+export const FILM_SUBTITLE_LOOK_IDS = [
+  'outline', 'bar', 'bold', 'yellow', 'clean', 'soft-box', 'white-box', 'yellow-box', 'news', 'variety', 'pink', 'blue-edge', 'gold',
+  'block', 'neon', 'cinema', 'type', 'thin',
+];
+
+/** Serif and typewriter stacks for the film and type looks: each platform's own, Chinese, Japanese and Korean included. */
+const SERIF_STACK = '"Songti SC", "Noto Serif SC", "Source Han Serif SC", "SimSun", Georgia, "Times New Roman", serif';
+const TYPE_STACK = 'ui-monospace, Menlo, Consolas, "Courier New", "PingFang SC", "Microsoft YaHei", monospace';
 
 /** @param {Partial<FilmSubtitleFont>} [over] @returns {FilmSubtitleFont} */
 function font(over = {}) {
@@ -220,6 +228,102 @@ export const FILM_SUBTITLE_LOOKS = {
     fill: '#ffffff',
     stroke: null,
     shadow: { dxEm: 0, dyEm: 0.04, blurEm: 0.2, color: 'rgba(0,0,0,0.62)' },
+    box: null,
+  },
+  /* a rounded, see-through box: a vlog's */
+  'soft-box': {
+    font: font({ weight: 600 }),
+    fill: '#ffffff',
+    stroke: null,
+    shadow: null,
+    box: { color: '#000000', opacity: 0.38, radiusEm: 0.45, padXEm: 0.6, padYEm: 0.14 },
+  },
+  'white-box': {
+    font: font({ weight: 700 }),
+    fill: '#111111',
+    stroke: null,
+    shadow: null,
+    box: { color: '#ffffff', opacity: 0.95, radiusEm: 0.14, padXEm: 0.45, padYEm: 0.1 },
+  },
+  'yellow-box': {
+    font: font({ weight: 800 }),
+    fill: '#111111',
+    stroke: null,
+    shadow: null,
+    box: { color: '#ffd400', opacity: 1, radiusEm: 0.1, padXEm: 0.45, padYEm: 0.1 },
+  },
+  /* a news bar: white on red, square */
+  news: {
+    font: font({ weight: 700, letterSpacingEm: 0.02 }),
+    fill: '#ffffff',
+    stroke: null,
+    shadow: null,
+    box: { color: '#d81f2a', opacity: 1, radiusEm: 0, padXEm: 0.5, padYEm: 0.12 },
+  },
+  /* a variety show's: yellow letters, a red edge, a hard shadow */
+  variety: {
+    font: font({ weight: 900, letterSpacingEm: 0.02 }),
+    fill: '#ffe14d',
+    stroke: { widthEm: 0.1, color: '#e8263f' },
+    shadow: { dxEm: 0.04, dyEm: 0.07, blurEm: 0, color: 'rgba(60,0,10,0.85)' },
+    box: null,
+  },
+  pink: {
+    font: font({ weight: 900, letterSpacingEm: 0.02 }),
+    fill: '#ff5fa2',
+    stroke: { widthEm: 0.09, color: '#ffffff' },
+    shadow: { dxEm: 0, dyEm: 0.06, blurEm: 0.12, color: 'rgba(120,0,60,0.55)' },
+    box: null,
+  },
+  'blue-edge': {
+    font: font({ weight: 800, letterSpacingEm: 0.02 }),
+    fill: '#ffffff',
+    stroke: { widthEm: 0.09, color: '#1f6bff' },
+    shadow: { dxEm: 0, dyEm: 0.05, blurEm: 0.1, color: 'rgba(0,20,80,0.6)' },
+    box: null,
+  },
+  gold: {
+    font: font({ weight: 800, letterSpacingEm: 0.03 }),
+    fill: '#ffd77a',
+    stroke: { widthEm: 0.07, color: '#4a2c00' },
+    shadow: { dxEm: 0, dyEm: 0.05, blurEm: 0.14, color: 'rgba(0,0,0,0.6)' },
+    box: null,
+  },
+  /* heavy letters lifted off the picture by a hard shadow below them */
+  block: {
+    font: font({ weight: 900, letterSpacingEm: 0.01 }),
+    fill: '#ffffff',
+    stroke: { widthEm: 0.06, color: '#111111' },
+    shadow: { dxEm: 0.05, dyEm: 0.08, blurEm: 0, color: '#111111' },
+    box: null,
+  },
+  neon: {
+    font: font({ weight: 600, letterSpacingEm: 0.06 }),
+    fill: '#f2feff',
+    stroke: null,
+    shadow: { dxEm: 0, dyEm: 0, blurEm: 0.35, color: '#00e1ff' },
+    box: null,
+  },
+  /* a film's: serif, spaced, a soft shadow */
+  cinema: {
+    font: font({ family: SERIF_STACK, weight: 400, letterSpacingEm: 0.08 }),
+    fill: '#f3efe4',
+    stroke: null,
+    shadow: { dxEm: 0, dyEm: 0.04, blurEm: 0.25, color: 'rgba(0,0,0,0.75)' },
+    box: null,
+  },
+  type: {
+    font: font({ family: TYPE_STACK, weight: 500, letterSpacingEm: 0.02 }),
+    fill: '#ffffff',
+    stroke: null,
+    shadow: null,
+    box: { color: '#000000', opacity: 0.8, radiusEm: 0.04, padXEm: 0.35, padYEm: 0.08 },
+  },
+  thin: {
+    font: font({ weight: 300, letterSpacingEm: 0.12 }),
+    fill: '#ffffff',
+    stroke: null,
+    shadow: { dxEm: 0, dyEm: 0.03, blurEm: 0.18, color: 'rgba(0,0,0,0.55)' },
     box: null,
   },
 };

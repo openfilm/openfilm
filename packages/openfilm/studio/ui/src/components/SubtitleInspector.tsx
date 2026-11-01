@@ -84,7 +84,7 @@ export function SubtitleInspector({ subtitles, width, onClose }: {
       <div data-subtitle-inspector className="py-2">
           {/* the looks are shown as samples, not names: "heavy outline" and "bold" sound alike and look nothing alike.
               Picked = the style is exactly that look (worked out, not stored: change a color and it is no longer it) */}
-          <div className="flex gap-1.5 pb-1.5 pt-0.5">
+          <div className="grid grid-cols-6 gap-1.5 pb-1.5 pt-0.5">
             {SUBTITLE_LOOK_IDS.map((id) => (
               <LookSwatch
                 key={id}
@@ -830,7 +830,7 @@ function LookSwatch({
         onMouseDown={(e) => e.preventDefault()}
         aria-label={label}
         aria-pressed={active}
-        className="flex h-10 min-w-0 flex-1 items-center justify-center rounded-md transition hover:brightness-125"
+        className="flex h-10 min-w-0 items-center justify-center overflow-hidden rounded-md transition hover:brightness-125"
         style={{
           background: '#2a2a2a',
           outline: active ? '1px solid var(--text)' : '1px solid var(--border)',
