@@ -977,7 +977,10 @@ async function draw(t, live, play = null) {
     for (const c of coming) if (c.coming === turn) c.coming = 0;
     if (live && turn === watched) {
       for (const c of going) if (!c.shown) c.el.style.visibility = 'hidden';
-      for (const c of coming) if (c.shown) c.el.style.visibility = 'visible';
+      let appeared = false;
+      for (const c of coming) if (c.shown) { c.el.style.visibility = 'visible'; appeared = true; }
+      /* a page that came on shows now: an editor that reads the picture (Studio's Layers panel) looks again */
+      if (appeared) window.__filmEditor.appeared?.();
     }
   }
 }
@@ -1282,6 +1285,9 @@ window.__filmEditor = {
   },
   /** Set by a host (Studio's bridge) to hear of a page's own length and size learned as it first opens (see load). */
   learned: null,
+  /** Set by a host to hear of a page that came on being shown (its first frame drawn, see draw): it is in the picture
+      only then, and an editor that read the picture before (Studio's Layers panel) looks again. */
+  appeared: null,
   /**
    * The film after an edit (`look`: its file's filmHead, when the edit came from the file; another one than this film
    * was loaded with needs the page loaded again): changed in place (see change), resolving to true, or to false when
