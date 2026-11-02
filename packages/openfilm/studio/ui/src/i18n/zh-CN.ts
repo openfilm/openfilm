@@ -1622,8 +1622,6 @@ export const zhCN: Words = {
     resize: '调整时间轴大小',
     seek: '拖动播放头',
     split: '分割',
-    keyframes: '关键帧',
-    keyframesHint: '选中一个画面片段，它的位置、缩放、旋转、不透明度会在下方展开成属性行',
     subtitles: '字幕',
     subtitlesNone: '还没有字幕——影片有了人声后就会出现',
     subtitlesMakeOne: '生成字幕：有一个人声片段还没有文字稿',

@@ -968,20 +968,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const MOTION_LABEL: Record<MotionProp, string> = { translate: 'inspector.keyPosition', scale: 'inspector.keyScale', rotate: 'inspector.keyRotate', opacity: 'inspector.keyOpacity' };
   /* the picked clip's rows drawn as a graph (⇧F3, or its button) */
   const [motionGraph, setMotionGraph] = React.useState(false);
-  /* the timeline's keyframes switch: on, the picked picture clip opens its position, scale, rotation and opacity as
-     rows under its track, where keyframes are set, moved and eased */
-  const [keyframeMode, keepKeyframeMode] = useKeptFlag('openfilm.project.keyframes', false);
+  /* a picked picture clip that moves (its stopwatch turned on in the inspector, a preset): its position, scale,
+     rotation and opacity open as rows under its track, where its keyframes are moved and eased */
   const keyedPicture = motionBlock && (motionBlock.kind === 'mg' || motionBlock.kind === 'video') ? motionBlock : null;
-  /* the picked clip's first keyframe set (its stopwatch in the inspector, say): its rows open, so it shows where it went */
   const keyCount = keyedPicture ? MOTION_PROPS.reduce((n, p) => n + (motionOfBlock(keyedPicture)[p]?.length ?? 0), 0) : 0;
-  const keyedBefore = React.useRef<{ clip: string | undefined; n: number }>({ clip: undefined, n: 0 });
-  React.useEffect(() => {
-    const was = keyedBefore.current;
-    keyedBefore.current = { clip: keyedPicture?.clipId, n: keyCount };
-    if (was.clip === keyedPicture?.clipId && was.n === 0 && keyCount > 0 && !keyframeMode) keepKeyframeMode(true);
-  }, [keyedPicture?.clipId, keyCount, keyframeMode, keepKeyframeMode]);
   const motionLanes = React.useMemo<MotionLanes | null>(() => {
-    if (!keyframeMode || !keyedPicture?.clipId) return null;
+    if (!keyCount || !keyedPicture?.clipId) return null;
     const motionBlock = { ...keyedPicture, clipId: keyedPicture.clipId };
     const motion = motionOfBlock(motionBlock);
     const rows = MOTION_PROPS.map((p) => ({ prop: p, label: t(MOTION_LABEL[p]), keys: motion[p] ?? [] }));
@@ -1031,7 +1023,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       },
       labels: { prev: t('inspector.keyPrev'), next: t('inspector.keyNext'), add: t('inspector.keyAdd'), remove: t('inspector.keyRemove'), graph: t('inspector.keyGraph') },
     };
-  }, [keyframeMode, keyedPicture, motionOfBlock, pickedKeys, timeMs, keyFrameS, keyCommand, rewriteMotion, seek, t, motionGraph, film.film]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [keyCount, keyedPicture, motionOfBlock, pickedKeys, timeMs, keyFrameS, keyCommand, rewriteMotion, seek, t, motionGraph, film.film]); // eslint-disable-line react-hooks/exhaustive-deps
   /* the picked clip's position keyframes, drawn on the picture as its path; the same picks as its timeline rows */
   const motionPath = React.useMemo<MotionPathKeys | null>(() => {
     if (!motionBlock?.clipId || playing) return null;
@@ -3973,10 +3965,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     links={clipLinks}
                     fades={clipFades}
                     motionLanes={motionLanes}
-                    keyframeMode={{
-                      on: keyframeMode, onToggle: () => keepKeyframeMode(!keyframeMode), label: t('timeline.keyframes'),
-                      hint: keyedPicture ? null : t('timeline.keyframesHint'),
-                    }}
                     transitions={filmTransitions}
                     onTransition={askTransition}
                     pickedTransition={pickedTr?.key ?? null}

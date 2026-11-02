@@ -1621,8 +1621,6 @@ export const es: Words = {
     resize: 'Redimensionar línea de tiempo',
     seek: 'Arrastrar el cabezal de reproducción',
     split: 'Dividir',
-    keyframes: 'Fotogramas clave',
-    keyframesHint: 'Elige un clip de imagen: su posición, escala, rotación y opacidad se abren como filas debajo',
     subtitles: 'Subtítulos',
     subtitlesNone: 'Aún no hay subtítulos: aparecen cuando la película tiene voz',
     subtitlesMakeOne: 'Crear subtítulos: un clip de voz aún no tiene transcripción',

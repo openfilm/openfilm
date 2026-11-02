@@ -1618,8 +1618,6 @@ export const ko: Words = {
     resize: '타임라인 크기 조정',
     seek: '재생 헤드 드래그',
     split: '분할',
-    keyframes: '키프레임',
-    keyframesHint: '화면 클립을 선택하면 위치, 크기, 회전, 불투명도가 아래에 행으로 열립니다',
     subtitles: '자막',
     subtitlesNone: '아직 자막이 없습니다. 영상에 음성이 생기면 나타납니다',
     subtitlesMakeOne: '자막 만들기: 음성 클립 1개에 아직 대본이 없습니다',
