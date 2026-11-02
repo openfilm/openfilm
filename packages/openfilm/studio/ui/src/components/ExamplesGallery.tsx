@@ -1,7 +1,8 @@
 /**
  * The examples (films made with OpenFilm) and the skills, to start from or to learn from. One view, two places:
  *
- *   · start      the projects window's "Examples": the examples only; one is started from (copied into a new project)
+ *   · start      the projects window's "Examples": the examples only; one is copied into a new project to change, or,
+ *                over a film, pointed at in its chat for the agent to follow (`onReference`)
  *   · reference  the Community, over a film, from the app's chat (lib/host.ts `onCommand` `show-examples`): two views
  *                switched in its title row, Skills first (SkillsLibrary: those installed, and OpenFilm's to install),
  *                then Examples (one, or a part of it, a segment or a stretch dragged on its strip, is pointed at in the
@@ -137,7 +138,8 @@ export function ExamplesGallery({ mode, projectId = null, heading, initial, onCl
     const [hero, ...rest] = examples;
     body = (
       <Body note={community ? t('gallery.referenceNote') : t('gallery.discoverNote')}>
-        <Hero example={hero!} mode={mode} onOpen={() => setOpened({ kind: 'example', example: hero! })} onStart={() => onStart(hero!)} />
+        <Hero example={hero!} mode={mode} onOpen={() => setOpened({ kind: 'example', example: hero! })} onStart={() => onStart(hero!)}
+          {...(mode === 'start' && onReference ? { onReference: () => onReference(hero!, null) } : {})} />
         {rest.length ? (
           <div className="mt-8">
             <Grid>{rest.map((e) => <ExampleCard key={e.id} example={e} label={e.category ? kindLabel(e.category) : null} onOpen={() => setOpened({ kind: 'example', example: e })} />)}</Grid>
@@ -211,8 +213,11 @@ function Picture({ example, playing, fit = 'cover' }: { example: Example; playin
   );
 }
 
-/** The first example, wide: its preview under the pointer, its title over it, and how to start from it. */
-function Hero({ example, mode, onOpen, onStart }: { example: Example; mode: ExamplesMode; onOpen: () => void; onStart: () => void }) {
+/**
+ * The first example, wide: its preview under the pointer, its title over it, and what to do with it: copy it to change
+ * it, and (over a film) point the agent at it, each with a line saying what follows.
+ */
+function Hero({ example, mode, onOpen, onStart, onReference }: { example: Example; mode: ExamplesMode; onOpen: () => void; onStart: () => void; onReference?: () => void }) {
   const t = useT();
   const [hover, setHover] = React.useState(false);
   return (
@@ -227,11 +232,31 @@ function Hero({ example, mode, onOpen, onStart }: { example: Example; mode: Exam
           {example.description ? <div className="mt-1.5 line-clamp-2 max-w-[520px] text-[13px] leading-[19px] text-white/80">{example.description}</div> : null}
           {example.duration ? <div className="mt-1.5 text-[12px] text-white/55">{clock(example.duration)}</div> : null}
         </div>
-        <button type="button" onClick={(e) => { e.stopPropagation(); if (mode === 'reference') onOpen(); else onStart(); }}
-          className="shrink-0 rounded-[10px] bg-white px-4 py-2.5 text-[13px] font-medium text-black transition hover:bg-white/90">
-          {mode === 'reference' ? t('gallery.reference') : t('gallery.start')}
-        </button>
+        {onReference ? (
+          <div className="flex shrink-0 items-start gap-3">
+            <HeroAction label={t('gallery.reference')} hint={t('gallery.referenceHint')} onClick={onReference} />
+            <HeroAction primary label={t('gallery.start')} hint={t('gallery.startHint')} onClick={onStart} />
+          </div>
+        ) : (
+          <button type="button" onClick={(e) => { e.stopPropagation(); if (mode === 'reference') onOpen(); else onStart(); }}
+            className="shrink-0 rounded-[10px] bg-white px-4 py-2.5 text-[13px] font-medium text-black transition hover:bg-white/90">
+            {mode === 'reference' ? t('gallery.reference') : t('gallery.start')}
+          </button>
+        )}
       </div>
+    </div>
+  );
+}
+
+/** One of the hero's two: its button, and under it what follows from it. */
+function HeroAction({ label, hint, onClick, primary = false }: { label: string; hint: string; onClick: () => void; primary?: boolean }) {
+  return (
+    <div className="flex w-[200px] flex-col items-end gap-1.5">
+      <button type="button" onClick={(e) => { e.stopPropagation(); onClick(); }}
+        className={`rounded-[10px] px-4 py-2.5 text-[13px] font-medium transition ${primary ? 'bg-white text-black hover:bg-white/90' : 'border border-white/25 bg-white/10 text-white hover:bg-white/20'}`}>
+        {label}
+      </button>
+      <span className="text-right text-[11.5px] leading-[16px] text-white/70">{hint}</span>
     </div>
   );
 }
@@ -286,10 +311,10 @@ function ExampleDetail({ example, mode, onStart, onReference, onUseCanvas, onExp
   };
   const seek = (s: number) => { if (video.current) { video.current.currentTime = s; void video.current.play().catch(() => {}); } };
   const pick = (next: ExamplePart) => { setPart(next); if (next) seek(next.from); };
-  const primary = mode === 'reference' && onReference
-    ? { label: part ? t('gallery.referencePart') : t('gallery.reference'), run: () => onReference(example, part) }
-    : { label: t('gallery.start'), run: () => onStart(example) };
-  const secondary = mode === 'reference' ? { label: t('gallery.startNew'), run: () => onStart(example) } : null;
+  const refer = onReference ? { label: part ? t('gallery.referencePart') : t('gallery.reference'), run: () => onReference(example, part) } : null;
+  const copy = { label: t('gallery.start'), run: () => onStart(example) };
+  /* over a film from its chat, pointing the agent at it comes first; in the projects window, copying it */
+  const [primary, secondary] = mode === 'reference' && refer ? [refer, copy] : [copy, refer];
 
   return (
     <div className="px-6 pb-10">
@@ -354,7 +379,7 @@ function ExampleDetail({ example, mode, onStart, onReference, onUseCanvas, onExp
           <div className="mt-5 flex flex-col gap-2">
             <button type="button" onClick={primary.run}
               className="flex h-10 items-center justify-center gap-1.5 rounded-[10px] bg-[var(--text)] text-[13.5px] font-medium text-[var(--bg)] transition hover:opacity-90">
-              {mode === 'reference' ? null : <Play size={13} />}{primary.label}
+              {primary === copy ? <Play size={13} /> : null}{primary.label}
             </button>
             {secondary ? (
               <button type="button" onClick={secondary.run}
@@ -373,7 +398,8 @@ function ExampleDetail({ example, mode, onStart, onReference, onUseCanvas, onExp
               </button>
             ) : null}
           </div>
-          <p className="mt-3 text-[12px] leading-[17px] text-[var(--text-faint)]">{mode === 'reference' ? t('gallery.referenceHow') : t('gallery.startHow')}</p>
+          <p className="mt-3 text-[12px] leading-[17px] text-[var(--text-faint)]">{t('gallery.startHow')}</p>
+          {refer ? <p className="mt-1.5 text-[12px] leading-[17px] text-[var(--text-faint)]">{t('gallery.referenceHow')}</p> : null}
           <a href={example.url} target="_blank" rel="noreferrer" className="mt-auto flex items-center gap-1.5 pt-6 text-[12px] text-[var(--text-dim)] hover:text-[var(--text)]"><ExternalLink size={13} />{t('gallery.viewSource')}</a>
         </div>
       </div>

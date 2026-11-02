@@ -23,13 +23,13 @@ import { useT } from '@/i18n';
 import { folderApi, folderCounts, folderTrail, newProjectIn, type ProjectFolder } from '@/lib/project-folders';
 import { stillThere } from '@/lib/project-delete';
 import { studioHost } from '@/lib/host';
-import { SourceError, sourcesApi } from '@/lib/project-sources';
+import { SourceError, sourcesApi, type Example } from '@/lib/project-sources';
 import { LIST_WAIT_MS, within } from '@/lib/projects-page';
 import { readLastSubtitleStyle } from '@/lib/subtitles';
 import { ConfirmDialog } from './ConfirmDialog';
 import { ProjectsView, type LibraryProject } from './ProjectsView';
 import { FolderBrowserDialog, GitHubDialog } from './ProjectSources';
-import { ExamplesGallery, TitleSwitch } from './ExamplesGallery';
+import { ExamplesGallery, TitleSwitch, type ExamplePart } from './ExamplesGallery';
 import { ProjectCoverContext, posterUrl, useProjectCover } from './ProjectCover';
 import { LARGE_DIALOG_SIZE } from './dialog-chrome';
 
@@ -452,6 +452,15 @@ export function ProjectsPopover({
               heading={<LauncherSwitch view={view} onView={showView} />}
               onClose={onClose}
               onStart={(example) => setGithub({ url: example.url, start: true, title: example.title })}
+              /* over a film: the example pointed at in its chat, for the agent to follow (as the Community does) */
+              {...(currentProjectId && studioHost?.refer ? { onReference: (example: Example, part: ExamplePart) => {
+                void sourcesApi.exampleFolder(example.id).catch(() => {});
+                studioHost?.refer?.({
+                  kind: 'example', id: example.id, title: example.title, url: example.url, ...(example.description ? { description: example.description } : {}),
+                  ...(part ? { start: part.from, end: part.to, ...(part.segment ? { segment: part.segment } : {}) } : {}),
+                });
+                onClose?.();
+              } } : {})}
             />
           ) : lib.loaded ? (
             <ProjectCoverContext.Provider value={cover.actions}>

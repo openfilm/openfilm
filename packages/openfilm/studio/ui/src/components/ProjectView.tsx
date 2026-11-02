@@ -4826,7 +4826,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       {hostAssets?.open && hostPanel ? (
         <div className="fixed z-30 flex min-h-0 min-w-0 flex-col overflow-hidden border-t border-[var(--dock-line)] bg-[var(--dock-pane)]"
           style={{ top: HOST_PANEL_TOP, left: 0, bottom: hostAssets.bottom, width: HOST_PANEL_WIDTH }}>
-          <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} actions={library.actions} onServices={() => setSettingsOpen('models')} />
+          <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} actions={library.actions} onServices={() => setSettingsOpen('models')} projectId={projectId} onOpenSkill={(name) => setExamplesOpen({ kind: 'skill', name })} />
         </div>
       ) : null}
       <DesktopDialog open={desktopOpen} onClose={() => setDesktopOpen(false)} />
