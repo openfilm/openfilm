@@ -59,7 +59,15 @@
    "kind": "page",
    "durationMs": 800,
    "src": "exposure.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "A quick pre-flash, then the frame blows out to white from a glowing core and ebbs in a halo. For energetic cuts on a beat.",
+   "tags": [
+    "light",
+    "fade",
+    "intense",
+    "transition",
+    "trailer"
+   ]
   },
   {
    "id": "transitions/light-leak",
@@ -75,7 +83,15 @@
    "kind": "page",
    "durationMs": 1000,
    "src": "light-leak.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "Warm orange, rose and gold leaks drift across, merge into golden white over the cut, then clear. For warm, nostalgic or romantic cuts.",
+   "tags": [
+    "light",
+    "warm-tone",
+    "soft",
+    "nostalgic",
+    "transition"
+   ]
   },
   {
    "id": "transitions/flare-whip",
@@ -91,7 +107,15 @@
    "kind": "page",
    "durationMs": 700,
    "src": "flare-whip.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "A wide streak of light whips across the frame, cool at its leading edge, whites out the cut, exits warm. For fast, punchy cuts.",
+   "tags": [
+    "light",
+    "slide",
+    "intense",
+    "transition",
+    "trailer"
+   ]
   },
   {
    "id": "transitions/prism",
@@ -107,7 +131,15 @@
    "kind": "page",
    "durationMs": 900,
    "src": "prism.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "A rainbow-split light sweeps diagonally across the frame, flashes white over the cut and trails its spectrum off. For bright, dreamy or celebratory cuts.",
+   "tags": [
+    "light",
+    "vivid",
+    "slide",
+    "dreamy",
+    "transition"
+   ]
   },
   {
    "id": "transitions/sun-rays",
@@ -123,7 +155,15 @@
    "kind": "page",
    "durationMs": 1000,
    "src": "sun-rays.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "Sunlight rays fan out and turn while a sun swells to fill the frame, then fades. For hopeful, sunny cuts and mornings.",
+   "tags": [
+    "light",
+    "warm-tone",
+    "uplifting",
+    "morning",
+    "transition"
+   ]
   },
   {
    "id": "transitions/sparkle",
@@ -139,7 +179,15 @@
    "kind": "page",
    "durationMs": 900,
    "src": "sparkle.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "Star glints pop across the frame, brighter toward the cut where they melt into white, then twinkle out. For magical, glamorous or festive cuts.",
+   "tags": [
+    "particles",
+    "light",
+    "wonder",
+    "dreamy",
+    "transition"
+   ]
   },
   {
    "id": "transitions/circle-zoom",
@@ -155,7 +203,14 @@
    "kind": "page",
    "durationMs": 800,
    "src": "circle-zoom.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "A circle grows from the middle to fill the frame, then a circular hole opens onto the next shot. For clean graphic cuts in explainers.",
+   "tags": [
+    "shapes",
+    "zoom",
+    "wipe",
+    "transition"
+   ]
   },
   {
    "id": "transitions/diamond",
@@ -171,7 +226,14 @@
    "kind": "page",
    "durationMs": 800,
    "src": "diamond.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "A diamond spins open from the middle to fill the frame, then a diamond hole opens on the next shot. For stylish graphic cuts.",
+   "tags": [
+    "shapes",
+    "spin",
+    "wipe",
+    "transition"
+   ]
   },
   {
    "id": "transitions/hex-tiles",
@@ -187,7 +249,15 @@
    "kind": "page",
    "durationMs": 1000,
    "src": "hex-tiles.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "Hexagon tiles flip over in a wave from the left to cover the frame, then flip away. For techy, modern cuts in product films.",
+   "tags": [
+    "shapes",
+    "split",
+    "spin",
+    "tech",
+    "transition"
+   ]
   },
   {
    "id": "transitions/shards",
@@ -203,7 +273,15 @@
    "kind": "page",
    "durationMs": 900,
    "src": "shards.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "Triangle shards fly in spinning from the corners, lock together over the cut, then break apart and fall away. For bold, dynamic cuts.",
+   "tags": [
+    "shapes",
+    "split",
+    "spin",
+    "intense",
+    "transition"
+   ]
   },
   {
    "id": "transitions/stripes",
@@ -219,7 +297,15 @@
    "kind": "page",
    "durationMs": 800,
    "src": "stripes.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "Diagonal stripes slide in from both sides one after another, lock together over the cut, then slide out. For clean, rhythmic cuts.",
+   "tags": [
+    "shapes",
+    "slide",
+    "wipe",
+    "transition",
+    "social"
+   ]
   },
   {
    "id": "transitions/checker",
@@ -235,7 +321,15 @@
    "kind": "page",
    "durationMs": 800,
    "src": "checker.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "Squares pop up in a checkerboard, turning as they grow, cover the frame, then shrink away. For playful graphic cuts.",
+   "tags": [
+    "shapes",
+    "split",
+    "bounce",
+    "playful",
+    "transition"
+   ]
   },
   {
    "id": "transitions/clock",
@@ -251,7 +345,15 @@
    "kind": "page",
    "durationMs": 800,
    "src": "clock.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "A hand sweeps round from twelve o'clock, filling the frame behind it, then a second turn clears it. For time passing and explainers.",
+   "tags": [
+    "wipe",
+    "spin",
+    "shapes",
+    "explainer",
+    "transition"
+   ]
   },
   {
    "id": "transitions/doors",
@@ -267,7 +369,15 @@
    "kind": "page",
    "durationMs": 800,
    "src": "doors.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "Two doors slide in from the sides, shut over the cut with a small bump, then slide open. For clean, simple corporate cuts.",
+   "tags": [
+    "wipe",
+    "slide",
+    "split",
+    "corporate",
+    "transition"
+   ]
   },
   {
    "id": "transitions/slats",
@@ -283,7 +393,15 @@
    "kind": "page",
    "durationMs": 900,
    "src": "slats.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "Diagonal slats turn shut one after another, shaded as they turn, then turn open again. For stylish cuts in fashion and promos.",
+   "tags": [
+    "wipe",
+    "split",
+    "spin",
+    "elegant",
+    "transition"
+   ]
   },
   {
    "id": "transitions/color-bars",
@@ -299,7 +417,16 @@
    "kind": "page",
    "durationMs": 900,
    "src": "color-bars.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "Slanted yellow, rose and blue panels sweep across one after another, the last in your colour covering the cut, then sweep off. For bright cuts.",
+   "tags": [
+    "wipe",
+    "slide",
+    "vivid",
+    "happy",
+    "transition",
+    "social"
+   ]
   },
   {
    "id": "transitions/ribbon",
@@ -315,7 +442,15 @@
    "kind": "page",
    "durationMs": 1000,
    "src": "ribbon.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "A ribbon in your colour, led by yellow and rose ones, spirals out from the middle to fill the frame, then unwinds. For festive cuts.",
+   "tags": [
+    "shapes",
+    "spin",
+    "playful",
+    "celebration",
+    "transition"
+   ]
   },
   {
    "id": "transitions/blob",
@@ -331,7 +466,15 @@
    "kind": "page",
    "durationMs": 1000,
    "src": "blob.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "Wobbling yellow, rose and colour blobs swell from the middle, one inside another, fill the frame, then open wobbling holes. For fun cuts.",
+   "tags": [
+    "shapes",
+    "bounce",
+    "playful",
+    "happy",
+    "transition"
+   ]
   },
   {
    "id": "transitions/circles-burst",
@@ -347,7 +490,15 @@
    "kind": "page",
    "durationMs": 900,
    "src": "circles-burst.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "Colored circles pop open all over the frame, each with a ring flying off, fill the frame, then pop shut. For lively, cheerful cuts.",
+   "tags": [
+    "shapes",
+    "bounce",
+    "happy",
+    "playful",
+    "transition"
+   ]
   },
   {
    "id": "transitions/zigzag",
@@ -363,7 +514,15 @@
    "kind": "page",
    "durationMs": 800,
    "src": "zigzag.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "Zigzag-edged layers rise from the bottom one after another, yellow, rose, then your colour over the cut, and exit off the top. For bright cuts.",
+   "tags": [
+    "wipe",
+    "slide",
+    "shapes",
+    "vivid",
+    "transition"
+   ]
   },
   {
    "id": "transitions/liquid",
@@ -379,7 +538,15 @@
    "kind": "page",
    "durationMs": 1000,
    "src": "liquid.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "Liquid in your colour rises in waves from the bottom with bubbles, fills the frame, then flows up and out. For fresh, fluid cuts.",
+   "tags": [
+    "wipe",
+    "slide",
+    "shapes",
+    "playful",
+    "transition"
+   ]
   },
   {
    "id": "transitions/pixels",
@@ -395,7 +562,15 @@
    "kind": "page",
    "durationMs": 800,
    "src": "pixels.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "Squares pop in, sweeping corner to corner, in three shades of your colour until they cover the cut, then pop away. For retro-game cuts.",
+   "tags": [
+    "shapes",
+    "split",
+    "chiptune",
+    "tech",
+    "transition"
+   ]
   },
   {
    "id": "transitions/dots",
@@ -411,7 +586,15 @@
    "kind": "page",
    "durationMs": 900,
    "src": "dots.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "A grid of dots swells in a wave from left to right until it runs together over the cut, then shrinks away. For pop-art cuts.",
+   "tags": [
+    "shapes",
+    "comic",
+    "wipe",
+    "playful",
+    "transition"
+   ]
   },
   {
    "id": "transitions/rgb-split",
@@ -427,7 +610,15 @@
    "kind": "page",
    "durationMs": 600,
    "src": "rgb-split.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "Bands go black and bars split into red, green and blue until the frame is torn over the cut, then snaps back. For glitchy cuts.",
+   "tags": [
+    "hud",
+    "shake",
+    "intense",
+    "tech",
+    "transition"
+   ]
   },
   {
    "id": "transitions/datamosh",
@@ -443,7 +634,15 @@
    "kind": "page",
    "durationMs": 700,
    "src": "datamosh.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "The picture breaks into blocks of smeared, wrong colour that spread over the cut, then drop out block by block. For glitch-art cuts.",
+   "tags": [
+    "hud",
+    "split",
+    "intense",
+    "tech",
+    "transition"
+   ]
   },
   {
    "id": "transitions/vhs",
@@ -459,7 +658,15 @@
    "kind": "page",
    "durationMs": 900,
    "src": "vhs.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "A blue tape screen rolls down with a noisy bar and tracking lines, shows PLAY over the cut, rolls on. For retro VHS cuts.",
+   "tags": [
+    "retro",
+    "slide",
+    "nostalgic",
+    "vlog",
+    "transition"
+   ]
   },
   {
    "id": "transitions/scan-tear",
@@ -475,7 +682,15 @@
    "kind": "page",
    "durationMs": 600,
    "src": "scan-tear.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "Thin bright tears open into black bands edged in cyan and magenta as a scan line races down, then close. For glitchy, tense digital cuts.",
+   "tags": [
+    "neon",
+    "hud",
+    "tense",
+    "tech",
+    "transition"
+   ]
   },
   {
    "id": "transitions/crt-off",
@@ -491,7 +706,15 @@
    "kind": "page",
    "durationMs": 800,
    "src": "crt-off.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "Picture collapses into a bright line, then a dot fading to black over the cut, like a TV switching off, then on. For retro cuts.",
+   "tags": [
+    "retro",
+    "zoom",
+    "nostalgic",
+    "tech",
+    "transition"
+   ]
   },
   {
    "id": "transitions/film-slip",
@@ -507,7 +730,15 @@
    "kind": "page",
    "durationMs": 700,
    "src": "film-slip.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "A strip of light-struck film frames with sprocket holes races down through the frame over the cut. For film-style cuts in documentaries and nostalgic edits.",
+   "tags": [
+    "film",
+    "retro",
+    "slide",
+    "nostalgic",
+    "transition"
+   ]
   },
   {
    "id": "transitions/projector",
@@ -523,7 +754,15 @@
    "kind": "page",
    "durationMs": 1000,
    "src": "projector.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "An old projector flickers, dust and hairs flash, and the lamp flares to warm white over the cut, then flickers down. For vintage, nostalgic cuts.",
+   "tags": [
+    "film",
+    "retro",
+    "light",
+    "nostalgic",
+    "transition"
+   ]
   },
   {
    "id": "transitions/burn-through",
@@ -539,7 +778,15 @@
    "kind": "page",
    "durationMs": 1000,
    "src": "burn-through.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "Film burns: holes with glowing orange rims merge into white over the cut, then holes burn through onto the next shot. For dramatic vintage cuts.",
+   "tags": [
+    "film",
+    "fire",
+    "retro",
+    "drama",
+    "transition"
+   ]
   },
   {
    "id": "transitions/cue-dot",
@@ -555,7 +802,15 @@
    "kind": "page",
    "durationMs": 1000,
    "src": "cue-dot.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "A cue dot flashes twice in the corner, then the frame flares to warm white over the cut and fades flickering. For old-cinema reel changes.",
+   "tags": [
+    "film",
+    "retro",
+    "light",
+    "nostalgic",
+    "transition"
+   ]
   },
   {
    "id": "transitions/leader",
@@ -571,7 +826,15 @@
    "kind": "page",
    "durationMs": 1200,
    "src": "leader.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "A film leader flickers in and counts down with a sweeping hand, 2 before the cut, 1 after, then a white flash. For old-cinema openings.",
+   "tags": [
+    "film",
+    "retro",
+    "countdown",
+    "intro",
+    "transition"
+   ]
   },
   {
    "id": "transitions/comic-bam",
@@ -587,7 +850,15 @@
    "kind": "page",
    "durationMs": 900,
    "src": "comic-bam.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "A red and yellow halftone comic burst explodes from the middle, BAM! slams in over the cut, then a burst-shaped hole opens. For loud cuts.",
+   "tags": [
+    "comic",
+    "shapes",
+    "zoom",
+    "comedy",
+    "transition"
+   ]
   },
   {
    "id": "transitions/speed-lines",
@@ -603,7 +874,15 @@
    "kind": "page",
    "durationMs": 800,
    "src": "speed-lines.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "Comic focus lines rush in from the edges until the frame is all lines over the cut, then burst outward. For fast action cuts.",
+   "tags": [
+    "comic",
+    "zoom",
+    "intense",
+    "action",
+    "transition"
+   ]
   },
   {
    "id": "transitions/shock",
@@ -619,7 +898,15 @@
    "kind": "page",
    "durationMs": 600,
    "src": "shock.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "Shock waves ring out as the frame darkens, strobes black, white and red over the cut, and a ring blasts open. For sudden, tense cuts.",
+   "tags": [
+    "shake",
+    "light",
+    "tense",
+    "intense",
+    "transition"
+   ]
   },
   {
    "id": "transitions/swipe-blur",
@@ -635,7 +922,15 @@
    "kind": "page",
    "durationMs": 600,
    "src": "swipe-blur.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "A panel whips across from the right with motion streaks racing ahead, covers the cut, and whips off left. For fast swipe cuts in vlogs.",
+   "tags": [
+    "slide",
+    "blur",
+    "intense",
+    "vlog",
+    "transition"
+   ]
   },
   {
    "id": "transitions/page-turn",
@@ -651,7 +946,15 @@
    "kind": "page",
    "durationMs": 1000,
    "src": "page-turn.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "A page with curl and shadow is laid over the picture from the right, covers the cut, then turns away left. For storybook cuts.",
+   "tags": [
+    "slide",
+    "wipe",
+    "nostalgic",
+    "drama",
+    "transition"
+   ]
   },
   {
    "id": "transitions/smoke",
@@ -667,7 +970,15 @@
    "kind": "page",
    "durationMs": 1200,
    "src": "smoke.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "Soft rolling smoke billows up from the bottom and sides to fill the frame, then clears in patches and drifts up. For moody, mysterious cuts.",
+   "tags": [
+    "weather-fx",
+    "fade",
+    "mysterious",
+    "dark",
+    "transition"
+   ]
   },
   {
    "id": "transitions/ink-drop",
@@ -683,7 +994,15 @@
    "kind": "page",
    "durationMs": 1200,
    "src": "ink-drop.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "Ink drops land and bloom with soft, feathered edges until they merge over the cut, then wash out in pale blooms. For calm, artistic cuts.",
+   "tags": [
+    "ink",
+    "fade",
+    "calm",
+    "elegant",
+    "transition"
+   ]
   },
   {
    "id": "transitions/ripple",
@@ -699,7 +1018,15 @@
    "kind": "page",
    "durationMs": 900,
    "src": "ripple.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "Ripples spread from the middle as if a drop fell into the picture, flashing white over the cut. For dreamy, memory or water cuts.",
+   "tags": [
+    "light",
+    "fade",
+    "dreamy",
+    "calm",
+    "transition"
+   ]
   },
   {
    "id": "transitions/clouds",
@@ -715,7 +1042,15 @@
    "kind": "page",
    "durationMs": 1000,
    "src": "clouds.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "Puffy clouds rush toward the viewer and past the edges, whiter until all is white over the cut, then thin out. For dreamy, uplifting changes.",
+   "tags": [
+    "weather-fx",
+    "zoom",
+    "fade",
+    "dreamy",
+    "transition"
+   ]
   },
   {
    "id": "transitions/sticker-pop",
@@ -731,7 +1066,15 @@
    "kind": "page",
    "durationMs": 900,
    "src": "sticker-pop.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "Stars, hearts, sparkles and dots burst from the middle on a disc of your colour filling the frame, then a hole opens. For cute cuts.",
+   "tags": [
+    "cute",
+    "shapes",
+    "zoom",
+    "happy",
+    "transition"
+   ]
   },
   {
    "id": "transitions/hearts",
@@ -747,7 +1090,15 @@
    "kind": "page",
    "durationMs": 1000,
    "src": "hearts.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "A swarm of bobbing hearts rises from the bottom, fills the frame over the cut, then floats up and away. For romantic or cute cuts.",
+   "tags": [
+    "cute",
+    "shapes",
+    "slide",
+    "romantic",
+    "transition"
+   ]
   },
   {
    "id": "transitions/confetti",
@@ -763,7 +1114,15 @@
    "kind": "page",
    "durationMs": 1000,
    "src": "confetti.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "A curtain of your colour drops behind tumbling confetti, covers the cut, then falls out of the bottom. For party, celebration and success cuts.",
+   "tags": [
+    "celebration",
+    "particles",
+    "slide",
+    "happy",
+    "transition"
+   ]
   },
   {
    "id": "transitions/msg-flood",
@@ -779,7 +1138,15 @@
    "kind": "page",
    "durationMs": 1000,
    "src": "msg-flood.html",
-   "place": "cut"
+   "place": "cut",
+   "about": "Chat bubbles pop up faster and faster, scrolling as they stack until they fill the frame over the cut, then pop away. For chat stories.",
+   "tags": [
+    "speech",
+    "bounce",
+    "ui",
+    "social",
+    "transition"
+   ]
   }
  ]
 }

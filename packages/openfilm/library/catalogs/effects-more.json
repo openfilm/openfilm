@@ -48,7 +48,14 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "gold-dust.html"
+   "src": "gold-dust.html",
+   "about": "Fine gold specks drift down and twinkle, a few with four-point glints, plus large soft flecks near the lens. For warm, magical or luxury scenes.",
+   "tags": [
+    "particles",
+    "warm-tone",
+    "dreamy",
+    "elegant"
+   ]
   },
   {
    "id": "effects/fireflies",
@@ -63,7 +70,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "fireflies.html"
+   "src": "fireflies.html",
+   "about": "Small glowing lights wander on lazy curves, mostly low in the frame, each fading up and out in its own rhythm. For dusk scenes.",
+   "tags": [
+    "particles",
+    "dreamy",
+    "wonder",
+    "night",
+    "nature"
+   ]
   },
   {
    "id": "effects/bokeh",
@@ -78,7 +93,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "bokeh.html"
+   "src": "bokeh.html",
+   "about": "Out-of-focus round light discs with bright rims drift slowly across the lens, swelling and fading, mostly warm. For city nights, dreamy backgrounds and romantic scenes.",
+   "tags": [
+    "blur",
+    "particles",
+    "dreamy",
+    "night",
+    "romantic"
+   ]
   },
   {
    "id": "effects/blossom-storm",
@@ -93,7 +116,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "blossom-storm.html"
+   "src": "blossom-storm.html",
+   "about": "Cherry blossom petals are swept across the frame by gusting wind, tumbling, near ones large and blurred. For spring, romance and Japan-style scenes.",
+   "tags": [
+    "particles",
+    "weather-fx",
+    "romantic",
+    "dreamy",
+    "nature"
+   ]
   },
   {
    "id": "effects/autumn-leaves",
@@ -108,7 +139,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "autumn-leaves.html"
+   "src": "autumn-leaves.html",
+   "about": "Red, orange and gold leaves rock down like pendulums and turn over, near ones big and soft. For autumn, nostalgic or calm scenes.",
+   "tags": [
+    "particles",
+    "warm-tone",
+    "nostalgic",
+    "calm",
+    "nature"
+   ]
   },
   {
    "id": "effects/smoke-haze",
@@ -123,7 +162,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "smoke-haze.html"
+   "src": "smoke-haze.html",
+   "about": "Wisps of smoke drift low across the frame and curl as they rise, thick near the ground and thin above. For moody, mysterious scenes.",
+   "tags": [
+    "weather-fx",
+    "mysterious",
+    "dark",
+    "scary",
+    "cinematic-look"
+   ]
   },
   {
    "id": "effects/dust-beam",
@@ -138,7 +185,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "dust-beam.html"
+   "src": "dust-beam.html",
+   "about": "Sunlight slants in as a fan of shimmering shafts, dust glittering where the beam catches it, dark outside. For cinematic, warm or sacred scenes.",
+   "tags": [
+    "light",
+    "particles",
+    "cinematic-look",
+    "warm",
+    "solemn"
+   ]
   },
   {
    "id": "effects/embers",
@@ -153,7 +208,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "embers.html"
+   "src": "embers.html",
+   "about": "Sparks rise from a fire below the frame, cooling from white-hot to orange and red, over a flickering glow. For fire, epic or dramatic scenes.",
+   "tags": [
+    "fire",
+    "particles",
+    "warm-tone",
+    "epic",
+    "dark"
+   ]
   },
   {
    "id": "effects/caustics",
@@ -168,7 +231,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "caustics.html"
+   "src": "caustics.html",
+   "about": "Moving nets of light and swaying sun shafts over a blue-green tint, with specks drifting like underwater. For ocean, pool and dreamy calm scenes.",
+   "tags": [
+    "light",
+    "cool-tone",
+    "calm",
+    "dreamy",
+    "nature"
+   ]
   },
   {
    "id": "effects/aurora",
@@ -183,7 +254,16 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "aurora.html"
+   "src": "aurora.html",
+   "about": "Green and violet northern-light curtains ripple sideways across the top of the frame with fine rays rising. For night, nature, fantasy and space scenes.",
+   "tags": [
+    "light",
+    "cool-tone",
+    "dreamy",
+    "wonder",
+    "night",
+    "space"
+   ]
   },
   {
    "id": "effects/blizzard",
@@ -198,7 +278,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "blizzard.html"
+   "src": "blizzard.html",
+   "about": "Snow is driven sideways by gusting wind, near flakes streaking past, and the light goes white with each gust. For winter, storm and survival scenes.",
+   "tags": [
+    "weather-fx",
+    "particles",
+    "cool-tone",
+    "intense",
+    "weather"
+   ]
   },
   {
    "id": "effects/raindrops-lens",
@@ -213,7 +301,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "raindrops-lens.html"
+   "src": "raindrops-lens.html",
+   "about": "Raindrops land on the glass in front of the lens with dark rims and catch-lights, some running down leaving trails. For rainy, moody scenes.",
+   "tags": [
+    "weather-fx",
+    "blur",
+    "sad",
+    "calm",
+    "weather"
+   ]
   },
   {
    "id": "effects/rainbow-leak",
@@ -228,7 +324,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "rainbow-leak.html"
+   "src": "rainbow-leak.html",
+   "about": "A tall slanted band of light splitting into rainbow colours sweeps across the picture with warm light from the side. For dreamy, happy, celebratory scenes.",
+   "tags": [
+    "light",
+    "vivid",
+    "dreamy",
+    "happy",
+    "vlog"
+   ]
   },
   {
    "id": "effects/anamorphic-flare",
@@ -243,7 +347,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "anamorphic-flare.html"
+   "src": "anamorphic-flare.html",
+   "about": "A bright light drifts across the top while a long thin blue streak crosses the whole frame with lens ghosts. For cinematic or sci-fi scenes.",
+   "tags": [
+    "light",
+    "cinematic-look",
+    "cool-tone",
+    "cinematic",
+    "tech"
+   ]
   },
   {
    "id": "effects/sunburst",
@@ -258,7 +370,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "sunburst.html"
+   "src": "sunburst.html",
+   "about": "Soft warm rays fan down from a sun above the top corner and turn slowly, each breathing, over a glow. For sunny, hopeful, morning scenes.",
+   "tags": [
+    "light",
+    "warm-tone",
+    "uplifting",
+    "morning",
+    "happy"
+   ]
   },
   {
    "id": "effects/prism",
@@ -273,7 +393,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "prism.html"
+   "src": "prism.html",
+   "about": "Light split into colours fans across the frame in soft spectral beams with crisp rainbow slivers, drifting. For dreamy, creative scenes.",
+   "tags": [
+    "light",
+    "vivid",
+    "dreamy",
+    "wonder",
+    "fashion"
+   ]
   },
   {
    "id": "effects/spotlight",
@@ -288,7 +416,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "spotlight.html"
+   "src": "spotlight.html",
+   "about": "The frame goes dark except a soft round spot that glides from place to place, resting at each. For reveals, mystery and highlighting.",
+   "tags": [
+    "light",
+    "dark",
+    "mysterious",
+    "focused",
+    "tense"
+   ]
   },
   {
    "id": "effects/bloom",
@@ -303,7 +439,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "bloom.html"
+   "src": "bloom.html",
+   "about": "The frame edges melt into a bright breathing haze, like a smeared filter, with glow pools drifting round the rim. For dreamy, romantic scenes.",
+   "tags": [
+    "blur",
+    "light",
+    "dreamy",
+    "soft",
+    "romantic"
+   ]
   },
   {
    "id": "effects/film-8mm",
@@ -318,7 +462,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "film-8mm.html"
+   "src": "film-8mm.html",
+   "about": "Home-movie 8mm look: dark rounded gate edges, sprocket hole, warm burnt edges, heavy grain, dust, scratches, flickering exposure. For memories and vintage scenes.",
+   "tags": [
+    "film",
+    "retro",
+    "warm-tone",
+    "nostalgic",
+    "documentary"
+   ]
   },
   {
    "id": "effects/tv-static",
@@ -333,7 +485,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "tv-static.html"
+   "src": "tv-static.html",
+   "about": "Poor-reception TV: snow, scan lines, a rolling bright bar, tearing lines, dark curved corners and bursts of static. For retro, glitch and horror scenes.",
+   "tags": [
+    "retro",
+    "film",
+    "scary",
+    "nostalgic",
+    "tech"
+   ]
   },
   {
    "id": "effects/sepia-paper",
@@ -348,7 +508,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "sepia-paper.html"
+   "src": "sepia-paper.html",
+   "about": "An old yellowed photograph: sepia wash, paper fibers, brown spots, a cup ring, a fold and dark aged edges. For history and memories.",
+   "tags": [
+    "retro",
+    "film",
+    "warm-tone",
+    "nostalgic",
+    "documentary"
+   ]
   },
   {
    "id": "effects/dv-camcorder",
@@ -363,7 +531,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "dv-camcorder.html"
+   "src": "dv-camcorder.html",
+   "about": "A DV camcorder screen: blinking red REC, running timecode, date, battery, zoom bar and corner marks over scan lines. For home-video and vlog scenes.",
+   "tags": [
+    "retro",
+    "hud",
+    "frame",
+    "vlog",
+    "nostalgic"
+   ]
   },
   {
    "id": "effects/halftone",
@@ -378,7 +554,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "halftone.html"
+   "src": "halftone.html",
+   "about": "Pop-art halftone dots in bold inks wash in from the corners, big at the edges and shrinking toward the middle. For comic and pop-art styles.",
+   "tags": [
+    "comic",
+    "shapes",
+    "vivid",
+    "playful",
+    "fashion"
+   ]
   },
   {
    "id": "effects/cinema-guides",
@@ -393,7 +577,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "cinema-guides.html"
+   "src": "cinema-guides.html",
+   "about": "Director's monitor overlay: a 2.39:1 mask, safe-area guides, corner marks, a center cross, running timecode and a blinking REC. For behind-the-scenes and film-making content.",
+   "tags": [
+    "hud",
+    "frame",
+    "cinematic-look",
+    "drama",
+    "documentary"
+   ]
   },
   {
    "id": "effects/phone-frame",
@@ -408,7 +600,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "phone-frame.html"
+   "src": "phone-frame.html",
+   "about": "The picture in a modern phone screen on a soft backdrop with shadow and passing glare; lies sideways on wide stages. For app demos.",
+   "tags": [
+    "frame",
+    "hud",
+    "tech",
+    "ui",
+    "social"
+   ]
   },
   {
    "id": "effects/vlog-frame",
@@ -423,7 +623,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "vlog-frame.html"
+   "src": "vlog-frame.html",
+   "about": "A paper matte round a rounded window, with washi tape, a handwritten line and date, a beating heart and a twinkling sparkle. For scrapbook-style vlogs.",
+   "tags": [
+    "frame",
+    "handdrawn",
+    "cute",
+    "vlog",
+    "travel"
+   ]
   },
   {
    "id": "effects/doodle-border",
@@ -438,7 +646,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "doodle-border.html"
+   "src": "doodle-border.html",
+   "about": "A wobbly marker double line round the picture with star, swirl, heart and spark doodles, redrawn eight times a second. For playful vlogs.",
+   "tags": [
+    "frame",
+    "handdrawn",
+    "playful",
+    "kids",
+    "vlog"
+   ]
   },
   {
    "id": "effects/comic-panel",
@@ -453,7 +669,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "comic-panel.html"
+   "src": "comic-panel.html",
+   "about": "The picture as a comic panel: inked border, halftone dots, a yellow caption box and a jolting WOW! burst. For comic-style and funny scenes.",
+   "tags": [
+    "frame",
+    "comic",
+    "playful",
+    "comedy",
+    "vivid"
+   ]
   },
   {
    "id": "effects/gold-frame",
@@ -468,7 +692,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "gold-frame.html"
+   "src": "gold-frame.html",
+   "about": "An ornate gilded gallery frame with beads, embossed vines and corner rosettes, a glint crossing the gold now and then. For art and portraits.",
+   "tags": [
+    "frame",
+    "elegant",
+    "solemn",
+    "documentary",
+    "warm-tone"
+   ]
   },
   {
    "id": "effects/story-bars",
@@ -483,7 +715,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "story-bars.html"
+   "src": "story-bars.html",
+   "about": "Social story bars along the top fill one after another, with an avatar ring, name, buttons and a message field below. For social-media mockups.",
+   "tags": [
+    "frame",
+    "hud",
+    "social",
+    "ui",
+    "vlog"
+   ]
   },
   {
    "id": "effects/speed-lines",
@@ -498,7 +738,14 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "speed-lines.html"
+   "src": "speed-lines.html",
+   "about": "Long tapered comic streaks cross the top and bottom of the picture, light and dark, redrawn twelve times a second. For fast motion and chases.",
+   "tags": [
+    "comic",
+    "handdrawn",
+    "intense",
+    "action"
+   ]
   },
   {
    "id": "effects/focus-lines",
@@ -513,7 +760,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "focus-lines.html"
+   "src": "focus-lines.html",
+   "about": "Sharp ink wedges rush in from every edge toward the middle and stop short, redrawn a dozen times a second. For comic emphasis and surprise.",
+   "tags": [
+    "comic",
+    "handdrawn",
+    "tense",
+    "comedy",
+    "intense"
+   ]
   },
   {
    "id": "effects/shock-burst",
@@ -528,7 +783,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "shock-burst.html"
+   "src": "shock-burst.html",
+   "about": "Each beat a flash at the middle, two-colour rays burst out and white streaks rush to the edges, then ease to flickers. For impacts.",
+   "tags": [
+    "comic",
+    "light",
+    "shake",
+    "intense",
+    "action"
+   ]
   },
   {
    "id": "effects/impact-marks",
@@ -543,7 +806,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "impact-marks.html"
+   "src": "impact-marks.html",
+   "about": "A bold !!! or !? slams in on a spiky burst, overshoots, shakes and settles, then flies off as the next lands. For comic surprise.",
+   "tags": [
+    "comic",
+    "speech",
+    "shake",
+    "comedy",
+    "playful"
+   ]
   },
   {
    "id": "effects/dizzy-stars",
@@ -558,7 +829,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "dizzy-stars.html"
+   "src": "dizzy-stars.html",
+   "about": "Five plump stars circle on a tilted ring, growing at the front and dimming behind, shedding twinkles. For cartoon dizziness and funny reactions.",
+   "tags": [
+    "comic",
+    "particles",
+    "spin",
+    "comedy",
+    "playful"
+   ]
   },
   {
    "id": "effects/emotion-marks",
@@ -573,7 +852,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "emotion-marks.html"
+   "src": "emotion-marks.html",
+   "about": "A throbbing anger mark at the right, sweat drops sliding down at the left and a small spiral of confusion between. For anime-style comic reactions.",
+   "tags": [
+    "comic",
+    "handdrawn",
+    "playful",
+    "comedy",
+    "bounce"
+   ]
   },
   {
    "id": "effects/heart-burst",
@@ -588,7 +875,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "heart-burst.html"
+   "src": "heart-burst.html",
+   "about": "Every beat a pop of light low in the frame flings glossy hearts up and out; they float up wobbling and shrink. For love scenes.",
+   "tags": [
+    "cute",
+    "particles",
+    "romantic",
+    "happy",
+    "celebration"
+   ]
   },
   {
    "id": "effects/blush-glow",
@@ -603,7 +898,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "blush-glow.html"
+   "src": "blush-glow.html",
+   "about": "A warm pink glow creeps in from the edges and pulses like a heartbeat, with blush marks and small rising hearts. For shy, romantic moments.",
+   "tags": [
+    "cute",
+    "warm-tone",
+    "romantic",
+    "playful",
+    "soft"
+   ]
   },
   {
    "id": "effects/heart-bokeh",
@@ -618,7 +921,16 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "heart-bokeh.html"
+   "src": "heart-bokeh.html",
+   "about": "Heart-shaped out-of-focus lights in pink and gold drift slowly up and breathe, with small round lights behind. For romantic, wedding and Valentine scenes.",
+   "tags": [
+    "cute",
+    "blur",
+    "particles",
+    "romantic",
+    "dreamy",
+    "pastel"
+   ]
   },
   {
    "id": "effects/glitter",
@@ -633,7 +945,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "glitter.html"
+   "src": "glitter.html",
+   "about": "Fine glitter flakes drift down, each flashing a rainbow colour for a moment, the brightest throwing a star. For glamour, party and magical scenes.",
+   "tags": [
+    "particles",
+    "vivid",
+    "celebration",
+    "dreamy",
+    "fashion"
+   ]
   },
   {
    "id": "effects/pastel-wash",
@@ -648,7 +968,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "pastel-wash.html"
+   "src": "pastel-wash.html",
+   "about": "Big soft clouds of candy colours (pink, lilac, sky, mint, peach) wander round the edges, mixing, under a milky haze. For soft, dreamy scenes.",
+   "tags": [
+    "pastel",
+    "blur",
+    "dreamy",
+    "soft",
+    "playful"
+   ]
   },
   {
    "id": "effects/cloud-float",
@@ -663,7 +991,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "cloud-float.html"
+   "src": "cloud-float.html",
+   "about": "Soft candy-tinted round clouds drift along the bottom in two layers, one in each top corner, with haze and twinkles. For dreamy, cute, kids scenes.",
+   "tags": [
+    "pastel",
+    "cute",
+    "weather-fx",
+    "dreamy",
+    "kids"
+   ]
   },
   {
    "id": "effects/sparkle-trails",
@@ -678,7 +1014,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "sparkle-trails.html"
+   "src": "sparkle-trails.html",
+   "about": "Bright little comets swoop across the picture on curves, each leaving a light ribbon and a wake of glitter that fades. For magic and glamour.",
+   "tags": [
+    "particles",
+    "light",
+    "dreamy",
+    "wonder",
+    "celebration"
+   ]
   },
   {
    "id": "effects/confetti-cannon",
@@ -693,7 +1037,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "confetti-cannon.html"
+   "src": "confetti-cannon.html",
+   "about": "Cannons in the bottom corners fire confetti squares, strips and dots up every few seconds; it slows, then flutters down. For celebrations and wins.",
+   "tags": [
+    "celebration",
+    "particles",
+    "happy",
+    "holiday",
+    "success"
+   ]
   },
   {
    "id": "effects/fireworks",
@@ -708,7 +1060,16 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "fireworks.html"
+   "src": "fireworks.html",
+   "about": "Shells climb on sparking trails and burst into coloured stars that droop and trail light, each burst lighting the sky. For New Year and finales.",
+   "tags": [
+    "celebration",
+    "particles",
+    "light",
+    "holiday",
+    "epic",
+    "night"
+   ]
   },
   {
    "id": "effects/balloons",
@@ -723,7 +1084,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "balloons.html"
+   "src": "balloons.html",
+   "about": "Glossy party-coloured balloons rise through the picture with shine, knots and trailing strings, far ones small, near ones large. For birthdays and parties.",
+   "tags": [
+    "celebration",
+    "vivid",
+    "happy",
+    "holiday",
+    "kids"
+   ]
   },
   {
    "id": "effects/disco-ball",
@@ -738,7 +1107,16 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "disco-ball.html"
+   "src": "disco-ball.html",
+   "about": "A mirror ball turns at the top, coloured beams sweep through haze and light spots slide across the dimmed frame. For parties and clubs.",
+   "tags": [
+    "celebration",
+    "light",
+    "vivid",
+    "electronic",
+    "funk",
+    "night"
+   ]
   },
   {
    "id": "effects/streamers",
@@ -753,7 +1131,15 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "streamers.html"
+   "src": "streamers.html",
+   "about": "Curly party ribbons twist as they fall, showing bright face and darker back, with a little confetti among them. For birthdays, parties and celebrations.",
+   "tags": [
+    "celebration",
+    "particles",
+    "happy",
+    "holiday",
+    "kids"
+   ]
   }
  ]
 }

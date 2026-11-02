@@ -131,7 +131,14 @@
       "src": "title-stagger.html",
       "w": 1000,
       "h": 500,
-      "fit": 0.36
+      "fit": 0.36,
+      "about": "Big white title whose letters drop in one by one and bounce, a yellow label above and a bar below. For playful openings.",
+      "tags": [
+        "title",
+        "bounce",
+        "playful",
+        "intro"
+      ]
     },
     {
       "id": "text/title-split",
@@ -149,7 +156,15 @@
       "src": "title-split.html",
       "w": 1000,
       "h": 500,
-      "fit": 0.36
+      "fit": 0.36,
+      "about": "A thin line draws across; a small spaced line rises above it and a huge bold line drops below it. For film and chapter titles.",
+      "tags": [
+        "title",
+        "split",
+        "slide",
+        "confident",
+        "intro"
+      ]
     },
     {
       "id": "text/title-sweep",
@@ -167,7 +182,15 @@
       "src": "title-sweep.html",
       "w": 1000,
       "h": 400,
-      "fit": 0.3
+      "fit": 0.3,
+      "about": "A green bar sweeps across and leaves a title on a dark box, with a corner tag and a line under it. For episode titles.",
+      "tags": [
+        "title",
+        "wipe",
+        "slide",
+        "confident",
+        "intro"
+      ]
     },
     {
       "id": "text/title-serif",
@@ -185,7 +208,15 @@
       "src": "title-serif.html",
       "w": 1000,
       "h": 400,
-      "fit": 0.3
+      "fit": 0.3,
+      "about": "Cream serif title, letters coming out of blur one by one between thin gold rules, with an italic credit. For short films.",
+      "tags": [
+        "title",
+        "elegant",
+        "fade",
+        "calm",
+        "drama"
+      ]
     },
     {
       "id": "text/title-slab",
@@ -203,7 +234,15 @@
       "src": "title-slab.html",
       "w": 1000,
       "h": 500,
-      "fit": 0.36
+      "fit": 0.36,
+      "about": "Heavy white title on a tilted red slab with a yellow slab behind, letters popping in, and a black tag below. For sports and events.",
+      "tags": [
+        "title",
+        "bounce",
+        "confident",
+        "intense",
+        "action"
+      ]
     },
     {
       "id": "text/title-glitch",
@@ -221,7 +260,15 @@
       "src": "title-glitch.html",
       "w": 1000,
       "h": 400,
-      "fit": 0.3
+      "fit": 0.3,
+      "about": "Cyan and magenta split-color title flickering in inside corner marks, with a monospace line typed under it with a cursor. For tech and sci-fi titles.",
+      "tags": [
+        "title",
+        "glitch",
+        "tech",
+        "typewriter",
+        "intro"
+      ]
     },
     {
       "id": "text/title-script",
@@ -239,7 +286,15 @@
       "src": "title-script.html",
       "w": 1000,
       "h": 400,
-      "fit": 0.3
+      "fit": 0.3,
+      "about": "White handwritten script title written out left to right, a pink swash drawn under it, small sparkles at its end. For vlogs and weddings.",
+      "tags": [
+        "title",
+        "handdrawn",
+        "romantic",
+        "vlog",
+        "soft"
+      ]
     },
     {
       "id": "text/lower-corporate",
@@ -257,7 +312,14 @@
       "src": "lower-corporate.html",
       "w": 1200,
       "h": 300,
-      "fit": 0.2
+      "fit": 0.2,
+      "about": "Name slides out from behind an upright blue bar, with a role and thin line under it. For interviews and business.",
+      "tags": [
+        "lowerthird",
+        "slide",
+        "corporate",
+        "minimal"
+      ]
     },
     {
       "id": "text/lower-vlog",
@@ -275,7 +337,15 @@
       "src": "lower-vlog.html",
       "w": 1200,
       "h": 300,
-      "fit": 0.2
+      "fit": 0.2,
+      "about": "Name on a white pill that pops in with a bounce, a tilted pink tag below and a wavy line. For vlogs and casual intros.",
+      "tags": [
+        "lowerthird",
+        "bounce",
+        "playful",
+        "vlog",
+        "cute"
+      ]
     },
     {
       "id": "text/lower-news",
@@ -293,7 +363,14 @@
       "src": "lower-news.html",
       "w": 1200,
       "h": 300,
-      "fit": 0.2
+      "fit": 0.2,
+      "about": "News name strap: a tag square, a red bar with the name and a white bar with the role, wiped in from left. For reports.",
+      "tags": [
+        "lowerthird",
+        "news",
+        "wipe",
+        "corporate"
+      ]
     },
     {
       "id": "text/lower-elegant",
@@ -311,7 +388,14 @@
       "src": "lower-elegant.html",
       "w": 1200,
       "h": 300,
-      "fit": 0.2
+      "fit": 0.2,
+      "about": "Serif name and italic role either side of a fine gold line, with a small diamond and a rule under. For interviews and premium brands.",
+      "tags": [
+        "lowerthird",
+        "elegant",
+        "fade",
+        "minimal"
+      ]
     },
     {
       "id": "text/lower-neon",
@@ -329,7 +413,14 @@
       "src": "lower-neon.html",
       "w": 1200,
       "h": 300,
-      "fit": 0.2
+      "fit": 0.2,
+      "about": "Glowing pink neon frame buzzes on around a name, with a cyan glowing role below. For nightlife, music and gaming.",
+      "tags": [
+        "lowerthird",
+        "neon",
+        "night",
+        "city"
+      ]
     },
     {
       "id": "text/lower-handle",
@@ -347,7 +438,14 @@
       "src": "lower-handle.html",
       "w": 1200,
       "h": 300,
-      "fit": 0.2
+      "fit": 0.2,
+      "about": "Rounded white account card with a round initial badge, name with verified mark, handle and a red follow button. For creator credits and social clips.",
+      "tags": [
+        "lowerthird",
+        "social",
+        "ui",
+        "slide"
+      ]
     },
     {
       "id": "text/lower-guest",
@@ -365,7 +463,14 @@
       "src": "lower-guest.html",
       "w": 1200,
       "h": 300,
-      "fit": 0.2
+      "fit": 0.2,
+      "about": "Guest intro with a big outlined number, a label, name and role beside a yellow line that rises. For interviews, podcasts and ranked lists.",
+      "tags": [
+        "lowerthird",
+        "slide",
+        "focused",
+        "explainer"
+      ]
     },
     {
       "id": "text/callout-leader",
@@ -383,7 +488,14 @@
       "src": "callout-leader.html",
       "w": 600,
       "h": 300,
-      "fit": 0.26
+      "fit": 0.26,
+      "about": "A pulsing yellow dot with a line drawn up and along from it, a label above and a note below. For pointing at things.",
+      "tags": [
+        "arrow",
+        "wipe",
+        "explainer",
+        "tech"
+      ]
     },
     {
       "id": "text/callout-note",
@@ -401,7 +513,14 @@
       "src": "callout-note.html",
       "w": 640,
       "h": 320,
-      "fit": 0.26
+      "fit": 0.26,
+      "about": "White note box with a pointer that pops out of the spot it marks, with an orange label and a line of words. For annotations.",
+      "tags": [
+        "arrow",
+        "speech",
+        "bounce",
+        "explainer"
+      ]
     },
     {
       "id": "text/callout-step",
@@ -419,7 +538,14 @@
       "src": "callout-step.html",
       "w": 800,
       "h": 250,
-      "fit": 0.2
+      "fit": 0.2,
+      "about": "Blue ring drawn around a round number that pops in, with a small step label and the step in bold. For how-to steps and tutorials.",
+      "tags": [
+        "explainer",
+        "bounce",
+        "title",
+        "focused"
+      ]
     },
     {
       "id": "text/callout-tip",
@@ -437,7 +563,14 @@
       "src": "callout-tip.html",
       "w": 800,
       "h": 300,
-      "fit": 0.24
+      "fit": 0.24,
+      "about": "Dark tip card with a yellow bulb badge that lights up and swings, a label and a line of advice. For tips and hints.",
+      "tags": [
+        "explainer",
+        "bounce",
+        "ui",
+        "focused"
+      ]
     },
     {
       "id": "text/callout-proscons",
@@ -455,7 +588,14 @@
       "src": "callout-proscons.html",
       "w": 1000,
       "h": 500,
-      "fit": 0.4
+      "fit": 0.4,
+      "about": "Dark card with two columns: green ticks for good points, red crosses for bad, each line coming in after the other. For reviews.",
+      "tags": [
+        "explainer",
+        "chart",
+        "slide",
+        "focused"
+      ]
     },
     {
       "id": "text/social-subscribe",
@@ -473,7 +613,14 @@
       "src": "social-subscribe.html",
       "w": 900,
       "h": 250,
-      "fit": 0.18
+      "fit": 0.18,
+      "about": "Red subscribe button that a pointer clicks, turning grey to subscribed, while the bell beside it rings. For channel calls to action.",
+      "tags": [
+        "social",
+        "ui",
+        "click",
+        "outro"
+      ]
     },
     {
       "id": "text/social-actions",
@@ -491,7 +638,14 @@
       "src": "social-actions.html",
       "w": 900,
       "h": 300,
-      "fit": 0.22
+      "fit": 0.22,
+      "about": "Like, comment and share round buttons pop in one by one with counts; the heart fills red and bursts. For short vertical videos.",
+      "tags": [
+        "social",
+        "ui",
+        "bounce",
+        "playful"
+      ]
     },
     {
       "id": "text/social-follow",
@@ -509,7 +663,14 @@
       "src": "social-follow.html",
       "w": 900,
       "h": 220,
-      "fit": 0.16
+      "fit": 0.16,
+      "about": "Glassy dark pill with a round initial badge, handle and count, and a pink follow button turning to following. For creator calls to action.",
+      "tags": [
+        "social",
+        "ui",
+        "outro",
+        "minimal"
+      ]
     },
     {
       "id": "text/social-swipe",
@@ -527,7 +688,14 @@
       "src": "social-swipe.html",
       "w": 400,
       "h": 500,
-      "fit": 0.4
+      "fit": 0.4,
+      "about": "Yellow chevrons rising in a row inside a rounded track, with swipe-up words under it. For story and short-video prompts.",
+      "tags": [
+        "social",
+        "ui",
+        "slide",
+        "arrow"
+      ]
     },
     {
       "id": "text/social-linkbio",
@@ -545,7 +713,14 @@
       "src": "social-linkbio.html",
       "w": 800,
       "h": 250,
-      "fit": 0.18
+      "fit": 0.18,
+      "about": "White pill with a link badge and words to find the link, a yellow marker stroke and a purple arrow bobbing up. For link-in-bio prompts.",
+      "tags": [
+        "social",
+        "ui",
+        "handdrawn",
+        "arrow"
+      ]
     },
     {
       "id": "text/shop-strike",
@@ -563,7 +738,14 @@
       "src": "shop-strike.html",
       "w": 800,
       "h": 400,
-      "fit": 0.3
+      "fit": 0.3,
+      "about": "Big yellow new price pops in, the old price beside it struck through by a drawn line, with a round red tag. For sales.",
+      "tags": [
+        "bounce",
+        "vivid",
+        "corporate",
+        "celebration"
+      ]
     },
     {
       "id": "text/shop-burst",
@@ -581,7 +763,15 @@
       "src": "shop-burst.html",
       "w": 500,
       "h": 500,
-      "fit": 0.34
+      "fit": 0.34,
+      "about": "Red and yellow starburst sticker spins in with a second burst behind it, a big discount and a word on it. For sales and promos.",
+      "tags": [
+        "spin",
+        "bounce",
+        "vivid",
+        "intense",
+        "celebration"
+      ]
     },
     {
       "id": "text/shop-coupon",
@@ -599,7 +789,14 @@
       "src": "shop-coupon.html",
       "w": 900,
       "h": 350,
-      "fit": 0.26
+      "fit": 0.26,
+      "about": "Cream coupon ticket with notches and a dashed tear line: a value on a red side, title, condition and code. For offers.",
+      "tags": [
+        "corporate",
+        "slide",
+        "vivid",
+        "cute"
+      ]
     },
     {
       "id": "text/shop-limited",
@@ -617,7 +814,14 @@
       "src": "shop-limited.html",
       "w": 900,
       "h": 200,
-      "fit": 0.14
+      "fit": 0.14,
+      "about": "Dark pill for a limited offer: a flashing red bolt, its words and a yellow timer counting down by the second. For flash sales.",
+      "tags": [
+        "countdown",
+        "tense",
+        "intense",
+        "corporate"
+      ]
     },
     {
       "id": "text/shop-specs",
@@ -635,7 +839,14 @@
       "src": "shop-specs.html",
       "w": 700,
       "h": 500,
-      "fit": 0.42
+      "fit": 0.42,
+      "about": "Dark product spec card: a name with a green label above, then four name-and-value rows drawn in one after another. For product features.",
+      "tags": [
+        "tech",
+        "corporate",
+        "slide",
+        "chart"
+      ]
     },
     {
       "id": "text/shop-buy",
@@ -653,7 +864,14 @@
       "src": "shop-buy.html",
       "w": 700,
       "h": 220,
-      "fit": 0.16
+      "fit": 0.16,
+      "about": "Glossy orange and pink buy button with a cart and moving arrows, a shine sweeping across it, clicked by a pointer. For calls to buy.",
+      "tags": [
+        "ui",
+        "click",
+        "vivid",
+        "corporate"
+      ]
     },
     {
       "id": "text/info-list",
@@ -671,7 +889,14 @@
       "src": "info-list.html",
       "w": 800,
       "h": 500,
-      "fit": 0.4
+      "fit": 0.4,
+      "about": "A heading and three numbered points that come in one after another along a blue line drawn down beside them. For lists and key points.",
+      "tags": [
+        "explainer",
+        "slide",
+        "chart",
+        "focused"
+      ]
     },
     {
       "id": "text/info-count",
@@ -689,7 +914,14 @@
       "src": "info-count.html",
       "w": 800,
       "h": 400,
-      "fit": 0.3
+      "fit": 0.3,
+      "about": "A key number counting up from zero, a label over it, a green bar filling under it and a note at its end. For statistics.",
+      "tags": [
+        "chart",
+        "explainer",
+        "success",
+        "focused"
+      ]
     },
     {
       "id": "text/info-compare",
@@ -707,7 +939,14 @@
       "src": "info-compare.html",
       "w": 1000,
       "h": 450,
-      "fit": 0.34
+      "fit": 0.34,
+      "about": "Two cards side by side, grey and orange, with a heading and value each, sliding in from either side to a round mark. For comparisons.",
+      "tags": [
+        "chart",
+        "explainer",
+        "slide",
+        "split"
+      ]
     },
     {
       "id": "text/info-timeline",
@@ -725,7 +964,14 @@
       "src": "info-timeline.html",
       "w": 1200,
       "h": 350,
-      "fit": 0.26
+      "fit": 0.26,
+      "about": "A line drawn left to right; four points pop as it reaches them, each with a year above and words below. For histories and schedules.",
+      "tags": [
+        "chart",
+        "explainer",
+        "documentary",
+        "wipe"
+      ]
     },
     {
       "id": "text/info-define",
@@ -743,7 +989,14 @@
       "src": "info-define.html",
       "w": 900,
       "h": 400,
-      "fit": 0.3
+      "fit": 0.3,
+      "about": "Cream dictionary card: a serif word, its pronunciation, its kind and its meaning typed in under it. For definitions and explainers.",
+      "tags": [
+        "explainer",
+        "typewriter",
+        "elegant",
+        "minimal"
+      ]
     },
     {
       "id": "text/info-quote",
@@ -761,7 +1014,14 @@
       "src": "info-quote.html",
       "w": 1000,
       "h": 450,
-      "fit": 0.34
+      "fit": 0.34,
+      "about": "Dark card with a big quotation mark swinging in, the words rising line by line and who said it in orange. For quotes and testimonials.",
+      "tags": [
+        "speech",
+        "explainer",
+        "elegant",
+        "emotional"
+      ]
     },
     {
       "id": "text/chapter-number",
@@ -779,7 +1039,14 @@
       "src": "chapter-number.html",
       "w": 1000,
       "h": 450,
-      "fit": 0.34
+      "fit": 0.34,
+      "about": "Big outlined chapter number that fills yellow from below, beside a label and the chapter title. For chapter openers and series.",
+      "tags": [
+        "title",
+        "wipe",
+        "explainer",
+        "intro"
+      ]
     },
     {
       "id": "text/chapter-later",
@@ -797,7 +1064,14 @@
       "src": "chapter-later.html",
       "w": 900,
       "h": 300,
-      "fit": 0.24
+      "fit": 0.24,
+      "about": "A clock whose hands spin forward fast and settle, with words for how much later rising letter by letter. For time skips.",
+      "tags": [
+        "spin",
+        "countdown",
+        "drama",
+        "title"
+      ]
     },
     {
       "id": "text/chapter-part",
@@ -815,7 +1089,15 @@
       "src": "chapter-part.html",
       "w": 1000,
       "h": 350,
-      "fit": 0.28
+      "fit": 0.28,
+      "about": "Serif part number with gold lines running out to both sides and rings at their ends, a title under it. For part dividers in films.",
+      "tags": [
+        "title",
+        "elegant",
+        "fade",
+        "solemn",
+        "drama"
+      ]
     },
     {
       "id": "text/end-thanks",
@@ -833,7 +1115,14 @@
       "src": "end-thanks.html",
       "w": 1000,
       "h": 500,
-      "fit": 0.38
+      "fit": 0.38,
+      "about": "Script line and heavy word rising letter by letter, with a red subscribe pill and a ringing bell. For the end of a video.",
+      "tags": [
+        "outro",
+        "social",
+        "title",
+        "happy"
+      ]
     },
     {
       "id": "text/end-credits",
@@ -851,7 +1140,14 @@
       "src": "end-credits.html",
       "w": 800,
       "h": 900,
-      "fit": 0.8
+      "fit": 0.8,
+      "about": "White credits rolling upward at an even pace, small-caps roles over names, fading at top and bottom, ending on a line. For film endings.",
+      "tags": [
+        "outro",
+        "slide",
+        "drama",
+        "calm"
+      ]
     },
     {
       "id": "text/end-seeyou",
@@ -869,7 +1165,15 @@
       "src": "end-seeyou.html",
       "w": 1000,
       "h": 400,
-      "fit": 0.3
+      "fit": 0.3,
+      "about": "Round bouncing letters keep a gentle wave, three dots hop, and a pink tag names the next video. For friendly sign-offs.",
+      "tags": [
+        "outro",
+        "bounce",
+        "playful",
+        "vlog",
+        "happy"
+      ]
     },
     {
       "id": "text/var-wow",
@@ -887,7 +1191,15 @@
       "src": "var-wow.html",
       "w": 600,
       "h": 400,
-      "fit": 0.34
+      "fit": 0.34,
+      "about": "Big yellow sticker word with a dark stroke and white outline slams in over pink rays, then shakes now and then. For reactions and hype.",
+      "tags": [
+        "comic",
+        "shake",
+        "bounce",
+        "intense",
+        "comedy"
+      ]
     },
     {
       "id": "text/var-noway",
@@ -905,7 +1217,15 @@
       "src": "var-noway.html",
       "w": 700,
       "h": 350,
-      "fit": 0.3
+      "fit": 0.3,
+      "about": "Tilted white sticker word with a red stroke slams in from the side with speed lines, then jolts now and then. For shock reactions.",
+      "tags": [
+        "comic",
+        "slide",
+        "shake",
+        "intense",
+        "comedy"
+      ]
     },
     {
       "id": "text/var-lol",
@@ -923,7 +1243,15 @@
       "src": "var-lol.html",
       "w": 600,
       "h": 350,
-      "fit": 0.3
+      "fit": 0.3,
+      "about": "Laughing letters in pink, blue and yellow with white outlines hop in turn while sparkles twinkle. For jokes and funny moments.",
+      "tags": [
+        "comic",
+        "bounce",
+        "playful",
+        "comedy",
+        "happy"
+      ]
     },
     {
       "id": "text/var-omg",
@@ -941,7 +1269,15 @@
       "src": "var-omg.html",
       "w": 600,
       "h": 400,
-      "fit": 0.34
+      "fit": 0.34,
+      "about": "Shocked sticker word in a yellow-to-orange gradient punches in from big, with white shock marks flashing and a tremble. For surprises.",
+      "tags": [
+        "comic",
+        "zoom",
+        "shake",
+        "comedy",
+        "intense"
+      ]
     },
     {
       "id": "text/chat-thread",
@@ -959,7 +1295,14 @@
       "src": "chat-thread.html",
       "w": 700,
       "h": 600,
-      "fit": 0.5
+      "fit": 0.5,
+      "about": "Chat bubbles pop in one by one from left and right, blue and light grey, the last after typing dots. For texting scenes and dialogue.",
+      "tags": [
+        "speech",
+        "ui",
+        "bounce",
+        "social"
+      ]
     },
     {
       "id": "text/chat-notify",
@@ -977,7 +1320,14 @@
       "src": "chat-notify.html",
       "w": 900,
       "h": 250,
-      "fit": 0.2
+      "fit": 0.2,
+      "about": "Phone message alert slides down with a bounce: green app badge, name and time, sender and message. For notifications and message scenes.",
+      "tags": [
+        "ui",
+        "speech",
+        "slide",
+        "bounce"
+      ]
     },
     {
       "id": "text/chat-thought",
@@ -995,7 +1345,14 @@
       "src": "chat-thought.html",
       "w": 700,
       "h": 450,
-      "fit": 0.36
+      "fit": 0.36,
+      "about": "White thought cloud puffs up after two small rings of trail, with a few words in it, drifting gently. For inner thoughts and comic asides.",
+      "tags": [
+        "speech",
+        "cute",
+        "playful",
+        "dreamy"
+      ]
     },
     {
       "id": "text/news-breaking",
@@ -1013,7 +1370,14 @@
       "src": "news-breaking.html",
       "w": 1600,
       "h": 260,
-      "fit": 0.17
+      "fit": 0.17,
+      "about": "Breaking news strap: a red block with a live dot, a white bar with the headline and a dark strip below. For news alerts.",
+      "tags": [
+        "news",
+        "lowerthird",
+        "slide",
+        "tense"
+      ]
     },
     {
       "id": "text/news-ticker",
@@ -1031,7 +1395,14 @@
       "src": "news-ticker.html",
       "w": 1920,
       "h": 110,
-      "fit": 0.07
+      "fit": 0.07,
+      "about": "Dark ticker along the bottom: a yellow label block and a line of news rolling by at an even pace, repeating. For news and updates.",
+      "tags": [
+        "news",
+        "slide",
+        "corporate",
+        "focused"
+      ]
     },
     {
       "id": "text/news-headline",
@@ -1049,7 +1420,14 @@
       "src": "news-headline.html",
       "w": 1000,
       "h": 450,
-      "fit": 0.34
+      "fit": 0.34,
+      "about": "Off-white headline card: a red rule drawn across the top, section tag and time, headline rising line by line, and a source. For news items.",
+      "tags": [
+        "news",
+        "wipe",
+        "corporate",
+        "focused"
+      ]
     },
     {
       "id": "text/place-pin",
@@ -1067,7 +1445,14 @@
       "src": "place-pin.html",
       "w": 900,
       "h": 300,
-      "fit": 0.22
+      "fit": 0.22,
+      "about": "Red map pin drops and bounces on a pulsing ring, with the place name beside it, a region and coordinates. For locations and travel.",
+      "tags": [
+        "map",
+        "travel",
+        "bounce",
+        "vlog"
+      ]
     },
     {
       "id": "text/place-date",
@@ -1085,7 +1470,14 @@
       "src": "place-date.html",
       "w": 500,
       "h": 500,
-      "fit": 0.34
+      "fit": 0.34,
+      "about": "White calendar page flips down on its rings: month on a red band, a big day, weekday and year. For dates and diary scenes.",
+      "tags": [
+        "spin",
+        "vlog",
+        "title",
+        "minimal"
+      ]
     },
     {
       "id": "text/place-weather",
@@ -1103,7 +1495,14 @@
       "src": "place-weather.html",
       "w": 700,
       "h": 350,
-      "fit": 0.28
+      "fit": 0.28,
+      "about": "Dark blue card: a sun turning slowly with a cloud drifting over it, temperature counting up, city and sky. For weather and travel reports.",
+      "tags": [
+        "weather",
+        "travel",
+        "vlog",
+        "calm"
+      ]
     },
     {
       "id": "text/fest-newyear",
@@ -1121,7 +1520,14 @@
       "src": "fest-newyear.html",
       "w": 1000,
       "h": 500,
-      "fit": 0.38
+      "fit": 0.38,
+      "about": "Greeting letters rise one by one under fireworks bursting in turn, with a big gold year under them. For New Year greetings.",
+      "tags": [
+        "holiday",
+        "celebration",
+        "particles",
+        "happy"
+      ]
     },
     {
       "id": "text/fest-xmas",
@@ -1139,7 +1545,14 @@
       "src": "fest-xmas.html",
       "w": 1000,
       "h": 500,
-      "fit": 0.38
+      "fit": 0.38,
+      "about": "Simple green tree of stacked triangles with a gold star and lights, a script greeting beside it, snow falling. For Christmas greetings.",
+      "tags": [
+        "holiday",
+        "celebration",
+        "weather-fx",
+        "warm"
+      ]
     },
     {
       "id": "text/fest-birthday",
@@ -1157,7 +1570,15 @@
       "src": "fest-birthday.html",
       "w": 1000,
       "h": 500,
-      "fit": 0.38
+      "fit": 0.38,
+      "about": "Little flags swing down, a greeting in bright pink, blue and yellow letters hops in, a name sits on a ribbon, confetti falls. For birthdays.",
+      "tags": [
+        "holiday",
+        "celebration",
+        "bounce",
+        "happy",
+        "playful"
+      ]
     }
   ]
 }

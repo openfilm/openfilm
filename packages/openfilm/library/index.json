@@ -285,7 +285,14 @@
     "es": "Fundido encadenado"
    },
    "kind": "fade",
-   "fade": "dissolve"
+   "fade": "dissolve",
+   "about": "The first shot fades into the second while both overlap briefly. For gentle, neutral cuts in any film, vlog or interview.",
+   "tags": [
+    "fade",
+    "soft",
+    "calm",
+    "transition"
+   ]
   },
   {
    "id": "transitions/dip-black",
@@ -299,7 +306,14 @@
     "es": "Fundido a negro"
    },
    "kind": "fade",
-   "fade": "dip-black"
+   "fade": "dip-black",
+   "about": "The picture fades down to black, then the next shot fades up from black. For scene endings, time jumps and solemn moments.",
+   "tags": [
+    "fade",
+    "dark",
+    "solemn",
+    "transition"
+   ]
   },
   {
    "id": "transitions/dip-white",
@@ -313,7 +327,14 @@
     "es": "Fundido a blanco"
    },
    "kind": "fade",
-   "fade": "dip-white"
+   "fade": "dip-white",
+   "about": "The picture washes out to white, then the next shot fades in from white. For bright, dreamy or memory-like scene changes.",
+   "tags": [
+    "fade",
+    "dreamy",
+    "light",
+    "transition"
+   ]
   },
   {
    "id": "transitions/light-sweep",
@@ -329,7 +350,14 @@
    "place": "cut",
    "kind": "page",
    "durationMs": 800,
-   "src": "light-sweep.html"
+   "src": "light-sweep.html",
+   "about": "A warm orange-white glow sweeps left to right across the frame, brightest at the cut. For warm, golden cuts in travel or lifestyle videos.",
+   "tags": [
+    "light",
+    "warm-tone",
+    "slide",
+    "transition"
+   ]
   },
   {
    "id": "transitions/flare",
@@ -345,7 +373,15 @@
    "place": "cut",
    "kind": "page",
    "durationMs": 800,
-   "src": "flare.html"
+   "src": "flare.html",
+   "about": "A white-yellow burst of light grows from the center and whites out the cut. For energetic cuts on a beat or in a launch film.",
+   "tags": [
+    "light",
+    "intense",
+    "zoom",
+    "transition",
+    "trailer"
+   ]
   },
   {
    "id": "transitions/film-burn",
@@ -361,7 +397,15 @@
    "place": "cut",
    "kind": "page",
    "durationMs": 800,
-   "src": "film-burn.html"
+   "src": "film-burn.html",
+   "about": "An orange overexposed band runs across the frame like burnt film, hiding the cut. For nostalgic or analog-style cuts.",
+   "tags": [
+    "film",
+    "light",
+    "warm-tone",
+    "nostalgic",
+    "transition"
+   ]
   },
   {
    "id": "transitions/wipe",
@@ -377,7 +421,14 @@
    "place": "cut",
    "kind": "page",
    "durationMs": 800,
-   "src": "wipe.html"
+   "src": "wipe.html",
+   "about": "A flat off-white panel slides in from the left, covers the frame and exits right; the cut happens behind it. For clean, graphic cuts.",
+   "tags": [
+    "wipe",
+    "slide",
+    "minimal",
+    "transition"
+   ]
   },
   {
    "id": "transitions/shutter",
@@ -393,7 +444,14 @@
    "place": "cut",
    "kind": "page",
    "durationMs": 800,
-   "src": "shutter.html"
+   "src": "shutter.html",
+   "about": "Black bars close from top and bottom to meet in the middle, then open onto the next shot. For crisp, cinematic scene changes.",
+   "tags": [
+    "wipe",
+    "cinematic-look",
+    "dark",
+    "transition"
+   ]
   },
   {
    "id": "transitions/iris",
@@ -409,7 +467,14 @@
    "place": "cut",
    "kind": "page",
    "durationMs": 800,
-   "src": "iris.html"
+   "src": "iris.html",
+   "about": "A black circle closes in on the center of the frame, then opens again on the next shot. For classic, playful scene changes.",
+   "tags": [
+    "wipe",
+    "shapes",
+    "playful",
+    "transition"
+   ]
   },
   {
    "id": "transitions/blinds",
@@ -425,7 +490,14 @@
    "place": "cut",
    "kind": "page",
    "durationMs": 800,
-   "src": "blinds.html"
+   "src": "blinds.html",
+   "about": "Vertical black stripes widen like window blinds until the frame is covered, then open again. For stylish scene changes.",
+   "tags": [
+    "wipe",
+    "split",
+    "shapes",
+    "transition"
+   ]
   },
   {
    "id": "transitions/ink",
@@ -441,7 +513,13 @@
    "place": "cut",
    "kind": "page",
    "durationMs": 1000,
-   "src": "ink.html"
+   "src": "ink.html",
+   "about": "Black ink blots spread from the middle and swallow the frame, then lift away over the next shot. For dramatic, artistic cuts.",
+   "tags": [
+    "ink",
+    "dark",
+    "transition"
+   ]
   },
   {
    "id": "transitions/heart",
@@ -457,7 +535,14 @@
    "place": "cut",
    "kind": "page",
    "durationMs": 800,
-   "src": "heart.html"
+   "src": "heart.html",
+   "about": "A pink heart grows from the center until it fills the screen, then fades. For romantic, cute or wedding cuts.",
+   "tags": [
+    "cute",
+    "romantic",
+    "shapes",
+    "transition"
+   ]
   },
   {
    "id": "transitions/star",
@@ -473,7 +558,15 @@
    "place": "cut",
    "kind": "page",
    "durationMs": 800,
-   "src": "star.html"
+   "src": "star.html",
+   "about": "A yellow star spins out from the center, covers the frame, then fades. For fun, celebratory or kids' cuts.",
+   "tags": [
+    "shapes",
+    "playful",
+    "spin",
+    "celebration",
+    "transition"
+   ]
   },
   {
    "id": "transitions/glitch",
@@ -489,7 +582,15 @@
    "place": "cut",
    "kind": "page",
    "durationMs": 600,
-   "src": "glitch.html"
+   "src": "glitch.html",
+   "about": "Pink and cyan bars with a dark frame jump sideways for a moment, like a broken signal. For techy, fast cuts.",
+   "tags": [
+    "glitch",
+    "intense",
+    "shake",
+    "tech",
+    "transition"
+   ]
   },
   {
    "id": "transitions/static",
@@ -505,7 +606,14 @@
    "place": "cut",
    "kind": "page",
    "durationMs": 600,
-   "src": "static.html"
+   "src": "static.html",
+   "about": "A short burst of grey TV noise flickers over the frame and hides the cut. For retro, horror or channel-change cuts.",
+   "tags": [
+    "retro",
+    "tense",
+    "glitch",
+    "transition"
+   ]
   },
   {
    "id": "effects/grain",
@@ -520,7 +628,13 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "grain.html"
+   "src": "grain.html",
+   "about": "A moving film-grain noise lies over the whole picture and changes every frame. For an analog, filmic texture on any shot.",
+   "tags": [
+    "film",
+    "retro",
+    "cinematic-look"
+   ]
   },
   {
    "id": "effects/vignette",
@@ -535,7 +649,13 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "vignette.html"
+   "src": "vignette.html",
+   "about": "The corners of the picture are darkened toward black, with a clear center. For drawing the eye to the middle and a moodier look.",
+   "tags": [
+    "cinematic-look",
+    "dark",
+    "minimal"
+   ]
   },
   {
    "id": "effects/scratches",
@@ -550,7 +670,13 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "scratches.html"
+   "src": "scratches.html",
+   "about": "Thin white and dark vertical scratches jump across the picture, with a faint flicker. For old-film or silent-movie looks.",
+   "tags": [
+    "film",
+    "retro",
+    "nostalgic"
+   ]
   },
   {
    "id": "effects/scanlines",
@@ -565,7 +691,13 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "scanlines.html"
+   "src": "scanlines.html",
+   "about": "Fine dark horizontal lines run across the whole frame, like an old screen. For retro monitor, CRT or sci-fi looks.",
+   "tags": [
+    "retro",
+    "hud",
+    "tech"
+   ]
   },
   {
    "id": "effects/light-leak",
@@ -580,7 +712,14 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "light-leak.html"
+   "src": "light-leak.html",
+   "about": "Warm orange and pink light drifts in from the left and right edges, pulsing slowly. For warm, nostalgic or dreamy footage.",
+   "tags": [
+    "light",
+    "warm-tone",
+    "dreamy",
+    "nostalgic"
+   ]
   },
   {
    "id": "effects/lens-flare",
@@ -595,7 +734,13 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "lens-flare.html"
+   "src": "lens-flare.html",
+   "about": "A bright sun-like flare sits in the top-right corner with faint colored spots, breathing slowly. For sunny, cinematic shots.",
+   "tags": [
+    "light",
+    "cinematic-look",
+    "warm"
+   ]
   },
   {
    "id": "effects/light-rays",
@@ -610,7 +755,14 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "light-rays.html"
+   "src": "light-rays.html",
+   "about": "Soft pale rays fall from the top-left corner and slowly brighten and fade. For sunlight through trees, windows or a hopeful mood.",
+   "tags": [
+    "light",
+    "uplifting",
+    "calm",
+    "nature"
+   ]
   },
   {
    "id": "effects/snow",
@@ -625,7 +777,14 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "snow.html"
+   "src": "snow.html",
+   "about": "White snowflakes of three sizes fall and sway, the near ones larger and blurred. For winter, holiday or calm scenes.",
+   "tags": [
+    "weather-fx",
+    "particles",
+    "calm",
+    "holiday"
+   ]
   },
   {
    "id": "effects/rain",
@@ -640,7 +799,14 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "rain.html"
+   "src": "rain.html",
+   "about": "Thin pale streaks fall fast at a slant across the frame. For rainy, sad or moody scenes.",
+   "tags": [
+    "weather-fx",
+    "sad",
+    "calm",
+    "weather"
+   ]
   },
   {
    "id": "effects/sparkles",
@@ -655,7 +821,14 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "sparkles.html"
+   "src": "sparkles.html",
+   "about": "Small pale-yellow four-pointed stars twinkle here and there across the frame. For magic, glamour or celebration.",
+   "tags": [
+    "particles",
+    "dreamy",
+    "celebration",
+    "cute"
+   ]
   },
   {
    "id": "effects/confetti",
@@ -670,7 +843,14 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "confetti.html"
+   "src": "confetti.html",
+   "about": "Many small colored paper pieces tumble down the screen. For parties, wins, birthdays and announcements.",
+   "tags": [
+    "celebration",
+    "particles",
+    "happy",
+    "success"
+   ]
   },
   {
    "id": "effects/petals",
@@ -685,7 +865,14 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "petals.html"
+   "src": "petals.html",
+   "about": "Pink cherry blossom petals drift down and sideways across the frame. For spring, romance, weddings and Asian-style scenes.",
+   "tags": [
+    "particles",
+    "romantic",
+    "soft",
+    "nature"
+   ]
   },
   {
    "id": "effects/bubbles",
@@ -700,7 +887,14 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "bubbles.html"
+   "src": "bubbles.html",
+   "about": "Clear round bubbles with white highlights rise from the bottom of the frame. For underwater, kids and playful scenes.",
+   "tags": [
+    "particles",
+    "playful",
+    "dreamy",
+    "kids"
+   ]
   },
   {
    "id": "effects/flash",
@@ -715,7 +909,13 @@
    },
    "kind": "page",
    "durationMs": 1000,
-   "src": "flash.html"
+   "src": "flash.html",
+   "about": "A white flash at the start that fades out in about half a second. For hits on a beat, camera flashes and sudden accents.",
+   "tags": [
+    "light",
+    "intense",
+    "camera"
+   ]
   },
   {
    "id": "effects/heartbeat",
@@ -730,7 +930,14 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "heartbeat.html"
+   "src": "heartbeat.html",
+   "about": "The screen edges glow red and pulse twice a second, like a heartbeat. For tension, love, fear or a racing pulse.",
+   "tags": [
+    "light",
+    "tense",
+    "heartbeat",
+    "romantic"
+   ]
   },
   {
    "id": "effects/glitch",
@@ -745,7 +952,13 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "glitch.html"
+   "src": "glitch.html",
+   "about": "Pink and cyan bars jump across the picture now and then, like a broken signal. For tech, hacking or distorted moments.",
+   "tags": [
+    "glitch",
+    "tense",
+    "tech"
+   ]
   },
   {
    "id": "effects/letterbox",
@@ -760,7 +973,13 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "letterbox.html"
+   "src": "letterbox.html",
+   "about": "Black bars sit at the top and bottom of the frame for a wide cinema shape. For a movie look in trailers and film scenes.",
+   "tags": [
+    "frame",
+    "cinematic-look",
+    "trailer"
+   ]
   },
   {
    "id": "effects/polaroid",
@@ -775,7 +994,14 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "polaroid.html"
+   "src": "polaroid.html",
+   "about": "A cream instant-photo border surrounds the picture, thicker at the bottom. For memories, snapshots and travel photos.",
+   "tags": [
+    "frame",
+    "nostalgic",
+    "retro",
+    "travel"
+   ]
   },
   {
    "id": "effects/film-strip",
@@ -790,7 +1016,14 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "film-strip.html"
+   "src": "film-strip.html",
+   "about": "Dark edges with light sprocket holes run down both sides, like a strip of film. For memories, old movies and slideshows.",
+   "tags": [
+    "film",
+    "frame",
+    "retro",
+    "nostalgic"
+   ]
   },
   {
    "id": "effects/viewfinder",
@@ -805,7 +1038,14 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "viewfinder.html"
+   "src": "viewfinder.html",
+   "about": "White corner marks frame the picture, with a blinking red dot and REC at the top left. For camcorder, found-footage and vlog looks.",
+   "tags": [
+    "frame",
+    "retro",
+    "vlog",
+    "hud"
+   ]
   },
   {
    "id": "effects/neon-frame",
@@ -820,7 +1060,13 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "neon-frame.html"
+   "src": "neon-frame.html",
+   "about": "A glowing magenta neon tube outlines the picture and flickers now and then. For nightlife, music and cyberpunk looks.",
+   "tags": [
+    "neon",
+    "frame",
+    "night"
+   ]
   },
   {
    "id": "effects/vhs",
@@ -835,7 +1081,13 @@
    },
    "kind": "page",
    "durationMs": 4000,
-   "src": "vhs.html"
+   "src": "vhs.html",
+   "about": "Scan lines, a PLAY mark, a date stamp and a soft band rolling down the screen, like a VHS tape. For retro, home-video looks.",
+   "tags": [
+    "retro",
+    "nostalgic",
+    "film"
+   ]
   },
   {
    "id": "text/text",
@@ -853,7 +1105,13 @@
    "src": "text.html",
    "w": 1600,
    "h": 260,
-   "fit": 0.14
+   "fit": 0.14,
+   "about": "A single line of words whose font, size, color, style, entrance, loop and exit can all be changed. For any title, caption or label.",
+   "tags": [
+    "title",
+    "subtitle",
+    "minimal"
+   ]
   },
   {
    "id": "text/looks/title",
@@ -873,7 +1131,12 @@
    },
    "w": 1600,
    "h": 260,
-   "fit": 0.2
+   "fit": 0.2,
+   "about": "Extra-heavy rounded headline lettering in the default color. For large titles and headlines.",
+   "tags": [
+    "title",
+    "confident"
+   ]
   },
   {
    "id": "text/looks/subtitle",
@@ -892,7 +1155,12 @@
    },
    "w": 1600,
    "h": 260,
-   "fit": 0.11
+   "fit": 0.11,
+   "about": "Bold, plain text for secondary lines. For subtitles and supporting lines under a title.",
+   "tags": [
+    "subtitle",
+    "minimal"
+   ]
   },
   {
    "id": "text/looks/body",
@@ -912,7 +1180,13 @@
    },
    "w": 1600,
    "h": 260,
-   "fit": 0.08
+   "fit": 0.08,
+   "about": "Medium-weight plain text that fades in. For body copy and everyday captions.",
+   "tags": [
+    "subtitle",
+    "minimal",
+    "soft"
+   ]
   },
   {
    "id": "text/looks/note",
@@ -936,7 +1210,12 @@
    },
    "w": 1600,
    "h": 260,
-   "fit": 0.08
+   "fit": 0.08,
+   "about": "Smaller medium text on a dark semi-transparent rounded box, fading in. For notes, tips and small captions over busy footage.",
+   "tags": [
+    "subtitle",
+    "minimal"
+   ]
   },
   {
    "id": "text/looks/lower",
@@ -958,7 +1237,13 @@
    "w": 1600,
    "h": 260,
    "fit": 0.08,
-   "low": true
+   "low": true,
+   "about": "Semi-bold text with a thin dark outline, fading in. For readable subtitles over any footage.",
+   "tags": [
+    "subtitle",
+    "minimal",
+    "lowerthird"
+   ]
   },
   {
    "id": "text/looks/white-black",
@@ -975,7 +1260,13 @@
    "vars": {
     "--stroke": "0.12em",
     "--stroke-color": "#111"
-   }
+   },
+   "about": "White letters with a thick near-black outline. For readable subtitles and captions over any footage.",
+   "tags": [
+    "subtitle",
+    "title",
+    "minimal"
+   ]
   },
   {
    "id": "text/looks/yellow-variety",
@@ -995,7 +1286,15 @@
     "--stroke": "0.14em",
     "--stroke-color": "#151515",
     "--shadow": "0.07em 0.09em 0 #151515"
-   }
+   },
+   "about": "Yellow rounded letters with a thick black outline and a hard black drop shadow, in a variety-show style. For loud, fun captions.",
+   "tags": [
+    "title",
+    "subtitle",
+    "comic",
+    "playful",
+    "vivid"
+   ]
   },
   {
    "id": "text/looks/variety-pink",
@@ -1016,7 +1315,14 @@
     "--stroke": "0.16em",
     "--stroke-color": "#ff3d7f",
     "--shadow": "0 0.1em 0 #9e0040"
-   }
+   },
+   "about": "White bubbly letters with a thick pink outline and dark-pink shadow, in a variety-show style. For cute, lively captions.",
+   "tags": [
+    "title",
+    "cute",
+    "playful",
+    "pastel"
+   ]
   },
   {
    "id": "text/looks/candy",
@@ -1036,7 +1342,14 @@
     "--color": "transparent",
     "--fill": "linear-gradient(180deg, #ffffff 35%, #ffe08a 80%)",
     "--glow": "drop-shadow(0.05em 0em 0 #ff8a00) drop-shadow(-0.05em 0em 0 #ff8a00) drop-shadow(0em 0.05em 0 #ff8a00) drop-shadow(0em -0.05em 0 #ff8a00) drop-shadow(0.04em 0em 0 #ff8a00) drop-shadow(-0.04em 0em 0 #ff8a00) drop-shadow(0em 0.04em 0 #ff8a00) drop-shadow(0em -0.04em 0 #ff8a00) drop-shadow(0 0.09em 0 #c24e00)"
-   }
+   },
+   "about": "White-to-cream bubbly letters with a thick orange outline and a darker orange base. For sweet, cheerful titles.",
+   "tags": [
+    "title",
+    "playful",
+    "vivid",
+    "kids"
+   ]
   },
   {
    "id": "text/looks/comic",
@@ -1057,7 +1370,14 @@
     "--stroke": "0.12em",
     "--stroke-color": "#111",
     "--shadow": "0.09em 0.09em 0 #e53935"
-   }
+   },
+   "about": "Yellow bubbly letters with a thick black outline and a red offset shadow. For comic, joking and funny captions.",
+   "tags": [
+    "title",
+    "comic",
+    "comedy",
+    "playful"
+   ]
   },
   {
    "id": "text/looks/cute-pink",
@@ -1078,7 +1398,14 @@
     "--stroke": "0.13em",
     "--stroke-color": "#ff7eb6",
     "--shadow": "0 0.08em 0 #e05597"
-   }
+   },
+   "about": "White bubbly letters with a soft pink outline and pink shadow. For cute, girlish and sweet captions.",
+   "tags": [
+    "title",
+    "cute",
+    "pastel",
+    "playful"
+   ]
   },
   {
    "id": "text/looks/mint",
@@ -1099,7 +1426,14 @@
     "--stroke": "0.13em",
     "--stroke-color": "#2ec4a0",
     "--shadow": "0 0.08em 0 #13866b"
-   }
+   },
+   "about": "White bubbly letters with a mint-green outline and deep-green shadow. For fresh, light and cute captions.",
+   "tags": [
+    "title",
+    "cute",
+    "pastel",
+    "playful"
+   ]
   },
   {
    "id": "text/looks/neon-pink",
@@ -1117,7 +1451,13 @@
     "--weight": "700",
     "--color": "#fff0fb",
     "--glow": "drop-shadow(0 0 0.06em #ff2fd0) drop-shadow(0 0 0.25em #ff2fd0)"
-   }
+   },
+   "about": "Near-white letters with a hot pink neon glow. For nightlife, music and cyberpunk titles.",
+   "tags": [
+    "title",
+    "neon",
+    "night"
+   ]
   },
   {
    "id": "text/looks/neon-cyan",
@@ -1135,7 +1475,13 @@
     "--weight": "700",
     "--color": "#effffe",
     "--glow": "drop-shadow(0 0 0.06em #19e3ff) drop-shadow(0 0 0.25em #19e3ff)"
-   }
+   },
+   "about": "Near-white letters with a cyan neon glow. For tech, night and cyberpunk titles.",
+   "tags": [
+    "title",
+    "neon",
+    "night"
+   ]
   },
   {
    "id": "text/looks/neon-yellow",
@@ -1153,7 +1499,13 @@
     "--weight": "700",
     "--color": "#fffbe0",
     "--glow": "drop-shadow(0 0 0.06em #ffd21f) drop-shadow(0 0 0.25em #ff9d00)"
-   }
+   },
+   "about": "Pale yellow letters with a yellow-orange neon glow. For nightlife, retro signs and lively titles.",
+   "tags": [
+    "title",
+    "neon",
+    "night"
+   ]
   },
   {
    "id": "text/looks/gold",
@@ -1174,7 +1526,14 @@
     "--stroke": "0.03em",
     "--stroke-color": "#5a3a00",
     "--glow": "drop-shadow(0 0.04em 0.06em rgba(0,0,0,0.55))"
-   }
+   },
+   "about": "Letters with a shiny gold metallic gradient, a dark brown edge and a soft shadow. For awards, luxury and celebration titles.",
+   "tags": [
+    "title",
+    "elegant",
+    "celebration",
+    "success"
+   ]
   },
   {
    "id": "text/looks/silver",
@@ -1195,7 +1554,13 @@
     "--stroke": "0.03em",
     "--stroke-color": "#2d333b",
     "--glow": "drop-shadow(0 0.04em 0.06em rgba(0,0,0,0.55))"
-   }
+   },
+   "about": "Letters with a shiny silver metallic gradient, a dark edge and a soft shadow. For premium, tech and award titles.",
+   "tags": [
+    "title",
+    "elegant",
+    "tech"
+   ]
   },
   {
    "id": "text/looks/sunset",
@@ -1213,7 +1578,14 @@
     "--font": "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
     "--color": "transparent",
     "--fill": "linear-gradient(90deg, #ffb35c, #ff4d8d 55%, #8a5cff)"
-   }
+   },
+   "about": "Letters filled with an orange-to-pink-to-purple gradient. For warm, dreamy titles and travel videos.",
+   "tags": [
+    "title",
+    "vivid",
+    "warm-tone",
+    "dreamy"
+   ]
   },
   {
    "id": "text/looks/ocean",
@@ -1231,7 +1603,14 @@
     "--font": "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
     "--color": "transparent",
     "--fill": "linear-gradient(90deg, #7cf6ff, #2f8cff 60%, #5b3cff)"
-   }
+   },
+   "about": "Letters filled with a cyan-to-blue-to-violet gradient. For cool, fresh titles on water, tech or travel topics.",
+   "tags": [
+    "title",
+    "cool-tone",
+    "vivid",
+    "tech"
+   ]
   },
   {
    "id": "text/looks/aurora",
@@ -1250,7 +1629,14 @@
     "--color": "transparent",
     "--fill": "linear-gradient(90deg, #8affc1, #5ad1ff 50%, #c08bff)",
     "--glow": "drop-shadow(0 0 0.15em rgba(120,220,255,0.6))"
-   }
+   },
+   "about": "Letters filled with a green-to-blue-to-lilac gradient and a soft cyan glow. For dreamy, magical or night-sky titles.",
+   "tags": [
+    "title",
+    "dreamy",
+    "cool-tone",
+    "vivid"
+   ]
   },
   {
    "id": "text/looks/fire",
@@ -1269,7 +1655,14 @@
     "--color": "transparent",
     "--fill": "linear-gradient(0deg, #ff3d00, #ffb300 55%, #fff59d)",
     "--glow": "drop-shadow(0 0 0.18em #ff6d00)"
-   }
+   },
+   "about": "Letters filled with a red-orange to yellow gradient, with an orange glow. For action, hot and intense titles.",
+   "tags": [
+    "title",
+    "fire",
+    "intense",
+    "action"
+   ]
   },
   {
    "id": "text/looks/ice",
@@ -1290,7 +1683,14 @@
     "--stroke": "0.02em",
     "--stroke-color": "#e6faff",
     "--glow": "drop-shadow(0 0 0.15em #7fdcff)"
-   }
+   },
+   "about": "Letters filled with white-to-pale-blue, a thin icy edge and a blue glow. For winter, cool and clean titles.",
+   "tags": [
+    "title",
+    "cool-tone",
+    "weather",
+    "soft"
+   ]
   },
   {
    "id": "text/looks/solid-red",
@@ -1308,7 +1708,13 @@
     "--font": "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
     "--color": "#ff4a3d",
     "--shadow": "0.012em 0.012em 0 #7a0f08, 0.024em 0.024em 0 #7a0f08, 0.036em 0.036em 0 #7a0f08, 0.048em 0.048em 0 #7a0f08, 0.060em 0.060em 0 #7a0f08, 0.072em 0.072em 0 #7a0f08, 0.084em 0.084em 0 #7a0f08, 0.096em 0.096em 0 #7a0f08"
-   }
+   },
+   "about": "Red letters with a deep red extruded shadow down and to the right, like a block. For bold, punchy titles.",
+   "tags": [
+    "title",
+    "vivid",
+    "confident"
+   ]
   },
   {
    "id": "text/looks/solid-blue",
@@ -1326,7 +1732,13 @@
     "--font": "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
     "--color": "#4aa8ff",
     "--shadow": "0.012em 0.012em 0 #0b2f66, 0.024em 0.024em 0 #0b2f66, 0.036em 0.036em 0 #0b2f66, 0.048em 0.048em 0 #0b2f66, 0.060em 0.060em 0 #0b2f66, 0.072em 0.072em 0 #0b2f66, 0.084em 0.084em 0 #0b2f66, 0.096em 0.096em 0 #0b2f66"
-   }
+   },
+   "about": "Blue letters with a deep navy extruded shadow down and to the right, like a block. For bold, punchy titles.",
+   "tags": [
+    "title",
+    "vivid",
+    "confident"
+   ]
   },
   {
    "id": "text/looks/long-shadow",
@@ -1344,7 +1756,12 @@
     "--font": "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
     "--color": "#ffffff",
     "--shadow": "0.012em 0.012em 0 rgba(0,0,0,0.35), 0.024em 0.024em 0 rgba(0,0,0,0.35), 0.036em 0.036em 0 rgba(0,0,0,0.35), 0.048em 0.048em 0 rgba(0,0,0,0.35), 0.060em 0.060em 0 rgba(0,0,0,0.35), 0.072em 0.072em 0 rgba(0,0,0,0.35), 0.084em 0.084em 0 rgba(0,0,0,0.35), 0.096em 0.096em 0 rgba(0,0,0,0.35), 0.108em 0.108em 0 rgba(0,0,0,0.35), 0.120em 0.120em 0 rgba(0,0,0,0.35), 0.132em 0.132em 0 rgba(0,0,0,0.35), 0.144em 0.144em 0 rgba(0,0,0,0.35), 0.156em 0.156em 0 rgba(0,0,0,0.35), 0.168em 0.168em 0 rgba(0,0,0,0.35), 0.180em 0.180em 0 rgba(0,0,0,0.35), 0.192em 0.192em 0 rgba(0,0,0,0.35)"
-   }
+   },
+   "about": "White letters with a long, soft dark shadow stretching down and to the right. For flat, modern titles.",
+   "tags": [
+    "title",
+    "minimal"
+   ]
   },
   {
    "id": "text/looks/outline",
@@ -1363,7 +1780,13 @@
     "--color": "transparent",
     "--stroke": "0.035em",
     "--stroke-color": "#ffffff"
-   }
+   },
+   "about": "Hollow letters drawn only as a thin white outline. For modern, stylish titles over footage.",
+   "tags": [
+    "title",
+    "minimal",
+    "elegant"
+   ]
   },
   {
    "id": "text/looks/double-edge",
@@ -1381,7 +1804,13 @@
     "--font": "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
     "--color": "#ffffff",
     "--glow": "drop-shadow(0.035em 0em 0 #2b5bff) drop-shadow(-0.035em 0em 0 #2b5bff) drop-shadow(0em 0.035em 0 #2b5bff) drop-shadow(0em -0.035em 0 #2b5bff) drop-shadow(0.03em 0em 0 #2b5bff) drop-shadow(-0.03em 0em 0 #2b5bff) drop-shadow(0em 0.03em 0 #2b5bff) drop-shadow(0em -0.03em 0 #2b5bff) drop-shadow(0.035em 0em 0 #ffffff) drop-shadow(-0.035em 0em 0 #ffffff) drop-shadow(0em 0.035em 0 #ffffff) drop-shadow(0em -0.035em 0 #ffffff)"
-   }
+   },
+   "about": "White letters with a blue edge and a white outer edge around it. For sticker-like, lively titles.",
+   "tags": [
+    "title",
+    "vivid",
+    "playful"
+   ]
   },
   {
    "id": "text/looks/retro",
@@ -1399,7 +1828,14 @@
     "--font": "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
     "--color": "#f6e7c8",
     "--shadow": "0.06em 0.06em 0 #d2452f, 0.12em 0.12em 0 #24384d"
-   }
+   },
+   "about": "Cream letters with a red then navy offset shadow, in a vintage style. For retro posters and nostalgic titles.",
+   "tags": [
+    "title",
+    "retro",
+    "nostalgic",
+    "warm-tone"
+   ]
   },
   {
    "id": "text/looks/vapor",
@@ -1418,7 +1854,14 @@
     "--color": "#ffe9ff",
     "--italic": "italic",
     "--shadow": "0.05em 0.05em 0 #ff4fd8, 0.1em 0.1em 0 #3bd5ff"
-   }
+   },
+   "about": "Pale pink italic letters with pink and cyan offset shadows, in a vaporwave style. For retro-futuristic, 80s titles.",
+   "tags": [
+    "title",
+    "retro",
+    "neon",
+    "dreamy"
+   ]
   },
   {
    "id": "text/looks/glitch",
@@ -1436,7 +1879,14 @@
     "--font": "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
     "--color": "#ffffff",
     "--shadow": "-0.05em 0 0 #ff0050, 0.05em 0 0 #00e5ff"
-   }
+   },
+   "about": "White letters with a pink shadow on the left and a cyan shadow on the right, like a broken signal. For techy, edgy titles.",
+   "tags": [
+    "title",
+    "glitch",
+    "tech",
+    "intense"
+   ]
   },
   {
    "id": "text/looks/label-black",
@@ -1455,7 +1905,13 @@
     "--box": "#111111",
     "--box-pad": "0.25em 0.55em",
     "--box-radius": "0.18em"
-   }
+   },
+   "about": "White bold text on a solid black rounded box. For clear labels and captions that stand out on any footage.",
+   "tags": [
+    "subtitle",
+    "lowerthird",
+    "minimal"
+   ]
   },
   {
    "id": "text/looks/label-yellow",
@@ -1475,7 +1931,13 @@
     "--box": "#ffd400",
     "--box-pad": "0.25em 0.55em",
     "--box-radius": "0.18em"
-   }
+   },
+   "about": "Black bold text on a bright yellow rounded box. For attention-grabbing labels and highlights.",
+   "tags": [
+    "subtitle",
+    "lowerthird",
+    "vivid"
+   ]
   },
   {
    "id": "text/looks/label-red",
@@ -1494,7 +1956,13 @@
     "--box": "#d6202f",
     "--box-pad": "0.22em 0.6em",
     "--box-radius": "0"
-   }
+   },
+   "about": "White bold text on a red square-cornered box, like a news tag. For news, alerts and breaking headlines.",
+   "tags": [
+    "news",
+    "lowerthird",
+    "intense"
+   ]
   },
   {
    "id": "text/looks/highlighter",
@@ -1513,7 +1981,13 @@
     "--color": "#ffffff",
     "--box": "linear-gradient(transparent 55%, rgba(255,61,127,0.85) 55%, rgba(255,61,127,0.85) 90%, transparent 90%)",
     "--box-pad": "0 0.15em"
-   }
+   },
+   "about": "White bold text with a pink highlighter stripe over its lower half. For emphasizing key words in a caption.",
+   "tags": [
+    "subtitle",
+    "handdrawn",
+    "vivid"
+   ]
   },
   {
    "id": "text/looks/bubble",
@@ -1535,7 +2009,13 @@
     "--box-pad": "0.3em 0.8em",
     "--box-radius": "1.2em",
     "--glow": "drop-shadow(0 0.05em 0.1em rgba(0,0,0,0.4))"
-   }
+   },
+   "about": "Dark bubbly letters on a white rounded box with a soft shadow, like a speech bubble. For chat lines and friendly remarks.",
+   "tags": [
+    "speech",
+    "playful",
+    "cute"
+   ]
   },
   {
    "id": "text/looks/handwriting",
@@ -1553,7 +2033,13 @@
     "--font": "'ZCOOL KuaiLe', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
     "--weight": "400",
     "--shadow": "0 0.04em 0.2em rgba(0,0,0,0.5)"
-   }
+   },
+   "about": "Casual rounded, hand-written style white letters with a soft shadow. For personal notes, diaries and light captions.",
+   "tags": [
+    "handdrawn",
+    "playful",
+    "subtitle"
+   ]
   },
   {
    "id": "text/looks/cinema",
@@ -1574,7 +2060,14 @@
     "--spacing": "0.25em",
     "--size": "6vw",
     "--shadow": "0 0.02em 0.12em rgba(0,0,0,0.85)"
-   }
+   },
+   "about": "Widely spaced cream serif letters with a soft dark shadow. For film titles, credits and dramatic openings.",
+   "tags": [
+    "title",
+    "cinematic-look",
+    "elegant",
+    "warm"
+   ]
   },
   {
    "id": "text/looks/elegant",
@@ -1593,7 +2086,13 @@
     "--weight": "500",
     "--italic": "italic",
     "--spacing": "0.06em"
-   }
+   },
+   "about": "Medium italic serif letters with slight spacing. For refined quotes, fashion and wedding titles.",
+   "tags": [
+    "title",
+    "elegant",
+    "romantic"
+   ]
   },
   {
    "id": "text/looks/thin",
@@ -1610,7 +2109,14 @@
    "vars": {
     "--weight": "200",
     "--spacing": "0.18em"
-   }
+   },
+   "about": "Very thin, widely spaced sans-serif letters. For minimal, airy titles and quiet captions.",
+   "tags": [
+    "title",
+    "minimal",
+    "soft",
+    "elegant"
+   ]
   },
   {
    "id": "text/looks/soft-shadow",
@@ -1627,7 +2133,13 @@
    "vars": {
     "--weight": "800",
     "--shadow": "0 0.06em 0.3em rgba(0,0,0,0.65)"
-   }
+   },
+   "about": "Heavy white letters with a soft dark shadow underneath. For readable titles on bright or busy footage.",
+   "tags": [
+    "title",
+    "subtitle",
+    "confident"
+   ]
   },
   {
    "id": "text/looks/stamp",
@@ -1648,7 +2160,13 @@
     "--box-pad": "0.15em 0.4em",
     "--stroke": "0",
     "--shadow": "0.020em 0.000em 0 rgba(226,59,46,0.5), -0.020em 0.000em 0 rgba(226,59,46,0.5), 0.000em 0.020em 0 rgba(226,59,46,0.5), 0.000em -0.020em 0 rgba(226,59,46,0.5), 0.014em 0.014em 0 rgba(226,59,46,0.5), -0.014em 0.014em 0 rgba(226,59,46,0.5), 0.014em -0.014em 0 rgba(226,59,46,0.5), -0.014em -0.014em 0 rgba(226,59,46,0.5)"
-   }
+   },
+   "about": "Red letters with a faint rough red edge, like a rubber stamp. For approvals, labels and playful emphasis.",
+   "tags": [
+    "title",
+    "retro",
+    "comic"
+   ]
   },
   {
    "id": "text/motions/in-none",
@@ -1665,7 +2183,12 @@
    "vars": {
     "--in": "none",
     "--in-time": "0.6s"
-   }
+   },
+   "about": "Text appears at once with no entrance animation. For plain captions that should not move.",
+   "tags": [
+    "minimal",
+    "subtitle"
+   ]
   },
   {
    "id": "text/motions/in-fade",
@@ -1682,7 +2205,13 @@
    "vars": {
     "--in": "fade",
     "--in-time": "0.6s"
-   }
+   },
+   "about": "Text fades in from transparent over 0.6 seconds. For calm, neutral entrances for titles and captions.",
+   "tags": [
+    "fade",
+    "soft",
+    "title"
+   ]
   },
   {
    "id": "text/motions/in-rise",
@@ -1699,7 +2228,13 @@
    "vars": {
     "--in": "rise",
     "--in-time": "0.6s"
-   }
+   },
+   "about": "Text rises up a little from below while fading in. For gentle title and caption entrances.",
+   "tags": [
+    "slide",
+    "soft",
+    "title"
+   ]
   },
   {
    "id": "text/motions/in-drop",
@@ -1716,7 +2251,13 @@
    "vars": {
     "--in": "drop",
     "--in-time": "0.6s"
-   }
+   },
+   "about": "Text drops down a little from above while fading in. For light, friendly title entrances.",
+   "tags": [
+    "slide",
+    "soft",
+    "title"
+   ]
   },
   {
    "id": "text/motions/in-pop",
@@ -1733,7 +2274,14 @@
    "vars": {
     "--in": "pop",
     "--in-time": "0.6s"
-   }
+   },
+   "about": "Text scales up from small, overshoots slightly and settles. For lively, playful titles and stickers.",
+   "tags": [
+    "bounce",
+    "zoom",
+    "playful",
+    "title"
+   ]
   },
   {
    "id": "text/motions/in-zoom",
@@ -1750,7 +2298,13 @@
    "vars": {
     "--in": "zoom",
     "--in-time": "0.6s"
-   }
+   },
+   "about": "Text starts large and blurred, then shrinks and sharpens into place. For dramatic, punchy title reveals.",
+   "tags": [
+    "zoom",
+    "intense",
+    "title"
+   ]
   },
   {
    "id": "text/motions/in-blur",
@@ -1767,7 +2321,14 @@
    "vars": {
     "--in": "blur",
     "--in-time": "0.6s"
-   }
+   },
+   "about": "Text fades in from a heavy blur and comes into focus. For dreamy, soft title reveals.",
+   "tags": [
+    "dreamy",
+    "fade",
+    "soft",
+    "title"
+   ]
   },
   {
    "id": "text/motions/in-slide-left",
@@ -1784,7 +2345,13 @@
    "vars": {
     "--in": "slide-left",
     "--in-time": "0.6s"
-   }
+   },
+   "about": "Text slides in from the left while fading in. For lower thirds, captions and side entrances.",
+   "tags": [
+    "slide",
+    "lowerthird",
+    "title"
+   ]
   },
   {
    "id": "text/motions/in-slide-right",
@@ -1801,7 +2368,13 @@
    "vars": {
     "--in": "slide-right",
     "--in-time": "0.6s"
-   }
+   },
+   "about": "Text slides in from the right while fading in. For captions and side entrances that follow the first.",
+   "tags": [
+    "slide",
+    "lowerthird",
+    "title"
+   ]
   },
   {
    "id": "text/motions/in-wipe",
@@ -1818,7 +2391,13 @@
    "vars": {
     "--in": "wipe",
     "--in-time": "0.6s"
-   }
+   },
+   "about": "Text is revealed from left to right as if a mask sweeps across it. For clean, simple title reveals.",
+   "tags": [
+    "wipe",
+    "minimal",
+    "title"
+   ]
   },
   {
    "id": "text/motions/in-type",
@@ -1835,7 +2414,13 @@
    "vars": {
     "--in": "type",
     "--in-time": "1.2s"
-   }
+   },
+   "about": "Text is revealed from left to right in a slow 1.2-second sweep, like typing. For captions and quotes.",
+   "tags": [
+    "typewriter",
+    "title",
+    "subtitle"
+   ]
   },
   {
    "id": "text/motions/in-stamp",
@@ -1852,7 +2437,14 @@
    "vars": {
     "--in": "stamp",
     "--in-time": "0.6s"
-   }
+   },
+   "about": "Text slams in large and slightly tilted, then shrinks onto the frame like a rubber stamp. For emphatic words and approvals.",
+   "tags": [
+    "zoom",
+    "intense",
+    "confident",
+    "title"
+   ]
   },
   {
    "id": "text/motions/in-spin-in",
@@ -1869,7 +2461,13 @@
    "vars": {
     "--in": "spin-in",
     "--in-time": "0.6s"
-   }
+   },
+   "about": "Text spins in from a quarter-turn while growing from small and fading in. For playful, energetic title entrances.",
+   "tags": [
+    "spin",
+    "playful",
+    "title"
+   ]
   },
   {
    "id": "text/motions/in-flip-in",
@@ -1886,7 +2484,13 @@
    "vars": {
     "--in": "flip-in",
     "--in-time": "0.6s"
-   }
+   },
+   "about": "Text flips up from edge-on, as if turning toward the viewer, while fading in. For tech and stylish title entrances.",
+   "tags": [
+    "spin",
+    "tech",
+    "title"
+   ]
   },
   {
    "id": "text/motions/in-bounce-in",
@@ -1903,7 +2507,14 @@
    "vars": {
     "--in": "bounce-in",
     "--in-time": "0.6s"
-   }
+   },
+   "about": "Text drops from above, bounces slightly past its place and settles. For cheerful, cartoon-style titles.",
+   "tags": [
+    "bounce",
+    "playful",
+    "happy",
+    "title"
+   ]
   },
   {
    "id": "text/motions/loop-none",
@@ -1919,7 +2530,12 @@
    "kind": "textmotion",
    "vars": {
     "--loop": "none"
-   }
+   },
+   "about": "Text stays still while it shows, with no looping movement. For plain, steady captions.",
+   "tags": [
+    "minimal",
+    "subtitle"
+   ]
   },
   {
    "id": "text/motions/loop-float",
@@ -1935,7 +2551,13 @@
    "kind": "textmotion",
    "vars": {
     "--loop": "float"
-   }
+   },
+   "about": "Text drifts up and down slightly, in a slow loop. For light, floating titles and soft moods.",
+   "tags": [
+    "soft",
+    "calm",
+    "dreamy"
+   ]
   },
   {
    "id": "text/motions/loop-pulse",
@@ -1951,7 +2573,13 @@
    "kind": "textmotion",
    "vars": {
     "--loop": "pulse"
-   }
+   },
+   "about": "Text swells slightly in size and back, in a loop. For gentle emphasis on key words.",
+   "tags": [
+    "zoom",
+    "soft",
+    "title"
+   ]
   },
   {
    "id": "text/motions/loop-wiggle",
@@ -1967,7 +2595,13 @@
    "kind": "textmotion",
    "vars": {
     "--loop": "wiggle"
-   }
+   },
+   "about": "Text tilts a few degrees left and right, in a loop. For playful, cute emphasis on words.",
+   "tags": [
+    "playful",
+    "cute",
+    "spin"
+   ]
   },
   {
    "id": "text/motions/loop-shake",
@@ -1983,7 +2617,13 @@
    "kind": "textmotion",
    "vars": {
     "--loop": "shake"
-   }
+   },
+   "about": "Text trembles quickly from side to side, in a loop. For anger, fear, cold or shock.",
+   "tags": [
+    "shake",
+    "tense",
+    "intense"
+   ]
   },
   {
    "id": "text/motions/loop-breathe",
@@ -1999,7 +2639,13 @@
    "kind": "textmotion",
    "vars": {
     "--loop": "breathe"
-   }
+   },
+   "about": "Text slowly dims and returns to full brightness, in a loop. For calm, living text and soft glows.",
+   "tags": [
+    "calm",
+    "soft",
+    "fade"
+   ]
   },
   {
    "id": "text/motions/loop-swing",
@@ -2015,7 +2661,13 @@
    "kind": "textmotion",
    "vars": {
     "--loop": "swing"
-   }
+   },
+   "about": "Text rocks slowly a few degrees, like a hanging sign. For playful or casual titles.",
+   "tags": [
+    "spin",
+    "playful",
+    "soft"
+   ]
   },
   {
    "id": "text/motions/loop-flicker",
@@ -2031,7 +2683,13 @@
    "kind": "textmotion",
    "vars": {
     "--loop": "flicker"
-   }
+   },
+   "about": "Text flickers briefly now and then, like a faulty light. For neon, horror and electric titles.",
+   "tags": [
+    "neon",
+    "scary",
+    "tense"
+   ]
   },
   {
    "id": "text/motions/out-none",
@@ -2048,7 +2706,12 @@
    "vars": {
     "--out": "none",
     "--out-time": "0.5s"
-   }
+   },
+   "about": "Text disappears at once at the end with no exit animation. For plain captions that cut away.",
+   "tags": [
+    "minimal",
+    "subtitle"
+   ]
   },
   {
    "id": "text/motions/out-fade-out",
@@ -2065,7 +2728,13 @@
    "vars": {
     "--out": "fade-out",
     "--out-time": "0.5s"
-   }
+   },
+   "about": "Text fades out to transparent over half a second. For calm, neutral exits.",
+   "tags": [
+    "fade",
+    "soft",
+    "title"
+   ]
   },
   {
    "id": "text/motions/out-sink",
@@ -2082,7 +2751,13 @@
    "vars": {
     "--out": "sink",
     "--out-time": "0.5s"
-   }
+   },
+   "about": "Text sinks down a little while fading out. For gentle exits, mirroring a rise-in.",
+   "tags": [
+    "slide",
+    "soft",
+    "title"
+   ]
   },
   {
    "id": "text/motions/out-lift",
@@ -2099,7 +2774,13 @@
    "vars": {
     "--out": "lift",
     "--out-time": "0.5s"
-   }
+   },
+   "about": "Text lifts up a little while fading out. For light, airy exits.",
+   "tags": [
+    "slide",
+    "soft",
+    "title"
+   ]
   },
   {
    "id": "text/motions/out-shrink",
@@ -2116,7 +2797,12 @@
    "vars": {
     "--out": "shrink",
     "--out-time": "0.5s"
-   }
+   },
+   "about": "Text shrinks to a small size while fading out. For quick, tidy exits.",
+   "tags": [
+    "zoom",
+    "title"
+   ]
   },
   {
    "id": "text/motions/out-blur-out",
@@ -2133,7 +2819,13 @@
    "vars": {
     "--out": "blur-out",
     "--out-time": "0.5s"
-   }
+   },
+   "about": "Text blurs heavily while fading out. For dreamy, soft exits.",
+   "tags": [
+    "dreamy",
+    "fade",
+    "soft"
+   ]
   },
   {
    "id": "text/motions/out-wipe-out",
@@ -2150,7 +2842,13 @@
    "vars": {
     "--out": "wipe-out",
     "--out-time": "0.5s"
-   }
+   },
+   "about": "Text is wiped away from left to right as if a mask sweeps over it. For clean, simple exits.",
+   "tags": [
+    "wipe",
+    "minimal",
+    "title"
+   ]
   },
   {
    "id": "text/motions/out-zoom-out",
@@ -2167,7 +2865,13 @@
    "vars": {
     "--out": "zoom-out",
     "--out-time": "0.5s"
-   }
+   },
+   "about": "Text grows large and blurred while fading out, as if flying past the camera. For dramatic exits.",
+   "tags": [
+    "zoom",
+    "intense",
+    "title"
+   ]
   },
   {
    "id": "text/title-cinema",
@@ -2182,7 +2886,14 @@
    },
    "kind": "page",
    "durationMs": 3000,
-   "src": "title-cinema.html"
+   "src": "title-cinema.html",
+   "about": "Thin, widely spaced serif capitals rise gently into the center of the frame. For film titles, openings and quiet statements.",
+   "tags": [
+    "title",
+    "cinematic-look",
+    "elegant",
+    "intro"
+   ]
   },
   {
    "id": "text/title-bold",
@@ -2197,7 +2908,14 @@
    },
    "kind": "page",
    "durationMs": 3000,
-   "src": "title-bold.html"
+   "src": "title-bold.html",
+   "about": "A big heavy white title pops in with a small overshoot. For strong headlines, openers and punchy statements.",
+   "tags": [
+    "title",
+    "confident",
+    "intense",
+    "zoom"
+   ]
   },
   {
    "id": "text/title-outline",
@@ -2212,7 +2930,13 @@
    },
    "kind": "page",
    "durationMs": 3000,
-   "src": "title-outline.html"
+   "src": "title-outline.html",
+   "about": "Big letters drawn as outlines only, with no fill, slide in from the left. For modern, stylish headlines.",
+   "tags": [
+    "title",
+    "minimal",
+    "slide"
+   ]
   },
   {
    "id": "text/title-neon",
@@ -2227,7 +2951,13 @@
    },
    "kind": "page",
    "durationMs": 3000,
-   "src": "title-neon.html"
+   "src": "title-neon.html",
+   "about": "White letters with a pink glow flicker on like a neon sign. For nightlife, music and retro-futuristic titles.",
+   "tags": [
+    "title",
+    "neon",
+    "night"
+   ]
   },
   {
    "id": "text/title-gradient",
@@ -2242,7 +2972,14 @@
    },
    "kind": "page",
    "durationMs": 3000,
-   "src": "title-gradient.html"
+   "src": "title-gradient.html",
+   "about": "A large title filled with a gold-to-pink gradient pops in with a small overshoot. For cheerful greetings and lively headlines.",
+   "tags": [
+    "title",
+    "vivid",
+    "happy",
+    "zoom"
+   ]
   },
   {
    "id": "text/typewriter",
@@ -2257,7 +2994,14 @@
    },
    "kind": "page",
    "durationMs": 3000,
-   "src": "typewriter.html"
+   "src": "typewriter.html",
+   "about": "Monospace words are typed out letter by letter with a blinking underscore cursor. For times, dates, notes and technical captions.",
+   "tags": [
+    "typewriter",
+    "title",
+    "tech",
+    "retro"
+   ]
   },
   {
    "id": "text/chapter",
@@ -2272,7 +3016,13 @@
    },
    "kind": "page",
    "durationMs": 3000,
-   "src": "chapter.html"
+   "src": "chapter.html",
+   "about": "A small spaced-out chapter number sits above a large title that rises into place. For chapter cards and section breaks.",
+   "tags": [
+    "title",
+    "intro",
+    "slide"
+   ]
   },
   {
    "id": "text/quote",
@@ -2287,7 +3037,14 @@
    },
    "kind": "page",
    "durationMs": 3000,
-   "src": "quote.html"
+   "src": "quote.html",
+   "about": "A quotation in white italic serif letters rises into the center. For quotes, reflections and quiet moments.",
+   "tags": [
+    "title",
+    "elegant",
+    "soft",
+    "calm"
+   ]
   },
   {
    "id": "text/lower-simple",
@@ -2302,7 +3059,13 @@
    },
    "kind": "page",
    "durationMs": 3000,
-   "src": "lower-simple.html"
+   "src": "lower-simple.html",
+   "about": "A bold name and a smaller role sit at the lower left with a thin line beside them, sliding in. For interviews and introductions.",
+   "tags": [
+    "lowerthird",
+    "minimal",
+    "slide"
+   ]
   },
   {
    "id": "text/lower-block",
@@ -2317,7 +3080,13 @@
    },
    "kind": "page",
    "durationMs": 3000,
-   "src": "lower-block.html"
+   "src": "lower-block.html",
+   "about": "A name and role sit on a yellow block at the lower left and slide in from the left. For interviews, news and speaker names.",
+   "tags": [
+    "lowerthird",
+    "news",
+    "slide"
+   ]
   },
   {
    "id": "text/location",
@@ -2332,7 +3101,13 @@
    },
    "kind": "page",
    "durationMs": 3000,
-   "src": "location.html"
+   "src": "location.html",
+   "about": "A place name with a pin symbol beside it, at the lower left, rising into place. For travel and documentary location tags.",
+   "tags": [
+    "lowerthird",
+    "map",
+    "travel"
+   ]
   },
   {
    "id": "text/bubble",
@@ -2347,7 +3122,13 @@
    },
    "kind": "page",
    "durationMs": 3000,
-   "src": "bubble.html"
+   "src": "bubble.html",
+   "about": "White text in a rounded speech bubble with a tail pops in. For comments, chat lines and friendly remarks.",
+   "tags": [
+    "speech",
+    "playful",
+    "zoom"
+   ]
   },
   {
    "id": "text/follow",
@@ -2362,7 +3143,13 @@
    },
    "kind": "page",
    "durationMs": 3000,
-   "src": "follow.html"
+   "src": "follow.html",
+   "about": "A round red button reading Follow pops in with a small overshoot. For social video calls to action.",
+   "tags": [
+    "social",
+    "ui",
+    "zoom"
+   ]
   },
   {
    "id": "text/price",
@@ -2377,7 +3164,13 @@
    },
    "kind": "page",
    "durationMs": 3000,
-   "src": "price.html"
+   "src": "price.html",
+   "about": "A price in a gold-bordered dark tag pops in with a small overshoot. For products, deals and shopping videos.",
+   "tags": [
+    "title",
+    "vivid",
+    "zoom"
+   ]
   },
   {
    "id": "text/countdown",
@@ -2392,7 +3185,13 @@
    },
    "kind": "page",
    "durationMs": 3000,
-   "src": "countdown.html"
+   "src": "countdown.html",
+   "about": "A big monospace number counts 3, 2, 1, one second each, shrinking into place. For launches, intros and reveals.",
+   "tags": [
+    "countdown",
+    "intro",
+    "trailer"
+   ]
   },
   {
    "id": "text/progress",
@@ -2407,7 +3206,13 @@
    },
    "kind": "page",
    "durationMs": 3000,
-   "src": "progress.html"
+   "src": "progress.html",
+   "about": "A thin teal bar along the bottom fills from left to right over three seconds. For timers, loading and progress cues.",
+   "tags": [
+    "countdown",
+    "ui",
+    "wipe"
+   ]
   },
   {
    "id": "text/subtitle-box",
@@ -2422,7 +3227,12 @@
    },
    "kind": "page",
    "durationMs": 3000,
-   "src": "subtitle-box.html"
+   "src": "subtitle-box.html",
+   "about": "White caption text on a dark semi-transparent box at the bottom middle. For subtitles and spoken-line captions.",
+   "tags": [
+    "subtitle",
+    "minimal"
+   ]
   },
   {
    "id": "stickers/arrow-down",
@@ -2439,7 +3249,12 @@
    "durationMs": 3000,
    "src": "arrow-down.html",
    "w": 400,
-   "h": 400
+   "h": 400,
+   "about": "A thick yellow arrow pointing down bounces gently up and down. For pointing at something below, like a link or button.",
+   "tags": [
+    "arrow",
+    "bounce"
+   ]
   },
   {
    "id": "stickers/tap",
@@ -2456,7 +3271,13 @@
    "durationMs": 3000,
    "src": "tap.html",
    "w": 400,
-   "h": 400
+   "h": 400,
+   "about": "A yellow dot with a ring that grows and fades, repeating like a tap. For showing where to click or tap in a tutorial.",
+   "tags": [
+    "ui",
+    "explainer",
+    "shapes"
+   ]
   },
   {
    "id": "stickers/heart",
@@ -2473,7 +3294,13 @@
    "durationMs": 3000,
    "src": "heart.html",
    "w": 400,
-   "h": 400
+   "h": 400,
+   "about": "A pink-red heart beats with two quick pulses, repeating. For love, likes and affection.",
+   "tags": [
+    "cute",
+    "romantic",
+    "social"
+   ]
   },
   {
    "id": "stickers/sparkle",
@@ -2490,7 +3317,13 @@
    "durationMs": 3000,
    "src": "sparkle.html",
    "w": 400,
-   "h": 400
+   "h": 400,
+   "about": "A yellow four-pointed star twinkles, with a smaller one beside it. For magic, shine and highlights.",
+   "tags": [
+    "particles",
+    "cute",
+    "dreamy"
+   ]
   },
   {
    "id": "stickers/star",
@@ -2507,7 +3340,13 @@
    "durationMs": 3000,
    "src": "star.html",
    "w": 400,
-   "h": 400
+   "h": 400,
+   "about": "A yellow five-pointed star rocks from side to side. For ratings, praise and rewards.",
+   "tags": [
+    "shapes",
+    "cute",
+    "success"
+   ]
   },
   {
    "id": "stickers/check",
@@ -2524,7 +3363,13 @@
    "durationMs": 3000,
    "src": "check.html",
    "w": 400,
-   "h": 400
+   "h": 400,
+   "about": "A green check mark draws itself in one stroke. For done, correct or approved moments.",
+   "tags": [
+    "success",
+    "ui",
+    "explainer"
+   ]
   },
   {
    "id": "stickers/cross",
@@ -2541,7 +3386,13 @@
    "durationMs": 3000,
    "src": "cross.html",
    "w": 400,
-   "h": 400
+   "h": 400,
+   "about": "A red cross draws itself in two quick strokes. For wrong, rejected or cancelled points.",
+   "tags": [
+    "error",
+    "ui",
+    "explainer"
+   ]
   },
   {
    "id": "stickers/circle",
@@ -2558,7 +3409,13 @@
    "durationMs": 3000,
    "src": "circle.html",
    "w": 500,
-   "h": 300
+   "h": 300,
+   "about": "A red hand-drawn ring draws itself around something. For circling and highlighting a detail in a tutorial.",
+   "tags": [
+    "handdrawn",
+    "arrow",
+    "explainer"
+   ]
   },
   {
    "id": "stickers/underline",
@@ -2575,7 +3432,13 @@
    "durationMs": 3000,
    "src": "underline.html",
    "w": 600,
-   "h": 120
+   "h": 120,
+   "about": "A yellow brush stroke draws itself left to right as an underline. For emphasizing a word or caption.",
+   "tags": [
+    "handdrawn",
+    "arrow",
+    "explainer"
+   ]
   },
   {
    "id": "stickers/pin",
@@ -2592,7 +3455,13 @@
    "durationMs": 3000,
    "src": "pin.html",
    "w": 400,
-   "h": 400
+   "h": 400,
+   "about": "A red map pin drops in from above and settles with a small bounce. For marking a place on a map or in travel clips.",
+   "tags": [
+    "map",
+    "travel",
+    "bounce"
+   ]
   },
   {
    "id": "stickers/arrow-right",
@@ -2609,7 +3478,12 @@
    "durationMs": 3000,
    "src": "arrow-right.html",
    "w": 400,
-   "h": 400
+   "h": 400,
+   "about": "A thick yellow arrow pointing right nudges forward and back, repeating. For leading the eye or pointing to the next item.",
+   "tags": [
+    "arrow",
+    "slide"
+   ]
   },
   {
    "id": "sounds/whoosh.m4a",

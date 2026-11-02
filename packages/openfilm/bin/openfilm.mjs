@@ -7,6 +7,8 @@ const USAGE = `openfilm — a film is a function of time: given t, it draws that
   openfilm open    [folder | url]      start or open a project; Studio shows it to the person
   openfilm look    [what] [t | a-b]    check the film and draw it: a contact sheet with its sound and loudness
   openfilm render  [a-b]               the MP4, saved beside film.html
+  openfilm find    [kind] <what>       OpenFilm's own music, sounds, transitions, effects, filters, stickers, text, templates
+  openfilm take    <id>                one of them into the project, and what to write in film.html to use it
   openfilm get     [what] [--options]  voice-over, music, sound effects, transcripts, images, video, from a connected service
   openfilm canvas  [apply <steps>]     the canvas beside the edit: read it, or lay out notes, files and what to make on it
   openfilm skills                      the skills this film can be made with; \`openfilm skill <name>\` prints one
@@ -14,7 +16,7 @@ const USAGE = `openfilm — a film is a function of time: given t, it draws that
   openfilm doctor                      what this computer has for OpenFilm, to paste into an issue
 
   Run with no arguments for the manual; \`openfilm <command> --help\` for one command's options; --version for the version.
-  look, render, get and canvas work on the project around the current folder.
+  look, render, take, get and canvas work on the project around the current folder.
   Exit status: 0 done, 1 the film or the command failed (the output says why), 2 not a project or a wrong command.`;
 
 /* one command's help: what it does, what it takes, where its output goes */
@@ -72,6 +74,24 @@ openfilm skill remove <name>
   opened in Studio first, so the person watches it.
 
   --count <n>     frames in a sheet (12)`,
+  find: `openfilm find [kind] <what>
+
+  kind     music, sound, transition, effect, filter, sticker, text or template; without it, all of them
+  what     what it is for, in any words and any language: "calm piano for a morning scene", "glitch", "打字音效"
+
+  OpenFilm's own library, searched here, offline: the best matches, each with its id, name, length, what it is like
+  (for music its tempo, energy 1–5 and whether it loops), and a file to hear or see it. Everything in it is CC0, free
+  to use in any film. Look here before making or paying for a sound, music, a transition or an effect.
+
+  --duration <s>  the seconds it is wanted for: music at least that long, a sound near it
+  --limit <n>     how many (8)`,
+  take: `openfilm take <id>
+
+  id       openfilm/<id>, as \`openfilm find\` prints it
+
+  Copies it into the project around the current folder, as Studio's library does: a sound or music into assets/, a
+  page and its files to saved/openfilm/<id>/; then prints the element to put in film.html and where. A motion is CSS,
+  printed; a filter, a fade or a text style is put on a clip in Studio by the person.`,
   canvas: `openfilm canvas [apply <steps>]
 
   The project's canvas: a board beside the edit where the person lays out notes, the project's files and nodes that
@@ -162,7 +182,7 @@ if (RAW[0] === 'get') {
       options: {
         count: { type: 'string' }, out: { type: 'string', short: 'o' }, '4k': { type: 'boolean' }, scale: { type: 'string' },
         blur: { type: 'boolean' }, samples: { type: 'string' }, shutter: { type: 'string' }, alpha: { type: 'boolean' }, subtitles: { type: 'boolean' },
-        fps: { type: 'string' }, workers: { type: 'string' }, help: { type: 'boolean', short: 'h' },
+        fps: { type: 'string' }, workers: { type: 'string' }, duration: { type: 'string' }, limit: { type: 'string' }, help: { type: 'boolean', short: 'h' },
       },
     });
   } catch (e) {
@@ -199,6 +219,8 @@ if (RAW[0] === 'get') {
         return m.render(args, opts);
       }));
     },
+    find: () => import('../src/find.mjs').then((m) => m.findCommand(args, o, RUN)),
+    take: () => import('../src/find.mjs').then((m) => m.takeCommand(args, RUN)),
     canvas: () => import('../studio/client.mjs').then((m) => m.canvasCommand(args, (line) => console.error(line))),
     update: () => import('../studio/client.mjs').then((m) => m.updateOpenfilm((line) => console.error(line))),
     skills: () => import('../src/skills-cli.mjs').then((m) => m.skillsCommand(RUN)),

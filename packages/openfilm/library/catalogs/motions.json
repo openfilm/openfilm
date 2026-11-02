@@ -67,7 +67,13 @@
      "secs": 0.5,
      "ease": "ease-out"
     }
-   }
+   },
+   "about": "The clip fades in from transparent over half a second. For calm, neutral entrances of clips, stickers and images.",
+   "tags": [
+    "fade",
+    "soft",
+    "calm"
+   ]
   },
   {
    "id": "motions/in-zoom",
@@ -89,7 +95,12 @@
      "secs": 0.5,
      "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
     }
-   }
+   },
+   "about": "The clip grows from 60 percent size while fading in. For smooth, gentle entrances of clips and images.",
+   "tags": [
+    "zoom",
+    "soft"
+   ]
   },
   {
    "id": "motions/in-zoom-down",
@@ -111,7 +122,12 @@
      "secs": 0.5,
      "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
     }
-   }
+   },
+   "about": "The clip shrinks from 140 percent size to normal while fading in. For soft, settling entrances of clips and images.",
+   "tags": [
+    "zoom",
+    "soft"
+   ]
   },
   {
    "id": "motions/in-pop",
@@ -133,7 +149,13 @@
      "secs": 0.55,
      "ease": "cubic-bezier(0.34, 1.56, 0.64, 1)"
     }
-   }
+   },
+   "about": "The clip springs up from a tiny size with an overshoot, then settles. For stickers, logos and playful entrances.",
+   "tags": [
+    "bounce",
+    "zoom",
+    "playful"
+   ]
   },
   {
    "id": "motions/in-slide-left",
@@ -155,7 +177,12 @@
      "secs": 0.5,
      "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
     }
-   }
+   },
+   "about": "The clip slides in from the right edge of the screen. For side entrances of clips, cards and overlays.",
+   "tags": [
+    "slide",
+    "soft"
+   ]
   },
   {
    "id": "motions/in-slide-right",
@@ -177,7 +204,12 @@
      "secs": 0.5,
      "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
     }
-   }
+   },
+   "about": "The clip slides in from the left edge of the screen. For side entrances of clips, cards and overlays.",
+   "tags": [
+    "slide",
+    "soft"
+   ]
   },
   {
    "id": "motions/in-rise",
@@ -199,7 +231,12 @@
      "secs": 0.5,
      "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
     }
-   }
+   },
+   "about": "The clip rises from below while fading in. For gentle entrances of titles, cards and images.",
+   "tags": [
+    "slide",
+    "soft"
+   ]
   },
   {
    "id": "motions/in-drop",
@@ -221,7 +258,13 @@
      "secs": 0.6,
      "ease": "cubic-bezier(0.34, 1.56, 0.64, 1)"
     }
-   }
+   },
+   "about": "The clip drops from above with a small bounce when it lands. For playful, lively entrances of stickers and cards.",
+   "tags": [
+    "bounce",
+    "slide",
+    "playful"
+   ]
   },
   {
    "id": "motions/in-spin",
@@ -243,7 +286,13 @@
      "secs": 0.6,
      "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
     }
-   }
+   },
+   "about": "The clip spins in from a tilt while growing from small and fading in. For energetic, playful entrances.",
+   "tags": [
+    "spin",
+    "zoom",
+    "playful"
+   ]
   },
   {
    "id": "motions/in-blur",
@@ -265,7 +314,13 @@
      "secs": 0.6,
      "ease": "ease-out"
     }
-   }
+   },
+   "about": "The clip fades in from a heavy blur and comes into focus. For dreamy, soft entrances.",
+   "tags": [
+    "dreamy",
+    "fade",
+    "soft"
+   ]
   },
   {
    "id": "motions/in-whip",
@@ -287,7 +342,12 @@
      "secs": 0.4,
      "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
     }
-   }
+   },
+   "about": "The clip whips in quickly from the left, blurred, and snaps into focus. For fast, energetic entrances.",
+   "tags": [
+    "slide",
+    "intense"
+   ]
   },
   {
    "id": "motions/in-swing",
@@ -309,7 +369,13 @@
      "secs": 0.7,
      "ease": "cubic-bezier(0.34, 1.56, 0.64, 1)"
     }
-   }
+   },
+   "about": "The clip swings in from a tilt and from below, with a small overshoot. For playful, lively entrances of cards and stickers.",
+   "tags": [
+    "spin",
+    "bounce",
+    "playful"
+   ]
   },
   {
    "id": "motions/out-fade",
@@ -331,7 +397,13 @@
      "secs": 0.5,
      "ease": "ease-in"
     }
-   }
+   },
+   "about": "The clip fades out to transparent over half a second. For calm, neutral exits.",
+   "tags": [
+    "fade",
+    "soft",
+    "calm"
+   ]
   },
   {
    "id": "motions/out-zoom",
@@ -353,7 +425,12 @@
      "secs": 0.5,
      "ease": "cubic-bezier(0.55, 0, 1, 0.45)"
     }
-   }
+   },
+   "about": "The clip shrinks to 60 percent while fading out. For smooth, gentle exits.",
+   "tags": [
+    "zoom",
+    "soft"
+   ]
   },
   {
    "id": "motions/out-zoom-up",
@@ -375,7 +452,12 @@
      "secs": 0.5,
      "ease": "cubic-bezier(0.55, 0, 1, 0.45)"
     }
-   }
+   },
+   "about": "The clip grows to 140 percent while fading out. For smooth exits that feel like flying toward the viewer.",
+   "tags": [
+    "zoom",
+    "soft"
+   ]
   },
   {
    "id": "motions/out-slide-left",
@@ -397,7 +479,12 @@
      "secs": 0.5,
      "ease": "cubic-bezier(0.55, 0, 1, 0.45)"
     }
-   }
+   },
+   "about": "The clip slides out to the left edge. For side exits of clips, cards and overlays.",
+   "tags": [
+    "slide",
+    "soft"
+   ]
   },
   {
    "id": "motions/out-slide-right",
@@ -419,7 +506,12 @@
      "secs": 0.5,
      "ease": "cubic-bezier(0.55, 0, 1, 0.45)"
     }
-   }
+   },
+   "about": "The clip slides out to the right edge. For side exits of clips, cards and overlays.",
+   "tags": [
+    "slide",
+    "soft"
+   ]
   },
   {
    "id": "motions/out-sink",
@@ -441,7 +533,12 @@
      "secs": 0.5,
      "ease": "cubic-bezier(0.55, 0, 1, 0.45)"
     }
-   }
+   },
+   "about": "The clip sinks down while fading out. For gentle exits of titles, cards and images.",
+   "tags": [
+    "slide",
+    "soft"
+   ]
   },
   {
    "id": "motions/out-spin",
@@ -463,7 +560,13 @@
      "secs": 0.6,
      "ease": "cubic-bezier(0.55, 0, 1, 0.45)"
     }
-   }
+   },
+   "about": "The clip spins away while shrinking and fading out. For energetic, playful exits.",
+   "tags": [
+    "spin",
+    "zoom",
+    "playful"
+   ]
   },
   {
    "id": "motions/out-blur",
@@ -485,7 +588,13 @@
      "secs": 0.6,
      "ease": "ease-in"
     }
-   }
+   },
+   "about": "The clip blurs heavily while fading out. For dreamy, soft exits.",
+   "tags": [
+    "dreamy",
+    "fade",
+    "soft"
+   ]
   },
   {
    "id": "motions/loop-pulse",
@@ -507,7 +616,12 @@
      "secs": 1.6,
      "ease": "ease-in-out"
     }
-   }
+   },
+   "about": "The clip swells 5 percent and back every 1.6 seconds. For gentle emphasis on logos, stickers and buttons.",
+   "tags": [
+    "zoom",
+    "soft"
+   ]
   },
   {
    "id": "motions/loop-float",
@@ -529,7 +643,13 @@
      "secs": 2.4,
      "ease": "ease-in-out"
     }
-   }
+   },
+   "about": "The clip floats up and down a little every 2.4 seconds. For calm, hovering stickers, logos and images.",
+   "tags": [
+    "soft",
+    "calm",
+    "dreamy"
+   ]
   },
   {
    "id": "motions/loop-swing",
@@ -551,7 +671,13 @@
      "secs": 2,
      "ease": "ease-in-out"
     }
-   }
+   },
+   "about": "The clip sways a few degrees left and right every 2 seconds. For casual, playful stickers and images.",
+   "tags": [
+    "spin",
+    "playful",
+    "soft"
+   ]
   },
   {
    "id": "motions/loop-shake",
@@ -573,7 +699,13 @@
      "secs": 0.4,
      "ease": "linear"
     }
-   }
+   },
+   "about": "The clip jitters quickly in small steps in all directions, 0.4 seconds per cycle. For impact, anger, fear or alarm.",
+   "tags": [
+    "shake",
+    "intense",
+    "tense"
+   ]
   },
   {
    "id": "motions/loop-beat",
@@ -595,7 +727,13 @@
      "secs": 1,
      "ease": "ease-out"
     }
-   }
+   },
+   "about": "The clip swells twice quickly, then rests, once per second, like a heartbeat. For love, tension or a racing pulse.",
+   "tags": [
+    "heartbeat",
+    "romantic",
+    "tense"
+   ]
   },
   {
    "id": "motions/loop-flicker",
@@ -617,7 +755,13 @@
      "secs": 1.2,
      "ease": "linear"
     }
-   }
+   },
+   "about": "The clip flickers in brightness briefly, now and then. For neon, horror and electric looks.",
+   "tags": [
+    "neon",
+    "scary",
+    "tense"
+   ]
   },
   {
    "id": "motions/loop-ken-burns",
@@ -639,7 +783,14 @@
      "secs": 8,
      "ease": "ease-in-out"
     }
-   }
+   },
+   "about": "The clip slowly pushes in from full size to 112 percent over 8 seconds. For still photos and calm shots that need life.",
+   "tags": [
+    "zoom",
+    "calm",
+    "soft",
+    "documentary"
+   ]
   },
   {
    "id": "motions/cut-zoom-through",
@@ -668,7 +819,13 @@
      "secs": 0.35,
      "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
     }
-   }
+   },
+   "about": "The outgoing shot zooms in and blurs, then the next shot settles from the same zoom. For energetic cuts, as if flying through the picture.",
+   "tags": [
+    "zoom",
+    "intense",
+    "transition"
+   ]
   },
   {
    "id": "motions/cut-pull-back",
@@ -697,7 +854,13 @@
      "secs": 0.35,
      "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
     }
-   }
+   },
+   "about": "The outgoing shot shrinks back and fades, then the next shot pulls in from large and blurred. For smooth, flowing scene changes.",
+   "tags": [
+    "zoom",
+    "soft",
+    "transition"
+   ]
   },
   {
    "id": "motions/cut-whip-left",
@@ -726,7 +889,14 @@
      "secs": 0.25,
      "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
     }
-   }
+   },
+   "about": "Both shots slide and blur leftward fast, like a camera whip pan. For fast, energetic cuts in vlogs and action.",
+   "tags": [
+    "slide",
+    "intense",
+    "transition",
+    "action"
+   ]
   },
   {
    "id": "motions/cut-whip-right",
@@ -755,7 +925,14 @@
      "secs": 0.25,
      "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
     }
-   }
+   },
+   "about": "Both shots slide and blur rightward fast, like a camera whip pan. For fast, energetic cuts in vlogs and action.",
+   "tags": [
+    "slide",
+    "intense",
+    "transition",
+    "action"
+   ]
   },
   {
    "id": "motions/cut-whip-up",
@@ -784,7 +961,14 @@
      "secs": 0.25,
      "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
     }
-   }
+   },
+   "about": "Both shots slide and blur upward fast, like a tilt whip. For fast, energetic cuts in vlogs and action.",
+   "tags": [
+    "slide",
+    "intense",
+    "transition",
+    "action"
+   ]
   },
   {
    "id": "motions/cut-whip-down",
@@ -813,7 +997,14 @@
      "secs": 0.25,
      "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
     }
-   }
+   },
+   "about": "Both shots slide and blur downward fast, like a tilt whip. For fast, energetic cuts in vlogs and action.",
+   "tags": [
+    "slide",
+    "intense",
+    "transition",
+    "action"
+   ]
   },
   {
    "id": "motions/cut-spin",
@@ -842,7 +1033,13 @@
      "secs": 0.35,
      "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
     }
-   }
+   },
+   "about": "The outgoing shot twists clockwise, enlarged and blurred, and the next shot untwists into place. For dynamic, playful cuts.",
+   "tags": [
+    "spin",
+    "intense",
+    "transition"
+   ]
   },
   {
    "id": "motions/cut-spin-back",
@@ -871,7 +1068,13 @@
      "secs": 0.35,
      "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
     }
-   }
+   },
+   "about": "The outgoing shot twists counter-clockwise, enlarged and blurred, and the next shot untwists into place. For dynamic, playful cuts.",
+   "tags": [
+    "spin",
+    "intense",
+    "transition"
+   ]
   },
   {
    "id": "motions/cut-flash-zoom",
@@ -900,7 +1103,14 @@
      "secs": 0.3,
      "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
     }
-   }
+   },
+   "about": "The outgoing shot zooms in and blows out to white, then the next shot settles from the same flash. For beat hits and launch cuts.",
+   "tags": [
+    "light",
+    "zoom",
+    "intense",
+    "transition"
+   ]
   },
   {
    "id": "motions/cut-blur",
@@ -929,7 +1139,13 @@
      "secs": 0.35,
      "ease": "ease-out"
     }
-   }
+   },
+   "about": "The outgoing shot blurs heavily and the next shot comes into focus from a blur. For soft, dreamy scene changes.",
+   "tags": [
+    "dreamy",
+    "soft",
+    "transition"
+   ]
   },
   {
    "id": "motions/cut-shake",
@@ -958,7 +1174,14 @@
      "secs": 0.25,
      "ease": "linear"
     }
-   }
+   },
+   "about": "Both shots shake and enlarge with a blur on the cut, like a camera knock. For impacts, beat hits and action.",
+   "tags": [
+    "shake",
+    "intense",
+    "transition",
+    "action"
+   ]
   }
  ]
 }
