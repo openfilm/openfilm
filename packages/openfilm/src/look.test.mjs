@@ -221,7 +221,7 @@ test('look --full watches every frame of a video: each planted fault is told at 
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const file = faultyFilm(join(dir, 'faults.mp4'), [
     "negate=enable='between(n,60,62)'", // 2 s: three frames unlike their neighbours
-    "drawbox=enable='eq(n,120)':color=white:t=fill", // 4 s: one white frame
+    "drawbox=enable='eq(n,121)':color=white:t=fill", // 4.03 s: one white frame, between the tenths of a second
     "drawbox=enable='between(n,240,245)':color=white:t=fill", // 8 s: a 0.2 s white flash
     "drawbox=enable='between(n,540,554)':color=black:t=fill", // 18–18.5 s: black
   ], [300, 509]); // 10–17 s: still
@@ -234,7 +234,7 @@ test('look --full watches every frame of a video: each planted fault is told at 
     return m && Number(m[1]) - 0.25 <= t && t <= Number(m[2] ?? m[1]) + 0.25;
   });
   assert.ok(at('jumping frame', 2.05), told.join('\n'));
-  assert.ok(at('jumping frame', 4), told.join('\n'));
+  assert.ok(at('white flash', 4.03), told.join('\n'));
   assert.ok(at('white flash', 8), told.join('\n'));
   assert.ok(told.some((l) => { const m = /^! still picture at ([\d.]+)s–([\d.]+)s/.exec(l); return m && Number(m[1]) <= 10.2 && Number(m[2]) >= 16.8; }), told.join('\n'));
   assert.ok(at('black', 18.2), told.join('\n'));
@@ -263,4 +263,38 @@ test('look --full of a project watches its rendered film, and says when film.htm
   utimesSync(video, old, old);
   const stale = await look([dir], { full: true, count: 2 });
   assert.match(stale.lines[1], /^! film\.html changed after .*\.mp4 was rendered/);
+});
+
+/** A 320×180 30 fps clip from an ffmpeg filter graph ending in [v]. */
+function clip(file, graph, ...codec) {
+  const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-filter_complex', graph, '-map', '[v]', ...(codec.length ? codec : ['-c:v', 'libx264', '-crf', '18', '-pix_fmt', 'yuv420p']), file]);
+  assert.equal(r.status, 0, String(r.stderr));
+  return file;
+}
+
+test('look --full: a slow push-in is not still, a black card with words is not black, the first and last frames are watched for a flash (#334)', { timeout: 120_000 }, async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-look-full2-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const kinds = async (file) => (await watch(file, { fps: 30 })).map((f) => [f.kind, f.from]);
+  /* a smooth picture zooming 3% over 10 s changes little from frame to frame, a lot from its first frame */
+  const push = clip(join(dir, 'push.mp4'), "testsrc2=s=640x360:d=1,gblur=sigma=30,scale=2560:1440,trim=end_frame=1,zoompan=z='1+0.03*on/300':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=300:s=320x180:fps=30[v]");
+  assert.deepEqual(await kinds(push), []);
+  /* two lines of white words on black, held: still, not black */
+  const card = clip(join(dir, 'card.mp4'), 'color=black:s=320x180:r=30:d=8,drawbox=x=100:y=80:w=120:h=4:color=white:t=fill,drawbox=x=120:y=92:w=80:h=3:color=white:t=fill[v]');
+  assert.deepEqual(await kinds(card), [['still', 0]]);
+  /* a white first frame (a page not drawn yet), and a white flash in the last 0.4 s */
+  const ends = clip(join(dir, 'ends.mp4'), "testsrc2=s=320x180:r=30:d=4,drawbox=enable='eq(n,0)+between(n,111,113)':color=white:t=fill[v]");
+  assert.deepEqual((await kinds(ends)).map(([k, at]) => [k, Math.round(at * 10) / 10]), [['flash', 0], ['flash', 3.7]]);
+  /* 0.3 s of black before the picture: a lead-in, not a fault; half a second of it in the middle is */
+  const lead = clip(join(dir, 'lead.mp4'), "testsrc2=s=320x180:r=30:d=4,drawbox=enable='lt(n,9)+between(n,60,74)':color=black:t=fill[v]");
+  assert.deepEqual(await kinds(lead), [['dark', 2]]);
+});
+
+test('look --full of a transparent WebM watches what it draws, over gray: a moving box is not black (#334)', { timeout: 60_000, skip: !vp9 && 'this ffmpeg has no libvpx-vp9' }, async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-look-full-alpha-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = clip(join(dir, 'layer.webm'), "color=black@0:s=320x180:r=30:d=8,format=yuva420p[bg];color=red:s=40x40:r=30,format=yuva420p[box];[bg][box]overlay=x='20+t*30':y=60:shortest=1:format=yuv420[v]",
+    '-c:v', 'libvpx-vp9', '-pix_fmt', 'yuva420p', '-auto-alt-ref', '0');
+  const r = await look([file], { full: true, count: 2 });
+  assert.ok(r.lines.includes('✓ every frame watched at 30 fps: no white flash, jumping frame, still picture (transparent: black not judged)'), r.lines.join('\n'));
 });

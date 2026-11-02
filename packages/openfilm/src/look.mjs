@@ -354,13 +354,15 @@ const FAULT = { flash: 'white flash', jump: 'jumping frame', still: 'still pictu
 
 /**
  * Every frame of a video watched (watch.mjs), in [from, to), as look's lines: one per finding, or one saying there is
- * none. A still picture may be meant (an end card, a held frame): it is said, the person judges it.
+ * none. A still picture may be meant (an end card, a held frame): it is said, the person judges it. `decode`, `alpha`:
+ * a transparent video, read by `decode` and watched over gray, is not judged for black.
  * @param {string} file @param {number} fps @param {number} from @param {number} to
+ * @param {{ decode?: string[], alpha?: boolean }} [how]
  */
-export async function watchLines(file, fps, from, to) {
+export async function watchLines(file, fps, from, to, { decode = [], alpha = false } = {}) {
   if (!process.stderr.isTTY) process.stderr.write(`  watching every frame (${fmt(from)}–${fmt(to)})…\n`);
-  const found = await watch(file, { fps, from, length: to - from });
-  if (!found.length) return [`✓ every frame watched at ${Number(fps.toFixed(3))} fps: no white flash, jumping frame, still picture or black`];
+  const found = await watch(file, { fps, from, length: to - from, decode, alpha });
+  if (!found.length) return [`✓ every frame watched at ${Number(fps.toFixed(3))} fps: no white flash, jumping frame, still picture${alpha ? ' (transparent: black not judged)' : ' or black'}`];
   const lines = found.slice(0, 40).map((f) => `! ${FAULT[f.kind]} at ${f.to - f.from > 0.15 ? `${fmt(f.from)}–${fmt(f.to)}` : fmt(f.from)}: ${f.detail}${f.kind === 'still' ? ' (fine if meant: an end card, a held frame)' : ''}`);
   if (found.length > 40) lines.push(`! … and ${found.length - 40} more`);
   return lines;
@@ -424,7 +426,7 @@ async function lookMedia(target, at, range, opts) {
       writeFileSync(out, await sheet(browser, shots, { width: w || 1920, height: h || 1080 }, from, to, wave, [], 'its sound'));
       files.push(out);
     } finally { await browser.close(); }
-    if (opts.full && video && !still) watched.push(...await watchLines(file, fps ?? 30, from, to));
+    if (opts.full && video && !still) watched.push(...await watchLines(file, fps ?? 30, from, to, { decode, alpha: video.tags?.alpha_mode === '1' }));
   }
   return { ok: true, lines: [head, ...watched, ...files.map((f) => `→ ${shown(f)}`)], files };
 }
