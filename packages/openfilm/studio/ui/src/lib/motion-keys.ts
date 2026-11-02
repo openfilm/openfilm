@@ -86,10 +86,13 @@ export function withEase(keys: readonly Key[], picked: ReadonlySet<number>, comm
   return out;
 }
 
+/* the properties that have keyframes: a clip's, or any rows' of the same shape (a mask's: `mask-pos`, …) */
+const propsOf = (motion: Motion) => Object.keys(motion) as KeyedProp[];
+
 /** The motion with the picked keyframes moved `dt` seconds (kept apart from the others of their property, none before 0). */
 export function movedKeys(motion: Motion, picked: ReadonlySet<string>, dt: number): Motion {
   const next: Motion = {};
-  for (const prop of KEYED_PROPS) {
+  for (const prop of propsOf(motion)) {
     const keys = motion[prop];
     if (!keys?.length) continue;
     const moving = keys.filter((k) => picked.has(keyId(prop, k.t)));
@@ -107,7 +110,7 @@ export function movedKeys(motion: Motion, picked: ReadonlySet<string>, dt: numbe
 /** The motion without the picked keyframes. */
 export function withoutKeys(motion: Motion, picked: ReadonlySet<string>): Motion {
   const next: Motion = {};
-  for (const prop of KEYED_PROPS) {
+  for (const prop of propsOf(motion)) {
     const keys = (motion[prop] ?? []).filter((k) => !picked.has(keyId(prop, k.t)));
     if (keys.length) next[prop] = keys;
   }
@@ -117,7 +120,7 @@ export function withoutKeys(motion: Motion, picked: ReadonlySet<string>): Motion
 /** The motion with a command applied to the picked keyframes of every property. */
 export function easedMotion(motion: Motion, picked: ReadonlySet<string>, command: EaseCommand): Motion {
   const next: Motion = { ...motion };
-  for (const prop of KEYED_PROPS) {
+  for (const prop of propsOf(motion)) {
     const keys = motion[prop];
     if (!keys?.length) continue;
     const times = new Set(keys.filter((k) => picked.has(keyId(prop, k.t))).map((k) => k.t));

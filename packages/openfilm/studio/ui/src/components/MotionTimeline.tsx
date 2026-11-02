@@ -4,23 +4,29 @@
  * its blending mode; its bar on the right, dragged to move it in time and by its ends
  * to trim it. A layer twirls open (▸) to its Transform: position, scale, rotation and opacity, each with the keyframe
  * navigator in the switches' column, a stopwatch, its value in blue (dragged left and right, or clicked and typed),
- * and its keyframes on its row (components/MotionLanes), or the graph.
+ * and its keyframes on its row (components/MotionLanes), or the graph. Under it, only the groups the layer has: its
+ * Effects, its Shape (a stroke drawn on), its Text animator, its Mask, each twirled open and shut on its own. What a
+ * layer does not have yet is put on it from its menu (a right click, or its + ), or dragged onto it from the Effects &
+ * Presets panel (components/motion-items).
  *
  * As there: P, S, R and T show only that property of the picked layers (⇧: added to what shows), U the ones that
  * move, the same key again closes them; J and K go to the keyframe before and after the playhead among what shows.
  * The work area (the film's marked range) is the bar over the ruler; the slider under the layers zooms the time.
  */
 import * as React from 'react';
-import { Box, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, X } from 'lucide-react';
-import { EFFECTS, EFFECT_PROPS, MOTION_PROPS, type EffectProp, type KeyedProp, type MotionProp } from '../../../../src/clip-motion.mjs';
+import { Box, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, Plus, X } from 'lucide-react';
+import { EFFECTS, MOTION_PROPS, type EffectProp, type KeyedProp, type Motion, type MotionProp } from '../../../../src/clip-motion.mjs';
 import type { effectsModel, EffectsChange } from '@/lib/motion-keys';
-import { easeOfBezier } from '@/lib/motion-keys';
+import { easeOfBezier, easedMotion, keyId, movedKeys, withoutKeys, type EaseCommand } from '@/lib/motion-keys';
 import { MASK_FIELDS, MASK_SHAPES, type MaskShape } from '@/lib/clip-mask';
 import type { MaskChange, MaskKeys, MaskParam, maskModel } from '@/lib/mask-motion';
 import { TEXT_PRESETS, textAnimDefault, type TextAnim, type TextPreset } from '@/lib/text-animator';
 import type { FilmRange } from '@/lib/studio-refs';
 import { BLEND_MODES } from '@/lib/clip-look';
 import { formatTimecode } from '@/lib/timecode';
+import { ANIM_GROUPS, type Rest } from '@/lib/motion-presets';
+import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
+import { FILTER_EFFECTS, ITEM_DRAG, applyItem, itemApplies, itemOfKey, type MotionItem } from './motion-items';
 import { Stopwatch } from './KeyframesSection';
 import { LANE_H, LANE_PAD, MotionLaneHeads, MotionLaneRows, lanesHeight, type MotionLanes } from './MotionLanes';
 
@@ -37,6 +43,11 @@ export interface TransformNumbers {
   set: (prop: MotionProp, n: number | [number, number]) => unknown;
   stopwatch: (prop: MotionProp) => unknown;
   toggleHere: (prop: MotionProp) => unknown;
+  /**
+   * What an animation preset is keyed from (lib/motion-presets): the keyframes, the transform at rest in their terms,
+   * where the layer shows in their seconds, its picture's size. `commit({ motion })` writes what it makes.
+   */
+  preset?: { motion: Motion; rest: Rest; span: [number, number]; stage: { w: number; h: number } };
 }
 
 /** What a layer is and does beyond its keyframes: its Transform's numbers, how it blends, whether it shows. */
@@ -91,6 +102,8 @@ export interface MotionTimelineProps {
   onOpen?: (layer: Layer) => void;
   /** The composition open, and the way back to the film. */
   crumb?: { outer: string; name: string; onBack: () => void } | null;
+  /** Layers to show twirled open (what was just put on them from the Effects & Presets panel), by a count that changes. */
+  reveal?: { ids: readonly string[]; n: number } | null;
   /** The work area: the film's marked range. */
   workArea: FilmRange | null;
   onWorkArea: (range: FilmRange | null) => void;
@@ -128,6 +141,35 @@ const maskParamOf = (prop: string) => prop.slice('mask-'.length) as MaskParam;
 /** A layer's label color by what it is, as an animation editor gives each kind its own. */
 const LABEL: Record<string, string> = { video: '#4ca3ad', mg: '#a594d6', still: '#c7a35f', text: '#d0706f', image: '#c7a35f', shape: '#5b8fd6', box: '#8c9a6b', group: '#8a8f98' };
 const labelOf = (layer: Layer) => LABEL[layer.kind] ?? '#8a8f98';
+const SELECT = 'h-[18px] rounded-[4px] border border-[var(--dock-line)] bg-transparent px-1 text-[11px] text-[var(--text-muted)] outline-none hover:bg-[var(--bg-hover)]';
+
+/**
+ * A group's head under a layer (its Transform, Effects, Shape, Text, Mask): twirled open and shut, its name, what sets
+ * it up beside that, and on the right, when it can go, a way to take it off.
+ */
+function GroupHead({ id, title, open, onTwirl, head, headW, timeW, removeLabel, onRemove, children }: {
+  id: string; title: string; open: boolean; onTwirl: () => void; head: string; headW: number; timeW: number;
+  removeLabel: string; onRemove?: (() => void) | undefined; children?: React.ReactNode;
+}) {
+  return (
+    <div className="group/head flex" style={{ height: 22 }} data-group={id}>
+      <div className={`${head} flex items-center gap-2 border-r border-[var(--dock-line)] pr-2 text-[11.5px] text-[var(--text-muted)]`} style={{ width: headW, paddingLeft: AV_W + 16 }}>
+        <button type="button" aria-expanded={open} onClick={onTwirl} onPointerDown={(e) => e.stopPropagation()}
+          className="flex shrink-0 items-center gap-1 rounded-[3px] pr-1 font-medium hover:text-[var(--text)]">
+          {open ? <ChevronDown size={11} /> : <ChevronRight size={11} />}{title}
+        </button>
+        {children}
+        {onRemove ? (
+          <button type="button" aria-label={removeLabel} title={removeLabel} data-group-remove={id} onPointerDown={(e) => e.stopPropagation()} onClick={onRemove}
+            className="ml-auto grid h-[16px] w-[16px] shrink-0 place-items-center rounded-[3px] text-[var(--text-faint)] opacity-0 hover:bg-[var(--bg-hover)] hover:text-[var(--text)] group-hover/head:opacity-100">
+            <X size={11} />
+          </button>
+        ) : null}
+      </div>
+      <div style={{ width: timeW }} />
+    </div>
+  );
+}
 
 /** Follow the pointer from a press: `move` with how far it went (px), `done` on letting go. */
 function follow(e: React.PointerEvent, move: (dx: number, ev: PointerEvent) => void, done: (dx: number, moved: boolean) => void) {
@@ -151,7 +193,7 @@ function follow(e: React.PointerEvent, move: (dx: number, ev: PointerEvent) => v
  * A number in blue, as an animation editor shows a property's value: dragged left and right to change it (⇧ ten
  * times faster, ⌘/Ctrl ten times finer), clicked to type it. Written when let go or typed.
  */
-function Scrub({ value, onCommit, step = 1, digits = 1, unit, disabled, label }: {
+export function Scrub({ value, onCommit, step = 1, digits = 1, unit, disabled, label }: {
   value: number; onCommit: (n: number) => void; step?: number; digits?: number; unit?: string; disabled?: boolean; label: string;
 }) {
   const [live, setLive] = React.useState<number | null>(null);
@@ -217,15 +259,72 @@ export function MotionTimeline(p: MotionTimelineProps) {
     if (next.has(id)) next.delete(id); else next.set(id, ALL);
     return next;
   });
-  const live = React.useRef({ layers, picked, shown, playheadMs, lanesOf });
-  live.current = { layers, picked, shown, playheadMs, lanesOf };
+  /* layers twirled open to show what was just put on them */
+  const reveal = React.useCallback((ids: readonly string[]) => setShown((was) => {
+    if (ids.every((id) => was.get(id)?.includes('fx'))) return was;
+    const next = new Map(was);
+    for (const id of ids) next.set(id, ALL);
+    return next;
+  }), []);
+  React.useEffect(() => { if (p.reveal?.ids.length) reveal(p.reveal.ids); }, [p.reveal, reveal]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* a group of a layer twirled shut (`<layer>:<group>`) */
+  const [shut, setShut] = React.useState<ReadonlySet<string>>(new Set());
+  const twirl = (key: string) => setShut((was) => {
+    const next = new Set(was);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+  /* a layer's menu (its right click, its +), or its effects' (the Effects group's +) */
+  const [menu, setMenu] = React.useState<{ x: number; y: number; layer: Layer; only?: 'fx' } | null>(null);
+  const [dropOn, setDropOn] = React.useState<string | null>(null);
+  /* a mask's keyframes picked (`mask-pos@1.2`), by its layer; and their menu */
+  const [maskPick, setMaskPick] = React.useState<{ id: string; keys: ReadonlySet<string> } | null>(null);
+  const [maskMenu, setMaskMenu] = React.useState<{ x: number; y: number } | null>(null);
+  const put = (layer: Layer, host: LayerHost, item: MotionItem) => {
+    if (!itemApplies(host, item)) return;
+    applyItem(host, item);
+    reveal([layer.clipId]);
+  };
+  const live = React.useRef({ layers, picked, shown, playheadMs, lanesOf, hostOf, maskPick });
+  live.current = { layers, picked, shown, playheadMs, lanesOf, hostOf, maskPick };
+  /* the picked mask keyframes eased, taken away or moved, as a clip's are (lib/motion-keys, on the mask's rows) */
+  const maskKeysRun = React.useCallback((what: EaseCommand | 'delete' | { move: number }) => {
+    const pick = live.current.maskPick;
+    if (!pick?.keys.size) return false;
+    const layer = live.current.layers.find((l) => l.clipId === pick.id);
+    const mk = layer ? live.current.hostOf(layer).mask : null;
+    if (!mk) return false;
+    const rows = Object.fromEntries(Object.entries(mk.keys).map(([prop, keys]) => [maskRow(prop as MaskParam), keys])) as Motion;
+    let next: Motion;
+    let keep: ReadonlySet<string> = pick.keys;
+    if (what === 'delete') { next = withoutKeys(rows, pick.keys); keep = new Set(); }
+    else if (typeof what === 'object') {
+      const at = (id: string) => ({ prop: id.slice(0, id.lastIndexOf('@')), t: Number(id.slice(id.lastIndexOf('@') + 1)) });
+      const dt = Math.max(what.move, -Math.min(...[...pick.keys].map((id) => at(id).t)));
+      next = movedKeys(rows, pick.keys, what.move);
+      keep = new Set([...pick.keys].map((id) => keyId(at(id).prop as KeyedProp, Math.round((at(id).t + dt) * 1000) / 1000)));
+    } else next = easedMotion(rows, pick.keys, what);
+    mk.commit({ keys: Object.fromEntries(Object.entries(next).flatMap(([prop, keys]) => (keys?.length ? [[maskParamOf(prop), keys]] : []))) as MaskKeys });
+    setMaskPick({ id: pick.id, keys: keep });
+    return true;
+  }, []);
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
       const now = live.current;
+      /* a mask's picked keyframes: as a clip's (F9 and its ⇧/⌘⇧, ⌫, ⌥←/→, Esc) */
+      if (now.maskPick?.keys.size) {
+        let done = true;
+        if (e.key === 'F9') maskKeysRun(e.metaKey && e.shiftKey ? 'easy-out' : e.shiftKey ? 'easy-in' : 'easy');
+        else if (e.key === 'Backspace' || e.key === 'Delete') maskKeysRun('delete');
+        else if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) maskKeysRun({ move: ((e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 10 : 1)) / Math.max(1, fps) });
+        else if (e.key === 'Escape') setMaskPick(null);
+        else done = false;
+        if (done) { e.preventDefault(); e.stopPropagation(); return; }
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       const key = e.key.toLowerCase();
       const targets = now.layers.filter((l) => now.picked.includes(l.clipId));
       if (key in SOLO || key === 'u' || key === 'e') {
@@ -262,7 +361,7 @@ export function MotionTimeline(p: MotionTimelineProps) {
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [onSeek]);
+  }, [onSeek, maskKeysRun, fps]);
 
   /* the ruler: pressed and dragged, the playhead follows */
   const scrub = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -313,6 +412,61 @@ export function MotionTimeline(p: MotionTimelineProps) {
   };
 
   const head = 'sticky left-0 z-10 shrink-0 bg-[var(--dock-pane)]';
+  /* a layer's menu: what can be put on it (each checked when it has it, picked again to take it off), how it blends */
+  const menuItems = (m: { layer: Layer; only?: 'fx' }): ContextMenuEntry[] => {
+    const { layer } = m;
+    const host = hostOf(layer);
+    const fxItems = FILTER_EFFECTS.flatMap((fx): ContextMenuEntry[] => {
+      const has = host.effects?.on.includes(fx) ?? false;
+      if (m.only && has) return [];
+      return [{ id: `fx-${fx}`, label: t(`canvas.fx.${fx}`), checked: has, disabled: !host.effects,
+        onSelect: () => { if (has) host.commitEffects(host.effects!.remove(fx)); else put(layer, host, { kind: 'fx', id: fx }); } }];
+    });
+    if (m.only) return fxItems;
+    const items: ContextMenuEntry[] = [];
+    if (host.model?.preset) {
+      items.push({ id: 'anim', label: t('canvas.animPresets'), submenu: ANIM_GROUPS.flatMap((g, gi): ContextMenuEntry[] => [
+        ...(gi ? [{ id: `sep-${g.id}`, separator: true as const }] : []),
+        ...g.presets.map((id) => ({ id, label: t(`canvas.anim.${id}`), onSelect: () => put(layer, host, { kind: 'anim', id }) })),
+      ]) });
+    }
+    if (host.effects) items.push({ id: 'fx', label: t('canvas.fxGroup'), submenu: fxItems });
+    const mk = host.mask;
+    if (mk) {
+      items.push({ id: 'mask', label: t('inspector.mask'), submenu: [
+        ...MASK_SHAPES.map((shape) => ({ id: `mask-${shape}`, label: t(`inspector.maskShapes.${shape}`), checked: mk.shape === shape, onSelect: () => put(layer, host, { kind: 'mask', id: shape }) })),
+        ...(mk.shape ? [
+          { id: 'sep-mask', separator: true as const },
+          { id: 'mask-invert', label: t('inspector.maskInvert'), checked: mk.invert, onSelect: () => mk.setInvert(!mk.invert) },
+          { id: 'mask-remove', label: t('canvas.maskRemove'), danger: true, onSelect: () => mk.setShape(null) },
+        ] : []),
+      ] });
+    }
+    const text = host.text;
+    if (text && text.anim !== null) {
+      items.push({ id: 'text', label: t('canvas.textAnimator'), submenu: [
+        ...TEXT_PRESETS.map((x) => ({ id: `text-${x}`, label: t(`canvas.textPresets.${x}`), checked: text.anim?.preset === x, onSelect: () => put(layer, host, { kind: 'text', id: x }) })),
+        ...(text.anim ? [{ id: 'sep-text', separator: true as const }, { id: 'text-remove', label: t('canvas.textRemove'), danger: true, onSelect: () => text.set(null) }] : []),
+      ] });
+    }
+    const stroke = host.stroke;
+    if (stroke) items.push({ id: 'stroke', label: t('canvas.fx.trim'), checked: stroke.on, onSelect: () => { if (stroke.on) stroke.commit(stroke.model.remove('trim')); else put(layer, host, { kind: 'stroke' }); } });
+    const three = host.three;
+    if (three) items.push({ id: 'three', label: t('canvas.threeD'), checked: three.on, onSelect: () => { if (three.on) three.toggle(false); else put(layer, host, { kind: 'three' }); } });
+    items.push(
+      { id: 'sep-blend', separator: true },
+      { id: 'blend', label: t('canvas.motionMode'), submenu: BLEND_MODES.map((mode) => ({ id: `blend-${mode}`, label: t(`inspector.blendModes.${mode}`), checked: host.blend === mode, onSelect: () => host.setBlend(mode) })) },
+      { id: 'sep-show', separator: true },
+      { id: 'moving', label: t('canvas.showMoving'), shortcut: 'U', onSelect: () => setShown((was) => {
+        const keyed = lanesOf(layer).rows.filter((r) => r.keys.length).map((r) => r.prop);
+        const next = new Map(was);
+        if (keyed.length) next.set(layer.clipId, keyed); else next.delete(layer.clipId);
+        return next;
+      }) },
+    );
+    if (p.onOpen && layer.kind === 'mg') items.push({ id: 'open', label: t('canvas.openComp'), onSelect: () => p.onOpen?.(layer) });
+    return items;
+  };
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden text-[12px]" data-motion-timeline="">
       {p.crumb ? (
@@ -354,6 +508,7 @@ export function MotionTimeline(p: MotionTimelineProps) {
           {layers.map((layer, i) => {
             const props = shown.get(layer.clipId);
             const all = props ? lanesOf(layer) : null;
+            const host = hostOf(layer);
             /* its Transform, a 3D layer's depth and turns each after the property it goes with */
             const order: KeyedProp[] = MOTION_PROPS.flatMap((p) => [p, ...(THREE_AFTER[p] ?? [])]);
             const lanes = all && props ? {
@@ -361,35 +516,67 @@ export function MotionTimeline(p: MotionTimelineProps) {
               rows: all.rows.filter((r) => (isTransform(r.prop) && props.includes(r.prop)) || (isThree(r.prop) && Object.entries(THREE_AFTER).some(([base, xs]) => xs.includes(r.prop) && props.includes(base as Shown))))
                 .sort((a, b) => order.indexOf(a.prop) - order.indexOf(b.prop)),
             } : null;
-            /* its Effects group: all of them, or those asked for by name (U) */
+            /* the groups beyond its Transform: all it has, or those asked for by name (U) */
             const fxShown = Boolean(props && (props.includes('fx') || props.some((x) => x !== 'fx' && !isTransform(x))));
-            const fxLanes = all && props && fxShown
+            const fxLanes = all && props && fxShown && host.effects
               ? { ...all, rows: all.rows.filter((r) => !isTransform(r.prop) && Boolean(EFFECTS[r.prop as EffectProp]?.filter) && (props.includes('fx') || props.includes(r.prop))) }
               : null;
             const on = picked.includes(layer.clipId);
-            const host = hostOf(layer);
             const moving = lanesOf(layer).rows.some((r) => r.keys.length);
             const drag = barDrag?.id === layer.clipId ? barDrag : null;
             const startMs = layer.startMs + (drag && drag.kind !== 'end' ? drag.dms : 0);
             const endMs = layer.endMs + (drag && drag.kind !== 'start' ? drag.dms : 0);
             const tint = on ? 'bg-[color-mix(in_srgb,var(--tl-accent)_14%,var(--dock-pane))]' : 'bg-[var(--dock-pane)]';
+            const openMenu = (e: React.MouseEvent, only?: 'fx') => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (!on) onPick(layer.clipId, false);
+              const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              setMenu(e.type === 'contextmenu' ? { x: e.clientX, y: e.clientY, layer, ...(only ? { only } : {}) } : { x: r.left, y: r.bottom + 2, layer, ...(only ? { only } : {}) });
+            };
+            const isOpen = (g: string) => !shut.has(`${layer.clipId}:${g}`);
+            const group = (g: string, title: string, controls?: React.ReactNode, onRemove?: () => void) => (
+              <GroupHead key={`${g}-head`} id={`${layer.clipId}:${g}`} title={title} open={isOpen(g)} onTwirl={() => twirl(`${layer.clipId}:${g}`)}
+                head={head} headW={headW} timeW={timeW} removeLabel={t('canvas.groupRemove')} onRemove={onRemove}>{controls}</GroupHead>
+            );
+            const rowsOf = (rows: MotionLanes, heads: React.ReactNode) => (
+              <div className="flex" style={{ height: lanesHeight(rows) }}>
+                <div className={`${head} border-r border-[var(--dock-line)]`} style={{ width: headW, paddingTop: LANE_PAD / 2 }}>{rows.graph ? <MotionLaneHeads lanes={rows} /> : heads}</div>
+                <div className="relative" style={{ width: timeW }}><MotionLaneRows lanes={rows} top={0} pxPerMs={pxPerMs} /></div>
+              </div>
+            );
+            const fxOn = (host.effects?.on ?? []).filter((fx) => EFFECTS[fx].filter);
+            const stroke = host.stroke;
+            const text = host.text;
+            const mk = host.mask;
             return (
-              <div key={layer.clipId} data-motion-layer={layer.clipId} className="border-b border-[var(--dock-line)]">
-                <div className="flex" style={{ height: LAYER_H }}>
+              <div key={layer.clipId} data-motion-layer={layer.clipId}
+                className={`border-b border-[var(--dock-line)] ${dropOn === layer.clipId ? 'outline outline-1 -outline-offset-1 outline-[var(--tl-accent)]' : ''}`}
+                onDragOver={(e) => { if (!e.dataTransfer.types.includes(ITEM_DRAG)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDropOn(layer.clipId); }}
+                onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropOn(null); }}
+                onDrop={(e) => {
+                  setDropOn(null);
+                  const item = itemOfKey(e.dataTransfer.getData(ITEM_DRAG));
+                  if (!item) return;
+                  e.preventDefault();
+                  onPick(layer.clipId, false);
+                  put(layer, host, item);
+                }}>
+                <div className="group/layer flex" style={{ height: LAYER_H }} onContextMenu={(e) => openMenu(e)}>
                   <div className={`sticky left-0 z-10 flex shrink-0 items-center border-r border-[var(--dock-line)] ${tint}`} style={{ width: headW }}
                     onPointerDown={(e) => { if (e.button === 0) onPick(layer.clipId, e.shiftKey || e.metaKey || e.ctrlKey); }}>
                     <span className="flex shrink-0 items-center pl-1" style={{ width: AV_W }}>
                       {host.setVisible ? (
                         <button type="button" aria-label={t('canvas.motionVisible')} aria-pressed={host.visible} data-layer-eye={layer.clipId}
                           onPointerDown={(e) => e.stopPropagation()} onClick={() => host.setVisible?.(!host.visible)}
-                          className="grid h-[18px] w-[18px] place-items-center rounded-[3px] text-[var(--text-muted)] hover:bg-white/10">
+                          className="grid h-[18px] w-[18px] place-items-center rounded-[3px] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]">
                           {host.visible ? <Eye size={12} /> : <EyeOff size={12} className="opacity-50" />}
                         </button>
                       ) : null}
                     </span>
                     <button type="button" aria-label={t('inspector.transform')} aria-expanded={Boolean(props)} data-twirl={layer.clipId}
                       onPointerDown={(e) => e.stopPropagation()} onClick={() => toggle(layer.clipId)}
-                      className="grid h-[18px] w-[16px] shrink-0 place-items-center rounded-[3px] text-[var(--text-muted)] hover:bg-white/10">
+                      className="grid h-[18px] w-[16px] shrink-0 place-items-center rounded-[3px] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]">
                       {props ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                     </button>
                     <span className="mx-1 h-[10px] w-[10px] shrink-0 rounded-[2px]" style={{ background: labelOf(layer) }} />
@@ -398,18 +585,28 @@ export function MotionTimeline(p: MotionTimelineProps) {
                       style={{ paddingLeft: 4 + (layer.depth ?? 0) * 12 }}
                       onDoubleClick={() => p.onOpen?.(layer)}>{layer.title || layer.clipId}</span>
                     {moving ? <svg className="mr-1 shrink-0" width="7" height="7" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1 11 6 6 11 1 6Z" fill="var(--tl-accent)" /></svg> : null}
-                    {host.three ? (
-                      <button type="button" aria-label={t('canvas.threeD')} title={t('canvas.threeD')} aria-pressed={host.three.on} data-layer-3d={layer.clipId}
-                        onPointerDown={(e) => e.stopPropagation()} onClick={() => host.three?.toggle(!host.three.on)}
-                        className={`mr-1 grid h-[18px] w-[20px] shrink-0 place-items-center rounded-[3px] hover:bg-white/10 ${host.three.on ? 'text-[var(--tl-accent)]' : 'text-[var(--text-faint)]'}`}>
-                        <Box size={12} />
-                      </button>
-                    ) : null}
-                    <select aria-label={t('canvas.motionMode')} value={host.blend} data-layer-mode={layer.clipId}
-                      onPointerDown={(e) => e.stopPropagation()} onChange={(e) => host.setBlend(e.target.value)}
-                      className="mr-1 h-[18px] shrink-0 rounded-[3px] border border-[var(--dock-line)] bg-transparent px-1 text-[11px] text-[var(--text-muted)]" style={{ width: MODE_W - 6 }}>
-                      {BLEND_MODES.map((mode) => <option key={mode} value={mode}>{t(`inspector.blendModes.${mode}`)}</option>)}
-                    </select>
+                    <button type="button" aria-label={t('canvas.layerAdd')} title={t('canvas.layerAdd')} data-layer-add={layer.clipId}
+                      onPointerDown={(e) => e.stopPropagation()} onClick={(e) => openMenu(e)}
+                      className={`mr-1 grid h-[18px] w-[18px] shrink-0 place-items-center rounded-[4px] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)] ${menu?.layer.clipId === layer.clipId ? 'opacity-100' : 'opacity-0 group-hover/layer:opacity-100'}`}>
+                      <Plus size={13} />
+                    </button>
+                    <span className="grid w-[22px] shrink-0 place-items-center">
+                      {host.three ? (
+                        <button type="button" aria-label={t('canvas.threeD')} title={t('canvas.threeD')} aria-pressed={host.three.on} data-layer-3d={layer.clipId}
+                          onPointerDown={(e) => e.stopPropagation()} onClick={() => { host.three?.toggle(!host.three.on); if (!host.three?.on) reveal([layer.clipId]); }}
+                          className={`grid h-[18px] w-[20px] place-items-center rounded-[3px] hover:bg-[var(--bg-hover)] ${host.three.on ? 'text-[var(--tl-accent)]' : 'text-[var(--text-faint)] opacity-60'}`}>
+                          <Box size={12} />
+                        </button>
+                      ) : null}
+                    </span>
+                    <span className="relative mr-1 shrink-0" style={{ width: MODE_W - 6 }}>
+                      <select aria-label={t('canvas.motionMode')} value={host.blend} data-layer-mode={layer.clipId}
+                        onPointerDown={(e) => e.stopPropagation()} onChange={(e) => host.setBlend(e.target.value)}
+                        className={`h-[18px] w-full appearance-none truncate rounded-[4px] bg-transparent pl-1.5 pr-4 text-[11px] outline-none hover:bg-[var(--bg-hover)] ${host.blend === 'normal' ? 'text-[var(--text-faint)]' : 'text-[var(--text)]'}`}>
+                        {BLEND_MODES.map((mode) => <option key={mode} value={mode}>{t(`inspector.blendModes.${mode}`)}</option>)}
+                      </select>
+                      <ChevronDown size={10} className="pointer-events-none absolute right-1 top-[4px] text-[var(--text-faint)]" />
+                    </span>
                     {hasParents ? (
                       <span className="shrink-0 truncate pr-1 text-[11px] text-[var(--text-faint)]" style={{ width: PARENT_W }} title={layer.parent}>{layer.parent ?? t('canvas.motionNone')}</span>
                     ) : null}
@@ -436,121 +633,75 @@ export function MotionTimeline(p: MotionTimelineProps) {
                 </div>
                 {lanes?.rows.length ? (
                   <>
-                    {/* its Transform group, as the editor names it */}
-                    <div className="flex" style={{ height: 20 }}>
-                      <div className={`${head} flex items-center border-r border-[var(--dock-line)] text-[11.5px] text-[var(--text-muted)]`} style={{ width: headW, paddingLeft: AV_W + 18 }}>
-                        <ChevronDown size={11} className="mr-1" /> {t('inspector.transform')}
-                      </div>
-                      <div style={{ width: timeW }} />
-                    </div>
-                    {lanes.rows.length ? (
-                      <div className="flex" style={{ height: lanesHeight(lanes) }}>
-                        <div className={`${head} border-r border-[var(--dock-line)]`} style={{ width: headW, paddingTop: LANE_PAD / 2 }}>
-                          {lanes.graph ? <MotionLaneHeads lanes={lanes} /> : lanes.rows.map((row) => (isThree(row.prop) && host.three
-                            ? <EffectHead key={row.prop} layer={layer} lanes={lanes} fx={row.prop as EffectProp} host={{ ...host, effects: host.three.model, commitEffects: host.three.commit }} t={t} />
-                            : <PropertyHead key={row.prop} layer={layer} lanes={lanes} prop={row.prop as MotionProp} host={host} t={t} />))}
-                        </div>
-                        <div className="relative" style={{ width: timeW }}><MotionLaneRows lanes={lanes} top={0} pxPerMs={pxPerMs} /></div>
-                      </div>
-                    ) : null}
+                    {group('transform', t('inspector.transform'))}
+                    {isOpen('transform') ? rowsOf(lanes, lanes.rows.map((row) => (isThree(row.prop) && host.three
+                      ? <EffectHead key={row.prop} layer={layer} lanes={lanes} fx={row.prop as EffectProp} host={{ ...host, effects: host.three.model, commitEffects: host.three.commit }} t={t} />
+                      : <PropertyHead key={row.prop} layer={layer} lanes={lanes} prop={row.prop as MotionProp} host={host} t={t} />))) : null}
                   </>
                 ) : null}
-                {fxLanes && host.effects ? (
-                  <>
-                    {/* its Effects group: an effect added from the menu, each with its own row */}
-                    <div className="flex" style={{ height: 22 }} data-effects-group={layer.clipId}>
-                      <div className={`${head} flex items-center gap-2 border-r border-[var(--dock-line)] text-[11.5px] text-[var(--text-muted)]`} style={{ width: headW, paddingLeft: AV_W + 18 }}>
-                        <span className="flex items-center"><ChevronDown size={11} className="mr-1" /> {t('canvas.fxGroup')}</span>
-                        {EFFECT_PROPS.some((fx) => EFFECTS[fx].filter && !host.effects!.on.includes(fx)) ? (
-                          <select aria-label={t('canvas.fxAdd')} value="" data-effect-add={layer.clipId}
-                            onPointerDown={(e) => e.stopPropagation()}
-                            onChange={(e) => { const fx = e.target.value as EffectProp; if (fx) host.commitEffects(host.effects!.add(fx)); }}
-                            className="h-[18px] rounded-[3px] border border-[var(--dock-line)] bg-transparent px-1 text-[11px] text-[var(--text-muted)]">
-                            <option value="">{t('canvas.fxAdd')}</option>
-                            {EFFECT_PROPS.filter((fx) => EFFECTS[fx].filter && !host.effects!.on.includes(fx)).map((fx) => <option key={fx} value={fx}>{t(`canvas.fx.${fx}`)}</option>)}
-                          </select>
-                        ) : null}
-                      </div>
-                      <div style={{ width: timeW }} />
-                    </div>
-                    {fxLanes.rows.length ? (
-                      <div className="flex" style={{ height: lanesHeight(fxLanes) }}>
-                        <div className={`${head} border-r border-[var(--dock-line)]`} style={{ width: headW, paddingTop: LANE_PAD / 2 }}>
-                          {fxLanes.graph ? <MotionLaneHeads lanes={fxLanes} /> : fxLanes.rows.map((row) => (
-                            <EffectHead key={row.prop} layer={layer} lanes={fxLanes} fx={row.prop as EffectProp} host={host} t={t} />
-                          ))}
-                        </div>
-                        <div className="relative" style={{ width: timeW }}><MotionLaneRows lanes={fxLanes} top={0} pxPerMs={pxPerMs} /></div>
-                      </div>
-                    ) : null}
-                  </>
+                {fxLanes && fxOn.length ? (
+                  <div data-effects-group={layer.clipId}>
+                    {group('fx', t('canvas.fxGroup'), FILTER_EFFECTS.some((fx) => !fxOn.includes(fx)) ? (
+                      <button type="button" aria-label={t('canvas.fxAdd')} title={t('canvas.fxAdd')} data-effect-add={layer.clipId}
+                        onPointerDown={(e) => e.stopPropagation()} onClick={(e) => openMenu(e, 'fx')}
+                        className="grid h-[16px] w-[16px] place-items-center rounded-[3px] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+                        <Plus size={12} />
+                      </button>
+                    ) : null)}
+                    {isOpen('fx') && fxLanes.rows.length ? rowsOf(fxLanes, fxLanes.rows.map((row) => (
+                      <EffectHead key={row.prop} layer={layer} lanes={fxLanes} fx={row.prop as EffectProp} host={host} t={t} />
+                    ))) : null}
+                  </div>
                 ) : null}
-                {all && fxShown && host.stroke ? (() => {
-                  const stroke = host.stroke;
-                  const rows = { ...all, rows: all.rows.filter((r) => r.prop === 'trim') };
-                  const as = { ...host, effects: stroke.model, commitEffects: stroke.commit };
+                {all && fxShown && stroke?.on ? (
+                  <div data-shape-group={layer.clipId}>
+                    {group('shape', t('canvas.shapeGroup'), null, () => stroke.commit(stroke.model.remove('trim')))}
+                    {isOpen('shape') ? (() => {
+                      const rows = { ...all, rows: all.rows.filter((r) => r.prop === 'trim') };
+                      return rows.rows.length ? rowsOf(rows, <EffectHead layer={layer} lanes={rows} fx="trim" host={{ ...host, effects: stroke.model, commitEffects: stroke.commit }} t={t} />) : null;
+                    })() : null}
+                  </div>
+                ) : null}
+                {fxShown && text && text.anim !== undefined ? (
+                  <TextGroup layer={layer} host={text} head={head} headW={headW} timeW={timeW} pxPerMs={pxPerMs} open={isOpen('text')}
+                    title={group('text', t('canvas.textGroup'), text.anim === null ? <span className="text-[11px] text-[var(--text-faint)]">{t('canvas.textCustom')}</span> : (
+                      <select aria-label={t('canvas.textAnimate')} value={text.anim.preset} data-text-preset={layer.clipId} className={SELECT}
+                        onPointerDown={(e) => e.stopPropagation()} onChange={(e) => text.set(textAnimDefault(e.target.value as TextPreset, text.anim))}>
+                        {TEXT_PRESETS.map((x) => <option key={x} value={x}>{t(`canvas.textPresets.${x}`)}</option>)}
+                      </select>
+                    ), text.anim === null ? undefined : () => text.set(null))} t={t} />
+                ) : null}
+                {all && fxShown && mk?.shape ? (() => {
+                  const masks = mk.model ? maskLanes(all, mk, {
+                    picked: maskPick?.id === layer.clipId ? maskPick.keys : new Set(),
+                    onPick: (ids, mode) => setMaskPick((was) => {
+                      const base = was?.id === layer.clipId ? was.keys : new Set<string>();
+                      if (mode === 'set') return { id: layer.clipId, keys: new Set(ids) };
+                      const next = new Set(base);
+                      for (const id of ids) { if (mode === 'toggle' && next.has(id)) next.delete(id); else next.add(id); }
+                      return { id: layer.clipId, keys: next };
+                    }),
+                    onMove: (dt) => { maskKeysRun({ move: dt }); },
+                    onMenu: (e) => setMaskMenu({ x: e.clientX, y: e.clientY }),
+                  }) : null;
                   return (
-                    <>
-                      {/* its Shape group: its stroke drawn on, as an animation editor trims a path */}
-                      <div className="flex" style={{ height: 22 }} data-shape-group={layer.clipId}>
-                        <div className={`${head} flex items-center gap-2 border-r border-[var(--dock-line)] text-[11.5px] text-[var(--text-muted)]`} style={{ width: headW, paddingLeft: AV_W + 18 }}>
-                          <span className="flex items-center"><ChevronDown size={11} className="mr-1" /> {t('canvas.shapeGroup')}</span>
-                          <label className="flex items-center gap-1 text-[11px]">
-                            <input type="checkbox" checked={stroke.on} data-stroke-trim={layer.clipId}
-                              onChange={(e) => { if (e.target.checked) stroke.turnOn(); else stroke.commit(stroke.model.remove('trim')); }} />
-                            {t('canvas.fx.trim')}
+                    <div data-masks-group={layer.clipId}>
+                      {group('mask', t('inspector.mask'), (
+                        <>
+                          <select aria-label={t('inspector.maskShape')} value={mk.shape} data-mask-shape={layer.clipId} className={SELECT}
+                            onPointerDown={(e) => e.stopPropagation()} onChange={(e) => mk.setShape(e.target.value as MaskShape)}>
+                            {MASK_SHAPES.map((shape) => <option key={shape} value={shape}>{t(`inspector.maskShapes.${shape}`)}</option>)}
+                          </select>
+                          <label className="flex items-center gap-1 text-[11px]" onPointerDown={(e) => e.stopPropagation()}>
+                            <input type="checkbox" checked={mk.invert} onChange={(e) => mk.setInvert(e.target.checked)} data-mask-invert={layer.clipId} />
+                            {t('inspector.maskInvert')}
                           </label>
-                        </div>
-                        <div style={{ width: timeW }} />
-                      </div>
-                      {stroke.on && rows.rows.length ? (
-                        <div className="flex" style={{ height: lanesHeight(rows) }}>
-                          <div className={`${head} border-r border-[var(--dock-line)]`} style={{ width: headW, paddingTop: LANE_PAD / 2 }}>
-                            <EffectHead layer={layer} lanes={rows} fx="trim" host={as} t={t} />
-                          </div>
-                          <div className="relative" style={{ width: timeW }}><MotionLaneRows lanes={rows} top={0} pxPerMs={pxPerMs} /></div>
-                        </div>
-                      ) : null}
-                    </>
-                  );
-                })() : null}
-                {fxShown && host.text ? (
-                  <TextGroup layer={layer} host={host.text} head={head} headW={headW} timeW={timeW} pxPerMs={pxPerMs} t={t} />
-                ) : null}
-                {all && fxShown && host.mask ? (() => {
-                  const mk = host.mask;
-                  const masks = mk.shape && mk.model ? maskLanes(all, mk) : null;
-                  return (
-                    <>
-                      {/* its Masks group: a shape picked, turned inside out, each of its numbers a row */}
-                      <div className="flex" style={{ height: 22 }} data-masks-group={layer.clipId}>
-                        <div className={`${head} flex items-center gap-2 border-r border-[var(--dock-line)] text-[11.5px] text-[var(--text-muted)]`} style={{ width: headW, paddingLeft: AV_W + 18 }}>
-                          <span className="flex items-center"><ChevronDown size={11} className="mr-1" /> {t('inspector.mask')}</span>
-                          <select aria-label={t('inspector.maskShape')} value={mk.shape ?? 'none'} data-mask-shape={layer.clipId}
-                            onPointerDown={(e) => e.stopPropagation()} onChange={(e) => mk.setShape(e.target.value === 'none' ? null : e.target.value as MaskShape)}
-                            className="h-[18px] rounded-[3px] border border-[var(--dock-line)] bg-transparent px-1 text-[11px] text-[var(--text-muted)]">
-                            {(['none', ...MASK_SHAPES] as const).map((shape) => <option key={shape} value={shape}>{t(`inspector.maskShapes.${shape}`)}</option>)}
-                          </select>
-                          {mk.shape ? (
-                            <label className="flex items-center gap-1 text-[11px]">
-                              <input type="checkbox" checked={mk.invert} onChange={(e) => mk.setInvert(e.target.checked)} data-mask-invert={layer.clipId} />
-                              {t('inspector.maskInvert')}
-                            </label>
-                          ) : null}
-                        </div>
-                        <div style={{ width: timeW }} />
-                      </div>
-                      {masks ? (
-                        <div className="flex" style={{ height: lanesHeight(masks) }}>
-                          <div className={`${head} border-r border-[var(--dock-line)]`} style={{ width: headW, paddingTop: LANE_PAD / 2 }}>
-                            {masks.graph ? <MotionLaneHeads lanes={masks} /> : masks.rows.map((row) => (
-                              <MaskHead key={row.prop} layer={layer} lanes={masks} param={maskParamOf(row.prop)} mask={mk} t={t} />
-                            ))}
-                          </div>
-                          <div className="relative" style={{ width: timeW }}><MotionLaneRows lanes={masks} top={0} pxPerMs={pxPerMs} /></div>
-                        </div>
-                      ) : null}
-                    </>
+                        </>
+                      ), () => mk.setShape(null))}
+                      {isOpen('mask') && masks ? rowsOf(masks, masks.rows.map((row) => (
+                        <MaskHead key={row.prop} layer={layer} lanes={masks} param={maskParamOf(row.prop)} mask={mk} t={t} />
+                      ))) : null}
+                    </div>
                   );
                 })() : null}
               </div>
@@ -561,6 +712,15 @@ export function MotionTimeline(p: MotionTimelineProps) {
           <div className="pointer-events-none absolute bottom-0 top-0 z-[15] w-px bg-[#4ea1ff]" style={{ left: headW + playheadMs * pxPerMs }} />
         </div>
       </div>
+      {menu ? <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu)} onClose={() => setMenu(null)} /> : null}
+      {maskMenu ? (
+        <ContextMenu x={maskMenu.x} y={maskMenu.y} dense onClose={() => setMaskMenu(null)} items={[
+          ...([['easy', 'ease-in-out', 'F9'], ['easy-in', 'ease-in', '⇧F9'], ['easy-out', 'ease-out', '⌘⇧F9'], ['linear', 'linear', ''], ['hold', 'hold', '']] as const)
+            .map(([id, label, shortcut]) => ({ id, label: t(`inspector.eases.${label}`), ...(shortcut ? { shortcut } : {}), onSelect: () => { maskKeysRun(id); } })),
+          { id: 'sep', separator: true },
+          { id: 'delete', label: t('inspector.keyRemove'), shortcut: '⌫', danger: true, onSelect: () => { maskKeysRun('delete'); } },
+        ]} />
+      ) : null}
       {/* the time's zoom, under the layers as there */}
       <div className="flex h-[24px] shrink-0 items-center gap-2 border-t border-[var(--dock-line)] px-2 text-[var(--text-faint)]">
         <span className="text-[10.5px]" style={{ width: headW - 16 }}>{t('canvas.motionZoom')}</span>
@@ -576,33 +736,30 @@ export function MotionTimeline(p: MotionTimelineProps) {
  * parts (characters, words, lines), their order, when the first starts, how far apart, how long each; its turns drawn
  * on the time from the start.
  */
-function TextGroup({ layer, host, head, headW, timeW, pxPerMs, t }: {
-  layer: Layer; host: NonNullable<LayerHost['text']>; head: string; headW: number; timeW: number; pxPerMs: number; t: (key: string) => string;
+function TextGroup({ layer, host, head, headW, timeW, pxPerMs, open, title, t }: {
+  layer: Layer; host: NonNullable<LayerHost['text']>; head: string; headW: number; timeW: number; pxPerMs: number; open: boolean; title: React.ReactElement; t: (key: string) => string;
 }) {
   const anim = host.anim;
-  const sel = 'h-[18px] rounded-[3px] border border-[var(--dock-line)] bg-transparent px-1 text-[11px] text-[var(--text-muted)]';
+  const sel = SELECT;
   const set = (part: Partial<TextAnim>) => { if (anim) host.set({ ...anim, ...part }); };
   return (
-    <>
-      <div className="flex" style={{ height: 22 }} data-text-group={layer.clipId}>
-        <div className={`${head} flex items-center gap-2 border-r border-[var(--dock-line)] text-[11.5px] text-[var(--text-muted)]`} style={{ width: headW, paddingLeft: AV_W + 18 }}>
-          <span className="flex items-center"><ChevronDown size={11} className="mr-1" /> {t('canvas.textGroup')}</span>
-          {anim === null ? <span className="text-[11px] text-[var(--text-faint)]">{t('canvas.textCustom')}</span> : (
-            <select aria-label={t('canvas.textAnimate')} value={anim?.preset ?? 'none'} data-text-preset={layer.clipId} className={sel}
-              onPointerDown={(e) => e.stopPropagation()}
-              onChange={(e) => host.set(e.target.value === 'none' ? null : textAnimDefault(e.target.value as TextPreset, anim))}>
-              <option value="none">{t('canvas.textNone')}</option>
-              {TEXT_PRESETS.map((p) => <option key={p} value={p}>{t(`canvas.textPresets.${p}`)}</option>)}
-            </select>
-          )}
-        </div>
-        <div className="relative" style={{ width: timeW }}>
-          {anim ? <div className="absolute inset-y-[6px] rounded-[2px] bg-[#d0706f]/50" style={{ left: anim.start * 1000 * pxPerMs, width: Math.max(3, anim.secs * 1000 * pxPerMs) }} /> : null}
-        </div>
+    <div data-text-group={layer.clipId}>
+      {/* its head, its turns drawn on the time from the start */}
+      <div className="relative">
+        {title}
+        {anim ? <div className="pointer-events-none absolute inset-y-[6px] rounded-[2px] bg-[#d0706f]/50" style={{ left: headW + anim.start * 1000 * pxPerMs, width: Math.max(3, anim.secs * 1000 * pxPerMs) }} /> : null}
       </div>
-      {anim ? (
+      {anim && open ? (
         <div className="flex" style={{ height: 22 }}>
           <div className={`${head} flex items-center gap-1.5 overflow-hidden border-r border-[var(--dock-line)] text-[11px] text-[var(--text-muted)]`} style={{ width: headW, paddingLeft: AV_W + 34 }}>
+            <select aria-label={t('canvas.textDir')} value={anim.dir ?? 'in'} className={`${sel} w-[58px]`} data-text-dir={layer.clipId} onPointerDown={(e) => e.stopPropagation()}
+              onChange={(e) => {
+                const dir = e.target.value as 'in' | 'out';
+                /* going out: near the end of the page, where a line leaves */
+                set(dir === 'out' ? { dir, start: Math.max(0, Math.round((layer.endMs / 1000 - anim.secs - 0.6) * 100) / 100) } : { dir: undefined, start: 0 });
+              }}>
+              {(['in', 'out'] as const).map((d) => <option key={d} value={d}>{t(`canvas.textDirs.${d}`)}</option>)}
+            </select>
             <select aria-label={t('canvas.textBy')} value={anim.by} className={`${sel} w-[64px]`} onPointerDown={(e) => e.stopPropagation()} onChange={(e) => set({ by: e.target.value as TextAnim['by'] })}>
               {(['char', 'word', 'line'] as const).map((b) => <option key={b} value={b}>{t(`canvas.textBys.${b}`)}</option>)}
             </select>
@@ -619,7 +776,7 @@ function TextGroup({ layer, host, head, headW, timeW, pxPerMs, t }: {
           <div style={{ width: timeW }} />
         </div>
       ) : null}
-    </>
+    </div>
   );
 }
 
@@ -627,7 +784,7 @@ function TextGroup({ layer, host, head, headW, timeW, pxPerMs, t }: {
  * A mask's numbers as keyframe rows (components/MotionLanes): the layer's rows' time and playhead, its own keyframes;
  * one set, moved in the graph or eased there changes the mask's.
  */
-function maskLanes(all: MotionLanes, mk: LayerMask): MotionLanes {
+function maskLanes(all: MotionLanes, mk: LayerMask, pick: Pick<MotionLanes, 'picked' | 'onPick' | 'onMove' | 'onMenu'>): MotionLanes {
   const params = maskParamsOf(mk.shape!);
   const keysOf = (prop: string) => mk.keys[maskParamOf(prop)] ?? [];
   const write = (prop: string, keys: MaskKeys[MaskParam]) => {
@@ -638,10 +795,7 @@ function maskLanes(all: MotionLanes, mk: LayerMask): MotionLanes {
   return {
     ...all,
     rows: params.map((p) => ({ prop: maskRow(p), label: p, keys: mk.keys[p] ?? [] })),
-    picked: new Set(),
-    onPick: () => {},
-    onMove: () => {},
-    onMenu: () => {},
+    ...pick,
     onToggleHere: (prop) => mk.commit(mk.model?.toggleHere(maskParamOf(prop)) ?? null),
     onCurve: (prop, at, curve) => {
       const ease = easeOfBezier(curve);
@@ -685,7 +839,7 @@ function MaskHead({ layer, lanes, param, mask, t }: { layer: Layer; lanes: Motio
       <span style={{ width: 34 }} />
       <Stopwatch on={keys.length > 0} label={t(keys.length ? 'inspector.stopwatchOff' : 'inspector.stopwatchOn')} disabled={!keys.length && !inClip}
         onClick={() => mask.commit(model.stopwatch(param))} />
-      <span className="ml-1 w-[64px] shrink-0 truncate text-[var(--text-muted)]">{t(MASK_LABEL[param])}</span>
+      <span className="ml-1 w-[84px] shrink-0 truncate text-[var(--text-muted)]">{t(MASK_LABEL[param])}</span>
       <span className="flex min-w-0 items-center gap-2">
         {Array.isArray(value) ? (
           <>
@@ -727,7 +881,7 @@ function EffectHead({ layer, lanes, fx, host, t }: { layer: Layer; lanes: Motion
       <span style={{ width: 34 }} />
       <Stopwatch on={keys.length > 0} label={t(keys.length ? 'inspector.stopwatchOff' : 'inspector.stopwatchOn')} disabled={!keys.length && !inClip}
         onClick={() => host.commitEffects(model.stopwatch(fx))} />
-      <span className="ml-1 w-[64px] shrink-0 truncate text-[var(--text-muted)]">{t(`canvas.fx.${fx}`)}</span>
+      <span className="ml-1 w-[84px] shrink-0 truncate text-[var(--text-muted)]">{t(`canvas.fx.${fx}`)}</span>
       <Scrub label={t(`canvas.fx.${fx}`)} value={model.now(fx)} unit={unit} step={FX_STEP[fx]}
         onCommit={(n) => host.commitEffects(model.set(fx, EFFECTS[fx].unit === 'deg' ? n : fx === 'trim' ? Math.min(100, Math.max(0, n)) : Math.max(0, n)))} />
       {isThree(fx) ? null : <button type="button" aria-label={t('canvas.fxRemove')} title={t('canvas.fxRemove')} data-effect-remove={`${layer.clipId}:${fx}`}
@@ -769,7 +923,7 @@ function PropertyHead({ layer, lanes, prop, host, t }: { layer: Layer; lanes: Mo
       <span style={{ width: 34 }} />
       <Stopwatch on={keys.length > 0} label={t(keys.length ? 'inspector.stopwatchOff' : 'inspector.stopwatchOn')} disabled={!model || (!keys.length && !inClip)}
         onClick={() => host.commit(model?.stopwatch(prop) ?? null)} />
-      <span className="ml-1 w-[64px] shrink-0 truncate text-[var(--text-muted)]">{t(PROP_LABEL[prop])}</span>
+      <span className="ml-1 w-[84px] shrink-0 truncate text-[var(--text-muted)]">{t(PROP_LABEL[prop])}</span>
       <span className="flex min-w-0 items-center gap-2">
         {value == null ? <span className="text-[var(--text-faint)]">—</span>
           : prop === 'translate' ? (

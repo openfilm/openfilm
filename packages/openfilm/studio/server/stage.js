@@ -2039,6 +2039,16 @@
       const lengths = shapes.map((n) => { try { return n.getTotalLength(); } catch { return 0; } }).filter((n) => n > 0);
       return lengths.length ? Math.ceil(Math.max(...lengths)) : null;
     },
+    /** The elements' own sizes (px, before any transform): what a mask of one is drawn in (the motion timeline). */
+    sizes({ handles }) {
+      return (handles ?? []).map((handle) => {
+        const el = nodeOf(handle);
+        if (!el) return null;
+        if (el.offsetWidth || el.offsetHeight) return { w: el.offsetWidth, h: el.offsetHeight };
+        try { const b = el.getBBox?.(); if (b?.width || b?.height) return { w: b.width, h: b.height }; } catch { /* not drawn */ }
+        return null;
+      });
+    },
     /**
      * Restack siblings in the order a person put them in (the Layers panel): `order` the handles of the elements
      * under one parent, the top one first, `moved` the one that was moved. Only the moved one is given a z-index when

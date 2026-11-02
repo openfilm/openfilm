@@ -318,7 +318,7 @@ function ownMotion(/** @type {FilmValue} */ value) {
       if (typeof anim !== 'string') return o;
       const entries = anim.split(',').map((e) => {
         const [name, ...rest] = e.trim().split(/\s+/);
-        const m = new RegExp(`^(.+)--(e[0-9a-z]+--(?:${KEYED_PROPS.join('|')}))$`).exec(name);
+        const m = new RegExp(`^(.+)--(e[0-9a-z]+--(?:${[...KEYED_PROPS, 'mask'].join('|')}))$`).exec(name);
         if (!m || m[1] === clip.id || value.keyframes?.[name] == null) { used.add(name); return e.trim(); }
         const mine = `${clip.id}--${m[2]}`;
         /** @type {Record<string, string>} */ (value.keyframes)[mine] ??= /** @type {Record<string, string>} */ (value.keyframes)[name];

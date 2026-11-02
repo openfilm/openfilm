@@ -7,7 +7,7 @@
  * are written one at a time (see editor/use-film.ts); the agent's writes come in through the folder's events.
  */
 import * as React from 'react';
-import { BookmarkPlus, ChevronDown, ClipboardCopy, ClipboardPaste, Film as FilmIcon, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, Spline, TriangleAlert, Upload, Workflow } from 'lucide-react';
+import { BookmarkPlus, ClipboardCopy, ClipboardPaste, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, TriangleAlert, Upload } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
 import { EFFECTS, MOTION_PROPS, animationsOf, effectsOf, readMotion, valueAt, withAnimations, withEffects, withPreset, type EffectProp, type KeyedProp, type Motion, type MotionProp } from '../../../../src/clip-motion.mjs';
 import { copiedKeys, easeOfBezier, easedMotion, effectsModel, type EffectsChange, keyId, keyedBox, movedKeys, parseKeyId, pastedKeys, poseAt, withoutKeys, type CopiedKeys, type EaseCommand } from '@/lib/motion-keys';
@@ -91,6 +91,8 @@ import { cueAt, filmSubtitleStyleFor, filmSubtitleWords, sameFilmSubtitleLanguag
 import { DEFAULT_INSPECTOR, DOCK_GAP, DockPaneDivider, MIN_DOCK_H, MIN_INSPECTOR, MIN_STAGE_H, MIN_VIEWER, PaneDivider, usePaneSize } from './PaneDivider';
 import { PANE_BAR, PANE_BTN_ON, PANE_TOGGLE, PANE_TOGGLE_ICON } from './dock-pane-bar';
 import { Tooltip } from './Tooltip';
+import { ModeSwitcher } from './ModeSwitcher';
+import { MotionPanel } from './MotionPanel';
 import { ProjectCard } from './ProjectCard';
 import { BrandLogo } from './BrandLogo';
 import { ExamplesDialog } from './ExamplesGallery';
@@ -440,17 +442,18 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   React.useEffect(() => { setCanvasOpenState(canvasShown(projectId)); }, [projectId]);
   /* the edit seen as an animation editor sees it (components/MotionTimeline), in the timeline's place */
   const [motionOpen, keepMotionOpen] = useKeptFlag('openfilm.project.motion', false);
+  /* layers the motion panel just put something on, twirled open on the motion timeline */
+  const [motionReveal, setMotionReveal] = React.useState<{ ids: readonly string[]; n: number } | null>(null);
   const setCanvasOpen = React.useCallback((open: boolean) => {
     if (open) pauseRef.current();
     setCanvasOpenState(open);
     try { localStorage.setItem(`${CANVAS_KEY}:${projectId}`, open ? '1' : '0'); } catch { /* for this launch only */ }
   }, [projectId]);
-  const [modeMenu, setModeMenu] = React.useState<{ x: number; y: number } | null>(null);
   const workMode: 'canvas' | 'edit' | 'motion' = canvasOpen ? 'canvas' : motionOpen ? 'motion' : 'edit';
   const setWorkMode = React.useCallback((mode: 'canvas' | 'edit' | 'motion') => {
     setCanvasOpen(mode === 'canvas');
     if (mode !== 'canvas') keepMotionOpen(mode === 'motion');
-    if (mode === 'motion') setTimelineOpen(true);
+    if (mode === 'motion') { setTimelineOpen(true); setInspectorOpen(true); }
   }, [setCanvasOpen, keepMotionOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   const canvasFiles = React.useMemo(() => (listing ? [...listing.files, ...listing.pages] : []), [listing]);
   /* a file of the media pane as a reference: shown by its poster (a video, a page) or itself (a still, on Studio's
@@ -957,6 +960,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* keyframes copied (⌘C with keyframes picked): ⌘V puts them on the picked clip at the playhead, until something
      else is copied */
   const keyClipRef = React.useRef<CopiedKeys | null>(null);
+  /* the same for an element's keyframes picked in a composition (set where its rows are made, elementLanesOf) */
+  const elementKeys = React.useRef<{ run: (what: EaseCommand | 'delete' | { move: number }) => boolean; copy: () => CopiedKeys | null; paste: (copied: CopiedKeys) => boolean }>({ run: () => false, copy: () => null, paste: () => false });
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
@@ -965,8 +970,10 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
       const key = e.key.toLowerCase();
       if (key === 'c' || key === 'x') {
-        keyClipRef.current = key === 'c' && pickedKeys.size ? copiedKeys(motionOfBlock(motionBlock), pickedKeys) : null;
+        keyClipRef.current = key !== 'c' ? null : pickedKeys.size ? copiedKeys(motionOfBlock(motionBlock), pickedKeys) : elementKeys.current.copy();
         if (!keyClipRef.current) return;
+      } else if (key === 'v' && keyClipRef.current && elementKeys.current.paste(keyClipRef.current)) {
+        /* pasted on the element picked in the composition open */
       } else if (key === 'v' && keyClipRef.current && motionBlock) {
         const local = (timeRef.current - motionBlock.startMs) / 1000;
         if (local < -keyFrameS / 2 || local > (motionBlock.endMs - motionBlock.startMs) / 1000 + keyFrameS / 2) return;
@@ -1157,7 +1164,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       },
     };
     return {
-      model,
+      /* what an animation preset keys from (lib/motion-presets): a clip's keyframes are on top of its box */
+      model: model ? { ...model, preset: { motion, rest: { translate: [0, 0], scale: 1, rotate: 0, opacity: staticTransform(placed!).base.opacity }, span: [0, length], stage: film.film?.stage ?? { w: 1920, h: 1080 } } } : null,
       effects,
       mask,
       three,
@@ -1210,14 +1218,16 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       onMove: (at, v) => rewriteMotion({ ...motion, translate: keys.map((k) => (k.t === at ? { ...k, v } : k)) }),
     };
   }, [motionBlock, motionOfBlock, pickedKeys, playing, projectFps, rewriteMotion]);
+  /* the picked keyframes' menu: an element's in the composition open, else the clip's */
+  const runKeys = (what: EaseCommand | 'delete') => { if (!elementKeys.current.run(what)) keyCommand(what); };
   const keyMenuItems: ContextMenuEntry[] = [
-    { id: 'easy', label: t('inspector.eases.ease-in-out'), shortcut: 'F9', onSelect: () => keyCommand('easy') },
-    { id: 'easy-in', label: t('inspector.eases.ease-in'), shortcut: '⇧F9', onSelect: () => keyCommand('easy-in') },
-    { id: 'easy-out', label: t('inspector.eases.ease-out'), shortcut: '⌘⇧F9', onSelect: () => keyCommand('easy-out') },
-    { id: 'linear', label: t('inspector.eases.linear'), onSelect: () => keyCommand('linear') },
-    { id: 'hold', label: t('inspector.eases.hold'), onSelect: () => keyCommand('hold') },
+    { id: 'easy', label: t('inspector.eases.ease-in-out'), shortcut: 'F9', onSelect: () => runKeys('easy') },
+    { id: 'easy-in', label: t('inspector.eases.ease-in'), shortcut: '⇧F9', onSelect: () => runKeys('easy-in') },
+    { id: 'easy-out', label: t('inspector.eases.ease-out'), shortcut: '⌘⇧F9', onSelect: () => runKeys('easy-out') },
+    { id: 'linear', label: t('inspector.eases.linear'), onSelect: () => runKeys('linear') },
+    { id: 'hold', label: t('inspector.eases.hold'), onSelect: () => runKeys('hold') },
     { id: 'sep', separator: true },
-    { id: 'delete', label: t('inspector.keyRemove'), shortcut: '⌫', danger: true, onSelect: () => keyCommand('delete') },
+    { id: 'delete', label: t('inspector.keyRemove'), shortcut: '⌫', danger: true, onSelect: () => runKeys('delete') },
   ];
   /* the inspector's keyframes: a clip's (src/clip-motion.mjs), the playhead, and going to a moment */
   const motionHost = React.useMemo<ClipMotionHost>(() => ({
@@ -2689,11 +2699,25 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   React.useEffect(() => {
     if (!motionComp || !compShown) { setCompRows(null); return undefined; }
     let alive = true;
-    void askStage<{ clip: string; layers: LayerRow[] }[]>('tree').then((tree) => {
-      if (alive) setCompRows(tree?.find((c) => c.clip === motionComp)?.layers ?? []);
+    let tries = 0;
+    let wait: ReturnType<typeof setTimeout> | undefined;
+    const read = () => void askStage<{ clip: string; layers: LayerRow[] }[]>('tree').then(async (tree) => {
+      const rows = tree?.find((c) => c.clip === motionComp)?.layers ?? [];
+      if (!alive) return;
+      /* its page still loading: asked again in a moment */
+      if (!rows.length && ++tries < 60) { wait = setTimeout(read, 500); return; }
+      setCompRows(rows);
+      /* each element's own size: what a mask of it is drawn in */
+      const handles: number[] = [];
+      const walk = (list: readonly LayerRow[]) => { for (const r of list) { handles.push(r.handle); walk(r.children ?? []); } };
+      walk(rows);
+      const sizes = await askStage<({ w: number; h: number } | null)[]>('sizes', { handles });
+      if (alive) setCompSizes(new Map(handles.flatMap((h, i) => (sizes?.[i] ? [[h, sizes[i]!] as const] : []))));
     });
-    return () => { alive = false; };
+    read();
+    return () => { alive = false; clearTimeout(wait); };
   }, [motionComp, compShown, film.film, askStage]);
+  const [compSizes, setCompSizes] = React.useState<ReadonlyMap<number, { w: number; h: number }>>(new Map());
   const [compPicked, setCompPicked] = React.useState<readonly string[]>([]);
   const [compKeys, setCompKeys] = React.useState<{ id: string; keys: ReadonlySet<string> } | null>(null);
   /** An element layer's place: its override's selector and which match. */
@@ -2718,7 +2742,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     return compRows ? find(compRows) : null;
   }, [compRows]);
   /* an element's keyframes and tweak written: the clip's overrides, the film's @keyframes, one edit */
-  const writeElement = React.useCallback((loc: string, motion: Motion, stat?: ElementCommit['stat'], style?: Record<string, string | null>, words?: ReturnType<typeof splitFor>) => {
+  const writeElement = React.useCallback((loc: string, motion: Motion, stat?: ElementCommit['stat'], style?: Record<string, string | null>, words?: ReturnType<typeof splitFor>,
+    mask?: { name: string; entry: string | null; body: string | null }) => {
     const row = rowOf(loc);
     if (!row || !motionComp) return;
     const { at, n } = elementAt(row);
@@ -2748,7 +2773,20 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         return Object.keys(next).some((k) => k !== 'at' && k !== 'n') ? [next] : [];
       });
     }
-    const set = Object.fromEntries(Object.entries({ ...out.keyframes, ...(words?.keyframes ?? {}) }).filter(([name, body]) => body != null || film.film?.keyframes?.[name] != null));
+    if (mask) {
+      /* its mask's keyframes, played among its animations (lib/mask-motion), or not any more */
+      overrides = (overrides.some((o) => sameElement(o, at, n)) || !mask.entry ? overrides : [...overrides, { at, ...(n ? { n } : {}) }]).flatMap((o) => {
+        if (!sameElement(o, at, n)) return [o];
+        const css = { ...(o.style ?? {}) } as Record<string, string | number>;
+        const entries = typeof css.animation === 'string' ? css.animation.split(',').map((e) => e.trim()).filter((e) => e && e.split(/\s+/)[0] !== mask.name) : [];
+        if (mask.entry) entries.push(mask.entry);
+        if (entries.length) css.animation = entries.join(', '); else delete css.animation;
+        const next = { ...o, style: css };
+        if (!Object.keys(css).length) delete (next as { style?: unknown }).style;
+        return Object.keys(next).some((k) => k !== 'at' && k !== 'n') ? [next] : [];
+      });
+    }
+    const set = Object.fromEntries(Object.entries({ ...out.keyframes, ...(words?.keyframes ?? {}), ...(mask ? { [mask.name]: mask.body } : {}) }).filter(([name, body]) => body != null || film.film?.keyframes?.[name] != null));
     void edit([
       { op: 'props', edits: [{ clip: motionComp, prop: 'overrides', value: overrides.length ? (overrides as unknown as Record<string, unknown>) : null }] },
       ...(Object.keys(set).length ? [{ op: 'keyframes' as const, set }] : []),
@@ -2775,8 +2813,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const fxCss = [`filter: ${css.filter ?? ''}`, ...Object.entries(css).filter(([k]) => k.startsWith('--fx-')).map(([k, v]) => `${k}: ${v}`)].join('; ');
     const fx = effectsOf(fxCss);
     const effects = effectsModel(motion, fx.on, fx.values, compLocalMs / 1000 + compOffset, on, keyFrameS);
+    const stat = elementStatic(entry);
+    const pageS = compBlock ? (compBlock.endMs - compBlock.startMs) / 1000 : 0;
     return {
-      model,
+      /* an element's keyframes are its transform itself, on the page's own seconds */
+      model: { ...model, preset: { motion, rest: { translate: stat.t, scale: stat.s, rotate: stat.r, opacity: stat.opacity }, span: [compOffset, compOffset + pageS], stage: compBlock?.size ?? film.film?.stage ?? { w: 1920, h: 1080 } } },
       effects,
       commitEffects: (c: EffectsChange | null) => {
         if (!c) return;
@@ -2794,9 +2835,47 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       visible: !row?.hidden,
       setVisible: (show) => writeElement(layer.clipId, motion, undefined, { visibility: show ? null : 'hidden' }),
       ...(row?.kind === 'text' ? { text: { anim: textAnimOf(entry), set: (anim: TextAnim | null) => writeElement(layer.clipId, motion, undefined, undefined, splitFor(anim)) } } : {}),
+      ...(row && motionComp ? { mask: elementMaskOf(layer.clipId, row, css, motion) } : {}),
       ...(row?.kind === 'shape' ? { stroke: strokeOf(layer.clipId, row, css, motion, on) } : {}),
     };
-  }, [rowOf, compClip, elementMotionOf, compBlock, compLocalMs, compOffset, keyFrameS, writeElement]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rowOf, compClip, elementMotionOf, compBlock, compLocalMs, compOffset, keyFrameS, writeElement, film.film, compSizes, motionComp, projectFps]); // eslint-disable-line react-hooks/exhaustive-deps
+  /*
+   * An element's mask (lib/clip-mask) in its tweak's style, drawn in its own size. Its tweak's style is applied with
+   * priority, over any animation: one that moves (lib/mask-motion) keeps no mask of its own there, its keyframes'
+   * first stop says what it is.
+   */
+  const elementMaskOf = (loc: string, row: LayerRow, css: Record<string, string | number>, motion: Motion): LayerMask | null => {
+    const { at, n } = elementAt(row);
+    const box = compSizes.get(row.handle) ?? null;
+    const name = `${elementSubject(motionComp!, at, n)}--mask`;
+    const body = film.film?.keyframes?.[name];
+    const keys = readMaskKeys(body);
+    const first = /%\s*\{\s*mask-image:\s*(.*?);\s*mask-composite:\s*([^}]*?)\s*\}/.exec(body ?? '');
+    const now = first && Object.keys(keys).length ? maskOf(first[1], first[2], box) : maskOf(css.maskImage as string | undefined, css.maskComposite as string | undefined, box);
+    const read = (prop: string) => (prop === 'mask-image' ? css.maskImage : prop === 'mask-composite' ? css.maskComposite : css[prop.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())]) as string | undefined;
+    const write = (base: Mask | null, next: MaskKeys) => {
+      const own = base ? maskCss(read, base, box) : { 'mask-image': null, 'mask-composite': null };
+      if (!own) return;
+      const frames = base ? maskKeyframes(base, next, (prop) => (prop === 'mask-image' || prop === 'mask-composite' ? own[prop] ?? undefined : read(prop)), box, projectFps) : null;
+      /* drawn over the whole element, whatever size and place a mask of the page's own had there (a shine moving) */
+      const fit = base ? { maskSize: '100% 100%', maskPosition: '0 0', maskRepeat: 'no-repeat' } : { maskSize: null, maskPosition: null, maskRepeat: null };
+      writeElement(loc, motion, undefined,
+        frames ? { maskImage: null, maskComposite: null, ...fit } : { maskImage: own['mask-image'] ?? null, maskComposite: own['mask-composite'] ?? null, ...fit },
+        undefined, { name, entry: frames ? `${name} ${Math.round(frames.secs * 1000) / 1000}s linear both` : null, body: frames?.body ?? null });
+    };
+    const on = compBlock != null && compLocalMs >= 0 && compLocalMs <= compBlock.endMs - compBlock.startMs;
+    /* a mask Studio cannot read (written by hand): left as it is */
+    if (now === null) return null;
+    return {
+      shape: now?.shape ?? null,
+      invert: Boolean(now?.invert),
+      model: now ? maskModel(now, keys, compLocalMs / 1000 + compOffset, on, keyFrameS) : null,
+      keys,
+      setShape: (shape) => write(shape ? maskDefault(shape, box, now ?? null) : null, shape ? keys : {}),
+      setInvert: (inv) => { if (now) write({ ...now, invert: inv }, keys); },
+      commit: (c) => { if (c && now) write(c.base ?? now, c.keys); },
+    };
+  };
   /*
    * A shape's stroke drawn on (an animation editor's Trim Paths): its dash as long as its longest path (asked of the
    * page once, as it is turned on), offset by what is not drawn of it, `--fx-trim` (0–100, keyed as an effect)
@@ -2852,7 +2931,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         if (c) writeElement(id, c.motion, c.stat);
       },
       onSeek: (ms) => { if (compBlock) seek(compBlock.startMs + ms); },
-      onMenu: () => {},
+      onMenu: (e) => { if (picked.size) setKeyMenu({ x: e.clientX, y: e.clientY }); },
       graph: motionGraph,
       onGraph: () => setMotionGraph((v) => !v),
       onCurve: (prop, at, curve) => {
@@ -2870,6 +2949,49 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       labels: { prev: t('inspector.keyPrev'), next: t('inspector.keyNext'), add: t('inspector.keyAdd'), remove: t('inspector.keyRemove'), graph: t('inspector.keyGraph') },
     };
   }, [elementMotionOf, elementHostOf, compKeys, compOffset, compLocalMs, keyFrameS, writeElement, compBlock, seek, motionGraph, t]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* an element's picked keyframes: eased (F9), taken away, nudged (⌥←/→), copied and pasted, as a clip's are */
+  elementKeys.current = {
+    run: (what) => {
+      if (!motionComp || !compKeys?.keys.size) return false;
+      const { id, keys: picked } = compKeys;
+      const motion = elementMotionOf(id);
+      if (what === 'delete') { writeElement(id, withoutKeys(motion, picked)); setCompKeys({ id, keys: new Set() }); return true; }
+      if (typeof what === 'object') {
+        const lowest = Math.min(...[...picked].map((x) => parseKeyId(x)?.t ?? Infinity));
+        const dt = Math.max(what.move, -lowest);
+        writeElement(id, movedKeys(motion, picked, what.move));
+        setCompKeys({ id, keys: new Set([...picked].flatMap((x) => { const k = parseKeyId(x); return k ? [keyId(k.prop, Math.round((k.t + dt) * 1000) / 1000)] : []; })) });
+        return true;
+      }
+      writeElement(id, easedMotion(motion, picked, what));
+      return true;
+    },
+    copy: () => (motionComp && compKeys?.keys.size ? copiedKeys(elementMotionOf(compKeys.id), compKeys.keys) : null),
+    paste: (copied) => {
+      const id = motionComp ? compPicked[0] : undefined;
+      if (!id || !compBlock) return false;
+      const pasted = pastedKeys(elementMotionOf(id), copied, Math.max(0, compLocalMs / 1000 + compOffset), keyFrameS);
+      writeElement(id, pasted.motion);
+      setCompKeys({ id, keys: pasted.picked });
+      return true;
+    },
+  };
+  React.useEffect(() => {
+    if (!compKeys?.keys.size) return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      let done = true;
+      if (e.key === 'F9') elementKeys.current.run(e.metaKey && e.shiftKey ? 'easy-out' : e.shiftKey ? 'easy-in' : 'easy');
+      else if (e.key === 'Backspace' || e.key === 'Delete') elementKeys.current.run('delete');
+      else if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) elementKeys.current.run({ move: (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 10 : 1) * keyFrameS });
+      else if (e.key === 'Escape') setCompKeys(null);
+      else done = false;
+      if (done) { e.preventDefault(); e.stopPropagation(); }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [compKeys, keyFrameS]);
   /* a page layer double-clicked: its composition opened, the playhead brought into it */
   const openComposition = React.useCallback((layer: Layer) => {
     const block = blocksRef.current.find((b) => b.clipId === layer.clipId);
@@ -2877,6 +2999,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (timeRef.current < block.startMs || timeRef.current >= block.endMs) seek(block.startMs);
     setCompPicked([]);
     setCompKeys(null);
+    setPickedKeys(new Set());
     setMotionComp(layer.clipId);
   }, [seek]);
   const previewClip = React.useCallback((clipLoc: string, patch: Partial<MgTransform> | null) => clipPreviewRef.current?.(clipLoc, patch), []);
@@ -3984,25 +4107,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
               </>)}
               {/* what the panes are for: one button saying which, a click for the menu of the three — the edit (cutting
                   the film), the canvas (making material), motion (layers and keyframes, as an animation editor shows them) */}
-              <Tooltip label={t('canvas.modes')} side="bottom">
-                <button type="button" aria-haspopup="menu" aria-expanded={modeMenu != null} data-work-mode={workMode}
-                  onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setModeMenu({ x: r.right, y: r.bottom + 4 }); }}
-                  className={`flex h-[26px] shrink-0 items-center gap-1.5 rounded-md pl-2 pr-1.5 text-[12px] text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] ${modeMenu ? 'bg-[var(--bg-hover)] text-[var(--text)]' : ''}`}>
-                  {workMode === 'canvas' ? <Workflow size={14} /> : workMode === 'motion' ? <Spline size={14} /> : <FilmIcon size={14} />}
-                  {t(workMode === 'canvas' ? 'canvas.modeCanvas' : workMode === 'motion' ? 'canvas.modeMotion' : 'canvas.modeEdit')}
-                  <ChevronDown size={12} className="text-[var(--text-faint)]" />
-                </button>
-              </Tooltip>
-              {modeMenu ? (
-                <ContextMenu x={modeMenu.x} y={modeMenu.y} align="end" onClose={() => setModeMenu(null)}
-                  items={([
-                    ['edit', <FilmIcon key="e" size={15} />, 'canvas.modeEdit', 'canvas.noteEdit'],
-                    ['canvas', <Workflow key="c" size={15} />, 'canvas.modeCanvas', 'canvas.noteCanvas'],
-                    ['motion', <Spline key="m" size={15} />, 'canvas.modeMotion', 'canvas.noteMotion'],
-                  ] as const).map(([mode, icon, label, note]) => ({
-                    id: mode, icon, label: t(label), note: t(note), checked: workMode === mode, onSelect: () => setWorkMode(mode),
-                  }))} />
-              ) : null}
+              <ModeSwitcher mode={workMode} onMode={setWorkMode} />
             </div>
             <div aria-hidden className="shrink-0 self-stretch" style={{ width: 'var(--titlebar-right-x)' }} />
           </div>
@@ -4298,6 +4403,17 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                       width={inspectorShownWidth}
                       onClose={closeInspector}
                     />
+                  ) : motionOpen ? (
+                    /* motion's own panel (components/MotionPanel): the picked layers' properties, the effects & presets */
+                    <div className={`${PANE} flex shrink-0 flex-col`} style={{ width: inspectorShownWidth }}>
+                      {compBlock ? (
+                        <MotionPanel layers={compLayers.filter((l) => compPicked.includes(l.clipId))} hostOf={elementHostOf}
+                          onApplied={(ids) => setMotionReveal((was) => ({ ids, n: (was?.n ?? 0) + 1 }))} />
+                      ) : (
+                        <MotionPanel layers={motionLayers.filter((l) => selectedBlocks.some((b) => b.clipId === l.clipId))} hostOf={(l) => layerHostOf(l as TimelineBlock & { clipId: string })}
+                          onApplied={(ids) => setMotionReveal((was) => ({ ids, n: (was?.n ?? 0) + 1 }))} />
+                      )}
+                    </div>
                   ) : (
                     <FontScopeContext.Provider value={fontScope}>
                     <LiveGeometryInspector
@@ -4376,6 +4492,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     workArea={null}
                     onWorkArea={() => {}}
                     crumb={{ outer: loaded?.project.name ?? '', name: compBlock.title || compBlock.clipId || '', onBack: () => setMotionComp(null) }}
+                    reveal={motionReveal}
                     t={t}
                   />
                   ) : motionOpen ? (
@@ -4394,6 +4511,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     onTrimLayer={trimLayer}
                     workArea={markedRange}
                     onWorkArea={setMarkedRange}
+                    reveal={motionReveal}
                     t={t}
                   />
                   ) : (
