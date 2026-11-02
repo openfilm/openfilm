@@ -61,6 +61,30 @@ test('a film in a film: its picture is a page\'s, and its sound is heard where t
   }
 });
 
+test('an element of a page moves by the film\'s keyframes an override\'s animation names, on the page\'s time', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-element-motion-'));
+  writeFileSync(join(dir, 'title.html'), page('title', 4));
+  writeFileSync(join(dir, 'film.html'), filmHtml({
+    stage: { w: 320, h: 180 },
+    tracks: [{ clips: [{ id: 't', src: 'title.html', at: 1, overrides: [{ at: 'p', style: { animation: 't--e1--translate 2s linear both' } }] }] }],
+    keyframes: { 't--e1--translate': '0% { translate: 0px 0px } 100% { translate: 100px 0px }' },
+  }));
+  const s = await open(dir);
+  const moved = () => s.film.page.evaluate(() => {
+    const p = document.querySelector('#t').contentDocument.querySelector('p');
+    return getComputedStyle(p).translate;
+  });
+  try {
+    /* 1.5 s into the film is 0.5 s into the page: a quarter of the way */
+    await s.film.seek(1.5);
+    assert.equal(await moved(), '25px');
+    await s.film.seek(3);
+    assert.equal(await moved(), '100px');
+  } finally {
+    await s.close();
+  }
+});
+
 /** `seconds` of silence as a WAV (8 kHz, mono, 16 bit): a sound file the browser reads without a codec. */
 function silence(seconds) {
   const data = Math.round(8000 * seconds) * 2;

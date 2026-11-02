@@ -303,6 +303,26 @@ function ownMotion(/** @type {FilmValue} */ value) {
       return [mine, ...rest].join(' ');
     });
     if (changed) clip.style = withAnimations(/** @type {string | undefined} */ (clip.style), next);
+    /* its page's elements' keyframes (`<clip id>--<element>--<property>`, an override's animation): its own too */
+    const overrides = /** @type {{ at?: string, style?: Record<string, unknown> }[] | undefined} */ (clip.overrides);
+    if (!Array.isArray(overrides)) continue;
+    let tweaked = false;
+    const list = overrides.map((o) => {
+      const anim = o?.at !== undefined ? o.style?.animation : undefined;
+      if (typeof anim !== 'string') return o;
+      const entries = anim.split(',').map((e) => {
+        const [name, ...rest] = e.trim().split(/\s+/);
+        const m = /^(.+)--(e[0-9a-z]+--(?:translate|scale|rotate|opacity))$/.exec(name);
+        if (!m || m[1] === clip.id || value.keyframes?.[name] == null) { used.add(name); return e.trim(); }
+        const mine = `${clip.id}--${m[2]}`;
+        /** @type {Record<string, string>} */ (value.keyframes)[mine] ??= /** @type {Record<string, string>} */ (value.keyframes)[name];
+        used.add(mine);
+        tweaked = true;
+        return [mine, ...rest].join(' ');
+      });
+      return { ...o, style: { ...o.style, animation: entries.join(', ') } };
+    });
+    if (tweaked) setField(clip, 'overrides', /** @type {PropValue} */ (/** @type {unknown} */ (list)));
   }
   /* Studio's own (a clip's keyframes, the library's presets) go when nothing moves by them */
   for (const name of Object.keys(value.keyframes)) if ((own.test(name) || /^motion-(in|out|loop)-/.test(name)) && !used.has(name)) delete value.keyframes[name];

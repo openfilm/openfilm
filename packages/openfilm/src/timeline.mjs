@@ -1100,7 +1100,9 @@ async function drawClip(c, t, live, play, turn, coming, going) {
   c.win.filmHost?.settle?.(local);
   if (!live) await mediaShown(c.win.document);
   c.drawn = true;
-  override(c, c.preview ?? c.overrides);
+  override(c, c.preview ?? c.overrides, filmKeyframes);
+  /* an element's animation a tweak just gave it is held at the page's time too */
+  c.win.filmHost?.settle?.(local);
 }
 
 window.__filmVideos = () => ({ ...videoSeen });
@@ -1165,8 +1167,11 @@ function element(row) {
  * stands over the one of its name the film was loaded with (a running animation takes its keyframes' change).
  */
 let keyframesStyle = null;
+/* and played inside pages too, by their elements' tweaks (overrides.mjs) */
+let filmKeyframes = doc.keyframes ?? {};
 function keyframesNow(keyframes) {
   if (!keyframes) return;
+  filmKeyframes = keyframes;
   keyframesStyle ??= document.head.appendChild(document.createElement('style'));
   const text = Object.entries(keyframes).map(([name, body]) => `@keyframes ${name} { ${body} }`).join('\n');
   if (keyframesStyle.textContent !== text) keyframesStyle.textContent = text;
@@ -1281,7 +1286,8 @@ async function cue(c, row, track, t, fresh) {
     await c.child.frame(local);
     c.win.filmHost?.settle?.(local);
     c.drawn = true;
-    override(c, c.overrides);
+    override(c, c.overrides, filmKeyframes);
+    c.win.filmHost?.settle?.(local);
   } finally { cueing.delete(c); }
 }
 
@@ -1399,7 +1405,7 @@ window.__filmEditor = {
     if (!c) return;
     restore(c);
     c.preview = overrides ?? undefined;
-    if (c.drawn) override(c, c.preview ?? c.overrides);
+    if (c.drawn) override(c, c.preview ?? c.overrides, filmKeyframes);
   },
   /** What is on top under the stage point (x, y) now: an element of a page, or a clip. */
   pick(x, y) {

@@ -14,7 +14,8 @@ import { copiedKeys, easeOfBezier, easedMotion, keyId, keyedBox, movedKeys, pars
 import type { MotionLanes } from './MotionLanes';
 import type { MotionPathKeys } from './MotionPath';
 import { MotionTimeline, type Layer, type LayerHost } from './MotionTimeline';
-import { transformModel } from './KeyframesSection';
+import { elementModel, elementStatic, elementSubject, readElementMotion, sameElement, writeElementMotion, type ElementCommit } from '@/lib/element-motion';
+import { transformModel, type TransformCommit } from './KeyframesSection';
 import { staticTransform, transformEdits } from '@/lib/clip-transform';
 import { declared, withDeclarations } from '@/lib/clip-look';
 import { PARTS, compoundOf, dissolvedOf } from '../../../server/compound.mjs';
@@ -1073,7 +1074,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       .sort((a, b) => a.startMs - b.startMs).map((b) => ({ ...b, clipId: b.clipId! }))), [timelineTracks]);
   /* a layer of the motion timeline beyond its keyframes: its Transform's numbers (the inspector's, lib/clip-transform),
      how it blends (its mix-blend-mode) */
-  const layerHostOf = React.useCallback((layer: Layer): LayerHost => {
+  const layerHostOf = React.useCallback((layer: TimelineBlock & { clipId: string }): LayerHost => {
     const clip = film.film?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === layer.clipId) as { style?: string; box?: FilmBox } | undefined;
     const css = clip?.style ?? '';
     const placed = layer.size ? { kind: layer.kind, own: layer.size, box: clip?.box ?? layer.box, stage: film.film?.stage ?? { w: 1920, h: 1080 }, css } : null;
@@ -1085,7 +1086,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     };
     return {
       model,
-      commit: (c) => {
+      commit: (made) => {
+        const c = made as TransformCommit | null;
         if (!c || !placed || !layer.loc) return;
         void editBlocks(transformEdits(layer.loc, placed, c.motion, c.base)).then((err) => { if (err) toast.showError(err); });
       },
@@ -2594,6 +2596,145 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     void editStageOverrides(edits.map(({ target, style }) => ({ element: layerElement(clipId, target.at, target.n, target.at), patch: { style } as OverrideGeometry })))
       .then((f) => { if (f) toast.show(f); });
   }, [editStageOverrides, toast]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* ── motion: a page clip opened as a composition, its elements its layers (lib/element-motion) ── */
+  const [motionComp, setMotionComp] = React.useState<string | null>(null);
+  React.useEffect(() => { if (!motionOpen) setMotionComp(null); }, [motionOpen]);
+  const compBlock = motionComp ? blocksRef.current.find((b) => b.clipId === motionComp) ?? null : null;
+  const compClip = motionComp ? film.film?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === motionComp) ?? null : null;
+  /* its elements, as the Layers panel reads them from the page (only while it is in the picture) */
+  const [compRows, setCompRows] = React.useState<readonly LayerRow[] | null>(null);
+  const compShown = Boolean(compBlock && timeMs >= compBlock.startMs && timeMs < compBlock.endMs);
+  React.useEffect(() => {
+    if (!motionComp || !compShown) { setCompRows(null); return undefined; }
+    let alive = true;
+    void askStage<{ clip: string; layers: LayerRow[] }[]>('tree').then((tree) => {
+      if (alive) setCompRows(tree?.find((c) => c.clip === motionComp)?.layers ?? []);
+    });
+    return () => { alive = false; };
+  }, [motionComp, compShown, film.film, askStage]);
+  const [compPicked, setCompPicked] = React.useState<readonly string[]>([]);
+  const [compKeys, setCompKeys] = React.useState<{ id: string; keys: ReadonlySet<string> } | null>(null);
+  /** An element layer's place: its override's selector and which match. */
+  const elementAt = (row: LayerRow) => ({ at: row.instance ? row.loc.slice(0, -`#${row.instance}`.length) : row.loc, n: row.instance });
+  const compLayers = React.useMemo<Layer[]>(() => {
+    if (!compBlock || !compRows) return [];
+    const out: Layer[] = [];
+    const walk = (rows: readonly LayerRow[], depth: number, parent?: string) => {
+      for (const row of rows) {
+        out.push({ clipId: row.loc, title: row.label, kind: row.kind, startMs: 0, endMs: compBlock.endMs - compBlock.startMs, depth, ...(parent ? { parent } : {}) });
+        walk(row.children ?? [], depth + 1, row.label);
+      }
+    };
+    walk(compRows, 0);
+    return out;
+  }, [compBlock, compRows]);
+  const rowOf = React.useCallback((loc: string): LayerRow | null => {
+    const find = (rows: readonly LayerRow[]): LayerRow | null => {
+      for (const r of rows) { if (r.loc === loc) return r; const inner = find(r.children ?? []); if (inner) return inner; }
+      return null;
+    };
+    return compRows ? find(compRows) : null;
+  }, [compRows]);
+  /* an element's keyframes and tweak written: the clip's overrides, the film's @keyframes, one edit */
+  const writeElement = React.useCallback((loc: string, motion: Motion, stat?: ElementCommit['stat'], style?: Record<string, string | null>) => {
+    const row = rowOf(loc);
+    if (!row || !motionComp) return;
+    const { at, n } = elementAt(row);
+    const list = (compClip?.overrides ?? []) as FilmOverride[];
+    const out = writeElementMotion(list, at, n, elementSubject(motionComp, at, n), motion, stat);
+    let overrides = out.overrides;
+    if (style) {
+      const has = overrides.some((o) => sameElement(o, at, n));
+      overrides = (has ? overrides : [...overrides, { at, ...(n ? { n } : {}) }]).flatMap((o) => {
+        if (!sameElement(o, at, n)) return [o];
+        const css = { ...(o.style ?? {}) } as Record<string, string | number>;
+        for (const [k, v] of Object.entries(style)) { if (v == null) delete css[k]; else css[k] = v; }
+        const next = { ...o, style: css };
+        if (!Object.keys(css).length) delete (next as { style?: unknown }).style;
+        return Object.keys(next).some((k) => k !== 'at' && k !== 'n') ? [next] : [];
+      });
+    }
+    const set = Object.fromEntries(Object.entries(out.keyframes).filter(([name, body]) => body != null || film.film?.keyframes?.[name] != null));
+    void edit([
+      { op: 'props', edits: [{ clip: motionComp, prop: 'overrides', value: overrides.length ? (overrides as unknown as Record<string, unknown>) : null }] },
+      ...(Object.keys(set).length ? [{ op: 'keyframes' as const, set }] : []),
+    ], clipStep('history.stepMoved', [motionComp])).then((err) => { if (err) toast.showError(err); });
+  }, [rowOf, motionComp, compClip, film.film, edit, toast]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* where the page is: its own second at the playhead (the clip plays it from its trim's start) */
+  const compOffset = Array.isArray(compClip?.time) ? Number(compClip!.time[0]) || 0 : 0;
+  const compLocalMs = compBlock ? timeMs - compBlock.startMs : 0;
+  const elementMotionOf = React.useCallback((loc: string): Motion => {
+    const row = rowOf(loc);
+    if (!row || !motionComp) return {};
+    const { at, n } = elementAt(row);
+    const entry = ((compClip?.overrides ?? []) as FilmOverride[]).find((o) => sameElement(o, at, n));
+    return readElementMotion(entry, film.film?.keyframes, elementSubject(motionComp, at, n));
+  }, [rowOf, motionComp, compClip, film.film]); // eslint-disable-line react-hooks/exhaustive-deps
+  const elementHostOf = React.useCallback((layer: Layer): LayerHost => {
+    const row = rowOf(layer.clipId);
+    const entry = row ? ((compClip?.overrides ?? []) as FilmOverride[]).find((o) => sameElement(o, elementAt(row).at, elementAt(row).n)) : undefined;
+    const motion = elementMotionOf(layer.clipId);
+    const on = compBlock != null && compLocalMs >= 0 && compLocalMs <= compBlock.endMs - compBlock.startMs;
+    const model = elementModel(motion, elementStatic(entry), compLocalMs / 1000 + compOffset, on, keyFrameS);
+    const css = (entry?.style ?? {}) as Record<string, string | number>;
+    return {
+      model,
+      commit: (c) => { const k = c as ElementCommit | null; if (k) writeElement(layer.clipId, k.motion, k.stat); },
+      blend: String(css.mixBlendMode ?? 'normal'),
+      setBlend: (mode) => writeElement(layer.clipId, motion, undefined, { mixBlendMode: mode === 'normal' ? null : mode }),
+      visible: !row?.hidden,
+      setVisible: (show) => writeElement(layer.clipId, motion, undefined, { visibility: show ? null : 'hidden' }),
+    };
+  }, [rowOf, compClip, elementMotionOf, compBlock, compLocalMs, compOffset, keyFrameS, writeElement]); // eslint-disable-line react-hooks/exhaustive-deps
+  const elementLanesOf = React.useCallback((layer: Layer): MotionLanes => {
+    const motion = elementMotionOf(layer.clipId);
+    const id = layer.clipId;
+    const picked = compKeys?.id === id ? compKeys.keys : NO_KEYS;
+    const model = elementHostOf(layer).model;
+    return {
+      clipId: id, startMs: -compOffset * 1000, endMs: layer.endMs, playheadMs: compLocalMs, frameMs: 1000 * keyFrameS,
+      rows: MOTION_PROPS.map((prop) => ({ prop, label: t(MOTION_LABEL[prop]), keys: motion[prop] ?? [] })),
+      picked,
+      onPick: (ids, mode) => {
+        setCompPicked([id]);
+        setCompKeys((was) => {
+          const base = was?.id === id ? was.keys : NO_KEYS;
+          if (mode === 'set') return { id, keys: new Set(ids) };
+          const next = new Set(base);
+          for (const k of ids) { if (mode === 'toggle' && next.has(k)) next.delete(k); else next.add(k); }
+          return { id, keys: next };
+        });
+      },
+      onMove: (dt) => { if (picked.size) writeElement(id, movedKeys(motion, picked, dt)); },
+      onToggleHere: (prop) => { const c = model?.toggleHere(prop) as ElementCommit | null; if (c) writeElement(id, c.motion, c.stat); },
+      onSeek: (ms) => { if (compBlock) seek(compBlock.startMs + ms); },
+      onMenu: () => {},
+      graph: motionGraph,
+      onGraph: () => setMotionGraph((v) => !v),
+      onCurve: (prop, at, curve) => {
+        const ease = easeOfBezier(curve);
+        writeElement(id, { ...motion, [prop]: (motion[prop] ?? []).map((k) => {
+          if (k.t !== at) return k;
+          const { ease: _was, ...rest } = k;
+          return ease ? { ...rest, ease } : rest;
+        }) });
+      },
+      onKeyEdit: (prop, at, to) => {
+        const keys = (motion[prop] ?? []).filter((k) => k.t === at || Math.abs(k.t - to.t) >= keyFrameS / 2);
+        writeElement(id, { ...motion, [prop]: keys.map((k) => (k.t === at ? { ...k, t: to.t, v: to.v } : k)).sort((a, b) => a.t - b.t) });
+      },
+      labels: { prev: t('inspector.keyPrev'), next: t('inspector.keyNext'), add: t('inspector.keyAdd'), remove: t('inspector.keyRemove'), graph: t('inspector.keyGraph') },
+    };
+  }, [elementMotionOf, elementHostOf, compKeys, compOffset, compLocalMs, keyFrameS, writeElement, compBlock, seek, motionGraph, t]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* a page layer double-clicked: its composition opened, the playhead brought into it */
+  const openComposition = React.useCallback((layer: Layer) => {
+    const block = blocksRef.current.find((b) => b.clipId === layer.clipId);
+    if (!block || block.kind !== 'mg') return;
+    if (timeRef.current < block.startMs || timeRef.current >= block.endMs) seek(block.startMs);
+    setCompPicked([]);
+    setCompKeys(null);
+    setMotionComp(layer.clipId);
+  }, [seek]);
   const previewClip = React.useCallback((clipLoc: string, patch: Partial<MgTransform> | null) => clipPreviewRef.current?.(clipLoc, patch), []);
   const previewLook = React.useCallback((clipLoc: string, css: string | null) => lookPreviewRef.current?.(clipLoc, css), []);
   /* the inspector's Crop: crop mode on the picture, for the video or still in hand there */
@@ -4076,16 +4217,34 @@ export function ProjectView({ projectId, onProject, onLeave }: {
               <div className={`${PANE} shrink-0 bg-[var(--dock-pane)]`} style={{ height: timelineShownHeight }}>
                 <div className="absolute inset-0 flex min-h-0 min-w-0 flex-col" data-timeline-scope="main" style={{ right: METERS_W }}
                   onPointerDownCapture={() => { if (pickedMedia) pickMedia(null); }}>
-                  {motionOpen ? (
+                  {motionOpen && compBlock ? (
                   <MotionTimeline
+                    key={`comp:${compBlock.clipId}`}
+                    layers={compLayers}
+                    totalMs={compBlock.endMs - compBlock.startMs}
+                    playheadMs={compLocalMs}
+                    fps={projectFps}
+                    onSeek={(ms) => seek(compBlock.startMs + ms)}
+                    picked={compPicked}
+                    onPick={(id, add) => setCompPicked((was) => (add ? (was.includes(id) ? was.filter((x) => x !== id) : [...was, id]) : [id]))}
+                    lanesOf={elementLanesOf}
+                    hostOf={elementHostOf}
+                    workArea={null}
+                    onWorkArea={() => {}}
+                    crumb={{ outer: loaded?.project.name ?? '', name: compBlock.title || compBlock.clipId || '', onBack: () => setMotionComp(null) }}
+                    t={t}
+                  />
+                  ) : motionOpen ? (
+                  <MotionTimeline
+                    onOpen={openComposition}
                     layers={motionLayers}
                     totalMs={totalMs}
                     playheadMs={timeMs}
                     onSeek={seek}
                     picked={selectedBlocks.flatMap((b) => (b.clipId ? [b.clipId] : []))}
                     onPick={(id, add) => setSelectedKeys((was) => (add ? (was.includes(id) ? was.filter((x) => x !== id) : [...was, id]) : [id]))}
-                    lanesOf={lanesOf}
-                    hostOf={layerHostOf}
+                    lanesOf={(l) => lanesOf(l as TimelineBlock & { clipId: string })}
+                    hostOf={(l) => layerHostOf(l as TimelineBlock & { clipId: string })}
                     fps={projectFps}
                     onMoveLayer={moveLayer}
                     onTrimLayer={trimLayer}

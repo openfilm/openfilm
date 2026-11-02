@@ -11,24 +11,39 @@
  * The work area (the film's marked range) is the bar over the ruler; the slider under the layers zooms the time.
  */
 import * as React from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff } from 'lucide-react';
 import type { MotionProp } from '../../../../src/clip-motion.mjs';
-import type { TimelineBlock } from '@/lib/timeline-layout';
 import type { FilmRange } from '@/lib/studio-refs';
 import { BLEND_MODES } from '@/lib/clip-look';
 import { formatTimecode } from '@/lib/timecode';
-import type { transformModel, TransformCommit } from './KeyframesSection';
 import { Stopwatch } from './KeyframesSection';
 import { LANE_H, LANE_PAD, MotionLaneHeads, MotionLaneRows, lanesHeight, type MotionLanes } from './MotionLanes';
 
-export type Layer = TimelineBlock & { clipId: string };
+/**
+ * A layer: a clip of the film, or an element of a page (a composition opened); `clipId` names it (an element's is
+ * where it is). `depth` and `parent`: where it is nested, an element in another.
+ */
+export interface Layer { clipId: string; title?: string; kind: string; startMs: number; endMs: number; depth?: number; parent?: string }
 
-/** What a layer is and does beyond its keyframes: its Transform's numbers, how it blends. */
+/** A layer's Transform as numbers (KeyframesSection transformModel, lib/element-motion elementModel). */
+export interface TransformNumbers {
+  on: boolean;
+  now: (prop: MotionProp) => number | [number, number];
+  set: (prop: MotionProp, n: number | [number, number]) => unknown;
+  stopwatch: (prop: MotionProp) => unknown;
+  toggleHere: (prop: MotionProp) => unknown;
+}
+
+/** What a layer is and does beyond its keyframes: its Transform's numbers, how it blends, whether it shows. */
 export interface LayerHost {
-  model: ReturnType<typeof transformModel> | null;
-  commit: (c: TransformCommit | null) => void;
+  model: TransformNumbers | null;
+  /** A change the model worked out, written (null: nothing). */
+  commit: (c: unknown) => void;
   blend: string;
   setBlend: (mode: string) => void;
+  /** Only where a layer can be hidden on its own (an element of a page). */
+  visible?: boolean;
+  setVisible?: (on: boolean) => void;
 }
 
 export interface MotionTimelineProps {
@@ -42,9 +57,13 @@ export interface MotionTimelineProps {
   onPick: (clipId: string, add: boolean) => void;
   lanesOf: (layer: Layer) => MotionLanes;
   hostOf: (layer: Layer) => LayerHost;
-  /** A layer moved in time, or one of its ends (trimmed). */
-  onMoveLayer: (clipId: string, deltaMs: number) => void;
-  onTrimLayer: (clipId: string, edge: 'start' | 'end', deltaMs: number) => void;
+  /** A layer moved in time, or one of its ends (trimmed); none: its bar stays (an element plays all its page). */
+  onMoveLayer?: (clipId: string, deltaMs: number) => void;
+  onTrimLayer?: (clipId: string, edge: 'start' | 'end', deltaMs: number) => void;
+  /** A layer double-clicked: its composition opened (a page's elements); none where it has none. */
+  onOpen?: (layer: Layer) => void;
+  /** The composition open, and the way back to the film. */
+  crumb?: { outer: string; name: string; onBack: () => void } | null;
   /** The work area: the film's marked range. */
   workArea: FilmRange | null;
   onWorkArea: (range: FilmRange | null) => void;
@@ -57,12 +76,13 @@ const RULER_H = 30;
 /** The switches' column (the keyframe navigator on a property's row). */
 const AV_W = 58;
 const MODE_W = 92;
+const PARENT_W = 84;
 /** The keys that show one property. */
 const SOLO: Record<string, MotionProp> = { p: 'translate', s: 'scale', r: 'rotate', t: 'opacity' };
 const ALL: readonly MotionProp[] = ['translate', 'scale', 'rotate', 'opacity'];
 const PROP_LABEL: Record<MotionProp, string> = { translate: 'inspector.keyPosition', scale: 'inspector.keyScale', rotate: 'inspector.keyRotate', opacity: 'inspector.keyOpacity' };
 /** A layer's label color by what it is, as an animation editor gives each kind its own. */
-const LABEL: Record<string, string> = { video: '#4ca3ad', mg: '#a594d6', still: '#c7a35f' };
+const LABEL: Record<string, string> = { video: '#4ca3ad', mg: '#a594d6', still: '#c7a35f', text: '#d0706f', image: '#c7a35f', shape: '#5b8fd6', box: '#8c9a6b', group: '#8a8f98' };
 const labelOf = (layer: Layer) => LABEL[layer.kind] ?? '#8a8f98';
 
 /** Follow the pointer from a press: `move` with how far it went (px), `done` on letting go. */
@@ -128,6 +148,9 @@ function Scrub({ value, onCommit, step = 1, digits = 1, unit, disabled, label }:
 export function MotionTimeline(p: MotionTimelineProps) {
   const { layers, totalMs, playheadMs, fps, onSeek, picked, onPick, lanesOf, hostOf, t } = p;
   const scroller = React.useRef<HTMLDivElement | null>(null);
+  /* a parent's column only where layers are nested (a page's elements) */
+  const hasParents = layers.some((l) => (l.depth ?? 0) > 0);
+  const headW = HEAD_W + (hasParents ? PARENT_W : 0);
   const [width, setWidth] = React.useState(800);
   React.useLayoutEffect(() => {
     const el = scroller.current;
@@ -139,7 +162,7 @@ export function MotionTimeline(p: MotionTimelineProps) {
   }, []);
   /* the time's zoom: 1 is the whole film across */
   const [zoom, setZoom] = React.useState(1);
-  const fitW = Math.max(100, width - HEAD_W - 24);
+  const fitW = Math.max(100, width - headW - 24);
   const timeW = fitW * zoom;
   const pxPerMs = timeW / Math.max(totalMs, 1000);
 
@@ -225,12 +248,13 @@ export function MotionTimeline(p: MotionTimelineProps) {
     if (e.button !== 0) return;
     e.stopPropagation();
     onPick(layer.clipId, e.shiftKey || e.metaKey || e.ctrlKey);
+    if (kind === 'move' ? !p.onMoveLayer : !p.onTrimLayer) return;
     follow(e, (dx) => setBarDrag({ id: layer.clipId, kind, dms: snapMs(dx / pxPerMs) }), (dx, moved) => {
       setBarDrag(null);
       const dms = snapMs(dx / pxPerMs);
       if (!moved || !dms) return;
-      if (kind === 'move') p.onMoveLayer(layer.clipId, dms);
-      else p.onTrimLayer(layer.clipId, kind, dms);
+      if (kind === 'move') p.onMoveLayer?.(layer.clipId, dms);
+      else p.onTrimLayer?.(layer.clipId, kind, dms);
     });
   };
   /* the work area's ends, dragged */
@@ -247,14 +271,25 @@ export function MotionTimeline(p: MotionTimelineProps) {
   const head = 'sticky left-0 z-10 shrink-0 bg-[var(--dock-pane)]';
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden text-[12px]" data-motion-timeline="">
+      {p.crumb ? (
+        <div className="flex h-[24px] shrink-0 items-center gap-1 border-b border-[var(--dock-line)] px-2 text-[12px]">
+          <button type="button" data-composition-back="" onClick={p.crumb.onBack}
+            className="flex items-center gap-1 rounded-[4px] px-1 text-[var(--text-muted)] hover:bg-white/10 hover:text-[var(--text)]">
+            <ChevronLeft size={13} />{p.crumb.outer}
+          </button>
+          <span className="text-[var(--text-faint)]">/</span>
+          <span className="truncate font-medium text-[var(--text)]">{p.crumb.name}</span>
+        </div>
+      ) : null}
       <div ref={scroller} className="min-h-0 flex-1 overflow-auto">
-        <div className="relative" style={{ width: HEAD_W + timeW + 24 }}>
+        <div className="relative" style={{ width: headW + timeW + 24 }}>
           {/* the current time, the columns' names, the work area and the ruler, kept in sight */}
           <div className="sticky top-0 z-20 flex border-b border-[var(--dock-line)] bg-[var(--dock-pane)]" style={{ height: RULER_H }}>
-            <div className={`${head} z-30 flex items-end border-r border-[var(--dock-line)] pb-1`} style={{ width: HEAD_W }}>
+            <div className={`${head} z-30 flex items-end border-r border-[var(--dock-line)] pb-1`} style={{ width: headW }}>
               <span className="px-2 pb-[1px] text-[15px] font-medium leading-none tabular-nums text-[#4ea1ff]" data-motion-time="">{formatTimecode(playheadMs, { fps })}</span>
               <span className="ml-auto flex text-[10.5px] text-[var(--text-faint)]">
                 <span style={{ width: MODE_W }}>{t('canvas.motionMode')}</span>
+                {hasParents ? <span style={{ width: PARENT_W }}>{t('canvas.motionParent')}</span> : null}
               </span>
             </div>
             <div className="relative cursor-ew-resize" style={{ width: timeW }} onPointerDown={scrub}>
@@ -286,9 +321,17 @@ export function MotionTimeline(p: MotionTimelineProps) {
             return (
               <div key={layer.clipId} data-motion-layer={layer.clipId} className="border-b border-[var(--dock-line)]">
                 <div className="flex" style={{ height: LAYER_H }}>
-                  <div className={`sticky left-0 z-10 flex shrink-0 items-center border-r border-[var(--dock-line)] ${tint}`} style={{ width: HEAD_W }}
+                  <div className={`sticky left-0 z-10 flex shrink-0 items-center border-r border-[var(--dock-line)] ${tint}`} style={{ width: headW }}
                     onPointerDown={(e) => { if (e.button === 0) onPick(layer.clipId, e.shiftKey || e.metaKey || e.ctrlKey); }}>
-                    <span className="shrink-0" style={{ width: AV_W }} />
+                    <span className="flex shrink-0 items-center pl-1" style={{ width: AV_W }}>
+                      {host.setVisible ? (
+                        <button type="button" aria-label={t('canvas.motionVisible')} aria-pressed={host.visible} data-layer-eye={layer.clipId}
+                          onPointerDown={(e) => e.stopPropagation()} onClick={() => host.setVisible?.(!host.visible)}
+                          className="grid h-[18px] w-[18px] place-items-center rounded-[3px] text-[var(--text-muted)] hover:bg-white/10">
+                          {host.visible ? <Eye size={12} /> : <EyeOff size={12} className="opacity-50" />}
+                        </button>
+                      ) : null}
+                    </span>
                     <button type="button" aria-label={t('inspector.transform')} aria-expanded={Boolean(props)} data-twirl={layer.clipId}
                       onPointerDown={(e) => e.stopPropagation()} onClick={() => toggle(layer.clipId)}
                       className="grid h-[18px] w-[16px] shrink-0 place-items-center rounded-[3px] text-[var(--text-muted)] hover:bg-white/10">
@@ -296,25 +339,36 @@ export function MotionTimeline(p: MotionTimelineProps) {
                     </button>
                     <span className="mx-1 h-[10px] w-[10px] shrink-0 rounded-[2px]" style={{ background: labelOf(layer) }} />
                     <span className="w-[20px] shrink-0 text-center text-[11px] tabular-nums text-[var(--text-faint)]">{i + 1}</span>
-                    <span className={`min-w-0 flex-1 truncate pl-1 ${on ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`} title={layer.title}>{layer.title || layer.clipId}</span>
+                    <span className={`min-w-0 flex-1 truncate pl-1 ${on ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`} title={layer.title}
+                      style={{ paddingLeft: 4 + (layer.depth ?? 0) * 12 }}
+                      onDoubleClick={() => p.onOpen?.(layer)}>{layer.title || layer.clipId}</span>
                     {moving ? <svg className="mr-1 shrink-0" width="7" height="7" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1 11 6 6 11 1 6Z" fill="var(--tl-accent)" /></svg> : null}
                     <select aria-label={t('canvas.motionMode')} value={host.blend} data-layer-mode={layer.clipId}
                       onPointerDown={(e) => e.stopPropagation()} onChange={(e) => host.setBlend(e.target.value)}
                       className="mr-1 h-[18px] shrink-0 rounded-[3px] border border-[var(--dock-line)] bg-transparent px-1 text-[11px] text-[var(--text-muted)]" style={{ width: MODE_W - 6 }}>
                       {BLEND_MODES.map((mode) => <option key={mode} value={mode}>{t(`inspector.blendModes.${mode}`)}</option>)}
                     </select>
+                    {hasParents ? (
+                      <span className="shrink-0 truncate pr-1 text-[11px] text-[var(--text-faint)]" style={{ width: PARENT_W }} title={layer.parent}>{layer.parent ?? t('canvas.motionNone')}</span>
+                    ) : null}
                   </div>
                   <div className="relative" style={{ width: timeW }} onPointerDown={(e) => { if (e.button === 0) onPick(layer.clipId, e.shiftKey || e.metaKey || e.ctrlKey); }}>
                     <div data-layer-bar={layer.clipId}
-                      className="group/bar absolute inset-y-[3px] cursor-grab rounded-[3px]"
+                      className={`group/bar absolute inset-y-[3px] rounded-[3px] ${p.onMoveLayer ? 'cursor-grab' : ''}`}
                       style={{
                         left: startMs * pxPerMs, width: Math.max(4, (endMs - startMs) * pxPerMs),
                         background: `color-mix(in srgb, ${labelOf(layer)} ${on ? 70 : 42}%, transparent)`,
                         boxShadow: on ? 'inset 0 0 0 1px rgba(255,255,255,0.75)' : 'inset 0 0 0 1px rgba(255,255,255,0.08)',
+                        opacity: host.visible === false ? 0.4 : 1,
                       }}
-                      onPointerDown={(e) => pressBar(e, layer, 'move')}>
-                      <span className="absolute inset-y-0 left-0 w-[6px] cursor-ew-resize rounded-l-[3px] hover:bg-white/40" data-layer-in={layer.clipId} onPointerDown={(e) => pressBar(e, layer, 'start')} />
-                      <span className="absolute inset-y-0 right-0 w-[6px] cursor-ew-resize rounded-r-[3px] hover:bg-white/40" data-layer-out={layer.clipId} onPointerDown={(e) => pressBar(e, layer, 'end')} />
+                      onPointerDown={(e) => pressBar(e, layer, 'move')}
+                      onDoubleClick={() => p.onOpen?.(layer)}>
+                      {p.onTrimLayer ? (
+                        <>
+                          <span className="absolute inset-y-0 left-0 w-[6px] cursor-ew-resize rounded-l-[3px] hover:bg-white/40" data-layer-in={layer.clipId} onPointerDown={(e) => pressBar(e, layer, 'start')} />
+                          <span className="absolute inset-y-0 right-0 w-[6px] cursor-ew-resize rounded-r-[3px] hover:bg-white/40" data-layer-out={layer.clipId} onPointerDown={(e) => pressBar(e, layer, 'end')} />
+                        </>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -322,14 +376,14 @@ export function MotionTimeline(p: MotionTimelineProps) {
                   <>
                     {/* its Transform group, as the editor names it */}
                     <div className="flex" style={{ height: 20 }}>
-                      <div className={`${head} flex items-center border-r border-[var(--dock-line)] text-[11.5px] text-[var(--text-muted)]`} style={{ width: HEAD_W, paddingLeft: AV_W + 18 }}>
+                      <div className={`${head} flex items-center border-r border-[var(--dock-line)] text-[11.5px] text-[var(--text-muted)]`} style={{ width: headW, paddingLeft: AV_W + 18 }}>
                         <ChevronDown size={11} className="mr-1" /> {t('inspector.transform')}
                       </div>
                       <div style={{ width: timeW }} />
                     </div>
                     {lanes.rows.length ? (
                       <div className="flex" style={{ height: lanesHeight(lanes) }}>
-                        <div className={`${head} border-r border-[var(--dock-line)]`} style={{ width: HEAD_W, paddingTop: LANE_PAD / 2 }}>
+                        <div className={`${head} border-r border-[var(--dock-line)]`} style={{ width: headW, paddingTop: LANE_PAD / 2 }}>
                           {lanes.graph ? <MotionLaneHeads lanes={lanes} /> : lanes.rows.map((row) => (
                             <PropertyHead key={row.prop} layer={layer} lanes={lanes} prop={row.prop} host={host} t={t} />
                           ))}
@@ -344,12 +398,12 @@ export function MotionTimeline(p: MotionTimelineProps) {
           })}
           <div style={{ height: 24 }} />
           {/* the playhead, over the ruler and every layer */}
-          <div className="pointer-events-none absolute bottom-0 top-0 z-[15] w-px bg-[#4ea1ff]" style={{ left: HEAD_W + playheadMs * pxPerMs }} />
+          <div className="pointer-events-none absolute bottom-0 top-0 z-[15] w-px bg-[#4ea1ff]" style={{ left: headW + playheadMs * pxPerMs }} />
         </div>
       </div>
       {/* the time's zoom, under the layers as there */}
       <div className="flex h-[24px] shrink-0 items-center gap-2 border-t border-[var(--dock-line)] px-2 text-[var(--text-faint)]">
-        <span className="text-[10.5px]" style={{ width: HEAD_W - 16 }}>{t('canvas.motionZoom')}</span>
+        <span className="text-[10.5px]" style={{ width: headW - 16 }}>{t('canvas.motionZoom')}</span>
         <input type="range" aria-label={t('canvas.motionZoom')} min={0} max={100} value={Math.round((Math.log(zoom) / Math.log(40)) * 100)}
           onChange={(e) => setZoom(40 ** (Number(e.target.value) / 100))} className="w-[160px]" data-motion-zoom="" />
       </div>

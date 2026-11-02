@@ -8,10 +8,12 @@
  * Overrides: a person's tweak of one element inside a page, applied after the page draws each frame. `found` keeps,
  * per tweak, whether its selector ever found an element (a page rewritten since may have lost it). What a tweak
  * changes is remembered as it was before (`touched`), so a tweak taken away, or changed, leaves nothing behind.
+ * A tweak's `animation` plays the film's @keyframes (`keyframes`, name → body): those it names are put in the page.
  */
-export function override(c, list = []) {
+export function override(c, list = [], keyframes = null) {
   const win = c.win;
   if (!win) return;
+  keyframesIn(win.document, list, keyframes);
   const touch = (el, prop) => {
     let saved = c.touched.get(el);
     if (!saved) { saved = { props: new Map(), texts: null }; c.touched.set(el, saved); }
@@ -52,6 +54,25 @@ export function override(c, list = []) {
       }
     }
   }
+}
+
+/** The film's @keyframes the tweaks' animations name, in a <style> of the page's own (none named: taken out). */
+function keyframesIn(page, list, keyframes) {
+  const names = new Set();
+  for (const o of list) {
+    const anim = o.at !== undefined && o.style?.animation;
+    if (typeof anim === 'string') for (const entry of anim.split(',')) names.add(entry.trim().split(/\s+/)[0]);
+  }
+  const text = [...names].filter((n) => keyframes?.[n] != null).map((n) => `@keyframes ${n} { ${keyframes[n]} }`).join('\n');
+  if (!text && typeof page?.querySelector !== 'function') return;
+  let tag = page.querySelector('style[data-film-keyframes]');
+  if (!text) { tag?.remove(); return; }
+  if (!tag) {
+    tag = page.createElement('style');
+    tag.setAttribute('data-film-keyframes', '');
+    (page.head ?? page.documentElement).append(tag);
+  }
+  if (tag.textContent !== text) tag.textContent = text;
 }
 
 /** An element's words with a line break for each <br>, as a `text` override writes them. */
