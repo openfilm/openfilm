@@ -33,14 +33,20 @@ interface Choice {
 
 export function ModelsSection() {
   const t = useT();
-  const hook = useProviders();
+  const got = useProviders();
+  /* Local models' name said in the person's language (the server's is English) */
+  const hook = { ...got, state: got.state && { ...got.state, providers: got.state.providers.map((p) => (p.id === 'local' ? { ...p, name: t('settings.local.name') } : p)) } };
   const local = useLocalModels();
+  /* a Local model that came, went, or was turned on or off changes what can make each kind */
+  const usable = (local.models ?? []).filter((m) => m.on).map((m) => m.id).join();
+  React.useEffect(() => { if (local.models) void got.reload(); }, [usable]); // eslint-disable-line react-hooks/exhaustive-deps
   const state = hook.state;
   /* the card open over the page: a provider's id, 'local' (Local models), or 'add' */
   const [card, setCard] = React.useState<string | null>(null);
   /* asks the custom services to open their form (counted, so asking again opens it again) */
   const [addCustom, setAddCustom] = React.useState(0);
-  const shown = state?.providers.find((p) => p.id === card) ?? null;
+  /* Local models opens its own card (LocalModelsDialog), not a service's */
+  const shown = card === 'local' ? null : state?.providers.find((p) => p.id === card) ?? null;
   const row = (verb: ProviderVerb) => <ModelRow key={verb} verb={verb} hook={hook} onConnect={setCard} />;
 
   return (

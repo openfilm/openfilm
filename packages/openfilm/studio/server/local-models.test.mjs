@@ -6,15 +6,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, test } from 'node:test';
 
-/* the model as the library publishes it: two small files, listed with their sums in the package's models.json */
+/* the models as the library publishes them: the search's two small files, listed with their sums in the package's
+   models.json, and a transcription model's one in local-models.json */
 const host = mkdtempSync(join(tmpdir(), 'library-host-'));
 const files = { 'models/multilingual-e5-small/model_quantized.onnx': 'onnx bytes', 'models/multilingual-e5-small/vocab.bin': 'vocab bytes' };
-for (const [rel, body] of Object.entries(files)) { mkdirSync(join(host, rel, '..'), { recursive: true }); writeFileSync(join(host, rel), body); }
+const whisper = { 'models/whisper-small/config.json': '{}' };
+for (const [rel, body] of Object.entries({ ...files, ...whisper })) { mkdirSync(join(host, rel, '..'), { recursive: true }); writeFileSync(join(host, rel), body); }
+const listed = (/** @type {Record<string, string>} */ some) => Object.entries(some).map(([path, body]) => ({ path, bytes: body.length, sha256: createHash('sha256').update(body).digest('hex') }));
 const pkg = mkdtempSync(join(tmpdir(), 'library-package-'));
 writeFileSync(join(pkg, 'models.json'), JSON.stringify({
-  version: 1, model: 'multilingual-e5-small', dims: 384, onnx: Object.keys(files)[0], tokenizer: Object.keys(files)[1], runtime: '',
-  files: Object.entries(files).map(([path, body]) => ({ path, bytes: body.length, sha256: createHash('sha256').update(body).digest('hex') })),
+  version: 1, model: 'multilingual-e5-small', dims: 384, onnx: Object.keys(files)[0], tokenizer: Object.keys(files)[1], runtime: '', files: listed(files),
 }));
+writeFileSync(join(pkg, 'local-models.json'), JSON.stringify({ version: 1, models: [{ id: 'whisper-small', files: listed(whisper) }] }));
 const library = createServer((req, res) => {
   try { res.end(readFileSync(join(host, decodeURIComponent(req.url ?? '').replace(/^\/library\//, '')))); } catch { res.writeHead(404); res.end(); }
 });
@@ -27,6 +30,8 @@ before(async () => {
   process.env.OPENFILM_LIBRARY_URL = `http://127.0.0.1:${/** @type {import('node:net').AddressInfo} */ (library.address()).port}/library`;
   process.env.OPENFILM_LIBRARY_CACHE = mkdtempSync(join(tmpdir(), 'library-cache-'));
   process.env.OPENFILM_BUILT_IN_LIBRARY = pkg;
+  /* the choices of Settings → Services, which a model coming or going moves: the test's own */
+  process.env.OPENFILM_HOME = mkdtempSync(join(tmpdir(), 'local-models-home-'));
   const { localModelsRoute } = await import('./local-models.mjs');
   const { json } = await import('./http.mjs');
   api = createServer((req, res) => {
@@ -46,7 +51,8 @@ const call = async (/** @type {string} */ path, method = 'GET', body = undefined
 test('a local model is installed, turned off and on, and uninstalled, and a search never fetches it once it is off', async () => {
   const { semanticState } = await import('../../src/library-semantic.mjs');
   let { models } = await call('');
-  assert.deepEqual(models?.map((m) => [m.id, m.kind, m.by, m.installed, m.on, m.builtIn]), [['multilingual-e5-small', 'search', 'Microsoft', false, false, false]]);
+  assert.deepEqual(models?.map((m) => [m.id, m.kind, m.by, m.installed, m.on, m.builtIn]), [
+    ['multilingual-e5-small', 'search', 'Microsoft', false, false, false], ['whisper-small', 'asr', 'OpenAI', false, false, false]]);
   assert.equal(models?.[0].bytes, 21, 'its files\' size');
 
   assert.equal((await call('/multilingual-e5-small', 'PUT', { on: true })).status, 409, 'not before it is installed');
@@ -80,4 +86,25 @@ test('a model that is part of the checkout cannot be uninstalled', async () => {
   const { models } = await call('/multilingual-e5-small/install', 'POST');
   assert.deepEqual([models?.[0].installed, models?.[0].builtIn], [true, true]);
   assert.equal((await call('/multilingual-e5-small', 'DELETE')).status, 409);
+});
+
+test('a transcription model installed makes transcripts when nothing else was chosen for them, and uninstalled stops', async () => {
+  const { readSettings } = await import('./keys.mjs');
+  const { chooseProvider } = await import('./providers/index.mjs');
+  assert.equal(await chooseProvider('asr'), null);
+  let { models } = await call('/whisper-small/install', 'POST');
+  for (let i = 0; i < 100 && !models?.find((m) => m.id === 'whisper-small').installed; i++) {
+    await new Promise((done) => setTimeout(done, 100));
+    ({ models } = await call(''));
+  }
+  assert.equal((await readSettings()).use.asr, 'local', 'the kind goes to it once it is here');
+  assert.equal((await chooseProvider('asr'))?.id, 'local');
+  await assert.rejects(chooseProvider('cutout', { via: 'local' }), /No local model for cutout is installed/);
+
+  await call('/whisper-small', 'PUT', { on: false });
+  assert.equal((await readSettings()).use.asr, undefined, 'off: it makes nothing');
+  await call('/whisper-small', 'PUT', { on: true });
+  assert.equal((await readSettings()).use.asr, 'local');
+  await call('/whisper-small', 'DELETE');
+  assert.equal((await readSettings()).use.asr, undefined);
 });

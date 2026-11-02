@@ -6,7 +6,7 @@
  */
 import React from 'react';
 
-export type ProviderVerb = 'voice' | 'tts' | 'sfx' | 'music' | 'asr' | 'image-search' | 'image' | 'video' | 'translate' | 'web-search' | 'web-fetch';
+export type ProviderVerb = 'voice' | 'tts' | 'sfx' | 'music' | 'asr' | 'cutout' | 'image-search' | 'image' | 'video' | 'translate' | 'web-search' | 'web-fetch';
 
 
 export interface OwnProvider {
@@ -101,7 +101,7 @@ export const USE_VERBS: ProviderVerb[] = ['tts', 'music', 'sfx', 'asr', 'image',
  * Every kind Settings › Services lets the person choose what makes: media, and web search for an agent that has none
  * of its own. Translating subtitles is the agent's model's work.
  */
-export const SERVICE_VERBS: ProviderVerb[] = ['tts', 'music', 'sfx', 'asr', 'image', 'image-search', 'video', 'web-search'];
+export const SERVICE_VERBS: ProviderVerb[] = ['tts', 'music', 'sfx', 'asr', 'cutout', 'image', 'image-search', 'video', 'web-search'];
 
 /** Each provider's website, as its card links it. */
 export const PROVIDER_SITES: Readonly<Record<string, string>> = {
@@ -138,6 +138,8 @@ export interface ProvidersHook {
   cancelSignIn: (id: string) => Promise<void>;
   /** who makes that kind of media: a provider id with its model, or '' (none) */
   choose: (verb: ProviderVerb, provider: string, pick?: { model?: string }) => Promise<void>;
+  /** the state asked again (what Local models makes changed) */
+  reload: () => Promise<void>;
   /** one of the person's own services added (id null) or changed; resolves whether it was kept */
   saveService: (id: string | null, fields: OwnServiceFields) => Promise<boolean>;
   removeService: (id: string) => Promise<void>;
@@ -194,5 +196,7 @@ export function useProviders(): ProvidersHook {
     choose: async (verb, provider, pick) => { await change(verb, '/use', { method: 'PUT', json: { verb, provider: provider || null, ...pick } }); },
     saveService: (id, fields) => change(id ?? 'custom', id ? `/custom/${encodeURIComponent(id)}` : '/custom', { method: id ? 'PUT' : 'POST', json: fields }),
     removeService: async (id) => { await change(id, `/custom/${encodeURIComponent(id)}`, { method: 'DELETE' }); },
+    /* asked again: what Local models makes changed (a model came, went, or was turned on or off) */
+    reload: async () => { await call('').then(setState, () => {}); },
   };
 }

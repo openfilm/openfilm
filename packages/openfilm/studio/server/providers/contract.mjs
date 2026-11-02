@@ -11,6 +11,7 @@
  *   sfx           sound effect                 --out --prompt --sec
  *   music         music                        --out --prompt --sec
  *   asr           transcribe a project file    --src --force
+ *   cutout        a picture's background out   --src --out
  *   image-search  find pictures on the web     --out --prompt --n
  *   image         make a picture               --out --prompt --ratio --quality --transparent
  *   video         make a video clip            --out --prompt --duration --aspect-ratio --first-frame --last-frame
@@ -23,7 +24,7 @@
  */
 
 /**
- * @typedef {'voice' | 'tts' | 'sfx' | 'music' | 'asr' | 'image-search' | 'image' | 'video' | 'translate' | 'web-search' | 'web-fetch'} Verb
+ * @typedef {'voice' | 'tts' | 'sfx' | 'music' | 'asr' | 'cutout' | 'image-search' | 'image' | 'video' | 'translate' | 'web-search' | 'web-fetch'} Verb
  */
 
 /**
@@ -81,6 +82,7 @@
  *   signIn?: import('../sign-in.mjs').SignIn,
  *   refresh?: (options?: { force?: boolean }) => Promise<void>,
  *   keyless?: boolean,
+ *   ready?: () => boolean,
  *   speechFormat?: 'mp3',
  *   run: (verb: Verb, args: Record<string, unknown>, ctx: RunContext) => Promise<RunResult>,
  * }} Provider
@@ -95,6 +97,7 @@
  * reached.
  * `keyless`: it also works with no key (a free tier), so the person can connect it with one click and add a key for
  * higher limits. Connected without one, its `key` is ''. Like every provider, it serves nothing until it is connected.
+ * `ready`: it takes no key at all (Local models): connected while it can run, which it says.
  * `billingUrl`: the provider's own page where the person tops up its balance. A run that fails because the account has
  * no balance left throws an Error with `code: 'balance'` (common.mjs `noBalance`), the same for every provider: the
  * person is told in Studio, with this page, and the agent is told to stop.

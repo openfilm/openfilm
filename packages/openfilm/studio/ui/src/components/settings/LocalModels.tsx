@@ -1,18 +1,19 @@
 /**
  * Local models in Settings → Services: the service of the models that run on this computer (lib/local-models), its
  * chip second, after OpenFilm. Unlike the others it is not connected: its card lists its models by what they are for,
- * each with where it stands, in its own color: not installed (Install), coming (how far), on, or off. A model opens its
+ * each with where it stands, in its own color: not installed (Install; its last download failed, in red), coming (how
+ * far), on, or off. A model opens its
  * own page in the card: who made it, what it does, its size, memory and license, where it is used, and managing it
  * (install, turn on or off, uninstall).
  */
 import React from 'react';
-import { ArrowLeft, ChevronRight, Cpu, ExternalLink, ScanSearch } from 'lucide-react';
+import { ArrowLeft, Captions, ChevronRight, Cpu, ExternalLink, ScanSearch, Scissors } from 'lucide-react';
 import { useT } from '@/i18n';
 import { LOCAL_KINDS, sizeText, type LocalKind, type LocalModel, type LocalModelsHook } from '@/lib/local-models';
 import { Card } from './ProvidersSection';
 import { SettingsButton, SettingsSwitch, settingsError } from './ui';
 
-const KIND_ICON: Record<LocalKind, React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>> = { search: ScanSearch };
+const KIND_ICON: Record<LocalKind, React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>> = { asr: Captions, cutout: Scissors, search: ScanSearch };
 
 const chipClass = 'inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-[14px] transition hover:border-[var(--border-strong)] hover:text-[var(--text)]';
 
@@ -45,7 +46,7 @@ function Status({ model }: { model: LocalModel }) {
       </span>
     );
   }
-  if (!model.installed) return <span className="text-[13px] text-[var(--text-faint)]">{t('settings.local.none')}</span>;
+  if (!model.installed) return <span className={`text-[13px] ${model.failed ? 'text-[var(--err)]' : 'text-[var(--text-faint)]'}`}>{t(model.failed ? 'settings.local.failed' : 'settings.local.none')}</span>;
   return model.on
     ? <span className="flex items-center gap-1.5 text-[13px] font-medium text-[var(--ok)]"><span className="h-2 w-2 rounded-full bg-[var(--ok)]" />{t('settings.local.on')}</span>
     : <span className="flex items-center gap-1.5 text-[13px] text-[var(--text-muted)]"><span className="h-2 w-2 rounded-full border-[1.5px] border-[var(--text-faint)]" />{t('settings.local.off')}</span>;
@@ -82,7 +83,7 @@ export function LocalModelsDialog({ hook, onClose }: { hook: LocalModelsHook; on
                   className="-mx-2 flex cursor-pointer items-center gap-3 rounded-[8px] px-2 py-3 outline-none transition hover:bg-[var(--bg-hover)] focus-visible:bg-[var(--bg-hover)]">
                   <div className="min-w-0 flex-1">
                     <div className={`truncate text-[14.5px] font-medium ${m.installed ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>{m.name}</div>
-                    <div className="mt-0.5 truncate text-[12.5px] text-[var(--text-faint)]">{m.by} · {sizeText(m.bytes)}</div>
+                    <div className="mt-0.5 truncate text-[12.5px] text-[var(--text-faint)]">{m.by} · {sizeText(m.bytes)}{m.failed ? <span className="text-[var(--err)]"> · {t('settings.local.failed')}</span> : null}</div>
                   </div>
                   {!m.installed && !m.installing
                     ? <SettingsButton onClick={(e) => { e.stopPropagation(); void hook.install(m.id); }}>{t('settings.local.install')}</SettingsButton>
@@ -129,7 +130,7 @@ function ModelPage({ model, hook, onBack }: { model: LocalModel; hook: LocalMode
         <div className="flex shrink-0 items-center gap-2 pt-1">
           {model.installed ? <SettingsSwitch checked={model.on} onChange={(on) => void hook.turn(model.id, on)} label={t('settings.local.enabled')} />
             : model.installing ? null
-              : <SettingsButton variant="primary" onClick={() => void hook.install(model.id)}>{t('settings.local.installSize').replace('{size}', sizeText(model.bytes))}</SettingsButton>}
+              : <SettingsButton variant="primary" onClick={() => void hook.install(model.id)}>{t(model.failed ? 'settings.local.retry' : 'settings.local.installSize').replace('{size}', sizeText(model.bytes))}</SettingsButton>}
         </div>
       </div>
       {model.installing ? (

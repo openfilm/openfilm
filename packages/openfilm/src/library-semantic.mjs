@@ -14,18 +14,17 @@
  * model); a Studio running keeps it loaded, and the CLI asks it first (studio/client.mjs getMedia).
  *
  * Only the vectors come with the package. The first search fetches the rest in the background, in a process of its own
- * (`node src/library-semantic.mjs fetch`), so that search answers at once with keywords; each file is checked against
- * models.json and kept in the library's cache for every OpenFilm here. Offline, or a file that does not check: keyword
+ * (local-models.mjs), so that search answers at once with keywords; each file is checked against models.json and kept
+ * in the library's cache for every OpenFilm here. Offline, or a file that does not check: keyword
  * search, and another try an hour later. Nothing is sent anywhere: the question is turned into a vector here.
  * Settings → Services → Local models can turn it off (kept, not used: keyword search) or remove it (thrown away, and
- * off, so that no search fetches it again); turning it on again fetches it at once (local-models.mjs).
+ * off, so that no search fetches it again); turning it on again fetches it at once.
  */
-import { spawn } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { builtInRoot, fetchLibrary, libraryCache, libraryFile } from '../studio/server/library.mjs';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { builtInRoot, libraryFile } from '../studio/server/library.mjs';
+import { fetchModel as fetchEntry, modelOn, modelReady, modelState, setModelOn } from './local-models.mjs';
 
 /** @typedef {{ path: string, bytes: number, sha256: string }} ModelFile */
 /** @typedef {{ version: number, model: string, dims: number, onnx: string, tokenizer: string, runtime: string, files: ModelFile[] }} Manifest */
@@ -35,133 +34,34 @@ export function manifest() {
   try { return JSON.parse(readFileSync(join(builtInRoot(), 'models.json'), 'utf8')); } catch { return null; }
 }
 
-/** Where what the fetching knows is kept: `{ pid, at }` while it runs, `{ failed }` after it failed. */
-const stateFile = (/** @type {Manifest} */ m) => join(libraryCache(), 'models', `${m.model}.json`);
-/** The mark of a model whose every file was checked, named for what models.json says of them. */
-const okFile = (/** @type {Manifest} */ m) => join(libraryCache(), 'models', `${m.model}.${digest(m)}.ok`);
-const digest = (/** @type {Manifest} */ m) => createHash('sha256').update(m.files.map((f) => f.sha256).join()).digest('hex').slice(0, 12);
-/** The mark of a model turned off, or removed, in Settings → Services → Local models: not used, and not fetched. */
-const offFile = (/** @type {Manifest} */ m) => join(libraryCache(), 'models', `${m.model}.off`);
+/** The model as Local models lists it (local-models.mjs): its id and files. */
+const entry = (/** @type {Manifest} */ m) => ({ id: m.model, files: m.files });
 
 /** Whether the model is to be used (and fetched when it is not here): not turned off. */
-export const semanticOn = (m = manifest()) => Boolean(m) && !existsSync(offFile(/** @type {Manifest} */ (m)));
+export const semanticOn = (m = manifest()) => Boolean(m) && modelOn(entry(/** @type {Manifest} */ (m)));
 
-/** The model turned on (fetched now when it is not here: semanticState) or off (kept, not used). */
+/** The model turned on (fetched now when it is not here) or off (kept, not used). */
 export function setSemanticOn(/** @type {boolean} */ on, m = manifest()) {
-  if (!m) return;
-  if (on) {
-    rmSync(offFile(m), { force: true });
-    /* a fetch that failed lately is tried again at once: the person asked for it */
-    rmSync(stateFile(m), { force: true });
-    semanticState();
-  } else {
-    mkdirSync(dirname(offFile(m)), { recursive: true });
-    writeFileSync(offFile(m), '');
-  }
-}
-
-/** The model's fetched files thrown away, and the model turned off (else the next search would fetch it again). */
-export function removeModel(m = manifest()) {
-  if (!m) return;
-  setSemanticOn(false, m);
-  for (const f of m.files) {
-    const file = libraryFile(f.path);
-    if (file && !file.startsWith(builtInRoot())) rmSync(file, { force: true });
-  }
-  rmSync(okFile(m), { force: true });
-  rmSync(stateFile(m), { force: true });
-}
-
-/** Whether every file of the model is part of this checkout's library (a source checkout's: it cannot be removed). */
-export const modelBuiltIn = (m = manifest()) => Boolean(m?.files.every((f) => libraryFile(f.path)?.startsWith(builtInRoot())));
-
-/** How much of the model is on this computer, in bytes: its files here, and what is written of the one coming. */
-export function modelBytesHere(m = manifest()) {
-  if (!m) return 0;
-  let bytes = 0;
-  for (const f of m.files) {
-    if (libraryFile(f.path)) { bytes += f.bytes; continue; }
-    const at = join(libraryCache(), f.path);
-    try {
-      for (const name of readdirSync(dirname(at))) if (name.startsWith(`${basename(at)}.part-`)) bytes += statSync(join(dirname(at), name)).size;
-    } catch { /* its folder is not made yet */ }
-  }
-  return bytes;
+  if (m) setModelOn(on, entry(m));
 }
 
 /** Whether the model can run here: every file of it on this computer, and checked (or part of this checkout's library). */
-export function semanticReady(m = manifest()) {
-  if (!m) return false;
-  const files = m.files.map((f) => libraryFile(f.path));
-  if (files.some((f) => !f)) return false;
-  return files.every((f) => f?.startsWith(builtInRoot())) || existsSync(okFile(m));
-}
-
-/** How long a failed fetch waits before another try. */
-const RETRY_MS = 60 * 60_000;
-/** A fetch running longer than this has died. */
-const STALE_MS = 2 * 60 * 60_000;
+export const semanticReady = (m = manifest()) => Boolean(m) && modelReady(entry(/** @type {Manifest} */ (m)));
 
 /**
- * Whether the model is coming: 'ready', 'fetching' (begun now, or still running), or 'off' (no model listed, or it
- * failed lately: keyword search, said nothing of). Starts the fetch when it is due: `start` runs it (a process of its
- * own by default).
+ * Whether the model is coming: 'ready', 'fetching' (begun now, or still running), or 'off' (no model listed, turned
+ * off, or it failed lately: keyword search, said nothing of). Starts the fetch when it is due: `start` runs it (a
+ * process of its own by default).
  * @param {{ start?: () => void }} [o]
  * @returns {'ready' | 'fetching' | 'off'}
  */
 export function semanticState(o = {}) {
   const m = manifest();
-  if (!m || !semanticOn(m)) return 'off';
-  if (semanticReady(m)) return 'ready';
-  let state = /** @type {{ pid?: number, at?: number, failed?: number }} */ ({});
-  try { state = JSON.parse(readFileSync(stateFile(m), 'utf8')); } catch { /* none yet */ }
-  if (state.failed && Date.now() - state.failed < RETRY_MS) return 'off';
-  if (state.pid && state.at && Date.now() - state.at < STALE_MS && alive(state.pid)) return 'fetching';
-  mkdirSync(dirname(stateFile(m)), { recursive: true });
-  (o.start ?? startFetch)();
-  return 'fetching';
+  return m ? modelState(entry(m), o) : 'off';
 }
 
-const alive = (/** @type {number} */ pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
-
-/** Whether the model's fetch is running now (one that died, or failed, is not). */
-export function modelFetching(m = manifest()) {
-  if (!m) return false;
-  let state = /** @type {{ pid?: number, at?: number }} */ ({});
-  try { state = JSON.parse(readFileSync(stateFile(m), 'utf8')); } catch { return false; }
-  return Boolean(state.pid && state.at && Date.now() - state.at < STALE_MS && alive(state.pid));
-}
-
-/** The fetch, in a process of its own that outlives the search that began it. */
-function startFetch() {
-  const child = spawn(process.execPath, [fileURLToPath(import.meta.url), 'fetch'], { detached: true, stdio: 'ignore', windowsHide: true });
-  child.unref();
-}
-
-/**
- * Every file of the model fetched into the library's cache and checked against models.json: one that does not check
- * is thrown away. Marks the model checked when all are; says it failed otherwise. Returns whether it is ready.
- */
-export async function fetchModel(m = manifest()) {
-  if (!m) return false;
-  mkdirSync(dirname(stateFile(m)), { recursive: true });
-  writeFileSync(stateFile(m), JSON.stringify({ pid: process.pid, at: Date.now() }));
-  try {
-    for (const f of m.files) {
-      const file = await fetchLibrary(f.path);
-      if (!file) throw new Error(`${f.path} could not be fetched`);
-      if (file.startsWith(builtInRoot())) continue;
-      const sum = createHash('sha256').update(readFileSync(file)).digest('hex');
-      if (sum !== f.sha256) { rmSync(file, { force: true }); throw new Error(`${f.path} is not what models.json says`); }
-    }
-    writeFileSync(okFile(m), '');
-    rmSync(stateFile(m), { force: true });
-    return true;
-  } catch {
-    writeFileSync(stateFile(m), JSON.stringify({ failed: Date.now() }));
-    return false;
-  }
-}
+/** Every file of the model fetched and checked (local-models.mjs fetchModel). Returns whether it is ready. */
+export const fetchModel = async (m = manifest()) => Boolean(m) && await fetchEntry(entry(/** @type {Manifest} */ (m)));
 
 /* ── the tokenizer: SentencePiece's unigram model, as the model's tokenizer.json has it ───────────────────────── */
 
@@ -366,4 +266,3 @@ export async function nearest(query, keep, limit = 50) {
   return scored.sort((a, b) => b[1] - a[1]).slice(0, limit);
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url) && process.argv[2] === 'fetch') process.exitCode = (await fetchModel()) ? 0 : 1;

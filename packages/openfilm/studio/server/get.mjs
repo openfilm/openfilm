@@ -88,6 +88,11 @@ export const VERBS = /** @type {Record<string, VerbSpec>} */ ({
     timeoutSec: 900,
     options: { src: { value: 'path', required: true, path: 'speech' }, force: {} },
   },
+  cutout: {
+    help: 'Take the background out of a picture in the project: the same picture as a PNG, what it is of kept and the rest transparent. Returns its path and size.',
+    dir: 'assets/image', timeoutSec: 300,
+    options: { src: { value: 'path', required: true, path: 'picture' }, out },
+  },
   'image-search': {
     help: 'Find pictures on the web and download them (1 to 8). Returns their paths and sizes.',
     dir: 'assets/image', timeoutSec: 300,
@@ -155,12 +160,14 @@ const NO_OWN_SERVICES = 'The person has added no services of their own. In Studi
 
 /** Each kind of media, in words (finding voices is part of voice-over). */
 const WORDS = /** @type {Record<string, string>} */ ({
-  tts: 'voice-over', music: 'music', sfx: 'sound effects', asr: 'transcripts', image: 'images', 'image-search': 'image search',
+  tts: 'voice-over', music: 'music', sfx: 'sound effects', asr: 'transcripts', cutout: 'backgrounds taken out', image: 'images', 'image-search': 'image search',
   video: 'video', translate: 'subtitle translation', 'web-search': 'web search',
 });
 /** The media services `get` can use, by name (none comes first), what each makes, and where the person connects them. */
 export const services = () => `Media services, each used with the person's own key: ${listProviders()
   .map((p) => ({ name: p.name, makes: p.verbs.filter((v) => WORDS[v]).map((v) => WORDS[v]).join(', ') }))
+  /* Local models, with no model installed, make nothing yet */
+  .filter((p) => p.makes)
   .sort((a, b) => a.name.localeCompare(b.name)).map((p) => `${p.name} (${p.makes})`).join(', ')}. ${WHERE_TO_CONNECT}`;
 
 /** How long the person has to answer a question about spending. */

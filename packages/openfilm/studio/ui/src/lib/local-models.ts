@@ -5,8 +5,8 @@
 import React from 'react';
 
 /** What a local model is for, wherever they are grouped. */
-export type LocalKind = 'search';
-export const LOCAL_KINDS: LocalKind[] = ['search'];
+export type LocalKind = 'asr' | 'cutout' | 'search';
+export const LOCAL_KINDS: LocalKind[] = ['asr', 'cutout', 'search'];
 
 export interface LocalModel {
   id: string;
@@ -25,6 +25,8 @@ export interface LocalModel {
   builtIn: boolean;
   /** coming: how much of it is here */
   installing?: { bytes: number };
+  /** its last download failed (offline, or a file that did not check): Install tries again */
+  failed?: boolean;
 }
 
 async function call(path: string, method = 'GET', body?: unknown): Promise<LocalModel[]> {

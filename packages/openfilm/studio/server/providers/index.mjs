@@ -33,6 +33,7 @@ import doubao from './doubao.mjs';
 import mimo from './mimo.mjs';
 import keenable from './keenable.mjs';
 import openfilm from './openfilm.mjs';
+import local from './local.mjs';
 
 /**
  * @typedef {import('./contract.mjs').Provider} Provider @typedef {import('./contract.mjs').Verb} Verb
@@ -40,11 +41,11 @@ import openfilm from './openfilm.mjs';
  * @typedef {import('../http.mjs').Req} Req @typedef {import('../http.mjs').Res} Res
  */
 
-/** The providers paid with the person's own key. */
-const OWN = [elevenlabs, inworld, cartesia, openai, google, fal, openrouter, pexels, pixabay, brave, tavily, groq, azure, doubao, mimo, keenable, openfilm];
+/** The providers paid with the person's own key, and Local models, which takes none. */
+const OWN = [elevenlabs, inworld, cartesia, openai, google, fal, openrouter, pexels, pixabay, brave, tavily, groq, azure, doubao, mimo, keenable, openfilm, local];
 
 /** The kinds of media the person chooses a provider and model for (Settings → Services). */
-const USE_VERBS = /** @type {Verb[]} */ (['tts', 'music', 'sfx', 'asr', 'image', 'image-search', 'video', 'translate', 'web-search']);
+const USE_VERBS = /** @type {Verb[]} */ (['tts', 'music', 'sfx', 'asr', 'cutout', 'image', 'image-search', 'video', 'translate', 'web-search']);
 
 export const listProviders = () => OWN;
 
@@ -60,6 +61,9 @@ async function named(id, verb, settings, strict) {
   const provider = OWN.find((p) => p.id === id);
   const fail = (/** @type {string} */ why) => { if (strict) throw new Error(why); return null; };
   if (!provider) return fail(`There is no provider "${id}": use ${OWN.map((p) => p.id).join(', ')}.`);
+  if (provider.ready && !provider.verbs.includes(verb)) {
+    return fail(`No local model for ${verb} is installed and on: the person installs one in Studio (the OpenFilm logo at the top left opens Settings → Services → Local models).`);
+  }
   if (!provider.verbs.includes(verb)) return fail(`${provider.name} does not do ${verb}.`);
   if (!providerKey(provider, settings)) {
     return fail(provider.keyless
@@ -85,6 +89,21 @@ function fill(s) {
 
 /** The saved choices. */
 export const providerSettings = () => readSettings();
+
+/**
+ * After a Local model came, went or was turned on or off: a kind it alone can make now goes to it, and a kind it can
+ * no longer make goes to what else makes it (the header's rule). Written only when that changes something.
+ */
+export async function localModelsChanged() {
+  await local.refresh?.();
+  const settings = await readSettings();
+  const before = JSON.stringify(settings.use);
+  const next = structuredClone(settings);
+  if (!providerKey(local, next)) for (const [verb, id] of Object.entries(next.use)) if (id === local.id) delete next.use[verb];
+  for (const [verb, id] of Object.entries(next.use)) if (id === local.id && !local.verbs.includes(/** @type {Verb} */ (verb))) delete next.use[verb];
+  fill(next);
+  if (JSON.stringify(next.use) !== before) await changeSettings((s) => { s.use = next.use; });
+}
 
 /**
  * Who serves `verb`: `via` (a provider id from `--via`), else the person's choice while it can. null:
