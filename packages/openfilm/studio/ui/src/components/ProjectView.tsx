@@ -7,7 +7,7 @@
  * are written one at a time (see editor/use-film.ts); the agent's writes come in through the folder's events.
  */
 import * as React from 'react';
-import { BookmarkPlus, ChartSpline, ClipboardCopy, ClipboardPaste, Diamond, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Plus, Settings2, Spline, TriangleAlert, Upload } from 'lucide-react';
+import { BookmarkPlus, ChartSpline, ChevronDown, ChevronRight, ClipboardCopy, ClipboardPaste, Diamond, Eye, EyeOff, Layers, LibraryBig, Lock, LockOpen, MessageSquarePlus, MonitorDown, Plus, Settings2, Spline, TriangleAlert, Upload } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
 import { EFFECTS, MOTION_PROPS, animationsOf, effectsOf, readMotion, valueAt, withAnimations, withEffects, withPreset, type EffectProp, type KeyedProp, type Motion, type MotionProp } from '../../../../src/clip-motion.mjs';
 import { copiedKeys, easeOfBezier, easedMotion, effectsModel, type EffectsChange, keyId, keyedBox, movedKeys, parseKeyId, pastedKeys, poseAt, withoutKeys, type CopiedKeys, type EaseCommand } from '@/lib/motion-keys';
@@ -225,6 +225,9 @@ const WHITE_SRC = 'transitions/white.html';
 /** No keyframes picked. */
 const NO_KEYS: ReadonlySet<string> = new Set();
 const clipStep = (key: string, ids: readonly string[]) => `${key}|${ids.join(', ')}`;
+
+/** A row of Motion's timeline: a layer, a folder (a track of several clips, `open` showing each as a layer) or a sound track. */
+interface LayerRowSpec { track: TimelineTrack; layer: Layer | null; n: number; folder?: { count: number; open: boolean } }
 /** A compound clip's folder (`parts/<name>`), from its src; null for any other clip. */
 const compoundFolder = (src: string | undefined) => /^(parts\/[^/]+)\/film\.html$/.exec((src ?? '').replace(/#.*$/, ''))?.[1] ?? null;
 
@@ -2707,8 +2710,10 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* its elements, as the Layers panel reads them from the page (only while it is in the picture) */
   const [compRows, setCompRows] = React.useState<readonly LayerRow[] | null>(null);
   const compShown = Boolean(compBlock && timeMs >= compBlock.startMs && timeMs < compBlock.endMs);
+  /* another composition opened: its own elements, read anew; one off the picture keeps those it was read with */
+  React.useEffect(() => { setCompRows(null); }, [motionComp]);
   React.useEffect(() => {
-    if (!motionComp || !compShown) { setCompRows(null); return undefined; }
+    if (!motionComp || !compShown) return undefined;
     let alive = true;
     let tries = 0;
     let wait: ReturnType<typeof setTimeout> | undefined;
@@ -2733,18 +2738,23 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const [compKeys, setCompKeys] = React.useState<{ id: string; keys: ReadonlySet<string> } | null>(null);
   /** An element layer's place: its override's selector and which match. */
   const elementAt = (row: LayerRow) => ({ at: row.instance ? row.loc.slice(0, -`#${row.instance}`.length) : row.loc, n: row.instance });
+  /* its elements as layers, a tree: an element with others in it twirled open to them (none at first) */
+  const [compOpen, setCompOpen] = React.useState<ReadonlySet<string>>(new Set());
+  React.useEffect(() => { setCompOpen(new Set()); }, [motionComp]);
   const compLayers = React.useMemo<Layer[]>(() => {
     if (!compBlock || !compRows) return [];
     const out: Layer[] = [];
     const walk = (rows: readonly LayerRow[], depth: number, parent?: string) => {
       for (const row of rows) {
-        out.push({ clipId: row.loc, title: row.label, kind: row.kind, startMs: 0, endMs: compBlock.endMs - compBlock.startMs, depth, ...(parent ? { parent } : {}) });
-        walk(row.children ?? [], depth + 1, row.label);
+        const kids = row.children?.length ?? 0;
+        const open = compOpen.has(row.loc);
+        out.push({ clipId: row.loc, title: row.label, kind: row.kind, startMs: 0, endMs: compBlock.endMs - compBlock.startMs, depth, ...(parent ? { parent } : {}), ...(kids ? { kids, kidsOpen: open } : {}) });
+        if (open) walk(row.children ?? [], depth + 1, row.label);
       }
     };
     walk(compRows, 0);
     return out;
-  }, [compBlock, compRows]);
+  }, [compBlock, compRows, compOpen]);
   const rowOf = React.useCallback((loc: string): LayerRow | null => {
     const find = (rows: readonly LayerRow[]): LayerRow | null => {
       for (const r of rows) { if (r.loc === loc) return r; const inner = find(r.children ?? []); if (inner) return inner; }
@@ -2806,6 +2816,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* where the page is: its own second at the playhead (the clip plays it from its trim's start) */
   const compOffset = Array.isArray(compClip?.time) ? Number(compClip!.time[0]) || 0 : 0;
   const compLocalMs = compBlock ? timeMs - compBlock.startMs : 0;
+  /* a composition's time is its clip's: the playhead stays on it (its last frame at most), as a nested comp's ends */
+  const inComp = (ms: number) => (compBlock ? Math.min(Math.max(ms, 0), Math.max(0, compBlock.endMs - compBlock.startMs - 1000 / Math.max(1, projectFps))) : ms);
   const elementMotionOf = React.useCallback((loc: string): Motion => {
     const row = rowOf(loc);
     if (!row || !motionComp) return {};
@@ -2941,7 +2953,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         const c = model?.toggleHere(prop as MotionProp) as ElementCommit | null;
         if (c) writeElement(id, c.motion, c.stat);
       },
-      onSeek: (ms) => { if (compBlock) seek(compBlock.startMs + ms); },
+      onSeek: (ms) => { if (compBlock) seek(compBlock.startMs + inComp(ms)); },
       onMenu: (e) => { if (picked.size) setKeyMenu({ x: e.clientX, y: e.clientY }); },
       graph: motionGraph,
       onGraph: () => setMotionGraph((v) => !v),
@@ -3024,10 +3036,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     onOpen: openComposition, reveal: motionReveal, t,
   });
   const compMotion = useMotionLayers({
-    layers: compLayers, playheadMs: compLocalMs, fps: projectFps, onSeek: (ms) => { if (compBlock) seek(compBlock.startMs + ms); },
+    layers: compLayers, playheadMs: compLocalMs, fps: projectFps, onSeek: (ms) => { if (compBlock) seek(compBlock.startMs + inComp(ms)); },
     picked: compPicked,
     onPick: (id, add) => setCompPicked((was) => (add ? (was.includes(id) ? was.filter((x) => x !== id) : [...was, id]) : [id])),
     lanesOf: elementLanesOf, hostOf: elementHostOf, reveal: motionReveal, t,
+    onKids: (layer) => setCompOpen((was) => { const next = new Set(was); if (next.has(layer.clipId)) next.delete(layer.clipId); else next.add(layer.clipId); return next; }),
   });
   /* a new layer (Motion's toolbar): words, a shape or a solid from the library's layers, still, on a track of its own at
      the top from the playhead, for keyframes to move; or the picked layers grouped (a compound clip, as an animation
@@ -3051,31 +3064,69 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         onSelect: () => { void makeCompound(selectedBlocks).then((err) => { if (err) toast.showError(err); }); } },
     ];
   };
-  /* the edit's tracks as layers: each picture clip a row of its own (its track's, so drags and trims are the edit's),
-     in its track's order and then by time; sound tracks as they are */
+  /* the edit's tracks as Motion's rows, in their order: a track with one picture clip is that layer; one with more is
+     a folder, its clips on its row as in the edit, twirled open to a layer each (its track's, so drags and trims are
+     the edit's), by time; sound tracks as they are */
+  const [openTracks, setOpenTracks] = React.useState<ReadonlySet<string>>(new Set());
   const layerTracks = React.useMemo(() => {
     if (!motionOpen) return null;
     const byClip = new Map(motionLayers.map((l) => [l.clipId, l]));
     let n = 0;
-    const rows: { track: TimelineTrack; layer: Layer | null; n: number }[] = [];
+    const rows: LayerRowSpec[] = [];
     for (const track of tools.tracks) {
       const pictures = track.kind === 'visual' ? [...track.blocks].filter((b) => b.clipId && byClip.has(b.clipId)).sort((a, b) => a.startMs - b.startMs) : [];
       if (!pictures.length) { rows.push({ track, layer: null, n: 0 }); continue; }
+      const folder = pictures.length > 1;
+      const open = folder && openTracks.has(track.lane);
+      if (folder) {
+        /* open, its clips are on their own rows below it, not twice */
+        rows.push({ track: { ...track, height: LAYER_ROW_H, extra: undefined, ...(open ? { blocks: track.blocks.filter((b) => !pictures.includes(b)) } : {}) }, layer: null, n: 0, folder: { count: pictures.length, open } });
+        if (!open) continue;
+      }
       for (const b of pictures) {
-        const layer = byClip.get(b.clipId!)!;
+        const own = byClip.get(b.clipId!)!;
+        const layer = folder ? { ...own, depth: 1 } : own;
         const extra = filmMotion.extraOf(layer);
         rows.push({ track: { ...track, lane: `${track.lane}~${b.id}`, blocks: [b], name: b.title, height: LAYER_ROW_H, ...(extra ? { extra } : { extra: undefined }) }, layer, n: ++n });
       }
     }
     return rows;
-  }, [motionOpen, motionLayers, tools.tracks, filmMotion]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [motionOpen, motionLayers, tools.tracks, filmMotion, openTracks]); // eslint-disable-line react-hooks/exhaustive-deps
   const compTracks = React.useMemo(() => (compBlock ? compLayers.map((layer, i) => {
     const extra = compMotion.extraOf(layer);
     const block: TimelineBlock = { id: `el:${layer.clipId}`, title: layer.title || layer.clipId, startMs: 0, endMs: layer.endMs, kind: 'mg' };
     return { track: { lane: `el:${layer.clipId}`, role: 'mg' as const, kind: 'visual' as const, index: 1, name: block.title, blocks: [block], height: LAYER_ROW_H, ...(extra ? { extra } : {}) } as TimelineTrack, layer, n: i + 1 };
   }) : null), [compBlock, compLayers, compMotion]); // eslint-disable-line react-hooks/exhaustive-deps
   /* what the timeline draws of a layer row: its head and its properties (a sound track keeps a plain head) */
-  const layerView = (view: MotionLayersView, rows: readonly { track: TimelineTrack; layer: Layer | null; n: number }[], keysPicked: boolean, layersPicked: boolean, open?: (layer: Layer) => void) => {
+  /* a folder's head: its track's eye and lock, its twirl, its badge and how many clips it has */
+  const folderHead = (track: TimelineTrack, folder: NonNullable<LayerRowSpec['folder']>) => {
+    const loc = track.blocks.find((b) => b.loc)?.loc ?? (track.docIndex != null ? `film.html#${track.docIndex}.0` : null);
+    const flag = (prop: 'hidden' | 'locked') => { if (loc) void editBlocks([{ loc, prop, value: track[prop] ? null : true }]).then((err) => { if (err) toast.showError(err); }); };
+    const btn = 'grid h-[18px] w-[18px] place-items-center rounded-[3px] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]';
+    return (
+      <div className="flex h-full w-full min-w-0 items-center pr-2 text-[12px] text-[var(--text-muted)]" data-motion-folder={track.lane}>
+        <span className="grid w-[22px] shrink-0 place-items-center">
+          <button type="button" aria-label={t('canvas.motionVisible')} aria-pressed={!track.hidden} className={btn} onPointerDown={(e) => e.stopPropagation()} onClick={() => flag('hidden')}>
+            {track.hidden ? <EyeOff size={12} className="opacity-50" /> : <Eye size={12} />}
+          </button>
+        </span>
+        <span className="grid w-[20px] shrink-0 place-items-center">
+          <button type="button" aria-label={t(track.locked ? 'canvas.layerUnlock' : 'canvas.layerLock')} className={`${btn} ${track.locked ? 'text-[var(--text)]' : 'text-[var(--text-faint)] opacity-60'}`} onPointerDown={(e) => e.stopPropagation()} onClick={() => flag('locked')}>
+            {track.locked ? <Lock size={11} /> : <LockOpen size={11} />}
+          </button>
+        </span>
+        <button type="button" aria-expanded={folder.open} aria-label={t('canvas.trackLayers')} title={t('canvas.trackLayers')} data-folder-twirl={track.lane}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => setOpenTracks((was) => { const next = new Set(was); if (next.has(track.lane)) next.delete(track.lane); else next.add(track.lane); return next; })}
+          className="flex min-w-0 items-center gap-1.5 rounded-[3px] pr-1 hover:text-[var(--text)]">
+          {folder.open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+          <span className="rounded-[3px] bg-[var(--bg-hover)] px-1 text-[10.5px] font-medium tabular-nums text-[var(--text)]">{track.badge ?? ''}</span>
+          <span className="truncate">{t('canvas.trackClips').replace('{n}', String(folder.count))}</span>
+        </button>
+      </div>
+    );
+  };
+  const layerView = (view: MotionLayersView, rows: readonly LayerRowSpec[], keysPicked: boolean, layersPicked: boolean, open?: (layer: Layer) => void) => {
     const of = new Map(rows.map((r) => [r.track.lane, r]));
     return {
       headWidth: view.headWidth,
@@ -3097,6 +3148,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       ],
       head: (track: TimelineTrack) => {
         const row = of.get(track.lane);
+        if (row?.folder) return folderHead(row.track, row.folder);
         return row?.layer ? view.head(row.layer, row.n) : <span className="truncate px-3 text-[11px] text-[var(--text-faint)]">{track.badge ?? ''} {track.name ?? ''}</span>;
       },
       extraHead: (track: TimelineTrack) => { const row = of.get(track.lane); return row?.layer ? view.extraHead(row.layer) : null; },
@@ -4647,9 +4699,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     totalMs={compBlock.endMs - compBlock.startMs}
                     timeMs={compLocalMs}
                     playing={playing}
-                    onSeek={(ms) => seek(compBlock.startMs + ms)}
-                    onScrubPreview={(ms) => scrubPreview(compBlock.startMs + ms)}
-                    onScrubCommit={(ms) => scrubCommit(compBlock.startMs + ms)}
+                    onSeek={(ms) => seek(compBlock.startMs + inComp(ms))}
+                    onScrubPreview={(ms) => scrubPreview(compBlock.startMs + inComp(ms))}
+                    onScrubCommit={(ms) => scrubCommit(compBlock.startMs + inComp(ms))}
                     selected={compPicked.map((id) => `el:${id}`)}
                     onSelectedChange={(ids) => setCompPicked(ids.map((x) => x.replace(/^el:/, '')))}
                     crumb={{ outer: loaded?.project.name ?? '', name: compBlock.title || compBlock.clipId || '', onBack: () => setMotionComp(null) }}

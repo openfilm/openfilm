@@ -32,7 +32,7 @@ import { LANE_H, LANE_PAD, MotionLaneHeads, MotionLaneRows, lanesHeight, type Mo
  * A layer: a clip of the film, or an element of a page (a composition opened); `clipId` names it (an element's is
  * where it is). `depth` and `parent`: where it is nested, an element in another.
  */
-export interface Layer { clipId: string; title?: string; kind: string; startMs: number; endMs: number; depth?: number; parent?: string }
+export interface Layer { clipId: string; title?: string; kind: string; startMs: number; endMs: number; depth?: number; parent?: string; kids?: number; kidsOpen?: boolean }
 
 /** A layer's Transform as numbers (KeyframesSection transformModel, lib/element-motion elementModel). */
 export interface TransformNumbers {
@@ -112,6 +112,8 @@ export interface MotionLayersArgs {
   hostOf: (layer: Layer) => LayerHost;
   /** A layer double-clicked: its composition opened (a page's elements); none where it has none. */
   onOpen?: (layer: Layer) => void;
+  /** A layer with others in it (`kids`, an element holding elements) twirled open or shut to them. */
+  onKids?: (layer: Layer) => void;
   /** Layers to show twirled open (what was just put on them from the Effects & Presets panel), by a count that changes. */
   reveal?: { ids: readonly string[]; n: number } | null;
   t: (key: string) => string;
@@ -609,8 +611,16 @@ export function useMotionLayers(p: MotionLayersArgs): MotionLayersView {
         </button>
         <span className="mx-1 h-[10px] w-[10px] shrink-0 rounded-[2px]" style={{ background: labelOf(layer) }} />
         <span className="w-[20px] shrink-0 text-center text-[11px] tabular-nums text-[var(--text-faint)]">{n}</span>
-        <span className={`min-w-0 flex-1 truncate pl-1 ${on ? 'font-medium text-[var(--text)]' : 'text-[var(--text-muted)]'}`} title={layer.title}
-          style={{ paddingLeft: 4 + (layer.depth ?? 0) * 12 }}>{layer.title || layer.clipId}</span>
+        <span className="flex min-w-0 flex-1 items-center" style={{ paddingLeft: 4 + (layer.depth ?? 0) * 12 }}>
+          {layer.kids ? (
+            <button type="button" aria-expanded={Boolean(layer.kidsOpen)} aria-label={t('canvas.layerKids').replace('{n}', String(layer.kids))} title={t('canvas.layerKids').replace('{n}', String(layer.kids))} data-layer-kids={layer.clipId}
+              onPointerDown={(e) => e.stopPropagation()} onClick={() => p.onKids?.(layer)}
+              className="mr-0.5 flex shrink-0 items-center gap-0.5 rounded-[3px] px-0.5 text-[10.5px] tabular-nums text-[var(--text-faint)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+              {layer.kidsOpen ? <ChevronDown size={10} /> : <ChevronRight size={10} />}{layer.kids}
+            </button>
+          ) : null}
+          <span className={`min-w-0 truncate pl-1 ${on ? 'font-medium text-[var(--text)]' : 'text-[var(--text-muted)]'}`} title={layer.title}>{layer.title || layer.clipId}</span>
+        </span>
         {moving ? <svg className="mr-1 shrink-0" width="7" height="7" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1 11 6 6 11 1 6Z" fill="var(--tl-accent)" /></svg> : null}
         <button type="button" aria-label={t('canvas.layerAdd')} title={t('canvas.layerAdd')} data-layer-add={layer.clipId}
           onPointerDown={(e) => e.stopPropagation()} onClick={(e) => openMenu(e, layer)}
