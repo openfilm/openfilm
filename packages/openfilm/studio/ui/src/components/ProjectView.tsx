@@ -604,9 +604,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
 
   /* ── the timeline: film.html + where the preview placed each clip ── */
   const spans = React.useMemo(() => info?.spans ?? [], [info]);
-  /* the Layers panel reads its tree again when film.html changes, and when the preview drew the film anew (a page
-     written: a layer pasted into it, or the agent's edit) */
-  const layersKey = React.useMemo(() => ({}), [film.film, info]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* the Layers panel reads its tree again when film.html changes, when the preview drew the film anew (a page
+     written: a layer pasted into it, or the agent's edit), and when a page that came on is shown (it is in the tree
+     only once drawn; the picture says so, and nothing else is rebuilt for it) */
+  const [pageShown, setPageShown] = React.useState(0);
+  const layersKey = React.useMemo(() => ({}), [film.film, info, pageShown]); // eslint-disable-line react-hooks/exhaustive-deps
   /* a file's length draws a clip that plays to its end before the preview places it (a split's second half, a drop) */
   const mediaFacts = React.useMemo<MediaFacts>(() => new Map([...facts].map(([path, f]) => [path, { audio: f.audio, ...(f.durationMs ? { duration: f.durationMs / 1000 } : {}) }])), [facts]);
   const [pendingDrops, setPendingDrops] = React.useState<PendingDrop[]>([]);
@@ -3285,7 +3287,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                         }}>
                           <Preview ref={preview} folder={folder} stage={shownStage} time={() => player.current.time()} fps={exactRate(projectFps)}
                             onInfo={onInfo} onKey={previewKey} onError={setPreviewError} onPlayed={onPlayed}
-                            onSpans={(next) => setInfo((had) => (had ? { ...had, spans: next } : had))}>
+                            onSpans={(next) => setInfo((had) => (had ? { ...had, spans: next } : had))}
+                            onShown={() => setPageShown((n) => n + 1)}>
                             {!fullscreen ? (
                               <FilmStageSelect
                                 previewRef={preview}
