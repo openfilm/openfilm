@@ -1446,6 +1446,8 @@ export const en = {
     noteCanvas: 'Make material: generate and gather on a board',
     noteMotion: 'Layers and keyframes, as in an animation editor',
     motionEmpty: 'No picture clips to animate yet',
+    motionMode: 'Mode',
+    motionZoom: 'Zoom',
     toCanvas: 'Switch to the canvas',
     note: 'Note',
     notePlaceholder: 'Write a note…',

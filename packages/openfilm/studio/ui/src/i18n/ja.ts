@@ -1445,6 +1445,8 @@ export const ja: Words = {
     noteCanvas: '素材を作る：ボード上で生成・整理',
     noteMotion: 'レイヤーとキーフレーム（アニメーションエディタ式）',
     motionEmpty: 'アニメーションできる映像クリップがまだありません',
+    motionMode: 'モード',
+    motionZoom: 'ズーム',
     toCanvas: 'キャンバスに切り替え',
     note: 'メモ',
     notePlaceholder: 'メモを書く…',

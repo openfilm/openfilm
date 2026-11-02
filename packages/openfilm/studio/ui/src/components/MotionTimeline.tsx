@@ -1,50 +1,146 @@
 /**
- * The film as an animation editor lays out a composition: every picture clip a layer, the topmost first, its bar over
- * the time it plays. A layer twirls open (▸) to its Transform: position, scale, rotation and opacity, each a row of
- * keyframes (components/MotionLanes) with its navigator, or the graph. As there, P, S, R and T show only that property
- * of the picked layers (⇧: added to what shows), U the ones that move, and the same key again closes them; J and K go
- * to the keyframe before and after the playhead among what shows. A click on a layer picks it, as on the timeline.
+ * The film as an animation editor lays out a composition, in its timeline panel's arrangement: the current time big
+ * at the top left; a row per picture clip (a layer), the topmost first, with its label color, its number, its name and
+ * its blending mode; its bar on the right, dragged to move it in time and by its ends
+ * to trim it. A layer twirls open (▸) to its Transform: position, scale, rotation and opacity, each with the keyframe
+ * navigator in the switches' column, a stopwatch, its value in blue (dragged left and right, or clicked and typed),
+ * and its keyframes on its row (components/MotionLanes), or the graph.
+ *
+ * As there: P, S, R and T show only that property of the picked layers (⇧: added to what shows), U the ones that
+ * move, the same key again closes them; J and K go to the keyframe before and after the playhead among what shows.
+ * The work area (the film's marked range) is the bar over the ruler; the slider under the layers zooms the time.
  */
 import * as React from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { MotionProp } from '../../../../src/clip-motion.mjs';
 import type { TimelineBlock } from '@/lib/timeline-layout';
+import type { FilmRange } from '@/lib/studio-refs';
+import { BLEND_MODES } from '@/lib/clip-look';
 import { formatTimecode } from '@/lib/timecode';
-import { MotionLaneHeads, MotionLaneRows, lanesHeight, type MotionLanes } from './MotionLanes';
+import type { transformModel, TransformCommit } from './KeyframesSection';
+import { Stopwatch } from './KeyframesSection';
+import { LANE_H, LANE_PAD, MotionLaneHeads, MotionLaneRows, lanesHeight, type MotionLanes } from './MotionLanes';
 
-type Layer = TimelineBlock & { clipId: string };
+export type Layer = TimelineBlock & { clipId: string };
+
+/** What a layer is and does beyond its keyframes: its Transform's numbers, how it blends. */
+export interface LayerHost {
+  model: ReturnType<typeof transformModel> | null;
+  commit: (c: TransformCommit | null) => void;
+  blend: string;
+  setBlend: (mode: string) => void;
+}
 
 export interface MotionTimelineProps {
   /** The picture clips, the topmost first. */
   layers: readonly Layer[];
   totalMs: number;
   playheadMs: number;
+  fps: number;
   onSeek: (ms: number) => void;
   picked: readonly string[];
   onPick: (clipId: string, add: boolean) => void;
   lanesOf: (layer: Layer) => MotionLanes;
-  labels: { transform: string; empty: string };
+  hostOf: (layer: Layer) => LayerHost;
+  /** A layer moved in time, or one of its ends (trimmed). */
+  onMoveLayer: (clipId: string, deltaMs: number) => void;
+  onTrimLayer: (clipId: string, edge: 'start' | 'end', deltaMs: number) => void;
+  /** The work area: the film's marked range. */
+  workArea: FilmRange | null;
+  onWorkArea: (range: FilmRange | null) => void;
+  t: (key: string) => string;
 }
 
-const HEAD_W = 248;
-const LAYER_H = 26;
-const RULER_H = 24;
-/** The keys that show one property, as an animation editor's. */
+const HEAD_W = 380;
+const LAYER_H = 24;
+const RULER_H = 30;
+/** The switches' column (the keyframe navigator on a property's row). */
+const AV_W = 58;
+const MODE_W = 92;
+/** The keys that show one property. */
 const SOLO: Record<string, MotionProp> = { p: 'translate', s: 'scale', r: 'rotate', t: 'opacity' };
 const ALL: readonly MotionProp[] = ['translate', 'scale', 'rotate', 'opacity'];
+const PROP_LABEL: Record<MotionProp, string> = { translate: 'inspector.keyPosition', scale: 'inspector.keyScale', rotate: 'inspector.keyRotate', opacity: 'inspector.keyOpacity' };
+/** A layer's label color by what it is, as an animation editor gives each kind its own. */
+const LABEL: Record<string, string> = { video: '#4ca3ad', mg: '#a594d6', still: '#c7a35f' };
+const labelOf = (layer: Layer) => LABEL[layer.kind] ?? '#8a8f98';
 
-export function MotionTimeline({ layers, totalMs, playheadMs, onSeek, picked, onPick, lanesOf, labels }: MotionTimelineProps) {
-  const host = React.useRef<HTMLDivElement | null>(null);
+/** Follow the pointer from a press: `move` with how far it went (px), `done` on letting go. */
+function follow(e: React.PointerEvent, move: (dx: number, ev: PointerEvent) => void, done: (dx: number, moved: boolean) => void) {
+  const x0 = e.clientX;
+  let moved = false;
+  const onMove = (ev: PointerEvent) => {
+    if (!moved && Math.abs(ev.clientX - x0) < 3) return;
+    moved = true;
+    move(ev.clientX - x0, ev);
+  };
+  const onUp = (ev: PointerEvent) => {
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+    done(ev.clientX - x0, moved);
+  };
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
+}
+
+/**
+ * A number in blue, as an animation editor shows a property's value: dragged left and right to change it (⇧ ten
+ * times faster, ⌘/Ctrl ten times finer), clicked to type it. Written when let go or typed.
+ */
+function Scrub({ value, onCommit, step = 1, digits = 1, unit, disabled, label }: {
+  value: number; onCommit: (n: number) => void; step?: number; digits?: number; unit?: string; disabled?: boolean; label: string;
+}) {
+  const [live, setLive] = React.useState<number | null>(null);
+  const [typing, setTyping] = React.useState<string | null>(null);
+  const shown = live ?? value;
+  const fmt = (n: number) => (Number.isInteger(n) && digits <= 1 ? n.toFixed(1) : n.toFixed(digits));
+  if (typing != null) {
+    return (
+      <input autoFocus aria-label={label} value={typing} onChange={(e) => setTyping(e.target.value)}
+        onBlur={() => { const n = Number(typing); setTyping(null); if (Number.isFinite(n)) onCommit(n); }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+          if (e.key === 'Escape') setTyping(null);
+          e.stopPropagation();
+        }}
+        className="h-[18px] w-[64px] rounded-[3px] border border-[var(--tl-accent)] bg-[var(--dock-pane)] px-1 text-[11.5px] tabular-nums text-[var(--text)] outline-none" />
+    );
+  }
+  return (
+    <span role="spinbutton" aria-label={label} aria-valuenow={value} tabIndex={disabled ? -1 : 0}
+      className={`select-none tabular-nums ${disabled ? 'text-[var(--text-faint)]' : 'cursor-ew-resize text-[#4ea1ff] hover:underline'}`}
+      onPointerDown={(e) => {
+        if (disabled || e.button !== 0) return;
+        e.stopPropagation();
+        const start = value;
+        let at = start;
+        follow(e, (dx, ev) => { at = start + dx * step * (ev.shiftKey ? 10 : ev.metaKey || ev.ctrlKey ? 0.1 : 1); setLive(at); }, (_dx, moved) => {
+          setLive(null);
+          if (!moved) { setTyping(fmt(value)); return; }
+          onCommit(Number(at.toFixed(3)));
+        });
+      }}>
+      {fmt(shown)}{unit ?? ''}
+    </span>
+  );
+}
+
+export function MotionTimeline(p: MotionTimelineProps) {
+  const { layers, totalMs, playheadMs, fps, onSeek, picked, onPick, lanesOf, hostOf, t } = p;
+  const scroller = React.useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = React.useState(800);
   React.useLayoutEffect(() => {
-    const el = host.current;
+    const el = scroller.current;
     if (!el) return undefined;
     const ro = new ResizeObserver(() => setWidth(el.clientWidth));
     ro.observe(el);
     setWidth(el.clientWidth);
     return () => ro.disconnect();
   }, []);
-  const timeW = Math.max(100, width - HEAD_W - 16);
+  /* the time's zoom: 1 is the whole film across */
+  const [zoom, setZoom] = React.useState(1);
+  const fitW = Math.max(100, width - HEAD_W - 24);
+  const timeW = fitW * zoom;
   const pxPerMs = timeW / Math.max(totalMs, 1000);
 
   /* what each layer shows of its Transform (none: closed) */
@@ -54,24 +150,17 @@ export function MotionTimeline({ layers, totalMs, playheadMs, onSeek, picked, on
     if (next.has(id)) next.delete(id); else next.set(id, ALL);
     return next;
   });
-  const lanesOfRef = React.useRef(lanesOf);
-  lanesOfRef.current = lanesOf;
-  const layersRef = React.useRef(layers);
-  layersRef.current = layers;
-  const pickedRef = React.useRef(picked);
-  pickedRef.current = picked;
-  const shownRef = React.useRef(shown);
-  shownRef.current = shown;
-  const playRef = React.useRef(playheadMs);
-  playRef.current = playheadMs;
+  const live = React.useRef({ layers, picked, shown, playheadMs, lanesOf });
+  live.current = { layers, picked, shown, playheadMs, lanesOf };
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const now = live.current;
       const key = e.key.toLowerCase();
-      const targets = layersRef.current.filter((l) => pickedRef.current.includes(l.clipId));
+      const targets = now.layers.filter((l) => now.picked.includes(l.clipId));
       if (key in SOLO || key === 'u') {
         if (!targets.length) return;
         e.preventDefault();
@@ -79,10 +168,10 @@ export function MotionTimeline({ layers, totalMs, playheadMs, onSeek, picked, on
         setShown((was) => {
           const next = new Map(was);
           for (const layer of targets) {
-            const moving = ALL.filter((p) => lanesOfRef.current(layer).rows.some((r) => r.prop === p && r.keys.length));
+            const moving = ALL.filter((prop) => now.lanesOf(layer).rows.some((r) => r.prop === prop && r.keys.length));
             const want: readonly MotionProp[] = key === 'u' ? moving : [SOLO[key]!];
             const had = next.get(layer.clipId) ?? [];
-            const same = had.length === want.length && want.every((p) => had.includes(p));
+            const same = had.length === want.length && want.every((x) => had.includes(x));
             if (e.shiftKey) next.set(layer.clipId, [...new Set([...had, ...want])]);
             else if (same || !want.length) next.delete(layer.clipId);
             else next.set(layer.clipId, want);
@@ -93,13 +182,12 @@ export function MotionTimeline({ layers, totalMs, playheadMs, onSeek, picked, on
       }
       if (key === 'j' || key === 'k') {
         /* the keyframes of what shows (of the picked layers when some are), on the film's time */
-        const from = targets.length ? targets : layersRef.current;
+        const from = targets.length ? targets : now.layers;
         const times = from.flatMap((layer) => {
-          const props = shownRef.current.get(layer.clipId) ?? (targets.length ? ALL : []);
-          return lanesOfRef.current(layer).rows.filter((r) => props.includes(r.prop)).flatMap((r) => r.keys.map((k) => layer.startMs + k.t * 1000));
+          const props = now.shown.get(layer.clipId) ?? (targets.length ? ALL : []);
+          return now.lanesOf(layer).rows.filter((r) => props.includes(r.prop)).flatMap((r) => r.keys.map((k) => layer.startMs + k.t * 1000));
         });
-        const now = playRef.current;
-        const to = key === 'j' ? Math.max(...times.filter((ms) => ms < now - 1)) : Math.min(...times.filter((ms) => ms > now + 1));
+        const to = key === 'j' ? Math.max(...times.filter((ms) => ms < now.playheadMs - 1)) : Math.min(...times.filter((ms) => ms > now.playheadMs + 1));
         e.preventDefault();
         e.stopPropagation();
         if (Number.isFinite(to)) onSeek(to);
@@ -128,65 +216,190 @@ export function MotionTimeline({ layers, totalMs, playheadMs, onSeek, picked, on
     if (s < 60) return `${Number.isInteger(s) ? s : s.toFixed(step < 1000 ? 2 : 1).replace(/0$/, '')}s`;
     return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
   };
+  const frameMs = 1000 / Math.max(1, fps);
+  const snapMs = (ms: number) => Math.round(ms / frameMs) * frameMs;
 
+  /* a layer's bar dragged (moved), or one of its ends (trimmed): shown as it goes, written when let go */
+  const [barDrag, setBarDrag] = React.useState<{ id: string; kind: 'move' | 'start' | 'end'; dms: number } | null>(null);
+  const pressBar = (e: React.PointerEvent, layer: Layer, kind: 'move' | 'start' | 'end') => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    onPick(layer.clipId, e.shiftKey || e.metaKey || e.ctrlKey);
+    follow(e, (dx) => setBarDrag({ id: layer.clipId, kind, dms: snapMs(dx / pxPerMs) }), (dx, moved) => {
+      setBarDrag(null);
+      const dms = snapMs(dx / pxPerMs);
+      if (!moved || !dms) return;
+      if (kind === 'move') p.onMoveLayer(layer.clipId, dms);
+      else p.onTrimLayer(layer.clipId, kind, dms);
+    });
+  };
+  /* the work area's ends, dragged */
+  const pressWork = (e: React.PointerEvent, edge: 'start' | 'end') => {
+    const range = p.workArea;
+    if (!range || e.button !== 0) return;
+    e.stopPropagation();
+    follow(e, (dx) => {
+      const ms = snapMs(Math.min(totalMs, Math.max(0, (edge === 'start' ? range.startMs : range.endMs) + dx / pxPerMs)));
+      p.onWorkArea(edge === 'start' ? { startMs: Math.min(ms, range.endMs - frameMs), endMs: range.endMs } : { startMs: range.startMs, endMs: Math.max(ms, range.startMs + frameMs) });
+    }, () => {});
+  };
+
+  const head = 'sticky left-0 z-10 shrink-0 bg-[var(--dock-pane)]';
   return (
-    <div ref={host} className="relative flex min-h-0 flex-1 flex-col overflow-hidden text-[12px]" data-motion-timeline="">
-      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-        {/* the ruler, kept in sight */}
-        <div className="sticky top-0 z-20 flex border-b border-[var(--dock-line)] bg-[var(--dock-pane)]" style={{ height: RULER_H }}>
-          <div className="flex shrink-0 items-center px-2 text-[11px] text-[var(--text-faint)]" style={{ width: HEAD_W }}>{formatTimecode(playheadMs)}</div>
-          <div className="relative cursor-ew-resize" style={{ width: timeW }} onPointerDown={scrub}>
-            {ticks.map((ms) => (
-              <div key={ms} className="absolute bottom-0 top-[10px] border-l border-[var(--text-faint)]/40 pl-1 text-[10px] leading-none text-[var(--text-faint)]" style={{ left: ms * pxPerMs }}>
-                {tickLabel(ms)}
-              </div>
-            ))}
-          </div>
-        </div>
-        {!layers.length ? <p className="p-4 text-[12px] text-[var(--text-faint)]">{labels.empty}</p> : null}
-        {layers.map((layer, i) => {
-          const props = shown.get(layer.clipId);
-          const all = props ? lanesOf(layer) : null;
-          const lanes = all && props ? { ...all, rows: all.rows.filter((r) => props.includes(r.prop)) } : null;
-          const on = picked.includes(layer.clipId);
-          const moving = all ? all.rows.some((r) => r.keys.length) : false;
-          return (
-            <div key={layer.clipId} data-motion-layer={layer.clipId} className="border-b border-[var(--dock-line)]">
-              <div className={`flex ${on ? 'bg-[color-mix(in_srgb,var(--tl-accent)_14%,transparent)]' : ''}`} style={{ height: LAYER_H }}>
-                <div className="flex shrink-0 cursor-default items-center gap-1 pl-1 pr-2" style={{ width: HEAD_W }}
-                  onPointerDown={(e) => { if (e.button === 0) onPick(layer.clipId, e.shiftKey || e.metaKey || e.ctrlKey); }}>
-                  <button type="button" aria-label={labels.transform} aria-expanded={Boolean(props)} data-twirl={layer.clipId}
-                    onPointerDown={(e) => e.stopPropagation()} onClick={() => toggle(layer.clipId)}
-                    className="grid h-[18px] w-[18px] place-items-center rounded-[3px] text-[var(--text-muted)] hover:bg-white/10">
-                    {props ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                  </button>
-                  <span className="w-[18px] shrink-0 text-right text-[11px] tabular-nums text-[var(--text-faint)]">{i + 1}</span>
-                  <span className={`min-w-0 flex-1 truncate ${on ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`} title={layer.title}>{layer.title || layer.clipId}</span>
-                  {moving ? <svg width="8" height="8" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1 11 6 6 11 1 6Z" fill="var(--tl-accent)" /></svg> : null}
-                </div>
-                <div className="relative" style={{ width: timeW }}
-                  onPointerDown={(e) => { if (e.button === 0) onPick(layer.clipId, e.shiftKey || e.metaKey || e.ctrlKey); }}>
-                  <div className="absolute inset-y-[4px] rounded-[3px]"
-                    style={{
-                      left: layer.startMs * pxPerMs, width: Math.max(2, (layer.endMs - layer.startMs) * pxPerMs),
-                      background: on ? 'color-mix(in srgb, var(--tl-accent) 55%, transparent)' : 'rgba(120,140,170,0.35)',
-                      boxShadow: on ? 'inset 0 0 0 1px var(--tl-accent)' : 'inset 0 0 0 1px rgba(255,255,255,0.08)',
-                    }} />
-                </div>
-              </div>
-              {lanes && lanes.rows.length ? (
-                <div className="flex" style={{ height: lanesHeight(lanes) }}>
-                  <div className="shrink-0 pl-6" style={{ width: HEAD_W }}><MotionLaneHeads lanes={lanes} /></div>
-                  <div className="relative" style={{ width: timeW }}><MotionLaneRows lanes={lanes} top={0} pxPerMs={pxPerMs} /></div>
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden text-[12px]" data-motion-timeline="">
+      <div ref={scroller} className="min-h-0 flex-1 overflow-auto">
+        <div className="relative" style={{ width: HEAD_W + timeW + 24 }}>
+          {/* the current time, the columns' names, the work area and the ruler, kept in sight */}
+          <div className="sticky top-0 z-20 flex border-b border-[var(--dock-line)] bg-[var(--dock-pane)]" style={{ height: RULER_H }}>
+            <div className={`${head} z-30 flex items-end border-r border-[var(--dock-line)] pb-1`} style={{ width: HEAD_W }}>
+              <span className="px-2 pb-[1px] text-[15px] font-medium leading-none tabular-nums text-[#4ea1ff]" data-motion-time="">{formatTimecode(playheadMs, { fps })}</span>
+              <span className="ml-auto flex text-[10.5px] text-[var(--text-faint)]">
+                <span style={{ width: MODE_W }}>{t('canvas.motionMode')}</span>
+              </span>
+            </div>
+            <div className="relative cursor-ew-resize" style={{ width: timeW }} onPointerDown={scrub}>
+              {p.workArea ? (
+                <div className="absolute top-[2px] h-[7px] rounded-[2px] bg-[#6b7a99]/70" style={{ left: p.workArea.startMs * pxPerMs, width: Math.max(2, (p.workArea.endMs - p.workArea.startMs) * pxPerMs) }}>
+                  <span className="absolute -left-[3px] top-0 h-full w-[6px] cursor-ew-resize rounded-[2px] bg-[#9fb0d0]" onPointerDown={(e) => pressWork(e, 'start')} />
+                  <span className="absolute -right-[3px] top-0 h-full w-[6px] cursor-ew-resize rounded-[2px] bg-[#9fb0d0]" onPointerDown={(e) => pressWork(e, 'end')} />
                 </div>
               ) : null}
+              {ticks.map((ms) => (
+                <div key={ms} className="absolute bottom-0 top-[12px] border-l border-[var(--text-faint)]/40 pl-1 text-[10px] leading-none text-[var(--text-faint)]" style={{ left: ms * pxPerMs }}>
+                  {tickLabel(ms)}
+                </div>
+              ))}
             </div>
-          );
-        })}
-        <div style={{ height: 24 }} />
+          </div>
+          {!layers.length ? <p className="p-4 text-[12px] text-[var(--text-faint)]">{t('canvas.motionEmpty')}</p> : null}
+          {layers.map((layer, i) => {
+            const props = shown.get(layer.clipId);
+            const all = props ? lanesOf(layer) : null;
+            const lanes = all && props ? { ...all, rows: all.rows.filter((r) => props.includes(r.prop)) } : null;
+            const on = picked.includes(layer.clipId);
+            const host = hostOf(layer);
+            const moving = lanesOf(layer).rows.some((r) => r.keys.length);
+            const drag = barDrag?.id === layer.clipId ? barDrag : null;
+            const startMs = layer.startMs + (drag && drag.kind !== 'end' ? drag.dms : 0);
+            const endMs = layer.endMs + (drag && drag.kind !== 'start' ? drag.dms : 0);
+            const tint = on ? 'bg-[color-mix(in_srgb,var(--tl-accent)_14%,var(--dock-pane))]' : 'bg-[var(--dock-pane)]';
+            return (
+              <div key={layer.clipId} data-motion-layer={layer.clipId} className="border-b border-[var(--dock-line)]">
+                <div className="flex" style={{ height: LAYER_H }}>
+                  <div className={`sticky left-0 z-10 flex shrink-0 items-center border-r border-[var(--dock-line)] ${tint}`} style={{ width: HEAD_W }}
+                    onPointerDown={(e) => { if (e.button === 0) onPick(layer.clipId, e.shiftKey || e.metaKey || e.ctrlKey); }}>
+                    <span className="shrink-0" style={{ width: AV_W }} />
+                    <button type="button" aria-label={t('inspector.transform')} aria-expanded={Boolean(props)} data-twirl={layer.clipId}
+                      onPointerDown={(e) => e.stopPropagation()} onClick={() => toggle(layer.clipId)}
+                      className="grid h-[18px] w-[16px] shrink-0 place-items-center rounded-[3px] text-[var(--text-muted)] hover:bg-white/10">
+                      {props ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                    </button>
+                    <span className="mx-1 h-[10px] w-[10px] shrink-0 rounded-[2px]" style={{ background: labelOf(layer) }} />
+                    <span className="w-[20px] shrink-0 text-center text-[11px] tabular-nums text-[var(--text-faint)]">{i + 1}</span>
+                    <span className={`min-w-0 flex-1 truncate pl-1 ${on ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`} title={layer.title}>{layer.title || layer.clipId}</span>
+                    {moving ? <svg className="mr-1 shrink-0" width="7" height="7" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1 11 6 6 11 1 6Z" fill="var(--tl-accent)" /></svg> : null}
+                    <select aria-label={t('canvas.motionMode')} value={host.blend} data-layer-mode={layer.clipId}
+                      onPointerDown={(e) => e.stopPropagation()} onChange={(e) => host.setBlend(e.target.value)}
+                      className="mr-1 h-[18px] shrink-0 rounded-[3px] border border-[var(--dock-line)] bg-transparent px-1 text-[11px] text-[var(--text-muted)]" style={{ width: MODE_W - 6 }}>
+                      {BLEND_MODES.map((mode) => <option key={mode} value={mode}>{t(`inspector.blendModes.${mode}`)}</option>)}
+                    </select>
+                  </div>
+                  <div className="relative" style={{ width: timeW }} onPointerDown={(e) => { if (e.button === 0) onPick(layer.clipId, e.shiftKey || e.metaKey || e.ctrlKey); }}>
+                    <div data-layer-bar={layer.clipId}
+                      className="group/bar absolute inset-y-[3px] cursor-grab rounded-[3px]"
+                      style={{
+                        left: startMs * pxPerMs, width: Math.max(4, (endMs - startMs) * pxPerMs),
+                        background: `color-mix(in srgb, ${labelOf(layer)} ${on ? 70 : 42}%, transparent)`,
+                        boxShadow: on ? 'inset 0 0 0 1px rgba(255,255,255,0.75)' : 'inset 0 0 0 1px rgba(255,255,255,0.08)',
+                      }}
+                      onPointerDown={(e) => pressBar(e, layer, 'move')}>
+                      <span className="absolute inset-y-0 left-0 w-[6px] cursor-ew-resize rounded-l-[3px] hover:bg-white/40" data-layer-in={layer.clipId} onPointerDown={(e) => pressBar(e, layer, 'start')} />
+                      <span className="absolute inset-y-0 right-0 w-[6px] cursor-ew-resize rounded-r-[3px] hover:bg-white/40" data-layer-out={layer.clipId} onPointerDown={(e) => pressBar(e, layer, 'end')} />
+                    </div>
+                  </div>
+                </div>
+                {lanes ? (
+                  <>
+                    {/* its Transform group, as the editor names it */}
+                    <div className="flex" style={{ height: 20 }}>
+                      <div className={`${head} flex items-center border-r border-[var(--dock-line)] text-[11.5px] text-[var(--text-muted)]`} style={{ width: HEAD_W, paddingLeft: AV_W + 18 }}>
+                        <ChevronDown size={11} className="mr-1" /> {t('inspector.transform')}
+                      </div>
+                      <div style={{ width: timeW }} />
+                    </div>
+                    {lanes.rows.length ? (
+                      <div className="flex" style={{ height: lanesHeight(lanes) }}>
+                        <div className={`${head} border-r border-[var(--dock-line)]`} style={{ width: HEAD_W, paddingTop: LANE_PAD / 2 }}>
+                          {lanes.graph ? <MotionLaneHeads lanes={lanes} /> : lanes.rows.map((row) => (
+                            <PropertyHead key={row.prop} layer={layer} lanes={lanes} prop={row.prop} host={host} t={t} />
+                          ))}
+                        </div>
+                        <div className="relative" style={{ width: timeW }}><MotionLaneRows lanes={lanes} top={0} pxPerMs={pxPerMs} /></div>
+                      </div>
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
+            );
+          })}
+          <div style={{ height: 24 }} />
+          {/* the playhead, over the ruler and every layer */}
+          <div className="pointer-events-none absolute bottom-0 top-0 z-[15] w-px bg-[#4ea1ff]" style={{ left: HEAD_W + playheadMs * pxPerMs }} />
+        </div>
       </div>
-      {/* the playhead, over the ruler and every layer */}
-      <div className="pointer-events-none absolute bottom-0 top-0 z-30 w-px bg-[var(--tl-accent)]" style={{ left: HEAD_W + playheadMs * pxPerMs }} />
+      {/* the time's zoom, under the layers as there */}
+      <div className="flex h-[24px] shrink-0 items-center gap-2 border-t border-[var(--dock-line)] px-2 text-[var(--text-faint)]">
+        <span className="text-[10.5px]" style={{ width: HEAD_W - 16 }}>{t('canvas.motionZoom')}</span>
+        <input type="range" aria-label={t('canvas.motionZoom')} min={0} max={100} value={Math.round((Math.log(zoom) / Math.log(40)) * 100)}
+          onChange={(e) => setZoom(40 ** (Number(e.target.value) / 100))} className="w-[160px]" data-motion-zoom="" />
+      </div>
+    </div>
+  );
+}
+
+/** A property's row in the layer's head: the navigator in the switches' column, its stopwatch, its name, its value. */
+function PropertyHead({ layer, lanes, prop, host, t }: { layer: Layer; lanes: MotionLanes; prop: MotionProp; host: LayerHost; t: (key: string) => string }) {
+  const model = host.model;
+  const row = lanes.rows.find((r) => r.prop === prop)!;
+  const keys = row.keys;
+  const local = (lanes.playheadMs - lanes.startMs) / 1000;
+  const frame = lanes.frameMs / 1000;
+  const inClip = lanes.playheadMs >= lanes.startMs && lanes.playheadMs <= lanes.endMs;
+  const here = inClip && keys.some((k) => Math.abs(k.t - local) < frame / 2);
+  const prev = [...keys].reverse().find((k) => k.t < local - frame / 2);
+  const next = keys.find((k) => k.t > local + frame / 2);
+  const value = model?.now(prop);
+  const set = (n: number | [number, number]) => host.commit(model?.set(prop, n) ?? null);
+  const nav = 'grid h-[16px] w-[14px] place-items-center rounded-[2px] text-[var(--text-faint)] hover:bg-white/10 hover:text-[var(--text)] disabled:opacity-30';
+  return (
+    <div className="flex items-center text-[11.5px]" style={{ height: LANE_H }} data-property-row={`${layer.clipId}:${prop}`}>
+      <span className="flex shrink-0 items-center justify-center" style={{ width: AV_W }}>
+        {keys.length ? (
+          <>
+            <button type="button" aria-label={t('inspector.keyPrev')} disabled={!prev} className={nav} onClick={() => prev && lanes.onSeek(lanes.startMs + prev.t * 1000)}><ChevronLeft size={10} /></button>
+            <button type="button" aria-label={t(here ? 'inspector.keyRemove' : 'inspector.keyAdd')} disabled={!inClip} className={nav} onClick={() => host.commit(model?.toggleHere(prop) ?? null)}>
+              <svg width="8" height="8" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1 11 6 6 11 1 6Z" fill={here ? 'var(--tl-accent)' : 'none'} stroke={here ? 'var(--tl-accent)' : 'currentColor'} strokeWidth="1.5" /></svg>
+            </button>
+            <button type="button" aria-label={t('inspector.keyNext')} disabled={!next} className={nav} onClick={() => next && lanes.onSeek(lanes.startMs + next.t * 1000)}><ChevronRight size={10} /></button>
+          </>
+        ) : null}
+      </span>
+      <span style={{ width: 34 }} />
+      <Stopwatch on={keys.length > 0} label={t(keys.length ? 'inspector.stopwatchOff' : 'inspector.stopwatchOn')} disabled={!model || (!keys.length && !inClip)}
+        onClick={() => host.commit(model?.stopwatch(prop) ?? null)} />
+      <span className="ml-1 w-[64px] shrink-0 truncate text-[var(--text-muted)]">{t(PROP_LABEL[prop])}</span>
+      <span className="flex min-w-0 items-center gap-2">
+        {value == null ? <span className="text-[var(--text-faint)]">—</span>
+          : prop === 'translate' ? (
+            <>
+              <Scrub label="X" value={(value as [number, number])[0]} onCommit={(n) => set([n, (value as [number, number])[1]])} />
+              <span className="text-[var(--text-faint)]">,</span>
+              <Scrub label="Y" value={(value as [number, number])[1]} onCommit={(n) => set([(value as [number, number])[0], n])} />
+            </>
+          ) : prop === 'scale' ? <Scrub label={t('inspector.keyScale')} value={value as number} unit="%" step={0.5} onCommit={set} />
+            : prop === 'rotate' ? <Scrub label={t('inspector.keyRotate')} value={value as number} unit="°" step={0.5} onCommit={set} />
+              : <Scrub label={t('inspector.keyOpacity')} value={value as number} unit="%" step={0.5} digits={0} onCommit={(n) => set(Math.min(100, Math.max(0, n)))} />}
+      </span>
     </div>
   );
 }

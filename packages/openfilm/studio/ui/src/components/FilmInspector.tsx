@@ -55,7 +55,8 @@ import {
 import { SPEED_STOPS, exactSpeed, lengthAtSpeed, roundSpeed, sliderKeyPosition, speedAtPosition, speedPosition } from '@/lib/clip-speed';
 import { speedText } from '@/lib/playback-speed';
 import type { Motion } from '../../../../src/clip-motion.mjs';
-import { KeyframesSection, type StaticTransform } from './KeyframesSection';
+import { KeyframesSection } from './KeyframesSection';
+import { staticTransform, transformEdits } from '@/lib/clip-transform';
 import {
   AdjustSection, AdvancedSection, AppearanceSection, CropSection, EffectsSection, FillSection, FilterSection, MaskSection, NEUTRAL, StrokeSection,
   TypographySection, camelOf,
@@ -1603,12 +1604,8 @@ function ClipPanel({
           {/* its keyframes right under its place: they move it on top of its box */}
           {picture && motion && block.clipId && docLoc && own && geo ? (() => {
             /* its own transform under its keyframes: the box's top left, its scale of its own size, its turn, its opacity */
-            const box = geo.box ?? own;
-            const tf = clipTransform(block, own, stage);
-            const at = clipFields(tf, box);
-            const css = lookOf?.css ?? '';
-            const opacity = Number.parseFloat(declared(css, 'opacity') ?? '1');
-            const base: StaticTransform = { x: at.x, y: at.y, scale: tf.scaleX, rotate: tf.rotate, opacity: Number.isFinite(opacity) ? opacity : 1 };
+            const placed = { kind: block.kind, own, box: block.box, stage, css: lookOf?.css ?? '' };
+            const { base } = staticTransform(placed, geo.box);
             return (
               <KeyframesSection
                 t={t}
@@ -1617,22 +1614,7 @@ function ClipPanel({
                 local={motion.playheadMs >= block.startMs - 1 && motion.playheadMs <= block.endMs + 1 ? (motion.playheadMs - block.startMs) / 1000 : null}
                 length={(block.endMs - block.startMs) / 1000}
                 frame={1 / fps}
-                onCommit={(m, own2) => {
-                  const edits: ClipEdit[] = [];
-                  /* its own opacity first: the keyframes written after it read the style it leaves */
-                  if (own2?.opacity != null) edits.push({ loc: loc!, prop: 'style', value: withDeclarations(css, { opacity: own2.opacity >= 1 ? null : String(own2.opacity) }) || null });
-                  if (own2 && (own2.x != null || own2.y != null || own2.scale != null || own2.rotate != null)) {
-                    const part: Partial<MgTransform> = {
-                      ...(own2.x != null ? clipFieldPart('x', own2.x, box) : {}),
-                      ...(own2.y != null ? clipFieldPart('y', own2.y, box) : {}),
-                      ...(own2.scale != null ? { scaleX: own2.scale, scaleY: own2.scale * (tf.scaleY / (tf.scaleX || 1)) } : {}),
-                      ...(own2.rotate != null ? { rotate: own2.rotate } : {}),
-                    };
-                    edits.push({ loc: loc!, prop: 'box', value: compactBox({ ...tf, ...part }, own) });
-                  }
-                  edits.push({ loc: loc!, prop: 'motion', value: Object.keys(m).length ? (m as unknown as Record<string, unknown>) : null });
-                  void commit(edits);
-                }}
+                onCommit={(m, own2) => { void commit(transformEdits(loc!, placed, m, own2, geo.box)); }}
                 onSeek={(s) => motion.onSeek(block.startMs + s * 1000)}
               />
             );

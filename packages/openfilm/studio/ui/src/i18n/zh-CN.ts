@@ -1446,6 +1446,8 @@ export const zhCN: Words = {
     noteCanvas: '做素材：在画布上生成和整理',
     noteMotion: '图层和关键帧，像 AE 一样做动效',
     motionEmpty: '还没有可以做动画的画面片段',
+    motionMode: '模式',
+    motionZoom: '缩放',
     toCanvas: '切换到画布',
     note: '便签',
     notePlaceholder: '写点什么…',

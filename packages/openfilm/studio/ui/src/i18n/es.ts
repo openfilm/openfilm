@@ -1445,6 +1445,8 @@ export const es: Words = {
     noteCanvas: 'Crear material: generar y reunir en un tablero',
     noteMotion: 'Capas y fotogramas clave, como en un editor de animación',
     motionEmpty: 'Aún no hay clips de imagen que animar',
+    motionMode: 'Modo',
+    motionZoom: 'Zoom',
     toCanvas: 'Cambiar al lienzo',
     note: 'Nota',
     notePlaceholder: 'Escribe una nota…',

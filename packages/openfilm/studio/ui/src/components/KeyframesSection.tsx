@@ -15,8 +15,9 @@ import { NumField, Row, Section } from './inspector-fields';
 
 type T = ReturnType<typeof useT>;
 
-/** The clip's own transform, under its keyframes: its box's top left, its scale of its own size, its turn, its opacity. */
-export interface StaticTransform { x: number; y: number; scale: number; rotate: number; opacity: number }
+import type { StaticTransform } from '@/lib/clip-transform';
+
+export type { StaticTransform };
 
 export interface TransformSectionProps {
   t: T;
@@ -67,7 +68,15 @@ export function withKey(motion: Motion, prop: MotionProp, t: number, v: MotionVa
   return next;
 }
 
-export function KeyframesSection({ t, motion, base, local, length, frame, onCommit, onSeek }: TransformSectionProps) {
+/** A change of a clip's Transform: its keyframes, and its own transform when that changes too. */
+export interface TransformCommit { motion: Motion; base?: Partial<StaticTransform> }
+
+/**
+ * A clip's Transform as numbers, the inspector's and the motion timeline's alike: each property's value where the
+ * picture is at the playhead, and what a value typed, a stopwatch or a navigator's middle makes of it (null: nothing,
+ * the playhead off the clip).
+ */
+export function transformModel(motion: Motion, base: StaticTransform, local: number | null, length: number, frame: number) {
   const on = local != null && local >= -frame / 2 && local <= length + frame / 2;
   const at = on ? Math.min(Math.max(local, 0), length) : 0;
   /* a property's value where the picture is now, as shown */
@@ -78,30 +87,41 @@ export function KeyframesSection({ t, motion, base, local, length, frame, onComm
     return shown[prop](keys?.length ? valueAt(prop, keys, at) : prop === 'scale' ? 1 : 0, base);
   };
   /* a value typed: a keyframe here when the property moves, else the clip's own value */
-  const set = (prop: MotionProp, n: number | [number, number]) => {
+  const set = (prop: MotionProp, n: number | [number, number]): TransformCommit | null => {
     if (motion[prop]?.length) {
-      if (!on) return;
-      onCommit(withKey(motion, prop, at, (keyed[prop] as (n: never, b: StaticTransform) => MotionValue)(n as never, base), frame));
-    } else onCommit(motion, (asBase[prop] as (n: never) => Partial<StaticTransform>)(n as never));
+      if (!on) return null;
+      return { motion: withKey(motion, prop, at, (keyed[prop] as (n: never, b: StaticTransform) => MotionValue)(n as never, base), frame) };
+    }
+    return { motion, base: (asBase[prop] as (n: never) => Partial<StaticTransform>)(n as never) };
   };
   /* the stopwatch: on, the first keyframe here at the value it has; off, no keyframes and that value its own */
-  const stopwatch = (prop: MotionProp) => {
+  const stopwatch = (prop: MotionProp): TransformCommit | null => {
     const value = now(prop);
     if (motion[prop]?.length) {
       const next = { ...motion };
       delete next[prop];
-      onCommit(next, (asBase[prop] as (n: never) => Partial<StaticTransform>)(value as never));
-    } else if (on) {
-      const first = prop === 'opacity' ? keyed.opacity(value as number) : prop === 'translate' ? [0, 0] as [number, number] : prop === 'scale' ? 1 : 0;
-      onCommit(withKey(motion, prop, at, first, frame));
+      return { motion: next, base: (asBase[prop] as (n: never) => Partial<StaticTransform>)(value as never) };
     }
+    if (!on) return null;
+    const first = prop === 'opacity' ? keyed.opacity(value as number) : prop === 'translate' ? [0, 0] as [number, number] : prop === 'scale' ? 1 : 0;
+    return { motion: withKey(motion, prop, at, first, frame) };
   };
   /* the navigator's middle: a keyframe here added (at its value now) or taken away */
-  const toggleHere = (prop: MotionProp) => {
-    if (!on) return;
+  const toggleHere = (prop: MotionProp): TransformCommit | null => {
+    if (!on) return null;
     const has = (motion[prop] ?? []).some((k) => near(k.t, at, frame));
-    onCommit(withKey(motion, prop, at, has ? null : valueAt(prop, motion[prop], at), frame));
+    return { motion: withKey(motion, prop, at, has ? null : valueAt(prop, motion[prop], at), frame) };
   };
+  return { on, at, now, set, stopwatch, toggleHere };
+}
+
+export function KeyframesSection({ t, motion, base, local, length, frame, onCommit, onSeek }: TransformSectionProps) {
+  const model = transformModel(motion, base, local, length, frame);
+  const { on, at, now } = model;
+  const commit = (c: TransformCommit | null) => { if (c) onCommit(c.motion, c.base); };
+  const set = (prop: MotionProp, n: number | [number, number]) => commit(model.set(prop, n));
+  const stopwatch = (prop: MotionProp) => commit(model.stopwatch(prop));
+  const toggleHere = (prop: MotionProp) => commit(model.toggleHere(prop));
 
   const row = (prop: MotionProp, label: string, field: React.ReactNode) => {
     const keys = motion[prop] ?? [];
@@ -172,7 +192,7 @@ function KeyDiamond({ filled }: { filled: boolean }) {
 }
 
 /** A property's stopwatch: lit while it moves. */
-function Stopwatch({ on, label, disabled, onClick }: { on: boolean; label: string; disabled?: boolean; onClick: () => void }) {
+export function Stopwatch({ on, label, disabled, onClick }: { on: boolean; label: string; disabled?: boolean; onClick: () => void }) {
   const color = on ? 'var(--tl-accent)' : 'var(--text-faint)';
   return (
     <button type="button" aria-label={label} title={label} aria-pressed={on} disabled={disabled} onClick={onClick}

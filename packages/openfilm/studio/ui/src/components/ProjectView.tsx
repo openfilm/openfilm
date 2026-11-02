@@ -13,8 +13,10 @@ import { MOTION_PROPS, readMotion, valueAt, withPreset, type Motion, type Motion
 import { copiedKeys, easeOfBezier, easedMotion, keyId, keyedBox, movedKeys, parseKeyId, pastedKeys, poseAt, withoutKeys, type CopiedKeys, type EaseCommand } from '@/lib/motion-keys';
 import type { MotionLanes } from './MotionLanes';
 import type { MotionPathKeys } from './MotionPath';
-import { MotionTimeline } from './MotionTimeline';
-import { declared } from '@/lib/clip-look';
+import { MotionTimeline, type Layer, type LayerHost } from './MotionTimeline';
+import { transformModel } from './KeyframesSection';
+import { staticTransform, transformEdits } from '@/lib/clip-transform';
+import { declared, withDeclarations } from '@/lib/clip-look';
 import { PARTS, compoundOf, dissolvedOf } from '../../../server/compound.mjs';
 import type { FilmValue } from '../../../server/ops.mjs';
 import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type Op, type ProjectFilm, type ProjectSettings, type SavedGroupClip } from '@/api';
@@ -44,7 +46,7 @@ import { apartOnTracks, type ClipEdit } from '@/lib/film-clip-edits';
 import { mediaFetch, useMediaImages } from '@/lib/media-queue';
 import { clipboardItemsOf, clipboardNow, laneOfBlock, pasteEdit, type TimelineClipboardItem } from '@/lib/timeline-clipboard';
 import {
-  editModelOf, freshLink, linkedIds, magnetOn, mainTrackOf, planMove, planRippleTrim, planRoom, planSpeed, slowestSpeed, soundTrackFor, type EditMode,
+  editModelOf, freshLink, linkedIds, magnetOn, mainTrackOf, planEdges, planMove, planRippleTrim, planRoom, planSpeed, slowestSpeed, soundTrackFor, type EditMode,
 } from '@/lib/timeline-edit';
 import { readTimelinePrefs, switchesOf } from '@/lib/timeline-prefs';
 import { fadeMsOf, type FadeMs } from '@/lib/clip-fade';
@@ -1069,6 +1071,38 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const motionLayers = React.useMemo(() => [...timelineTracks]
     .flatMap((track) => track.blocks.filter((b) => b.clipId && b.loc && (b.kind === 'mg' || b.kind === 'video'))
       .sort((a, b) => a.startMs - b.startMs).map((b) => ({ ...b, clipId: b.clipId! }))), [timelineTracks]);
+  /* a layer of the motion timeline beyond its keyframes: its Transform's numbers (the inspector's, lib/clip-transform),
+     how it blends (its mix-blend-mode) */
+  const layerHostOf = React.useCallback((layer: Layer): LayerHost => {
+    const clip = film.film?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === layer.clipId) as { style?: string; box?: FilmBox } | undefined;
+    const css = clip?.style ?? '';
+    const placed = layer.size ? { kind: layer.kind, own: layer.size, box: clip?.box ?? layer.box, stage: film.film?.stage ?? { w: 1920, h: 1080 }, css } : null;
+    const length = (layer.endMs - layer.startMs) / 1000;
+    const model = placed ? transformModel(motionOfBlock(layer), staticTransform(placed).base, (timeMs - layer.startMs) / 1000, length, keyFrameS) : null;
+    const style = (decl: Record<string, string | null>) => {
+      if (!layer.loc) return;
+      void editBlocks([{ loc: layer.loc, prop: 'style', value: withDeclarations(css, decl) || null }]).then((err) => { if (err) toast.showError(err); });
+    };
+    return {
+      model,
+      commit: (c) => {
+        if (!c || !placed || !layer.loc) return;
+        void editBlocks(transformEdits(layer.loc, placed, c.motion, c.base)).then((err) => { if (err) toast.showError(err); });
+      },
+      blend: declared(css, 'mix-blend-mode') ?? 'normal',
+      setBlend: (mode) => style({ 'mix-blend-mode': mode === 'normal' ? null : mode }),
+    };
+  }, [film.film, motionOfBlock, timeMs, keyFrameS, editBlocks, toast]);
+  /* a layer's bar moved or trimmed on the motion timeline: as the timeline moves and trims a clip (lib/timeline-edit) */
+  const moveLayer = React.useCallback((id: string, deltaMs: number) => {
+    const lead = blocksRef.current.find((b) => b.clipId === id);
+    const plan = lead ? planMove(editModel(), { ids: [id], deltaMs, pointerMs: lead.startMs + deltaMs, mode: 'place' }) : null;
+    if (plan?.ops.length) void edit(plan.ops, clipStep('history.stepMoved', [id]));
+  }, [editModel, edit]);
+  const trimLayer = React.useCallback((id: string, edge: 'start' | 'end', deltaMs: number) => {
+    const plan = planEdges(editModel(), [{ id, kind: edge }], deltaMs);
+    if (plan.ops.length) void edit(plan.ops, clipStep('history.stepTrimmed', [id]));
+  }, [editModel, edit]);
   const motionLanes = React.useMemo<MotionLanes | null>(
     () => (keyCount && keyedPicture?.clipId ? lanesOf({ ...keyedPicture, clipId: keyedPicture.clipId }) : null),
     [keyCount, keyedPicture, lanesOf],
@@ -4051,7 +4085,13 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     picked={selectedBlocks.flatMap((b) => (b.clipId ? [b.clipId] : []))}
                     onPick={(id, add) => setSelectedKeys((was) => (add ? (was.includes(id) ? was.filter((x) => x !== id) : [...was, id]) : [id]))}
                     lanesOf={lanesOf}
-                    labels={{ transform: t('inspector.transform'), empty: t('canvas.motionEmpty') }}
+                    hostOf={layerHostOf}
+                    fps={projectFps}
+                    onMoveLayer={moveLayer}
+                    onTrimLayer={trimLayer}
+                    workArea={markedRange}
+                    onWorkArea={setMarkedRange}
+                    t={t}
                   />
                   ) : (
                   <Timeline
