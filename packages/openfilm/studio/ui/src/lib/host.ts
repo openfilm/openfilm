@@ -392,7 +392,10 @@ export type StudioCommand =
   | { type: 'settings'; section?: 'agents' | 'providers' }
   /* the app's chat opens the examples over the film, to point at one or a part of one, or name a skill; `open`: on
      that skill's or example's page (a pill of one clicked) */
-  | { type: 'show-examples'; open?: CommunityItem };
+  | { type: 'show-examples'; open?: CommunityItem }
+  /* the app's chat added a skill of the Community's "Add a skill" (skills.add): the Community itself closes, so the
+     person is back at the conversation its dialog was opened over */
+  | { type: 'close-examples' };
 
 /** A skill or an example in the Community, to open on its page. */
 export type CommunityItem = { kind: 'skill'; name: string } | { kind: 'example'; id: string };

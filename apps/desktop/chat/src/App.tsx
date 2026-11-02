@@ -140,9 +140,9 @@ export function App({ initialProject, initialSelection, initialFfmpeg }: {
   return (
     <div className={`relative flex h-full flex-col ${assetsOpen ? '' : 'bg-[var(--dock-shell)]'}`}>
       {addingSkill ? (
-        <AddSkillDialog onClose={() => setAddingSkill(false)} onAdded={async () => { window.dispatchEvent(new Event(SKILLS_CHANGED)); }}
-          onPick={onProject ? (skill) => app.useSkill?.(skill) : undefined}
-          onMake={onProject ? () => window.dispatchEvent(new Event(MAKE_SKILL)) : undefined} />
+        <AddSkillDialog onClose={() => setAddingSkill(false)} onAdded={async () => { window.dispatchEvent(new Event(SKILLS_CHANGED)); app.skillAdded?.(); }}
+          onPick={onProject ? (skill) => { app.useSkill?.(skill); app.skillAdded?.(); } : undefined}
+          onMake={onProject ? () => { window.dispatchEvent(new Event(MAKE_SKILL)); app.skillAdded?.(); } : undefined} />
       ) : null}
       {/* under Studio's top bar (it runs over this, across the window): the seam on the left is the handle */}
       <Divider />
