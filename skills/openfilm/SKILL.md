@@ -9,5 +9,5 @@ Run `npx -y openfilm@latest` and follow the manual it prints: it is the whole of
 again whenever you need it.
 
 Before you make or pay for music, a sound effect, a transition, an effect, a filter, a sticker or a text animation,
-search OpenFilm's own library with `npx -y openfilm@latest find <kind> "<what>"` and use what fits; make one only when
-nothing does.
+search OpenFilm's own library, free and offline, with `npx -y openfilm@latest get <music-search|sfx-search|transition|…>
+--prompt "<what>"` and use what fits; make one only when nothing does.

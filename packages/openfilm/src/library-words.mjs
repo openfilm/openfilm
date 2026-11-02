@@ -7,7 +7,7 @@
  * and `rise` alike), one of CJK characters anywhere in it (`适合早晨的钢琴` says morning and piano).
  *
  * The things of the library carry their tags (`tags`, written once: scripts/library-describe.mjs for the sounds and
- * music, by hand for the rest); a thing's names say more of them, found as it is searched (src/find.mjs).
+ * music, by hand for the rest); a thing's names say more of them, found as it is searched (src/library-search.mjs).
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

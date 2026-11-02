@@ -15,6 +15,7 @@ import { changeSettings, kindOf, providersFile } from './keys.mjs';
 import { listProviders } from './providers/index.mjs';
 import { startStudio } from './server.mjs';
 import { filmHtml } from '../../src/film-doc.mjs';
+import { libraryVerbs } from '../../src/library-search.mjs';
 
 /* OpenFilm's service is asked what it offers: nowhere here (a port that refuses at once) */
 process.env.OPENFILM_API_URL ??= 'http://127.0.0.1:9';
@@ -426,16 +427,21 @@ test('openfilm get: what can be got here, connected, partly or not at all; wrong
   const run = (cwd, ...args) => new Promise((done) => execFile(process.execPath, [bin, 'get', ...args], { cwd, env, encoding: 'utf8' }, (error, stdout) => done({ status: error?.code ?? 0, stdout })));
   const root = project();
   /* the listing as the CLI prints it: the verbs' names padded to the longest shown */
-  const listing = (verbs, width = Math.max(...verbs.map((v) => v.length))) => [
-    'openfilm get <what> [--option value …]   media for this project, saved under assets/',
-    '  --yes              the person already agreed to what it spends',
-    '',
-    ...verbs.flatMap((verb) => {
-      const spec = VERBS[verb];
-      return [`  ${verb.padEnd(width)}  ${spec.help}${spec.dir ? ` Saved under ${spec.dir}/.` : ''}`,
-        `${' '.repeat(width + 4)}${Object.entries(spec.options).map(([n, o]) => flagHelp(n, o)).join(' ')}`];
-    }),
-  ];
+  /* OpenFilm's own library first (src/library-search.mjs), but for one verb's help */
+  const free = libraryVerbs();
+  const lines = (list, width) => list.flatMap((v) => [`  ${v.verb.padEnd(width)}  ${v.help}${v.dir ? ` Saved under ${v.dir}/.` : ''}`,
+    `${' '.repeat(width + 4)}${Object.entries(v.options).map(([n, o]) => flagHelp(n, o)).join(' ')}`]);
+  const library = (width) => ['Free, offline, from OpenFilm\'s own library (CC0): search it first, and make only what it does not have.', ...lines(free, width), ''];
+  const listing = (verbs, { one = false } = {}) => {
+    const width = Math.max(...[...(one ? [] : free.map((v) => v.verb)), ...verbs].map((v) => v.length));
+    return [
+      'openfilm get <what> [--option value …]   media for this project, saved under assets/',
+      '  --yes              the person already agreed to what it spends',
+      '',
+      ...(one ? [] : [...library(width), 'From a connected service:']),
+      ...lines(verbs.map((verb) => ({ verb, ...VERBS[verb] })), width),
+    ];
+  };
   const media = Object.keys(VERBS).filter((verb) => !WEB_VERBS.includes(verb) && made(verb));
   try {
     /* everything connected: the verbs, and nothing else */
@@ -460,8 +466,10 @@ test('openfilm get: what can be got here, connected, partly or not at all; wrong
     rmSync(providersFile());
     const nothing = get(scratch);
     assert.equal(nothing.status, 0, nothing.stderr);
-    assert.equal(nothing.stdout, 'Nothing is connected for media here: each kind works only once the person connects a service that makes it (below). '
-      + 'Until then, make sound and pictures in code, or use a service the person has a key for (with its API docs), and save them under assets/. '
+    assert.equal(nothing.stdout, `${library(Math.max(...free.map((v) => v.verb.length))).join('\n')}\n`
+      + 'Nothing is connected for media here: each kind works only once the person connects a service that makes it (below). '
+      + 'Until then, take what OpenFilm\'s own library has (its verbs are free and need nothing connected), make sound and pictures in code, '
+      + 'or use a service the person has a key for (with its API docs), and save them under assets/. '
       + `\`openfilm get <what> --help\` shows what one kind takes (${media.join(', ')}).\n\n${services()}\n`);
     assert.match(services(), /^Media services, each used with the person's own key: Brave Search \(web search\), Cartesia \(voice-over\), Doubao \(transcripts\), ElevenLabs \(voice-over, sound effects, music, transcripts\), fal\.ai \(images, video, music, sound effects\), .*, Microsoft Azure \(voice-over\), .*, Tavily \(web search\), Xiaomi MiMo \(voice-over, transcripts\)\. In Studio, the OpenFilm logo at the top left opens Settings/);
 
@@ -475,7 +483,7 @@ test('openfilm get: what can be got here, connected, partly or not at all; wrong
       `Not connected here: ${rest.map(unconnected).join(', ')}. ${CONNECT_ONE}`, '', services()].join('\n')}\n`);
     assert.doesNotMatch(partly.stdout.replace(services(), ''), /ElevenLabs|made by/i);
     const image = get(root, 'image', '--help');
-    assert.equal(image.stdout, `${[...listing(['image']), '',
+    assert.equal(image.stdout, `${[...listing(['image'], { one: true }), '',
       `Not connected here: ${unconnected('image')}. ${CONNECT_ONE}`].join('\n')}\n`);
     const unavailable = get(root, 'image', '--out', 'hero', '--prompt', 'a key');
     assert.equal(unavailable.status, 1);

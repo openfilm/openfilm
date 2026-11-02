@@ -145,7 +145,8 @@ const notConnected = (verbs) => `Not connected here: ${verbs.map((v) => `${v} ($
 const offered = (/** @type {string} */ verb) => listProviders().some((p) => /** @type {readonly string[]} */ (p.verbs).includes(verb));
 /** The whole of `openfilm get` when nothing is connected. */
 const nothing = () => 'Nothing is connected for media here: each kind works only once the person connects a service that makes it (below). '
-  + 'Until then, make sound and pictures in code, or use a service the person has a key for (with its API docs), and save them under assets/. '
+  + 'Until then, take what OpenFilm\'s own library has (its verbs are free and need nothing connected), make sound and pictures in code, '
+  + 'or use a service the person has a key for (with its API docs), and save them under assets/. '
   + `\`openfilm get <what> --help\` shows what one kind takes (${Object.keys(VERBS).filter((v) => !WEB_VERBS.includes(v) && offered(v)).join(', ')}).`;
 
 /** What `call` says when the person has added no service of their own. */

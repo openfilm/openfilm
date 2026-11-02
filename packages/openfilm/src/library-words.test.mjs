@@ -23,7 +23,7 @@ test('every tag is named in each language, once, of a kind', () => {
 
 test('the library\'s things carry tags of the vocabulary, and the made ones say what they are', () => {
   const { items } = /** @type {{ items: any[] }} */ (libraryIndex());
-  /* what `openfilm find` looks for */
+  /* what `openfilm get` searches in the library */
   const found = new Set(['music', 'sound', 'transition', 'effect', 'filter', 'sticker', 'text', 'template']);
   for (const item of items.filter((i) => found.has(i.cat))) {
     for (const t of item.tags ?? []) if (!/^stickers\/emoji\//.test(item.id)) assert.ok(vocab.byId.has(t), `${item.id}: no tag ${t}`);
