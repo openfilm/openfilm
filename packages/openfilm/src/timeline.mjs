@@ -872,10 +872,31 @@ function settle(c, row, track, ti) {
   }
 }
 
-/** The film's sound: each sound clip's and each video's own, placed where its clip sits (`clip`: whose). */
+/** A clip's page that is a film of its own: a folder's film.html. */
+const nestedFilm = (src) => /(^|\/)film\.html$/.test(src.replace(/[#?].*$/, '')) && src.includes('/');
+
+/**
+ * The film's sound: each sound clip's and each video's own, placed where its clip sits (`clip`: whose), and a film's in
+ * the film: each of its sounds, cut to the part of it the clip plays, where that part sits here, as loud as it is
+ * there times the clip's volume; the clip's fades go on the ones at its edges.
+ */
 function hear() {
   sounds.length = 0;
   for (const c of clips) {
+    if (c.inner && c.volume > 0) {
+      const from = c.span.from, to = c.span.to;
+      for (const s of c.inner) {
+        const end = s.at + (s.to - s.from) / s.speed;
+        const lo = Math.max(s.at, from), hi = Math.min(end, to);
+        if (!(hi > lo)) continue;
+        const fade = s.fade ? [Math.max(0, s.fade[0] - (lo - s.at)), Math.max(0, s.fade[1] - (end - hi))] : [0, 0];
+        if (c.fade && lo === from) fade[0] = Math.max(fade[0], c.fade[0]);
+        if (c.fade && hi === to) fade[1] = Math.max(fade[1], c.fade[1]);
+        sounds.push({ clip: `${c.id}/${s.clip}`, src: s.src, at: c.at + (lo - from), from: s.from + (lo - s.at) * s.speed,
+          to: s.from + (hi - s.at) * s.speed, volume: s.volume * c.volume, speed: s.speed, ...(fade[0] || fade[1] ? { fade } : {}) });
+      }
+      continue;
+    }
     if (c.volume <= 0 || (c.kind !== 'sound' && c.kind !== 'video')) continue;
     sounds.push({ clip: c.id, src: url(c.row.src).pathname, at: c.at, from: c.span.from, to: c.span.to, volume: c.volume, speed: c.span.speed,
       ...(c.fade ? { fade: c.fade } : {}) });
@@ -930,6 +951,15 @@ async function load(row, track, ti, el) {
     /* a page that is not there: its clip keeps its time, at the stage's size */
     c.missing = true;
     c.nw = stage.w; c.nh = stage.h;
+  } else if (nestedFilm(row.src)) {
+    /* a film in the film (its own folder's film.html): opened now, as it is loaded, for its sound, heard in this one
+       (see hear) wherever the playhead is */
+    c.row = row;
+    await wakePage(c);
+    const length = c.child.duration;
+    c.native = Number.isFinite(length) && length > 0 ? length : undefined;
+    c.inner = (c.win.__filmSounds?.() ?? []).map((s) => ({ ...s }));
+    if ([...pagesAwake].filter((p) => p.child).length > PAGES_AWAKE) restPage(c);
   } else if (SKIP_MISSING && row.time?.length === 2) {
     /* an editor's preview: a page whose #t= is its length opens when the playhead comes near (see near), its own
        length and size learned then (see wakePage); the film is up without waiting for every page of a long film */

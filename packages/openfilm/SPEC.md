@@ -119,6 +119,10 @@ trimmed, muted and set in volume on the timeline like any clip. A sound that bel
 second the shot plays it; moving the page clip does not move it. The host mixes and encodes the sound; it never
 records it from the page.
 
+A film can be a clip of another: `<iframe src="parts/intro/film.html">`, a film.html in a folder of its own, its
+`src` relative to it. Its picture is a page's; its sound is heard in the film that holds it, each of its sounds where
+the clip plays that part of it, at its volume times the clip's, the clip's fades on the ones at its edges.
+
 Timing that follows sound (beats, onsets, word timings) is data, not API: precompute it into files the page reads
 during `ready`. Hosts MAY provide tools that write such files.
 

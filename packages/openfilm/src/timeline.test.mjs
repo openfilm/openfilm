@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -28,6 +28,34 @@ test('a hidden track\'s clips are still placed for an editor, but neither drawn 
     await s.film.seek(1);
     const shown = await s.film.page.evaluate(() => [...document.querySelectorAll('body > section > *')].map((el) => el.style.visibility));
     assert.deepEqual(shown, ['hidden', 'visible']);
+  } finally {
+    await s.close();
+  }
+});
+
+test('a film in a film: its picture is a page\'s, and its sound is heard where the clip plays that part of it', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-nested-'));
+  writeFileSync(join(dir, 'title.html'), page('title', 4));
+  writeFileSync(join(dir, 'hum.wav'), silence(4));
+  mkdirSync(join(dir, 'parts', 'intro'), { recursive: true });
+  /* its own sound from 1 to 4 of its 4 seconds, fading in and out */
+  writeFileSync(join(dir, 'parts', 'intro', 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [
+    { clips: [{ id: 'title', src: '../../title.html' }] },
+    { clips: [{ id: 'hum', src: '../../hum.wav', at: 1, time: [0, 3], volume: 0.5, overrides: [{ fade: [0.25, 0.25] }] }] },
+  ] }));
+  /* the clip plays 0.5 to 3.5 of it, from 2 on this film */
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [
+    { clips: [{ id: 'intro', src: 'parts/intro/film.html', at: 2, time: [0.5, 3.5] }] },
+  ] }));
+  const s = await open(dir);
+  try {
+    const sounds = await s.film.page.evaluate(() => window.__filmSounds());
+    assert.deepEqual(sounds.map(({ clip, src, at, from, to, volume, fade }) => ({ clip, src, at, from, to, volume, fade })), [
+      /* its part from 1 to 3.5 of it: at 2.5 here, the file's 0 to 2.5, its fade out cut off with the clip's end */
+      { clip: 'intro/hum', src: '/hum.wav', at: 2.5, from: 0, to: 2.5, volume: 0.5, fade: [0.25, 0] },
+    ]);
+    await s.film.seek(3);
+    assert.equal(await s.film.page.evaluate(() => document.querySelector('#intro').style.visibility), 'visible');
   } finally {
     await s.close();
   }
