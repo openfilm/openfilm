@@ -28,9 +28,11 @@ const RANGE: Record<EffectProp, [number, number, number]> = {
 const PROP_LABEL: Record<MotionProp, string> = { translate: 'inspector.keyPosition', scale: 'inspector.keyScale', rotate: 'inspector.keyRotate', opacity: 'inspector.keyOpacity' };
 const LABEL: Record<string, string> = { video: '#4ca3ad', mg: '#a594d6', still: '#c7a35f', text: '#d0706f', image: '#c7a35f', shape: '#5b8fd6', box: '#8c9a6b', group: '#8a8f98' };
 
-export function MotionPanel({ layers, hostOf, onApplied }: {
+export function MotionPanel({ layers, hostOf, onApplied, contents }: {
   /** The picked layers, the first the one shown. */
   layers: readonly Layer[];
+  /** What the layer itself is made of (a text's words and font, a shape's fill and stroke): its page's properties. */
+  contents?: React.ReactNode;
   hostOf: (layer: Layer) => LayerHost;
   /** Something was put on these layers (the timeline twirls them open). */
   onApplied: (ids: readonly string[]) => void;
@@ -46,7 +48,8 @@ export function MotionPanel({ layers, hostOf, onApplied }: {
     if (took.length) onApplied(took.map((l) => l.clipId));
   };
   return (
-    <div className={styles.panel} data-motion-panel="">
+    /* the inspector of Motion: a press in it keeps what is in hand on the picture */
+    <div className={styles.panel} data-motion-panel="" data-film-inspector="">
       <div className={styles.tabs} role="tablist">
         {(['properties', 'presets'] as const).map((id) => (
           <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? styles.on : undefined} onClick={() => choose(id)} data-motion-tab={id}>
@@ -56,14 +59,14 @@ export function MotionPanel({ layers, hostOf, onApplied }: {
       </div>
       <div className={styles.scroll}>
         {tab === 'properties'
-          ? (layer && host ? <Properties layer={layer} count={layers.length} host={host} t={t} onApplied={onApplied} /> : <p className={styles.empty}>{t('canvas.panelPick')}</p>)
+          ? (layer && host ? <Properties layer={layer} count={layers.length} host={host} t={t} onApplied={onApplied} contents={contents} /> : <p className={styles.empty}>{t('canvas.panelPick')}</p>)
           : <Presets host={host} count={layers.length} onPut={put} t={t} />}
       </div>
     </div>
   );
 }
 
-function Properties({ layer, count, host, t, onApplied }: { layer: Layer; count: number; host: LayerHost; t: (key: string) => string; onApplied: (ids: readonly string[]) => void }) {
+function Properties({ layer, count, host, t, onApplied, contents }: { layer: Layer; count: number; host: LayerHost; t: (key: string) => string; onApplied: (ids: readonly string[]) => void; contents?: React.ReactNode }) {
   const model = host.model;
   const motion = model?.preset?.motion ?? {};
   const [adding, setAdding] = React.useState<{ x: number; y: number } | null>(null);
@@ -76,6 +79,7 @@ function Properties({ layer, count, host, t, onApplied }: { layer: Layer; count:
         <span className={styles.name} title={layer.title}>{layer.title || layer.clipId}</span>
         <span className={styles.kind}>{count > 1 ? t('canvas.panelMore').replace('{n}', String(count - 1)) : null}</span>
       </div>
+      {contents ? <div className="px-[10px]" data-panel-section="contents">{contents}</div> : null}
       {model ? (
         <section className={styles.section} data-panel-section="transform">
           <div className={styles.sectionHead}><span>{t('inspector.transform')}</span></div>

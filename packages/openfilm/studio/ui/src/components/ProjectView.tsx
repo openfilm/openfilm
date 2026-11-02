@@ -7,13 +7,13 @@
  * are written one at a time (see editor/use-film.ts); the agent's writes come in through the folder's events.
  */
 import * as React from 'react';
-import { BookmarkPlus, ChartSpline, ClipboardCopy, ClipboardPaste, Diamond, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, Spline, TriangleAlert, Upload } from 'lucide-react';
+import { BookmarkPlus, ChartSpline, ClipboardCopy, ClipboardPaste, Diamond, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Plus, Settings2, Spline, TriangleAlert, Upload } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
 import { EFFECTS, MOTION_PROPS, animationsOf, effectsOf, readMotion, valueAt, withAnimations, withEffects, withPreset, type EffectProp, type KeyedProp, type Motion, type MotionProp } from '../../../../src/clip-motion.mjs';
 import { copiedKeys, easeOfBezier, easedMotion, effectsModel, type EffectsChange, keyId, keyedBox, movedKeys, parseKeyId, pastedKeys, poseAt, withoutKeys, type CopiedKeys, type EaseCommand } from '@/lib/motion-keys';
 import type { MotionLanes } from './MotionLanes';
 import type { MotionPathKeys } from './MotionPath';
-import { LAYER_ROW_H, useMotionLayers, type Layer, type LayerHost, type LayerMask, type MotionLayersView } from './MotionLayers';
+import { LAYER_ROW_H, useMotionLayers, type Layer, type LayerContents, type LayerHost, type LayerMask, type MotionLayersView } from './MotionLayers';
 import { maskCss, maskDefault, maskOf, type Mask } from '@/lib/clip-mask';
 import { maskKeyframes, maskModel, readMaskKeys, type MaskKeys } from '@/lib/mask-motion';
 import { splitFor, textAnimOf, type TextAnim } from '@/lib/text-animator';
@@ -130,7 +130,8 @@ import { FontScopeContext, type FontScope } from '@/lib/use-fonts';
 import { stageMenu, stageRecoveryMenu, type StageArrangeResult, type StageMenuContext, type StagePictureActions } from './stage-menu';
 import type { StageEditFailure, StageTextEdit } from './FilmInspector';
 import { layerTarget, pageClipOf, recoverLayer } from '@/lib/stage-layers';
-import { pictureStyle, relativeTo, type TemplateControls } from '@/lib/template-controls';
+import { pictureStyle, relativeTo, withVar, type TemplateControls } from '@/lib/template-controls';
+import { numberOf, readVarMotion, writeVarMotion } from '@/lib/page-motion';
 import { propsAttr, propsOf, type ComponentProp } from '@/lib/component-props';
 import { pointersOf, propsWithoutDeleted, withDeleted } from '@/lib/layer-delete';
 import {
@@ -139,7 +140,7 @@ import {
 } from '@/lib/layer-clipboard';
 import { idsIn, pastedElsewhere, pastedPage, withoutPaste, withPaste, type PasteItem, type PasteLayer, type PastedPage } from '@/lib/layer-paste';
 import { pasteTargets, targetById } from '@/lib/layer-paste-target';
-import type { PropsHost } from './PropertiesSection';
+import { PropertiesSection, type PropsHost } from './PropertiesSection';
 import type { LayerPropsActions } from './FilmInspector';
 import { SAVED, refreshSaved, savedActions, savedSources, useSavedListing } from '@/lib/saved';
 import { batchMap } from '@/lib/batch-map';
@@ -1089,6 +1090,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const motionLayers = React.useMemo(() => [...timelineTracks]
     .flatMap((track) => track.blocks.filter((b) => b.clipId && b.loc && (b.kind === 'mg' || b.kind === 'video'))
       .sort((a, b) => a.startMs - b.startMs).map((b) => ({ ...b, clipId: b.clipId! }))), [timelineTracks]);
+  /* a page layer's Contents (set once its properties can be read, below) */
+  const contentsOfRef = React.useRef<(layer: TimelineBlock & { clipId: string }) => LayerContents | null>(() => null);
   /* a layer of the motion timeline beyond its keyframes: its Transform's numbers (the inspector's, lib/clip-transform),
      how it blends (its mix-blend-mode) */
   const layerHostOf = React.useCallback((layer: TimelineBlock & { clipId: string }): LayerHost => {
@@ -2021,7 +2024,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       look(item, block?.loc && clip ? [{ loc: block.loc, style: clip.style }] : []);
       return null;
     };
-    return { actions, applyDrop, lookTargets };
+    return { actions, applyDrop, lookTargets, place };
   }, [language, selectedBlocks, editModel, projectId, addMedia, timelineTracks, edit, filmClipOf, editBlocks, askTransition, t, toast]);
   /* a look tried: shown on the clips it would go on, taken off when the try ends */
   React.useEffect(() => {
@@ -2986,7 +2989,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     picked: selectedBlocks.flatMap((b) => (b.clipId ? [b.clipId] : [])),
     onPick: (id, add) => setSelectedKeys((was) => (add ? (was.includes(id) ? was.filter((x) => x !== id) : [...was, id]) : [id])),
     lanesOf: (l) => lanesOf(l as TimelineBlock & { clipId: string }),
-    hostOf: (l) => layerHostOf(l as TimelineBlock & { clipId: string }),
+    hostOf: (l) => ({ ...layerHostOf(l as TimelineBlock & { clipId: string }), contents: contentsOfRef.current(l as TimelineBlock & { clipId: string }) }),
     onOpen: openComposition, reveal: motionReveal, t,
   });
   const compMotion = useMotionLayers({
@@ -2995,6 +2998,28 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     onPick: (id, add) => setCompPicked((was) => (add ? (was.includes(id) ? was.filter((x) => x !== id) : [...was, id]) : [id])),
     lanesOf: elementLanesOf, hostOf: elementHostOf, reveal: motionReveal, t,
   });
+  /* a new layer (Motion's toolbar): words, a shape or a solid from the library's layers, still, on a track of its own at
+     the top from the playhead, for keyframes to move; or the picked layers grouped (a compound clip, as an animation
+     editor precomposes them, moved together) */
+  const [newLayerMenu, setNewLayerMenu] = React.useState<{ x: number; y: number } | null>(null);
+  const newLayerItems = (): ContextMenuEntry[] => {
+    const layer = (id: string, label: string, vars?: Record<string, string>) => ({
+      id, label, onSelect: () => { const item = builtInItem(`${BUILT_IN}/${id}`); if (item) void library.place(item, vars, label); else toast.show(t('timeline.editFail')); },
+    });
+    return [
+      /* the words still: how they come in and go out is keyframes now, not the page's own */
+      layer(TEXT_COMPONENT, t('canvas.layerText'), { '--in': 'none', '--loop': 'none', '--out': 'none' }),
+      { id: 'sep-shapes', separator: true },
+      layer('layers/rectangle', t('canvas.layerRect')),
+      layer('layers/ellipse', t('canvas.layerEllipse')),
+      layer('layers/polygon', t('canvas.layerPolygon')),
+      layer('layers/star', t('canvas.layerStar')),
+      layer('layers/solid', t('canvas.layerSolid')),
+      { id: 'sep-group', separator: true },
+      { id: 'group', label: t('canvas.layerGroup'), shortcut: '⌥G', disabled: !selectedBlocks.length || Boolean(motionComp),
+        onSelect: () => { void makeCompound(selectedBlocks).then((err) => { if (err) toast.showError(err); }); } },
+    ];
+  };
   /* the edit's tracks as layers: each picture clip a row of its own (its track's, so drags and trims are the edit's),
      in its track's order and then by time; sound tracks as they are */
   const layerTracks = React.useMemo(() => {
@@ -3025,6 +3050,10 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       headWidth: view.headWidth,
       /* an animation editor's tools in the place of cutting's: ease the picked keyframes, their curves, what moves */
       tools: [
+        { id: 'new', label: t('canvas.newLayer'), icon: <Plus size={16} />, onClick: () => {
+          const r = document.querySelector('[data-motion-tool="new"]')?.getBoundingClientRect();
+          setNewLayerMenu(r ? { x: r.left, y: r.bottom + 4 } : { x: 200, y: 200 });
+        } },
         { id: 'ease', label: t('canvas.toolEase'), hint: 'F9', icon: <Spline size={16} />, disabled: !keysPicked, onClick: () => runKeys('easy') },
         { id: 'graph', label: t('canvas.toolGraph'), hint: '⇧F3', icon: <ChartSpline size={16} />, active: motionGraph, onClick: () => setMotionGraph((on) => !on) },
         { id: 'moving', label: t('canvas.showMoving'), hint: 'U', icon: <Diamond size={15} />, disabled: !layersPicked, onClick: view.showMoving },
@@ -3077,6 +3106,52 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const clipPropsOf = React.useCallback((clipId: string | undefined): ComponentProp[] => (
     clipId ? propsOf(filmRef.current?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === clipId)) : []
   ), []);
+  /* the page's own value of each of its properties, as the picture last showed them (a page layer's Contents) */
+  const [pageVars, setPageVars] = React.useState<ReadonlyMap<string, Readonly<Record<string, string>>>>(new Map());
+  React.useEffect(() => {
+    if (workMode !== 'motion') return undefined;
+    let live = true;
+    const want = motionLayers.filter((l) => l.kind === 'mg' && !pageVars.has(l.clipId) && clipPropsOf(l.clipId).some((p) => p.type === 'var'));
+    if (!want.length) return undefined;
+    const timer = window.setTimeout(() => {
+      void Promise.all(want.map((l) => askStage<TemplateControls>('controls', { clip: l.clipId }).catch(() => null).then((c) => [l.clipId, c] as const))).then((read) => {
+        if (!live) return;
+        const found = read.filter((r): r is readonly [string, TemplateControls] => r[1] != null);
+        if (found.length) setPageVars((was) => new Map([...was, ...found.map(([id, c]) => [id, Object.fromEntries(c.vars.map((v) => [v.name, v.value]))] as const)]));
+      });
+    }, 300);
+    return () => { live = false; window.clearTimeout(timer); };
+  }, [workMode, motionLayers, pageVars, clipPropsOf, askStage, Math.floor(timeMs / 1000)]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* its properties that are numbers, each keyed as its Transform is (lib/page-motion): still, a `:root` override */
+  contentsOfRef.current = (layer) => {
+    const clip = layer.kind === 'mg' ? film.film?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === layer.clipId) : undefined;
+    if (!clip) return null;
+    const overrides = clip.overrides as readonly FilmOverride[] | undefined;
+    const keyed = readVarMotion(clip.id, overrides, film.film?.keyframes);
+    const still = overrideOf(overrides, { at: ':root' })?.style ?? {};
+    const own = pageVars.get(clip.id) ?? {};
+    const params = clipPropsOf(clip.id).flatMap((p) => {
+      if (p.type !== 'var' || p.var === '--clip-length') return [];
+      const num = numberOf(still[p.var] as string | undefined) ?? numberOf(own[p.var]);
+      const k = keyed[p.var];
+      return k || num ? [{ var: p.var, label: p.name, unit: k?.unit ?? num?.unit ?? '', still: num?.n ?? null }] : [];
+    });
+    return {
+      params,
+      keys: Object.fromEntries(Object.entries(keyed).map(([v, k]) => [v, k.keys])),
+      commit: (keys, stillPatch) => {
+        const unitOf = (v: string) => params.find((x) => x.var === v)?.unit ?? '';
+        let next = overrides;
+        for (const [v, n] of Object.entries(stillPatch ?? {})) next = withVar(next, v, n == null ? null : `${Math.round(n * 1000) / 1000}${unitOf(v)}`) ?? undefined;
+        const w = writeVarMotion(clip.id, next, Object.fromEntries(Object.entries(keys).filter(([, ks]) => ks.length).map(([v, ks]) => [v, { unit: unitOf(v), keys: ks }])), clip.time?.[0] ?? 0);
+        const set = Object.fromEntries(Object.entries(w.keyframes).filter(([name, body]) => body != null || film.film?.keyframes?.[name] != null));
+        void edit([
+          { op: 'props', edits: [{ clip: clip.id, prop: 'overrides', value: w.overrides as unknown as Record<string, unknown> | null }] },
+          ...(Object.keys(set).length ? [{ op: 'keyframes' as const, set }] : []),
+        ], clipStep('history.stepMoved', [clip.id])).then((err) => { if (err) toast.showError(err); });
+      },
+    };
+  };
   const writeClipProps = React.useCallback((clipId: string | undefined, next: readonly ComponentProp[]) => {
     const loc = blocksRef.current.find((b) => b.clipId === clipId)?.loc;
     if (!loc) { toast.show(t('timeline.editFail')); return; }
@@ -4447,6 +4522,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                           onApplied={(ids) => setMotionReveal((was) => ({ ids, n: (was?.n ?? 0) + 1 }))} />
                       ) : (
                         <MotionPanel layers={motionLayers.filter((l) => selectedBlocks.some((b) => b.clipId === l.clipId))} hostOf={(l) => layerHostOf(l as TimelineBlock & { clipId: string })}
+                          contents={(() => {
+                            /* a page layer's own properties (its words, its fill…), as the edit's inspector shows them */
+                            const block = selectedBlocks.length === 1 ? selectedBlocks[0]! : null;
+                            const host = block?.kind === 'mg' && block.loc ? propsHostOf(block) : null;
+                            return host && block?.loc ? <PropertiesSection host={host} commit={(next) => { void editBlocks([{ loc: block.loc!, prop: 'overrides', value: next as unknown as Record<string, unknown> | null }]).then((err) => { if (err) toast.showError(err); }); }} /> : null;
+                          })()}
                           onApplied={(ids) => setMotionReveal((was) => ({ ids, n: (was?.n ?? 0) + 1 }))} />
                       )}
                     </div>
@@ -4596,6 +4677,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                   />
                   )}
                   {motionOpen ? (compBlock ? compMotion.overlay : filmMotion.overlay) : null}
+                  {newLayerMenu ? <ContextMenu x={newLayerMenu.x} y={newLayerMenu.y} items={newLayerItems()} onClose={() => setNewLayerMenu(null)} /> : null}
                 </div>
                 {/* the audio meters, beside the timeline */}
                 <div className="absolute inset-y-0 right-0"><AudioMeters levels={tools.levels} playing={playing} /></div>

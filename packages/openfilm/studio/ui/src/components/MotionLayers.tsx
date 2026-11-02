@@ -15,7 +15,7 @@
  */
 import * as React from 'react';
 import { Box, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, Plus, X } from 'lucide-react';
-import { EFFECTS, MOTION_PROPS, type EffectProp, type KeyedProp, type Motion, type MotionProp } from '../../../../src/clip-motion.mjs';
+import { EFFECTS, MOTION_PROPS, valueAt, type EffectProp, type Key, type KeyedProp, type Motion, type MotionProp } from '../../../../src/clip-motion.mjs';
 import type { effectsModel, EffectsChange } from '@/lib/motion-keys';
 import { easeOfBezier, easedMotion, keyId, movedKeys, withoutKeys, type EaseCommand } from '@/lib/motion-keys';
 import { MASK_FIELDS, MASK_SHAPES, type MaskShape } from '@/lib/clip-mask';
@@ -69,6 +69,19 @@ export interface LayerHost {
   three?: { on: boolean; model: ReturnType<typeof effectsModel>; commit: (c: EffectsChange | null) => void; toggle: (on: boolean) => void };
   /** Its stroke drawn on (a shape's): on or not, how much is drawn (an effect's numbers, `trim`), turned on. */
   stroke?: { on: boolean; model: ReturnType<typeof effectsModel>; commit: (c: EffectsChange | null) => void; turnOn: () => void };
+  /** What its page is made of, as numbers (a page layer's): each keyed as a Transform's property (lib/page-motion). */
+  contents?: LayerContents | null;
+}
+
+/**
+ * A page layer's Contents: its properties that are numbers (a shape's stroke width, a repeater's copies), each with
+ * its value when it has no keyframes (`still`: null, the page's own not known yet) and its keyframes, at seconds of
+ * the clip; `commit` writes them all (a still value null: the page's own again, left out: as it was).
+ */
+export interface LayerContents {
+  params: { var: string; label: string; unit: string; still: number | null }[];
+  keys: Readonly<Record<string, readonly Key[]>>;
+  commit: (keys: Record<string, Key[]>, still?: Record<string, number | null>) => void;
 }
 
 /** A layer's mask in the Masks group: its shape (none: no mask), its keyframes (lib/mask-motion), what changes it. */
@@ -128,6 +141,10 @@ const MASK_LABEL: Record<MaskParam, string> = { pos: 'inspector.keyPosition', si
 /** A mask's row as the keyframe rows take it (a name of its own beside the Transform's). */
 const maskRow = (p: MaskParam) => `mask-${p}` as KeyedProp;
 const maskParamOf = (prop: string) => prop.slice('mask-'.length) as MaskParam;
+/** A page's number as the keyframe rows take it. */
+const contentRow = (v: string) => `content${v}` as KeyedProp;
+const isContentRow = (prop: string) => prop.startsWith('content--');
+const contentVarOf = (prop: string) => prop.slice('content'.length);
 /** A layer's label color by what it is, as an animation editor gives each kind its own. */
 const LABEL: Record<string, string> = { video: '#4ca3ad', mg: '#a594d6', still: '#c7a35f', text: '#d0706f', image: '#c7a35f', shape: '#5b8fd6', box: '#8c9a6b', group: '#8a8f98' };
 const labelOf = (layer: Layer) => LABEL[layer.kind] ?? '#8a8f98';
@@ -163,7 +180,7 @@ export function Scrub({ value, onCommit, step = 1, digits = 1, unit, disabled, l
   const fmt = (n: number) => (Number.isInteger(n) && digits <= 1 ? n.toFixed(1) : n.toFixed(digits));
   if (typing != null) {
     return (
-      <input autoFocus aria-label={label} value={typing} onChange={(e) => setTyping(e.target.value)}
+      <input autoFocus aria-label={label} value={typing} onChange={(e) => setTyping(e.target.value)} onFocus={(e) => e.currentTarget.select()}
         onBlur={() => { const n = Number(typing); setTyping(null); if (Number.isFinite(n)) onCommit(n); }}
         onKeyDown={(e) => {
           if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
@@ -281,9 +298,14 @@ export function useMotionLayers(p: MotionLayersArgs): MotionLayersView {
     const pick = live.current.maskPick;
     if (!pick?.keys.size) return false;
     const layer = live.current.layers.find((l) => l.clipId === pick.id);
-    const mk = layer ? live.current.hostOf(layer).mask : null;
-    if (!mk) return false;
-    const rows = Object.fromEntries(Object.entries(mk.keys).map(([prop, keys]) => [maskRow(prop as MaskParam), keys])) as Motion;
+    const host = layer ? live.current.hostOf(layer) : null;
+    const mk = host?.mask ?? null;
+    const ct = host?.contents ?? null;
+    if (!mk && !ct) return false;
+    const rows = {
+      ...Object.fromEntries(Object.entries(mk?.keys ?? {}).map(([prop, keys]) => [maskRow(prop as MaskParam), keys])),
+      ...Object.fromEntries(Object.entries(ct?.keys ?? {}).map(([v, keys]) => [contentRow(v), keys])),
+    } as Motion;
     let next: Motion;
     let keep: ReadonlySet<string> = pick.keys;
     if (what === 'delete') { next = withoutKeys(rows, pick.keys); keep = new Set(); }
@@ -293,7 +315,9 @@ export function useMotionLayers(p: MotionLayersArgs): MotionLayersView {
       next = movedKeys(rows, pick.keys, what.move);
       keep = new Set([...pick.keys].map((id) => keyId(at(id).prop as KeyedProp, Math.round((at(id).t + dt) * 1000) / 1000)));
     } else next = easedMotion(rows, pick.keys, what);
-    mk.commit({ keys: Object.fromEntries(Object.entries(next).flatMap(([prop, keys]) => (keys?.length ? [[maskParamOf(prop), keys]] : []))) as MaskKeys });
+    const touched = [...pick.keys].map((k) => k.slice(0, k.lastIndexOf('@')));
+    if (mk && touched.some((prop) => !isContentRow(prop))) mk.commit({ keys: Object.fromEntries(Object.entries(next).flatMap(([prop, keys]) => (keys?.length && !isContentRow(prop) ? [[maskParamOf(prop), keys]] : []))) as MaskKeys });
+    if (ct && touched.some(isContentRow)) ct.commit(Object.fromEntries(Object.entries(next).flatMap(([prop, keys]) => (keys?.length && isContentRow(prop) ? [[contentVarOf(prop), [...keys]]] : []))));
     setMaskPick({ id: pick.id, keys: keep });
     return true;
   }, []);
@@ -323,7 +347,7 @@ export function useMotionLayers(p: MotionLayersArgs): MotionLayersView {
         setShown((was) => {
           const next = new Map(was);
           for (const layer of targets) {
-            const moving = now.lanesOf(layer).rows.filter((r) => r.keys.length).map((r) => r.prop);
+            const moving = [...now.lanesOf(layer).rows.filter((r) => r.keys.length).map((r) => r.prop), ...contentsKeyed(now.hostOf(layer))];
             const want: readonly Shown[] = key === 'u' ? moving : key === 'e' ? ['fx'] : [SOLO[key]!];
             const had = next.get(layer.clipId) ?? [];
             const same = had.length === want.length && want.every((x) => had.includes(x));
@@ -395,6 +419,27 @@ export function useMotionLayers(p: MotionLayersArgs): MotionLayersView {
       head: <div style={{ paddingTop: LANE_PAD / 2 }}>{lanes.graph ? <MotionLaneHeads lanes={lanes} /> : heads}</div>,
       body: (px) => <MotionLaneRows lanes={lanes} top={0} pxPerMs={px} />,
     });
+    const pickOf = (): Pick<MotionLanes, 'picked' | 'onPick' | 'onMove' | 'onMenu'> => ({
+      picked: maskPick?.id === id ? maskPick.keys : new Set(),
+      onPick: (ids, mode) => setMaskPick((was) => {
+        const base = was?.id === id ? was.keys : new Set<string>();
+        if (mode === 'set') return { id, keys: new Set(ids) };
+        const next = new Set(base);
+        for (const k of ids) { if (mode === 'toggle' && next.has(k)) next.delete(k); else next.add(k); }
+        return { id, keys: next };
+      }),
+      onMove: (dt) => { maskKeysRun({ move: dt }); },
+      onMenu: (e) => setMaskMenu({ x: e.clientX, y: e.clientY }),
+    });
+    /* what its page is made of, first, as an animation editor shows a shape's Contents above its Transform */
+    const ct = host.contents;
+    if (ct?.params.length && (props.includes('fx') || props.some((x) => isContentRow(x)))) {
+      group('contents', t('canvas.contentsGroup'), undefined, undefined, undefined, { 'data-contents-group': id });
+      if (isOpen('contents')) {
+        const lanes = contentLanes(all, ct, pickOf(), props.includes('fx') ? null : props.filter(isContentRow).map(contentVarOf));
+        if (lanes.rows.length) rows('contents', lanes, lanes.rows.map((row) => <ContentHead key={row.prop} layer={layer} lanes={lanes} v={contentVarOf(row.prop)} contents={ct} t={t} />));
+      }
+    }
     /* its Transform, a 3D layer's depth and turns each after the property it goes with */
     const order: KeyedProp[] = MOTION_PROPS.flatMap((x) => [x, ...(THREE_AFTER[x] ?? [])]);
     const tf = { ...all, rows: all.rows.filter((r) => (isTransform(r.prop) && props.includes(r.prop)) || (isThree(r.prop) && Object.entries(THREE_AFTER).some(([base, xs]) => xs.includes(r.prop) && props.includes(base as Shown))))
@@ -455,18 +500,7 @@ export function useMotionLayers(p: MotionLayersArgs): MotionLayersView {
         </>
       ), () => mk.setShape(null), undefined, { 'data-masks-group': id });
       if (isOpen('mask') && mk.model) {
-        const masks = maskLanes(all, mk, {
-          picked: maskPick?.id === id ? maskPick.keys : new Set(),
-          onPick: (ids, mode) => setMaskPick((was) => {
-            const base = was?.id === id ? was.keys : new Set<string>();
-            if (mode === 'set') return { id, keys: new Set(ids) };
-            const next = new Set(base);
-            for (const k of ids) { if (mode === 'toggle' && next.has(k)) next.delete(k); else next.add(k); }
-            return { id, keys: next };
-          }),
-          onMove: (dt) => { maskKeysRun({ move: dt }); },
-          onMenu: (e) => setMaskMenu({ x: e.clientX, y: e.clientY }),
-        });
+        const masks = maskLanes(all, mk, pickOf());
         rows('mask', masks, masks.rows.map((row) => <MaskHead key={row.prop} layer={layer} lanes={masks} param={maskParamOf(row.prop)} mask={mk} t={t} />));
       }
     }
@@ -519,7 +553,7 @@ export function useMotionLayers(p: MotionLayersArgs): MotionLayersView {
       { id: 'blend', label: t('canvas.motionMode'), submenu: BLEND_MODES.map((mode) => ({ id: `blend-${mode}`, label: t(`inspector.blendModes.${mode}`), checked: host.blend === mode, onSelect: () => host.setBlend(mode) })) },
       { id: 'sep-show', separator: true },
       { id: 'moving', label: t('canvas.showMoving'), shortcut: 'U', onSelect: () => setShown((was) => {
-        const keyed = lanesOf(layer).rows.filter((r) => r.keys.length).map((r) => r.prop);
+        const keyed = [...lanesOf(layer).rows.filter((r) => r.keys.length).map((r) => r.prop), ...contentsKeyed(hostOf(layer))];
         const next = new Map(was);
         if (keyed.length) next.set(layer.clipId, keyed); else next.delete(layer.clipId);
         return next;
@@ -587,7 +621,7 @@ export function useMotionLayers(p: MotionLayersArgs): MotionLayersView {
   const showMoving = () => setShown((was) => {
     const next = new Map(was);
     for (const layer of layers.filter((l) => picked.includes(l.clipId))) {
-      const keyed = lanesOf(layer).rows.filter((r) => r.keys.length).map((r) => r.prop);
+      const keyed = [...lanesOf(layer).rows.filter((r) => r.keys.length).map((r) => r.prop), ...contentsKeyed(hostOf(layer))];
       const had = next.get(layer.clipId) ?? [];
       if (!keyed.length || (had.length === keyed.length && keyed.every((x) => had.includes(x)))) next.delete(layer.clipId);
       else next.set(layer.clipId, keyed);
@@ -651,6 +685,101 @@ function TextParams({ layer, host, anim, t }: { layer: Layer; host: NonNullable<
       <Scrub label={t('canvas.textStart')} value={anim.start} unit="s" step={0.01} digits={2} onCommit={(n) => set({ start: Math.max(0, n) })} />
       <Scrub label={t('canvas.textStagger')} value={anim.stagger} unit="s" step={0.002} digits={3} onCommit={(n) => set({ stagger: Math.max(0, n) })} />
       <Scrub label={t('canvas.textSecs')} value={anim.secs} unit="s" step={0.01} digits={2} onCommit={(n) => set({ secs: Math.max(0.01, n) })} />
+    </div>
+  );
+}
+
+/** A layer's page numbers that have keyframes, as rows (what U shows). */
+const contentsKeyed = (host: LayerHost) => Object.entries(host.contents?.keys ?? {}).filter(([, k]) => k.length).map(([v]) => contentRow(v));
+
+/** A page's number now: as its keyframes have it at the clip's second `t`, else its still value. */
+const contentNow = (ct: LayerContents, v: string, t: number) => {
+  const keys = ct.keys[v];
+  return keys?.length ? (valueAt('opacity', keys as Key[], t) as number) : ct.params.find((p) => p.var === v)?.still ?? null;
+};
+
+/** A page's numbers as keyframe rows (only those named, or all), as a mask's are. */
+function contentLanes(all: MotionLanes, ct: LayerContents, pick: Pick<MotionLanes, 'picked' | 'onPick' | 'onMove' | 'onMenu'>, only: string[] | null): MotionLanes {
+  const keysOf = (v: string) => [...(ct.keys[v] ?? [])];
+  const write = (v: string, keys: Key[]) => {
+    const next: Record<string, Key[]> = Object.fromEntries(Object.entries(ct.keys).map(([k, ks]) => [k, [...ks]]));
+    if (keys.length) next[v] = keys; else delete next[v];
+    ct.commit(next);
+  };
+  const local = (all.playheadMs - all.startMs) / 1000;
+  const frame = all.frameMs / 1000;
+  return {
+    ...all,
+    rows: ct.params.filter((p) => !only || only.includes(p.var)).map((p) => ({ prop: contentRow(p.var), label: p.label, keys: ct.keys[p.var] ?? [] })),
+    ...pick,
+    onToggleHere: (prop) => {
+      const v = contentVarOf(prop);
+      const keys = keysOf(v);
+      const here = keys.find((k) => Math.abs(k.t - local) < frame / 2);
+      const now = contentNow(ct, v, local);
+      if (here) write(v, keys.filter((k) => k !== here));
+      else if (now != null) write(v, [...keys, { t: Math.round(local * 1000) / 1000, v: now }].sort((a, b) => a.t - b.t));
+    },
+    onCurve: (prop, at, curve) => {
+      const ease = easeOfBezier(curve);
+      write(contentVarOf(prop), keysOf(contentVarOf(prop)).map((k) => {
+        if (k.t !== at) return k;
+        const { ease: _was, ...rest } = k;
+        return ease ? { ...rest, ease } : rest;
+      }));
+    },
+    onKeyEdit: (prop, at, to) => write(contentVarOf(prop), keysOf(contentVarOf(prop)).filter((k) => k.t === at || Math.abs(k.t - to.t) >= frame / 2)
+      .map((k) => (k.t === at ? { ...k, t: to.t, v: to.v } : k)).sort((a, b) => a.t - b.t)),
+  };
+}
+
+/** A page's number as a row in the layer's head: navigator, stopwatch, its name, its value (typed or dragged). */
+function ContentHead({ layer, lanes, v, contents, t }: { layer: Layer; lanes: MotionLanes; v: string; contents: LayerContents; t: (key: string) => string }) {
+  const param = contents.params.find((p) => p.var === v)!;
+  const keys = [...(contents.keys[v] ?? [])];
+  const local = (lanes.playheadMs - lanes.startMs) / 1000;
+  const frame = lanes.frameMs / 1000;
+  const inClip = lanes.playheadMs >= lanes.startMs && lanes.playheadMs <= lanes.endMs;
+  const here = inClip && keys.some((k) => Math.abs(k.t - local) < frame / 2);
+  const prev = [...keys].reverse().find((k) => k.t < local - frame / 2);
+  const next = keys.find((k) => k.t > local + frame / 2);
+  const value = contentNow(contents, v, local);
+  const others = (): Record<string, Key[]> => Object.fromEntries(Object.entries(contents.keys).map(([k, ks]) => [k, [...ks]]));
+  /* typed or dragged: a keyframe here when it has keyframes (the playhead on the clip), else its still value */
+  const set = (n: number) => {
+    if (!keys.length) { contents.commit(others(), { [v]: n }); return; }
+    if (!inClip) return;
+    const at = Math.round(local * 1000) / 1000;
+    contents.commit({ ...others(), [v]: [...keys.filter((k) => Math.abs(k.t - local) >= frame / 2), { ...(keys.find((k) => Math.abs(k.t - local) < frame / 2) ?? {}), t: at, v: n }].sort((a, b) => a.t - b.t) });
+  };
+  /* the stopwatch: on, a keyframe of its value now; off, its keyframes gone and the value now kept still */
+  const stopwatch = () => {
+    const rest = others();
+    if (keys.length) { delete rest[v]; contents.commit(rest, { [v]: value }); return; }
+    if (value == null) return;
+    contents.commit({ ...rest, [v]: [{ t: Math.round(Math.max(0, local) * 1000) / 1000, v: value }] });
+  };
+  const nav = 'grid h-[16px] w-[14px] place-items-center rounded-[2px] text-[var(--text-faint)] hover:bg-white/10 hover:text-[var(--text)] disabled:opacity-30';
+  const unit = param.unit === 'deg' ? '°' : param.unit;
+  const step = param.unit === 'px' || param.unit === '' ? (Math.abs(value ?? 0) >= 20 ? 1 : 0.05) : 0.5;
+  return (
+    <div className="flex items-center text-[11.5px]" style={{ height: LANE_H }} data-content-row={`${layer.clipId}:${v}`}>
+      <span className="flex shrink-0 items-center justify-center" style={{ width: AV_W }}>
+        {keys.length ? (
+          <>
+            <button type="button" aria-label={t('inspector.keyPrev')} disabled={!prev} className={nav} onClick={() => prev && lanes.onSeek(lanes.startMs + prev.t * 1000)}><ChevronLeft size={10} /></button>
+            <button type="button" aria-label={t(here ? 'inspector.keyRemove' : 'inspector.keyAdd')} disabled={!inClip} className={nav} onClick={() => lanes.onToggleHere(contentRow(v))}>
+              <svg width="8" height="8" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1 11 6 6 11 1 6Z" fill={here ? 'var(--tl-accent)' : 'none'} stroke={here ? 'var(--tl-accent)' : 'currentColor'} strokeWidth="1.5" /></svg>
+            </button>
+            <button type="button" aria-label={t('inspector.keyNext')} disabled={!next} className={nav} onClick={() => next && lanes.onSeek(lanes.startMs + next.t * 1000)}><ChevronRight size={10} /></button>
+          </>
+        ) : null}
+      </span>
+      <span style={{ width: 34 }} />
+      <Stopwatch on={keys.length > 0} label={t(keys.length ? 'inspector.stopwatchOff' : 'inspector.stopwatchOn')} disabled={value == null || (!keys.length && !inClip)} onClick={stopwatch} />
+      <span className="ml-1 w-[84px] shrink-0 truncate text-[var(--text-muted)]" title={param.label}>{param.label}</span>
+      {value == null ? <span className="text-[var(--text-faint)]">—</span>
+        : <Scrub label={param.label} value={value} unit={unit} step={step} digits={Number.isInteger(value) && step >= 0.5 ? 1 : 2} onCommit={set} />}
     </div>
   );
 }
