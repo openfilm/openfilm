@@ -1440,6 +1440,7 @@ export const es: Words = {
     title: 'Lienzo',
     toEdit: 'Cambiar a la edición',
     modes: 'Espacio de trabajo',
+    modesSettings: 'Ajustes de espacios…',
     modeEdit: 'Edición',
     modeCanvas: 'Lienzo',
     modeMotion: 'Movimiento',
@@ -2067,6 +2068,10 @@ export const es: Words = {
       group: 'Versiones',
       auto: 'Versiones automáticas',
       autoHint: 'Confirma una versión por sí sola mientras trabajas: antes y después del turno de un agente, y cuando la película pasa un par de minutos sin cambios. Solo si la película cambió.',
+    },
+    workModes: {
+      group: 'Espacios de trabajo',
+      footnote: 'Desactiva los que no uses. Con uno solo, la barra superior no muestra el selector.',
     },
     advanced: {
       intro: "Ya están ajustados para la mejor experiencia. Normalmente no hace falta cambiarlos.",

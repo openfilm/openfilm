@@ -1440,6 +1440,7 @@ export const ja: Words = {
     title: 'キャンバス',
     toEdit: '編集に切り替え',
     modes: 'ワークスペース',
+    modesSettings: 'ワークスペースの設定…',
     modeEdit: '編集',
     modeCanvas: 'キャンバス',
     modeMotion: 'モーション',
@@ -2067,6 +2068,10 @@ export const ja: Words = {
       group: 'バージョン',
       auto: '自動バージョン',
       autoHint: '作業中にバージョンを自動でコミットします。エージェントの作業の前後と、作品が数分変わらないとき。作品が変わったときだけです。',
+    },
+    workModes: {
+      group: 'ワークスペース',
+      footnote: '使わないものはオフにできます。1 つだけ残すと、上部の切り替えボタンは表示されません。',
     },
     advanced: {
       intro: "最適な設定になっています。通常は変更する必要はありません。",

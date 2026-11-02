@@ -732,6 +732,17 @@ export interface TimelineProps {
   fades?: ReadonlyMap<string, FadeMs>;
   /** The picked clip's moving properties: rows under its track with their keyframes (components/MotionLanes). */
   motionLanes?: MotionLanes | null;
+  /**
+   * Motion's layers (components/MotionLayers): each row a layer, its head Motion's own (wider, a layer's switches), and,
+   * twirled open, its properties in the row's `extra` under it: their names and values under its head, their keyframes
+   * under its clip. The toolbar, ruler, clips, drags and trims are the edit's own.
+   */
+  layers?: {
+    headWidth: number;
+    head: (track: TimelineTrack) => React.ReactNode;
+    extraHead: (track: TimelineTrack) => React.ReactNode;
+    extraBody: (track: TimelineTrack, pxPerMs: number) => React.ReactNode;
+  } | null;
   /** The transitions the fades make (lib/transitions findTransitions): a mark over each, picked, resized, deleted. */
   transitions?: readonly FilmTransition[];
   /** A transition put on a cut (the cut's menu, a clip's menu), resized or deleted. Null = done. */
@@ -1014,6 +1025,7 @@ export const Timeline = React.memo(function Timeline({
   onReplaceDrop,
   fades,
   motionLanes,
+  layers = null,
   transitions,
   onTransition,
   pickedTransition = null,
@@ -1814,7 +1826,7 @@ export const Timeline = React.memo(function Timeline({
   const [renaming, setRenaming] = React.useState<number | null>(null);
   const renamingRef = React.useRef(renaming);
   renamingRef.current = renaming;
-  const headW = HEAD_W + (solo ? HEAD_SOLO_W : 0);
+  const headW = layers ? layers.headWidth : HEAD_W + (solo ? HEAD_SOLO_W : 0);
   /* picking clips lets the gap go; so does an edit that fills or moves it */
   React.useEffect(() => { if (selected.length) setGap(null); }, [selected.length]);
   React.useEffect(() => {
@@ -2723,6 +2735,18 @@ export const Timeline = React.memo(function Timeline({
     const mainHead = Boolean(track.main) && track.index === 1;
     /* the track a pill hovered in the app's chat points at */
     const chatLit = chatTrack != null && track.docIndex === chatTrack;
+    /* a layer's head is Motion's (its values change with the playhead: never kept) */
+    if (layers) {
+      const head = (
+        <div key={track.lane} className="relative flex w-full min-w-0 items-center rounded-l-[3px]" data-layer-head={track.lane}
+          style={{ marginTop: GAP, height: h, background: laneTone(track, lit), boxShadow: chatLit ? CHAT_RING : undefined }}>
+          {layers.head(track)}
+        </div>
+      );
+      return track.extra
+        ? <div key={track.lane}>{head}<div style={{ height: track.extra, background: laneTone(track, false) }} className="rounded-l-[3px]">{layers.extraHead(track)}</div></div>
+        : head;
+    }
     const pose = `${liftingHead}:${lit}:${targeted}:${renamingHere}:${chatLit}`;
     const cached = headElements.get(track.lane);
     if (cached?.pose === pose) return withLaneHeads(track, cached.node);
@@ -2842,7 +2866,7 @@ export const Timeline = React.memo(function Timeline({
     );
     headElements.set(track.lane, { pose, node });
     return withLaneHeads(track, node);
-  }), [tracks, t, laneOrder, onEditBlocks, startLaneReorder, toggleTrack, selectedLanes, openHeadMenu, chatTrack, trackNames, targetLane, renaming, onRenameTrack, solo, onResizeTrack, nearFirst, nearLast, headElements, motionLanes]);
+  }), [tracks, t, laneOrder, onEditBlocks, startLaneReorder, toggleTrack, selectedLanes, openHeadMenu, chatTrack, trackNames, targetLane, renaming, onRenameTrack, solo, onResizeTrack, nearFirst, nearLast, headElements, motionLanes, layers]);
 
   /* row backgrounds are fixed to the view and only follow vertical scroll; the clips move horizontally above them */
   const laneSkins = React.useMemo(() => tracks.map((track) => (
@@ -3077,7 +3101,8 @@ export const Timeline = React.memo(function Timeline({
         /* right-click on empty space: the track menu at this time (clips stop their own right-clicks) */
         onContextMenu={(e) => openLaneMenu(e, track.lane)}
       >
-          {track.extra && motionLanes ? <MotionLaneRows lanes={motionLanes} top={h} pxPerMs={pxPerMs} /> : null}
+          {track.extra && layers ? <div className="absolute inset-x-0" style={{ top: h, height: track.extra }}>{layers.extraBody(track, pxPerMs)}</div>
+            : track.extra && motionLanes ? <MotionLaneRows lanes={motionLanes} top={h} pxPerMs={pxPerMs} /> : null}
           {track.blocks.map((block) => {
             /* while dragging, drawn where the preview says (film.html only updates after the write); a clip the edit
                takes out is drawn faint where it is */
@@ -3535,7 +3560,7 @@ export const Timeline = React.memo(function Timeline({
     openBlockMenu, openLaneMenu, onEditBlocks, collapseIfClick, selectOne, setSelected, clipElements, thumbWindow, view.width,
     chatClip, chatDraft, placedOf, pickForTrim, gap, withLinked, runSplit, trackOverlay,
     fadeOfBlock, fadeDrag, startFade, volumeDrag, startVolume, transitions, transitionDrag, pickedTransition, onPickTransition, onTransition, startTransitionResize,
-    nearFirst, nearLast, speedOn, hoveredBlock, motionLanes, onEnterCompound,
+    nearFirst, nearLast, speedOn, hoveredBlock, motionLanes, layers, onEnterCompound,
   ]);
 
   const tickMarks = React.useMemo(() => ticks.map(({ ms, label }) => {

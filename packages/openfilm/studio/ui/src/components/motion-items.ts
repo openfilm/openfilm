@@ -7,7 +7,7 @@ import { EFFECT_PROPS, EFFECTS, type EffectProp } from '../../../../src/clip-mot
 import { MASK_SHAPES, type MaskShape } from '@/lib/clip-mask';
 import { ANIM_GROUPS, presetMotion, type AnimPreset } from '@/lib/motion-presets';
 import { TEXT_PRESETS, textAnimDefault, type TextPreset } from '@/lib/text-animator';
-import type { LayerHost } from './MotionTimeline';
+import type { LayerHost } from './MotionLayers';
 
 export type MotionItem =
   | { kind: 'anim'; id: AnimPreset }

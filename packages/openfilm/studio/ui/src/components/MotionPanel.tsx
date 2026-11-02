@@ -13,7 +13,7 @@ import { EFFECTS, MOTION_PROPS, type EffectProp, type MotionProp } from '../../.
 import { useT } from '@/i18n';
 import { Stopwatch } from './KeyframesSection';
 import { ContextMenu } from './ContextMenu';
-import { Scrub, type Layer, type LayerHost } from './MotionTimeline';
+import { Scrub, type Layer, type LayerHost } from './MotionLayers';
 import { FILTER_EFFECTS, ITEM_DRAG, ITEM_SECTIONS, applyItem, itemApplies, itemKey, itemLabel, type MotionItem } from './motion-items';
 import styles from './MotionPanel.module.css';
 

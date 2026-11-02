@@ -13,7 +13,7 @@ import { EFFECTS, MOTION_PROPS, animationsOf, effectsOf, readMotion, valueAt, wi
 import { copiedKeys, easeOfBezier, easedMotion, effectsModel, type EffectsChange, keyId, keyedBox, movedKeys, parseKeyId, pastedKeys, poseAt, withoutKeys, type CopiedKeys, type EaseCommand } from '@/lib/motion-keys';
 import type { MotionLanes } from './MotionLanes';
 import type { MotionPathKeys } from './MotionPath';
-import { MotionTimeline, type Layer, type LayerHost, type LayerMask } from './MotionTimeline';
+import { LAYER_ROW_H, useMotionLayers, type Layer, type LayerHost, type LayerMask, type MotionLayersView } from './MotionLayers';
 import { maskCss, maskDefault, maskOf, type Mask } from '@/lib/clip-mask';
 import { maskKeyframes, maskModel, readMaskKeys, type MaskKeys } from '@/lib/mask-motion';
 import { splitFor, textAnimOf, type TextAnim } from '@/lib/text-animator';
@@ -51,7 +51,7 @@ import { apartOnTracks, type ClipEdit } from '@/lib/film-clip-edits';
 import { mediaFetch, useMediaImages } from '@/lib/media-queue';
 import { clipboardItemsOf, clipboardNow, laneOfBlock, pasteEdit, type TimelineClipboardItem } from '@/lib/timeline-clipboard';
 import {
-  editModelOf, freshLink, linkedIds, magnetOn, mainTrackOf, planEdges, planMove, planRippleTrim, planRoom, planSpeed, slowestSpeed, soundTrackFor, type EditMode,
+  editModelOf, freshLink, linkedIds, magnetOn, mainTrackOf, planMove, planRippleTrim, planRoom, planSpeed, slowestSpeed, soundTrackFor, type EditMode,
 } from '@/lib/timeline-edit';
 import { readTimelinePrefs, switchesOf } from '@/lib/timeline-prefs';
 import { fadeMsOf, type FadeMs } from '@/lib/clip-fade';
@@ -92,6 +92,7 @@ import { DEFAULT_INSPECTOR, DOCK_GAP, DockPaneDivider, MIN_DOCK_H, MIN_INSPECTOR
 import { PANE_BAR, PANE_BTN_ON, PANE_TOGGLE, PANE_TOGGLE_ICON } from './dock-pane-bar';
 import { Tooltip } from './Tooltip';
 import { ModeSwitcher } from './ModeSwitcher';
+import { useWorkModes } from '@/lib/work-modes';
 import { MotionPanel } from './MotionPanel';
 import { ProjectCard } from './ProjectCard';
 import { BrandLogo } from './BrandLogo';
@@ -139,7 +140,7 @@ import {
 import { idsIn, pastedElsewhere, pastedPage, withoutPaste, withPaste, type PasteItem, type PasteLayer, type PastedPage } from '@/lib/layer-paste';
 import { pasteTargets, targetById } from '@/lib/layer-paste-target';
 import type { PropsHost } from './PropertiesSection';
-import type { ClipMotionHost, LayerPropsActions } from './FilmInspector';
+import type { LayerPropsActions } from './FilmInspector';
 import { SAVED, refreshSaved, savedActions, savedSources, useSavedListing } from '@/lib/saved';
 import { batchMap } from '@/lib/batch-map';
 import { groupInsertAt, groupInsertOps } from '@/lib/saved-insert';
@@ -455,6 +456,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (mode !== 'canvas') keepMotionOpen(mode === 'motion');
     if (mode === 'motion') { setTimelineOpen(true); setInspectorOpen(true); }
   }, [setCanvasOpen, keepMotionOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* the ways of working turned on (Settings → Advanced): one turned off while in use gives way to the first still on */
+  const workModes = useWorkModes();
+  React.useEffect(() => { if (!workModes.includes(workMode)) setWorkMode(workModes[0]!); }, [workModes, workMode, setWorkMode]);
   const canvasFiles = React.useMemo(() => (listing ? [...listing.files, ...listing.pages] : []), [listing]);
   /* a file of the media pane as a reference: shown by its poster (a video, a page) or itself (a still, on Studio's
      origin: see stillUrl) */
@@ -1007,10 +1011,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const keyedLabel = (p: KeyedProp) => t(p in EFFECTS ? `canvas.fx.${p}` : MOTION_LABEL[p as MotionProp]);
   /* the picked clip's rows drawn as a graph (⇧F3, or its button) */
   const [motionGraph, setMotionGraph] = React.useState(false);
-  /* a picked picture clip that moves (its stopwatch turned on in the inspector, a preset): its position, scale,
-     rotation and opacity open as rows under its track, where its keyframes are moved and eased */
-  const keyedPicture = motionBlock && (motionBlock.kind === 'mg' || motionBlock.kind === 'video') ? motionBlock : null;
-  const keyCount = keyedPicture ? MOTION_PROPS.reduce((n, p) => n + (motionOfBlock(keyedPicture)[p]?.length ?? 0), 0) : 0;
   /**
    * A picture clip's rows of keyframes (components/MotionLanes): the picked clip's with its picked keyframes; another's
    * (the motion timeline shows every layer's) picks the clip first, then its keyframes.
@@ -1185,20 +1185,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       setBlend: (mode) => style({ 'mix-blend-mode': mode === 'normal' ? null : mode }),
     };
   }, [film.film, motionOfBlock, timeMs, keyFrameS, editBlocks, edit, projectFps, toast]); // eslint-disable-line react-hooks/exhaustive-deps
-  /* a layer's bar moved or trimmed on the motion timeline: as the timeline moves and trims a clip (lib/timeline-edit) */
-  const moveLayer = React.useCallback((id: string, deltaMs: number) => {
-    const lead = blocksRef.current.find((b) => b.clipId === id);
-    const plan = lead ? planMove(editModel(), { ids: [id], deltaMs, pointerMs: lead.startMs + deltaMs, mode: 'place' }) : null;
-    if (plan?.ops.length) void edit(plan.ops, clipStep('history.stepMoved', [id]));
-  }, [editModel, edit]);
-  const trimLayer = React.useCallback((id: string, edge: 'start' | 'end', deltaMs: number) => {
-    const plan = planEdges(editModel(), [{ id, kind: edge }], deltaMs);
-    if (plan.ops.length) void edit(plan.ops, clipStep('history.stepTrimmed', [id]));
-  }, [editModel, edit]);
-  const motionLanes = React.useMemo<MotionLanes | null>(
-    () => (keyCount && keyedPicture?.clipId ? lanesOf({ ...keyedPicture, clipId: keyedPicture.clipId }) : null),
-    [keyCount, keyedPicture, lanesOf],
-  );
   /* the picked clip's position keyframes, drawn on the picture as its path; the same picks as its timeline rows */
   const motionPath = React.useMemo<MotionPathKeys | null>(() => {
     if (!motionBlock?.clipId || playing) return null;
@@ -1229,15 +1215,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     { id: 'sep', separator: true },
     { id: 'delete', label: t('inspector.keyRemove'), shortcut: '⌫', danger: true, onSelect: () => runKeys('delete') },
   ];
-  /* the inspector's keyframes: a clip's (src/clip-motion.mjs), the playhead, and going to a moment */
-  const motionHost = React.useMemo<ClipMotionHost>(() => ({
-    of: (id) => {
-      const clip = film.film?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === id);
-      return clip ? readMotion(clip as { id: string; style?: string }, film.film?.keyframes) : {};
-    },
-    playheadMs: timeMs,
-    onSeek: seek,
-  }), [film.film, timeMs, seek]);
   /** An edit the timeline planned (lib/timeline-edit), as it planned it: one write, one undo step. */
   const editOps = React.useCallback((ops: Op[], label: string) => edit(ops, label), [edit]);
 
@@ -3002,6 +2979,58 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     setPickedKeys(new Set());
     setMotionComp(layer.clipId);
   }, [seek]);
+  /* ── Motion's layers on the edit's own timeline (components/Timeline `layers`): a row a picture clip, the topmost
+     first, its properties under it; a composition's, a row an element of its page (they play all of it: not moved) ── */
+  const filmMotion = useMotionLayers({
+    layers: motionLayers, playheadMs: timeMs, fps: projectFps, onSeek: seek,
+    picked: selectedBlocks.flatMap((b) => (b.clipId ? [b.clipId] : [])),
+    onPick: (id, add) => setSelectedKeys((was) => (add ? (was.includes(id) ? was.filter((x) => x !== id) : [...was, id]) : [id])),
+    lanesOf: (l) => lanesOf(l as TimelineBlock & { clipId: string }),
+    hostOf: (l) => layerHostOf(l as TimelineBlock & { clipId: string }),
+    onOpen: openComposition, reveal: motionReveal, t,
+  });
+  const compMotion = useMotionLayers({
+    layers: compLayers, playheadMs: compLocalMs, fps: projectFps, onSeek: (ms) => { if (compBlock) seek(compBlock.startMs + ms); },
+    picked: compPicked,
+    onPick: (id, add) => setCompPicked((was) => (add ? (was.includes(id) ? was.filter((x) => x !== id) : [...was, id]) : [id])),
+    lanesOf: elementLanesOf, hostOf: elementHostOf, reveal: motionReveal, t,
+  });
+  /* the edit's tracks as layers: each picture clip a row of its own (its track's, so drags and trims are the edit's),
+     in its track's order and then by time; sound tracks as they are */
+  const layerTracks = React.useMemo(() => {
+    if (!motionOpen) return null;
+    const byClip = new Map(motionLayers.map((l) => [l.clipId, l]));
+    let n = 0;
+    const rows: { track: TimelineTrack; layer: Layer | null; n: number }[] = [];
+    for (const track of tools.tracks) {
+      const pictures = track.kind === 'visual' ? [...track.blocks].filter((b) => b.clipId && byClip.has(b.clipId)).sort((a, b) => a.startMs - b.startMs) : [];
+      if (!pictures.length) { rows.push({ track, layer: null, n: 0 }); continue; }
+      for (const b of pictures) {
+        const layer = byClip.get(b.clipId!)!;
+        const extra = filmMotion.extraOf(layer);
+        rows.push({ track: { ...track, lane: `${track.lane}~${b.id}`, blocks: [b], name: b.title, height: LAYER_ROW_H, ...(extra ? { extra } : { extra: undefined }) }, layer, n: ++n });
+      }
+    }
+    return rows;
+  }, [motionOpen, motionLayers, tools.tracks, filmMotion]); // eslint-disable-line react-hooks/exhaustive-deps
+  const compTracks = React.useMemo(() => (compBlock ? compLayers.map((layer, i) => {
+    const extra = compMotion.extraOf(layer);
+    const block: TimelineBlock = { id: `el:${layer.clipId}`, title: layer.title || layer.clipId, startMs: 0, endMs: layer.endMs, kind: 'mg' };
+    return { track: { lane: `el:${layer.clipId}`, role: 'mg' as const, kind: 'visual' as const, index: 1, name: block.title, blocks: [block], height: LAYER_ROW_H, ...(extra ? { extra } : {}) } as TimelineTrack, layer, n: i + 1 };
+  }) : null), [compBlock, compLayers, compMotion]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* what the timeline draws of a layer row: its head and its properties (a sound track keeps a plain head) */
+  const layerView = (view: MotionLayersView, rows: readonly { track: TimelineTrack; layer: Layer | null; n: number }[]) => {
+    const of = new Map(rows.map((r) => [r.track.lane, r]));
+    return {
+      headWidth: view.headWidth,
+      head: (track: TimelineTrack) => {
+        const row = of.get(track.lane);
+        return row?.layer ? view.head(row.layer, row.n) : <span className="truncate px-3 text-[11px] text-[var(--text-faint)]">{track.badge ?? ''} {track.name ?? ''}</span>;
+      },
+      extraHead: (track: TimelineTrack) => { const row = of.get(track.lane); return row?.layer ? view.extraHead(row.layer) : null; },
+      extraBody: (track: TimelineTrack, px: number) => { const row = of.get(track.lane); return row?.layer ? view.extraBody(row.layer, px) : null; },
+    };
+  };
   const previewClip = React.useCallback((clipLoc: string, patch: Partial<MgTransform> | null) => clipPreviewRef.current?.(clipLoc, patch), []);
   const previewLook = React.useCallback((clipLoc: string, css: string | null) => lookPreviewRef.current?.(clipLoc, css), []);
   /* the inspector's Crop: crop mode on the picture, for the video or still in hand there */
@@ -4107,7 +4136,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
               </>)}
               {/* what the panes are for: one button saying which, a click for the menu of the three — the edit (cutting
                   the film), the canvas (making material), motion (layers and keyframes, as an animation editor shows them) */}
-              <ModeSwitcher mode={workMode} onMode={setWorkMode} />
+              <ModeSwitcher mode={workMode} modes={workModes} onMode={setWorkMode} onSettings={() => setSettingsOpen('advanced')} />
             </div>
             <div aria-hidden className="shrink-0 self-stretch" style={{ width: 'var(--titlebar-right-x)' }} />
           </div>
@@ -4294,7 +4323,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                                 timeMs={timeMs}
                                 poseOf={poseOf}
                                 poseKey={stagePoseKey}
-                                motionPath={motionPath}
+                                /* the path a picked layer moves along: Motion's (the edit keeps out of keyframes) */
+                                motionPath={motionOpen ? motionPath : null}
                                 playing={playing}
                                 onPause={pause}
                                 onSelectElement={selectStageElement}
@@ -4457,7 +4487,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                       onPlaceLayers={(to) => stageControl.current?.placeLayers(to)}
                       locked={inspectorLocked}
                       rate={frameRate}
-                      motion={motionHost}
                       fades={clipFades}
                       transition={pickedTr && !selectedBlocks.length ? {
                         kind: pickedTr.kind,
@@ -4477,42 +4506,20 @@ export function ProjectView({ projectId, onProject, onLeave }: {
               <div className={`${PANE} shrink-0 bg-[var(--dock-pane)]`} style={{ height: timelineShownHeight }}>
                 <div className="absolute inset-0 flex min-h-0 min-w-0 flex-col" data-timeline-scope="main" style={{ right: METERS_W }}
                   onPointerDownCapture={() => { if (pickedMedia) pickMedia(null); }}>
-                  {motionOpen && compBlock ? (
-                  <MotionTimeline
-                    key={`comp:${compBlock.clipId}`}
-                    layers={compLayers}
+                  {motionOpen && compBlock && compTracks ? (
+                  /* a composition: its page's elements as layers, on the timeline of the page's own time */
+                  <Timeline
+                    tracks={compTracks.map((r) => r.track)}
+                    layers={layerView(compMotion, compTracks)}
                     totalMs={compBlock.endMs - compBlock.startMs}
-                    playheadMs={compLocalMs}
-                    fps={projectFps}
+                    timeMs={compLocalMs}
+                    playing={playing}
                     onSeek={(ms) => seek(compBlock.startMs + ms)}
-                    picked={compPicked}
-                    onPick={(id, add) => setCompPicked((was) => (add ? (was.includes(id) ? was.filter((x) => x !== id) : [...was, id]) : [id]))}
-                    lanesOf={elementLanesOf}
-                    hostOf={elementHostOf}
-                    workArea={null}
-                    onWorkArea={() => {}}
+                    onScrubPreview={(ms) => scrubPreview(compBlock.startMs + ms)}
+                    onScrubCommit={(ms) => scrubCommit(compBlock.startMs + ms)}
+                    selected={compPicked.map((id) => `el:${id}`)}
+                    onSelectedChange={(ids) => setCompPicked(ids.map((x) => x.replace(/^el:/, '')))}
                     crumb={{ outer: loaded?.project.name ?? '', name: compBlock.title || compBlock.clipId || '', onBack: () => setMotionComp(null) }}
-                    reveal={motionReveal}
-                    t={t}
-                  />
-                  ) : motionOpen ? (
-                  <MotionTimeline
-                    onOpen={openComposition}
-                    layers={motionLayers}
-                    totalMs={totalMs}
-                    playheadMs={timeMs}
-                    onSeek={seek}
-                    picked={selectedBlocks.flatMap((b) => (b.clipId ? [b.clipId] : []))}
-                    onPick={(id, add) => setSelectedKeys((was) => (add ? (was.includes(id) ? was.filter((x) => x !== id) : [...was, id]) : [id]))}
-                    lanesOf={(l) => lanesOf(l as TimelineBlock & { clipId: string })}
-                    hostOf={(l) => layerHostOf(l as TimelineBlock & { clipId: string })}
-                    fps={projectFps}
-                    onMoveLayer={moveLayer}
-                    onTrimLayer={trimLayer}
-                    workArea={markedRange}
-                    onWorkArea={setMarkedRange}
-                    reveal={motionReveal}
-                    t={t}
                   />
                   ) : (
                   <Timeline
@@ -4538,7 +4545,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     relinkCandidates={relinkCandidates}
                     onRelink={(block, path) => void relinkBlock(block, path)}
                     onViewChange={setThumbView}
-                    tracks={tools.tracks}
+                    tracks={layerTracks ? layerTracks.map((r) => r.track) : tools.tracks}
+                    layers={layerTracks ? layerView(filmMotion, layerTracks) : null}
                     totalMs={totalMs}
                     timeMs={timeMs}
                     clock={playing ? clock : null}
@@ -4558,7 +4566,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     onEditOps={editOps}
                     links={clipLinks}
                     fades={clipFades}
-                    motionLanes={motionLanes}
                     transitions={filmTransitions}
                     onTransition={askTransition}
                     pickedTransition={pickedTr?.key ?? null}
@@ -4572,13 +4579,17 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     hasClipboard={clipboard.length > 0 || layerBoard != null}
                     selected={selectedIds}
                     onSelectedChange={onTimelineSelected}
-                    subtitles={{ on: subs.style.on, onToggle: subs.toggle, count: subs.count, untranscribed: subs.captions?.untranscribed.length ?? 0, onConfigure: configureSubtitles, configuring: inspectorShown && inspectorContent === 'subtitles', onMake: makeSubtitles, making: subs.transcribing, problem: subtitleProblem }}
-                    subtitleRow={subtitleRow}
+                    /* subtitles are the edit's */
+                    {...(layerTracks ? {} : {
+                      subtitles: { on: subs.style.on, onToggle: subs.toggle, count: subs.count, untranscribed: subs.captions?.untranscribed.length ?? 0, onConfigure: configureSubtitles, configuring: inspectorShown && inspectorContent === 'subtitles', onMake: makeSubtitles, making: subs.transcribing, problem: subtitleProblem },
+                      subtitleRow,
+                    })}
                     waveUrl={waveUrl}
                     history={timelineHistory}
                     {...tools.timeline}
                   />
                   )}
+                  {motionOpen ? (compBlock ? compMotion.overlay : filmMotion.overlay) : null}
                 </div>
                 {/* the audio meters, beside the timeline */}
                 <div className="absolute inset-y-0 right-0"><AudioMeters levels={tools.levels} playing={playing} /></div>

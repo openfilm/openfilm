@@ -1437,6 +1437,7 @@ export const ko: Words = {
     title: '캔버스',
     toEdit: '편집으로 전환',
     modes: '작업 공간',
+    modesSettings: '작업 공간 설정…',
     modeEdit: '편집',
     modeCanvas: '캔버스',
     modeMotion: '모션',
@@ -2063,6 +2064,10 @@ export const ko: Words = {
       group: '버전',
       auto: '자동 버전',
       autoHint: '작업하는 동안 버전을 자동으로 커밋합니다. 에이전트 작업 전후, 그리고 영상이 몇 분 동안 바뀌지 않을 때. 영상이 바뀐 경우에만 저장합니다.',
+    },
+    workModes: {
+      group: '작업 공간',
+      footnote: '쓰지 않는 작업 공간은 끌 수 있습니다. 하나만 남으면 상단의 전환 버튼이 사라집니다.',
     },
     advanced: {
       intro: "최적의 환경으로 설정되어 있어 보통은 바꿀 필요가 없습니다.",

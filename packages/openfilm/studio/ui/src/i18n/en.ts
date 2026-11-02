@@ -1441,6 +1441,7 @@ export const en = {
     title: 'Canvas',
     toEdit: 'Switch to the edit',
     modes: 'Workspace',
+    modesSettings: 'Workspace settings…',
     modeEdit: 'Edit',
     modeCanvas: 'Canvas',
     modeMotion: 'Motion',
@@ -2068,6 +2069,10 @@ export const en = {
       group: 'Versions',
       auto: 'Auto versions',
       autoHint: 'Commit a version on its own while you work: before and after an agent’s turn, and when the film rests for a couple of minutes. Only when the film changed.',
+    },
+    workModes: {
+      group: 'Ways of working',
+      footnote: 'Turn off what you don’t use. With one left on, the top bar has no switch.',
     },
     advanced: {
       intro: "These are set for the best experience. You don’t need to change them.",

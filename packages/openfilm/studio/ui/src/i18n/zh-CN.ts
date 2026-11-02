@@ -1441,6 +1441,7 @@ export const zhCN: Words = {
     title: '画布',
     toEdit: '切换到剪辑',
     modes: '工作台',
+    modesSettings: '工作台设置…',
     modeEdit: '剪辑台',
     modeCanvas: '画布',
     modeMotion: '动效台',
@@ -2068,6 +2069,10 @@ export const zhCN: Words = {
       group: '版本',
       auto: '自动保存版本',
       autoHint: '工作时自动提交版本：智能体每一轮开始前和结束后，以及影片停下几分钟没变时。只有影片变了才保存。',
+    },
+    workModes: {
+      group: '工作台',
+      footnote: '关掉用不到的工作台。只剩一个时，顶栏不再显示切换按钮。',
     },
     advanced: {
       intro: "这些已设为最佳体验，一般不用改。",
