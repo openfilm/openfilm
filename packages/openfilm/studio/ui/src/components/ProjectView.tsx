@@ -934,8 +934,10 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const block = blocksRef.current.find((b) => b.clipId === clipId);
     if (!block) return null;
     const local = Math.min(Math.max((timeRef.current - block.startMs) / 1000, 0), (block.endMs - block.startMs) / 1000);
-    return poseAt(motionOfBlock(block), local);
-  }, [motionOfBlock]);
+    const style = (film.film?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === clipId) as { style?: string } | undefined)?.style ?? '';
+    const still = (p: 'ax' | 'ay') => { const n = Number.parseFloat(declared(style, `--fx-${p}`) ?? ''); return Number.isFinite(n) ? n : 0; };
+    return poseAt(motionOfBlock(block), local, { ax: still('ax'), ay: still('ay') });
+  }, [motionOfBlock, film.film]);
   const stagePoseKey = motionBlock?.clipId && !playing ? JSON.stringify(poseOf(motionBlock.clipId)) : '';
   /* the picked clip's keyframes rewritten; the ones picked follow where they went */
   const rewriteMotion = React.useCallback((next: Motion, picked?: ReadonlySet<string>) => {
@@ -1022,7 +1024,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const clipStyle = (film.film?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === block.clipId) as { style?: string } | undefined)?.style;
     const fx = effectsOf(clipStyle);
     const threeD = /--fx-(z|rx|ry)\b/.test(clipStyle ?? '') || (['z', 'rx', 'ry'] as const).some((p) => motion[p]?.length);
-    const rows = [...MOTION_PROPS, ...fx.on, ...(threeD ? (['z', 'rx', 'ry'] as const) : [])].map((p) => ({ prop: p, label: keyedLabel(p), keys: motion[p] ?? [] }));
+    const rows = [...MOTION_PROPS, 'ax' as const, 'ay' as const, ...fx.on, ...(threeD ? (['z', 'rx', 'ry'] as const) : [])].map((p) => ({ prop: p, label: keyedLabel(p), keys: motion[p] ?? [] }));
     const startMs = block.startMs;
     const rewrite = (next: Motion, picked?: ReadonlySet<string>) => {
       if (!block.loc) return;
@@ -1166,12 +1168,28 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         writeThree(Object.fromEntries(THREE.map((p) => [`--fx-${p}`, on ? `0${EFFECTS[p].unit}` : null])), next);
       },
     };
+    /* its anchor point (SPEC §1): kept in its style, keyed as its effects are; at its box's middle it is not written */
+    const ANCHOR = ['ax', 'ay'] as const;
+    const anchorValues = Object.fromEntries(ANCHOR.flatMap((p) => {
+      const n = Number.parseFloat(declared(css, `--fx-${p}`) ?? '');
+      return Number.isFinite(n) ? [[p, n]] : [];
+    }));
+    const anchor = {
+      model: effectsModel(motion, [...ANCHOR], anchorValues, Math.min(Math.max(local, 0), length), local >= 0 && local <= length, keyFrameS),
+      commit: (c: EffectsChange | null) => {
+        if (!c) return;
+        const decl: Record<string, string | null> = {};
+        if (c.fx) for (const p of ANCHOR) decl[`--fx-${p}`] = c.motion[p]?.length || !c.fx.values[p] ? null : `${c.fx.values[p]}px`;
+        writeThree(decl, c.motion);
+      },
+    };
     return {
       /* what an animation preset keys from (lib/motion-presets): a clip's keyframes are on top of its box */
       model: model ? { ...model, preset: { motion, rest: { translate: [0, 0], scale: 1, rotate: 0, opacity: staticTransform(placed!).base.opacity }, span: [0, length], stage: film.film?.stage ?? { w: 1920, h: 1080 } } } : null,
       effects,
       mask,
       three,
+      anchor,
       commitEffects: (c: EffectsChange | null) => {
         if (!c || !layer.loc) return;
         void editBlocks([
@@ -1186,6 +1204,19 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       },
       blend: declared(css, 'mix-blend-mode') ?? 'normal',
       setBlend: (mode) => style({ 'mix-blend-mode': mode === 'normal' ? null : mode }),
+      /* shown and locked as its track is (each layer Motion makes is on a track of its own) */
+      ...(() => {
+        const at = parseFilmDocLoc(layer.loc ?? '');
+        const track = at ? film.film?.tracks[at.track] : undefined;
+        const flag = (prop: 'hidden' | 'locked', on: boolean) => {
+          if (!layer.loc) return;
+          void editBlocks([{ loc: layer.loc, prop, value: on ? true : null }]).then((err) => { if (err) toast.showError(err); });
+        };
+        return track ? {
+          visible: !track.hidden, setVisible: (on: boolean) => flag('hidden', !on),
+          locked: Boolean(track.locked), setLocked: (on: boolean) => flag('locked', on),
+        } : {};
+      })(),
     };
   }, [film.film, motionOfBlock, timeMs, keyFrameS, editBlocks, edit, projectFps, toast]); // eslint-disable-line react-hooks/exhaustive-deps
   /* the picked clip's position keyframes, drawn on the picture as its path; the same picks as its timeline rows */

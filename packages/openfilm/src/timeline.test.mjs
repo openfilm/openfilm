@@ -136,6 +136,33 @@ test('a picture in 3D turns about its middle under the film\'s camera; a flat fi
   }
 });
 
+test('a picture turns and scales about its anchor point, from its box\'s middle', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-anchor-'));
+  writeFileSync(join(dir, 'chip.html'), page('chip', 2).replace('width:320,height:180', 'width:80,height:40'));
+  /* its box 160 × 80 at (20, 30), its anchor at the box's top left: halved toward that corner, then also turned 90° */
+  const anchored = '--fx-ax: -80px; --fx-ay: -40px; animation: half 2s linear both';
+  writeFileSync(join(dir, 'film.html'), filmHtml({
+    stage: { w: 320, h: 180 },
+    tracks: [
+      { clips: [{ id: 'a', src: 'chip.html', box: { x: 20, y: 30, w: 160 }, style: anchored }] },
+      { clips: [{ id: 'b', src: 'chip.html', box: { x: 20, y: 30, w: 160, r: 90 }, style: anchored }] },
+      { clips: [{ id: 'c', src: 'chip.html', box: { x: 20, y: 30, w: 160 }, style: 'animation: half 2s linear both' }] },
+    ],
+    keyframes: { half: '0%, 100% { scale: 0.5 }' },
+  }));
+  const s = await open(dir);
+  try {
+    await s.film.seek(1);
+    const seen = await s.film.page.evaluate(() => [...document.querySelectorAll('iframe')].map((el) => {
+      const r = el.getBoundingClientRect();
+      return [r.left, r.top, r.width, r.height].map((n) => Math.round(n));
+    }));
+    assert.deepEqual(seen, [[20, 30, 80, 40], [-20, 30, 40, 80], [60, 50, 80, 40]]);
+  } finally {
+    await s.close();
+  }
+});
+
 /** `seconds` of silence as a WAV (8 kHz, mono, 16 bit): a sound file the browser reads without a codec. */
 function silence(seconds) {
   const data = Math.round(8000 * seconds) * 2;

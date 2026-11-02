@@ -85,7 +85,9 @@ where, and CSS that says how each looks. A page draws a shot.
     `--fx-trim` (a number, 0–100: how much of a stroke is drawn, for its `stroke-dashoffset`). A picture that sets or
     animates `--fx-z` (a length toward the viewer), `--fx-rx` or `--fx-ry` (its turn about its X and Y axes) is in 3D:
     the host places it so about its center, under the film's camera (a perspective of 1.389 times the stage's width,
-    looking at its middle), which the film has once any picture of it is in 3D.
+    looking at its middle), which the film has once any picture of it is in 3D. `--fx-ax` and `--fx-ay` (lengths) are
+    its anchor point, stage px from its box's middle: its animation's `rotate` and `scale`, and its turns in 3D, are
+    about there.
   - `overrides` are the person's changes made in Studio, as JSON, a list of entries. An entry with `at` (a CSS
     selector), on a page clip only, tweaks an element of the page, applied by the host after each frame: optional `n`
     (which match, from 1), `t` (translate px), `s` (scale), `r` (rotate degrees) as the independent CSS transform

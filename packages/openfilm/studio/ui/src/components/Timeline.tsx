@@ -1237,8 +1237,9 @@ export const Timeline = React.memo(function Timeline({
   const tracksH = hasLanes
     ? tracks.reduce((h, tr) => h + rowH(tr) + GAP, 0)
     : 0;
-  /* at least TL_VPAD even when the rows overflow, counted in padTop so every hit test uses the same number */
-  const padTop = Math.max(TL_VPAD, Math.floor((view.height - tracksH) / 2));
+  /* at least TL_VPAD even when the rows overflow, counted in padTop so every hit test uses the same number; layers
+     (Motion) stack down from the top, the first on top, as an animation editor lists them */
+  const padTop = layers ? TL_VPAD : Math.max(TL_VPAD, Math.floor((view.height - tracksH) / 2));
   padTopRef.current = padTop;
   const viewHeightRef = React.useRef(view.height);
   viewHeightRef.current = view.height;

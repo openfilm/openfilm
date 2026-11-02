@@ -185,23 +185,40 @@ export function keyedBox(was: Box, now: Box, own: { w: number; h: number }, moti
   return keyed ? { box, motion: next } : null;
 }
 
-/** Where a clip's keyframes have moved its picture at a moment: its middle by `dx`, `dy`, its size by `s`, turned by `r`. */
-export interface ClipPose { dx: number; dy: number; s: number; r: number }
+/**
+ * Where a clip's keyframes have moved its picture at a moment: its middle by `dx`, `dy`, its size by `s`, turned by
+ * `r`; `ax`, `ay` its anchor point (SPEC §1, from its box's middle), what it turns and sizes about.
+ */
+export interface ClipPose { dx: number; dy: number; s: number; r: number; ax?: number; ay?: number }
 type Placed = { x: number; y: number; scaleX: number; scaleY: number; rotate: number };
 
-/** The pose at the clip's second `t`; null when nothing of its place moves. */
-export function poseAt(motion: Motion, t: number): ClipPose | null {
-  if (!motion.translate?.length && !motion.scale?.length && !motion.rotate?.length) return null;
+/**
+ * The pose at the clip's second `t` (`anchor`: its anchor point when not keyed); null when nothing of its place moves
+ * and it turns about its middle.
+ */
+export function poseAt(motion: Motion, t: number, anchor: { ax?: number; ay?: number } = {}): ClipPose | null {
+  const ax = motion.ax?.length ? valueAt('ax', motion.ax, t) as number : anchor.ax ?? 0;
+  const ay = motion.ay?.length ? valueAt('ay', motion.ay, t) as number : anchor.ay ?? 0;
+  if (!motion.translate?.length && !motion.scale?.length && !motion.rotate?.length && !ax && !ay) return null;
   const [dx, dy] = valueAt('translate', motion.translate, t) as [number, number];
-  return { dx, dy, s: valueAt('scale', motion.scale, t) as number, r: valueAt('rotate', motion.rotate, t) as number };
+  return { dx, dy, s: valueAt('scale', motion.scale, t) as number, r: valueAt('rotate', motion.rotate, t) as number, ...(ax || ay ? { ax, ay } : {}) };
+}
+
+/* turned (`deg`, all of its turn) and sized (`s`) about its anchor, not its middle: its middle goes by a − s·R·a */
+function anchorShift(pose: ClipPose, deg: number): [number, number] {
+  const ax = pose.ax ?? 0, ay = pose.ay ?? 0;
+  if (!ax && !ay) return [0, 0];
+  const r = (deg * Math.PI) / 180, c = Math.cos(r), n = Math.sin(r);
+  return [ax - pose.s * (c * ax - n * ay), ay - pose.s * (n * ax + c * ay)];
 }
 
 /** A picture placed at `p` (its top left, its scale of its own size `own`, its turn) as its pose shows it. */
 export function posed(p: Placed, own: { w: number; h: number }, pose: ClipPose | null): Placed {
   if (!pose) return p;
   const w = own.w * p.scaleX, h = own.h * p.scaleY;
+  const [sx, sy] = anchorShift(pose, p.rotate + pose.r);
   return {
-    x: p.x + pose.dx + (w * (1 - pose.s)) / 2, y: p.y + pose.dy + (h * (1 - pose.s)) / 2,
+    x: p.x + pose.dx + (w * (1 - pose.s)) / 2 + sx, y: p.y + pose.dy + (h * (1 - pose.s)) / 2 + sy,
     scaleX: p.scaleX * pose.s, scaleY: p.scaleY * pose.s, rotate: p.rotate + pose.r,
   };
 }
@@ -211,8 +228,9 @@ export function unposed(p: Placed, own: { w: number; h: number }, pose: ClipPose
   if (!pose) return p;
   const s = Math.abs(pose.s) > 1e-6 ? pose.s : 1;
   const w = (own.w * p.scaleX) / s, h = (own.h * p.scaleY) / s;
+  const [sx, sy] = anchorShift({ ...pose, s }, p.rotate);
   return {
-    x: p.x - pose.dx - (w * (1 - s)) / 2, y: p.y - pose.dy - (h * (1 - s)) / 2,
+    x: p.x - pose.dx - (w * (1 - s)) / 2 - sx, y: p.y - pose.dy - (h * (1 - s)) / 2 - sy,
     scaleX: p.scaleX / s, scaleY: p.scaleY / s, rotate: p.rotate - pose.r,
   };
 }

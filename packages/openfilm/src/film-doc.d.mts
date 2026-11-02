@@ -118,6 +118,8 @@ export declare const EFFECTS: Readonly<{
   z: { unit: 'px'; rest: 0; syntax: '<length>'; filter: null };
   rx: { unit: 'deg'; rest: 0; syntax: '<angle>'; filter: null };
   ry: { unit: 'deg'; rest: 0; syntax: '<angle>'; filter: null };
+  ax: { unit: 'px'; rest: 0; syntax: '<length>'; filter: null };
+  ay: { unit: 'px'; rest: 0; syntax: '<length>'; filter: null };
 }>;
 /** The effects' custom properties registered in a window, so their keyframes ease. */
 export declare function registerEffects(win: unknown): void;

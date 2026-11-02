@@ -111,13 +111,17 @@ function place(c, box) {
   const cx = at.x + at.w / 2, cy = at.y + at.h / 2;
   Object.assign(c.el.style, {
     position: 'absolute', left: '0', top: '0', right: 'auto', bottom: 'auto', margin: '0', translate: 'none', rotate: 'none', scale: 'none',
-    width: c.w + 'px', height: c.h + 'px', transformOrigin: `${cx}px ${cy}px`,
-    /* T(−origin) · placing · T(origin), the first two of which cancel: about the origin it is the placing alone; in
-       3D (SPEC §1: --fx-z, --fx-rx, --fx-ry) moved toward the viewer and turned about its X and Y axes there too */
-    transform: `${inThreeD(c) ? `${THREE_D} ` : ''}rotate(${at.r}deg) translate(${-at.w / 2}px, ${-at.h / 2}px)${k} translate(${cx}px, ${cy}px)`,
+    /* about its anchor point (SPEC §1: --fx-ax, --fx-ay from its box's middle) */
+    width: c.w + 'px', height: c.h + 'px', transformOrigin: `calc(${cx}px + ${AX}) calc(${cy}px + ${AY})`,
+    /* T(−origin) · placing · T(origin), the first two of which cancel: about the origin it is the placing alone (the
+       anchor's offset taken off before it and put back after), its box's turn about the anchor as its animation's
+       is; in 3D (SPEC §1: --fx-z, --fx-rx, --fx-ry) moved toward the viewer and turned about its X and Y axes there
+       too */
+    transform: `${inThreeD(c) ? `${THREE_D} ` : ''}rotate(${at.r}deg) translate(calc(-1 * ${AX}), calc(-1 * ${AY})) translate(${-at.w / 2}px, ${-at.h / 2}px)${k} translate(${cx}px, ${cy}px) translate(${AX}, ${AY})`,
   });
 }
 const THREE_D = 'translateZ(var(--fx-z, 0px)) rotateX(var(--fx-rx, 0deg)) rotateY(var(--fx-ry, 0deg))';
+const AX = 'var(--fx-ax, 0px)', AY = 'var(--fx-ay, 0px)';
 const THREE_D_PROPS = /--fx-(z|rx|ry)\b/;
 /** Whether a clip is in 3D: its style, or keyframes it plays, say so (a flat one is placed flat, as it always was). */
 function inThreeD(c) {

@@ -89,3 +89,19 @@ test('an easing as its curve and back: names stay names, a straight line is no e
   /* a curve of one's own still reads as eased on the way it is flat */
   assert.deepEqual(sidesOf([{ t: 0, v: 0, ease: 'cubic-bezier(0.6, 0, 0.7, 0.7)' }, { t: 1, v: 1 }]), [{ in: null, out: 'ease' }, { in: 'linear', out: null }]);
 });
+
+test('a pose turns and sizes about its anchor point; unposed takes it back', () => {
+  const own = { w: 100, h: 50 };
+  const p = { x: 0, y: 0, scaleX: 1, scaleY: 1, rotate: 0 };
+  /* halved toward its top left corner, the anchor there: its top left stays */
+  const half = posed(p, own, { dx: 0, dy: 0, s: 0.5, r: 0, ax: -50, ay: -25 });
+  assert.deepEqual([half.x, half.y, half.scaleX], [0, 0, 0.5]);
+  /* turned 90° about that corner: its middle goes from (50, 25) to (-25, 50), its top left (as it is drawn, unturned
+     about its middle) to (-75, 25) */
+  const turned = posed(p, own, { dx: 0, dy: 0, s: 1, r: 90, ax: -50, ay: -25 });
+  assert.deepEqual([Math.round(turned.x), Math.round(turned.y), turned.rotate], [-75, 25, 90]);
+  const back = unposed(turned, own, { dx: 0, dy: 0, s: 1, r: 90, ax: -50, ay: -25 });
+  assert.deepEqual([Math.round(back.x), Math.round(back.y), back.rotate], [0, 0, 0]);
+  assert.deepEqual(poseAt({}, 0, { ax: -50, ay: 0 }), { dx: 0, dy: 0, s: 1, r: 0, ax: -50, ay: 0 });
+  assert.equal(poseAt({}, 0), null);
+});

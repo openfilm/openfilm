@@ -14,7 +14,7 @@
  * The work area (the film's marked range) is the bar over the ruler; the slider under the layers zooms the time.
  */
 import * as React from 'react';
-import { Box, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, Plus, X } from 'lucide-react';
+import { Box, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, Lock, LockOpen, Plus, X } from 'lucide-react';
 import { EFFECTS, MOTION_PROPS, valueAt, type EffectProp, type Key, type KeyedProp, type Motion, type MotionProp } from '../../../../src/clip-motion.mjs';
 import type { effectsModel, EffectsChange } from '@/lib/motion-keys';
 import { easeOfBezier, easedMotion, keyId, movedKeys, withoutKeys, type EaseCommand } from '@/lib/motion-keys';
@@ -55,9 +55,12 @@ export interface LayerHost {
   commit: (c: unknown) => void;
   blend: string;
   setBlend: (mode: string) => void;
-  /** Only where a layer can be hidden on its own (an element of a page). */
+  /** Whether it shows (a clip's: its track's, an element's: its own). */
   visible?: boolean;
   setVisible?: (on: boolean) => void;
+  /** Locked: kept from being moved or changed (a clip's track). */
+  locked?: boolean;
+  setLocked?: (on: boolean) => void;
   /** Its effects (lib/motion-keys effectsModel), and a change of them written. */
   effects: ReturnType<typeof effectsModel> | null;
   commitEffects: (c: EffectsChange | null) => void;
@@ -67,6 +70,8 @@ export interface LayerHost {
   text?: { anim: TextAnim | null | undefined; set: (anim: TextAnim | null) => void };
   /** In 3D (a clip's): on or not, its depth and X and Y turns (an effect's numbers), switched. */
   three?: { on: boolean; model: ReturnType<typeof effectsModel>; commit: (c: EffectsChange | null) => void; toggle: (on: boolean) => void };
+  /** Its anchor point (a clip's): where it turns and scales about, from its box's middle (an effect's numbers). */
+  anchor?: { model: ReturnType<typeof effectsModel>; commit: (c: EffectsChange | null) => void };
   /** Its stroke drawn on (a shape's): on or not, how much is drawn (an effect's numbers, `trim`), turned on. */
   stroke?: { on: boolean; model: ReturnType<typeof effectsModel>; commit: (c: EffectsChange | null) => void; turnOn: () => void };
   /** What its page is made of, as numbers (a page layer's): each keyed as a Transform's property (lib/page-motion). */
@@ -128,10 +133,12 @@ const ALL: readonly Shown[] = [...MOTION_PROPS, 'fx'];
 const isTransform = (p: KeyedProp) => (MOTION_PROPS as readonly string[]).includes(p);
 const PROP_LABEL: Record<MotionProp, string> = { translate: 'inspector.keyPosition', scale: 'inspector.keyScale', rotate: 'inspector.keyRotate', opacity: 'inspector.keyOpacity' };
 /** An effect's value: its step when dragged, its digits. */
-const FX_STEP: Record<EffectProp, number> = { blur: 0.1, brightness: 0.5, contrast: 0.5, saturate: 0.5, hue: 0.5, grayscale: 0.5, invert: 0.5, glow: 0.1, trim: 0.5, z: 1, rx: 0.5, ry: 0.5 };
+const FX_STEP: Record<EffectProp, number> = { blur: 0.1, brightness: 0.5, contrast: 0.5, saturate: 0.5, hue: 0.5, grayscale: 0.5, invert: 0.5, glow: 0.1, trim: 0.5, z: 1, rx: 0.5, ry: 0.5, ax: 1, ay: 1 };
 /** A 3D layer's numbers, shown with its Transform's: depth after position, its X and Y turns after rotation. */
 const THREE_AFTER: Record<string, readonly KeyedProp[]> = { translate: ['z'], rotate: ['rx', 'ry'] };
 const isThree = (p: string) => p === 'z' || p === 'rx' || p === 'ry';
+/** The anchor point's two numbers, the Transform's first, as an animation editor lists it. */
+const isAnchor = (p: string) => p === 'ax' || p === 'ay';
 /** A mask's parameters its shape has, and their names. */
 const maskParamsOf = (shape: MaskShape): MaskParam[] => {
   const f = MASK_FIELDS[shape];
@@ -440,13 +447,17 @@ export function useMotionLayers(p: MotionLayersArgs): MotionLayersView {
         if (lanes.rows.length) rows('contents', lanes, lanes.rows.map((row) => <ContentHead key={row.prop} layer={layer} lanes={lanes} v={contentVarOf(row.prop)} contents={ct} t={t} />));
       }
     }
-    /* its Transform, a 3D layer's depth and turns each after the property it goes with */
-    const order: KeyedProp[] = MOTION_PROPS.flatMap((x) => [x, ...(THREE_AFTER[x] ?? [])]);
-    const tf = { ...all, rows: all.rows.filter((r) => (isTransform(r.prop) && props.includes(r.prop)) || (isThree(r.prop) && Object.entries(THREE_AFTER).some(([base, xs]) => xs.includes(r.prop) && props.includes(base as Shown))))
+    /* its Transform: its anchor point first, a 3D layer's depth and turns each after the property it goes with */
+    const order: KeyedProp[] = ['ax', 'ay', ...MOTION_PROPS.flatMap((x) => [x, ...(THREE_AFTER[x] ?? [])])];
+    const tf = { ...all, rows: all.rows.filter((r) => (isTransform(r.prop) && props.includes(r.prop))
+      || (isAnchor(r.prop) && (props.includes('translate') || props.includes(r.prop)))
+      || (isThree(r.prop) && Object.entries(THREE_AFTER).some(([base, xs]) => xs.includes(r.prop) && props.includes(base as Shown))))
       .sort((a, b) => order.indexOf(a.prop) - order.indexOf(b.prop)) };
     if (tf.rows.length) {
       group('transform', t('inspector.transform'));
-      if (isOpen('transform')) rows('transform', tf, tf.rows.map((row) => (isThree(row.prop) && host.three
+      if (isOpen('transform')) rows('transform', tf, tf.rows.map((row) => (isAnchor(row.prop) && host.anchor
+        ? <EffectHead key={row.prop} layer={layer} lanes={tf} fx={row.prop as EffectProp} host={{ ...host, effects: host.anchor.model, commitEffects: host.anchor.commit }} t={t} />
+        : isThree(row.prop) && host.three
         ? <EffectHead key={row.prop} layer={layer} lanes={tf} fx={row.prop as EffectProp} host={{ ...host, effects: host.three.model, commitEffects: host.three.commit }} t={t} />
         : <PropertyHead key={row.prop} layer={layer} lanes={tf} prop={row.prop as MotionProp} host={host} t={t} />)));
     }
@@ -579,6 +590,15 @@ export function useMotionLayers(p: MotionLayersArgs): MotionLayersView {
               onPointerDown={(e) => e.stopPropagation()} onClick={() => host.setVisible?.(!host.visible)}
               className="grid h-[18px] w-[18px] place-items-center rounded-[3px] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]">
               {host.visible ? <Eye size={12} /> : <EyeOff size={12} className="opacity-50" />}
+            </button>
+          ) : null}
+        </span>
+        <span className="grid w-[20px] shrink-0 place-items-center">
+          {host.setLocked ? (
+            <button type="button" aria-label={t(host.locked ? 'canvas.layerUnlock' : 'canvas.layerLock')} title={t(host.locked ? 'canvas.layerUnlock' : 'canvas.layerLock')} aria-pressed={host.locked} data-layer-lock={layer.clipId}
+              onPointerDown={(e) => e.stopPropagation()} onClick={() => host.setLocked?.(!host.locked)}
+              className={`grid h-[18px] w-[18px] place-items-center rounded-[3px] hover:bg-[var(--bg-hover)] ${host.locked ? 'text-[var(--text)]' : 'text-[var(--text-faint)] opacity-0 group-hover/layer:opacity-60'}`}>
+              {host.locked ? <Lock size={11} /> : <LockOpen size={11} />}
             </button>
           ) : null}
         </span>
@@ -887,8 +907,8 @@ function EffectHead({ layer, lanes, fx, host, t }: { layer: Layer; lanes: Motion
         onClick={() => host.commitEffects(model.stopwatch(fx))} />
       <span className="ml-1 w-[84px] shrink-0 truncate text-[var(--text-muted)]">{t(`canvas.fx.${fx}`)}</span>
       <Scrub label={t(`canvas.fx.${fx}`)} value={model.now(fx)} unit={unit} step={FX_STEP[fx]}
-        onCommit={(n) => host.commitEffects(model.set(fx, EFFECTS[fx].unit === 'deg' ? n : fx === 'trim' ? Math.min(100, Math.max(0, n)) : Math.max(0, n)))} />
-      {isThree(fx) ? null : <button type="button" aria-label={t('canvas.fxRemove')} title={t('canvas.fxRemove')} data-effect-remove={`${layer.clipId}:${fx}`}
+        onCommit={(n) => host.commitEffects(model.set(fx, EFFECTS[fx].unit === 'deg' || isThree(fx) || isAnchor(fx) ? n : fx === 'trim' ? Math.min(100, Math.max(0, n)) : Math.max(0, n)))} />
+      {isThree(fx) || isAnchor(fx) ? null : <button type="button" aria-label={t('canvas.fxRemove')} title={t('canvas.fxRemove')} data-effect-remove={`${layer.clipId}:${fx}`}
         onClick={() => host.commitEffects(model.remove(fx))}
         className="ml-2 grid h-[16px] w-[16px] place-items-center rounded-[3px] text-[var(--text-faint)] opacity-0 hover:bg-white/10 hover:text-[var(--text)] group-hover/fx:opacity-100">
         <X size={11} />

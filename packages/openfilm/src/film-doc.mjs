@@ -309,6 +309,10 @@ export const EFFECTS = Object.freeze({
   z: { unit: 'px', rest: 0, syntax: '<length>', filter: null },
   rx: { unit: 'deg', rest: 0, syntax: '<angle>', filter: null },
   ry: { unit: 'deg', rest: 0, syntax: '<angle>', filter: null },
+  /* a picture's anchor point (a host turns, sizes and moves it in 3D about there): where it is from its box's middle,
+     stage px */
+  ax: { unit: 'px', rest: 0, syntax: '<length>', filter: null },
+  ay: { unit: 'px', rest: 0, syntax: '<length>', filter: null },
 });
 
 /** The effects' custom properties registered in a window (the film's, a page's), so their keyframes ease. */
