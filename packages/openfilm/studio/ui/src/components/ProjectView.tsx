@@ -4306,7 +4306,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
               </>)}
               {/* what the panes are for: one button saying which, a click for the menu of the three — the edit (cutting
                   the film), the canvas (making material), motion (layers and keyframes, as an animation editor shows them) */}
-              <ModeSwitcher mode={workMode} modes={workModes} onMode={setWorkMode} onSettings={() => setSettingsOpen('advanced')} />
+              {/* the edit and the canvas; animating is the edit's own timeline shown another way (its toolbar's first button) */}
+              <ModeSwitcher mode={workMode === 'motion' ? 'edit' : workMode} modes={workModes.filter((m) => m !== 'motion')} onMode={setWorkMode} onSettings={() => setSettingsOpen('advanced')} />
             </div>
             <div aria-hidden className="shrink-0 self-stretch" style={{ width: 'var(--titlebar-right-x)' }} />
           </div>
@@ -4732,6 +4733,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     onViewChange={setThumbView}
                     tracks={layerTracks ? layerTracks.map((r) => r.track) : tools.tracks}
                     layers={layerTracks ? layerView(filmMotion, layerTracks, pickedKeys.size > 0, selectedBlocks.length > 0, openComposition) : null}
+                    timelineView={workModes.includes('motion') && workModes.includes('edit') ? { now: workMode === 'motion' ? 'motion' : 'edit', onView: setWorkMode } : null}
                     totalMs={totalMs}
                     timeMs={timeMs}
                     clock={playing ? clock : null}

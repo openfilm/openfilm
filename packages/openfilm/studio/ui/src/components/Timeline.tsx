@@ -56,6 +56,7 @@ import {
   Pencil,
   TriangleAlert,
   Blend,
+  Waypoints,
 } from 'lucide-react';
 import { useT } from '@/i18n';
 import { keyAction, useKeyHint } from '@/lib/keymap-store';
@@ -747,6 +748,11 @@ export interface TimelineProps {
     /** A layer's clip double-clicked: what it is made of opened (a page's elements, as layers); false: none to open. */
     open?: (block: TimelineBlock) => boolean;
   } | null;
+  /**
+   * How the film's timeline is shown, first on its toolbar: cutting it (its tracks of clips) or animating it (the same
+   * tracks, twirled open to layers, their properties and keyframes). None: one way only.
+   */
+  timelineView?: { now: 'edit' | 'motion'; onView: (view: 'edit' | 'motion') => void } | null;
   /** The transitions the fades make (lib/transitions findTransitions): a mark over each, picked, resized, deleted. */
   transitions?: readonly FilmTransition[];
   /** A transition put on a cut (the cut's menu, a clip's menu), resized or deleted. Null = done. */
@@ -1030,6 +1036,7 @@ export const Timeline = React.memo(function Timeline({
   fades,
   motionLanes,
   layers = null,
+  timelineView = null,
   transitions,
   onTransition,
   pickedTransition = null,
@@ -4054,12 +4061,16 @@ export const Timeline = React.memo(function Timeline({
         }
       }}
     >
-      {/* ── Toolbar: mode (select / split) · undo / redo / history · split · status · the switches · zoom · subtitles ── */}
+      {/* ── Toolbar: cut or animate · mode (select / split) · undo / redo / history · split · status · the switches · zoom · subtitles ── */}
       <div
         ref={toolbarRef}
         className="@container relative flex h-[34px] shrink-0 items-center gap-1.5 border-b px-2"
         style={{ background: TL.head, borderColor: TL.line }}
       >
+        {timelineView ? <>
+          <ViewPicker now={timelineView.now} onView={timelineView.onView} />
+          <span className="mx-0.5 h-4 w-px" style={{ background: TL.line }} />
+        </> : null}
         {onSplit && !layers ? <>
           <ModePicker mode={mode} onPick={setMode} />
           <span className="mx-0.5 h-4 w-px" style={{ background: TL.line }} />
@@ -4831,6 +4842,55 @@ export type TimelineMode = 'select' | 'split';
  * Select / split — a button and a dropdown. Split is a mode, not only a button: a rough cut is a dozen cuts in a row,
  * and the pointer becoming a blade beats select-then-split each time.
  */
+/**
+ * Cutting or animating the film, as the tool picker beside it: the icon is the way it is shown now and switches to the
+ * other (its tooltip names it), the arrow lists both with what each is for. Animating, the icon takes the accent.
+ */
+function ViewPicker({ now, onView }: { now: 'edit' | 'motion'; onView: (view: 'edit' | 'motion') => void }) {
+  const t = useT();
+  const [open, setOpen] = React.useState(false);
+  const items = [
+    { id: 'edit' as const, label: t('timeline.viewEdit'), note: t('timeline.viewEditNote'), icon: <Film size={16} /> },
+    { id: 'motion' as const, label: t('timeline.viewMotion'), note: t('timeline.viewMotionNote'), icon: <Waypoints size={16} /> },
+  ];
+  const current = items.find((i) => i.id === now)!;
+  const other = items.find((i) => i.id !== now)!;
+  return (
+    <div className="relative flex items-center" data-timeline-view={now}>
+      <ToolButton onClick={() => onView(other.id)} label={t('timeline.viewTo').replace('{view}', other.label)}>
+        <span style={{ color: now === 'motion' ? 'var(--tl-accent)' : undefined, display: 'flex' }}>{current.icon}</span>
+      </ToolButton>
+      <Popover
+        open={open}
+        onOpenChange={setOpen}
+        placement="bottom"
+        align="start"
+        trigger={
+          <button type="button" onClick={() => setOpen((v) => !v)} aria-label={t('timeline.viewPick')}
+            className="flex h-[28px] w-[15px] shrink-0 items-center justify-center rounded-[6px] transition hover:bg-black/5 dark:hover:bg-white/10"
+            style={{ color: 'var(--text-dim)' }}>
+            <ChevronDown size={12} />
+          </button>
+        }
+      >
+        <div className="min-w-[200px] rounded-[8px] border p-1 shadow-lg" style={{ background: 'var(--tl-head)', borderColor: 'var(--tl-line)' }}>
+          {items.map((item) => (
+            <button key={item.id} type="button" onClick={() => { onView(item.id); setOpen(false); }} data-timeline-view-item={item.id}
+              className="flex w-full items-center gap-2.5 rounded-[4px] px-2 py-1.5 text-left transition hover:bg-black/5 dark:hover:bg-white/10"
+              style={{ color: 'var(--tl-text)', background: item.id === now ? 'var(--tl-line)' : undefined }}>
+              <span className="shrink-0" style={{ color: item.id === 'motion' ? 'var(--tl-accent)' : undefined }}>{item.icon}</span>
+              <span className="flex min-w-0 flex-col">
+                <span className="text-[12px]">{item.label}</span>
+                <span className="text-[11px]" style={{ color: 'var(--tl-faint)' }}>{item.note}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </Popover>
+    </div>
+  );
+}
+
 function ModePicker({
   mode, onPick,
 }: { mode: TimelineMode; onPick: (m: TimelineMode) => void }) {
