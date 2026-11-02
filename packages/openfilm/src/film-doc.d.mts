@@ -36,6 +36,11 @@ export type FilmOverride = {
   lock?: true;
   /** The element's text (only where it holds text alone). */
   text?: string;
+  /**
+   * Its words animated part by part: each character, word or line wrapped and given `animation` (the film's own
+   * @keyframes), starting `start` + its place in `order` × `stagger` seconds into the page.
+   */
+  split?: { by: 'char' | 'word' | 'line'; animation: string; stagger: number; start?: number; order?: 'forward' | 'reverse' | 'center' | 'random' };
   /** The clip's own entry only: seconds its picture and sound ramp up from 0 at its start, and down to 0 at its end. */
   fade?: [number, number];
 }

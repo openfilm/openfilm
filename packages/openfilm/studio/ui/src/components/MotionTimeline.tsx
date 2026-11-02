@@ -17,6 +17,7 @@ import type { effectsModel, EffectsChange } from '@/lib/motion-keys';
 import { easeOfBezier } from '@/lib/motion-keys';
 import { MASK_FIELDS, MASK_SHAPES, type MaskShape } from '@/lib/clip-mask';
 import type { MaskChange, MaskKeys, MaskParam, maskModel } from '@/lib/mask-motion';
+import { TEXT_PRESETS, textAnimDefault, type TextAnim, type TextPreset } from '@/lib/text-animator';
 import type { FilmRange } from '@/lib/studio-refs';
 import { BLEND_MODES } from '@/lib/clip-look';
 import { formatTimecode } from '@/lib/timecode';
@@ -53,6 +54,8 @@ export interface LayerHost {
   commitEffects: (c: EffectsChange | null) => void;
   /** Its mask (a clip's; none where it cannot have one here). */
   mask?: LayerMask | null;
+  /** Its words animated part by part (a text element's; null: one Studio did not write, shown as such). */
+  text?: { anim: TextAnim | null | undefined; set: (anim: TextAnim | null) => void };
 }
 
 /** A layer's mask in the Masks group: its shape (none: no mask), its keyframes (lib/mask-motion), what changes it. */
@@ -462,6 +465,9 @@ export function MotionTimeline(p: MotionTimelineProps) {
                     ) : null}
                   </>
                 ) : null}
+                {fxShown && host.text ? (
+                  <TextGroup layer={layer} host={host.text} head={head} headW={headW} timeW={timeW} pxPerMs={pxPerMs} t={t} />
+                ) : null}
                 {all && fxShown && host.mask ? (() => {
                   const mk = host.mask;
                   const masks = mk.shape && mk.model ? maskLanes(all, mk) : null;
@@ -513,6 +519,58 @@ export function MotionTimeline(p: MotionTimelineProps) {
           onChange={(e) => setZoom(40 ** (Number(e.target.value) / 100))} className="w-[160px]" data-motion-zoom="" />
       </div>
     </div>
+  );
+}
+
+/**
+ * A text layer's Animate group, as an animation editor's text animator: a preset of how each part comes in, the
+ * parts (characters, words, lines), their order, when the first starts, how far apart, how long each; its turns drawn
+ * on the time from the start.
+ */
+function TextGroup({ layer, host, head, headW, timeW, pxPerMs, t }: {
+  layer: Layer; host: NonNullable<LayerHost['text']>; head: string; headW: number; timeW: number; pxPerMs: number; t: (key: string) => string;
+}) {
+  const anim = host.anim;
+  const sel = 'h-[18px] rounded-[3px] border border-[var(--dock-line)] bg-transparent px-1 text-[11px] text-[var(--text-muted)]';
+  const set = (part: Partial<TextAnim>) => { if (anim) host.set({ ...anim, ...part }); };
+  return (
+    <>
+      <div className="flex" style={{ height: 22 }} data-text-group={layer.clipId}>
+        <div className={`${head} flex items-center gap-2 border-r border-[var(--dock-line)] text-[11.5px] text-[var(--text-muted)]`} style={{ width: headW, paddingLeft: AV_W + 18 }}>
+          <span className="flex items-center"><ChevronDown size={11} className="mr-1" /> {t('canvas.textGroup')}</span>
+          {anim === null ? <span className="text-[11px] text-[var(--text-faint)]">{t('canvas.textCustom')}</span> : (
+            <select aria-label={t('canvas.textAnimate')} value={anim?.preset ?? 'none'} data-text-preset={layer.clipId} className={sel}
+              onPointerDown={(e) => e.stopPropagation()}
+              onChange={(e) => host.set(e.target.value === 'none' ? null : textAnimDefault(e.target.value as TextPreset, anim))}>
+              <option value="none">{t('canvas.textNone')}</option>
+              {TEXT_PRESETS.map((p) => <option key={p} value={p}>{t(`canvas.textPresets.${p}`)}</option>)}
+            </select>
+          )}
+        </div>
+        <div className="relative" style={{ width: timeW }}>
+          {anim ? <div className="absolute inset-y-[6px] rounded-[2px] bg-[#d0706f]/50" style={{ left: anim.start * 1000 * pxPerMs, width: Math.max(3, anim.secs * 1000 * pxPerMs) }} /> : null}
+        </div>
+      </div>
+      {anim ? (
+        <div className="flex" style={{ height: 22 }}>
+          <div className={`${head} flex items-center gap-1.5 overflow-hidden border-r border-[var(--dock-line)] text-[11px] text-[var(--text-muted)]`} style={{ width: headW, paddingLeft: AV_W + 34 }}>
+            <select aria-label={t('canvas.textBy')} value={anim.by} className={`${sel} w-[64px]`} onPointerDown={(e) => e.stopPropagation()} onChange={(e) => set({ by: e.target.value as TextAnim['by'] })}>
+              {(['char', 'word', 'line'] as const).map((b) => <option key={b} value={b}>{t(`canvas.textBys.${b}`)}</option>)}
+            </select>
+            <select aria-label={t('canvas.textOrder')} value={anim.order} className={`${sel} w-[72px]`} onPointerDown={(e) => e.stopPropagation()} onChange={(e) => set({ order: e.target.value as TextAnim['order'] })}>
+              {(['forward', 'reverse', 'center', 'random'] as const).map((o) => <option key={o} value={o}>{t(`canvas.textOrders.${o}`)}</option>)}
+            </select>
+            <span className="text-[var(--text-faint)]">{t('canvas.textStart')}</span>
+            <Scrub label={t('canvas.textStart')} value={anim.start} unit="s" step={0.01} digits={2} onCommit={(n) => set({ start: Math.max(0, n) })} />
+            <span className="text-[var(--text-faint)]">{t('canvas.textStagger')}</span>
+            <Scrub label={t('canvas.textStagger')} value={anim.stagger} unit="s" step={0.002} digits={3} onCommit={(n) => set({ stagger: Math.max(0, n) })} />
+            <span className="text-[var(--text-faint)]">{t('canvas.textSecs')}</span>
+            <Scrub label={t('canvas.textSecs')} value={anim.secs} unit="s" step={0.01} digits={2} onCommit={(n) => set({ secs: Math.max(0.01, n) })} />
+          </div>
+          <div style={{ width: timeW }} />
+        </div>
+      ) : null}
+    </>
   );
 }
 

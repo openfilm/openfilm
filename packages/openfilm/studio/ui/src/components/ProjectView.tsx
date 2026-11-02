@@ -16,6 +16,7 @@ import type { MotionPathKeys } from './MotionPath';
 import { MotionTimeline, type Layer, type LayerHost, type LayerMask } from './MotionTimeline';
 import { maskCss, maskDefault, maskOf, type Mask } from '@/lib/clip-mask';
 import { maskKeyframes, maskModel, readMaskKeys, type MaskKeys } from '@/lib/mask-motion';
+import { splitFor, textAnimOf, type TextAnim } from '@/lib/text-animator';
 import { elementModel, elementStatic, elementSubject, readElementMotion, sameElement, writeElementMotion, type ElementCommit } from '@/lib/element-motion';
 import { transformModel, type TransformCommit } from './KeyframesSection';
 import { staticTransform, transformEdits } from '@/lib/clip-transform';
@@ -2686,7 +2687,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     return compRows ? find(compRows) : null;
   }, [compRows]);
   /* an element's keyframes and tweak written: the clip's overrides, the film's @keyframes, one edit */
-  const writeElement = React.useCallback((loc: string, motion: Motion, stat?: ElementCommit['stat'], style?: Record<string, string | null>) => {
+  const writeElement = React.useCallback((loc: string, motion: Motion, stat?: ElementCommit['stat'], style?: Record<string, string | null>, words?: ReturnType<typeof splitFor>) => {
     const row = rowOf(loc);
     if (!row || !motionComp) return;
     const { at, n } = elementAt(row);
@@ -2704,7 +2705,17 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         return Object.keys(next).some((k) => k !== 'at' && k !== 'n') ? [next] : [];
       });
     }
-    const set = Object.fromEntries(Object.entries(out.keyframes).filter(([name, body]) => body != null || film.film?.keyframes?.[name] != null));
+    if (words) {
+      /* its words animated part by part, or not any more (lib/text-animator) */
+      const has = overrides.some((o) => sameElement(o, at, n));
+      overrides = (has || words.split ? (has ? overrides : [...overrides, { at, ...(n ? { n } : {}) }]) : overrides).flatMap((o) => {
+        if (!sameElement(o, at, n)) return [o];
+        const next = { ...o } as FilmOverride;
+        if (words.split) next.split = words.split; else delete next.split;
+        return Object.keys(next).some((k) => k !== 'at' && k !== 'n') ? [next] : [];
+      });
+    }
+    const set = Object.fromEntries(Object.entries({ ...out.keyframes, ...(words?.keyframes ?? {}) }).filter(([name, body]) => body != null || film.film?.keyframes?.[name] != null));
     void edit([
       { op: 'props', edits: [{ clip: motionComp, prop: 'overrides', value: overrides.length ? (overrides as unknown as Record<string, unknown>) : null }] },
       ...(Object.keys(set).length ? [{ op: 'keyframes' as const, set }] : []),
@@ -2749,6 +2760,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       setBlend: (mode) => writeElement(layer.clipId, motion, undefined, { mixBlendMode: mode === 'normal' ? null : mode }),
       visible: !row?.hidden,
       setVisible: (show) => writeElement(layer.clipId, motion, undefined, { visibility: show ? null : 'hidden' }),
+      ...(row?.kind === 'text' ? { text: { anim: textAnimOf(entry), set: (anim: TextAnim | null) => writeElement(layer.clipId, motion, undefined, undefined, splitFor(anim)) } } : {}),
     };
   }, [rowOf, compClip, elementMotionOf, compBlock, compLocalMs, compOffset, keyFrameS, writeElement]); // eslint-disable-line react-hooks/exhaustive-deps
   const elementLanesOf = React.useCallback((layer: Layer): MotionLanes => {

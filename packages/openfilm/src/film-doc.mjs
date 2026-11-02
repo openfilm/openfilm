@@ -132,7 +132,9 @@ const CLIP_FIELDS = {
 const KEPT_ATTRIBUTE = /^(alt|title|lang|dir|data-[a-z0-9-]+|aria-[a-z]+)$/;
 /** What a track keeps of its element that says nothing to the film: a name, a class, a description. */
 const KEPT_TRACK_ATTRIBUTE = /^(id|class|title|lang|dir|data-[a-z0-9-]+|aria-[a-z]+)$/;
-const OVERRIDE_FIELDS = ['at', 'n', 't', 's', 'r', 'style', 'lock', 'text', 'fade'];
+const OVERRIDE_FIELDS = ['at', 'n', 't', 's', 'r', 'style', 'lock', 'text', 'split', 'fade'];
+/** How an element's words animate part by part (an override's `split`). */
+const SPLIT_FIELDS = ['by', 'animation', 'stagger', 'start', 'order'];
 /** A key of an override's style: a CSS property in camelCase, or a custom property as CSS writes it (`--accent`). */
 const STYLE_KEY = /^(?:[a-zA-Z]{1,40}|--[A-Za-z0-9_-]{1,60})$/;
 const BOX_FIELDS = ['x', 'y', 'w', 'h', 'r'];
@@ -189,6 +191,16 @@ function checkOverride(o, where, problems, kind) {
   }
   if (o.lock !== undefined && o.lock !== true) problems.push(`${where}lock is true, or not written.`);
   if (o.text !== undefined && (typeof o.text !== 'string' || o.text.length > 2000)) problems.push(`${where}text has to be text (at most 2000 characters).`);
+  if (o.split !== undefined) {
+    const sp = o.split;
+    if (!isObject(sp)) { problems.push(`${where}split has to be { "by": "char", "animation": "rise .5s ease-out", "stagger": 0.04 }.`); return; }
+    unknownKeys(sp, SPLIT_FIELDS, `${where}split: `, problems);
+    if (!['char', 'word', 'line'].includes(sp.by)) problems.push(`${where}split.by is "char", "word" or "line".`);
+    if (typeof sp.animation !== 'string' || !sp.animation || sp.animation.length > 200) problems.push(`${where}split.animation has to be an animation, as CSS writes one ("rise .5s ease-out").`);
+    if (!(isFinite(sp.stagger) && sp.stagger >= 0 && sp.stagger <= 10)) problems.push(`${where}split.stagger has to be seconds between parts, 0 to 10.`);
+    if (sp.start !== undefined && !(isFinite(sp.start) && sp.start >= 0)) problems.push(`${where}split.start has to be seconds, 0 or more.`);
+    if (sp.order !== undefined && !['forward', 'reverse', 'center', 'random'].includes(sp.order)) problems.push(`${where}split.order is "forward", "reverse", "center" or "random".`);
+  }
 }
 
 /** One clip, checked for what its file is. Returns the clip with its fields in their written order. */

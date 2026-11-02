@@ -308,6 +308,11 @@ function ownMotion(/** @type {FilmValue} */ value) {
     const overrides = /** @type {{ at?: string, style?: Record<string, unknown> }[] | undefined} */ (clip.overrides);
     if (!Array.isArray(overrides)) continue;
     let tweaked = false;
+    /* its elements' words animated part by part play a preset (`motion-text-…`): it stays while they do */
+    for (const o of overrides) {
+      const split = /** @type {{ split?: { animation?: unknown } }} */ (o)?.split;
+      if (typeof split?.animation === 'string') for (const e of split.animation.split(',')) used.add(e.trim().split(/\s+/)[0]);
+    }
     const list = overrides.map((o) => {
       const anim = o?.at !== undefined ? o.style?.animation : undefined;
       if (typeof anim !== 'string') return o;
@@ -326,7 +331,7 @@ function ownMotion(/** @type {FilmValue} */ value) {
     if (tweaked) setField(clip, 'overrides', /** @type {PropValue} */ (/** @type {unknown} */ (list)));
   }
   /* Studio's own (a clip's keyframes, the library's presets) go when nothing moves by them */
-  for (const name of Object.keys(value.keyframes)) if ((own.test(name) || /^motion-(in|out|loop)-/.test(name)) && !used.has(name)) delete value.keyframes[name];
+  for (const name of Object.keys(value.keyframes)) if ((own.test(name) || /^motion-(in|out|loop|text)-/.test(name)) && !used.has(name)) delete value.keyframes[name];
 }
 
 function fitClipLengths(/** @type {FilmValue} */ value) {

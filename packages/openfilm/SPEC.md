@@ -90,7 +90,11 @@ where, and CSS that says how each looks. A page draws a shot.
     the page, on the page's time like the page's own animations), `text`
     (replaces the element's own text: all of it when it has no child elements or only `<br>`s, a line break in `text`
     being a `<br>`; with other inline children, its first run of text, the children kept), `lock` (`true`: an editor keeps the element from being selected or moved; it changes
-    nothing in the picture). An entry without `at`, at most one, on any clip, is the clip's own: `fade: [in, out]`,
+    nothing in the picture), `split` (its words animated part by part: `{ "by": "char" | "word" | "line",
+    "animation": "rise .5s ease-out both", "stagger": 0.04, "start": 0, "order": "forward" | "reverse" | "center" |
+    "random" }`, each character, word or line wrapped by the host and given `animation`, the film's own `@keyframes`,
+    starting `start` plus its turn in `order` times `stagger` seconds into the page). An entry without `at`, at most
+    one, on any clip, is the clip's own: `fade: [in, out]`,
     seconds (0 or more, to the millisecond, together no longer than the clip): its picture's opacity and its sound's
     gain ramp linearly from 0 to 1 over its first `in` seconds and from 1 to 0 over its last `out` seconds, times its
     own opacity and volume (as its animation has its opacity at that moment).

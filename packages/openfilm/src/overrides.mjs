@@ -29,6 +29,9 @@ export function override(c, list = [], keyframes = null) {
     if (o.n) nodes = nodes.slice(o.n - 1, o.n);
     if (nodes.length) c.found[i] = true;
     for (const el of nodes) {
+      /* split into parts already, for the same words and the same way: as it is (each frame would start them over) */
+      const splitKey = o.split ? JSON.stringify([o.split, o.text ?? null]) : null;
+      const done = splitKey != null && c.touched.get(el)?.split === splitKey;
       if (o.t) set(el, 'translate', `${o.t[0]}px ${o.t[1]}px`);
       if (o.s != null) set(el, 'scale', Array.isArray(o.s) ? `${o.s[0]} ${o.s[1]}` : String(o.s));
       if (o.r != null) set(el, 'rotate', `${o.r}deg`);
@@ -38,7 +41,7 @@ export function override(c, list = [], keyframes = null) {
         const prop = k.replace(/[A-Z]/g, (ch) => '-' + ch.toLowerCase());
         set(el, prop, typeof v === 'number' && !/opacity|z-index|font-weight|line-height|flex/.test(prop) ? v + 'px' : String(v), 'important');
       }
-      if (o.text != null) {
+      if (o.text != null && !done) {
         const saved = (touch(el, 'translate'), c.touched.get(el));
         if ([...el.children].every((ch) => ch.localName === 'br')) {
           /* words alone, or lines between <br>s: all of them change, a <br> at each line break (SPEC §1) */
@@ -54,16 +57,85 @@ export function override(c, list = [], keyframes = null) {
           parts.forEach((n, k) => { n.data = k ? '' : o.text; });
         }
       }
+      if (o.split && !done) {
+        const saved = (touch(el, 'translate'), c.touched.get(el));
+        saved.nodes ??= [...el.childNodes];
+        splitInto(el, o.split);
+        saved.split = splitKey;
+      }
     }
   }
+}
+
+/** A part's mark: what restore takes back out (it puts the element's own nodes back). */
+const PART = 'data-film-part';
+
+/**
+ * An element's words in parts (an override's `split`): each character or word in a <span> of its own (an
+ * inline-block, so it can move and grow; spaces stay as they are), each given the animation, started at its turn.
+ * Lines are its words grouped by where the page lays them out.
+ */
+function splitInto(el, split) {
+  const doc = el.ownerDocument;
+  for (const old of el.querySelectorAll(`[${PART}]`)) old.replaceWith(...old.childNodes);
+  el.normalize();
+  const texts = [];
+  const walk = (n) => { for (const ch of [...n.childNodes]) { if (ch.nodeType === 3) texts.push(ch); else if (ch.nodeType === 1) walk(ch); } };
+  walk(el);
+  const parts = [];
+  for (const node of texts) {
+    const pieces = split.by === 'char' ? [...node.data].map((ch) => (/\s/.test(ch) ? { space: ch } : { word: ch }))
+      : node.data.split(/(\s+)/).filter(Boolean).map((w) => (/^\s+$/.test(w) ? { space: w } : { word: w }));
+    node.replaceWith(...pieces.map((p) => {
+      if (p.space) return doc.createTextNode(p.space);
+      const span = doc.createElement('span');
+      span.setAttribute(PART, '');
+      span.style.display = 'inline-block';
+      span.textContent = p.word;
+      parts.push(span);
+      return span;
+    }));
+  }
+  /* a line's words go at once: their turn is their line's */
+  let turns = parts.map((_, i) => i);
+  if (split.by === 'line') {
+    const tops = [];
+    turns = parts.map((span) => {
+      const top = Math.round(span.offsetTop);
+      let k = tops.findIndex((t) => Math.abs(t - top) < 2);
+      if (k < 0) { tops.push(top); k = tops.length - 1; }
+      return k;
+    });
+  }
+  const n = Math.max(...turns, 0) + 1;
+  const orderOf = (k) => (split.order === 'reverse' ? n - 1 - k
+    : split.order === 'center' ? Math.round(Math.abs(k - (n - 1) / 2))
+      : split.order === 'random' ? shuffled(n)[k] : k);
+  parts.forEach((span, i) => {
+    span.style.animation = split.animation;
+    span.style.animationDelay = `${Math.round(((split.start ?? 0) + orderOf(turns[i]) * split.stagger) * 1000) / 1000}s`;
+  });
+}
+
+/** 0 … n−1 in an order that looks random and is always the same for n (a film renders as it previews). */
+function shuffled(n) {
+  const out = [...Array(n).keys()];
+  let seed = 0x2545f491 ^ n;
+  for (let i = n - 1; i > 0; i--) {
+    seed = (Math.imul(seed ^ (seed >>> 15), 0x2c1b3c6d) + 0x297a2d39) | 0;
+    const j = ((seed >>> 0) % (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
 }
 
 /** The film's @keyframes the tweaks' animations name, in a <style> of the page's own (none named: taken out). */
 function keyframesIn(page, list, keyframes) {
   const names = new Set();
   for (const o of list) {
-    const anim = o.at !== undefined && o.style?.animation;
-    if (typeof anim === 'string') for (const entry of anim.split(',')) names.add(entry.trim().split(/\s+/)[0]);
+    for (const anim of o.at !== undefined ? [o.style?.animation, o.split?.animation] : []) {
+      if (typeof anim === 'string') for (const entry of anim.split(',')) names.add(entry.trim().split(/\s+/)[0]);
+    }
   }
   const text = [...names].filter((n) => keyframes?.[n] != null).map((n) => `@keyframes ${n} { ${keyframes[n]} }`).join('\n');
   if (!text && typeof page?.querySelector !== 'function') return;
@@ -92,6 +164,8 @@ export function restore(c) {
     }
     if (saved.nodes) el.replaceChildren(...saved.nodes);
     else if (saved.texts) for (const [node, data] of saved.texts) node.data = data;
+    /* words split into parts deeper in it: back as words */
+    if (saved.split) { for (const part of el.querySelectorAll(`[${PART}]`)) part.replaceWith(...part.childNodes); el.normalize(); }
   }
   c.touched = new Map();
   c.found = [];
