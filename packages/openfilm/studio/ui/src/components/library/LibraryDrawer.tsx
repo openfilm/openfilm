@@ -25,6 +25,7 @@ import { MiniPlayer, MusicCard, SoundRow, usePlayer } from './AudioList';
 import { CategoryIcon, Empty } from './icons';
 import { FEATURED, STARRED, VoicesPane } from './VoicesPane';
 import { SkillsPane, type SkillsLine } from './SkillsPane';
+import { SourceBadge, SourceChips, sourcesIn, type Source } from './SourceChips';
 
 type Category = 'media' | 'skill' | 'voice' | LibraryCategory;
 const CATEGORIES: Category[] = ['media', 'skill', 'voice', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition', 'template'];
@@ -68,6 +69,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
   const [group, setGroup] = React.useState<string>(SHOWN.group[SHOWN.cat] ?? '');
   const [folded, setFolded] = React.useState(SHOWN.folded);
   const [query, setQuery] = React.useState('');
+  /* the source the list is narrowed to (SourceChips), all of them by default */
+  const [source, setSource] = React.useState<Source | ''>('');
   const [picked, setPicked] = React.useState<string | null>(null);
   const tryOut = React.useRef(actions.tryOut);
   tryOut.current = actions.tryOut;
@@ -77,7 +80,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
   };
   /* another category: what played in the last one stops and its player goes */
   const closePlayer = React.useRef<() => void>(() => {});
-  const show = (next: Category) => { SHOWN.cat = next; setCat(next); setGroup(SHOWN.group[next] ?? ''); setQuery(''); pick(null); closePlayer.current(); };
+  const show = (next: Category) => { SHOWN.cat = next; setCat(next); setGroup(SHOWN.group[next] ?? ''); setQuery(''); setSource(''); pick(null); closePlayer.current(); };
   const pickGroup = (next: string) => { SHOWN.group[cat] = next; setGroup(next); setQuery(''); };
   const fold = () => { SHOWN.folded = !folded; setFolded(!folded); };
   const [rail, setRail] = React.useState(railWidth);
@@ -85,9 +88,11 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
   React.useEffect(() => () => tryOut.current(null), []);
 
   const q = query.trim().toLowerCase();
-  const items = (index?.items ?? []).filter((item) => item.cat === cat && (q
+  const shown = (index?.items ?? []).filter((item) => item.cat === cat && (q
     ? [...Object.values(item.name), ...(item.tags ?? [])].some((n) => n?.toLowerCase().includes(q))
     : group === FAVORITES ? favorites.includes(item.id) : !group || item.group === group));
+  const sources = sourcesIn(shown.map(sourceOf));
+  const items = source && sources.includes(source) ? shown.filter((item) => sourceOf(item) === source) : shown;
   const pickedItem = picked ? index?.items.find((i) => i.id === picked) ?? null : null;
 
   const onKey = (e: React.KeyboardEvent) => {
@@ -108,7 +113,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
   const dragProps = (item: LibraryItem) => ({ onDragStart: dragOf(item, nameOf(item.name, lang)), onDragEnd: () => clearResourceDrag() });
   /* a long list (thousands of sounds) is drawn a page at a time, from its top again when what it lists changes */
   const [drawn, setDrawn] = React.useState(PAGE);
-  React.useEffect(() => setDrawn(PAGE), [cat, group, query]);
+  React.useEffect(() => setDrawn(PAGE), [cat, group, query, source]);
 
   /* the bars and the library's things are the app's panel's (data-studio-host-panel): a press there keeps what is
      picked on the timeline and the picture, which a look or a transition goes on */
@@ -165,7 +170,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
                 <SideBox on={group === FAVORITES && !q} onClick={() => pickGroup(FAVORITES)}>{t('assetDrawer.favorites')}</SideBox>
                 {cat === 'voice' ? <SideBox on={group === FEATURED && !q} onClick={() => pickGroup(FEATURED)}>{t('assetDrawer.featured')}</SideBox> : null}
                 <SideBox on={group !== FAVORITES && group !== FEATURED && folded && !q} open={!folded} onClick={fold}>
-                  {t(cat === 'voice' ? 'assetDrawer.services' : 'assetDrawer.official')}
+                  {t(cat === 'voice' ? 'assetDrawer.services' : 'assetDrawer.library')}
                 </SideBox>
                 {folded ? null : (
                   <div className="flex flex-col pb-1">
@@ -191,6 +196,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
                   />
                 </label>
               </div>
+              {cat !== 'skill' && cat !== 'voice' ? <SourceChips sources={sources} value={source} onChange={setSource} /> : null}
               {cat === 'skill' ? <SkillsPane line={(group === 'discover' ? 'discover' : 'installed') as SkillsLine} query={query} projectId={projectId} onOpen={(name) => onOpenSkill?.(name)} />
                 : cat === 'voice' ? <VoicesPane group={group} query={query} favorites={favorites} onServices={onServices} onAll={() => pickGroup('')} /> : (
               <>
@@ -365,6 +371,9 @@ function AddButton({ item, onAdd, className }: { item: LibraryItem; onAdd: () =>
 const SAMPLE = libraryUrl('filters/sample.jpg');
 
 /** A template's clips for the person's own pictures, and how long it runs. */
+/** Where a thing of the library comes from: the community's when someone sent it (`by`), else OpenFilm's own. */
+const sourceOf = (item: LibraryItem): Source => (item.by ? 'community' : 'official');
+
 function TemplateBadge({ item }: { item: LibraryItem }) {
   const t = useT();
   const secs = Math.round((item.durationMs ?? 0) / 1000);
@@ -390,7 +399,7 @@ function Card({ item, lang, picked, kept, square, onPick, onAdd }: {
       onMouseLeave={() => setHover(false)}
       onClick={onPick}
       onDoubleClick={onAdd}
-      title={name}
+      title={item.by ? `${name} · @${item.by}` : name}
     >
       <div className={`relative overflow-hidden rounded-md bg-[var(--surface-2)] ${square ? 'aspect-square' : 'aspect-video'} ${picked ? 'ring-2 ring-[var(--tl-accent)]' : 'ring-1 ring-transparent group-hover:ring-[var(--text-faint)]'}`}>
         {item.kind === 'look'
@@ -400,6 +409,7 @@ function Card({ item, lang, picked, kept, square, onPick, onAdd }: {
         <StarButton item={item} kept={kept} className={`absolute right-1 top-1 h-5 w-5 place-items-center rounded-full bg-black/45 ${kept ? 'grid text-[#ffd35a]' : 'hidden text-white group-hover:grid'}`} />
         <AddButton item={item} onAdd={onAdd} className="absolute bottom-1 right-1 hidden h-[22px] w-[22px] place-items-center rounded-full bg-[var(--tl-accent)] text-black shadow-md group-hover:grid" />
         {item.kind === 'group' ? <TemplateBadge item={item} /> : null}
+        <SourceBadge source={sourceOf(item)} />
       </div>
       <div className={`mt-1.5 truncate px-0.5 text-[11.5px] ${picked ? 'text-[var(--tl-accent)]' : 'text-[var(--text-muted)] group-hover:text-[var(--text)]'}`}>{name}</div>
     </div>

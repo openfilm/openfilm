@@ -247,7 +247,8 @@ export const ko: Words = {
     unpin: '고정 해제',
   },
   starter: {
-    more: '더 보기',
+    more: '스킬 더 보기',
+    examples: '예시로 시작하기',
     title: '무엇을 만들고 싶으세요?',
   },
   turnAsk: {

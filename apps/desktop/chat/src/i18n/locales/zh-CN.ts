@@ -251,7 +251,8 @@ export const zhCN: Words = {
     unpin: '取消置顶',
   },
   starter: {
-    more: '更多',
+    more: '更多技能',
+    examples: '从示例开始',
     title: '你想做什么？',
   },
   turnAsk: {

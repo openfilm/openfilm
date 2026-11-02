@@ -9,6 +9,8 @@
  *                          sound  a file (sounds/<name>.m4a), its waveform in sounds/waves/<name>.png
  *                          look   a CSS `filter`, written into a clip's style
  *                          fade   one of Studio's transitions (ui lib/transitions), made of fades
+ *                        and, for a thing someone sent to the library, `by`: their GitHub name (the drawer shows it
+ *                        as the community's; without it, a thing is OpenFilm's own)
  *   library/<id>/…       the things themselves
  *   library/stickers.json  emoji stickers, each a bundle under stickers/emoji/ (published with the library likewise)
  *   library/audio.json   more sounds and music, as index.json says its own (`audio/<sfx|music>/<name>.mp3`, each with its

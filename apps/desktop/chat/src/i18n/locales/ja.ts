@@ -251,7 +251,8 @@ export const ja: Words = {
     unpin: 'ピン留めを外す',
   },
   starter: {
-    more: 'もっと見る',
+    more: 'その他のスキル',
+    examples: 'サンプルから始める',
     title: '何を作りますか？',
   },
   turnAsk: {

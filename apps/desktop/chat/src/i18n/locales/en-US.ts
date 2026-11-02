@@ -252,7 +252,8 @@ export const enUS = {
     unpin: 'Unpin',
   },
   starter: {
-    more: 'More',
+    more: 'More skills',
+    examples: 'Start from an example',
     title: 'What do you want to make?',
   },
   turnAsk: {

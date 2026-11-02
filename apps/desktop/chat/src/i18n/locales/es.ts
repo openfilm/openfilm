@@ -251,7 +251,8 @@ export const es: Words = {
     unpin: 'Dejar de fijar',
   },
   starter: {
-    more: 'Más',
+    more: 'Más skills',
+    examples: 'Empezar desde un ejemplo',
     title: '¿Qué quieres hacer?',
   },
   turnAsk: {

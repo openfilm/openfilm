@@ -45,6 +45,8 @@ export interface LibraryItem {
   still?: boolean;
   /** Words it is found by, besides its name. */
   tags?: string[];
+  /** Who sent it to the library (their GitHub name): a community thing; none: OpenFilm's own. */
+  by?: string;
   /** A piece of music's cover, by its place in the library (none: one drawn, coverLook). */
   cover?: string;
   /** A text style (word art) or a text motion: values of the text component's variables (library/text/text). */

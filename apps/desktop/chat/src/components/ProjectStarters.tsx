@@ -4,7 +4,8 @@
  * The conversation column of an empty project, before anything has been said: the question, then the skills as
  * cards, each its cover and its name, two to a row. A card names its skill in the message being written (Enter
  * starts it, or a few words more say what to make with it), installed or not: as the Community's Try now, the skill is
- * given to that conversation, nothing installed. "More" opens the Community on Discover, all of OpenFilm's.
+ * given to that conversation, nothing installed. Under them, "More skills" opens the Community on Discover, all of
+ * OpenFilm's, and "Start from an example" on the examples: one copied into a new project, or followed by the agent here.
  */
 import React from 'react';
 import { ChevronRight } from 'lucide-react';
@@ -64,15 +65,18 @@ export function ProjectStarters({ onSkill }: {
       </ul>
 
       {app.showExamples ? (
-        <div className="mt-4 flex justify-center">
-          <button
-            type="button"
-            onClick={() => app.showExamples?.({ kind: 'discover' })}
-            className="inline-flex items-center gap-0.5 rounded-md px-2 py-1 text-[13px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
-          >
-            {t('starter.more')}
-            <ChevronRight size={14} />
-          </button>
+        <div className="mt-4 flex justify-center gap-2">
+          {([['discover', 'starter.more'], ['examples', 'starter.examples']] as const).map(([kind, label]) => (
+            <button
+              key={kind}
+              type="button"
+              onClick={() => app.showExamples?.({ kind })}
+              className="inline-flex items-center gap-0.5 rounded-md px-2 py-1 text-[13px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
+            >
+              {t(label)}
+              <ChevronRight size={14} />
+            </button>
+          ))}
         </div>
       ) : null}
     </div>

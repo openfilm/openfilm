@@ -70,20 +70,20 @@ export function ExamplesGallery({ mode, projectId = null, heading, initial, onCl
   const t = useT();
   /* the Community (over a film) opens on its skills; the projects window shows the examples only */
   const community = mode === 'reference';
-  const [view, setView] = React.useState<'skills' | 'examples'>(community ? 'skills' : 'examples');
+  const [view, setView] = React.useState<'skills' | 'examples'>(community && initial?.kind !== 'examples' ? 'skills' : 'examples');
   /* what was read before shows at once; what is read now replaces it */
   const [examples, setExamples] = React.useState<Example[] | null>(() => seenExamples());
   const [skills, setSkills] = React.useState<SkillEntry[]>(() => seenSkills(projectId) ?? []);
   const [opened, setOpened] = React.useState<Opened | null>(null);
   /* opened on one skill or example (from the library, a pill in the chat): its page is all there is, closed, no Back */
-  const alone = initial != null && initial.kind !== 'discover';
+  const alone = initial != null && initial.kind !== 'discover' && initial.kind !== 'examples';
   /* opening on one item: once what it is in has been read */
   const pending = React.useRef(initial);
   React.useEffect(() => {
     const want = pending.current;
     if (!want) return;
     /* the skills' Discover: the view the gallery opens on (SkillsLibrary `initialView`) */
-    if (want.kind === 'discover') { pending.current = undefined; return; }
+    if (want.kind === 'discover' || want.kind === 'examples') { pending.current = undefined; return; }
     if (want.kind === 'skill') {
       const skill = skills.find((k) => k.name === want.name);
       if (skill) { pending.current = undefined; setView('skills'); setOpened({ kind: 'skill', skill }); }
@@ -141,7 +141,7 @@ export function ExamplesGallery({ mode, projectId = null, heading, initial, onCl
     body = (
       <Body note={community ? t('gallery.referenceNote') : t('gallery.discoverNote')}>
         <Hero example={hero!} mode={mode} onOpen={() => setOpened({ kind: 'example', example: hero! })} onStart={() => onStart(hero!)}
-          {...(mode === 'start' && onReference ? { onReference: () => onReference(hero!, null) } : {})} />
+          {...(onReference ? { onReference: () => onReference(hero!, null) } : {})} />
         {rest.length ? (
           <div className="mt-8">
             <Grid>{rest.map((e) => <ExampleCard key={e.id} example={e} label={e.category ? kindLabel(e.category) : null} onOpen={() => setOpened({ kind: 'example', example: e })} />)}</Grid>
