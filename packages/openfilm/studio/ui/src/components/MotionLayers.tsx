@@ -157,6 +157,8 @@ const contentVarOf = (prop: string) => prop.slice('content'.length);
 /** A layer's label color by what it is, as an animation editor gives each kind its own. */
 const LABEL: Record<string, string> = { video: '#4ca3ad', mg: '#a594d6', still: '#c7a35f', text: '#d0706f', image: '#c7a35f', shape: '#5b8fd6', box: '#8c9a6b', group: '#8a8f98' };
 const labelOf = (layer: Layer) => LABEL[layer.kind] ?? '#8a8f98';
+/** A layer's bar on the time: its label color, toned down so its name reads on it. */
+export const layerBarColor = (kind: string) => `color-mix(in srgb, ${LABEL[kind] ?? '#8a8f98'} 58%, #1b2326)`;
 const SELECT = 'h-[18px] rounded-[4px] border border-[var(--dock-line)] bg-transparent px-1 text-[11px] text-[var(--text-muted)] outline-none hover:bg-[var(--bg-hover)]';
 
 function follow(e: React.PointerEvent, move: (dx: number, ev: PointerEvent) => void, done: (dx: number, moved: boolean) => void) {
@@ -611,15 +613,23 @@ export function useMotionLayers(p: MotionLayersArgs): MotionLayersView {
         </button>
         <span className="mx-1 h-[10px] w-[10px] shrink-0 rounded-[2px]" style={{ background: labelOf(layer) }} />
         <span className="w-[20px] shrink-0 text-center text-[11px] tabular-nums text-[var(--text-faint)]">{n}</span>
-        <span className="flex min-w-0 flex-1 items-center" style={{ paddingLeft: 4 + (layer.depth ?? 0) * 12 }}>
-          {layer.kids ? (
-            <button type="button" aria-expanded={Boolean(layer.kidsOpen)} aria-label={t('canvas.layerKids').replace('{n}', String(layer.kids))} title={t('canvas.layerKids').replace('{n}', String(layer.kids))} data-layer-kids={layer.clipId}
-              onPointerDown={(e) => e.stopPropagation()} onClick={() => p.onKids?.(layer)}
-              className="mr-0.5 flex shrink-0 items-center gap-0.5 rounded-[3px] px-0.5 text-[10.5px] tabular-nums text-[var(--text-faint)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
-              {layer.kidsOpen ? <ChevronDown size={10} /> : <ChevronRight size={10} />}{layer.kids}
-            </button>
-          ) : null}
-          <span className={`min-w-0 truncate pl-1 ${on ? 'font-medium text-[var(--text)]' : 'text-[var(--text-muted)]'}`} title={layer.title}>{layer.title || layer.clipId}</span>
+        {/* where it is in the tree: a guide for each level it is in, then the twirl to what is in it (a slot kept when
+            nothing is, so names line up), then its name; what holds others reads as a group */}
+        <span className="flex h-full min-w-0 flex-1 items-center pl-1">
+          {Array.from({ length: layer.depth ?? 0 }, (_, i) => (
+            <span key={i} aria-hidden className="h-full w-[14px] shrink-0 border-l border-[var(--dock-line)]" style={{ marginLeft: i ? 0 : 6 }} />
+          ))}
+          <span className="grid w-[16px] shrink-0 place-items-center">
+            {layer.kids ? (
+              <button type="button" aria-expanded={Boolean(layer.kidsOpen)} aria-label={t('canvas.layerKids').replace('{n}', String(layer.kids))} title={t('canvas.layerKids').replace('{n}', String(layer.kids))} data-layer-kids={layer.clipId}
+                onPointerDown={(e) => e.stopPropagation()} onClick={() => p.onKids?.(layer)}
+                className="grid h-[16px] w-[16px] place-items-center rounded-[3px] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+                {layer.kidsOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+              </button>
+            ) : null}
+          </span>
+          <span className={`min-w-0 truncate ${layer.kids ? 'font-medium' : ''} ${on ? 'font-medium text-[var(--text)]' : layer.kids ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`} title={layer.title}>{layer.title || layer.clipId}</span>
+          {layer.kids ? <span className="ml-1.5 shrink-0 text-[10.5px] tabular-nums text-[var(--text-faint)]">{layer.kids}</span> : null}
         </span>
         {moving ? <svg className="mr-1 shrink-0" width="7" height="7" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1 11 6 6 11 1 6Z" fill="var(--tl-accent)" /></svg> : null}
         <button type="button" aria-label={t('canvas.layerAdd')} title={t('canvas.layerAdd')} data-layer-add={layer.clipId}

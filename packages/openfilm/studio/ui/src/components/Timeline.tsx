@@ -3161,7 +3161,7 @@ export const Timeline = React.memo(function Timeline({
                still lines up with the ruler */
             const left = Math.round(startMs * pxPerMs);
             const width = Math.max(2, Math.round(endMs * pxPerMs) - left - 1);
-            const color = KIND_COLOR[block.kind];
+            const color = block.color ?? KIND_COLOR[block.kind];
             const able = drag.can(block);
             const strip = clipThumbs.get(clipThumbId(block));
             const poster = block.src ? posters?.[block.src] : undefined;
@@ -3310,6 +3310,16 @@ export const Timeline = React.memo(function Timeline({
                           : undefined,
                   }}
                 >
+                {/* a layer's keyframes, marked along its bar under its name */}
+                {block.keysMs?.length ? (
+                  <div className="pointer-events-none absolute inset-x-0 bottom-[3px]" style={{ top: INFO_H }} data-block-keys={block.keysMs.length}>
+                    {block.keysMs.map((ms) => (
+                      <svg key={ms} width="7" height="7" viewBox="0 0 12 12" className="absolute top-1/2" style={{ left: Math.round((ms - (startMs - block.startMs)) * pxPerMs) - 3.5, marginTop: -3.5 }} aria-hidden>
+                        <path d="M6 1 11 6 6 11 1 6Z" fill="rgb(255 255 255 / 0.9)" stroke="rgb(0 0 0 / 0.4)" strokeWidth="1" />
+                      </svg>
+                    ))}
+                  </div>
+                ) : null}
                 {/* info strip: name and length side by side (one statement), not at opposite ends of a wide clip */}
                 <div
                   className="pointer-events-none absolute inset-x-0 top-0 flex items-center overflow-hidden px-1.5"
@@ -4843,50 +4853,34 @@ export type TimelineMode = 'select' | 'split';
  * and the pointer becoming a blade beats select-then-split each time.
  */
 /**
- * Cutting or animating the film, as the tool picker beside it: the icon is the way it is shown now and switches to the
- * other (its tooltip names it), the arrow lists both with what each is for. Animating, the icon takes the accent.
+ * Cutting or animating the film: two icons side by side, the way it is shown now raised (the accent when animating),
+ * each naming on hover what it is for. Both always in sight, so which one is on, and that there is another, needs no
+ * menu.
  */
 function ViewPicker({ now, onView }: { now: 'edit' | 'motion'; onView: (view: 'edit' | 'motion') => void }) {
   const t = useT();
-  const [open, setOpen] = React.useState(false);
   const items = [
-    { id: 'edit' as const, label: t('timeline.viewEdit'), note: t('timeline.viewEditNote'), icon: <Film size={16} /> },
-    { id: 'motion' as const, label: t('timeline.viewMotion'), note: t('timeline.viewMotionNote'), icon: <Waypoints size={16} /> },
+    { id: 'edit' as const, label: t('timeline.viewEdit'), note: t('timeline.viewEditNote'), icon: <Film size={15} /> },
+    { id: 'motion' as const, label: t('timeline.viewMotion'), note: t('timeline.viewMotionNote'), icon: <Waypoints size={15} /> },
   ];
-  const current = items.find((i) => i.id === now)!;
-  const other = items.find((i) => i.id !== now)!;
   return (
-    <div className="relative flex items-center" data-timeline-view={now}>
-      <ToolButton onClick={() => onView(other.id)} label={t('timeline.viewTo').replace('{view}', other.label)}>
-        <span style={{ color: now === 'motion' ? 'var(--tl-accent)' : undefined, display: 'flex' }}>{current.icon}</span>
-      </ToolButton>
-      <Popover
-        open={open}
-        onOpenChange={setOpen}
-        placement="bottom"
-        align="start"
-        trigger={
-          <button type="button" onClick={() => setOpen((v) => !v)} aria-label={t('timeline.viewPick')}
-            className="flex h-[28px] w-[15px] shrink-0 items-center justify-center rounded-[6px] transition hover:bg-black/5 dark:hover:bg-white/10"
-            style={{ color: 'var(--text-dim)' }}>
-            <ChevronDown size={12} />
-          </button>
-        }
-      >
-        <div className="min-w-[200px] rounded-[8px] border p-1 shadow-lg" style={{ background: 'var(--tl-head)', borderColor: 'var(--tl-line)' }}>
-          {items.map((item) => (
-            <button key={item.id} type="button" onClick={() => { onView(item.id); setOpen(false); }} data-timeline-view-item={item.id}
-              className="flex w-full items-center gap-2.5 rounded-[4px] px-2 py-1.5 text-left transition hover:bg-black/5 dark:hover:bg-white/10"
-              style={{ color: 'var(--tl-text)', background: item.id === now ? 'var(--tl-line)' : undefined }}>
-              <span className="shrink-0" style={{ color: item.id === 'motion' ? 'var(--tl-accent)' : undefined }}>{item.icon}</span>
-              <span className="flex min-w-0 flex-col">
-                <span className="text-[12px]">{item.label}</span>
-                <span className="text-[11px]" style={{ color: 'var(--tl-faint)' }}>{item.note}</span>
-              </span>
+    <div role="radiogroup" aria-label={t('timeline.viewPick')} data-timeline-view={now}
+      className="flex h-[26px] shrink-0 items-center gap-px rounded-[7px] p-[2px]" style={{ background: 'var(--tl-line)' }}>
+      {items.map((item) => {
+        const on = item.id === now;
+        return (
+          <Tooltip key={item.id} side="bottom" label={`${item.label} · ${item.note}`}>
+            <button type="button" role="radio" aria-checked={on} aria-label={item.label} data-timeline-view-item={item.id}
+              onMouseDown={(e) => e.preventDefault()} onClick={() => { if (!on) onView(item.id); }}
+              className={`flex h-[22px] w-[26px] items-center justify-center rounded-[5px] outline-none transition focus-visible:ring-1 focus-visible:ring-[var(--tl-accent)] ${on ? '' : 'hover:bg-black/5 dark:hover:bg-white/10'}`}
+              style={on
+                ? { background: 'var(--tl-head)', color: item.id === 'motion' ? 'var(--tl-accent)' : 'var(--tl-text)', boxShadow: '0 1px 2px rgb(0 0 0 / 0.25)' }
+                : { color: 'var(--tl-faint)' }}>
+              {item.icon}
             </button>
-          ))}
-        </div>
-      </Popover>
+          </Tooltip>
+        );
+      })}
     </div>
   );
 }

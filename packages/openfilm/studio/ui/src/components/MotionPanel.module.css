@@ -105,3 +105,10 @@
 .stroke svg { color:var(--tl-accent); }
 .stroke:hover path { animation:draw 1.6s ease-in-out infinite; }
 @keyframes draw { 0% { stroke-dashoffset:60 } 60%,100% { stroke-dashoffset:0 } }
+.howTo { padding:22px 18px; color:var(--text-muted); font-size:12px; line-height:1.55; }
+.howTitle { margin:0 0 12px; color:var(--text); font-weight:500; }
+.howSteps { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:10px; }
+.howSteps li { display:flex; gap:10px; align-items:flex-start; }
+.howN { flex:none; display:grid; place-items:center; width:18px; height:18px; border-radius:50%; background:var(--bg-hover); color:var(--text); font-size:11px; font-variant-numeric:tabular-nums; }
+.howMore { margin:14px 0 0; color:var(--text-faint); font-size:11px; }
+

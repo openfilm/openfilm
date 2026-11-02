@@ -19,7 +19,7 @@ import {
   AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignHorizontalDistributeCenter,
   AlignStartHorizontal, AlignStartVertical, AlignVerticalDistributeCenter, ArrowRightToLine, AudioLines, Captions,
   Check, ChevronRight, CircleAlert, Clapperboard, Copy, Diamond, Film, Gauge, Image as ImageIcon, Link2, Maximize2, MousePointerClick,
-  Lock, MoveHorizontal, Music, Replace, RotateCcw, Scissors, Shapes, Sparkles, Square, Type, Unlink2, Video, Volume2, X,
+  Lock, MoveHorizontal, Music, Replace, RotateCcw, Scissors, Shapes, Sparkles, Square, Type, Unlink2, Video, Volume2, Waypoints, X,
 } from 'lucide-react';
 
 import {
@@ -169,6 +169,7 @@ export const FilmInspector = React.memo(function FilmInspector({
   onSelectParent,
   onSelectClip,
   onPreviewClip,
+  onAnimate,
   pageChangesOf,
   replaceEntries,
   clipLookOf,
@@ -238,6 +239,8 @@ export const FilmInspector = React.memo(function FilmInspector({
   onSelectClip?: (clipLoc: string) => void;
   /** Moves the clip on the picture while its transform numbers are dragged (nothing written); null puts it back. */
   onPreviewClip?: (clipLoc: string, patch: Partial<MgTransform> | null) => void;
+  /** The clip's moves made with keyframes: the timeline shown animating, the clip twirled open (its id). */
+  onAnimate?: (clipId: string) => void;
   /** A page clip's in-page changes (film.html `overrides`) and which of them its page no longer has. */
   pageChangesOf?: (clipLoc: string) => PageChanges | null;
   /** What can take a clip's place (the project's files, one from this computer): the clip's Replace button. */
@@ -349,6 +352,7 @@ export const FilmInspector = React.memo(function FilmInspector({
             geometry={geometry && geometry.kind === 'clip' && geometry.loc === clip.loc ? geometry : null}
             onEdit={onEditClips}
             onPreviewClip={onPreviewClip}
+            {...(onAnimate ? { onAnimate } : {})}
             {...(pageChangesOf ? { pageChangesOf } : {})}
             {...(replaceEntries ? { replaceEntries } : {})}
             {...(clipLookOf ? { clipLookOf } : {})}
@@ -1503,7 +1507,7 @@ function clipsLook(
  * can only be looked at.
  */
 function ClipPanel({
-  block, onMain, speedFloor, geometry, stage, badges, onEdit, onPreviewClip, pageChangesOf, replaceEntries, clipLookOf, onPreviewLook, onStartCrop, onEditMask, maskAsk,
+  block, onMain, speedFloor, geometry, stage, badges, onEdit, onPreviewClip, onAnimate, pageChangesOf, replaceEntries, clipLookOf, onPreviewLook, onStartCrop, onEditMask, maskAsk,
   onMaskAsked, fades, propsHostOf, motion, fps = 30,
 }: {
   fades?: ReadonlyMap<string, FadeMs>;
@@ -1522,6 +1526,7 @@ function ClipPanel({
   badges?: readonly string[] | undefined;
   onEdit?: (edits: ClipEdit[]) => Promise<string | null>;
   onPreviewClip?: (clipLoc: string, patch: Partial<MgTransform> | null) => void;
+  onAnimate?: (clipId: string) => void;
   pageChangesOf?: (clipLoc: string) => PageChanges | null;
   clipLookOf?: (clipLoc: string) => { css: string; look: ClipLook | null; cls?: string } | null;
   onPreviewLook?: (clipLoc: string, css: string | null) => void;
@@ -1599,6 +1604,7 @@ function ClipPanel({
               value={clipTransform(block, own, stage)}
               onCommit={commit}
               {...(onPreviewClip ? { onPreview: (patch: Partial<MgTransform> | null) => onPreviewClip(loc!, patch) } : {})}
+              {...(onAnimate && block.clipId ? { onAnimate: () => onAnimate(block.clipId!) } : {})}
             />
           ) : null}
           {/* its keyframes right under its place: they move it on top of its box */}
@@ -2454,8 +2460,10 @@ function TransitionPanel({ t, pick }: { t: T; pick: TransitionPick }) {
  * whole, so its box keeps its proportions.
  */
 function ClipPositionSection({
-  t, loc, page, own, placed, value, geometry, onCommit, onPreview,
+  t, loc, page, own, placed, value, geometry, onCommit, onPreview, onAnimate,
 }: {
+  /** Its place moved with keyframes: the timeline animating, the clip twirled open. */
+  onAnimate?: () => void;
   t: T;
   loc: string;
   page: boolean;
@@ -2503,10 +2511,19 @@ function ClipPositionSection({
     <Section
       id="position"
       title={t('inspector.position')}
-      aside={placed ? (
-        <SectionAction label={t('inspector.resetTransform')} onClick={() => onCommit([{ loc, prop: 'box', value: null }])}>
-          <RotateCcw size={11} />
-        </SectionAction>
+      aside={placed || onAnimate ? (
+        <span className="flex items-center">
+          {onAnimate ? (
+            <SectionAction label={t('inspector.animate')} onClick={onAnimate}>
+              <Waypoints size={11} />
+            </SectionAction>
+          ) : null}
+          {placed ? (
+            <SectionAction label={t('inspector.resetTransform')} onClick={() => onCommit([{ loc, prop: 'box', value: null }])}>
+              <RotateCcw size={11} />
+            </SectionAction>
+          ) : null}
+        </span>
       ) : null}
     >
       <AlignBar t={t} onAlign={alignTo} />

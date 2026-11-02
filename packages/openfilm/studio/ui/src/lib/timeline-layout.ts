@@ -348,6 +348,10 @@ export interface TimelineBlock {
   startMs: number;
   endMs: number;
   kind: TimelineBlockKind;
+  /** Its bar's color, in place of its kind's (a layer's label, in Motion). */
+  color?: string;
+  /** Where its keyframes are, ms from its start: marked on its bar (a layer's, in Motion). */
+  keysMs?: readonly number[];
   /** Turned off (or on a hidden track): drawn see-through. */
   off?: boolean;
   /**

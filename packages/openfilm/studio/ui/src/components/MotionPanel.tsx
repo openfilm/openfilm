@@ -60,7 +60,7 @@ export function MotionPanel({ layers, hostOf, onApplied, contents }: {
       </div>
       <div className={styles.scroll}>
         {tab === 'properties'
-          ? (layer && host ? <Properties layer={layer} count={layers.length} host={host} t={t} onApplied={onApplied} contents={contents} /> : <p className={styles.empty}>{t('canvas.panelPick')}</p>)
+          ? (layer && host ? <Properties layer={layer} count={layers.length} host={host} t={t} onApplied={onApplied} contents={contents} /> : <HowTo t={t} />)
           : <Presets host={host} count={layers.length} onPut={put} t={t} />}
       </div>
     </div>
@@ -250,4 +250,23 @@ function TilePicture({ item }: { item: MotionItem }) {
     );
   }
   return <span className={styles.stage}><span className={styles.card} /></span>;
+}
+
+/**
+ * With nothing in hand, how a move is made, in three steps, as the first thing anyone animating needs: a layer, its
+ * stopwatch, the playhead moved and a value changed (the keyframes follow).
+ */
+function HowTo({ t }: { t: (key: string) => string }) {
+  const steps = ['canvas.howPick', 'canvas.howWatch', 'canvas.howChange'];
+  return (
+    <div className={styles.howTo} data-motion-howto="">
+      <p className={styles.howTitle}>{t('canvas.howTitle')}</p>
+      <ol className={styles.howSteps}>
+        {steps.map((key, i) => (
+          <li key={key}><span className={styles.howN}>{i + 1}</span><span>{t(key)}</span></li>
+        ))}
+      </ol>
+      <p className={styles.howMore}>{t('canvas.howMore')}</p>
+    </div>
+  );
 }
