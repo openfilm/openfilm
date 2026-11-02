@@ -37,6 +37,19 @@ test('a quiet mix with loud bangs is brought to the target as a whole, its bangs
   assert.ok(Math.abs(down.after.lufs - -30) <= 0.5, `integrated loudness ${down.after.lufs}`);
 });
 
+test('the limiter does not delay the sound: a bang starts on the sample it started on', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 60_000 }, async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-loudness-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const out = join(dir, 'sound.wav');
+  await toLoudness(wav(join(dir, 'bangs.wav'), '0.95*lt(mod(t,4),0.005)*sin(2*PI*900*t)'), out, ['-c:a', 'pcm_f32le'], { lufs: -14 });
+  const pcm = execFileSync('ffmpeg', ['-v', 'error', '-i', out, '-ac', '1', '-f', 'f32le', '-'], { maxBuffer: 1 << 24 });
+  const samples = new Float32Array(pcm.buffer, pcm.byteOffset, pcm.length / 4);
+  /* the bang at 4 s: its first sample over -40 dBFS, from 3.9 s */
+  let onset = 4 * 48000 - 4800;
+  while (Math.abs(samples[onset]) < 0.01) onset += 1;
+  assert.ok(Math.abs(onset - 4 * 48000) <= 8, `the bang starts ${onset - 4 * 48000} samples late`);
+});
+
 test('silence is encoded as it is, with nothing to measure', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 60_000 }, async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'of-loudness-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

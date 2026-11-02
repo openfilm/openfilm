@@ -272,13 +272,14 @@ test('--loudness brings the sound to the target with true peaks under -1 dBTP, t
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   mkdirSync(join(dir, 'assets'));
   writeFileSync(join(dir, 'page.html'), '<!doctype html><body style="margin:0;background:#204080"><script>window.film = { duration: 3, width: 320, height: 180, frame() {} };</script>');
-  /* a quiet voice, and a loud knock at 1 s on another track */
+  /* a quiet voice, and a knock at 1 s on another track: lavfi's sine is at 1/8, so the knock is about -18.6 dBFS, still caught by the limiter once turned up */
   execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'sine=frequency=220:duration=3', '-af', 'volume=-28dB', '-ac', '1', '-ar', '48000', join(dir, 'assets', 'vo.wav')]);
   execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'sine=frequency=900:duration=0.01', '-af', 'volume=-0.5dB', '-ac', '1', '-ar', '48000', join(dir, 'assets', 'knock.wav')]);
   writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [
     { clips: [{ id: 'p', src: 'page.html' }] }, { clips: [{ id: 'vo', src: 'assets/vo.wav' }] }, { clips: [{ id: 'k', src: 'assets/knock.wav', at: 1 }] },
   ] }));
-  const quiet = { workers: 1, silent: true, onProgress() {}, fps: 10 };
+  /* software encoding: h264_videotoolbox on macOS gives different bytes each time */
+  const quiet = { workers: 1, silent: true, onProgress() {}, fps: 10, hardware: false };
   const plain = await render([dir], { ...quiet, silent: false, out: join(dir, 'plain.mp4') });
   const loud = await render([dir], { ...quiet, silent: false, loudness: -16, out: join(dir, 'loud.mp4') });
   const { loudnessOf } = await import('./loudness.mjs');

@@ -66,7 +66,7 @@ export async function toLoudness(from, to, codec, { lufs, peak = TRUE_PEAK, sign
   let ceiling = peak - HEADROOM;
   let after = before;
   for (let pass = 0; pass < 3; pass += 1) {
-    await encode(`aresample=${RATE * OVERSAMPLE},volume=${gain.toFixed(2)}dB,alimiter=limit=${(10 ** (ceiling / 20)).toFixed(4)}:attack=3:release=60:level=false:asc=1,aresample=${RATE}`);
+    await encode(`aresample=${RATE * OVERSAMPLE},volume=${gain.toFixed(2)}dB,alimiter=limit=${(10 ** (ceiling / 20)).toFixed(4)}:attack=3:release=60:level=false:asc=1:latency=1,aresample=${RATE}`);
     after = await loudnessOf(to, signal);
     if (Math.abs(after.lufs - lufs) <= LOUDNESS_SLACK && after.peak <= peak) break;
     gain += lufs - after.lufs;
