@@ -40,11 +40,12 @@ export const builtInRoot = () => process.env.OPENFILM_BUILT_IN_LIBRARY || fileUR
 
 /**
  * The library's parts too big to come with the package (git-ignored, left out of npm): its sounds and music (`audio/`),
- * its voices' samples (`voices/`), its emoji stickers (`stickers/emoji/`). Each is fetched on first use from the
+ * its voices' samples (`voices/`), its emoji stickers (`stickers/emoji/`), the model semantic search runs (`models/`,
+ * src/library-semantic.mjs). Each is fetched on first use from the
  * library's host and kept in the shared home, once for every OpenFilm on this computer; a bundle (a sticker) comes with
  * the list of its files, `files.json` beside it there, written when the library is published.
  */
-const PUBLISHED = ['audio/', 'voices/', 'stickers/emoji/'];
+const PUBLISHED = ['audio/', 'voices/', 'stickers/emoji/', 'models/'];
 
 /** Where the published parts come from: openfilm.dev's library, which sends each person to the copy nearest them. */
 const libraryHost = () => (process.env.OPENFILM_LIBRARY_URL || 'https://openfilm.dev/library').replace(/\/+$/, '');
@@ -67,7 +68,8 @@ const fetching = new Map();
 
 /** One file of the published library into the cache: whole or not at all. */
 async function fetchFile(/** @type {string} */ rel) {
-  const res = await fetch(`${libraryHost()}/${rel.split('/').map(encodeURIComponent).join('/')}`, { signal: AbortSignal.timeout(60_000) });
+  /* a model is a hundred megabytes: time for a slow line */
+  const res = await fetch(`${libraryHost()}/${rel.split('/').map(encodeURIComponent).join('/')}`, { signal: AbortSignal.timeout(rel.startsWith('models/') ? 30 * 60_000 : 60_000) });
   if (!res.ok) throw new Error(`the library's ${rel} came back ${res.status}`);
   const at = inside(libraryCache(), rel);
   await mkdir(dirname(at), { recursive: true });

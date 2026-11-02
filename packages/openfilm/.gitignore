@@ -12,3 +12,5 @@ library/voices/
 library/audio/
 # the emoji stickers of library/stickers.json: published with the library likewise
 library/stickers/emoji/
+# the model semantic search runs, and its runtime: published with the library likewise (library/models.json)
+library/models/

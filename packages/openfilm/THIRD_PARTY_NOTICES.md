@@ -12,3 +12,8 @@ Studio's editor (`studio/ui/dist`) bundles:
   easing of d3-ease also BSD 3-Clause License, © Robert Penner).
 
 The CLI depends on **playwright-core** (Apache License 2.0), which downloads a headless Chromium on first use.
+
+The library's semantic search (`src/library-semantic.mjs`) fetches on first use, and its vectors (`library/vectors.i8`)
+are made with, **multilingual-e5-small** by Liang Wang et al., Microsoft (MIT License), as the int8 ONNX export of
+Xenova/multilingual-e5-small; it runs it in **ONNX Runtime Web** (`onnxruntime-web`, MIT License, © Microsoft
+Corporation), fetched likewise.

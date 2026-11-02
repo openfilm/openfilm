@@ -65,7 +65,7 @@ const rarity = (/** @type {number} */ n, /** @type {number} */ count) => Math.lo
  * The things of the library of `kind` (all kinds when null) that fit `query` best, the best first.
  * @param {keyof typeof KINDS | null} kind @param {string} query
  * @param {{ duration?: number, limit?: number }} [o] duration: the seconds it is wanted for
- * @returns {{ item: Item, score: number, tags: string[] }[]}
+ * @returns {Found[]}
  */
 export function findInLibrary(kind, query, o = {}) {
   const { vocab, docs } = library();
@@ -96,7 +96,6 @@ export function findInLibrary(kind, query, o = {}) {
   const asks = tags.length + words.length + (pairs.length ? 1 : 0) + (wants ? 1 : 0) + (bpm ? 1 : 0);
   const top = Math.max(1, ...tagRarity.values(), ...wordRarity.values());
   const results = [];
-  const short = new Set();
   for (const d of all) {
     let score = 0;
     let met = 0;
@@ -126,23 +125,60 @@ export function findInLibrary(kind, query, o = {}) {
       if (off <= 8) { score += 2 * top * (1 - off / 16); met++; }
     }
     /* asked for by its name */
-    if (d.title.some((t) => t && (t === said || (CJK.test(t) && t.length > 1 && folded.includes(t))))) score += 2 * top;
+    const named = d.title.some((t) => t && (t === said || (CJK.test(t) && t.length > 1 && folded.includes(t))));
+    if (named) score += 2 * top;
     if (score <= 0 || !met) continue;
     /* the more of what was asked it has, the better */
     score *= 0.4 + 0.6 * Math.min(1, met / Math.max(1, asks));
     if (o.duration && d.item.durationMs) {
       const secs = d.item.durationMs / 1000;
-      if (d.item.cat === 'music') { if (secs < o.duration && !d.item.loop) short.add(d.item.id); }
-      else score /= 1 + Math.abs(Math.log(secs / o.duration));
+      if (d.item.cat !== 'music') score /= 1 + Math.abs(Math.log(secs / o.duration));
     } else if (d.item.cat === 'music' && d.item.durationMs) {
       /* music for a scene rather than a sting, when no length is asked */
       score *= Math.min(1, 0.8 + (0.2 * d.item.durationMs) / 30000);
     }
-    results.push({ item: d.item, score, tags: [...d.tags] });
+    results.push({ item: d.item, score, tags: [...d.tags], named, short: tooShort(d.item, o.duration) });
   }
-  /* music shorter than asked (and not a loop) after all that is long enough */
-  results.sort((a, b) => Number(short.has(a.item.id)) - Number(short.has(b.item.id)) || b.score - a.score || a.item.id.localeCompare(b.item.id));
+  results.sort(inOrder((r) => r.score));
   return results.slice(0, o.limit ?? 8);
+}
+
+/** @typedef {{ item: Item, score: number, tags: string[], named: boolean, short: boolean }} Found */
+
+/** Music shorter than asked, and no loop: after all that is long enough. @param {Item} item @param {number} [duration] */
+const tooShort = (item, duration) => Boolean(duration && item.cat === 'music' && item.durationMs && item.durationMs / 1000 < duration && !item.loop);
+
+/** The order results are given in: what is long enough first, then what was asked for by its name, then `by`. */
+const inOrder = (/** @type {(r: Found) => number} */ by) => (/** @type {Found} */ a, /** @type {Found} */ b) =>
+  Number(a.short) - Number(b.short) || Number(b.named) - Number(a.named) || by(b) - by(a) || a.item.id.localeCompare(b.item.id);
+
+/* how far down a list a place still counts in the merge, and how much the first places count more (reciprocal rank) */
+const DEPTH = 50;
+const RRF_K = 60;
+
+/**
+ * The keyword search's results and the semantic search's nearest things (library-semantic.mjs) as one list, each
+ * thing scored by its places in both (reciprocal rank fusion): a thing high in either comes up, one high in both
+ * first. The keyword search alone when the model is not ready here. A vector is near something whatever is asked
+ * (`qwzxv` is as near some music as `sad goodbye at a train station`), so `worded` says whether any words matched.
+ * @param {keyof typeof KINDS} kind @param {string} query @param {{ duration?: number, limit?: number }} [o]
+ * @returns {Promise<{ found: Found[], worded: boolean }>}
+ */
+export async function searchLibrary(kind, query, o = {}) {
+  const words = findInLibrary(kind, query, { ...o, limit: DEPTH });
+  const { docs } = library();
+  const { nearest } = await import('./library-semantic.mjs');
+  const near = await nearest(query, (id) => docs.get(id)?.item.cat === KINDS[kind], DEPTH);
+  if (!near) return { found: words.slice(0, o.limit ?? 8), worded: words.length > 0 };
+  /** @type {Map<string, Found & { fused: number }>} */
+  const all = new Map(words.map((r, i) => [r.item.id, { ...r, fused: 1 / (RRF_K + i) }]));
+  near.forEach(([id], i) => {
+    const was = all.get(id);
+    if (was) { was.fused += 1 / (RRF_K + i); return; }
+    const d = /** @type {Doc} */ (docs.get(id));
+    all.set(id, { item: d.item, score: 0, tags: [...d.tags], named: false, short: tooShort(d.item, o.duration), fused: 1 / (RRF_K + i) });
+  });
+  return { found: [...all.values()].sort(inOrder((r) => /** @type {Found & { fused: number }} */ (r).fused)).slice(0, o.limit ?? 8), worded: words.length > 0 };
 }
 
 /** The language a query is written in, when its script says (CJK); else English. @param {string} text */
@@ -227,12 +263,17 @@ export async function libraryGet(verb, flags) {
   const count = limit === undefined ? 8 : Number(limit);
   if (!(Number.isInteger(count) && count >= 1 && count <= 50)) return wrong(`--limit is a whole number from 1 to 50, not ${limit}`);
   const query = prompt.trim();
-  const found = findInLibrary(spec.kind, query, { duration: seconds, limit: count });
+  const { semanticState, manifest } = await import('./library-semantic.mjs');
+  const state = semanticState();
+  const { found, worded } = await searchLibrary(spec.kind, query, { duration: seconds, limit: count });
   const make = spec.makes ? `make one with \`openfilm get ${spec.makes}\`` : 'write it yourself, as a page or CSS';
-  if (!found.length) return { code: 0, lines: [`Nothing in OpenFilm's library for “${query}”: ${make}.`] };
+  const mb = Math.round((manifest()?.files ?? []).reduce((sum, f) => sum + f.bytes, 0) / 1e6);
+  const coming = state === 'fetching' ? [`(Semantic search is being set up in the background, about ${mb} MB, once: until then, words are matched.)`] : [];
+  if (!found.length) return { code: 0, lines: [`Nothing in OpenFilm's library for “${query}”: ${make}.`, ...coming] };
   const lang = languageOf(query);
   const { vocab } = library();
-  const lines = [`${found.length} in OpenFilm's library for “${query}”, the best first (free to use in any film):`, ''];
+  const lines = [worded ? `${found.length} in OpenFilm's library for “${query}”, the best first (free to use in any film):`
+    : `No words of “${query}” are in OpenFilm's library; the ${found.length} nearest in meaning, which may not fit:`, ''];
   found.forEach(({ item, tags }, i) => {
     const name = lang === 'en' || !item.name[lang] ? item.name.en : `${item.name[lang]} (${item.name.en})`;
     const facts = [
@@ -251,7 +292,7 @@ export async function libraryGet(verb, flags) {
     lines.push(`    ${preview ? `${item.kind === 'sound' ? 'hear' : 'see'} it: ${preview}` : item.kind === 'sound' ? 'its file is not on this computer' : 'no preview'}`);
   });
   lines.push('', `Take one into the film: \`openfilm get ${verb} --take <id>\` (it says what to put in film.html).`);
-  lines.push(`Only when none of these fits, ${make}.`);
+  lines.push(`Only when none of these fits, ${make}.`, ...coming);
   return { code: 0, lines };
 }
 

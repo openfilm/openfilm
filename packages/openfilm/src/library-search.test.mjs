@@ -3,7 +3,13 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { LIBRARY_VERBS, findInLibrary, languageOf, libraryGet, libraryVerbs } from './library-search.mjs';
+import { LIBRARY_VERBS, findInLibrary, languageOf, libraryGet, libraryVerbs, searchLibrary } from './library-search.mjs';
+import { semanticReady } from './library-semantic.mjs';
+
+/* the model, when it is not in this checkout's library, is fetched from nowhere into a cache of the tests' own */
+process.env.OPENFILM_LIBRARY_CACHE = mkdtempSync(join(tmpdir(), 'library-search-cache-'));
+process.env.OPENFILM_LIBRARY_URL = 'http://127.0.0.1:9/library';
+const semantic = semanticReady();
 
 test('calm piano for a morning scene: calm piano music for a morning', () => {
   const found = findInLibrary('music', 'calm piano for a morning scene', { limit: 5 });
@@ -49,8 +55,27 @@ test('nothing that fits is nothing found, and said so', async () => {
   assert.deepEqual(findInLibrary('music', 'qwzxv'), []);
   const said = await libraryGet('music-search', { prompt: 'qwzxv' });
   assert.equal(said.code, 0);
-  assert.match(said.lines.join('\n'), /^Nothing in OpenFilm's library for “qwzxv”: make one with `openfilm get music`\.$/);
-  assert.match((await libraryGet('transition', { prompt: 'qwzxv' })).lines[0], /write it yourself/);
+  /* a vector is near something whatever is asked: then the nearest are given as such */
+  if (semantic) assert.match(said.lines[0], /^No words of “qwzxv” are in OpenFilm's library; the 8 nearest in meaning, which may not fit:$/);
+  else {
+    assert.match(said.lines[0], /^Nothing in OpenFilm's library for “qwzxv”: make one with `openfilm get music`\.$/);
+    assert.match((await libraryGet('transition', { prompt: 'qwzxv' })).lines[0], /write it yourself/);
+  }
+});
+
+test('with the model here, what is meant is found with no word in common, and what is named stays first', { skip: !semantic && 'the model is not in this library' }, async () => {
+  const goodbye = (await searchLibrary('music', 'sad goodbye at a train station', { limit: 5 })).found;
+  assert.ok(goodbye.filter(({ item }) => /farewell|grief|goodbye|lament|elegiac/i.test(`${item.name.en} ${item.about ?? ''}`)).length >= 3, goodbye.map((f) => f.item.name.en).join());
+  assert.ok(!goodbye.some(({ item }) => /training|gym/i.test(item.name.en)), 'no word taken for what it is not');
+  const guzheng = (await searchLibrary('music', '古风 古筝', { limit: 5 })).found;
+  assert.ok(guzheng.every(({ tags }) => tags.includes('chinese')), guzheng.map((f) => f.item.name.en).join());
+  const vague = await searchLibrary('music', '下班路上的感觉', { limit: 3 });
+  assert.equal(vague.worded, false);
+  assert.equal(vague.found.length, 3);
+  assert.equal((await searchLibrary('transition', 'glitch')).found[0].item.id, 'transitions/glitch');
+  assert.equal((await searchLibrary('sound', '雨声')).found[0].item.id, 'sounds/rain.m4a');
+  const long = (await searchLibrary('music', 'calm piano', { duration: 50, limit: 5 })).found;
+  assert.ok(long.every(({ item }) => /** @type {number} */ (item.durationMs) >= 50000 || item.loop), 'music at least as long as asked, or a loop');
 });
 
 test('the library is part of `openfilm get`: a search verb beside each one that makes, a verb for each kind only it has', () => {
