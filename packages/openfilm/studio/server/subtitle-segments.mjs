@@ -131,10 +131,11 @@ const LEANS_FORWARD = new Set(['a', 'an', 'the', 'to', 'of', 'in', 'on', 'at', '
 /* hesitations, which the printed subtitle leaves out (captions.mjs): they count for nothing in a piece's length; "um"
    only where it is not a word (umIsWord) */
 const FILLERS = new Set(['\u5443', '\u55ef', '\u989d', 'uh', 'um', 'erm', 'mm', 'mmm', 'hmm', 'mhm']);
-/* common words of Portuguese ("um": a, one) and German ("um": around, at), none of them English or Spanish */
+/* common words of Portuguese ("um": a, one) and German ("um": around, at), none of them English or Spanish ("die",
+   "den", "mit" are left out: they are English words too) */
 const UM_IS_A_WORD_IN = new Set(['n\u00e3o', '\u00e9', 'em', 'com', 'uma', 'isso', 'esse', 'essa', 'est\u00e1',
   's\u00e3o', 'voc\u00ea', 'ele', 'ela', 'eu', 'muito', 'tamb\u00e9m', 'das', 'ao', 'pelo', 'pela', 'num', 'numa',
-  'und', 'der', 'die', 'ist', 'nicht', 'ich', 'zu', 'mit', 'sich', 'ein', 'eine', 'einen', 'auf', 'wir', 'sie', 'auch', 'den', 'dem', 'uhr']);
+  'und', 'der', 'ist', 'nicht', 'ich', 'zu', 'sich', 'ein', 'eine', 'einen', 'auf', 'wir', 'sie', 'auch', 'dem', 'uhr']);
 
 /**
  * Whether "um" in a text is a word, not a hesitation: the text reads as Portuguese or German (one word in ten, fillers
@@ -142,8 +143,10 @@ const UM_IS_A_WORD_IN = new Set(['n\u00e3o', '\u00e9', 'em', 'com', 'uma', 'isso
  * @param {string} t
  */
 export function umIsWord(t) {
-  const words = (t.toLowerCase().match(/\p{L}+/gu) ?? []).filter((w) => !FILLERS.has(w));
-  return words.length > 0 && words.filter((w) => UM_IS_A_WORD_IN.has(w)).length * 10 >= words.length;
+  /* English that spells one of them is not counted: 'em, dot com, an acronym (EU) */
+  const words = (t.replace(/(?:\.|\bdot\s+)com\b/giu, ' ').match(/['’]?\p{L}+/gu) ?? []).filter((w) => !FILLERS.has(w.toLowerCase()));
+  const theirs = words.filter((w) => !/^['’]/u.test(w) && !(w.length > 1 && w === w.toUpperCase()) && UM_IS_A_WORD_IN.has(w.toLowerCase()));
+  return words.length > 0 && theirs.length * 10 >= words.length;
 }
 const CJK_PARTICLES = ['\u7684\u8bdd', '\u5427', '\u5462', '\u554a', '\u5417', '\u5440', '\u561b'];
 

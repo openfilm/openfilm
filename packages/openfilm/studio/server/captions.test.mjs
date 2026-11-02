@@ -79,6 +79,15 @@ test('"um" is printed where it is a word: in Portuguese and German, not in Engli
   assert.equal(captionText('porque esse é um'), 'porque esse é um');
   assert.equal(captionText('Wir treffen uns um acht Uhr.'), 'Wir treffen uns um acht Uhr.');
   assert.equal(captionText('Um, so we start at eight.'), 'so we start at eight.');
+  /* short English lines with a word that is also theirs */
+  assert.equal(captionText('Um, I could die.'), 'I could die.');
+  assert.equal(captionText('Um, let \'em go.'), 'let \'em go.');
+  assert.equal(captionText('Um, let ’em go.'), 'let ’em go.');
+  assert.equal(captionText('Um, go to example dot com.'), 'go to example dot com.');
+  assert.equal(captionText('Um, go to example.com.'), 'go to example.com.');
+  assert.equal(captionText('Um, the den.'), 'the den.');
+  assert.equal(captionText('Um, I went to MIT.'), 'I went to MIT.');
+  assert.equal(captionText('Um, the EU said so.'), 'the EU said so.');
   assert.equal(captionText('um dia em Salem.', false), 'dia em Salem.', 'told otherwise, it is a hesitation');
   /* "Um ano depois." alone reads as no language; the transcript it is in reads as Portuguese */
   const vtt = 'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nEra uma vez uma cidade.\n\n00:00:02.000 --> 00:00:04.000\nUm ano depois.\n';
