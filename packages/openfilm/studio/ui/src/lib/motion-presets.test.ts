@@ -38,3 +38,12 @@ test('a short layer: what comes in takes half of it at most', () => {
   const m = presetMotion('popIn', {}, rest, [0, 0.4], stage);
   assert.equal(m.scale?.[m.scale.length - 1]?.t, 0.2);
 });
+
+test('what plays all along a layer plays after how it comes in and before how it goes out', () => {
+  const was = { scale: [{ t: 0, v: 0.4 }, { t: 0.55, v: 1 }, { t: 3.5, v: 1 }, { t: 4, v: 0 }] };
+  const m = presetMotion('pulse', was, { ...rest, scale: 1 }, [0, 4], stage);
+  const t = m.scale!.map((k) => k.t);
+  assert.deepEqual(t.slice(0, 2), [0, 0.55]);
+  assert.deepEqual(t.slice(-2), [3.5, 4]);
+  assert.ok(m.scale!.some((k) => k.v === 1.06 && k.t > 0.55 && k.t < 3.5));
+});

@@ -4,7 +4,9 @@
  * is keyed from the layer's own transform (its `rest`: where, how big, how turned and how opaque it is when nothing
  * moves it), so it comes in to where it stands and leaves from there.
  *
- * The keyframes a preset makes take the place of the ones its properties had in that stretch; the rest stay.
+ * The keyframes a preset makes take the place of the ones its properties had in that stretch; the rest stay. What plays
+ * all along a layer plays between how its property comes in and how it goes out (its keyframes in the first half of the
+ * layer, and in the second), so a pulse after a pop-in keeps the pop-in.
  *
  * Pure: no React, no DOM.
  */
@@ -40,10 +42,16 @@ export function presetMotion(preset: AnimPreset, motion: Motion, rest: Rest, spa
   const c = to - outS;
   const made: Partial<Record<MotionProp, Key[]>> = {};
   const k = (t: number, v: Key['v'], ease?: string): Key => ({ t: r3(t), v, ...(ease ? { ease } : {}) });
-  /* a property played along all the layer: a turn every so many seconds, the last back where it rests */
-  const along = (every: number, at: (i: number) => Key['v']) => {
-    const n = Math.max(1, Math.round(len / every));
-    return Array.from({ length: n * 2 + 1 }, (_, i) => k(from + (len * i) / (n * 2), i % 2 ? at(i) : at(0), 'ease-in-out'));
+  /* a property played along the layer, after how it comes in and before how it goes out: a turn every so many seconds,
+     the last back where it rests */
+  const along = (prop: MotionProp, every: number, at: (i: number) => Key['v']) => {
+    const mid = (from + to) / 2;
+    const times = (motion[prop] ?? []).map((key) => key.t);
+    const a0 = Math.max(from, ...times.filter((t) => t <= mid));
+    const b0 = Math.min(to, ...times.filter((t) => t > mid));
+    const span0 = Math.max(0.05, b0 - a0);
+    const n = Math.max(1, Math.round(span0 / every));
+    return Array.from({ length: n * 2 + 1 }, (_, i) => k(a0 + (span0 * i) / (n * 2), i % 2 ? at(i) : at(0), 'ease-in-out'));
   };
   switch (preset) {
     case 'fadeIn': made.opacity = [k(a, 0, 'ease-out'), k(b, rest.opacity)]; break;
@@ -74,9 +82,9 @@ export function presetMotion(preset: AnimPreset, motion: Motion, rest: Rest, spa
       made.opacity = [k(c, rest.opacity, 'ease-in'), k(to, 0)];
       break;
     case 'pushIn': made.scale = [k(from, rest.scale, 'ease-in-out'), k(to, r3(rest.scale * 1.15))]; break;
-    case 'pulse': made.scale = along(1.2, (i) => (i ? r3(rest.scale * 1.06) : rest.scale)); break;
-    case 'wiggle': made.rotate = along(0.8, (i) => r3(rest.rotate + (i ? ((i % 4) === 1 ? 4 : -4) : 0))); break;
-    case 'float': made.translate = along(2, (i) => (i ? [x, r3(y - stage.h * 0.02)] : [x, y])); break;
+    case 'pulse': made.scale = along('scale', 1.2, (i) => (i ? r3(rest.scale * 1.06) : rest.scale)); break;
+    case 'wiggle': made.rotate = along('rotate', 0.8, (i) => r3(rest.rotate + (i ? ((i % 4) === 1 ? 4 : -4) : 0))); break;
+    case 'float': made.translate = along('translate', 2, (i) => (i ? [x, r3(y - stage.h * 0.02)] : [x, y])); break;
   }
   const next: Motion = { ...motion };
   for (const [prop, keys] of Object.entries(made) as [MotionProp, Key[]][]) {
