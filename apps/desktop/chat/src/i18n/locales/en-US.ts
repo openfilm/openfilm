@@ -264,8 +264,6 @@ export const enUS = {
     skipped: 'Skipped — it carried on with its own call',
     timedOut: 'No answer in time — it carried on with its own call',
   },
-  /* the composer's button that opens the Community over the film: skills and examples (Studio's ExamplesGallery) */
-  community: { button: 'Community', tooltip: 'Community: skills and examples' },
   skills: {
     chooseCover: 'Choose cover',
     removeCover: 'Undo cover choice',

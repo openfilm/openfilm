@@ -483,7 +483,7 @@ const ICONS: Record<string, LucideIcon> = {
 const HUES: Record<string, number> = { copy: 212, scissors: 18, monitor: 188, shapes: 262, pip: 328, pen: 42, film: 28, music: 286, presentation: 228, layers: 6 };
 
 /** A skill's picture: its cover, else its preview's first frame, else a tile of its mark in its own color. */
-function SkillCover({ skill, title, small = false, big = false, playing = false }: { skill: SkillEntry; title: string; small?: boolean; big?: boolean; playing?: boolean }) {
+export function SkillCover({ skill, title, small = false, big = false, playing = false }: { skill: SkillEntry; title: string; small?: boolean; big?: boolean; playing?: boolean }) {
   const [failed, setFailed] = React.useState(false);
   if (skill.cover && !failed) {
     return (

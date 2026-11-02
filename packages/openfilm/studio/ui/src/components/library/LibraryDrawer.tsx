@@ -2,8 +2,8 @@
  * The assets drawer's library (in the app's panel, over the chat, its composer under it), laid out as an editor's
  * library is: the categories along the top — the media (the project's and Saved, the media pane as it was), the
  * skills an agent takes up (SkillsPane), the voices to speak a voice-over in, then OpenFilm's own sounds, music, text,
- * stickers, filters, effects and transitions (lib/library), and last the models media is made with (ModelsPane) — and
- * down the left the starred ones and the library's own, its groups under it. What is shown is in
+ * stickers, filters, effects and transitions (lib/library) — and down the left the starred ones and the library's own,
+ * its groups under it. What is shown is in
  * the accent color; a category's icon fills faintly too.
  *
  * A thing plays in its card while the pointer rests on it. A click picks it and tries it in the viewer, on the picture
@@ -25,10 +25,9 @@ import { MiniPlayer, MusicCard, SoundRow, usePlayer } from './AudioList';
 import { CategoryIcon, Empty } from './icons';
 import { FEATURED, STARRED, VoicesPane } from './VoicesPane';
 import { SkillsPane, type SkillsLine } from './SkillsPane';
-import { MODEL_KINDS, ModelsPane, type ModelsLine } from './ModelsPane';
 
-type Category = 'media' | 'skill' | 'voice' | LibraryCategory | 'model';
-const CATEGORIES: Category[] = ['media', 'skill', 'voice', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition', 'template', 'model'];
+type Category = 'media' | 'skill' | 'voice' | LibraryCategory;
+const CATEGORIES: Category[] = ['media', 'skill', 'voice', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition', 'template'];
 
 /** The side bar's starred line: a category's things the person starred ('' is all of it, else one of its groups). */
 const FAVORITES = STARRED;
@@ -53,7 +52,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
   mediaScope: 'project' | 'picked' | 'saved';
   onMediaScope: (next: 'project' | 'picked' | 'saved') => void;
   actions: LibraryActions;
-  /** Settings › Services: where a voice's (or a model's) service is connected */
+  /** Settings › Services: where a voice's service is connected */
   onServices: () => void;
   /** the project shown, for its own skills */
   projectId?: string | null;
@@ -161,14 +160,6 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
                 <SideBox on={group !== 'discover'} onClick={() => pickGroup('installed')}>{t('assetDrawer.skillsInstalled')}</SideBox>
                 <SideBox on={group === 'discover'} onClick={() => pickGroup('discover')}>{t('assetDrawer.skillsDiscover')}</SideBox>
               </>
-            ) : cat === 'model' ? (
-              <>
-                <SideBox on={!group && !q} onClick={() => pickGroup('')}>{t('assetDrawer.all')}</SideBox>
-                <SideBox on={group === 'ready' && !q} onClick={() => pickGroup('ready')}>{t('assetDrawer.modelsReady')}</SideBox>
-                <div className="flex flex-col pb-1">
-                  {MODEL_KINDS.map((v) => <SideLine key={v} on={group === v && !q} onClick={() => pickGroup(v)}>{t(`settings.providers.verbs.${v}`)}</SideLine>)}
-                </div>
-              </>
             ) : (
               <>
                 <SideBox on={group === FAVORITES && !q} onClick={() => pickGroup(FAVORITES)}>{t('assetDrawer.favorites')}</SideBox>
@@ -201,7 +192,6 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
                 </label>
               </div>
               {cat === 'skill' ? <SkillsPane line={(group === 'discover' ? 'discover' : 'installed') as SkillsLine} query={query} projectId={projectId} onOpen={(name) => onOpenSkill?.(name)} />
-                : cat === 'model' ? <ModelsPane line={group as ModelsLine} query={query} onServices={onServices} />
                 : cat === 'voice' ? <VoicesPane group={group} query={query} favorites={favorites} onServices={onServices} onAll={() => pickGroup('')} /> : (
               <>
               {/* a click on nothing lets the picked thing go; the player is under the list */}

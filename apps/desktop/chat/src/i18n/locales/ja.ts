@@ -263,8 +263,6 @@ export const ja: Words = {
     skipped: 'スキップしました — エージェントが自分で判断して続けました',
     timedOut: '時間内に回答がありませんでした — エージェントが自分で判断して続けました',
   },
-  /* the composer's button that opens the Community over the film: skills and examples (Studio's ExamplesGallery) */
-  community: { button: 'コミュニティ', tooltip: 'コミュニティ：スキルとサンプル' },
   skills: {
     chooseCover: 'カバーを選択',
     removeCover: '選択を元に戻す',

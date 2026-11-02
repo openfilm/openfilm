@@ -25,9 +25,11 @@
  * a bundle's files to `saved/openfilm/<id as one name>/` there (`effects-snow`), a file into assets/. Nothing here is
  * ever written.
  */
-import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
-import { mkdir, rename, writeFile } from 'node:fs/promises';
+import { createWriteStream, existsSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
+import { mkdir, rename, rm } from 'node:fs/promises';
 import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 import { setSharedPref, sharedHome, sharedPref } from '../../src/locations.mjs';
 
@@ -87,7 +89,13 @@ async function fetchFile(/** @type {string} */ rel) {
   const at = inside(libraryCache(), rel);
   await mkdir(dirname(at), { recursive: true });
   const part = `${at}.part-${process.pid}`;
-  await writeFile(part, new Uint8Array(await res.arrayBuffer()));
+  /* written as it comes: how far a model is can be read off its size (local-models.mjs) */
+  try {
+    await pipeline(Readable.fromWeb(/** @type {import('node:stream/web').ReadableStream} */ (res.body)), createWriteStream(part));
+  } catch (e) {
+    await rm(part, { force: true });
+    throw e;
+  }
   await rename(part, at);
 }
 

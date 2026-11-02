@@ -263,8 +263,6 @@ export const zhCN: Words = {
     skipped: '已跳过，它按自己的判断继续了',
     timedOut: '未及时回答，它按自己的判断继续了',
   },
-  /* the composer's button that opens the Community over the film: skills and examples (Studio's ExamplesGallery) */
-  community: { button: '社区', tooltip: '社区：Skill 和示例' },
   skills: {
     chooseCover: '选择封面',
     removeCover: '撤销封面选择',

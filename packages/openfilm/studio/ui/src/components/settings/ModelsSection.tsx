@@ -1,5 +1,6 @@
 /**
- * Settings → Services: the services there are, as chips that open each one's card (ServicesBar), and what makes each
+ * Settings → Services: the services there are, as chips that open each one's card (ServicesBar; Local models, second,
+ * opens its own: LocalModels), and what makes each
  * kind of media: one of the models of a connected service (its mark and the model's name), or none. A kind's menu
  * lists every service that makes it with its models: the connected ones to choose from, then the others, whose
  * models are shown as what connecting would bring, each opening that service's card. Connecting a service fills the
@@ -19,6 +20,8 @@ import { ProviderMark } from './ProviderMark';
 import { AddProviderDialog, KIND_ICON, ProviderDialog, ServicesBar } from './ProvidersSection';
 import { SettingsGroup, SettingsItem, SettingsPage } from './ui';
 import { CustomServices } from './CustomServices';
+import { LocalModelsChip, LocalModelsDialog } from './LocalModels';
+import { useLocalModels } from '@/lib/local-models';
 
 /** One thing a kind of media can be made with: a provider and its model. */
 interface Choice {
@@ -31,8 +34,9 @@ interface Choice {
 export function ModelsSection() {
   const t = useT();
   const hook = useProviders();
+  const local = useLocalModels();
   const state = hook.state;
-  /* the card open over the page: a provider's id, or 'add' */
+  /* the card open over the page: a provider's id, 'local' (Local models), or 'add' */
   const [card, setCard] = React.useState<string | null>(null);
   /* asks the custom services to open their form (counted, so asking again opens it again) */
   const [addCustom, setAddCustom] = React.useState(0);
@@ -43,12 +47,13 @@ export function ModelsSection() {
     <SettingsPage note={t('settings.models.desc')}>
       {state ? (
         <>
-          <ServicesBar hook={hook} onOpen={setCard} />
+          <ServicesBar hook={hook} onOpen={setCard} second={<LocalModelsChip hook={local} onOpen={() => setCard('local')} />} />
           <SettingsGroup>{SERVICE_VERBS.filter((verb) => offered(state, verb)).map(row)}</SettingsGroup>
         </>
       ) : null}
       <CustomServices hook={hook} adding={addCustom} />
       {shown ? <ProviderDialog provider={shown} hook={hook} onClose={() => setCard(null)} /> : null}
+      {card === 'local' ? <LocalModelsDialog hook={local} onClose={() => setCard(null)} /> : null}
       {card === 'add' ? <AddProviderDialog onClose={() => setCard(null)} onCustom={() => { setCard(null); setAddCustom((n) => n + 1); }} /> : null}
     </SettingsPage>
   );

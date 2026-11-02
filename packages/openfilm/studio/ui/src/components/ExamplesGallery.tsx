@@ -75,6 +75,8 @@ export function ExamplesGallery({ mode, projectId = null, heading, initial, onCl
   const [examples, setExamples] = React.useState<Example[] | null>(() => seenExamples());
   const [skills, setSkills] = React.useState<SkillEntry[]>(() => seenSkills(projectId) ?? []);
   const [opened, setOpened] = React.useState<Opened | null>(null);
+  /* opened on one skill or example (from the library, a pill in the chat): its page is all there is, closed, no Back */
+  const alone = initial != null && initial.kind !== 'discover';
   /* opening on one item: once what it is in has been read */
   const pending = React.useRef(initial);
   React.useEffect(() => {
@@ -103,11 +105,11 @@ export function ExamplesGallery({ mode, projectId = null, heading, initial, onCl
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return;
-      if (opened) { e.preventDefault(); e.stopPropagation(); setOpened(null); } else if (onClose) { e.preventDefault(); onClose(); }
+      if (opened && !alone) { e.preventDefault(); e.stopPropagation(); setOpened(null); } else if (onClose) { e.preventDefault(); onClose(); }
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [opened, onClose]);
+  }, [opened, alone, onClose]);
 
   /* a page opened starts at its top; Back returns to the list where it was left */
   const scroller = React.useRef<HTMLDivElement>(null);
@@ -164,7 +166,7 @@ export function ExamplesGallery({ mode, projectId = null, heading, initial, onCl
       <header className="flex shrink-0 flex-col px-6 pb-4 pt-5">
         <div className="flex min-h-8 items-center gap-1">
           {/* an example or a skill opened has its way back here, where the switch was */}
-          {opened ? (
+          {opened && alone ? <span className="mr-auto" /> : opened ? (
             <button type="button" onClick={() => setOpened(null)} className="mr-auto flex h-8 items-center gap-1.5 rounded-lg pl-1 pr-2.5 text-[13.5px] font-medium text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
               <ArrowLeft size={16} strokeWidth={1.75} />{t('gallery.back')}
             </button>

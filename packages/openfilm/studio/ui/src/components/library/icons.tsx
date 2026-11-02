@@ -86,14 +86,6 @@ const DRAWN: Record<string, Draw> = {
       <path d="M17.6 3.4 18.6 6l2.6 1-2.6 1-1 2.6-1-2.6-2.6-1 2.6-1Z" {...fill} />
     </>
   ),
-  /* a model: a chip, its pins on each side */
-  model: ({ fill, ink }) => (
-    <>
-      <path d="M8.2 6h7.6A2.2 2.2 0 0 1 18 8.2v7.6a2.2 2.2 0 0 1-2.2 2.2H8.2A2.2 2.2 0 0 1 6 15.8V8.2A2.2 2.2 0 0 1 8.2 6Z" {...fill} />
-      <path d="M10 10h4v4h-4Z" {...ink} />
-      <path d="M9.5 3v3M14.5 3v3M9.5 18v3M14.5 18v3M3 9.5h3M3 14.5h3M18 9.5h3M18 14.5h3" />
-    </>
-  ),
   /* a template: a picture laid out, one big place and two small */
   template: ({ fill, ink }) => (
     <>

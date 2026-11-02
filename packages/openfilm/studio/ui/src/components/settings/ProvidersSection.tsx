@@ -31,14 +31,16 @@ export const KIND_ICON: Partial<Record<ProviderVerb, React.ComponentType<{ size?
 const chipClass = 'inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-[14px] transition hover:border-[var(--border-strong)] hover:text-[var(--text)]';
 
 /**
- * Every service as a chip: the connected ones first (with a dot), then the recommended ones, then the rest and adding
- * one behind "N more", each part in the default order (lib/providers providerOrder). A chip opens the service's card
- * (`onOpen` with its id, or 'add').
+ * Every service as a chip: OpenFilm's own and `second` (Local models) first, then the connected ones (with a dot), the
+ * recommended ones, and the rest and adding one behind "N more", each part in the default order (lib/providers
+ * providerOrder). A chip opens the service's card (`onOpen` with its id, or 'add').
  */
-export function ServicesBar({ hook, onOpen }: { hook: ProvidersHook; onOpen: (id: string) => void }) {
+export function ServicesBar({ hook, onOpen, second }: { hook: ProvidersHook; onOpen: (id: string) => void; second?: React.ReactNode }) {
   const t = useT();
   const rows = hook.state?.providers ?? [];
-  const order = providerOrder(rows);
+  /* OpenFilm's own first, then `second` (Local models), then the others */
+  const own = rows.find((p) => p.id === 'openfilm');
+  const order = providerOrder(rows.filter((p) => p !== own));
   const [all, setAll] = React.useState(false);
   const chip = (p: OwnProvider) => (
     <button key={p.id} type="button" onClick={() => onOpen(p.id)}
@@ -52,6 +54,8 @@ export function ServicesBar({ hook, onOpen }: { hook: ProvidersHook; onOpen: (id
   return (
     <div className="mb-10">
       <div className="flex flex-wrap gap-2">
+        {own ? chip(own) : null}
+        {second}
         {order.connected.map(chip)}
         {order.recommended.map(chip)}
         {all ? (
@@ -75,7 +79,7 @@ export function ServicesBar({ hook, onOpen }: { hook: ProvidersHook; onOpen: (id
 }
 
 /** A card over Settings. Esc or a click beside it closes it, not Settings; a field's own Esc closes only that field. */
-function Card({ label, onClose, children }: { label: string; onClose: () => void; children: React.ReactNode }) {
+export function Card({ label, onClose, children }: { label: string; onClose: () => void; children: React.ReactNode }) {
   const t = useT();
   const close = React.useRef(onClose);
   close.current = onClose;

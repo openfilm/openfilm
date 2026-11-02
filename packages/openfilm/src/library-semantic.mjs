@@ -17,11 +17,13 @@
  * (`node src/library-semantic.mjs fetch`), so that search answers at once with keywords; each file is checked against
  * models.json and kept in the library's cache for every OpenFilm here. Offline, or a file that does not check: keyword
  * search, and another try an hour later. Nothing is sent anywhere: the question is turned into a vector here.
+ * Settings → Services → Local models can turn it off (kept, not used: keyword search) or remove it (thrown away, and
+ * off, so that no search fetches it again); turning it on again fetches it at once (local-models.mjs).
  */
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { builtInRoot, fetchLibrary, libraryCache, libraryFile } from '../studio/server/library.mjs';
 
@@ -38,6 +40,54 @@ const stateFile = (/** @type {Manifest} */ m) => join(libraryCache(), 'models', 
 /** The mark of a model whose every file was checked, named for what models.json says of them. */
 const okFile = (/** @type {Manifest} */ m) => join(libraryCache(), 'models', `${m.model}.${digest(m)}.ok`);
 const digest = (/** @type {Manifest} */ m) => createHash('sha256').update(m.files.map((f) => f.sha256).join()).digest('hex').slice(0, 12);
+/** The mark of a model turned off, or removed, in Settings → Services → Local models: not used, and not fetched. */
+const offFile = (/** @type {Manifest} */ m) => join(libraryCache(), 'models', `${m.model}.off`);
+
+/** Whether the model is to be used (and fetched when it is not here): not turned off. */
+export const semanticOn = (m = manifest()) => Boolean(m) && !existsSync(offFile(/** @type {Manifest} */ (m)));
+
+/** The model turned on (fetched now when it is not here: semanticState) or off (kept, not used). */
+export function setSemanticOn(/** @type {boolean} */ on, m = manifest()) {
+  if (!m) return;
+  if (on) {
+    rmSync(offFile(m), { force: true });
+    /* a fetch that failed lately is tried again at once: the person asked for it */
+    rmSync(stateFile(m), { force: true });
+    semanticState();
+  } else {
+    mkdirSync(dirname(offFile(m)), { recursive: true });
+    writeFileSync(offFile(m), '');
+  }
+}
+
+/** The model's fetched files thrown away, and the model turned off (else the next search would fetch it again). */
+export function removeModel(m = manifest()) {
+  if (!m) return;
+  setSemanticOn(false, m);
+  for (const f of m.files) {
+    const file = libraryFile(f.path);
+    if (file && !file.startsWith(builtInRoot())) rmSync(file, { force: true });
+  }
+  rmSync(okFile(m), { force: true });
+  rmSync(stateFile(m), { force: true });
+}
+
+/** Whether every file of the model is part of this checkout's library (a source checkout's: it cannot be removed). */
+export const modelBuiltIn = (m = manifest()) => Boolean(m?.files.every((f) => libraryFile(f.path)?.startsWith(builtInRoot())));
+
+/** How much of the model is on this computer, in bytes: its files here, and what is written of the one coming. */
+export function modelBytesHere(m = manifest()) {
+  if (!m) return 0;
+  let bytes = 0;
+  for (const f of m.files) {
+    if (libraryFile(f.path)) { bytes += f.bytes; continue; }
+    const at = join(libraryCache(), f.path);
+    try {
+      for (const name of readdirSync(dirname(at))) if (name.startsWith(`${basename(at)}.part-`)) bytes += statSync(join(dirname(at), name)).size;
+    } catch { /* its folder is not made yet */ }
+  }
+  return bytes;
+}
 
 /** Whether the model can run here: every file of it on this computer, and checked (or part of this checkout's library). */
 export function semanticReady(m = manifest()) {
@@ -61,7 +111,7 @@ const STALE_MS = 2 * 60 * 60_000;
  */
 export function semanticState(o = {}) {
   const m = manifest();
-  if (!m) return 'off';
+  if (!m || !semanticOn(m)) return 'off';
   if (semanticReady(m)) return 'ready';
   let state = /** @type {{ pid?: number, at?: number, failed?: number }} */ ({});
   try { state = JSON.parse(readFileSync(stateFile(m), 'utf8')); } catch { /* none yet */ }
@@ -73,6 +123,14 @@ export function semanticState(o = {}) {
 }
 
 const alive = (/** @type {number} */ pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+
+/** Whether the model's fetch is running now (one that died, or failed, is not). */
+export function modelFetching(m = manifest()) {
+  if (!m) return false;
+  let state = /** @type {{ pid?: number, at?: number }} */ ({});
+  try { state = JSON.parse(readFileSync(stateFile(m), 'utf8')); } catch { return false; }
+  return Boolean(state.pid && state.at && Date.now() - state.at < STALE_MS && alive(state.pid));
+}
 
 /** The fetch, in a process of its own that outlives the search that began it. */
 function startFetch() {

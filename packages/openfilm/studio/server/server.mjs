@@ -59,6 +59,7 @@ import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { moveToTrash } from './trash.mjs';
 import { listSkills, removeSkill, setSkillCover, setSkillInstalled, setSkillOn, skillOrigins, skillsInstalled, skillsOff } from '../../src/skills.mjs';
 import { providersRoute } from './providers/index.mjs';
+import { localModelsRoute } from './local-models.mjs';
 import { captionRoutes, writeSubtitleStyle } from './captions.mjs';
 import { projectSettingsRoute } from './project-settings.mjs';
 import { markersRoute } from './markers.mjs';
@@ -321,6 +322,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     /* ── own keys and who makes each kind of media (Settings → Services): never a key back; see providers/index.mjs ── */
     if (parts[0] === 'providers') return providersRoute(req, res, parts.slice(1), { openBrowser });
+    /* the models that run on this computer (Settings → Services → Local models; local-models.mjs) */
+    if (parts[0] === 'local-models') return localModelsRoute(req, res, parts.slice(1));
     /* what the person changed in a project while an agent worked, kept over its writes: the note for the agent named
        `agent`, which its `openfilm` command prints, answered at once ({ id, line }, line null when nothing); it counts
        as told once the command says it printed it (POST kept/said { id }; person-edits.mjs) */

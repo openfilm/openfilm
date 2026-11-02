@@ -1,15 +1,15 @@
 /**
  * The library's skills, in the drawer: what an agent takes up when making a film. The side bar picks the installed
- * ones (the person's own, OpenFilm's installed, this project's) or OpenFilm's still to install. Each is a row of its
- * title, what it is for and where it comes from, with what to do now: Try (a new conversation with it named) once it
- * is installed, Install before. A row opens its page in the Community (SkillsLibrary keeps the whole of it).
+ * ones (the person's own, OpenFilm's installed, this project's) or OpenFilm's still to install. Each is a tile of its
+ * cover (its preview under the pointer), title and where it comes from, with what to do now over the cover: Try (a new
+ * conversation with it named) once it is installed, Install before. One opens its page (SkillsLibrary keeps the whole
+ * of it), on its own.
  */
 import React from 'react';
-import { Check, Sparkles } from 'lucide-react';
 import { useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import { seenSkills, sourcesApi, watchSkills, type SkillEntry } from '@/lib/project-sources';
-import { byOrder, useSkillWords } from '../SkillsLibrary';
+import { byOrder, SkillCover, useSkillWords } from '../SkillsLibrary';
 
 /** An official one not installed is in the catalog only; the person's own and a project's are installed already. */
 const installedOf = (skill: SkillEntry) => skill.installed !== false;
@@ -49,33 +49,33 @@ export function SkillsPane({ line, query, projectId, onOpen }: {
     return <p className="px-4 pt-12 text-center text-[12.5px] leading-relaxed text-[var(--text-faint)]">{t(q ? 'assetDrawer.noSkillsFound' : line === 'installed' ? 'assetDrawer.noSkills' : 'assetDrawer.allSkillsInstalled')}</p>;
   }
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-3 pb-3 pt-0.5">
-      {shown.map((skill) => {
-        const { title, summary } = words(skill);
-        const installed = installedOf(skill);
-        return (
-          <div key={`${skill.source}:${skill.name}`} role="button" tabIndex={0} onClick={() => onOpen(skill.name)} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(skill.name); }}
-            className="flex cursor-pointer flex-col gap-1.5 rounded-[9px] border border-[var(--border)] bg-[var(--surface-2)] p-2.5 outline-none transition hover:border-[var(--border-strong)] focus-visible:border-[var(--tl-accent)]">
-            <span className="flex min-w-0 items-center gap-2">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[7px] bg-[var(--surface-3)] text-[var(--text-muted)]"><Sparkles size={13} /></span>
-              <span className="min-w-0 truncate text-[12.5px] font-semibold text-[var(--text)]">{title}</span>
-            </span>
-            {summary ? <span className="line-clamp-2 text-[11.5px] leading-[16px] text-[var(--text-muted)]">{summary}</span> : null}
-            <span className="flex min-w-0 items-center justify-between gap-2">
-              <span className="min-w-0 truncate text-[10.5px] text-[var(--text-faint)]">{from(skill)}{skill.off ? ` · ${t('assetDrawer.skillOff')}` : ''}</span>
-              {installed ? (
-                studioHost?.useSkill ? (
-                  <button type="button" onClick={(e) => { e.stopPropagation(); tryIt(skill); }}
-                    className="h-6 shrink-0 rounded-[6px] border border-[var(--border-strong)] px-2 text-[11px] text-[var(--text)] transition hover:bg-[var(--bg-hover)]">{t('assetDrawer.skillTry')}</button>
-                ) : <span className="flex h-6 shrink-0 items-center gap-1 text-[11px] text-[var(--tl-accent)]"><Check size={12} />{t('assetDrawer.skillInstalled')}</span>
-              ) : (
-                <button type="button" onClick={(e) => { e.stopPropagation(); install(skill); }}
-                  className="h-6 shrink-0 rounded-[6px] bg-[var(--text)] px-2 text-[11px] font-medium text-[var(--bg)] transition hover:opacity-90">{t('assetDrawer.skillInstall')}</button>
-              )}
-            </span>
-          </div>
-        );
-      })}
+    <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-0.5">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-x-2.5 gap-y-3">
+        {shown.map((skill) => <SkillTile key={`${skill.source}:${skill.name}`} skill={skill} from={from(skill)} onOpen={() => onOpen(skill.name)}
+          {...(installedOf(skill) ? (studioHost?.useSkill ? { onTry: () => tryIt(skill) } : {}) : { onInstall: () => install(skill) })} />)}
+      </div>
+    </div>
+  );
+}
+
+/** One skill: its cover (its preview under the pointer), with Try or Install over it, and its title and source under it. */
+function SkillTile({ skill, from, onOpen, onTry, onInstall }: { skill: SkillEntry; from: string; onOpen: () => void; onTry?: () => void; onInstall?: () => void }) {
+  const t = useT();
+  const { title } = useSkillWords()(skill);
+  const [hover, setHover] = React.useState(false);
+  const act = onInstall ? { label: t('assetDrawer.skillInstall'), run: onInstall } : onTry ? { label: t('assetDrawer.skillTry'), run: onTry } : null;
+  return (
+    <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(); }} title={title}
+      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} className="group min-w-0 cursor-pointer select-none outline-none">
+      <div className="relative aspect-video overflow-hidden rounded-md bg-[var(--surface-2)] ring-1 ring-transparent group-hover:ring-[var(--text-faint)] group-focus-visible:ring-[var(--tl-accent)]">
+        <SkillCover key={skill.cover ?? ''} skill={skill} title={title} small playing={hover} />
+        {act ? (
+          <button type="button" onClick={(e) => { e.stopPropagation(); act.run(); }}
+            className="absolute bottom-1 right-1 hidden h-[22px] items-center rounded-full bg-[var(--tl-accent)] px-2.5 text-[11px] font-medium text-black shadow-md group-hover:flex">{act.label}</button>
+        ) : null}
+      </div>
+      <div className="mt-1.5 truncate px-0.5 text-[11.5px] text-[var(--text-muted)] group-hover:text-[var(--text)]">{title}</div>
+      <div className="truncate px-0.5 text-[10.5px] text-[var(--text-faint)]">{from}{skill.off ? ` · ${t('assetDrawer.skillOff')}` : ''}</div>
     </div>
   );
 }

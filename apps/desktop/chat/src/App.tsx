@@ -6,7 +6,7 @@
  * (lib/local-agent-run's saved turns).
  */
 import React from 'react';
-import { ArrowDown, Blocks, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, ShieldQuestion, Square, X } from 'lucide-react';
+import { ArrowDown, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, ShieldQuestion, Square, X } from 'lucide-react';
 import { buildPromptDisplay, type Turn } from '@openfilm/shared';
 import { useT, useUiLocale } from '@/i18n';
 import { ConversationBar } from '@/components/ConversationSessionBar';
@@ -1043,13 +1043,6 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
             <Plus size={16} strokeWidth={1.75} />
           </button>
         </Tooltip>
-        {app.showExamples ? (
-          <Tooltip label={t('community.tooltip')}>
-            <button type="button" onClick={() => app.showExamples?.()} className="openfilm-composer-tool" aria-label={t('community.button')}>
-              <Blocks size={16} strokeWidth={1.75} />
-            </button>
-          </Tooltip>
-        ) : null}
 
         <Tooltip label={t('project.assets')}>
           <button type="button" onClick={() => app.setAssetsOpen(!assetsOpen)} aria-pressed={assetsOpen} className="openfilm-composer-tool" aria-label={t('project.assets')}>
