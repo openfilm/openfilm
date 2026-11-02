@@ -29,7 +29,7 @@ import { TOOL_DIR } from './projects.mjs';
 import { filmSubtitleLanguageOf, filmSubtitleLanguagesIn, isFilmSubtitleLanguage, parseFilmSubtitleStyle, sameFilmSubtitleLanguage } from './film-subtitle.mjs';
 import { writeAtomic } from './atomic.mjs';
 import { inProject } from './files.mjs';
-import { alignTranslation, segmentLine, subtitleEnd } from './subtitle-segments.mjs';
+import { alignTranslation, segmentLine, subtitleEnd, umIsWord } from './subtitle-segments.mjs';
 import { readTranscript, setLine, transcriptIsCurrent, translationsOf, writeTranscript } from './transcripts.mjs';
 import { subtitleEditRoutes } from './subtitle-edits.mjs';
 
@@ -70,8 +70,10 @@ export const MIN_CAPTION_MS = 300;
 const SLACK_MS = 60;
 const EDGE_PUNCT = /^[\s，,、。．.；;：:！!？?…]+|[\s，,、；;：:]+$/g;
 const LEAD_PUNCT = /^[\s，,、。．.；;：:！!？?…]+/;
-/* standalone fillers (Chinese e, en, e; uh, um) are not printed; sentence particles that carry meaning are */
-const FILLER = /(^|[\s\uff0c,\u3001\u3002.\uff01!\uff1f?])(?:\u5443|\u55ef|\u989d|uh|um|erm|mm+|hmm+|mhm)(?=$|[\s\uff0c,\u3001\u3002.\uff01!\uff1f?])[\uff0c,\u3001]?/giu;
+/* standalone fillers (Chinese e, en, e; uh, um) are not printed; sentence particles that carry meaning are, and so is
+   "um" where it is a word (umIsWord: Portuguese, German) */
+const FILLER = /(^|[\s\uff0c,\u3001\u3002.\uff01!\uff1f?])(?:\u5443|\u55ef|\u989d|uh|erm|mm+|hmm+|mhm)(?=$|[\s\uff0c,\u3001\u3002.\uff01!\uff1f?])[\uff0c,\u3001]?/giu;
+const UM = /(^|[\s\uff0c,\u3001\u3002.\uff01!\uff1f?])um(?=$|[\s\uff0c,\u3001\u3002.\uff01!\uff1f?])[\uff0c,\u3001]?/giu;
 /* a word broken off and said again ("a- and", "th- the"): the transcript marks it with a trailing hyphen */
 const FALSE_START = /(^|\s)([\p{L}']{1,4})-\s+(?=(\p{L}+))/gu;
 /* half-width punctuation after Chinese (common in text typed for TTS): Chinese subtitles set full-width */
@@ -82,12 +84,13 @@ const FULL_PUNCT = { ',': '\uff0c', ';': '\uff1b', ':': '\uff1a', '?': '\uff1f',
 /**
  * A subtitle as it is printed: no fillers, no false starts, no punctuation it starts with, and its end set by the
  * convention of its script (subtitleEnd: Chinese drops a trailing ，。, Latin keeps its own); '' when nothing is left.
- * @param {string} t
+ * `umWord`: "um" is a word here, not a hesitation (umIsWord; by default, as the text itself reads).
+ * @param {string} t @param {boolean} [umWord]
  */
-export function captionText(t) {
+export function captionText(t, umWord = umIsWord(t)) {
   const out = subtitleEnd(t.replace(FALSE_START, (all, lead, stub, next) => (String(next).toLowerCase().startsWith(String(stub).toLowerCase()) ? lead : all))
     .replace(HALF_PUNCT, (_all, mark) => FULL_PUNCT[mark] ?? mark)
-    .replace(FILLER, '$1').replace(/\s+(?:\.{2,}|…+)\s*$/u, '').replace(/\s{2,}/g, ' ').replace(LEAD_PUNCT, '')).trim();
+    .replace(FILLER, '$1').replace(UM, (all, lead) => (umWord ? all : lead)).replace(/\s+(?:\.{2,}|…+)\s*$/u, '').replace(/\s{2,}/g, ' ').replace(LEAD_PUNCT, '')).trim();
   return /[\p{L}\p{N}]/u.test(out) ? out : '';
 }
 
@@ -121,7 +124,8 @@ export const wholeLine = (line) => ({
  * @param {readonly SpokenLine[]} lines
  * @param {{ fromMs: number, startMs: number, durMs: number, speed: number }} span
  * `cut`: the transcript was cut by hand (transcripts.mjs CUT_NOTE): each line is one subtitle, as it is.
- * @param {{ alt?: AltLines, speaker?: string, clip?: string, src?: string, cut?: boolean }} [extra]
+ * `umWord`: "um" is a word in this transcript (umIsWord of all its lines); without it each piece tells by itself.
+ * @param {{ alt?: AltLines, speaker?: string, clip?: string, src?: string, cut?: boolean, umWord?: boolean }} [extra]
  * @returns {FilmSubtitleCue[]}
  */
 export function clipCues(lines, span, extra = {}) {
@@ -141,7 +145,7 @@ export function clipCues(lines, span, extra = {}) {
       const mine = piece.marks?.length
         ? piece.marks.some((m) => m.startMs >= span.fromMs - SLACK_MS && m.startMs < until - SLACK_MS)
         : (piece.startMs + piece.endMs) / 2 >= span.fromMs && (piece.startMs + piece.endMs) / 2 < until;
-      const said = captionText(trimToWindow(piece, span.fromMs, until));
+      const said = captionText(trimToWindow(piece, span.fromMs, until), extra.umWord);
       /* what a trim leaves of a piece can be a scrap; a piece itself is as long as segmentLine made it */
       const cut = from > piece.startMs || to < piece.endMs;
       if (!mine || !said || to <= from || (cut && (to - from) / speed < MIN_CAPTION_MS)) continue;
@@ -226,7 +230,7 @@ export async function filmCaptions(root, options = {}) {
   const doc = /** @type {import('../../src/film-doc.d.mts').FilmDoc | null} */ (film.doc);
   if (!doc) return empty;
   const duration = options.duration ?? ((/** @type {string} */ src) => probe(root, src).then((p) => p.duration, () => undefined));
-  /** @type {Map<string, { lines: SpokenLine[], speaker?: string, alt: AltLines, cut?: boolean } | null>} */
+  /** @type {Map<string, { lines: SpokenLine[], speaker?: string, alt: AltLines, cut?: boolean, umWord: boolean } | null>} */
   const known = new Map();
   const transcriptOf = async (/** @type {string} */ src) => {
     if (known.has(src)) return known.get(src) ?? null;
@@ -238,7 +242,10 @@ export async function filmCaptions(root, options = {}) {
         for (const line of (await readTranscript(root, src, language))?.lines ?? []) alt.set(line.startMs, { ...alt.get(line.startMs), [language]: line.text });
       }
     }
-    const one = read ? { lines: read.lines, ...(read.speaker ? { speaker: read.speaker } : {}), alt, ...(read.cut ? { cut: true } : {}) } : null;
+    /* a short line tells its language poorly; the whole transcript does */
+    const one = read ? {
+      lines: read.lines, ...(read.speaker ? { speaker: read.speaker } : {}), alt, ...(read.cut ? { cut: true } : {}), umWord: umIsWord(read.lines.map((l) => l.text).join(' ')),
+    } : null;
     known.set(src, one);
     return one;
   };
@@ -263,7 +270,7 @@ export async function filmCaptions(root, options = {}) {
     try { span = clipSpan(clip, native ?? NaN); } catch { continue; }
     cues.push(...clipCues(said.lines, {
       fromMs: span.from * 1000, startMs: (clip.at ?? 0) * 1000, durMs: span.length * 1000, speed: span.speed,
-    }, { alt: said.alt, ...(said.speaker ? { speaker: said.speaker } : {}), clip: clip.id, src: clip.src, ...(said.cut ? { cut: true } : {}) }));
+    }, { alt: said.alt, ...(said.speaker ? { speaker: said.speaker } : {}), clip: clip.id, src: clip.src, ...(said.cut ? { cut: true } : {}), umWord: said.umWord }));
   }
   cues.sort((a, b) => a.startMs - b.startMs);
   /* a speaker's name tells voices apart; with one voice in the film it tells nothing, and would open every line */
