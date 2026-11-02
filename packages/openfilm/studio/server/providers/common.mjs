@@ -167,7 +167,7 @@ export function wordsFromCharacters(chars, starts, ends, dur = null) {
   const words = [];
   /** @type {{ token: string, start: number, end: number } | null} */
   let word = null;
-  const cut = (/** @type {number} */ t) => dur === null ? t : Math.min(t, dur);
+  const cut = (/** @type {number} */ t) => round(dur === null ? t : Math.min(t, dur));
   chars.forEach((ch, i) => {
     const start = cut(Number(starts[i]) || 0);
     const end = cut(Number(ends[i]) || start);
@@ -182,13 +182,14 @@ export function wordsFromCharacters(chars, starts, ends, dur = null) {
 
 /**
  * Words with their times from per-word timings, as services that time words give them: a token with no letter or
- * digit (a space, punctuation) stays with the word before it. Times are clamped to the file's length.
+ * digit (a space, punctuation) stays with the word before it. Times are clamped to the file's length and kept to the
+ * millisecond.
  * @param {unknown[]} tokens @param {unknown[]} starts @param {unknown[]} ends @param {number | null} [dur]
  */
 export function wordsFromTokens(tokens, starts, ends, dur = null) {
   /** @type {{ token: string, start: number, end: number }[]} */
   const words = [];
-  const cut = (/** @type {number} */ t) => dur === null ? t : Math.min(t, dur);
+  const cut = (/** @type {number} */ t) => round(dur === null ? t : Math.min(t, dur));
   tokens.forEach((raw, i) => {
     const token = text(raw);
     if (!token) return;
