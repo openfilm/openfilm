@@ -4525,7 +4525,16 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                           contents={(() => {
                             /* a page layer's own properties (its words, its fill…), as the edit's inspector shows them */
                             const block = selectedBlocks.length === 1 ? selectedBlocks[0]! : null;
-                            const host = block?.kind === 'mg' && block.loc ? propsHostOf(block) : null;
+                            const own = block?.kind === 'mg' && block.loc ? propsHostOf(block) : null;
+                            /* a number with keyframes is changed on its row under Contents, where its keyframes are: a
+                               still value typed here would win over them */
+                            const keyed = new Set(Object.keys((block?.clipId ? contentsOfRef.current(block as TimelineBlock & { clipId: string })?.keys : null) ?? {}));
+                            const isKeyed = (p: ComponentProp) => p.type === 'var' && keyed.has(p.var);
+                            const host = own && keyed.size ? {
+                              ...own,
+                              props: () => own.props().filter((p) => !isKeyed(p)),
+                              setProps: (next: readonly ComponentProp[]) => own.setProps([...next, ...own.props().filter((p) => isKeyed(p) && !next.some((n) => n.name === p.name))]),
+                            } : own;
                             return host && block?.loc ? <PropertiesSection host={host} commit={(next) => { void editBlocks([{ loc: block.loc!, prop: 'overrides', value: next as unknown as Record<string, unknown> | null }]).then((err) => { if (err) toast.showError(err); }); }} /> : null;
                           })()}
                           onApplied={(ids) => setMotionReveal((was) => ({ ids, n: (was?.n ?? 0) + 1 }))} />
