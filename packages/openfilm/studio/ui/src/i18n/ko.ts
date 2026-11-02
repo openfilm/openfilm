@@ -1461,6 +1461,8 @@ export const ko: Words = {
     textAnimator: '텍스트 애니메이터',
     textRemove: '텍스트 애니메이션 제거',
     showMoving: '움직이는 속성만 보기',
+    toolEase: '부드럽게',
+    toolGraph: '그래프 편집기',
     openComp: '컴포지션 열기',
     panelProperties: '속성',
     panelPresets: '효과 및 프리셋',

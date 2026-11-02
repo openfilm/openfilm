@@ -1464,6 +1464,8 @@ export const ja: Words = {
     textAnimator: 'テキストアニメーター',
     textRemove: 'テキストアニメーションを削除',
     showMoving: '動いているプロパティだけ表示',
+    toolEase: 'イージーイーズ',
+    toolGraph: 'グラフエディター',
     openComp: 'コンポジションを開く',
     panelProperties: 'プロパティ',
     panelPresets: 'エフェクト＆プリセット',

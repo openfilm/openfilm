@@ -202,6 +202,8 @@ export interface MotionLayersView {
   extraBody: (layer: Layer, pxPerMs: number) => React.ReactNode;
   /** Its menus, drawn over everything. */
   overlay: React.ReactNode;
+  /** The picked layers twirled open to what moves on them, or shut when they show just that (U). */
+  showMoving: () => void;
 }
 
 /** A row under a layer: its height, its head (names, values), what it draws on the time. */
@@ -582,8 +584,19 @@ export function useMotionLayers(p: MotionLayersArgs): MotionLayersView {
     );
   };
 
+  const showMoving = () => setShown((was) => {
+    const next = new Map(was);
+    for (const layer of layers.filter((l) => picked.includes(l.clipId))) {
+      const keyed = lanesOf(layer).rows.filter((r) => r.keys.length).map((r) => r.prop);
+      const had = next.get(layer.clipId) ?? [];
+      if (!keyed.length || (had.length === keyed.length && keyed.every((x) => had.includes(x)))) next.delete(layer.clipId);
+      else next.set(layer.clipId, keyed);
+    }
+    return next;
+  });
   return {
     headWidth: MOTION_HEAD_W,
+    showMoving,
     extraOf: (layer) => specsOf(layer).reduce((h, s) => h + s.h, 0),
     head,
     extraHead: (layer) => (

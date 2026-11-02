@@ -1465,6 +1465,8 @@ export const en = {
     textAnimator: 'Text animator',
     textRemove: 'Remove text animation',
     showMoving: 'Show what moves',
+    toolEase: 'Easy ease',
+    toolGraph: 'Graph editor',
     openComp: 'Open composition',
     panelProperties: 'Properties',
     panelPresets: 'Effects & Presets',

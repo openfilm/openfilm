@@ -1464,6 +1464,8 @@ export const es: Words = {
     textAnimator: 'Animador de texto',
     textRemove: 'Quitar la animación de texto',
     showMoving: 'Mostrar lo que se mueve',
+    toolEase: 'Suavizado',
+    toolGraph: 'Editor de gráficos',
     openComp: 'Abrir la composición',
     panelProperties: 'Propiedades',
     panelPresets: 'Efectos y ajustes',

@@ -1465,6 +1465,8 @@ export const zhCN: Words = {
     textAnimator: '文字动画',
     textRemove: '移除文字动画',
     showMoving: '只看在动的属性',
+    toolEase: '缓动',
+    toolGraph: '曲线编辑器',
     openComp: '打开合成',
     panelProperties: '属性',
     panelPresets: '效果和预设',

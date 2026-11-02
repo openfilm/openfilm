@@ -742,6 +742,8 @@ export interface TimelineProps {
     head: (track: TimelineTrack) => React.ReactNode;
     extraHead: (track: TimelineTrack) => React.ReactNode;
     extraBody: (track: TimelineTrack, pxPerMs: number) => React.ReactNode;
+    /** Motion's tools on the toolbar, in the place of the edit's cutting ones (modes, split, magnet, linkage). */
+    tools?: readonly { id: string; label: string; hint?: string; icon: React.ReactNode; active?: boolean; disabled?: boolean; onClick: () => void }[];
   } | null;
   /** The transitions the fades make (lib/transitions findTransitions): a mark over each, picked, resized, deleted. */
   transitions?: readonly FilmTransition[];
@@ -1942,7 +1944,8 @@ export const Timeline = React.memo(function Timeline({
       selectOne(null);
       const docIndex = tracks[fromLane]?.docIndex;
       const exactMs = Math.max(0, (e.clientX - (scrollRef.current?.getBoundingClientRect().left ?? 0) + (scrollRef.current?.scrollLeft ?? 0)) / pxPerMs);
-      const found = docIndex != null && onEditOps && !tracks[fromLane]?.locked ? gapAt(modelRef.current, docIndex, exactMs) : null;
+      /* Motion's rows are layers: the space between them is no gap to close */
+      const found = !layers && docIndex != null && onEditOps && !tracks[fromLane]?.locked ? gapAt(modelRef.current, docIndex, exactMs) : null;
       setGap(found ? { track: docIndex!, ...found } : null);
       onScrubCommit(fromMs);
       warmPlayheadAt(ev.clientX, ev.clientY, fromMs);
@@ -3533,12 +3536,12 @@ export const Timeline = React.memo(function Timeline({
         {near && gap && track.docIndex === gap.track && track.index === 1 ? (
           <div
             data-gap=""
-            className="pointer-events-none absolute inset-y-[2px] z-[3] rounded-[3px] border border-dashed"
+            className="pointer-events-none absolute inset-y-[4px] z-[3] rounded-[3px]"
             style={{
               left: Math.round(gap.startMs * pxPerMs),
               width: Math.max(2, Math.round(gap.endMs * pxPerMs) - Math.round(gap.startMs * pxPerMs) - 1),
-              borderColor: 'var(--tl-select)',
-              background: 'color-mix(in srgb, var(--tl-select) 16%, transparent)',
+              /* a light wash, enough to say what ⌫ would close */
+              background: 'color-mix(in srgb, var(--tl-select) 9%, transparent)',
             }}
           />
         ) : null}
@@ -4049,7 +4052,7 @@ export const Timeline = React.memo(function Timeline({
         className="@container relative flex h-[34px] shrink-0 items-center gap-1.5 border-b px-2"
         style={{ background: TL.head, borderColor: TL.line }}
       >
-        {onSplit ? <>
+        {onSplit && !layers ? <>
           <ModePicker mode={mode} onPick={setMode} />
           <span className="mx-0.5 h-4 w-px" style={{ background: TL.line }} />
         </> : null}
@@ -4085,7 +4088,18 @@ export const Timeline = React.memo(function Timeline({
           </ToolButton>
         ) : null}
 
-        {onSplit ? (
+        {layers?.tools?.length ? <>
+          <span className="mx-0.5 h-4 w-px" style={{ background: TL.line }} />
+          {layers.tools.map((tool) => (
+            <span key={tool.id} data-motion-tool={tool.id}>
+              <ToolButton onClick={tool.onClick} active={Boolean(tool.active)} disabled={Boolean(tool.disabled)} label={tool.label} {...(tool.hint ? { hint: tool.hint } : {})}>
+                {tool.icon}
+              </ToolButton>
+            </span>
+          ))}
+        </> : null}
+
+        {onSplit && !layers ? (
           <ToolButton
             onClick={() => { void runSplit(selectedBlocks.filter((b) => drag.can(b).resize)); }}
             /* lit only with a selection: a disabled button already says "this acts on the selection" */
@@ -4137,7 +4151,16 @@ export const Timeline = React.memo(function Timeline({
         </div>
 
         {/* the switches (lib/timeline-prefs), in this order: the main-track magnet, snapping and linkage */}
-        {onEditOps ? <>
+        {/* Motion snaps; its magnet and linkage are cutting's */}
+        {onEditOps && layers ? (
+          <span data-timeline-snap={snap ? '1' : '0'}>
+            <ToolButton onClick={() => togglePref('snap')} active={snap} label={t('timeline.snap')}
+              hint={snap ? t('timeline.snapOn') : t('timeline.snapOff')}>
+              <SeparatorVertical size={15} />
+            </ToolButton>
+          </span>
+        ) : null}
+        {onEditOps && !layers ? <>
           <span data-timeline-magnet={prefs.magnet ? '1' : '0'}>
             <ToolButton onClick={() => togglePref('magnet')} active={prefs.magnet} label={t('timeline.magnet')}
               hint={prefs.magnet ? t('timeline.magnetOn') : t('timeline.magnetOff')}>

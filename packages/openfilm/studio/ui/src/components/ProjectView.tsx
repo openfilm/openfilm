@@ -7,7 +7,7 @@
  * are written one at a time (see editor/use-film.ts); the agent's writes come in through the folder's events.
  */
 import * as React from 'react';
-import { BookmarkPlus, ClipboardCopy, ClipboardPaste, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, TriangleAlert, Upload } from 'lucide-react';
+import { BookmarkPlus, ChartSpline, ClipboardCopy, ClipboardPaste, Diamond, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, Spline, TriangleAlert, Upload } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
 import { EFFECTS, MOTION_PROPS, animationsOf, effectsOf, readMotion, valueAt, withAnimations, withEffects, withPreset, type EffectProp, type KeyedProp, type Motion, type MotionProp } from '../../../../src/clip-motion.mjs';
 import { copiedKeys, easeOfBezier, easedMotion, effectsModel, type EffectsChange, keyId, keyedBox, movedKeys, parseKeyId, pastedKeys, poseAt, withoutKeys, type CopiedKeys, type EaseCommand } from '@/lib/motion-keys';
@@ -3019,10 +3019,16 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     return { track: { lane: `el:${layer.clipId}`, role: 'mg' as const, kind: 'visual' as const, index: 1, name: block.title, blocks: [block], height: LAYER_ROW_H, ...(extra ? { extra } : {}) } as TimelineTrack, layer, n: i + 1 };
   }) : null), [compBlock, compLayers, compMotion]); // eslint-disable-line react-hooks/exhaustive-deps
   /* what the timeline draws of a layer row: its head and its properties (a sound track keeps a plain head) */
-  const layerView = (view: MotionLayersView, rows: readonly { track: TimelineTrack; layer: Layer | null; n: number }[]) => {
+  const layerView = (view: MotionLayersView, rows: readonly { track: TimelineTrack; layer: Layer | null; n: number }[], keysPicked: boolean, layersPicked: boolean) => {
     const of = new Map(rows.map((r) => [r.track.lane, r]));
     return {
       headWidth: view.headWidth,
+      /* an animation editor's tools in the place of cutting's: ease the picked keyframes, their curves, what moves */
+      tools: [
+        { id: 'ease', label: t('canvas.toolEase'), hint: 'F9', icon: <Spline size={16} />, disabled: !keysPicked, onClick: () => runKeys('easy') },
+        { id: 'graph', label: t('canvas.toolGraph'), hint: '⇧F3', icon: <ChartSpline size={16} />, active: motionGraph, onClick: () => setMotionGraph((on) => !on) },
+        { id: 'moving', label: t('canvas.showMoving'), hint: 'U', icon: <Diamond size={15} />, disabled: !layersPicked, onClick: view.showMoving },
+      ],
       head: (track: TimelineTrack) => {
         const row = of.get(track.lane);
         return row?.layer ? view.head(row.layer, row.n) : <span className="truncate px-3 text-[11px] text-[var(--text-faint)]">{track.badge ?? ''} {track.name ?? ''}</span>;
@@ -4510,7 +4516,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                   /* a composition: its page's elements as layers, on the timeline of the page's own time */
                   <Timeline
                     tracks={compTracks.map((r) => r.track)}
-                    layers={layerView(compMotion, compTracks)}
+                    layers={layerView(compMotion, compTracks, Boolean(compKeys?.keys.size), compPicked.length > 0)}
                     totalMs={compBlock.endMs - compBlock.startMs}
                     timeMs={compLocalMs}
                     playing={playing}
@@ -4546,7 +4552,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     onRelink={(block, path) => void relinkBlock(block, path)}
                     onViewChange={setThumbView}
                     tracks={layerTracks ? layerTracks.map((r) => r.track) : tools.tracks}
-                    layers={layerTracks ? layerView(filmMotion, layerTracks) : null}
+                    layers={layerTracks ? layerView(filmMotion, layerTracks, pickedKeys.size > 0, selectedBlocks.length > 0) : null}
                     totalMs={totalMs}
                     timeMs={timeMs}
                     clock={playing ? clock : null}
