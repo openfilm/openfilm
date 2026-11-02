@@ -203,7 +203,8 @@ export function mediaListingOf(
     dirs: raw.folders.filter((d) => d.startsWith(`${root}/`)).map(rel),
     linkedDirs: Object.fromEntries(Object.entries(raw.links ?? {}).filter(([path]) => raw.folders.includes(path)).map(([path, link]) => [rel(path), link])),
     ...(made ? { made: made.filter((d) => d.startsWith(`${root}/`)).map(rel) } : {}),
-    pages: raw.pages.map((p) => ({
+    /* a compound clip's film (parts/) is placed by making one, not from here */
+    pages: raw.pages.filter((p) => !p.path.startsWith('parts/')).map((p) => ({
       path: p.path,
       name: pageName(p.path),
       dir: '',

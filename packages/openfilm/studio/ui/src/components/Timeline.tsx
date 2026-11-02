@@ -44,6 +44,7 @@ import {
   Volume2,
   VolumeX,
   Waves,
+  Layers,
   Link2,
   Link2Off,
   Mic,
@@ -626,6 +627,9 @@ export interface TimelineProps {
   onSplit?: (blocks: readonly TimelineBlock[], atMs: number) => Promise<string | null>;
   /** Take a video's sound apart from its picture, onto a track of its own (an editor's unlink). */
   onDetachAudio?: (block: TimelineBlock) => Promise<string | null>;
+  /** The picked clips made one compound clip; a compound clip taken apart (studio/server/compound.mjs). */
+  onCompound?: (blocks: readonly TimelineBlock[]) => void;
+  onUncompound?: (block: TimelineBlock) => void;
   /**
    * Thumbnails: key (`mtime:clipId@intoMs#v`, see thumb-frame) → image address. Shot outside; keyed by the
    * clip's own millisecond, not film time, so moving a clip does not change its pictures.
@@ -967,6 +971,8 @@ export const Timeline = React.memo(function Timeline({
   commandsRef,
   onSplit,
   onDetachAudio,
+  onCompound,
+  onUncompound,
   onCopy,
   onPaste,
   onExportBlock,
@@ -3835,6 +3841,20 @@ export const Timeline = React.memo(function Timeline({
           onSelect: () => { unlinkBlocks(picked); },
         });
       }
+    }
+    /* the picked clips as one compound clip (a film of their own), and one taken apart */
+    const placed = picked.filter((b) => b.clipId && b.loc && parseFilmDocLoc(b.loc) != null);
+    if (onCompound && placed.length && placed.length === picked.length) {
+      out.push({
+        id: 'compound', label: t('timeline.menuCompound'), icon: <Layers size={14} />, shortcut: keyHint('compound'),
+        disabled: pickedLocked, hint: t('timeline.trackLocked'), onSelect: () => { onCompound(placed); },
+      });
+    }
+    if (one && onUncompound && /^parts\/[^/]+\/film\.html$/.test((one.src ?? '').replace(/#.*$/, ''))) {
+      out.push({
+        id: 'uncompound', label: t('timeline.menuUncompound'), icon: <Layers size={14} />, shortcut: keyHint('uncompound'),
+        disabled: pickedLocked, hint: t('timeline.trackLocked'), onSelect: () => { onUncompound(one); },
+      });
     }
     /* a video's sound onto a track of its own: its picture and sound edited apart from then on */
     if (one && onDetachAudio && one.kind === 'video' && one.clipId && !(one.src && filmSrcIsStill(one.src))) {

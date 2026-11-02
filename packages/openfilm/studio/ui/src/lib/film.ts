@@ -31,8 +31,13 @@ export function filmClipKind(of: string | { src: string; sound?: boolean }): Fil
 /** How Studio shows a track, from what is on it: all sound → audio, all pages → mg, anything else → video. */
 export const filmTrackKind = trackKind;
 
-/** A file's name without its folder or extension (`assets/intro.html` → `intro`). */
+/**
+ * A file's name without its folder or extension (`assets/intro.html` → `intro`); a film in a folder of its own (a
+ * compound clip's) is called by its folder (`parts/intro/film.html` → `intro`).
+ */
 export function fileStem(path: string): string {
+  const parts = path.replace(/[#?].*$/, '').split('/');
+  if (parts.length > 1 && parts[parts.length - 1] === 'film.html') return parts[parts.length - 2]!;
   const base = path.split('/').pop() ?? path;
   return base.replace(/\.[a-z0-9]{1,5}$/i, '') || base;
 }

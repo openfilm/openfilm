@@ -152,6 +152,10 @@ export const api = {
   /** the person opened it here: the one `openfilm open` alone comes back to */
   opened: (id: string) => call<{ project: Project }>(`${p(id)}/opened`, { method: 'POST' }),
   /* `undo`: the edit puts back an earlier one (Studio keeps the person's edits over an agent's writes until then) */
+  /** A compound clip's film written in a folder of its own under parts/ (studio/server/parts.mjs): that folder. */
+  writePartFilm: (id: string, name: string, film: Film) => call<{ folder: string }>(`${p(id)}/films`, { method: 'POST', json: { name, film } }),
+  /** A compound clip's film, as it says. */
+  readPartFilm: (id: string, folder: string) => call<{ film: Film }>(`${p(id)}/films?folder=${encodeURIComponent(folder)}`),
   edit: (id: string, base: string | null, ops: Op[], undo = false) => call<{ text: string; rev: string; value: Film; doc: Film; rebased: boolean }>(`${p(id)}/edit`, { method: 'POST', json: { base, ops, ...(undo ? { undo: true } : {}) } }),
   files: (id: string) => call<Listing>(`${p(id)}/files`),
   /** the editor's settings of the project (`.film/settings.json`): its frame rate, its tracks' names */

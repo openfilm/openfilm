@@ -22,6 +22,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { EditError, editProjectFilm, pageClipLook, readProjectFilm, settleProjectFilm } from './film.mjs';
+import { readPartFilm, writePartFilm } from './parts.mjs';
 import { readPage, writePage } from './page-text.mjs';
 import { FileError, bringIn, collect, extractAudio, freezeFrame, importFile, inside, listFiles, makeFolder, moveCheck, moveFile, readable, relink, trashFile } from './files.mjs';
 import { ExportError, createExports, draftApps, exportCapabilities, exportsRoot, projectSizes } from './exports.mjs';
@@ -794,6 +795,24 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         /* the person's view is out of date or the edit cannot be: send the film as it is now with the reason */
         const now = await readProjectFilm(project.path);
         throw new HttpError(e.kind === 'conflict' ? 409 : 422, e.message, { rev: now.rev, doc: now.doc });
+      }
+    }
+    /* a compound clip's film: written in a folder of its own under parts/ as it is made, read as it is taken apart
+       (parts.mjs, compound.mjs); the film itself changes by an edit, as any */
+    if (rest === 'films' && req.method === 'POST') {
+      const { name, film } = /** @type {{ name?: string, film?: import('./ops.mjs').FilmValue }} */ (await readJson(req));
+      if (!film || !Array.isArray(film.tracks)) throw new HttpError(400, 'a film is needed');
+      try {
+        return json(res, 200, { folder: await writePartFilm(project.path, String(name ?? 'compound'), film) });
+      } catch (e) {
+        throw new HttpError(422, e instanceof Error ? e.message : String(e));
+      }
+    }
+    if (rest === 'films' && req.method === 'GET') {
+      try {
+        return json(res, 200, { film: await readPartFilm(project.path, url.searchParams.get('folder') ?? '') });
+      } catch (e) {
+        throw new HttpError(404, e instanceof Error ? e.message : String(e));
       }
     }
     /* a video's sound, made a file of its own beside it (files.mjs extractAudio) */

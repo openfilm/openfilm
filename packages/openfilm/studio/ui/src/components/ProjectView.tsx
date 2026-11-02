@@ -14,6 +14,8 @@ import { copiedKeys, easeOfBezier, easedMotion, keyId, keyedBox, movedKeys, pars
 import type { MotionLanes } from './MotionLanes';
 import type { MotionPathKeys } from './MotionPath';
 import { declared } from '@/lib/clip-look';
+import { PARTS, compoundOf, dissolvedOf } from '../../../server/compound.mjs';
+import type { FilmValue } from '../../../server/ops.mjs';
 import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type Op, type ProjectFilm, type ProjectSettings, type SavedGroupClip } from '@/api';
 import { useLanguage, useT } from '@/i18n';
 import { useFilm, type OutsideStep, type Step } from '@/editor/use-film';
@@ -209,6 +211,8 @@ const WHITE_SRC = 'transitions/white.html';
 
 /** An edit-history label naming the clips it was done to (see OperationHistory's stepText): "Deleted slow". */
 const clipStep = (key: string, ids: readonly string[]) => `${key}|${ids.join(', ')}`;
+/** A compound clip's folder (`parts/<name>`), from its src; null for any other clip. */
+const compoundFolder = (src: string | undefined) => /^(parts\/[^/]+)\/film\.html$/.exec((src ?? '').replace(/#.*$/, ''))?.[1] ?? null;
 
 /** The project's id-named clips by their place in film.html (`film.html#t.c`). */
 function clipIdAt(film: Film | null, loc: string): string | null {
@@ -1262,6 +1266,39 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       { op: 'insert', clip: sound, track },
     ], clipStep('history.stepDetachAudio', [block.clipId]));
   }, [edit, editModel, t]);
+  /**
+   * Clips made one compound clip (studio/server/compound.mjs): their own film written under parts/, then one edit puts
+   * it where they were (undone and redone as any); and one taken apart, its clips back where it plays them.
+   */
+  const makeCompound = React.useCallback(async (blocks: readonly TimelineBlock[]): Promise<string | null> => {
+    const current = filmRef.current;
+    const ids = blocks.flatMap((b) => (b.clipId ? [b.clipId] : []));
+    if (!current || !ids.length) return null;
+    const ends = Object.fromEntries(blocksRef.current.flatMap((b) => (b.clipId ? [[b.clipId, b.endMs / 1000]] : [])));
+    const draft = compoundOf(current as unknown as FilmValue, ids, ends, `${PARTS}/compound`);
+    if (!draft) return null;
+    try {
+      const { folder } = await api.writePartFilm(projectId, 'compound', draft.film as unknown as Film);
+      const made = compoundOf(filmRef.current as unknown as FilmValue, ids, ends, folder);
+      if (!made) return null;
+      const err = await edit(made.ops as Op[], clipStep('history.stepCompound', ids));
+      if (!err) setSelectedKeys([folder.split('/').pop()!]);
+      return err;
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  }, [edit, projectId]);
+  const breakCompound = React.useCallback(async (block: TimelineBlock): Promise<string | null> => {
+    const folder = compoundFolder(block.src);
+    if (!folder || !block.clipId) return null;
+    try {
+      const { film: inner } = await api.readPartFilm(projectId, folder);
+      const ops = dissolvedOf(filmRef.current as unknown as FilmValue, block.clipId, inner as unknown as FilmValue, folder);
+      return ops ? await edit(ops as Op[], clipStep('history.stepUncompound', [block.clipId])) : null;
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  }, [edit, projectId]);
   const [clipboard, setClipboard] = React.useState<readonly TimelineClipboardItem[]>([]);
   /* layers copied (lib/layer-clipboard): kept in the browser, so another window or project pastes them too; the
      timeline's clipboard and this one are emptied by a copy to the other, so a paste pastes what was copied last */
@@ -3301,6 +3338,22 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         window.setTimeout(() => document.querySelector<HTMLInputElement>(`[data-speed-field] input[aria-label="${t('inspector.speed')}"]:not([type=range])`)?.focus(), 80);
         return;
       }
+      case 'compound': {
+        /* ⌥G: the selected clips made one compound clip */
+        const picked = selectedBlocks.filter((b) => b.clipId);
+        if (!picked.length || !once) return;
+        take();
+        void makeCompound(picked).then((err) => { if (err) toast.showError(err); });
+        return;
+      }
+      case 'uncompound': {
+        /* ⌥⇧G: the selected compound clip taken apart */
+        const held = selectedBlocks.find((b) => compoundFolder(b.src));
+        if (!held || !once) return;
+        take();
+        void breakCompound(held).then((err) => { if (err) toast.showError(err); });
+        return;
+      }
       case 'detach-audio': {
         /* ⇧⌃S: the selected video's sound on a track of its own */
         const video = selectedBlocks.find((b) => b.kind === 'video' && b.clipId);
@@ -3960,6 +4013,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     onRemoveMany={removeBlocks}
                     onSplit={splitBlocks}
                     onDetachAudio={detachAudio}
+                    onCompound={(blocks) => { void makeCompound(blocks).then((err) => { if (err) toast.showError(err); }); }}
+                    onUncompound={(block) => { void breakCompound(block).then((err) => { if (err) toast.showError(err); }); }}
                     onEditBlocks={editBlocks}
                     onEditOps={editOps}
                     links={clipLinks}
