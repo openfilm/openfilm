@@ -1285,6 +1285,7 @@ export const ko: Words = {
       overlay: '오버레이',
       darken: '어둡게 하기',
       lighten: '밝게 하기',
+      'plus-lighter': '더하기',
       'color-dodge': '색상 닷지',
       'color-burn': '색상 번',
       'soft-light': '소프트 라이트',

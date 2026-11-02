@@ -508,7 +508,7 @@ export function fadeCss(fade: Fade | null): { 'mask-image': string | null; 'mask
 
 /* ───────────── which declarations the controls say ───────────── */
 
-export const BLEND_MODES = ['normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten', 'color-dodge', 'color-burn', 'soft-light', 'hard-light', 'difference', 'exclusion', 'hue', 'saturation', 'color', 'luminosity'] as const;
+export const BLEND_MODES = ['normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten', 'plus-lighter', 'color-dodge', 'color-burn', 'soft-light', 'hard-light', 'difference', 'exclusion', 'hue', 'saturation', 'color', 'luminosity'] as const;
 
 /**
  * Whether the inspector's controls show all of declaration `prop: value` — then the raw CSS (Advanced) need not.

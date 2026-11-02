@@ -1288,6 +1288,7 @@ export const es: Words = {
       overlay: 'Superponer',
       darken: 'Oscurecer',
       lighten: 'Aclarar',
+      'plus-lighter': 'Sumar',
       'color-dodge': 'Sobreexponer color',
       'color-burn': 'Subexponer color',
       'soft-light': 'Luz suave',

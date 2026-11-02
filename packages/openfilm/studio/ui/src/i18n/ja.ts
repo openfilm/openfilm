@@ -1288,6 +1288,7 @@ export const ja: Words = {
       overlay: 'オーバーレイ',
       darken: '比較（暗）',
       lighten: '比較（明）',
+      'plus-lighter': '加算',
       'color-dodge': '覆い焼きカラー',
       'color-burn': '焼き込みカラー',
       'soft-light': 'ソフトライト',

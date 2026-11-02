@@ -1289,6 +1289,7 @@ export const zhCN: Words = {
       overlay: '叠加',
       darken: '变暗',
       lighten: '变亮',
+      'plus-lighter': '相加',
       'color-dodge': '颜色减淡',
       'color-burn': '颜色加深',
       'soft-light': '柔光',

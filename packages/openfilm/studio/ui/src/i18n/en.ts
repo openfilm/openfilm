@@ -1289,6 +1289,7 @@ export const en = {
       overlay: 'Overlay',
       darken: 'Darken',
       lighten: 'Lighten',
+      'plus-lighter': 'Add',
       'color-dodge': 'Color dodge',
       'color-burn': 'Color burn',
       'soft-light': 'Soft light',
