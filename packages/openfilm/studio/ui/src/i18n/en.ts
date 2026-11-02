@@ -1539,6 +1539,7 @@ export const en = {
       saturate: 'Saturation',
       hue: 'Hue',
       grayscale: 'Black & white',
+      invert: 'Invert',
       glow: 'Glow',
       trim: 'Trim paths',
       z: 'Z position',

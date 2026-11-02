@@ -1538,6 +1538,7 @@ export const ja: Words = {
       saturate: '彩度',
       hue: '色相',
       grayscale: '白黒',
+      invert: '階調の反転',
       glow: 'グロー',
       trim: 'パスのトリミング',
       z: 'Z 位置',

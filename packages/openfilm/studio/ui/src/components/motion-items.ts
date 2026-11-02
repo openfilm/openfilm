@@ -20,7 +20,7 @@ export type MotionItem =
 /** The effects a picture can be given (a filter each): the rest are a shape's stroke and 3D, items of their own. */
 export const FILTER_EFFECTS = EFFECT_PROPS.filter((fx) => EFFECTS[fx].filter);
 /** An effect put on as it shows at once (at its resting value it would not), to be turned down from there. */
-const FX_START: Partial<Record<EffectProp, number>> = { blur: 8, brightness: 130, contrast: 130, saturate: 160, hue: 90, grayscale: 100, glow: 12 };
+const FX_START: Partial<Record<EffectProp, number>> = { blur: 8, brightness: 130, contrast: 130, saturate: 160, hue: 90, grayscale: 100, invert: 100, glow: 12 };
 
 /** Every item, by the panel's sections. */
 export const ITEM_SECTIONS: readonly { id: string; items: readonly MotionItem[] }[] = [

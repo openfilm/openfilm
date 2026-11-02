@@ -115,7 +115,7 @@ const ALL: readonly Shown[] = [...MOTION_PROPS, 'fx'];
 const isTransform = (p: KeyedProp) => (MOTION_PROPS as readonly string[]).includes(p);
 const PROP_LABEL: Record<MotionProp, string> = { translate: 'inspector.keyPosition', scale: 'inspector.keyScale', rotate: 'inspector.keyRotate', opacity: 'inspector.keyOpacity' };
 /** An effect's value: its step when dragged, its digits. */
-const FX_STEP: Record<EffectProp, number> = { blur: 0.1, brightness: 0.5, contrast: 0.5, saturate: 0.5, hue: 0.5, grayscale: 0.5, glow: 0.1, trim: 0.5, z: 1, rx: 0.5, ry: 0.5 };
+const FX_STEP: Record<EffectProp, number> = { blur: 0.1, brightness: 0.5, contrast: 0.5, saturate: 0.5, hue: 0.5, grayscale: 0.5, invert: 0.5, glow: 0.1, trim: 0.5, z: 1, rx: 0.5, ry: 0.5 };
 /** A 3D layer's numbers, shown with its Transform's: depth after position, its X and Y turns after rotation. */
 const THREE_AFTER: Record<string, readonly KeyedProp[]> = { translate: ['z'], rotate: ['rx', 'ry'] };
 const isThree = (p: string) => p === 'z' || p === 'rx' || p === 'ry';

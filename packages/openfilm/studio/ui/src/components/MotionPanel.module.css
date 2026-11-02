@@ -91,6 +91,7 @@
 .fx-saturate .card { filter:saturate(2.4); }
 .fx-hue .card { filter:hue-rotate(120deg); }
 .fx-grayscale .card { filter:grayscale(1); }
+.fx-invert .card { filter:invert(1); }
 .fx-glow .card { filter:drop-shadow(0 0 5px rgb(255 255 255 / .95)); }
 /* a mask's: the card cut so */
 .mask .card { width:40px; height:26px; }

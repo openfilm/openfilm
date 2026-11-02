@@ -1538,6 +1538,7 @@ export const es: Words = {
       saturate: 'Saturación',
       hue: 'Tono',
       grayscale: 'Blanco y negro',
+      invert: 'Invertir',
       glow: 'Resplandor',
       trim: 'Recortar trazados',
       z: 'Posición Z',

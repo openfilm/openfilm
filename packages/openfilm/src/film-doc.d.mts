@@ -112,6 +112,7 @@ export declare const EFFECTS: Readonly<{
   saturate: { unit: '%'; rest: 100; syntax: '<percentage>'; filter: string };
   hue: { unit: 'deg'; rest: 0; syntax: '<angle>'; filter: string };
   grayscale: { unit: '%'; rest: 0; syntax: '<percentage>'; filter: string };
+  invert: { unit: '%'; rest: 0; syntax: '<percentage>'; filter: string };
   glow: { unit: 'px'; rest: 0; syntax: '<length>'; filter: string };
   trim: { unit: ''; rest: 100; syntax: '<number>'; filter: null };
   z: { unit: 'px'; rest: 0; syntax: '<length>'; filter: null };

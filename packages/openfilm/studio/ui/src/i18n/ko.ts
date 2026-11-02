@@ -1535,6 +1535,7 @@ export const ko: Words = {
       saturate: '채도',
       hue: '색조',
       grayscale: '흑백',
+      invert: '반전',
       glow: '글로우',
       trim: '패스 트리밍',
       z: 'Z 위치',

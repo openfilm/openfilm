@@ -1539,6 +1539,7 @@ export const zhCN: Words = {
       saturate: '饱和度',
       hue: '色相',
       grayscale: '黑白',
+      invert: '反相',
       glow: '发光',
       trim: '描边绘制',
       z: 'Z 位置',

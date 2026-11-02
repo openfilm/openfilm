@@ -80,8 +80,8 @@ where, and CSS that says how each looks. A page draws a shot.
     long the clip is on the film (`4.2s`), so a way out can be timed from its end:
     `animation: out .6s ease-in calc(var(--clip-length) - .6s) both`. A `transition`, whose progress is history, is an
     error. A host registers the effects' custom properties, so a `filter` that reads them eases each by keyframes of
-    its own: `--fx-blur` and `--fx-glow` (lengths), `--fx-brightness`, `--fx-contrast`, `--fx-saturate` and
-    `--fx-grayscale` (percentages), `--fx-hue` (an angle), as in `filter: blur(var(--fx-blur, 0px))`; and
+    its own: `--fx-blur` and `--fx-glow` (lengths), `--fx-brightness`, `--fx-contrast`, `--fx-saturate`,
+    `--fx-grayscale` and `--fx-invert` (percentages), `--fx-hue` (an angle), as in `filter: blur(var(--fx-blur, 0px))`; and
     `--fx-trim` (a number, 0–100: how much of a stroke is drawn, for its `stroke-dashoffset`). A picture that sets or
     animates `--fx-z` (a length toward the viewer), `--fx-rx` or `--fx-ry` (its turn about its X and Y axes) is in 3D:
     the host places it so about its center, under the film's camera (a perspective of 1.389 times the stage's width,

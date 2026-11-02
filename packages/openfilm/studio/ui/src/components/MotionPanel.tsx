@@ -23,7 +23,7 @@ let keptTab: Tab = 'properties';
 /** Each effect's slider: from, to, a step. */
 const RANGE: Record<EffectProp, [number, number, number]> = {
   blur: [0, 40, 0.5], brightness: [0, 300, 1], contrast: [0, 300, 1], saturate: [0, 300, 1], hue: [-180, 180, 1],
-  grayscale: [0, 100, 1], glow: [0, 60, 0.5], trim: [0, 100, 0.5], z: [-1000, 1000, 5], rx: [-180, 180, 1], ry: [-180, 180, 1],
+  grayscale: [0, 100, 1], invert: [0, 100, 1], glow: [0, 60, 0.5], trim: [0, 100, 0.5], z: [-1000, 1000, 5], rx: [-180, 180, 1], ry: [-180, 180, 1],
 };
 const PROP_LABEL: Record<MotionProp, string> = { translate: 'inspector.keyPosition', scale: 'inspector.keyScale', rotate: 'inspector.keyRotate', opacity: 'inspector.keyOpacity' };
 const LABEL: Record<string, string> = { video: '#4ca3ad', mg: '#a594d6', still: '#c7a35f', text: '#d0706f', image: '#c7a35f', shape: '#5b8fd6', box: '#8c9a6b', group: '#8a8f98' };
