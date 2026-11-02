@@ -9,11 +9,13 @@
 import * as React from 'react';
 import { BookmarkPlus, ChevronDown, ClipboardCopy, ClipboardPaste, Film as FilmIcon, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, Spline, TriangleAlert, Upload, Workflow } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
-import { EFFECTS, MOTION_PROPS, effectsOf, readMotion, valueAt, withEffects, withPreset, type EffectProp, type KeyedProp, type Motion, type MotionProp } from '../../../../src/clip-motion.mjs';
+import { EFFECTS, MOTION_PROPS, animationsOf, effectsOf, readMotion, valueAt, withAnimations, withEffects, withPreset, type EffectProp, type KeyedProp, type Motion, type MotionProp } from '../../../../src/clip-motion.mjs';
 import { copiedKeys, easeOfBezier, easedMotion, effectsModel, type EffectsChange, keyId, keyedBox, movedKeys, parseKeyId, pastedKeys, poseAt, withoutKeys, type CopiedKeys, type EaseCommand } from '@/lib/motion-keys';
 import type { MotionLanes } from './MotionLanes';
 import type { MotionPathKeys } from './MotionPath';
-import { MotionTimeline, type Layer, type LayerHost } from './MotionTimeline';
+import { MotionTimeline, type Layer, type LayerHost, type LayerMask } from './MotionTimeline';
+import { maskCss, maskDefault, maskOf, type Mask } from '@/lib/clip-mask';
+import { maskKeyframes, maskModel, readMaskKeys, type MaskKeys } from '@/lib/mask-motion';
 import { elementModel, elementStatic, elementSubject, readElementMotion, sameElement, writeElementMotion, type ElementCommit } from '@/lib/element-motion';
 import { transformModel, type TransformCommit } from './KeyframesSection';
 import { staticTransform, transformEdits } from '@/lib/clip-transform';
@@ -1094,9 +1096,39 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const fx = effectsOf(css);
     const motion = motionOfBlock(layer);
     const effects = effectsModel(motion, fx.on, fx.values, Math.min(Math.max(local, 0), length), local >= 0 && local <= length, keyFrameS);
+    /* its mask (lib/clip-mask), drawn in its box as it shows, and the keyframes it moves by (lib/mask-motion) */
+    const tf = placed ? staticTransform(placed).tf : null;
+    const mbox = placed && tf ? { w: placed.own.w * tf.scaleX, h: placed.own.h * tf.scaleY } : null;
+    const maskName = `${layer.clipId}--mask`;
+    const maskNow = maskOf(declared(css, 'mask-image'), declared(css, 'mask-composite'), mbox);
+    const maskKeys = readMaskKeys(film.film?.keyframes?.[maskName]);
+    const writeMask = (base: Mask | null, keys: MaskKeys) => {
+      const read0 = (prop: string) => declared(css, prop) ?? undefined;
+      const own = maskCss(read0, base, mbox);
+      if (!own) return;
+      const style1 = withDeclarations(css, own);
+      const read1 = (prop: string) => declared(style1, prop) ?? undefined;
+      const frames = base ? maskKeyframes(base, keys, read1, mbox, projectFps) : null;
+      const entries = animationsOf(style1).filter((e) => e.split(/\s+/)[0] !== maskName);
+      const style2 = withAnimations(style1, frames ? [...entries, `${maskName} ${Math.round(frames.secs * 1000) / 1000}s linear both`] : entries);
+      void edit([
+        { op: 'props', edits: [{ clip: layer.clipId, prop: 'style', value: style2 || null }] },
+        { op: 'keyframes', set: { [maskName]: frames?.body ?? null } },
+      ], clipStep('history.stepMoved', [layer.clipId])).then((err) => { if (err) toast.showError(err); });
+    };
+    const mask: LayerMask | null = !placed || maskNow === null ? null : {
+      shape: maskNow?.shape ?? null,
+      invert: Boolean(maskNow?.invert),
+      model: maskNow ? maskModel(maskNow, maskKeys, Math.min(Math.max(local, 0), length), local >= 0 && local <= length, keyFrameS) : null,
+      keys: maskKeys,
+      setShape: (shape) => writeMask(shape ? maskDefault(shape, mbox, maskNow ?? null) : null, shape ? maskKeys : {}),
+      setInvert: (on) => { if (maskNow) writeMask({ ...maskNow, invert: on }, maskKeys); },
+      commit: (c) => { if (c && maskNow) writeMask(c.base ?? maskNow, c.keys); },
+    };
     return {
       model,
       effects,
+      mask,
       commitEffects: (c: EffectsChange | null) => {
         if (!c || !layer.loc) return;
         void editBlocks([
@@ -1112,7 +1144,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       blend: declared(css, 'mix-blend-mode') ?? 'normal',
       setBlend: (mode) => style({ 'mix-blend-mode': mode === 'normal' ? null : mode }),
     };
-  }, [film.film, motionOfBlock, timeMs, keyFrameS, editBlocks, toast]);
+  }, [film.film, motionOfBlock, timeMs, keyFrameS, editBlocks, edit, projectFps, toast]); // eslint-disable-line react-hooks/exhaustive-deps
   /* a layer's bar moved or trimmed on the motion timeline: as the timeline moves and trims a clip (lib/timeline-edit) */
   const moveLayer = React.useCallback((id: string, deltaMs: number) => {
     const lead = blocksRef.current.find((b) => b.clipId === id);

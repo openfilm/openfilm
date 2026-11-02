@@ -287,7 +287,8 @@ function splitMotion(/** @type {FilmValue} */ value, /** @type {Clip} */ clip, /
  */
 function ownMotion(/** @type {FilmValue} */ value) {
   if (!value.keyframes) return;
-  const own = new RegExp(`^(.+)--(${KEYED_PROPS.join('|')})$`);
+  /* a clip's own: its properties', and its mask's (studio/ui lib/mask-motion: a stop a frame) */
+  const own = new RegExp(`^(.+)--(${[...KEYED_PROPS, 'mask'].join('|')})$`);
   const used = new Set();
   for (const clip of value.tracks.flatMap((t) => t.clips)) {
     const entries = animationsOf(/** @type {string | undefined} */ (clip.style));

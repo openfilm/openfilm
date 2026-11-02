@@ -1454,6 +1454,8 @@ export const zhCN: Words = {
     fxGroup: '效果',
     fxAdd: '添加效果…',
     fxRemove: '移除效果',
+    maskSize: '大小',
+    maskRadius: '圆角',
     fx: {
       blur: '高斯模糊',
       brightness: '亮度',

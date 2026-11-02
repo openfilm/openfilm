@@ -241,7 +241,8 @@ function MotionGraph({ lanes, top, pxPerMs }: { lanes: MotionLanes; top: number;
   const fit = React.useRef<Map<string, [number, number]>>(new Map());
   const curves: Curve[] = lanes.rows.filter((row) => row.keys.length).flatMap((row) => {
     const keys = rowKeys(row.prop, row.keys);
-    const dims: (0 | 1 | null)[] = row.prop === 'translate' ? [0, 1] : [null];
+    /* a pair (a position, a mask's) is two curves, its X and its Y */
+    const dims: (0 | 1 | null)[] = Array.isArray(keys[0]?.v) ? [0, 1] : [null];
     return dims.map((dim) => {
       const name = `${row.prop}:${dim}`;
       let range = drag ? fit.current.get(name) : undefined;

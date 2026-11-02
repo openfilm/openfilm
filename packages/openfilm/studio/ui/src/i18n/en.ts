@@ -1454,6 +1454,8 @@ export const en = {
     fxGroup: 'Effects',
     fxAdd: 'Add effect…',
     fxRemove: 'Remove the effect',
+    maskSize: 'Size',
+    maskRadius: 'Corners',
     fx: {
       blur: 'Gaussian blur',
       brightness: 'Brightness',

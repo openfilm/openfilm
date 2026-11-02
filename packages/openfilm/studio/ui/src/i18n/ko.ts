@@ -1450,6 +1450,8 @@ export const ko: Words = {
     fxGroup: '효과',
     fxAdd: '효과 추가…',
     fxRemove: '효과 제거',
+    maskSize: '크기',
+    maskRadius: '모서리',
     fx: {
       blur: '가우시안 블러',
       brightness: '밝기',

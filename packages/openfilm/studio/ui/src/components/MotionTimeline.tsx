@@ -14,6 +14,9 @@ import * as React from 'react';
 import { ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, X } from 'lucide-react';
 import { EFFECTS, EFFECT_PROPS, MOTION_PROPS, type EffectProp, type KeyedProp, type MotionProp } from '../../../../src/clip-motion.mjs';
 import type { effectsModel, EffectsChange } from '@/lib/motion-keys';
+import { easeOfBezier } from '@/lib/motion-keys';
+import { MASK_FIELDS, MASK_SHAPES, type MaskShape } from '@/lib/clip-mask';
+import type { MaskChange, MaskKeys, MaskParam, maskModel } from '@/lib/mask-motion';
 import type { FilmRange } from '@/lib/studio-refs';
 import { BLEND_MODES } from '@/lib/clip-look';
 import { formatTimecode } from '@/lib/timecode';
@@ -48,6 +51,19 @@ export interface LayerHost {
   /** Its effects (lib/motion-keys effectsModel), and a change of them written. */
   effects: ReturnType<typeof effectsModel> | null;
   commitEffects: (c: EffectsChange | null) => void;
+  /** Its mask (a clip's; none where it cannot have one here). */
+  mask?: LayerMask | null;
+}
+
+/** A layer's mask in the Masks group: its shape (none: no mask), its keyframes (lib/mask-motion), what changes it. */
+export interface LayerMask {
+  shape: MaskShape | null;
+  invert: boolean;
+  model: ReturnType<typeof maskModel> | null;
+  keys: MaskKeys;
+  setShape: (shape: MaskShape | null) => void;
+  setInvert: (on: boolean) => void;
+  commit: (c: MaskChange | null) => void;
 }
 
 export interface MotionTimelineProps {
@@ -90,6 +106,15 @@ const isTransform = (p: KeyedProp) => (MOTION_PROPS as readonly string[]).includ
 const PROP_LABEL: Record<MotionProp, string> = { translate: 'inspector.keyPosition', scale: 'inspector.keyScale', rotate: 'inspector.keyRotate', opacity: 'inspector.keyOpacity' };
 /** An effect's value: its step when dragged, its digits. */
 const FX_STEP: Record<EffectProp, number> = { blur: 0.1, brightness: 0.5, contrast: 0.5, saturate: 0.5, hue: 0.5, grayscale: 0.5, glow: 0.1 };
+/** A mask's parameters its shape has, and their names. */
+const maskParamsOf = (shape: MaskShape): MaskParam[] => {
+  const f = MASK_FIELDS[shape];
+  return ['pos', ...(f.size === 'box' ? ['size' as const] : []), ...(f.rotate ? ['rotate' as const] : []), ...(f.feather ? ['feather' as const] : []), ...(f.radius ? ['radius' as const] : [])];
+};
+const MASK_LABEL: Record<MaskParam, string> = { pos: 'inspector.keyPosition', size: 'canvas.maskSize', rotate: 'inspector.keyRotate', feather: 'inspector.maskFeather', radius: 'canvas.maskRadius' };
+/** A mask's row as the keyframe rows take it (a name of its own beside the Transform's). */
+const maskRow = (p: MaskParam) => `mask-${p}` as KeyedProp;
+const maskParamOf = (prop: string) => prop.slice('mask-'.length) as MaskParam;
 /** A layer's label color by what it is, as an animation editor gives each kind its own. */
 const LABEL: Record<string, string> = { video: '#4ca3ad', mg: '#a594d6', still: '#c7a35f', text: '#d0706f', image: '#c7a35f', shape: '#5b8fd6', box: '#8c9a6b', group: '#8a8f98' };
 const labelOf = (layer: Layer) => LABEL[layer.kind] ?? '#8a8f98';
@@ -437,6 +462,42 @@ export function MotionTimeline(p: MotionTimelineProps) {
                     ) : null}
                   </>
                 ) : null}
+                {all && fxShown && host.mask ? (() => {
+                  const mk = host.mask;
+                  const masks = mk.shape && mk.model ? maskLanes(all, mk) : null;
+                  return (
+                    <>
+                      {/* its Masks group: a shape picked, turned inside out, each of its numbers a row */}
+                      <div className="flex" style={{ height: 22 }} data-masks-group={layer.clipId}>
+                        <div className={`${head} flex items-center gap-2 border-r border-[var(--dock-line)] text-[11.5px] text-[var(--text-muted)]`} style={{ width: headW, paddingLeft: AV_W + 18 }}>
+                          <span className="flex items-center"><ChevronDown size={11} className="mr-1" /> {t('inspector.mask')}</span>
+                          <select aria-label={t('inspector.maskShape')} value={mk.shape ?? 'none'} data-mask-shape={layer.clipId}
+                            onPointerDown={(e) => e.stopPropagation()} onChange={(e) => mk.setShape(e.target.value === 'none' ? null : e.target.value as MaskShape)}
+                            className="h-[18px] rounded-[3px] border border-[var(--dock-line)] bg-transparent px-1 text-[11px] text-[var(--text-muted)]">
+                            {(['none', ...MASK_SHAPES] as const).map((shape) => <option key={shape} value={shape}>{t(`inspector.maskShapes.${shape}`)}</option>)}
+                          </select>
+                          {mk.shape ? (
+                            <label className="flex items-center gap-1 text-[11px]">
+                              <input type="checkbox" checked={mk.invert} onChange={(e) => mk.setInvert(e.target.checked)} data-mask-invert={layer.clipId} />
+                              {t('inspector.maskInvert')}
+                            </label>
+                          ) : null}
+                        </div>
+                        <div style={{ width: timeW }} />
+                      </div>
+                      {masks ? (
+                        <div className="flex" style={{ height: lanesHeight(masks) }}>
+                          <div className={`${head} border-r border-[var(--dock-line)]`} style={{ width: headW, paddingTop: LANE_PAD / 2 }}>
+                            {masks.graph ? <MotionLaneHeads lanes={masks} /> : masks.rows.map((row) => (
+                              <MaskHead key={row.prop} layer={layer} lanes={masks} param={maskParamOf(row.prop)} mask={mk} t={t} />
+                            ))}
+                          </div>
+                          <div className="relative" style={{ width: timeW }}><MotionLaneRows lanes={masks} top={0} pxPerMs={pxPerMs} /></div>
+                        </div>
+                      ) : null}
+                    </>
+                  );
+                })() : null}
               </div>
             );
           })}
@@ -451,6 +512,82 @@ export function MotionTimeline(p: MotionTimelineProps) {
         <input type="range" aria-label={t('canvas.motionZoom')} min={0} max={100} value={Math.round((Math.log(zoom) / Math.log(40)) * 100)}
           onChange={(e) => setZoom(40 ** (Number(e.target.value) / 100))} className="w-[160px]" data-motion-zoom="" />
       </div>
+    </div>
+  );
+}
+
+/**
+ * A mask's numbers as keyframe rows (components/MotionLanes): the layer's rows' time and playhead, its own keyframes;
+ * one set, moved in the graph or eased there changes the mask's.
+ */
+function maskLanes(all: MotionLanes, mk: LayerMask): MotionLanes {
+  const params = maskParamsOf(mk.shape!);
+  const keysOf = (prop: string) => mk.keys[maskParamOf(prop)] ?? [];
+  const write = (prop: string, keys: MaskKeys[MaskParam]) => {
+    const next = { ...mk.keys };
+    if (keys?.length) next[maskParamOf(prop)] = keys; else delete next[maskParamOf(prop)];
+    mk.commit({ keys: next });
+  };
+  return {
+    ...all,
+    rows: params.map((p) => ({ prop: maskRow(p), label: p, keys: mk.keys[p] ?? [] })),
+    picked: new Set(),
+    onPick: () => {},
+    onMove: () => {},
+    onMenu: () => {},
+    onToggleHere: (prop) => mk.commit(mk.model?.toggleHere(maskParamOf(prop)) ?? null),
+    onCurve: (prop, at, curve) => {
+      const ease = easeOfBezier(curve);
+      write(prop, keysOf(prop).map((k) => {
+        if (k.t !== at) return k;
+        const { ease: _was, ...rest } = k;
+        return ease ? { ...rest, ease } : rest;
+      }));
+    },
+    onKeyEdit: (prop, at, to) => write(prop, keysOf(prop).filter((k) => k.t === at || Math.abs(k.t - to.t) >= all.frameMs / 2000)
+      .map((k) => (k.t === at ? { ...k, t: to.t, v: to.v } : k)).sort((a, b) => a.t - b.t)),
+  };
+}
+
+/** A mask's number as a row in the layer's head: navigator, stopwatch, name, its value (a pair for position and size). */
+function MaskHead({ layer, lanes, param, mask, t }: { layer: Layer; lanes: MotionLanes; param: MaskParam; mask: LayerMask; t: (key: string) => string }) {
+  const model = mask.model!;
+  const keys = mask.keys[param] ?? [];
+  const local = (lanes.playheadMs - lanes.startMs) / 1000;
+  const frame = lanes.frameMs / 1000;
+  const inClip = lanes.playheadMs >= lanes.startMs && lanes.playheadMs <= lanes.endMs;
+  const here = inClip && keys.some((k) => Math.abs(k.t - local) < frame / 2);
+  const prev = [...keys].reverse().find((k) => k.t < local - frame / 2);
+  const next = keys.find((k) => k.t > local + frame / 2);
+  const nav = 'grid h-[16px] w-[14px] place-items-center rounded-[2px] text-[var(--text-faint)] hover:bg-white/10 hover:text-[var(--text)] disabled:opacity-30';
+  const value = model.now(param);
+  const set = (v: number | [number, number]) => mask.commit(model.set(param, v));
+  return (
+    <div className="flex items-center text-[11.5px]" style={{ height: LANE_H }} data-mask-row={`${layer.clipId}:${param}`}>
+      <span className="flex shrink-0 items-center justify-center" style={{ width: AV_W }}>
+        {keys.length ? (
+          <>
+            <button type="button" aria-label={t('inspector.keyPrev')} disabled={!prev} className={nav} onClick={() => prev && lanes.onSeek(lanes.startMs + prev.t * 1000)}><ChevronLeft size={10} /></button>
+            <button type="button" aria-label={t(here ? 'inspector.keyRemove' : 'inspector.keyAdd')} disabled={!inClip} className={nav} onClick={() => mask.commit(model.toggleHere(param))}>
+              <svg width="8" height="8" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1 11 6 6 11 1 6Z" fill={here ? 'var(--tl-accent)' : 'none'} stroke={here ? 'var(--tl-accent)' : 'currentColor'} strokeWidth="1.5" /></svg>
+            </button>
+            <button type="button" aria-label={t('inspector.keyNext')} disabled={!next} className={nav} onClick={() => next && lanes.onSeek(lanes.startMs + next.t * 1000)}><ChevronRight size={10} /></button>
+          </>
+        ) : null}
+      </span>
+      <span style={{ width: 34 }} />
+      <Stopwatch on={keys.length > 0} label={t(keys.length ? 'inspector.stopwatchOff' : 'inspector.stopwatchOn')} disabled={!keys.length && !inClip}
+        onClick={() => mask.commit(model.stopwatch(param))} />
+      <span className="ml-1 w-[64px] shrink-0 truncate text-[var(--text-muted)]">{t(MASK_LABEL[param])}</span>
+      <span className="flex min-w-0 items-center gap-2">
+        {Array.isArray(value) ? (
+          <>
+            <Scrub label="X" value={value[0]} unit="%" step={0.2} onCommit={(n) => set([n, value[1]])} />
+            <span className="text-[var(--text-faint)]">,</span>
+            <Scrub label="Y" value={value[1]} unit="%" step={0.2} onCommit={(n) => set([value[0], n])} />
+          </>
+        ) : <Scrub label={t(MASK_LABEL[param])} value={value} unit={param === 'rotate' ? '°' : '%'} step={0.2} onCommit={(n) => set(param === 'rotate' ? n : Math.max(0, n))} />}
+      </span>
     </div>
   );
 }

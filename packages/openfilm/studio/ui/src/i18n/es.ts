@@ -1453,6 +1453,8 @@ export const es: Words = {
     fxGroup: 'Efectos',
     fxAdd: 'Añadir efecto…',
     fxRemove: 'Quitar el efecto',
+    maskSize: 'Tamaño',
+    maskRadius: 'Esquinas',
     fx: {
       blur: 'Desenfoque gaussiano',
       brightness: 'Brillo',

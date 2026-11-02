@@ -1453,6 +1453,8 @@ export const ja: Words = {
     fxGroup: 'エフェクト',
     fxAdd: 'エフェクトを追加…',
     fxRemove: 'エフェクトを削除',
+    maskSize: 'サイズ',
+    maskRadius: '角の丸み',
     fx: {
       blur: 'ブラー（ガウス）',
       brightness: '明るさ',
