@@ -280,7 +280,11 @@ test('an editor\'s preview is up without opening a page whose time is its length
     const preview = await browser.newPage();
     await preview.goto(`${site.url}/film.html?film-missing=skip`);
     await preview.waitForFunction(() => Boolean(window.film));
-    await preview.evaluate(() => { window.learned = 0; window.__filmEditor.learned = () => { window.learned += 1; }; return window.film.ready; });
+    await preview.evaluate(() => {
+      window.learned = 0; window.__filmEditor.learned = () => { window.learned += 1; };
+      window.appeared = 0; window.__filmEditor.appeared = () => { window.appeared += 1; };
+      return window.film.ready;
+    });
     /* `a` has no time: opened for its length. `b`'s time is its length: its place known, the page not opened */
     assert.deepEqual(await opened(preview), [true, false]);
     assert.equal(await preview.evaluate(() => window.film.duration), 5);
@@ -292,6 +296,10 @@ test('an editor\'s preview is up without opening a page whose time is its length
       [['a', 0, 2, 2, 320, 180, false], ['b', 2, 5, 3, 320, 180, false]], 'opened: its own length and size');
     assert.equal(await preview.evaluate(() => window.learned), 1, 'the editor told once');
     assert.equal(await preview.evaluate(() => document.querySelectorAll('iframe')[1].style.visibility), 'visible');
+    /* shown once drawn, and the editor told then too (its Layers panel lists the page only from now on) */
+    assert.equal(await preview.evaluate(() => window.appeared), 1, 'the editor told of the page shown');
+    await preview.evaluate(() => window.__filmEditor.watch(4));
+    assert.equal(await preview.evaluate(() => window.appeared), 1, 'a page already shown is not told again');
   } finally {
     await browser.close();
     await site.close();
