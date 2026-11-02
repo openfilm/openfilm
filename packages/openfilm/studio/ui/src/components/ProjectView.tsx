@@ -1013,7 +1013,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const motion = motionOfBlock(block);
     const clipStyle = (film.film?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === block.clipId) as { style?: string } | undefined)?.style;
     const fx = effectsOf(clipStyle);
-    const rows = [...MOTION_PROPS, ...fx.on].map((p) => ({ prop: p, label: keyedLabel(p), keys: motion[p] ?? [] }));
+    const threeD = /--fx-(z|rx|ry)\b/.test(clipStyle ?? '') || (['z', 'rx', 'ry'] as const).some((p) => motion[p]?.length);
+    const rows = [...MOTION_PROPS, ...fx.on, ...(threeD ? (['z', 'rx', 'ry'] as const) : [])].map((p) => ({ prop: p, label: keyedLabel(p), keys: motion[p] ?? [] }));
     const startMs = block.startMs;
     const rewrite = (next: Motion, picked?: ReadonlySet<string>) => {
       if (!block.loc) return;
@@ -1126,10 +1127,40 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       setInvert: (on) => { if (maskNow) writeMask({ ...maskNow, invert: on }, maskKeys); },
       commit: (c) => { if (c && maskNow) writeMask(c.base ?? maskNow, c.keys); },
     };
+    /* in 3D (SPEC §1): its depth and its turn about X and Y, kept in its style, keyed as its effects are */
+    const THREE = ['z', 'rx', 'ry'] as const;
+    const threeOn = /--fx-(z|rx|ry)\b/.test(css) || THREE.some((p) => motion[p]?.length);
+    const threeValues = Object.fromEntries(THREE.flatMap((p) => {
+      const n = Number.parseFloat(declared(css, `--fx-${p}`) ?? '');
+      return Number.isFinite(n) ? [[p, n]] : [];
+    }));
+    const writeThree = (decl: Record<string, string | null>, next: Motion) => {
+      if (!layer.loc) return;
+      void editBlocks([
+        { loc: layer.loc, prop: 'style', value: withDeclarations(css, decl) || null },
+        { loc: layer.loc, prop: 'motion', value: Object.keys(next).length ? (next as unknown as Record<string, unknown>) : null },
+      ]).then((err) => { if (err) toast.showError(err); });
+    };
+    const three = {
+      on: threeOn,
+      model: effectsModel(motion, threeOn ? [...THREE] : [], threeValues, Math.min(Math.max(local, 0), length), local >= 0 && local <= length, keyFrameS),
+      commit: (c: EffectsChange | null) => {
+        if (!c) return;
+        const decl: Record<string, string | null> = {};
+        if (c.fx) for (const p of THREE) decl[`--fx-${p}`] = c.motion[p]?.length || c.fx.values[p] == null ? null : `${c.fx.values[p]}${EFFECTS[p].unit}`;
+        writeThree(decl, c.motion);
+      },
+      toggle: (on: boolean) => {
+        const next = { ...motion };
+        if (!on) for (const p of THREE) delete next[p];
+        writeThree(Object.fromEntries(THREE.map((p) => [`--fx-${p}`, on ? `0${EFFECTS[p].unit}` : null])), next);
+      },
+    };
     return {
       model,
       effects,
       mask,
+      three,
       commitEffects: (c: EffectsChange | null) => {
         if (!c || !layer.loc) return;
         void editBlocks([

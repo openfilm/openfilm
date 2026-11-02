@@ -11,7 +11,7 @@
  * The work area (the film's marked range) is the bar over the ruler; the slider under the layers zooms the time.
  */
 import * as React from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, X } from 'lucide-react';
+import { Box, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, X } from 'lucide-react';
 import { EFFECTS, EFFECT_PROPS, MOTION_PROPS, type EffectProp, type KeyedProp, type MotionProp } from '../../../../src/clip-motion.mjs';
 import type { effectsModel, EffectsChange } from '@/lib/motion-keys';
 import { easeOfBezier } from '@/lib/motion-keys';
@@ -56,6 +56,8 @@ export interface LayerHost {
   mask?: LayerMask | null;
   /** Its words animated part by part (a text element's; null: one Studio did not write, shown as such). */
   text?: { anim: TextAnim | null | undefined; set: (anim: TextAnim | null) => void };
+  /** In 3D (a clip's): on or not, its depth and X and Y turns (an effect's numbers), switched. */
+  three?: { on: boolean; model: ReturnType<typeof effectsModel>; commit: (c: EffectsChange | null) => void; toggle: (on: boolean) => void };
   /** Its stroke drawn on (a shape's): on or not, how much is drawn (an effect's numbers, `trim`), turned on. */
   stroke?: { on: boolean; model: ReturnType<typeof effectsModel>; commit: (c: EffectsChange | null) => void; turnOn: () => void };
 }
@@ -110,7 +112,10 @@ const ALL: readonly Shown[] = [...MOTION_PROPS, 'fx'];
 const isTransform = (p: KeyedProp) => (MOTION_PROPS as readonly string[]).includes(p);
 const PROP_LABEL: Record<MotionProp, string> = { translate: 'inspector.keyPosition', scale: 'inspector.keyScale', rotate: 'inspector.keyRotate', opacity: 'inspector.keyOpacity' };
 /** An effect's value: its step when dragged, its digits. */
-const FX_STEP: Record<EffectProp, number> = { blur: 0.1, brightness: 0.5, contrast: 0.5, saturate: 0.5, hue: 0.5, grayscale: 0.5, glow: 0.1, trim: 0.5 };
+const FX_STEP: Record<EffectProp, number> = { blur: 0.1, brightness: 0.5, contrast: 0.5, saturate: 0.5, hue: 0.5, grayscale: 0.5, glow: 0.1, trim: 0.5, z: 1, rx: 0.5, ry: 0.5 };
+/** A 3D layer's numbers, shown with its Transform's: depth after position, its X and Y turns after rotation. */
+const THREE_AFTER: Record<string, readonly KeyedProp[]> = { translate: ['z'], rotate: ['rx', 'ry'] };
+const isThree = (p: string) => p === 'z' || p === 'rx' || p === 'ry';
 /** A mask's parameters its shape has, and their names. */
 const maskParamsOf = (shape: MaskShape): MaskParam[] => {
   const f = MASK_FIELDS[shape];
@@ -349,11 +354,17 @@ export function MotionTimeline(p: MotionTimelineProps) {
           {layers.map((layer, i) => {
             const props = shown.get(layer.clipId);
             const all = props ? lanesOf(layer) : null;
-            const lanes = all && props ? { ...all, rows: all.rows.filter((r) => isTransform(r.prop) && props.includes(r.prop)) } : null;
+            /* its Transform, a 3D layer's depth and turns each after the property it goes with */
+            const order: KeyedProp[] = MOTION_PROPS.flatMap((p) => [p, ...(THREE_AFTER[p] ?? [])]);
+            const lanes = all && props ? {
+              ...all,
+              rows: all.rows.filter((r) => (isTransform(r.prop) && props.includes(r.prop)) || (isThree(r.prop) && Object.entries(THREE_AFTER).some(([base, xs]) => xs.includes(r.prop) && props.includes(base as Shown))))
+                .sort((a, b) => order.indexOf(a.prop) - order.indexOf(b.prop)),
+            } : null;
             /* its Effects group: all of them, or those asked for by name (U) */
             const fxShown = Boolean(props && (props.includes('fx') || props.some((x) => x !== 'fx' && !isTransform(x))));
             const fxLanes = all && props && fxShown
-              ? { ...all, rows: all.rows.filter((r) => !isTransform(r.prop) && r.prop !== 'trim' && !r.prop.startsWith('mask-') && (props.includes('fx') || props.includes(r.prop))) }
+              ? { ...all, rows: all.rows.filter((r) => !isTransform(r.prop) && Boolean(EFFECTS[r.prop as EffectProp]?.filter) && (props.includes('fx') || props.includes(r.prop))) }
               : null;
             const on = picked.includes(layer.clipId);
             const host = hostOf(layer);
@@ -387,6 +398,13 @@ export function MotionTimeline(p: MotionTimelineProps) {
                       style={{ paddingLeft: 4 + (layer.depth ?? 0) * 12 }}
                       onDoubleClick={() => p.onOpen?.(layer)}>{layer.title || layer.clipId}</span>
                     {moving ? <svg className="mr-1 shrink-0" width="7" height="7" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1 11 6 6 11 1 6Z" fill="var(--tl-accent)" /></svg> : null}
+                    {host.three ? (
+                      <button type="button" aria-label={t('canvas.threeD')} title={t('canvas.threeD')} aria-pressed={host.three.on} data-layer-3d={layer.clipId}
+                        onPointerDown={(e) => e.stopPropagation()} onClick={() => host.three?.toggle(!host.three.on)}
+                        className={`mr-1 grid h-[18px] w-[20px] shrink-0 place-items-center rounded-[3px] hover:bg-white/10 ${host.three.on ? 'text-[var(--tl-accent)]' : 'text-[var(--text-faint)]'}`}>
+                        <Box size={12} />
+                      </button>
+                    ) : null}
                     <select aria-label={t('canvas.motionMode')} value={host.blend} data-layer-mode={layer.clipId}
                       onPointerDown={(e) => e.stopPropagation()} onChange={(e) => host.setBlend(e.target.value)}
                       className="mr-1 h-[18px] shrink-0 rounded-[3px] border border-[var(--dock-line)] bg-transparent px-1 text-[11px] text-[var(--text-muted)]" style={{ width: MODE_W - 6 }}>
@@ -428,9 +446,9 @@ export function MotionTimeline(p: MotionTimelineProps) {
                     {lanes.rows.length ? (
                       <div className="flex" style={{ height: lanesHeight(lanes) }}>
                         <div className={`${head} border-r border-[var(--dock-line)]`} style={{ width: headW, paddingTop: LANE_PAD / 2 }}>
-                          {lanes.graph ? <MotionLaneHeads lanes={lanes} /> : lanes.rows.map((row) => (
-                            <PropertyHead key={row.prop} layer={layer} lanes={lanes} prop={row.prop as MotionProp} host={host} t={t} />
-                          ))}
+                          {lanes.graph ? <MotionLaneHeads lanes={lanes} /> : lanes.rows.map((row) => (isThree(row.prop) && host.three
+                            ? <EffectHead key={row.prop} layer={layer} lanes={lanes} fx={row.prop as EffectProp} host={{ ...host, effects: host.three.model, commitEffects: host.three.commit }} t={t} />
+                            : <PropertyHead key={row.prop} layer={layer} lanes={lanes} prop={row.prop as MotionProp} host={host} t={t} />))}
                         </div>
                         <div className="relative" style={{ width: timeW }}><MotionLaneRows lanes={lanes} top={0} pxPerMs={pxPerMs} /></div>
                       </div>
@@ -712,11 +730,11 @@ function EffectHead({ layer, lanes, fx, host, t }: { layer: Layer; lanes: Motion
       <span className="ml-1 w-[64px] shrink-0 truncate text-[var(--text-muted)]">{t(`canvas.fx.${fx}`)}</span>
       <Scrub label={t(`canvas.fx.${fx}`)} value={model.now(fx)} unit={unit} step={FX_STEP[fx]}
         onCommit={(n) => host.commitEffects(model.set(fx, EFFECTS[fx].unit === 'deg' ? n : fx === 'trim' ? Math.min(100, Math.max(0, n)) : Math.max(0, n)))} />
-      <button type="button" aria-label={t('canvas.fxRemove')} title={t('canvas.fxRemove')} data-effect-remove={`${layer.clipId}:${fx}`}
+      {isThree(fx) ? null : <button type="button" aria-label={t('canvas.fxRemove')} title={t('canvas.fxRemove')} data-effect-remove={`${layer.clipId}:${fx}`}
         onClick={() => host.commitEffects(model.remove(fx))}
         className="ml-2 grid h-[16px] w-[16px] place-items-center rounded-[3px] text-[var(--text-faint)] opacity-0 hover:bg-white/10 hover:text-[var(--text)] group-hover/fx:opacity-100">
         <X size={11} />
-      </button>
+      </button>}
     </div>
   );
 }

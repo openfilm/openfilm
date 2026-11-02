@@ -106,6 +106,36 @@ test('an element\'s words animate part by part: each word its turn, the film\'s 
   }
 });
 
+test('a picture in 3D turns about its middle under the film\'s camera; a flat film has neither', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-3d-'));
+  writeFileSync(join(dir, 'title.html'), page('title', 4));
+  writeFileSync(join(dir, 'film.html'), filmHtml({
+    stage: { w: 320, h: 180 },
+    tracks: [
+      { clips: [{ id: 't', src: 'title.html', style: 'animation: t--ry 2s linear both' }] },
+      { clips: [{ id: 'flat', src: 'title.html' }] },
+    ],
+    keyframes: { 't--ry': '0% { --fx-ry: 0deg } 100% { --fx-ry: 60deg }' },
+  }));
+  const s = await open(dir);
+  const look = () => s.film.page.evaluate(() => ({
+    turned: getComputedStyle(document.querySelector('#t')).transform,
+    flat: document.querySelector('#flat').style.transform,
+    camera: document.body.style.perspective,
+  }));
+  try {
+    await s.film.seek(1);
+    const at = await look();
+    assert.match(at.turned, /^matrix3d\(/, '30° about Y: a 3D matrix');
+    /* cos 30° on the X axis's first term */
+    assert.ok(Math.abs(Number(at.turned.slice(9).split(',')[0]) - Math.cos(Math.PI / 6)) < 0.01, at.turned);
+    assert.doesNotMatch(at.flat, /translateZ/, 'a flat clip is placed flat');
+    assert.equal(at.camera, '444.44px');
+  } finally {
+    await s.close();
+  }
+});
+
 /** `seconds` of silence as a WAV (8 kHz, mono, 16 bit): a sound file the browser reads without a codec. */
 function silence(seconds) {
   const data = Math.round(8000 * seconds) * 2;

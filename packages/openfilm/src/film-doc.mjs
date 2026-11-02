@@ -303,6 +303,11 @@ export const EFFECTS = Object.freeze({
   glow: { unit: 'px', rest: 0, syntax: '<length>', filter: 'drop-shadow(0 0 var(--fx-glow, 0px) rgb(255 255 255 / 0.85))' },
   /* how much of a shape's stroke is drawn (0–100): its dash as long as its path, offset by what is not (no filter) */
   trim: { unit: '', rest: 100, syntax: '<number>', filter: null },
+  /* a picture in 3D (a host turns it so about its middle, under a camera shared by the film): its depth, toward the
+     viewer, and its turn about its X and Y axes */
+  z: { unit: 'px', rest: 0, syntax: '<length>', filter: null },
+  rx: { unit: 'deg', rest: 0, syntax: '<angle>', filter: null },
+  ry: { unit: 'deg', rest: 0, syntax: '<angle>', filter: null },
 });
 
 /** The effects' custom properties registered in a window (the film's, a page's), so their keyframes ease. */
