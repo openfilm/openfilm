@@ -13,8 +13,9 @@ import { settleFiles } from './person-edits.mjs';
 import { FILM_FILE } from '../../src/film-doc.mjs';
 import { projectMissing } from './project-presence.mjs';
 
-/* a dot folder is a tool's (Studio's own .film, .git…), and what builds and packages make is not the film */
-const IGNORED = /^(\.[^/\\]+|node_modules|dist|build)([/\\]|$)/;
+/* a dot folder is a tool's (Studio's own .film, .git…, a compound clip's film's own too, in parts/), and what builds
+   and packages make is not the film */
+const IGNORED = /(^|[/\\])(\.[^/\\]+|node_modules|dist|build)([/\\]|$)/;
 /** How long changes are gathered before one event: an agent writes a file in several chunks, and often several files. */
 const SETTLE_MS = 120;
 /** How long missing project files are rechecked before their pages are told (the project gone, or its film.html). */

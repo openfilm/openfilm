@@ -26,6 +26,7 @@ import { writeAtomic } from './atomic.mjs';
 import { coverAt } from './cover.mjs';
 import { libraryProjects, libraryRoot } from '../../src/locations.mjs';
 import { projectMissing } from './project-presence.mjs';
+import { compoundOuter } from './parts.mjs';
 
 export const TOOL_DIR = '.film';
 
@@ -253,8 +254,9 @@ export async function listProjects() {
     const state = await readState();
     if (await followLibrary(state)) await writeState(state);
     const folders = new Set(state.folders.map((f) => f.id));
-    /* a project in a folder that was deleted is back at the top level */
-    return state.recent.map((r) => describe(r.folderId && !folders.has(r.folderId) ? { ...r, folderId: undefined } : r));
+    /* a project in a folder that was deleted is back at the top level; a compound clip's film is reached through
+       its project, not listed (parts.mjs) */
+    return state.recent.filter((r) => compoundOuter(r.path) === resolve(r.path)).map((r) => describe(r.folderId && !folders.has(r.folderId) ? { ...r, folderId: undefined } : r));
   });
 }
 

@@ -1299,6 +1299,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       return e instanceof Error ? e.message : String(e);
     }
   }, [edit, projectId]);
+  /* a compound clip double-clicked: its film opened as a project of its own, which leads back here */
+  const enterCompound = React.useCallback((block: TimelineBlock) => {
+    const folder = compoundFolder(block.src);
+    if (!folder) return;
+    void api.openPartFilm(projectId, folder).then(({ project }) => onProject(project.id), (e) => toast.showError(e instanceof Error ? e.message : String(e)));
+  }, [projectId, onProject, toast]);
   const [clipboard, setClipboard] = React.useState<readonly TimelineClipboardItem[]>([]);
   /* layers copied (lib/layer-clipboard): kept in the browser, so another window or project pastes them too; the
      timeline's clipboard and this one are emptied by a copy to the other, so a paste pastes what was copied last */
@@ -4015,6 +4021,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     onDetachAudio={detachAudio}
                     onCompound={(blocks) => { void makeCompound(blocks).then((err) => { if (err) toast.showError(err); }); }}
                     onUncompound={(block) => { void breakCompound(block).then((err) => { if (err) toast.showError(err); }); }}
+                    onEnterCompound={enterCompound}
+                    crumb={loaded?.outer ? { outer: loaded.outer.name, name: loaded.outer.folder, onBack: () => onProject(loaded.outer!.id) } : null}
                     onEditBlocks={editBlocks}
                     onEditOps={editOps}
                     links={clipLinks}

@@ -5,7 +5,7 @@
  */
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { FILM_FILE, filmHtml, readFilm, readFilmFile } from '../../src/film-doc.mjs';
 import { PARTS, srcInto } from './compound.mjs';
 
@@ -44,6 +44,17 @@ export async function writePartFilm(root, name, film) {
   await mkdir(join(root, folder), { recursive: true });
   await writeFile(join(root, folder, FILM_FILE), text, { flag: 'wx' });
   return folder;
+}
+
+/**
+ * The project a folder is the compound clip of (its film in `<project>/parts/<name>`), out to the outermost; the folder
+ * itself when it is none's. Its films name their files from there (`../../assets/a.mp4`), so they are served from it.
+ * @param {string} folder
+ */
+export function compoundOuter(folder) {
+  let at = resolve(folder);
+  while (basename(dirname(at)) === PARTS && existsSync(join(dirname(dirname(at)), FILM_FILE))) at = dirname(dirname(at));
+  return at;
 }
 
 /** A compound clip's film, as it says (`folder`: under parts/, within the project). @param {string} root @param {string} folder */

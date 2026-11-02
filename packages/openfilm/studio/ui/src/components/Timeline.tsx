@@ -45,6 +45,7 @@ import {
   VolumeX,
   Waves,
   Layers,
+  ChevronLeft,
   Link2,
   Link2Off,
   Mic,
@@ -202,6 +203,9 @@ const H_SCROLL_H = 10;
 const RULER_H = 20;
 /** The markers' row under the ruler (only while there are markers). */
 const MARKER_ROW_H = 16;
+
+/** A compound clip's film (studio/server/compound.mjs): `parts/<name>/film.html`. */
+const COMPOUND_SRC = /^parts\/[^/]+\/film\.html$/;
 
 /** A marker's line through the timeline: where, in its color; `held` while it is dragged (else hovered, fainter). */
 export interface MarkerGuide { ms: number; color: string; held: boolean }
@@ -630,6 +634,10 @@ export interface TimelineProps {
   /** The picked clips made one compound clip; a compound clip taken apart (studio/server/compound.mjs). */
   onCompound?: (blocks: readonly TimelineBlock[]) => void;
   onUncompound?: (block: TimelineBlock) => void;
+  /** A compound clip double-clicked: its film opened to edit. */
+  onEnterCompound?: (block: TimelineBlock) => void;
+  /** Editing a compound clip's film: the way back to the film it is in, said on the toolbar. */
+  crumb?: { outer: string; name: string; onBack: () => void } | null;
   /**
    * Thumbnails: key (`mtime:clipId@intoMs#v`, see thumb-frame) → image address. Shot outside; keyed by the
    * clip's own millisecond, not film time, so moving a clip does not change its pictures.
@@ -973,6 +981,8 @@ export const Timeline = React.memo(function Timeline({
   onDetachAudio,
   onCompound,
   onUncompound,
+  onEnterCompound,
+  crumb,
   onCopy,
   onPaste,
   onExportBlock,
@@ -3183,6 +3193,12 @@ export const Timeline = React.memo(function Timeline({
                   cursor: mode === 'split' ? undefined : floating ? 'grabbing' : 'pointer',
                 }}
                 title={trouble ? `${blockTitleOf(block)}\n${t(trouble === 'length' ? 'timeline.noLengthHint' : trouble === 'missing' ? 'timeline.mediaMissingHint' : trouble === 'decode' ? 'timeline.mediaCannotPlay' : 'timeline.mediaReconnecting')}` : blockTitleOf(block)}
+                onDoubleClick={(e) => {
+                  /* a compound clip opens: its own film, edited as any (a breadcrumb leads back) */
+                  if (!onEnterCompound || mode === 'split' || !COMPOUND_SRC.test((block.src ?? '').replace(/#.*$/, ''))) return;
+                  e.stopPropagation();
+                  onEnterCompound(block);
+                }}
                 onPointerDown={(e) => {
                   /* a click selects and does not move the playhead (only empty space seeks); stop it reaching the
                      empty-space handler, which would seek and clear the selection */
@@ -3519,7 +3535,7 @@ export const Timeline = React.memo(function Timeline({
     openBlockMenu, openLaneMenu, onEditBlocks, collapseIfClick, selectOne, setSelected, clipElements, thumbWindow, view.width,
     chatClip, chatDraft, placedOf, pickForTrim, gap, withLinked, runSplit, trackOverlay,
     fadeOfBlock, fadeDrag, startFade, volumeDrag, startVolume, transitions, transitionDrag, pickedTransition, onPickTransition, onTransition, startTransitionResize,
-    nearFirst, nearLast, speedOn, hoveredBlock, motionLanes,
+    nearFirst, nearLast, speedOn, hoveredBlock, motionLanes, onEnterCompound,
   ]);
 
   const tickMarks = React.useMemo(() => ticks.map(({ ms, label }) => {
@@ -3850,7 +3866,7 @@ export const Timeline = React.memo(function Timeline({
         disabled: pickedLocked, hint: t('timeline.trackLocked'), onSelect: () => { onCompound(placed); },
       });
     }
-    if (one && onUncompound && /^parts\/[^/]+\/film\.html$/.test((one.src ?? '').replace(/#.*$/, ''))) {
+    if (one && onUncompound && COMPOUND_SRC.test((one.src ?? '').replace(/#.*$/, ''))) {
       out.push({
         id: 'uncompound', label: t('timeline.menuUncompound'), icon: <Layers size={14} />, shortcut: keyHint('uncompound'),
         disabled: pickedLocked, hint: t('timeline.trackLocked'), onSelect: () => { onUncompound(one); },
@@ -4058,6 +4074,15 @@ export const Timeline = React.memo(function Timeline({
 
         {/* the middle is for status: "Editing source…" and errors (not among the tools, where it would look like one) */}
         <div className="flex min-w-0 flex-1 items-center justify-center">
+          {crumb && !(dropBusy || drag.saving || dropError || drag.error || notice) ? (
+            <button type="button" data-compound-back="" onClick={crumb.onBack} title={crumb.outer}
+              className="flex max-w-[min(360px,100%)] items-center gap-1 truncate rounded-[4px] px-1.5 py-0.5 text-[12px] font-medium text-[var(--text)] hover:bg-black/5 dark:hover:bg-white/10">
+              <ChevronLeft size={14} className="shrink-0" aria-hidden />
+              <span className="truncate text-[var(--text-muted)]">{crumb.outer}</span>
+              <span className="text-[var(--text-faint)]">/</span>
+              <span className="truncate">{crumb.name}</span>
+            </button>
+          ) : null}
           {dropBusy || drag.saving ? (
             <span className="text-[11px]" style={{ color: TL.faint }}>{t('timeline.applying')}</span>
           ) : dropError || drag.error ? (

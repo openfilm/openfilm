@@ -28,7 +28,8 @@ export type Track = { clips: Clip[]; locked?: boolean; hidden?: boolean; muted?:
 export type Film = { stage?: { w: number; h: number }; tracks: Track[]; keyframes?: Record<string, string> };
 /** `value`: film.html as read, every clip named (a clip with no id takes its file's name, as the server and preview do). */
 /** `filmMissing`: the folder is there but film.html is not (read as an empty film; see FolderEvent `film-missing`). */
-export type ProjectFilm = { project: Project; folder: string; text: string; rev: string; value: Film | null; doc: Film | null; problems: string[]; filmMissing?: boolean };
+/** `outer`: a compound clip's film is in that project (studio/server/parts.mjs), `folder` its own folder's name. */
+export type ProjectFilm = { project: Project; folder: string; text: string; rev: string; value: Film | null; doc: Film | null; problems: string[]; filmMissing?: boolean; outer?: { id: string; name: string; folder: string } };
 export type MediaFile = { path: string; kind: 'video' | 'image' | 'audio' | 'page' | 'other'; size: number; mtime: number; added?: number };
 /** A project's editor settings (studio/server/project-settings.mjs). */
 export type ProjectSettings = { fps?: number; trackNames?: { name: string; index: number; clips: string[] }[]; trackHeights?: { height: number; index: number; clips: string[] }[] };
@@ -154,6 +155,8 @@ export const api = {
   /* `undo`: the edit puts back an earlier one (Studio keeps the person's edits over an agent's writes until then) */
   /** A compound clip's film written in a folder of its own under parts/ (studio/server/parts.mjs): that folder. */
   writePartFilm: (id: string, name: string, film: Film) => call<{ folder: string }>(`${p(id)}/films`, { method: 'POST', json: { name, film } }),
+  /** A compound clip's film opened to edit: a project of its own, served from this one's folder. */
+  openPartFilm: (id: string, folder: string) => call<{ project: Project }>(`${p(id)}/films/open`, { method: 'POST', json: { folder } }),
   /** A compound clip's film, as it says. */
   readPartFilm: (id: string, folder: string) => call<{ film: Film }>(`${p(id)}/films?folder=${encodeURIComponent(folder)}`),
   edit: (id: string, base: string | null, ops: Op[], undo = false) => call<{ text: string; rev: string; value: Film; doc: Film; rebased: boolean }>(`${p(id)}/edit`, { method: 'POST', json: { base, ops, ...(undo ? { undo: true } : {}) } }),

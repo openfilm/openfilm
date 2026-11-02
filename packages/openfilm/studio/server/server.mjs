@@ -14,7 +14,7 @@
  */
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { createReadStream, existsSync, mkdirSync, openSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { basename, extname, isAbsolute, join, normalize, resolve, sep } from 'node:path';
+import { basename, dirname, extname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:http';
 import { pipeline } from 'node:stream';
@@ -22,7 +22,8 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { EditError, editProjectFilm, pageClipLook, readProjectFilm, settleProjectFilm } from './film.mjs';
-import { readPartFilm, writePartFilm } from './parts.mjs';
+import { compoundOuter, readPartFilm, writePartFilm } from './parts.mjs';
+import { PARTS, srcInto } from './compound.mjs';
 import { readPage, writePage } from './page-text.mjs';
 import { FileError, bringIn, collect, extractAudio, freezeFrame, importFile, inside, listFiles, makeFolder, moveCheck, moveFile, readable, relink, trashFile } from './files.mjs';
 import { ExportError, createExports, draftApps, exportCapabilities, exportsRoot, projectSizes } from './exports.mjs';
@@ -663,7 +664,9 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         /* opened: its card in the projects list gets a picture before the list first shows it */
         if (film.doc?.tracks.some((t) => t.clips.length)) warmFilmPoster(project.path, pages.folderUrl(project));
         /* `filmMissing`: read as an empty film, and said to be missing (see watch.mjs `film-missing`) */
-        return json(res, 200, { project, folder: pages.folderUrl(project), ...film, ...(projectMissing(project.path) === 'film' ? { filmMissing: true } : {}) });
+        /* `outer`: a compound clip's film is in this project, which its editor goes back to (parts.mjs) */
+        const outer = await outerProject(project.path);
+        return json(res, 200, { project, folder: pages.folderUrl(project), ...film, ...(projectMissing(project.path) === 'film' ? { filmMissing: true } : {}), ...(outer ? { outer } : {}) });
       }
       if (req.method === 'PATCH') {
         const { name } = /** @type {{ name?: string }} */ (await readJson(req));
@@ -808,6 +811,12 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         throw new HttpError(422, e instanceof Error ? e.message : String(e));
       }
     }
+    /* a compound clip's film opened to edit: a project of its own, served from this one's folder (pages.mjs) */
+    if (rest === 'films/open' && req.method === 'POST') {
+      const { folder } = /** @type {{ folder?: string }} */ (await readJson(req));
+      try { await readPartFilm(project.path, String(folder ?? '')); } catch (e) { throw new HttpError(404, e instanceof Error ? e.message : String(e)); }
+      return json(res, 200, { project: await openProject(join(project.path, String(folder)), { create: false }) });
+    }
     if (rest === 'films' && req.method === 'GET') {
       try {
         return json(res, 200, { film: await readPartFilm(project.path, url.searchParams.get('folder') ?? '') });
@@ -874,7 +883,12 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     if (rest === 'files') {
       const at = url.searchParams.get('path') ?? '';
-      if (req.method === 'GET') return json(res, 200, await listFiles(project.path));
+      if (req.method === 'GET') {
+        /* a compound clip's film uses the media of the project it is in: that one's, named from its folder */
+        const outer = compoundOuter(project.path);
+        if (outer === resolve(project.path)) return json(res, 200, await listFiles(project.path));
+        return json(res, 200, filesFrom(await listFiles(outer), relative(outer, resolve(project.path)).split(sep).join('/')));
+      }
       /* the body is the file itself, streamed to disk: an import of any size */
       if (req.method === 'PUT') {
         const { path: landed } = await importFile(project.path, at, req);
@@ -1182,6 +1196,36 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
 
 /** Run from a checkout of the repository (the editor's source is beside its build), not from an installed package. */
 const FROM_SOURCE = existsSync(new URL('../ui/src', import.meta.url));
+
+/**
+ * A project's files as a compound clip's film in `folder` names them (`assets/a.mp4` → `../../assets/a.mp4`), the
+ * films of compound clips left out.
+ * @param {Awaited<ReturnType<typeof listFiles>>} listing @param {string} folder
+ */
+function filesFrom(listing, folder) {
+  const keep = (/** @type {string} */ path) => !path.startsWith(`${PARTS}/`);
+  const named = (/** @type {string} */ path) => srcInto(path, folder);
+  return {
+    ...listing,
+    files: listing.files.filter((f) => keep(f.path)).map((f) => ({ ...f, path: named(f.path) })),
+    pages: listing.pages.filter((p) => keep(p.path)).map((p) => ({ ...p, path: named(p.path) })),
+    folders: listing.folders.filter(keep).map(named),
+    made: listing.made.filter(keep).map(named),
+    ...(listing.links ? { links: Object.fromEntries(Object.entries(listing.links).filter(([path]) => keep(path)).map(([path, link]) => [named(path), link])) } : {}),
+  };
+}
+
+/**
+ * The project a compound clip's film (its folder `path`) is in, the one right around it: what its editor goes back
+ * to. Null for a project that is none's.
+ * @param {string} path
+ */
+async function outerProject(path) {
+  if (compoundOuter(path) === resolve(path)) return null;
+  const around = dirname(dirname(resolve(path)));
+  const found = await openProject(around, { create: false }).catch(() => null);
+  return found ? { id: found.id, name: found.name ?? basename(around), folder: basename(resolve(path)) } : null;
+}
 
 /**
  * `npx -y openfilm@<version> update` in the background (its words in logs/update.log), as the person would run it: the
