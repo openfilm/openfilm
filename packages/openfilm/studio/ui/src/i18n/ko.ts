@@ -1434,6 +1434,9 @@ export const ko: Words = {
   canvas: {
     title: '캔버스',
     toEdit: '편집으로 전환',
+    toMotion: '모션: 레이어와 키프레임 (애니메이션 편집기 방식)',
+    modes: '캔버스, 편집 또는 모션',
+    motionEmpty: '아직 애니메이션할 화면 클립이 없습니다',
     toCanvas: '캔버스로 전환',
     note: '메모',
     notePlaceholder: '메모를 쓰세요…',

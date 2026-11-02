@@ -1438,6 +1438,9 @@ export const en = {
   canvas: {
     title: 'Canvas',
     toEdit: 'Switch to the edit',
+    toMotion: 'Motion: layers and keyframes, as in an animation editor',
+    modes: 'Canvas, edit or motion',
+    motionEmpty: 'No picture clips to animate yet',
     toCanvas: 'Switch to the canvas',
     note: 'Note',
     notePlaceholder: 'Write a note…',

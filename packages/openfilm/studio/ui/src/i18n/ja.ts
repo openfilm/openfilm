@@ -1437,6 +1437,9 @@ export const ja: Words = {
   canvas: {
     title: 'キャンバス',
     toEdit: '編集に切り替え',
+    toMotion: 'モーション：レイヤーとキーフレーム（アニメーションエディタ式）',
+    modes: 'キャンバス・編集・モーション',
+    motionEmpty: 'アニメーションできる映像クリップがまだありません',
     toCanvas: 'キャンバスに切り替え',
     note: 'メモ',
     notePlaceholder: 'メモを書く…',

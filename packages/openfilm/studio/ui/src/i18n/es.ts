@@ -1437,6 +1437,9 @@ export const es: Words = {
   canvas: {
     title: 'Lienzo',
     toEdit: 'Cambiar a la edición',
+    toMotion: 'Movimiento: capas y fotogramas clave, como en un editor de animación',
+    modes: 'Lienzo, edición o movimiento',
+    motionEmpty: 'Aún no hay clips de imagen que animar',
     toCanvas: 'Cambiar al lienzo',
     note: 'Nota',
     notePlaceholder: 'Escribe una nota…',

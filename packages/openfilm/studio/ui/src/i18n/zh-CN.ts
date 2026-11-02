@@ -1438,6 +1438,9 @@ export const zhCN: Words = {
   canvas: {
     title: '画布',
     toEdit: '切换到剪辑',
+    toMotion: '动效：图层和关键帧（AE 式）',
+    modes: '画布、剪辑或动效',
+    motionEmpty: '还没有可以做动画的画面片段',
     toCanvas: '切换到画布',
     note: '便签',
     notePlaceholder: '写点什么…',
