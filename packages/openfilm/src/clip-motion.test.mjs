@@ -57,6 +57,8 @@ test('effects: each a custom property its filter reads, after the filter the cli
   assert.equal(style, 'object-fit: cover; --fx-blur: 4px; filter: url(#look) blur(var(--fx-blur, 0px)) drop-shadow(0 0 var(--fx-glow, 0px) rgb(255 255 255 / 0.85))');
   assert.deepEqual(effectsOf(style), { on: ['blur', 'glow'], values: { blur: 4 } });
   assert.equal(withEffects(style, [], {}), 'object-fit: cover; filter: url(#look)');
+  /* a stroke's trim is no filter: an effect written again leaves it */
+  assert.equal(withEffects('--fx-trim: 40; stroke-dasharray: 400px', ['blur'], {}), '--fx-trim: 40; stroke-dasharray: 400px; filter: blur(var(--fx-blur, 0px))');
   const written = writeMotion({ id: 'c', style }, { blur: [{ t: 0, v: 0 }, { t: 2, v: 12 }] });
   assert.equal(written.keyframes['c--blur'], '0% { --fx-blur: 0px } 100% { --fx-blur: 12px }');
   assert.deepEqual(readMotion({ id: 'c', style: written.style }, written.keyframes), { blur: [{ t: 0, v: 0 }, { t: 2, v: 12 }] });

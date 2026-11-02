@@ -46,6 +46,12 @@ export function writeElementMotion(
   if (stat?.r != null) { if (stat.r === 0) delete next.r; else next.r = stat.r; }
   if (stat?.opacity != null) { if (stat.opacity >= 1) delete next.style!.opacity; else next.style!.opacity = stat.opacity; }
   if (next.t && next.t[0] === 0 && next.t[1] === 0) delete next.t;
+  /* a tweak's style is applied with priority, over any animation: what moves has no static value of its own there */
+  for (const prop of Object.keys(motion) as (keyof Motion)[]) {
+    if (!motion[prop]?.length) continue;
+    if (prop === 'opacity') delete next.style!.opacity;
+    else if (prop !== 'translate' && prop !== 'scale' && prop !== 'rotate') delete next.style![`--fx-${prop}`];
+  }
   if (!Object.keys(next.style!).length) delete next.style;
   const keep = Object.keys(next).some((k) => k !== 'at' && k !== 'n');
   const overrides = entry

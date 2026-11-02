@@ -2699,7 +2699,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       overrides = (has ? overrides : [...overrides, { at, ...(n ? { n } : {}) }]).flatMap((o) => {
         if (!sameElement(o, at, n)) return [o];
         const css = { ...(o.style ?? {}) } as Record<string, string | number>;
-        for (const [k, v] of Object.entries(style)) { if (v == null) delete css[k]; else css[k] = v; }
+        /* what moves keeps no static value (a tweak's style is applied with priority, over its animation) */
+        const keyed = (k: string) => (k === 'opacity' ? Boolean(motion.opacity?.length) : k.startsWith('--fx-') && Boolean(motion[k.slice(5) as KeyedProp]?.length));
+        for (const [k, v] of Object.entries(style)) { if (v == null || keyed(k)) delete css[k]; else css[k] = v; }
         const next = { ...o, style: css };
         if (!Object.keys(css).length) delete (next as { style?: unknown }).style;
         return Object.keys(next).some((k) => k !== 'at' && k !== 'n') ? [next] : [];
@@ -2761,8 +2763,36 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       visible: !row?.hidden,
       setVisible: (show) => writeElement(layer.clipId, motion, undefined, { visibility: show ? null : 'hidden' }),
       ...(row?.kind === 'text' ? { text: { anim: textAnimOf(entry), set: (anim: TextAnim | null) => writeElement(layer.clipId, motion, undefined, undefined, splitFor(anim)) } } : {}),
+      ...(row?.kind === 'shape' ? { stroke: strokeOf(layer.clipId, row, css, motion, on) } : {}),
     };
   }, [rowOf, compClip, elementMotionOf, compBlock, compLocalMs, compOffset, keyFrameS, writeElement]); // eslint-disable-line react-hooks/exhaustive-deps
+  /*
+   * A shape's stroke drawn on (an animation editor's Trim Paths): its dash as long as its longest path (asked of the
+   * page once, as it is turned on), offset by what is not drawn of it, `--fx-trim` (0–100, keyed as an effect)
+   */
+  const strokeOf = (loc: string, row: LayerRow, css: Record<string, string | number>, motion: Motion, on: boolean) => {
+    const strokeOn = String(css.strokeDashoffset ?? '').includes('--fx-trim');
+    const trim = Number.parseFloat(String(css['--fx-trim'] ?? ''));
+    const model = effectsModel(motion, strokeOn ? ['trim'] : [], Number.isFinite(trim) ? { trim } : {}, compLocalMs / 1000 + compOffset, on, keyFrameS);
+    return {
+      on: strokeOn,
+      model,
+      commit: (c: EffectsChange | null) => {
+        if (!c) return;
+        const keep = c.fx ? c.fx.on.includes('trim') : strokeOn;
+        const value = c.fx?.values.trim;
+        writeElement(loc, c.motion, undefined, keep
+          ? (c.fx ? { '--fx-trim': value != null ? String(value) : null } : undefined)
+          : { strokeDasharray: null, strokeDashoffset: null, '--fx-trim': null });
+      },
+      turnOn: () => {
+        void askStage<number | null>('strokeLength', { handle: row.handle }).then((len) => {
+          if (!len) { toast.show(t('canvas.strokeNone')); return; }
+          writeElement(loc, motion, undefined, { strokeDasharray: `${len}px`, strokeDashoffset: `calc(${len}px * (1 - var(--fx-trim, 100) / 100))`, '--fx-trim': '100' });
+        });
+      },
+    };
+  };
   const elementLanesOf = React.useCallback((layer: Layer): MotionLanes => {
     const motion = elementMotionOf(layer.clipId);
     const id = layer.clipId;
@@ -2771,7 +2801,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const model = host.model;
     return {
       clipId: id, startMs: -compOffset * 1000, endMs: layer.endMs, playheadMs: compLocalMs, frameMs: 1000 * keyFrameS,
-      rows: [...MOTION_PROPS, ...(host.effects?.on ?? [])].map((prop) => ({ prop, label: keyedLabel(prop), keys: motion[prop] ?? [] })),
+      rows: [...MOTION_PROPS, ...(host.effects?.on ?? []), ...(host.stroke?.on ? ['trim' as const] : [])].map((prop) => ({ prop, label: keyedLabel(prop), keys: motion[prop] ?? [] })),
       picked,
       onPick: (ids, mode) => {
         setCompPicked([id]);
@@ -2785,6 +2815,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       },
       onMove: (dt) => { if (picked.size) writeElement(id, movedKeys(motion, picked, dt)); },
       onToggleHere: (prop) => {
+        if (prop === 'trim') { host.stroke?.commit(host.stroke.model.toggleHere('trim')); return; }
         if (prop in EFFECTS) { host.commitEffects(host.effects?.toggleHere(prop as EffectProp) ?? null); return; }
         const c = model?.toggleHere(prop as MotionProp) as ElementCommit | null;
         if (c) writeElement(id, c.motion, c.stat);

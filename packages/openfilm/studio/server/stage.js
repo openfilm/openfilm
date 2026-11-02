@@ -2029,6 +2029,17 @@
       return shown().map((c) => ({ clip: c.id, kind: c.kind, layers: c.kind === 'page' && c.win?.document?.body ? rowsOf(c) : [] }));
     },
     /**
+     * How long a shape layer's stroke is (its longest path, in its own units): what drawing it on runs along
+     * (the motion timeline's Trim). Null: no path in it.
+     */
+    strokeLength({ handle }) {
+      const el = nodeOf(handle);
+      if (!el) return null;
+      const shapes = [el, ...el.querySelectorAll('*')].filter((n) => typeof n.getTotalLength === 'function');
+      const lengths = shapes.map((n) => { try { return n.getTotalLength(); } catch { return 0; } }).filter((n) => n > 0);
+      return lengths.length ? Math.ceil(Math.max(...lengths)) : null;
+    },
+    /**
      * Restack siblings in the order a person put them in (the Layers panel): `order` the handles of the elements
      * under one parent, the top one first, `moved` the one that was moved. Only the moved one is given a z-index when
      * a z-index between its new neighbors puts it there; else all of them are numbered, bottom to top. Answers the

@@ -35,3 +35,9 @@ test('an element\'s numbers: its tweak while it does not move, its keyframes onc
   /* the stopwatch off: no keyframes, the value at the playhead its tweak */
   assert.deepEqual(moving.stopwatch('translate'), { motion: {}, stat: { t: [50, 0] } });
 });
+
+test('what moves keeps no static value in its tweak\'s style (applied with priority, over the animation)', () => {
+  const list = [{ at: 'svg', style: { '--fx-trim': '100', opacity: 0.5, strokeDasharray: '400px' } }];
+  const out = writeElementMotion(list, 'svg', undefined, 'd--e1', { trim: [{ t: 0, v: 0 }, { t: 2, v: 100 }], opacity: [{ t: 0, v: 1 }] });
+  assert.deepEqual(Object.keys(out.overrides[0]!.style!), ['strokeDasharray', 'animation']);
+});

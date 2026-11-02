@@ -113,6 +113,7 @@ export declare const EFFECTS: Readonly<{
   hue: { unit: 'deg'; rest: 0; syntax: '<angle>'; filter: string };
   grayscale: { unit: '%'; rest: 0; syntax: '<percentage>'; filter: string };
   glow: { unit: 'px'; rest: 0; syntax: '<length>'; filter: string };
+  trim: { unit: ''; rest: 100; syntax: '<number>'; filter: null };
 }>;
 /** The effects' custom properties registered in a window, so their keyframes ease. */
 export declare function registerEffects(win: unknown): void;

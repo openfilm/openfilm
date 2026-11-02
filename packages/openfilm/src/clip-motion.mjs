@@ -290,9 +290,11 @@ export function withEffects(style, on, values) {
   const parts = decls(style ?? '');
   const filter = parts.find(([p]) => p === 'filter')?.[1] ?? '';
   const others = filterParts(filter).filter((f) => !f.includes('var(--fx-'));
-  const ours = EFFECT_PROPS.filter((p) => on.includes(p));
+  const ours = EFFECT_PROPS.filter((p) => on.includes(p) && EFFECTS[p].filter);
   const nextFilter = [...others, ...ours.map((p) => EFFECTS[p].filter)].join(' ');
-  const kept = parts.filter(([p]) => p !== 'filter' && !p.startsWith('--fx-')).map(([p, v]) => `${p}: ${v}`);
+  /* the filter's effects' values are written again; another `--fx-…` (a stroke's trim) stays */
+  const filterFx = (/** @type {string} */ p) => p.startsWith('--fx-') && Boolean(EFFECTS[/** @type {EffectProp} */ (p.slice(5))]?.filter);
+  const kept = parts.filter(([p]) => p !== 'filter' && !filterFx(p)).map(([p, v]) => `${p}: ${v}`);
   for (const p of ours) if (values[p] != null) kept.push(`--fx-${p}: ${round(/** @type {number} */ (values[p]), 3)}${EFFECTS[p].unit}`);
   if (nextFilter) kept.push(`filter: ${nextFilter}`);
   return kept.join('; ');

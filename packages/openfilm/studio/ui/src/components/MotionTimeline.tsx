@@ -56,6 +56,8 @@ export interface LayerHost {
   mask?: LayerMask | null;
   /** Its words animated part by part (a text element's; null: one Studio did not write, shown as such). */
   text?: { anim: TextAnim | null | undefined; set: (anim: TextAnim | null) => void };
+  /** Its stroke drawn on (a shape's): on or not, how much is drawn (an effect's numbers, `trim`), turned on. */
+  stroke?: { on: boolean; model: ReturnType<typeof effectsModel>; commit: (c: EffectsChange | null) => void; turnOn: () => void };
 }
 
 /** A layer's mask in the Masks group: its shape (none: no mask), its keyframes (lib/mask-motion), what changes it. */
@@ -108,7 +110,7 @@ const ALL: readonly Shown[] = [...MOTION_PROPS, 'fx'];
 const isTransform = (p: KeyedProp) => (MOTION_PROPS as readonly string[]).includes(p);
 const PROP_LABEL: Record<MotionProp, string> = { translate: 'inspector.keyPosition', scale: 'inspector.keyScale', rotate: 'inspector.keyRotate', opacity: 'inspector.keyOpacity' };
 /** An effect's value: its step when dragged, its digits. */
-const FX_STEP: Record<EffectProp, number> = { blur: 0.1, brightness: 0.5, contrast: 0.5, saturate: 0.5, hue: 0.5, grayscale: 0.5, glow: 0.1 };
+const FX_STEP: Record<EffectProp, number> = { blur: 0.1, brightness: 0.5, contrast: 0.5, saturate: 0.5, hue: 0.5, grayscale: 0.5, glow: 0.1, trim: 0.5 };
 /** A mask's parameters its shape has, and their names. */
 const maskParamsOf = (shape: MaskShape): MaskParam[] => {
   const f = MASK_FIELDS[shape];
@@ -351,7 +353,7 @@ export function MotionTimeline(p: MotionTimelineProps) {
             /* its Effects group: all of them, or those asked for by name (U) */
             const fxShown = Boolean(props && (props.includes('fx') || props.some((x) => x !== 'fx' && !isTransform(x))));
             const fxLanes = all && props && fxShown
-              ? { ...all, rows: all.rows.filter((r) => !isTransform(r.prop) && (props.includes('fx') || props.includes(r.prop))) }
+              ? { ...all, rows: all.rows.filter((r) => !isTransform(r.prop) && r.prop !== 'trim' && !r.prop.startsWith('mask-') && (props.includes('fx') || props.includes(r.prop))) }
               : null;
             const on = picked.includes(layer.clipId);
             const host = hostOf(layer);
@@ -441,13 +443,13 @@ export function MotionTimeline(p: MotionTimelineProps) {
                     <div className="flex" style={{ height: 22 }} data-effects-group={layer.clipId}>
                       <div className={`${head} flex items-center gap-2 border-r border-[var(--dock-line)] text-[11.5px] text-[var(--text-muted)]`} style={{ width: headW, paddingLeft: AV_W + 18 }}>
                         <span className="flex items-center"><ChevronDown size={11} className="mr-1" /> {t('canvas.fxGroup')}</span>
-                        {host.effects.on.length < EFFECT_PROPS.length ? (
+                        {EFFECT_PROPS.some((fx) => EFFECTS[fx].filter && !host.effects!.on.includes(fx)) ? (
                           <select aria-label={t('canvas.fxAdd')} value="" data-effect-add={layer.clipId}
                             onPointerDown={(e) => e.stopPropagation()}
                             onChange={(e) => { const fx = e.target.value as EffectProp; if (fx) host.commitEffects(host.effects!.add(fx)); }}
                             className="h-[18px] rounded-[3px] border border-[var(--dock-line)] bg-transparent px-1 text-[11px] text-[var(--text-muted)]">
                             <option value="">{t('canvas.fxAdd')}</option>
-                            {EFFECT_PROPS.filter((fx) => !host.effects!.on.includes(fx)).map((fx) => <option key={fx} value={fx}>{t(`canvas.fx.${fx}`)}</option>)}
+                            {EFFECT_PROPS.filter((fx) => EFFECTS[fx].filter && !host.effects!.on.includes(fx)).map((fx) => <option key={fx} value={fx}>{t(`canvas.fx.${fx}`)}</option>)}
                           </select>
                         ) : null}
                       </div>
@@ -465,6 +467,35 @@ export function MotionTimeline(p: MotionTimelineProps) {
                     ) : null}
                   </>
                 ) : null}
+                {all && fxShown && host.stroke ? (() => {
+                  const stroke = host.stroke;
+                  const rows = { ...all, rows: all.rows.filter((r) => r.prop === 'trim') };
+                  const as = { ...host, effects: stroke.model, commitEffects: stroke.commit };
+                  return (
+                    <>
+                      {/* its Shape group: its stroke drawn on, as an animation editor trims a path */}
+                      <div className="flex" style={{ height: 22 }} data-shape-group={layer.clipId}>
+                        <div className={`${head} flex items-center gap-2 border-r border-[var(--dock-line)] text-[11.5px] text-[var(--text-muted)]`} style={{ width: headW, paddingLeft: AV_W + 18 }}>
+                          <span className="flex items-center"><ChevronDown size={11} className="mr-1" /> {t('canvas.shapeGroup')}</span>
+                          <label className="flex items-center gap-1 text-[11px]">
+                            <input type="checkbox" checked={stroke.on} data-stroke-trim={layer.clipId}
+                              onChange={(e) => { if (e.target.checked) stroke.turnOn(); else stroke.commit(stroke.model.remove('trim')); }} />
+                            {t('canvas.fx.trim')}
+                          </label>
+                        </div>
+                        <div style={{ width: timeW }} />
+                      </div>
+                      {stroke.on && rows.rows.length ? (
+                        <div className="flex" style={{ height: lanesHeight(rows) }}>
+                          <div className={`${head} border-r border-[var(--dock-line)]`} style={{ width: headW, paddingTop: LANE_PAD / 2 }}>
+                            <EffectHead layer={layer} lanes={rows} fx="trim" host={as} t={t} />
+                          </div>
+                          <div className="relative" style={{ width: timeW }}><MotionLaneRows lanes={rows} top={0} pxPerMs={pxPerMs} /></div>
+                        </div>
+                      ) : null}
+                    </>
+                  );
+                })() : null}
                 {fxShown && host.text ? (
                   <TextGroup layer={layer} host={host.text} head={head} headW={headW} timeW={timeW} pxPerMs={pxPerMs} t={t} />
                 ) : null}
@@ -661,7 +692,7 @@ function EffectHead({ layer, lanes, fx, host, t }: { layer: Layer; lanes: Motion
   const prev = [...keys].reverse().find((k) => k.t < local - frame / 2);
   const next = keys.find((k) => k.t > local + frame / 2);
   const nav = 'grid h-[16px] w-[14px] place-items-center rounded-[2px] text-[var(--text-faint)] hover:bg-white/10 hover:text-[var(--text)] disabled:opacity-30';
-  const unit = EFFECTS[fx].unit === 'deg' ? '°' : EFFECTS[fx].unit;
+  const unit = EFFECTS[fx].unit === 'deg' ? '°' : EFFECTS[fx].unit || '%';
   return (
     <div className="group/fx flex items-center text-[11.5px]" style={{ height: LANE_H }} data-effect-row={`${layer.clipId}:${fx}`}>
       <span className="flex shrink-0 items-center justify-center" style={{ width: AV_W }}>
@@ -680,7 +711,7 @@ function EffectHead({ layer, lanes, fx, host, t }: { layer: Layer; lanes: Motion
         onClick={() => host.commitEffects(model.stopwatch(fx))} />
       <span className="ml-1 w-[64px] shrink-0 truncate text-[var(--text-muted)]">{t(`canvas.fx.${fx}`)}</span>
       <Scrub label={t(`canvas.fx.${fx}`)} value={model.now(fx)} unit={unit} step={FX_STEP[fx]}
-        onCommit={(n) => host.commitEffects(model.set(fx, EFFECTS[fx].unit === 'deg' ? n : Math.max(0, n)))} />
+        onCommit={(n) => host.commitEffects(model.set(fx, EFFECTS[fx].unit === 'deg' ? n : fx === 'trim' ? Math.min(100, Math.max(0, n)) : Math.max(0, n)))} />
       <button type="button" aria-label={t('canvas.fxRemove')} title={t('canvas.fxRemove')} data-effect-remove={`${layer.clipId}:${fx}`}
         onClick={() => host.commitEffects(model.remove(fx))}
         className="ml-2 grid h-[16px] w-[16px] place-items-center rounded-[3px] text-[var(--text-faint)] opacity-0 hover:bg-white/10 hover:text-[var(--text)] group-hover/fx:opacity-100">
