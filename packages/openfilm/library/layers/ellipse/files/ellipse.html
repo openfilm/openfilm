@@ -9,7 +9,7 @@
  * keyframes in Motion). Repeated as an animation
  * editor's repeater does: --copies of it (up to 48; a fraction shows the last one partly), --copy-offset further
  * along, each one moved by --copy-x and --copy-y, turned by --copy-turn and scaled by --copy-scale percent from the
- * one before, the first on top. Each property is its clip's to change, and registered, so keyframes ease it;
+ * one before, the first on top, the copies' opacity going from --copy-opacity-start to --copy-opacity-end. Each property is its clip's to change, and registered, so keyframes ease it;
  * CSS alone draws it, so a frame shows its own second.
  */
 @property --width { syntax: '<length>'; inherits: true; initial-value: 432px; }
@@ -26,7 +26,9 @@
 @property --copy-y { syntax: '<length>'; inherits: true; initial-value: 0px; }
 @property --copy-turn { syntax: '<angle>'; inherits: true; initial-value: 0deg; }
 @property --copy-scale { syntax: '<number>'; inherits: true; initial-value: 100; }
-:root { --width: 40vh; --height: 40vh; --fill: #ffffff; --stroke: #ffffff; --stroke-width: 0px; --trim: 100; --trim-start: 0; --trim-offset: 0; --copies: 1; --copy-offset: 0; --copy-x: 0px; --copy-y: 0px; --copy-turn: 0deg; --copy-scale: 100; }
+@property --copy-opacity-start { syntax: '<number>'; inherits: true; initial-value: 100; }
+@property --copy-opacity-end { syntax: '<number>'; inherits: true; initial-value: 100; }
+:root { --width: 40vh; --height: 40vh; --fill: #ffffff; --stroke: #ffffff; --stroke-width: 0px; --trim: 100; --trim-start: 0; --trim-offset: 0; --copies: 1; --copy-offset: 0; --copy-x: 0px; --copy-y: 0px; --copy-turn: 0deg; --copy-scale: 100; --copy-opacity-start: 100; --copy-opacity-end: 100; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 svg { position: fixed; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .copy { transform-box: view-box; transform-origin: 50% 50%; }
@@ -47,7 +49,8 @@ svg { position: fixed; inset: 0; width: 100%; height: 100%; overflow: visible; }
   translate: calc(var(--j) * var(--copy-x)) calc(var(--j) * var(--copy-y));
   rotate: calc(var(--j) * var(--copy-turn));
   scale: pow(calc(var(--copy-scale) / 100), var(--j));
-  opacity: clamp(0, var(--copies) - var(--k), 1);
+  /* from the first's opacity to the last's (percent), as far between them as it is among the copies */
+  opacity: calc(clamp(0, var(--copies) - var(--k), 1) * (var(--copy-opacity-start) + (var(--copy-opacity-end) - var(--copy-opacity-start)) * min(var(--k) / max(var(--copies) - 1, 1), 1)) / 100);
 }
 </style>
 </head>
