@@ -3,7 +3,7 @@
  "model": "multilingual-e5-small",
  "dims": 384,
  "onnx": "models/multilingual-e5-small/model_quantized.onnx",
- "tokenizer": "models/multilingual-e5-small/tokenizer.json",
+ "tokenizer": "models/multilingual-e5-small/vocab.bin",
  "runtime": "models/onnxruntime-web-1.31.1/ort.wasm.min.mjs",
  "files": [
   {
@@ -12,9 +12,9 @@
    "sha256": "f80102d3f2a1229f387d3c81909990d8945513e347b0eab049f7de3c6f98c193"
   },
   {
-   "path": "models/multilingual-e5-small/tokenizer.json",
-   "bytes": 17082730,
-   "sha256": "0b44a9d7b51c3c62626640cda0e2c2f70fdacdc25bbbd68038369d14ebdf4c39"
+   "path": "models/multilingual-e5-small/vocab.bin",
+   "bytes": 5581385,
+   "sha256": "b3bea46ce18a08227a3f9cf66682cfd5a9b345419a85b6b471811d952464062f"
   },
   {
    "path": "models/onnxruntime-web-1.31.1/ort.wasm.min.mjs",

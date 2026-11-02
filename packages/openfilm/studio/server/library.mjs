@@ -25,12 +25,11 @@
  * a bundle's files to `saved/openfilm/<id as one name>/` there (`effects-snow`), a file into assets/. Nothing here is
  * ever written.
  */
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { mkdir, rename, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setSharedPref, sharedHome, sharedPref } from '../../src/locations.mjs';
-import { inside } from './files.mjs';
 
 /** What a path names the library by (`openfilm/<id>`), as `saved/` names Saved. */
 export const BUILT_IN = 'openfilm';
@@ -52,6 +51,20 @@ const libraryHost = () => (process.env.OPENFILM_LIBRARY_URL || 'https://openfilm
 
 /** Where the fetched ones are kept. */
 export const libraryCache = () => process.env.OPENFILM_LIBRARY_CACHE || join(sharedHome(), 'library');
+
+/**
+ * A place under one of the library's folders, as a path: never one that leaves it (`..`, an absolute path, a link out
+ * of it). Not files.mjs's `inside`, whose project rules (and what it loads) a search has no need of.
+ * @param {string} root @param {string} rel
+ */
+function inside(root, rel) {
+  if (!rel || rel.includes('\0')) throw new Error('which file?');
+  const at = resolve(root, normalize(rel.split('/').join(sep)));
+  const back = relative(root, at);
+  const out = (/** @type {string} */ path) => !path || path === '..' || path.startsWith(`..${sep}`) || isAbsolute(path);
+  if (out(back) || (existsSync(at) && out(relative(realpathSync(root), realpathSync(at))))) throw new Error(`${rel} is not in the library`);
+  return at;
+}
 
 /** A place of the library on this computer: in the package, else among the fetched ones; null for neither. */
 function located(/** @type {string} */ rel) {
@@ -130,7 +143,7 @@ function read(name, empty) {
  * sounds and music (audio.json), the emoji (stickers.json), and each catalog in catalogs/ (stickers, effects,
  * transitions, text, templates made as pages), by its name.
  */
-const catalogNames = () => ['audio.json', 'stickers.json',
+export const catalogFiles = () => ['audio.json', 'stickers.json',
   ...(existsSync(join(builtInRoot(), 'catalogs')) ? readdirSync(join(builtInRoot(), 'catalogs')).filter((f) => f.endsWith('.json')).sort().map((f) => `catalogs/${f}`) : [])];
 
 /** @type {{ parts: unknown[], index: unknown } | null} */
@@ -142,7 +155,7 @@ let merged = null;
  */
 export function libraryIndex() {
   const own = /** @type {{ version: number, groups: Record<string, unknown[]>, items: unknown[] }} */ (read('index.json', { version: 1, groups: {}, items: [] }));
-  const more = /** @type {({ groups?: Record<string, { id: string }[]>, items?: unknown[] } | null)[]} */ (catalogNames().map((name) => read(name, null)));
+  const more = /** @type {({ groups?: Record<string, { id: string }[]>, items?: unknown[] } | null)[]} */ (catalogFiles().map((name) => read(name, null)));
   const parts = [own, ...more];
   if (merged && merged.parts.length === parts.length && merged.parts.every((p, i) => p === parts[i])) return merged.index;
   const groups = { ...own.groups };

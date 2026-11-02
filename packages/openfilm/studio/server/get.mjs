@@ -686,6 +686,8 @@ export function createAsks(pages) {
  *   POST /api/get           { folder, verb, args, via?, model?, yes? } → { ok: true, text } once it is done, or
  *                           { ok: false, code, text }: code 2, not a project or a wrong command; 1, it did not run
  *   POST /api/get/asks/:id  { allow } → { answered }: the person's answer to a question about spending
+ *   POST /api/get/library   { verb, args } → { code, lines }: a search of OpenFilm's own library (src/library-search.mjs),
+ *                           answered with the library and its model kept loaded here, so it takes milliseconds
  * @param {Req} req @param {Res} res @param {string[]} parts the path after /api/get @param {ReturnType<typeof createAsks>} asks
  */
 export async function getRoute(req, res, parts, asks) {
@@ -696,6 +698,13 @@ export async function getRoute(req, res, parts, asks) {
   if (parts[0] === 'asks' && parts[1] && req.method === 'POST') {
     const { allow } = /** @type {{ allow?: unknown }} */ (await readJson(req));
     return json(res, 200, { answered: asks.answer(parts[1], allow === true) });
+  }
+  if (parts[0] === 'library' && parts.length === 1 && req.method === 'POST') {
+    const { verb, args } = /** @type {{ verb?: unknown, args?: unknown }} */ (await readJson(req));
+    const { LIBRARY_VERBS, libraryGet } = await import('../../src/library-search.mjs');
+    const given = args && typeof args === 'object' && !Array.isArray(args) ? /** @type {Record<string, string | true>} */ (args) : {};
+    if (typeof verb !== 'string' || !(verb in LIBRARY_VERBS) || 'take' in given) throw new HttpError(400, 'a search of the library, please');
+    return json(res, 200, await libraryGet(verb, given));
   }
   if (parts.length || req.method !== 'POST') throw new HttpError(404, 'no such API');
   const body = /** @type {{ folder?: unknown, verb?: unknown, args?: unknown, via?: unknown, model?: unknown, yes?: unknown }} */ (await readJson(req));

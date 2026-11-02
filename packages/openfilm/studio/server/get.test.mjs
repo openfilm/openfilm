@@ -15,7 +15,7 @@ import { changeSettings, kindOf, providersFile } from './keys.mjs';
 import { listProviders } from './providers/index.mjs';
 import { startStudio } from './server.mjs';
 import { filmHtml } from '../../src/film-doc.mjs';
-import { libraryVerbs } from '../../src/library-search.mjs';
+import { libraryGet, libraryVerbs } from '../../src/library-search.mjs';
 
 /* OpenFilm's service is asked what it offers: nowhere here (a port that refuses at once) */
 process.env.OPENFILM_API_URL ??= 'http://127.0.0.1:9';
@@ -422,6 +422,8 @@ const freePort = () => new Promise((done) => { const probe = netServer().listen(
 
 test('openfilm get: what can be got here, connected, partly or not at all; wrong commands exit 2', { timeout: 60_000 }, async () => {
   const bin = fileURLToPath(new URL('../../bin/openfilm.mjs', import.meta.url));
+  /* the library's model, where this checkout has none, fetched from nowhere into a cache of the test's own */
+  Object.assign(process.env, { OPENFILM_LIBRARY_CACHE: mkdtempSync(join(tmpdir(), 'get-library-')), OPENFILM_LIBRARY_URL: 'http://127.0.0.1:9/library' });
   const env = { ...process.env, OPENFILM_STUDIO_PORT: String(await freePort()) };
   const get = (cwd, ...args) => spawnSync(process.execPath, [bin, 'get', ...args], { cwd, env, encoding: 'utf8' });
   const run = (cwd, ...args) => new Promise((done) => execFile(process.execPath, [bin, 'get', ...args], { cwd, env, encoding: 'utf8' }, (error, stdout) => done({ status: error?.code ?? 0, stdout })));
@@ -490,6 +492,15 @@ test('openfilm get: what can be got here, connected, partly or not at all; wrong
     assert.match(unavailable.stdout, /^Not connected here: image \(fal\.ai, Google, OpenAI or OpenRouter\)\. .*with their own key/);
     assert.equal(unavailable.stdout, `Not connected here: ${unconnected('image')}. ${CONNECT_ONE} Tell the person. `
       + 'Until then, make it in code, or use a service the person has a key for (with its API docs), and save it under assets/.\n');
+
+    /* a search of the library: answered by the Studio running, which keeps it loaded, as the CLI answers it itself */
+    const studio = JSON.parse(readFileSync(join(process.env.OPENFILM_HOME, 'run.json'), 'utf8'));
+    const ask = (body) => fetch(`${studio.origin}/api/get/library`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-studio-key': studio.key }, body: JSON.stringify(body) });
+    const searched = await (await ask({ verb: 'transition', args: { prompt: 'glitch', limit: '3' } })).json();
+    assert.deepEqual(searched, await libraryGet('transition', { prompt: 'glitch', limit: '3' }));
+    assert.equal(get(scratch, 'transition', '--prompt', 'glitch', '--limit', '3').stdout, `${searched.lines.join('\n')}\n`);
+    assert.equal((await ask({ verb: 'transition', args: { take: 'openfilm/transitions/glitch' } })).status, 400, 'taking one is the CLI\'s, in its project');
+    assert.equal((await ask({ verb: 'music', args: { prompt: 'calm' } })).status, 400);
 
     assert.equal(get(scratch, 'tts', '--out', 'x').status, 2, 'not in a project');
     assert.match(get(scratch, 'tts').stdout, /is not in a project; `openfilm open` makes one/);

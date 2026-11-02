@@ -4,7 +4,8 @@
  * The library's vectors for semantic search (src/library-semantic.mjs): every thing `openfilm get` searches, what it
  * is (passageOf) turned into a vector by the model, written as library/vectors.i8 (int8, 384 a thing) and
  * library/vectors.json (the model, the ids in order, each vector's scale); and library/models.json, each file of the
- * model and its runtime with its size and sha256, for those who fetch it. Run on the computer that has them under
+ * model and its runtime with its size and sha256, for those who fetch it; and the model's vocabulary packed for a
+ * quick start (vocab.bin beside its tokenizer.json, library-semantic.mjs packVocabulary). Run on the computer that has them under
  * library/models/ (published with the library, not in git), after the library's things or their descriptions change:
  *
  *   node scripts/library-vectors.mjs
@@ -18,7 +19,7 @@ import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { builtInRoot, libraryIndex } from '../studio/server/library.mjs';
 import { KINDS } from '../src/library-search.mjs';
-import { embedder, passageOf } from '../src/library-semantic.mjs';
+import { embedder, packVocabulary, passageOf } from '../src/library-semantic.mjs';
 import { vocabulary } from '../src/library-words.mjs';
 
 const MODEL = 'multilingual-e5-small';
@@ -26,7 +27,8 @@ const root = builtInRoot();
 const runtime = readdirSync(join(root, 'models')).find((d) => d.startsWith('onnxruntime-web-'));
 if (!runtime) throw new Error('no library/models/onnxruntime-web-<version>/ here');
 const rel = (/** @type {string[]} */ ...parts) => ['models', ...parts].join('/');
-const files = [rel(MODEL, 'model_quantized.onnx'), rel(MODEL, 'tokenizer.json'),
+writeFileSync(join(root, rel(MODEL, 'vocab.bin')), packVocabulary(join(root, rel(MODEL, 'tokenizer.json'))));
+const files = [rel(MODEL, 'model_quantized.onnx'), rel(MODEL, 'vocab.bin'),
   rel(runtime, 'ort.wasm.min.mjs'), rel(runtime, 'ort-wasm-simd-threaded.mjs'), rel(runtime, 'ort-wasm-simd-threaded.wasm')];
 const manifest = {
   version: 1, model: MODEL, dims: 384, onnx: files[0], tokenizer: files[1], runtime: files[2],

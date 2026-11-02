@@ -375,7 +375,14 @@ export async function getMedia(argv, say) {
   if (model !== undefined && typeof model !== 'string') return { code: 2, lines: ['openfilm get: --model names a model, e.g. --model eleven_v4'] };
   /* OpenFilm's own library: searched here, offline and free, with no Studio (src/library-search.mjs) */
   const library = await import('../src/library-search.mjs');
-  if (verb && verb in library.LIBRARY_VERBS && help === undefined) return library.libraryGet(verb, args);
+  if (verb && verb in library.LIBRARY_VERBS && help === undefined) {
+    /* a Studio running keeps the library and its model loaded: it answers a search in milliseconds; asked only when
+       one says it runs (run.json), so a search with none waits for nothing */
+    const run = args.take === undefined && existsSync(join(studioHome(), 'run.json')) ? await running() : null;
+    const answer = run ? await post(run, '/api/get/library', { verb, args }).catch(() => null) : null;
+    if (Array.isArray(answer?.lines) && typeof answer.code === 'number') return { code: answer.code, lines: answer.lines };
+    return library.libraryGet(verb, args);
+  }
   const listing = !verb || verb === 'help' || help !== undefined;
   const folder = projectAround('.');
   if (!folder && !listing) return { code: 2, lines: [`openfilm get: ${resolve('.')} is not in a project; \`openfilm open\` makes one`] };

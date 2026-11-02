@@ -11,9 +11,10 @@
  * and sounds are also matched on how lively they are (`calm`, `soft`, `energetic` against their energy), a tempo
  * asked (`120 bpm`) and the length asked (--sec).
  */
-import { existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { BUILT_IN, builtInRoot, fetchLibrary, libraryIndex } from '../studio/server/library.mjs';
+import { BUILT_IN, builtInRoot, catalogFiles, fetchLibrary, libraryIndex } from '../studio/server/library.mjs';
 import { CJK, fold, readText, tagsIn, vocabulary, wordsOf } from './library-words.mjs';
 
 /** What can be looked for, and the library's category of each. */
@@ -22,40 +23,92 @@ export const KINDS = /** @type {const} */ ({ music: 'music', sound: 'sound', tra
 /** @typedef {{ id: string, cat: string, group: string, kind: string, name: Record<string, string>, durationMs?: number, tags?: string[], about?: string, energy?: number, bpm?: number, loop?: boolean, place?: string, poster?: string, sample?: string, [k: string]: unknown }} Item */
 
 
-/** @typedef {{ index: unknown, vocab: ReturnType<typeof vocabulary>, docs: Map<string, Doc> }} Searched */
+/**
+ * The library as it is searched: its things by id, the rows of what they are searched by, and each thing's Doc made
+ * from its row when it is first searched (a music search makes none for the 5,400 sounds).
+ * @typedef {{ index: unknown, vocab: ReturnType<typeof vocabulary>, items: Map<string, Item>, rows: Map<string, Row>, docs: Map<string, Doc> }} Searched
+ */
 /** @type {Searched | null} */
 let kept = null;
 
 /** @typedef {{ item: Item, tags: Set<string>, named: Set<string>, nameWords: Set<string>, words: Set<string>, cjk: string, title: string[] }} Doc */
 
-/** What each thing is searched by, made once for the library as it is. @returns {Searched} */
-function library() {
-  const index = libraryIndex();
-  if (kept && kept.index === index) return kept;
-  const vocab = vocabulary(builtInRoot());
-  const { items, groups } = /** @type {{ items: Item[], groups: Record<string, { id: string, name: Record<string, string> }[]> }} */ (index);
-  /** @type {Map<string, Doc>} */
-  const docs = new Map();
-  for (const item of items) {
-    const group = groups[item.cat]?.find((g) => g.id === item.group);
+/**
+ * What a thing is searched by, as library/search.json keeps it: its id, its tags, the tags its names say, the words of
+ * its names, its other words (each tab-separated: an emoji's tag may have a space), its CJK names, and its names as asked for (one a line).
+ * @typedef {[string, string, string, string, string, string, string]} Row
+ */
+
+/**
+ * The row of each thing of the library (`index`), worked out from its names, group, tags and what it is about.
+ * scripts/library-search-index.mjs writes them to library/search.json when the library changes, so a search reads them
+ * rather than works them out (a few hundred milliseconds).
+ * @param {{ items: Item[], groups: Record<string, { id: string, name: Record<string, string> }[]> }} index
+ * @param {ReturnType<typeof vocabulary>} vocab @returns {Row[]}
+ */
+export function searchRows(index, vocab) {
+  return index.items.map((item) => {
+    const group = index.groups[item.cat]?.find((g) => g.id === item.group);
     const slug = (item.id.split('/').pop() ?? '').replace(/(-[0-9a-f]{6})?\.\w+$/, '').replaceAll('-', ' ');
     const names = `${item.name.en} ${item.name.es ?? ''} ${slug}`;
     /* a sound is what it sounds like, not a picture's look (`warm` the mood, not the tone) */
     const fits = (/** @type {string} */ t) => item.kind !== 'sound' || !['look', 'motion'].includes(vocab.byId.get(t)?.kind ?? '');
     const named = new Set([...tagsIn(vocab, `${names} ${['zh-CN', 'ja', 'ko'].map((l) => item.name[l] ?? '').join(' ')}`)].filter(fits));
     const grouped = [...tagsIn(vocab, Object.values(group?.name ?? {}).join(' '))].filter(fits);
-    docs.set(item.id, {
-      item, named,
-      tags: new Set([...named, ...(item.tags ?? []), ...grouped]),
-      nameWords: new Set(wordsOf(names)),
-      words: new Set(wordsOf(`${item.about ?? ''} ${group?.name.en ?? ''} ${(item.tags ?? []).join(' ')}`)),
-      cjk: fold(['zh-CN', 'ja', 'ko'].map((l) => `${item.name[l] ?? ''} ${group?.name[l] ?? ''}`).join(' ')),
-      title: [wordsOf(item.name.en).join(' '), ...['zh-CN', 'ja', 'ko'].map((l) => fold(item.name[l] ?? ''))],
-    });
+    const set = (/** @type {Iterable<string>} */ list) => [...new Set(list)].join('\t');
+    return [item.id, set([...named, ...(item.tags ?? []), ...grouped]), set(named), set(wordsOf(names)),
+      set(wordsOf(`${item.about ?? ''} ${group?.name.en ?? ''} ${(item.tags ?? []).join(' ')}`)),
+      fold(['zh-CN', 'ja', 'ko'].map((l) => `${item.name[l] ?? ''} ${group?.name[l] ?? ''}`).join(' ')),
+      [wordsOf(item.name.en).join(' '), ...['zh-CN', 'ja', 'ko'].map((l) => fold(item.name[l] ?? ''))].join('\n')];
+  });
+}
+
+/**
+ * library/search.json for the library as it is: the digest of its inputs, then a row a line.
+ * @param {{ items: Item[], groups: Record<string, { id: string, name: Record<string, string> }[]> }} index
+ */
+export const searchFile = (index) => `{"version": 1, "inputs": ${JSON.stringify(searchInputs())}, "rows": [\n${searchRows(index, vocabulary(builtInRoot())).map((r) => JSON.stringify(r)).join(',\n')}\n]}\n`;
+
+/** What the rows are worked out from: the library's catalogs and its tags, as they are now (a digest of them). */
+export function searchInputs() {
+  const hash = createHash('sha256');
+  for (const name of ['index.json', 'tags.json', ...catalogFiles()]) {
+    try { hash.update(readFileSync(join(builtInRoot(), name))); } catch { hash.update(`no ${name}`); }
   }
-  const made = { index, vocab, docs };
+  return hash.digest('hex').slice(0, 16);
+}
+
+/** What each thing is searched by, made once for the library as it is: library/search.json's rows when they are of it. @returns {Searched} */
+function library() {
+  const index = libraryIndex();
+  if (kept && kept.index === index) return kept;
+  const vocab = vocabulary(builtInRoot());
+  const library = /** @type {{ items: Item[], groups: Record<string, { id: string, name: Record<string, string> }[]> }} */ (index);
+  /** @type {Row[] | null} */
+  let rows = null;
+  try {
+    const file = JSON.parse(readFileSync(join(builtInRoot(), 'search.json'), 'utf8'));
+    if (file.inputs === searchInputs()) rows = file.rows;
+  } catch { /* none: worked out here */ }
+  rows ??= searchRows(library, vocab);
+  const made = { index, vocab, items: new Map(library.items.map((item) => [item.id, item])), rows: new Map(rows.map((r) => [r[0], r])), docs: new Map() };
   kept = made;
   return made;
+}
+
+/** What a thing is searched by (null: no such thing), made from its row once. @param {Searched} at @param {string} id */
+function docOf(at, id) {
+  const was = at.docs.get(id);
+  if (was) return was;
+  const item = at.items.get(id);
+  const row = at.rows.get(id);
+  if (!item || !row) return null;
+  const [, tags, named, nameWords, other, cjk, title] = row;
+  const words = (/** @type {string} */ s) => new Set(s ? s.split('\t') : []);
+  /** @type {Doc} */
+  const doc = { item, tags: words(tags), named: words(named), nameWords: words(nameWords), words: words(other), cjk, title: title.split('\n') };
+  at.docs.set(id, doc);
+  return doc;
 }
 
 /** How rare a thing is among `n`, `count` having it: the rarer, the more it says. */
@@ -68,8 +121,9 @@ const rarity = (/** @type {number} */ n, /** @type {number} */ count) => Math.lo
  * @returns {Found[]}
  */
 export function findInLibrary(kind, query, o = {}) {
-  const { vocab, docs } = library();
-  const all = [...docs.values()].filter((d) => !kind || d.item.cat === KINDS[kind]);
+  const at = library();
+  const { vocab } = at;
+  const all = [...at.items.values()].filter((item) => !kind || item.cat === KINDS[kind]).map((item) => docOf(at, item.id)).filter((d) => d !== null);
   const asked = readText(vocab, query, { asked: true });
   const bpm = Number(/(\d{2,3})\s*bpm/i.exec(query)?.[1]) || null;
   const words = asked.words.filter((w) => !vocab.plain.has(w) && !/^\d+$/.test(w) && w !== 'bpm');
@@ -166,16 +220,16 @@ const RRF_K = 60;
  */
 export async function searchLibrary(kind, query, o = {}) {
   const words = findInLibrary(kind, query, { ...o, limit: DEPTH });
-  const { docs } = library();
+  const at = library();
   const { nearest } = await import('./library-semantic.mjs');
-  const near = await nearest(query, (id) => docs.get(id)?.item.cat === KINDS[kind], DEPTH);
+  const near = await nearest(query, (id) => at.items.get(id)?.cat === KINDS[kind], DEPTH);
   if (!near) return { found: words.slice(0, o.limit ?? 8), worded: words.length > 0 };
   /** @type {Map<string, Found & { fused: number }>} */
   const all = new Map(words.map((r, i) => [r.item.id, { ...r, fused: 1 / (RRF_K + i) }]));
   near.forEach(([id], i) => {
     const was = all.get(id);
     if (was) { was.fused += 1 / (RRF_K + i); return; }
-    const d = /** @type {Doc} */ (docs.get(id));
+    const d = /** @type {Doc} */ (docOf(at, id));
     all.set(id, { item: d.item, score: 0, tags: [...d.tags], named: false, short: tooShort(d.item, o.duration), fused: 1 / (RRF_K + i) });
   });
   return { found: [...all.values()].sort(inOrder((r) => /** @type {Found & { fused: number }} */ (r).fused)).slice(0, o.limit ?? 8), worded: words.length > 0 };
@@ -311,7 +365,7 @@ const EXAMPLES = /** @type {Record<string, string>} */ ({
  */
 async function takeOne(verb, asked) {
   const id = asked.replace(new RegExp(`^${BUILT_IN}/`), '');
-  const item = library().docs.get(id)?.item;
+  const item = library().items.get(id);
   if (!item || item.cat !== KINDS[LIBRARY_VERBS[verb].kind]) {
     return { code: 2, lines: [`openfilm get ${verb}: no ${asked} here; \`openfilm get ${verb} --prompt <what>\` says what there is`] };
   }

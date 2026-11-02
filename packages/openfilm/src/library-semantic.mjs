@@ -6,9 +6,12 @@
  *
  *   library/vectors.i8, vectors.json   each thing's vector, made offline with the same model (scripts/library-vectors.mjs)
  *                                      from what it is (passageOf): int8, a scale each, in the order of vectors.json's ids
- *   library/models.json                the model and its runtime (onnxruntime-web, WebAssembly, one thread): published
- *                                      parts of the library (library.mjs fetchLibrary), each file with its size and
- *                                      sha256
+ *   library/models.json                the model, its vocabulary packed (vocab.bin) and its runtime (onnxruntime-web,
+ *                                      WebAssembly, one thread): published parts of the library (library.mjs
+ *                                      fetchLibrary), each file with its size and sha256
+ *
+ * A search in a CLI of its own loads the model each time (a few hundred milliseconds: the runtime starting, then the
+ * model); a Studio running keeps it loaded, and the CLI asks it first (studio/client.mjs getMedia).
  *
  * Only the vectors come with the package. The first search fetches the rest in the background, in a process of its own
  * (`node src/library-semantic.mjs fetch`), so that search answers at once with keywords; each file is checked against
@@ -108,7 +111,7 @@ export async function fetchModel(m = manifest()) {
  * A text's token ids as the model was trained on them: NFKC, spaces as `▁` (one before the first word too), each word
  * cut into the pieces of the vocabulary whose scores add up highest (Viterbi); a character no piece has is `<unk>`.
  * Between `<s>` and `</s>`, at most 512.
- * @param {{ pieces: Map<string, number>, scores: Float32Array, longest: number, unknown: number }} vocab @param {string} text
+ * @param {Vocabulary} vocab @param {string} text
  */
 export function tokenize(vocab, text) {
   const ids = [0];
@@ -125,7 +128,7 @@ export function tokenize(vocab, text) {
       let piece = '';
       for (let j = i; j < Math.min(n, i + vocab.longest); j++) {
         piece += chars[j];
-        const k = vocab.pieces.get(piece);
+        const k = vocab.id(piece);
         /* the first four are <s>, <pad>, </s>, <unk>: never pieces of a text */
         if (k === undefined || k < 4) continue;
         const score = best[i] + vocab.scores[k];
@@ -140,7 +143,13 @@ export function tokenize(vocab, text) {
   return [...ids.slice(0, 511), 2];
 }
 
-/** The vocabulary of a tokenizer.json, ready for tokenize. @param {string} file */
+/**
+ * A vocabulary as tokenize reads it: the id of a piece (undefined: none), each id's score, the longest piece (in
+ * characters), and the score of a character no piece has.
+ * @typedef {{ id: (piece: string) => number | undefined, scores: Float32Array, longest: number, unknown: number }} Vocabulary
+ */
+
+/** The vocabulary of a tokenizer.json. @param {string} file @returns {Vocabulary} */
 export function readVocabulary(file) {
   /** @type {{ model: { vocab: [string, number][] } }} */
   const json = JSON.parse(readFileSync(file, 'utf8'));
@@ -148,7 +157,65 @@ export function readVocabulary(file) {
   let longest = 0;
   let lowest = 0;
   json.model.vocab.forEach(([piece, score], i) => { pieces.set(piece, i); longest = Math.max(longest, [...piece].length); lowest = Math.min(lowest, score); });
-  return { pieces, scores: Float32Array.from(json.model.vocab, ([, s]) => s), longest, unknown: lowest - 10 };
+  return { id: (piece) => pieces.get(piece), scores: Float32Array.from(json.model.vocab, ([, s]) => s), longest, unknown: lowest - 10 };
+}
+
+/*
+ * A vocabulary packed (vocab.bin, made from tokenizer.json when the library is published): read in a few
+ * milliseconds where the JSON takes a hundred, a piece found by binary search over its UTF-8 bytes. Little-endian:
+ *   u32 count, u32 longest, f32 unknown, then count × f32 score (by id), count × u32 id (in the order of the pieces'
+ *   bytes), (count + 1) × u32 offset (by id, into the text), and the text: every piece's UTF-8, by id.
+ */
+
+/** tokenizer.json's vocabulary, packed. @param {string} file @returns {Buffer} */
+export function packVocabulary(file) {
+  /** @type {{ model: { vocab: [string, number][] } }} */
+  const json = JSON.parse(readFileSync(file, 'utf8'));
+  const { scores, longest, unknown } = readVocabulary(file);
+  const bytes = json.model.vocab.map(([piece]) => Buffer.from(piece, 'utf8'));
+  const n = bytes.length;
+  const order = Uint32Array.from(bytes.keys()).sort((a, b) => Buffer.compare(bytes[a], bytes[b]));
+  const offsets = new Uint32Array(n + 1);
+  for (let i = 0; i < n; i++) offsets[i + 1] = offsets[i] + bytes[i].length;
+  const head = Buffer.alloc(12);
+  head.writeUInt32LE(n, 0);
+  head.writeUInt32LE(longest, 4);
+  head.writeFloatLE(unknown, 8);
+  return Buffer.concat([head, Buffer.from(scores.buffer), Buffer.from(order.buffer), Buffer.from(offsets.buffer), ...bytes]);
+}
+
+/** A packed vocabulary (packVocabulary). @param {Buffer} buf @returns {Vocabulary} */
+export function readPacked(buf) {
+  const data = new Uint8Array(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.length));
+  const view = new DataView(data.buffer);
+  const n = view.getUint32(0, true);
+  const scores = new Float32Array(data.buffer, 12, n);
+  const order = new Uint32Array(data.buffer, 12 + 4 * n, n);
+  const offsets = new Uint32Array(data.buffer, 12 + 8 * n, n + 1);
+  const text = data.subarray(12 + 12 * n + 4);
+  const encoder = new TextEncoder();
+  /** the piece of id `k` against `want`, as Buffer.compare: by bytes */
+  const compare = (/** @type {number} */ k, /** @type {Uint8Array} */ want) => {
+    const from = offsets[k];
+    const length = offsets[k + 1] - from;
+    for (let i = 0; i < Math.min(length, want.length); i++) if (text[from + i] !== want[i]) return text[from + i] - want[i];
+    return length - want.length;
+  };
+  return {
+    id: (piece) => {
+      const want = encoder.encode(piece);
+      let lo = 0;
+      let hi = n - 1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        const c = compare(order[mid], want);
+        if (c === 0) return order[mid];
+        if (c < 0) lo = mid + 1; else hi = mid - 1;
+      }
+      return undefined;
+    },
+    scores, longest: view.getUint32(4, true), unknown: view.getFloat32(8, true),
+  };
 }
 
 /* ── the model ───────────────────────────────────────────────────────────────────────────────────────────────── */
@@ -167,7 +234,7 @@ export function embedder(m = /** @type {Manifest} */ (manifest())) {
     ort.env.wasm.numThreads = 1;
     ort.env.wasm.wasmPaths = pathToFileURL(`${dirname(at(m.runtime))}/`).href;
     ort.env.logLevel = 'error';
-    const vocab = readVocabulary(at(m.tokenizer));
+    const vocab = readPacked(readFileSync(at(m.tokenizer)));
     const session = await ort.InferenceSession.create(readFileSync(at(m.onnx)));
     const int64 = (/** @type {number[]} */ v) => new ort.Tensor('int64', BigInt64Array.from(v, BigInt), [1, v.length]);
     return async (/** @type {string} */ text) => {

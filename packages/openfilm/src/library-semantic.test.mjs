@@ -28,7 +28,7 @@ before(async () => {
 });
 after(() => server.close());
 
-const { fetchModel, passageOf, readVocabulary, semanticReady, semanticState, tokenize } = await import('./library-semantic.mjs');
+const { fetchModel, packVocabulary, passageOf, readPacked, readVocabulary, semanticReady, semanticState, tokenize } = await import('./library-semantic.mjs');
 
 test('a text is cut into the vocabulary\'s pieces whose scores add up highest, between <s> and </s>', () => {
   const file = join(mkdtempSync(join(tmpdir(), 'semantic-vocab-')), 'tokenizer.json');
@@ -42,6 +42,11 @@ test('a text is cut into the vocabulary\'s pieces whose scores add up highest, b
   assert.deepEqual(tokenize(v, 'calmx'), [0, id('▁calm'), 3, 2], 'a character no piece has is <unk>');
   assert.deepEqual(tokenize(v, '钢琴'), [0, id('▁'), id('钢琴'), 2]);
   assert.equal(tokenize(v, 'calm '.repeat(600)).length, 512, 'at most 512');
+  /* packed, it finds every piece the JSON does, and nothing else */
+  const packed = readPacked(packVocabulary(file));
+  for (const [piece] of [...vocab, ['ca'], ['▁calmer'], ['钢'], ['']]) assert.equal(packed.id(piece), v.id(piece), piece);
+  assert.deepEqual([packed.longest, packed.unknown, [...packed.scores]], [v.longest, Math.fround(v.unknown), [...v.scores]]);
+  for (const text of ['calm piano', 'calmx 钢琴', 'ｃａｌｍ']) assert.deepEqual(tokenize(packed, text), tokenize(v, text));
 });
 
 test('what a thing is, in the words of its vector: names, about, group, tags in English and Chinese, energy, tempo', () => {

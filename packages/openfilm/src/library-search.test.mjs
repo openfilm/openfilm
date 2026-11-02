@@ -1,15 +1,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { LIBRARY_VERBS, findInLibrary, languageOf, libraryGet, libraryVerbs, searchLibrary } from './library-search.mjs';
+import { builtInRoot, libraryIndex } from '../studio/server/library.mjs';
+import { LIBRARY_VERBS, findInLibrary, languageOf, libraryGet, libraryVerbs, searchFile, searchLibrary } from './library-search.mjs';
 import { semanticReady } from './library-semantic.mjs';
 
 /* the model, when it is not in this checkout's library, is fetched from nowhere into a cache of the tests' own */
 process.env.OPENFILM_LIBRARY_CACHE = mkdtempSync(join(tmpdir(), 'library-search-cache-'));
 process.env.OPENFILM_LIBRARY_URL = 'http://127.0.0.1:9/library';
 const semantic = semanticReady();
+
+test('library/search.json is of the library as it is (after changing the library, run scripts/library-search-index.mjs)', () => {
+  assert.equal(readFileSync(join(builtInRoot(), 'search.json'), 'utf8'), searchFile(/** @type {any} */ (libraryIndex())));
+});
 
 test('calm piano for a morning scene: calm piano music for a morning', () => {
   const found = findInLibrary('music', 'calm piano for a morning scene', { limit: 5 });
