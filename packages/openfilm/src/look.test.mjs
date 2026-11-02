@@ -298,3 +298,12 @@ test('look --full of a transparent WebM watches what it draws, over gray: a movi
   const r = await look([file], { full: true, count: 2 });
   assert.ok(r.lines.includes('✓ every frame watched at 30 fps: no white flash, jumping frame, still picture (transparent: black not judged)'), r.lines.join('\n'));
 });
+
+test('look --full of a transparent ProRes 4444 knows its alpha from the pixel format: 3 s of nothing is not black (#334)', { timeout: 60_000 }, async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-look-full-prores-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = clip(join(dir, 'layer.mov'), "color=black@0:s=320x180:r=30:d=8,format=yuva444p[bg];color=red:s=40x40:r=30,format=yuva444p[box];[bg][box]overlay=x='20+t*30':y=60:shortest=1:enable='gte(t,3)':format=yuv444[v]",
+    '-c:v', 'prores_ks', '-profile:v', '4444', '-pix_fmt', 'yuva444p10le');
+  const r = await look([file], { full: true, count: 2 });
+  assert.ok(r.lines.includes('✓ every frame watched at 30 fps: no white flash, jumping frame, still picture (transparent: black not judged)'), r.lines.join('\n'));
+});

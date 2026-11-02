@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { FrameError, launch, SOFTWARE_GL } from './host.mjs';
+import { hasAlpha } from './seekable.mjs';
 import { blockDiff, checkSound, cutText, fileOf, ffmpeg, filmSound, fmt, hash, homeFor, locate, mix, open, outDir, parseTarget, SAME_LIMIT, shown, shuffled, spread, UsageError } from './shared.mjs';
 import { watch } from './watch.mjs';
 
@@ -377,7 +378,7 @@ async function lookMedia(target, at, range, opts) {
   const file = resolve(target);
   if (!existsSync(file) || !statSync(file).isFile()) throw new UsageError(`${target}: no such file`);
   const dir = outDir(homeFor(dirname(file)), 'look');
-  const probe = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration:stream=codec_type,codec_name,width,height,avg_frame_rate,r_frame_rate:stream_tags=alpha_mode', '-of', 'json', file], { encoding: 'utf8', windowsHide: true });
+  const probe = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration:stream=codec_type,codec_name,pix_fmt,width,height,avg_frame_rate,r_frame_rate:stream_tags=alpha_mode', '-of', 'json', file], { encoding: 'utf8', windowsHide: true });
   let info;
   try { info = JSON.parse(probe.stdout); } catch { return { ok: false, lines: [`✗ ${target}: ffprobe cannot read it`], files: [] }; }
   const video = (info.streams ?? []).find((x) => x.codec_type === 'video');
@@ -426,7 +427,7 @@ async function lookMedia(target, at, range, opts) {
       writeFileSync(out, await sheet(browser, shots, { width: w || 1920, height: h || 1080 }, from, to, wave, [], 'its sound'));
       files.push(out);
     } finally { await browser.close(); }
-    if (opts.full && video && !still) watched.push(...await watchLines(file, fps ?? 30, from, to, { decode, alpha: video.tags?.alpha_mode === '1' }));
+    if (opts.full && video && !still) watched.push(...await watchLines(file, fps ?? 30, from, to, { decode, alpha: hasAlpha(video) }));
   }
   return { ok: true, lines: [head, ...watched, ...files.map((f) => `→ ${shown(f)}`)], files };
 }
