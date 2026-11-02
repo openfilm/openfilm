@@ -5,7 +5,7 @@
  * no clock, nothing but the film's value.
  */
 import { FILM_FILE, clipFade, clipIdFor, clipKind, clipSpeed, kindOf } from '../../src/film-doc.mjs';
-import { MOTION_PROPS, animationsOf, motionName, readMotion, shiftMotion, withAnimations, writeMotion } from '../../src/clip-motion.mjs';
+import { KEYED_PROPS, animationsOf, motionName, readMotion, shiftMotion, withAnimations, writeMotion } from '../../src/clip-motion.mjs';
 
 /** @typedef {{ src: string, id: string, [field: string]: unknown }} Clip */
 /** @typedef {{ clips: Clip[], locked?: boolean, hidden?: boolean, muted?: boolean }} Track */
@@ -272,7 +272,7 @@ export const CLIP_LENGTH = '--clip-length';
 function splitMotion(/** @type {FilmValue} */ value, /** @type {Clip} */ clip, /** @type {Clip} */ right) {
   const motion = readMotion(/** @type {{ id: string, style?: string }} */ (clip), value.keyframes);
   if (!Object.keys(motion).length) return;
-  const own = new Set(MOTION_PROPS.map((p) => motionName(clip.id, p)));
+  const own = new Set(KEYED_PROPS.map((p) => motionName(clip.id, p)));
   const style = withAnimations(/** @type {string | undefined} */ (right.style), animationsOf(/** @type {string | undefined} */ (right.style)).filter((e) => !own.has(e.split(/\s+/)[0])));
   const shifted = shiftMotion(motion, -(Number(right.at ?? 0) - Number(clip.at ?? 0)));
   const written = writeMotion({ id: right.id, style }, shifted);
@@ -287,7 +287,7 @@ function splitMotion(/** @type {FilmValue} */ value, /** @type {Clip} */ clip, /
  */
 function ownMotion(/** @type {FilmValue} */ value) {
   if (!value.keyframes) return;
-  const own = /^(.+)--(translate|scale|rotate|opacity)$/;
+  const own = new RegExp(`^(.+)--(${KEYED_PROPS.join('|')})$`);
   const used = new Set();
   for (const clip of value.tracks.flatMap((t) => t.clips)) {
     const entries = animationsOf(/** @type {string | undefined} */ (clip.style));
@@ -312,7 +312,7 @@ function ownMotion(/** @type {FilmValue} */ value) {
       if (typeof anim !== 'string') return o;
       const entries = anim.split(',').map((e) => {
         const [name, ...rest] = e.trim().split(/\s+/);
-        const m = /^(.+)--(e[0-9a-z]+--(?:translate|scale|rotate|opacity))$/.exec(name);
+        const m = new RegExp(`^(.+)--(e[0-9a-z]+--(?:${KEYED_PROPS.join('|')}))$`).exec(name);
         if (!m || m[1] === clip.id || value.keyframes?.[name] == null) { used.add(name); return e.trim(); }
         const mine = `${clip.id}--${m[2]}`;
         /** @type {Record<string, string>} */ (value.keyframes)[mine] ??= /** @type {Record<string, string>} */ (value.keyframes)[name];

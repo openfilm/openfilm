@@ -2,7 +2,7 @@
 // in host.mjs); the file's own elements are the clips: an <iframe> a web page, a <video>, an <img> a still, an
 // <audio> a sound for the mix. Where each plays and sits is what film-doc.mjs reads in the file, the same reading
 // Studio plays and exports by; how each looks is the file's own CSS. Track 0, the first <section>, is on top.
-import { MEDIA_RATE_MAX, MEDIA_RATE_MIN, clipFade, clipSpan, clipTag, declarations, fadeGain, filmHead, fittedFade, keyframeBlocks, kindOf, mediaPlays, parseFilm, pictureRect, readFilmFile, sourceAt, srcHref } from './film-doc.mjs';
+import { MEDIA_RATE_MAX, MEDIA_RATE_MIN, registerEffects, clipFade, clipSpan, clipTag, declarations, fadeGain, filmHead, fittedFade, keyframeBlocks, kindOf, mediaPlays, parseFilm, pictureRect, readFilmFile, sourceAt, srcHref } from './film-doc.mjs';
 import { override, restore } from './overrides.mjs';
 
 /* the file as written (without what the host puts in it), read as every reader reads it */
@@ -1167,6 +1167,8 @@ function element(row) {
  * stands over the one of its name the film was loaded with (a running animation takes its keyframes' change).
  */
 let keyframesStyle = null;
+/* the effects' custom properties ease (film-doc EFFECTS); pages register them as their tweaks need (overrides.mjs) */
+registerEffects(window);
 /* and played inside pages too, by their elements' tweaks (overrides.mjs) */
 let filmKeyframes = doc.keyframes ?? {};
 function keyframesNow(keyframes) {

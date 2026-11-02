@@ -11,8 +11,9 @@
  * The work area (the film's marked range) is the bar over the ruler; the slider under the layers zooms the time.
  */
 import * as React from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff } from 'lucide-react';
-import type { MotionProp } from '../../../../src/clip-motion.mjs';
+import { ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, X } from 'lucide-react';
+import { EFFECTS, EFFECT_PROPS, MOTION_PROPS, type EffectProp, type KeyedProp, type MotionProp } from '../../../../src/clip-motion.mjs';
+import type { effectsModel, EffectsChange } from '@/lib/motion-keys';
 import type { FilmRange } from '@/lib/studio-refs';
 import { BLEND_MODES } from '@/lib/clip-look';
 import { formatTimecode } from '@/lib/timecode';
@@ -44,6 +45,9 @@ export interface LayerHost {
   /** Only where a layer can be hidden on its own (an element of a page). */
   visible?: boolean;
   setVisible?: (on: boolean) => void;
+  /** Its effects (lib/motion-keys effectsModel), and a change of them written. */
+  effects: ReturnType<typeof effectsModel> | null;
+  commitEffects: (c: EffectsChange | null) => void;
 }
 
 export interface MotionTimelineProps {
@@ -79,8 +83,13 @@ const MODE_W = 92;
 const PARENT_W = 84;
 /** The keys that show one property. */
 const SOLO: Record<string, MotionProp> = { p: 'translate', s: 'scale', r: 'rotate', t: 'opacity' };
-const ALL: readonly MotionProp[] = ['translate', 'scale', 'rotate', 'opacity'];
+/** What shows of a layer twirled open: its Transform's properties, and its Effects group (`fx`: all its effects). */
+type Shown = KeyedProp | 'fx';
+const ALL: readonly Shown[] = [...MOTION_PROPS, 'fx'];
+const isTransform = (p: KeyedProp) => (MOTION_PROPS as readonly string[]).includes(p);
 const PROP_LABEL: Record<MotionProp, string> = { translate: 'inspector.keyPosition', scale: 'inspector.keyScale', rotate: 'inspector.keyRotate', opacity: 'inspector.keyOpacity' };
+/** An effect's value: its step when dragged, its digits. */
+const FX_STEP: Record<EffectProp, number> = { blur: 0.1, brightness: 0.5, contrast: 0.5, saturate: 0.5, hue: 0.5, grayscale: 0.5, glow: 0.1 };
 /** A layer's label color by what it is, as an animation editor gives each kind its own. */
 const LABEL: Record<string, string> = { video: '#4ca3ad', mg: '#a594d6', still: '#c7a35f', text: '#d0706f', image: '#c7a35f', shape: '#5b8fd6', box: '#8c9a6b', group: '#8a8f98' };
 const labelOf = (layer: Layer) => LABEL[layer.kind] ?? '#8a8f98';
@@ -167,7 +176,7 @@ export function MotionTimeline(p: MotionTimelineProps) {
   const pxPerMs = timeW / Math.max(totalMs, 1000);
 
   /* what each layer shows of its Transform (none: closed) */
-  const [shown, setShown] = React.useState<ReadonlyMap<string, readonly MotionProp[]>>(new Map());
+  const [shown, setShown] = React.useState<ReadonlyMap<string, readonly Shown[]>>(new Map());
   const toggle = (id: string) => setShown((was) => {
     const next = new Map(was);
     if (next.has(id)) next.delete(id); else next.set(id, ALL);
@@ -184,15 +193,15 @@ export function MotionTimeline(p: MotionTimelineProps) {
       const now = live.current;
       const key = e.key.toLowerCase();
       const targets = now.layers.filter((l) => now.picked.includes(l.clipId));
-      if (key in SOLO || key === 'u') {
+      if (key in SOLO || key === 'u' || key === 'e') {
         if (!targets.length) return;
         e.preventDefault();
         e.stopPropagation();
         setShown((was) => {
           const next = new Map(was);
           for (const layer of targets) {
-            const moving = ALL.filter((prop) => now.lanesOf(layer).rows.some((r) => r.prop === prop && r.keys.length));
-            const want: readonly MotionProp[] = key === 'u' ? moving : [SOLO[key]!];
+            const moving = now.lanesOf(layer).rows.filter((r) => r.keys.length).map((r) => r.prop);
+            const want: readonly Shown[] = key === 'u' ? moving : key === 'e' ? ['fx'] : [SOLO[key]!];
             const had = next.get(layer.clipId) ?? [];
             const same = had.length === want.length && want.every((x) => had.includes(x));
             if (e.shiftKey) next.set(layer.clipId, [...new Set([...had, ...want])]);
@@ -208,7 +217,7 @@ export function MotionTimeline(p: MotionTimelineProps) {
         const from = targets.length ? targets : now.layers;
         const times = from.flatMap((layer) => {
           const props = now.shown.get(layer.clipId) ?? (targets.length ? ALL : []);
-          return now.lanesOf(layer).rows.filter((r) => props.includes(r.prop)).flatMap((r) => r.keys.map((k) => layer.startMs + k.t * 1000));
+          return now.lanesOf(layer).rows.filter((r) => props.includes(r.prop) || (!isTransform(r.prop) && props.includes('fx'))).flatMap((r) => r.keys.map((k) => layer.startMs + k.t * 1000));
         });
         const to = key === 'j' ? Math.max(...times.filter((ms) => ms < now.playheadMs - 1)) : Math.min(...times.filter((ms) => ms > now.playheadMs + 1));
         e.preventDefault();
@@ -310,7 +319,12 @@ export function MotionTimeline(p: MotionTimelineProps) {
           {layers.map((layer, i) => {
             const props = shown.get(layer.clipId);
             const all = props ? lanesOf(layer) : null;
-            const lanes = all && props ? { ...all, rows: all.rows.filter((r) => props.includes(r.prop)) } : null;
+            const lanes = all && props ? { ...all, rows: all.rows.filter((r) => isTransform(r.prop) && props.includes(r.prop)) } : null;
+            /* its Effects group: all of them, or those asked for by name (U) */
+            const fxShown = Boolean(props && (props.includes('fx') || props.some((x) => x !== 'fx' && !isTransform(x))));
+            const fxLanes = all && props && fxShown
+              ? { ...all, rows: all.rows.filter((r) => !isTransform(r.prop) && (props.includes('fx') || props.includes(r.prop))) }
+              : null;
             const on = picked.includes(layer.clipId);
             const host = hostOf(layer);
             const moving = lanesOf(layer).rows.some((r) => r.keys.length);
@@ -372,7 +386,7 @@ export function MotionTimeline(p: MotionTimelineProps) {
                     </div>
                   </div>
                 </div>
-                {lanes ? (
+                {lanes?.rows.length ? (
                   <>
                     {/* its Transform group, as the editor names it */}
                     <div className="flex" style={{ height: 20 }}>
@@ -385,10 +399,40 @@ export function MotionTimeline(p: MotionTimelineProps) {
                       <div className="flex" style={{ height: lanesHeight(lanes) }}>
                         <div className={`${head} border-r border-[var(--dock-line)]`} style={{ width: headW, paddingTop: LANE_PAD / 2 }}>
                           {lanes.graph ? <MotionLaneHeads lanes={lanes} /> : lanes.rows.map((row) => (
-                            <PropertyHead key={row.prop} layer={layer} lanes={lanes} prop={row.prop} host={host} t={t} />
+                            <PropertyHead key={row.prop} layer={layer} lanes={lanes} prop={row.prop as MotionProp} host={host} t={t} />
                           ))}
                         </div>
                         <div className="relative" style={{ width: timeW }}><MotionLaneRows lanes={lanes} top={0} pxPerMs={pxPerMs} /></div>
+                      </div>
+                    ) : null}
+                  </>
+                ) : null}
+                {fxLanes && host.effects ? (
+                  <>
+                    {/* its Effects group: an effect added from the menu, each with its own row */}
+                    <div className="flex" style={{ height: 22 }} data-effects-group={layer.clipId}>
+                      <div className={`${head} flex items-center gap-2 border-r border-[var(--dock-line)] text-[11.5px] text-[var(--text-muted)]`} style={{ width: headW, paddingLeft: AV_W + 18 }}>
+                        <span className="flex items-center"><ChevronDown size={11} className="mr-1" /> {t('canvas.fxGroup')}</span>
+                        {host.effects.on.length < EFFECT_PROPS.length ? (
+                          <select aria-label={t('canvas.fxAdd')} value="" data-effect-add={layer.clipId}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onChange={(e) => { const fx = e.target.value as EffectProp; if (fx) host.commitEffects(host.effects!.add(fx)); }}
+                            className="h-[18px] rounded-[3px] border border-[var(--dock-line)] bg-transparent px-1 text-[11px] text-[var(--text-muted)]">
+                            <option value="">{t('canvas.fxAdd')}</option>
+                            {EFFECT_PROPS.filter((fx) => !host.effects!.on.includes(fx)).map((fx) => <option key={fx} value={fx}>{t(`canvas.fx.${fx}`)}</option>)}
+                          </select>
+                        ) : null}
+                      </div>
+                      <div style={{ width: timeW }} />
+                    </div>
+                    {fxLanes.rows.length ? (
+                      <div className="flex" style={{ height: lanesHeight(fxLanes) }}>
+                        <div className={`${head} border-r border-[var(--dock-line)]`} style={{ width: headW, paddingTop: LANE_PAD / 2 }}>
+                          {fxLanes.graph ? <MotionLaneHeads lanes={fxLanes} /> : fxLanes.rows.map((row) => (
+                            <EffectHead key={row.prop} layer={layer} lanes={fxLanes} fx={row.prop as EffectProp} host={host} t={t} />
+                          ))}
+                        </div>
+                        <div className="relative" style={{ width: timeW }}><MotionLaneRows lanes={fxLanes} top={0} pxPerMs={pxPerMs} /></div>
                       </div>
                     ) : null}
                   </>
@@ -407,6 +451,46 @@ export function MotionTimeline(p: MotionTimelineProps) {
         <input type="range" aria-label={t('canvas.motionZoom')} min={0} max={100} value={Math.round((Math.log(zoom) / Math.log(40)) * 100)}
           onChange={(e) => setZoom(40 ** (Number(e.target.value) / 100))} className="w-[160px]" data-motion-zoom="" />
       </div>
+    </div>
+  );
+}
+
+/** An effect's row in the layer's head, as a property's: navigator, stopwatch, name, value; and a way to take it off. */
+function EffectHead({ layer, lanes, fx, host, t }: { layer: Layer; lanes: MotionLanes; fx: EffectProp; host: LayerHost; t: (key: string) => string }) {
+  const model = host.effects!;
+  const keys = lanes.rows.find((r) => r.prop === fx)?.keys ?? [];
+  const local = (lanes.playheadMs - lanes.startMs) / 1000;
+  const frame = lanes.frameMs / 1000;
+  const inClip = lanes.playheadMs >= 0 && lanes.playheadMs <= lanes.endMs;
+  const here = inClip && keys.some((k) => Math.abs(k.t - local) < frame / 2);
+  const prev = [...keys].reverse().find((k) => k.t < local - frame / 2);
+  const next = keys.find((k) => k.t > local + frame / 2);
+  const nav = 'grid h-[16px] w-[14px] place-items-center rounded-[2px] text-[var(--text-faint)] hover:bg-white/10 hover:text-[var(--text)] disabled:opacity-30';
+  const unit = EFFECTS[fx].unit === 'deg' ? '°' : EFFECTS[fx].unit;
+  return (
+    <div className="group/fx flex items-center text-[11.5px]" style={{ height: LANE_H }} data-effect-row={`${layer.clipId}:${fx}`}>
+      <span className="flex shrink-0 items-center justify-center" style={{ width: AV_W }}>
+        {keys.length ? (
+          <>
+            <button type="button" aria-label={t('inspector.keyPrev')} disabled={!prev} className={nav} onClick={() => prev && lanes.onSeek(lanes.startMs + prev.t * 1000)}><ChevronLeft size={10} /></button>
+            <button type="button" aria-label={t(here ? 'inspector.keyRemove' : 'inspector.keyAdd')} disabled={!inClip} className={nav} onClick={() => host.commitEffects(model.toggleHere(fx))}>
+              <svg width="8" height="8" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1 11 6 6 11 1 6Z" fill={here ? 'var(--tl-accent)' : 'none'} stroke={here ? 'var(--tl-accent)' : 'currentColor'} strokeWidth="1.5" /></svg>
+            </button>
+            <button type="button" aria-label={t('inspector.keyNext')} disabled={!next} className={nav} onClick={() => next && lanes.onSeek(lanes.startMs + next.t * 1000)}><ChevronRight size={10} /></button>
+          </>
+        ) : null}
+      </span>
+      <span style={{ width: 34 }} />
+      <Stopwatch on={keys.length > 0} label={t(keys.length ? 'inspector.stopwatchOff' : 'inspector.stopwatchOn')} disabled={!keys.length && !inClip}
+        onClick={() => host.commitEffects(model.stopwatch(fx))} />
+      <span className="ml-1 w-[64px] shrink-0 truncate text-[var(--text-muted)]">{t(`canvas.fx.${fx}`)}</span>
+      <Scrub label={t(`canvas.fx.${fx}`)} value={model.now(fx)} unit={unit} step={FX_STEP[fx]}
+        onCommit={(n) => host.commitEffects(model.set(fx, EFFECTS[fx].unit === 'deg' ? n : Math.max(0, n)))} />
+      <button type="button" aria-label={t('canvas.fxRemove')} title={t('canvas.fxRemove')} data-effect-remove={`${layer.clipId}:${fx}`}
+        onClick={() => host.commitEffects(model.remove(fx))}
+        className="ml-2 grid h-[16px] w-[16px] place-items-center rounded-[3px] text-[var(--text-faint)] opacity-0 hover:bg-white/10 hover:text-[var(--text)] group-hover/fx:opacity-100">
+        <X size={11} />
+      </button>
     </div>
   );
 }

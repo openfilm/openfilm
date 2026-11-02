@@ -79,7 +79,9 @@ where, and CSS that says how each looks. A page draws a shot.
     look (`opacity`, `filter`, `clip-path`…), never what places it. On every picture a host sets `--clip-length`, how
     long the clip is on the film (`4.2s`), so a way out can be timed from its end:
     `animation: out .6s ease-in calc(var(--clip-length) - .6s) both`. A `transition`, whose progress is history, is an
-    error.
+    error. A host registers the effects' custom properties, so a `filter` that reads them eases each by keyframes of
+    its own: `--fx-blur` and `--fx-glow` (lengths), `--fx-brightness`, `--fx-contrast`, `--fx-saturate` and
+    `--fx-grayscale` (percentages), `--fx-hue` (an angle), as in `filter: blur(var(--fx-blur, 0px))`.
   - `overrides` are the person's changes made in Studio, as JSON, a list of entries. An entry with `at` (a CSS
     selector), on a page clip only, tweaks an element of the page, applied by the host after each frame: optional `n`
     (which match, from 1), `t` (translate px), `s` (scale), `r` (rotate degrees) as the independent CSS transform

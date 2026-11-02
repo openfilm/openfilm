@@ -277,6 +277,29 @@ function trimDashes(/** @type {string} */ name) {
 }
 
 /**
+ * A clip's (or a page element's) effects, each a number in a custom property of its own (`--fx-blur: 4px`) that its
+ * `filter` reads, so each moves by keyframes of its own: its unit, its value when it does nothing, its CSS type, its
+ * filter (with that value as the fallback). A host registers them (registerEffects) so their keyframes ease.
+ */
+export const EFFECTS = Object.freeze({
+  blur: { unit: 'px', rest: 0, syntax: '<length>', filter: 'blur(var(--fx-blur, 0px))' },
+  brightness: { unit: '%', rest: 100, syntax: '<percentage>', filter: 'brightness(var(--fx-brightness, 100%))' },
+  contrast: { unit: '%', rest: 100, syntax: '<percentage>', filter: 'contrast(var(--fx-contrast, 100%))' },
+  saturate: { unit: '%', rest: 100, syntax: '<percentage>', filter: 'saturate(var(--fx-saturate, 100%))' },
+  hue: { unit: 'deg', rest: 0, syntax: '<angle>', filter: 'hue-rotate(var(--fx-hue, 0deg))' },
+  grayscale: { unit: '%', rest: 0, syntax: '<percentage>', filter: 'grayscale(var(--fx-grayscale, 0%))' },
+  glow: { unit: 'px', rest: 0, syntax: '<length>', filter: 'drop-shadow(0 0 var(--fx-glow, 0px) rgb(255 255 255 / 0.85))' },
+});
+
+/** The effects' custom properties registered in a window (the film's, a page's), so their keyframes ease. */
+export function registerEffects(win) {
+  if (!win?.CSS?.registerProperty) return;
+  for (const [name, { unit, rest, syntax }] of Object.entries(EFFECTS)) {
+    try { win.CSS.registerProperty({ name: `--fx-${name}`, syntax, inherits: false, initialValue: `${rest}${unit}` }); } catch { /* already */ }
+  }
+}
+
+/**
  * The name a clip gets when it has none: its source's file name (`assets/audio/vo/02-turn.m4a` → `02-turn`), with
  * `-2`, `-3` when taken. Letters are Unicode letters: a file named in Chinese keeps its name.
  */

@@ -11,7 +11,7 @@
  */
 import * as React from 'react';
 import { ChevronLeft, ChevronRight, ChartSpline } from 'lucide-react';
-import { valueAt, type Key, type MotionProp, type MotionValue } from '../../../../src/clip-motion.mjs';
+import { valueAt, type Key, type KeyedProp, type MotionValue } from '../../../../src/clip-motion.mjs';
 import { bezierOf, easeOfBezier, keyId, sidesOf, type Bezier, type Side } from '@/lib/motion-keys';
 
 /** A row's height, and the room kept above the first. */
@@ -25,7 +25,7 @@ export interface MotionLanes {
   /** Where the clip starts and ends on the film, ms. */
   startMs: number;
   endMs: number;
-  rows: { prop: MotionProp; label: string; keys: readonly Key[] }[];
+  rows: { prop: KeyedProp; label: string; keys: readonly Key[] }[];
   /** The keyframes picked (lib/motion-keys keyId). */
   picked: ReadonlySet<string>;
   playheadMs: number;
@@ -33,16 +33,16 @@ export interface MotionLanes {
   onPick: (ids: string[], mode: 'set' | 'add' | 'toggle') => void;
   /** The picked keyframes moved in time, s. */
   onMove: (dt: number) => void;
-  onToggleHere: (prop: MotionProp) => void;
+  onToggleHere: (prop: KeyedProp) => void;
   onSeek: (ms: number) => void;
   onMenu: (e: React.MouseEvent, id: string) => void;
   /** The graph shown in place of the rows. */
   graph: boolean;
   onGraph: () => void;
   /** A segment's curve (the one from the keyframe at `t`) shaped. */
-  onCurve: (prop: MotionProp, t: number, curve: Bezier) => void;
+  onCurve: (prop: KeyedProp, t: number, curve: Bezier) => void;
   /** A keyframe dragged on the graph: its time and value. */
-  onKeyEdit: (prop: MotionProp, t: number, to: { t: number; v: MotionValue }) => void;
+  onKeyEdit: (prop: KeyedProp, t: number, to: { t: number; v: MotionValue }) => void;
   labels: { prev: string; next: string; add: string; remove: string; graph: string };
 }
 
@@ -165,7 +165,7 @@ export function MotionLaneHeads({ lanes }: { lanes: MotionLanes }) {
               onClick={() => lanes.onPick(row.keys.map((k) => keyId(row.prop, k.t)), 'set')}>
               {lanes.graph && row.keys.length ? (row.prop === 'translate'
                 ? <><span className="h-[6px] w-[6px] shrink-0 rounded-full" style={{ background: CURVE.x }} /><span className="h-[6px] w-[6px] shrink-0 rounded-full" style={{ background: CURVE.y }} /></>
-                : <span className="h-[6px] w-[6px] shrink-0 rounded-full" style={{ background: CURVE[row.prop] }} />) : null}
+                : <span className="h-[6px] w-[6px] shrink-0 rounded-full" style={{ background: curveOf(row.prop) }} />) : null}
               <span className="truncate">{row.label}</span>
             </button>
             <HeadButton label={lanes.labels.prev} disabled={!prev} onClick={() => prev && lanes.onSeek(lanes.startMs + prev.t * 1000)}><ChevronLeft size={10} /></HeadButton>
@@ -195,15 +195,18 @@ function HeadButton({ label, disabled, on, onClick, children }: { label: string;
 }
 
 /** Each curve's colour: a position's X and Y, and the other properties. */
-const CURVE = { x: '#ff6b6b', y: '#5fd38d', translate: '#ff6b6b', scale: '#f5c451', rotate: '#6aa8ff', opacity: '#d9d9d9' } as const;
+const CURVE: Record<string, string> = { x: '#ff6b6b', y: '#5fd38d', translate: '#ff6b6b', scale: '#f5c451', rotate: '#6aa8ff', opacity: '#d9d9d9' };
+/** An effect's curve (blur, brightness…). */
+const EFFECT_CURVE = '#c58af0';
+const curveOf = (prop: string) => CURVE[prop] ?? EFFECT_CURVE;
 const GRAPH_PAD = 12;
 /** Points along each segment, to draw its curve. */
 const STEPS = 24;
 
-type Curve = { prop: MotionProp; dim: 0 | 1 | null; keys: Key[]; color: string; min: number; max: number };
+type Curve = { prop: KeyedProp; dim: 0 | 1 | null; keys: Key[]; color: string; min: number; max: number };
 type GraphDrag =
-  | { kind: 'handle'; prop: MotionProp; seg: number; side: 'out' | 'in'; curve: Bezier }
-  | { kind: 'key'; prop: MotionProp; dim: 0 | 1 | null; index: number; dt: number; dv: number };
+  | { kind: 'handle'; prop: KeyedProp; seg: number; side: 'out' | 'in'; curve: Bezier }
+  | { kind: 'key'; prop: KeyedProp; dim: 0 | 1 | null; index: number; dt: number; dv: number };
 
 const part = (v: MotionValue, dim: 0 | 1 | null) => (dim == null ? (v as number) : (v as [number, number])[dim]);
 
@@ -217,7 +220,7 @@ function MotionGraph({ lanes, top, pxPerMs }: { lanes: MotionLanes; top: number;
   const frameS = lanes.frameMs / 1000;
 
   /* the rows' keyframes as they are while dragged */
-  const rowKeys = (prop: MotionProp, keys: readonly Key[]): Key[] => {
+  const rowKeys = (prop: KeyedProp, keys: readonly Key[]): Key[] => {
     const out = keys.map((k) => ({ ...k }));
     if (drag?.prop !== prop) return out;
     if (drag.kind === 'handle') {
@@ -254,7 +257,7 @@ function MotionGraph({ lanes, top, pxPerMs }: { lanes: MotionLanes; top: number;
         range = [lo, hi];
         fit.current.set(name, range);
       }
-      const color = dim === 0 ? CURVE.x : dim === 1 ? CURVE.y : CURVE[row.prop];
+      const color = dim === 0 ? CURVE.x! : dim === 1 ? CURVE.y! : curveOf(row.prop);
       return { prop: row.prop, dim, keys, color, min: range[0], max: range[1] };
     });
   });

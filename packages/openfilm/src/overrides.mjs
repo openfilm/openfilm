@@ -4,6 +4,8 @@
 // clip as the timeline keeps it: its page's window (`win`), what its tweaks changed (`touched`), which ones found an
 // element (`found`).
 
+import { registerEffects } from './film-doc.mjs';
+
 /**
  * Overrides: a person's tweak of one element inside a page, applied after the page draws each frame. `found` keeps,
  * per tweak, whether its selector ever found an element (a page rewritten since may have lost it). What a tweak
@@ -65,6 +67,8 @@ function keyframesIn(page, list, keyframes) {
   }
   const text = [...names].filter((n) => keyframes?.[n] != null).map((n) => `@keyframes ${n} { ${keyframes[n]} }`).join('\n');
   if (!text && typeof page?.querySelector !== 'function') return;
+  /* an effect's keyframes ease only where its custom property is registered (film-doc EFFECTS) */
+  if (text.includes('--fx-')) registerEffects(page.defaultView);
   let tag = page.querySelector('style[data-film-keyframes]');
   if (!text) { tag?.remove(); return; }
   if (!tag) {

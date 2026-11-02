@@ -9,15 +9,15 @@
  *
  * Pure: no React, no DOM, so `node --test` runs it.
  */
-import { EASES, MOTION_PROPS, valueAt, type Key, type Motion, type MotionProp } from '../../../../src/clip-motion.mjs';
+import { EASES, EFFECTS, KEYED_PROPS, valueAt, type EffectProp, type Key, type KeyedProp, type Motion } from '../../../../src/clip-motion.mjs';
 
 /** A picked keyframe, `<property>@<seconds>`. */
-export const keyId = (prop: MotionProp, t: number) => `${prop}@${t}`;
-export function parseKeyId(id: string): { prop: MotionProp; t: number } | null {
+export const keyId = (prop: KeyedProp, t: number) => `${prop}@${t}`;
+export function parseKeyId(id: string): { prop: KeyedProp; t: number } | null {
   const at = id.lastIndexOf('@');
-  const prop = id.slice(0, at) as MotionProp;
+  const prop = id.slice(0, at) as KeyedProp;
   const t = Number(id.slice(at + 1));
-  return at > 0 && MOTION_PROPS.includes(prop) && Number.isFinite(t) ? { prop, t } : null;
+  return at > 0 && KEYED_PROPS.includes(prop) && Number.isFinite(t) ? { prop, t } : null;
 }
 
 /** How a keyframe goes in or out. */
@@ -89,7 +89,7 @@ export function withEase(keys: readonly Key[], picked: ReadonlySet<number>, comm
 /** The motion with the picked keyframes moved `dt` seconds (kept apart from the others of their property, none before 0). */
 export function movedKeys(motion: Motion, picked: ReadonlySet<string>, dt: number): Motion {
   const next: Motion = {};
-  for (const prop of MOTION_PROPS) {
+  for (const prop of KEYED_PROPS) {
     const keys = motion[prop];
     if (!keys?.length) continue;
     const moving = keys.filter((k) => picked.has(keyId(prop, k.t)));
@@ -107,7 +107,7 @@ export function movedKeys(motion: Motion, picked: ReadonlySet<string>, dt: numbe
 /** The motion without the picked keyframes. */
 export function withoutKeys(motion: Motion, picked: ReadonlySet<string>): Motion {
   const next: Motion = {};
-  for (const prop of MOTION_PROPS) {
+  for (const prop of KEYED_PROPS) {
     const keys = (motion[prop] ?? []).filter((k) => !picked.has(keyId(prop, k.t)));
     if (keys.length) next[prop] = keys;
   }
@@ -117,7 +117,7 @@ export function withoutKeys(motion: Motion, picked: ReadonlySet<string>): Motion
 /** The motion with a command applied to the picked keyframes of every property. */
 export function easedMotion(motion: Motion, picked: ReadonlySet<string>, command: EaseCommand): Motion {
   const next: Motion = { ...motion };
-  for (const prop of MOTION_PROPS) {
+  for (const prop of KEYED_PROPS) {
     const keys = motion[prop];
     if (!keys?.length) continue;
     const times = new Set(keys.filter((k) => picked.has(keyId(prop, k.t))).map((k) => k.t));
@@ -215,20 +215,20 @@ export function unposed(p: Placed, own: { w: number; h: number }, pose: ClipPose
 }
 
 /** Keyframes copied: each property's, their times from the earliest of them all. */
-export type CopiedKeys = Partial<Record<MotionProp, Key[]>>;
+export type CopiedKeys = Partial<Record<KeyedProp, Key[]>>;
 
 /** The picked keyframes, copied. */
 export function copiedKeys(motion: Motion, picked: ReadonlySet<string>): CopiedKeys | null {
   const out: CopiedKeys = {};
   let first = Infinity;
-  for (const prop of MOTION_PROPS) {
+  for (const prop of KEYED_PROPS) {
     const keys = (motion[prop] ?? []).filter((k) => picked.has(keyId(prop, k.t)));
     if (!keys.length) continue;
     out[prop] = keys.map((k) => ({ ...k }));
     first = Math.min(first, keys[0]!.t);
   }
   if (!Number.isFinite(first)) return null;
-  for (const prop of MOTION_PROPS) out[prop]?.forEach((k) => { k.t = Math.round((k.t - first) * 1000) / 1000; });
+  for (const prop of KEYED_PROPS) out[prop]?.forEach((k) => { k.t = Math.round((k.t - first) * 1000) / 1000; });
   return out;
 }
 
@@ -239,7 +239,7 @@ export function copiedKeys(motion: Motion, picked: ReadonlySet<string>): CopiedK
 export function pastedKeys(motion: Motion, copied: CopiedKeys, t: number, frame: number): { motion: Motion; picked: Set<string> } {
   const next: Motion = { ...motion };
   const picked = new Set<string>();
-  for (const prop of MOTION_PROPS) {
+  for (const prop of KEYED_PROPS) {
     const add = copied[prop];
     if (!add?.length) continue;
     let keys = [...(motion[prop] ?? [])];
@@ -252,4 +252,53 @@ export function pastedKeys(motion: Motion, copied: CopiedKeys, t: number, frame:
     next[prop] = keys.sort((a, b) => a.t - b.t);
   }
   return { motion: next, picked };
+}
+
+/** The motion with a property's keyframe at `t` set (`v`), or taken away (null); one within half a frame is replaced. */
+export function withKeyAt(motion: Motion, prop: KeyedProp, t: number, v: Key['v'] | null, frame: number): Motion {
+  const was = (motion[prop] ?? []).find((k) => Math.abs(k.t - t) < frame / 2);
+  const keys = (motion[prop] ?? []).filter((k) => k !== was);
+  if (v != null) keys.push({ t: Math.round(t * 1000) / 1000, v, ...(was?.ease ? { ease: was.ease } : {}) });
+  keys.sort((a, b) => a.t - b.t);
+  const next = { ...motion };
+  if (keys.length) next[prop] = keys; else delete next[prop];
+  return next;
+}
+
+/**
+ * A layer's effects as numbers (the motion timeline's Effects group): which are on, each one's value at the second
+ * `at` (its keyframes', else its own), and the change a value typed, a stopwatch, a navigator's middle, an effect
+ * added or taken away makes: its keyframes, and its own values and which are on (`fx`) when those change.
+ */
+export interface EffectsChange { motion: Motion; fx?: { on: EffectProp[]; values: Partial<Record<EffectProp, number>> } }
+export function effectsModel(motion: Motion, on: readonly EffectProp[], values: Partial<Record<EffectProp, number>>, at: number, inClip: boolean, frame: number) {
+  const now = (p: EffectProp) => (motion[p]?.length ? valueAt(p, motion[p], at) as number : values[p] ?? EFFECTS[p].rest);
+  const fx = (nextOn: readonly EffectProp[], nextValues: Partial<Record<EffectProp, number>>) => ({ on: [...nextOn], values: nextValues });
+  return {
+    on,
+    now,
+    set: (p: EffectProp, n: number): EffectsChange | null => (motion[p]?.length
+      ? (inClip ? { motion: withKeyAt(motion, p, at, n, frame) } : null)
+      : { motion, fx: fx(on, { ...values, [p]: n }) }),
+    stopwatch: (p: EffectProp): EffectsChange | null => {
+      if (motion[p]?.length) {
+        const next = { ...motion };
+        delete next[p];
+        return { motion: next, fx: fx(on, { ...values, [p]: now(p) }) };
+      }
+      return inClip ? { motion: withKeyAt(motion, p, at, now(p), frame) } : null;
+    },
+    toggleHere: (p: EffectProp): EffectsChange | null => {
+      if (!inClip) return null;
+      const has = (motion[p] ?? []).some((k) => Math.abs(k.t - at) < frame / 2);
+      return { motion: withKeyAt(motion, p, at, has ? null : now(p), frame) };
+    },
+    add: (p: EffectProp): EffectsChange => ({ motion, fx: fx([...on, p], values) }),
+    remove: (p: EffectProp): EffectsChange => {
+      const next = { ...motion };
+      delete next[p];
+      const { [p]: _gone, ...rest } = values;
+      return { motion: next, fx: fx(on.filter((x) => x !== p), rest) };
+    },
+  };
 }

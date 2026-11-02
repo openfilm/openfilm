@@ -9,8 +9,8 @@
 import * as React from 'react';
 import { BookmarkPlus, ChevronDown, ClipboardCopy, ClipboardPaste, Film as FilmIcon, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, Spline, TriangleAlert, Upload, Workflow } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
-import { MOTION_PROPS, readMotion, valueAt, withPreset, type Motion, type MotionProp } from '../../../../src/clip-motion.mjs';
-import { copiedKeys, easeOfBezier, easedMotion, keyId, keyedBox, movedKeys, parseKeyId, pastedKeys, poseAt, withoutKeys, type CopiedKeys, type EaseCommand } from '@/lib/motion-keys';
+import { EFFECTS, MOTION_PROPS, effectsOf, readMotion, valueAt, withEffects, withPreset, type EffectProp, type KeyedProp, type Motion, type MotionProp } from '../../../../src/clip-motion.mjs';
+import { copiedKeys, easeOfBezier, easedMotion, effectsModel, type EffectsChange, keyId, keyedBox, movedKeys, parseKeyId, pastedKeys, poseAt, withoutKeys, type CopiedKeys, type EaseCommand } from '@/lib/motion-keys';
 import type { MotionLanes } from './MotionLanes';
 import type { MotionPathKeys } from './MotionPath';
 import { MotionTimeline, type Layer, type LayerHost } from './MotionTimeline';
@@ -18,6 +18,7 @@ import { elementModel, elementStatic, elementSubject, readElementMotion, sameEle
 import { transformModel, type TransformCommit } from './KeyframesSection';
 import { staticTransform, transformEdits } from '@/lib/clip-transform';
 import { declared, withDeclarations } from '@/lib/clip-look';
+import { declarations } from '../../../../src/film-doc.mjs';
 import { PARTS, compoundOf, dissolvedOf } from '../../../server/compound.mjs';
 import type { FilmValue } from '../../../server/ops.mjs';
 import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type Op, type ProjectFilm, type ProjectSettings, type SavedGroupClip } from '@/api';
@@ -992,6 +993,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     return () => window.removeEventListener('keydown', onKey, true);
   }, [pickedKeys, keyCommand, keyFrameS]);
   const MOTION_LABEL: Record<MotionProp, string> = { translate: 'inspector.keyPosition', scale: 'inspector.keyScale', rotate: 'inspector.keyRotate', opacity: 'inspector.keyOpacity' };
+  /* a keyed property's name: a Transform's, or an effect's */
+  const keyedLabel = (p: KeyedProp) => t(p in EFFECTS ? `canvas.fx.${p}` : MOTION_LABEL[p as MotionProp]);
   /* the picked clip's rows drawn as a graph (⇧F3, or its button) */
   const [motionGraph, setMotionGraph] = React.useState(false);
   /* a picked picture clip that moves (its stopwatch turned on in the inspector, a preset): its position, scale,
@@ -1005,7 +1008,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const lanesOf = React.useCallback((block: TimelineBlock & { clipId: string }): MotionLanes => {
     const mine = block.clipId === motionBlock?.clipId;
     const motion = motionOfBlock(block);
-    const rows = MOTION_PROPS.map((p) => ({ prop: p, label: t(MOTION_LABEL[p]), keys: motion[p] ?? [] }));
+    const clipStyle = (film.film?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === block.clipId) as { style?: string } | undefined)?.style;
+    const fx = effectsOf(clipStyle);
+    const rows = [...MOTION_PROPS, ...fx.on].map((p) => ({ prop: p, label: keyedLabel(p), keys: motion[p] ?? [] }));
     const startMs = block.startMs;
     const rewrite = (next: Motion, picked?: ReadonlySet<string>) => {
       if (!block.loc) return;
@@ -1042,7 +1047,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
           const n = Number.parseFloat(declared(clip?.style ?? '', 'opacity') ?? '1');
           return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 1;
         };
-        if (!here) rest.push({ t: Math.round(local * 1000) / 1000, v: keys.length || prop !== 'opacity' ? valueAt(prop, keys, local) : own() });
+        const still = prop in EFFECTS ? fx.values[prop as EffectProp] ?? EFFECTS[prop as EffectProp].rest : prop === 'opacity' ? own() : valueAt(prop, keys, local);
+        if (!here) rest.push({ t: Math.round(local * 1000) / 1000, v: keys.length ? valueAt(prop, keys, local) : still });
         rest.sort((a, b) => a.t - b.t);
         const next = { ...motion };
         if (rest.length) next[prop] = rest; else delete next[prop];
@@ -1084,8 +1090,20 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       if (!layer.loc) return;
       void editBlocks([{ loc: layer.loc, prop: 'style', value: withDeclarations(css, decl) || null }]).then((err) => { if (err) toast.showError(err); });
     };
+    const local = (timeMs - layer.startMs) / 1000;
+    const fx = effectsOf(css);
+    const motion = motionOfBlock(layer);
+    const effects = effectsModel(motion, fx.on, fx.values, Math.min(Math.max(local, 0), length), local >= 0 && local <= length, keyFrameS);
     return {
       model,
+      effects,
+      commitEffects: (c: EffectsChange | null) => {
+        if (!c || !layer.loc) return;
+        void editBlocks([
+          ...(c.fx ? [{ loc: layer.loc, prop: 'style', value: withEffects(css, c.fx.on, c.fx.values) || null }] : []),
+          { loc: layer.loc, prop: 'motion', value: Object.keys(c.motion).length ? (c.motion as unknown as Record<string, unknown>) : null },
+        ]).then((err) => { if (err) toast.showError(err); });
+      },
       commit: (made) => {
         const c = made as TransformCommit | null;
         if (!c || !placed || !layer.loc) return;
@@ -2677,8 +2695,23 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const on = compBlock != null && compLocalMs >= 0 && compLocalMs <= compBlock.endMs - compBlock.startMs;
     const model = elementModel(motion, elementStatic(entry), compLocalMs / 1000 + compOffset, on, keyFrameS);
     const css = (entry?.style ?? {}) as Record<string, string | number>;
+    /* its effects, in its tweak's style: its filter and its `--fx-…` values (clip-motion effectsOf) */
+    const fxCss = [`filter: ${css.filter ?? ''}`, ...Object.entries(css).filter(([k]) => k.startsWith('--fx-')).map(([k, v]) => `${k}: ${v}`)].join('; ');
+    const fx = effectsOf(fxCss);
+    const effects = effectsModel(motion, fx.on, fx.values, compLocalMs / 1000 + compOffset, on, keyFrameS);
     return {
       model,
+      effects,
+      commitEffects: (c: EffectsChange | null) => {
+        if (!c) return;
+        let patch: Record<string, string | null> | undefined;
+        if (c.fx) {
+          const next = Object.fromEntries(declarations(withEffects(fxCss, c.fx.on, c.fx.values)));
+          patch = { filter: next.filter || null };
+          for (const p of Object.keys(EFFECTS)) patch[`--fx-${p}`] = next[`--fx-${p}`] ?? null;
+        }
+        writeElement(layer.clipId, c.motion, undefined, patch);
+      },
       commit: (c) => { const k = c as ElementCommit | null; if (k) writeElement(layer.clipId, k.motion, k.stat); },
       blend: String(css.mixBlendMode ?? 'normal'),
       setBlend: (mode) => writeElement(layer.clipId, motion, undefined, { mixBlendMode: mode === 'normal' ? null : mode }),
@@ -2690,10 +2723,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const motion = elementMotionOf(layer.clipId);
     const id = layer.clipId;
     const picked = compKeys?.id === id ? compKeys.keys : NO_KEYS;
-    const model = elementHostOf(layer).model;
+    const host = elementHostOf(layer);
+    const model = host.model;
     return {
       clipId: id, startMs: -compOffset * 1000, endMs: layer.endMs, playheadMs: compLocalMs, frameMs: 1000 * keyFrameS,
-      rows: MOTION_PROPS.map((prop) => ({ prop, label: t(MOTION_LABEL[prop]), keys: motion[prop] ?? [] })),
+      rows: [...MOTION_PROPS, ...(host.effects?.on ?? [])].map((prop) => ({ prop, label: keyedLabel(prop), keys: motion[prop] ?? [] })),
       picked,
       onPick: (ids, mode) => {
         setCompPicked([id]);
@@ -2706,7 +2740,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         });
       },
       onMove: (dt) => { if (picked.size) writeElement(id, movedKeys(motion, picked, dt)); },
-      onToggleHere: (prop) => { const c = model?.toggleHere(prop) as ElementCommit | null; if (c) writeElement(id, c.motion, c.stat); },
+      onToggleHere: (prop) => {
+        if (prop in EFFECTS) { host.commitEffects(host.effects?.toggleHere(prop as EffectProp) ?? null); return; }
+        const c = model?.toggleHere(prop as MotionProp) as ElementCommit | null;
+        if (c) writeElement(id, c.motion, c.stat);
+      },
       onSeek: (ms) => { if (compBlock) seek(compBlock.startMs + ms); },
       onMenu: () => {},
       graph: motionGraph,
