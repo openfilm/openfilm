@@ -27,6 +27,9 @@ function world() {
   skill(join(home, '.claude', 'skills', 'research'), 'research');
   skill(join(home, '.claude', 'skills', 'synced', 'bucket', 'pdf'), 'pdf');
   skill(join(project, '.claude', 'skills', 'team-style'), 'team-style');
+  /* above the home, as a temp folder on Windows is inside the person's real one: not the project's */
+  skill(join(root, '.claude', 'skills', 'above-home'), 'above-home');
+  skill(join(root, '.agents', 'skills', 'above-home-agents'), 'above-home-agents');
   /* Codex: its own .system, the person's, ~/.agents, a plugin from OpenAI's marketplace and one not */
   skill(join(home, '.codex', 'skills', '.system', 'imagegen'), 'imagegen');
   skill(join(home, '.codex', 'skills', 'old-openfilm'), 'openfilm');
