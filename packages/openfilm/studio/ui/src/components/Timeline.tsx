@@ -744,6 +744,8 @@ export interface TimelineProps {
     extraBody: (track: TimelineTrack, pxPerMs: number) => React.ReactNode;
     /** Motion's tools on the toolbar, in the place of the edit's cutting ones (modes, split, magnet, linkage). */
     tools?: readonly { id: string; label: string; hint?: string; icon: React.ReactNode; active?: boolean; disabled?: boolean; onClick: () => void }[];
+    /** A layer's clip double-clicked: what it is made of opened (a page's elements, as layers); false: none to open. */
+    open?: (block: TimelineBlock) => boolean;
   } | null;
   /** The transitions the fades make (lib/transitions findTransitions): a mark over each, picked, resized, deleted. */
   transitions?: readonly FilmTransition[];
@@ -3223,10 +3225,15 @@ export const Timeline = React.memo(function Timeline({
                 }}
                 title={trouble ? `${blockTitleOf(block)}\n${t(trouble === 'length' ? 'timeline.noLengthHint' : trouble === 'missing' ? 'timeline.mediaMissingHint' : trouble === 'decode' ? 'timeline.mediaCannotPlay' : 'timeline.mediaReconnecting')}` : blockTitleOf(block)}
                 onDoubleClick={(e) => {
+                  if (mode === 'split') return;
                   /* a compound clip opens: its own film, edited as any (a breadcrumb leads back) */
-                  if (!onEnterCompound || mode === 'split' || !COMPOUND_SRC.test((block.src ?? '').replace(/#.*$/, ''))) return;
-                  e.stopPropagation();
-                  onEnterCompound(block);
+                  if (onEnterCompound && COMPOUND_SRC.test((block.src ?? '').replace(/#.*$/, ''))) {
+                    e.stopPropagation();
+                    onEnterCompound(block);
+                    return;
+                  }
+                  /* a layer (Motion) opens what it is made of, as its name double-clicked does */
+                  if (layers?.open?.(block)) e.stopPropagation();
                 }}
                 onPointerDown={(e) => {
                   /* a click selects and does not move the playhead (only empty space seeks); stop it reaching the

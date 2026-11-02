@@ -3075,10 +3075,16 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     return { track: { lane: `el:${layer.clipId}`, role: 'mg' as const, kind: 'visual' as const, index: 1, name: block.title, blocks: [block], height: LAYER_ROW_H, ...(extra ? { extra } : {}) } as TimelineTrack, layer, n: i + 1 };
   }) : null), [compBlock, compLayers, compMotion]); // eslint-disable-line react-hooks/exhaustive-deps
   /* what the timeline draws of a layer row: its head and its properties (a sound track keeps a plain head) */
-  const layerView = (view: MotionLayersView, rows: readonly { track: TimelineTrack; layer: Layer | null; n: number }[], keysPicked: boolean, layersPicked: boolean) => {
+  const layerView = (view: MotionLayersView, rows: readonly { track: TimelineTrack; layer: Layer | null; n: number }[], keysPicked: boolean, layersPicked: boolean, open?: (layer: Layer) => void) => {
     const of = new Map(rows.map((r) => [r.track.lane, r]));
     return {
       headWidth: view.headWidth,
+      ...(open ? { open: (block: TimelineBlock) => {
+        const layer = rows.find((r) => r.layer?.clipId === block.clipId)?.layer;
+        if (!layer || layer.kind !== 'mg') return false;
+        open(layer);
+        return true;
+      } } : {}),
       /* an animation editor's tools in the place of cutting's: ease the picked keyframes, their curves, what moves */
       tools: [
         { id: 'new', label: t('canvas.newLayer'), icon: <Plus size={16} />, onClick: () => {
@@ -4673,7 +4679,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     onRelink={(block, path) => void relinkBlock(block, path)}
                     onViewChange={setThumbView}
                     tracks={layerTracks ? layerTracks.map((r) => r.track) : tools.tracks}
-                    layers={layerTracks ? layerView(filmMotion, layerTracks, pickedKeys.size > 0, selectedBlocks.length > 0) : null}
+                    layers={layerTracks ? layerView(filmMotion, layerTracks, pickedKeys.size > 0, selectedBlocks.length > 0, openComposition) : null}
                     totalMs={totalMs}
                     timeMs={timeMs}
                     clock={playing ? clock : null}
