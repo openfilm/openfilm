@@ -1622,6 +1622,8 @@ export const en = {
     resize: 'Resize timeline',
     seek: 'Drag the playhead',
     split: 'Split',
+    keyframes: 'Keyframes',
+    keyframesHint: 'Pick a picture clip: its position, scale, rotation and opacity open as rows under it',
     subtitles: 'Subtitles',
     subtitlesNone: 'No subtitles yet — they appear once the film has a voice',
     subtitlesMakeOne: 'Make subtitles: a voice clip has no transcript yet',

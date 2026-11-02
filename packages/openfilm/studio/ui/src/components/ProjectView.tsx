@@ -13,6 +13,7 @@ import { MOTION_PROPS, readMotion, valueAt, withPreset, type Motion, type Motion
 import { copiedKeys, easeOfBezier, easedMotion, keyId, keyedBox, movedKeys, parseKeyId, pastedKeys, poseAt, withoutKeys, type CopiedKeys, type EaseCommand } from '@/lib/motion-keys';
 import type { MotionLanes } from './MotionLanes';
 import type { MotionPathKeys } from './MotionPath';
+import { declared } from '@/lib/clip-look';
 import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type Op, type ProjectFilm, type ProjectSettings, type SavedGroupClip } from '@/api';
 import { useLanguage, useT } from '@/i18n';
 import { useFilm, type OutsideStep, type Step } from '@/editor/use-film';
@@ -967,11 +968,23 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const MOTION_LABEL: Record<MotionProp, string> = { translate: 'inspector.keyPosition', scale: 'inspector.keyScale', rotate: 'inspector.keyRotate', opacity: 'inspector.keyOpacity' };
   /* the picked clip's rows drawn as a graph (⇧F3, or its button) */
   const [motionGraph, setMotionGraph] = React.useState(false);
+  /* the timeline's keyframes switch: on, the picked picture clip opens its position, scale, rotation and opacity as
+     rows under its track, where keyframes are set, moved and eased */
+  const [keyframeMode, keepKeyframeMode] = useKeptFlag('openfilm.project.keyframes', false);
+  const keyedPicture = motionBlock && (motionBlock.kind === 'mg' || motionBlock.kind === 'video') ? motionBlock : null;
+  /* the picked clip's first keyframe set (its stopwatch in the inspector, say): its rows open, so it shows where it went */
+  const keyCount = keyedPicture ? MOTION_PROPS.reduce((n, p) => n + (motionOfBlock(keyedPicture)[p]?.length ?? 0), 0) : 0;
+  const keyedBefore = React.useRef<{ clip: string | undefined; n: number }>({ clip: undefined, n: 0 });
+  React.useEffect(() => {
+    const was = keyedBefore.current;
+    keyedBefore.current = { clip: keyedPicture?.clipId, n: keyCount };
+    if (was.clip === keyedPicture?.clipId && was.n === 0 && keyCount > 0 && !keyframeMode) keepKeyframeMode(true);
+  }, [keyedPicture?.clipId, keyCount, keyframeMode, keepKeyframeMode]);
   const motionLanes = React.useMemo<MotionLanes | null>(() => {
-    if (!motionBlock?.clipId) return null;
+    if (!keyframeMode || !keyedPicture?.clipId) return null;
+    const motionBlock = { ...keyedPicture, clipId: keyedPicture.clipId };
     const motion = motionOfBlock(motionBlock);
-    const rows = MOTION_PROPS.filter((p) => motion[p]?.length).map((p) => ({ prop: p, label: t(MOTION_LABEL[p]), keys: motion[p]! }));
-    if (!rows.length) return null;
+    const rows = MOTION_PROPS.map((p) => ({ prop: p, label: t(MOTION_LABEL[p]), keys: motion[p] ?? [] }));
     const startMs = motionBlock.startMs;
     return {
       clipId: motionBlock.clipId, startMs, endMs: motionBlock.endMs, rows, picked: pickedKeys, playheadMs: timeMs, frameMs: 1000 * keyFrameS,
@@ -987,7 +1000,13 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         const keys = motion[prop] ?? [];
         const here = keys.find((k) => Math.abs(k.t - local) < keyFrameS / 2);
         const rest = keys.filter((k) => k !== here);
-        if (!here) rest.push({ t: Math.round(local * 1000) / 1000, v: valueAt(prop, keys, local) });
+        /* the first keyframe of a property is its value now: the clip's own opacity, else no change */
+        const own = () => {
+          const clip = film.film?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === motionBlock.clipId) as { style?: string } | undefined;
+          const n = Number.parseFloat(declared(clip?.style ?? '', 'opacity') ?? '1');
+          return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 1;
+        };
+        if (!here) rest.push({ t: Math.round(local * 1000) / 1000, v: keys.length || prop !== 'opacity' ? valueAt(prop, keys, local) : own() });
         rest.sort((a, b) => a.t - b.t);
         const next = { ...motion };
         if (rest.length) next[prop] = rest; else delete next[prop];
@@ -1012,7 +1031,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       },
       labels: { prev: t('inspector.keyPrev'), next: t('inspector.keyNext'), add: t('inspector.keyAdd'), remove: t('inspector.keyRemove'), graph: t('inspector.keyGraph') },
     };
-  }, [motionBlock, motionOfBlock, pickedKeys, timeMs, keyFrameS, keyCommand, rewriteMotion, seek, t, motionGraph]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [keyframeMode, keyedPicture, motionOfBlock, pickedKeys, timeMs, keyFrameS, keyCommand, rewriteMotion, seek, t, motionGraph, film.film]); // eslint-disable-line react-hooks/exhaustive-deps
   /* the picked clip's position keyframes, drawn on the picture as its path; the same picks as its timeline rows */
   const motionPath = React.useMemo<MotionPathKeys | null>(() => {
     if (!motionBlock?.clipId || playing) return null;
@@ -3954,6 +3973,10 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     links={clipLinks}
                     fades={clipFades}
                     motionLanes={motionLanes}
+                    keyframeMode={{
+                      on: keyframeMode, onToggle: () => keepKeyframeMode(!keyframeMode), label: t('timeline.keyframes'),
+                      hint: keyedPicture ? null : t('timeline.keyframesHint'),
+                    }}
                     transitions={filmTransitions}
                     onTransition={askTransition}
                     pickedTransition={pickedTr?.key ?? null}

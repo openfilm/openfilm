@@ -161,9 +161,9 @@ export function MotionLaneHeads({ lanes }: { lanes: MotionLanes }) {
             {ri === 0 ? (
               <HeadButton label={lanes.labels.graph} on={lanes.graph} onClick={lanes.onGraph}><ChartSpline size={10} /></HeadButton>
             ) : <span className="w-[12px] shrink-0" />}
-            <button type="button" className="flex min-w-0 flex-1 items-center gap-1 truncate text-left text-[10.5px] text-[var(--text-muted)] hover:text-[var(--text)]"
+            <button type="button" className={`flex min-w-0 flex-1 items-center gap-1 truncate text-left text-[10.5px] hover:text-[var(--text)] ${row.keys.length ? 'text-[var(--text-muted)]' : 'text-[var(--text-faint)]'}`}
               onClick={() => lanes.onPick(row.keys.map((k) => keyId(row.prop, k.t)), 'set')}>
-              {lanes.graph ? (row.prop === 'translate'
+              {lanes.graph && row.keys.length ? (row.prop === 'translate'
                 ? <><span className="h-[6px] w-[6px] shrink-0 rounded-full" style={{ background: CURVE.x }} /><span className="h-[6px] w-[6px] shrink-0 rounded-full" style={{ background: CURVE.y }} /></>
                 : <span className="h-[6px] w-[6px] shrink-0 rounded-full" style={{ background: CURVE[row.prop] }} />) : null}
               <span className="truncate">{row.label}</span>
@@ -236,7 +236,7 @@ function MotionGraph({ lanes, top, pxPerMs }: { lanes: MotionLanes; top: number;
   };
   /* each curve fitted to the height by its own least and greatest value: kept still while something is dragged */
   const fit = React.useRef<Map<string, [number, number]>>(new Map());
-  const curves: Curve[] = lanes.rows.flatMap((row) => {
+  const curves: Curve[] = lanes.rows.filter((row) => row.keys.length).flatMap((row) => {
     const keys = rowKeys(row.prop, row.keys);
     const dims: (0 | 1 | null)[] = row.prop === 'translate' ? [0, 1] : [null];
     return dims.map((dim) => {

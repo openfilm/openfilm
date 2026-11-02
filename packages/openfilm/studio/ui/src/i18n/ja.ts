@@ -1621,6 +1621,8 @@ export const ja: Words = {
     resize: 'タイムラインのサイズを変更',
     seek: '再生ヘッドをドラッグ',
     split: '分割',
+    keyframes: 'キーフレーム',
+    keyframesHint: '映像クリップを選ぶと、位置・スケール・回転・不透明度がその下に行として開きます',
     subtitles: '字幕',
     subtitlesNone: '字幕はまだありません — 映像に音声が入ると表示されます',
     subtitlesMakeOne: '字幕を作成：書き起こしのない音声クリップが 1 個あります',

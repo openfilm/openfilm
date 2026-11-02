@@ -720,6 +720,11 @@ export interface TimelineProps {
   fades?: ReadonlyMap<string, FadeMs>;
   /** The picked clip's moving properties: rows under its track with their keyframes (components/MotionLanes). */
   motionLanes?: MotionLanes | null;
+  /**
+   * The keyframes switch on the toolbar: on, the picked picture clip opens its moving properties as rows under its
+   * track (motionLanes); `hint` says what to do while nothing can be keyed.
+   */
+  keyframeMode?: { on: boolean; onToggle: () => void; label: string; hint: string | null };
   /** The transitions the fades make (lib/transitions findTransitions): a mark over each, picked, resized, deleted. */
   transitions?: readonly FilmTransition[];
   /** A transition put on a cut (the cut's menu, a clip's menu), resized or deleted. Null = done. */
@@ -998,6 +1003,7 @@ export const Timeline = React.memo(function Timeline({
   onReplaceDrop,
   fades,
   motionLanes,
+  keyframeMode,
   transitions,
   onTransition,
   pickedTransition = null,
@@ -4036,6 +4042,15 @@ export const Timeline = React.memo(function Timeline({
           </ToolButton>
         ) : null}
 
+        {keyframeMode ? (
+          <ToolButton onClick={keyframeMode.onToggle} active={keyframeMode.on} label={keyframeMode.label} wide>
+            <span className="flex items-center gap-1 text-[11.5px] font-medium" data-keyframe-mode={keyframeMode.on ? 'on' : 'off'}>
+              <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1 11 6 6 11 1 6Z" fill="currentColor" /></svg>
+              {keyframeMode.label}
+            </span>
+          </ToolButton>
+        ) : null}
+
         {/* the middle is for status: "Editing source…" and errors (not among the tools, where it would look like one) */}
         <div className="flex min-w-0 flex-1 items-center justify-center">
           {dropBusy || drag.saving ? (
@@ -4052,6 +4067,8 @@ export const Timeline = React.memo(function Timeline({
             >
               {dropError ?? drag.error}
             </button>
+          ) : keyframeMode?.on && keyframeMode.hint ? (
+            <span className="truncate text-[11px]" style={{ color: TL.faint }}>{keyframeMode.hint}</span>
           ) : notice ? (
             <button
               type="button"
@@ -4655,9 +4672,12 @@ function ToolButton({
   label,
   hint,
   active = false,
+  wide = false,
   children,
 }: {
   onClick: () => void;
+  /** Its words beside its icon: as wide as they are. */
+  wide?: boolean;
   disabled?: boolean;
   label: string;
   /** The shortcut, already formatted by shortcutHint (⌘ on Mac, Ctrl elsewhere); shown as `Label (⌘Z)`. */
@@ -4681,7 +4701,7 @@ function ToolButton({
         aria-label={title}
         aria-pressed={active}
         /* no focus outline after a click; focus-visible still shows for keyboard users */
-        className={`flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-[6px] outline-none transition focus-visible:ring-1 focus-visible:ring-[var(--tl-accent)] ${
+        className={`flex h-[28px] ${wide ? 'px-2' : 'w-[28px]'} shrink-0 items-center justify-center rounded-[6px] outline-none transition focus-visible:ring-1 focus-visible:ring-[var(--tl-accent)] ${
           disabled ? 'cursor-default' : ''
         } ${active || disabled ? '' : 'hover:bg-black/5 dark:hover:bg-white/10'}`}
         style={active
