@@ -7,7 +7,7 @@
  * are written one at a time (see editor/use-film.ts); the agent's writes come in through the folder's events.
  */
 import * as React from 'react';
-import { BookmarkPlus, ClipboardCopy, ClipboardPaste, Film as FilmIcon, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, Spline, TriangleAlert, Upload, Workflow } from 'lucide-react';
+import { BookmarkPlus, ChevronDown, ClipboardCopy, ClipboardPaste, Film as FilmIcon, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, Spline, TriangleAlert, Upload, Workflow } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
 import { MOTION_PROPS, readMotion, valueAt, withPreset, type Motion, type MotionProp } from '../../../../src/clip-motion.mjs';
 import { copiedKeys, easeOfBezier, easedMotion, keyId, keyedBox, movedKeys, parseKeyId, pastedKeys, poseAt, withoutKeys, type CopiedKeys, type EaseCommand } from '@/lib/motion-keys';
@@ -438,6 +438,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     setCanvasOpenState(open);
     try { localStorage.setItem(`${CANVAS_KEY}:${projectId}`, open ? '1' : '0'); } catch { /* for this launch only */ }
   }, [projectId]);
+  const [modeMenu, setModeMenu] = React.useState<{ x: number; y: number } | null>(null);
   const workMode: 'canvas' | 'edit' | 'motion' = canvasOpen ? 'canvas' : motionOpen ? 'motion' : 'edit';
   const setWorkMode = React.useCallback((mode: 'canvas' | 'edit' | 'motion') => {
     setCanvasOpen(mode === 'canvas');
@@ -3662,26 +3663,27 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 </button>
               </Tooltip>
               </>)}
-              {/* what the panes are for: the canvas (making material), the edit (cutting the film) or motion (its layers'
-                  keyframes, as an animation editor shows them); the viewer and the inspector stay for the last two */}
-              <div role="radiogroup" aria-label={t('canvas.modes')} className="flex h-[26px] shrink-0 items-center gap-[1px] rounded-md border border-[var(--dock-line)] p-[2px]">
-                {([
-                  ['canvas', t('canvas.toCanvas'), <Workflow key="c" size={14} />],
-                  ['edit', t('canvas.toEdit'), <FilmIcon key="e" size={14} />],
-                  ['motion', t('canvas.toMotion'), <Spline key="m" size={14} />],
-                ] as const).map(([mode, label, icon]) => {
-                  const on = workMode === mode;
-                  return (
-                    <Tooltip key={mode} label={label} side="bottom">
-                      <button type="button" role="radio" aria-checked={on} aria-label={label} data-work-mode={mode}
-                        onClick={() => setWorkMode(mode)}
-                        className={`grid h-[20px] w-[26px] place-items-center rounded-[4px] transition ${on ? 'bg-[var(--bg-hover)] text-[var(--text)]' : 'text-[var(--text-faint)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}`}>
-                        {icon}
-                      </button>
-                    </Tooltip>
-                  );
-                })}
-              </div>
+              {/* what the panes are for: one button saying which, a click for the menu of the three — the edit (cutting
+                  the film), the canvas (making material), motion (layers and keyframes, as an animation editor shows them) */}
+              <Tooltip label={t('canvas.modes')} side="bottom">
+                <button type="button" aria-haspopup="menu" aria-expanded={modeMenu != null} data-work-mode={workMode}
+                  onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setModeMenu({ x: r.right, y: r.bottom + 4 }); }}
+                  className={`flex h-[26px] shrink-0 items-center gap-1.5 rounded-md pl-2 pr-1.5 text-[12px] text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] ${modeMenu ? 'bg-[var(--bg-hover)] text-[var(--text)]' : ''}`}>
+                  {workMode === 'canvas' ? <Workflow size={14} /> : workMode === 'motion' ? <Spline size={14} /> : <FilmIcon size={14} />}
+                  {t(workMode === 'canvas' ? 'canvas.modeCanvas' : workMode === 'motion' ? 'canvas.modeMotion' : 'canvas.modeEdit')}
+                  <ChevronDown size={12} className="text-[var(--text-faint)]" />
+                </button>
+              </Tooltip>
+              {modeMenu ? (
+                <ContextMenu x={modeMenu.x} y={modeMenu.y} align="end" onClose={() => setModeMenu(null)}
+                  items={([
+                    ['edit', <FilmIcon key="e" size={15} />, 'canvas.modeEdit', 'canvas.noteEdit'],
+                    ['canvas', <Workflow key="c" size={15} />, 'canvas.modeCanvas', 'canvas.noteCanvas'],
+                    ['motion', <Spline key="m" size={15} />, 'canvas.modeMotion', 'canvas.noteMotion'],
+                  ] as const).map(([mode, icon, label, note]) => ({
+                    id: mode, icon, label: t(label), note: t(note), checked: workMode === mode, onSelect: () => setWorkMode(mode),
+                  }))} />
+              ) : null}
             </div>
             <div aria-hidden className="shrink-0 self-stretch" style={{ width: 'var(--titlebar-right-x)' }} />
           </div>
