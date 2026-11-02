@@ -326,8 +326,9 @@ const isCmdScript = (path) => /\.(?:cmd|bat)$/i.test(path);
  * file, yet starts like one: there, being there is enough.
  */
 function presentFile(path) {
-  try { return statSync(path).isFile(); } catch { /* maybe a Store app's command */ }
-  try { const s = lstatSync(path); return s.isFile() || s.isSymbolicLink(); } catch { return false; }
+  /* most of the files looked for are not there: told without an error to make (thousands of them a look) */
+  try { const s = statSync(path, { throwIfNoEntry: false }); if (s) return s.isFile(); } catch { /* maybe a Store app's command */ }
+  try { const s = lstatSync(path, { throwIfNoEntry: false }); return Boolean(s && (s.isFile() || s.isSymbolicLink())); } catch { return false; }
 }
 
 /** each folder once (on Windows whatever its case), as first spelled */

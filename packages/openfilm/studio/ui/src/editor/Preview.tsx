@@ -97,6 +97,8 @@ type Props = {
   onPlayed?(report: PlayedReport): void;
   /** The clips as placed, again: a page opened for the first time said its own length and size (the rest is as it was). */
   onSpans?(spans: ClipSpan[]): void;
+  /** A page that came on is shown (its first frame drawn): it is in the picture, and in the stage's tree, only now. */
+  onShown?(): void;
   children?: ReactNode;
 };
 
@@ -107,7 +109,7 @@ const RESCALE_MS = 600;
 /** How often a load held back for a drag or a line typed in place looks whether it may be shown, ms. */
 const HOLD_POLL_MS = 100;
 
-export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folder, stage, time, fps, onInfo, onKey, onError, onPlayed, onSpans, children }, ref) {
+export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folder, stage, time, fps, onInfo, onKey, onError, onPlayed, onSpans, onShown, children }, ref) {
   const t = useT();
   const origin = new URL(folder).origin;
   const [frames, setFrames] = useState<Frame[]>([{ key: 1, ready: false }]);
@@ -150,6 +152,8 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
   onPlayedRef.current = onPlayed;
   const onSpansRef = useRef(onSpans);
   onSpansRef.current = onSpans;
+  const onShownRef = useRef(onShown);
+  onShownRef.current = onShown;
   /* the stretches rendered to play in the film's place: told to each load of the film once it is up */
   const rendered = useRef<PreviewRender[]>([]);
   useEffect(() => { onErrorRef.current?.(failed); }, [failed]);
@@ -384,6 +388,8 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
         else reload();
       } else if (m.type === 'spans') {
         if (key === shownRef.current?.key && Array.isArray(m.spans)) onSpansRef.current?.(m.spans);
+      } else if (m.type === 'shown') {
+        if (key === shownRef.current?.key) onShownRef.current?.();
       } else if (m.type === 'picked') {
         const resolve = picks.current.get(m.seq);
         picks.current.delete(m.seq);

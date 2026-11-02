@@ -84,6 +84,8 @@ export interface ExportCapabilities {
   hevcAlpha: boolean;
   vp9: boolean;
   prores: boolean;
+  /** ProRes encoded by the Mac's media engine, not by ffmpeg's prores_ks */
+  proresChip: boolean;
   mp3: boolean;
 }
 

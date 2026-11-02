@@ -167,3 +167,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). To report a security issue, see [SECURIT
 
 The format, the CLI, Studio and the desktop app are [MIT](LICENSE). The OpenFilm name and logo are trademarks: see
 [TRADEMARK.md](TRADEMARK.md).
+
+## Star History
+
+<a href="https://www.star-history.com/#openfilm/openfilm&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=openfilm/openfilm&type=Date&theme=dark">
+    <img alt="Star History of openfilm/openfilm" src="https://api.star-history.com/svg?repos=openfilm/openfilm&type=Date">
+  </picture>
+</a>

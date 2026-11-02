@@ -144,6 +144,8 @@ export async function exportCapabilities() {
     hevcAlpha: have.has('hevc_videotoolbox'),
     vp9: have.has('libvpx-vp9'),
     prores: have.has('prores_ks') || have.has('prores_videotoolbox'),
+    /* ProRes through the Mac's media engine, else ffmpeg's prores_ks: the dialog's size range differs (export-spec.ts) */
+    proresChip: Boolean(await hardwareEncoder('prores', have)),
     mp3: have.has('libmp3lame'),
   };
 }

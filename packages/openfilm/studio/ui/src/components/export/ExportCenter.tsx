@@ -472,7 +472,7 @@ export function ExportCenter(props: ExportCenterProps) {
       const size = exportFramedDims(stage, frame, fill, r.shortEdge ?? Math.min(stage.w, stage.h));
       return add(exportEstimateBytes({
         codec: r.codec, size, filmPixels: exportFilmPixels(stage, frame, fill, size), fps: r.fps, quality: r.quality, durationMs: requestDurationMs(r, totalMs),
-        audio: r.audio && r.codec !== 'png' && !knownSilent,
+        audio: r.audio && r.codec !== 'png' && !knownSilent, proresKs: !can?.proresChip,
       }));
     }
     if (r.kind === 'gif') {
@@ -492,7 +492,7 @@ export function ExportCenter(props: ExportCenterProps) {
       return add([bytes, bytes]);
     }
     return [low, high];
-  }, [0, 0]), [requests, stage, totalMs, soundKinds, knownSilent, projectSizes]);
+  }, [0, 0]), [requests, stage, totalMs, soundKinds, knownSilent, projectSizes, can]);
   /* "about 0.8 MB–8 MB"; one size when both ends read the same */
   const estText = estBytes[1] > 0 ? [...new Set(estBytes.map((b) => formatBytes(b)))].join('–') : '';
 

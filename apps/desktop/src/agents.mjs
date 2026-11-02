@@ -709,10 +709,9 @@ export async function listAgents({ ids = Object.keys(AGENTS), statusIds = ids, f
     const checkSignIn = statusIds.includes(id);
     // Enabled agents start first. Background discovery never opens a disabled agent's ACP/auth session.
     if (!checkSignIn) await new Promise((done) => setImmediate(done));
-    if (windows && !resolveAgentCli(id, { pathDirs })) {
-      await windowsSlowerLook();
-    }
-    const agent = await agentOnComputer(id, pathDirs, { fresh, checkSignIn });
+    const quick = windows ? resolveAgentCli(id, { pathDirs }) : undefined;
+    if (windows && !quick) await windowsSlowerLook();
+    const agent = await agentOnComputer(id, pathDirs, { fresh, checkSignIn, found: quick || undefined });
     onAgent(agent);
     return agent;
   }));
@@ -722,14 +721,14 @@ export async function listAgents({ ids = Object.keys(AGENTS), statusIds = ids, f
 export async function localAgent(id, { fresh = false } = {}) {
   if (!isAgentId(id)) throw new Error(`No agent ${id}`);
   const pathDirs = (await loginShellEnvironment({ maxAgeMs: 10_000 })).PATH.split(PATH_SEP);
-  if (windows && !resolveAgentCli(id, { pathDirs })) {
-    await windowsSlowerLook();
-  }
-  return agentOnComputer(id, pathDirs, { fresh });
+  const quick = windows ? resolveAgentCli(id, { pathDirs }) : undefined;
+  if (windows && !quick) await windowsSlowerLook();
+  return agentOnComputer(id, pathDirs, { fresh, found: quick || undefined });
 }
 
-async function agentOnComputer(id, pathDirs, { fresh = false, checkSignIn = true } = {}) {
-  const cli = resolveAgentCli(id, { pathDirs });
+/** `found`: the program the look just found (Windows looks first to know whether to wait), not looked for again */
+async function agentOnComputer(id, pathDirs, { fresh = false, checkSignIn = true, found = undefined } = {}) {
+  const cli = found ?? resolveAgentCli(id, { pathDirs });
   const install = AGENT_DEFINITIONS[id]?.install ?? null;
   const app = cli ? null : desktopApp(id);
   const claudeApp = id === 'claude' && Boolean(app);
