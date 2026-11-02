@@ -27,7 +27,7 @@ import { savedRoot } from '../../src/locations.mjs';
 import { STUDIO_STATE, filmClosure, folderView } from './closure.mjs';
 import { readProjectFilm } from './film.mjs';
 import { cleanName, importFile, inside, kindOf } from './files.mjs';
-import { BUILT_IN, builtInRoot } from './library.mjs';
+import { BUILT_IN, builtInRoot, fetchLibrary } from './library.mjs';
 
 export class SavedError extends Error {
   /** @param {string} message @param {number} status */
@@ -321,7 +321,8 @@ export async function takeSaved(root, path) {
   const lib = builtIn ? builtInRoot() : await libraryRoot();
   const rel = builtIn ? /** @type {string} */ (path).slice(BUILT_IN.length + 1) : libraryRel(path);
   if (!rel) throw new SavedError('a thing in Saved, please', 400);
-  const at = inside(lib, rel);
+  /* OpenFilm's own: in the package, or a published part fetched now (library.mjs) */
+  const at = (builtIn ? await fetchLibrary(rel) : null) ?? inside(lib, rel);
   const info = await stat(at).catch(() => null);
   if (!info) throw new SavedError('That is not in Saved any more.', 404);
   if (info.isFile()) return { path: (await importFile(root, `assets/${basename(rel)}`, createReadStream(at))).path };

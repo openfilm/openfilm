@@ -13,7 +13,7 @@
  */
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { BUILT_IN, builtInRoot, libraryIndex } from '../studio/server/library.mjs';
+import { BUILT_IN, builtInRoot, fetchLibrary, libraryIndex } from '../studio/server/library.mjs';
 import { CJK, fold, readText, tagsIn, vocabulary, wordsOf } from './library-words.mjs';
 
 /** What can be looked for, and the library's category of each. */
@@ -292,9 +292,9 @@ async function takeOne(verb, asked) {
     }
     return { code: 0, lines };
   }
-  if (item.kind === 'sound' && !existsSync(join(builtInRoot(), item.id))) {
+  if (item.kind === 'sound' && !(await fetchLibrary(item.id))) {
     const make = LIBRARY_VERBS[verb].makes;
-    return { code: 1, lines: [`openfilm get ${verb}: ${item.name.en}'s file is not on this computer: this copy of OpenFilm has the library's list of sounds and music, not their files. Take another, or make one with \`openfilm get ${make}\`.`] };
+    return { code: 1, lines: [`openfilm get ${verb}: ${item.name.en}'s file could not be fetched (the library's sounds and music come over the network the first time they are used). Try again online, or make one with \`openfilm get ${make}\`.`] };
   }
   const { takeSaved } = await import('../studio/server/saved.mjs');
   const { clipTag } = await import('./film-doc.mjs');

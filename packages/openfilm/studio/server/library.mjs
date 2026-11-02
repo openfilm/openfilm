@@ -13,6 +13,7 @@
  *   library/stickers.json  emoji stickers, each a bundle under stickers/emoji/ (published with the library likewise)
  *   library/audio.json   more sounds and music, as index.json says its own (`audio/<sfx|music>/<name>.mp3`, each with its
  *                        waveform beside it in waves/), the files published with the library rather than kept in git
+ *                        (fetchLibrary: fetched on first use, like the voices' samples and the emoji stickers)
  *   library/voices.json  the voices to speak a voice-over in: the ready-made voices of the voice-over services OpenFilm
  *                        offers, each with its service's own sample (voices/<service>/<voice>.m4a); made by
  *                        scripts/library-voices.mjs from those services' own lists
@@ -25,9 +26,10 @@
  * ever written.
  */
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdir, rename, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { setSharedPref, sharedPref } from '../../src/locations.mjs';
+import { setSharedPref, sharedHome, sharedPref } from '../../src/locations.mjs';
 import { inside } from './files.mjs';
 
 /** What a path names the library by (`openfilm/<id>`), as `saved/` names Saved. */
@@ -35,6 +37,76 @@ export const BUILT_IN = 'openfilm';
 
 /** The library's folder. */
 export const builtInRoot = () => process.env.OPENFILM_BUILT_IN_LIBRARY || fileURLToPath(new URL('../../library', import.meta.url));
+
+/**
+ * The library's parts too big to come with the package (git-ignored, left out of npm): its sounds and music (`audio/`),
+ * its voices' samples (`voices/`), its emoji stickers (`stickers/emoji/`). Each is fetched on first use from the
+ * library's host and kept in the shared home, once for every OpenFilm on this computer; a bundle (a sticker) comes with
+ * the list of its files, `files.json` beside it there, written when the library is published.
+ */
+const PUBLISHED = ['audio/', 'voices/', 'stickers/emoji/'];
+
+/** Where the published parts come from: openfilm.dev's library, which sends each person to the copy nearest them. */
+const libraryHost = () => (process.env.OPENFILM_LIBRARY_URL || 'https://openfilm.dev/library').replace(/\/+$/, '');
+
+/** Where the fetched ones are kept. */
+export const libraryCache = () => process.env.OPENFILM_LIBRARY_CACHE || join(sharedHome(), 'library');
+
+/** A place of the library on this computer: in the package, else among the fetched ones; null for neither. */
+function located(/** @type {string} */ rel) {
+  for (const root of [builtInRoot(), libraryCache()]) {
+    let at;
+    try { at = inside(root, rel); } catch { return null; }
+    if (existsSync(at)) return at;
+  }
+  return null;
+}
+
+/** @type {Map<string, Promise<string | null>>} */
+const fetching = new Map();
+
+/** One file of the published library into the cache: whole or not at all. */
+async function fetchFile(/** @type {string} */ rel) {
+  const res = await fetch(`${libraryHost()}/${rel.split('/').map(encodeURIComponent).join('/')}`, { signal: AbortSignal.timeout(60_000) });
+  if (!res.ok) throw new Error(`the library's ${rel} came back ${res.status}`);
+  const at = inside(libraryCache(), rel);
+  await mkdir(dirname(at), { recursive: true });
+  const part = `${at}.part-${process.pid}`;
+  await writeFile(part, new Uint8Array(await res.arrayBuffer()));
+  await rename(part, at);
+}
+
+/**
+ * A place of the library on this computer (a file, or a bundle's folder), fetched first when it is a published part
+ * not fetched yet; null when it is neither here nor fetchable (offline, or no such thing).
+ */
+export function fetchLibrary(/** @type {unknown} */ rel) {
+  if (typeof rel !== 'string' || !rel) return Promise.resolve(null);
+  const here = located(rel);
+  if (here || !PUBLISHED.some((part) => rel.startsWith(part))) return Promise.resolve(here);
+  const was = fetching.get(rel);
+  if (was) return was;
+  const job = (async () => {
+    try {
+      /* a file has a name with a dot; a bundle is a folder, its files listed beside it */
+      if (/\.[a-z0-9]+$/i.test(rel)) await fetchFile(rel);
+      else {
+        const res = await fetch(`${libraryHost()}/${rel}/files.json`, { signal: AbortSignal.timeout(30_000) });
+        if (!res.ok) return null;
+        const files = /** @type {unknown} */ (await res.json());
+        if (!Array.isArray(files)) return null;
+        for (const file of files) if (typeof file === 'string') await fetchFile(`${rel}/${file}`);
+      }
+      return located(rel);
+    } catch {
+      return null;
+    } finally {
+      fetching.delete(rel);
+    }
+  })();
+  fetching.set(rel, job);
+  return job;
+}
 
 /** @type {Map<string, { mtime: number, value: unknown }>} */
 const kept = new Map();
@@ -99,12 +171,17 @@ function starrable() {
   ]);
 }
 
-/** A file of the library by its place there (a poster, a preview, a page, a sound), or null when there is none. */
+/** A file of the library on this computer by its place there (a poster, a preview, a page, a sound), or null when there is none. */
 export function libraryFile(/** @type {unknown} */ rel) {
   if (typeof rel !== 'string' || !rel) return null;
-  let file;
-  try { file = inside(builtInRoot(), rel); } catch { return null; }
-  return existsSync(file) && statSync(file).isFile() ? file : null;
+  const file = located(rel);
+  return file && statSync(file).isFile() ? file : null;
+}
+
+/** libraryFile, fetching it first when it is a published part not here yet (fetchLibrary). */
+export async function libraryFileFetched(/** @type {unknown} */ rel) {
+  const file = await fetchLibrary(rel);
+  return file && statSync(file).isFile() ? file : null;
 }
 
 /** Where the starred things are kept in the shared prefs.json. */

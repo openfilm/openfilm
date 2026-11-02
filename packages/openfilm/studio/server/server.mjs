@@ -53,7 +53,7 @@ import { installedFonts } from './fonts.mjs';
 import { projectFonts, resolveIn } from './project-fonts.mjs';
 import { FILM_PAGE, PageFrameError, closePageFrames, filmPoster, pageFacts, pageFrame, warmFilmPoster } from './pageframes.mjs';
 import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCover, setCoverFromFile } from './cover.mjs';
-import { libraryFavorites, libraryFile, libraryIndex, libraryVoices, setLibraryFavorites } from './library.mjs';
+import { libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, setLibraryFavorites } from './library.mjs';
 import { SavedError, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
 import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { moveToTrash } from './trash.mjs';
@@ -414,12 +414,12 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (parts[0] === 'library') {
       if (parts.length === 1 && req.method === 'GET') return json(res, 200, libraryIndex());
       if (parts[1] === 'voices' && parts.length === 2 && req.method === 'GET') return json(res, 200, libraryVoices());
-      if (parts[1] === 'file' && parts.length === 2 && req.method === 'GET') return sendMedia(req, res, libraryFile(url.searchParams.get('path')), { check: true });
+      if (parts[1] === 'file' && parts.length === 2 && req.method === 'GET') return sendMedia(req, res, await libraryFileFetched(url.searchParams.get('path')), { check: true });
       /* a page of it, as a page: what a click tries over the viewer's picture */
       if (parts[1] === 'pages' && parts.length > 2 && req.method === 'GET') {
         /* a page of it, as a page, and what it loads beside it by its own place (its fonts, its pictures): what a click
            tries over the viewer's picture */
-        const file = libraryFile(parts.slice(2).join('/'));
+        const file = await libraryFileFetched(parts.slice(2).join('/'));
         if (!file) throw new HttpError(404, 'no such file');
         const type = /** @type {Record<string, string>} */ ({ '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.otf': 'font/otf' })[extname(file).toLowerCase()];
         if (!type) return sendMedia(req, res, file, { check: true });
