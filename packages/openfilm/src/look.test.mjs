@@ -204,3 +204,17 @@ test('clips that overlap on a track are told; touching ones, a millisecond of ro
   const touching = await look([dir], { count: 2 });
   assert.ok(!touching.lines.some((l) => /clips overlap/.test(l)), touching.lines.join('\n'));
 });
+
+test('look --loudness says how far the mix is from the target, and what brings it there (#323)', { timeout: 120_000 }, async (t) => {
+  const { mkdirSync, writeFileSync } = await import('node:fs');
+  const dir = mkdtempSync(join(tmpdir(), 'of-look-loud-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, 'assets'));
+  writeFileSync(join(dir, 'page.html'), '<!doctype html><body style="margin:0;background:#123"><script>window.film = { duration: 2, width: 320, height: 180, frame(t) { document.body.style.opacity = String(0.5 + t / 4); } };</script>');
+  encode(join(dir, 'assets', 'vo.wav'), 'sine=frequency=220:duration=2', '-af', 'volume=-30dB');
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'p', src: 'page.html' }] }, { clips: [{ id: 'vo', src: 'assets/vo.wav' }] }] }));
+  const r = await look([dir], { count: 2, loudness: -14 });
+  assert.ok(r.lines.some((l) => /^♪ target {2}[\d.]+ LU below -14 LUFS: render --loudness=-14 \(or the export's loudness\) brings it there$/.test(l)), r.lines.join('\n'));
+  const plain = await look([dir], { count: 2 });
+  assert.ok(!plain.lines.some((l) => l.startsWith('♪ target')), 'without a target, nothing is said of one');
+});

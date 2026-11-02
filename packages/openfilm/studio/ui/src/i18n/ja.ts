@@ -383,6 +383,8 @@ export const ja: Words = {
     subtitles: '字幕',
     burnIn: '字幕を映像に焼き込む',
     noSidecar: 'ファイルなし',
+    loudnessAsMixed: 'ミックスのまま',
+    loudnessHint: '作品全体をこのラウドネスにそろえ、トゥルーピークは -1 dBTP 以下に抑えます。YouTube や配信には -14、ポッドキャストには -16、放送には -23。',
     gifWidth: 'サイズ',
     gifHint: 'ヒント：数秒の範囲を選んでください。640px で 10 秒の GIF は通常数 MB になります。',
     format: 'フォーマット',
