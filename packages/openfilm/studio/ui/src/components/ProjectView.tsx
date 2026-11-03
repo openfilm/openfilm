@@ -1702,6 +1702,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (command.type === 'draft-refs') { setDraftMarks(draftMarksOf(Array.isArray(command.refs) ? command.refs : [])); return; }
     if (command.type === 'settings') { setSettingsOpen(command.section ?? 'agents'); return; }
     if (command.type === 'show-examples') { setExamplesOpen(command.open ?? true); return; }
+    if (command.type === 'close-examples') { setExamplesOpen(false); return; }
     if (command.type === 'seek' && Number.isFinite(command.time)) { pause(); seek(command.time * 1000); return; }
     if ((command.type === 'show-range' || command.type === 'show-subtitle') && Number.isFinite(command.start) && Number.isFinite(command.end)) {
       /* a subtitle's span marked, and the subtitle panel open: the playhead at its start lights the line there */
