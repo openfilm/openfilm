@@ -165,8 +165,9 @@ function placeCopies(
   for (const [index, group] of byTrack) {
     const track = model.find((t) => t.index === index);
     const clips = track?.clips ?? [];
-    const taken = index === keepOff
-      || group.some((s, i) => clips.some((c) => overlap(s, c)) || group.slice(0, i).some((o) => overlap(s, o)));
+    /* a caption track takes its cues' copies where they land: one over another cuts it short (lib/caption-blocks) */
+    const taken = !track?.captions && (index === keepOff
+      || group.some((s, i) => clips.some((c) => overlap(s, c)) || group.slice(0, i).some((o) => overlap(s, o))));
     if (!taken) {
       there.push(...group);
       continue;

@@ -21,6 +21,12 @@ const PREFIX = 'cue:';
 /** A stand-in's src: a still, which any length suits (ops.mjs reads it as one). */
 const STAND_IN = 'openfilm-cue.png';
 
+/** A cue kept apart from its file (copied, then cut from it): its words, times and settings, and its own look. */
+export type KeptCue = { cue: VttCue; rule: Record<string, string> };
+
+/** A new clip standing for a cue kept apart (a paste of a cue cut since it was copied): its stand-in, put in by an insert. */
+export const cueStandIn = (clipId: string, durMs: number) => ({ src: STAND_IN, time: [0, r3(durMs / 1000)], attrs: { 'data-cue': clipId } });
+
 /** A cue's clip id on the timeline. */
 export const cueClipId = (src: string, id: string): string => `${PREFIX}${src}#${id}`;
 export const isCueClip = (clipId: string | undefined): boolean => Boolean(clipId?.startsWith(PREFIX));
@@ -63,12 +69,13 @@ export type CueEdit = { ops: Op[]; files: { src: string; next: Vtt }[] };
 
 /**
  * An edit of the timeline's clips, cues among them, as film.html's operations and the caption files' new versions.
- * `vttOf`: each caption track's cues as held (with their ids). Null: the edit puts a cue where only clips go, or a
- * clip onto a caption track; it is not made.
+ * `vttOf`: each caption track's cues as held (with their ids); `kept`: cues no file has any more that the edit puts back
+ * (cueStandIn), by their clip id. Null: the edit puts a cue where only clips go, or a clip onto a caption track; it is
+ * not made.
  */
-export function cueEditOf(film: FilmValue, ops: readonly Op[], vttOf: (src: string) => Vtt | null): CueEdit | null {
+export function cueEditOf(film: FilmValue, ops: readonly Op[], vttOf: (src: string) => Vtt | null, kept: ReadonlyMap<string, KeptCue> = new Map()): CueEdit | null {
   const named = (id: unknown) => typeof id === 'string' && isCueClip(id);
-  const touches = JSON.stringify(ops).includes(PREFIX);
+  const touches = JSON.stringify(ops).includes(PREFIX) || JSON.stringify(ops).includes(STAND_IN);
   const captions = film.tracks.flatMap((t) => (t.captions ? [t.captions.src] : []));
   if (!captions.length) return { ops: [...ops], files: [] };
 
@@ -98,14 +105,15 @@ export function cueEditOf(film: FilmValue, ops: readonly Op[], vttOf: (src: stri
       continue;
     }
     if ('clip' in op && named(op.clip)) continue;
-    if (op.op === 'insert' && named(op.from)) continue;
+    if (op.op === 'insert' && (named(op.from) || (op.clip as { src?: string } | undefined)?.src === STAND_IN)) continue;
     own.push(op);
   }
   if (!touches) return { ops: own, files: [] };
 
   /* where each cue went: its stand-ins, by the cue they stand for */
   const cueOfStandIn = (c: FilmTrack['clips'][number]) => cueOf(c.attrs?.['data-cue']);
-  const original = (src: string, id: string): VttCue | undefined => vttOf(src)?.cues.find((c) => c.id === id);
+  const original = (src: string, id: string): VttCue | undefined => vttOf(src)?.cues.find((c) => c.id === id) ?? kept.get(cueClipId(src, id))?.cue;
+  const ruleOf = (src: string, id: string) => (vttOf(src)?.cues.some((c) => c.id === id) ? cueRule(vttOf(src)!, `::cue(#${id})`) : kept.get(cueClipId(src, id))?.rule ?? {});
   const splits = new Set(ops.flatMap((op) => (op.op === 'split' && named(op.clip) ? [op.clip] : [])));
   /* the words of a cut cue's halves, by the cue's own cut (lib/caption-edits splitCue) at the left half's length */
   const halves = new Map<string, { left: string; right: string; at: number }>();
@@ -150,9 +158,9 @@ export function cueEditOf(film: FilmValue, ops: readonly Op[], vttOf: (src: stri
       const was = half && !itself ? half.at : cue.start;
       into.cues.push({ ...cue, id, start, end, text: shifted(words, r3(start - was)) });
       if (id !== cue.id || from.src !== src || Math.abs(start - cue.start) > 1e-6 || Math.abs(end - cue.end) > 1e-6 || words !== cue.text) into.moved.add(id);
-      /* its own look goes with it */
-      if (id !== cue.id || from.src !== src) {
-        const rule = cueRule(vttOf(from.src)!, `::cue(#${cue.id})`);
+      /* its own look goes with it (one kept apart has none in any file now) */
+      if (id !== cue.id || from.src !== src || !vttOf(from.src)?.cues.some((x) => x.id === cue.id)) {
+        const rule = ruleOf(from.src, cue.id);
         if (Object.keys(rule).length) into.rules.push([id, rule]);
       }
     }

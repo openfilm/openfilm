@@ -77,8 +77,8 @@ import { CaptionStage } from './CaptionStage';
 import { captionSelectionNow, captionTrackNow, configureCaptionTracks, refreshCaptionTracks, setCaptionSelection, useCaptionSelection, useCaptionTracksOf, writeCaptionTrack, writeCaptionTracksWith } from '@/lib/caption-tracks';
 import { cuePlain, readVtt, writeVtt } from '../../../../src/captions.mjs';
 import { FILM_SUBTITLE_LANGUAGES } from '../../../server/film-subtitle.mjs';
-import { addCue, placeCues, withIds } from '@/lib/caption-edits';
-import { cueClipId, cueEditOf, isCueClip, withCueBlocks } from '@/lib/caption-blocks';
+import { addCue, cueRule, placeCues, withIds } from '@/lib/caption-edits';
+import { cueClipId, cueEditOf, cueStandIn, isCueClip, withCueBlocks, type KeptCue } from '@/lib/caption-blocks';
 
 import { useFilmSubtitles } from '@/lib/use-film-subtitles';
 import { DEFAULT_INSPECTOR, DOCK_GAP, DockPaneDivider, MIN_DOCK_H, MIN_INSPECTOR, MIN_STAGE_H, MIN_VIEWER, PaneDivider, usePaneSize } from './PaneDivider';
@@ -904,7 +904,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
        their files first, and is one undo step with what it does to film.html */
     const current = filmRef.current;
     if (!current || outside || !current.tracks.some((tr) => tr.captions)) return filmEdit(ops, label, quiet, outside);
-    const split = cueEditOf(current as never, ops, (src) => captionTrackNow(projectId, src));
+    const split = cueEditOf(current as never, ops, (src) => captionTrackNow(projectId, src), copiedCues.current);
     if (!split) return t('captionTrack.onlyCues');
     const cues = split.files.length ? await writeCaptionTracksWith(projectId, split.files) : null;
     if (typeof cues === 'string') return cues;
@@ -1188,15 +1188,22 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   }, []);
   /* the clips copied as film.html had them then: a clip cut (⌘X) is gone from the film, and is pasted from these */
   const copiedClips = React.useRef(new Map<string, Clip>());
+  /* and the captions copied, as their files had them (a cue cut is pasted from these) */
+  const copiedCues = React.useRef(new Map<string, KeptCue>());
   const copyBlocks = React.useCallback((blocks: readonly TimelineBlock[]) => {
     const clips = new Map((filmRef.current?.tracks ?? []).flatMap((tr) => tr.clips.map((c) => [c.id, c] as const)));
     copiedClips.current = new Map(blocks.flatMap((b) => {
       const clip = b.clipId ? clips.get(b.clipId) : undefined;
       return clip ? [[clip.id, structuredClone(clip)] as const] : [];
     }));
+    copiedCues.current = new Map(blocks.flatMap((b) => {
+      const vtt = b.cue ? captionTrackNow(projectId, b.cue.src) : null;
+      const cue = vtt?.cues.find((c) => c.id === b.cue!.id);
+      return vtt && cue ? [[b.clipId!, { cue: structuredClone(cue), rule: cueRule(vtt, `::cue(#${cue.id})`) }] as const] : [];
+    }));
     setClipboard(clipboardItemsOf(blocks, timelineTracks));
     keepLayerBoard(null);
-  }, [timelineTracks, keepLayerBoard]);
+  }, [timelineTracks, keepLayerBoard, projectId]);
   /**
    * Layers copied (⌘C, the menus): per page clip, each as writing it into a page needs it (studio/server/stage.js
    * `layerSource`). Null, or why not.
@@ -1425,7 +1432,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     }
     if (!clipboard.length) return Promise.resolve(t('timeline.menuPasteEmpty'));
     const { items, missing } = clipboardNow(clipboard, timelineTracks);
-    const cut = clipboard.filter((item) => !items.some((i) => i.clipId === item.clipId) && copiedClips.current.has(item.clipId));
+    const cut = clipboard.filter((item) => !items.some((i) => i.clipId === item.clipId) && (copiedClips.current.has(item.clipId) || copiedCues.current.has(item.clipId)));
     if (missing > cut.length) toast.show(t('timeline.pasteGone'));
     const all = [...items, ...cut].sort((a, b) => a.startMs - b.startMs);
     if (!all.length) return Promise.resolve(null);
@@ -1436,6 +1443,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       if (op.op !== 'insert' || !op.from || !gone.has(op.from)) return op;
       /* a new id: the place it had may be another clip's by now, and a stale reading of the timeline would edit it */
       const { from, ...rest } = op;
+      const kept = copiedCues.current.get(from);
+      if (kept) return { ...rest, clip: cueStandIn(from, (kept.cue.end - kept.cue.start) * 1000) as never };
       const { id: _id, ...clip } = structuredClone(copiedClips.current.get(from)!);
       return { ...rest, clip };
     });

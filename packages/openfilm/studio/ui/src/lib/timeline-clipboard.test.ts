@@ -228,6 +228,12 @@ test('⌥-drag copies: the clips stay and a copy lands where it is let go, or be
   assert.deepEqual(run(planCopies(model, { ids: ['b'], deltaMs: 3000 }))[1], [['a', 0, null], ['b', 2, null], ['b-2', 5, null]]);
 });
 
+test('a caption\'s copy stays on its caption track where it lands, over another or not: no track opens', () => {
+  const model = editModelOf([{ ...track(0, [{ ...blockOf('cue:c.vtt#c1', 0, 0, 0, 2000), cue: { src: 'c.vtt', id: 'c1' } }], { role: 'mg' }), captions: { src: 'c.vtt' } }]);
+  const plan = planCopies(model, { ids: ['cue:c.vtt#c1'], deltaMs: 1000 })!;
+  assert.deepEqual(plan.ops, [{ op: 'insert', from: 'cue:c.vtt#c1', at: 1, track: 0 }]);
+});
+
 test('⌥-drag copies of several clips keep their spacing, together on one track', () => {
   const film: Film = { tracks: [{ clips: [filmClip('a', 0, 2), filmClip('b', 2, 2), filmClip('c', 5, 1)] }] };
   const tracks = [track(0, [blockOf('a', 0, 0, 0, 2000), blockOf('b', 0, 1, 2000, 4000), blockOf('c', 0, 2, 5000, 6000)], { role: 'video' })];
