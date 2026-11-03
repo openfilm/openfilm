@@ -59,7 +59,7 @@ import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listenLocal } from '../../src/host.mjs';
 import { captionTrackRoutes } from './caption-tracks.mjs';
 import { moveToTrash } from './trash.mjs';
-import { coreSkills, listSkills, removeSkill, setSkillCover, setSkillInstalled, setSkillOn, skillId, skillOrigins, skillsInstalled, skillsOff } from '../../src/skills.mjs';
+import { coreSkills, keeps, listSkills, offeredSkills, removeSkill, setSkillCover, setSkillInstalled, setSkillOn, skillOrigins, skillsInstalled, skillsOff } from '../../src/skills.mjs';
 import { providersRoute } from './providers/index.mjs';
 import { localModelsRoute } from './local-models.mjs';
 import { captionRoutes, writeSubtitleStyle } from './captions.mjs';
@@ -504,7 +504,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       return sendMedia(req, res, inside(folder, parts.slice(3).map(decodeURIComponent).join('/')), { keep: true });
     }
     /* the skills a project can be made with (../../src/skills.mjs): OpenFilm's own first (`core`, which can only be
-       turned off), then the project's, the person's, the official ones */
+       turned off), then the project's, the person's, the official ones. Each is told by its uid (owner/name) here and
+       in every route below, so two of the same name are both there; `as` is the name agents are given it by */
     if (parts[0] === 'skills' && parts.length === 1 && req.method === 'GET') {
       const id = url.searchParams.get('project');
       const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) : null;
@@ -512,72 +513,71 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const origins = skillOrigins();
       const off = new Set(skillsOff());
       const installed = new Set(skillsInstalled());
-      const media = (/** @type {string} */ name, /** @type {'cover' | 'preview'} */ which) => `/api/skills/${encodeURIComponent(name)}/${which}${id ? `?project=${encodeURIComponent(id)}` : ''}`;
+      const agentsCall = new Map(offeredSkills({ project: project?.path ?? null }).named.map((k) => [k.uid, k.as]));
+      const media = (/** @type {string} */ uid, /** @type {'cover' | 'preview'} */ which) => `/api/skills/${encodeURIComponent(uid)}/${which}${id ? `?project=${encodeURIComponent(id)}` : ''}`;
       return json(res, 200, {
         skills: [...coreSkills().map((k) => ({ ...k, core: true })), ...skills.map((k) => ({ ...k, core: false }))].map((k) => ({
-          k, id: skillId(k, k.source === 'mine' ? origins[basename(k.folder)] : undefined),
-        })).map(({ k, id }) => ({
-          ...(k.core ? { core: true } : {}), name: k.name, description: k.description, source: k.source, scripts: k.scripts.length,
-          /* its name wherever it is shared: owner/repo/name (skills.mjs skillId) */
-          ...(id ? { id } : {}),
+          ...(k.core ? { core: true } : {}), uid: k.uid, name: k.name, description: k.description, source: k.source, scripts: k.scripts.length,
+          ...(agentsCall.has(k.uid) ? { as: agentsCall.get(k.uid) } : {}),
           ...(k.shown ? { shown: k.shown } : {}), ...(k.version ? { version: k.version } : {}), ...(k.kind ? { kind: k.kind } : {}),
           ...(k.order != null ? { order: k.order } : {}), ...(k.icon ? { icon: k.icon } : {}), ...(k.repository ? { repository: k.repository } : {}),
-          ...(k.cover ? { cover: `${media(k.name, 'cover')}${id ? '&' : '?'}v=${encodeURIComponent(k.cover)}` } : {}), ...(k.preview ? { preview: media(k.name, 'preview') } : {}),
+          ...(k.cover ? { cover: `${media(k.uid, 'cover')}${id ? '&' : '?'}v=${encodeURIComponent(k.cover)}` } : {}), ...(k.preview ? { preview: media(k.uid, 'preview') } : {}),
           /* the person's own: where it came from (none kept: made where it is) */
           ...(k.source === 'mine' ? { origin: origins[basename(k.folder)] ?? { from: 'made' } } : {}),
           /* an official one is installed to be used; the person's own and a project's are theirs already */
-          installed: k.core || k.source !== 'official' || installed.has(k.name),
+          installed: k.core || k.source !== 'official' || keeps(installed, k),
           /* turned off: offered to no agent until it is turned on again */
-          ...(off.has(k.name) ? { off: true } : {}),
+          ...(keeps(off, k) ? { off: true } : {}),
         })),
       });
     }
+    /* a skill of the project shown (`?project=`), or the library's, by its uid; OpenFilm's own with `core` */
+    const skillAt = async (/** @type {string} */ uid, { core = false } = {}) => {
+      const id = url.searchParams.get('project');
+      const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) : null;
+      return [...(core ? coreSkills() : []), ...listSkills({ project: project?.path ?? null })].find((k) => k.uid === uid) ?? null;
+    };
     /* an official skill installed or uninstalled (PUT { installed }) */
     if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'installed' && req.method === 'PUT') {
       const installed = (await readJson(req))?.installed;
       if (typeof installed !== 'boolean') throw new HttpError(400, 'installed: true or false');
-      const skill = listSkills().find((k) => k.name === decodeURIComponent(parts[1]));
+      const skill = await skillAt(decodeURIComponent(parts[1]));
       if (!skill || skill.source !== 'official') throw new HttpError(404, 'no such official skill');
-      setSkillInstalled(skill.name, installed);
+      setSkillInstalled(skill.uid, installed);
       return json(res, 200, { installed });
     }
     /* one of the person's own skills, or a project's, moved to the trash (an official one is uninstalled instead) */
     if (parts[0] === 'skills' && parts.length === 2 && req.method === 'DELETE') {
-      const id = url.searchParams.get('project');
-      const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) : null;
-      const skill = listSkills({ project: project?.path ?? null }).find((k) => k.name === decodeURIComponent(parts[1]));
+      const skill = await skillAt(decodeURIComponent(parts[1]));
       if (!skill) throw new HttpError(404, 'no such skill');
       if (skill.source === 'official') throw new HttpError(400, 'An official skill is uninstalled, not removed.');
-      if (skill.source === 'mine') await removeSkill(skill.name);
+      if (skill.source === 'mine') await removeSkill(skill.uid);
       else await moveToTrash(skill.folder);
       return json(res, 200, {});
     }
-    /* a skill turned on or off, by name, for every project (PUT { on }) */
+    /* a skill turned on or off, by uid, for every project (PUT { on }) */
     if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'on' && req.method === 'PUT') {
       const on = (await readJson(req))?.on;
       if (typeof on !== 'boolean') throw new HttpError(400, 'on: true or false');
-      try { setSkillOn(decodeURIComponent(parts[1]), on); } catch (e) { throw new HttpError(400, e instanceof Error ? e.message : String(e)); }
+      const skill = await skillAt(decodeURIComponent(parts[1]), { core: true });
+      if (!skill) throw new HttpError(404, 'no such skill');
+      setSkillOn(skill.uid, on);
       return json(res, 200, { on });
     }
     /* Only the person's own skill can be changed; a project override must not edit a hidden personal skill. */
     if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'cover' && (req.method === 'PUT' || req.method === 'DELETE')) {
-      const id = url.searchParams.get('project');
-      const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) : null;
-      const name = decodeURIComponent(parts[1]);
-      const skill = listSkills({ project: project?.path ?? null }).find((s) => s.name === name);
+      const skill = await skillAt(decodeURIComponent(parts[1]));
       if (!skill) throw new HttpError(404, 'no such skill');
       if (skill.source !== 'mine') throw new HttpError(403, 'Only your own skills can have their cover changed.');
       const cover = req.method === 'DELETE' ? null : (await readJson(req, 7 << 20))?.cover;
       try {
-        const updated = setSkillCover(name, cover);
-        return json(res, 200, { cover: updated?.cover ? `/api/skills/${encodeURIComponent(name)}/cover?v=${encodeURIComponent(updated.cover)}` : null });
+        const updated = setSkillCover(skill.uid, cover);
+        return json(res, 200, { cover: updated?.cover ? `/api/skills/${encodeURIComponent(skill.uid)}/cover?v=${encodeURIComponent(updated.cover)}` : null });
       } catch (e) { throw new HttpError(400, e instanceof Error ? e.message : String(e)); }
     }
     /* a skill's cover picture or preview video (its openfilm.json's `cover`, `preview`) */
     if (parts[0] === 'skills' && parts.length === 3 && (parts[2] === 'cover' || parts[2] === 'preview') && req.method === 'GET') {
-      const id = url.searchParams.get('project');
-      const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) : null;
-      const skill = listSkills({ project: project?.path ?? null }).find((k) => k.name === decodeURIComponent(parts[1]));
+      const skill = await skillAt(decodeURIComponent(parts[1]), { core: true });
       const file = skill?.[parts[2]];
       return sendMedia(req, res, skill && file ? join(skill.folder, file) : null, { keep: true });
     }

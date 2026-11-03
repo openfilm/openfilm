@@ -166,11 +166,11 @@ export const INSTRUCTIONS = agentInstructions();
  * where it is and how it talks with the person (agent-prompt.md: written for it, so not INSTRUCTIONS, which tell
  * another agent to go and read the manual), and how the person points at Studio (STUDIO_REFERENCES). How a film is
  * made is OpenFilm's skills' (openfilm/skills coreSkills), which Pi lists after it and the agent reads when a task
- * needs one. `edit` false: the person turned `openfilm-edit` off, so the prompt does not send the agent to it.
+ * needs one. `edit` false: the person turned OpenFilm's `edit` off, so the prompt does not send the agent to it.
  */
 export function ownAgentPrompt({ edit = true } = {}) {
   const read = readFileSync(new URL('./agent-prompt.md', import.meta.url), 'utf8').trim();
-  const prompt = edit ? read : read.replace(/: read `openfilm-edit` before you make or change a film\./, '.');
+  const prompt = edit ? read : read.replace(/: read `edit` before you make or change a film\./, '.');
   return `${prompt}\n\n## Pointing at Studio\n\n${STUDIO_REFERENCES}`;
 }
 
@@ -1238,7 +1238,7 @@ export class AgentSession {
     /* its skills and MCP servers: its maker's, OpenFilm's skills, and the person's own only those let in (agent-skills.mjs) */
     const skills = this.opts.skills
       ? await sessionSkills(this.opts.agent, { cwd: this.opts.cwd, env: shell, ...this.opts.skills }).catch(() => null) : null;
-    if (harness) own.OPENFILM_PI = JSON.stringify({ agentDir: harness.home, models: harness.models, model: harness.model, systemPrompt: ownAgentPrompt({ edit: skills?.piSkills?.names.includes('openfilm-edit') ?? true }), skills: skills?.piSkills ?? null });
+    if (harness) own.OPENFILM_PI = JSON.stringify({ agentDir: harness.home, models: harness.models, model: harness.model, systemPrompt: ownAgentPrompt({ edit: skills?.piSkills?.names.includes('edit') ?? true }), skills: skills?.piSkills ?? null });
     /* Developer mode: the agent's own logging switch, so the turn log has what its model got; none when the person
        set its telemetry themselves (agent-logs.mjs) */
     this.logging = this.opts.logDir && cli && !this.spec.adapter

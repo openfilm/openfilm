@@ -2,13 +2,12 @@
  * The library's skills, in the drawer: what an agent takes up when making a film. The side bar picks the installed
  * ones (all of them, the person's own, OpenFilm's, the agents' own) or OpenFilm's still to install (Discover).
  *
- * Installed, each skill is a line: its mark (its cover, else its icon), its title, and under it its name wherever it is
- * shared, owner/repo/name as on GitHub (`openfilm/skills/keynote`; one never published says where it is instead), and
- * its switch: on, agents take it up when it fits; off, no agent gets it. A click opens its page (SkillPage). The lines
+ * Installed, each skill is a line: its mark (its cover, else its icon), its title, under it its uid, owner/name
+ * (`openfilm/keynote`, `river/keynote`: two of a name are told apart by it), and its switch: on, agents take it up when it fits; off, no agent gets it. A click opens its page (SkillPage). The lines
  * are in parts by whose they are, each headed with its count where more than one part is shown: OpenFilm's system
  * skills (how a film is made, its media, its canvas, in the order agents are given them), the community's installed,
  * the person's own (theirs, and this project's), then each agent's own (off until let in). Import is beside the search
- * (LibraryDrawer). Discover is a gallery of tiles to browse: cover, title, name, Install.
+ * (LibraryDrawer). Discover is a gallery of tiles to browse: cover, title, uid, Install.
  */
 import React from 'react';
 import { Plus } from 'lucide-react';
@@ -49,7 +48,7 @@ export function SkillsPane({ line, query, projectId, opened, onOpen }: {
   const agents = useAgentSkills(shows('agents'));
   const q = query.trim().toLowerCase();
   const found = skills
-    .filter((k) => !q || [words(k).title, words(k).summary, k.name, k.id].some((w) => w?.toLowerCase().includes(q)))
+    .filter((k) => !q || [words(k).title, words(k).summary, k.name, k.uid].some((w) => w?.toLowerCase().includes(q)))
     .sort(byOrder);
   /* OpenFilm's own in the order agents are given them, as the API lists them */
   const system = shows('openfilm') ? skills.filter((k) => k.core && found.includes(k)) : [];
@@ -60,34 +59,33 @@ export function SkillsPane({ line, query, projectId, opened, onOpen }: {
     .map((g) => ({ ...g, skills: g.skills.filter((k) => !q || [k.name, k.description].some((w) => w.toLowerCase().includes(q))) }))
     .filter((g) => g.skills.length);
   const install = (skill: SkillEntry) => {
-    setSkills((list) => list.map((k) => (k.name === skill.name ? { ...k, installed: true } : k)));
-    void sourcesApi.setSkillInstalled(skill.name, true).catch(() => { void sourcesApi.skills(projectId).then(setSkills); });
+    setSkills((list) => list.map((k) => (k.uid === skill.uid ? { ...k, installed: true } : k)));
+    void sourcesApi.setSkillInstalled(skill.uid, true).catch(() => { void sourcesApi.skills(projectId).then(setSkills); });
   };
   const turn = (skill: SkillEntry, on: boolean) => {
-    setSkills((list) => list.map((k) => (k.name === skill.name ? (on ? { ...k, off: undefined } : { ...k, off: true as const }) : k)));
-    void sourcesApi.setSkillOn(skill.name, on).catch(() => { void sourcesApi.skills(projectId).then(setSkills); });
+    setSkills((list) => list.map((k) => (k.uid === skill.uid ? (on ? { ...k, off: undefined } : { ...k, off: true as const }) : k)));
+    void sourcesApi.setSkillOn(skill.uid, on).catch(() => { void sourcesApi.skills(projectId).then(setSkills); });
   };
-  const tryIt = (skill: SkillEntry) => studioHost?.useSkill?.({ name: skill.name, description: skill.description, title: words(skill).title, newConversation: true });
-  /* under its title: its name wherever it is shared, else where it is (this project's, or the person's alone) */
-  const whereOf = (skill: SkillEntry) => skill.id ?? (skill.source === 'project' ? t('assetDrawer.skillProject') : `${t('assetDrawer.skillLocal')} · ${skill.name}`);
-
-  const page = opened ? skills.find((k) => k.name === opened) : undefined;
+  /* named in the message as agents know it (`as`: another of its name is beside it) */
+  const tryIt = (skill: SkillEntry) => studioHost?.useSkill?.({ name: skill.as ?? skill.name, description: skill.description, title: words(skill).title, newConversation: true });
+  /* a page asked for by uid, or by the name agents know it by (the chat's) */
+  const page = opened ? skills.find((k) => k.uid === opened) ?? skills.find((k) => (k.as ?? k.name) === opened) : undefined;
   if (page) {
-    return <SkillPage key={`${page.source}:${page.name}`} skill={page} setSkills={setSkills} projectId={projectId} onBack={() => onOpen(null)}
+    return <SkillPage key={page.uid} skill={page} setSkills={setSkills} projectId={projectId} onBack={() => onOpen(null)}
       {...(studioHost?.useSkill ? { onTry: tryIt } : {})} />;
   }
   if (line === 'discover') {
     return toInstall.length ? (
       <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-0.5">
         <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-x-2.5 gap-y-3.5">
-          {toInstall.map((skill) => <SkillTile key={skill.name} skill={skill} onOpen={() => onOpen(skill.name)} onInstall={() => install(skill)} />)}
+          {toInstall.map((skill) => <SkillTile key={skill.uid} skill={skill} onOpen={() => onOpen(skill.uid)} onInstall={() => install(skill)} />)}
         </div>
       </div>
     ) : <Empty text={t(q ? 'assetDrawer.noSkillsFound' : 'assetDrawer.allSkillsInstalled')} />;
   }
   const lineOf = (skill: SkillEntry) => (
-    <SkillLine key={`${skill.source}:${skill.name}`} mark={<SkillMark skill={skill} />} title={words(skill).title} under={whereOf(skill)} mono={!!skill.id}
-      tip={words(skill).summary} on={!skill.off} onOpen={() => onOpen(skill.name)}
+    <SkillLine key={skill.uid} mark={<SkillMark skill={skill} />} title={words(skill).title} under={skill.uid} mono
+      tip={words(skill).summary} on={!skill.off} onOpen={() => onOpen(skill.uid)}
       label={t(skill.off ? 'gallery.turnOn' : 'gallery.turnOff').replace('{name}', words(skill).title)} onChange={(on) => turn(skill, on)} />
   );
   const parts: Array<{ key: string; title: string; lines: React.ReactNode[]; empty?: string }> = [
@@ -179,7 +177,7 @@ function useAgentSkills(shown: boolean) {
   return { groups: shown ? groups : [], allow };
 }
 
-/** One skill to install, in Discover: its cover (its preview under the pointer) with Install over it, its title and whose it is under it. */
+/** One skill to install, in Discover: its cover (its preview under the pointer) with Install over it, its title and uid under it. */
 function SkillTile({ skill, onOpen, onInstall }: { skill: SkillEntry; onOpen: () => void; onInstall: () => void }) {
   const t = useT();
   const { title } = useSkillWords()(skill);
@@ -193,8 +191,7 @@ function SkillTile({ skill, onOpen, onInstall }: { skill: SkillEntry; onOpen: ()
           className="absolute bottom-1 right-1 hidden h-[22px] items-center rounded-full bg-[var(--tl-accent)] px-2.5 text-[11px] font-medium text-black shadow-md group-hover:flex">{t('assetDrawer.skillInstall')}</button>
       </div>
       <div className="mt-1.5 truncate px-0.5 text-[12px] font-medium text-[var(--text-muted)] group-hover:text-[var(--text)]">{title}</div>
-      {/* whose it is, owner/repo (its whole name is on its page) */}
-      {skill.id ? <div className="truncate px-0.5 font-mono text-[10.5px] text-[var(--text-faint)]" title={skill.id}>{skill.id.split('/').slice(0, -1).join('/')}</div> : null}
+      <div className="truncate px-0.5 font-mono text-[10.5px] text-[var(--text-faint)]">{skill.uid}</div>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 ---
-name: openfilm-media
+name: media
 description: Media for an OpenFilm film. Read it before you add music, a sound effect, a transition, an effect, a filter, a sticker, a text animation or a template, and before you make voice-over, pictures, video or transcripts, or search the web.
 ---
 

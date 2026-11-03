@@ -931,7 +931,6 @@ export const zhCN: Words = {
     skillsSystem: '系统技能',
     skillsCommunity: '社区技能',
     skillImport: '导入',
-    skillLocal: '本机',
     noMineSkills: '还没有导入的技能，可以从 GitHub 链接或文件夹导入。',
     noAgentSkills: '你的智能体在这里没有自带的技能。',
     noCommunitySkills: '社区技能在「发现」里安装。',

@@ -930,7 +930,6 @@ export const es: Words = {
     skillsSystem: 'Habilidades del sistema',
     skillsCommunity: 'Habilidades de la comunidad',
     skillImport: 'Importar',
-    skillLocal: 'En este equipo',
     noMineSkills: 'Aún no hay habilidades importadas: importa una desde un enlace de GitHub o una carpeta.',
     noAgentSkills: 'Tus agentes no tienen habilidades propias aquí.',
     noCommunitySkills: 'Las habilidades de la comunidad se instalan desde Descubrir.',

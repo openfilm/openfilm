@@ -1,5 +1,5 @@
 ---
-name: openfilm-canvas
+name: canvas
 description: The project's canvas in OpenFilm, the board beside the edit. Read it when the person asks for the canvas or points at a canvas node (`canvas node `ID``), or to lay out ideas, references and shots before they go into the film.
 ---
 

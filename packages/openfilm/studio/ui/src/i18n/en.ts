@@ -931,7 +931,6 @@ export const en = {
     skillsSystem: 'System skills',
     skillsCommunity: 'Community skills',
     skillImport: 'Import',
-    skillLocal: 'On this computer',
     noMineSkills: 'No imported skills yet: import one from a GitHub link or a folder.',
     noAgentSkills: 'Your agents have no skills of their own here.',
     noCommunitySkills: 'Community skills are installed from Discover.',

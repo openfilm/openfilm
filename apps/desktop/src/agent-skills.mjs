@@ -29,7 +29,7 @@
  * A session's OpenFilm skills are a folder of the app's, links to each skill's own folder (agent-skills/<id>/skills),
  * as each agent reads a plugin or a skills folder. Reads no Electron module, so `node --test` can use it.
  */
-import { mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
@@ -233,11 +233,34 @@ function linkFolder(base, skills) {
   mkdirSync(join(dir, '.agents'));
   writeFileSync(join(dir, '.claude-plugin', 'plugin.json'), `${JSON.stringify({ name: 'openfilm', description: 'OpenFilm skills', version: '1.0.0' }, null, 2)}\n`);
   for (const skill of skills) {
-    if (!/^[\w.-]+$/.test(skill.name)) continue;
-    try { symlinkSync(skill.folder, join(dir, 'skills', skill.name), link); } catch { /* one that cannot be linked is left out */ }
+    if (!/^[\w.-]+$/.test(skill.as)) continue;
+    try {
+      if (skill.as === skill.name) symlinkSync(skill.folder, join(dir, 'skills', skill.as), link);
+      else renamedSkill(skill, join(dir, 'skills', skill.as), link);
+    } catch { /* one that cannot be linked is left out */ }
   }
   symlinkSync(join(dir, 'skills'), join(dir, '.agents', 'skills'), link);
   return dir;
+}
+
+/**
+ * A skill given to the agent by another name than its own (agentNames: a second of that name): a folder of its own
+ * whose SKILL.md says that name, and links to everything else the skill has, so what it names by path is there.
+ */
+function renamedSkill(skill, to, link) {
+  mkdirSync(to);
+  const text = readFileSync(skill.file, 'utf8');
+  const head = /^(\uFEFF?---\r?\n)([\s\S]*?)(\r?\n---)/.exec(text);
+  const named = !head ? `---\nname: ${skill.as}\n---\n\n${text}`
+    : /^name:.*$/m.test(head[2]) ? text.replace(head[0], `${head[1]}${head[2].replace(/^name:.*$/m, `name: ${skill.as}`)}${head[3]}`)
+      : text.replace(head[0], `${head[1]}name: ${skill.as}\n${head[2]}${head[3]}`);
+  writeFileSync(join(to, 'SKILL.md'), named);
+  for (const entry of readdirSync(skill.folder, { withFileTypes: true })) {
+    if (entry.name === 'SKILL.md') continue;
+    const from = join(skill.folder, entry.name);
+    if (entry.isDirectory()) symlinkSync(from, join(to, entry.name), link);
+    else try { symlinkSync(from, join(to, entry.name), 'file'); } catch { copyFileSync(from, join(to, entry.name)); }
+  }
 }
 
 /** A system-defaults file of the app's for this session (Qwen Code's), beside its links. */
@@ -258,13 +281,11 @@ function defaultsFile(dir, name, settings) {
  *   mcpAllowed?: string[], home?: string }} o
  */
 export async function sessionSkills(agent, { cwd, env = {}, dataDir, mine, prefsHome, allowed = [], mcpAllowed = [], home = homedir() }) {
-  const { coreSkills, mySkillsDir, skillsOff, usableSkills } = await skillsLib();
-  /* OpenFilm's own first (how a film is made, its media, its canvas), unless turned off; then those installed and on */
-  const core = coreSkills();
-  const off = new Set(skillsOff(prefsHome));
-  const openfilm = [...core.filter((s) => !off.has(s.name)), ...usableSkills({ project: cwd, mine: mine ?? mySkillsDir(), ...(prefsHome ? { home: prefsHome } : {}) })
-    .filter((s) => !core.some((c) => c.name === s.name))];
-  const names = openfilm.map((s) => s.name);
+  const { mySkillsDir, offeredSkills } = await skillsLib();
+  /* OpenFilm's own first (how a film is made, its media, its canvas), unless turned off; then those installed and on.
+     Each by the name the agent is given it by: its own, but a second of a name told apart by whose it is */
+  const openfilm = offeredSkills({ project: cwd, mine: mine ?? mySkillsDir(), ...(prefsHome ? { home: prefsHome } : {}) }).given;
+  const names = openfilm.map((s) => s.as);
   const filtered = FILTERED_AGENTS.includes(agent);
   const base = { openfilm: names, allowed: [...allowed], mcpAllowed: [...mcpAllowed], filtered, mcpFiltered: MCP_AGENTS.includes(agent) };
   if (!filtered && !MCP_AGENTS.includes(agent)) return { log: base };

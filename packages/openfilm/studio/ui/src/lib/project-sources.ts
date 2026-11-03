@@ -40,9 +40,11 @@ export type FetchJob = {
 };
 /** a skill a project can be made with (openfilm/src/skills.mjs): the project's own, the person's, or official */
 export type SkillEntry = {
+  /** whose it is and its name, `owner/name` (openfilm/src/skills.mjs SKILL_UID): how it is told apart, shared and searched */
+  uid: string;
   name: string; description: string; source: 'project' | 'mine' | 'official'; scripts: number;
-  /** its name wherever it is shared and searched: owner/repo/name, as on GitHub; none until it is published */
-  id?: string;
+  /** the name agents are given it by: its own, or `owner-name` beside another of that name (none: turned off) */
+  as?: string;
   /** OpenFilm's own (how a film is made, its media, its canvas): in every agent's hands, and only turned off */
   core?: true;
   /** how people see it (its openfilm.json): a title and a one-line summary, by language */
@@ -125,30 +127,30 @@ export const sourcesApi = {
   exampleCanvas: (id: string) => call<{ canvas: unknown }>(`examples/${encodeURIComponent(id)}/canvas`).then((r) => r.canvas),
   skills: (projectId?: string | null) => call<{ skills: SkillEntry[] }>(`skills${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`)
     .then((r) => { seen.skills.set(projectId ?? '', r.skills); return r.skills; }, () => seenSkills(projectId) ?? []),
-  setSkillCover: async (name: string, cover: string | null, projectId?: string | null): Promise<string | null> => {
-    const path = `skills/${encodeURIComponent(name)}/cover${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`;
+  setSkillCover: async (uid: string, cover: string | null, projectId?: string | null): Promise<string | null> => {
+    const path = `skills/${encodeURIComponent(uid)}/cover${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`;
     const result = await call<{ cover: string | null }>(path, cover === null ? 'DELETE' : 'PUT', cover === null ? undefined : { cover });
-    for (const [key, skills] of seen.skills) seen.skills.set(key, skills.map((skill) => skill.source === 'mine' && skill.name === name ? { ...skill, cover: result.cover ?? undefined } : skill));
+    for (const [key, skills] of seen.skills) seen.skills.set(key, skills.map((skill) => skill.uid === uid ? { ...skill, cover: result.cover ?? undefined } : skill));
     return result.cover;
   },
   /** a skill turned on or off for every project; whoever lists skills (the gallery, the desktop's chat) reads them again */
-  setSkillOn: async (name: string, on: boolean): Promise<void> => {
-    await call<{ on: boolean }>(`skills/${encodeURIComponent(name)}/on`, 'PUT', { on });
+  setSkillOn: async (uid: string, on: boolean): Promise<void> => {
+    await call<{ on: boolean }>(`skills/${encodeURIComponent(uid)}/on`, 'PUT', { on });
     for (const [key, skills] of seen.skills) seen.skills.set(key, skills.map((skill) => {
-      if (skill.name !== name) return skill;
+      if (skill.uid !== uid) return skill;
       const { off: _was, ...rest } = skill;
       return on ? rest : { ...rest, off: true as const };
     }));
     window.dispatchEvent(new Event(SKILLS_CHANGED));
   },
   /** an official skill installed (it starts on) or uninstalled; whoever lists skills reads them again */
-  setSkillInstalled: async (name: string, installed: boolean): Promise<void> => {
-    await call<{ installed: boolean }>(`skills/${encodeURIComponent(name)}/installed`, 'PUT', { installed });
+  setSkillInstalled: async (uid: string, installed: boolean): Promise<void> => {
+    await call<{ installed: boolean }>(`skills/${encodeURIComponent(uid)}/installed`, 'PUT', { installed });
     window.dispatchEvent(new Event(SKILLS_CHANGED));
   },
   /** one of the person's own skills, or a project's, moved to the trash */
-  removeSkill: async (name: string, projectId?: string | null): Promise<void> => {
-    await call<object>(`skills/${encodeURIComponent(name)}${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`, 'DELETE');
+  removeSkill: async (uid: string, projectId?: string | null): Promise<void> => {
+    await call<object>(`skills/${encodeURIComponent(uid)}${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`, 'DELETE');
     window.dispatchEvent(new Event(SKILLS_CHANGED));
   },
   /** asked as Studio opens, so a gallery opened later shows its examples and skills at once */

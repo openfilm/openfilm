@@ -55,22 +55,22 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
   const [removing, setRemoving] = React.useState(false);
   const coverInput = React.useRef<HTMLInputElement>(null);
 
-  const patch = (change: (k: SkillEntry) => SkillEntry) => setSkills((list) => list.map((k) => (k.name === skill.name ? change(k) : k)));
+  const patch = (change: (k: SkillEntry) => SkillEntry) => setSkills((list) => list.map((k) => (k.uid === skill.uid ? change(k) : k)));
   const reload = () => { void sourcesApi.skills(projectId).then(setSkills); };
   const turn = (on: boolean) => {
     patch((k) => { const { off: _was, ...rest } = k; return on ? rest : { ...rest, off: true }; });
-    void sourcesApi.setSkillOn(skill.name, on).catch(reload);
+    void sourcesApi.setSkillOn(skill.uid, on).catch(reload);
   };
   const install = (on: boolean) => {
     patch((k) => { const { off: _was, ...rest } = k; return { ...rest, installed: on }; });
-    void sourcesApi.setSkillInstalled(skill.name, on).catch(reload);
+    void sourcesApi.setSkillInstalled(skill.uid, on).catch(reload);
   };
   /* an official one is only uninstalled (it stays in Discover); the person's own or a project's goes to the trash */
   const remove = () => {
     setRemoving(false);
     onBack();
-    setSkills((list) => list.filter((k) => !(k.source === skill.source && k.name === skill.name)));
-    void sourcesApi.removeSkill(skill.name, projectId).finally(reload);
+    setSkills((list) => list.filter((k) => k.uid !== skill.uid));
+    void sourcesApi.removeSkill(skill.uid, projectId).finally(reload);
   };
   const changeCover = async (file: File | null) => {
     setBusy(true);
@@ -89,7 +89,7 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
         image.src = cover;
         await image.decode().catch(() => { throw new Error(t('gallery.coverInvalid')); });
       }
-      const kept = await sourcesApi.setSkillCover(skill.name, cover, projectId);
+      const kept = await sourcesApi.setSkillCover(skill.uid, cover, projectId);
       patch((k) => (k.source === 'mine' ? { ...k, cover: kept ?? undefined } : k));
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
@@ -118,8 +118,8 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
       {skill.off ? <p className="mt-1.5 text-[12px] text-[var(--text-muted)]">{t('gallery.skillOff')}</p> : null}
       <div className="mt-2 flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
         <span>{t(group)}</span>
-        {/* its name wherever it is shared: owner/repo/name */}
-        {skill.id ? <span className="min-w-0 truncate font-mono text-[11px] text-[var(--text-faint)]" title={skill.id}>{skill.id}</span> : null}
+        {/* its uid, owner/name: how it is told apart, shared and searched */}
+        <span className="min-w-0 truncate font-mono text-[11px] text-[var(--text-faint)]" title={skill.uid}>{skill.uid}</span>
         {skill.version ? <span className="rounded-[5px] border border-[var(--border)] px-1.5 py-[1px] font-mono text-[10.5px] text-[var(--text-dim)]">v{skill.version}</span> : null}
         {/* its source: OpenFilm's repository, or the address one of the person's came from */}
         {source ? (

@@ -927,7 +927,6 @@ export const ko: Words = {
     skillsSystem: '시스템 스킬',
     skillsCommunity: '커뮤니티 스킬',
     skillImport: '가져오기',
-    skillLocal: '이 컴퓨터',
     noMineSkills: '아직 가져온 스킬이 없습니다. GitHub 링크나 폴더에서 가져올 수 있습니다.',
     noAgentSkills: '에이전트 자체 스킬이 여기에는 없습니다.',
     noCommunitySkills: '커뮤니티 스킬은 「둘러보기」에서 설치합니다.',

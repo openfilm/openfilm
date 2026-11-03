@@ -930,7 +930,6 @@ export const ja: Words = {
     skillsSystem: 'システムスキル',
     skillsCommunity: 'コミュニティスキル',
     skillImport: 'インポート',
-    skillLocal: 'このパソコン',
     noMineSkills: 'インポートしたスキルはまだありません。GitHub のリンクやフォルダからインポートできます。',
     noAgentSkills: 'エージェント自身のスキルはここにはありません。',
     noCommunitySkills: 'コミュニティスキルは「見つける」からインストールします。',
