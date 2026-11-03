@@ -4,9 +4,8 @@
  * the published library, with their size and sha256, fetched together into the library's cache for every OpenFilm
  * here (studio/server/library.mjs fetchLibrary), checked, and kept until the person removes them.
  *
- *   library/models.json         the library search's sentence model and its runtime (library-semantic.mjs)
- *   library/local-models.json   the others: { models: [{ id, files: [{ path, bytes, sha256 }] }] }, a runtime file
- *                               shared by several listed with each
+ *   library/local-models.json   { models: [{ id, files: [{ path, bytes, sha256 }] }] }, a runtime file shared by
+ *                               several listed with each
  *
  * Beside a model's files, in the cache's models/ folder: `<id>.json` while its fetch runs (`{ pid, at }`) or after it
  * failed (`{ failed }`), `<id>.<digest>.ok` once every file checked, and `<id>.off` while it is turned off (kept, not
@@ -26,14 +25,10 @@ import { builtInRoot, fetchLibrary, libraryCache, libraryFile } from '../studio/
 
 const readJson = (/** @type {string} */ name) => { try { return JSON.parse(readFileSync(join(builtInRoot(), name), 'utf8')); } catch { return null; } };
 
-/** Every model listed, the library search's first. @returns {ModelEntry[]} */
+/** Every model listed. @returns {ModelEntry[]} */
 export function modelEntries() {
-  const search = readJson('models.json');
-  const others = readJson('local-models.json');
-  return [
-    ...(search ? [{ id: String(search.model), files: search.files }] : []),
-    ...(Array.isArray(others?.models) ? others.models : []),
-  ];
+  const listed = readJson('local-models.json');
+  return Array.isArray(listed?.models) ? listed.models : [];
 }
 
 /** One model listed, by its id; null for none. */
@@ -60,7 +55,7 @@ export function modelReady(/** @type {ModelEntry} */ m) {
 /** Where the model's file `path` is on this computer (it is ready). */
 export const modelFile = (/** @type {string} */ path) => /** @type {string} */ (libraryFile(path));
 
-/** Whether the model is to be used (and, the library search's, fetched by itself when it is not here): not turned off. */
+/** Whether the model is to be used: not turned off. */
 export const modelOn = (/** @type {ModelEntry} */ m) => !existsSync(offFile(m));
 
 /** How long a failed fetch waits before it is tried by itself again. */

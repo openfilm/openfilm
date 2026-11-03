@@ -17,8 +17,11 @@ import { billedBy, call, serviceUrl, sleep } from './common.mjs';
  */
 
 const NAME = 'OpenFilm';
-/** How often a run that is still going is asked about (tests make it short). */
-export const polling = { ms: 3000 };
+/**
+ * How often a run that is still going is asked about, at most (tests make it short): first soon after it began, as
+ * most runs (a voice found, a line spoken) are done in a second, then less and less often.
+ */
+export const polling = { ms: 3000, first: 250 };
 
 /** The kinds of media the service may offer; listing voices goes with voice-over. */
 const KINDS = /** @type {Verb[]} */ (['tts', 'sfx', 'music', 'asr', 'image-search', 'image', 'video']);
@@ -117,8 +120,8 @@ export default {
       headers: { ...headers, 'content-type': 'application/json', 'idempotency-key': runKey, prefer: 'respond-async' },
       body: JSON.stringify(body),
     }, ctx);
-    while (res.status === 202) {
-      await sleep(polling.ms, ctx.signal);
+    for (let wait = Math.min(polling.first, polling.ms); res.status === 202; wait = Math.min(polling.ms, wait * 2)) {
+      await sleep(wait, ctx.signal);
       res = await call(NAME, `${base}/v1/media/run?key=${encodeURIComponent(runKey)}`, { headers }, ctx);
     }
     const done = /** @type {{ files?: { path: string, base64: string }[], index?: import('./contract.mjs').IndexRow[], receipt?: Record<string, unknown> }} */ (await res.json());

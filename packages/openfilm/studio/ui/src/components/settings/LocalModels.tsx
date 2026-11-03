@@ -7,13 +7,13 @@
  * (install, turn on or off, uninstall).
  */
 import React from 'react';
-import { ArrowLeft, Captions, ChevronRight, Cpu, ExternalLink, ScanSearch, Scissors } from 'lucide-react';
+import { ArrowLeft, Captions, ChevronRight, Cpu, ExternalLink, Scissors } from 'lucide-react';
 import { useT } from '@/i18n';
 import { LOCAL_KINDS, sizeText, type LocalKind, type LocalModel, type LocalModelsHook } from '@/lib/local-models';
 import { Card } from './ProvidersSection';
 import { SettingsButton, SettingsSwitch, settingsError } from './ui';
 
-const KIND_ICON: Record<LocalKind, React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>> = { asr: Captions, cutout: Scissors, search: ScanSearch };
+const KIND_ICON: Record<LocalKind, React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>> = { asr: Captions, cutout: Scissors };
 
 const chipClass = 'inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-[14px] transition hover:border-[var(--border-strong)] hover:text-[var(--text)]';
 

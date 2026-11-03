@@ -1,23 +1,20 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, test } from 'node:test';
 
-/* the models as the library publishes them: the search's two small files, listed with their sums in the package's
-   models.json, and a transcription model's one in local-models.json */
+/* the models as the library publishes them, listed with their sums in the package's local-models.json: two
+   transcription models, a big one of two files and a small one */
 const host = mkdtempSync(join(tmpdir(), 'library-host-'));
-const files = { 'models/multilingual-e5-small/model_quantized.onnx': 'onnx bytes', 'models/multilingual-e5-small/vocab.bin': 'vocab bytes' };
+const files = { 'models/whisper-large-v3-turbo/encoder.onnx': 'onnx bytes', 'models/whisper-large-v3-turbo/config.json': 'vocab bytes' };
 const whisper = { 'models/whisper-small/config.json': '{}' };
 for (const [rel, body] of Object.entries({ ...files, ...whisper })) { mkdirSync(join(host, rel, '..'), { recursive: true }); writeFileSync(join(host, rel), body); }
 const listed = (/** @type {Record<string, string>} */ some) => Object.entries(some).map(([path, body]) => ({ path, bytes: body.length, sha256: createHash('sha256').update(body).digest('hex') }));
 const pkg = mkdtempSync(join(tmpdir(), 'library-package-'));
-writeFileSync(join(pkg, 'models.json'), JSON.stringify({
-  version: 1, model: 'multilingual-e5-small', dims: 384, onnx: Object.keys(files)[0], tokenizer: Object.keys(files)[1], runtime: '', files: listed(files),
-}));
-writeFileSync(join(pkg, 'local-models.json'), JSON.stringify({ version: 1, models: [{ id: 'whisper-small', files: listed(whisper) }] }));
+writeFileSync(join(pkg, 'local-models.json'), JSON.stringify({ version: 1, models: [{ id: 'whisper-small', files: listed(whisper) }, { id: 'whisper-large-v3-turbo', files: listed(files) }] }));
 const library = createServer((req, res) => {
   try { res.end(readFileSync(join(host, decodeURIComponent(req.url ?? '').replace(/^\/library\//, '')))); } catch { res.writeHead(404); res.end(); }
 });
@@ -48,44 +45,43 @@ const call = async (/** @type {string} */ path, method = 'GET', body = undefined
   return { status: res.status, models: /** @type {{ models?: any[] }} */ (await res.json()).models };
 };
 
-test('a local model is installed, turned off and on, and uninstalled, and a search never fetches it once it is off', async () => {
-  const { semanticState } = await import('../../src/library-semantic.mjs');
+test('a local model is installed, turned off and on, and uninstalled', async () => {
   let { models } = await call('');
   assert.deepEqual(models?.map((m) => [m.id, m.kind, m.by, m.installed, m.on, m.builtIn]), [
-    ['multilingual-e5-small', 'search', 'Microsoft', false, false, false], ['whisper-small', 'asr', 'OpenAI', false, false, false]]);
-  assert.equal(models?.[0].bytes, 21, 'its files\' size');
+    ['whisper-small', 'asr', 'OpenAI', false, false, false], ['whisper-large-v3-turbo', 'asr', 'OpenAI', false, false, false]]);
+  const turbo = () => models?.find((m) => m.id === 'whisper-large-v3-turbo');
+  assert.equal(turbo().bytes, 21, 'its files\' size');
 
-  assert.equal((await call('/multilingual-e5-small', 'PUT', { on: true })).status, 409, 'not before it is installed');
-  ({ models } = await call('/multilingual-e5-small/install', 'POST'));
-  for (let i = 0; i < 100 && !models?.[0].installed; i++) {
+  assert.equal((await call('/whisper-large-v3-turbo', 'PUT', { on: true })).status, 409, 'not before it is installed');
+  ({ models } = await call('/whisper-large-v3-turbo/install', 'POST'));
+  for (let i = 0; i < 100 && !turbo().installed; i++) {
     await new Promise((done) => setTimeout(done, 100));
     ({ models } = await call(''));
   }
-  assert.equal(models?.[0].installed, true, 'fetched and checked, in a process of its own');
-  assert.equal(models?.[0].on, true);
-  assert.equal(semanticState(), 'ready');
+  assert.equal(turbo().installed, true, 'fetched and checked, in a process of its own');
+  assert.equal(turbo().on, true);
 
-  ({ models } = await call('/multilingual-e5-small', 'PUT', { on: false }));
-  assert.deepEqual([models?.[0].installed, models?.[0].on], [true, false], 'kept, not used');
-  assert.equal(semanticState(), 'off', 'searches use keywords');
-  ({ models } = await call('/multilingual-e5-small', 'PUT', { on: true }));
-  assert.equal(models?.[0].on, true);
+  ({ models } = await call('/whisper-large-v3-turbo', 'PUT', { on: false }));
+  assert.deepEqual([turbo().installed, turbo().on], [true, false], 'kept, not used');
+  ({ models } = await call('/whisper-large-v3-turbo', 'PUT', { on: true }));
+  assert.equal(turbo().on, true);
 
-  ({ models } = await call('/multilingual-e5-small', 'DELETE'));
-  assert.deepEqual([models?.[0].installed, models?.[0].on], [false, false]);
+  ({ models } = await call('/whisper-large-v3-turbo', 'DELETE'));
+  assert.deepEqual([turbo().installed, turbo().on], [false, false]);
   for (const rel of Object.keys(files)) assert.equal(existsSync(join(/** @type {string} */ (process.env.OPENFILM_LIBRARY_CACHE), rel)), false, `${rel} thrown away`);
-  let started = false;
-  assert.equal(semanticState({ start: () => { started = true; } }), 'off');
-  assert.equal(started, false, 'a search does not fetch it again');
 
   assert.equal((await call('/someone-else', 'DELETE')).status, 404);
 });
 
 test('a model that is part of the checkout cannot be uninstalled', async () => {
   for (const [rel, body] of Object.entries(files)) { mkdirSync(join(pkg, rel, '..'), { recursive: true }); writeFileSync(join(pkg, rel), body); }
-  const { models } = await call('/multilingual-e5-small/install', 'POST');
-  assert.deepEqual([models?.[0].installed, models?.[0].builtIn], [true, true]);
-  assert.equal((await call('/multilingual-e5-small', 'DELETE')).status, 409);
+  const { models } = await call('/whisper-large-v3-turbo/install', 'POST');
+  const turbo = models?.find((m) => m.id === 'whisper-large-v3-turbo');
+  assert.deepEqual([turbo.installed, turbo.builtIn], [true, true]);
+  assert.equal((await call('/whisper-large-v3-turbo', 'DELETE')).status, 409);
+  /* gone from the checkout again for the next test: not installed, and what it made goes too */
+  rmSync(join(pkg, 'models'), { recursive: true, force: true });
+  assert.equal((await call('')).models?.find((m) => m.id === 'whisper-large-v3-turbo').installed, false);
 });
 
 test('a transcription model installed makes transcripts when nothing else was chosen for them, and uninstalled stops', async () => {

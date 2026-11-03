@@ -10,10 +10,8 @@
  *   PUT    /api/local-models/<id>           { on }: used or not
  *   DELETE /api/local-models/<id>           its files thrown away, and off
  *
- * The library search's sentence model (src/library-semantic.mjs) is fetched by a search by itself, unless it was
- * turned off or removed here. The others are Local models the provider (providers/local.mjs): transcripts and pictures'
- * backgrounds; one coming, going or turned on or off moves what Settings → Services chose for its kind
- * (providers/index.mjs localModelsChanged).
+ * They are Local models the provider (providers/local.mjs): transcripts and pictures' backgrounds; one coming, going
+ * or turned on or off moves what Settings → Services chose for its kind (providers/index.mjs localModelsChanged).
  */
 import { HttpError, json, readJson } from './http.mjs';
 import { modelBuiltIn, modelBytesHere, modelEntries, modelEntry, modelFailed, modelFetching, modelOn, modelReady, removeModel, setModelOn } from '../../src/local-models.mjs';
@@ -22,12 +20,11 @@ import { localModelsChanged } from './providers/index.mjs';
 /**
  * What a model is, for its page: what it is for (`kind`), who made it and where they publish it, its license, and
  * about how much memory it takes while it runs (measured).
- * @typedef {{ kind: 'search' | 'asr' | 'cutout', name: string, by: string, site: string, license: string, memoryMb: number }} About
+ * @typedef {{ kind: 'asr' | 'cutout', name: string, by: string, site: string, license: string, memoryMb: number }} About
  */
 
 /** @type {Record<string, About>} */
 const ABOUT = {
-  'multilingual-e5-small': { kind: 'search', name: 'Multilingual E5 Small', by: 'Microsoft', site: 'huggingface.co/intfloat/multilingual-e5-small', license: 'MIT', memoryMb: 600 },
   'whisper-small': { kind: 'asr', name: 'Whisper Small', by: 'OpenAI', site: 'github.com/openai/whisper', license: 'MIT', memoryMb: 1800 },
   'whisper-large-v3-turbo': { kind: 'asr', name: 'Whisper Large v3 Turbo', by: 'OpenAI', site: 'github.com/openai/whisper', license: 'MIT', memoryMb: 2400 },
   'birefnet-lite': { kind: 'cutout', name: 'BiRefNet Lite', by: 'Nankai University', site: 'github.com/ZhengPeng7/BiRefNet', license: 'MIT', memoryMb: 2600 },

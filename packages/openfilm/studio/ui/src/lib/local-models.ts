@@ -5,8 +5,8 @@
 import React from 'react';
 
 /** What a local model is for, wherever they are grouped. */
-export type LocalKind = 'asr' | 'cutout' | 'search';
-export const LOCAL_KINDS: LocalKind[] = ['asr', 'cutout', 'search'];
+export type LocalKind = 'asr' | 'cutout';
+export const LOCAL_KINDS: LocalKind[] = ['asr', 'cutout'];
 
 export interface LocalModel {
   id: string;

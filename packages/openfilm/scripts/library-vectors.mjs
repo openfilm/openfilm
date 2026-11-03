@@ -5,8 +5,9 @@
  * is (passageOf) turned into a vector by the model, written as library/vectors.i8 (int8, 384 a thing) and
  * library/vectors.json (the model, the ids in order, each vector's scale); and library/models.json, each file of the
  * model and its runtime with its size and sha256, for those who fetch it; and the model's vocabulary packed for a
- * quick start (vocab.bin beside its tokenizer.json, library-semantic.mjs packVocabulary). Run on the computer that has them under
- * library/models/ (published with the library, not in git), after the library's things or their descriptions change:
+ * quick start (vocab.bin beside its tokenizer.json, sentence-model.mjs packVocabulary). Run on the computer that has
+ * them under library/models/ (published with the library, not in git), after the library's things or their
+ * descriptions change:
  *
  *   node scripts/library-vectors.mjs
  *
@@ -19,7 +20,8 @@ import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { builtInRoot, libraryIndex } from '../studio/server/library.mjs';
 import { KINDS } from '../src/library-search.mjs';
-import { embedder, packVocabulary, passageOf } from '../src/library-semantic.mjs';
+import { embedder, passageOf } from '../src/library-semantic.mjs';
+import { packVocabulary } from '../src/sentence-model.mjs';
 import { vocabulary } from '../src/library-words.mjs';
 
 const MODEL = 'multilingual-e5-small';
