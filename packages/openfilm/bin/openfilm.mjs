@@ -71,6 +71,9 @@ openfilm skill remove <name>
   opened in Studio first, so the person watches it.
 
   --count <n>     frames in a sheet (12)
+  --full          watch every frame of the rendered film (what render wrote beside film.html), or of a video
+                  given: white flashes, frames unlike those on both sides, still pictures (6 s or more) and
+                  black, each with its time
   --loudness=<n>  say how far the mix is from n LUFS and -1 dBTP, the target render --loudness brings it to`,
   render: `openfilm render [a-b]
 
@@ -142,7 +145,7 @@ if (RAW[0] === 'get') {
     parsed = parseArgs({
       allowPositionals: true,
       options: {
-        count: { type: 'string' }, out: { type: 'string', short: 'o' }, '4k': { type: 'boolean' }, scale: { type: 'string' },
+        count: { type: 'string' }, full: { type: 'boolean' }, out: { type: 'string', short: 'o' }, '4k': { type: 'boolean' }, scale: { type: 'string' },
         blur: { type: 'boolean' }, samples: { type: 'string' }, shutter: { type: 'string' }, alpha: { type: 'boolean' }, subtitles: { type: 'boolean' },
         fps: { type: 'string' }, workers: { type: 'string' }, loudness: { type: 'string' }, help: { type: 'boolean', short: 'h' },
       },
