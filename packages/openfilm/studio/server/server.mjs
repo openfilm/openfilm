@@ -61,6 +61,7 @@ import { projectSettingsRoute } from './project-settings.mjs';
 import { markersRoute } from './markers.mjs';
 import { transitionPageRoutes } from './transition-pages.mjs';
 import { createAsks, getRoute, subtitleTranscriber, subtitleTranslator } from './get.mjs';
+import { pipelineState } from './pipeline.mjs';
 import { LOCATION_KEYS, chooseFolder, locations, usableFolder } from '../../src/locations.mjs';
 import { doctor } from '../../src/doctor.mjs';
 import { recentProblems } from '../../src/problems.mjs';
@@ -655,6 +656,11 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     /* an editor page shows it: the person opened it, so it is the one `openfilm open` alone comes back to */
     if (rest === 'opened' && req.method === 'POST') return json(res, 200, { project: await markOpened(project.id) });
+    /* the production line as the person reads it (studio/server/pipeline.mjs): its stages, and what its check says */
+    if (rest === 'pipeline' && req.method === 'GET') {
+      requireProject({ film: false });
+      return json(res, 200, pipelineState(project.path));
+    }
     /* the fonts its pages declare with @font-face, and with `page` (a project path) the families that page can draw with
        and names (project-fonts.mjs): the font menu's "In this project" */
     if (rest === 'fonts' && req.method === 'GET') {

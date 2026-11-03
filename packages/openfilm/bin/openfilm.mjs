@@ -144,8 +144,7 @@ if (RAW[0] === 'get') {
   /* the process ends by itself, as after the other commands: process.exit() here, after the answer is printed,
      aborts Node 24.17 on Windows (`Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)`, exit status 127) */
   process.exitCode = result.code;
-}
-if (RAW[0] === 'pipeline') {
+} else if (RAW[0] === 'pipeline') {
   let result;
   try { result = await (await import('../src/pipeline-cli.mjs')).pipelineCommand(RAW.slice(1), RUN); }
   catch (e) { console.error(`${RUN} pipeline: ${e.message}`); process.exit(2); }

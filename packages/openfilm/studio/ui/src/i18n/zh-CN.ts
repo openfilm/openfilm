@@ -9,6 +9,24 @@ const TRASH = typeof navigator !== 'undefined' && /^win/i.test(navigator.platfor
   : typeof navigator !== 'undefined' && /^mac/i.test(navigator.platform) ? '废纸篓' : '回收站';
 
 export const zhCN: Words = {
+  pipeline: {
+    label: '制作流水线',
+    next: '下一步：{stage}',
+    allDone: '所有阶段都已完成',
+    problem: '流水线状态读不出来',
+    noStoryboard: '分镜还没写；写好之后检查才有话说',
+    check: '片子还缺什么',
+    checkOk: '分镜与项目一致：页面写好并剪入、素材齐备、配音录好、秒数对上',
+    stage: {
+      brief: '片子说什么、给谁看、多长、什么调性',
+      script: '文案，和镜头的顺序',
+      storyboard: '每个镜头：页面、秒数、素材、画面文字',
+      assets: '配音、音乐、图片和视频',
+      assembly: '用 film.html 剪在一起的页面',
+      review: '用 look 检查片子，修掉发现的问题',
+      deliver: '按要求渲染或导出',
+    },
+  },
   nav: {
     projects: '项目',
     desktop: '桌面版',

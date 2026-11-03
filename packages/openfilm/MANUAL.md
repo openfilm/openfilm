@@ -106,7 +106,8 @@ one `## Shot n — seconds` entry per shot, with its page, its voice line, its w
 Once the storyboard is written, `npx openfilm pipeline check` holds it against the project — pages written, media
 present, voices recorded (a shot's voice at `assets/audio/vo/shot-<n>.wav`), the seconds adding up, film.html cutting
 the shots as it says — and names what is missing under the stage that fills it: the work list of the stage the film
-is at.
+is at. `npx openfilm get tts --storyboard` speaks every shot's vo in one go, to the file the check expects; the
+person watches the line in Studio, beside the editor.
 
 The words of a sound or a video are a WebVTT beside it with the same name (`vo/1.wav` → `vo/1.vtt`): a cue per subtitle line, a timestamp tag at each word. Studio makes the film's subtitles from them; never draw subtitles in a page.
 

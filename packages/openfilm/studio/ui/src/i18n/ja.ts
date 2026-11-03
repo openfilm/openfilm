@@ -8,6 +8,24 @@ const TRASH = typeof navigator !== 'undefined' && /^win/i.test(navigator.platfor
   : typeof navigator !== 'undefined' && /^mac/i.test(navigator.platform) ? 'ゴミ箱' : 'ゴミ箱';
 
 export const ja: Words = {
+  pipeline: {
+    label: '制作ライン',
+    next: '次：{stage}',
+    allDone: '全ステージ完了',
+    problem: '制作ラインを読み込めません',
+    noStoryboard: '絵コンテはまだありません。書かれてからチェックが何かを言います',
+    check: 'まだ足りないもの',
+    checkOk: '絵コンテは合っています：ページが書かれ、組み込まれ、素材が揃い、音声が録られ、秒数が合う',
+    stage: {
+      brief: '何を伝え、誰に、どの長さで、どんなトーンで',
+      script: '言葉と、ショットの順番',
+      storyboard: '各ショットのページ、秒数、素材、画面の文字',
+      assets: '音声、音楽、画像、動画',
+      assembly: 'film.html に切り貼りしたページ',
+      review: 'look で確認し、見つかったものを直す',
+      deliver: '依頼どおりにレンダリングか書き出し',
+    },
+  },
   nav: {
     projects: 'プロジェクト',
     desktop: 'デスクトップ版',

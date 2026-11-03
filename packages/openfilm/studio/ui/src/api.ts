@@ -32,6 +32,12 @@ export type MediaFile = { path: string; kind: 'video' | 'image' | 'audio' | 'pag
 /** A project's editor settings (studio/server/project-settings.mjs). */
 export type ProjectSettings = { fps?: number; trackNames?: { name: string; index: number; clips: string[] }[]; trackHeights?: { height: number; index: number; clips: string[] }[] };
 export type Listing = { files: MediaFile[]; folders: string[]; pages: { path: string; size: number; mtime: number }[] };
+/** A stage of the production line (`.film/pipeline.json`), as the agent's `openfilm pipeline` command keeps it; the stages come in the line's order, each with what it leaves. */
+export type PipelineStage = { name: string; leaves: string; status: 'todo' | 'doing' | 'done'; note?: string; at?: string };
+export type Pipeline = { version: number; title?: string; seconds?: number; stages: PipelineStage[] };
+/** What the line's check says (`openfilm pipeline check`): the work list of the stage the film is at, as command output. */
+export type PipelineCheck = { ok: boolean; lines: string[] };
+export type PipelineState = { problem?: string; pipeline: Pipeline | null; check: PipelineCheck | null };
 export type Op =
   | { op: 'set'; clip: string; field: string; value?: unknown }
   | { op: 'move'; clip: string; at: number; track?: number; newTrack?: number }
@@ -149,6 +155,8 @@ export const api = {
   film: (id: string) => call<ProjectFilm>(p(id)),
   /** the person opened it here: the one `openfilm open` alone comes back to */
   opened: (id: string) => call<{ project: Project }>(`${p(id)}/opened`, { method: 'POST' }),
+  /** the project's production line (`.film/pipeline.json`), and what its check says is missing; either null when none */
+  pipeline: (id: string) => call<PipelineState>(`${p(id)}/pipeline`),
   /* `undo`: the edit puts back an earlier one (Studio keeps the person's edits over an agent's writes until then) */
   edit: (id: string, base: string | null, ops: Op[], undo = false) => call<{ text: string; rev: string; value: Film; doc: Film; rebased: boolean }>(`${p(id)}/edit`, { method: 'POST', json: { base, ops, ...(undo ? { undo: true } : {}) } }),
   files: (id: string) => call<Listing>(`${p(id)}/files`),

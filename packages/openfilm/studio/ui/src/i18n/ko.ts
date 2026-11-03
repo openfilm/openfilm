@@ -5,6 +5,24 @@ const FILES = typeof navigator !== 'undefined' && /^win/i.test(navigator.platfor
   : typeof navigator !== 'undefined' && /^mac/i.test(navigator.platform) ? 'Finder' : '파일';
 
 export const ko: Words = {
+  pipeline: {
+    label: '제작 라인',
+    next: '다음: {stage}',
+    allDone: '모든 단계 완료',
+    problem: '제작 라인을 읽을 수 없습니다',
+    noStoryboard: '스토리보드가 아직 없습니다. 작성되어야 점검이 말합니다',
+    check: '아직 필요한 것',
+    checkOk: '스토리보드가 일치합니다: 페이지 작성·편집 반영, 소재 완비, 목소리 녹음, 초 일치',
+    stage: {
+      brief: '무엇을, 누구에게, 얼마나, 어떤 톤으로',
+      script: '말과, 순서대로의 샷',
+      storyboard: '샷마다 페이지, 초, 소재, 화면의 글자',
+      assets: '목소리, 음악, 그림, 영상',
+      assembly: 'film.html로 이어 붙인 페이지',
+      review: 'look으로 확인하고, 찾은 것을 고침',
+      deliver: '요청한 대로 렌더링이나 내보내기',
+    },
+  },
   nav: {
     projects: '프로젝트',
     desktop: '데스크톱',

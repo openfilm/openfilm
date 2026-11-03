@@ -30,6 +30,7 @@ import { lstat, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from '
 import { tmpdir } from 'node:os';
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { FILM_FILE, clipKind } from '../../src/film-doc.mjs';
+import { readStoryboard } from '../../src/storyboard.mjs';
 import { spokenLines } from './captions.mjs';
 import { dropTranscripts, readTranscript, transcriptIsCurrent, transcriptPath, writeTranscript } from './transcripts.mjs';
 import { inside } from './files.mjs';
@@ -67,9 +68,9 @@ export const VERBS = /** @type {Record<string, VerbSpec>} */ ({
       limit: { value: 'n', min: 1, max: 100, integer: true, default: 5, alias: 'n' } },
   },
   tts: {
-    help: 'Voice-over: one line spoken. Returns src, dur and its transcript: a WebVTT of the text in pause-separated cues, in source seconds. Its word timing is kept, so never run asr on it.',
+    help: 'Voice-over: one line spoken. Returns src, dur and its transcript: a WebVTT of the text in pause-separated cues, in source seconds. Its word timing is kept, so never run asr on it. --storyboard voices every shot of the production line\'s storyboard that says a vo, to assets/audio/vo/shot-<n> (the ones recorded already are left; --force says them again).',
     dir: 'assets/audio/vo', timeoutSec: 300,
-    options: { out, text: { value: 'text', required: true }, voice: { value: 'voiceId', required: true } },
+    options: { out, text: { value: 'text', required: true }, voice: { value: 'voiceId', required: true }, storyboard: {}, force: {} },
   },
   sfx: {
     help: 'A sound effect. Returns src, its measured dur and, when measured, attack (seconds into the file where the hit is) and peakDb. --sec is a request: the dur returned is what it is.',
@@ -220,12 +221,19 @@ export async function checkArgs(root, verb, given) {
     });
     args[name] = option.repeat ? typed : typed[0];
   }
-  for (const [name, option] of Object.entries(spec.options)) {
-    if (args[name] === undefined && option.default !== undefined) args[name] = option.default;
-    if (args[name] === undefined && option.required) throw usage(`${verb} needs ${flagHelp(name, option)}`);
-  }
   if (typeof args.out === 'string' && (!/^[\p{L}\p{N}][\p{L}\p{N}._-]{0,120}$/u.test(args.out) || /\.[a-z0-9]{2,4}$/i.test(args.out))) {
     throw usage('--out is a simple name, without a folder or an extension (e.g. --out intro)');
+  }
+  /* --storyboard voices the storyboard's shots itself, each to its number's file: out/text are the per-shot run's */
+  const batch = verb === 'tts' && args.storyboard === true;
+  if (batch && (args.out !== undefined || args.text !== undefined)) {
+    throw usage('--storyboard voices every shot itself (assets/audio/vo/shot-<n>): give it no --out or --text');
+  }
+  for (const [name, option] of Object.entries(spec.options)) {
+    if (args[name] === undefined && option.default !== undefined) args[name] = option.default;
+    if (args[name] === undefined && option.required && !(batch && (name === 'out' || name === 'text'))) {
+      throw usage(`${verb} needs ${flagHelp(name, option)}`);
+    }
   }
   for (const [name, option] of Object.entries(spec.options)) {
     if (!option.path || args[name] === undefined) continue;
@@ -263,6 +271,60 @@ async function projectFile(root, rel, name, want) {
  * @typedef {{ kind: 'balance', provider: string, providerId: string }} Notice
  */
 
+/** The forms a voice-over lands in, by its --out name's extension. */
+const VOICE_EXTS = ['wav', 'mp3', 'm4a', 'flac', 'ogg'];
+
+/** Whether the voice of `name` (--out) is recorded already, in any of the forms it could have landed in.
+    @param {string} root @param {string} name */
+async function voicedAlready(root, name) {
+  for (const ext of VOICE_EXTS) {
+    if (await stat(join(root, 'assets', 'audio', 'vo', `${name}.${ext}`)).catch(() => null)) return true;
+  }
+  return false;
+}
+
+/**
+ * Every shot of the storyboard that says a vo, spoken by the same run as one `get tts` (--out shot-<n>, so it lands
+ * at assets/audio/vo/shot-<n> and the check knows it by its number). The ones recorded already are left as they are
+ * (--force says them again); a shot that fails does not stop the rest — the failures are said at the end, with every
+ * receipt, and the answer is an error so the agent knows some are missing.
+ * @param {string} root @param {Record<string, unknown>} args @param {Parameters<typeof runGet>[3]} options
+ */
+async function voiceTheBoard(root, args, options) {
+  const board = readStoryboard(root);
+  if (!board) throw usage('no storyboard in this project; `openfilm pipeline storyboard` shows the form one is written in');
+  if (board.problems.length) throw new GetError(`the storyboard does not hold together (\`openfilm pipeline check\` says where):\n${board.problems.join('\n')}`);
+  const shots = board.shots.filter((shot) => shot.vo);
+  if (!shots.length) throw usage('no shot in the storyboard says a vo; nothing to voice');
+  /** @type {string[]} */
+  const said = [];
+  /** @type {number[]} */
+  const failed = [];
+  let voiced = 0;
+  let kept = 0;
+  for (const shot of shots) {
+    const out = `shot-${shot.n}`;
+    if (args.force !== true && await voicedAlready(root, out)) {
+      kept++;
+      said.push(`shot ${shot.n}  already there (--force says it again)`);
+      continue;
+    }
+    try {
+      const receipt = await runGet(root, 'tts', { out, text: shot.vo, ...(args.voice !== undefined ? { voice: args.voice } : {}) }, options);
+      voiced++;
+      said.push(`shot ${shot.n}`, ...receipt.split('\n').map((line) => `  ${line}`));
+    } catch (e) {
+      failed.push(shot.n);
+      said.push(`shot ${shot.n}  ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  const done = `${voiced} voiced${kept ? `, ${kept} already there` : ''}`;
+  if (failed.length) {
+    throw new GetError(`${failed.length} of ${shots.length} with a vo did not run (${done}); the rest landed:\n${said.join('\n')}`);
+  }
+  return `${done}, from the storyboard's ${board.shots.length} shot${board.shots.length === 1 ? '' : 's'}\n${said.join('\n')}`;
+}
+
 /**
  * Run `verb` for the project at `root` and land what it makes. Resolves with the receipt for the agent; throws a
  * GetError (or a provider's own Error) saying why it did not run.
@@ -273,6 +335,7 @@ async function projectFile(root, rel, name, want) {
  */
 export async function runGet(root, verb, given, { via, model, yes = false, ask, tell, signal = new AbortController().signal } = {}) {
   const args = await checkArgs(root, verb, given);
+  if (verb === 'tts' && args.storyboard === true) return voiceTheBoard(root, args, { via, model, yes, ask, tell, signal });
   if (verb === 'call') {
     const { custom } = await providerSettings();
     const service = custom.find((s) => s.id === args.service);

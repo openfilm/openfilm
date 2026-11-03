@@ -89,6 +89,7 @@ import { trackFlagStep, type SessionTimeline } from './OperationHistory';
 import { ProjectLayoutMenu } from './ProjectLayoutMenu';
 import { ProjectMenu } from './ProjectMenu';
 import { ProjectHistoryButton, ProjectHistoryControls } from './ProjectHistoryControls';
+import { PipelineButton } from './PipelineButton';
 import { useProjectHistory } from './use-project-history';
 import { historyMoved } from '@/lib/project-history';
 import { ProjectsPopover } from './ProjectsLibrary';
@@ -3099,6 +3100,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 onTimeline={setTimelineOpen} onInspector={setInspectorOpen}
                 hostPanel={hostPanel ? { label: hostPanel.label, open: hostPanel.open, onChange: hostPanel.setOpen } : null} />
               <ProjectHistoryButton open={historyOpen} onClick={openHistory} className={TOP_BTN} />
+              {/* the production line the agent works down (a project with none shows nothing) */}
+              <PipelineButton projectId={projectId} />
               <Tooltip label={t('projectMenu.export')} side="bottom">
                 <button type="button" aria-label={t('projectMenu.export')} aria-haspopup="dialog" aria-expanded={exportOpen} className={TOP_BTN}
                   onClick={() => {

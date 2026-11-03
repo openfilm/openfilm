@@ -8,6 +8,24 @@ const TRASH = typeof navigator !== 'undefined' && /^win/i.test(navigator.platfor
   : typeof navigator !== 'undefined' && /^mac/i.test(navigator.platform) ? 'la Papelera' : 'la papelera';
 
 export const es: Words = {
+  pipeline: {
+    label: 'Línea de producción',
+    next: 'Siguiente: {stage}',
+    allDone: 'Todas las etapas listas',
+    problem: 'No se puede leer la línea de producción',
+    noStoryboard: 'El guion técnico aún no está escrito; hasta entonces el control no dice nada',
+    check: 'Lo que aún falta',
+    checkOk: 'El guion técnico está completo: páginas escritas y montadas, medios presentes, voces grabadas, los segundos sumando',
+    stage: {
+      brief: 'Lo que dice el vídeo, a quién, cuánto dura, con qué tono',
+      script: 'Las palabras y los planos en orden',
+      storyboard: 'De cada plano: su página, sus segundos, sus medios, su texto',
+      assets: 'La voz, la música, las imágenes y el vídeo',
+      assembly: 'Las páginas cortadas por film.html',
+      review: 'El vídeo revisado con look, lo encontrado arreglado',
+      deliver: 'El MP4 o el exportado, como se pidió',
+    },
+  },
   nav: {
     projects: 'Proyectos',
     desktop: 'Escritorio',

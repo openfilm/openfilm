@@ -9,6 +9,24 @@ const TRASH = typeof navigator !== 'undefined' && /^win/i.test(navigator.platfor
   : typeof navigator !== 'undefined' && /^mac/i.test(navigator.platform) ? 'the Trash' : 'the trash';
 
 export const en = {
+  pipeline: {
+    label: 'Production line',
+    next: 'Next: {stage}',
+    allDone: 'All stages done',
+    problem: 'The production line cannot be read',
+    noStoryboard: 'The storyboard is not written yet; the check says nothing until it is',
+    check: 'What the film still needs',
+    checkOk: 'The storyboard holds: pages written and cut in, media present, voices recorded, the seconds adding up',
+    stage: {
+      brief: 'What the film says, to whom, how long, in what tone',
+      script: 'The words, and the shots in order',
+      storyboard: 'The shots: page, seconds, media, on-screen text',
+      assets: 'The voice, music, pictures and video',
+      assembly: 'The pages cut together by film.html',
+      review: 'The film checked with look, what it found fixed',
+      deliver: 'The MP4 or the export, as the person asked',
+    },
+  },
   nav: {
     projects: 'Projects',
     desktop: 'Desktop',

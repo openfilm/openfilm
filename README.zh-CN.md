@@ -78,7 +78,8 @@ openfilm install-skill [agent...] # 把 OpenFilm 的 skill 装进智能体读 sk
 `openfilm pipeline` 把视频制作变成流水线：brief（创意）→ script（脚本）→ storyboard（分镜）→ assets（素材）→
 assembly（合成）→ review（审查）→ deliver（交付），每个阶段都把成果留在项目里。`openfilm pipeline start` 开始流水线，
 `openfilm pipeline <stage>` 说明每个阶段的做法，`openfilm pipeline check` 把分镜和项目对账——页面、素材、配音、秒数——
-缺什么、归哪个阶段补，一一说出来。`render` 会等片子做完并通过检查。`openfilm install-skill` 把 OpenFilm 介绍给会读
+缺什么、归哪个阶段补，一一说出来。Studio 会在编辑器旁边显示这条流水线，`openfilm get tts --storyboard` 一条命令把分镜里
+每个镜头的配音都说出来。`render` 会等片子做完并通过检查。`openfilm install-skill` 把 OpenFilm 介绍给会读
 skill 的智能体（Claude Code、Codex、ZCode、Qoder、WorkBuddy、DeepSeek Harness 等）——这是纯浏览器（web）模式下用
 终端智能体的方式。
 

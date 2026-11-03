@@ -80,7 +80,8 @@ connect a service in Studio with your own key.
 `openfilm pipeline` is video production as a line: brief → script → storyboard → assets → assembly → review →
 deliver, each stage leaving its work in the project. `openfilm pipeline start` begins it, `openfilm pipeline
 <stage>` says how each stage's work is done, and `openfilm pipeline check` holds the storyboard against the
-project — pages, media, voices, seconds — so the missing work is said under the stage that fills it. `render`
+project — pages, media, voices, seconds — so the missing work is said under the stage that fills it. Studio shows
+the line beside the editor, and `openfilm get tts --storyboard` speaks every shot's voice-over in one go. `render`
 holds until the film is made and checked. `openfilm install-skill` introduces OpenFilm to an agent that reads
 skills (Claude Code, Codex, ZCode, Qoder, WorkBuddy, DeepSeek Harness and more): the terminal way, when Studio
 runs in a browser without the desktop app.

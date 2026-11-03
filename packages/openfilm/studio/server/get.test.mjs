@@ -466,8 +466,11 @@ test('openfilm get: what can be got here, connected, partly or not at all; wrong
     assert.equal(get(root, 'tts', 'extra', '--out', 'x').status, 2);
     assert.equal(get(root, 'tts', '--via', 'nobody', '--out', 'x', '--text', 'hi', '--voice', 'v').status, 2);
   } finally {
-    const run = JSON.parse(readFileSync(join(process.env.OPENFILM_HOME, 'run.json'), 'utf8'));
-    await fetch(`${run.origin}/api/quit`, { method: 'POST', headers: { 'x-studio-key': run.key } });
+    /* the run the CLI left, when one was started (a listing-only run starts nothing): told to quit, so a Studio of
+       this test's own home is not left on a port */
+    const runFile = join(process.env.OPENFILM_HOME, 'run.json');
+    const run = existsSync(runFile) ? JSON.parse(readFileSync(runFile, 'utf8')) : null;
+    if (run) await fetch(`${run.origin}/api/quit`, { method: 'POST', headers: { 'x-studio-key': run.key } });
   }
 });
 
@@ -514,4 +517,63 @@ test('a voice-over spoken again without word timings: the last take\'s transcrip
   const said = await runGet(root, 'tts', { text: 'Hello', voice: 'alloy', out: 'intro' }, { via: 'openai' });
   assert.equal(existsSync(join(root, 'assets/audio/vo/intro.vtt')), false);
   assert.match(said, /"transcript": "none: the service does not time words/);
+});
+
+/** A storyboard written where the tools read it: three shots, the last saying no vo. */
+function storyboard(root, text = [
+  '## Shot 1 — 4s', 'page: title.html', 'vo: First line.', '',
+  '## Shot 2 — 6s', 'page: demo.html', 'vo: Second line.', '',
+  '## Shot 3 — 5s', 'page: end.html', '',
+].join('\n')) {
+  mkdirSync(join(root, '.film', 'pipeline'), { recursive: true });
+  writeFileSync(join(root, '.film', 'pipeline', 'storyboard.md'), text);
+}
+
+test('tts --storyboard: every shot with a vo spoken to its number, the ones there left, no vo no call', async () => {
+  const root = project();
+  storyboard(root);
+  const said = await runGet(root, 'tts', { storyboard: true, voice: 'v-1' });
+  assert.match(said, /2 voiced, from the storyboard's 3 shots/);
+  assert.match(said, /shot 1\n/);
+  assert.match(said, /"src": "assets\/audio\/vo\/shot-1\.mp3"/);
+  assert.ok(existsSync(join(root, 'assets/audio/vo/shot-1.mp3')));
+  assert.ok(existsSync(join(root, 'assets/audio/vo/shot-1.vtt')), 'the transcript beside it, as one get tts leaves');
+  assert.ok(existsSync(join(root, 'assets/audio/vo/shot-2.mp3')));
+  assert.ok(!existsSync(join(root, 'assets/audio/vo/shot-3.mp3')), 'a shot with no vo is not voiced');
+  const spoken = calls.filter((c) => c.path.startsWith('/v1/text-to-speech/'));
+  assert.equal(spoken.length, 2);
+  assert.deepEqual(spoken.map((c) => JSON.parse(c.body.toString('utf8')).text), ['First line.', 'Second line.']);
+
+  /* the ones recorded already are left: not one call more */
+  const before = calls.length;
+  const again = await runGet(root, 'tts', { storyboard: true, voice: 'v-1' });
+  assert.match(again, /2 already there/);
+  assert.equal(calls.length, before);
+
+  /* --force says them again */
+  await runGet(root, 'tts', { storyboard: true, voice: 'v-1', force: true });
+  assert.ok(calls.filter((c) => c.path.startsWith('/v1/text-to-speech/')).length === 4);
+});
+
+test('tts --storyboard: a shot that fails does not stop the rest, and the answer says what is missing', async () => {
+  const root = project();
+  storyboard(root);
+  refuse = (call) => (call.path.startsWith('/v1/text-to-speech/') ? [500, {}] : answer(call));
+  await assert.rejects(runGet(root, 'tts', { storyboard: true, voice: 'v-1' }), (e) => {
+    assert.match(e.message, /did not run/);
+    assert.match(e.message, /shot 1  /);
+    return true;
+  });
+  refuse = null;
+});
+
+test('tts --storyboard: no storyboard, one that does not hold together, none with a vo, and a stray --out are said', async () => {
+  const root = project();
+  await assert.rejects(runGet(root, 'tts', { storyboard: true, voice: 'v-1' }), (e) => e.code === 2 && /no storyboard in this project/.test(e.message));
+  storyboard(root, '## Shot 2\npage: a.html\n');
+  await assert.rejects(runGet(root, 'tts', { storyboard: true, voice: 'v-1' }), (e) => /does not hold together/.test(e.message));
+  storyboard(root, '## Shot 1 — 4s\npage: a.html\n');
+  await assert.rejects(runGet(root, 'tts', { storyboard: true, voice: 'v-1' }), (e) => e.code === 2 && /no shot in the storyboard says a vo/.test(e.message));
+  storyboard(root);
+  await assert.rejects(runGet(root, 'tts', { storyboard: true, voice: 'v-1', out: 'x', text: 'hi' }), (e) => e.code === 2 && /no --out or --text/.test(e.message));
 });
