@@ -33,7 +33,7 @@ import { cutPoints, namedTrack, nextCut, trackNamesOf } from '@/lib/timeline-nav
 import { anyLocked, lockedEdits } from '@/lib/track-lock';
 import { placeMedia, type SourceRange } from '@/lib/media-place';
 import { BUILT_IN, TEXT_COMPONENT, builtInItem, cutTrack, cutsOf, fromLibrary, isTextClip, libraryBox, libraryDragItem, nameOf, onCut, placedGroup, useLibraryIndex, withLook, withRootVars, type LibraryItem } from '@/lib/library';
-import { LibraryDrawer, type LibraryActions } from '@/components/library/LibraryDrawer';
+import { LibraryDrawer, type LibraryActions, type SkillsRequest } from '@/components/library/LibraryDrawer';
 import { LibraryTrial } from '@/components/library/LibraryTrial';
 import { apartOnTracks, type ClipEdit } from '@/lib/film-clip-edits';
 import { mediaFetch, useMediaImages } from '@/lib/media-queue';
@@ -67,7 +67,7 @@ import { useSettings } from './settings/use-settings';
 import { DesktopDialog } from './DesktopDialog';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import { readCanvasDoc, type CanvasDoc } from '../lib/canvas';
-import { HOST_PANEL_WIDTH, studioHost, useHostPanel, type CommunityItem, type HostPanel, type StageBox, type StudioCommand, type StudioRef } from '../lib/host';
+import { HOST_PANEL_WIDTH, studioHost, useHostPanel, type HostPanel, type StageBox, type StudioCommand, type StudioRef } from '../lib/host';
 import { clipRef, fileRef, layerRef, markRange, momentRef, rangeRef, regionRef, stillUrl, subtitleRef, trackRef, type ClipFrameSource, type FilmRange } from '@/lib/studio-refs';
 import { boxNow, chatPointOf, draftBoxesAt, draftMarksOf, sameClip, NO_DRAFT, type DraftMarks, type PictureMarks } from '@/lib/chat-marks';
 import { usePageChanges } from './use-page-changes';
@@ -81,7 +81,6 @@ import { PANE_BAR, PANE_BTN_ON, PANE_TOGGLE, PANE_TOGGLE_ICON } from './dock-pan
 import { Tooltip } from './Tooltip';
 import { ProjectCard } from './ProjectCard';
 import { BrandLogo } from './BrandLogo';
-import { ExamplesDialog } from './ExamplesGallery';
 import { UpdateButton, WebUpdateButton } from './UpdateButton';
 import { MediaPool, type ImportProgress } from './MediaPool';
 import type { SubtitleRowSpec } from './SubtitleRow';
@@ -2003,7 +2002,15 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (command.type === 'highlight') { setChatRef(command.ref ?? null); return; }
     if (command.type === 'draft-refs') { setDraftMarks(draftMarksOf(Array.isArray(command.refs) ? command.refs : [])); return; }
     if (command.type === 'settings') { setSettingsOpen(command.section === 'providers' ? 'models' : command.section ?? 'agents'); return; }
-    if (command.type === 'show-examples') { setExamplesOpen(command.open ?? true); return; }
+    if (command.type === 'show-examples') {
+      /* a skill: the library's skills, on Discover or on its page; an example: the projects window's examples */
+      const open = command.open;
+      if (open?.kind === 'discover' || open?.kind === 'skill') {
+        setSkillsShown({ ...(open.kind === 'skill' ? { name: open.name } : {}), n: Date.now() });
+        hostAssets?.setOpen(true);
+      } else setProjectsOpen({ example: open?.kind === 'example' ? open.id : undefined });
+      return;
+    }
     if (command.type === 'seek' && Number.isFinite(command.time)) { pause(); seek(command.time * 1000); return; }
     if ((command.type === 'show-range' || command.type === 'show-subtitle') && Number.isFinite(command.start) && Number.isFinite(command.end)) {
       /* a subtitle's span marked, and the subtitle panel open: the playhead at its start lights the line there */
@@ -3254,12 +3261,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       return false;
     }
   };
-  const [projectsOpen, setProjectsOpen] = React.useState(false);
+  /* the projects window: closed, open on the projects (true), or on the examples (and one example's page) */
+  const [projectsOpen, setProjectsOpen] = React.useState<boolean | { example?: string }>(false);
   /* the title's menu, where it was right-clicked */
   const [titleMenu, setTitleMenu] = React.useState<{ x: number; y: number } | null>(null);
-  /* the examples over the film, opened from the app's chat */
-  /* the Community over the film: closed, open on its list (true), or on one skill's or example's page */
-  const [examplesOpen, setExamplesOpen] = React.useState<boolean | CommunityItem>(false);
+  /* the library's skills as the app's chat asked to show them (LibraryDrawer `showSkills`) */
+  const [skillsShown, setSkillsShown] = React.useState<SkillsRequest | null>(null);
   const [settingsOpen, setSettingsOpen] = useSettings();
   /* making subtitles: what went wrong, shown on the CC button; with no service to transcribe, it opens Providers */
   const [subtitleProblem, setSubtitleProblem] = React.useState<{ text: string; connect: boolean } | null>(null);
@@ -3417,24 +3424,14 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 </button>
               </Tooltip>
               </>)}
-              {/* the edit or the canvas, in the panes' place: both shown, the one on raised, a click on the other goes there */}
-              <div role="radiogroup" aria-label={t('canvas.modes')} className="flex h-[26px] shrink-0 items-center gap-px rounded-[7px] bg-[var(--bg-hover)] p-[2px]">
-                {([
-                  { canvas: false, name: t('canvas.editTitle'), to: t('canvas.toEdit'), icon: <FilmIcon size={15} /> },
-                  { canvas: true, name: t('canvas.title'), to: t('canvas.toCanvas'), icon: <Workflow size={15} /> },
-                ]).map((m) => {
-                  const on = m.canvas === canvasOpen;
-                  return (
-                    <Tooltip key={m.name} label={on ? m.name : m.to} side="bottom">
-                      <button type="button" role="radio" aria-checked={on} aria-label={m.name} data-work-mode={m.canvas ? 'canvas' : 'edit'}
-                        onClick={() => { if (!on) setCanvasOpen(m.canvas); }}
-                        className={`flex h-[22px] w-[26px] items-center justify-center rounded-[5px] transition ${on ? 'bg-[var(--bg-surface)] text-[var(--text)] shadow-[0_1px_2px_rgb(0_0_0/0.25)]' : 'text-[var(--text-faint)] hover:text-[var(--text)]'}`}>
-                        {m.icon}
-                      </button>
-                    </Tooltip>
-                  );
-                })}
-              </div>
+              {/* the edit or the canvas, in the panes' place: the one shown, its icon and name, and a click for the other */}
+              <Tooltip label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} side="bottom">
+                <button type="button" aria-label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} data-work-mode={canvasOpen ? 'canvas' : 'edit'} onClick={() => setCanvasOpen(!canvasOpen)}
+                  className="flex h-[26px] shrink-0 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-medium text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+                  {canvasOpen ? <Workflow size={15} /> : <FilmIcon size={15} />}
+                  {t(canvasOpen ? 'canvas.title' : 'canvas.editTitle')}
+                </button>
+              </Tooltip>
             </div>
             <div aria-hidden className="shrink-0 self-stretch" style={{ width: 'var(--titlebar-right-x)' }} />
           </div>
@@ -3881,19 +3878,17 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       <ProjectHistoryControls projectId={projectId} projectName={loaded?.project.name ?? ''} history={history} open={historyOpen}
         onClose={() => setHistoryOpen(false)}
         onOpenProject={(id) => { setHistoryOpen(false); if (studioHost?.tabs) studioHost.tabs.open(id); else onProject(id); }} />
-      <ProjectsPopover open={projectsOpen} currentProjectId={projectId} onOpen={(id) => { if (!studioHost?.tabs) setProjectsOpen(false); onProject(id); }} onCurrentRemoved={onLeave} onClose={() => setProjectsOpen(false)} />
-      {examplesOpen ? (
-        <ExamplesDialog projectId={projectId} open={examplesOpen === true ? undefined : examplesOpen} onClose={() => setExamplesOpen(false)}
-          /* a film started from an example: in a tab of its own where there are tabs, else here */
-          onStarted={(id) => { if (studioHost?.tabs) studioHost.tabs.open(id); else onProject(id); }}
-          onUseCanvas={(example) => {
-            void api.exampleCanvasInto(projectId, example.id).then((raw) => {
-              setCanvasOpen(true);
-              setCanvasInsert({ doc: readCanvasDoc(raw), n: Date.now() });
-              toast.show(t('canvas.exampleCopied').replace('{folder}', `assets/examples/${example.id}/`));
-            }, (e: unknown) => toast.showError(e instanceof Error ? e.message : String(e)));
-          }} />
-      ) : null}
+      <ProjectsPopover open={projectsOpen !== false} currentProjectId={projectId}
+        {...(typeof projectsOpen === 'object' ? { examples: projectsOpen } : {})}
+        onOpen={(id) => { if (!studioHost?.tabs) setProjectsOpen(false); onProject(id); }} onCurrentRemoved={onLeave} onClose={() => setProjectsOpen(false)}
+        onUseCanvas={(example) => {
+          setProjectsOpen(false);
+          void api.exampleCanvasInto(projectId, example.id).then((raw) => {
+            setCanvasOpen(true);
+            setCanvasInsert({ doc: readCanvasDoc(raw), n: Date.now() });
+            toast.show(t('canvas.exampleCopied').replace('{folder}', `assets/examples/${example.id}/`));
+          }, (e: unknown) => toast.showError(e instanceof Error ? e.message : String(e)));
+        }} />
       <SettingsModal open={settingsOpen !== null} section={settingsOpen ?? undefined} onClose={() => setSettingsOpen(null)} />
       {/* the host app's media drawer (panel.assets): over its panel, under Studio's top bar, down to the `bottom` px the
           panel keeps for itself (the panel goes on below it, so the two read as one) */}
@@ -3901,7 +3896,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       {hostAssets?.open && hostPanel ? (
         <div className="fixed z-30 flex min-h-0 min-w-0 flex-col overflow-hidden border-t border-[var(--dock-line)] bg-[var(--dock-pane)]"
           style={{ top: HOST_PANEL_TOP, left: 0, bottom: hostAssets.bottom, width: HOST_PANEL_WIDTH }}>
-          <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} actions={library.actions} onServices={() => setSettingsOpen('models')} projectId={projectId} onOpenSkill={(name) => setExamplesOpen({ kind: 'skill', name })} />
+          <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} actions={library.actions} onServices={() => setSettingsOpen('models')} projectId={projectId} showSkills={skillsShown} />
         </div>
       ) : null}
       <DesktopDialog open={desktopOpen} onClose={() => setDesktopOpen(false)} />

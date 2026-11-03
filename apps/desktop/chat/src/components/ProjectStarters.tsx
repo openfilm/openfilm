@@ -3,9 +3,10 @@
 /**
  * The conversation column of an empty project, before anything has been said: the question, then the skills as
  * cards, each its cover and its name, two to a row. A card names its skill in the message being written (Enter
- * starts it, or a few words more say what to make with it), installed or not: as the Community's Try now, the skill is
- * given to that conversation, nothing installed. Under them, "More skills" opens the Community on Discover, all of
- * OpenFilm's, and "Start from an example" on the examples: one copied into a new project, or followed by the agent here.
+ * starts it, or a few words more say what to make with it), installed or not: as the library's Try now, the skill is
+ * given to that conversation, nothing installed. Under them, "More skills" opens the library's skills on Discover, all
+ * of OpenFilm's, and "Start from an example" the projects window's examples: one copied into a new project, or followed
+ * by the agent here.
  */
 import React from 'react';
 import { ChevronRight } from 'lucide-react';
@@ -13,7 +14,7 @@ import { useT, useUiLocale } from '@/i18n';
 import { app, type StarterSkill } from '../app-bridge';
 import { BrandLogo } from './BrandLogo';
 
-/** Three rows of two: the most used skills, in their order; the rest are a click away in the Community. */
+/** Three rows of two: the most used skills, in their order; the rest are a click away in the library. */
 const SHOWN = 6;
 /** the cards as read last: another empty conversation shows them at once, read again behind them */
 let lastRead: StarterSkill[] | null = null;

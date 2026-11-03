@@ -567,7 +567,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     return pillCard(pill, t);
   }, [t, nameableSkills, skillWords, attachmentOf]);
   const revealPill = React.useCallback((pill: { id: string; label: string; target?: Record<string, unknown> }) => {
-    /* a skill: its page in the Community; anything else: where it is in Studio */
+    /* a skill: its page in the library; anything else: where it is in Studio */
     const name = skillReferencePackage(pill.id);
     if (name) { app.showExamples?.({ kind: 'skill', name }); return; }
     /* a file brought in opens to look at: a picture large, a video played, a text read; a folder, shown where it is */

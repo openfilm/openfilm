@@ -37,8 +37,9 @@ const FAVORITES = STARRED;
 const PAGE = 80;
 
 /* the category shown, the line picked in each, and whether the library's own groups are folded, kept while the
-   drawer closes and opens again */
-const SHOWN = { cat: 'media' as Category, group: {} as Partial<Record<Category, string>>, folded: false };
+   drawer closes and opens again; and the last skills request (`showSkills`) followed, so a drawer opened again later
+   does not follow it twice */
+const SHOWN = { cat: 'media' as Category, group: {} as Partial<Record<Category, string>>, folded: false, request: 0 };
 
 export interface LibraryActions {
   /** A double click, Enter or "+": a page or a sound at the playhead (a transition on the cut), a look on the clip. */
@@ -47,7 +48,10 @@ export interface LibraryActions {
   tryOut: (item: LibraryItem | null) => void;
 }
 
-export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServices, projectId = null, onOpenSkill }: {
+/** The skills shown from outside the drawer (the app's chat): Discover, or one skill's page; `n` tells one request from the next. */
+export type SkillsRequest = { name?: string; n: number };
+
+export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServices, projectId = null, showSkills }: {
   media: React.ReactNode;
   /** the project's own media, what it took from the library, or Saved */
   mediaScope: 'project' | 'picked' | 'saved';
@@ -57,8 +61,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
   onServices: () => void;
   /** the project shown, for its own skills */
   projectId?: string | null;
-  /** a skill's page in the Community */
-  onOpenSkill?: (name: string) => void;
+  showSkills?: SkillsRequest | null;
 }) {
   const t = useT();
   const lang = useLanguage();
@@ -69,6 +72,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
   const [group, setGroup] = React.useState<string>(SHOWN.group[SHOWN.cat] ?? '');
   const [folded, setFolded] = React.useState(SHOWN.folded);
   const [query, setQuery] = React.useState('');
+  /* the skill whose page is shown in place of the skills' tiles */
+  const [skillOpen, setSkillOpen] = React.useState<string | null>(null);
   /* the source the list is narrowed to (SourceChips), all of them by default */
   const [source, setSource] = React.useState<Source | ''>('');
   const [picked, setPicked] = React.useState<string | null>(null);
@@ -80,8 +85,17 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
   };
   /* another category: what played in the last one stops and its player goes */
   const closePlayer = React.useRef<() => void>(() => {});
-  const show = (next: Category) => { SHOWN.cat = next; setCat(next); setGroup(SHOWN.group[next] ?? ''); setQuery(''); setSource(''); pick(null); closePlayer.current(); };
-  const pickGroup = (next: string) => { SHOWN.group[cat] = next; setGroup(next); setQuery(''); };
+  const show = (next: Category) => { SHOWN.cat = next; setCat(next); setGroup(SHOWN.group[next] ?? ''); setQuery(''); setSource(''); setSkillOpen(null); pick(null); closePlayer.current(); };
+  const pickGroup = (next: string) => { SHOWN.group[cat] = next; setGroup(next); setQuery(''); setSkillOpen(null); };
+  /* a request from outside: the skills, on Discover or on one's page (followed once, by its `n`) */
+  React.useEffect(() => {
+    if (!showSkills || showSkills.n === SHOWN.request) return;
+    SHOWN.request = showSkills.n;
+    if (cat !== 'skill') show('skill');
+    if (!showSkills.name) { SHOWN.group.skill = 'discover'; setGroup('discover'); }
+    setSkillOpen(showSkills.name ?? null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showSkills?.n]);
   const fold = () => { SHOWN.folded = !folded; setFolded(!folded); };
   const [rail, setRail] = React.useState(railWidth);
   /* the drawer closed: what was tried goes with it */
@@ -162,8 +176,9 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
               </>
             ) : cat === 'skill' ? (
               <>
-                <SideBox on={group !== 'discover'} onClick={() => pickGroup('installed')}>{t('assetDrawer.skillsInstalled')}</SideBox>
-                <SideBox on={group === 'discover'} onClick={() => pickGroup('discover')}>{t('assetDrawer.skillsDiscover')}</SideBox>
+                {/* Discover first opened: OpenFilm's skills to take up */}
+                <SideBox on={group === 'installed'} onClick={() => pickGroup('installed')}>{t('assetDrawer.skillsInstalled')}</SideBox>
+                <SideBox on={group !== 'installed'} onClick={() => pickGroup('discover')}>{t('assetDrawer.skillsDiscover')}</SideBox>
               </>
             ) : (
               <>
@@ -185,7 +200,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col" data-studio-host-panel={cat === 'media' ? undefined : ''}>
           {cat === 'media' ? media : (
             <>
-              <div className="px-3 pb-2 pt-2.5">
+              {/* a skill's page has its own way back instead */}
+              <div className="px-3 pb-2 pt-2.5" hidden={cat === 'skill' && skillOpen != null}>
                 <label className="flex h-8 min-w-0 items-center gap-2 rounded-md bg-[var(--surface-2)] px-2.5 text-[var(--text-faint)] focus-within:ring-1 focus-within:ring-[var(--tl-accent)]">
                   <Search size={14} />
                   <input
@@ -197,7 +213,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
                 </label>
               </div>
               {cat !== 'skill' && cat !== 'voice' ? <SourceChips sources={sources} value={source} onChange={setSource} /> : null}
-              {cat === 'skill' ? <SkillsPane line={(group === 'discover' ? 'discover' : 'installed') as SkillsLine} query={query} projectId={projectId} onOpen={(name) => onOpenSkill?.(name)} />
+              {cat === 'skill' ? <SkillsPane line={(group === 'installed' ? 'installed' : 'discover') as SkillsLine} query={query} projectId={projectId} opened={skillOpen} onOpen={setSkillOpen} />
                 : cat === 'voice' ? <VoicesPane group={group} query={query} favorites={favorites} onServices={onServices} onAll={() => pickGroup('')} /> : (
               <>
               {/* a click on nothing lets the picked thing go; the player is under the list */}
@@ -266,7 +282,7 @@ function RailEdge({ width, onWidth }: { width: number; onWidth: (w: number) => v
       aria-valuenow={width}
       tabIndex={0}
       data-studio-host-panel=""
-      className="group/edge absolute inset-y-0 -right-[4px] z-10 w-[7px] cursor-col-resize outline-none"
+      className="absolute inset-y-0 -right-[4px] z-10 w-[7px] cursor-col-resize outline-none"
       onPointerDown={(e) => {
         if (e.button !== 0) return;
         e.currentTarget.setPointerCapture(e.pointerId);
@@ -290,9 +306,7 @@ function RailEdge({ width, onWidth }: { width: number; onWidth: (w: number) => v
         onWidth(w);
         keep(w);
       }}
-    >
-      <span className="absolute inset-y-0 left-[3px] w-px bg-transparent group-hover/edge:bg-[var(--tl-accent)] group-focus-visible/edge:bg-[var(--tl-accent)]" />
-    </div>
+    />
   );
 }
 

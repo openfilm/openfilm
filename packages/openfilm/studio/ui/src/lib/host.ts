@@ -75,12 +75,12 @@ export interface StudioHost {
     onChange: (listener: (state: { open: boolean; width: number; assets?: { open: boolean; bottom: number } }) => void) => void;
   };
   /**
-   * The app's chat names a skill in the message being written: the skills (opened from the chat, `show-examples`)
-   * call this for one tried there, `newConversation` true (Try now: a new conversation with it named).
+   * The app's chat names a skill in the message being written: the library's skills call this for one tried there,
+   * `newConversation` true (Try now: a new conversation with it named).
    */
   useSkill?: (skill: { name: string; description: string; title?: string; newConversation?: boolean }) => void;
   /** The person's own skills, where the app keeps them: one added, the app's own way (from a link, a folder, or made
-      with the agent). The Community's skills offer it. */
+      with the agent). */
   skills?: { add: () => void };
   /** Let the app ask Studio to show something: Studio calls this once with its listener. */
   onCommand?: (listener: (command: StudioCommand) => void) => void;
@@ -406,13 +406,13 @@ export type StudioCommand =
   | { type: 'draft-refs'; refs: StudioRef[] }
   /* the app's chat sends the person to Settings (an agent to set up) */
   | { type: 'settings'; section?: 'agents' | 'providers' }
-  /* the app's chat opens the examples over the film, to point at one or a part of one, or name a skill; `open`: on
-     that skill's or example's page (a pill of one clicked) */
+  /* the app's chat shows the library's skills (on Discover, or a skill's page) or the projects window's examples
+     (an example's page); none: the examples */
   | { type: 'show-examples'; open?: CommunityItem };
 
 /**
- * A skill or an example in the Community, to open on its page; or `discover`, OpenFilm's skills to install; or
- * `examples`, the examples to start from (an empty project's "Start from an example").
+ * A skill or an example to open on its page (a pill of one clicked); or `discover`, OpenFilm's skills to install (an
+ * empty project's "More skills"); or `examples`, the examples to start from (its "Start from an example").
  */
 export type CommunityItem = { kind: 'skill'; name: string } | { kind: 'example'; id: string } | { kind: 'discover' } | { kind: 'examples' };
 

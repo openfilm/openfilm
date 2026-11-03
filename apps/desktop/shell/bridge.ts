@@ -166,7 +166,7 @@ projectReady = follow();
 /* ── between Studio and the chat: what is selected, what is referenced, what Studio is asked to show ── */
 const selection = signal<StudioSelection | null>(null);
 const refer = events<StudioRef>();
-/* a skill picked in the examples (Studio's ExamplesDialog), to be named in the message; and "Add a skill" there */
+/* a skill tried in Studio's library, to be named in the message; and "Add a skill" */
 const skillPicked = events<{ name: string; description: string; title?: string; newConversation?: boolean }>();
 const skillAdd = events<void>();
 const asked = events<{ text: string; refs: StudioRef[] }>();

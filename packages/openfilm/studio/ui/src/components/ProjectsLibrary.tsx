@@ -241,6 +241,8 @@ export function ProjectsPopover({
   onOpen,
   onCurrentRemoved,
   onClose,
+  examples,
+  onUseCanvas,
 }: {
   open: boolean;
   /** The project open in the editor ("" when none: Studio has no project to show, and this window is all there is). */
@@ -254,14 +256,19 @@ export function ProjectsPopover({
   onCurrentRemoved: () => void;
   /** Missing: the window cannot be closed (there is no project behind it). */
   onClose?: () => void;
+  /** open on the examples (the app's chat asked for them), and on this one's page */
+  examples?: { example?: string };
+  /** over a film: an example's canvas laid down on its own */
+  onUseCanvas?: (example: Example) => void;
 }) {
   const t = useT();
   const lib = useProjectLibrary(open);
   const { flash } = lib;
   const cover = useProjectCover(lib.coverChanged, React.useCallback(() => flash(t('projects.coverFailed')), [flash, t]));
-  /* each time it opens: the projects (the examples are a switch away) */
+  /* each time it opens: the projects (the examples are a switch away), or the examples when asked for */
   const [view, setView] = React.useState<LauncherView>('projects');
-  React.useEffect(() => { if (open) setView('projects'); }, [open]);
+  const opensOn: LauncherView = examples ? 'examples' : 'projects';
+  React.useEffect(() => { if (open) setView(opensOn); }, [open, opensOn]);
   const showView = setView;
   const [pendingDelete, setPendingDelete] = React.useState<string[] | null>(null);
   const [pendingFolder, setPendingFolder] = React.useState<ProjectFolder | null>(null);
@@ -448,8 +455,9 @@ export function ProjectsPopover({
           {cover.picker}
           {view === 'examples' ? (
             <ExamplesGallery
-              mode="start"
+              key={examples?.example ?? ''}
               heading={<LauncherSwitch view={view} onView={showView} />}
+              {...(examples?.example ? { initial: examples.example } : {})}
               onClose={onClose}
               onStart={(example) => setGithub({ url: example.url, start: true, title: example.title })}
               /* over a film: the example pointed at in its chat, for the agent to follow (as the Community does) */
@@ -458,6 +466,16 @@ export function ProjectsPopover({
                 studioHost?.refer?.({
                   kind: 'example', id: example.id, title: example.title, url: example.url, ...(example.description ? { description: example.description } : {}),
                   ...(part ? { start: part.from, end: part.to, ...(part.segment ? { segment: part.segment } : {}) } : {}),
+                });
+                onClose?.();
+              } } : {})}
+              {...(currentProjectId && onUseCanvas ? { onUseCanvas } : {})}
+              /* over a film: how it was made, asked in its chat */
+              {...(currentProjectId && studioHost?.ask ? { onExplain: (example: Example, canvas: boolean) => {
+                void sourcesApi.exampleFolder(example.id).catch(() => {});
+                studioHost?.ask?.({
+                  text: t(canvas ? 'gallery.explainAskCanvas' : 'gallery.explainAsk'),
+                  refs: [{ kind: 'example', id: example.id, title: example.title, url: example.url, ...(example.description ? { description: example.description } : {}), ...(canvas ? { canvas: true } : {}) }],
                 });
                 onClose?.();
               } } : {})}

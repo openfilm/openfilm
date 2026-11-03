@@ -78,13 +78,9 @@ const DRAWN: Record<string, Draw> = {
       <path d="M17 9.6l-1.6 4.8" />
     </>
   ),
-  /* a skill: a wand, and the spark it makes */
+  /* a skill: a bolt, what it adds at once */
   skill: ({ fill }) => (
-    <>
-      <path d="M4 20 14.6 9.4" />
-      <path d="m12.8 7.6 3.6 3.6" />
-      <path d="M17.6 3.4 18.6 6l2.6 1-2.6 1-1 2.6-1-2.6-2.6-1 2.6-1Z" {...fill} />
-    </>
+    <path d="M13.4 3 5.6 13.2h5.6L10.4 21l8-10.4h-5.6Z" {...fill} />
   ),
   /* a template: a picture laid out, one big place and two small */
   template: ({ fill, ink }) => (
