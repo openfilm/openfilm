@@ -1435,6 +1435,8 @@ export const zhCN: Words = {
     title: '画布',
     toEdit: '切换到剪辑',
     toCanvas: '切换到画布',
+    editTitle: '剪辑',
+    modes: '剪辑或画布',
     note: '便签',
     notePlaceholder: '写点什么…',
     addNote: '添加便签',

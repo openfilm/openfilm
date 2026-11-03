@@ -1434,6 +1434,8 @@ export const es: Words = {
     title: 'Lienzo',
     toEdit: 'Cambiar a la edición',
     toCanvas: 'Cambiar al lienzo',
+    editTitle: 'Edición',
+    modes: 'Edición o lienzo',
     note: 'Nota',
     notePlaceholder: 'Escribe una nota…',
     addNote: 'Añadir una nota',

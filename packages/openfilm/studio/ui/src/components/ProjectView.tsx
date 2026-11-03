@@ -7,7 +7,7 @@
  * are written one at a time (see editor/use-film.ts); the agent's writes come in through the folder's events.
  */
 import * as React from 'react';
-import { ArrowLeftRight, BookmarkPlus, ClipboardCopy, ClipboardPaste, Film as FilmIcon, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, TriangleAlert, Upload, Workflow } from 'lucide-react';
+import { BookmarkPlus, ClipboardCopy, ClipboardPaste, Film as FilmIcon, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, TriangleAlert, Upload, Workflow } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
 import { withPreset } from '../../../../src/clip-motion.mjs';
 import { PARTS, compoundOf, dissolvedOf } from '../../../server/compound.mjs';
@@ -3417,14 +3417,24 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 </button>
               </Tooltip>
               </>)}
-              {/* the edit or the canvas, in the panes' place: the one shown, and a click for the other */}
-              <Tooltip label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} side="bottom">
-                <button type="button" aria-label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} aria-pressed={canvasOpen} onClick={() => setCanvasOpen(!canvasOpen)}
-                  className="flex h-[26px] shrink-0 items-center gap-1 rounded-md pl-1.5 pr-1 text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
-                  {canvasOpen ? <Workflow size={15} /> : <FilmIcon size={15} />}
-                  <ArrowLeftRight size={10} className="text-[var(--text-faint)]" />
-                </button>
-              </Tooltip>
+              {/* the edit or the canvas, in the panes' place: both shown, the one on raised, a click on the other goes there */}
+              <div role="radiogroup" aria-label={t('canvas.modes')} className="flex h-[26px] shrink-0 items-center gap-px rounded-[7px] bg-[var(--bg-hover)] p-[2px]">
+                {([
+                  { canvas: false, name: t('canvas.editTitle'), to: t('canvas.toEdit'), icon: <FilmIcon size={15} /> },
+                  { canvas: true, name: t('canvas.title'), to: t('canvas.toCanvas'), icon: <Workflow size={15} /> },
+                ]).map((m) => {
+                  const on = m.canvas === canvasOpen;
+                  return (
+                    <Tooltip key={m.name} label={on ? m.name : m.to} side="bottom">
+                      <button type="button" role="radio" aria-checked={on} aria-label={m.name} data-work-mode={m.canvas ? 'canvas' : 'edit'}
+                        onClick={() => { if (!on) setCanvasOpen(m.canvas); }}
+                        className={`flex h-[22px] w-[26px] items-center justify-center rounded-[5px] transition ${on ? 'bg-[var(--bg-surface)] text-[var(--text)] shadow-[0_1px_2px_rgb(0_0_0/0.25)]' : 'text-[var(--text-faint)] hover:text-[var(--text)]'}`}>
+                        {m.icon}
+                      </button>
+                    </Tooltip>
+                  );
+                })}
+              </div>
             </div>
             <div aria-hidden className="shrink-0 self-stretch" style={{ width: 'var(--titlebar-right-x)' }} />
           </div>

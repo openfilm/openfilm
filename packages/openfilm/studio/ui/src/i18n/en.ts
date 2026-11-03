@@ -1435,6 +1435,8 @@ export const en = {
     title: 'Canvas',
     toEdit: 'Switch to the edit',
     toCanvas: 'Switch to the canvas',
+    editTitle: 'Edit',
+    modes: 'The edit or the canvas',
     note: 'Note',
     notePlaceholder: 'Write a note…',
     addNote: 'Add a note',

@@ -1434,6 +1434,8 @@ export const ja: Words = {
     title: 'キャンバス',
     toEdit: '編集に切り替え',
     toCanvas: 'キャンバスに切り替え',
+    editTitle: '編集',
+    modes: '編集またはキャンバス',
     note: 'メモ',
     notePlaceholder: 'メモを書く…',
     addNote: 'メモを追加',

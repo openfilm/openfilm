@@ -1431,6 +1431,8 @@ export const ko: Words = {
     title: '캔버스',
     toEdit: '편집으로 전환',
     toCanvas: '캔버스로 전환',
+    editTitle: '편집',
+    modes: '편집 또는 캔버스',
     note: '메모',
     notePlaceholder: '메모를 쓰세요…',
     addNote: '메모 추가',
