@@ -40,6 +40,7 @@ export default {
   env: 'OPENAI_API_KEY',
   keysUrl: 'https://platform.openai.com/api-keys',
   billingUrl: 'https://platform.openai.com/settings/organization/billing',
+  price: 'paid', pricingUrl: 'https://openai.com/api/pricing/',
   verbs: ['voice', 'tts', 'image', 'asr', 'translate'],
   models: MODELS,
   async run(verb, args, ctx) {

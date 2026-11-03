@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { azureKey, couldMake, offered, providerGroups, type OwnProvider, type ProviderVerb, type ProvidersState } from './providers.ts';
 
 const own = (id: string, name: string, verbs: ProviderVerb[], source: OwnProvider['source'] = null): OwnProvider =>
-  ({ id, name, verbs, models: {}, keysUrl: '', env: '', source, last4: null });
+  ({ id, name, verbs, models: {}, keysUrl: '', price: 'paid', pricingUrl: '', env: '', source, last4: null });
 const state: ProvidersState = {
   providers: [own('elevenlabs', 'ElevenLabs', ['tts', 'sfx']), own('openai', 'OpenAI', ['tts', 'image']), own('fal', 'fal.ai', ['image', 'video']), own('google', 'Google', ['image'], 'file')],
   use: {}, model: {},

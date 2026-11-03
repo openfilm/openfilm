@@ -21,6 +21,8 @@ export default {
   env: 'BRAVE_API_KEY',
   keysUrl: 'https://api-dashboard.search.brave.com/app/keys',
   billingUrl: 'https://api-dashboard.search.brave.com/',
+  /* $5 of searches a month free; a card is asked for */
+  price: 'allowance', pricingUrl: 'https://brave.com/search/api/',
   verbs: ['web-search', 'web-fetch'],
   models: MODELS,
   async run(verb, args, ctx) {

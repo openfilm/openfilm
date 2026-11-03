@@ -184,6 +184,8 @@ is a small one to start from. Its pull request comes with:
 - **Its mark** in [lib/provider-marks.ts](packages/openfilm/studio/ui/src/lib/provider-marks.ts), from
   [Lobe Icons](https://github.com/lobehub/lobe-icons) or [Simple Icons](https://simpleicons.org) (a test holds every
   provider to having one).
+- **What its API costs**, as `price` and `pricingUrl` in its file: `free`, `allowance` (free within limits for all or
+  some of what it makes) or `paid`, from the service's own pricing page. Settings › Providers shows it beside its name.
 - **Every word it shows in Studio** in all five languages: en, zh-CN, ja, ko and es. A key in a format of its own
   (a region with it, say) says so where it is pasted.
 - **A changeset**.

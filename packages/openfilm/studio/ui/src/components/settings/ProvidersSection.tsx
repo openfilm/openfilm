@@ -6,6 +6,7 @@
  * ElevenLabs, OpenAI, Google, Microsoft Azure, fal.ai, Groq, Pexels, Pixabay, Brave Search and Tavily connect with the person's
  * own key, which pays that service directly when it charges (a key in the environment shows as such and stays there).
  * Keenable also works without one: Connect connects it at once, and a key can be added after, for higher limits.
+ * Each says what its API costs (free, a free tier, or paid), linked to its own prices.
  * Which of them makes each kind of media, and with which model, is Settings → Services, with the person's own custom
  * services (CustomServices).
  */
@@ -81,6 +82,23 @@ function Connected({ children }: { children?: React.ReactNode }) {
 function abilityPhrase(verbs: readonly ProviderVerb[], t: (key: string) => string) {
   const words = verbs.map((v, i) => (i ? t(`settings.providers.verbs.${v}`).toLowerCase() : t(`settings.providers.verbs.${v}`)));
   return words.length > 1 ? `${words.slice(0, -1).join(', ')} ${t('settings.providers.and')} ${words.at(-1)}` : words[0] ?? '';
+}
+
+/** What a provider's API costs, a word after what it makes, linked to its own prices, with a sentence on a point. */
+function PriceTag({ provider }: { provider: OwnProvider }) {
+  const t = useT();
+  const tip = t(`settings.providers.price.${provider.price}Tip`).replaceAll('{name}', provider.name);
+  return (
+    <>
+      <span aria-hidden className="text-[var(--text-faint)]">·</span>
+      <Tooltip label={tip} wrap>
+        <a href={provider.pricingUrl} target="_blank" rel="noreferrer" aria-label={`${t(`settings.providers.price.${provider.price}`)}: ${tip}`}
+          className={provider.price === 'paid' ? settingsLink : settingsLink.replace('text-[var(--text-muted)]', 'text-[var(--ok)]')}>
+          {t(`settings.providers.price.${provider.price}`)}
+        </a>
+      </Tooltip>
+    </>
+  );
 }
 
 /**
@@ -184,18 +202,19 @@ function KeyRow({ provider, hook }: { provider: OwnProvider; hook: ProvidersHook
         </form>
       ) : null}
     >
-      {keyless ? (
-        <span className="inline-flex items-center gap-1">
-          {abilityPhrase(ABILITY_ORDER.filter((v) => provider.verbs.includes(v)), t)}
-          {/* what goes to a service connected with no key, a point away, before it is connected and after */}
+      <span className="inline-flex flex-wrap items-center gap-x-1.5">
+        {abilityPhrase(ABILITY_ORDER.filter((v) => provider.verbs.includes(v)), t)}
+        <PriceTag provider={provider} />
+        {/* what goes to a service connected with no key, a point away, before it is connected and after */}
+        {keyless ? (
           <Tooltip label={t('settings.providers.keyless').replaceAll('{name}', provider.name)} wrap>
             <span tabIndex={0} aria-label={t('settings.providers.keyless').replaceAll('{name}', provider.name)}
-              className="inline-flex h-5 w-5 items-center justify-center rounded-full hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+              className="-ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
               <CircleHelp size={14} aria-hidden />
             </span>
           </Tooltip>
-        </span>
-      ) : abilityPhrase(ABILITY_ORDER.filter((v) => provider.verbs.includes(v)), t)}
+        ) : null}
+      </span>
     </Row>
   );
 }
