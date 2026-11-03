@@ -2391,7 +2391,7 @@ export const en = {
       choose: 'Choose a model',
       notConnected: 'Not connected',
       none: 'None',
-      library: { title: 'Library search', about: 'Finds sound effects, music, transitions and more in OpenFilm\'s free library (5,000+ sounds, 1,200 tracks) by what you mean: the words of a search go to OpenFilm\'s service, free and with no account. Offline, by words.', by: 'OpenFilm · free' },
+      library: { title: 'Library search', about: 'Finds the best OpenFilm library items for a search with OpenFilm\'s vector search, free and with no account; offline, by keywords', by: 'OpenFilm · free' },
       about: {
         tts: 'Speaks a script, and finds voices to speak it',
         music: 'Makes a soundtrack from a description',

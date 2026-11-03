@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // @ts-check
 /**
- * The library's vectors for semantic search (src/library-semantic.mjs): every thing `openfilm get` searches, what it
- * is (passageOf) turned into a vector by the model, written as library/vectors.i8 (int8, 384 a thing) and
- * library/vectors.json (the model, the ids in order, each vector's scale); and library/models.json, each file of the
- * model and its runtime with its size and sha256, for those who fetch it; and the model's vocabulary packed for a
- * quick start (vocab.bin beside its tokenizer.json, sentence-model.mjs packVocabulary). Run on the computer that has
- * them under library/models/ (published with the library, not in git), after the library's things or their
- * descriptions change:
+ * The library's vectors for semantic search (OpenFilm's service searches them, src/library-semantic.mjs): every thing
+ * `openfilm get` searches, what it is (passageOf) turned into a vector by the model, written as library/vectors.i8
+ * (int8, 384 a thing) and library/vectors.json (the model, the ids in order, each one's category, each vector's
+ * scale); and library/models.json, each file of the model and its runtime with its size and sha256; and the model's
+ * vocabulary packed for a quick start (vocab.bin beside its tokenizer.json, sentence-model.mjs packVocabulary). Run on
+ * the computer that has them under library/models/ (not in git), after the library's things or their descriptions
+ * change:
  *
  *   node scripts/library-vectors.mjs
  *
@@ -58,6 +58,6 @@ for (const [n, item] of things.entries()) {
   if ((n + 1) % 1000 === 0) console.error(`${n + 1} of ${things.length}`);
 }
 writeFileSync(join(root, 'vectors.i8'), values);
-writeFileSync(join(root, 'vectors.json'), `${JSON.stringify({ version: 1, model: MODEL, dims: manifest.dims, ids: things.map((i) => i.id), scales })}\n`);
+writeFileSync(join(root, 'vectors.json'), `${JSON.stringify({ version: 1, model: MODEL, dims: manifest.dims, ids: things.map((i) => i.id), cats: things.map((i) => i.cat), scales })}\n`);
 const mb = (/** @type {number} */ b) => `${(b / 1e6).toFixed(1)} MB`;
 console.log(`${things.length} vectors in ${Math.round((Date.now() - started) / 1000)} s (${mb(values.length)}); the model and its runtime: ${mb(manifest.files.reduce((s, f) => s + f.bytes, 0))} to fetch`);

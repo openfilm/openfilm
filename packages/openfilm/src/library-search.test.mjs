@@ -8,18 +8,28 @@ import { builtInRoot, libraryIndex } from '../studio/server/library.mjs';
 import { LIBRARY_VERBS, findInLibrary, languageOf, libraryGet, libraryVerbs, searchFile, searchLibrary } from './library-search.mjs';
 import { embedder, manifest } from './library-semantic.mjs';
 
-/* OpenFilm's service turning what is asked into a vector, as `POST /v1/library/query` does: here, with the model when
-   this checkout's library has it (it is published with the library, not in git); else no service, and words alone */
+/* OpenFilm's service searching the library by meaning, as `POST /v1/library/search` does (the model and the things'
+   vectors): here, when this checkout's library has the model (published with the library, not in git); else no
+   service, and words alone */
 const model = manifest();
 const semantic = Boolean(model?.files.every((f) => existsSync(join(builtInRoot(), f.path))));
+const vectors = JSON.parse(readFileSync(join(builtInRoot(), 'vectors.json'), 'utf8'));
+const values = new Int8Array(readFileSync(join(builtInRoot(), 'vectors.i8')).buffer.slice(0));
 const service = createServer((req, res) => {
   let body = '';
   req.on('data', (c) => { body += c; });
   req.on('end', async () => {
-    const embed = await embedder();
-    const vector = [...await embed(`query: ${JSON.parse(body).text}`)];
+    const { text, cat, limit } = JSON.parse(body);
+    const q = await (await embedder())(`query: ${text}`);
+    const found = [];
+    vectors.ids.forEach((/** @type {string} */ id, /** @type {number} */ i) => {
+      if (vectors.cats[i] !== cat) return;
+      let dot = 0;
+      for (let k = 0; k < vectors.dims; k++) dot += values[i * vectors.dims + k] * q[k];
+      found.push([id, dot * vectors.scales[i]]);
+    });
     res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ model: model?.model, vector }));
+    res.end(JSON.stringify({ found: found.sort((x, y) => y[1] - x[1]).slice(0, limit) }));
   });
 });
 if (semantic) {

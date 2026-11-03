@@ -49,6 +49,8 @@
     "!library/audio",
     "!library/stickers/emoji",
     "!library/models",
+    "!library/vectors.i8",
+    "!library/vectors.json",
     "examples-index",
     "src",
     "!src/*.test.mjs",

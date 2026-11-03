@@ -5,24 +5,18 @@ import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-/* a package's library with three things' vectors of a model of four dimensions: a, b, and c between them */
-const pkg = mkdtempSync(join(tmpdir(), 'semantic-package-'));
-writeFileSync(join(pkg, 'vectors.json'), JSON.stringify({ model: 'tiny', dims: 4, ids: ['a', 'b', 'c'], scales: [1 / 127, 1 / 127, 1 / 127] }));
-writeFileSync(join(pkg, 'vectors.i8'), Buffer.from(Int8Array.from([127, 0, 0, 0, 0, 127, 0, 0, 90, 90, 0, 0]).buffer));
-process.env.OPENFILM_BUILT_IN_LIBRARY = pkg;
-
-/* OpenFilm's service: what is asked to the vector `answer` says, each request kept */
-/** @type {{ text: string }[]} */
+/* OpenFilm's service: the things it finds for a search, as `found` says, each request kept */
+/** @type {{ text: string, cat: string, limit: number }[]} */
 const asked = [];
-let answer = (/** @type {string} */ _text) => ({ status: 200, body: { model: 'tiny', vector: [1, 0, 0, 0] } });
+let answer = (/** @type {{ cat: string }} */ _q) => ({ status: 200, body: { found: [['sounds/a', 0.9], ['sounds/c', 0.7]] } });
 const service = createServer((req, res) => {
   let body = '';
   req.on('data', (c) => { body += c; });
   req.on('end', () => {
-    if (req.method !== 'POST' || req.url !== '/v1/library/query') { res.writeHead(404); res.end(); return; }
-    const { text } = JSON.parse(body);
-    asked.push({ text });
-    const { status, body: out } = answer(text);
+    if (req.method !== 'POST' || req.url !== '/v1/library/search') { res.writeHead(404); res.end(); return; }
+    const q = JSON.parse(body);
+    asked.push(q);
+    const { status, body: out } = answer(q);
     res.writeHead(status, { 'content-type': 'application/json' });
     res.end(JSON.stringify(out));
   });
@@ -33,7 +27,7 @@ before(async () => {
 });
 after(() => service.close());
 
-const { nearest, passageOf, queryVector } = await import('./library-semantic.mjs');
+const { nearest, passageOf } = await import('./library-semantic.mjs');
 const { packVocabulary, readPacked, readVocabulary, tokenize } = await import('./sentence-model.mjs');
 
 test('a text is cut into the vocabulary\'s pieces whose scores add up highest, between <s> and </s>', () => {
@@ -62,23 +56,21 @@ test('what a thing is, in the words of its vector: names, about, group, tags in 
   assert.equal(passage, 'passage: music: Quiet morning piano (清晨安静钢琴). Calm. Calm, Piano. 平静，钢琴. very calm, 72 bpm');
 });
 
-test('what is asked goes to the service as its words alone, once; the things nearest its vector come first', async () => {
+test('a search goes to the service as its words and the category alone, once; what it finds comes back as it ranked it', async () => {
   asked.length = 0;
-  assert.deepEqual((await nearest('a bright bell', () => true))?.map(([id]) => id), ['a', 'c', 'b']);
-  assert.deepEqual(asked, [{ text: 'a bright bell' }]);
-  assert.deepEqual((await nearest('a bright bell', (id) => id !== 'a'))?.map(([id]) => id), ['c', 'b'], 'only what keep lets through');
-  assert.equal(asked.length, 1, 'asked again: the vector it said');
-  const [[, near]] = /** @type {[string, number][]} */ (await nearest('a bright bell', (id) => id === 'c'));
-  assert.ok(Math.abs(near - 90 / 127) < 1e-6, 'the cosine, the scale put back');
+  assert.deepEqual(await nearest('a bright bell', 'sound', 20), [['sounds/a', 0.9], ['sounds/c', 0.7]]);
+  assert.deepEqual(asked, [{ text: 'a bright bell', cat: 'sound', limit: 20 }]);
+  await nearest('a bright bell', 'sound', 20);
+  assert.equal(asked.length, 1, 'asked again: what it said');
+  await nearest('a bright bell', 'music', 20);
+  assert.equal(asked.length, 2, 'another category is another search');
 });
 
-test('a service that is down, says no, or answers for another model: the keyword search alone', async () => {
+test('a service that is down, says no, or answers something else: the keyword search alone', async () => {
   answer = () => ({ status: 503, body: {} });
-  assert.equal(await nearest('a dull thud', () => true), null);
-  answer = () => ({ status: 200, body: { model: 'bigger', vector: [1, 0, 0, 0] } });
-  assert.equal(await queryVector('a soft thud', 'tiny'), null, 'not the vectors\' model');
-  answer = () => ({ status: 200, body: { model: 'tiny', vector: [1, 0, 0] } });
-  assert.equal(await nearest('a loud thud', () => true), null, 'not of their length');
+  assert.equal(await nearest('a dull thud', 'sound'), null);
+  answer = () => ({ status: 200, body: { found: [['sounds/a', 'near']] } });
+  assert.equal(await nearest('a soft thud', 'sound'), null);
   process.env.OPENFILM_API_URL = 'http://127.0.0.1:9';
-  assert.equal(await nearest('a far thud', () => true), null, 'unreachable');
+  assert.equal(await nearest('a far thud', 'sound'), null, 'unreachable');
 });

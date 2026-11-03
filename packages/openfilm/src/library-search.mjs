@@ -267,14 +267,16 @@ export async function searchLibrary(kind, query, o = {}) {
   const words = findInLibrary(kind, query, { ...o, limit: DEPTH });
   const at = library();
   const { nearest } = await import('./library-semantic.mjs');
-  const near = await nearest(query, (id) => at.items.get(id)?.cat === KINDS[kind], DEPTH);
+  /* what the service has that this catalog has not (a newer library's) is left out */
+  const near = (await nearest(query, KINDS[kind], DEPTH))?.filter(([id]) => at.items.get(id)?.cat === KINDS[kind]);
   if (!near) return { found: words.slice(0, o.limit ?? 8), worded: words.length > 0 };
   /** @type {Map<string, Found & { fused: number }>} */
   const all = new Map(words.map((r, i) => [r.item.id, { ...r, fused: 1 / (RRF_K + i) }]));
   near.forEach(([id], i) => {
     const was = all.get(id);
     if (was) { was.fused += 1 / (RRF_K + i); return; }
-    const d = /** @type {Doc} */ (docOf(at, id));
+    const d = docOf(at, id);
+    if (!d) return;
     all.set(id, { item: d.item, score: 0, tags: [...d.tags], named: false, short: tooShort(d.item, o.duration), fused: 1 / (RRF_K + i) });
   });
   return { found: [...all.values()].sort(inOrder((r) => /** @type {Found & { fused: number }} */ (r).fused)).slice(0, o.limit ?? 8), worded: words.length > 0 };

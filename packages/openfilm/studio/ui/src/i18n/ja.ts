@@ -2390,7 +2390,7 @@ export const ja: Words = {
       choose: 'モデルを選択',
       notConnected: '未接続',
       none: 'なし',
-      library: { title: 'ライブラリ検索', about: 'OpenFilm の無料素材ライブラリ（効果音 5,000 以上、音楽 1,200 曲、トランジションなど）を意味で探します。検索語は OpenFilm のサービスに送られます（無料・アカウント不要）。オフラインではキーワードで探します。', by: 'OpenFilm · 無料' },
+      library: { title: 'ライブラリ検索', about: 'OpenFilm のベクトル検索サービスで、検索にいちばん合う OpenFilm の素材を見つけます。無料・アカウント不要、オフラインではキーワードで探します', by: 'OpenFilm · 無料' },
       about: {
         tts: '台本を読み上げ、読み上げる声を探します',
         music: '説明からサウンドトラックを作成します',

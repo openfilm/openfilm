@@ -2386,7 +2386,7 @@ export const ko: Words = {
       choose: '모델 선택',
       notConnected: '연결 안 됨',
       none: '없음',
-      library: { title: '소재 검색', about: 'OpenFilm 무료 소재 라이브러리(효과음 5,000개 이상, 음악 1,200곡, 전환 효과 등)에서 뜻으로 찾습니다. 검색어는 OpenFilm 서비스로 보내집니다(무료, 계정 불필요). 오프라인에서는 키워드로 찾습니다.', by: 'OpenFilm · 무료' },
+      library: { title: '소재 검색', about: 'OpenFilm 벡터 검색 서비스로 검색에 가장 알맞은 OpenFilm 소재를 찾습니다. 무료이며 계정이 필요 없고, 오프라인에서는 키워드로 찾습니다', by: 'OpenFilm · 무료' },
       about: {
         tts: '대본을 읽고, 읽을 음성을 찾습니다',
         music: '설명으로 사운드트랙을 만듭니다',

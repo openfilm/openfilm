@@ -54,9 +54,8 @@ export function ModelsSection() {
         <>
           <ServicesBar hook={hook} onOpen={setCard} local={<LocalModelsChip hook={local} onOpen={() => setCard('local')} />} />
           <SettingsGroup>
-            {SERVICE_VERBS.filter((verb) => offered(state, verb)).flatMap((verb, _, all) => (
-              /* the library's search after the sounds and music it finds besides making them */
-              verb === all.filter((v) => v === 'music' || v === 'sfx').at(-1) ? [row(verb), <LibraryRow key="library" />] : [row(verb)]))}
+            {SERVICE_VERBS.filter((verb) => offered(state, verb)).map(row)}
+            <LibraryRow />
           </SettingsGroup>
         </>
       ) : null}

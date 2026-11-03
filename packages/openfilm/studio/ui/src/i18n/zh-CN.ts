@@ -2391,7 +2391,7 @@ export const zhCN: Words = {
       choose: '选择模型',
       notConnected: '未连接',
       none: '无',
-      library: { title: '素材检索', about: '按意思在 OpenFilm 免费素材库（5,000 多个音效、1,200 首音乐，还有转场、贴纸等）里找：搜索词发给 OpenFilm 服务处理，免费，不用登录；没网时按关键词找。', by: 'OpenFilm · 免费' },
+      library: { title: '素材检索', about: '通过 OpenFilm 的向量检索服务找到最合适的 OpenFilm 素材，免费，不用登录；没网时按关键词找', by: 'OpenFilm · 免费' },
       about: {
         tts: '朗读脚本，并寻找合适的音色',
         music: '根据描述生成配乐',
