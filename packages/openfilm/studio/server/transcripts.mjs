@@ -426,6 +426,18 @@ function firstAfter(marks, at) {
 }
 
 /**
+ * Chinese and Japanese as they are written: no space beside a full-width mark, none between two characters of a
+ * script written without them (`OpenFilm， 说一 句话` → `OpenFilm，说一句话`); a space between Han and Latin, or in
+ * Korean, stays. Services that transcribe put spaces where the speaker paused. Full-width marks: CJK symbols and
+ * full-width forms; written without spaces: Han and kana.
+ * @param {string} t
+ */
+export function tightCjk(t) {
+  return t.replace(/([\u3000-\u303f\uff00-\uffef])[ \t]+/gu, '$1').replace(/[ \t]+([\u3000-\u303f\uff00-\uffef])/gu, '$1')
+    .replace(/([\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff])[ \t]+(?=[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff])/gu, '$1');
+}
+
+/**
  * A speech's text and word times broken into lines, in the source's own milliseconds (what a transcript is written
  * as). `marks`: each matched word's place in the line and its start. `durMs`: the source's length (the last line's
  * end), if known.
@@ -433,7 +445,7 @@ function firstAfter(marks, at) {
  * @returns {SpokenLine[]}
  */
 export function spokenLines(source, words, durMs) {
-  const said = stripAudioTags(source ?? '');
+  const said = tightCjk(stripAudioTags(source ?? ''));
   if (!said) return [];
   const total = durMs !== undefined && Number.isFinite(durMs) ? durMs : undefined;
   const marks = words?.length ? alignedAt(said, words) : [];

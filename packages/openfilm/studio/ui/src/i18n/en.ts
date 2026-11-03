@@ -2299,10 +2299,10 @@ export const en = {
         groq: 'Very fast inference on its own chips: Whisper transcription and Orpheus voices, in seconds.',
         mimo: 'Xiaomi\'s MiMo models: natural speech and accurate transcription, at their best in Chinese.',
         doubao: 'ByteDance\'s Doubao speech models on Volcano Engine: accurate transcription, at its best in Chinese.',
-    /* Settings → Services → Local models (components/settings/LocalModels) */
+    /* Settings → Services → Local services (components/settings/LocalModels) */
     local: {
       by: 'By {who}',
-      name: 'Local models',
+      name: 'Local services',
       tagline: 'Runs on this computer · free · nothing leaves it',
       intro: 'These models are downloaded and run on this computer: they cost nothing, work offline, and what you give them stays here. Once installed and on, OpenFilm and your agent use them wherever they fit.',
       kinds: { asr: 'Transcription', cutout: 'Remove background' },
@@ -2391,10 +2391,11 @@ export const en = {
       choose: 'Choose a model',
       notConnected: 'Not connected',
       none: 'None',
+      library: { title: 'Library search', about: 'Finds sound effects, music, transitions and more in OpenFilm\'s free library (5,000+ sounds, 1,200 tracks) by what you mean: the words of a search go to OpenFilm\'s service, free and with no account. Offline, by words.', by: 'OpenFilm · free' },
       about: {
         tts: 'Speaks a script, and finds voices to speak it',
-        music: 'Makes a soundtrack from a description; the library has 1,200 free ones too',
-        sfx: 'Makes a sound from a description; the library has 5,000+ free ones too',
+        music: 'Makes a soundtrack from a description',
+        sfx: 'Makes a sound from a description',
         asr: 'Writes down what is said, word by word, for subtitles',
         cutout: 'Takes the background out of a picture, keeping what it is of',
         image: 'Makes a picture from a description',

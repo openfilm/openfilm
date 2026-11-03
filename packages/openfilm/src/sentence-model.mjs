@@ -128,7 +128,8 @@ export function readPacked(buf) {
 /**
  * The model, loaded from its files: a text (with its `query: ` or `passage: `, as the model was trained) to its
  * vector, the mean of its tokens' last states, of length 1.
- * @param {{ runtime: string, onnx: string, tokenizer: string }} files where each is on this computer
+ * @param {{ runtime: string, onnx: string, tokenizer: string }} files where each is on this computer: the tokenizer
+ * packed (vocab.bin), or as the model's maker publishes it (tokenizer.json)
  * @returns {Promise<(text: string) => Promise<Float32Array>>}
  */
 export async function loadEmbedder(files) {
@@ -136,7 +137,7 @@ export async function loadEmbedder(files) {
   ort.env.wasm.numThreads = 1;
   ort.env.wasm.wasmPaths = pathToFileURL(`${dirname(files.runtime)}/`).href;
   ort.env.logLevel = 'error';
-  const vocab = readPacked(readFileSync(files.tokenizer));
+  const vocab = files.tokenizer.endsWith('.json') ? readVocabulary(files.tokenizer) : readPacked(readFileSync(files.tokenizer));
   const session = await ort.InferenceSession.create(readFileSync(files.onnx));
   const int64 = (/** @type {number[]} */ v) => new ort.Tensor('int64', BigInt64Array.from(v, BigInt), [1, v.length]);
   return async (/** @type {string} */ text) => {

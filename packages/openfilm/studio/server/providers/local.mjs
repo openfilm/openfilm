@@ -1,8 +1,8 @@
 // @ts-check
 /**
- * Local models as a provider: transcripts (asr) by Whisper and backgrounds taken out of pictures (cutout) by BiRefNet,
+ * Local services as a provider: transcripts (asr) by Whisper and backgrounds taken out of pictures (cutout) by BiRefNet,
  * run on this computer, free and offline. It takes no key: it is connected while one of its models is installed and on
- * (Settings → Services → Local models; src/local-models.mjs), and makes only the kinds it has such a model of, with
+ * (Settings → Services → Local services; src/local-models.mjs), and makes only the kinds it has such a model of, with
  * those models. Each run is a process of its own (src/local-run.mjs).
  */
 import { execFile } from 'node:child_process';
@@ -16,7 +16,7 @@ import { landing, madePicture, needed, round } from './common.mjs';
 
 /** @typedef {import('./contract.mjs').Provider} Provider @typedef {import('./contract.mjs').Verb} Verb */
 
-const NAME = 'Local models';
+const NAME = 'Local services';
 /** Every model it could run, by kind, the default first. */
 const ALL = /** @type {Partial<Record<Verb, { id: string, name: string }[]>>} */ ({
   asr: [{ id: 'whisper-small', name: 'Whisper Small' }, { id: 'whisper-large-v3-turbo', name: 'Whisper Large v3 Turbo' }],
@@ -64,7 +64,7 @@ export default {
   async run(verb, args, ctx) {
     const models = usable()[verb] ?? [];
     const model = models.find((m) => m.id === ctx.model) ?? models[0];
-    if (!model) throw new Error(`No local model for ${verb} is installed and on: install one in Studio (Settings → Services → Local models).`);
+    if (!model) throw new Error(`No local model for ${verb} is installed and on: install one in Studio (Settings → Services → Local services).`);
     const tmp = await mkdtemp(join(tmpdir(), 'openfilm-local-'));
     try {
       if (verb === 'asr') {

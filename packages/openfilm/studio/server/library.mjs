@@ -43,7 +43,7 @@ export const builtInRoot = () => process.env.OPENFILM_BUILT_IN_LIBRARY || fileUR
 
 /**
  * The library's parts too big to come with the package (git-ignored, left out of npm): its sounds and music (`audio/`),
- * its voices' samples (`voices/`), its emoji stickers (`stickers/emoji/`), the models Local models runs (`models/`,
+ * its voices' samples (`voices/`), its emoji stickers (`stickers/emoji/`), the models Local services runs (`models/`,
  * src/local-models.mjs). Each is fetched on first use from the library's host and kept in the shared home, once for
  * every OpenFilm on this computer; a bundle (a sticker) comes with the list of its files, `files.json` beside it there,
  * written when the library is published.

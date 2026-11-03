@@ -2294,10 +2294,10 @@ export const ko: Words = {
         groq: '자체 칩으로 하는 초고속 추론: Whisper 받아쓰기와 Orpheus 음성을 몇 초 만에.',
         mimo: 'Xiaomi의 MiMo 모델: 자연스러운 음성 합성과 정확한 받아쓰기, 특히 중국어에 강합니다.',
         doubao: 'Volcano Engine의 ByteDance Doubao 음성 모델: 정확한 받아쓰기, 특히 중국어에 강합니다.',
-    /* Settings → Services → Local models (components/settings/LocalModels) */
+    /* Settings → Services → Local services (components/settings/LocalModels) */
     local: {
       by: '제공: {who}',
-      name: '로컬 모델',
+      name: '로컬 서비스',
       tagline: '이 컴퓨터에서 실행 · 무료 · 내용이 밖으로 나가지 않음',
       intro: '이 모델들은 이 컴퓨터에 내려받아 실행합니다. 비용이 들지 않고, 오프라인에서도 쓸 수 있으며, 맡긴 내용은 이 컴퓨터를 떠나지 않습니다. 설치하고 켜 두면 OpenFilm과 에이전트가 쓸 수 있는 곳에서 자동으로 사용합니다.',
       kinds: { asr: '음성 전사', cutout: '배경 제거' },
@@ -2386,10 +2386,11 @@ export const ko: Words = {
       choose: '모델 선택',
       notConnected: '연결 안 됨',
       none: '없음',
+      library: { title: '소재 검색', about: 'OpenFilm 무료 소재 라이브러리(효과음 5,000개 이상, 음악 1,200곡, 전환 효과 등)에서 뜻으로 찾습니다. 검색어는 OpenFilm 서비스로 보내집니다(무료, 계정 불필요). 오프라인에서는 키워드로 찾습니다.', by: 'OpenFilm · 무료' },
       about: {
         tts: '대본을 읽고, 읽을 음성을 찾습니다',
-        music: '설명으로 사운드트랙을 만듭니다. 소재 라이브러리에도 무료 음악이 1,200곡 있습니다',
-        sfx: '설명으로 소리를 만듭니다. 소재 라이브러리에도 무료 효과음이 5,000개 넘게 있습니다',
+        music: '설명으로 사운드트랙을 만듭니다',
+        sfx: '설명으로 소리를 만듭니다',
         asr: '자막용으로 말한 내용을 단어 단위로 받아 적습니다',
         cutout: '이미지의 배경을 없애고 주체만 남깁니다',
         image: '설명으로 이미지를 만듭니다',

@@ -31,16 +31,16 @@ export const KIND_ICON: Partial<Record<ProviderVerb, React.ComponentType<{ size?
 const chipClass = 'inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-[14px] transition hover:border-[var(--border-strong)] hover:text-[var(--text)]';
 
 /**
- * Every service as a chip: OpenFilm's own and `second` (Local models) first, then the connected ones (with a dot), the
- * recommended ones, and the rest and adding one behind "N more", each part in the default order (lib/providers
- * providerOrder). A chip opens the service's card (`onOpen` with its id, or 'add').
+ * Every service as a chip: OpenFilm's own first, then the connected ones (with a dot), the recommended ones, and the
+ * rest behind "N more", each part in the default order (lib/providers providerOrder); last `local` (Local services),
+ * just before adding one. A chip opens the service's card (`onOpen` with its id, or 'add').
  */
-export function ServicesBar({ hook, onOpen, second }: { hook: ProvidersHook; onOpen: (id: string) => void; second?: React.ReactNode }) {
+export function ServicesBar({ hook, onOpen, local }: { hook: ProvidersHook; onOpen: (id: string) => void; local?: React.ReactNode }) {
   const t = useT();
   const rows = hook.state?.providers ?? [];
-  /* OpenFilm's own first, then `second` (Local models), then the others */
+  /* OpenFilm's own first, then the others */
   const own = rows.find((p) => p.id === 'openfilm');
-  /* Local models has its own chip (`second`) */
+  /* Local services has its own chip (`local`) */
   const order = providerOrder(rows.filter((p) => p !== own && p.id !== 'local'));
   const [all, setAll] = React.useState(false);
   const chip = (p: OwnProvider) => (
@@ -56,16 +56,14 @@ export function ServicesBar({ hook, onOpen, second }: { hook: ProvidersHook; onO
     <div className="mb-10">
       <div className="flex flex-wrap gap-2">
         {own ? chip(own) : null}
-        {second}
         {order.connected.map(chip)}
         {order.recommended.map(chip)}
+        {all ? order.more.map(chip) : null}
+        {local}
         {all ? (
-          <>
-            {order.more.map(chip)}
-            <button type="button" onClick={() => onOpen('add')} className={`${chipClass} border-dashed border-[var(--border)] text-[var(--text-muted)]`}>
-              <Plus size={15} aria-hidden />{t('settings.providers.addProvider')}
-            </button>
-          </>
+          <button type="button" onClick={() => onOpen('add')} className={`${chipClass} border-dashed border-[var(--border)] text-[var(--text-muted)]`}>
+            <Plus size={15} aria-hidden />{t('settings.providers.addProvider')}
+          </button>
         ) : null}
         <button type="button" aria-expanded={all} onClick={() => setAll(!all)}
           className="inline-flex h-9 items-center gap-1 rounded-full px-3 text-[14px] text-[var(--text-faint)] transition hover:text-[var(--text)]">

@@ -41,7 +41,7 @@ import local from './local.mjs';
  * @typedef {import('../http.mjs').Req} Req @typedef {import('../http.mjs').Res} Res
  */
 
-/** The providers paid with the person's own key, and Local models, which takes none. */
+/** The providers paid with the person's own key, and Local services, which takes none. */
 const OWN = [elevenlabs, inworld, cartesia, openai, google, fal, openrouter, pexels, pixabay, brave, tavily, groq, azure, doubao, mimo, keenable, openfilm, local];
 
 /** The kinds of media the person chooses a provider and model for (Settings → Services). */
@@ -62,7 +62,7 @@ async function named(id, verb, settings, strict) {
   const fail = (/** @type {string} */ why) => { if (strict) throw new Error(why); return null; };
   if (!provider) return fail(`There is no provider "${id}": use ${OWN.map((p) => p.id).join(', ')}.`);
   if (provider.ready && !provider.verbs.includes(verb)) {
-    return fail(`No local model for ${verb} is installed and on: the person installs one in Studio (the OpenFilm logo at the top left opens Settings → Services → Local models).`);
+    return fail(`No local model for ${verb} is installed and on: the person installs one in Studio (the OpenFilm logo at the top left opens Settings → Services → Local services).`);
   }
   if (!provider.verbs.includes(verb)) return fail(`${provider.name} does not do ${verb}.`);
   if (!providerKey(provider, settings)) {

@@ -322,7 +322,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     /* ── own keys and who makes each kind of media (Settings → Services): never a key back; see providers/index.mjs ── */
     if (parts[0] === 'providers') return providersRoute(req, res, parts.slice(1), { openBrowser });
-    /* the models that run on this computer (Settings → Services → Local models; local-models.mjs) */
+    /* the models that run on this computer (Settings → Services → Local services; local-models.mjs) */
     if (parts[0] === 'local-models') return localModelsRoute(req, res, parts.slice(1));
     /* what the person changed in a project while an agent worked, kept over its writes: the note for the agent named
        `agent`, which its `openfilm` command prints, answered at once ({ id, line }, line null when nothing); it counts

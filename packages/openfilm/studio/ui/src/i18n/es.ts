@@ -2298,10 +2298,10 @@ export const es: Words = {
         groq: 'Inferencia muy rápida en sus propios chips: transcripción con Whisper y voces de Orpheus en segundos.',
         mimo: 'Los modelos MiMo de Xiaomi: voz natural y transcripción precisa, sobre todo en chino.',
         doubao: 'Los modelos de voz Doubao de ByteDance en Volcano Engine: transcripción precisa, sobre todo en chino.',
-    /* Settings → Services → Local models (components/settings/LocalModels) */
+    /* Settings → Services → Local services (components/settings/LocalModels) */
     local: {
       by: 'De {who}',
-      name: 'Modelos locales',
+      name: 'Servicios locales',
       tagline: 'Se ejecutan en este ordenador · gratis · nada sale de él',
       intro: 'Estos modelos se descargan y se ejecutan en este ordenador: no cuestan nada, funcionan sin conexión y lo que les das se queda aquí. Una vez instalados y activados, OpenFilm y tu agente los usan donde encajan.',
       kinds: { asr: 'Transcripción', cutout: 'Quitar fondo' },
@@ -2390,10 +2390,11 @@ export const es: Words = {
       choose: 'Elegir un modelo',
       notConnected: 'Sin conectar',
       none: 'Ninguno',
+      library: { title: 'Búsqueda en la biblioteca', about: 'Busca efectos de sonido, música, transiciones y más en la biblioteca gratuita de OpenFilm (más de 5.000 sonidos, 1.200 pistas) por lo que quieres decir: las palabras de la búsqueda van al servicio de OpenFilm, gratis y sin cuenta. Sin conexión, por palabras.', by: 'OpenFilm · gratis' },
       about: {
         tts: 'Lee un guion en voz alta y encuentra voces para leerlo',
-        music: 'Crea una banda sonora a partir de una descripción; la biblioteca tiene además 1.200 gratis',
-        sfx: 'Crea un sonido a partir de una descripción; la biblioteca tiene además más de 5.000 gratis',
+        music: 'Crea una banda sonora a partir de una descripción',
+        sfx: 'Crea un sonido a partir de una descripción',
         asr: 'Transcribe lo que se dice, palabra por palabra, para los subtítulos',
         cutout: 'Quita el fondo de una imagen y deja el sujeto',
         image: 'Crea una imagen a partir de una descripción',

@@ -1,6 +1,7 @@
 /**
- * The models that run on this computer, as Settings → Services → Local models shows them (studio/server/local-models.mjs):
- * each installed or not, an installed one on or off, and one coming with how much of it is here.
+ * The models that run on this computer, as Settings → Services → Local services shows them
+ * (studio/server/local-models.mjs): each installed or not, an installed one on or off, and one coming with how much of
+ * it is here.
  */
 import React from 'react';
 

@@ -100,7 +100,7 @@ export function changeSettings(/** @type {(s: ProviderSettings) => void} */ edit
  * @returns {{ key: string, source: 'env' | 'file', env: string } | null}
  */
 export function providerKey(provider, settings, env = process.env) {
-  /* one that takes no key (Local models): connected while it can run */
+  /* one that takes no key (Local services): connected while it can run */
   if (provider.ready) return provider.ready() ? { key: '', source: 'file', env: '' } : null;
   const kept = settings.keys[provider.id];
   if (kept) return { key: kept, source: 'file', env: provider.env };

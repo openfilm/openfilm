@@ -2299,10 +2299,10 @@ export const zhCN: Words = {
         groq: '用自研芯片做极速推理：Whisper 转写和 Orpheus 音色，几秒就好。',
         mimo: '小米的 MiMo 模型：自然的语音合成和准确的转写，中文表现最好。',
         doubao: '字节跳动火山引擎上的豆包语音模型：转写准确，中文表现最好。',
-    /* Settings → Services → Local models (components/settings/LocalModels) */
+    /* Settings → Services → Local services (components/settings/LocalModels) */
     local: {
       by: '出自 {who}',
-      name: '本地模型',
+      name: '本地服务',
       tagline: '在这台电脑上运行 · 免费 · 内容不离开电脑',
       intro: '这些模型下载到这台电脑上运行：不花钱，不联网也能用，交给它的内容不会离开电脑。装好并启用后，OpenFilm 和 Agent 会在用得上的地方自动用它。',
       kinds: { asr: '语音转写', cutout: '抠图' },
@@ -2391,10 +2391,11 @@ export const zhCN: Words = {
       choose: '选择模型',
       notConnected: '未连接',
       none: '无',
+      library: { title: '素材检索', about: '按意思在 OpenFilm 免费素材库（5,000 多个音效、1,200 首音乐，还有转场、贴纸等）里找：搜索词发给 OpenFilm 服务处理，免费，不用登录；没网时按关键词找。', by: 'OpenFilm · 免费' },
       about: {
         tts: '朗读脚本，并寻找合适的音色',
-        music: '根据描述生成配乐；素材库另有 1,200 首免费音乐',
-        sfx: '根据描述生成音效；素材库另有 5,000 多个免费音效',
+        music: '根据描述生成配乐',
+        sfx: '根据描述生成音效',
         asr: '逐字记录所说的内容，用于字幕',
         cutout: '去掉图片背景，只留下主体',
         image: '根据描述生成图片',

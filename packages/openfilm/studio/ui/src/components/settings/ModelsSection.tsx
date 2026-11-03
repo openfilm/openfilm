@@ -1,10 +1,9 @@
 /**
- * Settings → Services: the services there are, as chips that open each one's card (ServicesBar; Local models, second,
- * opens its own: LocalModels), and what makes each
- * kind of media: one of the models of a connected service (its mark and the model's name), or none. A kind's menu
- * lists every service that makes it with its models: the connected ones to choose from, then the others, whose
- * models are shown as what connecting would bring, each opening that service's card. Connecting a service fills the
- * kinds that have none, with its first model.
+ * Settings → Services: the services there are, as chips that open each one's card (ServicesBar; Local services, last,
+ * opens its own: LocalModels), and what makes each kind of media: one of the models of a connected service (its mark
+ * and the model's name), or none. A kind's menu lists every service that makes it with its models: the connected ones
+ * to choose from, then the others, whose models are shown as what connecting would bring, each opening that service's
+ * card. Connecting a service fills the kinds that have none, with its first model.
  *
  * Media, and web search (for an agent that has none of its own), in one list. Writing, translating subtitles and
  * looking at pictures are the agent's own work, with its own model.
@@ -12,7 +11,7 @@
  * Under them, the person's custom services, which their agent calls itself (CustomServices).
  */
 import React from 'react';
-import { Check, ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, Library } from 'lucide-react';
 import { useT } from '@/i18n';
 import { SERVICE_VERBS, offered, providerOrder, useProviders, type OwnProvider, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
 import { Popover } from '@/components/Popover';
@@ -34,18 +33,18 @@ interface Choice {
 export function ModelsSection() {
   const t = useT();
   const got = useProviders();
-  /* Local models' name said in the person's language (the server's is English) */
+  /* Local services' name said in the person's language (the server's is English) */
   const hook = { ...got, state: got.state && { ...got.state, providers: got.state.providers.map((p) => (p.id === 'local' ? { ...p, name: t('settings.local.name') } : p)) } };
   const local = useLocalModels();
   /* a Local model that came, went, or was turned on or off changes what can make each kind */
   const usable = (local.models ?? []).filter((m) => m.on).map((m) => m.id).join();
   React.useEffect(() => { if (local.models) void got.reload(); }, [usable]); // eslint-disable-line react-hooks/exhaustive-deps
   const state = hook.state;
-  /* the card open over the page: a provider's id, 'local' (Local models), or 'add' */
+  /* the card open over the page: a provider's id, 'local' (Local services), or 'add' */
   const [card, setCard] = React.useState<string | null>(null);
   /* asks the custom services to open their form (counted, so asking again opens it again) */
   const [addCustom, setAddCustom] = React.useState(0);
-  /* Local models opens its own card (LocalModelsDialog), not a service's */
+  /* Local services opens its own card (LocalModelsDialog), not a service's */
   const shown = card === 'local' ? null : state?.providers.find((p) => p.id === card) ?? null;
   const row = (verb: ProviderVerb) => <ModelRow key={verb} verb={verb} hook={hook} onConnect={setCard} />;
 
@@ -53,8 +52,12 @@ export function ModelsSection() {
     <SettingsPage note={t('settings.models.desc')}>
       {state ? (
         <>
-          <ServicesBar hook={hook} onOpen={setCard} second={<LocalModelsChip hook={local} onOpen={() => setCard('local')} />} />
-          <SettingsGroup>{SERVICE_VERBS.filter((verb) => offered(state, verb)).map(row)}</SettingsGroup>
+          <ServicesBar hook={hook} onOpen={setCard} local={<LocalModelsChip hook={local} onOpen={() => setCard('local')} />} />
+          <SettingsGroup>
+            {SERVICE_VERBS.filter((verb) => offered(state, verb)).flatMap((verb, _, all) => (
+              /* the library's search after the sounds and music it finds besides making them */
+              verb === all.filter((v) => v === 'music' || v === 'sfx').at(-1) ? [row(verb), <LibraryRow key="library" />] : [row(verb)]))}
+          </SettingsGroup>
         </>
       ) : null}
       <CustomServices hook={hook} adding={addCustom} />
@@ -62,6 +65,26 @@ export function ModelsSection() {
       {card === 'local' ? <LocalModelsDialog hook={local} onClose={() => setCard(null)} /> : null}
       {card === 'add' ? <AddProviderDialog onClose={() => setCard(null)} onCustom={() => { setCard(null); setAddCustom((n) => n + 1); }} /> : null}
     </SettingsPage>
+  );
+}
+
+/**
+ * OpenFilm's library searched by what is meant: not chosen like the others, said, as the search sends its words to
+ * OpenFilm's service (src/library-semantic.mjs), free and with no account.
+ */
+function LibraryRow() {
+  const t = useT();
+  return (
+    <SettingsItem
+      mark={<Library size={17} strokeWidth={1.75} />}
+      title={t('settings.models.library.title')}
+      description={t('settings.models.library.about')}
+      control={(
+        <span className="inline-flex h-9 items-center gap-2 px-3 text-[14px] text-[var(--text-muted)]">
+          <ProviderMark id="openfilm" size={15} />{t('settings.models.library.by')}
+        </span>
+      )}
+    />
   );
 }
 

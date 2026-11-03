@@ -1,6 +1,6 @@
 /**
- * Local models in Settings → Services: the service of the models that run on this computer (lib/local-models), its
- * chip second, after OpenFilm. Unlike the others it is not connected: its card lists its models by what they are for,
+ * Local services in Settings → Services: the service of the models that run on this computer (lib/local-models), its
+ * chip last, before adding one. Unlike the others it is not connected: its card lists its models by what they are for,
  * each with where it stands, in its own color: not installed (Install; its last download failed, in red), coming (how
  * far), on, or off. A model opens its
  * own page in the card: who made it, what it does, its size, memory and license, where it is used, and managing it

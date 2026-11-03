@@ -2298,10 +2298,10 @@ export const ja: Words = {
         groq: '自社チップによる超高速推論：Whisper の書き起こしと Orpheus の音声を数秒で。',
         mimo: 'Xiaomi の MiMo モデル：自然な音声合成と正確な書き起こし。中国語で特に強みがあります。',
         doubao: 'Volcano Engine 上の ByteDance の Doubao 音声モデル：正確な書き起こし。中国語で特に強みがあります。',
-    /* Settings → Services → Local models (components/settings/LocalModels) */
+    /* Settings → Services → Local services (components/settings/LocalModels) */
     local: {
       by: '提供: {who}',
-      name: 'ローカルモデル',
+      name: 'ローカルサービス',
       tagline: 'このコンピューターで動作 · 無料 · 内容は外に出ません',
       intro: 'これらのモデルはこのコンピューターにダウンロードして動かします。費用はかからず、オフラインでも使え、渡した内容はここから出ません。インストールして有効にすると、OpenFilm とエージェントが使える場面で自動的に使います。',
       kinds: { asr: '文字起こし', cutout: '背景除去' },
@@ -2390,10 +2390,11 @@ export const ja: Words = {
       choose: 'モデルを選択',
       notConnected: '未接続',
       none: 'なし',
+      library: { title: 'ライブラリ検索', about: 'OpenFilm の無料素材ライブラリ（効果音 5,000 以上、音楽 1,200 曲、トランジションなど）を意味で探します。検索語は OpenFilm のサービスに送られます（無料・アカウント不要）。オフラインではキーワードで探します。', by: 'OpenFilm · 無料' },
       about: {
         tts: '台本を読み上げ、読み上げる声を探します',
-        music: '説明からサウンドトラックを作成します。素材ライブラリにも無料の音楽が 1,200 曲あります',
-        sfx: '説明からサウンドを作成します。素材ライブラリにも無料の効果音が 5,000 以上あります',
+        music: '説明からサウンドトラックを作成します',
+        sfx: '説明からサウンドを作成します',
         asr: '話された内容を単語ごとに書き起こし、字幕にします',
         cutout: '画像の背景を取り除き、被写体だけを残す',
         image: '説明から画像を作成します',

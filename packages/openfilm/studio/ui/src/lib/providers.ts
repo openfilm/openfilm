@@ -138,7 +138,7 @@ export interface ProvidersHook {
   cancelSignIn: (id: string) => Promise<void>;
   /** who makes that kind of media: a provider id with its model, or '' (none) */
   choose: (verb: ProviderVerb, provider: string, pick?: { model?: string }) => Promise<void>;
-  /** the state asked again (what Local models makes changed) */
+  /** the state asked again (what Local services makes changed) */
   reload: () => Promise<void>;
   /** one of the person's own services added (id null) or changed; resolves whether it was kept */
   saveService: (id: string | null, fields: OwnServiceFields) => Promise<boolean>;
@@ -196,7 +196,7 @@ export function useProviders(): ProvidersHook {
     choose: async (verb, provider, pick) => { await change(verb, '/use', { method: 'PUT', json: { verb, provider: provider || null, ...pick } }); },
     saveService: (id, fields) => change(id ?? 'custom', id ? `/custom/${encodeURIComponent(id)}` : '/custom', { method: id ? 'PUT' : 'POST', json: fields }),
     removeService: async (id) => { await change(id, `/custom/${encodeURIComponent(id)}`, { method: 'DELETE' }); },
-    /* asked again: what Local models makes changed (a model came, went, or was turned on or off) */
+    /* asked again: what Local services makes changed (a model came, went, or was turned on or off) */
     reload: async () => { await call('').then(setState, () => {}); },
   };
 }
