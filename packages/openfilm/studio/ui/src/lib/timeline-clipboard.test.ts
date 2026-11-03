@@ -238,15 +238,23 @@ test('⌥-drag copies of several clips keep their spacing, together on one track
     [[['b-2', 4, null], ['c-2', 7, null]], [['a', 0, null], ['b', 2, null], ['c', 5, null]]]);
 });
 
-test('with the magnet a copy of a main-track clip pastes onto a new track right above the main track', () => {
+test('with the magnet a copy of a main-track clip pastes into the main track: at the cut nearest the playhead, what follows moving on', () => {
   const tracks = [
     track(0, [blockOf('t', 0, 0, 0, 1000)], { role: 'mg' }),
     track(1, [blockOf('a', 1, 0, 0, 2000), blockOf('b', 1, 1, 2000, 4000)], { role: 'video' }),
   ];
-  const ops = pasteEdit(clipboardItemsOf([tracks[1]!.blocks[0]!], tracks), tracks, editModelOf(tracks), 9000, null, { mode: 'place', magnet: true, linkage: true })!;
-  const out = spans(applyOps(filmOfRows(tracks) as never, ops as never) as unknown as Film).map((t) => t.map(([id, at]) => [id, at]));
-  /* even where the main track is free (past its end): the main track is only changed by putting clips in between */
-  assert.deepEqual(out, [[['t', 0]], [['a-2', 9]], [['a', 0], ['b', 2]]]);
+  const paste = (atMs: number) => {
+    const ops = pasteEdit(clipboardItemsOf([tracks[1]!.blocks[0]!], tracks), tracks, editModelOf(tracks), atMs, null, { mode: 'place', magnet: true, linkage: true })!;
+    return spans(applyOps(filmOfRows(tracks) as never, ops as never) as unknown as Film).map((t) => t.map(([id, at]) => [id, at]));
+  };
+  /* past the main track's end: right after its last clip */
+  assert.deepEqual(paste(9000), [[['t', 0]], [['a', 0], ['b', 2], ['a-2', 4]]]);
+  /* over the second half of a: after it, b moving on (and the title riding on a staying with it) */
+  assert.deepEqual(paste(1500), [[['t', 0]], [['a', 0], ['a-2', 2], ['b', 4]]]);
+  /* onto a track pointed at that is not the main one: put down there, as before */
+  const ops = pasteEdit(clipboardItemsOf([tracks[1]!.blocks[0]!], tracks), tracks, editModelOf(tracks), 1000, 'doc-0', { mode: 'place', pointed: true, magnet: true, linkage: true })!;
+  assert.deepEqual(spans(applyOps(filmOfRows(tracks) as never, ops as never) as unknown as Film).map((t) => t.map(([id, at]) => [id, at])),
+    [[['t', 0], ['a-2', 1]], [['a', 0], ['b', 2]]]);
 });
 
 test('with the magnet ⌥-drag copies onto the main track go in between, what follows moving on', () => {

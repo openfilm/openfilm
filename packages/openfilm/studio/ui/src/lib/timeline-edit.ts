@@ -717,17 +717,18 @@ export function planCloseMainGaps(model: EditModel, sw: Switches): EditPlan {
 
 /**
  * Delete clips. Without `ripple` they leave a gap (a lift), but on the main track with the magnet, which closes up;
- * with it the time they took closes on each of their tracks (a ripple delete). With linkage what rides on a deleted
- * main-track clip goes with it, and what rides on the clips after it moves with them. Clips on locked tracks stay.
+ * with it the time they took closes on each of their tracks (a ripple delete). With linkage the titles and overlays
+ * riding on a deleted main-track clip go with it (a sound stays where it is: a voice or music is never lost to a cut),
+ * and what rides on the clips after it moves with them. Clips on locked tracks stay.
  */
 export function planRemove(model: EditModel, ids: readonly string[], opts: { ripple: boolean } & Partial<Switches>): EditPlan {
   const d = draftOf(model);
   const main = mainTrackOf(model);
   const rides = opts.linkage ? ridesOf(d, main, new Set(ids)) : new Map<string, Ride>();
-  /* what rides on a deleted main-track clip goes with it (it moves and is deleted with the main track) */
+  /* the pictures riding on a deleted main-track clip go with it (they move and are deleted with the main track) */
   const deleted = new Set(ids);
   for (const [id, ride] of rides) {
-    if (!deleted.has(ride.host)) continue;
+    if (!deleted.has(ride.host) || trackAt(d, d.before.get(id)!.track)?.role === 'audio') continue;
     deleted.add(id);
     rides.delete(id);
   }

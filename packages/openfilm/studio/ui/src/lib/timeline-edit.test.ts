@@ -516,12 +516,13 @@ test('the main track is the lowest picture track; what rides on it starts over o
   assert.equal(hostOf(main, { startMs: 12_500 }), null, 'past the end of the main track nothing rides');
 });
 
-test('with the magnet a delete on the main track closes up; with linkage what rides on it goes too', () => {
+test('with the magnet a delete on the main track closes up; with linkage the pictures riding on it go too, a sound stays', () => {
   const m = filmWithMain();
   assert.deepEqual(after(m, planRemove(m, ['b'], { ripple: false, ...ON })), [
     [['logo', 5, 6]],
     [['a', 0, 4], ['c', 4, 8]],
     [['bed', 0, 12]],
+    [['sfx', 5, 6]],
   ]);
   /* without linkage the main track closes up and the rest stays */
   assert.deepEqual(after(m, planRemove(m, ['b'], { ripple: false, magnet: true, linkage: false })), [
@@ -530,11 +531,12 @@ test('with the magnet a delete on the main track closes up; with linkage what ri
     [['bed', 0, 12]],
     [['sfx', 5, 6]],
   ]);
-  /* without the magnet a gap is left; linkage still takes what rides on b */
+  /* without the magnet a gap is left; linkage still takes the title riding on b */
   assert.deepEqual(after(m, planRemove(m, ['b'], { ripple: false, magnet: false, linkage: true })), [
     [['logo', 9, 10]],
     [['a', 0, 4], ['c', 8, 12]],
     [['bed', 0, 12]],
+    [['sfx', 5, 6]],
   ]);
 });
 
