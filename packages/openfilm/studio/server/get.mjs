@@ -109,7 +109,7 @@ export const VERBS = /** @type {Record<string, VerbSpec>} */ ({
   video: {
     help: 'Make one video clip. Returns src, dur, its size and preview frames. It spends a lot: the person confirms it in Studio first (--yes when they already agreed). The same request again returns the same clip; --force makes a new one.',
     dir: 'assets/video', timeoutSec: 1200,
-    options: { out, prompt, force: {}, duration: { value: 'seconds', min: 4, max: 30, integer: true, default: 5 },
+    options: { out, prompt, force: {}, duration: { value: 'seconds', min: 2, max: 30, integer: true, default: 5 },
       'aspect-ratio': { value: 'ratio', choices: ['16:9', '9:16', '4:3', '3:4', '1:1', '21:9', '9:21', '3:2', '2:3', 'adaptive'] },
       'first-frame': { value: 'path', path: 'picture' }, 'last-frame': { value: 'path', path: 'picture' },
       'input-reference': { value: 'path', path: 'picture', repeat: true } },

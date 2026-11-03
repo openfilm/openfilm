@@ -34,6 +34,7 @@ const MODELS = {
     m('bytedance/seedance-2.5', 'Seedance 2.5'),
     m('alibaba/wan-3.0', 'Wan 3.0'),
     m('minimax/hailuo-3', 'MiniMax Hailuo 3'),
+    m('heygen/heygen-video-1', 'HeyGen Video'),
     m('kwaivgi/kling-v3.0-std', 'Kling 3.0 Standard'),
     m('kwaivgi/kling-v3.0-pro', 'Kling 3.0 Pro'),
     m('google/veo-3.1-fast', 'Veo 3.1 Fast'),
@@ -53,15 +54,18 @@ const MAX_REFS = 16;
 
 /**
  * Each video model's lengths (`seconds`, a range in whole seconds, or `only` some), shapes, whether it takes
- * reference pictures, and the size it is asked for: 720p, or the one it makes (`resolution`). Every clip has sound.
- * @type {Record<string, { name: string, seconds?: [number, number], only?: number[], ratios: string[], references: boolean, resolution?: string }>}
+ * reference pictures, and the size it is asked for: 720p, or the nearest it makes (`resolution`). Every clip has sound:
+ * asked for, or (`audio: false`) made with it unasked.
+ * @type {Record<string, { name: string, seconds?: [number, number], only?: number[], ratios: string[], references: boolean, resolution?: string, audio?: false }>}
  */
 const VIDEO = {
   'bytedance/seedance-2.0-fast': { name: 'Seedance', seconds: [4, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: true },
   'bytedance/seedance-2.0': { name: 'Seedance', seconds: [4, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: true },
   'bytedance/seedance-2.5': { name: 'Seedance', seconds: [4, 30], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: true },
-  'alibaba/wan-3.0': { name: 'Wan', seconds: [2, 30], ratios: ['16:9', '4:3', '1:1', '3:4', '9:16'], references: false },
+  /* billed 5 s at the least, however short the clip: none shorter is asked for */
+  'alibaba/wan-3.0': { name: 'Wan', seconds: [5, 30], ratios: ['16:9', '4:3', '1:1', '3:4', '9:16'], references: false },
   'minimax/hailuo-3': { name: 'Hailuo', seconds: [5, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: false, resolution: '2K' },
+  'heygen/heygen-video-1': { name: 'HeyGen', seconds: [5, 30], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: false, resolution: '768p', audio: false },
   'kwaivgi/kling-v3.0-std': { name: 'Kling', seconds: [3, 15], ratios: ['16:9', '9:16', '1:1'], references: false },
   'kwaivgi/kling-v3.0-pro': { name: 'Kling', seconds: [3, 15], ratios: ['16:9', '9:16', '1:1'], references: false },
   'google/veo-3.1-fast': { name: 'Veo', only: [4, 6, 8], ratios: ['16:9', '9:16'], references: false },
@@ -167,7 +171,7 @@ async function video(args, ctx) {
   const frame = async (/** @type {string} */ src, /** @type {'first_frame' | 'last_frame'} */ type) => ({ type: 'image_url', image_url: { url: await dataUri(src, ctx) }, frame_type: type });
   const frames = [...(first ? [await frame(first, 'first_frame')] : []), ...(last ? [await frame(last, 'last_frame')] : [])];
   const body = {
-    model, prompt, duration: seconds, resolution: spec.resolution ?? RESOLUTION, generate_audio: true,
+    model, prompt, duration: seconds, resolution: spec.resolution ?? RESOLUTION, ...(spec.audio === false ? {} : { generate_audio: true }),
     ...(aspect ? { aspect_ratio: aspect } : {}),
     ...(frames.length ? { frame_images: frames } : {}),
     ...(refs.length && !frames.length ? { input_references: await Promise.all(refs.map(async (r) => ({ type: 'image_url', image_url: { url: await dataUri(r, ctx) } }))) } : {}),
