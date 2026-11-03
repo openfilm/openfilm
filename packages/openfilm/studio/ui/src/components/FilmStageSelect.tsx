@@ -54,8 +54,6 @@ import {
   mgSize, moveTransform, rotateTransform, sameMgTransform, snapMove, type MgBox, type MgGuide, type MgTransform,
 } from '@/lib/mg-transform';
 import { compactBox, liveLookStands, transformOf } from '@/lib/stage-clip';
-import { posed, unposed, type ClipPose } from '@/lib/motion-keys';
-import { MotionPath, type MotionPathKeys } from './MotionPath';
 import {
   aspectRatio, CROP_ASPECTS, cropOfRect, cropPreviewCss, croppedCss, cropRect, draggedCrop, fitAspect, frameAabb, pannedCrop,
   positionOf, roundOf, transformOfVisible, visibleFrame, type CropAspect, type Rect,
@@ -274,13 +272,9 @@ interface ClipInfo { loc: string; id: string; kind: 'mg' | 'video'; t: MgTransfo
 /** Where a clip is before its picture's size is known: nowhere to hold it by. */
 const UNMEASURED: MgTransform = { x: 0, y: 0, scaleX: 1, scaleY: 1, rotate: 0 };
 
-/**
- * `live`: CSS the inspector shows on it, not kept yet, while film.html's style is still the one it was shown over.
- * `poseOf`: where its keyframes have its picture now; its numbers are where it shows (boxOut takes them back).
- */
+/** `live`: CSS the inspector shows on it, not kept yet, while film.html's style is still the one it was shown over. */
 function clipInfo(
   doc: FilmDoc, spans: readonly ClipSpan[], stage: { w: number; h: number }, loc: string, live?: { css: string; written: string } | null,
-  poseOf?: ((clipId: string) => ClipPose | null) | null,
 ): ClipInfo | null {
   const at = parseFilmDocLoc(loc);
   const clip = at ? doc.tracks[at.track]?.clips[at.clip] : undefined;
@@ -291,8 +285,7 @@ function clipInfo(
   const own = span?.w && span.h ? { w: span.w, h: span.h } : null;
   const style = live && live.written === (clip.style ?? '') ? live.css : clip.style ?? '';
   return {
-    loc, id: clip.id, kind, t: own ? posed(transformOf(filmSrcKind(clip.src), own, stage, clip.box), own, poseOf?.(clip.id) ?? null) : UNMEASURED,
-    box: own, crop: cropOfStyle(style, span?.look),
+    loc, id: clip.id, kind, t: own ? transformOf(filmSrcKind(clip.src), own, stage, clip.box) : UNMEASURED, box: own, crop: cropOfStyle(style, span?.look),
   };
 }
 
@@ -370,12 +363,6 @@ interface FilmStageSelectProps {
   spans: readonly ClipSpan[];
   /** Now (ms). Only its half-second bucket is looked at (see the memo below): a change re-measures the selection. */
   timeMs: number;
-  /** Where a clip's keyframes have its picture now (none: where its box is): its frame and handles are drawn there. */
-  poseOf?: (clipId: string) => ClipPose | null;
-  /** The clip in hand's pose now, as text: a change re-measures it (its keyframes move it within a half second). */
-  poseKey?: string;
-  /** The clip in hand's position keyframes: their path drawn over it. */
-  motionPath?: MotionPathKeys | null;
   playing?: boolean;
   /** Pressing the picture pauses: selecting something that moves is a contradiction. */
   onPause?: () => void;
@@ -446,7 +433,7 @@ interface FilmStageSelectProps {
 }
 
 function FilmStageSelectImpl({
-  previewRef, stage, doc, spans, timeMs, poseOf, poseKey, motionPath, playing, onPause, onSelectElement, onEditClip, linkedLocs, onSelectClips, selectRequest,
+  previewRef, stage, doc, spans, timeMs, playing, onPause, onSelectElement, onEditClip, linkedLocs, onSelectClips, selectRequest,
   clipPreviewRef, lookPreviewRef, controlRef, onTransformLayer, onTransformLayers, onEditTextInline, onGeometry, menuFor, recoveryMenu,
   onRegion, regionHint, flashBox, chat, onHoverLayer, onStartMask, pointLayer, arrowsMove = true, onDropPicture,
 }: FilmStageSelectProps) {
@@ -574,17 +561,6 @@ function FilmStageSelectImpl({
   const lockedClip = (loc: string | null | undefined): boolean => trackLockedAt(docRef.current, loc);
   const spansRef = React.useRef(spans);
   spansRef.current = spans;
-  const poseOfRef = React.useRef(poseOf);
-  poseOfRef.current = poseOf;
-  /**
-   * A clip's numbers as written to film.html's box (`clip`: its id or loc): the frame is drawn where its keyframes have
-   * it, its box is under them.
-   */
-  const boxOut = (clip: string, t: MgTransform, own: MgBox) => {
-    const at = parseFilmDocLoc(clip);
-    const id = at ? docRef.current.tracks[at.track]?.clips[at.clip]?.id : clip;
-    return compactBox(unposed(t, own, id ? poseOfRef.current?.(id) ?? null : null), own);
-  };
   /**
    * The inspector's look preview (a clip's CSS not kept yet) and film.html's style it was shown over: the frame follows
    * a crop being dragged there, and stops once film.html's style is another (kept, undone).
@@ -598,7 +574,7 @@ function FilmStageSelectImpl({
   }, [doc]);
   const infoOf = (loc: string) => {
     const live = lookLiveRef.current;
-    return clipInfo(docRef.current, spansRef.current, stage, loc, live?.clipLoc === loc ? live : null, poseOfRef.current);
+    return clipInfo(docRef.current, spansRef.current, stage, loc, live?.clipLoc === loc ? live : null);
   };
   /**
    * The clips a marquee `area` goes around (stage px), by the part of each on the canvas (a part past its edge cannot
@@ -926,7 +902,7 @@ function FilmStageSelectImpl({
     }
     syncGeomSoon();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stale, poseKey, syncGeomSoon]);
+  }, [stale, syncGeomSoon]);
   /* film.html changed (an edit, an undo, the agent): the picture follows it a moment later. A layer whose clip is not
      in the film any more (pasted layers undone) lets go */
   React.useEffect(() => {
@@ -1369,7 +1345,7 @@ function FilmStageSelectImpl({
   React.useEffect(() => {
     const next: LinkedMark[] = [];
     for (const loc of linkedLocs ?? []) {
-      const info = clipInfo(doc, spans, stage, loc, null, poseOfRef.current);
+      const info = clipInfo(doc, spans, stage, loc);
       /* only a clip on screen now: one selected elsewhere in time has nothing here to outline */
       if (info?.box && shownNow(info.id)) next.push({ loc, t: info.t, box: info.box });
     }
@@ -1391,7 +1367,7 @@ function FilmStageSelectImpl({
     }
     const only = locs[0]!;
     const held = pickedRef.current?.element;
-    const info = clipInfo(doc, spans, stage, only, null, poseOfRef.current);
+    const info = clipInfo(doc, spans, stage, only);
     /* not on screen now (the playhead elsewhere): no frame over a picture it is not in; it comes back with it */
     if (info && !shownNow(info.id)) { if (held?.isMgOuter) dropPick(); return; }
     if (held?.isMgOuter && held.clipLoc === only) return;
@@ -1411,10 +1387,8 @@ function FilmStageSelectImpl({
     clipPreviewRef.current = (clipLoc, patch) => {
       const outer = pickedRef.current?.element;
       if (!outer?.isMgOuter || outer.clipLoc !== clipLoc || !outer.mgBox || !outer.transform || !outer.clipId) return;
-      /* the inspector's numbers are the clip's own (under its keyframes): put in there, shown where they have it */
-      const pose = poseOfRef.current?.(outer.clipId) ?? null;
-      const next = patch ? posed({ ...unposed(outer.transform, outer.mgBox, pose), ...patch }, outer.mgBox, pose) : outer.transform;
-      void ask('place', { clip: outer.clipId, box: patch ? boxOut(outer.clipId, next, outer.mgBox) : null });
+      const next = patch ? { ...outer.transform, ...patch } : outer.transform;
+      void ask('place', { clip: outer.clipId, box: patch ? compactBox(next, outer.mgBox) : null });
       /* film.html's box as the preview began (kept through the preview's every step): once it changes, the preview
          is over (see syncPick) */
       if (patch && !liveBoxRef.current) liveBoxRef.current = writtenBoxOf(docRef.current, clipLoc);
@@ -1691,7 +1665,7 @@ function FilmStageSelectImpl({
       guides = r.guides;
     }
     shown = visibleFrame(next, g.box, g.crop);
-    clipPlace.push({ clip: g.clipId, box: boxOut(g.clipId, next, g.box) });
+    clipPlace.push({ clip: g.clipId, box: compactBox(next, g.box) });
     liveTRef.current = next;
     setLiveT(next);
     setLiveGuides((cur) => (sameGuides(cur, guides) ? cur : guides));
@@ -1721,7 +1695,7 @@ function FilmStageSelectImpl({
   const commitClipBox = (g: { clipLoc: string; clipId: string; box: MgBox; crop: Crop; origin: MgTransform }, t: MgTransform) => {
     holdClipAt(g, t);
     if (!onEditClip) return;
-    void onEditClip([{ loc: g.clipLoc, prop: 'box', value: boxOut(g.clipId, t, g.box) }]).then((failed) => {
+    void onEditClip([{ loc: g.clipLoc, prop: 'box', value: compactBox(t, g.box) }]).then((failed) => {
       if (!failed) return;
       clipPlace.push({ clip: g.clipId, box: null });
       holdClipAt(g, g.origin);
@@ -1767,7 +1741,7 @@ function FilmStageSelectImpl({
       clipLoc: outer.clipLoc, clipId: outer.clipId, box: outer.mgBox, crop: infoOf(outer.clipLoc)?.crop ?? NO_CROP, origin, now: origin, timer: null,
     };
     cur.now = moveTransform(cur.now, dx, dy);
-    clipPlace.push({ clip: cur.clipId, box: boxOut(cur.clipId, cur.now, cur.box) });
+    clipPlace.push({ clip: cur.clipId, box: compactBox(cur.now, cur.box) });
     liveTRef.current = cur.now;
     setLiveT(cur.now);
     if (cur.timer) clearTimeout(cur.timer);
@@ -1786,7 +1760,7 @@ function FilmStageSelectImpl({
     const moved = n.items.map((it) => ({ loc: it.loc, box: it.box, t: { ...it.t0, x: it.t0.x + n.dx, y: it.t0.y + n.dy } }));
     setLinkedMarks((marks) => marks.map((m) => moved.find((it) => it.loc === m.loc) ? { ...m, t: moved.find((it) => it.loc === m.loc)!.t } : m));
     setClipsMoved(null);
-    void clipsPlace.idle().then(() => onEditClip?.(moved.map((it) => ({ loc: it.loc, prop: 'box' as const, value: boxOut(it.loc, it.t, it.box) }))));
+    void clipsPlace.idle().then(() => onEditClip?.(moved.map((it) => ({ loc: it.loc, prop: 'box' as const, value: compactBox(it.t, it.box) }))));
   };
   const nudgeGroup = (e: KeyboardEvent): boolean => {
     const locs = linkedLocs ?? [];
@@ -1801,7 +1775,7 @@ function FilmStageSelectImpl({
     n.dy += e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
     const moved = n.items.map((it) => ({ loc: it.loc, box: it.box, t: { ...it.t0, x: it.t0.x + n.dx, y: it.t0.y + n.dy } }));
     setClipsMoved(moved);
-    clipsPlace.push(n.items.map((it, i) => ({ clip: it.id, box: boxOut(it.id, moved[i]!.t, it.box) })));
+    clipsPlace.push(n.items.map((it, i) => ({ clip: it.id, box: compactBox(moved[i]!.t, it.box) })));
     if (n.timer) clearTimeout(n.timer);
     n.timer = setTimeout(flushGroupNudge, NUDGE_WRITE_MS);
     groupNudge.current = n;
@@ -2306,17 +2280,15 @@ function FilmStageSelectImpl({
     }
     if (!picked.element) { reportGeometry(null); return; }
     if (mgFrame && heldT && picked.element.mgBox) {
-      /* its own box, under what its keyframes do to it (the inspector's Transform shows those) */
-      const own = picked.element.clipId ? unposed(heldT, picked.element.mgBox, poseOfRef.current?.(picked.element.clipId) ?? null) : heldT;
-      const size = mgSize(own, picked.element.mgBox);
+      const size = mgSize(heldT, picked.element.mgBox);
       reportGeometry({
         kind: 'clip',
         loc: picked.element.clipLoc ?? null,
-        x: round((picked.element.mgBox.x ?? 0) + own.x),
-        y: round((picked.element.mgBox.y ?? 0) + own.y),
+        x: round((picked.element.mgBox.x ?? 0) + heldT.x),
+        y: round((picked.element.mgBox.y ?? 0) + heldT.y),
         w: round(size.w),
         h: round(size.h),
-        r: round(own.rotate || 0),
+        r: round(heldT.rotate || 0),
         unit: 1,
         box: picked.element.mgBox,
         stage,
@@ -2399,7 +2371,7 @@ function FilmStageSelectImpl({
       /* the outlines stay where they were let go (film.html follows a moment later) */
       setLinkedMarks((marks) => marks.map((m) => moved.find((it) => it.loc === m.loc) ? { ...m, t: moved.find((it) => it.loc === m.loc)!.t } : m));
       setClipsMoved(null);
-      void clipsPlace.idle().then(() => onEditClip?.(moved.map((it) => ({ loc: it.loc, prop: 'box' as const, value: boxOut(it.loc, it.t, it.box) })))).then((failed) => {
+      void clipsPlace.idle().then(() => onEditClip?.(moved.map((it) => ({ loc: it.loc, prop: 'box' as const, value: compactBox(it.t, it.box) })))).then((failed) => {
         if (!failed) return;
         clipsPlace.push(cd.items.map((it) => ({ clip: it.id, box: null })));
         setLinkedMarks((marks) => marks.map((m) => cd.items.find((it) => it.loc === m.loc) ? { ...m, t: cd.items.find((it) => it.loc === m.loc)!.t0 } : m));
@@ -2581,7 +2553,7 @@ function FilmStageSelectImpl({
   const groupStretch = Boolean(groupMarks?.every((m) => infoOf(m.loc)?.kind === 'video'));
   const groupBox = groupMarks ? unionRect(groupMarks.map((m) => clientOf(frameAabb(visibleFrame(m.t, m.box, infoOf(m.loc)?.crop ?? NO_CROP))))) : null;
   /* the clip of a pill hovered in the app's chat, where it is drawn now */
-  const chatClip = chat?.clipLoc ? clipInfo(doc, spans, stage, chat.clipLoc, null, poseOfRef.current) : null;
+  const chatClip = chat?.clipLoc ? clipInfo(doc, spans, stage, chat.clipLoc) : null;
 
   /* ── what is in hand, for the references made of it (FilmStageControl.picked) ── */
   const t = useT();
@@ -2933,7 +2905,7 @@ function FilmStageSelectImpl({
           }
           const moved = d.items.map((it) => ({ loc: it.loc, box: it.box, t: groupDragged(d, it.t0, it.box) }));
           setClipsMoved(moved);
-          clipsPlace.push(d.items.map((it, i) => ({ clip: it.id, box: boxOut(it.id, moved[i]!.t, it.box) })));
+          clipsPlace.push(d.items.map((it, i) => ({ clip: it.id, box: compactBox(moved[i]!.t, it.box) })));
           return;
         }
         if (layersPull.current) {
@@ -3080,13 +3052,6 @@ function FilmStageSelectImpl({
         ) : null}
         {measure && picked ? <Measures lines={measure.lines} other={measure.other} viewScale={vsNow} /> : null}
         {hint ? <GestureHint x={hint.x} y={hint.y} text={hint.text} /> : null}
-        {/* the path its position keyframes take the clip in hand along, about its own middle */}
-        {motionPath && !playing && !cropping && mgFrame && heldT && picked?.element?.mgBox && picked.element.clipId === motionPath.clipId ? (() => {
-          const box = picked.element.mgBox;
-          const own = unposed(heldT, box, poseOfRef.current?.(motionPath.clipId) ?? null);
-          const center: [number, number] = [(box.x ?? 0) + own.x + (box.w * own.scaleX) / 2, (box.y ?? 0) + own.y + (box.h * own.scaleY) / 2];
-          return <MotionPath path={motionPath} center={center} viewScale={vsNow} />;
-        })() : null}
         {/* what is in hand and not in the picture now (see syncPick) has no frame */}
         {picked && !pickLost && !(multi && !drawnItems(multi).length) ? (
           <>
@@ -3154,8 +3119,6 @@ export const FilmStageSelect = React.memo(FilmStageSelectImpl, (a, b) => (
   && a.onEditClip === b.onEditClip
   && Boolean(a.playing) === Boolean(b.playing)
   && staleBucket(a.timeMs) === staleBucket(b.timeMs)
-  && a.poseKey === b.poseKey
-  && a.motionPath === b.motionPath
   /* by content: the list is rebuilt with every film.html change while the selection is the same clips */
   && sameLocs(a.linkedLocs, b.linkedLocs)
   && a.selectRequest?.seq === b.selectRequest?.seq

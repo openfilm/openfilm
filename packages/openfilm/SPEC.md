@@ -79,28 +79,15 @@ where, and CSS that says how each looks. A page draws a shot.
     look (`opacity`, `filter`, `clip-path`…), never what places it. On every picture a host sets `--clip-length`, how
     long the clip is on the film (`4.2s`), so a way out can be timed from its end:
     `animation: out .6s ease-in calc(var(--clip-length) - .6s) both`. A `transition`, whose progress is history, is an
-    error. A host registers the effects' custom properties, so a `filter` that reads them eases each by keyframes of
-    its own: `--fx-blur` and `--fx-glow` (lengths), `--fx-brightness`, `--fx-contrast`, `--fx-saturate`,
-    `--fx-grayscale` and `--fx-invert` (percentages), `--fx-hue` (an angle), as in `filter: blur(var(--fx-blur, 0px))`; and
-    `--fx-trim` (a number, 0–100: how much of a stroke is drawn, for its `stroke-dashoffset`). A picture that sets or
-    animates `--fx-z` (a length toward the viewer), `--fx-rx` or `--fx-ry` (its turn about its X and Y axes) is in 3D:
-    the host places it so about its center, under the film's camera (a perspective of 1.389 times the stage's width,
-    looking at its middle), which the film has once any picture of it is in 3D. `--fx-ax` and `--fx-ay` (lengths) are
-    its anchor point, stage px from its box's middle: its animation's `rotate` and `scale`, and its turns in 3D, are
-    about there.
+    error.
   - `overrides` are the person's changes made in Studio, as JSON, a list of entries. An entry with `at` (a CSS
     selector), on a page clip only, tweaks an element of the page, applied by the host after each frame: optional `n`
     (which match, from 1), `t` (translate px), `s` (scale), `r` (rotate degrees) as the independent CSS transform
     properties so they compose with the page's own animation, `style` (CSS properties, camelCase or custom
-    `--name`, applied with priority; an `animation` there plays the film's own `@keyframes`, which the host puts in
-    the page, on the page's time like the page's own animations), `text`
+    `--name`, applied with priority), `text`
     (replaces the element's own text: all of it when it has no child elements or only `<br>`s, a line break in `text`
     being a `<br>`; with other inline children, its first run of text, the children kept), `lock` (`true`: an editor keeps the element from being selected or moved; it changes
-    nothing in the picture), `split` (its words animated part by part: `{ "by": "char" | "word" | "line",
-    "animation": "rise .5s ease-out both", "stagger": 0.04, "start": 0, "order": "forward" | "reverse" | "center" |
-    "random" }`, each character, word or line wrapped by the host and given `animation`, the film's own `@keyframes`,
-    starting `start` plus its turn in `order` times `stagger` seconds into the page). An entry without `at`, at most
-    one, on any clip, is the clip's own: `fade: [in, out]`,
+    nothing in the picture). An entry without `at`, at most one, on any clip, is the clip's own: `fade: [in, out]`,
     seconds (0 or more, to the millisecond, together no longer than the clip): its picture's opacity and its sound's
     gain ramp linearly from 0 to 1 over its first `in` seconds and from 1 to 0 over its last `out` seconds, times its
     own opacity and volume (as its animation has its opacity at that moment).

@@ -5,7 +5,7 @@
  * no clock, nothing but the film's value.
  */
 import { FILM_FILE, clipFade, clipIdFor, clipKind, clipSpeed, kindOf } from '../../src/film-doc.mjs';
-import { KEYED_PROPS, animationsOf, motionName, readMotion, shiftMotion, withAnimations, writeMotion } from '../../src/clip-motion.mjs';
+import { MOTION_PROPS, animationsOf, motionName, readMotion, shiftMotion, withAnimations, writeMotion } from '../../src/clip-motion.mjs';
 
 /** @typedef {{ src: string, id: string, [field: string]: unknown }} Clip */
 /** @typedef {{ clips: Clip[], locked?: boolean, hidden?: boolean, muted?: boolean }} Track */
@@ -272,7 +272,7 @@ export const CLIP_LENGTH = '--clip-length';
 function splitMotion(/** @type {FilmValue} */ value, /** @type {Clip} */ clip, /** @type {Clip} */ right) {
   const motion = readMotion(/** @type {{ id: string, style?: string }} */ (clip), value.keyframes);
   if (!Object.keys(motion).length) return;
-  const own = new Set(KEYED_PROPS.map((p) => motionName(clip.id, p)));
+  const own = new Set(MOTION_PROPS.map((p) => motionName(clip.id, p)));
   const style = withAnimations(/** @type {string | undefined} */ (right.style), animationsOf(/** @type {string | undefined} */ (right.style)).filter((e) => !own.has(e.split(/\s+/)[0])));
   const shifted = shiftMotion(motion, -(Number(right.at ?? 0) - Number(clip.at ?? 0)));
   const written = writeMotion({ id: right.id, style }, shifted);
@@ -287,8 +287,7 @@ function splitMotion(/** @type {FilmValue} */ value, /** @type {Clip} */ clip, /
  */
 function ownMotion(/** @type {FilmValue} */ value) {
   if (!value.keyframes) return;
-  /* a clip's own: its properties', and its mask's (studio/ui lib/mask-motion: a stop a frame) */
-  const own = new RegExp(`^(.+)--(${[...KEYED_PROPS, 'mask'].join('|')})$`);
+  const own = /^(.+)--(translate|scale|rotate|opacity)$/;
   const used = new Set();
   for (const clip of value.tracks.flatMap((t) => t.clips)) {
     const entries = animationsOf(/** @type {string | undefined} */ (clip.style));
@@ -304,34 +303,9 @@ function ownMotion(/** @type {FilmValue} */ value) {
       return [mine, ...rest].join(' ');
     });
     if (changed) clip.style = withAnimations(/** @type {string | undefined} */ (clip.style), next);
-    /* its page's elements' keyframes (`<clip id>--<element>--<property>`, an override's animation): its own too */
-    const overrides = /** @type {{ at?: string, style?: Record<string, unknown> }[] | undefined} */ (clip.overrides);
-    if (!Array.isArray(overrides)) continue;
-    let tweaked = false;
-    /* its elements' words animated part by part play a preset (`motion-text-…`): it stays while they do */
-    for (const o of overrides) {
-      const split = /** @type {{ split?: { animation?: unknown } }} */ (o)?.split;
-      if (typeof split?.animation === 'string') for (const e of split.animation.split(',')) used.add(e.trim().split(/\s+/)[0]);
-    }
-    const list = overrides.map((o) => {
-      const anim = o?.at !== undefined ? o.style?.animation : undefined;
-      if (typeof anim !== 'string') return o;
-      const entries = anim.split(',').map((e) => {
-        const [name, ...rest] = e.trim().split(/\s+/);
-        const m = new RegExp(`^(.+)--(e[0-9a-z]+--(?:${[...KEYED_PROPS, 'mask'].join('|')}))$`).exec(name);
-        if (!m || m[1] === clip.id || value.keyframes?.[name] == null) { used.add(name); return e.trim(); }
-        const mine = `${clip.id}--${m[2]}`;
-        /** @type {Record<string, string>} */ (value.keyframes)[mine] ??= /** @type {Record<string, string>} */ (value.keyframes)[name];
-        used.add(mine);
-        tweaked = true;
-        return [mine, ...rest].join(' ');
-      });
-      return { ...o, style: { ...o.style, animation: entries.join(', ') } };
-    });
-    if (tweaked) setField(clip, 'overrides', /** @type {PropValue} */ (/** @type {unknown} */ (list)));
   }
   /* Studio's own (a clip's keyframes, the library's presets) go when nothing moves by them */
-  for (const name of Object.keys(value.keyframes)) if ((own.test(name) || /^motion-(in|out|loop|text)-/.test(name)) && !used.has(name)) delete value.keyframes[name];
+  for (const name of Object.keys(value.keyframes)) if ((own.test(name) || /^motion-(in|out|loop)-/.test(name)) && !used.has(name)) delete value.keyframes[name];
 }
 
 function fitClipLengths(/** @type {FilmValue} */ value) {
