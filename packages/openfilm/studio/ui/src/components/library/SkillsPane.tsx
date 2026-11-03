@@ -1,13 +1,15 @@
 /**
  * The library's skills, in the drawer: what an agent takes up when making a film. The side bar picks the installed
- * ones (all of them, the person's own, OpenFilm's, the agents' own) or OpenFilm's still to install (Discover).
+ * ones (all, the person's own, OpenFilm's system skills, the community's, the agents' own) or OpenFilm's still to
+ * install (Discover).
  *
  * Installed, each skill is a line: its mark (its cover, else its icon), its title, under it its uid, owner/name
- * (`openfilm/keynote`, `river/keynote`: two of a name are told apart by it), and its switch: on, agents take it up when it fits; off, no agent gets it. A click opens its page (SkillPage). The lines
- * are in parts by whose they are, each headed with its count where more than one part is shown: OpenFilm's system
- * skills (how a film is made, its media, its canvas, in the order agents are given them), the community's installed,
- * the person's own (theirs, and this project's), then each agent's own (off until let in). Import is beside the search
- * (LibraryDrawer). Discover is a gallery of tiles to browse: cover, title, uid, Install.
+ * (`openfilm/keynote`, `river/keynote`: two of a name are told apart by it), and its switch: on, agents take it up when
+ * it fits; off, no agent gets it. A click opens its page (SkillPage). All of them are in parts in the side bar's order,
+ * each headed with its count: the person's own (theirs, and this project's), OpenFilm's system skills (how a film is
+ * made, its media, its canvas, in the order agents are given them), the community's installed, then each agent's own
+ * (off until let in). Import is beside the search (LibraryDrawer). Discover is a gallery of tiles to browse: cover,
+ * title, uid, Install.
  */
 import React from 'react';
 import { Plus } from 'lucide-react';
@@ -20,7 +22,7 @@ import { SettingsSwitch } from '../settings/ui';
 /** An official one not installed is in the catalog only; the person's own and a project's are installed already. */
 const installedOf = (skill: SkillEntry) => skill.installed !== false;
 
-export type SkillsLine = 'all' | 'mine' | 'openfilm' | 'agents' | 'discover';
+export type SkillsLine = 'all' | 'mine' | 'system' | 'community' | 'agents' | 'discover';
 
 /** One of an agent's own skills, and whether OpenFilm lets it in. */
 type AgentSkill = { name: string; description: string; allowed: boolean };
@@ -44,15 +46,15 @@ export function SkillsPane({ line, query, projectId, opened, onOpen }: {
     return () => { live = false; stop(); };
   }, [projectId]);
 
-  const shows = (what: 'mine' | 'openfilm' | 'agents') => line === 'all' || line === what;
+  const shows = (what: 'mine' | 'system' | 'community' | 'agents') => line === 'all' || line === what;
   const agents = useAgentSkills(shows('agents'));
   const q = query.trim().toLowerCase();
   const found = skills
     .filter((k) => !q || [words(k).title, words(k).summary, k.name, k.uid].some((w) => w?.toLowerCase().includes(q)))
     .sort(byOrder);
   /* OpenFilm's own in the order agents are given them, as the API lists them */
-  const system = shows('openfilm') ? skills.filter((k) => k.core && found.includes(k)) : [];
-  const community = shows('openfilm') ? found.filter((k) => !k.core && k.source === 'official' && installedOf(k)) : [];
+  const system = shows('system') ? skills.filter((k) => k.core && found.includes(k)) : [];
+  const community = shows('community') ? found.filter((k) => !k.core && k.source === 'official' && installedOf(k)) : [];
   const mine = shows('mine') ? found.filter((k) => k.source !== 'official') : [];
   const toInstall = line === 'discover' ? found.filter((k) => k.source === 'official' && !installedOf(k)) : [];
   const own = agents.groups
@@ -89,9 +91,9 @@ export function SkillsPane({ line, query, projectId, opened, onOpen }: {
       label={t(skill.off ? 'gallery.turnOn' : 'gallery.turnOff').replace('{name}', words(skill).title)} onChange={(on) => turn(skill, on)} />
   );
   const parts: Array<{ key: string; title: string; lines: React.ReactNode[]; empty?: string }> = [
-    { key: 'system', title: t('assetDrawer.skillsSystem'), lines: system.map(lineOf) },
-    { key: 'community', title: t('assetDrawer.skillsCommunity'), lines: community.map(lineOf), ...(line === 'openfilm' && !q ? { empty: t('assetDrawer.noCommunitySkills') } : {}) },
     { key: 'mine', title: t('assetDrawer.skillsMine'), lines: mine.map(lineOf), ...(line === 'mine' && !q ? { empty: t('assetDrawer.noMineSkills') } : {}) },
+    { key: 'system', title: t('assetDrawer.skillsSystem'), lines: system.map(lineOf) },
+    { key: 'community', title: t('assetDrawer.skillsCommunity'), lines: community.map(lineOf), ...(line === 'community' && !q ? { empty: t('assetDrawer.noCommunitySkills') } : {}) },
     ...own.map((g) => ({
       key: g.id, title: g.name,
       lines: g.skills.map((k) => <SkillLine key={k.name} mark={<SkillMark skill={{}} />} title={k.name} under={k.description} tip={k.description} on={k.allowed}

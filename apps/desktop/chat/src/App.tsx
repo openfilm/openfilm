@@ -6,7 +6,7 @@
  * (lib/local-agent-run's saved turns).
  */
 import React from 'react';
-import { ArrowDown, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, ShieldQuestion, Square, X } from 'lucide-react';
+import { ArrowDown, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, ShieldQuestion, Square } from 'lucide-react';
 import { buildPromptDisplay, type Turn } from '@openfilm/shared';
 import { useT, useUiLocale } from '@/i18n';
 import { ConversationBar } from '@/components/ConversationSessionBar';
@@ -60,6 +60,7 @@ import type { TurnFileChanges } from '@/lib/file-changes';
 import { readBalance, type TurnBalance } from '@/lib/balance';
 import { BalanceNotice } from '@/components/BalanceNotice';
 import { CopyDiagnostics } from '@/components/CopyDiagnostics';
+import { Notice, type NoticeTone } from '@/components/NoticeCard';
 import { accountName, accountTrouble } from '@/lib/account-trouble';
 import { accountModel, accountModelOf, routeWithoutKey } from '@/lib/route-without-key';
 import { keptNote, readStudioFilm } from '@/lib/studio-film';
@@ -128,14 +129,19 @@ export function App({ initialProject, initialSelection, initialFfmpeg }: {
   /* the project's chat record, read from its folder before its conversation shows */
   const chatReady = useProjectChat(project);
   const ffState = typeof ffmpeg === 'object' && ffmpeg ? ffmpeg : null;
+  /* what Studio and its tools tell, as notices on the composer: each closed stays closed for what it said */
+  const [closed, setClosed] = React.useState<ReadonlySet<string>>(() => new Set());
+  const notice = (key: string, tone: NoticeTone, text: React.ReactNode, closable = true) => (closed.has(key) ? null : (
+    <Notice key={key} tone={tone} {...(closable ? { onClose: () => setClosed((set) => new Set(set).add(key)) } : {})}>{text}</Notice>
+  ));
   const banners = (
     <>
-      {studioFailed ? <Banner tone="error">{t('banner.studioFailed').replace('{error}', studioFailed)}</Banner> : null}
-      {ffmpeg === false ? <Banner>{t('banner.ffmpegMissing')} <code className="font-mono">{navigator.platform.startsWith('Win') ? 'winget install ffmpeg' : 'brew install ffmpeg'}</code></Banner> : null}
-      {ffState?.state === 'downloading' ? <Banner>{t('banner.ffmpegDownloading').replace('{n}', String(Math.round((ffState.progress ?? 0) * 100)))}</Banner> : null}
-      {ffState?.state === 'failed' ? <Banner tone="error">{t('banner.ffmpegFailed').replace('{error}', ffState.message ?? '')}</Banner> : null}
-      {browser?.state === 'downloading' ? <Banner>{t('banner.browserDownloading')}</Banner> : null}
-      {browser?.state === 'failed' ? <Banner tone="error">{t('banner.browserFailed').replace('{error}', browser.message ?? '')}</Banner> : null}
+      {studioFailed ? notice(`studio:${studioFailed}`, 'error', t('banner.studioFailed').replace('{error}', studioFailed)) : null}
+      {ffmpeg === false ? notice('ffmpeg:missing', 'warn', <>{t('banner.ffmpegMissing')} <code className="font-mono">{navigator.platform.startsWith('Win') ? 'winget install ffmpeg' : 'brew install ffmpeg'}</code></>) : null}
+      {ffState?.state === 'downloading' ? notice('ffmpeg:downloading', 'info', t('banner.ffmpegDownloading').replace('{n}', String(Math.round((ffState.progress ?? 0) * 100)))) : null}
+      {ffState?.state === 'failed' ? notice(`ffmpeg:${ffState.message ?? ''}`, 'error', t('banner.ffmpegFailed').replace('{error}', ffState.message ?? '')) : null}
+      {browser?.state === 'downloading' ? notice('browser:downloading', 'info', t('banner.browserDownloading')) : null}
+      {browser?.state === 'failed' ? notice(`browser:${browser.message ?? ''}`, 'error', t('banner.browserFailed').replace('{error}', browser.message ?? '')) : null}
     </>
   );
 
@@ -153,7 +159,12 @@ export function App({ initialProject, initialSelection, initialFfmpeg }: {
       <div className="flex min-h-0 flex-1 flex-col">
         {project && chatReady
           ? <ChatPane key={`${project.id}:${project.path}`} project={project} banners={banners} selection={selection && selection.projectId === project.id ? selection : null} assetsOpen={assetsOpen} />
-          : <aside className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden bg-[var(--dock-pane)]">{banners}<Loader2 size={16} className="animate-spin text-[var(--text-faint)]" /></aside>}
+          : (
+            <aside className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--dock-pane)]">
+              <div className="flex flex-1 items-center justify-center"><Loader2 size={16} className="animate-spin text-[var(--text-faint)]" /></div>
+              <div className="flex shrink-0 flex-col gap-2 px-4 pb-3 empty:hidden">{banners}</div>
+            </aside>
+          )}
       </div>
     </div>
   );
@@ -325,6 +336,9 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   /** the conversation whose message waits for its turn to end (an agent that cannot take one mid-turn) */
   const [queued, setQueued] = React.useState<string | null>(null);
   const [followUpError, setFollowUpError] = React.useState<string | null>(null);
+  /* the notices on the composer closed here (NoticeCard): each stays closed for what it said */
+  const [closed, setClosed] = React.useState<ReadonlySet<string>>(() => new Set());
+  const close = (key: string) => setClosed((set) => new Set(set).add(key));
   const composerFiles = useDesktopAttachments(project.path);
   /* a file of the message being written, opened to look at */
   const [openedFile, setOpenedFile] = React.useState<AttachmentPreviewItem | null>(null);
@@ -826,8 +840,10 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   };
   const undoNow = React.useRef(undoTurn);
   undoNow.current = undoTurn;
-  /* the last turn's Undo, for the conversation shown and none running */
-  const onUndo = React.useMemo(() => (active ? null : (entry: ProjectVersion) => undoNow.current(entry)), [active]);
+  /* the last turn's Undo, for the conversation shown and none running: asked on the composer first */
+  const [undoAsk, setUndoAsk] = React.useState<ProjectVersion | null>(null);
+  const onUndo = React.useMemo(() => (active ? null : (entry: ProjectVersion) => setUndoAsk(entry)), [active]);
+  React.useEffect(() => { if (active) setUndoAsk(null); }, [active]);
 
   function submitFollowUp(): void {
     if (!followUpFilled) return;
@@ -972,21 +988,6 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
 
   const editComposerCard = (
     <div className="flex flex-col gap-1">
-      {/* the agent this conversation used cannot be used now: the next message goes to the one picked below */}
-      {agentWas ? (
-        <div className="flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-[12px] text-[var(--text-muted)]">
-          <span className="min-w-0 flex-1">{t('composer.agentWas').replace('{name}', wasName)}</span>
-        </div>
-      ) : null}
-      {contextFull ? (
-        <div className="flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] py-1.5 pl-3 pr-1.5 text-[12px] text-[var(--text-muted)]">
-          <span className="min-w-0 flex-1">{t('composer.contextFull')}</span>
-          <button type="button" onClick={onNewSession}
-            className="h-6 shrink-0 rounded-[6px] px-2 text-[12px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)]">{t('composer.contextFullNew')}</button>
-          <button type="button" onClick={() => setContextNoticeOff(sessionId)} aria-label={t('project.close')}
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"><X size={12} /></button>
-        </div>
-      ) : null}
       <div
         /* a file from the disk dropped on the card is brought along, a pill where it was let go (on the words) or at
            the cursor; Studio's things dropped on it become pills too */
@@ -1112,7 +1113,6 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
             {/* with the assets open only the composer shows, at the bottom: the drawer above it is Studio's, and the two
                 read as one pane */}
             <aside className={`relative flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--dock-pane)] ${assetsOpen ? 'mt-auto shrink-0' : 'flex-1'}`}>
-              {assetsOpen ? null : banners}
               <div className={`relative min-h-0 min-w-0 flex-1 flex-col ${assetsOpen ? 'hidden' : 'flex'}`}>
                 <ConversationBar
                   sessions={shownSessions}
@@ -1173,6 +1173,9 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
 
               <div ref={composerBlockRef} className={`relative flex shrink-0 flex-col px-4 pb-1.5 ${assetsOpen ? 'pt-2' : ''}`}>
                 <div className="flex flex-col gap-2">
+                  {/* what is said apart from the conversation, each a notice on the composer (NoticeCard): Studio's
+                      own trouble, the asks waiting on the person, then this conversation's */}
+                  {assetsOpen ? null : banners}
                   {spendAsk ? (
                     <ComposerCard role="alertdialog" icon={<Coins size={14} />} title={spendAsk.title}
                       body={spendAsk.body ? <span className="break-words">{spendAsk.body}</span> : undefined}>
@@ -1214,39 +1217,41 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
                       </CardActions>
                     </ComposerCard>
                   ) : null}
-                  {turnError ? (
-                    <p role="alert" className="text-xs text-[var(--err)]">
-                      {keyless ? t(onAccount ? 'composer.routeNoKey' : 'composer.routeNoKeyNoAccount') : turnError}{' '}
-                      {onAccount ? (
-                        <span className="text-[var(--text-muted)]">
-                          {onAccountPicked ? `${t('composer.accountModelPicked').replace('{model}', onAccountPicked.name)} ` : (
-                            <><button type="button" onClick={pickAccountModel} className="underline underline-offset-2 hover:text-[var(--text)]">
-                              {t('composer.useAccountModel').replace('{model}', onAccount.name)}
-                            </button>{' '}</>
-                          )}
-                        </span>
-                      ) : null}
-                      {/* failed for its account: whose it is, and Settings → Agents to switch it */}
-                      {switchFor ? (
-                        <span className="text-[var(--text-muted)]">
-                          {switchFor.who ? `${t('composer.signedInAs').replace('{account}', switchFor.who)} ` : null}
-                          <button type="button" onClick={() => desktopBridge()?.openSettings?.('agents')} className="underline underline-offset-2 hover:text-[var(--text)]">
-                            {t('composer.switchAccount')}
-                          </button>{' '}
-                        </span>
-                      ) : null}
-                      {/* what to send when it keeps failing */}
-                      <span className="text-[var(--text-muted)]"><CopyDiagnostics /></span>
-                    </p>
+                  {undoAsk ? (
+                    <Notice tone="warn" role="alertdialog" title={t('undo.title')} onClose={() => setUndoAsk(null)}
+                      actions={<>
+                        <CardButton weight="quiet" onClick={() => setUndoAsk(null)}>{t('undo.cancel')}</CardButton>
+                        <CardButton weight="danger" onClick={() => { const entry = undoAsk; setUndoAsk(null); void undoNow.current(entry); }}>{t('undo.confirm')}</CardButton>
+                      </>}>
+                      {t('undo.description')}
+                    </Notice>
                   ) : null}
-                  {localTurn?.state.balance ? <BalanceNotice balance={localTurn.state.balance} /> : null}
-                  {followUpError && <p className="text-xs text-[var(--err)]">{followUpError}</p>}
+                  {turnError && !closed.has(`error:${sessionId}:${turnError}`) ? (
+                    <Notice tone="error" below onClose={() => close(`error:${sessionId}:${turnError}`)}
+                      actions={<>
+                        {/* what to send when it keeps failing */}
+                        <CopyDiagnostics />
+                        {/* failed for its account: Settings → Agents to switch it */}
+                        {switchFor ? <CardButton weight="secondary" onClick={() => desktopBridge()?.openSettings?.('agents')}>{t('composer.switchAccount')}</CardButton> : null}
+                        {onAccount && !onAccountPicked ? <CardButton weight="primary" onClick={pickAccountModel}>{t('composer.useAccountModel').replace('{model}', onAccount.name)}</CardButton> : null}
+                      </>}>
+                      {keyless ? t(onAccount ? 'composer.routeNoKey' : 'composer.routeNoKeyNoAccount') : turnError}
+                      {onAccountPicked ? ` ${t('composer.accountModelPicked').replace('{model}', onAccountPicked.name)}` : null}
+                      {switchFor?.who ? ` ${t('composer.signedInAs').replace('{account}', switchFor.who)}` : null}
+                    </Notice>
+                  ) : null}
+                  {localTurn?.state.balance && !closed.has(`balance:${sessionId}`) ? <BalanceNotice balance={localTurn.state.balance} onClose={() => close(`balance:${sessionId}`)} /> : null}
+                  {followUpError ? <Notice tone="error" onClose={() => setFollowUpError(null)}>{followUpError}</Notice> : null}
                   {queued === sessionId && active ? (
-                    <p role="status" className="flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
-                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent)]" />
-                      <span className="min-w-0 flex-1">{t('composer.queued')}</span>
-                      <button type="button" onClick={() => setQueued(null)} className="shrink-0 underline underline-offset-2 hover:text-[var(--text)]">{t('composer.queuedCancel')}</button>
-                    </p>
+                    <Notice actions={<CardButton weight="quiet" onClick={() => setQueued(null)}>{t('composer.queuedCancel')}</CardButton>}>{t('composer.queued')}</Notice>
+                  ) : null}
+                  {/* the agent this conversation used cannot be used now: the next message goes to the one picked below */}
+                  {agentWas && !closed.has(`was:${sessionId}`) ? (
+                    <Notice onClose={() => close(`was:${sessionId}`)}>{t('composer.agentWas').replace('{name}', wasName)}</Notice>
+                  ) : null}
+                  {contextFull ? (
+                    <Notice onClose={() => setContextNoticeOff(sessionId)}
+                      actions={<CardButton weight="secondary" onClick={onNewSession}>{t('composer.contextFullNew')}</CardButton>}>{t('composer.contextFull')}</Notice>
                   ) : null}
                   {editComposerCard}
                 </div>
@@ -1265,11 +1270,3 @@ function LiveConversation({ store, ...rest }: { store: LocalTranscriptStore } & 
   return <ProjectConversation {...rest} liveTranscript={transcript} />;
 }
 
-function Banner({ tone = 'plain', action, children }: { tone?: 'plain' | 'error'; action?: { label: string; onClick: () => void }; children: React.ReactNode }) {
-  return (
-    <div className={`flex shrink-0 items-center gap-2 border-b px-3 py-2 text-[12px] leading-snug ${tone === 'error' ? 'border-[color-mix(in_srgb,var(--err)_25%,transparent)] text-[var(--err)]' : 'border-[var(--border)] text-[var(--text-muted)]'}`}>
-      <span className="min-w-0 flex-1">{children}</span>
-      {action ? <CardButton weight="secondary" className="h-6 px-2" onClick={action.onClick}>{action.label}</CardButton> : null}
-    </div>
-  );
-}

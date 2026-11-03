@@ -29,9 +29,9 @@ import { SourceBadge, SourceChips, sourcesIn, type Source } from './SourceChips'
 
 type Category = 'media' | 'skill' | 'voice' | LibraryCategory;
 /* the installed skills by whose they are (SkillsPane), and the words for each */
-const SKILL_LINES = ['openfilm', 'mine', 'agents'] as const;
+const SKILL_LINES = ['all', 'mine', 'system', 'community', 'agents'] as const;
 const SKILL_LINE_WORDS: Record<(typeof SKILL_LINES)[number], string> = {
-  openfilm: 'assetDrawer.skillsOpenFilm', mine: 'assetDrawer.skillsMine', agents: 'assetDrawer.skillsAgents',
+  all: 'assetDrawer.all', mine: 'assetDrawer.skillsMine', system: 'assetDrawer.skillsSystem', community: 'assetDrawer.skillsCommunity', agents: 'assetDrawer.skillsAgents',
 };
 const CATEGORIES: Category[] = ['media', 'skill', 'voice', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition', 'template'];
 
@@ -107,7 +107,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
   React.useEffect(() => () => tryOut.current(null), []);
 
   /* the skills' line: one of the installed (Installed alone, as kept before, is all of them), else Discover */
-  const skillLine: SkillsLine = group === 'installed' || group === 'all' ? 'all' : (SKILL_LINES as readonly string[]).includes(group) ? group as SkillsLine : 'discover';
+  const skillLine: SkillsLine = group === 'installed' ? 'all' : (SKILL_LINES as readonly string[]).includes(group) ? group as SkillsLine : 'discover';
   const q = query.trim().toLowerCase();
   const shown = (index?.items ?? []).filter((item) => item.cat === cat && (q
     ? [...Object.values(item.name), ...(item.tags ?? [])].some((n) => n?.toLowerCase().includes(q))
@@ -183,11 +183,13 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
               </>
             ) : cat === 'skill' ? (
               <>
-                {/* Discover first opened: OpenFilm's skills to take up. Installed is all of them; under it, by whose they are */}
-                <SideBox on={skillLine === 'all'} onClick={() => pickGroup('all')}>{t('assetDrawer.skillsInstalled')}</SideBox>
-                <div className="flex flex-col pb-1 pl-1.5">
-                  {SKILL_LINES.map((id) => <SideLine key={id} on={skillLine === id} onClick={() => pickGroup(id)}>{t(SKILL_LINE_WORDS[id])}</SideLine>)}
-                </div>
+                {/* Discover first opened: OpenFilm's skills to take up. The installed under their fold: all, then by whose */}
+                <SideBox on={skillLine !== 'discover' && folded} open={!folded} onClick={fold}>{t('assetDrawer.skillsInstalled')}</SideBox>
+                {folded ? null : (
+                  <div className="flex flex-col pb-1">
+                    {SKILL_LINES.map((id) => <SideLine key={id} on={skillLine === id} onClick={() => pickGroup(id)}>{t(SKILL_LINE_WORDS[id])}</SideLine>)}
+                  </div>
+                )}
                 <SideBox on={skillLine === 'discover'} onClick={() => pickGroup('discover')}>{t('assetDrawer.skillsDiscover')}</SideBox>
               </>
             ) : (

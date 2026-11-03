@@ -27,7 +27,6 @@ import { relativeTime, useMinuteTick } from '@/lib/relative-time';
 import { isPendingAssetId } from '@/lib/asset-lists';
 import { TurnLogButton } from './TurnLog';
 import { FileChangesList } from './FileChangesList';
-import { ConfirmDialog } from 'openfilm/studio-ui/components/ConfirmDialog.tsx';
 import { ChatProjectContext, useDeveloperMode, useShowChanges } from '@/lib/developer';
 import { isVideoAttachment } from '@/lib/composer-attachments';
 import { desktopBridge } from '@/lib/desktop-bridge';
@@ -714,36 +713,27 @@ function TurnFooter({ entry, items, running = false, last = false }: { entry: Pr
   );
 }
 
-/** The conversation's way to undo its last turn (App: the files as it found them, its message back in the composer); none while one runs. */
-export const TurnUndoContext = React.createContext<((entry: ProjectVersion) => Promise<void>) | null>(null);
+/**
+ * The conversation's way to undo its last turn (App: asked on the composer, then the files as it found them, its
+ * message back in the composer); none while one runs.
+ */
+export const TurnUndoContext = React.createContext<((entry: ProjectVersion) => void) | null>(null);
 
-/** At the footer's end: undo this turn, once confirmed. */
+/** At the footer's end: undo this turn, once confirmed on the composer. */
 function UndoButton({ entry }: { entry: ProjectVersion }) {
   const t = useT();
   const undo = React.useContext(TurnUndoContext);
-  const [asking, setAsking] = React.useState(false);
   if (!undo) return null;
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => setAsking(true)}
-        aria-label={t('undo.button')}
-        title={t('undo.button')}
-        className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition hover:bg-[var(--bg-hover)] hover:text-[var(--chat-text)]"
-      >
-        <Undo2 size={13} />
-      </button>
-      <ConfirmDialog
-        open={asking}
-        title={t('undo.title')}
-        description={t('undo.description')}
-        confirmLabel={t('undo.confirm')}
-        cancelLabel={t('undo.cancel')}
-        onConfirm={() => { setAsking(false); void undo(entry); }}
-        onCancel={() => setAsking(false)}
-      />
-    </>
+    <button
+      type="button"
+      onClick={() => undo(entry)}
+      aria-label={t('undo.button')}
+      title={t('undo.button')}
+      className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition hover:bg-[var(--bg-hover)] hover:text-[var(--chat-text)]"
+    >
+      <Undo2 size={13} />
+    </button>
   );
 }
 
