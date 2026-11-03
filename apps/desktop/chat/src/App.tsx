@@ -140,9 +140,11 @@ export function App({ initialProject, initialSelection, initialFfmpeg }: {
   return (
     <div className={`relative flex h-full flex-col ${assetsOpen ? '' : 'bg-[var(--dock-shell)]'}`}>
       {addingSkill ? (
-        <AddSkillDialog onClose={() => setAddingSkill(false)} onAdded={async () => { window.dispatchEvent(new Event(SKILLS_CHANGED)); app.skillAdded?.(); }}
-          onPick={onProject ? (skill) => { app.useSkill?.(skill); app.skillAdded?.(); } : undefined}
-          onMake={onProject ? () => { window.dispatchEvent(new Event(MAKE_SKILL)); app.skillAdded?.(); } : undefined} />
+        /* a skill only added keeps the Community (the Skills page) open, where the person sees it; Use it and making
+           one with the agent land in the conversation, so those close it */
+        <AddSkillDialog onClose={() => setAddingSkill(false)} onAdded={async () => { window.dispatchEvent(new Event(SKILLS_CHANGED)); }}
+          onPick={onProject ? (skill) => { app.useSkill?.(skill); app.closeExamples?.(); } : undefined}
+          onMake={onProject ? () => { window.dispatchEvent(new Event(MAKE_SKILL)); app.closeExamples?.(); } : undefined} />
       ) : null}
       {/* under Studio's top bar (it runs over this, across the window): the seam on the left is the handle */}
       <Divider />

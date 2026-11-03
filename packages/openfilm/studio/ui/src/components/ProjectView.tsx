@@ -60,10 +60,9 @@ import { SettingsModal } from './settings/SettingsModal';
 import { useSettings } from './settings/use-settings';
 import { DesktopDialog } from './DesktopDialog';
 import type { ContextMenuEntry } from './ContextMenu';
-import { studioHost, useHostPanel, type HostPanel, type StageBox, type StudioCommand, type StudioRef } from '../lib/host';
+import { studioHost, useHostPanel, type CommunityItem, type HostPanel, type StageBox, type StudioCommand, type StudioRef } from '../lib/host';
 import { clipRef, fileRef, layerRef, markRange, momentRef, rangeRef, regionRef, stillUrl, subtitleRef, trackRef, type ClipFrameSource, type FilmRange } from '@/lib/studio-refs';
 import { boxNow, chatPointOf, draftBoxesAt, draftMarksOf, sameClip, NO_DRAFT, type DraftMarks, type PictureMarks } from '@/lib/chat-marks';
-import { examplesOpenOf, type ExamplesOpen } from '@/lib/examples-command';
 import { usePageChanges } from './use-page-changes';
 import { SubtitleOverlay } from './SubtitleOverlay';
 import { SubtitleInspector, subtitleLineKey, type SubtitleLineAt, type SubtitleLineRefer } from './SubtitleInspector';
@@ -1699,7 +1698,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (command.type === 'highlight') { setChatRef(command.ref ?? null); return; }
     if (command.type === 'draft-refs') { setDraftMarks(draftMarksOf(Array.isArray(command.refs) ? command.refs : [])); return; }
     if (command.type === 'settings') { setSettingsOpen(command.section ?? 'agents'); return; }
-    if (command.type === 'show-examples' || command.type === 'close-examples') { setExamplesOpen(examplesOpenOf(command)); return; }
+    if (command.type === 'show-examples') { setExamplesOpen(command.open ?? true); return; }
+    if (command.type === 'close-examples') { setExamplesOpen(false); return; }
     if (command.type === 'seek' && Number.isFinite(command.time)) { pause(); seek(command.time * 1000); return; }
     if ((command.type === 'show-range' || command.type === 'show-subtitle') && Number.isFinite(command.start) && Number.isFinite(command.end)) {
       /* a subtitle's span marked, and the subtitle panel open: the playhead at its start lights the line there */
@@ -2954,7 +2954,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const [projectsOpen, setProjectsOpen] = React.useState(false);
   /* the examples over the film, opened from the app's chat */
   /* the Community over the film: closed, open on its list (true), or on one skill's or example's page */
-  const [examplesOpen, setExamplesOpen] = React.useState<ExamplesOpen>(false);
+  const [examplesOpen, setExamplesOpen] = React.useState<boolean | CommunityItem>(false);
   const [settingsOpen, setSettingsOpen] = useSettings();
   /* making subtitles: what went wrong, shown on the CC button; with no service to transcribe, it opens Providers */
   const [subtitleProblem, setSubtitleProblem] = React.useState<{ text: string; connect: boolean } | null>(null);

@@ -3,4 +3,4 @@
 "openfilm": patch
 ---
 
-Desktop: a skill kept by "Add a skill" in the Community now closes it, putting the person back at the conversation its dialog opened over. A skill named by "Use it", and one made with the agent from there, close it too.
+Desktop: the Community's "Use it" and "make one with the agent" now close it, putting the person at the conversation. A skill only added keeps the Skills page open, where the person sees it.

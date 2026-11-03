@@ -39,8 +39,8 @@ interface AppBridge {
   onUseSkill?(listener: (skill: { name: string; description: string; newConversation?: boolean }) => void): () => void;
   /** "Add a skill" in the examples */
   onAddSkill?(listener: () => void): () => void;
-  /** a skill kept by that dialog, for the Community it opened over to close */
-  skillAdded?(): void;
+  /** the examples over the film closed: "Use it" and making one with the agent land the person in the conversation */
+  closeExamples?(): void;
   /** name a skill in the message being written (as one picked in the examples) */
   useSkill?(skill: { name: string; description: string }): void;
   /** the reference with its picture: the viewer as it is now, for one that shows it (lib/host.ts StudioRefImage) */

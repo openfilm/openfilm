@@ -378,8 +378,8 @@ function commandFor(ref: StudioRef): StudioCommand {
   showExamples: (open?: CommunityItem) => command?.({ type: 'show-examples', ...(open ? { open } : {}) }),
   onUseSkill: skillPicked.on,
   onAddSkill: skillAdd.on,
-  /* a skill kept by the dialog "Add a skill" opened: the Community it opened over closes, back at the conversation */
-  skillAdded: () => command?.({ type: 'close-examples' }),
+  /* the Community over the film closed: its "Use it" and "make one with the agent" land the person in the conversation */
+  closeExamples: () => command?.({ type: 'close-examples' }),
   useSkill: (skill: { name: string; description: string; newConversation?: boolean }) => skillPicked.set(skill),
   /* a reference made in the chat (⌘L there, the @ menu) gets its picture as Studio's own do */
   withPicture: (ref: StudioRef) => { const done = pictured.then(() => withPicture(ref)); pictured = done.then(() => {}); return done; },
