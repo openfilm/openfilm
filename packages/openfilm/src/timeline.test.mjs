@@ -1375,3 +1375,23 @@ c2
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('a clip that is not on draws none of its filter (Chromium paints a hidden element\'s filter, a mask\'s stroke with it)', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-hidden-filter-'));
+  writeFileSync(join(dir, 'bg.html'), '<!doctype html><body style="margin:0;background:#000"><script>window.film={duration:3,width:320,height:180,frame(){}}</script></body>');
+  writeFileSync(join(dir, 'dot.html'), page('dot', 1));
+  const red = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='f'%3E%3CfeFlood flood-color='red'/%3E%3C/filter%3E%3C/svg%3E#f")`;
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [
+    { clips: [{ id: 'dot', src: 'dot.html', box: { x: 0, y: 0, w: 160, h: 90 }, style: `filter: ${red}` }] },
+    { clips: [{ id: 'bg', src: 'bg.html' }] },
+  ] }));
+  const s = await open(dir);
+  try {
+    const at = async (t) => { await s.film.seek(t); return s.film.page.evaluate(() => getComputedStyle(document.getElementById('dot')).filter); };
+    assert.match(await at(0.5), /^url\(/, 'on: its filter as written');
+    assert.equal(await at(2), 'none', 'off: none of it');
+  } finally {
+    await s.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

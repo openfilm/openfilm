@@ -158,10 +158,13 @@ export function removeCues(vtt: Vtt, ids: ReadonlySet<string>): Vtt {
   return out;
 }
 
-/** A new cue at `at` (s) for NEW_CUE_S or up to the next cue; null when one is there or there is no room. */
-export function addCue(vtt: Vtt, at: number, text: string): { vtt: Vtt; id: string } | null {
+/**
+ * A new cue at `at` (s) for NEW_CUE_S or up to the next cue or `until` (the film's end: a cue past it is never
+ * seen); null when one is there or there is no room.
+ */
+export function addCue(vtt: Vtt, at: number, text: string, until = Infinity): { vtt: Vtt; id: string } | null {
   if (vtt.cues.some((c) => c.start <= at && at < c.end)) return null;
-  const next = Math.min(...vtt.cues.filter((c) => c.start > at).map((c) => c.start));
+  const next = Math.min(until, ...vtt.cues.filter((c) => c.start > at).map((c) => c.start));
   const end = Math.min(at + NEW_CUE_S, next);
   if (end - at < MIN_CUE_S) return null;
   const id = freshId(vtt);

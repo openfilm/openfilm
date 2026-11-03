@@ -18,7 +18,7 @@ import { useT } from '@/i18n';
 import { hintOf } from '@/lib/keymap';
 import { currentKeymap, keyAction, MAC } from '@/lib/keymap-store';
 import {
-  addCue, canSplit, cueRule, mergeCues, moveCues, removeCues, retimeCue, setCueText, splitCue, type Vtt, type VttCue,
+  addCue, canSplit, mergeCues, moveCues, removeCues, retimeCue, setCueText, splitCue, type Vtt, type VttCue,
 } from '@/lib/caption-edits';
 import { setCaptionSelection, useCaptionSelection, useCaptionTrack } from '@/lib/caption-tracks';
 import { snapToFrame } from '@/lib/timecode';
@@ -35,6 +35,8 @@ export interface CaptionLaneProps {
   locked: boolean;
   hidden: boolean;
   pxPerMs: number;
+  /** Where the film ends (ms): a cue added after it would never be seen. */
+  endMs: number;
   playheadMs: () => number;
   snap: boolean;
   snapTargets: () => SnapTarget[];
@@ -47,7 +49,7 @@ export interface CaptionLaneProps {
 
 type Hand = { vtt: Vtt; guideMs: number | null };
 
-export function CaptionLane({ projectId, src, locked, hidden, pxPerMs, playheadMs, snap, snapTargets, onSeek, onPick, onError }: CaptionLaneProps) {
+export function CaptionLane({ projectId, src, locked, hidden, pxPerMs, endMs, playheadMs, snap, snapTargets, onSeek, onPick, onError }: CaptionLaneProps) {
   const t = useT();
   const { vtt, write } = useCaptionTrack(projectId, src);
   const sel = useCaptionSelection();
@@ -62,8 +64,6 @@ export function CaptionLane({ projectId, src, locked, hidden, pxPerMs, playheadM
   const targeted = React.useRef(false);
   const shown = hand?.vtt ?? held ?? vtt;
   const cues = shown?.cues ?? [];
-  /* the cues with a look of their own (a `::cue(#id)` rule): marked on their blocks */
-  const own = React.useMemo(() => new Set(cues.filter((c) => shown && Object.keys(cueRule(shown, `::cue(#${c.id})`)).length).map((c) => c.id)), [cues, shown]);
   const vttRef = React.useRef(vtt);
   vttRef.current = vtt;
   const pickedRef = React.useRef(picked);
@@ -107,14 +107,15 @@ export function CaptionLane({ projectId, src, locked, hidden, pxPerMs, playheadM
   const addAt = React.useCallback((atMs: number) => {
     const now = vttRef.current;
     if (!now) return;
-    const made = addCue(now, snapToFrame(atMs) / 1000, t('subtitleRow.newText'));
+    if (atMs >= endMs - 100) { onError(t('captionTrack.pastEnd')); return; }
+    const made = addCue(now, snapToFrame(atMs) / 1000, t('subtitleRow.newText'), endMs / 1000);
     if (!made) { onError(t('subtitleRow.noRoom')); return; }
     void send(made.vtt, 'captionTrack.stepAdd').then((ok) => {
       if (!ok) return;
       select([made.id]);
       setEditing({ id: made.id, text: t('subtitleRow.newText') });
     });
-  }, [send, select, onError, t]);
+  }, [send, select, onError, t, endMs]);
   const commitText = React.useCallback(() => {
     const now = editing;
     setEditing(null);
@@ -313,14 +314,13 @@ export function CaptionLane({ projectId, src, locked, hidden, pxPerMs, playheadM
             key={cue.id}
             data-caption-cue={cue.id}
             title={words}
-            className="absolute top-[3px] bottom-[3px] cursor-grab overflow-hidden rounded-[3px] active:cursor-grabbing"
-            style={{ left, width: w, background: 'var(--tl-caption)', boxShadow: on ? '0 0 0 1.5px var(--tl-select)' : undefined, zIndex: on ? 2 : 1 }}
+            className="absolute inset-y-[2px] cursor-grab overflow-hidden rounded-[4px] active:cursor-grabbing"
+            style={{ left, width: w, background: 'var(--tl-caption)', boxShadow: on ? '0 0 0 1.5px var(--tl-select), inset 0 0 0 1px rgba(0,0,0,.25)' : 'inset 0 0 0 1px rgba(0,0,0,.18)', zIndex: on ? 2 : 1 }}
             onPointerDown={(e) => press(e, cue, 'move')}
             onDoubleClick={(e) => { e.stopPropagation(); if (!locked) setEditing({ id: cue.id, text: words }); }}
             onContextMenu={(e) => openMenu(e, cue)}
           >
-            <span className="pointer-events-none absolute inset-0 flex items-center truncate px-1.5 text-[10.5px] leading-none text-white/95">{w > 14 ? words : null}</span>
-            {own.has(cue.id) && w > 10 ? <span aria-hidden data-caption-own="" className="pointer-events-none absolute right-[3px] top-[3px] h-[5px] w-[5px] rounded-full bg-[#ffd400]" /> : null}
+            <span className="pointer-events-none absolute inset-0 flex items-center truncate px-1.5 text-[10.5px] font-medium leading-none text-white">{w > 14 ? words : null}</span>
             <span role="presentation" data-trim="start" className="absolute inset-y-0 left-0 z-[2] cursor-ew-resize" style={{ width: edge }} onPointerDown={(e) => press(e, cue, 'start')} />
             <span role="presentation" data-trim="end" className="absolute inset-y-0 right-0 z-[2] cursor-ew-resize" style={{ width: edge }} onPointerDown={(e) => press(e, cue, 'end')} />
           </div>
@@ -344,7 +344,7 @@ export function CaptionLane({ projectId, src, locked, hidden, pxPerMs, playheadM
             }}
             onBlur={commitText}
             onPointerDown={(e) => e.stopPropagation()}
-            className="absolute top-[3px] z-10 h-[calc(100%-6px)] rounded-[3px] bg-[var(--bg)] px-1.5 text-[11.5px] text-[var(--text)] outline-none ring-1 ring-[var(--tl-accent)]"
+            className="absolute top-[2px] z-10 h-[calc(100%-4px)] rounded-[4px] bg-[var(--bg)] px-1.5 text-[11.5px] text-[var(--text)] outline-none ring-1 ring-[var(--tl-accent)]"
             style={{ left: cue.start * 1000 * pxPerMs, width: Math.max(180, (cue.end - cue.start) * 1000 * pxPerMs) }}
           />
         );

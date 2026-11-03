@@ -291,16 +291,19 @@ function laneTone(track: TimelineTrack, selected: boolean): string {
   return track.main ? `color-mix(in srgb, ${tone} 93%, var(--tl-text))` : tone;
 }
 
+/** A caption track's row: narrow, each cue a line of text (components/CaptionLane). */
+const CAPTION_ROW_H = 26;
+
 /** A row's height: the person's for its track (lib/track-heights), else the timeline's own (the main track taller). */
-function rowH(track: Pick<TimelineTrack, 'kind' | 'height' | 'main'>): number {
-  return track.height ?? ownTrackHeight(track);
+function rowH(track: Pick<TimelineTrack, 'kind' | 'height' | 'main'> & { captions?: unknown }): number {
+  return track.height ?? (track.captions ? CAPTION_ROW_H : ownTrackHeight(track));
 }
 
 /**
  * The height that shows every row (toolbar + ruler + rows + padding + range bar). The editor uses it for the
  * timeline's default height.
  */
-export function timelineFitHeight(tracks: readonly Pick<TimelineTrack, 'kind' | 'height' | 'main'>[]): number {
+export function timelineFitHeight(tracks: readonly (Pick<TimelineTrack, 'kind' | 'height' | 'main'> & { captions?: unknown })[]): number {
   const lanes = tracks.reduce((h, tr) => h + rowH(tr) + GAP, 0);
   return TOOLBAR_H + RULER_H + lanes + GAP + 2 * TL_VPAD + H_SCROLL_H;
 }
@@ -2742,7 +2745,12 @@ export const Timeline = React.memo(function Timeline({
         }}
       >
         <span className="flex min-w-0 items-center gap-1">
-          {track.badge ? (
+          {track.captions ? (
+            /* a caption track: its kind's mark alone, as narrow as its row */
+            <span className="flex items-center justify-center rounded-[3px]" style={{ width: 21, height: 14, color: '#fff', background: 'var(--tl-caption)', opacity: track.hidden ? 0.55 : 1 }}>
+              <Captions size={11} aria-label={track.name ?? undefined} />
+            </span>
+          ) : track.badge ? (
             <span
               className="flex items-center justify-center rounded-[3px] font-semibold tabular-nums"
               style={{
@@ -3063,7 +3071,7 @@ export const Timeline = React.memo(function Timeline({
       >
           {track.captions && captionLanes ? (
             <CaptionLane projectId={captionLanes.projectId} src={track.captions.src} locked={Boolean(track.locked)} hidden={Boolean(track.hidden)}
-              pxPerMs={pxPerMs} playheadMs={() => timeMsRef.current} snap={snap} snapTargets={() => snapTargetsFor(allBlocks, null, timeMsRef.current)}
+              pxPerMs={pxPerMs} endMs={totalMs} playheadMs={() => timeMsRef.current} snap={snap} snapTargets={() => snapTargetsFor(allBlocks, null, timeMsRef.current)}
               onSeek={onSeek} onPick={captionLanes.onPick} onError={setDropError} />
           ) : null}
           {track.blocks.map((block) => {
@@ -3528,7 +3536,7 @@ export const Timeline = React.memo(function Timeline({
     openBlockMenu, openLaneMenu, onEditBlocks, collapseIfClick, selectOne, setSelected, clipElements, thumbWindow, view.width,
     chatClip, chatDraft, placedOf, pickForTrim, gap, withLinked, runSplit, trackOverlay,
     fadeOfBlock, fadeDrag, startFade, volumeDrag, startVolume, transitions, transitionDrag, pickedTransition, onPickTransition, onTransition, startTransitionResize,
-    nearFirst, nearLast, speedOn, hoveredBlock, onEnterCompound, captionLanes, snap, allBlocks, onSeek,
+    nearFirst, nearLast, speedOn, hoveredBlock, onEnterCompound, captionLanes, snap, allBlocks, onSeek, totalMs,
   ]);
 
   const tickMarks = React.useMemo(() => ticks.map(({ ms, label }) => {

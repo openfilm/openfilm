@@ -1,8 +1,8 @@
 /**
  * The look of the cues picked on a caption track (SPEC §1 Captions), and their words. What it changes is the file's
- * STYLE: with "Selected" the picked cues' own rules (`::cue(#c3)`), with "Whole track" the track's (`::cue`), which
- * takes those properties off every cue's own rule (as "apply to all" does). A cue changed on its own shows its block
- * marked on the timeline; "Use the track's look" takes its own rule away.
+ * STYLE: with "Apply to all captions" (on, as captions are one look) the track's (`::cue`), every cue's own say of
+ * those properties taken away; off, the picked cues' own rules (`::cue(#c3)`). Cues with a look of their own are
+ * said so here, with the way back to the track's.
  */
 import React from 'react';
 import { RotateCcw, Trash2 } from 'lucide-react';
@@ -49,7 +49,8 @@ export function CaptionInspector({ projectId, width, onClose }: { projectId: str
   const t = useT();
   const sel = useCaptionSelection();
   const { vtt, write } = useCaptionTrack(projectId, sel?.src ?? '');
-  const [scope, setScope] = React.useState<'selected' | 'all'>('selected');
+  const [all, setAll] = React.useState(true);
+  const scope = all ? 'all' : 'selected';
   const ids = React.useMemo(() => [...(sel?.ids ?? [])], [sel]);
   const one = ids.length === 1 ? vtt?.cues.find((c) => c.id === ids[0]) : undefined;
   const [text, setText] = React.useState('');
@@ -60,7 +61,7 @@ export function CaptionInspector({ projectId, width, onClose }: { projectId: str
   const own = ids.map((id) => lookOf(cueRule(vtt, `::cue(#${id})`)));
   /* what the panel shows: the track's look under the first picked cue's own (a mixed value shows the first's) */
   const shown = { ...DEFAULTS, ...track, ...(scope === 'selected' ? own[0] : {}) };
-  const changedOwn = ids.some((id) => Object.keys(cueRule(vtt, `::cue(#${id})`)).length);
+  const ownCount = ids.filter((id) => Object.keys(cueRule(vtt, `::cue(#${id})`)).length).length;
 
   const apply = (decls: Record<string, string | null>, label: string) => {
     let next: Vtt = vtt;
@@ -85,11 +86,20 @@ export function CaptionInspector({ projectId, width, onClose }: { projectId: str
   return (
     <InspectorPanel title={t('captionTrack.title')} width={width} onClose={onClose}>
       <div className="mt-3 flex flex-col gap-1.5">
-        <Segmented label={t('captionTrack.scope')} value={scope} onChange={(v) => setScope(v as 'selected' | 'all')} options={[
-          { value: 'selected', label: t('captionTrack.scopeSelected').replace('{n}', String(ids.length)) },
-          { value: 'all', label: t('captionTrack.scopeAll') },
-        ]} />
-        <p className="text-[10.5px] leading-snug text-[var(--text-faint)]">{t(scope === 'all' ? 'captionTrack.scopeAllHint' : 'captionTrack.scopeSelectedHint')}</p>
+        <label className="flex cursor-pointer items-center gap-2 text-[11.5px] text-[var(--text)]">
+          <input type="checkbox" data-caption-apply-all="" checked={all} onChange={(e) => setAll(e.target.checked)} className="accent-[var(--accent)]" />
+          {t('captionTrack.applyAll')}
+        </label>
+        {!all ? <p className="text-[10.5px] leading-snug text-[var(--text-faint)]">{t('captionTrack.selectedOnly').replace('{n}', String(ids.length))}</p> : null}
+        {ownCount ? (
+          <div data-caption-own="" className="flex items-center justify-between gap-2 rounded-[5px] bg-[var(--fill-tsp)] px-2 py-1 text-[10.5px] text-[var(--text-muted)]">
+            <span>{t(ownCount === 1 && ids.length === 1 ? 'captionTrack.ownOne' : 'captionTrack.ownSome').replace('{n}', String(ownCount))}</span>
+            <button type="button" className="flex shrink-0 items-center gap-1 text-[var(--text)] hover:underline"
+              onClick={() => { let next = vtt; for (const id of ids) next = setCueRule(next, `::cue(#${id})`, null); void write(next, 'captionTrack.stepLook'); }}>
+              <RotateCcw size={11} />{t('captionTrack.useTrack')}
+            </button>
+          </div>
+        ) : null}
       </div>
       {one ? (
         <Section id="caption-text" title={t('captionTrack.text')}>
@@ -103,12 +113,7 @@ export function CaptionInspector({ projectId, width, onClose }: { projectId: str
           />
         </Section>
       ) : null}
-      <Section id="caption-look" title={t('captionTrack.look')} aside={scope === 'selected' && changedOwn ? (
-        <button type="button" title={t('captionTrack.useTrack')} aria-label={t('captionTrack.useTrack')} className="flex h-6 w-6 items-center justify-center rounded-[5px] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
-          onClick={() => { let next = vtt; for (const id of ids) next = setCueRule(next, `::cue(#${id})`, null); void write(next, 'captionTrack.stepLook'); }}>
-          <RotateCcw size={13} />
-        </button>
-      ) : undefined}>
+      <Section id="caption-look" title={t('captionTrack.look')}>
         <div className="flex flex-col gap-2">
           <SliderField label={t('captionTrack.size')} value={shown.size} min={2} max={12} step={0.1} unit="%" onCommit={(n) => apply({ 'font-size': `${n}cqmin` }, 'captionTrack.stepLook')} />
           <Segmented label={t('captionTrack.weight')} value={Number(shown.weight) >= 600 ? 'bold' : 'regular'} onChange={(v) => apply({ 'font-weight': v === 'bold' ? '800' : '400' }, 'captionTrack.stepLook')} options={[

@@ -59,6 +59,8 @@ test('split at its words, or by its text; merge; add where there is room; remove
   const added = addCue(v, 6, 'New')!;
   assert.deepEqual(added.vtt.cues.at(-1), { id: added.id, start: 6, end: 8, settings: 'line:40%', text: 'New' });
   assert.equal(addCue(v, 1, 'x'), null, 'a cue is there');
+  assert.deepEqual(addCue(v, 6, 'End', 7)!.vtt.cues.at(-1)!.end, 7, 'no further than the film');
+  assert.equal(addCue(v, 6.95, 'x', 7), null, 'too little room before the film ends');
   const gone = removeCues(v, new Set(['b']));
   assert.deepEqual(spans(gone), [['a', 0.5, 2], ['c1', 3.5, 5]]);
   assert.deepEqual(cueRule(gone, '::cue(#b)'), {});

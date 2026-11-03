@@ -41,6 +41,8 @@ const CAPTIONS = readFileSync(fileURLToPath(new URL('./captions.mjs', import.met
  */
 const filmStart = (stage) => `<style>html,body{margin:0;overflow:hidden}:where(body){background:#000}`
   + `body>section{display:contents}body>section>:is(iframe,video,img,audio){position:absolute;left:0;top:0;margin:0;visibility:hidden}`
+  /* a clip not on draws no filter: Chromium paints a hidden element's filter (an feImage, a mask's stroke) all the same */
+  + `body>section>:not([style*="visibility: visible"]){filter:none!important}`
   + `body>section>iframe{border:0;width:${stage.w}px;height:${stage.h}px}:where(body>section>:is(video,img)){object-fit:contain}</style>`
   + `<script>${HOLD_MEDIA}</script>`
   + `<script type="module" src="__film/timeline.mjs"></script>`;
