@@ -56,6 +56,7 @@ import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCov
 import { libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, setLibraryFavorites } from './library.mjs';
 import { SavedError, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
 import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
+import { listenLocal } from '../../src/host.mjs';
 import { moveToTrash } from './trash.mjs';
 import { listSkills, removeSkill, setSkillCover, setSkillInstalled, setSkillOn, skillOrigins, skillsInstalled, skillsOff } from '../../src/skills.mjs';
 import { providersRoute } from './providers/index.mjs';
@@ -1147,7 +1148,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       refuse('404 Not Found');
     })().catch(() => refuse('500 Internal Server Error'));
   });
-  await new Promise((done, fail) => { editor.once('error', fail); editor.listen(port, '127.0.0.1', () => done(undefined)); });
+  await listenLocal(editor, port);
   /* the examples index is asked for as Studio starts, so the Examples tab has GitHub's newest when it opens */
   void listExamples().catch(() => {});
   const address = /** @type {import('node:net').AddressInfo} */ (editor.address());

@@ -215,20 +215,42 @@ export function mediaFacts(file) {
   return /** @type {Promise<{ duration: number, w: number, h: number } | null>} */ (mediaFactsOf.get(key));
 }
 
+/* the ports browsers refuse to open (the Fetch standard's bad ports, ERR_UNSAFE_PORT) that an OS may hand out */
+const BAD_PORTS = new Set([1719, 1720, 1723, 2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6679, 6697, 10080]);
+
+/**
+ * Listen on 127.0.0.1 at `port`; for port 0, at one a browser opens: a port browsers refuse is let go and the OS asked
+ * again. The port it listens on.
+ * @param {import('node:net').Server} server
+ * @param {number} [port]
+ * @returns {Promise<number>}
+ */
+export async function listenLocal(server, port = 0) {
+  for (;;) {
+    await new Promise((done, fail) => {
+      server.once('error', fail);
+      server.listen(port, '127.0.0.1', () => { server.off('error', fail); done(undefined); });
+    });
+    const got = /** @type {import('node:net').AddressInfo} */ (server.address()).port;
+    if (port || !BAD_PORTS.has(got)) return got;
+    await new Promise((done) => server.close(() => done(undefined)));
+  }
+}
+
 /**
  * Serve `root`. HTML gets the host flag injected before any page script;
  * ?film-host=0 serves the page untouched, as a visitor would see it.
  */
-export function serve(root, { port = 0, swap } = {}) {
+export async function serve(root, { port = 0, swap } = {}) {
   const files = folderFiles(root, { swap });
   const server = createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
     if (!files(req, res, url.pathname, url.searchParams)) res.writeHead(403).end();
   });
-  return new Promise((ok) => server.listen(port, '127.0.0.1', () => ok({
-    server, url: `http://127.0.0.1:${server.address().port}`,
+  return {
+    server, url: `http://127.0.0.1:${await listenLocal(server, port)}`,
     close: () => new Promise((done) => { server.closeAllConnections?.(); server.close(() => done()); }),
-  })));
+  };
 }
 
 /** Put `tag` before any script of the page: after <head> if there is one before the first script, else after the doctype. */

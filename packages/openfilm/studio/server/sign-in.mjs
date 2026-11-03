@@ -15,6 +15,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
 import { hostname } from 'node:os';
+import { listenLocal } from '../../src/host.mjs';
 
 /**
  * @typedef {{ page: string, token: string, revoke: string }} SignIn the provider's connect page, where a code is
@@ -86,7 +87,7 @@ export async function startSignIn(provider, { openBrowser, done }) {
     server.close();
     if (pending?.close === close) pending = null;
   }
-  await new Promise((ready, error) => server.once('error', error).listen(0, '127.0.0.1', () => ready(undefined)));
+  await listenLocal(server);
   pending = { id: provider.id, close };
   const port = /** @type {import('node:net').AddressInfo} */ (server.address()).port;
   openBrowser(`${provider.signIn.page}?${new URLSearchParams({ port: String(port), state, challenge, device: deviceName() })}`);
