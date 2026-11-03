@@ -83,6 +83,27 @@ export async function writeCaptionTrack(projectId: string, src: string, next: Vt
 }
 
 /**
+ * Caption tracks an edit of the film's clips changed too (their cues carried with linkage), written now; the step that
+ * puts them back and on again, for that edit's own undo step (use-film `edit`'s `outside`). Null when nothing changed;
+ * a string: why a file was not written (those written are put back).
+ */
+export async function writeCaptionTracksWith(projectId: string, files: readonly { src: string; next: Vtt }[]): Promise<OutsideStep | string | null> {
+  const changes = files.map(({ src, next }) => ({ src, before: entries.get(keyOf(projectId, src))?.text ?? null, after: writeVtt(next) }))
+    .filter((f) => f.after !== f.before);
+  if (!changes.length) return null;
+  const all = async (side: 'before' | 'after') => {
+    for (const f of changes) {
+      const why = await put(projectId, f.src, f[side] ?? 'WEBVTT\n');
+      if (why) return why;
+    }
+    return null;
+  };
+  const why = await all('after');
+  if (why) { await all('before'); return why; }
+  return { undo: () => all('before'), redo: () => all('after') };
+}
+
+/**
  * A caption track's cues, read once; `write` sends a new version of them (one undo step, `label` naming it). Null
  * while the file is first read.
  */

@@ -108,6 +108,7 @@ import {
   planRoom,
   planUnlink,
   TOUCH_MS,
+  type CueRiding,
   type EditMode,
   type EditPlan,
 } from '@/lib/timeline-edit';
@@ -615,7 +616,8 @@ export interface TimelineProps {
    * clip id, in one write and one undo step; `label` names it in the edit history. Without it clips can be selected
    * but not dragged — a read-only film, rather than a drag that does nothing. Null = done; a sentence = shown.
    */
-  onEditOps?: (ops: Op[], label: string) => Promise<string | null>;
+  /** `riding`: the plan's main track before and after, with linkage (lib/timeline-edit), for the caption cues riding on it. */
+  onEditOps?: (ops: Op[], label: string, riding?: CueRiding) => Promise<string | null>;
   /** Clip id → its `data-link`: clips sharing one are selected and edited together (see the Linked switch). */
   links?: ReadonlyMap<string, string>;
   /**
@@ -1768,7 +1770,7 @@ export const Timeline = React.memo(function Timeline({
    */
   const runPlan = React.useCallback(async (plan: EditPlan | null, label: string, note?: string): Promise<boolean> => {
     if (!onEditOps || !plan?.ops.length) return false;
-    const err = await onEditOps(plan.ops, label);
+    const err = await onEditOps(plan.ops, label, plan.riding);
     if (err) setDropError(err);
     /* not an error: the edit was made, and this says why a gap was left (a warning's look, not an error's) */
     else if (plan.shortMs > 0) setNotice(t('timeline.rippleShort').replace('{s}', (plan.shortMs / 1000).toFixed(2)));

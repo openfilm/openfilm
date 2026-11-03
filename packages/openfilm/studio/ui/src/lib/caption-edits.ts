@@ -153,6 +153,27 @@ export function moveCues(vtt: Vtt, ids: ReadonlySet<string>, by: number): Vtt {
   return { ...vtt, cues: cutAround(moved, ids).sort(byStart) };
 }
 
+/**
+ * Cues put at new spans by an edit of the film's clips (lib/timeline-edit carryCues: ms; null: the cue goes), their
+ * words' timestamps with them. A cue that stayed is cut short where a moved one reaches it, as a move cuts it; one
+ * that would be left shorter than MIN_CUE_S stays whole under it instead (two cues at once, nothing lost).
+ */
+export function retimeCues(vtt: Vtt, spans: ReadonlyMap<string, { startMs: number; endMs: number } | null>): Vtt {
+  const gone = new Set([...spans].filter(([, to]) => to == null).map(([id]) => id));
+  let out = gone.size ? removeCues(vtt, gone) : vtt;
+  const moved = new Set<string>();
+  const cues = out.cues.map((c) => {
+    const to = spans.get(c.id);
+    if (!to) return c;
+    moved.add(c.id);
+    const by = round(to.startMs / 1000 - c.start);
+    return { ...c, start: round(to.startMs / 1000), end: round(to.endMs / 1000), text: shifted(c.text, by) };
+  });
+  const cut = cutAround(cues, moved).map((c, i) => (c.end - c.start < MIN_CUE_S - 1e-9 ? cues[i]! : c));
+  out = { ...out, cues: cut.sort(byStart) };
+  return out;
+}
+
 /** Where a cue split at `at` would be (inside it, MIN_CUE_S each side). */
 export const canSplit = (cue: VttCue, at: number) => at - cue.start >= MIN_CUE_S && cue.end - at >= MIN_CUE_S;
 

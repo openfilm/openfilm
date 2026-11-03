@@ -11,7 +11,8 @@
  *     one deleted or taken off it closes up after it, a trim or a new speed there moves what follows on it;
  *   · with linkage, a clip on another track that rides on a main-track clip (ridesOn) keeps the moment of that clip's
  *     footage it starts at wherever the edit takes the footage, and goes with the clip when it is deleted; carried
- *     into another clip on its track, it goes to a free track nearby;
+ *     into another clip on its track, it goes to a free track nearby. A caption track's cues ride the same way: a plan
+ *     says how its main track was and is (`riding`), and carryCues takes the cues along;
  *   · a ripple (a ripple delete, a closed gap, an insert, a ripple trim) moves what follows on the tracks edited
  *     alone; other tracks follow only by linkage. `shortMs` says how much time could not be closed.
  *
@@ -106,8 +107,21 @@ export type TrackDest = number | { insert: number };
 /** Where a clip the edit touched ends up, for drawing it before it is written; null: it goes. */
 export type Placed = { startMs: number; endMs: number; track: TrackDest } | null;
 
+/**
+ * The main track before and after an edit made with linkage, for what rides on it outside film.html's clips (a caption
+ * track's cues, carryCues): its clips as they were, the pieces each is now (itself, the half a cut took off; none when
+ * it went), and whether the edit deletes what rides on a clip that goes.
+ */
+export interface CueRiding {
+  was: EditClip[];
+  pieces: Map<string, EditClip[]>;
+  drop: boolean;
+}
+
 export interface EditPlan {
   ops: Op[];
+  /** With linkage: the main track before and after (see CueRiding). */
+  riding?: CueRiding;
   /** By clip id; the halves an edit cuts off a clip are `<id>~b`. */
   placed: Map<string, Placed>;
   /** Time a ripple meant to close but could not, because a clip on a track it reaches is in the way (ms). */
@@ -164,6 +178,8 @@ export interface Draft {
   /** The right half cut off a clip, by the clip's id. */
   cut: Map<string, EditClip>;
   shortMs: number;
+  /** With linkage: the main track as it was, and whether what rides on a clip that goes goes too (see CueRiding). */
+  link?: { was: EditClip[]; drop: boolean };
 }
 
 /**
@@ -444,6 +460,7 @@ function ridesOf(d: Draft, main: number | null, skip: ReadonlySet<string> = new 
   if (main == null || trackAt(d, main)?.locked) return out;
   const was = [...d.before.values()];
   const mainWas = { clips: was.filter((x) => x.track === main).map((x) => x.clip) };
+  d.link ??= { was: mainWas.clips.map((c) => ({ ...c })), drop: false };
   for (const { clip, track } of was) {
     if (track === main || skip.has(clip.id) || trackAt(d, track)?.locked || !ridesOn(mainWas, clip)) continue;
     const host = hostOf(mainWas, clip)!;
@@ -463,6 +480,7 @@ const overlap = (a: { startMs: number; endMs: number }, b: { startMs: number; en
  * another clip on their track go to a free track nearby (settle).
  */
 function carry(d: Draft, rides: ReadonlyMap<string, Ride>, dropWithHost = false): void {
+  if (d.link && dropWithHost) d.link.drop = true;
   if (!rides.size) return;
   const live = (c: EditClip | undefined): c is EditClip => Boolean(c && d.tracks.some((t) => t.clips.includes(c)));
   const moved = new Set<EditClip>();
@@ -605,7 +623,41 @@ function planOf(d: Draft): EditPlan {
   if (edits.length || openEdits.length) ops.push({ op: 'props', edits: [...edits, ...openEdits] });
   if (joinEdits.length) ops.push({ op: 'props', edits: joinEdits });
   ops.push(...removes);
-  return { ops, placed, shortMs: d.shortMs };
+  return { ops, placed, shortMs: d.shortMs, ...(d.link ? { riding: ridingOf(d, d.link) } : {}) };
+}
+
+function ridingOf(d: Draft, link: NonNullable<Draft['link']>): CueRiding {
+  const live = (c: EditClip | undefined): c is EditClip => Boolean(c && d.tracks.some((t) => t.clips.includes(c)));
+  const pieces = new Map(link.was.map((c) => [c.id, [find(d, c.id)?.clip, d.cut.get(c.id)].filter(live).map((x) => ({ ...x }))]));
+  return { was: link.was, pieces, drop: link.drop };
+}
+
+/**
+ * Cues of a caption track carried by an edit made with linkage, as clips riding on the main track are (carry): each
+ * one that rode on a main-track clip (ridesOn) goes where that clip now shows the moment it started at, as long as it
+ * was; one whose clip went goes too when the edit says so (a delete), else stays; one whose moment was trimmed away
+ * stays. Only those that change, by id: their new span, or null for gone.
+ */
+export function carryCues(riding: CueRiding, cues: readonly { id: string; startMs: number; endMs: number }[]): Map<string, { startMs: number; endMs: number } | null> {
+  const out = new Map<string, { startMs: number; endMs: number } | null>();
+  const was = { clips: riding.was };
+  for (const cue of cues) {
+    if (!ridesOn(was, cue)) continue;
+    const host = hostOf(was, cue)!;
+    const at = momentAt(host, cue.startMs);
+    const pieces = riding.pieces.get(host.id) ?? [];
+    if (!pieces.length) {
+      if (riding.drop) out.set(cue.id, null);
+      continue;
+    }
+    let to: number | null = null;
+    for (const p of pieces) if (to == null) to = filmAtMoment(p, at);
+    if (to == null) continue;
+    const start = Math.max(0, to);
+    if (Math.abs(start - cue.startMs) < 0.5) continue;
+    out.set(cue.id, { startMs: start, endMs: start + (cue.endMs - cue.startMs) });
+  }
+  return out;
 }
 
 /* the draft's own steps, for edits planned elsewhere (lib/transitions) */
@@ -726,7 +778,9 @@ export function planRemove(model: EditModel, ids: readonly string[], opts: { rip
   const d = draftOf(model);
   const main = mainTrackOf(model);
   const rides = opts.linkage ? ridesOf(d, main, new Set(ids)) : new Map<string, Ride>();
-  /* the pictures riding on a deleted main-track clip go with it (they move and are deleted with the main track) */
+  /* the pictures riding on a deleted main-track clip go with it (they move and are deleted with the main track); so do
+     a caption track's cues (carryCues) */
+  if (d.link) d.link.drop = true;
   const deleted = new Set(ids);
   for (const [id, ride] of rides) {
     if (!deleted.has(ride.host) || trackAt(d, d.before.get(id)!.track)?.role === 'audio') continue;

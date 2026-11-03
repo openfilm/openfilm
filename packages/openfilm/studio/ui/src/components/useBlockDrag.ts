@@ -46,6 +46,7 @@ import {
   planRippleTrim,
   planSpeed,
   sourceLeftMs,
+  type CueRiding,
   type EditModel,
   type EditPlan,
   type MoveMode,
@@ -207,7 +208,7 @@ export function useBlockDrag(opts: {
   /** The selection: dragging one of it moves all of it (see dragCompanions). Read at press time. */
   selectedIds?: readonly string[];
   /** Write the plan's operations, as one edit. Null = done; a sentence = it did not go through. */
-  onCommit?: (ops: Op[], label: string) => Promise<string | null>;
+  onCommit?: (ops: Op[], label: string, riding?: CueRiding) => Promise<string | null>;
   /**
    * Clips moved out of the timeline and let go over the panel of the app around Studio (its chat,
    * `[data-studio-host-panel]`): the move is dropped and these clips are handed to it instead.
@@ -649,6 +650,7 @@ export function useBlockDrag(opts: {
         return;
       }
       const ops = lastPlan.ops;
+      const riding = lastPlan.riding;
       /* the clips stay where they were let go until the new layout is drawn */
       const held = {
         ...last,
@@ -663,7 +665,7 @@ export function useBlockDrag(opts: {
       setSaving(true);
       setPreview(held);
       const label = copy ? `history.stepDuplicated|${block.clipId}` : stepOf(mode, ripple, block.clipId!);
-      void Promise.resolve().then(() => commit(ops, label)).catch((err: unknown) => (
+      void Promise.resolve().then(() => commit(ops, label, riding)).catch((err: unknown) => (
         err instanceof Error ? err.message : String(err)
       )).then((err) => {
         pendingSaves.current -= 1;

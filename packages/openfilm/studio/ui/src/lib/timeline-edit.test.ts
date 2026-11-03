@@ -25,6 +25,7 @@ import {
   slowestSpeed,
   planUnlink,
   ridesOn,
+  carryCues,
   soundTrackFor,
   sourceLeftMs,
   type EditClip,
@@ -538,6 +539,28 @@ test('with the magnet a delete on the main track closes up; with linkage the pic
     [['bed', 0, 12]],
     [['sfx', 5, 6]],
   ]);
+});
+
+test('a caption track\'s cues ride on the main track as titles do: along with their shot, gone with it, a long one stays', () => {
+  const m = filmWithMain();
+  const cues = [
+    { id: 'on-a', startMs: 1000, endMs: 2000 },
+    { id: 'on-b', startMs: 5000, endMs: 6500 },
+    { id: 'on-c', startMs: 9000, endMs: 10_000 },
+    { id: 'long', startMs: 0, endMs: 12_000 },
+  ];
+  /* c moved before a: what was said over c is said there, the rest moves as the shots it rode on */
+  const moved = planMove(m, { ids: ['c'], deltaMs: -9000, pointerMs: 1000, mode: 'place', ...ON })!;
+  assert.deepEqual([...carryCues(moved.riding!, cues)], [
+    ['on-a', { startMs: 5000, endMs: 6000 }],
+    ['on-b', { startMs: 9000, endMs: 10_500 }],
+    ['on-c', { startMs: 1000, endMs: 2000 }],
+  ]);
+  /* b deleted, the main track closing up: what was said over b goes, what was over c comes back with it */
+  const removed = planRemove(m, ['b'], { ripple: false, ...ON });
+  assert.deepEqual([...carryCues(removed.riding!, cues)], [['on-b', null], ['on-c', { startMs: 5000, endMs: 6000 }]]);
+  /* without linkage nothing rides */
+  assert.equal(planRemove(m, ['b'], { ripple: false, magnet: true, linkage: false }).riding, undefined);
 });
 
 test('a clip past the end of the main track rides on nothing: deleting the last shot leaves it be', () => {

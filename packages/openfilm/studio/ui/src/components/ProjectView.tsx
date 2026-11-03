@@ -40,7 +40,7 @@ import { apartOnTracks, type ClipEdit } from '@/lib/film-clip-edits';
 import { mediaFetch, useMediaImages } from '@/lib/media-queue';
 import { clipboardItemsOf, clipboardNow, laneOfBlock, pasteEdit, type TimelineClipboardItem } from '@/lib/timeline-clipboard';
 import {
-  editModelOf, freshLink, linkedIds, magnetOn, mainTrackOf, planMove, planRippleTrim, planRoom, planSpeed, slowestSpeed, soundTrackFor, type EditMode,
+  carryCues, editModelOf, freshLink, linkedIds, magnetOn, mainTrackOf, planMove, planRippleTrim, planRoom, planSpeed, slowestSpeed, soundTrackFor, type CueRiding, type EditMode,
 } from '@/lib/timeline-edit';
 import { readTimelinePrefs, switchesOf } from '@/lib/timeline-prefs';
 import { fadeMsOf, type FadeMs } from '@/lib/clip-fade';
@@ -74,10 +74,10 @@ import { boxNow, chatPointOf, draftBoxesAt, draftMarksOf, sameClip, NO_DRAFT, ty
 import { usePageChanges } from './use-page-changes';
 import { CaptionInspector } from './CaptionInspector';
 import { CaptionStage } from './CaptionStage';
-import { captionSelectionNow, captionTrackNow, configureCaptionTracks, refreshCaptionTracks, setCaptionSelection, useCaptionSelection } from '@/lib/caption-tracks';
+import { captionSelectionNow, captionTrackNow, configureCaptionTracks, refreshCaptionTracks, setCaptionSelection, useCaptionSelection, writeCaptionTracksWith } from '@/lib/caption-tracks';
 import { cuePlain, readVtt, writeVtt } from '../../../../src/captions.mjs';
 import { FILM_SUBTITLE_LANGUAGES } from '../../../server/film-subtitle.mjs';
-import { placeCues, withIds } from '@/lib/caption-edits';
+import { placeCues, retimeCues, withIds } from '@/lib/caption-edits';
 
 import { useFilmSubtitles } from '@/lib/use-film-subtitles';
 import { DEFAULT_INSPECTOR, DOCK_GAP, DockPaneDivider, MIN_DOCK_H, MIN_INSPECTOR, MIN_STAGE_H, MIN_VIEWER, PaneDivider, usePaneSize } from './PaneDivider';
@@ -868,6 +868,24 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     stageControl.current?.flushPending();
     return filmEdit(ops, label, quiet, outside);
   }, [filmEdit]);
+  /**
+   * An edit planned with linkage (lib/timeline-edit) carries the cues of the caption tracks riding on the main track
+   * too (carryCues), as it carries the clips riding there: their files written first, one undo step with the edit.
+   */
+  const editRiding = React.useCallback(async (ops: Op[], label: string, riding?: CueRiding, quiet?: boolean): Promise<string | null> => {
+    const files = riding ? (filmRef.current?.tracks ?? []).flatMap((tr) => {
+      if (!tr.captions || tr.locked) return [];
+      const vtt = captionTrackNow(projectId, tr.captions.src);
+      if (!vtt) return [];
+      const spans = carryCues(riding, vtt.cues.map((c) => ({ id: c.id, startMs: c.start * 1000, endMs: c.end * 1000 })));
+      return spans.size ? [{ src: tr.captions.src, next: retimeCues(vtt, spans) }] : [];
+    }) : [];
+    const outside = files.length ? await writeCaptionTracksWith(projectId, files) : null;
+    if (typeof outside === 'string') return outside;
+    const why = await edit(ops, label, quiet, outside ?? undefined);
+    if (why && outside) await outside.undo();
+    return why;
+  }, [projectId, edit]);
   /** `quiet`: the caller shows why an edit was refused itself (the inspector does, beside its field) */
   const editBlocks = React.useCallback((asked: ClipEdit[], quiet = false): Promise<string | null> => {
     const current = filmRef.current;
@@ -879,7 +897,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     return edit([{ op: 'props', edits: mapped as { clip: string; prop: string; value: never }[] }], editStepLabel(edits, tracksRef.current), quiet);
   }, [edit, t]);
   /** An edit the timeline planned (lib/timeline-edit), as it planned it: one write, one undo step. */
-  const editOps = React.useCallback((ops: Op[], label: string) => edit(ops, label), [edit]);
+  const editOps = React.useCallback((ops: Op[], label: string, riding?: CueRiding) => editRiding(ops, label, riding), [editRiding]);
 
   /* ── a clip's attributes copied onto others (lib/clip-attrs, ⌘⇧C / ⌘⇧V) ── */
   const [copiedAttrs, setCopiedAttrs] = React.useState<CopiedAttrs | null>(null);
@@ -981,20 +999,20 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       if (!Number.isFinite(startMs)) return Promise.resolve(t('timeline.editFail'));
       const plan = planMove(model, { ids, deltaMs: startMs - block.startMs, pointerMs: startMs, mode: 'place', ...switches });
       if (!plan) return Promise.resolve(t('timeline.trackLocked'));
-      return plan.ops.length ? edit(plan.ops, clipStep('history.stepMoved', [block.clipId]), true) : Promise.resolve(null);
+      return plan.ops.length ? editRiding(plan.ops, clipStep('history.stepMoved', [block.clipId]), plan.riding, true) : Promise.resolve(null);
     }
     if (one!.prop === 'speed') {
       const speed = typeof one!.value === 'number' ? one!.value : 1;
       const plan = planSpeed(model, ids, speed, { ripple: magnet, ...switches });
       if (plan.slowest != null) return Promise.resolve(t('inspector.speedTooSlow').replace('{n}', String(plan.slowest)));
-      return plan.ops.length ? edit(plan.ops, `history.stepSpeed|${block.clipId}`, true) : Promise.resolve(null);
+      return plan.ops.length ? editRiding(plan.ops, `history.stepSpeed|${block.clipId}`, plan.riding, true) : Promise.resolve(null);
     }
     /* a new length, with the magnet: a ripple trim of the tail by the difference (source seconds over the speed) */
     const k = block.anchor?.trimFrom != null && block.speed ? block.speed : 1;
     const deltaMs = ((Number(one!.value) - Number(one!.from ?? one!.value)) * 1000) / k;
     const plan = planRippleTrim(model, ids, 'end', deltaMs, switches);
-    return plan.ops.length ? edit(plan.ops, `history.stepRippleTrimmed|${block.clipId}`, true) : Promise.resolve(null);
-  }, [editBlocks, editModel, edit, t]);
+    return plan.ops.length ? editRiding(plan.ops, `history.stepRippleTrimmed|${block.clipId}`, plan.riding, true) : Promise.resolve(null);
+  }, [editBlocks, editModel, editRiding, t]);
   const removeBlock = React.useCallback((block: TimelineBlock): Promise<string | null> => {
     if (!block.clipId) return Promise.resolve(t('timeline.removeFail'));
     return edit([{ op: 'remove', clip: block.clipId }], clipStep('history.stepRemoved', [block.clipId]));
