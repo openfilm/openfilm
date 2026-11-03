@@ -87,6 +87,50 @@ test('a heading that is not a shot in form starts nothing: its fields are not an
   assert.equal(shots[0].page, 'a.html');
 });
 
+test('a shot may be headed with one #: a h1 heading starts its own shot, not the last one\'s tail', () => {
+  const { shots, problems } = parseStoryboard([
+    '## Shot 1 — 4s',
+    'page: a.html',
+    '# Shot 2 — 2s',
+    'page: b.html',
+  ].join('\n'));
+  assert.deepEqual(problems, []);
+  assert.deepEqual(shots.map((s) => [s.n, s.seconds, s.page]), [[1, 4, 'a.html'], [2, 2, 'b.html']]);
+});
+
+test('a field that names a file names it as the project has it: escapes read, the fragment off', () => {
+  const { shots, problems } = parseStoryboard([
+    '## Shot 1 — 4s',
+    'page: my%20page.html',
+    'vo: Say #1, louder.',
+    'media: assets/video/screen.mp4#t=2,8',
+  ].join('\n'));
+  assert.deepEqual(problems, []);
+  assert.equal(shots[0].page, 'my page.html');
+  assert.equal(shots[0].vo, 'Say #1, louder.');
+  assert.deepEqual(shots[0].media, ['assets/video/screen.mp4']);
+});
+
+test('a film.html that does not read is said once, and the shots are not each said not cut', () => {
+  const dir = project();
+  writeBoard(dir, TEXT);
+  writeFileSync(join(dir, 'title.html'), '<script>window.film={frame(){}}</script>');
+  writeFileSync(join(dir, 'demo.html'), '<script>window.film={frame(){}}</script>');
+  writeFileSync(join(dir, 'film.html'), '<html><body><section><iframe src="title.html#t=0,4"');
+  const said = checkStoryboard(dir, readStoryboard(dir)).lines.join('\n');
+  assert.match(said, /film\.html does not read as a film/);
+  assert.doesNotMatch(said, /is not cut into film\.html/);
+});
+
+test('a page named with an escape is held to film.html as the file it is', () => {
+  const dir = project();
+  writeBoard(dir, ['## Shot 1 — 4s', 'page: my%20page.html', ''].join('\n'));
+  writeFileSync(join(dir, 'my page.html'), '<script>window.film={frame(){}}</script>');
+  writeFileSync(join(dir, 'film.html'), '<section><iframe src="my%20page.html#t=0,4"></iframe></section>');
+  const hold = checkStoryboard(dir, readStoryboard(dir));
+  assert.equal(hold.ok, true, hold.lines.join('\n'));
+});
+
 test('a field that names a file is its file: a media fragment, written as film.html would, does not hide it', () => {
   const { shots, problems } = parseStoryboard([
     '## Shot 1 — 4s',

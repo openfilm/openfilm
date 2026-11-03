@@ -25,8 +25,11 @@ export function readStoryboard(project) {
   return parseStoryboard(readFileSync(file, 'utf8'), '.film/pipeline/storyboard.md');
 }
 
-/** The file a field names: which part of it plays (`#t=…`) is film.html's, not the storyboard's. */
-const mediaFile = (value) => value.split('#')[0].replaceAll('\\', '/');
+/** The file a field names, as the project has it: the part-of-the-file (`#t=…`, film.html's business) off, its escapes read, its backslashes forward. */
+const filePath = (value) => {
+  const [path] = value.split('#');
+  try { return decodeURIComponent(path).replaceAll('\\', '/'); } catch { return path.replaceAll('\\', '/'); }
+};
 
 /** The shots' seconds, added up. */
 export const storyboardSeconds = (shots) =>
@@ -43,7 +46,7 @@ export function parseStoryboard(text, file = 'storyboard.md') {
   let shot = null;
   for (const [i, line] of text.split(/\r?\n/).entries()) {
     const at = `${file}:${i + 1}`;
-    const heading = line.match(/^#{2,3}\s+shot\b\s*(.*)$/i);
+    const heading = line.match(/^#{1,3}\s+shot\b\s*(.*)$/i);
     if (heading) {
       const form = 'a shot heading says `## Shot 1 — 4s`, with an optional name after another dash';
       const m = heading[1].trim().match(/^(?<n>\d+)\s*(?:[-–—:]?\s*(?<seconds>[\d.]+)\s*(?:s|sec|seconds)\b)?\s*(?:[-–—:]\s*(?<name>.*))?$/i);
@@ -74,8 +77,8 @@ export function parseStoryboard(text, file = 'storyboard.md') {
       problems.push(`${at}: a shot has no ${key}; these are a shot's fields: ${FIELDS.join(', ')}`);
       continue;
     }
-    if (key === 'media') { if (value) shot.media.push(mediaFile(value)); }
-    else if (key === 'page') shot.page = value ? mediaFile(value) : null;
+    if (key === 'media') { if (value) shot.media.push(filePath(value)); }
+    else if (key === 'page') shot.page = value ? filePath(value) : null;
     else shot[key] = value || null;
   }
   return { shots, problems, file };
@@ -103,13 +106,6 @@ const voiceOf = (project, n) => {
 /** Seconds as they are said: 20, not 20.00. */
 const said = (s) => `${+s.toFixed(2)}`;
 
-/** The file a clip of film.html names, its escapes read and its part-of-the-file taken off. */
-const clipPath = (src) => {
-  let path = src;
-  try { path = decodeURIComponent(path); } catch { /* a % that escapes nothing, as written */ }
-  return path.split('#')[0].replaceAll('\\', '/');
-};
-
 /** How long a clip of film.html lasts on the film, from its part of the file and its speed; null when it is its own. */
 const cutLength = (clip) => {
   const time = Array.isArray(clip.time) ? clip.time : [];
@@ -121,21 +117,26 @@ const cutLength = (clip) => {
  * The storyboard held against the project: a line per thing it calls for that is not there, each under the stage
  * that fills it — assets for media and voices, assembly for pages and the cut — so the check is the work list of
  * the stage the film is at. A page the project has is held to film.html as well: cut in, in the storyboard's order,
- * for its seconds. `ok` when nothing is missing.
+ * for its seconds. A film.html that does not read is said once, not per shot. `ok` when nothing is missing.
  */
 export function checkStoryboard(project, { shots, problems, file }, { seconds, run = 'openfilm' } = {}) {
   const rows = problems.map((problem) => ['', problem]);
   const total = storyboardSeconds(shots);
   const filmFile = join(project, 'film.html');
-  const cut = existsSync(filmFile)
-    ? (readFilmFile(readFileSync(filmFile, 'utf8')).doc?.tracks ?? []).flatMap(({ clips }) => clips).filter((clip) => clipKind(clip.src) === 'page')
+  const filmRead = existsSync(filmFile) ? readFilmFile(readFileSync(filmFile, 'utf8')) : null;
+  const cut = filmRead?.doc
+    ? (filmRead.doc.tracks ?? []).flatMap(({ clips }) => clips).filter((clip) => clipKind(clip.src) === 'page')
     : [];
+  if (filmRead && !filmRead.doc && shots.some((shot) => shot.page)) {
+    rows.push(['', 'film.html does not read as a film; `openfilm look` says where']);
+  }
   const firsts = [];
+  const readable = filmRead?.doc != null;
   for (const shot of shots) {
     if (!shot.page) rows.push([`shot ${shot.n}`, `no page: every shot is made as a page (\`${run} pipeline storyboard\` shows the form)`]);
     else if (!existsSync(join(project, shot.page))) rows.push([`shot ${shot.n}`, `page ${shot.page} is not written yet (assembly)`]);
-    else {
-      const found = cut.filter((clip) => clipPath(clip.src) === shot.page);
+    else if (readable) {
+      const found = cut.filter((clip) => filePath(clip.src) === shot.page);
       if (!found.length) rows.push([`shot ${shot.n}`, `page ${shot.page} is not cut into film.html (assembly)`]);
       else {
         firsts.push(cut.indexOf(found[0]));
