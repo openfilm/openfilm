@@ -23,6 +23,7 @@
  *            { type: 'spans', spans }             a page opened for the first time said its own length and size
  *            { type: 'picked', seq, target }      (null: nothing there)
  *            { type: 'error', message }           the film or a page failed
+ *            { type: 'undecoded', src }           a video this browser could not play (src as film.html writes it)
  *
  * Only the editor's origin is listened to and answered (the server puts it in for EDITOR).
  */
@@ -56,6 +57,14 @@
     tweaker ??= import(new URL('__film/overrides.mjs', location.href).href).then((m) => m.override);
     (await tweaker)(tweakState, tweaks);
   };
+
+  /* the videos it could not play, as soon as the timeline is there (before the film is up: it may be why it is not) */
+  void film.then(() => {
+    const said = (src) => post({ type: 'undecoded', src });
+    if (!editor()) return;
+    editor().undecoded = said;
+    for (const src of editor().unplayed?.() ?? []) said(src);
+  });
 
   /* the film once loaded, or null: one that fails to load (a clip with no length, a missing file) says why once, here,
      and draws and answers nothing after — a page error for each later message would only repeat it */

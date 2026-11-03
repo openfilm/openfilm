@@ -482,6 +482,8 @@ export class FrameError extends Error {}
 export class VideoNotShown extends FrameError {}
 /** How many exact frames of video may go unseen, none seen yet, before the browser counts as showing no video. */
 const UNSEEN_VIDEO = 3;
+/** And with no other way to show video: how many before the film fails, rather than be drawn black. */
+const NEVER_SHOWN = 12;
 
 /**
  * `work`, or a FrameError saying `why` once `ms` pass. The limit is kept here, not in the page: a page whose code
@@ -657,9 +659,14 @@ export class FilmPage {
     const why = `frame(${Number(t.toFixed(3))}) did not finish within ${timeoutMs / 1000} s`;
     const videos = await inTime(drawn, timeoutMs, why).catch(async (e) => { throw e.message === why ? new FrameError(`${why}${await stuck(this.page)}`) : e; });
     /* every seek waited out (five seconds a frame) and the picture black: when browsers can show video another way,
-       the film is drawn again in those */
-    if (videos && videos.shown === 0 && videos.unshown >= UNSEEN_VIDEO && await this.onVideoNotShown()) {
-      throw new VideoNotShown(`this browser never showed the film's video frames (${videos.unshown} sought): video is shown another way from now on`);
+       the film is drawn again in those; with none, it fails before it is all drawn black */
+    if (videos && videos.shown === 0 && videos.unshown >= UNSEEN_VIDEO) {
+      if (await this.onVideoNotShown()) {
+        throw new VideoNotShown(`this browser never showed the film's video frames (${videos.unshown} sought): video is shown another way from now on`);
+      }
+      if (videos.unshown >= NEVER_SHOWN) {
+        throw new FrameError(`this browser never showed the film's video frames (${videos.unshown} sought), so its picture would be black. On Windows, updating the graphics driver can help.`);
+      }
     }
   }
 

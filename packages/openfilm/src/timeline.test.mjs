@@ -273,14 +273,16 @@ test('a missing file stops a film, said by its name; an editor\'s preview (film-
   }
 });
 
-test('a video the browser can\'t decode fails an exact frame, said by its clip and file; watched, the film draws on', { timeout: 60_000 }, async () => {
+test('a video the browser can\'t decode fails an exact frame, said by its clip and file; watched, the film draws on, and an editor hears of it once', { timeout: 60_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'of-undecodable-'));
   writeFileSync(join(dir, 'bad.mp4'), Buffer.alloc(20_000, 'not a video '));
   writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'v', src: 'bad.mp4', time: [0, 2] }] }] }));
   const s = await open(dir);
   try {
+    await s.film.page.evaluate(() => { window.told = []; window.__filmEditor.undecoded = (src) => window.told.push(src); });
     await assert.rejects(s.film.seek(0.5), (e) => e instanceof FrameError && /^clip "v" \(bad\.mp4\): this browser can't play its video/.test(e.message));
     await s.film.page.evaluate(() => window.__filmEditor.watch(1));
+    assert.deepEqual(await s.film.page.evaluate(() => [window.told, window.__filmEditor.unplayed()]), [['bad.mp4'], ['bad.mp4']]);
   } finally {
     await s.close();
     rmSync(dir, { recursive: true, force: true });
@@ -458,7 +460,7 @@ test('a sought frame that is decoded but never presented (a seek just after load
   }
 });
 
-test('a browser that never shows a film\'s video frames: after a few, the film is drawn again where video is shown another way, when there is one', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 120_000 }, async () => {
+test('a browser that never shows a film\'s video frames: after a few, the film is drawn again where video is shown another way, when there is one; else it fails', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 180_000 }, async () => {
   const dir = footage('of-never-shown-');
   writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'v', src: 'a.mp4', time: [0, 4] }] }] }));
   const site = await serve(dir);
@@ -473,10 +475,11 @@ test('a browser that never shows a film\'s video frames: after a few, the film i
     assert.equal(asked, 1);
     assert.deepEqual(await film.page.evaluate(() => window.__filmVideos()), { shown: 0, unshown: 3 });
     await film.close();
-    /* with no other way (not Windows, or moved already) it goes on as before */
+    /* with no other way (not Windows, or moved already) it goes on a while, then fails rather than be drawn black */
     const as = await FilmPage.open(browser, site.url, 'film.html', { onVideoNotShown: async () => false });
     await as.page.evaluate(() => { HTMLVideoElement.prototype.requestVideoFrameCallback = () => 0; });
-    for (const t of [0.5, 1.5, 2.5]) await as.seek(t);
+    for (let n = 1; n < 12; n++) await as.seek((n * 0.3) % 4);
+    await assert.rejects(as.seek(3.9), (e) => e instanceof FrameError && !(e instanceof VideoNotShown) && /never showed the film's video frames \(12 sought\), so its picture would be black/.test(e.message));
     await as.close();
   } finally {
     await browser.close();

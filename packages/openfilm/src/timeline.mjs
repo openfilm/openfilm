@@ -647,9 +647,17 @@ function wake(c, from = null) {
   if (from > 0) v.currentTime = from;
   c.awake = new Promise((done) => {
     v.addEventListener('loadeddata', () => done(), { once: true });
-    v.addEventListener('error', () => done(), { once: true });
+    v.addEventListener('error', () => { if (v.error && v.error.code !== v.error.MEDIA_ERR_NETWORK) undecoded(c.row.src); done(); }, { once: true });
   });
   return c.awake;
+}
+
+/** The videos this browser could not play (each src once), told to an editor (see __filmEditor.undecoded). */
+const notPlayed = new Set();
+function undecoded(src) {
+  if (notPlayed.has(src)) return;
+  notPlayed.add(src);
+  window.__filmEditor.undecoded?.(src);
 }
 
 /** Let a video's file go: its decoder and buffers are freed. A page is closed (see restPage). */
@@ -1380,6 +1388,9 @@ window.__filmEditor = {
   },
   /** Set by a host (Studio's bridge) to hear of a page's own length and size learned as it first opens (see load). */
   learned: null,
+  /** Set by a host to hear of each video this browser could not play (its src): `unplayed()` lists those so far. */
+  undecoded: null,
+  unplayed: () => [...notPlayed],
   /**
    * The film after an edit (`look`: its file's filmHead, when the edit came from the file; another one than this film
    * was loaded with needs the page loaded again): changed in place (see change), resolving to true, or to false when

@@ -376,6 +376,14 @@ export function ProjectView({ projectId, onProject, onLeave }: {
    * preview again behind the picture, so it plays what it should.
    */
   const [proxies, setProxies] = React.useState<Record<string, MediaProxy>>({});
+  /* the videos the preview could not play though this browser said it would (their src): told as not decoded too */
+  const unplayed = React.useRef(new Set<string>());
+  const askProxies = React.useRef<(() => void) | null>(null);
+  const onUndecoded = React.useCallback((src: string) => {
+    if (unplayed.current.has(src)) return;
+    unplayed.current.add(src);
+    askProxies.current?.();
+  }, []);
   const [prefsTick, setPrefsTick] = React.useState(0);
   React.useEffect(() => {
     const changed = () => setPrefsTick((n) => n + 1);
@@ -401,13 +409,17 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       before = states;
       const found = (await Promise.all(Object.entries(answer.checks ?? {}).map(async ([path, check]) => ((await decodes(check)) ? [] : [path])))).flat();
       if (!alive) return;
+      for (const path of new Set([...Object.keys(states), ...Object.keys(answer.checks ?? {})])) {
+        if (!found.includes(path) && [...unplayed.current].some((src) => srcHitsAsset(src, path))) found.push(path);
+      }
       const told = found.every((path) => undecoded.includes(path));
       undecoded = found;
       if (!told) void ask();
       else if (Object.values(states).some((s) => s.state === 'waiting' || s.state === 'making')) timer = window.setTimeout(() => { void ask(); }, 1500);
     };
+    askProxies.current = () => { window.clearTimeout(timer); void ask(); };
     void ask();
-    return () => { alive = false; window.clearTimeout(timer); };
+    return () => { alive = false; window.clearTimeout(timer); askProxies.current = null; };
   }, [rawListing, projectId, prefsTick]);
   const listing = React.useMemo<MediaListing | null>(
     () => (rawListing ? mediaListingOf(rawListing, (path) => ({ ...facts.get(path), ...(proxies[path] ? { proxy: proxies[path] } : {}) }), (rawListing as { made?: string[] }).made) : null),
@@ -3607,7 +3619,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                           height: `${(frameBox.inner.h / frameBox.h) * 100}%`,
                         }}>
                           <Preview ref={preview} folder={folder} stage={shownStage} time={() => player.current.time()} fps={exactRate(projectFps)}
-                            onInfo={onInfo} onKey={previewKey} onError={setPreviewError} onPlayed={onPlayed}
+                            onInfo={onInfo} onKey={previewKey} onError={setPreviewError} onPlayed={onPlayed} onUndecoded={onUndecoded}
                             onSpans={(next) => setInfo((had) => (had ? { ...had, spans: next } : had))}>
                             {!fullscreen ? (
                               <FilmStageSelect

@@ -10,9 +10,9 @@ const EDITOR = 'http://127.0.0.1:4792';
  * The bridge in a film page of its own: the film's draws held until let go, and what it says to the editor. Its clock
  * and its screen's refreshes are the test's: `refresh(ms)` moves the clock on and runs the frame callbacks waiting.
  * `alone`: a web page on its own (the media pane's viewer), with no timeline in it: its own frame(t) draws.
- * `duration` null: a page without one.
+ * `duration` null: a page without one. `unplayed`: the videos its timeline could not play before the bridge listened.
  */
-function filmPage({ alone = false, duration = 10 } = {}) {
+function filmPage({ alone = false, duration = 10, unplayed = [] } = {}) {
   const listeners = new Map();
   const said = [];
   const drawn = [];
@@ -24,7 +24,7 @@ function filmPage({ alone = false, duration = 10 } = {}) {
   const window = {
     addEventListener: (type, fn) => listeners.set(type, fn),
     film: { ...(duration == null ? {} : { duration }), width: 320, height: 180, ready: Promise.resolve(), frame: alone ? (t) => held(t) : () => {} },
-    ...(alone ? {} : { __filmEditor: { watch: held, update: async () => true } }),
+    ...(alone ? {} : { __filmEditor: { watch: held, update: async () => true, unplayed: () => unplayed } }),
   };
   const parent = { postMessage: (m) => said.push(m) };
   const performance = { now: () => now, timeOrigin: 1_700_000_000_000 };
@@ -41,8 +41,15 @@ function filmPage({ alone = false, duration = 10 } = {}) {
     for (const fn of due) fn(now);
     await settle();
   };
-  return { send, said, drawn, settle, refresh, clock: () => now };
+  return { send, said, drawn, settle, refresh, clock: () => now, window };
 }
+
+test('a video the timeline could not play is told to the editor, those from before the bridge listened too', async () => {
+  const page = filmPage({ unplayed: ['media/a.mov'] });
+  await page.settle();
+  page.window.__filmEditor.undecoded('media/b.mp4');
+  assert.deepEqual(page.said.filter((m) => m.type === 'undecoded').map((m) => m.src), ['media/a.mov', 'media/b.mp4']);
+});
 
 test('an edit changed in place while the first moment is still drawing is drawn at that moment, not at 0 s', async () => {
   const page = filmPage();
