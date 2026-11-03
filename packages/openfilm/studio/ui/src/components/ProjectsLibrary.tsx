@@ -19,6 +19,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2 } from 'lucide-react';
 import { api, ApiError, LIBRARY_EVENT } from '@/api';
+import { recycleRefusalOf, recycleRefusalWords, type RecycleRefusal } from '@/lib/recycle';
 import { useT } from '@/i18n';
 import { folderApi, folderCounts, folderTrail, newProjectIn, type ProjectFolder } from '@/lib/project-folders';
 import { stillThere } from '@/lib/project-delete';
@@ -131,17 +132,20 @@ function useProjectLibrary(open: boolean) {
     setProjects((list) => list.filter((p) => !drop.has(p.id)));
     /* null: deleted; else why not ('agent-running': an agent started in it since the list was read) */
     /* `lost`: no answer came (the request was cut off, as when the page showing one of them leaves it) */
+    /* `kept` (Windows): the Recycle Bin would not take its folder, so it stays where it is, and the person hears why */
     const results = await Promise.all(ids.map((id) => api.forget(id).then(() => null, (e: unknown) => ({
       id, working: e instanceof ApiError && e.body.code === 'agent-running', lost: !(e instanceof ApiError),
+      kept: e instanceof ApiError ? recycleRefusalOf(e.body) : null,
     }))));
     /* the ones still on the list (lib/project-delete): one gone already, or whose lost answer was a delete, was deleted */
-    const failed = await stillThere(results.filter((r): r is { id: string; working: boolean; lost: boolean } => r !== null),
+    const failed = await stillThere(results.filter((r): r is { id: string; working: boolean; lost: boolean; kept: RecycleRefusal | null } => r !== null),
       () => api.projects().then((list) => list.map((p) => p.id)));
     if (failed.length) {
       const back = new Set(failed.map((f) => f.id));
       setProjects((list) => [...list, ...before.filter((p) => back.has(p.id)).map((p) => (failed.find((f) => f.id === p.id)?.working ? { ...p, working: true } : p))]);
       const working = failed.filter((f) => f.working).length;
-      flash(working ? agentRunning(working, ids.length) : t('project.deleteFailed'));
+      const kept = failed.find((f) => f.kept)?.kept;
+      flash(working ? agentRunning(working, ids.length) : kept ? recycleRefusalWords(t, kept) : t('project.deleteFailed'));
     }
     const gone = new Set(failed.map((f) => f.id));
     return new Set(ids.filter((id) => !gone.has(id)));

@@ -9,6 +9,7 @@
 import { clipKind } from '../../../../src/film-doc.mjs';
 import type { FilmOverride } from './film.ts';
 import { mediaFetch } from './media-queue.ts';
+import type { RecycleRefusal } from './recycle.ts';
 
 export type WorkspaceResourceKind = 'video' | 'image' | 'audio' | 'mg' | 'other';
 
@@ -113,8 +114,9 @@ export interface MediaSources {
   pageSurface?(file: WorkspaceResource): string | undefined;
 }
 
-/** What a change to the files came to: done, refused because the name is taken, or failed. */
-export type MediaResult = 'ok' | 'taken' | 'failed';
+/** What a change to the files came to: done, refused because the name is taken, left where it is because the Recycle
+ * Bin would not take it (Windows; lib/recycle.ts), or failed. */
+export type MediaResult = 'ok' | 'taken' | 'failed' | RecycleRefusal;
 
 /** What a probe found out about a media file (`media?what=probe`, in ms and px). */
 export interface MediaFacts {

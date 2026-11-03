@@ -72,6 +72,7 @@ import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import { KIND_ICON, MediaPreview, useNearViewport } from './MediaPreview';
 import { useMediaImage } from '@/lib/media-queue';
 import { Tooltip } from './Tooltip';
+import { recycleRefusalWords, type RecycleRefusal } from '@/lib/recycle';
 import { retryImage } from '@/lib/retry-image';
 import { boxBetween, boxHits, boxPick, moveTargets, pickItem, type Box } from '@/lib/media-selection';
 import { barLayout, type BarWords } from '@/lib/media-bar';
@@ -463,11 +464,16 @@ export function MediaPool({
     const dropped = await onDropClips?.(gone);
     if (dropped) { setNotice(dropped); return; }
     let failed = false;
+    let kept: RecycleRefusal | null = null;
     for (const target of targets) {
       // eslint-disable-next-line no-await-in-loop
-      if (await onDelete(target.path) !== 'ok') failed = true;
+      const result = await onDelete(target.path);
+      if (typeof result === 'object') kept ??= result;
+      else if (result !== 'ok') failed = true;
     }
-    if (failed) setNotice(t('assets.deleteFailed'));
+    /* Windows: the Recycle Bin would not take it, so it stays, and the person hears why */
+    if (kept) setNotice(recycleRefusalWords(t, kept));
+    else if (failed) setNotice(t('assets.deleteFailed'));
     if (selectedPath && gone.includes(selectedPath)) showFile(null);
     setPicked((cur) => cur.filter((key) => !targets.some((target) => target.path === key)));
   };
