@@ -34,8 +34,7 @@ export default {
   env: 'GROQ_API_KEY',
   keysUrl: 'https://console.groq.com/keys',
   billingUrl: 'https://console.groq.com/settings/billing',
-  /* the Free plan's rate limits; a card only to raise them */
-  price: 'free', pricingUrl: 'https://console.groq.com/docs/rate-limits',
+  pricingUrl: 'https://console.groq.com/docs/models',
   verbs: ['voice', 'tts', 'asr'],
   models: MODELS,
   async run(verb, args, ctx) {

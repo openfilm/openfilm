@@ -41,8 +41,7 @@ export default {
   env: 'AZURE_SPEECH_KEY',
   keysUrl: 'https://portal.azure.com/#view/Microsoft_Azure_ProjectOxford/CognitiveServicesHub/~/SpeechServices',
   billingUrl: 'https://portal.azure.com/#view/Microsoft_Azure_CostManagement/Menu/~/overview',
-  /* 0.5 million neural voice characters a month free (F0); an Azure account takes a card */
-  price: 'allowance', pricingUrl: 'https://azure.microsoft.com/pricing/details/speech/',
+  pricingUrl: 'https://azure.microsoft.com/pricing/details/speech/',
   verbs: ['voice', 'tts'],
   checkKey(key) { placed(key); },
   async run(verb, args, ctx) {

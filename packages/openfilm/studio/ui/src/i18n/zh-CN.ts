@@ -2022,14 +2022,8 @@ export const zhCN: Words = {
       keyEnding: '尾号为 {last4} 的密钥',
       useEnv: '使用环境变量 ${env} 里的密钥',
       keyless: '无需密钥即可使用：你的智能体搜索的内容和读取的网址会发送给 {name}。添加密钥可提高用量上限。',
-      price: {
-        free: '免费',
-        freeTip: '{name} 的 API 不收费，只有用量上限。点击查看它的价格。',
-        allowance: '有免费额度',
-        allowanceTip: '{name} 的全部或部分功能在限额内免费，超出后由你的密钥付费。点击查看它的价格和额度。',
-        paid: '付费',
-        paidTip: '{name} 从第一次使用起收费，需要先在它那里充值或绑卡。点击查看它的价格。',
-      },
+      pricing: '价格',
+      pricingOf: '{name} 的价格（官网）',
       addKey: '添加密钥',
       own: {
         title: "自定义服务",

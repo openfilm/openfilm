@@ -69,20 +69,12 @@
  */
 
 /**
- * What a provider's API costs the person: `free` (nothing, within its limits), `allowance` (all or some of what it
- * makes is free within limits, a monthly allowance or a free model; past them, paid), `paid` (paid from the first
- * call: a balance or a card first).
- * @typedef {'free' | 'allowance' | 'paid'} Price
- */
-
-/**
  * @typedef {{
  *   id: string,
  *   name: string,
  *   env: string,
  *   keysUrl: string,
  *   billingUrl: string,
- *   price: Price,
  *   pricingUrl: string,
  *   verbs: Verb[],
  *   models?: Partial<Record<Verb, { id: string, name: string }[]>>,
@@ -97,8 +89,8 @@
  * is pasted instead of at the first run. Only for what the provider knows without calling anyone: it must not fetch.
  * `keyless`: it also works with no key (a free tier), so the person can connect it with one click and add a key for
  * higher limits. Connected without one, its `key` is ''. Like every provider, it serves nothing until it is connected.
- * `price`: what using it through its API costs the person, as Settings → Providers says beside its name (Price).
- * `pricingUrl`: the provider's own page of prices and free limits, linked from there.
+ * `pricingUrl`: the provider's own pricing page, linked as "Pricing" in Settings → Providers. Only the link: what is free
+ * and what is paid changes on the provider's side.
  * `billingUrl`: the provider's own page where the person tops up its balance. A run that fails because the account has
  * no balance left throws an Error with `code: 'balance'` (common.mjs `noBalance`), the same for every provider: the
  * person is told in Studio, with this page, and the agent is told to stop.

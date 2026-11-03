@@ -21,8 +21,7 @@ export default {
   env: 'KEENABLE_API_KEY',
   keysUrl: 'https://app.keenable.ai/console',
   billingUrl: 'https://app.keenable.ai/console',
-  /* 1,000 requests an hour with no key; 100K a month free with one */
-  price: 'free', pricingUrl: 'https://keenable.ai/pricing',
+  pricingUrl: 'https://keenable.ai/pricing',
   verbs: ['web-search', 'web-fetch'],
   models: MODELS,
   keyless: true,

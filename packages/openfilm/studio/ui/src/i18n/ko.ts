@@ -2017,14 +2017,8 @@ export const ko: Words = {
       keyEnding: '{last4}(으)로 끝나는 키',
       useEnv: '환경 변수 ${env}의 키 사용',
       keyless: '키 없이 사용할 수 있습니다. 에이전트의 검색어와 읽는 주소는 {name}(으)로 전송됩니다. 키를 추가하면 한도가 늘어납니다.',
-      price: {
-        free: '무료',
-        freeTip: '{name} API는 무료입니다(사용 한도 있음). 클릭하면 요금 페이지가 열립니다.',
-        allowance: '무료 한도',
-        allowanceTip: '{name}은(는) 기능의 전부 또는 일부를 한도 내에서 무료로 쓸 수 있습니다. 초과분은 내 키로 결제됩니다. 클릭하면 요금과 한도가 열립니다.',
-        paid: '유료',
-        paidTip: '{name}은(는) 첫 사용부터 요금이 청구됩니다. 먼저 잔액을 충전하거나 카드를 등록하세요. 클릭하면 요금 페이지가 열립니다.',
-      },
+      pricing: '요금',
+      pricingOf: '{name} 요금(공식 사이트)',
       addKey: '키 추가',
       own: {
         title: "사용자 지정 서비스",

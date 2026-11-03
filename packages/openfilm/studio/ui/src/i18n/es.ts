@@ -2021,14 +2021,8 @@ export const es: Words = {
       keyEnding: 'Clave terminada en {last4}',
       useEnv: 'Usar la clave de ${env}',
       keyless: 'Funciona sin clave: las búsquedas de tu agente y las direcciones que lee se envían a {name}. Una clave amplía sus límites.',
-      price: {
-        free: 'Gratis',
-        freeTip: 'La API de {name} no cuesta nada, dentro de sus límites. Haz clic para ver sus precios.',
-        allowance: 'Nivel gratuito',
-        allowanceTip: '{name} es gratis dentro de sus límites para todo o parte de lo que hace; pasados esos límites, paga tu clave. Haz clic para ver sus precios y límites.',
-        paid: 'De pago',
-        paidTip: '{name} cobra desde el primer uso: antes añade saldo o una tarjeta allí. Haz clic para ver sus precios.',
-      },
+      pricing: 'Precios',
+      pricingOf: 'Los precios de {name}, en su propio sitio',
       addKey: 'Añadir una clave',
       own: {
         title: "Servicios personalizados",

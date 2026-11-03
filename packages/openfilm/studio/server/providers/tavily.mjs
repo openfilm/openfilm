@@ -27,8 +27,7 @@ export default {
   env: 'TAVILY_API_KEY',
   keysUrl: 'https://app.tavily.com/home',
   billingUrl: 'https://app.tavily.com/billing',
-  /* 1,000 credits a month free, no card */
-  price: 'allowance', pricingUrl: 'https://www.tavily.com/pricing',
+  pricingUrl: 'https://www.tavily.com/pricing',
   verbs: ['web-search', 'web-fetch'],
   models: MODELS,
   async run(verb, args, ctx) {

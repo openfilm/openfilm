@@ -155,14 +155,10 @@ const WORDS = /** @type {Record<string, string>} */ ({
   tts: 'voice-over', music: 'music', sfx: 'sound effects', asr: 'transcripts', image: 'images', 'image-search': 'image search',
   video: 'video', translate: 'subtitle translation', 'web-search': 'web search',
 });
-/** What each service's API costs the person, in words (contract.mjs `Price`). */
-const PRICE_WORDS = /** @type {Record<string, string>} */ ({
-  free: 'free', allowance: 'free within limits for all or some of it, then paid', paid: 'paid',
-});
-/** The media services `get` can use, by name (none comes first), what each makes and costs, and where the person connects them. */
+/** The media services `get` can use, by name (none comes first), what each makes, and where the person connects them. */
 export const services = () => `Media services, each used with the person's own key: ${listProviders()
-  .map((p) => ({ name: p.name, makes: p.verbs.filter((v) => WORDS[v]).map((v) => WORDS[v]).join(', '), price: PRICE_WORDS[p.price] }))
-  .sort((a, b) => a.name.localeCompare(b.name)).map((p) => `${p.name} (${p.makes}; ${p.price})`).join(', ')}. ${WHERE_TO_CONNECT}`;
+  .map((p) => ({ name: p.name, makes: p.verbs.filter((v) => WORDS[v]).map((v) => WORDS[v]).join(', ') }))
+  .sort((a, b) => a.name.localeCompare(b.name)).map((p) => `${p.name} (${p.makes})`).join(', ')}. ${WHERE_TO_CONNECT}`;
 
 /** How long the person has to answer a question about spending. */
 const ASK_WAIT_MS = 15 * 60_000;

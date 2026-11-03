@@ -6,9 +6,6 @@
  */
 import React from 'react';
 
-/** What a provider's API costs the person (studio/server/providers/contract.mjs `Price`). */
-export type ProviderPrice = 'free' | 'allowance' | 'paid';
-
 export type ProviderVerb = 'voice' | 'tts' | 'sfx' | 'music' | 'asr' | 'image-search' | 'image' | 'video' | 'translate' | 'web-search' | 'web-fetch';
 
 
@@ -20,9 +17,7 @@ export interface OwnProvider {
   models: Partial<Record<ProviderVerb, { id: string; name: string }[]>>;
   /** the provider's page for making a key */
   keysUrl: string;
-  /** what its API costs: nothing, free within limits for all or some of what it makes, or paid from the first call */
-  price: ProviderPrice;
-  /** the provider's page of prices and free limits */
+  /** the provider's own pricing page */
   pricingUrl: string;
   /** the environment variable a key is (or would be) read from */
   env: string;

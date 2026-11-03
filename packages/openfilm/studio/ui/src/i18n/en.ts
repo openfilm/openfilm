@@ -2022,14 +2022,8 @@ export const en = {
       keyEnding: 'Key ending in {last4}',
       useEnv: 'Use the key in ${env}',
       keyless: "Works without a key: your agent's searches and the addresses it reads go to {name}. A key lifts its limits.",
-      price: {
-        free: 'Free',
-        freeTip: "{name}'s API costs nothing, within its limits. Click for its prices.",
-        allowance: 'Free tier',
-        allowanceTip: '{name} is free within its limits for all or some of what it makes; past them, your key pays. Click for its prices and limits.',
-        paid: 'Paid',
-        paidTip: '{name} charges from the first use: add a balance or a card there first. Click for its prices.',
-      },
+      pricing: 'Pricing',
+      pricingOf: "{name}'s prices, on its own site",
       addKey: 'Add a key',
       own: {
         title: "Custom services",

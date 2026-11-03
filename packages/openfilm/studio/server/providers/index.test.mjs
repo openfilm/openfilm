@@ -18,13 +18,8 @@ test('the own-key providers, in the order Settings lists them', () => {
   assert.deepEqual(listProviders().map((p) => p.id), ['elevenlabs', 'openai', 'google', 'fal', 'pexels', 'pixabay', 'brave', 'tavily', 'groq', 'azure', 'doubao', 'mimo', 'keenable']);
 });
 
-test('each provider says what its API costs, and where its prices are', () => {
-  for (const p of listProviders()) {
-    assert.ok(['free', 'allowance', 'paid'].includes(p.price), `${p.id}: ${p.price}`);
-    assert.match(p.pricingUrl, /^https:\/\//, p.id);
-  }
-  /* a keyless one costs nothing to connect */
-  for (const p of listProviders().filter((p) => p.keyless)) assert.equal(p.price, 'free', p.id);
+test('each provider links its own pricing page', () => {
+  for (const p of listProviders()) assert.match(p.pricingUrl, /^https:\/\//, p.id);
 });
 
 test('nothing serves a kind of media nobody chose, even with a key that could', async () => {
