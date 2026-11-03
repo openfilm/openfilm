@@ -6,7 +6,7 @@
  * until it is done, then its file. Pictures a model is given go inline, as data: URIs. What a run cost, as OpenRouter
  * reports it, goes in its receipt as `usd` (Studio leaves it out of what the agent reads).
  */
-import { billedBy, call, clamp, dataUri, download, extOf, landing, list, madePicture, modelOf, needed, notes, number, ownAddress, serviceUrl, sleep, text } from './common.mjs';
+import { billedBy, call, clamp, dataUri, download, extOf, landing, list, madePicture, modelOf, needed, notes, number, ownAddress, pictureSize, serviceUrl, sleep, text } from './common.mjs';
 
 /** @typedef {import('./contract.mjs').Provider} Provider @typedef {import('./contract.mjs').RunContext} RunContext */
 
@@ -20,6 +20,8 @@ const m = (id, name) => ({ id, name });
 /** The models it makes each kind of media with, the default first (openrouter.ai/models, by output). */
 const MODELS = {
   image: [
+    m('openai/gpt-image-2.5-flare', 'GPT Image 2.5 Flare'),
+    m('openai/gpt-image-2.5-sunburst', 'GPT Image 2.5 Sunburst'),
     m('google/gemini-nano-banana-2.1', 'Nano Banana 2.1'),
     m('google/gemini-3-pro-image', 'Nano Banana Pro'),
     m('openai/gpt-image-2', 'GPT Image 2'),
@@ -30,6 +32,8 @@ const MODELS = {
     m('bytedance/seedance-2.0-fast', 'Seedance 2.0 Fast'),
     m('bytedance/seedance-2.0', 'Seedance 2.0'),
     m('bytedance/seedance-2.5', 'Seedance 2.5'),
+    m('alibaba/wan-3.0', 'Wan 3.0'),
+    m('minimax/hailuo-3', 'MiniMax Hailuo 3'),
     m('kwaivgi/kling-v3.0-std', 'Kling 3.0 Standard'),
     m('kwaivgi/kling-v3.0-pro', 'Kling 3.0 Pro'),
     m('google/veo-3.1-fast', 'Veo 3.1 Fast'),
@@ -38,19 +42,26 @@ const MODELS = {
 };
 
 /** The picture shapes every model above makes. */
-const RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4', '3:2', '2:3'];
-/** The models that take `--quality` (the others have one quality) and `--transparent`. */
-const QUALITY = new Set(['openai/gpt-image-2']);
+const RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4', '3:2', '2:3', '21:9'];
+/** The models that take `--quality` (the others have one quality), with theirs, the finest last; they take `--transparent` too. */
+const QUALITY = /** @type {Record<string, string[]>} */ ({
+  'openai/gpt-image-2.5-flare': ['low', 'medium', 'high', 'xhigh', 'max'], 'openai/gpt-image-2.5-sunburst': ['low', 'medium', 'high', 'xhigh', 'max'],
+  'openai/gpt-image-2': ['low', 'medium', 'high'],
+});
+/** The most pictures a new one is made from. */
+const MAX_REFS = 16;
 
 /**
- * Each video model's lengths (`seconds`, a range in whole seconds, or `only` some), shapes, and whether it takes
- * reference pictures. Every clip is asked for at 720p, with sound.
- * @type {Record<string, { name: string, seconds?: [number, number], only?: number[], ratios: string[], references: boolean }>}
+ * Each video model's lengths (`seconds`, a range in whole seconds, or `only` some), shapes, whether it takes
+ * reference pictures, and the size it is asked for: 720p, or the one it makes (`resolution`). Every clip has sound.
+ * @type {Record<string, { name: string, seconds?: [number, number], only?: number[], ratios: string[], references: boolean, resolution?: string }>}
  */
 const VIDEO = {
   'bytedance/seedance-2.0-fast': { name: 'Seedance', seconds: [4, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: true },
   'bytedance/seedance-2.0': { name: 'Seedance', seconds: [4, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: true },
   'bytedance/seedance-2.5': { name: 'Seedance', seconds: [4, 30], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: true },
+  'alibaba/wan-3.0': { name: 'Wan', seconds: [2, 30], ratios: ['16:9', '4:3', '1:1', '3:4', '9:16'], references: false },
+  'minimax/hailuo-3': { name: 'Hailuo', seconds: [5, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: false, resolution: '2K' },
   'kwaivgi/kling-v3.0-std': { name: 'Kling', seconds: [3, 15], ratios: ['16:9', '9:16', '1:1'], references: false },
   'kwaivgi/kling-v3.0-pro': { name: 'Kling', seconds: [3, 15], ratios: ['16:9', '9:16', '1:1'], references: false },
   'google/veo-3.1-fast': { name: 'Veo', only: [4, 6, 8], ratios: ['16:9', '9:16'], references: false },
@@ -86,22 +97,36 @@ export default {
 const base = () => serviceUrl('OPENROUTER', 'https://openrouter.ai');
 const auth = (/** @type {RunContext} */ ctx) => ({ authorization: `Bearer ${ctx.key}` });
 
-/** A picture from a prompt, in the shape asked. @param {Record<string, unknown>} args @param {RunContext} ctx */
+/**
+ * A picture from a prompt, in the shape and size asked, or from pictures given (`--ref`, as references). OpenAI's
+ * models are asked for the exact pixels (as at OpenAI), the others for the size's tier. A mask is OpenAI's own: not here.
+ * @param {Record<string, unknown>} args @param {RunContext} ctx
+ */
 async function picture(args, ctx) {
   const prompt = needed(args, 'prompt');
   const ratio = text(args.ratio) || '3:2';
   if (!RATIOS.includes(ratio)) throw new Error(`--ratio is one of ${RATIOS.join(', ')}.`);
+  if (text(args.mask)) throw new Error('--mask: redrawing part of a picture is OpenAI\'s own: use OpenAI for it.');
   const model = modelOf(MODELS, 'image', ctx);
   const name = MODELS.image.find((x) => x.id === model)?.name ?? model;
-  const tunable = QUALITY.has(model);
+  const has = QUALITY[model];
+  const size = text(args.size) || '1k';
+  const refs = list(args.ref);
+  if (refs.length > MAX_REFS) throw new Error(`--ref: at most ${MAX_REFS} pictures.`);
+  const asked = text(args.quality);
+  const quality = has && asked ? (has.includes(asked) ? asked : has[has.length - 1]) : null;
   const said = [
-    ...(args.transparent && !tunable ? [`--transparent: ${name} makes opaque pictures`] : []),
-    ...(text(args.quality) && !tunable ? [`--quality: ${name} has one quality`] : []),
+    ...(args.transparent && !has ? [`--transparent: ${name} makes opaque pictures`] : []),
+    ...(asked && asked !== 'low' && !has ? [`--quality: ${name} has one quality`] : []),
+    ...(quality && quality !== asked ? [`--quality ${asked}: ${name}'s finest is ${quality}`] : []),
   ];
+  const pixels = /** @type {{ width: number, height: number }} */ (pictureSize(ratio, size));
   const body = {
-    model, prompt, aspect_ratio: ratio, n: 1,
-    ...(tunable && text(args.quality) ? { quality: text(args.quality) } : {}),
-    ...(tunable && args.transparent ? { background: 'transparent', output_format: 'png' } : {}),
+    model, prompt, n: 1,
+    ...(model.startsWith('openai/') ? { size: `${pixels.width}x${pixels.height}` } : { aspect_ratio: ratio, ...(size !== '1k' ? { size: size.toUpperCase() } : {}) }),
+    ...(quality ? { quality } : {}),
+    ...(has && args.transparent ? { background: 'transparent', output_format: 'png' } : {}),
+    ...(refs.length ? { input_references: await Promise.all(refs.map(async (r) => ({ type: 'image_url', image_url: { url: await dataUri(r, ctx) } }))) } : {}),
   };
   const res = await call(NAME, `${base()}/api/v1/images`, { method: 'POST', headers: { ...auth(ctx), 'content-type': 'application/json' }, body: JSON.stringify(body) }, ctx);
   const answer = /** @type {any} */ (await res.json());
@@ -110,7 +135,7 @@ async function picture(args, ctx) {
   const bytes = new Uint8Array(Buffer.from(image.b64_json, 'base64'));
   const path = landing('image', args.out, extOf(image.media_type, 'png'));
   const made = madePicture({ path, bytes, prompt, provider: 'openrouter', model, notes: said });
-  return { ...made, receipt: { ...made.receipt, ...reported(answer.usage) }, cost: billedBy(NAME) };
+  return { ...made, receipt: { ...made.receipt, ...(quality ? { quality } : {}), ...reported(answer.usage) }, cost: billedBy(NAME) };
 }
 
 /**
@@ -142,7 +167,7 @@ async function video(args, ctx) {
   const frame = async (/** @type {string} */ src, /** @type {'first_frame' | 'last_frame'} */ type) => ({ type: 'image_url', image_url: { url: await dataUri(src, ctx) }, frame_type: type });
   const frames = [...(first ? [await frame(first, 'first_frame')] : []), ...(last ? [await frame(last, 'last_frame')] : [])];
   const body = {
-    model, prompt, duration: seconds, resolution: RESOLUTION, generate_audio: true,
+    model, prompt, duration: seconds, resolution: spec.resolution ?? RESOLUTION, generate_audio: true,
     ...(aspect ? { aspect_ratio: aspect } : {}),
     ...(frames.length ? { frame_images: frames } : {}),
     ...(refs.length && !frames.length ? { input_references: await Promise.all(refs.map(async (r) => ({ type: 'image_url', image_url: { url: await dataUri(r, ctx) } }))) } : {}),
@@ -165,10 +190,10 @@ async function video(args, ctx) {
   return {
     files: [{ path, bytes }],
     index: [{ src: path, kind: 'video', dur: seconds, hasAudio: true, from: {
-      mode: 'generate', prompt, provider: 'openrouter', model, resolution: RESOLUTION, sec: seconds,
+      mode: 'generate', prompt, provider: 'openrouter', model, resolution: spec.resolution ?? RESOLUTION, sec: seconds,
       ...(first ? { firstFrame: first } : {}), ...(last ? { lastFrame: last } : {}), ...(refs.length && !frames.length ? { refs } : {}),
     } }],
-    receipt: { provider: 'openrouter', model, src: path, dur: seconds, hasAudio: true, resolution: RESOLUTION, ...reported(state.usage), ...notes(said) },
+    receipt: { provider: 'openrouter', model, src: path, dur: seconds, hasAudio: true, resolution: spec.resolution ?? RESOLUTION, ...reported(state.usage), ...notes(said) },
     cost: billedBy(NAME),
   };
 }

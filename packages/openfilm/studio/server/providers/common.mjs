@@ -260,7 +260,26 @@ export function imageSize(/** @type {Uint8Array} */ bytes) {
 export const RATIO_SIZE = /** @type {Record<string, { width: number, height: number }>} */ ({
   '16:9': { width: 1536, height: 864 }, '9:16': { width: 864, height: 1536 }, '1:1': { width: 1024, height: 1024 },
   '4:3': { width: 1344, height: 1008 }, '3:4': { width: 1008, height: 1344 }, '3:2': { width: 1536, height: 1024 }, '2:3': { width: 1024, height: 1536 },
+  '21:9': { width: 1680, height: 720 },
 });
+
+/** The pixels a picture of each `--size` has, about: 1K a square of 1024, 2K of 2048, 4K as many as 3840 × 2160. */
+const SIZE_PIXELS = /** @type {Record<string, number>} */ ({ '2k': 2048 * 2048, '4k': 3840 * 2160 });
+
+/**
+ * A picture's width and height for `--ratio` and `--size` (1k, 2k, 4k), in multiples of 16 as image models take them:
+ * 1K as RATIO_SIZE has it, 2K and 4K that many pixels in that shape, no side past 3840.
+ * @param {string} ratio @param {string} size
+ */
+export function pictureSize(ratio, size) {
+  const one = RATIO_SIZE[ratio];
+  const pixels = SIZE_PIXELS[size];
+  if (!one || !pixels) return one ?? null;
+  /* the longer side at most 3840, the other in proportion */
+  const scale = Math.min(Math.sqrt(pixels / (one.width * one.height)), 3840 / Math.max(one.width, one.height));
+  const side = (/** @type {number} */ v) => Math.floor((v * scale) / 16) * 16;
+  return { width: side(one.width), height: side(one.height) };
+}
 
 /** The index row and receipt of one picture made from a prompt. */
 export function madePicture(/** @type {{ path: string, bytes: Uint8Array, prompt: string, provider: string, model: string, notes: string[] }} */ p) {

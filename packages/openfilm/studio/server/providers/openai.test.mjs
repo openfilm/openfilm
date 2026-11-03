@@ -50,6 +50,36 @@ test('a picture: the ratio as pixels, the quality, a transparent background when
   assert.deepEqual(result.receipt.images, [{ src: 'assets/image/hero.png', width: 1536, height: 864, alpha: true }]);
 });
 
+test('GPT Image 2.5: every quality, 2K and 4K in the shape asked, and what it cost by the tokens it was billed', async () => {
+  reply = () => [200, { data: [{ b64_json: png(2720, 1536).toString('base64') }], usage: { input_tokens: 20, input_tokens_details: { text_tokens: 20, image_tokens: 0 }, output_tokens: 3122 } }];
+  const result = await openai.run('image', { out: 'wide', prompt: 'a harbor', ratio: '16:9', quality: 'xhigh', size: '2k' }, ctx());
+  assert.deepEqual(JSON.parse(seen.at(-1).body), { model: 'gpt-image-2.5-flare', prompt: 'a harbor', size: '2720x1536', quality: 'xhigh', output_format: 'png' });
+  assert.equal(result.receipt.quality, 'xhigh');
+  assert.equal(result.receipt.usd, 0.09376, '20 text tokens at $5/M and 3,122 picture tokens at $30/M');
+  await openai.run('image', { out: 'big', prompt: 'a harbor', ratio: '16:9', size: '4k' }, ctx());
+  assert.deepEqual(JSON.parse(seen.at(-1).body).size, '3840x2160');
+  assert.equal(JSON.parse(seen.at(-1).body).quality, 'low', 'low unless asked');
+  /* GPT Image 2 has three: what is asked past them is its finest, said */
+  const older = await openai.run('image', { out: 'old', prompt: 'a harbor', quality: 'max' }, { ...ctx(), model: 'gpt-image-2' });
+  assert.equal(JSON.parse(seen.at(-1).body).quality, 'high');
+  assert.match(older.receipt.notes.join(' '), /--quality max: GPT Image 2's finest is high/);
+  assert.equal(older.receipt.usd, undefined, 'billed otherwise: no cost worked out');
+});
+
+test('pictures given (--ref) make a new one at the edits endpoint; a mask redraws the first where it is transparent', async () => {
+  reply = () => [200, { data: [{ b64_json: png(1024, 1024).toString('base64') }] }];
+  const files = { 'assets/image/room.png': png(1024, 1024), 'assets/image/lamp.jpg': Buffer.from('jpeg'), 'assets/image/hole.png': png(1024, 1024) };
+  await openai.run('image', { out: 'lit', prompt: 'put the lamp on the table', ratio: '1:1', ref: ['assets/image/room.png', 'assets/image/lamp.jpg'], mask: 'assets/image/hole.png' }, { ...ctx(files), model: 'gpt-image-2.5-sunburst' });
+  const call = seen.at(-1);
+  assert.equal(call.url.pathname, '/v1/images/edits');
+  const sent = await form(call);
+  assert.deepEqual([sent.get('model'), sent.get('size'), sent.get('quality')], ['gpt-image-2.5-sunburst', '1024x1024', 'low']);
+  assert.deepEqual(sent.getAll('image[]').map((f) => [f.name, f.type]), [['room.png', 'image/png'], ['lamp.jpg', 'image/jpeg']]);
+  assert.equal(sent.get('mask').name, 'hole.png');
+  await assert.rejects(openai.run('image', { prompt: 'x', mask: 'assets/image/hole.png' }, ctx(files)), /--mask goes with the picture it redraws/);
+  await assert.rejects(openai.run('image', { prompt: 'x', ref: Array.from({ length: 17 }, () => 'assets/image/room.png') }, ctx(files)), /at most 16/);
+});
+
 test('voice-over: a WAV whose length is known, no word timings (Studio spreads the text)', async () => {
   reply = () => [200, wav(new Uint8Array(24000), 24000)];
   const result = await openai.run('tts', { out: 'line', text: 'Hello.', voice: 'marin' }, ctx());

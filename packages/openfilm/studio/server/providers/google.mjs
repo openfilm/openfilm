@@ -129,14 +129,19 @@ export default {
       const ratio = text(args.ratio) || '3:2';
       if (!RATIO_SIZE[ratio]) throw new Error(`--ratio is one of ${Object.keys(RATIO_SIZE).join(', ')}.`);
       const model = modelOf(MODELS, 'image', ctx);
-      const high = text(args.quality) === 'high' && model !== ONE_K_ONLY;
+      /* the size asked; the finer qualities, a 1K picture asked, at 2K as before */
+      const size = text(args.size) || '1k';
+      const fine = ['high', 'xhigh', 'max'].includes(text(args.quality));
+      const wanted = size !== '1k' ? size.toUpperCase() : fine ? '2K' : '1K';
+      const resolution = model === ONE_K_ONLY ? '1K' : wanted;
       const said = [
         ...(args.transparent ? ['--transparent: Gemini makes opaque pictures'] : []),
-        ...(text(args.quality) === 'high' && !high ? ['--quality high: Flash-Lite Image makes 1K pictures only'] : []),
+        ...(resolution !== wanted ? [`--size ${size}, --quality ${text(args.quality) || 'low'}: Flash-Lite Image makes 1K pictures only`] : []),
+        ...(list(args.ref).length || text(args.mask) ? ['--ref, --mask: Gemini here makes pictures from the prompt alone'] : []),
       ];
       const body = await generate(model, {
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: ratio, imageSize: high ? '2K' : '1K' } },
+        generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: ratio, imageSize: resolution } },
       });
       const picture = inline(body, 'image');
       const path = landing('image', args.out, extOf(picture.mimeType, 'png'));

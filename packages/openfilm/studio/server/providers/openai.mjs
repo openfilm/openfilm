@@ -5,7 +5,7 @@
  * a voice-over's words are left to Studio to spread over the line; transcription uses whisper-1, the model that times
  * each word.
  */
-import { RATIO_SIZE, billedBy, call, clamp, landing, madePicture, modelOf, needed, notes, number, round, serviceUrl, speechUpload, text, translatedLines, translationAsk, wavSeconds } from './common.mjs';
+import { RATIO_SIZE, billedBy, call, clamp, landing, list, madePicture, mimeOf, modelOf, needed, notes, number, pictureSize, round, serviceUrl, speechUpload, text, translatedLines, translationAsk, wavSeconds } from './common.mjs';
 
 /** @typedef {import('./contract.mjs').Provider} Provider */
 
@@ -28,6 +28,15 @@ const MODELS = {
     { id: 'gpt-6-astra', name: 'GPT-6 Astra' },
   ],
 };
+/** The qualities each picture model has, the finest last; GPT Image 2.5's billed by the token (USD each, as listed). */
+const QUALITIES = /** @type {Record<string, string[]>} */ ({
+  'gpt-image-2.5-flare': ['low', 'medium', 'high', 'xhigh', 'max'], 'gpt-image-2.5-sunburst': ['low', 'medium', 'high', 'xhigh', 'max'], 'gpt-image-2': ['low', 'medium', 'high'],
+});
+const TOKEN_USD = /** @type {Record<string, { text: number, image: number, out: number }>} */ ({
+  'gpt-image-2.5-flare': { text: 5e-6, image: 8e-6, out: 30e-6 }, 'gpt-image-2.5-sunburst': { text: 5e-6, image: 8e-6, out: 30e-6 },
+});
+/** The most pictures a new one is made from. */
+const MAX_REFS = 16;
 /** the voices its speech models have (they speak every language) */
 const VOICES = ['marin', 'cedar', 'alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer', 'verse'];
 /** the largest file its transcription takes */
@@ -75,18 +84,41 @@ export default {
     if (verb === 'image') {
       const prompt = needed(args, 'prompt');
       const ratio = text(args.ratio) || '3:2';
-      const size = RATIO_SIZE[ratio];
-      if (!size) throw new Error(`--ratio is one of ${Object.keys(RATIO_SIZE).join(', ')}.`);
-      const quality = text(args.quality) === 'high' ? 'high' : 'low';
-      const transparent = Boolean(args.transparent);
-      const path = landing('image', args.out, 'png');
+      if (!RATIO_SIZE[ratio]) throw new Error(`--ratio is one of ${Object.keys(RATIO_SIZE).join(', ')}.`);
       const model = modelOf(MODELS, 'image', ctx);
-      const body = await (await post('/v1/images/generations', {
-        model, prompt, size: `${size.width}x${size.height}`, quality, output_format: 'png', ...(transparent ? { background: 'transparent' } : {}),
-      })).json();
+      const name = MODELS.image.find((m) => m.id === model)?.name ?? model;
+      const said = [];
+      /* the quality asked, else the finest the model has below it */
+      const has = QUALITIES[model] ?? ['low', 'high'];
+      const asked = text(args.quality) || 'low';
+      const quality = has.includes(asked) ? asked : has[has.length - 1];
+      if (quality !== asked) said.push(`--quality ${asked}: ${name}'s finest is ${quality}`);
+      const size = /** @type {{ width: number, height: number }} */ (pictureSize(ratio, text(args.size) || '1k'));
+      const transparent = Boolean(args.transparent);
+      const refs = list(args.ref);
+      const mask = text(args.mask);
+      if (refs.length > MAX_REFS) throw new Error(`--ref: at most ${MAX_REFS} pictures.`);
+      if (mask && !refs.length) throw new Error('--mask goes with the picture it redraws: give that picture with --ref.');
+      const path = landing('image', args.out, 'png');
+      const settings = { model, prompt, size: `${size.width}x${size.height}`, quality, output_format: 'png', ...(transparent ? { background: 'transparent' } : {}) };
+      let res;
+      if (refs.length) {
+        /* a new picture from the ones given (the first redrawn where the mask is transparent) */
+        const form = new FormData();
+        for (const [k, v] of Object.entries(settings)) form.set(k, String(v));
+        for (const ref of refs) form.append('image[]', new Blob([new Uint8Array(await ctx.read(ref))], { type: mimeOf(ref) }), ref.split('/').pop());
+        if (mask) form.set('mask', new Blob([new Uint8Array(await ctx.read(mask))], { type: 'image/png' }), mask.split('/').pop());
+        res = await send('/v1/images/edits', { body: form });
+      } else res = await post('/v1/images/generations', settings);
+      const body = /** @type {any} */ (await res.json());
       const b64 = body?.data?.[0]?.b64_json;
       if (typeof b64 !== 'string') throw new Error(`${NAME} answered without a picture.`);
-      return { ...madePicture({ path, bytes: new Uint8Array(Buffer.from(b64, 'base64')), prompt, provider: 'openai', model, notes: [] }), cost: billedBy(NAME) };
+      /* what it cost, by the tokens it was billed (GPT Image 2.5) */
+      const rates = TOKEN_USD[model];
+      const u = body?.usage;
+      const usd = rates && u ? (u.input_tokens_details?.text_tokens ?? 0) * rates.text + (u.input_tokens_details?.image_tokens ?? 0) * rates.image + (u.output_tokens ?? 0) * rates.out : null;
+      const made = madePicture({ path, bytes: new Uint8Array(Buffer.from(b64, 'base64')), prompt, provider: 'openai', model, notes: said });
+      return { ...made, receipt: { ...made.receipt, quality, ...(usd !== null ? { usd: Math.round(usd * 1e6) / 1e6 } : {}) }, cost: billedBy(NAME) };
     }
     if (verb === 'asr') {
       const src = needed(args, 'src');

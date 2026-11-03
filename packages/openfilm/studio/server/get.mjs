@@ -99,10 +99,12 @@ export const VERBS = /** @type {Record<string, VerbSpec>} */ ({
     options: { out, prompt, n: { value: 'n', min: 1, max: 8, integer: true, default: 1, alias: 'limit' } },
   },
   image: {
-    help: 'Make one picture. Returns its path and size.',
+    help: 'Make one picture, or a new one from pictures in the project (--ref, up to 16; with --mask, a PNG whose transparent part is what is redrawn of the first). --quality low is quick and costs least, max is finest and slowest; --size 1k, 2k or 4k. Returns its path and size.',
     dir: 'assets/image', timeoutSec: 300,
-    options: { out, prompt, ratio: { value: 'ratio', choices: ['16:9', '9:16', '1:1', '4:3', '3:4', '3:2', '2:3'], default: '3:2' },
-      quality: { value: 'level', choices: ['low', 'high'], default: 'low' }, transparent: {} },
+    options: { out, prompt, ratio: { value: 'ratio', choices: ['16:9', '9:16', '1:1', '4:3', '3:4', '3:2', '2:3', '21:9'], default: '3:2' },
+      quality: { value: 'level', choices: ['low', 'medium', 'high', 'xhigh', 'max'], default: 'low' },
+      size: { value: 'size', choices: ['1k', '2k', '4k'], default: '1k' }, transparent: {},
+      ref: { value: 'path', path: 'picture', repeat: true }, mask: { value: 'path', path: 'picture' } },
   },
   video: {
     help: 'Make one video clip. Returns src, dur, its size and preview frames. It spends a lot: the person confirms it in Studio first (--yes when they already agreed). The same request again returns the same clip; --force makes a new one.',
