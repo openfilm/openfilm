@@ -2386,7 +2386,7 @@ export const ko: Words = {
       choose: '모델 선택',
       notConnected: '연결 안 됨',
       none: '없음',
-      library: { title: '소재 검색', about: 'OpenFilm 벡터 검색 서비스로 검색에 가장 알맞은 OpenFilm 소재를 찾습니다. 무료이며 계정이 필요 없고, 오프라인에서는 키워드로 찾습니다', by: 'OpenFilm · 무료' },
+      library: { title: '소재 검색', about: 'OpenFilm 벡터 검색 서비스로 가장 알맞은 OpenFilm 소재를 찾습니다. 무료이며 로그인이 필요 없습니다', engine: '벡터 검색' },
       about: {
         tts: '대본을 읽고, 읽을 음성을 찾습니다',
         music: '설명으로 사운드트랙을 만듭니다',

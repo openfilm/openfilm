@@ -11,7 +11,7 @@
  * Under them, the person's custom services, which their agent calls itself (CustomServices).
  */
 import React from 'react';
-import { Check, ChevronDown, Library } from 'lucide-react';
+import { Check, ChevronDown, FolderSearch } from 'lucide-react';
 import { useT } from '@/i18n';
 import { SERVICE_VERBS, offered, providerOrder, useProviders, type OwnProvider, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
 import { Popover } from '@/components/Popover';
@@ -55,7 +55,7 @@ export function ModelsSection() {
           <ServicesBar hook={hook} onOpen={setCard} local={<LocalModelsChip hook={local} onOpen={() => setCard('local')} />} />
           <SettingsGroup>
             {SERVICE_VERBS.filter((verb) => offered(state, verb)).map(row)}
-            <LibraryRow />
+            <LibraryRow hook={hook} />
           </SettingsGroup>
         </>
       ) : null}
@@ -68,20 +68,32 @@ export function ModelsSection() {
 }
 
 /**
- * OpenFilm's library searched by what is meant: not chosen like the others, said, as the search sends its words to
- * OpenFilm's service (src/library-semantic.mjs), free and with no account.
+ * OpenFilm's library searched by what is meant: OpenFilm's service (src/library-semantic.mjs, free, no account), on
+ * by default, or none (the library's words alone).
  */
-function LibraryRow() {
+function LibraryRow({ hook }: { hook: ProvidersHook }) {
   const t = useT();
+  const openfilm = hook.state?.providers.find((p) => p.id === 'openfilm');
+  if (!openfilm) return null;
+  const label = t('settings.models.library.title');
+  const only: Choice = { value: 'openfilm:library', provider: 'openfilm', name: t('settings.models.library.engine'), model: '' };
   return (
     <SettingsItem
-      mark={<Library size={17} strokeWidth={1.75} />}
-      title={t('settings.models.library.title')}
+      mark={<FolderSearch size={17} strokeWidth={1.75} />}
+      title={label}
       description={t('settings.models.library.about')}
       control={(
-        <span className="inline-flex h-9 items-center gap-2 px-3 text-[14px] text-[var(--text-muted)]">
-          <ProviderMark id="openfilm" size={15} />{t('settings.models.library.by')}
-        </span>
+        <ModelPicker
+          label={label}
+          connected={[openfilm]}
+          waiting={[]}
+          choicesOf={() => [only]}
+          current={hook.state?.librarySearch ? only : null}
+          busy={hook.busy === 'library-search'}
+          empty={t('settings.models.none')}
+          onPick={(choice) => void hook.setLibrarySearch(choice !== null)}
+          onConnect={() => {}}
+        />
       )}
     />
   );
@@ -129,13 +141,15 @@ function ModelRow({ verb, hook, onConnect }: { verb: ProviderVerb; hook: Provide
  * The connected ones first, to choose from (and None); then the others, their models shown as what connecting brings,
  * each opening its card to connect it.
  */
-function ModelPicker({ label, connected, waiting, choicesOf, current, busy, onPick, onConnect }: {
+function ModelPicker({ label, connected, waiting, choicesOf, current, busy, empty, onPick, onConnect }: {
   label: string;
   connected: OwnProvider[];
   waiting: OwnProvider[];
   choicesOf: (p: OwnProvider) => Choice[];
   current: Choice | null;
   busy: boolean;
+  /** what the button says when nothing is chosen (else "Choose a model") */
+  empty?: string;
   onPick: (choice: Choice | null) => void;
   onConnect: (provider: string) => void;
 }) {
@@ -191,7 +205,7 @@ function ModelPicker({ label, connected, waiting, choicesOf, current, busy, onPi
       className={`flex h-10 w-[300px] items-center gap-2.5 rounded-[9px] border px-3 text-left text-[14.5px] text-[var(--text)] transition disabled:opacity-60 ${open ? 'border-[var(--text-muted)]' : 'border-[var(--border)] hover:border-[var(--border-strong)]'}`}>
       {current ? <ProviderMark id={current.provider} size={15} /> : null}
       <span className={`min-w-0 flex-1 truncate ${current ? '' : 'text-[var(--text-muted)]'}`}>
-        {current ? current.name : t('settings.models.choose')}
+        {current ? current.name : empty ?? t('settings.models.choose')}
       </span>
       <ChevronDown size={15} className="shrink-0 text-[var(--text-muted)]" />
     </button>

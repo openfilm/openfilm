@@ -197,3 +197,14 @@ test('what a newer OpenFilm keeps in providers.json stays when this one writes i
   assert.equal(written.custom[0].note, 'Transcribes');
   assert.equal(written.keys.openai, 'sk-new-0123456789');
 });
+
+test('the library is searched by meaning at OpenFilm\'s service unless turned off, and the choice is kept', async () => {
+  let state = await (await api('/api/providers')).json();
+  assert.equal(state.librarySearch, 'openfilm', 'on by default');
+  state = await (await api('/api/providers/library-search', { method: 'PUT', body: { on: false } })).json();
+  assert.equal(state.librarySearch, null);
+  assert.equal((await readSettings()).libraryOff, true);
+  assert.equal((await api('/api/providers/library-search', { method: 'PUT', body: { on: 'yes' } })).status, 400);
+  state = await (await api('/api/providers/library-search', { method: 'PUT', body: { on: true } })).json();
+  assert.equal(state.librarySearch, 'openfilm');
+});

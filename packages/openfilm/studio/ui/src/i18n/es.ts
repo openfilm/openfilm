@@ -2390,7 +2390,7 @@ export const es: Words = {
       choose: 'Elegir un modelo',
       notConnected: 'Sin conectar',
       none: 'Ninguno',
-      library: { title: 'Búsqueda en la biblioteca', about: 'Encuentra los elementos de la biblioteca de OpenFilm que mejor encajan con una búsqueda mediante la búsqueda vectorial de OpenFilm, gratis y sin cuenta; sin conexión, por palabras clave', by: 'OpenFilm · gratis' },
+      library: { title: 'Búsqueda en la biblioteca', about: 'Encuentra los elementos de la biblioteca de OpenFilm que mejor encajan con la búsqueda vectorial de OpenFilm, gratis y sin iniciar sesión', engine: 'Búsqueda vectorial' },
       about: {
         tts: 'Lee un guion en voz alta y encuentra voces para leerlo',
         music: 'Crea una banda sonora a partir de una descripción',

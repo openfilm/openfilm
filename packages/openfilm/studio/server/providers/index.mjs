@@ -164,6 +164,8 @@ async function state() {
     signingIn: signInState(),
     ...shownChoices(settings),
     custom: settings.custom.map(shownService),
+    /* the library searched by meaning at OpenFilm's service, or by its words alone */
+    librarySearch: settings.libraryOff ? null : 'openfilm',
   };
 }
 
@@ -172,7 +174,8 @@ async function state() {
  *   GET    /api/providers           → { providers: [{ id, name, verbs, models: { verb: [{ id, name }] }, keysUrl, env,
  *                                       keyless?, source: 'file' | 'env' | null, last4 }],
  *                                       use: { verb: provider id | null },
- *                                       model: { verb: model id | null } }
+ *                                       model: { verb: model id | null },
+ *                                       librarySearch: 'openfilm' | null }
  *   PUT    /api/providers/:id/key   { key }               the key kept for that provider
  *   PUT    /api/providers/:id/key   { env: true }         the environment's key used for it again
  *   PUT    /api/providers/:id/key   { key: '' }           a keyless provider connected without a key
@@ -180,6 +183,8 @@ async function state() {
  *                                                         not used (until it is connected again)
  *   PUT    /api/providers/use       { verb, provider, model? }  who serves that kind of media (an id, or null: none),
  *                                       and with which of its models (its first when none is given)
+ *   PUT    /api/providers/library-search { on }  the library searched by meaning at OpenFilm's service (on, the
+ *                                       default) or by its words alone
  *   POST   /api/providers/:id/billing → {}, the provider's own page for its balance opened in the person's browser
  *   POST   /api/providers/:id/sign-in         a provider with `signIn`: its website opened in the person's browser to
  *                                       sign in (sign-in.mjs); the state's `signingIn` says who is waiting, and why
@@ -270,6 +275,12 @@ export async function providersRoute(req, res, parts, { openBrowser }) {
       });
       return json(res, 200, await state());
     }
+  }
+  if (parts.length === 1 && parts[0] === 'library-search' && req.method === 'PUT') {
+    const { on } = /** @type {{ on?: unknown }} */ (await readJson(req));
+    if (typeof on !== 'boolean') throw new HttpError(400, 'on: true (OpenFilm searches it by meaning) or false (by its words)');
+    await changeSettings((s) => { s.libraryOff = !on; });
+    return json(res, 200, await state());
   }
   if (parts.length === 1 && parts[0] === 'use' && req.method === 'PUT') {
     await freshProviders();

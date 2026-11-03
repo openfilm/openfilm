@@ -2390,7 +2390,7 @@ export const ja: Words = {
       choose: 'モデルを選択',
       notConnected: '未接続',
       none: 'なし',
-      library: { title: 'ライブラリ検索', about: 'OpenFilm のベクトル検索サービスで、検索にいちばん合う OpenFilm の素材を見つけます。無料・アカウント不要、オフラインではキーワードで探します', by: 'OpenFilm · 無料' },
+      library: { title: 'ライブラリ検索', about: 'OpenFilm のベクトル検索サービスで、いちばん合う OpenFilm の素材を見つけます。無料・ログイン不要', engine: 'ベクトル検索' },
       about: {
         tts: '台本を読み上げ、読み上げる声を探します',
         music: '説明からサウンドトラックを作成します',

@@ -7,8 +7,8 @@
  *
  * The comparing is OpenFilm's service's (`POST /v1/library/search` on openfilm.dev, or OPENFILM_API_URL: free, no
  * account, the words of the search and nothing else): it keeps the model and every thing's vector, so this computer
- * keeps only the library's catalog and its keyword index, and downloads and runs no model. Offline, or the service
- * not answering: the keyword search alone.
+ * keeps only the library's catalog and its keyword index, and downloads and runs no model. Offline, the service not
+ * answering, or turned off in Settings → Services (Library search: None): the keyword search alone.
  *
  *   library/vectors.i8, vectors.json   each thing's vector, made with the model (scripts/library-vectors.mjs) from
  *                                      what it is (passageOf), as the service searches them: published with the
@@ -17,6 +17,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { readSettings } from '../studio/server/keys.mjs';
 import { serviceUrl } from '../studio/server/providers/common.mjs';
 import { builtInRoot, libraryFile } from '../studio/server/library.mjs';
 import { loadEmbedder } from './sentence-model.mjs';
@@ -68,6 +69,8 @@ const asked = new Map();
  * @returns {Promise<[string, number][] | null>}
  */
 export async function nearest(query, cat, limit = 50) {
+  /* turned off in Settings → Services: words alone */
+  if ((await readSettings()).libraryOff) return null;
   const key = `${cat}\n${limit}\n${query}`;
   if (asked.has(key)) return asked.get(key);
   try {

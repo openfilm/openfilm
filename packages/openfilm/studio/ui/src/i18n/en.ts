@@ -2391,7 +2391,7 @@ export const en = {
       choose: 'Choose a model',
       notConnected: 'Not connected',
       none: 'None',
-      library: { title: 'Library search', about: 'Finds the best OpenFilm library items for a search with OpenFilm\'s vector search, free and with no account; offline, by keywords', by: 'OpenFilm · free' },
+      library: { title: 'Library search', about: 'Finds the OpenFilm library items that fit a search best with OpenFilm\'s vector search, free with no sign-in', engine: 'Vector search' },
       about: {
         tts: 'Speaks a script, and finds voices to speak it',
         music: 'Makes a soundtrack from a description',

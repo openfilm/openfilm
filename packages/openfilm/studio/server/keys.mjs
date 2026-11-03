@@ -27,9 +27,10 @@ import { keptServices } from './custom-services.mjs';
 /** @typedef {import('./providers/contract.mjs').Provider} Provider */
 /**
  * `off`: the providers disconnected while the environment has a key for them (that key is not used). `custom`: the
- * person's own services.
+ * person's own services. `libraryOff`: the library is searched by its words alone, not by meaning at OpenFilm's
+ * service (src/library-semantic.mjs).
  * @typedef {{ keys: Record<string, string>, use: Record<string, string>, model: Record<string, string>, off: string[],
- *   custom: import('./custom-services.mjs').CustomService[], accounts: Record<string, string> }} ProviderSettings
+ *   custom: import('./custom-services.mjs').CustomService[], accounts: Record<string, string>, libraryOff: boolean }} ProviderSettings
  */
 
 /** Where the keys and choices are kept: ~/.openfilm/providers.json. */
@@ -51,8 +52,8 @@ export async function readSettings(file = providersFile()) {
     /* 'auto' was a choice once: it means none now */
     const use = Object.fromEntries(Object.entries(strings(raw.use)).filter(([, id]) => id !== 'auto'));
     const off = Array.isArray(raw.off) ? raw.off.filter((id) => typeof id === 'string') : [];
-    return /** @type {ProviderSettings} */ ({ keys: strings(raw.keys), use, model: strings(raw.model), off, custom: keptServices(raw.custom), accounts: strings(raw.accounts) });
-  } catch { return /** @type {ProviderSettings} */ ({ keys: {}, use: {}, model: {}, off: [], custom: [], accounts: {} }); }
+    return /** @type {ProviderSettings} */ ({ keys: strings(raw.keys), use, model: strings(raw.model), off, custom: keptServices(raw.custom), accounts: strings(raw.accounts), libraryOff: raw.libraryOff === true });
+  } catch { return /** @type {ProviderSettings} */ ({ keys: {}, use: {}, model: {}, off: [], custom: [], accounts: {}, libraryOff: false }); }
 }
 
 /**

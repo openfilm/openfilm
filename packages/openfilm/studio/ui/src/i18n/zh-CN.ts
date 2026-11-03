@@ -2391,7 +2391,7 @@ export const zhCN: Words = {
       choose: '选择模型',
       notConnected: '未连接',
       none: '无',
-      library: { title: '素材检索', about: '通过 OpenFilm 的向量检索服务找到最合适的 OpenFilm 素材，免费，不用登录；没网时按关键词找', by: 'OpenFilm · 免费' },
+      library: { title: '素材检索', about: '通过 OpenFilm 的向量检索服务找到最合适的 OpenFilm 素材，免费无需登录', engine: '向量检索' },
       about: {
         tts: '朗读脚本，并寻找合适的音色',
         music: '根据描述生成配乐',

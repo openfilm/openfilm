@@ -11,6 +11,8 @@ import { embedder, manifest } from './library-semantic.mjs';
 /* OpenFilm's service searching the library by meaning, as `POST /v1/library/search` does (the model and the things'
    vectors): here, when this checkout's library has the model (published with the library, not in git); else no
    service, and words alone */
+/* the Services settings of the tests' own (Library search on, as it is by default) */
+process.env.OPENFILM_HOME = mkdtempSync(join(tmpdir(), 'library-search-home-'));
 const model = manifest();
 const semantic = Boolean(model?.files.every((f) => existsSync(join(builtInRoot(), f.path))));
 const vectors = JSON.parse(readFileSync(join(builtInRoot(), 'vectors.json'), 'utf8'));

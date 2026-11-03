@@ -5,6 +5,9 @@ import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+/* the Services settings of the tests' own (Library search on, as it is by default) */
+process.env.OPENFILM_HOME = mkdtempSync(join(tmpdir(), 'semantic-home-'));
+
 /* OpenFilm's service: the things it finds for a search, as `found` says, each request kept */
 /** @type {{ text: string, cat: string, limit: number }[]} */
 const asked = [];
@@ -64,6 +67,16 @@ test('a search goes to the service as its words and the category alone, once; wh
   assert.equal(asked.length, 1, 'asked again: what it said');
   await nearest('a bright bell', 'music', 20);
   assert.equal(asked.length, 2, 'another category is another search');
+});
+
+test('Library search turned off in Settings → Services: nothing is asked, words alone', async () => {
+  writeFileSync(join(/** @type {string} */ (process.env.OPENFILM_HOME), 'providers.json'), JSON.stringify({ libraryOff: true }), { mode: 0o600 });
+  asked.length = 0;
+  assert.equal(await nearest('a quiet bell', 'sound'), null);
+  assert.equal(asked.length, 0);
+  writeFileSync(join(/** @type {string} */ (process.env.OPENFILM_HOME), 'providers.json'), JSON.stringify({ libraryOff: false }), { mode: 0o600 });
+  assert.ok(await nearest('a quiet bell', 'sound'));
+  assert.equal(asked.length, 1, 'on again: asked');
 });
 
 test('a service that is down, says no, or answers something else: the keyword search alone', async () => {
