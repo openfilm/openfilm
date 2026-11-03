@@ -117,6 +117,7 @@ export const ja: Words = {
   },
   agent: {
     contextCompacted: 'これまでの会話を要約にまとめました',
+    sessionNotResumed: 'エージェントが以前のセッションを開けなかったため、これまでの会話を渡しました',
     modelGone: 'このエージェントでは {model} を使えなくなりました。モデルを選び直してください。',
     settingFailed: '{setting} を {value} に設定できませんでした: {error}',
     settingRejected: 'エージェントがこの設定を適用できませんでした。',

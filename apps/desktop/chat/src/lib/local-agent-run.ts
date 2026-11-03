@@ -27,6 +27,7 @@ import {
 import type { Turn } from '@openfilm/shared';
 import type { Balance } from '@/lib/balance';
 import { chatTurns, putChatTurn, type SavedTurn } from '@/lib/chat-store';
+import { withConversationSoFar } from '@/lib/conversation-so-far';
 import { app } from '../app-bridge';
 import { translate } from '@/i18n';
 import { isEmptyBackgroundTurn, opensUnprompted } from '@/lib/unprompted';
@@ -816,6 +817,11 @@ export async function runLocalAgentTurn({
     sessions.set(sessionKey, session);
     tellContext();
     onSessionInfo?.(started.info);
+    /* its session of this conversation not taken up again: a new one, told what was said so far, and the person told */
+    if (resume && (!started.info.resumed || started.info.sessionId !== resume)) {
+      text = withConversationSoFar(loadLocalAgentTurns(projectId, conversation).filter((x) => x.turn.id !== turn.turnId), text);
+      turn.notice('agent.sessionNotResumed');
+    }
   }
   /* a turn the agent was working on by itself ends as the person writes */
   endUnprompted(session.key);

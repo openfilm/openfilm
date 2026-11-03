@@ -117,6 +117,7 @@ export const enUS = {
   },
   agent: {
     contextCompacted: 'Earlier conversation folded into a summary',
+    sessionNotResumed: 'The agent could not reopen its earlier session, so it was given the conversation so far',
     modelGone: 'This agent no longer offers {model}. Choose a model again.',
     settingFailed: 'Couldn’t set {setting} to {value}: {error}',
     settingRejected: 'The agent couldn’t apply this setting.',
