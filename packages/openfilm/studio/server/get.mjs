@@ -170,6 +170,8 @@ const BILLING = new Set(['budget', 'balance', 'spent', 'plan', 'planName', 'pric
 
 /** Why a get did not run; `code` is the CLI's exit status (2: not a project or a wrong command, 1: it did not run). */
 export class GetError extends Error {
+  /** @type {'balance' | null} 'balance': the provider's account cannot pay for this; the person has been told where to top up. */
+  kind = null;
   /** @param {string} message @param {1 | 2} [code] */
   constructor(message, code = 1) {
     super(message);
@@ -274,11 +276,13 @@ async function projectFile(root, rel, name, want) {
 /** The forms a voice-over lands in, by its --out name's extension. */
 const VOICE_EXTS = ['wav', 'mp3', 'm4a', 'flac', 'ogg'];
 
-/** Whether the voice of `name` (--out) is recorded already, in any of the forms it could have landed in.
+/** Whether the voice of `name` (--out) is recorded already, in any of the forms it could have landed in. A leftover
+    that holds nothing is not a take: a run that died mid-write does not keep its shot unvoiced.
     @param {string} root @param {string} name */
 async function voicedAlready(root, name) {
   for (const ext of VOICE_EXTS) {
-    if (await stat(join(root, 'assets', 'audio', 'vo', `${name}.${ext}`)).catch(() => null)) return true;
+    const file = await stat(join(root, 'assets', 'audio', 'vo', `${name}.${ext}`)).catch(() => null);
+    if (file?.isFile() && file.size > 0) return true;
   }
   return false;
 }
@@ -297,7 +301,7 @@ async function voiceTheBoard(root, args, options) {
   const shots = board.shots.filter((shot) => shot.vo);
   if (!shots.length) throw usage('no shot in the storyboard says a vo; nothing to voice');
   /** @type {string[]} */
-  const said = [];
+  const receipts = [];
   /** @type {number[]} */
   const failed = [];
   let voiced = 0;
@@ -306,23 +310,30 @@ async function voiceTheBoard(root, args, options) {
     const out = `shot-${shot.n}`;
     if (args.force !== true && await voicedAlready(root, out)) {
       kept++;
-      said.push(`shot ${shot.n}  already there (--force says it again)`);
+      receipts.push(`shot ${shot.n}  already there (--force says it again)`);
       continue;
     }
     try {
       const receipt = await runGet(root, 'tts', { out, text: shot.vo, ...(args.voice !== undefined ? { voice: args.voice } : {}) }, options);
       voiced++;
-      said.push(`shot ${shot.n}`, ...receipt.split('\n').map((line) => `  ${line}`));
+      receipts.push(`shot ${shot.n}`, ...receipt.split('\n').map((line) => `  ${line}`));
     } catch (e) {
       failed.push(shot.n);
-      said.push(`shot ${shot.n}  ${e instanceof Error ? e.message : String(e)}`);
+      receipts.push(`shot ${shot.n}  ${e instanceof Error ? e.message : String(e)}`);
+      /* out of balance is not one shot's failure: every shot after it fails the same way, and the person is told
+         once already — stop here with what landed said */
+      if (/** @type {{ kind?: string }} */ (e)?.kind === 'balance') {
+        throw new GetError([...receipts, 'the shots after this one are not voiced; run again once the person has topped up'].join('\n'));
+      }
     }
   }
   const done = `${voiced} voiced${kept ? `, ${kept} already there` : ''}`;
   if (failed.length) {
-    throw new GetError(`${failed.length} of ${shots.length} with a vo did not run (${done}); the rest landed:\n${said.join('\n')}`);
+    throw new GetError(failed.length === shots.length
+      ? `nothing landed: all ${shots.length} with a vo did not run:\n${receipts.join('\n')}`
+      : `${failed.length} of ${shots.length} with a vo did not run (${done}); the rest landed:\n${receipts.join('\n')}`);
   }
-  return `${done}, from the storyboard's ${board.shots.length} shot${board.shots.length === 1 ? '' : 's'}\n${said.join('\n')}`;
+  return `${done}, from the storyboard's ${board.shots.length} shot${board.shots.length === 1 ? '' : 's'}\n${receipts.join('\n')}`;
 }
 
 /**
@@ -336,6 +347,8 @@ async function voiceTheBoard(root, args, options) {
 export async function runGet(root, verb, given, { via, model, yes = false, ask, tell, signal = new AbortController().signal } = {}) {
   const args = await checkArgs(root, verb, given);
   if (verb === 'tts' && args.storyboard === true) return voiceTheBoard(root, args, { via, model, yes, ask, tell, signal });
+  /* --force is the batch's: one tts has no take of its own to replace, and a run twice makes the same line twice */
+  if (verb === 'tts' && args.force === true) throw usage("--force is --storyboard's: it says the shots recorded already again");
   if (verb === 'call') {
     const { custom } = await providerSettings();
     const service = custom.find((s) => s.id === args.service);
@@ -393,8 +406,10 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     if (clock.timedOut()) throw new GetError(`${provider.name} did not finish within ${spec.timeoutSec + 60} s, so Studio stopped waiting. Nothing landed in the project; try again later.`);
     if (/** @type {{ code?: string }} */ (e)?.code === 'balance') {
       tell?.({ kind: 'balance', provider: provider.name, providerId: provider.id });
-      throw new GetError(`This did not run: ${provider.name} doesn't have enough balance. The person can top it up at ${provider.billingUrl}, `
+      const outOfBalance = new GetError(`This did not run: ${provider.name} doesn't have enough balance. The person can top it up at ${provider.billingUrl}, `
         + 'or switch to another service. Nothing was made. Stop and tell them; do not run it again until they say so.');
+      outOfBalance.kind = 'balance';
+      throw outOfBalance;
     }
     throw e;
   } finally {

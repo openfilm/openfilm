@@ -20,9 +20,12 @@ const MARK = {
   todo: <Circle size={13} className="text-[var(--text-dim)]" />,
 } as const;
 
-/** One stage of the line: its mark, its name, what the agent said it left, and what it leaves. */
+/** One stage of the line: its mark, its name, what the agent said it left, and what it leaves. A stage the panel has
+    no words for (a line from a newer OpenFilm) says what the server sent it. */
 function StageRow({ stage }: { stage: PipelineStage }) {
   const t = useT();
+  const key = `pipeline.stage.${stage.name}`;
+  const said = t(key);
   return (
     <li className="flex items-start gap-2 py-[3px]">
       <span className="mt-[2px] shrink-0">{MARK[stage.status]}</span>
@@ -31,7 +34,7 @@ function StageRow({ stage }: { stage: PipelineStage }) {
           <span className={`text-[12px] ${stage.status === 'todo' ? 'text-[var(--text-muted)]' : 'text-[var(--text)]'}`}>{stage.name}</span>
           {stage.note ? <span className="truncate text-[11px] text-[var(--text-dim)]" title={stage.note}>{stage.note}</span> : null}
         </div>
-        <div className="text-[11px] text-[var(--text-dim)]">{t(`pipeline.stage.${stage.name}`)}</div>
+        <div className="text-[11px] text-[var(--text-dim)]">{said === key ? stage.leaves : said}</div>
       </div>
     </li>
   );
@@ -74,6 +77,8 @@ function PipelineCard({ pipeline, check }: { pipeline: Pipeline; check: Pipeline
 /** The line read again while it shows: the agent works while the person watches. */
 function usePipeline(projectId: string, open: boolean): PipelineState | null {
   const [state, setState] = React.useState<PipelineState | null>(null);
+  /* another project's line is not this one's: the last one read goes before this one's first read answers */
+  React.useEffect(() => { setState(null); }, [projectId]);
   React.useEffect(() => {
     let live = true;
     const read = () => api.pipeline(projectId).then((s) => { if (live) setState(s); }, () => {});

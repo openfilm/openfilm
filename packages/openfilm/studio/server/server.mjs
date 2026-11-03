@@ -598,8 +598,9 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         : 'This project’s folder is not there any more: it was moved, renamed or deleted.', { code: missing === 'film' ? 'missing-film' : 'missing' });
     };
     /* film.html missing from a folder still there (an agent writing it again, or it lost): the project stays open, and
-       says so; its version history is there to bring film.html back from; what writes the film waits for it */
-    const filmOptional = (!rest && req.method === 'GET') || rest === 'opened' || parts[2] === 'history';
+       says so; its version history is there to bring film.html back from; what writes the film waits for it.
+       `pipeline`: the line is read while the film is being rebuilt, exactly when the person wants to see it */
+    const filmOptional = (!rest && req.method === 'GET') || rest === 'opened' || rest === 'pipeline' || parts[2] === 'history';
     if (!(!rest && req.method === 'DELETE')) {
       requireProject({ film: !filmOptional });
     }
@@ -657,10 +658,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* an editor page shows it: the person opened it, so it is the one `openfilm open` alone comes back to */
     if (rest === 'opened' && req.method === 'POST') return json(res, 200, { project: await markOpened(project.id) });
     /* the production line as the person reads it (studio/server/pipeline.mjs): its stages, and what its check says */
-    if (rest === 'pipeline' && req.method === 'GET') {
-      requireProject({ film: false });
-      return json(res, 200, pipelineState(project.path));
-    }
+    if (rest === 'pipeline' && req.method === 'GET') return json(res, 200, pipelineState(project.path));
     /* the fonts its pages declare with @font-face, and with `page` (a project path) the families that page can draw with
        and names (project-fonts.mjs): the font menu's "In this project" */
     if (rest === 'fonts' && req.method === 'GET') {

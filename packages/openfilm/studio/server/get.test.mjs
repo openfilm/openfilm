@@ -577,3 +577,43 @@ test('tts --storyboard: no storyboard, one that does not hold together, none wit
   storyboard(root);
   await assert.rejects(runGet(root, 'tts', { storyboard: true, voice: 'v-1', out: 'x', text: 'hi' }), (e) => e.code === 2 && /no --out or --text/.test(e.message));
 });
+
+test('tts --storyboard: out of balance stops the board — the person told once, the receipts so far said, the rest not spent on', async () => {
+  const root = project();
+  storyboard(root);
+  const told = [];
+  let spent = 0;
+  refuse = (call) => (call.path.startsWith('/v1/text-to-speech/') && ++spent > 1 ? [402, { detail: { status: 'quota_exceeded' } }] : answer(call));
+  await assert.rejects(runGet(root, 'tts', { storyboard: true, voice: 'v-1' }, { tell: (n) => told.push(n) }), (e) => {
+    assert.match(e.message, /shot 1\n/);
+    assert.match(e.message, /shot 2  /);
+    assert.match(e.message, /the shots after this one are not voiced/);
+    return true;
+  });
+  assert.deepEqual(told, [{ kind: 'balance', provider: 'ElevenLabs', providerId: 'elevenlabs' }], 'the person told once, not per shot');
+  assert.equal(spent, 2, 'shot 1 voiced, shot 2 refused, shot with no vo aside: nothing more spent');
+});
+
+test('tts --storyboard: a leftover that holds nothing is not a take, and all failed is nothing landed', async () => {
+  const root = project();
+  storyboard(root);
+  mkdirSync(join(root, 'assets/audio/vo'), { recursive: true });
+  writeFileSync(join(root, 'assets/audio/vo/shot-1.wav'), '');
+  const said = await runGet(root, 'tts', { storyboard: true, voice: 'v-1' });
+  assert.match(said, /2 voiced/, 'the empty leftover did not keep its shot unvoiced');
+  assert.equal(readFileSync(join(root, 'assets/audio/vo/shot-1.mp3')).length, mp3(2.8).length);
+
+  const empty = project();
+  storyboard(empty);
+  refuse = () => [500, {}];
+  await assert.rejects(runGet(empty, 'tts', { storyboard: true, voice: 'v-1' }), (e) => {
+    assert.match(e.message, /nothing landed: all 2 with a vo did not run/);
+    return true;
+  });
+  refuse = null;
+});
+
+test('tts --force without --storyboard is said so: one tts has no take of its own', async () => {
+  const root = project();
+  await assert.rejects(runGet(root, 'tts', { out: 'intro', text: SAID, voice: 'v-1', force: true }), (e) => e.code === 2 && /--force is --storyboard's/.test(e.message));
+});

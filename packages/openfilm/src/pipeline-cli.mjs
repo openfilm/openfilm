@@ -57,8 +57,8 @@ const check = (project, run) => {
   if (!board) {
     return { ok: false, lines: [`${run} pipeline check: no storyboard at ${storyboardFile(project)}; \`${run} pipeline storyboard\` shows the form the check reads`] };
   }
-  const said = checkStoryboard(project, board, { seconds: read?.seconds, run });
-  return { ok: said.ok, lines: said.lines };
+  const checked = checkStoryboard(project, board, { seconds: read?.seconds, run });
+  return { ok: checked.ok, lines: checked.lines };
 };
 
 /** `openfilm pipeline`, as the agent or the person runs it. */
