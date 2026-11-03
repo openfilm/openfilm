@@ -1808,6 +1808,7 @@ export const ko: Words = {
     sound: '오디오',
     place: '위치와 크기',
     blend: '혼합 (불투명도, 혼합 모드)',
+    mask: '마스크',
     volume: '볼륨',
     fade: '페이드 인 / 페이드 아웃',
     paste: '붙여넣기',

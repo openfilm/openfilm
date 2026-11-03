@@ -1812,6 +1812,7 @@ export const zhCN: Words = {
     sound: '音频',
     place: '位置大小',
     blend: '混合（不透明度、混合模式）',
+    mask: '蒙版',
     volume: '音量',
     fade: '淡入/淡出',
     paste: '粘贴',

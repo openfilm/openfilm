@@ -1811,6 +1811,7 @@ export const es: Words = {
     sound: 'Audio',
     place: 'Posición y tamaño',
     blend: 'Fusión (opacidad, modo de fusión)',
+    mask: 'Máscara',
     volume: 'Volumen',
     fade: 'Fundido de entrada / salida',
     paste: 'Pegar',

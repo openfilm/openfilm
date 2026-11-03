@@ -1812,6 +1812,7 @@ export const en = {
     sound: 'Sound',
     place: 'Position and size',
     blend: 'Blending (opacity, blend mode)',
+    mask: 'Mask',
     volume: 'Volume',
     fade: 'Fade in / fade out',
     paste: 'Paste',

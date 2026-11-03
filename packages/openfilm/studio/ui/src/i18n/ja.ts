@@ -1811,6 +1811,7 @@ export const ja: Words = {
     sound: 'オーディオ',
     place: '位置とサイズ',
     blend: 'ブレンド（不透明度、描画モード）',
+    mask: 'マスク',
     volume: '音量',
     fade: 'フェードイン / フェードアウト',
     paste: 'ペースト',
