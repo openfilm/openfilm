@@ -14,6 +14,7 @@ import { ArrowLeft, Clapperboard, ExternalLink, MessageCircleQuestion, Play, Wor
 import { useT } from '@/i18n';
 import { seenExamples, sourcesApi, type Example } from '@/lib/project-sources';
 import { readCanvasDoc, type CanvasDoc } from '@/lib/canvas';
+import { Tooltip } from './Tooltip';
 
 /* an example's canvas, only looked at: the board's code is loaded when one is shown */
 const CanvasPreview = React.lazy(() => import('./canvas/CanvasView').then((m) => ({ default: m.CanvasPreview })));
@@ -197,32 +198,24 @@ function Hero({ example, onOpen, onStart, onReference }: { example: Example; onO
           {example.description ? <div className="mt-1.5 line-clamp-2 max-w-[520px] text-[13px] leading-[19px] text-white/80">{example.description}</div> : null}
           {example.duration ? <div className="mt-1.5 text-[12px] text-white/55">{clock(example.duration)}</div> : null}
         </div>
-        {onReference ? (
-          <div className="flex shrink-0 items-start gap-3">
-            <HeroAction label={t('gallery.reference')} hint={t('gallery.referenceHint')} onClick={onReference} />
-            <HeroAction primary label={t('gallery.start')} hint={t('gallery.startHint')} onClick={onStart} />
-          </div>
-        ) : (
-          <button type="button" onClick={(e) => { e.stopPropagation(); onStart(); }}
-            className="shrink-0 rounded-[10px] bg-white px-4 py-2.5 text-[13px] font-medium text-black transition hover:bg-white/90">
-            {t('gallery.start')}
-          </button>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {onReference ? <HeroAction label={t('gallery.reference')} hint={t('gallery.referenceHint')} onClick={onReference} /> : null}
+          <HeroAction primary label={t('gallery.start')} hint={t('gallery.startHint')} onClick={onStart} />
+        </div>
       </div>
     </div>
   );
 }
 
-/** One of the hero's two: its button, and under it what follows from it. */
+/** One of the hero's buttons; what follows from it is said under the pointer. */
 function HeroAction({ label, hint, onClick, primary = false }: { label: string; hint: string; onClick: () => void; primary?: boolean }) {
   return (
-    <div className="flex w-[200px] flex-col items-end gap-1.5">
+    <Tooltip label={hint} side="bottom" wrap>
       <button type="button" onClick={(e) => { e.stopPropagation(); onClick(); }}
         className={`rounded-[10px] px-4 py-2.5 text-[13px] font-medium transition ${primary ? 'bg-white text-black hover:bg-white/90' : 'border border-white/25 bg-white/10 text-white hover:bg-white/20'}`}>
         {label}
       </button>
-      <span className="text-right text-[11.5px] leading-[16px] text-white/70">{hint}</span>
-    </div>
+    </Tooltip>
   );
 }
 

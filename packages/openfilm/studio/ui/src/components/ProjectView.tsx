@@ -7,7 +7,7 @@
  * are written one at a time (see editor/use-film.ts); the agent's writes come in through the folder's events.
  */
 import * as React from 'react';
-import { BookmarkPlus, ClipboardCopy, ClipboardPaste, Film as FilmIcon, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, TriangleAlert, Upload, Workflow } from 'lucide-react';
+import { BookmarkPlus, ClipboardCopy, ClipboardPaste, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Scissors, Settings2, TriangleAlert, Upload, Workflow } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
 import { withPreset } from '../../../../src/clip-motion.mjs';
 import { PARTS, compoundOf, dissolvedOf } from '../../../server/compound.mjs';
@@ -3427,8 +3427,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
               {/* the edit or the canvas, in the panes' place: the one shown, its icon and name, and a click for the other */}
               <Tooltip label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} side="bottom">
                 <button type="button" aria-label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} data-work-mode={canvasOpen ? 'canvas' : 'edit'} onClick={() => setCanvasOpen(!canvasOpen)}
-                  className="flex h-[26px] shrink-0 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-medium text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
-                  {canvasOpen ? <Workflow size={15} /> : <FilmIcon size={15} />}
+                  className="flex h-[26px] shrink-0 items-center gap-1.5 rounded-md bg-[var(--bg-hover)] px-2.5 text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-active)]">
+                  {canvasOpen ? <Workflow size={14} /> : <Scissors size={14} />}
                   {t(canvasOpen ? 'canvas.title' : 'canvas.editTitle')}
                 </button>
               </Tooltip>
