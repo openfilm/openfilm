@@ -52,7 +52,6 @@ import {
   ArrowRightToLine,
   TriangleAlert,
   Blend,
-  Captions,
   Type,
   Plus,
   AudioLines,
@@ -297,7 +296,14 @@ function LaneMark({ track }: { track: TimelineTrack }) {
     count.set(kind, (count.get(kind) ?? 0) + 1);
   }
   const most = [...count].sort((a, b) => b[1] - a[1])[0]?.[0] ?? (track.role === 'audio' ? 'music' : track.role === 'video' ? 'video' : 'mg');
-  const Icon = track.captions ? Captions : track.text ? Type
+  if (track.captions) {
+    return (
+      <span className="flex items-center justify-center" style={{ width: 21, height: 14, color: 'var(--text-dim)', opacity: track.hidden ? 0.5 : 1 }}>
+        <CaptionsIcon size={16} />
+      </span>
+    );
+  }
+  const Icon = track.text ? Type
     : most === 'voice' ? Mic : most === 'sfx' ? AudioLines : most === 'music' ? Music
       : most === 'video' ? Film : most === 'still' ? ImageIcon : Sparkles;
   return (
@@ -666,8 +672,15 @@ export interface TimelineProps {
   onRelink?: (block: TimelineBlock, path: string | null) => void;
   /** What is in view and at what density: thumbnail shooting only shoots what can be seen (the zoom is ours). */
   onViewChange?: (view: { fromMs: number; toMs: number; pxPerMs: number }) => void;
-  /** The toolbar's button that makes captions of what is said in the film: a caption track on top. */
+  /**
+   * The toolbar's CC: whether the film's captions show (its caption tracks hidden or not). With none yet, it makes them
+   * of what is said in the film: a caption track on top.
+   */
   autoCaptions?: {
+    /** The film has caption tracks, and whether any of them shows. */
+    tracks: number;
+    shown: boolean;
+    onToggle: () => void;
     /** Lines heard with a transcript, and clips heard with none yet: 0 and 0, nothing is said (the button says so). */
     lines: number;
     untranscribed: number;
@@ -4665,9 +4678,16 @@ function ToolButton({
   );
 }
 
-/** Captions made of what is said in the film; their look and words are edited on their track and in the Inspector. */
+/** The CC: captions shown or hidden (their look and words are edited on their track and in the Inspector); with none, made. */
 function AutoCaptionsButton({ auto }: { auto: NonNullable<TimelineProps['autoCaptions']> }) {
   const t = useT();
+  if (auto.tracks > 0) {
+    return (
+      <ToolButton onClick={auto.onToggle} active={auto.shown} label={auto.shown ? t('timeline.captionsHide') : t('timeline.captionsShow')}>
+        <CaptionsIcon size={19} />
+      </ToolButton>
+    );
+  }
   const none = auto.lines === 0 && auto.untranscribed === 0;
   const label = auto.making ? t('timeline.captionsMaking')
     : auto.problem ? (auto.problem.connect ? t('timeline.subtitlesConnect') : t('timeline.subtitlesFailed').replace('{error}', auto.problem.text))

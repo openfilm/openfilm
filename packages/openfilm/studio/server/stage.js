@@ -1678,11 +1678,15 @@
       const rect = (el) => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; };
       return (hooks()?.captions?.() ?? []).map(({ el, ...cue }) => ({ ...cue, box: rect(el), text: rect(el.querySelector('.cue-text') ?? el) }));
     },
-    /** Show cues of a caption track moved by (dx, dy) stage px, not kept yet (`ids` null: every one; no dx: in place again). */
-    captionShift({ track, ids, dx, dy }) {
+    /**
+     * Show cues of a caption track moved by (dx, dy) stage px and scaled by `k` about their middle, not kept yet (`ids`
+     * null: every one; none of them: in place again).
+     */
+    captionShift({ track, ids, dx, dy, k }) {
       for (const cue of hooks()?.captions?.() ?? []) {
         if (cue.track !== track || (ids && !ids.includes(cue.id))) continue;
         cue.el.style.translate = dx || dy ? `${dx}px ${dy}px` : '';
+        cue.el.style.scale = k && k !== 1 ? String(k) : '';
       }
       return true;
     },

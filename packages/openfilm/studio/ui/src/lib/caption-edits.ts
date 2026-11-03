@@ -298,6 +298,42 @@ export function placeCues(vtt: Vtt, ids: ReadonlySet<string> | null, dx: number,
   };
 }
 
+/**
+ * Cues made `width` wide (% of the frame) about their middle, as a frame's side is dragged on the picture: the ones in
+ * `ids`, or every cue (null). Every cue in one region, all of them, widens the region; else each is placed as it
+ * stands, out of any region, at that width (`size`), its words wrapping to it. `drawn`: as placeCues.
+ */
+export function resizeCues(vtt: Vtt, ids: ReadonlySet<string> | null, width: number, drawn: ReadonlyMap<string, CueBox> = new Map()): Vtt {
+  const w = clamp(width, 5, 100);
+  const regionIds = new Set(vtt.regions.map((b) => regionSettings(b).id ?? ''));
+  const inRegion = vtt.cues.map((c) => cueLayout(c.settings, regionIds)).map((at) => (at.mode === 'region' ? at.region ?? null : null));
+  const one = inRegion[0];
+  if (!ids && one && inRegion.every((r) => r === one)) {
+    return {
+      ...vtt,
+      regions: vtt.regions.map((block) => {
+        const s = regionSettings(block);
+        if (s.id !== one) return block;
+        const b = regionBox(block);
+        const cx = clamp(b.left + b.width / 2, w / 2, 100 - w / 2);
+        const [rx = 0, ry = 100] = String(s.regionanchor ?? '0%,100%').split(',').map((v) => Number.parseFloat(v));
+        const set: Record<string, string> = { ...s, width: `${r1(w)}%`, viewportanchor: `${r1(cx - w / 2 + (rx / 100) * w)}%,${r1(b.top + (ry / 100) * b.height)}%` };
+        if (!s.regionanchor) set.regionanchor = '0%,100%';
+        return Object.entries(set).map(([k, v]) => `${k}:${v}`).join('\n');
+      }),
+    };
+  }
+  return {
+    ...vtt,
+    cues: vtt.cues.map((c) => {
+      if (ids && !ids.has(c.id)) return c;
+      const box = drawn.get(c.id) ?? laidOut(vtt, c);
+      const cx = clamp(box.left + box.width / 2, w / 2, 100 - w / 2);
+      return { ...c, settings: withSettings(c.settings, { region: null, line: `${r1(box.top + box.height)}%,end`, position: `${r1(cx)}%,center`, size: `${r1(w)}%` }) };
+    }),
+  };
+}
+
 /* ── the look: the STYLE's rules ── */
 
 const norm = (prelude: string) => prelude.replace(/\s+/g, ' ').trim();

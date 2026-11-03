@@ -1,34 +1,14 @@
 /**
- * Subtitles in the editor, from before caption tracks: the looks a caption track can take at once (their table and CSS
- * in studio/server/film-subtitle.mjs), drawn as samples; the look the person used last, which a new project starts in;
+ * Subtitles in the editor, from before caption tracks: the look the person used last, which a new project starts in;
  * and the server calls that say what is said in the film and transcribe it (studio/server/captions.mjs).
  *
  * Kept free of React and of `@/` imports so the editor's tests can import it as it is.
  */
-import {
-  FILM_SUBTITLE_DEFAULT,
-  FILM_SUBTITLE_LOOKS,
-  FILM_SUBTITLE_LOOK_IDS,
-  filmSubtitleCss,
-  parseFilmSubtitleStyle,
-} from '../../../server/film-subtitle.mjs';
-import type { FilmSubtitleCss, FilmSubtitleCue, FilmSubtitleLookId, FilmSubtitleStyle } from '../../../server/film-subtitle.mjs';
+import { parseFilmSubtitleStyle } from '../../../server/film-subtitle.mjs';
+import type { FilmSubtitleCue, FilmSubtitleStyle } from '../../../server/film-subtitle.mjs';
 
 export type SubtitleCue = FilmSubtitleCue;
 export type SubtitleStyle = FilmSubtitleStyle;
-export type SubtitleLookId = FilmSubtitleLookId;
-
-export const SUBTITLE_LOOKS = FILM_SUBTITLE_LOOKS;
-export const SUBTITLE_LOOK_IDS = FILM_SUBTITLE_LOOK_IDS;
-export const SUBTITLE_DEFAULT = FILM_SUBTITLE_DEFAULT;
-
-/**
- * A look's CSS on the editor's side. The font size is in `cqmin` (a hundredth of the box's short side, the box being a
- * size container); 11px at least, or a narrow pane shows a gray smear instead of small text.
- */
-export function subtitleCss(style: SubtitleStyle): FilmSubtitleCss {
-  return filmSubtitleCss(style, { fontSize: `max(11px, ${style.font.sizePct}cqmin)` });
-}
 
 /* ── the look this person used last ──────────────────────────────────────── */
 

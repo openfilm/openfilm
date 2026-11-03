@@ -238,7 +238,10 @@ export function cueCss(css, scope) {
 
 /**
  * How every caption is drawn before its file's STYLE says otherwise: WebVTT's own default (white on black, 5% of the
- * frame's height), laid over the picture without taking clicks.
+ * frame's height), laid over the picture without taking clicks. A cue's text (`.cue-text`, what `::cue` styles) holds
+ * its words (`.cue-words`). The library text's variables style them as they style a text (library/text/text): font,
+ * size, weight, color, fill, outline, shadow, glow, box, spacing, and how they come in, move and go out (its motions,
+ * `__film/caption-text.css`), on the cue's own time (`--clip-length` its length). Plain CSS in `::cue` overrides them.
  */
 export const CAPTION_BASE_CSS = `
 [data-film-captions] { position: absolute; inset: 0; pointer-events: none; overflow: hidden; container-type: size; }
@@ -247,8 +250,16 @@ export const CAPTION_BASE_CSS = `
 [data-film-captions] .cue-auto > .cue { position: relative; width: 100%; }
 [data-film-captions] .cue-region { position: absolute; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; }
 [data-film-captions] .cue-region > .cue { position: relative; width: 100%; }
-[data-film-captions] .cue-text { color: #fff; background: rgba(0, 0, 0, .8); font: 5cqh sans-serif; line-height: 1.25;
-  -webkit-box-decoration-break: clone; box-decoration-break: clone; padding: 0 .25em; }
+[data-film-captions] .cue-text { color: var(--color, #fff); background: var(--box, rgba(0, 0, 0, .8)); padding: var(--box-pad, 0 .25em);
+  border-radius: var(--box-radius, 0); font-family: var(--font, sans-serif); font-size: var(--size, 5cqh); font-weight: var(--weight, normal);
+  font-style: var(--italic, normal); letter-spacing: var(--spacing, normal); line-height: 1.25;
+  -webkit-text-stroke: var(--stroke, 0) var(--stroke-color, transparent); paint-order: stroke fill; text-shadow: var(--shadow, none);
+  -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+[data-film-captions] .cue-words { display: inline-block; background: var(--fill, none); -webkit-background-clip: text; background-clip: text;
+  filter: var(--glow, none);
+  animation: var(--in, none) var(--in-time, .5s) cubic-bezier(.2, .8, .2, 1) both,
+    var(--loop, none) var(--loop-time, 1.6s) ease-in-out var(--in-time, .5s) infinite,
+    var(--out, none) var(--out-time, .4s) cubic-bezier(.6, 0, .8, .2) calc(var(--clip-length, 3600s) - var(--out-time, .4s)) forwards; }
 `;
 
 /* ── where a cue sits ───────────────────────────────────────────────────── */

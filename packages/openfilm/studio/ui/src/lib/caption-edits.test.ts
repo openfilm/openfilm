@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readVtt, writeVtt } from '../../../../src/captions.mjs';
 import {
-  MIN_CUE_S, addCue, keepApart, setCueBlock, cueRule, cutIndex, joinText, mergeCues, moveCues, placeCues, removeCues, retimeCue, setCueRule, setCueText, splitCue, withIds,
+  MIN_CUE_S, addCue, keepApart, resizeCues, setCueBlock, cueRule, cutIndex, joinText, mergeCues, moveCues, placeCues, removeCues, retimeCue, setCueRule, setCueText, splitCue, withIds,
 } from './caption-edits.ts';
 
 const FILE = `WEBVTT
@@ -118,4 +118,11 @@ test('a whole rule of the STYLE (keyframes) set, put back where it was, taken aw
   assert.equal(a.styles[0], '::cue { color: #fff; }\n::cue(#b) { color: #ffd400; }\n@keyframes of-in-fade { from { opacity: 0; } }');
   assert.equal(setCueBlock(a, '@keyframes of-in-fade', 'to { opacity: 1; }').styles[0]!.split('\n')[2], '@keyframes of-in-fade { to { opacity: 1; } }');
   assert.equal(setCueBlock(a, '@keyframes of-in-fade', null).styles[0], v.styles[0]);
+});
+
+test('cues made wider or narrower about their middle: the region of all of them, or each one alone', () => {
+  const v = withIds(readVtt('WEBVTT\n\nREGION\nid:main\nwidth:100%\nlines:3\nregionanchor:50%,100%\nviewportanchor:50%,94%\n\na\n00:00:00.000 --> 00:00:01.000 region:main align:center\nOne\n'));
+  assert.equal(resizeCues(v, null, 60).regions[0], 'id:main\nwidth:60%\nlines:3\nregionanchor:50%,100%\nviewportanchor:50%,94%');
+  const one = resizeCues(v, new Set(['a']), 40, new Map([['a', { left: 10, top: 80, width: 60, height: 6 }]]));
+  assert.equal(one.cues[0]!.settings, 'line:86%,end position:40%,center size:40% align:center');
 });

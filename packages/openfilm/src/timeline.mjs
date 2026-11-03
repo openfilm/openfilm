@@ -43,6 +43,8 @@ const ready = (a) => Promise.resolve(typeof a.ready === 'function' ? a.ready() :
  */
 const captionLayers = [];
 let captionBase = null;
+/** The text component's fonts and motions loading (see syncCaptions). */
+let captionText = null;
 
 /** A gate that runs what is given to it when fewer than `most` of its runs are going. */
 function gate(most) {
@@ -1132,6 +1134,10 @@ async function syncCaptions(value) {
     captionBase = document.createElement('style');
     captionBase.textContent = CAPTION_BASE_CSS;
     document.head.append(captionBase);
+    /* the library text's fonts and motions: a caption's look can be any of its looks */
+    const link = Object.assign(document.createElement('link'), { rel: 'stylesheet', href: '__film/caption-text.css' });
+    captionText = new Promise((done) => { link.onload = done; link.onerror = done; });
+    document.head.append(link);
   }
   const want = value.tracks.flatMap((track, ti) => (track.captions ? [{ ti, track }] : []));
   for (const layer of [...captionLayers]) {
@@ -1140,6 +1146,7 @@ async function syncCaptions(value) {
     layer.css.remove();
     captionLayers.splice(captionLayers.indexOf(layer), 1);
   }
+  await captionText;
   await Promise.all(want.map(async ({ ti, track }) => {
     let layer = captionLayers.find((l) => l.ti === ti);
     if (!layer) {
@@ -1173,6 +1180,9 @@ async function readCaptions(layer) {
   layer.cues = vtt.cues;
   layer.regions = new Map(vtt.regions.map((r) => regionBox(r)).map((r) => [r.id, r]));
   layer.css.textContent = cueCss(vtt.styles.join('\n'), `[data-film-captions="${layer.ti}"]`);
+  /* the fonts it names, loaded before a frame is drawn with them (they are shown only once loaded) */
+  const named = vtt.styles.join('\n');
+  await Promise.all([...document.fonts].filter((f) => named.includes(f.family.replace(/^["']|["']$/g, ''))).map((f) => f.load().catch(() => null)));
   for (const el of layer.on.values()) el.remove();
   layer.on.clear();
   layer.el.replaceChildren();
@@ -1206,8 +1216,13 @@ function cueElement(layer, cue) {
   const text = document.createElement('span');
   text.className = 'cue-text';
   if (cue.id) text.dataset.cueId = cue.id;
-  cueContent(text, cueNodes(cue.text));
+  /* its words in a box of their own: what a fill paints and a motion moves (CAPTION_BASE_CSS) */
+  const words = document.createElement('span');
+  words.className = 'cue-words';
+  cueContent(words, cueNodes(cue.text));
+  text.append(words);
   box.append(text);
+  box.style.setProperty('--clip-length', `${Math.max(0, cue.end - cue.start)}s`);
   const at = cueLayout(cue.settings, new Set(layer.regions.keys()));
   box.style.textAlign = at.align;
   let into = layer.el;

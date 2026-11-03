@@ -32,6 +32,18 @@ const FILM_DOC = readFileSync(fileURLToPath(new URL('./film-doc.mjs', import.met
 const OVERRIDES = readFileSync(fileURLToPath(new URL('./overrides.mjs', import.meta.url)), 'utf8');
 /* the timeline's reading of caption tracks' WebVTT (SPEC §1 Captions) */
 const CAPTIONS = readFileSync(fileURLToPath(new URL('./captions.mjs', import.meta.url)), 'utf8');
+/* the library's text component (library/text/text): its fonts and motions are a caption's too (src/captions.mjs) */
+const TEXT_DIR = new URL('../library/text/text/files/', import.meta.url);
+let captionText = null;
+/** The text component's @font-face and @keyframes rules; its fonts are served beside them (`__film/fonts/…`, as the rules say). */
+function captionTextCss() {
+  if (captionText != null) return captionText;
+  let page = '';
+  try { page = readFileSync(fileURLToPath(new URL('text.html', TEXT_DIR)), 'utf8'); } catch { /* a package without the library: none */ }
+  const css = /<style>([\s\S]*?)<\/style>/.exec(page)?.[1] ?? '';
+  captionText = (css.match(/@(?:font-face|keyframes)[^{]*\{(?:[^{}]|\{[^{}]*\})*\}/g) ?? []).join('\n');
+  return captionText;
+}
 
 /**
  * The start of a film, before the timeline takes its clips over: nothing shows, a page clip has the stage's size to
@@ -84,6 +96,18 @@ export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, ti
     }
     if (path.endsWith('/__film/captions.mjs')) {
       res.writeHead(200, { ...extraHeaders, 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' }).end(CAPTIONS);
+      return true;
+    }
+    if (path.endsWith('/__film/caption-text.css')) {
+      res.writeHead(200, { ...extraHeaders, 'content-type': 'text/css; charset=utf-8', 'cache-control': 'no-store' }).end(captionTextCss());
+      return true;
+    }
+    const font = /\/__film\/fonts\/([\w.-]+\.(?:woff2|ttf))$/.exec(path)?.[1];
+    if (font) {
+      let body = null;
+      try { body = readFileSync(fileURLToPath(new URL(`fonts/${font}`, TEXT_DIR))); } catch { /* not one of its fonts */ }
+      if (!body) { res.writeHead(404, extraHeaders).end(); return true; }
+      res.writeHead(200, { ...extraHeaders, 'content-type': font.endsWith('.woff2') ? 'font/woff2' : 'font/ttf', 'cache-control': 'max-age=86400' }).end(body);
       return true;
     }
     if (path.endsWith('/__film/overrides.mjs')) {

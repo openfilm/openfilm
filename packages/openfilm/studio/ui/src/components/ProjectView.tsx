@@ -3371,6 +3371,13 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* the library's skills as the app's chat asked to show them (LibraryDrawer `showSkills`) */
   const [skillsShown, setSkillsShown] = React.useState<SkillsRequest | null>(null);
   const [settingsOpen, setSettingsOpen] = useSettings();
+  /* the CC: every caption track shown, or every one hidden (one undo step) */
+  const toggleCaptions = React.useCallback(() => {
+    const tracks = filmRef.current?.tracks ?? [];
+    const shown = tracks.some((tr) => tr.captions && !tr.hidden);
+    const ops: Op[] = tracks.flatMap((tr, i) => (tr.captions && Boolean(tr.hidden) !== shown ? [{ op: 'track' as const, track: i, field: 'hidden' as const, value: shown }] : []));
+    if (ops.length) void edit(ops, shown ? 'captionTrack.stepHide' : 'captionTrack.stepShow');
+  }, [edit]);
   /* captions of what is said: what went wrong, shown on the button; with no service to transcribe, it opens Services */
   const [subtitleProblem, setSubtitleProblem] = React.useState<{ text: string; connect: boolean } | null>(null);
   const [captionsMaking, setCaptionsMaking] = React.useState(false);
@@ -3937,7 +3944,10 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     hasClipboard={clipboard.length > 0 || layerBoard != null}
                     selected={selectedIds}
                     onSelectedChange={onTimelineSelected}
-                    autoCaptions={{ lines: subs.captions?.cues.length ?? 0, untranscribed: subs.captions?.untranscribed.length ?? 0, onMake: () => void makeCaptions(), making: captionsMaking || subs.transcribing, problem: subtitleProblem }}
+                    autoCaptions={{
+                      tracks: captionSrcs.length, shown: (film.film?.tracks ?? []).some((tr) => tr.captions && !tr.hidden), onToggle: toggleCaptions,
+                      lines: subs.captions?.cues.length ?? 0, untranscribed: subs.captions?.untranscribed.length ?? 0, onMake: () => void makeCaptions(), making: captionsMaking || subs.transcribing, problem: subtitleProblem,
+                    }}
                     waveUrl={waveUrl}
                     history={timelineHistory}
                     recorder={recorder}
