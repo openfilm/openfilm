@@ -403,4 +403,13 @@ export const es: Words = {
     gone: 'La copia de antes de este turno ya no se conserva. Restaura film.html desde el Historial de versiones.',
     failed: 'No se pudo restaurar film.html. Inténtalo de nuevo o restáuralo desde el Historial de versiones.',
   },
+  filesRestore: {
+    lost: 'En este turno se eliminó {names} y ahora no está.',
+    restore: 'Restaurar como estaba antes de este turno',
+    restoring: 'Restaurando…',
+    restored: 'Ha vuelto como estaba antes de este turno.',
+    exists: 'Ya ha vuelto, así que se ha dejado como está.',
+    gone: 'La copia de antes de este turno ya no se conserva.',
+    failed: 'No se pudo restaurar. Inténtalo de nuevo.',
+  },
 };

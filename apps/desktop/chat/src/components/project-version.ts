@@ -34,6 +34,8 @@ export interface ProjectVersion {
   fileChanges?: FileChange[];
   /** the turn ended with film.html gone: offered back as the turn found it (lib/film-restore) */
   filmLost?: boolean;
+  /** the other files the turn removed: offered back as the turn found them (lib/files-restore) */
+  filesLost?: string[];
   /** 'background': the agent started it by itself, a background task of its own having come back (no message) */
   origin?: 'background';
 }

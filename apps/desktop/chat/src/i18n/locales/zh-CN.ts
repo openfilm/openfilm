@@ -403,4 +403,13 @@ export const zhCN: Words = {
     gone: '这一轮之前的副本已不再保留。请从“版本历史”恢复 film.html。',
     failed: '无法恢复 film.html。请重试，或从“版本历史”恢复。',
   },
+  filesRestore: {
+    lost: '这一轮删除了 {names}，现在它们不在了。',
+    restore: '恢复成这一轮之前的样子',
+    restoring: '正在恢复…',
+    restored: '已恢复成这一轮之前的样子。',
+    exists: '这些文件已经回来了，所以保持原样。',
+    gone: '这一轮之前的副本已不再保留。',
+    failed: '无法恢复这些文件。请重试。',
+  },
 };

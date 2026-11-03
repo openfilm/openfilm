@@ -56,6 +56,7 @@ import { desktopBridge, type LocalAgentId, type LocalAgentTurnMeta, type PromptI
 import { referencePictures } from '@/lib/ref-pictures';
 import type { TurnFileChanges } from '@/lib/file-changes';
 import { offersFilmRestore } from '@/lib/film-restore';
+import { filesLostOf } from '@/lib/files-restore';
 import { readBalance, type TurnBalance } from '@/lib/balance';
 import { BalanceNotice } from '@/components/BalanceNotice';
 import { CopyDiagnostics } from '@/components/CopyDiagnostics';
@@ -710,7 +711,8 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
         /* film.html gone as the turn ends: offered back under its reply, as the turn found it. Not kept with the turn:
            the app keeps the file only while it runs (lib/film-restore) */
         const filmLost = offersFilmRestore(found);
-        setTurns((list) => list.map((item) => (item.id === id ? { ...item, fileChanges, ...(filmLost ? { filmLost } : {}) } : item)));
+        const filesLost = filesLostOf(found);
+        setTurns((list) => list.map((item) => (item.id === id ? { ...item, fileChanges, ...(filmLost ? { filmLost } : {}), ...(filesLost.length ? { filesLost } : {}) } : item)));
       });
     });
     keep();

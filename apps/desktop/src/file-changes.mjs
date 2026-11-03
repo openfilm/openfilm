@@ -8,12 +8,14 @@
  * (.film), hidden folders and node_modules are not read.
  *
  * film.html is kept whole whatever its size (up to FILM_MAX): a turn that ends with it gone (`filmLost`) can put it
- * back as it was (`restoreFilm`), since the film is the project.
+ * back as it was (`restoreFilm`), since the film is the project. Any other file a turn removes (`lost`) can be put back
+ * too (`restoreFiles`): a text from what was kept of it, any other file from a hard link to it made as the turn began
+ * (`hold`, in Studio's folder: no space taken, and the content outlives a delete; a disk without hard links has none).
  *
  * Reads no Electron module, so `node --test` can use it.
  */
-import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { join, relative, sep } from 'node:path';
+import { link, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { dirname, join, relative, sep } from 'node:path';
 import { structuredPatch } from 'diff';
 
 const TEXT = /\.(html?|css|[cm]?js|jsx|tsx?|json|md|txt|srt|vtt|svg|xml|ya?ml|toml|py|sh|csv)$/i;
@@ -33,16 +35,28 @@ const DIFF_MS = 1500;
 export const FILM = 'film.html';
 const FILM_MAX = 32 * 1024 * 1024;
 
+/** Where a turn's links to the files as it began are kept (`hold`): null for an id that names no folder. */
+export const holdDir = (/** @type {string} */ root, /** @type {unknown} */ turnId) => (
+  typeof turnId === 'string' && /^[\w:-]{1,120}$/.test(turnId) ? join(root, '.film', 'cache', 'turn-files', turnId.replace(/:/g, '-')) : null
+);
+
+/** Let go of a turn's links (`hold`): a file the turn removed is gone for good then. */
+export const dropHold = (/** @type {string | null} */ hold) => (hold ? rm(hold, { recursive: true, force: true }).catch(() => {}) : Promise.resolve());
+
 /**
- * @typedef {{ size: number, mtimeMs: number, text?: string }} Seen
+ * @typedef {{ size: number, mtimeMs: number, text?: string, held?: true }} Seen
  * @typedef {{ files: Map<string, Seen>, cut: boolean }} Snapshot
  * @typedef {{ oldStart: number, oldLines: number, newStart: number, newLines: number, lines: string[] }} Hunk
  * @typedef {{ path: string, change: 'added' | 'removed' | 'changed', added?: number, removed?: number,
  *   hunks?: Hunk[], cut?: boolean }} FileChange
  */
 
-/** The project's files now: each one's size and time, and a text file's text. */
-export async function snapshot(root) {
+/**
+ * The project's files now: each one's size and time, and a text file's text. With `hold`, each other file is linked
+ * there too (`held`), to be put back if it goes.
+ * @param {string} root @param {{ hold?: string | null }} [opts]
+ */
+export async function snapshot(root, { hold = null } = {}) {
   /** @type {Map<string, Seen>} */
   const files = new Map();
   let kept = 0;
@@ -68,6 +82,10 @@ export async function snapshot(root) {
       const path = relative(root, abs).split(sep).join('/');
       if (path === FILM ? info.size <= FILM_MAX : TEXT.test(entry.name) && info.size <= TEXT_MAX && kept + info.size <= KEEP_MAX) {
         try { seen.text = await readFile(abs, 'utf8'); kept += info.size; } catch { /* gone meanwhile */ }
+      }
+      if (hold && seen.text == null) {
+        const to = join(hold, ...path.split('/'));
+        try { await mkdir(dirname(to), { recursive: true }); await link(abs, to); seen.held = true; } catch { /* no hard links here */ }
       }
       files.set(path, seen);
     }
@@ -98,11 +116,12 @@ function clip(hunks, max) {
 /**
  * What changed between a snapshot and the folder now: the files added, removed and changed, in path order (an
  * empty list: nothing changed). `cut`: the folder was too large to read whole. `filmLost`: film.html was there (and
- * kept whole) and is not now: removed, and not written again by the end; `restoreFilm` puts it back.
+ * kept whole) and is not now: removed, and not written again by the end; `restoreFilm` puts it back. `lost`: the other
+ * files removed that can be put back (restoreFiles).
  *
  * @param {string} root
  * @param {Snapshot} before
- * @returns {Promise<{ files: FileChange[], cut: boolean, filmLost?: true }>}
+ * @returns {Promise<{ files: FileChange[], cut: boolean, filmLost?: true, lost?: string[] }>}
  */
 export async function changes(root, before) {
   const after = await snapshot(root);
@@ -131,7 +150,35 @@ export async function changes(root, before) {
     out.push({ path, change, added, removed, hunks: kept, ...(dropped ? { cut: true } : {}) });
   }
   const filmLost = before.files.get(FILM)?.text != null && !after.files.has(FILM);
-  return { files: out, cut: before.cut || after.cut, ...(filmLost ? { filmLost: true } : {}) };
+  const lost = [...before.files].filter(([path, seen]) => path !== FILM && !after.files.has(path) && (seen.text != null || seen.held)).map(([path]) => path);
+  return { files: out, cut: before.cut || after.cut, ...(filmLost ? { filmLost: true } : {}), ...(lost.length ? { lost } : {}) };
+}
+
+/**
+ * Put back the files a turn removed (`lost`) as its snapshot had them: a text from what was kept, any other from its
+ * link in `hold`; only where there is none now, so one written meanwhile is never written over. → how many came back,
+ * and how many were there already.
+ * @param {string} root @param {Snapshot} before @param {string} hold @param {readonly string[]} lost
+ * @returns {Promise<{ restored: number, exists: number }>}
+ */
+export async function restoreFiles(root, before, hold, lost) {
+  let restored = 0;
+  let exists = 0;
+  for (const path of lost) {
+    const seen = before.files.get(path);
+    if (!seen || (seen.text == null && !seen.held)) continue;
+    const to = join(root, ...path.split('/'));
+    try {
+      await mkdir(dirname(to), { recursive: true });
+      if (seen.text != null) await writeFile(to, seen.text, { flag: 'wx' });
+      else await link(join(hold, ...path.split('/')), to);
+      restored += 1;
+    } catch (e) {
+      if (/** @type {NodeJS.ErrnoException} */ (e).code !== 'EEXIST') throw e;
+      exists += 1;
+    }
+  }
+  return { restored, exists };
 }
 
 /**

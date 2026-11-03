@@ -404,4 +404,13 @@ export const enUS = {
     gone: 'The copy from before this turn is no longer kept. Restore film.html from Version history.',
     failed: 'film.html could not be restored. Try again, or restore it from Version history.',
   },
+  filesRestore: {
+    lost: 'This turn removed {names}, and they are not there now.',
+    restore: 'Put them back as they were before this turn',
+    restoring: 'Putting back…',
+    restored: 'They are back as they were before this turn.',
+    exists: 'They are back already, so they were left as they are.',
+    gone: 'The copies from before this turn are no longer kept.',
+    failed: 'They could not be put back. Try again.',
+  },
 };
