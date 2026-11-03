@@ -25,6 +25,7 @@ import {
   cueKey,
   moveCue,
   retimeCue,
+  trimmedBy,
   rowOrder,
 } from '@/lib/subtitle-cues';
 import type { SubtitleCue } from '@/lib/subtitles';
@@ -357,7 +358,10 @@ export const SubtitleRow = React.forwardRef<SubtitleRowHandle, {
         <div data-zoom-layer="content" className="absolute inset-0">
           {cues.map((cue) => {
             const key = cueKey(cue);
-            const shown = drag?.key === key ? drag : held?.key === key ? held : { startMs: cue.startMs, endMs: cueEnd(cue) };
+            /* the cue in hand (or just let go) where it is; a neighbor it reaches, cut short as it will be */
+            const moving = drag ?? held;
+            const moved = moving ? cues.find((c) => cueKey(c) === moving.key) : undefined;
+            const shown = moving?.key === key ? moving : moving && moved ? trimmedBy(cue, moved, moving) : { startMs: cue.startMs, endMs: cueEnd(cue) };
             const left = shown.startMs * pxPerMs;
             const w = Math.max(2, (shown.endMs - shown.startMs) * pxPerMs);
             const picked = selected === key;

@@ -2,13 +2,15 @@
  * The subtitle row's edits, worked out here and written by the server (studio/server/subtitle-edits.mjs).
  *
  * Two sides:
- *   · on the film (film ms), what the row shows: where a dragged edge or cue may go (never over a neighbor), where a
- *     cue can be split, which two can be merged, where a new one fits;
+ *   · on the film (film ms), what the row shows: where a dragged edge or cue may go (into a neighbor said by the same
+ *     clip, which it cuts short; never over another's), where a cue can be split, which two can be merged, where a new
+ *     one fits;
  *   · in the source (its own ms, what its transcript holds): the same edit made to the source's subtitles, one cue per
  *     subtitle, each with its timed words and its translations. A cue on the film shows a source's subtitle through
  *     its clip (`at`, the `#t=` in point, `speed`): toSourceMs takes a film time back there.
  *
- * Cues never overlap after an edit: on the row, a cue keeps between its neighbors; in the source, the same.
+ * Cues never overlap after an edit: on the row, a cue dragged into its neighbor of the same source shortens it (to
+ * MIN_CUE_MS at least), and keeps clear of the others; in the source, the same.
  *
  * Plain TypeScript, no React: the editor's tests import it as it is.
  */
@@ -30,20 +32,31 @@ export const cueKey = (c: SubtitleCue) => `${c.src ?? ''}\u0000${c.clip ?? ''}\u
 /** The cues as the row lays them out: by start. */
 export const rowOrder = (cues: readonly SubtitleCue[]): SubtitleCue[] => [...cues].sort((a, b) => a.startMs - b.startMs || a.durMs - b.durMs);
 
+/** Whether two cues are lines of one transcript, through one clip: one can cut the other short. */
+const sameVoice = (a: SubtitleCue, b: SubtitleCue) => Boolean(a.src) && a.src === b.src && a.clip === b.clip;
+
 /**
- * The room cue `i` of `cues` (in row order) has: from the end of the cues before it to the start of those after it.
- * Never less than the cue itself: two cues that overlap already (two voices at once) are not pushed apart, only kept
- * from overlapping more.
+ * The room cue `i` of `cues` (in row order) has: up to MIN_CUE_MS into its neighbors of the same source (they are cut
+ * short, see trimmedBy), up to the others. Never less than the cue itself: two cues that overlap already (two voices
+ * at once) are not pushed apart, only kept from overlapping more.
  */
 export function cueRoom(cues: readonly SubtitleCue[], i: number): { lo: number; hi: number } {
   const cue = cues[i]!;
   let lo = 0;
   let hi = Infinity;
   cues.forEach((c, j) => {
-    if (j < i) lo = Math.max(lo, cueEnd(c));
-    if (j > i) hi = Math.min(hi, c.startMs);
+    const cut = sameVoice(c, cue);
+    if (j < i) lo = Math.max(lo, cut ? Math.min(cueEnd(c), c.startMs + MIN_CUE_MS) : cueEnd(c));
+    if (j > i) hi = Math.min(hi, cut ? Math.max(c.startMs, cueEnd(c) - MIN_CUE_MS) : c.startMs);
   });
   return { lo: Math.min(lo, cue.startMs), hi: Math.max(hi, cueEnd(cue)) };
+}
+
+/** Cue `c` as it shows while `moved` takes [startMs, endMs): a neighbor of the same source it reaches is cut short. */
+export function trimmedBy(c: SubtitleCue, moved: SubtitleCue, span: { startMs: number; endMs: number }): { startMs: number; endMs: number } {
+  const startMs = c.startMs, endMs = cueEnd(c);
+  if (c === moved || !sameVoice(c, moved) || endMs <= span.startMs || startMs >= span.endMs) return { startMs, endMs };
+  return startMs < moved.startMs ? { startMs, endMs: Math.min(endMs, span.startMs) } : { startMs: Math.max(startMs, span.endMs), endMs };
 }
 
 /** One edge of cue `i` dragged to `ms`: kept inside its room, and at least MIN_CUE_MS long. */
@@ -158,19 +171,28 @@ const withMarks = (cue: SourceCue, marks: Mark[] | undefined): SourceCue => {
   return marks?.length ? { ...rest, marks } : rest;
 };
 
-/** The room source cue `i` has between its neighbors. */
+/** The room source cue `i` has: up to MIN_CUE_MS into each neighbor (one shorter already is not cut). */
 function sourceRoom(list: readonly SourceCue[], i: number) {
-  return { lo: i > 0 ? list[i - 1]!.endMs : 0, hi: i < list.length - 1 ? list[i + 1]!.startMs : Infinity };
+  const before = list[i - 1], after = list[i + 1];
+  return {
+    lo: before ? Math.min(before.endMs, before.startMs + MIN_CUE_MS) : 0,
+    hi: after ? Math.max(after.startMs, after.endMs - MIN_CUE_MS) : Infinity,
+  };
 }
 
-/** Cue `i` given new times (each kept between its neighbors), its words moved with it. */
+/** Cue `i` given new times (inside its room), its words moved with it; a neighbor it reaches is cut short, its words too. */
 export function retimeSource(list: readonly SourceCue[], i: number, startMs: number, endMs: number): SourceCue[] {
   const cue = list[i]!;
   const { lo, hi } = sourceRoom(list, i);
   const s = Math.round(Math.max(lo, startMs));
   const e = Math.round(Math.min(hi, endMs));
   if (e - s < 1) return [...list];
-  return list.map((c, j) => (j === i ? withMarks({ ...c, startMs: s, endMs: e }, scaledMarks(cue, s, e)) : c));
+  return list.map((c, j) => {
+    if (j === i) return withMarks({ ...c, startMs: s, endMs: e }, scaledMarks(cue, s, e));
+    if (j === i - 1 && c.endMs > s) return withMarks({ ...c, endMs: s }, scaledMarks(c, c.startMs, s));
+    if (j === i + 1 && c.startMs < e) return withMarks({ ...c, startMs: e }, scaledMarks(c, e, c.endMs));
+    return c;
+  });
 }
 
 /**

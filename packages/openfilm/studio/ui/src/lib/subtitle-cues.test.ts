@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   addSource, addSpan, canMerge, canSplitAt, clipSpanOf, cueIndexAt, cueRoom, cutIndex, findSourceCue, joinText, mergeSource,
-  MIN_CUE_MS, moveCue, removeSource, retimeCue, retimeSource, rowOrder, splitSource, textSource, toFilmMs, toSourceMs,
+  MIN_CUE_MS, moveCue, removeSource, retimeCue, retimeSource, rowOrder, splitSource, textSource, toFilmMs, toSourceMs, trimmedBy,
   type SourceCue,
 } from './subtitle-cues.ts';
 import type { SubtitleCue } from './subtitles.ts';
@@ -10,18 +10,26 @@ import type { SubtitleCue } from './subtitles.ts';
 const cue = (startMs: number, endMs: number, text = 'x', extra: Partial<SubtitleCue> = {}): SubtitleCue => ({ startMs, durMs: endMs - startMs, text, src: 'vo.mp3', clip: 'vo', line: startMs, ...extra });
 const ROW = rowOrder([cue(3000, 4000), cue(0, 1000), cue(1500, 2500)]);
 
-test('on the row, a cue keeps between its neighbors and keeps a length', () => {
+test('on the row, a cue goes into its neighbors of the same source, cutting them short to a length, and keeps one', () => {
   assert.deepEqual(ROW.map((c) => c.startMs), [0, 1500, 3000]);
-  assert.deepEqual(cueRoom(ROW, 1), { lo: 1000, hi: 3000 });
-  assert.deepEqual(cueRoom(ROW, 0), { lo: 0, hi: 1500 });
-  assert.deepEqual(cueRoom(ROW, 2), { lo: 2500, hi: Infinity });
-  assert.deepEqual(retimeCue(ROW, 1, 'start', 200), { startMs: 1000, endMs: 2500 });
+  assert.deepEqual(cueRoom(ROW, 1), { lo: MIN_CUE_MS, hi: 4000 - MIN_CUE_MS });
+  assert.deepEqual(cueRoom(ROW, 0), { lo: 0, hi: 2500 - MIN_CUE_MS });
+  assert.deepEqual(cueRoom(ROW, 2), { lo: 1500 + MIN_CUE_MS, hi: Infinity });
+  assert.deepEqual(retimeCue(ROW, 1, 'start', 200), { startMs: 200, endMs: 2500 });
   assert.deepEqual(retimeCue(ROW, 1, 'start', 2490), { startMs: 2500 - MIN_CUE_MS, endMs: 2500 });
-  assert.deepEqual(retimeCue(ROW, 1, 'end', 9000), { startMs: 1500, endMs: 3000 });
+  assert.deepEqual(retimeCue(ROW, 1, 'end', 9000), { startMs: 1500, endMs: 4000 - MIN_CUE_MS });
   assert.deepEqual(retimeCue(ROW, 1, 'end', 0), { startMs: 1500, endMs: 1500 + MIN_CUE_MS });
-  assert.deepEqual(moveCue(ROW, 1, 2600), { startMs: 2000, endMs: 3000 });
-  assert.deepEqual(moveCue(ROW, 1, 0), { startMs: 1000, endMs: 2000 });
+  assert.deepEqual(moveCue(ROW, 1, 2600), { startMs: 2600, endMs: 3600 });
+  assert.deepEqual(moveCue(ROW, 1, 0), { startMs: MIN_CUE_MS, endMs: MIN_CUE_MS + 1000 });
   assert.deepEqual(moveCue(ROW, 2, 9000), { startMs: 9000, endMs: 10000 });
+  /* the neighbors it reaches, as they show meanwhile: cut short where it is */
+  assert.deepEqual(trimmedBy(ROW[0]!, ROW[1]!, { startMs: 200, endMs: 2500 }), { startMs: 0, endMs: 200 });
+  assert.deepEqual(trimmedBy(ROW[2]!, ROW[1]!, { startMs: 200, endMs: 2500 }), { startMs: 3000, endMs: 4000 });
+  assert.deepEqual(trimmedBy(ROW[2]!, ROW[1]!, { startMs: 2600, endMs: 3600 }), { startMs: 3600, endMs: 4000 });
+  /* another voice's line is not cut: kept clear of */
+  const two = rowOrder([cue(0, 1000), cue(1000, 2000, 'y', { src: 'b.mp3' })]);
+  assert.deepEqual(cueRoom(two, 1), { lo: 1000, hi: Infinity });
+  assert.deepEqual(trimmedBy(two[0]!, two[1]!, { startMs: 500, endMs: 2000 }), { startMs: 0, endMs: 1000 });
   /* two voices that overlap already are not pushed apart, only kept from overlapping more */
   const both = rowOrder([cue(0, 2000), cue(1000, 3000, 'y', { src: 'b.mp3' })]);
   assert.deepEqual(cueRoom(both, 1), { lo: 1000, hi: Infinity });
@@ -74,14 +82,18 @@ const SOURCE: SourceCue[] = [
   { startMs: 3000, endMs: 4000, text: 'Seven.', line: 3000 },
 ];
 
-test('in the source: retimed with its words, kept between its neighbors', () => {
+test('in the source: retimed with its words, a neighbor it reaches cut short with its words', () => {
   assert.equal(findSourceCue(SOURCE, { line: 0, part: 1 }), 1);
   assert.equal(findSourceCue(SOURCE, { line: 3000 }), 2);
   assert.equal(findSourceCue(SOURCE, { line: 0 }), -1);
   const longer = retimeSource(SOURCE, 0, 0, 2000);
-  assert.deepEqual(longer[0], { ...SOURCE[0], endMs: 1200, marks: [{ index: 0, startMs: 0 }, { index: 4, startMs: 360 }, { index: 8, startMs: 720 }] });
-  assert.equal(retimeSource(SOURCE, 1, 1500, 2500)[1]!.startMs, 1500);
-  assert.equal(retimeSource(SOURCE, 1, 900, 2500)[1]!.startMs, 1000, 'not over the cue before');
+  assert.deepEqual(longer[0], { ...SOURCE[0], endMs: 2000, marks: [{ index: 0, startMs: 0 }, { index: 4, startMs: 600 }, { index: 8, startMs: 1200 }] });
+  assert.deepEqual(longer[1], { ...SOURCE[1], startMs: 2000 }, 'the next one cut short');
+  assert.equal(retimeSource(SOURCE, 0, 0, 9000)[0]!.endMs, 2200 - MIN_CUE_MS, 'never past what keeps it a length');
+  assert.deepEqual(retimeSource(SOURCE, 1, 1500, 2500).map((c) => [c.startMs, c.endMs]), [[0, 1000], [1500, 2500], [3000, 4000]]);
+  const earlier = retimeSource(SOURCE, 1, 900, 2500);
+  assert.deepEqual(earlier[0], { ...SOURCE[0], endMs: 900, marks: [{ index: 0, startMs: 0 }, { index: 4, startMs: 270 }, { index: 8, startMs: 540 }] });
+  assert.equal(earlier[1]!.startMs, 900);
 });
 
 test('in the source: split at the word said at that moment, its translation cut alike', () => {
