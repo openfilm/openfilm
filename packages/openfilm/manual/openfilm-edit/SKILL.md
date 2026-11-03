@@ -8,7 +8,7 @@ description: How an OpenFilm film is made, and how to see it. Read it whole befo
 ## The project
 
 A folder:
-- `film.html`: the film. The person edits it in Studio at any moment: read it right before you change it, and change only what you mean to.
+- `film.html`: the film. The person edits it in Studio at any moment: read it right before you change it, and change only what you mean to. Take a file out of it before you delete the file, so the film never points at one that is gone.
 - Pages (`*.html`): pictures written as code, with the files they load by relative path.
 - `assets/`: media files (video, pictures, sound). The person sees every one in Studio: keep only what the film can use, and delete the pieces you made them from.
 - Files and folders starting with a dot (`.film`, `.git`) belong to the tools: leave them.

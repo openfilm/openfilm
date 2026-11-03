@@ -640,8 +640,9 @@ export interface TimelineProps {
   thumbs?: ReadonlyMap<string, string>;
   /** A poster per clip src, covering a picture clip until its thumbnails exist. */
   posters?: Readonly<Record<string, string>>;
-  /** Clips whose media shows no picture, by source path, and why — marked on their own block. */
-  mediaTrouble?: ReadonlyMap<string, 'decode' | 'unreachable' | 'missing'>;
+  /** Clips whose media shows no picture, by source path, and why — marked on their own block. `waiting`: gone while an
+      agent changes the film, so on its way rather than missing. */
+  mediaTrouble?: ReadonlyMap<string, 'decode' | 'unreachable' | 'missing' | 'waiting'>;
   /** Files in the project a missing clip's media may have moved to (same file name), best first. */
   relinkCandidates?: (src: string) => readonly string[];
   /** Point a clip whose media is missing at another file: one of the candidates, or null to pick a file to import. */
@@ -3168,7 +3169,7 @@ export const Timeline = React.memo(function Timeline({
                      .tl-blade on the scroller sets the blade and an inline cursor would override it */
                   cursor: mode === 'split' ? undefined : floating ? 'grabbing' : 'pointer',
                 }}
-                title={trouble ? `${blockTitleOf(block)}\n${t(trouble === 'length' ? 'timeline.noLengthHint' : trouble === 'missing' ? 'timeline.mediaMissingHint' : trouble === 'decode' ? 'timeline.mediaCannotPlay' : 'timeline.mediaReconnecting')}` : blockTitleOf(block)}
+                title={trouble ? `${blockTitleOf(block)}\n${t(trouble === 'length' ? 'timeline.noLengthHint' : trouble === 'missing' ? 'timeline.mediaMissingHint' : trouble === 'waiting' ? 'timeline.mediaWaitingHint' : trouble === 'decode' ? 'timeline.mediaCannotPlay' : 'timeline.mediaReconnecting')}` : blockTitleOf(block)}
                 onDoubleClick={(e) => {
                   /* a compound clip opens: its own film, edited as any (a breadcrumb leads back) */
                   if (!onEnterCompound || mode === 'split' || !COMPOUND_SRC.test((block.src ?? '').replace(/#.*$/, ''))) return;
@@ -3273,6 +3274,12 @@ export const Timeline = React.memo(function Timeline({
                 {trouble === 'missing' ? (
                   <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] flex items-center justify-center overflow-hidden bg-[#4a0d0d]" style={{ top: INFO_H }}>
                     {width > 64 ? <span className="truncate px-1 text-[11px] font-medium text-white/90">{t('timeline.mediaMissing')}</span> : null}
+                  </span>
+                ) : null}
+                {/* gone while an agent changes the film: on its way, so neutral stripes and a word, not an alarm */}
+                {trouble === 'waiting' ? (
+                  <span aria-hidden data-clip-waiting="" className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] flex items-center justify-center overflow-hidden" style={{ top: INFO_H, background: 'repeating-linear-gradient(135deg, rgb(255 255 255 / .07) 0 6px, rgb(255 255 255 / .02) 6px 12px), #2a2a2a' }}>
+                    {width > 64 ? <span className="truncate px-1 text-[11px] font-medium text-white/60">{t('timeline.mediaWaiting')}</span> : null}
                   </span>
                 ) : null}
                 {/* preview band: thumbnails by the clip's own time (a move keeps them, a left trim seeks deeper).

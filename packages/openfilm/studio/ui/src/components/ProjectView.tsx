@@ -23,6 +23,7 @@ import { changesPicture } from '@/lib/picture-files';
 import { SPEED_MAX } from '@/lib/playback-speed';
 import type { ReplaceFamily } from '@/lib/clip-replace';
 import { layoutTracks, type TimelineBlock, type TimelineTrack } from '@/lib/timeline-layout';
+import { useAgentWorking } from '@/lib/agent-working';
 import { filmClipKind, filmDocLoc, filmSrcIsPage, filmSrcKind, filmTrackBadges, parseFilmDocLoc, type FilmBox, type FilmDoc, type FilmOverride } from '@/lib/film';
 import { exactRate, footageFps, setTimecodeFps, snapToFrame, stepFrames } from '@/lib/timecode';
 import { JUMP_FRAMES, loopBack, playStart, shuttleRate } from '@/lib/timeline-keys';
@@ -2665,6 +2666,10 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rawListing, timelineTracks]);
+  /* while an agent changes the film, a file gone is on its way: its clips wait, and the viewer says nothing of it */
+  const agentWorking = useAgentWorking();
+  const timelineTrouble = React.useMemo(() => (agentWorking && [...mediaTrouble.values()].includes('missing')
+    ? new Map([...mediaTrouble].map(([src, why]) => [src, why === 'missing' ? 'waiting' as const : why])) : mediaTrouble), [agentWorking, mediaTrouble]);
   /** The file of a clip under the playhead that is gone (on a track that is seen), for the viewer to say. */
   const missingHere = React.useMemo(() => {
     if (!mediaTrouble.size) return null;
@@ -3587,7 +3592,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                               {played.rendered ? ` · ${t('viewer.statsRendered')}` : ''}
                             </div>
                           ) : null}
-                          {missingHere && !fullscreen ? (
+                          {missingHere && !fullscreen && !agentWorking ? (
                             <div data-preview-missing="" className="pointer-events-none absolute left-2 top-2 z-10 max-w-[80%] truncate rounded-[4px] bg-black/75 px-2 py-1 text-[11px] text-white">
                               {t('project.previewMissing').replace('{file}', missingHere)}
                             </div>
@@ -3619,7 +3624,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                           height: `${(frameBox.inner.h / frameBox.h) * 100}%`,
                         }}>
                           <Preview ref={preview} folder={folder} stage={shownStage} time={() => player.current.time()} fps={exactRate(projectFps)}
-                            onInfo={onInfo} onKey={previewKey} onError={setPreviewError} onPlayed={onPlayed} onUndecoded={onUndecoded}
+                            onInfo={onInfo} onKey={previewKey} onError={setPreviewError} onPlayed={onPlayed} onUndecoded={onUndecoded} waiting={agentWorking}
                             onSpans={(next) => setInfo((had) => (had ? { ...had, spans: next } : had))}>
                             {!fullscreen ? (
                               <FilmStageSelect
@@ -3817,7 +3822,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     onPlayRange={playRange}
                     thumbs={shownThumbs}
                     posters={shownPosters}
-                    mediaTrouble={mediaTrouble}
+                    mediaTrouble={timelineTrouble}
                     relinkCandidates={relinkCandidates}
                     onRelink={(block, path) => void relinkBlock(block, path)}
                     onViewChange={setThumbView}

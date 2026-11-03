@@ -93,6 +93,11 @@ type Props = {
   onKey?(e: KeyboardEvent): void;
   /** The film could not be drawn (the message), or it is drawn again (null). */
   onError?(message: string | null): void;
+  /**
+   * An agent is changing the film (lib/agent-working): a load that cannot be drawn is on its way, not broken. The
+   * picture drawn last stays, dimmed and said to be updating, or, with none, the viewer says it is updating.
+   */
+  waiting?: boolean;
   /** How playing went, about once a second while it plays. */
   onPlayed?(report: PlayedReport): void;
   /** The clips as placed, again: a page opened for the first time said its own length and size (the rest is as it was). */
@@ -109,7 +114,7 @@ const RESCALE_MS = 600;
 /** How often a load held back for a drag or a line typed in place looks whether it may be shown, ms. */
 const HOLD_POLL_MS = 100;
 
-export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folder, stage, time, fps, onInfo, onKey, onError, onPlayed, onSpans, onUndecoded, children }, ref) {
+export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folder, stage, time, fps, onInfo, onKey, onError, onPlayed, onSpans, onUndecoded, waiting = false, children }, ref) {
   const t = useT();
   const origin = new URL(folder).origin;
   const [frames, setFrames] = useState<Frame[]>([{ key: 1, ready: false }]);
@@ -469,6 +474,9 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
   }, [pageScale, shownScale, shown?.key, frames.length]);
 
   const error = failed;
+  /* while an agent changes the film: the picture drawn last, dimmed (a load behind it failed), else a word */
+  const updating = Boolean(error && waiting);
+  const stale = updating && shown != null && !shown.error;
   return (
     <div className="stage-box" ref={box}>
       <div className="stage" style={{ width: fit.w, height: fit.h }}>
@@ -501,13 +509,24 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
         </div>
         {shown && !error ? children : null}
         {!shown && !error ? <div className="cover"><span role="status" className="text-sweep">{t('project.previewStageMount')}</span></div> : null}
-        {error ? (
+        {stale ? <div aria-hidden className="pointer-events-none absolute inset-0 z-[2] bg-black/50" /> : null}
+        {stale ? (
+          <span role="status" data-preview-updating="" className="pointer-events-none absolute bottom-2 right-2 z-[3] rounded-[4px] bg-black/70 px-2 py-1 text-[11px] text-white/85">
+            <span className="text-sweep">{t('project.previewUpdating')}</span>
+          </span>
+        ) : updating ? (
+          <div className="cover" role="status" data-preview-updating=""><span className="text-sweep">{t('project.previewUpdating')}</span></div>
+        ) : error ? (
           <div className="cover" role="alert">
             <div className="max-w-[420px] text-[13px] leading-relaxed text-white/70">
               <p>{t('project.previewFailed')}</p>
               {/* in Safari or Firefox the likely reason is the browser: films are drawn and exported in Chromium */}
               {!chromiumBased() ? <p className="mt-1.5">{t('project.previewBrowser')}</p> : null}
-              <p className="mt-1.5 text-[11.5px] text-white/45">{error}</p>
+              {/* what went wrong as the film said it, for whoever wants it */}
+              <details className="mt-1.5 text-[11.5px] text-white/45">
+                <summary className="cursor-pointer select-none hover:text-white/70">{t('project.previewDetails')}</summary>
+                <p className="mt-1 break-words text-left">{error}</p>
+              </details>
             </div>
           </div>
         ) : null}

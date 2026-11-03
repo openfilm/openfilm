@@ -520,6 +520,9 @@ body.tl-pinning, body.tl-pinning * { cursor: crosshair !important; }
   content: '⟳';
   background: var(--warn);
 }
+/* gone while an agent changes the film (Timeline `waiting`): no edge, no badge; the block's stripes say it */
+[data-media-trouble='waiting'] > :first-child { box-shadow: none; }
+[data-media-trouble='waiting']::after { content: none; }
 
 /* ── The picture (editor/Preview): the film's page, scaled into the delivery frame's box ── */
 .stage-box {
