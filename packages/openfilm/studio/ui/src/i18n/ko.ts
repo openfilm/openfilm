@@ -380,6 +380,8 @@ export const ko: Words = {
     subtitles: '자막',
     burnIn: '자막을 화면에 입히기',
     noSidecar: '파일 없음',
+    loudnessAsMixed: '믹스 그대로',
+    loudnessHint: '영상 전체를 이 라우드니스로 맞추고 트루 피크는 -1 dBTP 아래로 둡니다. YouTube와 스트리밍은 -14, 팟캐스트는 -16, 방송은 -23.',
     gifWidth: '크기',
     gifHint: '팁: 몇 초 정도의 구간을 선택하세요. 640px의 10초 GIF는 보통 몇 MB입니다.',
     format: '형식',

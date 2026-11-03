@@ -179,6 +179,8 @@ function saveSettings(s: Settings): void {
 }
 
 const SHORT_EDGES = [480, 720, 1080, 1440, 2160];
+/** The loudness a video can be exported at, in LUFS: streaming sites, podcasts, broadcast (EBU R128). */
+const LOUDNESS_TARGETS = [-14, -16, -23] as const;
 const STILL_EDGES = [720, 1080, 1440, 2160];
 /** A video's rates: the project's list (lib/timecode), one spec for both. */
 const FPS_CHOICES = FRAME_RATES;
@@ -420,6 +422,7 @@ export function ExportCenter(props: ExportCenterProps) {
           quality: v.quality, audio: v.audio, label: selectedVideoPreset?.name ?? codecName(videoCodec), ...burn(v.burn),
           ...(selectedVideoPreset ? { preset: selectedVideoPreset.name } : {}),
           ...(captions > 0 && v.sidecar !== 'none' && videoCodec !== 'png' ? { sidecar: v.sidecar } : {}),
+          ...(v.audio && v.loudness != null && videoCodec !== 'png' ? { loudness: v.loudness } : {}),
         }];
       }
       case 'alpha': {
@@ -728,6 +731,19 @@ export function ExportCenter(props: ExportCenterProps) {
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <Field label={t('exportCenter.audio')}>
                         <Toggle checked={s.video.audio} onChange={(audio) => patch('video', { audio })} label={t('exportCenter.includeAudio')} />
+                        {s.video.audio && (
+                          <div className="mt-2">
+                            <Segmented
+                              value={s.video.loudness == null ? 'mixed' : String(s.video.loudness)}
+                              options={[
+                                { value: 'mixed', label: t('exportCenter.loudnessAsMixed') },
+                                ...LOUDNESS_TARGETS.map((n) => ({ value: String(n), label: `${n} LUFS` })),
+                              ]}
+                              onChange={(v) => patch('video', { loudness: v === 'mixed' ? null : Number(v) })}
+                            />
+                            <span className="mt-1 block text-[11px] leading-snug text-[var(--text-faint)]">{t('exportCenter.loudnessHint')}</span>
+                          </div>
+                        )}
                       </Field>
                       {captions > 0 && (
                         <Field label={t('exportCenter.subtitles')}>
