@@ -72,13 +72,14 @@ import { HOST_PANEL_WIDTH, studioHost, useHostPanel, type HostPanel, type StageB
 import { clipRef, fileRef, layerRef, markRange, momentRef, rangeRef, regionRef, stillUrl, subtitleRef, trackRef, type ClipFrameSource, type FilmRange } from '@/lib/studio-refs';
 import { boxNow, chatPointOf, draftBoxesAt, draftMarksOf, sameClip, NO_DRAFT, type DraftMarks, type PictureMarks } from '@/lib/chat-marks';
 import { usePageChanges } from './use-page-changes';
-import { SubtitleOverlay } from './SubtitleOverlay';
-import { SubtitleInspector, subtitleLineKey, type SubtitleLineAt, type SubtitleLineRefer } from './SubtitleInspector';
 import { CaptionInspector } from './CaptionInspector';
-import { configureCaptionTracks, refreshCaptionTracks, setCaptionSelection } from '@/lib/caption-tracks';
+import { CaptionStage } from './CaptionStage';
+import { captionSelectionNow, captionTrackNow, configureCaptionTracks, refreshCaptionTracks, setCaptionSelection, useCaptionSelection } from '@/lib/caption-tracks';
+import { cuePlain, readVtt, writeVtt } from '../../../../src/captions.mjs';
+import { FILM_SUBTITLE_LANGUAGES } from '../../../server/film-subtitle.mjs';
+import { placeCues, withIds } from '@/lib/caption-edits';
+
 import { useFilmSubtitles } from '@/lib/use-film-subtitles';
-import { speakerAt, useSubtitleEdits } from '@/lib/use-subtitle-edits';
-import { cueAt, filmSubtitleStyleFor, filmSubtitleWords, sameFilmSubtitleLanguage } from '@/lib/subtitles';
 import { DEFAULT_INSPECTOR, DOCK_GAP, DockPaneDivider, MIN_DOCK_H, MIN_INSPECTOR, MIN_STAGE_H, MIN_VIEWER, PaneDivider, usePaneSize } from './PaneDivider';
 import { PANE_BAR, PANE_BTN_ON, PANE_TOGGLE, PANE_TOGGLE_ICON } from './dock-pane-bar';
 import { Tooltip } from './Tooltip';
@@ -86,7 +87,6 @@ import { ProjectCard } from './ProjectCard';
 import { BrandLogo } from './BrandLogo';
 import { UpdateButton, WebUpdateButton } from './UpdateButton';
 import { MediaPool, type ImportProgress } from './MediaPool';
-import type { SubtitleRowSpec } from './SubtitleRow';
 import { LayersPanel } from './LayersPanel';
 import type { LayerRow } from '@/lib/layers-tree';
 import { SourcePreview } from './SourcePreview';
@@ -105,7 +105,7 @@ import { ProjectsPopover } from './ProjectsLibrary';
 import { FilmFullscreenBar, useFullscreenKeys } from './FilmFullscreenBar';
 import { ViewerBar } from './ViewerBar';
 import { ViewerZoom, ViewerZoomButton } from './ViewerZoom';
-import { LiveTime, type PlaybackClock } from './LiveTime';
+import type { PlaybackClock } from './LiveTime';
 import { Toast, useToast } from './Toast';
 import { SpendAsks } from './SpendAsks';
 import { ExportCenter } from './export/ExportCenter';
@@ -138,6 +138,9 @@ import { nextOverrides, overrideOf, type OverrideGeometry, type OverrideTarget }
 import { compactScale, type MgTransform, type NodeOverride, type OverridePivot, type StageElement, type StageElementStyle, type StageGeometry } from '@/lib/stage-types';
 import { usePreviewPrefs } from '@/lib/preview-prefs';
 import { isTypingTarget } from './typing-target';
+
+/** How far a caption track's translation sits above it (% of the frame): about a line. */
+const TRANSLATION_LIFT_PCT = 7;
 
 const PANE = 'relative flex min-h-0 min-w-0 flex-col overflow-hidden';
 /** The files a picture inside a page can be replaced with. */
@@ -819,26 +822,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const [pickedMedia, setPickedMedia] = React.useState<WorkspaceResource | null>(null);
   /* the file picked is one of Saved (lib/saved): shown from there, and brought into the project when it is used */
   const [pickedSaved, setPickedSaved] = React.useState(false);
-  const [inspectorContent, setInspectorContent] = React.useState<'selection' | 'subtitles' | 'captions' | WorkspaceResource>('selection');
+  const [inspectorContent, setInspectorContent] = React.useState<'selection' | 'captions' | WorkspaceResource>('selection');
   const subs = useFilmSubtitles(projectId);
-  /* the subtitle over the picture renders again while playing only when another line, or another of its words, is said */
-  const subtitleStep = React.useCallback((ms: number) => {
-    const cue = subs.style.on ? cueAt(subs.cues, ms) : null;
-    if (!cue) return '';
-    return `${subs.cues.indexOf(cue)}:${subs.style.karaoke ? filmSubtitleWords(cue, ms).map((w) => (w.active ? 1 : 0)).join('') : ''}`;
-  }, [subs.cues, subs.style.on, subs.style.karaoke]);
-  const configureSubtitles = React.useCallback(() => {
-    setInspectorContent('subtitles');
-    setInspectorOpen(!(inspectorOpen && inspectorContent === 'subtitles'));
-  }, [inspectorOpen, inspectorContent]);
-  /* a subtitle picked (on the picture, or its line on the timeline) is what is selected now, as a layer picked is: the
-     clips let go, and the inspector shows the subtitles' look */
-  const showSubtitleLook = React.useCallback(() => {
-    setSelectedKeys([]);
-    setStageElement(null);
-    setInspectorContent('subtitles');
-    setInspectorOpen(true);
-  }, []);
   /** Cues of a caption track picked (components/CaptionLane): their look and words in the inspector. */
   const showCaptionLook = React.useCallback(() => {
     setSelectedKeys([]);
@@ -1757,32 +1742,46 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       { id: 'save-each', label: t('saved.addEach'), icon: <BookmarkPlus size={14} />, onSelect: () => saveBlocks(blocks) },
     ];
   };
-  /* the subtitle row (components/SubtitleRow): its edits go into the transcripts, each a step of the undo here */
-  const subtitleEdits = useSubtitleEdits(projectId, { film: film.film, refresh: subs.refresh, record: film.record });
   /* caption tracks' edits are steps of the editor's history; a file written, the picture reads it again */
   React.useEffect(() => { configureCaptionTracks({ record: film.record, written: () => preview.current?.captions?.() }); }, [film.record]);
   const captionLanes = React.useMemo(() => ({ projectId, onPick: showCaptionLook }), [projectId, showCaptionLook]);
-  /** The subtitles made a caption track (studio/server/caption-tracks.mjs): on top, the old row's look off. */
-  const [converting, setConverting] = React.useState(false);
-  const convertSubtitles = React.useCallback(async () => {
-    setConverting(true);
-    try {
-      const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/caption-tracks/from-subtitles`, {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: t('captionTrack.fileName') }),
-      });
-      const body = await res.json().catch(() => ({})) as { src?: string; error?: string };
-      if (!res.ok || !body.src) { toast.show(body.error ?? t('timeline.editFail')); return; }
-      const why = await editOps([{ op: 'captions', at: 0, captions: { src: body.src, kind: 'captions', label: t('captionTrack.name') } }], 'captionTrack.stepConvert');
-      if (why) { toast.show(why); return; }
-      subs.patchStyle({ on: false });
-      setInspectorContent('selection');
-    } finally { setConverting(false); }
-  }, [projectId, editOps, subs, toast, t]);
-  const subtitleRow = React.useMemo<SubtitleRowSpec>(() => ({
-    cues: subs.captions?.cues ?? [], edits: subtitleEdits,
-    speakerAt: (ms) => speakerAt(tracksRef.current, subs.captions?.cues ?? [], ms),
-    onPick: showSubtitleLook,
-  }), [subs.captions, subtitleEdits, showSubtitleLook]);
+  /**
+   * What is said in the film made a caption track (studio/server/caption-tracks.mjs), on top: one undo step. False when
+   * it was not (said why).
+   */
+  const captionsFromSpeech = React.useCallback(async (): Promise<boolean> => {
+    const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/caption-tracks/from-subtitles`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: t('captionTrack.fileName') }),
+    }).catch(() => null);
+    const body = await res?.json().catch(() => ({})) as { src?: string; text?: string; error?: string } | undefined;
+    if (!res?.ok || !body?.src) { toast.show(body?.error ?? t('timeline.editFail')); return false; }
+    if (!body.text?.includes('-->')) { toast.show(t('timeline.captionsNone')); return false; }
+    const why = await editOps([{ op: 'captions', at: 0, captions: { src: body.src, kind: 'captions', label: t('captionTrack.name') } }], 'captionTrack.stepAuto');
+    if (why) { toast.show(why); return false; }
+    return true;
+  }, [projectId, editOps, toast, t]);
+  /**
+   * A caption track's translation (components/CaptionInspector) put in the film just above it, its lines a little
+   * higher so the two languages read one over the other: one undo step. Null, or why not.
+   */
+  const addTranslation = React.useCallback(async (from: string, src: string, language: string): Promise<string | null> => {
+    const at = Math.max(0, film.film?.tracks.findIndex((tr) => tr.captions?.src === from) ?? 0);
+    const got = await fetch(`/api/projects/${encodeURIComponent(projectId)}/caption-tracks/file?src=${encodeURIComponent(src)}`).then((r) => r.json(), () => null) as { text?: string } | null;
+    if (typeof got?.text === 'string') {
+      const above = writeVtt(placeCues(withIds(readVtt(got.text)), null, 0, -TRANSLATION_LIFT_PCT));
+      await fetch(`/api/projects/${encodeURIComponent(projectId)}/caption-tracks/file`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ src, text: above }) }).catch(() => null);
+    }
+    const name = FILM_SUBTITLE_LANGUAGES.find((l) => l.code === language)?.native ?? language;
+    return editOps([{ op: 'captions', at, captions: { src, kind: 'subtitles', srclang: language, label: `${t('captionTrack.name')} · ${name}` } }], 'captionTrack.stepTranslate');
+  }, [projectId, film.film, editOps, t]);
+  /* the subtitles Studio drew over the picture before caption tracks: made the project's caption track as it opens, once */
+  React.useEffect(() => {
+    let gone = false;
+    void fetch(`/api/projects/${encodeURIComponent(projectId)}/caption-tracks/retire`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: t('captionTrack.fileName'), label: t('captionTrack.name') }),
+    }).then((r) => (r.ok ? r.json() : null), () => null).then((body: { src?: string | null } | null) => { if (!gone && body?.src) toast.show(t('captionTrack.retired')); });
+    return () => { gone = true; };
+  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
   const relinkInputRef = React.useRef<HTMLInputElement>(null);
   const relinkTarget = React.useRef<TimelineBlock | null>(null);
   const relinkBlock = React.useCallback(async (block: TimelineBlock, path: string | null) => {
@@ -1956,41 +1955,16 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     return layerRef(el, { projectId: refSource.current.projectId, ms: timeRef.current, box, stage: stageRef.current });
   };
   const layerPicked = (el: StageElement | null): el is StageElement => Boolean(el && el.kind !== 'clip' && !el.isMgOuter);
-  /*
-   * The subtitle line being worked on in the subtitle panel (focused there, or words selected in it): picked as a clip
-   * is, it comes along with the selection until another line, a clip or a layer is picked, or the panel closes.
-   */
-  const [subtitlePick, setSubtitlePick] = React.useState<SubtitleLineAt | null>(null);
-  const subtitlesShown = inspectorShown && inspectorContent === 'subtitles';
-  React.useEffect(() => { if (!subtitlesShown) setSubtitlePick(null); }, [subtitlesShown]);
-  React.useEffect(() => { if (selectedBlocks.length || layerPicked(stageElement)) setSubtitlePick(null); }, [selectedBlocks, stageElement]); // eslint-disable-line react-hooks/exhaustive-deps
-  const refOfSubtitle = (line: SubtitleLineAt) => subtitleRef(projectId, line.cue, { index: line.index, lang: line.language, text: line.text, pick: line.pick });
-  /* the line picked, while the film still has it (a line emptied is gone) */
-  const pickedSubtitleRef = (): StudioRef | null => {
-    const lines = subs.captions?.cues ?? [];
-    return subtitlePick && lines.some((c) => subtitleLineKey(c) === subtitleLineKey(subtitlePick.cue)) ? refOfSubtitle(subtitlePick) : null;
+  /* the caption cues picked (on their track's row, or on the picture): each a reference as a subtitle line is */
+  const captionPick = useCaptionSelection();
+  const pickedCaptionRefs = (): StudioRef[] => {
+    const sel = captionSelectionNow();
+    const vtt = sel ? captionTrackNow(projectId, sel.src) : null;
+    if (!sel || !vtt) return [];
+    return vtt.cues.flatMap((c, i) => (sel.ids.has(c.id)
+      ? [subtitleRef(projectId, { startMs: Math.round(c.start * 1000), durMs: Math.round((c.end - c.start) * 1000), text: cuePlain(c.text).trim() }, { index: i + 1 })]
+      : []));
   };
-  /* with the subtitle panel open and nothing picked, ⌘L takes the line at the playhead, in the language it shows */
-  const subtitleNowRef = (): StudioRef | null => {
-    const lines = subs.captions?.cues ?? [];
-    const cue = subtitlesShown ? cueAt(lines, timeRef.current) : null;
-    if (!cue) return null;
-    const lang = subs.style.language && !sameFilmSubtitleLanguage(subs.style.language, subs.sourceLanguage) ? subs.style.language : null;
-    const alt = lang ? cue.alt?.[lang] : undefined;
-    return refOfSubtitle({ cue, index: lines.indexOf(cue) + 1, language: alt ? lang : null, text: alt ?? cue.text, pick: null });
-  };
-  const subtitleRefer = React.useMemo<SubtitleLineRefer | undefined>(() => {
-    const refer = studioHost?.refer;
-    if (!refer) return undefined;
-    const same = (a: SubtitleLineAt | null, b: SubtitleLineAt) => !!a && a.cue === b.cue && a.language === b.language && a.text === b.text
-      && a.pick?.from === b.pick?.from && a.pick?.to === b.pick?.to;
-    return {
-      of: refOfSubtitle,
-      send: refer,
-      pick: (line) => setSubtitlePick((cur) => (same(cur, line) ? cur : line)),
-      shortcut: keyHint('refer') ?? '',
-    };
-  }, [projectId, keyHint]); // eslint-disable-line react-hooks/exhaustive-deps
   /** A thing in hand on the picture as a reference: a whole clip as its block is, a layer where it is drawn. */
   const refOfStagePick = (pick: StagePick): StudioRef | null => {
     const el = pick.element;
@@ -2001,12 +1975,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     return layerRef(el, { projectId: refSource.current.projectId, ms: timeRef.current, box: pick.box, stage: stageRef.current });
   };
   /**
-   * What ⌘L references: the subtitle line picked, else the layer picked in the picture (each of several), else each
-   * clip selected and the range, else the line at the playhead (the subtitle panel open), else the moment.
+   * What ⌘L references: the caption cues picked, else the layer picked in the picture (each of several), else each
+   * clip selected and the range, else the moment.
    */
   const selectedRefs = (): StudioRef[] => {
-    const line = pickedSubtitleRef();
-    if (line) return [line];
+    const lines = pickedCaptionRefs();
+    if (lines.length) return lines;
     const el = stageElementRef.current;
     if (layerPicked(el)) return [refOfLayer(el)];
     const layers = stageControl.current?.picked() ?? [];
@@ -2014,7 +1988,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const refs = selectedBlocks.map(refOfBlock);
     if (markedRange) refs.push(rangeRef(projectId, markedRange, blocksRef.current));
     if (refs.length) return refs;
-    return [subtitleNowRef() ?? momentRef(projectId, timeRef.current)];
+    return [momentRef(projectId, timeRef.current)];
   };
   const hostSelection = studioHost?.onSelection;
   React.useEffect(() => {
@@ -2022,13 +1996,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const timer = setTimeout(() => {
       const refs: StudioRef[] = selectedBlocks.map(refOfBlock);
       if (layerPicked(stageElement)) refs.push(refOfLayer(stageElement));
-      const line = pickedSubtitleRef();
-      if (line) refs.push(line);
+      refs.push(...pickedCaptionRefs());
       hostSelection({ projectId, time: Math.round(timeMs) / 1000, refs, range: markedRange ? { start: Math.round(markedRange.startMs) / 1000, end: Math.round(markedRange.endMs) / 1000 } : null, stage: stageRef.current });
     }, 80);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hostSelection, projectId, timeMs, selectedBlocks, stageElement, markedRange, subtitlePick, subs.captions]);
+  }, [hostSelection, projectId, timeMs, selectedBlocks, stageElement, markedRange, captionPick]);
   /* a box the app shows on the picture (show-box), flashed there */
   const [flashBox, setFlashBox] = React.useState<{ box: StageBox; seq: number } | null>(null);
   /* a file the app shows in the media pane (show-file): its folder opened, the tile in view */
@@ -2061,8 +2034,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     }
     if (command.type === 'seek' && Number.isFinite(command.time)) { pause(); seek(command.time * 1000); return; }
     if ((command.type === 'show-range' || command.type === 'show-subtitle') && Number.isFinite(command.start) && Number.isFinite(command.end)) {
-      /* a subtitle's span marked, and the subtitle panel open: the playhead at its start lights the line there */
-      if (command.type === 'show-subtitle') { setInspectorContent('subtitles'); setInspectorOpen(true); }
+      /* a subtitle's span marked, the playhead at its start */
       const startMs = Math.max(0, Math.min(command.start, command.end) * 1000);
       const endMs = Math.max(command.start, command.end) * 1000;
       if (command.type === 'show-range') {
@@ -3320,13 +3292,22 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* the library's skills as the app's chat asked to show them (LibraryDrawer `showSkills`) */
   const [skillsShown, setSkillsShown] = React.useState<SkillsRequest | null>(null);
   const [settingsOpen, setSettingsOpen] = useSettings();
-  /* making subtitles: what went wrong, shown on the CC button; with no service to transcribe, it opens Providers */
+  /* captions of what is said: what went wrong, shown on the button; with no service to transcribe, it opens Services */
   const [subtitleProblem, setSubtitleProblem] = React.useState<{ text: string; connect: boolean } | null>(null);
-  const makeSubtitles = React.useCallback(() => {
+  const [captionsMaking, setCaptionsMaking] = React.useState(false);
+  const makeCaptions = React.useCallback(async () => {
     if (subtitleProblem?.connect) { setSettingsOpen('models'); setSubtitleProblem(null); return; }
     setSubtitleProblem(null);
-    void subs.transcribe().then((r) => { if (!r.ok) setSubtitleProblem({ text: r.error ?? '', connect: !!r.needsTranscriber }); });
-  }, [subs, subtitleProblem]);
+    setCaptionsMaking(true);
+    try {
+      /* the speech with no transcript yet is transcribed first; what has one is used as it is */
+      if (subs.captions?.untranscribed.length) {
+        const r = await subs.transcribe();
+        if (!r.ok) { setSubtitleProblem({ text: r.error ?? '', connect: !!r.needsTranscriber }); return; }
+      }
+      await captionsFromSpeech();
+    } finally { setCaptionsMaking(false); }
+  }, [subs, subtitleProblem, captionsFromSpeech, setSettingsOpen]);
   const [desktopOpen, setDesktopOpen] = React.useState(false);
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const history = useProjectHistory(projectId, { onError: toast.showError, beforeChange: film.settled });
@@ -3342,8 +3323,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     let later: ReturnType<typeof setTimeout> | null = null;
     const stop = projectEvents(projectId, (e) => {
       /* a version restored, here or in another window: the folder's files changed under the editor. Its undo steps
-         were of the film before, and the film, its settings, markers and subtitles are read again (each where it is
-         kept: use-editor-tools, use-subtitle-style, use-film-subtitles) */
+         were of the film before, and the film, its settings, markers and captions are read again (each where it is
+         kept: use-editor-tools, use-film-subtitles, caption-tracks) */
       if (historyMoved(e)) {
         forgetSteps.current();
         void api.film(projectId).then((f) => { setLoaded(f); }, () => {});
@@ -3694,6 +3675,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                                 arrowsMove={viewerFocus}
                               />
                             ) : null}
+                            {!fullscreen ? <CaptionStage previewRef={preview} projectId={projectId} stage={shownStage} timeMs={timeMs} onPick={showCaptionLook} onPause={pause} /> : null}
                           </Preview>
                           {/* a thing of the library tried from the assets drawer: over the picture, nothing written */}
                           {libraryTrial && !fullscreen ? <LibraryTrial item={libraryTrial} onLetGo={() => setLibraryTrial(null)} /> : null}
@@ -3704,17 +3686,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                           </div>
                         ) : null}
                         {fullscreen ? <div className="absolute inset-0 z-[5]" aria-hidden /> : null}
-                        {/* subtitles sit on the frame, not on the film: their place is a share of the frame, so a 9:16
-                            frame puts them on its own bottom (the bar), not pushed up with the picture */}
-                        <LiveTime clock={playing ? clock : null} timeMs={timeMs} step={subtitleStep}>{(liveMs) => (
-                          <SubtitleOverlay
-                            cues={subs.cues}
-                            timeMs={liveMs}
-                            style={filmSubtitleStyleFor(subs.style, frameBox)}
-                            onMove={fullscreen ? undefined : subs.move}
-                            onPick={fullscreen ? undefined : showSubtitleLook}
-                          />
-                        )}</LiveTime>
                       </ViewerZoom>
                       {fullscreen ? (
                         <FilmFullscreenBar
@@ -3732,8 +3703,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                           onToggleMute={() => { player.current.setMuted(!player.current.muted); setMutedState(player.current.muted); }}
                           onRate={setSpeed}
                           onExit={toggleFullscreen}
-                          captionsOn={subs.count ? subs.style.on : undefined}
-                          onToggleCaptions={subs.toggle}
                         />
                       ) : null}
                     </div>
@@ -3771,13 +3740,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                   {typeof inspectorContent === 'object' ? (
                     <ResourceInspector file={inspectorContent} url={(pickedSaved && inspectorContent === pickedMedia ? savedSources : mediaSources).file(inspectorContent)} width={inspectorShownWidth} onClose={closeInspector} />
                   ) : inspectorContent === 'captions' ? (
-                    <CaptionInspector projectId={projectId} width={inspectorShownWidth} onClose={closeInspector} />
-                  ) : inspectorContent === 'subtitles' ? (
-                    <SubtitleInspector
-                      subtitles={{ style: subs.style, onStyle: subs.patchStyle, translate: subs.translate, sourceLanguage: subs.sourceLanguage, lines: subs.captions?.cues ?? [], onEditLine: (cue, text, language) => void subs.setLine(cue, text, language), timeMs, onSeek: seek, untranscribed: subs.captions?.untranscribed.length ?? 0, onMake: makeSubtitles, making: subs.transcribing, ...(subtitleRefer ? { refer: subtitleRefer } : {}), ...(subs.captions?.cues.length ? { onConvert: () => void convertSubtitles(), converting } : {}) }}
-                      width={inspectorShownWidth}
-                      onClose={closeInspector}
-                    />
+                    <CaptionInspector projectId={projectId} width={inspectorShownWidth} onClose={closeInspector} timeMs={timeMs} onSeek={seek} onTranslated={addTranslation} />
                   ) : (
                     <FontScopeContext.Provider value={fontScope}>
                     <LiveGeometryInspector
@@ -3896,8 +3859,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     hasClipboard={clipboard.length > 0 || layerBoard != null}
                     selected={selectedIds}
                     onSelectedChange={onTimelineSelected}
-                    subtitles={{ on: subs.style.on, onToggle: subs.toggle, count: subs.count, untranscribed: subs.captions?.untranscribed.length ?? 0, onConfigure: configureSubtitles, configuring: inspectorShown && inspectorContent === 'subtitles', onMake: makeSubtitles, making: subs.transcribing, problem: subtitleProblem }}
-                    subtitleRow={film.film?.tracks.some((tr) => tr.captions) ? undefined : subtitleRow}
+                    autoCaptions={{ lines: subs.captions?.cues.length ?? 0, untranscribed: subs.captions?.untranscribed.length ?? 0, onMake: () => void makeCaptions(), making: captionsMaking || subs.transcribing, problem: subtitleProblem }}
                     captionLanes={captionLanes}
                     waveUrl={waveUrl}
                     history={timelineHistory}

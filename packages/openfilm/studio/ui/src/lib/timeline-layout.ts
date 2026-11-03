@@ -345,6 +345,8 @@ export type TimelineBlockKind = 'mg' | 'video' | 'voice' | 'sfx' | 'music' | 'ca
 export interface TimelineBlock {
   id: string;
   title: string;
+  /** The library's text (isLibraryText): the words it says, as its overrides set them; absent when they are its own. */
+  words?: string;
   startMs: number;
   endMs: number;
   kind: TimelineBlockKind;
@@ -445,6 +447,8 @@ export interface TimelineTrack {
   main?: boolean;
   /** A caption track (SPEC §1 Captions): its WebVTT file and name. It has no clips; its row draws the file's cues. */
   captions?: { src: string; label?: string };
+  /** A track of the library's text only: drawn as a caption track is, narrow, each clip by its words. */
+  text?: boolean;
   blocks: TimelineBlock[];
 }
 
@@ -526,6 +530,7 @@ export interface TimelineFilm {
 interface Block {
   id: string;
   title: string;
+  words?: string;
   startMs: number;
   endMs: number;
   kind: TimelineBlock['kind'];
@@ -622,6 +627,18 @@ function withDocTimes(film: TimelineFilm): TimelineFilm {
     videos: film.videos.map(fix),
     sounds: film.sounds.map(fix),
   };
+}
+
+/** Where a project keeps a text of the library once taken (server takeSaved: `saved/openfilm/text-<name>/`). */
+const LIBRARY_TEXT = 'saved/openfilm/text-';
+/** Whether a clip is one of the library's texts (a line of words, a name card, a callout…). */
+export const isLibraryText = (src: string | undefined): boolean => Boolean(src?.split('#')[0]?.startsWith(LIBRARY_TEXT));
+
+/** The words a clip's overrides give its page (each part's text), joined; null when none. */
+function overrideWords(clip: Record<string, unknown> | undefined): string | null {
+  const list = Array.isArray(clip?.overrides) ? clip.overrides as { text?: unknown }[] : [];
+  const words = list.map((o) => (typeof o?.text === 'string' ? o.text.trim() : '')).filter(Boolean);
+  return words.length ? words.join(' · ') : null;
 }
 
 function docTracksOf(doc: unknown): readonly Record<string, unknown>[] {
@@ -849,11 +866,15 @@ export function layoutTracks(evaluated: TimelineFilm): TimelineTrack[] {
     if (v.track && v.loc) videoLocs.add(v.loc);
   }
 
+  const docClips = new Map(docTracksOf(film.doc).flatMap((t) => (Array.isArray(t.clips) ? t.clips as Record<string, unknown>[] : []))
+    .filter((c) => typeof c?.id === 'string').map((c) => [c.id as string, c]));
   for (const s of film.scenes) {
     if (!s.track || s.durMs <= 0 || (s.loc != null && videoLocs.has(s.loc))) continue;
     claim(s.track.index, s.clipId);
+    const words = isLibraryText(s.src) ? overrideWords(s.clipId ? docClips.get(s.clipId) : undefined) ?? fileStem(s.src ?? '') : null;
     take(s.track).blocks.push({
       id: s.key,
+      ...(words != null ? { words } : {}),
       /* a clip is called by its file, as in any editor (its id is film.html's, shown in the inspector); a page's
          file name drops the extension: `.html` says what it is written in, not what the clip is */
       title: fileStem(s.src ?? '') || s.clipId || fileStem(s.label),
@@ -1004,6 +1025,7 @@ export function layoutTracks(evaluated: TimelineFilm): TimelineTrack[] {
         locked,
         ...(flags?.incomplete ? { incomplete: true } : {}),
         ...(flags?.captions ? { captions: flags.captions } : {}),
+        ...(row.length && row.every((b) => b.words != null) ? { text: true } : {}),
         blocks: row,
       });
     }
@@ -1041,7 +1063,7 @@ export function layoutTracks(evaluated: TimelineFilm): TimelineTrack[] {
 
   /* badges last, per drawn row top to bottom (see badgeRows); the main track marked (the lowest picture track) */
   const badged = badgeRows(tracks);
-  const pictures = badged.filter((r) => r.role !== 'audio' && r.docIndex != null && !r.captions).map((r) => r.docIndex!);
+  const pictures = badged.filter((r) => r.role !== 'audio' && r.docIndex != null && !r.captions && !r.text).map((r) => r.docIndex!);
   const main = pictures.length ? Math.max(...pictures) : null;
   return main == null ? badged : badged.map((r) => (r.docIndex === main ? { ...r, main: true } : r));
 }

@@ -16,7 +16,7 @@ export type PlaybackSettings = {
 };
 
 /**
- * The viewer's playback settings: loop and the speed (subtitles are the timeline's CC button). What is not the default shows on the
+ * The viewer's playback settings: loop and the speed. What is not the default shows on the
  * button itself (the loop icon, "1.5×"), so it is seen without opening the menu. Laid out as the layout menu beside
  * it is (a row each, its icon in a tile); the speed is one segmented control. Nothing here takes focus on click: the next
  * Space still plays.

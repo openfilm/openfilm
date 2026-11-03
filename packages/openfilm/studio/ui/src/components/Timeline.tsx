@@ -28,7 +28,6 @@ import {
   Paperclip,
   MessageSquarePlus,
   ChevronDown,
-  ChevronUp,
   MousePointer2,
   MoveHorizontal,
   Play,
@@ -57,6 +56,7 @@ import {
   TriangleAlert,
   Blend,
   Captions,
+  Type,
 } from 'lucide-react';
 import { useT } from '@/i18n';
 import { keyAction, useKeyHint } from '@/lib/keymap-store';
@@ -162,7 +162,6 @@ import { inHostPanel, isTypingTarget } from './typing-target';
 import { Popover } from './Popover';
 import { MarkerGlyph } from './TimelineMarkers';
 import { CaptionLane } from './CaptionLane';
-import { SUBTITLE_ROW_H, SubtitleRow, SubtitleRowHead, useSubtitleRowShown, type SubtitleRowHandle, type SubtitleRowSpec } from './SubtitleRow';
 import { SoloButton, TrackResizeHandle } from './timeline-head-extras';
 import { clipAtPoint, markReplaceTarget } from './replace-drop';
 import { Tooltip } from './Tooltip';
@@ -291,19 +290,19 @@ function laneTone(track: TimelineTrack, selected: boolean): string {
   return track.main ? `color-mix(in srgb, ${tone} 93%, var(--tl-text))` : tone;
 }
 
-/** A caption track's row: narrow, each cue a line of text (components/CaptionLane). */
+/** A caption track's row, and a row of the library's text: narrow, each cue or clip a line of words (components/CaptionLane). */
 const CAPTION_ROW_H = 26;
 
 /** A row's height: the person's for its track (lib/track-heights), else the timeline's own (the main track taller). */
-function rowH(track: Pick<TimelineTrack, 'kind' | 'height' | 'main'> & { captions?: unknown }): number {
-  return track.height ?? (track.captions ? CAPTION_ROW_H : ownTrackHeight(track));
+function rowH(track: Pick<TimelineTrack, 'kind' | 'height' | 'main'> & { captions?: unknown; text?: boolean }): number {
+  return track.height ?? (track.captions || track.text ? CAPTION_ROW_H : ownTrackHeight(track));
 }
 
 /**
  * The height that shows every row (toolbar + ruler + rows + padding + range bar). The editor uses it for the
  * timeline's default height.
  */
-export function timelineFitHeight(tracks: readonly (Pick<TimelineTrack, 'kind' | 'height' | 'main'> & { captions?: unknown })[]): number {
+export function timelineFitHeight(tracks: readonly (Pick<TimelineTrack, 'kind' | 'height' | 'main'> & { captions?: unknown; text?: boolean })[]): number {
   const lanes = tracks.reduce((h, tr) => h + rowH(tr) + GAP, 0);
   return TOOLBAR_H + RULER_H + lanes + GAP + 2 * TL_VPAD + H_SCROLL_H;
 }
@@ -654,19 +653,15 @@ export interface TimelineProps {
   onRelink?: (block: TimelineBlock, path: string | null) => void;
   /** What is in view and at what density: thumbnail shooting only shoots what can be seen (the zoom is ours). */
   onViewChange?: (view: { fromMs: number; toMs: number; pxPerMs: number }) => void;
-  subtitles?: {
-    on: boolean;
-    onToggle: () => void;
-    onConfigure: () => void;
-    configuring?: boolean;
-    /** How many subtitle lines the film has. 0 = none yet: the button is disabled and says why. */
-    count: number;
-    /** Speech heard in the film with no transcript yet: the button makes subtitles for it (`onMake`). */
-    untranscribed?: number;
-    onMake?: () => void;
-    /** A transcription runs now. */
+  /** The toolbar's button that makes captions of what is said in the film: a caption track on top. */
+  autoCaptions?: {
+    /** Lines heard with a transcript, and clips heard with none yet: 0 and 0, nothing is said (the button says so). */
+    lines: number;
+    untranscribed: number;
+    onMake: () => void;
+    /** Transcribing, or making the track, now. */
     making?: boolean;
-    /** Why making them failed; `connect`: no service can transcribe, and the button opens Providers. */
+    /** Why making them failed; `connect`: no service can transcribe. */
     problem?: { text: string; connect: boolean } | null;
   };
   /** A clip's waveform address, from its src. Without it no waveforms are drawn. */
@@ -707,13 +702,11 @@ export interface TimelineProps {
   trackNames?: ReadonlyMap<number, string>;
   /** Name a track (an empty name takes it away): with it, a track's head menu has Rename. */
   onRenameTrack?: (docIndex: number, name: string) => void;
-  /** The subtitle row under the ruler (components/SubtitleRow): the film's subtitles, timed by hand. */
-  subtitleRow?: SubtitleRowSpec;
   /** The caption tracks' rows (components/CaptionLane): the project they are read from, and a cue picked. */
   captionLanes?: { projectId: string; onPick: () => void };
   /** Solo (Studio's playback only): the tracks soloed (film.html indexes), and a click on a head's S (⌥: alone). */
   solo?: { tracks: ReadonlySet<number>; onToggle: (docIndex: number, only: boolean) => void };
-  /** The markers' row under the ruler (under the subtitle row when it shows), while there are any. */
+  /** The markers' row under the ruler, while there are any. */
   markerLane?: { shown: boolean; render: (lane: MarkerLaneView) => React.ReactNode };
   /** The toolbar's Add marker (left of split); M does the same. */
   onAddMarker?: () => void;
@@ -997,14 +990,13 @@ export const Timeline = React.memo(function Timeline({
   relinkCandidates,
   onRelink,
   onViewChange,
-  subtitles,
+  autoCaptions,
   waveUrl,
   history,
   selected: selectedProp,
   onSelectedChange,
   trackNames,
   onRenameTrack,
-  subtitleRow,
   captionLanes,
   solo,
   markerLane,
@@ -1558,11 +1550,6 @@ export const Timeline = React.memo(function Timeline({
 
   /* dragging clips; every clip flat for snapping, across rows (putting a sound on a picture cut is the common case) */
   const allBlocks = React.useMemo(() => tracks.flatMap((tr) => tr.blocks), [tracks]);
-  /* the subtitle row, under the ruler while its switch is on */
-  const [subRowOn] = useSubtitleRowShown();
-  const subRowRef = React.useRef<SubtitleRowHandle | null>(null);
-  const subRowShown = Boolean(subtitleRow) && subRowOn && hasLanes;
-  const subRowH = subRowShown ? SUBTITLE_ROW_H : 0;
   const markerRowH = markerLane?.shown ? MARKER_ROW_H : 0;
   /* a marker hovered or dragged: its line through the whole timeline */
   const [markerGuide, setMarkerGuide] = React.useState<MarkerGuide | null>(null);
@@ -2745,10 +2732,10 @@ export const Timeline = React.memo(function Timeline({
         }}
       >
         <span className="flex min-w-0 items-center gap-1">
-          {track.captions ? (
-            /* a caption track: its kind's mark alone, as narrow as its row */
+          {track.captions || track.text ? (
+            /* a caption track, or a row of text: its kind's mark alone, as narrow as its row */
             <span className="flex items-center justify-center rounded-[3px]" style={{ width: 21, height: 14, color: '#fff', background: 'var(--tl-caption)', opacity: track.hidden ? 0.55 : 1 }}>
-              <Captions size={11} aria-label={track.name ?? undefined} />
+              {track.captions ? <Captions size={11} aria-label={track.name ?? undefined} /> : <Type size={11} aria-label={t('timeline.textTrack')} />}
             </span>
           ) : track.badge ? (
             <span
@@ -3111,7 +3098,7 @@ export const Timeline = React.memo(function Timeline({
             /* its fade handles and volume line: on the clip under the pointer, and on the one whose handle or line is
                in hand until it is let go */
             const pointed = hoveredBlock === block.id || Boolean(fadeTip) || Boolean(volumeTip);
-            const pose = `${startMs}:${endMs}:${!!live}:${gone}:${lifting}:${floating ? drag.preview?.offsetY : ''}:${picked}:${Math.round(winFrom)}-${Math.round(winTo)}:${trouble ?? ''}:${chatLit}:${chatNumbers.join(',')}:${fade[0]}-${fade[1]}:${fadeTip}:${volume}:${volumeTip ? Math.round(volumeTip.x) : ''}:${speeding}:${pointed}`;
+            const pose = `${startMs}:${endMs}:${!!live}:${gone}:${lifting}:${floating ? drag.preview?.offsetY : ''}:${picked}:${Math.round(winFrom)}-${Math.round(winTo)}:${trouble ?? ''}:${chatLit}:${chatNumbers.join(',')}:${fade[0]}-${fade[1]}:${fadeTip}:${volume}:${volumeTip ? Math.round(volumeTip.x) : ''}:${speeding}:${pointed}:${block.words ?? ''}`;
             const cached = clipElements.get(block.id);
             if (cached?.pose === pose) return cached.node;
             /* on whole pixels: a fractional left and width blur the edges, and a cut between two clips is the key
@@ -3119,7 +3106,9 @@ export const Timeline = React.memo(function Timeline({
                still lines up with the ruler */
             const left = Math.round(startMs * pxPerMs);
             const width = Math.max(2, Math.round(endMs * pxPerMs) - left - 1);
-            const color = KIND_COLOR[block.kind];
+            /* a row of the library's text: drawn as a caption track is, each clip its words, no pictures */
+            const textRow = Boolean(track.text);
+            const color = textRow ? 'var(--tl-caption)' : KIND_COLOR[block.kind];
             const able = drag.can(block);
             const strip = clipThumbs.get(clipThumbId(block));
             const poster = block.src ? posters?.[block.src] : undefined;
@@ -3265,17 +3254,17 @@ export const Timeline = React.memo(function Timeline({
                 {/* info strip: name and length side by side (one statement), not at opposite ends of a wide clip */}
                 <div
                   className="pointer-events-none absolute inset-x-0 top-0 flex items-center overflow-hidden px-1.5"
-                  style={{ height: INFO_H, background: 'rgba(0,0,0,0.3)' }}
+                  style={textRow ? { height: '100%' } : { height: INFO_H, background: 'rgba(0,0,0,0.3)' }}
                 >
                   {/* pinned to the left of the view so a clip wider than the screen still says what it is (pinLabels,
                       on scroll: scrolling rebuilds nothing) */}
                   <span className="flex min-w-0 items-center gap-1" data-pin={left} data-pin-max={width - 48}>
                     {/* a voice says so before its name: it is what the subtitles are made from */}
                     {block.kind === 'voice' ? <Mic className="h-2.5 w-2.5 shrink-0 text-white/90" aria-hidden /> : null}
-                    <span className="min-w-0 truncate text-[10px] font-medium leading-none text-white/95">
-                      {block.title}
+                    <span className={`min-w-0 truncate font-medium leading-none text-white/95 ${textRow ? 'text-[11px]' : 'text-[10px]'}`}>
+                      {textRow ? block.words ?? block.title : block.title}
                     </span>
-                    {width > 64 ? (
+                    {width > 64 && !textRow ? (
                       <span className="shrink-0 text-[10px] leading-none tabular-nums text-white/70">
                         {block.noLength ? t('timeline.noLength') : `${((endMs - startMs) / 1000).toFixed(endMs - startMs < 1000 ? 2 : 1)}s`}
                       </span>
@@ -3302,7 +3291,7 @@ export const Timeline = React.memo(function Timeline({
                 ) : null}
                 {/* preview band: thumbnails by the clip's own time (a move keeps them, a left trim seeks deeper).
                     Before thumbnails exist, one poster at the left — tiling it would fake a filmstrip. */}
-                {strip?.size && visual && width > 8 ? (
+                {strip?.size && visual && !textRow && width > 8 ? (
                   <BlockThumbs
                     thumbs={strip}
                     startMs={intoOrigin}
@@ -3313,7 +3302,7 @@ export const Timeline = React.memo(function Timeline({
                     thumbWidthPx={THUMB_CELL_PX}
                     visiblePx={{ from: thumbWindow.from - left, to: thumbWindow.to - left }}
                   />
-                ) : poster && visual && width > 8 ? (
+                ) : poster && visual && !textRow && width > 8 ? (
                   <span
                     aria-hidden
                     className="pointer-events-none absolute left-0 opacity-90"
@@ -4173,8 +4162,8 @@ export const Timeline = React.memo(function Timeline({
           <MoveHorizontal size={15} />
         </ToolButton>
 
-        {/* subtitles: toggles the overlay on the picture (not the film itself) */}
-        {subtitles ? <SubtitlePicker subtitles={subtitles} /> : null}
+        {/* captions of what is said: a caption track made on top, then edited like any */}
+        {autoCaptions ? <AutoCaptionsButton auto={autoCaptions} /> : null}
       </div>
 
       {/* ── Body: two columns. The head column is not inside the scroller (no scrollbar under it, no rubber-band,
@@ -4193,11 +4182,10 @@ export const Timeline = React.memo(function Timeline({
         >
           {/* as tall as the ruler, so heads line up with rows; no bottom line, it is not a column of its own */}
           <div style={{ height: RULER_H }} />
-          {subRowShown ? <SubtitleRowHead onAdd={() => subRowRef.current?.addAtPlayhead()} /> : null}
           {markerRowH ? <div style={{ height: markerRowH }} /> : null}
           <div
             className="relative overflow-hidden"
-            style={{ height: `calc(100% - ${RULER_H + subRowH + markerRowH}px - ${H_SCROLL_H}px)` }}
+            style={{ height: `calc(100% - ${RULER_H + markerRowH}px - ${H_SCROLL_H}px)` }}
           >
             {/* moved with the track area's vertical scroll (onScroll), as the rows' backgrounds are; its own block
                 (flow-root), so the first head's margin stays inside it and the reorder guide's top counts from it */}
@@ -4270,12 +4258,6 @@ export const Timeline = React.memo(function Timeline({
               {onReferRuler ? <RulerRefer hoverMs={rulerHoverMs} draft={referDraft} pxPerMs={pxPerMs} widthPx={trackPx} /> : null}
             </div>
           </div>
-
-          {subRowShown && subtitleRow ? (
-            <SubtitleRow ref={subRowRef} spec={subtitleRow} pxPerMs={pxPerMs} scrollLeft={view.left} width={trackPx}
-              playheadMs={() => timeMsRef.current} snap={snap} snapTargets={() => snapTargetsFor(allBlocks, null, timeMsRef.current)}
-              onScrub={startScrub} onError={setDropError} />
-          ) : null}
 
           {/* the markers' row: pins along it, scrolling with the tracks; a press between them moves the playhead (and
               drags it) as in the tracks' empty space, a right-click adds a marker there */}
@@ -4740,32 +4722,17 @@ function ToolButton({
   );
 }
 
-/** Visibility stays in the toolbar; appearance is edited in the Inspector. */
-function SubtitlePicker({ subtitles }: { subtitles: NonNullable<TimelineProps['subtitles']> }) {
+/** Captions made of what is said in the film; their look and words are edited on their track and in the Inspector. */
+function AutoCaptionsButton({ auto }: { auto: NonNullable<TimelineProps['autoCaptions']> }) {
   const t = useT();
-  const none = subtitles.count === 0;
-  const n = subtitles.untranscribed ?? 0;
-  /* no lines yet and speech with no transcript: the button makes them (with some lines, it shows them, and the
-     Inspector makes the rest) */
-  const make = none && n > 0 && !!subtitles.onMake;
-  const label = subtitles.making ? t('timeline.subtitlesMaking')
-    : subtitles.problem ? (subtitles.problem.connect ? t('timeline.subtitlesConnect') : t('timeline.subtitlesFailed').replace('{error}', subtitles.problem.text))
-      : make ? t(n === 1 ? 'timeline.subtitlesMakeOne' : 'timeline.subtitlesMake').replace('{n}', String(n))
-        : !none ? t('timeline.subtitles') : t('timeline.subtitlesNone');
+  const none = auto.lines === 0 && auto.untranscribed === 0;
+  const label = auto.making ? t('timeline.captionsMaking')
+    : auto.problem ? (auto.problem.connect ? t('timeline.subtitlesConnect') : t('timeline.subtitlesFailed').replace('{error}', auto.problem.text))
+      : none ? t('timeline.captionsNone') : t('timeline.captionsMake');
   return (
-    <div className="flex items-center gap-0.5">
-      <ToolButton onClick={make || subtitles.problem ? () => subtitles.onMake?.() : subtitles.onToggle} active={subtitles.on && !none && !make} disabled={subtitles.making || (none && !make && !subtitles.problem)}
-        label={label}>
-        <CaptionsIcon size={19} />
-      </ToolButton>
-      <Tooltip side="bottom" label={t('timeline.subtitleStyle')}>
-        <button type="button" onClick={subtitles.onConfigure}
-          aria-label={t('timeline.subtitleStyle')} aria-expanded={!!subtitles.configuring}
-          className={`flex h-6 w-4 shrink-0 items-center justify-center rounded transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--text-muted)] ${subtitles.configuring ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>
-          <ChevronUp size={12} aria-hidden className={`transition-transform ${subtitles.configuring ? 'rotate-180' : ''}`} />
-        </button>
-      </Tooltip>
-    </div>
+    <ToolButton onClick={auto.onMake} disabled={auto.making || none} label={label}>
+      <CaptionsIcon size={19} />
+    </ToolButton>
   );
 }
 

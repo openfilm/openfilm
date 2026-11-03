@@ -38,6 +38,11 @@ test('where the time is taken, a new track right above a picture row, right belo
 test('the edges of a row and the space around the rows open a track there', () => {
   assert.deepEqual(assetDropSpot(video, tracks, { lane: 1, band: 'above' }, 2000), { action: 'new-track', laneIndex: 1, docAt: 1 });
   assert.deepEqual(assetDropSpot(sound, tracks, { lane: 0, band: 'below' }, 2000), { action: 'new-track', laneIndex: 1, docAt: 1 });
+  /* a text of the library: onto a row of text where there is room, else a row of text of its own just above */
+  const text = { path: 'openfilm/text/name/files/name.html', kind: 'mg' as const, durationMs: 1000, saved: 'openfilm/text/name' };
+  assert.deepEqual(assetDropSpot(text, tracks, { lane: 1, band: 'body' }, 10_000), { action: 'new-track', laneIndex: 1, docAt: 1 });
+  const words = tracks.map((tr, i) => (i === 1 ? { ...tr, text: true } : tr));
+  assert.equal(assetDropSpot(text, words, { lane: 1, band: 'body' }, 10_000)?.action, 'into');
   assert.deepEqual(assetDropSpot(video, tracks, { lane: -1, band: 'above' }, 2000), { action: 'new-track', laneIndex: 0, docAt: 0 });
   assert.deepEqual(assetDropSpot(video, tracks, { lane: 3, band: 'below' }, 2000), { action: 'new-track', laneIndex: 3, docAt: 3 });
 });

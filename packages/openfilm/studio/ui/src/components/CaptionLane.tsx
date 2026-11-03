@@ -132,7 +132,7 @@ export function CaptionLane({ projectId, src, locked, hidden, pxPerMs, endMs, pl
       const el = e.target as Element | null;
       if (rowRef.current?.contains(el)) { targeted.current = true; return; }
       /* the inspector keeps the selection; another row of the timeline pressed takes it */
-      if (el?.closest?.('[data-timeline] .tl-scroll, [data-timeline] [data-subtitle-row]')) { targeted.current = false; if (pickedRef.current.size) setCaptionSelection(null); }
+      if (el?.closest?.('[data-timeline] .tl-scroll')) { targeted.current = false; if (pickedRef.current.size) setCaptionSelection(null); }
     };
     const onKey = (e: KeyboardEvent) => {
       if (!targeted.current || isTypingTarget(e.target) || (e.target as Element | null)?.closest?.('[role="dialog"]')) return;

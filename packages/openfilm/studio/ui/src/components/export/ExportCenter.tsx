@@ -265,6 +265,8 @@ export function ExportCenter(props: ExportCenterProps) {
   const [defaultFolder, setDefaultFolder] = React.useState<string>('');
   /** How many subtitle cues the film has (null until the server says). */
   const [captionCount, setCaptionCount] = React.useState<number | null>(null);
+  /** Whether they are the film's caption tracks: part of its picture, in every export unless the track is hidden. */
+  const [captionTracks, setCaptionTracks] = React.useState(false);
   /** How big the project and each of its parts are (null: not known yet). */
   const [projectSizes, setProjectSizes] = React.useState<ProjectSizes | null>(null);
   /** The footage's frame rate, as an editor's rate (an editor wants the source's exact rate: 29.97 in a 30 timeline slips a frame every 1,000). */
@@ -290,7 +292,7 @@ export function ExportCenter(props: ExportCenterProps) {
     setExportName(props.title);
     setNameTyped(false);
     setRange(false);
-    void listExports(props.projectId).then((r) => { setCan(r.can); setDraftApps({ jianying: Boolean(r.drafts?.jianying), capcut: Boolean(r.drafts?.capcut) }); setDefaultFolder(r.folder); setCaptionCount(r.subtitles ?? 0); setProjectSizes(r.project ?? null); }).catch(() => {});
+    void listExports(props.projectId).then((r) => { setCan(r.can); setDraftApps({ jianying: Boolean(r.drafts?.jianying), capcut: Boolean(r.drafts?.capcut) }); setDefaultFolder(r.folder); setCaptionCount(r.subtitles ?? 0); setCaptionTracks(Boolean(r.captionTracks)); setProjectSizes(r.project ?? null); }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -411,7 +413,7 @@ export function ExportCenter(props: ExportCenterProps) {
   /* ── the exports this screen asks for ── */
   const baseRequests = React.useMemo((): ExportRequest[] => {
     /* subtitles drawn into the picture: only a film that has some */
-    const burn = (on: boolean) => (captions > 0 && on ? { burnSubtitles: true } : {});
+    const burn = (on: boolean) => (captions > 0 && on && !captionTracks ? { burnSubtitles: true } : {});
     switch (dest) {
       case 'video': {
         const v = s.video;
@@ -456,7 +458,7 @@ export function ExportCenter(props: ExportCenterProps) {
         }];
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dest, s, can, nleApp, nleAlpha, draftApp, props.frame, blocks, nleSourceFps, captions, projectParts, moments]);
+  }, [dest, s, can, nleApp, nleAlpha, draftApp, props.frame, blocks, nleSourceFps, captions, captionTracks, projectParts, moments]);
 
   const requests = React.useMemo(() => canRange && range && parsedRanges
     ? applyRangeDelivery(baseRequests, parsedRanges, rangeDelivery) : baseRequests,
@@ -731,7 +733,7 @@ export function ExportCenter(props: ExportCenterProps) {
                       </Field>
                       {captions > 0 && (
                         <Field label={t('exportCenter.subtitles')}>
-                          <Toggle checked={s.video.burn} onChange={(burn) => patch('video', { burn })} label={t('exportCenter.burnIn')} />
+                          {captionTracks ? <Hint>{t('exportCenter.captionTracksDrawn')}</Hint> : <Toggle checked={s.video.burn} onChange={(burn) => patch('video', { burn })} label={t('exportCenter.burnIn')} />}
                           <div className="mt-2">
                             <Segmented
                               value={s.video.sidecar}
@@ -904,7 +906,7 @@ export function ExportCenter(props: ExportCenterProps) {
                     <Chips value={s.gif.fps} options={GIF_FPS.map((f) => ({ value: f, label: `${f}` }))} onChange={(fps) => patch('gif', { fps })} />
                   </Field>
                   {captions > 0 && (
-                    <Toggle checked={s.gif.burn} onChange={(burn) => patch('gif', { burn })} label={t('exportCenter.burnIn')} />
+                    captionTracks ? <Hint>{t('exportCenter.captionTracksDrawn')}</Hint> : <Toggle checked={s.gif.burn} onChange={(burn) => patch('gif', { burn })} label={t('exportCenter.burnIn')} />
                   )}
                   <Hint>{t('exportCenter.gifHint')}</Hint>
                 </>
@@ -1024,7 +1026,7 @@ export function ExportCenter(props: ExportCenterProps) {
                     value={moments}
                     onChange={pickMoments}
                     max={imageDocument ? MOMENTS_MAX.slides : MOMENTS_MAX.frames}
-                    note={captions > 0 && s.images.burn ? t('exportCenter.moments.noSubtitles') : undefined}
+                    note={captions > 0 && s.images.burn && !captionTracks ? t('exportCenter.moments.noSubtitles') : undefined}
                   />
                   <div className="flex min-w-0 flex-col gap-5">
                     <Field label={t('exportCenter.imageOutput')}>
@@ -1066,7 +1068,7 @@ export function ExportCenter(props: ExportCenterProps) {
                       />
                     </Field>
                     {captions > 0 && (
-                      <Toggle checked={s.images.burn} onChange={(burn) => patch('images', { burn })} label={t('exportCenter.burnIn')} />
+                      captionTracks ? <Hint>{t('exportCenter.captionTracksDrawn')}</Hint> : <Toggle checked={s.images.burn} onChange={(burn) => patch('images', { burn })} label={t('exportCenter.burnIn')} />
                     )}
                   </div>
                 </div>

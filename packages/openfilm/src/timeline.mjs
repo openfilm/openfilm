@@ -1149,10 +1149,11 @@ async function syncCaptions(value) {
       sectionOf(ti, track).append(el);
       const css = document.createElement('style');
       document.head.append(css);
-      layer = { ti, src: track.captions.src, el, css, cues: [], regions: new Map(), on: new Map(), hidden: false, read: null };
+      layer = { ti, src: track.captions.src, el, css, cues: [], regions: new Map(), on: new Map(), hidden: false, locked: false, read: null };
       captionLayers.push(layer);
     }
     layer.hidden = Boolean(track.hidden);
+    layer.locked = Boolean(track.locked);
     layer.el.style.zIndex = String(value.tracks.length - ti); // track 0 on top
     Object.assign(layer.el.style, { width: stage.w + 'px', height: stage.h + 'px' });
     layer.read ??= readCaptions(layer);
@@ -1526,6 +1527,9 @@ window.__filmEditor = {
     },
     updated: null,
     woke: null,
+    /** The caption cues on the picture now, each with its element (`.cue`, its text in `.cue-text`), top track first. */
+    captions: () => captionLayers.filter((l) => !l.hidden).sort((a, b) => a.ti - b.ti)
+      .flatMap((l) => [...l.on].map(([cue, el]) => ({ track: l.ti, src: l.src, id: cue.id, locked: l.locked, el }))),
   },
   /** Set by a host (Studio's bridge) to hear of a page's own length and size learned as it first opens (see load). */
   learned: null,

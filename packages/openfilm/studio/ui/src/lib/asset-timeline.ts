@@ -155,8 +155,11 @@ function newTrackSpot(tracks: readonly TimelineTrack[], docAt: number): AssetDro
   return { action: 'new-track', laneIndex: i >= 0 ? i : tracks.length, docAt };
 }
 
+/** A text of the library (a line of words, a name card, a callout…): it goes on a row of text (TimelineTrack `text`). */
+const libraryText = (file: { saved?: string | undefined }) => Boolean(file.saved?.startsWith('openfilm/text/'));
+
 export function assetDropSpot(
-  file: Pick<ResourceDragItem, 'path' | 'kind' | 'durationMs'>,
+  file: Pick<ResourceDragItem, 'path' | 'kind' | 'durationMs' | 'saved'>,
   tracks: readonly TimelineTrack[],
   hit: AssetLaneHit | null,
   atMs: number,
@@ -176,6 +179,8 @@ export function assetDropSpot(
     if (target.docIndex != null && hit.band !== 'body' && !edit) {
       return newTrackSpot(tracks, hit.band === 'above' ? target.docIndex : target.docIndex + 1);
     }
+    /* a text of the library onto a row of another kind: a row of text of its own, just above it */
+    if (libraryText(file) && target.docIndex != null && !target.text && !edit) return newTrackSpot(tracks, target.docIndex);
     if (target.locked) {
       return { action: 'into', laneIndex: hit.lane, lane: target.lane, docIndex: target.docIndex ?? null, locked: true };
     }

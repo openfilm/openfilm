@@ -781,9 +781,10 @@ const STOP_WAIT_MS = 8000;
 
 /**
  * The export queue. `onChange(job)` is told every change of a job (its progress included), for the pages watching.
- * `captions(root)`: a film's subtitle cues and the person's style for them (captions.mjs by default).
+ * `captions(root)`: a film's subtitle cues and the person's style for them, `tracks` when they are its caption tracks
+ * (captions.mjs by default).
  * `drafts(app)`: 剪映's or CapCut's drafts folder, where its draft goes (null: the exports folder); this computer's by default.
- * @param {{ onChange?: (job: ExportJob) => void, captions?: (root: string) => Promise<{ cues: Cue[], style: SubtitleStyle }>,
+ * @param {{ onChange?: (job: ExportJob) => void, captions?: (root: string) => Promise<{ cues: Cue[], style: SubtitleStyle, tracks?: boolean }>,
  *   drafts?: (app: 'jianying' | 'capcut') => string | null }} [options]
  */
 export function createExports({ onChange = () => {}, captions = subtitlesForExport, drafts = defaultDrafts } = {}) {
@@ -1659,6 +1660,10 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
     /** How many subtitle cues the film at `root` has (0 when they can't be read): the dialog's subtitle choices need some. */
     async subtitles(/** @type {string} */ root) {
       try { return (await subtitlesOf(root)).cues.length; } catch { return 0; }
+    },
+    /** Whether the film's subtitles are its caption tracks (drawn in its picture, never burned in). */
+    async captionTracks(/** @type {string} */ root) {
+      try { return Boolean((await captions(root)).tracks); } catch { return false; }
     },
     /** Whether an export is waiting or running. */
     busy: () => work.size > 0 || jobs.some((j) => j.status === 'waiting'),

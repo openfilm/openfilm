@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readVtt, writeVtt } from '../../../../src/captions.mjs';
 import {
-  MIN_CUE_S, addCue, cueRule, mergeCues, moveCues, removeCues, retimeCue, setCueRule, setCueText, splitCue, withIds,
+  MIN_CUE_S, addCue, cueRule, cutIndex, joinText, mergeCues, moveCues, placeCues, removeCues, retimeCue, setCueRule, setCueText, splitCue, withIds,
 } from './caption-edits.ts';
 
 const FILE = `WEBVTT
@@ -79,4 +79,27 @@ test('the look: a rule read, set, a property taken out, the rule gone when empty
   const text = writeVtt(set);
   assert.match(text, /STYLE\n::cue \{ color: #fff; \}\n::cue\(#b\) \{ color: #ffd400; \}\n::cue\(#a\) \{ font-weight: 800; color: #2bf06a; \}/);
   assert.deepEqual(cueRule(readVtt(text), '::cue(#a)'), { 'font-weight': '800', color: '#2bf06a' }, 'read back as written');
+});
+
+test('moved on the picture: every cue of one region moves the region; a cue alone is placed by its bottom and middle', () => {
+  const v = withIds(readVtt('WEBVTT\n\nREGION\nid:main\nwidth:100%\nlines:3\nregionanchor:50%,100%\nviewportanchor:50%,94%\n\na\n00:00:00.000 --> 00:00:01.000 region:main align:center\nOne\n\nb\n00:00:01.000 --> 00:00:02.000 region:main align:center\nTwo\n'));
+  const all = placeCues(v, null, -30, -44);
+  assert.deepEqual(all.cues.map((c) => c.settings), v.cues.map((c) => c.settings), 'the cues stay in their region');
+  assert.equal(all.regions[0], 'id:main\nwidth:40%\nlines:3\nregionanchor:50%,100%\nviewportanchor:20%,50%', 'its middle at 20%, narrowed to stay on the frame');
+  const one = placeCues(v, new Set(['b']), 0, -40, new Map([['b', { left: 30, top: 88, width: 40, height: 6 }]]));
+  assert.equal(one.cues[0]!.settings, 'region:main align:center');
+  assert.equal(one.cues[1]!.settings, 'line:54%,end position:50%,center size:40% align:center', 'where it was drawn, moved up');
+  assert.equal(placeCues(one, new Set(['b']), 0, 70, new Map([['b', { left: 30, top: 48, width: 40, height: 6 }]])).cues[1]!.settings.split(' ')[0], 'line:100%,end', 'kept on the frame');
+});
+
+test('texts are cut at a word, or between characters, never before a closing mark', () => {
+  assert.equal(cutIndex('one two three four', 0.5), 8);
+  assert.equal(cutIndex('one two three four', 0), 4);
+  assert.equal(cutIndex('word', 0.5), 0);
+  assert.equal(cutIndex('ok你好', 0.5), 2);
+  assert.equal(cutIndex('我们今天，去公园', 0.5), 5);
+  assert.equal(cutIndex('你好', 0.9), 1);
+  assert.equal(joinText('one two', 'three'), 'one two three');
+  assert.equal(joinText('你好，', '世界'), '你好，世界');
+  assert.equal(joinText('', 'x'), 'x');
 });

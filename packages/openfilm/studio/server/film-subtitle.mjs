@@ -2,8 +2,10 @@
 /**
  * Subtitle styles: one table, one function, every place that draws them.
  *
- * Subtitles are drawn by Studio, never by the film: the editor lays them over the picture (SubtitleOverlay), and an
- * export burns them in or writes them as SRT / WebVTT / a transcript. Each of those builds its CSS here
+ * Before caption tracks (SPEC §1 Captions), Studio drew a project's subtitles over the picture in a style of its own;
+ * a project from then has them made its caption track as it opens (caption-tracks.mjs `retireSubtitles`), and the
+ * styles here are the looks a caption track can take at once (`subtitleStyleVtt`). An export of such a project not
+ * opened since burns them in or writes them as SRT / WebVTT / a transcript. Each of those builds its CSS here
  * (`filmSubtitleCss`, `filmSubtitleFrameHtml`), so what the person sees while editing is what the export draws. The
  * only legitimate difference is the unit of the font size (the editor follows the window with `cqmin`; an export draws
  * at the frame's pixels), so that one value is passed in.
@@ -899,4 +901,43 @@ export function filmSubtitleCuesInRanges(cues, ranges) {
     offset += to - from;
     return part;
   });
+}
+
+/* ── a style as a caption track says it (SPEC §1 Captions) ───────────────── */
+
+const rgbaOf = (/** @type {string} */ color, /** @type {number} */ alpha) => {
+  const m = /^#([0-9a-f]{6})$/i.exec(color);
+  if (!m) return color;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${Math.round(alpha * 100) / 100})`;
+};
+
+/**
+ * A subtitle style (film-subtitle.mjs) as a caption track says it: a REGION where its lines sit (its place, as wide as
+ * it lets them be), and STYLE CSS for how they look. The size is a share of the frame's short side (`cqmin`), as the
+ * style's is; the word being said (karaoke) becomes the words said so far (`:past`).
+ * @param {import('./film-subtitle.mjs').FilmSubtitleStyle} style
+ * @returns {{ region: string, css: string, align: string }}
+ */
+export function subtitleStyleVtt(style) {
+  const f = style.font;
+  const anchor = style.pos.y > 0.55 ? 100 : style.pos.y < 0.45 ? 0 : 50;
+  const pct = (/** @type {number} */ n) => `${Math.round(n * 1000) / 10}%`;
+  const region = [
+    'id:main', `width:${Math.round(style.maxWidthPct)}%`, 'lines:3',
+    `regionanchor:50%,${anchor}%`, `viewportanchor:${pct(style.pos.x)},${pct(style.pos.y)}`,
+  ].join('\n');
+  const cue = [
+    `font: ${f.italic ? 'italic ' : ''}${f.weight} ${f.sizePct}cqmin/${f.lineHeight} ${cssFontFamily(f.family)}`,
+    `color: ${style.fill}`,
+    style.box ? `background: ${rgbaOf(style.box.color, style.box.opacity)}` : 'background: none',
+    ...(style.box ? [`padding: ${style.box.padYEm}em ${style.box.padXEm}em`, `border-radius: ${style.box.radiusEm}em`] : []),
+    ...(style.stroke && style.stroke.widthEm > 0 ? [`-webkit-text-stroke: ${style.stroke.widthEm}em ${style.stroke.color}`, 'paint-order: stroke fill'] : []),
+    ...(style.shadow ? [`text-shadow: ${style.shadow.dxEm}em ${style.shadow.dyEm}em ${style.shadow.blurEm}em ${style.shadow.color}`] : []),
+    ...(f.letterSpacingEm ? [`letter-spacing: ${f.letterSpacingEm}em`] : []),
+    ...(f.upper ? ['text-transform: uppercase'] : []),
+  ];
+  const lines = [`::cue { ${cue.join('; ')}; }`];
+  if (style.karaoke) lines.push(`::cue(:past) { color: ${style.karaoke.color}; }`);
+  return { region, css: lines.join('\n'), align: style.align };
 }

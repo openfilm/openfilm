@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -20,11 +20,11 @@ function project(tracks, files = {}) {
   return root;
 }
 
-async function serve(root) {
+async function serve(root, options) {
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://x');
-    captionTrackRoutes(req, res, root, url.pathname.slice(1), url).then((done) => { if (!done) json(res, 404, {}); }, (e) => {
-      json(res, e instanceof HttpError ? e.status : 500, { error: e.message });
+    captionTrackRoutes(req, res, root, url.pathname.slice(1), url, options).then((done) => { if (!done) json(res, 404, {}); }, (e) => {
+      json(res, e instanceof HttpError ? e.status : 500, { error: e.message, ...(e instanceof HttpError ? e.extra : {}) });
     });
   });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
@@ -73,4 +73,57 @@ test('the routes: a caption track\'s file read and written whole, inside the pro
     assert.equal((await call('GET', 'caption-tracks/file?src=captions%2Fnone.vtt')).status, 404);
     for (const src of ['../out.vtt', '.film/x.vtt', 'captions/a.txt']) assert.equal((await call('PUT', 'caption-tracks/file', { src, text: 'WEBVTT' })).status, 400, src);
   } finally { close(); }
+});
+
+test('a project\'s subtitles from before become its caption track once, as they looked; the old way is off after', async () => {
+  const root = project([{ clips: [{ id: 'vo', src: 'assets/vo.mp3' }] }], {
+    'assets/vo.mp3': 'x',
+    'assets/vo.vtt': 'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nHello there\n',
+    '.film/subtitles.json': JSON.stringify({ ...FILM_SUBTITLE_DEFAULT, ...FILM_SUBTITLE_LOOKS.yellow, pos: { x: 0.5, y: 0.8 } }),
+  });
+  const { base, close } = await serve(root);
+  const retire = () => fetch(`${base}/caption-tracks/retire`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ label: 'Captions' }) }).then((r) => r.json());
+  try {
+    const { src } = await retire();
+    assert.equal(src, 'captions/Captions.vtt');
+    const film = readFileSync(join(root, 'film.html'), 'utf8');
+    assert.match(film, /<section>\s*<track kind="captions" src="captions\/Captions\.vtt" label="Captions"/, 'on top of the film');
+    const vtt = readVtt(readFileSync(join(root, src), 'utf8'));
+    assert.equal(vtt.cues[0].text, 'Hello there');
+    assert.match(vtt.styles[0], /color: #ffe14d/, 'the look it had');
+    assert.match(vtt.regions[0], /viewportanchor:50%,80%/, 'where it sat');
+    assert.equal(JSON.parse(readFileSync(join(root, '.film/subtitles.json'), 'utf8')).on, false);
+    assert.deepEqual(await retire(), { src: null }, 'once');
+  } finally { close(); }
+  /* one that showed none: nothing made, the old way off all the same */
+  const none = project([{ clips: [{ id: 'vo', src: 'assets/vo.mp3' }] }], { 'assets/vo.mp3': 'x' });
+  const other = await serve(none);
+  try {
+    const got = await fetch(`${other.base}/caption-tracks/retire`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).then((r) => r.json());
+    assert.deepEqual(got, { src: null });
+    assert.equal(existsSync(join(none, 'captions')), false);
+    assert.equal(JSON.parse(readFileSync(join(none, '.film/subtitles.json'), 'utf8')).on, false);
+  } finally { other.close(); }
+});
+
+test('a caption track translated: a new file, the same cues at the same times and places, the words the other language\'s', async () => {
+  const root = project([], { 'captions/Captions.vtt': 'WEBVTT\n\nSTYLE\n::cue { color: #fff; }\n\nc1\n00:00:01.000 --> 00:00:02.000 line:80%\n<v Ana>Hello</v>\n\nc2\n00:00:02.000 --> 00:00:03.000\nBye & see you\n' });
+  const asked = [];
+  const { base, close } = await serve(root, { translate: async () => async (job) => { asked.push(job); return job.lines.map((l) => `[${l}]`); } });
+  const call = (body) => fetch(`${base}/caption-tracks/translate`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  try {
+    const made = await (await call({ src: 'captions/Captions.vtt', language: 'zh' })).json();
+    assert.equal(made.src, 'captions/Captions.zh.vtt');
+    assert.deepEqual(asked[0].lines, ['Hello', 'Bye & see you']);
+    const vtt = readVtt(made.text);
+    assert.deepEqual(vtt.cues.map((c) => [c.id, c.start, c.end, c.settings, c.text]), [['c1', 1, 2, 'line:80%', '[Hello]'], ['c2', 2, 3, '', '[Bye &amp; see you]']]);
+    assert.equal(vtt.styles[0], '::cue { color: #fff; }');
+    assert.equal((await call({ src: 'captions/Captions.vtt', language: 'xx' })).status, 400);
+  } finally { close(); }
+  const no = await serve(root);
+  try {
+    const res = await fetch(`${no.base}/caption-tracks/translate`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ src: 'captions/Captions.vtt', language: 'zh' }) });
+    assert.equal(res.status, 409);
+    assert.equal((await res.json()).code, 'no-translator');
+  } finally { no.close(); }
 });

@@ -4,14 +4,15 @@
  * (`c1`, `c2`…) as the file is read for editing, so the timeline, the selection and its style rule can name it.
  *
  * Cues on one track never overlap after an edit: a cue moved or stretched into its neighbor cuts that one short, to
- * MIN_CUE_S at least, as the subtitle row's do (lib/subtitle-cues).
+ * MIN_CUE_S at least.
  *
  * Its look is the CSS of the file's STYLE: the whole track's in `::cue`, one cue's in `::cue(#id)`.
  *
  * Plain TypeScript, no React: the editor's tests import it as it is.
  */
-import { cssRules, cueEscape, cuePlain, vttTime, type Vtt, type VttCue } from '../../../../src/captions.mjs';
-import { cutIndex, joinText } from './subtitle-cues.ts';
+import {
+  CAPTION_LINE_PCT, cssRules, cueEscape, cueLayout, cuePlain, regionBox, regionSettings, vttTime, withSettings, type Vtt, type VttCue,
+} from '../../../../src/captions.mjs';
 
 export type { Vtt, VttCue };
 
@@ -22,6 +23,45 @@ export const NEW_CUE_S = 2;
 
 const round = (s: number) => Math.round(s * 1000) / 1000;
 const byStart = (a: VttCue, b: VttCue) => a.start - b.start || a.end - b.end;
+
+/* ── words: where a text is cut in two, how two are joined ── */
+
+/** Chinese, Japanese and Korean: written without spaces between words. */
+const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}　-〿＀-￯]/u;
+/** Marks that never start a line (Chinese and Japanese typesetting): a cut is moved past them. */
+const NO_START = /[\s，。、；：！？,.;:!?)）」』》〉”’…]/u;
+
+/** Two subtitles' texts as one: a space between words, none where either side is CJK. */
+export function joinText(a: string, b: string): string {
+  if (!a) return b;
+  if (!b) return a;
+  return CJK.test(a.slice(-1)) || CJK.test(b.slice(0, 1)) ? `${a}${b}` : `${a} ${b}`;
+}
+
+/**
+ * Where to cut a text `fraction` of the way through: at the nearest space for words, else between characters (CJK),
+ * never before a closing mark nor inside a character. 0 when it cannot be cut (one word, one character).
+ */
+export function cutIndex(text: string, fraction: number): number {
+  const want = Math.round(Math.min(1, Math.max(0, fraction)) * text.length);
+  const ok = (k: number) => k > 0 && k < text.length && !NO_START.test(text[k]!) && !/[\uDC00-\uDFFF]/.test(text[k]!)
+    && text.slice(0, k).trim().length > 0 && text.slice(k).trim().length > 0;
+  /* words: right after the nearest space */
+  if (/\s/.test(text.trim())) {
+    let best = 0;
+    for (let k = 1; k < text.length; k += 1) {
+      if (/\s/.test(text[k - 1]!) && ok(k) && (!best || Math.abs(k - want) < Math.abs(best - want))) best = k;
+    }
+    return best;
+  }
+  /* no spaces: between characters, where either side is CJK (a Latin word is never cut) */
+  const between = (k: number) => ok(k) && (CJK.test(text[k - 1]!) || CJK.test(text[k]!));
+  for (let d = 0; d < text.length; d += 1) {
+    if (between(want + d)) return want + d;
+    if (between(want - d)) return want - d;
+  }
+  return 0;
+}
 
 /** The file with every cue named (`c<n>`, the lowest free), its cues in time order. */
 export function withIds(vtt: Vtt): Vtt {
@@ -182,6 +222,71 @@ export function setCueText(vtt: Vtt, id: string, text: string): Vtt {
 /** A cue's settings changed (a null value takes one out). */
 export function setCueSettings(vtt: Vtt, ids: ReadonlySet<string>, settings: (s: string) => string): Vtt {
   return { ...vtt, cues: vtt.cues.map((c) => (ids.has(c.id) ? { ...c, settings: settings(c.settings) } : c)) };
+}
+
+/* ── where cues sit: moved on the picture ── */
+
+/** A box on the frame, % of it. */
+export type CueBox = { left: number; top: number; width: number; height: number };
+
+const r1 = (n: number) => Math.round(n * 10) / 10;
+const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+
+/** Where a cue's box is, % of the frame, as its settings lay it out (its height one line, which drawn it may not be). */
+function laidOut(vtt: Vtt, cue: VttCue): CueBox {
+  const regions = new Map(vtt.regions.map((b) => regionBox(b)).map((b) => [b.id, b]));
+  const at = cueLayout(cue.settings, new Set(regions.keys()));
+  const height = CAPTION_LINE_PCT;
+  if (at.mode === 'region') { const b = regions.get(at.region!)!; return { left: b.left, top: b.top + b.height - height, width: b.width, height }; }
+  if (at.mode === 'auto') return { left: at.left, top: 96 - height, width: at.width, height };
+  const top = at.top ?? 100 - (at.bottom ?? 0) - height;
+  return { left: at.left, top: top + (at.shift ? (at.shift / 100) * height : 0), width: at.width, height };
+}
+
+/** A box moved by (dx, dy) and kept on the frame: centered where it lands, narrowed as an edge comes near. */
+function moved(box: CueBox, dx: number, dy: number): CueBox {
+  const cx = clamp(box.left + box.width / 2 + dx, 5, 95);
+  const width = Math.min(box.width, 2 * Math.min(cx, 100 - cx));
+  const top = clamp(box.top + dy, 0, 100 - box.height);
+  return { left: cx - width / 2, top, width, height: box.height };
+}
+
+/**
+ * Cues moved on the picture by (dx, dy), % of the frame: the ones in `ids`, or every cue (null). Every cue in one
+ * region, all moving, moves its region; else each is placed where it lands, out of any region, by its bottom edge
+ * (`line:…%,end`, so a second line grows upward), its middle (`position:…%,center`) and its width (`size`).
+ * `drawn` has the boxes of the cues on the picture now, as drawn; the others are where their settings put them.
+ */
+export function placeCues(vtt: Vtt, ids: ReadonlySet<string> | null, dx: number, dy: number, drawn: ReadonlyMap<string, CueBox> = new Map()): Vtt {
+  const regionIds = new Set(vtt.regions.map((b) => regionSettings(b).id ?? ''));
+  const inRegion = vtt.cues.map((c) => cueLayout(c.settings, regionIds)).map((at) => (at.mode === 'region' ? at.region ?? null : null));
+  const one = inRegion[0];
+  if (!ids && one && inRegion.every((r) => r === one)) {
+    return {
+      ...vtt,
+      regions: vtt.regions.map((block) => {
+        const s = regionSettings(block);
+        if (s.id !== one) return block;
+        const b = regionBox(block);
+        const to = moved(b, dx, dy);
+        const [rx = 0, ry = 100] = String(s.regionanchor ?? '0%,100%').split(',').map((v) => Number.parseFloat(v));
+        const set: Record<string, string> = {
+          ...s, width: `${r1(to.width)}%`,
+          viewportanchor: `${r1(to.left + (rx / 100) * to.width)}%,${r1(to.top + (ry / 100) * to.height)}%`,
+        };
+        if (!s.regionanchor) set.regionanchor = '0%,100%';
+        return Object.entries(set).map(([k, v]) => `${k}:${v}`).join('\n');
+      }),
+    };
+  }
+  return {
+    ...vtt,
+    cues: vtt.cues.map((c) => {
+      if (ids && !ids.has(c.id)) return c;
+      const to = moved(drawn.get(c.id) ?? laidOut(vtt, c), dx, dy);
+      return { ...c, settings: withSettings(c.settings, { region: null, line: `${r1(to.top + to.height)}%,end`, position: `${r1(to.left + to.width / 2)}%,center`, size: `${r1(to.width)}%` }) };
+    }),
+  };
 }
 
 /* ── the look: the STYLE's rules ── */

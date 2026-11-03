@@ -650,7 +650,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* ── subtitles: the film's lines, the person's subtitle style, translation (see captions.mjs) ── */
     if (await captionRoutes(req, res, project.path, rest, { translate: (root) => subtitleTranslator(root, { askAgent }), transcribe: await subtitleTranscriber() })) return;
     /* caption tracks: a track's WebVTT file, read and written whole (caption-tracks.mjs) */
-    if (await captionTrackRoutes(req, res, project.path, rest, url)) return;
+    if (await captionTrackRoutes(req, res, project.path, rest, url, { translate: (root) => subtitleTranslator(root, { askAgent }) })) return;
     /* ── end subtitles ── */
     /* the editor's settings of the project: its frame rate, its tracks' names (see project-settings.mjs) */
     if (await projectSettingsRoute(req, res, project.path, rest)) return;
@@ -1018,7 +1018,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
        how many subtitle cues the film has (the subtitle choices need some), and how big the project and its parts are */
     if (rest === 'exports') {
       if (req.method === 'GET') {
-        return json(res, 200, { exports: exports.list(project.id), folder: exportsRoot(), can: await exportCapabilities(), drafts: draftApps(), subtitles: await exports.subtitles(project.path), project: await projectSizes(project.path) });
+        return json(res, 200, { exports: exports.list(project.id), folder: exportsRoot(), can: await exportCapabilities(), drafts: draftApps(), subtitles: await exports.subtitles(project.path), captionTracks: await exports.captionTracks(project.path), project: await projectSizes(project.path) });
       }
       if (req.method === 'POST') {
         exportRoots.set(project.id, project.path);

@@ -67,6 +67,21 @@ async function put(projectId: string, src: string, text: string): Promise<string
   return null;
 }
 
+/** A new version of a caption track's cues sent (one undo step, `label` naming it): null, or why it was not written. */
+export async function writeCaptionTrack(projectId: string, src: string, next: Vtt, label: string): Promise<string | null> {
+  const before = entries.get(keyOf(projectId, src))?.text ?? null;
+  const text = writeVtt(next);
+  if (text === before) return null;
+  const why = await put(projectId, src, text);
+  if (!why) {
+    record?.(label, {
+      undo: () => put(projectId, src, before ?? 'WEBVTT\n'),
+      redo: () => put(projectId, src, text),
+    });
+  }
+  return why;
+}
+
 /**
  * A caption track's cues, read once; `write` sends a new version of them (one undo step, `label` naming it). Null
  * while the file is first read.
@@ -79,20 +94,13 @@ export function useCaptionTrack(projectId: string, src: string): { vtt: Vtt | nu
     const e = entries.get(key);
     if (!e) { const fresh: Entry = { vtt: null, text: null, error: null, loading: null }; entries.set(key, fresh); fresh.loading = load(projectId, src); }
   }, [key, projectId, src]);
-  const write = React.useCallback(async (next: Vtt, label: string) => {
-    const before = entries.get(key)?.text ?? null;
-    const text = writeVtt(next);
-    if (text === before) return null;
-    const why = await put(projectId, src, text);
-    if (!why) {
-      record?.(label, {
-        undo: () => put(projectId, src, before ?? 'WEBVTT\n'),
-        redo: () => put(projectId, src, text),
-      });
-    }
-    return why;
-  }, [key, projectId, src]);
+  const write = React.useCallback((next: Vtt, label: string) => writeCaptionTrack(projectId, src, next, label), [projectId, src]);
   return { vtt: entry?.vtt ?? null, write };
+}
+
+/** A number that changes whenever a caption track's file is read or written. */
+export function useCaptionTracksVersion(): number {
+  return React.useSyncExternalStore((fn) => { listeners.add(fn); return () => { listeners.delete(fn); }; }, () => version, () => version);
 }
 
 /** The cues of a caption track as held now (null when not read yet): what the inspector edits. */
@@ -113,4 +121,17 @@ export function setCaptionSelection(next: CaptionSelection): void {
 export const captionSelectionNow = (): CaptionSelection => selection;
 export function useCaptionSelection(): CaptionSelection {
   return React.useSyncExternalStore((fn) => { selectionListeners.add(fn); return () => { selectionListeners.delete(fn); }; }, () => selection, () => null);
+}
+
+/* ── whether a change of look or place is the whole track's ("Apply to all captions", on as captions are one look) ── */
+
+let applyAll = true;
+const applyAllListeners = new Set<() => void>();
+export function setCaptionApplyAll(on: boolean): void {
+  applyAll = on;
+  for (const fn of applyAllListeners) fn();
+}
+export const captionApplyAllNow = (): boolean => applyAll;
+export function useCaptionApplyAll(): boolean {
+  return React.useSyncExternalStore((fn) => { applyAllListeners.add(fn); return () => { applyAllListeners.delete(fn); }; }, () => applyAll, () => true);
 }

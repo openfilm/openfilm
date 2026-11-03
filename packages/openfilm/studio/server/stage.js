@@ -1670,6 +1670,22 @@
         return { id: c.id, visible: on.has(c), x: r.left, y: r.top, w: r.width, h: r.height };
       });
     },
+    /**
+     * The caption cues on the picture now (top track first): each one's box as laid out (`box`) and where its words
+     * are drawn (`text`), stage px.
+     */
+    captions() {
+      const rect = (el) => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; };
+      return (hooks()?.captions?.() ?? []).map(({ el, ...cue }) => ({ ...cue, box: rect(el), text: rect(el.querySelector('.cue-text') ?? el) }));
+    },
+    /** Show cues of a caption track moved by (dx, dy) stage px, not kept yet (`ids` null: every one; no dx: in place again). */
+    captionShift({ track, ids, dx, dy }) {
+      for (const cue of hooks()?.captions?.() ?? []) {
+        if (cue.track !== track || (ids && !ids.includes(cue.id))) continue;
+        cue.el.style.translate = dx || dy ? `${dx}px ${dy}px` : '';
+      }
+      return true;
+    },
     /** `pictures`: a video or a still only (a page is clicked by its layers; what is under its empty parts is found). */
     clipAt({ x, y, pictures }) { return clipAt(x, y, Boolean(pictures))?.id ?? null; },
     /** Show a clip placed in a box not kept yet (null: in its own again). */

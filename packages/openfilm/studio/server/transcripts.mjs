@@ -10,9 +10,8 @@
  * `src` comes from film.html or a request: a transcript is read or written only inside the project (files.mjs inside),
  * never at a `../` or through a link out of the folder.
  *
- * Studio cuts each line into subtitles itself (subtitle-segments.mjs). A transcript whose subtitles the person timed on
- * the timeline (subtitle-edits.mjs) says so in a note at its top (CUT_NOTE): each of its cues is then one subtitle as
- * it is, not cut again. The note is a WebVTT comment, so every other reader takes the file as it always did.
+ * Studio cuts each line into subtitles itself (subtitle-segments.mjs). A transcript whose subtitles the person timed by
+ * hand says so in a note at its top (CUT_NOTE): each of its cues is then one subtitle as it is, not cut again. The note is a WebVTT comment, so every other reader takes the file as it always did.
  */
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { basename, dirname, extname, join } from 'node:path';

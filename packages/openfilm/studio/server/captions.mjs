@@ -31,7 +31,6 @@ import { writeAtomic } from './atomic.mjs';
 import { inProject } from './files.mjs';
 import { alignTranslation, segmentLine, subtitleEnd } from './subtitle-segments.mjs';
 import { readTranscript, setLine, transcriptIsCurrent, translationsOf, writeTranscript } from './transcripts.mjs';
-import { subtitleEditRoutes } from './subtitle-edits.mjs';
 import { cuePlain, readVtt } from '../../src/captions.mjs';
 
 export { spokenLines, stripAudioTags } from './transcripts.mjs';
@@ -257,7 +256,7 @@ export async function filmCaptions(root, options = {}) {
     if (!said) { if (await wantsTranscript(root, clip.src)) untranscribed.add(clip.src); continue; }
     /* a transcript that runs on past the end of its file is not this file's any more (it was made again faster, or
        the transcript's times were moved): its lines would drift later and later and the last ones fall off. It is
-       still shown, and made again with the rest (the CC button) */
+       still shown, and made again with the rest (the timeline's captions button) */
     if (await transcriptOutlasts(said.lines, await lengthOf(clip.src))) untranscribed.add(clip.src);
     const native = clip.time?.length === 2 ? undefined : await lengthOf(clip.src) ?? (said.lines.at(-1)?.endMs ?? 0) / 1000;
     let span;
@@ -401,14 +400,11 @@ export const CONNECT_TRANSCRIBER = 'Connect a service that transcribes in Studio
  *                              'no-transcriber' } when no service can
  *   POST subtitles/translate   { language } → translateFilmSubtitles' result (502 when every voice failed);
  *                              409 { error, code: 'no-translator' } when no provider can translate
- *   GET  captions/source, PUT captions/source, PUT captions/files: the subtitle row's edits (subtitle-edits.mjs)
  * @param {import('./http.mjs').Req} req @param {import('./http.mjs').Res} res @param {string} root @param {string} rest
  * @param {{ translate?: (root: string) => Promise<TranslateLines | null>, transcribe?: Transcribe }} [options] where
  *   translation and transcription come from (none: nowhere)
  */
 export async function captionRoutes(req, res, root, rest, { translate = async () => null, transcribe } = {}) {
-  /* the subtitle row's edits of one source (subtitle-edits.mjs) */
-  if (await subtitleEditRoutes(req, res, root, rest)) return true;
   if (rest === 'captions' && req.method === 'GET') {
     json(res, 200, await filmCaptions(root));
     return true;

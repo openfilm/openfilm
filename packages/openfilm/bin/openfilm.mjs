@@ -103,7 +103,7 @@ openfilm skill remove <name>
   --4k            3840 px wide              --scale <n>     any device pixel ratio
   --blur          motion blur (8 samples)   --samples <n>   --shutter <0..1>
   --alpha         transparent background    --workers <n>   parallel browsers
-  --subtitles     burn the project's subtitles in, in their own style`,
+  --subtitles     burn in a project's subtitles from before caption tracks`,
 };
 
 /* `openfilm` alone: the manual, the whole of what an agent needs to know. `get` takes any options its verb has,

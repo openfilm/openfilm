@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { getPriority, tmpdir, totalmem } from 'node:os';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -262,6 +262,12 @@ test('--subtitles burns the project\'s subtitles into its film, named as its ren
     await assert.rejects(render([join(dir, 'page.html')], { ...quiet, subtitles: true }), /into the project's film: render the project's folder, not page\.html/);
     rmSync(join(dir, 'assets', 'vo.vtt'));
     await assert.rejects(render([dir], { ...quiet, subtitles: true, out: join(dir, 'none.mp4') }), /no subtitles to burn in/);
+    /* with a caption track, the subtitles are the film's picture: rendered as it is */
+    mkdirSync(join(dir, 'captions'));
+    writeFileSync(join(dir, 'captions', 'c.vtt'), 'WEBVTT\n\n00:00:00.500 --> 00:00:01.800\nOn the track\n');
+    writeFileSync(join(dir, 'film.html'), readFileSync(join(dir, 'film.html'), 'utf8').replace('<body>', '<body><section><track kind="captions" src="captions/c.vtt"></section>'));
+    const tracked = await render([dir], { ...quiet, subtitles: true, out: join(dir, 'tracked.mp4') });
+    assert.ok(changed(bottom(tracked.out, 10), bottom(tracked.out, 2)) > 200, 'the caption track drawn');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

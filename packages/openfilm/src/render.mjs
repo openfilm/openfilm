@@ -80,7 +80,8 @@ export async function render(args, opts = {}) {
   const { film: target, at, range } = parseTarget(args);
   if (range && opts.ranges) throw new UsageError('choose a range or ranges, not both');
   if (at != null) throw new UsageError(`render takes a range (for example ${at}-${at + 2}), not one time; for one frame use openfilm look ${at}`);
-  /* --subtitles: the project's film drawn around by a page that burns its subtitles in (the export's own, burn.mjs),
+  /* --subtitles: a project's subtitles from before caption tracks (its voices' transcripts in the style Studio kept),
+     the project's film drawn around by a page that burns them in (the export's own, burn.mjs),
      rendered in its place, from the project's folder, named as the film's own render is. Studio burns only the
      project's film, so a page of it is refused */
   if (opts.subtitles) {
@@ -88,6 +89,8 @@ export async function render(args, opts = {}) {
     const own = existsSync(join(loc.root, FILM_FILE)) ? FILM_FILE : 'index.html';
     if (decodeURI(loc.entry) !== own) throw new UsageError(`--subtitles burns the subtitles into the project's film: render the project's folder, not ${decodeURI(loc.entry)}`);
     const { subtitlesForExport } = await import('../studio/server/captions.mjs');
+    /* a film with caption tracks has its subtitles in its picture already: rendered as it is */
+    if ((await subtitlesForExport(loc.root)).tracks) return await render(args, { ...opts, subtitles: false });
     const burn = await burned(loc.root, { burnSubtitles: true }, subtitlesForExport, !!opts.alpha);
     if (!burn) throw new UsageError('--subtitles: the film has no subtitles to burn in');
     try {
