@@ -139,5 +139,3 @@ function Release({ release }: { release: ReleaseNotes }) {
 
 /** Whether this release has notes to show again (Settings › About). */
 export const hasNotes = (version: string | undefined) => Boolean(version && releaseNotes(version));
-/** The version whose notes are written, for a preview before it ships (Developer). */
-export const notesVersion = () => RELEASE.version;

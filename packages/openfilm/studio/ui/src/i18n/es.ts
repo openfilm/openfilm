@@ -2185,10 +2185,6 @@ export const es: Words = {
       logs: 'Mostrar el registro de cada turno',
       logsHint: 'En el chat, cada turno tiene un botón Registro: la petición y la sesión en que se ejecutó, cada herramienta con su entrada y su salida, cada pregunta y respuesta, y cómo terminó, tal como lo envió el agente.',
       where: 'Cada turno se registra esté o no activado, en la carpeta .film/logs del proyecto, solo en este ordenador.',
-      releaseGroup: 'Versiones',
-      previewWhatsNew: 'Novedades',
-      previewWhatsNewHint: 'Muestra las notas de {version} tal como se ven tras actualizar.',
-      preview: 'Vista previa',
     },
     shortcuts: {
       hint: "Las teclas siguen tu sistema operativo y se pausan mientras escribes. Elige un esquema para usar las teclas de otro editor, o cambia cualquier tecla en un esquema personalizado.",

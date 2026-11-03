@@ -2186,10 +2186,6 @@ export const en = {
       logs: 'Show each turn’s log',
       logsHint: 'In the chat, every turn gets a Log button: the prompt and the session it ran in, each tool call with its input and output, every question and answer, and how it ended, as the agent sent them.',
       where: 'Every turn is logged whether or not this is on, in the project’s .film/logs folder, on this computer only.',
-      releaseGroup: 'Releases',
-      previewWhatsNew: 'What’s new',
-      previewWhatsNewHint: 'Shows the notes of {version} as people see them after updating.',
-      preview: 'Preview',
     },
     shortcuts: {
       hint: "Keys follow your operating system, and pause while you type. Pick a scheme to use another editor's keys, or change any key in a custom scheme.",

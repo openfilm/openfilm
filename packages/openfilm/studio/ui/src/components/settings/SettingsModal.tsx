@@ -12,7 +12,7 @@ import { LANGUAGES, phrasesUnder, useLanguage, useLanguageChoice, useT, type Lan
 import { studioHost, type HostDeveloper, type HostUpdateState } from '@/lib/host';
 import { showWhatsNew } from '@/lib/whats-new';
 import { usePreviewPrefs, writePreviewPref } from '@/lib/preview-prefs';
-import { hasNotes, notesVersion } from '../WhatsNew';
+import { hasNotes } from '../WhatsNew';
 import { useWebUpdate } from '../UpdateButton';
 import { api, type StudioPrefs, type StudioVersion } from '@/api';
 import { AgentsSection } from './AgentsSection';
@@ -523,13 +523,6 @@ function DeveloperSection() {
           />
         </SettingsGroup>
       ) : null}
-      <SettingsGroup title={t('settings.developer.releaseGroup')}>
-        <SettingsItem
-          title={t('settings.developer.previewWhatsNew')}
-          description={t('settings.developer.previewWhatsNewHint').replace('{version}', notesVersion())}
-          control={<SettingsButton onClick={() => showWhatsNew()}>{t('settings.developer.preview')}</SettingsButton>}
-        />
-      </SettingsGroup>
     </SettingsPage>
   );
 }

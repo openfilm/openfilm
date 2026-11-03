@@ -2186,10 +2186,6 @@ export const zhCN: Words = {
       logs: '显示每一轮的日志',
       logsHint: '打开后，对话里每一轮都有“日志”按钮：提示词和所在会话、每次工具调用的输入和输出、每个提问和回答、这一轮怎么结束的，都按智能体发来的原样显示。',
       where: '不论是否打开，每一轮都会记录在项目的 .film/logs 文件夹里，只保存在这台电脑上。',
-      releaseGroup: '发版',
-      previewWhatsNew: '更新内容弹窗',
-      previewWhatsNewHint: '按用户更新后看到的样子，显示 {version} 的更新内容。',
-      preview: '预览',
     },
     shortcuts: {
       hint: "按键随操作系统而定，输入文字时暂停。选一个方案即可用其他剪辑软件的按键；在自定义方案里可以改任何一个键。",
