@@ -29,9 +29,9 @@ import { SourceBadge, SourceChips, sourcesIn, type Source } from './SourceChips'
 
 type Category = 'media' | 'skill' | 'voice' | LibraryCategory;
 /* the installed skills by whose they are (SkillsPane), and the words for each */
-const SKILL_LINES = ['all', 'mine', 'system', 'community', 'agents'] as const;
+const SKILL_LINES = ['all', 'system', 'community', 'agents'] as const;
 const SKILL_LINE_WORDS: Record<(typeof SKILL_LINES)[number], string> = {
-  all: 'assetDrawer.all', mine: 'assetDrawer.skillsMine', system: 'assetDrawer.skillsSystem', community: 'assetDrawer.skillsCommunity', agents: 'assetDrawer.skillsAgents',
+  all: 'assetDrawer.all', system: 'assetDrawer.skillsSystem', community: 'assetDrawer.skillsCommunity', agents: 'assetDrawer.skillsAgents',
 };
 const CATEGORIES: Category[] = ['media', 'skill', 'voice', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition', 'template'];
 
@@ -107,7 +107,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
   React.useEffect(() => () => tryOut.current(null), []);
 
   /* the skills' line: one of the installed (Installed alone, as kept before, is all of them), else Discover */
-  const skillLine: SkillsLine = group === 'installed' ? 'all' : (SKILL_LINES as readonly string[]).includes(group) ? group as SkillsLine : 'discover';
+  /* Installed and the person's own, as kept before, are all of them now (the person's own head it) */
+  const skillLine: SkillsLine = group === 'installed' || group === 'mine' ? 'all' : (SKILL_LINES as readonly string[]).includes(group) ? group as SkillsLine : 'discover';
   const q = query.trim().toLowerCase();
   const shown = (index?.items ?? []).filter((item) => item.cat === cat && (q
     ? [...Object.values(item.name), ...(item.tags ?? [])].some((n) => n?.toLowerCase().includes(q))

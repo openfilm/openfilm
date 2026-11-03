@@ -95,10 +95,14 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
     finally { setBusy(false); }
   };
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
-      <button type="button" onClick={onBack} className="-ml-1 mb-2 flex h-7 items-center gap-1 rounded-md pl-1 pr-2 text-[12.5px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+    <>
+    {/* Back where the search was, at its height, so the page comes in without a jump */}
+    <div className="flex shrink-0 px-3 pb-2 pt-2.5">
+      <button type="button" onClick={onBack} className="-ml-1 flex h-8 items-center gap-1.5 rounded-md pl-1.5 pr-2.5 text-[12.5px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
         <ArrowLeft size={14} />{t('gallery.back')}
       </button>
+    </div>
+    <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4 pt-0.5">
       <div className="relative aspect-video w-full overflow-hidden rounded-[10px] bg-black ring-1 ring-[var(--border)]">
         {skill.preview ? <video src={skill.preview} poster={skill.cover} autoPlay muted loop controls playsInline className="absolute inset-0 h-full w-full object-contain" />
           : <SkillCover key={skill.cover ?? ''} skill={skill} title={words.title} big />}
@@ -129,7 +133,15 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
       </div>
       <Origin skill={skill} />
       {words.summary ? <p className="mt-4 text-[13px] leading-[20px] text-[var(--text)]">{words.summary}</p> : null}
-      {details ? details.split('\n').map((line) => <p key={line} className="mt-2.5 text-[12.5px] leading-[20px] text-[var(--text-muted)]">{line}</p>) : null}
+      {/* each line of its details; a line's lead ("When it is used:") a shade brighter, to find at a glance */}
+      {details ? details.split('\n').map((line) => {
+        const lead = /^(.{1,24}?[：:])\s*(.+)$/.exec(line);
+        return (
+          <p key={line} className="mt-2.5 text-[12.5px] leading-[20px] text-[var(--text-muted)]">
+            {lead ? <><span className="font-medium text-[var(--text)]">{lead[1]}</span> {lead[2]}</> : line}
+          </p>
+        );
+      }) : null}
       <div className="mt-5 flex flex-col gap-2">
         {onTry ? (
           <button type="button" onClick={() => onTry(skill)} disabled={skill.off} title={skill.off ? t('gallery.tryOff') : undefined}
@@ -153,6 +165,7 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
         description={t('gallery.removeHint')} confirmLabel={t('gallery.remove')}
         onCancel={() => setRemoving(false)} onConfirm={remove} />
     </div>
+    </>
   );
 }
 
