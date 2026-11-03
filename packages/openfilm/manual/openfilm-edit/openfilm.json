@@ -1,0 +1,18 @@
+{
+  "order": 1,
+  "icon": "scissors",
+  "title": {
+    "en": "Editing",
+    "zh-CN": "剪辑",
+    "ja": "編集",
+    "ko": "편집",
+    "es": "Edición"
+  },
+  "summary": {
+    "en": "How a film is made: the project, film.html, its pages and captions, and how to look at it.",
+    "zh-CN": "怎么做一部片子：项目、film.html、页面和字幕，以及怎么检查画面。",
+    "ja": "映画の作り方：プロジェクト、film.html、ページと字幕、そして画面の確かめ方。",
+    "ko": "영상을 만드는 법: 프로젝트, film.html, 페이지와 자막, 그리고 화면을 확인하는 법.",
+    "es": "Cómo se hace un vídeo: el proyecto, film.html, sus páginas y subtítulos, y cómo revisarlo."
+  }
+}

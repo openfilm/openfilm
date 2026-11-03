@@ -14,6 +14,8 @@ test("the app's own agent's prompt is short: where it is and how it talks; how a
   assert.equal(count(prompt, 'Reply in the language'), 1);
   assert.match(prompt, /already open beside this chat/);
   assert.ok(!prompt.includes('openfilm render'), 'the person exports from Studio');
+  const without = ownAgentPrompt({ edit: false });
+  assert.ok(!without.includes('openfilm-edit') && without.includes("OpenFilm's skills, listed below, say how."), 'turned off: not sent to it');
 });
 
 test('every agent is told how to point at Studio', () => {

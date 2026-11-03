@@ -258,10 +258,11 @@ function defaultsFile(dir, name, settings) {
  *   mcpAllowed?: string[], home?: string }} o
  */
 export async function sessionSkills(agent, { cwd, env = {}, dataDir, mine, prefsHome, allowed = [], mcpAllowed = [], home = homedir() }) {
-  const { coreSkills, mySkillsDir, usableSkills } = await skillsLib();
-  /* OpenFilm's own first (how a film is made, its media, its canvas), always; then those installed and on */
+  const { coreSkills, mySkillsDir, skillsOff, usableSkills } = await skillsLib();
+  /* OpenFilm's own first (how a film is made, its media, its canvas), unless turned off; then those installed and on */
   const core = coreSkills();
-  const openfilm = [...core, ...usableSkills({ project: cwd, mine: mine ?? mySkillsDir(), ...(prefsHome ? { home: prefsHome } : {}) })
+  const off = new Set(skillsOff(prefsHome));
+  const openfilm = [...core.filter((s) => !off.has(s.name)), ...usableSkills({ project: cwd, mine: mine ?? mySkillsDir(), ...(prefsHome ? { home: prefsHome } : {}) })
     .filter((s) => !core.some((c) => c.name === s.name))];
   const names = openfilm.map((s) => s.name);
   const filtered = FILTERED_AGENTS.includes(agent);

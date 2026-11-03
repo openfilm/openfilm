@@ -14,7 +14,8 @@
  *   official   `skills/` in this package, released with OpenFilm
  *
  * OpenFilm's own (coreSkills: `manual/` in this package) are how a film is made, its media and its canvas, which the
- * manual names: always on, in every agent's hands and in no library, so the manual stays a page.
+ * manual names: in every agent's hands unless the person turns one off (skillsOff), never installed or removed, so the
+ * manual stays a page.
  *
  * Nothing here deletes a skill outright: one replaced or removed goes to the system's trash.
  *
@@ -295,9 +296,13 @@ export function usableSkills({ home, ...where } = {}) {
   return listSkills(where).filter((s) => (s.source !== 'official' || installed.has(s.name)) && !off.has(s.name));
 }
 
-/** OpenFilm's own skills (coreSkillsDir), which every agent has: never installed, turned off or listed. @returns {Skill[]} */
+/** OpenFilm's own skills by name, in the order agents are given them: how a film is made, its media, its canvas. */
+export const CORE_SKILLS = Object.freeze(['openfilm-edit', 'openfilm-media', 'openfilm-canvas']);
+
+/** OpenFilm's own skills (coreSkillsDir), which every agent has unless turned off, in CORE_SKILLS's order. @returns {Skill[]} */
 export function coreSkills() {
-  return skillsIn(coreSkillsDir(), 'official');
+  const rank = (/** @type {Skill} */ s) => (CORE_SKILLS.includes(s.name) ? CORE_SKILLS.indexOf(s.name) : CORE_SKILLS.length);
+  return skillsIn(coreSkillsDir(), 'official').sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
 }
 
 /** One skill by name, OpenFilm's own first, else as listSkills finds it, or null. @param {string} name @param {Parameters<typeof listSkills>[0]} [where] */

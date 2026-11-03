@@ -1,0 +1,18 @@
+{
+  "order": 2,
+  "icon": "music",
+  "title": {
+    "en": "Media",
+    "zh-CN": "素材",
+    "ja": "素材",
+    "ko": "소재",
+    "es": "Medios"
+  },
+  "summary": {
+    "en": "Music, sounds, effects and templates from the library; voice-over, pictures, video and transcripts made for the film.",
+    "zh-CN": "素材库里的音乐、音效、特效和模板，以及为片子生成配音、图片、视频和字幕。",
+    "ja": "ライブラリの音楽、効果音、エフェクト、テンプレート。映画のためのナレーション、画像、動画、文字起こしの生成。",
+    "ko": "라이브러리의 음악, 효과음, 효과, 템플릿. 영상을 위한 내레이션, 이미지, 동영상, 자막 생성.",
+    "es": "Música, sonidos, efectos y plantillas de la biblioteca; voz en off, imágenes, vídeo y transcripciones hechos para el vídeo."
+  }
+}

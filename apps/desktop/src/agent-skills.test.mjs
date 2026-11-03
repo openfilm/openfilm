@@ -97,10 +97,10 @@ test("OpenCode: every skill denied but its own, OpenFilm's and those let in; Pi:
   writeFileSync(join(w.openfilmHome, 'prefs.json'), JSON.stringify({ skillsInstalled: [readdirSync(new URL('../../../packages/openfilm/skills/', import.meta.url), { withFileTypes: true }).find((e) => e.isDirectory()).name] }));
   const oc = await sessionSkills('opencode', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills'), prefsHome: w.openfilmHome, allowed: ['research'] });
   const config = JSON.parse(oc.env.OPENCODE_CONFIG_CONTENT);
-  /* OpenFilm's own first, always; then the project's brand and lyric-pv and, of the official skills that come with the
-     package, only the one installed */
+  /* OpenFilm's own first, in their order (how a film is made, its media, its canvas); then the project's brand and
+     lyric-pv and, of the official skills that come with the package, only the one installed */
   const official = readdirSync(new URL('../../../packages/openfilm/skills/', import.meta.url), { withFileTypes: true }).filter((e) => e.isDirectory());
-  const names = ['openfilm-canvas', 'openfilm-edit', 'openfilm-media', ...[official[0].name, 'brand', 'lyric-pv'].sort()];
+  const names = ['openfilm-edit', 'openfilm-media', 'openfilm-canvas', ...[official[0].name, 'brand', 'lyric-pv'].sort()];
   assert.deepEqual(config.permission.skill, { '*': 'deny', 'customize-opencode': 'allow', ...Object.fromEntries([...names, 'research'].sort().map((n) => [n, 'allow'])) });
   assert.deepEqual(config.mcp, { search: { enabled: false } });
   assert.match(config.skills.paths[0], /agent-skills[\\/].+[\\/]skills$/);
@@ -126,12 +126,14 @@ test('expired session cleanup unlinks skills without removing their real folders
   assert.equal(realpathSync(join(second.piSkills.paths[0], 'brand')), realpathSync(join(w.project, 'skills', 'brand')), 'the next session links to the same skill again');
 });
 
-test("an OpenFilm skill the person turned off is given to no session", async () => {
+test("a skill the person turned off, OpenFilm's own too, is given to no session", async () => {
   const w = world();
   mkdirSync(w.openfilmHome, { recursive: true });
-  writeFileSync(join(w.openfilmHome, 'prefs.json'), JSON.stringify({ skillsOff: ['brand'] }));
+  writeFileSync(join(w.openfilmHome, 'prefs.json'), JSON.stringify({ skillsOff: ['brand', 'openfilm-canvas'] }));
   const pi = await sessionSkills('byok', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills'), prefsHome: w.openfilmHome });
   assert.ok(!pi.piSkills.names.includes('brand'));
+  assert.deepEqual(pi.piSkills.names.slice(0, 2), ['openfilm-edit', 'openfilm-media'], 'one of OpenFilm\'s own, too');
+  assert.ok(!pi.piSkills.names.includes('openfilm-canvas'));
   assert.ok(pi.piSkills.names.includes('lyric-pv'));
   assert.ok(!existsSync(join(pi.piSkills.paths[0], 'brand')), 'not in the folder the agent reads');
   const codex = await sessionSkills('codex', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills'), prefsHome: w.openfilmHome });

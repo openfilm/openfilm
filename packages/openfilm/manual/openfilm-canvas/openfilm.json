@@ -1,0 +1,18 @@
+{
+  "order": 3,
+  "icon": "layers",
+  "title": {
+    "en": "Canvas",
+    "zh-CN": "画布",
+    "ja": "キャンバス",
+    "ko": "캔버스",
+    "es": "Lienzo"
+  },
+  "summary": {
+    "en": "The board beside the edit: ideas, references and shots laid out before they go into the film.",
+    "zh-CN": "剪辑旁边的画板：想法、参考和镜头先在这里摆开，再放进片子。",
+    "ja": "編集の隣のボード：アイデア、参考、ショットを映画に入れる前に並べます。",
+    "ko": "편집 옆의 보드: 아이디어, 참고 자료, 장면을 영상에 넣기 전에 펼쳐 둡니다.",
+    "es": "El tablero junto a la edición: ideas, referencias y planos dispuestos antes de entrar en el vídeo."
+  }
+}

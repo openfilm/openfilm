@@ -64,7 +64,7 @@ test('a replacement skill cover has a new gallery URL and serves the chosen byte
   assert.equal(readFileSync(join(installed, 'SKILL.md'), 'utf8'), readFileSync(join(source, 'SKILL.md'), 'utf8'));
   const { skills } = await (await api('/api/skills')).json();
   assert.equal(skills.find((s) => s.name === 'covered').cover, undefined, 'removal persists when listed again');
-  const official = skills.find((s) => s.source === 'official');
+  const official = skills.find((s) => s.source === 'official' && !s.core);
   assert.ok(official);
   assert.equal((await api(`/api/skills/${official.name}/cover`, { method: 'DELETE' })).status, 403);
   assert.equal((await api('/api/skills/missing-skill/cover', { method: 'DELETE' })).status, 404);

@@ -59,7 +59,7 @@ import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listenLocal } from '../../src/host.mjs';
 import { captionTrackRoutes } from './caption-tracks.mjs';
 import { moveToTrash } from './trash.mjs';
-import { listSkills, removeSkill, setSkillCover, setSkillInstalled, setSkillOn, skillOrigins, skillsInstalled, skillsOff } from '../../src/skills.mjs';
+import { coreSkills, listSkills, removeSkill, setSkillCover, setSkillInstalled, setSkillOn, skillOrigins, skillsInstalled, skillsOff } from '../../src/skills.mjs';
 import { providersRoute } from './providers/index.mjs';
 import { localModelsRoute } from './local-models.mjs';
 import { captionRoutes, writeSubtitleStyle } from './captions.mjs';
@@ -503,7 +503,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const folder = await exampleFolderHere(decodeURIComponent(parts[1]));
       return sendMedia(req, res, inside(folder, parts.slice(3).map(decodeURIComponent).join('/')), { keep: true });
     }
-    /* the skills a project can be made with (../../src/skills.mjs): its own, the person's, the official ones */
+    /* the skills a project can be made with (../../src/skills.mjs): OpenFilm's own first (`core`, which can only be
+       turned off), then the project's, the person's, the official ones */
     if (parts[0] === 'skills' && parts.length === 1 && req.method === 'GET') {
       const id = url.searchParams.get('project');
       const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) : null;
@@ -513,15 +514,15 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const installed = new Set(skillsInstalled());
       const media = (/** @type {string} */ name, /** @type {'cover' | 'preview'} */ which) => `/api/skills/${encodeURIComponent(name)}/${which}${id ? `?project=${encodeURIComponent(id)}` : ''}`;
       return json(res, 200, {
-        skills: skills.map((k) => ({
-          name: k.name, description: k.description, source: k.source, scripts: k.scripts.length,
+        skills: [...coreSkills().map((k) => ({ ...k, core: true })), ...skills.map((k) => ({ ...k, core: false }))].map((k) => ({
+          ...(k.core ? { core: true } : {}), name: k.name, description: k.description, source: k.source, scripts: k.scripts.length,
           ...(k.shown ? { shown: k.shown } : {}), ...(k.version ? { version: k.version } : {}), ...(k.kind ? { kind: k.kind } : {}),
           ...(k.order != null ? { order: k.order } : {}), ...(k.icon ? { icon: k.icon } : {}), ...(k.repository ? { repository: k.repository } : {}),
           ...(k.cover ? { cover: `${media(k.name, 'cover')}${id ? '&' : '?'}v=${encodeURIComponent(k.cover)}` } : {}), ...(k.preview ? { preview: media(k.name, 'preview') } : {}),
           /* the person's own: where it came from (none kept: made where it is) */
           ...(k.source === 'mine' ? { origin: origins[basename(k.folder)] ?? { from: 'made' } } : {}),
           /* an official one is installed to be used; the person's own and a project's are theirs already */
-          installed: k.source !== 'official' || installed.has(k.name),
+          installed: k.core || k.source !== 'official' || installed.has(k.name),
           /* turned off: offered to no agent until it is turned on again */
           ...(off.has(k.name) ? { off: true } : {}),
         })),

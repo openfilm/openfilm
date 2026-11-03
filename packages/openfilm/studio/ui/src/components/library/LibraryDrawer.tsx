@@ -28,6 +28,11 @@ import { SkillsPane, type SkillsLine } from './SkillsPane';
 import { SourceBadge, SourceChips, sourcesIn, type Source } from './SourceChips';
 
 type Category = 'media' | 'skill' | 'voice' | LibraryCategory;
+/* the installed skills by whose they are (SkillsPane), and the words for each */
+const INSTALLED_LINES: SkillsLine[] = ['all', 'mine', 'openfilm', 'agents'];
+const SKILL_LINE_WORDS: Record<SkillsLine, string> = {
+  all: 'assetDrawer.all', mine: 'assetDrawer.skillsMine', openfilm: 'assetDrawer.skillsOpenFilm', agents: 'assetDrawer.skillsAgents', discover: 'assetDrawer.skillsDiscover',
+};
 const CATEGORIES: Category[] = ['media', 'skill', 'voice', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition', 'template'];
 
 /** The side bar's starred line: a category's things the person starred ('' is all of it, else one of its groups). */
@@ -101,6 +106,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
   /* the drawer closed: what was tried goes with it */
   React.useEffect(() => () => tryOut.current(null), []);
 
+  /* the skills' line: one of the installed (Installed alone, as kept before, is all of them), else Discover */
+  const skillLine: SkillsLine = group === 'installed' ? 'all' : (INSTALLED_LINES as string[]).includes(group) ? group as SkillsLine : 'discover';
   const q = query.trim().toLowerCase();
   const shown = (index?.items ?? []).filter((item) => item.cat === cat && (q
     ? [...Object.values(item.name), ...(item.tags ?? [])].some((n) => n?.toLowerCase().includes(q))
@@ -176,9 +183,14 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
               </>
             ) : cat === 'skill' ? (
               <>
-                {/* Discover first opened: OpenFilm's skills to take up */}
-                <SideBox on={group === 'installed'} onClick={() => pickGroup('installed')}>{t('assetDrawer.skillsInstalled')}</SideBox>
-                <SideBox on={group !== 'installed'} onClick={() => pickGroup('discover')}>{t('assetDrawer.skillsDiscover')}</SideBox>
+                {/* Discover first opened: OpenFilm's skills to take up; the installed by whose they are, under their fold */}
+                <SideBox on={skillLine !== 'discover' && folded} open={!folded} onClick={fold}>{t('assetDrawer.skillsInstalled')}</SideBox>
+                {folded ? null : (
+                  <div className="flex flex-col pb-1">
+                    {INSTALLED_LINES.map((id) => <SideLine key={id} on={skillLine === id} onClick={() => pickGroup(id)}>{t(SKILL_LINE_WORDS[id])}</SideLine>)}
+                  </div>
+                )}
+                <SideBox on={skillLine === 'discover'} onClick={() => pickGroup('discover')}>{t('assetDrawer.skillsDiscover')}</SideBox>
               </>
             ) : (
               <>
@@ -213,7 +225,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
                 </label>
               </div>
               {cat !== 'skill' && cat !== 'voice' ? <SourceChips sources={sources} value={source} onChange={setSource} /> : null}
-              {cat === 'skill' ? <SkillsPane line={(group === 'installed' ? 'installed' : 'discover') as SkillsLine} query={query} projectId={projectId} opened={skillOpen} onOpen={setSkillOpen} />
+              {cat === 'skill' ? <SkillsPane line={skillLine} query={query} projectId={projectId} opened={skillOpen} onOpen={setSkillOpen} />
                 : cat === 'voice' ? <VoicesPane group={group} query={query} favorites={favorites} onServices={onServices} onAll={() => pickGroup('')} /> : (
               <>
               {/* a click on nothing lets the picked thing go; the player is under the list */}
