@@ -5,7 +5,7 @@
  * `openfilm pipeline check`: every page written, every media file present, every voice recorded, the seconds adding
  * up to the film's. It is the plan, not the film: nothing else in the tools reads it.
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { clipKind, readFilmFile } from './film-doc.mjs';
 
@@ -94,11 +94,12 @@ export const getVerbFor = (media) => {
   return null;
 };
 
-/** The voice recorded for shot `n`, by its number: the first form in the project, else null. */
+/** The voice recorded for shot `n`, by its number: the first form in the project that holds a take (a file that
+    holds nothing is not one — the same rule `get tts --storyboard` goes by), else null. */
 const voiceOf = (project, n) => {
   for (const ext of VOICE_EXTS) {
     const path = `assets/audio/vo/shot-${n}.${ext}`;
-    if (existsSync(join(project, path))) return path;
+    try { if (statSync(join(project, path)).size > 0) return path; } catch { /* not there */ }
   }
   return null;
 };

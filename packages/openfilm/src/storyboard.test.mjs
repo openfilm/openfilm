@@ -223,6 +223,20 @@ test('the check holds film.html to the storyboard: a page not cut, a length chan
   assert.doesNotMatch(twice, /out of the storyboard's order/);
 });
 
+test('a leftover that holds nothing is not a take: the check asks for the voice as the batch does', () => {
+  const dir = project();
+  writeBoard(dir, ['## Shot 1 — 4s', 'page: a.html', 'vo: One line.', ''].join('\n'));
+  writeFileSync(join(dir, 'a.html'), '<!doctype html>');
+  writeFileSync(join(dir, 'film.html'), '<section><iframe src="a.html#t=0,4"></iframe></section>');
+  mkdirSync(join(dir, 'assets', 'audio', 'vo'), { recursive: true });
+  writeFileSync(join(dir, 'assets', 'audio', 'vo', 'shot-1.wav'), '');
+  const said = checkStoryboard(dir, readStoryboard(dir));
+  assert.equal(said.ok, false);
+  assert.match(said.lines.join('\n'), /voice not recorded: assets\/audio\/vo\/shot-1\.wav/);
+  writeFileSync(join(dir, 'assets', 'audio', 'vo', 'shot-1.wav'), 'a take');
+  assert.equal(checkStoryboard(dir, readStoryboard(dir)).ok, true);
+});
+
 test('a storyboard with no shots is said so, with the form named', () => {
   const dir = project();
   writeBoard(dir, '# Storyboard\n\nnothing yet\n');
