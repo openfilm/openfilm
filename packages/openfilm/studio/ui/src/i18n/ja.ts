@@ -798,6 +798,7 @@ export const ja: Words = {
     copyConfirm: 'コピーを作成',
     cancel: 'キャンセル',
     missing: '復元しましたが、このバージョンの素材の一部が見つかりませんでした。それらのファイルはそのままです。',
+    kept: `復元しました。${TRASH}に入れられなかった {n} 個のファイルはフォルダーに残っています：{files}`,
     kindSaved: '保存したバージョン',
     kindAuto: '自動保存',
     kindAgent: 'エージェントの作業前',

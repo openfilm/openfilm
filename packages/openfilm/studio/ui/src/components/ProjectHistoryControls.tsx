@@ -299,6 +299,11 @@ export function ProjectHistoryControls({
       setNotice(t('versions.recoveredRecords').replace('{n}', String(commits.length)));
     }
   };
+
+  /* files the trash would not take (Windows' Recycle Bin refusing a big one): the version is restored around them */
+  const keptWords = (kept: string[] | undefined) => (kept?.length
+    ? t('versions.kept').replace('{n}', String(kept.length)).replace('{files}', () => kept.join(', '))
+    : null);
   const restore = async (v: Version, saveFirst: boolean) => {
     setDialog(null);
     /* film.html missing: there is nothing to save (a version without it would be empty), and only film.html comes
@@ -314,7 +319,7 @@ export function ProjectHistoryControls({
     const result = await history.checkout(v.commit);
     if (result.ok) {
       setSelected(v.commit);
-      setNotice(result.body.missing?.length ? t('versions.missing') : t('versions.restored'));
+      setNotice(keptWords(result.body.kept) ?? (result.body.missing?.length ? t('versions.missing') : t('versions.restored')));
     } else if (result.code === 'dirty') setDialog({ kind: 'restore', version: v });
   };
   const submit = async () => {
@@ -335,7 +340,8 @@ export function ProjectHistoryControls({
     }
     if (dialog.kind === 'discard') {
       setDialog(null);
-      if (await history.discard()) setSelected(null);
+      const result = await history.discard();
+      if (result.ok) { setSelected(null); const words = keptWords(result.body.kept); if (words) setNotice(words); }
       return;
     }
     if (dialog.kind === 'save') {

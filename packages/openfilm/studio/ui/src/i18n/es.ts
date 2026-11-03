@@ -798,6 +798,7 @@ export const es: Words = {
     copyConfirm: 'Hacer una copia',
     cancel: 'Cancelar',
     missing: 'Se restauró, pero no se encontraron algunos medios de esa versión; esos archivos se dejaron como estaban.',
+    kept: `Se restauró. {n} archivo(s) que ${TRASH} no aceptó se quedaron en la carpeta: {files}.`,
     kindSaved: 'Versión guardada',
     kindAuto: 'Guardada automáticamente',
     kindAgent: 'Antes del turno del agente',

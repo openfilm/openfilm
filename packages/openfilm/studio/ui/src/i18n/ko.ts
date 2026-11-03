@@ -795,6 +795,7 @@ export const ko: Words = {
     copyConfirm: '사본 만들기',
     cancel: '취소',
     missing: '복원했지만 이 버전의 일부 미디어를 찾을 수 없어 해당 파일은 그대로 두었습니다.',
+    kept: '복원했습니다. 휴지통에 넣을 수 없었던 파일 {n}개는 폴더에 그대로 있습니다: {files}',
     kindSaved: '저장한 버전',
     kindAuto: '자동 저장',
     kindAgent: '에이전트 작업 전',
