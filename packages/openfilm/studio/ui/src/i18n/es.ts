@@ -1595,7 +1595,6 @@ export const es: Words = {
     },
   },
   timeline: {
-    renameTrack: "Cambiar nombre de la pista",
     mediaMissing: 'Medio no encontrado',
     mediaMissingHint: 'El archivo ya no está en el proyecto. Haz clic derecho para volver a vincularlo.',
     mediaWaiting: 'En espera',
@@ -1718,7 +1717,6 @@ export const es: Words = {
     captionsMake: 'Generar subtítulos de lo que se dice',
     captionsNone: 'Aún no se dice nada en la película: los subtítulos salen de sus voces',
     captionsMaking: 'Generando subtítulos…',
-    textTrack: 'Pista de texto',
   },
   /* the timeline's audio and editing tools: meters, solo, markers, loudness, freeze frame, replace, track heights */
   editorTools: {
@@ -1808,10 +1806,6 @@ export const es: Words = {
     fadeTip: '{what} {s} s',
   },
   subtitleRow: {
-    split: 'Dividir en el cabezal',
-    splitWhere: 'Pon el cabezal dentro del subtítulo, lejos de sus bordes',
-    merge: 'Unir con el siguiente',
-    edit: 'Editar texto',
     delete: 'Eliminar',
     newText: 'Nuevo subtítulo',
     noRoom: 'Aquí no cabe un subtítulo',
@@ -1838,15 +1832,11 @@ export const es: Words = {
     place: 'Posición',
     height: 'Altura',
     addHere: 'Añadir un subtítulo aquí',
-    mergeTwo: 'Unir los dos',
     deleteN: 'Eliminar {n} subtítulos',
     stepRemove: 'Eliminar subtítulos',
     stepSplit: 'Dividir un subtítulo',
-    stepMerge: 'Unir subtítulos',
     stepAdd: 'Añadir un subtítulo',
     stepText: 'Editar un subtítulo',
-    stepMove: 'Mover subtítulos',
-    stepTime: 'Ajustar un subtítulo',
     stepLook: 'Cambiar el aspecto de los subtítulos',
     stepPlace: 'Mover los subtítulos en la imagen',
     applyAll: 'Aplicar a todos los subtítulos',
@@ -1864,6 +1854,7 @@ export const es: Words = {
     lines: 'Todos los subtítulos',
     translate: 'Traducir',
     translateWhy: 'Una pista nueva en ese idioma, las mismas líneas a los mismos tiempos, justo encima de esta.',
+    onlyCues: 'Una pista de subtítulos solo lleva subtítulos, y los subtítulos solo van en pistas de subtítulos.',
   },
   confirm: {
     ok: 'Confirmar',

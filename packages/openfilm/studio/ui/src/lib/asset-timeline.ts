@@ -179,6 +179,8 @@ export function assetDropSpot(
     if (target.docIndex != null && hit.band !== 'body' && !edit) {
       return newTrackSpot(tracks, hit.band === 'above' ? target.docIndex : target.docIndex + 1);
     }
+    /* a caption track takes its cues alone: anything dropped on it gets a row of its own, just above it */
+    if (target.captions && target.docIndex != null) return newTrackSpot(tracks, target.docIndex);
     /* a text of the library onto a row of another kind: a row of text of its own, just above it */
     if (libraryText(file) && target.docIndex != null && !target.text && !edit) return newTrackSpot(tracks, target.docIndex);
     if (target.locked) {

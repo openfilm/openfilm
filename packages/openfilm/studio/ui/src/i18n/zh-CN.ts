@@ -1596,7 +1596,6 @@ export const zhCN: Words = {
     },
   },
   timeline: {
-    renameTrack: "重命名轨道",
     mediaMissing: '找不到媒体',
     mediaMissingHint: '该文件已不在项目中。右键点击以重新链接。',
     mediaWaiting: '等待中',
@@ -1719,7 +1718,6 @@ export const zhCN: Words = {
     captionsMake: '识别字幕',
     captionsNone: '影片里还没有人声，无法识别字幕',
     captionsMaking: '正在识别字幕…',
-    textTrack: '文字轨',
   },
   /* the timeline's audio and editing tools: meters, solo, markers, loudness, freeze frame, replace, track heights */
   editorTools: {
@@ -1809,10 +1807,6 @@ export const zhCN: Words = {
     fadeTip: '{what} {s} 秒',
   },
   subtitleRow: {
-    split: '在播放头处拆分',
-    splitWhere: '把播放头放到字幕中间，离开它的两端',
-    merge: '与下一条合并',
-    edit: '编辑文字',
     delete: '删除',
     newText: '新字幕',
     noRoom: '这里放不下字幕',
@@ -1839,15 +1833,11 @@ export const zhCN: Words = {
     place: '位置',
     height: '高度',
     addHere: '在这里加一条字幕',
-    mergeTwo: '合并这两条',
     deleteN: '删除 {n} 条字幕',
     stepRemove: '删除字幕',
     stepSplit: '拆分字幕',
-    stepMerge: '合并字幕',
     stepAdd: '添加字幕',
     stepText: '修改字幕文字',
-    stepMove: '移动字幕',
-    stepTime: '调整字幕时间',
     stepLook: '修改字幕样式',
     stepPlace: '调整字幕位置',
     applyAll: '应用到全部字幕',
@@ -1865,6 +1855,7 @@ export const zhCN: Words = {
     lines: '全部字幕',
     translate: '翻译',
     translateWhy: '生成一条该语言的新字幕轨，时间相同，放在这条上方。',
+    onlyCues: '字幕轨上只能放字幕，字幕也只能放在字幕轨上。',
   },
   confirm: {
     ok: '确认',

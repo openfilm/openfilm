@@ -347,6 +347,8 @@ export interface TimelineBlock {
   title: string;
   /** The library's text (isLibraryText): the words it says, as its overrides set them; absent when they are its own. */
   words?: string;
+  /** A caption track's cue (lib/caption-blocks): its file and its id there. No clip of film.html, edited as one. */
+  cue?: { src: string; id: string };
   startMs: number;
   endMs: number;
   kind: TimelineBlockKind;

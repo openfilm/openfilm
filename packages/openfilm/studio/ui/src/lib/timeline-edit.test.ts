@@ -25,7 +25,6 @@ import {
   slowestSpeed,
   planUnlink,
   ridesOn,
-  carryCues,
   soundTrackFor,
   sourceLeftMs,
   type EditClip,
@@ -541,26 +540,20 @@ test('with the magnet a delete on the main track closes up; with linkage the pic
   ]);
 });
 
-test('a caption track\'s cues ride on the main track as titles do: along with their shot, gone with it, a long one stays', () => {
-  const m = filmWithMain();
-  const cues = [
-    { id: 'on-a', startMs: 1000, endMs: 2000 },
-    { id: 'on-b', startMs: 5000, endMs: 6500 },
-    { id: 'on-c', startMs: 9000, endMs: 10_000 },
-    { id: 'long', startMs: 0, endMs: 12_000 },
-  ];
-  /* c moved before a: what was said over c is said there, the rest moves as the shots it rode on */
-  const moved = planMove(m, { ids: ['c'], deltaMs: -9000, pointerMs: 1000, mode: 'place', ...ON })!;
-  assert.deepEqual([...carryCues(moved.riding!, cues)], [
-    ['on-a', { startMs: 5000, endMs: 6000 }],
-    ['on-b', { startMs: 9000, endMs: 10_500 }],
-    ['on-c', { startMs: 1000, endMs: 2000 }],
-  ]);
-  /* b deleted, the main track closing up: what was said over b goes, what was over c comes back with it */
-  const removed = planRemove(m, ['b'], { ripple: false, ...ON });
-  assert.deepEqual([...carryCues(removed.riding!, cues)], [['on-b', null], ['on-c', { startMs: 5000, endMs: 6000 }]]);
-  /* without linkage nothing rides */
-  assert.equal(planRemove(m, ['b'], { ripple: false, magnet: true, linkage: false }).riding, undefined);
+test('a caption track\'s cues are clips: they ride on the main track, go with their shot, never leave caption tracks', () => {
+  const m = model(
+    { role: 'mg', clips: [['on-b', 5, 6.5, { cue: true, still: true }], ['long', 0, 12, { cue: true, still: true }]] },
+    { role: 'video', clips: [['a', 0, 4], ['b', 4, 8], ['c', 8, 12]] },
+  ).map((t, i) => (i === 0 ? { ...t, captions: true } : t));
+  /* b deleted, the main track closing up: the cue over b goes with it, the long one stays */
+  assert.deepEqual(after(m, planRemove(m, ['b'], { ripple: false, ...ON })), [[['long', 0, 12]], [['a', 0, 4], ['c', 4, 8]]]);
+  /* a cue moves along its caption track, and never onto another kind of track (nor a clip onto a caption track) */
+  assert.ok(planMove(m, { ids: ['on-b'], deltaMs: 2000, pointerMs: 7000, mode: 'place' }));
+  assert.equal(planMove(m, { ids: ['on-b'], deltaMs: 0, pointerMs: 5000, mode: 'place', to: new Map([['on-b', 1]]) }), null);
+  assert.equal(planMove(m, { ids: ['a'], deltaMs: 0, pointerMs: 1000, mode: 'place', to: new Map([['a', 0]]) }), null);
+  /* put over another cue, it stays there (its file cuts the other short): no track opens */
+  const over = planMove(m, { ids: ['on-b'], deltaMs: -5000, pointerMs: 500, mode: 'place' })!;
+  assert.ok(!over.ops.some((op) => op.op === 'props' && op.edits.some((e) => e.prop === 'track')));
 });
 
 test('a clip past the end of the main track rides on nothing: deleting the last shot leaves it be', () => {

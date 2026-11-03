@@ -1595,7 +1595,6 @@ export const ja: Words = {
     },
   },
   timeline: {
-    renameTrack: "トラック名を変更",
     mediaMissing: 'メディアが見つかりません',
     mediaMissingHint: 'ファイルはプロジェクト内にもうありません。右クリックして再リンクしてください。',
     mediaWaiting: '待機中',
@@ -1718,7 +1717,6 @@ export const ja: Words = {
     captionsMake: '字幕を自動生成',
     captionsNone: 'まだ映像に音声がないため、字幕を作れません',
     captionsMaking: '字幕を生成中…',
-    textTrack: 'テキストトラック',
   },
   /* the timeline's audio and editing tools: meters, solo, markers, loudness, freeze frame, replace, track heights */
   editorTools: {
@@ -1808,10 +1806,6 @@ export const ja: Words = {
     fadeTip: '{what} {s} 秒',
   },
   subtitleRow: {
-    split: '再生ヘッドで分割',
-    splitWhere: '再生ヘッドを字幕の内側、端から離れた位置に置いてください',
-    merge: '次の字幕と結合',
-    edit: 'テキストを編集',
     delete: '削除',
     newText: '新しい字幕',
     noRoom: 'ここには字幕を置く余地がありません',
@@ -1838,15 +1832,11 @@ export const ja: Words = {
     place: '位置',
     height: '高さ',
     addHere: 'ここに字幕を追加',
-    mergeTwo: '2 件を結合',
     deleteN: '{n} 件の字幕を削除',
     stepRemove: '字幕を削除',
     stepSplit: '字幕を分割',
-    stepMerge: '字幕を結合',
     stepAdd: '字幕を追加',
     stepText: '字幕の文字を編集',
-    stepMove: '字幕を移動',
-    stepTime: '字幕のタイミングを調整',
     stepLook: '字幕のスタイルを変更',
     stepPlace: '字幕の位置を変更',
     applyAll: 'すべての字幕に適用',
@@ -1864,6 +1854,7 @@ export const ja: Words = {
     lines: 'すべての字幕',
     translate: '翻訳',
     translateWhy: 'その言語の字幕トラックを新しく作り、同じタイミングでこのトラックの上に置きます。',
+    onlyCues: '字幕トラックには字幕だけを置けます。字幕も字幕トラックにだけ置けます。',
   },
   confirm: {
     ok: '確認',

@@ -43,6 +43,10 @@ test('the edges of a row and the space around the rows open a track there', () =
   assert.deepEqual(assetDropSpot(text, tracks, { lane: 1, band: 'body' }, 10_000), { action: 'new-track', laneIndex: 1, docAt: 1 });
   const words = tracks.map((tr, i) => (i === 1 ? { ...tr, text: true } : tr));
   assert.equal(assetDropSpot(text, words, { lane: 1, band: 'body' }, 10_000)?.action, 'into');
+  /* nothing goes onto a caption track: a row of its own above it */
+  const captioned = tracks.map((tr, i) => (i === 1 ? { ...tr, text: true, captions: { src: 'captions/c.vtt' } } : tr));
+  assert.deepEqual(assetDropSpot(text, captioned, { lane: 1, band: 'body' }, 10_000), { action: 'new-track', laneIndex: 1, docAt: 1 });
+  assert.deepEqual(assetDropSpot(video, captioned, { lane: 1, band: 'body' }, 10_000, 'insert'), { action: 'new-track', laneIndex: 1, docAt: 1 });
   assert.deepEqual(assetDropSpot(video, tracks, { lane: -1, band: 'above' }, 2000), { action: 'new-track', laneIndex: 0, docAt: 0 });
   assert.deepEqual(assetDropSpot(video, tracks, { lane: 3, band: 'below' }, 2000), { action: 'new-track', laneIndex: 3, docAt: 3 });
 });

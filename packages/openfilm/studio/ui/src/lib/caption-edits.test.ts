@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readVtt, writeVtt } from '../../../../src/captions.mjs';
 import {
-  MIN_CUE_S, addCue, retimeCues, cueRule, cutIndex, joinText, mergeCues, moveCues, placeCues, removeCues, retimeCue, setCueRule, setCueText, splitCue, withIds,
+  MIN_CUE_S, addCue, keepApart, cueRule, cutIndex, joinText, mergeCues, moveCues, placeCues, removeCues, retimeCue, setCueRule, setCueText, splitCue, withIds,
 } from './caption-edits.ts';
 
 const FILE = `WEBVTT
@@ -104,13 +104,10 @@ test('texts are cut at a word, or between characters, never before a closing mar
   assert.equal(joinText('', 'x'), 'x');
 });
 
-test('cues an edit of the clips carries: put at their new times with their words, gone, a neighbor cut short or left whole', () => {
+test('cues apart after an edit: one that stayed cut short where a moved one reaches it, or left whole', () => {
   const v = withIds(readVtt(FILE));
-  const out = retimeCues(v, new Map([['a', { startMs: 3000, endMs: 4500 }], ['b', null]]));
-  assert.deepEqual(spans(out), [['a', 3, 4.5], ['c1', 4.5, 5]], 'the third cut short where a reaches it');
-  assert.equal(cueRule(out, '::cue(#b)').color, undefined, 'b gone with its own look');
-  const words = retimeCues(v, new Map([['b', { startMs: 7000, endMs: 8500 }]]));
-  assert.equal(words.cues.find((c) => c.id === 'b')!.text, '<00:00:07.000>Second <00:00:07.800>line');
-  const over = retimeCues(v, new Map([['a', { startMs: 3400, endMs: 5000 }]]));
-  assert.deepEqual(spans(over).find(([id]) => id === 'c1'), ['c1', 3.5, 5], 'too little would be left: it stays whole');
+  const moved = v.cues.map((c) => (c.id === 'a' ? { ...c, start: 3, end: 4.5 } : c));
+  assert.deepEqual(keepApart(moved, new Set(['a'])).map((c) => [c.id, c.start, c.end]), [['b', 2, 3], ['a', 3, 4.5], ['c1', 4.5, 5]]);
+  const over = v.cues.map((c) => (c.id === 'a' ? { ...c, start: 3.4, end: 5 } : c));
+  assert.deepEqual(keepApart(over, new Set(['a'])).find((c) => c.id === 'c1')!.start, 3.5, 'too little would be left: it stays whole');
 });

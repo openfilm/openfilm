@@ -1596,7 +1596,6 @@ export const en = {
     },
   },
   timeline: {
-    renameTrack: "Rename track",
     mediaMissing: 'Media not found',
     mediaMissingHint: 'The file is no longer in the project. Right-click to relink it.',
     mediaWaiting: 'Waiting',
@@ -1719,7 +1718,6 @@ export const en = {
     captionsMake: 'Make captions of what is said',
     captionsNone: 'Nothing is said in the film yet: captions are made from its voices',
     captionsMaking: 'Making captions…',
-    textTrack: 'Text track',
   },
   /* the timeline's audio and editing tools: meters, solo, markers, loudness, freeze frame, replace, track heights */
   editorTools: {
@@ -1809,10 +1807,6 @@ export const en = {
     fadeTip: '{what} {s} s',
   },
   subtitleRow: {
-    split: 'Split at the playhead',
-    splitWhere: 'Put the playhead inside the subtitle, away from its edges',
-    merge: 'Merge with the next',
-    edit: 'Edit text',
     delete: 'Delete',
     newText: 'New subtitle',
     noRoom: 'There is no room for a subtitle here',
@@ -1839,15 +1833,11 @@ export const en = {
     place: 'Place',
     height: 'Height',
     addHere: 'Add a caption here',
-    mergeTwo: 'Merge the two',
     deleteN: 'Delete {n} captions',
     stepRemove: 'Deleted captions',
     stepSplit: 'Split a caption',
-    stepMerge: 'Merged captions',
     stepAdd: 'Added a caption',
     stepText: 'Edited a caption',
-    stepMove: 'Moved captions',
-    stepTime: 'Retimed a caption',
     stepLook: 'Changed the captions\' look',
     stepPlace: 'Moved the captions on the picture',
     applyAll: 'Apply to all captions',
@@ -1865,6 +1855,7 @@ export const en = {
     lines: 'All captions',
     translate: 'Translate',
     translateWhy: 'A new caption track in that language, the same lines at the same times, just above this one.',
+    onlyCues: 'A caption track holds captions only, and captions go only onto caption tracks.',
   },
   confirm: {
     ok: 'Confirm',

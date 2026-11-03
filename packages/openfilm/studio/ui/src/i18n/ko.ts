@@ -1592,7 +1592,6 @@ export const ko: Words = {
     },
   },
   timeline: {
-    renameTrack: "트랙 이름 바꾸기",
     mediaMissing: '미디어를 찾을 수 없음',
     mediaMissingHint: '파일이 더 이상 프로젝트에 없습니다. 마우스 오른쪽 버튼을 클릭해 다시 연결하세요.',
     mediaWaiting: '대기 중',
@@ -1715,7 +1714,6 @@ export const ko: Words = {
     captionsMake: '자막 자동 생성',
     captionsNone: '아직 영상에 음성이 없어 자막을 만들 수 없습니다',
     captionsMaking: '자막 생성 중…',
-    textTrack: '텍스트 트랙',
   },
   /* the timeline's audio and editing tools: meters, solo, markers, loudness, freeze frame, replace, track heights */
   editorTools: {
@@ -1805,10 +1803,6 @@ export const ko: Words = {
     fadeTip: '{what} {s}초',
   },
   subtitleRow: {
-    split: '재생 헤드에서 분할',
-    splitWhere: '재생 헤드를 자막 안쪽, 양 끝에서 떨어진 곳에 두세요',
-    merge: '다음 자막과 병합',
-    edit: '텍스트 편집',
     delete: '삭제',
     newText: '새 자막',
     noRoom: '여기에는 자막을 넣을 자리가 없습니다',
@@ -1835,15 +1829,11 @@ export const ko: Words = {
     place: '위치',
     height: '높이',
     addHere: '여기에 자막 추가',
-    mergeTwo: '두 개 합치기',
     deleteN: '자막 {n}개 삭제',
     stepRemove: '자막 삭제',
     stepSplit: '자막 나누기',
-    stepMerge: '자막 합치기',
     stepAdd: '자막 추가',
     stepText: '자막 글자 수정',
-    stepMove: '자막 이동',
-    stepTime: '자막 타이밍 조정',
     stepLook: '자막 스타일 변경',
     stepPlace: '자막 위치 변경',
     applyAll: '모든 자막에 적용',
@@ -1861,6 +1851,7 @@ export const ko: Words = {
     lines: '모든 자막',
     translate: '번역',
     translateWhy: '그 언어로 된 새 자막 트랙을 같은 시간에 이 트랙 위에 만듭니다.',
+    onlyCues: '자막 트랙에는 자막만 둘 수 있고, 자막도 자막 트랙에만 둘 수 있습니다.',
   },
   confirm: {
     ok: '확인',

@@ -11,8 +11,10 @@
  *     one deleted or taken off it closes up after it, a trim or a new speed there moves what follows on it;
  *   · with linkage, a clip on another track that rides on a main-track clip (ridesOn) keeps the moment of that clip's
  *     footage it starts at wherever the edit takes the footage, and goes with the clip when it is deleted; carried
- *     into another clip on its track, it goes to a free track nearby. A caption track's cues ride the same way: a plan
- *     says how its main track was and is (`riding`), and carryCues takes the cues along;
+ *     into another clip on its track, it goes to a free track nearby;
+ *   · a caption track's cues are clips of it (lib/caption-blocks): they move, trim, split, ripple and ride as any; a cue
+ *     goes only onto a caption track and nothing else does, and a cue put over another stays there (its file cuts the
+ *     other short) rather than opening a track;
  *   · a ripple (a ripple delete, a closed gap, an insert, a ripple trim) moves what follows on the tracks edited
  *     alone; other tracks follow only by linkage. `shortMs` says how much time could not be closed.
  *
@@ -50,6 +52,8 @@ export interface EditClip {
   vin?: number;
   /** Its `data-link`: clips sharing one move, trim, split and delete together. */
   link?: string;
+  /** A caption track's cue (lib/caption-blocks): it goes onto caption tracks only. */
+  cue?: boolean;
 }
 
 export interface EditTrack {
@@ -60,6 +64,8 @@ export interface EditTrack {
   locked?: boolean;
   /** What the timeline calls it by the clips on it; a sound taken off a video goes to an `audio` one. */
   role?: 'mg' | 'video' | 'audio';
+  /** A caption track: its clips are its cues, and only cues go onto it. */
+  captions?: boolean;
   clips: EditClip[];
 }
 
@@ -107,21 +113,8 @@ export type TrackDest = number | { insert: number };
 /** Where a clip the edit touched ends up, for drawing it before it is written; null: it goes. */
 export type Placed = { startMs: number; endMs: number; track: TrackDest } | null;
 
-/**
- * The main track before and after an edit made with linkage, for what rides on it outside film.html's clips (a caption
- * track's cues, carryCues): its clips as they were, the pieces each is now (itself, the half a cut took off; none when
- * it went), and whether the edit deletes what rides on a clip that goes.
- */
-export interface CueRiding {
-  was: EditClip[];
-  pieces: Map<string, EditClip[]>;
-  drop: boolean;
-}
-
 export interface EditPlan {
   ops: Op[];
-  /** With linkage: the main track before and after (see CueRiding). */
-  riding?: CueRiding;
   /** By clip id; the halves an edit cuts off a clip are `<id>~b`. */
   placed: Map<string, Placed>;
   /** Time a ripple meant to close but could not, because a clip on a track it reaches is in the way (ms). */
@@ -140,15 +133,15 @@ export function editModelOf(tracks: readonly TimelineTrack[], links?: ReadonlyMa
     if (row.docIndex == null) continue;
     let track = byIndex.get(row.docIndex);
     if (!track) {
-      track = { index: row.docIndex, role: row.role, clips: [], ...(row.locked || row.captions ? { locked: true } : {}) };
+      track = { index: row.docIndex, role: row.role, clips: [], ...(row.locked ? { locked: true } : {}), ...(row.captions ? { captions: true } : {}) };
       byIndex.set(row.docIndex, track);
     }
-    /* a caption track holds its file alone: to the clips' edits it is as locked (no clip goes onto it) */
-    if (row.locked || row.captions) track.locked = true;
+    if (row.locked) track.locked = true;
     for (const b of row.blocks) {
-      if (!b.clipId || !b.loc) continue;
+      /* a cue is no clip of film.html (it has no place there) but is edited as one */
+      if (!b.clipId || (!b.loc && !b.cue)) continue;
       const speed = b.speed && b.speed > 0 ? b.speed : 1;
-      const still = Boolean(b.anchor?.still);
+      const still = Boolean(b.anchor?.still || b.cue);
       const inMs = still ? 0 : b.inMs ?? Math.round((b.anchor?.trimFrom ?? 0) * 1000);
       const srcEnd = inMs + (b.endMs - b.startMs) * speed;
       const sourceMs = still ? Infinity
@@ -159,6 +152,7 @@ export function editModelOf(tracks: readonly TimelineTrack[], links?: ReadonlyMa
         id: b.clipId, startMs: b.startMs, endMs: b.endMs, inMs, speed, sourceMs,
         ...(still ? { still: true } : {}),
         ...(link ? { link } : {}),
+        ...(b.cue ? { cue: true } : {}),
       });
     }
   }
@@ -178,8 +172,6 @@ export interface Draft {
   /** The right half cut off a clip, by the clip's id. */
   cut: Map<string, EditClip>;
   shortMs: number;
-  /** With linkage: the main track as it was, and whether what rides on a clip that goes goes too (see CueRiding). */
-  link?: { was: EditClip[]; drop: boolean };
 }
 
 /**
@@ -460,7 +452,6 @@ function ridesOf(d: Draft, main: number | null, skip: ReadonlySet<string> = new 
   if (main == null || trackAt(d, main)?.locked) return out;
   const was = [...d.before.values()];
   const mainWas = { clips: was.filter((x) => x.track === main).map((x) => x.clip) };
-  d.link ??= { was: mainWas.clips.map((c) => ({ ...c })), drop: false };
   for (const { clip, track } of was) {
     if (track === main || skip.has(clip.id) || trackAt(d, track)?.locked || !ridesOn(mainWas, clip)) continue;
     const host = hostOf(mainWas, clip)!;
@@ -480,7 +471,6 @@ const overlap = (a: { startMs: number; endMs: number }, b: { startMs: number; en
  * another clip on their track go to a free track nearby (settle).
  */
 function carry(d: Draft, rides: ReadonlyMap<string, Ride>, dropWithHost = false): void {
-  if (d.link && dropWithHost) d.link.drop = true;
   if (!rides.size) return;
   const live = (c: EditClip | undefined): c is EditClip => Boolean(c && d.tracks.some((t) => t.clips.includes(c)));
   const moved = new Set<EditClip>();
@@ -509,7 +499,8 @@ function carry(d: Draft, rides: ReadonlyMap<string, Ride>, dropWithHost = false)
 function settle(d: Draft, moved: ReadonlySet<EditClip>): void {
   const main = mainTrackOf(d.tracks);
   for (const t of [...d.tracks]) {
-    if (t.index < 0 || t.locked || t.index === main) continue;
+    /* a cue carried over another stays: its file cuts the other short */
+    if (t.index < 0 || t.locked || t.index === main || t.captions) continue;
     const kept: EditClip[] = [];
     for (const c of [...t.clips].sort((a, b) => a.startMs - b.startMs)) {
       const hits = kept.filter((k) => overlap(k, c));
@@ -527,7 +518,7 @@ function settle(d: Draft, moved: ReadonlySet<EditClip>): void {
 function relocate(d: Draft, from: EditTrack, c: EditClip, main: number | null): void {
   const sound = (t: EditTrack) => t.role === 'audio';
   const free = d.tracks
-    .filter((t) => t !== from && t.index >= 0 && t.index !== main && !t.locked && sound(t) === sound(from))
+    .filter((t) => t !== from && t.index >= 0 && t.index !== main && !t.locked && !t.captions && sound(t) === sound(from))
     .filter((t) => !t.clips.some((x) => overlap(x, c)))
     .sort((a, b) => {
       const away = Math.abs(a.index - from.index) - Math.abs(b.index - from.index);
@@ -623,41 +614,7 @@ function planOf(d: Draft): EditPlan {
   if (edits.length || openEdits.length) ops.push({ op: 'props', edits: [...edits, ...openEdits] });
   if (joinEdits.length) ops.push({ op: 'props', edits: joinEdits });
   ops.push(...removes);
-  return { ops, placed, shortMs: d.shortMs, ...(d.link ? { riding: ridingOf(d, d.link) } : {}) };
-}
-
-function ridingOf(d: Draft, link: NonNullable<Draft['link']>): CueRiding {
-  const live = (c: EditClip | undefined): c is EditClip => Boolean(c && d.tracks.some((t) => t.clips.includes(c)));
-  const pieces = new Map(link.was.map((c) => [c.id, [find(d, c.id)?.clip, d.cut.get(c.id)].filter(live).map((x) => ({ ...x }))]));
-  return { was: link.was, pieces, drop: link.drop };
-}
-
-/**
- * Cues of a caption track carried by an edit made with linkage, as clips riding on the main track are (carry): each
- * one that rode on a main-track clip (ridesOn) goes where that clip now shows the moment it started at, as long as it
- * was; one whose clip went goes too when the edit says so (a delete), else stays; one whose moment was trimmed away
- * stays. Only those that change, by id: their new span, or null for gone.
- */
-export function carryCues(riding: CueRiding, cues: readonly { id: string; startMs: number; endMs: number }[]): Map<string, { startMs: number; endMs: number } | null> {
-  const out = new Map<string, { startMs: number; endMs: number } | null>();
-  const was = { clips: riding.was };
-  for (const cue of cues) {
-    if (!ridesOn(was, cue)) continue;
-    const host = hostOf(was, cue)!;
-    const at = momentAt(host, cue.startMs);
-    const pieces = riding.pieces.get(host.id) ?? [];
-    if (!pieces.length) {
-      if (riding.drop) out.set(cue.id, null);
-      continue;
-    }
-    let to: number | null = null;
-    for (const p of pieces) if (to == null) to = filmAtMoment(p, at);
-    if (to == null) continue;
-    const start = Math.max(0, to);
-    if (Math.abs(start - cue.startMs) < 0.5) continue;
-    out.set(cue.id, { startMs: start, endMs: start + (cue.endMs - cue.startMs) });
-  }
-  return out;
+  return { ops, placed, shortMs: d.shortMs };
 }
 
 /* the draft's own steps, for edits planned elsewhere (lib/transitions) */
@@ -778,9 +735,7 @@ export function planRemove(model: EditModel, ids: readonly string[], opts: { rip
   const d = draftOf(model);
   const main = mainTrackOf(model);
   const rides = opts.linkage ? ridesOf(d, main, new Set(ids)) : new Map<string, Ride>();
-  /* the pictures riding on a deleted main-track clip go with it (they move and are deleted with the main track); so do
-     a caption track's cues (carryCues) */
-  if (d.link) d.link.drop = true;
+  /* the pictures riding on a deleted main-track clip go with it (they move and are deleted with the main track) */
   const deleted = new Set(ids);
   for (const [id, ride] of rides) {
     if (!deleted.has(ride.host) || trackAt(d, d.before.get(id)!.track)?.role === 'audio') continue;
@@ -899,6 +854,9 @@ export function planMove(model: EditModel, spec: MoveSpec): (EditPlan & { landMs
     const dest = destOf(id);
     if (trackAt(d, d.before.get(id)!.track)?.locked) return null;
     if (typeof dest === 'number' && (!trackAt(d, dest) || trackAt(d, dest)!.locked)) return null;
+    /* a cue onto a caption track, and nothing else: never to a new track */
+    const cue = Boolean(d.before.get(id)!.clip.cue);
+    if (typeof dest === 'number' ? Boolean(trackAt(d, dest)!.captions) !== cue : cue) return null;
   }
   const main = mainTrackOf(model);
   const magnet = Boolean(spec.magnet) && magnetOn(model, main, true);
@@ -974,7 +932,7 @@ export function planMove(model: EditModel, spec: MoveSpec): (EditPlan & { landMs
   if (spec.mode === 'place') {
     for (const [id, c] of lifted) {
       const dest = destOf(id);
-      if (typeof dest !== 'number' || inserted.has(id)) continue;
+      if (typeof dest !== 'number' || inserted.has(id) || c.cue) continue;
       if ((trackAt(d, dest)?.clips ?? []).some((x) => overlap(x, c))) taken.add(dest);
     }
   }

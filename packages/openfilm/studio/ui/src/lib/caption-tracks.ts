@@ -124,6 +124,22 @@ export function useCaptionTracksVersion(): number {
   return React.useSyncExternalStore((fn) => { listeners.add(fn); return () => { listeners.delete(fn); }; }, () => version, () => version);
 }
 
+/** The caption tracks `srcs` of a project read (each once) and held: their cues as held now, by file (null: not read yet). */
+export function useCaptionTracksOf(projectId: string, srcs: readonly string[]): (src: string) => Vtt | null {
+  const v = useCaptionTracksVersion();
+  const key = srcs.join('\0');
+  React.useEffect(() => {
+    for (const src of key ? key.split('\0') : []) {
+      const k = keyOf(projectId, src);
+      if (entries.has(k)) continue;
+      const fresh: Entry = { vtt: null, text: null, error: null, loading: null };
+      entries.set(k, fresh);
+      fresh.loading = load(projectId, src);
+    }
+  }, [projectId, key]);
+  return React.useCallback((src: string) => entries.get(keyOf(projectId, src))?.vtt ?? null, [projectId, v]); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
 /** The cues of a caption track as held now (null when not read yet): what the inspector edits. */
 export const captionTrackNow = (projectId: string, src: string): Vtt | null => entries.get(keyOf(projectId, src))?.vtt ?? null;
 

@@ -22,7 +22,7 @@ import { filmShape, type MediaFacts } from '@/lib/film-shape';
 import { changesPicture } from '@/lib/picture-files';
 import { SPEED_MAX } from '@/lib/playback-speed';
 import type { ReplaceFamily } from '@/lib/clip-replace';
-import { layoutTracks, type TimelineBlock, type TimelineTrack } from '@/lib/timeline-layout';
+import { isLibraryText, layoutTracks, type TimelineBlock, type TimelineTrack } from '@/lib/timeline-layout';
 import { useAgentWorking } from '@/lib/agent-working';
 import { filmClipKind, filmDocLoc, filmSrcIsPage, filmSrcKind, filmTrackBadges, parseFilmDocLoc, type FilmBox, type FilmDoc, type FilmOverride } from '@/lib/film';
 import { exactRate, footageFps, setTimecodeFps, snapToFrame, stepFrames } from '@/lib/timecode';
@@ -30,7 +30,7 @@ import { JUMP_FRAMES, loopBack, playStart, shuttleRate } from '@/lib/timeline-ke
 import { comboOf, parseCombo } from '@/lib/keymap';
 import { currentKeymap, keyAction, useKeyHint } from '@/lib/keymap-store';
 import { attrsOf, pasteAttrs, type AttrGroup, type CopiedAttrs } from '@/lib/clip-attrs';
-import { cutPoints, namedTrack, nextCut, trackNamesOf } from '@/lib/timeline-nav';
+import { cutPoints, nextCut } from '@/lib/timeline-nav';
 import { anyLocked, lockedEdits } from '@/lib/track-lock';
 import { placeMedia, type SourceRange } from '@/lib/media-place';
 import { BUILT_IN, TEXT_COMPONENT, builtInItem, cutTrack, cutsOf, fromLibrary, isTextClip, libraryBox, libraryDragItem, nameOf, onCut, placedGroup, useLibraryIndex, withLook, withRootVars, type LibraryItem } from '@/lib/library';
@@ -40,7 +40,7 @@ import { apartOnTracks, type ClipEdit } from '@/lib/film-clip-edits';
 import { mediaFetch, useMediaImages } from '@/lib/media-queue';
 import { clipboardItemsOf, clipboardNow, laneOfBlock, pasteEdit, type TimelineClipboardItem } from '@/lib/timeline-clipboard';
 import {
-  carryCues, editModelOf, freshLink, linkedIds, magnetOn, mainTrackOf, planMove, planRippleTrim, planRoom, planSpeed, slowestSpeed, soundTrackFor, type CueRiding, type EditMode,
+  editModelOf, freshLink, linkedIds, magnetOn, mainTrackOf, planMove, planRippleTrim, planRoom, planSpeed, slowestSpeed, soundTrackFor, type EditMode,
 } from '@/lib/timeline-edit';
 import { readTimelinePrefs, switchesOf } from '@/lib/timeline-prefs';
 import { fadeMsOf, type FadeMs } from '@/lib/clip-fade';
@@ -74,10 +74,11 @@ import { boxNow, chatPointOf, draftBoxesAt, draftMarksOf, sameClip, NO_DRAFT, ty
 import { usePageChanges } from './use-page-changes';
 import { CaptionInspector } from './CaptionInspector';
 import { CaptionStage } from './CaptionStage';
-import { captionSelectionNow, captionTrackNow, configureCaptionTracks, refreshCaptionTracks, setCaptionSelection, useCaptionSelection, writeCaptionTracksWith } from '@/lib/caption-tracks';
+import { captionSelectionNow, captionTrackNow, configureCaptionTracks, refreshCaptionTracks, setCaptionSelection, useCaptionSelection, useCaptionTracksOf, writeCaptionTrack, writeCaptionTracksWith } from '@/lib/caption-tracks';
 import { cuePlain, readVtt, writeVtt } from '../../../../src/captions.mjs';
 import { FILM_SUBTITLE_LANGUAGES } from '../../../server/film-subtitle.mjs';
-import { placeCues, retimeCues, withIds } from '@/lib/caption-edits';
+import { addCue, placeCues, withIds } from '@/lib/caption-edits';
+import { cueClipId, cueEditOf, isCueClip, withCueBlocks } from '@/lib/caption-blocks';
 
 import { useFilmSubtitles } from '@/lib/use-film-subtitles';
 import { DEFAULT_INSPECTOR, DOCK_GAP, DockPaneDivider, MIN_DOCK_H, MIN_INSPECTOR, MIN_STAGE_H, MIN_VIEWER, PaneDivider, usePaneSize } from './PaneDivider';
@@ -666,11 +667,14 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* a file's length draws a clip that plays to its end before the preview places it (a split's second half, a drop) */
   const mediaFacts = React.useMemo<MediaFacts>(() => new Map([...facts].map(([path, f]) => [path, { audio: f.audio, ...(f.durationMs ? { duration: f.durationMs / 1000 } : {}) }])), [facts]);
   const [pendingDrops, setPendingDrops] = React.useState<PendingDrop[]>([]);
+  /* the caption tracks' files, read: their cues are blocks of their rows (lib/caption-blocks) */
+  const captionSrcs = React.useMemo(() => (film.film?.tracks ?? []).flatMap((tr) => (tr.captions ? [tr.captions.src] : [])), [film.film]);
+  const cuesOf = useCaptionTracksOf(projectId, captionSrcs);
   const timelineTracks = React.useMemo<TimelineTrack[]>(() => {
     if (!film.film) return [];
-    const base = layoutTracks(filmShape(film.film as unknown as FilmDoc, info?.spans ?? [], mediaFacts, Boolean(previewError)));
+    const base = withCueBlocks(layoutTracks(filmShape(film.film as unknown as FilmDoc, info?.spans ?? [], mediaFacts, Boolean(previewError))), cuesOf);
     return pendingDrops.length ? withPendingBlocks(base, pendingDrops) : base;
-  }, [film.film, info, mediaFacts, pendingDrops, previewError]);
+  }, [film.film, info, mediaFacts, pendingDrops, previewError, cuesOf]);
   const tracksRef = React.useRef(timelineTracks);
   tracksRef.current = timelineTracks;
   /* the clips' links (`data-link`, by clip id): clips sharing one are edited together (lib/timeline-edit) */
@@ -694,7 +698,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* the film's length: the preview's, unless it could not draw the film; that length is then of the film before
      (a clip that lost its length still counted at its old one), and the timeline's own reading of film.html stands,
      less the clips that have no length (drawn at a stand-in one) */
-  const totalMs = previewError || !info ? blocksRef.current.reduce((end, b) => (b.noLength ? end : Math.max(end, Math.round(b.endMs))), 0) : drawnMs;
+  const totalMs = previewError || !info ? blocksRef.current.reduce((end, b) => (b.noLength || b.cue ? end : Math.max(end, Math.round(b.endMs))), 0) : drawnMs;
   /* before the preview is up (a long film still loading), that reading is the film's length too: the playhead moves
      and plays at once, the picture and the sound join it as they come (see onInfo) */
   React.useEffect(() => {
@@ -729,12 +733,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   React.useEffect(() => { setTimecodeFps(projectFps); }, [projectFps]);
   React.useEffect(() => () => setTimecodeFps(30), []);
   const frameRate = React.useMemo(() => ({ fps: projectFps, fromFootage: settings?.fps == null, onChange: (fps: number) => patchSettings({ fps }) }), [projectFps, settings, patchSettings]);
-  /* tracks' names, by film.html track index (found again by their clips: lib/timeline-nav trackNamesOf) */
-  const trackNames = React.useMemo(() => trackNamesOf(settings?.trackNames ?? [], film.film?.tracks ?? []), [settings, film.film]);
-  const renameTrack = React.useCallback((docIndex: number, name: string) => {
-    if ((trackNames.get(docIndex) ?? '') === name.trim()) return;
-    patchSettings({ trackNames: namedTrack(settings?.trackNames ?? [], filmRef.current?.tracks ?? [], docIndex, name) });
-  }, [trackNames, settings, patchSettings]);
 
   /* selection, by clip id: a block's own id is its place, and that changes when it moves */
   const [selectedKeys, setSelectedKeys] = React.useState<readonly string[]>([]);
@@ -746,6 +744,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timelineTracks, selectedKeys]);
   const selectedIds = React.useMemo(() => selectedBlocks.map((b) => b.id), [selectedBlocks]);
+  /* the clips of film.html among them: a caption track's cues are picked with them, and have their own inspector */
+  const selectedClips = React.useMemo(() => selectedBlocks.filter((b) => !b.cue), [selectedBlocks]);
   /* the timeline's commands (⌘B, Q / W, ⌥← / →, its switches), for the keys bound here */
   const timelineCommands = React.useRef<TimelineCommands | null>(null);
   /**
@@ -824,9 +824,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const [pickedSaved, setPickedSaved] = React.useState(false);
   const [inspectorContent, setInspectorContent] = React.useState<'selection' | 'captions' | WorkspaceResource>('selection');
   const subs = useFilmSubtitles(projectId);
-  /** Cues of a caption track picked (components/CaptionLane): their look and words in the inspector. */
+  /** Cues of a caption track picked (on its row, or on the picture): their look and words in the inspector. */
   const showCaptionLook = React.useCallback(() => {
-    setSelectedKeys([]);
+    setSelectedKeys((keys) => keys.filter((k) => isCueClip(k)));
     setStageElement(null);
     setInspectorContent('captions');
     setInspectorOpen(true);
@@ -838,15 +838,37 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (file) { setInspectorContent(file); setInspectorOpen(true); }
     else setInspectorContent((c) => (typeof c === 'object' ? 'selection' : c));
   }, []);
+  /* a caption's cues picked on the timeline are the picked cues of the caption inspector and the picture too, and
+     those picked there are picked on the timeline (one selection, seen in three places) */
+  const fromTimeline = React.useRef(false);
   const onTimelineSelected = React.useCallback((ids: readonly string[]) => {
-    setSelectedKeys(blocksRef.current.filter((b) => ids.includes(b.id)).map((b) => b.clipId ?? b.id));
+    const picked = blocksRef.current.filter((b) => ids.includes(b.id));
+    setSelectedKeys(picked.map((b) => b.clipId ?? b.id));
     setPickedTransition(null);
+    const cues = picked.flatMap((b) => (b.cue ? [b.cue] : []));
+    const src = cues[0]?.src;
+    const next = src && cues.every((c) => c.src === src) ? { src, ids: new Set(cues.map((c) => c.id)) } : null;
+    const now = captionSelectionNow();
+    /* told only when it changes (the effect below then knows it came from here) */
+    if (next?.src !== now?.src || next?.ids.size !== now?.ids.size || [...(next?.ids ?? [])].some((id) => !now?.ids.has(id))) {
+      fromTimeline.current = true;
+      setCaptionSelection(next);
+    }
     if (ids.length) {
-      setInspectorContent('selection');
+      setInspectorContent(cues.length === picked.length ? 'captions' : 'selection');
       setInspectorOpen(true);
       setStageElement((el) => (el && el.kind !== 'clip' ? null : el));
     }
   }, []);
+  const cuePick = useCaptionSelection();
+  React.useEffect(() => {
+    if (fromTimeline.current) { fromTimeline.current = false; return; }
+    const cues = cuePick ? [...cuePick.ids].map((id) => cueClipId(cuePick.src, id)) : [];
+    setSelectedKeys((keys) => {
+      const next = [...keys.filter((k) => !isCueClip(k)), ...cues];
+      return next.length === keys.length && next.every((k, i) => k === keys[i]) ? keys : next;
+    });
+  }, [cuePick]);
   const rowNarrow = rowWidth > 0 && rowWidth < MIN_VIEWER + DEFAULT_INSPECTOR + 240;
   const inspectorIdle = inspectorContent === 'selection' && !stageElement && !selectedBlocks.length;
   const inspectorShown = inspectorOpen && !(rowNarrow && inspectorIdle);
@@ -864,28 +886,36 @@ export function ProjectView({ projectId, onProject, onLeave }: {
    * it is a step of its own before this one (and is never written after an undo, over it).
    */
   const filmEdit = film.edit;
-  const edit = React.useCallback((ops: Op[], label?: string, quiet?: boolean, outside?: OutsideStep) => {
+  const filmRecord = film.record;
+  const edit = React.useCallback(async (ops: Op[], label?: string, quiet?: boolean, outside?: OutsideStep): Promise<string | null> => {
     stageControl.current?.flushPending();
-    return filmEdit(ops, label, quiet, outside);
-  }, [filmEdit]);
-  /**
-   * An edit planned with linkage (lib/timeline-edit) carries the cues of the caption tracks riding on the main track
-   * too (carryCues), as it carries the clips riding there: their files written first, one undo step with the edit.
-   */
-  const editRiding = React.useCallback(async (ops: Op[], label: string, riding?: CueRiding, quiet?: boolean): Promise<string | null> => {
-    const files = riding ? (filmRef.current?.tracks ?? []).flatMap((tr) => {
-      if (!tr.captions || tr.locked) return [];
-      const vtt = captionTrackNow(projectId, tr.captions.src);
-      if (!vtt) return [];
-      const spans = carryCues(riding, vtt.cues.map((c) => ({ id: c.id, startMs: c.start * 1000, endMs: c.end * 1000 })));
-      return spans.size ? [{ src: tr.captions.src, next: retimeCues(vtt, spans) }] : [];
-    }) : [];
-    const outside = files.length ? await writeCaptionTracksWith(projectId, files) : null;
-    if (typeof outside === 'string') return outside;
-    const why = await edit(ops, label, quiet, outside ?? undefined);
-    if (why && outside) await outside.undo();
+    /* a text of the library put in without a box of its own would be laid out over the whole picture, its words in
+       the middle of an empty page as big as the frame: it gets its catalog shape's box (libraryBox) */
+    ops = ops.map((op) => {
+      if (op.op !== 'insert') return op;
+      const clip = op.clip as { src?: string; box?: unknown; size?: unknown } | undefined;
+      if (!clip?.src || clip.box || clip.size || !isLibraryText(clip.src)) return op;
+      const folder = /^saved\/openfilm\/text-([^/]+)\//.exec(clip.src)?.[1] ?? '';
+      const item = builtInItem(`${BUILT_IN}/text/${folder}`) ?? builtInItem(`${BUILT_IN}/${TEXT_COMPONENT}`);
+      const box = libraryBox(item ?? { w: 1600, h: 260, fit: 0.14 }, stageRef.current ?? { w: 1920, h: 1080 });
+      return box ? { ...op, clip: { ...op.clip, box, size: { w: box.w, h: box.h } } as never } : op;
+    });
+    /* the caption tracks' cues are clips of the timeline (lib/caption-blocks): what an edit does to them is written to
+       their files first, and is one undo step with what it does to film.html */
+    const current = filmRef.current;
+    if (!current || outside || !current.tracks.some((tr) => tr.captions)) return filmEdit(ops, label, quiet, outside);
+    const split = cueEditOf(current as never, ops, (src) => captionTrackNow(projectId, src));
+    if (!split) return t('captionTrack.onlyCues');
+    const cues = split.files.length ? await writeCaptionTracksWith(projectId, split.files) : null;
+    if (typeof cues === 'string') return cues;
+    if (!split.ops.length) {
+      if (cues) filmRecord(label ?? 'history.stepEdit', cues);
+      return null;
+    }
+    const why = await filmEdit(split.ops, label, quiet, cues ?? undefined);
+    if (why && cues) await cues.undo();
     return why;
-  }, [projectId, edit]);
+  }, [filmEdit, filmRecord, projectId, t]);
   /** `quiet`: the caller shows why an edit was refused itself (the inspector does, beside its field) */
   const editBlocks = React.useCallback((asked: ClipEdit[], quiet = false): Promise<string | null> => {
     const current = filmRef.current;
@@ -897,7 +927,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     return edit([{ op: 'props', edits: mapped as { clip: string; prop: string; value: never }[] }], editStepLabel(edits, tracksRef.current), quiet);
   }, [edit, t]);
   /** An edit the timeline planned (lib/timeline-edit), as it planned it: one write, one undo step. */
-  const editOps = React.useCallback((ops: Op[], label: string, riding?: CueRiding) => editRiding(ops, label, riding), [editRiding]);
+  const editOps = React.useCallback((ops: Op[], label: string) => edit(ops, label), [edit]);
 
   /* ── a clip's attributes copied onto others (lib/clip-attrs, ⌘⇧C / ⌘⇧V) ── */
   const [copiedAttrs, setCopiedAttrs] = React.useState<CopiedAttrs | null>(null);
@@ -917,13 +947,13 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const doPasteAttrs = React.useCallback((groups: ReadonlySet<AttrGroup>) => {
     setPasteAttrsOpen(false);
     if (!copiedAttrs) return;
-    const targets = selectedBlocks.flatMap((b) => {
+    const targets = selectedClips.flatMap((b) => {
       const clip = b.clipId && b.loc ? filmClipOf(b.clipId) : null;
       return clip ? [{ loc: b.loc!, clip, lengthS: (b.endMs - b.startMs) / 1000 }] : [];
     });
     const edits = pasteAttrs(copiedAttrs, groups, targets);
     if (edits.length) void editBlocks(edits).then((err) => { if (err) toast.showError(err); });
-  }, [copiedAttrs, selectedBlocks, filmClipOf, editBlocks, toast]);
+  }, [copiedAttrs, selectedClips, filmClipOf, editBlocks, toast]);
 
   /* ── fades and transitions: each clip's fades (its `overrides`' own entry), and the transitions they make ── */
   const clipFades = React.useMemo(() => new Map<string, FadeMs>((film.film?.tracks ?? []).flatMap((tr) => tr.clips.flatMap((c) => {
@@ -999,20 +1029,20 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       if (!Number.isFinite(startMs)) return Promise.resolve(t('timeline.editFail'));
       const plan = planMove(model, { ids, deltaMs: startMs - block.startMs, pointerMs: startMs, mode: 'place', ...switches });
       if (!plan) return Promise.resolve(t('timeline.trackLocked'));
-      return plan.ops.length ? editRiding(plan.ops, clipStep('history.stepMoved', [block.clipId]), plan.riding, true) : Promise.resolve(null);
+      return plan.ops.length ? edit(plan.ops, clipStep('history.stepMoved', [block.clipId]), true) : Promise.resolve(null);
     }
     if (one!.prop === 'speed') {
       const speed = typeof one!.value === 'number' ? one!.value : 1;
       const plan = planSpeed(model, ids, speed, { ripple: magnet, ...switches });
       if (plan.slowest != null) return Promise.resolve(t('inspector.speedTooSlow').replace('{n}', String(plan.slowest)));
-      return plan.ops.length ? editRiding(plan.ops, `history.stepSpeed|${block.clipId}`, plan.riding, true) : Promise.resolve(null);
+      return plan.ops.length ? edit(plan.ops, `history.stepSpeed|${block.clipId}`, true) : Promise.resolve(null);
     }
     /* a new length, with the magnet: a ripple trim of the tail by the difference (source seconds over the speed) */
     const k = block.anchor?.trimFrom != null && block.speed ? block.speed : 1;
     const deltaMs = ((Number(one!.value) - Number(one!.from ?? one!.value)) * 1000) / k;
     const plan = planRippleTrim(model, ids, 'end', deltaMs, switches);
-    return plan.ops.length ? editRiding(plan.ops, `history.stepRippleTrimmed|${block.clipId}`, plan.riding, true) : Promise.resolve(null);
-  }, [editBlocks, editModel, editRiding, t]);
+    return plan.ops.length ? edit(plan.ops, `history.stepRippleTrimmed|${block.clipId}`, true) : Promise.resolve(null);
+  }, [editBlocks, editModel, edit, t]);
   const removeBlock = React.useCallback((block: TimelineBlock): Promise<string | null> => {
     if (!block.clipId) return Promise.resolve(t('timeline.removeFail'));
     return edit([{ op: 'remove', clip: block.clipId }], clipStep('history.stepRemoved', [block.clipId]));
@@ -1030,14 +1060,19 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const current = filmRef.current;
     const clips = current?.tracks.flatMap((tr) => tr.clips) ?? [];
     const model = editModel();
+    /* a caption's cue is cut as a still is (its halves' lengths); its words are parted by its file (lib/caption-blocks) */
+    const sec = (ms: number) => Math.round(ms) / 1000;
+    const cueOps: Op[] = blocks.filter((b) => b.cue && atMs > b.startMs && atMs < b.endMs).map((b) => ({
+      op: 'split', clip: b.clipId!, left: { end: sec(atMs - b.startMs) }, right: { at: sec(atMs), end: sec(b.endMs - atMs) },
+    }));
     const halves = blocks.flatMap((block) => {
-      if (!block.clipId || !block.anchor?.move) return [];
+      if (!block.clipId || block.cue || !block.anchor?.move) return [];
       /* the halves' trims are the source's seconds, and the rest starts exactly where the first half ends */
       const clip = clips.find((c) => c.id === block.clipId);
       const split = splitHalves(block, atMs, Array.isArray(clip?.time) && clip.time.length === 2 ? clip.time[1] : undefined);
       return split ? [{ block, split, link: clip?.attrs?.['data-link'] }] : [];
     });
-    if (!halves.length) return Promise.resolve(t('timeline.splitFail'));
+    if (!halves.length && !cueOps.length) return Promise.resolve(t('timeline.splitFail'));
     const rightLinks = new Map<string, string>();
     const taken = new Set<string>();
     for (const { link } of halves) {
@@ -1065,7 +1100,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       right: { ...split.right, link: link ? rightLinks.get(link) ?? null : null },
       ...(rightIds.has(block.clipId!) ? { rightId: rightIds.get(block.clipId!)! } : {}),
     }));
-    return edit(ops, clipStep('history.stepSplit', halves.slice(0, 2).map((h) => h.block.clipId!))).then((err) => {
+    return edit([...ops, ...cueOps], halves.length ? clipStep('history.stepSplit', halves.slice(0, 2).map((h) => h.block.clipId!)) : 'captionTrack.stepSplit').then((err) => {
       if (!err && rightIds.size) setSelectedKeys((keys) => keys.map((k) => rightIds.get(k) ?? k));
       return err;
     });
@@ -1385,7 +1420,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     /* layers copied last: pasted as layers, over a clip of that row when one is selected there */
     if (layerBoardRef.current) {
       const row = lane ? timelineTracks.find((tr) => tr.lane === lane) : null;
-      const picked = row?.blocks.find((b) => selectedBlocks.some((x) => x.id === b.id) && b.loc);
+      const picked = row?.blocks.find((b) => selectedClips.some((x) => x.id === b.id) && b.loc);
       return pasteLayers(picked?.loc ?? row?.blocks.find((b) => b.loc)?.loc ?? null);
     }
     if (!clipboard.length) return Promise.resolve(t('timeline.menuPasteEmpty'));
@@ -1405,7 +1440,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       return { ...rest, clip };
     });
     return edit(written, 'history.stepPaste');
-  }, [clipboard, timelineTracks, selectedBlocks, pasteLayers, editModel, edit, t, toast]);
+  }, [clipboard, timelineTracks, selectedClips, pasteLayers, editModel, edit, t, toast]);
   /** Room for clips dropped onto a track (an insert pushes on, an overwrite cuts out): after the inserts, in one edit. */
   const roomFor = React.useCallback((spans: { track: number | { insert: number } | undefined; atSec: number; durMs: number }[], mode?: EditMode): Op[] => {
     const onTracks = spans.flatMap((s) => (typeof s.track === 'number' ? [{ track: s.track, startMs: Math.round(s.atSec * 1000), endMs: Math.round(s.atSec * 1000) + s.durMs }] : []));
@@ -1542,7 +1577,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* playing, the film is what is watched: the try goes */
   React.useEffect(() => { if (playing) setLibraryTrial(null); }, [playing]);
   const library = React.useMemo(() => {
-    const picked = () => selectedBlocks.flatMap((b) => (b.clipId ? [b.clipId] : []));
+    const picked = () => selectedClips.flatMap((b) => (b.clipId ? [b.clipId] : []));
     const target = () => timelineCommands.current?.target() ?? null;
     /* the cut a transition goes on: the picked clip's, else the one nearest the playhead; and the track it is on */
     const cutHere = () => {
@@ -1556,7 +1591,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     };
     /* the clips a look goes on: the picked pictures, else the main track's clip under the playhead */
     const lookTargets = (): { loc: string; style: string | undefined }[] => {
-      const pics = selectedBlocks.flatMap((b) => {
+      const pics = selectedClips.flatMap((b) => {
         const clip = b.clipId && b.loc ? filmClipOf(b.clipId) : null;
         return clip && !clip.sound && filmSrcKind(clip.src) !== 'sound' ? [{ loc: b.loc!, style: clip.style }] : [];
       });
@@ -1620,7 +1655,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       void askTransition({ kind: 'add', type: item.fade, cut }).then((err) => { if (err) toast.show(err); });
     };
     /* the text component's clips picked, which a text style or motion goes on */
-    const textTargets = () => selectedBlocks.flatMap((b) => {
+    const textTargets = () => selectedClips.flatMap((b) => {
       const clip = b.clipId && b.loc ? filmClipOf(b.clipId) : null;
       return clip && b.loc && isTextClip(clip.src) ? [{ loc: b.loc, overrides: clip.overrides }] : [];
     });
@@ -1703,7 +1738,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       return null;
     };
     return { actions, applyDrop, lookTargets };
-  }, [language, selectedBlocks, editModel, projectId, addMedia, timelineTracks, edit, filmClipOf, editBlocks, askTransition, t, toast]);
+  }, [language, selectedClips, editModel, projectId, addMedia, timelineTracks, edit, filmClipOf, editBlocks, askTransition, t, toast]);
   /* a look tried: shown on the clips it would go on, taken off when the try ends */
   React.useEffect(() => {
     if (libraryTrial?.kind !== 'look') return undefined;
@@ -1762,7 +1797,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   };
   /* caption tracks' edits are steps of the editor's history; a file written, the picture reads it again */
   React.useEffect(() => { configureCaptionTracks({ record: film.record, written: () => preview.current?.captions?.() }); }, [film.record]);
-  const captionLanes = React.useMemo(() => ({ projectId, onPick: showCaptionLook }), [projectId, showCaptionLook]);
   /**
    * What is said in the film made a caption track (studio/server/caption-tracks.mjs), on top: one undo step. False when
    * it was not (said why).
@@ -1792,6 +1826,17 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const name = FILM_SUBTITLE_LANGUAGES.find((l) => l.code === language)?.native ?? language;
     return editOps([{ op: 'captions', at, captions: { src, kind: 'subtitles', srclang: language, label: `${t('captionTrack.name')} · ${name}` } }], 'captionTrack.stepTranslate');
   }, [projectId, film.film, editOps, t]);
+  /** A caption put in on a caption track at a time (a caption row's menu): picked, its words to type in the inspector. */
+  const addCaption = React.useCallback(async (src: string, atMs: number): Promise<string | null> => {
+    const vtt = captionTrackNow(projectId, src);
+    if (!vtt) return t('timeline.editFail');
+    if (atMs >= totalMs - 100) return t('captionTrack.pastEnd');
+    const made = addCue(vtt, snapToFrame(atMs) / 1000, t('subtitleRow.newText'), totalMs / 1000);
+    if (!made) return t('subtitleRow.noRoom');
+    const why = await writeCaptionTrack(projectId, src, made.vtt, 'captionTrack.stepAdd');
+    if (!why) { setCaptionSelection({ src, ids: new Set([made.id]) }); showCaptionLook(); }
+    return why;
+  }, [projectId, totalMs, showCaptionLook, t]);
   /* the subtitles Studio drew over the picture before caption tracks: made the project's caption track as it opens, once */
   React.useEffect(() => {
     let gone = false;
@@ -2003,7 +2048,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (layerPicked(el)) return [refOfLayer(el)];
     const layers = stageControl.current?.picked() ?? [];
     if (layers.length > 1) return layers.flatMap((p) => refOfStagePick(p) ?? []);
-    const refs = selectedBlocks.map(refOfBlock);
+    const refs = selectedClips.map(refOfBlock);
     if (markedRange) refs.push(rangeRef(projectId, markedRange, blocksRef.current));
     if (refs.length) return refs;
     return [momentRef(projectId, timeRef.current)];
@@ -2012,14 +2057,14 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   React.useEffect(() => {
     if (!hostSelection) return undefined;
     const timer = setTimeout(() => {
-      const refs: StudioRef[] = selectedBlocks.map(refOfBlock);
+      const refs: StudioRef[] = selectedClips.map(refOfBlock);
       if (layerPicked(stageElement)) refs.push(refOfLayer(stageElement));
       refs.push(...pickedCaptionRefs());
       hostSelection({ projectId, time: Math.round(timeMs) / 1000, refs, range: markedRange ? { start: Math.round(markedRange.startMs) / 1000, end: Math.round(markedRange.endMs) / 1000 } : null, stage: stageRef.current });
     }, 80);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hostSelection, projectId, timeMs, selectedBlocks, stageElement, markedRange, captionPick]);
+  }, [hostSelection, projectId, timeMs, selectedClips, stageElement, markedRange, captionPick]);
   /* a box the app shows on the picture (show-box), flashed there */
   const [flashBox, setFlashBox] = React.useState<{ box: StageBox; seq: number } | null>(null);
   /* a file the app shows in the media pane (show-file): its folder opened, the tile in view */
@@ -2577,7 +2622,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const e = doc && recoverLayer(doc, layer, action);
     if (e) void editBlocks([{ ...e, value: e.value as unknown as Record<string, unknown> | null }]).then((f) => { if (f) toast.show(f); });
   }, t), [editBlocks, t, toast]);
-  const selectedLocs = React.useMemo(() => selectedBlocks.flatMap((b) => (b.loc ? [b.loc] : [])), [selectedBlocks]);
+  const selectedLocs = React.useMemo(() => selectedClips.flatMap((b) => (b.loc ? [b.loc] : [])), [selectedClips]);
   /* what the inspector shows is on a locked track: shown, not changed */
   const inspectorLocked = anyLocked(film.film, [stageElement?.clipLoc, ...selectedLocs]);
 
@@ -3188,8 +3233,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         setMarkedRange({ startMs: Math.min(...selectedBlocks.map((b) => b.startMs)), endMs: Math.max(...selectedBlocks.map((b) => b.endMs)) });
         return;
       }
-      case 'copy-attrs': if (!selectedBlocks.length) return; take(); if (once) copyAttrs(selectedBlocks); return;
-      case 'paste-attrs': if (!selectedBlocks.length) return; take(); if (once) askPasteAttrs(selectedBlocks); return;
+      case 'copy-attrs': if (!selectedBlocks.length) return; take(); if (once) copyAttrs(selectedClips); return;
+      case 'paste-attrs': if (!selectedBlocks.length) return; take(); if (once) askPasteAttrs(selectedClips); return;
       case 'speed': {
         /* ⌘R: the selected clip's speed, in the inspector */
         if (selectedBlocks.length !== 1 || !once) return;
@@ -3771,7 +3816,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     <LiveGeometryInspector
                       store={geometryStore}
                       element={stageElement}
-                      clips={selectedBlocks}
+                      clips={selectedClips}
                       mainTrack={mainTrack}
                       speedFloorOf={speedFloorOf}
                       onEditClips={editClips}
@@ -3841,8 +3886,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                       onReferBlocks: referBlocks, rangeRef: markedRangeRef, onReferRuler: referRuler,
                     } : {})}
                     commandsRef={timelineCommands}
-                    trackNames={trackNames}
-                    onRenameTrack={renameTrack}
                     onDuplicate={duplicateBlocks}
                     onPlayRange={playRange}
                     thumbs={shownThumbs}
@@ -3862,6 +3905,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     onRemove={removeBlock}
                     onRemoveMany={removeBlocks}
                     onSplit={splitBlocks}
+                    onAddCaption={addCaption}
                     onDetachAudio={detachAudio}
                     onCompound={(blocks) => { void makeCompound(blocks).then((err) => { if (err) toast.showError(err); }); }}
                     onUncompound={(block) => { void breakCompound(block).then((err) => { if (err) toast.showError(err); }); }}
@@ -3885,7 +3929,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     selected={selectedIds}
                     onSelectedChange={onTimelineSelected}
                     autoCaptions={{ lines: subs.captions?.cues.length ?? 0, untranscribed: subs.captions?.untranscribed.length ?? 0, onMake: () => void makeCaptions(), making: captionsMaking || subs.transcribing, problem: subtitleProblem }}
-                    captionLanes={captionLanes}
                     waveUrl={waveUrl}
                     history={timelineHistory}
                     recorder={recorder}

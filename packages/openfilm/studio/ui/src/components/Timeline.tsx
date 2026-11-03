@@ -36,7 +36,6 @@ import {
   SplitSquareHorizontal,
   Trash2,
   Undo2,
-  Video,
   X,
   ZoomIn,
   ZoomOut,
@@ -52,11 +51,15 @@ import {
   BetweenHorizontalStart,
   ArrowLeftToLine,
   ArrowRightToLine,
-  Pencil,
   TriangleAlert,
   Blend,
   Captions,
   Type,
+  Plus,
+  AudioLines,
+  Image as ImageIcon,
+  Music,
+  Sparkles,
 } from 'lucide-react';
 import { useT } from '@/i18n';
 import { keyAction, useKeyHint } from '@/lib/keymap-store';
@@ -108,7 +111,6 @@ import {
   planRoom,
   planUnlink,
   TOUCH_MS,
-  type CueRiding,
   type EditMode,
   type EditPlan,
 } from '@/lib/timeline-edit';
@@ -163,7 +165,6 @@ import { inHostPanel, isTypingTarget } from './typing-target';
 import { Popover } from './Popover';
 import { MarkerGlyph } from './TimelineMarkers';
 import { RecordButton, type RecordButtonProps } from './RecordButton';
-import { CaptionLane } from './CaptionLane';
 import { SoloButton, TrackResizeHandle } from './timeline-head-extras';
 import { clipAtPoint, markReplaceTarget } from './replace-drop';
 import { Tooltip } from './Tooltip';
@@ -177,13 +178,10 @@ import { cutNear, transitionSpan, type CutRef, type FilmTransition, type Transit
 /** Track head column: kind badge + lock + hide + original sound. */
 const HEAD_W = 108;
 /** A row at least this tall shows its track's name under the badge (a lower one says it on hover). */
-const HEAD_NAME_MIN_H = 34;
 /** The room solo's S takes in a head. */
 const HEAD_SOLO_W = 24;
 /* the head toggles' icons: at 10 px lock and eye are indistinguishable dots on Retina */
 const HEAD_ICON_H = 12;
-/** The kind icon of a row without a badge. */
-const TYPE_BOX = 13;
 /** Toolbar height. The playhead layer starts below it, so it is a constant. */
 const TOOLBAR_H = 34;
 /**
@@ -292,7 +290,28 @@ function laneTone(track: TimelineTrack, selected: boolean): string {
   return track.main ? `color-mix(in srgb, ${tone} 93%, var(--tl-text))` : tone;
 }
 
-/** A caption track's row, and a row of the library's text: narrow, each cue or clip a line of words (components/CaptionLane). */
+/** A row's mark: what it holds (its clips' kind, most of them; an empty row by its kind), as a plain icon. */
+function LaneMark({ track }: { track: TimelineTrack }) {
+  const count = new Map<string, number>();
+  for (const b of track.blocks) {
+    const kind = b.kind === 'video' && b.src && filmSrcIsStill(b.src) ? 'still' : b.kind;
+    count.set(kind, (count.get(kind) ?? 0) + 1);
+  }
+  const most = [...count].sort((a, b) => b[1] - a[1])[0]?.[0] ?? (track.role === 'audio' ? 'music' : track.role === 'video' ? 'video' : 'mg');
+  const Icon = track.captions || track.text ? Type
+    : most === 'voice' ? Mic : most === 'sfx' ? AudioLines : most === 'music' ? Music
+      : most === 'video' ? Film : most === 'still' ? ImageIcon : Sparkles;
+  return (
+    <span className="flex items-center justify-center" style={{ width: 21, height: 14, color: 'var(--text-dim)', opacity: track.hidden ? 0.5 : 1 }}>
+      <Icon size={13} strokeWidth={1.8} aria-hidden />
+    </span>
+  );
+}
+
+/** The entries of a clip's menu a caption's cues keep. */
+const CUE_MENU = new Set(['split', 'duplicate', 'remove', 'ripple', 'ripple-start', 'ripple-end']);
+
+/** A caption track's row, and a row of the library's text: narrow, each cue or clip a line of words. */
 const CAPTION_ROW_H = 26;
 
 /** A row's height: the person's for its track (lib/track-heights), else the timeline's own (the main track taller). */
@@ -520,16 +539,6 @@ function laneKindForHint(kind: string): 'visual' | 'audio' {
   return kind === 'voice' || kind === 'sfx' || kind === 'music' || kind === 'audio' ? 'audio' : 'visual';
 }
 
-/* A row head starts with its badge (P1 / V1 / A1, see timeline-layout badgeRows); rows without one fall back to an
-   icon: a camera for pictures, a wave for sound. */
-
-/** Badge colors: the family of the clips on the row. */
-const BADGE_COLOR: Record<string, string> = {
-  M: 'var(--tl-scene)',
-  V: 'var(--tl-video)',
-  A: 'var(--tl-voice)',
-};
-
 /** Word cues too close together keep only the first: zoomed out, five words a second is a smear. */
 function cueTicks(
   cues: readonly { word: string; tMs: number }[],
@@ -617,8 +626,9 @@ export interface TimelineProps {
    * clip id, in one write and one undo step; `label` names it in the edit history. Without it clips can be selected
    * but not dragged — a read-only film, rather than a drag that does nothing. Null = done; a sentence = shown.
    */
-  /** `riding`: the plan's main track before and after, with linkage (lib/timeline-edit), for the caption cues riding on it. */
-  onEditOps?: (ops: Op[], label: string, riding?: CueRiding) => Promise<string | null>;
+  onEditOps?: (ops: Op[], label: string) => Promise<string | null>;
+  /** A caption put in on a caption track (its file) at a time (ms); why not, when it is not. */
+  onAddCaption?: (src: string, atMs: number) => Promise<string | null>;
   /** Clip id → its `data-link`: clips sharing one are selected and edited together (see the Linked switch). */
   links?: ReadonlyMap<string, string>;
   /**
@@ -701,12 +711,6 @@ export interface TimelineProps {
   /** Selection, when owned outside (the Inspector). Kept internally without it. */
   selected?: readonly string[];
   onSelectedChange?: (ids: readonly string[]) => void;
-  /** Names given to tracks (by film.html track index), shown in their heads. */
-  trackNames?: ReadonlyMap<number, string>;
-  /** Name a track (an empty name takes it away): with it, a track's head menu has Rename. */
-  onRenameTrack?: (docIndex: number, name: string) => void;
-  /** The caption tracks' rows (components/CaptionLane): the project they are read from, and a cue picked. */
-  captionLanes?: { projectId: string; onPick: () => void };
   /** Solo (Studio's playback only): the tracks soloed (film.html indexes), and a click on a head's S (⌥: alone). */
   solo?: { tracks: ReadonlySet<number>; onToggle: (docIndex: number, only: boolean) => void };
   /** The markers' row under the ruler, while there are any. */
@@ -974,6 +978,7 @@ export const Timeline = React.memo(function Timeline({
   onRemoveMany,
   onEditBlocks,
   onEditOps,
+  onAddCaption,
   links,
   commandsRef,
   onSplit,
@@ -1000,9 +1005,6 @@ export const Timeline = React.memo(function Timeline({
   history,
   selected: selectedProp,
   onSelectedChange,
-  trackNames,
-  onRenameTrack,
-  captionLanes,
   solo,
   markerLane,
   onAddMarker,
@@ -1774,7 +1776,7 @@ export const Timeline = React.memo(function Timeline({
    */
   const runPlan = React.useCallback(async (plan: EditPlan | null, label: string, note?: string): Promise<boolean> => {
     if (!onEditOps || !plan?.ops.length) return false;
-    const err = await onEditOps(plan.ops, label, plan.riding);
+    const err = await onEditOps(plan.ops, label);
     if (err) setDropError(err);
     /* not an error: the edit was made, and this says why a gap was left (a warning's look, not an error's) */
     else if (plan.shortMs > 0) setNotice(t('timeline.rippleShort').replace('{s}', (plan.shortMs / 1000).toFixed(2)));
@@ -1795,9 +1797,6 @@ export const Timeline = React.memo(function Timeline({
     if (targetLane && !tracks.some((tr) => tr.lane === targetLane)) setTargetLane(null);
   }, [tracks, targetLane]);
   /** The track whose name is being typed in its head (film.html index). */
-  const [renaming, setRenaming] = React.useState<number | null>(null);
-  const renamingRef = React.useRef(renaming);
-  renamingRef.current = renaming;
   const headW = HEAD_W + (solo ? HEAD_SOLO_W : 0);
   /* picking clips lets the gap go; so does an edit that fills or moves it */
   React.useEffect(() => { if (selected.length) setGap(null); }, [selected.length]);
@@ -2513,14 +2512,8 @@ export const Timeline = React.memo(function Timeline({
     });
   }, [msAtClientX, tracks, pxPerMs]);
 
-  /* a track's head: the app's entries (a reference in its chat), then the track's own (its name) */
-  const headEntries = React.useCallback((track: TimelineTrack): ContextMenuEntry[] => {
-    const extra = trackMenuExtra?.(track) ?? [];
-    const own: ContextMenuEntry[] = onRenameTrack && track.docIndex != null ? [{
-      id: 'rename-track', label: t('timeline.renameTrack'), icon: <Pencil size={14} />, onSelect: () => setRenaming(track.docIndex!),
-    }] : [];
-    return extra.length && own.length ? [...extra, { id: 'track-sep', separator: true }, ...own] : [...extra, ...own];
-  }, [trackMenuExtra, onRenameTrack, t]);
+  /* a track's head: the app's entries (a reference in its chat) */
+  const headEntries = React.useCallback((track: TimelineTrack): ContextMenuEntry[] => trackMenuExtra?.(track) ?? [], [trackMenuExtra]);
   /* the menu of the whole track, when there is anything on it (else the browser's own) */
   const openHeadMenu = React.useCallback((e: React.MouseEvent, track: TimelineTrack) => {
     if (!headEntries(track).length) return;
@@ -2651,7 +2644,7 @@ export const Timeline = React.memo(function Timeline({
 
   const toggleTrack = React.useCallback((track: TimelineTrack, prop: 'locked' | 'hidden' | 'muted') => {
     if (!onEditBlocks) return;
-    const loc = track.blocks.find((b) => b.loc)?.loc ?? (
+    const loc = track.blocks.find((b) => b.loc && !b.cue)?.loc ?? (
       track.docIndex != null ? `film.html#${track.docIndex}.0` : null
     );
     if (!loc) return;
@@ -2678,7 +2671,7 @@ export const Timeline = React.memo(function Timeline({
   /* each head's element is kept while nothing it shows changes (as the clips' are, see clipElements): the heads drawn
      follow the scroll, and rebuilding every one of them each time rendered all their buttons and tooltips again */
   const headElements = React.useMemo(() => new Map<string, { pose: string; node: React.ReactElement }>(), [
-    tracks, t, onEditBlocks, startLaneReorder, toggleTrack, openHeadMenu, trackNames, onRenameTrack, solo, onResizeTrack,
+    tracks, t, onEditBlocks, startLaneReorder, toggleTrack, openHeadMenu, solo, onResizeTrack,
   ]);
   /** The head column (outside the scroller, so drawn apart from the rows). */
   const heads = React.useMemo(() => tracks.map((track, laneIndex) => {
@@ -2686,24 +2679,17 @@ export const Timeline = React.memo(function Timeline({
     const liftingHead = laneOrder?.fromLane === laneIndex;
     const canReorder = Boolean(onEditBlocks && track.docIndex != null);
     const canToggle = Boolean(onEditBlocks && (track.docIndex != null || track.blocks.some((b) => b.loc)));
-    const LaneIcon = track.captions ? Captions : track.kind === 'visual' ? Video : Waves;
-    /* the name the person gave it (on its first row only: rows spread from one track share it) */
-    const given = track.docIndex != null && track.index === 1 ? trackNames?.get(track.docIndex) : undefined;
-    const laneTitle = given ?? track.name ?? track.kind;
     const lit = selectedLanes.has(track.lane);
     const targeted = targetLane === track.lane;
-    const renamingHere = renaming != null && renaming === track.docIndex && track.index === 1;
-    /* far from the view, only its place (the one being renamed or dragged keeps all of it) */
-    if ((laneIndex < nearFirst || laneIndex > nearLast) && !renamingHere && !liftingHead) {
+    /* far from the view, only its place (the one being dragged keeps all of it) */
+    if ((laneIndex < nearFirst || laneIndex > nearLast) && !liftingHead) {
       return <div key={track.lane} className="rounded-l-[3px]" style={{ marginTop: GAP, height: h, background: laneTone(track, lit) }} />;
     }
-    /* typing a name always has its field; a name given shows when the row has room for it */
-    const nameLine = renamingHere || (Boolean(given) && h >= HEAD_NAME_MIN_H);
     /* the main track is marked by its look (its band) and its hover title, not by a name or a badge that reads as a switch */
     const mainHead = Boolean(track.main) && track.index === 1;
     /* the track a pill hovered in the app's chat points at */
     const chatLit = chatTrack != null && track.docIndex === chatTrack;
-    const pose = `${liftingHead}:${lit}:${targeted}:${renamingHere}:${chatLit}`;
+    const pose = `${liftingHead}:${lit}:${targeted}:${chatLit}`;
     const cached = headElements.get(track.lane);
     if (cached?.pose === pose) return cached.node;
     const node = (
@@ -2720,16 +2706,13 @@ export const Timeline = React.memo(function Timeline({
         data-lane-locked={track.locked ? '1' : '0'}
         data-lane-muted={track.muted ? '1' : '0'}
         onPointerDown={(e) => startLaneReorder(e, laneIndex)}
-        onDoubleClick={() => { if (onRenameTrack && track.docIndex != null && track.index === 1) setRenaming(track.docIndex); }}
         onContextMenu={(e) => openHeadMenu(e, track)}
-        title={mainHead ? `${laneTitle} · ${t('timeline.mainTrack')}` : laneTitle}
+        title={mainHead ? t('timeline.mainTrack') : undefined}
         data-main-track={mainHead ? '' : undefined}
         style={{
           marginTop: GAP,
           height: h,
           gridTemplateColumns: `repeat(${solo ? 5 : 4}, minmax(0, 1fr))`,
-          /* a name goes on a line of its own under the badge and the toggles: the heads keep their width */
-          ...(nameLine ? { gridTemplateRows: 'auto auto', alignContent: 'center', rowGap: 3 } : {}),
           background: laneTone(track, lit),
           /* the targeted track: an accent bar down its left edge */
           boxShadow: [chatLit ? CHAT_RING : '', targeted ? 'inset 2px 0 0 var(--tl-accent)' : ''].filter(Boolean).join(', ') || undefined,
@@ -2738,35 +2721,8 @@ export const Timeline = React.memo(function Timeline({
         }}
       >
         <span className="flex min-w-0 items-center gap-1">
-          {track.captions || track.text ? (
-            /* a caption track, or a row of text: its kind's mark alone, as narrow as its row */
-            <span className="flex items-center justify-center rounded-[3px]" style={{ width: 21, height: 14, color: '#fff', background: 'var(--tl-caption)', opacity: track.hidden ? 0.55 : 1 }}>
-              {track.captions ? <Captions size={11} aria-label={track.name ?? undefined} /> : <Type size={11} aria-label={t('timeline.textTrack')} />}
-            </span>
-          ) : track.badge ? (
-            <span
-              className="flex items-center justify-center rounded-[3px] font-semibold tabular-nums"
-              style={{
-                minWidth: 21,
-                height: 14,
-                padding: '0 3px',
-                fontSize: 10,
-                letterSpacing: '0.02em',
-                color: '#fff',
-                background: BADGE_COLOR[track.badge[0]!] ?? 'var(--tl-caption)',
-                opacity: track.hidden ? 0.55 : 1,
-              }}
-            >
-              {track.badge}
-            </span>
-          ) : (
-            <span
-              className="flex items-center justify-center"
-              style={{ width: TYPE_BOX, height: TYPE_BOX, color: 'var(--text-faint)' }}
-            >
-              <LaneIcon size={TYPE_BOX} />
-            </span>
-          )}
+          {/* what the row holds, as a mark alone: no number, no name */}
+          <LaneMark track={track} />
         </span>
         {onEditBlocks ? <>
         <TrackHeadButton
@@ -2802,32 +2758,12 @@ export const Timeline = React.memo(function Timeline({
         {solo ? (track.role === 'mg' || track.docIndex == null ? <span aria-hidden /> : (
           <SoloButton on={solo.tracks.has(track.docIndex)} onToggle={(only) => solo.onToggle(track.docIndex!, only)} />
         )) : null}
-        {/* the track's name, on its own line under the badge and the toggles */}
-        {nameLine && renamingHere ? (
-          <input
-            autoFocus
-            defaultValue={given ?? ''}
-            aria-label={t('timeline.renameTrack')}
-            placeholder={track.badge ?? ''}
-            maxLength={40}
-            onPointerDown={(e) => e.stopPropagation()}
-            onKeyDown={(e) => {
-              e.stopPropagation();
-              if (e.key === 'Enter') { onRenameTrack?.(track.docIndex!, e.currentTarget.value); setRenaming(null); }
-              if (e.key === 'Escape') setRenaming(null);
-            }}
-            onBlur={(e) => { if (renamingRef.current === track.docIndex) { onRenameTrack?.(track.docIndex!, e.currentTarget.value); setRenaming(null); } }}
-            className="col-span-full h-[16px] w-full min-w-0 justify-self-stretch rounded-[3px] bg-[var(--bg)] px-1 text-[11px] text-[var(--text)] outline-none ring-1 ring-[var(--tl-accent)]"
-          />
-        ) : nameLine && given ? (
-          <span className="col-span-full w-full min-w-0 justify-self-stretch truncate px-1 text-[10.5px] font-medium leading-[14px]" style={{ color: TL.text }} data-track-name="">{given}</span>
-        ) : null}
         {onResizeTrack && track.docIndex != null ? <TrackResizeHandle height={h} onResize={(height, done) => onResizeTrack(track, height, done)} /> : null}
       </div>
     );
     headElements.set(track.lane, { pose, node });
     return node;
-  }), [tracks, t, laneOrder, onEditBlocks, startLaneReorder, toggleTrack, selectedLanes, openHeadMenu, chatTrack, trackNames, targetLane, renaming, onRenameTrack, solo, onResizeTrack, nearFirst, nearLast, headElements]);
+  }), [tracks, t, laneOrder, onEditBlocks, startLaneReorder, toggleTrack, selectedLanes, openHeadMenu, chatTrack, targetLane, solo, onResizeTrack, nearFirst, nearLast, headElements]);
 
   /* row backgrounds are fixed to the view and only follow vertical scroll; the clips move horizontally above them */
   const laneSkins = React.useMemo(() => tracks.map((track) => (
@@ -3062,11 +2998,6 @@ export const Timeline = React.memo(function Timeline({
         /* right-click on empty space: the track menu at this time (clips stop their own right-clicks) */
         onContextMenu={(e) => openLaneMenu(e, track.lane)}
       >
-          {track.captions && captionLanes ? (
-            <CaptionLane projectId={captionLanes.projectId} src={track.captions.src} locked={Boolean(track.locked)} hidden={Boolean(track.hidden)}
-              pxPerMs={pxPerMs} endMs={totalMs} playheadMs={() => timeMsRef.current} snap={snap} snapTargets={() => snapTargetsFor(allBlocks, null, timeMsRef.current)}
-              onSeek={onSeek} onPick={captionLanes.onPick} onError={setDropError} />
-          ) : null}
           {track.blocks.map((block) => {
             /* while dragging, drawn where the preview says (film.html only updates after the write); a clip the edit
                takes out is drawn faint where it is */
@@ -3267,6 +3198,8 @@ export const Timeline = React.memo(function Timeline({
                   <span className="flex min-w-0 items-center gap-1" data-pin={left} data-pin-max={width - 48}>
                     {/* a voice says so before its name: it is what the subtitles are made from */}
                     {block.kind === 'voice' ? <Mic className="h-2.5 w-2.5 shrink-0 text-white/90" aria-hidden /> : null}
+                    {/* a caption's cue says so before its words: a line of the captions, not a text of its own */}
+                    {block.cue ? <Captions className="h-3 w-3 shrink-0 text-white/85" aria-hidden /> : null}
                     <span className={`min-w-0 truncate font-medium leading-none text-white/95 ${textRow ? 'text-[11px]' : 'text-[10px]'}`}>
                       {textRow ? block.words ?? block.title : block.title}
                     </span>
@@ -3431,7 +3364,7 @@ export const Timeline = React.memo(function Timeline({
                 {/* fade handles on the clip under the pointer, a dot just inside each end, on the bottom of its picture or
                     the top of its waveform: dragged inward, the clip fades in or out, the dot where the fade ends
                     (lib/clip-fade) */}
-                {pointed && onEditOps && block.clipId && !track.locked && width > 18 && !floating && mode === 'select' && !speeding ? (['in', 'out'] as const).map((edge) => {
+                {pointed && onEditOps && block.clipId && !block.cue && !track.locked && width > 18 && !floating && mode === 'select' && !speeding ? (['in', 'out'] as const).map((edge) => {
                   const ms = edge === 'in' ? fade[0] : fade[1];
                   const x = fadeHandleX(edge, ms, width, pxPerMs, FADE_DOT_INSET);
                   const what = t(edge === 'in' ? 'inspector.fadeIn' : 'inspector.fadeOut');
@@ -3531,7 +3464,7 @@ export const Timeline = React.memo(function Timeline({
     openBlockMenu, openLaneMenu, onEditBlocks, collapseIfClick, selectOne, setSelected, clipElements, thumbWindow, view.width,
     chatClip, chatDraft, placedOf, pickForTrim, gap, withLinked, runSplit, trackOverlay,
     fadeOfBlock, fadeDrag, startFade, volumeDrag, startVolume, transitions, transitionDrag, pickedTransition, onPickTransition, onTransition, startTransitionResize,
-    nearFirst, nearLast, speedOn, hoveredBlock, onEnterCompound, captionLanes, snap, allBlocks, onSeek, totalMs,
+    nearFirst, nearLast, speedOn, hoveredBlock, onEnterCompound, snap, allBlocks, onSeek, totalMs,
   ]);
 
   const tickMarks = React.useMemo(() => ticks.map(({ ms, label }) => {
@@ -3749,6 +3682,13 @@ export const Timeline = React.memo(function Timeline({
     if (!picked.length) {
       const laneLocked = Boolean(tracks.find((tr) => tr.lane === menu.lane)?.locked);
       const entries: ContextMenuEntry[] = [];
+      /* a caption track: a caption put in here (its words typed in the inspector) */
+      const captionRow = tracks.find((tr) => tr.lane === menu.lane)?.captions;
+      if (captionRow && onAddCaption) {
+        const at = menu.atMs;
+        entries.push({ id: 'add-caption', label: t('captionTrack.addHere'), icon: <Plus size={14} />, disabled: laneLocked, onSelect: () => { void onAddCaption(captionRow.src, at).then((err) => { if (err) setDropError(err); }); } });
+        return entries;
+      }
       if (onPaste) {
         entries.push({
           id: 'paste',
@@ -3789,7 +3729,7 @@ export const Timeline = React.memo(function Timeline({
     ));
     const nowMs = timeMsRef.current;
     const spans = (b: TimelineBlock) => nowMs > b.startMs + MIN_BLOCK_MS && nowMs < b.endMs - MIN_BLOCK_MS;
-    const canSplit = Boolean(onSplit && !pickedLocked && picked.some((b) => b.loc && spans(b)));
+    const canSplit = Boolean(onSplit && !pickedLocked && picked.some((b) => (b.loc || b.cue) && spans(b)));
     const out: ContextMenuEntry[] = [];
     const extra = blockMenuExtra?.(picked) ?? [];
     if (extra.length) out.push(...extra, { id: 'extra-sep', separator: true });
@@ -3987,10 +3927,12 @@ export const Timeline = React.memo(function Timeline({
         });
       }
     }
+    /* a caption's cues: what a clip's menu does that a line of words has (no speed, sound, media or file of its own) */
+    if (picked.length && picked.every((b) => b.cue)) return out.filter((e) => 'separator' in e || CUE_MENU.has(e.id));
     return out;
   }, [
     menu, t, keyHint, onSplit, onDetachAudio, onRemove, onRemoveMany, onCopy, onPaste, onExportBlock, mediaTrouble, relinkCandidates,
-    onRelink, hasClipboard, runSplit, removeMany, rippleRemove, magnetRemove, onEditOps, tracks, blockMenuExtra, headEntries, withLinked,
+    onRelink, hasClipboard, runSplit, removeMany, rippleRemove, magnetRemove, onEditOps, onAddCaption, tracks, blockMenuExtra, headEntries, withLinked,
     runPlan, closeGapOn, rippleTrimToPlayhead, linkBlocks, unlinkBlocks, transitions, onTransition, onPickTransition, transitionEntries,
     speedOn, selectedKey, onEditBlocks, onDuplicate,
   ]);
