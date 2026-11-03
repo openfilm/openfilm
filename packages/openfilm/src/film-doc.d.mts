@@ -36,6 +36,11 @@ export type FilmOverride = {
   lock?: true;
   /** The element's text (only where it holds text alone). */
   text?: string;
+  /**
+   * Its words animated part by part: each character, word or line wrapped and given `animation` (the film's own
+   * @keyframes), starting `start` + its place in `order` × `stagger` seconds into the page.
+   */
+  split?: { by: 'char' | 'word' | 'line'; animation: string; stagger: number; start?: number; order?: 'forward' | 'reverse' | 'center' | 'random' };
   /** The clip's own entry only: seconds its picture and sound ramp up from 0 at its start, and down to 0 at its end. */
   fade?: [number, number];
 }
@@ -99,6 +104,25 @@ export declare function hasPicture(src: unknown): boolean;
 /** What a clip is: its file's kind, but a video's sound alone (`sound: true`) is a sound. */
 export declare function kindOf(clip: { src?: unknown; sound?: unknown } | null | undefined): FilmClipKind | null;
 export declare function clipIdFor(src: string | undefined, used: Iterable<string>): string;
+/** A clip's (or a page element's) effects, each a number in a custom property `--fx-<name>` its filter reads. */
+export declare const EFFECTS: Readonly<{
+  blur: { unit: 'px'; rest: 0; syntax: '<length>'; filter: string };
+  brightness: { unit: '%'; rest: 100; syntax: '<percentage>'; filter: string };
+  contrast: { unit: '%'; rest: 100; syntax: '<percentage>'; filter: string };
+  saturate: { unit: '%'; rest: 100; syntax: '<percentage>'; filter: string };
+  hue: { unit: 'deg'; rest: 0; syntax: '<angle>'; filter: string };
+  grayscale: { unit: '%'; rest: 0; syntax: '<percentage>'; filter: string };
+  invert: { unit: '%'; rest: 0; syntax: '<percentage>'; filter: string };
+  glow: { unit: 'px'; rest: 0; syntax: '<length>'; filter: string };
+  trim: { unit: ''; rest: 100; syntax: '<number>'; filter: null };
+  z: { unit: 'px'; rest: 0; syntax: '<length>'; filter: null };
+  rx: { unit: 'deg'; rest: 0; syntax: '<angle>'; filter: null };
+  ry: { unit: 'deg'; rest: 0; syntax: '<angle>'; filter: null };
+  ax: { unit: 'px'; rest: 0; syntax: '<length>'; filter: null };
+  ay: { unit: 'px'; rest: 0; syntax: '<length>'; filter: null };
+}>;
+/** The effects' custom properties registered in a window, so their keyframes ease. */
+export declare function registerEffects(win: unknown): void;
 
 export declare function readFilm(value: unknown): { doc: FilmDoc | null; problems: string[]; whole?: boolean };
 /** A film.html: the value it says (`value`, clips named), checked (`doc`), or every problem, each with its line. */

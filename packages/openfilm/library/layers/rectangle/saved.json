@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "rectangle.html",
+    "time": [
+      0,
+      5
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Width\", \"type\": \"var\", \"var\": \"--width\"}, {\"name\": \"Height\", \"type\": \"var\", \"var\": \"--height\"}, {\"name\": \"Fill\", \"type\": \"var\", \"var\": \"--fill\"}, {\"name\": \"Stroke\", \"type\": \"var\", \"var\": \"--stroke\"}, {\"name\": \"Stroke width\", \"type\": \"var\", \"var\": \"--stroke-width\"}, {\"name\": \"Corner radius\", \"type\": \"var\", \"var\": \"--radius\"}, {\"name\": \"Trim start\", \"type\": \"var\", \"var\": \"--trim-start\"}, {\"name\": \"Trim end\", \"type\": \"var\", \"var\": \"--trim\"}, {\"name\": \"Trim offset\", \"type\": \"var\", \"var\": \"--trim-offset\"}, {\"name\": \"Copies\", \"type\": \"var\", \"var\": \"--copies\"}, {\"name\": \"Copy offset\", \"type\": \"var\", \"var\": \"--copy-offset\"}, {\"name\": \"Copy shift X\", \"type\": \"var\", \"var\": \"--copy-x\"}, {\"name\": \"Copy shift Y\", \"type\": \"var\", \"var\": \"--copy-y\"}, {\"name\": \"Copy turn\", \"type\": \"var\", \"var\": \"--copy-turn\"}, {\"name\": \"Copy scale\", \"type\": \"var\", \"var\": \"--copy-scale\"}, {\"name\": \"Copy opacity start\", \"type\": \"var\", \"var\": \"--copy-opacity-start\"}, {\"name\": \"Copy opacity end\", \"type\": \"var\", \"var\": \"--copy-opacity-end\"}]"
+    }
+  },
+  "durationMs": 5000
+}

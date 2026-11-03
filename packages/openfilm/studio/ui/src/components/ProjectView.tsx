@@ -7,9 +7,21 @@
  * are written one at a time (see editor/use-film.ts); the agent's writes come in through the folder's events.
  */
 import * as React from 'react';
-import { ArrowLeftRight, BookmarkPlus, ClipboardCopy, ClipboardPaste, Film as FilmIcon, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Settings2, TriangleAlert, Upload, Workflow } from 'lucide-react';
+import { BookmarkPlus, ChartSpline, ChevronDown, ChevronRight, ClipboardCopy, ClipboardPaste, Diamond, Eye, EyeOff, Layers, LibraryBig, Lock, LockOpen, MessageSquarePlus, MonitorDown, Plus, Settings2, Spline, TriangleAlert, Upload } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
-import { withPreset } from '../../../../src/clip-motion.mjs';
+import { EFFECTS, MOTION_PROPS, animationsOf, effectsOf, readMotion, valueAt, withAnimations, withEffects, withPreset, type EffectProp, type KeyedProp, type Motion, type MotionProp } from '../../../../src/clip-motion.mjs';
+import { copiedKeys, easeOfBezier, easedMotion, effectsModel, type EffectsChange, keyId, keyedBox, movedKeys, parseKeyId, pastedKeys, poseAt, withoutKeys, type CopiedKeys, type EaseCommand } from '@/lib/motion-keys';
+import type { MotionLanes } from './MotionLanes';
+import type { MotionPathKeys } from './MotionPath';
+import { LAYER_ROW_H, layerBarColor, useMotionLayers, type Layer, type LayerContents, type LayerHost, type LayerMask, type MotionLayersView } from './MotionLayers';
+import { maskCss, maskDefault, maskOf, type Mask } from '@/lib/clip-mask';
+import { maskKeyframes, maskModel, readMaskKeys, type MaskKeys } from '@/lib/mask-motion';
+import { splitFor, textAnimOf, type TextAnim } from '@/lib/text-animator';
+import { elementModel, elementStatic, elementSubject, readElementMotion, sameElement, writeElementMotion, type ElementCommit } from '@/lib/element-motion';
+import { transformModel, type TransformCommit } from './KeyframesSection';
+import { staticTransform, transformEdits } from '@/lib/clip-transform';
+import { declared, withDeclarations } from '@/lib/clip-look';
+import { declarations } from '../../../../src/film-doc.mjs';
 import { PARTS, compoundOf, dissolvedOf } from '../../../server/compound.mjs';
 import type { FilmValue } from '../../../server/ops.mjs';
 import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type Op, type ProjectFilm, type ProjectSettings, type SavedGroupClip } from '@/api';
@@ -79,6 +91,9 @@ import { cueAt, filmSubtitleStyleFor, filmSubtitleWords, sameFilmSubtitleLanguag
 import { DEFAULT_INSPECTOR, DOCK_GAP, DockPaneDivider, MIN_DOCK_H, MIN_INSPECTOR, MIN_STAGE_H, MIN_VIEWER, PaneDivider, usePaneSize } from './PaneDivider';
 import { PANE_BAR, PANE_BTN_ON, PANE_TOGGLE, PANE_TOGGLE_ICON } from './dock-pane-bar';
 import { Tooltip } from './Tooltip';
+import { ModeSwitcher } from './ModeSwitcher';
+import { useWorkModes } from '@/lib/work-modes';
+import { MotionPanel } from './MotionPanel';
 import { ProjectCard } from './ProjectCard';
 import { BrandLogo } from './BrandLogo';
 import { ExamplesDialog } from './ExamplesGallery';
@@ -115,7 +130,8 @@ import { FontScopeContext, type FontScope } from '@/lib/use-fonts';
 import { stageMenu, stageRecoveryMenu, type StageArrangeResult, type StageMenuContext, type StagePictureActions } from './stage-menu';
 import type { StageEditFailure, StageTextEdit } from './FilmInspector';
 import { layerTarget, pageClipOf, recoverLayer } from '@/lib/stage-layers';
-import { pictureStyle, relativeTo, type TemplateControls } from '@/lib/template-controls';
+import { pictureStyle, relativeTo, withVar, type TemplateControls } from '@/lib/template-controls';
+import { numberOf, readVarMotion, writeVarMotion } from '@/lib/page-motion';
 import { propsAttr, propsOf, type ComponentProp } from '@/lib/component-props';
 import { pointersOf, propsWithoutDeleted, withDeleted } from '@/lib/layer-delete';
 import {
@@ -124,7 +140,7 @@ import {
 } from '@/lib/layer-clipboard';
 import { idsIn, pastedElsewhere, pastedPage, withoutPaste, withPaste, type PasteItem, type PasteLayer, type PastedPage } from '@/lib/layer-paste';
 import { pasteTargets, targetById } from '@/lib/layer-paste-target';
-import type { PropsHost } from './PropertiesSection';
+import { PropertiesSection, type PropsHost } from './PropertiesSection';
 import type { LayerPropsActions } from './FilmInspector';
 import { SAVED, refreshSaved, savedActions, savedSources, useSavedListing } from '@/lib/saved';
 import { batchMap } from '@/lib/batch-map';
@@ -206,7 +222,19 @@ function editStepLabel(edits: readonly ClipEdit[], tracks: readonly TimelineTrac
 const WHITE_SRC = 'transitions/white.html';
 
 /** An edit-history label naming the clips it was done to (see OperationHistory's stepText): "Deleted slow". */
+/** No keyframes picked. */
+const NO_KEYS: ReadonlySet<string> = new Set();
 const clipStep = (key: string, ids: readonly string[]) => `${key}|${ids.join(', ')}`;
+
+/** Where keyframes are, ms on a bar that starts at second `from` of their time and is `lenMs` long; each once. */
+function keyTimesMs(motion: Motion, from: number, lenMs: number): number[] {
+  const out = new Set<number>();
+  for (const keys of Object.values(motion)) for (const k of keys ?? []) { const ms = Math.round((k.t - from) * 1000); if (ms >= 0 && ms <= lenMs) out.add(ms); }
+  return [...out].sort((a, b) => a - b);
+}
+
+/** A row of Motion's timeline: a layer, a folder (a track of several clips, `open` showing each as a layer) or a sound track. */
+interface LayerRowSpec { track: TimelineTrack; layer: Layer | null; n: number; folder?: { count: number; open: boolean } }
 /** A compound clip's folder (`parts/<name>`), from its src; null for any other clip. */
 const compoundFolder = (src: string | undefined) => /^(parts\/[^/]+)\/film\.html$/.exec((src ?? '').replace(/#.*$/, ''))?.[1] ?? null;
 
@@ -424,11 +452,24 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* opening it stops the film playing (the panes under it are hidden): the player's pause, set once it is made */
   const pauseRef = React.useRef<() => void>(() => {});
   React.useEffect(() => { setCanvasOpenState(canvasShown(projectId)); }, [projectId]);
+  /* the edit seen as an animation editor sees it (components/MotionTimeline), in the timeline's place */
+  const [motionOpen, keepMotionOpen] = useKeptFlag('openfilm.project.motion', false);
+  /* layers the motion panel just put something on, twirled open on the motion timeline */
+  const [motionReveal, setMotionReveal] = React.useState<{ ids: readonly string[]; n: number } | null>(null);
   const setCanvasOpen = React.useCallback((open: boolean) => {
     if (open) pauseRef.current();
     setCanvasOpenState(open);
     try { localStorage.setItem(`${CANVAS_KEY}:${projectId}`, open ? '1' : '0'); } catch { /* for this launch only */ }
   }, [projectId]);
+  const workMode: 'canvas' | 'edit' | 'motion' = canvasOpen ? 'canvas' : motionOpen ? 'motion' : 'edit';
+  const setWorkMode = React.useCallback((mode: 'canvas' | 'edit' | 'motion') => {
+    setCanvasOpen(mode === 'canvas');
+    if (mode !== 'canvas') keepMotionOpen(mode === 'motion');
+    if (mode === 'motion') { setTimelineOpen(true); setInspectorOpen(true); }
+  }, [setCanvasOpen, keepMotionOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* the ways of working turned on (Settings → Advanced): one turned off while in use gives way to the first still on */
+  const workModes = useWorkModes();
+  React.useEffect(() => { if (!workModes.includes(workMode)) setWorkMode(workModes[0]!); }, [workModes, workMode, setWorkMode]);
   const canvasFiles = React.useMemo(() => (listing ? [...listing.files, ...listing.pages] : []), [listing]);
   /* a file of the media pane as a reference: shown by its poster (a video, a page) or itself (a still, on Studio's
      origin: see stillUrl) */
@@ -856,15 +897,368 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     return filmEdit(ops, label, quiet, outside);
   }, [filmEdit]);
   /** `quiet`: the caller shows why an edit was refused itself (the inspector does, beside its field) */
-  const editBlocks = React.useCallback((asked: ClipEdit[], quiet = false): Promise<string | null> => {
+  const editBlocks = React.useCallback((given: ClipEdit[], quiet = false): Promise<string | null> => {
     const current = filmRef.current;
+    /* a box changed (on the picture, by its fields) while its position, scale or rotation moves: a keyframe at the
+       playhead for those, as an animation editor keys a value changed with its stopwatch on (lib/motion-keys keyedBox);
+       an edit that writes the clip's keyframes itself is taken as it is */
+    const asked = given.flatMap((e): ClipEdit[] => {
+      if (e.prop !== 'box' || !e.value || given.some((o) => o.loc === e.loc && o.prop === 'motion')) return [e];
+      const id = clipIdAt(current, e.loc);
+      const clip = id ? current?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === id) : null;
+      const block = blocksRef.current.find((bl) => bl.clipId === id);
+      if (!clip || !block?.size) return [e];
+      const local = (timeRef.current - block.startMs) / 1000;
+      if (local < 0 || local > (block.endMs - block.startMs) / 1000) return [e];
+      const motion = readMotion(clip as { id: string; style?: string }, current?.keyframes);
+      const keyed = keyedBox((clip.box ?? {}) as Record<string, number>, e.value as Record<string, number>, block.size, motion, local, 1 / Math.max(1, projectFps));
+      if (!keyed) return [e];
+      return [{ loc: e.loc, prop: 'box', value: Object.keys(keyed.box).length ? keyed.box as Record<string, number> : null }, { loc: e.loc, prop: 'motion', value: keyed.motion as unknown as Record<string, unknown> }];
+    });
     /* a locked track is the person's: nothing on it changes, whichever way the edit came (the picture, the inspector) */
     if (lockedEdits(asked, current).length) return Promise.resolve(t('timeline.trackLocked'));
     const edits = apartOnTracks(asked, blocksRef.current);
     const mapped = edits.map((e) => ({ clip: clipIdAt(current, e.loc), prop: e.prop, value: e.value }));
     if (mapped.some((e) => !e.clip)) return Promise.resolve(t('timeline.editFail'));
     return edit([{ op: 'props', edits: mapped as { clip: string; prop: string; value: never }[] }], editStepLabel(edits, tracksRef.current), quiet);
-  }, [edit, t]);
+  }, [edit, t, projectFps]);
+  /* ── keyframes on the timeline (components/MotionLanes): the picked clip's moving properties as rows under its track,
+     the keyframes picked there, and what F9, Delete, ⌥←/→ and their menu do to them (lib/motion-keys) ── */
+  const [pickedKeys, setPickedKeys] = React.useState<ReadonlySet<string>>(() => new Set());
+  const [keyMenu, setKeyMenu] = React.useState<{ x: number; y: number } | null>(null);
+  const motionBlock = selectedBlocks.length === 1 && selectedBlocks[0]!.clipId && selectedBlocks[0]!.loc ? selectedBlocks[0]! : null;
+  /* keyframes picked on another clip's rows (the motion timeline): that clip picked first, then they are */
+  const pendingPick = React.useRef<{ clip: string; ids: string[] } | null>(null);
+  React.useEffect(() => {
+    const pending = pendingPick.current;
+    pendingPick.current = null;
+    setPickedKeys(new Set(pending && pending.clip === motionBlock?.clipId ? pending.ids : []));
+    setKeyMenu(null);
+  }, [motionBlock?.clipId]);
+  const motionOfBlock = React.useCallback((block: TimelineBlock | null): Motion => {
+    const clip = block?.clipId ? film.film?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === block.clipId) : null;
+    return clip ? readMotion(clip as { id: string; style?: string }, film.film?.keyframes) : {};
+  }, [film.film]);
+  /* where a clip's keyframes have its picture at the playhead: its frame on the picture is drawn there */
+  const poseOf = React.useCallback((clipId: string) => {
+    const block = blocksRef.current.find((b) => b.clipId === clipId);
+    if (!block) return null;
+    const local = Math.min(Math.max((timeRef.current - block.startMs) / 1000, 0), (block.endMs - block.startMs) / 1000);
+    const style = (film.film?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === clipId) as { style?: string } | undefined)?.style ?? '';
+    const still = (p: 'ax' | 'ay') => { const n = Number.parseFloat(declared(style, `--fx-${p}`) ?? ''); return Number.isFinite(n) ? n : 0; };
+    return poseAt(motionOfBlock(block), local, { ax: still('ax'), ay: still('ay') });
+  }, [motionOfBlock, film.film]);
+  const stagePoseKey = motionBlock?.clipId && !playing ? JSON.stringify(poseOf(motionBlock.clipId)) : '';
+  /* the picked clip's keyframes rewritten; the ones picked follow where they went */
+  const rewriteMotion = React.useCallback((next: Motion, picked?: ReadonlySet<string>) => {
+    if (!motionBlock?.loc) return;
+    if (picked) setPickedKeys(picked);
+    void editBlocks([{ loc: motionBlock.loc, prop: 'motion', value: Object.keys(next).length ? (next as unknown as Record<string, unknown>) : null }]).then((err) => { if (err) toast.showError(err); });
+  }, [motionBlock, editBlocks, toast]);
+  const keyCommand = React.useCallback((what: EaseCommand | 'delete' | { move: number }) => {
+    if (!pickedKeys.size) return;
+    const motion = motionOfBlock(motionBlock);
+    if (what === 'delete') { rewriteMotion(withoutKeys(motion, pickedKeys), new Set()); return; }
+    if (typeof what === 'object') {
+      const moved = movedKeys(motion, pickedKeys, what.move);
+      /* the picked ones, where they are now */
+      const now = new Set([...pickedKeys].flatMap((id) => {
+        const k = parseKeyId(id);
+        if (!k) return [];
+        const lowest = Math.min(...[...pickedKeys].map((x) => parseKeyId(x)).filter((x) => x?.prop === k.prop).map((x) => x!.t));
+        return [keyId(k.prop, Math.round((k.t + Math.max(what.move, -lowest)) * 1000) / 1000)];
+      }));
+      rewriteMotion(moved, now);
+      return;
+    }
+    rewriteMotion(easedMotion(motion, pickedKeys, what));
+  }, [pickedKeys, motionBlock, motionOfBlock, rewriteMotion]);
+  const keyFrameS = 1 / Math.max(1, projectFps);
+  /* keyframes copied (⌘C with keyframes picked): ⌘V puts them on the picked clip at the playhead, until something
+     else is copied */
+  const keyClipRef = React.useRef<CopiedKeys | null>(null);
+  /* the same for an element's keyframes picked in a composition (set where its rows are made, elementLanesOf) */
+  const elementKeys = React.useRef<{ run: (what: EaseCommand | 'delete' | { move: number }) => boolean; copy: () => CopiedKeys | null; paste: (copied: CopiedKeys) => boolean }>({ run: () => false, copy: () => null, paste: () => false });
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      if (e.key === 'F3' && e.shiftKey && motionBlock) { e.preventDefault(); setMotionGraph((on) => !on); return; }
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
+      const key = e.key.toLowerCase();
+      if (key === 'c' || key === 'x') {
+        keyClipRef.current = key !== 'c' ? null : pickedKeys.size ? copiedKeys(motionOfBlock(motionBlock), pickedKeys) : elementKeys.current.copy();
+        if (!keyClipRef.current) return;
+      } else if (key === 'v' && keyClipRef.current && elementKeys.current.paste(keyClipRef.current)) {
+        /* pasted on the element picked in the composition open */
+      } else if (key === 'v' && keyClipRef.current && motionBlock) {
+        const local = (timeRef.current - motionBlock.startMs) / 1000;
+        if (local < -keyFrameS / 2 || local > (motionBlock.endMs - motionBlock.startMs) / 1000 + keyFrameS / 2) return;
+        const pasted = pastedKeys(motionOfBlock(motionBlock), keyClipRef.current, Math.max(0, local), keyFrameS);
+        rewriteMotion(pasted.motion, pasted.picked);
+      } else return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [pickedKeys, motionBlock, motionOfBlock, rewriteMotion, keyFrameS]);
+  React.useEffect(() => {
+    if (!pickedKeys.size) return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      let done = true;
+      if (e.key === 'F9') keyCommand(e.metaKey && e.shiftKey ? 'easy-out' : e.shiftKey ? 'easy-in' : 'easy');
+      else if (e.key === 'Backspace' || e.key === 'Delete') keyCommand('delete');
+      else if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) keyCommand({ move: (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 10 : 1) * keyFrameS });
+      else if (e.key === 'Escape') setPickedKeys(new Set());
+      else done = false;
+      if (done) { e.preventDefault(); e.stopPropagation(); }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [pickedKeys, keyCommand, keyFrameS]);
+  const MOTION_LABEL: Record<MotionProp, string> = { translate: 'inspector.keyPosition', scale: 'inspector.keyScale', rotate: 'inspector.keyRotate', opacity: 'inspector.keyOpacity' };
+  /* a keyed property's name: a Transform's, or an effect's */
+  const keyedLabel = (p: KeyedProp) => t(p in EFFECTS ? `canvas.fx.${p}` : MOTION_LABEL[p as MotionProp]);
+  /* the picked clip's rows drawn as a graph (⇧F3, or its button) */
+  const [motionGraph, setMotionGraph] = React.useState(false);
+  /**
+   * A picture clip's rows of keyframes (components/MotionLanes): the picked clip's with its picked keyframes; another's
+   * (the motion timeline shows every layer's) picks the clip first, then its keyframes.
+   */
+  const lanesOf = React.useCallback((block: TimelineBlock & { clipId: string }): MotionLanes => {
+    const mine = block.clipId === motionBlock?.clipId;
+    const motion = motionOfBlock(block);
+    const clipStyle = (film.film?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === block.clipId) as { style?: string } | undefined)?.style;
+    const fx = effectsOf(clipStyle);
+    const threeD = /--fx-(z|rx|ry)\b/.test(clipStyle ?? '') || (['z', 'rx', 'ry'] as const).some((p) => motion[p]?.length);
+    const rows = [...MOTION_PROPS, 'ax' as const, 'ay' as const, ...fx.on, ...(threeD ? (['z', 'rx', 'ry'] as const) : [])].map((p) => ({ prop: p, label: keyedLabel(p), keys: motion[p] ?? [] }));
+    const startMs = block.startMs;
+    const rewrite = (next: Motion, picked?: ReadonlySet<string>) => {
+      if (!block.loc) return;
+      if (picked) {
+        if (mine) setPickedKeys(picked);
+        else { pendingPick.current = { clip: block.clipId, ids: [...picked] }; setSelectedKeys([block.clipId]); }
+      }
+      void editBlocks([{ loc: block.loc, prop: 'motion', value: Object.keys(next).length ? (next as unknown as Record<string, unknown>) : null }]).then((err) => { if (err) toast.showError(err); });
+    };
+    return {
+      clipId: block.clipId, startMs, endMs: block.endMs, rows, picked: mine ? pickedKeys : NO_KEYS, playheadMs: timeMs, frameMs: 1000 * keyFrameS,
+      onPick: (ids, mode) => {
+        if (!mine) {
+          pendingPick.current = { clip: block.clipId, ids: [...ids] };
+          setSelectedKeys([block.clipId]);
+          return;
+        }
+        setPickedKeys((was) => {
+          if (mode === 'set') return new Set(ids);
+          const next = new Set(was);
+          for (const id of ids) { if (mode === 'toggle' && next.has(id)) next.delete(id); else next.add(id); }
+          return next;
+        });
+      },
+      onMove: (dt) => { if (mine) keyCommand({ move: dt }); },
+      onToggleHere: (prop) => {
+        const local = (timeRef.current - startMs) / 1000;
+        const keys = motion[prop] ?? [];
+        const here = keys.find((k) => Math.abs(k.t - local) < keyFrameS / 2);
+        const rest = keys.filter((k) => k !== here);
+        /* the first keyframe of a property is its value now: the clip's own opacity, else no change */
+        const own = () => {
+          const clip = film.film?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === block.clipId) as { style?: string } | undefined;
+          const n = Number.parseFloat(declared(clip?.style ?? '', 'opacity') ?? '1');
+          return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 1;
+        };
+        const still = prop in EFFECTS ? fx.values[prop as EffectProp] ?? EFFECTS[prop as EffectProp].rest : prop === 'opacity' ? own() : valueAt(prop, keys, local);
+        if (!here) rest.push({ t: Math.round(local * 1000) / 1000, v: keys.length ? valueAt(prop, keys, local) : still });
+        rest.sort((a, b) => a.t - b.t);
+        const next = { ...motion };
+        if (rest.length) next[prop] = rest; else delete next[prop];
+        rewrite(next);
+      },
+      onSeek: seek,
+      onMenu: (e) => { if (mine) setKeyMenu({ x: e.clientX, y: e.clientY }); },
+      graph: motionGraph,
+      onGraph: () => setMotionGraph((on) => !on),
+      onCurve: (prop, at, curve) => {
+        const ease = easeOfBezier(curve);
+        rewrite({ ...motion, [prop]: (motion[prop] ?? []).map((k) => {
+          if (k.t !== at) return k;
+          const { ease: _was, ...rest } = k;
+          return ease ? { ...rest, ease } : rest;
+        }) });
+      },
+      onKeyEdit: (prop, at, to) => {
+        const keys = (motion[prop] ?? []).filter((k) => k.t === at || Math.abs(k.t - to.t) >= keyFrameS / 2);
+        const next = keys.map((k) => (k.t === at ? { ...k, t: to.t, v: to.v } : k)).sort((a, b) => a.t - b.t);
+        rewrite({ ...motion, [prop]: next }, new Set([keyId(prop, to.t)]));
+      },
+      labels: { prev: t('inspector.keyPrev'), next: t('inspector.keyNext'), add: t('inspector.keyAdd'), remove: t('inspector.keyRemove'), graph: t('inspector.keyGraph') },
+    };
+  }, [motionBlock, motionOfBlock, pickedKeys, timeMs, keyFrameS, keyCommand, editBlocks, seek, t, motionGraph, film.film, toast]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* the motion timeline's layers: every picture clip, the topmost track's first, each by its start */
+  const motionLayers = React.useMemo(() => [...timelineTracks]
+    .flatMap((track) => track.blocks.filter((b) => b.clipId && b.loc && (b.kind === 'mg' || b.kind === 'video'))
+      .sort((a, b) => a.startMs - b.startMs).map((b) => ({ ...b, clipId: b.clipId! }))), [timelineTracks]);
+  /* a page layer's Contents (set once its properties can be read, below) */
+  const contentsOfRef = React.useRef<(layer: TimelineBlock & { clipId: string }) => LayerContents | null>(() => null);
+  /* a layer of the motion timeline beyond its keyframes: its Transform's numbers (the inspector's, lib/clip-transform),
+     how it blends (its mix-blend-mode) */
+  const layerHostOf = React.useCallback((layer: TimelineBlock & { clipId: string }): LayerHost => {
+    const clip = film.film?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === layer.clipId) as { style?: string; box?: FilmBox } | undefined;
+    const css = clip?.style ?? '';
+    const placed = layer.size ? { kind: layer.kind, own: layer.size, box: clip?.box ?? layer.box, stage: film.film?.stage ?? { w: 1920, h: 1080 }, css } : null;
+    const length = (layer.endMs - layer.startMs) / 1000;
+    const model = placed ? transformModel(motionOfBlock(layer), staticTransform(placed).base, (timeMs - layer.startMs) / 1000, length, keyFrameS) : null;
+    const style = (decl: Record<string, string | null>) => {
+      if (!layer.loc) return;
+      void editBlocks([{ loc: layer.loc, prop: 'style', value: withDeclarations(css, decl) || null }]).then((err) => { if (err) toast.showError(err); });
+    };
+    const local = (timeMs - layer.startMs) / 1000;
+    const fx = effectsOf(css);
+    const motion = motionOfBlock(layer);
+    const effects = effectsModel(motion, fx.on, fx.values, Math.min(Math.max(local, 0), length), local >= 0 && local <= length, keyFrameS);
+    /* its mask (lib/clip-mask), drawn in its box as it shows, and the keyframes it moves by (lib/mask-motion) */
+    const tf = placed ? staticTransform(placed).tf : null;
+    const mbox = placed && tf ? { w: placed.own.w * tf.scaleX, h: placed.own.h * tf.scaleY } : null;
+    const maskName = `${layer.clipId}--mask`;
+    const maskNow = maskOf(declared(css, 'mask-image'), declared(css, 'mask-composite'), mbox);
+    const maskKeys = readMaskKeys(film.film?.keyframes?.[maskName]);
+    const writeMask = (base: Mask | null, keys: MaskKeys) => {
+      const read0 = (prop: string) => declared(css, prop) ?? undefined;
+      const own = maskCss(read0, base, mbox);
+      if (!own) return;
+      const style1 = withDeclarations(css, own);
+      const read1 = (prop: string) => declared(style1, prop) ?? undefined;
+      const frames = base ? maskKeyframes(base, keys, read1, mbox, projectFps) : null;
+      const entries = animationsOf(style1).filter((e) => e.split(/\s+/)[0] !== maskName);
+      const style2 = withAnimations(style1, frames ? [...entries, `${maskName} ${Math.round(frames.secs * 1000) / 1000}s linear both`] : entries);
+      void edit([
+        { op: 'props', edits: [{ clip: layer.clipId, prop: 'style', value: style2 || null }] },
+        { op: 'keyframes', set: { [maskName]: frames?.body ?? null } },
+      ], clipStep('history.stepMoved', [layer.clipId])).then((err) => { if (err) toast.showError(err); });
+    };
+    const mask: LayerMask | null = !placed || maskNow === null ? null : {
+      shape: maskNow?.shape ?? null,
+      invert: Boolean(maskNow?.invert),
+      model: maskNow ? maskModel(maskNow, maskKeys, Math.min(Math.max(local, 0), length), local >= 0 && local <= length, keyFrameS) : null,
+      keys: maskKeys,
+      setShape: (shape) => writeMask(shape ? maskDefault(shape, mbox, maskNow ?? null) : null, shape ? maskKeys : {}),
+      setInvert: (on) => { if (maskNow) writeMask({ ...maskNow, invert: on }, maskKeys); },
+      commit: (c) => { if (c && maskNow) writeMask(c.base ?? maskNow, c.keys); },
+    };
+    /* in 3D (SPEC §1): its depth and its turn about X and Y, kept in its style, keyed as its effects are */
+    const THREE = ['z', 'rx', 'ry'] as const;
+    const threeOn = /--fx-(z|rx|ry)\b/.test(css) || THREE.some((p) => motion[p]?.length);
+    const threeValues = Object.fromEntries(THREE.flatMap((p) => {
+      const n = Number.parseFloat(declared(css, `--fx-${p}`) ?? '');
+      return Number.isFinite(n) ? [[p, n]] : [];
+    }));
+    const writeThree = (decl: Record<string, string | null>, next: Motion) => {
+      if (!layer.loc) return;
+      void editBlocks([
+        { loc: layer.loc, prop: 'style', value: withDeclarations(css, decl) || null },
+        { loc: layer.loc, prop: 'motion', value: Object.keys(next).length ? (next as unknown as Record<string, unknown>) : null },
+      ]).then((err) => { if (err) toast.showError(err); });
+    };
+    const three = {
+      on: threeOn,
+      model: effectsModel(motion, threeOn ? [...THREE] : [], threeValues, Math.min(Math.max(local, 0), length), local >= 0 && local <= length, keyFrameS),
+      commit: (c: EffectsChange | null) => {
+        if (!c) return;
+        const decl: Record<string, string | null> = {};
+        if (c.fx) for (const p of THREE) decl[`--fx-${p}`] = c.motion[p]?.length || c.fx.values[p] == null ? null : `${c.fx.values[p]}${EFFECTS[p].unit}`;
+        writeThree(decl, c.motion);
+      },
+      toggle: (on: boolean) => {
+        const next = { ...motion };
+        if (!on) for (const p of THREE) delete next[p];
+        writeThree(Object.fromEntries(THREE.map((p) => [`--fx-${p}`, on ? `0${EFFECTS[p].unit}` : null])), next);
+      },
+    };
+    /* its anchor point (SPEC §1): kept in its style, keyed as its effects are; at its box's middle it is not written */
+    const ANCHOR = ['ax', 'ay'] as const;
+    const anchorValues = Object.fromEntries(ANCHOR.flatMap((p) => {
+      const n = Number.parseFloat(declared(css, `--fx-${p}`) ?? '');
+      return Number.isFinite(n) ? [[p, n]] : [];
+    }));
+    const anchor = {
+      model: effectsModel(motion, [...ANCHOR], anchorValues, Math.min(Math.max(local, 0), length), local >= 0 && local <= length, keyFrameS),
+      commit: (c: EffectsChange | null) => {
+        if (!c) return;
+        const decl: Record<string, string | null> = {};
+        if (c.fx) for (const p of ANCHOR) decl[`--fx-${p}`] = c.motion[p]?.length || !c.fx.values[p] ? null : `${c.fx.values[p]}px`;
+        writeThree(decl, c.motion);
+      },
+    };
+    return {
+      /* what an animation preset keys from (lib/motion-presets): a clip's keyframes are on top of its box */
+      model: model ? { ...model, preset: { motion, rest: { translate: [0, 0], scale: 1, rotate: 0, opacity: staticTransform(placed!).base.opacity }, span: [0, length], stage: film.film?.stage ?? { w: 1920, h: 1080 } } } : null,
+      effects,
+      mask,
+      three,
+      anchor,
+      commitEffects: (c: EffectsChange | null) => {
+        if (!c || !layer.loc) return;
+        void editBlocks([
+          ...(c.fx ? [{ loc: layer.loc, prop: 'style', value: withEffects(css, c.fx.on, c.fx.values) || null }] : []),
+          { loc: layer.loc, prop: 'motion', value: Object.keys(c.motion).length ? (c.motion as unknown as Record<string, unknown>) : null },
+        ]).then((err) => { if (err) toast.showError(err); });
+      },
+      commit: (made) => {
+        const c = made as TransformCommit | null;
+        if (!c || !placed || !layer.loc) return;
+        void editBlocks(transformEdits(layer.loc, placed, c.motion, c.base)).then((err) => { if (err) toast.showError(err); });
+      },
+      blend: declared(css, 'mix-blend-mode') ?? 'normal',
+      setBlend: (mode) => style({ 'mix-blend-mode': mode === 'normal' ? null : mode }),
+      /* shown and locked as its track is (each layer Motion makes is on a track of its own) */
+      ...(() => {
+        const at = parseFilmDocLoc(layer.loc ?? '');
+        const track = at ? film.film?.tracks[at.track] : undefined;
+        const flag = (prop: 'hidden' | 'locked', on: boolean) => {
+          if (!layer.loc) return;
+          void editBlocks([{ loc: layer.loc, prop, value: on ? true : null }]).then((err) => { if (err) toast.showError(err); });
+        };
+        return track ? {
+          visible: !track.hidden, setVisible: (on: boolean) => flag('hidden', !on),
+          locked: Boolean(track.locked), setLocked: (on: boolean) => flag('locked', on),
+        } : {};
+      })(),
+    };
+  }, [film.film, motionOfBlock, timeMs, keyFrameS, editBlocks, edit, projectFps, toast]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* the picked clip's position keyframes, drawn on the picture as its path; the same picks as its timeline rows */
+  const motionPath = React.useMemo<MotionPathKeys | null>(() => {
+    if (!motionBlock?.clipId || playing) return null;
+    const motion = motionOfBlock(motionBlock);
+    const keys = motion.translate;
+    if (!keys?.length) return null;
+    return {
+      clipId: motionBlock.clipId, keys, fps: projectFps,
+      picked: new Set(keys.filter((k) => pickedKeys.has(keyId('translate', k.t))).map((k) => k.t)),
+      onPick: (at, mode) => setPickedKeys((was) => {
+        const id = keyId('translate', at);
+        if (mode === 'set') return new Set([id]);
+        const next = new Set(was);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        return next;
+      }),
+      onMove: (at, v) => rewriteMotion({ ...motion, translate: keys.map((k) => (k.t === at ? { ...k, v } : k)) }),
+    };
+  }, [motionBlock, motionOfBlock, pickedKeys, playing, projectFps, rewriteMotion]);
+  /* the picked keyframes' menu: an element's in the composition open, else the clip's */
+  const runKeys = (what: EaseCommand | 'delete') => { if (!elementKeys.current.run(what)) keyCommand(what); };
+  const keyMenuItems: ContextMenuEntry[] = [
+    { id: 'easy', label: t('inspector.eases.ease-in-out'), shortcut: 'F9', onSelect: () => runKeys('easy') },
+    { id: 'easy-in', label: t('inspector.eases.ease-in'), shortcut: '⇧F9', onSelect: () => runKeys('easy-in') },
+    { id: 'easy-out', label: t('inspector.eases.ease-out'), shortcut: '⌘⇧F9', onSelect: () => runKeys('easy-out') },
+    { id: 'linear', label: t('inspector.eases.linear'), onSelect: () => runKeys('linear') },
+    { id: 'hold', label: t('inspector.eases.hold'), onSelect: () => runKeys('hold') },
+    { id: 'sep', separator: true },
+    { id: 'delete', label: t('inspector.keyRemove'), shortcut: '⌫', danger: true, onSelect: () => runKeys('delete') },
+  ];
   /** An edit the timeline planned (lib/timeline-edit), as it planned it: one write, one undo step. */
   const editOps = React.useCallback((ops: Op[], label: string) => edit(ops, label), [edit]);
 
@@ -1671,7 +2065,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       look(item, block?.loc && clip ? [{ loc: block.loc, style: clip.style }] : []);
       return null;
     };
-    return { actions, applyDrop, lookTargets };
+    return { actions, applyDrop, lookTargets, place };
   }, [language, selectedBlocks, editModel, projectId, addMedia, timelineTracks, edit, filmClipOf, editBlocks, askTransition, t, toast]);
   /* a look tried: shown on the clips it would go on, taken off when the try ends */
   React.useEffect(() => {
@@ -2315,6 +2709,484 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     void editStageOverrides(edits.map(({ target, style }) => ({ element: layerElement(clipId, target.at, target.n, target.at), patch: { style } as OverrideGeometry })))
       .then((f) => { if (f) toast.show(f); });
   }, [editStageOverrides, toast]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* ── motion: a page clip opened as a composition, its elements its layers (lib/element-motion) ── */
+  const [motionComp, setMotionComp] = React.useState<string | null>(null);
+  React.useEffect(() => { if (!motionOpen) setMotionComp(null); }, [motionOpen]);
+  const compBlock = motionComp ? blocksRef.current.find((b) => b.clipId === motionComp) ?? null : null;
+  const compClip = motionComp ? film.film?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === motionComp) ?? null : null;
+  /* its elements, as the Layers panel reads them from the page (only while it is in the picture) */
+  const [compRows, setCompRows] = React.useState<readonly LayerRow[] | null>(null);
+  const compShown = Boolean(compBlock && timeMs >= compBlock.startMs && timeMs < compBlock.endMs);
+  /* another composition opened: its own elements, read anew; one off the picture keeps those it was read with */
+  React.useEffect(() => { setCompRows(null); }, [motionComp]);
+  React.useEffect(() => {
+    if (!motionComp || !compShown) return undefined;
+    let alive = true;
+    let tries = 0;
+    let wait: ReturnType<typeof setTimeout> | undefined;
+    const read = () => void askStage<{ clip: string; layers: LayerRow[] }[]>('tree').then(async (tree) => {
+      const rows = tree?.find((c) => c.clip === motionComp)?.layers ?? [];
+      if (!alive) return;
+      /* its page still loading: asked again in a moment */
+      if (!rows.length && ++tries < 60) { wait = setTimeout(read, 500); return; }
+      setCompRows(rows);
+      /* each element's own size: what a mask of it is drawn in */
+      const handles: number[] = [];
+      const walk = (list: readonly LayerRow[]) => { for (const r of list) { handles.push(r.handle); walk(r.children ?? []); } };
+      walk(rows);
+      const sizes = await askStage<({ w: number; h: number } | null)[]>('sizes', { handles });
+      if (alive) setCompSizes(new Map(handles.flatMap((h, i) => (sizes?.[i] ? [[h, sizes[i]!] as const] : []))));
+    });
+    read();
+    return () => { alive = false; clearTimeout(wait); };
+  }, [motionComp, compShown, film.film, askStage]);
+  const [compSizes, setCompSizes] = React.useState<ReadonlyMap<number, { w: number; h: number }>>(new Map());
+  const [compPicked, setCompPicked] = React.useState<readonly string[]>([]);
+  const [compKeys, setCompKeys] = React.useState<{ id: string; keys: ReadonlySet<string> } | null>(null);
+  /** An element layer's place: its override's selector and which match. */
+  const elementAt = (row: LayerRow) => ({ at: row.instance ? row.loc.slice(0, -`#${row.instance}`.length) : row.loc, n: row.instance });
+  /* its elements as layers, a tree: an element with others in it twirled open to them (none at first) */
+  const [compOpen, setCompOpen] = React.useState<ReadonlySet<string>>(new Set());
+  React.useEffect(() => { setCompOpen(new Set()); }, [motionComp]);
+  const compLayers = React.useMemo<Layer[]>(() => {
+    if (!compBlock || !compRows) return [];
+    const out: Layer[] = [];
+    /* a line of words the page split into an element a character (its own animation's parts): one layer, its words */
+    const split = (row: LayerRow) => (row.children?.length ?? 0) > 1 && row.children.every((c) => !c.children?.length && [...c.label.trim()].length <= 1);
+    const walk = (rows: readonly LayerRow[], depth: number, parent?: string) => {
+      for (const row of rows) {
+        const kids = split(row) ? 0 : row.children?.length ?? 0;
+        const open = compOpen.has(row.loc);
+        out.push({ clipId: row.loc, title: row.label, kind: row.kind, startMs: 0, endMs: compBlock.endMs - compBlock.startMs, depth, ...(parent ? { parent } : {}), ...(kids ? { kids, kidsOpen: open } : {}) });
+        if (open && kids) walk(row.children ?? [], depth + 1, row.label);
+      }
+    };
+    walk(compRows, 0);
+    return out;
+  }, [compBlock, compRows, compOpen]);
+  const rowOf = React.useCallback((loc: string): LayerRow | null => {
+    const find = (rows: readonly LayerRow[]): LayerRow | null => {
+      for (const r of rows) { if (r.loc === loc) return r; const inner = find(r.children ?? []); if (inner) return inner; }
+      return null;
+    };
+    return compRows ? find(compRows) : null;
+  }, [compRows]);
+  /* an element's keyframes and tweak written: the clip's overrides, the film's @keyframes, one edit */
+  const writeElement = React.useCallback((loc: string, motion: Motion, stat?: ElementCommit['stat'], style?: Record<string, string | null>, words?: ReturnType<typeof splitFor>,
+    mask?: { name: string; entry: string | null; body: string | null }) => {
+    const row = rowOf(loc);
+    if (!row || !motionComp) return;
+    const { at, n } = elementAt(row);
+    const list = (compClip?.overrides ?? []) as FilmOverride[];
+    const out = writeElementMotion(list, at, n, elementSubject(motionComp, at, n), motion, stat);
+    let overrides = out.overrides;
+    if (style) {
+      const has = overrides.some((o) => sameElement(o, at, n));
+      overrides = (has ? overrides : [...overrides, { at, ...(n ? { n } : {}) }]).flatMap((o) => {
+        if (!sameElement(o, at, n)) return [o];
+        const css = { ...(o.style ?? {}) } as Record<string, string | number>;
+        /* what moves keeps no static value (a tweak's style is applied with priority, over its animation) */
+        const keyed = (k: string) => (k === 'opacity' ? Boolean(motion.opacity?.length) : k.startsWith('--fx-') && Boolean(motion[k.slice(5) as KeyedProp]?.length));
+        for (const [k, v] of Object.entries(style)) { if (v == null || keyed(k)) delete css[k]; else css[k] = v; }
+        const next = { ...o, style: css };
+        if (!Object.keys(css).length) delete (next as { style?: unknown }).style;
+        return Object.keys(next).some((k) => k !== 'at' && k !== 'n') ? [next] : [];
+      });
+    }
+    if (words) {
+      /* its words animated part by part, or not any more (lib/text-animator) */
+      const has = overrides.some((o) => sameElement(o, at, n));
+      overrides = (has || words.split ? (has ? overrides : [...overrides, { at, ...(n ? { n } : {}) }]) : overrides).flatMap((o) => {
+        if (!sameElement(o, at, n)) return [o];
+        const next = { ...o } as FilmOverride;
+        if (words.split) next.split = words.split; else delete next.split;
+        return Object.keys(next).some((k) => k !== 'at' && k !== 'n') ? [next] : [];
+      });
+    }
+    if (mask) {
+      /* its mask's keyframes, played among its animations (lib/mask-motion), or not any more */
+      overrides = (overrides.some((o) => sameElement(o, at, n)) || !mask.entry ? overrides : [...overrides, { at, ...(n ? { n } : {}) }]).flatMap((o) => {
+        if (!sameElement(o, at, n)) return [o];
+        const css = { ...(o.style ?? {}) } as Record<string, string | number>;
+        const entries = typeof css.animation === 'string' ? css.animation.split(',').map((e) => e.trim()).filter((e) => e && e.split(/\s+/)[0] !== mask.name) : [];
+        if (mask.entry) entries.push(mask.entry);
+        if (entries.length) css.animation = entries.join(', '); else delete css.animation;
+        const next = { ...o, style: css };
+        if (!Object.keys(css).length) delete (next as { style?: unknown }).style;
+        return Object.keys(next).some((k) => k !== 'at' && k !== 'n') ? [next] : [];
+      });
+    }
+    const set = Object.fromEntries(Object.entries({ ...out.keyframes, ...(words?.keyframes ?? {}), ...(mask ? { [mask.name]: mask.body } : {}) }).filter(([name, body]) => body != null || film.film?.keyframes?.[name] != null));
+    void edit([
+      { op: 'props', edits: [{ clip: motionComp, prop: 'overrides', value: overrides.length ? (overrides as unknown as Record<string, unknown>) : null }] },
+      ...(Object.keys(set).length ? [{ op: 'keyframes' as const, set }] : []),
+    ], clipStep('history.stepMoved', [motionComp])).then((err) => { if (err) toast.showError(err); });
+  }, [rowOf, motionComp, compClip, film.film, edit, toast]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* where the page is: its own second at the playhead (the clip plays it from its trim's start) */
+  const compOffset = Array.isArray(compClip?.time) ? Number(compClip!.time[0]) || 0 : 0;
+  const compLocalMs = compBlock ? timeMs - compBlock.startMs : 0;
+  /* a composition's time is its clip's: the playhead stays on it (its last frame at most), as a nested comp's ends */
+  const inComp = (ms: number) => (compBlock ? Math.min(Math.max(ms, 0), Math.max(0, compBlock.endMs - compBlock.startMs - 1000 / Math.max(1, projectFps))) : ms);
+  const elementMotionOf = React.useCallback((loc: string): Motion => {
+    const row = rowOf(loc);
+    if (!row || !motionComp) return {};
+    const { at, n } = elementAt(row);
+    const entry = ((compClip?.overrides ?? []) as FilmOverride[]).find((o) => sameElement(o, at, n));
+    return readElementMotion(entry, film.film?.keyframes, elementSubject(motionComp, at, n));
+  }, [rowOf, motionComp, compClip, film.film]); // eslint-disable-line react-hooks/exhaustive-deps
+  const elementHostOf = React.useCallback((layer: Layer): LayerHost => {
+    const row = rowOf(layer.clipId);
+    const entry = row ? ((compClip?.overrides ?? []) as FilmOverride[]).find((o) => sameElement(o, elementAt(row).at, elementAt(row).n)) : undefined;
+    const motion = elementMotionOf(layer.clipId);
+    const on = compBlock != null && compLocalMs >= 0 && compLocalMs <= compBlock.endMs - compBlock.startMs;
+    const model = elementModel(motion, elementStatic(entry), compLocalMs / 1000 + compOffset, on, keyFrameS);
+    const css = (entry?.style ?? {}) as Record<string, string | number>;
+    /* its effects, in its tweak's style: its filter and its `--fx-…` values (clip-motion effectsOf) */
+    const fxCss = [`filter: ${css.filter ?? ''}`, ...Object.entries(css).filter(([k]) => k.startsWith('--fx-')).map(([k, v]) => `${k}: ${v}`)].join('; ');
+    const fx = effectsOf(fxCss);
+    const effects = effectsModel(motion, fx.on, fx.values, compLocalMs / 1000 + compOffset, on, keyFrameS);
+    const stat = elementStatic(entry);
+    const pageS = compBlock ? (compBlock.endMs - compBlock.startMs) / 1000 : 0;
+    return {
+      /* an element's keyframes are its transform itself, on the page's own seconds */
+      model: { ...model, preset: { motion, rest: { translate: stat.t, scale: stat.s, rotate: stat.r, opacity: stat.opacity }, span: [compOffset, compOffset + pageS], stage: compBlock?.size ?? film.film?.stage ?? { w: 1920, h: 1080 } } },
+      effects,
+      commitEffects: (c: EffectsChange | null) => {
+        if (!c) return;
+        let patch: Record<string, string | null> | undefined;
+        if (c.fx) {
+          const next = Object.fromEntries(declarations(withEffects(fxCss, c.fx.on, c.fx.values)));
+          patch = { filter: next.filter || null };
+          for (const p of Object.keys(EFFECTS)) patch[`--fx-${p}`] = next[`--fx-${p}`] ?? null;
+        }
+        writeElement(layer.clipId, c.motion, undefined, patch);
+      },
+      commit: (c) => { const k = c as ElementCommit | null; if (k) writeElement(layer.clipId, k.motion, k.stat); },
+      blend: String(css.mixBlendMode ?? 'normal'),
+      setBlend: (mode) => writeElement(layer.clipId, motion, undefined, { mixBlendMode: mode === 'normal' ? null : mode }),
+      visible: !row?.hidden,
+      setVisible: (show) => writeElement(layer.clipId, motion, undefined, { visibility: show ? null : 'hidden' }),
+      ...(row?.kind === 'text' ? { text: { anim: textAnimOf(entry), set: (anim: TextAnim | null) => writeElement(layer.clipId, motion, undefined, undefined, splitFor(anim)) } } : {}),
+      ...(row && motionComp ? { mask: elementMaskOf(layer.clipId, row, css, motion) } : {}),
+      ...(row?.kind === 'shape' ? { stroke: strokeOf(layer.clipId, row, css, motion, on) } : {}),
+    };
+  }, [rowOf, compClip, elementMotionOf, compBlock, compLocalMs, compOffset, keyFrameS, writeElement, film.film, compSizes, motionComp, projectFps]); // eslint-disable-line react-hooks/exhaustive-deps
+  /*
+   * An element's mask (lib/clip-mask) in its tweak's style, drawn in its own size. Its tweak's style is applied with
+   * priority, over any animation: one that moves (lib/mask-motion) keeps no mask of its own there, its keyframes'
+   * first stop says what it is.
+   */
+  const elementMaskOf = (loc: string, row: LayerRow, css: Record<string, string | number>, motion: Motion): LayerMask | null => {
+    const { at, n } = elementAt(row);
+    const box = compSizes.get(row.handle) ?? null;
+    const name = `${elementSubject(motionComp!, at, n)}--mask`;
+    const body = film.film?.keyframes?.[name];
+    const keys = readMaskKeys(body);
+    const first = /%\s*\{\s*mask-image:\s*(.*?);\s*mask-composite:\s*([^}]*?)\s*\}/.exec(body ?? '');
+    const now = first && Object.keys(keys).length ? maskOf(first[1], first[2], box) : maskOf(css.maskImage as string | undefined, css.maskComposite as string | undefined, box);
+    const read = (prop: string) => (prop === 'mask-image' ? css.maskImage : prop === 'mask-composite' ? css.maskComposite : css[prop.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())]) as string | undefined;
+    const write = (base: Mask | null, next: MaskKeys) => {
+      const own = base ? maskCss(read, base, box) : { 'mask-image': null, 'mask-composite': null };
+      if (!own) return;
+      const frames = base ? maskKeyframes(base, next, (prop) => (prop === 'mask-image' || prop === 'mask-composite' ? own[prop] ?? undefined : read(prop)), box, projectFps) : null;
+      /* drawn over the whole element, whatever size and place a mask of the page's own had there (a shine moving) */
+      const fit = base ? { maskSize: '100% 100%', maskPosition: '0 0', maskRepeat: 'no-repeat' } : { maskSize: null, maskPosition: null, maskRepeat: null };
+      writeElement(loc, motion, undefined,
+        frames ? { maskImage: null, maskComposite: null, ...fit } : { maskImage: own['mask-image'] ?? null, maskComposite: own['mask-composite'] ?? null, ...fit },
+        undefined, { name, entry: frames ? `${name} ${Math.round(frames.secs * 1000) / 1000}s linear both` : null, body: frames?.body ?? null });
+    };
+    const on = compBlock != null && compLocalMs >= 0 && compLocalMs <= compBlock.endMs - compBlock.startMs;
+    /* a mask Studio cannot read (written by hand): left as it is */
+    if (now === null) return null;
+    return {
+      shape: now?.shape ?? null,
+      invert: Boolean(now?.invert),
+      model: now ? maskModel(now, keys, compLocalMs / 1000 + compOffset, on, keyFrameS) : null,
+      keys,
+      setShape: (shape) => write(shape ? maskDefault(shape, box, now ?? null) : null, shape ? keys : {}),
+      setInvert: (inv) => { if (now) write({ ...now, invert: inv }, keys); },
+      commit: (c) => { if (c && now) write(c.base ?? now, c.keys); },
+    };
+  };
+  /*
+   * A shape's stroke drawn on (an animation editor's Trim Paths): its dash as long as its longest path (asked of the
+   * page once, as it is turned on), offset by what is not drawn of it, `--fx-trim` (0–100, keyed as an effect)
+   */
+  const strokeOf = (loc: string, row: LayerRow, css: Record<string, string | number>, motion: Motion, on: boolean) => {
+    const strokeOn = String(css.strokeDashoffset ?? '').includes('--fx-trim');
+    const trim = Number.parseFloat(String(css['--fx-trim'] ?? ''));
+    const model = effectsModel(motion, strokeOn ? ['trim'] : [], Number.isFinite(trim) ? { trim } : {}, compLocalMs / 1000 + compOffset, on, keyFrameS);
+    return {
+      on: strokeOn,
+      model,
+      commit: (c: EffectsChange | null) => {
+        if (!c) return;
+        const keep = c.fx ? c.fx.on.includes('trim') : strokeOn;
+        const value = c.fx?.values.trim;
+        writeElement(loc, c.motion, undefined, keep
+          ? (c.fx ? { '--fx-trim': value != null ? String(value) : null } : undefined)
+          : { strokeDasharray: null, strokeDashoffset: null, '--fx-trim': null });
+      },
+      turnOn: () => {
+        void askStage<number | null>('strokeLength', { handle: row.handle }).then((len) => {
+          if (!len) { toast.show(t('canvas.strokeNone')); return; }
+          writeElement(loc, motion, undefined, { strokeDasharray: `${len}px`, strokeDashoffset: `calc(${len}px * (1 - var(--fx-trim, 100) / 100))`, '--fx-trim': '100' });
+        });
+      },
+    };
+  };
+  const elementLanesOf = React.useCallback((layer: Layer): MotionLanes => {
+    const motion = elementMotionOf(layer.clipId);
+    const id = layer.clipId;
+    const picked = compKeys?.id === id ? compKeys.keys : NO_KEYS;
+    const host = elementHostOf(layer);
+    const model = host.model;
+    return {
+      clipId: id, startMs: -compOffset * 1000, endMs: layer.endMs, playheadMs: compLocalMs, frameMs: 1000 * keyFrameS,
+      rows: [...MOTION_PROPS, ...(host.effects?.on ?? []), ...(host.stroke?.on ? ['trim' as const] : [])].map((prop) => ({ prop, label: keyedLabel(prop), keys: motion[prop] ?? [] })),
+      picked,
+      onPick: (ids, mode) => {
+        setCompPicked([id]);
+        setCompKeys((was) => {
+          const base = was?.id === id ? was.keys : NO_KEYS;
+          if (mode === 'set') return { id, keys: new Set(ids) };
+          const next = new Set(base);
+          for (const k of ids) { if (mode === 'toggle' && next.has(k)) next.delete(k); else next.add(k); }
+          return { id, keys: next };
+        });
+      },
+      onMove: (dt) => { if (picked.size) writeElement(id, movedKeys(motion, picked, dt)); },
+      onToggleHere: (prop) => {
+        if (prop === 'trim') { host.stroke?.commit(host.stroke.model.toggleHere('trim')); return; }
+        if (prop in EFFECTS) { host.commitEffects(host.effects?.toggleHere(prop as EffectProp) ?? null); return; }
+        const c = model?.toggleHere(prop as MotionProp) as ElementCommit | null;
+        if (c) writeElement(id, c.motion, c.stat);
+      },
+      onSeek: (ms) => { if (compBlock) seek(compBlock.startMs + inComp(ms)); },
+      onMenu: (e) => { if (picked.size) setKeyMenu({ x: e.clientX, y: e.clientY }); },
+      graph: motionGraph,
+      onGraph: () => setMotionGraph((v) => !v),
+      onCurve: (prop, at, curve) => {
+        const ease = easeOfBezier(curve);
+        writeElement(id, { ...motion, [prop]: (motion[prop] ?? []).map((k) => {
+          if (k.t !== at) return k;
+          const { ease: _was, ...rest } = k;
+          return ease ? { ...rest, ease } : rest;
+        }) });
+      },
+      onKeyEdit: (prop, at, to) => {
+        const keys = (motion[prop] ?? []).filter((k) => k.t === at || Math.abs(k.t - to.t) >= keyFrameS / 2);
+        writeElement(id, { ...motion, [prop]: keys.map((k) => (k.t === at ? { ...k, t: to.t, v: to.v } : k)).sort((a, b) => a.t - b.t) });
+      },
+      labels: { prev: t('inspector.keyPrev'), next: t('inspector.keyNext'), add: t('inspector.keyAdd'), remove: t('inspector.keyRemove'), graph: t('inspector.keyGraph') },
+    };
+  }, [elementMotionOf, elementHostOf, compKeys, compOffset, compLocalMs, keyFrameS, writeElement, compBlock, seek, motionGraph, t]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* an element's picked keyframes: eased (F9), taken away, nudged (⌥←/→), copied and pasted, as a clip's are */
+  elementKeys.current = {
+    run: (what) => {
+      if (!motionComp || !compKeys?.keys.size) return false;
+      const { id, keys: picked } = compKeys;
+      const motion = elementMotionOf(id);
+      if (what === 'delete') { writeElement(id, withoutKeys(motion, picked)); setCompKeys({ id, keys: new Set() }); return true; }
+      if (typeof what === 'object') {
+        const lowest = Math.min(...[...picked].map((x) => parseKeyId(x)?.t ?? Infinity));
+        const dt = Math.max(what.move, -lowest);
+        writeElement(id, movedKeys(motion, picked, what.move));
+        setCompKeys({ id, keys: new Set([...picked].flatMap((x) => { const k = parseKeyId(x); return k ? [keyId(k.prop, Math.round((k.t + dt) * 1000) / 1000)] : []; })) });
+        return true;
+      }
+      writeElement(id, easedMotion(motion, picked, what));
+      return true;
+    },
+    copy: () => (motionComp && compKeys?.keys.size ? copiedKeys(elementMotionOf(compKeys.id), compKeys.keys) : null),
+    paste: (copied) => {
+      const id = motionComp ? compPicked[0] : undefined;
+      if (!id || !compBlock) return false;
+      const pasted = pastedKeys(elementMotionOf(id), copied, Math.max(0, compLocalMs / 1000 + compOffset), keyFrameS);
+      writeElement(id, pasted.motion);
+      setCompKeys({ id, keys: pasted.picked });
+      return true;
+    },
+  };
+  React.useEffect(() => {
+    if (!compKeys?.keys.size) return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      let done = true;
+      if (e.key === 'F9') elementKeys.current.run(e.metaKey && e.shiftKey ? 'easy-out' : e.shiftKey ? 'easy-in' : 'easy');
+      else if (e.key === 'Backspace' || e.key === 'Delete') elementKeys.current.run('delete');
+      else if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) elementKeys.current.run({ move: (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 10 : 1) * keyFrameS });
+      else if (e.key === 'Escape') setCompKeys(null);
+      else done = false;
+      if (done) { e.preventDefault(); e.stopPropagation(); }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [compKeys, keyFrameS]);
+  /* a page layer double-clicked: its composition opened, the playhead brought into it */
+  const openComposition = React.useCallback((layer: Layer) => {
+    const block = blocksRef.current.find((b) => b.clipId === layer.clipId);
+    if (!block || block.kind !== 'mg') return;
+    if (timeRef.current < block.startMs || timeRef.current >= block.endMs) seek(block.startMs);
+    setCompPicked([]);
+    setCompKeys(null);
+    setPickedKeys(new Set());
+    setMotionComp(layer.clipId);
+  }, [seek]);
+  /* ── Motion's layers on the edit's own timeline (components/Timeline `layers`): a row a picture clip, the topmost
+     first, its properties under it; a composition's, a row an element of its page (they play all of it: not moved) ── */
+  const filmMotion = useMotionLayers({
+    layers: motionLayers, playheadMs: timeMs, fps: projectFps, onSeek: seek,
+    picked: selectedBlocks.flatMap((b) => (b.clipId ? [b.clipId] : [])),
+    onPick: (id, add) => setSelectedKeys((was) => (add ? (was.includes(id) ? was.filter((x) => x !== id) : [...was, id]) : [id])),
+    lanesOf: (l) => lanesOf(l as TimelineBlock & { clipId: string }),
+    hostOf: (l) => ({ ...layerHostOf(l as TimelineBlock & { clipId: string }), contents: contentsOfRef.current(l as TimelineBlock & { clipId: string }) }),
+    onOpen: openComposition, reveal: motionReveal, t,
+  });
+  const compMotion = useMotionLayers({
+    layers: compLayers, playheadMs: compLocalMs, fps: projectFps, onSeek: (ms) => { if (compBlock) seek(compBlock.startMs + inComp(ms)); },
+    picked: compPicked,
+    onPick: (id, add) => {
+      const next = add ? (compPicked.includes(id) ? compPicked.filter((x) => x !== id) : [...compPicked, id]) : [id];
+      setCompPicked(next);
+      /* in hand on the picture too, with its handles, as the Layers panel's row picks it */
+      if (motionComp) selectLayerRows(next.map((loc) => ({ clipId: motionComp, loc })));
+    },
+    lanesOf: elementLanesOf, hostOf: elementHostOf, reveal: motionReveal, t,
+    onKids: (layer) => setCompOpen((was) => { const next = new Set(was); if (next.has(layer.clipId)) next.delete(layer.clipId); else next.add(layer.clipId); return next; }),
+  });
+  /* a new layer (Motion's toolbar): words, a shape or a solid from the library's layers, still, on a track of its own at
+     the top from the playhead, for keyframes to move; or the picked layers grouped (a compound clip, as an animation
+     editor precomposes them, moved together) */
+  const [newLayerMenu, setNewLayerMenu] = React.useState<{ x: number; y: number } | null>(null);
+  const newLayerItems = (): ContextMenuEntry[] => {
+    const layer = (id: string, label: string, vars?: Record<string, string>) => ({
+      id, label, onSelect: () => { const item = builtInItem(`${BUILT_IN}/${id}`); if (item) void library.place(item, vars, label); else toast.show(t('timeline.editFail')); },
+    });
+    return [
+      /* the words still: how they come in and go out is keyframes now, not the page's own */
+      layer(TEXT_COMPONENT, t('canvas.layerText'), { '--in': 'none', '--loop': 'none', '--out': 'none' }),
+      { id: 'sep-shapes', separator: true },
+      layer('layers/rectangle', t('canvas.layerRect')),
+      layer('layers/ellipse', t('canvas.layerEllipse')),
+      layer('layers/polygon', t('canvas.layerPolygon')),
+      layer('layers/star', t('canvas.layerStar')),
+      layer('layers/solid', t('canvas.layerSolid')),
+      { id: 'sep-group', separator: true },
+      { id: 'group', label: t('canvas.layerGroup'), shortcut: '⌥G', disabled: !selectedBlocks.length || Boolean(motionComp),
+        onSelect: () => { void makeCompound(selectedBlocks).then((err) => { if (err) toast.showError(err); }); } },
+    ];
+  };
+  /* the edit's tracks as Motion's rows, in their order: a track with one picture clip is that layer; one with more is
+     a folder, its clips on its row as in the edit, twirled open to a layer each (its track's, so drags and trims are
+     the edit's), by time; sound tracks as they are */
+  const [openTracks, setOpenTracks] = React.useState<ReadonlySet<string>>(new Set());
+  /* a clip that has keyframes shows them on its bar, cutting it or animating it: what moves is in sight */
+  const withKeyMarks = React.useCallback((b: TimelineBlock): TimelineBlock => {
+    if (!b.clipId || (b.kind !== 'mg' && b.kind !== 'video')) return b;
+    const clip = film.film?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === b.clipId);
+    const own = keyTimesMs(motionOfBlock(b), 0, b.endMs - b.startMs);
+    const vars = clip ? Object.values(readVarMotion(clip.id, clip.overrides as readonly FilmOverride[] | undefined, film.film?.keyframes)).flatMap((v) => v.keys.map((k) => Math.round(k.t * 1000))) : [];
+    const keysMs = [...new Set([...own, ...vars])].filter((ms) => ms >= 0 && ms <= b.endMs - b.startMs).sort((x, y) => x - y);
+    return keysMs.length ? { ...b, keysMs } : b;
+  }, [film.film, motionOfBlock]);
+  /* a layer shown twirled open (put on from the panels, or opened from the edit's inspector): its folder opens too */
+  React.useEffect(() => {
+    const ids = motionReveal?.ids ?? [];
+    const lanes = tools.tracks.filter((tr) => tr.blocks.some((b) => b.clipId && ids.includes(b.clipId))).map((tr) => tr.lane);
+    if (lanes.length) setOpenTracks((was) => (lanes.every((l) => was.has(l)) ? was : new Set([...was, ...lanes])));
+  }, [motionReveal]); // eslint-disable-line react-hooks/exhaustive-deps
+  const editTracks = React.useMemo(() => tools.tracks.map((tr) => (tr.blocks.some((b) => b.clipId) ? { ...tr, blocks: tr.blocks.map(withKeyMarks) } : tr)), [tools.tracks, withKeyMarks]);
+  const layerTracks = React.useMemo(() => {
+    if (!motionOpen) return null;
+    const byClip = new Map(motionLayers.map((l) => [l.clipId, l]));
+    let n = 0;
+    const rows: LayerRowSpec[] = [];
+    for (const track of tools.tracks) {
+      const pictures = track.kind === 'visual' ? [...track.blocks].filter((b) => b.clipId && byClip.has(b.clipId)).sort((a, b) => a.startMs - b.startMs) : [];
+      if (!pictures.length) { rows.push({ track, layer: null, n: 0 }); continue; }
+      const folder = pictures.length > 1;
+      const open = folder && openTracks.has(track.lane);
+      if (folder) {
+        /* open, its clips are on their own rows below it, not twice */
+        rows.push({ track: { ...track, height: LAYER_ROW_H, extra: undefined, blocks: open ? track.blocks.filter((b) => !pictures.includes(b)) : track.blocks.map(withKeyMarks) }, layer: null, n: 0, folder: { count: pictures.length, open } });
+        if (!open) continue;
+      }
+      for (const b of pictures) {
+        const own = byClip.get(b.clipId!)!;
+        const layer = folder ? { ...own, depth: 1 } : own;
+        const extra = filmMotion.extraOf(layer);
+        rows.push({ track: { ...track, lane: `${track.lane}~${b.id}`, blocks: [withKeyMarks(b)], name: b.title, height: LAYER_ROW_H, ...(extra ? { extra } : { extra: undefined }) }, layer, n: ++n });
+      }
+    }
+    return rows;
+  }, [motionOpen, motionLayers, tools.tracks, filmMotion, openTracks, withKeyMarks]); // eslint-disable-line react-hooks/exhaustive-deps
+  const compTracks = React.useMemo(() => (compBlock ? compLayers.map((layer, i) => {
+    const extra = compMotion.extraOf(layer);
+    /* its bar in its label's color, its keyframes marked on it (they are on the page's time) */
+    const keysMs = keyTimesMs(elementMotionOf(layer.clipId), -compOffset, layer.endMs);
+    const block: TimelineBlock = { id: `el:${layer.clipId}`, title: layer.title || layer.clipId, startMs: 0, endMs: layer.endMs, kind: 'mg', color: layerBarColor(layer.kind), ...(keysMs.length ? { keysMs } : {}) };
+    return { track: { lane: `el:${layer.clipId}`, role: 'mg' as const, kind: 'visual' as const, index: 1, name: block.title, blocks: [block], height: LAYER_ROW_H, ...(extra ? { extra } : {}) } as TimelineTrack, layer, n: i + 1 };
+  }) : null), [compBlock, compLayers, compMotion, compOffset, film.film]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* what the timeline draws of a layer row: its head and its properties (a sound track keeps a plain head) */
+  /* a folder's head: its track's eye and lock, its twirl, its badge and how many clips it has */
+  const folderHead = (track: TimelineTrack, folder: NonNullable<LayerRowSpec['folder']>) => {
+    const loc = track.blocks.find((b) => b.loc)?.loc ?? (track.docIndex != null ? `film.html#${track.docIndex}.0` : null);
+    const flag = (prop: 'hidden' | 'locked') => { if (loc) void editBlocks([{ loc, prop, value: track[prop] ? null : true }]).then((err) => { if (err) toast.showError(err); }); };
+    const btn = 'grid h-[18px] w-[18px] place-items-center rounded-[3px] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]';
+    return (
+      <div className="flex h-full w-full min-w-0 items-center pr-2 text-[12px] text-[var(--text-muted)]" data-motion-folder={track.lane}>
+        <span className="grid w-[22px] shrink-0 place-items-center">
+          <button type="button" aria-label={t('canvas.motionVisible')} aria-pressed={!track.hidden} className={btn} onPointerDown={(e) => e.stopPropagation()} onClick={() => flag('hidden')}>
+            {track.hidden ? <EyeOff size={12} className="opacity-50" /> : <Eye size={12} />}
+          </button>
+        </span>
+        <span className="grid w-[20px] shrink-0 place-items-center">
+          <button type="button" aria-label={t(track.locked ? 'canvas.layerUnlock' : 'canvas.layerLock')} className={`${btn} ${track.locked ? 'text-[var(--text)]' : 'text-[var(--text-faint)] opacity-60'}`} onPointerDown={(e) => e.stopPropagation()} onClick={() => flag('locked')}>
+            {track.locked ? <Lock size={11} /> : <LockOpen size={11} />}
+          </button>
+        </span>
+        <button type="button" aria-expanded={folder.open} aria-label={t('canvas.trackLayers')} title={t('canvas.trackLayers')} data-folder-twirl={track.lane}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => setOpenTracks((was) => { const next = new Set(was); if (next.has(track.lane)) next.delete(track.lane); else next.add(track.lane); return next; })}
+          className="flex min-w-0 items-center gap-1.5 rounded-[3px] pr-1 hover:text-[var(--text)]">
+          {folder.open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+          <span className="rounded-[3px] bg-[var(--bg-hover)] px-1 text-[10.5px] font-medium tabular-nums text-[var(--text)]">{track.badge ?? ''}</span>
+          <span className="truncate">{t('canvas.trackClips').replace('{n}', String(folder.count))}</span>
+        </button>
+      </div>
+    );
+  };
+  const layerView = (view: MotionLayersView, rows: readonly LayerRowSpec[], keysPicked: boolean, layersPicked: boolean, open?: (layer: Layer) => void) => {
+    const of = new Map(rows.map((r) => [r.track.lane, r]));
+    return {
+      headWidth: view.headWidth,
+      ...(open ? { open: (block: TimelineBlock) => {
+        const layer = rows.find((r) => r.layer?.clipId === block.clipId)?.layer;
+        if (!layer || layer.kind !== 'mg') return false;
+        open(layer);
+        return true;
+      } } : {}),
+      /* an animation editor's tools in the place of cutting's: ease the picked keyframes, their curves, what moves */
+      tools: [
+        { id: 'new', label: t('canvas.newLayer'), icon: <Plus size={16} />, onClick: () => {
+          const r = document.querySelector('[data-motion-tool="new"]')?.getBoundingClientRect();
+          setNewLayerMenu(r ? { x: r.left, y: r.bottom + 4 } : { x: 200, y: 200 });
+        } },
+        { id: 'ease', label: t('canvas.toolEase'), hint: 'F9', icon: <Spline size={16} />, disabled: !keysPicked, onClick: () => runKeys('easy') },
+        { id: 'graph', label: t('canvas.toolGraph'), hint: '⇧F3', icon: <ChartSpline size={16} />, active: motionGraph, onClick: () => setMotionGraph((on) => !on) },
+        { id: 'moving', label: t('canvas.showMoving'), hint: 'U', icon: <Diamond size={15} />, disabled: !layersPicked, onClick: view.showMoving },
+      ],
+      head: (track: TimelineTrack) => {
+        const row = of.get(track.lane);
+        if (row?.folder) return folderHead(row.track, row.folder);
+        return row?.layer ? view.head(row.layer, row.n) : <span className="truncate px-3 text-[11px] text-[var(--text-faint)]">{track.badge ?? ''} {track.name ?? ''}</span>;
+      },
+      extraHead: (track: TimelineTrack) => { const row = of.get(track.lane); return row?.layer ? view.extraHead(row.layer) : null; },
+      extraBody: (track: TimelineTrack, px: number) => { const row = of.get(track.lane); return row?.layer ? view.extraBody(row.layer, px) : null; },
+    };
+  };
   const previewClip = React.useCallback((clipLoc: string, patch: Partial<MgTransform> | null) => clipPreviewRef.current?.(clipLoc, patch), []);
   const previewLook = React.useCallback((clipLoc: string, css: string | null) => lookPreviewRef.current?.(clipLoc, css), []);
   /* the inspector's Crop: crop mode on the picture, for the video or still in hand there */
@@ -2355,6 +3227,52 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const clipPropsOf = React.useCallback((clipId: string | undefined): ComponentProp[] => (
     clipId ? propsOf(filmRef.current?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === clipId)) : []
   ), []);
+  /* the page's own value of each of its properties, as the picture last showed them (a page layer's Contents) */
+  const [pageVars, setPageVars] = React.useState<ReadonlyMap<string, Readonly<Record<string, string>>>>(new Map());
+  React.useEffect(() => {
+    if (workMode !== 'motion') return undefined;
+    let live = true;
+    const want = motionLayers.filter((l) => l.kind === 'mg' && !pageVars.has(l.clipId) && clipPropsOf(l.clipId).some((p) => p.type === 'var'));
+    if (!want.length) return undefined;
+    const timer = window.setTimeout(() => {
+      void Promise.all(want.map((l) => askStage<TemplateControls>('controls', { clip: l.clipId }).catch(() => null).then((c) => [l.clipId, c] as const))).then((read) => {
+        if (!live) return;
+        const found = read.filter((r): r is readonly [string, TemplateControls] => r[1] != null);
+        if (found.length) setPageVars((was) => new Map([...was, ...found.map(([id, c]) => [id, Object.fromEntries(c.vars.map((v) => [v.name, v.value]))] as const)]));
+      });
+    }, 300);
+    return () => { live = false; window.clearTimeout(timer); };
+  }, [workMode, motionLayers, pageVars, clipPropsOf, askStage, Math.floor(timeMs / 1000)]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* its properties that are numbers, each keyed as its Transform is (lib/page-motion): still, a `:root` override */
+  contentsOfRef.current = (layer) => {
+    const clip = layer.kind === 'mg' ? film.film?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === layer.clipId) : undefined;
+    if (!clip) return null;
+    const overrides = clip.overrides as readonly FilmOverride[] | undefined;
+    const keyed = readVarMotion(clip.id, overrides, film.film?.keyframes);
+    const still = overrideOf(overrides, { at: ':root' })?.style ?? {};
+    const own = pageVars.get(clip.id) ?? {};
+    const params = clipPropsOf(clip.id).flatMap((p) => {
+      if (p.type !== 'var' || p.var === '--clip-length') return [];
+      const num = numberOf(still[p.var] as string | undefined) ?? numberOf(own[p.var]);
+      const k = keyed[p.var];
+      return k || num ? [{ var: p.var, label: p.name, unit: k?.unit ?? num?.unit ?? '', still: num?.n ?? null }] : [];
+    });
+    return {
+      params,
+      keys: Object.fromEntries(Object.entries(keyed).map(([v, k]) => [v, k.keys])),
+      commit: (keys, stillPatch) => {
+        const unitOf = (v: string) => params.find((x) => x.var === v)?.unit ?? '';
+        let next = overrides;
+        for (const [v, n] of Object.entries(stillPatch ?? {})) next = withVar(next, v, n == null ? null : `${Math.round(n * 1000) / 1000}${unitOf(v)}`) ?? undefined;
+        const w = writeVarMotion(clip.id, next, Object.fromEntries(Object.entries(keys).filter(([, ks]) => ks.length).map(([v, ks]) => [v, { unit: unitOf(v), keys: ks }])), clip.time?.[0] ?? 0);
+        const set = Object.fromEntries(Object.entries(w.keyframes).filter(([name, body]) => body != null || film.film?.keyframes?.[name] != null));
+        void edit([
+          { op: 'props', edits: [{ clip: clip.id, prop: 'overrides', value: w.overrides as unknown as Record<string, unknown> | null }] },
+          ...(Object.keys(set).length ? [{ op: 'keyframes' as const, set }] : []),
+        ], clipStep('history.stepMoved', [clip.id])).then((err) => { if (err) toast.showError(err); });
+      },
+    };
+  };
   const writeClipProps = React.useCallback((clipId: string | undefined, next: readonly ComponentProp[]) => {
     const loc = blocksRef.current.find((b) => b.clipId === clipId)?.loc;
     if (!loc) { toast.show(t('timeline.editFail')); return; }
@@ -3371,6 +4289,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 )}
               </div>
             </div>
+            {keyMenu ? <ContextMenu x={keyMenu.x} y={keyMenu.y} dense items={keyMenuItems} onClose={() => setKeyMenu(null)} /> : null}
             {titleMenu ? (
               <ContextMenu x={titleMenu.x} y={titleMenu.y} onClose={() => setTitleMenu(null)}
                 items={projectMenuItems(t, { onRename: startRename, onCoverFromFrame: coverFromFrame, onReveal: () => reveal('') })} />
@@ -3417,14 +4336,10 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 </button>
               </Tooltip>
               </>)}
-              {/* the edit or the canvas, in the panes' place: the one shown, and a click for the other */}
-              <Tooltip label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} side="bottom">
-                <button type="button" aria-label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} aria-pressed={canvasOpen} onClick={() => setCanvasOpen(!canvasOpen)}
-                  className="flex h-[26px] shrink-0 items-center gap-1 rounded-md pl-1.5 pr-1 text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
-                  {canvasOpen ? <Workflow size={15} /> : <FilmIcon size={15} />}
-                  <ArrowLeftRight size={10} className="text-[var(--text-faint)]" />
-                </button>
-              </Tooltip>
+              {/* what the panes are for: one button saying which, a click for the menu of the three — the edit (cutting
+                  the film), the canvas (making material), motion (layers and keyframes, as an animation editor shows them) */}
+              {/* the edit and the canvas; animating is the edit's own timeline shown another way (its toolbar's first button) */}
+              <ModeSwitcher mode={workMode === 'motion' ? 'edit' : workMode} modes={workModes.filter((m) => m !== 'motion')} onMode={setWorkMode} onSettings={() => setSettingsOpen('advanced')} />
             </div>
             <div aria-hidden className="shrink-0 self-stretch" style={{ width: 'var(--titlebar-right-x)' }} />
           </div>
@@ -3609,6 +4524,10 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                                 doc={value as unknown as FilmDoc}
                                 spans={spans}
                                 timeMs={timeMs}
+                                poseOf={poseOf}
+                                poseKey={stagePoseKey}
+                                /* the path a picked layer moves along: Motion's (the edit keeps out of keyframes) */
+                                motionPath={motionOpen ? motionPath : null}
                                 playing={playing}
                                 onPause={pause}
                                 onSelectElement={selectStageElement}
@@ -3717,10 +4636,37 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                       width={inspectorShownWidth}
                       onClose={closeInspector}
                     />
+                  ) : motionOpen ? (
+                    /* motion's own panel (components/MotionPanel): the picked layers' properties, the effects & presets */
+                    <div className={`${PANE} flex shrink-0 flex-col`} style={{ width: inspectorShownWidth }}>
+                      {compBlock ? (
+                        <MotionPanel layers={compLayers.filter((l) => compPicked.includes(l.clipId))} hostOf={elementHostOf}
+                          onApplied={(ids) => setMotionReveal((was) => ({ ids, n: (was?.n ?? 0) + 1 }))} />
+                      ) : (
+                        <MotionPanel layers={motionLayers.filter((l) => selectedBlocks.some((b) => b.clipId === l.clipId))} hostOf={(l) => layerHostOf(l as TimelineBlock & { clipId: string })}
+                          contents={(() => {
+                            /* a page layer's own properties (its words, its fill…), as the edit's inspector shows them */
+                            const block = selectedBlocks.length === 1 ? selectedBlocks[0]! : null;
+                            const own = block?.kind === 'mg' && block.loc ? propsHostOf(block) : null;
+                            /* a number with keyframes is changed on its row under Contents, where its keyframes are: a
+                               still value typed here would win over them */
+                            const keyed = new Set(Object.keys((block?.clipId ? contentsOfRef.current(block as TimelineBlock & { clipId: string })?.keys : null) ?? {}));
+                            const isKeyed = (p: ComponentProp) => p.type === 'var' && keyed.has(p.var);
+                            const host = own && keyed.size ? {
+                              ...own,
+                              props: () => own.props().filter((p) => !isKeyed(p)),
+                              setProps: (next: readonly ComponentProp[]) => own.setProps([...next, ...own.props().filter((p) => isKeyed(p) && !next.some((n) => n.name === p.name))]),
+                            } : own;
+                            return host && block?.loc ? <PropertiesSection host={host} commit={(next) => { void editBlocks([{ loc: block.loc!, prop: 'overrides', value: next as unknown as Record<string, unknown> | null }]).then((err) => { if (err) toast.showError(err); }); }} /> : null;
+                          })()}
+                          onApplied={(ids) => setMotionReveal((was) => ({ ids, n: (was?.n ?? 0) + 1 }))} />
+                      )}
+                    </div>
                   ) : (
                     <FontScopeContext.Provider value={fontScope}>
                     <LiveGeometryInspector
                       store={geometryStore}
+                      {...(workModes.includes('motion') ? { onAnimate: (clipId: string) => { setWorkMode('motion'); setMotionReveal((was) => ({ ids: [clipId], n: (was?.n ?? 0) + 1 })); } } : {})}
                       element={stageElement}
                       clips={selectedBlocks}
                       mainTrack={mainTrack}
@@ -3779,6 +4725,28 @@ export function ProjectView({ projectId, onProject, onLeave }: {
               <div className={`${PANE} shrink-0 bg-[var(--dock-pane)]`} style={{ height: timelineShownHeight }}>
                 <div className="absolute inset-0 flex min-h-0 min-w-0 flex-col" data-timeline-scope="main" style={{ right: METERS_W }}
                   onPointerDownCapture={() => { if (pickedMedia) pickMedia(null); }}>
+                  {motionOpen && compBlock && compTracks ? (
+                  /* a composition: its page's elements as layers, on the timeline of the page's own time */
+                  <Timeline
+                    tracks={compTracks.map((r) => r.track)}
+                    layers={layerView(compMotion, compTracks, Boolean(compKeys?.keys.size), compPicked.length > 0)}
+                    totalMs={compBlock.endMs - compBlock.startMs}
+                    timeMs={compLocalMs}
+                    playing={playing}
+                    onSeek={(ms) => seek(compBlock.startMs + inComp(ms))}
+                    onScrubPreview={(ms) => scrubPreview(compBlock.startMs + inComp(ms))}
+                    onScrubCommit={(ms) => scrubCommit(compBlock.startMs + inComp(ms))}
+                    selected={compPicked.map((id) => `el:${id}`)}
+                    onSelectedChange={(ids) => {
+                      const next = ids.map((x) => x.replace(/^el:/, ''));
+                      setCompPicked(next);
+                      /* in hand on the picture too, as a pick on its name does: once the press is over, which the picture
+                         would otherwise answer by taking its clip again */
+                      if (motionComp && next.length) window.setTimeout(() => selectLayerRows(next.map((loc) => ({ clipId: motionComp, loc }))), 0);
+                    }}
+                    crumb={{ outer: loaded?.project.name ?? '', name: compBlock.title || compBlock.clipId || '', onBack: () => setMotionComp(null) }}
+                  />
+                  ) : (
                   <Timeline
                     blockMenuExtra={timelineMenuExtra}
                     chat={timelineChat}
@@ -3802,7 +4770,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     relinkCandidates={relinkCandidates}
                     onRelink={(block, path) => void relinkBlock(block, path)}
                     onViewChange={setThumbView}
-                    tracks={tools.tracks}
+                    tracks={layerTracks ? layerTracks.map((r) => r.track) : editTracks}
+                    layers={layerTracks ? layerView(filmMotion, layerTracks, pickedKeys.size > 0, selectedBlocks.length > 0, openComposition) : null}
+                    timelineView={workModes.includes('motion') && workModes.includes('edit') ? { now: workMode === 'motion' ? 'motion' : 'edit', onView: setWorkMode } : null}
                     totalMs={totalMs}
                     timeMs={timeMs}
                     clock={playing ? clock : null}
@@ -3835,12 +4805,18 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     hasClipboard={clipboard.length > 0 || layerBoard != null}
                     selected={selectedIds}
                     onSelectedChange={onTimelineSelected}
-                    subtitles={{ on: subs.style.on, onToggle: subs.toggle, count: subs.count, untranscribed: subs.captions?.untranscribed.length ?? 0, onConfigure: configureSubtitles, configuring: inspectorShown && inspectorContent === 'subtitles', onMake: makeSubtitles, making: subs.transcribing, problem: subtitleProblem }}
-                    subtitleRow={subtitleRow}
+                    /* subtitles are the edit's */
+                    {...(layerTracks ? {} : {
+                      subtitles: { on: subs.style.on, onToggle: subs.toggle, count: subs.count, untranscribed: subs.captions?.untranscribed.length ?? 0, onConfigure: configureSubtitles, configuring: inspectorShown && inspectorContent === 'subtitles', onMake: makeSubtitles, making: subs.transcribing, problem: subtitleProblem },
+                      subtitleRow,
+                    })}
                     waveUrl={waveUrl}
                     history={timelineHistory}
                     {...tools.timeline}
                   />
+                  )}
+                  {motionOpen ? (compBlock ? compMotion.overlay : filmMotion.overlay) : null}
+                  {newLayerMenu ? <ContextMenu x={newLayerMenu.x} y={newLayerMenu.y} items={newLayerItems()} onClose={() => setNewLayerMenu(null)} /> : null}
                 </div>
                 {/* the audio meters, beside the timeline */}
                 <div className="absolute inset-y-0 right-0"><AudioMeters levels={tools.levels} playing={playing} /></div>

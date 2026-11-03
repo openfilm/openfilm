@@ -11,15 +11,25 @@
  * Animations of other names (a preset's, an agent's own) are the clip's too, kept as they are. Pure: no DOM, so the
  * server's edits and the editor read and write keyframes alike.
  */
-import { declarations } from './film-doc.mjs';
+import { EFFECTS, declarations } from './film-doc.mjs';
 
-/** What Studio keys, and how a value of each is written. */
+export { EFFECTS };
+
+/** What Studio keys of a clip's Transform, and how a value of each is written. */
 export const MOTION_PROPS = /** @type {const} */ (['translate', 'scale', 'rotate', 'opacity']);
 /** @typedef {typeof MOTION_PROPS[number]} MotionProp */
+export const EFFECT_PROPS = /** @type {(keyof typeof EFFECTS)[]} */ (Object.keys(EFFECTS));
+/** @typedef {keyof typeof EFFECTS} EffectProp */
+/** Everything a clip's keyframes move. */
+export const KEYED_PROPS = /** @type {readonly (MotionProp | EffectProp)[]} */ ([...MOTION_PROPS, ...EFFECT_PROPS]);
+/** @typedef {MotionProp | EffectProp} KeyedProp */
+const isEffect = (/** @type {string} */ prop) => prop in EFFECTS;
+/** The CSS property a keyframe of `prop` sets. */
+export const cssProp = (/** @type {KeyedProp} */ prop) => (isEffect(prop) ? `--fx-${prop}` : prop);
 /** A value: translate is [x, y] in stage px, scale a factor, rotate degrees, opacity 0–1. */
 /** @typedef {number | [number, number]} MotionValue */
 /** @typedef {{ t: number, v: MotionValue, ease?: string }} Key */
-/** @typedef {Partial<Record<MotionProp, Key[]>>} Motion */
+/** @typedef {Partial<Record<KeyedProp, Key[]>>} Motion */
 
 /** The easings a keyframe offers, by name, as CSS. */
 export const EASES = {
@@ -31,19 +41,23 @@ export const EASES = {
 };
 
 /** What each property is when it has no keyframes. */
-export const MOTION_REST = { translate: /** @type {[number, number]} */ ([0, 0]), scale: 1, rotate: 0, opacity: 1 };
+export const MOTION_REST = /** @type {Record<KeyedProp, MotionValue>} */ ({
+  translate: /** @type {[number, number]} */ ([0, 0]), scale: 1, rotate: 0, opacity: 1,
+  ...Object.fromEntries(EFFECT_PROPS.map((p) => [p, EFFECTS[p].rest])),
+});
 
-export const motionName = (/** @type {string} */ clip, /** @type {MotionProp} */ prop) => `${clip}--${prop}`;
+export const motionName = (/** @type {string} */ clip, /** @type {KeyedProp} */ prop) => `${clip}--${prop}`;
 const round = (/** @type {number} */ n, d = 4) => Math.round(n * 10 ** d) / 10 ** d;
 
 /** A value as CSS. */
-function css(/** @type {MotionProp} */ prop, /** @type {MotionValue} */ v) {
+function css(/** @type {KeyedProp} */ prop, /** @type {MotionValue} */ v) {
+  if (isEffect(prop)) return `${round(/** @type {number} */ (v), 3)}${EFFECTS[/** @type {EffectProp} */ (prop)].unit}`;
   if (prop === 'translate') { const [x, y] = /** @type {[number, number]} */ (v); return `${round(x, 2)}px ${round(y, 2)}px`; }
   if (prop === 'rotate') return `${round(/** @type {number} */ (v), 3)}deg`;
   return String(round(/** @type {number} */ (v), 4));
 }
 /** A value read from CSS (null: not one Studio writes). */
-function valueOf(/** @type {MotionProp} */ prop, /** @type {string} */ text) {
+function valueOf(/** @type {KeyedProp} */ prop, /** @type {string} */ text) {
   const s = text.trim();
   if (prop === 'translate') {
     const m = /^(-?[\d.]+)px(?:\s+(-?[\d.]+)px)?$/.exec(s) ?? (s === '0' || s === 'none' ? ['', '0', '0'] : null);
@@ -109,15 +123,15 @@ export function readMotion(clip, keyframes) {
   const motion = {};
   for (const entry of animationsOf(clip.style)) {
     const [name, dur] = entry.split(/\s+/);
-    const prop = MOTION_PROPS.find((p) => name === motionName(clip.id, p));
+    const prop = KEYED_PROPS.find((p) => name === motionName(clip.id, p));
     const body = prop && keyframes?.[name];
     const d = Number.parseFloat(dur ?? '');
     if (!prop || body == null || !(d > 0)) continue;
     /** @type {Key[]} */
     const keys = [];
     for (const { pct, d: ds } of stops(body)) {
-      if (ds[prop] == null) continue;
-      const v = valueOf(prop, ds[prop]);
+      if (ds[cssProp(prop)] == null) continue;
+      const v = valueOf(prop, ds[cssProp(prop)]);
       if (v == null) continue;
       const t = round((pct / 100) * d);
       /* the 0% written to hold the first value before it (writeMotion) is no keyframe of the person's */
@@ -142,21 +156,21 @@ function pct0Only(/** @type {Key[]} */ keys, /** @type {string} */ body) {
  * @returns {{ style: string, keyframes: Record<string, string | null> }}
  */
 export function writeMotion(clip, motion) {
-  const own = new Set(MOTION_PROPS.map((p) => motionName(clip.id, p)));
+  const own = new Set(KEYED_PROPS.map((p) => motionName(clip.id, p)));
   const others = animationsOf(clip.style).filter((e) => !own.has(e.split(/\s+/)[0]));
   /** @type {Record<string, string | null>} */
   const keyframes = Object.fromEntries([...own].map((n) => [n, null]));
   const entries = [];
-  for (const prop of MOTION_PROPS) {
+  for (const prop of KEYED_PROPS) {
     const keys = [...(motion[prop] ?? [])].sort((a, b) => a.t - b.t);
     if (!keys.length) continue;
     const name = motionName(clip.id, prop);
     const d = Math.max(keys[keys.length - 1].t, 0.001);
     const lines = [];
-    if (keys[0].t > 0) lines.push(`/* held */ 0% { ${prop}: ${css(prop, keys[0].v)} }`);
+    if (keys[0].t > 0) lines.push(`/* held */ 0% { ${cssProp(prop)}: ${css(prop, keys[0].v)} }`);
     for (const k of keys) {
       const ease = k.ease && k.ease !== 'linear' ? `; animation-timing-function: ${EASES[/** @type {keyof EASES} */ (k.ease)] ?? k.ease}` : '';
-      lines.push(`${round((k.t / d) * 100, 3)}% { ${prop}: ${css(prop, k.v)}${ease} }`);
+      lines.push(`${round((k.t / d) * 100, 3)}% { ${cssProp(prop)}: ${css(prop, k.v)}${ease} }`);
     }
     keyframes[name] = lines.join(' ');
     entries.push(`${name} ${round(d, 3)}s linear both`);
@@ -181,7 +195,7 @@ export function eased(/** @type {string | undefined} */ ease, /** @type {number}
 }
 
 /** A property's value at a clip's second `t`, as its keyframes have it (none: its rest). */
-export function valueAt(/** @type {MotionProp} */ prop, /** @type {Key[] | undefined} */ keys, /** @type {number} */ t) {
+export function valueAt(/** @type {KeyedProp} */ prop, /** @type {Key[] | undefined} */ keys, /** @type {number} */ t) {
   if (!keys?.length) return MOTION_REST[prop];
   if (t <= keys[0].t) return keys[0].v;
   for (let i = 0; i < keys.length - 1; i++) {
@@ -201,7 +215,7 @@ export function valueAt(/** @type {MotionProp} */ prop, /** @type {Key[] | undef
 export function shiftMotion(/** @type {Motion} */ motion, /** @type {number} */ dt) {
   /** @type {Motion} */
   const out = {};
-  for (const prop of MOTION_PROPS) {
+  for (const prop of KEYED_PROPS) {
     const keys = motion[prop];
     if (!keys?.length) continue;
     const moved = keys.map((k) => ({ ...k, t: round(k.t + dt) }));
@@ -233,4 +247,55 @@ export function withPreset(style, slot, preset) {
   const own = kept.findIndex((e) => /--(translate|scale|rotate|opacity)$/.test(e.split(/\s+/)[0]));
   kept.splice(own < 0 ? kept.length : own, 0, entry);
   return withAnimations(style, kept);
+}
+
+/** A filter's functions, each whole (`blur(4px)`, `drop-shadow(0 0 2px rgb(0 0 0))`). */
+function filterParts(/** @type {string} */ text) {
+  const out = [];
+  let depth = 0, cur = '';
+  for (const ch of text) {
+    if (ch === '(') depth++;
+    if (ch === ')') depth--;
+    if (/\s/.test(ch) && depth === 0) { if (cur.trim()) out.push(cur.trim()); cur = ''; } else cur += ch;
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out;
+}
+
+/**
+ * The effects a style has (its filter reading `--fx-…`) and their values when they do not move (their `--fx-…`
+ * declarations; none written: they do nothing).
+ * @param {string | undefined} style
+ * @returns {{ on: EffectProp[], values: Partial<Record<EffectProp, number>> }}
+ */
+export function effectsOf(style) {
+  const d = Object.fromEntries(decls(style ?? ''));
+  const filter = d.filter ?? '';
+  const on = EFFECT_PROPS.filter((p) => filter.includes(`var(--fx-${p}`));
+  /** @type {Partial<Record<EffectProp, number>>} */
+  const values = {};
+  for (const p of EFFECT_PROPS) {
+    const n = Number.parseFloat(d[`--fx-${p}`] ?? '');
+    if (Number.isFinite(n)) values[p] = n;
+  }
+  return { on, values };
+}
+
+/**
+ * A style with these effects on (in one order, after any other filter it has) and these values of theirs; the
+ * values of effects not on taken out.
+ * @param {string | undefined} style @param {readonly EffectProp[]} on @param {Partial<Record<EffectProp, number>>} values
+ */
+export function withEffects(style, on, values) {
+  const parts = decls(style ?? '');
+  const filter = parts.find(([p]) => p === 'filter')?.[1] ?? '';
+  const others = filterParts(filter).filter((f) => !f.includes('var(--fx-'));
+  const ours = EFFECT_PROPS.filter((p) => on.includes(p) && EFFECTS[p].filter);
+  const nextFilter = [...others, ...ours.map((p) => EFFECTS[p].filter)].join(' ');
+  /* the filter's effects' values are written again; another `--fx-…` (a stroke's trim) stays */
+  const filterFx = (/** @type {string} */ p) => p.startsWith('--fx-') && Boolean(EFFECTS[/** @type {EffectProp} */ (p.slice(5))]?.filter);
+  const kept = parts.filter(([p]) => p !== 'filter' && !filterFx(p)).map(([p, v]) => `${p}: ${v}`);
+  for (const p of ours) if (values[p] != null) kept.push(`--fx-${p}: ${round(/** @type {number} */ (values[p]), 3)}${EFFECTS[p].unit}`);
+  if (nextFilter) kept.push(`filter: ${nextFilter}`);
+  return kept.join('; ');
 }

@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Solid</title>
+<style>
+/* A plain color the size of its clip: a background, a card, a flash. A layer of OpenFilm's library (CC0): still on its
+   own; how it moves is the film's (its keyframes in Motion). Its color is its clip's to change, registered so it eases. */
+@property --color { syntax: '<color>'; inherits: true; initial-value: #1c1c1c; }
+:root { --color: #1c1c1c; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--color); }
+</style>
+</head>
+<body>
+<script>
+window.film = { frame() {} };
+</script>
+</body>
+</html>

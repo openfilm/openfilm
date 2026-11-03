@@ -132,7 +132,9 @@ const CLIP_FIELDS = {
 const KEPT_ATTRIBUTE = /^(alt|title|lang|dir|data-[a-z0-9-]+|aria-[a-z]+)$/;
 /** What a track keeps of its element that says nothing to the film: a name, a class, a description. */
 const KEPT_TRACK_ATTRIBUTE = /^(id|class|title|lang|dir|data-[a-z0-9-]+|aria-[a-z]+)$/;
-const OVERRIDE_FIELDS = ['at', 'n', 't', 's', 'r', 'style', 'lock', 'text', 'fade'];
+const OVERRIDE_FIELDS = ['at', 'n', 't', 's', 'r', 'style', 'lock', 'text', 'split', 'fade'];
+/** How an element's words animate part by part (an override's `split`). */
+const SPLIT_FIELDS = ['by', 'animation', 'stagger', 'start', 'order'];
 /** A key of an override's style: a CSS property in camelCase, or a custom property as CSS writes it (`--accent`). */
 const STYLE_KEY = /^(?:[a-zA-Z]{1,40}|--[A-Za-z0-9_-]{1,60})$/;
 const BOX_FIELDS = ['x', 'y', 'w', 'h', 'r'];
@@ -189,6 +191,16 @@ function checkOverride(o, where, problems, kind) {
   }
   if (o.lock !== undefined && o.lock !== true) problems.push(`${where}lock is true, or not written.`);
   if (o.text !== undefined && (typeof o.text !== 'string' || o.text.length > 2000)) problems.push(`${where}text has to be text (at most 2000 characters).`);
+  if (o.split !== undefined) {
+    const sp = o.split;
+    if (!isObject(sp)) { problems.push(`${where}split has to be { "by": "char", "animation": "rise .5s ease-out", "stagger": 0.04 }.`); return; }
+    unknownKeys(sp, SPLIT_FIELDS, `${where}split: `, problems);
+    if (!['char', 'word', 'line'].includes(sp.by)) problems.push(`${where}split.by is "char", "word" or "line".`);
+    if (typeof sp.animation !== 'string' || !sp.animation || sp.animation.length > 200) problems.push(`${where}split.animation has to be an animation, as CSS writes one ("rise .5s ease-out").`);
+    if (!(isFinite(sp.stagger) && sp.stagger >= 0 && sp.stagger <= 10)) problems.push(`${where}split.stagger has to be seconds between parts, 0 to 10.`);
+    if (sp.start !== undefined && !(isFinite(sp.start) && sp.start >= 0)) problems.push(`${where}split.start has to be seconds, 0 or more.`);
+    if (sp.order !== undefined && !['forward', 'reverse', 'center', 'random'].includes(sp.order)) problems.push(`${where}split.order is "forward", "reverse", "center" or "random".`);
+  }
 }
 
 /** One clip, checked for what its file is. Returns the clip with its fields in their written order. */
@@ -274,6 +286,41 @@ function trimDashes(/** @type {string} */ name) {
   while (start < end && name[start] === '-') start++;
   while (end > start && name[end - 1] === '-') end--;
   return name.slice(start, end);
+}
+
+/**
+ * A clip's (or a page element's) effects, each a number in a custom property of its own (`--fx-blur: 4px`) that its
+ * `filter` reads, so each moves by keyframes of its own: its unit, its value when it does nothing, its CSS type, its
+ * filter (with that value as the fallback). A host registers them (registerEffects) so their keyframes ease.
+ */
+export const EFFECTS = Object.freeze({
+  blur: { unit: 'px', rest: 0, syntax: '<length>', filter: 'blur(var(--fx-blur, 0px))' },
+  brightness: { unit: '%', rest: 100, syntax: '<percentage>', filter: 'brightness(var(--fx-brightness, 100%))' },
+  contrast: { unit: '%', rest: 100, syntax: '<percentage>', filter: 'contrast(var(--fx-contrast, 100%))' },
+  saturate: { unit: '%', rest: 100, syntax: '<percentage>', filter: 'saturate(var(--fx-saturate, 100%))' },
+  hue: { unit: 'deg', rest: 0, syntax: '<angle>', filter: 'hue-rotate(var(--fx-hue, 0deg))' },
+  grayscale: { unit: '%', rest: 0, syntax: '<percentage>', filter: 'grayscale(var(--fx-grayscale, 0%))' },
+  invert: { unit: '%', rest: 0, syntax: '<percentage>', filter: 'invert(var(--fx-invert, 0%))' },
+  glow: { unit: 'px', rest: 0, syntax: '<length>', filter: 'drop-shadow(0 0 var(--fx-glow, 0px) rgb(255 255 255 / 0.85))' },
+  /* how much of a shape's stroke is drawn (0–100): its dash as long as its path, offset by what is not (no filter) */
+  trim: { unit: '', rest: 100, syntax: '<number>', filter: null },
+  /* a picture in 3D (a host turns it so about its middle, under a camera shared by the film): its depth, toward the
+     viewer, and its turn about its X and Y axes */
+  z: { unit: 'px', rest: 0, syntax: '<length>', filter: null },
+  rx: { unit: 'deg', rest: 0, syntax: '<angle>', filter: null },
+  ry: { unit: 'deg', rest: 0, syntax: '<angle>', filter: null },
+  /* a picture's anchor point (a host turns, sizes and moves it in 3D about there): where it is from its box's middle,
+     stage px */
+  ax: { unit: 'px', rest: 0, syntax: '<length>', filter: null },
+  ay: { unit: 'px', rest: 0, syntax: '<length>', filter: null },
+});
+
+/** The effects' custom properties registered in a window (the film's, a page's), so their keyframes ease. */
+export function registerEffects(win) {
+  if (!win?.CSS?.registerProperty) return;
+  for (const [name, { unit, rest, syntax }] of Object.entries(EFFECTS)) {
+    try { win.CSS.registerProperty({ name: `--fx-${name}`, syntax, inherits: false, initialValue: `${rest}${unit}` }); } catch { /* already */ }
+  }
 }
 
 /**

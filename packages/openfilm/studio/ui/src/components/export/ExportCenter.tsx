@@ -420,6 +420,7 @@ export function ExportCenter(props: ExportCenterProps) {
           quality: v.quality, audio: v.audio, label: selectedVideoPreset?.name ?? codecName(videoCodec), ...burn(v.burn),
           ...(selectedVideoPreset ? { preset: selectedVideoPreset.name } : {}),
           ...(captions > 0 && v.sidecar !== 'none' && videoCodec !== 'png' ? { sidecar: v.sidecar } : {}),
+          ...(v.blur ? { motionBlur: { shutter: v.blur } } : {}),
         }];
       }
       case 'alpha': {
@@ -728,6 +729,19 @@ export function ExportCenter(props: ExportCenterProps) {
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <Field label={t('exportCenter.audio')}>
                         <Toggle checked={s.video.audio} onChange={(audio) => patch('video', { audio })} label={t('exportCenter.includeAudio')} />
+                      </Field>
+                      {/* what moves blurred along its way, as a camera's shutter blurs it: 8 moments a frame, slower */}
+                      <Field label={t('exportCenter.motionBlur')}>
+                        <Toggle checked={s.video.blur != null} onChange={(on) => patch('video', { blur: on ? 180 : null })} label={t('exportCenter.motionBlurOn')} />
+                        {s.video.blur != null ? (
+                          <div className="mt-2">
+                            <Segmented
+                              value={String(s.video.blur)}
+                              options={[90, 180, 270, 360].map((deg) => ({ value: String(deg), label: `${deg}°` }))}
+                              onChange={(deg) => patch('video', { blur: Number(deg) })}
+                            />
+                          </div>
+                        ) : null}
                       </Field>
                       {captions > 0 && (
                         <Field label={t('exportCenter.subtitles')}>

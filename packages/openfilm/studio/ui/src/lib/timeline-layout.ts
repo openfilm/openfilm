@@ -348,6 +348,10 @@ export interface TimelineBlock {
   startMs: number;
   endMs: number;
   kind: TimelineBlockKind;
+  /** Its bar's color, in place of its kind's (a layer's label, in Motion). */
+  color?: string;
+  /** Where its keyframes are, ms from its start: marked on its bar (a layer's, in Motion). */
+  keysMs?: readonly number[];
   /** Turned off (or on a hidden track): drawn see-through. */
   off?: boolean;
   /**
@@ -438,6 +442,8 @@ export interface TimelineTrack {
   incomplete?: boolean;
   /** How tall the row is drawn, px, when the person set it (lib/track-heights); else the timeline's own for its kind. */
   height?: number;
+  /** Room under the row's clips, px: the picked clip's moving properties (components/MotionLanes). */
+  extra?: number;
   /**
    * The main track's rows: the lowest picture track, where the magnet and linkage act (lib/timeline-edit mainTrackOf),
    * marked and drawn taller than the others.
