@@ -13,7 +13,7 @@ import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from '
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { FILM_FILE } from './film-doc.mjs';
-import { addSkills, findSkill, folderSize, holdsSkills, migrateMySkills, mySkillsDir, readSkill, removeSkill, skillText, skillsIn, usableSkills, PROJECT_SKILLS } from './skills.mjs';
+import { addSkills, asRun, findSkill, folderSize, holdsSkills, migrateMySkills, mySkillsDir, readSkill, removeSkill, skillText, skillsIn, usableSkills, PROJECT_SKILLS } from './skills.mjs';
 
 /** The project around a folder (the nearest film.html above), or null. @param {string} from */
 export function projectAround(from) {
@@ -169,7 +169,7 @@ export async function skillCommand(args, run, opts = {}) {
   const skill = findSkill(first, { project: projectAround(opts.cwd ?? process.cwd()), ...(opts.mine ? { mine: opts.mine } : {}) });
   if (!skill) return { ok: false, usage: true, lines: [`${run} skill: no skill ${first}. \`${run} skills\` lists them.`] };
   /* its commands as the agent can type them here, as the manual's are */
-  return { ok: true, lines: [skillText(skill).replaceAll('npx openfilm', run)] };
+  return { ok: true, lines: [asRun(skillText(skill), run)] };
 }
 
 /** A skill on GitHub or GitLab, fetched into a folder of `into` (src/../studio/server/fetch-repo.mjs). */

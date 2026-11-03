@@ -124,7 +124,8 @@ const updateNotice = async (network) => {
 if (RAW.length === 0) {
   const { readFileSync } = await import('node:fs');
   await updateNotice(true);
-  console.log(readFileSync(new URL('../MANUAL.md', import.meta.url), 'utf8').replaceAll('npx openfilm', RUN));
+  const { asRun } = await import('../src/skills.mjs');
+  console.log(asRun(readFileSync(new URL('../MANUAL.md', import.meta.url), 'utf8'), RUN));
   process.exit(0);
 }
 if (RAW.length === 1 && (RAW[0] === '--version' || RAW[0] === '-v')) {

@@ -293,9 +293,9 @@ const ACT_ICONS: Record<string, LucideIcon> = {
 /**
  * A folded group of adjacent acts, running or finished.
  *
- * Closed by default. The summary says which kinds of act ran and how many of each (see actGroupParts);
- * the pictures and sounds the group made stay in the rows of the acts that made them. Pending acts join
- * the group from the start, so finishing updates its label without replacing the row.
+ * Closed by default. Only the acts that finished fold: the summary says which kinds ran and how many of each
+ * (see actGroupParts), and the pictures and sounds they made stay in the rows of the acts that made them. An
+ * act still running stands under the group, in full, with its clock; once it finishes it joins the count.
  *
  * Opening changes the content height. The asset drawer pins the bottom (pinIfFollowing in the same
  * frame); here the clicked row must stay put instead: skip the next bottom pin and, in the same frame,
@@ -313,20 +313,15 @@ function ActGroup({ items }: { items: AgentActivityItem[] }) {
      unrolling a wall of rows or moving a tool from the status line when it finishes. */
   const [picked, setPicked] = React.useState<boolean | null>(null);
   const open = picked ?? false;
-  const parts = React.useMemo(() => actGroupParts(items), [items]);
+  /* what finished folds; what runs stays in sight under it */
+  const done = React.useMemo(() => items.filter((item) => !item.pending), [items]);
+  const running = items.filter((item) => item.pending);
+  const parts = React.useMemo(() => actGroupParts(done), [done]);
   /* At most three kinds, the rest as a count: seven or eight cut off by an ellipsis tell the reader nothing. */
   const shown = parts.slice(0, GROUP_PARTS_MAX);
   const rest = parts.slice(GROUP_PARTS_MAX).reduce((n, part) => n + part.count, 0);
-  const pendingLabels = new Set(items.filter((item) => item.pending).map((item) => item.label));
-  const pending = pendingLabels.size > 0;
-  const since = items.reduce<number | undefined>((start, item) => item.pending && item.startedAt != null
-    ? Math.min(start ?? item.startedAt, item.startedAt) : start, undefined);
-  const full = parts
-    .map((part) => `${t(actCopyKey(part.label, pendingLabels.has(part.label)))}${part.count > 1 ? ` ×${part.count}` : ''}`)
-    .join(' · ');
-  const summary = shown
-    .map((part) => `${t(actCopyKey(part.label, pendingLabels.has(part.label)))}${part.count > 1 ? ` ×${part.count}` : ''}`)
-    .join(' · ');
+  const full = parts.map((part) => `${t(actCopyKey(part.label))}${part.count > 1 ? ` ×${part.count}` : ''}`).join(' · ');
+  const summary = shown.map((part) => `${t(actCopyKey(part.label))}${part.count > 1 ? ` ×${part.count}` : ''}`).join(' · ');
   const Icon = ACT_ICONS[parts[0]?.label ?? ''] ?? Layers;
 
   const toggle = () => {
@@ -348,6 +343,11 @@ function ActGroup({ items }: { items: AgentActivityItem[] }) {
     if (delta !== 0) scroller.scrollTop += delta;
   }, [open, thread]);
 
+  const row = (item: AgentActivityItem, index: number) => (item.kind === 'thought'
+    ? <ThoughtRow key={item.id ?? `thought-${index}`} item={item} />
+    : <ActRow key={item.id ?? `${item.label}-${index}`} item={item} />);
+  const live = running.map(row);
+  if (!done.length) return <div ref={rootRef} className="min-w-0">{live}</div>;
   return (
     <div ref={rootRef} className="min-w-0 py-1">
       {/* The chevron follows the text and shows on hover: a dozen groups with a column of chevrons read like a table */}
@@ -358,15 +358,12 @@ function ActGroup({ items }: { items: AgentActivityItem[] }) {
         title={full}
         data-activity-header=""
         data-activity-id={items[0]?.id}
-        aria-busy={pending}
         className="group/act flex h-6 w-full min-w-0 items-center gap-2 text-left text-[14px] leading-6 text-[var(--chat-hint)] hover:text-[var(--chat-text)]"
       >
         <Icon size={13} aria-hidden className="shrink-0" />
         <span data-activity-label="" className="min-w-0 truncate">{summary}</span>
         {rest ? <span className="shrink-0 tabular-nums opacity-80">+{rest}</span> : null}
-        <span className="ml-auto flex w-12 shrink-0 justify-end">
-          {pending ? <PendingElapsed startedAt={since} /> : null}
-        </span>
+        <span className="ml-auto w-12 shrink-0" />
         <ChevronRight
           size={13}
           aria-hidden
@@ -375,11 +372,10 @@ function ActGroup({ items }: { items: AgentActivityItem[] }) {
       </button>
       {open ? (
         <div className="ml-[6px] mt-0.5 border-l border-[var(--border)] pl-3">
-          {items.map((item, index) => (item.kind === 'thought'
-            ? <ThoughtRow key={item.id ?? `thought-${index}`} item={item} />
-            : <ActRow key={item.id ?? `${item.label}-${index}`} item={item} />))}
+          {done.map(row)}
         </div>
       ) : null}
+      {live}
     </div>
   );
 }

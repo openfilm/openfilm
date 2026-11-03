@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { cpSync, mkdirSync, mkdtempSync, writeFileSync, existsSync, readFileSync, symlinkSync, lstatSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { addSkills, coreSkills, findSkill, listSkills, migrateMySkills, mySkillsDir, parseSkillFile, readSkill, removeSkill, setSkillCover, setSkillInstalled, setSkillOn, skillOrigins, skillText } from './skills.mjs';
+import { addSkills, asRun, coreSkills, findSkill, listSkills, migrateMySkills, mySkillsDir, parseSkillFile, readSkill, removeSkill, setSkillCover, setSkillInstalled, setSkillOn, skillOrigins, skillText } from './skills.mjs';
 import { commitSkills, discardSkills, previewFolder, previewSkills, skillCommand, skillsCommand } from './skills-cli.mjs';
 
 const skill = (dir, name, description, body = 'How to make it.', extra = {}) => {
@@ -336,6 +336,10 @@ test("OpenFilm's own skills: each named by the manual, printed with the command 
   assert.match(text('openfilm-edit'), /The one rule: the picture depends only on t/);
   assert.match(text('openfilm-media'), /--take <id>/);
   assert.match(text('openfilm-canvas'), /canvas apply/);
+  /* read from their files, they say the command on the PATH (the app's own, or the one installed) */
+  for (const s of core) assert.ok(!readFileSync(s.file, 'utf8').includes('npx openfilm'), `${s.name} says \`openfilm\``);
+  assert.equal(asRun('`openfilm-edit`: `openfilm look`, and `openfilm skill <name>`', 'npx -y openfilm@latest'),
+    '`openfilm-edit`: `npx -y openfilm@latest look`, and `npx -y openfilm@latest skill <name>`', 'a skill\'s name stays');
   const printed = await skillCommand(['openfilm-edit'], 'npx -y openfilm@latest', { cwd: tmpdir() });
   assert.ok(printed.ok);
   assert.ok(printed.lines[0].includes('`npx -y openfilm@latest look`') && !/npx openfilm /.test(printed.lines[0]));
