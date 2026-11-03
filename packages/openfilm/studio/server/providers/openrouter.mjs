@@ -30,10 +30,13 @@ const MODELS = {
   ],
   video: [
     m('bytedance/seedance-2.0-fast', 'Seedance 2.0 Fast'),
+    m('bytedance/seedance-2.0-mini', 'Seedance 2.0 Mini'),
     m('bytedance/seedance-2.0', 'Seedance 2.0'),
     m('bytedance/seedance-2.5', 'Seedance 2.5'),
     m('alibaba/wan-3.0', 'Wan 3.0'),
+    m('alibaba/wan-3.0-prime', 'Wan 3.0 Prime'),
     m('minimax/hailuo-3', 'MiniMax Hailuo 3'),
+    m('minimax/hailuo-3-max', 'MiniMax Hailuo 3 Max'),
     m('heygen/heygen-video-1', 'HeyGen Video'),
     m('kwaivgi/kling-v3.0-std', 'Kling 3.0 Standard'),
     m('kwaivgi/kling-v3.0-pro', 'Kling 3.0 Pro'),
@@ -59,12 +62,15 @@ const MAX_REFS = 16;
  * @type {Record<string, { name: string, seconds?: [number, number], only?: number[], ratios: string[], references: boolean, resolution?: string, audio?: false }>}
  */
 const VIDEO = {
+  'bytedance/seedance-2.0-mini': { name: 'Seedance', seconds: [4, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: true },
   'bytedance/seedance-2.0-fast': { name: 'Seedance', seconds: [4, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: true },
   'bytedance/seedance-2.0': { name: 'Seedance', seconds: [4, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: true },
   'bytedance/seedance-2.5': { name: 'Seedance', seconds: [4, 30], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: true },
-  /* billed 5 s at the least, however short the clip: none shorter is asked for */
+  /* Wan is billed 5 s at the least, however short the clip: none shorter is asked for */
   'alibaba/wan-3.0': { name: 'Wan', seconds: [5, 30], ratios: ['16:9', '4:3', '1:1', '3:4', '9:16'], references: false },
+  'alibaba/wan-3.0-prime': { name: 'Wan', seconds: [5, 30], ratios: ['16:9', '4:3', '1:1', '3:4', '9:16'], references: false },
   'minimax/hailuo-3': { name: 'Hailuo', seconds: [5, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: false, resolution: '2K' },
+  'minimax/hailuo-3-max': { name: 'Hailuo', seconds: [5, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: false, resolution: '768p', audio: false },
   'heygen/heygen-video-1': { name: 'HeyGen', seconds: [5, 30], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: false, resolution: '768p', audio: false },
   'kwaivgi/kling-v3.0-std': { name: 'Kling', seconds: [3, 15], ratios: ['16:9', '9:16', '1:1'], references: false },
   'kwaivgi/kling-v3.0-pro': { name: 'Kling', seconds: [3, 15], ratios: ['16:9', '9:16', '1:1'], references: false },
