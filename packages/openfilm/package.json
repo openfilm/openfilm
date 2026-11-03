@@ -43,6 +43,7 @@
     "SPEC.md",
     "TRADEMARK.md",
     "bin",
+    "manual",
     "skills",
     "library",
     "!library/voices",

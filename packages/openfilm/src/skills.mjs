@@ -13,6 +13,9 @@
  *              Skills kept in Studio's home before (~/.openfilm/skills) are moved there (migrateMySkills).
  *   official   `skills/` in this package, released with OpenFilm
  *
+ * OpenFilm's own (coreSkills: `manual/` in this package) are how a film is made, its media and its canvas, which the
+ * manual names: always on, in every agent's hands and in no library, so the manual stays a page.
+ *
  * Nothing here deletes a skill outright: one replaced or removed goes to the system's trash.
  *
  * `openfilm skills` lists them and `openfilm skill <name>` prints one, as `openfilm` prints the manual: that is how any
@@ -50,6 +53,8 @@ export const SKILL_SOURCES = /** @type {const} */ (['project', 'mine', 'official
  * OPENFILM_OFFICIAL_SKILLS names another folder of them: a checkout's skills/, while they are being changed.
  */
 export const officialSkillsDir = () => process.env.OPENFILM_OFFICIAL_SKILLS || join(dirname(fileURLToPath(import.meta.url)), '..', 'skills');
+/** OpenFilm's own skills, released with this package beside the manual. */
+export const coreSkillsDir = () => join(dirname(fileURLToPath(import.meta.url)), '..', 'manual');
 /**
  * The person's own skills: OPENFILM_SKILLS, else `Skills/` beside the default projects library (OPENFILM_LIBRARY, else
  * ~/Movies/OpenFilm/Projects on macOS, ~/Videos/OpenFilm/Projects elsewhere: locations.mjs libraryDefault). They stay
@@ -290,9 +295,14 @@ export function usableSkills({ home, ...where } = {}) {
   return listSkills(where).filter((s) => (s.source !== 'official' || installed.has(s.name)) && !off.has(s.name));
 }
 
-/** One skill by name, as listSkills finds it, or null. @param {string} name @param {Parameters<typeof listSkills>[0]} [where] */
+/** OpenFilm's own skills (coreSkillsDir), which every agent has: never installed, turned off or listed. @returns {Skill[]} */
+export function coreSkills() {
+  return skillsIn(coreSkillsDir(), 'official');
+}
+
+/** One skill by name, OpenFilm's own first, else as listSkills finds it, or null. @param {string} name @param {Parameters<typeof listSkills>[0]} [where] */
 export function findSkill(name, where) {
-  return listSkills(where).find((s) => s.name === name) ?? null;
+  return coreSkills().find((s) => s.name === name) ?? listSkills(where).find((s) => s.name === name) ?? null;
 }
 
 /**

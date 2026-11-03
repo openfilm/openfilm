@@ -5,9 +5,6 @@ description: Make videos as web pages with OpenFilm. Use when the user asks for 
 
 # OpenFilm
 
-Run `npx -y openfilm@latest` and follow the manual it prints: it is the whole of OpenFilm, about a thousand words. Run it
-again whenever you need it.
-
-Before you make or pay for music, a sound effect, a transition, an effect, a filter, a sticker or a text animation,
-search OpenFilm's own library, free and offline, with `npx -y openfilm@latest get <music-search|sfx-search|transition|…>
---prompt "<what>"` and use what fits; make one only when nothing does.
+Run `npx -y openfilm@latest` and follow the manual it prints: a page that names OpenFilm's own skills, how a film is
+made, its media and its canvas. Read the one a task needs before you start it, and run the manual again whenever you
+need it.

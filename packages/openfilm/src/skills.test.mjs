@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { cpSync, mkdirSync, mkdtempSync, writeFileSync, existsSync, readFileSync, symlinkSync, lstatSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { addSkills, findSkill, listSkills, migrateMySkills, mySkillsDir, parseSkillFile, readSkill, removeSkill, setSkillCover, setSkillInstalled, setSkillOn, skillOrigins, skillText } from './skills.mjs';
+import { addSkills, coreSkills, findSkill, listSkills, migrateMySkills, mySkillsDir, parseSkillFile, readSkill, removeSkill, setSkillCover, setSkillInstalled, setSkillOn, skillOrigins, skillText } from './skills.mjs';
 import { commitSkills, discardSkills, previewFolder, previewSkills, skillCommand, skillsCommand } from './skills-cli.mjs';
 
 const skill = (dir, name, description, body = 'How to make it.', extra = {}) => {
@@ -321,4 +321,24 @@ test("a cover's format is what its bytes are, and a cover chosen before goes whe
   assert.equal(existsSync(join(mine, 'own', second)), false);
   assert.equal(existsSync(join(mine, 'own', 'original.png')), true, 'a picture of the skill\'s own stays');
   assert.throws(() => setSkillCover('own', `data:image/png;base64,${Buffer.from('GIF89a......').toString('base64')}`, { mine }), /PNG, JPEG or WebP/);
+});
+
+test("OpenFilm's own skills: each named by the manual, printed with the command as run here, never listed", async () => {
+  const manual = readFileSync(new URL('../MANUAL.md', import.meta.url), 'utf8');
+  const core = coreSkills();
+  assert.deepEqual(core.map((s) => s.name).sort(), ['openfilm-canvas', 'openfilm-edit', 'openfilm-media']);
+  for (const s of core) {
+    assert.ok(manual.includes(`\`${s.name}\``), `the manual names ${s.name}`);
+    assert.ok(s.description.length > 40, `${s.name} says when it is read`);
+  }
+  assert.ok(manual.split(/\s+/).length < 400, 'the manual is a page: how a film is made is a skill');
+  const text = (name) => readFileSync(core.find((s) => s.name === name).file, 'utf8');
+  assert.match(text('openfilm-edit'), /The one rule: the picture depends only on t/);
+  assert.match(text('openfilm-media'), /--take <id>/);
+  assert.match(text('openfilm-canvas'), /canvas apply/);
+  const printed = await skillCommand(['openfilm-edit'], 'npx -y openfilm@latest', { cwd: tmpdir() });
+  assert.ok(printed.ok);
+  assert.ok(printed.lines[0].includes('`npx -y openfilm@latest look`') && !/npx openfilm /.test(printed.lines[0]));
+  assert.equal(findSkill('openfilm-media')?.folder, core.find((s) => s.name === 'openfilm-media')?.folder);
+  assert.ok(!listSkills().some((s) => core.some((c) => c.name === s.name)), 'in no library');
 });

@@ -131,7 +131,7 @@ export const isChatAgent = (id) => isAgentId(id) || HARNESS_AGENTS.includes(id);
 
 /** How the person points at things in Studio, and how the agent points back: told to every agent, the app's own too. */
 export const STUDIO_REFERENCES = `The person may name a clip, a page or a moment (in seconds) of Studio: find it in film.html and the project's
-files. A canvas node they name (\`canvas node \`ID\`\`) is on the project's canvas, not in the film (\`openfilm canvas\`).
+files.
 
 In your replies, [[clip:ID]] (by its id in film.html), [[t:SECONDS]], [[range:START-END]] (in seconds), [[track:N]]
 (0 is the first) and [[file:PATH]] (a file of the project) show as links that open it in Studio.`;
@@ -163,17 +163,14 @@ export const INSTRUCTIONS = agentInstructions();
 
 /**
  * The app's own agent's whole system prompt, in place of Pi's (a coding assistant's, with Pi's own docs): who it is,
- * where it is and how it works with the person (agent-prompt.md: written for it, so not INSTRUCTIONS, which tell
- * another agent to go and read the manual), how the person points at Studio (STUDIO_REFERENCES), and the manual
- * `openfilm` prints, so it starts knowing it, less how to open Studio. Each thing is said once: what the manual says
- * (`openfilm get`'s services, the person's changes) and what Pi's tools say of themselves are not said again.
+ * where it is and how it talks with the person (agent-prompt.md: written for it, so not INSTRUCTIONS, which tell
+ * another agent to go and read the manual), and how the person points at Studio (STUDIO_REFERENCES). How a film is
+ * made is OpenFilm's skills' (openfilm/skills coreSkills), which Pi lists after it and the agent reads when a task
+ * needs one.
  */
 export function ownAgentPrompt() {
   const prompt = readFileSync(new URL('./agent-prompt.md', import.meta.url), 'utf8').trim();
-  /* less `open`: Studio is open beside it already */
-  const manual = readFileSync(join(dirname(require.resolve('openfilm/package.json')), 'MANUAL.md'), 'utf8').replaceAll('npx openfilm', 'openfilm')
-    .split('\n').filter((line) => !line.startsWith('- `openfilm open ')).join('\n').trim();
-  return `${prompt}\n\n## Pointing at Studio\n\n${STUDIO_REFERENCES}\n\n<manual>\n${manual}\n</manual>`;
+  return `${prompt}\n\n## Pointing at Studio\n\n${STUDIO_REFERENCES}`;
 }
 
 /**

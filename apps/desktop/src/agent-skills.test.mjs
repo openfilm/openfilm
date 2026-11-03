@@ -97,9 +97,10 @@ test("OpenCode: every skill denied but its own, OpenFilm's and those let in; Pi:
   writeFileSync(join(w.openfilmHome, 'prefs.json'), JSON.stringify({ skillsInstalled: [readdirSync(new URL('../../../packages/openfilm/skills/', import.meta.url), { withFileTypes: true }).find((e) => e.isDirectory()).name] }));
   const oc = await sessionSkills('opencode', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills'), prefsHome: w.openfilmHome, allowed: ['research'] });
   const config = JSON.parse(oc.env.OPENCODE_CONFIG_CONTENT);
-  /* the project's brand and lyric-pv; of the official skills that come with the package, only one installed */
+  /* OpenFilm's own first, always; then the project's brand and lyric-pv and, of the official skills that come with the
+     package, only the one installed */
   const official = readdirSync(new URL('../../../packages/openfilm/skills/', import.meta.url), { withFileTypes: true }).filter((e) => e.isDirectory());
-  const names = [official[0].name, 'brand', 'lyric-pv'].sort();
+  const names = ['openfilm-canvas', 'openfilm-edit', 'openfilm-media', ...[official[0].name, 'brand', 'lyric-pv'].sort()];
   assert.deepEqual(config.permission.skill, { '*': 'deny', 'customize-opencode': 'allow', ...Object.fromEntries([...names, 'research'].sort().map((n) => [n, 'allow'])) });
   assert.deepEqual(config.mcp, { search: { enabled: false } });
   assert.match(config.skills.paths[0], /agent-skills[\\/].+[\\/]skills$/);

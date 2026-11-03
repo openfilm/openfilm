@@ -62,7 +62,7 @@ npx -y openfilm@latest open https://github.com/openfilm/examples/tree/main/one-p
 Your agent runs them; so can you, with `npx -y openfilm@latest <command>` or `npm i -g openfilm`.
 
 ```sh
-openfilm                          # the manual: all an agent needs to know
+openfilm                          # the manual, and the skills it names: all an agent needs to know
 openfilm open   [folder | url]    # show a film in Studio: a new one, an existing one, one from GitHub, else this one or the last
 openfilm look   [what] [t | a-b]  # check the film, a page or a media file: a contact sheet, one frame, or a range
 openfilm render [a-b]             # the MP4; --4k, --blur (motion blur), --alpha (.webm / .mov)

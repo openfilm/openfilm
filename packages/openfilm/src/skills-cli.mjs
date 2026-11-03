@@ -168,7 +168,8 @@ export async function skillCommand(args, run, opts = {}) {
   }
   const skill = findSkill(first, { project: projectAround(opts.cwd ?? process.cwd()), ...(opts.mine ? { mine: opts.mine } : {}) });
   if (!skill) return { ok: false, usage: true, lines: [`${run} skill: no skill ${first}. \`${run} skills\` lists them.`] };
-  return { ok: true, lines: [skillText(skill)] };
+  /* its commands as the agent can type them here, as the manual's are */
+  return { ok: true, lines: [skillText(skill).replaceAll('npx openfilm', run)] };
 }
 
 /** A skill on GitHub or GitLab, fetched into a folder of `into` (src/../studio/server/fetch-repo.mjs). */

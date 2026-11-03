@@ -37,6 +37,7 @@ From the root:
 ```
 packages/openfilm/   npm `openfilm`: the format, the CLI and Studio
   SPEC.md, MANUAL.md   the film format; the manual `openfilm` prints for agents
+  manual/              OpenFilm's own skills, which the manual names: how a film is made, its media, its canvas
   bin/                 the `openfilm` command
   src/                 reading film.html, the host that draws frames in a headless browser, look and render
   studio/server/       Studio's server: projects, edits, history, exports, media providers
@@ -139,9 +140,11 @@ that you are taking it, and open one before starting a large change, so nobody d
 
 ## What we keep small
 
-- **The manual** ([MANUAL.md](packages/openfilm/MANUAL.md)), what `openfilm` prints for agents, holds three things:
-  what a film is, the one rule (the picture depends only on t), and how the tools are used. No style advice or
-  methods. If an agent gets something wrong, a word is added only when the manual was ambiguous; if a tool behaved
+- **The manual** ([MANUAL.md](packages/openfilm/MANUAL.md)), what `openfilm` prints for agents, is a page: what a
+  film is and OpenFilm's own skills ([manual/](packages/openfilm/manual)), which hold the rest: how a film is made and
+  seen (the one rule: the picture depends only on t), its media, its canvas. A new part of OpenFilm an agent works with
+  gets a skill of its own there, never more words in the manual. No style advice or methods. If an agent gets
+  something wrong, a word is added only when the manual or a skill was ambiguous; if a tool behaved
   oddly, the tool is fixed.
 - **The format** ([SPEC.md](packages/openfilm/SPEC.md)): a new attribute of `film.html` is read in one place,
   [src/film-doc.mjs](packages/openfilm/src/film-doc.mjs), and described in the spec in the same pull request.
