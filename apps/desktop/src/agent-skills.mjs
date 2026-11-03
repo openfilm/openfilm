@@ -113,7 +113,8 @@ const subdirs = (dir) => { try { return readdirSync(dir); } catch { return []; }
 export async function ownSkills(agent, { cwd = '', env = {}, home = homedir() } = {}) {
   const claudeHome = env.CLAUDE_CONFIG_DIR || join(home, '.claude');
   const codexHome = env.CODEX_HOME || join(home, '.codex');
-  const project = (subs) => (cwd ? upFrom(cwd) : []).filter((d) => d !== home).flatMap((d) => subs.map((s) => join(d, s)));
+  /* from the project up to the person's home, not into it or past it (on Windows a temp folder is inside a home) */
+  const project = (subs) => { const up = cwd ? upFrom(cwd) : []; const at = up.indexOf(home); return (at < 0 ? up : up.slice(0, at)).flatMap((d) => subs.map((s) => join(d, s))); };
   /** @type {string[]} */
   let dirs = [];
   switch (agent) {
