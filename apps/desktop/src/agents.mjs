@@ -130,15 +130,11 @@ export const HARNESS_AGENTS = Object.freeze(['byok']);
 export const isChatAgent = (id) => isAgentId(id) || HARNESS_AGENTS.includes(id);
 
 /** How the person points at things in Studio, and how the agent points back: told to every agent, the app's own too. */
-export const STUDIO_REFERENCES = `When the person mentions something in Studio, they may name a clip, a page or a moment (as seconds); find it in
-film.html and the project's files.
+export const STUDIO_REFERENCES = `The person may name a clip, a page or a moment (in seconds) of Studio: find it in film.html and the project's
+files. A canvas node they name (\`canvas node \`ID\`\`) is on the project's canvas, not in the film (\`openfilm canvas\`).
 
-In your replies you can point at things in Studio for the person: [[clip:ID]] (a clip, by its id in film.html),
-[[t:SECONDS]] (a moment), [[range:START-END]] (a stretch, in seconds), [[track:N]] (a track, 0 is the first) and
-[[file:PATH]] (a file of the project). They show as links that open it in Studio.
-
-A canvas node the person points at (\`canvas node \`ID\`\`) is on the project's canvas, beside the film and not in it:
-read the board with \`openfilm canvas\` and change it with \`openfilm canvas apply\`.`;
+In your replies, [[clip:ID]] (by its id in film.html), [[t:SECONDS]], [[range:START-END]] (in seconds), [[track:N]]
+(0 is the first) and [[file:PATH]] (a file of the project) show as links that open it in Studio.`;
 
 /**
  * What the agent is told about where it is, on top of its own instructions. `command`: the app's `openfilm` by its
@@ -157,9 +153,8 @@ the video editor, showing the project in your working directory; it updates live
 
 The project is an OpenFilm film: pages with window.film, cut together by film.html. Before you change anything, run
 \`${run}\` with no arguments and read the manual it prints; follow it. ${which} Studio is already open on this
-project: you never need \`${run} open\` and never open Studio in a browser. Run \`${run} look\` after each change
-to see what you made. Render the MP4 only when the person asks for it; they can also export from Studio. Reply in the
-language the person writes in.
+project: you never need \`${run} open\` and never open Studio in a browser, and the person exports the film from it.
+Run \`${run} look\` after each change to see what you made. Reply in the language the person writes in.
 
 ${STUDIO_REFERENCES}`;
 }
@@ -170,12 +165,14 @@ export const INSTRUCTIONS = agentInstructions();
  * The app's own agent's whole system prompt, in place of Pi's (a coding assistant's, with Pi's own docs): who it is,
  * where it is and how it works with the person (agent-prompt.md: written for it, so not INSTRUCTIONS, which tell
  * another agent to go and read the manual), how the person points at Studio (STUDIO_REFERENCES), and the manual
- * `openfilm` prints, so it starts knowing it. Each thing is said once: what the manual says (`openfilm get`'s
- * services, rendering, the person's changes) and what Pi's tools say of themselves are not said again.
+ * `openfilm` prints, so it starts knowing it, less how to open Studio. Each thing is said once: what the manual says
+ * (`openfilm get`'s services, the person's changes) and what Pi's tools say of themselves are not said again.
  */
 export function ownAgentPrompt() {
   const prompt = readFileSync(new URL('./agent-prompt.md', import.meta.url), 'utf8').trim();
-  const manual = readFileSync(join(dirname(require.resolve('openfilm/package.json')), 'MANUAL.md'), 'utf8').replaceAll('npx openfilm', 'openfilm').trim();
+  /* less `open`: Studio is open beside it already */
+  const manual = readFileSync(join(dirname(require.resolve('openfilm/package.json')), 'MANUAL.md'), 'utf8').replaceAll('npx openfilm', 'openfilm')
+    .split('\n').filter((line) => !line.startsWith('- `openfilm open ')).join('\n').trim();
   return `${prompt}\n\n## Pointing at Studio\n\n${STUDIO_REFERENCES}\n\n<manual>\n${manual}\n</manual>`;
 }
 

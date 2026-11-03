@@ -16,7 +16,7 @@
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, ChevronRight, ClipboardCopy, FolderOpen, RefreshCw, ScrollText, X } from 'lucide-react';
+import { AlertTriangle, ChevronRight, ClipboardCopy, FolderOpen, KeyRound, RefreshCw, ScrollText, X } from 'lucide-react';
 import { useT } from '@/i18n';
 import { chatLayer } from '@/lib/chat-layer';
 import { modelCalls, textOf, usageOf, type ModelCall, type RawCall } from '@/lib/model-calls';
@@ -134,7 +134,7 @@ function TurnLogViewer({ project, turnId, live, onClose }: { project: string; tu
             <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[12.5px] text-[var(--chat-hint)]">
               {agent ? (
                 <span className="flex w-3.5 shrink-0 justify-center opacity-80">
-                  {hasAgentIcon(agent) ? <AgentIcon id={agent} size={12} /> : <BrandLogo size={11} />}
+                  {agent === 'byok' ? <KeyRound size={12} /> : hasAgentIcon(agent) ? <AgentIcon id={agent} size={12} /> : <BrandLogo size={11} />}
                 </span>
               ) : null}
               <span className="truncate">

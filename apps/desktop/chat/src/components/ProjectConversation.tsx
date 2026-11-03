@@ -3,7 +3,7 @@
 import React from 'react';
 import { AGENT_DEFINITIONS, isAgentId } from '../../../src/agent-definitions.mjs';
 import type { PublicProgressSnapshot, TurnAttachment } from '@openfilm/shared';
-import { BellRing, Check, ChevronRight, Copy } from 'lucide-react';
+import { BellRing, Check, ChevronRight, Copy, KeyRound } from 'lucide-react';
 import { AgentActivityList, formatWorkDuration, StatusLine, type AgentActivityItem } from './AgentActivityRow';
 import { AgentIcon, hasAgentIcon } from './AgentIcons';
 import { BrandLogo } from './BrandLogo';
@@ -694,9 +694,9 @@ function TurnFooter({ entry, items, running = false }: { entry: ProjectVersion; 
         <span className="flex min-w-0 items-center gap-1.5">
           {/* the icon says which agent (its name on hover); written out it would only repeat it */}
           <span className="flex w-3.5 shrink-0 justify-center opacity-80" title={entry.agent === 'byok' ? t('composer.agentOwnKey') : isAgentId(entry.agent) ? AGENT_DEFINITIONS[entry.agent].name : entry.agent}>
-            {hasAgentIcon(entry.agent)
-              ? <AgentIcon id={entry.agent} size={12} />
-              : <BrandLogo size={11} />}
+            {entry.agent === 'byok' ? <KeyRound size={12} />
+              : hasAgentIcon(entry.agent) ? <AgentIcon id={entry.agent} size={12} />
+                : <BrandLogo size={11} />}
           </span>
           <span className="truncate">{[entry.model, when].filter(Boolean).join(' · ')}</span>
         </span>
