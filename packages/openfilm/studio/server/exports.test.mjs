@@ -446,6 +446,21 @@ test('footage no browser reads, placed whole (no trim): its length is ffprobe\'s
   assert.equal(JSON.parse(readFileSync(draft.out, 'utf8')).duration, 1_200_000);
 });
 
+test('a trim to the file\'s end, written to the millisecond, exports as a video and as a draft', { ...ffmpeg, timeout: 240_000 }, async () => {
+  const dir = join(scratch, 'Trim to the end');
+  mkdirSync(dir, { recursive: true });
+  /* 65 frames at 30 fps: 2.166667 s, written 2.167 */
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=30', '-frames:v', '65', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(dir, 'rain.mp4')]);
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'rain', src: 'rain.mp4', time: [0, 2.167] }] }] }));
+  const video = await exported({ kind: 'video', fps: 30 }, 'Trim to the end', dir);
+  assert.equal(video.status, 'done', video.error);
+  const drafts = join(scratch, 'Trim to the end drafts');
+  mkdirSync(drafts, { recursive: true });
+  const exports = createExports({ captions: subtitles, drafts: () => drafts });
+  const draft = await ended(exports, exports.start(project('Trim to the end', dir), { kind: 'nle', format: 'jianying', fps: 30 }));
+  assert.equal(draft.status, 'done', draft.error);
+});
+
 test('a PNG sequence comes zipped, one PNG with alpha per frame', ffmpeg, async () => {
   const done = await exported({ kind: 'video', codec: 'png', fps: 5, range: [0, 0.4] });
   assert.equal(done.out, join(exportsRoot(), 'Tiny (alpha) 0-0.4s.zip'));
