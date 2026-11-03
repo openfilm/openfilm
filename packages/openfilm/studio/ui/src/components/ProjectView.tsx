@@ -2852,6 +2852,13 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const dropFiles = React.useCallback((files: File[], hit: AssetLaneHit | null, atMs: number, mode?: EditMode) => (
     importAndPlace(files, (items) => assetRunInsert(items, tracksRef.current, hit, atMs, mode, stageRef.current), mode)
   ), [importAndPlace]);
+  /* a sound recorded with the timeline's record button: where the playhead was as recording began, on a sound track
+     with room there */
+  const recorder = React.useMemo(() => ({
+    now: () => snapToFrame(timeRef.current),
+    onSave: (file: File, atMs: number) => importAndPlace([file], (items) => (
+      assetRunInsert(items, tracksRef.current, soundLaneHit(tracksRef.current, atMs, assetRunMs(items)), atMs))),
+  }), [importAndPlace]);
   /* on the picture: at the playhead, pictures on a new track on top, sounds on a sound track */
   const dropFilesOnPicture = React.useCallback((files: File[]) => {
     const atMs = snapToFrame(timeRef.current);
@@ -3881,6 +3888,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     captionLanes={captionLanes}
                     waveUrl={waveUrl}
                     history={timelineHistory}
+                    recorder={recorder}
                     {...tools.timeline}
                   />
                 </div>

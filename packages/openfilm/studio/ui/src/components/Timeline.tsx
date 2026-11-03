@@ -162,6 +162,7 @@ import { CaptionsIcon } from './player-controls/controls-bar';
 import { inHostPanel, isTypingTarget } from './typing-target';
 import { Popover } from './Popover';
 import { MarkerGlyph } from './TimelineMarkers';
+import { RecordButton, type RecordButtonProps } from './RecordButton';
 import { CaptionLane } from './CaptionLane';
 import { SoloButton, TrackResizeHandle } from './timeline-head-extras';
 import { clipAtPoint, markReplaceTarget } from './replace-drop';
@@ -712,6 +713,8 @@ export interface TimelineProps {
   markerLane?: { shown: boolean; render: (lane: MarkerLaneView) => React.ReactNode };
   /** The toolbar's Add marker (left of split); M does the same. */
   onAddMarker?: () => void;
+  /** The toolbar's record button (components/RecordButton): sound from the microphone, put on at the playhead. */
+  recorder?: Pick<RecordButtonProps, 'now' | 'onSave'>;
   /** The ruler's own right-click menu, at a moment (film ms): adding a marker there. */
   rulerMenu?: (atMs: number) => ContextMenuEntry[];
   /** Drawn on each row, over its clips (the clips' markers). */
@@ -1003,6 +1006,7 @@ export const Timeline = React.memo(function Timeline({
   solo,
   markerLane,
   onAddMarker,
+  recorder,
   rulerMenu,
   trackOverlay,
   snapPointsMs,
@@ -4051,6 +4055,8 @@ export const Timeline = React.memo(function Timeline({
             <MarkerGlyph size={16} />
           </ToolButton>
         ) : null}
+
+        {recorder ? <RecordButton now={recorder.now} onSave={recorder.onSave} onProblem={setNotice} /> : null}
 
         {onSplit ? (
           <ToolButton
