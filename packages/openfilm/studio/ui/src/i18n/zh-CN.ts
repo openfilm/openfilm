@@ -1656,6 +1656,7 @@ export const zhCN: Words = {
       moveNo: '留在原处',
       moved: '已移动 {count} 个项目。',
       moveFailed: '这些项目没能移动，仍在原处：{names}',
+      moveLeft: `旧文件夹仍留在原来的磁盘上（${TRASH}无法接收），可在${FILES}中永久删除：{paths}`,
     },
     playback: {
       group: "播放",

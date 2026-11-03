@@ -1656,6 +1656,7 @@ export const en = {
       moveNo: 'Leave them',
       moved: 'Moved {count} projects.',
       moveFailed: 'These could not move and stay where they were: {names}',
+      moveLeft: `Their old folders stay on the old disk, as ${TRASH} would not take them; ${FILES} can delete them for good: {paths}`,
     },
     playback: {
       group: "Playback",

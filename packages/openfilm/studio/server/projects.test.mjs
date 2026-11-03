@@ -1,6 +1,6 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createFolder, createProject, deleteProject, forgetProject, listFolders, listProjects, locateProject, moveFolder, moveLibrary, openProject, projectById, renameProject, ProjectError } from './projects.mjs';
@@ -219,7 +219,7 @@ test('moving the library with its projects: each folder whole, a name taken beco
   writeFileSync(join(scratch, 'library', 'notes.txt'), 'mine');
   const to = filmFolder(join(scratch, 'New', 'Beta'));
   const done = await moveLibrary(join(scratch, 'New'), { move: true, choose: (f) => chooseFolder('projectsFolder', f) });
-  assert.deepEqual(done, { moved: 2, failed: [] });
+  assert.deepEqual(done, { moved: 2, failed: [], left: [] });
   const listed = await listProjects();
   const real = realpathSync(join(scratch, 'New'));
   assert.equal(listed.find((p) => p.id === a.id)?.path, join(real, 'Alpha'), 'the same project, at its new folder');
@@ -229,10 +229,56 @@ test('moving the library with its projects: each folder whole, a name taken beco
   assert.ok((await createProject('Next')).path.startsWith(real), 'new projects go to the new library');
 });
 
+/* another disk, for a move across disks (rename says EXDEV: copied whole, the old folder to the trash): GitHub's Linux
+   runner has /dev/shm, its Windows runner the D: drive the job runs on, a developer names one (a RAM disk) */
+const otherDisk = (() => {
+  const named = process.env.OPENFILM_TEST_OTHER_DISK ?? (process.platform === 'linux' ? '/dev/shm' : process.platform === 'win32' ? process.env.RUNNER_TEMP : null);
+  try { return named && statSync(named).isDirectory() && statSync(named).dev !== statSync(tmpdir()).dev ? named : null; } catch { return null; }
+})();
+
+test('moving the library across disks: an old folder the trash will not take stays there, named, and the project has moved (#345)', { skip: !otherDisk && 'no second disk here (OPENFILM_TEST_OTHER_DISK names one)' }, async () => {
+  const a = await createProject('Alpha');
+  writeFileSync(join(a.path, 'take.wav'), 'a take');
+  const into = mkdtempSync(join(otherDisk, 'of-library-'));
+  /* a trash that takes nothing: its folder a file (on Windows, the Recycle Bin refusing a folder too big for it) */
+  const wall = join(scratch, 'wall');
+  writeFileSync(wall, 'no trash here');
+  const was = process.env.OPENFILM_TRASH_DIR;
+  process.env.OPENFILM_TRASH_DIR = join(wall, 'trash');
+  let done;
+  try { done = await moveLibrary(into, { move: true, choose: (f) => chooseFolder('projectsFolder', f) }); }
+  finally { if (was === undefined) delete process.env.OPENFILM_TRASH_DIR; else process.env.OPENFILM_TRASH_DIR = was; }
+  try {
+    assert.deepEqual([done.moved, done.failed, done.left.map((l) => [l.name, l.path])], [1, [], [['Alpha', a.path]]]);
+    assert.match(done.left[0].error, /ENOTDIR|EEXIST|not a directory/i);
+    const real = realpathSync(into);
+    assert.equal((await listProjects()).find((p) => p.id === a.id)?.path, join(real, 'Alpha'), 'the copy is the project now');
+    assert.equal(readFileSync(join(real, 'Alpha', 'take.wav'), 'utf8'), 'a take');
+    assert.ok(existsSync(join(a.path, 'take.wav')), 'the old folder stays on the old disk');
+    /* with a trash that takes it, nothing is left behind (the stand-in trash on the disk the old folders are on: it
+       moves by rename, as the freedesktop trash does, and would not take a folder from another disk either) */
+    const b = await createProject('Beta');
+    const bin = mkdtempSync(join(otherDisk, 'of-trash-'));
+    process.env.OPENFILM_TRASH_DIR = bin;
+    try {
+      const back = await moveLibrary(join(scratch, 'library'), { move: true, choose: (f) => chooseFolder('projectsFolder', f) });
+      assert.deepEqual([back.moved, back.failed, back.left], [2, [], []]);
+      assert.ok(!existsSync(b.path), 'the old folder went to the trash');
+      assert.ok(existsSync(join(bin, 'Beta', 'film.html')));
+      assert.equal((await listProjects()).find((p) => p.id === b.id)?.path, join(realpathSync(join(scratch, 'library')), 'Beta'));
+    } finally {
+      if (was === undefined) delete process.env.OPENFILM_TRASH_DIR; else process.env.OPENFILM_TRASH_DIR = was;
+      rmSync(bin, { recursive: true, force: true });
+    }
+  } finally {
+    rmSync(into, { recursive: true, force: true });
+  }
+});
+
 test('moving the library without its projects: they stay where they are, still in the list', async () => {
   const a = await createProject('Stays');
   const done = await moveLibrary(join(scratch, 'Other'), { move: false, choose: (f) => chooseFolder('projectsFolder', f) });
-  assert.deepEqual(done, { moved: 0, failed: [] });
+  assert.deepEqual(done, { moved: 0, failed: [], left: [] });
   assert.equal((await listProjects()).find((p) => p.id === a.id)?.path, a.path);
   assert.equal((await listProjects()).find((p) => p.id === a.id)?.missing, false);
 });

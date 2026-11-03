@@ -1655,6 +1655,7 @@ export const ja: Words = {
       moveNo: '元の場所に残す',
       moved: '{count} 個のプロジェクトを移動しました。',
       moveFailed: '移動できず元の場所に残ったプロジェクト：{names}',
+      moveLeft: `元のフォルダーは${TRASH}に入れられなかったため元のディスクに残っています。${FILES}で完全に削除できます：{paths}`,
     },
     playback: {
       group: "再生",

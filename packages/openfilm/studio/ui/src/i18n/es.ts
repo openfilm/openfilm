@@ -1655,6 +1655,7 @@ export const es: Words = {
       moveNo: 'Dejarlos',
       moved: 'Se movieron {count} proyectos.',
       moveFailed: 'No se pudieron mover y siguen donde estaban: {names}',
+      moveLeft: `Sus carpetas antiguas se quedan en el disco anterior, porque ${TRASH} no las aceptó; ${FILES} puede borrarlas definitivamente: {paths}`,
     },
     playback: {
       group: "Reproducción",
