@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { cpSync, mkdirSync, mkdtempSync, writeFileSync, existsSync, readFileSync, symlinkSync, lstatSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { addSkills, asRun, coreSkills, findSkill, listSkills, migrateMySkills, mySkillsDir, parseSkillFile, readSkill, removeSkill, setSkillCover, setSkillInstalled, setSkillOn, skillOrigins, skillText } from './skills.mjs';
+import { addSkills, asRun, coreSkills, findSkill, listSkills, migrateMySkills, mySkillsDir, parseSkillFile, readSkill, removeSkill, setSkillCover, setSkillInstalled, setSkillOn, skillId, skillOrigins, skillText } from './skills.mjs';
 import { commitSkills, discardSkills, previewFolder, previewSkills, skillCommand, skillsCommand } from './skills-cli.mjs';
 
 const skill = (dir, name, description, body = 'How to make it.', extra = {}) => {
@@ -346,4 +346,17 @@ test("OpenFilm's own skills: in order, each named by the manual, printed with th
   assert.ok(printed.lines[0].includes('`npx -y openfilm@latest look`') && !/npx openfilm /.test(printed.lines[0]));
   assert.equal(findSkill('openfilm-media')?.folder, core.find((s) => s.name === 'openfilm-media')?.folder);
   assert.ok(!listSkills().some((s) => core.some((c) => c.name === s.name)), 'in no library');
+});
+
+test("a skill's name wherever it is shared: owner/repo/name, from where it really came from, never what it says of itself", () => {
+  const keynote = { name: 'keynote', source: 'official', repository: 'https://github.com/openfilm/skills/tree/main/skills/keynote' };
+  assert.equal(skillId(keynote), 'openfilm/skills/keynote');
+  assert.equal(skillId({ name: 'tdd', source: 'mine' }, { from: 'link', address: 'github.com/MattPocock/skills' }), 'mattpocock/skills/tdd');
+  assert.equal(skillId({ name: 'cut', source: 'mine' }, { from: 'link', address: 'https://gitlab.com/group/sub/repo/-/tree/main/cut' }), 'gitlab.com/group/sub/repo/cut');
+  /* one of the person's saying it is OpenFilm's is named by where it was added from, or not at all */
+  const claims = { name: 'look', source: 'mine', repository: 'https://github.com/openfilm/skills' };
+  assert.equal(skillId(claims, { from: 'link', address: 'https://github.com/someone/looks' }), 'someone/looks/look');
+  assert.equal(skillId(claims, { from: 'folder', address: '/tmp/look' }), null);
+  assert.equal(skillId({ name: 'brand', source: 'project', repository: 'https://github.com/openfilm/skills' }), null);
+  assert.equal(skillId({ name: 'x', source: 'mine' }, { from: 'link', address: 'not an address' }), null);
 });

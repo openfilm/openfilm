@@ -3,7 +3,8 @@
  * then its title and switch (on, an agent takes it up whenever it fits; off, no agent gets it), kind and version,
  * where it came from, what it does, and what to do with it: Try now (a new conversation with the skill named in its
  * message; installed or not, the skill is given to that conversation only), Install, or uninstalling it (an official
- * one) or moving it to the trash (the person's own, a project's). Back returns to the tiles. Also here: a skill's words
+ * one) or moving it to the trash (the person's own, a project's); OpenFilm's system skills are only turned off. Back
+ * returns to the list. Also here: a skill's words
  * in the language shown, and its cover.
  */
 import React from 'react';
@@ -47,7 +48,7 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
   const words = useSkillWords()(skill);
   const details = inLanguage(skill.shown?.details, lang);
   const installed = installedOf(skill);
-  const group = skill.source === 'official' ? (skill.kind === 'style' ? 'gallery.style' : 'gallery.workflow') : skill.source === 'mine' ? 'gallery.mine' : 'gallery.project';
+  const group = skill.core ? 'assetDrawer.skillsSystem' : skill.source === 'official' ? (skill.kind === 'style' ? 'gallery.style' : 'gallery.workflow') : skill.source === 'mine' ? 'gallery.mine' : 'gallery.project';
   const source = skill.repository ?? (skill.origin?.from === 'link' ? skill.origin.address : undefined);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -117,6 +118,8 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
       {skill.off ? <p className="mt-1.5 text-[12px] text-[var(--text-muted)]">{t('gallery.skillOff')}</p> : null}
       <div className="mt-2 flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
         <span>{t(group)}</span>
+        {/* its name wherever it is shared: owner/repo/name */}
+        {skill.id ? <span className="min-w-0 truncate font-mono text-[11px] text-[var(--text-faint)]" title={skill.id}>{skill.id}</span> : null}
         {skill.version ? <span className="rounded-[5px] border border-[var(--border)] px-1.5 py-[1px] font-mono text-[10.5px] text-[var(--text-dim)]">v{skill.version}</span> : null}
         {/* its source: OpenFilm's repository, or the address one of the person's came from */}
         {source ? (
@@ -132,7 +135,8 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
           <button type="button" onClick={() => onTry(skill)} disabled={skill.off} title={skill.off ? t('gallery.tryOff') : undefined}
             className="flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--text)] text-[13px] font-medium text-[var(--bg)] transition hover:opacity-90 disabled:opacity-40"><MessageSquarePlus size={15} />{t('gallery.tryNow')}</button>
         ) : null}
-        {!installed ? (
+        {/* OpenFilm's system skills are only turned off */}
+        {skill.core ? null : !installed ? (
           <button type="button" onClick={() => install(true)}
             className={onTry
               ? 'flex h-9 w-full items-center justify-center gap-1.5 rounded-[10px] border border-[var(--border-strong)] text-[13px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)]'
@@ -149,6 +153,22 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
         description={t('gallery.removeHint')} confirmLabel={t('gallery.remove')}
         onCancel={() => setRemoving(false)} onConfirm={remove} />
     </div>
+  );
+}
+
+/** A skill's mark at the start of its line in a list: its cover, else its icon in its own color. */
+export function SkillMark({ skill }: { skill: Pick<SkillEntry, 'cover' | 'icon'> }) {
+  const [failed, setFailed] = React.useState(false);
+  if (skill.cover && !failed) {
+    return <img src={skill.cover} alt="" loading="lazy" draggable={false} onError={() => setFailed(true)} className="h-8 w-8 shrink-0 rounded-[7px] object-cover ring-1 ring-[var(--border)]" />;
+  }
+  const Mark = ICONS[skill.icon ?? ''] ?? Sparkles;
+  const hue = HUES[skill.icon ?? ''] ?? 220;
+  return (
+    <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px]"
+      style={{ background: `hsl(${hue} 70% 55% / 0.16)`, color: `hsl(${hue} 80% 72%)`, boxShadow: `inset 0 0 0 1px hsl(${hue} 70% 60% / 0.28)` }}>
+      <Mark size={15} strokeWidth={1.7} />
+    </span>
   );
 }
 

@@ -1,19 +1,21 @@
 /**
  * The library's skills, in the drawer: what an agent takes up when making a film. The side bar picks the installed
- * ones (all of them, the person's own, OpenFilm's, the agents' own) or OpenFilm's still to install. OpenFilm's are its
- * system skills (how a film is made, its media, its canvas: each a line with its switch, as the agents are given them)
- * and the community's installed; the person's own (theirs, and this project's) come with Import first, where the app
- * can add one. Each installed or to install is a tile of its cover (its preview under the pointer) and title, with what
- * to do now over the cover: Try (a new conversation with it named) once it is installed, Install before. A click on
- * one opens its page in their place (SkillPage), Back returns to them. Last: the skills the person installed in an
- * agent themselves (Codex, Claude Code…), each off until let in.
+ * ones (all of them, the person's own, OpenFilm's, the agents' own) or OpenFilm's still to install (Discover).
+ *
+ * Installed, each skill is a line: its mark (its cover, else its icon), its title, and under it its name wherever it is
+ * shared, owner/repo/name as on GitHub (`openfilm/skills/keynote`; one never published says where it is instead), and
+ * its switch: on, agents take it up when it fits; off, no agent gets it. A click opens its page (SkillPage). The lines
+ * are in parts by whose they are, each headed with its count where more than one part is shown: OpenFilm's system
+ * skills (how a film is made, its media, its canvas, in the order agents are given them), the community's installed,
+ * the person's own (theirs, and this project's), then each agent's own (off until let in). Import is beside the search
+ * (LibraryDrawer). Discover is a gallery of tiles to browse: cover, title, name, Install.
  */
 import React from 'react';
 import { Plus } from 'lucide-react';
 import { useT } from '@/i18n';
 import { studioHost, type HostAgentId } from '@/lib/host';
 import { seenSkills, sourcesApi, watchSkills, type SkillEntry } from '@/lib/project-sources';
-import { byOrder, SkillCover, SkillPage, useSkillWords } from '../SkillPage';
+import { byOrder, SkillCover, SkillMark, SkillPage, useSkillWords } from '../SkillPage';
 import { SettingsSwitch } from '../settings/ui';
 
 /** An official one not installed is in the catalog only; the person's own and a project's are installed already. */
@@ -29,7 +31,7 @@ export function SkillsPane({ line, query, projectId, opened, onOpen }: {
   line: SkillsLine;
   query: string;
   projectId: string | null;
-  /** the skill whose page is shown (its name), none: the tiles */
+  /** the skill whose page is shown (its name), none: the list */
   opened: string | null;
   onOpen: (name: string | null) => void;
 }) {
@@ -47,7 +49,7 @@ export function SkillsPane({ line, query, projectId, opened, onOpen }: {
   const agents = useAgentSkills(shows('agents'));
   const q = query.trim().toLowerCase();
   const found = skills
-    .filter((k) => !q || [words(k).title, words(k).summary, k.name].some((w) => w?.toLowerCase().includes(q)))
+    .filter((k) => !q || [words(k).title, words(k).summary, k.name, k.id].some((w) => w?.toLowerCase().includes(q)))
     .sort(byOrder);
   /* OpenFilm's own in the order agents are given them, as the API lists them */
   const system = shows('openfilm') ? skills.filter((k) => k.core && found.includes(k)) : [];
@@ -66,94 +68,92 @@ export function SkillsPane({ line, query, projectId, opened, onOpen }: {
     void sourcesApi.setSkillOn(skill.name, on).catch(() => { void sourcesApi.skills(projectId).then(setSkills); });
   };
   const tryIt = (skill: SkillEntry) => studioHost?.useSkill?.({ name: skill.name, description: skill.description, title: words(skill).title, newConversation: true });
-  /* adding one of the person's own: the app's dialog (a link or a folder); the web editor has none */
-  const importSkill = studioHost?.skills?.add;
-  /* under the title, what the section cannot say: this project's, or off */
-  const note = (skill: SkillEntry) => [skill.source === 'project' ? t('assetDrawer.skillProject') : '', skill.off ? t('assetDrawer.skillOff') : ''].filter(Boolean).join(' · ');
+  /* under its title: its name wherever it is shared, else where it is (this project's, or the person's alone) */
+  const whereOf = (skill: SkillEntry) => skill.id ?? (skill.source === 'project' ? t('assetDrawer.skillProject') : `${t('assetDrawer.skillLocal')} · ${skill.name}`);
 
-  const page = opened ? skills.find((k) => k.name === opened && !k.core) : undefined;
+  const page = opened ? skills.find((k) => k.name === opened) : undefined;
   if (page) {
     return <SkillPage key={`${page.source}:${page.name}`} skill={page} setSkills={setSkills} projectId={projectId} onBack={() => onOpen(null)}
       {...(studioHost?.useSkill ? { onTry: tryIt } : {})} />;
   }
-  const tiles = (list: SkillEntry[], first?: React.ReactNode) => (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-x-2.5 gap-y-3">
-      {first}
-      {list.map((skill) => <SkillTile key={`${skill.source}:${skill.name}`} skill={skill} note={note(skill)} onOpen={() => onOpen(skill.name)}
-        {...(installedOf(skill) ? (studioHost?.useSkill ? { onTry: () => tryIt(skill) } : {}) : { onInstall: () => install(skill) })} />)}
-    </div>
+  if (line === 'discover') {
+    return toInstall.length ? (
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-0.5">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-x-2.5 gap-y-3.5">
+          {toInstall.map((skill) => <SkillTile key={skill.name} skill={skill} onOpen={() => onOpen(skill.name)} onInstall={() => install(skill)} />)}
+        </div>
+      </div>
+    ) : <Empty text={t(q ? 'assetDrawer.noSkillsFound' : 'assetDrawer.allSkillsInstalled')} />;
+  }
+  const lineOf = (skill: SkillEntry) => (
+    <SkillLine key={`${skill.source}:${skill.name}`} mark={<SkillMark skill={skill} />} title={words(skill).title} under={whereOf(skill)} mono={!!skill.id}
+      tip={words(skill).summary} on={!skill.off} onOpen={() => onOpen(skill.name)}
+      label={t(skill.off ? 'gallery.turnOn' : 'gallery.turnOff').replace('{name}', words(skill).title)} onChange={(on) => turn(skill, on)} />
   );
-  /* Import stays in sight on the person's own, even with none yet */
-  const importTile = importSkill && shows('mine') && !q ? <ImportTile onClick={importSkill} /> : null;
-  const sections = [
-    system.length ? (
-      <Section key="system" title={t('assetDrawer.skillsSystem')} hint={t('assetDrawer.skillsSystemHint')}>
-        {system.map((k) => <SkillLine key={k.name} title={words(k).title} summary={words(k).summary} on={!k.off}
-          label={t(k.off ? 'gallery.turnOn' : 'gallery.turnOff').replace('{name}', words(k).title)} onChange={(on) => turn(k, on)} />)}
-      </Section>
-    ) : null,
-    community.length ? <Section key="community" title={t('assetDrawer.skillsCommunity')}>{tiles(community)}</Section> : null,
-    mine.length || importTile ? (
-      <Section key="mine" title={line === 'all' ? t('assetDrawer.skillsMine') : undefined}>{tiles(mine, importTile)}</Section>
-    ) : null,
-    ...own.map((g) => (
-      <Section key={g.id} title={t('gallery.fromAgent').replace('{name}', g.name)} hint={t('gallery.agentHint')}>
-        {g.skills.map((k) => <SkillLine key={k.name} title={k.name} mono summary={k.description} on={k.allowed}
-          label={t(k.allowed ? 'gallery.turnOff' : 'gallery.turnOn').replace('{name}', k.name)} onChange={(on) => agents.allow(g.id, k.name, on)} />)}
-      </Section>
-    )),
-    toInstall.length ? <Section key="discover">{tiles(toInstall)}</Section> : null,
-  ].filter(Boolean);
-  const empty = q ? 'assetDrawer.noSkillsFound' : line === 'discover' ? 'assetDrawer.allSkillsInstalled' : line === 'mine' ? 'assetDrawer.noMineSkills'
-    : line === 'agents' ? 'assetDrawer.noAgentSkills' : 'assetDrawer.noSkills';
+  const parts: Array<{ key: string; title: string; lines: React.ReactNode[]; empty?: string }> = [
+    { key: 'system', title: t('assetDrawer.skillsSystem'), lines: system.map(lineOf) },
+    { key: 'community', title: t('assetDrawer.skillsCommunity'), lines: community.map(lineOf), ...(line === 'openfilm' && !q ? { empty: t('assetDrawer.noCommunitySkills') } : {}) },
+    { key: 'mine', title: t('assetDrawer.skillsMine'), lines: mine.map(lineOf), ...(line === 'mine' && !q ? { empty: t('assetDrawer.noMineSkills') } : {}) },
+    ...own.map((g) => ({
+      key: g.id, title: g.name,
+      lines: g.skills.map((k) => <SkillLine key={k.name} mark={<SkillMark skill={{}} />} title={k.name} under={k.description} tip={k.description} on={k.allowed}
+        label={t(k.allowed ? 'gallery.turnOff' : 'gallery.turnOn').replace('{name}', k.name)} onChange={(on) => agents.allow(g.id, k.name, on)} />),
+    })),
+  ].filter((p) => p.lines.length || p.empty);
+  if (!parts.length) {
+    return <Empty text={t(q ? 'assetDrawer.noSkillsFound' : line === 'agents' ? 'assetDrawer.noAgentSkills' : 'assetDrawer.noSkills')} />;
+  }
+  /* one part alone needs no heading: the side bar says what it is */
+  const headed = parts.length > 1 || line === 'all';
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 pb-3 pt-0.5">
-      {sections}
-      {/* the person's own with only Import: a word under it */}
-      {!sections.length || (line === 'mine' && !mine.length) || (line === 'openfilm' && !community.length && !q) ? (
-        <p className={`text-center text-[12.5px] leading-relaxed text-[var(--text-faint)] ${sections.length ? '' : 'px-1 pt-12'}`}>
-          {t(line === 'openfilm' && sections.length ? 'assetDrawer.noCommunitySkills' : empty)}
-        </p>
-      ) : null}
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 pb-3 pt-0.5">
+      {parts.map((p) => (
+        <section key={p.key}>
+          {headed ? (
+            <h3 className="mb-1 flex items-baseline gap-1.5 px-1 text-[11.5px] font-medium text-[var(--text-muted)]">
+              {p.title}<span className="tabular-nums text-[var(--text-faint)]">{p.lines.length}</span>
+            </h3>
+          ) : null}
+          {p.lines}
+          {!p.lines.length && p.empty ? <p className="px-1 py-2 text-[12px] text-[var(--text-faint)]">{p.empty}</p> : null}
+        </section>
+      ))}
     </div>
   );
 }
 
-/** A part of the skills: its heading and what it is, when it needs saying. */
-function Section({ title, hint, children }: { title?: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <section>
-      {title ? <h3 className="text-[12px] font-medium text-[var(--text)]">{title}</h3> : null}
-      {hint ? <p className="text-[11px] text-[var(--text-faint)]">{hint}</p> : null}
-      <div className={title || hint ? 'mt-2' : ''}>{children}</div>
-    </section>
-  );
+/** Nothing to list: a word in the middle. */
+function Empty({ text }: { text: string }) {
+  return <p className="px-4 pt-12 text-center text-[12.5px] leading-relaxed text-[var(--text-faint)]">{text}</p>;
 }
 
-/** A skill as a line with its switch: one of OpenFilm's system skills, or an agent's own. */
-function SkillLine({ title, summary, mono = false, on, label, onChange }: {
-  title: string; summary: string; mono?: boolean; on: boolean; label: string; onChange: (on: boolean) => void;
+/** An installed skill: its mark, its title and what is under it, its switch; a click opens its page (an agent's own has none). */
+function SkillLine({ mark, title, under, mono = false, tip, on, label, onChange, onOpen }: {
+  mark: React.ReactNode; title: string; under: string; mono?: boolean; tip?: string; on: boolean; label: string;
+  onChange: (on: boolean) => void; onOpen?: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2 py-1.5">
+    <div role={onOpen ? 'button' : undefined} tabIndex={onOpen ? 0 : undefined} title={tip}
+      onClick={onOpen} onKeyDown={(e) => { if (onOpen && e.key === 'Enter' && e.target === e.currentTarget) onOpen(); }}
+      className={`flex items-center gap-2.5 rounded-[8px] px-1 py-1.5 outline-none ${onOpen ? 'cursor-pointer hover:bg-[var(--bg-hover)] focus-visible:ring-1 focus-visible:ring-[var(--tl-accent)]' : ''}`}>
+      <span className={on ? '' : 'opacity-50'}>{mark}</span>
       <div className="min-w-0 flex-1">
-        <div className={`truncate text-[12px] ${mono ? 'font-mono' : 'font-medium'} ${on ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>{title}</div>
-        {summary ? <div className="truncate text-[11px] text-[var(--text-faint)]" title={summary}>{summary}</div> : null}
+        <div className={`truncate text-[12.5px] font-medium leading-[17px] ${on ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>{title}</div>
+        <div className={`truncate text-[11px] leading-[15px] text-[var(--text-faint)] ${mono ? 'font-mono' : ''}`}>{under}</div>
       </div>
-      <SettingsSwitch checked={on} onChange={onChange} label={label} />
+      {/* the switch is its own: a press there does not open the page */}
+      <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}><SettingsSwitch checked={on} onChange={onChange} label={label} /></span>
     </div>
   );
 }
 
-/** The first of the person's own: a skill added from a link or a folder (the app's dialog). */
-function ImportTile({ onClick }: { onClick: () => void }) {
+/** Adding one of the person's own (the app's dialog: a link or a folder). */
+export function ImportButton({ onClick }: { onClick: () => void }) {
   const t = useT();
   return (
-    <button type="button" onClick={onClick} className="group min-w-0 select-none text-left outline-none">
-      <div className="flex aspect-video flex-col items-center justify-center gap-1 rounded-md border border-dashed border-[var(--border-strong)] text-[var(--text-muted)] group-hover:border-[var(--text-muted)] group-hover:text-[var(--text)] group-focus-visible:border-[var(--tl-accent)]">
-        <Plus size={18} />
-      </div>
-      <div className="mt-1.5 truncate px-0.5 text-[11.5px] text-[var(--text-muted)] group-hover:text-[var(--text)]">{t('assetDrawer.skillImport')}</div>
+    <button type="button" onClick={onClick}
+      className="flex h-8 shrink-0 items-center gap-1 rounded-md bg-[var(--surface-2)] px-2.5 text-[12px] font-medium text-[var(--text)] hover:bg-[var(--bg-hover)]">
+      <Plus size={14} />{t('assetDrawer.skillImport')}
     </button>
   );
 }
@@ -179,24 +179,22 @@ function useAgentSkills(shown: boolean) {
   return { groups: shown ? groups : [], allow };
 }
 
-/** One skill: its cover (its preview under the pointer), with Try or Install over it, and its title under it. */
-function SkillTile({ skill, note, onOpen, onTry, onInstall }: { skill: SkillEntry; note: string; onOpen: () => void; onTry?: () => void; onInstall?: () => void }) {
+/** One skill to install, in Discover: its cover (its preview under the pointer) with Install over it, its title and whose it is under it. */
+function SkillTile({ skill, onOpen, onInstall }: { skill: SkillEntry; onOpen: () => void; onInstall: () => void }) {
   const t = useT();
   const { title } = useSkillWords()(skill);
   const [hover, setHover] = React.useState(false);
-  const act = onInstall ? { label: t('assetDrawer.skillInstall'), run: onInstall } : onTry ? { label: t('assetDrawer.skillTry'), run: onTry } : null;
   return (
     <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(); }} title={title}
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} className="group min-w-0 cursor-pointer select-none outline-none">
       <div className="relative aspect-video overflow-hidden rounded-md bg-[var(--surface-2)] ring-1 ring-transparent group-hover:ring-[var(--text-faint)] group-focus-visible:ring-[var(--tl-accent)]">
         <SkillCover key={skill.cover ?? ''} skill={skill} title={title} small playing={hover} />
-        {act ? (
-          <button type="button" onClick={(e) => { e.stopPropagation(); act.run(); }}
-            className="absolute bottom-1 right-1 hidden h-[22px] items-center rounded-full bg-[var(--tl-accent)] px-2.5 text-[11px] font-medium text-black shadow-md group-hover:flex">{act.label}</button>
-        ) : null}
+        <button type="button" onClick={(e) => { e.stopPropagation(); onInstall(); }}
+          className="absolute bottom-1 right-1 hidden h-[22px] items-center rounded-full bg-[var(--tl-accent)] px-2.5 text-[11px] font-medium text-black shadow-md group-hover:flex">{t('assetDrawer.skillInstall')}</button>
       </div>
-      <div className="mt-1.5 truncate px-0.5 text-[11.5px] text-[var(--text-muted)] group-hover:text-[var(--text)]">{title}</div>
-      {note ? <div className="truncate px-0.5 text-[10.5px] text-[var(--text-faint)]">{note}</div> : null}
+      <div className="mt-1.5 truncate px-0.5 text-[12px] font-medium text-[var(--text-muted)] group-hover:text-[var(--text)]">{title}</div>
+      {/* whose it is, owner/repo (its whole name is on its page) */}
+      {skill.id ? <div className="truncate px-0.5 font-mono text-[10.5px] text-[var(--text-faint)]" title={skill.id}>{skill.id.split('/').slice(0, -1).join('/')}</div> : null}
     </div>
   );
 }

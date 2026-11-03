@@ -24,14 +24,14 @@ import { useLibraryVoices } from '@/lib/library-voices';
 import { MiniPlayer, MusicCard, SoundRow, usePlayer } from './AudioList';
 import { CategoryIcon, Empty } from './icons';
 import { FEATURED, STARRED, VoicesPane } from './VoicesPane';
-import { SkillsPane, type SkillsLine } from './SkillsPane';
+import { ImportButton, SkillsPane, type SkillsLine } from './SkillsPane';
 import { SourceBadge, SourceChips, sourcesIn, type Source } from './SourceChips';
 
 type Category = 'media' | 'skill' | 'voice' | LibraryCategory;
 /* the installed skills by whose they are (SkillsPane), and the words for each */
-const INSTALLED_LINES: SkillsLine[] = ['all', 'mine', 'openfilm', 'agents'];
-const SKILL_LINE_WORDS: Record<SkillsLine, string> = {
-  all: 'assetDrawer.all', mine: 'assetDrawer.skillsMine', openfilm: 'assetDrawer.skillsOpenFilm', agents: 'assetDrawer.skillsAgents', discover: 'assetDrawer.skillsDiscover',
+const SKILL_LINES = ['openfilm', 'mine', 'agents'] as const;
+const SKILL_LINE_WORDS: Record<(typeof SKILL_LINES)[number], string> = {
+  openfilm: 'assetDrawer.skillsOpenFilm', mine: 'assetDrawer.skillsMine', agents: 'assetDrawer.skillsAgents',
 };
 const CATEGORIES: Category[] = ['media', 'skill', 'voice', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition', 'template'];
 
@@ -107,7 +107,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
   React.useEffect(() => () => tryOut.current(null), []);
 
   /* the skills' line: one of the installed (Installed alone, as kept before, is all of them), else Discover */
-  const skillLine: SkillsLine = group === 'installed' ? 'all' : (INSTALLED_LINES as string[]).includes(group) ? group as SkillsLine : 'discover';
+  const skillLine: SkillsLine = group === 'installed' || group === 'all' ? 'all' : (SKILL_LINES as readonly string[]).includes(group) ? group as SkillsLine : 'discover';
   const q = query.trim().toLowerCase();
   const shown = (index?.items ?? []).filter((item) => item.cat === cat && (q
     ? [...Object.values(item.name), ...(item.tags ?? [])].some((n) => n?.toLowerCase().includes(q))
@@ -183,13 +183,11 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
               </>
             ) : cat === 'skill' ? (
               <>
-                {/* Discover first opened: OpenFilm's skills to take up; the installed by whose they are, under their fold */}
-                <SideBox on={skillLine !== 'discover' && folded} open={!folded} onClick={fold}>{t('assetDrawer.skillsInstalled')}</SideBox>
-                {folded ? null : (
-                  <div className="flex flex-col pb-1">
-                    {INSTALLED_LINES.map((id) => <SideLine key={id} on={skillLine === id} onClick={() => pickGroup(id)}>{t(SKILL_LINE_WORDS[id])}</SideLine>)}
-                  </div>
-                )}
+                {/* Discover first opened: OpenFilm's skills to take up. Installed is all of them; under it, by whose they are */}
+                <SideBox on={skillLine === 'all'} onClick={() => pickGroup('all')}>{t('assetDrawer.skillsInstalled')}</SideBox>
+                <div className="flex flex-col pb-1 pl-1.5">
+                  {SKILL_LINES.map((id) => <SideLine key={id} on={skillLine === id} onClick={() => pickGroup(id)}>{t(SKILL_LINE_WORDS[id])}</SideLine>)}
+                </div>
                 <SideBox on={skillLine === 'discover'} onClick={() => pickGroup('discover')}>{t('assetDrawer.skillsDiscover')}</SideBox>
               </>
             ) : (
@@ -213,8 +211,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
           {cat === 'media' ? media : (
             <>
               {/* a skill's page has its own way back instead */}
-              <div className="px-3 pb-2 pt-2.5" hidden={cat === 'skill' && skillOpen != null}>
-                <label className="flex h-8 min-w-0 items-center gap-2 rounded-md bg-[var(--surface-2)] px-2.5 text-[var(--text-faint)] focus-within:ring-1 focus-within:ring-[var(--tl-accent)]">
+              <div className="flex gap-2 px-3 pb-2 pt-2.5" hidden={cat === 'skill' && skillOpen != null}>
+                <label className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md bg-[var(--surface-2)] px-2.5 text-[var(--text-faint)] focus-within:ring-1 focus-within:ring-[var(--tl-accent)]">
                   <Search size={14} />
                   <input
                     value={query}
@@ -223,6 +221,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
                     className="min-w-0 flex-1 bg-transparent text-[12.5px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]"
                   />
                 </label>
+                {/* the person's own skills come in here, the app's way (a link or a folder) */}
+                {cat === 'skill' && skillLine !== 'discover' && studioHost?.skills?.add ? <ImportButton onClick={studioHost.skills.add} /> : null}
               </div>
               {cat !== 'skill' && cat !== 'voice' ? <SourceChips sources={sources} value={source} onChange={setSource} /> : null}
               {cat === 'skill' ? <SkillsPane line={skillLine} query={query} projectId={projectId} opened={skillOpen} onOpen={setSkillOpen} />

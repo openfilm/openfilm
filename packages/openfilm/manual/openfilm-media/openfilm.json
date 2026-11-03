@@ -1,4 +1,5 @@
 {
+  "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/manual/openfilm-media",
   "order": 2,
   "icon": "music",
   "title": {

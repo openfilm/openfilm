@@ -1,4 +1,5 @@
 {
+  "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/manual/openfilm-edit",
   "order": 1,
   "icon": "scissors",
   "title": {

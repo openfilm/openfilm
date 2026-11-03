@@ -41,6 +41,8 @@ export type FetchJob = {
 /** a skill a project can be made with (openfilm/src/skills.mjs): the project's own, the person's, or official */
 export type SkillEntry = {
   name: string; description: string; source: 'project' | 'mine' | 'official'; scripts: number;
+  /** its name wherever it is shared and searched: owner/repo/name, as on GitHub; none until it is published */
+  id?: string;
   /** OpenFilm's own (how a film is made, its media, its canvas): in every agent's hands, and only turned off */
   core?: true;
   /** how people see it (its openfilm.json): a title and a one-line summary, by language */

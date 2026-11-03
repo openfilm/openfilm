@@ -27,6 +27,7 @@ test("Studio lists OpenFilm's own skills first, in their order, installed, and o
     ['openfilm-edit', true, true], ['openfilm-media', true, true], ['openfilm-canvas', true, true],
   ]);
   assert.equal(core[0].shown.title['zh-CN'], '剪辑');
+  assert.deepEqual(core.map((s) => s.id), ['openfilm/openfilm/openfilm-edit', 'openfilm/openfilm/openfilm-media', 'openfilm/openfilm/openfilm-canvas']);
   assert.ok((await listed()).slice(3).every((s) => !s.core), 'the library\'s are not');
   assert.equal((await api('/api/skills/openfilm-canvas/on', { method: 'PUT', body: { on: false } })).status, 200);
   assert.equal((await listed()).find((s) => s.name === 'openfilm-canvas').off, true);

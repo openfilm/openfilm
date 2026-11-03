@@ -59,7 +59,7 @@ import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listenLocal } from '../../src/host.mjs';
 import { captionTrackRoutes } from './caption-tracks.mjs';
 import { moveToTrash } from './trash.mjs';
-import { coreSkills, listSkills, removeSkill, setSkillCover, setSkillInstalled, setSkillOn, skillOrigins, skillsInstalled, skillsOff } from '../../src/skills.mjs';
+import { coreSkills, listSkills, removeSkill, setSkillCover, setSkillInstalled, setSkillOn, skillId, skillOrigins, skillsInstalled, skillsOff } from '../../src/skills.mjs';
 import { providersRoute } from './providers/index.mjs';
 import { localModelsRoute } from './local-models.mjs';
 import { captionRoutes, writeSubtitleStyle } from './captions.mjs';
@@ -515,7 +515,11 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const media = (/** @type {string} */ name, /** @type {'cover' | 'preview'} */ which) => `/api/skills/${encodeURIComponent(name)}/${which}${id ? `?project=${encodeURIComponent(id)}` : ''}`;
       return json(res, 200, {
         skills: [...coreSkills().map((k) => ({ ...k, core: true })), ...skills.map((k) => ({ ...k, core: false }))].map((k) => ({
+          k, id: skillId(k, k.source === 'mine' ? origins[basename(k.folder)] : undefined),
+        })).map(({ k, id }) => ({
           ...(k.core ? { core: true } : {}), name: k.name, description: k.description, source: k.source, scripts: k.scripts.length,
+          /* its name wherever it is shared: owner/repo/name (skills.mjs skillId) */
+          ...(id ? { id } : {}),
           ...(k.shown ? { shown: k.shown } : {}), ...(k.version ? { version: k.version } : {}), ...(k.kind ? { kind: k.kind } : {}),
           ...(k.order != null ? { order: k.order } : {}), ...(k.icon ? { icon: k.icon } : {}), ...(k.repository ? { repository: k.repository } : {}),
           ...(k.cover ? { cover: `${media(k.name, 'cover')}${id ? '&' : '?'}v=${encodeURIComponent(k.cover)}` } : {}), ...(k.preview ? { preview: media(k.name, 'preview') } : {}),

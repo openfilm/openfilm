@@ -30,6 +30,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { moveToTrash } from '../studio/server/trash.mjs';
 import { pictureType } from '../studio/server/cover.mjs';
+import { parseRepoUrl } from '../studio/server/fetch-repo.mjs';
 import { libraryDefault, setSharedPref, sharedPref } from './locations.mjs';
 
 const mkdirSyncSafe = (/** @type {string} */ dir) => mkdirSync(dir, { recursive: true });
@@ -294,6 +295,25 @@ export function usableSkills({ home, ...where } = {}) {
   const installed = new Set(skillsInstalled(home));
   const off = new Set(skillsOff(home));
   return listSkills(where).filter((s) => (s.source !== 'official' || installed.has(s.name)) && !off.has(s.name));
+}
+
+/**
+ * A skill's name wherever it is shared and searched, as the public skill directories name one: where its repository is
+ * and its own name, `owner/repo/name` on GitHub (`openfilm/skills/keynote`), `gitlab.com/group/repo/name` on GitLab.
+ * Read from where it really came from, never from what it says of itself: an official one's openfilm.json
+ * `repository` (released with OpenFilm), the address one of the person's was added from; null for one with neither
+ * (made here, added from a folder, a project's own), which has its name only until it is published.
+ * @param {{ name: string, source: SkillSource, repository?: string }} skill @param {{ from: string, address?: string }} [origin]
+ * @returns {string | null}
+ */
+export function skillId(skill, origin) {
+  const address = skill.source === 'official' ? skill.repository : skill.source === 'mine' && origin?.from === 'link' ? origin.address : undefined;
+  if (!address) return null;
+  try {
+    const repo = parseRepoUrl(address);
+    const path = new URL(repo.web).pathname.slice(1).toLowerCase();
+    return `${repo.host === 'github' ? '' : 'gitlab.com/'}${path}/${skill.name}`;
+  } catch { return null; }
 }
 
 /** OpenFilm's own skills by name, in the order agents are given them: how a film is made, its media, its canvas. */
