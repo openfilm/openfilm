@@ -389,23 +389,14 @@ export const ko: Words = {
     removed: '삭제됨',
     changed: '변경됨',
   },
-  /** a turn that ended with film.html gone: under its reply, put it back as the turn found it (lib/film-restore) */
-  filmRestore: {
-    lost: '이번 턴에서 film.html이 삭제되어 지금은 없습니다.',
-    restore: 'film.html을 이번 턴 이전 상태로 복원',
-    restoring: '복원하는 중…',
-    restored: 'film.html을 이번 턴 이전 상태로 복원했습니다.',
-    exists: 'film.html이 이미 돌아와 있어 그대로 두었습니다.',
-    gone: '이번 턴 이전의 사본은 더 이상 보관되지 않습니다. 버전 기록에서 film.html을 복원하세요.',
-    failed: 'film.html을 복원할 수 없습니다. 다시 시도하거나 버전 기록에서 복원하세요.',
-  },
-  filesRestore: {
-    lost: '이번 턴에서 {names}이(가) 삭제되어 지금은 없습니다.',
-    restore: '이번 턴 이전 상태로 복원',
-    restoring: '복원하는 중…',
-    restored: '이번 턴 이전 상태로 복원했습니다.',
-    exists: '이미 돌아와 있어 그대로 두었습니다.',
-    gone: '이번 턴 이전의 사본은 더 이상 보관되지 않습니다.',
-    failed: '복원할 수 없습니다. 다시 시도하세요.',
+  /** a turn undone from its footer: the files as it found them, its message back in the composer (App undoTurn) */
+  undo: {
+    button: '실행 취소',
+    title: '이번 턴을 실행 취소할까요?',
+    description: '프로젝트 파일이 이번 턴 이전 상태로 돌아가고, 그 뒤 Studio에서 바꾼 내용도 함께 되돌아갑니다. 이번 턴은 대화에서 빠지고 메시지는 아래 입력창으로 돌아와 다시 보낼 수 있습니다.',
+    confirm: '실행 취소',
+    cancel: '취소',
+    gone: '이 턴은 더 이상 실행 취소할 수 없습니다. 이전 파일은 OpenFilm이 열려 있는 동안만 보관됩니다.',
+    missed: '실행 취소했지만 {names}은(는) 원래대로 되돌리지 못했습니다.',
   },
 };

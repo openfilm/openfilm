@@ -1,7 +1,6 @@
 import type { Turn, LibraryVideo, PromptDisplay, TurnAttachment } from '@openfilm/shared';
 import { readFileChanges, type FileChange, type TurnFileChanges } from './file-changes.ts';
 import { readBalance, type Balance, type TurnBalance } from './balance.ts';
-import { filesLostOf } from './files-restore.ts';
 
 /**
  * A project's conversation: each of its turns, in time order.
@@ -47,10 +46,8 @@ export interface ProjectVersionEntry {
   settledAt?: string;
   /** What the turn changed in the project's files (lib/file-changes); none when nothing did. */
   fileChanges?: FileChange[];
-  /** The turn ended with film.html gone: offered back as the turn found it (lib/film-restore), while the app runs. */
-  filmLost?: boolean;
-  /** The other files the turn removed: offered back as the turn found them (lib/files-restore), while the app runs. */
-  filesLost?: string[];
+  /** The app keeps the files as the turn found them, so the turn can be undone (while it runs). */
+  undoable?: boolean;
   /** 'background': the agent started it by itself, a background task of its own having come back (no message) */
   origin?: 'background';
 }
@@ -103,7 +100,6 @@ export function deriveProjectTurns(
     const film = videos.find((item) => item.turnId === asset.id);
     if (film) filmCount += 1;
     const fileChanges = readFileChanges((asset as Turn & TurnFileChanges).fileChanges);
-    const filesLost = filesLostOf({ lost: (asset as Turn & { filesLost?: unknown }).filesLost });
     return {
       assetId: asset.id,
       label: film ? `v${filmCount}` : '',
@@ -116,8 +112,7 @@ export function deriveProjectTurns(
       current: asset.id === selectedId,
       ...frameOf(asset),
       ...(fileChanges ? { fileChanges } : {}),
-      ...((asset as Turn & { filmLost?: unknown }).filmLost === true ? { filmLost: true } : {}),
-      ...(filesLost.length ? { filesLost } : {}),
+      ...((asset as Turn & { undoable?: unknown }).undoable === true ? { undoable: true } : {}),
       ...((asset as Turn & { origin?: unknown }).origin === 'background' ? { origin: 'background' as const } : {}),
     };
   });

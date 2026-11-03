@@ -393,23 +393,14 @@ export const ja: Words = {
     removed: '削除',
     changed: '変更',
   },
-  /** a turn that ended with film.html gone: under its reply, put it back as the turn found it (lib/film-restore) */
-  filmRestore: {
-    lost: 'このターンで film.html が削除され、今はありません。',
-    restore: 'film.html をこのターンの前の状態に戻す',
-    restoring: '復元しています…',
-    restored: 'film.html をこのターンの前の状態に戻しました。',
-    exists: 'film.html はすでに戻っているため、そのままにしました。',
-    gone: 'このターンの前のコピーはもう保持されていません。バージョン履歴から film.html を復元してください。',
-    failed: 'film.html を復元できませんでした。もう一度試すか、バージョン履歴から復元してください。',
-  },
-  filesRestore: {
-    lost: 'このターンで {names} が削除され、今はありません。',
-    restore: 'このターンの前の状態に戻す',
-    restoring: '復元しています…',
-    restored: 'このターンの前の状態に戻しました。',
-    exists: 'すでに戻っているため、そのままにしました。',
-    gone: 'このターンの前のコピーはもう保持されていません。',
-    failed: '復元できませんでした。もう一度試してください。',
+  /** a turn undone from its footer: the files as it found them, its message back in the composer (App undoTurn) */
+  undo: {
+    button: '元に戻す',
+    title: 'このターンを元に戻しますか？',
+    description: 'プロジェクトのファイルはこのターンの前の状態に戻ります。その後 Studio で変えたところも戻ります。このターンはチャットから消え、メッセージは下の入力欄に戻るので、もう一度送れます。',
+    confirm: '元に戻す',
+    cancel: 'キャンセル',
+    gone: 'このターンはもう元に戻せません。前のファイルは OpenFilm を開いている間だけ保持されます。',
+    missed: '元に戻しましたが、{names} は元の状態に戻せませんでした。',
   },
 };

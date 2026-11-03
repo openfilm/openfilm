@@ -82,12 +82,10 @@ interface AppBridge {
     /** the turns with a log and no saved record (src/chat-store.mjs unsavedTurns), but those of `except` */
     unsaved?(project: string, except?: string[]): Promise<Array<{ turnId: string; events: TurnLog['events'] }>>;
     /** the project's files as a turn starts, kept by the app; then what the turn changed in them (src/file-changes.mjs).
-        `filmLost`: the turn ended with film.html gone, which `restoreFilm` puts back as the turn found it; `lost`: the
-        other files it removed, which `restoreFiles` puts back */
+        `undoable`: the app keeps how the turn found them, which `undo` puts back (while it runs) */
     snapshot(project: string, turnId: string): Promise<unknown>;
-    changes(project: string, turnId: string): Promise<{ files: FileChange[]; cut: boolean; filmLost?: boolean; lost?: string[] } | null>;
-    restoreFilm?(project: string, turnId: string): Promise<{ ok: true } | { ok: false; code: 'exists' | 'gone' }>;
-    restoreFiles?(project: string, turnId: string): Promise<{ ok: true; restored: number; exists: number } | { ok: false; code: 'gone' }>;
+    changes(project: string, turnId: string): Promise<{ files: FileChange[]; cut: boolean; undoable?: boolean } | null>;
+    undo?(project: string, turnId: string): Promise<{ ok: true; restored: number; missed: string[] } | { ok: false; code: 'gone' }>;
   };
   /** what an agent's command asks before it spends (a video clip), and what it tells the person (a provider with no
       balance left), worded by Studio: shown above the composer until answered; the command waits for a question */

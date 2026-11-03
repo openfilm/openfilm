@@ -393,23 +393,14 @@ export const zhCN: Words = {
     removed: '已删除',
     changed: '已修改',
   },
-  /** a turn that ended with film.html gone: under its reply, put it back as the turn found it (lib/film-restore) */
-  filmRestore: {
-    lost: '这一轮删除了 film.html，现在它不在了。',
-    restore: '把 film.html 恢复成这一轮之前的样子',
-    restoring: '正在恢复…',
-    restored: 'film.html 已恢复成这一轮之前的样子。',
-    exists: 'film.html 已经回来了，所以保持原样。',
-    gone: '这一轮之前的副本已不再保留。请从“版本历史”恢复 film.html。',
-    failed: '无法恢复 film.html。请重试，或从“版本历史”恢复。',
-  },
-  filesRestore: {
-    lost: '这一轮删除了 {names}，现在它们不在了。',
-    restore: '恢复成这一轮之前的样子',
-    restoring: '正在恢复…',
-    restored: '已恢复成这一轮之前的样子。',
-    exists: '这些文件已经回来了，所以保持原样。',
-    gone: '这一轮之前的副本已不再保留。',
-    failed: '无法恢复这些文件。请重试。',
+  /** a turn undone from its footer: the files as it found them, its message back in the composer (App undoTurn) */
+  undo: {
+    button: '撤销',
+    title: '撤销这一轮？',
+    description: '项目文件会回到这一轮之前的样子，之后在 Studio 里的修改也会一起撤销。这一轮会从对话里移除，你的消息回到下面的输入框，可以改了再发。',
+    confirm: '撤销',
+    cancel: '取消',
+    gone: '这一轮已无法撤销：之前的文件只在 OpenFilm 打开期间保留。',
+    missed: '已撤销，但 {names} 没能恢复成原来的样子。',
   },
 };

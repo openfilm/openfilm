@@ -1046,6 +1046,13 @@ export function saveLocalAgentTurn(projectId: string, turn: Turn, items: Transcr
   putChatTurn(projectId, { turn, items });
 }
 
+/** A turn the person undid: kept (its log stays), out of the conversation from now on. */
+export function undoLocalAgentTurn(projectId: string, turnId: string): void {
+  const saved = readSaved(projectId).find((x) => x.turn.id === turnId);
+  if (saved) putChatTurn(projectId, { turn: { ...saved.turn, undone: true } as Turn, items: saved.items });
+}
+const undoneTurn = (turn: Turn) => (turn as Turn & { undone?: unknown }).undone === true;
+
 /** A running turn's rows as they are kept while it runs: as read back after the app closed on it, nothing still going. */
 export function restingItems(items: TranscriptItem[]): TranscriptItem[] {
   return items.some((item) => item.pending) ? items.map((item) => (item.pending ? { ...item, pending: false } : item)) : items;
@@ -1058,12 +1065,13 @@ const ACTIVE_STATUSES = new Set<Turn['status']>(['generating', 'failing', 'cance
 /**
  * The turns run with a local agent in this project (this session). One kept while it ran (the page saves a running
  * turn as it goes) and running no more, the app having closed on it, reads as interrupted: what it did so far stays,
- * and the next message goes on from there. One the agent started by itself and ended with nothing in it is left out.
+ * and the next message goes on from there. One the agent started by itself and ended with nothing in it is left out,
+ * and one the person undid.
  */
 export function loadLocalAgentTurns(projectId: string, sessionId: string | null): SavedLocalTurn[] {
   if (typeof window === 'undefined') return [];
   return readSaved(projectId)
-    .filter((x) => (!sessionId || x.turn.sessionId === sessionId) && !isEmptyBackgroundTurn(x.turn, x.items))
+    .filter((x) => (!sessionId || x.turn.sessionId === sessionId) && !isEmptyBackgroundTurn(x.turn, x.items) && !undoneTurn(x.turn))
     .map((x) => (ACTIVE_STATUSES.has(x.turn.status) && !runningTurns.has(x.turn.id)
       ? { ...x, turn: { ...x.turn, status: 'error' as const, error: INTERRUPTED } }
       : x));

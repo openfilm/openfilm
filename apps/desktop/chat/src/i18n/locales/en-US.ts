@@ -394,23 +394,14 @@ export const enUS = {
     removed: 'Deleted',
     changed: 'Changed',
   },
-  /** a turn that ended with film.html gone: under its reply, put it back as the turn found it (lib/film-restore) */
-  filmRestore: {
-    lost: 'film.html was removed in this turn and is not there now.',
-    restore: 'Restore film.html as it was before this turn',
-    restoring: 'Restoring…',
-    restored: 'film.html is back as it was before this turn.',
-    exists: 'film.html is back already, so it was left as it is.',
-    gone: 'The copy from before this turn is no longer kept. Restore film.html from Version history.',
-    failed: 'film.html could not be restored. Try again, or restore it from Version history.',
-  },
-  filesRestore: {
-    lost: 'This turn removed {names}, and they are not there now.',
-    restore: 'Put them back as they were before this turn',
-    restoring: 'Putting back…',
-    restored: 'They are back as they were before this turn.',
-    exists: 'They are back already, so they were left as they are.',
-    gone: 'The copies from before this turn are no longer kept.',
-    failed: 'They could not be put back. Try again.',
+  /** a turn undone from its footer: the files as it found them, its message back in the composer (App undoTurn) */
+  undo: {
+    button: 'Undo',
+    title: 'Undo this turn?',
+    description: 'The project\'s files go back to how they were before it, including anything changed in Studio since. The turn leaves the chat and its message goes back into the box below, to send again.',
+    confirm: 'Undo',
+    cancel: 'Cancel',
+    gone: 'This turn can no longer be undone: the files from before it are only kept while OpenFilm is open.',
+    missed: 'Undone, except {names}: they could not be put back as they were.',
   },
 };

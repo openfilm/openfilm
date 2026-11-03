@@ -565,6 +565,7 @@ async function start() {
     projects: async () => { const { projects } = await studioApi('/api/projects'); return projects.filter((p) => !projectGone(projects, p.id)).map((p) => p.path); },
     dataDir: DATA,
     reveal: (path) => shell.showItemInFolder(path),
+    trash: (path) => shell.trashItem(path),
     tell: (channel, value) => broadcast(channel, value),
     log,
   });

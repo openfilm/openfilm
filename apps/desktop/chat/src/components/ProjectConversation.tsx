@@ -3,7 +3,7 @@
 import React from 'react';
 import { AGENT_DEFINITIONS, isAgentId } from '../../../src/agent-definitions.mjs';
 import type { PublicProgressSnapshot, TurnAttachment } from '@openfilm/shared';
-import { BellRing, Check, ChevronRight, Copy, KeyRound } from 'lucide-react';
+import { BellRing, Check, ChevronRight, Copy, KeyRound, Undo2 } from 'lucide-react';
 import { AgentActivityList, formatWorkDuration, StatusLine, type AgentActivityItem } from './AgentActivityRow';
 import { AgentIcon, hasAgentIcon } from './AgentIcons';
 import { BrandLogo } from './BrandLogo';
@@ -27,8 +27,7 @@ import { relativeTime, useMinuteTick } from '@/lib/relative-time';
 import { isPendingAssetId } from '@/lib/asset-lists';
 import { TurnLogButton } from './TurnLog';
 import { FileChangesList } from './FileChangesList';
-import { FilmRestoreOffer } from './FilmRestoreOffer';
-import { FilesRestoreOffer } from './FilesRestoreOffer';
+import { ConfirmDialog } from 'openfilm/studio-ui/components/ConfirmDialog.tsx';
 import { ChatProjectContext, useDeveloperMode, useShowChanges } from '@/lib/developer';
 import { isVideoAttachment } from '@/lib/composer-attachments';
 import { desktopBridge } from '@/lib/desktop-bridge';
@@ -413,8 +412,6 @@ const ConversationTurn = React.memo(function ConversationTurn({
 
       {/* What this turn changed in the project's files, as a coding agent's app lists them (Settings → Developer
           turns it off). No "version N · switch to it" link: going back belongs to the top bar's history. */}
-      {settled && entry.filmLost ? <FilmRestoreOffer turnId={entry.assetId} /> : null}
-      {settled && entry.filesLost?.length ? <FilesRestoreOffer turnId={entry.assetId} lost={entry.filesLost} /> : null}
       {settled && showChanges && entry.fileChanges?.length ? <FileChangesList changes={entry.fileChanges} /> : null}
 
       {/* The status and hover actions occupy separate rows. An empty status takes no room; a visible status
@@ -423,7 +420,7 @@ const ConversationTurn = React.memo(function ConversationTurn({
           show Failed here: the reason and Resume appear above the composer (the last turn's, even after a
           restart); an older one's reason is on its footer's Interrupted, on hover. */}
       {running ? <StatusLine items={rows ?? NO_ROWS} fallback={liveActivity} ownAgent={entry.agent === 'byok'} /> : null}
-      <TurnFooter entry={entry} items={items} running={running} />
+      <TurnFooter entry={entry} items={items} running={running} last={isLast} />
       </div>
     </div>
   );
@@ -669,7 +666,7 @@ function CopyButton({ text }: { text: string }) {
  * It appears on hover over the reply and keeps its space (h-6), independently of the status above it.
  * The time is how long ago; how long it worked is in the "Worked …" line.
  */
-function TurnFooter({ entry, items, running = false }: { entry: ProjectVersion; items: TranscriptItem[] | null; running?: boolean }) {
+function TurnFooter({ entry, items, running = false, last = false }: { entry: ProjectVersion; items: TranscriptItem[] | null; running?: boolean; last?: boolean }) {
   const t = useT();
   const locale = useUiLocale();
   const now = useMinuteTick();
@@ -712,7 +709,41 @@ function TurnFooter({ entry, items, running = false }: { entry: ProjectVersion; 
       {entry.outcome === 'balance' && entry.balance?.url ? (
         <a href={entry.balance.url} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-[var(--chat-text)]">{t('balance.manage')}</a>
       ) : null}
+      {last && !running && entry.undoable ? <UndoButton entry={entry} /> : null}
     </div>
+  );
+}
+
+/** The conversation's way to undo its last turn (App: the files as it found them, its message back in the composer); none while one runs. */
+export const TurnUndoContext = React.createContext<((entry: ProjectVersion) => Promise<void>) | null>(null);
+
+/** At the footer's end: undo this turn, once confirmed. */
+function UndoButton({ entry }: { entry: ProjectVersion }) {
+  const t = useT();
+  const undo = React.useContext(TurnUndoContext);
+  const [asking, setAsking] = React.useState(false);
+  if (!undo) return null;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setAsking(true)}
+        aria-label={t('undo.button')}
+        title={t('undo.button')}
+        className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition hover:bg-[var(--bg-hover)] hover:text-[var(--chat-text)]"
+      >
+        <Undo2 size={13} />
+      </button>
+      <ConfirmDialog
+        open={asking}
+        title={t('undo.title')}
+        description={t('undo.description')}
+        confirmLabel={t('undo.confirm')}
+        cancelLabel={t('undo.cancel')}
+        onConfirm={() => { setAsking(false); void undo(entry); }}
+        onCancel={() => setAsking(false)}
+      />
+    </>
   );
 }
 

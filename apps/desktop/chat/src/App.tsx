@@ -10,7 +10,8 @@ import { ArrowDown, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, ShieldQues
 import { buildPromptDisplay, type Turn } from '@openfilm/shared';
 import { useT, useUiLocale } from '@/i18n';
 import { ConversationBar } from '@/components/ConversationSessionBar';
-import { ProjectConversation, primeStoredTranscript } from '@/components/ProjectConversation';
+import { ProjectConversation, TurnUndoContext, primeStoredTranscript } from '@/components/ProjectConversation';
+import type { ProjectVersion } from '@/components/project-version';
 import { ProjectStarters } from '@/components/ProjectStarters';
 import { AttachmentPreview, type AttachmentPreviewItem } from '@/components/AttachmentPreview';
 import { ModelPopover } from '@/components/ModelPopover';
@@ -46,6 +47,7 @@ import {
   restingItems,
   saveLocalAgentTurn,
   steerLocalAgentTurn,
+  undoLocalAgentTurn,
   useAgentContext,
   useLocalAgentTurn,
   useRunningLocalTurns,
@@ -55,8 +57,6 @@ import {
 import { desktopBridge, type LocalAgentId, type LocalAgentTurnMeta, type PromptImage } from '@/lib/desktop-bridge';
 import { referencePictures } from '@/lib/ref-pictures';
 import type { TurnFileChanges } from '@/lib/file-changes';
-import { offersFilmRestore } from '@/lib/film-restore';
-import { filesLostOf } from '@/lib/files-restore';
 import { readBalance, type TurnBalance } from '@/lib/balance';
 import { BalanceNotice } from '@/components/BalanceNotice';
 import { CopyDiagnostics } from '@/components/CopyDiagnostics';
@@ -708,11 +708,10 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
         if (!fileChanges.length) return;
         const kept: Turn & TurnFileChanges = { ...done, fileChanges };
         saveLocalAgentTurn(meta.projectId, kept, turn.items);
-        /* film.html gone as the turn ends: offered back under its reply, as the turn found it. Not kept with the turn:
-           the app keeps the file only while it runs (lib/film-restore) */
-        const filmLost = offersFilmRestore(found);
-        const filesLost = filesLostOf(found);
-        setTurns((list) => list.map((item) => (item.id === id ? { ...item, fileChanges, ...(filmLost ? { filmLost } : {}), ...(filesLost.length ? { filesLost } : {}) } : item)));
+        /* the files as the turn found them, kept by the app: its footer's Undo. Not kept with the turn: the app keeps
+           them only while it runs */
+        const undoable = found?.undoable === true;
+        setTurns((list) => list.map((item) => (item.id === id ? { ...item, fileChanges, ...(undoable ? { undoable } : {}) } : item)));
       });
     });
     keep();
@@ -790,6 +789,46 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     });
   }
 
+  /* the conversations whose last turn the person undid, told to their agent with the next message there */
+  const undone = React.useRef(new Set<string>());
+  const undoneNote = (conversation: string): string => {
+    if (!undone.current.delete(conversation)) return '';
+    return '\n\n<studio_note>The person undid your last turn: the project\'s files are back as they were before it, and its message is out of the chat.</studio_note>';
+  };
+  /**
+   * Undo the conversation's last turn: the files as it found them (the app keeps them while it runs), the turn out of
+   * the conversation, and its message back in the composer, its pills too (a file brought in is not kept: its pill goes).
+   */
+  const undoTurn = async (entry: ProjectVersion): Promise<void> => {
+    const done = await app.chat.undo?.(project.path, entry.assetId).catch(() => null);
+    if (!done?.ok) { setFollowUpError(t('undo.gone')); return; }
+    undoLocalAgentTurn(projectKey, entry.assetId);
+    setTurns((list) => list.filter((item) => item.id !== entry.assetId));
+    touchSession(sessionId, (s) => ({ turns: Math.max(0, s.turns - 1) }));
+    undone.current.add(sessionId);
+    setFollowUpError(done.missed.length ? t('undo.missed').replace('{names}', done.missed.slice(0, 3).join(', ') + (done.missed.length > 3 ? ` (+${done.missed.length - 3})` : '')) : null);
+    const display = entry.promptDisplay ?? { text: entry.prompt, references: [] };
+    const studio = new Map<string, StudioRef>();
+    const files: PromptReference[] = [];
+    const named: PromptReference[] = [];
+    /* kept as the composer had them */
+    for (const pill of display.references as PromptReference[]) {
+      const ref = refFromPill(pill);
+      if (ref) studio.set(pill.id, ref);
+      else if (skillReferencePackage(pill.id)) named.push(pill);
+      else if (!isAttachmentPill(pill.id)) files.push(pill);
+    }
+    setStudioRefs(studio);
+    setFileRefs(files);
+    setSkillRefs(named);
+    /* written once the pills are the composer's, so each token finds its pill */
+    requestAnimationFrame(() => { composerRef.current?.setText(display.text); composerRef.current?.focus(); });
+  };
+  const undoNow = React.useRef(undoTurn);
+  undoNow.current = undoTurn;
+  /* the last turn's Undo, for the conversation shown and none running */
+  const onUndo = React.useMemo(() => (active ? null : (entry: ProjectVersion) => undoNow.current(entry)), [active]);
+
   function submitFollowUp(): void {
     if (!followUpFilled) return;
     /* while a turn runs: into it, for an agent that takes that; else it waits for the turn to end */
@@ -845,7 +884,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     /* what the person changed while the agent last worked that Studio kept over its writes, said with this message */
     const prepared = withFolders.then((ready) => Promise.all([referencePictures(ready, { project: project.path, turnId: id }), skillTexts, keptNote(project.id, sessionId)])
       .then(async ([{ pictures, images }, skills, kept]) => ({
-        text: instruction + studioReferencesText(ready, { stage, pictures }) + kept.text + skills.map((s) => `\n\n${s.text}`).join(''),
+        text: instruction + studioReferencesText(ready, { stage, pictures }) + kept.text + undoneNote(sessionId) + skills.map((s) => `\n\n${s.text}`).join(''),
         images: [...images, ...await attachedPictures(files, PROMPT_PICTURES_MAX - images.length)],
         skills: skills.map((s) => s.name),
         said: kept.said,
@@ -1101,14 +1140,16 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
                     ) : (
                       <div ref={thread.contentRef} className="min-w-0 shrink-0">
                         <PromptPillRevealContext.Provider value={sentPills}>
-                          <LiveConversation
-                            store={liveStore}
-                            turns={opLog}
-                            liveAssetId={active ? asset!.id : null}
-                            liveActive={active}
-                            liveActivity={activity}
-                            lastTurnRef={tail.lastTurnRef}
-                          />
+                          <TurnUndoContext.Provider value={onUndo}>
+                            <LiveConversation
+                              store={liveStore}
+                              turns={opLog}
+                              liveAssetId={active ? asset!.id : null}
+                              liveActive={active}
+                              liveActivity={activity}
+                              lastTurnRef={tail.lastTurnRef}
+                            />
+                          </TurnUndoContext.Provider>
                         </PromptPillRevealContext.Provider>
                       </div>
                     )}

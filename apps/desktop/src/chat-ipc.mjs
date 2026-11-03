@@ -13,11 +13,10 @@
  *   desktop:chat:paths     { paths } → [{ path, folder, size? } | { path, error }]   files and folders dragged in
  *   desktop:chat:unsaved   { project, except? } → [{ turnId, events }]   turns with a log and no saved record
  *   desktop:chat:snapshot  { project, turnId }     the project's files as a turn starts (file-changes.mjs), kept here
- *   desktop:chat:changes   { project, turnId } → { files, cut, filmLost? } | null   what the turn changed in them since
- *   desktop:chat:restore-film { project, turnId } → { ok } | { ok: false, code: 'exists' | 'gone' }   film.html put
- *                          back as that turn found it, when the turn ended with it gone (`filmLost`)
- *   desktop:chat:restore-files { project, turnId } → { ok, restored, exists } | { ok: false, code: 'gone' }   the other
- *                          files that turn removed (`lost`) put back as it found them
+ *   desktop:chat:changes   { project, turnId } → { files, cut, undoable? } | null   what the turn changed in them
+ *                          since; `undoable`: the snapshot is kept, for the turn to be undone
+ *   desktop:chat:undo      { project, turnId } → { ok, restored, missed } | { ok: false, code: 'gone' }   the files put
+ *                          back as that turn found them (file-changes.mjs undoTurn), what was added since to the trash
  *   desktop:prefs          → { developer, changes } and `desktop:prefs:set` either; told on `desktop:prefs`
  *
  * `project` is a folder path, and only one Studio has as a project is read or written: the page cannot point the
@@ -28,7 +27,7 @@ import { join, resolve } from 'node:path';
 import { RECORDED_AGENTS, agentRecordCalls, compactCalls } from './agent-records.mjs';
 import { chatDir, describePaths, loadChat, readLog, saveAttachment, saveRefImage, saveSessions, saveTurn, unsavedTurns } from './chat-store.mjs';
 import { loginShellVariables } from './environment.mjs';
-import { FILM, changes, dropHold, holdDir, restoreFiles, restoreFilm, snapshot } from './file-changes.mjs';
+import { changes, dropHold, holdDir, snapshot, undoTurn } from './file-changes.mjs';
 
 /** a turn's requests are those its agent's record has from a moment before it began to a moment after it ended */
 const RECORD_MARGIN_MS = 1000;
@@ -69,7 +68,7 @@ const SNAPSHOTS_MAX = 8;
  * @param {{ trusted: (event: any) => boolean, projects: () => Promise<string[]>, dataDir: string,
  *           reveal: (path: string) => void, tell: (channel: string, value: unknown) => void, log: (line: string) => void }} opts
  */
-export function registerChatIpc(ipcMain, { trusted, projects, dataDir, reveal, tell, log }) {
+export function registerChatIpc(ipcMain, { trusted, projects, dataDir, reveal, trash, tell, log }) {
   /* the projects Studio has, asked again when a path is not among them (a project opened a moment ago) */
   let known = new Set();
   const project = async (path) => {
@@ -96,11 +95,11 @@ export function registerChatIpc(ipcMain, { trusted, projects, dataDir, reveal, t
   handle('desktop:chat:log', async ({ project: path, turnId, unless }) => withAgentRecord(readLog(await project(path), turnId, {
     unless: unless && Number.isFinite(unless.size) && Number.isFinite(unless.callsSize) ? unless : null,
   })));
-  /* the files as each running turn found them, by the turn: compared, and let go, when the turn settles; with each, its
-     links to the files it found (file-changes.mjs hold), kept while what it removed can be put back */
+  /* the files as each running turn found them, by the turn: compared when the turn settles; with each, its links to
+     the files it found (file-changes.mjs hold) */
   const snapshots = new Map();
-  /** the files that turns which ended with some gone found, by the turn: put back when the person asks */
-  const lostFiles = new Map();
+  /** the files as the turns that changed some found them, by the turn: the latest few, kept to undo each */
+  const undoable = new Map();
   const forget = (/** @type {Map<string, { hold: string | null }>} */ kept, /** @type {string} */ turnId) => {
     void dropHold(kept.get(turnId)?.hold ?? null);
     kept.delete(turnId);
@@ -110,7 +109,7 @@ export function registerChatIpc(ipcMain, { trusted, projects, dataDir, reveal, t
     const hold = holdDir(dir, turnId);
     /* links left from before (the app closed on a turn) are no use now: only the turns this launch knows keep theirs */
     const turnFiles = join(dir, '.film', 'cache', 'turn-files');
-    const known = new Set([...snapshots.values(), ...lostFiles.values()].map((k) => k.hold));
+    const known = new Set([...snapshots.values(), ...undoable.values()].map((k) => k.hold));
     let left = [];
     try { left = readdirSync(turnFiles); } catch { /* none */ }
     await Promise.all(left.map((name) => join(turnFiles, name)).filter((p) => !known.has(p)).map(dropHold));
@@ -120,40 +119,26 @@ export function registerChatIpc(ipcMain, { trusted, projects, dataDir, reveal, t
     while (snapshots.size > SNAPSHOTS_MAX) forget(snapshots, snapshots.keys().next().value);
     return { ok: true };
   });
-  /* film.html as each turn that ended with it gone found it, by the turn: put back when the person asks */
-  const lostFilms = new Map();
   handle('desktop:chat:changes', async ({ project: path, turnId }) => {
     const dir = await project(path);
     const kept = snapshots.get(turnId);
     snapshots.delete(turnId);
     if (!kept || kept.dir !== dir) { void dropHold(kept?.hold ?? null); return null; }
     const found = await changes(dir, kept.taken);
-    if (found.filmLost) {
-      lostFilms.set(turnId, { dir, text: kept.taken.files.get(FILM)?.text ?? '' });
-      while (lostFilms.size > SNAPSHOTS_MAX) lostFilms.delete(lostFilms.keys().next().value);
-    }
-    if (found.lost) {
-      forget(lostFiles, turnId);
-      lostFiles.set(turnId, { dir, taken: kept.taken, hold: kept.hold, lost: found.lost });
-      while (lostFiles.size > SNAPSHOTS_MAX) forget(lostFiles, lostFiles.keys().next().value);
-    } else void dropHold(kept.hold);
-    return found;
+    /* a folder too large to read whole is never undone: what lies past the reading would look added */
+    if (!found.files.length || kept.taken.cut) { void dropHold(kept.hold); return found; }
+    forget(undoable, turnId);
+    undoable.set(turnId, kept);
+    while (undoable.size > SNAPSHOTS_MAX) forget(undoable, undoable.keys().next().value);
+    return { ...found, undoable: true };
   });
-  handle('desktop:chat:restore-files', async ({ project: path, turnId }) => {
+  handle('desktop:chat:undo', async ({ project: path, turnId }) => {
     const dir = await project(path);
-    const kept = lostFiles.get(turnId);
+    const kept = undoable.get(turnId);
     if (!kept || kept.dir !== dir) return { ok: false, code: 'gone' };
-    const done = await restoreFiles(dir, kept.taken, kept.hold, kept.lost);
-    forget(lostFiles, turnId);
+    const done = await undoTurn(dir, kept.taken, kept.hold, { trash });
+    forget(undoable, turnId);
     return { ok: true, ...done };
-  });
-  handle('desktop:chat:restore-film', async ({ project: path, turnId }) => {
-    const dir = await project(path);
-    const kept = lostFilms.get(turnId);
-    if (!kept || kept.dir !== dir) return { ok: false, code: 'gone' };
-    const done = await restoreFilm(dir, kept.text);
-    lostFilms.delete(turnId);
-    return done === 'restored' ? { ok: true } : { ok: false, code: 'exists' };
   });
   handle('desktop:chat:reveal', async ({ project: path, turnId }) => {
     const dir = await project(path);

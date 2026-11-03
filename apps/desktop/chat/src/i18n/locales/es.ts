@@ -393,23 +393,14 @@ export const es: Words = {
     removed: 'Eliminado',
     changed: 'Cambiado',
   },
-  /** a turn that ended with film.html gone: under its reply, put it back as the turn found it (lib/film-restore) */
-  filmRestore: {
-    lost: 'En este turno se eliminó film.html y ahora no está.',
-    restore: 'Restaurar film.html como estaba antes de este turno',
-    restoring: 'Restaurando…',
-    restored: 'film.html ha vuelto como estaba antes de este turno.',
-    exists: 'film.html ya ha vuelto, así que se ha dejado como está.',
-    gone: 'La copia de antes de este turno ya no se conserva. Restaura film.html desde el Historial de versiones.',
-    failed: 'No se pudo restaurar film.html. Inténtalo de nuevo o restáuralo desde el Historial de versiones.',
-  },
-  filesRestore: {
-    lost: 'En este turno se eliminó {names} y ahora no está.',
-    restore: 'Restaurar como estaba antes de este turno',
-    restoring: 'Restaurando…',
-    restored: 'Ha vuelto como estaba antes de este turno.',
-    exists: 'Ya ha vuelto, así que se ha dejado como está.',
-    gone: 'La copia de antes de este turno ya no se conserva.',
-    failed: 'No se pudo restaurar. Inténtalo de nuevo.',
+  /** a turn undone from its footer: the files as it found them, its message back in the composer (App undoTurn) */
+  undo: {
+    button: 'Deshacer',
+    title: '¿Deshacer este turno?',
+    description: 'Los archivos del proyecto vuelven a como estaban antes de él, también lo cambiado después en Studio. El turno sale del chat y su mensaje vuelve al cuadro de abajo, para enviarlo de nuevo.',
+    confirm: 'Deshacer',
+    cancel: 'Cancelar',
+    gone: 'Este turno ya no se puede deshacer: los archivos de antes solo se guardan mientras OpenFilm está abierto.',
+    missed: 'Deshecho, salvo {names}: no se pudieron dejar como estaban.',
   },
 };
