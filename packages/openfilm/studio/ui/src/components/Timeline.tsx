@@ -29,7 +29,6 @@ import {
   MessageSquarePlus,
   ChevronDown,
   MousePointer2,
-  MoveHorizontal,
   Play,
   Redo2,
   Scissors,
@@ -290,7 +289,7 @@ function laneTone(track: TimelineTrack, selected: boolean): string {
   return track.main ? `color-mix(in srgb, ${tone} 93%, var(--tl-text))` : tone;
 }
 
-/** A row's mark: what it holds (its clips' kind, most of them; an empty row by its kind), as a plain icon. */
+/** A row's mark: what it holds (its clips' kind, most of them; an empty row by its kind), as a plain icon; a caption track's is CC. */
 function LaneMark({ track }: { track: TimelineTrack }) {
   const count = new Map<string, number>();
   for (const b of track.blocks) {
@@ -298,7 +297,7 @@ function LaneMark({ track }: { track: TimelineTrack }) {
     count.set(kind, (count.get(kind) ?? 0) + 1);
   }
   const most = [...count].sort((a, b) => b[1] - a[1])[0]?.[0] ?? (track.role === 'audio' ? 'music' : track.role === 'video' ? 'video' : 'mg');
-  const Icon = track.captions || track.text ? Type
+  const Icon = track.captions ? Captions : track.text ? Type
     : most === 'voice' ? Mic : most === 'sfx' ? AudioLines : most === 'music' ? Music
       : most === 'video' ? Film : most === 'still' ? ImageIcon : Sparkles;
   return (
@@ -3198,8 +3197,6 @@ export const Timeline = React.memo(function Timeline({
                   <span className="flex min-w-0 items-center gap-1" data-pin={left} data-pin-max={width - 48}>
                     {/* a voice says so before its name: it is what the subtitles are made from */}
                     {block.kind === 'voice' ? <Mic className="h-2.5 w-2.5 shrink-0 text-white/90" aria-hidden /> : null}
-                    {/* a caption's cue says so before its words: a line of the captions, not a text of its own */}
-                    {block.cue ? <Captions className="h-3 w-3 shrink-0 text-white/85" aria-hidden /> : null}
                     <span className={`min-w-0 truncate font-medium leading-none text-white/95 ${textRow ? 'text-[11px]' : 'text-[10px]'}`}>
                       {textRow ? block.words ?? block.title : block.title}
                     </span>
@@ -3998,8 +3995,6 @@ export const Timeline = React.memo(function Timeline({
           </ToolButton>
         ) : null}
 
-        {recorder ? <RecordButton now={recorder.now} onSave={recorder.onSave} onProblem={setNotice} /> : null}
-
         {onSplit ? (
           <ToolButton
             onClick={() => { void runSplit(selectedBlocks.filter((b) => drag.can(b).resize)); }}
@@ -4051,7 +4046,9 @@ export const Timeline = React.memo(function Timeline({
           ) : null}
         </div>
 
-        {/* the switches (lib/timeline-prefs), in this order: the main-track magnet, snapping and linkage */}
+        {/* the right side: recording first, then the switches (lib/timeline-prefs), in this order: the main-track
+            magnet, snapping and linkage */}
+        {recorder ? <RecordButton now={recorder.now} onSave={recorder.onSave} onProblem={setNotice} /> : null}
         {onEditOps ? <>
           <span data-timeline-magnet={prefs.magnet ? '1' : '0'}>
             <ToolButton onClick={() => togglePref('magnet')} active={prefs.magnet} label={t('timeline.magnet')}
@@ -4102,14 +4099,6 @@ export const Timeline = React.memo(function Timeline({
           hint={keyHint('zoom-in')}
         >
           <ZoomIn size={15} />
-        </ToolButton>
-        {/* back to the opening zoom (80%, a little room after the end); a horizontal arrow: zoom is horizontal only */}
-        <ToolButton
-          onClick={() => zoomTo(ZOOM_DEFAULT)}
-          disabled={!playable || Math.abs(viewZoom - ZOOM_DEFAULT) < 0.01}
-          label={t('timeline.zoomFit')}
-        >
-          <MoveHorizontal size={15} />
         </ToolButton>
 
         {/* captions of what is said: a caption track made on top, then edited like any */}

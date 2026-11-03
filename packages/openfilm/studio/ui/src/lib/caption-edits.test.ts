@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readVtt, writeVtt } from '../../../../src/captions.mjs';
 import {
-  MIN_CUE_S, addCue, keepApart, cueRule, cutIndex, joinText, mergeCues, moveCues, placeCues, removeCues, retimeCue, setCueRule, setCueText, splitCue, withIds,
+  MIN_CUE_S, addCue, keepApart, setCueBlock, cueRule, cutIndex, joinText, mergeCues, moveCues, placeCues, removeCues, retimeCue, setCueRule, setCueText, splitCue, withIds,
 } from './caption-edits.ts';
 
 const FILE = `WEBVTT
@@ -110,4 +110,12 @@ test('cues apart after an edit: one that stayed cut short where a moved one reac
   assert.deepEqual(keepApart(moved, new Set(['a'])).map((c) => [c.id, c.start, c.end]), [['b', 2, 3], ['a', 3, 4.5], ['c1', 4.5, 5]]);
   const over = v.cues.map((c) => (c.id === 'a' ? { ...c, start: 3.4, end: 5 } : c));
   assert.deepEqual(keepApart(over, new Set(['a'])).find((c) => c.id === 'c1')!.start, 3.5, 'too little would be left: it stays whole');
+});
+
+test('a whole rule of the STYLE (keyframes) set, put back where it was, taken away', () => {
+  const v = withIds(readVtt(FILE));
+  const a = setCueBlock(v, '@keyframes of-in-fade', 'from { opacity: 0; }');
+  assert.equal(a.styles[0], '::cue { color: #fff; }\n::cue(#b) { color: #ffd400; }\n@keyframes of-in-fade { from { opacity: 0; } }');
+  assert.equal(setCueBlock(a, '@keyframes of-in-fade', 'to { opacity: 1; }').styles[0]!.split('\n')[2], '@keyframes of-in-fade { to { opacity: 1; } }');
+  assert.equal(setCueBlock(a, '@keyframes of-in-fade', null).styles[0], v.styles[0]);
 });

@@ -40,18 +40,29 @@ export function CaptionStage({ previewRef, projectId, stage, timeMs, onPick, onP
   const version = useCaptionTracksVersion();
   const box = React.useRef<HTMLDivElement | null>(null);
   const dragging = React.useRef(false);
+  /* the cues in hand, shown moved by (dx, dy) stage px until the film has drawn where they went (`ids` null: the track's) */
+  const shown = React.useRef<ShownCue[]>([]);
+  const [held, setHeld] = React.useState<{ src: string; ids: ReadonlySet<string> | null; dx: number; dy: number } | null>(null);
+  /* asked again once a file written is drawn (the film reads it on its own time) */
+  const [again, setAgain] = React.useState(0);
 
   /* where the cues are: asked once the film has drawn the moment (and read a file written, which takes a moment) */
   React.useEffect(() => {
     let gone = false;
     const ask = () => {
       if (dragging.current) return;
-      void previewRef.current?.stage?.<ShownCue[]>('captions').then((list) => { if (!gone && !dragging.current) setCues(list ?? []); });
+      void previewRef.current?.stage?.<ShownCue[]>('captions').then((list) => {
+        if (gone || dragging.current) return;
+        const next = list ?? [];
+        /* drawn where they went: the boxes held moved are let go */
+        if (JSON.stringify(next) !== JSON.stringify(shown.current)) setHeld(null);
+        shown.current = next;
+        setCues(next);
+      });
     };
-    const soon = window.setTimeout(ask, 40);
-    const later = window.setTimeout(ask, 300);
-    return () => { gone = true; window.clearTimeout(soon); window.clearTimeout(later); };
-  }, [previewRef, timeMs, version]);
+    const timers = [40, 300, 900].map((ms) => window.setTimeout(ask, ms));
+    return () => { gone = true; for (const id of timers) window.clearTimeout(id); };
+  }, [previewRef, timeMs, version, again]);
 
   /* pressing anywhere else on the picture lets the cues go */
   React.useEffect(() => {
@@ -86,6 +97,7 @@ export function CaptionStage({ previewRef, projectId, stage, timeMs, onPick, onP
     let raf = 0;
     const show = () => {
       raf = 0;
+      setHeld({ src: cue.src, ids: all ? null : ids, dx: shift.dx, dy: shift.dy });
       void previewRef.current?.stage?.('captionShift', { track: cue.track, ids: all ? null : [...ids], dx: shift.dx, dy: shift.dy });
     };
     const move = (ev: PointerEvent) => {
@@ -113,11 +125,14 @@ export function CaptionStage({ previewRef, projectId, stage, timeMs, onPick, onP
       const vtt = captionTrackNow(projectId, cue.src);
       const pct = (r: Rect): CueBox => ({ left: (r.x / stage.w) * 100, top: (r.y / stage.h) * 100, width: (r.w / stage.w) * 100, height: (r.h / stage.h) * 100 });
       const drawn = new Map(moving.map((c) => [c.id, pct(c.box)]));
+      /* held where they were let go until the film draws them there */
+      setHeld({ src: cue.src, ids: all ? null : ids, dx: shift.dx, dy: shift.dy });
       const done = () => {
         dragging.current = false;
         void previewRef.current?.stage?.('captionShift', { track: cue.track, ids: null, dx: 0, dy: 0 });
+        setAgain((n) => n + 1);
       };
-      if (!vtt) { done(); return; }
+      if (!vtt) { setHeld(null); done(); return; }
       const next = placeCues(vtt, all ? null : ids, (shift.dx / stage.w) * 100, (shift.dy / stage.h) * 100, drawn);
       void writeCaptionTrack(projectId, cue.src, next, 'captionTrack.stepPlace').finally(done);
     };
@@ -135,10 +150,12 @@ export function CaptionStage({ previewRef, projectId, stage, timeMs, onPick, onP
       {cues.map((cue) => {
         const picked = sel?.src === cue.src && sel.ids.has(cue.id);
         const key = `${cue.src}#${cue.id}`;
+        const moved = held && held.src === cue.src && (!held.ids || held.ids.has(cue.id));
+        const r = moved ? { ...cue.text, x: cue.text.x + held.dx, y: cue.text.y + held.dy } : cue.text;
         return (
           <div key={key} data-caption-hit={cue.id} role="presentation"
             className={`pointer-events-auto absolute ${cue.locked ? '' : 'cursor-move'}`}
-            style={{ ...at(cue.text), outline: picked ? `1.5px solid ${BLUE}` : hover === key ? `1px solid ${BLUE}` : undefined, outlineOffset: 2 }}
+            style={{ ...at(r), outline: picked ? `1.5px solid ${BLUE}` : hover === key ? `1px solid ${BLUE}` : undefined, outlineOffset: 2 }}
             onPointerEnter={() => setHover(key)} onPointerLeave={() => setHover((h) => (h === key ? null : h))}
             onPointerDown={(e) => press(e, cue)} />
         );

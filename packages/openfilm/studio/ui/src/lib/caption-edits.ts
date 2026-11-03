@@ -342,3 +342,17 @@ export function setCueRule(vtt: Vtt, prelude: string, set: Record<string, string
   const css = list.map((r) => `${norm(r.prelude)} {${r.block.includes('\n') ? r.block : r.block.replace(/^\s*/, ' ').replace(/\s*$/, ' ')}}`).join('\n');
   return { ...vtt, styles: css ? [css] : [] };
 }
+
+/**
+ * A rule of the file's STYLE set whole, as written (an at-rule: `@keyframes of-in-fade` and its frames), or taken away
+ * (null). Where it was, else after the others.
+ */
+export function setCueBlock(vtt: Vtt, prelude: string, block: string | null): Vtt {
+  const want = norm(prelude);
+  const rules = cssRules(vtt.styles.join('\n'));
+  const at = rules.findIndex((r) => norm(r.prelude) === want);
+  const list = rules.filter((r) => norm(r.prelude) !== want);
+  if (block != null) list.splice(at >= 0 ? at : list.length, 0, { prelude: want, block: ` ${block.trim()} ` });
+  const css = list.map((r) => `${norm(r.prelude)} {${r.block.includes('\n') ? r.block : r.block.replace(/^\s*/, ' ').replace(/\s*$/, ' ')}}`).join('\n');
+  return { ...vtt, styles: css ? [css] : [] };
+}
