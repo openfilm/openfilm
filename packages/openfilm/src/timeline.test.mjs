@@ -1311,3 +1311,67 @@ test('a frame-duration lookup given up on is not a problem: the frame is drawn f
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('a caption track draws its cues on the film\'s time: its STYLE by ::cue, a cue by its id, its words past and future, placed by its settings', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-captions-'));
+  writeFileSync(join(dir, 'bg.html'), page('bg', 6));
+  mkdirSync(join(dir, 'captions'));
+  writeFileSync(join(dir, 'captions', 'zh.vtt'), `WEBVTT
+
+STYLE
+::cue { color: rgb(255, 255, 255); background: none; }
+::cue(.em) { color: rgb(43, 240, 106); }
+::cue(#c2) { color: rgb(255, 212, 0); }
+::cue(:future) { opacity: 0.5; }
+::cue(v[voice="Ana"]) { font-weight: 900; }
+@keyframes rise { from { translate: 0 20px; } to { translate: 0 0; } }
+::cue(c.pop) { display: inline-block; animation: rise 1s linear both; }
+
+c1
+00:00:00.500 --> 00:00:02.000
+Cut a film in <c.em>three</c> seconds
+
+c2
+00:00:02.000 --> 00:00:04.000 line:20% align:left
+<00:00:02.000>No <00:00:02.500><c.pop>drag</c> <00:00:03.000><v Ana>timeline</v>
+`);
+  writeFileSync(join(dir, 'film.html'), `<!doctype html>
+<html><head><meta name="viewport" content="width=320, height=180"></head><body>
+<section>
+  <track kind="captions" src="captions/zh.vtt" srclang="en" label="Captions">
+</section>
+<section>
+  <iframe id="bg" src="bg.html"></iframe>
+</section>
+</body></html>
+`);
+  const s = await open(dir);
+  try {
+    const at = async (t) => { await s.film.seek(t); return s.film.page.evaluate(() => [...document.querySelectorAll('[data-film-captions] .cue-text')].map((el) => {
+      const box = el.parentElement.getBoundingClientRect();
+      const of = (sel) => { const n = el.querySelector(sel); return n ? { color: getComputedStyle(n).color, opacity: getComputedStyle(n).opacity, weight: getComputedStyle(n).fontWeight, translate: getComputedStyle(n).translate } : null; };
+      return { id: el.dataset.cueId, text: el.textContent, color: getComputedStyle(el).color, top: Math.round(box.top), left: Math.round(box.left), em: of('c.em'), pop: of('c.pop'), ana: of('v[voice="Ana"]') };
+    })); };
+    assert.deepEqual(await at(0.2), [], 'nothing before the first cue');
+    const [one] = await at(1);
+    assert.equal(one.text, 'Cut a film in three seconds');
+    assert.equal(one.color, 'rgb(255, 255, 255)');
+    assert.equal(one.em.color, 'rgb(43, 240, 106)', '::cue(.em)');
+    assert.ok(one.top > 120, 'no line: at the bottom');
+    const [two] = await at(2.6);
+    assert.equal(two.id, 'c2');
+    assert.equal(two.color, 'rgb(255, 212, 0)', '::cue(#c2)');
+    assert.equal(two.top, 36, 'line:20% of 180');
+    assert.equal(two.left, 0, 'align:left');
+    assert.equal(two.pop.opacity, '1', 'said: past');
+    assert.equal(two.ana.opacity, '0.5', 'not said yet: future');
+    assert.equal(two.ana.weight, '900', 'a voice by its name');
+    assert.equal(two.pop.translate, '0px 18px', 'its animation 0.1 s in, from its timestamp');
+    assert.equal((await at(3.5))[0].ana.opacity, '1');
+    assert.deepEqual(await at(4.5), [], 'after its end');
+    assert.equal(s.film.meta.duration, 6, 'a caption track is not the film\'s length');
+  } finally {
+    await s.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

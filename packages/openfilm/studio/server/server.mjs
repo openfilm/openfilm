@@ -57,6 +57,7 @@ import { libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, setL
 import { SavedError, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
 import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listenLocal } from '../../src/host.mjs';
+import { captionTrackRoutes } from './caption-tracks.mjs';
 import { moveToTrash } from './trash.mjs';
 import { listSkills, removeSkill, setSkillCover, setSkillInstalled, setSkillOn, skillOrigins, skillsInstalled, skillsOff } from '../../src/skills.mjs';
 import { providersRoute } from './providers/index.mjs';
@@ -643,6 +644,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     /* ── subtitles: the film's lines, the person's subtitle style, translation (see captions.mjs) ── */
     if (await captionRoutes(req, res, project.path, rest, { translate: (root) => subtitleTranslator(root, { askAgent }), transcribe: await subtitleTranscriber() })) return;
+    /* caption tracks: a track's WebVTT file, read and written whole (caption-tracks.mjs) */
+    if (await captionTrackRoutes(req, res, project.path, rest, url)) return;
     /* ── end subtitles ── */
     /* the editor's settings of the project: its frame rate, its tracks' names (see project-settings.mjs) */
     if (await projectSettingsRoute(req, res, project.path, rest)) return;

@@ -9,6 +9,7 @@
  *            { type: 'clock', ping }      what this page's clock says now (to put the editor's moments on it)
  *            { type: 'update', film, head, seq }  film.html changed: change the film in place if it can be
  *            { type: 'renders', list }    stretches rendered for the preview to play in their place: [{ a, b, src }]
+ *            { type: 'captions' }         the caption tracks' files changed: read again, the moment drawn again
  *            { type: 'preview', clip, overrides }   show a tweak on a page, not kept (null: stop showing)
  *            { type: 'overrides', list }  a page on its own: its clip's changes (SPEC §1), applied after each frame
  *            { type: 'pick', x, y, seq }          what is under this stage point
@@ -215,6 +216,7 @@
       else if (inPlace) next.seq = Math.max(Number(next.seq) || 0, Number(m.seq) || 0);
     }
     if (m.type === 'renders') editor()?.renders?.(m.list);
+    if (m.type === 'captions') void editor()?.captions?.();
     if (m.type === 'preview') editor()?.preview(m.clip, m.overrides);
     if (m.type === 'pick') post({ type: 'picked', seq: m.seq, target: editor()?.pick(m.x, m.y) ?? null });
   });

@@ -23,7 +23,9 @@ export type Clip = { src: string; id: string; at?: number; time?: [number] | [nu
   sound?: true;
   /** its look: class names for the film's styles, and its own CSS */
   class?: string; style?: string; attrs?: Record<string, string> };
-export type Track = { clips: Clip[]; locked?: boolean; hidden?: boolean; muted?: boolean; attrs?: Record<string, string> };
+/** A caption track's `<track>` (SPEC §1 Captions): its WebVTT file on the film's time, its language and name. */
+export type TrackCaptions = { src: string; kind: 'captions' | 'subtitles'; srclang?: string; label?: string };
+export type Track = { clips: Clip[]; locked?: boolean; hidden?: boolean; muted?: boolean; attrs?: Record<string, string>; captions?: TrackCaptions };
 /** `keyframes`: the film's @keyframes by name (its clips' own, Studio's: src/clip-motion.mjs). */
 export type Film = { stage?: { w: number; h: number }; tracks: Track[]; keyframes?: Record<string, string> };
 /** `value`: film.html as read, every clip named (a clip with no id takes its file's name, as the server and preview do). */
@@ -43,6 +45,9 @@ export type Op =
   | { op: 'split'; clip: string; left: Record<string, PropValue>; right: Record<string, PropValue>; rightId?: string }
   | { op: 'track'; track: number; field: 'locked' | 'hidden' | 'muted'; value: boolean }
   | { op: 'reorder'; from: number; to: number }
+  /** a caption track put in at track `at`, known by its WebVTT file (SPEC §1 Captions); `uncaptions` takes one out */
+  | { op: 'captions'; at: number; captions: { src: string; kind?: 'captions' | 'subtitles'; srclang?: string; label?: string } }
+  | { op: 'uncaptions'; src: string }
   | { op: 'props'; edits: PropEdit[] }
   | { op: 'stage'; w: number; h: number }
   | { op: 'fields'; clip: string; fields: Record<string, unknown> }

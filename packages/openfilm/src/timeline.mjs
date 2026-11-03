@@ -4,6 +4,7 @@
 // Studio plays and exports by; how each looks is the file's own CSS. Track 0, the first <section>, is on top.
 import { MEDIA_RATE_MAX, MEDIA_RATE_MIN, clipFade, clipSpan, clipTag, declarations, fadeGain, filmHead, fittedFade, keyframeBlocks, kindOf, mediaPlays, parseFilm, pictureRect, readFilmFile, sourceAt, srcHref } from './film-doc.mjs';
 import { override, restore } from './overrides.mjs';
+import { CAPTION_BASE_CSS, cueCss, cueLayout, cueNodes, readVtt, regionBox } from './captions.mjs';
 
 /* the file as written (without what the host puts in it), read as every reader reads it */
 const own = new URL(location.href);
@@ -34,6 +35,14 @@ const url = (src) => new URL(srcHref(src), location.href);
    but is neither loaded, drawn nor heard. Anything else (a check, an export) says the missing file and stops */
 const SKIP_MISSING = new URL(location.href).searchParams.get('film-missing') === 'skip';
 const ready = (a) => Promise.resolve(typeof a.ready === 'function' ? a.ready() : a.ready);
+
+/**
+ * Each caption track as drawn: its layer over the picture (in its track's place in the stack), the CSS of its file's
+ * STYLE, its cues and regions as read, and the cues on now, by the cue (their elements are kept while they stay on).
+ * @type {{ ti: number, src: string, el: HTMLElement, css: HTMLStyleElement, cues: import('./captions.mjs').VttCue[], regions: Map<string, ReturnType<typeof regionBox>>, on: Map<object, HTMLElement>, hidden: boolean, read: Promise<void> | null }[]}
+ */
+const captionLayers = [];
+let captionBase = null;
 
 /** A gate that runs what is given to it when fewer than `most` of its runs are going. */
 function gate(most) {
@@ -1003,7 +1012,9 @@ async function loadAll(list) {
    fonts from the network) takes longer to load than a host waits for the object to appear. Ready is every clip's
    length and place known and every page ready; a video's picture loads when a frame needs it. */
 const loading = (async () => {
+  const captionsRead = syncCaptions(doc);
   clips.push(...await loadAll(doc.tracks.flatMap((track, ti) => track.clips.map((row, ci) => ({ row, track, ti, el: elements[ti][ci] })))));
+  await captionsRead;
   hear();
 })();
 /* a film that cannot load (a clip with no length, a missing file) is the host's to report, once, when it awaits
@@ -1039,6 +1050,7 @@ async function draw(t, live, play = null) {
   footageFrame = live ? ++footageFrames : 0;
   footagePlay = playing ? { rate: play.rate, now: play.now, t } : null;
   try {
+    drawCaptions(t);
     await Promise.all(clips.map((c) => drawClip(c, t, live, playing ? play : null, turn, coming, going)));
     if (playing) idleFootage(t);
   } finally {
@@ -1109,6 +1121,134 @@ async function drawClip(c, t, live, play, turn, coming, going) {
   if (!live) await mediaShown(c.win.document);
   c.drawn = true;
   override(c, c.preview ?? c.overrides);
+}
+
+/* ── caption tracks (SPEC §1 Captions): a track's <track>, its WebVTT cues drawn over the tracks below it ── */
+
+
+/** The caption tracks of `value`, each with its layer and its file read: those gone taken out. */
+async function syncCaptions(value) {
+  if (!captionBase && value.tracks.some((t) => t.captions)) {
+    captionBase = document.createElement('style');
+    captionBase.textContent = CAPTION_BASE_CSS;
+    document.head.append(captionBase);
+  }
+  const want = value.tracks.flatMap((track, ti) => (track.captions ? [{ ti, track }] : []));
+  for (const layer of [...captionLayers]) {
+    if (want.some((w) => w.ti === layer.ti && w.track.captions.src === layer.src)) continue;
+    layer.el.remove();
+    layer.css.remove();
+    captionLayers.splice(captionLayers.indexOf(layer), 1);
+  }
+  await Promise.all(want.map(async ({ ti, track }) => {
+    let layer = captionLayers.find((l) => l.ti === ti);
+    if (!layer) {
+      const el = document.createElement('div');
+      el.dataset.filmCaptions = String(ti);
+      Object.assign(el.style, { width: stage.w + 'px', height: stage.h + 'px' });
+      sectionOf(ti, track).append(el);
+      const css = document.createElement('style');
+      document.head.append(css);
+      layer = { ti, src: track.captions.src, el, css, cues: [], regions: new Map(), on: new Map(), hidden: false, read: null };
+      captionLayers.push(layer);
+    }
+    layer.hidden = Boolean(track.hidden);
+    layer.el.style.zIndex = String(value.tracks.length - ti); // track 0 on top
+    Object.assign(layer.el.style, { width: stage.w + 'px', height: stage.h + 'px' });
+    layer.read ??= readCaptions(layer);
+    await layer.read;
+  }));
+}
+
+/** A caption track's file read into its layer: its cues, its regions, its STYLE as the page's CSS. */
+async function readCaptions(layer) {
+  const res = await fetch(url(layer.src), { cache: 'no-store' }).catch(() => null);
+  if (!res?.ok) {
+    if (!SKIP_MISSING) throw new Error(`caption track ${layer.ti + 1} (${layer.src}): its file is not there`);
+    layer.cues = [];
+    return;
+  }
+  const vtt = readVtt(await res.text());
+  layer.cues = vtt.cues;
+  layer.regions = new Map(vtt.regions.map((r) => regionBox(r)).map((r) => [r.id, r]));
+  layer.css.textContent = cueCss(vtt.styles.join('\n'), `[data-film-captions="${layer.ti}"]`);
+  for (const el of layer.on.values()) el.remove();
+  layer.on.clear();
+  layer.el.replaceChildren();
+}
+
+/** A cue's text as elements: its spans as the tags WebVTT names (`<c>`, `<v voice>`…), a word after a timestamp marked by it. */
+function cueContent(parent, nodes) {
+  for (const n of nodes) {
+    if (n.type === 'text') {
+      if (n.t == null) { parent.append(n.text); continue; }
+      const span = document.createElement('span');
+      span.dataset.t = String(n.t);
+      span.textContent = n.text;
+      parent.append(span);
+      continue;
+    }
+    const el = document.createElement(n.tag);
+    if (n.classes.length) el.className = n.classes.join(' ');
+    if (n.tag === 'v' && n.annotation) el.setAttribute('voice', n.annotation);
+    if (n.tag === 'lang' && n.annotation) el.setAttribute('lang', n.annotation);
+    if (n.t != null) el.dataset.t = String(n.t);
+    cueContent(el, n.children);
+    parent.append(el);
+  }
+}
+
+/** A cue's element, placed as its settings say (an `auto` one stacked from the bottom, a region's in its region). */
+function cueElement(layer, cue) {
+  const box = document.createElement('div');
+  box.className = 'cue';
+  const text = document.createElement('span');
+  text.className = 'cue-text';
+  if (cue.id) text.dataset.cueId = cue.id;
+  cueContent(text, cueNodes(cue.text));
+  box.append(text);
+  const at = cueLayout(cue.settings, new Set(layer.regions.keys()));
+  box.style.textAlign = at.align;
+  let into = layer.el;
+  if (at.mode === 'auto') {
+    into = layer.el.querySelector(':scope > .cue-auto') ?? layer.el.appendChild(Object.assign(document.createElement('div'), { className: 'cue-auto' }));
+    Object.assign(box.style, { width: at.width + '%', marginLeft: at.left + '%', alignSelf: 'flex-start' });
+  } else if (at.mode === 'region') {
+    const r = layer.regions.get(at.region);
+    into = layer.el.querySelector(`:scope > .cue-region[data-region="${CSS.escape(at.region)}"]`) ?? layer.el.appendChild(Object.assign(document.createElement('div'), { className: 'cue-region' }));
+    into.dataset.region = at.region;
+    Object.assign(into.style, { left: r.left + '%', top: r.top + '%', width: r.width + '%', height: r.height + '%' });
+  } else {
+    Object.assign(box.style, { left: at.left + '%', width: at.width + '%', ...(at.top != null ? { top: at.top + '%' } : { bottom: at.bottom + '%' }), ...(at.shift ? { transform: `translateY(${at.shift}%)` } : {}) });
+  }
+  into.append(box);
+  return box;
+}
+
+/** The caption tracks at film second t: the cues on now shown, their words past and future, their animations at their own time. */
+function drawCaptions(t) {
+  for (const layer of captionLayers) {
+    layer.el.style.visibility = layer.hidden ? 'hidden' : 'visible';
+    const now = new Set(layer.hidden ? [] : layer.cues.filter((c) => c.start <= t && t < c.end));
+    for (const [cue, el] of layer.on) if (!now.has(cue)) { el.remove(); layer.on.delete(cue); }
+    for (const cue of now) {
+      const el = layer.on.get(cue) ?? cueElement(layer, cue);
+      layer.on.set(cue, el);
+      for (const w of el.querySelectorAll('[data-t]')) {
+        const at = Number(w.dataset.t);
+        w.classList.toggle('past', at < t);
+        w.classList.toggle('future', at > t);
+      }
+      /* each animation on the cue's own time, from its start or from the timestamp before the element */
+      for (const a of el.getAnimations({ subtree: true })) {
+        const target = a.effect?.target;
+        const from = target?.closest?.('[data-t]')?.dataset.t;
+        if (a.playState !== 'paused') a.pause();
+        a.currentTime = Math.max(0, t - (from != null ? Number(from) : cue.start)) * 1000;
+      }
+    }
+    for (const box of layer.el.querySelectorAll(':scope > .cue-auto, :scope > .cue-region')) if (!box.childElementCount) box.remove();
+  }
 }
 
 window.__filmVideos = () => ({ ...videoSeen });
@@ -1229,8 +1369,9 @@ async function change(value, look) {
     await Promise.race([ready, late]);
     clearTimeout(timer);
   }
-  try { reshape(next.stage); doc = next; rows.forEach(({ row, track, ti }, i) => settle(records[i], row, track, ti)); }
+  try { reshape(next.stage); doc = next; rows.forEach(({ row, track, ti }, i) => settle(records[i], row, track, ti)); await syncCaptions(next); }
   catch { return false; }
+  if (shownT != null) drawCaptions(shownT);
   /* what the change put on at the moment shown and made ready shows now, with the clips it took away going: the
      picture changes at once, not first without them until that moment is drawn again */
   if (shownT != null) {
@@ -1390,6 +1531,12 @@ window.__filmEditor = {
   learned: null,
   /** Set by a host to hear of each video this browser could not play (its src): `unplayed()` lists those so far. */
   undecoded: null,
+  /** The caption tracks' files read again (an editor wrote one, or the agent did), and the moment shown drawn again. */
+  async captions() {
+    for (const layer of captionLayers) layer.read = null;
+    await syncCaptions(doc);
+    if (shownT != null) drawCaptions(shownT);
+  },
   unplayed: () => [...notPlayed],
   /**
    * The film after an edit (`look`: its file's filmHead, when the edit came from the file; another one than this film

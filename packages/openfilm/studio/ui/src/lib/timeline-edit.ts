@@ -126,10 +126,11 @@ export function editModelOf(tracks: readonly TimelineTrack[], links?: ReadonlyMa
     if (row.docIndex == null) continue;
     let track = byIndex.get(row.docIndex);
     if (!track) {
-      track = { index: row.docIndex, role: row.role, clips: [], ...(row.locked ? { locked: true } : {}) };
+      track = { index: row.docIndex, role: row.role, clips: [], ...(row.locked || row.captions ? { locked: true } : {}) };
       byIndex.set(row.docIndex, track);
     }
-    if (row.locked) track.locked = true;
+    /* a caption track holds its file alone: to the clips' edits it is as locked (no clip goes onto it) */
+    if (row.locked || row.captions) track.locked = true;
     for (const b of row.blocks) {
       if (!b.clipId || !b.loc) continue;
       const speed = b.speed && b.speed > 0 ? b.speed : 1;

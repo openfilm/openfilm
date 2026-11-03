@@ -63,6 +63,9 @@ export function SubtitleInspector({ subtitles, width, onClose }: {
     onMake?: () => void;
     making?: boolean;
     refer?: SubtitleLineRefer;
+    /** Make the subtitles a caption track (each line a block of its own, its own look); absent: there is nothing to make. */
+    onConvert?: () => void;
+    converting?: boolean;
   };
   width: number;
   onClose: () => void;
@@ -82,6 +85,15 @@ export function SubtitleInspector({ subtitles, width, onClose }: {
   return (
     <InspectorPanel title={t('timeline.subtitleStyle')} width={width} onClose={onClose}>
       <div data-subtitle-inspector className="py-2">
+          {subtitles.onConvert ? (
+            <div data-subtitle-convert="" className="mb-2 flex flex-col gap-1.5 rounded-[8px] bg-[var(--fill-tsp)] px-2.5 py-2">
+              <span className="text-[11.5px] leading-snug text-[var(--text)]">{t('captionTrack.convertWhy')}</span>
+              <button type="button" disabled={subtitles.converting} onClick={subtitles.onConvert}
+                className="flex h-7 w-fit items-center gap-1.5 rounded-[5px] bg-[var(--accent)] px-2.5 text-[11.5px] text-white transition hover:opacity-90 disabled:opacity-60">
+                {subtitles.converting ? <Loader2 size={12} className="animate-spin" /> : null}{t('captionTrack.convert')}
+              </button>
+            </div>
+          ) : null}
           {/* the looks are shown as samples, not names: "heavy outline" and "bold" sound alike and look nothing alike.
               Picked = the style is exactly that look (worked out, not stored: change a color and it is no longer it) */}
           <div className="grid grid-cols-6 gap-1.5 pb-1.5 pt-0.5">

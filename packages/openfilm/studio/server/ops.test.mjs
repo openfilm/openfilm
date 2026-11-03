@@ -173,3 +173,17 @@ test('motion: a clip\'s keyframes by property, written as its animations and the
   assert.equal(none.tracks[1].clips[0].style, undefined);
   assert.deepEqual(none.keyframes, {});
 });
+
+test('caption tracks: put in at a place, known by their file, kept though they hold no clips, taken out by their file', () => {
+  const zh = { src: 'captions/zh.vtt', kind: 'captions', srclang: 'zh', label: 'Captions' };
+  const f = applyOps(film(), [{ op: 'captions', at: 0, captions: zh }]);
+  assert.deepEqual(f.tracks[0], { clips: [], captions: zh });
+  /* an edit that empties another track drops that one; the caption track stays */
+  const g = applyOps(f, [{ op: 'remove', clip: 's' }]);
+  assert.equal(g.tracks.length, 3);
+  assert.deepEqual(g.tracks[0].captions, zh);
+  assert.throws(() => applyOps(g, [{ op: 'captions', at: 1, captions: zh }]), (e) => e instanceof EditError && /already/.test(e.message));
+  assert.throws(() => applyOps(g, [{ op: 'captions', at: 1, captions: { src: 'x.srt' } }]), EditError);
+  const h = applyOps(g, [{ op: 'uncaptions', src: 'captions/zh.vtt' }]);
+  assert.deepEqual(ids(h), [['a', 'b'], ['v']]);
+});

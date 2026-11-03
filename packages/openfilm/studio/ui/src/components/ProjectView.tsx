@@ -74,6 +74,8 @@ import { boxNow, chatPointOf, draftBoxesAt, draftMarksOf, sameClip, NO_DRAFT, ty
 import { usePageChanges } from './use-page-changes';
 import { SubtitleOverlay } from './SubtitleOverlay';
 import { SubtitleInspector, subtitleLineKey, type SubtitleLineAt, type SubtitleLineRefer } from './SubtitleInspector';
+import { CaptionInspector } from './CaptionInspector';
+import { configureCaptionTracks, refreshCaptionTracks, setCaptionSelection } from '@/lib/caption-tracks';
 import { useFilmSubtitles } from '@/lib/use-film-subtitles';
 import { speakerAt, useSubtitleEdits } from '@/lib/use-subtitle-edits';
 import { cueAt, filmSubtitleStyleFor, filmSubtitleWords, sameFilmSubtitleLanguage } from '@/lib/subtitles';
@@ -427,6 +429,13 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     [rawListing, facts, proxies],
   );
   React.useEffect(() => { if (listing) warmProjectMedia(projectId, listing, mediaSources); }, [projectId, listing, mediaSources]);
+  /* the caption tracks' files: read again when the folder changed (the agent may have written one), the picture too */
+  React.useEffect(() => {
+    if (!rawListing) return;
+    refreshCaptionTracks(projectId);
+    preview.current?.captions?.();
+  }, [rawListing, projectId]);
+  React.useEffect(() => () => setCaptionSelection(null), [projectId]);
   /* the canvas over the panes, or the edit: by project, as left */
   const [canvasOpen, setCanvasOpenState] = React.useState(() => canvasShown(projectId));
   /** the canvas node a chat's reference asked to be shown (`n`: each time again) */
@@ -810,7 +819,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const [pickedMedia, setPickedMedia] = React.useState<WorkspaceResource | null>(null);
   /* the file picked is one of Saved (lib/saved): shown from there, and brought into the project when it is used */
   const [pickedSaved, setPickedSaved] = React.useState(false);
-  const [inspectorContent, setInspectorContent] = React.useState<'selection' | 'subtitles' | WorkspaceResource>('selection');
+  const [inspectorContent, setInspectorContent] = React.useState<'selection' | 'subtitles' | 'captions' | WorkspaceResource>('selection');
   const subs = useFilmSubtitles(projectId);
   /* the subtitle over the picture renders again while playing only when another line, or another of its words, is said */
   const subtitleStep = React.useCallback((ms: number) => {
@@ -828,6 +837,13 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     setSelectedKeys([]);
     setStageElement(null);
     setInspectorContent('subtitles');
+    setInspectorOpen(true);
+  }, []);
+  /** Cues of a caption track picked (components/CaptionLane): their look and words in the inspector. */
+  const showCaptionLook = React.useCallback(() => {
+    setSelectedKeys([]);
+    setStageElement(null);
+    setInspectorContent('captions');
     setInspectorOpen(true);
   }, []);
   const pickMedia = React.useCallback((file: WorkspaceResource | null) => {
@@ -1358,8 +1374,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /**
    * A paste (⌘V, the menu) at a time: onto the track given (`lane`; `pointed`: under the pointer, so copies from
    * several tracks move there together) or each copy's own, never cutting what is
-   * there: a taken spot opens a track beside it, and with the magnet a copy for the main track goes right above it
-   * (lib/timeline-clipboard pasteEdit). A clip cut since it was copied comes back as it was copied (under a
+   * there: a taken spot opens a track beside it; with the magnet a copy for the main track goes in there, at the cut
+   * nearest the playhead (lib/timeline-clipboard pasteEdit). A clip cut since it was copied comes back as it was copied (under a
    * new id).
    */
   const pasteAt = React.useCallback((lane: string | null, atMs: number, pointed = false): Promise<string | null> => {
@@ -1743,6 +1759,25 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   };
   /* the subtitle row (components/SubtitleRow): its edits go into the transcripts, each a step of the undo here */
   const subtitleEdits = useSubtitleEdits(projectId, { film: film.film, refresh: subs.refresh, record: film.record });
+  /* caption tracks' edits are steps of the editor's history; a file written, the picture reads it again */
+  React.useEffect(() => { configureCaptionTracks({ record: film.record, written: () => preview.current?.captions?.() }); }, [film.record]);
+  const captionLanes = React.useMemo(() => ({ projectId, onPick: showCaptionLook }), [projectId, showCaptionLook]);
+  /** The subtitles made a caption track (studio/server/caption-tracks.mjs): on top, the old row's look off. */
+  const [converting, setConverting] = React.useState(false);
+  const convertSubtitles = React.useCallback(async () => {
+    setConverting(true);
+    try {
+      const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/caption-tracks/from-subtitles`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: t('captionTrack.fileName') }),
+      });
+      const body = await res.json().catch(() => ({})) as { src?: string; error?: string };
+      if (!res.ok || !body.src) { toast.show(body.error ?? t('timeline.editFail')); return; }
+      const why = await editOps([{ op: 'captions', at: 0, captions: { src: body.src, kind: 'captions', label: t('captionTrack.name') } }], 'captionTrack.stepConvert');
+      if (why) { toast.show(why); return; }
+      subs.patchStyle({ on: false });
+      setInspectorContent('selection');
+    } finally { setConverting(false); }
+  }, [projectId, editOps, subs, toast, t]);
   const subtitleRow = React.useMemo<SubtitleRowSpec>(() => ({
     cues: subs.captions?.cues ?? [], edits: subtitleEdits,
     speakerAt: (ms) => speakerAt(tracksRef.current, subs.captions?.cues ?? [], ms),
@@ -3735,9 +3770,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                   <PaneDivider width={inspectorShownWidth} onResize={commitInspectorWidth} containerRef={viewerRowRef} label={t('inspector.resize')} min={MIN_INSPECTOR} minRest={MIN_VIEWER} side="end" />
                   {typeof inspectorContent === 'object' ? (
                     <ResourceInspector file={inspectorContent} url={(pickedSaved && inspectorContent === pickedMedia ? savedSources : mediaSources).file(inspectorContent)} width={inspectorShownWidth} onClose={closeInspector} />
+                  ) : inspectorContent === 'captions' ? (
+                    <CaptionInspector projectId={projectId} width={inspectorShownWidth} onClose={closeInspector} />
                   ) : inspectorContent === 'subtitles' ? (
                     <SubtitleInspector
-                      subtitles={{ style: subs.style, onStyle: subs.patchStyle, translate: subs.translate, sourceLanguage: subs.sourceLanguage, lines: subs.captions?.cues ?? [], onEditLine: (cue, text, language) => void subs.setLine(cue, text, language), timeMs, onSeek: seek, untranscribed: subs.captions?.untranscribed.length ?? 0, onMake: makeSubtitles, making: subs.transcribing, ...(subtitleRefer ? { refer: subtitleRefer } : {}) }}
+                      subtitles={{ style: subs.style, onStyle: subs.patchStyle, translate: subs.translate, sourceLanguage: subs.sourceLanguage, lines: subs.captions?.cues ?? [], onEditLine: (cue, text, language) => void subs.setLine(cue, text, language), timeMs, onSeek: seek, untranscribed: subs.captions?.untranscribed.length ?? 0, onMake: makeSubtitles, making: subs.transcribing, ...(subtitleRefer ? { refer: subtitleRefer } : {}), ...(subs.captions?.cues.length ? { onConvert: () => void convertSubtitles(), converting } : {}) }}
                       width={inspectorShownWidth}
                       onClose={closeInspector}
                     />
@@ -3860,7 +3897,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     selected={selectedIds}
                     onSelectedChange={onTimelineSelected}
                     subtitles={{ on: subs.style.on, onToggle: subs.toggle, count: subs.count, untranscribed: subs.captions?.untranscribed.length ?? 0, onConfigure: configureSubtitles, configuring: inspectorShown && inspectorContent === 'subtitles', onMake: makeSubtitles, making: subs.transcribing, problem: subtitleProblem }}
-                    subtitleRow={subtitleRow}
+                    subtitleRow={film.film?.tracks.some((tr) => tr.captions) ? undefined : subtitleRow}
+                    captionLanes={captionLanes}
                     waveUrl={waveUrl}
                     history={timelineHistory}
                     {...tools.timeline}

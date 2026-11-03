@@ -140,7 +140,10 @@ const BOX_FIELDS = ['x', 'y', 'w', 'h', 'r'];
 const PAGE_SIZE_MAX = 8192;
 /** A copy of `row` with only `fields`, in that order: what is written back reads the same every time. */
 const ordered = (row, fields) => Object.fromEntries(fields.filter((k) => row[k] !== undefined).map((k) => [k, row[k]]));
-const TRACK_FIELDS = ['clips', 'locked', 'hidden', 'muted', 'attrs'];
+const TRACK_FIELDS = ['clips', 'locked', 'hidden', 'muted', 'attrs', 'captions'];
+/** A caption track's `<track>` (SPEC §1 Captions): what it may say. */
+const CAPTION_KINDS = ['captions', 'subtitles'];
+const CAPTION_FIELDS = ['src', 'kind', 'srclang', 'label'];
 
 function unknownKeys(row, allowed, where, problems) {
   const extra = Object.keys(row).filter((k) => !allowed.includes(k));
@@ -364,11 +367,29 @@ export function readFilm(value) {
       problems.push(`tracks[${ti}]: attrs has to be text attributes: id, class, title, lang, dir, data-* or aria-*.`);
       return;
     }
-    tracks.push({ clips, ...(row.locked === true ? { locked: true } : {}), ...(row.hidden === true ? { hidden: true } : {}), ...(row.muted === true ? { muted: true } : {}), ...(row.attrs && Object.keys(row.attrs).length ? { attrs: row.attrs } : {}) });
+    const captions = row.captions === undefined ? null : readCaptions(row.captions, `tracks[${ti}]`, problems);
+    if (row.captions !== undefined && !captions) return;
+    if (captions && row.clips.length) { problems.push(`tracks[${ti}]: a caption track holds its <track> alone — its clips go on a track of their own.`); return; }
+    tracks.push({ clips, ...(row.locked === true ? { locked: true } : {}), ...(row.hidden === true ? { hidden: true } : {}), ...(row.muted === true ? { muted: true } : {}), ...(row.attrs && Object.keys(row.attrs).length ? { attrs: row.attrs } : {}), ...(captions ? { captions } : {}) });
   });
   if (problems.length) return { doc: null, problems };
   const keyframes = value.keyframes && Object.keys(value.keyframes).length ? { keyframes: { ...value.keyframes } } : {};
   return { doc: { stage: { w: stage.w, h: stage.h }, tracks, ...keyframes }, problems };
+}
+
+/**
+ * A caption track's `<track>` as read (SPEC §1 Captions): its WebVTT file (`src`), `kind` captions or subtitles, and
+ * optionally `srclang` and `label`. Null, with what is wrong said in `problems`, when it is not one.
+ */
+function readCaptions(raw, where, problems) {
+  if (!isObject(raw)) { problems.push(`${where}: a caption track is a <track kind="captions" src="captions/….vtt">.`); return null; }
+  const extra = Object.keys(raw).filter((k) => !CAPTION_FIELDS.includes(k));
+  if (extra.length) { problems.push(`${where}: a caption track's <track> takes kind, src, srclang and label: ${extra.join(' · ')}`); return null; }
+  if (typeof raw.src !== 'string' || !/\.vtt$/i.test(raw.src.replace(/[?#].*$/, ''))) { problems.push(`${where}: a caption track's src is a WebVTT file (captions/….vtt).`); return null; }
+  const kind = raw.kind ?? 'captions';
+  if (!CAPTION_KINDS.includes(kind)) { problems.push(`${where}: a caption track's kind is captions or subtitles.`); return null; }
+  for (const k of ['srclang', 'label']) if (raw[k] !== undefined && typeof raw[k] !== 'string') { problems.push(`${where}: ${k} is text.`); return null; }
+  return { src: raw.src, kind, ...(raw.srclang ? { srclang: raw.srclang } : {}), ...(raw.label ? { label: raw.label } : {}) };
 }
 
 /** The edit, or an Error that lists every problem in it. */
@@ -917,6 +938,15 @@ export function readFilmFile(text) {
       track = null;
       continue;
     }
+    if (m.type === 'open' && m.name === 'track') {
+      /* a caption track: its one <track> (SPEC §1 Captions); readFilm says what is wrong with it */
+      const raw = {};
+      for (const a of m.attrs) raw[a.name] = a.value;
+      if (track.raw.captions) problems.push(`${at(m)}: a caption track holds one <track>.`);
+      else track.raw.captions = raw;
+      pending = [];
+      continue;
+    }
     if (m.type === 'open' && KIND_OF_TAG[m.name]) {
       const where = `${at(m)}: ${named(m)}`;
       let end = m.end;
@@ -1002,6 +1032,8 @@ export function clipTag(clip) {
   return `<${tag} ${parts.join(' ')}>${tag === 'img' ? '' : `</${tag}>`}`;
 }
 
+/** A caption track's `<track>`: kind, src, then its language and name. */
+const captionsTag = (c) => `<track kind="${escapeAttr(c.kind ?? 'captions')}" src="${escapeAttr(srcHref(c.src))}"${c.srclang ? ` srclang="${escapeAttr(c.srclang)}"` : ''}${c.label ? ` label="${escapeAttr(c.label)}"` : ''}>`;
 const sectionTag = (track) => `<section${Object.entries(track.attrs ?? {}).map(([k, v]) => ` ${k}="${escapeAttr(v)}"`).join('')}${TRACK_FLAGS.filter((f) => track[f]).map((f) => ` ${f}`).join('')}>`;
 const viewportTag = (stage) => `<meta name="viewport" content="width=${stage.w}, height=${stage.h}">`;
 /** Two values read alike: what a reader makes of them is the same. */
@@ -1036,6 +1068,7 @@ export function filmHtml(value, before = '') {
     const sameTrack = wasTrack && TRACK_FLAGS.every((f) => Boolean(wasTrack[f]) === Boolean(track[f])) && same(wasTrack.attrs ?? {}, track.attrs ?? {});
     body += was && sameTrack ? piece(was.open) : sectionTag(track);
     body += '\n';
+    if (track.captions) body += `  ${captionsTag(track.captions)}\n`;
     (track.clips ?? []).forEach((clip, ci) => {
       const now = checked?.tracks[ti]?.clips[ci] ?? clip;
       const k = kept.get(now.id);

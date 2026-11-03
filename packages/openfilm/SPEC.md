@@ -134,7 +134,19 @@ Its translations are beside it as `1.<language>.vtt`, the same lines at the same
 `NOTE Each cue is one subtitle, as cut by hand in OpenFilm Studio.` has its cues as the person cut them: each is shown
 as one subtitle as it is, where an editor would otherwise cut long lines into subtitles. An editor's subtitles are the
 lines of the clips that can be heard, placed by each clip's `at`, its `#t=` fragment and `speed`; a host draws none
-of them into the picture.
+of them into the picture. Words on the picture are a caption track.
+
+### Captions
+
+A track may hold, instead of clips, one `<track kind="captions">` (or `kind="subtitles"`): a caption track. Its `src`
+is a WebVTT file relative to film.html; `srclang` and `label` say its language and name. Its cues are on the film's
+time, 0 at the film's start, and a host draws each over the tracks below it while it is on, laid out by its settings
+(`line`, `position`, `size`, `align`, `region`) and the file's REGION blocks as WebVTT lays out cues over a video.
+How they look is the CSS of the file's STYLE blocks, by `::cue` and `::cue(…)`: a cue by its id (`::cue(#c3)`), its
+spans by tag, class and voice (`<c.em>`, `<v Ana>`), a cue's words after its timestamps by `:past` and `:future`.
+Every CSS property applies there, `@keyframes` included; an animation runs on the cue's own time, 0 at its start, or
+on an element after a timestamp from that timestamp. A caption track has no sound, can be `hidden` or `locked` like
+any track, and is not part of the film's length.
 
 ## 2. The page
 

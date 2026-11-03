@@ -38,6 +38,8 @@ export type PreviewHandle = {
   /** Stretches rendered to play in place of the film while it plays (studio/server/preview-cache.mjs); [] none. */
   renders?(list: PreviewRender[]): void;
   update(film: Film, head?: string): void;
+  /** The caption tracks' files read again (one was written) and the moment shown drawn again. */
+  captions?(): void;
   preview(clip: string, overrides: unknown[] | null): void;
   pick(x: number, y: number): Promise<Target | null>;
   /*
@@ -239,6 +241,9 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
         updateSeq.current.set(key, ++seq.current);
         post(key, { type: 'update', film, head: latestHead.current, seq: seq.current });
       }
+    },
+    captions() {
+      for (const key of up.current) post(key, { type: 'captions' });
     },
     preview(clip, overrides) {
       post(shownRef.current?.key, { type: 'preview', clip, overrides });

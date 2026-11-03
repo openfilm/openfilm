@@ -71,6 +71,16 @@ export function inverse(before: Film, after: Film, ops: Op[]): Op[] {
   for (const op of ops) {
     if (op.op === 'track') { undo.push({ op: 'track', track: op.track, field: op.field, value: Boolean(before.tracks[op.track]?.[op.field]) }); continue; }
     if (op.op === 'reorder') { undo.push({ op: 'reorder', from: op.to, to: op.from }); continue; }
+    if (op.op === 'captions') { undo.push({ op: 'uncaptions', src: op.captions.src }); continue; }
+    if (op.op === 'uncaptions') {
+      const at = before.tracks.findIndex((t) => t.captions?.src === op.src);
+      const track = before.tracks[at];
+      if (track?.captions) {
+        for (const field of ['hidden', 'locked'] as const) if (track[field]) undo.push({ op: 'track', track: at, field, value: true });
+        undo.push({ op: 'captions', at, captions: copy(track.captions) });
+      }
+      continue;
+    }
     if (op.op === 'stage') { const { w, h } = before.stage ?? DEFAULT_STAGE; undo.push({ op: 'stage', w, h }); continue; }
     if (op.op === 'keyframes') continue;
     if (op.op === 'insert') { for (const [id] of now) if (!was.has(id)) ids.add(id); continue; }

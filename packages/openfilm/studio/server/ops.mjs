@@ -8,7 +8,8 @@ import { FILM_FILE, clipFade, clipIdFor, clipKind, clipSpeed, kindOf } from '../
 import { MOTION_PROPS, animationsOf, motionName, readMotion, shiftMotion, withAnimations, writeMotion } from '../../src/clip-motion.mjs';
 
 /** @typedef {{ src: string, id: string, [field: string]: unknown }} Clip */
-/** @typedef {{ clips: Clip[], locked?: boolean, hidden?: boolean, muted?: boolean }} Track */
+/** @typedef {{ src: string, kind?: 'captions' | 'subtitles', srclang?: string, label?: string }} TrackCaptions */
+/** @typedef {{ clips: Clip[], locked?: boolean, hidden?: boolean, muted?: boolean, captions?: TrackCaptions }} Track */
 /** @typedef {{ stage?: { w: number, h: number }, tracks: Track[], keyframes?: Record<string, string> }} FilmValue */
 /**
  * @typedef {(
@@ -23,6 +24,8 @@ import { MOTION_PROPS, animationsOf, motionName, readMotion, shiftMotion, withAn
  *   | { op: 'fields', clip: string, fields: Record<string, unknown> }
  *   | { op: 'track', track: number, field: 'locked' | 'hidden' | 'muted', value: boolean }
  *   | { op: 'reorder', from: number, to: number }
+ *   | { op: 'captions', at: number, captions: TrackCaptions }
+ *   | { op: 'uncaptions', src: string }
  *   | { op: 'keyframes', set: Record<string, string | null> }
  * )} Op
  */
@@ -67,8 +70,9 @@ function targetTrack(/** @type {FilmValue} */ value, /** @type {number | undefin
   return track;
 }
 
-/** Tracks left with no clips go: a track is its clips (the agent never sees an empty one appear out of an edit). */
-const dropEmptyTracks = (/** @type {FilmValue} */ value) => { value.tracks = value.tracks.filter((track) => track.clips.length); };
+/** Tracks left with no clips go: a track is its clips (the agent never sees an empty one appear out of an edit). A
+ * caption track has none and stays (SPEC §1 Captions). */
+const dropEmptyTracks = (/** @type {FilmValue} */ value) => { value.tracks = value.tracks.filter((track) => track.clips.length || track.captions); };
 
 /** Fields a person sets from Studio, by kind of clip (the rest of a clip is the agent's to write). */
 const SETTABLE = new Set(['at', 'time', 'box', 'size', 'volume', 'speed', 'overrides', 'src']);
@@ -180,6 +184,21 @@ export function applyOps(value, ops) {
         if (!track) throw new EditError(`no track ${op.track}`, 'conflict');
         if (op.value) track[op.field] = true;
         else delete track[op.field];
+        break;
+      }
+      case 'captions': {
+        /* a caption track put in at `at` (SPEC §1 Captions), known by its file */
+        const c = op.captions;
+        if (!c || typeof c.src !== 'string' || !/\.vtt$/i.test(c.src)) throw new EditError('a caption track is a WebVTT file', 'invalid');
+        if (value.tracks.some((t) => t.captions?.src === c.src)) throw new EditError(`${c.src} is a caption track already`, 'conflict');
+        const at = Number.isInteger(op.at) ? Math.max(0, Math.min(value.tracks.length, op.at)) : 0;
+        value.tracks.splice(at, 0, { clips: [], captions: { src: c.src, kind: c.kind === 'subtitles' ? 'subtitles' : 'captions', ...(c.srclang ? { srclang: c.srclang } : {}), ...(c.label ? { label: c.label } : {}) } });
+        break;
+      }
+      case 'uncaptions': {
+        const i = value.tracks.findIndex((t) => t.captions?.src === op.src);
+        if (i < 0) throw new EditError(`no caption track ${op.src}`, 'conflict');
+        value.tracks.splice(i, 1);
         break;
       }
       case 'reorder': {

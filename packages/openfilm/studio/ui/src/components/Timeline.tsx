@@ -56,6 +56,7 @@ import {
   Pencil,
   TriangleAlert,
   Blend,
+  Captions,
 } from 'lucide-react';
 import { useT } from '@/i18n';
 import { keyAction, useKeyHint } from '@/lib/keymap-store';
@@ -160,6 +161,7 @@ import { CaptionsIcon } from './player-controls/controls-bar';
 import { inHostPanel, isTypingTarget } from './typing-target';
 import { Popover } from './Popover';
 import { MarkerGlyph } from './TimelineMarkers';
+import { CaptionLane } from './CaptionLane';
 import { SUBTITLE_ROW_H, SubtitleRow, SubtitleRowHead, useSubtitleRowShown, type SubtitleRowHandle, type SubtitleRowSpec } from './SubtitleRow';
 import { SoloButton, TrackResizeHandle } from './timeline-head-extras';
 import { clipAtPoint, markReplaceTarget } from './replace-drop';
@@ -704,6 +706,8 @@ export interface TimelineProps {
   onRenameTrack?: (docIndex: number, name: string) => void;
   /** The subtitle row under the ruler (components/SubtitleRow): the film's subtitles, timed by hand. */
   subtitleRow?: SubtitleRowSpec;
+  /** The caption tracks' rows (components/CaptionLane): the project they are read from, and a cue picked. */
+  captionLanes?: { projectId: string; onPick: () => void };
   /** Solo (Studio's playback only): the tracks soloed (film.html indexes), and a click on a head's S (⌥: alone). */
   solo?: { tracks: ReadonlySet<number>; onToggle: (docIndex: number, only: boolean) => void };
   /** The markers' row under the ruler (under the subtitle row when it shows), while there are any. */
@@ -998,6 +1002,7 @@ export const Timeline = React.memo(function Timeline({
   trackNames,
   onRenameTrack,
   subtitleRow,
+  captionLanes,
   solo,
   markerLane,
   onAddMarker,
@@ -2685,7 +2690,7 @@ export const Timeline = React.memo(function Timeline({
     const liftingHead = laneOrder?.fromLane === laneIndex;
     const canReorder = Boolean(onEditBlocks && track.docIndex != null);
     const canToggle = Boolean(onEditBlocks && (track.docIndex != null || track.blocks.some((b) => b.loc)));
-    const LaneIcon = track.kind === 'visual' ? Video : Waves;
+    const LaneIcon = track.captions ? Captions : track.kind === 'visual' ? Video : Waves;
     /* the name the person gave it (on its first row only: rows spread from one track share it) */
     const given = track.docIndex != null && track.index === 1 ? trackNames?.get(track.docIndex) : undefined;
     const laneTitle = given ?? track.name ?? track.kind;
@@ -3056,6 +3061,11 @@ export const Timeline = React.memo(function Timeline({
         /* right-click on empty space: the track menu at this time (clips stop their own right-clicks) */
         onContextMenu={(e) => openLaneMenu(e, track.lane)}
       >
+          {track.captions && captionLanes ? (
+            <CaptionLane projectId={captionLanes.projectId} src={track.captions.src} locked={Boolean(track.locked)} hidden={Boolean(track.hidden)}
+              pxPerMs={pxPerMs} playheadMs={() => timeMsRef.current} snap={snap} snapTargets={() => snapTargetsFor(allBlocks, null, timeMsRef.current)}
+              onSeek={onSeek} onPick={captionLanes.onPick} onError={setDropError} />
+          ) : null}
           {track.blocks.map((block) => {
             /* while dragging, drawn where the preview says (film.html only updates after the write); a clip the edit
                takes out is drawn faint where it is */
@@ -3518,7 +3528,7 @@ export const Timeline = React.memo(function Timeline({
     openBlockMenu, openLaneMenu, onEditBlocks, collapseIfClick, selectOne, setSelected, clipElements, thumbWindow, view.width,
     chatClip, chatDraft, placedOf, pickForTrim, gap, withLinked, runSplit, trackOverlay,
     fadeOfBlock, fadeDrag, startFade, volumeDrag, startVolume, transitions, transitionDrag, pickedTransition, onPickTransition, onTransition, startTransitionResize,
-    nearFirst, nearLast, speedOn, hoveredBlock, onEnterCompound,
+    nearFirst, nearLast, speedOn, hoveredBlock, onEnterCompound, captionLanes, snap, allBlocks, onSeek,
   ]);
 
   const tickMarks = React.useMemo(() => ticks.map(({ ms, label }) => {

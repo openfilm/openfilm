@@ -443,6 +443,8 @@ export interface TimelineTrack {
    * marked and drawn taller than the others.
    */
   main?: boolean;
+  /** A caption track (SPEC §1 Captions): its WebVTT file and name. It has no clips; its row draws the file's cues. */
+  captions?: { src: string; label?: string };
   blocks: TimelineBlock[];
 }
 
@@ -645,9 +647,18 @@ function docTrackKind(track: Record<string, unknown>): string {
  * Counted per drawn row, not per film.html track: a track spread into four rows by overlap is A2, A3, A4, A5 and the
  * music under it is A6. Four rows all called A2 could not be pointed at.
  */
-function badgeRows<T extends { role: string }>(rows: readonly T[]): (T & { badge: string })[] {
-  const badges = filmTrackBadges(rows.map((row) => ({ kind: row.role })));
-  return rows.map((row, i) => ({ ...row, badge: badges[i]! }));
+function badgeRows<T extends { role: string; captions?: unknown }>(rows: readonly T[]): (T & { badge: string })[] {
+  /* caption tracks are T1, T2… from the top; the rest are counted as if they were not there */
+  const others = rows.filter((row) => !row.captions);
+  const badges = filmTrackBadges(others.map((row) => ({ kind: row.role })));
+  let caption = 0;
+  return rows.map((row) => ({ ...row, badge: row.captions ? `T${++caption}` : badges[others.indexOf(row)]! }));
+}
+
+/** A film.html track's caption file and name, when it is a caption track. */
+function captionsOf(track: Record<string, unknown>): { src: string; label?: string } | null {
+  const c = track.captions as { src?: unknown; label?: unknown } | undefined;
+  return c && typeof c.src === 'string' ? { src: c.src, ...(typeof c.label === 'string' && c.label ? { label: c.label } : {}) } : null;
 }
 
 /**
@@ -793,6 +804,7 @@ export function layoutTracks(evaluated: TimelineFilm): TimelineTrack[] {
   interface DocRow {
     name: string; kind: string; blocks: Block[];
     hidden?: boolean; muted?: boolean; locked?: boolean;
+    captions?: { src: string; label?: string };
   }
   const byIndex = new Map<number, DocRow>();
   const take = (t: DocTrackRef): DocRow => {
@@ -948,10 +960,12 @@ export function layoutTracks(evaluated: TimelineFilm): TimelineTrack[] {
   for (const [index, t] of docTracksOf(film.doc).entries()) {
     if (byIndex.has(index)) continue;
     const kind = docTrackKind(t);
+    const captions = captionsOf(t);
     byIndex.set(index, {
-      name: kind,
-      kind,
+      name: captions?.label ?? kind,
+      kind: captions ? 'mg' : kind,
       blocks: [],
+      ...(captions ? { captions } : {}),
       ...(t.hidden ? { hidden: true } : {}),
       ...(t.muted ? { muted: true } : {}),
       ...(t.locked ? { locked: true } : {}),
@@ -965,7 +979,7 @@ export function layoutTracks(evaluated: TimelineFilm): TimelineTrack[] {
     blocks: Block[],
     name?: string | null,
     docIndex?: number,
-    flags?: { hidden?: boolean; muted?: boolean; locked?: boolean; incomplete?: boolean },
+    flags?: { hidden?: boolean; muted?: boolean; locked?: boolean; incomplete?: boolean; captions?: { src: string; label?: string } },
   ): void => {
     const hidden = Boolean(flags?.hidden);
     const muted = Boolean(flags?.muted);
@@ -989,6 +1003,7 @@ export function layoutTracks(evaluated: TimelineFilm): TimelineTrack[] {
         hidden,
         locked,
         ...(flags?.incomplete ? { incomplete: true } : {}),
+        ...(flags?.captions ? { captions: flags.captions } : {}),
         blocks: row,
       });
     }
@@ -997,7 +1012,7 @@ export function layoutTracks(evaluated: TimelineFilm): TimelineTrack[] {
   const rows = [...byIndex.entries()].sort((a, b) => a[0] - b[0]);
   /* nothing at all: no rows, so the timeline shows its "drag assets here" state instead of dead rows (with length 0
      every gesture is off). Partly empty tracks are drawn: they are where things get dropped. */
-  if (rows.every(([, row]) => row.blocks.length === 0)) return [];
+  if (rows.every(([, row]) => row.blocks.length === 0 && !row.captions)) return [];
   const docTracks = docTracksOf(film.doc);
   for (const [index, row] of rows) {
     const drawn = new Set(row.blocks.map((b) => b.clipId));
@@ -1019,13 +1034,14 @@ export function layoutTracks(evaluated: TimelineFilm): TimelineTrack[] {
         muted: row.muted,
         locked: row.locked,
         incomplete,
+        ...(row.captions ? { captions: row.captions } : {}),
       },
     );
   }
 
   /* badges last, per drawn row top to bottom (see badgeRows); the main track marked (the lowest picture track) */
   const badged = badgeRows(tracks);
-  const pictures = badged.filter((r) => r.role !== 'audio' && r.docIndex != null).map((r) => r.docIndex!);
+  const pictures = badged.filter((r) => r.role !== 'audio' && r.docIndex != null && !r.captions).map((r) => r.docIndex!);
   const main = pictures.length ? Math.max(...pictures) : null;
   return main == null ? badged : badged.map((r) => (r.docIndex === main ? { ...r, main: true } : r));
 }

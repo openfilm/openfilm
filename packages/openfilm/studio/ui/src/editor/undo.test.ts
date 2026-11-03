@@ -122,3 +122,15 @@ test('a clip\'s keyframes set, changed, cut and taken away come back exactly', (
   assert.ok(halves.keyframes?.['w--scale']);
   assert.deepEqual(apply(halves, inverse(keyed, halves, cut)), keyed);
 });
+
+test('a caption track put in is taken out by undo; one taken out comes back where it was, hidden as it was', () => {
+  const base: Film = { tracks: [{ clips: [{ id: 'v', src: 'v.mp4' }] }] };
+  const zh = { src: 'captions/zh.vtt', kind: 'captions' as const };
+  const add: Op[] = [{ op: 'captions', at: 0, captions: zh }];
+  const added = applyOps(structuredClone(base), add) as Film;
+  assert.deepEqual(applyOps(structuredClone(added), inverse(base, added, add)), base);
+  const hidden: Film = { tracks: [{ clips: [{ id: 'v', src: 'v.mp4' }] }, { clips: [], hidden: true, captions: zh }] };
+  const drop: Op[] = [{ op: 'uncaptions', src: zh.src }];
+  const dropped = applyOps(structuredClone(hidden), drop) as Film;
+  assert.deepEqual(applyOps(structuredClone(dropped), inverse(hidden, dropped, drop)), hidden);
+});

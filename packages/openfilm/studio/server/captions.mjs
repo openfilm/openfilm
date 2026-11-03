@@ -32,6 +32,7 @@ import { inProject } from './files.mjs';
 import { alignTranslation, segmentLine, subtitleEnd } from './subtitle-segments.mjs';
 import { readTranscript, setLine, transcriptIsCurrent, translationsOf, writeTranscript } from './transcripts.mjs';
 import { subtitleEditRoutes } from './subtitle-edits.mjs';
+import { cuePlain, readVtt } from '../../src/captions.mjs';
 
 export { spokenLines, stripAudioTags } from './transcripts.mjs';
 export { SUBTITLE_SEGMENT_RULES } from './subtitle-segments.mjs';
@@ -469,8 +470,25 @@ export async function captionRoutes(req, res, root, rest, { translate = async ()
   return false;
 }
 
-/** For an export: the project's cues and style in one read (the style as the person left it, or the default). @param {string} root */
+/**
+ * For an export: the project's cues and style in one read (the style as the person left it, or the default). A film
+ * with caption tracks (SPEC §1 Captions) has its subtitles there: the first one shown is the subtitle file's, and
+ * `tracks` says they are drawn by the film itself (nothing to burn in). @param {string} root
+ */
 export async function subtitlesForExport(root) {
+  const tracked = await captionTrackCues(root);
+  if (tracked) return { cues: tracked, style: { ...parseFilmSubtitleStyle(null), language: null, bilingual: false }, tracks: true };
   const [{ cues }, style] = await Promise.all([filmCaptions(root), readSubtitleStyle(root)]);
   return { cues, style: style ?? parseFilmSubtitleStyle(null) };
+}
+
+/** The cues of the film's first caption track that is shown, as subtitle lines (film ms, their words); null without one. @param {string} root */
+async function captionTrackCues(root) {
+  const film = await readProjectFilm(root);
+  const track = /** @type {import('../../src/film-doc.d.mts').FilmDoc | null} */ (film.doc)?.tracks.find((t) => t.captions && !t.hidden);
+  if (!track?.captions) return null;
+  const file = inProject(root, track.captions.src);
+  const text = file ? await readFile(file, 'utf8').catch(() => null) : null;
+  if (text == null) return null;
+  return readVtt(text).cues.map((c) => ({ startMs: Math.round(c.start * 1000), durMs: Math.round((c.end - c.start) * 1000), text: cuePlain(c.text).trim() }));
 }
