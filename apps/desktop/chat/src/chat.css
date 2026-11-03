@@ -204,11 +204,11 @@
   --border-soft: rgba(255, 255, 255, 0.04);
   --border-strong: rgba(255, 255, 255, 0.12);
 
-  --text: #dadada;
+  --text: #ededed;
   --text-dim: #f0f0f0;
   --text-muted: #7f7f7f;
-  --text-faint: #646464;
-  --heading: #dadada;
+  --text-faint: #5a5a5a;
+  --heading: #ededed;
 
   /*
    * The chat column's own text tone, brighter than elsewhere: it sits on the darkest background and is the only
@@ -228,7 +228,7 @@
   --tooltip-text: rgb(240, 240, 240);
   --tooltip-border: rgba(255, 255, 255, 0.16);
 
-  --ink: #dadada;
+  --ink: #ededed;
   /* one highlight everywhere: what is picked or shown is the timeline's teal, in every pane */
   --accent: #2ed3c6;
   --accent-2: #5fe3d8;
@@ -242,10 +242,10 @@
   --err: #eb4d4d;
 
   --bg-hover: rgba(255, 255, 255, 0.06);
-  --bg-active: rgba(255, 255, 255, 0.1);
+  --bg-active: rgba(255, 255, 255, 0.13);
 
   --nav-hover: rgba(255, 255, 255, 0.06);
-  --nav-selected: rgba(255, 255, 255, 0.1);
+  --nav-selected: rgba(255, 255, 255, 0.13);
   --nav-selected-hover: rgba(255, 255, 255, 0.14);
 
   /* See the same group in the light theme. */
@@ -326,11 +326,11 @@
     --border: rgba(255, 255, 255, 0.06);
     --border-soft: rgba(255, 255, 255, 0.04);
     --border-strong: rgba(255, 255, 255, 0.12);
-    --text: #dadada;
+    --text: #ededed;
     --text-dim: #f0f0f0;
     --text-muted: #7f7f7f;
-    --text-faint: #646464;
-    --heading: #dadada;
+    --text-faint: #5a5a5a;
+    --heading: #ededed;
     /* See the same two in [data-theme='dark'] above. */
     --chat-text: #f0f0f0;
     --chat-hint: #646464;
@@ -343,7 +343,7 @@
     --tooltip-bg: rgb(20, 20, 20);
     --tooltip-text: rgb(240, 240, 240);
     --tooltip-border: rgba(255, 255, 255, 0.16);
-    --ink: #dadada;
+    --ink: #ededed;
     --brand-text: rgb(255, 252, 225);
     /* one highlight everywhere: what is picked or shown is the timeline's teal, in every pane */
     --accent: #2ed3c6;
@@ -355,9 +355,9 @@
     --warn: #ffbf36;
     --err: #eb4d4d;
     --bg-hover: rgba(255, 255, 255, 0.06);
-    --bg-active: rgba(255, 255, 255, 0.1);
+    --bg-active: rgba(255, 255, 255, 0.13);
     --nav-hover: rgba(255, 255, 255, 0.06);
-    --nav-selected: rgba(255, 255, 255, 0.1);
+    --nav-selected: rgba(255, 255, 255, 0.13);
     --nav-selected-hover: rgba(255, 255, 255, 0.14);
     --app-nav-bg: rgb(24, 24, 24);
     --app-content-bg: rgb(17, 17, 17);

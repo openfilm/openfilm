@@ -301,7 +301,8 @@ function LaneMark({ track }: { track: TimelineTrack }) {
     : most === 'voice' ? Mic : most === 'sfx' ? AudioLines : most === 'music' ? Music
       : most === 'video' ? Film : most === 'still' ? ImageIcon : Sparkles;
   return (
-    <span className="flex items-center justify-center" style={{ width: 21, height: 14, color: 'var(--text-dim)', opacity: track.hidden ? 0.5 : 1 }}>
+    /* a label, dimmer than the switches beside it, so the two read apart */
+    <span className="flex items-center justify-center" style={{ width: 21, height: 14, color: 'var(--tl-faint)', opacity: track.hidden ? 0.5 : 1 }}>
       <Icon size={13} strokeWidth={1.8} aria-hidden />
     </span>
   );
@@ -2711,7 +2712,8 @@ export const Timeline = React.memo(function Timeline({
         style={{
           marginTop: GAP,
           height: h,
-          gridTemplateColumns: `repeat(${solo ? 5 : 4}, minmax(0, 1fr))`,
+          /* what the row holds on the left, a label; its switches after it, each in its own column */
+          gridTemplateColumns: `24px 4px repeat(${solo ? 4 : 3}, minmax(0, 1fr))`,
           background: laneTone(track, lit),
           /* the targeted track: an accent bar down its left edge */
           boxShadow: [chatLit ? CHAT_RING : '', targeted ? 'inset 2px 0 0 var(--tl-accent)' : ''].filter(Boolean).join(', ') || undefined,
@@ -2723,6 +2725,7 @@ export const Timeline = React.memo(function Timeline({
           {/* what the row holds, as a mark alone: no number, no name */}
           <LaneMark track={track} />
         </span>
+        <span aria-hidden />
         {onEditBlocks ? <>
         <TrackHeadButton
           label={track.locked ? t('timeline.unlockTrack') : t('timeline.lockTrack')}
@@ -4578,7 +4581,8 @@ function TrackHeadButton({
         }}
         className="flex h-full w-full items-center justify-center rounded-[4px] bg-transparent outline-none ring-0 transition-colors hover:bg-[var(--bg-hover)] focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 disabled:hover:bg-transparent"
         style={{
-          color: disabled ? 'var(--text-faint)' : active ? 'var(--tl-accent)' : 'var(--text-dim)',
+          /* a switch at rest is brighter than the row's mark; one turned on (locked, hidden, muted) is the accent */
+          color: disabled ? 'var(--text-faint)' : active ? 'var(--tl-accent)' : 'var(--tl-text)',
         }}
       >
         {children}

@@ -131,10 +131,11 @@
   --border-soft: rgba(255, 255, 255, 0.04);
   --border-strong: rgba(255, 255, 255, 0.12);
 
-  --text: #dadada;
-  --text-dim: #b0b0b0;
-  --text-muted: #959595;
-  --text-faint: #646464;
+  /* what is picked or read is bright; what is only there steps back: wide steps between them */
+  --text: #ededed;
+  --text-dim: #a8a8a8;
+  --text-muted: #8a8a8a;
+  --text-faint: #5a5a5a;
 
   --card-bg: #202020;
   --card-border: rgba(255, 255, 255, 0.06);
@@ -155,7 +156,7 @@
   --err: #eb4d4d;
 
   --bg-hover: rgba(255, 255, 255, 0.06);
-  --bg-active: rgba(255, 255, 255, 0.1);
+  --bg-active: rgba(255, 255, 255, 0.13);
   --layer-selected: #333c58;
   --layer-selected-in: #23283a;
   --layer-hover-line: rgba(116, 146, 230, 0.55);
@@ -175,13 +176,13 @@
   --brand-wind-mid: #66d8b8;
   --brand-wind-to: #7fd3e4;
 
-  --tl-lane: #1e1e1e;
-  --tl-lane-on: #272727;
+  --tl-lane: #1c1c1c;
+  --tl-lane-on: #2a2a2a;
   --tl-head: #181818;
   --tl-ruler: #181818;
   --tl-line: #252525;
-  --tl-text: rgba(255, 255, 255, 0.7);
-  --tl-faint: rgba(255, 255, 255, 0.4);
+  --tl-text: rgba(255, 255, 255, 0.72);
+  --tl-faint: rgba(255, 255, 255, 0.34);
   /* white playhead on near black; selection white too (teal disappears on the darkened blocks) */
   --tl-playhead: #ffffff;
   --tl-accent: #2ed3c6;
