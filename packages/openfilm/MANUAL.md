@@ -101,6 +101,13 @@ page, seconds, media, on-screen text) → **assets** (the voice, music, pictures
 project, not when you mean to write it. If the person changes direction, change the stage's work and carry on; the
 line is a plan, not a cage.
 
+`npx openfilm pipeline <stage>` says how a stage's work is done; the storyboard stage shows the form its file takes:
+one `## Shot n — seconds` entry per shot, with its page, its voice line, its words on screen and the media it needs.
+Once the storyboard is written, `npx openfilm pipeline check` holds it against the project — pages written, media
+present, voices recorded (a shot's voice at `assets/audio/vo/shot-<n>.wav`), the seconds adding up, film.html cutting
+the shots as it says — and names what is missing under the stage that fills it: the work list of the stage the film
+is at.
+
 The words of a sound or a video are a WebVTT beside it with the same name (`vo/1.wav` → `vo/1.vtt`): a cue per subtitle line, a timestamp tag at each word. Studio makes the film's subtitles from them; never draw subtitles in a page.
 
 Media can come from `get`, any service the person uses (with its API docs and their key), or your own code. Save it under `assets/`.

@@ -69,7 +69,7 @@ openfilm open   [folder | url]    # show a film in Studio: a new one, an existin
 openfilm look   [what] [t | a-b]  # check the film, a page or a media file: a contact sheet, one frame, or a range
 openfilm render [a-b]             # the MP4; --4k, --blur (motion blur), --alpha (.webm / .mov)
 openfilm get    [what]            # voice-over, music, sound effects, transcripts, images, video, from your services
-openfilm pipeline [stage --done]  # the production line: start it, see where the film stands, mark a stage done
+openfilm pipeline [stage | check]  # the production line: start it, work each stage, check the storyboard, mark stages done
 openfilm install-skill [agent...] # put OpenFilm's skill where an agent (claude, codex, zcode, qoder, …) reads its skills from
 openfilm doctor                   # what this computer has for OpenFilm, to paste into an issue
 ```
@@ -78,10 +78,12 @@ openfilm doctor                   # what this computer has for OpenFilm, to past
 connect a service in Studio with your own key.
 
 `openfilm pipeline` is video production as a line: brief → script → storyboard → assets → assembly → review →
-deliver, each stage leaving its work in the project. `openfilm pipeline start` begins it, and `render` holds until
-the film is made and checked. `openfilm install-skill` introduces OpenFilm to an agent that reads skills (Claude
-Code, Codex, ZCode, Qoder, WorkBuddy, DeepSeek Harness and more): the terminal way, when Studio runs in a browser
-without the desktop app.
+deliver, each stage leaving its work in the project. `openfilm pipeline start` begins it, `openfilm pipeline
+<stage>` says how each stage's work is done, and `openfilm pipeline check` holds the storyboard against the
+project — pages, media, voices, seconds — so the missing work is said under the stage that fills it. `render`
+holds until the film is made and checked. `openfilm install-skill` introduces OpenFilm to an agent that reads
+skills (Claude Code, Codex, ZCode, Qoder, WorkBuddy, DeepSeek Harness and more): the terminal way, when Studio
+runs in a browser without the desktop app.
 
 ## Studio
 

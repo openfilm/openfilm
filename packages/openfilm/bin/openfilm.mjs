@@ -10,7 +10,7 @@ const USAGE = `openfilm — a film is a function of time: given t, it draws that
   openfilm get     [what] [--options]  voice-over, music, sound effects, transcripts, images, video, from a connected service
   openfilm skills                      the skills this film can be made with; \`openfilm skill <name>\` prints one
   openfilm install-skill [agent...]    put OpenFilm's skill where a coding agent reads its skills from
-  openfilm pipeline [stage --done]     the production line: the stages a film goes through, and where this one stands
+  openfilm pipeline [stage | check]     the production line: the stages a film goes through, how each is worked, and where this one stands
   openfilm update                      the newest OpenFilm; Studio starts again on it
   openfilm doctor                      what this computer has for OpenFilm, to paste into an issue
 

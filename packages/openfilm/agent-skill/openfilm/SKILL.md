@@ -9,4 +9,6 @@ Run `npx -y openfilm@latest` and follow the manual it prints: it is the whole of
 again whenever you need it.
 
 For a film made step by step, run `npx -y openfilm@latest pipeline` after the manual: it is the production line, the
-stages a film goes through and what each one leaves behind.
+stages a film goes through, what each one leaves behind, and how each is worked (`openfilm pipeline <stage>`). When
+the storyboard is written, `openfilm pipeline check` holds it against the project — pages, media, voices, seconds —
+and names what is missing under the stage that fills it.

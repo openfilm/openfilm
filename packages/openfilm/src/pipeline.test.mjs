@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { normalize, pipelineFile, readPipeline, renderGate, setStage, startPipeline, statusLines, STAGES } from './pipeline.mjs';
+import { pipelineCommand } from './pipeline-cli.mjs';
 
 /** A project: a folder with a film.html, as look and render take one. */
 const project = () => {
@@ -82,4 +83,68 @@ test('a pipeline that cannot be read is said so, and one that is partly written 
   assert.equal(madeWhole.stages.script.status, 'todo');
   assert.equal(madeWhole.stages.storyboard.status, 'todo');
   assert.equal(normalize({ stages: null }), null);
+});
+
+test('a stage alone says how its work is done; an unknown one is said so, with the check named', async () => {
+  const dir = project();
+  const was = process.cwd();
+  process.chdir(dir);
+  try {
+    const brief = await pipelineCommand(['brief']);
+    assert.equal(brief.ok, true);
+    const text = brief.lines.join('\n');
+    assert.match(text, /the brief stage/);
+    assert.match(text, /brief\.md/);
+    assert.match(text, /pipeline brief --done/);
+    const guides = [];
+    for (const { name } of STAGES) guides.push((await pipelineCommand([name])).ok);
+    assert.ok(guides.every(Boolean), 'every stage has its guide');
+    const unknown = await pipelineCommand(['filming']);
+    assert.equal(unknown.ok, false);
+    assert.equal(unknown.usage, true);
+    assert.match(unknown.lines[0], /no stage filming/);
+    assert.match(unknown.lines[1], /pipeline check/);
+  } finally { process.chdir(was); }
+});
+
+test('check holds the storyboard against the project, and is quiet once the work has landed', async () => {
+  const dir = project();
+  const was = process.cwd();
+  process.chdir(dir);
+  try {
+    startPipeline(dir, { seconds: 12 });
+    const none = await pipelineCommand(['check']);
+    assert.equal(none.ok, false);
+    assert.match(none.lines[0], /no storyboard/);
+    mkdirSync(join(dir, '.film', 'pipeline'), { recursive: true });
+    writeFileSync(join(dir, '.film', 'pipeline', 'storyboard.md'), [
+      '## Shot 1 — 4s',
+      'page: title.html',
+      'vo: One prompt, one film.',
+      '',
+      '## Shot 2 — 6s',
+      'page: demo.html',
+      'media: assets/image/cover.jpg',
+      '',
+    ].join('\n'));
+    const gap = await pipelineCommand(['check']);
+    assert.equal(gap.ok, false);
+    const text = gap.lines.join('\n');
+    assert.match(text, /page title\.html is not written yet/);
+    assert.match(text, /voice not recorded: assets\/audio\/vo\/shot-1\.wav/);
+    assert.match(text, /assets\/image\/cover\.jpg is missing/);
+    assert.match(text, /the shots add up to 10 s; the film is 12 s/);
+    /* the film's seconds change with the film: the storyboard re-checked at the new length */
+    startPipeline(dir, { seconds: 10 });
+    writeFileSync(join(dir, 'title.html'), '<!doctype html>');
+    writeFileSync(join(dir, 'demo.html'), '<!doctype html>');
+    writeFileSync(join(dir, 'film.html'), '<section><iframe src="title.html#t=0,4"></iframe><iframe src="demo.html#t=0,6"></iframe></section>');
+    mkdirSync(join(dir, 'assets', 'image'), { recursive: true });
+    writeFileSync(join(dir, 'assets', 'image', 'cover.jpg'), 'x');
+    mkdirSync(join(dir, 'assets', 'audio', 'vo'), { recursive: true });
+    writeFileSync(join(dir, 'assets', 'audio', 'vo', 'shot-1.wav'), 'x');
+    const hold = await pipelineCommand(['check']);
+    assert.equal(hold.ok, true);
+    assert.match(hold.lines.join('\n'), /the storyboard holds/);
+  } finally { process.chdir(was); }
 });

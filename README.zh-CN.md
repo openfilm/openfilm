@@ -68,7 +68,7 @@ openfilm open   [folder | url]    # 在 Studio 里打开片子：新建、打开
 openfilm look   [what] [t | a-b]  # 检查片子、某个页面或媒体文件：缩略图总览、单帧或一段区间
 openfilm render [a-b]             # 渲染成 MP4；--4k、--blur（运动模糊）、--alpha（.webm / .mov）
 openfilm get    [what]            # 用你接入的服务生成配音、音乐、音效、字幕转写、图片和视频
-openfilm pipeline [stage --done]  # 制作流水线：开始、查看进度、把某个阶段标记为完成
+openfilm pipeline [stage | check]  # 制作流水线：开始、逐阶段说明做法、核对分镜、把某个阶段标记为完成
 openfilm install-skill [agent...] # 把 OpenFilm 的 skill 装进智能体读 skill 的目录（claude、codex、zcode、qoder 等）
 ```
 
@@ -76,10 +76,11 @@ openfilm install-skill [agent...] # 把 OpenFilm 的 skill 装进智能体读 sk
 自己的 key 接入服务。
 
 `openfilm pipeline` 把视频制作变成流水线：brief（创意）→ script（脚本）→ storyboard（分镜）→ assets（素材）→
-assembly（合成）→ review（审查）→ deliver（交付），每个阶段都把成果留在项目里。用 `openfilm pipeline start`
-开始之后，`render` 会等片子做完并通过检查。`openfilm install-skill` 把 OpenFilm 介绍给会读 skill 的智能体
-（Claude Code、Codex、ZCode、Qoder、WorkBuddy、DeepSeek Harness 等）——这是纯浏览器（web）模式下用终端智能体的
-方式。
+assembly（合成）→ review（审查）→ deliver（交付），每个阶段都把成果留在项目里。`openfilm pipeline start` 开始流水线，
+`openfilm pipeline <stage>` 说明每个阶段的做法，`openfilm pipeline check` 把分镜和项目对账——页面、素材、配音、秒数——
+缺什么、归哪个阶段补，一一说出来。`render` 会等片子做完并通过检查。`openfilm install-skill` 把 OpenFilm 介绍给会读
+skill 的智能体（Claude Code、Codex、ZCode、Qoder、WorkBuddy、DeepSeek Harness 等）——这是纯浏览器（web）模式下用
+终端智能体的方式。
 
 ## Studio
 

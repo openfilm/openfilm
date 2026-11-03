@@ -11,15 +11,103 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-/** The stages, in the order they are worked, and what each one leaves behind. */
+/**
+ * The stages, in the order they are worked: what each one leaves behind, and how its work is done (`work`, what
+ * `openfilm pipeline <stage>` says). A stage's work is advice for the agent, not rules the tools enforce; what the
+ * tools check, `openfilm pipeline check` checks.
+ */
 export const STAGES = Object.freeze([
-  { name: 'brief', leaves: '.film/pipeline/brief.md — what the film says, to whom, how long, in what tone' },
-  { name: 'script', leaves: '.film/pipeline/script.md — the words, and the shots in order' },
-  { name: 'storyboard', leaves: '.film/pipeline/storyboard.md — one entry per shot: its page, seconds, media, on-screen text' },
-  { name: 'assets', leaves: 'assets/ — the voice, music, pictures and video the storyboard calls for (openfilm get, or your services)' },
-  { name: 'assembly', leaves: 'the pages (window.film) cut together by film.html — the whole film, watchable in Studio' },
-  { name: 'review', leaves: 'openfilm look run, its sheets read, what it found fixed; the person\'s Studio edits kept' },
-  { name: 'deliver', leaves: 'the MP4 (openfilm render) or an export from Studio, as the person asked' },
+  {
+    name: 'brief',
+    leaves: '.film/pipeline/brief.md — what the film says, to whom, how long, in what tone',
+    work: [
+      'Write .film/pipeline/brief.md. It is the film\'s one page of truth; everything later reads it.',
+      '  - the idea: what the film says, in one sentence a viewer could repeat',
+      '  - who it is for, and where they will meet it (a launch page, a feed, a pitch)',
+      '  - how long, in what tone: with the seconds, this is the whole budget',
+      '  - what must be shown or named (a product, a logo, a call to action), and what to avoid',
+      'When the ask is thin (a topic, no angle), offer two or three directions first, and let the person choose.',
+    ],
+  },
+  {
+    name: 'script',
+    leaves: '.film/pipeline/script.md — the words, and the shots in order',
+    work: [
+      'Write .film/pipeline/script.md: the film as it will be heard and read, shot by shot, in order.',
+      '  - one block per shot, numbered as the storyboard will number them (1, 2, 3…)',
+      '  - in each block: the voice-over line (or none), the words on screen, and what the picture does',
+      '  - the voice carries the meaning; the screen carries little. About 2.5 spoken words fit in a second:',
+      '    count, and cut, before storyboarding',
+      'Read it to the person before the storyboard: words changed later cost the most.',
+    ],
+  },
+  {
+    name: 'storyboard',
+    leaves: '.film/pipeline/storyboard.md — one entry per shot: its page, seconds, media, on-screen text',
+    work: [
+      'Write .film/pipeline/storyboard.md, one entry per shot, in this form (the check reads it):',
+      '',
+      '    ## Shot 1 — 4s — title',
+      '    page: title.html',
+      '    vo: One prompt, one film.',
+      '    text: MAKE FILMS AT THE SPEED OF THOUGHT',
+      '    media: assets/image/logo.png',
+      '',
+      '  - page: the shot\'s page, one page per shot, named for its job (title.html, demo.html), not its number',
+      '  - vo: the line the voice says; it is recorded to assets/audio/vo/shot-1.wav (the shot\'s number)',
+      '  - text: what is written on the screen, not what is said',
+      '  - media: every file the shot needs, at the path it will live at; get fills it',
+      '  - the seconds add up to the film\'s length. Then `openfilm pipeline check` names what is missing.',
+    ],
+  },
+  {
+    name: 'assets',
+    leaves: 'assets/ — the voice, music, pictures and video the storyboard calls for (openfilm get, or your services)',
+    work: [
+      'Collect what the storyboard calls for, until `openfilm pipeline check` stops naming things:',
+      '  - pictures, footage, music, sound effects: `openfilm get image | video | music | sfx`, searched first',
+      '    (get image-search, get web-search) when real pictures would do better than made ones; or your own',
+      '    service, or media the person has — anything, so long as it lands at the path the storyboard names',
+      '  - the voice: one `openfilm get tts` per shot that has a vo, to assets/audio/vo/shot-<n>.wav; its',
+      '    transcript (.vtt) lands beside it and becomes the film\'s subtitles',
+      'Keep only what the film can use: the person sees every file under assets/ in Studio.',
+    ],
+  },
+  {
+    name: 'assembly',
+    leaves: 'the pages (window.film) cut together by film.html — the whole film, watchable in Studio',
+    work: [
+      'Make the pages and cut them together:',
+      '  - one page per shot, named as the storyboard says: a web page with window.film, drawn by frame(t)',
+      '    (the manual\'s "A page"); what pages share (fonts, colors, a logo) goes in a file they load',
+      '  - film.html: a track of pages in storyboard order, each with #t= for its seconds, and every sound as',
+      '    its own clip — the voices, the music, the effects — at the seconds the storyboard gives them',
+      '  - the film comes out at the brief\'s seconds: trim, speed or cut shots to keep it there',
+      'Run `openfilm open` before you write, and watch in Studio as you go: the person is watching too.',
+    ],
+  },
+  {
+    name: 'review',
+    leaves: 'openfilm look run, its sheets read, what it found fixed; the person\'s Studio edits kept',
+    work: [
+      'Check the film before the person has to:',
+      '  - `openfilm look` — a contact sheet of the whole film, drawn twice to catch a page that is not a pure',
+      '    function of t; read every sheet, do not count on the check alone',
+      '  - fix what it finds (a page error, a font that failed, text cut off, a sound missing) and look again',
+      '  - the person\'s Studio edits (overrides, locked tracks) are kept as they are',
+      'Mark review done when the sheets are clean and the film says what the brief promised.',
+    ],
+  },
+  {
+    name: 'deliver',
+    leaves: 'the MP4 (openfilm render) or an export from Studio, as the person asked',
+    work: [
+      'Hand the film over the way the person asked for it:',
+      '  - an MP4: `openfilm render` — it waits until assembly and review are done, so this stage is last',
+      '  - anything else (a GIF, stills, subtitles, a timeline for Final Cut or Premiere): an export from Studio',
+      'Only what was asked for: deliver is the end of the line, not a place for extras.',
+    ],
+  },
 ]);
 
 const STATUSES = new Set(['todo', 'doing', 'done']);
@@ -111,7 +199,7 @@ export function statusLines(pipeline, { project, run = 'openfilm' } = {}) {
   });
   const firstOpen = STAGE_NAMES.find((name) => pipeline.stages[name].status !== 'done');
   lines.push('', firstOpen
-    ? `next     ${firstOpen}: ${STAGES.find((s) => s.name === firstOpen).leaves}`
+    ? `next     ${firstOpen}: ${STAGES.find((s) => s.name === firstOpen).leaves} (\`${run} pipeline ${firstOpen}\` says how)`
     : 'all stages done; render or export when the person asks');
   if (project) lines.push(`state    ${pipelineFile(project)}`);
   return lines;
