@@ -86,10 +86,11 @@
   /* the timeline's own: a well (meters), the playhead and the frame of a picked clip, and waveforms drawn lighter
      over a clip's own color (canvas reads these back from the element) */
   --tl-lane: #f1f1f3;
-  /* a track's band, the ground seen in the gaps between two, and the track of a picked clip */
-  --tl-row: #f6f6f8;
-  --tl-gap: #e4e4e8;
-  --tl-lane-on: #ffffff;
+  /* a track's band, the ground seen in the gaps between two (the panel itself), and the track of a picked clip: the
+     app's own layers, as a field and a pressed field are on any panel */
+  --tl-row: var(--bg-field);
+  --tl-gap: var(--bg-panel);
+  --tl-lane-on: var(--bg-pressed);
   --tl-playhead: #161619;
   --tl-select: #161619;
   --tl-wave: rgba(255, 255, 255, 0.5);
@@ -150,9 +151,9 @@
   --clip-audio: #1c5757;
 
   --tl-lane: #0f0f11;
-  --tl-row: #1c1c1f;
-  --tl-gap: #0d0d0f;
-  --tl-lane-on: #28282d;
+  --tl-row: var(--bg-field);
+  --tl-gap: var(--bg-panel);
+  --tl-lane-on: var(--bg-pressed);
   --tl-playhead: #ffffff;
   --tl-select: #ffffff;
   --tl-wave: rgba(255, 255, 255, 0.4);

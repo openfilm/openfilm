@@ -236,7 +236,7 @@ const SCRUB_STATE_MS = 100;
  */
 const AUDIO_BAND_H = INFO_H;
 /** The gap between rows: two rows read as two, not as one area. */
-const GAP = 3;
+const GAP = 2;
 /**
  * How close to a row's top or bottom edge counts as "open a new track here" rather than "onto this row". It used to
  * be up to 12 px each side of a 44 px row, so more than half the row meant "new track" and a purely horizontal drag
@@ -276,8 +276,8 @@ const TL = {
 } as const;
 
 /* each track is a band of its own from its head across the timeline (`--tl-row`), apart from the next by a gap of the
-   darker ground under them (`--tl-gap`), so a clip is seen to be on its track; the track of a picked clip is a shade
-   brighter (`--tl-lane-on`) */
+   panel under them (`--tl-gap`), so a clip is seen to be on its track; the track of a picked clip is a shade further
+   (`--tl-lane-on`) */
 function laneTone(track: TimelineTrack, picked: boolean): string {
   if (picked) return 'var(--tl-lane-on)';
   /* the main track: a band deeper still, a shade toward the text (lighter in the dark, darker in the light) */
