@@ -159,6 +159,12 @@ export interface SourcePreviewProps {
   onPlace?: (mode: 'insert' | 'overwrite', range: SourceRange | null) => void;
 }
 
+/** A picture or a video laid out at its own shape (`fitted`), as large as the room around it allows (its cq units). */
+const FIT = 'block shrink-0 object-contain';
+const fitted = (shape: number | null): React.CSSProperties => (shape
+  ? { ...CLEAR, aspectRatio: String(shape), width: `min(100cqw, calc(100cqh * ${shape}))`, height: 'auto' }
+  : { width: '100%', height: '100%' });
+
 export function SourcePreview(props: SourcePreviewProps) {
   /* a web page is previewed on its own: its own timeline from 0, driven here through Studio's bridge. Each file is a
      preview of its own (keyed by its path): another one picked starts at 0, paused, with nothing of the last one's
@@ -210,6 +216,10 @@ function MediaPreviewPane({ file, sources, onClose, onPlace }: SourcePreviewProp
     return () => cancelAnimationFrame(raf);
   }, [playing]);
 
+  /* the picture's shape once known: it is then laid out at it (fitted), its clear ground on it alone */
+  const [shape, setShape] = React.useState<number | null>(null);
+  React.useEffect(() => setShape(null), [file.path]);
+  const shapeOf = (w: number, h: number) => { if (w > 0 && h > 0) setShape(w / h); };
   const mediaEvents = {
     onPlay: () => setPlaying(true),
     onPause: () => setPlaying(false),
@@ -221,7 +231,7 @@ function MediaPreviewPane({ file, sources, onClose, onPlace }: SourcePreviewProp
 
   return (
     <div ref={rootRef} className="absolute inset-0 z-20 flex flex-col bg-[var(--bg-panel)]">
-      <div className="relative flex min-h-0 flex-1 items-center justify-center px-3 py-2.5" onClick={timed ? toggle : undefined}>
+      <div className="relative flex min-h-0 flex-1 items-center justify-center px-3 py-2.5 [container-type:size]" onClick={timed ? toggle : undefined}>
         {failed ? (
           <p className="text-[12.5px] text-[var(--text-muted)]">{t('media.cannotPreview')}</p>
         ) : file.kind === 'video' ? (
@@ -235,11 +245,14 @@ function MediaPreviewPane({ file, sources, onClose, onPlace }: SourcePreviewProp
             /* picked to be seen: it plays from the start at once (the click that picked it lets the sound play) */
             autoPlay
             preload="auto"
-            className="h-full w-full object-contain"
+            className={FIT}
+            style={fitted(shape)}
             {...mediaEvents}
+            onLoadedMetadata={(e) => { shapeOf(e.currentTarget.videoWidth, e.currentTarget.videoHeight); mediaEvents.onLoadedMetadata?.(e); }}
           />
         ) : file.kind === 'image' ? (
-          <img src={src} alt={file.name} className="h-full w-full object-contain" onError={() => setFailed(true)} />
+          <img src={src} alt={file.name} className={FIT} style={fitted(shape)} onError={() => setFailed(true)}
+            onLoad={(e) => shapeOf(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight)} />
         ) : file.kind === 'audio' ? (
           <div className="relative h-[42%] w-full max-w-[920px] overflow-hidden rounded-md">
             <MediaPreview file={file} sources={sources} />

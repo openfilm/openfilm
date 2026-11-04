@@ -410,7 +410,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
           : what === 'frame' && !isPage(file) ? await frame(lib, file, Number(url.searchParams.get('ms')), Number(url.searchParams.get('w')))
           : null;
         if (!jpeg) throw new HttpError(400, 'what: probe, poster, frame or wave, of a media file');
-        res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'private, max-age=86400', 'content-length': jpeg.length });
+        res.writeHead(200, { 'content-type': pictureType(jpeg), 'cache-control': 'private, max-age=86400', 'content-length': jpeg.length });
         return res.end(jpeg);
       }
     }
@@ -1009,12 +1009,10 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       if (page) {
         const tag = `"${createHash('sha1').update(jpeg).digest('hex').slice(0, 16)}"`;
         if (req.headers['if-none-match'] === tag) { res.writeHead(304, { etag: tag, 'cache-control': 'private, no-cache' }); return res.end(); }
-        /* a WebP (RIFF) when drawn clear */
-        const type = jpeg.subarray(0, 4).toString('latin1') === 'RIFF' ? 'image/webp' : 'image/jpeg';
-        res.writeHead(200, { 'content-type': type, 'cache-control': 'private, no-cache', etag: tag, 'content-length': jpeg.length });
+        res.writeHead(200, { 'content-type': pictureType(jpeg), 'cache-control': 'private, no-cache', etag: tag, 'content-length': jpeg.length });
         return res.end(jpeg);
       }
-      res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'private, max-age=86400', 'content-length': jpeg.length });
+      res.writeHead(200, { 'content-type': pictureType(jpeg), 'cache-control': 'private, max-age=86400', 'content-length': jpeg.length });
       return res.end(jpeg);
     }
     /* exports (what one asks: see exports.mjs). GET also says where they go by default, what this machine encodes and
@@ -1389,6 +1387,12 @@ async function exampleFolderHere(id) {
   } catch (e) {
     throw new HttpError(e instanceof FetchError ? e.status : 404, e instanceof Error ? e.message : String(e));
   }
+}
+
+/** A poster's or frame's type by its first bytes: a page's poster drawn clear is a WebP, a clear picture's a PNG. */
+function pictureType(/** @type {Buffer} */ bytes) {
+  const head = bytes.subarray(0, 4).toString('latin1');
+  return head === 'RIFF' ? 'image/webp' : head === '\x89PNG' ? 'image/png' : 'image/jpeg';
 }
 
 /**

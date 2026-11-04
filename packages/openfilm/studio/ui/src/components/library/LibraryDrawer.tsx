@@ -19,9 +19,9 @@ import {
   libraryDragItem, libraryUrl, nameOf, posterUrl, previewUrl, toggleFavorite, useLibraryFavorites, useLibraryIndex,
   type LibraryCategory, type LibraryItem,
 } from '@/lib/library';
-import { clearResourceDrag, setResourceDragData } from '@/lib/resource-drag';
+import { clearResourceDrag, dragPicture, setResourceDragData } from '@/lib/resource-drag';
 import { useLibraryVoices } from '@/lib/library-voices';
-import { ADD_HOVER, MiniPlayer, MusicCard, ROUND, SoundRow, libraryArt, usePlayer } from './AudioList';
+import { ADD_HOVER, FOOT_ROOM, MiniPlayer, MusicCard, PLAYER_ROOM, ROUND, SoundRow, libraryArt, usePlayer } from './AudioList';
 import { CaptionsPane, type CaptionsActions } from './CaptionsPane';
 import { CategoryIcon, Empty } from './icons';
 import { FEATURED, STARRED, VoicesPane } from './VoicesPane';
@@ -237,7 +237,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
               <>
               {/* a click on nothing lets the picked thing go; the player is under the list */}
               <div
-                className={`min-h-0 flex-1 overflow-y-auto px-3 pt-0.5 ${player.item ? 'pb-3' : 'pb-[calc(var(--drawer-under,0px)+12px)]'}`}
+                className={`min-h-0 flex-1 overflow-y-auto px-3 pt-0.5 ${player.item ? PLAYER_ROOM : FOOT_ROOM}`}
                 onClick={(e) => { if (e.target === e.currentTarget) pick(null); }}
                 onScroll={(e) => { const el = e.currentTarget; if (el.scrollTop + el.clientHeight > el.scrollHeight - 800 && drawn < items.length) setDrawn(drawn + PAGE); }}
               >
@@ -338,8 +338,9 @@ function SideBox({ on, open, onClick, children }: { on: boolean; open?: boolean;
       aria-pressed={open === undefined ? on : undefined}
       aria-expanded={open}
       title={typeof children === 'string' ? children : undefined}
-      /* the one shown: the accent on a raised fill; the others plain until pointed at */
-      className={`flex h-8 shrink-0 items-center justify-between gap-1 rounded-md px-2.5 text-left text-[12px] ${on ? 'bg-[var(--bg-picked)] font-semibold text-[var(--accent)]' : 'font-medium text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}`}
+      /* the one shown: the accent on a raised fill; a heading over lines of its own (it folds) a lighter fill; the
+         others plain until pointed at */
+      className={`flex h-8 shrink-0 items-center justify-between gap-1 rounded-md px-2.5 text-left text-[12px] ${on ? 'bg-[var(--bg-picked)] font-semibold text-[var(--accent)]' : open !== undefined ? 'bg-[var(--bg-hover)] font-medium text-[var(--text-muted)] hover:bg-[var(--bg-pressed)] hover:text-[var(--text)]' : 'font-medium text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}`}
     >
       <span className="truncate whitespace-nowrap">{children}</span>
       {open === undefined ? null : <ChevronDown size={13} className={`shrink-0 text-[var(--text-faint)] transition-transform ${open ? 'rotate-180' : ''}`} />}
@@ -370,7 +371,7 @@ function addTip(item: LibraryItem, t: (path: string) => string): string {
 /** What a drag of `item` carries to the timeline (or the chat). */
 function dragOf(item: LibraryItem, name: string) {
   const drag = libraryDragItem(item, name);
-  return drag ? (e: React.DragEvent) => { setResourceDragData(e.dataTransfer, drag); e.dataTransfer.effectAllowed = 'copy'; } : undefined;
+  return drag ? (e: React.DragEvent) => { setResourceDragData(e.dataTransfer, drag); dragPicture(e); e.dataTransfer.effectAllowed = 'copy'; } : undefined;
 }
 
 /** A press on a card's own button: not a pick, nor a double click's add. */

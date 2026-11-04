@@ -8,7 +8,8 @@
  * preview needs the file's length, name and kind. So the file being dragged is also kept here (`peekResourceDrag`);
  * the drop itself still reads the data (`readResourceDragData`).
  *
- * Media pane: on `dragstart` call `setResourceDragData(e.dataTransfer, file)`, on `dragend` `clearResourceDrag()`.
+ * Media pane: on `dragstart` call `setResourceDragData(e.dataTransfer, file)` (and `dragPicture(e)`), on `dragend`
+ * `clearResourceDrag()`.
  */
 export const RESOURCE_DRAG_TYPE = 'application/x-openfilm-resource';
 
@@ -61,6 +62,54 @@ export function setResourceDragData(
   if (!item) return;
   data.setData(RESOURCE_DRAG_TYPE, JSON.stringify(item));
   data.setData('text/plain', item.path);
+}
+
+/* ── the picture that follows the pointer ──
+   The browser's own drag picture cannot be hidden or changed once a drag has begun, yet over the timeline the thing
+   should become the clip it will be (the timeline draws it where it lands). So the browser is given a blank one and the
+   dragged element's copy follows the pointer here, hidden while the timeline shows the clip instead. */
+
+let picture: HTMLElement | null = null;
+const BLANK = typeof Image === 'undefined' ? null : Object.assign(new Image(), { src: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7' });
+
+const follow = (e: DragEvent) => {
+  /* the last dragover of some browsers says 0, 0 */
+  if (picture && (e.clientX || e.clientY)) picture.style.translate = `${e.clientX}px ${e.clientY}px`;
+};
+const dropPicture = () => {
+  picture?.remove();
+  picture = null;
+  document.removeEventListener('dragover', follow, true);
+  document.removeEventListener('dragend', dropPicture, true);
+  document.removeEventListener('drop', dropPicture, true);
+};
+
+/**
+ * At `dragstart`: the element dragged (`e.currentTarget`) follows the pointer as it was grabbed, a little see-through,
+ * in place of the browser's picture.
+ */
+export function dragPicture(e: { currentTarget: EventTarget; dataTransfer: DataTransfer; clientX: number; clientY: number }): void {
+  const from = e.currentTarget as HTMLElement;
+  if (!BLANK || !(from instanceof HTMLElement)) return;
+  dropPicture();
+  const box = from.getBoundingClientRect();
+  const copy = from.cloneNode(true) as HTMLElement;
+  copy.style.cssText = `position:absolute;left:${box.left - e.clientX}px;top:${box.top - e.clientY}px;width:${box.width}px;height:${box.height}px;margin:0`;
+  const holder = document.createElement('div');
+  holder.setAttribute('aria-hidden', 'true');
+  holder.style.cssText = `position:fixed;left:0;top:0;z-index:2147483647;pointer-events:none;opacity:.85;translate:${e.clientX}px ${e.clientY}px`;
+  holder.append(copy);
+  document.body.append(holder);
+  picture = holder;
+  e.dataTransfer.setDragImage(BLANK, 0, 0);
+  document.addEventListener('dragover', follow, true);
+  document.addEventListener('dragend', dropPicture, true);
+  document.addEventListener('drop', dropPicture, true);
+}
+
+/** While the timeline draws the dragged thing as the clip it will be: its picture is not shown. */
+export function hideDragPicture(hidden: boolean): void {
+  if (picture) picture.style.visibility = hidden ? 'hidden' : '';
 }
 
 /**

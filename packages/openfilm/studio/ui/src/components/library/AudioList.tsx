@@ -198,13 +198,18 @@ export function MusicCard({ item, name, group, picked, player, kept, addTip, onP
   );
 }
 
+/** The room a list keeps at its foot while the player floats there: the composer's, the player's, and air. */
+export const PLAYER_ROOM = 'pb-[calc(var(--drawer-under,0px)+80px)]';
+/** The room a list keeps at its foot without the player: the composer's, and air. */
+export const FOOT_ROOM = 'pb-[calc(var(--drawer-under,0px)+12px)]';
+
 /** A library thing's picture in the player: its tile, a piece of music's cover. */
 export const libraryArt = (item: LibraryItem, playing: boolean) => <Tile item={item} playing={playing} size={40} cover={item.cat === 'music'} />;
 
 /**
  * The player under the list: what was clicked (`art` its picture, play or pause on it), and how far it has played,
- * dragged to any moment. Its controls stand above what the app keeps over the drawer's foot (--drawer-under: its
- * composer).
+ * dragged to any moment. A card floating over the list's foot, as the app's composer floats under it
+ * (--drawer-under), a little above it; the list scrolls clear of both (PLAYER_ROOM).
  */
 export function MiniPlayer<T extends Playable>({ player, name, group, art }: {
   player: Player<T>; name: string; group: string; art: (item: T, playing: boolean) => React.ReactNode;
@@ -218,8 +223,7 @@ export function MiniPlayer<T extends Playable>({ player, name, group, art }: {
   /* a short sound by tenths of a second, anything longer as minutes and seconds */
   const say = (sec: number) => (length < 10 ? `${sec.toFixed(1)}` : clock(sec));
   return (
-    /* it runs down under the composer too (its last --drawer-under px), so no strip of the drawer shows between */
-    <div className="box-content flex h-[60px] shrink-0 items-center gap-3 border-t border-[var(--border)] bg-[var(--bg-raised)] px-3 pb-[var(--drawer-under,0px)]" data-studio-host-panel="">
+    <div className="absolute inset-x-3 bottom-[calc(var(--drawer-under,0px)+8px)] z-10 flex h-[60px] items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg-raised)] px-3 shadow-[var(--shadow-lg)]" data-studio-host-panel="">
       <span className="group cursor-default" onClick={() => player.toggle(item)}>
         {art(item, player.playing)}
       </span>

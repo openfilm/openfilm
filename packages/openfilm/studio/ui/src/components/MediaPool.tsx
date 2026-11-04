@@ -47,7 +47,7 @@ import {
   X,
 } from 'lucide-react';
 import { useT } from '@/i18n';
-import { clearResourceDrag, setResourceDragData } from '@/lib/resource-drag';
+import { clearResourceDrag, dragPicture, setResourceDragData } from '@/lib/resource-drag';
 import { STUDIO_REF_TYPE, type StudioRef } from '@/lib/host';
 import {
   formatClipDuration,
@@ -1270,6 +1270,7 @@ function FileTile(p: {
          room) would lose the drag */
       onDragStart={(e) => {
         setResourceDragData(e.dataTransfer, p.library ? { ...p.file, saved: p.file.path } : p.file);
+        dragPicture(e);
         if (p.studioRef) e.dataTransfer.setData(STUDIO_REF_TYPE, JSON.stringify([p.studioRef()]));
         /* any file can go into a folder of this pane: a page's links are written again as it moves (Studio) */
         e.dataTransfer.setData(FOLDER_DRAG, p.moving().join('\n'));

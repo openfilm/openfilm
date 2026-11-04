@@ -758,11 +758,13 @@ test('a web page\'s poster and frames are drawn (it has no file to cut from)', a
   </script></body>`);
   const poster = await api(`/api/projects/${project.id}/media?what=poster&path=p.html`);
   assert.equal(poster.status, 200);
-  assert.equal(poster.headers.get('content-type'), 'image/jpeg');
+  /* a page's poster is drawn clear (pageframes.mjs), a WebP; its frames on the timeline on black, JPEG */
+  assert.equal(poster.headers.get('content-type'), 'image/webp');
   const bytes = Buffer.from(await poster.arrayBuffer());
-  assert.deepEqual([...bytes.subarray(0, 2)], [0xff, 0xd8]);
+  assert.equal(bytes.subarray(0, 4).toString('latin1'), 'RIFF');
   const frame = await api(`/api/projects/${project.id}/media?what=frame&path=p.html&ms=200&w=160`);
   assert.equal(frame.status, 200);
+  assert.equal(frame.headers.get('content-type'), 'image/jpeg');
   assert.equal((await api(`/api/projects/${project.id}/media?what=poster&path=gone.html`)).status, 404);
 });
 
