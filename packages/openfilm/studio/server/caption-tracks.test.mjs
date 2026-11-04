@@ -101,34 +101,43 @@ test('a new caption track\'s file: none, a WebVTT file as it is, an SRT file\'s 
   } finally { close(); }
 });
 
-test('a project\'s subtitles from before become its caption track once, as they looked; the old way is off after', async () => {
+test('the captions of what is said: put on top once something is said, written again after a cut while no one changed them, then theirs', async () => {
+  const transcript = 'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nHello there\n';
   const root = project([{ clips: [{ id: 'vo', src: 'assets/vo.mp3' }] }], {
     'assets/vo.mp3': 'x',
-    'assets/vo.vtt': 'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nHello there\n',
+    'assets/vo.vtt': transcript,
     '.film/subtitles.json': JSON.stringify({ ...FILM_SUBTITLE_DEFAULT, ...FILM_SUBTITLE_LOOKS.yellow, pos: { x: 0.5, y: 0.8 } }),
   });
   const { base, close } = await serve(root);
-  const retire = () => fetch(`${base}/caption-tracks/retire`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ label: 'Captions' }) }).then((r) => r.json());
+  const sync = () => fetch(`${base}/caption-tracks/sync`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ label: 'Captions' }) }).then((r) => r.json());
+  const file = () => readVtt(readFileSync(join(root, 'captions', 'Captions.vtt'), 'utf8'));
+  const cut = (at) => writeFileSync(join(root, 'film.html'), readFileSync(join(root, 'film.html'), 'utf8').replace(/<audio id="vo"[^>]*>/, `<audio id="vo" src="assets/vo.mp3" at="${at}">`));
   try {
-    const { src } = await retire();
-    assert.equal(src, 'captions/Captions.vtt');
-    const film = readFileSync(join(root, 'film.html'), 'utf8');
-    assert.match(film, /<section>\s*<track kind="captions" src="captions\/Captions\.vtt" label="Captions"/, 'on top of the film');
-    const vtt = readVtt(readFileSync(join(root, src), 'utf8'));
-    assert.equal(vtt.cues[0].text, 'Hello there');
-    assert.match(vtt.styles[0], /color: #ffe14d/, 'the look it had');
-    assert.match(vtt.regions[0], /viewportanchor:50%,80%/, 'where it sat');
-    assert.equal(JSON.parse(readFileSync(join(root, '.film/subtitles.json'), 'utf8')).on, false);
-    assert.deepEqual(await retire(), { src: null }, 'once');
+    assert.deepEqual(await sync(), { made: 'captions/Captions.vtt' });
+    assert.match(readFileSync(join(root, 'film.html'), 'utf8'), /<section>\s*<track kind="captions" src="captions\/Captions\.vtt" label="Captions"/, 'on top of the film');
+    assert.equal(file().cues[0].text, 'Hello there');
+    assert.match(file().styles[0], /color: #ffe14d/, 'in the look the subtitles had');
+    assert.deepEqual(await sync(), {}, 'nothing changed: nothing written');
+    /* the voice moved: its captions with it */
+    cut(3);
+    assert.deepEqual(await sync(), { updated: 'captions/Captions.vtt' });
+    assert.deepEqual(file().cues.map((c) => [c.start, c.end]), [[3, 5]]);
+    /* a caption changed by hand: the track is the person's, another cut leaves it */
+    writeFileSync(join(root, 'captions', 'Captions.vtt'), readFileSync(join(root, 'captions', 'Captions.vtt'), 'utf8').replace('Hello there', 'Hello, there'));
+    cut(4);
+    assert.deepEqual(await sync(), {});
+    assert.equal(file().cues[0].start, 3);
+    /* the track taken out: not put back */
+    writeFileSync(join(root, 'film.html'), readFileSync(join(root, 'film.html'), 'utf8').replace(/<section>\s*<track[^>]*>\s*<\/section>\s*/, ''));
+    assert.deepEqual(await sync(), {});
   } finally { close(); }
-  /* one that showed none: nothing made, the old way off all the same */
+  /* nothing said: nothing made */
   const none = project([{ clips: [{ id: 'vo', src: 'assets/vo.mp3' }] }], { 'assets/vo.mp3': 'x' });
   const other = await serve(none);
   try {
-    const got = await fetch(`${other.base}/caption-tracks/retire`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).then((r) => r.json());
-    assert.deepEqual(got, { src: null });
+    const got = await fetch(`${other.base}/caption-tracks/sync`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).then((r) => r.json());
+    assert.deepEqual(got, {});
     assert.equal(existsSync(join(none, 'captions')), false);
-    assert.equal(JSON.parse(readFileSync(join(none, '.film/subtitles.json'), 'utf8')).on, false);
   } finally { other.close(); }
 });
 

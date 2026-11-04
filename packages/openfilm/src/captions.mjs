@@ -21,6 +21,19 @@
 export const SPEECH_NOTE = 'NOTE Captions of what is said in the film, made again of it after cuts.';
 /** Whether a caption track's file is made of what is said (SPEECH_NOTE). @param {Vtt} vtt */
 export const madeOfSpeech = (vtt) => vtt.notes.some((n) => n.startsWith(SPEECH_NOTE));
+/** A short print of cues' times and words (FNV-1a): what they were when Studio wrote them. @param {readonly VttCue[]} cues */
+function cuesPrint(cues) {
+  let h = 0x811c9dc5;
+  for (const c of cues) {
+    const line = `${c.start.toFixed(3)}|${c.end.toFixed(3)}|${c.text}\n`;
+    for (let i = 0; i < line.length; i += 1) { h ^= line.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  }
+  return h.toString(16).padStart(8, '0');
+}
+/** The note of a file of what is said with these cues: SPEECH_NOTE and their print. @param {readonly VttCue[]} cues */
+export const speechNote = (cues) => `${SPEECH_NOTE} ${cuesPrint(cues)}`;
+/** Whether a file of what is said has its cues as Studio wrote them, not changed by hand since. @param {Vtt} vtt */
+export const untouchedSpeech = (vtt) => vtt.notes.includes(speechNote(vtt.cues));
 
 const TIME = /^(?:(\d+):)?(\d{1,2}):(\d{2})(?:[.,](\d{1,3}))?$/;
 

@@ -75,7 +75,7 @@ import { usePageChanges } from './use-page-changes';
 import { CaptionInspector } from './CaptionInspector';
 import { CaptionStage } from './CaptionStage';
 import { captionSelectionNow, captionTrackNow, configureCaptionTracks, refreshCaptionTracks, setCaptionSelection, useCaptionSelection, useCaptionTracksOf, writeCaptionTrack, writeCaptionTracksWith } from '@/lib/caption-tracks';
-import { cuePlain, madeOfSpeech, readVtt, writeVtt } from '../../../../src/captions.mjs';
+import { cuePlain, madeOfSpeech, readVtt, untouchedSpeech, writeVtt } from '../../../../src/captions.mjs';
 import { FILM_SUBTITLE_LANGUAGES } from '../../../server/film-subtitle.mjs';
 import { addCue, cueRule, placeCues, setCueRule, shifted, withIds } from '@/lib/caption-edits';
 import { cueClipId, cueEditOf, cueOf, cueStandIn, isCueClip, withCueBlocks, type KeptCue } from '@/lib/caption-blocks';
@@ -1824,7 +1824,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       if (typeof got?.text !== 'string' || !was) { toast.show(t('timeline.editFail')); return false; }
       const said = withIds(readVtt(got.text));
       if (!said.cues.length) { toast.show(t('timeline.captionsNone')); return false; }
-      let next = { ...was, cues: said.cues.map((c) => ({ ...c, settings: was.cues[0]?.settings ?? c.settings })) };
+      /* its note says what its cues are now, so it follows the cuts again from here */
+      let next = { ...was, notes: said.notes, cues: said.cues.map((c) => ({ ...c, settings: was.cues[0]?.settings ?? c.settings })) };
       for (const c of was.cues) next = setCueRule(next, `::cue(#${c.id})`, null);
       const why = await writeCaptionTrack(projectId, speechSrc, next, 'captionTrack.stepRemake');
       if (why) { toast.show(why); return false; }
@@ -1928,14 +1929,20 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     for (const f of subtitles) void newCaptionTrack(f, atMs);
     return files.filter((f) => !subtitles.includes(f));
   }, [newCaptionTrack]);
-  /* the subtitles Studio drew over the picture before caption tracks: made the project's caption track as it opens, once */
+  /* the captions of what is said kept in step with the film (server caption-tracks syncSpeechCaptions), from the
+     transcripts as they are: a voice made with its words timed is never heard again. Asked as the project opens and
+     whenever what is said changes (a voice put in, a clip cut or moved); not part of the person's undo */
+  const saidKey = subs.captions ? JSON.stringify(subs.captions.cues.map((c) => [c.startMs, c.durMs, c.text])) : null;
   React.useEffect(() => {
+    if (saidKey == null) return undefined;
     let gone = false;
-    void fetch(`/api/projects/${encodeURIComponent(projectId)}/caption-tracks/retire`, {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: t('captionTrack.fileName'), label: t('captionTrack.name') }),
-    }).then((r) => (r.ok ? r.json() : null), () => null).then((body: { src?: string | null } | null) => { if (!gone && body?.src) toast.show(t('captionTrack.retired')); });
-    return () => { gone = true; };
-  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+    const timer = window.setTimeout(() => {
+      void fetch(`/api/projects/${encodeURIComponent(projectId)}/caption-tracks/sync`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: t('captionTrack.fileName'), label: t('captionTrack.name') }),
+      }).then((r) => (r.ok ? r.json() : null), () => null).then((body: { made?: string } | null) => { if (!gone && body?.made) toast.show(t('captionTrack.autoMade')); });
+    }, 300);
+    return () => { gone = true; window.clearTimeout(timer); };
+  }, [projectId, saidKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const relinkInputRef = React.useRef<HTMLInputElement>(null);
   const relinkTarget = React.useRef<TimelineBlock | null>(null);
   const relinkBlock = React.useCallback(async (block: TimelineBlock, path: string | null) => {
@@ -4099,6 +4106,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
             captions={{
               lines: subs.captions?.cues.length ?? 0, untranscribed: subs.captions?.untranscribed.length ?? 0, making: captionsMaking || subs.transcribing, problem: subtitleProblem,
               speechTrack: speechRow?.badge ?? null, captionTrack: captionRow?.badge ?? null,
+              speechAuto: Boolean(speechSrc && cuesOf(speechSrc) && untouchedSpeech(cuesOf(speechSrc)!)),
               fromSpeech: () => void makeCaptions(), connect: () => { setSubtitleProblem(null); setSettingsOpen('models'); },
               fromFile: (file) => void newCaptionTrack(file), addOne: () => void captionHere(),
               translateFrom: translateRow?.badge ?? null, translations, translate: translateCaptions,

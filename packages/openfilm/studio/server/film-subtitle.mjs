@@ -3,7 +3,7 @@
  * Subtitle styles: one table, one function, every place that draws them.
  *
  * Before caption tracks (SPEC §1 Captions), Studio drew a project's subtitles over the picture in a style of its own;
- * a project from then has them made its caption track as it opens (caption-tracks.mjs `retireSubtitles`), and the
+ * a project from then has them made its caption track as it opens (caption-tracks.mjs `syncSpeechCaptions`), and the
  * styles here are the looks a caption track can take at once (`subtitleStyleVtt`). An export of such a project not
  * opened since burns them in or writes them as SRT / WebVTT / a transcript. Each of those builds its CSS here
  * (`filmSubtitleCss`, `filmSubtitleFrameHtml`), so what the person sees while editing is what the export draws. The

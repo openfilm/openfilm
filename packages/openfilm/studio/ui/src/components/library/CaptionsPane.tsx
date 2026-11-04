@@ -1,6 +1,8 @@
 /**
  * The library's captions, as its other categories are (SPEC §1 Captions): cards that put captions in the film. New:
- * what is said made captions, a subtitle file made a caption track, one caption typed in at the playhead. Translate: a
+ * what is said made captions (which Studio makes by itself once something is said, from the transcripts as they are,
+ * and keeps following the cuts until they are changed by hand), a subtitle file made a caption track, one caption
+ * typed in at the playhead. Translate: a
  * card for each language, the film's captions translated into it on a track of their own just above them. A card says
  * how the film stands under its name (how much is said and what has no transcript yet, the track a caption goes onto,
  * the track a language is on already); making the captions of speech again puts what is said now, after cuts, in place
@@ -26,6 +28,8 @@ export interface CaptionsActions {
   /** The caption track the captions of speech go onto again (its badge, V3), and the one a caption is added to; null: none yet. */
   speechTrack: string | null;
   captionTrack: string | null;
+  /** The captions of speech are as Studio wrote them: they follow the cuts by themselves. */
+  speechAuto: boolean;
   /** The caption track a translation is made of (the picked one's, else the speech's, else the top original), and each
       language a track is in already, by its code (`en` → V6). */
   translateFrom: string | null;
@@ -53,7 +57,7 @@ function New({ actions }: { actions: CaptionsActions }) {
   const t = useT();
   const input = React.useRef<HTMLInputElement>(null);
   const fileOf = (files: FileList | null) => [...(files ?? [])].find((f) => /\.(srt|vtt)$/i.test(f.name)) ?? null;
-  const { lines, untranscribed, problem, speechTrack, captionTrack, making } = actions;
+  const { lines, untranscribed, problem, speechTrack, captionTrack, making, speechAuto } = actions;
   const none = lines === 0 && untranscribed === 0;
   /* what is said: how much, and what has no transcript yet */
   const said = making ? t('timeline.captionsMaking')
@@ -70,8 +74,8 @@ function New({ actions }: { actions: CaptionsActions }) {
       <Grid>
         <ActionCard
           tile={<AudioLines size={22} strokeWidth={1.6} />}
-          name={speechTrack ? t('assetDrawer.captionsRemake') : t('assetDrawer.captionsSpeech')}
-          note={said}
+          name={!speechTrack ? t('assetDrawer.captionsSpeech') : speechAuto ? t('assetDrawer.captionsAuto') : t('assetDrawer.captionsRemake')}
+          note={!speechTrack || making ? said : speechAuto ? t('assetDrawer.captionsAutoNote').replace('{track}', speechTrack) : t('assetDrawer.captionsTouched')}
           tip={speechTrack ? t('assetDrawer.captionsRemakeNote').replace('{track}', speechTrack) : t('assetDrawer.captionsSpeechText')}
           disabled={making || none}
           onRun={actions.fromSpeech}
