@@ -78,7 +78,7 @@ import { captionSelectionNow, captionTrackNow, configureCaptionTracks, refreshCa
 import { cuePlain, readVtt, writeVtt } from '../../../../src/captions.mjs';
 import { FILM_SUBTITLE_LANGUAGES } from '../../../server/film-subtitle.mjs';
 import { addCue, cueRule, placeCues, withIds } from '@/lib/caption-edits';
-import { cueClipId, cueEditOf, cueStandIn, isCueClip, withCueBlocks, type KeptCue } from '@/lib/caption-blocks';
+import { cueClipId, cueEditOf, cueOf, cueStandIn, isCueClip, withCueBlocks, type KeptCue } from '@/lib/caption-blocks';
 
 import { useFilmSubtitles } from '@/lib/use-film-subtitles';
 import { DEFAULT_INSPECTOR, DOCK_GAP, DockPaneDivider, MIN_DOCK_H, MIN_INSPECTOR, MIN_STAGE_H, MIN_VIEWER, PaneDivider, usePaneSize } from './PaneDivider';
@@ -2393,7 +2393,13 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const selectStageParent = React.useCallback((loc: string, clipLoc?: string) => {
     selectStageLayers([{ loc, ...(clipLoc ? { clipLoc } : {}) }]);
   }, [selectStageLayers]);
-  const selectStageClip = React.useCallback((clipLoc: string) => { setStageElement(null); setSelectedLocs([clipLoc]); }, [setSelectedLocs]);
+  const selectStageClip = React.useCallback((clipLoc: string) => {
+    /* a caption's row in Layers: its cue picked, as a click on it on the picture does */
+    const cue = cueOf(clipLoc);
+    if (cue) { setCaptionSelection({ src: cue.src, ids: new Set([cue.id]) }); showCaptionLook(); return; }
+    setStageElement(null);
+    setSelectedLocs([clipLoc]);
+  }, [setSelectedLocs, showCaptionLook]);
   /* a marquee on the picture around several clips: the timeline selects them */
   const selectStageClips = React.useCallback((locs: readonly string[]) => { setStageElement(null); setSelectedLocs([...locs]); }, [setSelectedLocs]);
   /* ── the Layers panel: its rows select on the picture, outline there, hide, lock and restack (overrides) ── */
@@ -2403,6 +2409,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (groupKey) return (JSON.parse(groupKey) as [string, string | null][]).map(([clipId, loc]) => ({ clipId, loc }));
     return stageElement && stageElement.kind !== 'clip' ? [{ ...(stageElement.clipId ? { clipId: stageElement.clipId } : {}), loc: stageElement.loc }] : [];
   }, [groupKey, stageElement]);
+  /* the captions shown at the playhead, which the picture's stage does not list: each by its caption track's place */
+  const layerCaptions = React.useMemo(() => timelineTracks.flatMap((tr) => (tr.captions && !tr.hidden && tr.docIndex != null
+    ? tr.blocks.flatMap((b) => (b.cue && b.clipId && b.startMs <= timeMs && timeMs < b.endMs
+      ? [{ clip: b.clipId, track: tr.docIndex!, selected: Boolean(cuePick?.src === b.cue.src && cuePick.ids.has(b.cue.id)) }] : []))
+    : [])), [timelineTracks, timeMs, cuePick]);
   const askStage = React.useCallback(<T,>(op: string, args: object = {}): Promise<T | null> => (
     preview.current?.stage?.<T>(op, args) ?? Promise.resolve(null)
   ), []);
@@ -2433,9 +2444,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   }, [deleteLayers, toast]); // eslint-disable-line react-hooks/exhaustive-deps
   /* a Layers row's right-click: the picture's own menu, its layer (or clip) taken in hand there first */
   const openLayerMenu = React.useCallback((target: { clipId: string; loc?: string }, at: { x: number; y: number }) => {
+    /* a caption has no menu on the picture: the right-click picks it */
+    if (isCueClip(target.clipId)) { selectStageClip(target.clipId); return; }
     const clipLoc = blocksRef.current.find((b) => b.clipId === target.clipId)?.loc;
     if (clipLoc) stageControl.current?.openMenu({ clipLoc, ...(target.loc != null ? { loc: target.loc } : {}) }, at);
-  }, []);
+  }, [selectStageClip]);
   const restackLayers = React.useCallback((clipId: string, edits: StageArrangeResult['edits']) => {
     void editStageOverrides(edits.map(({ target, style }) => ({ element: layerElement(clipId, target.at, target.n, target.at), patch: { style } as OverrideGeometry })))
       .then((f) => { if (f) toast.show(f); });
@@ -3598,6 +3611,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                       clipOf={layerClipOf}
                       selected={layersSelected}
                       selectedClipLocs={selectedLocs}
+                      captions={layerCaptions}
                       onSelectLayers={selectLayerRows}
                       onSelectClip={selectStageClip}
                       onPoint={setPointedLayer}

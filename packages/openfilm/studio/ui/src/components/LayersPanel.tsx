@@ -1,6 +1,6 @@
 /**
  * The Layers panel: what is on the picture at the playhead as layers, the top one first. Each picture clip shown is a
- * row; a page clip opens into its layers, each level in the order the page draws it. A row selects its layer on the
+ * row, and each caption shown (a row that picks its cue, as a click on the picture does); a page clip opens into its layers, each level in the order the page draws it. A row selects its layer on the
  * picture; ⌘-clicked (Ctrl) it adds it to what is selected there or takes it away, Shift-clicked it selects the rows
  * shown from the last one clicked to it (and the picture's selection opens the rows down to each layer of it). Rows
  * selected one after another are one block, and what a selected layer holds is tinted with it. Its eye hides it, its
@@ -13,16 +13,17 @@
  */
 import React from 'react';
 import {
-  ChevronRight, Eye, EyeOff, Film, Globe, Image as ImageIcon, Lock, LockOpen, Shapes, Square, SquareDashed, Trash2, Type, X,
+  Captions, ChevronRight, Eye, EyeOff, Film, Globe, Image as ImageIcon, Lock, LockOpen, Shapes, Square, SquareDashed, Trash2, Type, X,
 } from 'lucide-react';
 import { useT } from '@/i18n';
 import {
-  layerKey, layerLines, movedOrder, moverFor, openTo, rowsBetween, sameTree, selectionTones,
-  type LayerClip, type LayerLine, type LayerRow, type LayerRowKind, type RowTone,
+  layerKey, layerLines, movedOrder, moverFor, openTo, rowsBetween, sameTree, selectionTones, withCaptions,
+  type LayerCaption, type LayerClip, type LayerLine, type LayerRow, type LayerRowKind, type RowTone,
 } from '@/lib/layers-tree';
 import type { StageArrangeResult } from './stage-menu';
 import { PANE_BAR, PANE_BTN, PANE_ICON, PANE_TITLE } from './dock-pane-bar';
 import { Tooltip } from './Tooltip';
+import { parseFilmDocLoc } from '@/lib/film';
 
 const ROW_H = 26;
 const INDENT = 12;
@@ -44,6 +45,8 @@ export interface LayersPanelProps {
   selected: readonly { clipId?: string; loc: string | null }[];
   /** The clips selected (film.html places). */
   selectedClipLocs: readonly string[];
+  /** The captions shown at the playhead (their tracks not hidden); the stage's tree has only clips. */
+  captions: readonly LayerCaption[];
   /** Select these layers together; `toggle`: each added to what is selected, or taken away (a ⌘-click). */
   onSelectLayers: (layers: readonly { clipId: string; loc: string }[], toggle: boolean) => void;
   onSelectClip: (clipLoc: string) => void;
@@ -64,9 +67,14 @@ export interface LayersPanelProps {
 
 export function LayersPanel(p: LayersPanelProps) {
   const t = useT();
-  const [clips, setClips] = React.useState<LayerClip[] | null>(null);
-  const clipsRef = React.useRef(clips);
-  clipsRef.current = clips;
+  const [stageClips, setClips] = React.useState<LayerClip[] | null>(null);
+  const clipsRef = React.useRef(stageClips);
+  clipsRef.current = stageClips;
+  const clipOf = p.clipOf;
+  const clips = React.useMemo(() => (stageClips ? withCaptions(stageClips, p.captions, (id) => {
+    const loc = clipOf(id)?.loc;
+    return loc ? parseFilmDocLoc(loc)?.track ?? null : null;
+  }) : null), [stageClips, p.captions, clipOf]);
   /* the lines the person opened or closed (lib/layers-tree: which start open) */
   const [toggled, setToggled] = React.useState<ReadonlySet<string>>(() => new Set());
   const askRef = React.useRef(p.ask);
@@ -162,6 +170,8 @@ export function LayersPanel(p: LayersPanelProps) {
 
   const isSelected = (line: LayerLine) => {
     if (!line.row) {
+      const caption = p.captions.find((c) => c.clip === line.clipId);
+      if (caption) return caption.selected;
       const loc = p.clipOf(line.clipId)?.loc;
       return !p.selected.length && Boolean(loc && p.selectedClipLocs.includes(loc));
     }
@@ -281,7 +291,7 @@ function LayerLineRow({ line, top, t, clipOf, tone, joinUp, joinDown, dragging, 
 }) {
   const row = line.row;
   const clip = row ? null : clipOf(line.clipId);
-  const Icon = row ? KIND_ICON[row.kind] : clip?.kind === 'mg' ? Globe : clip?.kind === 'video' ? Film : ImageIcon;
+  const Icon = row ? KIND_ICON[row.kind] : clip?.kind === 'mg' ? Globe : clip?.kind === 'video' ? Film : clip?.kind === 'caption' ? Captions : ImageIcon;
   const label = row ? row.label : (clip?.label ?? line.clipId);
   /* not drawn now, or hidden by the person: the row is there, dimmed (it can be shown or picked from here) */
   const dim = Boolean(row && (row.off || row.hidden));
