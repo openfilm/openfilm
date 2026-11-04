@@ -15,6 +15,14 @@ import {
 import { normalizeWavePeaks } from '@/lib/waveform-columns';
 import { useMediaImage } from '@/lib/media-queue';
 
+/** The ground a page is seen on (SourcePreview, a page's poster in MediaPool): a checkerboard in the theme's own
+    quiet tones, so what the page leaves clear is seen to be clear. */
+export const CLEAR: React.CSSProperties = {
+  backgroundColor: 'var(--bg-panel)',
+  backgroundImage: 'repeating-conic-gradient(var(--bg-pressed) 0 25%, transparent 0 50%)',
+  backgroundSize: '16px 16px',
+};
+
 /** A file's icon by kind, where there is no picture of it. */
 export const KIND_ICON: Record<WorkspaceResourceKind, LucideIcon> = {
   video: FileVideo,

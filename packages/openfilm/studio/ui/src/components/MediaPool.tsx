@@ -69,7 +69,7 @@ import {
 } from '@/lib/workspace-resources';
 import { ConfirmDialog } from './ConfirmDialog';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
-import { KIND_ICON, MediaPreview, useNearViewport } from './MediaPreview';
+import { CLEAR, KIND_ICON, MediaPreview, useNearViewport } from './MediaPreview';
 import { useMediaImage } from '@/lib/media-queue';
 import { Tooltip } from './Tooltip';
 import { retryImage } from '@/lib/retry-image';
@@ -1390,7 +1390,7 @@ function UploadTile({ upload, row }: { upload: Upload; row: boolean }) {
 
 /**
  * A web page's cover: its poster (the middle frame: a title that fades in is black on its first), else the scene
- * mark. The mark shows until the poster has loaded, so a page whose poster can't be drawn (it throws) never shows the
+ * mark, on a checkerboard where the page leaves it clear. The mark shows until the poster has loaded, so a page whose poster can't be drawn (it throws) never shows the
  * browser's broken picture while it is asked again.
  */
 function PagePoster({ file, sources }: { file: WorkspaceResource; sources: MediaSources }) {
@@ -1411,7 +1411,7 @@ function PagePoster({ file, sources }: { file: WorkspaceResource; sources: Media
       {src ? (
         <img src={src} alt="" onLoad={() => setLoaded(src)}
           onError={(e) => { setLoaded(null); retryImage(e.currentTarget, () => setFailed(src)); }}
-          className={`absolute inset-0 h-full w-full object-cover ${shown ? '' : 'invisible'}`} />
+          className={`absolute inset-0 h-full w-full object-cover ${shown ? '' : 'invisible'}`} style={CLEAR} />
       ) : null}
     </span>
   );

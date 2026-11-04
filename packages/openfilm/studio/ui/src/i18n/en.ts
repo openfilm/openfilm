@@ -904,6 +904,8 @@ export const en = {
     time: 'Time',
   },
   assetDrawer: {
+    catsMore: 'More categories',
+    catsStart: 'Back to the first',
     cat_media: 'Media',
     cat_sound: 'Sounds',
     cat_voice: 'Voices',

@@ -992,8 +992,9 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
          frame (`clip`, its id) with the person's changes in it, as the film shows them */
       const clipId = what === 'frame' ? url.searchParams.get('clip') : null;
       const look = clipId && isPage(at) ? await pageClipLook(project.path, clipId) : null;
+      /* a page's poster is drawn clear (what it leaves unpainted transparent), a frame on the timeline on black */
       const page = isPage(at) && (what === 'poster' || what === 'frame')
-        ? () => pageFrame(project.path, pages.folderUrl(project), at, what === 'poster' ? -1 : Number(url.searchParams.get('ms')), what === 'poster' ? 480 : Number(url.searchParams.get('w')), look?.overrides ?? null, look?.size ?? null).catch((e) => {
+        ? () => pageFrame(project.path, pages.folderUrl(project), at, what === 'poster' ? -1 : Number(url.searchParams.get('ms')), what === 'poster' ? 480 : Number(url.searchParams.get('w')), look?.overrides ?? null, look?.size ?? null, what === 'poster').catch((e) => {
           throw new HttpError(e instanceof PageFrameError ? 404 : 422, String(e?.message ?? e));
         })
         : null;
@@ -1008,7 +1009,9 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       if (page) {
         const tag = `"${createHash('sha1').update(jpeg).digest('hex').slice(0, 16)}"`;
         if (req.headers['if-none-match'] === tag) { res.writeHead(304, { etag: tag, 'cache-control': 'private, no-cache' }); return res.end(); }
-        res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'private, no-cache', etag: tag, 'content-length': jpeg.length });
+        /* a WebP (RIFF) when drawn clear */
+        const type = jpeg.subarray(0, 4).toString('latin1') === 'RIFF' ? 'image/webp' : 'image/jpeg';
+        res.writeHead(200, { 'content-type': type, 'cache-control': 'private, no-cache', etag: tag, 'content-length': jpeg.length });
         return res.end(jpeg);
       }
       res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'private, max-age=86400', 'content-length': jpeg.length });

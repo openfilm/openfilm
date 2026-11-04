@@ -900,6 +900,8 @@ export const ko: Words = {
     time: '시간',
   },
   assetDrawer: {
+    catsMore: '더 보기',
+    catsStart: '처음으로',
     cat_media: '소재',
     cat_sound: '효과음',
     cat_voice: '보이스',

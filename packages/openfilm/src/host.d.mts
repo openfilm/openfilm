@@ -34,7 +34,9 @@ export declare class FilmPage {
   meta: FilmMeta;
   problems: Array<{ kind: string; message: string }>;
   seek(t: number, opts?: { timeoutMs?: number }): Promise<void>;
-  capture(opts?: { format?: 'png' | 'jpeg'; quality?: number }): Promise<Buffer>;
+  capture(opts?: { format?: 'png' | 'jpeg' | 'webp'; quality?: number }): Promise<Buffer>;
+  /** What the page leaves unpainted from now on: clear (a capture keeps it transparent), else black. */
+  ground(clear: boolean): Promise<void>;
   close(): Promise<void>;
 }
 /** Serves one request for the files of `root` at `path`; false when the path leaves the folder. */

@@ -903,6 +903,8 @@ export const es: Words = {
     time: 'Duración',
   },
   assetDrawer: {
+    catsMore: 'Más categorías',
+    catsStart: 'Volver al principio',
     cat_media: 'Medios',
     cat_sound: 'Sonidos',
     cat_voice: 'Voces',

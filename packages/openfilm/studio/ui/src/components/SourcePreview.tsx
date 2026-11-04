@@ -16,7 +16,7 @@ import { exactRate, formatTimecode, snapToFrame, useTimecodeFps } from '@/lib/ti
 import { type MediaSources, type WorkspaceResource } from '@/lib/workspace-resources';
 import { keyAction } from '@/lib/keymap-store';
 import { isTypingTarget } from './typing-target';
-import { KIND_ICON, MediaPreview } from './MediaPreview';
+import { CLEAR, KIND_ICON, MediaPreview } from './MediaPreview';
 import { PANE_BTN, PANE_ICON } from './dock-pane-bar';
 import { Tooltip } from './Tooltip';
 import { ViewerBar } from './ViewerBar';
@@ -158,13 +158,6 @@ export interface SourcePreviewProps {
   /** Put the file on the film at its playhead: the part marked (null: all of it), inserted or over what is there. */
   onPlace?: (mode: 'insert' | 'overwrite', range: SourceRange | null) => void;
 }
-
-/** The ground a page is seen on: a checkerboard in the theme's own quiet tones. */
-const CLEAR: React.CSSProperties = {
-  backgroundColor: 'var(--bg-panel)',
-  backgroundImage: 'repeating-conic-gradient(var(--bg-pressed) 0 25%, transparent 0 50%)',
-  backgroundSize: '16px 16px',
-};
 
 export function SourcePreview(props: SourcePreviewProps) {
   /* a web page is previewed on its own: its own timeline from 0, driven here through Studio's bridge. Each file is a

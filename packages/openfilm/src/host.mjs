@@ -702,7 +702,7 @@ export class FilmPage {
     }
   }
 
-  /** PNG (or JPEG) of the viewport as composited. */
+  /** PNG (or JPEG, or WebP) of the viewport as composited. */
   async capture({ format = 'png', quality } = {}) {
     // Without a clip, headless Chromium returns CSS pixels; a clip at the device pixel ratio returns real pixels.
     const clip = { x: 0, y: 0, width: this.meta.width, height: this.meta.height, scale: this.scale };
@@ -711,6 +711,11 @@ export class FilmPage {
     const { data } = await inTime(this.cdp.send('Page.captureScreenshot', { format, quality, clip, fromSurface: true, optimizeForSpeed: true }),
       CAPTURE_MS, `the picture did not come within ${CAPTURE_MS / 1000} s`);
     return Buffer.from(data, 'base64');
+  }
+
+  /** What the page leaves unpainted from now on: clear (a capture keeps it transparent), else black. */
+  async ground(/** @type {boolean} */ clear) {
+    await this.cdp.send('Emulation.setDefaultBackgroundColorOverride', { color: { r: 0, g: 0, b: 0, a: clear ? 0 : 1 } });
   }
 
   async gpu() {

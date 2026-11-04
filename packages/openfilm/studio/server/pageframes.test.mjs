@@ -109,6 +109,21 @@ test('a page\'s thumbnail follows the files the page loads: a stylesheet it shar
   assert.ok(!blue.body.equals(red.body), 'the page drawn again with its new style');
 });
 
+test('a page\'s poster is drawn clear, what it leaves unpainted transparent; its frames on the timeline, on black', async () => {
+  const { project } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'Clear') } })).json();
+  writeFileSync(join(project.path, 'p.html'), '<!doctype html><body style="margin:0"><div style="margin:40px;width:200px;height:200px;background:#fc0"></div><script>window.film = { duration: 2, frame() {} };</script></body>');
+  const media = async (q) => {
+    const res = await api(`/api/projects/${project.id}/media?path=p.html&${q}`);
+    assert.equal(res.status, 200);
+    return { type: res.headers.get('content-type'), body: Buffer.from(await res.arrayBuffer()) };
+  };
+  const poster = await media('what=poster');
+  assert.equal(poster.type, 'image/webp');
+  assert.ok(poster.body.includes(Buffer.from('ALPH')), 'it keeps an alpha channel');
+  const frame = await media('what=frame&ms=500&w=160');
+  assert.equal(frame.type, 'image/jpeg');
+});
+
 test('a page clip\'s thumbnail shows the changes made in it (its overrides): another change, another picture', async () => {
   const { project } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'Tweaked') } })).json();
   writeFileSync(join(project.path, 'p.html'), '<!doctype html><body style="margin:0;background:#fff"><div id="box" style="width:960px;height:1080px;background:#f00"></div><script>window.film = { duration: 2, frame() {} };</script></body>');

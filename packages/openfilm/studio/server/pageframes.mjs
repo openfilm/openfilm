@@ -5,7 +5,8 @@
  * drawn the way an export draws it: in the headless browser, one frame. One browser for Studio, started on the first
  * request and closed after a minute without any; a few pages kept open (opening one is the slow part); one frame at a
  * time, so thumbnails never compete with the person's own preview for long. Cached in .film/cache by the page file's
- * version, the moment and the width.
+ * version, the moment and the width. Drawn on black, as the film shows a page with nothing below it; a page's poster
+ * in the media pane may be drawn clear instead (a WebP with what the page leaves unpainted transparent).
  */
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
@@ -54,26 +55,28 @@ export class PageFrameError extends Error {}
 export const FILM_PAGE = FILM_FILE;
 
 /**
- * The page `rel` of the folder served at `base` (its film-origin URL), drawn at `ms`, `width` px wide, as JPEG.
+ * The page `rel` of the folder served at `base` (its film-origin URL), drawn at `ms`, `width` px wide, as JPEG (with
+ * `clear`, as a WebP whose unpainted parts are transparent; never the whole film's, which a card shows as it plays).
  * `ms` past the page's end draws its last frame; `ms` < 0 draws the middle (its poster). `overrides`: a page clip's
  * (SPEC §1), drawn with it, so its pictures on the timeline show what was changed in it. `size`: a page clip's, the
  * CSS pixels a page without a size of its own is laid out at (SPEC §1), as the film lays it out; without one it is
  * 1920 × 1080, as a page opened on its own.
  * @param {string} root @param {string} base @param {string} rel @param {number} ms @param {number} width
- * @param {object[] | null} [overrides] @param {{ w: number, h: number } | null} [size]
+ * @param {object[] | null} [overrides] @param {{ w: number, h: number } | null} [size] @param {boolean} [clear]
  */
-export async function pageFrame(root, base, rel, ms, width, overrides = null, size = null) {
+export async function pageFrame(root, base, rel, ms, width, overrides = null, size = null, clear = false) {
+  clear &&= rel !== FILM_PAGE;
   const w = Math.max(32, Math.min(960, Math.round(width / 2) * 2 || 160));
   /* `rel` is the request's: a page of the project only, never one reached by `../` or a link out of the folder */
   const page = inProject(root, rel);
   const info = page ? await stat(page).catch(() => null) : null;
   if (!info?.isFile()) throw new PageFrameError(`${rel} is not there`);
-  /* `black`: how frames are drawn (frames drawn on white before are not reused) */
+  /* `black`: how frames are drawn (frames drawn on white before are not reused); `clear`, on nothing */
   const tweaks = overrides?.some((o) => o && typeof o === 'object' && 'at' in o) ? JSON.stringify(overrides) : '';
   const laid = size ? `${Math.round(size.w)}x${Math.round(size.h)}` : '';
-  const key = createHash('sha256').update(`black\0${rel}\0${Math.round(ms)}\0${w}${tweaks ? `\0${tweaks}` : ''}${laid ? `\0${laid}` : ''}`).digest('hex').slice(0, 24);
+  const key = createHash('sha256').update(`${clear ? 'clear' : 'black'}\0${rel}\0${Math.round(ms)}\0${w}${tweaks ? `\0${tweaks}` : ''}${laid ? `\0${laid}` : ''}`).digest('hex').slice(0, 24);
   const dir = join(root, TOOL_DIR, 'cache', 'pageframes');
-  const file = join(dir, `${key}.jpg`);
+  const file = join(dir, `${key}.${clear ? 'webp' : 'jpg'}`);
   /* a frame is good while every file the page loaded to draw it is as it was then: the page, and its styles, code,
      fonts, pictures (a page's look changes with a stylesheet it shares as much as with itself) */
   const known = await readFile(join(dir, `${key}.json`), 'utf8').then((t) => /** @type {string[]} */ (JSON.parse(t).files), () => null);
@@ -97,7 +100,7 @@ export async function pageFrame(root, base, rel, ms, width, overrides = null, si
     if (rel === FILM_PAGE) await filmCopies(root, base, info);
     /* a page drawn with tweaks is one of its own: the page kept open for another clip of the same file has none */
     const drawn = tweaks ? `${version}:${createHash('sha256').update(tweaks).digest('hex').slice(0, 12)}` : version;
-    const { jpeg, duration, loaded } = await draw(pageUrl(base, rel), ms, w, drawn, base, tweaks ? overrides : null, laid ? size : null).catch((e) => {
+    const { jpeg, duration, loaded } = await draw(pageUrl(base, rel), ms, w, drawn, base, tweaks ? overrides : null, laid ? size : null, clear).catch((e) => {
       failures.set(id, { error: e, at: Date.now() });
       if (failures.size > 500) failures.delete(failures.keys().next().value ?? '');
       throw e;
@@ -232,9 +235,10 @@ async function closeBrowser() {
 
 /**
  * Draw `url` at `ms`, `w` px wide. `loaded`: the project's files the page (and every page inside it) loaded, project
- * relative (`base`: where the project is served), so the frame is known stale when one of them changes.
+ * relative (`base`: where the project is served), so the frame is known stale when one of them changes. `clear`: on
+ * nothing rather than black, as a WebP.
  */
-function draw(/** @type {string} */ url, /** @type {number} */ ms, /** @type {number} */ w, /** @type {string} */ version, /** @type {string} */ base, /** @type {object[] | null} */ overrides = null, /** @type {{ w: number, h: number } | null} */ size = null) {
+function draw(/** @type {string} */ url, /** @type {number} */ ms, /** @type {number} */ w, /** @type {string} */ version, /** @type {string} */ base, /** @type {object[] | null} */ overrides = null, /** @type {{ w: number, h: number } | null} */ size = null, clear = false) {
   return withPage(url, w, version, size, async (page) => {
     const duration = lengthOf(page);
     const end = duration != null ? Math.max(0, duration - 1e-3) : Infinity;
@@ -251,11 +255,17 @@ function draw(/** @type {string} */ url, /** @type {number} */ ms, /** @type {nu
           override({ win: window, touched: new Map(), found: [] }, list);
         }, overrides);
       }
-      const shot = await page.capture({ format: 'jpeg', quality: 70 });
+      const shot = clear ? await clearShot(page) : await page.capture({ format: 'jpeg', quality: 70 });
       if (!jpeg || shot.length > jpeg.length) jpeg = shot;
     }
     return { jpeg: /** @type {Buffer} */ (jpeg), duration, loaded: await loadedFiles(page, base) };
   });
+}
+
+/** The page as it is now on nothing: the open page (kept for other frames) is drawn on black again after. */
+async function clearShot(/** @type {FilmPage} */ page) {
+  await page.ground(true);
+  try { return await page.capture({ format: 'webp', quality: 80 }); } finally { await page.ground(false); }
 }
 
 /** The project's files a page and the pages in it loaded (as resource timing lists them), project relative. */

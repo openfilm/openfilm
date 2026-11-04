@@ -12,7 +12,7 @@
  * it among the favorites, for every project.
  */
 import React from 'react';
-import { ChevronDown, Plus, Search, Star } from 'lucide-react';
+import { ChevronDown, ChevronsLeft, ChevronsRight, Plus, Search, Star } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import {
@@ -103,6 +103,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showSkills?.n]);
   const fold = () => { SHOWN.folded = !folded; setFolded(!folded); };
+  const bar = useSideways();
   const [rail, setRail] = React.useState(railWidth);
   /* the drawer closed: what was tried goes with it */
   React.useEffect(() => () => tryOut.current(null), []);
@@ -147,11 +148,14 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
       style={{ '--drawer-under': `${under}px` } as React.CSSProperties}>
       {/* the categories, as high as the inspector's tabs beside it (40 px) so their lines meet; they keep their own
           spacing however wide the panel is, and more than fit scroll sideways (a wheel too), fading at the edge while
-          the line under them runs whole */}
-      <div className="h-10 shrink-0 border-b border-[var(--border)]" data-studio-host-panel="">
+          the line under them runs whole; a button at the end takes them to their last (») and back to their first («),
+          for a mouse without a sideways wheel */}
+      <div className="flex h-10 shrink-0 border-b border-[var(--border)]" data-studio-host-panel="">
         <nav
+          ref={bar.ref}
+          onScroll={bar.read}
           onWheel={(e) => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) e.currentTarget.scrollLeft += e.deltaY; }}
-          className="flex h-full overflow-x-auto px-1 [mask-image:linear-gradient(to_right,black_calc(100%-20px),transparent)] [scrollbar-width:none]"
+          className={`flex h-full min-w-0 flex-1 overflow-x-auto px-1 [scrollbar-width:none] ${bar.end ? '' : '[mask-image:linear-gradient(to_right,black_calc(100%-20px),transparent)]'}`}
         >
           {CATEGORIES.map((id) => (
             <button
@@ -168,6 +172,13 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
             </button>
           ))}
         </nav>
+        {bar.over ? (
+          <button type="button" onClick={bar.toggle} title={t(bar.end ? 'assetDrawer.catsStart' : 'assetDrawer.catsMore')}
+            aria-label={t(bar.end ? 'assetDrawer.catsStart' : 'assetDrawer.catsMore')}
+            className="grid w-8 shrink-0 place-items-center text-[var(--text-muted)] hover:text-[var(--text)]">
+            {bar.end ? <ChevronsLeft size={16} /> : <ChevronsRight size={16} />}
+          </button>
+        ) : null}
       </div>
       <div className="flex min-h-0 flex-1">
         {/* as wide as the person dragged its edge (RAIL), kept for next time */}
@@ -413,6 +424,32 @@ function TemplateBadge({ item }: { item: LibraryItem }) {
       {item.slots ? `${t('assetDrawer.slots').replace('{n}', String(item.slots))} · ` : ''}{secs}s
     </span>
   );
+}
+
+/**
+ * A row that scrolls sideways: whether it holds more than it shows (`over`) and is scrolled to its end, kept as it
+ * scrolls and as it is sized; `toggle` takes it to its end, or from there back to its start.
+ */
+function useSideways() {
+  const ref = React.useRef<HTMLElement>(null);
+  const [state, setState] = React.useState({ over: false, end: false });
+  const read = React.useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    const over = el.scrollWidth > el.clientWidth + 1;
+    const end = over && el.scrollLeft + el.clientWidth >= el.scrollWidth - 1;
+    setState((s) => (s.over === over && s.end === end ? s : { over, end }));
+  }, []);
+  React.useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    read();
+    const seen = new ResizeObserver(read);
+    seen.observe(el);
+    return () => seen.disconnect();
+  }, [read]);
+  const toggle = () => ref.current?.scrollTo({ left: state.end ? 0 : ref.current.scrollWidth, behavior: 'smooth' });
+  return { ref, read, toggle, ...state };
 }
 
 function Card({ item, lang, picked, kept, square, onPick, onAdd }: {

@@ -904,6 +904,8 @@ export const zhCN: Words = {
     time: '时长',
   },
   assetDrawer: {
+    catsMore: '更多',
+    catsStart: '回到开头',
     cat_media: '素材',
     cat_sound: '音效',
     cat_voice: '配音',

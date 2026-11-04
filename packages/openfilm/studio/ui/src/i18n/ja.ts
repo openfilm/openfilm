@@ -903,6 +903,8 @@ export const ja: Words = {
     time: '時間',
   },
   assetDrawer: {
+    catsMore: 'もっと見る',
+    catsStart: '最初に戻る',
     cat_media: '素材',
     cat_sound: '効果音',
     cat_voice: 'ボイス',
