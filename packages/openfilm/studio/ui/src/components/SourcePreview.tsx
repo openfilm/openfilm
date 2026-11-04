@@ -159,6 +159,13 @@ export interface SourcePreviewProps {
   onPlace?: (mode: 'insert' | 'overwrite', range: SourceRange | null) => void;
 }
 
+/** The ground a page is seen on: a checkerboard in the theme's own quiet tones. */
+const CLEAR: React.CSSProperties = {
+  backgroundColor: 'var(--bg-panel)',
+  backgroundImage: 'repeating-conic-gradient(var(--bg-pressed) 0 25%, transparent 0 50%)',
+  backgroundSize: '16px 16px',
+};
+
 export function SourcePreview(props: SourcePreviewProps) {
   /* a web page is previewed on its own: its own timeline from 0, driven here through Studio's bridge. Each file is a
      preview of its own (keyed by its path): another one picked starts at 0, paused, with nothing of the last one's
@@ -437,14 +444,16 @@ function PagePreview({ file, sources, onClose, onPlace }: SourcePreviewProps) {
       <div ref={boxRef} className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-3 py-2.5" onClick={toggle}>
         {/* nothing to play it on (no surface for this page) is the same as a page that failed */}
         {failed || !surface ? <p className="text-[12.5px] text-[var(--text-muted)]">{t('media.cannotPreview')}</p> : (
-          <div className="relative shrink-0 overflow-hidden bg-black" style={size ? { width: size.w * scale, height: size.h * scale } : { width: 1, height: 1, opacity: 0 }}>
+          /* on a checkerboard: what the page leaves clear is seen to be clear (a page made to go over others) */
+          <div className="relative shrink-0 overflow-hidden" style={size ? { width: size.w * scale, height: size.h * scale, ...CLEAR } : { width: 1, height: 1, opacity: 0 }}>
             <iframe
               ref={frameRef}
               key={file.path}
               src={surface}
               title={file.name}
               className="pointer-events-none absolute left-0 top-0 origin-top-left border-0"
-              style={{ width: size?.w ?? laid.w, height: size?.h ?? laid.h, transform: `scale(${scale})` }}
+              /* the page's own color scheme, so the browser lays no opaque ground of its own under it */
+              style={{ width: size?.w ?? laid.w, height: size?.h ?? laid.h, transform: `scale(${scale})`, colorScheme: 'normal' }}
             />
           </div>
         )}

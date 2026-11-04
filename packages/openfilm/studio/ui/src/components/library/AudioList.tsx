@@ -203,7 +203,8 @@ export const libraryArt = (item: LibraryItem, playing: boolean) => <Tile item={i
 
 /**
  * The player under the list: what was clicked (`art` its picture, play or pause on it), and how far it has played,
- * dragged to any moment. It stands above what the app keeps over the drawer's foot (--drawer-under: its composer).
+ * dragged to any moment. Its controls stand above what the app keeps over the drawer's foot (--drawer-under: its
+ * composer).
  */
 export function MiniPlayer<T extends Playable>({ player, name, group, art }: {
   player: Player<T>; name: string; group: string; art: (item: T, playing: boolean) => React.ReactNode;
@@ -217,7 +218,8 @@ export function MiniPlayer<T extends Playable>({ player, name, group, art }: {
   /* a short sound by tenths of a second, anything longer as minutes and seconds */
   const say = (sec: number) => (length < 10 ? `${sec.toFixed(1)}` : clock(sec));
   return (
-    <div className="mb-[var(--drawer-under,0px)] flex h-[60px] shrink-0 items-center gap-3 border-t border-[var(--border)] bg-[var(--bg-raised)] px-3" data-studio-host-panel="">
+    /* it runs down under the composer too (its last --drawer-under px), so no strip of the drawer shows between */
+    <div className="box-content flex h-[60px] shrink-0 items-center gap-3 border-t border-[var(--border)] bg-[var(--bg-raised)] px-3 pb-[var(--drawer-under,0px)]" data-studio-host-panel="">
       <span className="group cursor-default" onClick={() => player.toggle(item)}>
         {art(item, player.playing)}
       </span>

@@ -111,7 +111,7 @@ export function VoicesPane({ group, query, favorites, onServices, onAll }: {
       </div>
       {/* a click on nothing lets the picked voice go */}
       <div
-        className="min-h-0 flex-1 overflow-y-auto px-3 pb-[calc(var(--drawer-under,0px)+12px)]"
+        className={`min-h-0 flex-1 overflow-y-auto px-3 ${player.item ? 'pb-3' : 'pb-[calc(var(--drawer-under,0px)+12px)]'}`}
         onClick={(e) => { if (e.target === e.currentTarget) { player.pause(); setPicked(null); } }}
         onScroll={(e) => { const el = e.currentTarget; if (el.scrollTop + el.clientHeight > el.scrollHeight - 600 && drawn < voices.length) setDrawn(drawn + PAGE); }}
       >
@@ -145,9 +145,8 @@ function useLanguageName(lang: Language) {
   }, [lang]);
 }
 
-/** The shade under a row's buttons: the app's ground, deeper than the row in either theme. */
-const SHADE = 'bg-[linear-gradient(to_right,transparent,var(--bg-app)_36px)]';
-const SHADE_HOVER = 'group-hover:bg-[linear-gradient(to_right,transparent,var(--bg-app)_36px)]';
+/** What the words fade into under a row's buttons: the row's own color (its field over the drawer), so solid */
+const SHADE_HOVER = 'group-hover:bg-[linear-gradient(to_right,transparent,var(--bg-field)_36px),linear-gradient(to_right,transparent,var(--bg-panel)_36px)]';
 
 /** A press on a row's own button: not a play, nor a double click's use. */
 const own = { onDoubleClick: (e: React.MouseEvent) => e.stopPropagation() };
@@ -174,7 +173,7 @@ function VoiceRow({ voice, service, access, showService, picked, sounding, kept,
     >
       <VoiceAvatar voice={voice} sounding={sounding} label={sounding ? t('assetDrawer.stop') : t('assetDrawer.play')} />
       {/* the words take the whole row; only a star kept holds a little room at its end */}
-      <span className={`min-w-0 ${kept ? 'pr-5' : ''}`}>
+      <span className={`min-w-0 ${kept ? 'pr-7' : ''}`}>
         <span className="flex min-w-0 items-baseline gap-1.5">
           {/* the name keeps its room; the facts after it give theirs up first */}
           <span className={`shrink-[0.2] truncate text-[12.5px] font-medium ${picked ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>{voice.name}</span>
@@ -182,9 +181,9 @@ function VoiceRow({ voice, service, access, showService, picked, sounding, kept,
         </span>
         <span className="mt-0.5 block truncate text-[11.5px] text-[var(--text-muted)]">{voice.description ?? voice.tags.join(', ')}</span>
       </span>
-      {/* what it offers, over the row's end under the pointer, the words fading out under a shade deeper than the row
-          so the buttons stand out; else a star kept */}
-      <span className={`absolute inset-y-0 right-0 flex items-center gap-1.5 rounded-r-lg pl-10 pr-2 ${picked ? SHADE : SHADE_HOVER}`}>
+      {/* what it offers, over the row's end under the pointer, the words fading out under the row's own color; else a
+          star kept */}
+      <span className={`absolute inset-y-0 right-0 flex items-center gap-1.5 rounded-r-lg pl-10 pr-2 ${SHADE_HOVER}`}>
         <button
           type="button"
           aria-label={t(kept ? 'assetDrawer.unstar' : 'assetDrawer.star')}

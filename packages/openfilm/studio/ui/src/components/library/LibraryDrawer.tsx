@@ -235,7 +235,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
               <>
               {/* a click on nothing lets the picked thing go; the player is under the list */}
               <div
-                className="min-h-0 flex-1 overflow-y-auto px-3 pb-[calc(var(--drawer-under,0px)+12px)] pt-0.5"
+                className={`min-h-0 flex-1 overflow-y-auto px-3 pt-0.5 ${player.item ? 'pb-3' : 'pb-[calc(var(--drawer-under,0px)+12px)]'}`}
                 onClick={(e) => { if (e.target === e.currentTarget) pick(null); }}
                 onScroll={(e) => { const el = e.currentTarget; if (el.scrollTop + el.clientHeight > el.scrollHeight - 800 && drawn < items.length) setDrawn(drawn + PAGE); }}
               >
