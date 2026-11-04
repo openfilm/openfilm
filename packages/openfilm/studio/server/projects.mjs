@@ -17,7 +17,7 @@
 import { moveToTrash } from './trash.mjs';
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
-import { cp, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { EMPTY_FILM } from './film.mjs';
@@ -452,7 +452,7 @@ export async function forgetProject(/** @type {string} */ id) {
  * Move the library: from now on new projects go to `to` (null: the default), and with `move`, the projects in the old
  * library go with it, each folder whole (to "Name 2" when the new library already has a "Name"). Across disks a project
  * is copied, then its old folder goes to the Trash. Anything else in the old folder stays. A project that cannot move
- * stays where it is, in the list, and is named in `failed`.
+ * stays where it is, in the list, named in `failed`, and leaves no copy behind in the new library.
  * @param {string | null} to @param {{ move?: boolean, choose: (folder: string | null) => void }} options
  */
 export async function moveLibrary(to, { move = false, choose }) {
@@ -477,12 +477,14 @@ export async function moveLibrary(to, { move = false, choose }) {
           if (/** @type {NodeJS.ErrnoException} */ (e).code !== 'EXDEV') throw e;
           try {
             await cp(folder, target, { recursive: true, errorOnExist: true, force: false, preserveTimestamps: true });
-          } catch (copying) {
-            /* half a copy is no project: it goes, the original stays */
-            if (existsSync(target)) await moveToTrash(target).catch(() => {});
-            throw copying;
+            await moveToTrash(folder);
+          } catch (failedMove) {
+            /* The copy is Studio's own, a moment old. A half copy is no project; and a trash that refuses the
+               old folder would leave a whole copy in the new library beside the original, both listed. Take
+               the copy out with rm (the trash is what just refused), keep the original, and say why it failed. */
+            if (existsSync(target)) await rm(target, { recursive: true, force: true }).catch(() => {});
+            throw failedMove;
           }
-          await moveToTrash(folder);
         }
       } catch (e) {
         failed.push({ name: basename(folder), error: /** @type {Error} */ (e).message });

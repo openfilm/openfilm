@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { syncBuiltinESMExports } from 'node:module';
+import fsPromises from 'node:fs/promises';
 import { createFolder, createProject, deleteProject, forgetProject, listFolders, listProjects, locateProject, moveFolder, moveLibrary, openProject, projectById, renameProject, ProjectError } from './projects.mjs';
 import { chooseFolder } from '../../src/locations.mjs';
 import { readFilmFile } from '../../src/film-doc.mjs';
@@ -227,6 +229,66 @@ test('moving the library with its projects: each folder whole, a name taken beco
   assert.ok(existsSync(join(to, 'film.html')), 'what was there already stays');
   assert.ok(existsSync(join(scratch, 'library', 'notes.txt')), 'what is not a project stays');
   assert.ok((await createProject('Next')).path.startsWith(real), 'new projects go to the new library');
+});
+
+/** A rename into the new library says EXDEV, as a move to another disk does: the project is copied there. */
+function acrossDisks(t, into) {
+  const real = fsPromises.rename;
+  t.mock.method(fsPromises, 'rename', async (from, to, ...rest) => {
+    if (String(to).startsWith(into)) throw Object.assign(new Error('cross-device link not permitted'), { code: 'EXDEV' });
+    return real(from, to, ...rest);
+  });
+  syncBuiltinESMExports();
+  return () => { t.mock.restoreAll(); syncBuiltinESMExports(); };
+}
+
+test('a move across disks whose old folder the trash refuses leaves one project, not two (#345)', async (t) => {
+  const a = await createProject('Alpha');
+  const into = join(scratch, 'New');
+  /* a file where the trash folder should be: moveToTrash fails, as a Recycle Bin that refuses does (409),
+     or a trash on another device (EXDEV). The copy in the new library is Studio's own and must not stay. */
+  const blocked = join(scratch, 'trash-is-a-file');
+  writeFileSync(blocked, 'not a folder');
+  const kept = process.env.OPENFILM_TRASH_DIR;
+  process.env.OPENFILM_TRASH_DIR = blocked;
+  const restore = acrossDisks(t, into);
+  try {
+    const done = await moveLibrary(into, { move: true, choose: (f) => chooseFolder('projectsFolder', f) });
+    assert.equal(done.moved, 0);
+    assert.equal(done.failed.length, 1);
+    assert.equal(done.failed[0].name, 'Alpha');
+    assert.ok(done.failed[0].error, 'the reason it could not move is told');
+    assert.equal(existsSync(join(into, 'Alpha')), false, 'no whole copy is left in the new library');
+    assert.ok(existsSync(join(a.path, 'film.html')), 'the original stays where it is');
+    const listed = await listProjects();
+    assert.equal(listed.filter((p) => p.id === a.id).length, 1, 'the project is listed once, not twice');
+    assert.equal(listed.find((p) => p.id === a.id)?.path, a.path, 'the list still points at the original');
+    assert.equal(listed.find((p) => p.id === a.id)?.missing, false);
+  } finally {
+    restore();
+    if (kept === undefined) delete process.env.OPENFILM_TRASH_DIR; else process.env.OPENFILM_TRASH_DIR = kept;
+  }
+});
+
+test('a move across disks whose old folder the trash takes is one project at its new folder', async (t) => {
+  const a = await createProject('Alpha');
+  const into = join(scratch, 'New');
+  const trashed = join(scratch, 'trashed');
+  mkdirSync(trashed, { recursive: true });
+  const kept = process.env.OPENFILM_TRASH_DIR;
+  process.env.OPENFILM_TRASH_DIR = trashed;
+  const restore = acrossDisks(t, into);
+  try {
+    const done = await moveLibrary(into, { move: true, choose: (f) => chooseFolder('projectsFolder', f) });
+    assert.deepEqual(done, { moved: 1, failed: [] });
+    assert.ok(existsSync(join(into, 'Alpha', 'film.html')), 'the copy is the project now');
+    const listed = await listProjects();
+    assert.equal(listed.filter((p) => p.id === a.id).length, 1);
+    assert.equal(listed.find((p) => p.id === a.id)?.path, join(realpathSync(into), 'Alpha'));
+  } finally {
+    restore();
+    if (kept === undefined) delete process.env.OPENFILM_TRASH_DIR; else process.env.OPENFILM_TRASH_DIR = kept;
+  }
 });
 
 test('moving the library without its projects: they stay where they are, still in the list', async () => {
