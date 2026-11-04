@@ -52,14 +52,8 @@ import {
   ArrowRightToLine,
   TriangleAlert,
   Blend,
-  Type,
   Plus,
   AudioWaveform,
-  Captions,
-  Clapperboard,
-  Image as ImageIcon,
-  Music,
-  Shapes,
 } from 'lucide-react';
 import { useT } from '@/i18n';
 import { keyAction, useKeyHint } from '@/lib/keymap-store';
@@ -290,20 +284,11 @@ function laneTone(track: TimelineTrack, selected: boolean): string {
 }
 
 /**
- * A row's mark: what it holds (its clips' kind, most of them; an empty row by its kind), as a plain icon: a video's
- * clapperboard, a still's picture, a page's shapes, a voice's microphone, a sound's waveform, music's note, a text's T,
- * a caption track's CC.
+ * A row's mark, one of two as tracks are of two kinds: picture (footage, stills, pages, text, captions: what is drawn)
+ * or sound (voices, sound effects, music).
  */
 function LaneMark({ track }: { track: TimelineTrack }) {
-  const count = new Map<string, number>();
-  for (const b of track.blocks) {
-    const kind = b.kind === 'video' && b.src && filmSrcIsStill(b.src) ? 'still' : b.kind;
-    count.set(kind, (count.get(kind) ?? 0) + 1);
-  }
-  const most = [...count].sort((a, b) => b[1] - a[1])[0]?.[0] ?? (track.role === 'audio' ? 'music' : track.role === 'video' ? 'video' : 'mg');
-  const Icon = track.captions ? Captions : track.text ? Type
-    : most === 'voice' ? Mic : most === 'sfx' ? AudioWaveform : most === 'music' ? Music
-      : most === 'video' ? Clapperboard : most === 'still' ? ImageIcon : Shapes;
+  const Icon = track.kind === 'audio' ? AudioWaveform : Film;
   return (
     /* a label, dimmer than the switches beside it, so the two read apart */
     <span className="flex items-center justify-center" style={{ width: 21, height: 14, color: 'var(--text-faint)', opacity: track.hidden ? 0.5 : 1 }}>
@@ -2584,7 +2569,7 @@ export const Timeline = React.memo(function Timeline({
     if (e.button !== 0) return;
     /* a head pressed is the targeted track */
     if (tracks[laneIndex]?.docIndex != null) setTargetLane(tracks[laneIndex]!.lane);
-    if (!onEditBlocks) return;
+    if (!onEditOps && !onEditBlocks) return;
     const fromDoc = tracks[laneIndex]?.docIndex;
     if (fromDoc == null) return;
     e.preventDefault();
@@ -2619,7 +2604,9 @@ export const Timeline = React.memo(function Timeline({
         toDoc = tracks[hoverLane]?.docIndex;
       }
       if (toDoc == null || toDoc === fromDoc) return;
-      void onEditBlocks([{
+      /* the track itself moved: a caption track has no clip of film.html to say it through */
+      if (onEditOps) { void onEditOps([{ op: 'reorder', from: fromDoc, to: toDoc }], 'history.stepTrackOrder'); return; }
+      void onEditBlocks?.([{
         loc: `film.html#${fromDoc}.0`,
         prop: 'trackOrder',
         value: { from: fromDoc, to: toDoc },
@@ -2627,7 +2614,7 @@ export const Timeline = React.memo(function Timeline({
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
-  }, [onEditBlocks, tracks, laneAtY]);
+  }, [onEditOps, onEditBlocks, tracks, laneAtY]);
 
   const clipThumbs = React.useMemo(
     () => indexClipThumbs(thumbs ?? new Map()) as ReadonlyMap<string, ReadonlyMap<number, string>>,
