@@ -943,6 +943,7 @@ export const es: Words = {
     captionsNeedTrack: "Aún no hay subtítulos: créalos o impórtalos primero y luego tradúcelos.",
     skillsInstalled: 'Instaladas',
     skillsDiscover: 'Descubrir',
+    skillAdd: 'Añadir al chat',
     skillProject: 'Este proyecto',
     skillOff: 'desactivada',
     skillTry: 'Probar',

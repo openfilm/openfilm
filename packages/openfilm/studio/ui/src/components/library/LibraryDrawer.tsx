@@ -110,7 +110,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
 
   /* the skills' line: one of the installed (Installed alone, as kept before, is all of them), else Discover */
   /* the skills: Discover (first opened), else the installed (any line of them kept before is that now) */
-  const skillLine: SkillsLine = !group || group === 'discover' ? 'discover' : 'installed';
+  const skillLine: SkillsLine = !group || group === 'discover' ? 'discover' : group === FAVORITES ? 'favorites' : 'installed';
   const q = query.trim().toLowerCase();
   const shown = (index?.items ?? []).filter((item) => item.cat === cat && (q
     ? [...Object.values(item.name), ...(item.tags ?? [])].some((n) => n?.toLowerCase().includes(q))
@@ -192,6 +192,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
             ) : cat === 'skill' ? (
               <>
                 {/* Discover first opened: OpenFilm's skills to take up; the installed in parts by whose they are (SkillsPane) */}
+                <SideBox on={skillLine === 'favorites'} onClick={() => pickGroup(FAVORITES)}>{t('assetDrawer.favorites')}</SideBox>
                 <SideBox on={skillLine === 'installed'} onClick={() => pickGroup('installed')}>{t('assetDrawer.skillsInstalled')}</SideBox>
                 <SideBox on={skillLine === 'discover'} onClick={() => pickGroup('discover')}>{t('assetDrawer.skillsDiscover')}</SideBox>
               </>
@@ -233,7 +234,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
                   />
                 </label>
                 {/* the person's own skills come in here, the app's way (a link or a folder) */}
-                {cat === 'skill' && skillLine !== 'discover' && studioHost?.skills?.add ? <ImportButton onClick={studioHost.skills.add} /> : null}
+                {cat === 'skill' && skillLine === 'installed' && studioHost?.skills?.add ? <ImportButton onClick={studioHost.skills.add} /> : null}
               </div>
               {cat !== 'skill' && cat !== 'voice' ? <SourceChips sources={sources} value={source} onChange={setSource} /> : null}
               {cat === 'skill' ? <SkillsPane line={skillLine} query={query} projectId={projectId} opened={skillOpen} onOpen={setSkillOpen} onDiscover={() => pickGroup('discover')} />

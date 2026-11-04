@@ -8,20 +8,30 @@
  * system skills (how a film is made, its media, its canvas, in the order agents are given them), the community's
  * installed, then each agent's own under that agent's name (off until let in). The person's own and the community's
  * are there with none too, as an invitation: Import, and Browse community (Discover). Import is beside the search too
- * (LibraryDrawer). Discover is a gallery of tiles to browse: cover, title, what it is for, Install.
+ * (LibraryDrawer). Each part folds under its head (kept while Studio is open). Discover is a gallery of tiles to
+ * browse: cover, title, what it is for; under the pointer a star and a "+", which names it in the chat's message (its
+ * page has Install). A star keeps a skill among the favorites (the side bar's Favorites), as the library's things are.
  */
 import React from 'react';
-import { Compass, FolderDown, Plus } from 'lucide-react';
+import { ChevronDown, Compass, FolderDown, Plus, Star } from 'lucide-react';
 import { useT } from '@/i18n';
 import { studioHost, type HostAgentId } from '@/lib/host';
+import { toggleFavorite, useLibraryFavorites } from '@/lib/library';
 import { seenSkills, sourcesApi, watchSkills, type SkillEntry } from '@/lib/project-sources';
 import { byOrder, SkillCover, SkillMark, SkillPage, useSkillWords } from '../SkillPage';
 import { SettingsSwitch } from '../settings/ui';
+import { ADD_HOVER, PANEL_ROUND, ROUND } from './AudioList';
 
 /** An official one not installed is in the catalog only; the person's own and a project's are installed already. */
 const installedOf = (skill: SkillEntry) => skill.installed !== false;
 
-export type SkillsLine = 'installed' | 'discover';
+export type SkillsLine = 'favorites' | 'installed' | 'discover';
+
+/** A skill among the library's favorites (lib/library), by its uid. */
+const starOf = (skill: SkillEntry) => `skill:${skill.uid}`;
+
+/* the parts folded, kept while Studio is open */
+const FOLDED = new Set<string>();
 
 /** One of an agent's own skills, and whether OpenFilm lets it in. */
 type AgentSkill = { name: string; description: string; allowed: boolean };
@@ -48,6 +58,10 @@ export function SkillsPane({ line, query, projectId, opened, onOpen, onDiscover 
   }, [projectId]);
 
   const installed = line === 'installed';
+  const favorites = useLibraryFavorites();
+  const starred = (skill: SkillEntry) => favorites.includes(starOf(skill));
+  const [, refold] = React.useReducer((n: number) => n + 1, 0);
+  const fold = (key: string) => { if (FOLDED.has(key)) FOLDED.delete(key); else FOLDED.add(key); refold(); };
   const agents = useAgentSkills(installed);
   const q = query.trim().toLowerCase();
   const found = skills
@@ -61,16 +75,19 @@ export function SkillsPane({ line, query, projectId, opened, onOpen, onDiscover 
   const own = agents.groups
     .map((g) => ({ ...g, skills: g.skills.filter((k) => !q || [k.name, k.description].some((w) => w.toLowerCase().includes(q))) }))
     .filter((g) => g.skills.length);
-  const install = (skill: SkillEntry) => {
-    setSkills((list) => list.map((k) => (k.uid === skill.uid ? { ...k, installed: true } : k)));
-    void sourcesApi.setSkillInstalled(skill.uid, true).catch(() => { void sourcesApi.skills(projectId).then(setSkills); });
-  };
   const turn = (skill: SkillEntry, on: boolean) => {
     setSkills((list) => list.map((k) => (k.uid === skill.uid ? (on ? { ...k, off: undefined } : { ...k, off: true as const }) : k)));
     void sourcesApi.setSkillOn(skill.uid, on).catch(() => { void sourcesApi.skills(projectId).then(setSkills); });
   };
   /* named in the message as agents know it (`as`: another of its name is beside it) */
   const tryIt = (skill: SkillEntry) => studioHost?.useSkill?.({ name: skill.as ?? skill.name, description: skill.description, title: words(skill).title, newConversation: true });
+  /* "+": named in the message being written, in this conversation */
+  const addIt = studioHost?.useSkill
+    ? (skill: SkillEntry) => studioHost?.useSkill?.({ name: skill.as ?? skill.name, description: skill.description, title: words(skill).title })
+    : undefined;
+  const tileOf = (skill: SkillEntry) => (
+    <SkillTile key={skill.uid} skill={skill} kept={starred(skill)} onOpen={() => onOpen(skill.uid)} {...(addIt ? { onAdd: () => addIt(skill) } : {})} />
+  );
   /* a page asked for by uid, or by the name agents know it by (the chat's) */
   const page = opened ? skills.find((k) => k.uid === opened) ?? skills.find((k) => (k.as ?? k.name) === opened) : undefined;
   if (page) {
@@ -80,17 +97,27 @@ export function SkillsPane({ line, query, projectId, opened, onOpen, onDiscover 
   if (line === 'discover') {
     return toInstall.length ? (
       <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[calc(var(--drawer-under,0px)+12px)] pt-0.5">
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-x-2.5 gap-y-3.5">
-          {toInstall.map((skill) => <SkillTile key={skill.uid} skill={skill} onOpen={() => onOpen(skill.uid)} onInstall={() => install(skill)} />)}
-        </div>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-x-2.5 gap-y-3.5">{toInstall.map(tileOf)}</div>
       </div>
     ) : <Empty text={t(q ? 'assetDrawer.noSkillsFound' : 'assetDrawer.allSkillsInstalled')} />;
   }
   const lineOf = (skill: SkillEntry) => (
     <SkillLine key={skill.uid} mark={<SkillMark skill={skill} />} title={words(skill).title} under={words(skill).summary}
-      tip={words(skill).summary} on={!skill.off} onOpen={() => onOpen(skill.uid)}
+      tip={words(skill).summary} on={!skill.off} onOpen={() => onOpen(skill.uid)} kept={starred(skill)} onStar={() => toggleFavorite(starOf(skill))}
       label={t(skill.off ? 'gallery.turnOn' : 'gallery.turnOff').replace('{name}', words(skill).title)} onChange={(on) => turn(skill, on)} />
   );
+  if (line === 'favorites') {
+    /* the starred: those installed as lines (their switch), those still to install as Discover's tiles */
+    const kept = found.filter(starred);
+    const lines = kept.filter(installedOf), tiles = kept.filter((k) => !installedOf(k));
+    if (!kept.length) return <Empty text={t(q ? 'assetDrawer.noSkillsFound' : 'assetDrawer.noFavorites')} />;
+    return (
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 pb-[calc(var(--drawer-under,0px)+12px)] pt-0.5">
+        {lines.length ? <div>{lines.map(lineOf)}</div> : null}
+        {tiles.length ? <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-x-2.5 gap-y-3.5">{tiles.map(tileOf)}</div> : null}
+      </div>
+    );
+  }
   const importSkill = studioHost?.skills?.add;
   type Part = { key: string; title: string; lines: React.ReactNode[]; empty?: React.ReactNode };
   const parts = ([
@@ -115,17 +142,21 @@ export function SkillsPane({ line, query, projectId, opened, onOpen, onDiscover 
   if (!parts.length) return <Empty text={t('assetDrawer.noSkillsFound')} />;
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 pb-[calc(var(--drawer-under,0px)+12px)] pt-0.5">
-      {parts.map((p) => (
-        <section key={p.key}>
-          {(
-            <h3 className="mb-1 flex items-baseline gap-1.5 px-1 text-[11.5px] font-medium text-[var(--text-muted)]">
+      {parts.map((p) => {
+        const folded = FOLDED.has(p.key) && !q;
+        return (
+          <section key={p.key}>
+            {/* its head folds it (a search shows every part) */}
+            <button type="button" onClick={() => fold(p.key)} aria-expanded={!folded}
+              className="group/head mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-left text-[11.5px] font-medium text-[var(--text-muted)] hover:text-[var(--text)]">
               {p.title}<span className="tabular-nums text-[var(--text-faint)]">{p.lines.length}</span>
-            </h3>
-          )}
-          {p.lines}
-          {!p.lines.length ? p.empty : null}
-        </section>
-      ))}
+              <ChevronDown size={13} className={`ml-auto text-[var(--text-faint)] transition-transform ${folded ? '-rotate-90' : ''}`} />
+            </button>
+            {folded ? null : p.lines}
+            {folded || p.lines.length ? null : p.empty}
+          </section>
+        );
+      })}
     </div>
   );
 }
@@ -152,20 +183,31 @@ function Empty({ text }: { text: string }) {
   return <p className="px-4 pt-12 text-center text-[12.5px] leading-relaxed text-[var(--text-faint)]">{text}</p>;
 }
 
-/** An installed skill: its mark, its title and what is under it, its switch; a click opens its page (an agent's own has none). */
-function SkillLine({ mark, title, under, tip, on, label, onChange, onOpen }: {
+/**
+ * An installed skill: its mark, its title and what is under it, its star (under the pointer, or kept) and its switch; a
+ * click opens its page (an agent's own has neither page nor star).
+ */
+function SkillLine({ mark, title, under, tip, on, label, onChange, onOpen, kept = false, onStar }: {
   mark: React.ReactNode; title: string; under: string; tip?: string; on: boolean; label: string;
-  onChange: (on: boolean) => void; onOpen?: () => void;
+  onChange: (on: boolean) => void; onOpen?: () => void; kept?: boolean; onStar?: () => void;
 }) {
+  const t = useT();
   return (
     <div role={onOpen ? 'button' : undefined} tabIndex={onOpen ? 0 : undefined} title={tip}
       onClick={onOpen} onKeyDown={(e) => { if (onOpen && e.key === 'Enter' && e.target === e.currentTarget) onOpen(); }}
-      className={`flex items-center gap-2.5 rounded-[8px] px-1 py-1.5 outline-none ${onOpen ? 'cursor-pointer hover:bg-[var(--bg-hover)] focus-visible:ring-1 focus-visible:ring-[var(--accent)]' : ''}`}>
+      className={`group flex items-center gap-2.5 rounded-[8px] px-1 py-1.5 outline-none ${onOpen ? 'cursor-pointer hover:bg-[var(--bg-hover)] focus-visible:ring-1 focus-visible:ring-[var(--accent)]' : ''}`}>
       <span className={on ? '' : 'opacity-50'}>{mark}</span>
       <div className="min-w-0 flex-1">
         <div className={`truncate text-[12.5px] font-medium leading-[17px] ${on ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>{title}</div>
         <div className={`truncate text-[11px] leading-[15px] text-[var(--text-faint)]`}>{under}</div>
       </div>
+      {onStar ? (
+        <button type="button" aria-label={t(kept ? 'assetDrawer.unstar' : 'assetDrawer.star')} aria-pressed={kept}
+          onClick={(e) => { e.stopPropagation(); onStar(); }}
+          className={`${PANEL_ROUND} ${kept ? 'grid text-[#ffd35a]' : 'hidden text-[var(--text)] group-hover:grid'}`}>
+          <Star size={11} fill={kept ? 'currentColor' : 'none'} strokeWidth={kept ? 0 : 2.2} />
+        </button>
+      ) : null}
       {/* the switch is its own: a press there does not open the page */}
       <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}><SettingsSwitch checked={on} onChange={onChange} label={label} /></span>
     </div>
@@ -204,8 +246,11 @@ function useAgentSkills(shown: boolean) {
   return { groups: shown ? groups : [], allow };
 }
 
-/** One skill to install, in Discover: its cover (its preview under the pointer) with Install over it, its title and what it is for under it. */
-function SkillTile({ skill, onOpen, onInstall }: { skill: SkillEntry; onOpen: () => void; onInstall: () => void }) {
+/**
+ * One skill to install, in Discover: its cover (its preview under the pointer), its title and what it is for under it;
+ * over the cover's corner, as a library card's, a star and a "+" that names it in the chat (Install is on its page).
+ */
+function SkillTile({ skill, kept, onOpen, onAdd }: { skill: SkillEntry; kept: boolean; onOpen: () => void; onAdd?: () => void }) {
   const t = useT();
   const { title, summary } = useSkillWords()(skill);
   const [hover, setHover] = React.useState(false);
@@ -214,8 +259,19 @@ function SkillTile({ skill, onOpen, onInstall }: { skill: SkillEntry; onOpen: ()
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} className="group min-w-0 cursor-pointer select-none outline-none">
       <div className="relative aspect-video overflow-hidden rounded-md bg-[var(--bg-field)] ring-1 ring-transparent group-hover:ring-[var(--text-faint)] group-focus-visible:ring-[var(--accent)]">
         <SkillCover key={skill.cover ?? ''} skill={skill} title={title} small playing={hover} />
-        <button type="button" onClick={(e) => { e.stopPropagation(); onInstall(); }}
-          className="absolute bottom-1 right-1 hidden h-[22px] items-center rounded-full bg-[var(--accent)] px-2.5 text-[11px] font-medium text-black shadow-md group-hover:flex">{t('assetDrawer.skillInstall')}</button>
+        <span className="absolute bottom-1 right-1 flex items-center gap-1">
+          <button type="button" aria-label={t(kept ? 'assetDrawer.unstar' : 'assetDrawer.star')} aria-pressed={kept}
+            onClick={(e) => { e.stopPropagation(); toggleFavorite(starOf(skill)); }}
+            className={`${ROUND} bg-black/55 ${kept ? 'grid text-[#ffd35a]' : 'hidden text-white group-hover:grid'}`}>
+            <Star size={11} fill={kept ? 'currentColor' : 'none'} strokeWidth={kept ? 0 : 2.2} />
+          </button>
+          {onAdd ? (
+            <button type="button" title={t('assetDrawer.skillAdd')} aria-label={t('assetDrawer.skillAdd')} onClick={(e) => { e.stopPropagation(); onAdd(); }}
+              className={`${ROUND} ${ADD_HOVER} hidden bg-black/55 text-white group-hover:grid`}>
+              <Plus size={12} strokeWidth={2.6} />
+            </button>
+          ) : null}
+        </span>
       </div>
       <div className="mt-1.5 truncate px-0.5 text-[12px] font-medium text-[var(--text-muted)] group-hover:text-[var(--text)]">{title}</div>
       <div className="truncate px-0.5 text-[10.5px] text-[var(--text-faint)]" title={summary}>{summary}</div>

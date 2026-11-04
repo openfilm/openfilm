@@ -1020,8 +1020,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
           attachFiles(filesFromTransfer(event.dataTransfer), { x: event.clientX, y: event.clientY });
         }}
         data-prompt-shell=""
-        /* over the assets drawer it floats, its shadow under it (the drawer itself has none) */
-        className={`rounded-[12px] border bg-[var(--bg-raised)] ${assetsOpen ? 'shadow-[var(--shadow-lg)]' : 'shadow-[0_2px_8px_rgba(0,0,0,0.04)]'} transition-colors duration-200 ${
+        className={`rounded-[12px] border bg-[var(--bg-raised)] shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-colors duration-200 ${
           dropping ? 'border-[var(--accent)]' : 'border-[var(--border)] focus-within:border-[var(--text-faint)]'
         }`}
       >

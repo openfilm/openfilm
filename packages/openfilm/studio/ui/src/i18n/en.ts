@@ -944,6 +944,7 @@ export const en = {
     captionsNeedTrack: "No captions yet: make or import captions first, then translate them.",
     skillsInstalled: 'Installed',
     skillsDiscover: 'Discover',
+    skillAdd: 'Add to the chat',
     skillProject: 'This project',
     skillOff: 'off',
     skillTry: 'Try',

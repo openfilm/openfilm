@@ -940,6 +940,7 @@ export const ko: Words = {
     captionsNeedTrack: "아직 자막이 없습니다. 먼저 자막을 만들거나 가져온 뒤 번역하세요.",
     skillsInstalled: '설치됨',
     skillsDiscover: '둘러보기',
+    skillAdd: '대화에 추가',
     skillProject: '이 프로젝트',
     skillOff: '꺼짐',
     skillTry: '써 보기',

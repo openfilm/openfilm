@@ -943,6 +943,7 @@ export const ja: Words = {
     captionsNeedTrack: "まだ字幕がありません。先に字幕を作るか読み込んでから翻訳してください。",
     skillsInstalled: 'インストール済み',
     skillsDiscover: '見つける',
+    skillAdd: 'チャットに追加',
     skillProject: 'このプロジェクト',
     skillOff: 'オフ',
     skillTry: '試す',

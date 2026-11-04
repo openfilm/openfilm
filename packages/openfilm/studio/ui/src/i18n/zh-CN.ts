@@ -944,6 +944,7 @@ export const zhCN: Words = {
     captionsNeedTrack: "还没有字幕：先识别或导入字幕，再翻译。",
     skillsInstalled: '已安装',
     skillsDiscover: '发现',
+    skillAdd: '放进对话',
     skillProject: '本项目',
     skillOff: '已关闭',
     skillTry: '试用',
