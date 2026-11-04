@@ -7,7 +7,10 @@ import {
   type MarkdownBlock,
   type MarkdownScan,
 } from '@openfilm/shared/markdown';
-import type { StudioRef } from '../app-bridge';
+import { app, type StudioRef } from '../app-bridge';
+import { ChatProjectContext } from '@/lib/developer';
+import { audioLinkPath } from '../../../src/chat-audio-link.mjs';
+import { AttachmentPreview, type AttachmentPreviewItem } from './AttachmentPreview';
 import { useT } from '@/i18n';
 import { agentRefPill, parseAgentRefs } from '@/lib/agent-refs';
 import { useClipSrc } from '@/lib/studio-film';
@@ -139,6 +142,7 @@ function inline(text: string): React.ReactNode[] {
     }
     if (piece.kind === 'strong') return <strong key={index} className="font-semibold">{withRefs(piece.text)}</strong>;
     if (piece.kind === 'em') return <em key={index} className="italic">{withRefs(piece.text)}</em>;
+    if (piece.kind === 'link' && audioLinkPath(piece.href)) return <AudioLink key={index} href={piece.href} text={piece.text} />;
     if (piece.kind === 'link') {
       return (
         <a
@@ -195,4 +199,39 @@ function AgentRefPill({ studioRef }: { studioRef: StudioRef }) {
       } : {})}
     />
   );
+}
+
+/** A local audition belongs to the project on disk, not to the URL of Studio's conversation page. */
+function AudioLink({ href, text }: { href: string; text: string }) {
+  const project = React.useContext(ChatProjectContext);
+  const t = useT();
+  const [item, setItem] = React.useState<AttachmentPreviewItem | null>(null);
+  const [failed, setFailed] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  const request = React.useRef(0);
+  React.useEffect(() => {
+    setItem(null); setFailed(false); setBusy(false);
+    return () => { request.current++; };
+  }, [project, href]);
+  React.useEffect(() => () => { if (item) URL.revokeObjectURL(item.url); }, [item]);
+  const open = async () => {
+    if (busy) return;
+    if (!project) { setFailed(true); return; }
+    const id = ++request.current;
+    setBusy(true);
+    setFailed(false);
+    try {
+      const audio = await app.chat.audio(project, href);
+      if (request.current !== id) return;
+      const url = URL.createObjectURL(new Blob([new Uint8Array(audio.bytes)], { type: audio.mediaType }));
+      setItem({ name: audio.name, kind: 'document', url, mediaType: audio.mediaType });
+    } catch { if (request.current === id) setFailed(true); }
+    finally { if (request.current === id) setBusy(false); }
+  };
+  return <>
+    <a href={href} aria-busy={busy} onClick={(event) => { event.preventDefault(); void open(); }}
+      className="break-all text-[var(--accent)] underline underline-offset-2 hover:opacity-80">{text}</a>
+    {failed ? <span role="alert" className="ml-1 text-[var(--err)]">{t('assets.audioPreviewFailed')}</span> : null}
+    {item ? <AttachmentPreview item={item} onClose={() => setItem(null)} /> : null}
+  </>;
 }

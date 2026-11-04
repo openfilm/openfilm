@@ -123,6 +123,7 @@ export const zhCN: Words = {
     thinking: '正在思考',
   },
   assets: {
+    audioPreviewFailed: '无法试听此音频。文件可能已丢失、无法读取或超过 32 MB。',
     close: '关闭',
     download: '下载',
     noPreview: '此类文件无法在这里预览，请下载后查看',
