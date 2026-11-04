@@ -175,7 +175,8 @@ const TIMELINE_SPARE = 48;
 const VIEWER_BESIDE_ASSETS = 440;
 const TITLE_MAX_CHARS = 56;
 /* the canvas beside the edit (components/canvas): loaded the first time it is opened */
-const CanvasView = React.lazy(() => import('./canvas/CanvasView'));
+const loadCanvas = () => import('./canvas/CanvasView');
+const CanvasView = React.lazy(loadCanvas);
 /** whether a project shows its canvas, kept on this computer by project */
 const CANVAS_KEY = 'openfilm.canvas.open';
 const canvasShown = (projectId: string) => { try { return localStorage.getItem(`${CANVAS_KEY}:${projectId}`) === '1'; } catch { return false; } };
@@ -908,11 +909,13 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (!split) return t('captionTrack.onlyCues');
     const cues = split.files.length ? await writeCaptionTracksWith(projectId, split.files) : null;
     if (typeof cues === 'string') return cues;
-    if (!split.ops.length) {
+    /* a caption track left with no cue goes, as a track left with no clip does (ops.mjs dropEmptyTracks) */
+    const filmOps: Op[] = [...split.ops, ...split.files.filter((f) => !f.next.cues.length).map((f) => ({ op: 'uncaptions' as const, src: f.src }))];
+    if (!filmOps.length) {
       if (cues) filmRecord(label ?? 'history.stepEdit', cues);
       return null;
     }
-    const why = await filmEdit(split.ops, label, quiet, cues ?? undefined);
+    const why = await filmEdit(filmOps, label, quiet, cues ?? undefined);
     if (why && cues) await cues.undo();
     return why;
   }, [filmEdit, filmRecord, projectId, t]);
@@ -1900,6 +1903,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (why) { toast.show(why); return; }
     if (picked) { setCaptionSelection({ src, ids: new Set([picked]) }); showCaptionLook(); }
   }, [projectId, totalMs, editOps, showCaptionLook, toast, t]);
+  /* the canvas's code fetched while the editor sits idle, so the first switch to it shows it at once, not a blank */
+  React.useEffect(() => { const id = window.setTimeout(() => { void loadCanvas(); }, 1500); return () => window.clearTimeout(id); }, []);
   /** A caption at the playhead (the library's captions): on the top caption track, else on a new one. */
   const captionHere = React.useCallback(async () => {
     const src = captionRow?.captions?.src;
@@ -2686,8 +2691,20 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const trackMenuExtra = React.useCallback((track: TimelineTrack) => {
     const docIndex = track.docIndex;
     const refer = docIndex == null || !studioHost?.refer ? [] : referEntry(() => { const ref = trackRef(tracksRef.current, docIndex); return ref ? [ref] : []; }, false);
-    return menuGroups(refer, tools.headMenuExtra(track));
-  }, [t, tools.headMenuExtra]); // eslint-disable-line react-hooks/exhaustive-deps
+    /* the track and all on it, one undo step: a caption track taken out of the film (its file kept for the undo), a track
+       of clips by its clips (a track with none goes, ops.mjs) */
+    const src = track.captions?.src;
+    const clips = (docIndex == null ? [] : filmRef.current?.tracks[docIndex]?.clips ?? []).map((c) => c.id);
+    const remove: ContextMenuEntry[] = docIndex == null || (!src && !clips.length) ? [] : [{
+      id: 'delete-track', label: t('timeline.deleteTrack'), danger: true,
+      disabled: Boolean(track.locked), ...(track.locked ? { hint: t('timeline.trackLocked') } : {}),
+      onSelect: () => {
+        const ops: Op[] = src ? [{ op: 'uncaptions', src }] : clips.map((clip) => ({ op: 'remove', clip }));
+        void edit(ops, 'history.stepTrackDelete').then((why) => { if (why) toast.show(why); });
+      },
+    }];
+    return menuGroups(menuGroups(refer, tools.headMenuExtra(track)), remove);
+  }, [t, tools.headMenuExtra, edit, toast]); // eslint-disable-line react-hooks/exhaustive-deps
   /* clips dragged out of the timeline onto the app's chat */
   const referBlocks = React.useCallback((blocks: TimelineBlock[]) => { for (const b of blocks) studioHost?.refer?.(refOfBlock(b)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const markedRangeRef = React.useCallback((range: FilmRange) => rangeRef(projectId, range, blocksRef.current), [projectId]);
