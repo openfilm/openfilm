@@ -275,8 +275,9 @@ const TL = {
   faint: 'var(--text-faint)',
 } as const;
 
-/* each track is a band of its own from its head across the timeline (`--tl-row`, a hairline between: .tl-row), so a
-   clip is seen to be on its track; the track of a picked clip is a shade brighter (`--tl-lane-on`) */
+/* each track is a band of its own from its head across the timeline (`--tl-row`), apart from the next by a gap of the
+   darker ground under them (`--tl-gap`), so a clip is seen to be on its track; the track of a picked clip is a shade
+   brighter (`--tl-lane-on`) */
 function laneTone(track: TimelineTrack, picked: boolean): string {
   if (picked) return 'var(--tl-lane-on)';
   /* the main track: a band deeper still, a shade toward the text (lighter in the dark, darker in the light) */
@@ -2672,7 +2673,7 @@ export const Timeline = React.memo(function Timeline({
     const targeted = targetLane === track.lane;
     /* far from the view, only its place (the one being dragged keeps all of it) */
     if ((laneIndex < nearFirst || laneIndex > nearLast) && !liftingHead) {
-      return <div key={track.lane} className="tl-row relative rounded-l-[3px]" style={{ marginTop: GAP, height: h, background: laneTone(track, lit) }} />;
+      return <div key={track.lane} className="rounded-l-[3px]" style={{ marginTop: GAP, height: h, background: laneTone(track, lit) }} />;
     }
     /* the main track is marked by its look (its band) and its hover title, not by a name or a badge that reads as a switch */
     const mainHead = Boolean(track.main) && track.index === 1;
@@ -2685,7 +2686,7 @@ export const Timeline = React.memo(function Timeline({
       /* each head is its own block with gaps between, matching its row one to one */
       <div
         key={track.lane}
-        className="tl-row relative grid w-full items-center justify-items-center rounded-l-[3px] px-0.5"
+        className="relative grid w-full items-center justify-items-center rounded-l-[3px] px-0.5"
         data-lane-reorder={canReorder ? '1' : '0'}
         data-lane-target={targeted ? '1' : '0'}
         data-lane-type={track.kind}
@@ -2760,7 +2761,6 @@ export const Timeline = React.memo(function Timeline({
   const laneSkins = React.useMemo(() => tracks.map((track) => (
     <div
       key={track.lane}
-      className="tl-row relative"
       style={{
         marginTop: GAP,
         height: rowH(track),
@@ -4117,7 +4117,8 @@ export const Timeline = React.memo(function Timeline({
           {markerRowH ? <div style={{ height: markerRowH }} /> : null}
           <div
             className="relative overflow-hidden"
-            style={{ height: `calc(100% - ${RULER_H + markerRowH}px - ${H_SCROLL_H}px)` }}
+            /* the ground the heads lie on, seen in the gaps between them as between the rows */
+            style={{ height: `calc(100% - ${RULER_H + markerRowH}px - ${H_SCROLL_H}px)`, background: 'var(--tl-gap)' }}
           >
             {/* moved with the track area's vertical scroll (onScroll), as the rows' backgrounds are; its own block
                 (flow-root), so the first head's margin stays inside it and the reorder guide's top counts from it */}
@@ -4214,7 +4215,7 @@ export const Timeline = React.memo(function Timeline({
           ) : null}
 
           {/* track area: backgrounds fixed to the view, clips scroll horizontally above them */}
-          <div className="relative min-h-0 min-w-0 flex-1" style={{ background: TL.head }}>
+          <div className="relative min-h-0 min-w-0 flex-1" style={{ background: 'var(--tl-gap)' }}>
             {hasLanes ? (
               <div
                 aria-hidden
