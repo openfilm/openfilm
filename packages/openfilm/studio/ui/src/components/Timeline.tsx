@@ -2673,7 +2673,7 @@ export const Timeline = React.memo(function Timeline({
     const targeted = targetLane === track.lane;
     /* far from the view, only its place (the one being dragged keeps all of it) */
     if ((laneIndex < nearFirst || laneIndex > nearLast) && !liftingHead) {
-      return <div key={track.lane} className="rounded-l-[3px]" style={{ marginTop: GAP, height: h, background: laneTone(track, lit) }} />;
+      return <div key={track.lane} style={{ marginTop: GAP, height: h, background: laneTone(track, lit) }} />;
     }
     /* the main track is marked by its look (its band) and its hover title, not by a name or a badge that reads as a switch */
     const mainHead = Boolean(track.main) && track.index === 1;
@@ -2686,7 +2686,7 @@ export const Timeline = React.memo(function Timeline({
       /* each head is its own block with gaps between, matching its row one to one */
       <div
         key={track.lane}
-        className="relative grid w-full items-center justify-items-center rounded-l-[3px] px-0.5"
+        className="relative grid w-full items-center justify-items-center px-0.5"
         data-lane-reorder={canReorder ? '1' : '0'}
         data-lane-target={targeted ? '1' : '0'}
         data-lane-type={track.kind}
@@ -4038,23 +4038,23 @@ export const Timeline = React.memo(function Timeline({
           ) : null}
         </div>
 
-        {/* the right side: recording first, then the switches (lib/timeline-prefs), in this order: the main-track
-            magnet, snapping and linkage */}
+        {/* the right side: recording first, then the switches (lib/timeline-prefs), in this order: snapping, the
+            main-track magnet and linkage */}
         {recorder ? <>
           <RecordButton now={recorder.now} onSave={recorder.onSave} onProblem={setNotice} />
           <span className="mx-0.5 h-4 w-px" style={{ background: TL.line }} />
         </> : null}
         {onEditOps ? <>
-          <span data-timeline-magnet={prefs.magnet ? '1' : '0'}>
-            <ToolButton onClick={() => togglePref('magnet')} active={prefs.magnet} label={t('timeline.magnet')}
-              hint={prefs.magnet ? t('timeline.magnetOn') : t('timeline.magnetOff')}>
-              <Magnet size={15} />
-            </ToolButton>
-          </span>
           <span data-timeline-snap={snap ? '1' : '0'}>
             <ToolButton onClick={() => togglePref('snap')} active={snap} label={t('timeline.snap')}
               hint={snap ? t('timeline.snapOn') : t('timeline.snapOff')}>
               <SeparatorVertical size={15} />
+            </ToolButton>
+          </span>
+          <span data-timeline-magnet={prefs.magnet ? '1' : '0'}>
+            <ToolButton onClick={() => togglePref('magnet')} active={prefs.magnet} label={t('timeline.magnet')}
+              hint={prefs.magnet ? t('timeline.magnetOn') : t('timeline.magnetOff')}>
+              <Magnet size={15} />
             </ToolButton>
           </span>
           <span data-timeline-linkage={prefs.linkage ? '1' : '0'}>

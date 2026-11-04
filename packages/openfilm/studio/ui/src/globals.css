@@ -111,9 +111,9 @@
 [data-theme='dark'] {
   color-scheme: dark;
 
-  --bg-app: #0a0a0c;
-  --bg-panel: #151517;
-  --bg-raised: #1f1f22;
+  --bg-app: #111114;
+  --bg-panel: #1a1a1d;
+  --bg-raised: #242427;
   --bg-field: rgba(240, 240, 255, 0.06);
   --bg-hover: rgba(240, 240, 255, 0.055);
   --bg-pressed: rgba(240, 240, 255, 0.1);
@@ -150,7 +150,7 @@
   --clip-text: #7f4d28;
   --clip-audio: #1c5757;
 
-  --tl-lane: #0f0f11;
+  --tl-lane: #151518;
   --tl-row: var(--bg-field);
   --tl-gap: var(--bg-panel);
   --tl-lane-on: var(--bg-pressed);
@@ -202,6 +202,13 @@ body {
 
 /* in the base layer, so a field's own selection color (a tab's name being edited) wins over it */
 @layer base {
+  /* a button that cannot be used now reads so at a glance, beside one that can: dimmed, wherever it does not dim
+     itself (a utility's own disabled look wins) */
+  button:disabled,
+  button[aria-disabled='true'] {
+    opacity: 0.38;
+  }
+
   ::selection {
     background: var(--accent-soft);
   }
