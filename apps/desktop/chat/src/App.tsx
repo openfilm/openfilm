@@ -1172,7 +1172,9 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
                 </div>
               </div>
 
-              <div ref={composerBlockRef} className={`relative flex shrink-0 flex-col px-4 pb-1.5 ${assetsOpen ? 'pt-2' : ''}`}>
+              {/* over the drawer it starts at its first card: the height it tells (setComposerHeight) is where the drawer's
+                  player ends, on the card, no strip between */}
+              <div ref={composerBlockRef} className="relative flex shrink-0 flex-col px-4 pb-1.5">
                 <div className="flex flex-col gap-2" data-composer-cards="">
                   {/* what is said apart from the conversation, each a notice on the composer (NoticeCard): Studio's
                       own trouble, the asks waiting on the person, then this conversation's */}

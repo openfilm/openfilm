@@ -36,7 +36,6 @@ import { placeMedia, type SourceRange } from '@/lib/media-place';
 import { BUILT_IN, TEXT_COMPONENT, builtInItem, cutTrack, cutsOf, fromLibrary, isTextClip, libraryBox, libraryDragItem, nameOf, onCut, placedGroup, useLibraryIndex, withLook, withRootVars, type LibraryItem } from '@/lib/library';
 import { LibraryDrawer, type LibraryActions, type SkillsRequest } from '@/components/library/LibraryDrawer';
 import { LibraryTrial } from '@/components/library/LibraryTrial';
-import { transcriptsOf } from '@/lib/transcripts';
 import { apartOnTracks, type ClipEdit } from '@/lib/film-clip-edits';
 import { mediaFetch, useMediaImages } from '@/lib/media-queue';
 import { clipboardItemsOf, clipboardNow, laneOfBlock, pasteEdit, type TimelineClipboardItem } from '@/lib/timeline-clipboard';
@@ -2023,13 +2022,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     return { ...listing, files: listing.files.filter(keep), pages: listing.pages.filter(keep) };
   }, [listing, mediaScope, libraryIndex]);
   const savedListing = useSavedListing(mediaScope === 'saved');
-  /* a video's or sound's transcript beside it (lib/transcripts), read in its inspector: the project's own files */
-  const transcriptUrl = (file: WorkspaceResource) => {
-    if (pickedSaved || !listing) return undefined;
-    const path = transcriptsOf(listing.files).of.get(file.path);
-    const vtt = path ? listing.files.find((f) => f.path === path) : undefined;
-    return vtt ? mediaSources.file(vtt) : undefined;
-  };
   const savedImport = React.useCallback((files: File[], into: string, onProgress: ImportProgress) => {
     /* in the app a dropped file's path is known: copied on this computer, not sent through the page */
     const paths = files.map((file) => studioHost?.folders?.pathOf(file) ?? '');
@@ -3921,7 +3913,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 <>
                   <PaneDivider width={inspectorShownWidth} onResize={commitInspectorWidth} containerRef={viewerRowRef} label={t('inspector.resize')} min={MIN_INSPECTOR} minRest={MIN_VIEWER} side="end" />
                   {typeof inspectorContent === 'object' ? (
-                    <ResourceInspector file={inspectorContent} url={(pickedSaved && inspectorContent === pickedMedia ? savedSources : mediaSources).file(inspectorContent)} transcript={transcriptUrl(inspectorContent)} width={inspectorShownWidth} onClose={closeInspector} />
+                    <ResourceInspector file={inspectorContent} url={(pickedSaved && inspectorContent === pickedMedia ? savedSources : mediaSources).file(inspectorContent)} width={inspectorShownWidth} onClose={closeInspector} />
                   ) : inspectorContent === 'captions' ? (
                     <CaptionInspector projectId={projectId} width={inspectorShownWidth} onClose={closeInspector} timeMs={timeMs} onSeek={seek} onTranslated={addTranslation} />
                   ) : (

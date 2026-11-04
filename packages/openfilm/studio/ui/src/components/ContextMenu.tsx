@@ -22,6 +22,7 @@ import * as React from 'react';
 import { createPortal } from 'react-dom';
 
 import { MENU_EDGE, menuPosition, menuStep } from '@/lib/menu-position';
+import { tidySeparators } from '@/lib/menu-separators';
 
 export interface ContextMenuItem {
   id: string;
@@ -57,7 +58,7 @@ function isItem(e: ContextMenuEntry): e is ContextMenuItem {
 export function ContextMenu({
   x,
   y,
-  items,
+  items: given,
   onClose,
   dense = false,
   align = 'start',
@@ -85,6 +86,7 @@ export function ContextMenu({
   /** The button that opened it: a press on it is not an outside click (the button toggles the menu itself). */
   trigger?: React.RefObject<HTMLElement | null>;
 }) {
+  const items = React.useMemo(() => tidySeparators(given), [given]);
   const ref = React.useRef<HTMLDivElement | null>(null);
   const subRef = React.useRef<HTMLDivElement | null>(null);
   const itemEls = React.useRef(new Map<string, HTMLButtonElement>());

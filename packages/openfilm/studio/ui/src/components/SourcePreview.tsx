@@ -13,12 +13,12 @@ import { useT } from '@/i18n';
 import { STILL_DROP_MS } from '@/lib/asset-timeline';
 import type { SourceRange } from '@/lib/media-place';
 import { exactRate, formatTimecode, snapToFrame, useTimecodeFps } from '@/lib/timecode';
+import { cuePlain, readVtt } from '../../../../src/captions.mjs';
 import { type MediaSources, type WorkspaceResource } from '@/lib/workspace-resources';
 import { keyAction } from '@/lib/keymap-store';
 import { isTypingTarget } from './typing-target';
 import { CLEAR, KIND_ICON, MediaPreview } from './MediaPreview';
 import { PANE_BTN, PANE_ICON } from './dock-pane-bar';
-import { TranscriptLines } from './ResourceInspector';
 import { Tooltip } from './Tooltip';
 import { ViewerBar } from './ViewerBar';
 
@@ -160,6 +160,36 @@ export interface SourcePreviewProps {
   onPlace?: (mode: 'insert' | 'overwrite', range: SourceRange | null) => void;
 }
 
+/** A WebVTT's lines as they read (a transcript, a subtitle file): each one's time, and what it says. */
+function VttLines({ url }: { url: string }) {
+  const t = useT();
+  const [lines, setLines] = React.useState<{ start: number; text: string }[] | null>(null);
+  React.useEffect(() => {
+    let current = true;
+    setLines(null);
+    fetch(url).then((r) => (r.ok ? r.text() : '')).then(
+      (text) => { if (current) setLines(readVtt(text).cues.map((c) => ({ start: c.start, text: cuePlain(c.text) }))); },
+      () => { if (current) setLines([]); },
+    );
+    return () => { current = false; };
+  }, [url]);
+  if (!lines) return null;
+  if (!lines.length) return <p className="text-[11.5px] text-[var(--text-faint)]">{t('media.transcriptEmpty')}</p>;
+  return (
+    <ol className="flex flex-col gap-1.5">
+      {lines.map((line, i) => (
+        <li key={i} className="flex gap-2 text-[12px] leading-[17px]">
+          <span className="shrink-0 tabular-nums text-[var(--text-faint)]">{clockOf(line.start)}</span>
+          <span className="min-w-0 break-words text-[var(--text)]">{line.text}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** Seconds as a line's time: 0:04, 1:12. */
+const clockOf = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+
 /** A picture or a video laid out at its own shape (`fitted`), as large as the room around it allows (its cq units). */
 const FIT = 'block shrink-0 object-contain';
 const fitted = (shape: number | null): React.CSSProperties => (shape
@@ -261,10 +291,10 @@ function MediaPreviewPane({ file, sources, onClose, onPlace }: SourcePreviewProp
             <audio key={file.path} ref={mediaRef} src={src} preload="auto" autoPlay {...mediaEvents} />
           </div>
         ) : /\.vtt$/i.test(file.name) ? (
-          /* a subtitle or transcript file of its own: its lines, as they read */
+          /* a subtitle or transcript file: its lines, as they read */
           <div className="h-full w-full max-w-[640px] overflow-y-auto py-2">
             <p className="mb-3 truncate text-[13px] font-medium text-[var(--text)]">{file.name}</p>
-            <TranscriptLines url={src} />
+            <VttLines url={src} />
           </div>
         ) : (
           /* a file Studio does not play: what it is, by its icon and name */
