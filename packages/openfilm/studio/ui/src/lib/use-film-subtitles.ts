@@ -14,7 +14,8 @@ import { historyMoved } from './project-history';
 const REFRESH_MS = 250;
 
 export interface FilmSubtitles {
-  transcribe: () => Promise<SubtitleTranscribeResult>;
+  /** `srcs`: those files alone. */
+  transcribe: (srcs?: readonly string[]) => Promise<SubtitleTranscribeResult>;
   /** Whether a transcription runs now. */
   transcribing: boolean;
   captions: FilmCaptions | null;
@@ -46,10 +47,10 @@ export function useFilmSubtitles(projectId: string): FilmSubtitles {
     return () => { stop(); if (timer) clearTimeout(timer); };
   }, [projectId, refresh]);
 
-  const transcribe = React.useCallback(async () => {
+  const transcribe = React.useCallback(async (srcs?: readonly string[]) => {
     setTranscribing(true);
     try {
-      const result = await requestSubtitleTranscription(projectId);
+      const result = await requestSubtitleTranscription(projectId, srcs);
       await refresh();
       return result;
     } finally { setTranscribing(false); }

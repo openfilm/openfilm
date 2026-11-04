@@ -34,6 +34,14 @@ function cuesPrint(cues) {
 export const speechNote = (cues) => `${SPEECH_NOTE} ${cuesPrint(cues)}`;
 /** Whether a file of what is said has its cues as Studio wrote them, not changed by hand since. @param {Vtt} vtt */
 export const untouchedSpeech = (vtt) => vtt.notes.includes(speechNote(vtt.cues));
+const CLIPS_NOTE = 'NOTE Of the clips ';
+/** The note of a file of what some clips say: their ids. @param {readonly string[]} clips */
+export const clipsNote = (clips) => `${CLIPS_NOTE}${JSON.stringify(clips)}`;
+/** The clips a file of what is said is made of (clipsNote); null: all that speak. @param {Vtt} vtt @returns {string[] | null} */
+export function speechClips(vtt) {
+  const note = vtt.notes.find((n) => n.startsWith(CLIPS_NOTE));
+  try { const ids = note ? JSON.parse(note.slice(CLIPS_NOTE.length)) : null; return Array.isArray(ids) ? ids.map(String) : null; } catch { return null; }
+}
 
 const TIME = /^(?:(\d+):)?(\d{1,2}):(\d{2})(?:[.,](\d{1,3}))?$/;
 

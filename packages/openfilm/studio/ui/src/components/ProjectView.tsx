@@ -76,8 +76,9 @@ import { CaptionInspector } from './CaptionInspector';
 import { CaptionStage } from './CaptionStage';
 import { captionSelectionNow, captionTrackNow, configureCaptionTracks, refreshCaptionTracks, setCaptionSelection, useCaptionSelection, useCaptionTracksOf, writeCaptionTrack, writeCaptionTracksWith } from '@/lib/caption-tracks';
 import { cuePlain, madeOfSpeech, readVtt, untouchedSpeech, writeVtt } from '../../../../src/captions.mjs';
-import { FILM_SUBTITLE_LANGUAGES } from '../../../server/film-subtitle.mjs';
+import { FILM_SUBTITLE_DEFAULT, FILM_SUBTITLE_LANGUAGES, FILM_SUBTITLE_LOOKS, subtitleStyleVtt } from '../../../server/film-subtitle.mjs';
 import { addCue, cueRule, placeCues, setCueRule, shifted, withIds } from '@/lib/caption-edits';
+import { lookVars, withCaptionLook } from '@/lib/caption-look';
 import { cueClipId, cueEditOf, cueOf, cueStandIn, isCueClip, withCueBlocks, type KeptCue } from '@/lib/caption-blocks';
 
 import { useFilmSubtitles } from '@/lib/use-film-subtitles';
@@ -1819,30 +1820,31 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const speechRow = captionRows.find((tr) => { const vtt = cuesOf(tr.captions!.src); return vtt ? madeOfSpeech(vtt) : false; }) ?? null;
   const captionRow = captionRows[0] ?? null;
   const speechSrc = speechRow?.captions?.src ?? null;
-  const captionsFromSpeech = React.useCallback(async (): Promise<boolean> => {
+  /** Captions of what `clips` say (null: all that speak): again on the speech's track, else on a new one; its file, or null. */
+  const captionsFromSpeech = React.useCallback(async (clips: readonly string[] | null): Promise<string | null> => {
     /* captions there already: what is said now, in their place, their look kept (a cue's own look goes with it) */
     if (speechSrc) {
-      const got = await fetch(`/api/projects/${encodeURIComponent(projectId)}/caption-tracks/speech`).then((r) => (r.ok ? r.json() : null), () => null) as { text?: string } | null;
+      const got = await fetch(`/api/projects/${encodeURIComponent(projectId)}/caption-tracks/speech${clips ? `?clips=${encodeURIComponent(clips.join(','))}` : ''}`).then((r) => (r.ok ? r.json() : null), () => null) as { text?: string } | null;
       const was = captionTrackNow(projectId, speechSrc);
-      if (typeof got?.text !== 'string' || !was) { toast.show(t('timeline.editFail')); return false; }
+      if (typeof got?.text !== 'string' || !was) { toast.show(t('timeline.editFail')); return null; }
       const said = withIds(readVtt(got.text));
-      if (!said.cues.length) { toast.show(t('timeline.captionsNone')); return false; }
+      if (!said.cues.length) { toast.show(t('timeline.captionsNone')); return null; }
       /* its note says what its cues are now, so it follows the cuts again from here */
       let next = { ...was, notes: said.notes, cues: said.cues.map((c) => ({ ...c, settings: was.cues[0]?.settings ?? c.settings })) };
       for (const c of was.cues) next = setCueRule(next, `::cue(#${c.id})`, null);
       const why = await writeCaptionTrack(projectId, speechSrc, next, 'captionTrack.stepRemake');
-      if (why) { toast.show(why); return false; }
-      return true;
+      if (why) { toast.show(why); return null; }
+      return speechSrc;
     }
     const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/caption-tracks/from-subtitles`, {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: t('captionTrack.fileName') }),
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: t('captionTrack.fileName'), ...(clips ? { clips } : {}) }),
     }).catch(() => null);
     const body = await res?.json().catch(() => ({})) as { src?: string; text?: string; error?: string } | undefined;
-    if (!res?.ok || !body?.src) { toast.show(body?.error ?? t('timeline.editFail')); return false; }
-    if (!body.text?.includes('-->')) { toast.show(t('timeline.captionsNone')); return false; }
+    if (!res?.ok || !body?.src) { toast.show(body?.error ?? t('timeline.editFail')); return null; }
+    if (!body.text?.includes('-->')) { toast.show(t('timeline.captionsNone')); return null; }
     const why = await editOps([{ op: 'captions', at: 0, captions: { src: body.src, kind: 'captions', label: t('captionTrack.name') } }], 'captionTrack.stepAuto');
-    if (why) { toast.show(why); return false; }
-    return true;
+    if (why) { toast.show(why); return null; }
+    return body.src;
   }, [projectId, speechSrc, editOps, toast, t]);
   /**
    * A caption track's translation (components/CaptionInspector) put in the film just above it, its lines a little
@@ -1874,14 +1876,14 @@ export function ProjectView({ projectId, onProject, onLeave }: {
    * WebVTT, `file`; from `atMs` on when it was dropped there), or with one caption at the playhead, picked, its words to
    * type in the inspector. One undo step.
    */
-  const newCaptionTrack = React.useCallback(async (file: File | null, atMs = 0) => {
+  const newCaptionTrack = React.useCallback(async (file: File | null, atMs = 0): Promise<string | null> => {
     let text = '';
     let picked: string | null = null;
     if (file) text = await file.text();
     else {
       const atMs = snapToFrame(timeRef.current);
       const made = atMs < totalMs - 100 ? addCue(readVtt('WEBVTT\n'), atMs / 1000, t('subtitleRow.newText'), totalMs / 1000) : null;
-      if (!made) { toast.show(t(atMs >= totalMs - 100 ? 'captionTrack.pastEnd' : 'subtitleRow.noRoom')); return; }
+      if (!made) { toast.show(t(atMs >= totalMs - 100 ? 'captionTrack.pastEnd' : 'subtitleRow.noRoom')); return null; }
       text = writeVtt(made.vtt);
       picked = made.id;
     }
@@ -1890,7 +1892,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       body: JSON.stringify({ name: file ? file.name.replace(/\.[^.]+$/, '') : t('captionTrack.fileName'), text }),
     }).catch(() => null);
     const body = await res?.json().catch(() => ({})) as { src?: string; error?: string } | undefined;
-    if (!res?.ok || !body?.src) { toast.show(body?.error ?? t('timeline.editFail')); return; }
+    if (!res?.ok || !body?.src) { toast.show(body?.error ?? t('timeline.editFail')); return null; }
     const src = body.src;
     /* dropped at a time: its captions from there on, their words' times with them */
     const by = file && atMs > 0 ? snapToFrame(atMs) / 1000 : 0;
@@ -1900,8 +1902,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       await fetch(`/api/projects/${encodeURIComponent(projectId)}/caption-tracks/file`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ src, text: later }) }).catch(() => null);
     }
     const why = await editOps([{ op: 'captions', at: 0, captions: { src, kind: 'captions', label: file ? file.name.replace(/\.[^.]+$/, '') : t('captionTrack.name') } }], file ? 'captionTrack.stepImport' : 'captionTrack.stepNew');
-    if (why) { toast.show(why); return; }
+    if (why) { toast.show(why); return null; }
     if (picked) { setCaptionSelection({ src, ids: new Set([picked]) }); showCaptionLook(); }
+    return src;
   }, [projectId, totalMs, editOps, showCaptionLook, toast, t]);
   /* the canvas's code fetched while the editor sits idle, so the first switch to it shows it at once, not a blank */
   React.useEffect(() => { const id = window.setTimeout(() => { void loadCanvas(); }, 1500); return () => window.clearTimeout(id); }, []);
@@ -1912,22 +1915,30 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const why = await addCaption(src, timeRef.current);
     if (why) toast.show(why);
   }, [captionRow, newCaptionTrack, addCaption, toast]);
-  /* the library's Translate: the captions translated are the picked track's, else the speech's, else the top original;
-     each language a track is in already, by its code */
-  const languageOf = (tr: TimelineTrack) => film.film?.tracks[tr.docIndex!]?.captions?.srclang;
-  const translateRow = captionRows.find((tr) => tr.captions?.src === cuePick?.src) ?? speechRow ?? captionRows.find((tr) => !languageOf(tr)) ?? null;
-  const translations = Object.fromEntries(captionRows.flatMap((tr) => { const lang = languageOf(tr); return lang && tr.badge ? [[lang, tr.badge]] : []; }));
-  const translateSrc = translateRow?.captions?.src ?? null;
-  const translateCaptions = React.useCallback(async (language: string): Promise<{ error: string; connect: boolean } | null> => {
-    if (!translateSrc) return { error: '', connect: false };
+  /** A caption track's captions translated into `language`, on a track just above it (the library's New captions). */
+  const translateTrack = React.useCallback(async (src: string, language: string) => {
     const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/caption-tracks/translate`, {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ src: translateSrc, language }),
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ src, language }),
     }).catch(() => null);
     const body = await res?.json().catch(() => ({})) as { src?: string; error?: string; code?: string } | undefined;
-    if (!res?.ok || !body?.src) return { error: body?.error ?? 'network', connect: body?.code === 'no-translator' };
-    const why = await addTranslation(translateSrc, body.src, language);
-    return why ? { error: why, connect: false } : null;
-  }, [projectId, translateSrc, addTranslation]);
+    if (!res?.ok || !body?.src) {
+      toast.show(body?.code === 'no-translator' ? t(studioHost?.agents ? 'timeline.subtitleTranslateAgent' : 'timeline.subtitleTranslateConnect') : t('timeline.subtitleTranslateFailed'));
+      return;
+    }
+    const why = await addTranslation(src, body.src, language);
+    if (why) toast.show(why);
+  }, [projectId, addTranslation, toast, t]);
+  /* the track a caption template goes on: the picked one, else the speech's, else the top one */
+  const templateRow = captionRows.find((tr) => tr.captions?.src === cuePick?.src) ?? speechRow ?? captionRow;
+  const templateSrc = templateRow?.captions?.src ?? null;
+  const captionTemplate = React.useCallback(async (id: string, edited: boolean) => {
+    const vtt = templateSrc ? captionTrackNow(projectId, templateSrc) : null;
+    const look = FILM_SUBTITLE_LOOKS[id as keyof typeof FILM_SUBTITLE_LOOKS];
+    if (!templateSrc || !vtt || !look) { toast.show(t('assetDrawer.captionsNeedTrack')); return; }
+    const vars = lookVars(subtitleStyleVtt({ ...FILM_SUBTITLE_DEFAULT, ...look } as never).css);
+    const why = await writeCaptionTrack(projectId, templateSrc, withCaptionLook(vtt, vars, edited), 'captionTrack.stepLook');
+    toast.show(why ?? t('assetDrawer.captionsTemplated').replace('{name}', t(`assetDrawer.captionLook_${id}`)).replace('{track}', templateRow?.badge ?? ''));
+  }, [projectId, templateSrc, templateRow, toast, t]);
   /** Subtitle files (SRT, WebVTT) among files dropped on the timeline or the picture: each a caption track from `atMs`. */
   const takeSubtitleFiles = React.useCallback((files: File[], atMs: number): File[] => {
     const subtitles = files.filter((f) => /\.(srt|vtt)$/i.test(f.name));
@@ -1937,6 +1948,18 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* the captions of what is said kept in step with the film (server caption-tracks syncSpeechCaptions), from the
      transcripts as they are: a voice made with its words timed is never heard again. Asked as the project opens and
      whenever what is said changes (a voice put in, a clip cut or moved); not part of the person's undo */
+  /* the media the film's words come from: their clips are marked on the timeline */
+  const transcribedSrcs = React.useMemo(() => new Set((subs.captions?.cues ?? []).flatMap((c) => (c.src ? [c.src.replace(/#.*$/, '')] : []))), [subs.captions]);
+  /* the clips that speak, for the library's New captions to choose from: with a transcript, or wanting one */
+  const heardClips = React.useMemo(() => {
+    const wanting = new Set(subs.captions?.untranscribed ?? []);
+    return timelineTracks.flatMap((tr) => (tr.muted || tr.hidden ? [] : tr.blocks.flatMap((b) => {
+      const src = b.src?.replace(/#.*$/, '');
+      if (!b.clipId || !src || b.cue) return [];
+      const transcribed = transcribedSrcs.has(src);
+      return transcribed || wanting.has(src) ? [{ clipId: b.clipId, name: b.title || src, src, startMs: b.startMs, endMs: b.endMs, transcribed }] : [];
+    })));
+  }, [timelineTracks, transcribedSrcs, subs.captions]);
   const saidKey = subs.captions ? JSON.stringify(subs.captions.cues.map((c) => [c.startMs, c.durMs, c.text])) : null;
   React.useEffect(() => {
     if (saidKey == null) return undefined;
@@ -3496,22 +3519,28 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* captions of what is said (the library's captions): what went wrong, shown there; with no service to transcribe, it opens Services */
   const [subtitleProblem, setSubtitleProblem] = React.useState<{ text: string; connect: boolean } | null>(null);
   const [captionsMaking, setCaptionsMaking] = React.useState(false);
-  const makeCaptions = React.useCallback(async () => {
+  /** The library's New captions: what the chosen clips say, translated too when asked. */
+  const makeCaptions = React.useCallback(async ({ clips, translate }: { clips: readonly string[]; translate: string | null }) => {
     setSubtitleProblem(null);
     setCaptionsMaking(true);
     try {
-      /* the speech with no transcript yet is transcribed first; what has one is used as it is, and made captions even
-         when the rest cannot be transcribed (which the library then says, and why) */
-      if (subs.captions?.untranscribed.length) {
-        const r = await subs.transcribe();
+      const chosen = heardClips.filter((h) => clips.includes(h.clipId));
+      /* the chosen clips with no transcript yet are transcribed first; those with one are used as they are (a voice made
+         with its words timed is never heard again), and made captions even when the rest cannot be transcribed (which
+         the library then says, and why) */
+      const need = [...new Set(chosen.filter((h) => !h.transcribed).map((h) => h.src))];
+      if (need.length) {
+        const r = await subs.transcribe(need);
         if (!r.ok) {
           setSubtitleProblem({ text: r.error ?? '', connect: !!r.needsTranscriber });
-          if (!subs.captions.cues.length) return;
+          if (!chosen.some((h) => h.transcribed)) return;
         }
       }
-      await captionsFromSpeech();
+      /* all of them: the captions follow whatever speaks from now on; some: those alone */
+      const src = await captionsFromSpeech(chosen.length === heardClips.length ? null : chosen.map((h) => h.clipId));
+      if (src && translate) await translateTrack(src, translate);
     } finally { setCaptionsMaking(false); }
-  }, [subs, captionsFromSpeech]);
+  }, [subs, heardClips, captionsFromSpeech, translateTrack]);
   const [desktopOpen, setDesktopOpen] = React.useState(false);
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const history = useProjectHistory(projectId, { onError: toast.showError, beforeChange: film.settled });
@@ -4017,6 +4046,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     flashRange={flashRange}
                     onRangeChange={setMarkedRange}
                     trackMenuExtra={trackMenuExtra}
+                    transcribed={transcribedSrcs}
                     {...(studioHost?.refer ? {
                       onReferBlocks: referBlocks, rangeRef: markedRangeRef, onReferRuler: referRuler,
                     } : {})}
@@ -4121,12 +4151,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
           <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--bg-panel)]">
           <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} actions={library.actions} under={hostAssets.bottom}
             captions={{
-              lines: subs.captions?.cues.length ?? 0, untranscribed: subs.captions?.untranscribed.length ?? 0, making: captionsMaking || subs.transcribing, problem: subtitleProblem,
-              speechTrack: speechRow?.badge ?? null, captionTrack: captionRow?.badge ?? null,
+              heard: heardClips, making: captionsMaking || subs.transcribing, problem: subtitleProblem,
+              speechTrack: speechRow?.badge ?? null, captionTrack: captionRow?.badge ?? null, templateTrack: templateRow?.badge ?? null,
               speechAuto: Boolean(speechSrc && cuesOf(speechSrc) && untouchedSpeech(cuesOf(speechSrc)!)),
-              fromSpeech: () => void makeCaptions(), connect: () => { setSubtitleProblem(null); setSettingsOpen('models'); },
-              fromFile: (file) => void newCaptionTrack(file), addOne: () => void captionHere(),
-              translateFrom: translateRow?.badge ?? null, translations, translate: translateCaptions,
+              make: (o) => void makeCaptions(o), connect: () => { setSubtitleProblem(null); setSettingsOpen('models'); },
+              fromFile: (file, translate) => void newCaptionTrack(file).then((src) => (src && translate ? translateTrack(src, translate) : undefined)),
+              addOne: () => void captionHere(), template: (id, edited) => void captionTemplate(id, edited),
             }}
             onServices={() => setSettingsOpen('models')} projectId={projectId} showSkills={skillsShown} />
           </div>

@@ -53,10 +53,12 @@ export async function fetchFilmCaptions(projectId: string, signal?: AbortSignal)
 /** How making subtitles went: `needsTranscriber` when no service can transcribe (the error says so). */
 export type SubtitleTranscribeResult = { ok: boolean; error?: string; needsTranscriber?: boolean };
 
-/** Transcribe the speech heard in the film that has no transcript yet (each gets a WebVTT beside it). */
-export async function requestSubtitleTranscription(projectId: string): Promise<SubtitleTranscribeResult> {
+/** Transcribe the speech heard in the film that has no transcript yet (each gets a WebVTT beside it); `srcs`: those files alone. */
+export async function requestSubtitleTranscription(projectId: string, srcs?: readonly string[]): Promise<SubtitleTranscribeResult> {
   try {
-    const res = await fetch(subtitlesApi(projectId, 'subtitles/transcribe'), { method: 'POST' });
+    const res = await fetch(subtitlesApi(projectId, 'subtitles/transcribe'), {
+      method: 'POST', ...(srcs ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify({ srcs }) } : {}),
+    });
     const body = await res.json().catch(() => null) as { failed?: { error: string }[]; error?: string; code?: string } | null;
     if (!res.ok) return { ok: false, error: body?.failed?.[0]?.error ?? body?.error ?? `HTTP ${res.status}`, ...(body?.code === 'no-transcriber' ? { needsTranscriber: true } : {}) };
     return body?.failed?.length ? { ok: false, error: body.failed[0]!.error } : { ok: true };

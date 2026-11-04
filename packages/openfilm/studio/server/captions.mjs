@@ -396,7 +396,8 @@ export const CONNECT_TRANSCRIBER = 'Connect a service that transcribes in Studio
  *                              subtitle of the line (a cue's `part`); empty text takes it out)
  *   GET  subtitles             → { style: FilmSubtitleStyle | null } (null: never changed)
  *   PUT  subtitles             { style } → { style } (as kept)
- *   POST subtitles/transcribe  → { transcribed, failed } for the speech heard with no transcript yet; 409 { error, code:
+ *   POST subtitles/transcribe  { srcs? } → { transcribed, failed } for the speech heard with no transcript yet (of
+ *                              those files alone, when given); 409 { error, code:
  *                              'no-transcriber' } when no service can
  *   POST subtitles/translate   { language } → translateFilmSubtitles' result (502 when every voice failed);
  *                              409 { error, code: 'no-translator' } when no provider can translate
@@ -432,9 +433,11 @@ export async function captionRoutes(req, res, root, rest, { translate = async ()
     const controller = new AbortController();
     res.once('close', () => { if (!res.writableEnded) controller.abort(); });
     const { untranscribed } = await filmCaptions(root);
+    const { srcs } = /** @type {{ srcs?: unknown }} */ (await readJson(req).catch(() => ({})));
+    const only = Array.isArray(srcs) ? new Set(srcs.map(String)) : null;
     /** @type {{ transcribed: string[], failed: { src: string, error: string }[] }} */
     const out = { transcribed: [], failed: [] };
-    for (const src of untranscribed) {
+    for (const src of untranscribed.filter((s) => !only || only.has(s))) {
       /* one made since the file changed is kept, unless it outlasts the file (filmCaptions): then it is not its own */
       if (await transcriptIsCurrent(root, src) && !(await outlastsItsFile(root, src))) continue;
       if (!transcribe) throw new HttpError(409, CONNECT_TRANSCRIBER, { code: 'no-transcriber' });

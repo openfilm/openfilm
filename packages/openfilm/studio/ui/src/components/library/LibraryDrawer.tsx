@@ -198,9 +198,9 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
               </>
             ) : cat === 'captions' ? (
               <>
-                {/* New first opened: the cards that put captions in; then the languages they are translated into */}
-                <SideBox on={group !== 'translate'} onClick={() => pickGroup('')}>{t('assetDrawer.captionsNewLine')}</SideBox>
-                <SideBox on={group === 'translate'} onClick={() => pickGroup('translate')}>{t('assetDrawer.captionsTranslateLine')}</SideBox>
+                {/* New captions first opened: a caption track made; then the templates its captions take */}
+                <SideBox on={group !== 'templates'} onClick={() => pickGroup('')}>{t('assetDrawer.captionsNewLine')}</SideBox>
+                <SideBox on={group === 'templates'} onClick={() => pickGroup('templates')}>{t('assetDrawer.captionsTemplates')}</SideBox>
               </>
             ) : (
               <>
@@ -220,7 +220,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
           </nav>
         </div>
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col" data-studio-host-panel={cat === 'media' ? undefined : ''}>
-          {cat === 'media' ? media : cat === 'captions' ? <CaptionsPane line={group === 'translate' ? 'translate' : 'new'} actions={captions} /> : (
+          {cat === 'media' ? media : cat === 'captions' ? <CaptionsPane line={group === 'templates' ? 'templates' : 'new'} actions={captions} /> : (
             <>
               {/* a skill's page has its own way back instead */}
               <div className="flex gap-2 px-3 pb-2 pt-2.5" hidden={cat === 'skill' && skillOpen != null}>

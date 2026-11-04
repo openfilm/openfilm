@@ -14,6 +14,7 @@
 import React from 'react';
 import { flushSync } from 'react-dom';
 import {
+  Captions,
   ClipboardPaste,
   Copy,
   CopyPlus,
@@ -566,6 +567,8 @@ export interface TimelineProps {
   blockMenuExtra?: (blocks: readonly TimelineBlock[]) => ContextMenuEntry[];
   /** The menu of a track's head (right-clicked); without entries the head has no menu. */
   trackMenuExtra?: (track: TimelineTrack) => ContextMenuEntry[];
+  /** The media files whose words the film's captions come from (a voice with its transcript): their clips say so by their name. */
+  transcribed?: ReadonlySet<string>;
   /** Clips dragged out of the timeline onto the panel of the app around Studio (its chat): handed to it, not moved. */
   onReferBlocks?: (blocks: TimelineBlock[]) => void;
   /** The range marked on the ruler (the editor keeps it): drawn as a band across the tracks. */
@@ -939,6 +942,7 @@ export const Timeline = React.memo(function Timeline({
   tracks,
   blockMenuExtra,
   trackMenuExtra,
+  transcribed,
   onReferBlocks,
   range,
   flashRange,
@@ -3189,6 +3193,10 @@ export const Timeline = React.memo(function Timeline({
                   {/* pinned to the left of the view so a clip wider than the screen still says what it is (pinLabels,
                       on scroll: scrolling rebuilds nothing) */}
                   <span className="flex min-w-0 items-center gap-1" data-pin={left} data-pin-max={width - 48}>
+                    {/* its words are the film's captions' source (its transcript) */}
+                    {block.src && transcribed?.has(block.src.replace(/#.*$/, '')) ? (
+                      <Captions data-clip-transcribed="" className="h-3 w-3 shrink-0 text-white/90" strokeWidth={2} aria-label={t('timeline.hasTranscript')} />
+                    ) : null}
                     <span className={`min-w-0 truncate font-medium leading-none text-white/90 ${textRow ? 'text-[11px]' : 'text-[10px]'}`}>
                       {textRow ? block.words ?? block.title : block.title}
                     </span>
@@ -3453,7 +3461,7 @@ export const Timeline = React.memo(function Timeline({
     openBlockMenu, openLaneMenu, onEditBlocks, collapseIfClick, selectOne, setSelected, clipElements, thumbWindow, view.width,
     chatClip, chatDraft, placedOf, pickForTrim, gap, withLinked, runSplit, trackOverlay,
     fadeOfBlock, fadeDrag, startFade, volumeDrag, startVolume, transitions, transitionDrag, pickedTransition, onPickTransition, onTransition, startTransitionResize,
-    nearFirst, nearLast, speedOn, hoveredBlock, onEnterCompound, snap, allBlocks, onSeek, totalMs,
+    nearFirst, nearLast, speedOn, hoveredBlock, onEnterCompound, snap, allBlocks, onSeek, totalMs, transcribed,
   ]);
 
   const tickMarks = React.useMemo(() => ticks.map(({ ms, label }) => {
