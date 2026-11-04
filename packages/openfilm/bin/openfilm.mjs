@@ -57,8 +57,9 @@ openfilm skill remove <name>
 
   Checks what OpenFilm needs here and prints a report to paste into an issue: OpenFilm's and Node's versions, the
   system, which agent ran the command, Studio, ffmpeg, the browser films are drawn in and its graphics, the data and
-  projects folders, npm, and the last errors in Studio's log. Paths under your home folder read ~; no keys, accounts
-  or projects are in it. Exit status 1 when something needs fixing; the report says what.`,
+  projects folders, how much the projects' .film folders hold, npm, and the last errors in Studio's log. Paths under
+  your home folder read ~; no keys, accounts or projects are in it. Exit status 1 when something needs fixing; the
+  report says what.`,
   look: `openfilm look [what] [t | a-b]
 
   what   the project (default), a web page (.html), or a media file (video, image, sound)

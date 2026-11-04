@@ -19,7 +19,7 @@
  * agent reads a skill. The desktop app's chat offers the same list (apps/desktop).
  */
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { cp, mkdir, rename, rm } from 'node:fs/promises';
+import { cp, mkdir, readdir, rename, rm, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -447,6 +447,26 @@ export function folderSize(dir) {
     }
   };
   walk(dir);
+  return total;
+}
+
+/**
+ * The same walk, read without holding the event loop. `doctor` runs inside Studio too (Settings → Developer's Copy
+ * report and the diagnostics file): a library on a network drive or a cold disk would hold the whole app for seconds
+ * if the folders were read synchronously. The synchronous `folderSize` stays for the CLI's skill preview, which is
+ * called synchronously by the desktop app and its tests.
+ * @param {string} dir @returns {Promise<number>}
+ */
+export async function folderSizeAsync(dir) {
+  let total = 0;
+  let entries = [];
+  try { entries = await readdir(dir, { withFileTypes: true }); } catch { return 0; }
+  for (const e of entries) {
+    if (e.name === '.git') continue;
+    const p = join(dir, e.name);
+    if (e.isDirectory()) total += await folderSizeAsync(p);
+    else { try { total += (await stat(p)).size; } catch { /* gone */ } }
+  }
   return total;
 }
 
