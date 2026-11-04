@@ -703,7 +703,7 @@ export interface TimelineProps {
   /** The toolbar's Add marker (left of split); M does the same. */
   onAddMarker?: () => void;
   /** The toolbar's record button (components/RecordButton): sound from the microphone, put on at the playhead. */
-  recorder?: Pick<RecordButtonProps, 'now' | 'onSave'>;
+  recorder?: Pick<RecordButtonProps, 'now' | 'onSave' | 'voiceOver'>;
   /** The ruler's own right-click menu, at a moment (film ms): adding a marker there. */
   rulerMenu?: (atMs: number) => ContextMenuEntry[];
   /** Drawn on each row, over its clips (the clips' markers). */
@@ -4049,7 +4049,7 @@ export const Timeline = React.memo(function Timeline({
         {/* the right side: recording first, then the switches (lib/timeline-prefs), in this order: snapping, the
             main-track magnet and linkage */}
         {recorder ? <>
-          <RecordButton now={recorder.now} onSave={recorder.onSave} onProblem={setNotice} />
+          <RecordButton now={recorder.now} onSave={recorder.onSave} voiceOver={recorder.voiceOver} onProblem={setNotice} />
           <span className="mx-0.5 h-4 w-px" style={{ background: TL.line }} />
         </> : null}
         {onEditOps ? <>

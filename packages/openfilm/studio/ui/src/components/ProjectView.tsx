@@ -54,6 +54,7 @@ import { LoadBoundary } from './canvas/LoadBoundary';
 import { splitHalves } from '@/lib/timeline-split';
 import { assetDropInsert, assetRunInsert, assetRunMs, pendingDropOf, soundLaneHit, withPendingBlocks, type AssetDropTarget, type AssetLaneHit, type AssetRunInsert, type PendingDrop } from '@/lib/asset-timeline';
 import { isComputerFileDrag, type ResourceDragItem } from '@/lib/resource-drag';
+import { useLibraryVoices, useServices, voiceAccess } from '@/lib/library-voices';
 import { ladderStepMs, THUMB_CELL_PX, thumbAnchorTimes } from '@/lib/thumb-cache';
 import { clipThumbId, overridesToken } from '@/lib/thumb-frame';
 import { useLoadedThumbs } from '@/lib/use-loaded-thumbs';
@@ -3086,11 +3087,45 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   }, [importAndPlace, takeSubtitleFiles]);
   /* a sound recorded with the timeline's record button: where the playhead was as recording began, on a sound track
      with room there */
+  /* beside it, voice-over in the voices of the services the person connected (lib/library-voices), made by Studio's
+     `get tts` as an agent's is (its words timed beside it: its captions come by themselves) and put there the same way */
+  const openServices = React.useRef<() => void>(() => {});
+  const libraryVoices = useLibraryVoices();
+  const voiceServices = useServices();
+  const voiceChoices = React.useMemo(() => {
+    const access = voiceAccess(libraryVoices?.providers ?? [], voiceServices);
+    const named = new Map((libraryVoices?.providers ?? []).map((p) => [p.id, p.name]));
+    return (libraryVoices?.voices ?? []).filter((v) => access[v.provider]).slice(0, 300)
+      .map((v) => ({ key: `${v.provider}:${v.id}`, name: v.name, note: [named.get(v.provider), v.language].filter(Boolean).join(' · '), voice: v, access: access[v.provider]! }));
+  }, [libraryVoices, voiceServices]);
+  const makeVoiceOver = React.useCallback(async (key: string, text: string, atMs: number): Promise<string | null> => {
+    const choice = voiceChoices.find((c) => c.key === key);
+    const folder = loaded?.project.path;
+    if (!choice || !folder) return t('timeline.editFail');
+    const res = await fetch('/api/get', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        folder, verb: 'tts', via: choice.access.via, ...(choice.access.models[0] ? { model: choice.access.models[0] } : {}),
+        args: { text, voice: choice.voice.id, out: `vo-${Date.now().toString(36)}` },
+      }),
+    }).catch(() => null);
+    const body = await res?.json().catch(() => null) as { ok?: boolean; text?: string } | null;
+    if (!body?.ok) return body?.text ?? t('timeline.editFail');
+    let made: { src?: string; dur?: number } | null = null;
+    try { made = JSON.parse(body.text ?? '') as { src?: string; dur?: number }; } catch { made = null; }
+    if (!made?.src) return t('timeline.editFail');
+    const durMs = Math.round((made.dur ?? 0) * 1000) || undefined;
+    const items = [{ path: made.src, name: made.src.replace(/^.*\//, ''), kind: 'audio', ...(durMs ? { durationMs: durMs } : {}) } as ResourceDragItem];
+    const plan = assetRunInsert(items, tracksRef.current, soundLaneHit(tracksRef.current, atMs, assetRunMs(items)), atMs);
+    if ('error' in plan) return plan.error === 'locked' ? t('timeline.trackLocked') : t('timeline.dropNotClip');
+    return edit(plan.inserts.map((i): Op => ({ op: 'insert', clip: i.element as never, at: i.at, ...(i.track != null ? { track: i.track } : {}) })), 'history.stepDrop');
+  }, [voiceChoices, loaded, edit, t]);
   const recorder = React.useMemo(() => ({
     now: () => snapToFrame(timeRef.current),
     onSave: (file: File, atMs: number) => importAndPlace([file], (items) => (
       assetRunInsert(items, tracksRef.current, soundLaneHit(tracksRef.current, atMs, assetRunMs(items)), atMs))),
-  }), [importAndPlace]);
+    voiceOver: { voices: voiceChoices, make: makeVoiceOver, connect: () => openServices.current() },
+  }), [importAndPlace, voiceChoices, makeVoiceOver]);
   /* on the picture: at the playhead, pictures on a new track on top, sounds on a sound track */
   const dropFilesOnPicture = React.useCallback((all: File[]) => {
     const atMs = snapToFrame(timeRef.current);
@@ -3551,6 +3586,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* the library's skills as the app's chat asked to show them (LibraryDrawer `showSkills`) */
   const [skillsShown, setSkillsShown] = React.useState<SkillsRequest | null>(null);
   const [settingsOpen, setSettingsOpen] = useSettings();
+  openServices.current = () => setSettingsOpen('models');
   /* captions of what is said (the library's captions): what went wrong, shown there; with no service to transcribe, it opens Services */
   const [subtitleProblem, setSubtitleProblem] = React.useState<{ text: string; connect: boolean } | null>(null);
   const [captionsMaking, setCaptionsMaking] = React.useState(false);
