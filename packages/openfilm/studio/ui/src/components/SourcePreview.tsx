@@ -18,6 +18,7 @@ import { keyAction } from '@/lib/keymap-store';
 import { isTypingTarget } from './typing-target';
 import { CLEAR, KIND_ICON, MediaPreview } from './MediaPreview';
 import { PANE_BTN, PANE_ICON } from './dock-pane-bar';
+import { TranscriptLines } from './ResourceInspector';
 import { Tooltip } from './Tooltip';
 import { ViewerBar } from './ViewerBar';
 
@@ -258,6 +259,12 @@ function MediaPreviewPane({ file, sources, onClose, onPlace }: SourcePreviewProp
             <MediaPreview file={file} sources={sources} />
             {duration > 0 ? <span className="pointer-events-none absolute inset-y-0 w-px bg-white/90" style={{ left: `${(time / duration) * 100}%` }} /> : null}
             <audio key={file.path} ref={mediaRef} src={src} preload="auto" autoPlay {...mediaEvents} />
+          </div>
+        ) : /\.vtt$/i.test(file.name) ? (
+          /* a subtitle or transcript file of its own: its lines, as they read */
+          <div className="h-full w-full max-w-[640px] overflow-y-auto py-2">
+            <p className="mb-3 truncate text-[13px] font-medium text-[var(--text)]">{file.name}</p>
+            <TranscriptLines url={src} />
           </div>
         ) : (
           /* a file Studio does not play: what it is, by its icon and name */

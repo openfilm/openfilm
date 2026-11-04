@@ -76,6 +76,7 @@ import { retryImage } from '@/lib/retry-image';
 import { boxBetween, boxHits, boxPick, moveTargets, pickItem, type Box } from '@/lib/media-selection';
 import { barLayout, type BarWords } from '@/lib/media-bar';
 import { byName, folderFaces } from '@/lib/media-folders';
+import { transcriptsOf } from '@/lib/transcripts';
 
 type Filter = 'all' | 'video' | 'image' | 'audio' | 'page' | 'other';
 type SortKey = 'name' | 'time' | 'duration' | 'type';
@@ -274,13 +275,15 @@ export function MediaPool({
   const inMedia = React.useCallback((path: string) => path.startsWith(`${root}/`), [root]);
   const relDir = (rel: string) => (rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : '');
 
+  /* a video's or sound's transcripts are its own (lib/transcripts): not listed, the file marked instead */
+  const transcripts = React.useMemo(() => transcriptsOf(media?.files ?? []), [media]);
   const allFiles = React.useMemo(() => {
     if (!media) return null;
     /* every file, of any kind: a document or a model is material too (the agent can make a film of it); Studio
        plays and previews only pictures, videos, sounds and pages */
-    const files = media.files.filter((f) => !hiddenDir(relDir(assetRel(f.path))));
+    const files = media.files.filter((f) => !hiddenDir(relDir(assetRel(f.path))) && !transcripts.hidden.has(f.path));
     return [...media.pages, ...files];
-  }, [media, assetRel]);
+  }, [media, assetRel, transcripts]);
 
   /* every folder under assets/ but a tool's (fonts) */
   const folders = React.useMemo(() => (media ? media.dirs.filter((dir) => !hiddenDir(dir)) : []), [media]);
@@ -1014,6 +1017,7 @@ export function MediaPool({
                 typeText={item.file.bundle ? t(`saved.kind_${item.file.bundle.kind}`) : item.file.kind === 'mg' ? t('assets.kindPage') : extOf(item.file.name).toUpperCase()}
                 library={inSaved}
                 {...(item.file.bundle?.props ? { componentMark: t('saved.component') } : {})}
+                {...(transcripts.of.has(item.file.path) ? { transcriptMark: t('media.transcriptMark'), transcriptLabel: t('media.transcriptLabel').replace('{path}', transcripts.of.get(item.file.path)!) } : {})}
                 onMenu={(e) => menuFor(item, e)}
                 onRename={(name) => void rename(item.file.path, name, false)}
                 onCancelRename={() => setRenaming(null)}
@@ -1254,6 +1258,9 @@ function FileTile(p: {
   library?: boolean;
   /** A bundle of Saved that offers properties: the word that marks it a component. */
   componentMark?: string;
+  /** A video or sound with a transcript beside it (lib/transcripts): its mark, and what it says under the pointer. */
+  transcriptMark?: string;
+  transcriptLabel?: string;
 }) {
   const bundle = p.file.bundle;
   return (
@@ -1326,6 +1333,10 @@ function FileTile(p: {
           ) : null}
           {p.file.proxy && p.file.proxy.state !== 'ready' && p.file.proxy.state !== 'failed' ? (
             <span className="absolute inset-x-0 bottom-0 z-10 h-1" title={p.proxyLabel}><UploadBar ratio={p.file.proxy.state === 'making' ? p.file.proxy.ratio ?? 0 : -1} /></span>
+          ) : null}
+          {/* a video or sound with its transcript (not listed: it is the file's own) */}
+          {p.transcriptMark ? (
+            <span className="absolute left-1 top-1 z-10 rounded bg-black/65 px-1 text-[9.5px] font-semibold leading-[15px] text-white/90" title={p.transcriptLabel}>{p.transcriptMark}</span>
           ) : null}
           {/* a bundle of Saved: a component, and how many clips a group holds */}
           {p.componentMark ? (

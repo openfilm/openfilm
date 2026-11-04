@@ -10,7 +10,7 @@ import { Pause, Play, Plus, Star } from 'lucide-react';
 import { useLanguage, useT, type Language } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import { toggleFavorite } from '@/lib/library';
-import { ADD_HOVER, FOOT_ROOM, MiniPlayer, PANEL_ROUND, PLAYER_ROOM, usePlayer } from './AudioList';
+import { ADD_HOVER, FOOT_ROOM, MiniPlayer, PANEL_ROUND, usePlayer } from './AudioList';
 import { Empty } from './icons';
 import {
   languageOf, sampleUrl, useLibraryVoices, useServices, voiceAccess, voiceKey, voiceLook, voiceRef,
@@ -91,7 +91,7 @@ export function VoicesPane({ group, query, favorites, onServices, onAll }: {
   const chip = (on: boolean) => `whitespace-nowrap text-[11.5px] ${on ? 'text-[var(--accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`;
   return (
     /* focused by a click in it, so Enter and Esc reach it */
-    <div className="relative flex min-h-0 flex-1 flex-col outline-none" tabIndex={-1} onKeyDown={onKey}>
+    <div className="flex min-h-0 flex-1 flex-col outline-none" tabIndex={-1} onKeyDown={onKey}>
       <div className="flex items-center gap-3 px-3 pb-2">
         <select
           value={language}
@@ -111,7 +111,7 @@ export function VoicesPane({ group, query, favorites, onServices, onAll }: {
       </div>
       {/* a click on nothing lets the picked voice go */}
       <div
-        className={`min-h-0 flex-1 overflow-y-auto px-3 ${player.item ? PLAYER_ROOM : FOOT_ROOM}`}
+        className={`min-h-0 flex-1 overflow-y-auto px-3 ${player.item ? 'pb-3' : FOOT_ROOM}`}
         onClick={(e) => { if (e.target === e.currentTarget) { player.pause(); setPicked(null); } }}
         onScroll={(e) => { const el = e.currentTarget; if (el.scrollTop + el.clientHeight > el.scrollHeight - 600 && drawn < voices.length) setDrawn(drawn + PAGE); }}
       >

@@ -21,7 +21,7 @@ import {
 } from '@/lib/library';
 import { clearResourceDrag, dragPicture, setResourceDragData } from '@/lib/resource-drag';
 import { useLibraryVoices } from '@/lib/library-voices';
-import { ADD_HOVER, FOOT_ROOM, MiniPlayer, MusicCard, PLAYER_ROOM, ROUND, SoundRow, libraryArt, usePlayer } from './AudioList';
+import { ADD_HOVER, FOOT_ROOM, MiniPlayer, MusicCard, ROUND, SoundRow, libraryArt, usePlayer } from './AudioList';
 import { CaptionsPane, type CaptionsActions } from './CaptionsPane';
 import { CategoryIcon, Empty } from './icons';
 import { FEATURED, STARRED, VoicesPane } from './VoicesPane';
@@ -29,7 +29,7 @@ import { ImportButton, SkillsPane, type SkillsLine } from './SkillsPane';
 import { SourceBadge, SourceChips, sourcesIn, type Source } from './SourceChips';
 
 type Category = 'media' | 'skill' | 'voice' | 'captions' | LibraryCategory;
-const CATEGORIES: Category[] = ['media', 'skill', 'voice', 'sound', 'music', 'text', 'captions', 'sticker', 'filter', 'effect', 'transition', 'template'];
+const CATEGORIES: Category[] = ['media', 'skill', 'captions', 'voice', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition', 'template'];
 
 /** The side bar's starred line: a category's things the person starred ('' is all of it, else one of its groups). */
 const FAVORITES = STARRED;
@@ -87,7 +87,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
   tryOut.current = actions.tryOut;
   const pick = (item: LibraryItem | null) => {
     setPicked(item?.id ?? null);
-    if (item?.kind !== 'sound') tryOut.current(item);
+    /* a word art of the captions is tried by putting it on (they have no picture of their own to try it on) */
+    if (item?.kind !== 'sound' && cat !== 'captions') tryOut.current(item);
   };
   /* another category: what played in the last one stops and its player goes */
   const closePlayer = React.useRef<() => void>(() => {});
@@ -112,9 +113,11 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
   /* the skills: Discover (first opened), else the installed (any line of them kept before is that now) */
   const skillLine: SkillsLine = !group || group === 'discover' ? 'discover' : 'installed';
   const q = query.trim().toLowerCase();
-  const shown = (index?.items ?? []).filter((item) => item.cat === cat && (q
+  /* the captions' Word art: the library's word art, put on captions */
+  const shown = (index?.items ?? []).filter((item) => (cat === 'captions' ? item.kind === 'textstyle' && item.group === 'wordart' : item.cat === cat) && (q
     ? [...Object.values(item.name), ...(item.tags ?? [])].some((n) => n?.toLowerCase().includes(q))
-    : group === FAVORITES ? favorites.includes(item.id) : !group || item.group === group));
+    : cat === 'captions' || (group === FAVORITES ? favorites.includes(item.id) : !group || item.group === group)));
+  const addItem = (item: LibraryItem) => (cat === 'captions' ? captions.look(item) : actions.add(item));
   const sources = sourcesIn(shown.map(sourceOf));
   const items = source && sources.includes(source) ? shown.filter((item) => sourceOf(item) === source) : shown;
   const pickedItem = picked ? index?.items.find((i) => i.id === picked) ?? null : null;
@@ -122,7 +125,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
   const onKey = (e: React.KeyboardEvent) => {
     if ((e.target as HTMLElement).tagName === 'INPUT' || !pickedItem) return;
     if (e.key === 'Escape') { e.preventDefault(); pick(null); }
-    if (e.key === 'Enter') { e.preventDefault(); actions.add(pickedItem); }
+    if (e.key === 'Enter') { e.preventDefault(); addItem(pickedItem); }
   };
 
   /* the library's own lines under its fold: all of it, then its groups (a voice's: the services) */
@@ -178,8 +181,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
         ) : null}
       </div>
       <div className="flex min-h-0 flex-1">
-        {/* as wide as the person dragged its edge (RAIL), kept for next time; the captions are one page, with none */}
-        {cat === 'captions' ? null : (
+        {/* as wide as the person dragged its edge (RAIL), kept for next time */}
         <div className="relative flex shrink-0" style={{ width: rail }}>
           <RailEdge width={rail} onWidth={setRail} />
           <nav data-studio-host-panel="" className="flex min-w-0 flex-1 flex-col gap-1 overflow-y-auto border-r border-[var(--border)] px-2 pb-[calc(var(--drawer-under,0px)+10px)] pt-2.5">
@@ -196,11 +198,17 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
                 <SideBox on={skillLine === 'installed'} onClick={() => pickGroup('installed')}>{t('assetDrawer.skillsInstalled')}</SideBox>
                 <SideBox on={skillLine === 'discover'} onClick={() => pickGroup('discover')}>{t('assetDrawer.skillsDiscover')}</SideBox>
               </>
+            ) : cat === 'captions' ? (
+              <>
+                {/* New first opened: the cards that put captions in; then the word art put on them */}
+                <SideBox on={group !== 'wordart'} onClick={() => pickGroup('')}>{t('assetDrawer.captionsNewLine')}</SideBox>
+                <SideBox on={group === 'wordart'} onClick={() => pickGroup('wordart')}>{t('assetDrawer.captionsWordArt')}</SideBox>
+              </>
             ) : (
               <>
                 <SideBox on={group === FAVORITES && !q} onClick={() => pickGroup(FAVORITES)}>{t('assetDrawer.favorites')}</SideBox>
                 {cat === 'voice' ? <SideBox on={group === FEATURED && !q} onClick={() => pickGroup(FEATURED)}>{t('assetDrawer.featured')}</SideBox> : null}
-                <SideBox on={group !== FAVORITES && group !== FEATURED && folded && !q} open={!folded} onClick={fold}>
+                <SideBox on={group !== FAVORITES && group !== FEATURED && folded && !q} holds={group !== FAVORITES && group !== FEATURED && !folded && !q} open={!folded} onClick={fold}>
                   {t(cat === 'voice' ? 'assetDrawer.services' : 'assetDrawer.library')}
                 </SideBox>
                 {folded ? null : (
@@ -213,9 +221,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
             )}
           </nav>
         </div>
-        )}
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col" data-studio-host-panel={cat === 'media' ? undefined : ''}>
-          {cat === 'media' ? media : cat === 'captions' ? <CaptionsPane actions={captions} /> : (
+          {cat === 'media' ? media : cat === 'captions' && group !== 'wordart' ? <CaptionsPane actions={captions} /> : (
             <>
               {/* a skill's page has its own way back instead */}
               <div className="flex gap-2 px-3 pb-2 pt-2.5" hidden={cat === 'skill' && skillOpen != null}>
@@ -237,7 +244,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
               <>
               {/* a click on nothing lets the picked thing go; the player is under the list */}
               <div
-                className={`min-h-0 flex-1 overflow-y-auto px-3 pt-0.5 ${player.item ? PLAYER_ROOM : FOOT_ROOM}`}
+                className={`min-h-0 flex-1 overflow-y-auto px-3 pt-0.5 ${player.item ? 'pb-3' : FOOT_ROOM}`}
                 onClick={(e) => { if (e.target === e.currentTarget) pick(null); }}
                 onScroll={(e) => { const el = e.currentTarget; if (el.scrollTop + el.clientHeight > el.scrollHeight - 800 && drawn < items.length) setDrawn(drawn + PAGE); }}
               >
@@ -265,7 +272,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
                   <div className={`grid gap-x-2.5 gap-y-3 ${cat === 'sticker' ? 'grid-cols-[repeat(auto-fill,minmax(68px,1fr))]' : cat === 'template' ? 'grid-cols-[repeat(auto-fill,minmax(140px,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(96px,1fr))]'}`}>
                     {items.map((it) => (
                       <Card key={it.id} item={it} lang={lang} picked={picked === it.id} kept={favorites.includes(it.id)} square={cat === 'sticker'}
-                        onPick={() => pick(picked === it.id ? null : it)} onAdd={() => actions.add(it)} />
+                        onPick={() => pick(picked === it.id ? null : it)} onAdd={() => addItem(it)} />
                     ))}
                   </div>
                 )}
@@ -330,7 +337,14 @@ function RailEdge({ width, onWidth }: { width: number; onWidth: (w: number) => v
 }
 
 /** A line of the side bar of its own (the starred, the library's own, the media's two): a box. `open`: it folds the lines under it. */
-function SideBox({ on, open, onClick, children }: { on: boolean; open?: boolean; onClick: () => void; children: React.ReactNode }) {
+function SideBox({ on, holds = false, open, onClick, children }: {
+  on: boolean;
+  /** a heading whose line under it is the one shown (it is open): a lighter fill than the line's own */
+  holds?: boolean;
+  open?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
   return (
     <button
       type="button"
@@ -338,9 +352,9 @@ function SideBox({ on, open, onClick, children }: { on: boolean; open?: boolean;
       aria-pressed={open === undefined ? on : undefined}
       aria-expanded={open}
       title={typeof children === 'string' ? children : undefined}
-      /* the one shown: the accent on a raised fill; a heading over lines of its own (it folds) a lighter fill; the
-         others plain until pointed at */
-      className={`flex h-8 shrink-0 items-center justify-between gap-1 rounded-md px-2.5 text-left text-[12px] ${on ? 'bg-[var(--bg-picked)] font-semibold text-[var(--accent)]' : open !== undefined ? 'bg-[var(--bg-hover)] font-medium text-[var(--text-muted)] hover:bg-[var(--bg-pressed)] hover:text-[var(--text)]' : 'font-medium text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}`}
+      /* the one shown: the accent on a raised fill; a heading whose line is the one shown, a lighter fill; the others
+         plain until pointed at */
+      className={`flex h-8 shrink-0 items-center justify-between gap-1 rounded-md px-2.5 text-left text-[12px] ${on ? 'bg-[var(--bg-picked)] font-semibold text-[var(--accent)]' : holds ? 'bg-[var(--bg-hover)] font-medium text-[var(--text)] hover:bg-[var(--bg-pressed)]' : 'font-medium text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}`}
     >
       <span className="truncate whitespace-nowrap">{children}</span>
       {open === undefined ? null : <ChevronDown size={13} className={`shrink-0 text-[var(--text-faint)] transition-transform ${open ? 'rotate-180' : ''}`} />}
