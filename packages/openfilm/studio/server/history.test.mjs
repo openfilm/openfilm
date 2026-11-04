@@ -215,14 +215,17 @@ test('a file the trash will not take stays, named; the version is put back aroun
   process.env.OPENFILM_TRASH_DIR = join(wall, 'trash');
   try {
     const done = await checkoutVersion(root, first);
-    assert.deepEqual([done.commit, done.kept, done.missing], [first, ['new.html'], []]);
+    assert.deepEqual([done.commit, done.kept.map((k) => k.path), done.missing], [first, ['new.html'], []]);
+    assert.match(done.kept[0].error, /ENOTDIR|EEXIST|ENOENT|not a directory/i, 'why, as the trash said it');
+    assert.equal(done.kept[0].recycle, undefined, 'the Recycle Bin\'s own answer only when that is what refused');
+    assert.deepEqual((await status(root)).changes?.files, [{ path: 'new.html', change: 'added' }], 'the file kept counts as a change, until deleted');
     assert.equal(readFileSync(join(root, 'title.html'), 'utf8'), 'title', 'the version is put back');
     assert.equal(readFileSync(join(root, 'new.html'), 'utf8'), 'a page made since', 'the file the trash refused stays');
     assert.equal((await status(root)).head, first, 'and the version is the one checked out');
     writeFileSync(join(root, 'extra.html'), 'made since');
     writeFileSync(join(root, 'title.html'), 'edited');
     const back = await discardChanges(root);
-    assert.deepEqual(back.kept.sort(), ['extra.html', 'new.html'], 'the one refused before is tried again, and kept again');
+    assert.deepEqual(back.kept.map((k) => k.path).sort(), ['extra.html', 'new.html'], 'the one refused before is tried again, and kept again');
     assert.equal(readFileSync(join(root, 'title.html'), 'utf8'), 'title', 'the edit is discarded');
     assert.ok(existsSync(join(root, 'extra.html')), 'the file the trash refused stays');
   } finally {

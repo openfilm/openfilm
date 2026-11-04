@@ -799,7 +799,7 @@ export const en = {
     copyConfirm: 'Create project',
     cancel: 'Cancel',
     missing: 'Restored, but some media of that version could not be found; those files were left as they are.',
-    kept: `Restored. {n} file(s) ${TRASH} would not take stayed in the folder: {files}.`,
+    kept: `Restored. {n} file(s) stayed in the folder, as ${TRASH} would not take them, and count as changes until ${FILES} deletes them: {files}.`,
     kindSaved: 'Saved version',
     kindAuto: 'Auto-saved',
     kindAgent: 'Before agent’s turn',

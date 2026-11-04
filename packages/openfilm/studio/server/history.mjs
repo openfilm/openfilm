@@ -549,13 +549,23 @@ export function saveVersion(root, { message = '', kind, onProgress } = {}) {
 }
 
 /**
+ * A file of the folder the trash would not take: its path, the error's words, and the Recycle Bin's own answer when
+ * that is what refused (trash.mjs: `why`, the drive, the sizes), for Studio to say in its language.
+ * @typedef {{ path: string, error: string, recycle?: Record<string, unknown> }} Kept
+ */
+
+/**
  * A file of the folder to the trash, as a delete in Studio does. One the trash will not take (Windows' Recycle Bin
- * refusing it, a trash on another disk) stays where it is and is named in `kept`: the version is put back around it,
- * rather than half way, with the files already written and the rest not, and the head not moved.
- * @param {string} root @param {string} path @param {string[]} kept
+ * refusing it, a trash on another disk) stays where it is and is named in `kept`, with why: the version is put back
+ * around it, rather than half way, with the files already written and the rest not, and the head not moved. It is
+ * in the folder still, so it counts as a change until the person deletes it (Studio says so).
+ * @param {string} root @param {string} path @param {Kept[]} kept
  */
 async function toTrash(root, path, kept) {
-  try { await moveToTrash(join(root, path)); } catch { kept.push(path); }
+  try { await moveToTrash(join(root, path)); } catch (e) {
+    const { message, extra } = /** @type {Error & { extra?: Record<string, unknown> }} */ (e);
+    kept.push({ path, error: message, ...(extra?.code === 'recycle' ? { recycle: extra } : {}) });
+  }
 }
 
 /**
@@ -564,11 +574,11 @@ async function toTrash(root, path, kept) {
  * in `kept`). Files the versions leave out are not touched.
  * @param {import('./history-store.mjs').Repo} repo @param {import('./history-store.mjs').Version} version
  * @param {Change[]} changes @param {Progress} [progress]
- * @returns {Promise<{ missing: string[], kept: string[] }>}
+ * @returns {Promise<{ missing: string[], kept: Kept[] }>}
  */
 async function putBack(repo, version, changes, progress) {
   const { missing } = await writeFiles(repo, version, { progress });
-  /** @type {string[]} */
+  /** @type {Kept[]} */
   const kept = [];
   for (const { path, change } of changes) {
     if (change === 'added' && !version.has(path) && existsSync(join(repo.root, path))) await toTrash(repo.root, path, kept);
