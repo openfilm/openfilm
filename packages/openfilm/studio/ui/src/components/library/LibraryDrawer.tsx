@@ -22,7 +22,7 @@ import {
 import { clearResourceDrag, setResourceDragData } from '@/lib/resource-drag';
 import { useLibraryVoices } from '@/lib/library-voices';
 import { ADD_HOVER, MiniPlayer, MusicCard, ROUND, SoundRow, libraryArt, usePlayer } from './AudioList';
-import { CaptionsPane, type CaptionsActions, type CaptionsLine } from './CaptionsPane';
+import { CaptionsPane, type CaptionsActions } from './CaptionsPane';
 import { CategoryIcon, Empty } from './icons';
 import { FEATURED, STARRED, VoicesPane } from './VoicesPane';
 import { ImportButton, SkillsPane, type SkillsLine } from './SkillsPane';
@@ -111,8 +111,6 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
   /* the skills' line: one of the installed (Installed alone, as kept before, is all of them), else Discover */
   /* the skills: Discover (first opened), else the installed (any line of them kept before is that now) */
   const skillLine: SkillsLine = !group || group === 'discover' ? 'discover' : 'installed';
-  /* the captions' line: made of what is said (first opened), from a file, or new */
-  const captionsLine: CaptionsLine = group === 'file' || group === 'new' ? group : 'speech';
   const q = query.trim().toLowerCase();
   const shown = (index?.items ?? []).filter((item) => item.cat === cat && (q
     ? [...Object.values(item.name), ...(item.tags ?? [])].some((n) => n?.toLowerCase().includes(q))
@@ -180,7 +178,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
         ) : null}
       </div>
       <div className="flex min-h-0 flex-1">
-        {/* as wide as the person dragged its edge (RAIL), kept for next time */}
+        {/* as wide as the person dragged its edge (RAIL), kept for next time; the captions are one page, with none */}
+        {cat === 'captions' ? null : (
         <div className="relative flex shrink-0" style={{ width: rail }}>
           <RailEdge width={rail} onWidth={setRail} />
           <nav data-studio-host-panel="" className="flex min-w-0 flex-1 flex-col gap-1 overflow-y-auto border-r border-[var(--border)] px-2 pb-[calc(var(--drawer-under,0px)+10px)] pt-2.5">
@@ -196,14 +195,6 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
                 {/* Discover first opened: OpenFilm's skills to take up; the installed in parts by whose they are (SkillsPane) */}
                 <SideBox on={skillLine === 'installed'} onClick={() => pickGroup('installed')}>{t('assetDrawer.skillsInstalled')}</SideBox>
                 <SideBox on={skillLine === 'discover'} onClick={() => pickGroup('discover')}>{t('assetDrawer.skillsDiscover')}</SideBox>
-              </>
-            ) : cat === 'captions' ? (
-              <>
-                {(['speech', 'file', 'new'] as const).map((id) => (
-                  <SideBox key={id} on={captionsLine === id} onClick={() => pickGroup(id)}>
-                    {t(id === 'speech' ? 'assetDrawer.captionsSpeech' : id === 'file' ? 'assetDrawer.captionsFile' : 'assetDrawer.captionsNew')}
-                  </SideBox>
-                ))}
               </>
             ) : (
               <>
@@ -222,8 +213,9 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
             )}
           </nav>
         </div>
+        )}
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col" data-studio-host-panel={cat === 'media' ? undefined : ''}>
-          {cat === 'media' ? media : cat === 'captions' ? <CaptionsPane line={captionsLine} actions={captions} /> : (
+          {cat === 'media' ? media : cat === 'captions' ? <CaptionsPane actions={captions} /> : (
             <>
               {/* a skill's page has its own way back instead */}
               <div className="flex gap-2 px-3 pb-2 pt-2.5" hidden={cat === 'skill' && skillOpen != null}>

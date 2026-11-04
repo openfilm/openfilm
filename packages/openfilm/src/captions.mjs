@@ -13,6 +13,15 @@
 /** @typedef {{ id: string, start: number, end: number, settings: string, text: string }} VttCue */
 /** @typedef {{ header: string, notes: string[], regions: string[], styles: string[], cues: VttCue[] }} Vtt */
 
+/**
+ * The note at the top of a caption track's file made of what is said in the film (Studio's library): its captions are
+ * made again of the speech once the film is cut, where any other track's are left as they are. A WebVTT comment, so
+ * every reader takes the file as it always did.
+ */
+export const SPEECH_NOTE = 'NOTE Captions of what is said in the film, made again of it after cuts.';
+/** Whether a caption track's file is made of what is said (SPEECH_NOTE). @param {Vtt} vtt */
+export const madeOfSpeech = (vtt) => vtt.notes.some((n) => n.startsWith(SPEECH_NOTE));
+
 const TIME = /^(?:(\d+):)?(\d{1,2}):(\d{2})(?:[.,](\d{1,3}))?$/;
 
 /** Seconds from a WebVTT timestamp (`01:02.500`, `1:01:02.500`); NaN when it is not one. */

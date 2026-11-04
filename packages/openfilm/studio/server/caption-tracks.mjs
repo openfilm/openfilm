@@ -7,7 +7,7 @@
  */
 import { mkdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { cueEscape, cuePlain, readVtt, vttTime, writeVtt } from '../../src/captions.mjs';
+import { SPEECH_NOTE, cueEscape, cuePlain, readVtt, vttTime, writeVtt } from '../../src/captions.mjs';
 import { writeAtomic } from './atomic.mjs';
 import { CONNECT_TRANSLATOR, filmCaptions, readSubtitleStyle, writeSubtitleStyle } from './captions.mjs';
 import { editProjectFilm, readProjectFilm } from './film.mjs';
@@ -28,25 +28,44 @@ function captionFile(/** @type {string} */ root, /** @type {unknown} */ src) {
 
 /**
  * A caption track's file from subtitles as the film plays them (film ms, word times when known, the speaker when
- * there are several): one cue for each, `c1`, `c2`…, in the region the style places them.
+ * there are several): one cue for each, `c1`, `c2`…, in the region the style places them; noted as made of what is
+ * said (SPEECH_NOTE).
  * @param {readonly import('./film-subtitle.mjs').FilmSubtitleCue[]} cues
  * @param {import('./film-subtitle.mjs').FilmSubtitleStyle} style
  */
 export function subtitlesVtt(cues, style) {
   const look = subtitleStyleVtt(style);
   const text = (/** @type {import('./film-subtitle.mjs').FilmSubtitleCue} */ c) => {
-    const said = c.words?.length
-      ? c.words.map((w) => `<${vttTime(w.startMs / 1000)}>${cueEscape(w.text)}`).join(/[A-Za-z0-9]$/.test(c.words[0]?.text ?? '') ? ' ' : '')
-      : cueEscape(c.text);
+    const said = (c.words?.length && timedWords(c.text, c.words))
+      || (c.words?.length
+        ? c.words.map((w) => `<${vttTime(w.startMs / 1000)}>${cueEscape(w.text)}`).join(/[A-Za-z0-9]$/.test(c.words[0]?.text ?? '') ? ' ' : '')
+        : cueEscape(c.text));
     return c.speaker ? `<v ${c.speaker.replace(/>/g, '')}>${said}</v>` : said;
   };
   return writeVtt({
     header: 'WEBVTT',
-    notes: [],
+    notes: [SPEECH_NOTE],
     regions: [look.region],
     styles: [look.css],
     cues: cues.map((c, i) => ({ id: `c${i + 1}`, start: c.startMs / 1000, end: (c.startMs + c.durMs) / 1000, settings: `region:main align:${look.align}`, text: text(c) })),
   });
+}
+
+/**
+ * A cue's words with each word's time before it, the line's own spaces and marks kept between them (`Comfortable,
+ * right?`, not `Comfortable,right?`); null when a word is not found in the line as it reads.
+ * @param {string} line @param {readonly { text: string, startMs: number }[]} words
+ */
+function timedWords(line, words) {
+  let out = '';
+  let at = 0;
+  for (const w of words) {
+    const i = line.indexOf(w.text, at);
+    if (i < 0) return null;
+    out += `${cueEscape(line.slice(at, i))}<${vttTime(w.startMs / 1000)}>${cueEscape(w.text)}`;
+    at = i + w.text.length;
+  }
+  return out + cueEscape(line.slice(at));
 }
 
 /**
@@ -55,6 +74,7 @@ export function subtitlesVtt(cues, style) {
  *   PUT  caption-tracks/file         { src, text } → { ok }: the file written whole
  *   POST caption-tracks/from-subtitles { name? } → { src, text }: the project's subtitles as a new caption track's file
  *                                    (captions/<name>.vtt, a number added when that is taken)
+ *   GET  caption-tracks/speech       → { text }: the same, written nowhere (a caption track made again of what is said)
  *   POST caption-tracks/retire       { name?, label? } → { src }: the subtitles a project showed before caption tracks
  *                                    made its caption track (retireSubtitles); src null when it showed none
  *   POST caption-tracks/new          { name?, text? } → { src, text }: a new caption track's file, of a WebVTT or SRT
@@ -84,6 +104,10 @@ export async function captionTrackRoutes(req, res, root, rest, url, { translate 
   if (rest === 'caption-tracks/from-subtitles' && req.method === 'POST') {
     const { name } = /** @type {{ name?: unknown }} */ (await readJson(req));
     json(res, 200, await subtitlesTrack(root, name));
+    return true;
+  }
+  if (rest === 'caption-tracks/speech' && req.method === 'GET') {
+    json(res, 200, { text: await speechVtt(root) });
     return true;
   }
   if (rest === 'caption-tracks/new' && req.method === 'POST') {
@@ -160,12 +184,17 @@ async function freeSrc(root, name) {
   return src;
 }
 
+/** What is said in the film, as its subtitle style shows it, as a caption track's file. @param {string} root */
+async function speechVtt(root) {
+  const style = { ...FILM_SUBTITLE_DEFAULT, ...(await readSubtitleStyle(root)) };
+  const { cues } = await filmCaptions(root);
+  return subtitlesVtt(filmSubtitleShown(cues, style), style);
+}
+
 /** The project's subtitles, as its style shows them, written as a new caption track's file. @param {string} root @param {unknown} name */
 async function subtitlesTrack(root, name) {
   const src = await freeSrc(root, name);
-  const style = { ...FILM_SUBTITLE_DEFAULT, ...(await readSubtitleStyle(root)) };
-  const { cues } = await filmCaptions(root);
-  const text = subtitlesVtt(filmSubtitleShown(cues, style), style);
+  const text = await speechVtt(root);
   const file = captionFile(root, src);
   await mkdir(dirname(file), { recursive: true });
   await writeAtomic(file, text);

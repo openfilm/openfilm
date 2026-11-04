@@ -75,9 +75,9 @@ import { usePageChanges } from './use-page-changes';
 import { CaptionInspector } from './CaptionInspector';
 import { CaptionStage } from './CaptionStage';
 import { captionSelectionNow, captionTrackNow, configureCaptionTracks, refreshCaptionTracks, setCaptionSelection, useCaptionSelection, useCaptionTracksOf, writeCaptionTrack, writeCaptionTracksWith } from '@/lib/caption-tracks';
-import { cuePlain, readVtt, writeVtt } from '../../../../src/captions.mjs';
+import { cuePlain, madeOfSpeech, readVtt, writeVtt } from '../../../../src/captions.mjs';
 import { FILM_SUBTITLE_LANGUAGES } from '../../../server/film-subtitle.mjs';
-import { addCue, cueRule, placeCues, withIds } from '@/lib/caption-edits';
+import { addCue, cueRule, placeCues, setCueRule, shifted, withIds } from '@/lib/caption-edits';
 import { cueClipId, cueEditOf, cueOf, cueStandIn, isCueClip, withCueBlocks, type KeptCue } from '@/lib/caption-blocks';
 
 import { useFilmSubtitles } from '@/lib/use-film-subtitles';
@@ -1810,7 +1810,26 @@ export function ProjectView({ projectId, onProject, onLeave }: {
    * What is said in the film made a caption track (studio/server/caption-tracks.mjs), on top: one undo step. False when
    * it was not (said why).
    */
+  /* the caption tracks the library's captions act on (components/library/CaptionsPane): the captions of speech are made
+     again on the top one made of what is said (SPEECH_NOTE), a caption typed in goes on the top one */
+  const captionRows = timelineTracks.filter((tr) => tr.captions && tr.docIndex != null);
+  const speechRow = captionRows.find((tr) => { const vtt = cuesOf(tr.captions!.src); return vtt ? madeOfSpeech(vtt) : false; }) ?? null;
+  const captionRow = captionRows[0] ?? null;
+  const speechSrc = speechRow?.captions?.src ?? null;
   const captionsFromSpeech = React.useCallback(async (): Promise<boolean> => {
+    /* captions there already: what is said now, in their place, their look kept (a cue's own look goes with it) */
+    if (speechSrc) {
+      const got = await fetch(`/api/projects/${encodeURIComponent(projectId)}/caption-tracks/speech`).then((r) => (r.ok ? r.json() : null), () => null) as { text?: string } | null;
+      const was = captionTrackNow(projectId, speechSrc);
+      if (typeof got?.text !== 'string' || !was) { toast.show(t('timeline.editFail')); return false; }
+      const said = withIds(readVtt(got.text));
+      if (!said.cues.length) { toast.show(t('timeline.captionsNone')); return false; }
+      let next = { ...was, cues: said.cues.map((c) => ({ ...c, settings: was.cues[0]?.settings ?? c.settings })) };
+      for (const c of was.cues) next = setCueRule(next, `::cue(#${c.id})`, null);
+      const why = await writeCaptionTrack(projectId, speechSrc, next, 'captionTrack.stepRemake');
+      if (why) { toast.show(why); return false; }
+      return true;
+    }
     const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/caption-tracks/from-subtitles`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: t('captionTrack.fileName') }),
     }).catch(() => null);
@@ -1820,7 +1839,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const why = await editOps([{ op: 'captions', at: 0, captions: { src: body.src, kind: 'captions', label: t('captionTrack.name') } }], 'captionTrack.stepAuto');
     if (why) { toast.show(why); return false; }
     return true;
-  }, [projectId, editOps, toast, t]);
+  }, [projectId, speechSrc, editOps, toast, t]);
   /**
    * A caption track's translation (components/CaptionInspector) put in the film just above it, its lines a little
    * higher so the two languages read one over the other: one undo step. Null, or why not.
@@ -1848,9 +1867,10 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   }, [projectId, totalMs, showCaptionLook, t]);
   /**
    * A new caption track on top (the library's captions, components/library/CaptionsPane): of a file's captions (SRT or
-   * WebVTT, `file`), or with one caption at the playhead, picked, its words to type in the inspector. One undo step.
+   * WebVTT, `file`; from `atMs` on when it was dropped there), or with one caption at the playhead, picked, its words to
+   * type in the inspector. One undo step.
    */
-  const newCaptionTrack = React.useCallback(async (file: File | null) => {
+  const newCaptionTrack = React.useCallback(async (file: File | null, atMs = 0) => {
     let text = '';
     let picked: string | null = null;
     if (file) text = await file.text();
@@ -1868,10 +1888,30 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const body = await res?.json().catch(() => ({})) as { src?: string; error?: string } | undefined;
     if (!res?.ok || !body?.src) { toast.show(body?.error ?? t('timeline.editFail')); return; }
     const src = body.src;
+    /* dropped at a time: its captions from there on, their words' times with them */
+    const by = file && atMs > 0 ? snapToFrame(atMs) / 1000 : 0;
+    if (by && typeof (body as { text?: string }).text === 'string') {
+      const vtt = readVtt((body as { text: string }).text);
+      const later = writeVtt({ ...vtt, cues: vtt.cues.map((c) => ({ ...c, start: c.start + by, end: c.end + by, text: shifted(c.text, by) })) });
+      await fetch(`/api/projects/${encodeURIComponent(projectId)}/caption-tracks/file`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ src, text: later }) }).catch(() => null);
+    }
     const why = await editOps([{ op: 'captions', at: 0, captions: { src, kind: 'captions', label: file ? file.name.replace(/\.[^.]+$/, '') : t('captionTrack.name') } }], file ? 'captionTrack.stepImport' : 'captionTrack.stepNew');
     if (why) { toast.show(why); return; }
     if (picked) { setCaptionSelection({ src, ids: new Set([picked]) }); showCaptionLook(); }
   }, [projectId, totalMs, editOps, showCaptionLook, toast, t]);
+  /** A caption at the playhead (the library's captions): on the top caption track, else on a new one. */
+  const captionHere = React.useCallback(async () => {
+    const src = captionRow?.captions?.src;
+    if (!src) { await newCaptionTrack(null); return; }
+    const why = await addCaption(src, timeRef.current);
+    if (why) toast.show(why);
+  }, [captionRow, newCaptionTrack, addCaption, toast]);
+  /** Subtitle files (SRT, WebVTT) among files dropped on the timeline or the picture: each a caption track from `atMs`. */
+  const takeSubtitleFiles = React.useCallback((files: File[], atMs: number): File[] => {
+    const subtitles = files.filter((f) => /\.(srt|vtt)$/i.test(f.name));
+    for (const f of subtitles) void newCaptionTrack(f, atMs);
+    return files.filter((f) => !subtitles.includes(f));
+  }, [newCaptionTrack]);
   /* the subtitles Studio drew over the picture before caption tracks: made the project's caption track as it opens, once */
   React.useEffect(() => {
     let gone = false;
@@ -2942,9 +2982,10 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     ], 'history.stepDrop');
   }, [onImport, resourceOf, edit, roomFor, t]);
   /* on the timeline: where they were dropped, as a drag from the media pane lands */
-  const dropFiles = React.useCallback((files: File[], hit: AssetLaneHit | null, atMs: number, mode?: EditMode) => (
-    importAndPlace(files, (items) => assetRunInsert(items, tracksRef.current, hit, atMs, mode, stageRef.current), mode)
-  ), [importAndPlace]);
+  const dropFiles = React.useCallback((all: File[], hit: AssetLaneHit | null, atMs: number, mode?: EditMode) => {
+    const files = takeSubtitleFiles(all, atMs);
+    return files.length ? importAndPlace(files, (items) => assetRunInsert(items, tracksRef.current, hit, atMs, mode, stageRef.current), mode) : Promise.resolve(null);
+  }, [importAndPlace, takeSubtitleFiles]);
   /* a sound recorded with the timeline's record button: where the playhead was as recording began, on a sound track
      with room there */
   const recorder = React.useMemo(() => ({
@@ -2953,8 +2994,10 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       assetRunInsert(items, tracksRef.current, soundLaneHit(tracksRef.current, atMs, assetRunMs(items)), atMs))),
   }), [importAndPlace]);
   /* on the picture: at the playhead, pictures on a new track on top, sounds on a sound track */
-  const dropFilesOnPicture = React.useCallback((files: File[]) => {
+  const dropFilesOnPicture = React.useCallback((all: File[]) => {
     const atMs = snapToFrame(timeRef.current);
+    const files = takeSubtitleFiles(all, atMs);
+    if (!files.length) return Promise.resolve(null);
     return importAndPlace(files, (items) => {
       const sounds = items.filter((f) => f.kind === 'audio');
       const pictures = items.filter((f) => f.kind !== 'audio');
@@ -2966,7 +3009,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       if (inserts.length) return { inserts };
       return 'error' in seen ? seen : 'error' in heard ? heard : { error: 'not-clip' };
     });
-  }, [importAndPlace]);
+  }, [importAndPlace, takeSubtitleFiles]);
   const [pictureDrop, setPictureDrop] = React.useState(false);
   const pictureDropProps = {
     onDragOver: (e: React.DragEvent) => {
@@ -3414,18 +3457,21 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const [subtitleProblem, setSubtitleProblem] = React.useState<{ text: string; connect: boolean } | null>(null);
   const [captionsMaking, setCaptionsMaking] = React.useState(false);
   const makeCaptions = React.useCallback(async () => {
-    if (subtitleProblem?.connect) { setSettingsOpen('models'); setSubtitleProblem(null); return; }
     setSubtitleProblem(null);
     setCaptionsMaking(true);
     try {
-      /* the speech with no transcript yet is transcribed first; what has one is used as it is */
+      /* the speech with no transcript yet is transcribed first; what has one is used as it is, and made captions even
+         when the rest cannot be transcribed (which the library then says, and why) */
       if (subs.captions?.untranscribed.length) {
         const r = await subs.transcribe();
-        if (!r.ok) { setSubtitleProblem({ text: r.error ?? '', connect: !!r.needsTranscriber }); return; }
+        if (!r.ok) {
+          setSubtitleProblem({ text: r.error ?? '', connect: !!r.needsTranscriber });
+          if (!subs.captions.cues.length) return;
+        }
       }
       await captionsFromSpeech();
     } finally { setCaptionsMaking(false); }
-  }, [subs, subtitleProblem, captionsFromSpeech, setSettingsOpen]);
+  }, [subs, captionsFromSpeech]);
   const [desktopOpen, setDesktopOpen] = React.useState(false);
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const history = useProjectHistory(projectId, { onError: toast.showError, beforeChange: film.settled });
@@ -4033,7 +4079,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
           <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} actions={library.actions} under={hostAssets.bottom}
             captions={{
               lines: subs.captions?.cues.length ?? 0, untranscribed: subs.captions?.untranscribed.length ?? 0, making: captionsMaking || subs.transcribing, problem: subtitleProblem,
-              fromSpeech: () => void makeCaptions(), fromFile: (file) => void newCaptionTrack(file), blank: () => void newCaptionTrack(null),
+              speechTrack: speechRow?.badge ?? null, captionTrack: captionRow?.badge ?? null,
+              fromSpeech: () => void makeCaptions(), connect: () => { setSubtitleProblem(null); setSettingsOpen('models'); },
+              fromFile: (file) => void newCaptionTrack(file), addOne: () => void captionHere(),
             }}
             onServices={() => setSettingsOpen('models')} projectId={projectId} showSkills={skillsShown} />
         </div>

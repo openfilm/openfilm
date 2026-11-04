@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { filmHtml } from '../../src/film-doc.mjs';
-import { cueCss, readVtt } from '../../src/captions.mjs';
+import { cueCss, madeOfSpeech, readVtt } from '../../src/captions.mjs';
 import { captionTrackRoutes, subtitleStyleVtt, subtitlesVtt } from './caption-tracks.mjs';
 import { FILM_SUBTITLE_DEFAULT, FILM_SUBTITLE_LOOKS } from './film-subtitle.mjs';
 import { HttpError, json } from './http.mjs';
@@ -48,11 +48,16 @@ test('subtitles become cues c1, c2… on the film\'s time, words timed, a speake
     { startMs: 2000, durMs: 2000, text: 'One two', speaker: 'Ana', words: [{ text: 'One', startMs: 2000, durMs: 400 }, { text: 'two', startMs: 2400, durMs: 600 }] },
   ], FILM_SUBTITLE_DEFAULT);
   const vtt = readVtt(text);
+  assert.equal(madeOfSpeech(vtt), true, 'noted as made of what is said');
+  assert.equal(madeOfSpeech(readVtt('WEBVTT\n\nc1\n00:00:01.000 --> 00:00:02.000\nHi\n')), false);
   assert.equal(vtt.regions.length, 1);
   assert.equal(vtt.styles.length, 1);
   assert.deepEqual(vtt.cues.map((c) => [c.id, c.start, c.end, c.settings]), [['c1', 0.5, 2, 'region:main align:center'], ['c2', 2, 4, 'region:main align:center']]);
   assert.equal(vtt.cues[0].text, 'Cut a film in three seconds');
   assert.equal(vtt.cues[1].text, '<v Ana><00:00:02.000>One <00:00:02.400>two</v>');
+  /* the line's own spaces and marks stay between its timed words */
+  const marked = readVtt(subtitlesVtt([{ startMs: 0, durMs: 1000, text: 'Comfortable, right?', words: [{ text: 'Comfortable,', startMs: 0, durMs: 500 }, { text: 'right?', startMs: 500, durMs: 500 }] }], FILM_SUBTITLE_DEFAULT));
+  assert.equal(marked.cues[0].text, '<00:00:00.000>Comfortable, <00:00:00.500>right?');
 });
 
 test('the routes: a caption track\'s file read and written whole, inside the project only; the subtitles made into one', async () => {
@@ -67,6 +72,10 @@ test('the routes: a caption track\'s file read and written whole, inside the pro
     assert.equal(made.src, 'captions/Subtitles.vtt');
     assert.equal(readVtt(made.text).cues[0].text, 'Hello there');
     assert.equal((await (await call('POST', 'caption-tracks/from-subtitles', { name: 'Subtitles' })).json()).src, 'captions/Subtitles-2.vtt', 'a name taken gets a number');
+    /* what is said, as a caption file's text, written nowhere */
+    const said = await (await call('GET', 'caption-tracks/speech')).json();
+    assert.equal(readVtt(said.text).cues[0].text, 'Hello there');
+    assert.equal(existsSync(join(root, 'captions', 'Subtitles-3.vtt')), false);
     assert.equal((await call('PUT', 'caption-tracks/file', { src: 'captions/Subtitles.vtt', text: 'WEBVTT\n\nc1\n00:00:01.000 --> 00:00:02.000\nHi\n' })).status, 200);
     assert.equal(readFileSync(join(root, 'captions', 'Subtitles.vtt'), 'utf8'), 'WEBVTT\n\nc1\n00:00:01.000 --> 00:00:02.000\nHi\n');
     assert.equal((await (await call('GET', 'caption-tracks/file?src=captions%2FSubtitles.vtt')).json()).text.includes('Hi'), true);
