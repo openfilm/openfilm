@@ -42,15 +42,14 @@ export function fileStem(path: string): string {
   return base.replace(/\.[a-z0-9]{1,5}$/i, '') || base;
 }
 
-/** A track's badge letter, by what it holds: P pages, V pictures (video and stills), A sound. */
+/** A track's badge letter, by what it holds: V pictures (footage, stills, pages), A sound. */
 export function filmTrackPrefix(kind: string): string {
-  return kind === 'mg' ? 'P' : kind === 'video' ? 'V' : 'A';
+  return kind === 'audio' ? 'A' : 'V';
 }
 
 /**
- * Each track's name on the timeline (P1, V2, A1), worked out from position and kind, never stored: picture tracks
- * (P, V) counted from the bottom up, so V1 is the lowest and V2 covers it, and sound tracks (A) from the top down.
- * Each prefix on its own. It names a track a person can point at; stacking is the position itself.
+ * Each track's name on the timeline (V2, V1, A1), worked out from position and kind, never stored: picture tracks
+ * (V) counted from the bottom up, so V1 is the lowest and V2 covers it, and sound tracks (A) from the top down. It names a track a person can point at; stacking is the position itself.
  */
 export function filmTrackBadges(tracks: readonly ({ kind: string } | { clips: readonly { src: string }[] })[]): string[] {
   return rowBadges(tracks.map((track) => 'kind' in track ? track.kind : filmTrackKind(track)));

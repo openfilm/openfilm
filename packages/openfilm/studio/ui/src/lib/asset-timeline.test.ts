@@ -15,7 +15,7 @@ const row = (docIndex: number, role: TimelineTrack['role'], spans: [number, numb
   docIndex,
   blocks: spans.map(([startMs, endMs], i) => ({ id: `${docIndex}.${i}`, title: '', startMs, endMs, kind: role === 'audio' ? 'music' : role })),
 });
-/* P1 (pages) over V1 (footage) over A1 */
+/* V2 (pages) over V1 (footage) over A1 */
 const tracks = [row(0, 'mg', [[1000, 5000], [7500, 11_500]]), row(1, 'video', [[0, 10_000]]), row(2, 'audio', [[0, 10_000]])];
 const video = { path: 'assets/footage/product.mp4', kind: 'video', durationMs: 4000 };
 const sound = { path: 'assets/audio/bed.mp3', kind: 'audio', durationMs: 4000 };

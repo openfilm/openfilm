@@ -96,7 +96,7 @@ export type FilmSummary = {
   clips: number;
   /** Nothing made yet: the stage itself may change shape. */
   empty: boolean;
-  /** Each track's name (P1, V2, A1; see filmTrackBadges), by its place in film.html. */
+  /** Each track's name (V2, V1, A1; see filmTrackBadges), by its place in film.html. */
   badges?: readonly string[];
 };
 

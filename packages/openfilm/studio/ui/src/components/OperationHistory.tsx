@@ -39,7 +39,7 @@ const FLAG_STEP = {
 
 /**
  * The label of a track toggle, by what was done to which track: `Locked V1`, `Muted A1`. `track` is the badge the
- * timeline shows (P1 / V1 / A1).
+ * timeline shows (V1 / A1).
  */
 export function trackFlagStep(flag: keyof typeof FLAG_STEP, on: boolean, track: string): string {
   return `${FLAG_STEP[flag][on ? 0 : 1]}|${track}`;

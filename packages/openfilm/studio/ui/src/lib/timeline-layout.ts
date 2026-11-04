@@ -425,7 +425,7 @@ export interface TimelineTrack {
   /** Row title. */
   name: string | null;
   /**
-   * The row's badge: `P1` / `V2` / `A1` (pictures counted bottom up, sound top
+   * The row's badge: `V2` / `V1` / `A1` (pictures counted bottom up, sound top
    * down), one per drawn row (rows of one track spread by overlap each get their own, see badgeRows).
    */
   badge?: string;
@@ -660,18 +660,16 @@ function docTrackKind(track: Record<string, unknown>): string {
 }
 
 /**
- * Row badges: P1, P2… for page tracks, V1… for picture tracks, A1… for sound tracks, counted
+ * Row badges: V1, V2… for picture tracks (footage, stills, pages, captions), A1… for sound tracks, counted
  * from position and kind, never read from the film (filmTrackBadges).
  *
  * Counted per drawn row, not per film.html track: a track spread into four rows by overlap is A2, A3, A4, A5 and the
  * music under it is A6. Four rows all called A2 could not be pointed at.
  */
 function badgeRows<T extends { role: string; captions?: unknown }>(rows: readonly T[]): (T & { badge: string })[] {
-  /* caption tracks are T1, T2… from the top; the rest are counted as if they were not there */
-  const others = rows.filter((row) => !row.captions);
-  const badges = filmTrackBadges(others.map((row) => ({ kind: row.role })));
-  let caption = 0;
-  return rows.map((row) => ({ ...row, badge: row.captions ? `T${++caption}` : badges[others.indexOf(row)]! }));
+  /* a caption track is picture: drawn over the rows under it, counted with them */
+  const badges = filmTrackBadges(rows.map((row) => ({ kind: row.captions ? 'video' : row.role })));
+  return rows.map((row, i) => ({ ...row, badge: badges[i]! }));
 }
 
 /** A film.html track's caption file and name, when it is a caption track. */

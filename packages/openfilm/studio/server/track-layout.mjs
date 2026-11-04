@@ -13,11 +13,11 @@ export function trackKind(track) {
   return kinds.size === 1 ? /** @type {'mg' | 'video' | 'audio'} */ ([...kinds][0]) : 'video';
 }
 
-/** Picture rows count bottom up, sound rows top down; each prefix counts separately.
+/** V for picture rows (pages too), counted bottom up; A for sound rows, top down.
  * @param {readonly string[]} kinds
  */
 export function rowBadges(kinds) {
-  const prefixes = kinds.map((kind) => kind === 'mg' ? 'P' : kind === 'video' ? 'V' : 'A');
+  const prefixes = kinds.map((kind) => kind === 'audio' ? 'A' : 'V');
   const total = new Map();
   for (const prefix of prefixes) total.set(prefix, (total.get(prefix) ?? 0) + 1);
   const seen = new Map();
