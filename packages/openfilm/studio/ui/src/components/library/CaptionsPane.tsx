@@ -11,7 +11,7 @@ import { Check, FileText } from 'lucide-react';
 import { FILM_SUBTITLE_DEFAULT, FILM_SUBTITLE_LANGUAGES, FILM_SUBTITLE_LOOKS, subtitleStyleVtt } from '../../../../server/film-subtitle.mjs';
 import { useLanguage, useT } from '@/i18n';
 import { cueRule } from '@/lib/caption-edits';
-import { varsOf } from '@/lib/caption-look';
+import { lookVars, varsOf } from '@/lib/caption-look';
 import { readVtt } from '../../../../../src/captions.mjs';
 import { MenuSelect } from '../MenuSelect';
 import { FOOT_ROOM } from './AudioList';
@@ -164,19 +164,33 @@ function Templates({ actions }: { actions: CaptionsActions }) {
       <p className="text-[11.5px] leading-relaxed text-[var(--text-muted)]">
         {target ? t('assetDrawer.captionsTemplateOn').replace('{track}', target) : t('assetDrawer.captionsNeedTrack')}
       </p>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-x-2.5 gap-y-3">
-        {Object.keys(FILM_SUBTITLE_LOOKS).map((id) => (
-          <button key={id} type="button" disabled={!target} onClick={() => actions.template(id, edited)} title={t(`assetDrawer.captionLook_${id}`)}
-            className="group min-w-0 cursor-default select-none text-left disabled:opacity-50">
-            <div className="grid aspect-video place-items-center overflow-hidden rounded-md bg-[#2b2b30] ring-1 ring-transparent group-hover:ring-[var(--text-faint)]">
-              <span style={lookStyle(id)}>{t('assetDrawer.captionsSample')}</span>
-            </div>
-            <div className="mt-1.5 truncate px-0.5 text-[11.5px] text-[var(--text-muted)] group-hover:text-[var(--text)]">{t(`assetDrawer.captionLook_${id}`)}</div>
-          </button>
-        ))}
-      </div>
+      <CaptionLookCards disabled={!target} onPick={(id) => actions.template(id, edited)} />
     </div>
   );
+}
+
+/** A card for each caption look (FILM_SUBTITLE_LOOKS), its words drawn in it: the library's templates, the inspector's presets. */
+export function CaptionLookCards({ onPick, disabled, small }: { onPick: (id: string) => void; disabled?: boolean; small?: boolean }) {
+  const t = useT();
+  return (
+    <div className={`grid gap-x-2 gap-y-2.5 ${small ? 'grid-cols-[repeat(auto-fill,minmax(72px,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(96px,1fr))]'}`}>
+      {Object.keys(FILM_SUBTITLE_LOOKS).map((id) => (
+        <button key={id} type="button" disabled={disabled} onClick={() => onPick(id)} title={t(`assetDrawer.captionLook_${id}`)}
+          className="group min-w-0 cursor-default select-none text-left disabled:opacity-50">
+          <div className="grid aspect-video place-items-center overflow-hidden rounded-md bg-[#2b2b30] ring-1 ring-transparent group-hover:ring-[var(--text-faint)]">
+            <span style={{ ...lookStyle(id), ...(small ? { fontSize: 12 } : {}) }}>{t('assetDrawer.captionsSample')}</span>
+          </div>
+          <div className="mt-1 truncate px-0.5 text-[11px] text-[var(--text-muted)] group-hover:text-[var(--text)]">{t(`assetDrawer.captionLook_${id}`)}</div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** A caption look's variables (lib/caption-look), from its CSS as film-subtitle writes it. */
+export function captionLookVars(id: string): Record<string, string> {
+  const look = FILM_SUBTITLE_LOOKS[id as keyof typeof FILM_SUBTITLE_LOOKS];
+  return look ? lookVars(subtitleStyleVtt({ ...FILM_SUBTITLE_DEFAULT, ...look } as never).css) : {};
 }
 
 /** How a look draws a few words on its card: its own CSS, at the card's size. */

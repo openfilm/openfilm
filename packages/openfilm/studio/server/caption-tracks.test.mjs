@@ -163,18 +163,18 @@ test('a caption track translated: a new file, the same cues at the same times an
   } finally { no.close(); }
 });
 
-test('captions of some clips only: what they say alone, the file saying which, followed by them alone', async () => {
+test('captions of some media only: what they say alone, the file saying which, followed by them alone', async () => {
   const root = project([{ clips: [{ id: 'a', src: 'assets/a.mp3' }, { id: 'b', src: 'assets/b.mp3', at: 3 }] }], {
     'assets/a.mp3': 'x', 'assets/a.vtt': 'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nFrom a\n',
     'assets/b.mp3': 'x', 'assets/b.vtt': 'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nFrom b\n',
   });
   const { base, close } = await serve(root);
   try {
-    const made = await (await fetch(`${base}/caption-tracks/from-subtitles`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'B', clips: ['b'] }) })).json();
+    const made = await (await fetch(`${base}/caption-tracks/from-subtitles`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'B', clips: ['assets/b.mp3'] }) })).json();
     const vtt = readVtt(made.text);
     assert.deepEqual(vtt.cues.map((c) => [c.start, c.text]), [[3, 'From b']]);
-    assert.deepEqual(speechClips(vtt), ['b']);
-    const said = await (await fetch(`${base}/caption-tracks/speech?clips=a`)).json();
+    assert.deepEqual(speechClips(vtt), ['assets/b.mp3']);
+    const said = await (await fetch(`${base}/caption-tracks/speech?clips=${encodeURIComponent('assets/a.mp3')}`)).json();
     assert.deepEqual(readVtt(said.text).cues.map((c) => c.text), ['From a']);
   } finally { close(); }
 });

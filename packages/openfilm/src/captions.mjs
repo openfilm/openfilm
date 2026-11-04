@@ -21,23 +21,26 @@
 export const SPEECH_NOTE = 'NOTE Captions of what is said in the film, made again of it after cuts.';
 /** Whether a caption track's file is made of what is said (SPEECH_NOTE). @param {Vtt} vtt */
 export const madeOfSpeech = (vtt) => vtt.notes.some((n) => n.startsWith(SPEECH_NOTE));
-/** A short print of cues' times and words (FNV-1a): what they were when Studio wrote them. @param {readonly VttCue[]} cues */
+/**
+ * A short print of cues' words (FNV-1a), not their times: what they said when Studio wrote them. Captions moved with
+ * the film are still Studio's; words changed are the person's. @param {readonly VttCue[]} cues
+ */
 function cuesPrint(cues) {
   let h = 0x811c9dc5;
   for (const c of cues) {
-    const line = `${c.start.toFixed(3)}|${c.end.toFixed(3)}|${c.text}\n`;
+    const line = `${cuePlain(c.text)}\n`;
     for (let i = 0; i < line.length; i += 1) { h ^= line.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
   }
   return h.toString(16).padStart(8, '0');
 }
 /** The note of a file of what is said with these cues: SPEECH_NOTE and their print. @param {readonly VttCue[]} cues */
 export const speechNote = (cues) => `${SPEECH_NOTE} ${cuesPrint(cues)}`;
-/** Whether a file of what is said has its cues as Studio wrote them, not changed by hand since. @param {Vtt} vtt */
+/** Whether a file of what is said has its words as Studio wrote them, not changed by hand since. @param {Vtt} vtt */
 export const untouchedSpeech = (vtt) => vtt.notes.includes(speechNote(vtt.cues));
-const CLIPS_NOTE = 'NOTE Of the clips ';
-/** The note of a file of what some clips say: their ids. @param {readonly string[]} clips */
-export const clipsNote = (clips) => `${CLIPS_NOTE}${JSON.stringify(clips)}`;
-/** The clips a file of what is said is made of (clipsNote); null: all that speak. @param {Vtt} vtt @returns {string[] | null} */
+const CLIPS_NOTE = 'NOTE Of the files ';
+/** The note of a file of what some media say: their files (a clip cut in two still speaks from its file). @param {readonly string[]} srcs */
+export const clipsNote = (srcs) => `${CLIPS_NOTE}${JSON.stringify(srcs)}`;
+/** The media files a file of what is said is made of (clipsNote); null: all that speak. @param {Vtt} vtt @returns {string[] | null} */
 export function speechClips(vtt) {
   const note = vtt.notes.find((n) => n.startsWith(CLIPS_NOTE));
   try { const ids = note ? JSON.parse(note.slice(CLIPS_NOTE.length)) : null; return Array.isArray(ids) ? ids.map(String) : null; } catch { return null; }

@@ -41,6 +41,7 @@ import { mediaFetch, useMediaImages } from '@/lib/media-queue';
 import { clipboardItemsOf, clipboardNow, laneOfBlock, pasteEdit, type TimelineClipboardItem } from '@/lib/timeline-clipboard';
 import {
   editModelOf, freshLink, linkedIds, magnetOn, mainTrackOf, planMove, planRippleTrim, planRoom, planSpeed, slowestSpeed, soundTrackFor, type EditMode,
+  planCutRange,
 } from '@/lib/timeline-edit';
 import { readTimelinePrefs, switchesOf } from '@/lib/timeline-prefs';
 import { fadeMsOf, type FadeMs } from '@/lib/clip-fade';
@@ -72,10 +73,10 @@ import { HOST_PANEL_WIDTH, studioHost, useHostPanel, type HostPanel, type StageB
 import { clipRef, fileRef, layerRef, markRange, momentRef, rangeRef, regionRef, stillUrl, subtitleRef, trackRef, type ClipFrameSource, type FilmRange } from '@/lib/studio-refs';
 import { boxNow, chatPointOf, draftBoxesAt, draftMarksOf, sameClip, NO_DRAFT, type DraftMarks, type PictureMarks } from '@/lib/chat-marks';
 import { usePageChanges } from './use-page-changes';
-import { CaptionInspector } from './CaptionInspector';
+import { CaptionInspector, type CaptionTrackInfo } from './CaptionInspector';
 import { CaptionStage } from './CaptionStage';
 import { captionSelectionNow, captionTrackNow, configureCaptionTracks, refreshCaptionTracks, setCaptionSelection, useCaptionSelection, useCaptionTracksOf, writeCaptionTrack, writeCaptionTracksWith } from '@/lib/caption-tracks';
-import { cuePlain, madeOfSpeech, readVtt, untouchedSpeech, writeVtt } from '../../../../src/captions.mjs';
+import { cuePlain, madeOfSpeech, readVtt, speechClips, untouchedSpeech, writeVtt } from '../../../../src/captions.mjs';
 import { FILM_SUBTITLE_DEFAULT, FILM_SUBTITLE_LANGUAGES, FILM_SUBTITLE_LOOKS, subtitleStyleVtt } from '../../../server/film-subtitle.mjs';
 import { addCue, cueRule, placeCues, setCueRule, shifted, withIds } from '@/lib/caption-edits';
 import { lookVars, withCaptionLook } from '@/lib/caption-look';
@@ -1950,6 +1951,40 @@ export function ProjectView({ projectId, onProject, onLeave }: {
      whenever what is said changes (a voice put in, a clip cut or moved); not part of the person's undo */
   /* the media the film's words come from: their clips are marked on the timeline */
   const transcribedSrcs = React.useMemo(() => new Set((subs.captions?.cues ?? []).flatMap((c) => (c.src ? [c.src.replace(/#.*$/, '')] : []))), [subs.captions]);
+  /* the caption inspector's Info: a caption track's badge, name and language, and where its captions come from */
+  const captionInfoOf = React.useCallback((src: string): CaptionTrackInfo => {
+    const row = captionRows.find((tr) => tr.captions?.src === src);
+    const track = row?.docIndex != null ? film.film?.tracks[row.docIndex]?.captions : undefined;
+    const vtt = cuesOf(src);
+    const clips = vtt ? speechClips(vtt) : null;
+    return {
+      badge: row?.badge ?? null, label: track?.label ?? null, language: track?.srclang ?? null,
+      speech: vtt && madeOfSpeech(vtt) ? { clips: clips ? clips.map((src) => src.replace(/^.*\//, '')) : null, auto: untouchedSpeech(vtt) } : null,
+    };
+  }, [captionRows, film.film, cuesOf]);
+  /**
+   * The words of captions cut out of the film, picture and sound with them (the caption inspector's Info): each stretch
+   * (those that touch as one) taken out and the film closed up, the last first, each planned on the film the one
+   * before made.
+   */
+  const cutRanges = React.useCallback(async (ranges: readonly { startMs: number; endMs: number }[]): Promise<string | null> => {
+    const joined: { startMs: number; endMs: number }[] = [];
+    for (const r of [...ranges].sort((a, b) => a.startMs - b.startMs)) {
+      const last = joined.at(-1);
+      if (last && r.startMs <= last.endMs + 1) last.endMs = Math.max(last.endMs, r.endMs);
+      else joined.push({ ...r });
+    }
+    for (const r of joined.reverse()) {
+      const before = filmRef.current;
+      const plan = planCutRange(editModel(), r);
+      if (!plan.ops.length) continue;
+      const why = await edit(plan.ops, 'captionTrack.stepCut');
+      if (why) { toast.show(why); return why; }
+      for (let i = 0; i < 80 && filmRef.current === before; i += 1) await new Promise((done) => window.setTimeout(done, 25));
+      await new Promise((done) => requestAnimationFrame(() => done(null)));
+    }
+    return null;
+  }, [editModel, edit, toast]);
   /* the clips that speak, for the library's New captions to choose from: with a transcript, or wanting one */
   const heardClips = React.useMemo(() => {
     const wanting = new Set(subs.captions?.untranscribed ?? []);
@@ -3537,7 +3572,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         }
       }
       /* all of them: the captions follow whatever speaks from now on; some: those alone */
-      const src = await captionsFromSpeech(chosen.length === heardClips.length ? null : chosen.map((h) => h.clipId));
+      const srcs = [...new Set(chosen.map((h) => h.src))];
+      const src = await captionsFromSpeech(srcs.length === new Set(heardClips.map((h) => h.src)).size ? null : srcs);
       if (src && translate) await translateTrack(src, translate);
     } finally { setCaptionsMaking(false); }
   }, [subs, heardClips, captionsFromSpeech, translateTrack]);
@@ -3974,7 +4010,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                   {typeof inspectorContent === 'object' ? (
                     <ResourceInspector file={inspectorContent} url={(pickedSaved && inspectorContent === pickedMedia ? savedSources : mediaSources).file(inspectorContent)} width={inspectorShownWidth} onClose={closeInspector} />
                   ) : inspectorContent === 'captions' ? (
-                    <CaptionInspector projectId={projectId} width={inspectorShownWidth} onClose={closeInspector} timeMs={timeMs} onSeek={seek} onTranslated={addTranslation} />
+                    <CaptionInspector projectId={projectId} width={inspectorShownWidth} onClose={closeInspector} timeMs={timeMs} onSeek={seek} onTranslated={addTranslation}
+                      infoOf={captionInfoOf} onCut={cutRanges} />
                   ) : (
                     <FontScopeContext.Provider value={fontScope}>
                     <LiveGeometryInspector

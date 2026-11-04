@@ -64,13 +64,18 @@ export function lookVars(css: string): Record<string, string> {
   return varsOf(cueRule(readVtt(`WEBVTT\n\nSTYLE\n${css}\n`), '::cue'));
 }
 
+/** What a look sets on a caption: each of a look's variables, a caption's own default where it says none (its size not). */
+export function captionLookSet(vars: Readonly<Record<string, string>>): Record<string, string> {
+  return Object.fromEntries(LOOK_VARS.map((k) => [k, vars[k] ?? CAPTION_DEFAULTS[k] ?? TEXT_DEFAULTS[k]!]));
+}
+
 /**
  * Every caption of a track in a look (the library's caption templates): its variables the track's `::cue`, what it
  * leaves unset a caption's own default, the track's size kept. `edited`: the captions given a look of their own
  * take it too (their own say of it goes); else they keep theirs.
  */
 export function withCaptionLook(vtt: Vtt, vars: Readonly<Record<string, string>>, edited: boolean): Vtt {
-  const set = Object.fromEntries(LOOK_VARS.map((k) => [k, vars[k] ?? CAPTION_DEFAULTS[k] ?? TEXT_DEFAULTS[k]!]));
+  const set = captionLookSet(vars);
   let out = setCueRule(vtt, '::cue', lookDecls(cueRule(vtt, '::cue'), set));
   if (!edited) return out;
   const off = Object.fromEntries([...LOOK_VARS, ...PLAIN].map((k) => [k, null]));

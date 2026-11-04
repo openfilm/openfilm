@@ -1,7 +1,9 @@
 /**
  * A caption track's inspector (SPEC §1 Captions): a caption is a line of words as a text is, so its look is edited as
- * a text's (TextInspector, the same tabs: Text, Word art, Motion, with the library's word art and motions), and what
- * only captions have is in a tab of its own: every line of the track to read and correct, where they sit, translation.
+ * a text's (TextInspector, the library's word art and motions). Text: Basic (the words, font, size, color… the caption
+ * presets, where the captions sit, how their words light) or Word art; Animation: in, loop and out. Info: the track
+ * itself (where its captions come from, its file, its language), every line of it to read and correct, and lines picked
+ * to cut out of the film, picture and sound with them; translation.
  *
  * What a text's inspector changes is the library text's variables (lib/text-look); here they are the file's STYLE
  * (the caption renderer styles a cue's words by them, src/captions.mjs): with "Apply to all captions" (on, as captions
@@ -10,7 +12,7 @@
  * The size is a share of the frame's short side: the inspector's % is a tenth of a percent of it here (40 = 4cqmin).
  */
 import React from 'react';
-import { Loader2, RotateCcw, Trash2 } from 'lucide-react';
+import { Loader2, RotateCcw, Scissors, Trash2 } from 'lucide-react';
 import { cuePlain, cueSettings, withSettings } from '../../../../src/captions.mjs';
 import { FILM_SUBTITLE_LANGUAGES } from '../../../server/film-subtitle.mjs';
 import { studioHost } from '@/lib/host';
@@ -18,21 +20,32 @@ import { useT } from '@/i18n';
 import { cueRule, removeCues, setCueRule, setCueSettings, setCueText, type Vtt } from '@/lib/caption-edits';
 import { setCaptionApplyAll, setCaptionSelection, useCaptionApplyAll, useCaptionSelection, useCaptionTrack } from '@/lib/caption-tracks';
 import { WORDS_AT, textVars, textWords } from '@/lib/text-look';
-import { CAPTION_DEFAULTS, PLAIN, fromInspector, lookDecls, toInspector, varsOf } from '@/lib/caption-look';
+import { CAPTION_DEFAULTS, PLAIN, captionLookSet, fromInspector, lookDecls, toInspector, varsOf, withCaptionLook } from '@/lib/caption-look';
+import { CaptionLookCards, captionLookVars } from './library/CaptionsPane';
 import { InspectorPanel } from './InspectorPanel';
 import type { PropsHost } from './PropertiesSection';
 import { ColorField, Section, Segmented, SliderField } from './inspector-fields';
 import { MenuSelect } from './MenuSelect';
 import { TextInspector } from './TextInspector';
 
-type Tab = 'text' | 'wordart' | 'motion' | 'captions';
-/** The tab shown last: the next caption picked opens on it. */
+type Tab = 'text' | 'motion' | 'info';
+/** The tab shown last (and Text's part): the next caption picked opens on it. */
 let lastTab: Tab = 'text';
+let lastPart: 'text' | 'wordart' = 'text';
+
+/** What the inspector says of a caption track beside its captions: its badge, name, language, and where they come from. */
+export interface CaptionTrackInfo {
+  badge: string | null;
+  label: string | null;
+  language: string | null;
+  /** Made of what clips say: their names (all that speak: null), and whether they still follow the cuts. */
+  speech: { clips: string[] | null; auto: boolean } | null;
+}
 
 /** Where a caption sits: a line of the picture, % from its top. */
 const PLACES = [{ id: 'top', at: 12 }, { id: 'middle', at: 55 }, { id: 'bottom', at: 90 }] as const;
 
-export function CaptionInspector({ projectId, width, onClose, timeMs, onSeek, onTranslated }: {
+export function CaptionInspector({ projectId, width, onClose, timeMs, onSeek, onTranslated, infoOf, onCut }: {
   projectId: string;
   width: number;
   onClose: () => void;
@@ -41,6 +54,10 @@ export function CaptionInspector({ projectId, width, onClose, timeMs, onSeek, on
   onSeek: (ms: number) => void;
   /** A translation of the track written (`src`, in `language`): put it in the film, just above the track. */
   onTranslated: (from: string, src: string, language: string) => Promise<string | null>;
+  /** The track's own information (its badge, name…), by its file. */
+  infoOf: (src: string) => CaptionTrackInfo;
+  /** Stretches of the film (ms) cut out, picture and sound with them, everything after closed up: null, or why not. */
+  onCut: (ranges: readonly { startMs: number; endMs: number }[]) => Promise<string | null>;
 }) {
   const t = useT();
   const sel = useCaptionSelection();
@@ -49,12 +66,15 @@ export function CaptionInspector({ projectId, width, onClose, timeMs, onSeek, on
   const scope = all ? 'all' : 'selected';
   const [tab, setTabState] = React.useState<Tab>(lastTab);
   const setTab = (next: string) => { lastTab = next as Tab; setTabState(next as Tab); };
+  const [part, setPartState] = React.useState<'text' | 'wordart'>(lastPart);
+  const setPart = (next: string) => { lastPart = next as 'text' | 'wordart'; setPartState(next as 'text' | 'wordart'); };
+  /* the lines picked in Info to cut out of the film */
+  const [cutting, setCutting] = React.useState<ReadonlySet<string>>(() => new Set());
   const ids = React.useMemo(() => [...(sel?.ids ?? [])], [sel]);
   const tabs = [
     { id: 'text', label: t('textInspector.text') },
-    { id: 'wordart', label: t('textInspector.wordart') },
-    { id: 'motion', label: t('textInspector.motion') },
-    { id: 'captions', label: t('captionTrack.tabLines') },
+    { id: 'motion', label: t('captionTrack.tabMotion') },
+    { id: 'info', label: t('captionTrack.tabInfo') },
   ];
   /* the look as the text inspector reads it: the track's, under the first picked cue's own when only they change */
   const vttRef = React.useRef(vtt);
@@ -97,6 +117,17 @@ export function CaptionInspector({ projectId, width, onClose, timeMs, onSeek, on
     void write(out, changed.length ? 'captionTrack.stepLook' : 'captionTrack.stepText');
   };
 
+  /* a caption preset: on every caption (they take it, their own look given up) or on the picked ones */
+  const preset = (id: string) => {
+    const vars = captionLookVars(id);
+    if (scope === 'all') { void write(withCaptionLook(vtt, vars, true), 'captionTrack.stepLook'); return; }
+    let out: Vtt = vtt;
+    for (const cid of ids) out = setCueRule(out, `::cue(#${cid})`, lookDecls(cueRule(out, `::cue(#${cid})`), captionLookSet(vars)));
+    void write(out, 'captionTrack.stepLook');
+  };
+  const info = infoOf(sel.src);
+  const lastEnd = vtt.cues.reduce((end, c) => Math.max(end, c.end), 0);
+  const cutLines = vtt.cues.filter((c) => cutting.has(c.id));
   const timed = vtt.cues.some((c) => /<\d+:\d/.test(c.text));
   const lit = cueRule(vtt, '::cue(:past)').color;
   const reveal = cueRule(vtt, '::cue(:future)').opacity === '0';
@@ -130,26 +161,25 @@ export function CaptionInspector({ projectId, width, onClose, timeMs, onSeek, on
 
   return (
     <InspectorPanel title={t('captionTrack.title')} width={width} onClose={onClose} tabs={tabs} tab={tab} onTab={setTab}>
-      {tab !== 'captions' ? (
+      {tab !== 'info' ? (
         <>
           {scopeBar}
-          {/* a text's inspector, its one tab shown */}
-          <div data-caption-look={tab}>
-            <style>{`[data-caption-look] section[data-section] { display: none; } [data-caption-look="${tab}"] section[data-section="${tab}"] { display: block; }`}</style>
+          {tab === 'text' ? (
+            <div className="mt-2.5">
+              <Segmented label={t('textInspector.text')} value={part} onChange={setPart}
+                options={[{ value: 'text', label: t('captionTrack.partBasic') }, { value: 'wordart', label: t('textInspector.wordart') }]} />
+            </div>
+          ) : null}
+          {/* a text's inspector, its one part shown */}
+          <div data-caption-look={tab === 'motion' ? 'motion' : part}>
+            <style>{`[data-caption-look] section[data-section] { display: none; } [data-caption-look="${tab === 'motion' ? 'motion' : part}"] section[data-section="${tab === 'motion' ? 'motion' : part}"] { display: block; }`}</style>
             <TextInspector key={`${sel.src}:${scope}:${ids.join(',')}`} host={host} commit={commit as never} />
           </div>
-        </>
-      ) : (
-        <>
-          <Section id="caption-lines" title={t('captionTrack.lines')}>
-            <div className="flex flex-col gap-1">
-              {vtt.cues.map((c) => (
-                <CueLine key={c.id} at={c.start} text={cuePlain(c.text)} on={c.start * 1000 <= timeMs && timeMs < c.end * 1000} picked={ids.includes(c.id)}
-                  onGo={() => { onSeek(Math.round(c.start * 1000)); setCaptionSelection({ src: sel.src, ids: new Set([c.id]) }); }}
-                  onEdit={(words) => void write(setCueText(vtt, c.id, words), 'captionTrack.stepText')} />
-              ))}
-            </div>
-          </Section>
+          {tab === 'text' && part === 'text' ? (
+            <>
+              <Section id="caption-presets" title={t('captionTrack.presets')}>
+                <CaptionLookCards small onPick={preset} />
+              </Section>
           <Section id="caption-place" title={t('captionTrack.place')}>
             <div className="flex flex-col gap-2">
               <Segmented label={t('captionTrack.place')} value={PLACES.find((p) => Math.abs(p.at - line) < 1)?.id ?? ''} onChange={(v) => placeAt(PLACES.find((p) => p.id === v)!.at)}
@@ -174,6 +204,38 @@ export function CaptionInspector({ projectId, width, onClose, timeMs, onSeek, on
               </div>
             ) : <p className="text-[10.5px] leading-snug text-[var(--text-faint)]">{t('captionTrack.wordsUntimed')}</p>}
           </Section>
+            </>
+          ) : null}
+        </>
+      ) : (
+        <>
+          <Section id="caption-info" title={t('captionTrack.info')}>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11.5px]">
+              <dt className="text-[var(--text-faint)]">{t('captionTrack.infoTrack')}</dt><dd className="truncate text-[var(--text)]">{[info.badge, info.label].filter(Boolean).join(' · ') || '—'}</dd>
+              <dt className="text-[var(--text-faint)]">{t('captionTrack.infoSource')}</dt>
+              <dd className="text-[var(--text)]">{info.speech ? `${t('captionTrack.infoSpeech')}${info.speech.clips ? ` · ${info.speech.clips.join(', ')}` : ''}` : t('captionTrack.infoOwn')}</dd>
+              {info.speech ? <><dt className="text-[var(--text-faint)]">{t('captionTrack.infoFollow')}</dt><dd className="text-[var(--text)]">{t(info.speech.auto ? 'captionTrack.infoFollowOn' : 'captionTrack.infoFollowOff')}</dd></> : null}
+              <dt className="text-[var(--text-faint)]">{t('captionTrack.infoCount')}</dt><dd className="tabular-nums text-[var(--text)]">{vtt.cues.length} · {Math.floor(lastEnd / 60)}:{String(Math.round(lastEnd % 60)).padStart(2, '0')}</dd>
+              {info.language ? <><dt className="text-[var(--text-faint)]">{t('captionTrack.infoLanguage')}</dt><dd className="text-[var(--text)]">{FILM_SUBTITLE_LANGUAGES.find((l) => l.code === info.language)?.native ?? info.language}</dd></> : null}
+              <dt className="text-[var(--text-faint)]">{t('captionTrack.infoFile')}</dt><dd className="truncate font-mono text-[10.5px] text-[var(--text-muted)]" title={sel.src}>{sel.src}</dd>
+            </dl>
+          </Section>
+          <Section id="caption-lines" title={t('captionTrack.lines')}>
+            <p className="mb-1.5 text-[10.5px] leading-snug text-[var(--text-faint)]">{t('captionTrack.cutHint')}</p>
+            <div className="flex flex-col gap-1">
+              {vtt.cues.map((c) => (
+                <CueLine key={c.id} at={c.start} text={cuePlain(c.text)} on={c.start * 1000 <= timeMs && timeMs < c.end * 1000} picked={ids.includes(c.id)}
+                  cut={cutting.has(c.id)} onCut={() => setCutting((cur) => { const n = new Set(cur); if (n.has(c.id)) n.delete(c.id); else n.add(c.id); return n; })}
+                  onGo={() => { onSeek(Math.round(c.start * 1000)); setCaptionSelection({ src: sel.src, ids: new Set([c.id]) }); }}
+                  onEdit={(words) => void write(setCueText(vtt, c.id, words), 'captionTrack.stepText')} />
+              ))}
+            </div>
+            <button type="button" data-caption-cut="" disabled={!cutLines.length}
+              onClick={() => { void onCut(cutLines.map((c) => ({ startMs: Math.round(c.start * 1000), endMs: Math.round(c.end * 1000) }))).then((why) => { if (!why) setCutting(new Set()); }); }}
+              className="mt-2 flex h-7 w-full items-center justify-center gap-1.5 rounded-[5px] bg-[var(--bg-field)] text-[11.5px] text-[var(--text)] hover:bg-[var(--bg-hover)]">
+              <Scissors size={13} />{t('captionTrack.cutLines').replace('{n}', String(cutLines.length))}
+            </button>
+          </Section>
           <Translate projectId={projectId} src={sel.src} onTranslated={onTranslated} />
           <div className="mt-3">
             <button type="button" data-caption-delete="" onClick={() => { setCaptionSelection(null); void write(removeCues(vtt, new Set(ids)), 'captionTrack.stepRemove'); }}
@@ -188,7 +250,9 @@ export function CaptionInspector({ projectId, width, onClose, timeMs, onSeek, on
 }
 
 /** One line of the track: its start, its words to correct (kept on leaving the field), lit while it plays. */
-function CueLine({ at, text, on, picked, onGo, onEdit }: { at: number; text: string; on: boolean; picked: boolean; onGo: () => void; onEdit: (words: string) => void }) {
+function CueLine({ at, text, on, picked, cut, onCut, onGo, onEdit }: {
+  at: number; text: string; on: boolean; picked: boolean; cut: boolean; onCut: () => void; onGo: () => void; onEdit: (words: string) => void;
+}) {
   const [draft, setDraft] = React.useState(text);
   React.useEffect(() => setDraft(text), [text]);
   const line = React.useRef<HTMLDivElement | null>(null);
@@ -196,12 +260,13 @@ function CueLine({ at, text, on, picked, onGo, onEdit }: { at: number; text: str
   const mm = Math.floor(at / 60), ss = Math.floor(at % 60);
   return (
     <div ref={line} data-caption-line="" className={`flex items-start gap-2 rounded-[5px] px-1 py-0.5 ${on ? 'bg-[var(--bg-field)]' : ''}`}>
+      <input type="checkbox" checked={cut} onChange={onCut} aria-label={text} className="mt-[7px] shrink-0 accent-[var(--accent)]" />
       <button type="button" onClick={onGo} className={`mt-[5px] w-8 shrink-0 text-left text-[10.5px] tabular-nums ${on || picked ? 'text-[var(--accent)]' : 'text-[var(--text-faint)]'}`}>
         {mm}:{String(ss).padStart(2, '0')}
       </button>
       <textarea value={draft} rows={1} onChange={(e) => setDraft(e.target.value)} onFocus={onGo}
         onBlur={() => { if (draft.trim() && draft !== text) onEdit(draft.trim()); else setDraft(text); }}
-        className="min-w-0 flex-1 resize-none rounded-[5px] bg-transparent px-1.5 py-1 text-[11.5px] leading-snug text-[var(--text)] outline-none [field-sizing:content] focus:bg-[var(--bg-panel)] focus:ring-1 focus:ring-[var(--accent)]" />
+        className={`min-w-0 flex-1 resize-none rounded-[5px] bg-transparent px-1.5 py-1 text-[11.5px] leading-snug outline-none [field-sizing:content] focus:bg-[var(--bg-panel)] focus:ring-1 focus:ring-[var(--accent)] ${cut ? 'text-[var(--text-faint)] line-through' : 'text-[var(--text)]'}`} />
     </div>
   );
 }

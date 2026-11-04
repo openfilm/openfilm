@@ -191,7 +191,7 @@ const idsOf = (v) => (Array.isArray(v) && v.length ? v.map(String) : null);
 async function speechVtt(root, clips = null) {
   const style = { ...FILM_SUBTITLE_DEFAULT, ...(await readSubtitleStyle(root)) };
   const { cues } = await filmCaptions(root);
-  const said = clips ? cues.filter((c) => c.clip !== undefined && clips.includes(c.clip)) : cues;
+  const said = clips ? cues.filter((c) => c.src !== undefined && clips.includes(c.src)) : cues;
   return subtitlesVtt(filmSubtitleShown(said, style), style, clips);
 }
 
@@ -232,7 +232,10 @@ export async function syncSpeechCaptions(root, { name, label }) {
   const said = readVtt(await speechVtt(root, speech ? speechClips(speech.vtt) : null));
   if (speech) {
     const was = speech.vtt;
-    if (!untouchedSpeech(was)) return {};
+    /* the person's words are theirs: written again only when they are Studio's, or when what is said now says them
+       all (a cut took out a caption's words with its sound) */
+    const words = (/** @type {import('../../src/captions.mjs').Vtt} */ v) => v.cues.map((c) => cuePlain(c.text)).join('\n');
+    if (!untouchedSpeech(was) && words(was) !== words(said)) return {};
     const styles = was.styles.map((b) => b.replace(/::cue\(#[^)]*\)\s*\{[^}]*\}\s*/g, '')).filter((b) => b.replace(/^STYLE\s*/, '').trim());
     const next = writeVtt({ ...was, notes: said.notes, styles, cues: said.cues.map((c) => ({ ...c, settings: was.cues[0]?.settings ?? c.settings })) });
     if (next === writeVtt(was)) return {};

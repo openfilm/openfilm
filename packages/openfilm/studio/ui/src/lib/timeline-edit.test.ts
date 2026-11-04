@@ -14,6 +14,7 @@ import {
   planCloseGap,
   planCloseMainGaps,
   planCloseTrackGaps,
+  planCutRange,
   planEdges,
   planLink,
   planMove,
@@ -635,4 +636,17 @@ test('no plan makes two clips on a track overlap', () => {
     planSpeed(m, ['d'], 0.25, { ripple: true }),
   ];
   for (const plan of plans) apart(after(m, plan!));
+});
+
+test('a stretch cut out of the film: what is in it goes, what crosses it is trimmed or cut in two, all after it closes up', () => {
+  const m = model([['a', 0, 4], ['b', 4, 8]], [['vo', 1, 6]], [['late', 7, 9]], { locked: true, clips: [['kept', 2, 5]] });
+  assert.deepEqual(after(m, planCutRange(m, { startMs: 2000, endMs: 3000 })), [
+    [['a', 0, 2], ['a-b', 2, 3], ['b', 3, 7]],
+    [['vo', 1, 2], ['vo-b', 2, 5]],
+    [['late', 6, 8]],
+    [['kept', 2, 5]],
+  ]);
+  /* a clip wholly inside goes */
+  const n = model([['x', 0, 2], ['y', 2, 3], ['z', 3, 5]]);
+  assert.deepEqual(after(n, planCutRange(n, { startMs: 2000, endMs: 3000 })), [[['x', 0, 2], ['z', 2, 4]]]);
 });

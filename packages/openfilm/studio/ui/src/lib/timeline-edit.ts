@@ -617,6 +617,36 @@ function planOf(d: Draft): EditPlan {
   return { ops, placed, shortMs: d.shortMs };
 }
 
+/**
+ * A stretch of the film taken out, everything after it closed up (the library's captions: the words of a caption cut,
+ * picture and sound with them): what lies in it goes, what crosses its edges is trimmed to them (a clip across the
+ * whole of it is cut in two), and every clip after it moves back by its length, on every track but a locked one.
+ */
+export function planCutRange(model: EditModel, range: { startMs: number; endMs: number }): EditPlan {
+  const d = draftOf(model);
+  const { startMs: a, endMs: b } = range;
+  const len = b - a;
+  if (!(len > TOUCH_MS)) return emptyPlan();
+  for (const t of d.tracks) {
+    if (t.locked) continue;
+    for (const c of [...t.clips]) {
+      if (c.endMs <= a + TOUCH_MS) continue;
+      if (c.startMs >= b - TOUCH_MS) { shiftClip(c, -len); continue; }
+      if (c.startMs >= a - TOUCH_MS && c.endMs <= b + TOUCH_MS) { t.clips.splice(t.clips.indexOf(c), 1); continue; }
+      if (c.startMs < a && c.endMs > b) {
+        const right = cutAt(d, t, c, b);
+        c.endMs = a;
+        if (right) shiftClip(right, -len);
+        continue;
+      }
+      if (c.startMs < a) { c.endMs = a; continue; }
+      setStart(c, b);
+      shiftClip(c, -len);
+    }
+  }
+  return planOf(d);
+}
+
 /* the draft's own steps, for edits planned elsewhere (lib/transitions) */
 export { carry, draftOf, find as findInDraft, follow, planOf, ridesOf, rippleAt, trackAt };
 
