@@ -79,6 +79,7 @@ import { captionSelectionNow, captionTrackNow, configureCaptionTracks, refreshCa
 import { cuePlain, madeOfSpeech, readVtt, writeVtt } from '../../../../src/captions.mjs';
 import { FILM_SUBTITLE_LANGUAGES } from '../../../server/film-subtitle.mjs';
 import { addCue, cueRule, placeCues, setCueRule, shifted, withIds } from '@/lib/caption-edits';
+import { withWordArt } from '@/lib/caption-look';
 import { cueClipId, cueEditOf, cueOf, cueStandIn, isCueClip, withCueBlocks, type KeptCue } from '@/lib/caption-blocks';
 
 import { useFilmSubtitles } from '@/lib/use-film-subtitles';
@@ -1907,6 +1908,15 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const why = await addCaption(src, timeRef.current);
     if (why) toast.show(why);
   }, [captionRow, newCaptionTrack, addCaption, toast]);
+  /** A word art of the library put on every caption of a track: the one picked, else the captions of speech, else the top one. */
+  const captionLook = React.useCallback(async (item: LibraryItem) => {
+    const src = captionSelectionNow()?.src ?? speechSrc ?? captionRow?.captions?.src ?? null;
+    const row = captionRows.find((tr) => tr.captions?.src === src);
+    const vtt = src ? captionTrackNow(projectId, src) : null;
+    if (!src || !vtt) { toast.show(t('assetDrawer.captionsNoTrack')); return; }
+    const why = await writeCaptionTrack(projectId, src, withWordArt(vtt, item.vars ?? {}), 'captionTrack.stepLook');
+    toast.show(why ?? t('assetDrawer.captionsLooked').replace('{name}', nameOf(item.name, language)).replace('{track}', row?.badge ?? ''));
+  }, [projectId, speechSrc, captionRow, captionRows, language, toast, t]);
   /** Subtitle files (SRT, WebVTT) among files dropped on the timeline or the picture: each a caption track from `atMs`. */
   const takeSubtitleFiles = React.useCallback((files: File[], atMs: number): File[] => {
     const subtitles = files.filter((f) => /\.(srt|vtt)$/i.test(f.name));
@@ -4082,14 +4092,14 @@ export function ProjectView({ projectId, onProject, onLeave }: {
           the panel's composer floats over its last `bottom` px, which its lists scroll clear of */}
       {hostAssets?.open && hostPanel ? <PanelSeam panel={hostPanel} bottom={hostAssets.bottom} /> : null}
       {hostAssets?.open && hostPanel ? (
-        <div className="fixed z-30 flex min-h-0 min-w-0 flex-col overflow-hidden border-t border-[var(--border)] bg-[var(--bg-panel)]"
+        <div className="fixed z-30 flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--bg-panel)]"
           style={{ top: HOST_PANEL_TOP, left: 0, bottom: 0, width: HOST_PANEL_WIDTH }}>
           <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} actions={library.actions} under={hostAssets.bottom}
             captions={{
               lines: subs.captions?.cues.length ?? 0, untranscribed: subs.captions?.untranscribed.length ?? 0, making: captionsMaking || subs.transcribing, problem: subtitleProblem,
               speechTrack: speechRow?.badge ?? null, captionTrack: captionRow?.badge ?? null,
               fromSpeech: () => void makeCaptions(), connect: () => { setSubtitleProblem(null); setSettingsOpen('models'); },
-              fromFile: (file) => void newCaptionTrack(file), addOne: () => void captionHere(),
+              fromFile: (file) => void newCaptionTrack(file), addOne: () => void captionHere(), look: (item) => void captionLook(item),
             }}
             onServices={() => setSettingsOpen('models')} projectId={projectId} showSkills={skillsShown} />
         </div>
