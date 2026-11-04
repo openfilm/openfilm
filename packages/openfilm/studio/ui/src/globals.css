@@ -86,8 +86,10 @@
   /* the timeline's own: a well (meters), the playhead and the frame of a picked clip, and waveforms drawn lighter
      over a clip's own color (canvas reads these back from the element) */
   --tl-lane: #f1f1f3;
-  /* the track of a picked clip */
-  --tl-lane-on: #ececef;
+  /* a track's band, the line between two, and the track of a picked clip */
+  --tl-row: #f3f3f5;
+  --tl-row-line: rgba(16, 16, 24, 0.1);
+  --tl-lane-on: #e8e8ec;
   --tl-playhead: #161619;
   --tl-select: #161619;
   --tl-wave: rgba(255, 255, 255, 0.5);
@@ -148,7 +150,9 @@
   --clip-audio: #1c5757;
 
   --tl-lane: #0f0f11;
-  --tl-lane-on: #202024;
+  --tl-row: #1a1a1d;
+  --tl-row-line: rgba(240, 240, 255, 0.09);
+  --tl-lane-on: #25252a;
   --tl-playhead: #ffffff;
   --tl-select: #ffffff;
   --tl-wave: rgba(255, 255, 255, 0.4);
@@ -337,6 +341,18 @@ html[data-focus-nav='tab'] :where(a, button, [role='button'], select, summary):f
 /* ── Timeline ── */
 
 /* Only the range bar under the tracks scrolls sideways; the lanes hide their horizontal scrollbar. */
+/* a track's row (Timeline.tsx), its head and its lane alike: a hairline in the gap above it, so two tracks read apart */
+.tl-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -2px;
+  height: 1px;
+  background: var(--tl-row-line);
+  pointer-events: none;
+}
+
 .tl-scroll {
   scrollbar-width: thin;
   scrollbar-color: var(--text-faint) transparent;

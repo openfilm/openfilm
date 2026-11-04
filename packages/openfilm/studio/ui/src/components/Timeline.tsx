@@ -73,6 +73,7 @@ import {
 import {
   computerFileDragItem,
   isComputerFileDrag,
+  hideDragPicture,
   peekResourceDrag,
   readResourceDragData,
   RESOURCE_DRAG_TYPE,
@@ -274,12 +275,12 @@ const TL = {
   faint: 'var(--text-faint)',
 } as const;
 
-/* rows are drawn only where they say something: clips lie on the panel itself; the track of a picked clip has a row
-   of its own color (`--tl-lane-on`), the main track a band */
+/* each track is a band of its own from its head across the timeline (`--tl-row`, a hairline between: .tl-row), so a
+   clip is seen to be on its track; the track of a picked clip is a shade brighter (`--tl-lane-on`) */
 function laneTone(track: TimelineTrack, picked: boolean): string {
   if (picked) return 'var(--tl-lane-on)';
-  /* the main track: a band of its own, a shade toward the text (lighter in the dark, darker in the light) */
-  return track.main && !track.hidden ? `color-mix(in srgb, ${TL.head} 95%, var(--text-muted))` : TL.head;
+  /* the main track: a band deeper still, a shade toward the text (lighter in the dark, darker in the light) */
+  return track.main && !track.hidden ? 'color-mix(in srgb, var(--tl-row) 94%, var(--text-muted))' : 'var(--tl-row)';
 }
 
 /**
@@ -459,7 +460,8 @@ function LandingMark({ landing, pxPerMs }: { landing: DropLanding; pxPerMs: numb
         width: Math.max(8, Math.round(landing.endMs * pxPerMs) - Math.round(landing.startMs * pxPerMs) - 1),
         top: landing.top,
         height: landing.height,
-        opacity: landing.refused ? 0.28 : 0.5,
+        /* solid, as the clip it will be; refused, faint */
+        opacity: landing.refused ? 0.28 : 1,
         boxShadow: landing.refused
           ? 'inset 0 0 0 1px color-mix(in srgb, var(--err) 70%, transparent)'
           : undefined,
@@ -1053,6 +1055,8 @@ export const Timeline = React.memo(function Timeline({
     if (pref === 'magnet' && on) onMagnetOn.current();
   }, []);
   const [assetHint, setAssetHint] = React.useState<AssetHint | null>(null);
+  /* over the lanes the dragged thing is the clip it will be, drawn where it lands: its picture is not shown meanwhile */
+  React.useEffect(() => { hideDragPicture(Boolean(assetHint)); }, [assetHint]);
   /* a fade dragged over the timeline: the cut it would go on, shown by the snap guide */
   const [applyCutMs, setApplyCutMs] = React.useState<number | null>(null);
   const [dropBusy, setDropBusy] = React.useState(false);
@@ -2668,7 +2672,7 @@ export const Timeline = React.memo(function Timeline({
     const targeted = targetLane === track.lane;
     /* far from the view, only its place (the one being dragged keeps all of it) */
     if ((laneIndex < nearFirst || laneIndex > nearLast) && !liftingHead) {
-      return <div key={track.lane} className="rounded-l-[3px]" style={{ marginTop: GAP, height: h, background: laneTone(track, lit) }} />;
+      return <div key={track.lane} className="tl-row relative rounded-l-[3px]" style={{ marginTop: GAP, height: h, background: laneTone(track, lit) }} />;
     }
     /* the main track is marked by its look (its band) and its hover title, not by a name or a badge that reads as a switch */
     const mainHead = Boolean(track.main) && track.index === 1;
@@ -2681,7 +2685,7 @@ export const Timeline = React.memo(function Timeline({
       /* each head is its own block with gaps between, matching its row one to one */
       <div
         key={track.lane}
-        className="relative grid w-full items-center justify-items-center rounded-l-[3px] px-0.5"
+        className="tl-row relative grid w-full items-center justify-items-center rounded-l-[3px] px-0.5"
         data-lane-reorder={canReorder ? '1' : '0'}
         data-lane-target={targeted ? '1' : '0'}
         data-lane-type={track.kind}
@@ -2756,6 +2760,7 @@ export const Timeline = React.memo(function Timeline({
   const laneSkins = React.useMemo(() => tracks.map((track) => (
     <div
       key={track.lane}
+      className="tl-row relative"
       style={{
         marginTop: GAP,
         height: rowH(track),
