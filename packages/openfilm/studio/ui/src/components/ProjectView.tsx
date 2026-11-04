@@ -4090,9 +4090,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
           the panel's composer floats over its last `bottom` px, which its lists scroll clear of */}
       {hostAssets?.open && hostPanel ? <PanelSeam panel={hostPanel} bottom={hostAssets.bottom} /> : null}
       {hostAssets?.open && hostPanel ? (
-        /* framed as the chat's column is: a line of the app's ground at its top, then the panel */
-        <div className="fixed z-30 flex min-h-0 min-w-0 flex-col overflow-hidden border-t border-[var(--bg-app)] bg-[var(--bg-panel)]"
+        /* framed as the chat's column is: a line of the app's ground at its top, then the panel (a border's color would
+           be the global one's) */
+        <div className="fixed z-30 flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--bg-app)] pt-px"
           style={{ top: HOST_PANEL_TOP, left: 0, bottom: 0, width: HOST_PANEL_WIDTH }}>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--bg-panel)]">
           <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} actions={library.actions} under={hostAssets.bottom}
             captions={{
               lines: subs.captions?.cues.length ?? 0, untranscribed: subs.captions?.untranscribed.length ?? 0, making: captionsMaking || subs.transcribing, problem: subtitleProblem,
@@ -4102,6 +4104,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
               translateFrom: translateRow?.badge ?? null, translations, translate: translateCaptions,
             }}
             onServices={() => setSettingsOpen('models')} projectId={projectId} showSkills={skillsShown} />
+          </div>
         </div>
       ) : null}
       <DesktopDialog open={desktopOpen} onClose={() => setDesktopOpen(false)} />
