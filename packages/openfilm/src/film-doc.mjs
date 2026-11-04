@@ -30,8 +30,9 @@ export const MEDIA_RATE_MAX = 16;
 /** Whether a browser plays media at `rate`. @param {number} rate */
 export const mediaPlays = (rate) => rate >= MEDIA_RATE_MIN - 1e-9 && rate <= MEDIA_RATE_MAX + 1e-9;
 const TRIM_EPS = 1e-6;
-/* film.html's seconds are written to the millisecond: a trim that far past a file's length is its end */
-const PAST_END_EPS = 0.0005 + TRIM_EPS;
+/* film.html's seconds are written to the millisecond, and Studio's timeline counts a file's length in whole
+   milliseconds rounded down: a trim one millisecond past a file's length is its end */
+const PAST_END_EPS = 0.001 + TRIM_EPS;
 
 const STILL_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp', 'avif', 'gif', 'bmp', 'svg']);
 
