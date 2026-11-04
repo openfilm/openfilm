@@ -254,20 +254,18 @@ const ZOOM_SETTLE_MS = 120;
  */
 const ZOOM_RELAYOUT = 1.5;
 
-/** Color by kind of clip (globals.css `--clip-*`): one hue each at one lightness; a clip is tinted with it (.tl-clip). */
+/** Color by kind of clip (globals.css `--clip-*`): one quiet color each, under white words; sounds of all kinds one. */
 const KIND_COLOR: Record<TimelineBlockKind, string> = {
   mg: 'var(--clip-page)',
   video: 'var(--clip-video)',
-  voice: 'var(--clip-voice)',
-  sfx: 'var(--clip-sfx)',
-  music: 'var(--clip-music)',
+  voice: 'var(--clip-audio)',
+  sfx: 'var(--clip-audio)',
+  music: 'var(--clip-audio)',
   caption: 'var(--clip-text)',
 };
 
 /** The timeline's surfaces: the app's (globals.css), and the lanes' own `--tl-*`. */
 const TL = {
-  lane: 'var(--tl-lane)',
-  laneOn: 'var(--tl-lane-on)',
   head: 'var(--bg-panel)',
   ruler: 'var(--bg-panel)',
   line: 'var(--border)',
@@ -276,11 +274,11 @@ const TL = {
   faint: 'var(--text-faint)',
 } as const;
 
-function laneTone(track: TimelineTrack, selected: boolean): string {
-  if (track.hidden) return TL.head;
-  const tone = selected ? TL.laneOn : TL.lane;
+/* rows are not drawn: clips lie on the panel itself, and a track is not lit when picked or aimed at (the picked clip's
+   frame says enough) */
+function laneTone(track: TimelineTrack): string {
   /* the main track: a band of its own, a shade toward the text (lighter in the dark, darker in the light) */
-  return track.main ? `color-mix(in srgb, ${tone} 93%, var(--text-muted))` : tone;
+  return track.main && !track.hidden ? `color-mix(in srgb, ${TL.head} 95%, var(--text-muted))` : TL.head;
 }
 
 /**
@@ -453,22 +451,21 @@ function LandingMark({ landing, pxPerMs }: { landing: DropLanding; pxPerMs: numb
     <div
       data-drop-slot=""
       data-drop-start={Math.round(landing.startMs)}
-      /* drawn as the clip it will be (.tl-clip), faded */
-      className="tl-clip absolute overflow-hidden rounded-[3px]"
+      className="absolute overflow-hidden rounded-[4px]"
       style={{
-        '--clip': landing.color,
+        background: landing.color,
         left: Math.round(landing.startMs * pxPerMs),
         width: Math.max(8, Math.round(landing.endMs * pxPerMs) - Math.round(landing.startMs * pxPerMs) - 1),
         top: landing.top,
         height: landing.height,
-        opacity: landing.refused ? 0.4 : 0.7,
+        opacity: landing.refused ? 0.28 : 0.5,
         boxShadow: landing.refused
           ? 'inset 0 0 0 1px color-mix(in srgb, var(--err) 70%, transparent)'
           : undefined,
-      } as React.CSSProperties}
+      }}
     >
       <div
-        className="truncate px-1.5 text-[10px] font-medium leading-none"
+        className="truncate px-1.5 text-[10px] font-medium leading-none text-white/90"
         style={{ height: INFO_H, display: 'flex', alignItems: 'center' }}
       >
         {landing.title}
@@ -2670,7 +2667,7 @@ export const Timeline = React.memo(function Timeline({
     const targeted = targetLane === track.lane;
     /* far from the view, only its place (the one being dragged keeps all of it) */
     if ((laneIndex < nearFirst || laneIndex > nearLast) && !liftingHead) {
-      return <div key={track.lane} className="rounded-l-[3px]" style={{ marginTop: GAP, height: h, background: laneTone(track, lit) }} />;
+      return <div key={track.lane} className="rounded-l-[3px]" style={{ marginTop: GAP, height: h, background: laneTone(track) }} />;
     }
     /* the main track is marked by its look (its band) and its hover title, not by a name or a badge that reads as a switch */
     const mainHead = Boolean(track.main) && track.index === 1;
@@ -2701,9 +2698,8 @@ export const Timeline = React.memo(function Timeline({
           height: h,
           /* what the row holds on the left, a label; its switches after it, each in its own column */
           gridTemplateColumns: `24px 4px repeat(${solo ? 4 : 3}, minmax(0, 1fr))`,
-          background: laneTone(track, lit),
-          /* the targeted track: an accent bar down its left edge */
-          boxShadow: [chatLit ? CHAT_RING : '', targeted ? 'inset 2px 0 0 var(--accent)' : ''].filter(Boolean).join(', ') || undefined,
+          background: laneTone(track),
+          boxShadow: chatLit ? CHAT_RING : undefined,
           opacity: liftingHead ? 0.45 : 1,
           cursor: canReorder ? (liftingHead ? 'grabbing' : 'grab') : undefined,
         }}
@@ -2762,7 +2758,7 @@ export const Timeline = React.memo(function Timeline({
       style={{
         marginTop: GAP,
         height: rowH(track),
-        background: laneTone(track, selectedLanes.has(track.lane)),
+        background: laneTone(track),
       }}
     />
   )), [tracks, selectedLanes]);
@@ -3167,9 +3163,9 @@ export const Timeline = React.memo(function Timeline({
                 onPointerLeave={() => { hoverBlockRef.current?.(null); setPointedBlock((id) => (id === block.id ? null : id)); }}
               >
                 <div
-                  className="tl-clip absolute inset-0 overflow-hidden rounded-[3px]"
+                  className="absolute inset-0 overflow-hidden rounded-[4px]"
                   style={{
-                    '--clip': color,
+                    background: color,
                     boxShadow: floating
                       ? '0 8px 18px rgba(0,0,0,0.32)'
                       : chatLit
@@ -3177,7 +3173,7 @@ export const Timeline = React.memo(function Timeline({
                         : live
                           ? '0 2px 8px rgba(0,0,0,0.18)'
                           : undefined,
-                  } as React.CSSProperties}
+                  }}
                 >
                 {/* info strip: name and length side by side (one statement), not at opposite ends of a wide clip */}
                 <div
@@ -3187,17 +3183,17 @@ export const Timeline = React.memo(function Timeline({
                   {/* pinned to the left of the view so a clip wider than the screen still says what it is (pinLabels,
                       on scroll: scrolling rebuilds nothing) */}
                   <span className="flex min-w-0 items-center gap-1" data-pin={left} data-pin-max={width - 48}>
-                    <span className={`min-w-0 truncate font-medium leading-none ${textRow ? 'text-[11px]' : 'text-[10px]'}`}>
+                    <span className={`min-w-0 truncate font-medium leading-none text-white/90 ${textRow ? 'text-[11px]' : 'text-[10px]'}`}>
                       {textRow ? block.words ?? block.title : block.title}
                     </span>
                     {width > 64 && !textRow ? (
-                      <span className="shrink-0 text-[10px] leading-none tabular-nums opacity-70">
+                      <span className="shrink-0 text-[10px] leading-none tabular-nums text-white/55">
                         {block.noLength ? t('timeline.noLength') : `${((endMs - startMs) / 1000).toFixed(endMs - startMs < 1000 ? 2 : 1)}s`}
                       </span>
                     ) : null}
                     {/* the speed handles on: the speed they set, as it is now */}
                     {speeding && width > 96 ? (
-                      <span data-clip-speed="" className="shrink-0 text-[10px] font-medium leading-none tabular-nums">
+                      <span data-clip-speed="" className="shrink-0 text-[10px] font-medium leading-none tabular-nums text-white/90">
                         {speedText(roundSpeed(thumbSpeed))}
                       </span>
                     ) : null}
@@ -3251,8 +3247,7 @@ export const Timeline = React.memo(function Timeline({
                     className="absolute inset-x-0 bottom-0"
                     style={{
                       height: AUDIO_BAND_H,
-                      /* a deeper shade of the clip's own tint */
-                      background: 'color-mix(in oklab, var(--clip) 12%, transparent)',
+                      background: 'rgba(0,0,0,0.22)',
                     }}
                   >
                     {bandAudio && waveUrl && block.src && width > 8 ? (
@@ -3260,7 +3255,7 @@ export const Timeline = React.memo(function Timeline({
                         url={waveUrl(block.src)}
                         width={width}
                         height={AUDIO_BAND_H - 2}
-                        color={color}
+                        color="var(--tl-wave-band)"
                         clipColor="var(--tl-wave-clip)"
                         /* as loud as it plays: the volume as written, or as the line in hand has it */
                         volume={volume}
@@ -3280,7 +3275,7 @@ export const Timeline = React.memo(function Timeline({
                       <span
                         key={c.tMs}
                         className="absolute top-0 bottom-0 w-px"
-                        style={{ left: c.tMs * pxPerMs, background: 'color-mix(in oklab, var(--clip) 45%, transparent)' }}
+                        style={{ left: c.tMs * pxPerMs, background: 'rgba(255,255,255,0.4)' }}
                         title={c.word}
                       />
                     ))}
@@ -3293,7 +3288,7 @@ export const Timeline = React.memo(function Timeline({
                     url={waveUrl(block.src)}
                     width={width}
                     height={Math.max(6, h - INFO_H - 2)}
-                    color={color}
+                    color="var(--tl-wave)"
                     clipColor="var(--tl-wave-clip)"
                     volume={volume}
                     visiblePx={{ from: winFrom, to: winTo }}
@@ -4245,7 +4240,7 @@ export const Timeline = React.memo(function Timeline({
                 <div
                   data-timeline-empty=""
                   className="pointer-events-none flex h-[60px] w-full items-center gap-2 rounded-[4px] border border-dashed px-4"
-                  style={{ background: TL.lane, borderColor: TL.line }}
+                  style={{ background: 'var(--bg-field)', borderColor: TL.line }}
                 >
                   <Film size={15} className="shrink-0" style={{ color: TL.faint }} aria-hidden />
                   <p className="truncate text-[12px]" style={{ color: TL.text }}>

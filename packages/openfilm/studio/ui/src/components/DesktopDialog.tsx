@@ -59,8 +59,8 @@ const DARK: React.CSSProperties = {
   '--on-primary': '#0a0a0c',
   '--accent': '#45cfb5',
   '--on-accent': '#04221d',
-  '--tl-playhead': '#45cfb5',
-  '--clip-voice': '#6cc185',
+  '--tl-playhead': '#ffffff',
+  '--clip-audio': '#1c5757',
   background: [
     'radial-gradient(90% 70% at 0% 0%, color-mix(in srgb, #5ecb92 34%, transparent), transparent 70%)',
     'radial-gradient(80% 60% at 100% 100%, color-mix(in srgb, #7fd3e4 26%, transparent), transparent 70%)',
@@ -250,7 +250,7 @@ function AppPicture() {
               <div className="flex gap-[3px] pl-[18%]">
                 <span className="h-[10px] w-[48%] rounded-[2px] bg-[color-mix(in_srgb,#66d8b8_40%,transparent)]" />
               </div>
-              <span className="h-[8px] w-[92%] rounded-[2px] bg-[color-mix(in_srgb,var(--clip-voice)_45%,transparent)]" />
+              <span className="h-[8px] w-[92%] rounded-[2px] bg-[color-mix(in_srgb,var(--clip-audio)_90%,transparent)]" />
             </div>
             <span className="openfilm-desktop-playhead absolute bottom-[4px] top-[3px] w-[1.5px] rounded-full bg-[var(--tl-playhead)]" />
           </div>

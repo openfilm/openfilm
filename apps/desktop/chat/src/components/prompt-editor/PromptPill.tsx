@@ -84,9 +84,9 @@ const PILL_TONE: Partial<Record<PromptReferenceKind, string>> = {
   subtitle: 'var(--clip-text)',
   clipMg: 'var(--clip-page)',
   clipVideo: 'var(--clip-video)',
-  clipVoice: 'var(--clip-voice)',
-  clipSfx: 'var(--clip-sfx)',
-  clipMusic: 'var(--clip-music)',
+  clipVoice: 'var(--clip-audio)',
+  clipSfx: 'var(--clip-audio)',
+  clipMusic: 'var(--clip-audio)',
   clipCaption: 'var(--clip-text)',
 };
 

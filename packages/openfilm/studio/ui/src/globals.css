@@ -16,10 +16,11 @@
    idle icons). Lines: a hairline and a stronger one.
 
    The main action is ink: near black in light, near white in dark. One accent, the brand teal, for what is selected,
-   current or focused (switches, progress, tabs, the playhead, the frame on the picture); ok, warn and err for states.
+   current or focused (switches, progress, tabs, the frame on the picture); ok, warn and err for states. The timeline
+   keeps to white (ink in light) for its playhead and a picked clip's frame.
 
-   Clips on the timeline by kind, one hue each at one lightness: the hue tints a clip's body, edges it, colors its
-   words and draws its waveform (.tl-clip). */
+   Clips on the timeline by kind, one quiet color each at one lightness, under white words; their waveforms are drawn
+   lighter over it. Sounds of all kinds are one color. */
 
 :root {
   --font-cjk-sans: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', 'Source Han Sans SC',
@@ -72,22 +73,19 @@
   --shadow-sm: 0 1px 2px rgba(16, 16, 24, 0.05), 0 1px 3px rgba(16, 16, 24, 0.05);
   --shadow-lg: 0 12px 32px rgba(16, 16, 24, 0.1), 0 4px 8px rgba(16, 16, 24, 0.05);
 
-  --clip-video: #4682cc;
-  --clip-image: #1c8cb4;
-  --clip-page: #8370c7;
-  --clip-text: #a67700;
-  --clip-voice: #359658;
-  --clip-sfx: #7a8a1b;
-  --clip-music: #209385;
-  /* how much of its hue a clip's body takes, and its words */
-  --clip-tint: 17%;
-  --clip-ink: 62%;
+  --clip-video: #54789d;
+  --clip-image: #497c93;
+  --clip-page: #7968a8;
+  --clip-text: #b5703d;
+  --clip-audio: #318383;
 
-  /* the timeline's own: the lanes are a well a step below the panel; the selected track's is tinted with the accent */
+  /* the timeline's own: a well (meters), the playhead and the frame of a picked clip, and waveforms drawn lighter
+     over a clip's own color (canvas reads these back from the element) */
   --tl-lane: #f1f1f3;
-  --tl-lane-on: #e6efee;
-  --tl-playhead: var(--accent);
+  --tl-playhead: #161619;
   --tl-select: #161619;
+  --tl-wave: rgba(255, 255, 255, 0.5);
+  --tl-wave-band: rgba(255, 255, 255, 0.4);
   /* the part of a waveform a clip's volume pushes past full scale: it will distort */
   --tl-wave-clip: var(--err);
 
@@ -135,20 +133,17 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.5), 0 4px 10px rgba(0, 0, 0, 0.3);
 
-  --clip-video: #76b4ff;
-  --clip-image: #5bbfe8;
-  --clip-page: #b3a1fd;
-  --clip-text: #daa843;
-  --clip-voice: #6bc987;
-  --clip-sfx: #aabc56;
-  --clip-music: #5ec6b6;
-  --clip-tint: 30%;
-  --clip-ink: 40%;
+  --clip-video: #354f6a;
+  --clip-image: #2e5363;
+  --clip-page: #504472;
+  --clip-text: #7f4d28;
+  --clip-audio: #1c5757;
 
   --tl-lane: #0f0f11;
-  --tl-lane-on: #102220;
-  --tl-playhead: var(--accent);
+  --tl-playhead: #ffffff;
   --tl-select: #ffffff;
+  --tl-wave: rgba(255, 255, 255, 0.4);
+  --tl-wave-band: rgba(255, 255, 255, 0.32);
   --tl-wave-clip: var(--err);
 
   --folder-back: #3a3a3a;
@@ -164,20 +159,6 @@
   border-color: var(--border);
 }
 
-/* A clip on the timeline (Timeline.tsx): its kind's hue (`--clip`, set on it) tints its body over the lane, colors its
-   words, and edges it over its pictures. */
-.tl-clip {
-  background: color-mix(in oklab, var(--clip) var(--clip-tint), var(--tl-lane));
-  color: color-mix(in oklab, var(--clip) var(--clip-ink), var(--text));
-}
-.tl-clip::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--clip) 40%, transparent);
-  pointer-events: none;
-}
 
 html,
 body {
