@@ -262,7 +262,7 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
           ) : (
             <Tooltip label={`${(data.versions?.length ? t('canvas.make.again') : t('canvas.make.run'))} · ${MOD}↵`}>
               <button type="button" aria-label={t('canvas.make.run')} disabled={!choices.length} onClick={() => board.make(id)}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--on-accent)] transition hover:bg-[var(--accent-hover)] disabled:opacity-30"><ArrowUp size={17} /></button>
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--primary)] text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:opacity-30"><ArrowUp size={17} /></button>
             </Tooltip>
           )}
         </div>
@@ -281,7 +281,7 @@ export function CutPanel({ id, count }: { id: string; count: number }) {
       <div className={`nodrag nopan flex w-[min(420px,80vw)] items-center gap-3 p-3 ${CARD}`}>
         <span className="min-w-0 flex-1 text-[12.5px] leading-snug text-[var(--cv-label)]">{count ? t('canvas.cut.how') : t('canvas.cut.waiting')}</span>
         <button type="button" disabled={!count} onClick={() => board.sendToFilm(id)}
-          className="flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-[var(--accent)] px-4 text-[13px] font-medium text-[var(--on-accent)] transition hover:bg-[var(--accent-hover)] disabled:opacity-30">
+          className="flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-[var(--primary)] px-4 text-[13px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:opacity-30">
           <Clapperboard size={14} />{t('canvas.cut.send')}
         </button>
       </div>

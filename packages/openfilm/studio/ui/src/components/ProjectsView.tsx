@@ -1390,7 +1390,7 @@ function FolderPicker({
           <button type="button" onClick={onClose}
             className="h-8 rounded-lg border border-[var(--border)] px-3 text-[12.5px] text-[var(--text)] transition hover:bg-[var(--bg-hover)]">{t('confirm.cancel')}</button>
           <button type="button" disabled={!canMove} onClick={() => move(picked)}
-            className="h-8 rounded-lg bg-[var(--accent)] px-4 text-[12.5px] font-medium text-[var(--on-accent)] transition hover:bg-[var(--accent-hover)] disabled:opacity-40">{t('projects.move')}</button>
+            className="h-8 rounded-lg bg-[var(--primary)] px-4 text-[12.5px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:opacity-40">{t('projects.move')}</button>
         </div>
       </div>
     </div>,

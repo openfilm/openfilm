@@ -334,7 +334,7 @@ function ExampleDetail({ example, onStart, onReference, onUseCanvas, onExplain, 
           {example.duration ? <p className="mt-2 text-[12px] text-[var(--text-faint)]">{clock(example.duration)}</p> : null}
           <div className="mt-5 flex flex-col gap-2">
             <button type="button" onClick={copy.run}
-              className="flex h-10 items-center justify-center gap-1.5 rounded-[10px] bg-[var(--accent)] text-[13.5px] font-medium text-[var(--on-accent)] transition hover:bg-[var(--accent-hover)]">
+              className="flex h-10 items-center justify-center gap-1.5 rounded-[10px] bg-[var(--primary)] text-[13.5px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)]">
               <Play size={13} />{copy.label}
             </button>
             {refer ? (

@@ -94,7 +94,7 @@ export function WhatsNew() {
             {t('whatsNew.changelog')}<ArrowUpRight size={14} aria-hidden />
           </a>
           <button type="button" onClick={close} autoFocus
-            className="ml-auto inline-flex h-9 items-center justify-center rounded-[8px] bg-[var(--accent)] px-5 text-[14px] font-medium text-[var(--on-accent)] transition hover:bg-[var(--accent-hover)]">
+            className="ml-auto inline-flex h-9 items-center justify-center rounded-[8px] bg-[var(--primary)] px-5 text-[14px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)]">
             {t('whatsNew.ok')}
           </button>
         </div>

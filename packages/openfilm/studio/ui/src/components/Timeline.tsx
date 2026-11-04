@@ -45,7 +45,6 @@ import {
   ChevronLeft,
   Link2,
   Link2Off,
-  Mic,
   SeparatorVertical,
   BetweenHorizontalStart,
   ArrowLeftToLine,
@@ -53,7 +52,8 @@ import {
   TriangleAlert,
   Blend,
   Plus,
-  AudioWaveform,
+  Headphones,
+  HeadphoneOff,
 } from 'lucide-react';
 import { useT } from '@/i18n';
 import { keyAction, useKeyHint } from '@/lib/keymap-store';
@@ -254,7 +254,7 @@ const ZOOM_SETTLE_MS = 120;
  */
 const ZOOM_RELAYOUT = 1.5;
 
-/** Color by kind of clip (globals.css `--clip-*`): one hue each at one lightness, dark enough for white text and waveforms. */
+/** Color by kind of clip (globals.css `--clip-*`): one hue each at one lightness; a clip is tinted with it (.tl-clip). */
 const KIND_COLOR: Record<TimelineBlockKind, string> = {
   mg: 'var(--clip-page)',
   video: 'var(--clip-video)',
@@ -284,15 +284,17 @@ function laneTone(track: TimelineTrack, selected: boolean): string {
 }
 
 /**
- * A row's mark, one of two as tracks are of two kinds: picture (footage, stills, pages, text, captions: what is drawn)
- * or sound (voices, sound effects, music).
+ * A row's name, V1, V2… for picture (footage, stills, pages, text, captions: what is drawn) or A1, A2… for sound
+ * (voices, sound effects, music), as editors number tracks (timeline-layout badgeRows).
  */
 function LaneMark({ track }: { track: TimelineTrack }) {
-  const Icon = track.kind === 'audio' ? AudioWaveform : Film;
   return (
     /* a label, dimmer than the switches beside it, so the two read apart */
-    <span className="flex items-center justify-center" style={{ width: 21, height: 14, color: 'var(--text-faint)', opacity: track.hidden ? 0.5 : 1 }}>
-      <Icon size={13} strokeWidth={1.8} aria-hidden />
+    <span
+      className="flex items-center justify-center text-[10.5px] font-medium leading-none tabular-nums"
+      style={{ width: 21, height: 14, color: 'var(--text-faint)', opacity: track.hidden ? 0.5 : 1 }}
+    >
+      {track.badge}
     </span>
   );
 }
@@ -451,22 +453,23 @@ function LandingMark({ landing, pxPerMs }: { landing: DropLanding; pxPerMs: numb
     <div
       data-drop-slot=""
       data-drop-start={Math.round(landing.startMs)}
-      className="absolute overflow-hidden rounded-[3px]"
+      /* drawn as the clip it will be (.tl-clip), faded */
+      className="tl-clip absolute overflow-hidden rounded-[3px]"
       style={{
+        '--clip': landing.color,
         left: Math.round(landing.startMs * pxPerMs),
         width: Math.max(8, Math.round(landing.endMs * pxPerMs) - Math.round(landing.startMs * pxPerMs) - 1),
         top: landing.top,
         height: landing.height,
-        background: landing.color,
-        opacity: landing.refused ? 0.28 : 0.45,
+        opacity: landing.refused ? 0.4 : 0.7,
         boxShadow: landing.refused
           ? 'inset 0 0 0 1px color-mix(in srgb, var(--err) 70%, transparent)'
           : undefined,
-      }}
+      } as React.CSSProperties}
     >
       <div
-        className="truncate px-1.5 text-[10px] font-medium leading-none text-white/95"
-        style={{ height: INFO_H, display: 'flex', alignItems: 'center', background: 'rgba(0,0,0,0.3)' }}
+        className="truncate px-1.5 text-[10px] font-medium leading-none"
+        style={{ height: INFO_H, display: 'flex', alignItems: 'center' }}
       >
         {landing.title}
       </div>
@@ -2706,7 +2709,7 @@ export const Timeline = React.memo(function Timeline({
         }}
       >
         <span className="flex min-w-0 items-center gap-1">
-          {/* what the row holds, as a mark alone: no number, no name */}
+          {/* its name as editors number tracks: no title of its own */}
           <LaneMark track={track} />
         </span>
         <span aria-hidden />
@@ -2737,7 +2740,8 @@ export const Timeline = React.memo(function Timeline({
           disabled={!canToggle}
           onToggle={() => toggleTrack(track, 'muted')}
         >
-          {track.muted ? <VolumeX size={HEAD_ICON_H} /> : <Volume2 size={HEAD_ICON_H} />}
+          {/* heard or not: headphones, which sit with the lock and the eye as a speaker's waves did not */}
+          {track.muted ? <HeadphoneOff size={HEAD_ICON_H} /> : <Headphones size={HEAD_ICON_H} />}
         </TrackHeadButton>}
         </> : null}
         {/* solo: Studio's playback only; a track of pages has no sound (its place is kept) */}
@@ -3163,9 +3167,9 @@ export const Timeline = React.memo(function Timeline({
                 onPointerLeave={() => { hoverBlockRef.current?.(null); setPointedBlock((id) => (id === block.id ? null : id)); }}
               >
                 <div
-                  className="absolute inset-0 overflow-hidden rounded-[3px]"
+                  className="tl-clip absolute inset-0 overflow-hidden rounded-[3px]"
                   style={{
-                    background: color,
+                    '--clip': color,
                     boxShadow: floating
                       ? '0 8px 18px rgba(0,0,0,0.32)'
                       : chatLit
@@ -3173,29 +3177,27 @@ export const Timeline = React.memo(function Timeline({
                         : live
                           ? '0 2px 8px rgba(0,0,0,0.18)'
                           : undefined,
-                  }}
+                  } as React.CSSProperties}
                 >
                 {/* info strip: name and length side by side (one statement), not at opposite ends of a wide clip */}
                 <div
                   className="pointer-events-none absolute inset-x-0 top-0 flex items-center overflow-hidden px-1.5"
-                  style={textRow ? { height: '100%' } : { height: INFO_H, background: 'rgba(0,0,0,0.3)' }}
+                  style={{ height: textRow ? '100%' : INFO_H }}
                 >
                   {/* pinned to the left of the view so a clip wider than the screen still says what it is (pinLabels,
                       on scroll: scrolling rebuilds nothing) */}
                   <span className="flex min-w-0 items-center gap-1" data-pin={left} data-pin-max={width - 48}>
-                    {/* a voice says so before its name: it is what the subtitles are made from */}
-                    {block.kind === 'voice' ? <Mic className="h-2.5 w-2.5 shrink-0 text-white/90" aria-hidden /> : null}
-                    <span className={`min-w-0 truncate font-medium leading-none text-white/95 ${textRow ? 'text-[11px]' : 'text-[10px]'}`}>
+                    <span className={`min-w-0 truncate font-medium leading-none ${textRow ? 'text-[11px]' : 'text-[10px]'}`}>
                       {textRow ? block.words ?? block.title : block.title}
                     </span>
                     {width > 64 && !textRow ? (
-                      <span className="shrink-0 text-[10px] leading-none tabular-nums text-white/70">
+                      <span className="shrink-0 text-[10px] leading-none tabular-nums opacity-70">
                         {block.noLength ? t('timeline.noLength') : `${((endMs - startMs) / 1000).toFixed(endMs - startMs < 1000 ? 2 : 1)}s`}
                       </span>
                     ) : null}
                     {/* the speed handles on: the speed they set, as it is now */}
                     {speeding && width > 96 ? (
-                      <span data-clip-speed="" className="shrink-0 text-[10px] font-medium leading-none tabular-nums text-white/95">
+                      <span data-clip-speed="" className="shrink-0 text-[10px] font-medium leading-none tabular-nums">
                         {speedText(roundSpeed(thumbSpeed))}
                       </span>
                     ) : null}
@@ -3249,7 +3251,8 @@ export const Timeline = React.memo(function Timeline({
                     className="absolute inset-x-0 bottom-0"
                     style={{
                       height: AUDIO_BAND_H,
-                      background: 'rgba(0,0,0,0.3)',
+                      /* a deeper shade of the clip's own tint */
+                      background: 'color-mix(in oklab, var(--clip) 12%, transparent)',
                     }}
                   >
                     {bandAudio && waveUrl && block.src && width > 8 ? (
@@ -3257,7 +3260,7 @@ export const Timeline = React.memo(function Timeline({
                         url={waveUrl(block.src)}
                         width={width}
                         height={AUDIO_BAND_H - 2}
-                        color="var(--tl-wave-band)"
+                        color={color}
                         clipColor="var(--tl-wave-clip)"
                         /* as loud as it plays: the volume as written, or as the line in hand has it */
                         volume={volume}
@@ -3277,7 +3280,7 @@ export const Timeline = React.memo(function Timeline({
                       <span
                         key={c.tMs}
                         className="absolute top-0 bottom-0 w-px"
-                        style={{ left: c.tMs * pxPerMs, background: 'rgba(255,255,255,0.45)' }}
+                        style={{ left: c.tMs * pxPerMs, background: 'color-mix(in oklab, var(--clip) 45%, transparent)' }}
                         title={c.word}
                       />
                     ))}
@@ -3290,7 +3293,7 @@ export const Timeline = React.memo(function Timeline({
                     url={waveUrl(block.src)}
                     width={width}
                     height={Math.max(6, h - INFO_H - 2)}
-                    color="var(--tl-wave)"
+                    color={color}
                     clipColor="var(--tl-wave-clip)"
                     volume={volume}
                     visiblePx={{ from: winFrom, to: winTo }}
@@ -3999,7 +4002,7 @@ export const Timeline = React.memo(function Timeline({
         <div className="flex min-w-0 flex-1 items-center justify-center">
           {crumb && !(dropBusy || drag.saving || dropError || drag.error || notice) ? (
             <button type="button" data-compound-back="" onClick={crumb.onBack} title={crumb.outer}
-              className="flex max-w-[min(360px,100%)] items-center gap-1 truncate rounded-[4px] px-1.5 py-0.5 text-[12px] font-medium text-[var(--text)] hover:bg-black/5 dark:hover:bg-white/10">
+              className="flex max-w-[min(360px,100%)] items-center gap-1 truncate rounded-[4px] px-1.5 py-0.5 text-[12px] font-medium text-[var(--text)] hover:bg-[var(--bg-hover)]">
               <ChevronLeft size={14} className="shrink-0" aria-hidden />
               <span className="truncate text-[var(--text-muted)]">{crumb.outer}</span>
               <span className="text-[var(--text-faint)]">/</span>
@@ -4640,9 +4643,10 @@ function ToolButton({
         /* no focus outline after a click; focus-visible still shows for keyboard users */
         className={`flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-[6px] outline-none transition focus-visible:ring-1 focus-visible:ring-[var(--accent)] ${
           disabled ? 'cursor-default' : ''
-        } ${active || disabled ? '' : 'hover:bg-black/5 dark:hover:bg-white/10'}`}
+        } ${active || disabled ? '' : 'hover:bg-[var(--bg-hover)]'}`}
+        /* on: the accent on a soft well of it, not a solid block (a row of them would shout) */
         style={active
-          ? { color: 'var(--on-accent)', background: 'var(--accent)' }
+          ? { color: 'var(--accent)', background: 'var(--accent-soft)' }
           : { color: disabled ? 'var(--text-faint)' : 'var(--text-muted)' }}
       >
         {children}
@@ -4693,7 +4697,7 @@ function ModePicker({
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className="flex h-[28px] w-[15px] shrink-0 items-center justify-center rounded-[6px] transition hover:bg-black/5 dark:hover:bg-white/10"
+            className="flex h-[28px] w-[15px] shrink-0 items-center justify-center rounded-[6px] transition hover:bg-[var(--bg-hover)]"
             style={{ color: 'var(--text-muted)' }}
             aria-label={current.label}
           >
@@ -4710,7 +4714,7 @@ function ModePicker({
               key={item.id}
               type="button"
               onClick={() => { onPick(item.id); setOpen(false); }}
-              className="flex w-full items-center gap-2 rounded-[4px] px-2 py-1.5 text-[12px] transition hover:bg-black/5 dark:hover:bg-white/10"
+              className="flex w-full items-center gap-2 rounded-[4px] px-2 py-1.5 text-[12px] transition hover:bg-[var(--bg-hover)]"
               style={{
                 color: 'var(--text-muted)',
                 /* the current row: --tl-line (a gray in both themes; translucent white vanishes on light) */

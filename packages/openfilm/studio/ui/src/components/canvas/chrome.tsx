@@ -43,7 +43,7 @@ export function BottomToolbar({ adding, onAdd, tool, onTool, onTemplates, onUndo
       <div className={`pointer-events-auto ${BAR}`}>
         <Tooltip label={`${t('canvas.toolbar.add')} · /`} side="top">
           <button type="button" aria-label={t('canvas.toolbar.add')} onClick={(event) => onAdd(event.currentTarget.getBoundingClientRect())}
-            className={`${TOOL} ${adding ? ON : '!bg-[var(--accent)] !text-[var(--on-accent)] hover:bg-[var(--accent-hover)]'}`}>
+            className={`${TOOL} ${adding ? ON : '!bg-[var(--primary)] !text-[var(--on-primary)] hover:bg-[var(--primary-hover)]'}`}>
             {adding ? <X size={18} /> : <Plus size={18} />}
           </button>
         </Tooltip>

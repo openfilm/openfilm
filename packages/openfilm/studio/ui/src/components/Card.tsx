@@ -68,7 +68,7 @@ export function CardActions({ children, className = '' }: { children: React.Reac
 type Weight = 'primary' | 'secondary' | 'quiet' | 'danger';
 
 const WEIGHT: Record<Weight, string> = {
-  primary: 'bg-[var(--accent)] text-[var(--on-accent)] hover:bg-[var(--accent-hover)]',
+  primary: 'bg-[var(--primary)] text-[var(--on-primary)] hover:bg-[var(--primary-hover)]',
   secondary: 'text-[var(--text)] ring-1 ring-inset ring-[var(--border-strong)] hover:bg-[var(--bg-hover)]',
   quiet: 'text-[var(--text-muted)] hover:text-[var(--text)]',
   danger: 'bg-[var(--err)] text-white hover:brightness-110',

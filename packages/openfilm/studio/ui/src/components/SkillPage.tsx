@@ -145,14 +145,14 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
       <div className="mt-5 flex flex-col gap-2">
         {onTry ? (
           <button type="button" onClick={() => onTry(skill)} disabled={skill.off} title={skill.off ? t('gallery.tryOff') : undefined}
-            className="flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--accent)] text-[13px] font-medium text-[var(--on-accent)] transition hover:bg-[var(--accent-hover)] disabled:opacity-40"><MessageSquarePlus size={15} />{t('gallery.tryNow')}</button>
+            className="flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--primary)] text-[13px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:opacity-40"><MessageSquarePlus size={15} />{t('gallery.tryNow')}</button>
         ) : null}
         {/* OpenFilm's system skills are only turned off */}
         {skill.core ? null : !installed ? (
           <button type="button" onClick={() => install(true)}
             className={onTry
               ? 'flex h-9 w-full items-center justify-center gap-1.5 rounded-[10px] border border-[var(--border-strong)] text-[13px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)]'
-              : 'flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--accent)] text-[13px] font-medium text-[var(--on-accent)] transition hover:bg-[var(--accent-hover)]'}><Plus size={15} />{t('gallery.install')}</button>
+              : 'flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--primary)] text-[13px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)]'}><Plus size={15} />{t('gallery.install')}</button>
         ) : (
           <button type="button" onClick={() => { if (skill.source === 'official') install(false); else setRemoving(true); }}
             className="flex h-9 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--bg-field)] text-[13px] text-[var(--text-muted)] transition hover:bg-[color-mix(in_srgb,var(--err)_14%,var(--bg-field))] hover:text-[var(--err)]">

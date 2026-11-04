@@ -9,12 +9,17 @@
 
    One set of names, a light and a dark value for each. Components use these names and no colors of their own.
 
-   Backgrounds, from the bottom up: the app (the window, the top bar and the seams between panes), a panel, what is
-   raised over a panel (cards, menus, popovers, dialogs, tooltips). On any of them: a field (inputs, wells, chips),
-   hover, pressed, and selected. Fields, hover and pressed are translucent, so they read the same on every layer.
-   Text: primary, muted (secondary), faint (hints, placeholders, idle icons). Lines: a hairline and a stronger one.
-   One accent, the brand teal, for what is selected, current, focused or the main action; ok, warn and err for
-   states. Clips on the timeline by kind, one hue each at one lightness, dark enough for white text. */
+   Neutrals are a cool gray, and color is kept for meaning. Backgrounds, from the bottom up: the app (the window, the
+   top bar and the seams between panes), a panel, what is raised over a panel (cards, menus, popovers, dialogs,
+   tooltips). On any of them: a field (inputs, wells, chips), hover, pressed, and selected. Fields, hover and pressed
+   are translucent, so they read the same on every layer. Text: primary, muted (secondary), faint (hints, placeholders,
+   idle icons). Lines: a hairline and a stronger one.
+
+   The main action is ink: near black in light, near white in dark. One accent, the brand teal, for what is selected,
+   current or focused (switches, progress, tabs, the playhead, the frame on the picture); ok, warn and err for states.
+
+   Clips on the timeline by kind, one hue each at one lightness: the hue tints a clip's body, edges it, colors its
+   words and draws its waveform (.tl-clip). */
 
 :root {
   --font-cjk-sans: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', 'Source Han Sans SC',
@@ -35,53 +40,56 @@
 [data-theme='light'] {
   color-scheme: light;
 
-  --bg-app: #e4e4e4;
-  --bg-panel: #f9f9f9;
+  --bg-app: #e9e9eb;
+  --bg-panel: #fafafb;
   --bg-raised: #ffffff;
-  --bg-field: rgba(0, 0, 0, 0.05);
-  --bg-hover: rgba(0, 0, 0, 0.05);
-  --bg-pressed: rgba(0, 0, 0, 0.09);
-  --bg-selected: rgba(0, 125, 114, 0.13);
+  --bg-field: rgba(16, 16, 24, 0.05);
+  --bg-hover: rgba(16, 16, 24, 0.045);
+  --bg-pressed: rgba(16, 16, 24, 0.08);
+  --bg-selected: rgba(0, 125, 114, 0.11);
 
-  --text: #171717;
-  --text-muted: #5e5e5e;
-  --text-faint: #8c8c8c;
+  --text: #161619;
+  --text-muted: #5d5d63;
+  --text-faint: #8b8b92;
 
-  --border: rgba(0, 0, 0, 0.09);
-  --border-strong: rgba(0, 0, 0, 0.18);
+  --border: rgba(16, 16, 24, 0.085);
+  --border-strong: rgba(16, 16, 24, 0.16);
+
+  --primary: #161619;
+  --primary-hover: #2e2e33;
+  --on-primary: #ffffff;
 
   --accent: #007d72;
-  --accent-hover: #006a61;
   --accent-soft: rgba(0, 125, 114, 0.1);
   --on-accent: #ffffff;
   /* words selected in a field */
-  --text-selection: rgba(0, 125, 114, 0.24);
+  --text-selection: rgba(0, 125, 114, 0.22);
 
   --ok: #1f8a4c;
   --warn: #b25e00;
   --err: #d1342f;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.06);
+  --shadow-sm: 0 1px 2px rgba(16, 16, 24, 0.05), 0 1px 3px rgba(16, 16, 24, 0.05);
+  --shadow-lg: 0 12px 32px rgba(16, 16, 24, 0.1), 0 4px 8px rgba(16, 16, 24, 0.05);
 
-  --clip-video: #4f83bd;
-  --clip-image: #2b8bb0;
-  --clip-page: #8274ba;
-  --clip-text: #b46a4c;
-  --clip-voice: #ac658f;
-  --clip-sfx: #4e925e;
-  --clip-music: #9a7c2a;
+  --clip-video: #4682cc;
+  --clip-image: #1c8cb4;
+  --clip-page: #8370c7;
+  --clip-text: #a67700;
+  --clip-voice: #359658;
+  --clip-sfx: #7a8a1b;
+  --clip-music: #209385;
+  /* how much of its hue a clip's body takes, and its words */
+  --clip-tint: 17%;
+  --clip-ink: 62%;
 
   /* the timeline's own: the lanes are a well a step below the panel; the selected track's is tinted with the accent */
-  --tl-lane: #eeeeee;
-  --tl-lane-on: #e2edeb;
+  --tl-lane: #f1f1f3;
+  --tl-lane-on: #e6efee;
   --tl-playhead: var(--accent);
-  --tl-select: #171717;
-  /* waveforms on blocks (canvas reads these back from the element) */
-  --tl-wave: rgba(255, 255, 255, 0.62);
-  --tl-wave-band: rgba(255, 255, 255, 0.4);
+  --tl-select: #161619;
   /* the part of a waveform a clip's volume pushes past full scale: it will distort */
-  --tl-wave-clip: #ff9a3d;
+  --tl-wave-clip: var(--err);
 
   --folder-back: #c9c9c9;
   --folder-front: #dedede;
@@ -96,26 +104,29 @@
 [data-theme='dark'] {
   color-scheme: dark;
 
-  --bg-app: #0c0c0c;
-  --bg-panel: #181818;
-  --bg-raised: #232323;
-  --bg-field: rgba(255, 255, 255, 0.06);
-  --bg-hover: rgba(255, 255, 255, 0.06);
-  --bg-pressed: rgba(255, 255, 255, 0.11);
-  --bg-selected: rgba(49, 210, 190, 0.16);
+  --bg-app: #0a0a0c;
+  --bg-panel: #151517;
+  --bg-raised: #1f1f22;
+  --bg-field: rgba(240, 240, 255, 0.06);
+  --bg-hover: rgba(240, 240, 255, 0.055);
+  --bg-pressed: rgba(240, 240, 255, 0.1);
+  --bg-selected: rgba(69, 207, 181, 0.15);
 
-  --text: #ececec;
-  --text-muted: #a1a1a1;
-  --text-faint: #6f6f6f;
+  --text: #ebebed;
+  --text-muted: #a4a4a9;
+  --text-faint: #717177;
 
-  --border: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.16);
+  --border: rgba(240, 240, 255, 0.075);
+  --border-strong: rgba(240, 240, 255, 0.15);
 
-  --accent: #31d2be;
-  --accent-hover: #5fe4d0;
-  --accent-soft: rgba(49, 210, 190, 0.12);
-  --on-accent: #062420;
-  --text-selection: rgba(49, 210, 190, 0.32);
+  --primary: #ebebed;
+  --primary-hover: #ffffff;
+  --on-primary: #0a0a0c;
+
+  --accent: #45cfb5;
+  --accent-soft: rgba(69, 207, 181, 0.12);
+  --on-accent: #04221d;
+  --text-selection: rgba(69, 207, 181, 0.3);
 
   --ok: #4cc27a;
   --warn: #f0b03c;
@@ -124,21 +135,21 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.5), 0 4px 10px rgba(0, 0, 0, 0.3);
 
-  --clip-video: #2a527d;
-  --clip-image: #0f5a74;
-  --clip-page: #51467a;
-  --clip-text: #763e28;
-  --clip-voice: #703b5a;
-  --clip-sfx: #285d36;
-  --clip-music: #634c06;
+  --clip-video: #76b4ff;
+  --clip-image: #5bbfe8;
+  --clip-page: #b3a1fd;
+  --clip-text: #daa843;
+  --clip-voice: #6bc987;
+  --clip-sfx: #aabc56;
+  --clip-music: #5ec6b6;
+  --clip-tint: 30%;
+  --clip-ink: 40%;
 
-  --tl-lane: #111111;
-  --tl-lane-on: #14211f;
+  --tl-lane: #0f0f11;
+  --tl-lane-on: #102220;
   --tl-playhead: var(--accent);
   --tl-select: #ffffff;
-  --tl-wave: rgba(255, 255, 255, 0.5);
-  --tl-wave-band: rgba(255, 255, 255, 0.3);
-  --tl-wave-clip: #ff8a3d;
+  --tl-wave-clip: var(--err);
 
   --folder-back: #3a3a3a;
   --folder-front: #4d4d4d;
@@ -151,6 +162,21 @@
 
 * {
   border-color: var(--border);
+}
+
+/* A clip on the timeline (Timeline.tsx): its kind's hue (`--clip`, set on it) tints its body over the lane, colors its
+   words, and edges it over its pictures. */
+.tl-clip {
+  background: color-mix(in oklab, var(--clip) var(--clip-tint), var(--tl-lane));
+  color: color-mix(in oklab, var(--clip) var(--clip-ink), var(--text));
+}
+.tl-clip::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--clip) 40%, transparent);
+  pointer-events: none;
 }
 
 html,

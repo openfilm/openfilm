@@ -47,17 +47,20 @@ const SYSTEM_NAMES = { mac: 'macOS', win: 'Windows' } as const;
  * window and the agents' marks read the same in a light Studio.
  */
 const DARK: React.CSSProperties = {
-  '--text': '#ececec',
-  '--text-muted': '#a1a1a1',
-  '--text-faint': '#6f6f6f',
-  '--bg-raised': '#232323',
-  '--bg-field': 'rgba(255, 255, 255, 0.06)',
-  '--border': 'rgba(255, 255, 255, 0.08)',
-  '--bg-app': '#0c0c0c',
-  '--accent': '#31d2be',
-  '--on-accent': '#062420',
-  '--tl-playhead': '#31d2be',
-  '--tl-wave': 'rgba(255, 255, 255, 0.5)',
+  '--text': '#ebebed',
+  '--text-muted': '#a4a4a9',
+  '--text-faint': '#717177',
+  '--bg-raised': '#1f1f22',
+  '--bg-field': 'rgba(240, 240, 255, 0.06)',
+  '--border': 'rgba(240, 240, 255, 0.075)',
+  '--bg-app': '#0a0a0c',
+  '--primary': '#ebebed',
+  '--primary-hover': '#ffffff',
+  '--on-primary': '#0a0a0c',
+  '--accent': '#45cfb5',
+  '--on-accent': '#04221d',
+  '--tl-playhead': '#45cfb5',
+  '--clip-voice': '#6cc185',
   background: [
     'radial-gradient(90% 70% at 0% 0%, color-mix(in srgb, #5ecb92 34%, transparent), transparent 70%)',
     'radial-gradient(80% 60% at 100% 100%, color-mix(in srgb, #7fd3e4 26%, transparent), transparent 70%)',
@@ -195,7 +198,7 @@ export function DesktopDialog({ open, onClose }: { open: boolean; onClose: () =>
               ref={download}
               type="button"
               onClick={() => void openDownload()}
-              className="inline-flex h-10 items-center gap-2 rounded-full bg-[var(--accent)] px-5 text-[13.5px] font-medium text-[var(--on-accent)] transition hover:bg-[var(--accent-hover)]"
+              className="inline-flex h-10 items-center gap-2 rounded-full bg-[var(--primary)] px-5 text-[13.5px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)]"
             >
               {system ? (
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d={system === 'mac' ? APPLE : WINDOWS} /></svg>
@@ -247,7 +250,7 @@ function AppPicture() {
               <div className="flex gap-[3px] pl-[18%]">
                 <span className="h-[10px] w-[48%] rounded-[2px] bg-[color-mix(in_srgb,#66d8b8_40%,transparent)]" />
               </div>
-              <span className="h-[8px] w-[92%] rounded-[2px] bg-[color-mix(in_srgb,var(--tl-wave)_55%,transparent)]" />
+              <span className="h-[8px] w-[92%] rounded-[2px] bg-[color-mix(in_srgb,var(--clip-voice)_45%,transparent)]" />
             </div>
             <span className="openfilm-desktop-playhead absolute bottom-[4px] top-[3px] w-[1.5px] rounded-full bg-[var(--tl-playhead)]" />
           </div>

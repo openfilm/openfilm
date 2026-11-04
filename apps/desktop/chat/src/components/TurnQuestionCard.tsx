@@ -85,7 +85,7 @@ export function TurnQuestionCard({
                 type="submit"
                 disabled={!other.trim()}
                 aria-label={t('turnAsk.send')}
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--accent)] text-[var(--on-accent)] transition hover:bg-[var(--accent-hover)] disabled:opacity-30"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--primary)] text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:opacity-30"
               >
                 <ArrowUp size={14} />
               </button>

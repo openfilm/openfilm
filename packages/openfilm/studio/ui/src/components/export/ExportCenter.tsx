@@ -1184,7 +1184,7 @@ export function ExportCenter(props: ExportCenterProps) {
                 type="button"
                 onClick={() => void queue(requests)}
                 disabled={disabled}
-                className="flex h-10 shrink-0 items-center gap-2 rounded-xl bg-[var(--accent)] px-6 text-[13.5px] font-medium text-[var(--on-accent)] transition hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex h-10 shrink-0 items-center gap-2 rounded-xl bg-[var(--primary)] px-6 text-[13.5px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {working ? <Loader2 size={14} className="animate-spin" /> : null}
                 {primaryLabel}

@@ -3680,7 +3680,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                         <span className="hidden @xl:inline">{t('project.editsUndone').replace('{n}', String(undoneCount))}</span>
                         <span className="@xl:hidden">{t('project.editsUndoneShort').replace('{n}', String(undoneCount))}</span>
                       </span>
-                      <button type="button" onClick={() => void restoreDropped()} className="shrink-0 rounded-md bg-[var(--accent)] px-2.5 py-1 text-[var(--on-accent)] transition hover:bg-[var(--accent-hover)]">{t('project.editsRestore')}</button>
+                      <button type="button" onClick={() => void restoreDropped()} className="shrink-0 rounded-md bg-[var(--primary)] px-2.5 py-1 text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)]">{t('project.editsRestore')}</button>
                       <button type="button" onClick={() => { setDropped(null); for (const e of undone) settledEdits.current.add(e); setUndone([]); }} className="shrink-0 rounded-md px-2 py-1 text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">{t('project.editsLeaveOut')}</button>
                     </div>
                   </div>

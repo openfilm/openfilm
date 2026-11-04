@@ -113,7 +113,7 @@ export function RecordButton({ now, onSave, onProblem }: RecordButtonProps) {
   return (
     <Tooltip side="bottom" label={label}>
       <button type="button" data-record="" onClick={() => void start()} onMouseDown={(e) => e.preventDefault()} aria-disabled={busy} aria-label={label}
-        className={`flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-[6px] outline-none transition focus-visible:ring-1 focus-visible:ring-[var(--accent)] ${busy ? 'cursor-default' : 'hover:bg-black/5 dark:hover:bg-white/10'}`}
+        className={`flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-[6px] outline-none transition focus-visible:ring-1 focus-visible:ring-[var(--accent)] ${busy ? 'cursor-default' : 'hover:bg-[var(--bg-hover)]'}`}
         style={{ color: busy ? 'var(--text-faint)' : 'var(--text-muted)' }}>
         {state === 'saving' ? <Loader2 size={15} className="animate-spin" /> : <Mic size={16} />}
       </button>

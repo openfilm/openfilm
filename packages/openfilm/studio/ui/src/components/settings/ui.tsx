@@ -66,7 +66,7 @@ export function SettingsStatus({ tone = 'ok', children }: { tone?: 'ok' | 'muted
 
 const BUTTON = {
   default: 'border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg-hover)]',
-  primary: 'border border-transparent bg-[var(--accent)] text-[var(--on-accent)] hover:bg-[var(--accent-hover)]',
+  primary: 'border border-transparent bg-[var(--primary)] text-[var(--on-primary)] hover:bg-[var(--primary-hover)]',
   quiet: 'border border-transparent text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]',
 };
 

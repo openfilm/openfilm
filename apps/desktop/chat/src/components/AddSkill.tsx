@@ -15,7 +15,7 @@ import { app, type SkillInfo, type SkillPreview } from '../app-bridge';
 import { readFileDataUrl } from '@/lib/composer-attachments';
 
 const QUIET_BUTTON = 'h-9 rounded-[9px] px-3.5 text-[13px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-40';
-const MAIN_BUTTON = 'flex h-9 items-center gap-1.5 rounded-[9px] bg-[var(--accent)] px-4 text-[13px] font-medium text-[var(--on-accent)] transition hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-40';
+const MAIN_BUTTON = 'flex h-9 items-center gap-1.5 rounded-[9px] bg-[var(--primary)] px-4 text-[13px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:cursor-not-allowed disabled:opacity-40';
 const LABEL = 'mb-2 text-[11.5px] font-medium text-[var(--text-faint)]';
 
 /** A folder dragged from the file manager, by its path (the desktop app's bridge), or ''. */
@@ -165,7 +165,7 @@ export function AddSkillDialog({ onClose, onAdded, onPick, onMake }: {
           <input autoFocus value={url} onChange={(e) => { setUrl(e.target.value); setError(null); }} placeholder="https://github.com/…" disabled={busy} spellCheck={false}
             className="min-w-0 flex-1 bg-transparent text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]" />
           <button type="submit" disabled={!url.trim() || busy} aria-label={t('skills.next')}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-[var(--accent)] text-[var(--on-accent)] transition hover:bg-[var(--accent-hover)] disabled:bg-transparent disabled:text-[var(--text-faint)]">
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-[var(--primary)] text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:bg-transparent disabled:text-[var(--text-faint)]">
             {busy && url.trim() ? <Loader2 size={14} className="animate-spin text-[var(--text-muted)]" /> : <ArrowRight size={15} />}
           </button>
         </form>

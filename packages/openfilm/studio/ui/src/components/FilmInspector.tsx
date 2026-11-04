@@ -403,7 +403,7 @@ function RedesignHint({ t, stage }: { t: T; stage: { w: number; h: number } }) {
           <p className="select-text rounded-md bg-[var(--bg-panel)] px-2 py-1.5 text-[11px] leading-[16px] text-[var(--text)]">{ask}</p>
           <button type="button"
             onClick={() => { void navigator.clipboard?.writeText(ask).then(() => setCopied(true), () => {}); }}
-            className="flex h-7 items-center justify-center gap-1.5 rounded-md bg-[var(--accent)] text-[11px] font-medium text-[var(--on-accent)] transition hover:bg-[var(--accent-hover)]">
+            className="flex h-7 items-center justify-center gap-1.5 rounded-md bg-[var(--primary)] text-[11px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)]">
             {copied ? <Check size={12} /> : <Copy size={12} />}
             {t(copied ? 'inspector.redesignCopied' : 'inspector.redesignCopy')}
           </button>

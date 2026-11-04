@@ -85,7 +85,7 @@ function Box({ title, text, children }: { title: string; text: string; children:
 function Go({ onClick, disabled, centered, children }: { onClick: () => void; disabled?: boolean; centered?: boolean; children: React.ReactNode }) {
   return (
     <button type="button" onClick={onClick} disabled={disabled}
-      className={`h-8 ${centered ? 'self-center' : 'self-start'} rounded-md bg-[var(--accent)] px-3.5 text-[12.5px] font-medium text-[var(--on-accent)] transition hover:bg-[var(--accent-hover)] disabled:pointer-events-none disabled:opacity-50`}>
+      className={`h-8 ${centered ? 'self-center' : 'self-start'} rounded-md bg-[var(--primary)] px-3.5 text-[12.5px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:pointer-events-none disabled:opacity-50`}>
       {children}
     </button>
   );
