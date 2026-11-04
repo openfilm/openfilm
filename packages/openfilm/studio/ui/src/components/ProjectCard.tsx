@@ -40,7 +40,7 @@ export function useHostTabs() {
 /** An open project's light: what it is doing, or nothing. */
 function Light({ tab }: { tab: HostTab }) {
   const t = useT();
-  if (tab.asking) return <span title={t('switcher.asking')} className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#e8a23a] shadow-[0_0_0_2px_rgba(232,162,58,0.18)]" />;
+  if (tab.asking) return <span title={t('switcher.asking')} className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--warn)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--warn)_18%,transparent)]" />;
   if (tab.exporting != null) return <span className="shrink-0 font-mono text-[10.5px] text-[var(--text-faint)]">{t('switcher.exporting').replace('{n}', String(Math.round(tab.exporting * 100)))}</span>;
   if (tab.working) return <span title={t('switcher.working')} className="status-breathe h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--text-muted)]" />;
   return null;
@@ -114,13 +114,13 @@ export function ProjectCard({ name, facts, actions = {}, onOpen, onAll }: {
           className={`flex h-[26px] min-w-0 max-w-[28ch] items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] ${hover.open ? 'bg-[var(--bg-hover)] text-[var(--text)]' : ''}`}
         >
           <span className="min-w-0 truncate">{name || t('switcher.label')}</span>
-          {waiting ? <span aria-label={t('switcher.asking')} className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#e8a23a]" />
+          {waiting ? <span aria-label={t('switcher.asking')} className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--warn)]" />
             : working ? <span aria-label={t('switcher.working')} className="status-breathe h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--text-muted)]" /> : null}
           <ChevronDown size={13} className="shrink-0 text-[var(--text-faint)]" />
         </button>
       )}
     >
-      <div {...hover.card} className="flex w-[340px] flex-col overflow-hidden rounded-[12px] border border-[var(--border)] bg-[var(--panel)] shadow-[var(--shadow-lg)]">
+      <div {...hover.card} className="flex w-[340px] flex-col overflow-hidden rounded-[12px] border border-[var(--border)] bg-[var(--bg-raised)] shadow-[var(--shadow-lg)]">
         {facts ? (
           <div className="flex flex-col gap-2.5 p-3">
             <img src={posterUrl(facts.project)} alt="" draggable={false}
@@ -154,7 +154,7 @@ export function ProjectCard({ name, facts, actions = {}, onOpen, onAll }: {
                 </button>
                 <Tooltip label={t('switcher.close')}>
                   <button type="button" aria-label={t('switcher.close')} onClick={() => host.close(tab.id)}
-                    className="hidden h-6 w-6 shrink-0 items-center justify-center rounded-md text-[var(--text-dim)] transition hover:bg-[var(--bg-active)] hover:text-[var(--text)] group-hover:flex">
+                    className="hidden h-6 w-6 shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] transition hover:bg-[var(--bg-pressed)] hover:text-[var(--text)] group-hover:flex">
                     <X size={13} />
                   </button>
                 </Tooltip>

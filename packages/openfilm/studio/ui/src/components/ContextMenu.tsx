@@ -288,7 +288,7 @@ export function ContextMenu({
         {...(activeId ? { 'aria-activedescendant': activeId } : {})}
         onKeyDown={onKeyDown}
         /* above every dialog it can be opened in (the Projects window is z-10050); taller than the window, it scrolls */
-        className={`fixed z-[10060] overflow-y-auto overflow-x-hidden border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)] outline-none ${panel}`}
+        className={`fixed z-[10060] overflow-y-auto overflow-x-hidden border border-[var(--border)] bg-[var(--bg-raised)] shadow-[var(--shadow-lg)] outline-none ${panel}`}
         style={{
           left: pos?.left ?? x,
           top: pos?.top ?? y,
@@ -381,7 +381,7 @@ export function ContextMenu({
           aria-orientation="vertical"
           {...(subActiveId ? { 'aria-activedescendant': subActiveId } : {})}
           onKeyDown={onSubKeyDown}
-          className="fixed z-[10061] min-w-[168px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] py-1 shadow-[var(--shadow-lg)] outline-none"
+          className="fixed z-[10061] min-w-[168px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-raised)] py-1 shadow-[var(--shadow-lg)] outline-none"
           style={{
             left: subPos?.left ?? 0,
             top: subPos?.top ?? 0,

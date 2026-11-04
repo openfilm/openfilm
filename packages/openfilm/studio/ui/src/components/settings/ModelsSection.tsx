@@ -215,7 +215,7 @@ function ModelPicker({ label, connected, waiting, choicesOf, current, busy, empt
     <div className="shrink-0">
       <Popover open={open} onOpenChange={setOpen} placement="auto" align="end" layer={10060} trigger={trigger}>
         <div ref={list} role="listbox" aria-label={label} onKeyDown={onKeyDown}
-          className="max-h-[min(480px,var(--popover-max-h))] w-[340px] overflow-y-auto rounded-[12px] border border-[var(--border)] bg-[var(--surface)] p-1.5 shadow-[var(--shadow-lg)]">
+          className="max-h-[min(480px,var(--popover-max-h))] w-[340px] overflow-y-auto rounded-[12px] border border-[var(--border)] bg-[var(--bg-raised)] p-1.5 shadow-[var(--shadow-lg)]">
           {connected.map((p) => (
             <div key={p.id} role="group" aria-label={p.name} className="pb-1">
               {heading(p, false)}
@@ -224,7 +224,7 @@ function ModelPicker({ label, connected, waiting, choicesOf, current, busy, empt
           ))}
           {connected.length ? option(null, t('settings.models.none')) : null}
           {waiting.length ? (
-            <div className={connected.length ? 'mt-1.5 border-t border-[var(--border-soft)] pt-1.5' : ''}>
+            <div className={connected.length ? 'mt-1.5 border-t border-[var(--border)] pt-1.5' : ''}>
               <div className="px-2.5 pb-1 pt-1.5 text-[12px] text-[var(--text-faint)]">{t('settings.models.notConnected')}</div>
               {waiting.map((p) => (
                 <div key={p.id} role="group" aria-label={`${p.name}: ${t('settings.providers.connect')}`} className="pb-1">

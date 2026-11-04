@@ -5,7 +5,16 @@
    directly: when the two differ, a system-driven `dark:` would paint the wrong side. */
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
-/* ── Design system: restrained, light by default ─────────────────────────────────────────────────────────────── */
+/* ── Design system ───────────────────────────────────────────────────────────────────────────────────────────────
+
+   One set of names, a light and a dark value for each. Components use these names and no colors of their own.
+
+   Backgrounds, from the bottom up: the app (the window, the top bar and the seams between panes), a panel, what is
+   raised over a panel (cards, menus, popovers, dialogs, tooltips). On any of them: a field (inputs, wells, chips),
+   hover, pressed, and selected. Fields, hover and pressed are translucent, so they read the same on every layer.
+   Text: primary, muted (secondary), faint (hints, placeholders, idle icons). Lines: a hairline and a stronger one.
+   One accent, the brand teal, for what is selected, current, focused or the main action; ok, warn and err for
+   states. Clips on the timeline by kind, one hue each at one lightness, dark enough for white text. */
 
 :root {
   --font-cjk-sans: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', 'Source Han Sans SC',
@@ -16,157 +25,120 @@
 
   --radius-lg: 16px;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.05);
-
   /* a host window's controls (lib/host.ts); nothing to make room for in a browser */
   --titlebar-logo-x: 6px;
   --titlebar-right-x: 0px;
 }
 
-/* ── Light (default): paper is 252, the board panes sit on is 242, every other gray lies between ── */
+/* ── Light (default) ── */
 :root,
 [data-theme='light'] {
   color-scheme: light;
 
-  --bg: #fcfcfc;
-  --canvas: #f2f2f2;
-  --panel: #fcfcfc;
-  --surface: #fcfcfc;
-  --surface-2: #f2f2f2;
-  --surface-3: #e8e8e8;
-  --bg-surface: var(--surface);
+  --bg-app: #e4e4e4;
+  --bg-panel: #f9f9f9;
+  --bg-raised: #ffffff;
+  --bg-field: rgba(0, 0, 0, 0.05);
+  --bg-hover: rgba(0, 0, 0, 0.05);
+  --bg-pressed: rgba(0, 0, 0, 0.09);
+  --bg-selected: rgba(0, 125, 114, 0.13);
 
-  --border: rgba(0, 0, 0, 0.08);
-  --border-soft: rgba(0, 0, 0, 0.05);
-  --border-strong: rgba(0, 0, 0, 0.16);
+  --text: #171717;
+  --text-muted: #5e5e5e;
+  --text-faint: #8c8c8c;
 
-  --text: #1f1f1f;
-  --text-dim: #4b4b4b;
-  --text-muted: #666666;
-  --text-faint: #a9a9a9;
+  --border: rgba(0, 0, 0, 0.09);
+  --border-strong: rgba(0, 0, 0, 0.18);
 
-  --card-bg: #fcfcfc;
-  --card-border: rgba(0, 0, 0, 0.08);
-  --fill-tsp: rgba(0, 0, 0, 0.05);
-
-  --tooltip-bg: #ffffff;
-  --tooltip-text: #1f1f1f;
-  --tooltip-border: rgba(0, 0, 0, 0.14);
-
-  /* the main action is ink, not a color; selected and hover are neutral grays */
-  --accent: #1a1a1a;
-  --accent-soft: rgba(26, 26, 26, 0.06);
+  --accent: #007d72;
+  --accent-hover: #006a61;
+  --accent-soft: rgba(0, 125, 114, 0.1);
   --on-accent: #ffffff;
-  /* selected words being edited (a tab's name): plainly seen, as the system's text selection */
-  --text-selection: rgba(26, 147, 254, 0.3);
+  /* words selected in a field */
+  --text-selection: rgba(0, 125, 114, 0.24);
 
-  --ok: #16a34a;
-  --warn: #d97706;
-  --err: #dc2626;
+  --ok: #1f8a4c;
+  --warn: #b25e00;
+  --err: #d1342f;
 
-  --bg-hover: rgba(0, 0, 0, 0.045);
-  --bg-active: rgba(0, 0, 0, 0.08);
-  /* the layers selected in the Layers panel: a muted blue, the picture's selection hue; what a selected layer holds
-     is a paler one, and the hovered row is lined */
-  --layer-selected: #dce9fb;
-  --layer-selected-in: #eff5fd;
-  --layer-hover-line: rgba(13, 153, 255, 0.45);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.06);
 
-  --app-content-bg: #fcfcfc;
+  --clip-video: #4f83bd;
+  --clip-image: #2b8bb0;
+  --clip-page: #8274ba;
+  --clip-text: #b46a4c;
+  --clip-voice: #ac658f;
+  --clip-sfx: #4e925e;
+  --clip-music: #9a7c2a;
 
-  /* the docked layout: panes edge to edge, square, a hairline between them (the board of lines showing through) */
-  --dock-shell: #f2f2f2;
-  --dock-pane: #fcfcfc;
-  --dock-line: #e3e3e3;
+  /* the timeline's own: the lanes are a well a step below the panel; the selected track's is tinted with the accent */
+  --tl-lane: #eeeeee;
+  --tl-lane-on: #e2edeb;
+  --tl-playhead: var(--accent);
+  --tl-select: #171717;
+  /* waveforms on blocks (canvas reads these back from the element) */
+  --tl-wave: rgba(255, 255, 255, 0.62);
+  --tl-wave-band: rgba(255, 255, 255, 0.4);
+  /* the part of a waveform a clip's volume pushes past full scale: it will distort */
+  --tl-wave-clip: #ff9a3d;
 
-  --folder-back: #cbcbcb;
-  --folder-front: #e0e0e0;
-  --folder-front-hi: #ededed;
+  --folder-back: #c9c9c9;
+  --folder-front: #dedede;
+  --folder-front-hi: #ececec;
 
   --brand-wind-from: #2f9e63;
   --brand-wind-mid: #3cbc93;
   --brand-wind-to: #55bfd0;
-
-  /* The timeline. The track area is light like the rest of the screen, but blocks are dark enough to carry white
-     text and waveforms. Toolbar, track heads and ruler are the pane's own color (its rounded corners show through
-     that); only the lanes step half a shade darker. */
-  --tl-lane: #efefef;
-  --tl-lane-on: #f5f5f5;
-  --tl-head: #fcfcfc;
-  --tl-ruler: #fcfcfc;
-  --tl-line: #e2e2e2;
-  --tl-text: #4a4a4a;
-  --tl-faint: #8a8a8a;
-  /* playhead, selection and the zoom slider's traveled part: the brand teal, "the thing you are moving" */
-  --tl-playhead: #1f8a86;
-  --tl-accent: #1f8a86;
-  --tl-select: var(--tl-accent);
-  --tl-tick: rgba(0, 0, 0, 0.16);
-  /* waveforms on blocks (canvas reads these back from the element) */
-  --tl-wave: rgba(0, 110, 108, 0.82);
-  --tl-wave-band: rgba(0, 96, 102, 0.8);
-  /* the part of a waveform a clip's volume pushes past full scale: it will distort */
-  --tl-wave-clip: #f2711c;
-  --tl-scene: #3f9b9b;
-  --tl-video: #5385bd;
-  --tl-voice: #6f62b0;
-  --tl-sfx: #5192c4;
-  --tl-music: #3f9a90;
-  --tl-caption: #c46a4a;
 }
 
 /* ── Dark ── */
 [data-theme='dark'] {
   color-scheme: dark;
 
-  --bg: #1a1a1a;
-  --canvas: #1f1f1f;
-  --panel: #181818;
-  --surface: #202020;
-  --surface-2: #2a2a2a;
-  --surface-3: #313131;
-
-  --border: rgba(255, 255, 255, 0.06);
-  --border-soft: rgba(255, 255, 255, 0.04);
-  --border-strong: rgba(255, 255, 255, 0.12);
-
-  /* what is picked or read is bright; what is only there steps back: wide steps between them */
-  --text: #ededed;
-  --text-dim: #a8a8a8;
-  --text-muted: #8a8a8a;
-  --text-faint: #5a5a5a;
-
-  --card-bg: #202020;
-  --card-border: rgba(255, 255, 255, 0.06);
-  --fill-tsp: rgba(255, 255, 255, 0.06);
-
-  --tooltip-bg: rgb(20, 20, 20);
-  --tooltip-text: rgb(240, 240, 240);
-  --tooltip-border: rgba(255, 255, 255, 0.16);
-
-  /* one highlight everywhere: what is picked or shown is the timeline's teal, in every pane */
-  --accent: #2ed3c6;
-  --accent-soft: rgba(46, 211, 198, 0.12);
-  --on-accent: #ffffff;
-  --text-selection: rgba(46, 211, 198, 0.4);
-
-  --ok: #5eb92d;
-  --warn: #ffbf36;
-  --err: #eb4d4d;
-
+  --bg-app: #0c0c0c;
+  --bg-panel: #181818;
+  --bg-raised: #232323;
+  --bg-field: rgba(255, 255, 255, 0.06);
   --bg-hover: rgba(255, 255, 255, 0.06);
-  --bg-active: rgba(255, 255, 255, 0.13);
-  --layer-selected: #333c58;
-  --layer-selected-in: #23283a;
-  --layer-hover-line: rgba(116, 146, 230, 0.55);
+  --bg-pressed: rgba(255, 255, 255, 0.11);
+  --bg-selected: rgba(49, 210, 190, 0.16);
 
-  --app-content-bg: rgb(17, 17, 17);
+  --text: #ececec;
+  --text-muted: #a1a1a1;
+  --text-faint: #6f6f6f;
 
-  /* panes one step lighter than the near-black top bar, a lighter hairline between them */
-  --dock-shell: #111111;
-  --dock-pane: #181818;
-  --dock-line: #2a2a2a;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+
+  --accent: #31d2be;
+  --accent-hover: #5fe4d0;
+  --accent-soft: rgba(49, 210, 190, 0.12);
+  --on-accent: #062420;
+  --text-selection: rgba(49, 210, 190, 0.32);
+
+  --ok: #4cc27a;
+  --warn: #f0b03c;
+  --err: #f2665f;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.5), 0 4px 10px rgba(0, 0, 0, 0.3);
+
+  --clip-video: #2a527d;
+  --clip-image: #0f5a74;
+  --clip-page: #51467a;
+  --clip-text: #763e28;
+  --clip-voice: #703b5a;
+  --clip-sfx: #285d36;
+  --clip-music: #634c06;
+
+  --tl-lane: #111111;
+  --tl-lane-on: #14211f;
+  --tl-playhead: var(--accent);
+  --tl-select: #ffffff;
+  --tl-wave: rgba(255, 255, 255, 0.5);
+  --tl-wave-band: rgba(255, 255, 255, 0.3);
+  --tl-wave-clip: #ff8a3d;
 
   --folder-back: #3a3a3a;
   --folder-front: #4d4d4d;
@@ -175,28 +147,6 @@
   --brand-wind-from: #5ecb92;
   --brand-wind-mid: #66d8b8;
   --brand-wind-to: #7fd3e4;
-
-  --tl-lane: #1c1c1c;
-  --tl-lane-on: #2a2a2a;
-  --tl-head: #181818;
-  --tl-ruler: #181818;
-  --tl-line: #252525;
-  --tl-text: rgba(255, 255, 255, 0.72);
-  --tl-faint: rgba(255, 255, 255, 0.34);
-  /* white playhead on near black; selection white too (teal disappears on the darkened blocks) */
-  --tl-playhead: #ffffff;
-  --tl-accent: #2ed3c6;
-  --tl-select: #ffffff;
-  --tl-wave: rgba(12, 168, 164, 0.9);
-  --tl-wave-band: rgba(0, 119, 125, 0.85);
-  --tl-wave-clip: #ff8a3d;
-  --tl-tick: rgba(255, 255, 255, 0.12);
-  --tl-scene: #1d5c60;
-  --tl-video: #2d4f7c;
-  --tl-voice: #003a4c;
-  --tl-sfx: #084254;
-  --tl-music: #00323f;
-  --tl-caption: #8f4632;
 }
 
 * {
@@ -209,15 +159,12 @@ body {
 }
 
 html {
-  background: #f2f2f2;
-}
-html[data-theme='dark'] {
-  background: #141414;
+  background: var(--bg-app);
 }
 
 body {
   color: var(--text);
-  background: var(--canvas);
+  background: var(--bg-app);
   font-family: var(--font-sans);
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   letter-spacing: -0.006em;
@@ -269,7 +216,7 @@ body {
 /* the selected clip and its reference in the chat glow together: the one is the other */
 @keyframes openfilm-desktop-pulse {
   0%, 100% { filter: none; }
-  50% { filter: drop-shadow(0 0 5px var(--tl-accent)); }
+  50% { filter: drop-shadow(0 0 5px var(--accent)); }
 }
 .openfilm-desktop-pulse {
   animation: openfilm-desktop-pulse 2.4s ease-in-out infinite;
@@ -343,7 +290,7 @@ html[data-focus-nav='tab'] :where(a, button, [role='button'], select, summary):f
 }
 
 .skeleton {
-  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 37%, var(--surface) 63%);
+  background: linear-gradient(90deg, var(--bg-raised) 25%, var(--bg-field) 37%, var(--bg-raised) 63%);
   background-size: 200% 100%;
   animation: openfilm-shimmer 1.4s ease-in-out infinite;
 }
@@ -376,7 +323,7 @@ html[data-focus-nav='tab'] :where(a, button, [role='button'], select, summary):f
 /* Only the range bar under the tracks scrolls sideways; the lanes hide their horizontal scrollbar. */
 .tl-scroll {
   scrollbar-width: thin;
-  scrollbar-color: var(--tl-faint) transparent;
+  scrollbar-color: var(--text-faint) transparent;
 }
 .tl-scroll::-webkit-scrollbar {
   width: 8px;
@@ -394,13 +341,13 @@ html[data-focus-nav='tab'] :where(a, button, [role='button'], select, summary):f
   background: transparent;
 }
 .tl-scroll::-webkit-scrollbar-thumb {
-  background: var(--tl-faint);
+  background: var(--text-faint);
   border: 2px solid transparent;
   border-radius: 4px;
   background-clip: content-box;
 }
 .tl-scroll::-webkit-scrollbar-thumb:hover {
-  background: var(--tl-text);
+  background: var(--text-muted);
   background-clip: content-box;
 }
 .tl-scroll::-webkit-scrollbar-corner {
@@ -459,10 +406,10 @@ body.tl-pinning, body.tl-pinning * { cursor: crosshair !important; }
   border-radius: 999px;
   background: linear-gradient(
     to right,
-    var(--tl-accent) 0,
-    var(--tl-accent) calc(var(--pos, 0) * 100%),
-    var(--tl-line) calc(var(--pos, 0) * 100%),
-    var(--tl-line) 100%
+    var(--accent) 0,
+    var(--accent) calc(var(--pos, 0) * 100%),
+    var(--border) calc(var(--pos, 0) * 100%),
+    var(--border) 100%
   );
 }
 .tl-zoom::-webkit-slider-thumb {
@@ -472,7 +419,7 @@ body.tl-pinning, body.tl-pinning * { cursor: crosshair !important; }
   height: 13px;
   margin-top: -5px;
   border-radius: 2px;
-  background: var(--tl-accent);
+  background: var(--accent);
   cursor: pointer;
 }
 .tl-zoom::-moz-range-track {
@@ -480,10 +427,10 @@ body.tl-pinning, body.tl-pinning * { cursor: crosshair !important; }
   border-radius: 999px;
   background: linear-gradient(
     to right,
-    var(--tl-accent) 0,
-    var(--tl-accent) calc(var(--pos, 0) * 100%),
-    var(--tl-line) calc(var(--pos, 0) * 100%),
-    var(--tl-line) 100%
+    var(--accent) 0,
+    var(--accent) calc(var(--pos, 0) * 100%),
+    var(--border) calc(var(--pos, 0) * 100%),
+    var(--border) 100%
   );
 }
 .tl-zoom::-moz-range-thumb {
@@ -491,7 +438,7 @@ body.tl-pinning, body.tl-pinning * { cursor: crosshair !important; }
   height: 12px;
   border: 0;
   border-radius: 2px;
-  background: var(--tl-text);
+  background: var(--text-muted);
   cursor: pointer;
 }
 
@@ -584,46 +531,38 @@ body.tl-pinning, body.tl-pinning * { cursor: crosshair !important; }
 html[data-file-drag] iframe { pointer-events: none; }
 
 /* a clip about to be replaced by the file dragged over it with ⇧ (components/replace-drop) */
-[data-replace-over] { outline: 2px solid var(--tl-accent); outline-offset: -2px; }
+[data-replace-over] { outline: 2px solid var(--accent); outline-offset: -2px; }
 
-/* the canvas (components/canvas): its own colors, a shade deeper than the panes, so its cards and wires stand out;
-   its floating parts (toolbar, panels, menus) a shade lighter than the cards */
+/* the canvas (components/canvas): the app's layers, named for what they are on the canvas. The board is the app's
+   bottom layer, its cards and floating parts (toolbar, panels, menus) raised over it; a wire being made, the one
+   selected and a selected card are the accent. */
+:root,
+[data-theme='light'],
+[data-theme='dark'] {
+  --cv-bg: var(--bg-app);
+  --cv-card: var(--bg-raised);
+  --cv-card-2: var(--bg-field);
+  --cv-line: var(--border);
+  --cv-line-hover: var(--border-strong);
+  --cv-ring: var(--accent);
+  --cv-label: var(--text-faint);
+  --cv-ink: var(--text);
+  --cv-ghost: var(--border-strong);
+  --cv-edge-lit: var(--accent);
+  --cv-float: var(--bg-raised);
+  --cv-float-line: var(--border);
+  --cv-float-hover: var(--bg-hover);
+}
 :root,
 [data-theme='light'] {
-  --cv-bg: #f3f3f4;
-  --cv-dot: rgba(0, 0, 0, 0.1);
-  --cv-card: #ffffff;
-  --cv-card-2: #f6f6f7;
-  --cv-line: rgba(0, 0, 0, 0.07);
-  --cv-line-hover: rgba(0, 0, 0, 0.16);
-  --cv-ring: rgba(0, 0, 0, 0.72);
-  --cv-label: rgba(0, 0, 0, 0.42);
-  --cv-ink: rgba(0, 0, 0, 0.86);
-  --cv-ghost: rgba(0, 0, 0, 0.14);
-  --cv-edge: rgba(0, 0, 0, 0.2);
-  --cv-edge-lit: #3d6dff;
-  --cv-float: #ffffff;
-  --cv-float-line: rgba(0, 0, 0, 0.08);
-  --cv-float-hover: rgba(0, 0, 0, 0.05);
+  --cv-dot: rgba(0, 0, 0, 0.12);
+  --cv-edge: rgba(0, 0, 0, 0.22);
   --cv-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
   --cv-float-shadow: 0 2px 6px rgba(0, 0, 0, 0.05), 0 16px 40px rgba(0, 0, 0, 0.12);
 }
 [data-theme='dark'] {
-  --cv-bg: #111111;
-  --cv-dot: rgba(255, 255, 255, 0.075);
-  --cv-card: #1b1b1c;
-  --cv-card-2: #202022;
-  --cv-line: rgba(255, 255, 255, 0.07);
-  --cv-line-hover: rgba(255, 255, 255, 0.16);
-  --cv-ring: rgba(255, 255, 255, 0.7);
-  --cv-label: rgba(255, 255, 255, 0.42);
-  --cv-ink: rgba(255, 255, 255, 0.88);
-  --cv-ghost: rgba(255, 255, 255, 0.11);
-  --cv-edge: rgba(255, 255, 255, 0.2);
-  --cv-edge-lit: #6f9bff;
-  --cv-float: #232325;
-  --cv-float-line: rgba(255, 255, 255, 0.08);
-  --cv-float-hover: rgba(255, 255, 255, 0.06);
+  --cv-dot: rgba(255, 255, 255, 0.08);
+  --cv-edge: rgba(255, 255, 255, 0.22);
   --cv-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 10px 30px rgba(0, 0, 0, 0.35);
   --cv-float-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 18px 48px rgba(0, 0, 0, 0.55);
 }

@@ -13,8 +13,9 @@
  * `data-layer-handle`), a crop's in crop mode (`data-crop-kind` / `data-crop-handle`) and several clips' together
  * (`data-group-kind` / `data-group-handle`); one pointer press is routed by the set it lands on.
  */
-/** The stage's "this one" blue: the frame, picked layers and linked outlines are drawn in it. */
-export const FRAME_BLUE = '#0d99ff';
+/** The stage's "this one" color, the accent's teal at one shade for both themes (the picture is not themed): the frame,
+ * picked layers and linked outlines are drawn in it. */
+export const FRAME_COLOR = '#0fa596';
 
 export type FrameCorner = 'nw' | 'ne' | 'se' | 'sw';
 export type FrameEdge = 'n' | 'e' | 's' | 'w';
@@ -141,8 +142,8 @@ export function StageTransformFrame({
             width: w,
             height: h,
             /* a border on something a pixel or two big would cover it: outline it from outside instead */
-            ...(w < 3 || h < 3 ? { boxShadow: `0 0 0 1px ${FRAME_BLUE}` } : { border: `1px solid ${FRAME_BLUE}` }),
-            background: moving ? 'rgba(13,153,255,.06)' : 'transparent',
+            ...(w < 3 || h < 3 ? { boxShadow: `0 0 0 1px ${FRAME_COLOR}` } : { border: `1px solid ${FRAME_COLOR}` }),
+            background: moving ? 'rgba(15,165,150,.06)' : 'transparent',
           }}
         />
         {edges ? EDGES.map((edge) => (
@@ -198,7 +199,7 @@ export function StageTransformFrame({
             >
               <span
                 className="block h-[8px] w-[8px] bg-white"
-                style={{ border: `1px solid ${FRAME_BLUE}`, boxShadow: '0 0 0 0.5px rgba(0,0,0,.08)' }}
+                style={{ border: `1px solid ${FRAME_COLOR}`, boxShadow: '0 0 0 0.5px rgba(0,0,0,.08)' }}
               />
             </div>
           );
@@ -226,7 +227,7 @@ function FrameLabel({ frame, text, bounds }: { frame: FrameGeometry; text: strin
   return (
     <div
       className="pointer-events-none absolute z-[7] -translate-x-1/2 whitespace-nowrap rounded-[3px] px-1 py-[1px] text-[10px] font-medium leading-[14px] text-white tabular-nums"
-      style={{ left: frame.cx, top, background: FRAME_BLUE }}
+      style={{ left: frame.cx, top, background: FRAME_COLOR }}
     >
       {text}
     </div>

@@ -181,7 +181,7 @@ const CANVAS_KEY = 'openfilm.canvas.open';
 const canvasShown = (projectId: string) => { try { return localStorage.getItem(`${CANVAS_KEY}:${projectId}`) === '1'; } catch { return false; } };
 
 const TOP_BTN =
-  'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]';
+  'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]';
 
 /**
  * Which edit-history label a batch of clip edits gets: by its most telling property; a track's switch by its badge; a
@@ -3470,7 +3470,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
 
   if (failure) {
     return (
-      <div className="workspace-shell flex flex-col items-center justify-center gap-3 bg-[var(--dock-shell)] text-[13px] text-[var(--text-muted)]">
+      <div className="workspace-shell flex flex-col items-center justify-center gap-3 bg-[var(--bg-app)] text-[13px] text-[var(--text-muted)]">
         <p>{failure}</p>
         <button type="button" onClick={onLeave} className="rounded-lg border border-[var(--border)] px-3 py-1.5 hover:bg-[var(--bg-hover)]">{t('nav.projects')}</button>
       </div>
@@ -3498,7 +3498,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     />
   );
   return (
-    <div className="workspace-shell flex flex-col bg-[var(--dock-shell)]">
+    <div className="workspace-shell flex flex-col bg-[var(--bg-app)]">
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         <div className="relative z-10 grid min-h-0 min-w-0 flex-1" style={{ gridTemplateColumns: 'minmax(0, 1fr)', gridTemplateRows: 'auto minmax(0, 1fr)', gridTemplateAreas: '"bar" "main"' }}>
           {/* ── top bar: the title centered, whatever is on either side ── */}
@@ -3525,7 +3525,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
             <div className="pointer-events-auto relative flex min-w-0 items-center gap-1">
               <Tooltip label={t('project.appMenu')} side="bottom">
                 <button type="button" aria-label={t('project.appMenu')} aria-haspopup="dialog" onClick={() => setSettingsOpen('general')}
-                  className="flex h-[26px] w-[26px] items-center justify-center rounded-md text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)]">
+                  className="flex h-[26px] w-[26px] items-center justify-center rounded-md text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)]">
                   <BrandLogo size={15} />
                 </button>
               </Tooltip>
@@ -3533,7 +3533,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
               <WebUpdateButton />
               {!studioHost && <Tooltip label={t('desktop.title')} side="bottom">
                 <button type="button" aria-haspopup="dialog" onClick={() => setDesktopOpen(true)}
-                  className={`flex h-[26px] shrink-0 items-center gap-1.5 rounded-md px-2 text-[12px] text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] ${desktopOpen ? 'bg-[var(--bg-hover)] text-[var(--text)]' : ''}`}>
+                  className={`flex h-[26px] shrink-0 items-center gap-1.5 rounded-md px-2 text-[12px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] ${desktopOpen ? 'bg-[var(--bg-hover)] text-[var(--text)]' : ''}`}>
                   <MonitorDown size={14} />
                   {t('nav.desktop')}
                 </button>
@@ -3565,7 +3565,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
               {/* the edit or the canvas, in the panes' place: the one shown, its icon and name, and a click for the other */}
               <Tooltip label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} side="bottom">
                 <button type="button" aria-label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} data-work-mode={canvasOpen ? 'canvas' : 'edit'} onClick={() => setCanvasOpen(!canvasOpen)}
-                  className="flex h-[26px] shrink-0 items-center gap-1.5 rounded-md bg-[var(--bg-hover)] px-2.5 text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-active)]">
+                  className="flex h-[26px] shrink-0 items-center gap-1.5 rounded-md bg-[var(--bg-hover)] px-2.5 text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-pressed)]">
                   {canvasOpen ? <Workflow size={14} /> : <Scissors size={14} />}
                   {t(canvasOpen ? 'canvas.title' : 'canvas.editTitle')}
                 </button>
@@ -3576,12 +3576,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
 
           {/* the panes, edge to edge on the board of lines (--dock-line): a line under the top bar, and one beside the
               app's own panel (lib/host.ts `panel`), which sits left of this, under the top bar: room left for it */}
-          <section ref={dockColRef} className="relative flex min-h-0 min-w-0 flex-col bg-[var(--dock-line)]"
+          <section ref={dockColRef} className="relative flex min-h-0 min-w-0 flex-col bg-[var(--bg-app)]"
             style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...(hostPanel?.open ? { marginLeft: HOST_PANEL_WIDTH, paddingLeft: DOCK_GAP } : null), ...(canvasOpen ? { visibility: 'hidden' } : null) }}>
             <div ref={viewerRowRef} className="relative flex min-h-0 min-w-0 flex-1 flex-row">
               {!hostAssets && assetsPaneOpen && assetsFit ? (
                 <>
-                  <div className={`${PANE} shrink-0 bg-[var(--dock-pane)]`} style={{ width: assetsShownWidth }}>
+                  <div className={`${PANE} shrink-0 bg-[var(--bg-panel)]`} style={{ width: assetsShownWidth }}>
                     {mediaPool()}
                   </div>
                   <PaneDivider width={assetsShownWidth} onResize={setAssetsWidth} containerRef={viewerRowRef} label={t('layout.assets')} min={200} minRest={MIN_VIEWER} />
@@ -3589,7 +3589,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
               ) : null}
               {layersShown ? (
                 <>
-                  <div ref={layersPaneRef} className={`${PANE} shrink-0 bg-[var(--dock-pane)]`} style={{ width: layersShownWidth }}>
+                  <div ref={layersPaneRef} className={`${PANE} shrink-0 bg-[var(--bg-panel)]`} style={{ width: layersShownWidth }}>
                     <LayersPanel
                       ask={askStage}
                       timeMs={timeMs}
@@ -3619,7 +3619,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 </>
               ) : null}
 
-              <div className={`${PANE} min-w-0 flex-1 bg-[var(--dock-pane)]`} data-viewer-pane="">
+              <div className={`${PANE} min-w-0 flex-1 bg-[var(--bg-panel)]`} data-viewer-pane="">
                 <div className={PANE_BAR}>
                   {hostAssets ? null : (
                   <Tooltip label={t(assetsPaneOpen && assetsFit ? 'assetsPane.hide' : 'assetsPane.show')} side="bottom">
@@ -3673,14 +3673,14 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                   </div>
                 ) : null}
                 {dropped?.length || undone.length ? (
-                  <div role="status" className="@container mx-3 mt-1.5 shrink-0 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-[12.5px] text-[var(--text)]">
+                  <div role="status" className="@container mx-3 mt-1.5 shrink-0 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 py-1 text-[12.5px] text-[var(--text)]">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       {/* edits inside pages left out and clip edits changed back are one thing to the person: their edits, undone */}
                       <span className="min-w-0 basis-full truncate @xs:basis-0 @xs:flex-1" title={t('project.editsUndone').replace('{n}', String(undoneCount))}>
                         <span className="hidden @xl:inline">{t('project.editsUndone').replace('{n}', String(undoneCount))}</span>
                         <span className="@xl:hidden">{t('project.editsUndoneShort').replace('{n}', String(undoneCount))}</span>
                       </span>
-                      <button type="button" onClick={() => void restoreDropped()} className="shrink-0 rounded-md bg-[var(--text)] px-2.5 py-1 text-[var(--surface)] transition hover:opacity-85">{t('project.editsRestore')}</button>
+                      <button type="button" onClick={() => void restoreDropped()} className="shrink-0 rounded-md bg-[var(--accent)] px-2.5 py-1 text-[var(--on-accent)] transition hover:bg-[var(--accent-hover)]">{t('project.editsRestore')}</button>
                       <button type="button" onClick={() => { setDropped(null); for (const e of undone) settledEdits.current.add(e); setUndone([]); }} className="shrink-0 rounded-md px-2 py-1 text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">{t('project.editsLeaveOut')}</button>
                     </div>
                   </div>
@@ -3691,7 +3691,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                   data-viewer-picture="" data-viewer-focus={viewerFocus ? '1' : '0'}>
                   {pictureDrop ? (
                     <div className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] ring-2 ring-inset ring-[var(--accent)]">
-                      <span className="rounded-md bg-[var(--surface)] px-2.5 py-1 text-[12.5px] text-[var(--text)] shadow-sm">{t('project.dropOnPicture')}</span>
+                      <span className="rounded-md bg-[var(--bg-raised)] px-2.5 py-1 text-[12.5px] text-[var(--text)] shadow-sm">{t('project.dropOnPicture')}</span>
                     </div>
                   ) : null}
                   {filmMissing ? (
@@ -3818,7 +3818,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 {film.broken ? (
                   <div role="status" className="mx-2 mb-1 flex items-start gap-2 rounded-md border border-[var(--warn)] px-2.5 py-1.5 text-[12px] leading-snug text-[var(--text)]">
                     <TriangleAlert size={14} className="mt-px shrink-0 text-[var(--warn)]" aria-hidden />
-                    <span className="min-w-0 break-words"><span className="font-medium">{t('project.filmBroken')}</span>{' '}<span className="text-[var(--text-dim)]">{film.broken}</span></span>
+                    <span className="min-w-0 break-words"><span className="font-medium">{t('project.filmBroken')}</span>{' '}<span className="text-[var(--text-muted)]">{film.broken}</span></span>
                   </div>
                 ) : null}
                 <ViewerBar
@@ -3905,7 +3905,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
 
             {timelineOpen ? <DockPaneDivider height={timelineShownHeight} onResize={commitTimelineHeight} containerRef={dockColRef} label={t('timeline.resize')} /> : null}
             {timelineOpen && value ? (
-              <div className={`${PANE} shrink-0 bg-[var(--dock-pane)]`} style={{ height: timelineShownHeight }}>
+              <div className={`${PANE} shrink-0 bg-[var(--bg-panel)]`} style={{ height: timelineShownHeight }}>
                 <div className="absolute inset-0 flex min-h-0 min-w-0 flex-col" data-timeline-scope="main" style={{ right: METERS_W }}
                   onPointerDownCapture={() => { if (pickedMedia) pickMedia(null); }}>
                   <Timeline
@@ -3976,9 +3976,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
           </section>
           {/* the canvas in the panes' place: they stay laid out as they were, hidden under it */}
           {canvasOpen ? (
-            <div className="relative z-[2] flex min-h-0 min-w-0 bg-[var(--dock-line)]"
+            <div className="relative z-[2] flex min-h-0 min-w-0 bg-[var(--bg-app)]"
               style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...(hostPanel?.open ? { marginLeft: HOST_PANEL_WIDTH, paddingLeft: DOCK_GAP } : null) }}>
-              <div className="relative min-h-0 min-w-0 flex-1 bg-[var(--dock-pane)]">
+              <div className="relative min-h-0 min-w-0 flex-1 bg-[var(--bg-panel)]">
                 <LoadBoundary title={t('canvas.loadFailed')} action={t('canvas.reload')}>
                   <React.Suspense fallback={null}>
                     <CanvasView projectId={projectId} folder={loaded?.project.path ?? ''} files={canvasFiles} sources={mediaSources} onAddToFilm={(file) => { void addFromCanvas(file); }}
@@ -4014,7 +4014,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
           panel keeps for itself (the panel goes on below it, so the two read as one) */}
       {hostAssets?.open && hostPanel ? <PanelSeam panel={hostPanel} bottom={hostAssets.bottom} /> : null}
       {hostAssets?.open && hostPanel ? (
-        <div className="fixed z-30 flex min-h-0 min-w-0 flex-col overflow-hidden border-t border-[var(--dock-line)] bg-[var(--dock-pane)]"
+        <div className="fixed z-30 flex min-h-0 min-w-0 flex-col overflow-hidden border-t border-[var(--border)] bg-[var(--bg-panel)]"
           style={{ top: HOST_PANEL_TOP, left: 0, bottom: hostAssets.bottom, width: HOST_PANEL_WIDTH }}>
           <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} actions={library.actions}
             captions={{

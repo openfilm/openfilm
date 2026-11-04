@@ -113,7 +113,7 @@ export function OperationHistory({
       ref={panel}
       role="dialog"
       aria-label={t('history.opsTitle')}
-      className="fixed z-[120] flex flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]"
+      className="fixed z-[120] flex flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-raised)] shadow-[var(--shadow-lg)]"
       style={{
         left,
         top: anchor.bottom + 6,
@@ -161,7 +161,7 @@ function OpRow({
   t: (key: string) => string;
   onPick: () => void;
 }) {
-  const tone = undone ? 'text-[var(--text-faint)]' : 'text-[var(--text-dim)]';
+  const tone = undone ? 'text-[var(--text-faint)]' : 'text-[var(--text-muted)]';
   return (
     <li>
       <button

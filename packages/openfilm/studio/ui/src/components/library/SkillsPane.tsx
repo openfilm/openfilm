@@ -134,14 +134,14 @@ export function SkillsPane({ line, query, projectId, opened, onOpen, onDiscover 
 function Invitation({ icon, title, text, action }: { icon: React.ReactNode; title: string; text: string; action?: { label: string; run: () => void } }) {
   return (
     <div className="flex items-center gap-3 rounded-[10px] border border-dashed border-[var(--border-strong)] px-3 py-3">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-[var(--surface-2)] text-[var(--text-muted)]">{icon}</span>
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-[var(--bg-field)] text-[var(--text-muted)]">{icon}</span>
       <div className="min-w-0 flex-1">
         <div className="text-[12.5px] font-medium leading-[17px] text-[var(--text)]">{title}</div>
         <div className="mt-0.5 text-[11.5px] leading-[16px] text-[var(--text-faint)]">{text}</div>
       </div>
       {action ? (
         <button type="button" onClick={action.run}
-          className="h-7 shrink-0 rounded-md bg-[var(--surface-2)] px-2.5 text-[12px] font-medium text-[var(--text)] hover:bg-[var(--bg-hover)]">{action.label}</button>
+          className="h-7 shrink-0 rounded-md bg-[var(--bg-field)] px-2.5 text-[12px] font-medium text-[var(--text)] hover:bg-[var(--bg-hover)]">{action.label}</button>
       ) : null}
     </div>
   );
@@ -160,7 +160,7 @@ function SkillLine({ mark, title, under, tip, on, label, onChange, onOpen }: {
   return (
     <div role={onOpen ? 'button' : undefined} tabIndex={onOpen ? 0 : undefined} title={tip}
       onClick={onOpen} onKeyDown={(e) => { if (onOpen && e.key === 'Enter' && e.target === e.currentTarget) onOpen(); }}
-      className={`flex items-center gap-2.5 rounded-[8px] px-1 py-1.5 outline-none ${onOpen ? 'cursor-pointer hover:bg-[var(--bg-hover)] focus-visible:ring-1 focus-visible:ring-[var(--tl-accent)]' : ''}`}>
+      className={`flex items-center gap-2.5 rounded-[8px] px-1 py-1.5 outline-none ${onOpen ? 'cursor-pointer hover:bg-[var(--bg-hover)] focus-visible:ring-1 focus-visible:ring-[var(--accent)]' : ''}`}>
       <span className={on ? '' : 'opacity-50'}>{mark}</span>
       <div className="min-w-0 flex-1">
         <div className={`truncate text-[12.5px] font-medium leading-[17px] ${on ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>{title}</div>
@@ -177,7 +177,7 @@ export function ImportButton({ onClick }: { onClick: () => void }) {
   const t = useT();
   return (
     <button type="button" onClick={onClick}
-      className="flex h-8 shrink-0 items-center gap-1 rounded-md bg-[var(--surface-2)] px-2.5 text-[12px] font-medium text-[var(--text)] hover:bg-[var(--bg-hover)]">
+      className="flex h-8 shrink-0 items-center gap-1 rounded-md bg-[var(--bg-field)] px-2.5 text-[12px] font-medium text-[var(--text)] hover:bg-[var(--bg-hover)]">
       <Plus size={14} />{t('assetDrawer.skillImport')}
     </button>
   );
@@ -212,10 +212,10 @@ function SkillTile({ skill, onOpen, onInstall }: { skill: SkillEntry; onOpen: ()
   return (
     <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(); }} title={title}
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} className="group min-w-0 cursor-pointer select-none outline-none">
-      <div className="relative aspect-video overflow-hidden rounded-md bg-[var(--surface-2)] ring-1 ring-transparent group-hover:ring-[var(--text-faint)] group-focus-visible:ring-[var(--tl-accent)]">
+      <div className="relative aspect-video overflow-hidden rounded-md bg-[var(--bg-field)] ring-1 ring-transparent group-hover:ring-[var(--text-faint)] group-focus-visible:ring-[var(--accent)]">
         <SkillCover key={skill.cover ?? ''} skill={skill} title={title} small playing={hover} />
         <button type="button" onClick={(e) => { e.stopPropagation(); onInstall(); }}
-          className="absolute bottom-1 right-1 hidden h-[22px] items-center rounded-full bg-[var(--tl-accent)] px-2.5 text-[11px] font-medium text-black shadow-md group-hover:flex">{t('assetDrawer.skillInstall')}</button>
+          className="absolute bottom-1 right-1 hidden h-[22px] items-center rounded-full bg-[var(--accent)] px-2.5 text-[11px] font-medium text-black shadow-md group-hover:flex">{t('assetDrawer.skillInstall')}</button>
       </div>
       <div className="mt-1.5 truncate px-0.5 text-[12px] font-medium text-[var(--text-muted)] group-hover:text-[var(--text)]">{title}</div>
       <div className="truncate px-0.5 text-[10.5px] text-[var(--text-faint)]" title={summary}>{summary}</div>

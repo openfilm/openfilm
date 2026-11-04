@@ -99,7 +99,7 @@ const DRAWN: Record<string, Draw> = {
 };
 
 /* the marks inside a solid shape are cut out of it in the panel's own color */
-const SOLID: Paint = { fill: { fill: 'currentColor' }, ink: { stroke: 'var(--dock-pane)' }, cut: { fill: 'var(--dock-pane)', stroke: 'var(--dock-pane)' } };
+const SOLID: Paint = { fill: { fill: 'currentColor' }, ink: { stroke: 'var(--bg-panel)' }, cut: { fill: 'var(--bg-panel)', stroke: 'var(--bg-panel)' } };
 const LINE: Paint = { fill: {}, ink: {}, cut: { fill: 'currentColor' } };
 
 export function CategoryIcon({ id, on, size = 22 }: { id: string; on: boolean; size?: number }) {
@@ -132,7 +132,7 @@ export function Empty({ icon, text, action, onAction }: { icon: 'star' | 'music'
       <EmptyIcon kind={icon} />
       <p className="text-[12.5px] leading-relaxed">
         {text}
-        {action ? <> <button type="button" onClick={onAction} className="font-medium text-[var(--tl-accent)] hover:underline">{action}</button></> : null}
+        {action ? <> <button type="button" onClick={onAction} className="font-medium text-[var(--accent)] hover:underline">{action}</button></> : null}
       </p>
     </div>
   );

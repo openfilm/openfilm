@@ -34,7 +34,7 @@ export function TurnLogButton({ project, turnId, live = false }: { project: stri
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} title={t('turnLog.title')}
-        className="flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 transition hover:bg-[var(--bg-hover)] hover:text-[var(--chat-text)]">
+        className="flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
         <ScrollText size={12} aria-hidden />
         {t('turnLog.open')}
       </button>
@@ -107,10 +107,10 @@ function TurnLogViewer({ project, turnId, live, onClose }: { project: string; tu
   const copy = () => {
     void navigator.clipboard?.writeText(JSON.stringify(shownTab === 'calls' ? calls : shownTab === 'sent' ? sent : events, null, 2)).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
   };
-  const button = 'flex h-8 items-center gap-1.5 rounded-[8px] border border-[var(--border)] px-2.5 text-[12.5px] text-[var(--chat-text)] transition hover:bg-[var(--bg-hover)]';
+  const button = 'flex h-8 items-center gap-1.5 rounded-[8px] border border-[var(--border)] px-2.5 text-[12.5px] text-[var(--text)] transition hover:bg-[var(--bg-hover)]';
   const tabButton = (id: Tab, label: string) => (
     <button type="button" onClick={() => setTab(id)}
-      className={`h-9 border-b-2 px-1 text-[13px] transition ${shownTab === id ? 'border-[var(--chat-text)] text-[var(--chat-text)]' : 'border-transparent text-[var(--chat-hint)] hover:text-[var(--chat-text)]'}`}>
+      className={`h-9 border-b-2 px-1 text-[13px] transition ${shownTab === id ? 'border-[var(--text)] text-[var(--text)]' : 'border-transparent text-[var(--text-faint)] hover:text-[var(--text)]'}`}>
       {label}
     </button>
   );
@@ -118,20 +118,20 @@ function TurnLogViewer({ project, turnId, live, onClose }: { project: string; tu
   return createPortal(
     <div className="fixed inset-0 z-[10045] grid place-items-center bg-black/40 p-6" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div role="dialog" aria-modal="true" aria-label={t('turnLog.title')}
-        className="flex h-[min(940px,94vh)] w-[min(1320px,96vw)] flex-col overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--dock-pane)] shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5)]">
+        className="flex h-[min(940px,94vh)] w-[min(1320px,96vw)] flex-col overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--bg-panel)] shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5)]">
         <div className="flex shrink-0 items-start gap-3 border-b border-[var(--border)] px-5 py-4">
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 text-[15px] font-semibold text-[var(--chat-text)]">
+            <div className="flex items-center gap-2 text-[15px] font-semibold text-[var(--text)]">
               {t('turnLog.title')}
               {done ? (
-                <span className={`rounded-[6px] px-1.5 py-0.5 text-[11.5px] font-medium ${done.ok ? 'bg-[var(--bg-hover)] text-[var(--chat-hint)]' : 'bg-[var(--err)]/15 text-[var(--err)]'}`}>
+                <span className={`rounded-[6px] px-1.5 py-0.5 text-[11.5px] font-medium ${done.ok ? 'bg-[var(--bg-hover)] text-[var(--text-faint)]' : 'bg-[var(--err)]/15 text-[var(--err)]'}`}>
                   {done.ok ? String(done.stopReason ?? t('turnLog.ended')) : t('turnLog.failed')}
                 </span>
               ) : live ? (
                 <span className="rounded-[6px] bg-[var(--bg-hover)] px-1.5 py-0.5 text-[11.5px] font-medium"><span className="text-sweep">{t('turnLog.running')}</span></span>
               ) : null}
             </div>
-            <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[12.5px] text-[var(--chat-hint)]">
+            <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[12.5px] text-[var(--text-faint)]">
               {agent ? (
                 <span className="flex w-3.5 shrink-0 justify-center opacity-80">
                   {agent === 'byok' ? <KeyRound size={12} /> : hasAgentIcon(agent) ? <AgentIcon id={agent} size={12} /> : <BrandLogo size={11} />}
@@ -150,10 +150,10 @@ function TurnLogViewer({ project, turnId, live, onClose }: { project: string; tu
           <button type="button" className={button} onClick={copy} disabled={!events.length}><ClipboardCopy size={13} />{copied ? t('turnLog.copied') : t('turnLog.copy')}</button>
           <button type="button" className={button} onClick={() => void app.chat.reveal(project, turnId)}><FolderOpen size={13} />{t('turnLog.reveal')}</button>
           <button type="button" aria-label={t('turnLog.close')} onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-[8px] text-[var(--chat-hint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--chat-text)]"><X size={16} /></button>
+            className="flex h-8 w-8 items-center justify-center rounded-[8px] text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"><X size={16} /></button>
         </div>
-        {log === undefined || (log === null && live) ? <p className="px-5 py-4 text-[13px] text-[var(--chat-hint)]">{t('turnLog.loading')}</p>
-          : log === null ? <p className="px-5 py-4 text-[13px] text-[var(--chat-hint)]">{t('turnLog.none')}</p> : (
+        {log === undefined || (log === null && live) ? <p className="px-5 py-4 text-[13px] text-[var(--text-faint)]">{t('turnLog.loading')}</p>
+          : log === null ? <p className="px-5 py-4 text-[13px] text-[var(--text-faint)]">{t('turnLog.none')}</p> : (
             <>
               <div className="flex shrink-0 items-center gap-4 border-b border-[var(--border)] px-5">
                 {tabButton('calls', fill(t('turnLog.calls'), { n: calls.length }))}
@@ -162,7 +162,7 @@ function TurnLogViewer({ project, turnId, live, onClose }: { project: string; tu
                 {log.cut ? <span className="text-[12px] text-[var(--warn)]">{t('turnLog.cut')}</span> : null}
               </div>
               {shownTab === 'calls'
-                ? (calls.length ? <Calls calls={calls} start={prompt?.t ?? calls[0]!.startedAt} t={t} /> : <p className="px-5 py-4 text-[13px] text-[var(--chat-hint)]">{t(noCallsReason(agent, prompt?.opened?.log))}</p>)
+                ? (calls.length ? <Calls calls={calls} start={prompt?.t ?? calls[0]!.startedAt} t={t} /> : <p className="px-5 py-4 text-[13px] text-[var(--text-faint)]">{t(noCallsReason(agent, prompt?.opened?.log))}</p>)
                 : shownTab === 'sent' ? <Sent events={sent} t={t} /> : <Events events={events} t={t} />}
             </>
           )}
@@ -184,7 +184,7 @@ const ROLE_COLOR: Record<string, string> = {
   context: 'text-[#c0603a]',
 };
 
-const block = 'whitespace-pre-wrap break-words font-mono text-[12px] leading-[1.55] text-[var(--chat-text)]';
+const block = 'whitespace-pre-wrap break-words font-mono text-[12px] leading-[1.55] text-[var(--text)]';
 const pretty = (raw: unknown) => {
   if (typeof raw !== 'string') return JSON.stringify(raw, null, 2);
   try { return JSON.stringify(JSON.parse(raw), null, 2); } catch { return raw; }
@@ -197,7 +197,7 @@ function Clamped({ text, max = 6000, t }: { text: string; max?: number; t: T }) 
   return (
     <div className={block}>
       {text.slice(0, max)}…
-      <button type="button" onClick={() => setAll(true)} className="ml-1 font-sans text-[12px] text-[var(--chat-hint)] underline">{fill(t('turnLog.showAll'), { n: text.length.toLocaleString() })}</button>
+      <button type="button" onClick={() => setAll(true)} className="ml-1 font-sans text-[12px] text-[var(--text-faint)] underline">{fill(t('turnLog.showAll'), { n: text.length.toLocaleString() })}</button>
     </div>
   );
 }
@@ -213,15 +213,15 @@ function Parts({ message, t }: { message: Item; t: T }) {
         if (part.type === 'thinking') {
           return (
             <details key={i}>
-              <summary className="cursor-pointer text-[12px] text-[var(--chat-hint)]">{t('turnLog.thought')} · {part.thinking ? fill(t('turnLog.chars'), { n: String(part.thinking).length.toLocaleString() }) : t('turnLog.thoughtNotKept')}</summary>
+              <summary className="cursor-pointer text-[12px] text-[var(--text-faint)]">{t('turnLog.thought')} · {part.thinking ? fill(t('turnLog.chars'), { n: String(part.thinking).length.toLocaleString() }) : t('turnLog.thoughtNotKept')}</summary>
               <div className="mt-1 italic"><Clamped text={String(part.thinking ?? '')} t={t} /></div>
             </details>
           );
         }
         if (part.type === 'toolCall') {
           return (
-            <div key={i} className="rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-2">
-              <div className="mb-1 flex gap-2 font-mono text-[12px]"><b className="text-[var(--chat-text)]">{String(part.name ?? '')}</b><span className="text-[var(--text-faint)]">{String(part.id ?? '')}</span></div>
+            <div key={i} className="rounded-[8px] border border-[var(--border)] bg-[var(--bg-field)] px-2.5 py-2">
+              <div className="mb-1 flex gap-2 font-mono text-[12px]"><b className="text-[var(--text)]">{String(part.name ?? '')}</b><span className="text-[var(--text-faint)]">{String(part.id ?? '')}</span></div>
               <Clamped text={pretty(part.arguments ?? {})} t={t} />
             </div>
           );
@@ -243,12 +243,12 @@ function MessageRow({ message, index, fresh, open: initial, t }: { message: Item
       <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[12px] hover:bg-[var(--bg-hover)]">
         <ChevronRight size={12} className={`shrink-0 text-[var(--text-faint)] transition-transform ${open ? 'rotate-90' : ''}`} />
         <span className="w-6 shrink-0 tabular-nums text-[var(--text-faint)]">{index}</span>
-        <b className={`shrink-0 font-semibold ${failed ? 'text-[var(--err)]' : ROLE_COLOR[role] ?? 'text-[var(--chat-hint)]'}`}>{role === 'toolResult' ? String(message.toolName ?? 'tool') : role}</b>
-        {role === 'context' || message.label ? <span className="shrink-0 font-mono text-[11px] text-[var(--chat-hint)]" title={t('turnLog.contextHint')}>{[message.label, message.as ? `as ${message.as}` : null].filter(Boolean).join(' · ')}</span> : null}
-        {message.meta ? <span className="shrink-0 font-mono text-[11px] text-[var(--chat-hint)]">meta</span> : null}
-        {fresh ? <span className="shrink-0 rounded-[4px] bg-[var(--bg-hover)] px-1 text-[10.5px] text-[var(--chat-text)]">{t('turnLog.fresh')}</span> : null}
+        <b className={`shrink-0 font-semibold ${failed ? 'text-[var(--err)]' : ROLE_COLOR[role] ?? 'text-[var(--text-faint)]'}`}>{role === 'toolResult' ? String(message.toolName ?? 'tool') : role}</b>
+        {role === 'context' || message.label ? <span className="shrink-0 font-mono text-[11px] text-[var(--text-faint)]" title={t('turnLog.contextHint')}>{[message.label, message.as ? `as ${message.as}` : null].filter(Boolean).join(' · ')}</span> : null}
+        {message.meta ? <span className="shrink-0 font-mono text-[11px] text-[var(--text-faint)]">meta</span> : null}
+        {fresh ? <span className="shrink-0 rounded-[4px] bg-[var(--bg-hover)] px-1 text-[10.5px] text-[var(--text)]">{t('turnLog.fresh')}</span> : null}
         {message.toolCallId ? <span className="shrink-0 font-mono text-[11px] text-[var(--text-faint)]">{String(message.toolCallId)}</span> : null}
-        <span className={`min-w-0 flex-1 truncate ${open ? 'invisible' : 'text-[var(--chat-hint)]'}`}>{text.replace(/\s+/g, ' ').slice(0, 200)}</span>
+        <span className={`min-w-0 flex-1 truncate ${open ? 'invisible' : 'text-[var(--text-faint)]'}`}>{text.replace(/\s+/g, ' ').slice(0, 200)}</span>
         <span className="shrink-0 tabular-nums text-[11px] text-[var(--text-faint)]">{fill(t('turnLog.chars'), { n: text.length.toLocaleString() })}</span>
       </button>
       {open ? <div className="border-t border-[var(--border)] px-3 py-2"><Parts message={message} t={t} /></div> : null}
@@ -266,8 +266,8 @@ function Calls({ calls, start, t }: { calls: ModelCall[]; start: number; t: T })
   const answer = call.answer;
   const failed = answer?.stopReason === 'error';
   const tools = call.tools ?? [];
-  const heading = 'mb-2 flex items-center gap-2 text-[12.5px] font-semibold text-[var(--chat-text)]';
-  const small = 'h-7 rounded-[7px] px-2.5 text-[12px] text-[var(--chat-hint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--chat-text)]';
+  const heading = 'mb-2 flex items-center gap-2 text-[12.5px] font-semibold text-[var(--text)]';
+  const small = 'h-7 rounded-[7px] px-2.5 text-[12px] text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]';
   const facts = [answer?.responseModel ?? answer?.model, answer?.provider, answer?.providerThinkingLevel ?? answer?.thinkingLevel, answer?.stopReason].filter(Boolean).map(String);
   return (
     <div className="flex min-h-0 flex-1">
@@ -281,11 +281,11 @@ function Calls({ calls, start, t }: { calls: ModelCall[]; start: number; t: T })
             <button key={c.no} type="button" onClick={() => setPicked(c.no === calls.length ? null : c.no)}
               className={`block w-full px-4 py-2 text-left text-[12px] ${c.no === call.no ? 'bg-[var(--bg-hover)]' : 'hover:bg-[var(--bg-hover)]'}`}>
               <div className="flex items-baseline gap-2">
-                <b className={`text-[12.5px] ${error ? 'text-[var(--err)]' : 'text-[var(--chat-text)]'}`}>#{c.no}</b>
+                <b className={`text-[12.5px] ${error ? 'text-[var(--err)]' : 'text-[var(--text)]'}`}>#{c.no}</b>
                 <span className="tabular-nums text-[var(--text-faint)]">+{seconds(c.startedAt - start)} · {seconds(c.ms)}</span>
               </div>
               {c.thread ? <div className="mt-0.5 truncate text-[11px] text-[#c0603a]">{c.thread.label}</div> : null}
-              <div className="mt-0.5 truncate text-[var(--chat-hint)]">
+              <div className="mt-0.5 truncate text-[var(--text-faint)]">
                 {error ? <span className="text-[var(--err)]">{String(c.answer?.errorMessage ?? '')}</span>
                   : asked.length ? `→ ${asked.join(', ')}` : t('turnLog.answered')}
               </div>
@@ -295,8 +295,8 @@ function Calls({ calls, start, t }: { calls: ModelCall[]; start: number; t: T })
         })}
       </div>
       <div className="min-w-0 flex-1 overflow-y-auto px-5 py-3">
-        <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[var(--chat-hint)]">
-          <b className="text-[13px] text-[var(--chat-text)]">#{call.no}</b>
+        <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[var(--text-faint)]">
+          <b className="text-[13px] text-[var(--text)]">#{call.no}</b>
           {call.thread ? <span className="text-[#c0603a]">{call.thread.label}</span> : null}
           {facts.map((f, i) => <span key={i}>{f}</span>)}
           <span className="tabular-nums">{fill(t('turnLog.tokens'), { input: u.input.toLocaleString(), cached: u.cached.toLocaleString(), output: u.output.toLocaleString() })}{u.reasoning ? ` (${fill(t('turnLog.reasoningTokens'), { n: u.reasoning.toLocaleString() })})` : ''}</span>
@@ -309,9 +309,9 @@ function Calls({ calls, start, t }: { calls: ModelCall[]; start: number; t: T })
             {fill(t('turnLog.fromRecord'), { file: call.source.file })}
           </div>
         ) : null}
-        {call.lacks.map((name) => <p key={name} className="-mt-1.5 mb-3 text-[12px] text-[var(--chat-hint)]">{t(`turnLog.lacks.${name}`)}</p>)}
+        {call.lacks.map((name) => <p key={name} className="-mt-1.5 mb-3 text-[12px] text-[var(--text-faint)]">{t(`turnLog.lacks.${name}`)}</p>)}
         {raw ? (
-          <pre className={`${block} rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] p-3`}>
+          <pre className={`${block} rounded-[8px] border border-[var(--border)] bg-[var(--bg-field)] p-3`}>
             {JSON.stringify({ request: { systemPrompt: call.systemPrompt, messages: call.messages, tools: call.tools, ...(call.settings ? { settings: call.settings } : {}) }, answer: call.answer }, null, 2)}
           </pre>
         ) : (
@@ -326,7 +326,7 @@ function Calls({ calls, start, t }: { calls: ModelCall[]; start: number; t: T })
                 </div>
               ) : answer ? (
                 <div className="rounded-[8px] border border-[var(--border)] px-3 py-2"><Parts message={answer} t={t} /></div>
-              ) : <p className="text-[12.5px] text-[var(--chat-hint)]">—</p>}
+              ) : <p className="text-[12.5px] text-[var(--text-faint)]">—</p>}
             </section>
             {/* everything the model got */}
             <section>
@@ -346,21 +346,21 @@ function Calls({ calls, start, t }: { calls: ModelCall[]; start: number; t: T })
             <section>
               {call.tools ? (
                 <details>
-                  <summary className="cursor-pointer text-[12.5px] font-semibold text-[var(--chat-text)]">{fill(t('turnLog.rest'), { n: tools.length })}</summary>
+                  <summary className="cursor-pointer text-[12.5px] font-semibold text-[var(--text)]">{fill(t('turnLog.rest'), { n: tools.length })}</summary>
                   <div className="mt-2 space-y-2">
-                    <div className="text-[12px] text-[var(--chat-hint)]">{tools.map((tool) => tool.name).join(', ')}</div>
-                    <pre className={`${block} max-h-[480px] overflow-auto rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] p-3`}>{JSON.stringify(call.tools, null, 2)}</pre>
+                    <div className="text-[12px] text-[var(--text-faint)]">{tools.map((tool) => tool.name).join(', ')}</div>
+                    <pre className={`${block} max-h-[480px] overflow-auto rounded-[8px] border border-[var(--border)] bg-[var(--bg-field)] p-3`}>{JSON.stringify(call.tools, null, 2)}</pre>
                   </div>
                 </details>
               ) : (
-                <p className="text-[12.5px] text-[var(--chat-hint)]">{t(call.toolsUnknown ? 'turnLog.toolsUnknown' : 'turnLog.toolsMissing')}</p>
+                <p className="text-[12.5px] text-[var(--text-faint)]">{t(call.toolsUnknown ? 'turnLog.toolsUnknown' : 'turnLog.toolsMissing')}</p>
               )}
             </section>
             {call.settings ? (
               <section>
                 <details>
-                  <summary className="cursor-pointer text-[12.5px] font-semibold text-[var(--chat-text)]">{t('turnLog.settings')}</summary>
-                  <pre className={`${block} mt-2 max-h-[480px] overflow-auto rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] p-3`}>{JSON.stringify(call.settings, null, 2)}</pre>
+                  <summary className="cursor-pointer text-[12.5px] font-semibold text-[var(--text)]">{t('turnLog.settings')}</summary>
+                  <pre className={`${block} mt-2 max-h-[480px] overflow-auto rounded-[8px] border border-[var(--border)] bg-[var(--bg-field)] p-3`}>{JSON.stringify(call.settings, null, 2)}</pre>
                 </details>
               </section>
             ) : null}
@@ -379,7 +379,7 @@ function SentBlocks({ blocks, t }: { blocks: Item[]; t: T }) {
     <div className="space-y-2">
       {blocks.map((b, i) => (b?.type === 'text' ? <Clamped key={i} text={String(b.text ?? '')} max={20000} t={t} />
         : b?.type === 'image' ? (
-          <div key={i} className="font-mono text-[12px] text-[var(--chat-hint)]">
+          <div key={i} className="font-mono text-[12px] text-[var(--text-faint)]">
             {fill(t('turnLog.picture'), { type: String(b.mimeType ?? ''), size: k(Number(b.bytes) || 0) })}{b.file ? ` · ${String(b.file)}` : ''}
           </div>
         ) : <Clamped key={i} text={pretty(b)} t={t} />))}
@@ -401,7 +401,7 @@ function skillsLines(skills: Item, t: T): string[] {
 function Labeled({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="grid grid-cols-[180px_minmax(0,1fr)] gap-3 border-t border-[var(--border)] py-2 first:border-t-0">
-      <div className="text-[12px] text-[var(--chat-hint)]">{label}</div>
+      <div className="text-[12px] text-[var(--text-faint)]">{label}</div>
       <div className="min-w-0">{children}</div>
     </div>
   );
@@ -412,14 +412,14 @@ function Sent({ events, t }: { events: LogEvent[]; t: T }) {
   const opened = prompt?.opened as Item | null | undefined;
   const messages = events.filter((e) => e.kind === 'sent' || e.kind === 'steer') as Item[];
   const start = prompt?.t ?? 0;
-  const heading = 'mb-2 text-[12.5px] font-semibold text-[var(--chat-text)]';
+  const heading = 'mb-2 text-[12.5px] font-semibold text-[var(--text)]';
   const appended = opened?.session?.params?._meta?.systemPrompt?.append;
   const developer = opened?.codexConfig?.developer_instructions;
   return (
     <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-4">
       <section>
         <div className={heading}>{t('turnLog.opened')}</div>
-        {!opened ? <p className="text-[12.5px] text-[var(--chat-hint)]">{t('turnLog.noOpened')}</p> : (
+        {!opened ? <p className="text-[12.5px] text-[var(--text-faint)]">{t('turnLog.noOpened')}</p> : (
           <div className="rounded-[8px] border border-[var(--border)] px-3">
             <Labeled label={t('turnLog.program')}>
               <div className={block}>{(opened.command ?? [opened.program]).join(' ')}{opened.adapter ? `\n${fill(t('turnLog.through'), { adapter: String(opened.adapter) })}` : ''}</div>
@@ -432,7 +432,7 @@ function Sent({ events, t }: { events: LogEvent[]; t: T }) {
             <Labeled label={t('turnLog.env')}><Clamped text={pretty({ ...opened.env, PATH: opened.path, fromShell: opened.fromShell })} t={t} /></Labeled>
             <Labeled label={t('turnLog.handshake')}>
               <details>
-                <summary className="cursor-pointer text-[12px] text-[var(--chat-hint)]">initialize</summary>
+                <summary className="cursor-pointer text-[12px] text-[var(--text-faint)]">initialize</summary>
                 <div className="mt-1"><Clamped text={pretty(opened.initialize ?? null)} t={t} /></div>
               </details>
             </Labeled>
@@ -441,12 +441,12 @@ function Sent({ events, t }: { events: LogEvent[]; t: T }) {
       </section>
       <section>
         <div className={heading}>{fill(t('turnLog.messages'), { n: messages.length })}</div>
-        {messages.length === 0 ? <p className="text-[12.5px] text-[var(--chat-hint)]">{t('turnLog.noSent')}</p> : (
+        {messages.length === 0 ? <p className="text-[12.5px] text-[var(--text-faint)]">{t('turnLog.noSent')}</p> : (
           <div className="space-y-2">
             {messages.map((m, i) => (
               <div key={i} className="rounded-[8px] border border-[var(--border)] px-3 py-2">
-                <div className="mb-1.5 flex gap-2 text-[12px] text-[var(--chat-hint)]">
-                  <b className="text-[var(--chat-text)]">{t(m.kind === 'steer' ? 'turnLog.steered' : 'turnLog.message')}</b>
+                <div className="mb-1.5 flex gap-2 text-[12px] text-[var(--text-faint)]">
+                  <b className="text-[var(--text)]">{t(m.kind === 'steer' ? 'turnLog.steered' : 'turnLog.message')}</b>
                   <span className="tabular-nums">+{seconds(m.t - start)}</span>
                   {m._meta ? <span className="font-mono">_meta {JSON.stringify(m._meta)}</span> : null}
                 </div>
@@ -531,12 +531,12 @@ function rowsOf(events: LogEvent[], joined: boolean): Row[] {
 }
 
 const KIND_COLOR: Record<string, string> = {
-  prompt: 'text-[var(--chat-text)]',
-  message: 'text-[var(--chat-text)]',
-  thought: 'text-[var(--chat-hint)]',
+  prompt: 'text-[var(--text)]',
+  message: 'text-[var(--text)]',
+  thought: 'text-[var(--text-faint)]',
   tool: 'text-[#3f8fd0]',
   ask: 'text-[#b07a1f]',
-  end: 'text-[var(--chat-text)]',
+  end: 'text-[var(--text)]',
 };
 
 function Events({ events, t }: { events: LogEvent[]; t: T }) {
@@ -552,25 +552,25 @@ function Events({ events, t }: { events: LogEvent[]; t: T }) {
     <>
       <div className="flex shrink-0 items-center gap-3 border-b border-[var(--border)] px-5 py-2">
         <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder={t('turnLog.filter')}
-          className="h-7 w-64 rounded-[7px] border border-[var(--border)] bg-transparent px-2.5 text-[12.5px] text-[var(--chat-text)] outline-none placeholder:text-[var(--text-faint)] focus:border-[var(--text-muted)]" />
-        <label className="flex items-center gap-1.5 text-[12.5px] text-[var(--chat-hint)]">
+          className="h-7 w-64 rounded-[7px] border border-[var(--border)] bg-transparent px-2.5 text-[12.5px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)] focus:border-[var(--text-muted)]" />
+        <label className="flex items-center gap-1.5 text-[12.5px] text-[var(--text-faint)]">
           <input type="checkbox" checked={joined} onChange={(e) => setJoined(e.target.checked)} />
           {t('turnLog.joined')}
         </label>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2 font-mono text-[12px] leading-[1.55]">
-        {shown.length === 0 ? <p className="px-3 py-2 font-sans text-[13px] text-[var(--chat-hint)]">{t('turnLog.noMatch')}</p> : shown.map((row, index) => {
+        {shown.length === 0 ? <p className="px-3 py-2 font-sans text-[13px] text-[var(--text-faint)]">{t('turnLog.noMatch')}</p> : shown.map((row, index) => {
           const open = openRows.has(index);
           return (
             <div key={`${row.at}-${index}`} className="rounded-[6px] hover:bg-[var(--bg-hover)]">
               <button type="button" onClick={() => toggle(index)} className="flex w-full items-start gap-3 px-3 py-1 text-left">
                 <ChevronRight size={12} className={`mt-[3px] shrink-0 text-[var(--text-faint)] transition-transform ${open ? 'rotate-90' : ''}`} />
                 <span className="w-[68px] shrink-0 text-right tabular-nums text-[var(--text-faint)]">+{((row.at - start) / 1000).toFixed(2)}s</span>
-                <span className={`w-[150px] shrink-0 truncate ${KIND_COLOR[row.kind] ?? 'text-[var(--chat-hint)]'}`}>{row.label}{row.events.length > 1 ? ` ×${row.events.length}` : ''}</span>
-                <span className={`min-w-0 flex-1 ${open ? 'whitespace-pre-wrap break-words' : 'truncate'} ${row.tone === 'error' ? 'text-[var(--err)]' : row.tone === 'quiet' ? 'text-[var(--chat-hint)]' : 'text-[var(--chat-text)]'}`}>{row.summary}</span>
+                <span className={`w-[150px] shrink-0 truncate ${KIND_COLOR[row.kind] ?? 'text-[var(--text-faint)]'}`}>{row.label}{row.events.length > 1 ? ` ×${row.events.length}` : ''}</span>
+                <span className={`min-w-0 flex-1 ${open ? 'whitespace-pre-wrap break-words' : 'truncate'} ${row.tone === 'error' ? 'text-[var(--err)]' : row.tone === 'quiet' ? 'text-[var(--text-faint)]' : 'text-[var(--text)]'}`}>{row.summary}</span>
               </button>
               {open ? (
-                <pre className="mx-3 mb-2 ml-[100px] max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] p-3 text-[11.5px] text-[var(--chat-text)]">
+                <pre className="mx-3 mb-2 ml-[100px] max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded-[8px] border border-[var(--border)] bg-[var(--bg-field)] p-3 text-[11.5px] text-[var(--text)]">
                   {JSON.stringify(row.events.length === 1 ? row.events[0] : row.events, null, 2)}
                 </pre>
               ) : null}

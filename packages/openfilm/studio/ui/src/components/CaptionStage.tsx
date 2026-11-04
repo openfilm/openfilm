@@ -18,7 +18,7 @@ import {
   captionApplyAllNow, captionSelectionNow, captionTrackNow, setCaptionSelection, useCaptionSelection, useCaptionTracksVersion, writeCaptionTrack,
 } from '@/lib/caption-tracks';
 import { DRAG_THRESHOLD_PX } from '@/lib/timeline-drag';
-import { FRAME_BLUE, StageTransformFrame } from './StageTransformFrame';
+import { FRAME_COLOR, StageTransformFrame } from './StageTransformFrame';
 
 type Rect = { x: number; y: number; w: number; h: number };
 type ShownCue = { track: number; src: string; id: string; locked: boolean; box: Rect; text: Rect };
@@ -201,7 +201,7 @@ export function CaptionStage({ previewRef, projectId, stage, timeMs, onPick, onP
           <React.Fragment key={key}>
             <div data-caption-hit={cue.id} role="presentation"
               className={`pointer-events-auto absolute ${cue.locked ? '' : 'cursor-move'}`}
-              style={{ ...at(r), outline: !picked && hover === key ? `1px solid ${FRAME_BLUE}` : undefined }}
+              style={{ ...at(r), outline: !picked && hover === key ? `1px solid ${FRAME_COLOR}` : undefined }}
               onPointerEnter={() => setHover(key)} onPointerLeave={() => setHover((h) => (h === key ? null : h))}
               onPointerDown={(e) => press(e, cue, 'move')} />
             {picked && !cue.locked ? (

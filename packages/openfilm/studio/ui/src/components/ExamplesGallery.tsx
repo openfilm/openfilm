@@ -173,7 +173,7 @@ function Picture({ example, playing, fit = 'cover' }: { example: Example; playin
   return (
     <>
       {example.poster && !failed ? <img src={example.poster} alt="" loading="lazy" draggable={false} onError={() => setFailed(true)} className={`absolute inset-0 h-full w-full ${fitClass}`} />
-        : <span className="absolute inset-0 flex items-center justify-center bg-[linear-gradient(135deg,var(--surface-2),var(--surface-3))] text-[var(--text-faint)]"><Clapperboard size={24} strokeWidth={1.5} /></span>}
+        : <span className="absolute inset-0 flex items-center justify-center bg-[linear-gradient(135deg,var(--bg-field),var(--bg-pressed))] text-[var(--text-faint)]"><Clapperboard size={24} strokeWidth={1.5} /></span>}
       {playing && example.video ? <video src={example.video} autoPlay muted loop playsInline className={`absolute inset-0 h-full w-full ${fitClass}`} /> : null}
     </>
   );
@@ -223,7 +223,7 @@ function ExampleCard({ example, label, onOpen }: { example: Example; label: stri
   const [hover, setHover] = React.useState(false);
   return (
     <button type="button" onClick={onOpen} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} className="group flex min-w-0 flex-col text-left outline-none">
-      <div className="relative aspect-video w-full overflow-hidden rounded-[10px] bg-[var(--surface-2)] ring-1 ring-[var(--border)] transition group-hover:ring-[var(--border-strong)] group-focus-visible:ring-2 group-focus-visible:ring-[var(--text-muted)]">
+      <div className="relative aspect-video w-full overflow-hidden rounded-[10px] bg-[var(--bg-field)] ring-1 ring-[var(--border)] transition group-hover:ring-[var(--border-strong)] group-focus-visible:ring-2 group-focus-visible:ring-[var(--text-muted)]">
         <Picture example={example} playing={hover} />
         {example.duration ? <span className="absolute bottom-2 right-2 rounded bg-black/60 px-1.5 py-[1px] font-mono text-[10.5px] text-white">{clock(example.duration)}</span> : null}
       </div>
@@ -287,7 +287,7 @@ function ExampleDetail({ example, onStart, onReference, onUseCanvas, onExplain, 
             </div>
           ) : null}
           {showCanvas ? (
-            <div className="relative aspect-video overflow-hidden rounded-[12px] bg-[var(--dock-pane)] ring-1 ring-[var(--border)]">
+            <div className="relative aspect-video overflow-hidden rounded-[12px] bg-[var(--bg-panel)] ring-1 ring-[var(--border)]">
               <React.Suspense fallback={null}><CanvasPreview doc={board} fileUrl={fileUrl} /></React.Suspense>
             </div>
           ) : (
@@ -308,13 +308,13 @@ function ExampleDetail({ example, onStart, onReference, onUseCanvas, onExplain, 
                 onMouseMove={(e) => { if (drag != null) { const at = timeAt(e.clientX); if (Math.abs(at - drag) > duration / 200) setPart({ from: Math.min(drag, at), to: Math.max(drag, at) }); } }}
                 onMouseUp={() => { if (drag != null && part) seek(part.from); setDrag(null); }}
                 onMouseLeave={() => setDrag(null)}
-                className="relative flex h-9 cursor-crosshair select-none overflow-hidden rounded-[8px] bg-[var(--surface-2)] ring-1 ring-[var(--border)]">
+                className="relative flex h-9 cursor-crosshair select-none overflow-hidden rounded-[8px] bg-[var(--bg-field)] ring-1 ring-[var(--border)]">
                 {(example.segments.length ? example.segments : [{ title: example.title, from: 0, to: duration }]).map((g) => (
                   <button key={`${g.from}-${g.title}`} type="button" title={g.title}
                     onMouseDown={(e) => e.stopPropagation()}
                     onClick={() => pick(example.segments.length ? { from: g.from, to: g.to, segment: g.title } : null)}
                     style={{ left: `${(g.from / duration) * 100}%`, width: `${((g.to - g.from) / duration) * 100}%` }}
-                    className={`absolute inset-y-1 truncate rounded-[5px] border-l-2 border-[var(--bg)] px-1.5 text-left text-[11px] transition ${part?.segment === g.title ? 'bg-[var(--text)] text-[var(--bg)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)]'}`}>
+                    className={`absolute inset-y-1 truncate rounded-[5px] border-l-2 border-[var(--bg-panel)] px-1.5 text-left text-[11px] transition ${part?.segment === g.title ? 'bg-[var(--accent)] text-[var(--on-accent)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)]'}`}>
                     {g.title}
                   </button>
                 ))}
@@ -334,7 +334,7 @@ function ExampleDetail({ example, onStart, onReference, onUseCanvas, onExplain, 
           {example.duration ? <p className="mt-2 text-[12px] text-[var(--text-faint)]">{clock(example.duration)}</p> : null}
           <div className="mt-5 flex flex-col gap-2">
             <button type="button" onClick={copy.run}
-              className="flex h-10 items-center justify-center gap-1.5 rounded-[10px] bg-[var(--text)] text-[13.5px] font-medium text-[var(--bg)] transition hover:opacity-90">
+              className="flex h-10 items-center justify-center gap-1.5 rounded-[10px] bg-[var(--accent)] text-[13.5px] font-medium text-[var(--on-accent)] transition hover:bg-[var(--accent-hover)]">
               <Play size={13} />{copy.label}
             </button>
             {refer ? (
@@ -356,7 +356,7 @@ function ExampleDetail({ example, onStart, onReference, onUseCanvas, onExplain, 
           </div>
           <p className="mt-3 text-[12px] leading-[17px] text-[var(--text-faint)]">{t('gallery.startHow')}</p>
           {refer ? <p className="mt-1.5 text-[12px] leading-[17px] text-[var(--text-faint)]">{t('gallery.referenceHow')}</p> : null}
-          <a href={example.url} target="_blank" rel="noreferrer" className="mt-auto flex items-center gap-1.5 pt-6 text-[12px] text-[var(--text-dim)] hover:text-[var(--text)]"><ExternalLink size={13} />{t('gallery.viewSource')}</a>
+          <a href={example.url} target="_blank" rel="noreferrer" className="mt-auto flex items-center gap-1.5 pt-6 text-[12px] text-[var(--text-muted)] hover:text-[var(--text)]"><ExternalLink size={13} />{t('gallery.viewSource')}</a>
         </div>
       </div>
     </div>

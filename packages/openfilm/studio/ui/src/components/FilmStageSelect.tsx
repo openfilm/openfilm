@@ -39,7 +39,7 @@ import { doubleClickAim, keepPress, type Press } from '@/lib/double-press';
 
 import { ContextMenu, type ContextMenuEntry } from '@/components/ContextMenu';
 import { MgOutline } from '@/components/MgOutline';
-import { FRAME_BLUE, GestureHint, StageTransformFrame, type FrameGeometry } from '@/components/StageTransformFrame';
+import { FRAME_COLOR, GestureHint, StageTransformFrame, type FrameGeometry } from '@/components/StageTransformFrame';
 import { StageMaskOverlay } from '@/components/StageMaskOverlay';
 import { linkedOutlines } from '@/components/film-stage-hit';
 import { inHostPanel } from '@/components/typing-target';
@@ -82,7 +82,7 @@ export type { LayerGeometry } from '@/lib/stage-gesture';
 
 /** Pulled open this far (stage px, both ways) it is a marquee; less is a click (a shaky hand keeps its click). */
 const MARQUEE_MIN_PX = 8;
-const PICK_BLUE = FRAME_BLUE;
+const PICK_COLOR = FRAME_COLOR;
 /** Snap this close (screen px: the feel must not change with the picture's scale). */
 const SNAP_PX = 6;
 const NO_GUIDES: readonly MgGuide[] = [];
@@ -246,7 +246,7 @@ const drawnItems = <T extends MultiItem>(items: readonly T[]): T[] => items.filt
 interface LinkedMark { loc: string; t: MgTransform; box: MgBox }
 const NO_MARKS: readonly LinkedMark[] = [];
 /** What the app's chat points at, on the picture: the timeline's accent, apart from the selection's blue. */
-const CHAT_TONE = 'var(--tl-accent)';
+const CHAT_TONE = 'var(--accent)';
 
 function sameLinkedMarks(a: readonly LinkedMark[], b: readonly LinkedMark[]): boolean {
   return a.length === b.length && a.every((m, i) => {
@@ -3170,9 +3170,9 @@ function Box({ rect, frame, tone, fading }: {
         ...(turned
           ? { left: turned.cx - turned.w / 2, top: turned.cy - turned.h / 2, width: turned.w, height: turned.h, transform: `rotate(${turned.r}deg)` }
           : { left: rect.left, top: rect.top, width: rect.width, height: rect.height }),
-        border: tone === 'picked' || tone === 'region' ? `2px solid ${PICK_BLUE}` : `1px solid ${PICK_BLUE}`,
+        border: tone === 'picked' || tone === 'region' ? `2px solid ${PICK_COLOR}` : `1px solid ${PICK_COLOR}`,
         /* a marquee: a thin line round a very light fill, what it goes over still plain under it */
-        ...(tone === 'draft' ? { background: 'rgba(13,153,255,.07)' } : {}),
+        ...(tone === 'draft' ? { background: 'rgba(15,165,150,.07)' } : {}),
         ...(tone === 'region' ? { background: 'rgba(12,140,232,.2)', borderRadius: 3, transition: 'opacity 300ms ease-out', opacity: fading ? 0 : 1 } : {}),
         ...(tone === 'picked' ? { background: 'rgba(12,140,232,.06)', boxShadow: '0 0 0 1px rgba(255,255,255,.45)' } : {}),
         ...(tone === 'chat' ? { border: `2px solid ${CHAT_TONE}`, borderRadius: 3, background: `color-mix(in srgb, ${CHAT_TONE} 10%, transparent)`, boxShadow: '0 0 0 1px rgba(255,255,255,.45)' } : {}),
@@ -3191,8 +3191,8 @@ function Guide({ guide, viewScale }: { guide: MgGuide; viewScale: number }) {
     <div
       className="pointer-events-none absolute z-[6]"
       style={guide.axis === 'x'
-        ? { left: at, top: 0, bottom: 0, width: 1, background: PICK_BLUE }
-        : { top: at, left: 0, right: 0, height: 1, background: PICK_BLUE }}
+        ? { left: at, top: 0, bottom: 0, width: 1, background: PICK_COLOR }
+        : { top: at, left: 0, right: 0, height: 1, background: PICK_COLOR }}
     />
   );
 }
@@ -3276,7 +3276,7 @@ function CropOverlay({ session: s, viewScale: vs, moving, bounds, onAspect, onDo
         <button type="button" title={t('stageCrop.cancelHint')} className="rounded-[4px] px-2 py-0.5 hover:bg-white/10" onClick={onCancel}>
           {t('stageCrop.cancel')}
         </button>
-        <button type="button" title={t('stageCrop.doneHint')} className="rounded-[4px] px-2 py-0.5" style={{ background: FRAME_BLUE }} onClick={onDone}>
+        <button type="button" title={t('stageCrop.doneHint')} className="rounded-[4px] px-2 py-0.5" style={{ background: FRAME_COLOR }} onClick={onDone}>
           {t('stageCrop.done')}
         </button>
       </div>

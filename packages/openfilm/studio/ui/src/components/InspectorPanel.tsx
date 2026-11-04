@@ -17,18 +17,18 @@ export function InspectorPanel({ title, width, onClose, tabs, tab, onTab, childr
 }) {
   const t = useT();
   return (
-    <aside aria-label={title} data-inspector-panel data-film-inspector className="relative flex min-h-0 min-w-0 shrink-0 flex-col overflow-hidden bg-[var(--dock-pane)] text-[var(--text)]" style={{ width }} onKeyDown={event => {
+    <aside aria-label={title} data-inspector-panel data-film-inspector className="relative flex min-h-0 min-w-0 shrink-0 flex-col overflow-hidden bg-[var(--bg-panel)] text-[var(--text)]" style={{ width }} onKeyDown={event => {
       if ((event.target as Element).closest('input, select, textarea, button')) event.stopPropagation();
     }}>
       {tabs ? (
         /* tabs as the other inspectors have them (the library's categories beside them): its 40 px bar and line, the
            one shown in the accent, bolder, underlined */
-        <div className="flex h-10 shrink-0 items-stretch gap-1 border-b border-[var(--dock-line)] px-2">
+        <div className="flex h-10 shrink-0 items-stretch gap-1 border-b border-[var(--border)] px-2">
           <div role="tablist" aria-label={title} className="flex min-w-0 flex-1 items-stretch gap-1 overflow-x-auto [scrollbar-width:none]">
             {tabs.map((x) => (
               <button key={x.id} type="button" role="tab" aria-selected={x.id === tab} data-inspector-tab={x.id} onClick={() => onTab?.(x.id)}
                 className={`relative flex-none whitespace-nowrap px-2.5 text-[11.5px] outline-none transition-colors ${x.id === tab
-                  ? 'font-semibold text-[var(--tl-accent)] after:absolute after:inset-x-2 after:bottom-0 after:h-[2px] after:rounded-[2px] after:bg-[var(--tl-accent)]'
+                  ? 'font-semibold text-[var(--accent)] after:absolute after:inset-x-2 after:bottom-0 after:h-[2px] after:rounded-[2px] after:bg-[var(--accent)]'
                   : 'font-medium text-[var(--text-muted)] hover:text-[var(--text)]'}`}>
                 {x.label}
               </button>

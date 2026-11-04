@@ -248,7 +248,7 @@ export function LayersPanel(p: LayersPanelProps) {
             <div aria-hidden className="pointer-events-none absolute right-2 h-0.5 rounded-full bg-[var(--accent)]"
               style={{ top: drag.y - 1, left: 8 + drag.mover.depth * INDENT }}>
               {groupMoved ? (
-                <span className="absolute right-0 top-1 max-w-[80%] truncate rounded bg-[var(--accent)] px-1.5 py-px text-[11px] text-[var(--bg)]">
+                <span className="absolute right-0 top-1 max-w-[80%] truncate rounded bg-[var(--accent)] px-1.5 py-px text-[11px] text-[var(--on-accent)]">
                   {t('layers.movesGroup').replace('{name}', groupMoved)}
                 </span>
               ) : null}
@@ -286,16 +286,16 @@ function LayerLineRow({ line, top, t, clipOf, tone, joinUp, joinDown, dragging, 
   /* not drawn now, or hidden by the person: the row is there, dimmed (it can be shown or picked from here) */
   const dim = Boolean(row && (row.off || row.hidden));
   const selected = tone === 'on';
-  const fill = selected ? 'bg-[var(--layer-selected)] text-[var(--text)]'
-    : tone === 'in' ? 'bg-[var(--layer-selected-in)] text-[var(--text)] hover:shadow-[inset_0_0_0_1px_var(--layer-hover-line)]'
-      : 'text-[var(--text-dim)] hover:shadow-[inset_0_0_0_1px_var(--layer-hover-line)]';
+  const fill = selected ? 'bg-[var(--bg-selected)] text-[var(--text)]'
+    : tone === 'in' ? 'bg-[var(--accent-soft)] text-[var(--text)] hover:shadow-[inset_0_0_0_1px_var(--border-strong)]'
+      : 'text-[var(--text-muted)] hover:shadow-[inset_0_0_0_1px_var(--border-strong)]';
   const corners = tone ? `${joinUp ? '' : 'rounded-t-[5px]'} ${joinDown ? '' : 'rounded-b-[5px]'}` : 'rounded-[5px]';
   const flag = (what: 'hidden' | 'locked', on: boolean, OnIcon: typeof Eye, OffIcon: typeof Eye, onLabel: string, offLabel: string) => (
     <Tooltip label={on ? onLabel : offLabel} side="bottom">
       <button type="button" aria-label={on ? onLabel : offLabel} aria-pressed={on}
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => { e.stopPropagation(); onToggle(what); }}
-        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--text-dim)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)] ${on ? '' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'}`}>
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)] ${on ? '' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'}`}>
         {on ? <OnIcon size={12} /> : <OffIcon size={12} />}
       </button>
     </Tooltip>
@@ -323,7 +323,7 @@ function LayerLineRow({ line, top, t, clipOf, tone, joinUp, joinDown, dragging, 
           <button type="button" aria-label={t('layers.delete')}
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--text-dim)] opacity-0 hover:bg-[var(--bg-hover)] hover:text-[var(--err)] focus-visible:opacity-100 group-hover:opacity-100">
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--text-muted)] opacity-0 hover:bg-[var(--bg-hover)] hover:text-[var(--err)] focus-visible:opacity-100 group-hover:opacity-100">
             <Trash2 size={12} />
           </button>
         </Tooltip>

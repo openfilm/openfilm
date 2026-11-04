@@ -17,7 +17,7 @@ export function SourceChips({ sources, value, onChange }: { sources: Source[]; v
   if (sources.length < 2) return null;
   const chip = (id: Source | '', label: string) => (
     <button key={id || 'all'} type="button" aria-pressed={value === id} onClick={() => onChange(id)}
-      className={`h-6 rounded-full border px-2.5 text-[11px] transition ${value === id ? 'border-[var(--tl-accent)] text-[var(--tl-accent)]' : 'border-[var(--border-strong)] text-[var(--text-muted)] hover:text-[var(--text)]'}`}>
+      className={`h-6 rounded-full border px-2.5 text-[11px] transition ${value === id ? 'border-[var(--accent)] text-[var(--accent)]' : 'border-[var(--border-strong)] text-[var(--text-muted)] hover:text-[var(--text)]'}`}>
       {label}
     </button>
   );

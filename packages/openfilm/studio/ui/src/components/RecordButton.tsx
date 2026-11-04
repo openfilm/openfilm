@@ -95,13 +95,13 @@ export function RecordButton({ now, onSave, onProblem }: RecordButtonProps) {
         </span>
         <Tooltip side="bottom" label={t('timeline.record.stop')}>
           <button type="button" data-record-stop="" onClick={() => void stop()} onMouseDown={(e) => e.preventDefault()} aria-label={t('timeline.record.stop')}
-            className="flex h-[24px] w-[24px] items-center justify-center rounded-[5px] text-[var(--err)] outline-none hover:bg-black/5 focus-visible:ring-1 focus-visible:ring-[var(--tl-accent)] dark:hover:bg-white/10">
+            className="flex h-[24px] w-[24px] items-center justify-center rounded-[5px] text-[var(--err)] outline-none hover:bg-black/5 focus-visible:ring-1 focus-visible:ring-[var(--accent)] dark:hover:bg-white/10">
             <Square size={12} fill="currentColor" />
           </button>
         </Tooltip>
         <Tooltip side="bottom" label={t('timeline.record.cancel')}>
           <button type="button" data-record-cancel="" onClick={cancel} onMouseDown={(e) => e.preventDefault()} aria-label={t('timeline.record.cancel')}
-            className="flex h-[24px] w-[24px] items-center justify-center rounded-[5px] text-[var(--text-dim)] outline-none hover:bg-black/5 focus-visible:ring-1 focus-visible:ring-[var(--tl-accent)] dark:hover:bg-white/10">
+            className="flex h-[24px] w-[24px] items-center justify-center rounded-[5px] text-[var(--text-muted)] outline-none hover:bg-black/5 focus-visible:ring-1 focus-visible:ring-[var(--accent)] dark:hover:bg-white/10">
             <X size={14} />
           </button>
         </Tooltip>
@@ -113,8 +113,8 @@ export function RecordButton({ now, onSave, onProblem }: RecordButtonProps) {
   return (
     <Tooltip side="bottom" label={label}>
       <button type="button" data-record="" onClick={() => void start()} onMouseDown={(e) => e.preventDefault()} aria-disabled={busy} aria-label={label}
-        className={`flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-[6px] outline-none transition focus-visible:ring-1 focus-visible:ring-[var(--tl-accent)] ${busy ? 'cursor-default' : 'hover:bg-black/5 dark:hover:bg-white/10'}`}
-        style={{ color: busy ? 'var(--text-faint)' : 'var(--text-dim)' }}>
+        className={`flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-[6px] outline-none transition focus-visible:ring-1 focus-visible:ring-[var(--accent)] ${busy ? 'cursor-default' : 'hover:bg-black/5 dark:hover:bg-white/10'}`}
+        style={{ color: busy ? 'var(--text-faint)' : 'var(--text-muted)' }}>
         {state === 'saving' ? <Loader2 size={15} className="animate-spin" /> : <Mic size={16} />}
       </button>
     </Tooltip>

@@ -770,7 +770,7 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
           <Background variant={BackgroundVariant.Dots} gap={24} size={1.4} />
           {map ? (
             <MiniMap position="bottom-right" pannable zoomable style={{ marginBottom: 64 }}
-              nodeColor={(n) => (n.type === 'frame' ? 'transparent' : n.type === 'note' ? 'var(--surface-3)' : 'var(--text-faint)')}
+              nodeColor={(n) => (n.type === 'frame' ? 'transparent' : n.type === 'note' ? 'var(--bg-pressed)' : 'var(--text-faint)')}
               nodeStrokeColor={(n) => (n.type === 'frame' ? FRAME_COLOR[(n.data as FrameData).color].line : 'transparent')} />
           ) : null}
         </ReactFlow>

@@ -144,7 +144,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
       {/* the categories, as high as the inspector's tabs beside it (40 px) so their lines meet; they keep their own
           spacing however wide the panel is, and more than fit scroll sideways (a wheel too), fading at the edge while
           the line under them runs whole */}
-      <div className="h-10 shrink-0 border-b border-[var(--dock-line)]" data-studio-host-panel="">
+      <div className="h-10 shrink-0 border-b border-[var(--border)]" data-studio-host-panel="">
         <nav
           onWheel={(e) => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) e.currentTarget.scrollLeft += e.deltaY; }}
           className="flex h-full overflow-x-auto px-1 [mask-image:linear-gradient(to_right,black_calc(100%-20px),transparent)] [scrollbar-width:none]"
@@ -155,10 +155,10 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
               type="button"
               onClick={() => show(id)}
               aria-pressed={cat === id}
-              className={`relative flex h-full min-w-[46px] shrink-0 flex-col items-center justify-center gap-px whitespace-nowrap px-2 text-[10.5px] leading-[13px] ${cat === id ? 'font-semibold text-[var(--tl-accent)]' : 'font-medium text-[var(--text-muted)] hover:text-[var(--text)]'}`}
+              className={`relative flex h-full min-w-[46px] shrink-0 flex-col items-center justify-center gap-px whitespace-nowrap px-2 text-[10.5px] leading-[13px] ${cat === id ? 'font-semibold text-[var(--accent)]' : 'font-medium text-[var(--text-muted)] hover:text-[var(--text)]'}`}
             >
               {/* the one shown: its color, its icon filled, and a line under it */}
-              {cat === id ? <span aria-hidden className="absolute inset-x-2 bottom-0 h-[2px] rounded-full bg-[var(--tl-accent)]" /> : null}
+              {cat === id ? <span aria-hidden className="absolute inset-x-2 bottom-0 h-[2px] rounded-full bg-[var(--accent)]" /> : null}
               <CategoryIcon id={id} on={cat === id} size={18} />
               {t(`assetDrawer.cat_${id}`)}
             </button>
@@ -169,7 +169,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
         {/* as wide as the person dragged its edge (RAIL), kept for next time */}
         <div className="relative flex shrink-0" style={{ width: rail }}>
           <RailEdge width={rail} onWidth={setRail} />
-          <nav data-studio-host-panel="" className="flex min-w-0 flex-1 flex-col gap-1 overflow-y-auto border-r border-[var(--dock-line)] px-2 py-2.5">
+          <nav data-studio-host-panel="" className="flex min-w-0 flex-1 flex-col gap-1 overflow-y-auto border-r border-[var(--border)] px-2 py-2.5">
             {cat === 'media' ? (
               <>
                 {/* what came into this project, folded: its own media, then what it took from the library; then Saved */}
@@ -218,7 +218,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
             <>
               {/* a skill's page has its own way back instead */}
               <div className="flex gap-2 px-3 pb-2 pt-2.5" hidden={cat === 'skill' && skillOpen != null}>
-                <label className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md bg-[var(--surface-2)] px-2.5 text-[var(--text-faint)] focus-within:ring-1 focus-within:ring-[var(--tl-accent)]">
+                <label className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md bg-[var(--bg-field)] px-2.5 text-[var(--text-faint)] focus-within:ring-1 focus-within:ring-[var(--accent)]">
                   <Search size={14} />
                   <input
                     value={query}
@@ -337,7 +337,7 @@ function SideBox({ on, open, onClick, children }: { on: boolean; open?: boolean;
       aria-pressed={open === undefined ? on : undefined}
       aria-expanded={open}
       title={typeof children === 'string' ? children : undefined}
-      className={`flex h-8 shrink-0 items-center justify-between gap-1 rounded-md bg-[var(--surface-2)] px-2.5 text-left text-[12px] font-medium hover:bg-[var(--bg-hover)] ${on ? 'text-[var(--tl-accent)]' : 'text-[var(--text)]'}`}
+      className={`flex h-8 shrink-0 items-center justify-between gap-1 rounded-md bg-[var(--bg-field)] px-2.5 text-left text-[12px] font-medium hover:bg-[var(--bg-hover)] ${on ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}
     >
       <span className="truncate whitespace-nowrap">{children}</span>
       {open === undefined ? null : <ChevronDown size={13} className={`shrink-0 text-[var(--text-faint)] transition-transform ${open ? 'rotate-180' : ''}`} />}
@@ -353,7 +353,7 @@ function SideLine({ on, onClick, children }: { on: boolean; onClick: () => void;
       onClick={onClick}
       aria-pressed={on}
       title={typeof children === 'string' ? children : undefined}
-      className={`truncate whitespace-nowrap px-2.5 py-1.5 text-left text-[12px] ${on ? 'font-medium text-[var(--tl-accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
+      className={`truncate whitespace-nowrap px-2.5 py-1.5 text-left text-[12px] ${on ? 'font-medium text-[var(--accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
     >
       {children}
     </button>
@@ -433,17 +433,17 @@ function Card({ item, lang, picked, kept, square, onPick, onAdd }: {
       onDoubleClick={onAdd}
       title={item.by ? `${name} · @${item.by}` : name}
     >
-      <div className={`relative overflow-hidden rounded-md bg-[var(--surface-2)] ${square ? 'aspect-square' : 'aspect-video'} ${picked ? 'ring-2 ring-[var(--tl-accent)]' : 'ring-1 ring-transparent group-hover:ring-[var(--text-faint)]'}`}>
+      <div className={`relative overflow-hidden rounded-md bg-[var(--bg-field)] ${square ? 'aspect-square' : 'aspect-video'} ${picked ? 'ring-2 ring-[var(--accent)]' : 'ring-1 ring-transparent group-hover:ring-[var(--text-faint)]'}`}>
         {item.kind === 'look'
           ? <img src={item.sample ? libraryUrl(item.sample) : SAMPLE} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" style={{ filter: item.filter }} />
           : <img src={posterUrl(item)} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />}
         {hover && item.kind !== 'look' && !item.still ? <video src={previewUrl(item)} autoPlay loop muted playsInline className="absolute inset-0 h-full w-full object-cover" /> : null}
         <StarButton item={item} kept={kept} className={`absolute right-1 top-1 h-5 w-5 place-items-center rounded-full bg-black/45 ${kept ? 'grid text-[#ffd35a]' : 'hidden text-white group-hover:grid'}`} />
-        <AddButton item={item} onAdd={onAdd} className="absolute bottom-1 right-1 hidden h-[22px] w-[22px] place-items-center rounded-full bg-[var(--tl-accent)] text-black shadow-md group-hover:grid" />
+        <AddButton item={item} onAdd={onAdd} className="absolute bottom-1 right-1 hidden h-[22px] w-[22px] place-items-center rounded-full bg-[var(--accent)] text-black shadow-md group-hover:grid" />
         {item.kind === 'group' ? <TemplateBadge item={item} /> : null}
         <SourceBadge source={sourceOf(item)} />
       </div>
-      <div className={`mt-1.5 truncate px-0.5 text-[11.5px] ${picked ? 'text-[var(--tl-accent)]' : 'text-[var(--text-muted)] group-hover:text-[var(--text)]'}`}>{name}</div>
+      <div className={`mt-1.5 truncate px-0.5 text-[11.5px] ${picked ? 'text-[var(--accent)]' : 'text-[var(--text-muted)] group-hover:text-[var(--text)]'}`}>{name}</div>
     </div>
   );
 }

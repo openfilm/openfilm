@@ -260,33 +260,33 @@ const ZOOM_SETTLE_MS = 120;
  */
 const ZOOM_RELAYOUT = 1.5;
 
-/** Color by kind of clip: picture, voice, other sound. Muted tones, dark enough for white text and waveforms. */
+/** Color by kind of clip (globals.css `--clip-*`): one hue each at one lightness, dark enough for white text and waveforms. */
 const KIND_COLOR: Record<TimelineBlockKind, string> = {
-  mg: 'var(--tl-scene)',
-  video: 'var(--tl-video)',
-  voice: 'var(--tl-voice)',
-  sfx: 'var(--tl-sfx)',
-  music: 'var(--tl-music)',
-  caption: 'var(--tl-caption)',
+  mg: 'var(--clip-page)',
+  video: 'var(--clip-video)',
+  voice: 'var(--clip-voice)',
+  sfx: 'var(--clip-sfx)',
+  music: 'var(--clip-music)',
+  caption: 'var(--clip-text)',
 };
 
-/** The timeline's surfaces, CSS variables with a light and a dark set (see globals.css `--tl-*`). */
+/** The timeline's surfaces: the app's (globals.css), and the lanes' own `--tl-*`. */
 const TL = {
   lane: 'var(--tl-lane)',
   laneOn: 'var(--tl-lane-on)',
-  head: 'var(--tl-head)',
-  ruler: 'var(--tl-ruler)',
-  line: 'var(--tl-line)',
-  tick: 'var(--tl-tick)',
-  text: 'var(--tl-text)',
-  faint: 'var(--tl-faint)',
+  head: 'var(--bg-panel)',
+  ruler: 'var(--bg-panel)',
+  line: 'var(--border)',
+  tick: 'var(--border-strong)',
+  text: 'var(--text-muted)',
+  faint: 'var(--text-faint)',
 } as const;
 
 function laneTone(track: TimelineTrack, selected: boolean): string {
   if (track.hidden) return TL.head;
   const tone = selected ? TL.laneOn : TL.lane;
   /* the main track: a band of its own, a shade toward the text (lighter in the dark, darker in the light) */
-  return track.main ? `color-mix(in srgb, ${tone} 93%, var(--tl-text))` : tone;
+  return track.main ? `color-mix(in srgb, ${tone} 93%, var(--text-muted))` : tone;
 }
 
 /**
@@ -306,7 +306,7 @@ function LaneMark({ track }: { track: TimelineTrack }) {
       : most === 'video' ? Clapperboard : most === 'still' ? ImageIcon : Shapes;
   return (
     /* a label, dimmer than the switches beside it, so the two read apart */
-    <span className="flex items-center justify-center" style={{ width: 21, height: 14, color: 'var(--tl-faint)', opacity: track.hidden ? 0.5 : 1 }}>
+    <span className="flex items-center justify-center" style={{ width: 21, height: 14, color: 'var(--text-faint)', opacity: track.hidden ? 0.5 : 1 }}>
       <Icon size={13} strokeWidth={1.8} aria-hidden />
     </span>
   );
@@ -425,8 +425,8 @@ function LandingMark({ landing, pxPerMs }: { landing: DropLanding; pxPerMs: numb
           width: 3,
           top: landing.top - 3,
           height: landing.height + 6,
-          background: 'var(--tl-accent)',
-          boxShadow: '0 0 6px color-mix(in srgb, var(--tl-accent) 70%, transparent)',
+          background: 'var(--accent)',
+          boxShadow: '0 0 6px color-mix(in srgb, var(--accent) 70%, transparent)',
         }}
       />
     );
@@ -443,7 +443,7 @@ function LandingMark({ landing, pxPerMs }: { landing: DropLanding; pxPerMs: numb
             left: 0,
             width: '100%',
             top: landing.top - 1,
-            background: 'color-mix(in srgb, var(--tl-accent) 45%, transparent)',
+            background: 'color-mix(in srgb, var(--accent) 45%, transparent)',
           }}
         />
         <div
@@ -455,8 +455,8 @@ function LandingMark({ landing, pxPerMs }: { landing: DropLanding; pxPerMs: numb
             width: Math.max(8, Math.round((landing.endMs - landing.startMs) * pxPerMs)),
             top: landing.top - 2,
             height: 4,
-            background: 'var(--tl-accent)',
-            boxShadow: '0 0 6px color-mix(in srgb, var(--tl-accent) 70%, transparent)',
+            background: 'var(--accent)',
+            boxShadow: '0 0 6px color-mix(in srgb, var(--accent) 70%, transparent)',
           }}
         />
       </>
@@ -779,14 +779,14 @@ const SELECT_HIT = 8;
 const FADE_DOT = 8;
 const FADE_DOT_INSET = FADE_DOT / 2;
 /** What the app's chat points at (a pill hovered there): an accent ring and its glow, around a clip or a track's head. */
-const CHAT_RING = '0 0 0 2px var(--tl-accent), 0 0 10px 1px color-mix(in srgb, var(--tl-accent) 60%, transparent)';
+const CHAT_RING = '0 0 0 2px var(--accent), 0 0 10px 1px color-mix(in srgb, var(--accent) 60%, transparent)';
 /* the sides (trim handles) are solid, top and bottom lighter; theme color (--tl-select) so it shows on light lanes */
 const SELECT_EDGE_X = 'var(--tl-select)';
 const SELECT_EDGE_Y = 'color-mix(in srgb, var(--tl-select) 70%, transparent)';
 
 /* Speed on: the same frame in the accent, its edges changing the speed instead of trimming */
-const SPEED_EDGE_X = 'var(--tl-accent)';
-const SPEED_EDGE_Y = 'color-mix(in srgb, var(--tl-accent) 70%, transparent)';
+const SPEED_EDGE_X = 'var(--accent)';
+const SPEED_EDGE_Y = 'color-mix(in srgb, var(--accent) 70%, transparent)';
 
 function SelectFrame({ speed = false }: { speed?: boolean }) {
   return (
@@ -813,8 +813,8 @@ function ChatNumbers({ numbers }: { numbers: readonly number[] }) {
   return (
     <span aria-hidden data-chat-numbers={numbers.join(',')} className="pointer-events-none absolute -top-[5px] left-[3px] z-[3] flex gap-[2px]">
       {numbers.map((n) => (
-        <span key={n} className="flex h-[14px] min-w-[14px] items-center justify-center rounded-full px-[3px] text-[9.5px] font-semibold leading-none tabular-nums text-white shadow-[0_1px_3px_rgba(0,0,0,.35)]"
-          style={{ background: 'var(--tl-accent)' }}>{n}</span>
+        <span key={n} className="flex h-[14px] min-w-[14px] items-center justify-center rounded-full px-[3px] text-[9.5px] font-semibold leading-none tabular-nums text-[var(--on-accent)] shadow-[0_1px_3px_rgba(0,0,0,.35)]"
+          style={{ background: 'var(--accent)' }}>{n}</span>
       ))}
     </span>
   );
@@ -2713,7 +2713,7 @@ export const Timeline = React.memo(function Timeline({
           gridTemplateColumns: `24px 4px repeat(${solo ? 4 : 3}, minmax(0, 1fr))`,
           background: laneTone(track, lit),
           /* the targeted track: an accent bar down its left edge */
-          boxShadow: [chatLit ? CHAT_RING : '', targeted ? 'inset 2px 0 0 var(--tl-accent)' : ''].filter(Boolean).join(', ') || undefined,
+          boxShadow: [chatLit ? CHAT_RING : '', targeted ? 'inset 2px 0 0 var(--accent)' : ''].filter(Boolean).join(', ') || undefined,
           opacity: liftingHead ? 0.45 : 1,
           cursor: canReorder ? (liftingHead ? 'grabbing' : 'grab') : undefined,
         }}
@@ -3044,7 +3044,8 @@ export const Timeline = React.memo(function Timeline({
             const width = Math.max(2, Math.round(endMs * pxPerMs) - left - 1);
             /* a row of the library's text: drawn as a caption track is, each clip its words, no pictures */
             const textRow = Boolean(track.text);
-            const color = textRow ? 'var(--tl-caption)' : KIND_COLOR[block.kind];
+            const color = textRow ? 'var(--clip-text)'
+              : block.kind === 'video' && block.src && filmSrcIsStill(block.src) ? 'var(--clip-image)' : KIND_COLOR[block.kind];
             const able = drag.can(block);
             const strip = clipThumbs.get(clipThumbId(block));
             const poster = block.src ? posters?.[block.src] : undefined;
@@ -3351,8 +3352,8 @@ export const Timeline = React.memo(function Timeline({
                     <span aria-hidden className={`pointer-events-none absolute top-[3px] h-px origin-top transition-opacity [@media(min-resolution:2dppx)]:scale-y-50 ${volumeTip ? 'opacity-60' : 'opacity-30 group-hover/vol:opacity-60'}`}
                       style={{ left: -trimHit(width), right: -trimHit(width), background: '#fff' }} />
                     {volumeTip ? (
-                      <span className={`pointer-events-none absolute ${tipUp ? 'bottom-[8px]' : 'top-[8px]'} -translate-x-1/2 whitespace-nowrap rounded-[4px] px-1.5 py-[1px] text-[10.5px] font-medium leading-[15px] text-white tabular-nums shadow-[0_1px_4px_rgba(0,0,0,.35)]`}
-                        style={{ left: Math.max(36, Math.min(width - 36, volumeTip.x)) - trimHit(width), background: 'var(--tl-accent)' }}>
+                      <span className={`pointer-events-none absolute ${tipUp ? 'bottom-[8px]' : 'top-[8px]'} -translate-x-1/2 whitespace-nowrap rounded-[4px] px-1.5 py-[1px] text-[10.5px] font-medium leading-[15px] text-[var(--on-accent)] tabular-nums shadow-[0_1px_4px_rgba(0,0,0,.35)]`}
+                        style={{ left: Math.max(36, Math.min(width - 36, volumeTip.x)) - trimHit(width), background: 'var(--accent)' }}>
                         {`${t('inspector.gainDb')} ${volumeText(volume)}`}
                       </span>
                     ) : null}
@@ -3375,8 +3376,8 @@ export const Timeline = React.memo(function Timeline({
                       <span aria-hidden className={`pointer-events-none box-border rounded-full border-2 border-solid bg-black shadow-[0_0_2px_rgba(0,0,0,.5)] transition-transform ${fadeTip === edge ? 'scale-[1.25]' : 'group-hover/fade:scale-[1.25]'}`}
                         style={{ width: FADE_DOT, height: FADE_DOT, borderColor: '#fff' }} />
                       {fadeTip === edge ? (
-                        <span className={`pointer-events-none absolute left-1/2 ${fadeTipUp ? 'bottom-[14px]' : 'top-[14px]'} -translate-x-1/2 whitespace-nowrap rounded-[4px] px-1.5 py-[1px] text-[10.5px] font-medium leading-[15px] text-white tabular-nums shadow-[0_1px_4px_rgba(0,0,0,.35)]`}
-                          style={{ background: 'var(--tl-accent)' }}>
+                        <span className={`pointer-events-none absolute left-1/2 ${fadeTipUp ? 'bottom-[14px]' : 'top-[14px]'} -translate-x-1/2 whitespace-nowrap rounded-[4px] px-1.5 py-[1px] text-[10.5px] font-medium leading-[15px] text-[var(--on-accent)] tabular-nums shadow-[0_1px_4px_rgba(0,0,0,.35)]`}
+                          style={{ background: 'var(--accent)' }}>
                           {t('transitions.fadeTip').replace('{what}', what).replace('{s}', (ms / 1000).toFixed(2))}
                         </span>
                       ) : null}
@@ -3402,8 +3403,8 @@ export const Timeline = React.memo(function Timeline({
               className="absolute z-[13] flex items-center justify-center overflow-hidden rounded-[4px] text-[10px] font-medium leading-none"
               style={{
                 left: x, width: w, top, height: 16,
-                background: on ? 'var(--tl-select)' : 'rgba(255,255,255,0.88)',
-                color: on ? '#fff' : '#1b1e25',
+                background: on ? 'var(--accent)' : 'rgba(255,255,255,0.88)',
+                color: on ? 'var(--on-accent)' : '#1b1e25',
                 boxShadow: on ? '0 0 0 1px rgba(255,255,255,.9), 0 1px 4px rgba(0,0,0,.35)' : '0 1px 3px rgba(0,0,0,.35)',
                 cursor: 'pointer',
               }}
@@ -3449,7 +3450,7 @@ export const Timeline = React.memo(function Timeline({
             className="pointer-events-none absolute inset-0 z-[20]"
             style={{
               backgroundImage:
-                'repeating-linear-gradient(-45deg, transparent, transparent 5px, color-mix(in srgb, var(--tl-accent) 16%, transparent) 5px, color-mix(in srgb, var(--tl-accent) 16%, transparent) 10px)',
+                'repeating-linear-gradient(-45deg, transparent, transparent 5px, color-mix(in srgb, var(--accent) 16%, transparent) 5px, color-mix(in srgb, var(--accent) 16%, transparent) 10px)',
             }}
           />
         ) : null}
@@ -3475,7 +3476,7 @@ export const Timeline = React.memo(function Timeline({
           left: ms * pxPerMs,
           borderColor: label ? TL.line : TL.tick,
           /* labels are read to find a place: 82% of the text color, not the faintest tone */
-          color: label ? 'color-mix(in srgb, var(--tl-text) 82%, transparent)' : undefined,
+          color: label ? 'color-mix(in srgb, var(--text-muted) 82%, transparent)' : undefined,
         }}
       >
         {label ? formatRulerLabel(ms, fps) : null}
@@ -4147,7 +4148,7 @@ export const Timeline = React.memo(function Timeline({
                   <div
                     className="pointer-events-none absolute left-0 right-0 z-40 h-0.5"
                     data-lane-order-guide=""
-                    style={{ top, background: 'var(--tl-select)' }}
+                    style={{ top, background: 'var(--accent)' }}
                   />
                 );
               })() : null}
@@ -4300,8 +4301,8 @@ export const Timeline = React.memo(function Timeline({
                       /* follows the pointer, not row edges (contentY already includes the scroll) */
                       top: Math.min(marquee.fromY, marquee.toY),
                       height: Math.abs(marquee.toY - marquee.fromY),
-                      borderColor: 'var(--tl-accent)',
-                      background: 'color-mix(in srgb, var(--tl-accent) 18%, transparent)',
+                      borderColor: 'var(--accent)',
+                      background: 'color-mix(in srgb, var(--accent) 18%, transparent)',
                     }}
                   />
                 ) : null}
@@ -4394,7 +4395,7 @@ export const Timeline = React.memo(function Timeline({
         >
           <div
             data-snap-guide=""
-            className="absolute inset-y-0 left-0 w-px bg-[var(--tl-accent)]"
+            className="absolute inset-y-0 left-0 w-px bg-[var(--accent)]"
             style={{
               transform: `translate3d(${snapGuideMs * pxPerMs - scrollLeft + PLAYHEAD_BLEED}px,0,0)`,
             }}
@@ -4412,8 +4413,8 @@ export const Timeline = React.memo(function Timeline({
               style={{
                 transform: `translate3d(${chat.span.startMs * pxPerMs - scrollLeft}px,0,0)`,
                 width: Math.max(2, (chat.span.endMs - chat.span.startMs) * pxPerMs),
-                background: 'color-mix(in srgb, var(--tl-accent) 45%, transparent)',
-                boxShadow: 'inset 0 -2px 0 var(--tl-accent)',
+                background: 'color-mix(in srgb, var(--accent) 45%, transparent)',
+                boxShadow: 'inset 0 -2px 0 var(--accent)',
               }}
             />
           </div>
@@ -4430,8 +4431,8 @@ export const Timeline = React.memo(function Timeline({
               style={{
                 transform: `translate3d(${flashRange.startMs * pxPerMs - scrollLeft}px,0,0)`,
                 width: Math.max(1, (flashRange.endMs - flashRange.startMs) * pxPerMs),
-                borderColor: 'color-mix(in srgb, var(--tl-accent) 55%, transparent)',
-                background: 'color-mix(in srgb, var(--tl-accent) 10%, transparent)',
+                borderColor: 'color-mix(in srgb, var(--accent) 55%, transparent)',
+                background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
               }}
             />
           </div>
@@ -4454,11 +4455,11 @@ export const Timeline = React.memo(function Timeline({
                   style={{
                     transform: `translate3d(${fromX}px,0,0)`,
                     width,
-                    borderColor: 'var(--tl-accent)',
-                    background: 'color-mix(in srgb, var(--tl-accent) 13%, transparent)',
+                    borderColor: 'var(--accent)',
+                    background: 'color-mix(in srgb, var(--accent) 13%, transparent)',
                   }}
                 >
-                  <div className="absolute inset-x-0 top-0" style={{ height: RULER_H, background: 'color-mix(in srgb, var(--tl-accent) 28%, transparent)' }} />
+                  <div className="absolute inset-x-0 top-0" style={{ height: RULER_H, background: 'color-mix(in srgb, var(--accent) 28%, transparent)' }} />
                 </div>
               </div>
             </div>
@@ -4476,8 +4477,8 @@ export const Timeline = React.memo(function Timeline({
                       e.dataTransfer.setData('text/plain', label);
                       e.dataTransfer.effectAllowed = 'copy';
                     }}
-                    className={`absolute top-0 origin-left whitespace-nowrap rounded-[4px] px-1.5 py-[2px] text-[10.5px] font-medium leading-[15px] text-white tabular-nums shadow-[0_1px_4px_rgba(0,0,0,.25)] ${rangeRef ? 'pointer-events-auto cursor-grab active:cursor-grabbing' : ''}`}
-                    style={{ left: Math.max(4, fromX + 4), background: 'var(--tl-accent)' }}
+                    className={`absolute top-0 origin-left whitespace-nowrap rounded-[4px] px-1.5 py-[2px] text-[10.5px] font-medium leading-[15px] text-[var(--on-accent)] tabular-nums shadow-[0_1px_4px_rgba(0,0,0,.25)] ${rangeRef ? 'pointer-events-auto cursor-grab active:cursor-grabbing' : ''}`}
+                    style={{ left: Math.max(4, fromX + 4), background: 'var(--accent)' }}
                   >
                     {label}
                   </div>
@@ -4513,9 +4514,9 @@ function GestureLabel({ tip, left, top }: { tip: GestureTip; left: number; top: 
   return (
     <div
       data-gesture-tip={tip.kind}
-      className="pointer-events-none absolute z-[70] whitespace-nowrap rounded-[4px] px-1.5 py-[2px] text-[10.5px] font-medium leading-[15px] text-white tabular-nums shadow-[0_1px_4px_rgba(0,0,0,.35)]"
+      className="pointer-events-none absolute z-[70] whitespace-nowrap rounded-[4px] px-1.5 py-[2px] text-[10.5px] font-medium leading-[15px] text-[var(--on-accent)] tabular-nums shadow-[0_1px_4px_rgba(0,0,0,.35)]"
       /* centred on the edge, but never cut off at the film's start (a clip at 0 s made 100× has its edge there) */
-      style={{ left, top: Math.max(0, top - 21), transform: `translateX(max(-50%, ${-left}px))`, background: 'var(--tl-accent)' }}
+      style={{ left, top: Math.max(0, top - 21), transform: `translateX(max(-50%, ${-left}px))`, background: 'var(--accent)' }}
     >
       {what} {tip.speed != null ? speedText(roundSpeed(tip.speed)) : signedSeconds(tip.deltaMs)}
       {tip.lengthMs != null ? <span className="opacity-75"> · {(tip.lengthMs / 1000).toFixed(2)} s</span> : null}
@@ -4535,7 +4536,7 @@ function PlayheadKnob({ filled }: { filled: boolean }) {
     <svg width="12" height="17" viewBox="0 0 12 17" aria-hidden="true">
       <path
         d="M1.9 3.4a2 2 0 0 1 2-2h4.2a2 2 0 0 1 2 2v5.3a4.1 4.1 0 0 1-8.2 0z"
-        fill={filled ? 'var(--tl-playhead)' : 'var(--tl-ruler)'}
+        fill={filled ? 'var(--tl-playhead)' : 'var(--bg-panel)'}
         stroke="var(--tl-playhead)"
         strokeWidth="1.9"
         strokeLinejoin="round"
@@ -4580,7 +4581,7 @@ function TrackHeadButton({
         className="flex h-full w-full items-center justify-center rounded-[4px] bg-transparent outline-none ring-0 transition-colors hover:bg-[var(--bg-hover)] focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 disabled:hover:bg-transparent"
         style={{
           /* a switch at rest is brighter than the row's mark; one turned on (locked, hidden, muted) is the accent */
-          color: disabled ? 'var(--text-faint)' : active ? 'var(--tl-accent)' : 'var(--tl-text)',
+          color: disabled ? 'var(--text-faint)' : active ? 'var(--accent)' : 'var(--text-muted)',
         }}
       >
         {children}
@@ -4650,12 +4651,12 @@ function ToolButton({
         aria-label={title}
         aria-pressed={active}
         /* no focus outline after a click; focus-visible still shows for keyboard users */
-        className={`flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-[6px] outline-none transition focus-visible:ring-1 focus-visible:ring-[var(--tl-accent)] ${
+        className={`flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-[6px] outline-none transition focus-visible:ring-1 focus-visible:ring-[var(--accent)] ${
           disabled ? 'cursor-default' : ''
         } ${active || disabled ? '' : 'hover:bg-black/5 dark:hover:bg-white/10'}`}
         style={active
-          ? { color: '#fff', background: 'var(--tl-accent)' }
-          : { color: disabled ? 'var(--text-faint)' : 'var(--text-dim)' }}
+          ? { color: 'var(--on-accent)', background: 'var(--accent)' }
+          : { color: disabled ? 'var(--text-faint)' : 'var(--text-muted)' }}
       >
         {children}
       </button>
@@ -4706,7 +4707,7 @@ function ModePicker({
             type="button"
             onClick={() => setOpen((v) => !v)}
             className="flex h-[28px] w-[15px] shrink-0 items-center justify-center rounded-[6px] transition hover:bg-black/5 dark:hover:bg-white/10"
-            style={{ color: 'var(--text-dim)' }}
+            style={{ color: 'var(--text-muted)' }}
             aria-label={current.label}
           >
             <ChevronDown size={12} />
@@ -4715,7 +4716,7 @@ function ModePicker({
       >
         <div
           className="min-w-[150px] rounded-[8px] border p-1 shadow-lg"
-          style={{ background: 'var(--tl-head)', borderColor: 'var(--tl-line)' }}
+          style={{ background: 'var(--bg-panel)', borderColor: 'var(--border)' }}
         >
           {items.map((item) => (
             <button
@@ -4724,14 +4725,14 @@ function ModePicker({
               onClick={() => { onPick(item.id); setOpen(false); }}
               className="flex w-full items-center gap-2 rounded-[4px] px-2 py-1.5 text-[12px] transition hover:bg-black/5 dark:hover:bg-white/10"
               style={{
-                color: 'var(--tl-text)',
+                color: 'var(--text-muted)',
                 /* the current row: --tl-line (a gray in both themes; translucent white vanishes on light) */
-                background: item.id === mode ? 'var(--tl-line)' : undefined,
+                background: item.id === mode ? 'var(--border)' : undefined,
               }}
             >
               {item.icon}
               <span className="flex-1 text-left">{item.label}</span>
-              <span style={{ color: 'var(--tl-faint)' }}>{item.key}</span>
+              <span style={{ color: 'var(--text-faint)' }}>{item.key}</span>
             </button>
           ))}
         </div>
@@ -4940,8 +4941,8 @@ function RulerRefer({ hoverMs, draft, pxPerMs, widthPx }: { hoverMs: number | nu
     const flip = x > widthPx - 96;
     return (
       <span
-        className="absolute top-1/2 flex h-[15px] items-center gap-[3px] whitespace-nowrap rounded-[4px] px-[5px] text-[10px] font-medium leading-none tabular-nums text-white shadow-[0_1px_3px_rgba(0,0,0,.35)]"
-        style={{ left: x, background: 'var(--tl-accent)', transform: `translate(${flip ? 'calc(-100% - 5px)' : '5px'}, -50%)` }}
+        className="absolute top-1/2 flex h-[15px] items-center gap-[3px] whitespace-nowrap rounded-[4px] px-[5px] text-[10px] font-medium leading-none tabular-nums text-[var(--on-accent)] shadow-[0_1px_3px_rgba(0,0,0,.35)]"
+        style={{ left: x, background: 'var(--accent)', transform: `translate(${flip ? 'calc(-100% - 5px)' : '5px'}, -50%)` }}
       >
         <MessageSquarePlus size={9} aria-hidden />
         {text}
@@ -4953,7 +4954,7 @@ function RulerRefer({ hoverMs, draft, pxPerMs, widthPx }: { hoverMs: number | nu
     const width = Math.max(1, (draft.endMs - draft.startMs) * pxPerMs);
     return (
       <div aria-hidden className="pointer-events-none absolute inset-0">
-        <div data-timeline-refer-range="" className="absolute inset-y-0" style={{ left, width, background: 'color-mix(in srgb, var(--tl-accent) 22%, transparent)', boxShadow: 'inset 1px 0 var(--tl-accent), inset -1px 0 var(--tl-accent)' }} />
+        <div data-timeline-refer-range="" className="absolute inset-y-0" style={{ left, width, background: 'color-mix(in srgb, var(--accent) 22%, transparent)', boxShadow: 'inset 1px 0 var(--accent), inset -1px 0 var(--accent)' }} />
         {tag(left + width, `${chatClock(draft.startMs)}–${chatClock(draft.endMs)}`)}
       </div>
     );
@@ -4961,7 +4962,7 @@ function RulerRefer({ hoverMs, draft, pxPerMs, widthPx }: { hoverMs: number | nu
   const x = hoverMs! * pxPerMs;
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0">
-      <div className="absolute inset-y-0 w-px" style={{ left: x, background: 'var(--tl-accent)' }} />
+      <div className="absolute inset-y-0 w-px" style={{ left: x, background: 'var(--accent)' }} />
       {tag(x, chatClock(hoverMs!))}
     </div>
   );

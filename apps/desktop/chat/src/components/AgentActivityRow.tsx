@@ -141,11 +141,11 @@ const AgentActivityRow = React.memo(function AgentActivityRow({
      Drawn as a labeled divider: it marks that the agent no longer sees the original text above it. */
   if (item.kind === 'notice') {
     /* A local agent's own notice (a Codex warning): its words, quiet, apart from what it says to the person */
-    if (item.text) return <p className="break-words py-1 text-[12px] leading-relaxed text-[var(--chat-hint)]">{item.text}</p>;
+    if (item.text) return <p className="break-words py-1 text-[12px] leading-relaxed text-[var(--text-faint)]">{item.text}</p>;
     return (
       <div className="flex items-center gap-2.5 py-1.5">
         <span className="h-px flex-1 bg-[var(--border)]" />
-        <span className="shrink-0 text-[11px] text-[var(--chat-hint)]">{t(item.label)}</span>
+        <span className="shrink-0 text-[11px] text-[var(--text-faint)]">{t(item.label)}</span>
         <span className="h-px flex-1 bg-[var(--border)]" />
       </div>
     );
@@ -197,14 +197,14 @@ function ThoughtRow({ item }: { item: AgentActivityItem }) {
     ? t('turnFrame.thought').replace('{t}', formatWorkDuration(ms))
     : t('turnFrame.thoughtShort');
   const text = (item.text ?? '').trim();
-  if (!text) return <div className="py-1 text-[14px] leading-relaxed text-[var(--chat-hint)]">{label}</div>;
+  if (!text) return <div className="py-1 text-[14px] leading-relaxed text-[var(--text-faint)]">{label}</div>;
   return (
     <div className="min-w-0 py-1">
       <button
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className="flex items-center gap-1.5 text-[14px] leading-relaxed text-[var(--chat-hint)] hover:text-[var(--chat-text)]"
+        className="flex items-center gap-1.5 text-[14px] leading-relaxed text-[var(--text-faint)] hover:text-[var(--text)]"
       >
         {label}
         <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -230,7 +230,7 @@ function PlanRow({ item }: { item: AgentActivityItem }) {
   const done = plan.filter((entry) => entry.status === 'completed').length;
   return (
     <div className="min-w-0 py-1.5">
-      <div className="mb-1 text-[13px] text-[var(--chat-hint)]">
+      <div className="mb-1 text-[13px] text-[var(--text-faint)]">
         {t('turnFrame.plan').replace('{done}', String(done)).replace('{total}', String(plan.length))}
       </div>
       <ul className="flex flex-col gap-0.5">
@@ -241,9 +241,9 @@ function PlanRow({ item }: { item: AgentActivityItem }) {
               <Icon
                 size={13}
                 aria-hidden
-                className={`mt-[5px] shrink-0 ${entry.status === 'in_progress' ? 'text-[var(--chat-text)]' : 'text-[var(--chat-hint)]'}`}
+                className={`mt-[5px] shrink-0 ${entry.status === 'in_progress' ? 'text-[var(--text)]' : 'text-[var(--text-faint)]'}`}
               />
-              <span className={entry.status === 'in_progress' ? 'text-[var(--chat-text)]' : 'text-[var(--chat-hint)]'}>
+              <span className={entry.status === 'in_progress' ? 'text-[var(--text)]' : 'text-[var(--text-faint)]'}>
                 {entry.content}
               </span>
             </li>
@@ -358,7 +358,7 @@ function ActGroup({ items }: { items: AgentActivityItem[] }) {
         title={full}
         data-activity-header=""
         data-activity-id={items[0]?.id}
-        className="group/act flex h-6 w-full min-w-0 items-center gap-2 text-left text-[14px] leading-6 text-[var(--chat-hint)] hover:text-[var(--chat-text)]"
+        className="group/act flex h-6 w-full min-w-0 items-center gap-2 text-left text-[14px] leading-6 text-[var(--text-faint)] hover:text-[var(--text)]"
       >
         <Icon size={13} aria-hidden className="shrink-0" />
         <span data-activity-label="" className="min-w-0 truncate">{summary}</span>
@@ -399,7 +399,7 @@ function ActRow({ item }: { item: AgentActivityItem }) {
   return (
     <div className="flex min-w-0 items-start gap-2 py-1 text-[14px] leading-6">
       {Icon ? (
-        <Icon size={13} aria-hidden className="mt-[5px] shrink-0 text-[var(--chat-hint)]" />
+        <Icon size={13} aria-hidden className="mt-[5px] shrink-0 text-[var(--text-faint)]" />
       ) : null}
       <div className="min-w-0 flex-1">
         <div
@@ -410,13 +410,13 @@ function ActRow({ item }: { item: AgentActivityItem }) {
         >
           <ActivityLabel label={item.label} pending={!!item.pending} />
           {item.query ? (
-            <span className="min-w-0 truncate text-[var(--chat-hint)] opacity-80" title={item.query}>
+            <span className="min-w-0 truncate text-[var(--text-faint)] opacity-80" title={item.query}>
               “{item.query}”
             </span>
           ) : null}
           {/* File name or command: not film content, so no quotes, monospace */}
           {item.detail ? (
-            <span className="min-w-0 truncate font-mono text-[12.5px] text-[var(--chat-hint)] opacity-80" title={item.detail}>
+            <span className="min-w-0 truncate font-mono text-[12.5px] text-[var(--text-faint)] opacity-80" title={item.detail}>
               {item.detail}
             </span>
           ) : null}
@@ -436,7 +436,7 @@ function ActRow({ item }: { item: AgentActivityItem }) {
 function ActivityLabel({ label, pending }: { label: string; pending: boolean }) {
   const t = useT();
   return (
-    <span data-activity-label="" className="min-w-0 shrink-0 truncate text-[var(--chat-hint)]">
+    <span data-activity-label="" className="min-w-0 shrink-0 truncate text-[var(--text-faint)]">
       {t(actCopyKey(label, pending))}
     </span>
   );
@@ -447,14 +447,14 @@ function AskOutcome({ ask }: { ask: NonNullable<AgentActivityItem['ask']> }) {
   const t = useT();
   if (ask.status === 'answered' && ask.answer) {
     return (
-      <div className="mt-1 flex min-w-0 items-start gap-1.5 text-[var(--chat-hint)]">
-        <CornerDownRight size={13} aria-hidden className="mt-[5px] shrink-0 text-[var(--chat-hint)]" />
+      <div className="mt-1 flex min-w-0 items-start gap-1.5 text-[var(--text-faint)]">
+        <CornerDownRight size={13} aria-hidden className="mt-[5px] shrink-0 text-[var(--text-faint)]" />
         <span className="min-w-0 whitespace-pre-wrap break-words">{ask.answer}</span>
       </div>
     );
   }
   return (
-    <div className="mt-1 flex items-center gap-1.5 text-[var(--chat-hint)]">
+    <div className="mt-1 flex items-center gap-1.5 text-[var(--text-faint)]">
       <CornerDownRight size={13} aria-hidden className="shrink-0" />
       <span>{t(ask.status === 'timeout' ? 'turnAsk.timedOut' : 'turnAsk.skipped')}</span>
     </div>
@@ -492,7 +492,7 @@ function ImageThumb({ asset }: { asset: AgentActAsset }) {
         type="button"
         onClick={() => setOpen(true)}
         title={t('actGroup.openImage')}
-        className="block shrink-0 overflow-hidden rounded-md border border-[var(--border)] bg-[var(--surface-2)] transition-opacity hover:opacity-85"
+        className="block shrink-0 overflow-hidden rounded-md border border-[var(--border)] bg-[var(--bg-field)] transition-opacity hover:opacity-85"
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -521,7 +521,7 @@ function MediaLink({ asset }: { asset: AgentActAsset }) {
       href={toUrl(asset.src)}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex h-7 items-center gap-1.5 rounded-full border border-[var(--border)] px-2.5 text-[12px] text-[var(--chat-hint)] hover:text-[var(--chat-text)]"
+      className="inline-flex h-7 items-center gap-1.5 rounded-full border border-[var(--border)] px-2.5 text-[12px] text-[var(--text-faint)] hover:text-[var(--text)]"
     >
       <Video size={12} aria-hidden />
       {asset.dur ? formatDur(asset.dur) : null}
@@ -563,8 +563,8 @@ function AudioChip({ asset, label }: { asset: AgentActAsset; label?: string }) {
       title={failed ? t('assets.previewFailed') : undefined}
       className={`inline-flex h-7 max-w-full items-center gap-1.5 rounded-full border px-2.5 text-[12px] transition-colors ${
         playing
-          ? 'border-[var(--accent)] text-[var(--chat-text)]'
-          : 'border-[var(--border)] text-[var(--chat-hint)] hover:text-[var(--chat-text)]'
+          ? 'border-[var(--accent)] text-[var(--text)]'
+          : 'border-[var(--border)] text-[var(--text-faint)] hover:text-[var(--text)]'
       }`}
     >
       {playing ? <Pause size={12} aria-hidden className="shrink-0" /> : <Play size={12} aria-hidden className="shrink-0" />}
@@ -688,10 +688,10 @@ function IdleStatus({ since, quietFirst = false, ownAgent = false }: { since: nu
 function StatusShell({ Icon, label, extra, plain = false, since, waiting = false }: { Icon?: LucideIcon | undefined; label: string; extra?: string | undefined; plain?: boolean; since: number; waiting?: boolean }) {
   return (
     <div role="status" className="flex h-6 min-w-0 items-center gap-2 text-[14px]">
-      {Icon ? <Icon size={13} aria-hidden className="shrink-0 text-[var(--chat-hint)]" /> : null}
+      {Icon ? <Icon size={13} aria-hidden className="shrink-0 text-[var(--text-faint)]" /> : null}
       <span className={`${waiting ? '' : 'text-sweep '}min-w-0 truncate ${extra ? 'max-w-[60%] shrink-0' : ''}`}>{label}</span>
       {extra ? (
-        <span className={`min-w-0 truncate text-[var(--chat-hint)] opacity-80 ${plain || extra.startsWith('“') ? '' : 'font-mono text-[12.5px]'}`} title={extra}>
+        <span className={`min-w-0 truncate text-[var(--text-faint)] opacity-80 ${plain || extra.startsWith('“') ? '' : 'font-mono text-[12.5px]'}`} title={extra}>
           {extra}
         </span>
       ) : null}
@@ -709,7 +709,7 @@ function PendingElapsed({ startedAt }: { startedAt: AgentActivityItem['startedAt
   const elapsed = elapsedLabel(startedAt, tick);
   if (!elapsed) return null;
   return (
-    <span className="ml-auto shrink-0 tabular-nums text-[11px] text-[var(--chat-hint)]">
+    <span className="ml-auto shrink-0 tabular-nums text-[11px] text-[var(--text-faint)]">
       {elapsed}
     </span>
   );

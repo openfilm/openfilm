@@ -55,7 +55,7 @@ export function ProjectStarters({ onSkill }: {
                 type="button"
                 title={skill.description}
                 onClick={() => onSkill({ name: skill.name, description: skill.description, title: titleOf(skill) })}
-                className="flex h-14 w-full min-w-0 items-center gap-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-2 text-left transition hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)]"
+                className="flex h-14 w-full min-w-0 items-center gap-2.5 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] p-2 text-left transition hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)]"
               >
                 <img src={skill.cover} alt="" loading="lazy" draggable={false} className="h-10 w-10 shrink-0 rounded-md bg-[var(--bg-hover)] object-cover" />
                 <span className="line-clamp-2 min-w-0 flex-1 text-[13px] leading-snug text-[var(--text)]">{titleOf(skill)}</span>

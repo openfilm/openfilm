@@ -124,11 +124,11 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
         <span>{t(group)}</span>
         {/* its uid, owner/name: how it is told apart, shared and searched */}
         <span className="min-w-0 truncate font-mono text-[11px] text-[var(--text-faint)]" title={skill.uid}>{skill.uid}</span>
-        {skill.version ? <span className="rounded-[5px] border border-[var(--border)] px-1.5 py-[1px] font-mono text-[10.5px] text-[var(--text-dim)]">v{skill.version}</span> : null}
+        {skill.version ? <span className="rounded-[5px] border border-[var(--border)] px-1.5 py-[1px] font-mono text-[10.5px] text-[var(--text-muted)]">v{skill.version}</span> : null}
         {/* its source: OpenFilm's repository, or the address one of the person's came from */}
         {source ? (
           <a href={source} target="_blank" rel="noreferrer" title={source} aria-label={t('gallery.viewSource')}
-            className="flex h-6 w-6 items-center justify-center rounded-[6px] text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"><Github size={14} strokeWidth={1.75} /></a>
+            className="flex h-6 w-6 items-center justify-center rounded-[6px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"><Github size={14} strokeWidth={1.75} /></a>
         ) : null}
       </div>
       <Origin skill={skill} />
@@ -145,17 +145,17 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
       <div className="mt-5 flex flex-col gap-2">
         {onTry ? (
           <button type="button" onClick={() => onTry(skill)} disabled={skill.off} title={skill.off ? t('gallery.tryOff') : undefined}
-            className="flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--text)] text-[13px] font-medium text-[var(--bg)] transition hover:opacity-90 disabled:opacity-40"><MessageSquarePlus size={15} />{t('gallery.tryNow')}</button>
+            className="flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--accent)] text-[13px] font-medium text-[var(--on-accent)] transition hover:bg-[var(--accent-hover)] disabled:opacity-40"><MessageSquarePlus size={15} />{t('gallery.tryNow')}</button>
         ) : null}
         {/* OpenFilm's system skills are only turned off */}
         {skill.core ? null : !installed ? (
           <button type="button" onClick={() => install(true)}
             className={onTry
               ? 'flex h-9 w-full items-center justify-center gap-1.5 rounded-[10px] border border-[var(--border-strong)] text-[13px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)]'
-              : 'flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--text)] text-[13px] font-medium text-[var(--bg)] transition hover:opacity-90'}><Plus size={15} />{t('gallery.install')}</button>
+              : 'flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--accent)] text-[13px] font-medium text-[var(--on-accent)] transition hover:bg-[var(--accent-hover)]'}><Plus size={15} />{t('gallery.install')}</button>
         ) : (
           <button type="button" onClick={() => { if (skill.source === 'official') install(false); else setRemoving(true); }}
-            className="flex h-9 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--surface-2)] text-[13px] text-[var(--text-muted)] transition hover:bg-[color-mix(in_srgb,var(--err)_14%,var(--surface-2))] hover:text-[var(--err)]">
+            className="flex h-9 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--bg-field)] text-[13px] text-[var(--text-muted)] transition hover:bg-[color-mix(in_srgb,var(--err)_14%,var(--bg-field))] hover:text-[var(--err)]">
             <Trash2 size={14} />{t(skill.source === 'official' ? 'gallery.uninstall' : 'gallery.remove')}
           </button>
         )}
@@ -223,7 +223,7 @@ export function SkillCover({ skill, title, small = false, big = false, playing =
   const hue = HUES[skill.icon ?? ''] ?? 220;
   return (
     <div aria-label={title} className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center"
-      style={{ background: `radial-gradient(110% 90% at 25% 0%, hsl(${hue} 70% 55% / 0.22), transparent 62%), radial-gradient(90% 80% at 100% 100%, hsl(${hue} 70% 50% / 0.12), transparent 60%), var(--surface-2)` }}>
+      style={{ background: `radial-gradient(110% 90% at 25% 0%, hsl(${hue} 70% 55% / 0.22), transparent 62%), radial-gradient(90% 80% at 100% 100%, hsl(${hue} 70% 50% / 0.12), transparent 60%), var(--bg-field)` }}>
       <span className={`flex items-center justify-center ${small ? 'h-7 w-7 rounded-[8px]' : big ? 'h-16 w-16 rounded-[14px]' : 'h-14 w-14 rounded-[14px]'}`}
         style={{ background: `hsl(${hue} 70% 55% / 0.16)`, color: `hsl(${hue} 80% 72%)`, boxShadow: `0 0 0 1px hsl(${hue} 70% 60% / 0.28)` }}>
         <Mark size={small ? 14 : big ? 28 : 24} strokeWidth={1.6} />

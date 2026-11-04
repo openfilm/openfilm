@@ -36,7 +36,7 @@ export function SoloButton({ on, onToggle }: { on: boolean; onToggle: (only: boo
           className="flex h-[14px] w-[14px] items-center justify-center rounded-[3px] text-[9.5px] font-bold leading-none"
           style={on
             ? { background: '#e8c547', color: '#1b1b1b' }
-            : { color: 'var(--tl-text)', boxShadow: 'inset 0 0 0 1px currentColor' }}
+            : { color: 'var(--text-muted)', boxShadow: 'inset 0 0 0 1px currentColor' }}
         >
           S
         </span>

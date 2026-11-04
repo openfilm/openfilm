@@ -290,7 +290,7 @@ export const FilmInspector = React.memo(function FilmInspector({
   return (
     <div
       data-film-inspector
-      className={`${PANE} shrink-0 bg-[var(--dock-pane)]`}
+      className={`${PANE} shrink-0 bg-[var(--bg-panel)]`}
       style={{ width }}
     >
       <div className={PANE_BAR}>
@@ -303,7 +303,7 @@ export const FilmInspector = React.memo(function FilmInspector({
         </Tooltip>
       </div>
       {locked && (layer || clip || many) ? (
-        <div role="status" data-inspector-locked="" className="mx-2 mb-1 flex items-center gap-1.5 rounded-md bg-[var(--fill-tsp)] px-2 py-1 text-[11px] text-[var(--text-muted)]">
+        <div role="status" data-inspector-locked="" className="mx-2 mb-1 flex items-center gap-1.5 rounded-md bg-[var(--bg-field)] px-2 py-1 text-[11px] text-[var(--text-muted)]">
           <Lock size={12} className="shrink-0" aria-hidden />
           <span className="min-w-0">{t('inspector.trackLocked')}</span>
         </div>
@@ -398,12 +398,12 @@ function RedesignHint({ t, stage }: { t: T; stage: { w: number; h: number } }) {
         {t('inspector.redesignOpen')}
       </button>
       {open ? (
-        <div className="flex flex-col gap-2 rounded-lg border border-[var(--border)] bg-[var(--fill-tsp)] p-2.5">
+        <div className="flex flex-col gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-field)] p-2.5">
           <p className="text-[10.5px] leading-[15px] text-[var(--text-muted)]">{t('inspector.redesignBody')}</p>
-          <p className="select-text rounded-md bg-[var(--bg)] px-2 py-1.5 text-[11px] leading-[16px] text-[var(--text)]">{ask}</p>
+          <p className="select-text rounded-md bg-[var(--bg-panel)] px-2 py-1.5 text-[11px] leading-[16px] text-[var(--text)]">{ask}</p>
           <button type="button"
             onClick={() => { void navigator.clipboard?.writeText(ask).then(() => setCopied(true), () => {}); }}
-            className="flex h-7 items-center justify-center gap-1.5 rounded-md bg-[var(--text)] text-[11px] font-medium text-[var(--bg)] transition hover:opacity-90">
+            className="flex h-7 items-center justify-center gap-1.5 rounded-md bg-[var(--accent)] text-[11px] font-medium text-[var(--on-accent)] transition hover:bg-[var(--accent-hover)]">
             {copied ? <Check size={12} /> : <Copy size={12} />}
             {t(copied ? 'inspector.redesignCopied' : 'inspector.redesignCopy')}
           </button>
@@ -506,7 +506,7 @@ function FilmPanel({
         </Section>
       ) : null}
       <div className="flex flex-col items-center px-6 pt-8 text-center">
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--fill-tsp)] text-[var(--text-muted)]">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--bg-field)] text-[var(--text-muted)]">
           <MousePointerClick size={15} strokeWidth={1.75} />
         </div>
         <p className="mt-2 text-[11.5px] leading-relaxed text-[var(--text-faint)]">{t('inspector.empty')}</p>
@@ -586,7 +586,7 @@ function Header({
 }) {
   return (
     <div className="flex items-center gap-2 px-3 pb-2 pt-2.5">
-      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[5px] bg-[var(--fill-tsp)] text-[var(--text-muted)]">
+      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[5px] bg-[var(--bg-field)] text-[var(--text-muted)]">
         {icon}
       </div>
       <div className="min-w-0 flex-1">
@@ -625,7 +625,7 @@ function AlignBar({ t, onAlign, onDistribute }: { t: T; onAlign?: (edge: AlignEd
         aria-label={label}
         disabled={!onClick}
         onClick={onClick}
-        className="flex h-6 flex-1 items-center justify-center rounded-[4px] text-[var(--text-muted)] transition hover:bg-[var(--bg)] hover:text-[var(--text)] disabled:pointer-events-none disabled:opacity-40"
+        className="flex h-6 flex-1 items-center justify-center rounded-[4px] text-[var(--text-muted)] transition hover:bg-[var(--bg-panel)] hover:text-[var(--text)] disabled:pointer-events-none disabled:opacity-40"
       >
         {icon}
       </button>
@@ -634,12 +634,12 @@ function AlignBar({ t, onAlign, onDistribute }: { t: T; onAlign?: (edge: AlignEd
   return (
     <div className="flex items-center gap-1.5">
       {[items.slice(0, 3), items.slice(3)].map((group, i) => (
-        <div key={i} className="flex h-[26px] flex-1 items-center rounded-[5px] bg-[var(--fill-tsp)] p-px">
+        <div key={i} className="flex h-[26px] flex-1 items-center rounded-[5px] bg-[var(--bg-field)] p-px">
           {group.map((item) => btn(item.edge, item.label, item.icon, onAlign ? () => onAlign(item.edge) : undefined))}
         </div>
       ))}
       {onDistribute ? (
-        <div className="flex h-[26px] w-[54px] shrink-0 items-center rounded-[5px] bg-[var(--fill-tsp)] p-px">
+        <div className="flex h-[26px] w-[54px] shrink-0 items-center rounded-[5px] bg-[var(--bg-field)] p-px">
           {btn('dx', t('inspector.distributeH'), <AlignHorizontalDistributeCenter size={ICON} />, () => onDistribute('x'))}
           {btn('dy', t('inspector.distributeV'), <AlignVerticalDistributeCenter size={ICON} />, () => onDistribute('y'))}
         </div>
@@ -1338,7 +1338,7 @@ function TextSection({
           }
         }}
         rows={Math.min(6, Math.max(2, raw.split('\n').length))}
-        className={`w-full resize-none rounded-[5px] bg-[var(--fill-tsp)] px-2 py-1.5 text-[11.5px] leading-[1.5] text-[var(--text)] outline-none ring-1 ring-inset ring-transparent transition hover:ring-[var(--border)] focus:bg-[var(--bg)] focus:ring-[1.5px] focus:ring-[var(--accent)] ${saving ? 'opacity-60' : ''}`}
+        className={`w-full resize-none rounded-[5px] bg-[var(--bg-field)] px-2 py-1.5 text-[11.5px] leading-[1.5] text-[var(--text)] outline-none ring-1 ring-inset ring-transparent transition hover:ring-[var(--border)] focus:bg-[var(--bg-panel)] focus:ring-[1.5px] focus:ring-[var(--accent)] ${saving ? 'opacity-60' : ''}`}
       />
       <p className="text-[10.5px] leading-[15px] text-[var(--text-faint)]">
         {t('inspector.editOnCanvas')}
@@ -1566,7 +1566,7 @@ function ClipPanel({
         <RefusalBanner message={refusal} onDismiss={() => setRefusal(null)} t={t} />
       ) : null}
       {!editable ? (
-        <p className="mx-3 rounded-[6px] bg-[var(--fill-tsp)] px-2.5 py-2 text-[11px] text-[var(--text-muted)]">
+        <p className="mx-3 rounded-[6px] bg-[var(--bg-field)] px-2.5 py-2 text-[11px] text-[var(--text-muted)]">
           {t('inspector.noEdit')}
         </p>
       ) : (
@@ -1667,7 +1667,7 @@ function ReplaceButton({ block, entries, t }: { block: TimelineBlock; entries: (
           const r = ref.current!.getBoundingClientRect();
           setMenu({ x: r.right, y: r.bottom + 4, top: r.top - 4, items: entries(block) });
         }}
-        className="flex h-6 shrink-0 items-center gap-1 rounded-[5px] px-1.5 text-[11px] text-[var(--text-muted)] transition hover:bg-[var(--fill-tsp)] hover:text-[var(--text)]"
+        className="flex h-6 shrink-0 items-center gap-1 rounded-[5px] px-1.5 text-[11px] text-[var(--text-muted)] transition hover:bg-[var(--bg-field)] hover:text-[var(--text)]"
       >
         <Replace size={12} />
         {t('editorTools.replaceButton')}
@@ -1749,7 +1749,7 @@ function TimingSection({ t, block, onMain, speedFloor, commit }: {
       id="timing"
       title={t('inspector.timing')}
       aside={(
-        <div role="radiogroup" aria-label={t('inspector.timeUnit')} className="flex h-5 items-center rounded-[4px] bg-[var(--fill-tsp)] p-px text-[10px]">
+        <div role="radiogroup" aria-label={t('inspector.timeUnit')} className="flex h-5 items-center rounded-[4px] bg-[var(--bg-field)] p-px text-[10px]">
           {(['timecode', 'seconds'] as const).map((u) => (
             <button
               key={u}
@@ -1758,7 +1758,7 @@ function TimingSection({ t, block, onMain, speedFloor, commit }: {
               aria-checked={unit === u}
               title={t(u === 'timecode' ? 'inspector.timeTimecode' : 'inspector.timeSeconds')}
               onClick={() => setUnit(u)}
-              className={`h-[18px] rounded-[3px] px-1.5 font-medium transition ${unit === u ? 'bg-[var(--bg)] text-[var(--text)]' : 'text-[var(--text-faint)] hover:text-[var(--text)]'}`}
+              className={`h-[18px] rounded-[3px] px-1.5 font-medium transition ${unit === u ? 'bg-[var(--bg-panel)] text-[var(--text)]' : 'text-[var(--text-faint)] hover:text-[var(--text)]'}`}
             >
               {u === 'timecode' ? 'TC' : 's'}
             </button>
@@ -1921,7 +1921,7 @@ function SpeedField({ t, id, speed, min, lengthMs, onCommit }: {
           <div className="relative flex h-[22px] items-center">
             <div className="pointer-events-none absolute inset-x-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full bg-[var(--border-strong)]">
               {/* slower than the clip after it lets it be: out of reach */}
-              {floor > 0 ? <div className="absolute inset-y-0 left-0 rounded-l-full bg-[var(--fill-tsp)]" style={{ width: `${floor * 100}%` }} /> : null}
+              {floor > 0 ? <div className="absolute inset-y-0 left-0 rounded-l-full bg-[var(--bg-field)]" style={{ width: `${floor * 100}%` }} /> : null}
               <div className="absolute inset-y-0 rounded-full bg-[var(--text-muted)]" style={{ left: `${Math.min(one, pos) * 100}%`, width: `${Math.abs(pos - one) * 100}%` }} />
               {SPEED_STOPS.map((s) => (
                 <div key={s} className="absolute -top-[3px] h-[9px] w-px bg-[var(--text-faint)]" style={{ left: at(s) }} />
@@ -1962,9 +1962,9 @@ function SpeedField({ t, id, speed, min, lengthMs, onCommit }: {
               onDoubleClick={() => settle(fit(1))}
               className={`relative h-[22px] w-full cursor-pointer appearance-none bg-transparent
                 [&::-webkit-slider-runnable-track]:h-[3px] [&::-webkit-slider-runnable-track]:bg-transparent
-                [&::-webkit-slider-thumb]:-mt-[4.5px] [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--bg)] [&::-webkit-slider-thumb]:shadow-[0_0_0_1px_var(--border-strong),0_1px_3px_rgba(0,0,0,0.25)]
+                [&::-webkit-slider-thumb]:-mt-[4.5px] [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--bg-panel)] [&::-webkit-slider-thumb]:shadow-[0_0_0_1px_var(--border-strong),0_1px_3px_rgba(0,0,0,0.25)]
                 [&::-moz-range-track]:h-[3px] [&::-moz-range-track]:bg-transparent
-                [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-[var(--bg)] [&::-moz-range-thumb]:shadow-[0_0_0_1px_var(--border-strong),0_1px_3px_rgba(0,0,0,0.25)]`}
+                [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-[var(--bg-panel)] [&::-moz-range-thumb]:shadow-[0_0_0_1px_var(--border-strong),0_1px_3px_rgba(0,0,0,0.25)]`}
             />
           </div>
           {/* the stops, each a click away; the ends kept inside the slider */}
@@ -2082,7 +2082,7 @@ function SourceBar({ t, block, timecode, onSlip, onCommit, maxDurSec }: {
         role="group"
         aria-label={t('inspector.sourceBar')}
         className="relative h-[22px] rounded-[4px]"
-        style={{ background: 'repeating-linear-gradient(90deg, var(--fill-tsp) 0 14px, transparent 14px 28px), var(--fill-tsp)' }}
+        style={{ background: 'repeating-linear-gradient(90deg, var(--bg-field) 0 14px, transparent 14px 28px), var(--bg-field)' }}
       >
         <div
           onPointerDown={start('slip')}

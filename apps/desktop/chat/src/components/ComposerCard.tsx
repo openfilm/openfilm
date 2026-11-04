@@ -16,7 +16,7 @@ import { inChat } from '@/lib/chat-layer';
 
 /** The shell of floating layers (menus, dropdowns): the cards' shadow, on the surface color. */
 export const POPOVER_CHROME: React.CSSProperties = {
-  background: 'var(--bg-surface)',
+  background: 'var(--bg-raised)',
   border: '1px solid var(--border-strong)',
   borderRadius: 12,
   boxShadow: '0 16px 40px -8px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.18)',
@@ -51,7 +51,7 @@ export function ComposerCard({
   return (
     <div
       {...(role ? { role } : {})}
-      className={`relative rounded-[12px] border border-[var(--composer-border)] bg-[var(--composer-bg)] px-3.5 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.35)] ${collapsed ? 'py-2' : 'pb-3 pt-3'} ${className}`}
+      className={`relative rounded-[12px] border border-[var(--border)] bg-[var(--bg-raised)] px-3.5 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.35)] ${collapsed ? 'py-2' : 'pb-3 pt-3'} ${className}`}
     >
       <div className={`absolute right-2 flex items-center gap-0.5 ${collapsed ? 'top-1.5' : 'top-2'}`}>
         {collapse ? (
@@ -101,7 +101,7 @@ export function CardActions({ children, className = '' }: { children: React.Reac
 type Weight = 'primary' | 'secondary' | 'quiet' | 'danger';
 
 const WEIGHT: Record<Weight, string> = {
-  primary: 'bg-[var(--text)] text-[var(--panel)] hover:opacity-90',
+  primary: 'bg-[var(--accent)] text-[var(--on-accent)] hover:bg-[var(--accent-hover)]',
   secondary: 'text-[var(--text)] ring-1 ring-inset ring-[var(--border-strong)] hover:bg-[var(--bg-hover)]',
   quiet: 'text-[var(--text-muted)] hover:text-[var(--text)]',
   danger: 'bg-[var(--err)] text-white hover:brightness-110',

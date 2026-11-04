@@ -147,7 +147,7 @@ export function App({ initialProject, initialSelection, initialFfmpeg }: {
 
   const onProject = Boolean(project) && /^\/projects\//.test(location.pathname);
   return (
-    <div className={`relative flex h-full flex-col ${assetsOpen ? '' : 'bg-[var(--dock-line)] pt-px'}`}>
+    <div className={`relative flex h-full flex-col ${assetsOpen ? '' : 'bg-[var(--bg-app)] pt-px'}`}>
       {addingSkill ? (
         <AddSkillDialog onClose={() => setAddingSkill(false)} onAdded={async () => { window.dispatchEvent(new Event(SKILLS_CHANGED)); }}
           onPick={onProject ? (skill) => app.useSkill?.(skill) : undefined}
@@ -160,7 +160,7 @@ export function App({ initialProject, initialSelection, initialFfmpeg }: {
         {project && chatReady
           ? <ChatPane key={`${project.id}:${project.path}`} project={project} banners={banners} selection={selection && selection.projectId === project.id ? selection : null} assetsOpen={assetsOpen} />
           : (
-            <aside className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--dock-pane)]">
+            <aside className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--bg-panel)]">
               <div className="flex flex-1 items-center justify-center"><Loader2 size={16} className="animate-spin text-[var(--text-faint)]" /></div>
               <div className="flex shrink-0 flex-col gap-2 px-4 pb-3 empty:hidden">{banners}</div>
             </aside>
@@ -1020,8 +1020,8 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
           attachFiles(filesFromTransfer(event.dataTransfer), { x: event.clientX, y: event.clientY });
         }}
         data-prompt-shell=""
-        className={`rounded-[12px] border bg-[var(--composer-bg)] shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-colors duration-200 ${
-          dropping ? 'border-[var(--accent)]' : 'border-[var(--composer-border)] focus-within:border-[var(--composer-border-active)]'
+        className={`rounded-[12px] border bg-[var(--bg-raised)] shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-colors duration-200 ${
+          dropping ? 'border-[var(--accent)]' : 'border-[var(--border)] focus-within:border-[var(--text-faint)]'
         }`}
       >
         {openedFile ? <AttachmentPreview item={openedFile} onClose={() => setOpenedFile(null)} /> : null}
@@ -1041,7 +1041,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
               placeholder={t(blank ? 'project.composerPlaceholderBlank' : 'project.composerPlaceholder')}
               minHeight={22}
               maxHeight={158}
-              contentClassName="text-[14px] leading-[22px] text-[var(--chat-text)]"
+              contentClassName="text-[14px] leading-[22px] text-[var(--text)]"
               onPasteFiles={(files) => attachFiles(files)}
               pillState={attachmentState}
               pillOpens={opensPill}
@@ -1055,7 +1055,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
               type="button"
               onClick={stopping ? () => { if (asset) void cancelLocalAgentTurn(asset.id); } : submitFollowUp}
               disabled={stopping ? false : !followUpFilled}
-              className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-[6px] text-[var(--text-dim)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:cursor-not-allowed disabled:text-[var(--text-faint)] disabled:hover:bg-transparent"
+              className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-[6px] text-[var(--text-muted)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:cursor-not-allowed disabled:text-[var(--text-faint)] disabled:hover:bg-transparent"
               aria-label={stopping ? t('project.stop') : t('project.sendFollowUp')}
             >
               {stopping ? <Square size={14} /> : <CornerDownLeft size={14} />}
@@ -1112,7 +1112,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
           <StickToBottomContext.Provider value={thread}>
             {/* with the assets open only the composer shows, at the bottom: the drawer above it is Studio's, and the two
                 read as one pane */}
-            <aside className={`relative flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--dock-pane)] ${assetsOpen ? 'mt-auto shrink-0' : 'flex-1'}`}>
+            <aside className={`relative flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--bg-panel)] ${assetsOpen ? 'mt-auto shrink-0' : 'flex-1'}`}>
               <div className={`relative min-h-0 min-w-0 flex-1 flex-col ${assetsOpen ? 'hidden' : 'flex'}`}>
                 <ConversationBar
                   sessions={shownSessions}
@@ -1154,15 +1154,15 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
                       </div>
                     )}
                   </div>
-                  <div aria-hidden className={`pointer-events-none absolute inset-x-0 top-0 h-6 bg-gradient-to-b from-[var(--dock-pane)] to-transparent transition-opacity duration-150 ${scrolled && !blank ? 'opacity-100' : 'opacity-0'}`} />
-                  <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-[var(--dock-pane)] to-transparent" />
+                  <div aria-hidden className={`pointer-events-none absolute inset-x-0 top-0 h-6 bg-gradient-to-b from-[var(--bg-panel)] to-transparent transition-opacity duration-150 ${scrolled && !blank ? 'opacity-100' : 'opacity-0'}`} />
+                  <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-[var(--bg-panel)] to-transparent" />
                   {!blank && !thread.atBottom && (
                     <Tooltip label={t('project.jumpToLatest')}>
                       <button
                         type="button"
                         onClick={() => thread.scrollToBottom({ smooth: true })}
                         aria-label={t('project.jumpToLatest')}
-                        className="absolute bottom-4 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full border border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text-dim)] shadow-[0_2px_10px_rgba(0,0,0,0.18)] transition hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+                        className="absolute bottom-4 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full border border-[var(--border-strong)] bg-[var(--bg-raised)] text-[var(--text-muted)] shadow-[0_2px_10px_rgba(0,0,0,0.18)] transition hover:bg-[var(--bg-field)] hover:text-[var(--text)]"
                       >
                         <ArrowDown size={17} />
                       </button>

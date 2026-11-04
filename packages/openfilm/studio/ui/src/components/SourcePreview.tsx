@@ -97,7 +97,7 @@ function Scrubber({ time, duration, onSeek, label, marks }: { time: number; dura
       onPointerCancel={() => setDragging(false)}
     >
       <div className={`relative w-full overflow-hidden rounded-full bg-white/15 transition-[height] ${dragging ? 'h-1' : 'h-0.5 group-hover:h-1'}`}>
-        <div className="absolute inset-y-0 left-0 bg-[var(--text)]" style={{ width: `${part * 100}%` }} />
+        <div className="absolute inset-y-0 left-0 bg-[var(--accent)]" style={{ width: `${part * 100}%` }} />
       </div>
       {/* the part marked with I and O: a band over the line, its ends standing up from it */}
       {marks && duration > 0 && (marks.in != null || marks.out != null) ? (() => {
@@ -112,7 +112,7 @@ function Scrubber({ time, duration, onSeek, label, marks }: { time: number; dura
         );
       })() : null}
       <span
-        className={`pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 rounded-full bg-[var(--text)] shadow transition-opacity ${dragging ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+        className={`pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 rounded-full bg-[var(--accent)] shadow transition-opacity ${dragging ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
         style={{ left: `${part * 100}%` }}
       />
     </div>
@@ -220,7 +220,7 @@ function MediaPreviewPane({ file, sources, onClose, onPlace }: SourcePreviewProp
   };
 
   return (
-    <div ref={rootRef} className="absolute inset-0 z-20 flex flex-col bg-[var(--dock-pane)]">
+    <div ref={rootRef} className="absolute inset-0 z-20 flex flex-col bg-[var(--bg-panel)]">
       <div className="relative flex min-h-0 flex-1 items-center justify-center px-3 py-2.5" onClick={timed ? toggle : undefined}>
         {failed ? (
           <p className="text-[12.5px] text-[var(--text-muted)]">{t('media.cannotPreview')}</p>
@@ -433,7 +433,7 @@ function PagePreview({ file, sources, onClose, onPlace }: SourcePreviewProps) {
   }, [onClose, toggle]);
 
   return (
-    <div ref={rootRef} className="absolute inset-0 z-20 flex flex-col bg-[var(--dock-pane)]">
+    <div ref={rootRef} className="absolute inset-0 z-20 flex flex-col bg-[var(--bg-panel)]">
       <div ref={boxRef} className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-3 py-2.5" onClick={toggle}>
         {/* nothing to play it on (no surface for this page) is the same as a page that failed */}
         {failed || !surface ? <p className="text-[12.5px] text-[var(--text-muted)]">{t('media.cannotPreview')}</p> : (

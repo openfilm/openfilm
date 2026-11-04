@@ -117,7 +117,7 @@ export function CaptionInspector({ projectId, width, onClose, timeMs, onSeek, on
         {t('captionTrack.scopeAll')}
       </label>
       {ownCount ? (
-        <div data-caption-own="" className="flex items-center justify-between gap-2 rounded-[5px] bg-[var(--fill-tsp)] px-2 py-1 text-[10.5px] text-[var(--text-muted)]">
+        <div data-caption-own="" className="flex items-center justify-between gap-2 rounded-[5px] bg-[var(--bg-field)] px-2 py-1 text-[10.5px] text-[var(--text-muted)]">
           <span>{t(ownCount === 1 && ids.length === 1 ? 'captionTrack.ownOne' : 'captionTrack.ownSome').replace('{n}', String(ownCount))}</span>
           <button type="button" className="flex shrink-0 items-center gap-1 text-[var(--text)] hover:underline"
             onClick={() => { let next = vtt; for (const cid of ids) next = setCueRule(next, `::cue(#${cid})`, null); void write(next, 'captionTrack.stepLook'); }}>
@@ -177,7 +177,7 @@ export function CaptionInspector({ projectId, width, onClose, timeMs, onSeek, on
           <Translate projectId={projectId} src={sel.src} onTranslated={onTranslated} />
           <div className="mt-3">
             <button type="button" data-caption-delete="" onClick={() => { setCaptionSelection(null); void write(removeCues(vtt, new Set(ids)), 'captionTrack.stepRemove'); }}
-              className="flex h-7 w-full items-center justify-center gap-1.5 rounded-[5px] bg-[var(--fill-tsp)] text-[11.5px] text-[var(--danger,#e5484d)] hover:bg-[var(--bg-hover)]">
+              className="flex h-7 w-full items-center justify-center gap-1.5 rounded-[5px] bg-[var(--bg-field)] text-[11.5px] text-[var(--err)] hover:bg-[var(--bg-hover)]">
               <Trash2 size={13} />{ids.length > 1 ? t('captionTrack.deleteN').replace('{n}', String(ids.length)) : t('subtitleRow.delete')}
             </button>
           </div>
@@ -195,13 +195,13 @@ function CueLine({ at, text, on, picked, onGo, onEdit }: { at: number; text: str
   React.useEffect(() => { if (on) line.current?.scrollIntoView({ block: 'nearest' }); }, [on]);
   const mm = Math.floor(at / 60), ss = Math.floor(at % 60);
   return (
-    <div ref={line} data-caption-line="" className={`flex items-start gap-2 rounded-[5px] px-1 py-0.5 ${on ? 'bg-[var(--fill-tsp)]' : ''}`}>
+    <div ref={line} data-caption-line="" className={`flex items-start gap-2 rounded-[5px] px-1 py-0.5 ${on ? 'bg-[var(--bg-field)]' : ''}`}>
       <button type="button" onClick={onGo} className={`mt-[5px] w-8 shrink-0 text-left text-[10.5px] tabular-nums ${on || picked ? 'text-[var(--accent)]' : 'text-[var(--text-faint)]'}`}>
         {mm}:{String(ss).padStart(2, '0')}
       </button>
       <textarea value={draft} rows={1} onChange={(e) => setDraft(e.target.value)} onFocus={onGo}
         onBlur={() => { if (draft.trim() && draft !== text) onEdit(draft.trim()); else setDraft(text); }}
-        className="min-w-0 flex-1 resize-none rounded-[5px] bg-transparent px-1.5 py-1 text-[11.5px] leading-snug text-[var(--text)] outline-none [field-sizing:content] focus:bg-[var(--bg)] focus:ring-1 focus:ring-[var(--accent)]" />
+        className="min-w-0 flex-1 resize-none rounded-[5px] bg-transparent px-1.5 py-1 text-[11.5px] leading-snug text-[var(--text)] outline-none [field-sizing:content] focus:bg-[var(--bg-panel)] focus:ring-1 focus:ring-[var(--accent)]" />
     </div>
   );
 }
@@ -231,7 +231,7 @@ function Translate({ projectId, src, onTranslated }: { projectId: string; src: s
           <Loader2 size={12} className="animate-spin" aria-hidden />{t('timeline.subtitleTranslating').replace('{lang}', nameOf(state.busy))}
         </p>
       ) : state.error ? (
-        <p role="alert" title={state.error} className="mt-1.5 text-[11px] text-[var(--danger,#c2410c)]">{t(failure)}</p>
+        <p role="alert" title={state.error} className="mt-1.5 text-[11px] text-[var(--err)]">{t(failure)}</p>
       ) : (
         <p className="mt-1.5 text-[10.5px] leading-snug text-[var(--text-faint)]">{t('captionTrack.translateWhy')}</p>
       )}

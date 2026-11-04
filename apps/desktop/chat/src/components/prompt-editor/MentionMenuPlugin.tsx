@@ -293,7 +293,7 @@ function MentionMenu({
       /* Marks the open mention menu. */
       data-prompt-menu=""
       style={style}
-      className="z-[10000] flex flex-col overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_48px_-12px_rgba(0,0,0,0.45),0_2px_8px_rgba(0,0,0,0.12)]"
+      className="z-[10000] flex flex-col overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--bg-raised)] shadow-[0_18px_48px_-12px_rgba(0,0,0,0.45),0_2px_8px_rgba(0,0,0,0.12)]"
     >
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-1.5">
         {options.map((option, index) => {
@@ -328,7 +328,7 @@ function MentionMenu({
                     : `cursor-pointer ${selected ? 'bg-[var(--bg-hover)]' : ''}`
                 }`}
               >
-                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${selected && !item.disabled ? 'bg-[var(--surface)] text-[var(--text)]' : 'bg-[var(--surface-2)] text-[var(--text-muted)]'}`}>
+                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${selected && !item.disabled ? 'bg-[var(--bg-raised)] text-[var(--text)]' : 'bg-[var(--bg-field)] text-[var(--text-muted)]'}`}>
                   <Icon size={13} />
                 </span>
                 {/* A disabled item keeps its full name and the hint shrinks instead. */}
@@ -362,7 +362,7 @@ function MentionMenu({
 
 function Kbd({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="mr-0.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-[var(--border)] bg-[var(--surface-2)] px-1 font-sans text-[10.5px] text-[var(--text-muted)]">
+    <kbd className="mr-0.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-[var(--border)] bg-[var(--bg-field)] px-1 font-sans text-[10.5px] text-[var(--text-muted)]">
       {children}
     </kbd>
   );

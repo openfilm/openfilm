@@ -233,7 +233,7 @@ export function FontFamilyPicker({
           <div
             role="dialog"
             aria-label={label}
-            className="fixed z-[10151] flex flex-col overflow-hidden rounded-[8px] border border-[var(--border)] bg-[var(--panel)] shadow-[var(--shadow-lg)]"
+            className="fixed z-[10151] flex flex-col overflow-hidden rounded-[8px] border border-[var(--border)] bg-[var(--bg-raised)] shadow-[var(--shadow-lg)]"
             style={{ left: at.left, top: at.top, width: at.width, maxHeight: at.maxHeight }}
           >
             <input

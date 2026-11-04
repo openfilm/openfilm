@@ -447,7 +447,7 @@ export function ProjectsPopover({
         role="dialog"
         aria-label={t('project.projects')}
         aria-modal="true"
-        className={`fixed left-1/2 top-1/2 z-[10050] flex ${LARGE_DIALOG_SIZE} -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-[var(--border-strong)] bg-[var(--app-content-bg)] shadow-[0_24px_64px_rgba(0,0,0,0.35)]`}
+        className={`fixed left-1/2 top-1/2 z-[10050] flex ${LARGE_DIALOG_SIZE} -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-panel)] shadow-[0_24px_64px_rgba(0,0,0,0.35)]`}
         onDragOver={onDragOver}
         onDrop={onDrop}
       >
@@ -519,7 +519,7 @@ export function ProjectsPopover({
               <button
                 type="button"
                 onClick={lib.retryLoad}
-                className="h-8 rounded-lg bg-[var(--surface-2)] px-3 text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)]"
+                className="h-8 rounded-lg bg-[var(--bg-field)] px-3 text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)]"
               >
                 {t('projects.loadRetry')}
               </button>
@@ -531,14 +531,14 @@ export function ProjectsPopover({
           )}
         </div>
         {busy ? (
-          <div className="absolute inset-0 z-20 flex items-center justify-center bg-[var(--app-content-bg)]/70">
-            <div className="flex items-center gap-2 rounded-lg bg-[var(--surface)] px-4 py-3 text-sm shadow-lg">
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-[var(--bg-panel)]/70">
+            <div className="flex items-center gap-2 rounded-lg bg-[var(--bg-raised)] px-4 py-3 text-sm shadow-lg">
               <Loader2 size={16} className="animate-spin" />{t(busy === 'creating' ? 'projects.creating' : 'projects.opening')}
             </div>
           </div>
         ) : null}
         {lib.error ? (
-          <div role="alert" className="pointer-events-none absolute bottom-4 left-1/2 z-30 -translate-x-1/2 rounded-full border border-[var(--err)]/40 bg-[var(--surface)] px-4 py-2 text-[12.5px] font-medium text-[var(--err)] shadow-[var(--shadow-lg)]">
+          <div role="alert" className="pointer-events-none absolute bottom-4 left-1/2 z-30 -translate-x-1/2 rounded-full border border-[var(--err)]/40 bg-[var(--bg-raised)] px-4 py-2 text-[12.5px] font-medium text-[var(--err)] shadow-[var(--shadow-lg)]">
             {lib.error}
           </div>
         ) : null}

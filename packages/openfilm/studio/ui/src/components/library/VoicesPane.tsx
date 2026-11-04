@@ -97,7 +97,7 @@ export function VoicesPane({ group, query, favorites, onServices, onAll }: {
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); playing?.pause(); setPicked(null); }
   };
 
-  const chip = (on: boolean) => `whitespace-nowrap text-[11.5px] ${on ? 'text-[var(--tl-accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`;
+  const chip = (on: boolean) => `whitespace-nowrap text-[11.5px] ${on ? 'text-[var(--accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`;
   return (
     /* focused by a click in it, so Enter and Esc reach it */
     <div className="flex min-h-0 flex-1 flex-col outline-none" tabIndex={-1} onKeyDown={onKey}>
@@ -106,7 +106,7 @@ export function VoicesPane({ group, query, favorites, onServices, onAll }: {
           value={language}
           onChange={(e) => setLanguage(e.target.value)}
           aria-label={t('assetDrawer.language')}
-          className="h-7 min-w-0 max-w-[150px] rounded-md bg-[var(--surface-2)] px-2 text-[12px] text-[var(--text)] outline-none hover:bg-[var(--bg-hover)]"
+          className="h-7 min-w-0 max-w-[150px] rounded-md bg-[var(--bg-field)] px-2 text-[12px] text-[var(--text)] outline-none hover:bg-[var(--bg-hover)]"
         >
           <option value="">{t('assetDrawer.anyLanguage')}</option>
           {languages.map((l) => <option key={l} value={l}>{languageName(l)}</option>)}
@@ -170,7 +170,7 @@ function VoiceRow({ voice, service, access, showService, picked, sounding, kept,
   const useTip = access ? t('assetDrawer.useVoice') : t('assetDrawer.connectFirst').replace('{service}', service?.name ?? voice.provider);
   return (
     <div
-      className={`group relative grid cursor-default select-none grid-cols-[40px_minmax(0,1fr)] items-center gap-2.5 rounded-lg px-2 py-2 ${picked ? 'bg-[var(--surface-2)]' : 'hover:bg-[var(--surface-2)]'}`}
+      className={`group relative grid cursor-default select-none grid-cols-[40px_minmax(0,1fr)] items-center gap-2.5 rounded-lg px-2 py-2 ${picked ? 'bg-[var(--bg-field)]' : 'hover:bg-[var(--bg-field)]'}`}
       onClick={onPlay}
       onDoubleClick={onUse}
       title={[voice.name, voice.description, voice.tags.join(', ')].filter(Boolean).join('\n')}
@@ -180,13 +180,13 @@ function VoiceRow({ voice, service, access, showService, picked, sounding, kept,
       <span className={`min-w-0 ${kept ? 'pr-5' : ''}`}>
         <span className="flex min-w-0 items-baseline gap-1.5">
           {/* the name keeps its room; the facts after it give theirs up first */}
-          <span className={`shrink-[0.2] truncate text-[12.5px] font-medium ${picked ? 'text-[var(--tl-accent)]' : 'text-[var(--text)]'}`}>{voice.name}</span>
+          <span className={`shrink-[0.2] truncate text-[12.5px] font-medium ${picked ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>{voice.name}</span>
           <span className="min-w-0 shrink-[5] truncate text-[11px] text-[var(--text-faint)]">{facts}</span>
         </span>
         <span className="mt-0.5 block truncate text-[11.5px] text-[var(--text-muted)]">{voice.description ?? voice.tags.join(', ')}</span>
       </span>
       {/* what it offers, over the row's end under the pointer (the words fading out under it), else a star kept */}
-      <span className={`absolute inset-y-0 right-0 flex items-center gap-1.5 rounded-r-lg pl-6 pr-2 ${picked ? 'bg-[linear-gradient(to_right,transparent,var(--surface-2)_24px)]' : 'group-hover:bg-[linear-gradient(to_right,transparent,var(--surface-2)_24px)]'}`}>
+      <span className={`absolute inset-y-0 right-0 flex items-center gap-1.5 rounded-r-lg pl-6 pr-2 ${picked ? 'bg-[linear-gradient(to_right,transparent,var(--bg-field)_24px)]' : 'group-hover:bg-[linear-gradient(to_right,transparent,var(--bg-field)_24px)]'}`}>
         <button
           type="button"
           aria-label={t(kept ? 'assetDrawer.unstar' : 'assetDrawer.star')}
@@ -199,12 +199,12 @@ function VoiceRow({ voice, service, access, showService, picked, sounding, kept,
         </button>
         {access ? (
           <button type="button" title={useTip} aria-label={useTip} onClick={(e) => { e.stopPropagation(); onUse(); }} {...own}
-            className="hidden h-[22px] w-[22px] place-items-center rounded-full bg-[var(--tl-accent)] text-black group-hover:grid">
+            className="hidden h-[22px] w-[22px] place-items-center rounded-full bg-[var(--accent)] text-black group-hover:grid">
             <Plus size={12} strokeWidth={3} />
           </button>
         ) : (
           <button type="button" title={useTip} onClick={(e) => { e.stopPropagation(); onServices(); }} {...own}
-            className="hidden whitespace-nowrap text-[11px] text-[var(--tl-accent)] hover:underline group-hover:inline">
+            className="hidden whitespace-nowrap text-[11px] text-[var(--accent)] hover:underline group-hover:inline">
             {t('assetDrawer.connect')}
           </button>
         )}
@@ -228,7 +228,7 @@ function VoiceAvatar({ voice, sounding, label }: { voice: LibraryVoice; sounding
         {sounding ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" className="translate-x-px" />}
       </span>
       {voice.featured ? (
-        <span className="absolute -right-0.5 -top-0.5 grid h-[15px] w-[15px] place-items-center rounded-full bg-[var(--surface-2)] text-[var(--tl-accent)] ring-2 ring-[var(--dock-pane)]">
+        <span className="absolute -right-0.5 -top-0.5 grid h-[15px] w-[15px] place-items-center rounded-full bg-[var(--bg-field)] text-[var(--accent)] ring-2 ring-[var(--bg-panel)]">
           <Star size={9} fill="currentColor" strokeWidth={0} />
         </span>
       ) : null}

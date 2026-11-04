@@ -53,7 +53,7 @@ export function TextInspector({ host, commit }: { host: PropsHost; commit: (next
           rows={2}
           onBlur={(e) => { if (e.target.value !== words) write(withWords(overrides, e.target.value)); }}
           onFocus={() => host.point?.({ at: WORDS_AT })}
-          className="w-full resize-none rounded-[5px] bg-[var(--fill-tsp)] px-2 py-1.5 text-[12px] leading-[1.5] text-[var(--text)] outline-none ring-1 ring-inset ring-transparent focus:ring-[var(--tl-accent)]"
+          className="w-full resize-none rounded-[5px] bg-[var(--bg-field)] px-2 py-1.5 text-[12px] leading-[1.5] text-[var(--text)] outline-none ring-1 ring-inset ring-transparent focus:ring-[var(--accent)]"
         />
         <Line label={t('textInspector.font')}>
           <FontFamilyPicker
@@ -162,12 +162,12 @@ function Tiles({ items, on, none, lang, small, onPick }: {
   onPick: (item: LibraryItem | null) => void;
 }) {
   const [hover, setHover] = React.useState<string | null>(null);
-  const ring = (lit: boolean) => (lit ? 'ring-2 ring-[var(--tl-accent)]' : 'ring-1 ring-[var(--border)] hover:ring-[var(--text-faint)]');
-  const label = (lit: boolean) => `mt-1 truncate text-center text-[10.5px] ${lit ? 'font-medium text-[var(--tl-accent)]' : 'text-[var(--text-muted)]'}`;
+  const ring = (lit: boolean) => (lit ? 'ring-2 ring-[var(--accent)]' : 'ring-1 ring-[var(--border)] hover:ring-[var(--text-faint)]');
+  const label = (lit: boolean) => `mt-1 truncate text-center text-[10.5px] ${lit ? 'font-medium text-[var(--accent)]' : 'text-[var(--text-muted)]'}`;
   return (
     <div className={`grid gap-1.5 ${small ? 'grid-cols-4' : 'grid-cols-3'}`}>
       <button type="button" onClick={() => onPick(null)} className="min-w-0 text-left">
-        <span className={`grid aspect-video place-items-center rounded-[5px] bg-[var(--fill-tsp)] text-[var(--text-faint)] ${ring(on === '')}`}><Ban size={14} /></span>
+        <span className={`grid aspect-video place-items-center rounded-[5px] bg-[var(--bg-field)] text-[var(--text-faint)] ${ring(on === '')}`}><Ban size={14} /></span>
         <span className={`block ${label(on === '')}`}>{none}</span>
       </button>
       {items.map((item) => (

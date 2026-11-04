@@ -133,7 +133,7 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-title"
-        className={`relative flex ${LARGE_DIALOG_SIZE} overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--dock-pane)] shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5),0_4px_16px_rgba(0,0,0,0.14)]`}
+        className={`relative flex ${LARGE_DIALOG_SIZE} overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--bg-panel)] shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5),0_4px_16px_rgba(0,0,0,0.14)]`}
         style={{ opacity: shown ? 1 : 0, transform: shown ? 'scale(1)' : 'scale(0.98)', transition: 'opacity 160ms ease, transform 200ms ease' }}
       >
         <nav aria-label={t('settings.title')} className="flex w-[264px] shrink-0 flex-col overflow-y-auto border-r border-[var(--border)] px-3 pb-4 pt-3">
@@ -160,7 +160,7 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
                     aria-current={active ? 'page' : undefined}
                     onClick={() => setSection(id)}
                     className={`flex h-10 min-w-0 items-center gap-3 rounded-[8px] px-2.5 text-left text-[15px] transition ${
-                      active ? 'bg-[var(--bg-active)] text-[var(--text)]' : 'text-[var(--text-dim)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'
+                      active ? 'bg-[var(--bg-pressed)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'
                     }`}
                   >
                     <span className={`shrink-0 ${active ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>{SECTION_ICON[id]}</span>
@@ -382,7 +382,7 @@ function AboutGroup() {
             : t('settings.about.how')}
           control={(
             <>
-              <code className="select-all rounded-md bg-[var(--surface-2)] px-2 py-1 font-mono text-[12px] text-[var(--text)]">npx -y openfilm@latest update</code>
+              <code className="select-all rounded-md bg-[var(--bg-field)] px-2 py-1 font-mono text-[12px] text-[var(--text)]">npx -y openfilm@latest update</code>
               <SettingsButton variant="primary" disabled={!web.update || web.update.status === 'updating'} onClick={web.start}>
                 {web.update?.status === 'updating' ? <Loader2 size={14} className="animate-spin" aria-hidden /> : null}
                 {t('update.webUpdate')}
@@ -464,14 +464,14 @@ function AppAboutGroup() {
     <SettingsGroup title={t('settings.about.group')}>
       <SettingsItem
         title={`OpenFilm ${s?.version ?? ''}`.trim()}
-        badge={s?.channel === 'beta' ? <span className="rounded-full bg-[var(--fill-tsp)] px-2 py-0.5 text-[11.5px] text-[var(--text-muted)]">beta</span> : null}
+        badge={s?.channel === 'beta' ? <span className="rounded-full bg-[var(--bg-field)] px-2 py-0.5 text-[11.5px] text-[var(--text-muted)]">beta</span> : null}
         description={description}
         control={control}
       >
         {hasNotes(s?.version) ? <WhatsNewLink /> : null}
         {s?.status === 'downloading' ? (
-          <div className="h-1 overflow-hidden rounded-full bg-[var(--fill-tsp)]" role="progressbar" aria-valuenow={Math.round(s.progress)} aria-valuemin={0} aria-valuemax={100}>
-            <div className="h-full rounded-full bg-[var(--text)] transition-[width]" style={{ width: `${Math.max(2, s.progress)}%` }} />
+          <div className="h-1 overflow-hidden rounded-full bg-[var(--bg-field)]" role="progressbar" aria-valuenow={Math.round(s.progress)} aria-valuemin={0} aria-valuemax={100}>
+            <div className="h-full rounded-full bg-[var(--accent)] transition-[width]" style={{ width: `${Math.max(2, s.progress)}%` }} />
           </div>
         ) : null}
       </SettingsItem>

@@ -94,7 +94,7 @@ function Buttons({ item, kept, addTip, onAdd, always }: { item: LibraryItem; kep
         <Star size={13} fill={kept ? 'currentColor' : 'none'} strokeWidth={kept ? 0 : 1.8} />
       </button>
       <button type="button" title={addTip} aria-label={addTip} {...own} onClick={(e) => { e.stopPropagation(); onAdd(); }}
-        className={`grid h-6 w-6 place-items-center rounded-full bg-[var(--tl-accent)] text-black ${show}`}>
+        className={`grid h-6 w-6 place-items-center rounded-full bg-[var(--accent)] text-black ${show}`}>
         <Plus size={13} strokeWidth={3} />
       </button>
     </span>
@@ -125,7 +125,7 @@ function Wave({ item, played }: { item: LibraryItem; played: number }) {
   return (
     <span aria-hidden className="block h-4 w-full" style={{
       WebkitMaskImage: `url(${waveUrl(item)})`, maskImage: `url(${waveUrl(item)})`, WebkitMaskSize: '100% 100%', maskSize: '100% 100%',
-      background: `linear-gradient(to right, var(--tl-accent) ${lit}%, var(--text-faint) ${lit}%)`,
+      background: `linear-gradient(to right, var(--accent) ${lit}%, var(--text-faint) ${lit}%)`,
     }} />
   );
 }
@@ -140,7 +140,7 @@ export function SoundRow({ item, name, group, picked, player, kept, addTip, onPi
     <div
       {...drag}
       draggable
-      className={`group grid h-[60px] cursor-default select-none grid-cols-[44px_minmax(0,1fr)] items-center gap-3 rounded-lg px-2 ${picked || mine ? 'bg-[var(--surface-2)]' : 'hover:bg-[var(--surface-2)]'}`}
+      className={`group grid h-[60px] cursor-default select-none grid-cols-[44px_minmax(0,1fr)] items-center gap-3 rounded-lg px-2 ${picked || mine ? 'bg-[var(--bg-field)]' : 'hover:bg-[var(--bg-field)]'}`}
       onClick={() => { onPick(); player.toggle(item); }}
       onDoubleClick={onAdd}
       title={name}
@@ -148,7 +148,7 @@ export function SoundRow({ item, name, group, picked, player, kept, addTip, onPi
       <Tile item={item} playing={mine && player.playing} size={44} />
       <span className="flex min-w-0 flex-col justify-center gap-1">
         <span className="flex h-6 min-w-0 items-center gap-2">
-          <span className={`truncate text-[12.5px] font-medium ${picked || mine ? 'text-[var(--tl-accent)]' : 'text-[var(--text)]'}`}>{name}</span>
+          <span className={`truncate text-[12.5px] font-medium ${picked || mine ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>{name}</span>
           <span className="shrink-0 text-[11px] text-[var(--text-faint)]">{group}</span>
           <span className="ml-auto shrink-0 text-[11px] tabular-nums text-[var(--text-faint)]">{lengthOf(item.durationMs ?? 0, t)}</span>
           <Buttons item={item} kept={kept} addTip={addTip} onAdd={onAdd} />
@@ -169,14 +169,14 @@ export function MusicCard({ item, name, group, picked, player, kept, addTip, onP
     <div
       {...drag}
       draggable
-      className={`group flex h-[92px] cursor-default select-none gap-2.5 rounded-xl p-2 ring-1 ${picked || mine ? 'bg-[var(--surface-2)] ring-[var(--tl-accent)]' : 'bg-[var(--surface)] ring-transparent hover:bg-[var(--surface-2)]'}`}
+      className={`group flex h-[92px] cursor-default select-none gap-2.5 rounded-xl p-2 ring-1 ${picked || mine ? 'bg-[var(--bg-field)] ring-[var(--accent)]' : 'bg-[var(--bg-raised)] ring-transparent hover:bg-[var(--bg-field)]'}`}
       onClick={() => { onPick(); player.toggle(item); }}
       onDoubleClick={onAdd}
       title={name}
     >
       <Tile item={item} playing={mine && player.playing} size={76} cover />
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className={`line-clamp-2 text-[12.5px] font-medium leading-[17px] ${picked || mine ? 'text-[var(--tl-accent)]' : 'text-[var(--text)]'}`}>{name}</span>
+        <span className={`line-clamp-2 text-[12.5px] font-medium leading-[17px] ${picked || mine ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>{name}</span>
         <span className="mt-0.5 truncate text-[11px] text-[var(--text-faint)]">{group} · {lengthOf(item.durationMs ?? 0, t)}</span>
         <span className="mt-auto flex justify-end"><Buttons item={item} kept={kept} addTip={addTip} onAdd={onAdd} always /></span>
       </span>
@@ -195,7 +195,7 @@ export function MiniPlayer({ player, name, group }: { player: Player; name: stri
   /* a short sound by tenths of a second, anything longer as minutes and seconds */
   const say = (sec: number) => (length < 10 ? `${sec.toFixed(1)}` : clock(sec));
   return (
-    <div className="flex h-[60px] shrink-0 items-center gap-3 border-t border-[var(--dock-line)] bg-[var(--surface)] px-3" data-studio-host-panel="">
+    <div className="flex h-[60px] shrink-0 items-center gap-3 border-t border-[var(--border)] bg-[var(--bg-raised)] px-3" data-studio-host-panel="">
       <span className="group cursor-default" onClick={() => player.toggle(item)}>
         <Tile item={item} playing={player.playing} size={40} cover={item.cat === 'music'} />
       </span>
@@ -205,14 +205,14 @@ export function MiniPlayer({ player, name, group }: { player: Player; name: stri
           <span className="shrink-0 text-[11px] text-[var(--text-faint)]">{group}</span>
         </span>
         <span className="flex items-center gap-2 text-[11px] tabular-nums">
-          <span className="text-[var(--tl-accent)]">{say(at)}</span>
+          <span className="text-[var(--accent)]">{say(at)}</span>
           <Scrub at={Math.min(at, length)} length={length} label={t('assetDrawer.seek')}
             onDrag={setDragged} onLet={(sec) => { player.seek(sec); setDragged(null); }} />
           <span className="text-[var(--text-faint)]">{say(length)}</span>
         </span>
       </span>
       <button type="button" aria-label={t('assetDrawer.close')} onClick={player.close}
-        className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[var(--surface-2)] text-[var(--text-muted)] hover:text-[var(--text)]">
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[var(--bg-field)] text-[var(--text-muted)] hover:text-[var(--text)]">
         <X size={14} />
       </button>
     </div>
@@ -251,8 +251,8 @@ function Scrub({ at, length, label, onDrag, onLet }: {
       }}
     >
       <span className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-[var(--bg-hover)]" />
-      <span className="absolute left-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-[var(--tl-accent)]" style={{ width: `${lit}%` }} />
-      <span className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--tl-accent)] transition-transform group-hover/scrub:scale-125" style={{ left: `${lit}%` }} />
+      <span className="absolute left-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-[var(--accent)]" style={{ width: `${lit}%` }} />
+      <span className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--accent)] transition-transform group-hover/scrub:scale-125" style={{ left: `${lit}%` }} />
     </div>
   );
 }

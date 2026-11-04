@@ -81,9 +81,9 @@ function StatusLight({ turnId, unseen }: { turnId: string | null; unseen?: 'done
 
 const LIGHT: Record<SessionStatus, string> = {
   working: 'status-breathe bg-[var(--text-muted)]',
-  asking: 'bg-[#e8a23a] shadow-[0_0_0_2px_rgba(232,162,58,0.18)]',
-  done: 'bg-[#3b82f6]',
-  error: 'bg-[#ef4444]',
+  asking: 'bg-[var(--warn)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--warn)_18%,transparent)]',
+  done: 'bg-[var(--accent)]',
+  error: 'bg-[var(--err)]',
 };
 
 /**
@@ -209,7 +209,7 @@ export function ConversationBar({
 }
 
 /** A conversation's own buttons in the history, on hover: pin, rename, archive. */
-const ROW_BTN = 'flex h-6 w-6 items-center justify-center rounded-md text-[var(--text-dim)] transition hover:bg-[var(--bg-active)] hover:text-[var(--text)] disabled:pointer-events-none disabled:opacity-40';
+const ROW_BTN = 'flex h-6 w-6 items-center justify-center rounded-md text-[var(--text-muted)] transition hover:bg-[var(--bg-pressed)] hover:text-[var(--text)] disabled:pointer-events-none disabled:opacity-40';
 
 /** One conversation in the history: its title, a running one turning; on hover its buttons. */
 function SessionRow({ item, label, active, turnId, unseen, onSelect, onRenameSession, onPinSession, onArchiveSession }: SessionActions & {

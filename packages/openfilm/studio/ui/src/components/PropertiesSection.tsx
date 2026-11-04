@@ -218,7 +218,7 @@ function NameInput({ value, onDone, onCancel }: { value: string; onDone: (next: 
         if (e.key === 'Enter' && !e.nativeEvent.isComposing) { done.current = true; onDone(raw); }
         if (e.key === 'Escape') { done.current = true; onCancel(); }
       }}
-      className="h-5 w-full min-w-0 rounded-[4px] bg-[var(--bg)] px-1 text-[11px] text-[var(--text)] outline-none ring-1 ring-[var(--accent)]"
+      className="h-5 w-full min-w-0 rounded-[4px] bg-[var(--bg-panel)] px-1 text-[11px] text-[var(--text)] outline-none ring-1 ring-[var(--accent)]"
     />
   );
 }
@@ -227,8 +227,8 @@ function NameInput({ value, onDone, onCancel }: { value: string; onDone: (next: 
 function Switch({ label, on, onChange }: { label: string; on: boolean; onChange: (on: boolean) => void }) {
   return (
     <button type="button" role="switch" aria-checked={on} aria-label={label} onClick={() => onChange(!on)} className="flex h-6 items-center">
-      <span aria-hidden className={`relative h-[16px] w-[28px] shrink-0 rounded-full transition-colors ${on ? 'bg-[var(--text)]' : 'bg-[var(--surface-2)] ring-1 ring-inset ring-[var(--border)]'}`}>
-        <span className={`absolute top-[3px] h-2.5 w-2.5 rounded-full transition-all ${on ? 'left-[15px] bg-[var(--bg)]' : 'left-[3px] bg-[var(--text-faint)]'}`} />
+      <span aria-hidden className={`relative h-[16px] w-[28px] shrink-0 rounded-full transition-colors ${on ? 'bg-[var(--accent)]' : 'bg-[var(--bg-field)] ring-1 ring-inset ring-[var(--border)]'}`}>
+        <span className={`absolute top-[3px] h-2.5 w-2.5 rounded-full transition-all ${on ? 'left-[15px] bg-[var(--on-accent)]' : 'left-[3px] bg-[var(--text-faint)]'}`} />
       </span>
     </button>
   );
@@ -414,7 +414,7 @@ function WordsInput({ label, value, onCommit, onPreview }: {
           (e.target as HTMLTextAreaElement).blur();
         }
       }}
-      className="w-full resize-none rounded-[5px] bg-[var(--fill-tsp)] px-2 py-1 text-[11.5px] leading-[1.5] text-[var(--text)] outline-none ring-1 ring-inset ring-transparent transition hover:ring-[var(--border)] focus:bg-[var(--bg)] focus:ring-[1.5px] focus:ring-[var(--accent)]"
+      className="w-full resize-none rounded-[5px] bg-[var(--bg-field)] px-2 py-1 text-[11.5px] leading-[1.5] text-[var(--text)] outline-none ring-1 ring-inset ring-transparent transition hover:ring-[var(--border)] focus:bg-[var(--bg-panel)] focus:ring-[1.5px] focus:ring-[var(--accent)]"
     />
   );
 }

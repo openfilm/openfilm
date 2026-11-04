@@ -94,7 +94,7 @@ export function Card({ label, onClose, children }: { label: string; onClose: () 
   return createPortal(
     <div className="fixed inset-0 z-[10070] grid place-items-center bg-black/45 p-6" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div role="dialog" aria-modal="true" aria-label={label}
-        className="relative flex max-h-[86dvh] w-[640px] max-w-full flex-col overflow-y-auto rounded-[16px] border border-[var(--border)] bg-[var(--dock-pane)] p-7 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5)]">
+        className="relative flex max-h-[86dvh] w-[640px] max-w-full flex-col overflow-y-auto rounded-[16px] border border-[var(--border)] bg-[var(--bg-panel)] p-7 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5)]">
         <button type="button" onClick={onClose} aria-label={t('settings.done')}
           className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-md text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
           <X size={16} />
@@ -121,7 +121,7 @@ export function ProviderDialog({ provider, hook, onClose }: { provider: OwnProvi
     <Card label={provider.name} onClose={onClose}>
       <Connection provider={provider} hook={hook} header={(status, action) => (
         <div className="flex items-start gap-4 pr-8">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[12px] bg-[var(--fill-tsp)] text-[var(--text)]"><ProviderMark id={provider.id} size={24} /></span>
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[12px] bg-[var(--bg-field)] text-[var(--text)]"><ProviderMark id={provider.id} size={24} /></span>
           <div className="min-w-0 flex-1">
             <h2 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-[var(--text)]">{provider.name}</h2>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13.5px]">
@@ -149,7 +149,7 @@ export function ProviderDialog({ provider, hook, onClose }: { provider: OwnProvi
               <span className={`w-[132px] shrink-0 text-[14.5px] ${makes ? 'text-[var(--text)]' : 'text-[var(--text-faint)]'}`}>{t(`settings.providers.verbs.${verb}`)}</span>
               {models.length ? (
                 <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
-                  {models.map((m) => <span key={m.id} className="rounded-[6px] bg-[var(--fill-tsp)] px-2 py-0.5 text-[13.5px] text-[var(--text-muted)]">{m.name}</span>)}
+                  {models.map((m) => <span key={m.id} className="rounded-[6px] bg-[var(--bg-field)] px-2 py-0.5 text-[13.5px] text-[var(--text-muted)]">{m.name}</span>)}
                 </div>
               ) : <span className="text-[14px] text-[var(--text-faint)]">{makes ? t('settings.providers.included') : '—'}</span>}
             </div>
@@ -268,7 +268,7 @@ export function AddProviderDialog({ onCustom, onClose }: { onCustom: () => void;
       <ol className="mt-6 flex flex-col divide-y divide-[var(--border)] border-y border-[var(--border)]">
         {(['addKnown', 'addOther', 'addCustom'] as const).map((key, i) => (
           <li key={key} className="flex gap-4 py-4">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--fill-tsp)] text-[12.5px] font-medium text-[var(--text-muted)]">{i + 1}</span>
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--bg-field)] text-[12.5px] font-medium text-[var(--text-muted)]">{i + 1}</span>
             <span className="text-[14.5px] leading-relaxed text-[var(--text)]">{t(`settings.providers.${key}`)}</span>
           </li>
         ))}

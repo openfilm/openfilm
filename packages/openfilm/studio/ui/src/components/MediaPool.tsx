@@ -840,7 +840,7 @@ export function MediaPool({
         {/* one field throughout: opened over the bar it is restyled, not made again, so it keeps the focus; there, its
             see-through fill is laid on the pane's own, so the buttons under it do not show */}
         {bar.field || searching ? (
-          <label className={`flex h-7 min-w-0 items-center gap-1.5 rounded-md bg-[var(--bg-hover)] px-2 text-[12.5px] text-[var(--text-muted)] ${searching ? `absolute top-2.5 z-10 ${tight ? 'inset-x-2' : 'inset-x-2.5'} [background:linear-gradient(var(--bg-hover),var(--bg-hover)),var(--dock-pane)]` : 'flex-1'}`}>
+          <label className={`flex h-7 min-w-0 items-center gap-1.5 rounded-md bg-[var(--bg-hover)] px-2 text-[12.5px] text-[var(--text-muted)] ${searching ? `absolute top-2.5 z-10 ${tight ? 'inset-x-2' : 'inset-x-2.5'} [background:linear-gradient(var(--bg-hover),var(--bg-hover)),var(--bg-panel)]` : 'flex-1'}`}>
             <Search size={13} className="shrink-0" />
             <input autoFocus={!bar.field} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={hint}
               onFocus={() => { if (bar.cramped) setSearchOpen(true); }}
@@ -866,7 +866,7 @@ export function MediaPool({
         <Tooltip label={t('media.import')} side="bottom">
           <button type="button" aria-label={t('media.import')} aria-haspopup={onPick && onBring ? 'menu' : undefined}
             onClick={(e) => (onPick && onBring ? (links ? barMenu(e, importMenu) : void bringFrom('copy', false)) : inputRef.current?.click())}
-            className={`flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md bg-[var(--bg-active)] text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--border-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--border-strong)] ${bar.uploadWord ? 'px-2.5' : 'w-7'}`}>
+            className={`flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md bg-[var(--bg-pressed)] text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--border-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--border-strong)] ${bar.uploadWord ? 'px-2.5' : 'w-7'}`}>
             <Upload size={13} strokeWidth={2.2} />
             {bar.uploadWord ? uploadWord : null}
           </button>
@@ -954,7 +954,7 @@ export function MediaPool({
               <div className="text-[13px] font-medium text-[var(--text)]">{t(at ? 'media.emptyFolder' : inSaved ? 'saved.emptyTitle' : 'media.emptyTitle')}</div>
               {at ? null : <p className="max-w-[30ch] text-[12px] leading-relaxed text-[var(--text-muted)]">{t(inSaved ? 'saved.emptyBody' : 'media.emptyBody')}</p>}
               <button type="button" onClick={() => (onPick && onBring ? void bringFrom('copy', false) : inputRef.current?.click())}
-                className="mt-1 inline-flex h-7 items-center gap-1.5 rounded-md border border-[var(--border)] px-2.5 text-[12.5px] text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)]">
+                className="mt-1 inline-flex h-7 items-center gap-1.5 rounded-md border border-[var(--border)] px-2.5 text-[12.5px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)]">
                 <Plus size={13} />{t('media.import')}
               </button>
             </div>
@@ -1026,7 +1026,7 @@ export function MediaPool({
 
       {/* over a folder, the folder shows where they go */}
       {osDrag && dropTarget == null ? (
-        <div className="pointer-events-none absolute inset-1 z-30 flex items-center justify-center rounded-lg border-2 border-dashed border-[var(--accent)] bg-[var(--surface)]/80 text-[13px] text-[var(--text)]">
+        <div className="pointer-events-none absolute inset-1 z-30 flex items-center justify-center rounded-lg border-2 border-dashed border-[var(--accent)] bg-[var(--bg-raised)]/80 text-[13px] text-[var(--text)]">
           {t('media.dropHint')}
         </div>
       ) : null}
@@ -1067,7 +1067,7 @@ function BarButton({ label, on, onClick, children }: { label: string; on?: boole
     <Tooltip label={label} side="bottom">
       <button type="button" aria-label={label} onClick={onClick}
         /* two states, on and off: hovered, only the ground lights; an on button keeps its color */
-        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition hover:bg-[var(--bg-hover)] ${on ? 'text-[var(--accent)]' : 'text-[var(--text-dim)] hover:text-[var(--text)]'}`}>
+        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition hover:bg-[var(--bg-hover)] ${on ? 'text-[var(--accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}>
         {children}
       </button>
     </Tooltip>
@@ -1145,7 +1145,7 @@ function FolderTile(p: {
   const cells = p.covers.length;
   if (p.row) {
     return (
-      <div className={`${ROW} ${on ? 'bg-[var(--bg-active)]' : 'hover:bg-[var(--bg-hover)]'} ${p.target ? 'ring-1 ring-inset ring-[var(--accent)]' : ''}`}
+      <div className={`${ROW} ${on ? 'bg-[var(--bg-pressed)]' : 'hover:bg-[var(--bg-hover)]'} ${p.target ? 'ring-1 ring-inset ring-[var(--accent)]' : ''}`}
         data-media-folder="" data-media-key={p.pickKey} draggable={!p.renaming} onDragStart={p.onDragStart}
         onClick={p.onPress} onDoubleClick={p.onOpen} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); p.onMenu(e); }} {...p.drop}>
         <span className={ROW_THUMB}>
@@ -1156,7 +1156,7 @@ function FolderTile(p: {
         </span>
         <span className="min-w-0 flex-1">
           {p.renaming ? <NameInput value={p.name} onDone={p.onRename} onCancel={p.onCancelRename} />
-            : <span className={`block truncate text-[12.5px] font-medium ${on ? 'text-[var(--text)]' : 'text-[var(--text-dim)]'}`} style={KEEP_SPACES}>{p.name}</span>}
+            : <span className={`block truncate text-[12.5px] font-medium ${on ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`} style={KEEP_SPACES}>{p.name}</span>}
         </span>
         <span className={COL_TYPE} />
         <span className={COL_DIMS} />
@@ -1171,8 +1171,8 @@ function FolderTile(p: {
       onClick={p.onPress} onDoubleClick={p.onOpen} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); p.onMenu(e); }} {...p.drop}>
       <div className="relative pt-[7px]">
         {/* the stack: two cards peeking out above the cover */}
-        <span aria-hidden className="absolute inset-x-[14%] top-0 h-3 rounded-t-md bg-[var(--fill-tsp,rgba(127,127,127,0.18))] opacity-60" />
-        <span aria-hidden className="absolute inset-x-[7%] top-[3px] h-3 rounded-t-md bg-[var(--fill-tsp,rgba(127,127,127,0.18))]" />
+        <span aria-hidden className="absolute inset-x-[14%] top-0 h-3 rounded-t-md bg-[var(--bg-field)] opacity-60" />
+        <span aria-hidden className="absolute inset-x-[7%] top-[3px] h-3 rounded-t-md bg-[var(--bg-field)]" />
         <div className={`${TILE_BOX} bg-[var(--bg-hover)] shadow-[0_1px_0_rgba(255,255,255,0.06)_inset] ${on ? 'ring-[var(--accent)]' : 'ring-transparent group-hover:ring-[var(--border)]'} ${p.target ? 'scale-[1.03]' : ''}`}>
           {cells ? (
             <div className={`pointer-events-none absolute inset-0 grid gap-px bg-black/40 ${grid}`}>
@@ -1193,7 +1193,7 @@ function FolderTile(p: {
       </div>
       <div className="mt-1 min-w-0 px-0.5">
         {p.renaming ? <NameInput value={p.name} onDone={p.onRename} onCancel={p.onCancelRename} />
-          : <div className={`truncate text-[12px] font-medium ${on ? 'text-[var(--text)]' : 'text-[var(--text-dim)]'}`} style={KEEP_SPACES}>{p.name}</div>}
+          : <div className={`truncate text-[12px] font-medium ${on ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`} style={KEEP_SPACES}>{p.name}</div>}
       </div>
     </div>
   );
@@ -1217,8 +1217,8 @@ function NewFolderTile({ label, onDone, onCancel, row = false }: { label: string
   return (
     <div className="min-w-0" data-media-new-folder="">
       <div className="relative pt-[7px]">
-        <span aria-hidden className="absolute inset-x-[14%] top-0 h-3 rounded-t-md bg-[var(--fill-tsp,rgba(127,127,127,0.18))] opacity-60" />
-        <span aria-hidden className="absolute inset-x-[7%] top-[3px] h-3 rounded-t-md bg-[var(--fill-tsp,rgba(127,127,127,0.18))]" />
+        <span aria-hidden className="absolute inset-x-[14%] top-0 h-3 rounded-t-md bg-[var(--bg-field)] opacity-60" />
+        <span aria-hidden className="absolute inset-x-[7%] top-[3px] h-3 rounded-t-md bg-[var(--bg-field)]" />
         <div className={`${TILE_BOX} bg-[var(--bg-hover)] ring-[var(--accent)]`}><FolderGlyph /></div>
       </div>
       <div className="mt-1 min-w-0 px-0.5">
@@ -1259,7 +1259,7 @@ function FileTile(p: {
   return (
     <div
       className={p.row
-        ? `${ROW} outline-none ${p.lit ? 'ring-1 ring-inset ring-[var(--tl-accent)]' : ''} ${p.selected ? 'bg-[var(--bg-active)]' : 'hover:bg-[var(--bg-hover)]'}`
+        ? `${ROW} outline-none ${p.lit ? 'ring-1 ring-inset ring-[var(--accent)]' : ''} ${p.selected ? 'bg-[var(--bg-pressed)]' : 'hover:bg-[var(--bg-hover)]'}`
         : 'group min-w-0 cursor-default select-none outline-none'}
       data-media-path={p.file.path}
       data-media-key={p.file.path}
@@ -1291,8 +1291,8 @@ function FileTile(p: {
             {p.renaming ? <NameInput value={p.file.name} onDone={p.onRename} onCancel={p.onCancelRename} />
               : (
                 <span className="flex min-w-0 items-center gap-1" title={p.linkLabel}>
-                  {p.file.link ? (p.file.link.missing ? <Unlink size={12} className="shrink-0 text-[var(--danger,#e5484d)]" /> : <Link2 size={12} className="shrink-0 text-[var(--text-faint)]" />) : null}
-                  <span className={`block truncate text-[12.5px] ${p.file.link?.missing ? 'text-[var(--text-faint)]' : p.selected ? 'text-[var(--text)]' : 'text-[var(--text-dim)]'}`} style={KEEP_SPACES}>{p.file.name}</span>
+                  {p.file.link ? (p.file.link.missing ? <Unlink size={12} className="shrink-0 text-[var(--err)]" /> : <Link2 size={12} className="shrink-0 text-[var(--text-faint)]" />) : null}
+                  <span className={`block truncate text-[12.5px] ${p.file.link?.missing ? 'text-[var(--text-faint)]' : p.selected ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`} style={KEEP_SPACES}>{p.file.name}</span>
                 </span>
               )}
             {p.where ? <span className="block truncate text-left text-[11px] text-[var(--text-faint)]" dir="rtl"><bdi>{p.where}</bdi></span> : null}
@@ -1305,7 +1305,7 @@ function FileTile(p: {
       ) : <>
       {/* the same room above as a folder's stacked cards, so covers and names line up across a row */}
       <div className="pt-[7px]">
-        <div className={`${TILE_BOX} bg-[var(--bg-hover)] ${p.lit ? 'ring-[var(--tl-accent)] shadow-[0_0_10px_1px_color-mix(in_srgb,var(--tl-accent)_55%,transparent)]' : p.selected ? 'ring-[var(--accent)]' : 'ring-transparent group-hover:ring-[var(--border)]'}`}>
+        <div className={`${TILE_BOX} bg-[var(--bg-hover)] ${p.lit ? 'ring-[var(--accent)] shadow-[0_0_10px_1px_color-mix(in_srgb,var(--accent)_55%,transparent)]' : p.selected ? 'ring-[var(--accent)]' : 'ring-transparent group-hover:ring-[var(--border)]'}`}>
           {p.file.kind === 'mg' ? <PagePoster file={p.file} sources={p.sources} /> : <MediaPreview file={p.file} sources={p.sources} />}
           {/* a link to media kept elsewhere: marked; one that cannot be reached (a NAS that is off) says so over it */}
           {p.file.link?.missing ? (
@@ -1321,7 +1321,7 @@ function FileTile(p: {
             <span className="absolute right-1 top-1 z-10 rounded bg-black/65 px-1 text-[9.5px] font-semibold uppercase leading-[15px] tracking-wide text-white/90" title={p.proxyLabel}>{p.proxyMark}</span>
           ) : null}
           {p.file.proxy?.needed && p.file.proxy.state !== 'ready' ? (
-            <span className={`absolute right-1 top-1 z-10 rounded px-1 text-[9.5px] font-semibold leading-[15px] text-white/90 ${p.file.proxy.state === 'failed' ? 'bg-[var(--danger,#e5484d)]' : 'bg-black/65'}`} title={p.proxyLabel}>{p.proxyMark}</span>
+            <span className={`absolute right-1 top-1 z-10 rounded px-1 text-[9.5px] font-semibold leading-[15px] text-white/90 ${p.file.proxy.state === 'failed' ? 'bg-[var(--err)]' : 'bg-black/65'}`} title={p.proxyLabel}>{p.proxyMark}</span>
           ) : null}
           {p.file.proxy && p.file.proxy.state !== 'ready' && p.file.proxy.state !== 'failed' ? (
             <span className="absolute inset-x-0 bottom-0 z-10 h-1" title={p.proxyLabel}><UploadBar ratio={p.file.proxy.state === 'making' ? p.file.proxy.ratio ?? 0 : -1} /></span>
@@ -1338,7 +1338,7 @@ function FileTile(p: {
       </div>
       <div className="mt-1 min-w-0 px-0.5">
         {p.renaming ? <NameInput value={p.file.name} onDone={p.onRename} onCancel={p.onCancelRename} />
-          : <div className={`truncate text-[12px] ${p.selected ? 'text-[var(--text)]' : 'text-[var(--text-dim)]'}`} style={KEEP_SPACES}>{p.file.name}</div>}
+          : <div className={`truncate text-[12px] ${p.selected ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`} style={KEEP_SPACES}>{p.file.name}</div>}
         {p.where ? <div className="truncate text-left text-[11px] text-[var(--text-faint)]" dir="rtl"><bdi>{p.where}</bdi></div> : null}
       </div>
       </>}

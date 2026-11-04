@@ -35,7 +35,7 @@ export function CaptionsPane({ line, actions }: { line: CaptionsLine; actions: C
           onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setOver(true); } }}
           onDragLeave={() => setOver(false)}
           onDrop={(e) => { e.preventDefault(); setOver(false); const f = fileOf(e.dataTransfer.files); if (f) actions.fromFile(f); }}
-          className={`flex flex-col items-center gap-1.5 rounded-lg border border-dashed px-3 py-5 ${over ? 'border-[var(--tl-accent)] bg-[color-mix(in_srgb,var(--tl-accent)_8%,transparent)]' : 'border-[var(--border)]'}`}
+          className={`flex flex-col items-center gap-1.5 rounded-lg border border-dashed px-3 py-5 ${over ? 'border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]' : 'border-[var(--border)]'}`}
         >
           <Go onClick={() => input.current?.click()} centered>{t('assetDrawer.captionsFileGo')}</Go>
           <span className="text-[11.5px] text-[var(--text-faint)]">{t('assetDrawer.captionsFileDrop')}</span>
@@ -71,7 +71,7 @@ export function CaptionsPane({ line, actions }: { line: CaptionsLine; actions: C
 function Box({ title, text, children }: { title: string; text: string; children: React.ReactNode }) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-2.5">
-      <div className="flex flex-col gap-3 rounded-lg bg-[var(--surface-2)] p-4">
+      <div className="flex flex-col gap-3 rounded-lg bg-[var(--bg-field)] p-4">
         <div className="flex flex-col gap-1">
           <h3 className="text-[13px] font-semibold text-[var(--text)]">{title}</h3>
           <p className="text-[12px] leading-relaxed text-[var(--text-muted)]">{text}</p>
@@ -85,7 +85,7 @@ function Box({ title, text, children }: { title: string; text: string; children:
 function Go({ onClick, disabled, centered, children }: { onClick: () => void; disabled?: boolean; centered?: boolean; children: React.ReactNode }) {
   return (
     <button type="button" onClick={onClick} disabled={disabled}
-      className={`h-8 ${centered ? 'self-center' : 'self-start'} rounded-md bg-[var(--text)] px-3.5 text-[12.5px] font-medium text-[var(--bg)] transition hover:opacity-90 disabled:pointer-events-none disabled:opacity-50`}>
+      className={`h-8 ${centered ? 'self-center' : 'self-start'} rounded-md bg-[var(--accent)] px-3.5 text-[12.5px] font-medium text-[var(--on-accent)] transition hover:bg-[var(--accent-hover)] disabled:pointer-events-none disabled:opacity-50`}>
       {children}
     </button>
   );
