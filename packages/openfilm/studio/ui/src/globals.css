@@ -87,10 +87,10 @@
      over a clip's own color (canvas reads these back from the element) */
   --tl-lane: #f1f1f3;
   /* a track's band, the ground seen in the gaps between two (the panel itself), and the track of a picked clip: the
-     app's own layers, as a field and a pressed field are on any panel */
-  --tl-row: var(--bg-field);
+     panel a quiet step darker (lighter in dark), the picked one a step further */
+  --tl-row: rgba(16, 16, 24, 0.03);
   --tl-gap: var(--bg-panel);
-  --tl-lane-on: var(--bg-pressed);
+  --tl-lane-on: rgba(16, 16, 24, 0.07);
   --tl-playhead: #161619;
   --tl-select: #161619;
   --tl-wave: rgba(255, 255, 255, 0.5);
@@ -151,9 +151,9 @@
   --clip-audio: #1c5757;
 
   --tl-lane: #151518;
-  --tl-row: var(--bg-field);
+  --tl-row: rgba(240, 240, 255, 0.035);
   --tl-gap: var(--bg-panel);
-  --tl-lane-on: var(--bg-pressed);
+  --tl-lane-on: rgba(240, 240, 255, 0.085);
   --tl-playhead: #ffffff;
   --tl-select: #ffffff;
   --tl-wave: rgba(255, 255, 255, 0.4);
