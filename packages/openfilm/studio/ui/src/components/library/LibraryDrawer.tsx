@@ -87,8 +87,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
   tryOut.current = actions.tryOut;
   const pick = (item: LibraryItem | null) => {
     setPicked(item?.id ?? null);
-    /* a word art of the captions is tried by putting it on (they have no picture of their own to try it on) */
-    if (item?.kind !== 'sound' && cat !== 'captions') tryOut.current(item);
+    if (item?.kind !== 'sound') tryOut.current(item);
   };
   /* another category: what played in the last one stops and its player goes */
   const closePlayer = React.useRef<() => void>(() => {});
@@ -113,11 +112,9 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
   /* the skills: Discover (first opened), else the installed (any line of them kept before is that now) */
   const skillLine: SkillsLine = !group || group === 'discover' ? 'discover' : 'installed';
   const q = query.trim().toLowerCase();
-  /* the captions' Word art: the library's word art, put on captions */
-  const shown = (index?.items ?? []).filter((item) => (cat === 'captions' ? item.kind === 'textstyle' && item.group === 'wordart' : item.cat === cat) && (q
+  const shown = (index?.items ?? []).filter((item) => item.cat === cat && (q
     ? [...Object.values(item.name), ...(item.tags ?? [])].some((n) => n?.toLowerCase().includes(q))
-    : cat === 'captions' || (group === FAVORITES ? favorites.includes(item.id) : !group || item.group === group)));
-  const addItem = (item: LibraryItem) => (cat === 'captions' ? captions.look(item) : actions.add(item));
+    : group === FAVORITES ? favorites.includes(item.id) : !group || item.group === group));
   const sources = sourcesIn(shown.map(sourceOf));
   const items = source && sources.includes(source) ? shown.filter((item) => sourceOf(item) === source) : shown;
   const pickedItem = picked ? index?.items.find((i) => i.id === picked) ?? null : null;
@@ -125,7 +122,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
   const onKey = (e: React.KeyboardEvent) => {
     if ((e.target as HTMLElement).tagName === 'INPUT' || !pickedItem) return;
     if (e.key === 'Escape') { e.preventDefault(); pick(null); }
-    if (e.key === 'Enter') { e.preventDefault(); addItem(pickedItem); }
+    if (e.key === 'Enter') { e.preventDefault(); actions.add(pickedItem); }
   };
 
   /* the library's own lines under its fold: all of it, then its groups (a voice's: the services) */
@@ -200,9 +197,9 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
               </>
             ) : cat === 'captions' ? (
               <>
-                {/* New first opened: the cards that put captions in; then the word art put on them */}
-                <SideBox on={group !== 'wordart'} onClick={() => pickGroup('')}>{t('assetDrawer.captionsNewLine')}</SideBox>
-                <SideBox on={group === 'wordart'} onClick={() => pickGroup('wordart')}>{t('assetDrawer.captionsWordArt')}</SideBox>
+                {/* New first opened: the cards that put captions in; then the languages they are translated into */}
+                <SideBox on={group !== 'translate'} onClick={() => pickGroup('')}>{t('assetDrawer.captionsNewLine')}</SideBox>
+                <SideBox on={group === 'translate'} onClick={() => pickGroup('translate')}>{t('assetDrawer.captionsTranslateLine')}</SideBox>
               </>
             ) : (
               <>
@@ -222,7 +219,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
           </nav>
         </div>
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col" data-studio-host-panel={cat === 'media' ? undefined : ''}>
-          {cat === 'media' ? media : cat === 'captions' && group !== 'wordart' ? <CaptionsPane actions={captions} /> : (
+          {cat === 'media' ? media : cat === 'captions' ? <CaptionsPane line={group === 'translate' ? 'translate' : 'new'} actions={captions} /> : (
             <>
               {/* a skill's page has its own way back instead */}
               <div className="flex gap-2 px-3 pb-2 pt-2.5" hidden={cat === 'skill' && skillOpen != null}>
@@ -272,7 +269,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
                   <div className={`grid gap-x-2.5 gap-y-3 ${cat === 'sticker' ? 'grid-cols-[repeat(auto-fill,minmax(68px,1fr))]' : cat === 'template' ? 'grid-cols-[repeat(auto-fill,minmax(140px,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(96px,1fr))]'}`}>
                     {items.map((it) => (
                       <Card key={it.id} item={it} lang={lang} picked={picked === it.id} kept={favorites.includes(it.id)} square={cat === 'sticker'}
-                        onPick={() => pick(picked === it.id ? null : it)} onAdd={() => addItem(it)} />
+                        onPick={() => pick(picked === it.id ? null : it)} onAdd={() => actions.add(it)} />
                     ))}
                   </div>
                 )}
