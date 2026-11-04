@@ -931,7 +931,7 @@ export function MediaPool({
       <div
         ref={gridRef}
         tabIndex={-1}
-        className="relative min-h-0 flex-1 overflow-y-auto px-2.5 pb-3 pt-1 outline-none"
+        className="relative min-h-0 flex-1 overflow-y-auto px-2.5 pb-[calc(var(--drawer-under,0px)+12px)] pt-1 outline-none"
         onPointerDown={startBox}
         /* a click on empty space (around the tiles, or in the gaps between them) lets go of what is picked */
         onClick={(e) => {

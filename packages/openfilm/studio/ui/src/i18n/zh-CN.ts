@@ -956,7 +956,6 @@ export const zhCN: Words = {
     source_mine: '我的',
     slots: '{n} 段',
     mediaImport: '导入',
-    mediaSaved: '我的',
     favorites: '收藏',
     featured: '精选',
     all: '全部',

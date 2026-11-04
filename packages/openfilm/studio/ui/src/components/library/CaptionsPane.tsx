@@ -70,7 +70,7 @@ export function CaptionsPane({ line, actions }: { line: CaptionsLine; actions: C
 
 function Box({ title, text, children }: { title: string; text: string; children: React.ReactNode }) {
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-2.5">
+    <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[calc(var(--drawer-under,0px)+12px)] pt-2.5">
       <div className="flex flex-col gap-3 rounded-lg bg-[var(--bg-field)] p-4">
         <div className="flex flex-col gap-1">
           <h3 className="text-[13px] font-semibold text-[var(--text)]">{title}</h3>

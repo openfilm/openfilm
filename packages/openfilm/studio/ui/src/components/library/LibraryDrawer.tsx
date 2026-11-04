@@ -21,7 +21,7 @@ import {
 } from '@/lib/library';
 import { clearResourceDrag, setResourceDragData } from '@/lib/resource-drag';
 import { useLibraryVoices } from '@/lib/library-voices';
-import { MiniPlayer, MusicCard, SoundRow, usePlayer } from './AudioList';
+import { ADD_HOVER, MiniPlayer, MusicCard, ROUND, SoundRow, libraryArt, usePlayer } from './AudioList';
 import { CaptionsPane, type CaptionsActions, type CaptionsLine } from './CaptionsPane';
 import { CategoryIcon, Empty } from './icons';
 import { FEATURED, STARRED, VoicesPane } from './VoicesPane';
@@ -52,7 +52,7 @@ export interface LibraryActions {
 /** The skills shown from outside the drawer (the app's chat): Discover, or one skill's page; `n` tells one request from the next. */
 export type SkillsRequest = { name?: string; n: number };
 
-export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captions, onServices, projectId = null, showSkills }: {
+export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captions, onServices, projectId = null, showSkills, under = 0 }: {
   media: React.ReactNode;
   /** the project's own media, or Saved */
   mediaScope: 'project' | 'saved';
@@ -65,6 +65,9 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
   /** the project shown, for its own skills */
   projectId?: string | null;
   showSkills?: SkillsRequest | null;
+  /** how much of its foot the app's composer floats over: the lists run on under it, their ends scrolled clear of it
+      (--drawer-under) */
+  under?: number;
 }) {
   const t = useT();
   const lang = useLanguage();
@@ -140,7 +143,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
   /* the bars and the library's things are the app's panel's (data-studio-host-panel): a press there keeps what is
      picked on the timeline and the picture, which a look or a transition goes on */
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-col outline-none" tabIndex={-1} onKeyDown={onKey}>
+    <div className="flex h-full min-h-0 min-w-0 flex-col outline-none" tabIndex={-1} onKeyDown={onKey}
+      style={{ '--drawer-under': `${under}px` } as React.CSSProperties}>
       {/* the categories, as high as the inspector's tabs beside it (40 px) so their lines meet; they keep their own
           spacing however wide the panel is, and more than fit scroll sideways (a wheel too), fading at the edge while
           the line under them runs whole */}
@@ -169,13 +173,13 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
         {/* as wide as the person dragged its edge (RAIL), kept for next time */}
         <div className="relative flex shrink-0" style={{ width: rail }}>
           <RailEdge width={rail} onWidth={setRail} />
-          <nav data-studio-host-panel="" className="flex min-w-0 flex-1 flex-col gap-1 overflow-y-auto border-r border-[var(--border)] px-2 py-2.5">
+          <nav data-studio-host-panel="" className="flex min-w-0 flex-1 flex-col gap-1 overflow-y-auto border-r border-[var(--border)] px-2 pb-[calc(var(--drawer-under,0px)+10px)] pt-2.5">
             {cat === 'media' ? (
               <>
                 {/* what the person brought into this project (what it took from the library stays in its category),
                     then Saved */}
                 <SideBox on={mediaScope === 'project'} onClick={() => onMediaScope('project')}>{t('assetDrawer.mediaImport')}</SideBox>
-                <SideBox on={mediaScope === 'saved'} onClick={() => onMediaScope('saved')}>{t('assetDrawer.mediaSaved')}</SideBox>
+                <SideBox on={mediaScope === 'saved'} onClick={() => onMediaScope('saved')}>{t('assetDrawer.favorites')}</SideBox>
               </>
             ) : cat === 'skill' ? (
               <>
@@ -231,7 +235,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
               <>
               {/* a click on nothing lets the picked thing go; the player is under the list */}
               <div
-                className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-0.5"
+                className="min-h-0 flex-1 overflow-y-auto px-3 pb-[calc(var(--drawer-under,0px)+12px)] pt-0.5"
                 onClick={(e) => { if (e.target === e.currentTarget) pick(null); }}
                 onScroll={(e) => { const el = e.currentTarget; if (el.scrollTop + el.clientHeight > el.scrollHeight - 800 && drawn < items.length) setDrawn(drawn + PAGE); }}
               >
@@ -264,7 +268,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
                   </div>
                 )}
               </div>
-              <MiniPlayer player={player} name={player.item ? nameOf(player.item.name, lang) : ''} group={player.item ? groupName(player.item.group) : ''} />
+              <MiniPlayer player={player} name={player.item ? nameOf(player.item.name, lang) : ''} group={player.item ? groupName(player.item.group) : ''} art={libraryArt} />
               </>
               )}
             </>
@@ -381,7 +385,7 @@ function StarButton({ item, kept, className }: { item: LibraryItem; kept: boolea
       className={className}
     >
       {/* hollow until starred, then filled in the star's own color */}
-      <Star size={13} fill={kept ? 'currentColor' : 'none'} strokeWidth={kept ? 0 : 2} />
+      <Star size={11} fill={kept ? 'currentColor' : 'none'} strokeWidth={kept ? 0 : 2.2} />
     </button>
   );
 }
@@ -390,7 +394,7 @@ function AddButton({ item, onAdd, className }: { item: LibraryItem; onAdd: () =>
   const t = useT();
   return (
     <button type="button" title={addTip(item, t)} aria-label={addTip(item, t)} onClick={(e) => { e.stopPropagation(); onAdd(); }} {...own} className={className}>
-      <Plus size={12} strokeWidth={3} />
+      <Plus size={12} strokeWidth={2.6} />
     </button>
   );
 }
@@ -433,8 +437,11 @@ function Card({ item, lang, picked, kept, square, onPick, onAdd }: {
           ? <img src={item.sample ? libraryUrl(item.sample) : SAMPLE} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" style={{ filter: item.filter }} />
           : <img src={posterUrl(item)} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />}
         {hover && item.kind !== 'look' && !item.still ? <video src={previewUrl(item)} autoPlay loop muted playsInline className="absolute inset-0 h-full w-full object-cover" /> : null}
-        <StarButton item={item} kept={kept} className={`absolute right-1 top-1 h-5 w-5 place-items-center rounded-full bg-black/45 ${kept ? 'grid text-[#ffd35a]' : 'hidden text-white group-hover:grid'}`} />
-        <AddButton item={item} onAdd={onAdd} className="absolute bottom-1 right-1 hidden h-[22px] w-[22px] place-items-center rounded-full bg-[var(--accent)] text-black shadow-md group-hover:grid" />
+        {/* the star and the "+" side by side, of one size, dark glass over the picture */}
+        <span className="absolute bottom-1 right-1 flex items-center gap-1">
+          <StarButton item={item} kept={kept} className={`${ROUND} bg-black/55 ${kept ? 'grid text-[#ffd35a]' : 'hidden text-white group-hover:grid'}`} />
+          <AddButton item={item} onAdd={onAdd} className={`${ROUND} ${ADD_HOVER} hidden bg-black/55 text-white group-hover:grid`} />
+        </span>
         {item.kind === 'group' ? <TemplateBadge item={item} /> : null}
         <SourceBadge source={sourceOf(item)} />
       </div>

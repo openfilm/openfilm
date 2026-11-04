@@ -952,7 +952,6 @@ export const ko: Words = {
     source_mine: '내 것',
     slots: '{n}개 클립',
     mediaImport: '가져오기',
-    mediaSaved: '보관함',
     favorites: '즐겨찾기',
     featured: '추천',
     all: '전체',

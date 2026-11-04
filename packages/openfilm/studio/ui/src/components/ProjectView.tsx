@@ -4010,13 +4010,13 @@ export function ProjectView({ projectId, onProject, onLeave }: {
           }, (e: unknown) => toast.showError(e instanceof Error ? e.message : String(e)));
         }} />
       <SettingsModal open={settingsOpen !== null} section={settingsOpen ?? undefined} onClose={() => setSettingsOpen(null)} />
-      {/* the host app's media drawer (panel.assets): over its panel, under Studio's top bar, down to the `bottom` px the
-          panel keeps for itself (the panel goes on below it, so the two read as one) */}
+      {/* the host app's media drawer (panel.assets): over its panel, under Studio's top bar, down to the window's foot;
+          the panel's composer floats over its last `bottom` px, which its lists scroll clear of */}
       {hostAssets?.open && hostPanel ? <PanelSeam panel={hostPanel} bottom={hostAssets.bottom} /> : null}
       {hostAssets?.open && hostPanel ? (
         <div className="fixed z-30 flex min-h-0 min-w-0 flex-col overflow-hidden border-t border-[var(--border)] bg-[var(--bg-panel)]"
-          style={{ top: HOST_PANEL_TOP, left: 0, bottom: hostAssets.bottom, width: HOST_PANEL_WIDTH }}>
-          <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} actions={library.actions}
+          style={{ top: HOST_PANEL_TOP, left: 0, bottom: 0, width: HOST_PANEL_WIDTH }}>
+          <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} actions={library.actions} under={hostAssets.bottom}
             captions={{
               lines: subs.captions?.cues.length ?? 0, untranscribed: subs.captions?.untranscribed.length ?? 0, making: captionsMaking || subs.transcribing, problem: subtitleProblem,
               fromSpeech: () => void makeCaptions(), fromFile: (file) => void newCaptionTrack(file), blank: () => void newCaptionTrack(null),

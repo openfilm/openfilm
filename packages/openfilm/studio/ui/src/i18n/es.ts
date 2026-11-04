@@ -955,7 +955,6 @@ export const es: Words = {
     source_mine: 'Míos',
     slots: '{n} clips',
     mediaImport: 'Importado',
-    mediaSaved: 'Guardado',
     favorites: 'Favoritos',
     featured: 'Destacadas',
     all: 'Todo',

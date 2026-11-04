@@ -1020,7 +1020,8 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
           attachFiles(filesFromTransfer(event.dataTransfer), { x: event.clientX, y: event.clientY });
         }}
         data-prompt-shell=""
-        className={`rounded-[12px] border bg-[var(--bg-raised)] shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-colors duration-200 ${
+        /* over the assets drawer it floats, its shadow under it (the drawer itself has none) */
+        className={`rounded-[12px] border bg-[var(--bg-raised)] ${assetsOpen ? 'shadow-[var(--shadow-lg)]' : 'shadow-[0_2px_8px_rgba(0,0,0,0.04)]'} transition-colors duration-200 ${
           dropping ? 'border-[var(--accent)]' : 'border-[var(--border)] focus-within:border-[var(--text-faint)]'
         }`}
       >
@@ -1110,9 +1111,9 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
       <PromptPillHoverContext.Provider value={pillHover.hover}>
         <WaitingContext.Provider value={Boolean(localTurn?.state.question || localTurn?.state.permission || spendAsk)}>
           <StickToBottomContext.Provider value={thread}>
-            {/* with the assets open only the composer shows, at the bottom: the drawer above it is Studio's, and the two
-                read as one pane */}
-            <aside className={`relative flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--bg-panel)] ${assetsOpen ? 'mt-auto shrink-0' : 'flex-1'}`}>
+            {/* with the assets open only the composer shows, at the bottom, floating over Studio's drawer: the drawer
+                runs on under it, fading out behind it so the words under the composer stay clear */}
+            <aside className={`relative flex min-h-0 min-w-0 flex-col overflow-hidden ${assetsOpen ? 'mt-auto shrink-0 bg-[linear-gradient(to_bottom,transparent,var(--bg-panel)_36px)]' : 'flex-1 bg-[var(--bg-panel)]'}`}>
               <div className={`relative min-h-0 min-w-0 flex-1 flex-col ${assetsOpen ? 'hidden' : 'flex'}`}>
                 <ConversationBar
                   sessions={shownSessions}
@@ -1172,7 +1173,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
               </div>
 
               <div ref={composerBlockRef} className={`relative flex shrink-0 flex-col px-4 pb-1.5 ${assetsOpen ? 'pt-2' : ''}`}>
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-2" data-composer-cards="">
                   {/* what is said apart from the conversation, each a notice on the composer (NoticeCard): Studio's
                       own trouble, the asks waiting on the person, then this conversation's */}
                   {assetsOpen ? null : banners}

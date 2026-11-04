@@ -1,7 +1,8 @@
 /**
  * The assets drawer's voices (lib/library-voices): the ready-made voices of the voice-over services, narrowed by the
  * side bar (a service, or the starred ones), the search, a language and a gender. A click on a voice plays its
- * service's sample (again: stops it); a double click, Enter or its "+" puts it in the chat as a reference, the voice
+ * service's sample in the player under the list (again: pauses it); a double click, Enter or its "+" puts it in the chat
+ * as a reference, the voice
  * the agent makes the voice-over in. A voice whose service is not connected says so; its "Connect" opens Services.
  */
 import React from 'react';
@@ -9,6 +10,7 @@ import { Pause, Play, Plus, Star } from 'lucide-react';
 import { useLanguage, useT, type Language } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import { toggleFavorite } from '@/lib/library';
+import { ADD_HOVER, MiniPlayer, PANEL_ROUND, usePlayer } from './AudioList';
 import { Empty } from './icons';
 import {
   languageOf, sampleUrl, useLibraryVoices, useServices, voiceAccess, voiceKey, voiceLook, voiceRef,
@@ -24,9 +26,6 @@ const PAGE = 80;
 
 /* the languages offered first, in this order, after the person's own */
 const FIRST = ['en', 'zh', 'ja', 'ko', 'es'];
-
-/* the voice playing in the drawer: one at a time */
-let playing: HTMLAudioElement | null = null;
 
 export function VoicesPane({ group, query, favorites, onServices, onAll }: {
   /** '' all, STARRED, FEATURED, or a service's id */
@@ -45,8 +44,9 @@ export function VoicesPane({ group, query, favorites, onServices, onAll }: {
   const [language, setLanguage] = React.useState('');
   const [gender, setGender] = React.useState<'' | 'm' | 'f'>('');
   const [picked, setPicked] = React.useState<string | null>(null);
-  const [sounding, setSounding] = React.useState<string | null>(null);
-  React.useEffect(() => () => { playing?.pause(); }, []);
+  /* the sample heard, in the drawer's player (AudioList): its id is the voice's key */
+  const player = usePlayer<{ id: string; voice: LibraryVoice }>();
+  const sounding = player.playing ? player.item?.id ?? null : null;
 
   const byId = React.useMemo(() => new Map((library?.providers ?? []).map((s) => [s.id, s])), [library]);
   const shown = (library?.voices ?? []).filter((v) => (group === STARRED ? favorites.includes(voiceKey(v))
@@ -69,18 +69,9 @@ export function VoicesPane({ group, query, favorites, onServices, onAll }: {
   React.useEffect(() => setDrawn(PAGE), [group, query, language, gender]);
 
   const play = (v: LibraryVoice) => {
-    const key = voiceKey(v);
-    setPicked(key);
-    if (sounding === key) { playing?.pause(); return; }
-    playing?.pause();
+    setPicked(voiceKey(v));
     const src = sampleUrl(v);
-    if (!src) { setSounding(null); return; }
-    const a = new Audio(src);
-    a.onpause = () => setSounding((s) => (s === key ? null : s));
-    a.onended = () => setSounding((s) => (s === key ? null : s));
-    playing = a;
-    setSounding(key);
-    void a.play().catch(() => setSounding(null));
+    if (src) player.toggle({ id: voiceKey(v), voice: v }, src);
   };
   const use = (v: LibraryVoice) => {
     const service = byId.get(v.provider);
@@ -94,7 +85,7 @@ export function VoicesPane({ group, query, favorites, onServices, onAll }: {
     const v = picked ? voices.find((x) => voiceKey(x) === picked) : null;
     if (!v || (e.target as HTMLElement).tagName === 'SELECT') return;
     if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); use(v); }
-    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); playing?.pause(); setPicked(null); }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); player.pause(); setPicked(null); }
   };
 
   const chip = (on: boolean) => `whitespace-nowrap text-[11.5px] ${on ? 'text-[var(--accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`;
@@ -120,8 +111,8 @@ export function VoicesPane({ group, query, favorites, onServices, onAll }: {
       </div>
       {/* a click on nothing lets the picked voice go */}
       <div
-        className="min-h-0 flex-1 overflow-y-auto px-3 pb-3"
-        onClick={(e) => { if (e.target === e.currentTarget) { playing?.pause(); setPicked(null); } }}
+        className="min-h-0 flex-1 overflow-y-auto px-3 pb-[calc(var(--drawer-under,0px)+12px)]"
+        onClick={(e) => { if (e.target === e.currentTarget) { player.pause(); setPicked(null); } }}
         onScroll={(e) => { const el = e.currentTarget; if (el.scrollTop + el.clientHeight > el.scrollHeight - 600 && drawn < voices.length) setDrawn(drawn + PAGE); }}
       >
         {!voices.length ? (
@@ -139,6 +130,8 @@ export function VoicesPane({ group, query, favorites, onServices, onAll }: {
           );
         })}
       </div>
+      <MiniPlayer player={player} name={player.item?.voice.name ?? ''} group={player.item ? byId.get(player.item.voice.provider)?.name ?? '' : ''}
+        art={(it, on) => <VoiceAvatar voice={it.voice} sounding={on} label={on ? t('assetDrawer.stop') : t('assetDrawer.play')} />} />
     </div>
   );
 }
@@ -151,6 +144,10 @@ function useLanguageName(lang: Language) {
     return (code: string) => (code ? names?.of(code) ?? code : '');
   }, [lang]);
 }
+
+/** The shade under a row's buttons: the app's ground, deeper than the row in either theme. */
+const SHADE = 'bg-[linear-gradient(to_right,transparent,var(--bg-app)_36px)]';
+const SHADE_HOVER = 'group-hover:bg-[linear-gradient(to_right,transparent,var(--bg-app)_36px)]';
 
 /** A press on a row's own button: not a play, nor a double click's use. */
 const own = { onDoubleClick: (e: React.MouseEvent) => e.stopPropagation() };
@@ -185,22 +182,23 @@ function VoiceRow({ voice, service, access, showService, picked, sounding, kept,
         </span>
         <span className="mt-0.5 block truncate text-[11.5px] text-[var(--text-muted)]">{voice.description ?? voice.tags.join(', ')}</span>
       </span>
-      {/* what it offers, over the row's end under the pointer (the words fading out under it), else a star kept */}
-      <span className={`absolute inset-y-0 right-0 flex items-center gap-1.5 rounded-r-lg pl-6 pr-2 ${picked ? 'bg-[linear-gradient(to_right,transparent,var(--bg-field)_24px)]' : 'group-hover:bg-[linear-gradient(to_right,transparent,var(--bg-field)_24px)]'}`}>
+      {/* what it offers, over the row's end under the pointer, the words fading out under a shade deeper than the row
+          so the buttons stand out; else a star kept */}
+      <span className={`absolute inset-y-0 right-0 flex items-center gap-1.5 rounded-r-lg pl-10 pr-2 ${picked ? SHADE : SHADE_HOVER}`}>
         <button
           type="button"
           aria-label={t(kept ? 'assetDrawer.unstar' : 'assetDrawer.star')}
           aria-pressed={kept}
           onClick={(e) => { e.stopPropagation(); toggleFavorite(voiceKey(voice)); }}
           {...own}
-          className={kept ? 'text-[#ffd35a]' : 'hidden text-[var(--text-faint)] hover:text-[var(--text)] group-hover:inline'}
+          className={`${PANEL_ROUND} ${kept ? 'grid text-[#ffd35a]' : 'hidden text-[var(--text)] group-hover:grid'}`}
         >
-          <Star size={13} fill={kept ? 'currentColor' : 'none'} strokeWidth={kept ? 0 : 2} />
+          <Star size={11} fill={kept ? 'currentColor' : 'none'} strokeWidth={kept ? 0 : 2.2} />
         </button>
         {access ? (
           <button type="button" title={useTip} aria-label={useTip} onClick={(e) => { e.stopPropagation(); onUse(); }} {...own}
-            className="hidden h-[22px] w-[22px] place-items-center rounded-full bg-[var(--accent)] text-black group-hover:grid">
-            <Plus size={12} strokeWidth={3} />
+            className={`${PANEL_ROUND} ${ADD_HOVER} hidden text-[var(--text)] group-hover:grid`}>
+            <Plus size={12} strokeWidth={2.6} />
           </button>
         ) : (
           <button type="button" title={useTip} onClick={(e) => { e.stopPropagation(); onServices(); }} {...own}
@@ -228,7 +226,7 @@ function VoiceAvatar({ voice, sounding, label }: { voice: LibraryVoice; sounding
         {sounding ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" className="translate-x-px" />}
       </span>
       {voice.featured ? (
-        <span className="absolute -right-0.5 -top-0.5 grid h-[15px] w-[15px] place-items-center rounded-full bg-[var(--bg-field)] text-[var(--accent)] ring-2 ring-[var(--bg-panel)]">
+        <span className="absolute -right-0.5 -top-0.5 grid h-[15px] w-[15px] place-items-center rounded-full bg-[var(--bg-raised)] text-[var(--accent)] ring-2 ring-[var(--bg-panel)]">
           <Star size={9} fill="currentColor" strokeWidth={0} />
         </span>
       ) : null}

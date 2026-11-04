@@ -2,8 +2,9 @@
  * The library's sounds and music as the assets drawer lists them: a sound a row (its tile in its group's colors with
  * its group's mark, its name, length and waveform), a piece of music a card (its cover, else one drawn, its name, mood
  * and length),
- * and one player under the list for what was clicked: play and pause, how far it has played, dragged to any moment.
- * Rows and cards keep their size under the pointer: their buttons are always there, only shown on it.
+ * and one player under the list for what was clicked (a voice's sample too, VoicesPane): play and pause, how far it has
+ * played, dragged to any moment. Rows and cards keep their size under the pointer: their buttons are always there, only
+ * shown on it, a star and a "+" of one size.
  */
 import React from 'react';
 import {
@@ -26,14 +27,19 @@ export function lengthOf(ms: number, t: (path: string) => string): string {
 }
 const clock = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
 
-export interface Player {
-  item: LibraryItem | null;
+/** What the player plays: a thing of the library, or a voice (its sample). */
+export type Playable = { id: string; durationMs?: number };
+
+export interface Player<T extends Playable = LibraryItem> {
+  item: T | null;
   playing: boolean;
   /** seconds played, and its length */
   time: number;
   duration: number;
-  /** play it from the start (or go on, when it is the one paused); pause it when it plays */
-  toggle: (item: LibraryItem) => void;
+  /** play it from the start (or go on, when it is the one paused); pause it when it plays. `src`: where it is heard,
+      a library thing's own file by default */
+  toggle: (item: T, src?: string) => void;
+  pause: () => void;
   seek: (sec: number) => void;
   close: () => void;
 }
@@ -42,8 +48,8 @@ export interface Player {
 let audio: HTMLAudioElement | null = null;
 
 /** The drawer's player: what plays, how far, and its controls. Stops when the drawer goes. */
-export function usePlayer(): Player {
-  const [item, setItem] = React.useState<LibraryItem | null>(null);
+export function usePlayer<T extends Playable = LibraryItem>(): Player<T> {
+  const [item, setItem] = React.useState<T | null>(null);
   const [playing, setPlaying] = React.useState(false);
   const [time, setTime] = React.useState(0);
   const [duration, setDuration] = React.useState(0);
@@ -55,14 +61,14 @@ export function usePlayer(): Player {
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
   }, [playing]);
-  const toggle = (next: LibraryItem) => {
+  const toggle = (next: T, src = libraryUrl(next.id)) => {
     if (item?.id === next.id && audio) {
       if (playing) audio.pause();
       else void audio.play().catch(() => setPlaying(false));
       return;
     }
     audio?.pause();
-    const a = new Audio(libraryUrl(next.id));
+    const a = new Audio(src);
     audio = a;
     setItem(next);
     setTime(0);
@@ -75,6 +81,7 @@ export function usePlayer(): Player {
   };
   return {
     item, playing, time, duration, toggle,
+    pause: () => audio?.pause(),
     seek: (sec) => { if (audio) { audio.currentTime = sec; setTime(sec); } },
     close: () => { audio?.pause(); audio = null; setItem(null); setPlaying(false); setTime(0); },
   };
@@ -83,26 +90,33 @@ export function usePlayer(): Player {
 /** A press on a button of a row or card: not its click, nor its double click. */
 const own = { onDoubleClick: (e: React.MouseEvent) => e.stopPropagation() };
 
+/** A row's or card's star and "+": round, of one size; on the panel tinted with the words' color, the "+" in the
+    accent under the pointer. Over a picture they are dark glass instead (LibraryDrawer's cards). */
+export const ROUND = 'h-5 w-5 shrink-0 place-items-center rounded-full';
+export const PANEL_ROUND = `${ROUND} bg-[var(--bg-pressed)]`;
+export const ON_PANEL = `grid ${PANEL_ROUND}`;
+export const ADD_HOVER = 'hover:bg-[var(--accent)] hover:text-[var(--on-accent)]';
+
 function Buttons({ item, kept, addTip, onAdd, always }: { item: LibraryItem; kept: boolean; addTip: string; onAdd: () => void; always?: boolean }) {
   const t = useT();
   const show = always ? '' : 'invisible group-hover:visible';
   return (
-    <span className="flex shrink-0 items-center gap-1">
+    <span className="flex shrink-0 items-center gap-1.5">
       <button type="button" aria-label={t(kept ? 'assetDrawer.unstar' : 'assetDrawer.star')} aria-pressed={kept} {...own}
         onClick={(e) => { e.stopPropagation(); toggleFavorite(item.id); }}
-        className={`grid h-6 w-6 place-items-center rounded-full ${kept ? 'visible text-[#ffd35a]' : `${show} text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]`}`}>
-        <Star size={13} fill={kept ? 'currentColor' : 'none'} strokeWidth={kept ? 0 : 1.8} />
+        className={`${ON_PANEL} ${kept ? 'visible text-[#ffd35a]' : `${show} text-[var(--text)]`}`}>
+        <Star size={11} fill={kept ? 'currentColor' : 'none'} strokeWidth={kept ? 0 : 2.2} />
       </button>
       <button type="button" title={addTip} aria-label={addTip} {...own} onClick={(e) => { e.stopPropagation(); onAdd(); }}
-        className={`grid h-6 w-6 place-items-center rounded-full bg-[var(--accent)] text-black ${show}`}>
-        <Plus size={13} strokeWidth={3} />
+        className={`${ON_PANEL} ${ADD_HOVER} ${show} text-[var(--text)]`}>
+        <Plus size={12} strokeWidth={2.6} />
       </button>
     </span>
   );
 }
 
 /** A sound's tile: its group's colors and mark; play or pause on it under the pointer and while it plays. */
-function Tile({ item, playing, size, cover }: { item: LibraryItem; playing: boolean; size: number; cover?: boolean }) {
+export function Tile({ item, playing, size, cover }: { item: LibraryItem; playing: boolean; size: number; cover?: boolean }) {
   const look = React.useMemo(() => (cover ? coverLook(item) : soundLook(item)), [item, cover]);
   const Mark = MARKS[item.group] ?? AudioWaveform;
   return (
@@ -184,8 +198,16 @@ export function MusicCard({ item, name, group, picked, player, kept, addTip, onP
   );
 }
 
-/** The player under the list: what was clicked, play or pause, and how far it has played, dragged to any moment. */
-export function MiniPlayer({ player, name, group }: { player: Player; name: string; group: string }) {
+/** A library thing's picture in the player: its tile, a piece of music's cover. */
+export const libraryArt = (item: LibraryItem, playing: boolean) => <Tile item={item} playing={playing} size={40} cover={item.cat === 'music'} />;
+
+/**
+ * The player under the list: what was clicked (`art` its picture, play or pause on it), and how far it has played,
+ * dragged to any moment. It stands above what the app keeps over the drawer's foot (--drawer-under: its composer).
+ */
+export function MiniPlayer<T extends Playable>({ player, name, group, art }: {
+  player: Player<T>; name: string; group: string; art: (item: T, playing: boolean) => React.ReactNode;
+}) {
   const t = useT();
   const { item } = player;
   const [dragged, setDragged] = React.useState<number | null>(null);
@@ -195,9 +217,9 @@ export function MiniPlayer({ player, name, group }: { player: Player; name: stri
   /* a short sound by tenths of a second, anything longer as minutes and seconds */
   const say = (sec: number) => (length < 10 ? `${sec.toFixed(1)}` : clock(sec));
   return (
-    <div className="flex h-[60px] shrink-0 items-center gap-3 border-t border-[var(--border)] bg-[var(--bg-raised)] px-3" data-studio-host-panel="">
+    <div className="mb-[var(--drawer-under,0px)] flex h-[60px] shrink-0 items-center gap-3 border-t border-[var(--border)] bg-[var(--bg-raised)] px-3" data-studio-host-panel="">
       <span className="group cursor-default" onClick={() => player.toggle(item)}>
-        <Tile item={item} playing={player.playing} size={40} cover={item.cat === 'music'} />
+        {art(item, player.playing)}
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="flex min-w-0 items-baseline gap-2">

@@ -956,7 +956,6 @@ export const en = {
     source_mine: 'Mine',
     slots: '{n} clips',
     mediaImport: 'Imported',
-    mediaSaved: 'Saved',
     favorites: 'Favorites',
     featured: 'Featured',
     all: 'All',

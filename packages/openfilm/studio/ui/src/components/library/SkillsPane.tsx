@@ -79,7 +79,7 @@ export function SkillsPane({ line, query, projectId, opened, onOpen, onDiscover 
   }
   if (line === 'discover') {
     return toInstall.length ? (
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-0.5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[calc(var(--drawer-under,0px)+12px)] pt-0.5">
         <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-x-2.5 gap-y-3.5">
           {toInstall.map((skill) => <SkillTile key={skill.uid} skill={skill} onOpen={() => onOpen(skill.uid)} onInstall={() => install(skill)} />)}
         </div>
@@ -114,7 +114,7 @@ export function SkillsPane({ line, query, projectId, opened, onOpen, onDiscover 
   ] as Part[]).filter((p) => p.lines.length || p.empty);
   if (!parts.length) return <Empty text={t('assetDrawer.noSkillsFound')} />;
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 pb-3 pt-0.5">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 pb-[calc(var(--drawer-under,0px)+12px)] pt-0.5">
       {parts.map((p) => (
         <section key={p.key}>
           {(
