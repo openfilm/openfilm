@@ -955,8 +955,6 @@ export const ja: Words = {
     source_mine: '自分の',
     slots: '{n} 素材',
     mediaImport: '読み込み',
-    mediaProject: '素材',
-    mediaPicked: 'ライブラリから',
     mediaSaved: '保存済み',
     favorites: 'お気に入り',
     featured: 'おすすめ',

@@ -54,9 +54,9 @@ export type SkillsRequest = { name?: string; n: number };
 
 export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captions, onServices, projectId = null, showSkills }: {
   media: React.ReactNode;
-  /** the project's own media, what it took from the library, or Saved */
-  mediaScope: 'project' | 'picked' | 'saved';
-  onMediaScope: (next: 'project' | 'picked' | 'saved') => void;
+  /** the project's own media, or Saved */
+  mediaScope: 'project' | 'saved';
+  onMediaScope: (next: 'project' | 'saved') => void;
   actions: LibraryActions;
   /** where a caption track comes from: what is said, a file, or new */
   captions: CaptionsActions;
@@ -172,14 +172,9 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
           <nav data-studio-host-panel="" className="flex min-w-0 flex-1 flex-col gap-1 overflow-y-auto border-r border-[var(--border)] px-2 py-2.5">
             {cat === 'media' ? (
               <>
-                {/* what came into this project, folded: its own media, then what it took from the library; then Saved */}
-                <SideBox on={mediaScope !== 'saved' && folded} open={!folded} onClick={fold}>{t('assetDrawer.mediaImport')}</SideBox>
-                {folded ? null : (
-                  <div className="flex flex-col pb-1">
-                    <SideLine on={mediaScope === 'project'} onClick={() => onMediaScope('project')}>{t('assetDrawer.mediaProject')}</SideLine>
-                    <SideLine on={mediaScope === 'picked'} onClick={() => onMediaScope('picked')}>{t('assetDrawer.mediaPicked')}</SideLine>
-                  </div>
-                )}
+                {/* what the person brought into this project (what it took from the library stays in its category),
+                    then Saved */}
+                <SideBox on={mediaScope === 'project'} onClick={() => onMediaScope('project')}>{t('assetDrawer.mediaImport')}</SideBox>
                 <SideBox on={mediaScope === 'saved'} onClick={() => onMediaScope('saved')}>{t('assetDrawer.mediaSaved')}</SideBox>
               </>
             ) : cat === 'skill' ? (

@@ -149,8 +149,8 @@ const PICTURE_FILE = /\.(png|jpe?g|gif|webp|avif|svg|bmp)$/i;
 /* ⌘ is the modifier on a Mac, Ctrl elsewhere (the editor's keys, lib/timeline-keys) */
 const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 /** Which the media pane shows, the project's media or Saved: kept while Studio is open, across projects. */
-/** The media shown: the project's own, what it took from the library (`picked`), or Saved. */
-type MediaScope = 'project' | 'picked' | 'saved';
+/** The media shown: the project's own, or Saved. */
+type MediaScope = 'project' | 'saved';
 const MEDIA_SCOPE: { current: MediaScope } = { current: 'project' };
 /** where the app's panel starts: under Studio's top bar (its h-8) */
 const HOST_PANEL_TOP = 32;
@@ -1963,12 +1963,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* the media pane shows the project's media, or Saved (lib/saved): the same pane, the button beside Upload switches */
   const [mediaScope, setMediaScope] = React.useState<MediaScope>(() => MEDIA_SCOPE.current);
   const switchMedia = React.useCallback((next: MediaScope) => { MEDIA_SCOPE.current = next; setMediaScope(next); }, []);
-  /* the drawer's media apart: the project's own, and what it took from the library (lib/library fromLibrary) */
+  /* the drawer's media: only the project's own; what it took from the library (lib/library fromLibrary) is shown in
+     the library's own category, tried there without being listed here */
   const libraryIndex = useLibraryIndex();
   const scopedListing = React.useMemo(() => {
     if (!listing || mediaScope === 'saved') return listing;
-    const picked = mediaScope === 'picked';
-    const keep = (f: { path: string }) => fromLibrary(f.path, libraryIndex?.items ?? null) === picked;
+    const keep = (f: { path: string }) => !fromLibrary(f.path, libraryIndex?.items ?? null);
     return { ...listing, files: listing.files.filter(keep), pages: listing.pages.filter(keep) };
   }, [listing, mediaScope, libraryIndex]);
   const savedListing = useSavedListing(mediaScope === 'saved');
