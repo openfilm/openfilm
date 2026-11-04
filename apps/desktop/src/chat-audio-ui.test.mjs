@@ -64,7 +64,9 @@ test('relative audio links preview in chat without navigating to the Studio HTML
     let popups = 0;
     page.on('popup', () => { popups++; });
     await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/markdown-audio`);
-    await page.getByRole('link', { name: 'Voice A', exact: true }).click();
+    const audition = page.getByRole('button', { name: 'Voice A', exact: true });
+    assert.equal(await audition.getAttribute('href'), null, 'there is no broken browser URL behind the preview control');
+    await audition.click();
     const dialog = page.getByRole('dialog', { name: 'voice A.wav' });
     await dialog.waitFor();
     assert.deepEqual(await page.evaluate(() => window.audioCalls), [{ project: '/example/film', href: '../voice_auditions/voice%20A.wav' }]);
@@ -74,7 +76,7 @@ test('relative audio links preview in chat without navigating to the Studio HTML
     const url = await audio.getAttribute('src');
     await dialog.getByRole('button', { name: 'Close', exact: true }).click();
     assert.equal(await page.evaluate(async (url) => { try { await fetch(url); return true; } catch { return false; } }, url), false, 'closing releases the audio blob');
-    await page.getByRole('link', { name: 'Missing', exact: true }).click();
+    await page.getByRole('button', { name: 'Missing', exact: true }).click();
     await page.getByRole('alert').waitFor();
     assert.match(await page.getByRole('alert').innerText(), /Could not preview this audio/);
     assert.deepEqual(errors, []);

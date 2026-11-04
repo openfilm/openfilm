@@ -229,8 +229,8 @@ function AudioLink({ href, text }: { href: string; text: string }) {
     finally { if (request.current === id) setBusy(false); }
   };
   return <>
-    <a href={href} aria-busy={busy} onClick={(event) => { event.preventDefault(); void open(); }}
-      className="break-all text-[var(--accent)] underline underline-offset-2 hover:opacity-80">{text}</a>
+    <button type="button" aria-busy={busy} disabled={busy} onClick={() => { void open(); }}
+      className="break-all text-[var(--accent)] underline underline-offset-2 hover:opacity-80">{text}</button>
     {failed ? <span role="alert" className="ml-1 text-[var(--err)]">{t('assets.audioPreviewFailed')}</span> : null}
     {item ? <AttachmentPreview item={item} onClose={() => setItem(null)} /> : null}
   </>;
