@@ -18,6 +18,10 @@ test('the own-key providers, in the order Settings lists them', () => {
   assert.deepEqual(listProviders().map((p) => p.id), ['elevenlabs', 'openai', 'google', 'fal', 'pexels', 'pixabay', 'brave', 'tavily', 'groq', 'azure', 'doubao', 'mimo', 'keenable']);
 });
 
+test('each provider links its own pricing page', () => {
+  for (const p of listProviders()) assert.match(p.pricingUrl, /^https:\/\//, p.id);
+});
+
 test('nothing serves a kind of media nobody chose, even with a key that could', async () => {
   const keys = { openai: 'sk-0123456789', fal: 'fal-0123456789' };
   assert.equal(await id(chooseProvider('tts', { settings: settings(keys) })), null);

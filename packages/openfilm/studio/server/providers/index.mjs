@@ -124,7 +124,7 @@ async function state() {
       /* `envKey`: the environment has one (connected or not), so connecting can use it */
       const inEnv = envKey(p);
       return {
-        id: p.id, name: p.name, verbs: p.verbs, models: p.models ?? {}, keysUrl: p.keysUrl, env: key?.env ?? inEnv?.env ?? p.env, envKey: Boolean(inEnv),
+        id: p.id, name: p.name, verbs: p.verbs, models: p.models ?? {}, keysUrl: p.keysUrl, pricingUrl: p.pricingUrl, env: key?.env ?? inEnv?.env ?? p.env, envKey: Boolean(inEnv),
         /* `keyless`: it connects without a key; connected so, it has no last four */
         ...(p.keyless ? { keyless: true } : {}), source: key?.source ?? null, last4: key?.key ? key.key.slice(-4) : null,
       };
@@ -136,7 +136,7 @@ async function state() {
 
 /**
  * Studio's `/api/providers/*` (the editor page, with the launch key like the rest of the API). Each answers the state:
- *   GET    /api/providers           → { providers: [{ id, name, verbs, models: { verb: [{ id, name }] }, keysUrl, env,
+ *   GET    /api/providers           → { providers: [{ id, name, verbs, models: { verb: [{ id, name }] }, keysUrl, pricingUrl, env,
  *                                       keyless?, source: 'file' | 'env' | null, last4 }],
  *                                       use: { verb: provider id | null },
  *                                       model: { verb: model id | null } }

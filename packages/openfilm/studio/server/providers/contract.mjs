@@ -75,6 +75,7 @@
  *   env: string,
  *   keysUrl: string,
  *   billingUrl: string,
+ *   pricingUrl: string,
  *   verbs: Verb[],
  *   models?: Partial<Record<Verb, { id: string, name: string }[]>>,
  *   checkKey?: (key: string) => void,
@@ -88,6 +89,8 @@
  * is pasted instead of at the first run. Only for what the provider knows without calling anyone: it must not fetch.
  * `keyless`: it also works with no key (a free tier), so the person can connect it with one click and add a key for
  * higher limits. Connected without one, its `key` is ''. Like every provider, it serves nothing until it is connected.
+ * `pricingUrl`: the provider's own pricing page, linked as "Pricing" in Settings → Providers. Only the link: what is free
+ * and what is paid changes on the provider's side.
  * `billingUrl`: the provider's own page where the person tops up its balance. A run that fails because the account has
  * no balance left throws an Error with `code: 'balance'` (common.mjs `noBalance`), the same for every provider: the
  * person is told in Studio, with this page, and the agent is told to stop.

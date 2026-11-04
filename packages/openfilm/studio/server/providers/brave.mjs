@@ -21,6 +21,7 @@ export default {
   env: 'BRAVE_API_KEY',
   keysUrl: 'https://api-dashboard.search.brave.com/app/keys',
   billingUrl: 'https://api-dashboard.search.brave.com/',
+  pricingUrl: 'https://brave.com/search/api/',
   verbs: ['web-search', 'web-fetch'],
   models: MODELS,
   async run(verb, args, ctx) {

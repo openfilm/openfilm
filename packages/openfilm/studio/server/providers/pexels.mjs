@@ -21,6 +21,7 @@ export default {
   keysUrl: 'https://www.pexels.com/api/',
   /* free: its API page is where its limits are */
   billingUrl: 'https://www.pexels.com/api/',
+  pricingUrl: 'https://www.pexels.com/api/',
   verbs: ['image-search'],
   models: MODELS,
   async run(verb, args, ctx) {

@@ -37,6 +37,7 @@ export default {
   id: 'doubao', name: NAME, env: 'DOUBAO_ASR_API_KEY', speechFormat: 'mp3',
   keysUrl: 'https://console.volcengine.com/speech/app',
   billingUrl: 'https://console.volcengine.com/finance/overview/',
+  pricingUrl: 'https://docs.volcengine.com/docs/doubao-voice/billing-instructions',
   verbs: ['asr'], models: { asr: [{ id: MODEL, name: MODEL }] },
   async run(verb, args, ctx) {
     if (verb !== 'asr') throw new Error(`${NAME} does not do ${verb}.`);

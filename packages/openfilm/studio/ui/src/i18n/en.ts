@@ -2032,6 +2032,8 @@ export const en = {
       keyEnding: 'Key ending in {last4}',
       useEnv: 'Use the key in ${env}',
       keyless: "Works without a key: your agent's searches and the addresses it reads go to {name}. A key lifts its limits.",
+      pricing: 'Pricing',
+      pricingOf: "{name}'s prices, on its own site",
       addKey: 'Add a key',
       own: {
         title: "Custom services",

@@ -29,6 +29,7 @@ export default {
   env: 'ELEVENLABS_API_KEY',
   keysUrl: 'https://elevenlabs.io/app/settings/api-keys',
   billingUrl: 'https://elevenlabs.io/app/subscription',
+  pricingUrl: 'https://elevenlabs.io/pricing/api',
   verbs: ['voice', 'tts', 'sfx', 'music', 'asr'],
   models: MODELS,
   async run(verb, args, ctx) {

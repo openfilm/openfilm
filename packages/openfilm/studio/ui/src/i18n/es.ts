@@ -2031,6 +2031,8 @@ export const es: Words = {
       keyEnding: 'Clave terminada en {last4}',
       useEnv: 'Usar la clave de ${env}',
       keyless: 'Funciona sin clave: las búsquedas de tu agente y las direcciones que lee se envían a {name}. Una clave amplía sus límites.',
+      pricing: 'Precios',
+      pricingOf: 'Los precios de {name}, en su propio sitio',
       addKey: 'Añadir una clave',
       own: {
         title: "Servicios personalizados",

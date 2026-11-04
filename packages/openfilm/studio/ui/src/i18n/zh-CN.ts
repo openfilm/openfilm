@@ -2032,6 +2032,8 @@ export const zhCN: Words = {
       keyEnding: '尾号为 {last4} 的密钥',
       useEnv: '使用环境变量 ${env} 里的密钥',
       keyless: '无需密钥即可使用：你的智能体搜索的内容和读取的网址会发送给 {name}。添加密钥可提高用量上限。',
+      pricing: '价格',
+      pricingOf: '{name} 的价格（官网）',
       addKey: '添加密钥',
       own: {
         title: "自定义服务",

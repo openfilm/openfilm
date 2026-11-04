@@ -2031,6 +2031,8 @@ export const ja: Words = {
       keyEnding: '末尾が {last4} のキー',
       useEnv: '環境変数 ${env} のキーを使う',
       keyless: 'キーなしで使えます。エージェントの検索内容と読み込むアドレスは {name} に送られます。キーを追加すると上限が上がります。',
+      pricing: '料金',
+      pricingOf: '{name} の料金（公式サイト）',
       addKey: 'キーを追加',
       own: {
         title: "カスタムサービス",

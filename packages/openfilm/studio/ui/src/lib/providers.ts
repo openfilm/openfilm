@@ -17,6 +17,8 @@ export interface OwnProvider {
   models: Partial<Record<ProviderVerb, { id: string; name: string }[]>>;
   /** the provider's page for making a key */
   keysUrl: string;
+  /** the provider's own pricing page */
+  pricingUrl: string;
   /** the environment variable a key is (or would be) read from */
   env: string;
   /** it works without a key: connected with one click, a key added for higher limits (then it has `last4`) */

@@ -76,6 +76,7 @@ export default {
   env: 'FAL_KEY',
   keysUrl: 'https://fal.ai/dashboard/keys',
   billingUrl: 'https://fal.ai/dashboard/billing',
+  pricingUrl: 'https://fal.ai/pricing',
   verbs: ['image', 'video', 'music', 'sfx'],
   models: MODELS,
   async run(verb, args, ctx) {
