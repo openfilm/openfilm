@@ -73,8 +73,8 @@ export function ProjectLayoutMenu({ className, assets, layers, timeline, inspect
         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[var(--bg-field)] text-[var(--text-muted)]"><Icon size={13} aria-hidden /></span>
         <span className="flex-1 text-left">{label}</span>
         {/* a switch, not a tick: each pane is open or closed, not one picked from a set. Ink-colored, not blue. */}
-        <span aria-hidden className={`relative h-[18px] w-[30px] shrink-0 rounded-full transition-colors ${checked ? 'bg-[var(--accent)]' : 'bg-[var(--bg-field)] ring-1 ring-inset ring-[var(--border)]'}`}>
-          <span className={`absolute top-[3px] h-3 w-3 rounded-full transition-all ${checked ? 'left-[15px] bg-[var(--on-accent)]' : 'left-[3px] bg-[var(--text-faint)]'}`} />
+        <span aria-hidden className={`relative h-[18px] w-[30px] shrink-0 rounded-full transition-colors ${checked ? 'bg-[var(--switch-on)]' : 'bg-[var(--bg-field)] ring-1 ring-inset ring-[var(--border)]'}`}>
+          <span className={`absolute top-[3px] h-3 w-3 rounded-full transition-all ${checked ? 'left-[15px] bg-white' : 'left-[3px] bg-[var(--text-faint)]'}`} />
         </span>
       </button>)}
     </div>, document.body)}

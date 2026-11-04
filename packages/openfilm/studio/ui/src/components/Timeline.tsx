@@ -274,9 +274,10 @@ const TL = {
   faint: 'var(--text-faint)',
 } as const;
 
-/* rows are not drawn: clips lie on the panel itself, and a track is not lit when picked or aimed at (the picked clip's
-   frame says enough) */
-function laneTone(track: TimelineTrack): string {
+/* rows are drawn only where they say something: clips lie on the panel itself; the track of a picked clip has a row
+   of its own color (`--tl-lane-on`), the main track a band */
+function laneTone(track: TimelineTrack, picked: boolean): string {
+  if (picked) return 'var(--tl-lane-on)';
   /* the main track: a band of its own, a shade toward the text (lighter in the dark, darker in the light) */
   return track.main && !track.hidden ? `color-mix(in srgb, ${TL.head} 95%, var(--text-muted))` : TL.head;
 }
@@ -2667,7 +2668,7 @@ export const Timeline = React.memo(function Timeline({
     const targeted = targetLane === track.lane;
     /* far from the view, only its place (the one being dragged keeps all of it) */
     if ((laneIndex < nearFirst || laneIndex > nearLast) && !liftingHead) {
-      return <div key={track.lane} className="rounded-l-[3px]" style={{ marginTop: GAP, height: h, background: laneTone(track) }} />;
+      return <div key={track.lane} className="rounded-l-[3px]" style={{ marginTop: GAP, height: h, background: laneTone(track, lit) }} />;
     }
     /* the main track is marked by its look (its band) and its hover title, not by a name or a badge that reads as a switch */
     const mainHead = Boolean(track.main) && track.index === 1;
@@ -2698,7 +2699,7 @@ export const Timeline = React.memo(function Timeline({
           height: h,
           /* what the row holds on the left, a label; its switches after it, each in its own column */
           gridTemplateColumns: `24px 4px repeat(${solo ? 4 : 3}, minmax(0, 1fr))`,
-          background: laneTone(track),
+          background: laneTone(track, lit),
           boxShadow: chatLit ? CHAT_RING : undefined,
           opacity: liftingHead ? 0.45 : 1,
           cursor: canReorder ? (liftingHead ? 'grabbing' : 'grab') : undefined,
@@ -2758,7 +2759,7 @@ export const Timeline = React.memo(function Timeline({
       style={{
         marginTop: GAP,
         height: rowH(track),
-        background: laneTone(track),
+        background: laneTone(track, selectedLanes.has(track.lane)),
       }}
     />
   )), [tracks, selectedLanes]);
@@ -3416,16 +3417,16 @@ export const Timeline = React.memo(function Timeline({
             </div>
           );
         })}
-        {/* the gap picked on this track (on its first row): ⌫ closes it */}
+        {/* the gap picked on this track (on its first row): ⌫ closes it, its menu works on it; nothing is drawn, only its
+            place is kept (for automated UI checks) */}
         {near && gap && track.docIndex === gap.track && track.index === 1 ? (
           <div
             data-gap=""
-            className="pointer-events-none absolute inset-y-[2px] z-[3] rounded-[3px] border border-dashed"
+            aria-hidden
+            className="pointer-events-none absolute inset-y-[2px]"
             style={{
               left: Math.round(gap.startMs * pxPerMs),
               width: Math.max(2, Math.round(gap.endMs * pxPerMs) - Math.round(gap.startMs * pxPerMs) - 1),
-              borderColor: 'var(--tl-select)',
-              background: 'color-mix(in srgb, var(--tl-select) 16%, transparent)',
             }}
           />
         ) : null}

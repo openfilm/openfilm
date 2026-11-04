@@ -87,8 +87,8 @@ export function PlaybackMenu({ className, disabled, settings }: {
         <span className="flex-1 text-left">{loopLabel}</span>
         {keyHint('loop') ? <span className="text-[11px] text-[var(--text-faint)]">{keyHint('loop')}</span> : null}
         {/* a switch, ink-colored, as the layout menu's */}
-        <span aria-hidden className={`relative h-[18px] w-[30px] shrink-0 rounded-full transition-colors ${loop ? 'bg-[var(--accent)]' : 'bg-[var(--bg-field)] ring-1 ring-inset ring-[var(--border)]'}`}>
-          <span className={`absolute top-[3px] h-3 w-3 rounded-full transition-all ${loop ? 'left-[15px] bg-[var(--on-accent)]' : 'left-[3px] bg-[var(--text-faint)]'}`} />
+        <span aria-hidden className={`relative h-[18px] w-[30px] shrink-0 rounded-full transition-colors ${loop ? 'bg-[var(--switch-on)]' : 'bg-[var(--bg-field)] ring-1 ring-inset ring-[var(--border)]'}`}>
+          <span className={`absolute top-[3px] h-3 w-3 rounded-full transition-all ${loop ? 'left-[15px] bg-white' : 'left-[3px] bg-[var(--text-faint)]'}`} />
         </span>
       </button>
       <div className="flex items-center gap-2.5 px-2 pb-1.5 pt-1.5 text-[13px] text-[var(--text)]">

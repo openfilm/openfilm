@@ -1349,7 +1349,7 @@ function Toggle({ checked, onChange, label, disabled, locked }: {
         aria-readonly={locked || undefined}
         disabled={disabled}
         onClick={() => { if (!locked) onChange(!checked); }}
-        className={`relative h-[18px] w-[30px] shrink-0 rounded-full transition ${checked || locked ? 'bg-[var(--accent)]' : 'bg-[var(--border-strong)]'} ${locked ? 'cursor-default' : ''} disabled:opacity-50`}
+        className={`relative h-[18px] w-[30px] shrink-0 rounded-full transition ${checked || locked ? 'bg-[var(--switch-on)]' : 'bg-[var(--border-strong)]'} ${locked ? 'cursor-default' : ''} disabled:opacity-50`}
       >
         <span className={`absolute top-[2px] h-[14px] w-[14px] rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.2)] transition-[left] ${checked || locked ? 'left-[14px]' : 'left-[2px]'}`} />
       </button>

@@ -22,13 +22,13 @@ export function InspectorPanel({ title, width, onClose, tabs, tab, onTab, childr
     }}>
       {tabs ? (
         /* tabs as the other inspectors have them (the library's categories beside them): its 40 px bar and line, the
-           one shown in the accent, bolder, underlined */
+           one shown in the accent on a raised fill */
         <div className="flex h-10 shrink-0 items-stretch gap-1 border-b border-[var(--border)] px-2">
           <div role="tablist" aria-label={title} className="flex min-w-0 flex-1 items-stretch gap-1 overflow-x-auto [scrollbar-width:none]">
             {tabs.map((x) => (
               <button key={x.id} type="button" role="tab" aria-selected={x.id === tab} data-inspector-tab={x.id} onClick={() => onTab?.(x.id)}
-                className={`relative flex-none whitespace-nowrap px-2.5 text-[11.5px] outline-none transition-colors ${x.id === tab
-                  ? 'font-semibold text-[var(--accent)] after:absolute after:inset-x-2 after:bottom-0 after:h-[2px] after:rounded-[2px] after:bg-[var(--accent)]'
+                className={`relative my-1.5 flex-none whitespace-nowrap rounded-md px-2.5 text-[11.5px] outline-none transition-colors ${x.id === tab
+                  ? 'bg-[var(--bg-picked)] font-semibold text-[var(--accent)]'
                   : 'font-medium text-[var(--text-muted)] hover:text-[var(--text)]'}`}>
                 {x.label}
               </button>

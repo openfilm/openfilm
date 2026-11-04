@@ -63,6 +63,10 @@
   --accent: #007d72;
   --accent-soft: rgba(0, 125, 114, 0.1);
   --on-accent: #ffffff;
+  /* a switch turned on: the accent a step quieter, so a page of them does not glare */
+  --switch-on: #3f978d;
+  /* what is picked among choices (tabs, a rail): the accent's words on this raised fill */
+  --bg-picked: rgba(16, 16, 24, 0.075);
   /* words selected in a field */
   --text-selection: rgba(0, 125, 114, 0.22);
 
@@ -82,6 +86,8 @@
   /* the timeline's own: a well (meters), the playhead and the frame of a picked clip, and waveforms drawn lighter
      over a clip's own color (canvas reads these back from the element) */
   --tl-lane: #f1f1f3;
+  /* the track of a picked clip */
+  --tl-lane-on: #ececef;
   --tl-playhead: #161619;
   --tl-select: #161619;
   --tl-wave: rgba(255, 255, 255, 0.5);
@@ -124,6 +130,8 @@
   --accent: #45cfb5;
   --accent-soft: rgba(69, 207, 181, 0.12);
   --on-accent: #04221d;
+  --switch-on: #2a7a6e;
+  --bg-picked: rgba(240, 240, 255, 0.1);
   --text-selection: rgba(69, 207, 181, 0.3);
 
   --ok: #4cc27a;
@@ -140,6 +148,7 @@
   --clip-audio: #1c5757;
 
   --tl-lane: #0f0f11;
+  --tl-lane-on: #202024;
   --tl-playhead: #ffffff;
   --tl-select: #ffffff;
   --tl-wave: rgba(255, 255, 255, 0.4);

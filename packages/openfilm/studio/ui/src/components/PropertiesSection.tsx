@@ -227,8 +227,8 @@ function NameInput({ value, onDone, onCancel }: { value: string; onDone: (next: 
 function Switch({ label, on, onChange }: { label: string; on: boolean; onChange: (on: boolean) => void }) {
   return (
     <button type="button" role="switch" aria-checked={on} aria-label={label} onClick={() => onChange(!on)} className="flex h-6 items-center">
-      <span aria-hidden className={`relative h-[16px] w-[28px] shrink-0 rounded-full transition-colors ${on ? 'bg-[var(--accent)]' : 'bg-[var(--bg-field)] ring-1 ring-inset ring-[var(--border)]'}`}>
-        <span className={`absolute top-[3px] h-2.5 w-2.5 rounded-full transition-all ${on ? 'left-[15px] bg-[var(--on-accent)]' : 'left-[3px] bg-[var(--text-faint)]'}`} />
+      <span aria-hidden className={`relative h-[16px] w-[28px] shrink-0 rounded-full transition-colors ${on ? 'bg-[var(--switch-on)]' : 'bg-[var(--bg-field)] ring-1 ring-inset ring-[var(--border)]'}`}>
+        <span className={`absolute top-[3px] h-2.5 w-2.5 rounded-full transition-all ${on ? 'left-[15px] bg-white' : 'left-[3px] bg-[var(--text-faint)]'}`} />
       </span>
     </button>
   );

@@ -163,10 +163,9 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
               type="button"
               onClick={() => show(id)}
               aria-pressed={cat === id}
-              className={`relative flex h-full min-w-[46px] shrink-0 flex-col items-center justify-center gap-px whitespace-nowrap px-2 text-[10.5px] leading-[13px] ${cat === id ? 'font-semibold text-[var(--accent)]' : 'font-medium text-[var(--text-muted)] hover:text-[var(--text)]'}`}
+              className={`relative my-1 flex min-w-[46px] shrink-0 flex-col items-center justify-center gap-px whitespace-nowrap rounded-md px-2 text-[10.5px] leading-[13px] ${cat === id ? 'bg-[var(--bg-picked)] font-semibold text-[var(--accent)]' : 'font-medium text-[var(--text-muted)] hover:text-[var(--text)]'}`}
             >
-              {/* the one shown: its color, its icon filled, and a line under it */}
-              {cat === id ? <span aria-hidden className="absolute inset-x-2 bottom-0 h-[2px] rounded-full bg-[var(--accent)]" /> : null}
+              {/* the one shown: the accent on a raised fill, its icon filled */}
               <CategoryIcon id={id} on={cat === id} size={18} />
               {t(`assetDrawer.cat_${id}`)}
             </button>
@@ -347,7 +346,8 @@ function SideBox({ on, open, onClick, children }: { on: boolean; open?: boolean;
       aria-pressed={open === undefined ? on : undefined}
       aria-expanded={open}
       title={typeof children === 'string' ? children : undefined}
-      className={`flex h-8 shrink-0 items-center justify-between gap-1 rounded-md bg-[var(--bg-field)] px-2.5 text-left text-[12px] font-medium hover:bg-[var(--bg-hover)] ${on ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}
+      /* the one shown: the accent on a raised fill; the others plain until pointed at */
+      className={`flex h-8 shrink-0 items-center justify-between gap-1 rounded-md px-2.5 text-left text-[12px] ${on ? 'bg-[var(--bg-picked)] font-semibold text-[var(--accent)]' : 'font-medium text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}`}
     >
       <span className="truncate whitespace-nowrap">{children}</span>
       {open === undefined ? null : <ChevronDown size={13} className={`shrink-0 text-[var(--text-faint)] transition-transform ${open ? 'rotate-180' : ''}`} />}
@@ -363,7 +363,7 @@ function SideLine({ on, onClick, children }: { on: boolean; onClick: () => void;
       onClick={onClick}
       aria-pressed={on}
       title={typeof children === 'string' ? children : undefined}
-      className={`truncate whitespace-nowrap px-2.5 py-1.5 text-left text-[12px] ${on ? 'font-medium text-[var(--accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
+      className={`truncate whitespace-nowrap rounded-md px-2.5 py-1.5 text-left text-[12px] ${on ? 'bg-[var(--bg-picked)] font-semibold text-[var(--accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
     >
       {children}
     </button>

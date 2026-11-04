@@ -91,7 +91,7 @@ export function SettingsLinkButton({ className = '', ...props }: React.AnchorHTM
 export function SettingsSwitch({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
   return (
     <button type="button" role="switch" aria-checked={checked} aria-label={label} title={label} disabled={disabled} onClick={() => onChange(!checked)}
-      className={`relative h-6 w-10 shrink-0 rounded-full transition-colors disabled:opacity-50 ${checked ? 'bg-[var(--accent)]' : 'bg-[var(--bg-pressed)]'}`}>
+      className={`relative h-6 w-10 shrink-0 rounded-full transition-colors disabled:opacity-50 ${checked ? 'bg-[var(--switch-on)]' : 'bg-[var(--bg-pressed)]'}`}>
       <span className={`absolute top-[3px] h-[18px] w-[18px] rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.2)] transition-all ${checked ? 'left-[19px]' : 'left-[3px]'}`} />
     </button>
   );
