@@ -57,6 +57,8 @@ export function subtitlesVtt(cues, style) {
  *                                    (captions/<name>.vtt, a number added when that is taken)
  *   POST caption-tracks/retire       { name?, label? } → { src }: the subtitles a project showed before caption tracks
  *                                    made its caption track (retireSubtitles); src null when it showed none
+ *   POST caption-tracks/new          { name?, text? } → { src, text }: a new caption track's file, of a WebVTT or SRT
+ *                                    file's text (importedVtt) or none; put in the film by the caller
  *   POST caption-tracks/translate    { src, language, name? } → { src, text }: a caption track's cues translated, as a
  *                                    new file at the same times and places; 409 { code: 'no-translator' } when nothing can
  * @param {import('./http.mjs').Req} req @param {import('./http.mjs').Res} res @param {string} root @param {string} rest
@@ -82,6 +84,17 @@ export async function captionTrackRoutes(req, res, root, rest, url, { translate 
   if (rest === 'caption-tracks/from-subtitles' && req.method === 'POST') {
     const { name } = /** @type {{ name?: unknown }} */ (await readJson(req));
     json(res, 200, await subtitlesTrack(root, name));
+    return true;
+  }
+  if (rest === 'caption-tracks/new' && req.method === 'POST') {
+    const { name, text } = /** @type {{ name?: unknown, text?: unknown }} */ (await readJson(req));
+    const made = importedVtt(typeof text === 'string' ? text : '');
+    if (made == null) throw new HttpError(400, 'This is not a WebVTT or SRT file with captions in it.');
+    const src = await freeSrc(root, name);
+    const file = captionFile(root, src);
+    await mkdir(dirname(file), { recursive: true });
+    await writeAtomic(file, made);
+    json(res, 200, { src, text: made });
     return true;
   }
   if (rest === 'caption-tracks/retire' && req.method === 'POST') {
@@ -122,6 +135,21 @@ export async function captionTrackRoutes(req, res, root, rest, url, { translate 
     return true;
   }
   return false;
+}
+
+/**
+ * A caption track's file from a WebVTT or SRT file's text: a WebVTT file as it is; an SRT file's cues at their times,
+ * known as `c1`, `c2`… (its numbers are no CSS ids), its position tags (`{\an8}`) dropped. '' gives a file with no
+ * cues. Null: text with no cue in it.
+ * @param {string} text
+ */
+export function importedVtt(text) {
+  if (!text.trim()) return 'WEBVTT\n';
+  const body = text.replace(/^\uFEFF/, '');
+  const srt = !body.startsWith('WEBVTT');
+  const vtt = readVtt(srt ? `WEBVTT\n\n${body}` : body);
+  if (!vtt.cues.length) return null;
+  return srt ? writeVtt({ ...vtt, cues: vtt.cues.map((c, i) => ({ ...c, id: `c${i + 1}`, text: c.text.replace(/\{\\[^}]*\}/g, '').trim() })) }) : body;
 }
 
 /** A caption track's file not taken yet: captions/<name>.vtt, a number added when that one is. @param {string} root @param {unknown} name */

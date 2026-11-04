@@ -1846,6 +1846,32 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (!why) { setCaptionSelection({ src, ids: new Set([made.id]) }); showCaptionLook(); }
     return why;
   }, [projectId, totalMs, showCaptionLook, t]);
+  /**
+   * A new caption track on top (the library's captions, components/library/CaptionsPane): of a file's captions (SRT or
+   * WebVTT, `file`), or with one caption at the playhead, picked, its words to type in the inspector. One undo step.
+   */
+  const newCaptionTrack = React.useCallback(async (file: File | null) => {
+    let text = '';
+    let picked: string | null = null;
+    if (file) text = await file.text();
+    else {
+      const atMs = snapToFrame(timeRef.current);
+      const made = atMs < totalMs - 100 ? addCue(readVtt('WEBVTT\n'), atMs / 1000, t('subtitleRow.newText'), totalMs / 1000) : null;
+      if (!made) { toast.show(t(atMs >= totalMs - 100 ? 'captionTrack.pastEnd' : 'subtitleRow.noRoom')); return; }
+      text = writeVtt(made.vtt);
+      picked = made.id;
+    }
+    const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/caption-tracks/new`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: file ? file.name.replace(/\.[^.]+$/, '') : t('captionTrack.fileName'), text }),
+    }).catch(() => null);
+    const body = await res?.json().catch(() => ({})) as { src?: string; error?: string } | undefined;
+    if (!res?.ok || !body?.src) { toast.show(body?.error ?? t('timeline.editFail')); return; }
+    const src = body.src;
+    const why = await editOps([{ op: 'captions', at: 0, captions: { src, kind: 'captions', label: file ? file.name.replace(/\.[^.]+$/, '') : t('captionTrack.name') } }], file ? 'captionTrack.stepImport' : 'captionTrack.stepNew');
+    if (why) { toast.show(why); return; }
+    if (picked) { setCaptionSelection({ src, ids: new Set([picked]) }); showCaptionLook(); }
+  }, [projectId, totalMs, editOps, showCaptionLook, toast, t]);
   /* the subtitles Studio drew over the picture before caption tracks: made the project's caption track as it opens, once */
   React.useEffect(() => {
     let gone = false;
@@ -3371,14 +3397,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* the library's skills as the app's chat asked to show them (LibraryDrawer `showSkills`) */
   const [skillsShown, setSkillsShown] = React.useState<SkillsRequest | null>(null);
   const [settingsOpen, setSettingsOpen] = useSettings();
-  /* the CC: every caption track shown, or every one hidden (one undo step) */
-  const toggleCaptions = React.useCallback(() => {
-    const tracks = filmRef.current?.tracks ?? [];
-    const shown = tracks.some((tr) => tr.captions && !tr.hidden);
-    const ops: Op[] = tracks.flatMap((tr, i) => (tr.captions && Boolean(tr.hidden) !== shown ? [{ op: 'track' as const, track: i, field: 'hidden' as const, value: shown }] : []));
-    if (ops.length) void edit(ops, shown ? 'captionTrack.stepHide' : 'captionTrack.stepShow');
-  }, [edit]);
-  /* captions of what is said: what went wrong, shown on the button; with no service to transcribe, it opens Services */
+  /* captions of what is said (the library's captions): what went wrong, shown there; with no service to transcribe, it opens Services */
   const [subtitleProblem, setSubtitleProblem] = React.useState<{ text: string; connect: boolean } | null>(null);
   const [captionsMaking, setCaptionsMaking] = React.useState(false);
   const makeCaptions = React.useCallback(async () => {
@@ -3944,10 +3963,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     hasClipboard={clipboard.length > 0 || layerBoard != null}
                     selected={selectedIds}
                     onSelectedChange={onTimelineSelected}
-                    autoCaptions={{
-                      tracks: captionSrcs.length, shown: (film.film?.tracks ?? []).some((tr) => tr.captions && !tr.hidden), onToggle: toggleCaptions,
-                      lines: subs.captions?.cues.length ?? 0, untranscribed: subs.captions?.untranscribed.length ?? 0, onMake: () => void makeCaptions(), making: captionsMaking || subs.transcribing, problem: subtitleProblem,
-                    }}
                     waveUrl={waveUrl}
                     history={timelineHistory}
                     recorder={recorder}
@@ -4001,7 +4016,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       {hostAssets?.open && hostPanel ? (
         <div className="fixed z-30 flex min-h-0 min-w-0 flex-col overflow-hidden border-t border-[var(--dock-line)] bg-[var(--dock-pane)]"
           style={{ top: HOST_PANEL_TOP, left: 0, bottom: hostAssets.bottom, width: HOST_PANEL_WIDTH }}>
-          <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} actions={library.actions} onServices={() => setSettingsOpen('models')} projectId={projectId} showSkills={skillsShown} />
+          <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} actions={library.actions}
+            captions={{
+              lines: subs.captions?.cues.length ?? 0, untranscribed: subs.captions?.untranscribed.length ?? 0, making: captionsMaking || subs.transcribing, problem: subtitleProblem,
+              fromSpeech: () => void makeCaptions(), fromFile: (file) => void newCaptionTrack(file), blank: () => void newCaptionTrack(null),
+            }}
+            onServices={() => setSettingsOpen('models')} projectId={projectId} showSkills={skillsShown} />
         </div>
       ) : null}
       <DesktopDialog open={desktopOpen} onClose={() => setDesktopOpen(false)} />

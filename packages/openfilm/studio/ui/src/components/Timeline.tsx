@@ -54,10 +54,12 @@ import {
   Blend,
   Type,
   Plus,
-  AudioLines,
+  AudioWaveform,
+  Captions,
+  Clapperboard,
   Image as ImageIcon,
   Music,
-  Sparkles,
+  Shapes,
 } from 'lucide-react';
 import { useT } from '@/i18n';
 import { keyAction, useKeyHint } from '@/lib/keymap-store';
@@ -153,12 +155,11 @@ import {
   zoomPreviewStep,
   type ZoomPreview,
 } from '@/lib/timeline-view';
-import { OperationHistory, type SessionTimeline } from './OperationHistory';
+import { OperationHistory, trackFlagStep, type SessionTimeline } from './OperationHistory';
 import { BlockThumbs } from './BlockThumbs';
 import { BlockWaveform } from './BlockWaveform';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import type { PlaybackClock } from './LiveTime';
-import { CaptionsIcon } from './player-controls/controls-bar';
 import { inHostPanel, isTypingTarget } from './typing-target';
 import { Popover } from './Popover';
 import { MarkerGlyph } from './TimelineMarkers';
@@ -288,7 +289,11 @@ function laneTone(track: TimelineTrack, selected: boolean): string {
   return track.main ? `color-mix(in srgb, ${tone} 93%, var(--tl-text))` : tone;
 }
 
-/** A row's mark: what it holds (its clips' kind, most of them; an empty row by its kind), as a plain icon; a caption track's is CC. */
+/**
+ * A row's mark: what it holds (its clips' kind, most of them; an empty row by its kind), as a plain icon: a video's
+ * clapperboard, a still's picture, a page's shapes, a voice's microphone, a sound's waveform, music's note, a text's T,
+ * a caption track's CC.
+ */
 function LaneMark({ track }: { track: TimelineTrack }) {
   const count = new Map<string, number>();
   for (const b of track.blocks) {
@@ -296,16 +301,9 @@ function LaneMark({ track }: { track: TimelineTrack }) {
     count.set(kind, (count.get(kind) ?? 0) + 1);
   }
   const most = [...count].sort((a, b) => b[1] - a[1])[0]?.[0] ?? (track.role === 'audio' ? 'music' : track.role === 'video' ? 'video' : 'mg');
-  if (track.captions) {
-    return (
-      <span className="flex items-center justify-center" style={{ width: 21, height: 14, color: 'var(--text-dim)', opacity: track.hidden ? 0.5 : 1 }}>
-        <CaptionsIcon size={16} />
-      </span>
-    );
-  }
-  const Icon = track.text ? Type
-    : most === 'voice' ? Mic : most === 'sfx' ? AudioLines : most === 'music' ? Music
-      : most === 'video' ? Film : most === 'still' ? ImageIcon : Sparkles;
+  const Icon = track.captions ? Captions : track.text ? Type
+    : most === 'voice' ? Mic : most === 'sfx' ? AudioWaveform : most === 'music' ? Music
+      : most === 'video' ? Clapperboard : most === 'still' ? ImageIcon : Shapes;
   return (
     /* a label, dimmer than the switches beside it, so the two read apart */
     <span className="flex items-center justify-center" style={{ width: 21, height: 14, color: 'var(--tl-faint)', opacity: track.hidden ? 0.5 : 1 }}>
@@ -672,24 +670,6 @@ export interface TimelineProps {
   onRelink?: (block: TimelineBlock, path: string | null) => void;
   /** What is in view and at what density: thumbnail shooting only shoots what can be seen (the zoom is ours). */
   onViewChange?: (view: { fromMs: number; toMs: number; pxPerMs: number }) => void;
-  /**
-   * The toolbar's CC: whether the film's captions show (its caption tracks hidden or not). With none yet, it makes them
-   * of what is said in the film: a caption track on top.
-   */
-  autoCaptions?: {
-    /** The film has caption tracks, and whether any of them shows. */
-    tracks: number;
-    shown: boolean;
-    onToggle: () => void;
-    /** Lines heard with a transcript, and clips heard with none yet: 0 and 0, nothing is said (the button says so). */
-    lines: number;
-    untranscribed: number;
-    onMake: () => void;
-    /** Transcribing, or making the track, now. */
-    making?: boolean;
-    /** Why making them failed; `connect`: no service can transcribe. */
-    problem?: { text: string; connect: boolean } | null;
-  };
   /** A clip's waveform address, from its src. Without it no waveforms are drawn. */
   waveUrl?: (src: string) => string;
   /** Copy clips (the clipboard lives outside, so it survives across tracks and projects). */
@@ -1013,7 +993,6 @@ export const Timeline = React.memo(function Timeline({
   relinkCandidates,
   onRelink,
   onViewChange,
-  autoCaptions,
   waveUrl,
   history,
   selected: selectedProp,
@@ -2656,13 +2635,18 @@ export const Timeline = React.memo(function Timeline({
   );
 
   const toggleTrack = React.useCallback((track: TimelineTrack, prop: 'locked' | 'hidden' | 'muted') => {
+    /* the track's own switch; a caption track has no clip of film.html to say it through */
+    if (onEditOps && track.docIndex != null) {
+      void onEditOps([{ op: 'track', track: track.docIndex, field: prop, value: !track[prop] }], trackFlagStep(prop, !track[prop], track.badge ?? ''));
+      return;
+    }
     if (!onEditBlocks) return;
     const loc = track.blocks.find((b) => b.loc && !b.cue)?.loc ?? (
       track.docIndex != null ? `film.html#${track.docIndex}.0` : null
     );
     if (!loc) return;
     void onEditBlocks([{ loc, prop, value: track[prop] ? null : true }]);
-  }, [onEditBlocks]);
+  }, [onEditOps, onEditBlocks]);
 
   /* what the app's chat points at: read in the memoized rows and heads (they rebuild only when it changes) */
   const chatTrack = chat?.track ?? null;
@@ -4064,7 +4048,10 @@ export const Timeline = React.memo(function Timeline({
 
         {/* the right side: recording first, then the switches (lib/timeline-prefs), in this order: the main-track
             magnet, snapping and linkage */}
-        {recorder ? <RecordButton now={recorder.now} onSave={recorder.onSave} onProblem={setNotice} /> : null}
+        {recorder ? <>
+          <RecordButton now={recorder.now} onSave={recorder.onSave} onProblem={setNotice} />
+          <span className="mx-0.5 h-4 w-px" style={{ background: TL.line }} />
+        </> : null}
         {onEditOps ? <>
           <span data-timeline-magnet={prefs.magnet ? '1' : '0'}>
             <ToolButton onClick={() => togglePref('magnet')} active={prefs.magnet} label={t('timeline.magnet')}
@@ -4086,6 +4073,7 @@ export const Timeline = React.memo(function Timeline({
           </span>
         </> : null}
 
+        <span className="mx-0.5 h-4 w-px" style={{ background: TL.line }} />
         <ToolButton
           onClick={() => zoomBy(1 / ZOOM_STEP)}
           disabled={!(hasLanes && spanMs > 0) || viewZoom <= zoomMinOf(spanMs)}
@@ -4116,9 +4104,6 @@ export const Timeline = React.memo(function Timeline({
         >
           <ZoomIn size={15} />
         </ToolButton>
-
-        {/* captions of what is said: a caption track made on top, then edited like any */}
-        {autoCaptions ? <AutoCaptionsButton auto={autoCaptions} /> : null}
       </div>
 
       {/* ── Body: two columns. The head column is not inside the scroller (no scrollbar under it, no rubber-band,
@@ -4675,27 +4660,6 @@ function ToolButton({
         {children}
       </button>
     </Tooltip>
-  );
-}
-
-/** The CC: captions shown or hidden (their look and words are edited on their track and in the Inspector); with none, made. */
-function AutoCaptionsButton({ auto }: { auto: NonNullable<TimelineProps['autoCaptions']> }) {
-  const t = useT();
-  if (auto.tracks > 0) {
-    return (
-      <ToolButton onClick={auto.onToggle} active={auto.shown} label={auto.shown ? t('timeline.captionsHide') : t('timeline.captionsShow')}>
-        <CaptionsIcon size={19} />
-      </ToolButton>
-    );
-  }
-  const none = auto.lines === 0 && auto.untranscribed === 0;
-  const label = auto.making ? t('timeline.captionsMaking')
-    : auto.problem ? (auto.problem.connect ? t('timeline.subtitlesConnect') : t('timeline.subtitlesFailed').replace('{error}', auto.problem.text))
-      : none ? t('timeline.captionsNone') : t('timeline.captionsMake');
-  return (
-    <ToolButton onClick={auto.onMake} disabled={auto.making || none} label={label}>
-      <CaptionsIcon size={19} />
-    </ToolButton>
   );
 }
 

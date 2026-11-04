@@ -2,7 +2,7 @@
  * The assets drawer's library (in the app's panel, over the chat, its composer under it), laid out as an editor's
  * library is: the categories along the top — the media (the project's and Saved, the media pane as it was), the
  * skills an agent takes up (SkillsPane), the voices to speak a voice-over in, then OpenFilm's own sounds, music, text,
- * stickers, filters, effects and transitions (lib/library) — and down the left the starred ones and the library's own,
+ * the captions a caption track is made with (CaptionsPane), stickers, filters, effects and transitions (lib/library) — and down the left the starred ones and the library's own,
  * its groups under it. What is shown is in
  * the accent color; a category's icon fills faintly too.
  *
@@ -22,13 +22,14 @@ import {
 import { clearResourceDrag, setResourceDragData } from '@/lib/resource-drag';
 import { useLibraryVoices } from '@/lib/library-voices';
 import { MiniPlayer, MusicCard, SoundRow, usePlayer } from './AudioList';
+import { CaptionsPane, type CaptionsActions, type CaptionsLine } from './CaptionsPane';
 import { CategoryIcon, Empty } from './icons';
 import { FEATURED, STARRED, VoicesPane } from './VoicesPane';
 import { ImportButton, SkillsPane, type SkillsLine } from './SkillsPane';
 import { SourceBadge, SourceChips, sourcesIn, type Source } from './SourceChips';
 
-type Category = 'media' | 'skill' | 'voice' | LibraryCategory;
-const CATEGORIES: Category[] = ['media', 'skill', 'voice', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition', 'template'];
+type Category = 'media' | 'skill' | 'voice' | 'captions' | LibraryCategory;
+const CATEGORIES: Category[] = ['media', 'skill', 'voice', 'sound', 'music', 'text', 'captions', 'sticker', 'filter', 'effect', 'transition', 'template'];
 
 /** The side bar's starred line: a category's things the person starred ('' is all of it, else one of its groups). */
 const FAVORITES = STARRED;
@@ -51,12 +52,14 @@ export interface LibraryActions {
 /** The skills shown from outside the drawer (the app's chat): Discover, or one skill's page; `n` tells one request from the next. */
 export type SkillsRequest = { name?: string; n: number };
 
-export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServices, projectId = null, showSkills }: {
+export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captions, onServices, projectId = null, showSkills }: {
   media: React.ReactNode;
   /** the project's own media, what it took from the library, or Saved */
   mediaScope: 'project' | 'picked' | 'saved';
   onMediaScope: (next: 'project' | 'picked' | 'saved') => void;
   actions: LibraryActions;
+  /** where a caption track comes from: what is said, a file, or new */
+  captions: CaptionsActions;
   /** Settings › Services: where a voice's service is connected */
   onServices: () => void;
   /** the project shown, for its own skills */
@@ -104,6 +107,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
   /* the skills' line: one of the installed (Installed alone, as kept before, is all of them), else Discover */
   /* the skills: Discover (first opened), else the installed (any line of them kept before is that now) */
   const skillLine: SkillsLine = !group || group === 'discover' ? 'discover' : 'installed';
+  /* the captions' line: made of what is said (first opened), from a file, or new */
+  const captionsLine: CaptionsLine = group === 'file' || group === 'new' ? group : 'speech';
   const q = query.trim().toLowerCase();
   const shown = (index?.items ?? []).filter((item) => item.cat === cat && (q
     ? [...Object.values(item.name), ...(item.tags ?? [])].some((n) => n?.toLowerCase().includes(q))
@@ -183,6 +188,14 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
                 <SideBox on={skillLine === 'installed'} onClick={() => pickGroup('installed')}>{t('assetDrawer.skillsInstalled')}</SideBox>
                 <SideBox on={skillLine === 'discover'} onClick={() => pickGroup('discover')}>{t('assetDrawer.skillsDiscover')}</SideBox>
               </>
+            ) : cat === 'captions' ? (
+              <>
+                {(['speech', 'file', 'new'] as const).map((id) => (
+                  <SideBox key={id} on={captionsLine === id} onClick={() => pickGroup(id)}>
+                    {t(id === 'speech' ? 'assetDrawer.captionsSpeech' : id === 'file' ? 'assetDrawer.captionsFile' : 'assetDrawer.captionsNew')}
+                  </SideBox>
+                ))}
+              </>
             ) : (
               <>
                 <SideBox on={group === FAVORITES && !q} onClick={() => pickGroup(FAVORITES)}>{t('assetDrawer.favorites')}</SideBox>
@@ -201,7 +214,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, onServ
           </nav>
         </div>
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col" data-studio-host-panel={cat === 'media' ? undefined : ''}>
-          {cat === 'media' ? media : (
+          {cat === 'media' ? media : cat === 'captions' ? <CaptionsPane line={captionsLine} actions={captions} /> : (
             <>
               {/* a skill's page has its own way back instead */}
               <div className="flex gap-2 px-3 pb-2 pt-2.5" hidden={cat === 'skill' && skillOpen != null}>

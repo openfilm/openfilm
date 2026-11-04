@@ -75,6 +75,23 @@ test('the routes: a caption track\'s file read and written whole, inside the pro
   } finally { close(); }
 });
 
+test('a new caption track\'s file: none, a WebVTT file as it is, an SRT file\'s cues as WebVTT; text with no cue is refused', async () => {
+  const root = project([]);
+  const { base, close } = await serve(root);
+  const call = (body) => fetch(`${base}/caption-tracks/new`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  try {
+    const blank = await (await call({ name: 'Captions' })).json();
+    assert.deepEqual(blank, { src: 'captions/Captions.vtt', text: 'WEBVTT\n' });
+    const vtt = 'WEBVTT\n\nintro\n00:00:01.000 --> 00:00:02.000\nHi\n';
+    assert.equal((await (await call({ name: 'Captions', text: vtt })).json()).text, vtt);
+    const srt = await (await call({ name: 'film', text: '\uFEFF1\r\n00:00:01,000 --> 00:00:02,500\r\n{\\an8}Hello <i>there</i>\r\n\r\n2\r\n00:00:03,000 --> 00:00:04,000\r\nTwo\r\n' })).json();
+    assert.equal(srt.src, 'captions/film.vtt');
+    assert.deepEqual(readVtt(srt.text).cues.map((c) => [c.id, c.start, c.end, c.text]), [['c1', 1, 2.5, 'Hello <i>there</i>'], ['c2', 3, 4, 'Two']]);
+    assert.equal(readFileSync(join(root, 'captions', 'film.vtt'), 'utf8'), srt.text);
+    assert.equal((await call({ text: 'not captions' })).status, 400);
+  } finally { close(); }
+});
+
 test('a project\'s subtitles from before become its caption track once, as they looked; the old way is off after', async () => {
   const root = project([{ clips: [{ id: 'vo', src: 'assets/vo.mp3' }] }], {
     'assets/vo.mp3': 'x',
