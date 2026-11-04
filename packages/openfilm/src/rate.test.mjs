@@ -11,3 +11,13 @@ test('the NTSC rates are their exact rates; another rate is kept as it is', () =
   assert.equal(ffmpegRate(exactRate(29.97), 8), '240000/1001');
   assert.equal(ffmpegRate(exactRate(12.5), 2), '25');
 });
+
+test('a rate taken times over is written without a float\'s tail', () => {
+  /* 1.1 * 3 is 3.3000000000000003 to a float, and that string used to go straight into ffmpeg's -framerate */
+  assert.equal(ffmpegRate(exactRate(1.1), 3), '3.3');
+  assert.equal(ffmpegRate(exactRate(2.3), 3), '6.9');
+  assert.equal(ffmpegRate(exactRate(12.5), 3), '37.5');
+  assert.equal(ffmpegRate(exactRate(0.7), 10), '7');
+  /* an NTSC rate is a pair of whole numbers: times over stays exact */
+  assert.equal(ffmpegRate(exactRate(29.97), 3), '90000/1001');
+});

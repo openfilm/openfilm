@@ -12,5 +12,10 @@ export function exactRate(fps) {
   return ntsc ? { fps: (whole * 1000) / 1001, num: whole * 1000, den: 1001 } : { fps, num: fps, den: 1 };
 }
 
+/** A number as ffmpeg reads it. A rate times over is a small number, so a float's tail (1.1 * 3 written as
+ * 3.3000000000000003) is never a real part of it: round it away before it reaches `-r`, `-framerate` or a filter.
+ * @param {number} n */
+const plain = (n) => String(Number(n.toPrecision(12)));
+
 /** The rate as ffmpeg takes it (`-r`, `-framerate`, a filter's expression), `times` over. @param {{ num: number, den: number }} rate @param {number} [times] */
-export const ffmpegRate = ({ num, den }, times = 1) => (den === 1 ? String(num * times) : `${num * times}/${den}`);
+export const ffmpegRate = ({ num, den }, times = 1) => (den === 1 ? plain(num * times) : `${plain(num * times)}/${den}`);
