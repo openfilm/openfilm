@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:f
 import { availableParallelism, freemem, totalmem } from 'node:os';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { clipKind, FILM_FILE } from './film-doc.mjs';
+import { crfVideo, softwareOnly } from './encode-options.mjs';
 import { broken, encoders, FRAMES_709, hardwareEncoder, hardwareOptions, prores709 } from './encoders.mjs';
 import { FilmPage, launch } from './host.mjs';
 import { exactRate, ffmpegRate } from './rate.mjs';
@@ -155,7 +156,8 @@ export async function render(args, opts = {}) {
   if (alpha && extname(out).toLowerCase() === '.mp4') { await probe.close(); await pool?.give(lent); throw new UsageError('mp4 has no transparency: write .webm or .mov with --alpha'); }
   /* a host may encode the container its own way (Studio's export: another codec, a quality, a frame around the film),
      and gets exactly that; else the picture goes through the graphics chip when it can */
-  const own = { ...container, ...opts.format };
+  const base = { ...container, ...opts.format };
+  const own = { ...base, video: crfVideo(base.video, opts.crf) };
   /* `clear` (with `alpha`): the format for a page that lets anything through. The page is drawn with `format` while
      every frame is opaque, each frame's alpha read as it is drawn; at the first pixel that shows through it is drawn
      again with `clear`, in the same tabs (an editing project's page: H.264 when it can, PNG with its alpha when not).
@@ -163,7 +165,7 @@ export async function render(args, opts = {}) {
   const clearFormat = alpha && opts.clear ? { ...container, ...opts.clear } : null;
   let clear = false;
   const size = { w: Math.round(meta.width * scale), h: Math.round(meta.height * scale) };
-  const chip = opts.format || opts.hardware === false ? null : await chipFormat(extname(out).toLowerCase(), size, fps);
+  const chip = softwareOnly(opts) ? null : await chipFormat(extname(out).toLowerCase(), size, fps);
   let format = chip ? { ...own, ...chip.format } : own;
   let encoder = chip?.encoder ?? encoderOf(own.video);
   const workers = Math.max(1, Math.min(pool ? lent.length : Number(opts.workers ?? defaultWorkers(machine(), total)), total));

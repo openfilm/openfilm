@@ -83,6 +83,8 @@ openfilm skill remove <name>
 
   --out <file>    another path; .webm or .mov with --alpha
   --fps <n>       frame rate, including decimals such as 29.97 (30)
+  --crf <n>       picture quality, lower is better (0 to 51, 16 by default); H.264 or VP9 by software,
+                  not the graphics chip's encoder, as a chip sets its bitrate instead
   --4k            3840 px wide              --scale <n>     any device pixel ratio
   --blur          motion blur (8 samples)   --samples <n>   --shutter <0..1>
   --alpha         transparent background    --workers <n>   parallel browsers
@@ -147,7 +149,7 @@ if (RAW[0] === 'get') {
       options: {
         count: { type: 'string' }, full: { type: 'boolean' }, out: { type: 'string', short: 'o' }, '4k': { type: 'boolean' }, scale: { type: 'string' },
         blur: { type: 'boolean' }, samples: { type: 'string' }, shutter: { type: 'string' }, alpha: { type: 'boolean' }, subtitles: { type: 'boolean' },
-        fps: { type: 'string' }, workers: { type: 'string' }, loudness: { type: 'string' }, help: { type: 'boolean', short: 'h' },
+        fps: { type: 'string' }, workers: { type: 'string' }, loudness: { type: 'string' }, crf: { type: 'string' }, help: { type: 'boolean', short: 'h' },
       },
     });
   } catch (e) {
@@ -161,9 +163,9 @@ if (RAW[0] === 'get') {
   if (o.help && COMMAND_HELP[cmd]) { console.log(named(COMMAND_HELP[cmd])); process.exit(0); }
   if (o.help || !cmd) { console.log(HELP); process.exit(0); }
   const num = (v) => (v == null ? undefined : Number(v));
-  const opts = { ...o, loudness: num(o.loudness), count: num(o.count), scale: num(o.scale), samples: num(o.samples), shutter: num(o.shutter), fps: num(o.fps), workers: num(o.workers) };
+  const opts = { ...o, loudness: num(o.loudness), count: num(o.count), scale: num(o.scale), samples: num(o.samples), shutter: num(o.shutter), fps: num(o.fps), workers: num(o.workers), crf: num(o.crf) };
   /* a number option out of its range is a wrong command (2), said before anything starts */
-  const RANGES = { count: [1, 200, true], fps: [1, 240, false], scale: [0.1, 8, false], samples: [1, 64, true], shutter: [0, 1, false], workers: [1, 64, true], loudness: [-70, -5, false] };
+  const RANGES = { count: [1, 200, true], fps: [1, 240, false], scale: [0.1, 8, false], samples: [1, 64, true], shutter: [0, 1, false], workers: [1, 64, true], loudness: [-70, -5, false], crf: [0, 51, true] };
   for (const [name, [lo, hi, whole]] of Object.entries(RANGES)) {
     const v = opts[name];
     if (v === undefined || (Number.isFinite(v) && v >= lo && v <= hi && (!whole || Number.isInteger(v)))) continue;
