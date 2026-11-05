@@ -1697,7 +1697,7 @@
     /** `pictures`: a video or a still only (a page is clicked by its layers; what is under its empty parts is found). */
     clipAt({ x, y, pictures }) { return clipAt(x, y, Boolean(pictures))?.id ?? null; },
     /** Show a clip placed in a box not kept yet (null: in its own again). */
-    place({ clip, box }) { hooks()?.place(clip, box ?? null); return true; },
+    place({ clip, box, size }) { hooks()?.place(clip, box ?? null, size ?? null); return true; },
     /** Show a clip in CSS of its own not kept yet (null: its own again). */
     look({ clip, css }) { hooks()?.look?.(clip, typeof css === 'string' ? css : null); return true; },
     /** Show a layer's move / scale / turn; with `center` (stage px), its offset keeps its center there. */

@@ -170,11 +170,11 @@ interface StageOutline {
   of?: string;
 }
 
-/** A clip's edit from the stage: its film.html `box`, or its own CSS (`style`: a crop). */
+/** A clip's edit from the stage: its film.html `box`, its own CSS (`style`: a crop), or the `size` a page is laid out at. */
 export interface StageClipEdit {
   loc: string;
-  prop: 'box' | 'style';
-  value: FilmBox | string | null;
+  prop: 'box' | 'style' | 'size';
+  value: FilmBox | { w: number; h: number } | string | null;
 }
 
 /** What the inspector needs of the stage while the editor wires it (see FilmStageSelect's `controlRef`). */
@@ -1639,7 +1639,7 @@ function FilmStageSelectImpl({
   }, [hoverHandle, onHoverLayer, ask, elementOf]);
 
   /* ── a whole clip in hand: moved, scaled, turned ── */
-  const clipPlace = React.useMemo(() => new Latest<{ clip: string; box: FilmBox | null }>(async (a) => { await ask('place', a); }), [ask]);
+  const clipPlace = React.useMemo(() => new Latest<{ clip: string; box: FilmBox | null; size?: { w: number; h: number } }>(async (a) => { await ask('place', a); }), [ask]);
   const clipsPlace = React.useMemo(() => new Latest<{ clip: string; box: FilmBox | null }[]>(async (list) => {
     await Promise.all(list.map((a) => ask('place', a)));
   }), [ask]);
@@ -1687,7 +1687,8 @@ function FilmStageSelectImpl({
       guides = r.guides;
     }
     shown = visibleFrame(next, g.box, g.crop);
-    clipPlace.push({ clip: g.clipId, box: compactBox(next, g.box) });
+    const side = g.kind === 'scale' ? textSideways(g, next) : null;
+    clipPlace.push(side ? { clip: g.clipId, box: side.box, size: side.size } : { clip: g.clipId, box: compactBox(next, g.box) });
     liveTRef.current = next;
     setLiveT(next);
     setLiveGuides((cur) => (sameGuides(cur, guides) ? cur : guides));
@@ -1713,11 +1714,24 @@ function FilmStageSelectImpl({
     /* the linked outline moves with it at once (film.html follows a moment later) */
     setLinkedMarks((marks) => (marks.some((m) => m.loc === g.clipLoc) ? marks.map((m) => (m.loc === g.clipLoc ? { ...m, t: at } : m)) : marks));
   };
+  /** A line of words pulled wider or narrower by a side: laid out again at its new width (its `size`), never stretched;
+      null for anything else. */
+  const textSideways = (g: { clipId: string; box: MgBox; handle?: { hx: number; hy: number } }, t: MgTransform) => {
+    if (!g.handle || g.handle.hy !== 0 || !isTextClipId(g.clipId)) return null;
+    /* as large as it was made (its scale, both ways alike), its own width what the side pulled */
+    const w = Math.round((g.box.w * t.scaleX) / t.scaleY);
+    if (w === Math.round(g.box.w)) return null;
+    return { size: { w, h: Math.round(g.box.h) }, box: compactBox({ ...t, scaleX: t.scaleY }, { ...g.box, w }) };
+  };
   /** Written as film.html's `box`; refused, it goes back where it started (the caller says why). */
   const commitClipBox = (g: { clipLoc: string; clipId: string; box: MgBox; crop: Crop; origin: MgTransform }, t: MgTransform) => {
     holdClipAt(g, t);
     if (!onEditClip) return;
-    void onEditClip([{ loc: g.clipLoc, prop: 'box', value: compactBox(t, g.box) }]).then((failed) => {
+    const side = textSideways(g, t);
+    void onEditClip([
+      ...(side ? [{ loc: g.clipLoc, prop: 'size' as const, value: side.size }] : []),
+      { loc: g.clipLoc, prop: 'box', value: side ? side.box : compactBox(t, g.box) },
+    ]).then((failed) => {
       if (!failed) return;
       clipPlace.push({ clip: g.clipId, box: null });
       holdClipAt(g, g.origin);
@@ -2668,7 +2682,8 @@ function FilmStageSelectImpl({
         currentTarget.setPointerCapture(pointerId);
       };
       const outerCrop = outer?.isMgOuter && outer.clipLoc ? infoOf(outer.clipLoc)?.crop ?? NO_CROP : NO_CROP;
-      const stretchable = outer?.clipKind === 'video';
+      /* a video or still takes any proportions; a line of words is made wider or narrower (textSideways) */
+      const stretchable = outer?.clipKind === 'video' || Boolean(outer?.clipId && isTextClipId(outer.clipId));
       if (onEditClip && handle && outer?.isMgOuter && outer.clipLoc && outer.clipId && outer.mgBox && origin && !lockedClip(outer.clipLoc)) {
         const kind = handle.getAttribute('data-mg-kind');
         const at = HANDLE_AT[handle.getAttribute('data-mg-handle') ?? ''];
@@ -3083,7 +3098,7 @@ function FilmStageSelectImpl({
                 <StageTransformFrame
                   frame={mgFrame}
                   scope="mg"
-                  edges={picked.element?.clipKind === 'video'}
+                  edges={picked.element?.clipKind === 'video' ? true : picked.element?.clipId && isTextClipId(picked.element.clipId) ? 'sides' : false}
                   moving={liveT != null && dragging}
                   label={sizeLabel(mgFrame)}
                   bounds={stageBounds}

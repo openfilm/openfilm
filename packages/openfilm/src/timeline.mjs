@@ -1529,9 +1529,13 @@ window.__filmEditor = {
    */
   stage: {
     clips: () => clips,
-    place(id, box) {
+    /* `size`: a page without a size of its own laid out at another while it is shown so (a line of words pulled wider:
+       it lays itself out again as it goes); none, at its clip's own again */
+    place(id, box, size) {
       const c = clips.find((x) => x.id === id);
-      if (c?.el && c.kind !== 'sound') place(c, box ?? c.row.box);
+      if (!c?.el || c.kind === 'sound') return;
+      if (c.kind === 'page' && !c.own) { const s = size ?? c.row.size ?? stage; c.nw = s.w; c.nh = s.h; }
+      place(c, box ?? c.row.box);
     },
     /** Show a clip in CSS of its own not kept yet (null: its own again), as an inspector's value is dragged. */
     look(id, css) {
