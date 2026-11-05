@@ -1641,7 +1641,7 @@ function FilmStageSelectImpl({
   }, [hoverHandle, onHoverLayer, ask, elementOf]);
 
   /* ── a whole clip in hand: moved, scaled, turned ── */
-  const clipPlace = React.useMemo(() => new Latest<{ clip: string; box: FilmBox | null; size?: { w: number; h: number } }>(async (a) => { await ask('place', a); }), [ask]);
+  const clipPlace = React.useMemo(() => new Latest<{ clip: string; box: FilmBox | null; size?: { w: number; h: number }; vars?: Record<string, string> }>(async (a) => { await ask('place', a); }), [ask]);
   const clipsPlace = React.useMemo(() => new Latest<{ clip: string; box: FilmBox | null }[]>(async (list) => {
     await Promise.all(list.map((a) => ask('place', a)));
   }), [ask]);
@@ -1689,10 +1689,17 @@ function FilmStageSelectImpl({
       guides = r.guides;
     }
     shown = visibleFrame(next, g.box, g.crop);
-    const side = g.kind === 'scale' ? textSideways(g, next) : null;
-    clipPlace.push(side ? { clip: g.clipId, box: side.box, size: side.size } : { clip: g.clipId, box: compactBox(next, g.box) });
     liveTRef.current = next;
-    setLiveT(next);
+    /* a line of words pulled by a side: as tall as its lines are as it goes */
+    const live = g.kind === 'scale' ? textLiveOf(g) : null;
+    if (live) {
+      shown = visibleFrame(placeText(g, next, live), g.box, g.crop);
+      void growText(g);
+    } else {
+      const side = g.kind === 'scale' ? textSideways(g, next) : null;
+      clipPlace.push(side ? { clip: g.clipId, box: side.box, size: side.size } : { clip: g.clipId, box: compactBox(next, g.box) });
+      setLiveT(next);
+    }
     setLiveGuides((cur) => (sameGuides(cur, guides) ? cur : guides));
     const vs = viewScaleNow();
     setHint({
@@ -1716,6 +1723,68 @@ function FilmStageSelectImpl({
     /* the linked outline moves with it at once (film.html follows a moment later) */
     setLinkedMarks((marks) => (marks.some((m) => m.loc === g.clipLoc) ? marks.map((m) => (m.loc === g.clipLoc ? { ...m, t: at } : m)) : marks));
   };
+  /**
+   * A line of words pulled by a side, as it goes: laid out at its new width and as tall as its lines are (`h`, measured
+   * after each width: growText), its size in the page's unit (`--size` in vh of its height, `vh` as kept) made smaller
+   * as it grows so its words stay as large. Null for anything else, or words sized another way.
+   */
+  const textLive = React.useRef<{ g: object; vh: number; h0: number; h: number; busy: boolean; again: boolean } | null>(null);
+  const textLiveOf = (g: { clipLoc: string; clipId: string; box: MgBox; handle?: { hx: number; hy: number } }) => {
+    if (!g.handle || g.handle.hy !== 0 || !isTextClipId(g.clipId)) return null;
+    if (textLive.current?.g === g) return textLive.current;
+    const vh = textSizeOf(g.clipLoc)?.vh;
+    textLive.current = vh ? { g, vh, h0: Math.round(g.box.h), h: Math.round(g.box.h), busy: false, again: false } : null;
+    return textLive.current;
+  };
+  /** Its `--size` as kept, in vh of its height, and its overrides; null when it is sized another way. */
+  const textSizeOf = (clipLoc: string) => {
+    const at = parseFilmDocLoc(clipLoc);
+    const clip = at ? docRef.current.tracks[at.track]?.clips[at.clip] : undefined;
+    const overrides = (clip as { overrides?: unknown[] } | undefined)?.overrides;
+    const root = overrides?.find((o) => (o as { at?: string; n?: number }).at === ':root' && (o as { n?: number }).n === undefined) as { style?: Record<string, string> } | undefined;
+    const size = /^\s*([\d.]+)vh\s*$/.exec(root?.style?.['--size'] ?? '62vh');
+    return size ? { vh: Number(size[1]), overrides } : null;
+  };
+  /** Shown at transform `t` (its width from the pull) and the height in `live`: placed, and the transform its frame shows. */
+  const placeText = (g: { clipId: string; box: MgBox }, t: MgTransform, live: { vh: number; h0: number; h: number }) => {
+    const w = Math.round((g.box.w * t.scaleX) / t.scaleY);
+    const y = t.y - ((live.h - live.h0) * t.scaleY) / 2;
+    clipPlace.push({
+      clip: g.clipId,
+      box: compactBox({ ...t, scaleX: t.scaleY, y }, { ...g.box, w, h: live.h }),
+      size: { w, h: live.h },
+      vars: { '--size': `${Math.round(((live.vh * live.h0) / live.h) * 100) / 100}vh` },
+    });
+    const shownT = { ...t, y, scaleY: (t.scaleY * live.h) / live.h0 };
+    setLiveT(shownT);
+    return shownT;
+  };
+  /** Its lines measured at the width it is shown at now; taller or shorter, shown so (one at a time, the last width). */
+  const growText = async (g: { clipId: string; box: MgBox; crop: Crop }) => {
+    const live = textLive.current;
+    if (!live) return;
+    if (live.busy) { live.again = true; return; }
+    live.busy = true;
+    try {
+      do {
+        live.again = false;
+        await clipPlace.idle();
+        const h = await textLines(g.clipId);
+        if (textLive.current !== live || gestureRef.current !== live.g || h == null || Math.abs(h - live.h) < 2) continue;
+        live.h = h;
+        const t = liveTRef.current;
+        if (!t) continue;
+        /* its size by the pointer says so too */
+        const f = visibleFrame(placeText(g, t, live), g.box, g.crop);
+        setHint((cur) => (cur ? { ...cur, text: `${Math.round(f.w)} × ${Math.round(f.h)}` } : cur));
+      } while (live.again && textLive.current === live);
+    } finally { live.busy = false; }
+  };
+  /** How tall a line of words shown now is: its lines, and the room its box keeps above and below them (lib/text-box). */
+  const textLines = async (clip: string) => {
+    const [box, words] = await Promise.all([ask<{ h: number } | null>('measure', { clip, at: '.box' }), ask<{ font: number } | null>('measure', { clip, at: '.t' })]);
+    return box?.h && words?.font ? Math.round(box.h + 2 * TEXT_ROOM * words.font) : null;
+  };
   /** A line of words pulled wider or narrower by a side: laid out again at its new width (its `size`), never stretched;
       null for anything else. */
   const textSideways = (g: { clipId: string; box: MgBox; handle?: { hx: number; hy: number } }, t: MgTransform) => {
@@ -1727,10 +1796,15 @@ function FilmStageSelectImpl({
   };
   /** Written as film.html's `box`; refused, it goes back where it started (the caller says why). */
   const commitClipBox = (g: { clipLoc: string; clipId: string; box: MgBox; crop: Crop; origin: MgTransform }, t: MgTransform) => {
-    holdClipAt(g, t);
+    const live = textLive.current?.g === g ? textLive.current : null;
+    textLive.current = null;
+    /* a line of words grown as it was pulled: held as tall as it was shown until film.html has it */
+    holdClipAt(g, live ? { ...t, y: t.y - ((live.h - live.h0) * t.scaleY) / 2, scaleY: (t.scaleY * live.h) / live.h0 } : t);
     if (!onEditClip) return;
     const side = textSideways(g, t);
     const write = (edits: StageClipEdit[]) => void onEditClip(edits).then((failed) => {
+      /* its words' size shown as it was pulled: film.html's own now (a changed size lets it go by itself) */
+      if (live && (failed || !edits.some((e) => e.prop === 'overrides'))) void ask('release', { clip: g.clipId });
       if (!failed) return;
       clipPlace.push({ clip: g.clipId, box: null });
       holdClipAt(g, g.origin);
@@ -1753,18 +1827,11 @@ function FilmStageSelectImpl({
    * Null when it cannot be told (its size given another way, or the page not shown).
    */
   const textHeight = async (g: { clipLoc: string; clipId: string; box: MgBox }) => {
-    const at = parseFilmDocLoc(g.clipLoc);
-    const clip = at ? docRef.current.tracks[at.track]?.clips[at.clip] : undefined;
-    const overrides = (clip as { overrides?: unknown[] } | undefined)?.overrides;
-    const root = overrides?.find((o) => (o as { at?: string; n?: number }).at === ':root' && (o as { n?: number }).n === undefined) as { style?: Record<string, string> } | undefined;
-    const size = /^\s*([\d.]+)vh\s*$/.exec(root?.style?.['--size'] ?? '62vh');
-    if (!size) return null;
-    const [box, words] = await Promise.all([ask<{ h: number } | null>('measure', { clip: g.clipId, at: '.box' }), ask<{ font: number } | null>('measure', { clip: g.clipId, at: '.t' })]);
-    if (!box?.h || !words?.font) return null;
-    const h = Math.round(box.h + 2 * TEXT_ROOM * words.font);
-    if (Math.abs(h - g.box.h) < 2) return null;
-    const vh = Math.round(Number(size[1]) * (g.box.h / h) * 10) / 10;
-    return { h, overrides: withRootVars(overrides, { '--size': `${vh}vh` }) };
+    const size = textSizeOf(g.clipLoc);
+    const h = size ? await textLines(g.clipId) : null;
+    if (!size || h == null || Math.abs(h - g.box.h) < 2) return null;
+    const vh = Math.round(size.vh * (g.box.h / h) * 10) / 10;
+    return { h, overrides: withRootVars(size.overrides, { '--size': `${vh}vh` }) };
   };
 
   const endMgGesture = () => {

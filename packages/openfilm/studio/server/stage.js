@@ -1719,7 +1719,13 @@
     /** `pictures`: a video or a still only (a page is clicked by its layers; what is under its empty parts is found). */
     clipAt({ x, y, pictures }) { return clipAt(x, y, Boolean(pictures))?.id ?? null; },
     /** Show a clip placed in a box not kept yet (null: in its own again). */
-    place({ clip, box, size }) { hooks()?.place(clip, box ?? null, size ?? null); return true; },
+    /* `vars`: its page's variables shown with it, in the same frame (a line of words grown taller, its words as large) */
+    place({ clip, box, size, vars }) {
+      const c = vars ? clipById(clip) : null;
+      if (c?.kind === 'page') draft(c, { at: ':root' }, { style: vars });
+      hooks()?.place(clip, box ?? null, size ?? null);
+      return true;
+    },
     /** An element of a clip shown now, as its page lays it out (no transform counted): its size, and its font's. */
     measure({ clip, at }) {
       const c = clipById(clip);
