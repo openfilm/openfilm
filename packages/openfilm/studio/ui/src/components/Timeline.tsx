@@ -3052,8 +3052,9 @@ export const Timeline = React.memo(function Timeline({
                still lines up with the ruler */
             const left = Math.round(startMs * pxPerMs);
             const width = Math.max(2, Math.round(endMs * pxPerMs) - left - 1);
-            /* a row of the library's text: drawn as a caption track is, each clip its words, no pictures */
-            const textRow = Boolean(track.text);
+            /* a line of the library's words (a row of them, or one among other clips): drawn as a caption track is, its
+               words, no pictures */
+            const textRow = Boolean(track.text) || block.words != null;
             const color = textRow ? 'var(--clip-text)'
               : block.kind === 'video' && block.src && filmSrcIsStill(block.src) ? 'var(--clip-image)' : KIND_COLOR[block.kind];
             const able = drag.can(block);

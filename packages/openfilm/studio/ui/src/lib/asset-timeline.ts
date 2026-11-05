@@ -158,6 +158,32 @@ function newTrackSpot(tracks: readonly TimelineTrack[], docAt: number): AssetDro
 /** A text of the library (a line of words, a name card, a callout…): it goes on a row of text (TimelineTrack `text`). */
 const libraryText = (file: { saved?: string | undefined }) => Boolean(file.saved?.startsWith('openfilm/text/'));
 
+/**
+ * A sound goes on a sound track (A), a picture (a page, a video, a still) on a picture track (V), as the timeline names
+ * them: let go over a track of the other kind, or above or below every row, onto the nearest track of its own kind
+ * free there (a text only on a row of text), else a new one where its kind's tracks are: a sound track under the
+ * last one, a picture track right above V1 (which stays the main track).
+ */
+function ownKindSpot(
+  tracks: readonly TimelineTrack[],
+  sound: boolean,
+  text: boolean,
+  range: { startMs: number; endMs: number },
+  near: number,
+): AssetDropSpot {
+  const own = (tr: TimelineTrack) => tr.docIndex != null && !tr.captions && (tr.role === 'audio') === sound;
+  const free = tracks
+    .map((tr, laneIndex) => ({ tr, laneIndex }))
+    .filter(({ tr, laneIndex }) => own(tr) && !tr.locked && (!text || tr.text) && !rangeOverlaps(range, occupiedOf(tracks, tr.docIndex ?? null, laneIndex)))
+    .sort((a, b) => Math.abs(a.laneIndex - near) - Math.abs(b.laneIndex - near))[0];
+  if (free) return { action: 'into', laneIndex: free.laneIndex, lane: free.tr.lane, docIndex: free.tr.docIndex ?? null, locked: false };
+  const sounds = tracks.filter((tr) => tr.docIndex != null && tr.role === 'audio').map((tr) => tr.docIndex!);
+  const pictures = tracks.filter((tr) => tr.docIndex != null && tr.role !== 'audio' && !tr.captions).map((tr) => tr.docIndex!);
+  const docEnd = tracks.reduce((m, tr) => (tr.docIndex != null ? Math.max(m, tr.docIndex + 1) : m), 0);
+  if (sound) return newTrackSpot(tracks, sounds.length ? Math.max(...sounds) + 1 : pictures.length ? Math.max(...pictures) + 1 : docEnd);
+  return newTrackSpot(tracks, pictures.length ? Math.max(...pictures) : sounds.length ? Math.min(...sounds) : docEnd);
+}
+
 export function assetDropSpot(
   file: Pick<ResourceDragItem, 'path' | 'kind' | 'durationMs' | 'saved'>,
   tracks: readonly TimelineTrack[],
@@ -171,10 +197,14 @@ export function assetDropSpot(
   const startMs = Math.max(0, atMs);
   const range = { startMs, endMs: startMs + durMs };
   const onFilm = tracks.filter((tr) => tr.docIndex != null);
+  const sound = assetClipKindOf(file) === 'audio';
 
-  /* pointing at a row: any track takes any clip (SPEC), so it goes onto the row under the pointer */
+  /* pointing at a row: it goes onto the row under the pointer, when it is a track of its kind (ownKindSpot) */
   if (hit && hit.lane >= 0 && hit.lane < tracks.length) {
     const target = tracks[hit.lane]!;
+    if (target.docIndex != null && !target.captions && (target.role === 'audio') !== sound) {
+      return ownKindSpot(tracks, sound, libraryText(file), range, hit.lane);
+    }
     /* its top or bottom edge = a new track above / below (without an edit mode) */
     if (target.docIndex != null && hit.band !== 'body' && !edit) {
       return newTrackSpot(tracks, hit.band === 'above' ? target.docIndex : target.docIndex + 1);
@@ -195,7 +225,9 @@ export function assetDropSpot(
     return { action: 'into', laneIndex: hit.lane, lane: target.lane, docIndex: null, locked: false };
   }
 
-  /* above or below every row: a new track at the top / bottom, like dragging a clip there (moveDestFor) */
+  /* above or below every row: a new track at the top / bottom, like dragging a clip there (moveDestFor); a sound where
+     the sound tracks are */
+  if (sound && onFilm.length) return ownKindSpot(tracks, true, false, range, hit && hit.lane < 0 ? 0 : tracks.length);
   if (hit && hit.lane < 0 && onFilm.length) return newTrackSpot(tracks, onFilm[0]!.docIndex!);
   const docEnd = onFilm.reduce((m, tr) => Math.max(m, tr.docIndex! + 1), 0);
   return { action: 'new-track', laneIndex: tracks.length, docAt: docEnd };
