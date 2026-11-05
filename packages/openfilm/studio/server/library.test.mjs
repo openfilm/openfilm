@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { builtInRoot, libraryFavorites, libraryFile, libraryIndex, libraryVoices, setLibraryFavorites, voiceKey } from './library.mjs';
@@ -77,6 +77,21 @@ test('a page of the library is taken into a project as a copy under saved/openfi
   const sound = await takeSaved(root, 'openfilm/sounds/whoosh.m4a');
   assert.deepEqual(sound, { path: 'assets/whoosh.m4a' });
   await assert.rejects(() => takeSaved(root, 'openfilm/../package.json'));
+});
+
+test('a project\'s copy of the line of words follows the library\'s; another thing\'s copy is kept as it is', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-library-text-'));
+  await takeSaved(root, 'openfilm/text/text');
+  const page = join(root, 'saved/openfilm/text-text/text.html');
+  const now = readFileSync(page, 'utf8');
+  writeFileSync(page, 'an older text page');
+  await takeSaved(root, 'openfilm/text/text');
+  assert.equal(readFileSync(page, 'utf8'), now, 'written again as the library has it');
+  await takeSaved(root, 'openfilm/effects/snow');
+  const snow = join(root, 'saved/openfilm/effects-snow/snow.html');
+  writeFileSync(snow, 'changed here');
+  await takeSaved(root, 'openfilm/effects/snow');
+  assert.equal(readFileSync(snow, 'utf8'), 'changed here', 'kept');
 });
 
 test('the starred things are kept in the shared prefs, those of the library only, each once', () => {

@@ -37,6 +37,8 @@ export class SavedError extends Error {
   }
 }
 
+/** OpenFilm's line of words, in its library (the studio's lib/library TEXT_COMPONENT). */
+const TEXT_COMPONENT = 'text/text';
 const VERSION = 2;
 /** What the API calls the library's top folder: its paths are `saved/<place in the library>`. */
 export const LIBRARY = 'saved';
@@ -301,10 +303,12 @@ const placeName = (/** @type {string} */ rel) => rel.split('/').map((part) => pa
  * maybe changed since in that project) stays as it is.
  * @param {string} from @param {string[]} files @param {string} to
  */
-async function copyIn(from, files, to) {
+async function copyIn(from, files, to, fresh = false) {
   for (const rel of files) {
     const dest = join(to, rel);
-    if ((await stat(dest).catch(() => null))?.isFile()) continue;
+    const there = (await stat(dest).catch(() => null))?.isFile();
+    /* `fresh`: one there that is not the library's as it is now is written again */
+    if (there && (!fresh || (await readFile(dest)).equals(await readFile(join(from, rel))))) continue;
     await mkdir(dirname(dest), { recursive: true });
     await copyFile(join(from, rel), dest);
   }
@@ -313,8 +317,8 @@ async function copyIn(from, files, to) {
 /**
  * What a project needs to use a thing of the library (`path`, a `saved/` path, or an `openfilm/` one for a thing of
  * OpenFilm's own library, library.mjs): a file imported into its assets/ (as one from the computer is), or a bundle's
- * files copied to `saved/<its place>/` there (a file there already is kept as it is) and the clip, a group's clips or
- * the page, with their files' places there. OpenFilm's things go to `saved/openfilm/<its place, one name>/`.
+ * files copied to `saved/<its place>/` there (a file there already is kept as it is, but OpenFilm's line of words) and
+ * the clip, a group's clips or the page, with their files' places there. OpenFilm's things go to `saved/openfilm/<its place, one name>/`.
  * @param {string} root @param {unknown} path
  * @returns {Promise<{ clip: Record<string, unknown> & { src: string } } | { clips: { track: number, at: number, clip: Record<string, unknown> & { src: string } }[] } | { path: string }>}
  */
@@ -339,7 +343,9 @@ export async function takeSaved(root, path) {
   for (const entry of await readdir(from, { recursive: true, withFileTypes: true }).catch(() => [])) {
     if (entry.isFile()) files.push(join(entry.parentPath ?? entry.path, entry.name).slice(from.length + 1));
   }
-  await copyIn(from, files, join(root, base));
+  /* the library's line of words (its text component) is one page every text of a project shares, changed only through
+     its variables: a project's copy follows the library's (its motions kept within its box, say), never kept as it was */
+  await copyIn(from, files, join(root, base), builtIn && rel === TEXT_COMPONENT);
   if (item.kind === 'page') return { path: `${base}/${item.path}` };
   if (item.kind === 'group') return { clips: item.clips.map((/** @type {any} */ c) => ({ track: c.track, at: c.at, clip: { ...c.clip, src: `${base}/${c.clip.src}` } })) };
   return { clip: { ...item.clip, src: `${base}/${item.clip.src}` } };
