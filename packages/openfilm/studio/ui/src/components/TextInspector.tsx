@@ -10,11 +10,12 @@ import { useLanguage, useT } from '@/i18n';
 import { joinFontFamily, splitFontFamily } from '@/lib/font-styles';
 import { nameOf, posterUrl, previewUrl, useLibraryIndex, type LibraryItem } from '@/lib/library';
 import {
-  LOOK_VARS, MOTION_VARS, TEXT_DEFAULTS, WORDS_AT, currentOf, textVars, textWords, withLook, withMotion, withVars, withWords,
+  LOOK_VARS, MOTION_VARS, TEXT_DEFAULTS, currentOf, textVars, textWords, withLook, withMotion, withVars, withWords,
   type MotionSlot,
 } from '@/lib/text-look';
-import { ColorField, NumField, Row, Section, Segmented, SelectField } from './inspector-fields';
+import { ColorField, FIELD, NumField, Row, Section, Segmented, SelectField } from './inspector-fields';
 import { FontFamilyPicker } from './FontFamilyPicker';
+import { SavedLookTiles, useSavedLooks } from './CaptionPresets';
 import type { PropsHost } from './PropertiesSection';
 
 type Overrides = Record<string, unknown>[];
@@ -22,7 +23,8 @@ const ROOT = { at: ':root' };
 const num = (v: string | undefined) => { const n = Number.parseFloat(v ?? ''); return Number.isFinite(n) ? n : undefined; };
 const MOTION_SLOTS: MotionSlot[] = ['in', 'loop', 'out'];
 
-export function TextInspector({ host, commit }: { host: PropsHost; commit: (next: Overrides) => void }) {
+/** `boxH`: how tall its box is drawn on the picture, so its words' size reads in the film's pixels. */
+export function TextInspector({ host, boxH, commit }: { host: PropsHost; boxH?: number | undefined; commit: (next: Overrides) => void }) {
   const t = useT();
   const lang = useLanguage();
   const index = useLibraryIndex();
@@ -41,6 +43,10 @@ export function TextInspector({ host, commit }: { host: PropsHost; commit: (next
   const looks = (index?.items ?? []).filter((i) => i.kind === 'textstyle' && i.group === 'wordart');
   const motions = (slot: MotionSlot) => (index?.items ?? []).filter((i) => i.kind === 'textmotion' && i.group === slot);
   const look = currentOf(vars, looks, LOOK_VARS);
+  /* the person's own looks, saved here or with the captions (the same ones): its look, never its size */
+  const [saved, saveLook, dropLook] = useSavedLooks();
+  const ownLook = Object.fromEntries(LOOK_VARS.flatMap((k) => (vars[k] != null ? [[k, vars[k]!]] : [])));
+  const savedOn = currentOf(vars, saved.map((s) => ({ ...s, vars: Object.fromEntries(LOOK_VARS.flatMap((k) => (s.vars[k] != null ? [[k, s.vars[k]!]] : []))) })), LOOK_VARS)?.id ?? null;
   const family = splitFontFamily(vars['--font'] ?? '')[0];
   /* a font picked keeps the page's fallbacks after it */
   const withFont = (f: string) => joinFontFamily(f, splitFontFamily(TEXT_DEFAULTS['--font']!)[1]);
@@ -54,7 +60,6 @@ export function TextInspector({ host, commit }: { host: PropsHost; commit: (next
           placeholder={t('textInspector.wordsHint')}
           rows={2}
           onBlur={(e) => { if (e.target.value !== words) write(withWords(overrides, e.target.value)); }}
-          onFocus={() => host.point?.({ at: WORDS_AT })}
           className="w-full resize-none rounded-[5px] bg-[var(--bg-field)] px-2 py-1.5 text-[12px] leading-[1.5] text-[var(--text)] outline-none ring-1 ring-inset ring-transparent focus:ring-[var(--accent)]"
         />
         <Line label={t('textInspector.font')}>
@@ -65,14 +70,20 @@ export function TextInspector({ host, commit }: { host: PropsHost; commit: (next
             onPreview={(f) => paint('--font', withFont(f))}
             onRevert={revert}
             onCommit={(f) => setVar('--font', withFont(f))}
-            className="w-full"
+            className={FIELD}
           />
         </Line>
         <Line label={t('textInspector.size')}>
           <Row>
-            {/* of the clip's box: how tall the words are in it (they never spill out of it) */}
-            <NumField label={t('textInspector.size')} value={num(vars['--size'])} unit="%" step={1} min={5} max={100}
-              onPreview={(n) => paint('--size', `${n}vh`)} onRevert={revert} onCommit={(n) => setVar('--size', `${n}vh`)} />
+            {/* the words' size in the film's pixels (the page keeps it as a share of its box's height, `--size` in vh,
+                and the box follows the words); a share where the box is not known */}
+            {boxH ? (
+              <NumField label={t('textInspector.size')} value={Math.round(((num(vars['--size']) ?? 62) * boxH) / 100)} unit="px" step={1} min={4} max={2000}
+                onPreview={(n) => paint('--size', `${(n * 100) / boxH}vh`)} onRevert={revert} onCommit={(n) => setVar('--size', `${Math.round(((n * 100) / boxH) * 100) / 100}vh`)} />
+            ) : (
+              <NumField label={t('textInspector.size')} value={num(vars['--size'])} unit="%" step={1} min={5} max={100}
+                onPreview={(n) => paint('--size', `${n}vh`)} onRevert={revert} onCommit={(n) => setVar('--size', `${n}vh`)} />
+            )}
             <SelectField label={t('textInspector.weight')} value={vars['--weight'] ?? '800'}
               options={['200', '300', '400', '500', '600', '700', '800', '900'].map((w) => ({ value: w, label: w }))}
               onPreview={(w) => paint('--weight', w)} onRevert={revert} onCommit={(w) => setVar('--weight', w)} />
@@ -106,7 +117,19 @@ export function TextInspector({ host, commit }: { host: PropsHost; commit: (next
         </Line>
       </Section>
 
-      <Section id="wordart" title={t('textInspector.wordart')}>
+      <Section id="wordart" title={t('textInspector.wordart')}
+        aside={<button type="button" data-text-save-look="" onClick={() => saveLook(ownLook)}
+          className="h-5 rounded-[5px] bg-[var(--bg-field)] px-2 text-[11px] text-[var(--text)] hover:bg-[var(--bg-hover)]">{t('captionTrack.saveLook')}</button>}>
+        {/* the person's own first, then the library's */}
+        {saved.length ? (
+          <>
+            <div className="text-[11px] text-[var(--text-muted)]">{t('captionTrack.savedLook')}</div>
+            <div data-text-presets="" className="mb-2.5 mt-1.5 grid grid-cols-[repeat(auto-fill,minmax(38px,1fr))] gap-1.5">
+              <SavedLookTiles saved={saved} on={savedOn} onDrop={dropLook}
+                onPick={(_, v) => write(withLook(overrides, Object.fromEntries(LOOK_VARS.flatMap((k) => (v[k] != null ? [[k, v[k]!]] : [])))))} />
+            </div>
+          </>
+        ) : null}
         <Tiles
           items={looks}
           on={look?.id ?? (LOOK_VARS.every((k) => vars[k] === TEXT_DEFAULTS[k]) ? '' : null)}

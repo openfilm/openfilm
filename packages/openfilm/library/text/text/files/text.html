@@ -44,7 +44,12 @@
   --clip-length: 3600s;
 }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
-.stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+/* the words in the middle of the box's height, and to its left, middle or right as they are aligned (in a box wider
+   than they are: one a side was pulled out on), with their room kept at that side */
+.stage {
+  position: fixed; inset: 0; display: grid; align-content: center; justify-items: var(--align);
+  padding: 0 calc(var(--size) * 0.23);
+}
 .box {
   max-width: 96vw; text-align: var(--align); scale: var(--fit, 1);
   background: var(--box); padding: var(--box-pad); border-radius: var(--box-radius);
@@ -121,6 +126,8 @@ const fit = () => {
 /* fitted again whenever its variables or its words change (a host sets them after a frame is drawn) */
 new MutationObserver(fit).observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
 new MutationObserver(fit).observe(box, { subtree: true, characterData: true, childList: true });
+/* and when its box is made another size (a side pulled, the words typed in growing it) */
+addEventListener('resize', fit);
 document.fonts?.ready.then(fit);
 window.film = { frame() { fit(); } };
 if (!window.filmHost) {

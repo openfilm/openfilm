@@ -1018,10 +1018,19 @@ export function ProjectView({ projectId, onProject, onLeave }: {
    * shorter pushes or pulls what follows, as a ripple trim does; elsewhere a speed too slow to fit before the next clip
    * is refused, and the inspector says why. With linkage what rides on the main track stays on its footage.
    */
-  const editClips = React.useCallback((edits: ClipEdit[]): Promise<string | null> => {
+  const editClips = React.useCallback(async (edits: ClipEdit[]): Promise<string | null> => {
     const [one] = edits;
     const block = one && edits.length === 1 ? blocksRef.current.find((b) => b.loc === one.loc) : undefined;
-    if (block?.loc && lockedEdits(edits, filmRef.current).length) return Promise.resolve(t('timeline.trackLocked'));
+    if (block?.loc && lockedEdits(edits, filmRef.current).length) return t('timeline.trackLocked');
+    /* a line of words given new words or a new look: its box stays its words (FilmStageControl fitText), in one edit */
+    if (block?.loc && one!.prop === 'overrides' && isTextClip(block.src ?? '')) {
+      const fitted = await stageControl.current?.fitText(block.loc, (one!.value ?? []) as unknown as unknown[]);
+      if (fitted) {
+        const failed = await editBlocks(fitted as unknown as ClipEdit[], true);
+        if (failed) void stageControl.current?.fitText(block.loc, null);
+        return failed;
+      }
+    }
     const model = editModel();
     const prefs = readTimelinePrefs();
     const switches = switchesOf(prefs);

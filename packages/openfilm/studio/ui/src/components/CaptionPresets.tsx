@@ -64,7 +64,7 @@ export function CaptionPresets({ on, onPick, saved, onDrop }: {
   onDrop: (id: string) => void;
 }) {
   const t = useT();
-  const tile = (lit: boolean) => `relative grid aspect-square place-items-center rounded-[6px] bg-[var(--bg-field)] text-[20px] ${lit ? 'ring-2 ring-[var(--accent)]' : 'hover:ring-1 hover:ring-[var(--text-faint)]'}`;
+  const tile = tileClass;
   return (
     <div data-caption-presets="" className="grid grid-cols-[repeat(auto-fill,minmax(38px,1fr))] gap-1.5">
       <button type="button" title={t('textInspector.none')} onClick={() => onPick('', null)} className={`${tile(on === '')} text-[var(--text-faint)]`}><Ban size={18} /></button>
@@ -73,9 +73,26 @@ export function CaptionPresets({ on, onPick, saved, onDrop }: {
           <span style={tStyle(captionLookVars(id))}>T</span>
         </button>
       ))}
+      <SavedLookTiles saved={saved} on={on} onPick={onPick} onDrop={onDrop} />
+    </div>
+  );
+}
+
+const tileClass = (lit: boolean) => `relative grid aspect-square place-items-center rounded-[6px] bg-[var(--bg-field)] text-[20px] ${lit ? 'ring-2 ring-[var(--accent)]' : 'hover:ring-1 hover:ring-[var(--text-faint)]'}`;
+
+/** The looks the person saved (captions' and lines of words' alike), each its "T", taken away by its ×. */
+export function SavedLookTiles({ saved, on, onPick, onDrop }: {
+  saved: readonly SavedLook[];
+  on: string | null;
+  onPick: (id: string, vars: Record<string, string>) => void;
+  onDrop: (id: string) => void;
+}) {
+  const t = useT();
+  return (
+    <>
       {saved.map((s) => (
         <span key={s.id} className="group relative">
-          <button type="button" data-caption-preset={s.id} title={t('captionTrack.savedLook')} onClick={() => onPick(s.id, s.vars)} className={`${tile(on === s.id)} w-full`}>
+          <button type="button" data-caption-preset={s.id} title={t('captionTrack.savedLook')} onClick={() => onPick(s.id, s.vars)} className={`${tileClass(on === s.id)} w-full`}>
             <span style={tStyle(s.vars)}>T</span>
           </button>
           <button type="button" aria-label={t('captionTrack.savedLookDrop')} onClick={() => onDrop(s.id)}
@@ -84,6 +101,6 @@ export function CaptionPresets({ on, onPick, saved, onDrop }: {
           </button>
         </span>
       ))}
-    </div>
+    </>
   );
 }

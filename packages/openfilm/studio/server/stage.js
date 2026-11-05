@@ -834,12 +834,20 @@
       paintAround(b, c, { t: g.t, s: [round(g.s[0] * ks[0]), round(g.s[1] * ks[1])], r: Math.round((g.r + dr) * 100) / 100 }, center);
     }
   };
+  /* clips shown with overrides of an inspector's not written yet (the show op): their own overrides then */
+  const shownWith = new Map();
   const release = (id) => {
     if (!drafts.delete(id)) return;
     editor()?.preview(id, null);
   };
   /* the film was updated: a clip whose kept overrides changed shows them, not the drafts made against the old ones */
   const updated = () => {
+    for (const [id, base] of shownWith) {
+      const c = clipById(id);
+      if (c && JSON.stringify(c.overrides ?? []) === base) continue;
+      shownWith.delete(id);
+      editor()?.preview(id, null);
+    }
     for (const [id, d] of drafts) {
       const c = clipById(id);
       if (!c || JSON.stringify(c.overrides ?? []) !== d.base) release(id);
@@ -1719,20 +1727,42 @@
     /** `pictures`: a video or a still only (a page is clicked by its layers; what is under its empty parts is found). */
     clipAt({ x, y, pictures }) { return clipAt(x, y, Boolean(pictures))?.id ?? null; },
     /** Show a clip placed in a box not kept yet (null: in its own again). */
-    /* `vars`: its page's variables shown with it, in the same frame (a line of words grown taller, its words as large) */
-    place({ clip, box, size, vars }) {
-      const c = vars ? clipById(clip) : null;
-      if (c?.kind === 'page') draft(c, { at: ':root' }, { style: vars });
+    /* `vars`: its page's variables shown with it, in the same frame (a line of words grown taller, its words as large).
+       `root`: the same set on the page itself, not as a draft (a draft shows the clip's overrides again, and would put
+       back the words of a line being typed in) */
+    place({ clip, box, size, vars, root }) {
+      const c = vars || root ? clipById(clip) : null;
+      if (vars && c?.kind === 'page') draft(c, { at: ':root' }, { style: vars });
+      if (root && c?.win) for (const [k, v] of Object.entries(root)) c.win.document.documentElement.style.setProperty(k, String(v));
       hooks()?.place(clip, box ?? null, size ?? null);
       return true;
     },
+    /**
+     * Show a page clip with `overrides` instead of its own (an inspector's edit measured before it is written), until
+     * its own change (written: see updated) or this is called with null.
+     */
+    show({ clip, overrides }) {
+      const c = clipById(clip);
+      if (!c) return false;
+      if (Array.isArray(overrides)) shownWith.set(clip, JSON.stringify(c.overrides ?? [])); else shownWith.delete(clip);
+      editor()?.preview(clip, Array.isArray(overrides) ? overrides : null);
+      return true;
+    },
     /** An element of a clip shown now, as its page lays it out (no transform counted): its size, and its font's. */
-    measure({ clip, at }) {
+    /* `natural`: also its width on one line, nothing wrapped (`nw`) */
+    measure({ clip, at, natural }) {
       const c = clipById(clip);
       let el = null;
       try { el = c?.win?.document?.querySelector(String(at)) ?? null; } catch { /* not a selector */ }
       if (!el || !c?.win) return null;
-      return { w: el.offsetWidth, h: el.offsetHeight, font: parseFloat(c.win.getComputedStyle(el).fontSize) || 0 };
+      const out = { w: el.offsetWidth, h: el.offsetHeight, font: parseFloat(c.win.getComputedStyle(el).fontSize) || 0 };
+      if (natural) {
+        const was = [el.style.getPropertyValue('white-space'), el.style.getPropertyPriority('white-space')];
+        el.style.setProperty('white-space', 'pre', 'important');
+        out.nw = el.offsetWidth;
+        if (was[0]) el.style.setProperty('white-space', was[0], was[1]); else el.style.removeProperty('white-space');
+      }
+      return out;
     },
     /** Show a clip in CSS of its own not kept yet (null: its own again). */
     look({ clip, css }) { hooks()?.look?.(clip, typeof css === 'string' ? css : null); return true; },
