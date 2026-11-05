@@ -1386,7 +1386,8 @@ function FilmStageSelectImpl({
     const info = clipInfo(doc, spans, stage, only);
     /* not on screen now (the playhead elsewhere): no frame over a picture it is not in; it comes back with it */
     if (info && !shownNow(info.id)) { if (held?.isMgOuter) dropPick(); return; }
-    if (held?.isMgOuter && held.clipLoc === only) return;
+    /* in hand already; or a line of it being typed in (a double-click went in: the clip stays selected there) */
+    if (held?.clipLoc === only && (held.isMgOuter || textEdit.current)) return;
     /* a sound has no picture: the handles of the clip held before go */
     if (!info) { if (pickedRef.current?.element?.isMgOuter) dropPick(); return; }
     /* the inspector's preview was of the clip held before */
