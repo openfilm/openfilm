@@ -56,7 +56,7 @@ export const BYOK_FORMATS = Object.freeze({
 });
 
 /* the person's other agents: not shown until connected or switched on */
-const DEFAULT_SHOWN = { codex: true, claude: true, byok: false };
+const DEFAULT_SHOWN = { codex: true, claude: true, antigravity: true, byok: false };
 /* Codex is used as it is signed in on the computer from the start; Claude Code only once the person connects it, which
    signs in to their Claude subscription the first time */
 const DEFAULT_DISCONNECTED = Object.freeze(['claude']);

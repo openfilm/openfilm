@@ -31,6 +31,7 @@ const FEATURES: { key: string; icon: React.ReactNode }[] = [
 const AGENTS: { id: string; name: string }[] = [
   { id: 'claude', name: 'Claude Code' },
   { id: 'openai', name: 'Codex' },
+  { id: 'google', name: 'Google Antigravity' },
   { id: 'copilot', name: 'GitHub Copilot' },
   { id: 'cursor', name: 'Cursor' },
   { id: 'opencode', name: 'OpenCode' },

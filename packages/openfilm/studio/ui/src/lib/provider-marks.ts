@@ -32,7 +32,7 @@ export const MARKS: Record<string, { viewBox: string; d: string; parts?: { d: st
 };
 
 /** An agent drawn with its maker's mark (Settings → Agents). The own key has a key, not a mark. */
-export const AGENT_MARK: Readonly<Record<string, string>> = { codex: 'openai' };
+export const AGENT_MARK: Readonly<Record<string, string>> = { codex: 'openai', antigravity: 'google' };
 
 /** The mark an agent is drawn with: its own, or its maker's. */
 export const agentMark = (id: string): string => AGENT_MARK[id] ?? id;

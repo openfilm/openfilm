@@ -103,6 +103,14 @@ export const AGENTS = Object.freeze({
       grep: 'search', glob: 'search',
       web_search: 'fetch', web_fetch: 'fetch',
     } },
+  /* Google Antigravity: speaks ACP or runs in automated mode; signed in through Google / Antigravity IDE, so one found is connected */
+  antigravity: {
+    label: AGENT_DEFINITIONS.antigravity.name,
+    args: ['acp'],
+    login: null,
+    approve: true,
+    systemPrompt: true,
+  },
 });
 
 /**

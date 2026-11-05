@@ -141,7 +141,7 @@ test('the agents that sign out with a command of their own, run with no window, 
   assert.deepEqual(logouts, {
     claude: ['auth', 'logout'], cursor: ['logout'], minimax: ['logout'],
     /* Codex signs in in Codex (its app shares the sign-in); OpenCode's asks which account; the others have none */
-    codex: null, copilot: null, opencode: null, codebuddy: null, qwen: null, kimi: null, deepseek: null,
+    codex: null, copilot: null, opencode: null, codebuddy: null, qwen: null, kimi: null, deepseek: null, antigravity: null,
   });
 });
 

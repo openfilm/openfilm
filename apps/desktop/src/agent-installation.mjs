@@ -40,6 +40,18 @@ export const AGENT_PROGRAMS = Object.freeze({
   deepseek: { names: ['dsh'], dirs: (home, win, apps = ['/Applications', join(home, 'Applications')]) => (win
     ? [join(localAppData(home), 'Programs', 'DeepSeek Harness', 'resources', 'runtime', 'cli', 'bin')]
     : apps.map((dir) => dirname(join(dir, 'DeepSeek Harness.app', DSH_IN_APP)))) },
+  /* Google Antigravity keeps agy in %LOCALAPPDATA%\agy\bin, %APPDATA%\Antigravity\bin, or inside Antigravity IDE on Windows; ~/.antigravity/bin on Unix */
+  antigravity: {
+    names: ['agy', 'antigravity'],
+    dirs: (home, win) => (win ? [
+      join(localAppData(home), 'agy', 'bin'),
+      join(roamingAppData(home), 'Antigravity', 'bin'),
+      join(localAppData(home), 'Programs', 'Antigravity', 'bin'),
+    ] : [
+      join(home, '.antigravity', 'bin'),
+      join(home, '.local', 'bin'),
+    ]),
+  },
 });
 
 /* where DeepSeek Harness is inside DeepSeek Harness.app, its desktop app (macOS) */
@@ -446,10 +458,12 @@ const WINDOWS_APP_NAMES = {
   kimi: /^Kimi(?:\s|$)/i,
   minimax: /^MiniMax(?:\s|$)/i,
   deepseek: /^DeepSeek Harness(?:\s|$)/i,
+  antigravity: /^Antigravity(?:\s|$)/i,
 };
 const WINDOWS_APP_FOLDERS = {
   copilot: /^GitHub Copilot$/i, cursor: /^cursor$/i, opencode: /^(?:@opencodedesktop|OpenCode)$/i,
   codebuddy: /^CodeBuddy/i, kimi: /^Kimi/i, minimax: /^MiniMax/i, deepseek: /^DeepSeek Harness$/i,
+  antigravity: /^Antigravity$/i,
 };
 const directoryExists = (dir) => { try { return statSync(dir).isDirectory(); } catch { return false; } };
 /** Registered custom folders and the maker's default folders. Stale registry entries never count. */
@@ -599,6 +613,7 @@ const DESKTOP_APPS = {
   codebuddy: { name: 'CodeBuddy', mac: /^CodeBuddy.*\.app$/i, win: (local) => folders(join(local, 'Programs'), /^CodeBuddy/i) },
   kimi: { name: 'Kimi', mac: /^Kimi.*\.app$/i, win: (local) => folders(join(local, 'Programs'), /^Kimi/i) },
   minimax: { name: 'MiniMax', mac: /^MiniMax.*\.app$/i, win: (local) => folders(join(local, 'Programs'), /^MiniMax/i) },
+  antigravity: { name: 'Antigravity', mac: /^Antigravity.*\.app$/i, win: (local) => folders(join(local, 'Programs'), /^Antigravity$/i) },
 };
 
 /** The folders in a folder whose names match. */
