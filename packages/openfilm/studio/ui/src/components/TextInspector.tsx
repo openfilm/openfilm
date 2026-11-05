@@ -16,6 +16,7 @@ import {
 import { ColorField, FIELD, NumField, Row, Section, Segmented, SelectField } from './inspector-fields';
 import { FontFamilyPicker } from './FontFamilyPicker';
 import { SavedLookTiles, useSavedLooks } from './CaptionPresets';
+import { TextStyleSample } from './library/TextStyleSample';
 import type { PropsHost } from './PropertiesSection';
 
 type Overrides = Record<string, unknown>[];
@@ -126,20 +127,21 @@ export function TextInspector({ host, boxH, commit }: { host: PropsHost; boxH?: 
         </Line>
       </Section>
 
-      <Section id="wordart" title={t('textInspector.wordart')}
-        aside={<button type="button" data-text-save-look="" onClick={() => saveLook(ownLook)}
-          className="h-5 rounded-[5px] bg-[var(--bg-field)] px-2 text-[11px] text-[var(--text)] hover:bg-[var(--bg-hover)]">{t('captionTrack.saveLook')}</button>}>
-        {/* the person's own first, then the library's */}
+      <Section id="wordart" title={t('textInspector.wordart')}>
+        {/* the person's own first (and saving its look as one), then the library's */}
+        <div className="flex h-6 items-center justify-between gap-2">
+          <span className="truncate text-[11px] text-[var(--text-muted)]">{t('captionTrack.savedLook')}</span>
+          <button type="button" data-text-save-look="" onClick={() => saveLook(ownLook)}
+            className="h-6 shrink-0 rounded-[5px] bg-[var(--bg-field)] px-2 text-[11px] text-[var(--text)] hover:bg-[var(--bg-hover)]">{t('captionTrack.saveLook')}</button>
+        </div>
         {saved.length ? (
-          <>
-            <div className="text-[11px] text-[var(--text-muted)]">{t('captionTrack.savedLook')}</div>
-            <div data-text-presets="" className="mb-2.5 mt-1.5 grid grid-cols-[repeat(auto-fill,minmax(38px,1fr))] gap-1.5">
-              <SavedLookTiles saved={saved} on={savedOn} onDrop={dropLook}
-                onPick={(_, v) => write(withLook(overrides, Object.fromEntries(LOOK_VARS.flatMap((k) => (v[k] != null ? [[k, v[k]!]] : [])))))} />
-            </div>
-          </>
+          <div data-text-presets="" className="mb-2 grid grid-cols-[repeat(auto-fill,minmax(38px,1fr))] gap-1.5">
+            <SavedLookTiles saved={saved} on={savedOn} onDrop={dropLook}
+              onPick={(_, v) => write(withLook(overrides, Object.fromEntries(LOOK_VARS.flatMap((k) => (v[k] != null ? [[k, v[k]!]] : [])))))} />
+          </div>
         ) : null}
         <Tiles
+          drawn
           items={looks}
           on={look?.id ?? (LOOK_VARS.every((k) => vars[k] === TEXT_DEFAULTS[k]) ? '' : null)}
           none={t('textInspector.none')}
@@ -191,16 +193,19 @@ function Line({ label, children }: { label: string; children: React.ReactNode })
   );
 }
 
-/** A grid of the library's looks or motions, by their posters (playing under the pointer): the one on lit, "none" first. */
-function Tiles({ items, on, none, lang, small, onPick }: {
-  items: LibraryItem[]; on: string | null; none: string; lang: ReturnType<typeof useLanguage>; small?: boolean;
+/**
+ * A grid of the library's looks or motions: the one on lit, "none" first. A look drawn as it is, its words filling a
+ * card as large as two a row leave (`drawn`); a motion by its poster, playing under the pointer.
+ */
+function Tiles({ items, on, none, lang, small, drawn, onPick }: {
+  items: LibraryItem[]; on: string | null; none: string; lang: ReturnType<typeof useLanguage>; small?: boolean; drawn?: boolean;
   onPick: (item: LibraryItem | null) => void;
 }) {
   const [hover, setHover] = React.useState<string | null>(null);
   const ring = (lit: boolean) => (lit ? 'ring-2 ring-[var(--accent)]' : 'ring-1 ring-[var(--border)] hover:ring-[var(--text-faint)]');
   const label = (lit: boolean) => `mt-1 truncate text-center text-[10.5px] ${lit ? 'font-medium text-[var(--accent)]' : 'text-[var(--text-muted)]'}`;
   return (
-    <div className={`grid gap-1.5 ${small ? 'grid-cols-4' : 'grid-cols-3'}`}>
+    <div className={`grid ${drawn ? 'grid-cols-[repeat(auto-fill,minmax(128px,1fr))] gap-x-2 gap-y-2.5' : `gap-1.5 ${small ? 'grid-cols-4' : 'grid-cols-3'}`}`}>
       <button type="button" onClick={() => onPick(null)} className="min-w-0 text-left">
         <span className={`grid aspect-video place-items-center rounded-[5px] bg-[var(--bg-field)] text-[var(--text-faint)] ${ring(on === '')}`}><Ban size={14} /></span>
         <span className={`block ${label(on === '')}`}>{none}</span>
@@ -209,8 +214,12 @@ function Tiles({ items, on, none, lang, small, onPick }: {
         <button key={item.id} type="button" onClick={() => onPick(item)} title={nameOf(item.name, lang)} className="min-w-0 text-left"
           onMouseEnter={() => setHover(item.id)} onMouseLeave={() => setHover(null)}>
           <span className={`relative block aspect-video overflow-hidden rounded-[5px] ${ring(on === item.id)}`}>
-            <img src={posterUrl(item)} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />
-            {hover === item.id ? <video src={previewUrl(item)} autoPlay loop muted playsInline className="absolute inset-0 h-full w-full object-cover" /> : null}
+            {drawn ? <TextStyleSample vars={item.vars} lang={lang} /> : (
+              <>
+                <img src={posterUrl(item)} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />
+                {hover === item.id ? <video src={previewUrl(item)} autoPlay loop muted playsInline className="absolute inset-0 h-full w-full object-cover" /> : null}
+              </>
+            )}
           </span>
           <span className={`block ${label(on === item.id)}`}>{nameOf(item.name, lang)}</span>
         </button>

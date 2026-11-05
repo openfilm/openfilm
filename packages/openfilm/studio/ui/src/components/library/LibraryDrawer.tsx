@@ -16,7 +16,7 @@ import { ChevronDown, ChevronsLeft, ChevronsRight, Plus, Search, Star } from 'lu
 import { useLanguage, useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import {
-  libraryDragItem, libraryUrl, nameOf, posterUrl, previewUrl, toggleFavorite, useLibraryFavorites, useLibraryIndex,
+  TEXT_COMPONENT, libraryDragItem, libraryUrl, nameOf, posterUrl, previewUrl, toggleFavorite, useLibraryFavorites, useLibraryIndex,
   type LibraryCategory, type LibraryItem,
 } from '@/lib/library';
 import { clearResourceDrag, dragPicture, setResourceDragData } from '@/lib/resource-drag';
@@ -27,6 +27,7 @@ import { CategoryIcon, Empty } from './icons';
 import { FEATURED, STARRED, VoicesPane } from './VoicesPane';
 import { ImportButton, SkillsPane, type SkillsLine } from './SkillsPane';
 import { SourceBadge, SourceChips, sourcesIn, type Source } from './SourceChips';
+import { TextStyleSample } from './TextStyleSample';
 
 type Category = 'media' | 'skill' | 'voice' | 'captions' | LibraryCategory;
 const CATEGORIES: Category[] = ['media', 'skill', 'captions', 'voice', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition', 'template'];
@@ -286,7 +287,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
                     ))}
                   </div>
                 ) : (
-                  <div className={`grid gap-x-2.5 gap-y-3 ${cat === 'sticker' ? 'grid-cols-[repeat(auto-fill,minmax(68px,1fr))]' : cat === 'template' ? 'grid-cols-[repeat(auto-fill,minmax(140px,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(96px,1fr))]'}`}>
+                  <div className={`grid gap-x-2.5 gap-y-3 ${cat === 'sticker' ? 'grid-cols-[repeat(auto-fill,minmax(68px,1fr))]' : cat === 'template' ? 'grid-cols-[repeat(auto-fill,minmax(140px,1fr))]' : cat === 'text' ? 'grid-cols-[repeat(auto-fill,minmax(120px,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(96px,1fr))]'}`}>
                     {/* a page at a time as it is scrolled, as the sounds are (the emoji alone are some 1,600) */}
                     {items.slice(0, drawn).map((it) => (
                       <Card key={it.id} item={it} lang={lang} picked={picked === it.id} kept={favorites.includes(it.id)} square={cat === 'sticker'}
@@ -482,6 +483,8 @@ function Card({ item, lang, picked, kept, square, onPick, onAdd }: {
 }) {
   const [hover, setHover] = React.useState(false);
   const name = nameOf(item.name, lang);
+  /* a text style, and the line of words in the page's own: drawn as it is, its words large, in the app's language */
+  const drawn = item.kind === 'textstyle' || item.id === TEXT_COMPONENT;
   return (
     <div
       className="group relative min-w-0 cursor-default select-none"
@@ -498,8 +501,9 @@ function Card({ item, lang, picked, kept, square, onPick, onAdd }: {
         {item.kind === 'look'
           ? <img src={item.sample ? libraryUrl(item.sample) : SAMPLE} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" style={{ filter: item.filter }} />
           /* a sticker whole in its square card (a wide one is not cut at its ends); loaded as it comes into view */
+          : drawn ? <TextStyleSample vars={item.vars} lang={lang} />
           : <img src={posterUrl(item)} alt="" draggable={false} loading="lazy" decoding="async" className={`absolute inset-0 h-full w-full ${square ? 'object-contain' : 'object-cover'}`} />}
-        {hover && item.kind !== 'look' && !item.still ? <video src={previewUrl(item)} autoPlay loop muted playsInline className={`absolute inset-0 h-full w-full ${square ? 'object-contain' : 'object-cover'}`} /> : null}
+        {hover && item.kind !== 'look' && !item.still && !drawn ? <video src={previewUrl(item)} autoPlay loop muted playsInline className={`absolute inset-0 h-full w-full ${square ? 'object-contain' : 'object-cover'}`} /> : null}
         {/* the star and the "+" side by side, of one size, dark glass over the picture */}
         <span className="absolute bottom-1 right-1 flex items-center gap-1">
           <StarButton item={item} kept={kept} className={`${ROUND} bg-black/55 ${kept ? 'grid text-[#ffd35a]' : 'hidden text-white group-hover:grid'}`} />
