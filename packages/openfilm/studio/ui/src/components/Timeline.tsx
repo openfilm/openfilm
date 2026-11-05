@@ -2273,10 +2273,11 @@ export const Timeline = React.memo(function Timeline({
   }, [pxPerMs]);
 
   /* where a drop lands, and what it snapped to: on an edge it snapped to, else on a frame. Decided here, before the
-     free space is checked: rounded after, a drop on a clip's end (not on a frame) landed a few ms inside it. The first
-     clip of a film starts at 0: black before it is never what was meant */
+     free space is checked: rounded after, a drop on a clip's end (not on a frame) landed a few ms inside it. With the
+     main track's magnet on, the first clip of a film starts at 0 (black before it is never what was meant); with it
+     off, it goes where it is let go, as any */
   const dropAt = React.useCallback((atMs: number): { ms: number; target: SnapTarget | null } => {
-    if (!allBlocks.some((b) => b.clipId)) return { ms: 0, target: { ms: 0, kind: 'zero' } };
+    if (prefsRef.current.magnet && !allBlocks.some((b) => b.clipId)) return { ms: 0, target: { ms: 0, kind: 'zero' } };
     const raw = Math.max(0, atMs);
     const snapped = snap && pxPerMs > 0
       ? snapMs(raw, snapTargetsFor(allBlocks, '', timeMsRef.current, undefined, snapPointsMs), pxPerMs)
