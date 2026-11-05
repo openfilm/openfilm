@@ -36,6 +36,7 @@ import { ensureFfmpeg, ffmpegDir, ffmpegDownloadable, ffmpegIn, ffmpegOnPath } f
 import { PATH_SEP } from './environment.mjs';
 import { firstWindowsApps } from './windows-apps.mjs';
 import { createTabs, projectGone } from './tabs.mjs';
+import { restartDelay } from './studio-restart.mjs';
 
 const here = (path) => fileURLToPath(new URL(path, import.meta.url));
 const mac = process.platform === 'darwin';
@@ -45,6 +46,9 @@ const overlayColours = (t) => ({ color: t === 'dark' ? '#111114' : '#e9e9eb', sy
 
 /* HTML-in-Canvas in Studio's viewer, as in the renderer (the `openfilm` package's src/host.mjs) */
 app.commandLine.appendSwitch('enable-blink-features', 'CanvasDrawElement');
+/* no Skia Graphite, as in the renderer (host.mjs launch): with it, a film's page drawing a 2D canvas through
+   `ctx.filter = 'blur(…)'` stroke by stroke took over 5 GB in a moment in the viewer; without it, under 200 MB */
+app.commandLine.appendSwitch('disable-skia-graphite');
 
 /* each flavour its own name, data folder and single-instance lock (flavor.mjs) */
 app.setName(PRODUCT_NAME);
@@ -412,7 +416,12 @@ function answerStudio(message, reply) {
     .finally(() => asked.delete(message.id));
 }
 
+/** when the running Studio started, and the wait before it did (studio-restart.mjs) */
+let startedAt = 0;
+let restartWait = 0;
+
 async function runStudio(env) {
+  startedAt = Date.now();
   studio = await startWindowStudio({
     onAsk: answerStudio,
     home: env.OPENFILM_HOME,
@@ -432,8 +441,10 @@ async function runStudio(env) {
     },
     onExit: (code) => {
       if (quitting) return;
-      log(`Studio stopped (${code}); starting it again\n`);
-      setTimeout(() => void runStudio(env).catch((error) => log(`Studio did not start again: ${error.message}\n`)), 1000);
+      /* stopping again and again at once: started again later each time (studio-restart.mjs) */
+      restartWait = restartDelay(restartWait, Date.now() - startedAt);
+      log(`Studio stopped (${code}); starting it again in ${restartWait / 1000} s\n`);
+      setTimeout(() => void runStudio(env).catch((error) => log(`Studio did not start again: ${error.message}\n`)), restartWait);
     },
   });
   /* a Studio started again hears where the agents are working */

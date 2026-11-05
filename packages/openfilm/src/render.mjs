@@ -6,6 +6,7 @@ import { availableParallelism, freemem, totalmem } from 'node:os';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { clipKind, FILM_FILE } from './film-doc.mjs';
 import { broken, encoders, FRAMES_709, hardwareEncoder, hardwareOptions, prores709 } from './encoders.mjs';
+import { memoryError } from './browser-memory.mjs';
 import { FilmPage, launch } from './host.mjs';
 import { exactRate, ffmpegRate } from './rate.mjs';
 import { browserCopies, filmVideos } from './seekable.mjs';
@@ -232,7 +233,8 @@ export async function render(args, opts = {}) {
   /** @type {(() => void)[]} */
   const unwatch = [];
   const watch = (/** @type {import('playwright-core').Browser} */ b) => {
-    const closed = () => crash(gone);
+    /* ended for the memory the page took: said so, and not drawn again in new browsers (browserFailed) */
+    const closed = () => crash(memoryError(b) ?? gone);
     b.on('disconnected', closed);
     unwatch.push(() => b.off('disconnected', closed));
     if (!b.isConnected()) closed();

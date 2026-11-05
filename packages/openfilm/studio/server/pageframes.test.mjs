@@ -178,6 +178,23 @@ test('a page that never gets ready (a loop that never ends) fails in its own tim
   assert.ok(Date.now() - t1 < 2000);
 });
 
+test('a thumbnails browser that is ended (it crashed, or took too much memory) is let go: the next frame starts another', { skip: process.platform === 'win32' && 'no ps', timeout: 120_000 }, async () => {
+  const { project } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'Ended') } })).json();
+  writeFileSync(join(project.path, 'p.html'), '<!doctype html><body style="background:#06c"><script>window.film = { duration: 4, frame() {} };</script></body>');
+  writeFileSync(join(project.path, 'film.html'), filmHtml({ tracks: [{ clips: [{ src: 'p.html' }] }] }));
+  const frame = (ms) => api(`/api/projects/${project.id}/media?what=frame&path=p.html&ms=${ms}&w=160`);
+  assert.equal((await frame(500)).status, 200);
+  /* the browsers this process started (the host marks each), ended as the system or the memory guard ends one */
+  const ours = execFileSync('/bin/ps', ['-axo', 'pid=,ppid=,command='], { encoding: 'utf8' }).split('\n')
+    .map((r) => r.trim().match(/^(\d+)\s+(\d+)\s+(.*)$/)).filter((m) => m && Number(m[2]) === process.pid && m[3].includes('--openfilm-browser='));
+  assert.ok(ours.length >= 1);
+  for (const m of ours) process.kill(Number(m[1]), 'SIGKILL');
+  await new Promise((r) => setTimeout(r, 500));
+  const t0 = Date.now();
+  assert.equal((await frame(1500)).status, 200, 'drawn by a new browser');
+  assert.ok(Date.now() - t0 < 20_000, 'at once, not after the old one is given up on');
+});
+
 test('a page asked for by a path out of the project (`../`) is not there: never opened, probed or drawn', async () => {
   const { project } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'Asker') } })).json();
   mkdirSync(join(scratch, 'Elsewhere'), { recursive: true });

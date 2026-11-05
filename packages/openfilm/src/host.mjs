@@ -1,5 +1,6 @@
 // The reference host (SPEC §4): serves a film folder over HTTP, opens its page in Chromium and asks it for frames.
 import { execFile } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { pipeline } from 'node:stream';
 import { createReadStream, readFileSync, realpathSync, statSync } from 'node:fs';
@@ -8,6 +9,7 @@ import { extname, join, normalize, resolve, sep } from 'node:path';
 import { chromium } from 'playwright-core';
 import { DEFAULT_STAGE, FILM_FILE, readFilmFile } from './film-doc.mjs';
 import { readableLink } from './media-links.mjs';
+import { guard } from './browser-memory.mjs';
 
 // Media seeks that land inside the frame they name. A plain `video.currentTime = t` at a frame boundary otherwise
 // shows the previous frame about a third of the time. Every page that draws a film by seeking video runs it first,
@@ -313,12 +315,21 @@ export function injectFirst(html, tag) {
  * included), is the smaller download, starts inside agents'
  * OS sandboxes where the full Chromium cannot, and is the build Studio's engine uses — one browser on the machine.
  * A visible window needs the full Chromium (`headed`). A host may pick another build, add arguments and its own
- * environment.
+ * environment. Each browser is held to a share of the machine's memory (browser-memory.mjs): a page whose drawing
+ * takes more ends it.
  */
 export async function launch({ headed = false, channel = headed ? 'chromium' : null, args: extra = [], env } = {}) {
-  /* CanvasDrawElement: HTML-in-Canvas (drawElementImage, texElementImage2D), so a page can draw its own DOM into 2D or WebGL */
-  const args = ['--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--autoplay-policy=no-user-gesture-required', '--hide-scrollbars', '--enable-blink-features=CanvasDrawElement', ...extra];
-  const open = (/** @type {string[]} */ angle) => chromium.launch({ ...(channel ? { channel } : {}), headless: !headed, args: [...args, ...angle], ...(env ? { env } : {}) });
+  /* CanvasDrawElement: HTML-in-Canvas (drawElementImage, texElementImage2D), so a page can draw its own DOM into 2D or WebGL.
+     No Skia Graphite: with it, a 2D canvas drawing hundreds of strokes each through `ctx.filter = 'blur(…)'` had the
+     GPU process take 7 to 9 GB for one frame (two such browsers froze a 16 GB Mac); without it, 400 MB, as fast */
+  const args = ['--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--disable-skia-graphite', '--autoplay-policy=no-user-gesture-required', '--hide-scrollbars', '--enable-blink-features=CanvasDrawElement', ...extra];
+  const open = async (/** @type {string[]} */ angle) => {
+    /* a switch of no meaning to Chromium, so its process (and every one it starts) is found to be watched */
+    const marker = `--openfilm-browser=${randomUUID()}`;
+    const browser = await chromium.launch({ ...(channel ? { channel } : {}), headless: !headed, args: [...args, ...angle, marker], ...(env ? { env } : {}) });
+    guard(browser, marker);
+    return browser;
+  };
   const browser = extra.some((a) => a.startsWith('--use-angle')) ? await open([])
     : process.platform === 'darwin' ? await open(['--use-angle=metal'])
     : process.platform === 'win32' ? await onWindows(open)

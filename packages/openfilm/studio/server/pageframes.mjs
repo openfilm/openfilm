@@ -13,6 +13,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { FilmPage, launch } from '../../src/host.mjs';
+import { BrowserMemoryError, memoryError } from '../../src/browser-memory.mjs';
 import { FILM_FILE, clipKind } from '../../src/film-doc.mjs';
 import { browserCopies, filmVideos, madeCopy } from '../../src/seekable.mjs';
 import { TOOL_DIR } from './projects.mjs';
@@ -40,6 +41,9 @@ const failures = new Map();
 const unopened = new Map();
 /** @type {Map<string, Promise<Buffer>>} frames being drawn, by project and cache key: asked again meanwhile, drawn once */
 const drawing = new Map();
+/** @type {Map<string, { version: string, error: BrowserMemoryError }>} pages whose drawing took more memory than the
+ * browser may have, by project and page, at the version of the page's file then: not drawn again until it changes */
+const heavy = new Map();
 
 /** @type {Promise<import('playwright-core').Browser> | null} */
 let browser = null;
@@ -92,6 +96,10 @@ export async function pageFrame(root, base, rel, ms, width, overrides = null, si
      hold every thumbnail behind it again on each request */
   const failed = failures.get(id);
   if (failed && Date.now() - failed.at < FAILED_KEPT_MS) throw failed.error;
+  /* a page too heavy to draw is not drawn again, at any moment or width, until its file changes */
+  const pageVersion = `${info.mtimeMs}:${info.size}`;
+  const tooHeavy = heavy.get(`${root}\0${rel}`);
+  if (tooHeavy?.version === pageVersion) throw tooHeavy.error;
   const pending = drawing.get(id);
   if (pending) return pending;
   const made = (async () => {
@@ -101,6 +109,7 @@ export async function pageFrame(root, base, rel, ms, width, overrides = null, si
     /* a page drawn with tweaks is one of its own: the page kept open for another clip of the same file has none */
     const drawn = tweaks ? `${version}:${createHash('sha256').update(tweaks).digest('hex').slice(0, 12)}` : version;
     const { jpeg, duration, loaded } = await draw(pageUrl(base, rel), ms, w, drawn, base, tweaks ? overrides : null, laid ? size : null, clear).catch((e) => {
+      if (e instanceof BrowserMemoryError) heavy.set(`${root}\0${rel}`, { version: pageVersion, error: e });
       failures.set(id, { error: e, at: Date.now() });
       if (failures.size > 500) failures.delete(failures.keys().next().value ?? '');
       throw e;
@@ -146,8 +155,7 @@ const copied = new Map();
 async function filmCopies(root, base, info) {
   const version = `${info.mtimeMs}:${info.size}`;
   if (copied.get(root) === version) return;
-  browser ??= launch().catch((e) => { browser = null; throw e; });
-  const b = await browser.catch(() => null);
+  const b = await started().catch(() => null);
   if (!b) return;
   await browserCopies(b, base, root, filmVideos(root, FILM_FILE));
   copied.set(root, version);
@@ -225,6 +233,28 @@ export async function closePageFrames() {
 }
 
 /** Close the browser (Studio is stopping, or nothing was drawn for a while). */
+/**
+ * The browser, started when there is none. One that disconnects (it crashed, or was ended for its memory) is let go
+ * with its pages, and the next request starts another; one that could not start (not downloaded yet on a first run)
+ * is tried again next time.
+ */
+function started() {
+  if (browser) return browser;
+  const starting = launch().then((b) => {
+    b.on('disconnected', () => {
+      if (browser !== starting) return;
+      browser = null;
+      open.clear();
+    });
+    return b;
+  }, (e) => {
+    if (browser === starting) browser = null;
+    throw e;
+  });
+  browser = starting;
+  return starting;
+}
+
 async function closeBrowser() {
   if (idle) clearTimeout(idle);
   const b = browser;
@@ -326,6 +356,7 @@ function withPage(url, w, version, size, use) {
     const late = new Promise((_, fail) => {
       timer = setTimeout(() => { void closeBrowser(); fail(new Error(`drawing ${url.split('/').pop()} took over ${JOB_MS / 1000} s`)); }, JOB_MS);
     });
+    const using = started();
     const work = pageFor(url, w, version, size).then(use);
     /* given up on, it fails later (its browser closed): heard, so it cannot end the process */
     work.catch(() => {});
@@ -333,7 +364,8 @@ function withPage(url, w, version, size, use) {
       return await Promise.race([work, late]);
     } catch (e) {
       forget(url, w, version, size);
-      throw e;
+      /* its browser ended for the memory the page took: said so, not as the browser closing */
+      throw memoryError(await using.catch(() => ({}))) ?? e;
     } finally {
       clearTimeout(timer);
       idle = setTimeout(() => void closeBrowser(), IDLE_MS);
@@ -369,13 +401,12 @@ async function pageFor(/** @type {string} */ url, /** @type {number} */ w, /** @
   }
   const refused = unopened.get(key);
   if (refused && Date.now() - refused.at < FAILED_KEPT_MS) throw refused.error;
-  /* a browser that could not start (not downloaded yet on a first run) is tried again next time, not kept */
-  browser ??= launch().catch((e) => { browser = null; throw e; });
+  const starting = started();
   const origin = new URL(url).origin;
   /* a page is 1920 wide (or its clip's size) unless it says otherwise; the device scale makes the capture `w` px
      without a resize */
   /* on black, as the film shows a page with nothing below it (white, the browser's default, hid a white title) */
-  const opening = (async () => FilmPage.open(await /** @type {Promise<import('playwright-core').Browser>} */ (browser), origin, url, { scale: w / (size?.w ?? 1920), ...(size ? { size } : {}), black: true, waitMs: 15_000, readyMs: FRAME_MS }))();
+  const opening = (async () => FilmPage.open(await starting, origin, url, { scale: w / (size?.w ?? 1920), ...(size ? { size } : {}), black: true, waitMs: 15_000, readyMs: FRAME_MS }))();
   open.set(key, opening);
   opening.catch((e) => {
     open.delete(key);
