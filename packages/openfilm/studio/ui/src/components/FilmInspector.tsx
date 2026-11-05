@@ -18,8 +18,8 @@ import * as React from 'react';
 import {
   AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignHorizontalDistributeCenter,
   AlignStartHorizontal, AlignStartVertical, AlignVerticalDistributeCenter, ArrowRightToLine, AudioLines, Captions,
-  Check, ChevronRight, CircleAlert, Clapperboard, Copy, Diamond, Film, Gauge, Image as ImageIcon, Link2, Maximize2, MousePointerClick,
-  Lock, MoveHorizontal, Music, Replace, RotateCcw, Scissors, Shapes, Sparkles, Square, Type, Unlink2, Video, Volume2, X,
+  Check, ChevronRight, CircleAlert, Clapperboard, Copy, Diamond, Film, Gauge, Image as ImageIcon, Link2, Maximize2, MessageSquarePlus, MousePointerClick,
+  Lock, MoveHorizontal, Music, Replace, RotateCcw, Scissors, Shapes, Square, Type, Unlink2, Video, Volume2, X,
 } from 'lucide-react';
 
 import {
@@ -394,7 +394,7 @@ function RedesignHint({ t, stage }: { t: T; stage: { w: number; h: number } }) {
     <div className="flex flex-col gap-2">
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
         className="flex h-7 items-center gap-1.5 self-start rounded-md px-1.5 text-[11px] font-medium text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
-        <Sparkles size={12} />
+        <MessageSquarePlus size={12} />
         {t('inspector.redesignOpen')}
       </button>
       {open ? (

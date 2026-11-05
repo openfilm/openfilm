@@ -197,7 +197,8 @@ const referKeyHeld = (e: { metaKey: boolean; ctrlKey: boolean }) => (MAC ? e.met
 /* the range bar's hit height (the visible bar is thinner, see .tl-range-thumb; 5 px could hardly be hit) */
 const H_SCROLL_H = 10;
 const RULER_H = 20;
-/** The markers' row under the ruler (only while there are markers). */
+/** The markers' row under the ruler (only while there are markers): it floats over the rows' top edge, so a marker
+ * added or the last one removed never moves the rows. */
 const MARKER_ROW_H = 16;
 
 /** A compound clip's film (studio/server/compound.mjs): `parts/<name>/film.html`. */
@@ -1208,8 +1209,9 @@ export const Timeline = React.memo(function Timeline({
   const tracksH = hasLanes
     ? tracks.reduce((h, tr) => h + rowH(tr) + GAP, 0)
     : 0;
-  /* at least TL_VPAD even when the rows overflow, counted in padTop so every hit test uses the same number */
-  const padTop = Math.max(TL_VPAD, Math.floor((view.height - tracksH) / 2));
+  /* clear of the markers' row floating over the top even when the rows overflow (whether or not there are markers, so
+     one added never moves them), counted in padTop so every hit test uses the same number */
+  const padTop = Math.max(MARKER_ROW_H + 2, Math.floor((view.height - tracksH) / 2));
   padTopRef.current = padTop;
   const viewHeightRef = React.useRef(view.height);
   viewHeightRef.current = view.height;
@@ -4145,11 +4147,10 @@ export const Timeline = React.memo(function Timeline({
         >
           {/* as tall as the ruler, so heads line up with rows; no bottom line, it is not a column of its own */}
           <div style={{ height: RULER_H }} />
-          {markerRowH ? <div style={{ height: markerRowH }} /> : null}
           <div
             className="relative overflow-hidden"
             /* the ground the heads lie on, seen in the gaps between them as between the rows */
-            style={{ height: `calc(100% - ${RULER_H + markerRowH}px - ${H_SCROLL_H}px)`, background: 'var(--tl-gap)' }}
+            style={{ height: `calc(100% - ${RULER_H}px - ${H_SCROLL_H}px)`, background: 'var(--tl-gap)' }}
           >
             {/* moved with the track area's vertical scroll (onScroll), as the rows' backgrounds are; its own block
                 (flow-root), so the first head's margin stays inside it and the reorder guide's top counts from it */}
@@ -4222,28 +4223,6 @@ export const Timeline = React.memo(function Timeline({
               {onReferRuler ? <RulerRefer hoverMs={rulerHoverMs} draft={referDraft} pxPerMs={pxPerMs} widthPx={trackPx} /> : null}
             </div>
           </div>
-
-          {/* the markers' row: pins along it, scrolling with the tracks; a press between them moves the playhead (and
-              drags it) as in the tracks' empty space, a right-click adds a marker there */}
-          {markerRowH && markerLane ? (
-            <div
-              data-marker-lane=""
-              onPointerDown={(e) => startScrub(e)}
-              className="relative shrink-0 touch-none overflow-hidden select-none"
-              style={{ height: markerRowH, background: TL.head }}
-              onContextMenu={rulerMenu ? (e) => {
-                e.preventDefault();
-                const items = rulerMenu(Math.max(0, Math.min(totalMs, msAtClientX(e.clientX))));
-                if (items.length) setRulerMenuAt({ x: e.clientX, y: e.clientY, items });
-              } : undefined}
-            >
-              <div className="absolute inset-y-0 left-0" style={{ width: trackPx, transform: `translate3d(${-view.left}px,0,0)` }}>
-                <div data-zoom-layer="content" className="absolute inset-0">
-                  {markerLane.render({ pxPerMs, widthPx: trackPx, snap: snapMarker, guide: setMarkerGuide })}
-                </div>
-              </div>
-            </div>
-          ) : null}
 
           {/* track area: backgrounds fixed to the view, clips scroll horizontally above them */}
           <div className="relative min-h-0 min-w-0 flex-1" style={{ background: 'var(--tl-gap)' }}>
@@ -4345,6 +4324,22 @@ export const Timeline = React.memo(function Timeline({
               </div>
             )}
           </div>
+          {/* the markers' row, floating over the rows' top edge (taking no room of its own, so the rows stay where they
+              are): pins along it, scrolling with the tracks sideways; between them the press falls through to the
+              tracks' empty space, which moves the playhead as the row did */}
+          {markerRowH && markerLane ? (
+            <div
+              data-marker-lane=""
+              className="pointer-events-none absolute inset-x-0 top-0 z-[22] touch-none overflow-hidden select-none"
+              style={{ height: markerRowH }}
+            >
+              <div className="absolute inset-y-0 left-0" style={{ width: trackPx, transform: `translate3d(${-view.left}px,0,0)` }}>
+                <div data-zoom-layer="content" className="absolute inset-0 [&_[data-marker]]:pointer-events-auto">
+                  {markerLane.render({ pxPerMs, widthPx: trackPx, snap: snapMarker, guide: setMarkerGuide })}
+                </div>
+              </div>
+            </div>
+          ) : null}
           </div>
           <TimelineRangeBar
             zoom={viewZoom}
