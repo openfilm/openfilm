@@ -3349,9 +3349,14 @@ function FilmStageSelectImpl({
         {hint ? <GestureHint x={hint.x} y={hint.y} text={hint.text} /> : null}
         {/* what is in hand and not in the picture now (see syncPick) has no frame */}
         {textTyping ? (() => {
-          /* a line of words being typed in: its one frame, following its words */
+          /* a line of words being typed in: its one frame, following its words; only drawn (inert), so a click in the
+             words places the caret there, not on the frame's own handles */
           const frame = scaleFrame(visibleFrame(textTyping.shownT, textTyping.base.box, NO_CROP), vsNow);
-          return <StageTransformFrame frame={frame} scope="mg" edges="sides" moving={false} label={sizeLabel(frame)} bounds={stageBounds} />;
+          return (
+            <div inert className="contents">
+              <StageTransformFrame frame={frame} scope="mg" edges="sides" moving={false} label={sizeLabel(frame)} bounds={stageBounds} />
+            </div>
+          );
         })() : picked && !pickLost && !(multi && !drawnItems(multi).length) ? (
           <>
             {mgFrame ? (
