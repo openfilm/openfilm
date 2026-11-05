@@ -38,6 +38,10 @@ function png(w, h) {
   return b;
 }
 
+test('pictures with GPT Image 2.6 Flare, the default, and Sunburst, and 2.5 Flare and Sunburst: what OpenFilm\'s service runs too', () => {
+  assert.deepEqual(openai.models.image.map((m) => m.id), ['gpt-image-2.6-flare', 'gpt-image-2.6-sunburst', 'gpt-image-2.5-flare', 'gpt-image-2.5-sunburst']);
+});
+
 test('a picture: the ratio as pixels, the quality, a transparent background when asked', async () => {
   reply = () => [200, { data: [{ b64_json: png(1536, 864).toString('base64') }] }];
   const result = await openai.run('image', { out: 'hero', prompt: 'a brass key', ratio: '16:9', quality: 'high', transparent: true }, ctx());

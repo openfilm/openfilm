@@ -23,6 +23,7 @@ const MODELS = {
     m('openai/gpt-image-2.6-flare', 'GPT Image 2.6 Flare'),
     m('openai/gpt-image-2.6-sunburst', 'GPT Image 2.6 Sunburst'),
     m('openai/gpt-image-2.5-flare', 'GPT Image 2.5 Flare'),
+    m('openai/gpt-image-2.5-sunburst', 'GPT Image 2.5 Sunburst'),
     m('google/gemini-nano-banana-2.1', 'Nano Banana 2.1'),
     m('google/gemini-3-pro-image', 'Nano Banana Pro'),
     m('bytedance-seed/seedream-5-0-pro', 'Seedream 5.0 Pro'),
@@ -50,7 +51,7 @@ const RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4', '3:2', '2:3', '21:9'];
 /** The models that take `--quality` (the others have one quality), with theirs, the finest last; they take `--transparent` too. */
 const QUALITY = /** @type {Record<string, string[]>} */ ({
   'openai/gpt-image-2.6-flare': ['low', 'medium', 'high', 'xhigh', 'max'], 'openai/gpt-image-2.6-sunburst': ['low', 'medium', 'high', 'xhigh', 'max'],
-  'openai/gpt-image-2.5-flare': ['low', 'medium', 'high', 'xhigh', 'max'],
+  'openai/gpt-image-2.5-flare': ['low', 'medium', 'high', 'xhigh', 'max'], 'openai/gpt-image-2.5-sunburst': ['low', 'medium', 'high', 'xhigh', 'max'],
 });
 /** The most pictures a new one is made from. */
 const MAX_REFS = 16;

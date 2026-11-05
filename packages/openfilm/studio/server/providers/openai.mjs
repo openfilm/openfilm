@@ -20,6 +20,7 @@ const MODELS = {
     { id: 'gpt-image-2.6-flare', name: 'GPT Image 2.6 Flare' },
     { id: 'gpt-image-2.6-sunburst', name: 'GPT Image 2.6 Sunburst' },
     { id: 'gpt-image-2.5-flare', name: 'GPT Image 2.5 Flare' },
+    { id: 'gpt-image-2.5-sunburst', name: 'GPT Image 2.5 Sunburst' },
   ],
   asr: [{ id: 'whisper-1', name: 'Whisper' }],
   translate: [
@@ -31,12 +32,12 @@ const MODELS = {
 /** The qualities each picture model has, the finest last. */
 const QUALITIES = /** @type {Record<string, string[]>} */ ({
   'gpt-image-2.6-flare': ['low', 'medium', 'high', 'xhigh', 'max'], 'gpt-image-2.6-sunburst': ['low', 'medium', 'high', 'xhigh', 'max'],
-  'gpt-image-2.5-flare': ['low', 'medium', 'high', 'xhigh', 'max'],
+  'gpt-image-2.5-flare': ['low', 'medium', 'high', 'xhigh', 'max'], 'gpt-image-2.5-sunburst': ['low', 'medium', 'high', 'xhigh', 'max'],
 });
 /** What each picture model's tokens cost (USD each, as listed): its pictures are billed by the token. */
 const TOKEN_USD = /** @type {Record<string, { text: number, image: number, out: number }>} */ ({
   'gpt-image-2.6-flare': { text: 5e-6, image: 8e-6, out: 30e-6 }, 'gpt-image-2.6-sunburst': { text: 5e-6, image: 8e-6, out: 30e-6 },
-  'gpt-image-2.5-flare': { text: 5e-6, image: 8e-6, out: 30e-6 },
+  'gpt-image-2.5-flare': { text: 5e-6, image: 8e-6, out: 30e-6 }, 'gpt-image-2.5-sunburst': { text: 5e-6, image: 8e-6, out: 30e-6 },
 });
 /** The picture models that make a GIF or an SVG too (the others, a PNG); one asked of another is made with the first. */
 const FORMATS = ['gpt-image-2.6-flare', 'gpt-image-2.6-sunburst'];
