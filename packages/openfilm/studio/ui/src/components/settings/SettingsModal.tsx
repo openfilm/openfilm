@@ -73,11 +73,10 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
   const language = useLanguage();
   const [section, setSection] = React.useState<SettingsSection>('general');
   const [query, setQuery] = React.useState('');
-  const [shown, setShown] = React.useState(false);
   const dialog = React.useRef<HTMLDivElement>(null);
   const search = React.useRef<HTMLInputElement>(null);
   /* the latest onClose without re-running the effect below: the page re-renders every frame while it plays, and
-     re-running it would fade the dialog out and in and take the focus back each time */
+     re-running it would take the focus back each time */
   const close = React.useRef(onClose);
   close.current = onClose;
 
@@ -110,12 +109,12 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
     window.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const r = requestAnimationFrame(() => { setShown(true); search.current?.focus(); });
+    /* shown at once, as the projects window is; the search takes the keys */
+    const r = requestAnimationFrame(() => search.current?.focus());
     return () => {
       window.removeEventListener('keydown', onKey);
       document.body.style.overflow = prev;
       cancelAnimationFrame(r);
-      setShown(false);
       if (previousFocus?.isConnected) previousFocus.focus();
     };
   }, [open]);
@@ -125,7 +124,7 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
   return createPortal(
     <div
       className="fixed inset-0 z-[10050] grid place-items-center p-6"
-      style={{ background: 'rgba(0,0,0,0.5)', opacity: shown ? 1 : 0, transition: 'opacity 160ms ease' }}
+      style={{ background: 'rgba(0,0,0,0.5)' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
@@ -134,7 +133,6 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
         aria-modal="true"
         aria-labelledby="settings-title"
         className={`relative flex ${LARGE_DIALOG_SIZE} overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--bg-panel)] shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5),0_4px_16px_rgba(0,0,0,0.14)]`}
-        style={{ opacity: shown ? 1 : 0, transform: shown ? 'scale(1)' : 'scale(0.98)', transition: 'opacity 160ms ease, transform 200ms ease' }}
       >
         <nav aria-label={t('settings.title')} className="flex w-[264px] shrink-0 flex-col overflow-y-auto border-r border-[var(--border)] px-3 pb-4 pt-3">
           <label className="mb-3 flex h-10 shrink-0 items-center gap-2.5 rounded-[9px] border border-[var(--border)] px-3 text-[var(--text-muted)] transition focus-within:border-[var(--text-muted)]">
