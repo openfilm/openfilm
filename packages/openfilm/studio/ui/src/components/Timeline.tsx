@@ -14,7 +14,7 @@
 import React from 'react';
 import { flushSync } from 'react-dom';
 import {
-  Captions,
+  Check,
   ClipboardPaste,
   Copy,
   CopyPlus,
@@ -57,6 +57,7 @@ import {
   HeadphoneOff,
 } from 'lucide-react';
 import { useT } from '@/i18n';
+import { CcMark } from './CcMark';
 import { keyAction, useKeyHint } from '@/lib/keymap-store';
 import { ownTrackHeight } from '@/lib/track-heights';
 import type { Op } from '@/api';
@@ -569,6 +570,11 @@ export interface TimelineProps {
   trackMenuExtra?: (track: TimelineTrack) => ContextMenuEntry[];
   /** The media files whose words the film's captions come from (a voice with its transcript): their clips say so by their name. */
   transcribed?: ReadonlySet<string>;
+  /**
+   * While the library's New captions is open: the clips the captions are made of (`lit`, drawn framed in the accent),
+   * and those with no transcript to tick in or out of them (`choosable`, a tick at their top right; `picked` ticked).
+   */
+  captionPick?: { lit: ReadonlySet<string>; choosable: ReadonlySet<string>; picked: ReadonlySet<string>; toggle: (clipId: string) => void } | null;
   /** Clips dragged out of the timeline onto the panel of the app around Studio (its chat): handed to it, not moved. */
   onReferBlocks?: (blocks: TimelineBlock[]) => void;
   /** The range marked on the ruler (the editor keeps it): drawn as a band across the tracks. */
@@ -703,7 +709,7 @@ export interface TimelineProps {
   /** The toolbar's Add marker (left of split); M does the same. */
   onAddMarker?: () => void;
   /** The toolbar's record button (components/RecordButton): sound from the microphone, put on at the playhead. */
-  recorder?: Pick<RecordButtonProps, 'now' | 'onSave' | 'voiceOver'>;
+  recorder?: Pick<RecordButtonProps, 'now' | 'onSave'>;
   /** The ruler's own right-click menu, at a moment (film ms): adding a marker there. */
   rulerMenu?: (atMs: number) => ContextMenuEntry[];
   /** Drawn on each row, over its clips (the clips' markers). */
@@ -943,6 +949,7 @@ export const Timeline = React.memo(function Timeline({
   blockMenuExtra,
   trackMenuExtra,
   transcribed,
+  captionPick,
   onReferBlocks,
   range,
   flashRange,
@@ -3031,7 +3038,10 @@ export const Timeline = React.memo(function Timeline({
             /* its fade handles and volume line: on the clip under the pointer, and on the one whose handle or line is
                in hand until it is let go */
             const pointed = hoveredBlock === block.id || Boolean(fadeTip) || Boolean(volumeTip);
-            const pose = `${startMs}:${endMs}:${!!live}:${gone}:${lifting}:${floating ? drag.preview?.offsetY : ''}:${picked}:${Math.round(winFrom)}-${Math.round(winTo)}:${trouble ?? ''}:${chatLit}:${chatNumbers.join(',')}:${fade[0]}-${fade[1]}:${fadeTip}:${volume}:${volumeTip ? Math.round(volumeTip.x) : ''}:${speeding}:${pointed}:${block.words ?? ''}`;
+            /* New captions open: whether the captions are made of it, and whether it is ticked */
+            const captionMark = captionPick && block.clipId
+              ? `${captionPick.lit.has(block.clipId) ? 'l' : ''}${captionPick.choosable.has(block.clipId) ? 'c' : ''}${captionPick.picked.has(block.clipId) ? 'p' : ''}` : '';
+            const pose = `${startMs}:${endMs}:${!!live}:${gone}:${lifting}:${floating ? drag.preview?.offsetY : ''}:${picked}:${Math.round(winFrom)}-${Math.round(winTo)}:${trouble ?? ''}:${chatLit}:${chatNumbers.join(',')}:${fade[0]}-${fade[1]}:${fadeTip}:${volume}:${volumeTip ? Math.round(volumeTip.x) : ''}:${speeding}:${pointed}:${block.words ?? ''}:${captionMark}`;
             const cached = clipElements.get(block.id);
             if (cached?.pose === pose) return cached.node;
             /* on whole pixels: a fractional left and width blur the edges, and a cut between two clips is the key
@@ -3195,7 +3205,7 @@ export const Timeline = React.memo(function Timeline({
                   <span className="flex min-w-0 items-center gap-1" data-pin={left} data-pin-max={width - 48}>
                     {/* its words are the film's captions' source (its transcript) */}
                     {block.src && transcribed?.has(block.src.replace(/#.*$/, '')) ? (
-                      <Captions data-clip-transcribed="" className="h-3 w-3 shrink-0 text-white/90" strokeWidth={2} aria-label={t('timeline.hasTranscript')} />
+                      <span data-clip-transcribed="" role="img" aria-label={t('timeline.hasTranscript')} className="flex shrink-0 text-white/90"><CcMark size={12} /></span>
                     ) : null}
                     <span className={`min-w-0 truncate font-medium leading-none text-white/90 ${textRow ? 'text-[11px]' : 'text-[10px]'}`}>
                       {textRow ? block.words ?? block.title : block.title}
@@ -3383,6 +3393,19 @@ export const Timeline = React.memo(function Timeline({
                     </span>
                   );
                 }) : null}
+                {/* New captions open: the clips its captions are made of framed, a tick on those it may take or leave */}
+                {captionPick && block.clipId && captionPick.lit.has(block.clipId) ? (
+                  <span aria-hidden data-caption-lit="" className="pointer-events-none absolute inset-0 z-[6] rounded-[4px] shadow-[inset_0_0_0_2px_var(--accent)]" />
+                ) : null}
+                {captionPick && block.clipId && captionPick.choosable.has(block.clipId) && width > 22 ? (
+                  <button type="button" role="checkbox" aria-checked={captionPick.picked.has(block.clipId)} data-caption-tick=""
+                    aria-label={t('timeline.captionTick')} title={t('timeline.captionTick')}
+                    className={`absolute right-1 top-[3px] z-[7] grid h-[14px] w-[14px] place-items-center rounded-[3px] ${captionPick.picked.has(block.clipId) ? 'bg-[var(--accent)] text-[var(--on-accent)]' : 'bg-black/45 shadow-[inset_0_0_0_1.5px_rgba(255,255,255,.85)] hover:bg-black/60'}`}
+                    onPointerDown={(e) => { e.stopPropagation(); }}
+                    onClick={(e) => { e.stopPropagation(); captionPick.toggle(block.clipId!); }}>
+                    {captionPick.picked.has(block.clipId) ? <Check size={10} strokeWidth={3} /> : null}
+                  </button>
+                ) : null}
               </div>
             );
             clipElements.set(block.id, { pose, node });
@@ -3461,7 +3484,7 @@ export const Timeline = React.memo(function Timeline({
     openBlockMenu, openLaneMenu, onEditBlocks, collapseIfClick, selectOne, setSelected, clipElements, thumbWindow, view.width,
     chatClip, chatDraft, placedOf, pickForTrim, gap, withLinked, runSplit, trackOverlay,
     fadeOfBlock, fadeDrag, startFade, volumeDrag, startVolume, transitions, transitionDrag, pickedTransition, onPickTransition, onTransition, startTransitionResize,
-    nearFirst, nearLast, speedOn, hoveredBlock, onEnterCompound, snap, allBlocks, onSeek, totalMs, transcribed,
+    nearFirst, nearLast, speedOn, hoveredBlock, onEnterCompound, snap, allBlocks, onSeek, totalMs, transcribed, captionPick,
   ]);
 
   const tickMarks = React.useMemo(() => ticks.map(({ ms, label }) => {
@@ -4049,7 +4072,7 @@ export const Timeline = React.memo(function Timeline({
         {/* the right side: recording first, then the switches (lib/timeline-prefs), in this order: snapping, the
             main-track magnet and linkage */}
         {recorder ? <>
-          <RecordButton now={recorder.now} onSave={recorder.onSave} voiceOver={recorder.voiceOver} onProblem={setNotice} />
+          <RecordButton now={recorder.now} onSave={recorder.onSave} onProblem={setNotice} />
           <span className="mx-0.5 h-4 w-px" style={{ background: TL.line }} />
         </> : null}
         {onEditOps ? <>

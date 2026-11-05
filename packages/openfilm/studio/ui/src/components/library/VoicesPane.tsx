@@ -3,15 +3,17 @@
  * side bar (a service, or the starred ones), the search, a language and a gender. A click on a voice plays its
  * service's sample in the player under the list (again: pauses it); a double click, Enter or its "+" puts it in the chat
  * as a reference, the voice
- * the agent makes the voice-over in. A voice whose service is not connected says so; its "Connect" opens Services.
+ * the agent makes the voice-over in; its "Generate" speaks words typed in it there and then, onto the film at the
+ * playhead (SpeakDialog). A voice whose service is not connected says so; its "Connect" opens Services.
  */
 import React from 'react';
-import { Pause, Play, Plus, Star } from 'lucide-react';
+import { AudioLines, Pause, Play, Plus, Star } from 'lucide-react';
 import { useLanguage, useT, type Language } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import { toggleFavorite } from '@/lib/library';
 import { ADD_HOVER, FOOT_ROOM, MiniPlayer, PANEL_ROUND, usePlayer } from './AudioList';
 import { Empty } from './icons';
+import { SpeakDialog } from './SpeakDialog';
 import {
   languageOf, sampleUrl, useLibraryVoices, useServices, voiceAccess, voiceKey, voiceLook, voiceRef,
   type LibraryVoice, type VoiceAccess, type VoiceService,
@@ -27,7 +29,7 @@ const PAGE = 80;
 /* the languages offered first, in this order, after the person's own */
 const FIRST = ['en', 'zh', 'ja', 'ko', 'es'];
 
-export function VoicesPane({ group, query, favorites, onServices, onAll }: {
+export function VoicesPane({ group, query, favorites, onServices, onAll, speak }: {
   /** '' all, STARRED, FEATURED, or a service's id */
   group: string;
   query: string;
@@ -35,6 +37,8 @@ export function VoicesPane({ group, query, favorites, onServices, onAll }: {
   onServices: () => void;
   /** the side bar's "all", from an empty list of the starred */
   onAll: () => void;
+  /** Words spoken in a voice, put on the film at the playhead: null, or why not. */
+  speak?: (voice: LibraryVoice, access: VoiceAccess, text: string) => Promise<string | null>;
 }) {
   const t = useT();
   const lang = useLanguage();
@@ -44,6 +48,7 @@ export function VoicesPane({ group, query, favorites, onServices, onAll }: {
   const [language, setLanguage] = React.useState('');
   const [gender, setGender] = React.useState<'' | 'm' | 'f'>('');
   const [picked, setPicked] = React.useState<string | null>(null);
+  const [speaking, setSpeaking] = React.useState<LibraryVoice | null>(null);
   /* the sample heard, in the drawer's player (AudioList): its id is the voice's key */
   const player = usePlayer<{ id: string; voice: LibraryVoice }>();
   const sounding = player.playing ? player.item?.id ?? null : null;
@@ -126,12 +131,17 @@ export function VoicesPane({ group, query, favorites, onServices, onAll }: {
               key={key} voice={v} service={byId.get(v.provider)} access={access[v.provider]} showService={group === '' || group === STARRED || group === FEATURED}
               picked={picked === key} sounding={sounding === key} kept={favorites.includes(key)} languageName={languageName}
               onPlay={() => play(v)} onUse={() => use(v)} onServices={onServices}
+              onSpeak={speak && access[v.provider] ? () => { player.pause(); setSpeaking(v); } : undefined}
             />
           );
         })}
       </div>
       <MiniPlayer player={player} name={player.item?.voice.name ?? ''} group={player.item ? byId.get(player.item.voice.provider)?.name ?? '' : ''}
         art={(it, on) => <VoiceAvatar voice={it.voice} sounding={on} label={on ? t('assetDrawer.stop') : t('assetDrawer.play')} />} />
+      {speaking && speak && access[speaking.provider] ? (
+        <SpeakDialog voice={speaking} service={byId.get(speaking.provider)?.name ?? speaking.provider} onClose={() => setSpeaking(null)}
+          onSpeak={(text) => speak(speaking, access[speaking.provider]!, text)} />
+      ) : null}
     </div>
   );
 }
@@ -151,10 +161,10 @@ const SHADE_HOVER = 'group-hover:bg-[linear-gradient(to_right,transparent,var(--
 /** A press on a row's own button: not a play, nor a double click's use. */
 const own = { onDoubleClick: (e: React.MouseEvent) => e.stopPropagation() };
 
-function VoiceRow({ voice, service, access, showService, picked, sounding, kept, languageName, onPlay, onUse, onServices }: {
+function VoiceRow({ voice, service, access, showService, picked, sounding, kept, languageName, onPlay, onUse, onServices, onSpeak }: {
   voice: LibraryVoice; service: VoiceService | undefined; access: VoiceAccess | undefined; showService: boolean;
   picked: boolean; sounding: boolean; kept: boolean; languageName: (code: string) => string;
-  onPlay: () => void; onUse: () => void; onServices: () => void;
+  onPlay: () => void; onUse: () => void; onServices: () => void; onSpeak?: () => void;
 }) {
   const t = useT();
   const facts = [
@@ -194,6 +204,12 @@ function VoiceRow({ voice, service, access, showService, picked, sounding, kept,
         >
           <Star size={11} fill={kept ? 'currentColor' : 'none'} strokeWidth={kept ? 0 : 2.2} />
         </button>
+        {access && onSpeak ? (
+          <button type="button" data-voice-speak="" title={t('voiceSpeak.open')} aria-label={t('voiceSpeak.open')} onClick={(e) => { e.stopPropagation(); onSpeak(); }} {...own}
+            className={`${PANEL_ROUND} ${ADD_HOVER} hidden text-[var(--text)] group-hover:grid`}>
+            <AudioLines size={12} strokeWidth={2.4} />
+          </button>
+        ) : null}
         {access ? (
           <button type="button" title={useTip} aria-label={useTip} onClick={(e) => { e.stopPropagation(); onUse(); }} {...own}
             className={`${PANEL_ROUND} ${ADD_HOVER} hidden text-[var(--text)] group-hover:grid`}>

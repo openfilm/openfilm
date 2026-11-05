@@ -6,7 +6,7 @@
  * Plain TypeScript, no React: the editor's tests import it as it is.
  */
 import { LOOK_VARS, TEXT_DEFAULTS } from './text-look.ts';
-import { cueRule, setCueRule, type Vtt } from './caption-edits.ts';
+import { cueRule } from './caption-edits.ts';
 import { readVtt } from '../../../../src/captions.mjs';
 
 /** A caption as the renderer draws it with nothing said (CAPTION_BASE_CSS), in the text's variables. */
@@ -67,18 +67,4 @@ export function lookVars(css: string): Record<string, string> {
 /** What a look sets on a caption: each of a look's variables, a caption's own default where it says none (its size not). */
 export function captionLookSet(vars: Readonly<Record<string, string>>): Record<string, string> {
   return Object.fromEntries(LOOK_VARS.map((k) => [k, vars[k] ?? CAPTION_DEFAULTS[k] ?? TEXT_DEFAULTS[k]!]));
-}
-
-/**
- * Every caption of a track in a look (the library's caption templates): its variables the track's `::cue`, what it
- * leaves unset a caption's own default, the track's size kept. `edited`: the captions given a look of their own
- * take it too (their own say of it goes); else they keep theirs.
- */
-export function withCaptionLook(vtt: Vtt, vars: Readonly<Record<string, string>>, edited: boolean): Vtt {
-  const set = captionLookSet(vars);
-  let out = setCueRule(vtt, '::cue', lookDecls(cueRule(vtt, '::cue'), set));
-  if (!edited) return out;
-  const off = Object.fromEntries([...LOOK_VARS, ...PLAIN].map((k) => [k, null]));
-  for (const c of out.cues) out = setCueRule(out, `::cue(#${c.id})`, off);
-  return out;
 }

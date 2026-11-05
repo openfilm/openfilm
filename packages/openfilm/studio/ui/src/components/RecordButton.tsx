@@ -1,15 +1,11 @@
 /**
  * The timeline's record button: sound from the microphone (lib/recorder), put on the film where the playhead was when
  * recording began. While it records the button becomes the time recorded, how loud it is now, Stop (kept: into the
- * project's media and onto a sound track) and Discard (nothing kept). Beside it, Voice-over: words spoken in one of the
- * voices of the services the person connected, put on the film at the playhead the same way (its words timed, so its
- * captions come with it).
+ * project's media and onto a sound track) and Discard (nothing kept).
  */
 import React from 'react';
-import { ChevronDown, Loader2, Mic, Square, X } from 'lucide-react';
+import { Loader2, Mic, Square, X } from 'lucide-react';
 import { useT } from '@/i18n';
-import { MenuSelect } from './MenuSelect';
-import { Popover } from './Popover';
 import { meterPosition } from '@/lib/audio-levels';
 import { recordingName, startRecording, type RecordProblem, type Recording } from '@/lib/recorder';
 import { Tooltip } from './Tooltip';
@@ -21,13 +17,6 @@ export interface RecordButtonProps {
   onSave: (file: File, atMs: number) => Promise<string | null>;
   /** One sentence for the person: the microphone refused, missing, or a save that failed. */
   onProblem: (text: string) => void;
-  /** Voice-over in a voice of a service connected: the voices, and the words spoken put at `atMs` (null = done, else why not). */
-  voiceOver?: {
-    voices: readonly { key: string; name: string; note: string }[];
-    make: (voice: string, text: string, atMs: number) => Promise<string | null>;
-    /** Settings › Services, where a voice-over service is connected. */
-    connect: () => void;
-  };
 }
 
 const elapsed = (ms: number) => {
@@ -35,7 +24,7 @@ const elapsed = (ms: number) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 };
 
-export function RecordButton({ now, onSave, onProblem, voiceOver }: RecordButtonProps) {
+export function RecordButton({ now, onSave, onProblem }: RecordButtonProps) {
   const t = useT();
   const [state, setState] = React.useState<'idle' | 'starting' | 'recording' | 'saving'>('idle');
   const recording = React.useRef<{ rec: Recording; atMs: number; at: Date } | null>(null);
@@ -121,7 +110,7 @@ export function RecordButton({ now, onSave, onProblem, voiceOver }: RecordButton
   }
   const busy = state !== 'idle';
   const label = state === 'saving' ? t('timeline.record.saving') : t('timeline.record.start');
-  const mic = (
+  return (
     <Tooltip side="bottom" label={label}>
       <button type="button" data-record="" onClick={() => void start()} onMouseDown={(e) => e.preventDefault()} aria-disabled={busy} aria-label={label}
         className={`flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-[6px] outline-none transition focus-visible:ring-1 focus-visible:ring-[var(--accent)] ${busy ? 'cursor-default' : 'hover:bg-[var(--bg-hover)]'}`}
@@ -129,59 +118,5 @@ export function RecordButton({ now, onSave, onProblem, voiceOver }: RecordButton
         {state === 'saving' ? <Loader2 size={15} className="animate-spin" /> : <Mic size={16} />}
       </button>
     </Tooltip>
-  );
-  if (!voiceOver) return mic;
-  return <span className="flex shrink-0 items-center">{mic}<VoiceOver {...voiceOver} now={now} onProblem={onProblem} /></span>;
-}
-
-/** Voice-over beside the record button: a voice, the words, made and put at the playhead. */
-function VoiceOver({ voices, make, connect, now, onProblem }: NonNullable<RecordButtonProps['voiceOver']> & Pick<RecordButtonProps, 'now' | 'onProblem'>) {
-  const t = useT();
-  const [open, setOpen] = React.useState(false);
-  const [voice, setVoice] = React.useState('');
-  const [text, setText] = React.useState('');
-  const [making, setMaking] = React.useState(false);
-  const picked = voices.find((v) => v.key === voice) ?? voices[0] ?? null;
-  const go = async () => {
-    if (!picked || !text.trim() || making) return;
-    setMaking(true);
-    const why = await make(picked.key, text.trim(), now());
-    setMaking(false);
-    if (why) { onProblem(why); return; }
-    setText('');
-    setOpen(false);
-  };
-  return (
-    <Popover open={open} onOpenChange={setOpen} align="start" trigger={(
-      <Tooltip side="bottom" label={t('timeline.voiceOver.open')}>
-        <button type="button" data-voice-over="" onClick={() => setOpen(!open)} aria-label={t('timeline.voiceOver.open')} aria-expanded={open}
-          className="flex h-[28px] w-[16px] items-center justify-center rounded-[5px] text-[var(--text-muted)] outline-none hover:bg-[var(--bg-hover)] focus-visible:ring-1 focus-visible:ring-[var(--accent)]">
-          <ChevronDown size={12} />
-        </button>
-      </Tooltip>
-    )}>
-      <div className="flex w-[300px] flex-col gap-2.5 rounded-lg bg-[var(--bg-raised)] p-3 shadow-[var(--shadow-lg)] ring-1 ring-[var(--border)]">
-        <div className="text-[12.5px] font-semibold text-[var(--text)]">{t('timeline.voiceOver.title')}</div>
-        {voices.length ? (
-          <>
-            <MenuSelect label={t('timeline.voiceOver.voice')} value={picked?.key ?? ''} menuWidth="content"
-              groups={[{ choices: voices.map((v) => ({ value: v.key, label: `${v.name} · ${v.note}` })) }]} onPick={setVoice} />
-            <textarea value={text} onChange={(e) => setText(e.target.value)} rows={4} placeholder={t('timeline.voiceOver.text')}
-              className="resize-none rounded-md bg-[var(--bg-field)] px-2.5 py-2 text-[12px] leading-relaxed text-[var(--text)] outline-none placeholder:text-[var(--text-faint)] focus:ring-1 focus:ring-[var(--accent)]" />
-            <p className="text-[10.5px] leading-snug text-[var(--text-faint)]">{t('timeline.voiceOver.note')}</p>
-            <button type="button" disabled={!text.trim() || making} onClick={() => void go()}
-              className="flex h-8 items-center justify-center gap-1.5 rounded-md bg-[var(--primary)] text-[12.5px] font-medium text-[var(--on-primary)] hover:bg-[var(--primary-hover)]">
-              {making ? <Loader2 size={13} className="animate-spin" /> : null}{t(making ? 'timeline.voiceOver.making' : 'timeline.voiceOver.go')}
-            </button>
-          </>
-        ) : (
-          <>
-            <p className="text-[11.5px] leading-relaxed text-[var(--text-muted)]">{t('timeline.voiceOver.none')}</p>
-            <button type="button" onClick={() => { setOpen(false); connect(); }}
-              className="h-8 rounded-md bg-[var(--bg-field)] text-[12px] font-medium text-[var(--text)] hover:bg-[var(--bg-hover)]">{t('timeline.voiceOver.connect')}</button>
-          </>
-        )}
-      </div>
-    </Popover>
   );
 }

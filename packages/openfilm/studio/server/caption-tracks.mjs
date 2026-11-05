@@ -7,7 +7,7 @@
  */
 import { mkdir, readFile, readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { clipsNote, cueEscape, cuePlain, madeOfSpeech, readVtt, speechClips, speechNote, untouchedSpeech, vttTime, writeVtt } from '../../src/captions.mjs';
+import { CLIPS_NOTE, SPEECH_NOTE, clipsNote, cueEscape, cuePlain, madeOfSpeech, readVtt, speechClips, speechNote, untouchedSpeech, vttTime, writeVtt } from '../../src/captions.mjs';
 import { writeAtomic } from './atomic.mjs';
 import { CONNECT_TRANSLATOR, filmCaptions, readSubtitleStyle } from './captions.mjs';
 import { editProjectFilm, readProjectFilm } from './film.mjs';
@@ -75,8 +75,8 @@ function timedWords(line, words) {
  *                                    with the film (syncSpeechCaptions): the track's file made, or written again
  *   POST caption-tracks/new          { name?, text? } → { src, text }: a new caption track's file, of a WebVTT or SRT
  *                                    file's text (importedVtt) or none; put in the film by the caller
- *   POST caption-tracks/translate    { src, language, name? } → { src, text }: a caption track's cues translated, as a
- *                                    new file at the same times and places; 409 { code: 'no-translator' } when nothing can
+ *   POST caption-tracks/translate    { src | text, language, name? } → { src, text }: a caption track's cues (or a
+ *                                    WebVTT file's, `text`) translated, as a new file at the same times and places; 409 { code: 'no-translator' } when nothing can
  * @param {import('./http.mjs').Req} req @param {import('./http.mjs').Res} res @param {string} root @param {string} rest
  * @param {URL} url @param {{ translate?: (root: string) => Promise<import('./captions.mjs').TranslateLines | null> }} [options]
  */
@@ -124,10 +124,11 @@ export async function captionTrackRoutes(req, res, root, rest, url, { translate 
     return true;
   }
   if (rest === 'caption-tracks/translate' && req.method === 'POST') {
-    const { src, language, name } = /** @type {{ src?: unknown, language?: unknown, name?: unknown }} */ (await readJson(req));
+    const { src, text: given, language, name } = /** @type {{ src?: unknown, text?: unknown, language?: unknown, name?: unknown }} */ (await readJson(req));
     if (typeof language !== 'string' || !isFilmSubtitleLanguage(language)) throw new HttpError(400, `captions cannot be translated into "${String(language)}"`);
-    const text = await readFile(captionFile(root, src), 'utf8').catch(() => null);
-    if (text == null) throw new HttpError(404, `${String(src)} is not there`);
+    /* the captions to translate: a track's file, or captions given whole (what is said, a subtitle file) kept nowhere */
+    const text = typeof given === 'string' ? importedVtt(given) : await readFile(captionFile(root, src), 'utf8').catch(() => null);
+    if (text == null) throw new HttpError(typeof given === 'string' ? 400 : 404, typeof given === 'string' ? 'This is not a WebVTT or SRT file with captions in it.' : `${String(src)} is not there`);
     const translator = await translate(root);
     if (!translator) throw new HttpError(409, CONNECT_TRANSLATOR, { code: 'no-translator' });
     const controller = new AbortController();
@@ -137,7 +138,7 @@ export async function captionTrackRoutes(req, res, root, rest, url, { translate 
     let got;
     try {
       got = await translator({
-        src: String(src), language, lines, times: vtt.cues.map((c) => ({ startSec: c.start, endSec: c.end })), text: lines.join(' '),
+        src: String(src ?? 'captions'), language, lines, times: vtt.cues.map((c) => ({ startSec: c.start, endSec: c.end })), text: lines.join(' '),
         words: [], dur: vtt.cues.at(-1)?.end ?? 0, signal: controller.signal,
       });
     } catch (e) {
@@ -146,9 +147,11 @@ export async function captionTrackRoutes(req, res, root, rest, url, { translate 
       throw new HttpError(502, String(/** @type {Error} */ (e)?.message ?? e));
     }
     if (!Array.isArray(got) || got.length !== lines.length || got.some((x) => typeof x !== 'string')) throw new HttpError(502, 'The translation came back with the wrong number of lines; nothing was kept. Try again.');
-    const out = await freeSrc(root, typeof name === 'string' && name.trim() ? name : `${String(src).replace(/^.*\//, '').replace(/\.vtt$/i, '')}.${language}`);
-    /* the same cues, at the same times and places, in the same look: only the words are the other language's */
-    const made = writeVtt({ ...vtt, cues: vtt.cues.map((c, i) => ({ ...c, text: cueEscape(got[i].trim()) || c.text })) });
+    const out = await freeSrc(root, typeof name === 'string' && name.trim() ? name : `${String(src ?? 'captions').replace(/^.*\//, '').replace(/\.vtt$/i, '')}.${language}`);
+    /* the same cues, at the same times and places, in the same look: only the words are the other language's, and they
+       are no longer Studio's words of what is said (a translation is not made again of the speech) */
+    const notes = vtt.notes.filter((n) => !n.startsWith(SPEECH_NOTE) && !n.startsWith(CLIPS_NOTE));
+    const made = writeVtt({ ...vtt, notes, cues: vtt.cues.map((c, i) => ({ ...c, text: cueEscape(got[i].trim()) || c.text })) });
     const file = captionFile(root, out);
     await mkdir(dirname(file), { recursive: true });
     await writeAtomic(file, made);

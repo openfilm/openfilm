@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { filmHtml } from '../../src/film-doc.mjs';
-import { cueCss, madeOfSpeech, readVtt, speechClips } from '../../src/captions.mjs';
+import { clipsNote, cueCss, madeOfSpeech, readVtt, speechClips, speechNote } from '../../src/captions.mjs';
 import { captionTrackRoutes, subtitleStyleVtt, subtitlesVtt } from './caption-tracks.mjs';
 import { FILM_SUBTITLE_DEFAULT, FILM_SUBTITLE_LOOKS } from './film-subtitle.mjs';
 import { HttpError, json } from './http.mjs';
@@ -154,6 +154,14 @@ test('a caption track translated: a new file, the same cues at the same times an
     assert.deepEqual(vtt.cues.map((c) => [c.id, c.start, c.end, c.settings, c.text]), [['c1', 1, 2, 'line:80%', '[Hello]'], ['c2', 2, 3, '', '[Bye &amp; see you]']]);
     assert.equal(vtt.styles[0], '::cue { color: #fff; }');
     assert.equal((await call({ src: 'captions/Captions.vtt', language: 'xx' })).status, 400);
+    /* captions given whole (what is said, kept nowhere): translated alone, no longer Studio's words of the speech */
+    const said = `WEBVTT\n\n${speechNote([{ id: 'c1', start: 0, end: 1, settings: '', text: 'Hi' }])}\n\n${clipsNote(['assets/a.mp3'])}\n\nc1\n00:00:00.000 --> 00:00:01.000\nHi\n`;
+    const alone = await (await call({ text: said, language: 'en', name: 'Captions.en' })).json();
+    assert.equal(alone.src, 'captions/Captions.en.vtt');
+    const out = readVtt(alone.text);
+    assert.equal(out.cues[0].text, '[Hi]');
+    assert.equal(madeOfSpeech(out), false);
+    assert.equal(speechClips(out), null);
   } finally { close(); }
   const no = await serve(root);
   try {

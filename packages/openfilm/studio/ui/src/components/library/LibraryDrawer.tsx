@@ -20,7 +20,7 @@ import {
   type LibraryCategory, type LibraryItem,
 } from '@/lib/library';
 import { clearResourceDrag, dragPicture, setResourceDragData } from '@/lib/resource-drag';
-import { useLibraryVoices } from '@/lib/library-voices';
+import { useLibraryVoices, type LibraryVoice, type VoiceAccess } from '@/lib/library-voices';
 import { ADD_HOVER, FOOT_ROOM, MiniPlayer, MusicCard, ROUND, SoundRow, libraryArt, usePlayer } from './AudioList';
 import { CaptionsPane, type CaptionsActions } from './CaptionsPane';
 import { CategoryIcon, Empty } from './icons';
@@ -52,7 +52,7 @@ export interface LibraryActions {
 /** The skills shown from outside the drawer (the app's chat): Discover, or one skill's page; `n` tells one request from the next. */
 export type SkillsRequest = { name?: string; n: number };
 
-export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captions, onServices, projectId = null, showSkills, under = 0 }: {
+export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captions, speak, onServices, projectId = null, showSkills, under = 0 }: {
   media: React.ReactNode;
   /** the project's own media, or Saved */
   mediaScope: 'project' | 'saved';
@@ -60,6 +60,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
   actions: LibraryActions;
   /** where a caption track comes from: what is said, a file, or new */
   captions: CaptionsActions;
+  /** words spoken in a voice of the library, put on the film at the playhead (VoicesPane): null, or why not */
+  speak?: (voice: LibraryVoice, access: VoiceAccess, text: string) => Promise<string | null>;
   /** Settings › Services: where a voice's service is connected */
   onServices: () => void;
   /** the project shown, for its own skills */
@@ -199,9 +201,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
               </>
             ) : cat === 'captions' ? (
               <>
-                {/* New captions first opened: a caption track made; then the templates its captions take */}
-                <SideBox on={group !== 'templates'} onClick={() => pickGroup('')}>{t('assetDrawer.captionsNewLine')}</SideBox>
-                <SideBox on={group === 'templates'} onClick={() => pickGroup('templates')}>{t('assetDrawer.captionsTemplates')}</SideBox>
+                {/* caption tracks made here; their look is the caption inspector's */}
+                <SideBox on onClick={() => pickGroup('')}>{t('assetDrawer.captionsNewLine')}</SideBox>
               </>
             ) : (
               <>
@@ -221,7 +222,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
           </nav>
         </div>
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col" data-studio-host-panel={cat === 'media' ? undefined : ''}>
-          {cat === 'media' ? media : cat === 'captions' ? <CaptionsPane line={group === 'templates' ? 'templates' : 'new'} actions={captions} /> : (
+          {cat === 'media' ? media : cat === 'captions' ? <CaptionsPane actions={captions} /> : (
             <>
               {/* a skill's page has its own way back instead */}
               <div className="flex gap-2 px-3 pb-2 pt-2.5" hidden={cat === 'skill' && skillOpen != null}>
@@ -239,7 +240,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
               </div>
               {cat !== 'skill' && cat !== 'voice' ? <SourceChips sources={sources} value={source} onChange={setSource} /> : null}
               {cat === 'skill' ? <SkillsPane line={skillLine} query={query} projectId={projectId} opened={skillOpen} onOpen={setSkillOpen} onDiscover={() => pickGroup('discover')} />
-                : cat === 'voice' ? <VoicesPane group={group} query={query} favorites={favorites} onServices={onServices} onAll={() => pickGroup('')} /> : (
+                : cat === 'voice' ? <VoicesPane group={group} query={query} favorites={favorites} onServices={onServices} onAll={() => pickGroup('')} speak={speak} /> : (
               <>
               {/* a click on nothing lets the picked thing go; the player is under the list */}
               <div

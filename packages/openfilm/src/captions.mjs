@@ -37,7 +37,7 @@ function cuesPrint(cues) {
 export const speechNote = (cues) => `${SPEECH_NOTE} ${cuesPrint(cues)}`;
 /** Whether a file of what is said has its words as Studio wrote them, not changed by hand since. @param {Vtt} vtt */
 export const untouchedSpeech = (vtt) => vtt.notes.includes(speechNote(vtt.cues));
-const CLIPS_NOTE = 'NOTE Of the files ';
+export const CLIPS_NOTE = 'NOTE Of the files ';
 /** The note of a file of what some media say: their files (a clip cut in two still speaks from its file). @param {readonly string[]} srcs */
 export const clipsNote = (srcs) => `${CLIPS_NOTE}${JSON.stringify(srcs)}`;
 /** The media files a file of what is said is made of (clipsNote); null: all that speak. @param {Vtt} vtt @returns {string[] | null} */
