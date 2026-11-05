@@ -262,17 +262,15 @@ async function video(args, ctx, base, send) {
   if (refs.length && first) { said.push('reference pictures go with a clip made from the prompt: the frames were used'); refs = []; }
   if (refs.length > 6) { said.push('Gemini Omni takes 6 reference pictures: the rest were left out'); refs = refs.slice(0, 6); }
 
-  /* a clip is edited at its own length, or continued by the seconds asked (3 to 10, its own default 10 when none) */
+  /* a clip edited or continued needs a length said: the seconds asked (a continuation adds 3 to 10), else the clip's own */
   const length = clip ? await mediaSeconds(ctx.root, clip) : null;
   if (length !== null && length > 30.05) {
     throw new Error(`--video: Gemini Omni edits clips of 15 s at most and continues them to 30 s at most, and ${clip} is ${Math.round(length * 10) / 10} s: trim it to the part to make again.`);
   }
-  const asked = number(args.duration) ?? (clip ? null : 8);
-  const longest = clip ? 10 : first && last ? 10 : 15;
+  const asked = number(args.duration) ?? (!clip ? 8 : length !== null ? Math.round(length) : null);
+  const longest = first && last ? 10 : 15;
   const seconds = asked === null ? null : clamp(Math.round(asked), 3, longest);
-  if (asked !== null && seconds !== asked) {
-    said.push(clip ? `Gemini Omni continues a clip by 3 to 10 seconds: ${seconds} s` : `Gemini Omni makes 3 to ${longest} second clips${first && last ? ' between two frames' : ''}: ${seconds} s`);
-  }
+  if (asked !== null && seconds !== asked) said.push(`Gemini Omni makes 3 to ${longest} second clips${first && last ? ' between two frames' : ''}: ${seconds} s`);
 
   /* with a first frame and no ratio asked, the picture's own shape decides; a clip keeps its own unless one is asked */
   let ratio = text(args['aspect-ratio']);

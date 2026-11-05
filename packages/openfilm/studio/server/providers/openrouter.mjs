@@ -6,7 +6,7 @@
  * until it is done, then its file. Pictures a model is given go inline, as data: URIs. What a run cost, as OpenRouter
  * reports it, goes in its receipt as `usd` (Studio leaves it out of what the agent reads).
  */
-import { billedBy, call, clamp, dataUri, download, extOf, landing, list, madePicture, modelOf, needed, notes, number, ownAddress, pictureSize, pngOnly, serviceUrl, sleep, text } from './common.mjs';
+import { billedBy, call, clamp, dataUri, download, extOf, landing, list, madePicture, mediaSeconds, modelOf, mp4Facts, needed, notes, number, ownAddress, pictureSize, pngOnly, serviceUrl, sleep, text } from './common.mjs';
 
 /** @typedef {import('./contract.mjs').Provider} Provider @typedef {import('./contract.mjs').RunContext} RunContext */
 
@@ -58,10 +58,10 @@ const MAX_REFS = 16;
 /**
  * Each video model's lengths (`seconds`, a range in whole seconds, or `only` some; `framed`, the longest between a
  * first and a last frame), shapes, the most reference pictures it takes (`refs`, 0 for none), whether it takes a voice
- * (`voice`), and its sizes (`sizes`, as OpenRouter lists them): --resolution, else 720p, else the nearest it
+ * (`voice`) or a clip to edit or continue (`clip`), and its sizes (`sizes`, as OpenRouter lists them): --resolution, else 720p, else the nearest it
  * makes (`resolution`, its own default when it makes no 720p). Every clip has sound: asked for, or (`audio: false`) made
  * with it unasked.
- * @type {Record<string, { name: string, seconds?: [number, number], only?: number[], framed?: number, ratios: string[], refs: number, voice?: true, sizes?: string[], resolution?: string, audio?: false }>}
+ * @type {Record<string, { name: string, seconds?: [number, number], only?: number[], framed?: number, ratios: string[], refs: number, voice?: true, clip?: true, sizes?: string[], resolution?: string, audio?: false }>}
  */
 const VIDEO = {
   'bytedance/seedance-2.0-mini': { name: 'Seedance', seconds: [4, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], refs: 9, voice: true, sizes: ['480p', '720p'] },
@@ -76,7 +76,7 @@ const VIDEO = {
   'heygen/heygen-video-1': { name: 'HeyGen', seconds: [5, 30], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], refs: 0, sizes: ['480p', '768p', '1080p', '2K'], resolution: '768p', audio: false },
   'kwaivgi/kling-v3.0-std': { name: 'Kling', seconds: [3, 15], ratios: ['16:9', '9:16', '1:1'], refs: 0 },
   'kwaivgi/kling-v3.0-pro': { name: 'Kling', seconds: [3, 15], ratios: ['16:9', '9:16', '1:1'], refs: 0 },
-  'google/gemini-omni-1.2-flash': { name: 'Gemini Omni', seconds: [3, 15], framed: 10, ratios: ['16:9', '9:16'], refs: 6, sizes: ['360p', '720p', '1080p', '4K'] },
+  'google/gemini-omni-1.2-flash': { name: 'Gemini Omni', seconds: [3, 15], framed: 10, ratios: ['16:9', '9:16'], refs: 6, clip: true, sizes: ['360p', '720p', '1080p', '4K'] },
 };
 const RESOLUTION = '720p';
 /** Each size's lines of picture, to find the nearest a model makes. */
@@ -110,7 +110,6 @@ export default {
   models: MODELS,
   async run(verb, args, ctx) {
     if (verb === 'image') return picture(args, ctx);
-    if (verb === 'video' && text(args.video)) throw new Error('--video: OpenRouter\'s video models here make clips from a prompt and pictures. A clip made from another is fal\'s: use fal for it.');
     if (verb === 'video' && text(args.audio)) {
       throw new Error('--audio: a clip whose lips follow a recording word for word is fal\'s (OmniHuman, Kling Avatar): use fal for it. Here a person speaks the words written in the prompt in quotes, with its own sound, and --voice gives a recording of whose voice it is.');
     }
@@ -166,7 +165,8 @@ async function picture(args, ctx) {
 
 /**
  * A clip with sound, of the lengths and shapes the chosen model makes: from the prompt, from a first (and last) frame,
- * or from reference pictures (Seedance up to 9, Gemini Omni up to 6).
+ * or from reference pictures (Seedance up to 9, Gemini Omni up to 6); Gemini Omni also edits or continues a clip
+ * (`--video`), as the prompt says.
  * @param {Record<string, unknown>} args @param {RunContext} ctx
  */
 async function video(args, ctx) {
@@ -175,13 +175,21 @@ async function video(args, ctx) {
   const model = modelOf(MODELS, 'video', ctx);
   const spec = VIDEO[model];
   const said = [];
-  const first = text(args['first-frame']);
-  const last = text(args['last-frame']);
+  const clip = text(args.video);
+  if (clip && !spec.clip) throw new Error(`--video: ${spec.name} here makes clips from a prompt and pictures. Gemini Omni edits or continues a clip: --model google/gemini-omni-1.2-flash; fal makes clips from clips too.`);
+  const first = clip ? '' : text(args['first-frame']);
+  const last = clip ? '' : text(args['last-frame']);
+  if (clip) for (const name of ['first-frame', 'last-frame']) if (text(args[name])) said.push(`--${name}: ${spec.name} makes it from the clip: it was left out`);
   let refs = list(args['input-reference']);
   if (refs.length && !spec.refs) { said.push(`${spec.name} takes no reference pictures: they were left out`); refs = []; }
   if (refs.length > spec.refs) { said.push(`${spec.name} takes ${spec.refs} reference pictures: the rest were left out`); refs = refs.slice(0, spec.refs); }
 
-  const asked = number(args.duration) ?? 5;
+  /* a clip edited or continued needs a length said: the seconds asked (a continuation adds 3 to 10), else the clip's own */
+  const clipSeconds = clip ? await mediaSeconds(ctx.root, clip) : null;
+  if (clipSeconds !== null && clipSeconds > 30.05) {
+    throw new Error(`--video: ${spec.name} edits clips of 15 s at most and continues them to 30 s at most, and ${clip} is ${Math.round(clipSeconds * 10) / 10} s: trim it to the part to make again.`);
+  }
+  const asked = number(args.duration) ?? (clipSeconds !== null ? Math.round(clipSeconds) : 5);
   const framed = Boolean(first && last && spec.framed);
   const range = /** @type {[number, number] | undefined} */ (spec.seconds && framed ? [spec.seconds[0], Math.min(spec.seconds[1], /** @type {number} */ (spec.framed))] : spec.seconds);
   const seconds = length({ ...spec, seconds: range }, asked);
@@ -207,6 +215,7 @@ async function video(args, ctx) {
   const frame = async (/** @type {string} */ src, /** @type {'first_frame' | 'last_frame'} */ type) => ({ type: 'image_url', image_url: { url: await dataUri(src, ctx) }, frame_type: type });
   const frames = voice ? [] : [...(first ? [await frame(first, 'first_frame')] : []), ...(last ? [await frame(last, 'last_frame')] : [])];
   const references = [
+    ...(clip ? [{ type: 'video_url', video_url: { url: await dataUri(clip, ctx) } }] : []),
     ...(await Promise.all(refs.map(async (r) => ({ type: 'image_url', image_url: { url: await dataUri(r, ctx) } })))),
     ...(voice ? [{ type: 'audio_url', audio_url: { url: await dataUri(voice, ctx) } }] : []),
   ];
@@ -231,13 +240,17 @@ async function video(args, ctx) {
   }
   const fileUrl = ownAddress(NAME, text(state.unsigned_urls?.[0]) || `${root}/api/v1/videos/${encodeURIComponent(job.id)}/content?index=0`, root);
   const { bytes } = await download(NAME, fileUrl, ctx, { headers: auth(ctx) });
+  /* its length and size as made, when the file says (a continued clip may come back longer than asked) */
+  const facts = mp4Facts(bytes);
+  const dur = facts?.seconds ?? seconds;
+  const size = facts?.w && facts.h ? { w: facts.w, h: facts.h } : {};
   return {
     files: [{ path, bytes }],
-    index: [{ src: path, kind: 'video', dur: seconds, hasAudio: true, from: {
-      mode: 'generate', prompt, provider: 'openrouter', model, resolution, sec: seconds,
-      ...(first ? { firstFrame: first } : {}), ...(last ? { lastFrame: last } : {}), ...(refs.length && !frames.length ? { refs } : {}), ...(voice ? { voice } : {}),
+    index: [{ src: path, kind: 'video', ...size, dur, hasAudio: true, from: {
+      mode: 'generate', prompt, provider: 'openrouter', model, resolution, sec: dur,
+      ...(first ? { firstFrame: first } : {}), ...(last ? { lastFrame: last } : {}), ...(refs.length && !frames.length ? { refs } : {}), ...(voice ? { voice } : {}), ...(clip ? { clip } : {}),
     } }],
-    receipt: { provider: 'openrouter', model, src: path, dur: seconds, hasAudio: true, resolution, ...reported(state.usage), ...notes(said) },
+    receipt: { provider: 'openrouter', model, src: path, dur, ...(size.w ? { width: size.w, height: size.h } : {}), hasAudio: true, resolution, ...reported(state.usage), ...notes(said) },
     cost: billedBy(NAME),
   };
 }

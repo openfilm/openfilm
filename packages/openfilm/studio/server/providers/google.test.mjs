@@ -1,6 +1,10 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import google, { polling } from './google.mjs';
 
 const KEY = 'AIza-test-0123456789';
@@ -221,13 +225,18 @@ test('a video from a clip: uploaded, asked after until ready, edited or continue
     }
     return [404, {}];
   };
-  const files = { 'assets/video/take.mp4': new Uint8Array(mp4(6.5, 720, 1280)), 'assets/image/a.png': new Uint8Array(Buffer.from('89504e470d0a1a0a', 'hex')) };
-  const result = await google.run('video', { out: 'take-2', prompt: 'make the cup red', video: 'assets/video/take.mp4', 'first-frame': 'assets/image/a.png', 'input-reference': ['assets/image/a.png'] }, ctx(files));
+  /* a real 4 s clip in a project, so its length can be told */
+  const root = mkdtempSync(join(tmpdir(), 'omni-clip-'));
+  mkdirSync(join(root, 'assets/video'), { recursive: true });
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=gray:s=64x64:d=4', '-pix_fmt', 'yuv420p', join(root, 'assets/video/take.mp4')]);
+  const files = { 'assets/video/take.mp4': new Uint8Array(readFileSync(join(root, 'assets/video/take.mp4'))), 'assets/image/a.png': new Uint8Array(Buffer.from('89504e470d0a1a0a', 'hex')) };
+  const inProject = { ...ctx(files), root };
+  const result = await google.run('video', { out: 'take-2', prompt: 'make the cup red', video: 'assets/video/take.mp4', 'first-frame': 'assets/image/a.png', 'input-reference': ['assets/image/a.png'] }, inProject);
   const sent = JSON.parse(seen.findLast((c) => c.url.pathname === '/v1beta/interactions').body);
   assert.deepEqual(sent.input.map((/** @type {any} */ p) => p.type), ['video', 'image', 'text']);
   assert.deepEqual(sent.input[0], { type: 'video', uri: `${base}/v1beta/files/clip-1`, mime_type: 'video/mp4' });
-  /* the clip keeps its shape and length: none asked, none sent; the prompt says edit or continue */
-  assert.deepEqual(sent.response_format, { type: 'video', delivery: 'uri', resolution: '720p' });
+  /* the clip keeps its shape, none asked; its own length is said; the prompt says edit or continue */
+  assert.deepEqual(sent.response_format, { type: 'video', delivery: 'uri', resolution: '720p', duration: '4s' });
   assert.equal(sent.generation_config, undefined);
   assert.equal(asks, 2);
   assert.ok(seen.some((c) => c.method === 'DELETE' && c.url.pathname === '/v1beta/files/clip-1'));
@@ -236,9 +245,14 @@ test('a video from a clip: uploaded, asked after until ready, edited or continue
   assert.equal(result.index[0].from.clip, 'assets/video/take.mp4');
   assert.match(result.receipt.notes.join('\n'), /--first-frame: Gemini Omni makes it from the clip/);
 
-  await google.run('video', { out: 'more', prompt: 'continue the scene', video: 'assets/video/take.mp4', duration: 20, 'aspect-ratio': '9:16' }, ctx(files));
-  const more = JSON.parse(seen.findLast((c) => c.url.pathname === '/v1beta/interactions').body);
-  assert.deepEqual(more.response_format, { type: 'video', delivery: 'uri', aspect_ratio: '9:16', resolution: '720p', duration: '10s' });
+  const more = await google.run('video', { out: 'more', prompt: 'continue the scene', video: 'assets/video/take.mp4', duration: 6, 'aspect-ratio': '9:16' }, inProject);
+  assert.deepEqual(JSON.parse(seen.findLast((c) => c.url.pathname === '/v1beta/interactions').body).response_format,
+    { type: 'video', delivery: 'uri', aspect_ratio: '9:16', resolution: '720p', duration: '6s' });
+  assert.equal(more.receipt.notes, undefined);
+  /* a clip whose length cannot be told: none said, unless asked */
+  await google.run('video', { out: 'x', prompt: 'y', video: 'assets/video/take.mp4' }, ctx(files));
+  assert.equal(JSON.parse(seen.findLast((c) => c.url.pathname === '/v1beta/interactions').body).response_format.duration, undefined);
+  rmSync(root, { recursive: true, force: true });
 });
 
 test('a clip Gemini cannot take says so and its upload is deleted', async () => {

@@ -1,6 +1,10 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import openrouter, { polling } from './openrouter.mjs';
 
 const KEY = 'sk-or-v1-test0123456789';
@@ -170,4 +174,32 @@ test('a person speaks the words of the prompt with the clip\'s own sound: --voic
   assert.equal(result.index[0].from.voice, 'assets/audio/vo/voice.wav');
   await assert.rejects(openrouter.run('video', { prompt: 'p', voice: 'assets/audio/vo/voice.wav', out: 'x' }, ctx(files, 'kwaivgi/kling-v3.0-pro')), /Seedance takes one/);
   await assert.rejects(openrouter.run('video', { prompt: 'p', audio: 'assets/audio/vo/voice.wav', out: 'x' }, ctx(files)), /fal's \(OmniHuman, Kling Avatar\)/);
+});
+
+test('a clip edited or continued (Gemini Omni): sent as a video reference with its own length, unless one is asked; the made length as the file says', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'omni-clip-'));
+  mkdirSync(join(root, 'assets/video'), { recursive: true });
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=gray:s=64x64:d=4', '-pix_fmt', 'yuv420p', join(root, 'assets/video/take.mp4')]);
+  const take = new Uint8Array(readFileSync(join(root, 'assets/video/take.mp4')));
+  const files = { 'assets/video/take.mp4': take, 'assets/image/a.png': new Uint8Array([1]) };
+  const made = clip(1);
+  /* the clip made back is the 4 s one, so its own length and size are read from it */
+  reply = (call) => call.url.pathname === '/api/v1/videos/v1/content' ? [200, Buffer.from(take), 'video/mp4'] : made(call);
+  seen.length = 0;
+  const edited = await openrouter.run('video', { prompt: 'make the cup red', video: 'assets/video/take.mp4', 'first-frame': 'assets/image/a.png', 'input-reference': ['assets/image/a.png'], out: 'take-2' },
+    { ...ctx(files, 'google/gemini-omni-1.2-flash'), root });
+  const body = JSON.parse(seen[0].body);
+  assert.deepEqual(body.input_references.map((r) => r.type), ['video_url', 'image_url']);
+  assert.match(body.input_references[0].video_url.url, /^data:video\/mp4;base64,/);
+  assert.equal(body.duration, 4, 'the clip\'s own length');
+  assert.equal(body.frame_images, undefined);
+  assert.equal(body.aspect_ratio, undefined, 'the clip keeps its shape');
+  assert.deepEqual([edited.index[0].dur, edited.index[0].w, edited.index[0].h], [4, 64, 64]);
+  assert.equal(edited.index[0].from.clip, 'assets/video/take.mp4');
+  assert.match(edited.receipt.notes.join(' '), /--first-frame: Gemini Omni makes it from the clip/);
+  seen.length = 0;
+  await openrouter.run('video', { prompt: 'continue the scene', video: 'assets/video/take.mp4', duration: 6, out: 'more' }, { ...ctx(files, 'google/gemini-omni-1.2-flash'), root });
+  assert.equal(JSON.parse(seen[0].body).duration, 6);
+  await assert.rejects(openrouter.run('video', { prompt: 'p', video: 'assets/video/take.mp4', out: 'x' }, { ...ctx(files, 'bytedance/seedance-2.0'), root }), /--video: Seedance here makes clips from a prompt and pictures\. Gemini Omni edits or continues a clip/);
+  rmSync(root, { recursive: true, force: true });
 });
