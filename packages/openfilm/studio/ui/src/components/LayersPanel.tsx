@@ -40,7 +40,8 @@ export interface LayersPanelProps {
   /** Changes with film.html: the pages may have new overrides. */
   filmKey: unknown;
   /** A clip by its film.html id: how the timeline names it, and its place. */
-  clipOf: (clipId: string) => { label: string; kind: string; loc?: string } | null;
+  /** `whole`: a thing of the library (a sticker, an effect, words): one row, the parts of its page not shown. */
+  clipOf: (clipId: string) => { label: string; kind: string; loc?: string; whole?: boolean } | null;
   /** The layers in hand on the picture: one, several selected together, or none. */
   selected: readonly { clipId?: string; loc: string | null }[];
   /** The clips selected (film.html places). */
@@ -71,7 +72,7 @@ export function LayersPanel(p: LayersPanelProps) {
   const clipsRef = React.useRef(stageClips);
   clipsRef.current = stageClips;
   const clipOf = p.clipOf;
-  const clips = React.useMemo(() => (stageClips ? withCaptions(stageClips, p.captions, (id) => {
+  const clips = React.useMemo(() => (stageClips ? withCaptions(stageClips.map((c) => (clipOf(c.clip)?.whole ? { ...c, layers: [] } : c)), p.captions, (id) => {
     const loc = clipOf(id)?.loc;
     return loc ? parseFilmDocLoc(loc)?.track ?? null : null;
   }) : null), [stageClips, p.captions, clipOf]);

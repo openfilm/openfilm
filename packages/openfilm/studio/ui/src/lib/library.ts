@@ -325,6 +325,14 @@ export const TEXT_COMPONENT = 'text/text';
 /** Where a project keeps it once taken (server takeSaved: `saved/openfilm/<id as one name>/`). */
 const TEXT_IN_PROJECT = `saved/${BUILT_IN}/${TEXT_COMPONENT.replace('/', '-')}/`;
 
+/**
+ * Whether a clip is a thing of the library (a sticker, an effect, a title, a line of words: taken into the project
+ * under `saved/openfilm/`): one thing on the picture, picked and moved whole, never by the parts its page is made of.
+ */
+export const isLibraryClip = (src: string | undefined): boolean => Boolean(src?.split('#')[0]?.startsWith(`saved/${BUILT_IN}/`));
+/** Whether a clip is one of the library's stickers: drawn on the timeline by its picture. */
+export const isLibrarySticker = (src: string | undefined): boolean => Boolean(src?.split('#')[0]?.startsWith(`saved/${BUILT_IN}/stickers-`));
+
 /** Whether a clip is the text component, which a text style or motion goes on. */
 export const isTextClip = (src: string | undefined): boolean => Boolean(src?.split('#')[0]?.startsWith(TEXT_IN_PROJECT));
 

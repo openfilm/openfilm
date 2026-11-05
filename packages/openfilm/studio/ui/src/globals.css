@@ -81,6 +81,7 @@
   --clip-image: #497c93;
   --clip-page: #7968a8;
   --clip-text: #b5703d;
+  --clip-sticker: #3d8a5c;
   --clip-audio: #318383;
 
   /* the timeline's own: a well (meters), the playhead and the frame of a picked clip, and waveforms drawn lighter
@@ -148,6 +149,7 @@
   --clip-image: #2e5363;
   --clip-page: #504472;
   --clip-text: #7f4d28;
+  --clip-sticker: #24603e;
   --clip-audio: #1c5757;
 
   --tl-lane: #151518;

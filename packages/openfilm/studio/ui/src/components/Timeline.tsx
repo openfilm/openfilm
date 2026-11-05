@@ -168,6 +168,7 @@ import { fadeEdits, fadeFromPointer, fadeHandleX, type FadeEdge, type FadeMs } f
 import { canChangeSpeed, roundSpeed } from '@/lib/clip-speed';
 import { hasVolume, volumeAtLineY, volumeEdit, volumeLineY, volumeOf, volumeText } from '@/lib/clip-volume';
 import { speedText } from '@/lib/playback-speed';
+import { isLibrarySticker } from '@/lib/library';
 import { cutNear, transitionSpan, type CutRef, type FilmTransition, type TransitionAsk, type TransitionKind } from '@/lib/transitions';
 
 /** Track head column: kind badge + lock + hide + original sound. */
@@ -309,6 +310,13 @@ const CUE_MENU = new Set(['split', 'duplicate', 'remove', 'ripple', 'ripple-star
 const CAPTION_ROW_H = 26;
 
 /** A row's height: the person's for its track (lib/track-heights), else the timeline's own (the main track taller). */
+/** A sticker's picture on its block: a frame from its middle (it has come in by then), else its poster. */
+function stickerShot(strip: ReadonlyMap<number, string> | undefined, poster: string | undefined): string | undefined {
+  if (!strip?.size) return poster;
+  const at = [...strip.keys()].sort((a, b) => a - b);
+  return strip.get(at[Math.floor(at.length / 2)]!) ?? poster;
+}
+
 function rowH(track: Pick<TimelineTrack, 'kind' | 'height' | 'main'> & { captions?: unknown; text?: boolean }): number {
   return track.height ?? (track.captions || track.text ? CAPTION_ROW_H : ownTrackHeight(track));
 }
@@ -3055,7 +3063,9 @@ export const Timeline = React.memo(function Timeline({
             /* a line of the library's words (a row of them, or one among other clips): drawn as a caption track is, its
                words, no pictures */
             const textRow = Boolean(track.text) || block.words != null;
-            const color = textRow ? 'var(--clip-text)'
+            /* a sticker of the library: a block of its own color with its picture at its start, no filmstrip */
+            const sticker = !textRow && isLibrarySticker(block.src);
+            const color = textRow ? 'var(--clip-text)' : sticker ? 'var(--clip-sticker)'
               : block.kind === 'video' && block.src && filmSrcIsStill(block.src) ? 'var(--clip-image)' : KIND_COLOR[block.kind];
             const able = drag.can(block);
             const strip = clipThumbs.get(clipThumbId(block));
@@ -3202,11 +3212,18 @@ export const Timeline = React.memo(function Timeline({
                 {/* info strip: name and length side by side (one statement), not at opposite ends of a wide clip */}
                 <div
                   className="pointer-events-none absolute inset-x-0 top-0 flex items-center overflow-hidden px-1.5"
-                  style={{ height: textRow ? '100%' : INFO_H }}
+                  style={{ height: textRow || sticker ? '100%' : INFO_H }}
                 >
                   {/* pinned to the left of the view so a clip wider than the screen still says what it is (pinLabels,
                       on scroll: scrolling rebuilds nothing) */}
                   <span className="flex min-w-0 items-center gap-1" data-pin={left} data-pin-max={width - 48}>
+                    {sticker && width > 14 ? (() => {
+                      const shot = stickerShot(strip, poster);
+                      return (
+                        <span aria-hidden data-clip-sticker="" className="block shrink-0 rounded-[3px] bg-black/45 bg-contain bg-center bg-no-repeat"
+                          style={{ width: Math.min(rowH(track) - 10, width - 8), height: rowH(track) - 10, ...(shot ? { backgroundImage: `url(${JSON.stringify(shot)})` } : {}) }} />
+                      );
+                    })() : null}
                     {/* its words are the film's captions' source (its transcript) */}
                     {block.src && transcribed?.has(block.src.replace(/#.*$/, '')) ? (
                       <span data-clip-transcribed="" role="img" aria-label={t('timeline.hasTranscript')} className="flex shrink-0 text-white/90"><CcMark size={12} /></span>
@@ -3241,7 +3258,7 @@ export const Timeline = React.memo(function Timeline({
                 ) : null}
                 {/* preview band: thumbnails by the clip's own time (a move keeps them, a left trim seeks deeper).
                     Before thumbnails exist, one poster at the left — tiling it would fake a filmstrip. */}
-                {strip?.size && visual && !textRow && width > 8 ? (
+                {strip?.size && visual && !textRow && !sticker && width > 8 ? (
                   <BlockThumbs
                     thumbs={strip}
                     startMs={intoOrigin}
@@ -3252,7 +3269,7 @@ export const Timeline = React.memo(function Timeline({
                     thumbWidthPx={THUMB_CELL_PX}
                     visiblePx={{ from: thumbWindow.from - left, to: thumbWindow.to - left }}
                   />
-                ) : poster && visual && !textRow && width > 8 ? (
+                ) : poster && visual && !textRow && !sticker && width > 8 ? (
                   <span
                     aria-hidden
                     className="pointer-events-none absolute left-0 opacity-90"

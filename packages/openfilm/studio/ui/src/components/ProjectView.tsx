@@ -33,7 +33,7 @@ import { attrsOf, pasteAttrs, type AttrGroup, type CopiedAttrs } from '@/lib/cli
 import { cutPoints, nextCut } from '@/lib/timeline-nav';
 import { anyLocked, lockedEdits } from '@/lib/track-lock';
 import { placeMedia, type SourceRange } from '@/lib/media-place';
-import { BUILT_IN, TEXT_COMPONENT, builtInItem, cutTrack, cutsOf, defaultTextWords, fromLibrary, isTextClip, libraryBox, libraryDragItem, nameOf, onCut, pageUrl, placedGroup, useLibraryIndex, withLook, withRootVars, type LibraryItem } from '@/lib/library';
+import { BUILT_IN, TEXT_COMPONENT, builtInItem, cutTrack, cutsOf, defaultTextWords, fromLibrary, isLibraryClip, isTextClip, libraryBox, libraryDragItem, nameOf, onCut, pageUrl, placedGroup, useLibraryIndex, withLook, withRootVars, type LibraryItem } from '@/lib/library';
 import { LibraryDrawer, type LibraryActions, type SkillsRequest } from '@/components/library/LibraryDrawer';
 import type { CaptionsMake } from '@/components/library/CaptionsPane';
 import { LibraryTrial } from '@/components/library/LibraryTrial';
@@ -2585,7 +2585,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   ), []);
   const layerClipOf = React.useCallback((clipId: string) => {
     const b = blocksRef.current.find((x) => x.clipId === clipId);
-    return b ? { label: b.title, kind: b.kind, ...(b.loc ? { loc: b.loc } : {}) } : null;
+    /* a thing of the library: one row, as it is one thing on the picture */
+    return b ? { label: b.title, kind: b.kind, ...(b.loc ? { loc: b.loc } : {}), ...(isLibraryClip(b.src) ? { whole: true } : {}) } : null;
   }, []);
   const selectLayerRows = React.useCallback((layers: readonly { clipId: string; loc: string }[], toggle = false) => {
     const found = layers.flatMap(({ clipId, loc }) => {
