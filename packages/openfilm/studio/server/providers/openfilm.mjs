@@ -34,6 +34,8 @@ const MODELS = /** @type {Partial<Record<Verb, { id: string, name: string }[]>>}
 /** The verbs of those kinds (changed in place). */
 const VERBS = /** @type {Verb[]} */ ([]);
 let askAfter = 0;
+/** Whether the service has answered once: from then on what it said is shown while it is asked again. */
+let answered = false;
 /** @type {Promise<void> | null} */
 let asking = null;
 
@@ -94,6 +96,7 @@ export default {
         const res = await fetch(`${service()}/v1/media/models`, { signal: AbortSignal.timeout(5000) });
         if (!res.ok) throw new Error(String(res.status));
         take((/** @type {{ models?: unknown }} */ (await res.json())).models);
+        answered = true;
         askAfter = Date.now() + FRESH_MS;
       } catch {
         /* unreachable: what it offered last stays, and it is asked again soon */
@@ -102,7 +105,8 @@ export default {
         asking = null;
       }
     })();
-    return asking;
+    /* no one waits on the network for a list they already have (Settings opening, the agent asking what there is) */
+    return answered && !force ? Promise.resolve() : asking;
   },
   /* every model it runs takes MP3 speech, and it is the smallest to send */
   speechFormat: 'mp3',

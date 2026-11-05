@@ -29,7 +29,7 @@ const ctx = (files = {}, model) => ({
   read: async (p) => { if (!(p in files)) throw new Error(`no ${p}`); return files[p]; },
 });
 
-test('what it offers is what the service says now: the kinds it knows, voices with voice-over; kept when it cannot be reached', async () => {
+test('what it offers is what the service says now: the kinds it knows, voices with voice-over; kept when it cannot be reached', async (t) => {
   assert.deepEqual(openfilm.verbs, [], 'nothing before the service said');
   seen.length = 0;
   reply = (call) => (call.url.pathname === '/v1/media/models' ? [200, { models: {
@@ -46,6 +46,17 @@ test('what it offers is what the service says now: the kinds it knows, voices wi
   reply = () => [503, {}];
   await openfilm.refresh({ force: true });
   assert.deepEqual(openfilm.verbs, ['tts', 'voice', 'video'], 'kept while it cannot be reached');
+  /* once it has answered, a list grown old is shown at once while it is asked again: no one waits on the service */
+  t.mock.timers.enable({ apis: ['Date'], now: Date.now() + 31_000 });
+  let answer = () => {};
+  const later = new Promise((done) => { answer = done; });
+  reply = async () => { await later; return [200, { models: { tts: [{ id: 'inworld/inworld-tts-2', name: 'Inworld TTS-2' }] } }]; };
+  await openfilm.refresh();
+  assert.deepEqual(openfilm.verbs, ['tts', 'voice', 'video'], 'the list it had, without waiting');
+  answer();
+  await openfilm.refresh({ force: true });
+  assert.deepEqual(openfilm.verbs, ['tts', 'voice'], 'then what it says now');
+  t.mock.timers.reset();
 });
 
 test('a run: posted with the key, the files it names, async; asked after until done', async () => {

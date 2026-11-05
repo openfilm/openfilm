@@ -60,7 +60,7 @@ import { listenLocal } from '../../src/host.mjs';
 import { captionTrackRoutes } from './caption-tracks.mjs';
 import { moveToTrash } from './trash.mjs';
 import { coreSkills, keeps, listSkills, offeredSkills, removeSkill, setSkillCover, setSkillInstalled, setSkillOn, skillOrigins, skillsInstalled, skillsOff } from '../../src/skills.mjs';
-import { providersRoute } from './providers/index.mjs';
+import { freshProviders, providersRoute } from './providers/index.mjs';
 import { localModelsRoute } from './local-models.mjs';
 import { captionRoutes, writeSubtitleStyle } from './captions.mjs';
 import { projectSettingsRoute } from './project-settings.mjs';
@@ -1160,6 +1160,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
   await listenLocal(editor, port);
   /* the examples index is asked for as Studio starts, so the Examples tab has GitHub's newest when it opens */
   void listExamples().catch(() => {});
+  /* and what each service offers (OpenFilm's models are its service's to say), so Settings → Services opens with them */
+  void freshProviders().catch(() => {});
   const address = /** @type {import('node:net').AddressInfo} */ (editor.address());
   origin = `http://127.0.0.1:${address.port}`;
   COOKIE = cookieName(address.port);
