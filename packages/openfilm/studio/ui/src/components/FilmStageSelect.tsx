@@ -164,7 +164,10 @@ interface StageOutline {
   handle: number;
   rect: ClientBox;
   frame?: StageFrame;
+  /** a whole clip's outline: the clip */
   clip?: string;
+  /** a layer's: the clip it is in */
+  of?: string;
 }
 
 /** A clip's edit from the stage: its film.html `box`, or its own CSS (`style`: a crop). */
@@ -1527,7 +1530,7 @@ function FilmStageSelectImpl({
   const hoverQueue = React.useMemo(() => new Latest<{ x: number; y: number; from: number | null }>(async (p) => {
     let found = await ask<StageOutline>('hit', p);
     /* a line of the library's words: its whole clip's outline (hitOf) */
-    if (found?.clip && isTextClipId(found.clip)) found = clipOutlineRef.current(found.clip);
+    if (found?.of && isTextClipId(found.of)) found = clipOutlineRef.current(found.of);
     if (!found) {
       const id = await ask<string>('clipAt', { x: p.x, y: p.y });
       found = id ? clipOutlineRef.current(id) : null;

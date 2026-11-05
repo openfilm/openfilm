@@ -709,7 +709,8 @@
   const outline = (c, hit) => {
     const M = matrixOf(c);
     const turned = hit.frame.r || clipTurn(M);
-    return { handle: handleOf(hit.el), clip: c.id, rect: mapRect(M, hit.rect), ...(turned ? { frame: mapFrame(M, hit.frame) } : {}) };
+    /* `of`: the clip it is in (`clip` would say it is the whole clip's outline) */
+    return { handle: handleOf(hit.el), of: c.id, rect: mapRect(M, hit.rect), ...(turned ? { frame: mapFrame(M, hit.frame) } : {}) };
   };
   /** A layer by its handle, else by its clip and its selector (`at` and `n`, or a `loc`: `at`, or `at#n`). */
   const layerOf = (ref) => {
