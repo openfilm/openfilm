@@ -1687,6 +1687,9 @@
         if (cue.track !== track || (ids && !ids.includes(cue.id))) continue;
         cue.el.style.translate = dx || dy ? `${dx}px ${dy}px` : '';
         cue.el.style.scale = k && k !== 1 ? String(k) : '';
+        /* a cue in a region is held to its box: shown whole while it is dragged out of it */
+        const region = cue.el.closest('.cue-region');
+        if (region) region.style.overflow = dx || dy || (k && k !== 1) ? 'visible' : '';
       }
       return true;
     },

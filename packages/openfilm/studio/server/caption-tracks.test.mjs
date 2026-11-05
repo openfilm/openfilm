@@ -156,6 +156,9 @@ test('a caption track translated: a new file, the same cues at the same times an
     assert.equal((await call({ src: 'captions/Captions.vtt', language: 'xx' })).status, 400);
     /* captions given whole (what is said, kept nowhere): translated alone, no longer Studio's words of the speech */
     const said = `WEBVTT\n\n${speechNote([{ id: 'c1', start: 0, end: 1, settings: '', text: 'Hi' }])}\n\n${clipsNote(['assets/a.mp3'])}\n\nc1\n00:00:00.000 --> 00:00:01.000\nHi\n`;
+    /* a line timed word by word: its translation's words timed across it */
+    const words = await (await call({ text: 'WEBVTT\n\nc1\n00:00:00.000 --> 00:00:02.000\n<00:00:00.000>Hi <00:00:01.000>you\n', language: 'en', name: 'Timed.en' })).json();
+    assert.match(readVtt(words.text).cues[0].text, /^<00:00:00\.000>\[Hi <00:00:\d{2}\.\d{3}>you\]$/);
     const alone = await (await call({ text: said, language: 'en', name: 'Captions.en' })).json();
     assert.equal(alone.src, 'captions/Captions.en.vtt');
     const out = readVtt(alone.text);

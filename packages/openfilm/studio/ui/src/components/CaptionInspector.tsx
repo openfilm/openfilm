@@ -29,6 +29,7 @@ import { ColorField, FIELD, NumField, Segmented, SliderField } from './inspector
 import { FontFamilyPicker } from './FontFamilyPicker';
 import { Popover } from './Popover';
 import { TextInspector } from './TextInspector';
+import { Transcript, WordEffects } from './CaptionWords';
 import { Tooltip } from './Tooltip';
 
 type Tab = 'lines' | 'text' | 'motion';
@@ -155,9 +156,6 @@ export function CaptionInspector({ projectId, width, onClose, timeMs, onSeek, on
     void write(setCueSettings(vtt, targets(), (s) => withSettings(s, { region: null, line: `${Math.round(pct)}%`, position: null })), 'captionTrack.stepPlace');
   };
   const alignTo = (a: string) => void write(setCueSettings(vtt, targets(), (s) => withSettings(s, { align: a === 'left' ? 'start' : a === 'right' ? 'end' : 'center' })), 'captionTrack.stepPlace');
-  const timed = vtt.cues.some((c) => /<\d+:\d/.test(c.text));
-  const lit = cueRule(vtt, '::cue(:past)').color;
-  const reveal = cueRule(vtt, '::cue(:future)').opacity === '0';
   const ownCount = ids.filter((id) => Object.keys(cueRule(vtt, `::cue(#${id})`)).length).length;
   const family = splitFontFamily(look['--font'] ?? '')[0] ?? '';
   const withFont = (f: string) => joinFontFamily(f, splitFontFamily(TEXT_DEFAULTS['--font']!)[1]);
@@ -247,23 +245,6 @@ export function CaptionInspector({ projectId, width, onClose, timeMs, onSeek, on
           options={PLACES.map((p) => ({ value: p.id, label: t(`captionTrack.place_${p.id}`) }))} />
       </Line>
       <SliderField label={t('captionTrack.height')} value={Number.isFinite(line) ? line : 90} min={0} max={100} unit="%" onCommit={placeAt} />
-      {/* where a caption times its words: how they are said, lit as they come or shown one by one */}
-      <Line label={t('captionTrack.wordLight')}>
-        {timed ? (
-          <div className="flex flex-col gap-2">
-            <Segmented label={t('captionTrack.wordLight')} value={reveal ? 'reveal' : lit ? 'lit' : 'off'} onChange={(v) => {
-              let next = setCueRule(vtt, '::cue(:past)', v === 'lit' ? { color: lit ?? '#ffd400' } : null);
-              next = setCueRule(next, '::cue(:future)', v === 'reveal' ? { opacity: '0' } : null);
-              void write(next, 'captionTrack.stepLook');
-            }} options={[
-              { value: 'off', label: t('captionTrack.wordLightOff') },
-              { value: 'lit', label: t('captionTrack.wordLightOn') },
-              { value: 'reveal', label: t('captionTrack.wordReveal') },
-            ]} />
-            {lit && !reveal ? <ColorField label={t('captionTrack.wordLightColor')} value={lit} onCommit={(c) => void write(setCueRule(vtt, '::cue(:past)', { color: c }), 'captionTrack.stepLook')} /> : null}
-          </div>
-        ) : <p className="text-[10.5px] leading-snug text-[var(--text-faint)]">{t('captionTrack.wordsUntimed')}</p>}
-      </Line>
       <div className="mt-1 border-t border-[var(--border)] pt-2.5">
         <div className="mb-2 flex items-center justify-between">
           <span className="text-[11.5px] font-semibold text-[var(--text)]">{t('captionTrack.presets')}</span>
@@ -289,6 +270,7 @@ export function CaptionInspector({ projectId, width, onClose, timeMs, onSeek, on
               options={[{ value: 'basic', label: t('captionTrack.partBasic') }, { value: 'wordart', label: t('textInspector.wordart') }]} />
           ) : null}
           {scopeBar}
+          {tab === 'motion' ? <WordEffects vtt={vtt} onWrite={(next, step) => void write(next, step ?? 'captionTrack.stepLook')} /> : null}
           {tab === 'text' && part === 'basic' ? basic : (
             /* a text's inspector, its one part shown */
             <div data-caption-look={tab === 'motion' ? 'motion' : 'wordart'} className="-mx-3">
@@ -339,12 +321,10 @@ function Lines({ projectId, vtt, src, ids, timeMs, info, onSeek, onEdit, onRemov
   const t = useT();
   const [q, setQ] = React.useState('');
   const [cutting, setCutting] = React.useState(false);
-  const [ticked, setTicked] = React.useState<ReadonlySet<string>>(() => new Set());
   const [problem, setProblem] = React.useState<string | null>(null);
   const lastEnd = vtt.cues.reduce((end, c) => Math.max(end, c.end), 0);
   const query = q.trim().toLowerCase();
   const rows = vtt.cues.map((c, i) => ({ c, n: i + 1, text: cuePlain(c.text) })).filter((r) => !query || r.text.toLowerCase().includes(query));
-  const cutLines = vtt.cues.filter((c) => ticked.has(c.id));
   const language = info.language ? FILM_SUBTITLE_LANGUAGES.find((l) => l.code === info.language)?.native ?? info.language : null;
   const facts = [
     info.badge,
@@ -356,7 +336,8 @@ function Lines({ projectId, vtt, src, ids, timeMs, info, onSeek, onEdit, onRemov
   return (
     <div className="mt-3 flex min-h-0 flex-col gap-2">
       <div className="flex items-center gap-1.5">
-        <label className="flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-[6px] bg-[var(--bg-field)] px-2 text-[var(--text-faint)] focus-within:ring-1 focus-within:ring-[var(--accent)]">
+        {cutting ? <span className="min-w-0 flex-1 truncate px-0.5 text-[12px] font-semibold text-[var(--text)]">{t('captionTrack.cutMode')}</span> : null}
+        <label className={`${cutting ? 'hidden' : 'flex'} h-7 min-w-0 flex-1 items-center gap-1.5 rounded-[6px] bg-[var(--bg-field)] px-2 text-[var(--text-faint)] focus-within:ring-1 focus-within:ring-[var(--accent)]`}>
           <Search size={13} className="shrink-0" />
           <input data-caption-search="" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('captionTrack.search')}
             className="min-w-0 flex-1 bg-transparent text-[11.5px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]" />
@@ -364,18 +345,16 @@ function Lines({ projectId, vtt, src, ids, timeMs, info, onSeek, onEdit, onRemov
         </label>
         <Tooltip label={t('captionTrack.cutMode')}>
           <button type="button" data-caption-cut-mode="" aria-pressed={cutting} aria-label={t('captionTrack.cutMode')}
-            onClick={() => { setCutting(!cutting); setTicked(new Set()); }}
+            onClick={() => setCutting(!cutting)}
             className={`${iconBtn} ${cutting ? 'bg-[var(--bg-picked)] !text-[var(--accent)]' : ''}`}><Scissors size={14} /></button>
         </Tooltip>
         <Translate projectId={projectId} src={src} onTranslated={onTranslated} className={iconBtn} />
       </div>
       <p data-caption-facts="" title={src} className="truncate text-[10.5px] text-[var(--text-faint)]">{facts}</p>
-      {cutting ? <p className="text-[10.5px] leading-snug text-[var(--text-muted)]">{t('captionTrack.cutHint')}</p> : null}
+      {cutting ? <Transcript vtt={vtt} timeMs={timeMs} onSeek={onSeek} onCut={onCut} onDone={() => setCutting(false)} /> : (
       <div className="-mx-1 flex flex-col">
         {rows.map(({ c, n, text }) => (
           <CueLine key={c.id} n={n} text={text} on={c.start * 1000 <= timeMs && timeMs < c.end * 1000} picked={ids.includes(c.id)}
-            cut={cutting ? ticked.has(c.id) : null}
-            onCut={() => setTicked((cur) => { const next = new Set(cur); if (next.has(c.id)) next.delete(c.id); else next.add(c.id); return next; })}
             onGo={() => { onSeek(Math.round(c.start * 1000)); setCaptionSelection({ src, ids: new Set([c.id]) }); }}
             onEdit={(words) => onEdit(c.id, words)}
             onAdd={() => { setProblem(null); void onAdd(src, Math.round(c.end * 1000)).then((why) => setProblem(why)); }}
@@ -383,23 +362,15 @@ function Lines({ projectId, vtt, src, ids, timeMs, info, onSeek, onEdit, onRemov
         ))}
         {!rows.length ? <p className="px-1 py-3 text-[11.5px] text-[var(--text-faint)]">{t('captionTrack.searchNone')}</p> : null}
       </div>
+      )}
       {problem ? <p role="alert" className="text-[11px] text-[var(--err)]">{problem}</p> : null}
-      {cutting ? (
-        <div className="sticky bottom-0 -mx-3 flex flex-col gap-1.5 border-t border-[var(--border)] bg-[var(--bg-panel)] px-3 py-2">
-          <button type="button" data-caption-cut="" disabled={!cutLines.length}
-            onClick={() => { void onCut(cutLines.map((c) => ({ startMs: Math.round(c.start * 1000), endMs: Math.round(c.end * 1000) }))).then((why) => { if (!why) { setTicked(new Set()); setCutting(false); } }); }}
-            className="flex h-7 w-full items-center justify-center gap-1.5 rounded-[6px] bg-[var(--primary)] text-[11.5px] font-medium text-[var(--on-primary)] hover:bg-[var(--primary-hover)]">
-            <Scissors size={13} />{t('captionTrack.cutLines').replace('{n}', String(cutLines.length))}
-          </button>
-        </div>
-      ) : null}
     </div>
   );
 }
 
 /** One line of the track: its number, its words to correct (kept on leaving the field), lit while it plays. */
-function CueLine({ n, text, on, picked, cut, onCut, onGo, onEdit, onAdd, onRemove }: {
-  n: number; text: string; on: boolean; picked: boolean; cut: boolean | null; onCut: () => void; onGo: () => void;
+function CueLine({ n, text, on, picked, onGo, onEdit, onAdd, onRemove }: {
+  n: number; text: string; on: boolean; picked: boolean; onGo: () => void;
   onEdit: (words: string) => void; onAdd: () => void; onRemove: () => void;
 }) {
   const t = useT();
@@ -410,11 +381,10 @@ function CueLine({ n, text, on, picked, cut, onCut, onGo, onEdit, onAdd, onRemov
   const lit = on || picked;
   return (
     <div ref={line} data-caption-line="" className="group flex items-start gap-1.5 border-b border-[var(--border)] px-1 py-1.5">
-      {cut !== null ? <input type="checkbox" checked={cut} onChange={onCut} aria-label={text} className="mt-[6px] shrink-0 accent-[var(--accent)]" /> : null}
       <button type="button" onClick={onGo} className={`mt-[4px] w-6 shrink-0 text-right text-[11px] tabular-nums ${lit ? 'text-[var(--accent)]' : 'text-[var(--text-faint)]'}`}>{n}</button>
       <textarea value={draft} rows={1} onChange={(e) => setDraft(e.target.value)} onFocus={onGo}
         onBlur={() => { if (draft.trim() && draft !== text) onEdit(draft.trim()); else setDraft(text); }}
-        className={`min-w-0 flex-1 resize-none rounded-[5px] bg-transparent px-1.5 py-0.5 text-[12px] leading-snug outline-none [field-sizing:content] focus:bg-[var(--bg-field)] focus:ring-1 focus:ring-[var(--accent)] ${cut ? 'text-[var(--text-faint)] line-through' : lit ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`} />
+        className={`min-w-0 flex-1 resize-none rounded-[5px] bg-transparent px-1.5 py-0.5 text-[12px] leading-snug outline-none [field-sizing:content] focus:bg-[var(--bg-field)] focus:ring-1 focus:ring-[var(--accent)] ${lit ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`} />
       <span className="mt-px flex shrink-0 gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
         <button type="button" data-caption-add-after="" aria-label={t('captionTrack.addAfter')} title={t('captionTrack.addAfter')} onClick={onAdd}
           className="grid h-6 w-6 place-items-center rounded-[5px] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"><Plus size={13} /></button>

@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { useT } from '@/i18n';
 import { PANE_BAR, PANE_TITLE, PANE_BTN, PANE_ICON } from './dock-pane-bar';
 import { Tooltip } from './Tooltip';
+import { isTypingTarget } from './typing-target';
 
 /** A tab of the pane's bar: what it shows, picked there. */
 export type InspectorTab = { id: string; label: string };
@@ -18,7 +19,11 @@ export function InspectorPanel({ title, width, onClose, tabs, tab, onTab, childr
   const t = useT();
   return (
     <aside aria-label={title} data-inspector-panel data-film-inspector className="relative flex min-h-0 min-w-0 shrink-0 flex-col overflow-hidden bg-[var(--bg-panel)] text-[var(--text)]" style={{ width }} onKeyDown={event => {
-      if ((event.target as Element).closest('input, select, textarea, button')) event.stopPropagation();
+      /* typing is the field's, Space and Enter a button's, the arrows a slider's; every other key is the editor's (⌘Z
+         undoes the change a button or slider just made) */
+      const el = event.target as Element;
+      if (isTypingTarget(el) || ((event.key === ' ' || event.key === 'Enter') && el.closest('button, input, [role="button"]'))
+        || (event.key.startsWith('Arrow') && el.closest('input[type="range"]'))) event.stopPropagation();
     }}>
       {tabs ? (
         /* tabs as the other inspectors have them (the library's categories beside them): its 40 px bar and line, the

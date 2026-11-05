@@ -200,7 +200,7 @@ export function CaptionStage({ previewRef, projectId, stage, timeMs, onPick, onP
         return (
           <React.Fragment key={key}>
             <div data-caption-hit={cue.id} role="presentation"
-              className={`pointer-events-auto absolute ${cue.locked ? '' : 'cursor-move'}`}
+              className="pointer-events-auto absolute cursor-default"
               style={{ ...at(r), outline: !picked && hover === key ? `1px solid ${FRAME_COLOR}` : undefined }}
               onPointerEnter={() => setHover(key)} onPointerLeave={() => setHover((h) => (h === key ? null : h))}
               onPointerDown={(e) => press(e, cue, 'move')} />
@@ -215,7 +215,8 @@ export function CaptionStage({ previewRef, projectId, stage, timeMs, onPick, onP
                   else if (kind === 'stretch' && (edge === 'e' || edge === 'w')) press(e, cue, edge === 'e' ? 'stretch-e' : 'stretch-w');
                   else if (kind === 'move' || kind === 'stretch') press(e, cue, 'move');
                 }}>
-                <div className="[&_*]:pointer-events-auto">
+                {/* the frame's own handles take the pointer (its border and ring do not) */}
+                <div>
                   <StageTransformFrame scope="layer" edges rotate={false} label={null}
                     frame={{ cx: (r.x + r.w / 2) * scale, cy: (r.y + r.h / 2) * scale, w: r.w * scale, h: r.h * scale, r: 0 }} />
                 </div>

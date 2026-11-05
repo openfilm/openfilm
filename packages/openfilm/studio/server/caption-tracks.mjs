@@ -7,7 +7,7 @@
  */
 import { mkdir, readFile, readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { CLIPS_NOTE, SPEECH_NOTE, clipsNote, cueEscape, cuePlain, madeOfSpeech, readVtt, speechClips, speechNote, untouchedSpeech, vttTime, writeVtt } from '../../src/captions.mjs';
+import { CLIPS_NOTE, SPEECH_NOTE, clipsNote, cueEscape, cuePlain, madeOfSpeech, readVtt, speechClips, speechNote, timedText, untouchedSpeech, vttTime, writeVtt } from '../../src/captions.mjs';
 import { writeAtomic } from './atomic.mjs';
 import { CONNECT_TRANSLATOR, filmCaptions, readSubtitleStyle } from './captions.mjs';
 import { editProjectFilm, readProjectFilm } from './film.mjs';
@@ -151,7 +151,12 @@ export async function captionTrackRoutes(req, res, root, rest, url, { translate 
     /* the same cues, at the same times and places, in the same look: only the words are the other language's, and they
        are no longer Studio's words of what is said (a translation is not made again of the speech) */
     const notes = vtt.notes.filter((n) => !n.startsWith(SPEECH_NOTE) && !n.startsWith(CLIPS_NOTE));
-    const made = writeVtt({ ...vtt, notes, cues: vtt.cues.map((c, i) => ({ ...c, text: cueEscape(got[i].trim()) || c.text })) });
+    /* a line whose words were timed as said has its translation's words timed across it, so they light as the others do */
+    const timed = (/** @type {string} */ text) => /<\d+:\d{2}/.test(text);
+    const made = writeVtt({ ...vtt, notes, cues: vtt.cues.map((c, i) => {
+      const words = got[i].trim();
+      return { ...c, text: !words ? c.text : timed(c.text) ? timedText(words, c.start, c.end) : cueEscape(words) };
+    }) });
     const file = captionFile(root, out);
     await mkdir(dirname(file), { recursive: true });
     await writeAtomic(file, made);

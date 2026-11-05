@@ -196,6 +196,30 @@ export function cueEscape(/** @type {string} */ text) {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n\s*\n/g, '\n');
 }
 
+/* a character written as a word of its own (Chinese, Japanese): each is timed apart */
+const CJK = '\\u3040-\\u30ff\\u3400-\\u9fff\\uf900-\\ufaff';
+const UNITS = new RegExp(`\\s+|[${CJK}][^\\s${CJK}\\p{L}\\p{N}]*|[^\\s${CJK}]+`, 'gu');
+
+/**
+ * Words with no times of their own (a translation, a line typed in) timed across their cue, each by its length, as a
+ * cue's payload: a timestamp before each word (a Chinese or Japanese character is one), the last ending a little
+ * before the cue does. What a cue's words lit as said need, where nothing heard them.
+ * @param {string} text plain words @param {number} start @param {number} end seconds
+ */
+export function timedText(text, start, end) {
+  /** @type {{ text: string, w: number }[]} */
+  const units = [];
+  for (const m of text.trim().match(UNITS) ?? []) {
+    if (/^\s+$/u.test(m)) { if (units.length) units[units.length - 1].text += m; continue; }
+    units.push({ text: m, w: new RegExp(`^[${CJK}]`, 'u').test(m) ? 1 : Math.max(1, [...m].length * 0.35) });
+  }
+  const total = units.reduce((n, u) => n + u.w, 0);
+  if (!total) return cueEscape(text);
+  const span = Math.max(0, end - start) * 0.95;
+  let at = 0;
+  return units.map((u) => { const t = start + (span * at) / total; at += u.w; return `<${vttTime(t)}>${cueEscape(u.text)}`; }).join('');
+}
+
 /* ── its CSS ────────────────────────────────────────────────────────────── */
 
 /**
