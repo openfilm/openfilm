@@ -112,13 +112,22 @@ test('a clip from a first and last frame: submitted, asked after until done, its
   assert.match(result.receipt.notes[0], /4 to 15 second clips: 15 s/);
 });
 
-test('each model\'s lengths and shapes: Veo makes 4, 6 or 8 s, wide or tall; Kling takes no reference pictures', async () => {
+test('each model\'s lengths and shapes: Gemini Omni makes 3 to 15 s, 10 between two frames, wide or tall; Kling takes no reference pictures', async () => {
   seen.length = 0;
   reply = clip(1);
-  const veo = await openrouter.run('video', { prompt: 'rain', duration: 5, 'aspect-ratio': '1:1', out: 'rain' }, ctx({}, 'google/veo-3.1'));
-  assert.equal(JSON.parse(seen[0].body).duration, 6, 'the nearest, the longer on a tie');
-  assert.equal(JSON.parse(seen[0].body).aspect_ratio, '16:9');
-  assert.equal(veo.index[0].dur, 6);
+  const omni = await openrouter.run('video', { prompt: 'rain', duration: 20, 'aspect-ratio': '1:1', resolution: '360p', out: 'rain' }, ctx({}, 'google/gemini-omni-1.2-flash'));
+  assert.deepEqual([JSON.parse(seen[0].body).duration, JSON.parse(seen[0].body).aspect_ratio, JSON.parse(seen[0].body).resolution], [15, '16:9', '360p']);
+  assert.equal(omni.index[0].dur, 15);
+  seen.length = 0;
+  const pictures = Object.fromEntries(['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((n) => [`assets/image/${n}.png`, new Uint8Array([1])]));
+  const framed = await openrouter.run('video', { prompt: 'rain', duration: 12, 'first-frame': 'assets/image/a.png', 'last-frame': 'assets/image/b.png', out: 'rain' }, ctx(pictures, 'google/gemini-omni-1.2-flash'));
+  assert.equal(JSON.parse(seen[0].body).duration, 10);
+  assert.match(framed.receipt.notes.join(' '), /3 to 10 second clips between two frames: 10 s/);
+  seen.length = 0;
+  const refs = await openrouter.run('video', { prompt: 'rain', 'input-reference': Object.keys(pictures), out: 'rain' }, ctx(pictures, 'google/gemini-omni-1.2-flash'));
+  assert.equal(JSON.parse(seen[0].body).input_references.length, 6);
+  assert.match(refs.receipt.notes.join(' '), /takes 6 reference pictures/);
+  await assert.rejects(openrouter.run('video', { prompt: 'rain', voice: 'assets/audio/v.wav', out: 'rain' }, ctx({}, 'google/gemini-omni-1.2-flash')), /Gemini Omni here takes no voice/);
   seen.length = 0;
   const kling = await openrouter.run('video', { prompt: 'rain', 'input-reference': ['assets/image/a.png'], out: 'rain' }, ctx({ 'assets/image/a.png': new Uint8Array([1]) }, 'kwaivgi/kling-v3.0-pro'));
   assert.equal(JSON.parse(seen[0].body).input_references, undefined);
