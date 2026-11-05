@@ -6,14 +6,15 @@
  *   macOS    the system's own `trash` (macOS 15 and later): the Trash of the file's disk, with Put Back, and allowed
  *            where moving into ~/.Trash is not (a program without Full Disk Access); before it, ~/.Trash (with " 2",
  *            " 3" on a name already there)
- *   Linux    the freedesktop trash: ~/.local/share/Trash/{files,info}, with the .trashinfo that lets it be restored
+ *   Linux    the freedesktop trash: ~/.local/share/Trash/{files,info}, with the .trashinfo that lets it be restored;
+ *            from another disk (a project on a second drive, /tmp on its own file system) it is copied there, then removed
  *   Windows  the Recycle Bin, through PowerShell. An item the Recycle Bin cannot take (on a network or removable
  *            drive, bigger than the bin holds, a bin set to delete right away) is refused and left where it is: the
  *            shell's own answer would be to delete it for good, without a word
  */
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, extname, join } from 'node:path';
 import { promisify } from 'node:util';
@@ -114,13 +115,22 @@ function freeName(/** @type {string} */ dir, /** @type {string} */ name) {
   return candidate;
 }
 
+/** Move `from` to `to`; from another disk, which rename cannot cross, a copy and then the original removed. */
+async function moveInto(/** @type {string} */ from, /** @type {string} */ to) {
+  try { await rename(from, to); return; }
+  catch (e) { if (/** @type {NodeJS.ErrnoException} */ (e).code !== 'EXDEV') throw e; }
+  try { await cp(from, to, { recursive: true, errorOnExist: true, force: false, preserveTimestamps: true, verbatimSymlinks: true }); }
+  catch (e) { await rm(to, { recursive: true, force: true }); throw e; }
+  await rm(from, { recursive: true });
+}
+
 /** @param {string} path an absolute path */
 export async function moveToTrash(path) {
   /* tests (and anyone who wants deletes kept elsewhere) name the folder that stands for the trash */
   if (process.env.OPENFILM_TRASH_DIR) {
     const dir = process.env.OPENFILM_TRASH_DIR;
     await mkdir(dir, { recursive: true });
-    await rename(path, join(dir, freeName(dir, basename(path))));
+    await moveInto(path, join(dir, freeName(dir, basename(path))));
     return;
   }
   if (process.platform === 'win32') {
@@ -166,7 +176,7 @@ export async function moveToTrash(path) {
       if (/** @type {NodeJS.ErrnoException} */ (e).code === 'EEXIST') continue;
       throw e;
     }
-    try { await rename(path, join(files, name)); }
+    try { await moveInto(path, join(files, name)); }
     catch (e) { await rm(record, { force: true }); throw e; }
     return;
   }

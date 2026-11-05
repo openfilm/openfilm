@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import fsp from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { moveToTrash } from './trash.mjs';
@@ -53,6 +55,38 @@ test('an existing trash record is not overwritten even when its file is missing'
 
 test('a failed move leaves no new trash record', async (t) => {
   const { root, files, info } = linuxTrash(t);
+  await assert.rejects(moveToTrash(join(root, 'missing.wav')), (e) => e.code === 'ENOENT');
+  assert.deepEqual(readdirSync(files), []);
+  assert.deepEqual(readdirSync(info), []);
+});
+
+/** rename refusing to cross a disk (EXDEV), as from /tmp on its own file system to the home folder's trash. */
+const otherDisk = (t) => {
+  const real = fsp.rename;
+  t.mock.method(fsp, 'rename', async () => { throw Object.assign(new Error('EXDEV: cross-device link not permitted'), { code: 'EXDEV' }); });
+  syncBuiltinESMExports();
+  t.after(() => { fsp.rename = real; syncBuiltinESMExports(); });
+};
+
+test('from another disk, a file and a folder are copied into the trash with their record, then removed', async (t) => {
+  const { root, files, info } = linuxTrash(t);
+  otherDisk(t);
+  const take = join(root, 'take.wav');
+  writeFileSync(take, 'recording');
+  const shots = join(root, 'Shots');
+  mkdirSync(join(shots, 'day 1'), { recursive: true });
+  writeFileSync(join(shots, 'day 1', 'a.mp4'), 'clip');
+  await moveToTrash(take);
+  await moveToTrash(shots);
+  assert.ok(!existsSync(take) && !existsSync(shots));
+  assert.equal(readFileSync(join(files, 'take.wav'), 'utf8'), 'recording');
+  assert.equal(readFileSync(join(files, 'Shots', 'day 1', 'a.mp4'), 'utf8'), 'clip');
+  assert.deepEqual(readdirSync(info).sort(), ['Shots.trashinfo', 'take.wav.trashinfo']);
+});
+
+test('from another disk, a copy that fails leaves the original, no part of it in the trash, and no record', async (t) => {
+  const { root, files, info } = linuxTrash(t);
+  otherDisk(t);
   await assert.rejects(moveToTrash(join(root, 'missing.wav')), (e) => e.code === 'ENOENT');
   assert.deepEqual(readdirSync(files), []);
   assert.deepEqual(readdirSync(info), []);
