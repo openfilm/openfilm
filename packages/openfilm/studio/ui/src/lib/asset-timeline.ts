@@ -159,6 +159,12 @@ function newTrackSpot(tracks: readonly TimelineTrack[], docAt: number): AssetDro
 const libraryText = (file: { saved?: string | undefined }) => Boolean(file.saved?.startsWith('openfilm/text/'));
 
 /**
+ * A thing of the library laid over the film (a sticker, a text, an effect): never on the main track, where it would
+ * cut the film it goes over; on a track above it.
+ */
+export const libraryOverlay = (file: { saved?: string | undefined }) => /^openfilm\/(stickers|text|effects)\//.test(file.saved ?? '');
+
+/**
  * A sound goes on a sound track (A), a picture (a page, a video, a still) on a picture track (V), as the timeline names
  * them: let go over a track of the other kind, or above or below every row, onto the nearest track of its own kind
  * free there (a text only on a row of text), else a new one where its kind's tracks are: a sound track under the
@@ -170,8 +176,10 @@ function ownKindSpot(
   text: boolean,
   range: { startMs: number; endMs: number },
   near: number,
+  /** Not on the main track (a thing laid over the film: libraryOverlay). */
+  overMain = false,
 ): AssetDropSpot {
-  const own = (tr: TimelineTrack) => tr.docIndex != null && !tr.captions && (tr.role === 'audio') === sound;
+  const own = (tr: TimelineTrack) => tr.docIndex != null && !tr.captions && (tr.role === 'audio') === sound && !(overMain && tr.main);
   const free = tracks
     .map((tr, laneIndex) => ({ tr, laneIndex }))
     .filter(({ tr, laneIndex }) => own(tr) && !tr.locked && (!text || tr.text) && !rangeOverlaps(range, occupiedOf(tracks, tr.docIndex ?? null, laneIndex)))
@@ -203,8 +211,10 @@ export function assetDropSpot(
   if (hit && hit.lane >= 0 && hit.lane < tracks.length) {
     const target = tracks[hit.lane]!;
     if (target.docIndex != null && !target.captions && (target.role === 'audio') !== sound) {
-      return ownKindSpot(tracks, sound, libraryText(file), range, hit.lane);
+      return ownKindSpot(tracks, sound, libraryText(file), range, hit.lane, libraryOverlay(file));
     }
+    /* a sticker, text or effect let go on the main track: over it, on a track above (never cutting the film) */
+    if (target.main && target.docIndex != null && libraryOverlay(file)) return ownKindSpot(tracks, false, libraryText(file), range, hit.lane, true);
     /* its top or bottom edge = a new track above / below (without an edit mode) */
     if (target.docIndex != null && hit.band !== 'body' && !edit) {
       return newTrackSpot(tracks, hit.band === 'above' ? target.docIndex : target.docIndex + 1);

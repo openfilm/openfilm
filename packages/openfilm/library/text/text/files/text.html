@@ -33,14 +33,16 @@
   --align: center;
   /* how it comes in, moves while shown, goes out: an animation's name (none: still) and how long. Each stays within
      the room its box keeps around the words (Studio puts a line in hugged: a fifth of their size each side, and a
-     little of their width), so none is cut by the box */
-  --in: rise;
+     little of their width), so none is cut by the box. None at first: a line put in shows at once where it is put in
+     (and can be typed into there); a way in is picked for it */
+  --in: none;
   --in-time: 0.5s;
   --loop: none;
   --loop-time: 1.6s;
   --out: none;
   --out-time: 0.4s;
-  /* the clip's length on the film (Studio keeps it): when the way out starts */
+  /* when the clip ends, in the page's own time (Studio keeps it: its #t= end, its length unless it was split or trimmed
+     at its head): the way out ends there */
   --clip-length: 3600s;
 }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
@@ -51,12 +53,14 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: transparent;
   padding: 0 calc(var(--size) * 0.23);
 }
 .box {
+  /* the words' size here, so the box's padding and corners (in em) are of the words, not of the page's 16px */
+  font-size: var(--size);
   max-width: 96vw; text-align: var(--align); scale: var(--fit, 1);
   background: var(--box); padding: var(--box-pad); border-radius: var(--box-radius);
 }
 .t {
   display: inline-block; white-space: var(--wrap);
-  font-family: var(--font); font-size: var(--size); font-weight: var(--weight); font-style: var(--italic);
+  font-family: var(--font); font-size: 1em; font-weight: var(--weight); font-style: var(--italic);
   letter-spacing: var(--spacing); line-height: 1.15;
   color: var(--color);
   background: var(--fill); -webkit-background-clip: text; background-clip: text;

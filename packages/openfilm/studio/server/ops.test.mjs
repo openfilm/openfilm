@@ -135,7 +135,8 @@ test('a page that offers its clip\'s length is told it after every edit: an inse
   const trimmed = applyOps(structuredClone(f), [{ op: 'props', edits: [{ clip: w(f)[0].id, prop: 'end', value: 4.25 }] }]);
   assert.equal(w(trimmed)[0].overrides[1].style['--clip-length'], '4.25s');
   const split = applyOps(structuredClone(trimmed), [{ op: 'split', clip: w(trimmed)[0].id, left: { end: 1 }, right: { at: 11, start: 1 } }]);
-  assert.deepEqual(w(split).map((c) => c.overrides.at(-1).style['--clip-length']), ['1s', '3.25s']);
+  /* the right half's page runs from 1 s to 4.25 s of its own time: it goes out at 4.25 s, its end */
+  assert.deepEqual(w(split).map((c) => c.overrides.at(-1).style['--clip-length']), ['1s', '4.25s']);
   /* a page that does not offer it is left as it is */
   const other = applyOps(film(), [{ op: 'insert', clip: { src: 'x.html', id: 'x', time: [0, 2] }, at: 12, track: 0 }]);
   assert.equal(other.tracks[0].clips.find((c) => c.id === 'x').overrides, undefined);

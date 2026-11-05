@@ -115,9 +115,23 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
   /* Installed first opened */
   const skillLine: SkillsLine = group === 'discover' ? 'discover' : group === FAVORITES ? 'favorites' : 'installed';
   const q = query.trim().toLowerCase();
+  /* the groups all of whose things are stills (the emoji's) */
+  const stillGroups = React.useMemo(() => {
+    const moving = new Set<string>();
+    const seen = new Set<string>();
+    for (const item of index?.items ?? []) {
+      if (item.cat !== cat || !item.group) continue;
+      seen.add(item.group);
+      if (!item.still) moving.add(item.group);
+    }
+    return new Set([...seen].filter((g) => !moving.has(g)));
+  }, [index, cat]);
+  const stillGroup = (id: string) => stillGroups.has(id);
+  /* what moves before what stands still (animated stickers before the emoji), each in the library's own order */
   const shown = (index?.items ?? []).filter((item) => item.cat === cat && (q
     ? [...Object.values(item.name), ...(item.tags ?? [])].some((n) => n?.toLowerCase().includes(q))
-    : group === FAVORITES ? favorites.includes(item.id) : !group || item.group === group));
+    : group === FAVORITES ? favorites.includes(item.id) : !group || item.group === group))
+    .sort((a, b) => Number(Boolean(a.still)) - Number(Boolean(b.still)));
   const sources = sourcesIn(shown.map(sourceOf));
   const items = source && sources.includes(source) ? shown.filter((item) => sourceOf(item) === source) : shown;
   const pickedItem = picked ? index?.items.find((i) => i.id === picked) ?? null : null;
@@ -131,7 +145,9 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
   /* the library's own lines under its fold: all of it, then its groups (a voice's: the services) */
   const own = cat === 'voice'
     ? (voices?.providers ?? []).map((s) => ({ id: s.id, name: s.name }))
-    : (index?.groups[cat as LibraryCategory] ?? []).map((g) => ({ id: g.id, name: nameOf(g.name, lang) }));
+    : (index?.groups[cat as LibraryCategory] ?? []).map((g) => ({ id: g.id, name: nameOf(g.name, lang) }))
+      /* the groups of what moves first, those of stills (the emoji's) after them */
+      .sort((a, b) => Number(stillGroup(a.id)) - Number(stillGroup(b.id)));
   const askMusic = studioHost?.ask;
   const groupName = (id: string) => own.find((g) => g.id === id)?.name ?? '';
   /* what a sound or a piece of music plays in, under the list */
@@ -271,7 +287,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
                   </div>
                 ) : (
                   <div className={`grid gap-x-2.5 gap-y-3 ${cat === 'sticker' ? 'grid-cols-[repeat(auto-fill,minmax(68px,1fr))]' : cat === 'template' ? 'grid-cols-[repeat(auto-fill,minmax(140px,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(96px,1fr))]'}`}>
-                    {items.map((it) => (
+                    {/* a page at a time as it is scrolled, as the sounds are (the emoji alone are some 1,600) */}
+                    {items.slice(0, drawn).map((it) => (
                       <Card key={it.id} item={it} lang={lang} picked={picked === it.id} kept={favorites.includes(it.id)} square={cat === 'sticker'}
                         onPick={() => pick(picked === it.id ? null : it)} onAdd={() => actions.add(it)} />
                     ))}
@@ -480,8 +497,9 @@ function Card({ item, lang, picked, kept, square, onPick, onAdd }: {
       <div className={`relative overflow-hidden rounded-md bg-[var(--bg-field)] ${square ? 'aspect-square' : 'aspect-video'} ${picked ? 'ring-2 ring-[var(--accent)]' : 'ring-1 ring-transparent group-hover:ring-[var(--text-faint)]'}`}>
         {item.kind === 'look'
           ? <img src={item.sample ? libraryUrl(item.sample) : SAMPLE} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" style={{ filter: item.filter }} />
-          : <img src={posterUrl(item)} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />}
-        {hover && item.kind !== 'look' && !item.still ? <video src={previewUrl(item)} autoPlay loop muted playsInline className="absolute inset-0 h-full w-full object-cover" /> : null}
+          /* a sticker whole in its square card (a wide one is not cut at its ends); loaded as it comes into view */
+          : <img src={posterUrl(item)} alt="" draggable={false} loading="lazy" decoding="async" className={`absolute inset-0 h-full w-full ${square ? 'object-contain' : 'object-cover'}`} />}
+        {hover && item.kind !== 'look' && !item.still ? <video src={previewUrl(item)} autoPlay loop muted playsInline className={`absolute inset-0 h-full w-full ${square ? 'object-contain' : 'object-cover'}`} /> : null}
         {/* the star and the "+" side by side, of one size, dark glass over the picture */}
         <span className="absolute bottom-1 right-1 flex items-center gap-1">
           <StarButton item={item} kept={kept} className={`${ROUND} bg-black/55 ${kept ? 'grid text-[#ffd35a]' : 'hidden text-white group-hover:grid'}`} />

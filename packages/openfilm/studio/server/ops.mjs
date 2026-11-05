@@ -276,7 +276,7 @@ function fitFades(/** @type {FilmValue} */ value) {
   }
 }
 
-/** The component property that is its clip's length, kept by Studio: a page times its way out by it. */
+/** The component property that is when its clip ends in the page's own time, kept by Studio: a page times its way out by it. */
 export const CLIP_LENGTH = '--clip-length';
 
 /**
@@ -336,7 +336,9 @@ function fitClipLengths(/** @type {FilmValue} */ value) {
       let props;
       try { props = JSON.parse(raw.attrs['data-props']); } catch { continue; }
       if (!Array.isArray(props) || !props.some((p) => p?.type === 'var' && p.var === CLIP_LENGTH)) continue;
-      const length = `${round(Number(time[1]) - Number(time[0]))}s`;
+      /* when its clip ends in the page's own time (its #t= end): the page counts from its own 0, so a clip split or
+         trimmed at its head still goes out at its end */
+      const length = `${round(Number(time[1]))}s`;
       const list = Array.isArray(raw.overrides) ? raw.overrides.map((o) => ({ ...o })) : [];
       const root = list.find((o) => o?.at === ':root' && o.n === undefined);
       const style = /** @type {Record<string, string>} */ ({ ...(/** @type {{ style?: Record<string, string> }} */ (root ?? {}).style ?? {}) });

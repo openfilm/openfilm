@@ -33,12 +33,12 @@ import { attrsOf, pasteAttrs, type AttrGroup, type CopiedAttrs } from '@/lib/cli
 import { cutPoints, nextCut } from '@/lib/timeline-nav';
 import { anyLocked, lockedEdits } from '@/lib/track-lock';
 import { placeMedia, type SourceRange } from '@/lib/media-place';
-import { BUILT_IN, TEXT_COMPONENT, builtInItem, cutTrack, cutsOf, defaultTextWords, fromLibrary, isLibraryClip, isTextClip, libraryBox, libraryDragItem, nameOf, onCut, pageUrl, placedGroup, useLibraryIndex, withLook, withRootVars, type LibraryItem } from '@/lib/library';
+import { BUILT_IN, TEXT_COMPONENT, builtInItem, cutTrack, cutsOf, defaultTextWords, fromLibrary, isLibraryClip, isTextClip, libraryItemOfClip, libraryBox, libraryDragItem, nameOf, onCut, pageUrl, placedGroup, useLibraryIndex, withLook, withRootVars, type LibraryItem } from '@/lib/library';
 import { LibraryDrawer, type LibraryActions, type SkillsRequest } from '@/components/library/LibraryDrawer';
 import type { CaptionsMake } from '@/components/library/CaptionsPane';
 import { LibraryTrial } from '@/components/library/LibraryTrial';
 import { hugText } from '@/lib/text-box';
-import { withWords } from '@/lib/text-look';
+import { textVars, withLook as withTextLook, withMotion, withWords } from '@/lib/text-look';
 import { apartOnTracks, type ClipEdit } from '@/lib/film-clip-edits';
 import { mediaFetch, useMediaImages } from '@/lib/media-queue';
 import { clipboardItemsOf, clipboardNow, laneOfBlock, pasteEdit, type TimelineClipboardItem } from '@/lib/timeline-clipboard';
@@ -1018,6 +1018,25 @@ export function ProjectView({ projectId, onProject, onLeave }: {
    * shorter pushes or pulls what follows, as a ripple trim does; elsewhere a speed too slow to fit before the next clip
    * is refused, and the inspector says why. With linkage what rides on the main track stays on its footage.
    */
+  /**
+   * A line of words' motion played on the picture, so a change to it is seen: its way in from its start, its way out to
+   * its end, a couple of rounds of its loop from the playhead. A moment after it was written (the picture has it then).
+   */
+  const playTextMotion = React.useCallback((clipId: string, slot: 'in' | 'loop' | 'out') => {
+    window.setTimeout(() => {
+      const b = blocksRef.current.find((x) => x.clipId === clipId);
+      const at = b?.loc ? parseFilmDocLoc(b.loc) : null;
+      if (!b || !at) return;
+      const vars = textVars(filmRef.current?.tracks[at.track]?.clips[at.clip]?.overrides as unknown[] | undefined);
+      const ms = (key: string) => (Number.parseFloat(vars[key] ?? '') || 0.5) * 1000;
+      if (slot === 'in') playRange({ startMs: b.startMs, endMs: Math.min(b.endMs, b.startMs + ms('--in-time') + 400) });
+      else if (slot === 'out') playRange({ startMs: Math.max(b.startMs, b.endMs - ms('--out-time') - 400), endMs: b.endMs });
+      else {
+        const from = Math.min(Math.max(b.startMs, timeRef.current), b.endMs - 100);
+        playRange({ startMs: from, endMs: Math.min(b.endMs, from + 2 * ms('--loop-time')) });
+      }
+    }, 150);
+  }, [playRange]);
   const editClips = React.useCallback(async (edits: ClipEdit[]): Promise<string | null> => {
     const [one] = edits;
     const block = one && edits.length === 1 ? blocksRef.current.find((b) => b.loc === one.loc) : undefined;
@@ -1488,6 +1507,16 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     return [...placed, { track: below, at: 0, clip: { src: taken.path, time: [0, len], overrides: [{ fade: [0, Math.min(1.5, len / 3)] }] } }];
   }, [projectId]);
   const language = useLanguage();
+  /** The clip put in since `before` (the clips there were), picked on the timeline once it is drawn there. */
+  const pickNewClip = React.useCallback((before: ReadonlySet<string>) => {
+    let left = 30;
+    const find = () => {
+      const block = blocksRef.current.find((b) => b.clipId && !before.has(b.clipId));
+      if (block) { setStageElement(null); setSelectedKeys([block.clipId ?? block.id]); return; }
+      if (--left > 0) requestAnimationFrame(find);
+    };
+    requestAnimationFrame(find);
+  }, []);
   const dropAsset = React.useCallback(async (file: ResourceDragItem, target: AssetDropTarget, atMs: number): Promise<string | null> => {
     const plan = assetDropInsert(file, timelineTracks, target, atMs, stageRef.current);
     if ('error' in plan) return plan.error === 'locked' ? t('timeline.trackLocked') : t('timeline.dropNotClip');
@@ -1519,16 +1548,20 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       const overrides = words != null ? withWords(vars ? withRootVars((taken.clip as { overrides?: unknown[] }).overrides, vars) : (taken.clip as { overrides?: unknown[] }).overrides, words) : undefined;
       const clip = { ...taken.clip, ...(box ? { box, size: { w: box.w, h: box.h } } : {}), ...(overrides ? { overrides } : {}) };
       const durMs = file.durationMs ?? assetRunMs([file]);
+      /* the thing tried on the picture is the thing now put in: the try goes; what was put in is picked, as "+" does */
+      setLibraryTrial(null);
+      const before = new Set(blocksRef.current.flatMap((b) => (b.clipId ? [b.clipId] : [])));
+      const picked = (failed: string | null) => { if (!failed) pickNewClip(before); return failed; };
       /* a transition of OpenFilm's library (lib/library): its middle on the cut it was put near, never pushing or
          cutting what is under it */
       if (builtInItem(file.saved)?.place === 'cut') {
         const at = onCut(plan.at, durMs, cutsOf(timelineTracks));
         return edit([{ op: 'insert', clip: clip as never, at, track: cutTrack(timelineTracks, plan.track, at, durMs) }], 'history.stepDrop');
       }
-      return edit([
+      return picked(await edit([
         { op: 'insert', clip: clip as never, at: plan.at, ...(plan.track != null ? { track: plan.track } : {}) },
         ...roomFor([{ track: plan.track, atSec: plan.at, durMs }], target.edit),
-      ], 'history.stepDrop');
+      ], 'history.stepDrop'));
     }
     const pending = pendingDropOf(file, target, atMs);
     if (pending) setPendingDrops((all) => [...all, pending]);
@@ -1540,7 +1573,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     } finally {
       if (pending) setPendingDrops((all) => all.filter((d) => d.id !== pending.id));
     }
-  }, [timelineTracks, edit, roomFor, t, projectId, editModel, language]);
+  }, [timelineTracks, edit, roomFor, t, projectId, editModel, language, pickNewClip]);
   const dropAssetRef = React.useRef(dropAsset);
   dropAssetRef.current = dropAsset;
   /**
@@ -1644,15 +1677,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       return block?.loc && clip ? [{ loc: block.loc, style: clip.style }] : [];
     };
     /* what was just put in, picked on the timeline once it is drawn there */
-    const pickAdded = (before: ReadonlySet<string>) => {
-      let left = 30;
-      const find = () => {
-        const block = blocksRef.current.find((b) => b.clipId && !before.has(b.clipId));
-        if (block) { setStageElement(null); setSelectedKeys([block.clipId ?? block.id]); return; }
-        if (--left > 0) requestAnimationFrame(find);
-      };
-      requestAnimationFrame(find);
-    };
+    const pickAdded = pickNewClip;
     const clipIds = () => new Set(blocksRef.current.flatMap((b) => (b.clipId ? [b.clipId] : [])));
     const look = (item: LibraryItem, on: { loc: string; style: string | undefined }[]) => {
       if (!on.length) { toast.show(t('assetDrawer.pickClips')); return; }
@@ -1708,9 +1733,17 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         if (text) void place(text, vars, nameOf(item.name, language), item.w ? item : text);
         return;
       }
-      void editBlocks(on.map((c) => ({ loc: c.loc, prop: 'overrides', value: withRootVars(c.overrides as unknown[] | undefined, vars) as never }))).then((err) => {
-        if (err) toast.showError(err);
-        else toast.show(t('assetDrawer.looked').replace('{name}', nameOf(item.name, language)).replace('{n}', String(on.length)));
+      /* as the Text inspector puts them on: a look in place of the last one, a motion in its slot; one line of words
+         refitted to its new look (editClips), several each as they are */
+      const slot = item.kind === 'textmotion' && (item.group === 'in' || item.group === 'loop' || item.group === 'out') ? item.group : null;
+      const next = (own: unknown[] | undefined) => (slot ? withMotion(own, slot, vars) : item.kind === 'textstyle' ? withTextLook(own, vars) : withRootVars(own, vars));
+      const edits = on.map((c) => ({ loc: c.loc, prop: 'overrides' as const, value: next(c.overrides as unknown[] | undefined) as never }));
+      void (on.length === 1 ? editClips(edits as never) : editBlocks(edits as never)).then((err) => {
+        if (err) { toast.showError(err); return; }
+        toast.show(t('assetDrawer.looked').replace('{name}', nameOf(item.name, language)).replace('{n}', String(on.length)));
+        /* a motion put on: played, so it is seen */
+        const id = on.length === 1 ? clipIdAt(filmRef.current, on[0]!.loc) : null;
+        if (slot && id) playTextMotion(id, slot);
       });
     };
     /** `vars`: the page's CSS variables set on the clip put in (a text style or motion on new words), named `as`, its box
@@ -1784,7 +1817,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       return null;
     };
     return { actions, applyDrop, lookTargets };
-  }, [language, selectedClips, editModel, projectId, addMedia, timelineTracks, edit, filmClipOf, editBlocks, askTransition, t, toast]);
+  }, [language, selectedClips, editModel, projectId, addMedia, timelineTracks, edit, filmClipOf, editBlocks, editClips, playTextMotion, askTransition, t, toast]);
   /* a look tried: shown on the clips it would go on, taken off when the try ends */
   React.useEffect(() => {
     if (libraryTrial?.kind !== 'look') return undefined;
@@ -2586,11 +2619,13 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const layerClipOf = React.useCallback((clipId: string) => {
     const b = blocksRef.current.find((x) => x.clipId === clipId);
     /* a thing of the library: one row, as it is one thing on the picture */
+    /* a thing of the library by its name there (every emoji's page is emoji.html) */
+    const item = b ? libraryItemOfClip(b.src) : null;
     return b ? {
-      label: b.title, kind: b.kind, ...(b.loc ? { loc: b.loc } : {}), ...(b.src ? { src: b.src } : {}),
+      label: item ? nameOf(item.name, language) : b.title, kind: b.kind, ...(b.loc ? { loc: b.loc } : {}), ...(b.src ? { src: b.src } : {}),
       ...(isLibraryClip(b.src) ? { whole: true } : {}), ...(b.words != null ? { words: true } : {}),
     } : null;
-  }, []);
+  }, [language]);
   const selectLayerRows = React.useCallback((layers: readonly { clipId: string; loc: string }[], toggle = false) => {
     const found = layers.flatMap(({ clipId, loc }) => {
       const clipLoc = blocksRef.current.find((b) => b.clipId === clipId)?.loc;
@@ -2678,23 +2713,51 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const propsHostOf = React.useCallback((block: TimelineBlock): PropsHost | null => {
     const clip = block.clipId;
     if (!clip) return null;
+    const overridesNow = () => {
+      const at = parseFilmDocLoc(blocksRef.current.find((b) => b.clipId === clip)?.loc ?? '');
+      return (at ? filmRef.current?.tracks[at.track]?.clips[at.clip]?.overrides : undefined) as readonly FilmOverride[] | undefined;
+    };
+    /* a line of words: a look previewed refits its box as it goes (FilmStageControl fitText), the last one asked shown */
+    const text = isTextClip(block.src);
+    let pending: readonly unknown[] | null | undefined;
+    let fitting = false;
+    const fitPreview = (next: readonly unknown[] | null | undefined) => {
+      pending = next;
+      if (fitting) return;
+      fitting = true;
+      void (async () => {
+        while (pending !== undefined) {
+          const now = pending;
+          pending = undefined;
+          const loc = blocksRef.current.find((b) => b.clipId === clip)?.loc;
+          if (loc) await stageControl.current?.fitText(loc, now);
+        }
+        fitting = false;
+      })();
+    };
     return {
       read: () => askStage<TemplateControls>('controls', { clip }),
       props: () => clipPropsOf(clip),
       setProps: (next) => writeClipProps(clip, next),
-      overrides: () => {
-        const at = parseFilmDocLoc(blocksRef.current.find((b) => b.clipId === clip)?.loc ?? '');
-        return (at ? filmRef.current?.tracks[at.track]?.clips[at.clip]?.overrides : undefined) as readonly FilmOverride[] | undefined;
-      },
+      overrides: overridesNow,
       preview: (target, patch) => {
+        if (text && target.at === ':root' && !target.n) {
+          fitPreview(patch?.style ? withRootVars(overridesNow() as unknown[] | undefined, patch.style) : null);
+          return;
+        }
         void (patch ? askStage('tweak', { clip, at: target.at, ...(target.n ? { n: target.n } : {}), patch }) : askStage('release', { clip }));
       },
+      ...(text ? {
+        fits: true,
+        settle: () => { pending = undefined; },
+        playMotion: (slot: 'in' | 'loop' | 'out') => playTextMotion(clip, slot),
+      } : {}),
       page: block.src ?? '',
       pictures: pictureActions.pictures,
       pickPicture: () => pickReplacement('picture'),
       point: (target) => setPointedLayer(target ? { clipId: clip, loc: target.n ? `${target.at}#${target.n}` : target.at } : null),
     };
-  }, [askStage, pickReplacement, pictureActions, clipPropsOf, writeClipProps]);
+  }, [askStage, pickReplacement, pictureActions, clipPropsOf, writeClipProps, playTextMotion]);
   /* a clip's own CSS as film.html has it, and the look the player measured (the Inspector's Look section) */
   const clipLookOf = React.useCallback((clipLoc: string) => {
     const at = parseFilmDocLoc(clipLoc);

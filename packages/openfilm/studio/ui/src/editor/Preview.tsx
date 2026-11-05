@@ -73,7 +73,8 @@ export type PlayedReport = { frames: number; drawn: number; late: number; render
  * of the film is shown (its handles are new).
  */
 export type StageEvent =
-  | { event: 'typing'; handle: number; value: string }
+  /* `size`: a line of words' box as the picture fitted it to the words typed (stage.js fitTyped) */
+  | { event: 'typing'; handle: number; value: string; size?: { w: number; h: number } }
   /* `hold`: what kept the other layers in place as the words were typed (style for the same override, null takes a key away) */
   | { event: 'text'; handle: number; commit: boolean; value?: string; before?: string; hold?: Record<string, string | null> }
   | { event: 'key'; key: KeyboardEvent }
@@ -176,6 +177,8 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
    * taken from the one answered soonest (the time a message takes is the error, a fraction of a millisecond).
    */
   const line = useRef<Anchor | null>(null);
+  /* the still frame asked for last: drawn again when a page opens after it (see the stage's `woke`) */
+  const lastSeek = useRef<number | null>(null);
   const fpsRef = useRef(fps);
   fpsRef.current = fps;
   const clocks = useRef(new Map<number, { offset: number; rtt: number }>());
@@ -221,6 +224,7 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
   useImperativeHandle(ref, () => ({
     seek(t) {
       line.current = null;
+      lastSeek.current = t;
       post(shownRef.current?.key, { type: 'seek', t, seq: ++seq.current });
     },
     play(anchor) {
@@ -429,8 +433,13 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
             ctrlKey: Boolean(m.ctrlKey), metaKey: Boolean(m.metaKey), shiftKey: Boolean(m.shiftKey), buttons: Number(m.buttons) || 0,
             bubbles: true, cancelable: true,
           }));
+        } else if (m.event === 'woke') {
+          /* a page opened after the still frame was drawn: that frame drawn again, now with it */
+          if (!line.current && lastSeek.current != null) post(key, { type: 'seek', t: lastSeek.current, seq: ++seq.current });
         } else if (m.event === 'typing') {
-          tell({ event: 'typing', handle: Number(m.handle), value: String(m.value ?? '') });
+          const size = m.size && typeof m.size === 'object' && Number.isFinite(Number(m.size.w)) && Number.isFinite(Number(m.size.h))
+            ? { w: Number(m.size.w), h: Number(m.size.h) } : undefined;
+          tell({ event: 'typing', handle: Number(m.handle), value: String(m.value ?? ''), ...(size ? { size } : {}) });
         } else if (m.event === 'text') {
           tell({
             event: 'text', handle: Number(m.handle), commit: Boolean(m.commit),

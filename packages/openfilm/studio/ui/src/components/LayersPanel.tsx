@@ -261,6 +261,7 @@ export function LayersPanel(p: LayersPanelProps) {
               }}
               onClick={(e) => { if (!dragRef.current) clickRow(line, e); }}
               onPoint={() => p.onPoint({ clipId: line.clipId, loc: line.row ? line.row.loc : '' })}
+              onUnpoint={() => p.onPoint(null)}
               onToggle={(what) => { if (line.row) p.onToggle(line.clipId, line.row, what); }}
               onDelete={() => { if (line.row) p.onDelete(line.clipId, line.row); }}
               onMenu={(e) => {
@@ -284,7 +285,7 @@ export function LayersPanel(p: LayersPanelProps) {
   );
 }
 
-function LayerLineRow({ line, top, t, clipOf, tone, joinUp, joinDown, dragging, onToggleOpen, onPress, onClick, onPoint, onToggle, onDelete, onMenu }: {
+function LayerLineRow({ line, top, t, clipOf, tone, joinUp, joinDown, dragging, onToggleOpen, onPress, onClick, onPoint, onUnpoint, onToggle, onDelete, onMenu }: {
   line: LayerLine;
   top: number;
   t: ReturnType<typeof useT>;
@@ -299,6 +300,7 @@ function LayerLineRow({ line, top, t, clipOf, tone, joinUp, joinDown, dragging, 
   onPress: (e: React.PointerEvent) => void;
   onClick: (e: React.MouseEvent) => void;
   onPoint: () => void;
+  onUnpoint: () => void;
   onToggle: (what: 'hidden' | 'locked') => void;
   onDelete: () => void;
   onMenu: (e: React.MouseEvent) => void;
@@ -331,7 +333,8 @@ function LayerLineRow({ line, top, t, clipOf, tone, joinUp, joinDown, dragging, 
       className={`group absolute inset-x-1 flex items-center gap-1 pr-1 text-[12.5px] ${corners} ${fill} ${dragging ? 'opacity-50' : ''}`}
       style={{ top, height: ROW_H, paddingLeft: 4 + line.depth * INDENT }}
       title={row?.off && !row.hidden ? t('layers.notNow') : undefined}
-      onPointerDown={onPress} onClick={onClick} onPointerEnter={onPoint} onContextMenu={onMenu}>
+      /* its outline on the picture while the pointer is on the row, and gone as it leaves (to another row: that one's) */
+      onPointerDown={onPress} onClick={onClick} onPointerEnter={onPoint} onPointerLeave={onUnpoint} onContextMenu={onMenu}>
       {line.canOpen ? (
         <button type="button" aria-label={t(line.open ? 'layers.collapse' : 'layers.expand')}
           onPointerDown={(e) => e.stopPropagation()}

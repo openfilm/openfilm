@@ -54,7 +54,7 @@ import {
   Blend,
   Plus,
 } from 'lucide-react';
-import { useT } from '@/i18n';
+import { useLanguage, useT } from '@/i18n';
 import { CcMark } from './CcMark';
 import { keyAction, useKeyHint } from '@/lib/keymap-store';
 import { ownTrackHeight } from '@/lib/track-heights';
@@ -65,6 +65,7 @@ import { filmSrcIsStill, parseFilmDocLoc } from '@/lib/film';
 import {
   assetDropPreview,
   assetDropSpot,
+  libraryOverlay,
   assetDropTargetOf,
   type AssetDropPreview,
   type AssetDropTarget,
@@ -168,7 +169,7 @@ import { fadeEdits, fadeFromPointer, fadeHandleX, type FadeEdge, type FadeMs } f
 import { canChangeSpeed, roundSpeed } from '@/lib/clip-speed';
 import { hasVolume, volumeAtLineY, volumeEdit, volumeLineY, volumeOf, volumeText } from '@/lib/clip-volume';
 import { speedText } from '@/lib/playback-speed';
-import { isLibrarySticker } from '@/lib/library';
+import { isLibrarySticker, libraryItemOfClip, nameOf, useLibraryIndex } from '@/lib/library';
 import { cutNear, transitionSpan, type CutRef, type FilmTransition, type TransitionAsk, type TransitionKind } from '@/lib/transitions';
 
 /** Track head column: kind badge + lock + hide + original sound. */
@@ -1035,6 +1036,13 @@ export const Timeline = React.memo(function Timeline({
     return clock.subscribe(sync);
   }, [clock]);
   const t = useT();
+  /* a thing of the library is called by its name there, in the app's language (every emoji's page is emoji.html) */
+  const language = useLanguage();
+  const libraryIndex = useLibraryIndex();
+  const libraryTitle = React.useCallback((block: { src?: string | undefined }) => {
+    const item = libraryIndex ? libraryItemOfClip(block.src) : null;
+    return item ? nameOf(item.name, language) : null;
+  }, [libraryIndex, language]);
   const keyHint = useKeyHint();
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const rootRef = React.useRef<HTMLDivElement | null>(null);
@@ -2316,7 +2324,9 @@ export const Timeline = React.memo(function Timeline({
    * point there, what follows on that track moving on (nothing is cut). Anywhere else it is put down where it is let
    * go, or on a new track when that spot is taken. ⌥: an overwrite.
    */
-  const dropModeAt = React.useCallback((hit: { lane: number; band: DropBand }, alt: boolean): EditMode | undefined => {
+  const dropModeAt = React.useCallback((hit: { lane: number; band: DropBand }, alt: boolean, file?: ResourceDragItem | null): EditMode | undefined => {
+    /* a sticker, text or effect of the library goes over the film, never into the main track (assetDropSpot) */
+    if (file && libraryOverlay(file)) return alt && !tracks[hit.lane]?.main ? 'overwrite' : undefined;
     if (alt) return 'overwrite';
     /* onto the main track with the magnet: in between, what follows moving on */
     const doc = hit.band === 'body' ? tracks[hit.lane]?.docIndex : undefined;
@@ -2331,7 +2341,7 @@ export const Timeline = React.memo(function Timeline({
    */
   const assetLanding = React.useCallback((file: ResourceDragItem, clientX: number, clientY: number, altKey: boolean): AssetHint | null => {
     const laneHit = laneHitAtY(clientY);
-    const editMode = dropModeAt(laneHit, altKey);
+    const editMode = dropModeAt(laneHit, altKey, file);
     const pointerMs = dropMsAtClientX(clientX);
     const snapped = dropAt(pointerMs);
     const preview = assetDropPreview(file, tracks, laneHit, snapped.ms, onEditOps ? editMode : undefined);
@@ -2411,7 +2421,7 @@ export const Timeline = React.memo(function Timeline({
     const replacing = replaced ? tracks.flatMap((tr) => tr.blocks).find((b) => b.id === replaced && b.clipId) : undefined;
     const dragged = replacing ? readResourceDragData(e.dataTransfer) ?? peekResourceDrag() : null;
     if (replacing && dragged) { onReplaceDrop!(replacing, dragged); return; }
-    const editMode = dropModeAt(laneHitAtY(e.clientY), e.altKey);
+    const editMode = dropModeAt(laneHitAtY(e.clientY), e.altKey, applying);
     if (isComputerFileDrag(e.dataTransfer)) {
       const files = [...e.dataTransfer.files];
       if (!onDropFiles || !files.length) return;
@@ -3230,7 +3240,7 @@ export const Timeline = React.memo(function Timeline({
                       <span data-clip-transcribed="" role="img" aria-label={t('timeline.hasTranscript')} className="flex shrink-0 text-white/90"><CcMark size={12} /></span>
                     ) : null}
                     <span className={`min-w-0 truncate font-medium leading-none text-white/90 ${textRow ? 'text-[11px]' : 'text-[10px]'}`}>
-                      {textRow ? block.words ?? block.title : block.title}
+                      {textRow ? block.words ?? block.title : libraryTitle(block) ?? block.title}
                     </span>
                     {width > 64 && !textRow ? (
                       <span className="shrink-0 text-[10px] leading-none tabular-nums text-white/55">
@@ -3502,7 +3512,7 @@ export const Timeline = React.memo(function Timeline({
     );
     });
   }, [
-    tracks, trackPx, pxPerMs, ringed, selected, drag, waveUrl, mode, msAtClientX, onSplit, clipThumbs, posters, mediaTrouble, t,
+    tracks, trackPx, pxPerMs, ringed, selected, drag, waveUrl, mode, msAtClientX, onSplit, clipThumbs, posters, mediaTrouble, t, libraryTitle,
     openBlockMenu, openLaneMenu, onEditBlocks, collapseIfClick, selectOne, setSelected, clipElements, thumbWindow, view.width,
     chatClip, chatDraft, placedOf, pickForTrim, gap, withLinked, runSplit, trackOverlay,
     fadeOfBlock, fadeDrag, startFade, volumeDrag, startVolume, transitions, transitionDrag, pickedTransition, onPickTransition, onTransition, startTransitionResize,

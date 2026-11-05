@@ -7,7 +7,7 @@
  */
 import { layerBlocks } from '../../../server/track-layout.mjs';
 import { clipSpan } from '../../../../src/film-doc.mjs';
-import { fileStem, filmTrackBadges, filmTrackKind, filmTrackPrefix, type FilmBox } from './film.ts';
+import { fileStem, filmSrcIsLibrary, filmTrackBadges, filmTrackKind, filmTrackPrefix, type FilmBox } from './film.ts';
 
 import { DISPLAY_FPS, exactRate } from './timecode.ts';
 import { trimFence } from './timeline-drag.ts';
@@ -885,8 +885,9 @@ export function layoutTracks(evaluated: TimelineFilm): TimelineTrack[] {
       ...(s.loc ? { loc: s.loc } : {}),
       ...(s.anchor ? { anchor: s.anchor } : {}),
       /* an MG's right edge is unlimited (past its end it holds the last frame); its left edge stops at its start,
-         with or without a duration of its own (without the limit a left edge past 0 only slid the page along) */
-      room: { headMs: Math.max(0, s.inMs ?? 0) },
+         with or without a duration of its own (without the limit a left edge past 0 only slid the page along). A
+         thing of the library's is pulled out as far as there is room: it lengthens (film-shape: as a still) */
+      ...(filmSrcIsLibrary(s.src) ? {} : { room: { headMs: Math.max(0, s.inMs ?? 0) } }),
       ...visualExtras(s),
       ...metaFields(s.meta),
     });

@@ -171,3 +171,14 @@ test('the preview of a drop looks as it will land: a line of words its words, a 
   assert.equal(sticker?.look, 'sticker');
   assert.equal(assetDropPreview(video, tracks, { lane: 0, band: 'body' }, 12_000)?.look, undefined);
 });
+
+test('a sticker, text or effect of the library let go on the main track goes over it, never cutting the film', () => {
+  const withMain = tracks.map((tr, i) => (i === 1 ? { ...tr, main: true } : tr));
+  const sticker = { path: 'openfilm/stickers/tap/files/tap.html', name: 'Tap', kind: 'mg' as const, durationMs: 3000, saved: 'openfilm/stickers/tap' };
+  /* free on the page track above: there */
+  assert.deepEqual(assetDropSpot(sticker, withMain, { lane: 1, band: 'body' }, 12_000, 'insert'), { action: 'into', laneIndex: 0, lane: 'doc-0', docIndex: 0, locked: false });
+  /* taken there too: a new track right above the main one */
+  assert.deepEqual(assetDropSpot(sticker, withMain, { lane: 1, band: 'body' }, 2000), { action: 'new-track', laneIndex: 1, docAt: 1 });
+  /* footage still goes onto the main track */
+  assert.equal(assetDropSpot(video, withMain, { lane: 1, band: 'body' }, 12_000, 'insert')?.action, 'into');
+});

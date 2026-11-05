@@ -97,6 +97,20 @@ export function useLibraryIndex(): LibraryIndex | null {
   return seen;
 }
 
+/* the library's things by the folder a project keeps each in (server takeSaved: its id as one name) */
+let byFolder: { of: LibraryIndex; map: Map<string, LibraryItem> } | null = null;
+
+/**
+ * The thing of the library a clip is (its page under `saved/openfilm/<id as one name>/`), when the index has been read:
+ * what the timeline and Layers call it (every emoji's page is `emoji.html`; its name is its own).
+ */
+export function libraryItemOfClip(src: string | undefined): LibraryItem | null {
+  const m = /^saved\/openfilm\/([^/]+)\//.exec(src?.split('#')[0] ?? '');
+  if (!m || !index) return null;
+  if (byFolder?.of !== index) byFolder = { of: index, map: new Map(index.items.map((item) => [item.id.replace(/\//g, '-'), item])) };
+  return byFolder.map.get(m[1]!) ?? null;
+}
+
 /** A thing of the library by its `openfilm/` path, when the index has been read and has it. */
 export function builtInItem(path: string | null | undefined): LibraryItem | null {
   if (!path || !index || !path.startsWith(`${BUILT_IN}/`)) return null;

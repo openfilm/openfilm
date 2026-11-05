@@ -24,7 +24,7 @@ const num = (v: string | undefined) => { const n = Number.parseFloat(v ?? ''); r
 const MOTION_SLOTS: MotionSlot[] = ['in', 'loop', 'out'];
 
 /** `boxH`: how tall its box is drawn on the picture, so its words' size reads in the film's pixels. */
-export function TextInspector({ host, boxH, commit }: { host: PropsHost; boxH?: number | undefined; commit: (next: Overrides) => void }) {
+export function TextInspector({ host, boxH, commit }: { host: PropsHost; boxH?: number | undefined; commit: (next: Overrides) => void | Promise<unknown> }) {
   const t = useT();
   const lang = useLanguage();
   const index = useLibraryIndex();
@@ -35,7 +35,16 @@ export function TextInspector({ host, boxH, commit }: { host: PropsHost; boxH?: 
   const overrides = React.useMemo(() => JSON.parse(now) as Overrides, [now]);
   const vars = textVars(overrides);
   const words = textWords(overrides) ?? '';
-  const write = (next: Overrides) => { host.preview(ROOT, null); commit(next); setRev((r) => r + 1); };
+  /* a line of words refits its box with each preview: the write shows the new look itself (taken back first, the old
+     look would show for a moment) */
+  const write = (next: Overrides) => {
+    if (host.fits) host.settle?.(); else host.preview(ROOT, null);
+    const done = commit(next);
+    setRev((r) => r + 1);
+    return Promise.resolve(done);
+  };
+  /* a motion changed, or its time: played on the picture, so it is seen */
+  const writeMotion = (next: Overrides, slot: MotionSlot) => { void write(next).then(() => host.playMotion?.(slot)); };
   const setVar = (key: string, value: string) => write(withVars(overrides, { [key]: value }));
   const paint = (key: string, value: string) => host.preview(ROOT, { style: { [key]: value } });
   const revert = () => host.preview(ROOT, null);
@@ -148,10 +157,11 @@ export function TextInspector({ host, boxH, commit }: { host: PropsHost; boxH?: 
             <div key={slot} className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-medium text-[var(--text-muted)]">{t(`textInspector.${slot}`)}</span>
-                {now !== 'none' && slot !== 'loop' ? (
+                {now !== 'none' ? (
                   <div className="w-[96px]">
+                    {/* how long it takes (a loop: one round of it) */}
                     <NumField label={t('textInspector.time')} value={num(vars[timeKey])} unit="s" step={0.1} min={0.1} max={5}
-                      onCommit={(n) => setVar(timeKey, `${n}s`)} />
+                      onCommit={(n) => writeMotion(withVars(overrides, { [timeKey]: `${n}s` }), slot)} />
                   </div>
                 ) : null}
               </div>
@@ -161,7 +171,7 @@ export function TextInspector({ host, boxH, commit }: { host: PropsHost; boxH?: 
                 none={t('textInspector.none')}
                 lang={lang}
                 small
-                onPick={(item) => write(withMotion(overrides, slot, item?.vars ?? { [nameKey]: 'none' }))}
+                onPick={(item) => (item ? writeMotion(withMotion(overrides, slot, item.vars ?? {}), slot) : void write(withMotion(overrides, slot, { [nameKey]: 'none' })))}
               />
             </div>
           );

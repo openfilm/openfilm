@@ -1599,7 +1599,8 @@ function ClipPanel({
                 framing={block.kind === 'video'}
                 box={geo ? { w: geo.w, h: geo.h } : null}
                 own={own}
-                {...(onStartCrop ? { onStartCrop } : {})}
+                /* cropping on the picture is a video's or a still's (a page, a sticker, crops by its numbers here) */
+                {...(onStartCrop && block.kind === 'video' ? { onStartCrop } : {})}
               />
               <MaskSection
                 look={look}
@@ -2451,6 +2452,10 @@ function ClipPositionSection({
   });
   const xPart = (x: number) => clipFieldPart('x', x, box);
   const yPart = (y: number) => clipFieldPart('y', y, box);
+  /* reset: a page with a size of its own (a sticker, a line of words) back in the middle at that size, unturned (no
+     box at all would lay it over the whole picture); anything else where it lands by default */
+  const home = page && (own.w !== geometry.stage.w || own.h !== geometry.stage.h)
+    ? { x: Math.round((geometry.stage.w - own.w) / 2), y: Math.round((geometry.stage.h - own.h) / 2) } : null;
   const sizePart = (field: 'w' | 'h', n: number): Partial<MgTransform> => {
     if (lockedNow) return clipFieldPart(field, n, box);
     return field === 'w' ? { scaleX: n / (box.w || 1) } : { scaleY: n / (box.h || 1) };
@@ -2473,7 +2478,7 @@ function ClipPositionSection({
       id="position"
       title={t('inspector.position')}
       aside={placed ? (
-        <SectionAction label={t('inspector.resetTransform')} onClick={() => onCommit([{ loc, prop: 'box', value: null }])}>
+        <SectionAction label={t('inspector.resetTransform')} onClick={() => onCommit([{ loc, prop: 'box', value: home }])}>
           <RotateCcw size={11} />
         </SectionAction>
       ) : null}

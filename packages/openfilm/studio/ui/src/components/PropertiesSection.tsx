@@ -18,6 +18,7 @@ import {
   propOf, propValue, renamedProp, withProp, withPropValue, withPropsReset, withoutProp, type ComponentProp, type PropValue,
 } from '@/lib/component-props';
 import { joinFontFamily, splitFontFamily } from '@/lib/font-styles';
+import { isLibraryClip } from '@/lib/library';
 import { readResourceDragData, RESOURCE_DRAG_TYPE } from '@/lib/resource-drag';
 import { ColorField, FIELD, INPUT, NumField, Section, SectionAction } from './inspector-fields';
 import { FontFamilyPicker } from './FontFamilyPicker';
@@ -46,6 +47,14 @@ export interface PropsHost {
   pickPicture?: () => Promise<string | null>;
   /** Outline a layer of the page on the picture (a row pointed at); null: none. */
   point?: (target: { at: string; n?: number } | null) => void;
+  /**
+   * A line of words, whose box follows its words: a preview of its look refits its box as it goes, and a write needs no
+   * take-back first (`settle` drops the previews not shown yet, so none comes after it).
+   */
+  fits?: boolean;
+  settle?: () => void;
+  /** Play the part of the clip a motion is in (its way in, its loop, its way out), so a change to it is seen. */
+  playMotion?: (slot: 'in' | 'loop' | 'out') => void;
 }
 
 const PICTURE = /\.(png|jpe?g|gif|webp|avif|svg|bmp)$/i;
@@ -154,6 +163,10 @@ export function PropertiesSection({ host, commit }: {
       }
     }
   };
+
+  /* a thing of the library is one thing (its layers are not picked one by one): with nothing it offers, no section
+     telling how to make a property of a layer of it */
+  if (!shown.length && isLibraryClip(host.page)) return null;
 
   return (
     <Section

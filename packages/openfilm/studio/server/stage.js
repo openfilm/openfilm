@@ -963,6 +963,10 @@
     /* the new words stay on screen until the edit is kept (or refused: the editor releases the clip), with what held
        the others in place as they were typed (kept with them) */
     const hold = kept && edit.hold && Object.keys(edit.hold).length ? edit.hold : null;
+    /* a line of words fitted as it was typed (fitTyped): its words' size as shown, kept with the words until written
+       (shown again with the clip's overrides, the size set on the page itself would go, and the words jump) */
+    const size = kept && edit.fit ? c.win?.document.documentElement.style.getPropertyValue('--size') : '';
+    if (size) draft(c, { at: ':root' }, { style: { '--size': size } });
     if (kept) draft(c, edit.target, { text: value, ...(hold ? { style: hold } : {}) });
     post({ type: 'stage-event', event: 'text', handle: edit.handle, commit: Boolean(kept), ...(kept ? { value, before: edit.before, ...(hold ? { hold } : {}) } : {}) });
   };
@@ -1007,8 +1011,11 @@
     /* the editor shows the words as they are typed (the inspector's box with them); they are kept at Enter or blur */
     const onInput = () => {
       if (!editing) return;
-      if (search) editing.hold = search(holdInline);
-      post({ type: 'stage-event', event: 'typing', handle, value: overlay ? collapse(host.innerText ?? host.textContent ?? '') : stageText(host) });
+      /* a line of words whose box follows its words (textFit): its box made so here, before the picture is drawn again
+         (asked of the editor, it would come a frame or more late: the words shrunk or wrapped meanwhile) */
+      const size = editing.fit ? fitTyped(editing) : null;
+      if (search && !editing.fit) editing.hold = search(holdInline);
+      post({ type: 'stage-event', event: 'typing', handle, value: overlay ? collapse(host.innerText ?? host.textContent ?? '') : stageText(host), ...(size ? { size } : {}) });
     };
     const host = overlay ? openOverlay(el) : el;
     /* the line hidden under its overlay, the blocks in it still shown (they are not what is typed) */
@@ -1037,6 +1044,9 @@
       children: [...el.childNodes],
       before: textOf(el),
       hold: null,
+      fit: null,
+      holdOff: () => holdInline({}),
+      refit: () => onInput(),
       cleanup: () => { host.removeEventListener('keydown', onKey); host.removeEventListener('blur', onBlur); host.removeEventListener('input', onInput); release(); },
     };
     /* the line in its page, and its page in the film */
@@ -1047,6 +1057,52 @@
     host.focus({ preventScroll: true });
     doc.getSelection()?.selectAllChildren(host);
     return true;
+  };
+
+  /**
+   * The box of a line of words being typed in, fitted to its words as each is typed (the editor's fitTextNow, done
+   * here in the same task as the typing): one line hugs its words with their room (never wider than `maxW`, where it
+   * wraps), a line a side was pulled on keeps its width; as tall as its lines, its words as large (`--size` in vh of
+   * its height set on the page itself), its middle where it was. `fit` (from the editor, textFit): its box and place as
+   * kept (w0 × h0 at x0, y0, scale s, turn r), its font size, whether it hugs. Answers its new size.
+   */
+  const fitTyped = (ed) => {
+    const f = ed.fit;
+    const doc = ed.c.win?.document;
+    const box = doc?.querySelector('.box');
+    if (!box || !hooks()) return null;
+    const nw = oneLineWidth(box);
+    const room = 2 * (0.23 * f.font + 0.04 * nw);
+    const w = f.hug ? Math.max(1, Math.min(f.maxW, Math.round(nw + room))) : f.w0;
+    const show = (h) => {
+      doc.documentElement.style.setProperty('--size', `${Math.round(((100 * f.font) / h) * 100) / 100}vh`);
+      /* grown from its side as it is aligned: a line aligned left keeps its left edge, right its right, else its middle */
+      const grow = f.align === 'left' || f.align === 'start' ? 0 : f.align === 'right' || f.align === 'end' ? 1 : 0.5;
+      const x = f.x0 - (w - f.w0) * f.s * grow;
+      const y = f.y0 - ((h - f.h0) * f.s) / 2;
+      hooks().place(ed.c.id, { x: Math.round(x), y: Math.round(y), w: Math.round(w * f.s), h: Math.round(h * f.s), ...(f.r ? { r: f.r } : {}) }, { w, h });
+    };
+    let h = f.h ?? f.h0;
+    show(h);
+    const tall = Math.round(box.offsetHeight + 2 * 0.23 * f.font);
+    if (Math.abs(tall - h) >= 2) { h = tall; show(h); }
+    f.h = h;
+    return { w, h };
+  };
+
+  /** How wide `el` is with the words in it (`.t`, or itself) on one line, nothing wrapped. */
+  const oneLineWidth = (el) => {
+    const line = el.matches('.t') ? el : el.querySelector('.t') ?? el;
+    /* the words on one line, and a box around them not held to its page's width (its max-width) while measured */
+    const set = (node, prop, value) => {
+      const was = [node.style.getPropertyValue(prop), node.style.getPropertyPriority(prop)];
+      node.style.setProperty(prop, value, 'important');
+      return () => { if (was[0]) node.style.setProperty(prop, was[0], was[1]); else node.style.removeProperty(prop); };
+    };
+    const back = [set(line, 'white-space', 'pre'), ...(line !== el ? [set(el, 'max-width', 'none')] : [])];
+    const w = el.offsetWidth;
+    for (const undo of back) undo();
+    return w;
   };
 
   /* ── keys pressed while the picture has focus go to the editor (its own keys work there too) ── */
@@ -1098,7 +1154,9 @@
     listenAll();
     const h = hooks();
     /* an update may have added pages: their keys are heard too */
-    if (h) { h.updated = () => { listenAll(); updated(); }; h.woke = listenAll; }
+    /* a page opened after its frame was drawn (one just put in at the playhead): the editor draws the frame again, so
+       it shows without the playhead being moved */
+    if (h) { h.updated = () => { listenAll(); updated(); }; h.woke = () => { listenAll(); post({ type: 'stage-event', event: 'woke' }); }; }
   })();
 
   /* ── restacking ── */
@@ -1749,19 +1807,15 @@
       return true;
     },
     /** An element of a clip shown now, as its page lays it out (no transform counted): its size, and its font's. */
-    /* `natural`: also its width on one line, nothing wrapped (`nw`) */
+    /* `natural`: also its width with its words on one line, nothing wrapped (`nw`; a box with its padding: its words,
+       `.t`, kept on one line) */
     measure({ clip, at, natural }) {
       const c = clipById(clip);
       let el = null;
       try { el = c?.win?.document?.querySelector(String(at)) ?? null; } catch { /* not a selector */ }
       if (!el || !c?.win) return null;
       const out = { w: el.offsetWidth, h: el.offsetHeight, font: parseFloat(c.win.getComputedStyle(el).fontSize) || 0 };
-      if (natural) {
-        const was = [el.style.getPropertyValue('white-space'), el.style.getPropertyPriority('white-space')];
-        el.style.setProperty('white-space', 'pre', 'important');
-        out.nw = el.offsetWidth;
-        if (was[0]) el.style.setProperty('white-space', was[0], was[1]); else el.style.removeProperty('white-space');
-      }
+      if (natural) out.nw = oneLineWidth(el);
       return out;
     },
     /** Show a clip in CSS of its own not kept yet (null: its own again). */
@@ -2168,6 +2222,14 @@
     },
     textStart: startText,
     textFinish({ commit }) { finishText(Boolean(commit)); return true; },
+    /* the line being typed in is a line of words whose box follows its words (fitTyped); null: no more */
+    textFit({ fit }) {
+      if (!editing) return false;
+      editing.fit = fit && typeof fit === 'object' ? { ...fit } : null;
+      /* what was typed before this came: fitted now */
+      if (editing.fit) { editing.holdOff(); editing.hold = null; editing.refit(); }
+      return true;
+    },
     /**
      * What a page clip shows that it can change without opening the page (its properties are made of these): the CSS
      * custom properties its stylesheets set on `:root` (or `html`), each with its value now; its words, each layer of

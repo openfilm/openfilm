@@ -323,7 +323,7 @@ function clipLocOf(doc: FilmDoc, id: string): string | undefined {
 
 /** A whole clip in hand: its box is the part that shows. */
 /** What a line of words is fitted from (FilmStageSelect textFitBase): its box and place as kept, its font size now. */
-interface TextFitBase { clipLoc: string; clipId: string; box: MgBox; t: MgTransform; font: number; oneLine: boolean }
+interface TextFitBase { clipLoc: string; clipId: string; box: MgBox; t: MgTransform; font: number; oneLine: boolean; align: string }
 
 function describeClip(info: ClipInfo, stage: { w: number; h: number }): Hit {
   const aabb = info.box ? frameAabb(visibleFrame(info.t, info.box, info.crop)) : { x: 0, y: 0, w: stage.w, h: stage.h };
@@ -468,6 +468,9 @@ function FilmStageSelectImpl({
   }, []);
   /** The layer under the pointer (only with no clip in hand). Stage px. */
   const [hover, setHover] = React.useState<StageOutline | null>(null);
+  /* what the pointer rests on now, for a press (a thing of the library under it is moved at once) */
+  const hoverRef = React.useRef(hover);
+  hoverRef.current = hover;
   const [draft, setDraft] = React.useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   /** The marquee's own copy: a press and a release can land in one batch of updates, so decisions never read state. */
   const draftRef = React.useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
@@ -672,7 +675,7 @@ function FilmStageSelectImpl({
   const textEdit = React.useRef<{ element: StageElement; layer: StageLayer } | null>(null);
   /* a line of words (the library's text component) being typed in: its one frame, its box following the words as they
      come (fitTextNow), shown at `w` × `h` (`shownT`: the transform its frame is drawn at) */
-  const [textTyping, setTextTyping] = React.useState<{ base: TextFitBase; w: number; h: number; shownT: MgTransform } | null>(null);
+  const [textTyping, setTextTyping] = React.useState<{ base: TextFitBase; w: number; h: number; shownT: MgTransform; shown?: boolean } | null>(null);
   const textTypingRef = React.useRef(textTyping);
   const setTyping = (next: typeof textTyping) => { textTypingRef.current = next; setTextTyping(next); };
   /** The last presses on the picture, in stage px: a double-click is aimed by its first click (see onStageDoubleClick). */
@@ -1127,12 +1130,22 @@ function FilmStageSelectImpl({
     const edit = textEdit.current;
     const element = edit?.element;
     if (!edit || edit.layer.handle !== e.handle || !element?.text) return;
+    /* a line of words: its whole clip stays in hand while it is typed in (the Text inspector stays); its box follows */
+    if (isTextClipId(edit.layer.clip)) { textTypedRef.current(e); return; }
     /* a layer named by its words is named by the new ones */
     const label = element.label === element.text.value && e.value ? e.value : element.label;
     const next = { ...element, label, text: { ...element.text, value: e.value } };
     setPicked((cur) => (cur?.element?.loc === element.loc ? { ...cur, element: next } : cur));
     onSelectElement?.(next);
-    if (textTypingRef.current) typingFit.push(0);
+  };
+  /* a line of words typed in: the picture fitted its box as the words were typed (stage.js fitTyped), its frame
+     follows; an older picture without that: fitted from here */
+  const textTypedRef = React.useRef((e: Extract<StageEvent, { event: 'typing' }>) => { void e; });
+  textTypedRef.current = (e) => {
+    const typing = textTypingRef.current;
+    if (!typing) return;
+    if (e.size) setTyping({ base: typing.base, w: e.size.w, h: e.size.h, shownT: textAt(typing.base, e.size.w, e.size.h).shownT, shown: true });
+    else typingFit.push(0);
   };
   /* the box of a line of words typed in, fitted again to its words (the last ones typed) */
   const typingFitNow = async () => {
@@ -1159,9 +1172,12 @@ function FilmStageSelectImpl({
   const textTypingDone = async (typing: NonNullable<typeof textTyping>, value: string | null) => {
     const { base } = typing;
     if (value == null || !onEditClip) { unfitText(base); pickWholeText(base.clipLoc); return; }
-    await typingFit.idle();
-    const fit = await fitTextNow(base, { w: textTypingRef.current?.w ?? typing.w, h: textTypingRef.current?.h ?? typing.h })
-      ?? { w: typing.w, h: typing.h, ...textAt(base, typing.w, typing.h) };
+    /* the size the picture showed as the words were typed (stage.js fitTyped) is what is written: measured again now,
+       after typing ended, the page is between its typed size and its kept one */
+    const fit = typing.shown
+      ? { w: typing.w, h: typing.h, ...textAt(base, typing.w, typing.h) }
+      : (await typingFit.idle(), await fitTextNow(base, { w: typing.w, h: typing.h }))
+        ?? { w: typing.w, h: typing.h, ...textAt(base, typing.w, typing.h) };
     pickWholeText(base.clipLoc, fit.shownT);
     const overrides = withRootVars(withWords(textSizeOf(base.clipLoc)?.overrides, value), { '--size': `${fit.vh}vh` });
     const failed = await onEditClip([
@@ -1200,7 +1216,11 @@ function FilmStageSelectImpl({
       });
       return;
     }
+    /* a thing of the library (a sticker with words: "look here"): the whole of it in hand again once typed in, never its
+       label alone, which could be dragged out of it */
+    const whole = element.clipLoc && isWholeClipId(layer.clip) ? element.clipLoc : null;
     if (!e.commit || !e.value || !onEditTextInline) {
+      if (whole) { pickWholeText(whole); return; }
       /* given up (or nothing new): the inspector goes back to the words it had */
       setPicked((cur) => (cur?.element?.loc === element.loc ? { ...cur, element } : cur));
       if (pickedRef.current?.element?.loc === element.loc) onSelectElement?.(element);
@@ -1208,7 +1228,8 @@ function FilmStageSelectImpl({
     }
     const value = e.value;
     const nextElement = { ...element, ...(element.text ? { text: { ...element.text, value } } : {}) };
-    setPicked((cur) => (cur?.element?.loc === element.loc ? { ...cur, element: nextElement } : cur));
+    if (whole) pickWholeText(whole);
+    else setPicked((cur) => (cur?.element?.loc === element.loc ? { ...cur, element: nextElement } : cur));
     void onEditTextInline(element, value, e.hold).then((failed) => {
       if (!failed) return;
       void ask('release', { clip: layer.clip });
@@ -1228,10 +1249,17 @@ function FilmStageSelectImpl({
     previewRef.current?.focus?.();
     void ask<boolean>('textStart', { handle: layer.handle }).then((started) => {
       if (started) {
-        /* a line of words: one frame, its box following the words as they are typed */
+        /* a line of words: one frame, its box following the words as they are typed, the whole clip in hand */
         if (element.clipLoc && isTextClipId(layer.clip)) {
+          pickWholeText(element.clipLoc);
           void textFitBase(element.clipLoc).then((base) => {
-            if (base && textEdit.current?.layer.handle === layer.handle) setTyping({ base, w: Math.round(base.box.w), h: Math.round(base.box.h), shownT: base.t });
+            if (!base || textEdit.current?.layer.handle !== layer.handle) return;
+            setTyping({ base, w: Math.round(base.box.w), h: Math.round(base.box.h), shownT: base.t });
+            /* the picture fits its box as each word is typed, in the same step (no frame drawn with the old box) */
+            void ask('textFit', { fit: {
+              w0: Math.round(base.box.w), h0: Math.round(base.box.h), x0: base.t.x, y0: base.t.y, s: base.t.scaleY, r: base.t.rotate,
+              font: base.font, hug: base.oneLine, maxW: Math.round(stage.w / base.t.scaleY), align: base.align,
+            } });
           });
         }
         return;
@@ -1247,7 +1275,11 @@ function FilmStageSelectImpl({
   /* the selection changed, or the layer went: what was typed is committed (like a click elsewhere); not a box just
      opened on the new selection (a double-click selects and types at once) */
   React.useEffect(() => () => {
-    if (textEdit.current && textEdit.current.element.loc !== pickedRef.current?.element?.loc) finishTextEditRef.current(true);
+    const now = pickedRef.current?.element;
+    const edit = textEdit.current;
+    /* a line of words typed in is held as its whole clip meanwhile: that is not another selection */
+    const own = edit && now && (now.loc === edit.element.loc || (now.isMgOuter && now.clipLoc === edit.element.clipLoc));
+    if (edit && !own) finishTextEditRef.current(true);
   }, [heldLoc]);
 
   /* ── the keyboard (the window's, and the picture's when it has focus: the film passes those on) ── */
@@ -1891,18 +1923,23 @@ function FilmStageSelectImpl({
     const size = textSizeOf(clipLoc);
     if (!el?.clipId || !el.mgBox || !el.transform || !size || !isTextClipId(el.clipId)) return null;
     const m = await ask<{ font: number; nw?: number }>('measure', { clip: el.clipId, at: '.t', natural: true });
+    const one = await ask<{ nw?: number }>('measure', { clip: el.clipId, at: '.box', natural: true });
     if (!m?.font || m.nw == null) return null;
+    if (one?.nw != null) m.nw = one.nw;
     const w0 = el.mgBox.w;
     const lines = Math.round((el.mgBox.h - 2 * TEXT_ROOM * m.font) / (1.15 * m.font));
     const hug = m.nw + 2 * (TEXT_ROOM * m.font + 0.04 * m.nw);
     const widest = stage.w / el.transform.scaleY;
     const hugs = w0 >= widest - 2 || (lines <= 1 && w0 <= hug + Math.max(4, 0.02 * w0));
-    return { clipLoc, clipId: el.clipId, box: el.mgBox, t: el.transform, font: m.font, oneLine: hugs };
+    const root = (size.overrides ?? []).find((o) => (o as { at?: string; n?: number }).at === ':root' && (o as { n?: number }).n === undefined) as { style?: Record<string, string> } | undefined;
+    return { clipLoc, clipId: el.clipId, box: el.mgBox, t: el.transform, font: m.font, oneLine: hugs, align: root?.style?.['--align'] ?? 'center' };
   };
   /** At `w` × `h` (its page's size), its middle where it was: its box, the transform its frame shows, its size in vh. */
   const textAt = (b: TextFitBase, w: number, h: number) => {
     const s = b.t.scaleY;
-    const x = b.t.x - ((w - b.box.w) * s) / 2;
+    /* grown from its side as it is aligned (stage.js fitTyped alike): left keeps its left edge, right its right */
+    const grow = b.align === 'left' || b.align === 'start' ? 0 : b.align === 'right' || b.align === 'end' ? 1 : 0.5;
+    const x = b.t.x - (w - b.box.w) * s * grow;
     const y = b.t.y - ((h - b.box.h) * s) / 2;
     return {
       box: compactBox({ ...b.t, scaleX: s, x, y }, { ...b.box, w, h }),
@@ -1916,7 +1953,7 @@ function FilmStageSelectImpl({
    * the size it is shown at now. Its `--size` is set on the page itself (`root`), so words being typed stay.
    */
   const fitTextNow = async (b: TextFitBase, from: { w: number; h: number }) => {
-    const n = await ask<{ nw?: number }>('measure', { clip: b.clipId, at: '.t', natural: true });
+    const n = await ask<{ nw?: number }>('measure', { clip: b.clipId, at: '.box', natural: true });
     if (n?.nw == null) return null;
     const room = 2 * (TEXT_ROOM * b.font + 0.04 * n.nw);
     const w = b.oneLine ? Math.max(1, Math.min(Math.round(stage.w / b.t.scaleY), Math.round(n.nw + room))) : Math.round(b.box.w);
@@ -2990,6 +3027,33 @@ function FilmStageSelectImpl({
           hit: { x: p.x, y: p.y },
         });
         return;
+      }
+      /* a sticker or a line of words of the library (one thing: hitOf) under the press, not in hand yet: taken in hand
+         and moved at once, as on the timeline (no first click to pick it); a click on it is still a click. Anything
+         else under a press draws a marquee, so a press on a picture that fills the frame does not move it */
+      const under = hoverRef.current?.clip;
+      const underLoc = under && !e.shiftKey && onEditClip && isWholeClipId(under) ? clipLocOf(docRef.current, under) : undefined;
+      const underInfo = underLoc && !lockedClip(underLoc) && (!outer?.isMgOuter || outer.clipLoc !== underLoc) ? infoOf(underLoc) : null;
+      if (underLoc && underInfo?.box && insideFrame(visibleFrame(underInfo.t, underInfo.box, underInfo.crop), stagePt.x, stagePt.y)) {
+        const hit = describeClip(underInfo, stage);
+        const el = hit.element;
+        if (el?.mgBox && el.transform && el.clipId) {
+          setHover(null);
+          commitHit(hit);
+          startGesture({
+            kind: 'move',
+            stretchable: isTextClipId(el.clipId),
+            pendingClick: true,
+            start: stagePt,
+            origin: el.transform,
+            box: el.mgBox,
+            crop: underInfo.crop,
+            clipLoc: underLoc,
+            clipId: el.clipId,
+            hit: { x: p.x, y: p.y },
+          });
+          return;
+        }
       }
       /* several clips selected: a press on one of them drags them all (Shift: a marquee
          that adds to them instead) */

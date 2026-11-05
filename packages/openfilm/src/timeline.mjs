@@ -1216,6 +1216,17 @@ async function drawClip(c, t, live, play, turn, coming, going) {
   if (!live) await mediaShown(c.win.document);
   c.drawn = true;
   override(c, c.preview ?? c.overrides);
+  held(c, local);
+}
+
+/**
+ * A page's animations held at its own second `local` again, after its overrides were put on: an override that names
+ * another animation (a line of words' way in) makes a new one, which would otherwise play on by itself while the film
+ * stands still.
+ */
+function held(c, local) {
+  c.local = local;
+  c.win?.filmHost?.settle?.(local);
 }
 
 /* ── caption tracks (SPEC §1 Captions): a track's <track>, its WebVTT cues drawn over the tracks below it ── */
@@ -1540,6 +1551,7 @@ async function cue(c, row, track, t, fresh) {
     c.win.filmHost?.settle?.(local);
     c.drawn = true;
     override(c, c.overrides);
+    held(c, local);
   } finally { cueing.delete(c); }
 }
 
@@ -1673,7 +1685,9 @@ window.__filmEditor = {
     if (!c) return;
     restore(c);
     c.preview = overrides ?? undefined;
-    if (c.drawn) override(c, c.preview ?? c.overrides);
+    if (!c.drawn) return;
+    override(c, c.preview ?? c.overrides);
+    if (c.local != null) held(c, c.local);
   },
   /** What is on top under the stage point (x, y) now: an element of a page, or a clip. */
   pick(x, y) {

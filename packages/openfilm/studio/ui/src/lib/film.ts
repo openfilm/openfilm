@@ -15,6 +15,11 @@ export const FILM_SPEED_MAX = SPEED_MAX;
 export const FILM_DEFAULT_STAGE = DEFAULT_STAGE;
 
 export const filmSrcIsStill: (src: string) => boolean = isStill;
+/**
+ * A thing of OpenFilm's library taken into the project (`saved/openfilm/…`: a sticker, a text, an effect): a page with
+ * no source of its own to trim into. As a still's, its left edge changes its length (its way in stays at its start).
+ */
+export const filmSrcIsLibrary = (src: string | undefined): boolean => Boolean(src?.split('#')[0]?.startsWith('saved/openfilm/'));
 export const filmSrcIsPage: (src: string) => boolean = isPage;
 /** What a clip is, as film.html says it (a page, a video, a still, a sound). */
 export const filmSrcKind = clipKind;
