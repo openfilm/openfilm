@@ -1519,18 +1519,18 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const dropAssetRef = React.useRef(dropAsset);
   dropAssetRef.current = dropAsset;
   /**
-   * A media file put on the timeline without a drag (lib/media-place): the media pane's "+" and Enter (in the
-   * playhead on the targeted track, else at the end of the lowest picture track), the source viewer's
-   * `,` and `.` (insert or overwrite the part marked, at the playhead; the playhead then goes to its end).
+   * A media file put on the timeline without a drag (lib/media-place): the media pane's "+" and Enter and the library's
+   * (at the playhead, which stays where it is), the source viewer's `,` and `.` (insert or overwrite the part marked, at
+   * the playhead; the playhead then goes to its end: `follow`); a cut of the canvas, at the end of the film.
    */
-  const addMedia = React.useCallback(async (file: WorkspaceResource, how: { mode?: EditMode; range?: SourceRange | null; atPlayhead?: boolean } = {}) => {
+  const addMedia = React.useCallback(async (file: WorkspaceResource, how: { mode?: EditMode; range?: SourceRange | null; atPlayhead?: boolean; follow?: boolean } = {}) => {
     const target = timelineCommands.current?.target() ?? null;
     const at = how.atPlayhead || target != null ? snapToFrame(timeRef.current) : 'end';
     const plan = placeMedia(editModel(), { file, range: how.range ?? null, target, at, ...(how.mode ? { mode: how.mode } : {}), ...switchesOf(readTimelinePrefs()), stage: stageRef.current });
     if ('error' in plan) { toast.show(plan.error === 'locked' ? t('timeline.trackLocked') : t('timeline.dropNotClip')); return false; }
     const failed = await edit(plan.ops, 'history.stepDrop');
     if (failed) { toast.show(failed); return false; }
-    if (how.atPlayhead) {
+    if (how.follow) {
       const end = plan.startMs + plan.durMs;
       pause();
       if (end <= player.current.duration * 1000 + 1) seek(end);
@@ -1553,7 +1553,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
    * the project first, then as a file of the project goes (`how`), or a clip as it was saved, at the playhead on the
    * targeted track; a group on new tracks at the top, from the playhead.
    */
-  const placeSaved = React.useCallback(async (file: WorkspaceResource, how: { mode?: EditMode; range?: SourceRange | null; atPlayhead?: boolean } = {}) => {
+  const placeSaved = React.useCallback(async (file: WorkspaceResource, how: { mode?: EditMode; range?: SourceRange | null; atPlayhead?: boolean; follow?: boolean } = {}) => {
     let taken: Awaited<ReturnType<typeof api.takeSaved>>;
     try { taken = await api.takeSaved(projectId, file.path); } catch (e) { toast.show(e instanceof Error ? e.message : String(e)); return; }
     if ('path' in taken) {
@@ -1575,8 +1575,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (failed) toast.show(failed);
   }, [projectId, editModel, edit, addMedia, t, toast]);
   const placeFromSource = React.useCallback((mode: EditMode, range: SourceRange | null) => {
-    if (pickedMedia && pickedSaved) void placeSaved(pickedMedia, { mode, range, atPlayhead: true });
-    else if (pickedMedia) void addMedia(pickedMedia, { mode, range, atPlayhead: true });
+    if (pickedMedia && pickedSaved) void placeSaved(pickedMedia, { mode, range, atPlayhead: true, follow: true });
+    else if (pickedMedia) void addMedia(pickedMedia, { mode, range, atPlayhead: true, follow: true });
   }, [addMedia, placeSaved, pickedMedia, pickedSaved]);
   /*
    * OpenFilm's library in the assets drawer (components/library/LibraryDrawer, lib/library). A click tries a thing in
@@ -2132,7 +2132,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       links={false}
       scope="saved"
       onScope={inDrawer ? undefined : switchMedia}
-      onAdd={(file) => void placeSaved(file)}
+      onAdd={(file) => void placeSaved(file, { atPlayhead: true })}
     />
   ) : (
     <MediaPool
@@ -2162,7 +2162,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       {...(studioHost?.refer ? { fileRef: refOfFile, onRefer: studioHost.refer } : {})}
       reveal={revealMedia}
       litPath={chatPoint?.file ?? null}
-      onAdd={(file) => void addMedia(file)}
+      onAdd={(file) => void addMedia(file, { atPlayhead: true })}
     />
   ));
   /* the range marked on the timeline (⇧-drag on the ruler, I and O): Studio's, told to the app with the selection */
