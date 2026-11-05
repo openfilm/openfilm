@@ -7,12 +7,23 @@ import { addSkills } from '../../src/skills.mjs';
 import { skillsCommand } from '../../src/skills-cli.mjs';
 import { startStudio } from './server.mjs';
 
+/** Discover as last read (skill-catalog.mjs): the index naming one skill of OpenFilm's, kept at its commit. */
+function discover(/** @type {string} */ home) {
+  const entry = { name: 'replicate', repo: 'https://github.com/openfilm/skill-replicate', path: 'skills/replicate', version: '0.1.0', commit: 'a'.repeat(40) };
+  const folder = join(home, 'skill-catalog', 'openfilm', `replicate@${entry.commit}`);
+  mkdirSync(folder, { recursive: true });
+  writeFileSync(join(folder, 'SKILL.md'), '---\nname: replicate\ndescription: Remake a video\n---\nSteps.');
+  writeFileSync(join(folder, '.source.json'), JSON.stringify(entry));
+  writeFileSync(join(home, 'skill-catalog', 'index.json'), JSON.stringify({ read: new Date().toISOString(), entries: [entry] }));
+}
+
 test('a replacement skill cover has a new gallery URL and serves the chosen bytes', async (t) => {
   const root = mkdtempSync(join(tmpdir(), 'of-skill-gallery-'));
-  const variables = { OPENFILM_HOME: join(root, 'home'), OPENFILM_LIBRARY: join(root, 'library'), OPENFILM_SKILLS: join(root, 'mine'), OPENFILM_TRASH_DIR: join(root, 'trash') };
+  const variables = { OPENFILM_HOME: join(root, 'home'), OPENFILM_LIBRARY: join(root, 'library'), OPENFILM_SKILLS: join(root, 'mine'), OPENFILM_TRASH_DIR: join(root, 'trash'), OPENFILM_SHARED_HOME: join(root, 'home') };
   const previous = Object.fromEntries(Object.keys(variables).map((key) => [key, process.env[key]]));
   Object.assign(process.env, variables);
   mkdirSync(variables.OPENFILM_TRASH_DIR);
+  discover(variables.OPENFILM_SHARED_HOME);
   t.after(() => {
     for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
     rmSync(root, { recursive: true, force: true });
@@ -76,11 +87,11 @@ test('a replacement skill cover has a new gallery URL and serves the chosen byte
 
 test('skills: turned off and on, an official one installed and uninstalled, one of the person\'s removed to the trash', async (t) => {
   const root = mkdtempSync(join(tmpdir(), 'of-skill-off-'));
-  const variables = { OPENFILM_HOME: join(root, 'home'), OPENFILM_LIBRARY: join(root, 'library'), OPENFILM_SKILLS: join(root, 'mine'), OPENFILM_TRASH_DIR: join(root, 'trash') };
-  const previous = Object.fromEntries([...Object.keys(variables), 'OPENFILM_SHARED_HOME'].map((key) => [key, process.env[key]]));
+  const variables = { OPENFILM_HOME: join(root, 'home'), OPENFILM_LIBRARY: join(root, 'library'), OPENFILM_SKILLS: join(root, 'mine'), OPENFILM_TRASH_DIR: join(root, 'trash'), OPENFILM_SHARED_HOME: join(root, 'home') };
+  const previous = Object.fromEntries(Object.keys(variables).map((key) => [key, process.env[key]]));
   Object.assign(process.env, variables);
-  delete process.env.OPENFILM_SHARED_HOME;
   mkdirSync(variables.OPENFILM_TRASH_DIR);
+  discover(variables.OPENFILM_SHARED_HOME);
   t.after(() => {
     for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
     rmSync(root, { recursive: true, force: true });

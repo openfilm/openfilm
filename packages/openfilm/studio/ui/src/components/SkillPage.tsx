@@ -10,7 +10,7 @@
 import React from 'react';
 import {
   ArrowLeft, Copy, Film, Folder, GitBranch, Github, Layers, MessageSquarePlus, MonitorPlay, Music, PenLine,
-  PictureInPicture2, Plus, Presentation, Scissors, Shapes, Sparkles, Trash2, Wand2, type LucideIcon,
+  PictureInPicture2, Plus, Presentation, RefreshCw, Scissors, Shapes, Sparkles, Trash2, Wand2, type LucideIcon,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { sourcesApi, type SkillEntry } from '@/lib/project-sources';
@@ -61,9 +61,26 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
     patch((k) => { const { off: _was, ...rest } = k; return on ? rest : { ...rest, off: true }; });
     void sourcesApi.setSkillOn(skill.uid, on).catch(reload);
   };
+  /* installing downloads it (a few seconds): said while it does, and why when it cannot */
+  const [working, setWorking] = React.useState<'installing' | 'updating' | null>(null);
   const install = (on: boolean) => {
-    patch((k) => { const { off: _was, ...rest } = k; return { ...rest, installed: on }; });
-    void sourcesApi.setSkillInstalled(skill.uid, on).catch(reload);
+    if (!on) {
+      patch((k) => { const { off: _was, ...rest } = k; return { ...rest, installed: false }; });
+      void sourcesApi.setSkillInstalled(skill.uid, false).catch(reload);
+      return;
+    }
+    setWorking('installing');
+    setError(null);
+    void sourcesApi.setSkillInstalled(skill.uid, true).then(
+      () => { patch((k) => { const { off: _was, ...rest } = k; return { ...rest, installed: true }; }); reload(); },
+      (e) => setError(t('gallery.installFailed').replace('{why}', e instanceof Error ? e.message : String(e))),
+    ).finally(() => setWorking(null));
+  };
+  const update = () => {
+    setWorking('updating');
+    setError(null);
+    void sourcesApi.updateSkill(skill.uid).then(reload, (e) => setError(t('gallery.installFailed').replace('{why}', e instanceof Error ? e.message : String(e))))
+      .finally(() => setWorking(null));
   };
   /* an official one is only uninstalled (it stays in Discover); the person's own or a project's goes to the trash */
   const remove = () => {
@@ -120,6 +137,7 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
         {installed ? <SettingsSwitch checked={!skill.off} onChange={turn} label={t(skill.off ? 'gallery.turnOn' : 'gallery.turnOff').replace('{name}', words.title)} /> : null}
       </div>
       {skill.off ? <p className="mt-1.5 text-[12px] text-[var(--text-muted)]">{t('gallery.skillOff')}</p> : null}
+      {skill.retired ? <p className="mt-1.5 text-[12px] text-[var(--text-muted)]">{t('gallery.retired')}</p> : null}
       <div className="mt-2 flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
         <span>{t(group)}</span>
         {/* its uid, owner/name: how it is told apart, shared and searched */}
@@ -148,11 +166,16 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
             className="flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--primary)] text-[13px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:opacity-40"><MessageSquarePlus size={15} />{t('gallery.tryNow')}</button>
         ) : null}
         {/* OpenFilm's system skills are only turned off */}
+        {skill.update && installed ? (
+          <button type="button" onClick={update} disabled={working !== null}
+            className="flex h-9 w-full items-center justify-center gap-1.5 rounded-[10px] border border-[var(--border-strong)] text-[13px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)] disabled:opacity-50">
+            <RefreshCw size={14} />{working === 'updating' ? t('gallery.updating') : t('gallery.update').replace('{version}', skill.update.version)}</button>
+        ) : null}
         {skill.core ? null : !installed ? (
-          <button type="button" onClick={() => install(true)}
+          <button type="button" onClick={() => install(true)} disabled={working !== null}
             className={onTry
-              ? 'flex h-9 w-full items-center justify-center gap-1.5 rounded-[10px] border border-[var(--border-strong)] text-[13px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)]'
-              : 'flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--primary)] text-[13px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)]'}><Plus size={15} />{t('gallery.install')}</button>
+              ? 'flex h-9 w-full items-center justify-center gap-1.5 rounded-[10px] border border-[var(--border-strong)] text-[13px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)] disabled:opacity-50'
+              : 'flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--primary)] text-[13px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:opacity-50'}><Plus size={15} />{t(working === 'installing' ? 'gallery.installing' : 'gallery.install')}</button>
         ) : (
           <button type="button" onClick={() => { if (skill.source === 'official') install(false); else setRemoving(true); }}
             className="flex h-9 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--bg-field)] text-[13px] text-[var(--text-muted)] transition hover:bg-[color-mix(in_srgb,var(--err)_14%,var(--bg-field))] hover:text-[var(--err)]">

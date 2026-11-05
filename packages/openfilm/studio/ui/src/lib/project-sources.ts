@@ -59,8 +59,10 @@ export type SkillEntry = {
   repository?: string;
   /** the person's own: where it came from (a link, a folder), or made where it is */
   origin?: { from: 'link' | 'folder'; address: string } | { from: 'made' };
-  /** an official one: installed to be used (the person's own and a project's are installed already) */
+  /** one of Discover's: installed to be used (the person's own and a project's are installed already) */
   installed?: boolean;
+  /** an installed one of Discover's: a newer version there, or no longer there at all (it still works here) */
+  update?: { version: string; commit: string }; retired?: true;
   /** turned off: offered to no agent until it is turned on again */
   off?: true;
 };
@@ -92,9 +94,11 @@ async function call<T>(path: string, method = 'GET', json?: unknown): Promise<T>
 }
 
 /* what the galleries read last: shown at once when one opens, and asked for again behind it */
-const seen: { examples: Example[] | null; skills: Map<string, SkillEntry[]> } = { examples: null, skills: new Map() };
+const seen: { examples: Example[] | null; skills: Map<string, SkillEntry[]>; catalog: string | null } = { examples: null, skills: new Map(), catalog: null };
 /** The examples read last, or null. */
 export const seenExamples = (): Example[] | null => seen.examples;
+/** When Discover's index was last read (ISO time), as the skills read last say; null: never. */
+export const seenCatalog = (): string | null => seen.catalog;
 /** The skills read last for a project (else for no project: the official ones and the person's own), or null. */
 export const seenSkills = (projectId?: string | null): SkillEntry[] | null => seen.skills.get(projectId ?? '') ?? seen.skills.get('') ?? null;
 
@@ -125,8 +129,20 @@ export const sourcesApi = {
   exampleFolder: (id: string) => call<{ folder: string }>(`examples/${encodeURIComponent(id)}/folder`, 'POST').then((r) => r.folder),
   /** an example's canvas, the steps it was made with (null: it has none), fetched with its folder */
   exampleCanvas: (id: string) => call<{ canvas: unknown }>(`examples/${encodeURIComponent(id)}/canvas`).then((r) => r.canvas),
-  skills: (projectId?: string | null) => call<{ skills: SkillEntry[] }>(`skills${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`)
-    .then((r) => { seen.skills.set(projectId ?? '', r.skills); return r.skills; }, () => seenSkills(projectId) ?? []),
+  skills: (projectId?: string | null) => call<{ skills: SkillEntry[]; catalog?: { read: string } | null }>(`skills${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`)
+    .then((r) => { seen.skills.set(projectId ?? '', r.skills); seen.catalog = r.catalog?.read ?? null; return r.skills; }, () => seenSkills(projectId) ?? []),
+  /** Discover's index read again from GitHub (the skills it names fetched): → when, or throws when it cannot be read */
+  readDiscover: async (): Promise<string> => {
+    const r = await call<{ catalog: { read: string } }>('skills/catalog', 'POST');
+    seen.catalog = r.catalog.read;
+    window.dispatchEvent(new Event(SKILLS_CHANGED));
+    return r.catalog.read;
+  },
+  /** an installed skill updated to the version Discover has; whoever lists skills reads them again */
+  updateSkill: async (uid: string): Promise<void> => {
+    await call<object>(`skills/${encodeURIComponent(uid)}/update`, 'POST');
+    window.dispatchEvent(new Event(SKILLS_CHANGED));
+  },
   setSkillCover: async (uid: string, cover: string | null, projectId?: string | null): Promise<string | null> => {
     const path = `skills/${encodeURIComponent(uid)}/cover${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`;
     const result = await call<{ cover: string | null }>(path, cover === null ? 'DELETE' : 'PUT', cover === null ? undefined : { cover });
@@ -143,7 +159,7 @@ export const sourcesApi = {
     }));
     window.dispatchEvent(new Event(SKILLS_CHANGED));
   },
-  /** an official skill installed (it starts on) or uninstalled; whoever lists skills reads them again */
+  /** one of Discover's installed (downloaded, at the version it shows) or uninstalled; whoever lists skills reads them again */
   setSkillInstalled: async (uid: string, installed: boolean): Promise<void> => {
     await call<{ installed: boolean }>(`skills/${encodeURIComponent(uid)}/installed`, 'PUT', { installed });
     window.dispatchEvent(new Event(SKILLS_CHANGED));

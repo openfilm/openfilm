@@ -44,7 +44,6 @@
     "TRADEMARK.md",
     "bin",
     "manual",
-    "skills",
     "library",
     "!library/voices",
     "!library/audio",

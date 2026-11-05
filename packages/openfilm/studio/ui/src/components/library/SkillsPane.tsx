@@ -17,13 +17,18 @@ import { ChevronDown, Compass, FolderDown, Plus, Star } from 'lucide-react';
 import { useT } from '@/i18n';
 import { studioHost, type HostAgentId } from '@/lib/host';
 import { toggleFavorite, useLibraryFavorites } from '@/lib/library';
-import { seenSkills, sourcesApi, watchSkills, type SkillEntry } from '@/lib/project-sources';
+import { seenCatalog, seenSkills, sourcesApi, watchSkills, type SkillEntry } from '@/lib/project-sources';
 import { byOrder, SkillCover, SkillMark, SkillPage, useSkillWords } from '../SkillPage';
 import { SettingsSwitch } from '../settings/ui';
 import { ADD_HOVER, PANEL_ROUND, ROUND } from './AudioList';
 
-/** An official one not installed is in the catalog only; the person's own and a project's are installed already. */
+/** One of Discover's not installed is there only; the person's own and a project's are installed already. */
 const installedOf = (skill: SkillEntry) => skill.installed !== false;
+
+/* how long Discover's index is fresh enough not to be read again as it opens (the server's FRESH_MS) */
+const FRESH_MS = 10 * 60 * 1000;
+/* Discover read from GitHub once while Studio is open, and again when stale: what it came to */
+let discoverRead: { at: number; failed: boolean } | null = null;
 
 export type SkillsLine = 'favorites' | 'installed' | 'discover';
 
@@ -56,6 +61,20 @@ export function SkillsPane({ line, query, projectId, opened, onOpen, onDiscover 
     const stop = watchSkills(projectId, (list) => { if (live) setSkills(list); });
     return () => { live = false; stop(); };
   }, [projectId]);
+
+  /* Discover: its index read from GitHub as it opens, unless read a little while ago; the skills read again then */
+  const [discover, setDiscover] = React.useState<'reading' | 'read' | 'failed'>(() => (discoverRead?.failed ? 'failed' : 'read'));
+  React.useEffect(() => {
+    if (line !== 'discover') return;
+    if (discoverRead && Date.now() - discoverRead.at < FRESH_MS) { setDiscover(discoverRead.failed ? 'failed' : 'read'); return; }
+    let live = true;
+    setDiscover('reading');
+    void sourcesApi.readDiscover().then(
+      () => { discoverRead = { at: Date.now(), failed: false }; if (live) setDiscover('read'); },
+      () => { discoverRead = { at: Date.now(), failed: true }; if (live) setDiscover('failed'); },
+    );
+    return () => { live = false; };
+  }, [line]);
 
   const installed = line === 'installed';
   const favorites = useLibraryFavorites();
@@ -95,14 +114,26 @@ export function SkillsPane({ line, query, projectId, opened, onOpen, onDiscover 
       {...(studioHost?.useSkill ? { onTry: tryIt } : {})} />;
   }
   if (line === 'discover') {
-    return toInstall.length ? (
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[calc(var(--drawer-under,0px)+12px)] pt-0.5">
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-x-2.5 gap-y-3.5">{toInstall.map(tileOf)}</div>
+    /* what Discover could not read now: the skills it had when it last could, said with when; none ever read */
+    const read = seenCatalog();
+    const note = discover === 'failed'
+      ? (read ? t('assetDrawer.discoverOffline').replace('{when}', new Date(read).toLocaleString()) : t('assetDrawer.discoverNever'))
+      : discover === 'reading' && !read ? t('assetDrawer.discoverReading') : null;
+    const anyThere = skills.some((k) => k.source === 'official' && !k.core);
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        {note ? <p role="status" className="shrink-0 px-3 pb-2 text-[12px] leading-[18px] text-[var(--text-muted)]">{note}</p> : null}
+        {toInstall.length ? (
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[calc(var(--drawer-under,0px)+12px)] pt-0.5">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-x-2.5 gap-y-3.5">{toInstall.map(tileOf)}</div>
+          </div>
+        ) : note && !read ? null : <Empty text={t(q ? 'assetDrawer.noSkillsFound' : anyThere ? 'assetDrawer.allSkillsInstalled' : 'assetDrawer.discoverNone')} />}
       </div>
-    ) : <Empty text={t(q ? 'assetDrawer.noSkillsFound' : 'assetDrawer.allSkillsInstalled')} />;
+    );
   }
   const lineOf = (skill: SkillEntry) => (
-    <SkillLine key={skill.uid} mark={<SkillMark skill={skill} />} title={words(skill).title} under={words(skill).summary}
+    <SkillLine key={skill.uid} mark={<SkillMark skill={skill} />} title={words(skill).title}
+      under={skill.update ? t('gallery.updateOut').replace('{version}', skill.update.version) : skill.retired ? `${t('gallery.retiredMark')} · ${words(skill).summary}` : words(skill).summary}
       tip={words(skill).summary} on={!skill.off} onOpen={() => onOpen(skill.uid)} kept={starred(skill)} onStar={() => toggleFavorite(starOf(skill))}
       label={t(skill.off ? 'gallery.turnOn' : 'gallery.turnOff').replace('{name}', words(skill).title)} onChange={(on) => turn(skill, on)} />
   );

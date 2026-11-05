@@ -13,7 +13,9 @@
  *              elsewhere; OPENFILM_SKILLS to name another): the person's own, and those they added. In sight beside
  *              their Projects and Exports, backed up with them, and never in Studio's own folder, which a reset clears.
  *              Skills kept in Studio's home before (~/.openfilm/skills) are moved there (migrateMySkills).
- *   official   `skills/` in this package, released with OpenFilm
+ *   official   `skills-installed/` in the shared home (~/.openfilm): those installed from the openfilm/skills index
+ *              (studio/server/skill-catalog.mjs), each the commit it was installed at, with where it came from in its
+ *              `.source.json`. Every OpenFilm on this computer has the same ones.
  *
  * OpenFilm's own (coreSkills: `manual/` in this package) are how a film is made, its media and its canvas, which the
  * manual names: in every agent's hands unless the person turns one off (skillsOff), never installed or removed, so the
@@ -33,7 +35,7 @@ import { randomUUID } from 'node:crypto';
 import { moveToTrash } from '../studio/server/trash.mjs';
 import { pictureType } from '../studio/server/cover.mjs';
 import { parseRepoUrl } from '../studio/server/fetch-repo.mjs';
-import { libraryDefault, setSharedPref, sharedPref } from './locations.mjs';
+import { libraryDefault, setSharedPref, sharedHome, sharedPref } from './locations.mjs';
 
 const mkdirSyncSafe = (/** @type {string} */ dir) => mkdirSync(dir, { recursive: true });
 /** a folder moved to another place: renamed, else (another disk) copied and then removed */
@@ -53,10 +55,24 @@ export const SKILL_SOURCES = /** @type {const} */ (['project', 'mine', 'official
 /** @typedef {typeof SKILL_SOURCES[number]} SkillSource */
 
 /**
- * The official skills, released with this package (a copy of openfilm/skills: `pnpm skills:sync`).
- * OPENFILM_OFFICIAL_SKILLS names another folder of them: a checkout's skills/, while they are being changed.
+ * The skills installed from the openfilm/skills index, each in a folder of its own (studio/server/skill-catalog.mjs).
+ * OPENFILM_OFFICIAL_SKILLS names another folder of them.
  */
-export const officialSkillsDir = () => process.env.OPENFILM_OFFICIAL_SKILLS || join(dirname(fileURLToPath(import.meta.url)), '..', 'skills');
+export const officialSkillsDir = () => process.env.OPENFILM_OFFICIAL_SKILLS || join(sharedHome(), 'skills-installed');
+/** Where an installed skill came from, kept beside its files: its repository, its folder there, the commit and version. */
+export const SOURCE_FILE = '.source.json';
+/**
+ * Where an installed skill (or one in the catalog) came from, or null. @param {string} folder
+ * @returns {{ repo: string, path: string, commit: string, version: string | null } | null}
+ */
+export function skillSource(folder) {
+  try {
+    const raw = JSON.parse(readFileSync(join(folder, SOURCE_FILE), 'utf8'));
+    if (typeof raw?.repo !== 'string' || !/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+$/.test(raw.repo)) return null;
+    if (typeof raw.commit !== 'string' || !/^[0-9a-f]{40}$/.test(raw.commit) || typeof raw.path !== 'string') return null;
+    return { repo: raw.repo, path: raw.path, commit: raw.commit, version: typeof raw.version === 'string' ? raw.version : null };
+  } catch { return null; }
+}
 /** OpenFilm's own skills, released with this package beside the manual. */
 export const coreSkillsDir = () => join(dirname(fileURLToPath(import.meta.url)), '..', 'manual');
 /**
@@ -119,7 +135,11 @@ const uidPart = (name) => name.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replac
  * the person's came from
  */
 export function skillOwner(source, origin) {
-  if (source === 'official') return 'openfilm';
+  /* an installed one is its repository's account's (OpenFilm's own, openfilm); OpenFilm's own skills, openfilm */
+  if (source === 'official') {
+    const account = origin?.address ? /^https:\/\/github\.com\/([\w.-]+)\//.exec(`${origin.address}/`)?.[1] : null;
+    return account ? uidPart(account) : 'openfilm';
+  }
   if (source === 'project') return 'project';
   if (origin?.from === 'link') {
     try {
@@ -230,7 +250,8 @@ export function readSkill(folder, source) {
   const extra = openfilmJson(folder);
   if (!extra.version && fields.version && VERSION.test(fields.version.trim())) extra.version = fields.version.trim();
   /* one of the person's is whose its origin says (kept beside it, skillOrigins) */
-  const origin = source === 'mine' ? skillOrigins(dirname(folder))[basename(folder)] : undefined;
+  const from = source === 'official' ? skillSource(folder) : null;
+  const origin = source === 'mine' ? skillOrigins(dirname(folder))[basename(folder)] : from ? { from: /** @type {const} */ ('link'), address: from.repo } : undefined;
   return { uid: skillUid(source, name, origin), name, description: (fields.description ?? '').trim(), folder, source, file, scripts: scriptsIn(folder), ...extra };
 }
 
@@ -290,57 +311,35 @@ export function listSkills({ project = null, mine = mySkillsDir(), official = of
 }
 
 /**
- * Which skills agents get. The official ones are a catalog: one is installed to be used (`skillsInstalled`); the
- * person's own and a project's are theirs already. Any of them can be turned off (`skillsOff`) and stays where it is,
- * offered to no agent until it is turned on again. Both are kept in the shared prefs.json, so every OpenFilm on this
+ * Which skills agents get: the person's own, a project's and those installed, all of them unless turned off
+ * (`skillsOff`), offered to no agent until turned on again. Kept in the shared prefs.json, so every OpenFilm on this
  * computer agrees; `home`: the Studio home that holds it.
  */
 const namesIn = (/** @type {unknown} */ value) => (Array.isArray(value) ? [...new Set(value.filter((n) => typeof n === 'string' && (SKILL_UID.test(n) || SKILL_NAME.test(n))))].sort() : []);
 
 /**
- * Whether a list of prefs.json holds a skill: by its uid, or by its name alone as kept before uids (an official one's
- * installed, any of that name off). @param {Set<string>} kept @param {{ uid: string, name: string }} skill
+ * Whether a list of prefs.json holds a skill: by its uid, or by its name alone as kept before uids.
+ * @param {Set<string>} kept @param {{ uid: string, name: string }} skill
  */
 export const keeps = (kept, skill) => kept.has(skill.uid) || kept.has(skill.name);
-
-/** The official skills the person installed, by uid (by name, as kept before). @param {string} [home] @returns {string[]} */
-export function skillsInstalled(home) {
-  return namesIn(sharedPref('skillsInstalled', home));
-}
 
 /** The skills the person turned off, by uid (by name, as kept before). @param {string} [home] @returns {string[]} */
 export function skillsOff(home) {
   return namesIn(sharedPref('skillsOff', home));
 }
 
-/** Keep a skill in a list of prefs.json by its uid, or take it out (its name as kept before too). @param {'skillsInstalled' | 'skillsOff'} key @param {string} uid @param {boolean} present @param {string} [home] */
-function keepUid(key, uid, present, home) {
-  if (!SKILL_UID.test(uid)) throw new Error(`"${uid}" is not a skill's uid (owner/name).`);
-  const names = new Set(namesIn(sharedPref(key, home)));
-  if (present) names.add(uid);
-  else { names.delete(uid); names.delete(uid.split('/')[1]); }
-  setSharedPref(key, [...names].sort(), home);
-}
-
 /** Turn a skill on or off, by uid. @param {string} uid @param {boolean} on @param {string} [home] */
 export function setSkillOn(uid, on, home) {
-  keepUid('skillsOff', uid, !on, home);
+  if (!SKILL_UID.test(uid)) throw new Error(`"${uid}" is not a skill's uid (owner/name).`);
+  const names = new Set(namesIn(sharedPref('skillsOff', home)));
+  if (on) { names.delete(uid); names.delete(uid.split('/')[1]); } else names.add(uid);
+  setSharedPref('skillsOff', [...names].sort(), home);
 }
 
-/** Install an official skill (it starts on), or uninstall it, by uid. @param {string} uid @param {boolean} installed @param {string} [home] */
-export function setSkillInstalled(uid, installed, home) {
-  keepUid('skillsInstalled', uid, installed, home);
-  if (installed) keepUid('skillsOff', uid, false, home);
-}
-
-/**
- * The skills agents get for a project: listSkills's, but the official ones not installed and any turned off.
- * @param {Parameters<typeof listSkills>[0] & { home?: string }} [where]
- */
+/** The skills agents get for a project: listSkills's, less any turned off. @param {Parameters<typeof listSkills>[0] & { home?: string }} [where] */
 export function usableSkills({ home, ...where } = {}) {
-  const installed = new Set(skillsInstalled(home));
   const off = new Set(skillsOff(home));
-  return listSkills(where).filter((s) => (s.source !== 'official' || keeps(installed, s)) && !keeps(off, s));
+  return listSkills(where).filter((s) => !keeps(off, s));
 }
 
 /** OpenFilm's own skills by name, in the order agents are given them: how a film is made, its media, its canvas. */

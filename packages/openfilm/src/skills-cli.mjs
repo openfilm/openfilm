@@ -21,13 +21,13 @@ export function projectAround(from) {
   return null;
 }
 
-const SOURCE = { project: 'this project', mine: 'yours', official: 'official' };
+const SOURCE = { project: 'this project', mine: 'yours', official: 'installed' };
 /** a path as the person reads it: from the current folder when it is under it */
 const shown = (/** @type {string} */ p) => { const r = relative(process.cwd(), p); return r && !r.startsWith('..') ? r : p; };
 
 /**
  * `openfilm skills`: the skills the project around here (if any) can be made with: its own, the person's and the
- * official ones they installed, none they turned off (usableSkills).
+ * ones installed from Discover, none they turned off (usableSkills).
  * @param {string} run
  */
 export function skillsCommand(run, { cwd = process.cwd() } = {}) {
@@ -35,7 +35,7 @@ export function skillsCommand(run, { cwd = process.cwd() } = {}) {
   const project = projectAround(cwd);
   const skills = usableSkills({ project });
   if (!skills.length) {
-    return { ok: true, lines: [`No skills installed. Install OpenFilm's in Studio's Skills, or \`${run} skill add <GitHub address or folder>\` adds one to yours (${shown(mySkillsDir())}).`] };
+    return { ok: true, lines: [`No skills installed. Install one from Discover in Studio's Skills, or \`${run} skill add <GitHub address or folder>\` adds one to yours (${shown(mySkillsDir())}).`] };
   }
   /* each by its uid, owner/name: two of the same name are told apart */
   const width = Math.min(36, Math.max(...skills.map((s) => s.uid.length)));

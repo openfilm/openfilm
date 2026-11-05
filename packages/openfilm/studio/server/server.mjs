@@ -59,7 +59,8 @@ import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listenLocal } from '../../src/host.mjs';
 import { captionTrackRoutes } from './caption-tracks.mjs';
 import { moveToTrash } from './trash.mjs';
-import { coreSkills, keeps, listSkills, offeredSkills, removeSkill, setSkillCover, setSkillInstalled, setSkillOn, skillOrigins, skillsInstalled, skillsOff } from '../../src/skills.mjs';
+import { coreSkills, keeps, listSkills, offeredSkills, removeSkill, setSkillCover, setSkillOn, skillOrigins, skillsOff } from '../../src/skills.mjs';
+import { catalogSkills, installSkill, installedStanding, readCatalog, refreshCatalog, uninstallSkill } from './skill-catalog.mjs';
 import { freshProviders, providersRoute } from './providers/index.mjs';
 import { localModelsRoute } from './local-models.mjs';
 import { captionRoutes, writeSubtitleStyle } from './captions.mjs';
@@ -504,19 +505,27 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       return sendMedia(req, res, inside(folder, parts.slice(3).map(decodeURIComponent).join('/')), { keep: true });
     }
     /* the skills a project can be made with (../../src/skills.mjs): OpenFilm's own first (`core`, which can only be
-       turned off), then the project's, the person's, the official ones. Each is told by its uid (owner/name) here and
-       in every route below, so two of the same name are both there; `as` is the name agents are given it by */
+       turned off), then the project's, the person's, those installed, then Discover's not installed (skill-catalog.mjs,
+       `installed: false`). Each is told by its uid (owner/name) here and in every route below, so two of the same name
+       are both there; `as` is the name agents are given it by. An installed one says when Discover has a newer commit
+       of it (`update`) or no longer has it (`retired`); `catalog`: when Discover's index was last read */
     if (parts[0] === 'skills' && parts.length === 1 && req.method === 'GET') {
       const id = url.searchParams.get('project');
       const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) : null;
       const skills = listSkills({ project: project?.path ?? null });
+      const catalog = readCatalog();
+      const standing = installedStanding(catalog);
+      const had = new Set(skills.map((k) => k.uid));
+      const offered = catalogSkills(catalog).filter((k) => !had.has(k.uid));
       const origins = skillOrigins();
       const off = new Set(skillsOff());
-      const installed = new Set(skillsInstalled());
       const agentsCall = new Map(offeredSkills({ project: project?.path ?? null }).named.map((k) => [k.uid, k.as]));
       const media = (/** @type {string} */ uid, /** @type {'cover' | 'preview'} */ which) => `/api/skills/${encodeURIComponent(uid)}/${which}${id ? `?project=${encodeURIComponent(id)}` : ''}`;
+      const all = [...coreSkills().map((k) => ({ ...k, core: true, installed: true })), ...skills.map((k) => ({ ...k, core: false, installed: true })),
+        ...offered.map((k) => ({ ...k, core: false, installed: false }))];
       return json(res, 200, {
-        skills: [...coreSkills().map((k) => ({ ...k, core: true })), ...skills.map((k) => ({ ...k, core: false }))].map((k) => ({
+        catalog: catalog ? { read: catalog.read } : null,
+        skills: all.map((k) => ({
           ...(k.core ? { core: true } : {}), uid: k.uid, name: k.name, description: k.description, source: k.source, scripts: k.scripts.length,
           ...(agentsCall.has(k.uid) ? { as: agentsCall.get(k.uid) } : {}),
           ...(k.shown ? { shown: k.shown } : {}), ...(k.version ? { version: k.version } : {}), ...(k.kind ? { kind: k.kind } : {}),
@@ -524,27 +533,47 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
           ...(k.cover ? { cover: `${media(k.uid, 'cover')}${id ? '&' : '?'}v=${encodeURIComponent(k.cover)}` } : {}), ...(k.preview ? { preview: media(k.uid, 'preview') } : {}),
           /* the person's own: where it came from (none kept: made where it is) */
           ...(k.source === 'mine' ? { origin: origins[basename(k.folder)] ?? { from: 'made' } } : {}),
-          /* an official one is installed to be used; the person's own and a project's are theirs already */
-          installed: k.core || k.source !== 'official' || keeps(installed, k),
+          /* in Discover only, installed to be used; the person's own and a project's are theirs already */
+          installed: k.installed,
+          ...(k.installed && k.source === 'official' && !k.core ? standing.get(k.uid) ?? {} : {}),
           /* turned off: offered to no agent until it is turned on again */
-          ...(keeps(off, k) ? { off: true } : {}),
+          ...(k.installed && keeps(off, k) ? { off: true } : {}),
         })),
       });
+    }
+    /* Discover's index read again (POST), the skills it names fetched at their commits: → { catalog }, or 502 saying
+       why, what was read before staying */
+    if (parts[0] === 'skills' && parts.length === 2 && parts[1] === 'catalog' && req.method === 'POST') {
+      try {
+        const catalog = await refreshCatalog();
+        return json(res, 200, { catalog: { read: catalog.read } });
+      } catch (e) {
+        throw new HttpError(502, `Discover could not be read now: ${e instanceof Error ? e.message : String(e)}`);
+      }
     }
     /* a skill of the project shown (`?project=`), or the library's, by its uid; OpenFilm's own with `core` */
     const skillAt = async (/** @type {string} */ uid, { core = false } = {}) => {
       const id = url.searchParams.get('project');
       const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) : null;
-      return [...(core ? coreSkills() : []), ...listSkills({ project: project?.path ?? null })].find((k) => k.uid === uid) ?? null;
+      return [...(core ? coreSkills() : []), ...listSkills({ project: project?.path ?? null })].find((k) => k.uid === uid)
+        ?? (core ? catalogSkills().find((k) => k.uid === uid) ?? null : null);
     };
-    /* an official skill installed or uninstalled (PUT { installed }) */
+    /* one of Discover's installed, at the commit it shows, or uninstalled to the trash (PUT { installed }); updated to
+       Discover's commit (POST `update`), the old one to the trash */
     if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'installed' && req.method === 'PUT') {
       const installed = (await readJson(req))?.installed;
       if (typeof installed !== 'boolean') throw new HttpError(400, 'installed: true or false');
-      const skill = await skillAt(decodeURIComponent(parts[1]));
-      if (!skill || skill.source !== 'official') throw new HttpError(404, 'no such official skill');
-      setSkillInstalled(skill.uid, installed);
+      const uid = decodeURIComponent(parts[1]);
+      if (installed) {
+        try { await installSkill(uid); } catch (e) { throw new HttpError(/** @type {any} */ (e).status ?? 500, e instanceof Error ? e.message : String(e)); }
+      } else if (!(await uninstallSkill(uid))) throw new HttpError(404, 'no such installed skill');
       return json(res, 200, { installed });
+    }
+    if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'update' && req.method === 'POST') {
+      const uid = decodeURIComponent(parts[1]);
+      if (!installedStanding().get(uid)?.update) throw new HttpError(404, 'no newer commit of that skill in Discover');
+      const skill = await installSkill(uid);
+      return json(res, 200, { version: skill.version ?? null });
     }
     /* one of the person's own skills, or a project's, moved to the trash (an official one is uninstalled instead) */
     if (parts[0] === 'skills' && parts.length === 2 && req.method === 'DELETE') {
@@ -566,7 +595,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     /* Only the person's own skill can be changed; a project override must not edit a hidden personal skill. */
     if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'cover' && (req.method === 'PUT' || req.method === 'DELETE')) {
-      const skill = await skillAt(decodeURIComponent(parts[1]));
+      const skill = await skillAt(decodeURIComponent(parts[1]), { core: true });
       if (!skill) throw new HttpError(404, 'no such skill');
       if (skill.source !== 'mine') throw new HttpError(403, 'Only your own skills can have their cover changed.');
       const cover = req.method === 'DELETE' ? null : (await readJson(req, 7 << 20))?.cover;

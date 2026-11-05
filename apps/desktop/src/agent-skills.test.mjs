@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { codexServers, mergeConfig, ownMcpServers, ownSkills, sessionSkills, skillStore } from './agent-skills.mjs';
 
-/* which official skills are installed is read from Studio's prefs.json: a scratch home, never the person's */
+/* which skills are off is read from Studio's prefs.json: a scratch home, never the person's */
 process.env.OPENFILM_HOME = mkdtempSync(join(tmpdir(), 'of-agent-skills-home-'));
 delete process.env.OPENFILM_SHARED_HOME;
 
@@ -14,6 +14,10 @@ const skill = (dir, name, description = `${name} skill`) => {
   writeFileSync(join(dir, 'SKILL.md'), `---\nname: ${name}\ndescription: ${description}\n---\n\nBody.\n`);
   return dir;
 };
+
+/* the skills installed from Discover: one */
+process.env.OPENFILM_OFFICIAL_SKILLS = mkdtempSync(join(tmpdir(), 'of-agent-skills-installed-'));
+skill(join(process.env.OPENFILM_OFFICIAL_SKILLS, 'openfilm-replicate'), 'replicate');
 
 /** A person's home with skills of their own beside their agents' makers', and a project with skills of its own. */
 function world() {
@@ -94,13 +98,11 @@ test("Codex: each of the person's own not let in turned off by its file, OpenFil
 test("OpenCode: every skill denied but its own, OpenFilm's and those let in; Pi: OpenFilm's only; the others unfiltered", async () => {
   const w = world();
   mkdirSync(w.openfilmHome, { recursive: true });
-  writeFileSync(join(w.openfilmHome, 'prefs.json'), JSON.stringify({ skillsInstalled: [readdirSync(new URL('../../../packages/openfilm/skills/', import.meta.url), { withFileTypes: true }).find((e) => e.isDirectory()).name] }));
   const oc = await sessionSkills('opencode', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills'), prefsHome: w.openfilmHome, allowed: ['research'] });
   const config = JSON.parse(oc.env.OPENCODE_CONFIG_CONTENT);
   /* OpenFilm's own first, in their order (how a film is made, its media, its canvas); then the project's brand and
-     lyric-pv and, of the official skills that come with the package, only the one installed */
-  const official = readdirSync(new URL('../../../packages/openfilm/skills/', import.meta.url), { withFileTypes: true }).filter((e) => e.isDirectory());
-  const names = ['edit', 'media', 'canvas', ...[official[0].name, 'brand', 'lyric-pv'].sort()];
+     lyric-pv and the one installed from Discover */
+  const names = ['edit', 'media', 'canvas', ...['replicate', 'brand', 'lyric-pv'].sort()];
   assert.deepEqual(config.permission.skill, { '*': 'deny', 'customize-opencode': 'allow', ...Object.fromEntries([...names, 'research'].sort().map((n) => [n, 'allow'])) });
   assert.deepEqual(config.mcp, { search: { enabled: false } });
   assert.match(config.skills.paths[0], /agent-skills[\\/].+[\\/]skills$/);

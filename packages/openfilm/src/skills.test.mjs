@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync, symlinkSync, lstatSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { addSkills, asRun, coreSkills, findSkill, listSkills, migrateMySkills, mySkillsDir, parseSkillFile, readSkill, removeSkill, setSkillCover, setSkillInstalled, setSkillOn, SKILL_UID, skillOrigins, skillText, skillUid, agentNames } from './skills.mjs';
+import { addSkills, asRun, coreSkills, findSkill, listSkills, migrateMySkills, mySkillsDir, parseSkillFile, readSkill, removeSkill, setSkillCover, setSkillOn, SKILL_UID, skillOrigins, skillText, skillUid, agentNames } from './skills.mjs';
 import { commitSkills, discardSkills, previewFolder, previewSkills, skillCommand, skillsCommand } from './skills-cli.mjs';
 
 const skill = (dir, name, description, body = 'How to make it.', extra = {}) => {
@@ -245,10 +245,12 @@ test('openfilm skills and skill: the list, one printed whole, one added from an 
     assert.ok(listed.lines.some((l) => l.includes('This film\'s brand')));
     /* outside a project: none of this film's; OpenFilm's own once installed, and not while off */
     assert.match(skillsCommand('openfilm', { cwd: root }).lines[0], /^No skills installed\./);
-    setSkillInstalled('openfilm/replicate', true);
+    /* one installed from Discover (studio/server/skill-catalog.mjs): its folder, with where it came from */
+    const installed = skill(join(root, 'studio-home', 'skills-installed', 'openfilm-replicate'), 'replicate', 'Remake a video');
+    writeFileSync(join(installed, '.source.json'), JSON.stringify({ repo: 'https://github.com/openfilm/skill-replicate', path: 'skills/replicate', commit: 'a'.repeat(40), version: '0.1.0' }));
     const outside = skillsCommand('openfilm', { cwd: root }).lines;
     assert.match(outside[0], /^Skills\. /);
-    assert.ok(!outside.some((l) => /this project/.test(l)) && outside.some((l) => /openfilm\/replicate\s+official/.test(l)));
+    assert.ok(!outside.some((l) => /this project/.test(l)) && outside.some((l) => /openfilm\/replicate\s+installed/.test(l)));
     setSkillOn('openfilm/replicate', false);
     assert.ok(!skillsCommand('openfilm', { cwd: root }).lines.some((l) => /replicate/.test(l)), 'off: offered to no agent');
     setSkillOn('openfilm/replicate', true);
@@ -392,4 +394,13 @@ test('two skills of a name are both had, each by its uid; an agent is given the 
   assert.equal(findSkill('ana/keynote', { project, mine, official }).description, 'Ana');
   assert.deepEqual(agentNames(listed).map((s) => s.as), ['keynote', 'ana-keynote', 'river-keynote', 'openfilm-keynote']);
   rmSync(root, { recursive: true, force: true });
+});
+
+test('an installed skill is its repository\'s account\'s: OpenFilm\'s own is openfilm, anyone else\'s is theirs', () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-installed-owner-'));
+  const ours = skill(join(root, 'openfilm-replicate'), 'replicate', 'Ours');
+  writeFileSync(join(ours, '.source.json'), JSON.stringify({ repo: 'https://github.com/openfilm/skill-replicate', path: 'skills/replicate', commit: 'a'.repeat(40), version: '0.1.0' }));
+  const theirs = skill(join(root, 'ana-lyrics'), 'lyrics', 'Theirs');
+  writeFileSync(join(theirs, '.source.json'), JSON.stringify({ repo: 'https://github.com/Ana/lyric-skills', path: 'skills/lyrics', commit: 'b'.repeat(40), version: '1.0.0' }));
+  assert.deepEqual([readSkill(ours, 'official').uid, readSkill(theirs, 'official').uid], ['openfilm/replicate', 'ana/lyrics']);
 });
