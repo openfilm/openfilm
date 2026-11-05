@@ -193,3 +193,64 @@ test('a video\'s address elsewhere is not downloaded with the key', async () => 
   await assert.rejects(google.run('video', { out: 'x', prompt: 'y' }, ctx()), /not its own; your key was not sent there/);
   assert.equal(keyed, 0);
 });
+
+/** A minimal MP4: a movie header of this length and one track of this picture size. */
+function mp4(seconds, w, h) {
+  const box = (type, ...parts) => { const body = Buffer.concat(parts); const head = Buffer.alloc(8); head.writeUInt32BE(8 + body.length); head.write(type, 4, 'ascii'); return Buffer.concat([head, body]); };
+  const mvhd = Buffer.alloc(100);
+  mvhd.writeUInt32BE(1000, 12);
+  mvhd.writeUInt32BE(Math.round(seconds * 1000), 16);
+  const tkhd = Buffer.alloc(84);
+  tkhd.writeUInt32BE(w * 65536, 76);
+  tkhd.writeUInt32BE(h * 65536, 80);
+  return Buffer.concat([box('ftyp', Buffer.from('isom')), box('moov', box('mvhd', mvhd), box('trak', box('tkhd', tkhd)))]);
+}
+
+test('a video from a clip: uploaded, asked after until ready, edited or continued as the prompt says, the upload deleted', async () => {
+  let asks = 0;
+  reply = (call) => {
+    if (call.url.pathname === '/upload/v1beta/files') return [200, {}, { 'x-goog-upload-url': `${base}/upload/session-2` }];
+    if (call.url.pathname === '/upload/session-2') {
+      assert.equal(call.headers['content-type'], 'video/mp4');
+      return [200, { file: { name: 'files/clip-1', uri: `${base}/v1beta/files/clip-1`, mimeType: 'video/mp4' } }];
+    }
+    if (call.url.pathname === '/v1beta/files/clip-1' && call.method === 'GET') { asks += 1; return [200, { state: asks < 2 ? 'PROCESSING' : 'ACTIVE' }]; }
+    if (call.url.pathname === '/v1beta/files/clip-1' && call.method === 'DELETE') return [200, {}];
+    if (call.url.pathname === '/v1beta/interactions') {
+      return [200, { status: 'completed', steps: [{ type: 'model_output', content: [{ type: 'video', mime_type: 'video/mp4', data: mp4(6.5, 720, 1280).toString('base64') }] }] }];
+    }
+    return [404, {}];
+  };
+  const files = { 'assets/video/take.mp4': new Uint8Array(mp4(6.5, 720, 1280)), 'assets/image/a.png': new Uint8Array(Buffer.from('89504e470d0a1a0a', 'hex')) };
+  const result = await google.run('video', { out: 'take-2', prompt: 'make the cup red', video: 'assets/video/take.mp4', 'first-frame': 'assets/image/a.png', 'input-reference': ['assets/image/a.png'] }, ctx(files));
+  const sent = JSON.parse(seen.findLast((c) => c.url.pathname === '/v1beta/interactions').body);
+  assert.deepEqual(sent.input.map((/** @type {any} */ p) => p.type), ['video', 'image', 'text']);
+  assert.deepEqual(sent.input[0], { type: 'video', uri: `${base}/v1beta/files/clip-1`, mime_type: 'video/mp4' });
+  /* the clip keeps its shape and length: none asked, none sent; the prompt says edit or continue */
+  assert.deepEqual(sent.response_format, { type: 'video', delivery: 'uri', resolution: '720p' });
+  assert.equal(sent.generation_config, undefined);
+  assert.equal(asks, 2);
+  assert.ok(seen.some((c) => c.method === 'DELETE' && c.url.pathname === '/v1beta/files/clip-1'));
+  /* its length and size as the made file says */
+  assert.deepEqual({ ...result.index[0], from: undefined }, { src: 'assets/video/take-2.mp4', kind: 'video', w: 720, h: 1280, dur: 6.5, hasAudio: true, from: undefined });
+  assert.equal(result.index[0].from.clip, 'assets/video/take.mp4');
+  assert.match(result.receipt.notes.join('\n'), /--first-frame: Gemini Omni makes it from the clip/);
+
+  await google.run('video', { out: 'more', prompt: 'continue the scene', video: 'assets/video/take.mp4', duration: 20, 'aspect-ratio': '9:16' }, ctx(files));
+  const more = JSON.parse(seen.findLast((c) => c.url.pathname === '/v1beta/interactions').body);
+  assert.deepEqual(more.response_format, { type: 'video', delivery: 'uri', aspect_ratio: '9:16', resolution: '720p', duration: '10s' });
+});
+
+test('a clip Gemini cannot take says so and its upload is deleted', async () => {
+  let deleted = 0;
+  reply = (call) => {
+    if (call.url.pathname === '/upload/v1beta/files') return [200, {}, { 'x-goog-upload-url': `${base}/upload/session-3` }];
+    if (call.url.pathname === '/upload/session-3') return [200, { file: { name: 'files/clip-2', uri: `${base}/v1beta/files/clip-2`, mimeType: 'video/mp4' } }];
+    if (call.method === 'DELETE') { deleted += 1; return [200, {}]; }
+    if (call.url.pathname === '/v1beta/files/clip-2') return [200, { state: 'FAILED', error: { message: 'unreadable video' } }];
+    return [404, {}];
+  };
+  await assert.rejects(google.run('video', { out: 'x', prompt: 'y', video: 'assets/video/take.mp4' }, ctx({ 'assets/video/take.mp4': new Uint8Array([1]) })), /could not take the clip: unreadable video/);
+  assert.equal(deleted, 1);
+  assert.ok(!seen.some((c) => c.url.pathname === '/v1beta/interactions' && JSON.parse(c.body).input?.[0]?.uri?.endsWith('clip-2')));
+});

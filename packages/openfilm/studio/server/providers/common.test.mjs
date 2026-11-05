@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { call, imageSize, landing, outOfBalance, translatedLines, translationAsk, wav, wavSeconds, wordsFromCharacters } from './common.mjs';
+import { call, imageSize, landing, mp4Facts, outOfBalance, translatedLines, translationAsk, wav, wavSeconds, wordsFromCharacters } from './common.mjs';
 
 test('words from character timings: spaces split, punctuation stays, each Chinese character is a word, times clamped', () => {
   const said = 'Hi, there 你好';
@@ -48,6 +48,41 @@ test('picture sizes from PNG and JPEG headers', () => {
   const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 4, 0, 0, 0xff, 0xc0, 0, 17, 8, 0x02, 0xd0, 0x05, 0x00, 3, 0, 0]);
   assert.deepEqual(imageSize(jpeg), { w: 1280, h: 720 });
   assert.equal(imageSize(Buffer.from('nope')), null);
+});
+
+test('an MP4\'s length and picture size from its boxes: 32- and 64-bit headers, the moov after the media', () => {
+  const box = (/** @type {string} */ type, /** @type {Buffer[]} */ ...parts) => {
+    const body = Buffer.concat(parts);
+    const head = Buffer.alloc(8);
+    head.writeUInt32BE(8 + body.length);
+    head.write(type, 4, 'ascii');
+    return Buffer.concat([head, body]);
+  };
+  const mvhd0 = Buffer.alloc(100);
+  mvhd0.writeUInt32BE(600, 12);
+  mvhd0.writeUInt32BE(2700, 16);
+  const sound = Buffer.alloc(84);
+  const picture = Buffer.alloc(84);
+  picture.writeUInt32BE(1280 * 65536, 76);
+  picture.writeUInt32BE(720 * 65536, 80);
+  /* a large media box (64-bit size) before the movie header, the sound track before the picture's */
+  const mdat = Buffer.alloc(24);
+  mdat.writeUInt32BE(1);
+  mdat.write('mdat', 4, 'ascii');
+  mdat.writeBigUInt64BE(24n, 8);
+  const file = Buffer.concat([box('ftyp', Buffer.from('isom')), mdat, box('moov', box('trak', box('tkhd', sound)), box('mvhd', mvhd0), box('trak', box('tkhd', picture)))]);
+  assert.deepEqual(mp4Facts(new Uint8Array(file)), { seconds: 4.5, w: 1280, h: 720 });
+  const mvhd1 = Buffer.alloc(112);
+  mvhd1[0] = 1;
+  mvhd1.writeUInt32BE(1000, 20);
+  mvhd1.writeBigUInt64BE(15000n, 24);
+  const tkhd1 = Buffer.alloc(96);
+  tkhd1[0] = 1;
+  tkhd1.writeUInt32BE(720 * 65536, 88);
+  tkhd1.writeUInt32BE(1280 * 65536, 92);
+  assert.deepEqual(mp4Facts(new Uint8Array(box('moov', box('mvhd', mvhd1), box('trak', box('tkhd', tkhd1))))), { seconds: 15, w: 720, h: 1280 });
+  assert.equal(mp4Facts(new Uint8Array(Buffer.from('mp4 bytes'))), null);
+  assert.equal(mp4Facts(new Uint8Array(box('ftyp', Buffer.from('isom')))), null);
 });
 
 test('results land as assets/<dir>/<name>.<ext>; --out is a name, not a path', () => {

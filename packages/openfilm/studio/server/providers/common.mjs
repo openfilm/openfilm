@@ -269,6 +269,47 @@ export function imageSize(/** @type {Uint8Array} */ bytes) {
 }
 
 /**
+ * An MP4's length and picture size from its boxes (moov: mvhd, and the first track with a picture size in its tkhd),
+ * null when it has no movie header.
+ * @returns {{ seconds: number, w: number | null, h: number | null } | null}
+ */
+export function mp4Facts(/** @type {Uint8Array} */ bytes) {
+  const b = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  /** The boxes between two offsets: type, where the body starts, where the box ends. */
+  const boxes = function* (/** @type {number} */ start, /** @type {number} */ end) {
+    for (let at = start; at + 8 <= end;) {
+      let size = b.readUInt32BE(at);
+      let head = 8;
+      if (size === 1 && at + 16 <= end) { size = Number(b.readBigUInt64BE(at + 8)); head = 16; }
+      else if (size === 0) size = end - at;
+      if (size < head || at + size > end) return;
+      yield { type: b.toString('ascii', at + 4, at + 8), body: at + head, end: at + size };
+      at += size;
+    }
+  };
+  let seconds = null, w = null, h = null;
+  for (const moov of boxes(0, b.length)) {
+    if (moov.type !== 'moov') continue;
+    for (const box of boxes(moov.body, moov.end)) {
+      const v1 = b[box.body] === 1;
+      if (box.type === 'mvhd' && box.body + (v1 ? 32 : 20) <= box.end) {
+        const scale = b.readUInt32BE(box.body + (v1 ? 20 : 12));
+        const length = v1 ? Number(b.readBigUInt64BE(box.body + 24)) : b.readUInt32BE(box.body + 16);
+        if (scale) seconds = round(length / scale);
+      }
+      if (box.type !== 'trak' || w !== null) continue;
+      for (const tkhd of boxes(box.body, box.end)) {
+        const at = tkhd.body + (b[tkhd.body] === 1 ? 88 : 76);
+        if (tkhd.type !== 'tkhd' || at + 8 > tkhd.end) continue;
+        const tw = Math.round(b.readUInt32BE(at) / 65536), th = Math.round(b.readUInt32BE(at + 4) / 65536);
+        if (tw && th) { w = tw; h = th; }
+      }
+    }
+  }
+  return seconds === null ? null : { seconds, w, h };
+}
+
+/**
  * How long a recording in the project lasts (ffprobe), in seconds, or null when it cannot be told.
  * @param {string} root the project @param {string} rel the file, in it
  * @returns {Promise<number | null>}

@@ -5,7 +5,7 @@
  * `generateContent`; transcription and video use the Interactions API. Generated speech has no word timings and comes
  * as raw PCM, wrapped here in a WAV file.
  */
-import { RATIO_SIZE, billedBy, call, clamp, download, extOf, imageSize, landing, list, madePicture, mimeOf, modelOf, needed, notes, number, ownAddress, pngOnly, serviceUrl, sleep, speechUpload, text, translatedLines, translationAsk, wav, wavSeconds } from './common.mjs';
+import { RATIO_SIZE, billedBy, call, clamp, download, extOf, imageSize, landing, list, madePicture, mediaSeconds, mimeOf, modelOf, mp4Facts, needed, notes, number, ownAddress, pngOnly, serviceUrl, sleep, speechUpload, text, translatedLines, translationAsk, wav, wavSeconds } from './common.mjs';
 
 /** @typedef {import('./contract.mjs').Provider} Provider @typedef {import('./contract.mjs').RunContext} RunContext */
 
@@ -156,7 +156,6 @@ export default {
       const answer = (body?.candidates?.[0]?.content?.parts ?? []).map((/** @type {any} */ p) => String(p?.text ?? '')).join('');
       return { files: [], index: [], receipt: { provider: 'google', model, language: text(args.language), lines: translatedLines(answer, ask.count) }, cost: billedBy(NAME) };
     }
-    if (verb === 'video' && text(args.video)) throw new Error('--video: Gemini Omni here makes clips from a prompt and pictures. A clip made from another is fal\'s: use fal for it.');
     if (verb === 'video' && (text(args.audio) || text(args.voice))) {
       throw new Error(`--${text(args.audio) ? 'audio' : 'voice'}: Gemini Omni takes no recording. A person speaks the words written in the prompt in quotes, with the clip's own sound; a clip whose lips follow a recording is fal's.`);
     }
@@ -166,7 +165,7 @@ export default {
 };
 
 /**
- * A prepared speech file uploaded with Gemini's resumable Files API. The returned upload address is accepted only on
+ * A prepared file uploaded with Gemini's resumable Files API. The returned upload address is accepted only on
  * Google's configured origin, so the person's key and bytes cannot be redirected elsewhere.
  * @param {{ blob: Blob, name: string, size: number }} upload @param {string} base
  * @param {(url: string, init?: RequestInit) => Promise<Response>} send
@@ -196,7 +195,7 @@ async function uploadFile(upload, base, send) {
   })).json();
   const file = body?.file;
   const uri = text(file?.uri), name = text(file?.name);
-  if (!uri || !name) throw new Error(`${NAME} did not keep the speech upload.`);
+  if (!uri || !name) throw new Error(`${NAME} did not keep the upload.`);
   return { uri, name, mimeType: text(file?.mimeType ?? file?.mime_type) || mimeType };
 }
 
@@ -242,9 +241,10 @@ function inline(/** @type {any} */ body, /** @type {string} */ what) {
 
 /**
  * A Gemini Omni clip with its own sound: 3 to 15 seconds (10 at most between a first and a last frame), 16:9 or 9:16,
- * 360p to 4K. Made from the prompt, from a first (and last) frame, or from up to 6 reference pictures. Asked through
- * the Interactions API with the clip sent back as a file address, since an answer carries 4 MB at most inline; the
- * file is asked after until it is ready, then downloaded with the key.
+ * 360p to 4K. Made from the prompt, from a first (and last) frame, or from up to 6 reference pictures; or from a clip
+ * (`--video`), edited or continued as the prompt says. Asked through the Interactions API with the clip sent back as a
+ * file address, since an answer carries 4 MB at most inline; the file is asked after until it is ready, then
+ * downloaded with the key.
  * @param {Record<string, unknown>} args @param {RunContext} ctx @param {string} base
  * @param {(url: string, init?: RequestInit) => Promise<Response>} send
  */
@@ -253,58 +253,94 @@ async function video(args, ctx, base, send) {
   const path = landing('video', args.out, 'mp4');
   const model = modelOf(MODELS, 'video', ctx);
   const said = [];
-  const first = text(args['first-frame']);
-  const last = text(args['last-frame']);
+  const clip = text(args.video);
+  const first = clip ? '' : text(args['first-frame']);
+  const last = clip ? '' : text(args['last-frame']);
+  if (clip) for (const name of ['first-frame', 'last-frame']) if (text(args[name])) said.push(`--${name}: Gemini Omni makes it from the clip: it was left out`);
   if (last && !first) throw new Error('--last-frame: Gemini Omni ends on a last frame only after a first one. Give --first-frame too.');
   let refs = list(args['input-reference']);
   if (refs.length && first) { said.push('reference pictures go with a clip made from the prompt: the frames were used'); refs = []; }
   if (refs.length > 6) { said.push('Gemini Omni takes 6 reference pictures: the rest were left out'); refs = refs.slice(0, 6); }
 
-  const asked = number(args.duration) ?? 8;
-  const longest = first && last ? 10 : 15;
-  const seconds = clamp(Math.round(asked), 3, longest);
-  if (seconds !== asked) said.push(`Gemini Omni makes 3 to ${longest} second clips${longest === 10 ? ' between two frames' : ''}: ${seconds} s`);
+  /* a clip is edited at its own length, or continued by the seconds asked (3 to 10, its own default 10 when none) */
+  const length = clip ? await mediaSeconds(ctx.root, clip) : null;
+  if (length !== null && length > 30.05) {
+    throw new Error(`--video: Gemini Omni edits clips of 15 s at most and continues them to 30 s at most, and ${clip} is ${Math.round(length * 10) / 10} s: trim it to the part to make again.`);
+  }
+  const asked = number(args.duration) ?? (clip ? null : 8);
+  const longest = clip ? 10 : first && last ? 10 : 15;
+  const seconds = asked === null ? null : clamp(Math.round(asked), 3, longest);
+  if (asked !== null && seconds !== asked) {
+    said.push(clip ? `Gemini Omni continues a clip by 3 to 10 seconds: ${seconds} s` : `Gemini Omni makes 3 to ${longest} second clips${first && last ? ' between two frames' : ''}: ${seconds} s`);
+  }
 
-  /* with a first frame and no ratio asked, the picture's own shape decides */
+  /* with a first frame and no ratio asked, the picture's own shape decides; a clip keeps its own unless one is asked */
   let ratio = text(args['aspect-ratio']);
   if (!ratio && first) { const size = imageSize(await ctx.read(first)); ratio = size && size.h > size.w ? '9:16' : '16:9'; }
   const tall = ['9:16', '3:4', '2:3', '9:21'].includes(ratio);
-  const aspect = tall ? '9:16' : '16:9';
-  if (ratio && ratio !== aspect && ratio !== 'adaptive') said.push(`Gemini Omni makes 16:9 or 9:16 clips: ${aspect}`);
+  const aspect = clip && (!ratio || ratio === 'adaptive') ? '' : tall ? '9:16' : '16:9';
+  if (ratio && aspect && ratio !== aspect && ratio !== 'adaptive') said.push(`Gemini Omni makes 16:9 or 9:16 clips: ${aspect}`);
   const askedSize = text(args.resolution);
   const resolution = OMNI_SIZES[askedSize.toLowerCase()] ? askedSize.toLowerCase() : '720p';
   if (askedSize && resolution !== askedSize.toLowerCase()) said.push(`Gemini Omni makes ${Object.keys(OMNI_SIZES).join(', ')}: ${resolution}`);
 
   const picture = async (/** @type {string} */ file) => ({ type: 'image', data: Buffer.from(await ctx.read(file)).toString('base64'), mime_type: mimeOf(file) });
   const pictures = await Promise.all([first, last, ...refs].filter(Boolean).map(picture));
-  /* the role of a single first frame, and of reference pictures, is set; two frames are read as a start and an end */
-  const task = first && !last ? 'image_to_video' : refs.length ? 'reference_to_video' : '';
-  const body = {
-    model,
-    input: pictures.length ? [...pictures, { type: 'text', text: prompt }] : prompt,
-    response_format: { type: 'video', delivery: 'uri', aspect_ratio: aspect, resolution, duration: `${seconds}s` },
-    ...(task ? { generation_config: { video_config: { task } } } : {}),
-  };
-  const answer = /** @type {any} */ (await (await send(`${base}/v1beta/interactions`, { method: 'POST', body: JSON.stringify(body) })).json());
-  const made = (Array.isArray(answer?.steps) ? answer.steps : []).flatMap((/** @type {any} */ s) => (s?.type === 'model_output' && Array.isArray(s.content) ? s.content : []))
-    .find((/** @type {any} */ c) => c?.type === 'video' && (typeof c.data === 'string' || typeof c.uri === 'string'));
-  if (!made) throw new Error(`Gemini Omni made no clip${text(answer?.status) && answer.status !== 'completed' ? ` (${answer.status})` : ''}.`);
-  const bytes = typeof made.data === 'string' ? new Uint8Array(Buffer.from(made.data, 'base64')) : await omniFile(made.uri, ctx, base, send);
-  const [w, h] = OMNI_SIZES[resolution];
-  const [width, height] = tall ? [h, w] : [w, h];
-  return {
-    files: [{ path, bytes }],
-    index: [{ src: path, kind: 'video', w: width, h: height, dur: seconds, hasAudio: true, from: {
-      mode: 'generate', prompt, provider: 'google', model, resolution, sec: seconds,
-      ...(first ? { firstFrame: first } : {}), ...(last ? { lastFrame: last } : {}), ...(refs.length ? { refs } : {}),
-    } }],
-    receipt: { provider: 'google', model, src: path, dur: seconds, width, height, hasAudio: true, resolution, ...notes(said) },
-    cost: billedBy(NAME),
-  };
+  const given = clip ? await omniUpload(clip, ctx, base, send) : null;
+  try {
+    /* the role of a single first frame, and of reference pictures, is set; two frames are read as a start and an end;
+       whether a clip is edited or continued, the prompt says */
+    const task = clip ? '' : first && !last ? 'image_to_video' : refs.length ? 'reference_to_video' : '';
+    const parts = [...(given ? [{ type: 'video', uri: given.uri, mime_type: given.mimeType }] : []), ...pictures];
+    const body = {
+      model,
+      input: parts.length ? [...parts, { type: 'text', text: prompt }] : prompt,
+      response_format: { type: 'video', delivery: 'uri', ...(aspect ? { aspect_ratio: aspect } : {}), resolution, ...(seconds !== null ? { duration: `${seconds}s` } : {}) },
+      ...(task ? { generation_config: { video_config: { task } } } : {}),
+    };
+    const answer = /** @type {any} */ (await (await send(`${base}/v1beta/interactions`, { method: 'POST', body: JSON.stringify(body) })).json());
+    const made = interactionContents(answer).find((/** @type {any} */ c) => c?.type === 'video' && (typeof c.data === 'string' || typeof c.uri === 'string'));
+    if (!made) throw new Error(`Gemini Omni made no clip${text(answer?.status) && answer.status !== 'completed' ? ` (${answer.status})` : ''}.`);
+    const bytes = typeof made.data === 'string' ? new Uint8Array(Buffer.from(made.data, 'base64')) : await omniFile(made.uri, ctx, base, send);
+    /* its length and size as made; when the file does not say, as asked */
+    const facts = mp4Facts(bytes);
+    const [w, h] = OMNI_SIZES[resolution];
+    const [width, height] = facts?.w && facts.h ? [facts.w, facts.h] : clip ? [null, null] : tall ? [h, w] : [w, h];
+    const dur = facts?.seconds ?? seconds ?? length ?? 10;
+    return {
+      files: [{ path, bytes }],
+      index: [{ src: path, kind: 'video', ...(width && height ? { w: width, h: height } : {}), dur, hasAudio: true, from: {
+        mode: 'generate', prompt, provider: 'google', model, resolution, sec: dur,
+        ...(first ? { firstFrame: first } : {}), ...(last ? { lastFrame: last } : {}), ...(refs.length ? { refs } : {}), ...(clip ? { clip } : {}),
+      } }],
+      receipt: { provider: 'google', model, src: path, dur, ...(width && height ? { width, height } : {}), hasAudio: true, resolution, ...notes(said) },
+      cost: billedBy(NAME),
+    };
+  } finally {
+    /* an uploaded clip otherwise stays in the person's Gemini project for up to 48 hours */
+    if (given) await send(`${base}/v1beta/${given.name}`, { method: 'DELETE' }).catch(() => {});
+  }
 }
 
 /** Each size Gemini Omni makes, wide. */
 const OMNI_SIZES = /** @type {Record<string, [number, number]>} */ ({ '360p': [640, 360], '720p': [1280, 720], '1080p': [1920, 1080], '4k': [3840, 2160] });
+
+/**
+ * A project clip uploaded with the Files API for Gemini Omni to edit or continue, asked after until it is ready.
+ * @param {string} clip @param {RunContext} ctx @param {string} base
+ * @param {(url: string, init?: RequestInit) => Promise<Response>} send
+ */
+async function omniUpload(clip, ctx, base, send) {
+  const bytes = await ctx.read(clip);
+  const file = await uploadFile({ blob: new Blob([new Uint8Array(bytes)], { type: mimeOf(clip) }), name: clip.split('/').pop() ?? clip, size: bytes.length }, base, send);
+  try {
+    await fileReady(file.name, 'take the clip', ctx, base, send);
+  } catch (e) {
+    await send(`${base}/v1beta/${file.name}`, { method: 'DELETE' }).catch(() => {});
+    throw e;
+  }
+  return file;
+}
 
 /**
  * A made clip sent back as a file address: asked after until the file is ready, then downloaded with the key, on
@@ -315,13 +351,21 @@ const OMNI_SIZES = /** @type {Record<string, [number, number]>} */ ({ '360p': [6
 async function omniFile(uri, ctx, base, send) {
   const at = ownAddress(NAME, uri, base);
   const id = /\/files\/([^/:?]+)/.exec(new URL(at).pathname)?.[1];
-  if (id) {
-    for (;;) {
-      const file = /** @type {any} */ (await (await send(`${base}/v1beta/files/${id}`)).json());
-      if (file?.state === 'FAILED') throw new Error(`Gemini Omni could not finish the clip${text(file.error?.message) ? `: ${text(file.error.message)}` : ''}.`);
-      if (!file?.state || file.state === 'ACTIVE') break;
-      await sleep(polling.ms, ctx.signal);
-    }
-  }
+  if (id) await fileReady(`files/${id}`, 'finish the clip', ctx, base, send);
   return (await download(NAME, at, ctx, { headers: { 'x-goog-api-key': ctx.key } })).bytes;
+}
+
+/**
+ * Waits until a file of the Files API (`files/…`) is ready to use, asking after it until the run is cancelled.
+ * @param {string} name @param {string} what what failed, said when it does @param {RunContext} ctx @param {string} base
+ * @param {(url: string, init?: RequestInit) => Promise<Response>} send
+ */
+async function fileReady(name, what, ctx, base, send) {
+  if (!/^files\/[a-z0-9-]+$/i.test(name)) return;
+  for (;;) {
+    const file = /** @type {any} */ (await (await send(`${base}/v1beta/${name}`)).json());
+    if (file?.state === 'FAILED') throw new Error(`Gemini Omni could not ${what}${text(file.error?.message) ? `: ${text(file.error.message)}` : ''}.`);
+    if (!file?.state || file.state === 'ACTIVE') return;
+    await sleep(polling.ms, ctx.signal);
+  }
 }
