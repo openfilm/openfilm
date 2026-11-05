@@ -315,6 +315,8 @@ export const enUS = {
     copied: 'Copied',
     copy: 'Copy as JSON',
     cut: 'A long log: these are its last events.',
+    callsCut: 'A long log: its later model requests were not kept.',
+    updatesCut: "A long log: the agent's later updates were not kept.",
     developer: 'Codex developer instructions (yours first, then the app\'s)',
     ended: 'Ended',
     env: 'Variables the app set',

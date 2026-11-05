@@ -310,6 +310,8 @@ export const ko: Words = {
     copied: '복사됨',
     copy: 'JSON으로 복사',
     cut: '로그가 길어 마지막 이벤트만 표시합니다.',
+    callsCut: '로그가 길어 이후의 모델 요청은 저장하지 않았습니다.',
+    updatesCut: '로그가 길어 이후의 에이전트 업데이트는 저장하지 않았습니다.',
     developer: 'Codex developer instructions (직접 쓴 것이 먼저, 앱의 것이 뒤)',
     ended: '종료됨',
     env: '앱이 설정한 변수',

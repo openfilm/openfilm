@@ -314,6 +314,8 @@ export const ja: Words = {
     copied: 'コピーしました',
     copy: 'JSON としてコピー',
     cut: '長いログのため、最後のイベントを表示しています。',
+    callsCut: '長いログのため、以降のモデルへのリクエストは保存されていません。',
+    updatesCut: '長いログのため、以降のエージェントの更新は保存されていません。',
     developer: 'Codex の developer instructions（あなたのものが先、アプリのものが後）',
     ended: '終了',
     env: 'アプリが設定した変数',

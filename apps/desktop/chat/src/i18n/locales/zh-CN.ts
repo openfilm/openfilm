@@ -314,6 +314,8 @@ export const zhCN: Words = {
     copied: '已复制',
     copy: '复制为 JSON',
     cut: '日志太长：这里显示的是最后的事件。',
+    callsCut: '日志太长：之后的模型请求没有保存。',
+    updatesCut: '日志太长：agent 之后的更新没有保存。',
     developer: 'Codex developer instructions（你自己的在前，app 的在后）',
     ended: '已结束',
     env: 'app 设置的变量',

@@ -10,9 +10,11 @@
  * the ones carried over from before, and the system prompt, are one line each until opened.
  * Sent to the agent: what the app started and opened the agent with (every word it adds to the agent's own, the
  * variables it set), and each message exactly as the agent got it.
- * Events: every event the agent sent, each a line opening to the event exactly as it was.
+ * Events: every event the agent sent, each a line opening to the event exactly as it was; only the lines in view are
+ * drawn, however long the log. A picture is shown as its type, size and file (the log keeps it as a file).
  *
- * Opened while the turn runs, it reads the log again every moment until the turn ends, so it shows the turn so far.
+ * Opened while the turn runs, it asks every moment for what was written since, until the turn ends, so it shows the
+ * turn so far; a very long log is shown as its first event and its last EVENTS_KEPT.
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
@@ -20,7 +22,7 @@ import { AlertTriangle, ChevronRight, ClipboardCopy, FolderOpen, KeyRound, Refre
 import { useT } from '@/i18n';
 import { chatLayer } from '@/lib/chat-layer';
 import { modelCalls, textOf, usageOf, type ModelCall, type RawCall } from '@/lib/model-calls';
-import { app, type TurnLog as TurnLogData } from '../app-bridge';
+import { app, type TurnLog as TurnLogData, type TurnLogAt } from '../app-bridge';
 import { AgentIcon, hasAgentIcon } from './AgentIcons';
 import { BrandLogo } from './BrandLogo';
 
@@ -57,20 +59,46 @@ const seconds = (ms: number | null) => (ms === null ? '—' : ms < 60_000 ? `${(
 const fill = (template: string, values: Record<string, string | number>) => template.replace(/\{(\w+)\}/g, (_, k) => String(values[k] ?? ''));
 const k = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 100_000 ? 0 : 1)}k` : String(n));
 
-/** how often a running turn's log is read again */
+/** how often a running turn's log is asked for what is new */
 const LIVE_READ_MS = 1500;
+/** the most events held at once: past it the oldest go (the prompt stays), as a long turn's end explains how it ended */
+const EVENTS_KEPT = 100_000;
+
+/** A log as shown: what was read so far, and where the reading stopped. */
+interface Shown { file: string; cut: boolean; callsCut: boolean; events: LogEvent[]; calls: RawCall[]; at: TurnLogAt }
+
+/** What was shown, with a read's new events and requests after it (or in its place, when the read was whole). */
+function merged(prev: Shown | null, next: TurnLogData): Shown {
+  const after = !next.whole && prev;
+  let events = after ? (next.events.length ? [...prev.events, ...next.events] : prev.events) : next.events;
+  let cut = after ? prev.cut || next.cut : next.cut;
+  if (events.length > EVENTS_KEPT) {
+    const head = events[0]?.kind === 'prompt' ? [events[0]] : [];
+    events = [...head, ...events.slice(events.length - EVENTS_KEPT + head.length)];
+    cut = true;
+  }
+  const callsAfter = !next.callsWhole && prev;
+  const calls = callsAfter ? (next.calls.length ? [...prev.calls, ...(next.calls as RawCall[])] : prev.calls) : next.calls as RawCall[];
+  return { file: next.file, cut, callsCut: next.callsCut || Boolean(callsAfter && prev.callsCut), events, calls, at: next.at };
+}
 
 function TurnLogViewer({ project, turnId, live, onClose }: { project: string; turnId: string; live: boolean; onClose: () => void }) {
   const t = useT();
-  const [log, setLog] = React.useState<TurnLogData | null | undefined>(undefined);
+  const [log, setLog] = React.useState<Shown | null | undefined>(undefined);
   const [tab, setTab] = React.useState<Tab | null>(null);
   const [copied, setCopied] = React.useState(false);
+  /* what is shown, for a read to add to; `reads`: a read whole again makes any read asked before it stale */
+  const shown = React.useRef<Shown | null>(null);
+  const reads = React.useRef(0);
   const load = React.useCallback(() => {
-    void app.chat.log(project, turnId).then((next) => setLog(next && 'same' in next ? undefined : next)).catch(() => setLog(null));
+    const read = ++reads.current;
+    void app.chat.log(project, turnId).then((next) => {
+      if (read !== reads.current) return;
+      shown.current = next && !('same' in next) ? merged(null, next) : null;
+      setLog(shown.current);
+    }).catch(() => setLog(null));
   }, [project, turnId]);
-  const known = React.useRef<{ size: number; callsSize: number } | null>(null);
-  known.current = log ? { size: log.size, callsSize: log.callsSize ?? 0 } : null;
-  /* read on opening and once more as the turn ends (its last events); while it runs, again and again, one read at a time */
+  /* read on opening and once more as the turn ends (its last events); while it runs, what is new, one read at a time */
   React.useEffect(load, [load, live]);
   React.useEffect(() => {
     if (!live) return undefined;
@@ -78,9 +106,13 @@ function TurnLogViewer({ project, turnId, live, onClose }: { project: string; tu
     const timer = window.setInterval(() => {
       if (reading) return;
       reading = true;
-      /* read again only once it has grown */
-      void app.chat.log(project, turnId, known.current ?? undefined)
-        .then((next) => { if (next && !('same' in next)) setLog(next); }).catch(() => {}).finally(() => { reading = false; });
+      const read = reads.current;
+      void app.chat.log(project, turnId, shown.current?.at)
+        .then((next) => {
+          if (!next || 'same' in next || read !== reads.current) return;
+          shown.current = merged(shown.current, next);
+          setLog(shown.current);
+        }).catch(() => {}).finally(() => { reading = false; });
     }, LIVE_READ_MS);
     return () => window.clearInterval(timer);
   }, [live, project, turnId]);
@@ -90,12 +122,16 @@ function TurnLogViewer({ project, turnId, live, onClose }: { project: string; tu
     return () => window.removeEventListener('keydown', onKey, true);
   }, [onClose]);
 
-  const events = log?.events ?? [];
-  const calls = React.useMemo(() => modelCalls((log?.calls ?? []) as RawCall[]), [log]);
-  const sent = events.filter((e) => e.kind === 'prompt' || e.kind === 'sent' || e.kind === 'steer');
+  const events = React.useMemo(() => log?.events ?? [], [log?.events]);
+  const calls = React.useMemo(() => modelCalls(log?.calls ?? []), [log?.calls]);
+  const sent = React.useMemo(() => events.filter((e) => e.kind === 'prompt' || e.kind === 'sent' || e.kind === 'steer'), [events]);
   const shownTab = tab ?? (calls.length ? 'calls' : 'sent');
   const prompt = events.find((e) => e.kind === 'prompt') as Record<string, any> | undefined;
-  const done = [...events].reverse().find((e) => e.kind === 'done') as Record<string, any> | undefined;
+  const done = React.useMemo(() => {
+    for (let i = events.length - 1; i >= 0; i -= 1) if (events[i]!.kind === 'done') return events[i] as Record<string, any>;
+    return undefined;
+  }, [events]);
+  const updatesCut = React.useMemo(() => events.some((e) => e.kind === 'cut'), [events]);
   const agent = typeof prompt?.agent === 'string' ? prompt.agent : null;
   const model = prompt?.meta?.turn?.localAgent?.model ?? null;
   const took = prompt && done ? seconds(done.t - prompt.t) : null;
@@ -159,7 +195,9 @@ function TurnLogViewer({ project, turnId, live, onClose }: { project: string; tu
                 {tabButton('calls', fill(t('turnLog.calls'), { n: calls.length }))}
                 {tabButton('sent', t('turnLog.sentTab'))}
                 {tabButton('events', fill(t('turnLog.events'), { n: events.length }))}
-                {log.cut ? <span className="text-[12px] text-[var(--warn)]">{t('turnLog.cut')}</span> : null}
+                {[log.cut ? 'turnLog.cut' : null, updatesCut ? 'turnLog.updatesCut' : null, log.callsCut ? 'turnLog.callsCut' : null].filter(Boolean).map((key) => (
+                  <span key={key} className="text-[12px] text-[var(--warn)]">{t(key!)}</span>
+                ))}
               </div>
               {shownTab === 'calls'
                 ? (calls.length ? <Calls calls={calls} start={prompt?.t ?? calls[0]!.startedAt} t={t} /> : <p className="px-5 py-4 text-[13px] text-[var(--text-faint)]">{t(noCallsReason(agent, prompt?.opened?.log))}</p>)
@@ -226,7 +264,10 @@ function Parts({ message, t }: { message: Item; t: T }) {
             </div>
           );
         }
-        if (part.type === 'image') return <img key={i} src={`data:${part.mimeType ?? 'image/png'};base64,${part.data}`} alt="" className="max-h-[220px] max-w-[360px] rounded-[6px] border border-[var(--border)] object-contain" />;
+        if (part.type === 'image') {
+          return part.data ? <img key={i} src={`data:${part.mimeType ?? 'image/png'};base64,${part.data}`} alt="" className="max-h-[220px] max-w-[360px] rounded-[6px] border border-[var(--border)] object-contain" />
+            : <div key={i} className="font-mono text-[12px] text-[var(--text-faint)]">{fill(t('turnLog.picture'), { type: String(part.mimeType ?? ''), size: k(Number(part.bytes) || 0) })}{part.file ? ` · ${String(part.file)}` : ''}</div>;
+        }
         return <Clamped key={i} text={pretty(part)} t={t} />;
       })}
     </div>
@@ -539,15 +580,105 @@ const KIND_COLOR: Record<string, string> = {
   end: 'text-[var(--text)]',
 };
 
+/** a collapsed line's height (px), and how many lines past the view are drawn each way */
+const ROW_HEIGHT = 26;
+const OVERSCAN = 30;
+
+/** A stable key for a line: its first event's, given as it is first seen. */
+const rowKeys = new WeakMap<LogEvent, number>();
+let lastRowKey = 0;
+const rowKey = (event: LogEvent) => {
+  let key = rowKeys.get(event);
+  if (key === undefined) { key = ++lastRowKey; rowKeys.set(event, key); }
+  return key;
+};
+
+/** The first line whose bottom is below `y`, in `offsets` (each line's top, and the end). */
+function lineAt(offsets: Float64Array, y: number): number {
+  let lo = 0;
+  let hi = offsets.length - 2;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (offsets[mid + 1]! <= y) lo = mid + 1;
+    else hi = mid;
+  }
+  return Math.max(0, lo);
+}
+
+/** An opened line, telling its height as it changes. */
+function Measured({ onHeight, children }: { onHeight: (px: number) => void; children: React.ReactNode }) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  React.useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    onHeight(el.offsetHeight);
+    const observer = new ResizeObserver(() => onHeight(el.offsetHeight));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [onHeight]);
+  return <div ref={ref}>{children}</div>;
+}
+
 function Events({ events, t }: { events: LogEvent[]; t: T }) {
   const [joined, setJoined] = React.useState(true);
   const [filter, setFilter] = React.useState('');
-  const [openRows, setOpenRows] = React.useState<Set<number>>(() => new Set());
+  const needle = React.useDeferredValue(filter).trim().toLowerCase();
+  /* the opened lines, by their first event (a line keeps it as the log grows and older events go) */
+  const [openRows, setOpenRows] = React.useState<Set<LogEvent>>(() => new Set());
+  const heights = React.useRef(new Map<LogEvent, number>());
+  const [measured, setMeasured] = React.useState(0);
   const start = events[0]?.t ?? 0;
   const rows = React.useMemo(() => rowsOf(events, joined), [events, joined]);
-  const needle = filter.trim().toLowerCase();
-  const shown = needle ? rows.filter((row) => `${row.label} ${row.summary}`.toLowerCase().includes(needle)) : rows;
-  const toggle = (index: number) => setOpenRows((set) => { const next = new Set(set); if (next.has(index)) next.delete(index); else next.add(index); return next; });
+  const shown = React.useMemo(() => (needle ? rows.filter((row) => `${row.label} ${row.summary}`.toLowerCase().includes(needle)) : rows), [rows, needle]);
+  const toggle = (event: LogEvent) => setOpenRows((set) => { const next = new Set(set); if (next.has(event)) next.delete(event); else next.add(event); return next; });
+
+  /* each line's top: a collapsed one ROW_HEIGHT, an opened one as measured */
+  const offsets = React.useMemo(() => {
+    const out = new Float64Array(shown.length + 1);
+    for (let i = 0; i < shown.length; i += 1) {
+      const first = shown[i]!.events[0]!;
+      out[i + 1] = out[i]! + (openRows.has(first) ? heights.current.get(first) ?? ROW_HEIGHT : ROW_HEIGHT);
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `measured` says the heights changed
+  }, [shown, openRows, measured]);
+  const heightOf = React.useCallback((event: LogEvent) => (px: number) => {
+    if (heights.current.get(event) === px) return;
+    heights.current.set(event, px);
+    setMeasured((n) => n + 1);
+  }, []);
+  const onHeight = React.useRef(new Map<LogEvent, (px: number) => void>());
+  const measure = (event: LogEvent) => {
+    let fn = onHeight.current.get(event);
+    if (!fn) { fn = heightOf(event); onHeight.current.set(event, fn); }
+    return fn;
+  };
+
+  /* the view: where it is scrolled and how tall; at the end it stays at the end as lines come */
+  const scroller = React.useRef<HTMLDivElement>(null);
+  const [view, setView] = React.useState({ top: 0, height: 800 });
+  const atEnd = React.useRef(false);
+  React.useLayoutEffect(() => {
+    const el = scroller.current;
+    if (!el) return undefined;
+    const observer = new ResizeObserver(() => setView({ top: el.scrollTop, height: el.clientHeight }));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const total = offsets[shown.length] ?? 0;
+  React.useLayoutEffect(() => {
+    const el = scroller.current;
+    if (el && atEnd.current && el.scrollTop + el.clientHeight < el.scrollHeight - 1) el.scrollTop = el.scrollHeight;
+  }, [total]);
+  const onScroll = () => {
+    const el = scroller.current;
+    if (!el) return;
+    atEnd.current = el.scrollTop > 0 && el.scrollTop + el.clientHeight >= el.scrollHeight - 4;
+    setView({ top: el.scrollTop, height: el.clientHeight });
+  };
+  const first = shown.length ? Math.max(0, lineAt(offsets, view.top) - OVERSCAN) : 0;
+  const last = shown.length ? Math.min(shown.length, lineAt(offsets, view.top + view.height) + 1 + OVERSCAN) : 0;
+
   return (
     <>
       <div className="flex shrink-0 items-center gap-3 border-b border-[var(--border)] px-5 py-2">
@@ -558,25 +689,33 @@ function Events({ events, t }: { events: LogEvent[]; t: T }) {
           {t('turnLog.joined')}
         </label>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2 font-mono text-[12px] leading-[1.55]">
-        {shown.length === 0 ? <p className="px-3 py-2 font-sans text-[13px] text-[var(--text-faint)]">{t('turnLog.noMatch')}</p> : shown.map((row, index) => {
-          const open = openRows.has(index);
-          return (
-            <div key={`${row.at}-${index}`} className="rounded-[6px] hover:bg-[var(--bg-hover)]">
-              <button type="button" onClick={() => toggle(index)} className="flex w-full items-start gap-3 px-3 py-1 text-left">
-                <ChevronRight size={12} className={`mt-[3px] shrink-0 text-[var(--text-faint)] transition-transform ${open ? 'rotate-90' : ''}`} />
-                <span className="w-[68px] shrink-0 text-right tabular-nums text-[var(--text-faint)]">+{((row.at - start) / 1000).toFixed(2)}s</span>
-                <span className={`w-[150px] shrink-0 truncate ${KIND_COLOR[row.kind] ?? 'text-[var(--text-faint)]'}`}>{row.label}{row.events.length > 1 ? ` ×${row.events.length}` : ''}</span>
-                <span className={`min-w-0 flex-1 ${open ? 'whitespace-pre-wrap break-words' : 'truncate'} ${row.tone === 'error' ? 'text-[var(--err)]' : row.tone === 'quiet' ? 'text-[var(--text-faint)]' : 'text-[var(--text)]'}`}>{row.summary}</span>
-              </button>
-              {open ? (
-                <pre className="mx-3 mb-2 ml-[100px] max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded-[8px] border border-[var(--border)] bg-[var(--bg-field)] p-3 text-[11.5px] text-[var(--text)]">
-                  {JSON.stringify(row.events.length === 1 ? row.events[0] : row.events, null, 2)}
-                </pre>
-              ) : null}
+      <div ref={scroller} onScroll={onScroll} data-turn-log-events="" className="min-h-0 flex-1 overflow-y-auto px-2 py-2 font-mono text-[12px] leading-[1.55]">
+        {shown.length === 0 ? <p className="px-3 py-2 font-sans text-[13px] text-[var(--text-faint)]">{t('turnLog.noMatch')}</p> : (
+          <div className="relative" style={{ height: total }}>
+            <div className="absolute inset-x-0" style={{ top: offsets[first] }}>
+              {shown.slice(first, last).map((row) => {
+                const key = row.events[0]!;
+                const open = openRows.has(key);
+                const line = (
+                  <div className="rounded-[6px] hover:bg-[var(--bg-hover)]" style={open ? undefined : { height: ROW_HEIGHT }}>
+                    <button type="button" onClick={() => toggle(key)} className="flex w-full items-start gap-3 px-3 py-1 text-left">
+                      <ChevronRight size={12} className={`mt-[3px] shrink-0 text-[var(--text-faint)] transition-transform ${open ? 'rotate-90' : ''}`} />
+                      <span className="w-[68px] shrink-0 text-right tabular-nums text-[var(--text-faint)]">+{((row.at - start) / 1000).toFixed(2)}s</span>
+                      <span className={`w-[150px] shrink-0 truncate ${KIND_COLOR[row.kind] ?? 'text-[var(--text-faint)]'}`}>{row.label}{row.events.length > 1 ? ` ×${row.events.length}` : ''}</span>
+                      <span className={`min-w-0 flex-1 ${open ? 'whitespace-pre-wrap break-words' : 'truncate'} ${row.tone === 'error' ? 'text-[var(--err)]' : row.tone === 'quiet' ? 'text-[var(--text-faint)]' : 'text-[var(--text)]'}`}>{open ? row.summary : row.summary.slice(0, 1000)}</span>
+                    </button>
+                    {open ? (
+                      <pre className="mx-3 mb-2 ml-[100px] max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded-[8px] border border-[var(--border)] bg-[var(--bg-field)] p-3 text-[11.5px] text-[var(--text)]">
+                        {JSON.stringify(row.events.length === 1 ? row.events[0] : row.events, null, 2)}
+                      </pre>
+                    ) : null}
+                  </div>
+                );
+                return open ? <Measured key={rowKey(key)} onHeight={measure(key)}>{line}</Measured> : <React.Fragment key={rowKey(key)}>{line}</React.Fragment>;
+              })}
             </div>
-          );
-        })}
+          </div>
+        )}
       </div>
     </>
   );

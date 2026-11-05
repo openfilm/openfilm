@@ -314,6 +314,8 @@ export const es: Words = {
     copied: 'Copiado',
     copy: 'Copiar como JSON',
     cut: 'Registro largo: estos son sus últimos eventos.',
+    callsCut: 'Registro largo: no se guardaron sus solicitudes posteriores al modelo.',
+    updatesCut: 'Registro largo: no se guardaron las actualizaciones posteriores del agente.',
     developer: 'Developer instructions de Codex (primero las tuyas, luego las de la app)',
     ended: 'Terminado',
     env: 'Variables que puso la app',

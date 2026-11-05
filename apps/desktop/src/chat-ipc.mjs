@@ -4,9 +4,10 @@
  *   desktop:chat:load      { project } → { sessions, last, turns }
  *   desktop:chat:sessions  { project, sessions, last }
  *   desktop:chat:turn      { project, turn, items }
- *   desktop:chat:log       { project, turnId, unless? } → { file, cut, size, callsSize, events, calls } | { same } | null
- *                          a turn of another agent with no model log yet (running, or from before there was one) has
- *                          its requests read from the agent's own record (or log) as it is now (agent-records.mjs)
+ *   desktop:chat:log       { project, turnId, since? } → { file, cut, whole, events, calls, callsWhole, callsCut, at }
+ *                          | { same } | null   (chat-store.mjs readLog): `since`, an earlier read's `at`, only what is
+ *                          new; a turn of another agent with no model log yet (running, or from before there was one)
+ *                          has its requests read from the agent's own record (or log) as it is now (agent-records.mjs)
  *   desktop:chat:reveal    { project, turnId? }   the turn's log (or the logs folder) in the file manager
  *   desktop:chat:ref-image { project, turnId, n, bytes } → { path }   a reference's picture, kept for the agent
  *   desktop:chat:attachment { project, name, bytes } → { path }   a file pasted into a message, kept for the agent
@@ -25,7 +26,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { RECORDED_AGENTS, agentRecordCalls, compactCalls } from './agent-records.mjs';
-import { chatDir, describePaths, loadChat, readLog, saveAttachment, saveRefImage, saveSessions, saveTurn, unsavedTurns } from './chat-store.mjs';
+import { chatDir, describePaths, loadChat, logFile, logPrompt, readLog, saveAttachment, saveRefImage, saveSessions, saveTurn, unsavedTurns, withoutPictures } from './chat-store.mjs';
 import { loginShellVariables } from './environment.mjs';
 import { changes, dropHold, holdDir, snapshot, undoTurn } from './file-changes.mjs';
 
@@ -34,19 +35,20 @@ const RECORD_MARGIN_MS = 1000;
 
 /**
  * A log with no model requests, of a turn of an agent whose record (or log, `opened.log`) is read: its requests from
- * there, read now. The log as it was when there is none to read.
+ * there, read now, whole (`callsWhole`) and without their pictures' bytes. The log as it was when there is none to
+ * read. `prompt`: the turn's first event, when the read was only what is new (it does not have it).
  */
-export async function withAgentRecord(found) {
-  if (!found || 'same' in found || found.calls?.length) return found;
-  const prompt = found.events.find((e) => e.kind === 'prompt');
+export async function withAgentRecord(found, prompt = null) {
+  if (!found || 'same' in found || found.at.calls > 0) return found;
+  const first = prompt ?? found.events.find((e) => e.kind === 'prompt');
   const done = [...found.events].reverse().find((e) => e.kind === 'done');
-  const sessionId = prompt?.session?.sessionId;
-  if (!RECORDED_AGENTS.includes(prompt?.agent) || !sessionId) return found;
+  const sessionId = first?.session?.sessionId;
+  if (!RECORDED_AGENTS.includes(first?.agent) || !sessionId) return found;
   const read = agentRecordCalls({
-    agent: prompt.agent, sessionId, cwd: prompt.cwd, env: await loginShellVariables({ staleOk: true }), log: prompt.opened?.log ?? null,
-    from: prompt.t - RECORD_MARGIN_MS, to: done ? done.t + RECORD_MARGIN_MS : Date.now() + RECORD_MARGIN_MS,
+    agent: first.agent, sessionId, cwd: first.cwd, env: await loginShellVariables({ staleOk: true }), log: first.opened?.log ?? null,
+    from: first.t - RECORD_MARGIN_MS, to: done ? done.t + RECORD_MARGIN_MS : Date.now() + RECORD_MARGIN_MS,
   });
-  return read?.calls.length ? { ...found, calls: compactCalls(read.calls) } : found;
+  return read?.calls.length ? { ...found, calls: withoutPictures(compactCalls(read.calls)), callsWhole: true } : found;
 }
 
 /**
@@ -92,9 +94,13 @@ export function registerChatIpc(ipcMain, { trusted, projects, dataDir, reveal, t
   handle('desktop:chat:unsaved', async ({ project: path, except }) => unsavedTurns(await project(path), {
     except: Array.isArray(except) ? except.filter((id) => typeof id === 'string') : [],
   }));
-  handle('desktop:chat:log', async ({ project: path, turnId, unless }) => withAgentRecord(readLog(await project(path), turnId, {
-    unless: unless && Number.isFinite(unless.size) && Number.isFinite(unless.callsSize) ? unless : null,
-  })));
+  handle('desktop:chat:log', async ({ project: path, turnId, since }) => {
+    const dir = await project(path);
+    const at = since && ['events', 'calls', 'callsFile'].every((key) => Number.isFinite(since[key])) ? since : null;
+    const found = readLog(dir, turnId, { since: at });
+    /* only what is new has no prompt: the agent's record is found from the log's first line */
+    return withAgentRecord(found, found && !('same' in found) && !found.whole ? logPrompt(dir, turnId) : null);
+  });
   /* the files as each running turn found them, by the turn: compared when the turn settles; with each, its links to
      the files it found (file-changes.mjs hold) */
   const snapshots = new Map();
@@ -142,10 +148,10 @@ export function registerChatIpc(ipcMain, { trusted, projects, dataDir, reveal, t
   });
   handle('desktop:chat:reveal', async ({ project: path, turnId }) => {
     const dir = await project(path);
-    const found = typeof turnId === 'string' ? readLog(dir, turnId) : null;
+    const file = logFile(dir, turnId);
     const logs = join(chatDir(dir), 'logs');
     mkdirSync(logs, { recursive: true });
-    reveal(found?.file ?? logs);
+    reveal(file && existsSync(file) ? file : logs);
     return { ok: true };
   });
 
