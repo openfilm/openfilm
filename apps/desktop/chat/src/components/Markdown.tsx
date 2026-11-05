@@ -7,13 +7,12 @@ import {
   type MarkdownBlock,
   type MarkdownScan,
 } from '@openfilm/shared/markdown';
-import { app, type StudioRef } from '../app-bridge';
-import { ChatProjectContext } from '@/lib/developer';
-import { audioLinkPath } from '../../../src/chat-audio-link.mjs';
-import { AttachmentPreview, type AttachmentPreviewItem } from './AttachmentPreview';
+import type { StudioRef } from '../app-bridge';
+import { audioLinkPath, projectAudioUrl } from '@/lib/audio-link';
+import { AttachmentPreview } from './AttachmentPreview';
 import { useT } from '@/i18n';
 import { agentRefPill, parseAgentRefs } from '@/lib/agent-refs';
-import { useClipSrc } from '@/lib/studio-film';
+import { ProjectFolderContext, useClipSrc } from '@/lib/studio-film';
 import { PromptPill, PromptPillRevealContext } from './prompt-editor';
 
 /**
@@ -201,37 +200,18 @@ function AgentRefPill({ studioRef }: { studioRef: StudioRef }) {
   );
 }
 
-/** A local audition belongs to the project on disk, not to the URL of Studio's conversation page. */
+/** A local audition is streamed by Studio, with its existing project and real-file boundary checks. */
 function AudioLink({ href, text }: { href: string; text: string }) {
-  const project = React.useContext(ChatProjectContext);
+  const folder = React.useContext(ProjectFolderContext);
   const t = useT();
-  const [item, setItem] = React.useState<AttachmentPreviewItem | null>(null);
-  const [failed, setFailed] = React.useState(false);
-  const [busy, setBusy] = React.useState(false);
-  const request = React.useRef(0);
-  React.useEffect(() => {
-    setItem(null); setFailed(false); setBusy(false);
-    return () => { request.current++; };
-  }, [project, href]);
-  React.useEffect(() => () => { if (item) URL.revokeObjectURL(item.url); }, [item]);
-  const open = async () => {
-    if (busy) return;
-    if (!project) { setFailed(true); return; }
-    const id = ++request.current;
-    setBusy(true);
-    setFailed(false);
-    try {
-      const audio = await app.chat.audio(project, href);
-      if (request.current !== id) return;
-      const url = URL.createObjectURL(new Blob([new Uint8Array(audio.bytes)], { type: audio.mediaType }));
-      setItem({ name: audio.name, kind: 'document', url, mediaType: audio.mediaType });
-    } catch { if (request.current === id) setFailed(true); }
-    finally { if (request.current === id) setBusy(false); }
-  };
+  const [open, setOpen] = React.useState(false);
+  React.useEffect(() => { setOpen(false); }, [folder, href]);
+  const url = projectAudioUrl(href, folder);
+  const name = audioLinkPath(href)?.split(/[\\/]/).pop() ?? text;
   return <>
-    <button type="button" aria-busy={busy} disabled={busy} onClick={() => { void open(); }}
+    <button type="button" onClick={() => setOpen(true)}
       className="break-all text-[var(--accent)] underline underline-offset-2 hover:opacity-80">{text}</button>
-    {failed ? <span role="alert" className="ml-1 text-[var(--err)]">{t('assets.audioPreviewFailed')}</span> : null}
-    {item ? <AttachmentPreview item={item} onClose={() => setItem(null)} /> : null}
+    {open && !url ? <span role="alert" className="ml-1 text-[var(--err)]">{t('assets.previewFailed')}</span> : null}
+    {open && url ? <AttachmentPreview item={{ name, kind: 'document', url }} onClose={() => setOpen(false)} /> : null}
   </>;
 }

@@ -123,7 +123,6 @@ export const es: Words = {
     thinking: 'Pensando',
   },
   assets: {
-    audioPreviewFailed: 'No se pudo previsualizar el audio. Puede que falte, no se pueda leer o supere los 32 MB.',
     close: 'Cerrar',
     download: 'Descargar',
     noPreview: 'Este tipo de archivo no se puede previsualizar aquí: descárgalo',

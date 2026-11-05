@@ -75,8 +75,6 @@ interface AppBridge {
     saveRefImage(project: string, turnId: string, n: number, bytes: ArrayBuffer): Promise<{ path: string }>;
     /** a file pasted into a message (it has no path of its own), kept for its agent: .film/attachments/<name> */
     saveAttachment(project: string, name: string, bytes: ArrayBuffer): Promise<{ path: string }>;
-    /** Read a clicked relative audio link, including an audition beside the project; at most 32 MB. */
-    audio(project: string, href: string): Promise<{ name: string; mediaType: string; bytes: Uint8Array }>;
     /** what each path dragged into a message is, where it is (nothing is copied) */
     describePaths(paths: string[]): Promise<Array<{ path: string; folder: boolean; size?: number } | { path: string; error: string }>>;
     /** the turns with a log and no saved record (src/chat-store.mjs unsavedTurns), but those of `except` */

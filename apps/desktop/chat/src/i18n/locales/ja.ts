@@ -123,7 +123,6 @@ export const ja: Words = {
     thinking: '考え中',
   },
   assets: {
-    audioPreviewFailed: '音声を試聴できません。ファイルが見つからない、読み取れない、または 32 MB を超えている可能性があります。',
     close: '閉じる',
     download: 'ダウンロード',
     noPreview: 'この種類のファイルはここでプレビューできません。ダウンロードしてください',

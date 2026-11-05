@@ -100,7 +100,6 @@ contextBridge.exposeInMainWorld('openfilmNative', {
     reveal: (project, turnId) => ipcRenderer.invoke('desktop:chat:reveal', { project, turnId }),
     saveRefImage: (project, turnId, n, bytes) => ipcRenderer.invoke('desktop:chat:ref-image', { project, turnId, n, bytes }),
     saveAttachment: (project, name, bytes) => ipcRenderer.invoke('desktop:chat:attachment', { project, name, bytes }),
-    audio: (project, href) => ipcRenderer.invoke('desktop:chat:audio', { project, href }),
     describePaths: (paths) => ipcRenderer.invoke('desktop:chat:paths', { paths }),
     unsaved: (project, except) => ipcRenderer.invoke('desktop:chat:unsaved', { project, except }),
     snapshot: (project, turnId) => ipcRenderer.invoke('desktop:chat:snapshot', { project, turnId }),

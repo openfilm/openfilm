@@ -123,7 +123,6 @@ export const enUS = {
     thinking: 'Thinking',
   },
   assets: {
-    audioPreviewFailed: 'Could not preview this audio. It may be missing, unreadable, or larger than 32 MB.',
     close: 'Close',
     download: 'Download',
     noPreview: 'This file type cannot be previewed here — download it instead',

@@ -119,7 +119,6 @@ export const ko: Words = {
     thinking: '생각하는 중',
   },
   assets: {
-    audioPreviewFailed: '오디오를 미리 들을 수 없습니다. 파일이 없거나, 읽을 수 없거나, 32 MB를 초과할 수 있습니다.',
     close: '닫기',
     download: '다운로드',
     noPreview: '이 파일 형식은 여기서 미리 볼 수 없습니다. 대신 다운로드하세요',
