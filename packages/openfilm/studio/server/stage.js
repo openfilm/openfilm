@@ -1063,7 +1063,7 @@
    * The box of a line of words being typed in, fitted to its words as each is typed (the editor's fitTextNow, done
    * here in the same task as the typing): one line hugs its words with their room (never wider than `maxW`, where it
    * wraps), a line a side was pulled on keeps its width; as tall as its lines, its words as large (`--size` in vh of
-   * its height set on the page itself), its middle where it was. `fit` (from the editor, textFit): its box and place as
+   * its height: set in px on the page itself while it is typed, see textFit), its middle where it was. `fit` (from the editor, textFit): its box and place as
    * kept (w0 × h0 at x0, y0, scale s, turn r), its font size, whether it hugs. Answers its new size.
    */
   const fitTyped = (ed) => {
@@ -1073,9 +1073,8 @@
     if (!box || !hooks()) return null;
     const nw = oneLineWidth(box);
     const room = 2 * (0.23 * f.font + 0.04 * nw);
-    const w = f.hug ? Math.max(1, Math.min(f.maxW, Math.round(nw + room))) : f.w0;
+    const w = f.hug ? Math.max(1, Math.min(f.maxW, 8192, Math.round(nw + room))) : f.w0;
     const show = (h) => {
-      doc.documentElement.style.setProperty('--size', `${Math.round(((100 * f.font) / h) * 100) / 100}vh`);
       /* grown from its side as it is aligned: a line aligned left keeps its left edge, right its right, else its middle */
       const grow = f.align === 'left' || f.align === 'start' ? 0 : f.align === 'right' || f.align === 'end' ? 1 : 0.5;
       const x = f.x0 - (w - f.w0) * f.s * grow;
@@ -1084,7 +1083,7 @@
     };
     let h = f.h ?? f.h0;
     show(h);
-    const tall = Math.round(box.offsetHeight + 2 * 0.23 * f.font);
+    const tall = Math.min(8192, Math.round(box.offsetHeight + 2 * 0.23 * f.font));
     if (Math.abs(tall - h) >= 2) { h = tall; show(h); }
     f.h = h;
     return { w, h };
@@ -2226,8 +2225,14 @@
     textFit({ fit }) {
       if (!editing) return false;
       editing.fit = fit && typeof fit === 'object' ? { ...fit } : null;
-      /* what was typed before this came: fitted now */
-      if (editing.fit) { editing.holdOff(); editing.hold = null; editing.refit(); }
+      /* its words' size in px while it is typed in (its box's height changes as lines come and go; a size in vh of it
+         would change with it); what was typed before this came: fitted now */
+      if (editing.fit) {
+        editing.c.win?.document.documentElement.style.setProperty('--size', `${Math.round(editing.fit.font * 100) / 100}px`);
+        editing.holdOff();
+        editing.hold = null;
+        editing.refit();
+      }
       return true;
     },
     /**

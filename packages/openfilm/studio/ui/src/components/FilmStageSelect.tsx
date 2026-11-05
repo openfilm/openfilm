@@ -322,6 +322,16 @@ function clipLocOf(doc: FilmDoc, id: string): string | undefined {
 }
 
 /** A whole clip in hand: its box is the part that shows. */
+/** The largest a page is laid out at (film.html refuses more). */
+const MAX_PAGE = 8192;
+
+/** A line of words' `--size` in `overrides`, in vh of its height (the page's own 62vh when it has none); null in another unit. */
+function vhSizeOf(overrides: readonly unknown[] | undefined): number | null {
+  const root = overrides?.find((o) => (o as { at?: string; n?: number }).at === ':root' && (o as { n?: number }).n === undefined) as { style?: Record<string, string> } | undefined;
+  const m = /^\s*([\d.]+)vh\s*$/.exec(root?.style?.['--size'] ?? '62vh');
+  return m ? Number(m[1]) : null;
+}
+
 /** What a line of words is fitted from (FilmStageSelect textFitBase): its box and place as kept, its font size now. */
 interface TextFitBase { clipLoc: string; clipId: string; box: MgBox; t: MgTransform; font: number; oneLine: boolean; align: string }
 
@@ -1237,8 +1247,10 @@ function FilmStageSelectImpl({
       syncGeomSoon();
     });
   };
-  const startTextEdit = (): boolean => {
-    const held = pickedRef.current;
+  /** `target`: the line to type in, when it is not the one in hand (a line of words is typed in with its whole clip
+      in hand, never its line picked first: the inspector and the frame would go to the line and back) */
+  const startTextEdit = (target?: { element: StageElement; layer: StageLayer }): boolean => {
+    const held = target ?? pickedRef.current;
     const element = held?.element;
     const layer = held?.layer;
     if (!onEditTextInline || !layer || !element?.text || textEdit.current || layer.locked || lockedClip(element.clipLoc)) return false;
@@ -1251,7 +1263,8 @@ function FilmStageSelectImpl({
       if (started) {
         /* a line of words: one frame, its box following the words as they are typed, the whole clip in hand */
         if (element.clipLoc && isTextClipId(layer.clip)) {
-          pickWholeText(element.clipLoc);
+          const now = pickedRef.current?.element;
+          if (!(now?.isMgOuter && now.clipLoc === element.clipLoc)) pickWholeText(element.clipLoc);
           void textFitBase(element.clipLoc).then((base) => {
             if (!base || textEdit.current?.layer.handle !== layer.handle) return;
             setTyping({ base, w: Math.round(base.box.w), h: Math.round(base.box.h), shownT: base.t });
@@ -1871,9 +1884,8 @@ function FilmStageSelectImpl({
     const at = parseFilmDocLoc(clipLoc);
     const clip = at ? docRef.current.tracks[at.track]?.clips[at.clip] : undefined;
     const overrides = (clip as { overrides?: unknown[] } | undefined)?.overrides;
-    const root = overrides?.find((o) => (o as { at?: string; n?: number }).at === ':root' && (o as { n?: number }).n === undefined) as { style?: Record<string, string> } | undefined;
-    const size = /^\s*([\d.]+)vh\s*$/.exec(root?.style?.['--size'] ?? '62vh');
-    return size ? { vh: Number(size[1]), overrides } : null;
+    const vh = vhSizeOf(overrides);
+    return vh != null ? { vh, overrides } : null;
   };
   /** Shown at transform `t` (its width from the pull) and the height in `live`: placed, and the transform its frame shows. */
   const placeText = (g: { clipId: string; box: MgBox }, t: MgTransform, live: { vh: number; h0: number; h: number }) => {
@@ -1922,18 +1934,31 @@ function FilmStageSelectImpl({
     const el = info ? describeClip(info, stage).element : null;
     const size = textSizeOf(clipLoc);
     if (!el?.clipId || !el.mgBox || !el.transform || !size || !isTextClipId(el.clipId)) return null;
-    const m = await ask<{ font: number; nw?: number }>('measure', { clip: el.clipId, at: '.t', natural: true });
+    /* worked out once for the clip as film.html has it, and kept until that changes: read again while a preview is on
+       the picture (another size, another font), it would start from the preview, and each preview from the last */
+    const at = parseFilmDocLoc(clipLoc);
+    const clip = at ? docRef.current.tracks[at.track]?.clips[at.clip] : undefined;
+    const key = JSON.stringify([clip?.box, clip?.size, clip?.overrides, stage.w, stage.h]);
+    const kept = fitBases.current.get(clipLoc);
+    if (kept?.key === key) return kept.base;
+    /* its words' size from what is written (`--size` in vh of its height), never read off the page */
+    const font = (size.vh / 100) * el.mgBox.h;
+    const m = await ask<{ font: number }>('measure', { clip: el.clipId, at: '.t' });
     const one = await ask<{ nw?: number }>('measure', { clip: el.clipId, at: '.box', natural: true });
-    if (!m?.font || m.nw == null) return null;
-    if (one?.nw != null) m.nw = one.nw;
+    if (!m?.font || one?.nw == null) return null;
+    /* its one line as wide as at its written size (the page may show it at another for a moment) */
+    const nw = one.nw * (font / m.font);
     const w0 = el.mgBox.w;
-    const lines = Math.round((el.mgBox.h - 2 * TEXT_ROOM * m.font) / (1.15 * m.font));
-    const hug = m.nw + 2 * (TEXT_ROOM * m.font + 0.04 * m.nw);
+    const lines = Math.round((el.mgBox.h - 2 * TEXT_ROOM * font) / (1.15 * font));
+    const hug = nw + 2 * (TEXT_ROOM * font + 0.04 * nw);
     const widest = stage.w / el.transform.scaleY;
     const hugs = w0 >= widest - 2 || (lines <= 1 && w0 <= hug + Math.max(4, 0.02 * w0));
     const root = (size.overrides ?? []).find((o) => (o as { at?: string; n?: number }).at === ':root' && (o as { n?: number }).n === undefined) as { style?: Record<string, string> } | undefined;
-    return { clipLoc, clipId: el.clipId, box: el.mgBox, t: el.transform, font: m.font, oneLine: hugs, align: root?.style?.['--align'] ?? 'center' };
+    const base = { clipLoc, clipId: el.clipId, box: el.mgBox, t: el.transform, font, oneLine: hugs, align: root?.style?.['--align'] ?? 'center' };
+    fitBases.current.set(clipLoc, { key, base });
+    return base;
   };
+  const fitBases = React.useRef(new Map<string, { key: string; base: TextFitBase }>());
   /** At `w` × `h` (its page's size), its middle where it was: its box, the transform its frame shows, its size in vh. */
   const textAt = (b: TextFitBase, w: number, h: number) => {
     const s = b.t.scaleY;
@@ -1956,15 +1981,15 @@ function FilmStageSelectImpl({
     const n = await ask<{ nw?: number }>('measure', { clip: b.clipId, at: '.box', natural: true });
     if (n?.nw == null) return null;
     const room = 2 * (TEXT_ROOM * b.font + 0.04 * n.nw);
-    const w = b.oneLine ? Math.max(1, Math.min(Math.round(stage.w / b.t.scaleY), Math.round(n.nw + room))) : Math.round(b.box.w);
+    const w = b.oneLine ? Math.max(1, Math.min(Math.round(stage.w / b.t.scaleY), MAX_PAGE, Math.round(n.nw + room))) : Math.round(b.box.w);
     const show = (h: number) => {
       const at = textAt(b, w, h);
-      clipPlace.push({ clip: b.clipId, box: at.box, size: { w, h }, root: { '--size': `${at.vh}vh` } });
+      clipPlace.push({ clip: b.clipId, box: at.box, size: { w, h } });
       return at;
     };
     if (w !== from.w) show(from.h);
     await clipPlace.idle();
-    const h = (await textLines(b.clipId)) ?? from.h;
+    const h = Math.min(MAX_PAGE, (await textLines(b.clipId)) ?? from.h);
     return { w, h, ...show(h) };
   };
   /** Back as it is kept: its own box and size, its own `--size`. */
@@ -1976,15 +2001,30 @@ function FilmStageSelectImpl({
     const at = parseFilmDocLoc(clipLoc);
     const id = at ? docRef.current.tracks[at.track]?.clips[at.clip]?.id : undefined;
     if (!id || !isTextClipId(id)) return null;
-    const letGo = async () => { await ask('show', { clip: id, overrides: null }); clipPlace.push({ clip: id, box: null, size: null, root: { '--size': `${textSizeOf(clipLoc)?.vh ?? 62}vh` } }); return null; };
+    /* its frame drawn where it is shown (a preview's box; back to its own when let go) */
+    const frameAt = (b: TextFitBase, t: MgTransform) => {
+      const held = pickedRef.current?.element;
+      if (held?.isMgOuter && held.clipLoc === clipLoc) holdClipAt({ clipLoc, box: b.box, crop: NO_CROP }, t);
+    };
+    const letGo = async () => {
+      await ask('show', { clip: id, overrides: null });
+      clipPlace.push({ clip: id, box: null, size: null, root: { '--size': `${textSizeOf(clipLoc)?.vh ?? 62}vh` } });
+      const kept = fitBases.current.get(clipLoc)?.base;
+      if (kept) frameAt(kept, kept.t);
+      return null;
+    };
     if (!overrides) return letGo();
-    /* whether it hugs its words, by the words it has; then its new ones (or look) shown, and their size read */
+    /* from the clip as written (whether it hugs its words, its box); its new words' size from the new `--size` (in vh
+       of its written height), shown in px while it is fitted, so the page's height for the moment does not change it */
     const was = await textFitBase(clipLoc);
-    await ask('show', { clip: id, overrides });
-    const font = was ? (await ask<{ font: number }>('measure', { clip: id, at: '.t' }))?.font : undefined;
-    const b = was && font ? { ...was, font } : null;
-    const fit = b ? await fitTextNow(b, { w: Math.round(b.box.w), h: Math.round(b.box.h) }) : null;
-    if (!b || !fit) return letGo();
+    const vh = vhSizeOf(overrides);
+    if (!was || vh == null) return letGo();
+    const font = (vh / 100) * was.box.h;
+    await ask('show', { clip: id, overrides: withRootVars(overrides, { '--size': `${Math.round(font * 100) / 100}px` }) });
+    const b = { ...was, font };
+    const fit = await fitTextNow(b, { w: Math.round(b.box.w), h: Math.round(b.box.h) });
+    if (!fit) return letGo();
+    frameAt(b, fit.shownT);
     return [
       { loc: clipLoc, prop: 'size', value: { w: fit.w, h: fit.h } },
       { loc: clipLoc, prop: 'overrides', value: withRootVars(overrides, { '--size': `${fit.vh}vh` }) },
@@ -2528,6 +2568,8 @@ function FilmStageSelectImpl({
       if (!inside || !held?.element?.text) {
         const layer = await ask<StageLayer>('hit', { ...at, from: held?.layer?.handle ?? null, detail: true });
         if (token !== pressSeq.current || !layer?.text) return;
+        /* a line of words: typed in at once, its whole clip staying in hand */
+        if (isTextClipId(layer.clip)) { startTextEditRef.current({ element: elementOf(layer), layer }); return; }
         commitHit(layerHit(layer));
       }
       startTextEditRef.current();
