@@ -213,3 +213,25 @@ test('a clip made from another (--video): put on fal\'s storage, each model its 
   await fal.run('video', { out: 'again', video: 'references/shot.mp4', prompt: 'p' }, { ...ctx(files), model: 'kling-o3-edit' });
   assert.match(JSON.parse(seen.find((c) => c.url.pathname === '/fal-ai/kling-video/o3/pro/video-to-video/edit').body).video_url, /^data:video\/mp4;base64,/);
 });
+
+test('a person speaking a recording (--audio): from a picture or a clip, the lips following it, the clip its length; a voice for Seedance', async () => {
+  process.env.OPENFILM_FAL_REST_URL = base;
+  const files = { 'assets/audio/vo/line.wav': new Uint8Array(Buffer.from('speech')), 'assets/image/host.png': new Uint8Array(png(16, 16)), 'assets/video/talk.mp4': new Uint8Array(Buffer.from('clip')) };
+  const run = async (model, args, endpoint) => {
+    seen.length = 0;
+    reply = storage(queue(endpoint, { video: { url: `${base}/files/out.mp4` } }));
+    const result = await fal.run('video', { out: 'host', ...args }, { ...ctx(files), model });
+    return { result, input: JSON.parse(seen.find((c) => c.method === 'POST' && c.url.pathname === `/${endpoint}`).body) };
+  };
+  const omni = await run('omnihuman-v2', { audio: 'assets/audio/vo/line.wav', 'first-frame': 'assets/image/host.png', prompt: 'waist up, a slow push in' }, 'bytedance/omnihuman/v2');
+  assert.deepEqual({ ...omni.input, image_url: omni.input.image_url.slice(0, 22) }, { image_url: 'data:image/png;base64,', audio_url: 'https://v3b.fal.media/files/clip.mp4', prompt: 'waist up, a slow push in' });
+  assert.equal(omni.result.index[0].from.audio, 'assets/audio/vo/line.wav');
+  const sync = await run('sync-3', { audio: 'assets/audio/vo/line.wav', video: 'assets/video/talk.mp4' }, 'fal-ai/sync-lipsync/v3');
+  assert.deepEqual(Object.keys(sync.input).sort(), ['audio_url', 'sync_mode', 'video_url']);
+  await assert.rejects(fal.run('video', { out: 'x', audio: 'assets/audio/vo/line.wav' }, { ...ctx(files), model: 'kling-avatar-v2' }), /--first-frame/);
+  await assert.rejects(fal.run('video', { out: 'x', prompt: 'p', audio: 'assets/audio/vo/line.wav' }, { ...ctx(files), model: 'kling-3.0-pro' }), /--model omnihuman-v2 or kling-avatar-v2/);
+  /* Seedance: whose voice, as a reference beside the picture of who speaks */
+  const voiced = await run('seedance-2.0', { prompt: 'He says: "此刻海上有多少艘船？"', voice: 'assets/audio/vo/line.wav', 'first-frame': 'assets/image/host.png' }, 'bytedance/seedance-2.0/reference-to-video');
+  assert.deepEqual([voiced.input.audio_urls, voiced.input.image_urls.length, voiced.input.image_url], [['https://v3b.fal.media/files/clip.mp4'], 1, undefined]);
+  await assert.rejects(fal.run('video', { out: 'x', prompt: 'p', voice: 'assets/audio/vo/line.wav' }, { ...ctx(files), model: 'seedance-2.0' }), /goes with a picture or a clip/);
+});

@@ -115,13 +115,14 @@ export const VERBS = /** @type {Record<string, VerbSpec>} */ ({
       frames: { value: 'n', min: 2, max: 16, integer: true, default: 9 }, 'frame-ms': { value: 'ms', min: 20, max: 2000, integer: true, default: 200 } },
   },
   video: {
-    help: 'Make one video clip. --resolution 480p to 4K, as the model makes them (720p, or its nearest, when not asked): a bigger one costs more. Returns src, dur, its size and preview frames. It spends a lot: the person confirms it in Studio first (--yes when they already agreed). The same request again returns the same clip; --force makes a new one. --video makes it from a clip in the project, trimmed to the part to make again (references/ is the place for another\'s footage); what it keeps is the model\'s way, chosen with --model: at fal, kling-o3-edit changes what the prompt names and keeps the rest; kling-o3-reference makes a new clip with its camera and motion; seedance-2.0 takes it as a reference (@Video1 in the prompt); luma-ray-3.2 redraws it, its performance kept; minimax-h3-max-recast puts the people of --input-reference in place of its own, one picture each.',
+    help: 'Make one video clip. --resolution 480p to 4K, as the model makes them (720p, or its nearest, when not asked): a bigger one costs more. Returns src, dur, its size and preview frames. It spends a lot: the person confirms it in Studio first (--yes when they already agreed). The same request again returns the same clip; --force makes a new one. A person who speaks on screen speaks in the clip, the voice and the lips made together, never a voice laid over a clip made without it: write the words in the prompt, in quotes, and keep the clip\'s own sound (--voice gives a recording of whose voice it is, the same across clips); or give a recording with --audio and the lips follow it word for word (at fal: omnihuman-v2 or kling-avatar-v2 from a picture of the person, --first-frame; sync-3 for a clip, --video). --video makes it from a clip in the project, trimmed to the part to make again (references/ is the place for another\'s footage); what it keeps is the model\'s way, chosen with --model: at fal, kling-o3-edit changes what the prompt names and keeps the rest; kling-o3-reference makes a new clip with its camera and motion; seedance-2.0 takes it as a reference (@Video1 in the prompt); luma-ray-3.2 redraws it, its performance kept; minimax-h3-max-recast puts the people of --input-reference in place of its own, one picture each.',
     dir: 'assets/video', timeoutSec: 1200,
     options: { out, prompt, force: {}, duration: { value: 'seconds', min: 2, max: 30, integer: true, default: 5 },
       resolution: { value: 'size', choices: ['480p', '720p', '768p', '1080p', '2K', '4K'] },
       'aspect-ratio': { value: 'ratio', choices: ['16:9', '9:16', '4:3', '3:4', '1:1', '21:9', '9:21', '3:2', '2:3', 'adaptive'] },
       'first-frame': { value: 'path', path: 'picture' }, 'last-frame': { value: 'path', path: 'picture' },
-      'input-reference': { value: 'path', path: 'picture', repeat: true }, video: { value: 'path', path: 'clip' } },
+      'input-reference': { value: 'path', path: 'picture', repeat: true }, video: { value: 'path', path: 'clip' },
+      audio: { value: 'path', path: 'speech' }, voice: { value: 'path', path: 'speech' } },
   },
   'web-search': {
     help: 'Search the web (up to 3 --query at once). Returns the pages that match: title, URL and an excerpt of each. web-fetch reads a whole page.',
@@ -341,8 +342,8 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     if (verb === 'video' && !yes) {
       const words = typeof args.prompt === 'string' ? args.prompt : '';
       const named = offered.find((m) => m.id === runModel)?.name ?? runModel;
-      /* a clip made from another is about as long as that one */
-      const from = typeof args.video === 'string' ? await mediaSeconds(root, args.video) : null;
+      /* a clip that speaks a recording is as long as it; one made from another, about as long as that one */
+      const from = typeof args.audio === 'string' ? await mediaSeconds(root, args.audio) : typeof args.video === 'string' ? await mediaSeconds(root, args.video) : null;
       await approve({ kind: 'video', provider: provider.name, ...(named ? { model: named } : {}), seconds: from !== null ? Math.round(from) : Number(args.duration),
         ...(words ? { prompt: words.length > 200 ? `${words.slice(0, 199).trimEnd()}…` : words } : {}) });
     }

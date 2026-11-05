@@ -112,6 +112,9 @@ export default {
   async run(verb, args, ctx) {
     if (verb === 'image') return picture(args, ctx);
     if (verb === 'video' && text(args.video)) throw new Error('--video: OpenRouter\'s video models here make clips from a prompt and pictures. A clip made from another is fal\'s: use fal for it.');
+    if (verb === 'video' && text(args.audio)) {
+      throw new Error('--audio: a clip whose lips follow a recording word for word is fal\'s (OmniHuman, Kling Avatar): use fal for it. Here a person speaks the words written in the prompt in quotes, with its own sound, and --voice gives a recording of whose voice it is.');
+    }
     if (verb === 'video') return video(args, ctx);
     throw new Error(`${NAME} does not do ${verb}.`);
   },
@@ -191,13 +194,26 @@ async function video(args, ctx) {
   const resolution = sizeOf(spec, askedSize);
   if (askedSize && resolution !== askedSize) said.push(`${spec.name} makes ${(spec.sizes ?? [resolution]).join(', ')}: ${resolution}`);
 
+  /* whose voice speaks the words of the prompt: a recording of it, as a reference (Seedance); a clip whose lips follow a
+     recording word for word is fal's (--audio) */
+  const voice = text(args.voice);
+  if (voice && !spec.references) throw new Error(`--voice: ${spec.name} here takes no voice. Seedance takes one: --model bytedance/seedance-2.0, or another Seedance.`);
+  if (voice && first) {
+    /* with a voice, the clip is made from references: the first frame is one of its pictures */
+    refs = [first, ...refs].slice(0, 9);
+    said.push('--first-frame: with --voice it was given as a reference picture, the clip made from references');
+  }
   const frame = async (/** @type {string} */ src, /** @type {'first_frame' | 'last_frame'} */ type) => ({ type: 'image_url', image_url: { url: await dataUri(src, ctx) }, frame_type: type });
-  const frames = [...(first ? [await frame(first, 'first_frame')] : []), ...(last ? [await frame(last, 'last_frame')] : [])];
+  const frames = voice ? [] : [...(first ? [await frame(first, 'first_frame')] : []), ...(last ? [await frame(last, 'last_frame')] : [])];
+  const references = [
+    ...(await Promise.all(refs.map(async (r) => ({ type: 'image_url', image_url: { url: await dataUri(r, ctx) } })))),
+    ...(voice ? [{ type: 'audio_url', audio_url: { url: await dataUri(voice, ctx) } }] : []),
+  ];
   const body = {
     model, prompt, duration: seconds, resolution, ...(spec.audio === false ? {} : { generate_audio: true }),
     ...(aspect ? { aspect_ratio: aspect } : {}),
     ...(frames.length ? { frame_images: frames } : {}),
-    ...(refs.length && !frames.length ? { input_references: await Promise.all(refs.map(async (r) => ({ type: 'image_url', image_url: { url: await dataUri(r, ctx) } }))) } : {}),
+    ...(references.length && !frames.length ? { input_references: references } : {}),
   };
   if (refs.length && frames.length) said.push('reference pictures go with a clip made from the prompt: the frames were used');
 
@@ -218,7 +234,7 @@ async function video(args, ctx) {
     files: [{ path, bytes }],
     index: [{ src: path, kind: 'video', dur: seconds, hasAudio: true, from: {
       mode: 'generate', prompt, provider: 'openrouter', model, resolution, sec: seconds,
-      ...(first ? { firstFrame: first } : {}), ...(last ? { lastFrame: last } : {}), ...(refs.length && !frames.length ? { refs } : {}),
+      ...(first ? { firstFrame: first } : {}), ...(last ? { lastFrame: last } : {}), ...(refs.length && !frames.length ? { refs } : {}), ...(voice ? { voice } : {}),
     } }],
     receipt: { provider: 'openrouter', model, src: path, dur: seconds, hasAudio: true, resolution, ...reported(state.usage), ...notes(said) },
     cost: billedBy(NAME),

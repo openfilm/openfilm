@@ -160,6 +160,9 @@ export default {
       return { files: [], index: [], receipt: { provider: 'google', model, language: text(args.language), lines: translatedLines(answer, ask.count) }, cost: billedBy(NAME) };
     }
     if (verb === 'video' && text(args.video)) throw new Error('--video: Veo makes clips from a prompt and pictures. A clip made from another is fal\'s: use fal for it.');
+    if (verb === 'video' && (text(args.audio) || text(args.voice))) {
+      throw new Error(`--${text(args.audio) ? 'audio' : 'voice'}: Veo takes no recording. A person speaks the words written in the prompt in quotes, with the clip's own sound; a clip whose lips follow a recording is fal's.`);
+    }
     if (verb === 'video') return video(args, ctx, base, send);
     throw new Error(`${NAME} does not do ${verb}.`);
   },

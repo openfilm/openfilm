@@ -147,3 +147,18 @@ test('a clip that failed says why; the key goes only to OpenRouter\'s own addres
   reply = clip(1, { status: 'completed', unsigned_urls: () => ['https://elsewhere.example/v.mp4'] });
   await assert.rejects(openrouter.run('video', { prompt: 'x', out: 'x' }, ctx()), /not its own; your key was not sent there/);
 });
+
+test('a person speaks the words of the prompt with the clip\'s own sound: --voice is whose voice, a reference beside the picture; --audio is fal\'s', async () => {
+  seen.length = 0;
+  reply = clip();
+  const files = { 'assets/image/host.png': new Uint8Array([1, 2, 3]), 'assets/audio/vo/voice.wav': new Uint8Array([4, 5, 6]) };
+  const result = await openrouter.run('video', { prompt: 'He says: "此刻海上有多少艘船？"', 'first-frame': 'assets/image/host.png', voice: 'assets/audio/vo/voice.wav', out: 'host' }, ctx(files));
+  const body = JSON.parse(seen[0].body);
+  assert.equal(body.generate_audio, true);
+  assert.equal(body.frame_images, undefined, 'with a voice, the clip is made from references');
+  assert.deepEqual(body.input_references.map((r) => r.type), ['image_url', 'audio_url']);
+  assert.match(body.input_references[1].audio_url.url, /^data:audio\/wav;base64,/);
+  assert.equal(result.index[0].from.voice, 'assets/audio/vo/voice.wav');
+  await assert.rejects(openrouter.run('video', { prompt: 'p', voice: 'assets/audio/vo/voice.wav', out: 'x' }, ctx(files, 'kwaivgi/kling-v3.0-pro')), /Seedance takes one/);
+  await assert.rejects(openrouter.run('video', { prompt: 'p', audio: 'assets/audio/vo/voice.wav', out: 'x' }, ctx(files)), /fal's \(OmniHuman, Kling Avatar\)/);
+});

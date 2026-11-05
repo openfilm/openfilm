@@ -25,6 +25,10 @@ const MODELS = {
     { id: 'kling-o3-reference', name: 'Kling O3 Reference (a new clip with a clip\'s camera and motion)' },
     { id: 'luma-ray-3.2', name: 'Luma Ray 3.2 Modify (a clip redrawn, its performance kept)' },
     { id: 'minimax-h3-max-recast', name: 'MiniMax H3 Max Recast (a clip\'s people replaced)' },
+    /* a person speaking a recording (--audio), its lips following it word for word: see FROM_SPEECH */
+    { id: 'omnihuman-v2', name: 'OmniHuman v2 (a person in a picture speaking a recording)' },
+    { id: 'kling-avatar-v2', name: 'Kling Avatar v2 (a person in a picture speaking a recording)' },
+    { id: 'sync-3', name: 'sync-3 (a clip\'s lips made to follow a recording)' },
   ],
   music: [{ id: 'fal-ai/stable-audio-25/text-to-audio', name: 'Stable Audio 2.5' }, { id: 'fal-ai/lyria2', name: 'Lyria 2' }],
   sfx: [{ id: 'fal-ai/elevenlabs/sound-effects/v2', name: 'ElevenLabs Sound Effects v2' }, { id: 'fal-ai/stable-audio-25/text-to-audio', name: 'Stable Audio 2.5' }],
@@ -84,6 +88,19 @@ const FROM_CLIP = {
   'luma-ray-3.2': { name: 'Luma Ray 3.2', endpoint: 'luma/agent/ray/v3.2/video-to-video', way: 'modify', clip: [1, 18] },
   'minimax-h3-max-recast': { name: 'MiniMax H3 Max Recast', endpoint: 'minimax/h3-max/recast', way: 'recast', clip: [5, 30] },
 };
+/**
+ * The models that make a person speak a recording (`--audio`), the lips following it word for word, the clip as long as
+ * the recording and its sound that recording: from a picture of the person (`--first-frame`, else the first
+ * `--input-reference`), the prompt steering how they move and how they are framed; or (`clip`) a clip whose lips are
+ * made to follow it (`--video`).
+ * @type {Record<string, { name: string, endpoint: string, from: 'picture' | 'clip', seconds: [number, number] }>}
+ */
+const FROM_SPEECH = {
+  'omnihuman-v2': { name: 'OmniHuman v2', endpoint: 'bytedance/omnihuman/v2', from: 'picture', seconds: [4, 300] },
+  'kling-avatar-v2': { name: 'Kling Avatar v2', endpoint: 'fal-ai/kling-video/ai-avatar/v2/pro', from: 'picture', seconds: [2, 300] },
+  'sync-3': { name: 'sync-3', endpoint: 'fal-ai/sync-lipsync/v3', from: 'clip', seconds: [1, 600] },
+};
+
 /** the largest clip sent inline when it cannot be put on fal's storage */
 const INLINE_MAX = 10 * 1024 * 1024;
 
@@ -132,6 +149,10 @@ export default {
 async function video(args, ctx) {
   const chosen = modelOf(MODELS, 'video', ctx);
   const clip = text(args.video);
+  if (FROM_SPEECH[chosen]) return fromSpeech(FROM_SPEECH[chosen], args, ctx);
+  if (text(args.audio)) {
+    throw new Error(`--audio: a person speaking a recording is made with --model omnihuman-v2 or kling-avatar-v2 (from a picture), or sync-3 (a clip's lips made to follow it).`);
+  }
   if (FROM_CLIP[chosen]) return fromClip(FROM_CLIP[chosen], args, ctx);
   const prompt = needed(args, 'prompt');
   const path = landing('video', args.out, 'mp4');
@@ -154,7 +175,16 @@ async function video(args, ctx) {
   const aspect = !ratio || ratio === 'adaptive' ? null : spec.ratios.includes(ratio) ? ratio : tall ? '9:16' : ['4:3', '1:1'].includes(ratio) && spec.ratios.includes('1:1') ? '1:1' : '16:9';
   if (aspect && aspect !== ratio) said.push(`${spec.name} makes ${spec.ratios.join(', ')} clips: ${aspect}`);
 
-  const endpoint = first && !clip ? spec.image : (refs.length || clip) && spec.reference ? spec.reference : spec.text;
+  /* whose voice speaks the words of the prompt (Seedance): a recording of it, beside a picture or a clip of who speaks */
+  const voice = text(args.voice);
+  if (voice && !spec.reference) throw new Error(`--voice: ${spec.name} here takes no voice. Seedance takes one: --model seedance-2.0.`);
+  if (voice && first && !clip) {
+    refs = [first, ...refs].slice(0, 9);
+    said.push('--first-frame: with --voice it was given as a reference picture, the clip made from references');
+  }
+  if (voice && !refs.length && !clip) throw new Error('--voice goes with a picture or a clip of who speaks: --first-frame, --input-reference or --video.');
+  const fromRefs = voice || refs.length || clip;
+  const endpoint = first && !fromRefs ? spec.image : fromRefs && spec.reference ? spec.reference : spec.text;
   if (first && clip) said.push('--first-frame: a clip made with a reference clip takes no first frame: it was left out');
   /* Kling calls the first frame start_image_url, and shapes only a clip made from the prompt */
   const kling = !spec.reference;
@@ -162,10 +192,11 @@ async function video(args, ctx) {
     /* Seedance's prompt names its reference clip @Video1 */
     prompt: clip && !prompt.includes('@Video1') ? `@Video1: ${prompt}` : prompt, duration: String(seconds), ...(spec.resolution ? { resolution: spec.resolution } : {}),
     ...(aspect && !(kling && first) ? { aspect_ratio: aspect } : {}),
-    ...(first && !clip ? { [kling ? 'start_image_url' : 'image_url']: await dataUri(first, ctx) } : {}),
-    ...(last && !clip ? { end_image_url: await dataUri(last, ctx) } : {}),
+    ...(first && !fromRefs ? { [kling ? 'start_image_url' : 'image_url']: await dataUri(first, ctx) } : {}),
+    ...(last && !fromRefs ? { end_image_url: await dataUri(last, ctx) } : {}),
     ...(refs.length ? { image_urls: await Promise.all(refs.map((r) => dataUri(r, ctx))) } : {}),
     ...(clip ? { video_urls: [await clipUrl(clip, ctx)] } : {}),
+    ...(voice ? { audio_urls: [await clipUrl(voice, ctx)] } : {}),
   };
   const result = await queued(endpoint, input, ctx, polling.ms.video);
   if (!text(result?.video?.url)) throw new Error(`${NAME} answered without a clip.`);
@@ -232,6 +263,42 @@ async function fromClip(spec, args, ctx) {
     files: [{ path, bytes }],
     index: [{ src: path, kind: 'video', dur: seconds, hasAudio: true, from: { mode: 'generate', prompt, provider: 'fal', model: spec.endpoint, sec: seconds, clip, ...(refs.length ? { refs } : {}) } }],
     receipt: { provider: 'fal', model: spec.endpoint, src: path, dur: seconds, hasAudio: true, ...notes(said) },
+    cost: billedBy(NAME),
+  };
+}
+
+/**
+ * A person speaking a recording (`--audio`), the chosen model's way (FROM_SPEECH): the clip is as long as the recording
+ * and its sound is the recording.
+ * @param {typeof FROM_SPEECH[string]} spec @param {Record<string, unknown>} args @param {RunContext} ctx
+ */
+async function fromSpeech(spec, args, ctx) {
+  const audio = text(args.audio);
+  if (!audio) throw new Error(`${spec.name} makes a person speak a recording: give it with --audio.`);
+  const said = [];
+  const picture = text(args['first-frame']) || list(args['input-reference'])[0];
+  const clip = text(args.video);
+  if (spec.from === 'picture' && !picture) throw new Error(`${spec.name} makes the person in a picture speak: give the picture with --first-frame.`);
+  if (spec.from === 'clip' && !clip) throw new Error(`${spec.name} makes a clip's lips follow the recording: give the clip with --video.`);
+  const seconds = await mediaSeconds(ctx.root, audio);
+  if (seconds !== null && (seconds < spec.seconds[0] || seconds > spec.seconds[1])) {
+    throw new Error(`--audio: ${spec.name} takes recordings of ${spec.seconds[0]} to ${spec.seconds[1]} s, and ${audio} is ${Math.round(seconds * 10) / 10} s.`);
+  }
+  if (text(args.duration) && seconds !== null) said.push(`--duration: the clip is as long as the recording, ${Math.round(seconds * 10) / 10} s`);
+  const prompt = text(args.prompt);
+  const path = landing('video', args.out, 'mp4');
+  const audioUrl = await clipUrl(audio, ctx);
+  const input = spec.from === 'clip'
+    ? { video_url: await clipUrl(clip, ctx), audio_url: audioUrl, sync_mode: 'cut_off' }
+    : { image_url: await dataUri(/** @type {string} */ (picture), ctx), audio_url: audioUrl, prompt: prompt || '.' };
+  const result = await queued(spec.endpoint, input, ctx, polling.ms.video);
+  if (!text(result?.video?.url)) throw new Error(`${NAME} answered without a clip.`);
+  const { bytes } = await download(NAME, result.video.url, ctx);
+  const dur = seconds !== null ? Math.round(seconds * 1000) / 1000 : number(args.duration) ?? 5;
+  return {
+    files: [{ path, bytes }],
+    index: [{ src: path, kind: 'video', dur, hasAudio: true, from: { mode: 'generate', prompt, provider: 'fal', model: spec.endpoint, sec: dur, audio, ...(picture && spec.from === 'picture' ? { firstFrame: picture } : {}), ...(clip ? { clip } : {}) } }],
+    receipt: { provider: 'fal', model: spec.endpoint, src: path, dur, hasAudio: true, ...notes(said) },
     cost: billedBy(NAME),
   };
 }
