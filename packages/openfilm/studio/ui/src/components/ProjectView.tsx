@@ -33,10 +33,11 @@ import { attrsOf, pasteAttrs, type AttrGroup, type CopiedAttrs } from '@/lib/cli
 import { cutPoints, nextCut } from '@/lib/timeline-nav';
 import { anyLocked, lockedEdits } from '@/lib/track-lock';
 import { placeMedia, type SourceRange } from '@/lib/media-place';
-import { BUILT_IN, TEXT_COMPONENT, builtInItem, cutTrack, cutsOf, fromLibrary, isTextClip, libraryBox, libraryDragItem, nameOf, onCut, placedGroup, useLibraryIndex, withLook, withRootVars, type LibraryItem } from '@/lib/library';
+import { BUILT_IN, TEXT_COMPONENT, builtInItem, cutTrack, cutsOf, fromLibrary, isTextClip, libraryBox, libraryDragItem, nameOf, onCut, pageUrl, placedGroup, useLibraryIndex, withLook, withRootVars, type LibraryItem } from '@/lib/library';
 import { LibraryDrawer, type LibraryActions, type SkillsRequest } from '@/components/library/LibraryDrawer';
 import type { CaptionsMake } from '@/components/library/CaptionsPane';
 import { LibraryTrial } from '@/components/library/LibraryTrial';
+import { hugText } from '@/lib/text-box';
 import { apartOnTracks, type ClipEdit } from '@/lib/film-clip-edits';
 import { mediaFetch, useMediaImages } from '@/lib/media-queue';
 import { clipboardItemsOf, clipboardNow, laneOfBlock, pasteEdit, type TimelineClipboardItem } from '@/lib/timeline-clipboard';
@@ -1490,8 +1491,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         const { saved: _from, ...rest } = file;
         return dropAssetRef.current({ ...rest, path: taken.path }, target, atMs);
       }
-      /* a sticker of the library: in the middle of the picture at a size it reads, not over all of it */
-      const box = libraryBox(builtInItem(file.saved), stageRef.current ?? { w: 1920, h: 1080 });
+      /* a sticker of the library: in the middle of the picture at a size it reads, not over all of it; a line of words
+         in a box that hugs them (lib/text-box) */
+      const shape = builtInItem(file.saved);
+      const stageNow = stageRef.current ?? { w: 1920, h: 1080 };
+      const shaped = libraryBox(shape, stageNow);
+      const box = shaped && shape?.id === TEXT_COMPONENT ? await hugText(pageUrl(shape), shaped, stageNow.w) : shaped;
       const clip = box ? { ...taken.clip, box, size: { w: box.w, h: box.h } } : taken.clip;
       const durMs = file.durationMs ?? assetRunMs([file]);
       /* a transition of OpenFilm's library (lib/library): its middle on the cut it was put near, never pushing or
@@ -1722,8 +1727,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         return;
       }
       if (!('clip' in taken)) return;
-      /* in a box of its own, the page drawn at the box's size (not the picture's, shrunk into it) */
-      const box = libraryBox(shape, stageRef.current ?? { w: 1920, h: 1080 });
+      /* in a box of its own, the page drawn at the box's size (not the picture's, shrunk into it); a line of words in a
+         box that hugs them (lib/text-box) */
+      const stageNow = stageRef.current ?? { w: 1920, h: 1080 };
+      const shaped = libraryBox(shape, stageNow);
+      const box = shaped && item.id === TEXT_COMPONENT ? await hugText(pageUrl(item), shaped, stageNow.w, vars) : shaped;
       const clip = { ...taken.clip, ...(box ? { box, size: { w: box.w, h: box.h } } : {}), ...(vars ? { overrides: withRootVars((taken.clip as { overrides?: unknown[] }).overrides, vars) } : {}) };
       const failed = await edit([{ op: 'insert', clip: clip as never, at, track }], 'history.stepDrop');
       if (failed) { toast.show(failed); return; }

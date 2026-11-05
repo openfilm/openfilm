@@ -31,7 +31,9 @@
   --wrap: pre-wrap;
   --italic: normal;
   --align: center;
-  /* how it comes in, moves while shown, goes out: an animation's name (none: still) and how long */
+  /* how it comes in, moves while shown, goes out: an animation's name (none: still) and how long. Each stays within
+     the room its box keeps around the words (Studio puts a line in hugged: a fifth of their size each side, and a
+     little of their width), so none is cut by the box */
   --in: rise;
   --in-time: 0.5s;
   --loop: none;
@@ -64,37 +66,37 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: transparent;
 
 /* coming in */
 @keyframes fade { from { opacity: 0; } }
-@keyframes rise { from { opacity: 0; transform: translateY(0.6em); } }
-@keyframes drop { from { opacity: 0; transform: translateY(-0.8em); } }
-@keyframes pop { 0% { opacity: 0; transform: scale(0.4); } 70% { transform: scale(1.08); } 100% { transform: scale(1); } }
-@keyframes zoom { from { opacity: 0; transform: scale(1.6); filter: blur(6px); } }
+@keyframes rise { from { opacity: 0; transform: translateY(0.2em); } }
+@keyframes drop { from { opacity: 0; transform: translateY(-0.2em); } }
+@keyframes pop { 0% { opacity: 0; transform: scale(0.4); } 70% { transform: scale(1.04); } 100% { transform: scale(1); } }
+@keyframes zoom { from { opacity: 0; transform: scale(0.8); filter: blur(6px); } }
 @keyframes blur { from { opacity: 0; filter: blur(14px); } }
-@keyframes slide-left { from { opacity: 0; transform: translateX(-1.2em); } }
-@keyframes slide-right { from { opacity: 0; transform: translateX(1.2em); } }
+@keyframes slide-left { from { opacity: 0; transform: translateX(-0.2em); } }
+@keyframes slide-right { from { opacity: 0; transform: translateX(0.2em); } }
 @keyframes wipe { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 @keyframes type { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
-@keyframes stamp { 0% { opacity: 0; transform: scale(2.4) rotate(-8deg); } 60% { opacity: 1; transform: scale(0.94) rotate(0); } 100% { transform: scale(1); } }
-@keyframes spin-in { from { opacity: 0; transform: rotate(-90deg) scale(0.5); } }
+@keyframes stamp { 0% { opacity: 0; transform: scale(0.6) rotate(-3deg); } 60% { opacity: 1; transform: scale(1.04) rotate(0); } 100% { transform: scale(1); } }
+@keyframes spin-in { from { opacity: 0; transform: rotate(-6deg) scale(0.6); } }
 @keyframes flip-in { from { opacity: 0; transform: perspective(600px) rotateX(90deg); } }
-@keyframes bounce-in { 0% { opacity: 0; transform: translateY(-1.4em); } 55% { opacity: 1; transform: translateY(0.12em); } 75% { transform: translateY(-0.06em); } 100% { transform: translateY(0); } }
+@keyframes bounce-in { 0% { opacity: 0; transform: translateY(-0.2em); } 55% { opacity: 1; transform: translateY(0.06em); } 75% { transform: translateY(-0.03em); } 100% { transform: translateY(0); } }
 
 /* while it shows */
 @keyframes float { 50% { transform: translateY(-0.12em); } }
-@keyframes pulse { 50% { transform: scale(1.06); } }
-@keyframes wiggle { 25% { transform: rotate(-3deg); } 75% { transform: rotate(3deg); } }
+@keyframes pulse { 50% { transform: scale(1.04); } }
+@keyframes wiggle { 25% { transform: rotate(-2deg); } 75% { transform: rotate(2deg); } }
 @keyframes shake { 20% { transform: translateX(-0.04em); } 40% { transform: translateX(0.04em); } 60% { transform: translateX(-0.03em); } 80% { transform: translateX(0.03em); } }
 @keyframes breathe { 50% { opacity: 0.55; } }
-@keyframes swing { 50% { transform: rotate(4deg); } }
+@keyframes swing { 50% { transform: rotate(2deg); } }
 @keyframes flicker { 0%, 100% { opacity: 1; } 8% { opacity: 0.4; } 10% { opacity: 1; } 52% { opacity: 0.7; } 54% { opacity: 1; } }
 
 /* going out */
 @keyframes fade-out { to { opacity: 0; } }
-@keyframes sink { to { opacity: 0; transform: translateY(0.6em); } }
-@keyframes lift { to { opacity: 0; transform: translateY(-0.8em); } }
+@keyframes sink { to { opacity: 0; transform: translateY(0.2em); } }
+@keyframes lift { to { opacity: 0; transform: translateY(-0.2em); } }
 @keyframes shrink { to { opacity: 0; transform: scale(0.4); } }
 @keyframes blur-out { to { opacity: 0; filter: blur(14px); } }
 @keyframes wipe-out { from { clip-path: inset(0 0 0 0); } to { clip-path: inset(0 0 0 100%); } }
-@keyframes zoom-out { to { opacity: 0; transform: scale(1.6); filter: blur(6px); } }
+@keyframes zoom-out { to { opacity: 0; transform: scale(0.8); filter: blur(6px); } }
 </style>
 </head>
 <body>

@@ -48,6 +48,7 @@ import type { PreviewHandle, StageEvent } from '@/editor/Preview';
 import { useT } from '@/i18n';
 import { cropOf, declared, pxOf, type ClipLook, type Crop } from '@/lib/clip-look';
 import { filmClipKind, filmDocLoc, filmSrcKind, parseFilmDocLoc, type FilmBox, type FilmDoc } from '@/lib/film';
+import { isTextClip } from '@/lib/library';
 import type { OverrideGeometry } from '@/lib/film-overrides';
 import { spanShows, type ClipSpan } from '@/lib/film-shape';
 import {
@@ -628,7 +629,22 @@ function FilmStageSelectImpl({
     override: layer.override,
     ...(layer.instance != null ? { instance: layer.instance, instances: layer.instances } : {}),
   }), []);
-  const hitOf = React.useCallback((layer: StageLayer): Hit => ({ rect: layer.rect, label: layer.label, element: elementOf(layer), layer }), [elementOf]);
+  /** Whether clip `id` is a line of the library's words (its text component). */
+  const isTextClipId = (id: string) => {
+    const at = parseFilmDocLoc(clipLocOf(docRef.current, id) ?? '');
+    return Boolean(at && isTextClip(docRef.current.tracks[at.track]?.clips[at.clip]?.src ?? ''));
+  };
+  /** A layer as the picture holds it. */
+  const layerHit = React.useCallback((layer: StageLayer): Hit => ({ rect: layer.rect, label: layer.label, element: elementOf(layer), layer }), [elementOf]);
+  /* a line of the library's words (its text component, lib/library isTextClip) is one thing on the picture: pointed
+     at, hovered or pressed, it is its whole clip, whose box hugs the words (one frame, not the clip's and its line's);
+     a double-click goes in to type (layerHit) */
+  const hitOf = React.useCallback((layer: StageLayer): Hit => {
+    const loc = isTextClipId(layer.clip) ? clipLocOf(docRef.current, layer.clip) : undefined;
+    const info = loc ? infoOf(loc) : null;
+    return info ? describeClip(info, stage) : layerHit(layer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layerHit, stage]);
 
   /* ── in-place text editing state (the film runs the text box; it says when it ends) ── */
   const [editingText, setEditingTextState] = React.useState<string | null>(null);
@@ -1509,6 +1525,8 @@ function FilmStageSelectImpl({
      empty part, as its layers are: several pages on the picture are each found) */
   const hoverQueue = React.useMemo(() => new Latest<{ x: number; y: number; from: number | null }>(async (p) => {
     let found = await ask<StageOutline>('hit', p);
+    /* a line of the library's words: its whole clip's outline (hitOf) */
+    if (found?.clip && isTextClipId(found.clip)) found = clipOutlineRef.current(found.clip);
     if (!found) {
       const id = await ask<string>('clipAt', { x: p.x, y: p.y });
       found = id ? clipOutlineRef.current(id) : null;
@@ -2184,7 +2202,7 @@ function FilmStageSelectImpl({
       if (!inside || !held?.element?.text) {
         const layer = await ask<StageLayer>('hit', { ...at, from: held?.layer?.handle ?? null, detail: true });
         if (token !== pressSeq.current || !layer?.text) return;
-        commitHit(hitOf(layer));
+        commitHit(layerHit(layer));
       }
       startTextEditRef.current();
     })();
