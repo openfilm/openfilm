@@ -1207,7 +1207,6 @@ export const ja: Words = {
     fontWeight: 'ウェイト',
     fontFamily: 'フォント',
     fontSearch: 'フォントを検索',
-    fontUse: '「{name}」を使用',
     fontNone: '一致するフォントはありません',
     fontGroupLatin: '欧文',
     fontGroupZh: '中国語',

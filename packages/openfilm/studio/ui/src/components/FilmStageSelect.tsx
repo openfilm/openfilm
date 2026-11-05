@@ -437,7 +437,8 @@ interface FilmStageSelectProps {
   onHoverLayer?: (hit: { element: StageElement; box: StageBox } | null) => void;
   /** A clip's menu's Mask, its shapes: the one picked is put on the clip in hand, its handles on the picture. */
   onStartMask?: (shape: MaskShape | 'none', clipLoc: string) => void;
-  /** A layer pointed at from elsewhere (a row of the Layers panel), outlined as the one under the pointer is. */
+  /** A layer pointed at from elsewhere (a row of the Layers panel), outlined as the one under the pointer is; `loc`
+      empty: the whole clip. */
   pointLayer?: { clipId: string; loc: string } | null;
   /** A picture of the project dropped on a picture inside a page (an <img>, a box painted with one): put in its place. */
   onDropPicture?: (element: StageElement, path: string) => void;
@@ -1657,8 +1658,15 @@ function FilmStageSelectImpl({
   /* goes up when the picture is drawn anew: the layer pointed at is looked up again (it may be gone) */
   const [pointAgain, setPointAgain] = React.useState(0);
   React.useEffect(() => {
-    if (!pointClip || !pointLoc) {
+    if (!pointClip) {
       if (pointed.current) { pointed.current = false; setHover(null); }
+      return undefined;
+    }
+    /* a clip's own row: the whole clip, outlined as it is under the pointer */
+    if (!pointLoc) {
+      const outline = clipOutlineRef.current(pointClip);
+      pointed.current = Boolean(outline);
+      setHover(outline);
       return undefined;
     }
     let live = true;

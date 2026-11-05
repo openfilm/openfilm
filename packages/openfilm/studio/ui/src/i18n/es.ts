@@ -1207,7 +1207,6 @@ export const es: Words = {
     fontWeight: 'Grosor',
     fontFamily: 'Fuente',
     fontSearch: 'Buscar fuentes',
-    fontUse: 'Usar “{name}”',
     fontNone: 'Ninguna fuente coincide',
     fontGroupLatin: 'Latinas',
     fontGroupZh: 'Chino',

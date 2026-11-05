@@ -1208,7 +1208,6 @@ export const en = {
     fontWeight: 'Weight',
     fontFamily: 'Font',
     fontSearch: 'Search fonts',
-    fontUse: 'Use “{name}”',
     fontNone: 'No matching font',
     fontGroupLatin: 'Latin',
     fontGroupZh: 'Chinese',

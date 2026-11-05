@@ -13,7 +13,7 @@
  */
 import React from 'react';
 import {
-  Captions, ChevronRight, Eye, EyeOff, Film, Globe, Image as ImageIcon, Lock, LockOpen, Shapes, Square, SquareDashed, Trash2, Type, X,
+  Captions, ChevronRight, Eye, EyeOff, Film, Globe, Image as ImageIcon, Lock, LockOpen, Shapes, Sparkles, Square, SquareDashed, Sticker, Trash2, Type, X,
 } from 'lucide-react';
 import { useT } from '@/i18n';
 import {
@@ -23,7 +23,8 @@ import {
 import type { StageArrangeResult } from './stage-menu';
 import { PANE_BAR, PANE_BTN, PANE_ICON, PANE_TITLE } from './dock-pane-bar';
 import { Tooltip } from './Tooltip';
-import { parseFilmDocLoc } from '@/lib/film';
+import { filmSrcIsStill, parseFilmDocLoc } from '@/lib/film';
+import { isLibrarySticker } from '@/lib/library';
 
 const ROW_H = 26;
 const INDENT = 12;
@@ -31,6 +32,17 @@ const INDENT = 12;
 const PLAYING_EVERY_MS = 400;
 
 const KIND_ICON: Record<LayerRowKind, typeof Type> = { text: Type, image: ImageIcon, shape: Shapes, box: Square, group: SquareDashed };
+
+/** A clip's row icon, as the timeline tells it: words, a sticker, an effect, a video, a still, a caption, a page. */
+function clipIcon(clip: { kind: string; src?: string; words?: boolean } | null): typeof Type {
+  const src = clip?.src?.split('#')[0] ?? '';
+  if (clip?.words) return Type;
+  if (isLibrarySticker(src)) return Sticker;
+  if (src.startsWith('saved/openfilm/effects-')) return Sparkles;
+  if (clip?.kind === 'caption') return Captions;
+  if (clip?.kind === 'video') return src && filmSrcIsStill(src) ? ImageIcon : Film;
+  return clip?.kind === 'mg' ? Globe : ImageIcon;
+}
 
 export interface LayersPanelProps {
   /** Asks the picture's stage (studio/server/stage.js ops). */
@@ -40,8 +52,9 @@ export interface LayersPanelProps {
   /** Changes with film.html: the pages may have new overrides. */
   filmKey: unknown;
   /** A clip by its film.html id: how the timeline names it, and its place. */
-  /** `whole`: a thing of the library (a sticker, an effect, words): one row, the parts of its page not shown. */
-  clipOf: (clipId: string) => { label: string; kind: string; loc?: string; whole?: boolean } | null;
+  /** `whole`: a thing of the library (a sticker, an effect, words): one row, the parts of its page not shown. `src`
+      and `words` (a line of words) tell its icon. */
+  clipOf: (clipId: string) => { label: string; kind: string; loc?: string; whole?: boolean; src?: string; words?: boolean } | null;
   /** The layers in hand on the picture: one, several selected together, or none. */
   selected: readonly { clipId?: string; loc: string | null }[];
   /** The clips selected (film.html places). */
@@ -247,7 +260,7 @@ export function LayersPanel(p: LayersPanelProps) {
                 press.current = { line, x: e.clientX, y: e.clientY, id: e.pointerId };
               }}
               onClick={(e) => { if (!dragRef.current) clickRow(line, e); }}
-              onPoint={() => p.onPoint(line.row ? { clipId: line.clipId, loc: line.row.loc } : null)}
+              onPoint={() => p.onPoint({ clipId: line.clipId, loc: line.row ? line.row.loc : '' })}
               onToggle={(what) => { if (line.row) p.onToggle(line.clipId, line.row, what); }}
               onDelete={() => { if (line.row) p.onDelete(line.clipId, line.row); }}
               onMenu={(e) => {
@@ -292,7 +305,7 @@ function LayerLineRow({ line, top, t, clipOf, tone, joinUp, joinDown, dragging, 
 }) {
   const row = line.row;
   const clip = row ? null : clipOf(line.clipId);
-  const Icon = row ? KIND_ICON[row.kind] : clip?.kind === 'mg' ? Globe : clip?.kind === 'video' ? Film : clip?.kind === 'caption' ? Captions : ImageIcon;
+  const Icon = row ? KIND_ICON[row.kind] : clipIcon(clip);
   const label = row ? row.label : (clip?.label ?? line.clipId);
   /* not drawn now, or hidden by the person: the row is there, dimmed (it can be shown or picked from here) */
   const dim = Boolean(row && (row.off || row.hidden));

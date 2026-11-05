@@ -350,10 +350,12 @@ export type AssetDropPreview = {
   /** The row's lane name; null for a new track. */
   lane: string | null;
   error: 'locked' | null;
+  /** What it is drawn as once put in, when not by its kind: a line of words, or a sticker of the library. */
+  look?: 'text' | 'sticker';
 };
 
 export function assetDropPreview(
-  file: Pick<ResourceDragItem, 'path' | 'kind' | 'name' | 'durationMs'>,
+  file: Pick<ResourceDragItem, 'path' | 'kind' | 'name' | 'durationMs' | 'saved' | 'words'>,
   tracks: readonly TimelineTrack[],
   hit: AssetLaneHit | null,
   atMs: number,
@@ -365,7 +367,9 @@ export function assetDropPreview(
   if (!spot || !kind || !blockKind) return null;
   const durMs = dropDurMsOf(file);
   const startMs = Math.max(0, atMs);
-  const base = { kind, blockKind, title: clipTitleOf(file), startMs, endMs: startMs + durMs };
+  /* drawn as it will be: a line of words its words, a sticker as a sticker (the timeline's own looks for them) */
+  const look = file.words ? 'text' as const : file.saved?.startsWith('openfilm/stickers/') ? 'sticker' as const : undefined;
+  const base = { kind, blockKind, title: file.words ?? clipTitleOf(file), startMs, endMs: startMs + durMs, ...(look ? { look } : {}) };
   if (spot.action === 'new-track') {
     return { ...base, laneIndex: spot.laneIndex, newTrack: true, docAt: spot.docAt, lane: null, error: null };
   }

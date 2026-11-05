@@ -1208,7 +1208,6 @@ export const zhCN: Words = {
     fontWeight: '字重',
     fontFamily: '字体',
     fontSearch: '搜索字体',
-    fontUse: '使用“{name}”',
     fontNone: '没有匹配的字体',
     fontGroupLatin: '拉丁文',
     fontGroupZh: '中文',

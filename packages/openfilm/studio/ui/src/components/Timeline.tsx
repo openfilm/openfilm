@@ -309,7 +309,6 @@ const CUE_MENU = new Set(['split', 'duplicate', 'remove', 'ripple', 'ripple-star
 /** A caption track's row, and a row of the library's text: narrow, each cue or clip a line of words. */
 const CAPTION_ROW_H = 26;
 
-/** A row's height: the person's for its track (lib/track-heights), else the timeline's own (the main track taller). */
 /** A sticker's picture on its block: a frame from its middle (it has come in by then), else its poster. */
 function stickerShot(strip: ReadonlyMap<number, string> | undefined, poster: string | undefined): string | undefined {
   if (!strip?.size) return poster;
@@ -317,6 +316,7 @@ function stickerShot(strip: ReadonlyMap<number, string> | undefined, poster: str
   return strip.get(at[Math.floor(at.length / 2)]!) ?? poster;
 }
 
+/** A row's height: the person's for its track (lib/track-heights), else the timeline's own (the main track taller). */
 function rowH(track: Pick<TimelineTrack, 'kind' | 'height' | 'main'> & { captions?: unknown; text?: boolean }): number {
   return track.height ?? (track.captions || track.text ? CAPTION_ROW_H : ownTrackHeight(track));
 }
@@ -399,7 +399,8 @@ function landingForClip(
     title: block.title,
     color: KIND_COLOR[block.kind],
     top: trackSlotTop(tracks, laneIndex, padTop),
-    height: trackKindHeight(tracks[Math.min(laneIndex, Math.max(0, tracks.length - 1))]?.kind ?? block.kind),
+    /* as tall as the row it lands on (a row of words is low), never over the rows under it */
+    height: (() => { const row = tracks[Math.min(laneIndex, Math.max(0, tracks.length - 1))]; return row ? rowH(row) : trackKindHeight(block.kind); })(),
     refused,
   };
 }
@@ -3549,13 +3550,15 @@ export const Timeline = React.memo(function Timeline({
         }];
       }
       const top = trackSlotTop(tracks, assetHint.laneIndex, padTop);
-      const height = trackKindHeight(tracks[assetHint.laneIndex]?.kind ?? laneKindForHint(assetHint.blockKind));
+      /* as tall as the row it lands on, in the look it will have there (words, a sticker) */
+      const row = tracks[assetHint.laneIndex];
+      const height = row ? rowH(row) : trackKindHeight(laneKindForHint(assetHint.blockKind));
       return [{
         type: 'slot',
         startMs: assetHint.startMs,
         endMs: assetHint.endMs,
         title: assetHint.title,
-        color: KIND_COLOR[assetHint.blockKind],
+        color: assetHint.look === 'text' ? 'var(--clip-text)' : assetHint.look === 'sticker' ? 'var(--clip-sticker)' : KIND_COLOR[assetHint.blockKind],
         top,
         height,
         refused: Boolean(assetHint.error),

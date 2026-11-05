@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { assetClipElement, assetClipKindOf, assetDropInsert, assetDropSpot, assetDropTargetOf, assetFitBox, assetPageFit, assetRunInsert, soundLaneHit } from './asset-timeline.ts';
+import { assetClipElement, assetClipKindOf, assetDropInsert, assetDropPreview, assetDropSpot, assetDropTargetOf, assetFitBox, assetPageFit, assetRunInsert, soundLaneHit } from './asset-timeline.ts';
 import type { TimelineTrack } from './timeline-layout.ts';
 
 /* A file from the media pane lands on the row under the pointer when it is a track of its kind (a sound on a sound
@@ -160,4 +160,14 @@ test('a page without a size of its own keeps the size it is shown at alone, scal
 test('a page the pane names one without its ending (a bundle of Saved) is an mg clip', () => {
   assert.equal(assetClipKindOf({ path: 'saved/Lower third', kind: 'mg' }), 'mg');
   assert.equal(assetClipKindOf({ path: 'saved/notes', kind: 'other' }), null);
+});
+
+test('the preview of a drop looks as it will land: a line of words its words, a sticker as a sticker', () => {
+  const words = { path: 'openfilm/text/text/files/text.html', name: 'Candy', kind: 'mg' as const, durationMs: 3000, saved: 'openfilm/text/looks/candy', words: '默认文本' };
+  const text = assetDropPreview(words, tracks, { lane: 0, band: 'body' }, 12_000);
+  assert.equal(text?.title, '默认文本');
+  assert.equal(text?.look, 'text');
+  const sticker = assetDropPreview({ path: 'openfilm/stickers/tap/files/tap.html', name: 'Tap', kind: 'mg', durationMs: 3000, saved: 'openfilm/stickers/tap' }, tracks, { lane: 0, band: 'body' }, 12_000);
+  assert.equal(sticker?.look, 'sticker');
+  assert.equal(assetDropPreview(video, tracks, { lane: 0, band: 'body' }, 12_000)?.look, undefined);
 });

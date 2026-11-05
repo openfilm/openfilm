@@ -137,7 +137,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
   /* what a sound or a piece of music plays in, under the list */
   const player = usePlayer();
   closePlayer.current = player.close;
-  const dragProps = (item: LibraryItem) => ({ onDragStart: dragOf(item, nameOf(item.name, lang)), onDragEnd: () => clearResourceDrag() });
+  const dragProps = (item: LibraryItem) => ({ onDragStart: dragOf(item, nameOf(item.name, lang), lang), onDragEnd: () => clearResourceDrag() });
   /* a long list (thousands of sounds) is drawn a page at a time, from its top again when what it lists changes */
   const [drawn, setDrawn] = React.useState(PAGE);
   React.useEffect(() => setDrawn(PAGE), [cat, group, query, source]);
@@ -384,8 +384,8 @@ function addTip(item: LibraryItem, t: (path: string) => string): string {
 }
 
 /** What a drag of `item` carries to the timeline (or the chat). */
-function dragOf(item: LibraryItem, name: string) {
-  const drag = libraryDragItem(item, name);
+function dragOf(item: LibraryItem, name: string, lang: Parameters<typeof libraryDragItem>[2]) {
+  const drag = libraryDragItem(item, name, lang);
   return drag ? (e: React.DragEvent) => { setResourceDragData(e.dataTransfer, drag); dragPicture(e); e.dataTransfer.effectAllowed = 'copyMove'; } : undefined;
 }
 
@@ -469,7 +469,7 @@ function Card({ item, lang, picked, kept, square, onPick, onAdd }: {
     <div
       className="group relative min-w-0 cursor-default select-none"
       draggable
-      onDragStart={dragOf(item, name)}
+      onDragStart={dragOf(item, name, lang)}
       onDragEnd={() => clearResourceDrag()}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}

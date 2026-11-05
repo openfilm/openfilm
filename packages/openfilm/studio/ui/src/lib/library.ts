@@ -138,7 +138,8 @@ export const waveUrl = (item: LibraryItem): string => libraryUrl(item.id.replace
  * preview's length, and its `openfilm/` path to be taken into the project as it lands; a look or a fade what it goes
  * on (`apply`: a clip, a cut), being no clip itself.
  */
-export function libraryDragItem(item: LibraryItem, name: string): ResourceDragItem | null {
+/** `lang`: the app's language, for the words a line of words says (defaultTextWords). */
+export function libraryDragItem(item: LibraryItem, name: string, lang?: Language): ResourceDragItem | null {
   const saved = `${BUILT_IN}/${item.id}`;
   if (item.kind === 'look' || item.kind === 'fade') return { path: saved, name, kind: 'other', saved, apply: item.kind };
   if (item.kind === 'sound') return { path: saved, name, kind: 'audio', ...(item.durationMs ? { durationMs: item.durationMs } : {}), saved };
@@ -146,11 +147,12 @@ export function libraryDragItem(item: LibraryItem, name: string): ResourceDragIt
   /* a text style: a new line of words in it (the drop takes the text component with its variables) */
   if (item.kind === 'textstyle') {
     const text = builtInItem(`${BUILT_IN}/${TEXT_COMPONENT}`);
-    const drag = text ? libraryDragItem(text, name) : null;
+    const drag = text ? libraryDragItem(text, name, lang) : null;
     return drag ? { ...drag, ...(item.w && item.h ? { w: item.w, h: item.h } : {}), saved } : null;
   }
   if (item.kind !== 'page' || !item.src) return null;
   return {
+    ...(item.id === TEXT_COMPONENT ? { words: lang ? defaultTextWords(lang) : name } : {}),
     path: `${saved}/files/${item.src.split('#')[0]}`,
     name,
     kind: 'mg',

@@ -2586,7 +2586,10 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const layerClipOf = React.useCallback((clipId: string) => {
     const b = blocksRef.current.find((x) => x.clipId === clipId);
     /* a thing of the library: one row, as it is one thing on the picture */
-    return b ? { label: b.title, kind: b.kind, ...(b.loc ? { loc: b.loc } : {}), ...(isLibraryClip(b.src) ? { whole: true } : {}) } : null;
+    return b ? {
+      label: b.title, kind: b.kind, ...(b.loc ? { loc: b.loc } : {}), ...(b.src ? { src: b.src } : {}),
+      ...(isLibraryClip(b.src) ? { whole: true } : {}), ...(b.words != null ? { words: true } : {}),
+    } : null;
   }, []);
   const selectLayerRows = React.useCallback((layers: readonly { clipId: string; loc: string }[], toggle = false) => {
     const found = layers.flatMap(({ clipId, loc }) => {

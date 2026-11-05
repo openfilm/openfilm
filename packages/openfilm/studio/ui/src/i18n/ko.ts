@@ -1204,7 +1204,6 @@ export const ko: Words = {
     fontWeight: '굵기',
     fontFamily: '글꼴',
     fontSearch: '글꼴 검색',
-    fontUse: '“{name}” 사용',
     fontNone: '일치하는 글꼴 없음',
     fontGroupLatin: '라틴',
     fontGroupZh: '중국어',
