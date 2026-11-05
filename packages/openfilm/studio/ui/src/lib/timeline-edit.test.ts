@@ -14,6 +14,7 @@ import {
   planCloseGap,
   planCloseMainGaps,
   planCloseTrackGaps,
+  planDetachAudio,
   planEdges,
   planLink,
   planMove,
@@ -475,6 +476,41 @@ test('a detached sound goes on a sound track with room, else on a new one under 
   assert.deepEqual(soundTrackFor(none, { startMs: 0, endMs: 4000 }, 0), { insert: 2 });
   const locked = model({ role: 'video', clips: [['v', 0, 4]] }, { role: 'audio', locked: true, clips: [] });
   assert.deepEqual(soundTrackFor(locked, { startMs: 0, endMs: 4000 }, 0), { insert: 2 });
+});
+
+test('sounds detached together: each on a track with room, a track opened for one there for the next, each linked to its video', () => {
+  /* two videos playing together and one after them; one sound track, busy over the first two */
+  const m = model(
+    { role: 'video', clips: [['a', 0, 4], ['c', 5, 8]] },
+    { role: 'video', clips: [['b', 1, 3]] },
+    { role: 'audio', clips: [['vo', 0, 4]] },
+  );
+  const film = filmOf(m);
+  const ops = planDetachAudio(m, film.tracks.slice(0, 2).flatMap((t) => t.clips) as never);
+  const out = applyOps(structuredClone(film) as never, ops as never) as unknown as FilmValue;
+  const sounds = out.tracks.map((t) => t.clips.filter((c) => (c as { sound?: true }).sound));
+  /* a's sound opens a track under vo's; b's overlaps it and opens another; c's has room beside vo, below c's own track */
+  assert.deepEqual(sounds.map((t) => t.map((c) => [c.src, c.at ?? 0])), [[], [], [['c.mp4', 5]], [['a.mp4', 0]], [['b.mp4', 1]]]);
+  const clips = out.tracks.flatMap((t) => t.clips);
+  for (const id of ['a', 'b', 'c']) {
+    const video = clips.find((c) => c.id === id)!;
+    const sound = clips.find((c) => (c as { sound?: true }).sound && c.src === `${id}.mp4`)!;
+    assert.equal((video as { volume?: number }).volume, 0, `${id} is silent`);
+    assert.equal(video.attrs?.['data-link'], id, `${id} has its own link`);
+    assert.equal(sound.attrs?.['data-link'], id, `${id}'s sound is linked to it`);
+    assert.deepEqual(sound.time, video.time, `${id}'s sound plays the same seconds`);
+  }
+  /* no two sounds on one track at once */
+  for (const t of out.tracks) {
+    const spans = t.clips.map((c) => [c.at ?? 0, (c.at ?? 0) + c.time![1]! - c.time![0]!]).sort((x, y) => x[0]! - y[0]!);
+    for (let i = 1; i < spans.length; i++) assert.ok(spans[i]![0]! >= spans[i - 1]![1]!, 'nothing overlaps on a track');
+  }
+  /* a video linked already keeps its link; a video not on the timeline is left alone */
+  const linked = model({ role: 'video', clips: [['v', 0, 2, { link: 'k' }]] }, { role: 'audio', clips: [['s', 0, 2, { link: 'k' }]] });
+  const kept = planDetachAudio(linked, [...filmOf(linked).tracks[0]!.clips, { id: 'gone', src: 'gone.mp4' }] as never);
+  assert.deepEqual(kept[0], { op: 'props', edits: [{ clip: 'v', prop: 'volume', value: 0 }, { clip: 'v', prop: 'link', value: 'k' }] });
+  assert.equal(kept.length, 2);
+  assert.deepEqual(planDetachAudio(linked, [{ id: 'gone', src: 'gone.mp4' }]), []);
 });
 
 /* ── the model from the timeline ── */
