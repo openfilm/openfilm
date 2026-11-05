@@ -1181,6 +1181,19 @@ function FilmStageSelectImpl({
       return;
     }
     const { element, layer } = edit;
+    /* a line of words not fitted (its page did not answer how large it is): its words still written as the one entry
+       the Text inspector reads too (lib/text-look withWords), the whole clip in hand again */
+    if (element.clipLoc && isTextClipId(layer.clip) && onEditClip) {
+      const clipLoc = element.clipLoc;
+      pickWholeText(clipLoc);
+      if (!e.commit || !e.value) return;
+      const at = parseFilmDocLoc(clipLoc);
+      const own = at ? (docRef.current.tracks[at.track]?.clips[at.clip] as { overrides?: unknown[] } | undefined)?.overrides : undefined;
+      void onEditClip([{ loc: clipLoc, prop: 'overrides', value: withWords(own, e.value) }]).then((failed) => {
+        if (failed) void ask('release', { clip: layer.clip });
+      });
+      return;
+    }
     if (!e.commit || !e.value || !onEditTextInline) {
       /* given up (or nothing new): the inspector goes back to the words it had */
       setPicked((cur) => (cur?.element?.loc === element.loc ? { ...cur, element } : cur));

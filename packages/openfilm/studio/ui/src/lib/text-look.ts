@@ -35,9 +35,15 @@ export function textVars(overrides: readonly unknown[] | undefined): Record<stri
 
 /** Its words as the clip set them (null: the page's own). */
 export function textWords(overrides: readonly unknown[] | undefined): string | null {
-  const own = (overrides ?? []).find((o) => (o as Override)?.at === WORDS_AT && typeof (o as Override).text === 'string') as Override | undefined;
+  const list = (overrides ?? []) as Override[];
+  const own = list.find((o) => o?.at === WORDS_AT && typeof o.text === 'string')
+    ?? list.find((o) => typeof o?.at === 'string' && LINE_AT.test(o.at) && typeof o.text === 'string');
   return own ? String(own.text) : null;
 }
+
+/* the line of words named another way (by its path, `body > div.stage > div.box > span.t`, as typing in place on the
+   picture names a layer): the same words */
+const LINE_AT = /(^|[\s>+~])(span)?\.t$/;
 
 /** The overrides with `set` in the `:root` entry and `drop` taken out of it (an entry left empty goes). */
 export function withVars(overrides: readonly unknown[] | undefined, set: Record<string, string>, drop: readonly string[] = []): Override[] {
@@ -62,7 +68,14 @@ export const withMotion = (overrides: readonly unknown[] | undefined, slot: Moti
 
 /** The overrides with the words set (empty: back to the page's own). */
 export function withWords(overrides: readonly unknown[] | undefined, words: string): Override[] {
-  const list = (overrides ?? []).map((o) => ({ ...(o as Override) })).filter((o) => !(o.at === WORDS_AT && 'text' in o && Object.keys(o).length <= 2));
+  /* one entry holds the words: any other naming the line gives its words up (the later one would win over these) */
+  const list = (overrides ?? []).map((o) => ({ ...(o as Override) }))
+    .map((o) => {
+      if (o.at === WORDS_AT || typeof o.at !== 'string' || !LINE_AT.test(o.at) || !('text' in o)) return o;
+      const { text: _gone, ...rest } = o;
+      return rest;
+    })
+    .filter((o) => !(typeof o.at === 'string' && (o.at === WORDS_AT || LINE_AT.test(o.at)) && Object.keys(o).length <= ('text' in o ? 2 : 1)));
   const own = list.find((o) => o.at === WORDS_AT);
   if (!words) { if (own) delete own.text; return list; }
   if (own) own.text = words;
