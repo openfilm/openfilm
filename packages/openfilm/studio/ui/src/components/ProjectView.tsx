@@ -142,7 +142,7 @@ import type { MaskShape } from '@/lib/clip-mask';
 import { nextOverrides, overrideOf, type OverrideGeometry, type OverrideTarget } from '@/lib/film-overrides';
 import { compactScale, type MgTransform, type NodeOverride, type OverridePivot, type StageElement, type StageElementStyle, type StageGeometry } from '@/lib/stage-types';
 import { usePreviewPrefs } from '@/lib/preview-prefs';
-import { isTypingTarget } from './typing-target';
+import { isTextField, isTypingTarget } from './typing-target';
 
 /** How far a caption track's translation sits above it (% of the frame): about a line. */
 const TRANSLATION_LIFT_PCT = 7;
@@ -3382,7 +3382,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       return;
     }
     if (cmd === 'play-pause') {
-      if (isTypingTarget(el)) return;
+      /* the library's panes are Studio's own: Space plays there too (its "+" just pressed is not pressed again), but
+         not in its search field */
+      if (el?.closest?.('[data-studio-library]') ? isTextField(el) : isTypingTarget(el)) return;
       if (event.repeat) { event.preventDefault(); return; }
       if (el?.closest('[role="dialog"]')) return;
       if (tabbed.current && el?.closest('button, a, [role="button"]')) return;

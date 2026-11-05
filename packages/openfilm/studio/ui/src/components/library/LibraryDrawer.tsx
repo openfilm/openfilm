@@ -146,7 +146,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
      picked on the timeline and the picture, which a look or a transition goes on */
   return (
     /* a drag let go back in the drawer ends at once (lib/resource-drag) */
-    <div className="flex h-full min-h-0 min-w-0 flex-col outline-none" tabIndex={-1} onKeyDown={onKey} data-drag-home=""
+    <div className="flex h-full min-h-0 min-w-0 flex-col outline-none" tabIndex={-1} onKeyDown={onKey} data-drag-home="" data-studio-library=""
       style={{ '--drawer-under': `${under}px` } as React.CSSProperties}>
       {/* the categories, as high as the inspector's tabs beside it (40 px) so their lines meet; they keep their own
           spacing however wide the panel is, and more than fit scroll sideways (a wheel too), fading at the edge while
