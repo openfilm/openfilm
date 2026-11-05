@@ -53,8 +53,6 @@ import {
   TriangleAlert,
   Blend,
   Plus,
-  Headphones,
-  HeadphoneOff,
 } from 'lucide-react';
 import { useT } from '@/i18n';
 import { CcMark } from './CcMark';
@@ -2756,8 +2754,8 @@ export const Timeline = React.memo(function Timeline({
           disabled={!canToggle}
           onToggle={() => toggleTrack(track, 'muted')}
         >
-          {/* heard or not: headphones, which sit with the lock and the eye as a speaker's waves did not */}
-          {track.muted ? <HeadphoneOff size={HEAD_ICON_H} /> : <Headphones size={HEAD_ICON_H} />}
+          {/* heard or not: a speaker, or one crossed out */}
+          {track.muted ? <VolumeX size={HEAD_ICON_H} /> : <Volume2 size={HEAD_ICON_H} />}
         </TrackHeadButton>}
         </> : null}
         {/* solo: Studio's playback only; a track of pages has no sound (its place is kept) */}
