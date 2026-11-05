@@ -1720,6 +1720,14 @@
     clipAt({ x, y, pictures }) { return clipAt(x, y, Boolean(pictures))?.id ?? null; },
     /** Show a clip placed in a box not kept yet (null: in its own again). */
     place({ clip, box, size }) { hooks()?.place(clip, box ?? null, size ?? null); return true; },
+    /** An element of a clip shown now, as its page lays it out (no transform counted): its size, and its font's. */
+    measure({ clip, at }) {
+      const c = clipById(clip);
+      let el = null;
+      try { el = c?.win?.document?.querySelector(String(at)) ?? null; } catch { /* not a selector */ }
+      if (!el || !c?.win) return null;
+      return { w: el.offsetWidth, h: el.offsetHeight, font: parseFloat(c.win.getComputedStyle(el).fontSize) || 0 };
+    },
     /** Show a clip in CSS of its own not kept yet (null: its own again). */
     look({ clip, css }) { hooks()?.look?.(clip, typeof css === 'string' ? css : null); return true; },
     /** Show a layer's move / scale / turn; with `center` (stage px), its offset keeps its center there. */

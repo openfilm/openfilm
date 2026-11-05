@@ -48,7 +48,8 @@ import type { PreviewHandle, StageEvent } from '@/editor/Preview';
 import { useT } from '@/i18n';
 import { cropOf, declared, pxOf, type ClipLook, type Crop } from '@/lib/clip-look';
 import { filmClipKind, filmDocLoc, filmSrcKind, parseFilmDocLoc, type FilmBox, type FilmDoc } from '@/lib/film';
-import { isTextClip } from '@/lib/library';
+import { isTextClip, withRootVars } from '@/lib/library';
+import { TEXT_ROOM } from '@/lib/text-box';
 import type { OverrideGeometry } from '@/lib/film-overrides';
 import { spanShows, type ClipSpan } from '@/lib/film-shape';
 import {
@@ -170,11 +171,12 @@ interface StageOutline {
   of?: string;
 }
 
-/** A clip's edit from the stage: its film.html `box`, its own CSS (`style`: a crop), or the `size` a page is laid out at. */
+/** A clip's edit from the stage: its film.html `box`, its own CSS (`style`: a crop), the `size` a page is laid out at,
+    or its `overrides` (a line of words' size, kept as it was while its box grows). */
 export interface StageClipEdit {
   loc: string;
-  prop: 'box' | 'style' | 'size';
-  value: FilmBox | { w: number; h: number } | string | null;
+  prop: 'box' | 'style' | 'size' | 'overrides';
+  value: FilmBox | { w: number; h: number } | string | readonly unknown[] | null;
 }
 
 /** What the inspector needs of the stage while the editor wires it (see FilmStageSelect's `controlRef`). */
@@ -1728,14 +1730,41 @@ function FilmStageSelectImpl({
     holdClipAt(g, t);
     if (!onEditClip) return;
     const side = textSideways(g, t);
-    void onEditClip([
-      ...(side ? [{ loc: g.clipLoc, prop: 'size' as const, value: side.size }] : []),
-      { loc: g.clipLoc, prop: 'box', value: side ? side.box : compactBox(t, g.box) },
-    ]).then((failed) => {
+    const write = (edits: StageClipEdit[]) => void onEditClip(edits).then((failed) => {
       if (!failed) return;
       clipPlace.push({ clip: g.clipId, box: null });
       holdClipAt(g, g.origin);
     });
+    if (!side) { write([{ loc: g.clipLoc, prop: 'box', value: compactBox(t, g.box) }]); return; }
+    /* a line of words at its new width: as tall as its lines now are, its words as large as they were */
+    void clipPlace.idle().then(() => textHeight(g)).then((tall) => write(tall ? [
+      { loc: g.clipLoc, prop: 'size', value: { w: side.size.w, h: tall.h } },
+      { loc: g.clipLoc, prop: 'overrides', value: tall.overrides },
+      { loc: g.clipLoc, prop: 'box', value: compactBox({ ...t, scaleX: t.scaleY, y: t.y - ((tall.h - g.box.h) * t.scaleY) / 2 }, { ...g.box, w: side.size.w, h: tall.h }) },
+    ] : [
+      { loc: g.clipLoc, prop: 'size', value: side.size },
+      { loc: g.clipLoc, prop: 'box', value: side.box },
+    ]));
+  };
+  /**
+   * How tall a line of words is at the width it is shown at now: its lines' height and
+   * the room its box keeps above and below them (lib/text-box: of their size), its size in the page's own unit made
+   * smaller as the box grows taller, so its words stay as large (the page sizes them by its height: `--size` in vh).
+   * Null when it cannot be told (its size given another way, or the page not shown).
+   */
+  const textHeight = async (g: { clipLoc: string; clipId: string; box: MgBox }) => {
+    const at = parseFilmDocLoc(g.clipLoc);
+    const clip = at ? docRef.current.tracks[at.track]?.clips[at.clip] : undefined;
+    const overrides = (clip as { overrides?: unknown[] } | undefined)?.overrides;
+    const root = overrides?.find((o) => (o as { at?: string; n?: number }).at === ':root' && (o as { n?: number }).n === undefined) as { style?: Record<string, string> } | undefined;
+    const size = /^\s*([\d.]+)vh\s*$/.exec(root?.style?.['--size'] ?? '62vh');
+    if (!size) return null;
+    const [box, words] = await Promise.all([ask<{ h: number } | null>('measure', { clip: g.clipId, at: '.box' }), ask<{ font: number } | null>('measure', { clip: g.clipId, at: '.t' })]);
+    if (!box?.h || !words?.font) return null;
+    const h = Math.round(box.h + 2 * TEXT_ROOM * words.font);
+    if (Math.abs(h - g.box.h) < 2) return null;
+    const vh = Math.round(Number(size[1]) * (g.box.h / h) * 10) / 10;
+    return { h, overrides: withRootVars(overrides, { '--size': `${vh}vh` }) };
   };
 
   const endMgGesture = () => {

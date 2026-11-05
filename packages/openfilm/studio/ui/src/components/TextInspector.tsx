@@ -26,9 +26,11 @@ export function TextInspector({ host, commit }: { host: PropsHost; commit: (next
   const t = useT();
   const lang = useLanguage();
   const index = useLibraryIndex();
-  /* what the clip has now: read again after each write (the host's overrides are the film's) */
-  const [rev, setRev] = React.useState(0);
-  const overrides = React.useMemo(() => (host.overrides() ?? []) as unknown as Overrides, [host, rev]);
+  /* what the clip has now: read again after each write and whenever they change from elsewhere (a side of its box
+     pulled on the picture, an undo); the host's overrides are the film's */
+  const [, setRev] = React.useState(0);
+  const now = JSON.stringify(host.overrides() ?? []);
+  const overrides = React.useMemo(() => JSON.parse(now) as Overrides, [now]);
   const vars = textVars(overrides);
   const words = textWords(overrides) ?? '';
   const write = (next: Overrides) => { host.preview(ROOT, null); commit(next); setRev((r) => r + 1); };
