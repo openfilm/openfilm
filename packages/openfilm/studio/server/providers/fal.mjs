@@ -7,7 +7,7 @@
  * model is given go inline, as data: URIs.
  */
 import { extname } from 'node:path';
-import { RATIO_SIZE, billedBy, call, clamp, dataUri, download, extOf, landing, list, madePicture, modelOf, mp3Seconds, needed, notes, number, ownAddress, pictureSize, round, serviceUrl, sleep, text, wavSeconds } from './common.mjs';
+import { RATIO_SIZE, billedBy, call, clamp, dataUri, download, extOf, landing, list, madePicture, modelOf, mp3Seconds, needed, notes, number, ownAddress, pictureSize, pngOnly, round, serviceUrl, sleep, text, wavSeconds } from './common.mjs';
 
 /** @typedef {import('./contract.mjs').Provider} Provider @typedef {import('./contract.mjs').RunContext} RunContext */
 
@@ -81,13 +81,14 @@ export default {
   async run(verb, args, ctx) {
     if (verb === 'image') {
       const prompt = needed(args, 'prompt');
+      pngOnly(args, 'FLUX.2');
       const ratio = text(args.ratio) || '3:2';
       const size = RATIO_SIZE[ratio];
       if (!size) throw new Error(`--ratio is one of ${Object.keys(RATIO_SIZE).join(', ')}.`);
       const model = modelOf(MODELS, 'image', ctx);
       const said = [...(args.transparent ? ['--transparent: FLUX.2 makes opaque pictures'] : []),
         ...(text(args.quality) && text(args.quality) !== 'low' ? [`--quality ${text(args.quality)}: FLUX.2 has one quality`] : []),
-        ...(list(args.ref).length || text(args.mask) ? ['--ref, --mask: FLUX.2 here makes pictures from the prompt alone'] : [])];
+        ...(list(args.ref).length || text(args.mask) || text(args.markup) ? ['--ref, --mask, --markup: FLUX.2 here makes pictures from the prompt alone'] : [])];
       const pixels = pictureSize(ratio, text(args.size) || '1k') ?? size;
       const result = await queued(model, { prompt, image_size: pixels, output_format: 'png' }, ctx, polling.ms.image);
       const image = result?.images?.[0];

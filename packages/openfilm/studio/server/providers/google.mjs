@@ -6,7 +6,7 @@
  * operation, asked after until it is done. Generated speech has no word timings and comes as raw PCM, wrapped here in
  * a WAV file.
  */
-import { RATIO_SIZE, billedBy, call, clamp, download, extOf, imageSize, landing, list, madePicture, mimeOf, modelOf, needed, notes, number, ownAddress, serviceUrl, sleep, speechUpload, text, translatedLines, translationAsk, wav, wavSeconds } from './common.mjs';
+import { RATIO_SIZE, billedBy, call, clamp, download, extOf, imageSize, landing, list, madePicture, mimeOf, modelOf, needed, notes, number, ownAddress, pngOnly, serviceUrl, sleep, speechUpload, text, translatedLines, translationAsk, wav, wavSeconds } from './common.mjs';
 
 /** @typedef {import('./contract.mjs').Provider} Provider @typedef {import('./contract.mjs').RunContext} RunContext */
 
@@ -126,6 +126,7 @@ export default {
     }
     if (verb === 'image') {
       const prompt = needed(args, 'prompt');
+      pngOnly(args, 'Gemini');
       const ratio = text(args.ratio) || '3:2';
       if (!RATIO_SIZE[ratio]) throw new Error(`--ratio is one of ${Object.keys(RATIO_SIZE).join(', ')}.`);
       const model = modelOf(MODELS, 'image', ctx);
@@ -137,7 +138,7 @@ export default {
       const said = [
         ...(args.transparent ? ['--transparent: Gemini makes opaque pictures'] : []),
         ...(resolution !== wanted ? [`--size ${size}, --quality ${text(args.quality) || 'low'}: Flash-Lite Image makes 1K pictures only`] : []),
-        ...(list(args.ref).length || text(args.mask) ? ['--ref, --mask: Gemini here makes pictures from the prompt alone'] : []),
+        ...(list(args.ref).length || text(args.mask) || text(args.markup) ? ['--ref, --mask, --markup: Gemini here makes pictures from the prompt alone'] : []),
       ];
       const body = await generate(model, {
         contents: [{ parts: [{ text: prompt }] }],

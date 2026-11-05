@@ -123,6 +123,89 @@ function place(c, box) {
   });
 }
 
+/* ── animated pictures ─────────────────────────────────────────────────── */
+
+/* the pictures that may move by themselves: a GIF, an animated PNG or WebP */
+const ANIMATED = /\.(gif|png|apng|webp)$/i;
+/* how many of a moving picture's frames are kept decoded */
+const FRAMES_KEPT = 48;
+
+/**
+ * A moving picture's frames and their timing, or null when it is still (or this browser cannot read it). Shown as a
+ * clip, it is not left to play by itself: the frame its own timing has at the clip's time is drawn, counted from the
+ * clip's start and looping as many times as the file says, then holding its last frame. So the same t always draws
+ * the same picture.
+ */
+async function animationOf(href) {
+  if (typeof ImageDecoder === 'undefined' || !ANIMATED.test(new URL(href).pathname)) return null;
+  try {
+    const res = await fetch(href);
+    const type = (res.headers.get('content-type') ?? '').split(';')[0].trim();
+    if (!res.ok || !type || !(await ImageDecoder.isTypeSupported(type))) return null;
+    const decoder = new ImageDecoder({ data: await res.arrayBuffer(), type });
+    await decoder.tracks.ready;
+    const track = decoder.tracks.selectedTrack;
+    if (!track?.animated || track.frameCount < 2) { decoder.close(); return null; }
+    await decoder.completed;
+    /* each frame's start, in ms; a delay under 20 ms is shown for 100 ms, as browsers show a GIF */
+    const starts = [];
+    let total = 0;
+    for (let i = 0; i < track.frameCount; i++) {
+      const { image } = await decoder.decode({ frameIndex: i });
+      const ms = (image.duration ?? 0) / 1000;
+      image.close();
+      starts.push(total);
+      total += ms >= 20 ? ms : 100;
+    }
+    return { decoder, starts, total, plays: track.repetitionCount + 1, kept: new Map() };
+  } catch {
+    return null;
+  }
+}
+
+/** The frame a moving picture shows `s` seconds into its clip. */
+function frameAt({ starts, total, plays }, s) {
+  const ms = Math.max(0, s) * 1000;
+  if (ms >= total * plays) return starts.length - 1;
+  const at = ms % total;
+  let lo = 0, hi = starts.length - 1;
+  while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (starts[mid] <= at) lo = mid; else hi = mid - 1; }
+  return lo;
+}
+
+/** A frame of a moving picture as a picture of its own (an object URL), decoded once and kept among the last few. */
+function frameUrl(a, i) {
+  let made = a.kept.get(i);
+  if (!made) {
+    made = a.decoder.decode({ frameIndex: i }).then(async ({ image }) => {
+      const canvas = new OffscreenCanvas(image.displayWidth, image.displayHeight);
+      canvas.getContext('2d').drawImage(image, 0, 0);
+      image.close();
+      return URL.createObjectURL(await canvas.convertToBlob({ type: 'image/png' }));
+    });
+    a.kept.set(i, made);
+    if (a.kept.size > FRAMES_KEPT) {
+      const [first, gone] = a.kept.entries().next().value;
+      a.kept.delete(first);
+      gone.then((u) => URL.revokeObjectURL(u), () => {});
+    }
+  }
+  return made;
+}
+
+/**
+ * Show a moving picture's frame for t on its element. `exact`: wait until the element has it decoded (an export's
+ * frame); watched, the frame shows as soon as it is ready, unless a later one was asked meanwhile.
+ */
+async function animate(c, t, exact) {
+  const i = frameAt(c.anim, t - c.at);
+  c.frame = i;
+  const src = await frameUrl(c.anim, i).catch(() => null);
+  if (!src || c.frame !== i || c.el.src === src) return;
+  c.el.src = src;
+  if (exact) await c.el.decode().catch(() => {});
+}
+
 /**
  * A clip's animations (SPEC §1) held at its own time, `t − at`: paused here first, so the clock that holds the rest
  * of the document's at the film's t (FILM_CLOCK's settle) leaves them be. `c.moves`: it has any.
@@ -955,10 +1038,17 @@ async function load(row, track, ti, el) {
   } else if (kind === 'still') {
     /* its file as the film names it: a name written with a bare `?` or `%` asks the browser for another file */
     const href = url(row.src).href;
+    el.__filmAnim?.decoder.close();
+    el.__filmAnim = null;
     if (el.src.replace(/#.*$/, '') !== href) el.src = href;
     await el.decode().catch(() => {});
     if (!el.naturalWidth && !(await mustBeThere(row.src))) c.missing = true;
     c.nw = el.naturalWidth || stage.w; c.nh = el.naturalHeight || stage.h;
+    /* a moving picture: drawn frame by frame at the film's t (see animate), never left to play by itself */
+    if (!c.missing) {
+      c.anim = el.__filmAnim = await animationOf(href);
+      if (c.anim) await animate(c, c.at, true);
+    }
   } else if (kind === 'video') {
     el.muted = true; el.playsInline = true;
     rest(c);
@@ -1083,7 +1173,10 @@ async function drawClip(c, t, live, play, turn, coming, going) {
     else { if (!c.el.paused) c.el.pause(); c.lastWant = c.cued = undefined; }
     return;
   }
-  if (c.kind === 'still') return;
+  if (c.kind === 'still') {
+    if (c.anim) { if (live) animate(c, t, false); else await animate(c, t, true); }
+    return;
+  }
   if (c.kind === 'video') {
     if (play) {
       /* where it should be this moment (not at the frame on its way): its own clock runs on to that frame */

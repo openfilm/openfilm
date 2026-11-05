@@ -118,7 +118,7 @@ export function landing(/** @type {string} */ dir, /** @type {unknown} */ out, /
 /** The extension for a media type a service answered with. */
 export function extOf(/** @type {string | null | undefined} */ mime, fallback = 'bin') {
   const m = (mime ?? '').toLowerCase().split(';')[0].trim();
-  return ({ 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov',
+  return ({ 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'image/svg+xml': 'svg', 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov',
     'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/wav': 'wav', 'audio/x-wav': 'wav' })[m] ?? fallback;
 }
 
@@ -253,7 +253,48 @@ export function imageSize(/** @type {Uint8Array} */ bytes) {
       at += 2 + b.readUInt16BE(at + 2);
     }
   }
+  if (b.length > 10 && b.toString('ascii', 0, 4) === 'GIF8') return { w: b.readUInt16LE(6), h: b.readUInt16LE(8) };
+  /* an SVG: its width and height, else its viewBox's */
+  const head = b.toString('utf8', 0, Math.min(b.length, 4096));
+  const svg = /<svg\b[^>]*>/i.exec(head)?.[0];
+  if (svg) {
+    const attr = (/** @type {string} */ name) => Number(new RegExp(`\\s${name}\\s*=\\s*["']\\s*([\\d.]+)(?:px)?\\s*["']`, 'i').exec(svg)?.[1]);
+    const box = /\sviewBox\s*=\s*["']\s*[-\d.]+[\s,]+[-\d.]+[\s,]+([\d.]+)[\s,]+([\d.]+)/i.exec(svg);
+    const w = attr('width') || Number(box?.[1]);
+    const h = attr('height') || Number(box?.[2]);
+    if (w > 0 && h > 0) return { w: Math.round(w), h: Math.round(h) };
+  }
   return null;
+}
+
+/** A picture service that makes PNGs alone refuses a GIF or an SVG, and says where they are made. */
+export function pngOnly(/** @type {Record<string, unknown>} */ args, /** @type {string} */ name) {
+  const format = text(args.format);
+  if (format && format !== 'png') throw new Error(`--format ${format}: ${name} makes still pictures. A GIF or an SVG is GPT Image 2.6's: use OpenAI for it.`);
+}
+
+/* GPT Image makes a GIF's frames on one sheet: by how many there are, the grids it lays them out on (columns × rows) */
+const GIF_GRIDS = (/** @type {number} */ n) => (n <= 8 ? [[4, 2], [2, 4]] : n === 9 ? [[3, 3]] : n <= 12 ? [[4, 3], [3, 4], [4, 4]] : [[4, 4]]);
+
+/**
+ * The largest frame of a GIF of `frames` frames in `ratio`'s shape, no larger than `cap` (the size asked), that GPT Image
+ * makes: each side a multiple of 16, and the sheet of all of them at most 3840 px on its longest side, of 655,360 to
+ * 8,294,400 pixels. null when none fits.
+ * @param {string} ratio @param {number} frames @param {{ width: number, height: number }} cap
+ */
+export function gifFrameSize(ratio, frames, cap) {
+  const shape = RATIO_SIZE[ratio];
+  const a = shape.width / shape.height;
+  /** @type {{ width: number, height: number } | null} */
+  let best = null;
+  for (const [cols, rows] of GIF_GRIDS(frames)) {
+    const h = Math.min(3840 / rows, 3840 / (cols * a), Math.sqrt(8_294_400 / (cols * rows * a)), cap.height, cap.width / a);
+    const height = Math.floor(h / 16) * 16;
+    const width = Math.floor((height * a) / 16) * 16;
+    if (cols * rows * width * height < 655_360) continue;
+    if (!best || width * height > best.width * best.height) best = { width, height };
+  }
+  return best;
 }
 
 /** Pixel sizes for `--ratio` at about 1.3 megapixels, each side a multiple of 16 (what image services accept). */

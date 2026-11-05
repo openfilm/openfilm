@@ -1395,3 +1395,40 @@ test('a clip that is not on draws none of its filter (Chromium paints a hidden e
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('a moving picture (a GIF) shows the frame its own timing has at the clip\'s time, looping as the file says: the same t, the same frame', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-gif-'));
+  /* red for 0.1 s, then blue for 0.1 s, looping; and the same played once, then holding blue */
+  for (const [name, loop] of [['loop.gif', '0'], ['once.gif', '-1']]) {
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=red:s=32x32:d=0.1:r=10', '-f', 'lavfi', '-i', 'color=blue:s=32x32:d=0.1:r=10',
+      '-filter_complex', '[0][1]concat=n=2:v=1', '-loop', loop, join(dir, name)]);
+  }
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [
+    { clips: [{ src: 'loop.gif', id: 'loop', at: 1, time: [0, 3], style: 'left: 0px; top: 0px; width: 160px; height: 180px' }] },
+    { clips: [{ src: 'once.gif', id: 'once', at: 1, time: [0, 3], style: 'left: 160px; top: 0px; width: 160px; height: 180px' }] },
+  ] }));
+  const s = await open(dir);
+  try {
+    const colours = async (t) => {
+      await s.film.seek(t);
+      return s.film.page.evaluate(() => [...document.querySelectorAll('img')].map((img) => {
+        const c = document.createElement('canvas');
+        c.width = 4; c.height = 4;
+        const g = c.getContext('2d');
+        g.drawImage(img, 0, 0, 4, 4);
+        const [r, , b] = g.getImageData(2, 2, 1, 1).data;
+        return r > b ? 'red' : 'blue';
+      }));
+    };
+    assert.deepEqual(await colours(1.05), ['red', 'red']);
+    assert.deepEqual(await colours(1.15), ['blue', 'blue']);
+    assert.deepEqual(await colours(1.25), ['red', 'blue'], 'the loop starts again; the one played once holds its last frame');
+    assert.deepEqual(await colours(2.95), ['blue', 'blue']);
+    assert.deepEqual(await colours(1.15), ['blue', 'blue'], 'the same t, the same frame, whatever came before');
+    assert.deepEqual(await colours(1.05), ['red', 'red']);
+    const src = await s.film.page.evaluate(() => document.querySelector('#loop').src);
+    assert.match(src, /^blob:/, 'the clip shows a frame of it, never the file playing by itself');
+  } finally {
+    await s.close();
+  }
+});

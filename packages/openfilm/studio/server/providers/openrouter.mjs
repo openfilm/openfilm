@@ -6,7 +6,7 @@
  * until it is done, then its file. Pictures a model is given go inline, as data: URIs. What a run cost, as OpenRouter
  * reports it, goes in its receipt as `usd` (Studio leaves it out of what the agent reads).
  */
-import { billedBy, call, clamp, dataUri, download, extOf, landing, list, madePicture, modelOf, needed, notes, number, ownAddress, pictureSize, serviceUrl, sleep, text } from './common.mjs';
+import { billedBy, call, clamp, dataUri, download, extOf, landing, list, madePicture, modelOf, needed, notes, number, ownAddress, pictureSize, pngOnly, serviceUrl, sleep, text } from './common.mjs';
 
 /** @typedef {import('./contract.mjs').Provider} Provider @typedef {import('./contract.mjs').RunContext} RunContext */
 
@@ -20,11 +20,11 @@ const m = (id, name) => ({ id, name });
 /** The models it makes each kind of media with, the default first (openrouter.ai/models, by output). */
 const MODELS = {
   image: [
+    m('openai/gpt-image-2.6-flare', 'GPT Image 2.6 Flare'),
+    m('openai/gpt-image-2.6-sunburst', 'GPT Image 2.6 Sunburst'),
     m('openai/gpt-image-2.5-flare', 'GPT Image 2.5 Flare'),
-    m('openai/gpt-image-2.5-sunburst', 'GPT Image 2.5 Sunburst'),
     m('google/gemini-nano-banana-2.1', 'Nano Banana 2.1'),
     m('google/gemini-3-pro-image', 'Nano Banana Pro'),
-    m('openai/gpt-image-2', 'GPT Image 2'),
     m('bytedance-seed/seedream-5-0-pro', 'Seedream 5.0 Pro'),
     m('black-forest-labs/flux-3-image', 'FLUX.3'),
   ],
@@ -49,8 +49,8 @@ const MODELS = {
 const RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4', '3:2', '2:3', '21:9'];
 /** The models that take `--quality` (the others have one quality), with theirs, the finest last; they take `--transparent` too. */
 const QUALITY = /** @type {Record<string, string[]>} */ ({
-  'openai/gpt-image-2.5-flare': ['low', 'medium', 'high', 'xhigh', 'max'], 'openai/gpt-image-2.5-sunburst': ['low', 'medium', 'high', 'xhigh', 'max'],
-  'openai/gpt-image-2': ['low', 'medium', 'high'],
+  'openai/gpt-image-2.6-flare': ['low', 'medium', 'high', 'xhigh', 'max'], 'openai/gpt-image-2.6-sunburst': ['low', 'medium', 'high', 'xhigh', 'max'],
+  'openai/gpt-image-2.5-flare': ['low', 'medium', 'high', 'xhigh', 'max'],
 });
 /** The most pictures a new one is made from. */
 const MAX_REFS = 16;
@@ -116,9 +116,10 @@ async function picture(args, ctx) {
   const prompt = needed(args, 'prompt');
   const ratio = text(args.ratio) || '3:2';
   if (!RATIOS.includes(ratio)) throw new Error(`--ratio is one of ${RATIOS.join(', ')}.`);
-  if (text(args.mask)) throw new Error('--mask: redrawing part of a picture is OpenAI\'s own: use OpenAI for it.');
+  if (text(args.mask) || text(args.markup)) throw new Error(`--${text(args.mask) ? 'mask' : 'markup'}: redrawing part of a picture is OpenAI\'s own: use OpenAI for it.`);
   const model = modelOf(MODELS, 'image', ctx);
   const name = MODELS.image.find((x) => x.id === model)?.name ?? model;
+  pngOnly(args, `${name} here`);
   const has = QUALITY[model];
   const size = text(args.size) || '1k';
   const refs = list(args.ref);

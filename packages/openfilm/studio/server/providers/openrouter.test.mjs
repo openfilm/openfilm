@@ -69,21 +69,21 @@ test('a picture: the model, the prompt and the shape, with the key; landed as it
 test('quality and transparency go to the model that has them, and are said to be left out by the others', async () => {
   seen.length = 0;
   reply = () => [200, { data: [{ b64_json: png(1024, 1024).toString('base64') }] }];
-  await openrouter.run('image', { prompt: 'a logo', ratio: '1:1', quality: 'high', transparent: true, out: 'logo' }, ctx({}, 'openai/gpt-image-2'));
-  assert.deepEqual(JSON.parse(seen[0].body), { model: 'openai/gpt-image-2', prompt: 'a logo', n: 1, size: '1024x1024', quality: 'high', background: 'transparent', output_format: 'png' });
+  await openrouter.run('image', { prompt: 'a logo', ratio: '1:1', quality: 'high', transparent: true, out: 'logo' }, ctx({}, 'openai/gpt-image-2.5-flare'));
+  assert.deepEqual(JSON.parse(seen[0].body), { model: 'openai/gpt-image-2.5-flare', prompt: 'a logo', n: 1, size: '1024x1024', quality: 'high', background: 'transparent', output_format: 'png' });
   const other = await openrouter.run('image', { prompt: 'a logo', quality: 'high', transparent: true, out: 'logo' }, ctx({}, 'google/gemini-3-pro-image'));
   assert.equal(JSON.parse(seen[1].body).quality, undefined);
   assert.equal(other.receipt.notes.length, 2);
   await assert.rejects(openrouter.run('image', { prompt: 'x', ratio: '5:1', out: 'x' }, ctx()), /--ratio is one of/);
 });
 
-test('GPT Image 2.5, the default: every quality, the exact pixels of a size, reference pictures; a mask is OpenAI\'s own', async () => {
+test('GPT Image 2.6, the default: every quality, the exact pixels of a size, reference pictures; a mask is OpenAI\'s own', async () => {
   seen.length = 0;
   reply = () => [200, { data: [{ b64_json: png(2720, 1536).toString('base64') }], usage: { cost: 0.09376 } }];
   const files = { 'assets/image/room.png': png(64, 64) };
   const result = await openrouter.run('image', { prompt: 'a harbor', ratio: '16:9', quality: 'xhigh', size: '2k', ref: ['assets/image/room.png'], out: 'harbor' }, ctx(files));
   const body = JSON.parse(seen[0].body);
-  assert.deepEqual({ ...body, input_references: body.input_references.length }, { model: 'openai/gpt-image-2.5-flare', prompt: 'a harbor', n: 1, size: '2720x1536', quality: 'xhigh', input_references: 1 });
+  assert.deepEqual({ ...body, input_references: body.input_references.length }, { model: 'openai/gpt-image-2.6-flare', prompt: 'a harbor', n: 1, size: '2720x1536', quality: 'xhigh', input_references: 1 });
   assert.match(body.input_references[0].image_url.url, /^data:image\/png;base64,/);
   assert.deepEqual([result.receipt.quality, result.receipt.usd], ['xhigh', 0.09376]);
   /* another maker's model is asked for the size's tier */
