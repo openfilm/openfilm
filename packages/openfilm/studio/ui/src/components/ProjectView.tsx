@@ -33,11 +33,12 @@ import { attrsOf, pasteAttrs, type AttrGroup, type CopiedAttrs } from '@/lib/cli
 import { cutPoints, nextCut } from '@/lib/timeline-nav';
 import { anyLocked, lockedEdits } from '@/lib/track-lock';
 import { placeMedia, type SourceRange } from '@/lib/media-place';
-import { BUILT_IN, TEXT_COMPONENT, builtInItem, cutTrack, cutsOf, fromLibrary, isTextClip, libraryBox, libraryDragItem, nameOf, onCut, pageUrl, placedGroup, useLibraryIndex, withLook, withRootVars, type LibraryItem } from '@/lib/library';
+import { BUILT_IN, TEXT_COMPONENT, builtInItem, cutTrack, cutsOf, defaultTextWords, fromLibrary, isTextClip, libraryBox, libraryDragItem, nameOf, onCut, pageUrl, placedGroup, useLibraryIndex, withLook, withRootVars, type LibraryItem } from '@/lib/library';
 import { LibraryDrawer, type LibraryActions, type SkillsRequest } from '@/components/library/LibraryDrawer';
 import type { CaptionsMake } from '@/components/library/CaptionsPane';
 import { LibraryTrial } from '@/components/library/LibraryTrial';
 import { hugText } from '@/lib/text-box';
+import { withWords } from '@/lib/text-look';
 import { apartOnTracks, type ClipEdit } from '@/lib/film-clip-edits';
 import { mediaFetch, useMediaImages } from '@/lib/media-queue';
 import { clipboardItemsOf, clipboardNow, laneOfBlock, pasteEdit, type TimelineClipboardItem } from '@/lib/timeline-clipboard';
@@ -1477,14 +1478,19 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const below = Math.max(...placed.map((c) => c.track)) + 1;
     return [...placed, { track: below, at: 0, clip: { src: taken.path, time: [0, len], overrides: [{ fade: [0, Math.min(1.5, len / 3)] }] } }];
   }, [projectId]);
+  const language = useLanguage();
   const dropAsset = React.useCallback(async (file: ResourceDragItem, target: AssetDropTarget, atMs: number): Promise<string | null> => {
     const plan = assetDropInsert(file, timelineTracks, target, atMs, stageRef.current);
     if ('error' in plan) return plan.error === 'locked' ? t('timeline.trackLocked') : t('timeline.dropNotClip');
     /* a thing of Saved (lib/saved): brought into the project first (a file imported, a bundle's files copied in), then
        put where it was dropped: a file as a file of the project goes, a clip as it was saved */
     if (file.saved) {
+      /* a text style: a new line of words in it, in its box (a title's taller) */
+      const style = builtInItem(file.saved);
+      const textStyle = style?.kind === 'textstyle' ? style : null;
+      const from = textStyle ? `${BUILT_IN}/${TEXT_COMPONENT}` : file.saved;
       let taken: Awaited<ReturnType<typeof api.takeSaved>>;
-      try { taken = await api.takeSaved(projectId, file.saved); } catch (e) { return e instanceof Error ? e.message : String(e); }
+      try { taken = await api.takeSaved(projectId, from); } catch (e) { return e instanceof Error ? e.message : String(e); }
       /* a group: its tracks new ones, where it was dropped */
       if ('clips' in taken) return edit(groupInsertOps(await templateClips(file.saved, taken.clips), plan.at, groupInsertAt(plan.track), editModel()), 'history.stepDrop');
       if ('path' in taken) {
@@ -1493,11 +1499,16 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       }
       /* a sticker of the library: in the middle of the picture at a size it reads, not over all of it; a line of words
          in a box that hugs them (lib/text-box) */
-      const shape = builtInItem(file.saved);
+      const own = builtInItem(from);
+      const shape = textStyle?.w ? textStyle : own;
       const stageNow = stageRef.current ?? { w: 1920, h: 1080 };
       const shaped = libraryBox(shape, stageNow);
-      const box = shaped && shape?.id === TEXT_COMPONENT ? await hugText(pageUrl(shape), shaped, stageNow.w) : shaped;
-      const clip = box ? { ...taken.clip, box, size: { w: box.w, h: box.h } } : taken.clip;
+      /* a line of words says the default words, in a box that hugs them */
+      const words = own?.id === TEXT_COMPONENT ? defaultTextWords(language) : undefined;
+      const vars = textStyle?.vars;
+      const box = shaped && own && words != null ? await hugText(pageUrl(own), shaped, stageNow.w, vars, words) : shaped;
+      const overrides = words != null ? withWords(vars ? withRootVars((taken.clip as { overrides?: unknown[] }).overrides, vars) : (taken.clip as { overrides?: unknown[] }).overrides, words) : undefined;
+      const clip = { ...taken.clip, ...(box ? { box, size: { w: box.w, h: box.h } } : {}), ...(overrides ? { overrides } : {}) };
       const durMs = file.durationMs ?? assetRunMs([file]);
       /* a transition of OpenFilm's library (lib/library): its middle on the cut it was put near, never pushing or
          cutting what is under it */
@@ -1520,7 +1531,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     } finally {
       if (pending) setPendingDrops((all) => all.filter((d) => d.id !== pending.id));
     }
-  }, [timelineTracks, edit, roomFor, t, projectId, editModel]);
+  }, [timelineTracks, edit, roomFor, t, projectId, editModel, language]);
   const dropAssetRef = React.useRef(dropAsset);
   dropAssetRef.current = dropAsset;
   /**
@@ -1592,7 +1603,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
    * in is then picked on the timeline, so the inspector shows what can be changed in it. A drag onto the timeline
    * goes through dropAsset, or for a look or a fade through applyDrop.
    */
-  const language = useLanguage();
   const [libraryTrial, setLibraryTrial] = React.useState<LibraryItem | null>(null);
   /* playing, the film is what is watched: the try goes */
   React.useEffect(() => { if (playing) setLibraryTrial(null); }, [playing]);
@@ -1731,8 +1741,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
          box that hugs them (lib/text-box) */
       const stageNow = stageRef.current ?? { w: 1920, h: 1080 };
       const shaped = libraryBox(shape, stageNow);
-      const box = shaped && item.id === TEXT_COMPONENT ? await hugText(pageUrl(item), shaped, stageNow.w, vars) : shaped;
-      const clip = { ...taken.clip, ...(box ? { box, size: { w: box.w, h: box.h } } : {}), ...(vars ? { overrides: withRootVars((taken.clip as { overrides?: unknown[] }).overrides, vars) } : {}) };
+      /* a line of words says the default words, in a box that hugs them */
+      const words = item.id === TEXT_COMPONENT ? defaultTextWords(language) : undefined;
+      const box = shaped && words != null ? await hugText(pageUrl(item), shaped, stageNow.w, vars, words) : shaped;
+      const own = (taken.clip as { overrides?: unknown[] }).overrides;
+      const overrides = words != null ? withWords(vars ? withRootVars(own, vars) : own, words) : vars ? withRootVars(own, vars) : undefined;
+      const clip = { ...taken.clip, ...(box ? { box, size: { w: box.w, h: box.h } } : {}), ...(overrides ? { overrides } : {}) };
       const failed = await edit([{ op: 'insert', clip: clip as never, at, track }], 'history.stepDrop');
       if (failed) { toast.show(failed); return; }
       toast.show(t('assetDrawer.added').replace('{name}', name));

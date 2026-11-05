@@ -117,6 +117,12 @@ export function fromLibrary(path: string, items: readonly LibraryItem[] | null =
 /** Its name in `lang`, else English. */
 export const nameOf = (names: LibraryNames, lang: Language): string => names[lang] ?? names.en;
 
+/** What a new line of words says until it is typed in: the library's line of words' own name ("Default text"), in `lang`. */
+export function defaultTextWords(lang: Language): string {
+  const text = builtInItem(`${BUILT_IN}/${TEXT_COMPONENT}`);
+  return text ? nameOf(text.name, lang) : 'Default text';
+}
+
 /** A file of the library by its place there. */
 /* `v`: the pictures were drawn again in place (2026-10-31): a copy kept from before is not used */
 export const libraryUrl = (rel: string): string => `/api/library/file?path=${encodeURIComponent(rel)}&v=2`;
@@ -137,6 +143,12 @@ export function libraryDragItem(item: LibraryItem, name: string): ResourceDragIt
   if (item.kind === 'look' || item.kind === 'fade') return { path: saved, name, kind: 'other', saved, apply: item.kind };
   if (item.kind === 'sound') return { path: saved, name, kind: 'audio', ...(item.durationMs ? { durationMs: item.durationMs } : {}), saved };
   if (item.kind === 'group') return { path: saved, name, kind: 'mg', ...(item.durationMs ? { durationMs: item.durationMs } : {}), saved };
+  /* a text style: a new line of words in it (the drop takes the text component with its variables) */
+  if (item.kind === 'textstyle') {
+    const text = builtInItem(`${BUILT_IN}/${TEXT_COMPONENT}`);
+    const drag = text ? libraryDragItem(text, name) : null;
+    return drag ? { ...drag, ...(item.w && item.h ? { w: item.w, h: item.h } : {}), saved } : null;
+  }
   if (item.kind !== 'page' || !item.src) return null;
   return {
     path: `${saved}/files/${item.src.split('#')[0]}`,

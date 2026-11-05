@@ -23,8 +23,8 @@ export function huggingBox(box: Box, wordsW: number, fontPx: number, stageW: num
   return { ...box, x: Math.round(box.x + (box.w - w) / 2), w };
 }
 
-/** `box` hugging the words of the text page at `url` (lib/library pageUrl) with CSS variables `vars`. */
-export function hugText(url: string, box: Box, stageW: number, vars: Record<string, string> = {}): Promise<Box> {
+/** `box` hugging the words of the text page at `url` (lib/library pageUrl) with CSS variables `vars`; `words`: what it says. */
+export function hugText(url: string, box: Box, stageW: number, vars: Record<string, string> = {}, words?: string): Promise<Box> {
   /* words sized by the box's width (`vw`) would shrink with it: they keep their shape's box */
   if (typeof document === 'undefined' || /vw\s*$/.test(vars['--size'] ?? '')) return Promise.resolve(box);
   return new Promise((done) => {
@@ -37,13 +37,14 @@ export function hugText(url: string, box: Box, stageW: number, vars: Record<stri
     const late = window.setTimeout(() => end(box), 2500);
     frame.onload = () => {
       const doc = frame.contentDocument;
-      const words = doc?.querySelector<HTMLElement>('.t');
-      if (!doc || !words) { window.clearTimeout(late); end(box); return; }
+      const line = doc?.querySelector<HTMLElement>('.t');
+      if (!doc || !line) { window.clearTimeout(late); end(box); return; }
+      if (words) line.textContent = words;
       void (doc.fonts?.ready ?? Promise.resolve()).then(() => requestAnimationFrame(() => {
         window.clearTimeout(late);
         /* its layout width (a motion's transform not counted), as the page fits it (`--fit`, the box's scale) */
-        const fit = Number(getComputedStyle(words.parentElement ?? words).getPropertyValue('--fit')) || 1;
-        end(huggingBox(box, words.offsetWidth * fit, parseFloat(getComputedStyle(words).fontSize) * fit, stageW));
+        const fit = Number(getComputedStyle(line.parentElement ?? line).getPropertyValue('--fit')) || 1;
+        end(huggingBox(box, line.offsetWidth * fit, parseFloat(getComputedStyle(line).fontSize) * fit, stageW));
       }));
     };
     const query = Object.keys(vars).length ? `?vars=${encodeURIComponent(JSON.stringify(vars))}` : '';
