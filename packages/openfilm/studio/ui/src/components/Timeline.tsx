@@ -118,6 +118,7 @@ import { draftNumbersOf, sameClip, type ChatPoint, type DraftMarks } from '@/lib
 import { formatRulerLabel, formatTimecode, frameAt, frameMs, secondFrames, snapToFrame, stepFrames, useTimecodeFps } from '@/lib/timecode';
 import { planNudge, sideTargets, splitAllTargets, splitTargets } from '@/lib/timeline-nav';
 import {
+  VIEW_SPAN_EMPTY_MS,
   VIEW_SPAN_MIN_MS,
   ZOOM_DEFAULT,
   zoomMaxOf,
@@ -1161,8 +1162,9 @@ export const Timeline = React.memo(function Timeline({
   /*
    * When the film's length changes (dragged past the end, undo, a new evaluation) the time in view stays; only the
    * zoom factor is adjusted. Otherwise 100% = the whole film, and a longer film would squeeze every clip mid-drag.
-   * Not from a film shorter than the narrowest view (the first clip arriving): that would open zoomed all the way in.
-   * Worked out during render and written back (the slider follows); not before the width is known.
+   * The first clip arriving on an empty timeline keeps its scale too, so it stays where it was let go, when it fits
+   * the empty view; a longer one is shown at the zoom as it was (as a share of the film). Worked out during render
+   * and written back (the slider follows); not before the width is known.
    */
   const clipEndMs = tracks.reduce((ms, tr) => {
     for (const b of tr.blocks) if (b.endMs > ms) ms = b.endMs;
@@ -1177,7 +1179,7 @@ export const Timeline = React.memo(function Timeline({
     if (laneW > 0) {
       const prev = prevTotalMs.current;
       prevTotalMs.current = spanMs;
-      if (prev >= VIEW_SPAN_MIN_MS && spanMs > 0) {
+      if (spanMs > 0 && (prev >= VIEW_SPAN_MIN_MS || (prev <= 0 && spanMs <= VIEW_SPAN_EMPTY_MS))) {
         const keep = zoomedPxPerMs(prev, laneW, zoom);
         viewZoom = zoomForPxPerMs(spanMs, laneW, keep);
         if (Math.abs(viewZoom - zoom) > 1e-9) setZoom(viewZoom);

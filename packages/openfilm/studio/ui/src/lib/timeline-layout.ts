@@ -37,7 +37,8 @@ export type TimelineLaneKind = 'visual' | 'audio';
  * Zoom is how much time one screen shows, not a pixel density.
  *
  * 100% = the whole film just fills the width. Default 80%: a 10 s film shows 12.5 s, with room on the right. Widest:
- * four times the film. Narrowest: always 1 s (30 frames), whatever the film's length, so a short film can still be
+ * four times the film, and never less than an empty timeline shows (a short film keeps the view it was put in at).
+ * Narrowest: always 1 s (30 frames), whatever the film's length, so a short film can still be
  * zoomed all the way in.
  */
 /** The narrowest view: 1 s = 30 frames. */
@@ -62,7 +63,7 @@ export const ZOOM_STEP = 1.6;
 
 /** The most time one view can show. */
 export function viewSpanMaxMs(totalMs: number): number {
-  return Math.max(Math.max(0, totalMs) * VIEW_SPAN_MAX_FACTOR, VIEW_SPAN_MIN_MS);
+  return Math.max(Math.max(0, totalMs) * VIEW_SPAN_MAX_FACTOR, VIEW_SPAN_EMPTY_MS);
 }
 
 /** The lowest zoom (relative to fitting the film). */
