@@ -58,27 +58,38 @@ const MAX_REFS = 16;
 
 /**
  * Each video model's lengths (`seconds`, a range in whole seconds, or `only` some), shapes, whether it takes
- * reference pictures, and the size it is asked for: 720p, or the nearest it makes (`resolution`). Every clip has sound:
- * asked for, or (`audio: false`) made with it unasked.
- * @type {Record<string, { name: string, seconds?: [number, number], only?: number[], ratios: string[], references: boolean, resolution?: string, audio?: false }>}
+ * reference pictures, and its sizes (`sizes`, as OpenRouter lists them): --resolution, else 720p, else the nearest it
+ * makes (`resolution`, its own default when it makes no 720p). Every clip has sound: asked for, or (`audio: false`) made
+ * with it unasked.
+ * @type {Record<string, { name: string, seconds?: [number, number], only?: number[], ratios: string[], references: boolean, sizes?: string[], resolution?: string, audio?: false }>}
  */
 const VIDEO = {
-  'bytedance/seedance-2.0-mini': { name: 'Seedance', seconds: [4, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: true },
-  'bytedance/seedance-2.0-fast': { name: 'Seedance', seconds: [4, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: true },
-  'bytedance/seedance-2.0': { name: 'Seedance', seconds: [4, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: true },
-  'bytedance/seedance-2.5': { name: 'Seedance', seconds: [4, 30], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: true },
+  'bytedance/seedance-2.0-mini': { name: 'Seedance', seconds: [4, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: true, sizes: ['480p', '720p'] },
+  'bytedance/seedance-2.0-fast': { name: 'Seedance', seconds: [4, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: true, sizes: ['480p', '720p'] },
+  'bytedance/seedance-2.0': { name: 'Seedance', seconds: [4, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: true, sizes: ['480p', '720p', '1080p', '4K'] },
+  'bytedance/seedance-2.5': { name: 'Seedance', seconds: [4, 30], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: true, sizes: ['480p', '720p'] },
   /* Wan is billed 5 s at the least, however short the clip: none shorter is asked for */
-  'alibaba/wan-3.0': { name: 'Wan', seconds: [5, 30], ratios: ['16:9', '4:3', '1:1', '3:4', '9:16'], references: false },
-  'alibaba/wan-3.0-prime': { name: 'Wan', seconds: [5, 30], ratios: ['16:9', '4:3', '1:1', '3:4', '9:16'], references: false },
-  'minimax/hailuo-3': { name: 'Hailuo', seconds: [5, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: false, resolution: '2K' },
-  'minimax/hailuo-3-max': { name: 'Hailuo', seconds: [5, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: false, resolution: '768p', audio: false },
-  'heygen/heygen-video-1': { name: 'HeyGen', seconds: [5, 30], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: false, resolution: '768p', audio: false },
+  'alibaba/wan-3.0': { name: 'Wan', seconds: [5, 30], ratios: ['16:9', '4:3', '1:1', '3:4', '9:16'], references: false, sizes: ['480p', '720p', '1080p'] },
+  'alibaba/wan-3.0-prime': { name: 'Wan', seconds: [5, 30], ratios: ['16:9', '4:3', '1:1', '3:4', '9:16'], references: false, sizes: ['480p', '720p', '1080p'] },
+  'minimax/hailuo-3': { name: 'Hailuo', seconds: [5, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: false, sizes: ['2K'], resolution: '2K' },
+  'minimax/hailuo-3-max': { name: 'Hailuo', seconds: [5, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: false, sizes: ['480p', '768p'], resolution: '768p', audio: false },
+  'heygen/heygen-video-1': { name: 'HeyGen', seconds: [5, 30], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], references: false, sizes: ['480p', '768p', '1080p', '2K'], resolution: '768p', audio: false },
   'kwaivgi/kling-v3.0-std': { name: 'Kling', seconds: [3, 15], ratios: ['16:9', '9:16', '1:1'], references: false },
   'kwaivgi/kling-v3.0-pro': { name: 'Kling', seconds: [3, 15], ratios: ['16:9', '9:16', '1:1'], references: false },
   'google/veo-3.1-fast': { name: 'Veo', only: [4, 6, 8], ratios: ['16:9', '9:16'], references: false },
   'google/veo-3.1': { name: 'Veo', only: [4, 6, 8], ratios: ['16:9', '9:16'], references: false },
 };
 const RESOLUTION = '720p';
+/** Each size's lines of picture, to find the nearest a model makes. */
+const LINES = /** @type {Record<string, number>} */ ({ '480p': 480, '720p': 720, '768p': 768, '1080p': 1080, '2K': 1440, '4K': 2160 });
+
+/** The size a model makes nearest to the one asked (the larger on a tie); its own when none is asked. */
+function sizeOf(/** @type {{ sizes?: string[], resolution?: string }} */ spec, /** @type {string} */ asked) {
+  const own = spec.resolution ?? RESOLUTION;
+  if (!asked || !spec.sizes?.length || spec.sizes.includes(asked)) return asked && spec.sizes?.includes(asked) ? asked : own;
+  const want = LINES[asked] ?? LINES[own] ?? 720;
+  return spec.sizes.reduce((best, s) => (Math.abs(LINES[s] - want) < Math.abs(LINES[best] - want) || (Math.abs(LINES[s] - want) === Math.abs(LINES[best] - want) && LINES[s] > LINES[best]) ? s : best));
+}
 
 /** The length a model makes nearest to the one asked: within its range, or the nearest it makes (the longer on a tie). */
 function length(/** @type {{ seconds?: [number, number], only?: number[] }} */ spec, /** @type {number} */ asked) {
@@ -176,11 +187,14 @@ async function video(args, ctx) {
   const tall = ['9:21', '2:3', '3:4', '9:16'].includes(ratio);
   const aspect = !ratio || ratio === 'adaptive' ? null : spec.ratios.includes(ratio) ? ratio : tall ? '9:16' : ['4:3', '1:1'].includes(ratio) && spec.ratios.includes('1:1') ? '1:1' : '16:9';
   if (aspect && aspect !== ratio) said.push(`${spec.name} makes ${spec.ratios.join(', ')} clips: ${aspect}`);
+  const askedSize = text(args.resolution);
+  const resolution = sizeOf(spec, askedSize);
+  if (askedSize && resolution !== askedSize) said.push(`${spec.name} makes ${(spec.sizes ?? [resolution]).join(', ')}: ${resolution}`);
 
   const frame = async (/** @type {string} */ src, /** @type {'first_frame' | 'last_frame'} */ type) => ({ type: 'image_url', image_url: { url: await dataUri(src, ctx) }, frame_type: type });
   const frames = [...(first ? [await frame(first, 'first_frame')] : []), ...(last ? [await frame(last, 'last_frame')] : [])];
   const body = {
-    model, prompt, duration: seconds, resolution: spec.resolution ?? RESOLUTION, ...(spec.audio === false ? {} : { generate_audio: true }),
+    model, prompt, duration: seconds, resolution, ...(spec.audio === false ? {} : { generate_audio: true }),
     ...(aspect ? { aspect_ratio: aspect } : {}),
     ...(frames.length ? { frame_images: frames } : {}),
     ...(refs.length && !frames.length ? { input_references: await Promise.all(refs.map(async (r) => ({ type: 'image_url', image_url: { url: await dataUri(r, ctx) } }))) } : {}),
@@ -203,10 +217,10 @@ async function video(args, ctx) {
   return {
     files: [{ path, bytes }],
     index: [{ src: path, kind: 'video', dur: seconds, hasAudio: true, from: {
-      mode: 'generate', prompt, provider: 'openrouter', model, resolution: spec.resolution ?? RESOLUTION, sec: seconds,
+      mode: 'generate', prompt, provider: 'openrouter', model, resolution, sec: seconds,
       ...(first ? { firstFrame: first } : {}), ...(last ? { lastFrame: last } : {}), ...(refs.length && !frames.length ? { refs } : {}),
     } }],
-    receipt: { provider: 'openrouter', model, src: path, dur: seconds, hasAudio: true, resolution: spec.resolution ?? RESOLUTION, ...reported(state.usage), ...notes(said) },
+    receipt: { provider: 'openrouter', model, src: path, dur: seconds, hasAudio: true, resolution, ...reported(state.usage), ...notes(said) },
     cost: billedBy(NAME),
   };
 }

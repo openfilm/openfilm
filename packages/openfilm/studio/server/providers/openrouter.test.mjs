@@ -127,6 +127,14 @@ test('each model\'s lengths and shapes: Veo makes 4, 6 or 8 s, wide or tall; Kli
   await openrouter.run('video', { prompt: 'rain', 'input-reference': ['assets/image/a.png'], out: 'rain' }, ctx({ 'assets/image/a.png': new Uint8Array([1]) }, 'bytedance/seedance-2.0'));
   assert.equal(JSON.parse(seen[0].body).input_references.length, 1);
   assert.equal(JSON.parse(seen[0].body).generate_audio, true);
+  /* the size asked, when the model makes it; else its nearest, said */
+  seen.length = 0;
+  await openrouter.run('video', { prompt: 'rain', resolution: '1080p', out: 'rain' }, ctx({}, 'bytedance/seedance-2.0'));
+  assert.equal(JSON.parse(seen[0].body).resolution, '1080p');
+  seen.length = 0;
+  const max = await openrouter.run('video', { prompt: 'rain', resolution: '720p', out: 'rain' }, ctx({}, 'minimax/hailuo-3-max'));
+  assert.equal(JSON.parse(seen[0].body).resolution, '768p');
+  assert.match(max.receipt.notes.join(' '), /makes 480p, 768p: 768p/);
   /* Hailuo 3 Max makes its sound unasked, at 768p: none is asked for */
   seen.length = 0;
   await openrouter.run('video', { prompt: 'rain', out: 'rain' }, ctx({}, 'minimax/hailuo-3-max'));
