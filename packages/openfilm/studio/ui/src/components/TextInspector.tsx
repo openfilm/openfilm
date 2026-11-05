@@ -8,7 +8,7 @@ import * as React from 'react';
 import { Ban } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { joinFontFamily, splitFontFamily } from '@/lib/font-styles';
-import { nameOf, posterUrl, previewUrl, useLibraryIndex, type LibraryItem } from '@/lib/library';
+import { nameOf, posterUrl, useLibraryIndex, type LibraryItem } from '@/lib/library';
 import {
   LOOK_VARS, MOTION_VARS, TEXT_DEFAULTS, currentOf, textVars, textWords, withLook, withMotion, withVars, withWords,
   type MotionSlot,
@@ -168,11 +168,11 @@ export function TextInspector({ host, boxH, commit }: { host: PropsHost; boxH?: 
                 ) : null}
               </div>
               <Tiles
+                moving
                 items={items}
                 on={now === 'none' ? '' : items.find((i) => i.vars?.[nameKey] === now)?.id ?? null}
                 none={t('textInspector.none')}
                 lang={lang}
-                small
                 onPick={(item) => (item ? writeMotion(withMotion(overrides, slot, item.vars ?? {}), slot) : void write(withMotion(overrides, slot, { [nameKey]: 'none' })))}
               />
             </div>
@@ -194,18 +194,19 @@ function Line({ label, children }: { label: string; children: React.ReactNode })
 }
 
 /**
- * A grid of the library's looks or motions: the one on lit, "none" first. A look drawn as it is, its words filling a
- * card as large as two a row leave (`drawn`); a motion by its poster, playing under the pointer.
+ * A grid of the library's looks or motions, each drawn as it is, its words filling its card (lib TextStyleSample): the
+ * one on lit, "none" first. A look's cards as large as two a row leave (`drawn`); a motion's three a row, played under
+ * the pointer (`moving`).
  */
-function Tiles({ items, on, none, lang, small, drawn, onPick }: {
-  items: LibraryItem[]; on: string | null; none: string; lang: ReturnType<typeof useLanguage>; small?: boolean; drawn?: boolean;
+function Tiles({ items, on, none, lang, drawn, moving, onPick }: {
+  items: LibraryItem[]; on: string | null; none: string; lang: ReturnType<typeof useLanguage>; drawn?: boolean; moving?: boolean;
   onPick: (item: LibraryItem | null) => void;
 }) {
   const [hover, setHover] = React.useState<string | null>(null);
   const ring = (lit: boolean) => (lit ? 'ring-2 ring-[var(--accent)]' : 'ring-1 ring-[var(--border)] hover:ring-[var(--text-faint)]');
   const label = (lit: boolean) => `mt-1 truncate text-center text-[10.5px] ${lit ? 'font-medium text-[var(--accent)]' : 'text-[var(--text-muted)]'}`;
   return (
-    <div className={`grid ${drawn ? 'grid-cols-[repeat(auto-fill,minmax(128px,1fr))] gap-x-2 gap-y-2.5' : `gap-1.5 ${small ? 'grid-cols-4' : 'grid-cols-3'}`}`}>
+    <div className={`grid ${drawn ? 'grid-cols-[repeat(auto-fill,minmax(128px,1fr))] gap-x-2 gap-y-2.5' : 'grid-cols-3 gap-1.5'}`}>
       <button type="button" onClick={() => onPick(null)} className="min-w-0 text-left">
         <span className={`grid aspect-video place-items-center rounded-[5px] bg-[var(--bg-field)] text-[var(--text-faint)] ${ring(on === '')}`}><Ban size={14} /></span>
         <span className={`block ${label(on === '')}`}>{none}</span>
@@ -214,12 +215,9 @@ function Tiles({ items, on, none, lang, small, drawn, onPick }: {
         <button key={item.id} type="button" onClick={() => onPick(item)} title={nameOf(item.name, lang)} className="min-w-0 text-left"
           onMouseEnter={() => setHover(item.id)} onMouseLeave={() => setHover(null)}>
           <span className={`relative block aspect-video overflow-hidden rounded-[5px] ${ring(on === item.id)}`}>
-            {drawn ? <TextStyleSample vars={item.vars} lang={lang} /> : (
-              <>
-                <img src={posterUrl(item)} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />
-                {hover === item.id ? <video src={previewUrl(item)} autoPlay loop muted playsInline className="absolute inset-0 h-full w-full object-cover" /> : null}
-              </>
-            )}
+            {drawn ? <TextStyleSample vars={item.vars} lang={lang} />
+              : moving ? <TextStyleSample lang={lang} moving={item.vars} playing={hover === item.id} />
+              : <img src={posterUrl(item)} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />}
           </span>
           <span className={`block ${label(on === item.id)}`}>{nameOf(item.name, lang)}</span>
         </button>

@@ -11,7 +11,7 @@ export const TEXT_DEFAULTS: Readonly<Record<string, string>> = {
   '--font': "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
   '--size': '62vh', '--weight': '800', '--color': '#ffffff', '--fill': 'none', '--stroke': '0', '--stroke-color': '#000000',
   '--shadow': 'none', '--glow': 'none', '--box': 'transparent', '--box-pad': '0', '--box-radius': '0', '--spacing': '0.02em',
-  '--italic': 'normal', '--align': 'center', '--wrap': 'pre-wrap',
+  '--italic': 'normal', '--align': 'center', '--wrap': 'pre',
   '--in': 'none', '--in-time': '0.5s', '--loop': 'none', '--loop-time': '1.6s', '--out': 'none', '--out-time': '0.4s',
 };
 

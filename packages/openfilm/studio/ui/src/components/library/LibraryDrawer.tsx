@@ -16,7 +16,7 @@ import { ChevronDown, ChevronsLeft, ChevronsRight, Plus, Search, Star } from 'lu
 import { useLanguage, useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import {
-  TEXT_COMPONENT, libraryDragItem, libraryUrl, nameOf, posterUrl, previewUrl, toggleFavorite, useLibraryFavorites, useLibraryIndex,
+  TEXT_COMPONENT, libraryDragItem, libraryUrl, nameOf, pageUrl, posterUrl, previewUrl, toggleFavorite, useLibraryFavorites, useLibraryIndex,
   type LibraryCategory, type LibraryItem,
 } from '@/lib/library';
 import { clearResourceDrag, dragPicture, setResourceDragData } from '@/lib/resource-drag';
@@ -483,8 +483,12 @@ function Card({ item, lang, picked, kept, square, onPick, onAdd }: {
 }) {
   const [hover, setHover] = React.useState(false);
   const name = nameOf(item.name, lang);
-  /* a text style, and the line of words in the page's own: drawn as it is, its words large, in the app's language */
-  const drawn = item.kind === 'textstyle' || item.id === TEXT_COMPONENT;
+  /* a text style, a text motion (played under the pointer) and the line of words in the page's own: drawn as it is,
+     its words large, in the app's language */
+  const drawn = item.kind === 'textstyle' || item.kind === 'textmotion' || item.id === TEXT_COMPONENT;
+  /* a moving sticker drawn by its own page in its own box, filling the card as it fills its box when put in (its
+     poster is a small picture of it in a wide frame); loaded as it comes into view */
+  const live = item.cat === 'sticker' && !item.still && item.kind === 'page' && Boolean(item.w && item.h && item.src);
   return (
     <div
       className="group relative min-w-0 cursor-default select-none"
@@ -501,9 +505,15 @@ function Card({ item, lang, picked, kept, square, onPick, onAdd }: {
         {item.kind === 'look'
           ? <img src={item.sample ? libraryUrl(item.sample) : SAMPLE} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" style={{ filter: item.filter }} />
           /* a sticker whole in its square card (a wide one is not cut at its ends); loaded as it comes into view */
-          : drawn ? <TextStyleSample vars={item.vars} lang={lang} />
+          : drawn ? <TextStyleSample lang={lang} {...(item.kind === 'textmotion' ? { moving: item.vars, playing: hover } : { vars: item.vars })} />
+          : live ? (
+            <span className="pointer-events-none absolute inset-[8%] grid place-items-center">
+              <iframe title="" src={pageUrl(item)} loading="lazy" tabIndex={-1} className="max-h-full max-w-full border-0"
+                style={{ aspectRatio: `${item.w} / ${item.h}`, width: item.w! >= item.h! ? '100%' : 'auto', height: item.w! >= item.h! ? 'auto' : '100%', colorScheme: 'normal' }} />
+            </span>
+          )
           : <img src={posterUrl(item)} alt="" draggable={false} loading="lazy" decoding="async" className={`absolute inset-0 h-full w-full ${square ? 'object-contain' : 'object-cover'}`} />}
-        {hover && item.kind !== 'look' && !item.still && !drawn ? <video src={previewUrl(item)} autoPlay loop muted playsInline className={`absolute inset-0 h-full w-full ${square ? 'object-contain' : 'object-cover'}`} /> : null}
+        {hover && item.kind !== 'look' && !item.still && !drawn && !live ? <video src={previewUrl(item)} autoPlay loop muted playsInline className={`absolute inset-0 h-full w-full ${square ? 'object-contain' : 'object-cover'}`} /> : null}
         {/* the star and the "+" side by side, of one size, dark glass over the picture */}
         <span className="absolute bottom-1 right-1 flex items-center gap-1">
           <StarButton item={item} kept={kept} className={`${ROUND} bg-black/55 ${kept ? 'grid text-[#ffd35a]' : 'hidden text-white group-hover:grid'}`} />
