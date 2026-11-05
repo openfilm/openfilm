@@ -45,7 +45,7 @@ import local from './local.mjs';
 const OWN = [elevenlabs, inworld, cartesia, openai, google, fal, openrouter, pexels, pixabay, brave, tavily, groq, azure, doubao, mimo, keenable, openfilm, local];
 
 /** The kinds of media the person chooses a provider and model for (Settings → Services). */
-const USE_VERBS = /** @type {Verb[]} */ (['tts', 'music', 'sfx', 'asr', 'cutout', 'image', 'image-search', 'video', 'translate', 'web-search']);
+const USE_VERBS = /** @type {Verb[]} */ (['tts', 'music', 'sfx', 'asr', 'cutout', 'image', 'image-search', 'video-search', 'video', 'translate', 'web-search']);
 
 export const listProviders = () => OWN;
 

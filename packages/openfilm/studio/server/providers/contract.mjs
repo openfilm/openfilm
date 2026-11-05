@@ -13,9 +13,10 @@
  *   asr           transcribe a project file    --src --force
  *   cutout        a picture's background out   --src --out
  *   image-search  find pictures on the web     --out --prompt --n
+ *   video-search  find video clips on the web  --out --prompt --n --orientation
  *   image         make a picture               --out --prompt --ratio --quality --transparent
  *   video         make a video clip            --out --prompt --duration --aspect-ratio --first-frame --last-frame
- *                                              --input-reference
+ *                                              --input-reference --video
  *   web-search    search the web               --query (up to 3)
  *   web-fetch     read web pages               --url (up to 3)
  * and `translate` (subtitles: `{ lines, language }` → translated lines), which is not a CLI verb. Its args also carry
@@ -24,7 +25,7 @@
  */
 
 /**
- * @typedef {'voice' | 'tts' | 'sfx' | 'music' | 'asr' | 'cutout' | 'image-search' | 'image' | 'video' | 'translate' | 'web-search' | 'web-fetch'} Verb
+ * @typedef {'voice' | 'tts' | 'sfx' | 'music' | 'asr' | 'cutout' | 'image-search' | 'video-search' | 'image' | 'video' | 'translate' | 'web-search' | 'web-fetch'} Verb
  */
 
 /**

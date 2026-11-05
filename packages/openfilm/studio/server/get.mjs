@@ -37,7 +37,7 @@ import { inside } from './files.mjs';
 import { HttpError, json, readJson } from './http.mjs';
 import { kindOf, modelFor, providerKey } from './keys.mjs';
 import { chooseProvider, freshProviders, listProviders, providerSettings } from './providers/index.mjs';
-import { translatedLines, translationAsk } from './providers/common.mjs';
+import { mediaSeconds, translatedLines, translationAsk } from './providers/common.mjs';
 import { CALL_TIMEOUT_SEC, callService, servicesHelp } from './custom-services.mjs';
 
 /**
@@ -53,7 +53,7 @@ import { CALL_TIMEOUT_SEC, callService, servicesHelp } from './custom-services.m
  * An option: `value` names what it takes in the help (none: a switch). `path`: a project file it names, which must be
  * a recording (`speech`) or a picture.
  * @typedef {{ value?: string, required?: boolean, repeat?: boolean, choices?: string[], min?: number, max?: number,
- *   integer?: boolean, default?: string | number, alias?: string, path?: 'speech' | 'picture' }} Option
+ *   integer?: boolean, default?: string | number, alias?: string, path?: 'speech' | 'picture' | 'clip' }} Option
  * @typedef {{ help: string, dir?: string, timeoutSec: number, options: Record<string, Option> }} VerbSpec
  */
 
@@ -98,6 +98,12 @@ export const VERBS = /** @type {Record<string, VerbSpec>} */ ({
     dir: 'assets/image', timeoutSec: 300,
     options: { out, prompt, n: { value: 'n', min: 1, max: 8, integer: true, default: 1, alias: 'limit' } },
   },
+  'video-search': {
+    help: 'Find video clips on the web and download them (1 to 4), each with who made it and its page, the credit the film gives it; --orientation landscape, portrait or square. Returns their paths, lengths and sizes.',
+    dir: 'assets/video', timeoutSec: 600,
+    options: { out, prompt, n: { value: 'n', min: 1, max: 4, integer: true, default: 1, alias: 'limit' },
+      orientation: { value: 'orientation', choices: ['landscape', 'portrait', 'square'] } },
+  },
   image: {
     help: 'Make one picture, or a new one from pictures in the project (--ref, up to 16; with --mask, a PNG whose transparent part is what is redrawn of the first; or --markup, a transparent PNG the size of the first with what to change drawn or written on it). --quality low is quick and costs least, max is finest and slowest; --size 1k, 2k or 4k. --format gif makes a looping animation of --frames (2 to 16) frames of --frame-ms each: a GIF clip plays its frames by the film\'s time, looping, so one round lasts frames × frame-ms. --format svg makes a vector picture from the prompt alone, its shapes elements a page can change. Returns its path and size.',
     dir: 'assets/image', timeoutSec: 300,
@@ -109,12 +115,12 @@ export const VERBS = /** @type {Record<string, VerbSpec>} */ ({
       frames: { value: 'n', min: 2, max: 16, integer: true, default: 9 }, 'frame-ms': { value: 'ms', min: 20, max: 2000, integer: true, default: 200 } },
   },
   video: {
-    help: 'Make one video clip. Returns src, dur, its size and preview frames. It spends a lot: the person confirms it in Studio first (--yes when they already agreed). The same request again returns the same clip; --force makes a new one.',
+    help: 'Make one video clip. Returns src, dur, its size and preview frames. It spends a lot: the person confirms it in Studio first (--yes when they already agreed). The same request again returns the same clip; --force makes a new one. --video makes it from a clip in the project, trimmed to the part to make again (references/ is the place for another\'s footage); what it keeps is the model\'s way, chosen with --model: at fal, kling-o3-edit changes what the prompt names and keeps the rest; kling-o3-reference makes a new clip with its camera and motion; seedance-2.0 takes it as a reference (@Video1 in the prompt); luma-ray-3.2 redraws it, its performance kept; minimax-h3-max-recast puts the people of --input-reference in place of its own, one picture each.',
     dir: 'assets/video', timeoutSec: 1200,
     options: { out, prompt, force: {}, duration: { value: 'seconds', min: 2, max: 30, integer: true, default: 5 },
       'aspect-ratio': { value: 'ratio', choices: ['16:9', '9:16', '4:3', '3:4', '1:1', '21:9', '9:21', '3:2', '2:3', 'adaptive'] },
       'first-frame': { value: 'path', path: 'picture' }, 'last-frame': { value: 'path', path: 'picture' },
-      'input-reference': { value: 'path', path: 'picture', repeat: true } },
+      'input-reference': { value: 'path', path: 'picture', repeat: true }, video: { value: 'path', path: 'clip' } },
   },
   'web-search': {
     help: 'Search the web (up to 3 --query at once). Returns the pages that match: title, URL and an excerpt of each. web-fetch reads a whole page.',
@@ -164,7 +170,7 @@ const NO_OWN_SERVICES = 'The person has added no services of their own. In Studi
 
 /** Each kind of media, in words (finding voices is part of voice-over). */
 const WORDS = /** @type {Record<string, string>} */ ({
-  tts: 'voice-over', music: 'music', sfx: 'sound effects', asr: 'transcripts', cutout: 'backgrounds taken out', image: 'images', 'image-search': 'image search',
+  tts: 'voice-over', music: 'music', sfx: 'sound effects', asr: 'transcripts', cutout: 'backgrounds taken out', image: 'images', 'image-search': 'image search', 'video-search': 'video search',
   video: 'video', translate: 'subtitle translation', 'web-search': 'web search',
 });
 /** The media services `get` can use, by name (none comes first), what each makes, and where the person connects them. */
@@ -250,14 +256,14 @@ export async function checkArgs(root, verb, given) {
   return args;
 }
 
-/** A file of the project the option names, of the kind it wants. @param {string} root @param {string} rel @param {string} name @param {'speech' | 'picture'} want */
+/** A file of the project the option names, of the kind it wants. @param {string} root @param {string} rel @param {string} name @param {'speech' | 'picture' | 'clip'} want */
 async function projectFile(root, rel, name, want) {
   let abs;
   try { abs = inside(root, rel); } catch { throw usage(`--${name} ${rel} is not a path inside the project`); }
   if (!(await stat(abs).catch(() => null))?.isFile()) throw usage(`--${name} ${rel} is not in the project`);
   const kind = clipKind(rel);
-  if (want === 'speech' ? kind !== 'sound' && kind !== 'video' : kind !== 'still') {
-    throw usage(`--${name} wants ${want === 'speech' ? 'a sound or video file' : 'a picture'}; ${basename(rel)} is not one`);
+  if (want === 'speech' ? kind !== 'sound' && kind !== 'video' : want === 'clip' ? kind !== 'video' : kind !== 'still') {
+    throw usage(`--${name} wants ${want === 'speech' ? 'a sound or video file' : want === 'clip' ? 'a video file' : 'a picture'}; ${basename(rel)} is not one`);
   }
   /* a recording's transcript is written beside it, and files and folders starting with a dot are the tools' (.git) */
   if (want === 'speech' && relative(root, abs).split(sep).some((part) => part.startsWith('.'))) {
@@ -334,7 +340,9 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     if (verb === 'video' && !yes) {
       const words = typeof args.prompt === 'string' ? args.prompt : '';
       const named = offered.find((m) => m.id === runModel)?.name ?? runModel;
-      await approve({ kind: 'video', provider: provider.name, ...(named ? { model: named } : {}), seconds: Number(args.duration),
+      /* a clip made from another is about as long as that one */
+      const from = typeof args.video === 'string' ? await mediaSeconds(root, args.video) : null;
+      await approve({ kind: 'video', provider: provider.name, ...(named ? { model: named } : {}), seconds: from !== null ? Math.round(from) : Number(args.duration),
         ...(words ? { prompt: words.length > 200 ? `${words.slice(0, 199).trimEnd()}…` : words } : {}) });
     }
     const result = await provider.run(/** @type {Verb} */ (verb), args, ctx);

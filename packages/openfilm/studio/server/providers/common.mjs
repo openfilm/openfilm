@@ -3,7 +3,8 @@
  * What the own-key providers share: calling a service and saying plainly what went wrong, the flags as values, where
  * results land, word timings, WAV and picture sizes, and subtitle translation's prompt and answer.
  */
-import { basename, extname } from 'node:path';
+import { execFile } from 'node:child_process';
+import { basename, extname, join } from 'node:path';
 
 /** @typedef {import('./contract.mjs').RunContext} RunContext */
 
@@ -267,6 +268,20 @@ export function imageSize(/** @type {Uint8Array} */ bytes) {
   return null;
 }
 
+/**
+ * How long a recording in the project lasts (ffprobe), in seconds, or null when it cannot be told.
+ * @param {string} root the project @param {string} rel the file, in it
+ * @returns {Promise<number | null>}
+ */
+export function mediaSeconds(root, rel) {
+  return new Promise((done) => {
+    execFile('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', join(root, rel)], { timeout: 15_000 }, (error, out) => {
+      const seconds = Number(String(out).trim());
+      done(!error && seconds > 0 ? seconds : null);
+    });
+  });
+}
+
 /** A picture service that makes PNGs alone refuses a GIF or an SVG, and says where they are made. */
 export function pngOnly(/** @type {Record<string, unknown>} */ args, /** @type {string} */ name) {
   const format = text(args.format);
@@ -365,6 +380,35 @@ export async function foundPictures({ service, provider, args, hits, notes: said
     index,
     receipt: { provider, images, asked, landed: files.length, ...notes(said) },
   };
+}
+
+/**
+ * Clips found on the web, downloaded and landed as `assets/video/<out>.mp4`, `<out>_2.mp4`, ...: as many as were asked,
+ * from the hits in order (one that cannot be downloaded is skipped), each with its length and size as the search said,
+ * and who made it and its page: the credit a film gives it. Throws a sentence when none landed.
+ * @param {{ service: string, provider: string, args: Record<string, unknown>, hits: { url: string, page: string, credit: string, dur: number | null, w: number | null, h: number | null }[], notes: string[] }} p
+ * @param {RunContext} ctx
+ */
+export async function foundClips({ service, provider, args, hits, notes: said }, ctx) {
+  const prompt = needed(args, 'prompt');
+  const asked = Math.round(number(args.n) ?? 1);
+  /** @type {{ path: string, bytes: Uint8Array }[]} */
+  const files = [];
+  const index = [];
+  const clips = [];
+  for (const hit of hits) {
+    if (files.length >= asked) break;
+    const got = await download(service, hit.url, ctx).catch((e) => { if (ctx.signal.aborted) throw e; return null; });
+    if (!got) continue;
+    const name = files.length ? `${text(args.out).replace(/\.[a-z0-9]{2,4}$/i, '')}_${files.length + 1}` : args.out;
+    const path = landing('video', name, extOf(got.type, 'mp4'));
+    files.push({ path, bytes: got.bytes });
+    const facts = { ...(hit.dur ? { dur: hit.dur } : {}), ...(hit.w && hit.h ? { w: hit.w, h: hit.h } : {}) };
+    index.push({ src: path, kind: 'video', ...facts, from: { mode: 'search', prompt, provider, sourceUrl: hit.page, credit: hit.credit } });
+    clips.push({ src: path, ...facts, source: 'web', credit: hit.credit, page: hit.page });
+  }
+  if (!files.length) throw new Error(`${service} found no clips for "${prompt}". Try other words.`);
+  return { files, index, receipt: { provider, clips, asked, landed: files.length, ...notes(said) } };
 }
 
 /** The receipt's `notes` (flags a service could not honor), only when there are some. */

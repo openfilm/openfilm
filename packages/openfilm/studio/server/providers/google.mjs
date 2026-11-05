@@ -159,6 +159,7 @@ export default {
       const answer = (body?.candidates?.[0]?.content?.parts ?? []).map((/** @type {any} */ p) => String(p?.text ?? '')).join('');
       return { files: [], index: [], receipt: { provider: 'google', model, language: text(args.language), lines: translatedLines(answer, ask.count) }, cost: billedBy(NAME) };
     }
+    if (verb === 'video' && text(args.video)) throw new Error('--video: Veo makes clips from a prompt and pictures. A clip made from another is fal\'s: use fal for it.');
     if (verb === 'video') return video(args, ctx, base, send);
     throw new Error(`${NAME} does not do ${verb}.`);
   },

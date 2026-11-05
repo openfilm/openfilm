@@ -13,7 +13,7 @@
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { AudioWaveform, Captions, ChevronRight, Clapperboard, ExternalLink, Globe, Image, Mic, Music, Plus, ScanSearch, Scissors, X } from 'lucide-react';
+import { AudioWaveform, Captions, ChevronRight, Clapperboard, ExternalLink, Film, Globe, Image, Mic, Music, Plus, ScanSearch, Scissors, X } from 'lucide-react';
 import { useT } from '@/i18n';
 import { AZURE_SERVICES, PROVIDER_SITES, SERVICE_VERBS, azureKey, providerOrder, type OwnProvider, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
 import { customProblem } from './CustomServices';
@@ -25,7 +25,7 @@ const ADDING_PROVIDERS = 'https://github.com/openfilm/openfilm/blob/main/CONTRIB
 
 /** Each kind's picture, wherever kinds are listed. */
 export const KIND_ICON: Partial<Record<ProviderVerb, React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>>> = {
-  tts: Mic, music: Music, sfx: AudioWaveform, asr: Captions, cutout: Scissors, image: Image, 'image-search': ScanSearch, video: Clapperboard, 'web-search': Globe,
+  tts: Mic, music: Music, sfx: AudioWaveform, asr: Captions, cutout: Scissors, image: Image, 'image-search': ScanSearch, 'video-search': Film, video: Clapperboard, 'web-search': Globe,
 };
 
 const chipClass = 'inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-[14px] transition hover:border-[var(--border-strong)] hover:text-[var(--text)]';

@@ -100,6 +100,7 @@ export default {
   models: MODELS,
   async run(verb, args, ctx) {
     if (verb === 'image') return picture(args, ctx);
+    if (verb === 'video' && text(args.video)) throw new Error('--video: OpenRouter\'s video models here make clips from a prompt and pictures. A clip made from another is fal\'s: use fal for it.');
     if (verb === 'video') return video(args, ctx);
     throw new Error(`${NAME} does not do ${verb}.`);
   },
