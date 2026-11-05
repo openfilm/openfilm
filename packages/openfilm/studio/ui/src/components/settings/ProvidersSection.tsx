@@ -120,20 +120,19 @@ export function ProviderDialog({ provider, hook, onClose }: { provider: OwnProvi
   return (
     <Card label={provider.name} onClose={onClose}>
       <Connection provider={provider} hook={hook} header={(status, action) => (
-        <div className="flex items-start gap-4 pr-8">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[12px] bg-[var(--bg-field)] text-[var(--text)]"><ProviderMark id={provider.id} size={24} /></span>
-          <div className="min-w-0 flex-1">
+        /* the status line runs on under the buttons, which are no taller than the name and website */
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-4 pr-8">
+          <span className="row-span-2 flex h-12 w-12 items-center justify-center rounded-[12px] bg-[var(--bg-field)] text-[var(--text)]"><ProviderMark id={provider.id} size={24} /></span>
+          <div className="min-w-0">
             <h2 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-[var(--text)]">{provider.name}</h2>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13.5px]">
-              {site ? (
-                <a href={`https://${site}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[var(--text-faint)] transition hover:text-[var(--text)]">
-                  {site}<ExternalLink size={11} />
-                </a>
-              ) : null}
-              {status}
-            </div>
+            {site ? (
+              <a href={`https://${site}`} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 text-[13.5px] text-[var(--text-faint)] transition hover:text-[var(--text)]">
+                {site}<ExternalLink size={11} />
+              </a>
+            ) : null}
           </div>
-          <div className="flex shrink-0 items-center gap-1 pt-1">{action}</div>
+          <div className="flex items-center gap-1 pt-1">{action}</div>
+          {status ? <div className="col-span-2 col-start-2 mt-1 flex min-w-0 text-[13.5px]">{status}</div> : null}
         </div>
       )} />
       <p className="mt-5 text-[14.5px] leading-relaxed text-[var(--text-muted)]">{t(`settings.providers.about.${provider.id}`)}</p>
@@ -189,9 +188,10 @@ function Connection({ provider, hook, header }: {
   const pasteLabel = azure ? t('settings.providers.key') : t('settings.providers.pasteKey').replaceAll('{name}', provider.name);
   const escape = (e: React.KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); close(); } };
 
-  /* one line that may wrap as text: the dot, Connected, and as whom (an account's email, or a key's last four) */
+  /* one line, never broken: the dot, Connected, and as whom (an account's email, or a key's last four); cut short when
+     the card is too narrow for it */
   const status = provider.source ? (
-    <span className="min-w-0 text-[var(--text-muted)]">
+    <span className="min-w-0 max-w-full truncate text-[var(--text-muted)]" title={provider.account || undefined}>
       <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-[var(--ok)] align-middle" aria-hidden />
       {t('settings.providers.connected')}
       {provider.account ? <span className="text-[var(--text-faint)]"> · {provider.account}</span> : null}
