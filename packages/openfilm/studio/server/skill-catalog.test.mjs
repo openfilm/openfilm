@@ -4,8 +4,8 @@ import { createServer } from 'node:http';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { listSkills, usableSkills } from '../../src/skills.mjs';
-import { catalogSkills, installSkill, installedStanding, readCatalog, refreshCatalog, uninstallSkill } from './skill-catalog.mjs';
+import { findSkill, listSkills, offeredSkills, usableSkills } from '../../src/skills.mjs';
+import { catalogSkills, installSkill, installedStanding, readCatalog, readDiscover, refreshCatalog, uninstallSkill } from './skill-catalog.mjs';
 
 /** A fake GitHub: its API lists a folder's files at a commit, its raw host sends each. `repos[commit]` → { path: text } */
 async function github(/** @type {Record<string, Record<string, string>>} */ commits) {
@@ -56,6 +56,12 @@ test('Discover: the index read as it is now, each skill installed at its commit,
   const shown = catalogSkills();
   assert.deepEqual(shown.map((k) => [k.uid, k.version, k.shown?.title.en]), [['openfilm/demo', '1.0.0', 'Demo']], 'the malformed entry left out');
   assert.deepEqual(listSkills(), [], 'in Discover, not installed');
+  /* not installed, it can still be tried in a conversation: named, and found by its name */
+  assert.equal(findSkill('demo')?.uid, 'openfilm/demo');
+  assert.ok(offeredSkills().named.some((k) => k.uid === 'openfilm/demo') && !offeredSkills().given.some((k) => k.uid === 'openfilm/demo'));
+  /* read a moment ago: asked again within its freshness, what was read; one reading for many askers */
+  const read = readCatalog()?.read;
+  assert.equal((await readDiscover({ fresh: 60_000 })).read, read);
 
   await installSkill('openfilm/demo');
   assert.deepEqual(usableSkills().map((k) => [k.uid, k.source]), [['openfilm/demo', 'official']], 'installed: agents get it');

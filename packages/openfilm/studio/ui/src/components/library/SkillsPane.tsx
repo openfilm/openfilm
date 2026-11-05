@@ -25,10 +25,10 @@ import { ADD_HOVER, PANEL_ROUND, ROUND } from './AudioList';
 /** One of Discover's not installed is there only; the person's own and a project's are installed already. */
 const installedOf = (skill: SkillEntry) => skill.installed !== false;
 
-/* how long Discover's index is fresh enough not to be read again as it opens (the server's FRESH_MS) */
-const FRESH_MS = 10 * 60 * 1000;
-/* Discover read from GitHub once while Studio is open, and again when stale: what it came to */
-let discoverRead: { at: number; failed: boolean } | null = null;
+/* Discover is read again as it opens, unless it was a minute ago; what it last read shows meanwhile */
+const FRESH_MS = 60 * 1000;
+/* Discover could not be read when last asked, while Studio is open */
+let discoverFailed = false;
 
 export type SkillsLine = 'favorites' | 'installed' | 'discover';
 
@@ -62,16 +62,16 @@ export function SkillsPane({ line, query, projectId, opened, onOpen, onDiscover 
     return () => { live = false; stop(); };
   }, [projectId]);
 
-  /* Discover: its index read from GitHub as it opens, unless read a little while ago; the skills read again then */
-  const [discover, setDiscover] = React.useState<'reading' | 'read' | 'failed'>(() => (discoverRead?.failed ? 'failed' : 'read'));
+  /* Discover: what it last read shows at once, and it is read again behind it (Studio reads it as it starts too); before
+     anything was ever read, its tiles' places show while it is */
+  const [discover, setDiscover] = React.useState<'reading' | 'read' | 'failed'>(() => (seenCatalog() ? (discoverFailed ? 'failed' : 'read') : 'reading'));
   React.useEffect(() => {
     if (line !== 'discover') return;
-    if (discoverRead && Date.now() - discoverRead.at < FRESH_MS) { setDiscover(discoverRead.failed ? 'failed' : 'read'); return; }
     let live = true;
-    setDiscover('reading');
-    void sourcesApi.readDiscover().then(
-      () => { discoverRead = { at: Date.now(), failed: false }; if (live) setDiscover('read'); },
-      () => { discoverRead = { at: Date.now(), failed: true }; if (live) setDiscover('failed'); },
+    if (!seenCatalog()) setDiscover('reading');
+    void sourcesApi.readDiscover(FRESH_MS).then(
+      () => { discoverFailed = false; if (live) setDiscover('read'); },
+      () => { discoverFailed = true; if (live) setDiscover('failed'); },
     );
     return () => { live = false; };
   }, [line]);
@@ -118,14 +118,23 @@ export function SkillsPane({ line, query, projectId, opened, onOpen, onDiscover 
     const read = seenCatalog();
     const note = discover === 'failed'
       ? (read ? t('assetDrawer.discoverOffline').replace('{when}', new Date(read).toLocaleString()) : t('assetDrawer.discoverNever'))
-      : discover === 'reading' && !read ? t('assetDrawer.discoverReading') : null;
+      : null;
     const anyThere = skills.some((k) => k.source === 'official' && !k.core);
+    /* the first read under way: the tiles' places, said as Discover being read */
+    const waiting = discover === 'reading' && !toInstall.length && !q;
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         {note ? <p role="status" className="shrink-0 px-3 pb-2 text-[12px] leading-[18px] text-[var(--text-muted)]">{note}</p> : null}
-        {toInstall.length ? (
+        {toInstall.length || waiting ? (
           <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[calc(var(--drawer-under,0px)+12px)] pt-0.5">
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-x-2.5 gap-y-3.5">{toInstall.map(tileOf)}</div>
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-x-2.5 gap-y-3.5" {...(waiting ? { role: 'status', 'aria-label': t('assetDrawer.discoverReading') } : {})}>
+              {waiting ? Array.from({ length: 6 }, (_, i) => (
+                <div key={i} aria-hidden className="flex flex-col gap-1.5">
+                  <div className="skeleton aspect-video w-full rounded-[8px]" />
+                  <div className="skeleton h-3 w-2/3 rounded" />
+                </div>
+              )) : toInstall.map(tileOf)}
+            </div>
           </div>
         ) : note && !read ? null : <Empty text={t(q ? 'assetDrawer.noSkillsFound' : anyThere ? 'assetDrawer.allSkillsInstalled' : 'assetDrawer.discoverNone')} />}
       </div>

@@ -19,8 +19,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { cp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import { sharedHome } from '../../src/locations.mjs';
-import { SKILL_NAME, SOURCE_FILE, officialSkillsDir, readSkill, skillSource, skillsIn } from '../../src/skills.mjs';
+import { SKILL_NAME, SOURCE_FILE, discoverDir, discoverFolder, officialSkillsDir, readSkill, skillSource, skillsIn } from '../../src/skills.mjs';
 import { downloadFiles, listFiles } from './fetch-github.mjs';
 import { moveToTrash } from './trash.mjs';
 
@@ -34,7 +33,7 @@ const MAX_BYTES = 20 * 1024 * 1024;
 /** @typedef {{ name: string, repo: string, path: string, version: string, commit: string }} IndexEntry */
 /** @typedef {{ read: string, entries: IndexEntry[] }} Catalog what the index said, and when (ISO time) */
 
-export const catalogDir = () => join(sharedHome(), 'skill-catalog');
+export const catalogDir = discoverDir;
 const indexFile = () => join(catalogDir(), 'index.json');
 
 /** The account and repository of a GitHub address. @param {string} repo */
@@ -42,8 +41,8 @@ const repoOf = (repo) => {
   const [, owner, name] = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)$/.exec(repo) ?? [];
   return { owner, repo: name };
 };
-/** Where a skill of the index is kept in the catalog. @param {IndexEntry} e */
-const catalogFolder = (e) => join(catalogDir(), repoOf(e.repo).owner.toLowerCase(), `${e.name}@${e.commit}`);
+/** Where a skill of the index is kept in the catalog. */
+const catalogFolder = discoverFolder;
 
 /**
  * The entries of an index that are well formed (as openfilm/skills checks them); the rest are left out.
@@ -76,7 +75,10 @@ export async function refreshCatalog({ signal, hosts, fetch: get = fetch } = {})
   const from = process.env.OPENFILM_SKILLS_INDEX || INDEX_URL;
   let index;
   if (/^https:\/\//.test(from)) {
-    const res = await get(from, { signal, headers: { accept: 'application/json' }, cache: 'no-store' });
+    /* asked past any cache between (GitHub's raw files are cached for minutes): what the index says now */
+    const url = new URL(from);
+    url.searchParams.set('read', String(Date.now()));
+    const res = await get(url, { signal, headers: { accept: 'application/json' }, cache: 'no-store' });
     if (!res.ok) throw new Error(`The skills index answered ${res.status}.`);
     index = await res.json();
   } else index = JSON.parse(await readFile(from, 'utf8'));
@@ -106,6 +108,22 @@ export async function refreshCatalog({ signal, hosts, fetch: get = fetch } = {})
   await mkdir(catalogDir(), { recursive: true });
   await writeFile(indexFile(), `${JSON.stringify(catalog, null, 2)}\n`);
   return catalog;
+}
+
+/** the reading under way, which every asker waits for */
+/** @type {Promise<Catalog> | null} */
+let reading = null;
+
+/**
+ * Discover read again, unless it was read less than `fresh` ms ago (then what it said then), one reading at a time
+ * however many ask: Studio as it starts, Discover as it opens, an empty conversation's first cards.
+ * @param {{ fresh?: number }} [options] @returns {Promise<Catalog>}
+ */
+export function readDiscover({ fresh = 0 } = {}) {
+  const now = readCatalog();
+  if (now && Date.now() - Date.parse(now.read) < fresh) return Promise.resolve(now);
+  reading ??= refreshCatalog().finally(() => { reading = null; });
+  return reading;
 }
 
 /** A folder's entries, none when it is not there. @param {string} dir */

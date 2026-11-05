@@ -60,7 +60,7 @@ import { listenLocal } from '../../src/host.mjs';
 import { captionTrackRoutes } from './caption-tracks.mjs';
 import { moveToTrash } from './trash.mjs';
 import { coreSkills, keeps, listSkills, offeredSkills, removeSkill, setSkillCover, setSkillOn, skillOrigins, skillsOff } from '../../src/skills.mjs';
-import { catalogSkills, installSkill, installedStanding, readCatalog, refreshCatalog, uninstallSkill } from './skill-catalog.mjs';
+import { catalogSkills, installSkill, installedStanding, readCatalog, readDiscover, uninstallSkill } from './skill-catalog.mjs';
 import { freshProviders, providersRoute } from './providers/index.mjs';
 import { localModelsRoute } from './local-models.mjs';
 import { captionRoutes, writeSubtitleStyle } from './captions.mjs';
@@ -541,11 +541,12 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         })),
       });
     }
-    /* Discover's index read again (POST), the skills it names fetched at their commits: → { catalog }, or 502 saying
-       why, what was read before staying */
+    /* Discover's index read again (POST { fresh? }: unless read less than `fresh` ms ago), the skills it names fetched
+       at their commits: → { catalog }, or 502 saying why, what was read before staying */
     if (parts[0] === 'skills' && parts.length === 2 && parts[1] === 'catalog' && req.method === 'POST') {
+      const fresh = Number((await readJson(req).catch(() => ({})))?.fresh) || 0;
       try {
-        const catalog = await refreshCatalog();
+        const catalog = await readDiscover({ fresh });
         return json(res, 200, { catalog: { read: catalog.read } });
       } catch (e) {
         throw new HttpError(502, `Discover could not be read now: ${e instanceof Error ? e.message : String(e)}`);
@@ -1204,6 +1205,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
   });
   filmOrigin = pages.origin;
   if (advertise) {
+    /* Discover read as Studio starts, so its skills are there when it first opens (and on an empty conversation) */
+    readDiscover({ fresh: 60_000 }).catch(() => { /* offline: what was read before, said so when Discover opens */ });
     mkdirSync(studioHome(), { recursive: true });
     /* `supervisor`: the process that starts this one again if it ends unexpectedly (main.mjs), stopped with it */
     const supervisor = Number(process.env.OPENFILM_STUDIO_SUPERVISOR) || undefined;

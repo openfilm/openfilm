@@ -73,6 +73,23 @@ export function skillSource(folder) {
     return { repo: raw.repo, path: raw.path, commit: raw.commit, version: typeof raw.version === 'string' ? raw.version : null };
   } catch { return null; }
 }
+/** Where Discover keeps the skills the openfilm/skills index names, each at its commit (studio/server/skill-catalog.mjs). */
+export const discoverDir = () => join(sharedHome(), 'skill-catalog');
+/** Where Discover keeps one skill of the index. @param {{ name: string, repo: string, commit: string }} entry */
+export const discoverFolder = (entry) => join(discoverDir(), (/github\.com\/([\w.-]+)\//.exec(`${entry.repo}/`)?.[1] ?? 'unknown').toLowerCase(), `${entry.name}@${entry.commit}`);
+/**
+ * Discover's skills as last read, installed or not: a person may try one in a conversation before installing it.
+ * @returns {Skill[]}
+ */
+export function discoverSkills() {
+  let entries = [];
+  try { entries = JSON.parse(readFileSync(join(discoverDir(), 'index.json'), 'utf8'))?.entries ?? []; } catch { return []; }
+  return (Array.isArray(entries) ? entries : []).flatMap((/** @type {any} */ e) => {
+    if (typeof e?.name !== 'string' || !SKILL_NAME.test(e.name) || typeof e.commit !== 'string' || !/^[0-9a-f]{40}$/.test(e.commit) || typeof e.repo !== 'string') return [];
+    const skill = readSkill(discoverFolder(e), 'official');
+    return skill ? [skill] : [];
+  });
+}
 /** OpenFilm's own skills, released with this package beside the manual. */
 export const coreSkillsDir = () => join(dirname(fileURLToPath(import.meta.url)), '..', 'manual');
 /**
@@ -356,8 +373,9 @@ export function coreSkills() {
  * @param {string} key @param {Parameters<typeof listSkills>[0]} [where]
  */
 export function findSkill(key, where) {
-  const all = [...coreSkills(), ...listSkills(where)];
-  return all.find((s) => (key.includes('/') ? s.uid === key.toLowerCase() : s.name === key)) ?? null;
+  const is = (/** @type {Skill} */ s) => (key.includes('/') ? s.uid === key.toLowerCase() : s.name === key);
+  /* one of Discover's not installed, last: tried in a conversation before it is installed */
+  return [...coreSkills(), ...listSkills(where)].find(is) ?? discoverSkills().find(is) ?? null;
 }
 
 /**
@@ -387,7 +405,10 @@ export function offeredSkills({ home, ...where } = {}) {
   const core = coreSkills().filter((s) => !keeps(off, s));
   const known = (/** @type {Skill[]} */ list, /** @type {Skill} */ s) => list.some((k) => k.uid === s.uid);
   const usable = usableSkills({ home, ...where }).filter((s) => !known(core, s));
-  const rest = listSkills(where).filter((s) => !keeps(off, s) && !known(core, s) && !known(usable, s));
+  /* the rest a person may name in a conversation: those of a project or theirs turned off elsewhere, and Discover's not
+     installed (tried before installing) */
+  const listed = listSkills(where);
+  const rest = [...listed, ...discoverSkills().filter((s) => !known(listed, s))].filter((s) => !keeps(off, s) && !known(core, s) && !known(usable, s));
   const named = agentNames([...core, ...usable, ...rest]);
   return { named, given: named.slice(0, core.length + usable.length), usable: named.slice(core.length, core.length + usable.length) };
 }

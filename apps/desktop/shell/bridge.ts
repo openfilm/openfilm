@@ -398,12 +398,15 @@ function commandFor(ref: StudioRef): StudioCommand {
     if (!id) return { files: [] };
     try { return await (await fetch(`/api/projects/${encodeURIComponent(id)}/files`)).json(); } catch { return { files: [] }; }
   },
-  /* Studio's skills (its own listing, with their covers), for the cards of an empty conversation */
+  /* Studio's skills (its own listing, with their covers), Discover's among them, for the cards of an empty conversation:
+     Discover read first unless it was in the last ten minutes (Studio reads it as it starts), a few seconds at most */
   async starterSkills() {
     const id = project.get()?.id;
     if (!id) return [];
     type Listed = { name: string; description: string; cover?: string; order?: number; off?: true; shown?: { title: Record<string, string> } };
     try {
+      await fetch('/api/skills/catalog', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fresh: 10 * 60 * 1000 }), signal: AbortSignal.timeout(5000) })
+        .catch(() => { /* offline or slow: what Discover read before */ });
       const body = await (await fetch(`/api/skills?project=${encodeURIComponent(id)}`)).json() as { skills?: Listed[] };
       return (body.skills ?? [])
         .filter((s): s is Listed & { cover: string } => Boolean(s.cover) && !s.off)

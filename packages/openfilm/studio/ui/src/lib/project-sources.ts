@@ -131,9 +131,10 @@ export const sourcesApi = {
   exampleCanvas: (id: string) => call<{ canvas: unknown }>(`examples/${encodeURIComponent(id)}/canvas`).then((r) => r.canvas),
   skills: (projectId?: string | null) => call<{ skills: SkillEntry[]; catalog?: { read: string } | null }>(`skills${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`)
     .then((r) => { seen.skills.set(projectId ?? '', r.skills); seen.catalog = r.catalog?.read ?? null; return r.skills; }, () => seenSkills(projectId) ?? []),
-  /** Discover's index read again from GitHub (the skills it names fetched): → when, or throws when it cannot be read */
-  readDiscover: async (): Promise<string> => {
-    const r = await call<{ catalog: { read: string } }>('skills/catalog', 'POST');
+  /** Discover's index read again from GitHub, unless read less than `fresh` ms ago (the skills it names fetched): → when,
+   *  or throws when it cannot be read */
+  readDiscover: async (fresh = 0): Promise<string> => {
+    const r = await call<{ catalog: { read: string } }>('skills/catalog', 'POST', { fresh });
     seen.catalog = r.catalog.read;
     window.dispatchEvent(new Event(SKILLS_CHANGED));
     return r.catalog.read;
