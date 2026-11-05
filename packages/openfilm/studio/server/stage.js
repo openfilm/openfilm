@@ -55,7 +55,29 @@
   const clipById = (id) => clips().find((c) => c.id === id) ?? null;
 
   /* ── a clip on the stage: its placement maps its own px to stage px ── */
-  const matrixOf = (c) => new DOMMatrix(getComputedStyle(c.el).transform);
+  /* where the clip's element draws, as the browser applies it: about its transform-origin (the film places a scaled or
+     turned clip about its middle, timeline.mjs place), its translate, rotate and scale, then its transform (as
+     timeline.mjs matrixOf), so a point is found in the clip where it is drawn */
+  const matrixOf = (c) => {
+    const css = getComputedStyle(c.el);
+    const [ox = 0, oy = 0] = css.transformOrigin.split(' ').map(parseFloat);
+    const m = new DOMMatrix().translateSelf(ox, oy);
+    if (css.translate && css.translate !== 'none') {
+      const [x = '0', y = '0', z = '0'] = css.translate.split(' ');
+      m.translateSelf(parseFloat(x), parseFloat(y), parseFloat(z));
+    }
+    if (css.rotate && css.rotate !== 'none') {
+      const parts = css.rotate.split(' ');
+      const deg = parseFloat(parts.pop() ?? '0');
+      const axis = parts.length === 3 ? parts.map(Number) : parts[0] === 'x' ? [1, 0, 0] : parts[0] === 'y' ? [0, 1, 0] : [0, 0, 1];
+      m.rotateAxisAngleSelf(axis[0], axis[1], axis[2], deg);
+    }
+    if (css.scale && css.scale !== 'none') {
+      const [sx, sy = sx, sz = '1'] = css.scale.split(' ');
+      m.scaleSelf(parseFloat(sx), parseFloat(sy), parseFloat(sz));
+    }
+    return m.multiplySelf(new DOMMatrix(css.transform === 'none' ? undefined : css.transform)).translateSelf(-ox, -oy);
+  };
   const mapPoint = (M, x, y) => { const p = M.transformPoint(new DOMPoint(x, y)); return { x: p.x, y: p.y }; };
   /** A box in the clip's px → the stage box around it. */
   const mapRect = (M, r) => {
