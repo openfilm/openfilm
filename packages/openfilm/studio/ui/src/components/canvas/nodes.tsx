@@ -208,6 +208,16 @@ export function NoteNodeView({ id, data, selected }: NodeProps<NoteNode>) {
   const board = useBoard();
   const far = useStore(farSelector);
   const editing = board.editing === id;
+  /* empty, it says what to write for what it is wired into (a picture, a clip, a sound) */
+  const feeds = useStore((s) => {
+    for (const e of s.edges) {
+      if (e.source !== id) continue;
+      const to = s.nodeLookup.get(e.target);
+      if (to?.type === 'make') return (to.data as MakeNode['data']).make;
+    }
+    return null;
+  });
+  const hint = feeds ? t(`canvas.noteFor.${feeds}`) : t('canvas.notePlaceholder');
   return (
     <div className="h-full w-full" onDoubleClick={() => { if (!board.readOnly) board.edit(id); }}>
       <NodeResizer isVisible={selected && !board.readOnly} minWidth={160} minHeight={80} lineClassName="!border-transparent"
@@ -222,12 +232,12 @@ export function NoteNodeView({ id, data, selected }: NodeProps<NoteNode>) {
             onChange={(event) => board.setData(id, { text: event.target.value })}
             onBlur={() => board.edit(null)}
             onKeyDown={(event) => { if (event.key === 'Escape') event.currentTarget.blur(); }}
-            placeholder={t('canvas.notePlaceholder')}
+            placeholder={hint}
             className="nodrag nowheel h-full w-full resize-none bg-transparent px-4 py-3.5 text-[13.5px] leading-[1.65] text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-label)]"
           />
         ) : far ? <Outline icon={TypeIcon} /> : (
           <div className={`h-full w-full overflow-hidden whitespace-pre-wrap break-words px-4 py-3.5 text-[13.5px] leading-[1.65] ${data.text ? 'text-[var(--cv-ink)]' : 'text-[var(--cv-label)]'}`}>
-            {data.text || t('canvas.notePlaceholder')}
+            {data.text || hint}
           </div>
         )}
       </Frame>
@@ -262,7 +272,7 @@ export function FrameNodeView({ id, data, selected }: NodeProps<FrameNode>) {
         {board.makesIn(id) && !editing && !board.readOnly ? (
           <Tooltip label={t('canvas.makeAllTip')}>
             <button type="button" disabled={board.busyIn(id)} onClick={() => board.makeAll(id)}
-              className="nodrag flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[var(--cv-float-line)] bg-[var(--cv-float)] px-2.5 text-[12.5px] text-[var(--cv-label)] transition hover:text-[var(--cv-ink)] disabled:opacity-60">
+              className="nodrag flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[var(--cv-float-line)] bg-[var(--cv-float)] px-2.5 text-[12.5px] font-medium text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)] disabled:opacity-60">
               {board.busyIn(id) ? <Loader2 size={12} className="animate-spin" /> : <Play size={11} />}{t('canvas.makeAll')}
             </button>
           </Tooltip>

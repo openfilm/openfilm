@@ -14,7 +14,7 @@ export interface OwnProvider {
   name: string;
   verbs: ProviderVerb[];
   /** the models it can make each kind of media with, its default first, each with the name people know it by */
-  models: Partial<Record<ProviderVerb, { id: string; name: string }[]>>;
+  models: Partial<Record<ProviderVerb, { id: string; name: string; spec?: import('./canvas').ModelSpec }[]>>;
   /** the provider's page for making a key */
   keysUrl: string;
   /** the environment variable a key is (or would be) read from */

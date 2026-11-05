@@ -71,6 +71,23 @@
  */
 
 /**
+ * What a picture or clip model makes, as Studio's canvas offers it (nothing said: the canvas offers the usual):
+ * `ratios`, its shapes; `seconds`, a clip's lengths (a range in whole seconds) or `only` some; `refs`, the most pictures
+ * it is made from (`--ref` for a picture, `--input-reference` for a clip; 0: none); `frames`, a clip from a first (and
+ * last) frame; `qualities`, a picture's `--quality`, the finest last; `needs`, a clip made only from another clip
+ * (`--video`) or a recording spoken (`--audio`).
+ * @typedef {{
+ *   ratios?: string[],
+ *   seconds?: [number, number],
+ *   only?: number[],
+ *   refs?: number,
+ *   frames?: boolean,
+ *   qualities?: string[],
+ *   needs?: 'clip' | 'audio',
+ * }} ModelSpec
+ */
+
+/**
  * @typedef {{
  *   id: string,
  *   name: string,
@@ -78,7 +95,7 @@
  *   keysUrl: string,
  *   billingUrl: string,
  *   verbs: Verb[],
- *   models?: Partial<Record<Verb, { id: string, name: string }[]>>,
+ *   models?: Partial<Record<Verb, { id: string, name: string, spec?: ModelSpec }[]>>,
  *   checkKey?: (key: string) => void,
  *   signIn?: import('../sign-in.mjs').SignIn,
  *   refresh?: (options?: { force?: boolean }) => Promise<void>,
@@ -86,9 +103,11 @@
  *   ready?: () => boolean,
  *   speechFormat?: 'mp3',
  *   run: (verb: Verb, args: Record<string, unknown>, ctx: RunContext) => Promise<RunResult>,
+ *   added?: boolean,
  * }} Provider
  * `models`: the models it can make each kind of media with, its default first, each with the name people know it by
- * (Settings → Services shows "ElevenLabs · Eleven v4").
+ * (Settings → Services shows "ElevenLabs · Eleven v4") and, for pictures and clips, what it makes (`spec`), so the
+ * canvas offers only that.
  * `checkKey`: throws a sentence when a pasted key cannot work as it is (Azure's must carry its region), shown where it
  * is pasted instead of at the first run. Only for what the provider knows without calling anyone: it must not fetch.
  * `signIn`: connected by signing in on the provider's website instead of pasting a key (sign-in.mjs); the key it
@@ -99,6 +118,7 @@
  * `keyless`: it also works with no key (a free tier), so the person can connect it with one click and add a key for
  * higher limits. Connected without one, its `key` is ''. Like every provider, it serves nothing until it is connected.
  * `ready`: it takes no key at all (Local services): connected while it can run, which it says.
+ * `added`: one the person added in their shared home (added.mjs), not built in; set when it is read.
  * `billingUrl`: the provider's own page where the person tops up its balance. A run that fails because the account has
  * no balance left throws an Error with `code: 'balance'` (common.mjs `noBalance`), the same for every provider: the
  * person is told in Studio, with this page, and the agent is told to stop.

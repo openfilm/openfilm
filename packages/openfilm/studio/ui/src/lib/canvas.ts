@@ -43,8 +43,20 @@ export interface CanvasNode {
 /** What a node can make, as `get` names it. */
 export const MAKE_KINDS = ['image', 'video', 'sfx', 'music'] as const;
 export type MakeKind = typeof MAKE_KINDS[number];
-/** a picture's shape, a clip's length or a sound's, and whether the pictures wired into a video are its first and last frames */
-export interface MakeOptions { ratio?: string; sec?: number; frames?: boolean }
+/**
+ * a picture's shape and quality, a clip's length or a sound's, and whether the pictures wired into a video are its first
+ * and last frames
+ */
+export interface MakeOptions { ratio?: string; sec?: number; frames?: boolean; quality?: string }
+
+/**
+ * What a model makes, as its provider says (studio/server/providers/contract.mjs ModelSpec): its shapes, a clip's
+ * lengths (a range, or `only` some), the most pictures it is made from, whether a clip starts from a first frame, a
+ * picture's qualities (the finest last), and a clip made only from a clip or a recording. Nothing said: the usual.
+ */
+export interface ModelSpec {
+  ratios?: string[]; seconds?: [number, number]; only?: number[]; refs?: number; frames?: boolean; qualities?: string[]; needs?: 'clip' | 'audio';
+}
 
 /** What each kind makes, as the board shows it. */
 export const MAKE_MEDIA: Record<MakeKind, 'image' | 'video' | 'audio'> = { image: 'image', video: 'video', sfx: 'audio', music: 'audio' };
@@ -109,6 +121,7 @@ function readMake(n: Record<string, unknown>): Omit<CanvasNode, 'id' | 'x' | 'y'
     ...(str(o.ratio) ? { ratio: o.ratio as string } : {}),
     ...(num(o.sec) ? { sec: o.sec } : {}),
     ...(o.frames === true ? { frames: true } : {}),
+    ...(str(o.quality) ? { quality: o.quality as string } : {}),
   };
   const versions = Array.isArray(n.versions) ? n.versions.filter((v): v is string => typeof v === 'string' && v.length > 0) : [];
   const fields = {
@@ -226,32 +239,88 @@ export function isStale(node: CanvasNode, inputs: readonly MakeInput[]): boolean
   return Boolean(node.make && node.path && node.made && node.made !== inputsKey(node, inputs));
 }
 
+/** The lengths a model makes, in seconds, as a range: its own, else the kind's. */
+export function lengthRange(kind: MakeKind, spec?: ModelSpec): [number, number] | null {
+  const usual = MAKE_SECONDS[kind];
+  if (!usual) return null;
+  if (spec?.only?.length) return [Math.min(...spec.only), Math.max(...spec.only)];
+  return spec?.seconds ?? [usual.min, usual.max];
+}
+
+/** How long a node's media is asked to be: what it asks, else the usual, within what its model makes. */
+export function lengthOf(kind: MakeKind, asked: number | undefined, spec?: ModelSpec): number | null {
+  const usual = MAKE_SECONDS[kind];
+  const range = lengthRange(kind, spec);
+  if (!usual || !range) return null;
+  const want = asked ?? usual.default;
+  if (spec?.only?.length) return spec.only.reduce((best, n) => (Math.abs(n - want) < Math.abs(best - want) ? n : best));
+  return Math.min(range[1], Math.max(range[0], want));
+}
+
+/** The shape a node's media is asked for: what it asks when its model makes it, else the nearest of the model's. */
+export function ratioOf(asked: string | undefined, spec?: ModelSpec): string {
+  const want = asked ?? '16:9';
+  const ratios = spec?.ratios;
+  if (!ratios?.length || ratios.includes(want)) return want;
+  const [w, h] = want.split(':').map(Number);
+  const r = (w ?? 16) / (h ?? 9);
+  return ratios.reduce((best, x) => {
+    const [a, b] = x.split(':').map(Number);
+    const [c, d] = best.split(':').map(Number);
+    return Math.abs(Math.log(a! / b!) - Math.log(r)) < Math.abs(Math.log(c! / d!) - Math.log(r)) ? x : best;
+  });
+}
+
 /**
- * What `get` is asked to make a node's next version: its verb and its options. The words wired in come before its own
- * prompt; pictures wired into a video are its references (or its first and last frames). What the kind cannot take
- * (pictures for a picture, a clip, a sound) is counted in `unused`.
+ * Whether the pictures wired into a clip are its first and last frames (else references): what the node says, when its
+ * model takes both; frames when it takes no references, references when it takes no frames.
  */
-export function makeRequest(node: CanvasNode & { make: MakeKind }, inputs: readonly MakeInput[], name: string):
+export function usesFrames(opts: MakeOptions | undefined, spec?: ModelSpec): boolean {
+  if (spec?.refs === 0) return spec.frames !== false;
+  if (spec?.frames === false) return false;
+  return Boolean(opts?.frames);
+}
+
+/**
+ * What `openfilm get` is asked for a node: the words wired in, then its own; a picture made from the pictures wired in
+ * (`--ref`); a clip from them (its first and last frames, or references), or from a clip or a recording wired in when
+ * its model makes it so; each within what the node's model makes (`spec`). `unused`: what is wired in that it cannot
+ * use.
+ */
+export function makeRequest(node: CanvasNode & { make: MakeKind }, inputs: readonly MakeInput[], name: string, spec?: ModelSpec):
   { verb: MakeKind; args: Record<string, string | string[]>; unused: number } {
   const words = [...inputs.flatMap((i) => ('text' in i ? [i.text] : [])), (node.prompt ?? '').trim()].filter(Boolean).join('\n\n');
   const pictures = inputs.flatMap((i) => ('media' in i && i.media === 'image' ? [i.path] : []));
-  const others = inputs.filter((i) => 'media' in i && i.media !== 'image').length;
+  const clips = inputs.flatMap((i) => ('media' in i && i.media === 'video' ? [i.path] : []));
+  const sounds = inputs.flatMap((i) => ('media' in i && i.media === 'audio' ? [i.path] : []));
   /* as `openfilm get` is given them: words, as on its command line */
   const args: Record<string, string | string[]> = { out: name, prompt: words };
   const opts = node.opts ?? {};
-  const seconds = MAKE_SECONDS[node.make];
-  if (seconds) args[node.make === 'video' ? 'duration' : 'sec'] = String(Math.min(seconds.max, Math.max(seconds.min, opts.sec ?? seconds.default)));
+  const seconds = lengthOf(node.make, opts.sec, spec);
   let used = 0;
-  if (node.make === 'image') args.ratio = opts.ratio ?? '16:9';
-  if (node.make === 'video') {
-    if (opts.ratio) args['aspect-ratio'] = opts.ratio;
-    if (opts.frames && pictures.length) {
-      args['first-frame'] = pictures[0]!;
-      if (pictures[1]) args['last-frame'] = pictures[1];
-      used = Math.min(2, pictures.length);
-    } else if (pictures.length) { args['input-reference'] = pictures; used = pictures.length; }
+  if (node.make === 'image') {
+    args.ratio = ratioOf(opts.ratio, spec);
+    if (opts.quality && spec?.qualities?.includes(opts.quality)) args.quality = opts.quality;
+    const refs = pictures.slice(0, spec?.refs ?? pictures.length);
+    if (refs.length) { args.ref = refs; used = refs.length; }
   }
-  return { verb: node.make, args, unused: pictures.length - used + others };
+  if (node.make === 'video') {
+    const fromClip = spec?.needs === 'clip';
+    if (fromClip && clips[0]) { args.video = clips[0]; used += 1; }
+    else if (spec?.needs === 'audio' && sounds[0]) { args.audio = sounds[0]; used += 1; }
+    /* a clip made from a clip or a recording is as long as it */
+    if (seconds !== null && !used) args.duration = String(seconds);
+    if (opts.ratio && !spec?.needs) args['aspect-ratio'] = ratioOf(opts.ratio, spec);
+    if (pictures.length && !fromClip && usesFrames(opts, spec)) {
+      args['first-frame'] = pictures[0]!;
+      if (pictures[1] && !spec?.needs) args['last-frame'] = pictures[1];
+      used += spec?.needs ? 1 : Math.min(2, pictures.length);
+    } else if (pictures.length) {
+      const refs = pictures.slice(0, spec?.refs ?? pictures.length);
+      if (refs.length) { args['input-reference'] = refs; used += refs.length; }
+    }
+  } else if (seconds !== null) args.sec = String(seconds);
+  return { verb: node.make, args, unused: pictures.length + clips.length + sounds.length - used };
 }
 
 /** A name for what a node makes next: from its words, and when, so no two are the same. */

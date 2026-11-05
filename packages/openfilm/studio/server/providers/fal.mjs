@@ -101,6 +101,18 @@ const FROM_SPEECH = {
   'sync-3': { name: 'sync-3', endpoint: 'fal-ai/sync-lipsync/v3', from: 'clip', seconds: [1, 600] },
 };
 
+/* what each model makes, as the canvas offers it (contract.mjs ModelSpec) */
+for (const model of MODELS.image) Object.assign(model, { spec: { ratios: Object.keys(RATIO_SIZE), refs: 0 } });
+for (const model of MODELS.video) {
+  const v = VIDEO[model.id];
+  const c = FROM_CLIP[model.id];
+  const s = FROM_SPEECH[model.id];
+  const spec = v ? { ratios: v.ratios, seconds: v.seconds, refs: v.reference ? 9 : 0, frames: true }
+    : c ? { seconds: c.clip, refs: c.way === 'recast' ? 9 : 0, needs: 'clip' }
+    : s ? { seconds: s.seconds, refs: s.from === 'picture' ? 1 : 0, needs: 'audio' } : null;
+  if (spec) Object.assign(model, { spec });
+}
+
 /** the largest clip sent inline when it cannot be put on fal's storage */
 const INLINE_MAX = 10 * 1024 * 1024;
 

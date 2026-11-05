@@ -23,7 +23,7 @@ import {
   type Connection, type Edge, type FinalConnectionState,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Clapperboard, Download, FolderSearch, LayoutTemplate, Maximize2, Play, Plus, Sparkles, Square } from 'lucide-react';
+import { ChevronRight, Clapperboard, Download, FolderSearch, Image as ImageIcon, LayoutTemplate, Maximize2, Play, Plus, Sparkles, Square, Type as TypeIcon, Video } from 'lucide-react';
 import { useT } from '@/i18n';
 import { api, projectEvents } from '@/api';
 import {
@@ -39,7 +39,7 @@ import type { StudioRef } from '@/lib/host';
 import { useThemeChanges } from '@/lib/theme-changes';
 import { ContextMenu, type ContextMenuEntry } from '../ContextMenu';
 import {
-  BoardContext, CUT_W, boxOf, choicesFor, defaultChoice, fromFlow, inputViews, runErrors, runs, runsChanged, shownBoards, startRun, toFlow, useRuns,
+  BoardContext, CUT_W, allChoicesFor, boxOf, choiceOf, choicesFor, defaultChoice, fromFlow, inputViews, runErrors, runs, runsChanged, shownBoards, startRun, toFlow, useRuns,
   type Board, type BoardNode, type FrameData, type FrameNode, type MakingNode, type Side, type SpawnKind,
 } from './board';
 import { BottomToolbar, ChatToggle, Outline, Viewer, ZoomBar } from './chrome';
@@ -163,13 +163,13 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
     setEdges((list) => list.filter((e) => !gone.has(e.source) && !gone.has(e.target) && !edgesGone.has(e.id)));
   };
   const removeSelected = () => remove([...selectedIds()]);
-  const add = (doc: CanvasDoc) => {
+  const add = (doc: CanvasDoc, select = true) => {
     willChange();
     const current = docNow();
     /* a copy out of a group that is gone since lands on the board itself */
     const groups = new Set([...current.nodes, ...doc.nodes].filter((n) => n.group != null).map((n) => n.id));
     const added = doc.nodes.map((n) => (n.parent && !groups.has(n.parent) ? (({ parent: _parent, ...rest }) => rest)(n) : n));
-    show({ nodes: [...current.nodes, ...added], edges: [...current.edges, ...doc.edges] }, new Set(added.map((n) => n.id)));
+    show({ nodes: [...current.nodes, ...added], edges: [...current.edges, ...doc.edges] }, select ? new Set(added.map((n) => n.id)) : undefined);
   };
   const copy = () => {
     const ids = selectedIds();
@@ -321,20 +321,25 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
       if (!n.make) continue;
       const inputs = inputsOf(doc, n.id, mediaOf);
       if (isStale(n, inputs)) stale.add(n.id);
-      const left = makeRequest(n as MakingNode, inputs, '').unused;
+      const left = makeRequest(n as MakingNode, inputs, '', choiceOf(providers, n.make, n.via, n.model)?.spec).unused;
       if (left) unused.set(n.id, left);
     }
     return { stale, unused };
-  }, [nodes, edges, mediaOf]);
+  }, [nodes, edges, mediaOf, providers]);
   const makeNow = (id: string): Promise<boolean> => {
     const doc = docNow();
     const node = doc.nodes.find((n) => n.id === id);
     if (!node?.make || !folder) return Promise.resolve(false);
+    const fail = (key: string) => { runErrors.set(`${projectId}/${id}`, t(key)); runsChanged(); return Promise.resolve(false); };
+    /* what is wired in is used, so nothing wired in is left out unsaid: words still to write, a node still to make */
+    const wired = doc.edges.filter((e) => e.to === id).map((e) => doc.nodes.find((n) => n.id === e.from));
+    if (wired.some((n) => n && n.text != null && n.group == null && !n.text.trim())) return fail('canvas.make.emptyNote');
+    if (wired.some((n) => n?.make && !n.path)) return fail('canvas.make.unmadeInput');
     const inputs = inputsOf(doc, id, mediaOf);
-    const request = makeRequest(node as MakingNode, inputs, makeName(node as MakingNode));
+    const request = makeRequest(node as MakingNode, inputs, makeName(node as MakingNode), choiceOf(providers, node.make, node.via, node.model)?.spec);
     if (!String(request.args.prompt).trim()) { runErrors.set(`${projectId}/${id}`, t('canvas.make.noWords')); runsChanged(); return Promise.resolve(false); }
     const pick = node.via ? { via: node.via, ...(node.model ? { model: node.model } : {}) } : {};
-    return startRun(projectId, folder, id, request, pick, inputsKey(node, inputs), t('canvas.make.nothing'));
+    return startRun(projectId, folder, id, request, pick, inputsKey(node, inputs), { nothing: t('canvas.make.nothing'), balance: t('canvas.make.noBalance') });
   };
   /**
    * Everything a group makes, in the order its wires say: what feeds another is made first, and what waits for it is
@@ -376,7 +381,11 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
   const layTemplate = async (template: CanvasTemplate, at: { x: number; y: number }) => {
     try {
       const doc = template.builtIn ? builtIns.find((b) => b.id === template.id)!.doc : readCanvasDoc(await api.useCanvasTemplate(projectId, template.id));
-      add(copyOf(doc, new Set(doc.nodes.filter((n) => !n.parent).map((n) => n.id)), at));
+      const laid = copyOf(doc, new Set(doc.nodes.filter((n) => !n.parent).map((n) => n.id)), at);
+      /* nothing picked: the first words left to write are open to write in */
+      add(laid, false);
+      const first = laid.nodes.filter((n) => n.group == null && !n.make && !n.cut && n.path == null && !n.text?.trim()).sort((a, b) => a.y - b.y || a.x - b.x)[0];
+      if (first) setEditing(first.id);
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
   };
   /** a group kept as a template, by its name, with what is in it and the wires between them */
@@ -440,6 +449,7 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
     edit: (id) => { if (id) willChange(); setEditing(id); },
     single,
     choices: (kind) => choicesFor(providers, kind),
+    allChoices: (kind) => allChoicesFor(providers, kind),
     fallback: (kind) => defaultChoice(providers, kind),
     run: (id) => runs.get(`${projectId}/${id}`),
     error: (id) => runErrors.get(`${projectId}/${id}`),
@@ -793,19 +803,33 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
           <Outline nodes={nodes} fileOf={board.fileOf} sources={sources} onShow={showNode} onClose={() => setOutline(false)} />
         ) : null}
         {ready && nodes.length === 0 ? (
-          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-4">
-            <div className="text-[16px] font-medium tracking-[-0.01em] text-[var(--cv-ink)]">{t('canvas.start.title')}</div>
-            <div className="max-w-[400px] text-center text-[13px] leading-relaxed text-[var(--cv-label)]">{t('canvas.empty')}</div>
-            <div className="pointer-events-auto flex flex-wrap justify-center gap-2">
-              {templates.slice(0, 4).map((template) => (
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 px-6">
+            <div className="text-[18px] font-medium tracking-[-0.01em] text-[var(--cv-ink)]">{t('canvas.start.title')}</div>
+            <div className="max-w-[460px] text-center text-[13px] leading-relaxed text-[var(--cv-label)]">{t('canvas.start.lead')}</div>
+            {/* OpenFilm's ways of working, each a card: what it is made of, its name, what it gets */}
+            <div className="pointer-events-auto mt-3 grid w-full max-w-[960px] grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3">
+              {builtIns.map((template) => (
                 <button key={template.id} type="button"
                   onClick={() => { const box = rootRef.current!.getBoundingClientRect(); void layTemplate(template, flow.screenToFlowPosition({ x: box.left + 80, y: box.top + 120 }))
-                    .then(() => requestAnimationFrame(() => { void flow.fitView({ padding: 0.2, maxZoom: 1, duration: 200 }); })); }}
-                  className="flex h-9 items-center gap-1.5 rounded-xl border border-[var(--cv-float-line)] bg-[var(--cv-float)] px-3.5 text-[13px] text-[var(--cv-label)] shadow-[var(--cv-float-shadow)] transition hover:text-[var(--cv-ink)]">
-                  <LayoutTemplate size={14} />{template.name}
+                    .then(() => requestAnimationFrame(() => { void flow.fitView({ padding: 0.15, maxZoom: 1, duration: 200 }); })); }}
+                  className="group flex flex-col items-start gap-2.5 rounded-2xl border border-[var(--cv-float-line)] bg-[var(--cv-float)] p-4 text-left shadow-[var(--cv-float-shadow)] transition hover:border-[var(--cv-ring)]">
+                  <span className="flex items-center gap-1 text-[var(--cv-label)]">
+                    {(template.flow ?? []).map((kind, i) => {
+                      const Icon = kind === 'note' ? TypeIcon : kind === 'image' ? ImageIcon : kind === 'video' ? Video : Clapperboard;
+                      return (
+                        <React.Fragment key={i}>
+                          {i ? <ChevronRight size={12} className="opacity-50" /> : null}
+                          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--cv-float-hover)] group-hover:text-[var(--cv-ink)]"><Icon size={14} /></span>
+                        </React.Fragment>
+                      );
+                    })}
+                  </span>
+                  <span className="text-[14px] font-medium text-[var(--cv-ink)]">{template.name}</span>
+                  <span className="text-[12.5px] leading-snug text-[var(--cv-label)]">{template.about}</span>
                 </button>
               ))}
             </div>
+            <div className="mt-2 max-w-[520px] text-center text-[12.5px] leading-relaxed text-[var(--cv-label)]">{t('canvas.empty')}</div>
           </div>
         ) : null}
         {menu ? (
@@ -897,7 +921,7 @@ function Preview({ doc, fileUrl }: { doc: CanvasDoc; fileUrl: (path: string) => 
       fileOf: (path) => files.get(path) ?? null,
       sources: { file: (file) => fileUrl(file.path), wave: () => '' },
       addToFilm: nothing, setData: nothing, remove: nothing, willChange: nothing, editing: null, edit: nothing, single: null,
-      choices: () => [], fallback: () => null, run: () => undefined, error: () => undefined, stale: NOTHING, unused: NONE,
+      choices: () => [], allChoices: () => [], fallback: () => null, run: () => undefined, error: () => undefined, stale: NOTHING, unused: NONE,
       make: nothing, stop: nothing, inputs: (id) => inputViews(drawn.nodes, drawn.edges, id, mediaOf), unwire: nothing, sideMenu: nothing,
       upload: nothing, wireIn: nothing, sendToFilm: nothing, view: nothing,
       makesIn: () => 0, busyIn: () => false, makeAll: nothing, openSettings: nothing, readOnly: true,

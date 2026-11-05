@@ -201,13 +201,13 @@ export const api = {
    * Something made with the person's services, as `openfilm get <verb>` makes it (studio/server/get.mjs): answered
    * once it is made, with its receipt (JSON, as text), or why not. A video asks the person first (SpendAsks), unless
    * `yes`: the person asked for it themselves (a node's Make). Not a write a reload waits for: it may take minutes,
-   * and aborting it (`signal`) stops it.
+   * and aborting it (`signal`) stops it. A run the service's account had too little for throws with `reason: 'balance'`.
    */
   make: async (folder: string, verb: string, args: Record<string, unknown>, pick: { via?: string; model?: string; yes?: boolean }, signal?: AbortSignal) => {
     const res = await fetch('/api/get', { method: 'POST', signal, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ folder, verb, args, ...pick }) });
     if (res.status === 401) markLocked();
-    const body = await res.json().catch(() => ({})) as { ok?: boolean; text?: string; error?: string };
-    if (!res.ok || !body.ok) throw new Error(body.text ?? body.error ?? `Studio answered ${res.status}`);
+    const body = await res.json().catch(() => ({})) as { ok?: boolean; text?: string; error?: string; reason?: string };
+    if (!res.ok || !body.ok) throw Object.assign(new Error(body.text ?? body.error ?? `Studio answered ${res.status}`), body.reason ? { reason: body.reason } : {});
     return body.text ?? '';
   },
   answerAsk: (askId: string, allow: boolean) => call<{ answered: boolean }>(`get/asks/${encodeURIComponent(askId)}`, { method: 'POST', json: { allow } }),

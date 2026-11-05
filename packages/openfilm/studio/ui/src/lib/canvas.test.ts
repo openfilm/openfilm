@@ -110,7 +110,18 @@ test('what is wired into a node comes in its edges\' order; words and pictures, 
   });
   assert.deepEqual(makeRequest({ ...v, opts: { frames: true, sec: 99, ratio: '9:16' } }, inputs, 'push').args,
     { out: 'push', prompt: 'cold blue dawn\n\na slow push in', duration: '30', 'aspect-ratio': '9:16', 'first-frame': 'assets/a.png', 'last-frame': 'assets/image/b.png' });
-  assert.equal(makeRequest({ ...v, make: 'image' }, inputs, 'still').unused, 2, 'a picture is made from words only');
+  assert.deepEqual(makeRequest({ ...v, make: 'image' }, inputs, 'still').args,
+    { out: 'still', prompt: 'cold blue dawn\n\na slow push in', ratio: '16:9', ref: ['assets/a.png', 'assets/image/b.png'] }, 'a picture is made from the pictures wired in');
+  /* within what the model makes */
+  const heygen = { ratios: ['16:9', '9:16'], seconds: [5, 30] as [number, number], refs: 0, frames: true };
+  assert.deepEqual(makeRequest({ ...v, opts: { sec: 4, ratio: '4:3' } }, inputs, 'push', heygen).args,
+    { out: 'push', prompt: 'cold blue dawn\n\na slow push in', duration: '5', 'aspect-ratio': '16:9', 'first-frame': 'assets/a.png', 'last-frame': 'assets/image/b.png' },
+    'a model that takes no references starts from the first picture');
+  assert.deepEqual(makeRequest({ ...v, opts: { frames: true } }, inputs, 'push', { refs: 1, frames: false }).args['input-reference'], ['assets/a.png'], 'one that takes no frames, references, as many as it takes');
+  assert.equal(makeRequest({ ...v, opts: { sec: 7 } }, inputs, 'push', { only: [5, 10] }).args.duration, '5');
+  assert.deepEqual(makeRequest({ ...v, make: 'image', opts: { quality: 'high' } }, inputs, 'still', { refs: 1, qualities: ['low', 'high'] }).args,
+    { out: 'still', prompt: 'cold blue dawn\n\na slow push in', ratio: '16:9', quality: 'high', ref: ['assets/a.png'] });
+  assert.equal(makeRequest({ ...v, make: 'image' }, inputs, 'still', { refs: 0 }).unused, 2, 'a model that takes no pictures leaves them');
   assert.match(makeName({ ...v, prompt: 'A slow push-in, at dawn!' }, 36), /^a-slow-push-in-10$/);
   assert.match(makeName({ ...v, prompt: '黎明' }, 36), /^video-10$/);
 });

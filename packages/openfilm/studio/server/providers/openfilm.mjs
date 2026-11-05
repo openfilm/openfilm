@@ -10,6 +10,10 @@
  */
 import { randomUUID } from 'node:crypto';
 import { billedBy, call, serviceUrl, sleep } from './common.mjs';
+import openai from './openai.mjs';
+import google from './google.mjs';
+import fal from './fal.mjs';
+import openrouter from './openrouter.mjs';
 
 /**
  * @typedef {import('./contract.mjs').Provider} Provider @typedef {import('./contract.mjs').RunContext} RunContext
@@ -30,7 +34,15 @@ const FRESH_MS = 5 * 60_000;
 const RETRY_MS = 30_000;
 
 /** What it makes each kind of media with, its default first, as the service last said (changed in place). */
-const MODELS = /** @type {Partial<Record<Verb, { id: string, name: string }[]>>} */ ({});
+const MODELS = /** @type {Partial<Record<Verb, { id: string, name: string, spec?: import('./contract.mjs').ModelSpec }[]>>} */ ({});
+/** The providers the service runs models of, whose own models say what each makes. */
+const RUNS = [openai, google, fal, openrouter];
+/** What a model of the service makes: as the provider it is run at says for it (`openrouter/bytedance/seedance-2.0`). */
+function specOf(/** @type {Verb} */ kind, /** @type {string} */ id) {
+  const at = id.indexOf('/');
+  const provider = RUNS.find((p) => p.id === id.slice(0, at));
+  return provider?.models?.[kind]?.find((m) => m.id === id.slice(at + 1))?.spec;
+}
 /** The verbs of those kinds (changed in place). */
 const VERBS = /** @type {Verb[]} */ ([]);
 let askAfter = 0;
@@ -47,7 +59,7 @@ function take(/** @type {unknown} */ offer) {
   for (const kind of KINDS) {
     const list = (Array.isArray(models[kind]) ? models[kind] : [])
       .filter((m) => m && typeof m.id === 'string' && typeof m.name === 'string')
-      .map((m) => ({ id: m.id, name: m.name }));
+      .map((m) => { const spec = specOf(kind, m.id); return { id: m.id, name: m.name, ...(spec ? { spec } : {}) }; });
     if (!list.length) continue;
     MODELS[kind] = list;
     VERBS.push(kind, ...(kind === 'tts' ? /** @type {Verb[]} */ (['voice']) : []));

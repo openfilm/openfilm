@@ -6,7 +6,7 @@
 import React from 'react';
 import type { Edge, Node } from '@xyflow/react';
 import { api } from '@/api';
-import { FILE_W, MAKE_MEDIA, MAKE_W, NOTE_H, NOTE_W, readCanvasDoc, withVersion, type CanvasDoc, type CanvasNode, type GroupColor, type MakeKind, type MediaOf, makeRequest } from '@/lib/canvas';
+import { FILE_W, MAKE_MEDIA, MAKE_W, NOTE_H, NOTE_W, readCanvasDoc, withVersion, type CanvasDoc, type CanvasNode, type GroupColor, type MakeKind, type MediaOf, type ModelSpec, makeRequest } from '@/lib/canvas';
 import type { ProvidersState } from '@/lib/providers';
 import type { MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
 
@@ -72,15 +72,31 @@ export function boxOf(node: BoardNode, byId: ReadonlyMap<string, BoardNode>): { 
 
 /* ── the services a node makes with ── */
 
-/** a service and model a node can make its kind with (via, model: as `get` names them) */
-export interface Choice { via: string; model?: string; name: string; provider: string }
+/**
+ * a service and model a node can make its kind with (via, model: as `get` names them), whether the person has
+ * connected that service, and what the model makes
+ */
+export interface Choice { via: string; model?: string; name: string; provider: string; connected: boolean; spec?: ModelSpec }
+
+/** Every service that makes a kind, each model of each: the connected ones first, then the others to connect. */
+export function allChoicesFor(state: ProvidersState | null, kind: MakeKind): Choice[] {
+  const providers = (state?.providers ?? []).filter((p) => p.verbs.includes(kind));
+  return [...providers.filter((p) => p.source), ...providers.filter((p) => !p.source)].flatMap((p) => {
+    const models = p.models[kind] ?? [];
+    const connected = Boolean(p.source);
+    return models.length ? models.map((m) => ({ via: p.id, model: m.id, name: m.name, provider: p.name, connected, ...(m.spec ? { spec: m.spec } : {}) }))
+      : [{ via: p.id, name: p.name, provider: p.name, connected }];
+  });
+}
 
 /** What the person's connected services can make a kind with, each model of each. */
 export function choicesFor(state: ProvidersState | null, kind: MakeKind): Choice[] {
-  return (state?.providers ?? []).filter((p) => p.source && p.verbs.includes(kind)).flatMap((p) => {
-    const models = p.models[kind] ?? [];
-    return models.length ? models.map((m) => ({ via: p.id, model: m.id, name: m.name, provider: p.name })) : [{ via: p.id, name: p.name, provider: p.name }];
-  });
+  return allChoicesFor(state, kind).filter((c) => c.connected);
+}
+
+/** The model a node makes with: the one it names, else what Settings say for its kind. */
+export function choiceOf(state: ProvidersState | null, kind: MakeKind, via?: string, model?: string): Choice | null {
+  return (via ? choicesFor(state, kind).find((c) => c.via === via && (!model || c.model === model)) : null) ?? defaultChoice(state, kind);
 }
 /** What a kind is made with when the node names none: the person's choice in Settings, else the first connected. */
 export function defaultChoice(state: ProvidersState | null, kind: MakeKind): Choice | null {
@@ -105,7 +121,8 @@ export const runsChanged = () => { runsVersion += 1; for (const watch of runWatc
 export const useRuns = () => React.useSyncExternalStore((watch) => { runWatchers.add(watch); return () => { runWatchers.delete(watch); }; }, () => runsVersion);
 
 /** Whether it made one (false: it failed, was stopped, or was being made already). */
-export async function startRun(project: string, folder: string, node: string, request: ReturnType<typeof makeRequest>, pick: { via?: string; model?: string }, key: string, nothing: string): Promise<boolean> {
+export async function startRun(project: string, folder: string, node: string, request: ReturnType<typeof makeRequest>, pick: { via?: string; model?: string }, key: string,
+  say: { nothing: string; balance: string }): Promise<boolean> {
   const id = `${project}/${node}`;
   if (runs.has(id)) return false;
   const abort = new AbortController();
@@ -116,7 +133,7 @@ export async function startRun(project: string, folder: string, node: string, re
     /* the person pressed Make on it: what it costs is not asked again, as an agent's would be */
     const receipt = JSON.parse(await api.make(folder, request.verb, request.args, { ...pick, yes: true }, abort.signal)) as { src?: string; images?: Array<{ src?: string }> };
     const path = receipt.src ?? receipt.images?.[0]?.src;
-    if (!path) throw new Error(nothing);
+    if (!path) throw new Error(say.nothing);
     const made = { path, made: key };
     const shown = shownBoards.get(project);
     if (shown) shown(node, made);
@@ -127,7 +144,8 @@ export async function startRun(project: string, folder: string, node: string, re
     }
     return true;
   } catch (e) {
-    if (!abort.signal.aborted) runErrors.set(id, e instanceof Error ? e.message : String(e));
+    /* what the service's account lacked is said to the person (its dialog says where to top it up), not as told to an agent */
+    if (!abort.signal.aborted) runErrors.set(id, (e as { reason?: string })?.reason === 'balance' ? say.balance : e instanceof Error ? e.message : String(e));
     return false;
   } finally {
     runs.delete(id);
@@ -176,6 +194,8 @@ export interface Board {
   single: string | null;
   /** making: with what, whether it is at it or failed, what changed since, what it cannot use */
   choices: (kind: MakeKind) => Choice[];
+  /** every service's models for a kind, the ones to connect after */
+  allChoices: (kind: MakeKind) => Choice[];
   fallback: (kind: MakeKind) => Choice | null;
   run: (id: string) => Run | undefined;
   error: (id: string) => string | undefined;

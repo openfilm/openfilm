@@ -78,6 +78,12 @@ const VIDEO = {
   'kwaivgi/kling-v3.0-pro': { name: 'Kling', seconds: [3, 15], ratios: ['16:9', '9:16', '1:1'], refs: 0 },
   'google/gemini-omni-1.2-flash': { name: 'Gemini Omni', seconds: [3, 15], framed: 10, ratios: ['16:9', '9:16'], refs: 6, clip: true, sizes: ['360p', '720p', '1080p', '4K'] },
 };
+/* what each model makes, as the canvas offers it (contract.mjs ModelSpec) */
+for (const model of MODELS.image) Object.assign(model, { spec: { ratios: RATIOS, refs: MAX_REFS, ...(QUALITY[model.id] ? { qualities: QUALITY[model.id] } : {}) } });
+for (const model of MODELS.video) {
+  const v = VIDEO[model.id];
+  if (v) Object.assign(model, { spec: { ratios: v.ratios, ...(v.only ? { only: v.only } : v.seconds ? { seconds: v.seconds } : {}), refs: v.refs, frames: true } });
+}
 const RESOLUTION = '720p';
 /** Each size's lines of picture, to find the nearest a model makes. */
 const LINES = /** @type {Record<string, number>} */ ({ '360p': 360, '480p': 480, '720p': 720, '768p': 768, '1080p': 1080, '2K': 1440, '4K': 2160 });

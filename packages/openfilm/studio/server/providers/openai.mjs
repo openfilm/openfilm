@@ -46,6 +46,8 @@ const SVG_AUTHOR = { model: 'gpt-6-luna', reasoning: { effort: 'low' } };
 const SVG_TOKEN_USD = { in: 0.1e-6, out: 0.5e-6 };
 /** The most pictures a new one is made from. */
 const MAX_REFS = 16;
+/* what each picture model makes, as the canvas offers it (contract.mjs ModelSpec) */
+for (const model of MODELS.image) Object.assign(model, { spec: { ratios: Object.keys(RATIO_SIZE), refs: MAX_REFS, qualities: QUALITIES[model.id] ?? ['low', 'high'] } });
 /** the voices its speech models have (they speak every language) */
 const VOICES = ['marin', 'cedar', 'alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer', 'verse'];
 /** the largest file its transcription takes */

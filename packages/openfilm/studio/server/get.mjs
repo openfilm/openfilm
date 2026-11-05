@@ -30,6 +30,7 @@ import { realpathSync } from 'node:fs';
 import { lstat, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { FILM_FILE, clipKind } from '../../src/film-doc.mjs';
 import { spokenLines } from './captions.mjs';
 import { dropTranscripts, readTranscript, transcriptIsCurrent, transcriptPath, writeTranscript } from './transcripts.mjs';
@@ -37,6 +38,7 @@ import { inside } from './files.mjs';
 import { HttpError, json, readJson } from './http.mjs';
 import { kindOf, modelFor, providerKey } from './keys.mjs';
 import { chooseProvider, freshProviders, listProviders, providerSettings } from './providers/index.mjs';
+import { addedDir } from './providers/added.mjs';
 import { mediaSeconds, translatedLines, translationAsk } from './providers/common.mjs';
 import { CALL_TIMEOUT_SEC, callService, servicesHelp } from './custom-services.mjs';
 
@@ -180,7 +182,13 @@ export const services = () => `Media services, each used with the person's own k
   .map((p) => ({ name: p.name, makes: p.verbs.filter((v) => WORDS[v]).map((v) => WORDS[v]).join(', ') }))
   /* Local services, with no model installed, make nothing yet */
   .filter((p) => p.makes)
-  .sort((a, b) => a.name.localeCompare(b.name)).map((p) => `${p.name} (${p.makes})`).join(', ')}. ${WHERE_TO_CONNECT}`;
+  .sort((a, b) => a.name.localeCompare(b.name)).map((p) => `${p.name} (${p.makes})`).join(', ')}. ${WHERE_TO_CONNECT} ${ADD_ONE()}`;
+
+/** How a service that is not built in is added: a provider module of its own, read like the built-in ones. */
+const ADD_ONE = () => `A service not listed is added as a provider: ${join(addedDir(), '<id>', 'provider.mjs')}, whose default export follows `
+  + `${fileURLToPath(new URL('./providers/contract.mjs', import.meta.url))} (as ${fileURLToPath(new URL('./providers/openrouter.mjs', import.meta.url))} does), `
+  + 'written from the service\'s API docs; once the person adds its key in Settings → Services, it makes media like the others, on the canvas too. '
+  + 'Try it with `openfilm get <verb> --via <id>`.';
 
 /** How long the person has to answer a question about spending. */
 const ASK_WAIT_MS = 15 * 60_000;
@@ -191,10 +199,11 @@ const BILLING = new Set(['budget', 'balance', 'spent', 'plan', 'planName', 'pric
 
 /** Why a get did not run; `code` is the CLI's exit status (2: not a project or a wrong command, 1: it did not run). */
 export class GetError extends Error {
-  /** @param {string} message @param {1 | 2} [code] */
-  constructor(message, code = 1) {
+  /** @param {string} message @param {1 | 2} [code] @param {'balance'} [reason] why it did not run, for a page to say in its own words */
+  constructor(message, code = 1, reason) {
     super(message);
     this.code = code;
+    this.reason = reason;
   }
 }
 const usage = (/** @type {string} */ message) => new GetError(message, 2);
@@ -355,7 +364,7 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     if (/** @type {{ code?: string }} */ (e)?.code === 'balance') {
       tell?.({ kind: 'balance', provider: provider.name, providerId: provider.id });
       throw new GetError(`This did not run: ${provider.name} doesn't have enough balance. The person can top it up at ${provider.billingUrl}, `
-        + 'or switch to another service. Nothing was made. Stop and tell them; do not run it again until they say so.');
+        + 'or switch to another service. Nothing was made. Stop and tell them; do not run it again until they say so.', 1, 'balance');
     }
     throw e;
   } finally {
@@ -705,7 +714,8 @@ export function createAsks(pages) {
  *   GET  /api/get[?verb=][&web=1] → { verbs: [{ verb, help, dir?, options }], note, services }: what can be got here now
  *                           (see catalog; `web=1` for an agent without web tools of its own)
  *   POST /api/get           { folder, verb, args, via?, model?, yes? } → { ok: true, text } once it is done, or
- *                           { ok: false, code, text }: code 2, not a project or a wrong command; 1, it did not run
+ *                           { ok: false, code, text, reason? }: code 2, not a project or a wrong command; 1, it did not run
+ *                           (`reason` 'balance': the service's account had too little left)
  *   POST /api/get/asks/:id  { allow } → { answered }: the person's answer to a question about spending
  *   POST /api/get/library   { verb, args } → { code, lines }: a search of OpenFilm's own library (src/library-search.mjs),
  *                           answered with the library and its model kept loaded here, so it takes milliseconds
@@ -747,6 +757,6 @@ export async function getRoute(req, res, parts, asks) {
     json(res, 200, { ok: true, text });
   } catch (e) {
     if (controller.signal.aborted) return;
-    json(res, 200, { ok: false, code: e instanceof GetError ? e.code : 1, text: e instanceof Error ? e.message : String(e) });
+    json(res, 200, { ok: false, code: e instanceof GetError ? e.code : 1, text: e instanceof Error ? e.message : String(e), ...(e instanceof GetError && e.reason ? { reason: e.reason } : {}) });
   }
 }

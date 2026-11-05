@@ -7,14 +7,14 @@
 import React from 'react';
 import { NodeToolbar, Position, useStore } from '@xyflow/react';
 import {
-  ArrowUp, Check, ChevronDown, Clapperboard, Download, FolderSearch, Images, LayoutGrid, Maximize2, Music, Plus, Sparkles, Square, Type as TypeIcon, Video, X,
+  ArrowUp, Check, ChevronDown, Clapperboard, Download, FolderSearch, Images, LayoutGrid, Maximize2, Music, Plus, Search, Sparkles, Square, Type as TypeIcon, Video, X,
 } from 'lucide-react';
 import { useT } from '@/i18n';
-import { IMAGE_RATIOS, MAKE_MEDIA, MAKE_SECONDS, VIDEO_RATIOS } from '@/lib/canvas';
+import { IMAGE_RATIOS, MAKE_MEDIA, VIDEO_RATIOS, lengthOf, lengthRange, ratioOf, usesFrames, type ModelSpec } from '@/lib/canvas';
 import type { WorkspaceResource } from '@/lib/workspace-resources';
 import { Popover } from '../Popover';
 import { Tooltip } from '../Tooltip';
-import { useBoard, type BoardNode, type MakeData } from './board';
+import { useBoard, type BoardNode, type Choice, type MakeData } from './board';
 
 const MOD = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform) ? '⌘' : 'Ctrl+';
 /** the lengths offered for each kind, in seconds */
@@ -85,6 +85,74 @@ function useThumb() {
     : file.kind === 'image' ? board.sources.file(file) : file.kind === 'video' ? board.sources.poster?.(file) : file.kind === 'mg' ? board.sources.pagePoster?.(file) : undefined);
 }
 
+/** What a model makes, in a few words: its lengths, the pictures it takes, what it is made from. */
+function specLine(spec: ModelSpec | undefined, t: (key: string) => string): string {
+  if (!spec) return '';
+  const range = spec.only?.length ? [Math.min(...spec.only), Math.max(...spec.only)] : spec.seconds;
+  return [
+    spec.needs === 'clip' ? t('canvas.spec.fromClip') : spec.needs === 'audio' ? t('canvas.spec.fromAudio') : '',
+    range ? t('canvas.spec.seconds').replace('{a}', String(range[0])).replace('{b}', String(range[1])) : '',
+    spec.refs ? t('canvas.spec.refs').replace('{n}', String(spec.refs)) : '',
+    spec.refs === 0 && spec.frames ? t('canvas.spec.frames') : '',
+  ].filter(Boolean).join(' · ');
+}
+
+/**
+ * Which model a node makes with: as Settings say, or one of every service's, the person's own first; a service not
+ * connected yet is there too, a click away from connecting it.
+ */
+function ModelPicker({ choices, picked, fallback, onPick, onConnect }: {
+  choices: Choice[]; picked: Choice | null; fallback: Choice | null; onPick: (choice: Choice | null) => void; onConnect: () => void;
+}) {
+  const t = useT();
+  const [query, setQuery] = React.useState('');
+  const q = query.trim().toLowerCase();
+  const shown = q ? choices.filter((c) => `${c.name} ${c.provider}`.toLowerCase().includes(q)) : choices;
+  const row = (c: Choice) => {
+    const line = specLine(c.spec, t);
+    const on = picked?.via === c.via && picked?.model === c.model;
+    return (
+      <button key={`${c.via}|${c.model ?? ''}`} type="button" onClick={() => (c.connected ? onPick(c) : onConnect())}
+        className={`flex w-full min-w-0 items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-[13px] hover:bg-[var(--cv-float-hover)] ${c.connected ? 'text-[var(--cv-ink)]' : 'text-[var(--cv-label)]'}`}>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate">{c.name}</span>
+          <span className="block truncate text-[11.5px] text-[var(--cv-label)]">{[c.provider, line].filter(Boolean).join(' · ')}</span>
+        </span>
+        {on ? <Check size={14} className="shrink-0 text-[var(--cv-label)]" />
+          : !c.connected ? <span className="shrink-0 rounded-md border border-[var(--cv-float-line)] px-1.5 py-0.5 text-[11px] text-[var(--cv-label)]">{t('canvas.panel.models.connect')}</span> : null}
+      </button>
+    );
+  };
+  const mine = shown.filter((c) => c.connected);
+  const others = shown.filter((c) => !c.connected);
+  return (
+    <div className={`flex max-h-[420px] w-[320px] flex-col ${CARD}`}>
+      <label className="flex shrink-0 items-center gap-2 border-b border-[var(--cv-float-line)] px-3 py-2 text-[var(--cv-label)]">
+        <Search size={14} />
+        <input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('canvas.panel.models.search')}
+          className="min-w-0 flex-1 bg-transparent text-[13px] text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-label)]" />
+      </label>
+      <div className="min-h-0 flex-1 overflow-y-auto p-1">
+        {!q ? (
+          <button type="button" onClick={() => onPick(null)}
+            className="flex w-full min-w-0 items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-[13px] text-[var(--cv-ink)] hover:bg-[var(--cv-float-hover)]">
+            <span className="min-w-0 flex-1">
+              <span className="block truncate">{t('canvas.panel.followSettings')}</span>
+              {fallback ? <span className="block truncate text-[11.5px] text-[var(--cv-label)]">{fallback.name} · {fallback.provider}</span> : null}
+            </span>
+            {!picked ? <Check size={14} className="shrink-0 text-[var(--cv-label)]" /> : null}
+          </button>
+        ) : null}
+        {mine.length ? <div className="px-2 pb-1 pt-2.5 text-[11px] font-medium text-[var(--cv-label)]">{t('canvas.panel.models.mine')}</div> : null}
+        {mine.map(row)}
+        {others.length ? <div className="px-2 pb-1 pt-2.5 text-[11px] font-medium text-[var(--cv-label)]">{t('canvas.panel.models.others')}</div> : null}
+        {others.map(row)}
+        {!shown.length ? <div className="px-2 py-2 text-[12.5px] text-[var(--cv-label)]">{t('canvas.panel.models.none')}</div> : null}
+      </div>
+    </div>
+  );
+}
+
 /**
  * A node that makes something: its panel, under it while it is the one selected. What goes into it first (brought in
  * from the computer, from the board, from the Assets), numbered in its wires' order; its words; with which model and
@@ -101,19 +169,30 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
   const takesPictures = media !== 'audio';
   const inputs = shown ? board.inputs(id) : [];
   const choices = board.choices(data.make);
+  const every = board.allChoices(data.make);
   const fallback = board.fallback(data.make);
   const picked = choices.find((c) => c.via === data.via && c.model === data.model) ?? null;
+  /* what the model it makes with makes: only that is offered */
+  const model = (picked ?? fallback)?.spec;
   const run = board.run(id);
   const error = board.error(id);
   const unused = board.unused.get(id) ?? 0;
   const set = (patch: Partial<MakeData>) => { board.willChange(); board.setData(id, patch); };
   const setOpts = (patch: Partial<NonNullable<MakeData['opts']>>) => set({ opts: { ...data.opts, ...patch } });
-  const ratios = data.make === 'image' ? IMAGE_RATIOS : data.make === 'video' ? VIDEO_RATIOS : null;
-  const lengths = MAKE_LENGTHS[data.make];
-  const ratio = data.opts?.ratio ?? '16:9';
-  const sec = data.opts?.sec ?? MAKE_SECONDS[data.make]?.default;
-  const spec = [ratios ? ratio : null, lengths ? t('canvas.make.seconds').replace('{n}', String(sec)) : null,
-    data.make === 'video' ? (data.opts?.frames ? t('canvas.make.frames') : t('canvas.make.refs')) : null].filter(Boolean).join(' · ');
+  const ratios = data.make === 'image' || data.make === 'video' ? model?.ratios ?? (data.make === 'image' ? IMAGE_RATIOS : VIDEO_RATIOS) : null;
+  const range = lengthRange(data.make, model);
+  const lengths = model?.only?.length ? model.only
+    : range ? [...new Set([range[0], ...(MAKE_LENGTHS[data.make] ?? []).filter((n) => n > range[0] && n < range[1]), range[1]])] : null;
+  const ratio = ratioOf(data.opts?.ratio, model);
+  const sec = lengthOf(data.make, data.opts?.sec, model);
+  const frames = usesFrames(data.opts, model);
+  /* references or first and last frames: a choice only for a model that takes both */
+  const either = data.make === 'video' && !model?.needs && model?.refs !== 0 && model?.frames !== false;
+  const qualities = data.make === 'image' ? model?.qualities ?? null : null;
+  const quality = qualities ? (data.opts?.quality && qualities.includes(data.opts.quality) ? data.opts.quality : qualities[0]) : null;
+  const spec = [ratios ? ratio : null, lengths && sec !== null ? t('canvas.make.seconds').replace('{n}', String(sec)) : null,
+    quality ? t(`canvas.make.qualities.${quality}`) : null,
+    data.make === 'video' && !model?.needs ? (frames ? t('canvas.make.frames') : t('canvas.make.refs')) : null].filter(Boolean).join(' · ');
   const wiredFrom = new Set(inputs.map((i) => i.from));
   const boardRows = all.filter((n) => n.id !== id && !wiredFrom.has(n.id) && (n.type === 'note' || ((n.type === 'file' || n.type === 'make') && n.data.path)))
     .map((n) => {
@@ -178,21 +257,16 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
           className="mt-2.5 w-full resize-none bg-transparent px-0.5 text-[13.5px] leading-relaxed text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-label)]"
         />
         <div className="mt-1.5 flex min-w-0 items-center gap-1">
-          {choices.length ? (
+          {every.length ? (
             <Popover open={open === 'model'} onOpenChange={(v) => setOpen(v ? 'model' : null)} placement="auto"
               trigger={(
-                <button type="button" className={PICK} onClick={() => setOpen(open === 'model' ? null : 'model')}>
-                  <Sparkles size={14} /><span className="max-w-[180px] truncate">{(picked ?? fallback)?.name}</span><ChevronDown size={13} />
+                <button type="button" className={`${PICK} ${choices.length ? '' : 'text-amber-500 hover:text-amber-400'}`} onClick={() => setOpen(open === 'model' ? null : 'model')}>
+                  <Sparkles size={14} /><span className="max-w-[180px] truncate">{(picked ?? fallback)?.name ?? t('canvas.panel.connect')}</span><ChevronDown size={13} />
                 </button>
               )}>
-              <Listing
-                picked={picked ? `${picked.via}|${picked.model ?? ''}` : ''}
-                rows={[
-                  { key: '', value: null as null | { via: string; model?: string }, label: t('canvas.panel.followSettings'), note: fallback ? `${fallback.name} · ${fallback.provider}` : undefined },
-                  ...choices.map((c) => ({ key: `${c.via}|${c.model ?? ''}`, value: { via: c.via, model: c.model } as null | { via: string; model?: string }, label: c.name, note: c.provider })),
-                ]}
+              <ModelPicker choices={every} picked={picked} fallback={fallback}
                 onPick={(choice) => { set({ via: choice?.via, model: choice?.model }); setOpen(null); }}
-              />
+                onConnect={() => { setOpen(null); board.openSettings(); }} />
             </Popover>
           ) : (
             <Tooltip label={t('canvas.make.noService')}>
@@ -225,28 +299,43 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
                   {lengths ? (
                     <>
                       <div className={`mb-2 text-[12px] text-[var(--cv-label)] ${ratios ? 'mt-3' : ''}`}>{t('canvas.make.length')}</div>
-                      <div className="grid grid-cols-6 gap-1.5">
+                      <div className="flex flex-wrap gap-1.5">
                         {lengths.map((n) => (
                           <button key={n} type="button" onClick={() => setOpts({ sec: n })}
-                            className={`h-8 rounded-lg border text-[12px] transition ${n === sec ? 'border-[var(--cv-ring)] bg-[var(--cv-float-hover)] text-[var(--cv-ink)]' : 'border-[var(--cv-float-line)] text-[var(--cv-label)] hover:text-[var(--cv-ink)]'}`}>
+                            className={`h-8 min-w-[46px] rounded-lg border px-2 text-[12px] transition ${n === sec ? 'border-[var(--cv-ring)] bg-[var(--cv-float-hover)] text-[var(--cv-ink)]' : 'border-[var(--cv-float-line)] text-[var(--cv-label)] hover:text-[var(--cv-ink)]'}`}>
                             {t('canvas.make.seconds').replace('{n}', String(n))}
                           </button>
                         ))}
                       </div>
                     </>
                   ) : null}
-                  {data.make === 'video' ? (
+                  {qualities ? (
                     <>
-                      <div className="mb-2 mt-3 text-[12px] text-[var(--cv-label)]">{t('canvas.panel.pictures')}</div>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {([false, true] as const).map((frames) => (
-                          <button key={String(frames)} type="button" onClick={() => setOpts({ frames: frames || undefined })}
-                            className={`h-8 rounded-lg border text-[12px] transition ${Boolean(data.opts?.frames) === frames ? 'border-[var(--cv-ring)] bg-[var(--cv-float-hover)] text-[var(--cv-ink)]' : 'border-[var(--cv-float-line)] text-[var(--cv-label)] hover:text-[var(--cv-ink)]'}`}>
-                            {frames ? t('canvas.make.frames') : t('canvas.make.refs')}
+                      <div className="mb-2 mt-3 text-[12px] text-[var(--cv-label)]">{t('canvas.make.quality')}</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {qualities.map((q) => (
+                          <button key={q} type="button" onClick={() => setOpts({ quality: q })}
+                            className={`h-8 rounded-lg border px-3 text-[12px] transition ${q === quality ? 'border-[var(--cv-ring)] bg-[var(--cv-float-hover)] text-[var(--cv-ink)]' : 'border-[var(--cv-float-line)] text-[var(--cv-label)] hover:text-[var(--cv-ink)]'}`}>
+                            {t(`canvas.make.qualities.${q}`)}
                           </button>
                         ))}
                       </div>
                     </>
+                  ) : null}
+                  {either ? (
+                    <>
+                      <div className="mb-2 mt-3 text-[12px] text-[var(--cv-label)]">{t('canvas.panel.pictures')}</div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {([false, true] as const).map((asFrames) => (
+                          <button key={String(asFrames)} type="button" onClick={() => setOpts({ frames: asFrames || undefined })}
+                            className={`h-8 rounded-lg border text-[12px] transition ${frames === asFrames ? 'border-[var(--cv-ring)] bg-[var(--cv-float-hover)] text-[var(--cv-ink)]' : 'border-[var(--cv-float-line)] text-[var(--cv-label)] hover:text-[var(--cv-ink)]'}`}>
+                            {asFrames ? t('canvas.make.frames') : t('canvas.make.refs')}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  ) : data.make === 'video' && model && !model.needs ? (
+                    <div className="mt-3 text-[12px] leading-snug text-[var(--cv-label)]">{t(frames ? 'canvas.make.onlyFrames' : 'canvas.make.onlyRefs')}</div>
                   ) : null}
                 </div>
               </Popover>

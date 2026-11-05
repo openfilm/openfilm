@@ -34,6 +34,7 @@ import mimo from './mimo.mjs';
 import keenable from './keenable.mjs';
 import openfilm from './openfilm.mjs';
 import local from './local.mjs';
+import { addedProblems, addedProviders } from './added.mjs';
 
 /**
  * @typedef {import('./contract.mjs').Provider} Provider @typedef {import('./contract.mjs').Verb} Verb
@@ -42,15 +43,25 @@ import local from './local.mjs';
  */
 
 /** The providers paid with the person's own key, and Local services, which takes none. */
-const OWN = [elevenlabs, inworld, cartesia, openai, google, fal, openrouter, pexels, pixabay, brave, tavily, groq, azure, doubao, mimo, keenable, openfilm, local];
+const BUILT_IN = [elevenlabs, inworld, cartesia, openai, google, fal, openrouter, pexels, pixabay, brave, tavily, groq, azure, doubao, mimo, keenable, openfilm, local];
+/** Those, then the ones the person added (added.mjs), as last read (changed in place). */
+const OWN = [...BUILT_IN];
 
 /** The kinds of media the person chooses a provider and model for (Settings → Services). */
 const USE_VERBS = /** @type {Verb[]} */ (['tts', 'music', 'sfx', 'asr', 'cutout', 'image', 'image-search', 'video-search', 'video', 'translate', 'web-search']);
 
 export const listProviders = () => OWN;
 
-/** The models of the providers whose service says what it offers (`refresh`), brought up to date. */
-export const freshProviders = (/** @type {{ force?: boolean }} */ options = {}) => Promise.all(OWN.map((p) => p.refresh?.(options))).then(() => OWN);
+/**
+ * The providers brought up to date: the ones the person added read again, and the models of those whose service says
+ * what it offers (`refresh`).
+ */
+export async function freshProviders(/** @type {{ force?: boolean }} */ options = {}) {
+  const added = await addedProviders(new Set(BUILT_IN.map((p) => p.id)));
+  OWN.splice(BUILT_IN.length, OWN.length - BUILT_IN.length, ...added);
+  await Promise.all(OWN.map((p) => p.refresh?.(options)));
+  return OWN;
+}
 
 /**
  * The provider `id` when it can serve `verb` now. `strict` (asked for by name on the command): a sentence saying why
@@ -159,8 +170,12 @@ async function state() {
         ...(p.keyless ? { keyless: true } : {}), source: key?.source ?? null, last4: key?.key ? key.key.slice(-4) : null,
         /* connected by signing in (sign-in.mjs), and as whom */
         signIn: Boolean(p.signIn), account: key?.source === 'file' ? settings.accounts[p.id] ?? null : null,
+        /* one the person added (added.mjs), not built in */
+        ...(p.added ? { added: true } : {}),
       };
     }),
+    /* the added services left out, and why */
+    ...(addedProblems.size ? { addedProblems: [...addedProblems].map(([folder, problem]) => ({ folder, problem })) } : {}),
     signingIn: signInState(),
     ...shownChoices(settings),
     custom: settings.custom.map(shownService),
