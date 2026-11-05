@@ -110,7 +110,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
 
   /* the skills' line: one of the installed (Installed alone, as kept before, is all of them), else Discover */
   /* the skills: Discover (first opened), else the installed (any line of them kept before is that now) */
-  const skillLine: SkillsLine = !group || group === 'discover' ? 'discover' : group === FAVORITES ? 'favorites' : 'installed';
+  /* Installed first opened */
+  const skillLine: SkillsLine = group === 'discover' ? 'discover' : group === FAVORITES ? 'favorites' : 'installed';
   const q = query.trim().toLowerCase();
   const shown = (index?.items ?? []).filter((item) => item.cat === cat && (q
     ? [...Object.values(item.name), ...(item.tags ?? [])].some((n) => n?.toLowerCase().includes(q))
@@ -191,9 +192,9 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
               </>
             ) : cat === 'skill' ? (
               <>
-                {/* Discover first opened: OpenFilm's skills to take up; the installed in parts by whose they are (SkillsPane) */}
-                <SideBox on={skillLine === 'favorites'} onClick={() => pickGroup(FAVORITES)}>{t('assetDrawer.favorites')}</SideBox>
+                {/* Installed first opened, in parts by whose they are (SkillsPane); the starred; Discover, OpenFilm's to take up */}
                 <SideBox on={skillLine === 'installed'} onClick={() => pickGroup('installed')}>{t('assetDrawer.skillsInstalled')}</SideBox>
+                <SideBox on={skillLine === 'favorites'} onClick={() => pickGroup(FAVORITES)}>{t('assetDrawer.favorites')}</SideBox>
                 <SideBox on={skillLine === 'discover'} onClick={() => pickGroup('discover')}>{t('assetDrawer.skillsDiscover')}</SideBox>
               </>
             ) : cat === 'captions' ? (

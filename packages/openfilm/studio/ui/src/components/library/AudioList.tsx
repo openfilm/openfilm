@@ -221,7 +221,9 @@ export function MiniPlayer<T extends Playable>({ player, name, group, art }: {
   /* a short sound by tenths of a second, anything longer as minutes and seconds */
   const say = (sec: number) => (length < 10 ? `${sec.toFixed(1)}` : clock(sec));
   return (
-    <div className="mb-[var(--drawer-under,0px)] flex h-[60px] shrink-0 items-center gap-3 border-t border-[var(--border)] bg-[var(--bg-raised)] px-3" data-studio-host-panel="">
+    /* on the drawer's own ground, a hairline above it: the composer's card under it sits on the same ground, as one
+       stack, not a lighter strip ending on the card */
+    <div className="mb-[var(--drawer-under,0px)] flex h-[60px] shrink-0 items-center gap-3 border-t border-[var(--border)] bg-[var(--bg-panel)] px-4" data-studio-host-panel="">
       <span className="group cursor-default" onClick={() => player.toggle(item)}>
         {art(item, player.playing)}
       </span>

@@ -49,13 +49,15 @@ export interface WorkspaceResource {
 /**
  * What a bundle of Saved is: a clip, a group of `count` clips, or a page; `props`: a component, the properties it offers.
  * A page, or a clip of one: `page`, where its page is in the library (from its top); a clip's `size` (what its page is
- * laid out at) and `overrides` (the changes made in it), so it plays as the film had it.
+ * laid out at) and `overrides` (the changes made in it), so it plays as the film had it. A clip of a sound, a video or
+ * a picture: `file`, its file (a `saved/` path), heard, played and pictured as the file itself.
  */
 export interface SavedBundle {
   kind: 'clip' | 'group' | 'page';
   count?: number;
   props?: number;
   page?: string;
+  file?: string;
   size?: { w: number; h: number };
   overrides?: readonly FilmOverride[];
 }
@@ -190,6 +192,7 @@ export function mediaListingOf(
           ...(f.saved.count ? { count: f.saved.count } : {}),
           ...(f.saved.props ? { props: f.saved.props } : {}),
           ...(f.saved.page ? { page: f.saved.page } : {}),
+          ...(f.saved.file ? { file: f.saved.file } : {}),
           ...(f.saved.size ? { size: f.saved.size } : {}),
           ...(f.saved.overrides ? { overrides: f.saved.overrides } : {}),
         },

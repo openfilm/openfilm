@@ -79,6 +79,11 @@ test('the library lists files of any kind and folders as a project\'s media, a b
     kind: 'clip', props: 1, durationMs: 2000, w: 400, h: 200, page: 'Logos/Lower third/files/pages/title.html',
     size: { w: 1080, h: 1920 }, overrides: [{ at: '#t', text: 'Hello', style: { '--accent': '#00ff00' } }],
   });
+  /* a clip of a video or a sound: its file, which the pane plays and pictures (its waveform) as the file itself */
+  await saveClip(root, 'v', { name: 'Shot' });
+  const shot = (await listLibrary()).files.find((f) => f.path === 'saved/Shot');
+  assert.equal(shot?.kind, 'video');
+  assert.equal(/** @type {any} */ (shot?.saved)?.file, 'saved/Shot/files/assets/v.mp4');
 });
 
 test('a bundle moves and is renamed as a folder; taken into a project, its files go under saved/ there once, its page still finding them', async () => {

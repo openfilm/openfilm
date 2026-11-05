@@ -133,6 +133,8 @@ function bundleEntry(rel, item) {
     ...(num(item.w) ? { w: num(item.w) } : {}),
     ...(num(item.h) ? { h: num(item.h) } : {}),
     ...(kind === 'page' && item.kind !== 'group' ? { page: `${rel}/files/${mainOf(item)}` } : {}),
+    /* a clip of a sound, a video or a picture: its file, by its `saved/` path, which the pane plays and pictures */
+    ...(item.kind === 'clip' && ['audio', 'video', 'image'].includes(kind) ? { file: libraryPath(`${rel}/files/${mainOf(item)}`) } : {}),
     ...(size ? { size } : {}),
     ...(overrides ? { overrides } : {}),
   };

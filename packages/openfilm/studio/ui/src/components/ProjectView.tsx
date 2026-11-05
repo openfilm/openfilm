@@ -2914,15 +2914,28 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* each drawn once it has had its turn among Studio's media requests (lib/media-queue) */
   const shownPosters = useMediaImages(posters);
   const waveUrl = React.useCallback((src: string) => `/api/projects/${encodeURIComponent(projectId)}/media?what=wave&path=${encodeURIComponent(src)}&v=${mtimeOf.get(src) ?? 0}`, [projectId, mtimeOf]);
-  /* clips whose files are gone, and where the same name may be now */
-  const mediaTrouble = React.useMemo(() => {
+  /* clips whose files are gone, and where the same name may be now. A file a clip names that the listing does not have
+     is gone only once a listing read after it was first named still lacks it: one just brought in as its clip was put
+     on the timeline (from Saved, the library) is not in the listing read before, and is not shown missing meanwhile */
+  const firstMissedIn = React.useRef(new Map<string, Listing>());
+  const [mediaTrouble, awaitingFiles] = React.useMemo(() => {
     const out = new Map<string, 'decode' | 'unreachable' | 'missing'>();
-    if (!rawListing) return out;
+    if (!rawListing) return [out, false] as const;
     const paths = new Set([...rawListing.files.map((f) => f.path), ...rawListing.pages.map((p) => p.path)]);
-    for (const b of blocksRef.current) if (b.src && (b.src.startsWith('assets/') || /\.html?$/i.test(b.src)) && !paths.has(b.src)) out.set(b.src, 'missing');
-    return out;
+    let awaiting = false;
+    for (const b of blocksRef.current) {
+      if (!b.src || !(b.src.startsWith('assets/') || /\.html?$/i.test(b.src))) continue;
+      if (paths.has(b.src)) { firstMissedIn.current.delete(b.src); continue; }
+      const since = firstMissedIn.current.get(b.src);
+      if (!since) firstMissedIn.current.set(b.src, rawListing);
+      if (!since || since === rawListing) { awaiting = true; continue; }
+      out.set(b.src, 'missing');
+    }
+    return [out, awaiting] as const;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rawListing, timelineTracks]);
+  /* the files read again for what is awaited */
+  React.useEffect(() => { if (awaitingFiles) void api.files(projectId).then(setRawListing, () => {}); }, [awaitingFiles, rawListing, projectId]);
   /* while an agent changes the film, a file gone is on its way: its clips wait, and the viewer says nothing of it */
   const agentWorking = useAgentWorking();
   const timelineTrouble = React.useMemo(() => (agentWorking && [...mediaTrouble.values()].includes('missing')
@@ -3870,7 +3883,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 {pickedMedia ? (
                   <div className="absolute inset-x-0 bottom-0 top-8 z-20">
                     {/* a bundle of Saved plays its page as its clip had it; any other bundle shows its picture */}
-                    <SourcePreview file={pickedSaved && pickedMedia.bundle && !pickedMedia.bundle.page ? { ...pickedMedia, kind: 'image' } : pickedMedia} sources={pickedSaved ? savedSources : mediaSources} onClose={() => pickMedia(null)} onPlace={placeFromSource} />
+                    <SourcePreview file={pickedSaved && pickedMedia.bundle && !pickedMedia.bundle.page && !pickedMedia.bundle.file ? { ...pickedMedia, kind: 'image' } : pickedMedia} sources={pickedSaved ? savedSources : mediaSources} onClose={() => pickMedia(null)} onPlace={placeFromSource} />
                   </div>
                 ) : null}
                 {dropped?.length || undone.length ? (
