@@ -76,10 +76,22 @@ const follow = (e: DragEvent) => {
   /* the last dragover of some browsers says 0, 0 */
   if (picture && (e.clientX || e.clientY)) picture.style.translate = `${e.clientX}px ${e.clientY}px`;
 };
-const dropPicture = () => {
+/* let go where it came from (a panel marked `data-drag-home`: the library, the media pane), and nothing there takes
+   it: taken as a drop that does nothing, so it ends at once. Refused, the browser would first fly its picture back to
+   where the drag began, and the drag would end only after that */
+const atHome = (e: Event) => e.target instanceof Element && Boolean(e.target.closest('[data-drag-home]'));
+const home = (e: DragEvent) => {
+  if (!picture || e.defaultPrevented || !atHome(e)) return;
+  e.preventDefault();
+  if (e.dataTransfer) e.dataTransfer.dropEffect = e.dataTransfer.effectAllowed.includes('move') ? 'move' : 'copy';
+};
+const dropPicture = (e?: Event) => {
+  /* let go at home: nothing done there (not its path typed into a field it was let go on) */
+  if (e?.type === 'drop' && atHome(e)) e.preventDefault();
   picture?.remove();
   picture = null;
   document.removeEventListener('dragover', follow, true);
+  document.removeEventListener('dragover', home);
   document.removeEventListener('dragend', dropPicture, true);
   document.removeEventListener('drop', dropPicture, true);
 };
@@ -103,6 +115,8 @@ export function dragPicture(e: { currentTarget: EventTarget; dataTransfer: DataT
   picture = holder;
   e.dataTransfer.setDragImage(BLANK, 0, 0);
   document.addEventListener('dragover', follow, true);
+  /* after the page's own handlers (bubbling): a place that takes the drop decides first */
+  document.addEventListener('dragover', home);
   document.addEventListener('dragend', dropPicture, true);
   document.addEventListener('drop', dropPicture, true);
 }

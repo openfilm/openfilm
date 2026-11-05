@@ -795,6 +795,8 @@ export function MediaPool({
   return (
     <div
       ref={setRootEl}
+      /* a drag let go back in the pane ends at once (lib/resource-drag) */
+      data-drag-home=""
       className="relative flex h-full min-h-0 flex-col"
       /* the pane's keys, while they are its own (the timeline's Delete is the timeline's): Delete (or Backspace) asks to
          delete what is picked, as an editor's project panel does; Enter puts the one file picked on the timeline, as

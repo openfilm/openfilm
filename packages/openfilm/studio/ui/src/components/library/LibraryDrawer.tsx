@@ -145,7 +145,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
   /* the bars and the library's things are the app's panel's (data-studio-host-panel): a press there keeps what is
      picked on the timeline and the picture, which a look or a transition goes on */
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-col outline-none" tabIndex={-1} onKeyDown={onKey}
+    /* a drag let go back in the drawer ends at once (lib/resource-drag) */
+    <div className="flex h-full min-h-0 min-w-0 flex-col outline-none" tabIndex={-1} onKeyDown={onKey} data-drag-home=""
       style={{ '--drawer-under': `${under}px` } as React.CSSProperties}>
       {/* the categories, as high as the inspector's tabs beside it (40 px) so their lines meet; they keep their own
           spacing however wide the panel is, and more than fit scroll sideways (a wheel too), fading at the edge while
@@ -385,7 +386,7 @@ function addTip(item: LibraryItem, t: (path: string) => string): string {
 /** What a drag of `item` carries to the timeline (or the chat). */
 function dragOf(item: LibraryItem, name: string) {
   const drag = libraryDragItem(item, name);
-  return drag ? (e: React.DragEvent) => { setResourceDragData(e.dataTransfer, drag); dragPicture(e); e.dataTransfer.effectAllowed = 'copy'; } : undefined;
+  return drag ? (e: React.DragEvent) => { setResourceDragData(e.dataTransfer, drag); dragPicture(e); e.dataTransfer.effectAllowed = 'copyMove'; } : undefined;
 }
 
 /** A press on a card's own button: not a pick, nor a double click's add. */
