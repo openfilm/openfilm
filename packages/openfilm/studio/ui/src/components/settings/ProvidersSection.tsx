@@ -13,7 +13,7 @@
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { AudioWaveform, Captions, ChevronRight, Clapperboard, ExternalLink, Film, Globe, Image, Mic, Music, Plus, ScanSearch, Scissors, X } from 'lucide-react';
+import { AudioWaveform, Captions, ChevronRight, Clapperboard, createLucideIcon, ExternalLink, Globe, Image, Mic, Music, Plus, ScanSearch, Scissors, X } from 'lucide-react';
 import { useT } from '@/i18n';
 import { AZURE_SERVICES, PROVIDER_SITES, SERVICE_VERBS, azureKey, providerOrder, type OwnProvider, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
 import { customProblem } from './CustomServices';
@@ -23,9 +23,17 @@ import { SettingsButton, SettingsField, SettingsLinkButton, settingsError, setti
 /** Where a new built-in provider is proposed, and what it needs. */
 const ADDING_PROVIDERS = 'https://github.com/openfilm/openfilm/blob/main/CONTRIBUTING.md#adding-a-media-provider';
 
+/** Video search: a clip's frame with its play mark, found with a magnifier (as image search finds a picture). */
+const VideoSearch = createLucideIcon('video-search', [
+  ['path', { d: 'M13 17H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v5', key: 'frame' }],
+  ['path', { d: 'M8 8.5v5l4-2.5z', key: 'play' }],
+  ['circle', { cx: '17', cy: '17', r: '3', key: 'lens' }],
+  ['path', { d: 'm22 22-2.8-2.8', key: 'handle' }],
+]);
+
 /** Each kind's picture, wherever kinds are listed. */
 export const KIND_ICON: Partial<Record<ProviderVerb, React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>>> = {
-  tts: Mic, music: Music, sfx: AudioWaveform, asr: Captions, cutout: Scissors, image: Image, 'image-search': ScanSearch, 'video-search': Film, video: Clapperboard, 'web-search': Globe,
+  tts: Mic, music: Music, sfx: AudioWaveform, asr: Captions, cutout: Scissors, image: Image, 'image-search': ScanSearch, video: Clapperboard, 'video-search': VideoSearch, 'web-search': Globe,
 };
 
 const chipClass = 'inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-[14px] transition hover:border-[var(--border-strong)] hover:text-[var(--text)]';
