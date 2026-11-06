@@ -1470,6 +1470,7 @@ function pictureType(/** @type {Buffer} */ bytes) {
  * @param {import('node:http').IncomingMessage} req @param {import('node:http').ServerResponse} res @param {string | null | undefined} file
  */
 function sendMedia(req, res, file, { keep = false, check = false } = {}) {
+  if (res.destroyed) return;
   if (!file || !existsSync(file) || !statSync(file).isFile()) throw new HttpError(404, 'no such file');
   const { size, mtimeMs } = statSync(file);
   /* `keep`: a picture that changes only with its file (a skill's cover, an example's poster) is kept by the browser
