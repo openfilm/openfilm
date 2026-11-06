@@ -58,17 +58,17 @@ const MAX_REFS = 16;
 /**
  * Each video model's lengths (`seconds`, a range in whole seconds, or `only` some; `framed`, the longest between a
  * first and a last frame), shapes, the most reference pictures it takes (`refs`, 0 for none), whether it takes a voice
- * (`voice`) or a clip to edit or continue (`clip`), whether it takes a recording or a clip inline (`inline`; else only
+ * (`voice`) or a clip (`clip`: to edit or continue, or as a reference beside its pictures), whether it takes a recording or a clip inline (`inline`; else only
  * from a web address), and its sizes (`sizes`, as OpenRouter lists them): --resolution, else 720p, else the nearest it
  * makes (`resolution`, its own default when it makes no 720p). Every clip has sound: asked for, or (`audio: false`) made
  * with it unasked.
- * @type {Record<string, { name: string, seconds?: [number, number], only?: number[], framed?: number, ratios: string[], refs: number, voice?: true, clip?: true, inline?: true, sizes?: string[], resolution?: string, audio?: false }>}
+ * @type {Record<string, { name: string, seconds?: [number, number], only?: number[], framed?: number, ratios: string[], refs: number, voice?: true, clip?: 'edit' | 'reference', inline?: true, sizes?: string[], resolution?: string, audio?: false }>}
  */
 const VIDEO = {
-  'bytedance/seedance-2.0-mini': { name: 'Seedance', seconds: [4, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], refs: 9, voice: true, sizes: ['480p', '720p'] },
-  'bytedance/seedance-2.0-fast': { name: 'Seedance', seconds: [4, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], refs: 9, voice: true, sizes: ['480p', '720p'] },
-  'bytedance/seedance-2.0': { name: 'Seedance', seconds: [4, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], refs: 9, voice: true, sizes: ['480p', '720p', '1080p', '4K'] },
-  'bytedance/seedance-2.5': { name: 'Seedance', seconds: [4, 30], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], refs: 9, voice: true, sizes: ['480p', '720p'] },
+  'bytedance/seedance-2.0-mini': { name: 'Seedance', seconds: [4, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], refs: 9, voice: true, clip: 'reference', sizes: ['480p', '720p'] },
+  'bytedance/seedance-2.0-fast': { name: 'Seedance', seconds: [4, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], refs: 9, voice: true, clip: 'reference', sizes: ['480p', '720p'] },
+  'bytedance/seedance-2.0': { name: 'Seedance', seconds: [4, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], refs: 9, voice: true, clip: 'reference', sizes: ['480p', '720p', '1080p', '4K'] },
+  'bytedance/seedance-2.5': { name: 'Seedance', seconds: [4, 30], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], refs: 9, voice: true, clip: 'reference', sizes: ['480p', '720p'] },
   /* Wan is billed 5 s at the least, however short the clip: none shorter is asked for */
   'alibaba/wan-3.0': { name: 'Wan', seconds: [5, 30], ratios: ['16:9', '4:3', '1:1', '3:4', '9:16'], refs: 0, sizes: ['480p', '720p', '1080p'] },
   'alibaba/wan-3.0-prime': { name: 'Wan', seconds: [5, 30], ratios: ['16:9', '4:3', '1:1', '3:4', '9:16'], refs: 0, sizes: ['480p', '720p', '1080p'] },
@@ -77,7 +77,7 @@ const VIDEO = {
   'heygen/heygen-video-1': { name: 'HeyGen', seconds: [5, 30], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], refs: 0, sizes: ['480p', '768p', '1080p', '2K'], resolution: '768p', audio: false },
   'kwaivgi/kling-v3.0-std': { name: 'Kling', seconds: [3, 15], ratios: ['16:9', '9:16', '1:1'], refs: 0 },
   'kwaivgi/kling-v3.0-pro': { name: 'Kling', seconds: [3, 15], ratios: ['16:9', '9:16', '1:1'], refs: 0 },
-  'google/gemini-omni-1.2-flash': { name: 'Gemini Omni', seconds: [3, 15], framed: 10, ratios: ['16:9', '9:16'], refs: 6, clip: true, inline: true, sizes: ['360p', '720p', '1080p', '4K'] },
+  'google/gemini-omni-1.2-flash': { name: 'Gemini Omni', seconds: [3, 15], framed: 10, ratios: ['16:9', '9:16'], refs: 6, clip: 'edit', inline: true, sizes: ['360p', '720p', '1080p', '4K'] },
 };
 /* what each model makes, as the canvas offers it (contract.mjs ModelSpec) */
 for (const model of MODELS.image) Object.assign(model, { spec: { ratios: RATIOS, refs: MAX_REFS, sizes: ['1k', '2k', '4k'], ...(QUALITY[model.id] ? { qualities: QUALITY[model.id], transparent: true } : {}) } });
@@ -185,7 +185,7 @@ async function picture(args, ctx) {
 /**
  * A clip with sound, of the lengths and shapes the chosen model makes: from the prompt, from a first (and last) frame,
  * or from reference pictures (Seedance up to 9, Gemini Omni up to 6); Gemini Omni also edits or continues a clip
- * (`--video`), as the prompt says.
+ * (`--video`), as the prompt says, and Seedance takes one as a reference, beside its pictures and voice.
  * @param {Record<string, unknown>} args @param {RunContext} ctx
  */
 async function video(args, ctx) {
@@ -195,20 +195,28 @@ async function video(args, ctx) {
   const spec = VIDEO[model];
   const said = [];
   const clip = text(args.video);
-  if (clip && !spec.clip) throw new Error(`--video: ${spec.name} here makes clips from a prompt and pictures. Gemini Omni edits or continues a clip: --model google/gemini-omni-1.2-flash; fal makes clips from clips too.`);
-  const first = clip ? '' : text(args['first-frame']);
+  if (clip && !spec.clip) throw new Error(`--video: ${spec.name} here makes clips from a prompt and pictures. Gemini Omni edits or continues a clip (--model google/gemini-omni-1.2-flash), and Seedance takes one as a reference (--model bytedance/seedance-2.0); fal makes clips from clips too.`);
+  /* a clip edited is the clip's own start and end; a reference clip goes with pictures, a first frame among them */
+  const editing = Boolean(clip) && spec.clip === 'edit';
+  const first = editing ? '' : text(args['first-frame']);
   const last = clip ? '' : text(args['last-frame']);
-  if (clip) for (const name of ['first-frame', 'last-frame']) if (text(args[name])) said.push(`--${name}: ${spec.name} makes it from the clip: it was left out`);
+  if (editing) for (const name of ['first-frame', 'last-frame']) if (text(args[name])) said.push(`--${name}: ${spec.name} makes it from the clip: it was left out`);
+  if (clip && !editing && text(args['last-frame'])) said.push(`--last-frame: ${spec.name} made from a reference clip takes no last frame: it was left out`);
   let refs = list(args['input-reference']);
   if (refs.length && !spec.refs) { said.push(`${spec.name} takes no reference pictures: they were left out`); refs = []; }
   if (refs.length > spec.refs) { said.push(`${spec.name} takes ${spec.refs} reference pictures: the rest were left out`); refs = refs.slice(0, spec.refs); }
 
-  /* a clip edited or continued needs a length said: the seconds asked (a continuation adds 3 to 10), else the clip's own */
+  /* a clip edited or continued needs a length said: the seconds asked (a continuation adds 3 to 10), else the clip's own;
+     a reference clip is 2 s at least and as long as the model's longest clip at most */
   const clipSeconds = clip ? await mediaSeconds(ctx.root, clip) : null;
-  if (clipSeconds !== null && clipSeconds > 30.05) {
+  if (editing && clipSeconds !== null && clipSeconds > 30.05) {
     throw new Error(`--video: ${spec.name} edits clips of 15 s at most and continues them to 30 s at most, and ${clip} is ${Math.round(clipSeconds * 10) / 10} s: trim it to the part to make again.`);
   }
-  const asked = number(args.duration) ?? (clipSeconds !== null ? Math.round(clipSeconds) : 5);
+  const longestRef = spec.seconds?.[1] ?? 15;
+  if (clip && !editing && clipSeconds !== null && (clipSeconds < 1.95 || clipSeconds > longestRef + 0.05)) {
+    throw new Error(`--video: ${spec.name} takes reference clips of 2 to ${longestRef} s, and ${clip} is ${Math.round(clipSeconds * 10) / 10} s: trim it to the part to follow.`);
+  }
+  const asked = number(args.duration) ?? (editing && clipSeconds !== null ? Math.round(clipSeconds) : 5);
   const framed = Boolean(first && last && spec.framed);
   const range = /** @type {[number, number] | undefined} */ (spec.seconds && framed ? [spec.seconds[0], Math.min(spec.seconds[1], /** @type {number} */ (spec.framed))] : spec.seconds);
   const seconds = length({ ...spec, seconds: range }, asked);
@@ -226,13 +234,14 @@ async function video(args, ctx) {
      recording word for word is fal's (--audio) */
   const voice = text(args.voice);
   if (voice && !spec.voice) throw new Error(`--voice: ${spec.name} here takes no voice. Seedance takes one: --model bytedance/seedance-2.0, or another Seedance.`);
-  if (voice && first) {
-    /* with a voice, the clip is made from references: the first frame is one of its pictures */
+  /* with a voice or a reference clip, the clip is made from references: the first frame is one of its pictures */
+  const fromRefs = Boolean(voice) || (Boolean(clip) && !editing);
+  if (fromRefs && first) {
     refs = [first, ...refs].slice(0, spec.refs);
-    said.push('--first-frame: with --voice it was given as a reference picture, the clip made from references');
+    said.push(`--first-frame: with ${voice ? '--voice' : 'a reference clip'} it was given as a reference picture, the clip made from references`);
   }
   const frame = async (/** @type {string} */ src, /** @type {'first_frame' | 'last_frame'} */ type) => ({ type: 'image_url', image_url: { url: await dataUri(src, ctx) }, frame_type: type });
-  const frames = voice ? [] : [...(first ? [await frame(first, 'first_frame')] : []), ...(last ? [await frame(last, 'last_frame')] : [])];
+  const frames = fromRefs ? [] : [...(first ? [await frame(first, 'first_frame')] : []), ...(last ? [await frame(last, 'last_frame')] : [])];
   const references = [
     ...(clip ? [{ type: 'video_url', video_url: { url: await addressOf(clip, 'video', spec, ctx) } }] : []),
     ...(await Promise.all(refs.map(async (r) => ({ type: 'image_url', image_url: { url: await dataUri(r, ctx) } })))),

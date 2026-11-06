@@ -209,6 +209,18 @@ test('a clip edited or continued (Gemini Omni): sent as a video reference with i
   seen.length = 0;
   await openrouter.run('video', { prompt: 'continue the scene', video: 'assets/video/take.mp4', duration: 6, out: 'more' }, { ...ctx(files, 'google/gemini-omni-1.2-flash'), root });
   assert.equal(JSON.parse(seen[0].body).duration, 6);
-  await assert.rejects(openrouter.run('video', { prompt: 'p', video: 'assets/video/take.mp4', out: 'x' }, { ...ctx(files, 'bytedance/seedance-2.0'), root }), /--video: Seedance here makes clips from a prompt and pictures\. Gemini Omni edits or continues a clip/);
+  await assert.rejects(openrouter.run('video', { prompt: 'p', video: 'assets/video/take.mp4', out: 'x' }, { ...ctx(files, 'kwaivgi/kling-v3.0-pro'), root }), /--video: Kling here makes clips from a prompt and pictures\. Gemini Omni edits or continues a clip.*Seedance takes one as a reference/);
+  /* Seedance takes a reference clip from a web address only: the run's own temporary one, or none with your own key */
+  await assert.rejects(openrouter.run('video', { prompt: 'p', video: 'assets/video/take.mp4', out: 'x' }, { ...ctx(files, 'bytedance/seedance-2.0'), root }), /--video: Seedance at OpenRouter takes a clip only from a web address/);
+  seen.length = 0;
+  const linked = { ...ctx(files, 'bytedance/seedance-2.0-mini'), root, link: async (/** @type {string} */ path) => `https://relay.example/${path}?sig=1` };
+  const followed = await openrouter.run('video', { prompt: 'follow its camera', video: 'assets/video/take.mp4', 'first-frame': 'assets/image/a.png', 'last-frame': 'assets/image/a.png', out: 'follow' }, linked);
+  const ref = JSON.parse(seen[0].body);
+  assert.deepEqual(ref.input_references.map((r) => r.type), ['video_url', 'image_url']);
+  assert.equal(ref.input_references[0].video_url.url, 'https://relay.example/assets/video/take.mp4?sig=1');
+  assert.equal(ref.frame_images, undefined, 'with a reference clip, the first frame is a reference picture');
+  assert.equal(ref.duration, 5, 'as asked, not the reference clip\'s length');
+  assert.match(followed.receipt.notes.join(' '), /--last-frame: Seedance made from a reference clip takes no last frame/);
+  assert.equal(followed.index[0].from.clip, 'assets/video/take.mp4');
   rmSync(root, { recursive: true, force: true });
 });
