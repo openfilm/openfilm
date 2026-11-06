@@ -799,6 +799,7 @@ export const zhCN: Words = {
     copyConfirm: '创建项目',
     cancel: '取消',
     missing: '已恢复，但这个版本的部分素材找不到了，这些文件保持原样。',
+    kept: `已恢复。${TRASH}无法接收的 {n} 个文件仍留在文件夹中，在${FILES}中删除之前会一直算作改动：{files}。`,
     kindSaved: '已保存的版本',
     kindAuto: '自动保存',
     kindAgent: '智能体开始前',
