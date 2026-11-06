@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  canvasId, canvasKey, copyOf, emptyHistory, inputsKey, inputsOf, isStale, makeName, makeRequest, modesFor, nextOrder, readCanvasDoc, redo, remember, reorder, undo, withVersion,
+  canvasId, canvasKey, copyOf, emptyHistory, inputsChanged, inputsKey, inputsOf, isStale, makeName, makeRequest, modesFor, nextOrder, readCanvasDoc, redo, remember, reorder, undo, withVersion,
 } from './canvas.ts';
 
 test('a board as sent is read node by node: notes and files, and edges between nodes it has', () => {
@@ -153,6 +153,10 @@ test('a node is stale when what it would be asked is not what it made the one sh
   assert.equal(isStale(made, inputs), false);
   assert.equal(isStale(made, [{ from: 'n', text: 'warm' }]), true);
   assert.equal(isStale({ ...made, prompt: 'dusk' }, inputs), true);
+  /* said on the node only when what is wired in changed: its own words and settings changed, the person knows */
+  assert.equal(inputsChanged({ ...made, prompt: 'dusk' }, inputs), false);
+  assert.equal(inputsChanged(made, [{ from: 'n', text: 'warm' }]), true);
+  assert.equal(inputsChanged({ ...made, made: 'abc' }, [{ from: 'n', text: 'warm' }]), false, 'a key from before, of one part: not said');
   assert.equal(isStale({ ...node }, []), false, 'nothing known it was made from');
 });
 

@@ -416,7 +416,6 @@ export function MakeNodeView({ id, data, selected }: NodeProps<MakeNode>) {
                   <TryLine icon={Upload} label={t('canvas.try.upload.audio')} onClick={() => board.upload(id, 'version')} />
                 )} />
               )}
-          {file && !far ? <span className="pointer-events-none absolute left-2.5 top-2.5 rounded-md border border-white/35 bg-black/25 px-1.5 py-[2px] text-[10.5px] leading-none text-white/85 backdrop-blur-sm">{t('canvas.make.ai')}</span> : null}
           {versions.length > 1 && !far && !board.readOnly ? (
             <button type="button" onClick={(event) => { event.stopPropagation(); setVersionsOpen((v) => !v); }}
               className="nodrag absolute right-2.5 top-2.5 flex h-7 items-center gap-1 rounded-lg bg-black/45 px-2 text-[12px] text-white/90 backdrop-blur-md transition hover:bg-black/65">

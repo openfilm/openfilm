@@ -1812,6 +1812,7 @@ export const es: Words = {
     },
     outline: {
       title: 'Elementos del lienzo',
+      all: 'Todo',
       close: 'Cerrar',
       search: 'Buscar',
       count: '{n} nodos',
@@ -1836,7 +1837,6 @@ export const es: Words = {
     make: {
       tts: 'Locución',
       noVoice: 'Elige antes una voz',
-      ai: 'Hecho con IA',
       image: 'Imagen',
       video: 'Vídeo',
       sfx: 'Efecto de sonido',
@@ -1872,7 +1872,7 @@ export const es: Words = {
       qualities: { low: 'Baja', medium: 'Estándar', high: 'Alta', xhigh: 'Muy alta', max: 'Máxima' },
       onlyFrames: 'Este modelo parte de la primera imagen conectada.',
       onlyRefs: 'Este modelo usa las imágenes conectadas como referencias.',
-      stale: 'Cambiado',
+      stale: 'Entradas cambiadas',
       staleTip: 'Lo que entra cambió desde la última vez: créalo de nuevo para seguirlo',
       unused: '{n} conectados no se usan aquí',
       frames: 'Primer y último fotograma',
@@ -2616,6 +2616,7 @@ export const es: Words = {
         "copy-attrs": "Copiar atributos",
         "paste-attrs": "Pegar atributos",
         "refer": "Añadir al chat",
+        "work-mode": "Cambiar entre edición y lienzo",
       },
     },
     /* Settings → Services → Local services (components/settings/LocalModels) */

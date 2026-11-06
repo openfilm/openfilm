@@ -472,6 +472,30 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   }, [projectId]);
   /* what an agent lays out on the canvas (`openfilm canvas apply`) is shown: the canvas opens on it */
   React.useEffect(() => projectEvents(projectId, (event) => { if (event.type === 'canvas') setCanvasOpen(true); }), [projectId, setCanvasOpen]);
+  /* once shown, the canvas stays (hidden under the edit): back to it, it is as it was left, not loaded and fitted again */
+  const [canvasKept, setCanvasKept] = React.useState(canvasOpen);
+  React.useEffect(() => { if (canvasOpen) setCanvasKept(true); }, [canvasOpen]);
+  React.useEffect(() => { setCanvasKept(canvasShown(projectId)); }, [projectId]);
+  /* its chunk fetched while the edit is in use, so the first switch to it is at once too */
+  React.useEffect(() => {
+    const idle = window.setTimeout(() => { void loadCanvas(); }, 1500);
+    return () => window.clearTimeout(idle);
+  }, []);
+  /* the edit or the canvas, from either (keymap `work-mode`, ⌘E): not while typing, nor over a dialog */
+  const workModeRef = React.useRef(() => {});
+  workModeRef.current = () => setCanvasOpen(!canvasOpen);
+  React.useEffect(() => {
+    const press = (event: KeyboardEvent) => {
+      const el = event.target as HTMLElement | null;
+      if (event.defaultPrevented || event.repeat || keyAction(event) !== 'work-mode' || isTypingTarget(el) || el?.closest?.('[role="dialog"]')) return;
+      /* a dialog of the canvas's open (a redraw, a library): it has the keys until it closes */
+      if (document.querySelector('[data-studio-canvas] [role="dialog"]')) return;
+      event.preventDefault();
+      workModeRef.current();
+    };
+    window.addEventListener('keydown', press, true);
+    return () => window.removeEventListener('keydown', press, true);
+  }, []);
   const canvasFiles = React.useMemo(() => (listing ? [...listing.files, ...listing.pages] : []), [listing]);
   /* a file of the media pane as a reference: shown by its poster (a video, a page) or itself (a still, on Studio's
      origin: see stillUrl) */
@@ -4365,7 +4389,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 </Tooltip>
               ) : null}
               {/* the edit or the canvas, in the panes' place: the one shown, its icon and name, and a click for the other */}
-              <Tooltip label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} side="bottom">
+              <Tooltip label={[t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas'), keyHint('work-mode')].filter(Boolean).join(' · ')} side="bottom">
                 <button type="button" aria-label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} data-work-mode={canvasOpen ? 'canvas' : 'edit'} onClick={() => setCanvasOpen(!canvasOpen)}
                   className="flex h-[26px] shrink-0 items-center gap-1.5 rounded-md bg-[var(--bg-hover)] px-2.5 text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-pressed)]">
                   {canvasOpen ? <Workflow size={14} /> : <Scissors size={14} />}
@@ -4788,13 +4812,13 @@ export function ProjectView({ projectId, onProject, onLeave }: {
           </section>
           {/* the canvas in the panes' place: they stay laid out as they were, hidden under it; the gaps round it are the
               panes' lines (the one under the top bar, the one by the chat) */}
-          {canvasOpen ? (
-            <div className="relative z-[2] flex min-h-0 min-w-0 bg-[var(--dock-line)]"
-              style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...(hostPanel?.open ? { marginLeft: HOST_PANEL_WIDTH, paddingLeft: DOCK_GAP } : null) }}>
+          {canvasKept ? (
+            <div className="relative z-[2] flex min-h-0 min-w-0 bg-[var(--dock-line)]" aria-hidden={!canvasOpen} inert={!canvasOpen}
+              style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...(hostPanel?.open ? { marginLeft: HOST_PANEL_WIDTH, paddingLeft: DOCK_GAP } : null), ...(canvasOpen ? null : { visibility: 'hidden', zIndex: 0 }) }}>
               <div className="relative min-h-0 min-w-0 flex-1 bg-[var(--bg-panel)]">
                 <LoadBoundary title={t('canvas.loadFailed')} action={t('canvas.reload')}>
                   <React.Suspense fallback={null}>
-                    <CanvasView projectId={projectId} folder={loaded?.project.path ?? ''} files={canvasFiles} sources={mediaSources} onAddToFilm={(file) => { void addFromCanvas(file); }}
+                    <CanvasView shown={canvasOpen} projectId={projectId} folder={loaded?.project.path ?? ''} files={canvasFiles} sources={mediaSources} onAddToFilm={(file) => { void addFromCanvas(file); }}
                       onImportFiles={(dropped) => onImport(dropped, 'assets', () => {})} onOpenSettings={() => setSettingsOpen('models')}
                       focus={canvasFocus} insert={canvasInsert} onRefer={studioHost?.refer ? (refs) => { for (const ref of refs) studioHost?.refer?.(ref); } : undefined}
                       onSendToFilm={(list) => { void sendFromCanvas(list); }} onReveal={(path) => { setCanvasOpen(false); showFile(path); }}

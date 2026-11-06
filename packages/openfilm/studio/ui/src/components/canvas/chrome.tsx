@@ -10,6 +10,7 @@ import {
   Type as TypeIcon, UserRound, X,
 } from 'lucide-react';
 import { useT } from '@/i18n';
+import { useKeyHint } from '@/lib/keymap-store';
 import type { MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
 import { Popover } from '../Popover';
 import { Tooltip } from '../Tooltip';
@@ -61,6 +62,21 @@ export function BottomToolbar({ adding, onAdd, tool, onTool, onTemplates, onLibr
 }) {
   const t = useT();
   const [keys, setKeys] = React.useState(false);
+  const keysButton = React.useRef<HTMLButtonElement>(null);
+  const keysPanel = React.useRef<HTMLDivElement>(null);
+  const hint = useKeyHint();
+  /* the keys close on a press outside them (their button toggles them) and on Escape */
+  React.useEffect(() => {
+    if (!keys) return undefined;
+    const away = (event: PointerEvent) => {
+      const at = event.target as Node;
+      if (!keysPanel.current?.contains(at) && !keysButton.current?.contains(at)) setKeys(false);
+    };
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setKeys(false); };
+    window.addEventListener('pointerdown', away, true);
+    window.addEventListener('keydown', escape, true);
+    return () => { window.removeEventListener('pointerdown', away, true); window.removeEventListener('keydown', escape, true); };
+  }, [keys]);
   const [library, setLibrary] = React.useState(false);
   /* the keys, in four columns: making, zooming, moving the board, and the rest */
   const columns: Array<[string, Array<[string, string]>]> = [
@@ -73,10 +89,29 @@ export function BottomToolbar({ adding, onAdd, tool, onTool, onTemplates, onLibr
     [t('canvas.keys.other'), [
       [t('canvas.keys.undo'), `${MOD} Z`], [t('canvas.keys.redo'), `${MOD} ⇧ Z`], [t('canvas.copy'), `${MOD} C`], [t('canvas.paste'), `${MOD} V`],
       [t('canvas.selectAll'), `${MOD} A`], [t('canvas.keys.find'), `${MOD} F`], [t('canvas.remove'), '⌫'],
+      ...(hint('work-mode') ? [[t('canvas.toEdit'), hint('work-mode')!] as [string, string]] : []),
     ]],
   ];
   return (
     <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2">
+      {/* the keys over the bar, in the middle of the board's foot as the bar is */}
+      {keys ? (
+        <div ref={keysPanel} role="dialog" aria-label={t('canvas.keys.title')}
+          className="cv-pop pointer-events-auto absolute bottom-full left-1/2 mb-2 grid w-[min(860px,92vw)] -translate-x-1/2 grid-cols-4 gap-6 rounded-[12px] bg-[var(--cv-float)] p-5 shadow-[var(--cv-float-shadow)]">
+          <button type="button" aria-label={t('canvas.outline.close')} onClick={() => setKeys(false)} className="absolute right-3 top-3 text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]"><X size={15} /></button>
+          {columns.map(([title, rows]) => (
+            <div key={title}>
+              <div className="mb-2 text-[12.5px] font-medium text-[var(--cv-edge-lit)]">{title}</div>
+              {rows.map(([what, key]) => (
+                <div key={what} className="flex h-8 items-center justify-between gap-2 text-[12.5px]">
+                  <span className="truncate text-[var(--cv-ink-2)]">{what}</span>
+                  <kbd className="shrink-0 rounded-[6px] bg-[var(--cv-chip)] px-1.5 py-0.5 font-sans text-[11.5px] text-[var(--cv-ink)]">{key}</kbd>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      ) : null}
       <div className="pointer-events-auto flex items-center gap-2 rounded-[12px] border-[0.5px] !border-[var(--cv-bar-line)] bg-[var(--cv-bar)] p-2">
         <Tooltip label={`${t('canvas.toolbar.add')} · /`} side="top">
           <button type="button" aria-label={t('canvas.toolbar.add')} onClick={(event) => onAdd(event.currentTarget.getBoundingClientRect())}
@@ -117,27 +152,9 @@ export function BottomToolbar({ adding, onAdd, tool, onTool, onTemplates, onLibr
           <button type="button" aria-label={t('canvas.history.title')} onClick={onHistory} className={TOOL}><History size={17} /></button>
         </Tooltip>
         <span className="h-4 w-px bg-[var(--cv-bar-line)]" />
-        <Popover open={keys} onOpenChange={setKeys} placement="top" align="center"
-          trigger={(
-            <Tooltip label={t('canvas.keys.title')} side="top">
-              <button type="button" aria-label={t('canvas.keys.title')} onClick={() => setKeys((v) => !v)} className={`${TOOL} ${keys ? ON : ''}`}><Keyboard size={17} /></button>
-            </Tooltip>
-          )}>
-          <div className="cv-pop relative grid w-[min(860px,92vw)] grid-cols-4 gap-6 rounded-[12px] bg-[var(--cv-float)] p-5 shadow-[var(--cv-float-shadow)]">
-            <button type="button" aria-label={t('canvas.outline.close')} onClick={() => setKeys(false)} className="absolute right-3 top-3 text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]"><X size={15} /></button>
-            {columns.map(([title, rows]) => (
-              <div key={title}>
-                <div className="mb-2 text-[12.5px] font-medium text-[var(--cv-edge-lit)]">{title}</div>
-                {rows.map(([what, key]) => (
-                  <div key={what} className="flex h-8 items-center justify-between gap-2 text-[12.5px]">
-                    <span className="truncate text-[var(--cv-ink-2)]">{what}</span>
-                    <kbd className="shrink-0 rounded-[6px] bg-[var(--cv-chip)] px-1.5 py-0.5 font-sans text-[11.5px] text-[var(--cv-ink)]">{key}</kbd>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        </Popover>
+        <Tooltip label={t('canvas.keys.title')} side="top">
+          <button ref={keysButton} type="button" aria-label={t('canvas.keys.title')} aria-expanded={keys} onClick={() => setKeys((v) => !v)} className={`${TOOL} ${keys ? ON : ''}`}><Keyboard size={17} /></button>
+        </Tooltip>
       </div>
     </div>
   );
@@ -207,7 +224,19 @@ function nodeRow(n: BoardNode, fileOf: (path: string) => WorkspaceResource | nul
   };
 }
 
-/** What is on the board, in a list (a click shows it): the board's own, not the Assets (the chat beside it has those). */
+type Category = 'image' | 'video' | 'audio' | 'note' | 'group' | 'other';
+const CATEGORIES: readonly Category[] = ['image', 'video', 'audio', 'note', 'group', 'other'];
+/** Which of the list's kinds a node is: what it makes, else what its file is. */
+function categoryOf(n: BoardNode, fileOf: (path: string) => WorkspaceResource | null): Category {
+  if (n.type === 'note') return 'note';
+  if (n.type === 'frame') return 'group';
+  if (n.type === 'make') { const make = (n.data as MakeData).make; return make === 'image' || make === 'video' ? make : 'audio'; }
+  const path = n.type === 'file' ? n.data.path : undefined;
+  const kind = path ? fileOf(path)?.kind : undefined;
+  return kind === 'image' || kind === 'video' || kind === 'audio' ? kind : 'other';
+}
+
+/** What is on the board, in a list (a click shows it), by kind: the board's own, not the Assets (the chat beside it has those). */
 export function Outline({ nodes, fileOf, sources, onShow, onClose }: {
   nodes: readonly BoardNode[];
   fileOf: (path: string) => WorkspaceResource | null;
@@ -217,8 +246,15 @@ export function Outline({ nodes, fileOf, sources, onShow, onClose }: {
 }) {
   const t = useT();
   const [query, setQuery] = React.useState('');
+  const [only, setOnly] = React.useState<Category | null>(null);
   const needle = query.trim().toLowerCase();
-  const rows = nodes.map((n) => ({ id: n.id, ...nodeRow(n, fileOf, sources, t) })).filter((r) => !needle || r.label.toLowerCase().includes(needle) || r.kind.toLowerCase().includes(needle));
+  const all = nodes.map((n) => ({ id: n.id, category: categoryOf(n, fileOf), ...nodeRow(n, fileOf, sources, t) }));
+  /* the kinds the board has, each a filter; the one picked again: all */
+  const present = CATEGORIES.filter((c) => all.some((r) => r.category === c));
+  const shown = only && present.includes(only) ? only : null;
+  const rows = all.filter((r) => (!shown || r.category === shown) && (!needle || r.label.toLowerCase().includes(needle) || r.kind.toLowerCase().includes(needle)));
+  const chip = (on: boolean) => `h-6 shrink-0 rounded-full px-2.5 text-[12px] transition ${on ? 'bg-[var(--cv-invert)] text-[var(--cv-on-invert)]' : 'bg-[var(--cv-float-hover)] text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]'}`;
+  const named = (c: Category) => t(c === 'note' ? 'canvas.kinds.note' : c === 'group' ? 'canvas.group' : `canvas.outline.kind.${c}`);
   return (
     <div className="pointer-events-auto absolute bottom-[60px] right-2 top-3 z-20 flex w-[320px] flex-col overflow-hidden rounded-[12px] bg-[var(--cv-float)] shadow-[var(--cv-float-shadow)]">
       <div className="flex items-center gap-1 py-2 pl-3.5 pr-2">
@@ -231,6 +267,16 @@ export function Outline({ nodes, fileOf, sources, onShow, onClose }: {
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('canvas.outline.search')}
           className="min-w-0 flex-1 bg-transparent text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-label)]" />
       </label>
+      {present.length > 1 ? (
+        <div className="mx-2 mb-1 flex flex-wrap gap-1">
+          <button type="button" aria-pressed={!shown} onClick={() => setOnly(null)} className={chip(!shown)}>{t('canvas.outline.all')}</button>
+          {present.map((c) => (
+            <button key={c} type="button" aria-pressed={shown === c} onClick={() => setOnly(shown === c ? null : c)} className={chip(shown === c)}>
+              {named(c)} {all.filter((r) => r.category === c).length}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div className="min-h-0 flex-1 overflow-y-auto p-1">
         {rows.map((row) => (
           <button key={row.id} type="button" onClick={() => onShow(row.id)}

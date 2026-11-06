@@ -29,7 +29,7 @@ import { useLanguage, useT } from '@/i18n';
 import { ApiError, api, projectEvents, type CanvasBoard, type CanvasCharacter } from '@/api';
 import { BoardSwitcher, boardName, nextBoardName } from './boards';
 import {
-  CARD_H, CUT_W, FILE_W, GROUP_COLORS, MAKE_MEDIA, MAKE_W, NOTE_H, NOTE_W, canvasId, cardWidth, makeSize, canvasKey, copyOf, emptyHistory, inputsKey, inputsOf, isStale, makeName, makeRequest, modeOf, frameRatio, ratioOf,
+  CARD_H, CUT_W, FILE_W, GROUP_COLORS, MAKE_MEDIA, MAKE_W, NOTE_H, NOTE_W, canvasId, cardWidth, makeSize, canvasKey, copyOf, emptyHistory, inputsChanged, inputsKey, inputsOf, isStale, makeName, makeRequest, modeOf, frameRatio, ratioOf,
   nextOrder, readCanvasDoc, redo, remember, reorder, undo, withVersion,
   type CanvasDoc, type CanvasHistory, type MediaOf,
 } from '@/lib/canvas';
@@ -82,12 +82,14 @@ const unselectEdges = (list: Edge[]) => (list.some((e) => e.selected) ? list.map
 /** what was copied last, on any board of this page: pasted with new ids, a step further each time */
 let clipboard: { doc: CanvasDoc; pasted: number } | null = null;
 
-function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFilm, onImportFiles, onOpenSettings, onReveal, chat, onError, onNotice, focus, insert, onRefer }: CanvasViewProps) {
+function BoardView({ shown = true, projectId, folder, files, sources, onAddToFilm, onSendToFilm, onImportFiles, onOpenSettings, onReveal, chat, onError, onNotice, focus, insert, onRefer }: CanvasViewProps) {
   const t = useT();
   const flow = useReactFlow<BoardNode, Edge>();
   const [nodes, setNodes, onNodesChange] = useNodesState<BoardNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [ready, setReady] = React.useState(false);
+  /* the board is seen once it is fitted to what is on it: never first drawn close up and then pulled out to all of it */
+  const [fitted, setFitted] = React.useState(false);
   const [editing, setEditing] = React.useState<string | null>(null);
   const [menu, setMenu] = React.useState<MenuAt | null>(null);
   const [context, setContext] = React.useState<{ x: number; y: number; items: ContextMenuEntry[] } | null>(null);
@@ -201,9 +203,13 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
       show(doc);
       setReady(true);
       /* once the cards are measured: every group round what is in it (a board an agent laid out loosely), then all in view */
-      requestAnimationFrame(() => requestAnimationFrame(() => { setNodes((list) => fitGroups(unstack(list))); void flow.fitView({ padding: 0.2, maxZoom: 1 }); }));
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        setNodes((list) => fitGroups(unstack(list)));
+        void flow.fitView({ padding: 0.2, maxZoom: 1 }).finally(() => { if (live) setFitted(true); });
+      }));
     }, (e: unknown) => {
       if (!live) return;
+      setFitted(true);
       /* a board that is not there (any more): the first */
       if (e instanceof ApiError && e.status === 404 && boardId !== MAIN_BOARD) { setBoardId(MAIN_BOARD); keepLastBoard(projectId, MAIN_BOARD); return; }
       setReady(true);
@@ -405,7 +411,7 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
   const libraryVoices = useLibraryVoices();
   const language = useLanguage();
   const runsSeen = useRuns();
-  /** what changed since each making node last made one, and what is wired into it that it cannot use */
+  /** the making nodes whose inputs changed since they last made one (said on them), and what is wired into each that it cannot use */
   const making = React.useMemo(() => {
     const stale = new Set<string>();
     const unused = new Map<string, number>();
@@ -414,7 +420,7 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
     for (const n of doc.nodes) {
       if (!n.make) continue;
       const inputs = inputsOf(doc, n.id, mediaOf);
-      if (isStale(n, inputs)) stale.add(n.id);
+      if (inputsChanged(n, inputs)) stale.add(n.id);
       const left = makeRequest(n as MakingNode, inputs, '', choiceOf(providers, n.make, n.via, n.model)?.spec).unused;
       if (left) unused.set(n.id, left);
     }
@@ -901,6 +907,7 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
   /* ── keys: the board's own, and the page's while nothing else has them (a menu closed, a node drawn again): the
      board covers the edit, so Studio's ⌘Z, Space and the rest are not to act on a film out of sight ── */
   const onKeyDown = (event: KeyboardEvent) => {
+    if (!shown) return;
     const target = event.target as HTMLElement;
     if (target !== document.body && !rootRef.current?.contains(target)) return;
     /* a menu open has the keys (its Escape closes it, and only it); a dialog over the board has them all (its own undo) */
@@ -1075,7 +1082,7 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
         ref={rootRef}
         data-studio-canvas=""
         tabIndex={-1}
-        className="relative h-full w-full outline-none"
+        className={`relative h-full w-full outline-none transition-opacity duration-150 ${fitted ? 'opacity-100' : 'opacity-0'}`}
         onPointerDown={(event) => { if (!(event.target as HTMLElement).closest('input, textarea')) rootRef.current?.focus({ preventScroll: true }); }}
         onDragOver={(event) => {
           if (!event.dataTransfer.types.includes(RESOURCE_DRAG_TYPE) && !isComputerFileDrag(event.dataTransfer)) return;
@@ -1269,6 +1276,8 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
 }
 
 export interface CanvasViewProps {
+  /** false: kept under the edit, hidden, as it was left; its keys are the edit's then */
+  shown?: boolean;
   projectId: string;
   /** the project's folder: where what is made lands (under assets/) */
   folder: string;

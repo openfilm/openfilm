@@ -284,18 +284,36 @@ export function inputsOf(doc: CanvasDoc, id: string, mediaOf: MediaOf): MakeInpu
   return inputs;
 }
 
-/** What a node is asked, in a few characters: the same when nothing it is asked has changed. */
-export function inputsKey(node: CanvasNode, inputs: readonly MakeInput[]): string {
-  const said = JSON.stringify([node.make, node.prompt ?? '', node.via ?? '', node.model ?? '', node.opts ?? {},
-    inputs.map((i) => ('text' in i ? ['t', i.text] : ['f', i.path])), ...(node.preset ? [node.preset] : [])]);
+const shortHash = (said: string): string => {
   let hash = 0x811c9dc5;
   for (let i = 0; i < said.length; i++) hash = Math.imul(hash ^ said.charCodeAt(i), 0x01000193);
   return (hash >>> 0).toString(36);
+};
+/** What is wired into a node, in a few characters. */
+const fedKey = (inputs: readonly MakeInput[]): string => shortHash(JSON.stringify(inputs.map((i) => ('text' in i ? ['t', i.text] : ['f', i.path]))));
+
+/**
+ * What a node is asked, in a few characters: the same when nothing it is asked has changed. Two parts: all it is asked
+ * (its own words and settings with what is wired in), then what is wired in alone.
+ */
+export function inputsKey(node: CanvasNode, inputs: readonly MakeInput[]): string {
+  const said = JSON.stringify([node.make, node.prompt ?? '', node.via ?? '', node.model ?? '', node.opts ?? {},
+    inputs.map((i) => ('text' in i ? ['t', i.text] : ['f', i.path])), ...(node.preset ? [node.preset] : [])]);
+  return `${shortHash(said)}-${fedKey(inputs)}`;
 }
 
 /** Whether what a node last made was made from what it would not be asked now (it made nothing: it is not). */
 export function isStale(node: CanvasNode, inputs: readonly MakeInput[]): boolean {
   return Boolean(node.make && node.path && node.made && node.made !== inputsKey(node, inputs));
+}
+
+/**
+ * Whether what is wired into a node changed since it last made one: what the person changed in the node itself, they
+ * know; a picture changed upstream, they may not. A node made before its key had two parts: not said.
+ */
+export function inputsChanged(node: CanvasNode, inputs: readonly MakeInput[]): boolean {
+  const fed = node.make && node.path && node.made ? node.made.split('-')[1] : undefined;
+  return Boolean(fed && fed !== fedKey(inputs));
 }
 
 /** The lengths a model makes, in seconds, as a range: its own, else the kind's. */

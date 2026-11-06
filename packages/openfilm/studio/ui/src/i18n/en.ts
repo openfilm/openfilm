@@ -1813,6 +1813,7 @@ export const en = {
     },
     outline: {
       title: 'Canvas elements',
+      all: 'All',
       close: 'Close',
       search: 'Search',
       count: '{n} nodes',
@@ -1837,7 +1838,6 @@ export const en = {
     make: {
       tts: 'Voice-over',
       noVoice: 'Pick a voice for it first',
-      ai: 'AI made',
       image: 'Image',
       video: 'Video',
       sfx: 'Sound effect',
@@ -1873,7 +1873,7 @@ export const en = {
       qualities: { low: 'Low', medium: 'Standard', high: 'High', xhigh: 'Very high', max: 'Best' },
       onlyFrames: 'This model starts from the first picture wired in.',
       onlyRefs: 'This model uses the pictures wired in as references.',
-      stale: 'Changed',
+      stale: 'Inputs changed',
       staleTip: 'What goes into it changed since it last made one: make it again to follow',
       unused: '{n} wired in not used here',
       frames: 'First & last frame',
@@ -2617,6 +2617,7 @@ export const en = {
         "copy-attrs": "Copy attributes",
         "paste-attrs": "Paste attributes",
         "refer": "Add to chat",
+        "work-mode": "Switch between edit and canvas",
       },
     },
     /* Settings → Services → Local services (components/settings/LocalModels) */

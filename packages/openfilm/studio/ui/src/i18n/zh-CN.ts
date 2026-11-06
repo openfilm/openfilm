@@ -1813,6 +1813,7 @@ export const zhCN: Words = {
     },
     outline: {
       title: '画布元素',
+      all: '全部',
       close: '关闭',
       search: '搜索',
       count: '共 {n} 个节点',
@@ -1837,7 +1838,6 @@ export const zhCN: Words = {
     make: {
       tts: '配音',
       noVoice: '先给它选一个音色',
-      ai: 'AI生成',
       image: '图片',
       video: '视频',
       sfx: '音效',
@@ -1873,7 +1873,7 @@ export const zhCN: Words = {
       qualities: { low: '低画质', medium: '标准画质', high: '高画质', xhigh: '超高画质', max: '极致画质' },
       onlyFrames: '这个模型从连进来的第一张图开始做。',
       onlyRefs: '这个模型把连进来的图当参考图。',
-      stale: '已变化',
+      stale: '输入已变',
       staleTip: '上次生成后，输入有变化：重新生成以跟上',
       unused: '{n} 个输入在这里用不上',
       frames: '首尾帧',
@@ -2617,6 +2617,7 @@ export const zhCN: Words = {
         "copy-attrs": "复制属性",
         "paste-attrs": "粘贴属性",
         "refer": "添加到对话",
+        "work-mode": "在剪辑和画布之间切换",
       },
     },
     /* Settings → Services → Local services (components/settings/LocalModels) */

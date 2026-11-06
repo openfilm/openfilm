@@ -1809,6 +1809,7 @@ export const ko: Words = {
     },
     outline: {
       title: '캔버스 요소',
+      all: '전체',
       close: '닫기',
       search: '검색',
       count: '노드 {n}개',
@@ -1833,7 +1834,6 @@ export const ko: Words = {
     make: {
       tts: '내레이션',
       noVoice: '먼저 목소리를 고르세요',
-      ai: 'AI 생성',
       image: '이미지',
       video: '동영상',
       sfx: '효과음',
@@ -1869,7 +1869,7 @@ export const ko: Words = {
       qualities: { low: '저화질', medium: '표준 화질', high: '고화질', xhigh: '초고화질', max: '최고 화질' },
       onlyFrames: '이 모델은 연결된 첫 이미지에서 시작합니다.',
       onlyRefs: '이 모델은 연결된 이미지를 참고 이미지로 씁니다.',
-      stale: '변경됨',
+      stale: '입력 변경됨',
       staleTip: '마지막 생성 이후 입력이 바뀌었습니다. 다시 생성하면 반영됩니다',
       unused: '연결된 {n}개는 여기서 쓰이지 않음',
       frames: '첫 프레임과 마지막 프레임',
@@ -2612,6 +2612,7 @@ export const ko: Words = {
         "copy-attrs": "속성 복사",
         "paste-attrs": "속성 붙여넣기",
         "refer": "채팅에 추가",
+        "work-mode": "편집과 캔버스 전환",
       },
     },
     /* Settings → Services → Local services (components/settings/LocalModels) */

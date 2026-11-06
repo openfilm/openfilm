@@ -1812,6 +1812,7 @@ export const ja: Words = {
     },
     outline: {
       title: 'キャンバスの要素',
+      all: 'すべて',
       close: '閉じる',
       search: '検索',
       count: '{n} ノード',
@@ -1836,7 +1837,6 @@ export const ja: Words = {
     make: {
       tts: 'ナレーション',
       noVoice: '先に声を選んでください',
-      ai: 'AI生成',
       image: '画像',
       video: '動画',
       sfx: '効果音',
@@ -1872,7 +1872,7 @@ export const ja: Words = {
       qualities: { low: '低画質', medium: '標準画質', high: '高画質', xhigh: '超高画質', max: '最高画質' },
       onlyFrames: 'このモデルはつないだ最初の画像から作ります。',
       onlyRefs: 'このモデルはつないだ画像を参考画像にします。',
-      stale: '変更あり',
+      stale: '入力が変更',
       staleTip: '前回の生成後に入力が変わりました。再生成すると反映されます',
       unused: '{n} 個の入力はここでは使われません',
       frames: '最初と最後のフレーム',
@@ -2616,6 +2616,7 @@ export const ja: Words = {
         "copy-attrs": "属性をコピー",
         "paste-attrs": "属性をペースト",
         "refer": "チャットに追加",
+        "work-mode": "編集とキャンバスを切り替え",
       },
     },
     /* Settings → Services → Local services (components/settings/LocalModels) */
