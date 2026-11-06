@@ -405,6 +405,9 @@ test('each codec this machine encodes, at the size asked, transparent where the 
   }
   const hevc = can.hevc ? (await exported({ kind: 'video', codec: 'hevc', fps: 5, range: [0, 0.2] })).out : null;
   if (hevc) assert.equal(probe(hevc, 'stream=codec_tag_string'), 'hvc1', 'HEVC that Apple players open');
+  /* at master, 10 bits: a dark gradient keeps steps 8 bits would band */
+  const master = can.hevc ? (await exported({ kind: 'video', codec: 'hevc', quality: 'master', fps: 5, range: [0, 0.2] })).out : null;
+  if (master) assert.equal(probe(master, 'stream=pix_fmt'), 'yuv420p10le');
 });
 
 test('every codec carries the colors the page draws, tagged BT.709, through the graphics chip and without it', { ...ffmpeg, timeout: 300_000 }, async () => {

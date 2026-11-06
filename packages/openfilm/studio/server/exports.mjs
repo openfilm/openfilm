@@ -600,7 +600,8 @@ function encoding(codec, quality, size, fps, have, hw = null) {
     case 'hevc':
       if (hw) return { encoder: hw, format: { video: [...hardwareOptions(hw, bits(0.8), { gop }), ...BT709], tag: ['-tag:v', 'hvc1', ...HEVC_709] } };
       if (have.has('libx265')) {
-        return { encoder: 'libx265', format: { video: ['-c:v', 'libx265', '-preset', 'medium', '-crf', String(X265_CRF[quality]), '-x265-params', 'log-level=error', '-tag:v', 'hvc1', ...BT709], tag: ['-tag:v', 'hvc1', ...HEVC_709] } };
+        /* master in 10 bits (Main 10): a dark gradient keeps steps 8 bits break into bands */
+        return { encoder: 'libx265', format: { video: ['-c:v', 'libx265', '-preset', 'medium', '-crf', String(X265_CRF[quality]), '-x265-params', 'log-level=error', '-tag:v', 'hvc1', ...BT709], tag: ['-tag:v', 'hvc1', ...HEVC_709], ...(quality === 'master' ? { pix: YUV_709('yuv420p10le') } : {}) } };
       }
       if (have.has('hevc_videotoolbox')) return { encoder: 'hevc_videotoolbox', format: { video: ['-c:v', 'hevc_videotoolbox', '-b:v', bitrate(0.8), '-g', String(gop), '-tag:v', 'hvc1', ...BT709], tag: ['-tag:v', 'hvc1', ...HEVC_709] } };
       throw new ExportError('this computer\'s ffmpeg has no HEVC encoder (libx265 or hevc_videotoolbox)');
@@ -875,7 +876,8 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       const how = (chip) => {
         const { encoder, format } = encoding(codec, quality, size, fps ?? 30, have, chip);
         const container = /** @type {{ pix?: string }} */ (format).pix ?? (codec === 'h264' || codec === 'hevc' ? YUV_709('yuv420p') : codec === 'vp9' ? YUV_709('yuva420p') : 'format=yuva444p10le');
-        return { encoder, opts: { fps, scale: place.scale, alpha, silent: ask.audio === false || codec === 'png', ...(ask.loudness != null ? { loudness: ask.loudness } : {}), format: { ...format, pix: `${place.vf},${container}` }, ...(clip || burn ? { root } : {}) } };
+        /* master: frames taken as PNG and footage read from copies near the file (`fine`), so nothing on the way bands */
+        return { encoder, opts: { fps, scale: place.scale, alpha, silent: ask.audio === false || codec === 'png', ...(ask.loudness != null ? { loudness: ask.loudness } : {}), format: { ...format, pix: `${place.vf},${container}` }, ...(quality === 'master' ? { fine: true } : {}), ...(clip || burn ? { root } : {}) } };
       };
       let { encoder, opts } = how(hw);
       update(job, { encoder });

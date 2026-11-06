@@ -186,7 +186,7 @@ export async function render(args, opts = {}) {
       console.error(`openfilm render: ${shown(file)}: a copy this browser plays could not be made, so it is drawn as it is`);
     };
     try {
-      copies = await browserCopies(browser, site.url, root, files, { signal: opts.signal, slow: total >= fps * 2, failed });
+      copies = await browserCopies(browser, site.url, root, files, { signal: opts.signal, slow: total >= fps * 2, fine: !!opts.fine, failed });
     } catch (e) {
       await probe.close();
       await pool?.give(lent, { retire: true });
@@ -259,7 +259,7 @@ export async function render(args, opts = {}) {
       const stop = new AbortController();
       const quit = () => stop.abort();
       opts.signal?.addEventListener('abort', quit, { once: true });
-      const runs = parts.map((p) => encode(p, { fps, rate, samples, shutter, duration: end, first: f0, format: f, onFrame: progress, still: alpha ? 'png' : 'jpeg', opaque, signal: stop.signal,
+      const runs = parts.map((p) => encode(p, { fps, rate, samples, shutter, duration: end, first: f0, format: f, onFrame: progress, still: alpha || opts.fine ? 'png' : 'jpeg', opaque, signal: stop.signal,
         sourceFrame: selection ? (frame) => selectionFrame(selection.spans, frame) : (frame) => frame }));
       try {
         await unlessCancelled(Promise.all(runs));
