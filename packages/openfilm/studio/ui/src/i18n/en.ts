@@ -1833,6 +1833,7 @@ export const en = {
       switchWhere: {
         codex: 'the Codex app, or with codex login in a terminal',
         copilot: 'Copilot itself: run copilot in a terminal and use /user',
+        antigravity: 'Google Antigravity itself: run agy in a terminal and use /logout',
         opencode: 'the OpenCode app, or with opencode auth switch in a terminal',
         codebuddy: 'CodeBuddy itself: run codebuddy in a terminal',
         qwen: 'Qwen Code itself: run qwen in a terminal and use /auth',

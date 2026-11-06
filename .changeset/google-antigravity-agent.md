@@ -1,6 +1,6 @@
 ---
-"@openfilm/desktop": minor
-"openfilm": minor
+"@openfilm/desktop": patch
+"openfilm": patch
 ---
 
-Desktop: support Google Antigravity as a coding agent via the Agent Client Protocol (ACP), with automatic detection across Windows and Unix platforms.
+Desktop: support Google Antigravity as a coding agent via the Agent Client Protocol (ACP).

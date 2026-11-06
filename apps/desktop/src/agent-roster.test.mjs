@@ -36,7 +36,7 @@ test('startup publishes each result before a slow background discovery ends; onl
   const pending = r.refresh();
   try {
     await new Promise((done) => setImmediate(done));
-    assert.deepEqual(requested.statusIds, ['codex', 'antigravity']);
+    assert.deepEqual(requested.statusIds, ['codex']);
     assert.equal(requested.ids.length, 11, 'disabled agents are still discovered automatically');
     assert.equal(requested.ids[0], 'codex', 'enabled agents are scheduled first');
     assert.equal(r.list().find((a) => a.id === 'codex').status, 'ready');

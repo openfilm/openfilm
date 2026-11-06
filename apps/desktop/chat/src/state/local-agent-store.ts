@@ -281,7 +281,6 @@ const AGENT_FORCED_PREFS: Partial<Record<LocalAgentId, Record<string, unknown>>>
   codex: { mode: 'agent-full-access' },
   kimi: { mode: 'yolo' },
   minimax: { permissionMode: 'bypassPermissions' },
-  antigravity: { mode: 'auto' },
   byok: { mode: 'agent-full-access' },
 };
 

@@ -36,7 +36,7 @@ import { Readable, Writable } from 'node:stream';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as acp from '@agentclientprotocol/sdk';
 import { PATH_SEP, childEnvironment, lastPathSource, loginShellEnvironment, loginShellVariables, shellSubset } from './environment.mjs';
-import { AGENT_PROGRAMS, HOME_BIN_CANDIDATES, chosenProgram, claudeUpdate, claudeVersion, codexAppCopies, codexVersion, desktopApp, detectAgentInstallation, installCommand, laterVersion, notTheAgent, searchReport } from './agent-installation.mjs';
+import { AGENT_PROGRAMS, HOME_BIN_CANDIDATES, antigravityVersion, chosenProgram, claudeUpdate, claudeVersion, codexAppCopies, codexVersion, desktopApp, detectAgentInstallation, installCommand, laterVersion, notTheAgent, searchReport } from './agent-installation.mjs';
 import { logSwitches } from './agent-logs.mjs';
 import { afterFirstReading, firstWindowsApps, refreshWindowsApps } from './windows-apps.mjs';
 import { mergeConfig, sessionSkills } from './agent-skills.mjs';
@@ -103,13 +103,12 @@ export const AGENTS = Object.freeze({
       grep: 'search', glob: 'search',
       web_search: 'fetch', web_fetch: 'fetch',
     } },
-  /* Google Antigravity: speaks ACP or runs in automated mode; signed in through Google / Antigravity IDE, so one found is connected */
+  /* Google Antigravity: speaks ACP; logs in with `agy acp --login` */
   antigravity: {
     label: AGENT_DEFINITIONS.antigravity.name,
     args: ['acp'],
-    login: null,
+    login: ['acp', '--login'],
     approve: true,
-    systemPrompt: true,
   },
 });
 
@@ -320,6 +319,7 @@ function starting(cliPath, args) {
 const NOT_THE_AGENT = Object.freeze({
   app: 'This is an editor or a desktop app, not the agent\'s command-line program.',
   'not-cursor-agent': 'This is not Cursor\'s command-line agent, which installs in a cursor-agent folder.',
+  'too-old': 'This program is older than OpenFilm needs (Google Antigravity needs 1.5.0 or later, which introduced ACP): update it, then try again.',
 });
 
 /**
@@ -887,6 +887,7 @@ const AUTH_REQUIRED = -32000;
 
 /** The oldest Codex the chat was tried with: an older one may have an app server the adapter can't talk to. */
 export const CODEX_TESTED = '0.132.0';
+export const ANTIGRAVITY_TESTED = '1.5.0';
 
 /**
  * The oldest Claude Code the chat was tried with. An older one lists only the models it knows: 2.1.288 has no Haiku
@@ -920,6 +921,18 @@ export function codexTooOld(agent, path, e, versionOf = codexVersion) {
   if (!version || !laterVersion(CODEX_TESTED, version)) return e;
   const why = e instanceof Error ? e.message : String(e);
   return Object.assign(new Error(`Codex ${version} is older than OpenFilm needs (${CODEX_TESTED} or later): update Codex, then try again. ${why}`.trim()), { code: 'outdated' });
+}
+
+/**
+ * An Antigravity older than 1.5.0, which introduced ACP.
+ * @param {string} agent @param {string | undefined} path @param {any} e @param {(file: string) => string | null} [versionOf]
+ */
+export function antigravityTooOld(agent, path, e, versionOf = antigravityVersion) {
+  if (agent !== 'antigravity' || !path || e?.code === 'sign-in' || e?.code === 'not-installed') return e;
+  const version = versionOf(path);
+  if (!version || !laterVersion(ANTIGRAVITY_TESTED, version)) return e;
+  const why = e instanceof Error ? e.message : String(e);
+  return Object.assign(new Error(`Google Antigravity ${version} is older than OpenFilm needs (${ANTIGRAVITY_TESTED} or later): update agy, then try again. ${why}`.trim()), { code: 'outdated' });
 }
 
 /** ACP's internal error: what an agent's own failures come as. */
@@ -1163,7 +1176,7 @@ export class AgentSession {
       this.step = null;
       return info;
     } catch (e) {
-      throw await this.explain(codexTooOld(this.opts.agent, this.cli?.path, e));
+      throw await this.explain(antigravityTooOld(this.opts.agent, this.cli?.path, codexTooOld(this.opts.agent, this.cli?.path, e)));
     }
   }
 
