@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>Progress bar</title>
 <style>
-:root { --color: #45c2b4; }
+:root { --font: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --color: #45c2b4; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 .w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; }
-.w.low { align-items: flex-end; justify-content: flex-start; text-align: left; padding: 0 0 9vh 6vw; }
-.t { color: var(--color); font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; line-height: 1.12; }
+.w.low { text-align: left; }
+.t { color: var(--color); font-family: var(--font); line-height: 1.12; }
 .s { display: block; font-size: 0.42em; font-weight: 500; opacity: 0.85; margin-top: 0.3em; }
-.w { align-items: flex-end; padding-bottom: 5vh; }
-.t { width: 80vw; height: 1.2vh; border-radius: 1vh; background: rgba(255, 255, 255, 0.25); overflow: hidden; font-size: 0; }
+.w { align-items: center; }
+.t { width: 89.302vw; height: 38.118vh; border-radius: 31.765vh; background: rgba(255, 255, 255, 0.25); overflow: hidden; font-size: 0; }
 .t::after { content: ""; display: block; height: 100%; background: var(--color); animation: p 3s linear both; }
 @keyframes p { from { width: 0; } to { width: 100%; } }
 </style>

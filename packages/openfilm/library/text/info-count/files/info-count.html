@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>Counting number</title>
 <style>
-:root { --accent: #3ee0a1; --color: #ffffff; }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --accent: #3ee0a1; --color: #ffffff; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; color: var(--color); text-shadow: 0 0.8vh 3vh rgba(0, 0, 0, 0.45); }
+.w { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: var(--font); color: var(--color); text-shadow: 0 0.8vh 3vh rgba(0, 0, 0, 0.45); }
 .t1 { font-size: 8.4vh; font-weight: 700; letter-spacing: 0.3em; padding-left: 0.3em; color: var(--accent); white-space: pre; animation: rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .n { font: 800 40vh/1.05 'DIN Alternate', 'Bahnschrift', 'Avenir Next', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; margin: 1vh 0 3vh; animation: pop 0.5s 0.1s cubic-bezier(0.3, 1.6, 0.5, 1) both; }
 .bar { width: 150vh; height: 3vh; border-radius: 2vh; background: rgba(255, 255, 255, 0.18); overflow: hidden; animation: rise 0.5s 0.2s both; }

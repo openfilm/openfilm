@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>Link in bio</title>
 <style>
-:root { --accent: #7a5cff; --mark: #ffe14d; --ink: #16171c; }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --accent: #7a5cff; --mark: #ffe14d; --ink: #16171c; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8vh; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; }
+.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8vh; font-family: var(--font); }
 .p { display: flex; align-items: center; gap: 7vh; background: #fff; color: var(--ink); border-radius: 60vh; padding: 8vh 12vh 8vh 8vh; box-shadow: 0 3vh 8vh rgba(0, 0, 0, 0.35); animation: pop 0.6s cubic-bezier(0.3, 1.6, 0.5, 1) both; }
 .ic { width: 56vh; height: 56vh; flex: none; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; animation: spin 0.7s 0.15s cubic-bezier(0.3, 1.5, 0.5, 1) both; }
 .ic svg { width: 32vh; height: 32vh; }

@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>OMG</title>
 <style>
-:root { --from: #ffef5a; --to: #ff6a3d; --marks: #ffffff; }
+:root { --font: Impact, 'Haettenschweiler', 'Arial Black', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --from: #ffef5a; --to: #ff6a3d; --marks: #ffffff; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font-family: Impact, 'Haettenschweiler', 'Arial Black', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; }
+.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--font); }
 .tr { animation: punch 0.5s cubic-bezier(0.2, 1.3, 0.4, 1) both, tremble 0.12s 0.6s linear infinite; }
 .k { position: relative; font-size: calc(50vh * var(--k, 1)); letter-spacing: 0.02em; }
 .k .t1 { -webkit-text-fill-color: transparent; background: linear-gradient(180deg, var(--from) 25%, var(--to) 80%); -webkit-background-clip: text; background-clip: text; -webkit-text-stroke: 2.6vh #1a1420; paint-order: stroke fill; filter: drop-shadow(0 2.4vh 0 #1a1420); }

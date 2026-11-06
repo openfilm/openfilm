@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>Buy now button</title>
 <style>
-:root { --accent: #ff6a00; --accent2: #ff2d55; --color: #ffffff; }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --accent: #ff6a00; --accent2: #ff2d55; --color: #ffffff; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; color: var(--color); }
+.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--font); color: var(--color); }
 .b { position: relative; display: flex; align-items: center; gap: 7vh; padding: 11vh 12vh 11vh 10vh; border-radius: 60vh; background: linear-gradient(135deg, var(--accent), var(--accent2)); box-shadow: 0 3vh 7vh rgba(0, 0, 0, 0.35), inset 0 -2vh 0 rgba(0, 0, 0, 0.12), inset 0 2vh 0 rgba(255, 255, 255, 0.18); overflow: hidden; animation: pop 0.6s cubic-bezier(0.3, 1.6, 0.5, 1) both, press 0.35s 1.1s ease-out both, breathe 1.6s 1.6s ease-in-out infinite; }
 .b::after { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.5) 50%, transparent 62%); background-size: 300% 100%; animation: shine 2.2s 0.7s ease-in-out infinite; }
 .b svg.cart { width: 40vh; height: 40vh; flex: none; }

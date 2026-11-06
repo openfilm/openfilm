@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>Name card, business</title>
 <style>
-:root { --color: #ffffff; --accent: #3b82f6; }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --color: #ffffff; --accent: #3b82f6; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; align-items: center; padding-left: 5vh; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; color: var(--color); }
+.w { position: fixed; inset: 0; display: flex; align-items: center; padding-left: 5vh; font-family: var(--font); color: var(--color); }
 .w::before { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(5, 10, 20, 0.62), rgba(5, 10, 20, 0.35) 55%, transparent); -webkit-mask-image: linear-gradient(transparent, #000 22%, #000 78%, transparent); mask-image: linear-gradient(transparent, #000 22%, #000 78%, transparent); animation: fade 0.6s both; }
 .bar { position: relative; width: 2vh; height: 74vh; background: var(--accent); border-radius: 0.4vh; animation: bar 0.45s cubic-bezier(0.3, 1.4, 0.5, 1) both; }
 .txt { position: relative; overflow: hidden; padding: 2vh 4vh 2vh 4.4vh; }

@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>Step callout</title>
 <style>
-:root { --color: #ffffff; --accent: #4f7cff; }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --color: #ffffff; --accent: #4f7cff; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; align-items: center; gap: 7vh; padding-left: 6vh; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; color: var(--color); }
+.w { position: fixed; inset: 0; display: flex; align-items: center; gap: 7vh; padding-left: 6vh; font-family: var(--font); color: var(--color); }
 .n { position: relative; width: 70vh; height: 70vh; flex: none; display: flex; align-items: center; justify-content: center; }
 .n i { position: absolute; inset: 9vh; border-radius: 50%; background: var(--accent); box-shadow: 0 2vh 6vh rgba(0, 0, 0, 0.35); animation: pop 0.55s cubic-bezier(0.3, 1.7, 0.5, 1) both; }
 .t1 { position: relative; font-size: 30vh; font-weight: 800; animation: pop 0.5s 0.15s cubic-bezier(0.3, 1.7, 0.5, 1) both; }

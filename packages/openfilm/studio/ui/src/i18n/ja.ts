@@ -999,6 +999,8 @@ export const ja: Words = {
     nothing: '「{q}」は見つかりません。',
     noFavorites: 'お気に入りはまだありません',
     textNew: '新規テキスト',
+    stickersLive: '動くステッカー',
+    stickersStill: '静止ステッカー',
     textMine: 'マイ',
     textPresets: 'マイプリセット',
     textPreset: 'プリセット {n}',

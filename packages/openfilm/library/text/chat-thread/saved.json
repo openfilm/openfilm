@@ -8,7 +8,7 @@
       4
     ],
     "attrs": {
-      "data-props": "[{\"name\": \"Message 1\", \"type\": \"text\", \"at\": \".m1\"}, {\"name\": \"Message 2\", \"type\": \"text\", \"at\": \".m2\"}, {\"name\": \"Message 3\", \"type\": \"text\", \"at\": \".m3\"}, {\"name\": \"My bubbles\", \"type\": \"var\", \"var\": \"--me\"}, {\"name\": \"Their bubbles\", \"type\": \"var\", \"var\": \"--them\"}, {\"name\": \"Their text\", \"type\": \"var\", \"var\": \"--ink\"}]"
+      "data-props": "[{\"name\": \"Message 1\", \"type\": \"text\", \"at\": \".m1\"}, {\"name\": \"Message 2\", \"type\": \"text\", \"at\": \".m2\"}, {\"name\": \"Message 3\", \"type\": \"text\", \"at\": \".m3\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"My bubbles\", \"type\": \"var\", \"var\": \"--me\"}, {\"name\": \"Their bubbles\", \"type\": \"var\", \"var\": \"--them\"}, {\"name\": \"Their text\", \"type\": \"var\", \"var\": \"--ink\"}]"
     }
   },
   "durationMs": 4000

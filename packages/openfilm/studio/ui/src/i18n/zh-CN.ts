@@ -1000,6 +1000,8 @@ export const zhCN: Words = {
     nothing: '这里没有叫“{q}”的。',
     noFavorites: '暂无收藏内容',
     textNew: '新建文本',
+    stickersLive: '动态贴纸',
+    stickersStill: '静态贴纸',
     textMine: '我的',
     textPresets: '个人预设',
     textPreset: '预设 {n}',

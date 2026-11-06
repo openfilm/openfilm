@@ -8,7 +8,7 @@
       3
     ],
     "attrs": {
-      "data-props": "[{\"name\": \"Text\", \"type\": \"text\", \"at\": \".t > .x\"}, {\"name\": \"Second line\", \"type\": \"text\", \"at\": \".s\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+      "data-props": "[{\"name\": \"Text\", \"type\": \"text\", \"at\": \".t > .x\"}, {\"name\": \"Second line\", \"type\": \"text\", \"at\": \".s\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
     }
   },
   "durationMs": 3000

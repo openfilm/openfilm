@@ -12,7 +12,7 @@ import { HardDriveUpload, ImageIcon, Plus, RotateCcw } from 'lucide-react';
 import { useT } from '@/i18n';
 import type { FilmOverride } from '@/lib/film';
 import {
-  ROOT, fieldOf, isFontVar, labelOf, relativeTo, valueOf, type TemplateControls, type VarField,
+  ROOT, fieldOf, isFontVar, labelOf, pathIsAt, relativeTo, valueOf, type TemplateControls, type VarField,
 } from '@/lib/template-controls';
 import {
   propOf, propValue, renamedProp, withProp, withPropValue, withPropsReset, withoutProp, type ComponentProp, type PropValue,
@@ -134,7 +134,8 @@ export function PropertiesSection({ host, commit }: {
     const value = propValue(overrides, prop);
     switch (prop.type) {
       case 'text': {
-        const own = controls?.texts.find((x) => sameAt(x, prop))?.value ?? '';
+        /* the page's own words: by the property's selector, else by the path the stage names them by */
+        const own = (controls?.texts.find((x) => sameAt(x, prop)) ?? controls?.texts.find((x) => (x.n ?? null) === (prop.n ?? null) && pathIsAt(x.at, prop.at)))?.value ?? '';
         const target = { at: prop.at, ...(prop.n ? { n: prop.n } : {}) };
         return (
           <WordsInput

@@ -8,7 +8,7 @@
       4
     ],
     "attrs": {
-      "data-props": "[{\"name\": \"Heading\", \"type\": \"text\", \"at\": \".t0\"}, {\"name\": \"Point 1\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Point 2\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Point 3\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+      "data-props": "[{\"name\": \"Heading\", \"type\": \"text\", \"at\": \".t0\"}, {\"name\": \"Point 1\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Point 2\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Point 3\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
     }
   },
   "durationMs": 4000

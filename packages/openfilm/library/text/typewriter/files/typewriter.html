@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <title>Typewriter</title>
 <style>
-:root { --color: #ffffff; }
+:root { --font: ui-monospace, Menlo, "PingFang SC", monospace; --color: #ffffff; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 .w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; }
-.w.low { align-items: flex-end; justify-content: flex-start; text-align: left; padding: 0 0 9vh 6vw; }
+.w.low { text-align: left; }
 .t { color: var(--color); font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; line-height: 1.12; }
 .s { display: block; font-size: 0.42em; font-weight: 500; opacity: 0.85; margin-top: 0.3em; }
-.t { font: 600 5.5vw/1.2 ui-monospace, Menlo, "PingFang SC", monospace; white-space: pre; animation: type 1.6s steps(12) both; }
+.t { font: 600 18.397vw/1.2 var(--font); white-space: pre; animation: type 1.6s steps(12) both; }
 .t::after { content: "_"; animation: blink 0.8s steps(1) infinite; }
 @keyframes type { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 @keyframes blink { 50% { opacity: 0; } }

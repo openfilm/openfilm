@@ -996,6 +996,8 @@ export const ko: Words = {
     nothing: '“{q}”(이)라는 항목이 없습니다.',
     noFavorites: '즐겨찾기가 없습니다',
     textNew: '새 텍스트',
+    stickersLive: '움직이는 스티커',
+    stickersStill: '정지 스티커',
     textMine: '내 항목',
     textPresets: '내 프리셋',
     textPreset: '프리셋 {n}',

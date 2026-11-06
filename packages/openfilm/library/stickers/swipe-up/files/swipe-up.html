@@ -5,7 +5,7 @@
 <title>Swipe up</title>
 <style>
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
-:root { --color: #ffffff; }
+:root { --font: 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; --color: #ffffff; }
 svg { width: 100vw; height: 100vh; display: block; overflow: visible; }
 svg { filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
 .in { animation: in 0.55s cubic-bezier(.34, 1.56, .64, 1) both; }
@@ -14,7 +14,7 @@ svg { filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
 @keyframes bob { 50% { transform: translateY(-14px); } }
 .c { fill: none; stroke: var(--color); stroke-width: 18; stroke-linecap: round; stroke-linejoin: round; opacity: 0.3; animation: c 1.2s ease-in-out infinite; }
 @keyframes c { 0%, 100% { opacity: 0.4; } 30% { opacity: 1; } }
-.label { fill: var(--color); font: 700 40px 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; letter-spacing: 1px; animation: lab 0.5s cubic-bezier(.2, .8, .2, 1) 0.2s both; }
+.label { fill: var(--color); font: 700 40px var(--font); letter-spacing: 1px; animation: lab 0.5s cubic-bezier(.2, .8, .2, 1) 0.2s both; }
 @keyframes lab { from { opacity: 0; transform: translateY(16px); } }
 </style>
 </head>

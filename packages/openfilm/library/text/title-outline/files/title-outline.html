@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <title>Outline title</title>
 <style>
-:root { --color: #ffffff; }
+:root { --font: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --color: #ffffff; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 .w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; }
-.w.low { align-items: flex-end; justify-content: flex-start; text-align: left; padding: 0 0 9vh 6vw; }
-.t { color: var(--color); font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; line-height: 1.12; }
+.w.low { text-align: left; }
+.t { color: var(--color); font-family: var(--font); line-height: 1.12; }
 .s { display: block; font-size: 0.42em; font-weight: 500; opacity: 0.85; margin-top: 0.3em; }
-.t { font-size: 9vw; font-weight: 900; color: transparent; -webkit-text-stroke: 0.25vw var(--color); }
+.t { font-size: 15vw; font-weight: 900; color: transparent; -webkit-text-stroke: 0.417vw var(--color); }
 .t { animation: in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 @keyframes in { from { transform: translateX(-25%); opacity: 0; } to { transform: none; opacity: 1; } }
 </style>

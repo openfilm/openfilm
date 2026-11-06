@@ -47,6 +47,13 @@ const PRESETS = 'presets';
 const ART = 'art';
 const TEMPLATES = 'tpl';
 type TextSection = 'mine' | typeof ART | typeof TEMPLATES;
+/* the sticker category's lines: the starred; the moving ones (`live:<group>` one of their groups); the still ones (the
+   emoji, `still:<group>`) */
+const LIVE = 'live';
+const STILL = 'still';
+type StickerSection = typeof LIVE | typeof STILL;
+const stickerSectionOf = (line: string): StickerSection | null =>
+  line === LIVE || line.startsWith(`${LIVE}:`) ? LIVE : line === STILL || line.startsWith(`${STILL}:`) ? STILL : null;
 /** What a thing of the text category is to its lines: the new line, a look, a template, or none (a motion). */
 const textKind = (item: LibraryItem): 'new' | typeof ART | typeof TEMPLATES | null =>
   item.id === TEXT_COMPONENT ? 'new' : item.kind === 'textstyle' ? ART : item.kind === 'page' ? TEMPLATES : null;
@@ -61,9 +68,11 @@ const SHOWN = {
   cat: 'media' as Category, group: {} as Partial<Record<Category, string>>, folded: false, request: 0,
   /* the text category's sections opened, and which of the person's starred things are shown (looks or templates) */
   textOpen: { mine: false, art: true, tpl: false } as Record<TextSection, boolean>, starredText: ART as typeof ART | typeof TEMPLATES,
+  /* the sticker category's sections opened */
+  stickerOpen: { live: true, still: false } as Record<StickerSection, boolean>,
 };
-/* the line a category opens on the first time: a new line of words for the text */
-const firstLine = (cat: Category) => SHOWN.group[cat] ?? (cat === 'text' ? NEW_TEXT : '');
+/* the line a category opens on the first time: a new line of words for the text, the moving stickers */
+const firstLine = (cat: Category) => SHOWN.group[cat] ?? (cat === 'text' ? NEW_TEXT : cat === 'sticker' ? LIVE : '');
 
 export interface LibraryActions {
   /** A double click, Enter or "+": a page or a sound at the playhead (a transition on the cut), a look on the clip. */
@@ -103,6 +112,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
   const [group, setGroup] = React.useState<string>(firstLine(SHOWN.cat));
   const [textOpen, setTextOpen] = React.useState(SHOWN.textOpen);
   const [starredText, setStarredText] = React.useState(SHOWN.starredText);
+  const [stickerOpen, setStickerOpen] = React.useState(SHOWN.stickerOpen);
   const [presets, , dropPreset] = useSavedLooks();
   const [folded, setFolded] = React.useState(SHOWN.folded);
   const [query, setQuery] = React.useState('');
@@ -129,6 +139,12 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
     if (open && sectionOf(group) !== section) pickGroup(section === 'mine' ? FAVORITES : section);
   };
   const showStarred = (kind: typeof ART | typeof TEMPLATES) => { SHOWN.starredText = kind; setStarredText(kind); };
+  const toggleSticker = (section: StickerSection) => {
+    const open = !stickerOpen[section];
+    SHOWN.stickerOpen = { ...stickerOpen, [section]: open };
+    setStickerOpen(SHOWN.stickerOpen);
+    if (open && stickerSectionOf(group) !== section) pickGroup(section);
+  };
   /* a request from outside: the skills, on Discover or on one's page (followed once, by its `n`) */
   React.useEffect(() => {
     if (!showSkills || showSkills.n === SHOWN.request) return;
@@ -170,9 +186,14 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
     const [section, of] = group.split(':');
     return kind === section && (!of || item.group === of);
   };
+  /* a sticker on the line shown: a moving one or a still one, of a group of them or of all */
+  const onStickerLine = (item: LibraryItem) => {
+    const [section, of] = group.split(':');
+    return (section === STILL) === Boolean(item.still) && (section === LIVE || section === STILL) && (!of || item.group === of);
+  };
   const shown = (index?.items ?? []).filter((item) => item.cat === cat && (cat !== 'text' || textKind(item)) && (q
     ? [...Object.values(item.name), ...(item.tags ?? [])].some((n) => n?.toLowerCase().includes(q))
-    : cat === 'text' ? onTextLine(item) : group === FAVORITES ? favorites.includes(item.id) : !group || item.group === group))
+    : cat === 'text' ? onTextLine(item) : cat === 'sticker' && group !== FAVORITES ? onStickerLine(item) : group === FAVORITES ? favorites.includes(item.id) : !group || item.group === group))
     .sort((a, b) => Number(Boolean(a.still)) - Number(Boolean(b.still)));
   const sources = sourcesIn(shown.map(sourceOf));
   const items = source && sources.includes(source) ? shown.filter((item) => sourceOf(item) === source) : shown;
@@ -214,6 +235,21 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
       </>
     );
   };
+  const stickerSection = (section: StickerSection, label: string) => {
+    const inIt = stickerSectionOf(group) === section && !q;
+    const groups = own.filter((g) => stillGroup(g.id) === (section === STILL));
+    return (
+      <>
+        <SideBox on={inIt && !stickerOpen[section]} holds={inIt && stickerOpen[section]} open={stickerOpen[section]} onClick={() => toggleSticker(section)}>{label}</SideBox>
+        {stickerOpen[section] ? (
+          <div className="flex flex-col pb-1">
+            <SideLine on={group === section && !q} onClick={() => pickGroup(section)}>{t('assetDrawer.all')}</SideLine>
+            {groups.map((g) => <SideLine key={g.id} on={group === `${section}:${g.id}` && !q} onClick={() => pickGroup(`${section}:${g.id}`)}>{g.name}</SideLine>)}
+          </div>
+        ) : null}
+      </>
+    );
+  };
   /* square cards for the looks (and the person's), wide ones for the templates */
   const textSquare = cat === 'text' && (sectionOf(group) === ART || group === PRESETS || group === NEW_TEXT || (group === FAVORITES && starredText === ART));
   const askMusic = studioHost?.ask;
@@ -249,9 +285,9 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
               type="button"
               onClick={() => show(id)}
               aria-pressed={cat === id}
-              className={`relative my-1 flex min-w-[46px] shrink-0 flex-col items-center justify-center gap-px whitespace-nowrap rounded-md px-2 text-[10.5px] leading-[13px] ${cat === id ? 'bg-[var(--bg-picked)] font-semibold text-[var(--accent)]' : 'font-medium text-[var(--text-muted)] hover:text-[var(--text)]'}`}
+              className={`relative my-1 flex min-w-[46px] shrink-0 flex-col items-center justify-center gap-px whitespace-nowrap rounded-md px-2 text-[10.5px] leading-[13px] ${cat === id ? 'font-semibold text-[var(--accent)]' : 'font-medium text-[var(--text-muted)] hover:text-[var(--text)]'}`}
             >
-              {/* the one shown: the accent on a raised fill, its icon filled */}
+              {/* the one shown: in the accent, its icon filled */}
               <CategoryIcon id={id} on={cat === id} size={18} />
               {t(`assetDrawer.cat_${id}`)}
             </button>
@@ -299,6 +335,13 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
                 ) : null}
                 {textSection(ART, t('assetDrawer.textArt'))}
                 {textSection(TEMPLATES, t('assetDrawer.textTemplates'))}
+              </>
+            ) : cat === 'sticker' ? (
+              <>
+                {/* the starred; the moving stickers; the still ones (the emoji) */}
+                <SideBox on={group === FAVORITES && !q} onClick={() => pickGroup(FAVORITES)}>{t('assetDrawer.favorites')}</SideBox>
+                {stickerSection(LIVE, t('assetDrawer.stickersLive'))}
+                {stickerSection(STILL, t('assetDrawer.stickersStill'))}
               </>
             ) : cat === 'captions' ? (
               <>
@@ -461,7 +504,7 @@ function RailEdge({ width, onWidth }: { width: number; onWidth: (w: number) => v
 /** A line of the side bar of its own (the starred, the library's own, the media's two): a box. `open`: it folds the lines under it. */
 function SideBox({ on, holds = false, open, onClick, children }: {
   on: boolean;
-  /** a heading whose line under it is the one shown (it is open): a lighter fill than the line's own */
+  /** a heading whose line under it is the one shown (it is open): in the accent too */
   holds?: boolean;
   open?: boolean;
   onClick: () => void;
@@ -474,12 +517,11 @@ function SideBox({ on, holds = false, open, onClick, children }: {
       aria-pressed={open === undefined ? on : undefined}
       aria-expanded={open}
       title={typeof children === 'string' ? children : undefined}
-      /* the one shown: the accent on a raised fill; a heading whose line is the one shown, a lighter fill; the others
-         plain until pointed at */
-      className={`flex h-8 shrink-0 items-center justify-between gap-1 rounded-md px-2.5 text-left text-[12px] ${on ? 'bg-[var(--bg-picked)] font-semibold text-[var(--accent)]' : holds ? 'bg-[var(--bg-hover)] font-medium text-[var(--text)] hover:bg-[var(--bg-pressed)]' : 'font-medium text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}`}
+      /* each a box on its own fill; the one shown, or the heading whose line is, in the accent */
+      className={`flex h-8 shrink-0 items-center justify-between gap-1 rounded-md bg-[var(--bg-hover)] px-2.5 text-left text-[12px] font-semibold hover:bg-[var(--bg-pressed)] ${on || holds ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}
     >
       <span className="truncate whitespace-nowrap">{children}</span>
-      {open === undefined ? null : <ChevronDown size={13} className={`shrink-0 text-[var(--text-faint)] transition-transform ${open ? 'rotate-180' : ''}`} />}
+      {open === undefined ? null : <ChevronDown size={13} className={`shrink-0 transition-transform ${on || holds ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'} ${open ? 'rotate-180' : ''}`} />}
     </button>
   );
 }
@@ -492,7 +534,8 @@ function SideLine({ on, onClick, children }: { on: boolean; onClick: () => void;
       onClick={onClick}
       aria-pressed={on}
       title={typeof children === 'string' ? children : undefined}
-      className={`truncate whitespace-nowrap rounded-md px-2.5 py-1.5 text-left text-[12px] ${on ? 'bg-[var(--bg-picked)] font-semibold text-[var(--accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
+      /* the one shown in the accent, no fill */
+      className={`truncate whitespace-nowrap rounded-md px-2.5 py-1.5 text-left text-[12px] font-medium ${on ? 'text-[var(--accent)]' : 'text-[var(--text)] hover:bg-[var(--bg-hover)]'}`}
     >
       {children}
     </button>

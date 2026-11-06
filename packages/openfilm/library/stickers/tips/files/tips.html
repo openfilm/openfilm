@@ -5,7 +5,7 @@
 <title>Tips</title>
 <style>
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
-:root { --color: #ffc800; }
+:root { --font: 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; --color: #ffc800; }
 .w { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
 .ic { position: relative; z-index: 1; width: 70vh; height: 70vh; border-radius: 50%; background: var(--color); border: 1.8vh solid #ffffff; box-sizing: border-box; animation: pop 0.45s cubic-bezier(.34, 1.56, .64, 1) both; }
 @keyframes pop { from { transform: scale(0) rotate(-60deg); } }
@@ -16,7 +16,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: transparent;
 @keyframes bulb { 40% { filter: drop-shadow(0 0 3px #ffffff); } }
 .pill { display: flex; align-items: center; height: 46vh; margin-left: -10vh; padding: 0 6vw 0 calc(10vh + 3.5vw); border-radius: 0 23vh 23vh 0; background: #ffffff; animation: slide 0.4s cubic-bezier(.2, .8, .2, 1) 0.2s both; clip-path: inset(0 -10% 0 0); }
 @keyframes slide { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 -10% 0 0); } }
-.label { color: #16161a; font: 800 26vh 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; white-space: nowrap; }
+.label { color: #16161a; font: 800 26vh var(--font); white-space: nowrap; }
 </style>
 </head>
 <body>

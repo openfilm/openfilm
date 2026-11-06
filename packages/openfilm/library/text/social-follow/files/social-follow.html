@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>Follow pill</title>
 <style>
-:root { --accent: #ff2d55; --glass: rgba(18, 18, 24, 0.72); --color: #ffffff; }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --accent: #ff2d55; --glass: rgba(18, 18, 24, 0.72); --color: #ffffff; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; color: var(--color); }
+.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--font); color: var(--color); }
 .p { display: flex; align-items: center; gap: 6vh; background: var(--glass); border: 0.8vh solid rgba(255, 255, 255, 0.16); border-radius: 60vh; padding: 9vh 9vh 9vh 9vh; box-shadow: 0 3vh 8vh rgba(0, 0, 0, 0.35); animation: grow 0.7s cubic-bezier(0.3, 1.3, 0.5, 1) both; }
 .av { width: 64vh; height: 64vh; flex: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 30vh; font-weight: 800; background: linear-gradient(135deg, #ffb347, #ff2d55 55%, #7a5cff); animation: spin 0.7s 0.15s cubic-bezier(0.3, 1.5, 0.5, 1) both; }
 .tx { display: flex; flex-direction: column; gap: 1vh; animation: side 0.5s 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }

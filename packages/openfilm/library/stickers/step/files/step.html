@@ -5,7 +5,7 @@
 <title>Step number</title>
 <style>
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
-:root { --color: #2f7bff; }
+:root { --font: 'Arial Black', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; --color: #2f7bff; }
 svg { width: 100vw; height: 100vh; display: block; overflow: visible; }
 svg { filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
 .in { transform-origin: 150px 150px; animation: in 0.45s cubic-bezier(.34, 1.56, .64, 1) both; }
@@ -16,7 +16,7 @@ svg { filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
 @keyframes run { 0% { stroke-dashoffset: 0; opacity: 0.9; } 100% { stroke-dashoffset: -1; opacity: 0.9; } }
 .num { transform-origin: 150px 170px; animation: num 0.45s cubic-bezier(.34, 1.56, .64, 1) 0.22s both; }
 @keyframes num { from { transform: scale(0) rotate(-20deg); } }
-.label { font: 400 112px 'Arial Black', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; fill: #ffffff; }
+.label { font: 400 112px var(--font); fill: #ffffff; }
 .label2 { font: 800 26px 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; fill: #ffffff; letter-spacing: 6px; opacity: 0.85; }
 </style>
 </head>

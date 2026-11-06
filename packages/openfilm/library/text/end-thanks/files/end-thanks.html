@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>Thanks for watching</title>
 <style>
-:root { --color: #ffffff; --accent: #ff2d3a; --script: #ffd7a8; }
+:root { --font: 'Snell Roundhand', 'Segoe Script', 'Brush Script MT', 'Kaiti SC', 'STKaiti', 'KaiTi', cursive; --color: #ffffff; --accent: #ff2d3a; --script: #ffd7a8; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
@@ -12,7 +12,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: transparent;
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
 .w { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; color: var(--color); text-align: center; }
-.t1 { font: 400 20vh/1 'Snell Roundhand', 'Segoe Script', 'Brush Script MT', 'Kaiti SC', 'STKaiti', 'KaiTi', cursive; color: var(--script); white-space: pre; margin-bottom: -2vh; text-shadow: 0 0.8vh 2.4vh rgba(0, 0, 0, 0.45); animation: write 0.9s cubic-bezier(0.3, 0.1, 0.3, 1) both; -webkit-mask-image: linear-gradient(90deg, #000 45%, transparent 55%); mask-image: linear-gradient(90deg, #000 45%, transparent 55%); -webkit-mask-size: 220% 100%; mask-size: 220% 100%; }
+.t1 { font: 400 20vh/1 var(--font); color: var(--script); white-space: pre; margin-bottom: -2vh; text-shadow: 0 0.8vh 2.4vh rgba(0, 0, 0, 0.45); animation: write 0.9s cubic-bezier(0.3, 0.1, 0.3, 1) both; -webkit-mask-image: linear-gradient(90deg, #000 45%, transparent 55%); mask-image: linear-gradient(90deg, #000 45%, transparent 55%); -webkit-mask-size: 220% 100%; mask-size: 220% 100%; }
 .row { width: 94vw; display: flex; justify-content: center; }
 .k { font-size: calc(32vh * var(--k, 1)); font-weight: 800; letter-spacing: 0.04em; text-shadow: 0 1.2vh 3.6vh rgba(0, 0, 0, 0.4); }
 .s { display: flex; align-items: center; gap: 4vh; margin-top: 5vh; animation: rise 0.6s 1s cubic-bezier(0.3, 1.5, 0.5, 1) both; }

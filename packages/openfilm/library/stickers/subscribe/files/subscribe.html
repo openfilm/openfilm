@@ -5,13 +5,13 @@
 <title>Subscribe</title>
 <style>
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
-:root { --color: #ff0033; }
+:root { --font: 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; --color: #ff0033; }
 .w { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 4vw; filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
 .btn { position: relative; display: grid; place-items: center; height: 44vh; padding: 0 7vw; border-radius: 22vh; background: var(--color); animation: pop 0.45s cubic-bezier(.34, 1.56, .64, 1) both, press 0.35s ease-in-out 0.9s forwards, done 0.25s ease 1.02s both; }
 @keyframes pop { from { transform: scale(0.3); opacity: 0; } 40% { opacity: 1; } }
 @keyframes press { 40% { transform: scale(0.93); } }
 @keyframes done { to { background: #3a3a3c; } }
-.btn > div { grid-area: 1 / 1; color: #ffffff; font: 800 18vh 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; letter-spacing: 0.04em; white-space: nowrap; }
+.btn > div { grid-area: 1 / 1; color: #ffffff; font: 800 18vh var(--font); letter-spacing: 0.04em; white-space: nowrap; }
 .label { animation: out 0.2s ease 1.02s both; }
 .label2 { opacity: 0; color: #d1d1d6 !important; animation: in2 0.3s cubic-bezier(.2, .8, .2, 1) 1.06s both; }
 @keyframes out { to { opacity: 0; transform: translateY(-30%); } }

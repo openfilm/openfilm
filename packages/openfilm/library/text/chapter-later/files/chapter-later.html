@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>Time skip</title>
 <style>
-:root { --color: #ffffff; --accent: #ffb547; }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --color: #ffffff; --accent: #ffb547; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; gap: 10vh; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; color: var(--color); }
+.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; gap: 10vh; font-family: var(--font); color: var(--color); }
 .ck { position: relative; width: 74vh; height: 74vh; flex: none; border-radius: 50%; border: 3.4vh solid var(--color); background: rgba(0, 0, 0, 0.35); box-shadow: 0 2vh 6vh rgba(0, 0, 0, 0.35); animation: pop 0.55s cubic-bezier(0.3, 1.6, 0.5, 1) both; }
 .ck i { position: absolute; left: 50%; bottom: 50%; border-radius: 2vh; transform-origin: 50% 100%; }
 .ck .h { width: 4vh; height: 17vh; margin-left: -2vh; background: var(--color); animation: hour 1.3s 0.2s cubic-bezier(0.4, 0, 0.1, 1) both; }

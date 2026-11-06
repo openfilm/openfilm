@@ -5,7 +5,7 @@
 <title>Discount</title>
 <style>
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
-:root { --color: #ffd60a; }
+:root { --font: 'Arial Black', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; --color: #ffd60a; }
 svg { width: 100vw; height: 100vh; display: block; overflow: visible; }
 svg { filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
 .in { transform-origin: 170px 170px; animation: in 0.6s cubic-bezier(.34, 1.56, .64, 1) both; }
@@ -14,7 +14,7 @@ svg { filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
 @keyframes p { 50% { transform: scale(1.05); } }
 .spin { transform-origin: 170px 170px; animation: spin 14s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.label { font: 400 70px 'Arial Black', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; fill: #e3001b; letter-spacing: -2px; }
+.label { font: 400 70px var(--font); fill: #e3001b; letter-spacing: -2px; }
 .label2 { font: 900 34px 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; fill: #e3001b; letter-spacing: 8px; }
 </style>
 </head>

@@ -1000,6 +1000,8 @@ export const en = {
     nothing: 'Nothing called “{q}” here.',
     noFavorites: 'Nothing starred yet.',
     textNew: 'New text',
+    stickersLive: 'Animated stickers',
+    stickersStill: 'Still stickers',
     textMine: 'Mine',
     textPresets: 'My presets',
     textPreset: 'Preset {n}',

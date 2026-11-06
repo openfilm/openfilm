@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>Account card</title>
 <style>
-:root { --accent: #ff3b5c; --card: rgba(255, 255, 255, 0.96); --ink: #15161a; }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --accent: #ff3b5c; --card: rgba(255, 255, 255, 0.96); --ink: #15161a; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; align-items: center; padding-left: 5vh; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; }
+.w { position: fixed; inset: 0; display: flex; align-items: center; padding-left: 5vh; font-family: var(--font); }
 .c { display: flex; align-items: center; gap: 5vh; background: var(--card); color: var(--ink); border-radius: 40vh; padding: 5vh 6vh 5vh 5vh; box-shadow: 0 3vh 7vh rgba(0, 0, 0, 0.3); transform-origin: 15% 50%; animation: pop 0.6s cubic-bezier(0.3, 1.5, 0.5, 1) both; }
 .av { position: relative; width: 62vh; height: 62vh; flex: none; border-radius: 50%; background: conic-gradient(from 200deg, #ffb347, var(--accent), #7a5cff, #ffb347); padding: 1.2vh; animation: spin 0.8s 0.1s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .av span { display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; border-radius: 50%; background: #23242b; color: #fff; font-size: 28vh; font-weight: 700; border: 1.6vh solid var(--card); }

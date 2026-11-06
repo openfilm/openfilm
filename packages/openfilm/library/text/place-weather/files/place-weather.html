@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>Weather card</title>
 <style>
-:root { --sun: #ffc533; --card: rgba(18, 28, 48, 0.72); --color: #ffffff; }
+:root { --font: 'DIN Alternate', 'Bahnschrift', 'Avenir Next', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --sun: #ffc533; --card: rgba(18, 28, 48, 0.72); --color: #ffffff; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
@@ -21,7 +21,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: transparent;
 .cd { position: absolute; right: 0; bottom: 4vh; width: 40vh; height: 22vh; animation: cloud 0.7s 0.45s cubic-bezier(0.3, 1.4, 0.5, 1) both, drift 4s 1.2s ease-in-out infinite; filter: drop-shadow(0 1.4vh 2vh rgba(0, 0, 0, 0.25)); }
 .cd i { position: absolute; border-radius: 50%; background: #fff; }
 .tx { display: flex; flex-direction: column; gap: 1.6vh; }
-.tm { font: 700 40vh/0.95 'DIN Alternate', 'Bahnschrift', 'Avenir Next', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; font-variant-numeric: tabular-nums; }
+.tm { font: 700 40vh/0.95 var(--font); font-variant-numeric: tabular-nums; }
 .t2 { font-size: 13vh; font-weight: 700; white-space: pre; animation: side 0.5s 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .t3 { font-size: 9vh; font-weight: 500; opacity: 0.75; white-space: pre; animation: side 0.5s 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 @keyframes in { from { opacity: 0; transform: translateY(8vh) scale(0.9); } }

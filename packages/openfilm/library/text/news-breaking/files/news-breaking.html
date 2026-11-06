@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>Breaking news bar</title>
 <style>
-:root { --accent: #d81e2c; --bar: #ffffff; --ink: #111318; }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --accent: #d81e2c; --bar: #ffffff; --ink: #111318; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: center; padding: 0 4vh; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; }
+.w { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: center; padding: 0 4vh; font-family: var(--font); }
 .top { display: flex; height: 50vh; }
 .tag { position: relative; display: flex; align-items: center; gap: 4vh; background: var(--accent); color: #fff; padding: 0 9vh 0 7vh; font-size: 21vh; font-weight: 800; font-style: italic; letter-spacing: 0.02em; white-space: pre; overflow: hidden; clip-path: inset(0 100% 0 0); animation: wipe 0.45s cubic-bezier(0.7, 0, 0.2, 1) forwards; }
 .tag::before { content: ""; width: 7vh; height: 7vh; border-radius: 50%; background: #fff; flex: none; animation: live 1s 0.6s ease-in-out infinite; }

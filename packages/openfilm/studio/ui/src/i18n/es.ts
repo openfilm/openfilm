@@ -999,6 +999,8 @@ export const es: Words = {
     nothing: 'Aquí no hay nada llamado «{q}».',
     noFavorites: 'Aún no hay favoritos.',
     textNew: 'Texto nuevo',
+    stickersLive: 'Stickers animados',
+    stickersStill: 'Stickers fijos',
     textMine: 'Lo mío',
     textPresets: 'Mis ajustes',
     textPreset: 'Ajuste {n}',

@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>Limited time</title>
 <style>
-:root { --accent: #ff2d3a; --timer: #ffd23f; --pill: rgba(16, 16, 20, 0.86); }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --accent: #ff2d3a; --timer: #ffd23f; --pill: rgba(16, 16, 20, 0.86); }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; color: #fff; }
+.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--font); color: #fff; }
 .p { display: flex; align-items: center; background: var(--pill); border-radius: 50vh; padding: 0 6vh 0 0; height: 74vh; overflow: hidden; box-shadow: 0 3vh 6vh rgba(0, 0, 0, 0.35); clip-path: inset(0 100% 0 0 round 50vh); animation: open 0.7s cubic-bezier(0.7, 0, 0.2, 1) forwards; }
 .a { height: 100%; display: flex; align-items: center; gap: 4vh; background: var(--accent); padding: 0 9vh 0 8vh; border-radius: 50vh; }
 .a svg { width: 26vh; height: 40vh; animation: flash 1s 0.8s steps(1) infinite; }

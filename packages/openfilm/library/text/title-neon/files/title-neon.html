@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <title>Neon</title>
 <style>
-:root { --color: #ff3fd8; }
+:root { --font: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --color: #ff3fd8; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 .w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; }
-.w.low { align-items: flex-end; justify-content: flex-start; text-align: left; padding: 0 0 9vh 6vw; }
-.t { color: var(--color); font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; line-height: 1.12; }
+.w.low { text-align: left; }
+.t { color: var(--color); font-family: var(--font); line-height: 1.12; }
 .s { display: block; font-size: 0.42em; font-weight: 500; opacity: 0.85; margin-top: 0.3em; }
-.t { font-size: 9vw; font-weight: 700; color: #fff; text-shadow: 0 0 0.6vw var(--color), 0 0 2vw var(--color), 0 0 4vw var(--color); animation: on 1.2s steps(1) both; }
+.t { font-size: 29.691vw; font-weight: 700; color: #fff; text-shadow: 0 0 1.979vw var(--color), 0 0 6.598vw var(--color), 0 0 13.196vw var(--color); animation: on 1.2s steps(1) both; }
 @keyframes on { 0% { opacity: 0; } 20% { opacity: 1; } 28% { opacity: 0.2; } 36% { opacity: 1; } 44% { opacity: 0.5; } 52% { opacity: 1; } }
 </style>
 </head>

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>Part divider</title>
 <style>
-:root { --color: #f5efe4; --accent: #d9b57a; }
+:root { --font: Didot, 'Bodoni 72', Georgia, 'Songti SC', 'Noto Serif SC', serif; --color: #f5efe4; --accent: #d9b57a; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
@@ -17,7 +17,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: transparent;
 .r b:first-child { transform-origin: right; } .r b:last-child { transform-origin: left; }
 .r b::after { content: ""; position: absolute; top: 50%; width: 3.6vh; height: 3.6vh; margin-top: -1.8vh; border-radius: 50%; border: 0.7vh solid var(--accent); }
 .r b:first-child::after { left: -3.6vh; } .r b:last-child::after { right: -3.6vh; }
-.k { font: 400 34vh/1 Didot, 'Bodoni 72', Georgia, 'Songti SC', 'Noto Serif SC', serif; letter-spacing: 0.12em; padding-left: 0.12em; }
+.k { font: 400 34vh/1 var(--font); letter-spacing: 0.12em; padding-left: 0.12em; }
 .t2 { margin-top: 4vh; font: italic 400 12vh/1.1 Georgia, 'Songti SC', 'Noto Serif SC', serif; letter-spacing: 0.04em; white-space: pre; opacity: 0.92; animation: rise 0.8s 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 @keyframes line { from { transform: scaleX(0); opacity: 0; } }
 @keyframes rise { from { opacity: 0; transform: translateY(3vh); filter: blur(1vh); } }

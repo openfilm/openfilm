@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>Name card, elegant</title>
 <style>
-:root { --color: #f7f2ea; --accent: #d8b77a; }
+:root { --font: Didot, 'Bodoni 72', Georgia, 'Songti SC', 'Noto Serif SC', serif; --color: #f7f2ea; --accent: #d8b77a; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
@@ -13,7 +13,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: transparent;
 .src { -webkit-text-fill-color: transparent; }
 .w { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding-left: 7vh; color: var(--color); text-shadow: 0 0.5vh 2vh rgba(0, 0, 0, 0.45); }
 .r { display: flex; align-items: center; gap: 5vh; }
-.t1 { font: 400 30vh/1.05 Didot, 'Bodoni 72', Georgia, 'Songti SC', 'Noto Serif SC', serif; white-space: pre; letter-spacing: 0.02em; animation: blur 1s 0.1s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.t1 { font: 400 30vh/1.05 var(--font); white-space: pre; letter-spacing: 0.02em; animation: blur 1s 0.1s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .v { width: 0.6vh; height: 38vh; background: var(--accent); animation: tall 0.7s 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .t2 { font: italic 400 15vh/1.1 Georgia, 'Songti SC', 'Noto Serif SC', serif; opacity: 0.9; white-space: pre; animation: side 0.9s 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .u { display: flex; align-items: center; gap: 2vh; margin-top: 3vh; width: 100%; max-width: 330vh; }

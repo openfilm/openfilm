@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>Spec list</title>
 <style>
-:root { --accent: #38d9a9; --card: rgba(14, 16, 22, 0.84); --color: #ffffff; }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --accent: #38d9a9; --card: rgba(14, 16, 22, 0.84); --color: #ffffff; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; color: var(--color); }
+.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--font); color: var(--color); }
 .c { width: 128vh; background: var(--card); border-radius: 4vh; padding: 7vh 8vh 6vh; box-shadow: 0 3vh 7vh rgba(0, 0, 0, 0.35); animation: in 0.6s cubic-bezier(0.3, 1.4, 0.5, 1) both; }
 .t0 { font-size: 5vh; font-weight: 800; letter-spacing: 0.3em; color: var(--accent); white-space: pre; animation: side 0.5s 0.2s both; }
 .t1 { display: block; margin: 1.6vh 0 3vh; font-size: 11vh; font-weight: 800; line-height: 1.1; white-space: pre; animation: side 0.5s 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both; }

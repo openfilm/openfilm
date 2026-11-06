@@ -8,7 +8,7 @@
       4
     ],
     "attrs": {
-      "data-props": "[{\"name\": \"Word\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Fill\", \"type\": \"var\", \"var\": \"--fill\"}, {\"name\": \"Stroke\", \"type\": \"var\", \"var\": \"--stroke\"}, {\"name\": \"Speed lines\", \"type\": \"var\", \"var\": \"--lines\"}]"
+      "data-props": "[{\"name\": \"Word\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Fill\", \"type\": \"var\", \"var\": \"--fill\"}, {\"name\": \"Stroke\", \"type\": \"var\", \"var\": \"--stroke\"}, {\"name\": \"Speed lines\", \"type\": \"var\", \"var\": \"--lines\"}]"
     }
   },
   "durationMs": 4000
