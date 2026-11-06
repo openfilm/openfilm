@@ -2201,6 +2201,7 @@ export const zhCN: Words = {
       proxySize: "代理分辨率",
       proxySizeHint: "越小播放越流畅，越大预览越清晰。",
     },
+    libraryCategories: { group: '素材库类别', hint: '素材库里各类别的顺序和是否显示。素材始终在第一个，不能关闭。', up: '上移{name}', down: '下移{name}' },
     versions: {
       group: '版本',
       auto: '自动保存版本',

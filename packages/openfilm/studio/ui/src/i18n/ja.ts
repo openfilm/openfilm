@@ -2200,6 +2200,7 @@ export const ja: Words = {
       proxySize: "プロキシのサイズ",
       proxySizeHint: "小さいほど滑らかに再生でき、大きいほどビューアで鮮明に見えます。",
     },
+    libraryCategories: { group: 'ライブラリのカテゴリ', hint: 'ライブラリのカテゴリの順番と表示。素材は常に先頭で、オフにできません。', up: '{name}を上へ', down: '{name}を下へ' },
     versions: {
       group: 'バージョン',
       auto: '自動バージョン',

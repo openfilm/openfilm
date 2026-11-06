@@ -3913,7 +3913,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
 
           {/* the panes, edge to edge on the board of lines (--dock-line): a line under the top bar, and one beside the
               app's own panel (lib/host.ts `panel`), which sits left of this, under the top bar: room left for it */}
-          <section ref={dockColRef} className="relative flex min-h-0 min-w-0 flex-col bg-[var(--bg-app)]"
+          <section ref={dockColRef} className="relative flex min-h-0 min-w-0 flex-col bg-[var(--dock-line)]"
             style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...(hostPanel?.open ? { marginLeft: HOST_PANEL_WIDTH, paddingLeft: DOCK_GAP } : null), ...(canvasOpen ? { visibility: 'hidden' } : null) }}>
             <div ref={viewerRowRef} className="relative flex min-h-0 min-w-0 flex-1 flex-row">
               {!hostAssets && assetsPaneOpen && assetsFit ? (
@@ -4357,7 +4357,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       {hostAssets?.open && hostPanel ? (
         /* framed as the chat's column is: a line of the app's ground at its top, then the panel (a border's color would
            be the global one's) */
-        <div className="fixed z-30 flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--bg-app)] pt-px"
+        <div className="fixed z-30 flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--dock-line)] pt-px"
           style={{ top: HOST_PANEL_TOP, left: 0, bottom: 0, width: HOST_PANEL_WIDTH }}>
           <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--bg-panel)]">
           <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} actions={library.actions} under={hostAssets.bottom}

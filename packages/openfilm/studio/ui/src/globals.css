@@ -46,6 +46,8 @@
   --bg-raised: #ffffff;
   /* the viewer's pane, round the picture: a step under the panels, so the picture stands out of them */
   --bg-viewer: #ececf0;
+  /* the one-pixel lines between the panes and under the top bar (the board under them showing through) */
+  --dock-line: #d2d2d8;
   --bg-field: rgba(16, 16, 24, 0.055);
   --bg-hover: rgba(16, 16, 24, 0.05);
   --bg-pressed: rgba(16, 16, 24, 0.09);
@@ -121,6 +123,7 @@
   --bg-panel: #181818;
   --bg-raised: #242424;
   --bg-viewer: #141414;
+  --dock-line: #000000;
   --bg-field: rgba(255, 255, 255, 0.08);
   --bg-hover: rgba(255, 255, 255, 0.06);
   --bg-pressed: rgba(255, 255, 255, 0.12);

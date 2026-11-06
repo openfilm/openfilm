@@ -182,3 +182,9 @@ test('a sticker, text or effect of the library let go on the main track goes ove
   /* footage still goes onto the main track */
   assert.equal(assetDropSpot(video, withMain, { lane: 1, band: 'body' }, 12_000, 'insert')?.action, 'into');
 });
+
+test('a main track with no film on it, only stickers, takes another sticker in its gap', () => {
+  const stickers = tracks.map((tr, i) => (i === 1 ? { ...tr, main: true, overlay: true } : tr));
+  const sticker = { path: 'openfilm/stickers/tap/files/tap.html', name: 'Tap', kind: 'mg' as const, durationMs: 3000, saved: 'openfilm/stickers/tap' };
+  assert.deepEqual(assetDropSpot(sticker, stickers, { lane: 1, band: 'body' }, 12_000), { action: 'into', laneIndex: 1, lane: stickers[1]!.lane, docIndex: stickers[1]!.docIndex ?? null, locked: false });
+});

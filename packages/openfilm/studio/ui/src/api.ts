@@ -104,6 +104,8 @@ export interface StudioPrefs {
   keys?: unknown;
   /** whether open projects save versions on their own (studio/server/auto-versions.mjs) */
   autoVersions?: boolean;
+  /** the library drawer's categories as arranged in Settings › Advanced (lib/library-categories), null: OpenFilm's */
+  libraryCategories?: { order: string[]; off: string[] } | null;
 }
 /** Where the projects library is (src/locations.mjs): the folder, its default, whether the person chose it, the free space on its disk, how many projects are in it. */
 export interface StudioLocation { path: string; default: string; chosen: boolean; free: number | null; count: number }
@@ -146,7 +148,7 @@ export const api = {
   revealProject: (id: string) => call<object>(`projects/${encodeURIComponent(id)}/reveal`, { method: 'POST', json: {} }),
   /** one of them in the system's file manager */
   openLocation: (which: keyof StudioLocations) => call<{ ok: true }>(`locations/${which}`, { method: 'POST', json: {} }),
-  setPrefs: (patch: { proxies?: Partial<StudioPrefs['proxies']>; seenVersion?: string; projectsFolder?: string | null; keys?: unknown; autoVersions?: boolean }) => call<StudioPrefs>('prefs', { method: 'PATCH', json: patch }).then((prefs) => {
+  setPrefs: (patch: { proxies?: Partial<StudioPrefs['proxies']>; seenVersion?: string; projectsFolder?: string | null; keys?: unknown; autoVersions?: boolean; libraryCategories?: StudioPrefs['libraryCategories'] }) => call<StudioPrefs>('prefs', { method: 'PATCH', json: patch }).then((prefs) => {
     window.dispatchEvent(new Event(PREFS_EVENT));
     return prefs;
   }),

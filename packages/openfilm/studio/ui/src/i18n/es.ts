@@ -2200,6 +2200,7 @@ export const es: Words = {
       proxySize: "Tamaño del proxy",
       proxySizeHint: "Más pequeño se reproduce con más fluidez; más grande se ve más nítido en el visor.",
     },
+    libraryCategories: { group: 'Categorías de la biblioteca', hint: 'Su orden en la biblioteca y cuáles se muestran. Medios siempre va primero y siempre se muestra.', up: 'Subir {name}', down: 'Bajar {name}' },
     versions: {
       group: 'Versiones',
       auto: 'Versiones automáticas',

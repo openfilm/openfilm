@@ -2196,6 +2196,7 @@ export const ko: Words = {
       proxySize: "프록시 크기",
       proxySizeHint: "작을수록 더 부드럽게 재생되고, 클수록 뷰어에서 더 선명합니다.",
     },
+    libraryCategories: { group: '라이브러리 카테고리', hint: '라이브러리 카테고리의 순서와 표시 여부. 소재는 항상 처음이며 끌 수 없습니다.', up: '{name} 위로', down: '{name} 아래로' },
     versions: {
       group: '버전',
       auto: '자동 버전',

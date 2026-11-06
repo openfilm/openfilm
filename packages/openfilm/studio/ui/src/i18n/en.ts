@@ -2201,6 +2201,7 @@ export const en = {
       proxySize: "Proxy size",
       proxySizeHint: "Smaller plays more smoothly; larger looks sharper in the viewer.",
     },
+    libraryCategories: { group: 'Library categories', hint: 'Their order in the library and which are shown. Media is always first and always shown.', up: 'Move {name} up', down: 'Move {name} down' },
     versions: {
       group: 'Versions',
       auto: 'Auto versions',

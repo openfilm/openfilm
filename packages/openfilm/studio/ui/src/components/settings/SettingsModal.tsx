@@ -7,7 +7,7 @@
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { X, Settings2, Keyboard, Sun, Moon, Monitor, Boxes, Bot, Search, SquareTerminal, Loader2, SlidersHorizontal } from 'lucide-react';
+import { X, Settings2, Keyboard, Sun, Moon, Monitor, Boxes, Bot, Search, SquareTerminal, Loader2, SlidersHorizontal, ChevronUp, ChevronDown } from 'lucide-react';
 import { LANGUAGES, phrasesUnder, useLanguage, useLanguageChoice, useT, type LanguageChoice } from '@/i18n';
 import { studioHost, type HostDeveloper, type HostUpdateState } from '@/lib/host';
 import { showWhatsNew } from '@/lib/whats-new';
@@ -24,6 +24,10 @@ import { SettingsButton, SettingsGroup, SettingsItem, SettingsPage, SettingsSegm
 import { useThemeMode, type ThemeMode } from './theme';
 import { StorageGroup } from './StorageGroup';
 import { LARGE_DIALOG_SIZE } from '../dialog-chrome';
+import { CATEGORIES } from '../library/LibraryDrawer';
+import { CategoryIcon } from '../library/icons';
+import { keepArrangement, useLibraryArrangement } from '../library/arrangement';
+import { arrangedCategories, FIRST_CATEGORY } from '@/lib/library-categories';
 
 export type SettingsSection = 'general' | 'agents' | 'models' | 'developer' | 'shortcuts' | 'advanced';
 
@@ -57,7 +61,7 @@ const SECTION_WORDS: Record<SettingsSection, string | string[]> = {
   models: ['settings.models', 'settings.providers'],
   developer: ['settings.developer', 'settings.report'],
   shortcuts: 'settings.shortcuts',
-  advanced: ['settings.advanced', 'settings.versions', 'settings.playback'],
+  advanced: ['settings.advanced', 'settings.versions', 'settings.playback', 'settings.libraryCategories'],
 };
 
 export interface SettingsModalProps {
@@ -321,14 +325,52 @@ function VersionsGroup() {
   );
 }
 
+/**
+ * The library's categories (its drawer's top bar): their order, moved up or down, and which are shown. The media is
+ * always first and shown (lib/library-categories).
+ */
+function LibraryCategoriesGroup() {
+  const t = useT();
+  const arranged = useLibraryArrangement();
+  const [list, setList] = React.useState<{ id: string; on: boolean }[] | null>(null);
+  const now = list ?? arrangedCategories(CATEGORIES, arranged);
+  const keep = (next: { id: string; on: boolean }[]) => { setList(next); void keepArrangement(next).catch(() => setList(null)); };
+  const move = (i: number, by: -1 | 1) => {
+    const next = [...now];
+    [next[i], next[i + by]] = [next[i + by]!, next[i]!];
+    keep(next);
+  };
+  return (
+    <SettingsGroup title={t('settings.libraryCategories.group')} footnote={t('settings.libraryCategories.hint')}>
+      {now.map((c, i) => {
+        const first = c.id === FIRST_CATEGORY;
+        const name = t(`assetDrawer.cat_${c.id}`);
+        const arrow = 'grid h-7 w-7 place-items-center rounded-md text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-30 disabled:hover:bg-transparent';
+        return (
+          <div key={c.id} data-library-category={c.id} className="flex min-h-12 items-center gap-3 py-2">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-[var(--bg-field)] text-[var(--text)]"><CategoryIcon id={c.id as never} on={false} size={16} /></span>
+            <span className="min-w-0 flex-1 truncate text-[14px] text-[var(--text)]">{name}</span>
+            <button type="button" aria-label={t('settings.libraryCategories.up').replace('{name}', name)} title={t('settings.libraryCategories.up').replace('{name}', name)}
+              disabled={first || i <= 1} onClick={() => move(i, -1)} className={arrow}><ChevronUp size={16} /></button>
+            <button type="button" aria-label={t('settings.libraryCategories.down').replace('{name}', name)} title={t('settings.libraryCategories.down').replace('{name}', name)}
+              disabled={first || i === now.length - 1} onClick={() => move(i, 1)} className={arrow}><ChevronDown size={16} /></button>
+            <SettingsSwitch checked={c.on} disabled={first} label={name} onChange={(on) => keep(now.map((x) => (x.id === c.id ? { ...x, on } : x)))} />
+          </div>
+        );
+      })}
+    </SettingsGroup>
+  );
+}
+
 /** What is already set for the best experience, for whoever wants it otherwise: versions saved on their own
- * (VersionsGroup), how the preview plays (PlaybackGroup). */
+ * (VersionsGroup), how the preview plays (PlaybackGroup), the library's categories (LibraryCategoriesGroup). */
 function AdvancedSection() {
   const t = useT();
   return (
     <SettingsPage note={t('settings.advanced.intro')}>
       <VersionsGroup />
       <PlaybackGroup />
+      <LibraryCategoriesGroup />
     </SettingsPage>
   );
 }

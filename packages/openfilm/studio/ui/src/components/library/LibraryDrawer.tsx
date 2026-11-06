@@ -29,9 +29,13 @@ import { ImportButton, SkillsPane, type SkillsLine } from './SkillsPane';
 import { SourceBadge, SourceChips, sourcesIn, type Source } from './SourceChips';
 import { TextStyleSample } from './TextStyleSample';
 import { useSavedLooks } from '../CaptionPresets';
+import { arrangedCategories } from '@/lib/library-categories';
+import { useLibraryArrangement } from './arrangement';
 
 type Category = 'media' | 'skill' | 'voice' | 'captions' | LibraryCategory;
-const CATEGORIES: Category[] = ['media', 'skill', 'captions', 'voice', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition', 'template'];
+/* OpenFilm's order (the person's own in Settings › Advanced, lib/library-categories): the media, the skills, then the
+   templates, the most a film is made with at once */
+export const CATEGORIES: Category[] = ['media', 'skill', 'template', 'captions', 'voice', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition'];
 
 /** The side bar's starred line: a category's things the person starred ('' is all of it, else one of its groups). */
 const FAVORITES = STARRED;
@@ -108,7 +112,12 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
   const index = useLibraryIndex();
   const favorites = useLibraryFavorites();
   const voices = useLibraryVoices();
-  const [cat, setCat] = React.useState<Category>(SHOWN.cat);
+  /* the categories shown, in the person's order */
+  const arranged = useLibraryArrangement();
+  const categories = arrangedCategories(CATEGORIES, arranged).filter((c) => c.on).map((c) => c.id);
+  const [shownCat, setCat] = React.useState<Category>(SHOWN.cat);
+  /* one turned off while it was shown: the media in its place */
+  const cat: Category = categories.includes(shownCat) ? shownCat : 'media';
   const [group, setGroup] = React.useState<string>(firstLine(SHOWN.cat));
   const [textOpen, setTextOpen] = React.useState(SHOWN.textOpen);
   const [starredText, setStarredText] = React.useState(SHOWN.starredText);
@@ -279,7 +288,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
           onWheel={(e) => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) e.currentTarget.scrollLeft += e.deltaY; }}
           className={`flex h-full min-w-0 flex-1 overflow-x-auto px-1 [scrollbar-width:none] ${bar.end ? '' : '[mask-image:linear-gradient(to_right,black_calc(100%-20px),transparent)]'}`}
         >
-          {CATEGORIES.map((id) => (
+          {categories.map((id) => (
             <button
               key={id}
               type="button"

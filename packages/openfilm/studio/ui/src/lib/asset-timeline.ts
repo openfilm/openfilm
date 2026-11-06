@@ -164,6 +164,9 @@ const libraryText = (file: { saved?: string | undefined }) => Boolean(file.saved
  */
 export const libraryOverlay = (file: { saved?: string | undefined }) => /^openfilm\/(stickers|text|effects)\//.test(file.saved ?? '');
 
+/** A track with no film on it: things of the library laid over it only (stickers, text, effects), or nothing yet. */
+const overlayOnly = (track: TimelineTrack) => Boolean(track.overlay || track.text) || !track.blocks.length;
+
 /**
  * A sound goes on a sound track (A), a picture (a page, a video, a still) on a picture track (V), as the timeline names
  * them: let go over a track of the other kind, or above or below every row, onto the nearest track of its own kind
@@ -179,7 +182,7 @@ function ownKindSpot(
   /** Not on the main track (a thing laid over the film: libraryOverlay). */
   overMain = false,
 ): AssetDropSpot {
-  const own = (tr: TimelineTrack) => tr.docIndex != null && !tr.captions && (tr.role === 'audio') === sound && !(overMain && tr.main);
+  const own = (tr: TimelineTrack) => tr.docIndex != null && !tr.captions && (tr.role === 'audio') === sound && !(overMain && tr.main && !overlayOnly(tr));
   const free = tracks
     .map((tr, laneIndex) => ({ tr, laneIndex }))
     .filter(({ tr, laneIndex }) => own(tr) && !tr.locked && (!text || tr.text) && !rangeOverlaps(range, occupiedOf(tracks, tr.docIndex ?? null, laneIndex)))
@@ -213,8 +216,9 @@ export function assetDropSpot(
     if (target.docIndex != null && !target.captions && (target.role === 'audio') !== sound) {
       return ownKindSpot(tracks, sound, libraryText(file), range, hit.lane, libraryOverlay(file));
     }
-    /* a sticker, text or effect let go on the main track: over it, on a track above (never cutting the film) */
-    if (target.main && target.docIndex != null && libraryOverlay(file)) return ownKindSpot(tracks, false, libraryText(file), range, hit.lane, true);
+    /* a sticker, text or effect let go on the main track: over it, on a track above (never cutting the film); onto
+       it when it holds no film, only things laid over it */
+    if (target.main && target.docIndex != null && libraryOverlay(file) && !overlayOnly(target)) return ownKindSpot(tracks, false, libraryText(file), range, hit.lane, true);
     /* its top or bottom edge = a new track above / below (without an edit mode) */
     if (target.docIndex != null && hit.band !== 'body' && !edit) {
       return newTrackSpot(tracks, hit.band === 'above' ? target.docIndex : target.docIndex + 1);

@@ -33,6 +33,9 @@ export type TimelineLaneKind = 'visual' | 'audio';
 
 /* ── Zoom ─────────────────────────────────────────────────────────────────── */
 
+/** Where a project keeps the library's things it uses (studio/server saved.mjs takeSaved): their pages are under it. */
+const LIBRARY_PAGES = 'saved/openfilm/';
+
 /**
  * Zoom is how much time one screen shows, not a pixel density.
  *
@@ -452,6 +455,12 @@ export interface TimelineTrack {
   captions?: { src: string; label?: string };
   /** A track of the library's text only: drawn as a caption track is, narrow, each clip by its words. */
   text?: boolean;
+  /**
+   * A track of things of the library laid over the film only (stickers, effects, filters, templates' pages): no video
+   * or picture of the film on it. Drawn low, as a text track is; such things may go on it even when it is the main
+   * track (they cut no film there).
+   */
+  overlay?: boolean;
   blocks: TimelineBlock[];
 }
 
@@ -1028,6 +1037,7 @@ export function layoutTracks(evaluated: TimelineFilm): TimelineTrack[] {
         ...(flags?.incomplete ? { incomplete: true } : {}),
         ...(flags?.captions ? { captions: flags.captions } : {}),
         ...(row.length && row.every((b) => b.words != null) ? { text: true } : {}),
+        ...(row.length && row.some((b) => b.words == null) && row.every((b) => b.src?.startsWith(LIBRARY_PAGES)) ? { overlay: true } : {}),
         blocks: row,
       });
     }
