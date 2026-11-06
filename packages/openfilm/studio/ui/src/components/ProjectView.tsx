@@ -21,7 +21,9 @@ import { usePreviewRenders } from '@/editor/use-preview-renders';
 import { filmShape, type MediaFacts } from '@/lib/film-shape';
 import { changesPicture } from '@/lib/picture-files';
 import { SPEED_MAX } from '@/lib/playback-speed';
-import type { ReplaceFamily } from '@/lib/clip-replace';
+import { replaceClip, type ReplaceFamily } from '@/lib/clip-replace';
+import { fillFor, isSlotSrc, markedClips, templateMark, templateMarks, templateOf } from '@/lib/template-instance';
+import { TemplateSection, type TemplateHost } from '@/components/TemplateSection';
 import { isLibraryText, layoutTracks, type TimelineBlock, type TimelineTrack } from '@/lib/timeline-layout';
 import { useAgentWorking } from '@/lib/agent-working';
 import { filmClipKind, filmDocLoc, filmSrcIsPage, filmSrcKind, filmTrackBadges, parseFilmDocLoc, type FilmBox, type FilmDoc, type FilmOverride } from '@/lib/film';
@@ -123,7 +125,7 @@ import { FontScopeContext, type FontScope } from '@/lib/use-fonts';
 import { stageMenu, stageRecoveryMenu, type StageArrangeResult, type StageMenuContext, type StagePictureActions } from './stage-menu';
 import type { StageEditFailure, StageTextEdit } from './FilmInspector';
 import { layerTarget, pageClipOf, recoverLayer } from '@/lib/stage-layers';
-import { pictureStyle, relativeTo, type TemplateControls } from '@/lib/template-controls';
+import { pictureStyle, relativeTo, withText, type TemplateControls } from '@/lib/template-controls';
 import { propsAttr, propsOf, type ComponentProp } from '@/lib/component-props';
 import { pointersOf, propsWithoutDeleted, withDeleted } from '@/lib/layer-delete';
 import {
@@ -1497,16 +1499,22 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* a group of Saved or the library, laid out for this picture (lib/library placedGroup); a template of the library has
      its music (one of the library's) taken in too, on a track of its own under it, fading out at its end */
   const templateClips = React.useCallback(async (saved: string | undefined, clips: SavedGroupClip[]): Promise<SavedGroupClip[]> => {
-    const placed = placedGroup(clips, stageRef.current ?? { w: 1920, h: 1080 });
     const item = builtInItem(saved);
+    /* a template of the library: each of its clips marked as this time's of it (lib/template-instance), so it is one
+       template in the inspector (TemplateSection) */
+    const laid = placedGroup(clips, stageRef.current ?? { w: 1920, h: 1080 });
+    const mark = item?.cat === 'template' ? templateMark(item.id, templateMarks(filmRef.current?.tracks ?? [])) : null;
+    const placed = mark ? markedClips(laid, mark) : laid;
     const music = item?.music ? builtInItem(`${BUILT_IN}/${item.music}`) : null;
     if (!item?.music || !music) return placed;
     let taken: Awaited<ReturnType<typeof api.takeSaved>>;
     try { taken = await api.takeSaved(projectId, `${BUILT_IN}/${item.music}`); } catch { return placed; }
     if (!('path' in taken)) return placed;
     const len = Math.min(item.durationMs ?? 0, music.durationMs ?? Infinity) / 1000;
-    const below = Math.max(...placed.map((c) => c.track)) + 1;
-    return [...placed, { track: below, at: 0, clip: { src: taken.path, time: [0, len], overrides: [{ fade: [0, Math.min(1.5, len / 3)] }] } }];
+    /* under every track of the film, where its sound tracks are (a new track past the last goes last, ops.mjs) */
+    const below = 1000;
+    const tune = { track: below, at: 0, clip: { src: taken.path, time: [0, len], overrides: [{ fade: [0, Math.min(1.5, len / 3)] }] } };
+    return [...placed, ...(mark ? markedClips([tune], mark) : [tune])];
   }, [projectId]);
   const language = useLanguage();
   /** The clip put in since `before` (the clips there were), picked on the timeline once it is drawn there. */
@@ -2118,6 +2126,60 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     projectId, tracks: timelineTracks, film: film.film, settings, patchSettings, player, timeRef, seek, edit: editOps, record: film.record,
     editModel, selectedClipIds: selectedKeys, listing, toast, pickFile: pickReplacement,
   });
+  /* a template of the library the picked clip belongs to: its places for pictures, its words, picked whole
+     (TemplateSection, lib/template-instance) */
+  const templateSection = React.useCallback((blocks: readonly TimelineBlock[]): React.ReactNode => {
+    const value = filmRef.current;
+    const first = blocks[0]?.clipId;
+    const instance = first && value ? templateOf(value.tracks, first) : null;
+    /* one of its clips, or several all its own */
+    if (!instance || !value || !blocks.every((b) => b.clipId && instance.clips.includes(b.clipId))) return null;
+    const item = builtInItem(`${BUILT_IN}/${instance.id}`);
+    const blockOf = (id: string) => blocksRef.current.find((b) => b.clipId === id);
+    const clipOf = (id: string) => value.tracks.flatMap((tr) => tr.clips).find((c) => c.id === id);
+    const pictures = (listing?.files ?? []).filter((f) => (f.kind === 'video' || f.kind === 'image') && !fromLibrary(f.path));
+    const host: TemplateHost = {
+      instance,
+      name: item ? nameOf(item.name, language) : instance.mark,
+      slotOf: (id) => {
+        const b = blockOf(id);
+        const src = clipOf(id)?.src;
+        const path = src && !isSlotSrc(src) ? src.split('#')[0]! : null;
+        /* a picture as itself, a video its frame where the place starts it */
+        const thumb = !path ? null : PICTURE_FILE.test(path) ? `${folder}${path.split('/').map(encodeURIComponent).join('/')}`
+          : `/api/projects/${encodeURIComponent(projectId)}/media?what=frame&path=${encodeURIComponent(path)}&ms=${Math.round(b?.inMs ?? 0)}&w=200`;
+        return { durMs: b ? b.endMs - b.startMs : 0, thumb };
+      },
+      /* a place takes the person's own videos and pictures (or one from this computer), not pages */
+      pickEntries: (id) => {
+        const b = blockOf(id);
+        const own = new Set(pictures.map((f) => `replace:${f.path}`));
+        const entries = b ? tools.replaceEntries(b).filter((e) => !e.id.startsWith('replace:') || own.has(e.id)) : [];
+        return entries[0] && 'separator' in entries[0] ? entries.slice(1) : entries;
+      },
+      put: (id, file) => { const b = blockOf(id); if (b) tools.timeline.onReplaceDrop(b, file); },
+      fill: pictures.length ? () => {
+        const empty = instance.slots.filter((s) => s.empty).map((s) => s.clip);
+        const used = new Set(value.tracks.flatMap((tr) => tr.clips.map((c) => c.src.split('#')[0]!)));
+        const picks = fillFor(empty.length, pictures, used);
+        const edits = picks.flatMap((file, i) => {
+          const clip = clipOf(empty[i]!);
+          const b = blockOf(empty[i]!);
+          const plan = clip && b ? replaceClip(clip, b.endMs - b.startMs, file) : null;
+          return plan && !('error' in plan) ? plan.edits.map((e) => ({ clip: clip!.id, ...e })) : [];
+        });
+        if (edits.length) void edit([{ op: 'props', edits }], `history.stepReplaced|${empty[0]}`).then((err) => { if (err) toast.showError(err); });
+      } : null,
+      setWord: (w, text) => {
+        const b = blockOf(w.clip);
+        const clip = clipOf(w.clip);
+        if (b?.loc && clip) void editBlocks([{ loc: b.loc, prop: 'overrides', value: withText(clip.overrides as never, w.at, w.n, text) as never }]);
+      },
+      pageUrl: (id) => { const src = clipOf(id)?.src; return src && folder ? `${folder}${src.split('#')[0]}` : null; },
+      pickAll: blocks.length < instance.clips.length ? () => { setStageElement(null); setSelectedKeys(instance.clips); } : null,
+    };
+    return <TemplateSection host={host} />;
+  }, [listing, language, projectId, tools, edit, editBlocks, toast, folder]);
 
   /* how many of the person's edits an outside write undid: edits inside pages it left out, and clip edits it changed */
   const undoneCount = (dropped ?? []).reduce((n, d) => n + d.dropped.length, 0) + undone.length;
@@ -3052,9 +3114,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const b = here.find((x) => main?.blocks.some((m) => m.id === x.id)) ?? here[0] ?? film[0]!;
     const into = here.includes(b) ? (at - b.startMs) * (b.speed && b.speed > 0 ? b.speed : 1) : 0;
     const ms = Math.round((b.inMs ?? 0) + into);
+    /* a picture as itself: it has no frames to take */
+    if (PICTURE_FILE.test(b.src!)) return `${folder}${b.src!.split('/').map(encodeURIComponent).join('/')}?v=${mtimeOf.get(b.src!) ?? 0}`;
     return `/api/projects/${encodeURIComponent(projectId)}/media?what=frame&path=${encodeURIComponent(b.src!)}&ms=${ms}&w=360&v=${mtimeOf.get(b.src!) ?? 0}`;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frameSec, timelineTracks, projectId, mtimeOf]);
+  }, [frameSec, timelineTracks, projectId, mtimeOf, folder]);
   const waveUrl = React.useCallback((src: string) => `/api/projects/${encodeURIComponent(projectId)}/media?what=wave&path=${encodeURIComponent(src)}&v=${mtimeOf.get(src) ?? 0}`, [projectId, mtimeOf]);
   /* clips whose files are gone, and where the same name may be now. A file a clip names that the listing does not have
      is gone only once a listing read after it was first named still lacks it: one just brought in as its clip was put
@@ -4241,6 +4305,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                       layerProps={layerProps}
                       pictures={pictureActions}
                       replaceEntries={tools.replaceEntries}
+                      templateSection={templateSection}
                       clipLookOf={clipLookOf}
                       onPreviewLook={previewLook}
                       onStartCrop={startStageCrop}

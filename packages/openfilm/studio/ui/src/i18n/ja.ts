@@ -887,6 +887,8 @@ export const ja: Words = {
   },
   /* アセットドロワーの OpenFilm ライブラリ（components/library/LibraryDrawer、lib/library） */
   /** the inspector of a line of words of the library's text component (TextInspector) */
+  /** a template of the library put in the film (TemplateSection) */
+  template: { waiting: '{n} 個の素材を差し替え', allIn: 'すべて差し替え済み', fill: '自動で埋める', pick: 'ここに入れる動画や画像を選ぶか、素材をドロップ', words: '文字', pickAll: 'テンプレート全体を選択' },
   /** a filter on a track of its own (FilterLayerSection) */
   filterLayer: { title: 'フィルター', hint: '表示中は下のすべてのレイヤーに効きます。クリップにドロップするとそのクリップだけに効きます。', strength: '強さ' },
   textInspector: {

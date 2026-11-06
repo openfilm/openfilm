@@ -887,6 +887,8 @@ export const es: Words = {
   },
   /* La biblioteca de OpenFilm en el cajón de recursos (components/library/LibraryDrawer, lib/library) */
   /** the inspector of a line of words of the library's text component (TextInspector) */
+  /** a template of the library put in the film (TemplateSection) */
+  template: { waiting: '{n} por reemplazar', allIn: 'Todo reemplazado', fill: 'Rellenar', pick: 'Elige qué va aquí o suelta un clip encima', words: 'Textos', pickAll: 'Seleccionar toda la plantilla' },
   /** a filter on a track of its own (FilterLayerSection) */
   filterLayer: { title: 'Filtro', hint: 'Afecta a todas las capas de debajo mientras está activo. Soltado sobre un clip, solo afecta a ese clip.', strength: 'Intensidad' },
   textInspector: {

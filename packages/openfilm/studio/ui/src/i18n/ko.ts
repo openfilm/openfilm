@@ -884,6 +884,8 @@ export const ko: Words = {
   },
   /* 에셋 서랍의 OpenFilm 라이브러리 (components/library/LibraryDrawer, lib/library) */
   /** the inspector of a line of words of the library's text component (TextInspector) */
+  /** a template of the library put in the film (TemplateSection) */
+  template: { waiting: '교체할 소재 {n}개', allIn: '모두 교체됨', fill: '자동 채우기', pick: '여기에 넣을 동영상이나 사진을 고르거나 소재를 끌어다 놓기', words: '텍스트', pickAll: '템플릿 전체 선택' },
   /** a filter on a track of its own (FilterLayerSection) */
   filterLayer: { title: '필터', hint: '표시되는 동안 아래의 모든 레이어에 적용됩니다. 클립에 놓으면 그 클립에만 적용됩니다.', strength: '강도' },
   textInspector: {

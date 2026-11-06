@@ -167,6 +167,7 @@ export const FilmInspector = React.memo(function FilmInspector({
   onPreviewClip,
   pageChangesOf,
   replaceEntries,
+  templateSection,
   clipLookOf,
   onPreviewLook,
   stage,
@@ -237,6 +238,8 @@ export const FilmInspector = React.memo(function FilmInspector({
   pageChangesOf?: (clipLoc: string) => PageChanges | null;
   /** What can take a clip's place (the project's files, one from this computer): the clip's Replace button. */
   replaceEntries?: (block: TimelineBlock) => ContextMenuEntry[];
+  /** The template of the library the picked clips all belong to, shown first (TemplateSection); null when they are not one template's. */
+  templateSection?: (blocks: readonly TimelineBlock[]) => React.ReactNode;
   /** A clip's own CSS and `class` in film.html and how it looks now (see clip-look): its look sections read them. */
   clipLookOf?: (clipLoc: string) => { css: string; look: ClipLook | null; cls?: string } | null;
   /** Shows a clip in CSS not kept yet while a look value is dragged (null: its own again). */
@@ -344,6 +347,7 @@ export const FilmInspector = React.memo(function FilmInspector({
             onPreviewClip={onPreviewClip}
             {...(pageChangesOf ? { pageChangesOf } : {})}
             {...(replaceEntries ? { replaceEntries } : {})}
+            {...(templateSection ? { templateSection } : {})}
             {...(clipLookOf ? { clipLookOf } : {})}
             {...(onPreviewLook ? { onPreviewLook } : {})}
             {...(onStartCrop ? { onStartCrop } : {})}
@@ -363,6 +367,7 @@ export const FilmInspector = React.memo(function FilmInspector({
             {...(fades ? { fades } : {})}
             {...(clipLookOf ? { clipLookOf } : {})}
             {...(onPreviewLook ? { onPreviewLook } : {})}
+            {...(templateSection ? { templateSection } : {})}
           />
         ) : transition ? (
           <TransitionPanel t={t} pick={transition} />
@@ -1494,12 +1499,14 @@ function clipsLook(
  * can only be looked at.
  */
 function ClipPanel({
-  block, onMain, speedFloor, geometry, stage, badges, onEdit, onPreviewClip, pageChangesOf, replaceEntries, clipLookOf, onPreviewLook, onStartCrop, onEditMask, maskAsk,
+  block, onMain, speedFloor, geometry, stage, badges, onEdit, onPreviewClip, pageChangesOf, replaceEntries, templateSection, clipLookOf, onPreviewLook, onStartCrop, onEditMask, maskAsk,
   onMaskAsked, fades, propsHostOf,
 }: {
   fades?: ReadonlyMap<string, FadeMs>;
   propsHostOf?: (block: TimelineBlock) => PropsHost | null;
   replaceEntries?: (block: TimelineBlock) => ContextMenuEntry[];
+  /** The template of the library the picked clips all belong to, shown first (TemplateSection); null when they are not one template's. */
+  templateSection?: (blocks: readonly TimelineBlock[]) => React.ReactNode;
   block: TimelineBlock;
   /** On the main track, where the magnet acts. */
   onMain: boolean;
@@ -1574,6 +1581,8 @@ function ClipPanel({
         </p>
       ) : (
         <>
+          {/* a template of the library first: its places, its words, picked whole */}
+          {templateSection?.([block])}
           {isFilterLayer(block.src) && lookOf && loc ? (
             <FilterLayerSection css={lookOf.css} onPreview={(css) => onPreviewLook?.(loc, css)}
               onCommit={(css) => commit([{ loc, prop: 'style', value: css }])} />
@@ -2213,9 +2222,10 @@ function placedOf(block: TimelineBlock, stage: { w: number; h: number }): Placed
  * "Mixed" where they differ.
  */
 function MultiClipPanel({
-  blocks, onEdit, stage, clipLookOf, onPreviewLook, fades,
+  blocks, onEdit, stage, clipLookOf, onPreviewLook, fades, templateSection,
 }: {
   fades?: ReadonlyMap<string, FadeMs>;
+  templateSection?: (blocks: readonly TimelineBlock[]) => React.ReactNode;
   blocks: readonly TimelineBlock[];
   onEdit?: (edits: ClipEdit[]) => Promise<string | null>;
   stage: { w: number; h: number };
@@ -2313,6 +2323,8 @@ function MultiClipPanel({
       {refusal ? (
         <RefusalBanner message={refusal} onDismiss={() => setRefusal(null)} t={t} />
       ) : null}
+      {/* the whole of a template of the library picked: the template first */}
+      {templateSection?.(blocks)}
       {allPlaced ? (
         <Section id="position" title={t('inspector.position')}>
           <AlignBar t={t} onAlign={alignTo} {...(allPlaced.length >= 3 ? { onDistribute: distribute } : {})} />

@@ -888,6 +888,8 @@ export const en = {
   },
   /* OpenFilm's library in the assets drawer (components/library/LibraryDrawer, lib/library) */
   /** the inspector of a line of words of the library's text component (TextInspector) */
+  /** a template of the library put in the film (TemplateSection) */
+  template: { waiting: '{n} to replace', allIn: 'Every place has your own', fill: 'Fill', pick: 'Choose what goes here, or drop a clip on it', words: 'Words', pickAll: 'Select the whole template' },
   /** a filter on a track of its own (FilterLayerSection) */
   filterLayer: { title: 'Filter', hint: 'Grades every layer under it while it is on. Dropped on a clip, a filter grades that clip alone.', strength: 'Strength' },
   textInspector: {
