@@ -686,7 +686,7 @@ async function transcode(make, out, signal, video) {
   const chip = prores ? await hardwareEncoder('prores', have) : null;
   await onTheChip(chip, async (encoder, decoding) => {
     const own = prores ? null : encoding('png', 'master', video ?? { w: 1920, h: 1080 }, video?.fps ?? 30, have).format;
-    const { video: codec, pix } = own ? { video: own.video, pix: /** @type {{ pix: string }} */ (own).pix } : proresOptions(encoder ?? 'prores_ks', alpha);
+    const { video: codec, pix } = own ? { video: own.video, pix: /** @type {{ pix: string }} */ (/** @type {unknown} */ (own)).pix } : proresOptions(encoder ?? 'prores_ks', alpha);
     const tail = ['-map', '0:v:0', '-map', '0:a?', '-vf', pix, ...codec, '-c:a', 'pcm_s16le', '-ar', '48000', out];
     /* VP9's alpha is a side channel ffmpeg's own decoder drops: libvpx reads it */
     if (alpha) {
