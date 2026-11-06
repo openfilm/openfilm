@@ -902,7 +902,7 @@ export const zhCN: Words = {
   /** a clip's animation: how it comes in, goes out, moves while shown (ClipMotionSection) */
   clipMotion: { title: '动画', in: '入场', out: '出场', loop: '循环', none: '无', time: '时长' },
   /** a template of the library put in the film (TemplateSection) */
-  template: { waiting: '{n} 个素材待替换', allIn: '素材已全部替换', fill: '一键填充', pick: '选择放在这里的视频或图片，也可以把素材拖到这里', words: '文字', pickAll: '选中整个模板' },
+  template: { waiting: '{n} 个素材待替换', allIn: '素材已全部替换', fill: '一键填充', pick: '选择放在这里的视频或图片，也可以把素材拖到这里', words: '文字', pickAll: '选中整个模板', pickTitle: '选择 {n} 段素材', pickHint: '点素材放进亮起的位置', import: '从电脑导入', use: '使用模板', cancel: '取消', clear: '清空这个位置', noMedia: '还没有自己的视频或图片，先从电脑导入' },
   /** a filter on a track of its own (FilterLayerSection) */
   filterLayer: { title: '滤镜', hint: '在它的时间段内作用于下面所有画面层。拖到某个片段上则只作用于该片段。', strength: '强度' },
   textInspector: {

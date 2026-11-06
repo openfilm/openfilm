@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fillFor, isSlotSrc, markedClips, templateMark, templateMarks, templateOf, TEMPLATE_ATTR } from './template-instance.ts';
+import { filledTemplate, fillFor, isSlotSrc, markedClips, templateMark, templateMarks, templateOf, templateSlots, TEMPLATE_ATTR } from './template-instance.ts';
 
 const mark = (m: string, extra: Record<string, string> = {}) => ({ [TEMPLATE_ATTR]: m, ...extra });
 const tracks = [
@@ -38,4 +38,25 @@ test('empty places are filled with the person\'s pictures the film does not use 
   const media = [{ path: 'assets/a.mp4' }, { path: 'assets/b.jpg' }, { path: 'assets/c.mp4' }];
   assert.deepEqual(fillFor(2, media, new Set(['assets/a.mp4'])).map((f) => f.path), ['assets/b.jpg', 'assets/c.mp4']);
   assert.deepEqual(fillFor(4, media, new Set(['assets/a.mp4'])).map((f) => f.path), ['assets/b.jpg', 'assets/c.mp4', 'assets/a.mp4']);
+});
+
+test("a template's places in the order they play, and its clips with the person's own files in them before it is put in", () => {
+  const slot = (at: number, len: number, n: string) => ({ track: 3, at, clip: { src: 'saved/openfilm/templates-trip/slot.html', time: [0, len], style: 'object-fit: cover', overrides: [{ at: ':root', style: { '--n': n } }, { fade: [0, 0.3] }] } });
+  const clips = [
+    { track: 0, at: 0.3, clip: { src: 'saved/openfilm/templates-trip/title.html', time: [0, 2.5] } },
+    slot(3, 2.4, '2'),
+    slot(0, 3, '1'),
+    { track: 4, at: 0, clip: { src: 'saved/openfilm/music-x.mp3', time: [0, 11] } },
+  ];
+  assert.deepEqual(templateSlots(clips).map((s) => [s.clip.at, s.durMs]), [[0, 3000], [3, 2400]]);
+  /* the library's own bundle names its place `slot.html` */
+  assert.deepEqual(templateSlots([{ track: 0, at: 1, clip: { src: 'slot.html', time: [0, 2] } }]).map((s) => s.durMs), [2000]);
+  const filled = filledTemplate(clips, [{ path: 'assets/beach.mp4', kind: 'video', durationMs: 10_000 }, { path: 'assets/sea.jpg', kind: 'image' }]);
+  /* the first place (at 0) gets the first file, played from its start for the place's length; the page's own words gone, its fade kept */
+  assert.deepEqual(filled[2]!.clip, { src: 'assets/beach.mp4', time: [0, 3], style: 'object-fit: cover', overrides: [{ fade: [0, 0.3] }] });
+  assert.deepEqual(filled[1]!.clip, { src: 'assets/sea.jpg', time: [0, 2.4], style: 'object-fit: cover', overrides: [{ fade: [0, 0.3] }] });
+  assert.equal(filled[0], clips[0], 'what is not a place stays');
+  assert.equal(filled[3], clips[3]);
+  /* a place with no file stays a place */
+  assert.equal(filledTemplate(clips, [null, { path: 'assets/sea.jpg', kind: 'image' }])[2], clips[2]);
 });

@@ -902,7 +902,7 @@ export const en = {
   /** a clip's animation: how it comes in, goes out, moves while shown (ClipMotionSection) */
   clipMotion: { title: 'Animation', in: 'In', out: 'Out', loop: 'Loop', none: 'None', time: 'Duration' },
   /** a template of the library put in the film (TemplateSection) */
-  template: { waiting: '{n} to replace', allIn: 'Every place has your own', fill: 'Fill', pick: 'Choose what goes here, or drop a clip on it', words: 'Words', pickAll: 'Select the whole template' },
+  template: { waiting: '{n} to replace', allIn: 'Every place has your own', fill: 'Fill', pick: 'Choose what goes here, or drop a clip on it', words: 'Words', pickAll: 'Select the whole template', pickTitle: 'Choose {n} videos or pictures', pickHint: 'Click one to put it in the lit place', import: 'From this computer', use: 'Use template', cancel: 'Cancel', clear: 'Empty this place', noMedia: 'No videos or pictures of your own yet: bring some from this computer' },
   /** a filter on a track of its own (FilterLayerSection) */
   filterLayer: { title: 'Filter', hint: 'Grades every layer under it while it is on. Dropped on a clip, a filter grades that clip alone.', strength: 'Strength' },
   textInspector: {

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { withPreset } from '../../../../src/clip-motion.mjs';
-import { cardBody, clipMotions, presetsOn, takesMotion } from './clip-presets.ts';
+import { cardBody, clipMotions, cutCardKeyframes, presetsOn, takesMotion } from './clip-presets.ts';
 
 const fade = { name: 'motion-in-fade', body: 'from { opacity: 0 }', secs: 0.5, ease: 'ease-out' };
 const sink = { name: 'motion-out-sink', body: 'to { translate: 0 30vh; opacity: 0 }', secs: 0.5, ease: 'ease-in' };
@@ -45,4 +45,16 @@ test('videos, pictures and pages take an animation; words, filters, effects, tra
 test("a card's keyframes move by the card's own size and blur in proportion", () => {
   assert.equal(cardBody('from { translate: -30vw 10vh; filter: blur(18px); opacity: 0 }', 0.1), 'from { translate: -30% 10%; filter: blur(1.8px); opacity: 0 }');
   assert.equal(cardBody('0%, 100% { translate: 0 0 } 50% { translate: 0 -2.5vh }', 0.1), '0%, 100% { translate: 0 0 } 50% { translate: 0 -2.5% }');
+});
+
+test("a cut's camera move on a card: out, then in, from rest to rest, each part as long as its own", () => {
+  const out = { name: 'motion-out-zoom-through', body: 'to { scale: 1.8; filter: blur(14px) }', secs: 0.35, ease: 'ease-in' };
+  const into = { name: 'motion-in-zoom-through', body: 'from { scale: 1.8; filter: blur(14px) }', secs: 0.35, ease: 'ease-out' };
+  assert.equal(cutCardKeyframes(out, into, 0.1),
+    '0% { animation-timing-function: ease-in } 49.9% { scale: 1.8; filter: blur(1.4px) } 50% { scale: 1.8; filter: blur(1.4px); animation-timing-function: ease-out }');
+  /* frames of their own (a shake), each where its part puts it */
+  const shakeOut = { name: 'o', body: '0% { translate: 0 0 } 50% { translate: -3vw 2vh } 100% { translate: 2vw 0 }', secs: 0.25, ease: 'linear' };
+  const shakeIn = { name: 'i', body: '0% { translate: -2vw 1vh } 100% { translate: 0 0 }', secs: 0.75, ease: 'linear' };
+  assert.equal(cutCardKeyframes(shakeOut, shakeIn, 1),
+    '0% { translate: 0 0; animation-timing-function: linear } 12.5% { translate: -3% 2%; animation-timing-function: linear } 24.9% { translate: 2% 0 } 25% { translate: -2% 1%; animation-timing-function: linear } 100% { translate: 0 0 }');
 });

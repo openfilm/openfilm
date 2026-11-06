@@ -16,7 +16,7 @@ import { ChevronDown, ChevronsLeft, ChevronsRight, Plus, Search, Star, X } from 
 import { useLanguage, useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import {
-  BUILT_IN, TEXT_COMPONENT, builtInItem, libraryDragItem, libraryUrl, nameOf, pageUrl, posterUrl, previewUrl, toggleFavorite, useLibraryFavorites, useLibraryIndex,
+  BUILT_IN, TEXT_COMPONENT, builtInItem, libraryDragItem, nameOf, pageUrl, posterUrl, previewUrl, toggleFavorite, useLibraryFavorites, useLibraryIndex,
   type LibraryCategory, type LibraryItem,
 } from '@/lib/library';
 import { clearResourceDrag, dragPicture, setResourceDragData } from '@/lib/resource-drag';
@@ -30,6 +30,7 @@ import { SourceBadge, SourceChips, sourcesIn, type Source } from './SourceChips'
 import { TextStyleSample } from './TextStyleSample';
 import { useSavedLooks } from '../CaptionPresets';
 import { arrangedCategories } from '@/lib/library-categories';
+import { PLAIN, TemplateOnPicture, TransitionOnPicture } from './OnPicture';
 import { isClipMotion } from '@/lib/clip-presets';
 import { useLibraryArrangement } from './arrangement';
 
@@ -636,8 +637,6 @@ function AddButton({ item, onAdd, className }: { item: LibraryItem; onAdd: () =>
   );
 }
 
-const SAMPLE = libraryUrl('filters/sample.jpg');
-
 /** A template's clips for the person's own pictures, and how long it runs. */
 /** Where a thing of the library comes from: the community's when someone sent it (`by`), else OpenFilm's own. */
 const sourceOf = (item: LibraryItem): Source => (item.by ? 'community' : 'official');
@@ -686,17 +685,12 @@ function Card({ item, lang, picked, kept, square, frame = null, onPick, onAdd }:
   item: LibraryItem; lang: ReturnType<typeof useLanguage>; picked: boolean; kept: boolean; square: boolean; frame?: string | null; onPick: () => void; onAdd: () => void;
 }) {
   const [hover, setHover] = React.useState(false);
-  /* on the film's own picture at the playhead (`frame`): a filter graded on it; an effect's page laid over it; a
-     transition's page played over it under the pointer, again each time it ends; a motion's card the picture */
+  /* a filter, an effect, a transition, a template: on the person's own picture (`frame`: the film's at the playhead,
+     else theirs in the project), else a plain one, never the library's sample. A filter graded on it; an effect's page
+     laid over it; a transition played on it under the pointer, a template's title drawn on it (OnPicture) */
   const page = item.kind === 'page' && !item.w && Boolean(item.src);
-  const overFilm = frame && page && (item.cat === 'effect' || item.cat === 'transition') ? item.cat : null;
-  const onFrame = Boolean(frame) && (overFilm != null || item.kind === 'motion');
-  const [round, setRound] = React.useState(0);
-  React.useEffect(() => {
-    if (!(hover && overFilm === 'transition')) return undefined;
-    const timer = window.setInterval(() => setRound((r) => r + 1), (item.durationMs ?? 1000) + 500);
-    return () => window.clearInterval(timer);
-  }, [hover, overFilm, item.durationMs]);
+  const onPicture = item.cat === 'filter' || item.cat === 'effect' || item.cat === 'transition' || item.kind === 'group';
+  const picture = frame ?? PLAIN;
   const fit = item.cat === 'sticker' ? 'object-contain' : 'object-cover';
   const name = nameOf(item.name, lang);
   /* a text style, a text motion (played under the pointer) and the line of words in the page's own: drawn as it is,
@@ -719,13 +713,13 @@ function Card({ item, lang, picked, kept, square, frame = null, onPick, onAdd }:
     >
       <div className={`relative overflow-hidden rounded-md bg-[var(--bg-field)] ${square ? 'aspect-square' : 'aspect-video'} ${picked ? 'ring-2 ring-[var(--accent)]' : 'ring-1 ring-transparent group-hover:ring-[var(--text-faint)]'}`}>
         {item.kind === 'look'
-          ? <img src={frame ?? (item.sample ? libraryUrl(item.sample) : SAMPLE)} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" style={{ filter: item.filter }} />
-          : onFrame ? (
+          ? <img src={picture} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" style={{ filter: item.filter }} />
+          : item.cat === 'transition' ? <TransitionOnPicture item={item} picture={frame} playing={hover} />
+          : item.kind === 'group' ? <TemplateOnPicture item={item} picture={frame} playing={hover} />
+          : item.cat === 'effect' && page ? (
             <>
-              <img src={frame!} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />
-              {overFilm === 'effect' || (overFilm === 'transition' && hover) ? (
-                <iframe key={round} title="" src={pageUrl(item)} loading="lazy" tabIndex={-1} className="pointer-events-none absolute inset-0 h-full w-full border-0" style={{ colorScheme: 'normal' }} />
-              ) : null}
+              <img src={picture} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />
+              <iframe title="" src={pageUrl(item)} loading="lazy" tabIndex={-1} className="pointer-events-none absolute inset-0 h-full w-full border-0" style={{ colorScheme: 'normal' }} />
             </>
           )
           /* a sticker whole in its square card (a wide one is not cut at its ends); loaded as it comes into view */
@@ -737,7 +731,7 @@ function Card({ item, lang, picked, kept, square, frame = null, onPick, onAdd }:
             </span>
           )
           : <img src={posterUrl(item)} alt="" draggable={false} loading="lazy" decoding="async" className={`absolute inset-0 h-full w-full ${fit}`} />}
-        {hover && item.kind !== 'look' && !item.still && !drawn && !live && !overFilm ? <video src={previewUrl(item)} autoPlay loop muted playsInline className={`absolute inset-0 h-full w-full ${fit}`} /> : null}
+        {hover && item.kind !== 'look' && !item.still && !drawn && !live && !onPicture ? <video src={previewUrl(item)} autoPlay loop muted playsInline className={`absolute inset-0 h-full w-full ${fit}`} /> : null}
         {/* the star and the "+" side by side, of one size, dark glass over the picture */}
         <span className="absolute bottom-1 right-1 flex items-center gap-1">
           <StarButton item={item} kept={kept} className={`${ROUND} bg-black/55 ${kept ? 'grid text-[#ffd35a]' : 'hidden text-white group-hover:grid'}`} />

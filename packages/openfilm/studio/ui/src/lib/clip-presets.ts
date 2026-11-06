@@ -56,3 +56,36 @@ export function cardBody(body: string, blur: number): string {
     .replace(/(-?\d*\.?\d+)v[wh]\b/g, '$1%')
     .replace(/blur\((\d*\.?\d+)px\)/g, (_, n: string) => `blur(${Math.round(Number(n) * blur * 10) / 10}px)`);
 }
+
+/** A keyframes body's frames, by where they are (`from` 0, `to` 100; `0%, 100%` one for each), in order. */
+function framesOf(body: string): [number, string][] {
+  const out: [number, string][] = [];
+  for (const m of body.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    for (const sel of m[1]!.split(',')) {
+      const s = sel.trim();
+      const at = s === 'from' ? 0 : s === 'to' ? 100 : Number.parseFloat(s);
+      if (Number.isFinite(at)) out.push([at, m[2]!.trim()]);
+    }
+  }
+  return out.sort((a, b) => a[0] - b[0]);
+}
+
+const pct = (n: number) => `${Math.round(n * 100) / 100}%`;
+
+/**
+ * A cut's camera move on a card showing a picture (a transition of the library's, `place: cut`): the picture going out
+ * (the move's `out`) then coming in (its `in`), as one round of keyframes from rest to rest, each part as long as its
+ * own and eased its own way, made for the card (cardBody).
+ */
+export function cutCardKeyframes(out: Preset, into: Preset, blur: number): string {
+  const split = (out.secs / (out.secs + into.secs)) * 100;
+  const frames: string[] = [`0% { animation-timing-function: ${out.ease} }`];
+  for (const [at, decl] of framesOf(cardBody(out.body, blur))) {
+    if (at === 0) frames[0] = `0% { ${decl}; animation-timing-function: ${out.ease} }`;
+    else frames.push(`${pct(at === 100 ? split - 0.1 : (at * split) / 100)} { ${decl}${at === 100 ? '' : `; animation-timing-function: ${out.ease}`} }`);
+  }
+  const ins = framesOf(cardBody(into.body, blur));
+  if (!ins.length || ins[0]![0] !== 0) frames.push(`${pct(split)} { animation-timing-function: ${into.ease} }`);
+  for (const [at, decl] of ins) frames.push(`${pct(split + (at * (100 - split)) / 100)} { ${decl}${at === 100 ? '' : `; animation-timing-function: ${into.ease}`} }`);
+  return frames.join(' ');
+}

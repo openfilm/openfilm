@@ -898,7 +898,7 @@ export const ko: Words = {
   /** a clip's animation: how it comes in, goes out, moves while shown (ClipMotionSection) */
   clipMotion: { title: '애니메이션', in: '등장', out: '퇴장', loop: '반복', none: '없음', time: '길이' },
   /** a template of the library put in the film (TemplateSection) */
-  template: { waiting: '교체할 소재 {n}개', allIn: '모두 교체됨', fill: '자동 채우기', pick: '여기에 넣을 동영상이나 사진을 고르거나 소재를 끌어다 놓기', words: '텍스트', pickAll: '템플릿 전체 선택' },
+  template: { waiting: '교체할 소재 {n}개', allIn: '모두 교체됨', fill: '자동 채우기', pick: '여기에 넣을 동영상이나 사진을 고르거나 소재를 끌어다 놓기', words: '텍스트', pickAll: '템플릿 전체 선택', pickTitle: '소재 {n}개 선택', pickHint: '소재를 클릭하면 선택된 자리에 들어갑니다', import: '이 컴퓨터에서', use: '템플릿 사용', cancel: '취소', clear: '이 자리 비우기', noMedia: '아직 내 동영상이나 사진이 없습니다. 이 컴퓨터에서 가져오세요' },
   /** a filter on a track of its own (FilterLayerSection) */
   filterLayer: { title: '필터', hint: '표시되는 동안 아래의 모든 레이어에 적용됩니다. 클립에 놓으면 그 클립에만 적용됩니다.', strength: '강도' },
   textInspector: {

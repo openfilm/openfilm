@@ -1,17 +1,25 @@
 /**
  * A thing of the library tried in the viewer (a click in the assets drawer, LibraryDrawer), over the picture there and
  * nothing written: a page laid over it; a sticker, and a text look or motion on the words a new line says, in the box
- * it gets when put in (libraryBox), so the try looks as the drop will; a transition's preview; a filter grading the whole
- * picture through a backdrop-filter, as it will on its own track. A click on it lets it go.
+ * it gets when put in (libraryBox), so the try looks as the drop will; a transition played on the film's own picture
+ * (OnPicture: its page over it, its dip or dissolve, its camera move), never on the library's sample; a template's
+ * title over it; a filter grading the whole picture through a backdrop-filter, as it will on its own track. A click
+ * on it lets it go.
  */
 import * as React from 'react';
 import { useLanguage } from '@/i18n';
-import { TEXT_COMPONENT, builtInItem, BUILT_IN, defaultTextWords, libraryBox, nameOf, pageUrl, previewUrl, type LibraryItem } from '@/lib/library';
+import { TEXT_COMPONENT, builtInItem, BUILT_IN, defaultTextWords, libraryBox, nameOf, pageUrl, type LibraryItem } from '@/lib/library';
+import { TemplateOnPicture, TransitionOnPicture } from './OnPicture';
 
 /* a motion tried again and again: in, a while shown, out */
 const MOTION_SECONDS = 2.6;
 
-export function LibraryTrial({ item, onLetGo }: { item: LibraryItem; onLetGo: () => void }) {
+export function LibraryTrial({ item, frame = null, onLetGo }: {
+  item: LibraryItem;
+  /** the film's picture at the playhead (else the person's own in the project), for what moves the picture itself */
+  frame?: string | null;
+  onLetGo: () => void;
+}) {
   const lang = useLanguage();
   /* a line of words in a look or a motion, or in the page's own */
   const text = item.kind === 'textstyle' || item.kind === 'textmotion' || item.id === TEXT_COMPONENT;
@@ -54,8 +62,10 @@ export function LibraryTrial({ item, onLetGo }: { item: LibraryItem; onLetGo: ()
           style={box ? { left: box.x, top: box.y, width: box.w, height: box.h, colorScheme: 'normal' } : { colorScheme: 'normal' }}
         />
       ) : null}
-      {/* a transition, a template (its places filled with photos) and a clip's motion, as drawn: they need clips to be seen */}
-      {item.cat === 'transition' || item.kind === 'group' || item.kind === 'motion' ? <video src={previewUrl(item)} autoPlay loop muted playsInline className="pointer-events-none absolute inset-0 h-full w-full object-cover" /> : null}
+      {/* a transition: on the film's own picture */}
+      {item.cat === 'transition' ? <TransitionOnPicture item={item} picture={frame} playing live blur={0.35} /> : null}
+      {/* a template: its title over the film, where it puts it */}
+      {item.kind === 'group' ? <TemplateOnPicture item={item} picture={frame} playing live /> : null}
     </div>
   );
 }

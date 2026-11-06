@@ -7,6 +7,8 @@
  *
  * Pure: no React, no DOM, so `node --test` runs it.
  */
+import type { Clip } from '../api.ts';
+import { replaceClip, type ReplaceFile } from './clip-replace.ts';
 
 /** The attribute that says which template a clip came from. */
 export const TEMPLATE_ATTR = 'data-template';
@@ -89,6 +91,40 @@ export function templateOf(tracks: readonly { clips: readonly TemplateClip[] }[]
   }
   const id = `templates/${mark.replace(/-\d+$/, '')}`;
   return { mark, id, clips: mine.map((c) => c.id), slots, words };
+}
+
+/** A place of a template's group as the library has it (`slot.html` in its bundle) or as taken into a project. */
+const isSlotClipSrc = (src: string | undefined): boolean => isSlotSrc(src) || /^slot\.html$/.test(src?.split('#')[0] ?? '');
+
+/** A clip of a template's group (lib/saved-insert): its track, where it starts, the clip. */
+export interface GroupClip { track: number; at: number; clip: Record<string, unknown> & { src?: string; time?: readonly number[] } }
+
+/** A template's places for pictures, in the order they play, each with its length (ms). */
+export function templateSlots<G extends GroupClip>(clips: readonly G[]): { clip: G; durMs: number }[] {
+  return clips
+    .filter((c) => isSlotClipSrc(c.clip.src))
+    .sort((a, b) => a.at - b.at || a.track - b.track)
+    .map((c) => ({ clip: c, durMs: Math.round(((c.clip.time?.[1] ?? 0) - (c.clip.time?.[0] ?? 0)) * 1000) }));
+}
+
+/**
+ * A template's clips with the person's own videos and pictures in its places, in the order they play (`files[i]` the
+ * i-th place; one missing leaves its place as it is): each place becomes its file, played from its start for the
+ * place's length (lib/clip-replace), keeping where it is and how it fills the picture.
+ */
+export function filledTemplate<G extends GroupClip>(clips: readonly G[], files: readonly (ReplaceFile | null | undefined)[]): G[] {
+  const into = new Map<G, ReplaceFile>();
+  templateSlots(clips).forEach((s, i) => { const f = files[i]; if (f) into.set(s.clip, f); });
+  return clips.map((c) => {
+    const file = into.get(c);
+    if (!file) return c;
+    const durMs = Math.round(((c.clip.time?.[1] ?? 0) - (c.clip.time?.[0] ?? 0)) * 1000);
+    const plan = replaceClip(c.clip as unknown as Clip, durMs, file);
+    if ('error' in plan) return c;
+    const clip: Record<string, unknown> = { ...c.clip };
+    for (const e of plan.edits) { if (e.value == null) delete clip[e.prop]; else clip[e.prop] = e.value; }
+    return { ...c, clip } as G;
+  });
 }
 
 /**
