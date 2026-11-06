@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { after, before, test } from 'node:test';
 
 /* the models as the library publishes them, listed with their sums in the package's local-models.json: two
@@ -16,7 +16,12 @@ const listed = (/** @type {Record<string, string>} */ some) => Object.entries(so
 const pkg = mkdtempSync(join(tmpdir(), 'library-package-'));
 writeFileSync(join(pkg, 'local-models.json'), JSON.stringify({ version: 1, models: [{ id: 'whisper-small', files: listed(whisper) }, { id: 'whisper-large-v3-turbo', files: listed(files) }] }));
 const library = createServer((req, res) => {
-  try { res.end(readFileSync(join(host, decodeURIComponent(req.url ?? '').replace(/^\/library\//, '')))); } catch { res.writeHead(404); res.end(); }
+  /* only what is in the fake library's folder */
+  const at = resolve(host, decodeURIComponent(req.url ?? '').replace(/^\/library\//, ''));
+  try {
+    if (!at.startsWith(host + sep)) throw new Error('outside');
+    res.end(readFileSync(at));
+  } catch { res.writeHead(404); res.end(); }
 });
 
 /** @type {import('node:http').Server} */

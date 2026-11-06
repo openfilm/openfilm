@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { after, before, test } from 'node:test';
 
 /* the library's host: a folder served as openfilm.dev/library serves the published parts, counting what is asked */
@@ -17,7 +17,12 @@ put('stickers/emoji/alien/files/emoji.png', 'png bytes');
 const asked = [];
 const server = createServer((req, res) => {
   asked.push(req.url ?? '');
-  try { res.end(readFileSync(join(host, decodeURIComponent(req.url ?? '').replace(/^\/library\//, '')))); } catch { res.writeHead(404); res.end(); }
+  /* only what is in the fake library's folder */
+  const at = resolve(host, decodeURIComponent(req.url ?? '').replace(/^\/library\//, ''));
+  try {
+    if (!at.startsWith(host + sep)) throw new Error('outside');
+    res.end(readFileSync(at));
+  } catch { res.writeHead(404); res.end(); }
 });
 
 before(async () => {
