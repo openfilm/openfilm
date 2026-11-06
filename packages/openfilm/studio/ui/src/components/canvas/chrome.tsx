@@ -4,7 +4,7 @@
  * snapping to the grid, how far it is zoomed), the list itself, and a file seen whole over the board.
  */
 import React from 'react';
-import { useReactFlow, useStore } from '@xyflow/react';
+import { Background, BackgroundVariant, useReactFlow, useStore } from '@xyflow/react';
 import {
   Clapperboard, Grid3x3, Hand, History, Keyboard, LayoutTemplate, ListTree, Map as MapIcon, MousePointer2, Palette, Plus, Scissors, Search, Shapes, Spline,
   Type as TypeIcon, UserRound, X,
@@ -23,6 +23,29 @@ const TOOL = 'flex h-8 w-8 items-center justify-center rounded-[8px] text-[var(-
 const ON = '!bg-[var(--cv-float-hover)]';
 /** the bottom left bar's smaller ones */
 const SMALL = 'flex h-7 min-w-7 items-center justify-center rounded-[8px] px-1 text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
+
+/**
+ * The board's dots, the same on the screen however far it is zoomed: each 1.6 across, 20 apart, twice as far apart (on
+ * every other one) each time zooming out would bring them closer than 14 — never a haze of specks, never gone.
+ */
+export function Dots() {
+  const zoom = useStore((s) => s.transform[2]);
+  let gap = 20;
+  while (gap * zoom < 14) gap *= 2;
+  return <Background variant={BackgroundVariant.Dots} gap={gap} size={1.6 / zoom} />;
+}
+
+/** The canvas is still being tried out: said at its bottom left, its tip saying what that means. */
+export function BetaTag() {
+  const t = useT();
+  return (
+    <Tooltip label={t('canvas.betaTip')} side="top">
+      <span className="pointer-events-auto absolute bottom-4 left-3 z-20 flex h-[22px] cursor-default select-none items-center rounded-full border-[0.5px] !border-[var(--cv-bar-line)] bg-[color-mix(in_srgb,var(--cv-bg)_70%,transparent)] px-2.5 text-[11px] font-medium tracking-wide text-[var(--cv-ink-2)] backdrop-blur-[16px]">
+        {t('canvas.beta')}
+      </span>
+    </Tooltip>
+  );
+}
 
 /** The toolbar at the board's foot: what is added, how the board is moved, the templates, the keys. */
 export function BottomToolbar({ adding, onAdd, tool, onTool, onTemplates, onLibrary, onCharacters, onHistory }: {

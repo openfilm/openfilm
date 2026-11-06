@@ -1526,6 +1526,7 @@ export const zhCN: Words = {
     toCanvas: '切换到画布',
     editTitle: '剪辑',
     words: {
+      list: '列表',
       body: '正文',
       heading: '标题 {n}',
       bold: '加粗',

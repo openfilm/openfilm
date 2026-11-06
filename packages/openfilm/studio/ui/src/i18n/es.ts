@@ -1525,6 +1525,7 @@ export const es: Words = {
     toCanvas: 'Cambiar al lienzo',
     editTitle: 'Edición',
     words: {
+      list: 'Lista',
       body: 'Texto',
       heading: 'Título {n}',
       bold: 'Negrita',

@@ -69,10 +69,10 @@ export function AddMenu({ menu, files, templates, onKind, onUpload, onFile, onTe
   }));
   const sections: Array<{ title: string; rows: Row[] }> = view === 'files' ? [{ title: t('canvas.menu.fromAssets'), rows: fileRows }]
     : view === 'templates' ? [{ title: t('canvas.menu.templates'), rows: templateRows }]
-      : menu.from?.side === 'source' ? [{ title: t('canvas.menu.fromNode'), rows: (['note', 'image', 'video', 'cut', 'music'] as const).map(kind).filter((r) => match(r.label)) }]
+      : menu.from?.side === 'source' ? [{ title: t('canvas.menu.fromNode'), rows: (['note', 'image', 'music', 'video', 'cut'] as const).map(kind).filter((r) => match(r.label)) }]
         : menu.from?.side === 'target' ? [{ title: t('canvas.menu.intoNode'), rows: [upload, fromAssets, kind('note'), kind('image')].filter((r) => match(r.label)) }]
           : [
-            { title: t('canvas.menu.nodes'), rows: (['note', 'image', 'video', 'cut', 'music'] as const).map(kind).filter((r) => match(r.label)) },
+            { title: t('canvas.menu.nodes'), rows: (['note', 'image', 'music', 'video', 'cut'] as const).map(kind).filter((r) => match(r.label)) },
             { title: t('canvas.menu.resources'), rows: [upload, fromAssets].filter((r) => match(r.label)) },
             /* searching: the project's files and the templates too */
             ...(needle ? [{ title: t('canvas.menu.fromAssets'), rows: fileRows.slice(0, 8) }, { title: t('canvas.menu.templates'), rows: templateRows }] : []),

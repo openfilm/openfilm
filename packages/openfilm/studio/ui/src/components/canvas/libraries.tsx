@@ -19,7 +19,7 @@ export function CanvasModal({ onClose, side, children, label }: {
 }) {
   const t = useT();
   React.useEffect(() => {
-    const key = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.stopPropagation(); onClose(); } };
+    const key = (event: KeyboardEvent) => { if (event.key === 'Escape' && !event.isComposing) { event.stopPropagation(); onClose(); } };
     window.addEventListener('keydown', key, true);
     return () => window.removeEventListener('keydown', key, true);
   }, [onClose]);
@@ -120,7 +120,7 @@ export function HistoryModal({ projectId, uploads, onAdd, onClose }: {
         {part === 'made' ? <TopTabs tabs={[['project', t('canvas.history.thisProject')], ['all', t('canvas.history.allProjects')]]} on={scope} onPick={setScope} /> : <span className="text-[14px] font-medium">{t('canvas.history.uploaded')}</span>}
       </div>
       <div className="flex items-center gap-1 px-4 pt-3">
-        {(['all', 'image', 'video', 'audio'] as const).map((f) => <Chip key={f} label={t(`canvas.history.kinds.${f}`)} count={counts[f]} on={filter === f} onClick={() => setFilter(f)} />)}
+        {(['all', 'image', 'audio', 'video'] as const).map((f) => <Chip key={f} label={t(`canvas.history.kinds.${f}`)} count={counts[f]} on={filter === f} onClick={() => setFilter(f)} />)}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-4">
         {part === 'made' && made === null ? null : shown.length ? (

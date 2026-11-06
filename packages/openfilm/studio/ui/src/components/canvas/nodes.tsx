@@ -19,7 +19,7 @@ import type { WorkspaceResource } from '@/lib/workspace-resources';
 import { Tooltip } from '../Tooltip';
 import { useBoard, type CutNode, type FileNode, type FrameNode, type MakeNode, type NoteNode } from './board';
 import { ActionBar, CutPanel, MakePanel, NotePanel } from './panels';
-import { Words, WritingBar } from './words';
+import { Words, WritingBar, useDraft } from './words';
 import { SoundCard } from './sound';
 
 /** below this zoom a node is only its outline (its picture, its words are not drawn) */
@@ -254,14 +254,14 @@ export function NoteNodeView({ id, data, selected, height }: NodeProps<NoteNode>
   const area = React.useRef<HTMLTextAreaElement>(null);
   /* the bar over it pressed: the words stay open to write in */
   const barPressed = React.useRef(false);
-  const pressedAt = React.useRef<[number, number] | null>(null);
+  const words = useDraft(data.text, (text) => board.setData(id, { text }));
   return (
     <div className="h-full w-full" onDoubleClick={write}>
       <NotePanel id={id} />
       {editing && !board.readOnly ? (
         <NodeToolbar nodeId={id} isVisible position={Position.Top} offset={32}>
           <div data-writing-bar onPointerDownCapture={() => { barPressed.current = true; }}>
-            <WritingBar area={area} onChange={(text) => board.setData(id, { text })} onLarger={() => board.resize(id, { w: 720, h: 520 })} />
+            <WritingBar area={area} onChange={words.set} onLarger={() => board.resize(id, { w: 720, h: 520 })} />
           </div>
         </NodeToolbar>
       ) : null}
@@ -275,11 +275,10 @@ export function NoteNodeView({ id, data, selected, height }: NodeProps<NoteNode>
             autoFocus
             /* written on where it ends */
             onFocus={(event) => { const end = event.currentTarget.value.length; event.currentTarget.setSelectionRange(end, end); }}
-            value={data.text}
-            onChange={(event) => board.setData(id, { text: event.target.value })}
+            {...words.props}
             /* done when the focus goes elsewhere: not to the bar over it, which hands it back */
             onBlur={() => { setTimeout(() => { if (document.activeElement !== area.current && !document.activeElement?.closest('[data-writing-bar]') && !barPressed.current) board.edit(null); barPressed.current = false; }, 0); }}
-            onKeyDown={(event) => { if (event.key === 'Escape') { barPressed.current = false; board.edit(null); } }}
+            onKeyDown={(event) => { if (event.key === 'Escape' && !event.nativeEvent.isComposing) { barPressed.current = false; board.edit(null); } }}
             placeholder={hint}
             className="nodrag nowheel h-full w-full resize-none bg-transparent px-4 py-3.5 text-[14px] leading-[1.65] text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-ink-3)]"
           />
@@ -288,15 +287,13 @@ export function NoteNodeView({ id, data, selected, height }: NodeProps<NoteNode>
             <>
               <TryLine icon={PenLine} label={t('canvas.try.write')} onClick={write} />
               <TryLine icon={ImageIcon} label={t('canvas.try.toImage')} onClick={() => board.spawn(id, 'image')} />
-              <TryLine icon={Film} label={t('canvas.try.toVideo')} onClick={() => board.spawn(id, 'video')} />
               <TryLine icon={Music} label={t('canvas.try.toMusic')} onClick={() => board.spawn(id, 'music')} />
+              <TryLine icon={Film} label={t('canvas.try.toVideo')} onClick={() => board.spawn(id, 'video')} />
             </>
           )} />
         ) : (
-          /* a click in its words (not a drag of the card) writes in it, where the words end */
-          <div onPointerDown={(event) => { pressedAt.current = [event.clientX, event.clientY]; }}
-            onClick={(event) => { const [x, y] = pressedAt.current ?? [event.clientX, event.clientY]; if (Math.hypot(event.clientX - x, event.clientY - y) < 4) write(); }}
-            className={`h-full w-full cursor-text overflow-hidden whitespace-pre-wrap break-words px-4 py-3.5 text-[14px] leading-[1.65] ${data.text ? 'text-[var(--cv-ink)]' : 'text-[var(--cv-ink-3)]'}`}>
+          /* its words as they read: the card is held and moved anywhere on them; a double click, Enter or typing writes in it */
+          <div className={`h-full w-full overflow-hidden break-words px-4 py-3.5 text-[14px] leading-[1.65] ${data.text ? 'text-[var(--cv-ink)]' : 'text-[var(--cv-ink-3)]'}`}>
             {data.text ? <Words text={data.text} /> : hint}
           </div>
         )}

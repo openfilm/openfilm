@@ -1526,6 +1526,7 @@ export const en = {
     toCanvas: 'Switch to the canvas',
     editTitle: 'Edit',
     words: {
+      list: 'List',
       body: 'Body',
       heading: 'Heading {n}',
       bold: 'Bold',

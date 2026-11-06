@@ -1525,6 +1525,7 @@ export const ja: Words = {
     toCanvas: 'キャンバスに切り替え',
     editTitle: '編集',
     words: {
+      list: 'リスト',
       body: '本文',
       heading: '見出し {n}',
       bold: '太字',

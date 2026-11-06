@@ -18,6 +18,7 @@ import { Tooltip } from '../Tooltip';
 import { modelTime, timeLabel, useBoard, type Choice, type MakeData } from './board';
 import { frameOf, splitGrid } from './pixels';
 import { ProviderMark } from '../settings/ProviderMark';
+import { useDraft } from './words';
 import { useLibraryVoices, voiceLook } from '@/lib/library-voices';
 import { VoiceId, VoicePicker, defaultVoice, serviceOf, voicesOf } from './voices';
 
@@ -270,6 +271,7 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
   const error = board.error(id);
   const unused = board.unused.get(id) ?? 0;
   const set = (patch: Partial<MakeData>) => { board.willChange(); board.setData(id, patch); };
+  const prompt = useDraft(data.prompt ?? '', (text) => board.setData(id, { prompt: text }));
   const setOpts = (patch: Partial<NonNullable<MakeData['opts']>>) => set({ opts: { ...data.opts, ...patch } });
   const ratios = data.make === 'image' || data.make === 'video' ? model?.ratios ?? (data.make === 'image' ? IMAGE_RATIOS : VIDEO_RATIOS) : null;
   const range = lengthRange(data.make, model);
@@ -409,11 +411,11 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
           </div>
         ) : null}
         <textarea
-          value={data.prompt ?? ''}
+          {...prompt.props}
           rows={expanded ? 14 : 3}
           onFocus={board.willChange}
-          onChange={(event) => board.setData(id, { prompt: event.target.value })}
           onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing) return;
             if (event.key === 'Escape') event.currentTarget.blur();
             else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); board.make(id); }
           }}
@@ -633,6 +635,7 @@ export function NotePanel({ id }: { id: string }) {
           disabled={busy}
           onChange={(event) => { setAsk(event.target.value); setError(null); }}
           onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing) return;
             if (event.key === 'Escape') event.currentTarget.blur();
             else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); send(); }
           }}

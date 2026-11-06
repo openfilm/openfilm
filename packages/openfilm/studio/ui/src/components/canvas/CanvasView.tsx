@@ -18,8 +18,9 @@
  * Its keys are its own: Studio's shortcuts leave them alone (`data-studio-canvas`, typing-target.ts).
  */
 import React from 'react';
+import { flushSync } from 'react-dom';
 import {
-  Background, BackgroundVariant, MiniMap, ReactFlow, ReactFlowProvider, SelectionMode, useEdgesState, useNodesState, useReactFlow,
+  MiniMap, ReactFlow, ReactFlowProvider, SelectionMode, useEdgesState, useNodesState, useReactFlow,
   type Connection, type Edge, type FinalConnectionState,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -45,7 +46,7 @@ import {
   BoardContext, allChoicesFor, boxOf, choiceOf, choicesFor, defaultChoice, GROUP_HELD, fitGroups, fromFlow, tidyGroup, unstack, inputViews, keepModelTime, runErrors, runs, runsChanged, shownBoards, startRun, toFlow, useRuns,
   type Board, type BoardNode, type FrameData, type FrameNode, type MakeData, type MakingNode, type Side, type SpawnKind,
 } from './board';
-import { BottomToolbar, CornerBar, Outline, Viewer } from './chrome';
+import { BetaTag, BottomToolbar, CornerBar, Dots, Outline, Viewer } from './chrome';
 import { AddMenu, type MenuAt } from './menus';
 import { CHARACTER_PARTS, CharacterLibrary, HistoryModal, MaterialLibrary } from './libraries';
 import { RedrawEditor, type RedrawWay } from './redraw';
@@ -902,8 +903,9 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
   const onKeyDown = (event: KeyboardEvent) => {
     const target = event.target as HTMLElement;
     if (target !== document.body && !rootRef.current?.contains(target)) return;
-    /* a menu open has the keys (its Escape closes it, and only it) */
+    /* a menu open has the keys (its Escape closes it, and only it); a dialog over the board has them all (its own undo) */
     if (menu || context) return;
+    if (modal || redraw || target.closest('[role="dialog"]')) { if (target === document.body) event.stopPropagation(); return; }
     if (viewing) { if (event.key === 'Escape') { event.preventDefault(); setViewing(null); } return; }
     if (picking && event.key === 'Escape') { event.preventDefault(); setPicking(null); return; }
     if (target.closest('input, textarea, [contenteditable="true"]')) return;
@@ -924,13 +926,20 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
     else if (mod && key === 'enter' && single && now.current.nodes.find((n) => n.id === single)?.type === 'make') { done(); void makeNow(single); }
     else if (!mod && event.shiftKey && event.code === 'Digit1') { done(); void flow.fitView({ padding: 0.2, maxZoom: 1, duration: 200 }); }
     else if (!mod && event.shiftKey && event.code === 'Digit0') { done(); void flow.zoomTo(1, { duration: 150 }); }
-    /* a text node selected and typed into: written in, what was typed first (an input method's too, once it is open) */
-    else if (!mod && !event.altKey && single && !editing && (event.key.length === 1 || event.key === 'Process') && now.current.nodes.find((n) => n.id === single)?.type === 'note') {
+    /*
+     * a text node selected and typed into (or Enter): its words opened and the focus in them before the key does what it
+     * does, so what is typed lands there as typed — an input method's composing too, which a key put in by hand broke
+     */
+    else if (!mod && !event.altKey && single && !editing && (event.key.length === 1 || event.key === 'Process' || event.keyCode === 229 || key === 'enter')
+      && now.current.nodes.find((n) => n.id === single)?.type === 'note') {
       const note = now.current.nodes.find((n) => n.id === single)!;
+      if (key === 'enter') done();
       willChange();
-      if (event.key.length === 1) { done(); setNodes((list) => list.map((n) => (n.id === single && n.type === 'note' ? { ...n, data: { ...n.data, text: n.data.text + event.key } } : n))); }
-      if (note.height === CARD_H) board.resize(single, { w: NOTE_W, h: NOTE_H });
-      setEditing(single);
+      flushSync(() => {
+        if (note.height === CARD_H) setNodes((list) => list.map((n) => (n.id === single ? { ...n, width: NOTE_W, height: NOTE_H } : n)));
+        setEditing(single);
+      });
+      rootRef.current?.querySelector<HTMLTextAreaElement>(`.react-flow__node[data-id="${CSS.escape(single)}"] textarea`)?.focus();
     }
     else if (!mod && key === 'v') { done(); setTool('select'); }
     else if (!mod && key === 'h') { done(); setTool('hand'); }
@@ -1154,7 +1163,7 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
           proOptions={{ hideAttribution: true }}
           className={`openfilm-canvas ${tool === 'hand' ? 'cursor-grab' : ''}`}
         >
-          <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
+          <Dots />
           {map ? (
             /* beside the list of nodes when that is open, both on the right */
             <MiniMap position="bottom-right" pannable zoomable style={{ marginBottom: 60, marginRight: outline ? 336 : 8 }}
@@ -1204,6 +1213,7 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
           onPick={(id) => { void showBoard(id); }} onAdd={() => addBoard()} onRename={renameBoard} onCopy={(id) => { void addBoard(id); }}
           onRemove={(id) => { void removeBoard(id); }}
           {...(studioHost ? {} : { onOpenApart: (id: string) => { const url = new URL(window.location.href); url.searchParams.set('canvas', id); window.open(url.toString(), '_blank'); } })} />
+        <BetaTag />
         <CornerBar outline={outline} onOutline={() => setOutline((v) => !v)} map={map} onMap={() => setMap((v) => !v)}
           wires={wires} onWires={() => setWires((v) => !v)} snap={snap} onSnap={() => setSnap((v) => !v)} />
         {outline ? (
@@ -1215,15 +1225,16 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
             {/* to start: a node of each kind in the middle of the view, or the agent asked for a script */}
             <div className="pointer-events-auto flex flex-wrap justify-center gap-2">
               {([
-                ['image', ImageIcon, 'canvas.start.image'], ['video', Film, 'canvas.start.video'], ['music', AudioLines, 'canvas.start.audio'],
-                ['script', ScrollText, 'canvas.start.script'], ['cut', Scissors, 'canvas.start.cut'],
+                /* in the order a film is made: the words, the pictures, the sound, the clips, the cut */
+                ['script', ScrollText, 'canvas.start.script'], ['image', ImageIcon, 'canvas.start.image'], ['music', AudioLines, 'canvas.start.audio'],
+                ['video', Film, 'canvas.start.video'], ['cut', Scissors, 'canvas.start.cut'],
               ] as const).map(([kind, Icon, label]) => (
                 <button key={kind} type="button"
                   onClick={() => {
                     if (kind === 'script') { if (studioHost?.ask) studioHost.ask({ text: t('canvas.start.scriptAsk'), refs: [] }); else addKind('note', middle()); return; }
                     addKind(kind, middle());
                   }}
-                  className="flex h-14 w-[200px] items-center gap-3 rounded-2xl border !border-[var(--cv-float-line)] bg-[var(--cv-float)] px-3 text-left text-[14px] font-medium text-[var(--cv-ink)] transition hover:bg-[color-mix(in_srgb,var(--cv-float)_93%,var(--cv-ink))]">
+                  className="flex h-14 w-[184px] items-center gap-3 rounded-2xl border !border-[var(--cv-float-line)] bg-[var(--cv-float)] px-3 text-left text-[14px] font-medium text-[var(--cv-ink)] transition hover:bg-[color-mix(in_srgb,var(--cv-float)_93%,var(--cv-ink))]">
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--cv-chip)]"><Icon size={16} /></span>
                   <span className="min-w-0 flex-1 truncate">{t(label)}</span>
                 </button>
@@ -1347,7 +1358,7 @@ function Preview({ doc, fileUrl }: { doc: CanvasDoc; fileUrl: (path: string) => 
         proOptions={{ hideAttribution: true }}
         className="openfilm-canvas"
       >
-        <Background variant={BackgroundVariant.Dots} gap={22} size={1.3} />
+        <Dots />
       </ReactFlow>
     </BoardContext.Provider>
   );

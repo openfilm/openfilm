@@ -1522,6 +1522,7 @@ export const ko: Words = {
     toCanvas: '캔버스로 전환',
     editTitle: '편집',
     words: {
+      list: '목록',
       body: '본문',
       heading: '제목 {n}',
       bold: '굵게',
