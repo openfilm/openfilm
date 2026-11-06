@@ -13,6 +13,7 @@
  *            { type: 'preview', clip, overrides }   show a tweak on a page, not kept (null: stop showing)
  *            { type: 'overrides', list }  a page on its own: its clip's changes (SPEC §1), applied after each frame
  *            { type: 'pick', x, y, seq }          what is under this stage point
+ *            { type: 'shown' }            this load is shown now, over the one it replaces: say when it is on screen
  *   film   → { source: 'openfilm-film', type: 'ready', duration, width, height, sounds, spans, origin }
  *            { type: 'seeked', t, seq }           the frame at t is on screen
  *            { type: 'clock', ping, now }         this page's clock (performance.now) when the ping came
@@ -23,6 +24,8 @@
  *            { type: 'updated', seq, inPlace, duration, sounds, spans }   (inPlace false: load the page again)
  *            { type: 'spans', spans }             a page opened for the first time said its own length and size
  *            { type: 'picked', seq, target }      (null: nothing there)
+ *            { type: 'painted' }                  shown, it has been put on screen (two refreshes on): the load it
+ *                                         replaced, kept over it till then, may go
  *            { type: 'error', message }           the film or a page failed
  *            { type: 'undecoded', src }           a video this browser could not play (src as film.html writes it)
  *
@@ -98,11 +101,13 @@
       const f = await loaded;
       if (!f) { drawing = false; return; }
       /* a person is watching: the timeline draws for them (a scrub does not wait for its videos to be composited); a
-         page on its own draws its frame. A frame that does not come within a moment is let go: one stuck page or
-         video must not stop the picture. */
+         page on its own draws its frame. A load behind the picture draws its first frame whole, as an exact frame is
+         (its videos on screen, its pages drawn): drawn for a watcher, it was swapped in white, then without its pages,
+         for as long as they took. A frame that does not come within a moment is let go: one stuck page or video must
+         not stop the picture. */
       const watch = editor()?.watch;
       let timer;
-      await Promise.race([watch ? watch(t) : drawn(f, t), new Promise((done) => { timer = setTimeout(done, behind ? BEHIND_WAIT_MS : FRAME_WAIT_MS); })]);
+      await Promise.race([watch && !behind ? watch(t) : drawn(f, t), new Promise((done) => { timer = setTimeout(done, behind ? BEHIND_WAIT_MS : FRAME_WAIT_MS); })]);
       clearTimeout(timer);
       post({ type: 'seeked', t, seq });
     } catch (e) { fail(e); }
@@ -189,6 +194,8 @@
     if (e.origin !== EDITOR || e.data?.source !== 'openfilm-studio') return;
     const m = e.data;
     if (m.type === 'clock') { post({ type: 'clock', ping: m.ping, now: clock() }); return; }
+    /* a refresh draws this page as shown, the next one is on screen */
+    if (m.type === 'shown') { requestAnimationFrame(() => requestAnimationFrame(() => post({ type: 'painted' }))); return; }
     /* before the next frame is drawn: the one asked for after them shows them */
     if (m.type === 'overrides') { if (!editor()) tweaks = Array.isArray(m.list) && m.list.length ? m.list : null; return; }
     if (m.type === 'seek') { stop(); next = m; asked = m.t; draw(); return; }

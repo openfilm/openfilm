@@ -16,13 +16,15 @@ import type { Film } from '../api';
 import { useT } from '@/i18n';
 import type { ClipSpan } from '@/lib/film-shape';
 import type { Anchor, Sound } from './player';
-import { heldNext, reloaded, shownAfter, updateKeys, zoomedPageScale, type Frame } from './preview-frames';
+import { heldNext, left, reloaded, shownAfter, shownOf, updateKeys, zoomedPageScale, type Frame } from './preview-frames';
 import { usePreviewPrefs } from '@/lib/preview-prefs';
 import { chromiumBased } from '@/lib/browser';
 import { PictureZoom } from '@/lib/viewer-zoom';
 
 /** How far the film's frame reaches past the picture's box on each side, in px (see the `stage-frames` clip). */
 const BLEED = 1;
+/** How long a load replaced stays over the new one when that never says it is on screen, ms. */
+const LEAVING_MAX_MS = 1000;
 
 export type FilmInfo = { duration: number; width: number; height: number; sounds: Sound[]; spans: ClipSpan[] };
 /** What is selected in the picture: an element of a page (named by selector and match), or a whole clip. */
@@ -147,7 +149,7 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
   const scaleOf = useRef(new Map<number, number | null>());
   const framesRef = useRef(frames);
   framesRef.current = frames;
-  const shown = frames.find((f) => f.ready) ?? null;
+  const shown = shownOf(frames);
   const shownRef = useRef(shown);
   shownRef.current = shown;
   /** what failed in the frame being loaded, else in the one shown */
@@ -294,6 +296,18 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
     if (firstShown.current) { firstShown.current = false; return; }
     tell({ event: 'reset' });
   }, [shownKey]);
+  /* another load shown over the one it replaced: that one stays on top, told nothing more, until the new one says it
+     has been put on screen (its `painted`, a refresh later), else for a second at most (a page in the background
+     draws nothing) */
+  const going = frames.find((f) => f.leaving)?.key;
+  useEffect(() => {
+    if (going == null || shownKey == null) return undefined;
+    up.current.delete(going);
+    post(shownKey, { type: 'shown' });
+    const timer = setTimeout(() => setFrames(left), LEAVING_MAX_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [going, shownKey]);
 
   /**
    * Show the frame `key`, drawn at `t`: the film playing, it plays on from the line; still, the playhead may have moved
@@ -360,6 +374,12 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
       const key = [...elements.current].find(([, el]) => el.contentWindow === e.source)?.[0];
       if (key == null) return;
       const m = e.data;
+      /* the frame going says nothing more; the one shown over it says when it is on screen */
+      if (framesRef.current.find((f) => f.key === key)?.leaving) return;
+      if (m.type === 'painted') {
+        if (key === shownRef.current?.key) requestAnimationFrame(() => setFrames(left));
+        return;
+      }
       if (m.type === 'ready') {
         onInfo(m as FilmInfo);
         up.current.add(key);
@@ -512,11 +532,13 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
             /* the one loading is all but transparent, not hidden: the film is on another site, in a process of its own,
                and a frame hidden from there is not drawn at all, so a page that waits to draw (an image's decode()) would
                never be ready; nor quite 0, or it is not put on screen at all, and is blank for a moment when it is shown */
-            data-loading={f === shown ? undefined : ''}
+            data-loading={f === shown || f.leaving ? undefined : ''}
+            data-leaving={f.leaving ? '' : undefined}
             style={{
               width: stage.w, height: stage.h,
               transform: `translate(${-BLEED}px, ${-BLEED}px) scale(${(fit.w + 2 * BLEED) / stage.w}, ${(fit.h + 2 * BLEED) / stage.h})`,
-              ...(f === shown ? {} : { opacity: 0.001, pointerEvents: 'none' }),
+              /* the one replaced: over the new one until that is on screen */
+              ...(f === shown ? {} : f.leaving ? { zIndex: 1, pointerEvents: 'none' } : { opacity: 0.001, pointerEvents: 'none' }),
             }}
           />
         ))}

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { HELD_DRAWN_MAX_MS, ZOOMED_AREA_MAX, ZOOMED_SIDE_MAX, heldNext, pageScaleFor, reloaded, shownAfter, updateKeys, zoomedPageScale } from './preview-frames.ts';
+import { HELD_DRAWN_MAX_MS, ZOOMED_AREA_MAX, ZOOMED_SIDE_MAX, heldNext, left, pageScaleFor, reloaded, shownAfter, shownOf, updateKeys, zoomedPageScale } from './preview-frames.ts';
 
 test('a load behind the picture: the frame shown stays until the new one has drawn, and only then goes', () => {
   const first = [{ key: 1, ready: true }];
@@ -9,7 +9,16 @@ test('a load behind the picture: the frame shown stays until the new one has dra
   /* loaded again before that one drew: the one shown stays, the one loading is let go */
   const again = reloaded(loading);
   assert.deepEqual(again, [{ key: 1, ready: true }, { key: 3, ready: false }]);
-  assert.deepEqual(shownAfter(again, 3), [{ key: 3, ready: true }], 'drawn: it replaces the one shown');
+  const swapped = shownAfter(again, 3);
+  assert.deepEqual(swapped, [{ key: 1, ready: true, leaving: true }, { key: 3, ready: true }], 'drawn: it is shown, the one it replaces stays over it');
+  assert.equal(shownOf(swapped)?.key, 3);
+  const gone = left(swapped);
+  assert.deepEqual(gone, [{ key: 3, ready: true }], 'on screen: the one it replaced goes');
+  assert.equal(left(gone), gone, 'nothing going: unchanged');
+  /* loaded again while the one replaced is still going: it stays over the picture, in its place */
+  assert.deepEqual(reloaded(swapped), [{ key: 1, ready: true, leaving: true }, { key: 3, ready: true }, { key: 4, ready: false }]);
+  /* drawn again before that one went: only the frame shown last goes over the new one */
+  assert.deepEqual(shownAfter(reloaded(swapped), 4), [{ key: 3, ready: true, leaving: true }, { key: 4, ready: true }]);
   /* a moment drawn by the frame shown changes nothing; nor does one of a frame gone */
   assert.equal(shownAfter(again, 1), again);
   assert.equal(shownAfter(again, 2), again);

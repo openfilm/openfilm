@@ -30,6 +30,19 @@ Object.assign(document.body.style, { width: stage.w + 'px', height: stage.h + 'p
 const CLIP_TAGS = new Set(['iframe', 'video', 'img', 'audio']);
 const sections = [...document.body.children].filter((el) => el.localName === 'section');
 const elements = sections.map((s) => { s.style.display = 'contents'; return [...s.children].filter((el) => CLIP_TAGS.has(el.localName)); });
+/* the file written again while this page loaded (an editor's edit lands in a few writes): the page as it came and the
+   file as read since hold other clips. It is loaded again, as it is now, a few times at most; still apart, they are
+   said to be */
+if (doc.tracks.length !== elements.length || doc.tracks.some((tr, ti) => tr.clips.length !== elements[ti].length)) {
+  const again = new URL(location.href);
+  const n = Number(again.searchParams.get('film-again')) || 0;
+  if (n < 3) {
+    again.searchParams.set('film-again', String(n + 1));
+    location.replace(again.href);
+    await new Promise(() => {});
+  }
+  throw new Error('film.html changed while it was read, again and again: the page and the file hold other clips');
+}
 const url = (src) => new URL(srcHref(src), location.href);
 /* an editor's preview (`?film-missing=skip`) plays on past a clip whose file is not there: the clip keeps its time,
    but is neither loaded, drawn nor heard. Anything else (a check, an export) says the missing file and stops */

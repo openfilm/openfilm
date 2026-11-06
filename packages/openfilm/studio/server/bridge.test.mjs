@@ -19,11 +19,11 @@ function filmPage({ alone = false, duration = 10, unplayed = [] } = {}) {
   let now = 5000;
   let frames = new Map();
   let ids = 0;
-  /* each draw waits until the test lets it go */
-  const held = (t, play = null) => new Promise((done) => drawn.push({ t, play, done }));
+  /* each draw waits until the test lets it go; `exact`: the film's own frame (an export's), not the editor's watch */
+  const held = (t, play = null, exact = false) => new Promise((done) => drawn.push({ t, play, done, exact }));
   const window = {
     addEventListener: (type, fn) => listeners.set(type, fn),
-    film: { ...(duration == null ? {} : { duration }), width: 320, height: 180, ready: Promise.resolve(), frame: alone ? (t) => held(t) : () => {} },
+    film: { ...(duration == null ? {} : { duration }), width: 320, height: 180, ready: Promise.resolve(), frame: (t) => held(t, null, true) },
     ...(alone ? {} : { __filmEditor: { watch: held, update: async () => true, unplayed: () => unplayed } }),
   };
   const parent = { postMessage: (m) => said.push(m) };
@@ -92,6 +92,9 @@ test('a load of the film behind the picture shown says its first moment is drawn
   page.send({ type: 'seek', t: 3, seq: 1, behind: true });
   await new Promise((r) => setTimeout(r, 1300));
   assert.deepEqual(page.said.filter((m) => m.type === 'seeked'), [], 'not let go after the second a shown frame is given');
+  /* drawn whole, as an exact frame is (its videos on screen, its pages drawn), not as a watcher's moment, which does
+     not wait for them: swapped in that way it came up white, then without its pages */
+  assert.equal(page.drawn[0].exact, true);
   page.drawn[0].done();
   await page.settle();
   assert.deepEqual(page.said.filter((m) => m.type === 'seeked').map((m) => m.t), [3]);
@@ -99,6 +102,17 @@ test('a load of the film behind the picture shown says its first moment is drawn
   page.send({ type: 'seek', t: 4, seq: 2 });
   await new Promise((r) => setTimeout(r, 1300));
   assert.deepEqual(page.said.filter((m) => m.type === 'seeked').map((m) => m.t), [3, 4]);
+  assert.equal(page.drawn[1].exact, false, 'shown, a moment is drawn for the person watching');
+});
+
+test('a load shown over the one it replaces says when it is on screen: two refreshes on', async () => {
+  const page = filmPage();
+  await page.settle();
+  page.send({ type: 'shown' });
+  await page.refresh();
+  assert.deepEqual(page.said.filter((m) => m.type === 'painted'), [], 'the first refresh draws it');
+  await page.refresh();
+  assert.deepEqual(page.said.filter((m) => m.type === 'painted').map((m) => m.type), ['painted']);
 });
 
 test('playing, the film draws its own frames from the line it was given, each frame of its rate once, a refresh ahead', async () => {
