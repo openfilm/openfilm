@@ -29,7 +29,7 @@ import { attrsOf, pasteAttrs, type AttrGroup, type CopiedAttrs } from '@/lib/cli
 import { cutPoints, namedTrack, nextCut, trackNamesOf } from '@/lib/timeline-nav';
 import { anyLocked, lockedEdits } from '@/lib/track-lock';
 import { placeMedia, type SourceRange } from '@/lib/media-place';
-import { apartOnTracks, type ClipEdit } from '@/lib/film-clip-edits';
+import { apartOnTracks, stackClipEdit, type ClipEdit } from '@/lib/film-clip-edits';
 import { mediaFetch, useMediaImages } from '@/lib/media-queue';
 import { clipboardItemsOf, clipboardNow, laneOfBlock, pasteEdit, type TimelineClipboardItem } from '@/lib/timeline-clipboard';
 import {
@@ -2136,12 +2136,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         const b = blockAt(clipLoc);
         if (b?.clipId) void duplicateRef.current(withLinkedBlocks(b));
       },
-      bringToFront: (clipLoc) => { const at = parseFilmDocLoc(clipLoc); if (at) void editBlocks([{ loc: clipLoc, prop: 'trackOrder', value: { from: at.track, to: 0 } }]); },
-      sendToBack: (clipLoc) => {
-        const at = parseFilmDocLoc(clipLoc);
-        const last = (filmRef.current?.tracks.length ?? 1) - 1;
-        if (at) void editBlocks([{ loc: clipLoc, prop: 'trackOrder', value: { from: at.track, to: last } }]);
-      },
+      bringToFront: (clipLoc) => { const e = stackClipEdit(filmRef.current?.tracks ?? [], clipLoc, 'front'); if (e) void editBlocks([e]); },
+      sendToBack: (clipLoc) => { const e = stackClipEdit(filmRef.current?.tracks ?? [], clipLoc, 'back'); if (e) void editBlocks([e]); },
       resetTransform: (clipLoc) => { void editBlocks([{ loc: clipLoc, prop: 'box', value: null }]); },
       exportClip: (clipId) => openClipExportRef.current(clipId),
       remove: (clipLoc) => { const b = blockAt(clipLoc); if (b) { void removeBlocks(withLinkedBlocks(b)); setStageElement(null); } },

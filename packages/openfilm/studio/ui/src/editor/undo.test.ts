@@ -54,6 +54,21 @@ test('track flags and order', () => {
   roundTrip(f, [{ op: 'track', track: 1, field: 'hidden', value: true }]);
 });
 
+test('a track order undone after the agent added a track above: the track that moved goes back, not the one now there', () => {
+  const f = film([{ src: 'a.html', id: 'a' }], [{ src: 'b.html', id: 'b' }], [{ src: 'c.html', id: 'c' }]);
+  const edit = props(['c', 'trackOrder', { from: 2, to: 0 }]);
+  const after = apply(f, edit);
+  assert.deepEqual(ids(after), [['c@0'], ['a@0'], ['b@0']]);
+  const undo = inverse(f, after, edit);
+  /* the agent writes a new track on top meanwhile */
+  const written = structuredClone(after);
+  written.tracks.unshift({ clips: [{ src: 'n.html', id: 'n' }] } as Film['tracks'][number]);
+  assert.deepEqual(ids(apply(written, undo)), [['n@0'], ['a@0'], ['b@0'], ['c@0']]);
+  /* and redone */
+  const back = apply(written, undo);
+  assert.deepEqual(ids(apply(back, inverse(written, back, undo))), [['n@0'], ['c@0'], ['a@0'], ['b@0']]);
+});
+
 test('split, delete (with a ripple), paste, drop, duplicate', () => {
   const f = film([{ src: 'v.mp4', id: 'v', at: 1, time: [2, 8] }, { src: 'b.html', id: 'b', at: 9 }], [{ src: 's.wav', id: 's' }]);
   const split = roundTrip(f, [{ op: 'split', clip: 'v', left: { end: 4 }, right: { start: 4, end: 8, at: 3 } }]);

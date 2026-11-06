@@ -1197,10 +1197,12 @@ function FilmStageSelectImpl({
       const k = e.key.toLowerCase();
       const action = keyAction(e);
       const wordsSelected = () => Boolean(window.getSelection()?.toString());
+      /* [ and ] are the timeline's too (select left / right of the playhead): from there, they are its */
+      const fromTimeline = Boolean((e.target as Element | null)?.closest?.('[data-timeline]'));
       const menuId = mod && e.shiftKey && k === 'h' ? 'hide'
         : mod && e.shiftKey && k === 'l' ? 'lock'
-          : !mod && !e.altKey && e.key === ']' ? 'front'
-            : !mod && !e.altKey && e.key === '[' ? 'back'
+          : !mod && !e.altKey && !fromTimeline && e.key === ']' ? 'front'
+            : !mod && !e.altKey && !fromTimeline && e.key === '[' ? 'back'
               : action === 'remove' || action === 'ripple-delete' ? 'delete'
                 : action === 'copy' && !wordsSelected() ? 'copy-layers'
                   : null;

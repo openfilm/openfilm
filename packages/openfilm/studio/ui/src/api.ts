@@ -40,7 +40,7 @@ export type Op =
   | { op: 'split'; clip: string; at: number; time: [number, number]; restTime: [number, number] }
   | { op: 'split'; clip: string; left: Record<string, PropValue>; right: Record<string, PropValue>; rightId?: string }
   | { op: 'track'; track: number; field: 'locked' | 'hidden' | 'muted'; value: boolean }
-  | { op: 'reorder'; from: number; to: number }
+  | { op: 'reorder'; from: number; to: number; clip?: string; below?: string; above?: string }
   | { op: 'props'; edits: PropEdit[] }
   | { op: 'stage'; w: number; h: number }
   | { op: 'fields'; clip: string; fields: Record<string, unknown> };
