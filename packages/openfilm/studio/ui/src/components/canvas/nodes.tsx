@@ -18,7 +18,7 @@ import { CARD_H, MAKE_MEDIA, NOTE_H, NOTE_W, type CanvasNode, type GroupColor } 
 import type { WorkspaceResource } from '@/lib/workspace-resources';
 import { Tooltip } from '../Tooltip';
 import { useBoard, type CutNode, type FileNode, type FrameNode, type MakeNode, type NoteNode } from './board';
-import { ActionBar, CutPanel, MakePanel } from './panels';
+import { ActionBar, CutPanel, MakePanel, NotePanel } from './panels';
 import { Words, WritingBar } from './words';
 
 /** below this zoom a node is only its outline (its picture, its words are not drawn) */
@@ -265,6 +265,7 @@ export function NoteNodeView({ id, data, selected, height }: NodeProps<NoteNode>
   const barPressed = React.useRef(false);
   return (
     <div className="h-full w-full" onDoubleClick={write}>
+      <NotePanel id={id} />
       {editing && !board.readOnly ? (
         <NodeToolbar nodeId={id} isVisible position={Position.Top} offset={32}>
           <div data-writing-bar onPointerDownCapture={() => { barPressed.current = true; }}>

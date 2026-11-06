@@ -178,6 +178,8 @@ export const api = {
   /** its canvas (`.film/canvas.json`, components/canvas): the whole board, read and written */
   canvas: (id: string) => call<{ nodes: unknown; edges: unknown }>(`${p(id)}/canvas`),
   putCanvas: (id: string, canvas: { nodes: unknown[]; edges: unknown[] }) => call<{ nodes: unknown; edges: unknown }>(`${p(id)}/canvas`, { method: 'PUT', json: canvas }),
+  /** a text node's words written by the person's own agent (studio/server/canvas.mjs canvasWriteRoute); 409 without one */
+  canvasWrite: (id: string, prompt: string, inputs: string[]) => call<{ text: string }>(`${p(id)}/canvas-write`, { method: 'POST', json: { prompt, inputs } }),
   /** the person's canvas templates (studio/server/canvas-templates.mjs): listed, kept from a project's board, laid down on one, removed */
   canvasTemplates: () => call<{ templates: Array<{ id: string; name: string; nodes: number; created: number }> }>('canvas-templates').then((r) => r.templates),
   saveCanvasTemplate: (id: string, name: string, board: { nodes: unknown[]; edges: unknown[] }) =>

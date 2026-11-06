@@ -124,6 +124,9 @@ function readMake(n) {
     ...(o.frames === true ? { frames: true } : {}),
     ...(short(o.quality) ? { quality: o.quality } : {}),
     ...(['text', 'omni', 'first', 'firstLast', 'refs'].includes(/** @type {string} */ (o.mode)) ? { mode: o.mode } : {}),
+    ...(short(o.size) ? { size: o.size } : {}),
+    ...(o.transparent === true ? { transparent: true } : {}),
+    ...(o.count === 2 || o.count === 4 ? { count: o.count } : {}),
   };
   const versions = (Array.isArray(n.versions) ? n.versions : []).filter(projectPath).slice(-VERSIONS_MAX);
   const fields = {
@@ -162,6 +165,32 @@ export async function canvasRoute(req, res, root, rest) {
   if (req.method === 'GET') { json(res, 200, await readCanvas(root)); return true; }
   if (req.method === 'PUT') { json(res, 200, await writeCanvas(root, await readJson(req))); return true; }
   return false;
+}
+
+/**
+ * A text node's words written by the person's own agent (an app with a chat, `askAgent`): POST `canvas-write`
+ * { prompt, inputs: [the words wired in] } → { text }, the words alone. Without an agent ready: 409, code no-agent.
+ * @param {import('./http.mjs').Req} req @param {import('./http.mjs').Res} res @param {string} rest
+ * @param {import('./get.mjs').AskAgent | undefined} askAgent
+ */
+export async function canvasWriteRoute(req, res, rest, askAgent) {
+  if (rest !== 'canvas-write' || req.method !== 'POST') return false;
+  const body = /** @type {{ prompt?: unknown, inputs?: unknown }} */ (await readJson(req));
+  const prompt = typeof body.prompt === 'string' ? body.prompt.trim().slice(0, TEXT_MAX) : '';
+  const inputs = (Array.isArray(body.inputs) ? body.inputs : []).filter((i) => typeof i === 'string' && i.trim()).slice(0, 20).map((i) => /** @type {string} */ (i).slice(0, TEXT_MAX));
+  if (!prompt && !inputs.length) throw new HttpError(400, 'say what to write');
+  if (!askAgent) throw new HttpError(409, 'Writing on the canvas is done by your agent, in the app with a chat.', { code: 'no-agent' });
+  const ask = ['Write what the person asks, for a text node on the canvas of their film project (a script, a shot list, a prompt, a description).',
+    'Answer with the text itself, in the language they ask in, with no preamble and no closing remark. Markdown headings, bold and lists are fine.',
+    ...(inputs.length ? ['', 'What is wired into it:', ...inputs.map((i, n) => `[${n + 1}] ${i}`)] : []),
+    '', 'What they ask:', prompt || 'Write it from what is wired in.'].join('\n');
+  try {
+    json(res, 200, { text: (await askAgent(ask)).trim() });
+  } catch (e) {
+    if (/** @type {{ code?: unknown }} */ (e)?.code === 'no-agent') throw new HttpError(409, e instanceof Error ? e.message : String(e), { code: 'no-agent' });
+    throw e;
+  }
+  return true;
 }
 
 /* ── an agent's steps ─────────────────────────────────────────────────────── */

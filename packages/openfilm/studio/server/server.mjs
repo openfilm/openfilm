@@ -66,7 +66,7 @@ import { localModelsRoute } from './local-models.mjs';
 import { captionRoutes, writeSubtitleStyle } from './captions.mjs';
 import { projectSettingsRoute } from './project-settings.mjs';
 import { markersRoute } from './markers.mjs';
-import { CANVAS_FILE, agentCanvasRoute, canvasRoute, readCanvas } from './canvas.mjs';
+import { CANVAS_FILE, agentCanvasRoute, canvasRoute, canvasWriteRoute, readCanvas } from './canvas.mjs';
 import { copyBoardInto, projectTemplatesRoute, templatesRoute } from './canvas-templates.mjs';
 import { transitionPageRoutes } from './transition-pages.mjs';
 import { createAsks, getRoute, subtitleTranscriber, subtitleTranslator } from './get.mjs';
@@ -688,6 +688,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (await markersRoute(req, res, project.path, rest)) return;
     /* its canvas (canvas.mjs): Studio's own board beside the edit */
     if (await canvasRoute(req, res, project.path, rest)) return;
+    if (await canvasWriteRoute(req, res, rest, askAgent)) return;
     if (await projectTemplatesRoute(req, res, project.path, rest)) return;
     /* an example's canvas laid down on this one: its files copied into assets/examples/<id>/ (canvas-templates.mjs) */
     if (rest.startsWith('example-canvas/') && req.method === 'POST') {

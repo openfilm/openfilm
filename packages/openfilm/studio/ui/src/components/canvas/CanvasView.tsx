@@ -25,7 +25,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { AudioLines, Clapperboard, Download, Film, FolderSearch, Image as ImageIcon, LayoutTemplate, Maximize2, MousePointerClick, Play, Plus, Scissors, ScrollText, Sparkles, Square, Upload } from 'lucide-react';
 import { useT } from '@/i18n';
-import { api, projectEvents } from '@/api';
+import { ApiError, api, projectEvents } from '@/api';
 import {
   CARD_H, CUT_W, FILE_W, GROUP_COLORS, MAKE_MEDIA, MAKE_W, NOTE_W, canvasId, cardWidth, makeSize, canvasKey, copyOf, emptyHistory, inputsKey, inputsOf, isStale, makeName, makeRequest,
   nextOrder, readCanvasDoc, redo, remember, reorder, undo, withVersion,
@@ -345,7 +345,22 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
     const request = makeRequest(node as MakingNode, inputs, makeName(node as MakingNode), choiceOf(providers, node.make, node.via, node.model)?.spec);
     if (!String(request.args.prompt).trim()) { runErrors.set(`${projectId}/${id}`, t('canvas.make.noWords')); runsChanged(); return Promise.resolve(false); }
     const pick = node.via ? { via: node.via, ...(node.model ? { model: node.model } : {}) } : {};
-    return startRun(projectId, folder, id, request, pick, inputsKey(node, inputs), { nothing: t('canvas.make.nothing'), balance: t('canvas.make.noBalance') });
+    const say = { nothing: t('canvas.make.nothing'), balance: t('canvas.make.noBalance') };
+    /* two or four at once: one after another, each a version of its own (a clip asked again is made anew) */
+    const count = node.opts?.count ?? 1;
+    const spec = choiceOf(providers, node.make, node.via, node.model)?.spec;
+    if (count < 2) return startRun(projectId, folder, id, request, pick, inputsKey(node, inputs), say);
+    return (async () => {
+      let made = false;
+      for (let i = 0; i < count; i++) {
+        const again = i ? makeRequest(node as MakingNode, inputs, makeName(node as MakingNode), spec) : request;
+        if (node.make === 'video') again.args.force = 'true';
+        const ok = await startRun(projectId, folder, id, again, pick, inputsKey(node, inputs), say);
+        made ||= ok;
+        if (!ok) break;
+      }
+      return made;
+    })();
   };
   /**
    * Everything a group makes, in the order its wires say: what feeds another is made first, and what waits for it is
@@ -395,6 +410,24 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
   };
   /** a group kept as a template, by its name, with what is in it and the wires between them */
+  /* a text node written by the person's agent: the words wired in (and its own, to rework) go with what they ask */
+  const write = async (id: string, ask: string): Promise<string | null> => {
+    const inputs = edges.filter((e) => e.target === id).map((e) => nodes.find((n) => n.id === e.source))
+      .flatMap((n) => (n?.type === 'note' && n.data.text.trim() ? [n.data.text] : []));
+    const own = nodes.find((n) => n.id === id);
+    const mine = own?.type === 'note' ? own.data.text.trim() : '';
+    try {
+      const { text } = await api.canvasWrite(projectId, ask, mine ? [...inputs, `(the node's words now, to rework) ${mine}`] : inputs);
+      if (!text) return null;
+      willChange();
+      setNodes((all) => all.map((n) => (n.id === id && n.type === 'note' ? { ...n, data: { ...n.data, text } } : n)));
+      return null;
+    } catch (error) {
+      if (error instanceof ApiError && error.body.code === 'no-agent') return t('canvas.write.noAgent');
+      return error instanceof Error ? error.message : String(error);
+    }
+  };
+
   const keepTemplate = async (groupId: string) => {
     const doc = docNow();
     const node = doc.nodes.find((n) => n.id === groupId);
@@ -532,7 +565,8 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
     pick: (id) => setPicking(id),
     keepTemplate: (groupId) => { void keepTemplate(groupId); },
     openSettings: onOpenSettings,
-  }), [files, byPath, sources, onAddToFilm, setNodes, editing, single, providers, runsSeen, making, projectId, folder, onOpenSettings, nodes, edges, onReveal]); // eslint-disable-line react-hooks/exhaustive-deps
+    ...(chat ? { write } : {}),
+  }), [chat, files, byPath, sources, onAddToFilm, setNodes, editing, single, providers, runsSeen, making, projectId, folder, onOpenSettings, nodes, edges, onReveal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onDrop = (event: React.DragEvent) => {
     const at = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY });

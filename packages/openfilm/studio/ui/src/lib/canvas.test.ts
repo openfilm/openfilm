@@ -126,6 +126,10 @@ test('what is wired into a node comes in its edges\' order; words and pictures, 
   assert.deepEqual(makeRequest({ ...v, make: 'image', opts: { quality: 'high' } }, inputs, 'still', { refs: 1, qualities: ['low', 'high'] }).args,
     { out: 'still', prompt: 'cold blue dawn\n\na slow push in', ratio: '16:9', quality: 'high', ref: ['assets/a.png'] });
   assert.equal(makeRequest({ ...v, make: 'image' }, inputs, 'still', { refs: 0 }).unused, 2, 'a model that takes no pictures leaves them');
+  assert.deepEqual(makeRequest({ ...v, make: 'image', opts: { size: '2k', transparent: true } }, [], 'cut', { sizes: ['1k', '2k'], transparent: true }).args,
+    { out: 'cut', prompt: 'a slow push in', ratio: '16:9', size: '2k', transparent: 'true' });
+  assert.equal(makeRequest({ ...v, make: 'image', opts: { size: '4k', transparent: true } }, [], 'cut', { sizes: ['1k'] }).args.size, undefined, 'only what the model makes');
+  assert.equal(makeRequest({ ...v, opts: { size: '1080p' } }, [], 'push', { sizes: ['720p', '1080p'] }).args.resolution, '1080p');
   assert.match(makeName({ ...v, prompt: 'A slow push-in, at dawn!' }, 36), /^a-slow-push-in-10$/);
   assert.match(makeName({ ...v, prompt: '黎明' }, 36), /^video-10$/);
 });

@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CANVAS_FILE, CanvasOpError, applyCanvasOps, parseCanvas, readCanvas, writeCanvas } from './canvas.mjs';
+import { Readable } from 'node:stream';
+import { CANVAS_FILE, CanvasOpError, applyCanvasOps, canvasWriteRoute, parseCanvas, readCanvas, writeCanvas } from './canvas.mjs';
 
 test('a canvas keeps notes and project files as nodes, and edges between nodes it has', () => {
   assert.deepEqual(parseCanvas({
@@ -124,4 +125,22 @@ test("an agent's steps are all taken or none, and a wrong one says which and why
 
 test('a cut keeps only that it is one, with its place', () => {
   assert.deepEqual(parseCanvas({ nodes: [{ id: 'c', x: 1, y: 2, w: 320, cut: true, text: 'ignored' }], edges: [] }).nodes, [{ id: 'c', x: 1, y: 2, w: 320, cut: true }]);
+});
+
+test("a text node's words are written by the person's agent, from what they ask and what is wired in", async () => {
+  const post = (body) => Object.assign(Readable.from([Buffer.from(JSON.stringify(body))]), { method: 'POST' });
+  const answer = () => { const res = { status: 0, body: '', writeHead(s) { res.status = s; }, end(b) { res.body = b; } }; return res; };
+  let asked = '';
+  const res = answer();
+  assert.equal(await canvasWriteRoute(/** @type {any} */ (post({ prompt: 'a three-shot script', inputs: ['a fox at dawn', 3] })), /** @type {any} */ (res), 'canvas-write',
+    async (text) => { asked = text; return '  1. The fox wakes.\n'; }), true);
+  assert.deepEqual([res.status, JSON.parse(res.body)], [200, { text: '1. The fox wakes.' }]);
+  assert.match(asked, /\[1\] a fox at dawn/);
+  assert.match(asked, /a three-shot script$/);
+  assert.doesNotMatch(asked, /\[2\]/);
+  /* no agent here (a browser's Studio): refused, saying so */
+  await assert.rejects(canvasWriteRoute(/** @type {any} */ (post({ prompt: 'x' })), /** @type {any} */ (answer()), 'canvas-write', undefined),
+    (e) => e.status === 409 && e.extra?.code === 'no-agent');
+  await assert.rejects(canvasWriteRoute(/** @type {any} */ (post({})), /** @type {any} */ (answer()), 'canvas-write', async () => ''), (e) => e.status === 400);
+  assert.equal(await canvasWriteRoute(/** @type {any} */ ({ method: 'GET' }), /** @type {any} */ (answer()), 'canvas-write', undefined), false);
 });

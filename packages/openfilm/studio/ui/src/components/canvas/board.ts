@@ -76,7 +76,7 @@ export function boxOf(node: BoardNode, byId: ReadonlyMap<string, BoardNode>): { 
  * a service and model a node can make its kind with (via, model: as `get` names them), whether the person has
  * connected that service, and what the model makes
  */
-export interface Choice { via: string; model?: string; name: string; provider: string; connected: boolean; spec?: ModelSpec }
+export interface Choice { via: string; model?: string; name: string; provider: string; connected: boolean; spec?: ModelSpec; kind?: MakeKind }
 
 /** Every service that makes a kind, each model of each: the connected ones first, then the others to connect. */
 export function allChoicesFor(state: ProvidersState | null, kind: MakeKind): Choice[] {
@@ -84,8 +84,8 @@ export function allChoicesFor(state: ProvidersState | null, kind: MakeKind): Cho
   return [...providers.filter((p) => p.source), ...providers.filter((p) => !p.source)].flatMap((p) => {
     const models = p.models[kind] ?? [];
     const connected = Boolean(p.source);
-    return models.length ? models.map((m) => ({ via: p.id, model: m.id, name: m.name, provider: p.name, connected, ...(m.spec ? { spec: m.spec } : {}) }))
-      : [{ via: p.id, name: p.name, provider: p.name, connected }];
+    return models.length ? models.map((m) => ({ via: p.id, model: m.id, name: m.name, provider: p.name, connected, kind, ...(m.spec ? { spec: m.spec } : {}) }))
+      : [{ via: p.id, name: p.name, provider: p.name, connected, kind }];
   });
 }
 
@@ -235,6 +235,8 @@ export interface Board {
   ungroup: (group: string) => void;
   keepTemplate: (group: string) => void;
   openSettings: () => void;
+  /** a text node's words written by the person's agent from what they ask and what is wired in (in the app with a chat); why not, if not */
+  write?: (id: string, ask: string) => Promise<string | null>;
   /** a board only looked at (an example's): nothing on it is changed, made or wired */
   readOnly?: boolean;
 }

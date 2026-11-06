@@ -49,7 +49,14 @@ export type MakeKind = typeof MAKE_KINDS[number];
  * a picture's shape and quality, a clip's length or a sound's, and whether the pictures wired into a video are its first
  * and last frames
  */
-export interface MakeOptions { ratio?: string; sec?: number; frames?: boolean; quality?: string; mode?: VideoMode }
+export interface MakeOptions {
+  ratio?: string; sec?: number; frames?: boolean; quality?: string; mode?: VideoMode;
+  /** a picture's size (1k, 2k, 4k) or a clip's resolution (720p…); a picture with no background; how many are made at once */
+  size?: string; transparent?: boolean; count?: number;
+}
+
+/** how many a node makes at once */
+export const MAKE_COUNTS = [1, 2, 4] as const;
 
 /**
  * How a clip is made from what is wired in: from the words alone; from everything wired in as references (pictures,
@@ -68,6 +75,8 @@ export interface ModelSpec {
   ratios?: string[]; seconds?: [number, number]; only?: number[]; refs?: number; frames?: boolean; qualities?: string[]; needs?: 'clip' | 'audio';
   /** a clip that takes a recording of whose voice speaks in it, a clip of its own to continue or change */
   voice?: boolean; clip?: boolean;
+  /** a picture's sizes (1k, 2k, 4k) or a clip's resolutions (480p…), as it makes them; a picture with no background */
+  sizes?: string[]; transparent?: boolean;
 }
 
 /** What each kind makes, as the board shows it. */
@@ -153,6 +162,9 @@ function readMake(n: Record<string, unknown>): Omit<CanvasNode, 'id' | 'x' | 'y'
     ...(o.frames === true ? { frames: true } : {}),
     ...(str(o.quality) ? { quality: o.quality as string } : {}),
     ...(VIDEO_MODES.find((m) => m === o.mode) ? { mode: o.mode as VideoMode } : {}),
+    ...(str(o.size) ? { size: o.size as string } : {}),
+    ...(o.transparent === true ? { transparent: true } : {}),
+    ...(MAKE_COUNTS.find((c) => c === o.count && c > 1) ? { count: o.count as number } : {}),
   };
   const versions = Array.isArray(n.versions) ? n.versions.filter((v): v is string => typeof v === 'string' && v.length > 0) : [];
   const fields = {
@@ -343,6 +355,8 @@ export function makeRequest(node: CanvasNode & { make: MakeKind }, inputs: reado
   if (node.make === 'image') {
     args.ratio = ratioOf(opts.ratio, spec);
     if (opts.quality && spec?.qualities?.includes(opts.quality)) args.quality = opts.quality;
+    if (opts.size && spec?.sizes?.includes(opts.size)) args.size = opts.size;
+    if (opts.transparent && spec?.transparent) args.transparent = 'true';
     const refs = pictures.slice(0, spec?.refs ?? pictures.length);
     if (refs.length) { args.ref = refs; used = refs.length; }
   }
@@ -353,6 +367,7 @@ export function makeRequest(node: CanvasNode & { make: MakeKind }, inputs: reado
     /* a clip made from a clip or a recording is as long as it */
     if (seconds !== null && !used) args.duration = String(seconds);
     if (opts.ratio && !spec?.needs) args['aspect-ratio'] = ratioOf(opts.ratio, spec);
+    if (opts.size && spec?.sizes?.includes(opts.size)) args.resolution = opts.size;
     if (spec?.needs) {
       /* a person speaking a recording: from a picture of them */
       if (spec.needs === 'audio' && pictures[0]) { args['first-frame'] = pictures[0]; used += 1; }

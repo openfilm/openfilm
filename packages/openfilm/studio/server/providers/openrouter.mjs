@@ -80,10 +80,10 @@ const VIDEO = {
   'google/gemini-omni-1.2-flash': { name: 'Gemini Omni', seconds: [3, 15], framed: 10, ratios: ['16:9', '9:16'], refs: 6, clip: true, inline: true, sizes: ['360p', '720p', '1080p', '4K'] },
 };
 /* what each model makes, as the canvas offers it (contract.mjs ModelSpec) */
-for (const model of MODELS.image) Object.assign(model, { spec: { ratios: RATIOS, refs: MAX_REFS, ...(QUALITY[model.id] ? { qualities: QUALITY[model.id] } : {}) } });
+for (const model of MODELS.image) Object.assign(model, { spec: { ratios: RATIOS, refs: MAX_REFS, sizes: ['1k', '2k', '4k'], ...(QUALITY[model.id] ? { qualities: QUALITY[model.id], transparent: true } : {}) } });
 for (const model of MODELS.video) {
   const v = VIDEO[model.id];
-  if (v) Object.assign(model, { spec: { ratios: v.ratios, ...(v.only ? { only: v.only } : v.seconds ? { seconds: v.seconds } : {}), refs: v.refs, frames: true, ...(v.voice ? { voice: true } : {}), ...(v.clip ? { clip: true } : {}) } });
+  if (v) Object.assign(model, { spec: { ratios: v.ratios, ...(v.only ? { only: v.only } : v.seconds ? { seconds: v.seconds } : {}), refs: v.refs, frames: true, ...(v.voice ? { voice: true } : {}), ...(v.clip ? { clip: true } : {}), ...(v.sizes ? { sizes: v.sizes } : {}) } });
 }
 const RESOLUTION = '720p';
 /** Each size's lines of picture, to find the nearest a model makes. */

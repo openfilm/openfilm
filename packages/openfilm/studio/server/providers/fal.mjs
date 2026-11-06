@@ -102,7 +102,7 @@ const FROM_SPEECH = {
 };
 
 /* what each model makes, as the canvas offers it (contract.mjs ModelSpec) */
-for (const model of MODELS.image) Object.assign(model, { spec: { ratios: Object.keys(RATIO_SIZE), refs: 0 } });
+for (const model of MODELS.image) Object.assign(model, { spec: { ratios: Object.keys(RATIO_SIZE), refs: 0, sizes: ['1k', '2k', '4k'] } });
 for (const model of MODELS.video) {
   const v = VIDEO[model.id];
   const c = FROM_CLIP[model.id];
