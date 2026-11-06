@@ -280,7 +280,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* the film as loaded: a new project name (a rename, or the snapshot a reconnecting page is sent) leaves it as it is */
   const initial = React.useMemo(() => (loaded?.doc && loaded.value ? { value: loaded.value, rev: loaded.rev } : null), [loaded?.doc, loaded?.value, loaded?.rev]);
   React.useEffect(() => { if (initial) lastServerDoc.current = initial.value; }, [initial]);
+  /* the film with every edit made here, at once: an edit begun before the one before it was drawn (a color typed,
+     then a stroke added with the same click) starts from it, not from the film before it */
+  const filmRef = React.useRef<Film | null>(initial?.value ?? null);
   const film = useFilm(projectId, initial, React.useCallback((value: Film, kind: 'edit' | 'server', head?: string) => {
+    filmRef.current = value;
     preview.current?.update(value, head);
     if (kind === 'server') {
       const found = droppedOverrides(lastServerDoc.current as unknown as FilmDoc, value as unknown as FilmDoc);
@@ -300,7 +304,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     }
   }, []));
   personSteps.current = film.steps.done;
-  const filmRef = React.useRef(film.film);
   filmRef.current = film.film;
   /* on `showError`, which stays the same: `toast` is new with every message, so showing it would run this again, and
      again (the editor gone) */
@@ -1776,15 +1779,15 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     element: StageElement, rawPatch: OverrideGeometry | null, allCopies = false, pivot?: OverridePivot,
   ): Promise<string | null> => {
     const patch = rawPatch && pivot && stageControl.current ? await stageControl.current.previewOverride(element, rawPatch, pivot) : rawPatch;
+    /* the blocks written inside a line keep their place and look: their overrides go with it, one edit */
+    const riders = await stageControl.current?.riders(element, patch) ?? [];
+    /* the film read after the last wait and written with nothing between: an edit made meanwhile is in it, and kept */
     const doc = filmRef.current as unknown as FilmDoc | null;
     const found = doc ? pageClipOf(doc, element) : null;
     const target = layerTarget(element, allCopies);
     if (!found || !target) return t('timeline.editFail');
     let next = nextOverrides(found.clip.overrides, target, patch);
-    /* the blocks written inside a line keep their place and look: their overrides go with it, one edit */
-    for (const r of await stageControl.current?.riders(element, patch) ?? []) {
-      next = nextOverrides(next ?? undefined, { at: r.at, ...(r.n != null ? { n: r.n } : {}) }, r.patch);
-    }
+    for (const r of riders) next = nextOverrides(next ?? undefined, { at: r.at, ...(r.n != null ? { n: r.n } : {}) }, r.patch);
     /* the panel shows the new numbers at once; refused, they go back */
     const now = next ? overrideOf(next, target) : null;
     const before = element.override ?? null;
@@ -1811,18 +1814,19 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   editStageOverrideRef.current = editStageOverride;
   /* several layers at once (moved, hidden, aligned together): one write, one undo step */
   const editStageOverrides = React.useCallback(async (list: ReadonlyArray<{ element: StageElement; patch: OverrideGeometry | null }>): Promise<string | null> => {
+    const riders: Awaited<ReturnType<FilmStageControl['riders']>>[] = [];
+    for (const { element, patch } of list) riders.push(await stageControl.current?.riders(element, patch) ?? []);
+    /* read after the waits, as for one layer (editStageOverride) */
     const doc = filmRef.current as unknown as FilmDoc | null;
     if (!doc || !list.length) return t('timeline.editFail');
     const byClip = new Map<string, ReturnType<typeof nextOverrides>>();
-    for (const { element, patch } of list) {
+    for (const [i, { element, patch }] of list.entries()) {
       const found = pageClipOf(doc, element);
       const target = layerTarget(element);
       if (!found || !target) continue;
       const prev = byClip.has(found.loc) ? byClip.get(found.loc) ?? undefined : found.clip.overrides;
       let next = nextOverrides(prev, target, patch);
-      for (const r of await stageControl.current?.riders(element, patch) ?? []) {
-        next = nextOverrides(next ?? undefined, { at: r.at, ...(r.n != null ? { n: r.n } : {}) }, r.patch);
-      }
+      for (const r of riders[i]!) next = nextOverrides(next ?? undefined, { at: r.at, ...(r.n != null ? { n: r.n } : {}) }, r.patch);
       byClip.set(found.loc, next);
     }
     if (!byClip.size) return t('timeline.editFail');
