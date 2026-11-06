@@ -70,7 +70,7 @@ export function Chip({ label, count, on, onClick }: { label: string; count?: num
 }
 
 type MediaFilter = 'all' | 'image' | 'video' | 'audio';
-const mediaOfMade = (m: CanvasMade): Exclude<MediaFilter, 'all'> => (m.make === 'sfx' || m.make === 'music' ? 'audio' : m.make);
+const mediaOfMade = (m: CanvasMade): Exclude<MediaFilter, 'all'> => (m.make === 'image' || m.make === 'video' ? m.make : 'audio');
 
 /**
  * What the canvases made, newest first: this project's or every project's, all or by kind. A click puts one on the

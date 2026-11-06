@@ -1578,6 +1578,7 @@ export const zhCN: Words = {
       },
     },
     titles: {
+      tts: '音频节点 {n}',
       note: '文本节点 {n}',
       image: '图片节点 {n}',
       video: '视频节点 {n}',
@@ -1610,6 +1611,7 @@ export const zhCN: Words = {
     effects: { names: { pushIn: '推镜头', pullOut: '拉镜头', orbit: '环绕', track: '横移跟拍', follow: '背后跟随', whip: '甩镜', dollyZoom: '希区柯克变焦', craneUp: '升镜头', dive: '俯冲航拍', clouds: '穿云而入', fpv: 'FPV 穿越', slowMo: '慢动作', timelapse: '延时摄影', bulletTime: '子弹时间', handheld: '手持', pov: '第一人称', rack: '焦点转移' } },
     characters: { title: '角色库', chip: '角色库', mine: '我的角色库', search: '搜索角色', none: '还没有角色。用几句话生成一个，或用已有的图片创建，之后在每张图、每段视频里都是同一个人。', create: '创建新角色', generateNew: '生成新角色', fromComputer: '从本地导入', fromAssets: '从资源导入', newTitle: '创建你的新角色', nameTitle: '给角色起个名字', name: '名字', describe: '描述你的角色特征：年龄、外貌、发型、服装、特点…', aboutHint: '关于这个角色（可选）', generate: '生成', save: '保存', cancel: '取消', next: '下一步', pickAssets: '选出这个角色的图片，主图放第一张', edit: '编辑角色', remove: '删除', add: '添加到画布', useHere: '用在这里', keep: '存为角色', kept: '已存入角色库：{name}', noPictures: '这里没有可以存为角色的图片' },
     noteFor: {
+      tts: '要说的台词，一字不差',
       image: '描述这个画面：谁、在哪、在做什么、什么光线',
       video: '描述这个镜头：什么在动，镜头怎么动',
       sfx: '描述这个声音：什么发出的、在哪、多长',
@@ -1620,6 +1622,10 @@ export const zhCN: Words = {
     added: '已加到时间轴',
     remove: '移除',
     fit: '适应屏幕',
+    tidy: '整理',
+    beta: 'Beta',
+    betaTip: '画布仍在测试中，还有不少地方没做好。',
+    voice: { pick: '音色', search: '搜索音色', all: '全部', hear: '试听', stop: '停止', none: '没有这个名字的音色', idHint: '这个服务的音色不在音色库里：填写服务里的音色 ID。', idPlaceholder: '音色 ID', gender: { m: '男声', f: '女声', n: '中性' } },
     empty: '双击画布 自由生成节点',
     missing: '项目里已没有这个文件',
     saveFailed: '画布没能保存：{error}',
@@ -1724,6 +1730,7 @@ export const zhCN: Words = {
       },
       pictures: '连入的图片用作',
       placeholder: {
+        tts: '写下要说的台词，如：这座灯塔，已经在这里守了一百年。',
         image: '描述画面，或连入参考图做图生图，如：清晨海边的灯塔，薄雾，电影感',
         video: '描述镜头怎么动、画面里发生什么，如：镜头缓缓推近，灯塔的光扫过海面',
         sfx: '描述声音，如：海浪拍打礁石，远处有海鸥',
@@ -1798,6 +1805,8 @@ export const zhCN: Words = {
     loadFailed: '画布没能载入',
     reload: '重新载入',
     make: {
+      tts: '配音',
+      noVoice: '先给它选一个音色',
       ai: 'AI生成',
       image: '图片',
       video: '视频',

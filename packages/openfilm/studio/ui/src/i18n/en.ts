@@ -1578,6 +1578,7 @@ export const en = {
       },
     },
     titles: {
+      tts: 'Audio node {n}',
       note: 'Text node {n}',
       image: 'Picture node {n}',
       video: 'Video node {n}',
@@ -1610,6 +1611,7 @@ export const en = {
     effects: { names: { pushIn: 'Push in', pullOut: 'Pull out', orbit: 'Orbit', track: 'Tracking', follow: 'Follow', whip: 'Whip pan', dollyZoom: 'Dolly zoom', craneUp: 'Crane up', dive: 'Drone dive', clouds: 'Through the clouds', fpv: 'FPV flight', slowMo: 'Slow motion', timelapse: 'Time-lapse', bulletTime: 'Bullet time', handheld: 'Handheld', pov: 'First person', rack: 'Rack focus' } },
     characters: { title: 'Characters', chip: 'Characters', mine: 'My characters', search: 'Search characters', none: 'No characters yet. Make one from a few words, or from pictures you have, and it looks the same in every picture and clip.', create: 'New character', generateNew: 'Generate a character', fromComputer: 'From this computer', fromAssets: 'From Assets', newTitle: 'Create your new character', nameTitle: 'Name the character', name: 'Name', describe: 'Who they are: age, look, hair, clothes, what makes them them…', aboutHint: 'A few words about them (optional)', generate: 'Generate', save: 'Save', cancel: 'Cancel', next: 'Next', pickAssets: 'Pick the pictures of this character, the main one first', edit: 'Edit character', remove: 'Delete', add: 'Add to canvas', useHere: 'Use here', keep: 'Save as character', kept: '“{name}” saved to your characters', noPictures: 'There is no picture here to keep as a character' },
     noteFor: {
+      tts: 'The line to speak, word for word',
       image: 'Describe the picture: who, where, what is happening, the light',
       video: 'Describe the shot: what moves, and how the camera moves',
       sfx: 'Describe the sound: what makes it, where, how long',
@@ -1620,6 +1622,10 @@ export const en = {
     added: 'Added to the timeline',
     remove: 'Remove',
     fit: 'Fit to view',
+    tidy: 'Tidy up',
+    beta: 'Beta',
+    betaTip: 'The canvas is still in testing: much is not done yet.',
+    voice: { pick: 'Voice', search: 'Search voices', all: 'All', hear: 'Hear it', stop: 'Stop', none: 'No voice by that name', idHint: 'This service\'s voices are not in the library: enter a voice ID as the service names it.', idPlaceholder: 'Voice ID', gender: { m: 'Male', f: 'Female', n: 'Neutral' } },
     empty: 'Double-click the canvas to add any node',
     missing: 'This file is no longer in the project',
     saveFailed: 'The canvas could not be saved: {error}',
@@ -1724,6 +1730,7 @@ export const en = {
       },
       pictures: 'Pictures wired in are',
       placeholder: {
+        tts: 'The line to speak, e.g. The lighthouse has kept watch here for a hundred years.',
         image: 'Describe the picture, or wire in a reference to make one from it, e.g. a lighthouse by the sea at dawn, mist, cinematic',
         video: 'Describe how the camera moves and what happens, e.g. a slow push in as the lighthouse beam sweeps the sea',
         sfx: 'Describe the sound, e.g. waves on rocks, gulls far off',
@@ -1798,6 +1805,8 @@ export const en = {
     loadFailed: 'The canvas could not load',
     reload: 'Load again',
     make: {
+      tts: 'Voice-over',
+      noVoice: 'Pick a voice for it first',
       ai: 'AI made',
       image: 'Image',
       video: 'Video',

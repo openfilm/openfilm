@@ -16,12 +16,14 @@ once, and the person sees it at once. Its `--help` lists the steps.
 
 - **A storyboard or shots**: one row per shot, left to right: a note (what happens, in the person's words), a picture
   node wired from it, a video node wired from the picture with `opts.mode: "first"`, and every video wired into one
-  `cut` in order. The canvas's Storyboard view lists these rows as the film's shots, and its "Put on the timeline"
-  sends the clips in that order. Keep each shot in a group named after it (`around`) when there are many.
+  `cut` in order: the cut's "Put on the timeline" sends the clips in that order. Keep each shot in a group named after
+  it (`around`) when there are many.
 - **A character who looks the same in every shot**: a note of who they are, a picture node with `preset: "portrait"`
   wired from it, then `fullBody`, `expressions` and `turnaround16` picture nodes each wired from the note and the
   portrait, in a group named after them. Wire the portrait into every shot's picture and video (`opts.mode: "refs"`
   or as a reference) so they stay the same person.
+- **A voice-over**: a `tts` node whose prompt is the line to speak, with `opts.voice` a voiceId from
+  `openfilm get voice` that suits the speaker (none: the service's first voice in the person's language).
 - **Words for a node**: write the prompt in English unless the person writes otherwise; describe what is seen, the
   light and the camera, not the story's meaning.
 

@@ -111,6 +111,12 @@ export function BoardSwitcher({ boards, current, onPick, onAdd, onRename, onCopy
           ) : null}
         </div>
       </Popover>
+      {/* the canvas is still being tried out: said where it is named, its tip saying what that means */}
+      <Tooltip label={t('canvas.betaTip')}>
+        <span className="flex h-[22px] cursor-default select-none items-center rounded-full border-[0.5px] !border-[var(--cv-bar-line)] px-2 text-[11px] font-medium tracking-wide text-[var(--cv-ink-2)]">
+          {t('canvas.beta')}
+        </span>
+      </Tooltip>
       <ConfirmDialog open={removing !== null} danger title={t('canvas.boards.removeTitle')}
         description={removing ? t('canvas.boards.removeAsk').replace('{name}', boardName(boards, removing, t)) : ''}
         confirmLabel={t('canvas.boards.removeYes')}

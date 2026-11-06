@@ -43,7 +43,7 @@ export interface CanvasNode {
 }
 
 /** What a node can make, as `get` names it. */
-export const MAKE_KINDS = ['image', 'video', 'sfx', 'music'] as const;
+export const MAKE_KINDS = ['image', 'video', 'sfx', 'music', 'tts'] as const;
 export type MakeKind = typeof MAKE_KINDS[number];
 /**
  * a picture's shape and quality, a clip's length or a sound's, and whether the pictures wired into a video are its first
@@ -56,6 +56,8 @@ export interface MakeOptions {
   /** a picture made as a GIF (its frames and each one's length) or an SVG; one redrawn from the first picture wired in,
       where a mask (a PNG, clear where it is redrawn) or a markup (changes drawn on a clear PNG) says */
   format?: 'gif' | 'svg'; gifFrames?: number; frameMs?: number; mask?: string; markup?: string;
+  /** a voice-over's voice, its id at its service (`openfilm get tts --voice`) */
+  voice?: string;
 }
 
 /** how many a node makes at once */
@@ -88,7 +90,7 @@ export interface ModelSpec {
 }
 
 /** What each kind makes, as the board shows it. */
-export const MAKE_MEDIA: Record<MakeKind, 'image' | 'video' | 'audio'> = { image: 'image', video: 'video', sfx: 'audio', music: 'audio' };
+export const MAKE_MEDIA: Record<MakeKind, 'image' | 'video' | 'audio'> = { image: 'image', video: 'video', sfx: 'audio', music: 'audio', tts: 'audio' };
 export const IMAGE_RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4', '3:2', '2:3'] as const;
 export const VIDEO_RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'] as const;
 /** how long what is made may be, in seconds, and how long it is unless asked */
@@ -178,6 +180,7 @@ function readMake(n: Record<string, unknown>): Omit<CanvasNode, 'id' | 'x' | 'y'
     ...(num(o.frameMs) ? { frameMs: o.frameMs } : {}),
     ...(str(o.mask) ? { mask: o.mask as string } : {}),
     ...(str(o.markup) ? { markup: o.markup as string } : {}),
+    ...(str(o.voice) ? { voice: o.voice as string } : {}),
   };
   const versions = Array.isArray(n.versions) ? n.versions.filter((v): v is string => typeof v === 'string' && v.length > 0) : [];
   const fields = {
@@ -367,8 +370,10 @@ export function makeRequest(node: CanvasNode & { make: MakeKind }, inputs: reado
   const clips = inputs.flatMap((i) => ('media' in i && i.media === 'video' ? [i.path] : []));
   const sounds = inputs.flatMap((i) => ('media' in i && i.media === 'audio' ? [i.path] : []));
   /* as `openfilm get` is given them: words, as on its command line */
-  const args: Record<string, string | string[]> = { out: name, prompt: words };
   const opts = node.opts ?? {};
+  /* a voice-over: its words spoken in its voice; nothing wired in but words is used */
+  if (node.make === 'tts') return { verb: 'tts', args: { out: name, text: words, voice: opts.voice ?? '' }, unused: pictures.length + clips.length + sounds.length };
+  const args: Record<string, string | string[]> = { out: name, prompt: words };
   const seconds = lengthOf(node.make, opts.sec, spec);
   let used = 0;
   if (node.make === 'image') {

@@ -70,6 +70,101 @@ export function boxOf(node: BoardNode, byId: ReadonlyMap<string, BoardNode>): { 
   return { ...at, w: node.measured?.width ?? node.width ?? FILE_W, h: node.measured?.height ?? node.height ?? CARD_H };
 }
 
+/** the room in a group round what is in it, and at its top under its name */
+const GROUP_ROOM = 32;
+const GROUP_TOP = 52;
+
+/**
+ * Every group round what is in it: grown (never shrunk) where something lies past its edge, what is in it staying
+ * where it is on the board. The same list when nothing had to change.
+ */
+export function fitGroups(list: BoardNode[]): BoardNode[] {
+  const byId = new Map(list.map((n) => [n.id, n]));
+  let changed = false;
+  const fitted = new Map<string, { dx: number; dy: number; frame: BoardNode }>();
+  for (const g of list) {
+    if (g.type !== 'frame') continue;
+    const kids = list.filter((n) => n.parentId === g.id);
+    if (!kids.length) continue;
+    const size = (n: BoardNode) => boxOf(n, byId);
+    const left = Math.min(0, ...kids.map((k) => k.position.x - GROUP_ROOM));
+    const top = Math.min(0, ...kids.map((k) => k.position.y - GROUP_TOP));
+    const w = Math.max(g.width ?? 0, ...kids.map((k) => k.position.x - left + size(k).w + GROUP_ROOM));
+    const h = Math.max(g.height ?? 0, ...kids.map((k) => k.position.y - top + size(k).h + GROUP_ROOM));
+    if (left === 0 && top === 0 && Math.round(w) === Math.round(g.width ?? 0) && Math.round(h) === Math.round(g.height ?? 0)) continue;
+    changed = true;
+    fitted.set(g.id, { dx: left, dy: top, frame: { ...g, position: { x: g.position.x + left, y: g.position.y + top }, width: Math.round(w), height: Math.round(h) } as BoardNode });
+  }
+  if (!changed) return list;
+  return list.map((n) => {
+    const own = fitted.get(n.id);
+    if (own) return own.frame;
+    const parent = n.parentId ? fitted.get(n.parentId) : undefined;
+    return parent ? { ...n, position: { x: n.position.x - parent.dx, y: n.position.y - parent.dy } } : n;
+  });
+}
+
+/**
+ * Nothing laid on another: among the nodes of each group (and those of the board), left to right, one that lies on one
+ * before it moves right of it, and what it then lies on after it. `first` keep their place (a card that just grew
+ * pushes its neighbours, not itself). The groups are fitted round what they hold after. The same list when nothing
+ * lay on anything.
+ */
+export function unstack(list: BoardNode[], first: readonly string[] = []): BoardNode[] {
+  const GAP = 48;
+  /* its size as it is now asked to be (a card just reshaped is not measured yet), with the title over it */
+  const HEAD = 28;
+  const box = (n: BoardNode, x = n.position.x) => ({ x, y: n.position.y - HEAD, w: n.width ?? n.measured?.width ?? FILE_W, h: (n.height ?? n.measured?.height ?? CARD_H) + HEAD });
+  const on = (a: ReturnType<typeof box>, b: ReturnType<typeof box>) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  const moved = new Map<string, number>();
+  const sets = new Map<string, BoardNode[]>();
+  for (const n of list) if (n.type !== 'frame') sets.set(n.parentId ?? '', [...(sets.get(n.parentId ?? '') ?? []), n]);
+  for (const nodes of sets.values()) {
+    const order = [...nodes].sort((a, b) => Number(first.includes(b.id)) - Number(first.includes(a.id)) || a.position.x - b.position.x);
+    const placed: Array<ReturnType<typeof box>> = [];
+    for (const n of order) {
+      let me = box(n);
+      for (let tries = 0; tries < 100; tries++) {
+        const hit = placed.find((o) => on(me, o));
+        if (!hit) break;
+        me = box(n, hit.x + hit.w + GAP);
+      }
+      if (me.x !== n.position.x) moved.set(n.id, me.x);
+      placed.push(me);
+    }
+  }
+  if (!moved.size) return list;
+  return fitGroups(list.map((n) => (moved.has(n.id) ? { ...n, position: { ...n.position, x: moved.get(n.id)! } } : n)));
+}
+
+/**
+ * What is in a group laid out again, in rows as they read (top to bottom, then left to right): words first, the rest
+ * after them, at most four a row, clear of each other; the group round them.
+ */
+export function tidyGroup(list: BoardNode[], group: string): BoardNode[] {
+  const byId = new Map(list.map((n) => [n.id, n]));
+  const kids = list.filter((n) => n.parentId === group)
+    .sort((a, b) => (a.type === 'note' ? 0 : 1) - (b.type === 'note' ? 0 : 1) || (Math.abs(a.position.y - b.position.y) > 120 ? a.position.y - b.position.y : a.position.x - b.position.x));
+  const GAP = 48;
+  const places = new Map<string, { x: number; y: number }>();
+  let x = GROUP_ROOM;
+  let y = GROUP_TOP;
+  let rowH = 0;
+  let inRow = 0;
+  for (const k of kids) {
+    const { w, h } = boxOf(k, byId);
+    if (inRow === 4 || (inRow > 0 && x + w > 4 * 700)) { x = GROUP_ROOM; y += rowH + GAP; rowH = 0; inRow = 0; }
+    places.set(k.id, { x, y });
+    x += w + GAP;
+    rowH = Math.max(rowH, h);
+    inRow += 1;
+  }
+  const laid = list.map((n) => (places.has(n.id) ? { ...n, position: places.get(n.id)! } : n));
+  /* the group sized to them anew: shrunk too */
+  const tidied = laid.map((n) => (n.id === group ? { ...n, width: 0, height: 0 } as BoardNode : n));
+  return fitGroups(tidied);
+}
+
 /* ── the services a node makes with ── */
 
 /**
@@ -263,6 +358,8 @@ export interface Board {
   keepCharacter: (id: string) => void;
   openLibrary: (which: 'characters' | 'styles' | 'effects', node?: string) => void;
   openSettings: () => void;
+  /** what is in a group laid out again in rows, clear of each other */
+  tidy: (group: string) => void;
   /** a picture changed in part (brushed or drawn on, then said what to): the editor opened on it */
   redraw: (id: string, path: string) => void;
   /** a text node's words written by the person's agent from what they ask and what is wired in (in the app with a chat); why not, if not */

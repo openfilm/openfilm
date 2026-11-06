@@ -1577,6 +1577,7 @@ export const es: Words = {
       },
     },
     titles: {
+      tts: 'Nodo de audio {n}',
       note: 'Nodo de texto {n}',
       image: 'Nodo de imagen {n}',
       video: 'Nodo de vídeo {n}',
@@ -1609,6 +1610,7 @@ export const es: Words = {
     effects: { names: { pushIn: 'Acercamiento', pullOut: 'Alejamiento', orbit: 'Órbita', track: 'Travelling lateral', follow: 'Seguimiento', whip: 'Barrido rápido', dollyZoom: 'Dolly zoom', craneUp: 'Grúa ascendente', dive: 'Picado de dron', clouds: 'A través de las nubes', fpv: 'Vuelo FPV', slowMo: 'Cámara lenta', timelapse: 'Time-lapse', bulletTime: 'Tiempo bala', handheld: 'Cámara en mano', pov: 'Primera persona', rack: 'Cambio de foco' } },
     characters: { title: 'Personajes', chip: 'Personajes', mine: 'Mis personajes', search: 'Buscar personajes', none: 'Aún no hay personajes. Genera uno con unas palabras o créalo con tus imágenes, y será el mismo en cada imagen y clip.', create: 'Nuevo personaje', generateNew: 'Generar un personaje', fromComputer: 'Desde este ordenador', fromAssets: 'Desde Recursos', newTitle: 'Crea tu nuevo personaje', nameTitle: 'Ponle nombre al personaje', name: 'Nombre', describe: 'Cómo es: edad, aspecto, pelo, ropa, lo que lo distingue…', aboutHint: 'Unas palabras sobre él (opcional)', generate: 'Generar', save: 'Guardar', cancel: 'Cancelar', next: 'Siguiente', pickAssets: 'Elige las imágenes de este personaje, la principal primero', edit: 'Editar personaje', remove: 'Eliminar', add: 'Añadir al lienzo', useHere: 'Usar aquí', keep: 'Guardar como personaje', kept: '«{name}» guardado en tus personajes', noPictures: 'Aquí no hay ninguna imagen para guardar como personaje' },
     noteFor: {
+      tts: 'La frase que se dirá, palabra por palabra',
       image: 'Describe la imagen: quién, dónde, qué pasa, la luz',
       video: 'Describe el plano: qué se mueve y cómo se mueve la cámara',
       sfx: 'Describe el sonido: qué lo produce, dónde, cuánto dura',
@@ -1619,6 +1621,10 @@ export const es: Words = {
     added: 'Añadido a la línea de tiempo',
     remove: 'Quitar',
     fit: 'Ajustar a la vista',
+    tidy: 'Ordenar',
+    beta: 'Beta',
+    betaTip: 'El lienzo sigue en pruebas: aún falta mucho por hacer.',
+    voice: { pick: 'Voz', search: 'Buscar voces', all: 'Todas', hear: 'Escuchar', stop: 'Detener', none: 'No hay ninguna voz con ese nombre', idHint: 'Las voces de este servicio no están en la biblioteca: escribe el ID de la voz tal como lo nombra el servicio.', idPlaceholder: 'ID de la voz', gender: { m: 'Masculina', f: 'Femenina', n: 'Neutra' } },
     empty: 'Doble clic en el lienzo para añadir un nodo',
     missing: 'Este archivo ya no está en el proyecto',
     saveFailed: 'No se pudo guardar el lienzo: {error}',
@@ -1723,6 +1729,7 @@ export const es: Words = {
       },
       pictures: 'Las imágenes conectadas son',
       placeholder: {
+        tts: 'Escribe la frase que se dirá, p. ej.: Este faro lleva cien años vigilando aquí.',
         image: 'Describe la imagen, o conecta una referencia para crearla a partir de ella, p. ej. un faro junto al mar al amanecer, niebla, cinematográfico',
         video: 'Describe cómo se mueve la cámara y qué pasa, p. ej. un acercamiento lento mientras el haz del faro barre el mar',
         sfx: 'Describe el sonido, p. ej. olas contra las rocas, gaviotas a lo lejos',
@@ -1797,6 +1804,8 @@ export const es: Words = {
     loadFailed: 'No se pudo cargar el lienzo',
     reload: 'Cargar de nuevo',
     make: {
+      tts: 'Locución',
+      noVoice: 'Elige antes una voz',
       ai: 'Hecho con IA',
       image: 'Imagen',
       video: 'Vídeo',

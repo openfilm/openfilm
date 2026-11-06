@@ -10,7 +10,7 @@
 import React from 'react';
 import { Handle, NodeResizer, NodeToolbar, Position, useStore, type NodeProps } from '@xyflow/react';
 import {
-  AlignLeft, AudioLines, BookmarkPlus, Bot, Clapperboard, FileQuestion, Film, Image as ImageIcon, Layers, Loader2, Music, PenLine, Play, Plus, Scissors,
+  AlignLeft, AudioLines, BookmarkPlus, Bot, Clapperboard, FileQuestion, Film, Image as ImageIcon, Layers, LayoutGrid, Loader2, Mic, Music, PenLine, Play, Plus, Scissors,
   Square, Type as TypeIcon, Ungroup, Upload, UserRound, Video,
 } from 'lucide-react';
 import { useT } from '@/i18n';
@@ -20,13 +20,14 @@ import { Tooltip } from '../Tooltip';
 import { useBoard, type CutNode, type FileNode, type FrameNode, type MakeNode, type NoteNode } from './board';
 import { ActionBar, CutPanel, MakePanel, NotePanel } from './panels';
 import { Words, WritingBar } from './words';
+import { SoundCard } from './sound';
 
 /** below this zoom a node is only its outline (its picture, its words are not drawn) */
 export const FAR = 0.35;
 export const farSelector = (s: { transform: [number, number, number] }) => s.transform[2] < FAR;
 
 export const KIND_ICON = { video: Video, image: ImageIcon, audio: Music, mg: Clapperboard, other: FileQuestion } as const;
-export const MAKE_ICON = { image: ImageIcon, video: Video, sfx: AudioLines, music: Music } as const;
+export const MAKE_ICON = { image: ImageIcon, video: Video, sfx: AudioLines, music: Music, tts: Mic } as const;
 const RESIZE_HANDLE = '!h-2 !w-2 !rounded-[2px] !border-0 !bg-[var(--cv-ring)]';
 
 /** A group's tint: its frame's fill and line, its name's chip, by its color (muted, so what is in it leads). */
@@ -69,7 +70,8 @@ function ByAgent({ by }: { by: NonNullable<CanvasNode['by']> }) {
 /* where wires meet a card: the middle of its sides, unseen */
 const ANCHOR = '!h-px !w-px !min-h-0 !min-w-0 !border-0 !bg-transparent';
 /* the ⊕ off each side, under the pointer or while selected */
-const PLUS = '!flex !h-6 !w-6 items-center justify-center !rounded-full !border !border-[var(--cv-ring)] !bg-[var(--cv-bg)] !text-[var(--cv-ink)] transition-[opacity,transform] duration-150 hover:!scale-110';
+/* a ⊕ beside a card: 24 across as drawn; round it, what takes the pointer too, 24 further out and 16 above and below */
+const PLUS = "!flex !h-6 !w-6 items-center justify-center !rounded-full before:absolute before:-inset-y-4 before:rounded-full before:content-[''] !border !border-[var(--cv-ring)] !bg-[var(--cv-bg)] !text-[var(--cv-ink)] transition-[opacity,transform] duration-150 hover:!scale-110";
 
 /**
  * A node's sides: the wires' anchors at the middle of each (first, so a wire without a handle named meets them), and
@@ -88,12 +90,12 @@ function Sides({ id, selected, ins = true, outs = true }: { id: string; selected
       <Handle type="target" position={Position.Left} className={ANCHOR} isConnectable={!board.readOnly} />
       <Handle type="source" position={Position.Right} className={ANCHOR} isConnectable={!board.readOnly} />
       {ins ? (
-        <Handle id="in" type="target" position={Position.Left} className={`${PLUS} !-left-[31px] ${shown}`} onClick={side('target')} title={t('canvas.side.in')}>
+        <Handle id="in" type="target" position={Position.Left} className={`${PLUS} !-left-[31px] before:-left-6 before:-right-1 ${shown}`} onClick={side('target')} title={t('canvas.side.in')}>
           <Plus size={14} strokeWidth={2} className="pointer-events-none" />
         </Handle>
       ) : null}
       {outs ? (
-        <Handle id="out" type="source" position={Position.Right} className={`${PLUS} !-right-[31px] ${shown}`} onClick={side('source')} title={t('canvas.side.out')}>
+        <Handle id="out" type="source" position={Position.Right} className={`${PLUS} !-right-[31px] before:-right-6 before:-left-1 ${shown}`} onClick={side('source')} title={t('canvas.side.out')}>
           <Plus size={14} strokeWidth={2} className="pointer-events-none" />
         </Handle>
       ) : null}
@@ -143,7 +145,7 @@ function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, chi
 }
 
 /** A file shown in a card: a picture as it is, a clip's poster (playing under the pointer or while selected), a sound's player. */
-function Shown({ file, play }: { file: WorkspaceResource; play: boolean }) {
+function Shown({ file, play, words }: { file: WorkspaceResource; play: boolean; words?: string }) {
   const board = useBoard();
   const src = board.sources.file(file);
   const poster = board.sources.poster?.(file);
@@ -153,14 +155,7 @@ function Shown({ file, play }: { file: WorkspaceResource; play: boolean }) {
       ? <video src={src} poster={poster} muted loop playsInline autoPlay={play} preload="metadata" className="block h-full w-full bg-black object-cover" />
       : <img src={poster} alt="" draggable={false} className="block h-full w-full object-cover" />;
   }
-  if (file.kind === 'audio') {
-    return (
-      <div className="flex h-full w-full items-center gap-2.5 px-3.5">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--cv-card-2)] text-[var(--cv-label)]"><Music size={16} /></span>
-        <audio src={src} controls preload="none" className="nodrag h-8 min-w-0 flex-1" />
-      </div>
-    );
-  }
+  if (file.kind === 'audio') return <SoundCard file={file} words={words} />;
   const page = file.kind === 'mg' ? board.sources.pagePoster?.(file) : undefined;
   return page
     ? <img src={page} alt="" draggable={false} className="block h-full w-full object-cover" />
@@ -209,16 +204,11 @@ function Empty({ icon: Icon, tries }: { icon: React.ComponentType<{ size?: numbe
   );
 }
 
-/** Far out: a card's outline, its kind's icon in it. */
-function Outline({ icon: Icon, style }: { icon: React.ComponentType<{ size?: number }>; style?: React.CSSProperties }) {
-  return <div className="flex h-full w-full items-center justify-center bg-[var(--cv-card-2)] text-[var(--cv-ghost)]" style={style}><Icon size={32} /></div>;
-}
 
 /** A file of the project on the board: as its picture draws it, 350 high, until resized. */
 export function FileNodeView({ id, data, selected, width, height }: NodeProps<FileNode>) {
   const t = useT();
   const board = useBoard();
-  const far = useStore(farSelector);
   const [over, setOver] = React.useState(false);
   const file = board.fileOf(data.path);
   const Icon = KIND_ICON[file?.kind ?? 'other'];
@@ -227,8 +217,7 @@ export function FileNodeView({ id, data, selected, width, height }: NodeProps<Fi
       <ActionBar id={id} file={file} />
       <Frame id={id} selected={selected} icon={Icon} title={file?.name ?? data.path.split('/').pop() ?? data.path} meta={sizeOf(file)} by={data.by}>
         <div className="relative" style={boxStyle(width != null && height != null, file)}>
-          {far ? <Outline icon={Icon} />
-            : file ? <Shown file={file} play={over || selected} />
+          {file ? <Shown file={file} play={over || selected} />
               : <div className="flex h-full w-full items-center justify-center gap-2 px-3 text-center text-[12px] text-[var(--cv-label)]"><FileQuestion size={14} />{t('canvas.missing')}</div>}
         </div>
       </Frame>
@@ -243,7 +232,6 @@ export function FileNodeView({ id, data, selected, width, height }: NodeProps<Fi
 export function NoteNodeView({ id, data, selected, height }: NodeProps<NoteNode>) {
   const t = useT();
   const board = useBoard();
-  const far = useStore(farSelector);
   const n = useNumber(id);
   const editing = board.editing === id;
   /* empty, it says what to write for what it is wired into (a picture, a clip, a sound) */
@@ -266,6 +254,7 @@ export function NoteNodeView({ id, data, selected, height }: NodeProps<NoteNode>
   const area = React.useRef<HTMLTextAreaElement>(null);
   /* the bar over it pressed: the words stay open to write in */
   const barPressed = React.useRef(false);
+  const pressedAt = React.useRef<[number, number] | null>(null);
   return (
     <div className="h-full w-full" onDoubleClick={write}>
       <NotePanel id={id} />
@@ -294,7 +283,7 @@ export function NoteNodeView({ id, data, selected, height }: NodeProps<NoteNode>
             placeholder={hint}
             className="nodrag nowheel h-full w-full resize-none bg-transparent px-4 py-3.5 text-[14px] leading-[1.65] text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-ink-3)]"
           />
-        ) : far ? <Outline icon={TypeIcon} /> : fresh ? (
+        ) : fresh ? (
           <Empty icon={AlignLeft} tries={(
             <>
               <TryLine icon={PenLine} label={t('canvas.try.write')} onClick={write} />
@@ -304,7 +293,10 @@ export function NoteNodeView({ id, data, selected, height }: NodeProps<NoteNode>
             </>
           )} />
         ) : (
-          <div className={`h-full w-full overflow-hidden whitespace-pre-wrap break-words px-4 py-3.5 text-[14px] leading-[1.65] ${data.text ? 'text-[var(--cv-ink)]' : 'text-[var(--cv-ink-3)]'}`}>
+          /* a click in its words (not a drag of the card) writes in it, where the words end */
+          <div onPointerDown={(event) => { pressedAt.current = [event.clientX, event.clientY]; }}
+            onClick={(event) => { const [x, y] = pressedAt.current ?? [event.clientX, event.clientY]; if (Math.hypot(event.clientX - x, event.clientY - y) < 4) write(); }}
+            className={`h-full w-full cursor-text overflow-hidden whitespace-pre-wrap break-words px-4 py-3.5 text-[14px] leading-[1.65] ${data.text ? 'text-[var(--cv-ink)]' : 'text-[var(--cv-ink-3)]'}`}>
             {data.text ? <Words text={data.text} /> : hint}
           </div>
         )}
@@ -352,6 +344,7 @@ export function FrameNodeView({ id, data, selected }: NodeProps<FrameNode>) {
                 </button>
               </Tooltip>
             ) : null}
+            <button type="button" onClick={() => board.tidy(id)} className={bar}><LayoutGrid size={14} />{t('canvas.tidy')}</button>
             <button type="button" onClick={() => board.keepTemplate(id)} className={bar}><BookmarkPlus size={14} />{t('canvas.keepTemplate')}</button>
             <button type="button" onClick={() => board.keepCharacter(id)} className={bar}><UserRound size={14} />{t('canvas.characters.keep')}</button>
             <button type="button" onClick={() => board.ungroup(id)} className={bar}><Ungroup size={14} />{t('canvas.ungroup')}</button>
@@ -405,8 +398,7 @@ export function MakeNodeView({ id, data, selected }: NodeProps<MakeNode>) {
         ins={media !== 'audio'}
         note={board.stale.has(id) ? <span className="pointer-events-auto shrink-0 text-amber-500/90" title={t('canvas.make.staleTip')}>{t('canvas.make.stale')}</span> : null}>
         <div className="relative h-full w-full">
-          {far ? <Outline icon={Icon} />
-            : file ? <Shown file={file} play={over || selected} />
+          {file ? <Shown file={file} play={over || selected} words={data.make === 'tts' ? data.prompt : undefined} />
               : (
                 <Empty icon={Icon} tries={fed || run ? undefined : media === 'image' ? (
                   <>
@@ -466,7 +458,6 @@ export function MakeNodeView({ id, data, selected }: NodeProps<MakeNode>) {
 export function CutNodeView({ id, data, selected }: NodeProps<CutNode>) {
   const t = useT();
   const board = useBoard();
-  const far = useStore(farSelector);
   const n = useNumber(id);
   const shots = board.inputs(id).filter((i) => i.path);
   const seconds = Math.round(shots.reduce((sum, i) => sum + (board.fileOf(i.path!)?.durationMs ?? 0), 0) / 1000);
@@ -475,8 +466,7 @@ export function CutNodeView({ id, data, selected }: NodeProps<CutNode>) {
     <div className="h-full w-full">
       <CutPanel id={id} count={shots.length} />
       <Frame id={id} selected={selected} icon={Scissors} title={t('canvas.titles.cut').replace('{n}', String(n))} meta={meta} by={data.by} outs={false}>
-        {far ? <Outline icon={Scissors} />
-          : shots.length ? (
+        {shots.length ? (
             <div className="nowheel grid h-full grid-cols-2 content-start gap-2 overflow-y-auto p-3">
               {shots.map((shot, i) => {
                 const file = board.fileOf(shot.path!);

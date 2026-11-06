@@ -1574,6 +1574,7 @@ export const ko: Words = {
       },
     },
     titles: {
+      tts: '오디오 노드 {n}',
       note: '텍스트 노드 {n}',
       image: '이미지 노드 {n}',
       video: '영상 노드 {n}',
@@ -1606,6 +1607,7 @@ export const ko: Words = {
     effects: { names: { pushIn: '푸시 인', pullOut: '풀 아웃', orbit: '오빗', track: '트래킹', follow: '팔로우', whip: '휩 팬', dollyZoom: '돌리 줌', craneUp: '크레인 업', dive: '드론 다이브', clouds: '구름 통과', fpv: 'FPV 비행', slowMo: '슬로 모션', timelapse: '타임랩스', bulletTime: '불릿 타임', handheld: '핸드헬드', pov: '1인칭 시점', rack: '랙 포커스' } },
     characters: { title: '캐릭터', chip: '캐릭터', mine: '내 캐릭터', search: '캐릭터 검색', none: '아직 캐릭터가 없습니다. 몇 마디로 생성하거나 가진 이미지로 만들면 모든 이미지와 영상에서 같은 인물이 됩니다.', create: '새 캐릭터', generateNew: '캐릭터 생성', fromComputer: '이 컴퓨터에서', fromAssets: '에셋에서', newTitle: '새 캐릭터 만들기', nameTitle: '캐릭터 이름 정하기', name: '이름', describe: '어떤 인물인지: 나이, 외모, 머리, 옷차림, 특징…', aboutHint: '이 캐릭터에 대해 (선택)', generate: '생성', save: '저장', cancel: '취소', next: '다음', pickAssets: '이 캐릭터의 이미지를 고르세요 (대표 이미지를 먼저)', edit: '캐릭터 편집', remove: '삭제', add: '캔버스에 추가', useHere: '여기에 사용', keep: '캐릭터로 저장', kept: '"{name}"을(를) 캐릭터에 저장했습니다', noPictures: '캐릭터로 저장할 이미지가 없습니다' },
     noteFor: {
+      tts: '말할 대사를 그대로',
       image: '장면을 설명하세요: 누가, 어디서, 무엇을, 어떤 빛',
       video: '숏을 설명하세요: 무엇이 움직이고 카메라가 어떻게 움직이는지',
       sfx: '소리를 설명하세요: 무엇이, 어디서, 얼마나 길게',
@@ -1616,6 +1618,10 @@ export const ko: Words = {
     added: '타임라인에 추가했습니다',
     remove: '제거',
     fit: '화면에 맞추기',
+    tidy: '정리',
+    beta: '베타',
+    betaTip: '캔버스는 아직 테스트 중이며, 덜 된 부분이 많습니다.',
+    voice: { pick: '목소리', search: '목소리 검색', all: '전체', hear: '미리 듣기', stop: '정지', none: '그 이름의 목소리가 없습니다', idHint: '이 서비스의 목소리는 라이브러리에 없습니다. 서비스에서 쓰는 목소리 ID를 입력하세요.', idPlaceholder: '목소리 ID', gender: { m: '남성', f: '여성', n: '중성' } },
     empty: '캔버스를 더블클릭해 노드 추가',
     missing: '이 파일은 더 이상 프로젝트에 없습니다',
     saveFailed: '캔버스를 저장하지 못했습니다: {error}',
@@ -1720,6 +1726,7 @@ export const ko: Words = {
       },
       pictures: '연결한 이미지 사용 방식',
       placeholder: {
+        tts: '말할 대사를 적으세요. 예: 이 등대는 백 년 동안 이곳을 지켜 왔다.',
         image: '화면을 설명하거나 참조 이미지를 연결하세요. 예: 새벽 바닷가의 등대, 안개, 영화 같은',
         video: '카메라 움직임과 일어나는 일을 설명하세요. 예: 천천히 다가가며 등대 불빛이 바다를 비춤',
         sfx: '소리를 설명하세요. 예: 바위에 부딪히는 파도, 멀리 갈매기',
@@ -1794,6 +1801,8 @@ export const ko: Words = {
     loadFailed: '캔버스를 불러오지 못했습니다',
     reload: '다시 불러오기',
     make: {
+      tts: '내레이션',
+      noVoice: '먼저 목소리를 고르세요',
       ai: 'AI 생성',
       image: '이미지',
       video: '동영상',

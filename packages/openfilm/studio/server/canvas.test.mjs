@@ -196,3 +196,17 @@ test('a picture node keeps its GIF, its SVG and what of its picture it redraws',
   const [odd] = parseCanvas({ nodes: [{ id: 'q', x: 0, y: 0, make: 'image', opts: { format: 'jpg', gifFrames: 40, frameMs: 5 } }], edges: [] }).nodes;
   assert.equal(/** @type {any} */ (odd).opts, undefined, 'what the format does not take is left out');
 });
+
+test("an agent's nodes laid on each other are moved apart, and a group grows round what is in it", async () => {
+  const exists = async () => true;
+  const { canvas } = await applyCanvasOps({ nodes: [], edges: [] }, [
+    { op: 'add', kind: 'group', id: 'g', name: 'Shots', x: 0, y: 0, w: 400, h: 300 },
+    { op: 'add', kind: 'note', id: 'n', text: 'brief', group: 'g', x: 32, y: 52 },
+    { op: 'add', kind: 'image', id: 'a', prompt: 'one', group: 'g', x: 600, y: 52 },
+    { op: 'add', kind: 'image', id: 'b', prompt: 'two', group: 'g', x: 700, y: 52 },
+  ], { by: { agent: 'claude' }, exists });
+  const at = (id) => /** @type {any} */ (canvas.nodes.find((n) => n.id === id));
+  assert.ok(at('b').x >= at('a').x + 622, 'the second picture is clear of the first (622 wide)');
+  const g = at('g');
+  for (const id of ['n', 'a', 'b']) assert.ok(at(id).x + (at(id).w ?? 622) <= g.w && at(id).y + (at(id).h ?? 350) <= g.h, `${id} is inside its group`);
+});

@@ -7,9 +7,9 @@
 import React from 'react';
 import { NodeToolbar, Position } from '@xyflow/react';
 import {
-  AlignLeft, ArrowUp, Brush, Camera, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, Download, FolderSearch, Images, LayoutGrid, Maximize2, Minimize2, Music, Plus, Search, Sparkles, Square, Video, X,
+  AlignLeft, ArrowUp, AudioLines, Brush, Camera, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, Download, FolderSearch, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Video, X,
 } from 'lucide-react';
-import { useT } from '@/i18n';
+import { useLanguage, useT } from '@/i18n';
 import { GIF_FRAMES, GIF_FRAME_MS, IMAGE_RATIOS, MAKE_COUNTS, MAKE_MEDIA, VIDEO_MODES, VIDEO_RATIOS, frameRatio, lengthOf, lengthRange, modeOf, modesFor, ratioOf, type ModelSpec, type VideoMode } from '@/lib/canvas';
 import { PRESETS, PRESET_GROUPS, presetOf, type CanvasPreset } from '@/lib/canvas-presets';
 import type { WorkspaceResource } from '@/lib/workspace-resources';
@@ -18,6 +18,8 @@ import { Tooltip } from '../Tooltip';
 import { modelTime, timeLabel, useBoard, type Choice, type MakeData } from './board';
 import { frameOf, splitGrid } from './pixels';
 import { ProviderMark } from '../settings/ProviderMark';
+import { useLibraryVoices, voiceLook } from '@/lib/library-voices';
+import { VoiceId, VoicePicker, defaultVoice, serviceOf, voicesOf } from './voices';
 
 const MOD = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform) ? '⌘' : 'Ctrl+';
 /** the lengths offered for each kind, in seconds */
@@ -201,7 +203,7 @@ function ModelPicker({ choices, picked, fallback, onPick, onConnect }: {
           </span>
           {/* what it is and what it takes, said when pointed at (or picked) */}
           <span className={`text-[11.5px] leading-snug text-[var(--cv-label)] ${on ? 'block' : 'hidden group-hover/model:block'}`}>
-            {[c.provider, c.kind === 'sfx' || c.kind === 'music' ? t(`canvas.make.${c.kind}`) : '', line].filter(Boolean).join(' · ')}
+            {[c.provider, c.kind === 'sfx' || c.kind === 'music' || c.kind === 'tts' ? t(`canvas.make.${c.kind}`) : '', line].filter(Boolean).join(' · ')}
           </span>
         </span>
       </button>
@@ -254,12 +256,16 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
   const takesPictures = media !== 'audio';
   const inputs = shown ? board.inputs(id) : [];
   const choices = board.choices(data.make);
-  /* a sound is one node: its model says whether it makes a sound effect or music */
-  const every = MAKE_MEDIA[data.make] === 'audio' ? [...board.allChoices('music'), ...board.allChoices('sfx')] : board.allChoices(data.make);
+  const every = board.allChoices(data.make);
   const fallback = board.fallback(data.make);
   const picked = choices.find((c) => c.via === data.via && c.model === data.model) ?? null;
   /* what the model it makes with makes: only that is offered */
   const model = (picked ?? fallback)?.spec;
+  /* a voice-over's voice: the library's voices of the service its model is at, or one named by its id */
+  const library = useLibraryVoices();
+  const language = useLanguage();
+  const voices = data.make === 'tts' ? voicesOf(library, serviceOf(picked ?? fallback)) : [];
+  const voice = data.make === 'tts' ? (data.opts?.voice ? voices.find((v) => v.id === data.opts?.voice) ?? null : defaultVoice(voices, language)) : null;
   const run = board.run(id);
   const error = board.error(id);
   const unused = board.unused.get(id) ?? 0;
@@ -308,6 +314,19 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
             {expanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
           </button>
         </Tooltip>
+        {!takesPictures ? (
+          /* a sound is a voice-over, music or a sound effect: each made by its own models */
+          <div className="flex items-center gap-1 pr-9">
+            <div className="flex items-center gap-0.5 rounded-[10px] bg-[var(--cv-chip)] p-0.5">
+              {(['tts', 'music', 'sfx'] as const).map((k) => (
+                <button key={k} type="button" onClick={() => { if (k !== data.make) set({ make: k, via: undefined, model: undefined }); }}
+                  className={`flex h-6 items-center gap-1 rounded-[8px] px-2.5 text-[12px] transition ${k === data.make ? 'bg-[var(--cv-float-hover)] text-[var(--cv-ink)] shadow-sm' : 'text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]'}`}>
+                  {k === 'tts' ? <Mic size={12} /> : k === 'music' ? <Music size={12} /> : <AudioLines size={12} />}{t(`canvas.make.${k}`)}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
         {takesPictures ? (
           <div className="flex items-center gap-1 pr-9">
             <button type="button" className={CHIP} onClick={() => board.upload(id, 'input')}><Plus size={13} />{t('canvas.panel.upload')}</button>
@@ -418,6 +437,18 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
               <button type="button" onClick={board.openSettings} className={`${PICK} whitespace-nowrap text-amber-500 hover:text-amber-400`}>{t('canvas.panel.connect')}</button>
             </Tooltip>
           )}
+          {data.make === 'tts' && every.length ? (
+            <Popover open={open === 'voice'} onOpenChange={(v) => setOpen(v ? 'voice' : null)} placement="auto"
+              trigger={(
+                <button type="button" className={PICK} onClick={() => setOpen(open === 'voice' ? null : 'voice')}>
+                  {voice ? <span className="h-4 w-4 shrink-0 rounded-full" style={voiceLook(voice)} /> : <Mic size={14} />}
+                  <span className="max-w-[160px] truncate">{voice?.name ?? data.opts?.voice ?? t('canvas.voice.pick')}</span><ChevronDown size={13} />
+                </button>
+              )}>
+              {voices.length ? <VoicePicker voices={voices} picked={voice?.id} onPick={(v) => { setOpts({ voice: v }); setOpen(null); }} />
+                : <VoiceId value={data.opts?.voice} onPick={(v) => { setOpts({ voice: v }); setOpen(null); }} />}
+            </Popover>
+          ) : null}
           {mode ? (
             <Popover open={open === 'mode'} onOpenChange={(v) => setOpen(v ? 'mode' : null)} placement="auto"
               trigger={(

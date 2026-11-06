@@ -20,7 +20,7 @@ export const MADE_FILE = `${TOOL_DIR}/canvas-made.json`;
 const MADE_MAX = 5000;
 const SHOWN_MAX = 600;
 const PROMPT_MAX = 400;
-const KINDS = ['image', 'video', 'sfx', 'music'];
+const KINDS = ['image', 'video', 'sfx', 'music', 'tts'];
 const TYPES = /** @type {Record<string, string>} */ ({ '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif',
   '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.ogg': 'audio/ogg' });
 

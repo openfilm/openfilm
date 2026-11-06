@@ -57,7 +57,7 @@ const GROUP_COLORS = ['gray', 'red', 'orange', 'yellow', 'green', 'blue', 'purpl
 const NAME_MAX = 80;
 
 /** what a node can make, and how much of what it made it keeps */
-const MAKE_KINDS = ['image', 'video', 'sfx', 'music'];
+const MAKE_KINDS = ['image', 'video', 'sfx', 'music', 'tts'];
 const VERSIONS_MAX = 50;
 const SHORT_MAX = 120;
 
@@ -149,6 +149,7 @@ function readMake(n) {
     ...(projectPath(o.mask) ? { mask: o.mask } : {}),
     ...(projectPath(o.markup) ? { markup: o.markup } : {}),
     ...(o.count === 2 || o.count === 4 ? { count: o.count } : {}),
+    ...(short(o.voice) ? { voice: o.voice } : {}),
   };
   const versions = (Array.isArray(n.versions) ? n.versions : []).filter(projectPath).slice(-VERSIONS_MAX);
   const fields = {
@@ -292,9 +293,13 @@ const KIND_SIZE = /** @type {Record<string, { w: number, h: number }>} */ ({
 });
 /** the room left between what an agent adds and what is there */
 const GAP = 80;
+/** the room over a card its title takes */
+const CARD_HEAD = 28;
 /** a card's height on the board (studio/ui lib/canvas CARD_H) */
 const CARD_H = 350;
 const GROUP_PAD = 32;
+/** the room at a group's top, under its name */
+const GROUP_HEAD = 20;
 
 /** An agent's step that cannot be taken: which, and why. */
 export class CanvasOpError extends Error {}
@@ -308,7 +313,7 @@ function boxOf(n, byId) {
   const kind = kindOf(n);
   const m = /** @type {{ make?: string, opts?: { ratio?: string } }} */ (n);
   const shaped = (/** @type {string | undefined} */ ratio) => { const [a, b] = String(ratio ?? '16:9').split(':').map(Number); return a && b ? Math.round(CARD_H * a / b) : 622; };
-  const w = n.w ?? (kind === 'make' ? (m.make === 'sfx' || m.make === 'music' ? 320 : shaped(m.opts?.ratio)) : kind === 'file' ? 622 : kind === 'group' ? KIND_SIZE.group.w : CARD_H);
+  const w = n.w ?? (kind === 'make' ? (m.make === 'sfx' || m.make === 'music' || m.make === 'tts' ? 320 : shaped(m.opts?.ratio)) : kind === 'file' ? 622 : kind === 'group' ? KIND_SIZE.group.w : CARD_H);
   const h = n.h ?? (kind === 'group' ? KIND_SIZE.group.h : CARD_H);
   const parent = n.parent ? byId.get(n.parent) : undefined;
   return { x: n.x + (parent?.x ?? 0), y: n.y + (parent?.y ?? 0), w, h };
@@ -377,7 +382,7 @@ export async function applyCanvasOps(canvas, ops, { by, exists }) {
       else if (MAKE_KINDS.includes(kind)) {
         const path = op.path === undefined ? undefined : await file(op.path, 'path');
         fields = { make: kind, prompt: op.prompt, via: op.via, model: op.model, preset: op.preset, opts: op.opts, ...(path ? { versions: [path], path } : {}) };
-      } else throw new CanvasOpError(`${step}: kind is one of note, file, image, video, sfx, music, cut, group`);
+      } else throw new CanvasOpError(`${step}: kind is one of note, file, image, video, sfx, music, tts, cut, group`);
       const inputs = Array.isArray(op.inputs) ? op.inputs.map((input) => node(input).id) : [];
       const around = kind === 'group' && Array.isArray(op.around) ? op.around.map((a) => node(a)) : [];
       const group = op.group === undefined ? undefined : node(op.group);
@@ -455,9 +460,50 @@ export async function applyCanvasOps(canvas, ops, { by, exists }) {
       delete m.made;
     } else throw new CanvasOpError(`${step}: op is one of add, set, remove, wire, unwire, version`);
   }
+  settle(nodes, added);
   const kept = parseCanvas({ nodes, edges });
   if (kept.nodes.length < nodes.length) throw new CanvasOpError(`the board would have more than ${MAX_NODES} nodes`);
   return { canvas: kept, added };
+}
+
+/**
+ * After an agent's steps: what it added kept clear of what is there (moved right of what it would lie on, as a row
+ * goes on), and every group round what is in it (grown, never shrunk; what is in it stays where it is on the board).
+ * @param {CanvasNode[]} nodes @param {string[]} added
+ */
+function settle(nodes, added) {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  /* a card's title is drawn over it: it takes its room too */
+  const overlap = (/** @type {{ x: number, y: number, w: number, h: number }} */ a, /** @type {typeof a} */ b) =>
+    a.x < b.x + b.w && b.x < a.x + a.w && a.y - CARD_HEAD < b.y + b.h && b.y - CARD_HEAD < a.y + a.h;
+  /* in the order they were added: each clear of what was there and of what was added before it */
+  const later = new Set(added);
+  for (const id of added) {
+    const n = byId.get(id);
+    later.delete(id);
+    if (!n || 'group' in n) continue;
+    for (let tries = 0; tries < 200; tries++) {
+      const me = boxOf(n, byId);
+      const hit = nodes.find((o) => o !== n && !later.has(o.id) && !('group' in o) && overlap(me, boxOf(o, byId)));
+      if (!hit) break;
+      const there = boxOf(hit, byId);
+      n.x += there.x + there.w + GAP / 2 - me.x;
+    }
+  }
+  for (const g of nodes) {
+    if (!('group' in g)) continue;
+    const kids = nodes.filter((n) => n.parent === g.id);
+    if (!kids.length) continue;
+    const sizes = kids.map((k) => boxOf(k, byId));
+    const left = Math.min(0, ...kids.map((k) => k.x - GROUP_PAD));
+    const top = Math.min(0, ...kids.map((k) => k.y - GROUP_PAD - GROUP_HEAD));
+    if (left < 0 || top < 0) {
+      g.x += left; g.y += top;
+      for (const k of kids) { k.x -= left; k.y -= top; }
+    }
+    g.w = Math.max(g.w ?? KIND_SIZE.group.w, ...kids.map((k, i) => k.x + sizes[i].w + GROUP_PAD));
+    g.h = Math.max(g.h ?? KIND_SIZE.group.h, ...kids.map((k, i) => k.y + sizes[i].h + GROUP_PAD));
+  }
 }
 
 /**

@@ -24,7 +24,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { AudioLines, Clapperboard, Download, Film, FolderSearch, Image as ImageIcon, LayoutTemplate, Maximize2, MousePointerClick, Play, Plus, Scissors, ScrollText, Sparkles, Square, Upload, UserRound } from 'lucide-react';
-import { useT } from '@/i18n';
+import { useLanguage, useT } from '@/i18n';
 import { ApiError, api, projectEvents, type CanvasBoard, type CanvasCharacter } from '@/api';
 import { BoardSwitcher, boardName, nextBoardName } from './boards';
 import {
@@ -33,6 +33,8 @@ import {
   type CanvasDoc, type CanvasHistory, type MediaOf,
 } from '@/lib/canvas';
 import { useProviders } from '@/lib/providers';
+import { useLibraryVoices } from '@/lib/library-voices';
+import { defaultVoice, serviceOf, voicesOf } from './voices';
 import { builtInTemplates, type CanvasTemplate } from '@/lib/canvas-templates';
 import { RESOURCE_DRAG_TYPE, isComputerFileDrag, readResourceDragData } from '@/lib/resource-drag';
 import type { MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
@@ -40,7 +42,7 @@ import { studioHost, type StudioRef } from '@/lib/host';
 import { useThemeChanges } from '@/lib/theme-changes';
 import { ContextMenu, type ContextMenuEntry } from '../ContextMenu';
 import {
-  BoardContext, allChoicesFor, boxOf, choiceOf, choicesFor, defaultChoice, fromFlow, inputViews, keepModelTime, runErrors, runs, runsChanged, shownBoards, startRun, toFlow, useRuns,
+  BoardContext, allChoicesFor, boxOf, choiceOf, choicesFor, defaultChoice, fitGroups, fromFlow, tidyGroup, unstack, inputViews, keepModelTime, runErrors, runs, runsChanged, shownBoards, startRun, toFlow, useRuns,
   type Board, type BoardNode, type FrameData, type FrameNode, type MakeData, type MakingNode, type Side, type SpawnKind,
 } from './board';
 import { BottomToolbar, LeftBar, Outline, Viewer } from './chrome';
@@ -69,7 +71,7 @@ const LIT = 'var(--cv-edge-lit)';
 const MOD = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform) ? '⌘' : 'Ctrl+';
 const SHIFT = MOD === '⌘' ? '⇧⌘' : 'Ctrl+Shift+';
 /** what each kind of node starts as, wide */
-const WIDE: Record<SpawnKind | 'file', number> = { note: NOTE_W, image: MAKE_W, video: MAKE_W, sfx: makeSize('sfx').w, music: makeSize('music').w, cut: CUT_W, file: FILE_W };
+const WIDE: Record<SpawnKind | 'file', number> = { note: NOTE_W, image: MAKE_W, video: MAKE_W, sfx: makeSize('sfx').w, music: makeSize('music').w, tts: makeSize('tts').w, cut: CUT_W, file: FILE_W };
 /** what the computer's file picker offers, by what it is for */
 const ACCEPT = { image: 'image/*', video: 'video/*', audio: 'audio/*', media: 'image/*,video/*,audio/*' } as const;
 
@@ -197,7 +199,8 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
       history.current = emptyHistory();
       show(doc);
       setReady(true);
-      requestAnimationFrame(() => { void flow.fitView({ padding: 0.2, maxZoom: 1 }); });
+      /* once the cards are measured: every group round what is in it (a board an agent laid out loosely), then all in view */
+      requestAnimationFrame(() => requestAnimationFrame(() => { setNodes((list) => fitGroups(unstack(list))); void flow.fitView({ padding: 0.2, maxZoom: 1 }); }));
     }, (e: unknown) => {
       if (!live) return;
       /* a board that is not there (any more): the first */
@@ -398,6 +401,8 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
 
   /* ── making ── */
   const providers = useProviders().state;
+  const libraryVoices = useLibraryVoices();
+  const language = useLanguage();
   const runsSeen = useRuns();
   /** what changed since each making node last made one, and what is wired into it that it cannot use */
   const making = React.useMemo(() => {
@@ -439,8 +444,14 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
         if (shape) node.opts = { ...node.opts, ratio: shape };
       }
     }
+    /* a voice-over in the voice picked, else in its service's first voice in the person's language */
+    if (node.make === 'tts' && !node.opts?.voice) {
+      const voice = defaultVoice(voicesOf(libraryVoices, serviceOf(choiceOf(providers, 'tts', node.via, node.model))), language);
+      if (!voice) return fail('canvas.make.noVoice');
+      node.opts = { ...node.opts, voice: voice.id };
+    }
     const request = makeRequest(node as MakingNode, inputs, makeName(node as MakingNode), choiceOf(providers, node.make, node.via, node.model)?.spec);
-    if (!String(request.args.prompt).trim()) { runErrors.set(`${projectId}/${id}`, t('canvas.make.noWords')); runsChanged(); return Promise.resolve(false); }
+    if (!String(request.args.prompt ?? request.args.text).trim()) { runErrors.set(`${projectId}/${id}`, t('canvas.make.noWords')); runsChanged(); return Promise.resolve(false); }
     const pick = node.via ? { via: node.via, ...(node.model ? { model: node.model } : {}) } : {};
     const say = { nothing: t('canvas.make.nothing'), balance: t('canvas.make.noBalance') };
     /* two or four at once: one after another, each a version of its own (a clip asked again is made anew) */
@@ -725,14 +736,20 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
     fileOf: (path) => byPath.get(path) ?? null,
     sources,
     addToFilm: onAddToFilm,
-    setData: (id, data) => setNodes((list) => list.map((n) => {
-      if (n.id !== id) return n;
-      /* a picture or a clip asked in another shape: its card takes that shape, as high as it was */
-      const ratio = n.type === 'make' && MAKE_MEDIA[n.data.make] !== 'audio' ? data.opts?.ratio : undefined;
-      const reshaped = ratio && ratio !== (n.data as MakeData).opts?.ratio ? { width: cardWidth(ratio, n.height ?? CARD_H) } : {};
-      return { ...n, ...reshaped, data: { ...n.data, ...data } } as BoardNode;
-    })),
-    resize: (id, size) => setNodes((list) => list.map((n) => (n.id === id ? { ...n, width: size.w, height: size.h } : n))),
+    setData: (id, data) => setNodes((list) => {
+      let grew = false;
+      const next = list.map((n) => {
+        if (n.id !== id) return n;
+        /* a picture or a clip asked in another shape: its card takes that shape, as high as it was */
+        const ratio = n.type === 'make' && MAKE_MEDIA[n.data.make] !== 'audio' ? data.opts?.ratio : undefined;
+        const width = ratio && ratio !== (n.data as MakeData).opts?.ratio ? cardWidth(ratio, n.height ?? CARD_H) : null;
+        grew = width !== null && width > (n.width ?? 0);
+        return { ...n, ...(width !== null ? { width } : {}), data: { ...n.data, ...data } } as BoardNode;
+      });
+      /* a card grown wider moves what it now lies on out of its way */
+      return grew ? unstack(next, [id]) : next;
+    }),
+    resize: (id, size) => setNodes((list) => unstack(list.map((n) => (n.id === id ? { ...n, width: size.w, height: size.h } : n)), [id])),
     spawn: (id, kind, data) => {
       const made = addKind(kind, spotBeside(id, 'source', WIDE[kind]), { node: id, side: 'source' }, true);
       if (data) setNodes((list) => list.map((n) => (n.id === made ? { ...n, data: { ...n.data, ...data } } as BoardNode : n)));
@@ -806,6 +823,7 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
     keepCharacter: (id) => { void keepCharacter(id); },
     openLibrary,
     redraw: (id, path) => setRedraw({ id, path }),
+    tidy: (group) => { willChange(); setNodes((list) => tidyGroup(list, group)); },
     openSettings: onOpenSettings,
     ...(chat ? { write } : {}),
   }), [chat, boardId, files, byPath, sources, onAddToFilm, setNodes, editing, single, providers, runsSeen, making, projectId, folder, onOpenSettings, nodes, edges, onReveal]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -905,6 +923,14 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
     else if (mod && key === 'enter' && single && now.current.nodes.find((n) => n.id === single)?.type === 'make') { done(); void makeNow(single); }
     else if (!mod && event.shiftKey && event.code === 'Digit1') { done(); void flow.fitView({ padding: 0.2, maxZoom: 1, duration: 200 }); }
     else if (!mod && event.shiftKey && event.code === 'Digit0') { done(); void flow.zoomTo(1, { duration: 150 }); }
+    /* a text node selected and typed into: written in, what was typed first (an input method's too, once it is open) */
+    else if (!mod && !event.altKey && single && !editing && (event.key.length === 1 || event.key === 'Process') && now.current.nodes.find((n) => n.id === single)?.type === 'note') {
+      const note = now.current.nodes.find((n) => n.id === single)!;
+      willChange();
+      if (event.key.length === 1) { done(); setNodes((list) => list.map((n) => (n.id === single && n.type === 'note' ? { ...n, data: { ...n.data, text: n.data.text + event.key } } : n))); }
+      if (note.height === CARD_H) board.resize(single, { w: NOTE_W, h: NOTE_H });
+      setEditing(single);
+    }
     else if (!mod && key === 'v') { done(); setTool('select'); }
     else if (!mod && key === 'h') { done(); setTool('hand'); }
     else if (!mod && (key === 'backspace' || key === 'delete')) { done(); removeSelected(); }
@@ -1059,6 +1085,7 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onNodeDragStart={willChange}
+          onNodeDragStop={() => setNodes((list) => fitGroups(list))}
           onSelectionDragStart={willChange}
           onConnect={(connection: Connection) => {
             willChange();
@@ -1294,7 +1321,7 @@ function Preview({ doc, fileUrl }: { doc: CanvasDoc; fileUrl: (path: string) => 
       choices: () => [], allChoices: () => [], fallback: () => null, run: () => undefined, error: () => undefined, stale: NOTHING, unused: NONE,
       make: nothing, stop: nothing, inputs: (id) => inputViews(drawn.nodes, drawn.edges, id, mediaOf), unwire: nothing, sideMenu: nothing,
       upload: nothing, wireIn: nothing, sendToFilm: nothing, view: nothing,
-      makesIn: () => 0, busyIn: () => false, makeAll: nothing, ungroup: nothing, keepTemplate: nothing, keepCharacter: nothing, openLibrary: nothing, redraw: nothing, pick: nothing, openSettings: nothing, readOnly: true,
+      makesIn: () => 0, busyIn: () => false, makeAll: nothing, ungroup: nothing, keepTemplate: nothing, keepCharacter: nothing, openLibrary: nothing, redraw: nothing, tidy: nothing, pick: nothing, openSettings: nothing, readOnly: true,
     };
   }, [doc, fileUrl, drawn]);
   return (

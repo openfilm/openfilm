@@ -1577,6 +1577,7 @@ export const ja: Words = {
       },
     },
     titles: {
+      tts: 'オーディオノード {n}',
       note: 'テキストノード {n}',
       image: '画像ノード {n}',
       video: '動画ノード {n}',
@@ -1609,6 +1610,7 @@ export const ja: Words = {
     effects: { names: { pushIn: 'ドリーイン', pullOut: 'ドリーアウト', orbit: '回り込み', track: 'トラッキング', follow: 'フォロー', whip: 'ウィップパン', dollyZoom: 'ドリーズーム', craneUp: 'クレーンアップ', dive: 'ドローン急降下', clouds: '雲を抜ける', fpv: 'FPV 飛行', slowMo: 'スローモーション', timelapse: 'タイムラプス', bulletTime: 'バレットタイム', handheld: '手持ち', pov: '一人称視点', rack: 'ピント送り' } },
     characters: { title: 'キャラクター', chip: 'キャラクター', mine: 'マイキャラクター', search: 'キャラクターを検索', none: 'キャラクターはまだありません。短い説明から生成するか、手持ちの画像から作ると、どの画像や動画でも同じ人物になります。', create: '新しいキャラクター', generateNew: 'キャラクターを生成', fromComputer: 'このコンピュータから', fromAssets: 'アセットから', newTitle: '新しいキャラクターを作成', nameTitle: 'キャラクターに名前を付ける', name: '名前', describe: 'どんな人物か：年齢、外見、髪型、服装、特徴…', aboutHint: 'このキャラクターについて（任意）', generate: '生成', save: '保存', cancel: 'キャンセル', next: '次へ', pickAssets: 'このキャラクターの画像を選んでください（メインを最初に）', edit: 'キャラクターを編集', remove: '削除', add: 'キャンバスに追加', useHere: 'ここで使う', keep: 'キャラクターとして保存', kept: '「{name}」をキャラクターに保存しました', noPictures: 'キャラクターとして保存できる画像がありません' },
     noteFor: {
+      tts: '話すセリフをそのまま',
       image: '画面を説明：誰が、どこで、何をしているか、光の具合',
       video: 'ショットを説明：何が動くか、カメラがどう動くか',
       sfx: '音を説明：何の音か、どこで、どれくらいの長さか',
@@ -1619,6 +1621,10 @@ export const ja: Words = {
     added: 'タイムラインに追加しました',
     remove: '削除',
     fit: '画面に合わせる',
+    tidy: '整える',
+    beta: 'ベータ',
+    betaTip: 'キャンバスはまだテスト中で、できていないところがたくさんあります。',
+    voice: { pick: '声', search: '声を検索', all: 'すべて', hear: '試聴', stop: '停止', none: 'その名前の声はありません', idHint: 'このサービスの声はライブラリにありません。サービスでの声の ID を入力してください。', idPlaceholder: '声の ID', gender: { m: '男性', f: '女性', n: '中性' } },
     empty: 'キャンバスをダブルクリックしてノードを追加',
     missing: 'このファイルはもうプロジェクトにありません',
     saveFailed: 'キャンバスを保存できませんでした：{error}',
@@ -1723,6 +1729,7 @@ export const ja: Words = {
       },
       pictures: 'つないだ画像の使い方',
       placeholder: {
+        tts: '話すセリフを書く（例：この灯台は百年ここを見守ってきた。）',
         image: '画面を説明するか、参照画像をつないでください。例：夜明けの海辺の灯台、霧、映画的',
         video: 'カメラの動きと起きることを説明してください。例：ゆっくり寄っていき、灯台の光が海を照らす',
         sfx: '音を説明してください。例：岩に打ち寄せる波、遠くのカモメ',
@@ -1797,6 +1804,8 @@ export const ja: Words = {
     loadFailed: 'キャンバスを読み込めませんでした',
     reload: '再読み込み',
     make: {
+      tts: 'ナレーション',
+      noVoice: '先に声を選んでください',
       ai: 'AI生成',
       image: '画像',
       video: '動画',
