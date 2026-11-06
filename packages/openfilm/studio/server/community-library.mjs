@@ -12,7 +12,7 @@ const REFRESH = 60_000;
 const TIMEOUT = 2500;
 const HEX = /^[a-f0-9]{64}$/;
 const ITEM = /^(sound|music|transition|effect)\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const names = { en: 'Community', 'zh-CN': '社区', ja: 'コミュニティ', ko: '커뮤니티', es: 'Comunidad' };
+const languages = ['en', 'zh-CN', 'ja', 'ko', 'es'];
 const sha256 = (/** @type {Buffer} */ bytes) => createHash('sha256').update(bytes).digest('hex');
 const endpoint = () => (process.env.OPENFILM_COMMUNITY_LIBRARY_URL ??
   `${(process.env.OPENFILM_LIBRARY_URL || 'https://openfilm.dev/library').replace(/\/+$/, '')}/${PREFIX}`).replace(/\/+$/, '');
@@ -57,7 +57,7 @@ function decode(json) {
     const kind = typeof id === 'string' && id.length < 100 ? ITEM.exec(id)?.[1] : undefined;
     if (!kind || seen.has(id) || !Number.isSafeInteger(version) || version < 1 || !HEX.test(revision) ||
         typeof by !== 'string' || !/^[a-zA-Z0-9-]{1,39}$/.test(by) ||
-        !name || !Object.keys(names).every((lang) => typeof name[lang] === 'string' && name[lang].trim() && name[lang].length <= 60) ||
+        !name || !languages.every((lang) => typeof name[lang] === 'string' && name[lang].trim() && name[lang].length <= 60) ||
         typeof about !== 'string' || about.length > 300 ||
         !Array.isArray(tags) || tags.length > 12 || !tags.every((t) => typeof t === 'string' && /^[a-z0-9-]{1,40}$/.test(t)) ||
         !Number.isInteger(durationMs) || durationMs < 1 || durationMs > 3_600_000 ||
@@ -76,7 +76,7 @@ function decode(json) {
       result.files.set(`${base}/${key}`, file);
     }
     if (!audio) result.bundles.set(base, ['saved.json', 'files/overlay.html'].map((key) => `${base}/${key}`));
-    result.groups[kind] ??= [{ id: 'community', name: names }];
+    result.groups[kind] ??= [{ id: 'community', name: { en: 'Community' } }];
     result.items.push({ id: audio ? `${base}/${sound}` : base, cat: kind, group: 'community', kind: audio ? 'sound' : 'page',
       name, about, tags, by, durationMs, ...(!audio ? { src: 'overlay.html', ...(kind === 'transition' ? { place: /** @type {const} */ ('cut') } : {}) } : {}) });
   }
