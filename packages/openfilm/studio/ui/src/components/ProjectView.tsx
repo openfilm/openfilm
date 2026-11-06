@@ -97,7 +97,7 @@ import { useFilmSubtitles } from '@/lib/use-film-subtitles';
 import { DEFAULT_INSPECTOR, DOCK_GAP, DockPaneDivider, MIN_DOCK_H, MIN_INSPECTOR, MIN_STAGE_H, MIN_VIEWER, PaneDivider, usePaneSize } from './PaneDivider';
 import { PANE_BAR, PANE_BTN_ON, PANE_TOGGLE, PANE_TOGGLE_ICON } from './dock-pane-bar';
 import { Tooltip } from './Tooltip';
-import { ProjectCard } from './ProjectCard';
+import { ProjectTitle } from './ProjectTitle';
 import { BrandLogo } from './BrandLogo';
 import { UpdateButton, WebUpdateButton } from './UpdateButton';
 import { MediaPool, type ImportProgress } from './MediaPool';
@@ -186,7 +186,6 @@ const TIMELINE_H = 200;
 const TIMELINE_SHARE = 0.45;
 const TIMELINE_SPARE = 48;
 const VIEWER_BESIDE_ASSETS = 440;
-const TITLE_MAX_CHARS = 56;
 /* the canvas beside the edit (components/canvas): loaded the first time it is opened */
 const loadCanvas = () => import('./canvas/CanvasView');
 const CanvasView = React.lazy(loadCanvas);
@@ -3801,9 +3800,14 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }),
   })), [projectApi]);
   /* a picture of the project: the project's card in the projects list */
-  const onSetCover = React.useCallback((path: string) => {
-    void api.setCover(projectId, { path }).then(() => toast.show(t('projects.coverSet')), () => toast.showError(t('projects.coverFailed')));
+  const coverSet = React.useCallback((cover: number | null) => {
+    setLoaded((current) => current?.project.id === projectId
+      ? { ...current, project: { ...current.project, cover: cover ?? undefined } } : current);
+    toast.show(t('projects.coverSet'));
   }, [projectId, toast, t]);
+  const onSetCover = React.useCallback((path: string) => {
+    void api.setCover(projectId, { path }).then(coverSet, () => toast.showError(t('projects.coverFailed')));
+  }, [projectId, coverSet, toast, t]);
   const onNewFolder = React.useCallback(async (path: string) => mediaResult(await fetch(`${projectApi}/folders`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }),
   })), [projectApi]);
@@ -4149,7 +4153,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const coverFromFrame = () => {
     if (previewError || totalMs <= 0) { toast.show(t('project.filmNotReady')); return; }
     void api.setCover(projectId, { ms: Math.max(0, Math.min(totalMs - 1, timeRef.current)) })
-      .then(() => toast.show(t('projects.coverSet')), () => toast.showError(t('projects.coverFailed')));
+      .then(coverSet, () => toast.showError(t('projects.coverFailed')));
   };
   /* the app's "New Tab" (its menu): the projects, to pick what the new tab shows */
   React.useEffect(() => studioHost?.tabs?.onPick(() => setProjectsOpen(true)), []);
@@ -4288,40 +4292,21 @@ export function ProjectView({ projectId, onProject, onLeave }: {
 
   const value = film.film;
   const viewerReady = Boolean(info);
-  /* the project's name, renamed in place: centered on the bar, or at its left where the app keeps several projects */
-  /* the project's name being renamed, in place of its title */
-  const titleField = (
-    <input
-      autoFocus
-      value={titleDraft}
-      onChange={(e) => setTitleDraft(e.target.value)}
-      onBlur={() => void commitTitle()}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') void commitTitle();
-        if (e.key === 'Escape') { setTitleDraft(title); setRenaming(false); }
-      }}
-      placeholder={t('project.untitled')}
-      maxLength={TITLE_MAX_CHARS}
-      className="box-border h-[26px] max-w-full rounded-md bg-transparent px-2 text-[13px] font-medium text-[var(--text-muted)] outline-none"
-    />
-  );
   return (
     <div className="workspace-shell flex flex-col bg-[var(--bg-app)]">
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         <div className="relative z-10 grid min-h-0 min-w-0 flex-1" style={{ gridTemplateColumns: 'minmax(0, 1fr)', gridTemplateRows: 'auto minmax(0, 1fr)', gridTemplateAreas: '"bar" "main"' }}>
           {/* ── top bar: the title centered, whatever is on either side ── */}
           <div data-titlebar className="relative flex h-8 min-w-0 items-center gap-1 px-[6px]" style={{ gridArea: 'bar' }}>
-            {/* the title centered: its card while the pointer rests on it (ProjectCard), its menu on a right click */}
+            {/* A click opens Projects immediately; the arrow and hover card keep its actions. */}
             <div className="pointer-events-none absolute inset-0 flex min-w-0 items-center justify-center">
               <div className="pointer-events-auto flex min-w-0 max-w-full items-center"
                 onContextMenu={(e) => { if (renaming) return; e.preventDefault(); setTitleMenu({ x: e.clientX, y: e.clientY }); }}>
-                {renaming ? titleField : (
-                  <ProjectCard name={title}
-                    facts={loaded ? { project: loaded.project, durationMs: totalMs, stage, fps: projectFps, clips: filmSummary.clips } : undefined}
-                    actions={{ onRename: startRename, onCoverFromFrame: coverFromFrame, onReveal: () => reveal('') }}
-                    onOpen={(id) => { if (studioHost?.tabs) studioHost.tabs.open(id); else onProject(id); }}
-                    onAll={() => setProjectsOpen(true)} />
-                )}
+                <ProjectTitle name={title} editing={renaming} draft={titleDraft} onDraft={setTitleDraft}
+                  onRename={startRename} onCommit={() => void commitTitle()} onCancel={() => setRenaming(false)}
+                  facts={{ project: loaded.project, durationMs: totalMs, stage, fps: projectFps, clips: filmSummary.clips }}
+                  actions={{ onRename: startRename, onCoverFromFrame: coverFromFrame, onReveal: () => reveal('') }}
+                  onAll={() => setProjectsOpen(true)} />
               </div>
             </div>
             {titleMenu ? (
