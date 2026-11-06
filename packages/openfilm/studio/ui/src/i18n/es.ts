@@ -1628,6 +1628,11 @@ export const es: Words = {
       shortcuts: 'Atajos de teclado',
       advanced: 'Avanzado',
     },
+    notifications: {
+      group: 'Notificaciones',
+      turns: 'Avisar cuando el agente termine',
+      turnsHint: 'Cuando OpenFilm no está al frente: una notificación cuando un turno termina, se detiene por un error o espera tu respuesta. Al hacer clic se abre el proyecto.',
+    },
     appearance: {
       group: 'Apariencia',
       theme: 'Tema',

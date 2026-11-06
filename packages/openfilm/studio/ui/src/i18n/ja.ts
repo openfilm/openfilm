@@ -1628,6 +1628,11 @@ export const ja: Words = {
       shortcuts: 'キーボードショートカット',
       advanced: '詳細設定',
     },
+    notifications: {
+      group: '通知',
+      turns: 'エージェントの完了を通知',
+      turnsHint: 'OpenFilm が前面にないとき、ターンの完了、エラーでの中断、回答待ちをシステム通知で知らせます。クリックするとそのプロジェクトを開きます。',
+    },
     appearance: {
       group: '外観',
       theme: 'テーマ',

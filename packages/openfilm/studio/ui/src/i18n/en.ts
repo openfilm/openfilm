@@ -1629,6 +1629,11 @@ export const en = {
       shortcuts: 'Keyboard shortcuts',
       advanced: 'Advanced',
     },
+    notifications: {
+      group: 'Notifications',
+      turns: 'When the agent finishes',
+      turnsHint: 'When OpenFilm isn’t in front: a notification when a turn is done, stops with an error, or waits for your answer. Clicking it opens the project.',
+    },
     appearance: {
       group: 'Appearance',
       theme: 'Theme',

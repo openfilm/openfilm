@@ -222,7 +222,7 @@ const asks = signal<HostAsk[]>([]);
 let answerAsk: (id: string, allow: boolean) => void = () => {};
 
 /* ── Settings → Developer (kept by the app): Studio switches it, the chat shows each turn's log and changes by it ── */
-interface AppPrefs { developer: boolean; changes: boolean }
+interface AppPrefs { developer: boolean; changes: boolean; notify?: boolean }
 const developerOf = (prefs: AppPrefs) => ({ logs: prefs.developer === true, changes: prefs.changes !== false });
 const developer = {
   get: async () => developerOf(await native.prefs.get()),
@@ -231,6 +231,13 @@ const developer = {
     ...(typeof next.changes === 'boolean' ? { changes: next.changes } : {}),
   }),
   onChange: (listener: Listener<{ logs: boolean; changes: boolean }>) => native.prefs.onChange((prefs) => listener(developerOf(prefs))),
+};
+
+/* ── Settings → General (kept by the app): the system's notifications of a turn done, stopped or waiting ── */
+const notifications = {
+  get: async () => (await native.prefs.get()).notify !== false,
+  set: (on: boolean) => native.prefs.set({ notify: on }),
+  onChange: (listener: Listener<boolean>) => native.prefs.onChange((prefs) => listener(prefs.notify !== false)),
 };
 
 /* ── the app's update, for Studio's top bar: a version downloaded and ready (src/updates.mjs), Restart to install it ── */
@@ -295,6 +302,7 @@ const host: StudioHost = {
   agents: native.agents,
   asks: { show: (list, answer) => { answerAsk = answer; asks.set(list); } },
   developer,
+  notifications,
   update,
   folders: { pick: native.pickFolder, pathOf: native.pathForFile },
   tabs: native.tabs,
