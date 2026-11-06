@@ -119,8 +119,8 @@
 [data-theme='dark'] {
   color-scheme: dark;
 
-  /* the window's ground (rgb 20): what shows between the panes and the canvas's board; every pane's inside, its top
-     bars and the viewer round the picture among them, the panels' (rgb 24) */
+  /* the window's ground (rgb 20): what shows between the panes; every pane's inside, its top bars, the viewer round
+     the picture and the canvas's board among them, the panels' (rgb 24) */
   --bg-app: #141414;
   --bg-panel: #181818;
   --bg-raised: #242424;
@@ -611,8 +611,8 @@ html[data-file-drag] iframe { pointer-events: none; }
   --cv-group: rgba(0, 0, 0, 0.03);
 }
 [data-theme='dark'] {
-  /* the board is the window's grey (rgb 20); everything on it and over it, the panels' (rgb 24) */
-  --cv-bg: #141414;
+  /* the board is a pane's inside, the panels' grey (rgb 24), as everything on it and over it; a group a step up */
+  --cv-bg: #181818;
   --cv-dot: #474747;
   --cv-card: #181818;
   --cv-card-2: #181818;
@@ -637,7 +637,7 @@ html[data-file-drag] iframe { pointer-events: none; }
   --cv-shadow: none;
   --cv-float-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 16px 24px -8px rgba(0, 0, 0, 0.06), 0 4px 8px -4px rgba(0, 0, 0, 0.04);
   --cv-modal: #181818;
-  --cv-group: #181818;
+  --cv-group: rgba(255, 255, 255, 0.03);
 }
 .openfilm-canvas {
   --xy-background-color: var(--cv-bg);
