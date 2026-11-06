@@ -385,7 +385,7 @@ function readCaptions(raw, where, problems) {
   if (!isObject(raw)) { problems.push(`${where}: a caption track is a <track kind="captions" src="captions/….vtt">.`); return null; }
   const extra = Object.keys(raw).filter((k) => !CAPTION_FIELDS.includes(k));
   if (extra.length) { problems.push(`${where}: a caption track's <track> takes kind, src, srclang and label: ${extra.join(' · ')}`); return null; }
-  if (typeof raw.src !== 'string' || !/\.vtt$/i.test(raw.src.replace(/[?#].*$/, ''))) { problems.push(`${where}: a caption track's src is a WebVTT file (captions/….vtt).`); return null; }
+  if (typeof raw.src !== 'string' || !/\.vtt$/i.test(raw.src.split(/[?#]/, 1)[0])) { problems.push(`${where}: a caption track's src is a WebVTT file (captions/….vtt).`); return null; }
   const kind = raw.kind ?? 'captions';
   if (!CAPTION_KINDS.includes(kind)) { problems.push(`${where}: a caption track's kind is captions or subtitles.`); return null; }
   for (const k of ['srclang', 'label']) if (raw[k] !== undefined && typeof raw[k] !== 'string') { problems.push(`${where}: ${k} is text.`); return null; }
@@ -537,6 +537,19 @@ const NO_TRANSITION = 'a transition\'s progress is history, so no frame of it is
 /** What keyframes may not change: what places a clip (it moves by translate, scale and rotate, on top of its box). */
 const KEYFRAME_PLACING = new Set([...PLACING, 'left', 'top', 'width', 'height'].filter((p) => p !== 'translate' && p !== 'scale'));
 
+/** CSS without its comments: each from its `/*` to the next `*\/` (to the end, unclosed), found in one pass. */
+function withoutComments(/** @type {string} */ css) {
+  let out = '';
+  let at = 0;
+  for (let open = css.indexOf('/*'); open !== -1; open = css.indexOf('/*', at)) {
+    out += css.slice(at, open);
+    const close = css.indexOf('*/', open + 2);
+    if (close === -1) return out;
+    at = close + 2;
+  }
+  return out + css.slice(at);
+}
+
 /**
  * What is wrong with the film's own CSS (its <style>): a transition, or keyframes that would place a clip rather than
  * move it on top of its box.
@@ -544,7 +557,7 @@ const KEYFRAME_PLACING = new Set([...PLACING, 'left', 'top', 'width', 'height'].
  */
 export function filmCssProblems(css) {
   const problems = [];
-  const text = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  const text = withoutComments(css);
   if (/(^|[;{\s])transition(-[a-z-]+)?\s*:/i.test(text)) problems.push(NO_TRANSITION);
   for (const m of text.matchAll(/@keyframes\s+([^\s{]+)\s*\{/gi)) {
     let depth = 1, i = m.index + m[0].length;

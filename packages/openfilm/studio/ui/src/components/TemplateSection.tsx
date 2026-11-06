@@ -238,7 +238,7 @@ function WordField({ word, host }: { word: TemplateWord; host: TemplateHost }) {
 async function ownVar(url: string, name: string): Promise<string | null> {
   const doc = await pageDoc(url);
   const css = [...(doc?.querySelectorAll('style') ?? [])].map((s) => s.textContent ?? '').join('\n');
-  const m = new RegExp(`${name.replace(/[-]/g, '\\-')}\\s*:\\s*([^;}]+)`).exec(css);
+  const m = new RegExp(`${name.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')}\\s*:\\s*([^;}]+)`).exec(css);
   return m ? m[1]!.trim() : null;
 }
 

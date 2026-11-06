@@ -264,7 +264,7 @@ function selectorList(/** @type {string} */ list) {
 
 /** A selector inside `::cue(…)`, for the elements the page draws: an id is the cue's, `:past`/`:future` classes. */
 const inner = (/** @type {string} */ sel) => sel
-  .replace(/#((?:\\.|[\w-])+)/g, (_, id) => `[data-cue-id="${id.replace(/\\(.)/g, '$1').replace(/"/g, '\\"')}"]`)
+  .replace(/#((?:\\.|[\w-])+)/g, (_, id) => `[data-cue-id="${id.replace(/\\(.)/g, '$1').replace(/[\\"]/g, '\\$&')}"]`)
   .replace(/:past\b/g, '.past')
   .replace(/:future\b/g, '.future');
 

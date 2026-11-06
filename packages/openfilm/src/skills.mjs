@@ -153,7 +153,7 @@ export const RESERVED_NAMESPACES = Object.freeze(['local', 'project']);
 const accountSpace = (/** @type {string} */ account) => (RESERVED_NAMESPACES.includes(account) ? `github-${account}` : account);
 
 /** A name as a uid holds it: lowercase letters, digits and dashes. @param {string} name */
-const uidPart = (name) => name.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64) || 'skill';
+const uidPart = (name) => name.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/-{2,}/g, '-').replace(/^-|-$/g, '').slice(0, 64) || 'skill';
 
 /**
  * Whose a skill is, for its uid (SKILL_UID). @param {SkillSource} source @param {SkillOrigin} [origin] where one of

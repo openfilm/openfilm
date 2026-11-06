@@ -49,6 +49,8 @@ export const builtInRoot = () => process.env.OPENFILM_BUILT_IN_LIBRARY || fileUR
  * with the list of its files, `files.json` beside it there, written when the library is published.
  */
 const PUBLISHED = ['audio/', 'voices/', 'stickers/emoji/', 'models/', 'examples/'];
+/** A place in the library: names of letters, digits, dots, dashes and underscores, between slashes. */
+const SAFE_PLACE = /^[\w.-]+(?:\/[\w.-]+)*$/;
 
 /** Where the published parts come from: openfilm.dev's library, which sends each person to the copy nearest them. */
 const libraryHost = () => (process.env.OPENFILM_LIBRARY_URL || 'https://openfilm.dev/library').replace(/\/+$/, '');
@@ -106,7 +108,7 @@ async function fetchFile(/** @type {string} */ rel) {
  * not fetched yet; null when it is neither here nor fetchable (offline, or no such thing).
  */
 export function fetchLibrary(/** @type {unknown} */ rel) {
-  if (typeof rel !== 'string' || !rel) return Promise.resolve(null);
+  if (typeof rel !== 'string' || !rel || !SAFE_PLACE.test(rel) || rel.split('/').some((part) => part === '..' || part === '.')) return Promise.resolve(null);
   const here = located(rel);
   if (here || !PUBLISHED.some((part) => rel.startsWith(part))) return Promise.resolve(here);
   const was = fetching.get(rel);
@@ -116,7 +118,7 @@ export function fetchLibrary(/** @type {unknown} */ rel) {
       /* a file has a name with a dot; a bundle is a folder, its files listed beside it */
       if (/\.[a-z0-9]+$/i.test(rel)) await fetchFile(rel);
       else {
-        const res = await fetch(`${libraryHost()}/${rel}/files.json`, { signal: AbortSignal.timeout(30_000) });
+        const res = await fetch(`${libraryHost()}/${rel.split('/').map(encodeURIComponent).join('/')}/files.json`, { signal: AbortSignal.timeout(30_000) });
         if (!res.ok) return null;
         const files = /** @type {unknown} */ (await res.json());
         if (!Array.isArray(files)) return null;
