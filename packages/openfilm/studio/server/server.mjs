@@ -53,7 +53,7 @@ import { installedFonts } from './fonts.mjs';
 import { addTextFont, isFontFile, projectFonts, resolveIn } from './project-fonts.mjs';
 import { FILM_PAGE, PageFrameError, closePageFrames, filmPoster, pageFacts, pageFrame, warmFilmPoster } from './pageframes.mjs';
 import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCover, setCoverFromFile } from './cover.mjs';
-import { BUILT_IN, fetchItem, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, notHere, setLibraryFavorites } from './library.mjs';
+import { BUILT_IN, fetchItem, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, notHere, refreshCommunity, setLibraryFavorites } from './library.mjs';
 import { SavedError, TEXT_COMPONENT, TEXT_OWN_FONTS, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
 import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listenLocal } from '../../src/host.mjs';
@@ -422,7 +422,10 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* OpenFilm's library (library.mjs): what is in it, its voices, its files (a poster, a preview, a page, a sound, a waveform, a voice's sample), and
        the things the person starred */
     if (parts[0] === 'library') {
-      if (parts.length === 1 && req.method === 'GET') return json(res, 200, libraryIndex());
+      if (parts.length === 1 && req.method === 'GET') {
+        await refreshCommunity();
+        return json(res, 200, libraryIndex());
+      }
       if (parts[1] === 'voices' && parts.length === 2 && req.method === 'GET') return json(res, 200, libraryVoices());
       if (parts[1] === 'file' && parts.length === 2 && req.method === 'GET') return sendMedia(req, res, await libraryFileFetched(url.searchParams.get('path')), { check: true });
       /* which of these things still need fetching before they go in (a sound, an emoji, a template's music): { ids } */

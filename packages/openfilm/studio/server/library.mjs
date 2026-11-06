@@ -33,7 +33,10 @@ import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'no
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
+import { communityCatalog, communityReady, fetchCommunity, isCommunity, refreshCommunity } from './community-library.mjs';
 import { setSharedPref, sharedHome, sharedPref } from '../../src/locations.mjs';
+
+export { refreshCommunity };
 
 /** What a path names the library by (`openfilm/<id>`), as `saved/` names Saved. */
 export const BUILT_IN = 'openfilm';
@@ -109,6 +112,7 @@ async function fetchFile(/** @type {string} */ rel) {
  */
 export function fetchLibrary(/** @type {unknown} */ rel) {
   if (typeof rel !== 'string' || !rel || !SAFE_PLACE.test(rel) || rel.split('/').some((part) => part === '..' || part === '.')) return Promise.resolve(null);
+  if (isCommunity(rel)) return fetchCommunity(libraryCache(), rel);
   const here = located(rel);
   if (here || !PUBLISHED.some((part) => rel.startsWith(part))) return Promise.resolve(here);
   const was = fetching.get(rel);
@@ -141,18 +145,19 @@ export function fetchLibrary(/** @type {unknown} */ rel) {
  * @param {{ id: string, music?: string }} item
  */
 export function partsOf(item) {
-  return [...(PUBLISHED.some((part) => item.id.startsWith(part)) ? [item.id] : []), ...(typeof item.music === 'string' ? [item.music] : [])];
+  return [...((isCommunity(item.id) || PUBLISHED.some((part) => item.id.startsWith(part))) ? [item.id] : []), ...(typeof item.music === 'string' ? [item.music] : [])];
 }
 
 /** Of the things `ids`, those not all here yet (to be fetched before they are put in). @param {unknown} ids */
 export function notHere(ids) {
   if (!Array.isArray(ids)) return [];
   const byId = new Map((/** @type {{ items: { id: string, music?: string }[] }} */ (libraryIndex())).items.map((i) => [i.id, i]));
-  return ids.filter((id) => { const item = typeof id === 'string' ? byId.get(id) : undefined; return Boolean(item && partsOf(item).some((rel) => !located(rel))); });
+  return ids.filter((id) => { const item = typeof id === 'string' ? byId.get(id) : undefined; return Boolean(item && partsOf(item).some((rel) => isCommunity(rel) ? !communityReady(libraryCache(), rel) : !located(rel))); });
 }
 
 /** Fetch what a thing of the library needs (partsOf); whether it is all here now. @param {unknown} id */
 export async function fetchItem(id) {
+  if (typeof id === 'string' && isCommunity(id)) await refreshCommunity();
   const item = (/** @type {{ items: { id: string, music?: string }[] }} */ (libraryIndex())).items.find((i) => i.id === id);
   if (!item) return false;
   for (const rel of partsOf(item)) if (!(await fetchLibrary(rel))) return false;
@@ -192,6 +197,7 @@ let merged = null;
 export function libraryIndex() {
   const own = /** @type {{ version: number, groups: Record<string, unknown[]>, items: unknown[] }} */ (read('index.json', { version: 1, groups: {}, items: [] }));
   const more = /** @type {({ groups?: Record<string, { id: string }[]>, items?: unknown[] } | null)[]} */ (catalogFiles().map((name) => read(name, null)));
+  more.push(communityCatalog());
   const parts = [own, ...more];
   if (merged && merged.parts.length === parts.length && merged.parts.every((p, i) => p === parts[i])) return merged.index;
   const groups = { ...own.groups };
