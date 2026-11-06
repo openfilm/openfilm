@@ -672,4 +672,9 @@ html[data-file-drag] iframe { pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .cv-pop, .cv-fade, .cv-grow { animation: none; } }
 .openfilm-canvas .react-flow__minimap { overflow: hidden; border-radius: 12px; box-shadow: var(--cv-float-shadow); }
 .openfilm-canvas .react-flow__node { border-radius: 12px; }
+/* a group is held by its title bar (and its resize handles once selected): inside it the board is the board, so a drag
+   there draws a selection box and what is in it is reached as anywhere else */
+.openfilm-canvas .react-flow__node-frame { pointer-events: none !important; }
+.openfilm-canvas .react-flow__node-frame .cv-group-head,
+.openfilm-canvas .react-flow__node-frame .react-flow__resize-control { pointer-events: auto; }
 .openfilm-canvas .react-flow__edge-textbg { rx: 6; }

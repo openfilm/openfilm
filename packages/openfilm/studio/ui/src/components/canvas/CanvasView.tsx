@@ -42,10 +42,10 @@ import { studioHost, type StudioRef } from '@/lib/host';
 import { useThemeChanges } from '@/lib/theme-changes';
 import { ContextMenu, type ContextMenuEntry } from '../ContextMenu';
 import {
-  BoardContext, allChoicesFor, boxOf, choiceOf, choicesFor, defaultChoice, fitGroups, fromFlow, tidyGroup, unstack, inputViews, keepModelTime, runErrors, runs, runsChanged, shownBoards, startRun, toFlow, useRuns,
+  BoardContext, allChoicesFor, boxOf, choiceOf, choicesFor, defaultChoice, GROUP_HELD, fitGroups, fromFlow, tidyGroup, unstack, inputViews, keepModelTime, runErrors, runs, runsChanged, shownBoards, startRun, toFlow, useRuns,
   type Board, type BoardNode, type FrameData, type FrameNode, type MakeData, type MakingNode, type Side, type SpawnKind,
 } from './board';
-import { BottomToolbar, LeftBar, Outline, Viewer } from './chrome';
+import { BottomToolbar, CornerBar, Outline, Viewer } from './chrome';
 import { AddMenu, type MenuAt } from './menus';
 import { CHARACTER_PARTS, CharacterLibrary, HistoryModal, MaterialLibrary } from './libraries';
 import { RedrawEditor, type RedrawWay } from './redraw';
@@ -291,7 +291,7 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
     const id = canvasId('n');
     const origin = { x: box.x0 - GROUP_PAD, y: box.y0 - GROUP_PAD - GROUP_HEAD / 2 };
     const frame: FrameNode = {
-      id, type: 'frame', position: origin, zIndex: -1, selected: true,
+      id, type: 'frame', position: origin, zIndex: -1, selected: true, ...GROUP_HELD,
       width: box.x1 - box.x0 + 2 * GROUP_PAD, height: box.y1 - box.y0 + 2 * GROUP_PAD + GROUP_HEAD / 2,
       data: { label: `${t('canvas.group')} ${now.current.nodes.filter((n) => n.type === 'frame').length + 1}`, color: 'gray' },
     };
@@ -703,15 +703,17 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
 
   const selected = nodes.filter((n) => n.selected);
   const single = selected.length === 1 ? selected[0]!.id : null;
-  /* the one selected, with its panel under it, kept on the screen: the board moves as much as it takes */
-  React.useEffect(() => {
-    if (!single) return undefined;
-    const frame = requestAnimationFrame(() => {
+  /**
+   * A node clicked (not dragged), with its panel under it, kept on the screen: the board glides as much as it takes.
+   * Never on a press that starts a drag: the board stays where it is under the pointer, whatever is picked.
+   */
+  const keepShown = (id: string) => {
+    requestAnimationFrame(() => {
       const box = rootRef.current?.getBoundingClientRect();
-      const el = rootRef.current?.querySelector(`.react-flow__node[data-id="${CSS.escape(single)}"]`);
+      const el = rootRef.current?.querySelector(`.react-flow__node[data-id="${CSS.escape(id)}"]`);
       if (!box || !el) return;
       const node = el.getBoundingClientRect();
-      const type = now.current.nodes.find((n) => n.id === single)?.type;
+      const type = now.current.nodes.find((n) => n.id === id)?.type;
       /* its panel as drawn (a frame later), else as it is about to be */
       const drawn = rootRef.current?.querySelector('.react-flow__node-toolbar .nodrag')?.getBoundingClientRect();
       const panel = drawn && drawn.height > 40 ? { w: drawn.width, h: drawn.height }
@@ -728,9 +730,7 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
       const view = flow.getViewport();
       void flow.setViewport({ ...view, x: view.x + dx, y: view.y + dy }, { duration: 220 });
     });
-    return () => cancelAnimationFrame(frame);
-    /* again when what is wired in changes: its panel grows a row of inputs */
-  }, [single, edges.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  };
   const board = React.useMemo<Board>(() => ({
     files,
     fileOf: (path) => byPath.get(path) ?? null,
@@ -772,6 +772,7 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
     willChange,
     editing,
     edit: (id) => { if (id) willChange(); setEditing(id); },
+    select: (id, add) => setNodes((list) => list.map((n) => (n.id === id ? { ...n, selected: add ? !n.selected : true } : add ? n : { ...n, selected: false }))),
     single,
     choices: (kind) => choicesFor(providers, kind),
     allChoices: (kind) => allChoicesFor(providers, kind),
@@ -1122,7 +1123,7 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
           onPaneClick={() => { setContext(null); setEditing(null); }}
           onNodeClick={(event, node) => {
             if (editing && editing !== node.id) setEditing(null);
-            if (!picking) return;
+            if (!picking) { if (!event.shiftKey && !event.metaKey && !event.ctrlKey && node.type !== 'frame') keepShown(node.id); return; }
             /* picking: the node clicked goes into the one picking, and picking is done */
             event.stopPropagation();
             if (node.id !== picking && node.type !== 'frame') board.wireIn(picking, { node: node.id });
@@ -1155,7 +1156,8 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
         >
           <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
           {map ? (
-            <MiniMap position="bottom-left" pannable zoomable style={{ marginBottom: 60, marginLeft: 8 }}
+            /* beside the list of nodes when that is open, both on the right */
+            <MiniMap position="bottom-right" pannable zoomable style={{ marginBottom: 60, marginRight: outline ? 336 : 8 }}
               nodeColor={(n) => (n.type === 'frame' ? 'transparent' : n.type === 'note' ? 'var(--bg-pressed)' : 'var(--text-faint)')}
               nodeStrokeColor={(n) => (n.type === 'frame' ? FRAME_COLOR[(n.data as FrameData).color].line : 'transparent')} />
           ) : null}
@@ -1202,7 +1204,7 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
           onPick={(id) => { void showBoard(id); }} onAdd={() => addBoard()} onRename={renameBoard} onCopy={(id) => { void addBoard(id); }}
           onRemove={(id) => { void removeBoard(id); }}
           {...(studioHost ? {} : { onOpenApart: (id: string) => { const url = new URL(window.location.href); url.searchParams.set('canvas', id); window.open(url.toString(), '_blank'); } })} />
-        <LeftBar {...(chat ? { chat } : {})} outline={outline} onOutline={() => setOutline((v) => !v)} map={map} onMap={() => setMap((v) => !v)}
+        <CornerBar outline={outline} onOutline={() => setOutline((v) => !v)} map={map} onMap={() => setMap((v) => !v)}
           wires={wires} onWires={() => setWires((v) => !v)} snap={snap} onSnap={() => setSnap((v) => !v)} />
         {outline ? (
           <Outline nodes={nodes} fileOf={board.fileOf} sources={sources} onShow={showNode} onClose={() => setOutline(false)} />
@@ -1271,7 +1273,7 @@ export interface CanvasViewProps {
   onOpenSettings: () => void;
   /** a file shown in the Assets */
   onReveal?: (path: string) => void;
-  /** the chat beside the board: open or folded away, and the button at the board's bottom left that does it */
+  /** the chat beside the board (in an app with one): its agent writes a text node's words; the top bar opens and folds it */
   chat?: { open: boolean; toggle: () => void };
   /** a word that something went as asked (a template kept) */
   onNotice: (message: string) => void;
@@ -1321,7 +1323,7 @@ function Preview({ doc, fileUrl }: { doc: CanvasDoc; fileUrl: (path: string) => 
       choices: () => [], allChoices: () => [], fallback: () => null, run: () => undefined, error: () => undefined, stale: NOTHING, unused: NONE,
       make: nothing, stop: nothing, inputs: (id) => inputViews(drawn.nodes, drawn.edges, id, mediaOf), unwire: nothing, sideMenu: nothing,
       upload: nothing, wireIn: nothing, sendToFilm: nothing, view: nothing,
-      makesIn: () => 0, busyIn: () => false, makeAll: nothing, ungroup: nothing, keepTemplate: nothing, keepCharacter: nothing, openLibrary: nothing, redraw: nothing, tidy: nothing, pick: nothing, openSettings: nothing, readOnly: true,
+      makesIn: () => 0, busyIn: () => false, makeAll: nothing, ungroup: nothing, keepTemplate: nothing, keepCharacter: nothing, openLibrary: nothing, redraw: nothing, tidy: nothing, select: nothing, pick: nothing, openSettings: nothing, readOnly: true,
     };
   }, [doc, fileUrl, drawn]);
   return (

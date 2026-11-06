@@ -1,12 +1,12 @@
 /**
  * What is round the board, as the node canvases people know lay theirs out: the toolbar at its foot (add, move,
- * templates, the keys), the bar at its bottom left (the chat beside it, every node in a list, the overview map, the
- * wires shown or not, snapping to the grid, how far it is zoomed), the list itself, and a file seen whole over the board.
+ * templates, the keys), the bar at its bottom right (every node in a list, the overview map, the wires shown or not,
+ * snapping to the grid, how far it is zoomed), the list itself, and a file seen whole over the board.
  */
 import React from 'react';
 import { useReactFlow, useStore } from '@xyflow/react';
 import {
-  Clapperboard, Grid3x3, Hand, History, Keyboard, LayoutTemplate, ListTree, Map as MapIcon, MousePointer2, Palette, PanelLeftClose, PanelLeftOpen, Plus, Scissors, Search, Shapes, Spline,
+  Clapperboard, Grid3x3, Hand, History, Keyboard, LayoutTemplate, ListTree, Map as MapIcon, MousePointer2, Palette, Plus, Scissors, Search, Shapes, Spline,
   Type as TypeIcon, UserRound, X,
 } from 'lucide-react';
 import { useT } from '@/i18n';
@@ -121,11 +121,10 @@ export function BottomToolbar({ adding, onAdd, tool, onTool, onTemplates, onLibr
 }
 
 /**
- * The bar at the board's bottom left: the chat beside the board folded away or back (in an app with one), the list
- * of what is on the board, the overview map, the wires shown or hidden, snapping to the grid, how far it is zoomed.
+ * The bar at the board's bottom right: the list of what is on the board, the overview map, the wires shown or hidden,
+ * snapping to the grid, how far it is zoomed.
  */
-export function LeftBar({ chat, outline, onOutline, map, onMap, wires, onWires, snap, onSnap }: {
-  chat?: { open: boolean; toggle: () => void };
+export function CornerBar({ outline, onOutline, map, onMap, wires, onWires, snap, onSnap }: {
   outline: boolean; onOutline: () => void;
   map: boolean; onMap: () => void;
   wires: boolean; onWires: () => void;
@@ -137,16 +136,8 @@ export function LeftBar({ chat, outline, onOutline, map, onMap, wires, onWires, 
   const [open, setOpen] = React.useState(false);
   const row = 'flex h-8 w-full items-center justify-between rounded-[8px] px-2 text-[13px] text-[var(--cv-ink)] hover:bg-[var(--cv-float-hover)]';
   const act = (run: () => void) => () => { run(); setOpen(false); };
-  const chatLabel = chat ? t(chat.open ? 'canvas.toolbar.chatHide' : 'canvas.toolbar.chatShow') : '';
   return (
-    <div className="pointer-events-auto absolute bottom-3 left-2 z-20 flex h-10 items-center gap-1 rounded-[12px] bg-[color-mix(in_srgb,var(--cv-bg)_70%,transparent)] px-1.5 backdrop-blur-[16px]">
-      {chat ? (
-        <Tooltip label={chatLabel} side="top">
-          <button type="button" aria-label={chatLabel} aria-pressed={chat.open} onClick={chat.toggle} className={SMALL}>
-            {chat.open ? <PanelLeftClose size={15} /> : <PanelLeftOpen size={15} />}
-          </button>
-        </Tooltip>
-      ) : null}
+    <div className="pointer-events-auto absolute bottom-3 right-2 z-20 flex h-10 items-center gap-1 rounded-[12px] bg-[color-mix(in_srgb,var(--cv-bg)_70%,transparent)] px-1.5 backdrop-blur-[16px]">
       <Tooltip label={t('canvas.outline.title')} side="top">
         <button type="button" aria-label={t('canvas.outline.title')} onClick={onOutline} className={`${SMALL} ${outline ? ON : ''}`}><ListTree size={15} /></button>
       </Tooltip>
@@ -159,7 +150,7 @@ export function LeftBar({ chat, outline, onOutline, map, onMap, wires, onWires, 
       <Tooltip label={t('canvas.toolbar.snap')} side="top">
         <button type="button" aria-label={t('canvas.toolbar.snap')} aria-pressed={snap} onClick={onSnap} className={`${SMALL} ${snap ? ON : ''}`}><Grid3x3 size={15} /></button>
       </Tooltip>
-      <Popover open={open} onOpenChange={setOpen} placement="top" align="start"
+      <Popover open={open} onOpenChange={setOpen} placement="top" align="end"
         trigger={(
           <button type="button" onClick={() => setOpen((v) => !v)} className={`${SMALL} !px-1.5 text-[12.5px] tabular-nums`}>
             {Math.round(zoom * 100)}%
@@ -206,7 +197,7 @@ export function Outline({ nodes, fileOf, sources, onShow, onClose }: {
   const needle = query.trim().toLowerCase();
   const rows = nodes.map((n) => ({ id: n.id, ...nodeRow(n, fileOf, sources, t) })).filter((r) => !needle || r.label.toLowerCase().includes(needle) || r.kind.toLowerCase().includes(needle));
   return (
-    <div className="pointer-events-auto absolute bottom-[60px] left-2 top-3 z-20 flex w-[320px] flex-col overflow-hidden rounded-[12px] bg-[var(--cv-float)] shadow-[var(--cv-float-shadow)]">
+    <div className="pointer-events-auto absolute bottom-[60px] right-2 top-3 z-20 flex w-[320px] flex-col overflow-hidden rounded-[12px] bg-[var(--cv-float)] shadow-[var(--cv-float-shadow)]">
       <div className="flex items-center gap-1 py-2 pl-3.5 pr-2">
         <span className="text-[13px] font-medium text-[var(--cv-ink)]">{t('canvas.outline.title')}</span>
         <span className="flex-1" />

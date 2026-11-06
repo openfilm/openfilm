@@ -351,7 +351,11 @@ export function FrameNodeView({ id, data, selected }: NodeProps<FrameNode>) {
           </div>
         </NodeToolbar>
       ) : null}
-      <div className="absolute bottom-full left-0 mb-1 flex h-6 max-w-full items-center" onDoubleClick={(event) => { event.stopPropagation(); if (!board.readOnly) board.edit(id); }}>
+      {/* its title bar, what holds it: a drag moves it with what is in it, a click picks it (⇧ adds it), a double click
+          names it. Inside it the board is the board (globals.css): a drag there draws a selection box. */}
+      <div className="cv-group-head absolute inset-x-0 top-0 flex h-7 cursor-grab items-center rounded-t-[12px] px-3 transition-colors hover:bg-[color-mix(in_srgb,var(--cv-ink)_5%,transparent)] active:cursor-grabbing"
+        onPointerDown={(event) => { if (event.button === 0 && !editing && !(selected && !event.shiftKey && !event.metaKey && !event.ctrlKey)) board.select(id, event.shiftKey || event.metaKey || event.ctrlKey); }}
+        onDoubleClick={(event) => { event.stopPropagation(); if (!board.readOnly) board.edit(id); }}>
         {editing ? (
           <input
             autoFocus
@@ -362,7 +366,7 @@ export function FrameNodeView({ id, data, selected }: NodeProps<FrameNode>) {
             className="nodrag h-6 w-[200px] rounded-[6px] border border-[var(--cv-float-line)] bg-[var(--cv-float)] px-1.5 text-[13px] text-[var(--cv-ink)] outline-none"
           />
         ) : (
-          <span className="truncate text-[13px] text-[var(--cv-label)]">{data.label || t('canvas.group')}</span>
+          <span className="truncate text-[12.5px] font-medium text-[var(--cv-label)]">{data.label || t('canvas.group')}</span>
         )}
       </div>
     </div>

@@ -7,7 +7,7 @@
  * are written one at a time (see editor/use-film.ts); the agent's writes come in through the folder's events.
  */
 import * as React from 'react';
-import { BookmarkPlus, ClipboardCopy, ClipboardPaste, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Scissors, Settings2, TriangleAlert, Upload, Workflow } from 'lucide-react';
+import { BookmarkPlus, ClipboardCopy, ClipboardPaste, Layers, LibraryBig, MessageSquarePlus, MonitorDown, PanelLeft, Scissors, Settings2, TriangleAlert, Upload, Workflow } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
 import { withPreset } from '../../../../src/clip-motion.mjs';
 import { PARTS, compoundOf, dissolvedOf, srcInto, srcOutOf } from '../../../server/compound.mjs';
@@ -4217,6 +4217,15 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 </button>
               </Tooltip>
               </>)}
+              {/* the canvas's layout: the app's chat beside it opened or folded away (the edit's is in its Layout menu) */}
+              {canvasOpen && hostPanel ? (
+                <Tooltip label={t(hostPanel.open ? 'canvas.toolbar.chatHide' : 'canvas.toolbar.chatShow')} side="bottom">
+                  <button type="button" aria-label={t(hostPanel.open ? 'canvas.toolbar.chatHide' : 'canvas.toolbar.chatShow')} aria-pressed={hostPanel.open}
+                    onClick={() => hostPanel.setOpen(!hostPanel.open)} className={TOP_BTN}>
+                    <PanelLeft size={16} />
+                  </button>
+                </Tooltip>
+              ) : null}
               {/* the edit or the canvas, in the panes' place: the one shown, its icon and name, and a click for the other */}
               <Tooltip label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} side="bottom">
                 <button type="button" aria-label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} data-work-mode={canvasOpen ? 'canvas' : 'edit'} onClick={() => setCanvasOpen(!canvasOpen)}

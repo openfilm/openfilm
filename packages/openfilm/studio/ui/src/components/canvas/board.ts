@@ -30,7 +30,7 @@ export function toFlow(doc: CanvasDoc): { nodes: BoardNode[]; edges: Edge[] } {
     nodes: ordered.map((n): BoardNode => {
       const base = { id: n.id, position: { x: n.x, y: n.y }, ...(n.parent ? { parentId: n.parent } : {}) };
       const by = n.by ? { by: n.by } : {};
-      if (n.group != null) return { ...base, type: 'frame', width: n.w ?? 480, height: n.h ?? 320, zIndex: -1, data: { label: n.group, color: n.color ?? 'gray' } };
+      if (n.group != null) return { ...base, type: 'frame', width: n.w ?? 480, height: n.h ?? 320, zIndex: -1, ...GROUP_HELD, data: { label: n.group, color: n.color ?? 'gray' } };
       if (n.make) {
         const { id: _id, x: _x, y: _y, w: _w, h: _h, parent: _parent, text: _text, group: _group, color: _color, cut: _cut, ...data } = n;
         /* sized as resized; else (and on a board from before cards had a height) as its shape draws it */
@@ -69,6 +69,12 @@ export function boxOf(node: BoardNode, byId: ReadonlyMap<string, BoardNode>): { 
   const at = parent ? { x: parent.position.x + node.position.x, y: parent.position.y + node.position.y } : node.position;
   return { ...at, w: node.measured?.width ?? node.width ?? FILE_W, h: node.measured?.height ?? node.height ?? CARD_H };
 }
+
+/**
+ * A group is moved by its title bar and picked by a click on it, never by a selection box: a box drawn inside a group
+ * picks what is in it, as anywhere on the board.
+ */
+export const GROUP_HELD = { selectable: false, dragHandle: '.cv-group-head' } as const;
 
 /** the room in a group round what is in it, and at its top under its name */
 const GROUP_ROOM = 32;
@@ -320,6 +326,8 @@ export interface Board {
   edit: (id: string | null) => void;
   /** the one node selected, which shows its panel and its actions (null: none, or more than one) */
   single: string | null;
+  /** a node picked by a click of its own (a group's title bar): it alone, or added to what is picked (`add`) */
+  select: (id: string, add: boolean) => void;
   /** making: with what, whether it is at it or failed, what changed since, what it cannot use */
   choices: (kind: MakeKind) => Choice[];
   /** every service's models for a kind, the ones to connect after */
