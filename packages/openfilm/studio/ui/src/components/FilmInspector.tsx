@@ -168,6 +168,7 @@ export const FilmInspector = React.memo(function FilmInspector({
   pageChangesOf,
   replaceEntries,
   templateSection,
+  motionSection,
   clipLookOf,
   onPreviewLook,
   stage,
@@ -240,6 +241,8 @@ export const FilmInspector = React.memo(function FilmInspector({
   replaceEntries?: (block: TimelineBlock) => ContextMenuEntry[];
   /** The template of the library the picked clips all belong to, shown first (TemplateSection); null when they are not one template's. */
   templateSection?: (blocks: readonly TimelineBlock[]) => React.ReactNode;
+  /** A clip's animation: how it comes in, goes out, moves while shown (ClipMotionSection); null when it takes none. */
+  motionSection?: (block: TimelineBlock) => React.ReactNode;
   /** A clip's own CSS and `class` in film.html and how it looks now (see clip-look): its look sections read them. */
   clipLookOf?: (clipLoc: string) => { css: string; look: ClipLook | null; cls?: string } | null;
   /** Shows a clip in CSS not kept yet while a look value is dragged (null: its own again). */
@@ -348,6 +351,7 @@ export const FilmInspector = React.memo(function FilmInspector({
             {...(pageChangesOf ? { pageChangesOf } : {})}
             {...(replaceEntries ? { replaceEntries } : {})}
             {...(templateSection ? { templateSection } : {})}
+            {...(motionSection ? { motionSection } : {})}
             {...(clipLookOf ? { clipLookOf } : {})}
             {...(onPreviewLook ? { onPreviewLook } : {})}
             {...(onStartCrop ? { onStartCrop } : {})}
@@ -1499,7 +1503,7 @@ function clipsLook(
  * can only be looked at.
  */
 function ClipPanel({
-  block, onMain, speedFloor, geometry, stage, badges, onEdit, onPreviewClip, pageChangesOf, replaceEntries, templateSection, clipLookOf, onPreviewLook, onStartCrop, onEditMask, maskAsk,
+  block, onMain, speedFloor, geometry, stage, badges, onEdit, onPreviewClip, pageChangesOf, replaceEntries, templateSection, motionSection, clipLookOf, onPreviewLook, onStartCrop, onEditMask, maskAsk,
   onMaskAsked, fades, propsHostOf,
 }: {
   fades?: ReadonlyMap<string, FadeMs>;
@@ -1507,6 +1511,8 @@ function ClipPanel({
   replaceEntries?: (block: TimelineBlock) => ContextMenuEntry[];
   /** The template of the library the picked clips all belong to, shown first (TemplateSection); null when they are not one template's. */
   templateSection?: (blocks: readonly TimelineBlock[]) => React.ReactNode;
+  /** A clip's animation: how it comes in, goes out, moves while shown (ClipMotionSection); null when it takes none. */
+  motionSection?: (block: TimelineBlock) => React.ReactNode;
   block: TimelineBlock;
   /** On the main track, where the magnet acts. */
   onMain: boolean;
@@ -1606,6 +1612,8 @@ function ClipPanel({
           ) : null}
           {/* the fades right under the place: used on most clips */}
           {docLoc && block.clipId ? <FadeSection t={t} blocks={[block]} fades={fades} commit={commit} /> : null}
+          {/* how it comes in, goes out and moves while shown */}
+          {motionSection?.(block)}
           {look ? (
             <>
               <CropSection

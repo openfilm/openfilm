@@ -624,6 +624,7 @@ export const ko: Words = {
   },
   history: {
     stepFade: '페이드',
+    stepMotion: '애니메이션',
     stepTransition: '전환 효과 추가',
     stepTransitionResize: '전환 효과 길이',
     stepTransitionRemove: '전환 효과 제거',
@@ -884,6 +885,8 @@ export const ko: Words = {
   },
   /* 에셋 서랍의 OpenFilm 라이브러리 (components/library/LibraryDrawer, lib/library) */
   /** the inspector of a line of words of the library's text component (TextInspector) */
+  /** a clip's animation: how it comes in, goes out, moves while shown (ClipMotionSection) */
+  clipMotion: { title: '애니메이션', in: '등장', out: '퇴장', loop: '반복', none: '없음', time: '길이' },
   /** a template of the library put in the film (TemplateSection) */
   template: { waiting: '교체할 소재 {n}개', allIn: '모두 교체됨', fill: '자동 채우기', pick: '여기에 넣을 동영상이나 사진을 고르거나 소재를 끌어다 놓기', words: '텍스트', pickAll: '템플릿 전체 선택' },
   /** a filter on a track of its own (FilterLayerSection) */

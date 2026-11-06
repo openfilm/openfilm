@@ -628,6 +628,7 @@ export const en = {
   },
   history: {
     stepFade: 'Fade',
+    stepMotion: 'Animation',
     stepTransition: 'Added a transition',
     stepTransitionResize: 'Transition length',
     stepTransitionRemove: 'Removed a transition',
@@ -888,6 +889,8 @@ export const en = {
   },
   /* OpenFilm's library in the assets drawer (components/library/LibraryDrawer, lib/library) */
   /** the inspector of a line of words of the library's text component (TextInspector) */
+  /** a clip's animation: how it comes in, goes out, moves while shown (ClipMotionSection) */
+  clipMotion: { title: 'Animation', in: 'In', out: 'Out', loop: 'Loop', none: 'None', time: 'Duration' },
   /** a template of the library put in the film (TemplateSection) */
   template: { waiting: '{n} to replace', allIn: 'Every place has your own', fill: 'Fill', pick: 'Choose what goes here, or drop a clip on it', words: 'Words', pickAll: 'Select the whole template' },
   /** a filter on a track of its own (FilterLayerSection) */

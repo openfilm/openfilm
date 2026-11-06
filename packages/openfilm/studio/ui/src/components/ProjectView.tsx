@@ -24,6 +24,8 @@ import { SPEED_MAX } from '@/lib/playback-speed';
 import { replaceClip, type ReplaceFamily } from '@/lib/clip-replace';
 import { fillFor, isSlotSrc, markedClips, templateMark, templateMarks, templateOf } from '@/lib/template-instance';
 import { TemplateSection, type TemplateHost } from '@/components/TemplateSection';
+import { presetsOn, takesMotion, type Preset, type PresetSlot } from '@/lib/clip-presets';
+import { ClipMotionSection, type ClipMotionHost } from '@/components/ClipMotionSection';
 import { isLibraryText, layoutTracks, type TimelineBlock, type TimelineTrack } from '@/lib/timeline-layout';
 import { useAgentWorking } from '@/lib/agent-working';
 import { filmClipKind, filmDocLoc, filmSrcIsPage, filmSrcKind, filmTrackBadges, parseFilmDocLoc, type FilmBox, type FilmDoc, type FilmOverride } from '@/lib/film';
@@ -1038,6 +1040,20 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       else {
         const from = Math.min(Math.max(b.startMs, timeRef.current), b.endMs - 100);
         playRange({ startMs: from, endMs: Math.min(b.endMs, from + 2 * ms('--loop-time')) });
+      }
+    }, 150);
+  }, [playRange]);
+  /** A clip's animation played on the picture once put on, as a line of words' is: its way in, its way out, its loop. */
+  const playClipMotion = React.useCallback((clipId: string, slot: PresetSlot, secs: number) => {
+    window.setTimeout(() => {
+      const b = blocksRef.current.find((x) => x.clipId === clipId);
+      if (!b) return;
+      const ms = secs * 1000;
+      if (slot === 'in') playRange({ startMs: b.startMs, endMs: Math.min(b.endMs, b.startMs + ms + 400) });
+      else if (slot === 'out') playRange({ startMs: Math.max(b.startMs, b.endMs - ms - 400), endMs: b.endMs });
+      else {
+        const from = Math.min(Math.max(b.startMs, timeRef.current), b.endMs - 100);
+        playRange({ startMs: from, endMs: Math.min(b.endMs, from + Math.max(2 * ms, 1500)) });
       }
     }, 150);
   }, [playRange]);
@@ -2180,6 +2196,36 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     };
     return <TemplateSection host={host} />;
   }, [listing, language, projectId, tools, edit, editBlocks, toast, folder]);
+  /* a clip's animation (ClipMotionSection, lib/clip-presets): one of the library's motions in its In, Out or Loop, drawn
+     on the clip's own picture, written into its style with the motion's keyframes and played once put on */
+  const motionSection = React.useCallback((block: TimelineBlock): React.ReactNode => {
+    const clip = block.clipId ? filmClipOf(block.clipId) : null;
+    if (!clip || !block.src || !takesMotion(block)) return null;
+    const path = block.src.split('#')[0]!;
+    const api = `/api/projects/${encodeURIComponent(projectId)}/media`;
+    /* a picture as itself; a video its frame a moment in; a page its poster */
+    const picture = PICTURE_FILE.test(path) ? `${folder}${path.split('/').map(encodeURIComponent).join('/')}`
+      : block.kind === 'video' ? `${api}?what=frame&path=${encodeURIComponent(path)}&ms=${Math.round((block.inMs ?? 0) + Math.min(1000, (block.endMs - block.startMs) / 2))}&w=240`
+        : `${api}?what=poster&path=${encodeURIComponent(path)}`;
+    const style = typeof clip.style === 'string' ? clip.style : undefined;
+    const host: ClipMotionHost = {
+      picture,
+      cover: block.kind === 'video',
+      on: presetsOn(style),
+      lengthSecs: (block.endMs - block.startMs) / 1000,
+      put: (slot: PresetSlot, preset: Preset | null) => {
+        const ops = [
+          ...(preset ? [{ op: 'keyframes', set: { [preset.name]: preset.body } }] : []),
+          { op: 'props', edits: [{ clip: clip.id, prop: 'style', value: withPreset(style, slot, preset) || null }] },
+        ];
+        void edit(ops as never, 'history.stepMotion').then((err) => {
+          if (err) toast.showError(err);
+          else if (preset) playClipMotion(clip.id, slot, preset.secs);
+        });
+      },
+    };
+    return <ClipMotionSection key={clip.id} host={host} />;
+  }, [filmClipOf, projectId, folder, edit, toast, playClipMotion]);
 
   /* how many of the person's edits an outside write undid: edits inside pages it left out, and clip edits it changed */
   const undoneCount = (dropped ?? []).reduce((n, d) => n + d.dropped.length, 0) + undone.length;
@@ -4306,6 +4352,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                       pictures={pictureActions}
                       replaceEntries={tools.replaceEntries}
                       templateSection={templateSection}
+                      motionSection={motionSection}
                       clipLookOf={clipLookOf}
                       onPreviewLook={previewLook}
                       onStartCrop={startStageCrop}

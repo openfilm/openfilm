@@ -627,6 +627,7 @@ export const ja: Words = {
   },
   history: {
     stepFade: 'フェード',
+    stepMotion: 'アニメーション',
     stepTransition: 'トランジションを追加',
     stepTransitionResize: 'トランジションの長さ',
     stepTransitionRemove: 'トランジションを削除',
@@ -887,6 +888,8 @@ export const ja: Words = {
   },
   /* アセットドロワーの OpenFilm ライブラリ（components/library/LibraryDrawer、lib/library） */
   /** the inspector of a line of words of the library's text component (TextInspector) */
+  /** a clip's animation: how it comes in, goes out, moves while shown (ClipMotionSection) */
+  clipMotion: { title: 'アニメーション', in: 'イン', out: 'アウト', loop: 'ループ', none: 'なし', time: '長さ' },
   /** a template of the library put in the film (TemplateSection) */
   template: { waiting: '{n} 個の素材を差し替え', allIn: 'すべて差し替え済み', fill: '自動で埋める', pick: 'ここに入れる動画や画像を選ぶか、素材をドロップ', words: '文字', pickAll: 'テンプレート全体を選択' },
   /** a filter on a track of its own (FilterLayerSection) */

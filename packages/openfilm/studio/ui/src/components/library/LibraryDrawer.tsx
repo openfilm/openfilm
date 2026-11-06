@@ -30,6 +30,7 @@ import { SourceBadge, SourceChips, sourcesIn, type Source } from './SourceChips'
 import { TextStyleSample } from './TextStyleSample';
 import { useSavedLooks } from '../CaptionPresets';
 import { arrangedCategories } from '@/lib/library-categories';
+import { isClipMotion } from '@/lib/clip-presets';
 import { useLibraryArrangement } from './arrangement';
 
 type Category = 'media' | 'skill' | 'voice' | 'captions' | LibraryCategory;
@@ -46,6 +47,8 @@ const PAGE = 80;
 /* the text category's lines: a new line of words; the person's own (starred, presets); the library's looks (word art,
    `art:<group>` one of its groups) and its templates (`tpl:<group>`). Its motions are not here: they go on a line of
    words in the timeline, from the Text inspector */
+/* a clip's motions (how it comes in, goes out, moves while shown) are not among the effects either: they are put on a
+   clip from the inspector's Animation (ClipMotionSection); a camera move on a cut stays a transition */
 const NEW_TEXT = 'new';
 const PRESETS = 'presets';
 const ART = 'art';
@@ -188,6 +191,17 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
     return new Set([...seen].filter((g) => !moving.has(g)));
   }, [index, cat]);
   const stillGroup = (id: string) => stillGroups.has(id);
+  /* the groups that hold only a clip's motions (In, Out, Loop): not lines here */
+  const clipMotionGroups = React.useMemo(() => {
+    const other = new Set<string>();
+    const seen = new Set<string>();
+    for (const item of index?.items ?? []) {
+      if (item.cat !== cat || !item.group) continue;
+      seen.add(item.group);
+      if (!isClipMotion(item)) other.add(item.group);
+    }
+    return new Set([...seen].filter((g) => !other.has(g)));
+  }, [index, cat]);
   /* what moves before what stands still (animated stickers before the emoji), each in the library's own order */
   /* a thing of the text category on the line shown */
   const onTextLine = (item: LibraryItem) => {
@@ -202,7 +216,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
     const [section, of] = group.split(':');
     return (section === STILL) === Boolean(item.still) && (section === LIVE || section === STILL) && (!of || item.group === of);
   };
-  const shown = (index?.items ?? []).filter((item) => item.cat === cat && (cat !== 'text' || textKind(item)) && (q
+  const shown = (index?.items ?? []).filter((item) => item.cat === cat && !isClipMotion(item) && (cat !== 'text' || textKind(item)) && (q
     ? [...Object.values(item.name), ...(item.tags ?? [])].some((n) => n?.toLowerCase().includes(q))
     : cat === 'text' ? onTextLine(item) : cat === 'sticker' && group !== FAVORITES ? onStickerLine(item) : group === FAVORITES ? favorites.includes(item.id) : !group || item.group === group))
     .sort((a, b) => Number(Boolean(a.still)) - Number(Boolean(b.still)));
@@ -219,7 +233,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
   /* the library's own lines under its fold: all of it, then its groups (a voice's: the services) */
   const own = cat === 'voice'
     ? (voices?.providers ?? []).map((s) => ({ id: s.id, name: s.name }))
-    : (index?.groups[cat as LibraryCategory] ?? []).map((g) => ({ id: g.id, name: nameOf(g.name, lang) }))
+    : (index?.groups[cat as LibraryCategory] ?? []).filter((g) => !clipMotionGroups.has(g.id)).map((g) => ({ id: g.id, name: nameOf(g.name, lang) }))
       /* the groups of what moves first, those of stills (the emoji's) after them */
       .sort((a, b) => Number(stillGroup(a.id)) - Number(stillGroup(b.id)));
   /* the text category's groups, under Word art or Templates by what they hold */

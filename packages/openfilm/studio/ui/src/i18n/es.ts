@@ -627,6 +627,7 @@ export const es: Words = {
   },
   history: {
     stepFade: 'Fundido',
+    stepMotion: 'Animación',
     stepTransition: 'Transición añadida',
     stepTransitionResize: 'Duración de la transición',
     stepTransitionRemove: 'Transición quitada',
@@ -887,6 +888,8 @@ export const es: Words = {
   },
   /* La biblioteca de OpenFilm en el cajón de recursos (components/library/LibraryDrawer, lib/library) */
   /** the inspector of a line of words of the library's text component (TextInspector) */
+  /** a clip's animation: how it comes in, goes out, moves while shown (ClipMotionSection) */
+  clipMotion: { title: 'Animación', in: 'Entrada', out: 'Salida', loop: 'Bucle', none: 'Ninguna', time: 'Duración' },
   /** a template of the library put in the film (TemplateSection) */
   template: { waiting: '{n} por reemplazar', allIn: 'Todo reemplazado', fill: 'Rellenar', pick: 'Elige qué va aquí o suelta un clip encima', words: 'Textos', pickAll: 'Seleccionar toda la plantilla' },
   /** a filter on a track of its own (FilterLayerSection) */

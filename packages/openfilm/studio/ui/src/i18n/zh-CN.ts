@@ -628,6 +628,7 @@ export const zhCN: Words = {
   },
   history: {
     stepFade: '淡入淡出',
+    stepMotion: '动画',
     stepTransition: '添加转场',
     stepTransitionResize: '转场时长',
     stepTransitionRemove: '移除转场',
@@ -888,6 +889,8 @@ export const zhCN: Words = {
   },
   /* 素材抽屉里的 OpenFilm 资源库（components/library/LibraryDrawer、lib/library） */
   /** the inspector of a line of words of the library's text component (TextInspector) */
+  /** a clip's animation: how it comes in, goes out, moves while shown (ClipMotionSection) */
+  clipMotion: { title: '动画', in: '入场', out: '出场', loop: '循环', none: '无', time: '时长' },
   /** a template of the library put in the film (TemplateSection) */
   template: { waiting: '{n} 个素材待替换', allIn: '素材已全部替换', fill: '一键填充', pick: '选择放在这里的视频或图片，也可以把素材拖到这里', words: '文字', pickAll: '选中整个模板' },
   /** a filter on a track of its own (FilterLayerSection) */
