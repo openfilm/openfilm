@@ -86,7 +86,10 @@ export function ComposerCard({
           ) : (
             <h3 className="text-[13px] font-medium leading-snug text-[var(--text)]">{title}</h3>
           )}
-          {body && !collapsed ? <div className="mt-1 text-[12.5px] leading-relaxed text-[var(--text-muted)]">{body}</div> : null}
+          {/* a long body (a whole script to run) scrolls in its own box: the buttons and the composer stay in view */}
+          {body && !collapsed ? (
+            <div className="mt-1 max-h-[min(40vh,240px)] overflow-y-auto overscroll-contain pr-1 text-[12.5px] leading-relaxed text-[var(--text-muted)]">{body}</div>
+          ) : null}
         </div>
       </div>
       {collapsed ? null : children}

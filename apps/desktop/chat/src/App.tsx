@@ -6,7 +6,7 @@
  * (lib/local-agent-run's saved turns).
  */
 import React from 'react';
-import { ArrowDown, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, ShieldQuestion, Square } from 'lucide-react';
+import { ArrowDown, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, Square } from 'lucide-react';
 import { buildPromptDisplay, type Turn } from '@openfilm/shared';
 import { useT, useUiLocale } from '@/i18n';
 import { ConversationBar } from '@/components/ConversationSessionBar';
@@ -18,6 +18,7 @@ import { ModelPopover } from '@/components/ModelPopover';
 import { AddSkillDialog, type PickedSkill } from '@/components/AddSkill';
 import { SKILLS_CHANGED } from 'openfilm/studio-ui/lib/project-sources.ts';
 import { CardActions, CardButton, ComposerCard } from '@/components/ComposerCard';
+import { AgentPermissionCard } from '@/components/AgentPermissionCard';
 import { LocalAgentQuestionCard } from '@/components/TurnQuestionCard';
 import { Tooltip } from '@/components/Tooltip';
 import { StickToBottomContext, useStickToBottom, useTailSpacer } from '@/components/useStickToBottom';
@@ -1203,29 +1204,12 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
                     />
                   ) : null}
                   {localTurn?.state.permission ? (
-                    <ComposerCard
-                      role="alertdialog"
-                      icon={<ShieldQuestion size={14} />}
-                      title={t('composer.agentPermissionTitle').replace('{name}', agentName)}
-                      body={localTurn.state.permission.title ? (
-                        <span className="break-words font-mono text-[11.5px]">{localTurn.state.permission.title}</span>
-                      ) : undefined}
-                    >
-                      <CardActions className="flex-wrap">
-                        <CardButton weight="quiet" onClick={() => { if (asset) void answerLocalAgentPermission(asset.id, null); }}>
-                          {t('composer.agentPermissionDeny')}
-                        </CardButton>
-                        {localTurn.state.permission.options.map((option, index) => (
-                          <CardButton
-                            key={option.optionId}
-                            weight={index === 0 && option.kind.startsWith('allow') ? 'primary' : 'secondary'}
-                            onClick={() => { if (asset) void answerLocalAgentPermission(asset.id, option.optionId); }}
-                          >
-                            {option.name}
-                          </CardButton>
-                        ))}
-                      </CardActions>
-                    </ComposerCard>
+                    <AgentPermissionCard
+                      key={localTurn.state.permission.requestId}
+                      agentName={agentName}
+                      permission={localTurn.state.permission}
+                      onAnswer={(optionId) => { if (asset) void answerLocalAgentPermission(asset.id, optionId); }}
+                    />
                   ) : null}
                   {undoAsk ? (
                     <Notice tone="warn" role="alertdialog" title={t('undo.title')} onClose={() => setUndoAsk(null)}

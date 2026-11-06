@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { apartOnTracks, plainClipRefusal } from './film-clip-edits.ts';
+import { apartOnTracks, plainClipRefusal, stackClipEdit } from './film-clip-edits.ts';
 
 test('a refused clip edit is said without film.html\'s address and asides, the media fragment as the trim', () => {
   assert.equal(
@@ -44,4 +44,15 @@ test('a left edge pulled in keeps its clip on its track', () => {
 test('a clip moved onto another one on its track goes to a new track', () => {
   const edits = [{ loc: 'film.html#0.2', prop: 'at', value: 10 }];
   assert.deepEqual(apartOnTracks(edits, row).at(-1), { loc: 'film.html#0.2', prop: 'track', value: { insert: 0 } });
+});
+
+test('a clip to the front or back: alone, its track moves; with others, it alone goes onto a new track; there already, nothing', () => {
+  const tracks = [{ clips: [1] }, { clips: [1, 2] }, { clips: [1] }];
+  assert.deepEqual(stackClipEdit(tracks, 'film.html#2.0', 'front'), { loc: 'film.html#2.0', prop: 'trackOrder', value: { from: 2, to: 0 } });
+  assert.deepEqual(stackClipEdit(tracks, 'film.html#1.1', 'front'), { loc: 'film.html#1.1', prop: 'track', value: { insert: 0 } });
+  assert.deepEqual(stackClipEdit(tracks, 'film.html#1.0', 'back'), { loc: 'film.html#1.0', prop: 'track', value: { insert: 3 } });
+  assert.deepEqual(stackClipEdit(tracks, 'film.html#0.0', 'back'), { loc: 'film.html#0.0', prop: 'trackOrder', value: { from: 0, to: 2 } });
+  assert.equal(stackClipEdit(tracks, 'film.html#0.0', 'front'), null);
+  assert.equal(stackClipEdit(tracks, 'film.html#2.0', 'back'), null);
+  assert.equal(stackClipEdit(tracks, 'film.html#9.0', 'back'), null);
 });

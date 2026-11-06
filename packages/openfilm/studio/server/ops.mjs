@@ -23,7 +23,7 @@ import { MOTION_PROPS, animationsOf, motionName, readMotion, shiftMotion, withAn
  *   | { op: 'stage', w: number, h: number }
  *   | { op: 'fields', clip: string, fields: Record<string, unknown> }
  *   | { op: 'track', track: number, field: 'locked' | 'hidden' | 'muted', value: boolean }
- *   | { op: 'reorder', from: number, to: number }
+ *   | { op: 'reorder', from: number, to: number, clip?: string, below?: string, above?: string }
  *   | { op: 'captions', at: number, captions: TrackCaptions }
  *   | { op: 'uncaptions', src: string }
  *   | { op: 'keyframes', set: Record<string, string | null> }
@@ -202,10 +202,17 @@ export function applyOps(value, ops) {
         break;
       }
       case 'reorder': {
-        const { from, to } = op;
+        /* named by clips (an undo, after the agent may have added or moved tracks): `clip` the track that holds it,
+           wherever it is now; `below` / `above` the track it goes right under / over */
+        const trackOf = (/** @type {string | undefined} */ id) => (id && usedIds(value).includes(id) ? value.tracks[find(value, id).t] : null);
+        const from = op.clip && trackOf(op.clip) ? find(value, op.clip).t : op.from;
+        const { to } = op;
         if (!value.tracks[from] || !(Number.isInteger(to) && to >= 0 && to < value.tracks.length)) throw new EditError('no such tracks to reorder', 'conflict');
+        const under = trackOf(op.below);
+        const over = trackOf(op.above);
         const [track] = value.tracks.splice(from, 1);
-        value.tracks.splice(to, 0, track);
+        const at = under && under !== track ? value.tracks.indexOf(under) + 1 : over && over !== track ? value.tracks.indexOf(over) : to;
+        value.tracks.splice(at, 0, track);
         break;
       }
       case 'props':

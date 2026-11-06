@@ -2284,6 +2284,19 @@
     },
   };
 
+  /*
+   * What a drag shows (a layer moved, a clip placed, a value dragged) is answered once the picture has drawn it. The
+   * editor asks the next step only after the answer, and draws its outline from it: answered at once, a page slow to
+   * draw had the outline run ahead of the picture, and each step's work kept it from drawing. Hidden (no frames
+   * drawn), it answers soon anyway.
+   */
+  const SHOWN_OPS = new Set(['paint', 'paintMany', 'place', 'look', 'tweak']);
+  const drawn = () => new Promise((done) => {
+    const late = setTimeout(done, 250);
+    /* the frame's callbacks run before it is drawn; a task after them runs once it is */
+    requestAnimationFrame(() => setTimeout(() => { clearTimeout(late); done(); }, 0));
+  });
+
   window.addEventListener('message', async (e) => {
     if (e.origin !== EDITOR || e.source !== parent || e.data?.source !== 'openfilm-studio' || e.data.type !== 'stage') return;
     const { seq, op, ...args } = e.data;
@@ -2299,6 +2312,7 @@
       post({ type: 'stage', seq, result: null, error: String(error?.message ?? error) });
       return;
     }
+    if (SHOWN_OPS.has(op)) await drawn();
     post({ type: 'stage', seq, result });
   });
 })();
