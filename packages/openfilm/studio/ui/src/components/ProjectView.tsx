@@ -24,7 +24,7 @@ import { SPEED_MAX } from '@/lib/playback-speed';
 import { replaceClip, type ReplaceFamily } from '@/lib/clip-replace';
 import { fillFor, filmLength, filmTemplate, isSlotSrc, markedClips, placeFrame, retimedTemplate, templateFolderOf, templateMark, templateMarks, templateOf, templateOfFolder, withPlaceFrame } from '@/lib/template-instance';
 import { keepTemplateFilm, TemplateFilmSection, TemplateSection, type TemplateHost } from '@/components/TemplateSection';
-import { cutMovesOn, presetsOn, takesMotion, withCutMove, type Preset, type PresetSlot } from '@/lib/clip-presets';
+import { cutMovesOn, headStyle, joinedStyle, presetsOn, restStyle, takesMotion, withCutMove, type Preset, type PresetSlot } from '@/lib/clip-presets';
 import { ClipMotionSection, type ClipMotionHost } from '@/components/ClipMotionSection';
 import { TemplatePicker } from '@/components/TemplatePicker';
 import { isLibraryText, layoutTracks, type TimelineBlock, type TimelineTrack } from '@/lib/timeline-layout';
@@ -54,7 +54,7 @@ import {
 import { readTimelinePrefs, switchesOf } from '@/lib/timeline-prefs';
 import { fadeMsOf, type FadeMs } from '@/lib/clip-fade';
 import {
-  cutForClick, findTransitions, planRemoveTransition, planResizeTransition, planTransition, TRANSITION_MS,
+  cutForClick, findTransitions, foldHeads, headsOf, planRemoveTransition, planResizeTransition, planTransition, TRANSITION_MS,
   type ClipFacts, type TransitionAsk, type TransitionPlan,
 } from '@/lib/transitions';
 import { frameMs } from '@/lib/timecode';
@@ -984,7 +984,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       for (const c of tr.clips) {
         const moveIn = cutMovesOn(c.style).in;
         facts.set(c.id, {
-          picture: filmClipKind(c) !== 'audio', fade: fadeMsOf(c), ...(c.src === WHITE_SRC ? { white: true } : {}),
+          picture: filmClipKind(c) !== 'audio', fade: fadeMsOf(c), src: c.src.split('#')[0]!, ...(c.src === WHITE_SRC ? { white: true } : {}),
           ...(moveIn ? { moveIn: { slug: moveIn.slug, ms: Math.round(moveIn.secs * 1000) } } : {}),
         });
       }
@@ -997,6 +997,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const item = tr.move ? builtInItem(`${BUILT_IN}/motions/move-${tr.move}`) : null;
     return item ? { ...tr, label: nameOf(item.name, moveLanguage) } : tr;
   }), [timelineTracks, clipLinks, clipFacts, moveLanguage]);
+  /* the heads of transitions on one track folded away on the timeline: each shown by its mark on the main track */
+  const foldedHeads = React.useMemo(() => headsOf(editModelOf(timelineTracks, clipLinks), filmTransitions), [timelineTracks, clipLinks, filmTransitions]);
   const [pickedTransition, setPickedTransition] = React.useState<string | null>(null);
   const pickTransition = React.useCallback((key: string | null) => {
     setPickedTransition(key);
@@ -1030,27 +1032,35 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       label = ask.kind === 'remove' ? 'history.stepTransitionRemove' : 'history.stepTransitionResize';
     }
     if ('error' in plan) return t(plan.error === 'locked' ? 'transitions.locked' : plan.error === 'short' ? 'transitions.short' : 'transitions.none');
-    /* a move's two halves (lib/clip-presets withCutMove), in the same write: put on, made as long as the overlap now,
-       or taken off */
-    const pair = ask.kind === 'add' ? (ask.move ? { a: ask.cut.a, b: ask.cut.b } : null) : (() => {
+    /* the clips' ways in and out, in the same write: a shot cut for a transition on one track, its head keeping its way
+       in and its rest its ways out (lib/clip-presets headStyle, restStyle), whole again when it is taken off; a move's
+       two halves (withCutMove) put on, made as long as the overlap now, or taken off */
+    const styles: { clip: string; prop: string; value: string | null }[] = [];
+    const styleOf = (id: string) => filmClipOf(id)?.style ?? '';
+    const restyle = (id: string, value: string, was = styleOf(id)) => { if (value !== was) styles.push({ clip: id, prop: 'style', value: value || null }); };
+    const secs = (plan.lapMs ?? 0) / 1000;
+    const half = (style: string, edge: 'in' | 'out', p: { name: string; ease: string } | undefined) => withCutMove(style, edge, p && secs > 0 ? { name: p.name, secs, ease: p.ease } : null);
+    const keyframes: Op[] = [];
+    if (ask.kind === 'add') {
+      const cutFor = new Set((plan.pieces ?? []).map((p) => p.head));
+      for (const p of plan.pieces ?? []) restyle(p.rest, restStyle(styleOf(p.head)), styleOf(p.head));
+      const out = plan.replaced?.a ?? ask.cut.a;
+      const into = plan.replaced?.b ?? ask.cut.b;
+      if (out) restyle(out, half(styleOf(out), 'out', ask.move?.out));
+      if (into) restyle(into, half(cutFor.has(into) ? headStyle(styleOf(into)) : styleOf(into), 'in', ask.move?.in));
+      for (const id of cutFor) if (id !== into) restyle(id, headStyle(styleOf(id)));
+      if (ask.move) keyframes.push({ op: 'keyframes', set: Object.fromEntries(Object.values(ask.move).map((p) => [p.name, p.body])) } as Op);
+    } else {
       const tr = filmTransitions.find((x) => x.key === ask.key);
-      return tr?.kind === 'move' ? { a: tr.a, b: tr.b } : null;
-    })();
-    const moveOps: Op[] = [];
-    if (pair?.a && pair.b) {
-      const ca = filmClipOf(pair.a), cb = filmClipOf(pair.b);
-      const secs = (plan.lapMs ?? 0) / 1000;
-      const styled = ([[ca, 'out'], [cb, 'in']] as const).flatMap(([clip, edge]) => {
-        if (!clip) return [];
-        const had = cutMovesOn(clip.style)[edge];
-        const preset = ask.kind === 'add' ? ask.move?.[edge] : had;
-        const value = ask.kind === 'remove' || !preset || !(secs > 0) ? withCutMove(clip.style, edge, null) : withCutMove(clip.style, edge, { name: preset.name, secs, ease: preset.ease });
-        return value === (clip.style ?? '') ? [] : [{ clip: clip.id, prop: 'style', value: value || null }];
-      });
-      if (ask.kind === 'add' && ask.move) moveOps.push({ op: 'keyframes', set: Object.fromEntries(Object.values(ask.move).map((p) => [p.name, p.body])) } as Op);
-      if (styled.length) moveOps.push({ op: 'props', edits: styled } as Op);
+      if (tr && ask.kind === 'remove') {
+        restyle(tr.a, withCutMove(styleOf(tr.a), 'out', null));
+        restyle(tr.b, tr.rest ? joinedStyle(styleOf(tr.b), styleOf(tr.rest)) : withCutMove(styleOf(tr.b), 'in', null));
+      } else if (tr?.kind === 'move') {
+        restyle(tr.a, half(styleOf(tr.a), 'out', cutMovesOn(styleOf(tr.a)).out));
+        restyle(tr.b, half(styleOf(tr.b), 'in', cutMovesOn(styleOf(tr.b)).in));
+      }
     }
-    const ops = [...plan.ops, ...moveOps];
+    const ops = [...plan.ops, ...keyframes, ...(styles.length ? [{ op: 'props', edits: styles } as Op] : [])];
     return ops.length ? edit(ops, label) : null;
   }, [editModel, clipFacts, filmTransitions, filmClipOf, edit, t]);
   /**
@@ -2224,6 +2234,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     projectId, tracks: timelineTracks, film: film.film, settings, patchSettings, player, timeRef, seek, edit: editOps, record: film.record,
     editModel, selectedClipIds: selectedKeys, listing, toast, pickFile: pickReplacement,
   });
+  const shownTracks = React.useMemo(() => foldHeads(tools.tracks, foldedHeads), [tools.tracks, foldedHeads]);
   /* a template put in as one compound clip: its film read from its folder (TemplateFilmSection keeps each) */
   const loadTemplateFilm = React.useCallback(async (dir: string) => (await api.readPartFilm(projectId, dir)).film as unknown as FilmValue, [projectId]);
   /*
@@ -4744,7 +4755,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     relinkCandidates={relinkCandidates}
                     onRelink={(block, path) => void relinkBlock(block, path)}
                     onViewChange={setThumbView}
-                    tracks={tools.tracks}
+                    tracks={shownTracks}
                     totalMs={totalMs}
                     timeMs={timeMs}
                     clock={playing ? clock : null}

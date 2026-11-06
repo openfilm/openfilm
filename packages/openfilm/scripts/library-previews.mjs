@@ -134,8 +134,8 @@ function motionFilm(item) {
   if (item.lap) {
     const d = m.in.secs;
     const tracks = [{ clips: [{ id: 'b', src: 'b.jpg', at: 1 - d / 2, time: [0, 1 + d / 2], style: style(['in']) }] }, { clips: [{ id: 'a', src: 'a.jpg', time: [0, 1 + d / 2], style: style(['out']) }] }];
-    /* a little before the middle: a flip is edge on there */
-    return { html: filmHtml({ stage: { w: W, h: H }, tracks, keyframes }), posterAt: 1 - d * 0.15 };
+    /* a little before the middle (a turn about its axis further before: edge on there) */
+    return { html: filmHtml({ stage: { w: W, h: H }, tracks, keyframes }), posterAt: 1 - d * (/rotate: y/.test(m.in.body) ? 0.4 : 0.15) };
   }
   const clips = item.place === 'cut'
     ? [{ id: 'a', src: 'a.jpg', time: [0, 1], style: style(['out']) }, { id: 'b', src: 'b.jpg', at: 1, time: [0, 1], style: style(['in']) }]

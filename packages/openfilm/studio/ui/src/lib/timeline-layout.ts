@@ -453,6 +453,11 @@ export interface TimelineTrack {
   main?: boolean;
   /** A caption track (SPEC §1 Captions): its WebVTT file and name. It has no clips; its row draws the file's cues. */
   captions?: { src: string; label?: string };
+  /**
+   * A row of nothing but the heads of transitions on one track (lib/transitions foldHeads): drawn as nothing, each
+   * transition shown by its mark on the track it comes in over.
+   */
+  folded?: boolean;
   /** A track of the library's text only: drawn as a caption track is, narrow, each clip by its words. */
   text?: boolean;
   /**

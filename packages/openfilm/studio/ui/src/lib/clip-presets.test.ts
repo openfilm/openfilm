@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { withPreset } from '../../../../src/clip-motion.mjs';
-import { cardBody, clipMotions, cutCardKeyframes, cutMovesOn, presetsOn, takesMotion, withCutMove } from './clip-presets.ts';
+import { cardBody, clipMotions, cutCardKeyframes, cutMovesOn, headStyle, joinedStyle, presetsOn, restStyle, takesMotion, withCutMove } from './clip-presets.ts';
 
 const fade = { name: 'motion-in-fade', body: 'from { opacity: 0 }', secs: 0.5, ease: 'ease-out' };
 const sink = { name: 'motion-out-sink', body: 'to { translate: 0 30vh; opacity: 0 }', secs: 0.5, ease: 'ease-in' };
@@ -80,4 +80,19 @@ test('a cut move: each edge written apart from the clip\'s own in and out, read 
   assert.deepEqual(Object.keys(cutMovesOn(off)), ['out']);
   assert.match(off, /motion-in-fade/);
   assert.equal(withCutMove(withCutMove(off, 'out', null), 'in', null), 'object-fit: cover; animation: motion-in-fade 0.5s ease-out backwards');
+});
+
+test('a shot cut over a cut: its head keeps its way in, its rest its ways out; joined, whole again without the cut\'s', () => {
+  const ease = 'ease-out';
+  let style = withPreset('object-fit: cover', 'in', { name: 'motion-in-fade', body: 'from { opacity: 0 }', secs: 0.5, ease });
+  style = withPreset(style, 'out', { name: 'motion-out-fade', body: 'to { opacity: 0 }', secs: 0.5, ease });
+  style = withCutMove(style, 'out', { name: 'motion-cut-out-push-left', secs: 0.6, ease });
+  const head = withCutMove(headStyle(style), 'in', { name: 'motion-cut-in-iris', secs: 0.7, ease });
+  const rest = restStyle(style);
+  assert.deepEqual(Object.keys(presetsOn(head)), ['in']);
+  assert.deepEqual([Object.keys(cutMovesOn(head)), Object.keys(cutMovesOn(rest))], [['in'], ['out']]);
+  assert.deepEqual(Object.keys(presetsOn(rest)), ['out']);
+  const whole = joinedStyle(head, rest);
+  assert.deepEqual([Object.keys(presetsOn(whole)).sort(), Object.keys(cutMovesOn(whole))], [['in', 'out'], ['out']]);
+  assert.match(whole, /^object-fit: cover; animation: motion-in-fade/);
 });

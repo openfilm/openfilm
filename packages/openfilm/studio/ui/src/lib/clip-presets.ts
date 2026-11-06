@@ -126,3 +126,22 @@ export function withCutMove(style: string | undefined, edge: CutEdge, move: CutM
   kept.splice(own < 0 ? kept.length : own, 0, entry);
   return withAnimations(style, kept);
 }
+
+const entryName = (entry: string) => entry.trim().split(/\s+/)[0] ?? '';
+
+/**
+ * A shot cut over a cut (lib/transitions, one track): its head over the cut keeps the clip's way in and leaves its ways
+ * out (the clip's own and a cut's) to the rest; the rest, against the cut, keeps those and leaves the ways in.
+ */
+export function headStyle(style: string | undefined): string {
+  return withAnimations(style, animationsOf(style).filter((e) => !/^motion-(cut-)?out-/.test(entryName(e))));
+}
+export function restStyle(style: string | undefined): string {
+  return withAnimations(style, animationsOf(style).filter((e) => !/^motion-(cut-)?in-/.test(entryName(e))));
+}
+
+/** A shot whole again from its head and its rest: the head's own way in, the rest's ways out and all else. */
+export function joinedStyle(head: string | undefined, rest: string | undefined): string {
+  const ins = animationsOf(head).filter((e) => /^motion-in-/.test(entryName(e)));
+  return withAnimations(rest, [...ins, ...animationsOf(rest).filter((e) => !/^motion-(cut-)?in-/.test(entryName(e)))]);
+}

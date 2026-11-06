@@ -319,7 +319,9 @@ function stickerShot(strip: ReadonlyMap<number, string> | undefined, poster: str
 }
 
 /** A row's height: the person's for its track (lib/track-heights), else the timeline's own (the main track taller). */
-function rowH(track: Pick<TimelineTrack, 'kind' | 'height' | 'main'> & { captions?: unknown; text?: boolean }): number {
+function rowH(track: Pick<TimelineTrack, 'kind' | 'height' | 'main'> & { captions?: unknown; text?: boolean; folded?: boolean }): number {
+  /* the heads of transitions on one track: folded away, their marks on the track below */
+  if (track.folded) return 0;
   return track.height ?? (track.captions || track.text ? CAPTION_ROW_H : ownTrackHeight(track));
 }
 
@@ -2717,7 +2719,7 @@ export const Timeline = React.memo(function Timeline({
     const lit = selectedLanes.has(track.lane);
     const targeted = targetLane === track.lane;
     /* far from the view, only its place (the one being dragged keeps all of it) */
-    if ((laneIndex < nearFirst || laneIndex > nearLast) && !liftingHead) {
+    if (((laneIndex < nearFirst || laneIndex > nearLast) && !liftingHead) || track.folded) {
       return <div key={track.lane} style={{ marginTop: GAP, height: h, background: laneTone(track, lit) }} />;
     }
     /* the main track is marked by its look (its band) and its hover title, not by a name or a badge that reads as a switch */
@@ -3014,6 +3016,7 @@ export const Timeline = React.memo(function Timeline({
       : null;
     return tracks.map((track, laneIndex) => {
     const h = rowH(track);
+    if (track.folded) return <div key={track.lane} aria-hidden style={{ marginTop: GAP, height: 0 }} />;
     const liftingHere = Boolean(liftingIds && track.blocks.some((b) => liftingIds.has(b.id)));
     /* a row far from the view keeps its place and its clips in hand, moving or selected (see rowsNear) */
     const near = laneIndex >= nearFirst && laneIndex <= nearLast;

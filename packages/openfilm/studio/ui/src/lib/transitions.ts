@@ -2,14 +2,16 @@
  * Transitions, made of what film.html already says: fades (each clip's own `fade`, see lib/clip-fade) and where clips
  * are. Nothing new is written in the file, so an agent reads a transition as two clips that fade.
  *
- *   Cross dissolve   the incoming clip (with the clips linked to it) moves d earlier so the two overlap by d, onto a
- *                    track with room: a picture above the outgoing clip's track (the one right above when it is free
- *                    there, else a new one just above), a sound below. The incoming picture fades in over d while the
- *                    outgoing one stays whole under it, so the two blend (both fading would dip through the black
- *                    under them); sounds both fade, out and in. With `ripple`, what follows the cut moves d
- *                    earlier too, on every unlocked track, so no gap opens and nothing comes apart; without it, what
- *                    follows stays and a gap of d is left after the incoming clip.
- *   Audio crossfade  the same, for two sounds (a sound track below).
+ *   Cross dissolve   the two shots stay on their track, the incoming one still against the cut: it (with the clips
+ *                    linked to it at that edge) is cut d into it, and that head goes over the outgoing clip's last d
+ *                    on a track beside, a picture's above (the one right above when it is free there, else a new
+ *                    one just above), a sound's below; the rest stays where it was, d shorter, and head and rest are
+ *                    linked, one shot. The head fades in over d while the outgoing picture stays whole under it, so
+ *                    the two blend (both fading would dip through the black under them); sounds both fade, out and
+ *                    in. Every transition's head goes on that one track beside. With `ripple`, what follows the cut
+ *                    closes up by d on the tracks it is on, the next transitions' heads along; without it, a gap of
+ *                    d is left after the incoming clip.
+ *   Audio crossfade  the same, for two sounds (the head on a sound track below).
  *   Dip to black     no clip moves: the outgoing clip fades out over d/2, the incoming one in over d/2. The picture dips
  *                    to what is under them: the stage's black where nothing is.
  *   Dip to white     the same, over a white page (`transitions/white.html`) cut in under the dip, on the track below.
@@ -32,6 +34,7 @@
  * Pure: every plan is film.html's operations, one write and one undo step.
  */
 import type { Op, PropValue } from '../api.ts';
+import { filmTrackBadges } from './film.ts';
 import {
   TOUCH_MS, draftOf, findInDraft, follow, linkedIds, planOf, rippleAt, trackAt,
   type Draft, type EditClip, type EditModel, type EditTrack, type TrackDest,
@@ -52,6 +55,8 @@ export interface ClipFacts {
   fade: readonly [number, number];
   /** It is the white page under a dip to white. */
   white?: boolean;
+  /** Its file (`src` without its fragment): the head of a shot and its rest are one file. */
+  src?: string;
   /** The move it comes in by on a cut (its name, how long, ms): the incoming clip of a move. */
   moveIn?: { slug: string; ms: number };
 }
@@ -76,6 +81,8 @@ export interface FilmTransition {
   cutMs: number;
   /** A move's name (its library transition's, `motions/move-<it>`). */
   move?: string;
+  /** On one track: the rest of the incoming shot, against the cut (`b` is its head, over the cut). */
+  rest?: string;
   /** What it is called, when not its kind's name (a move's). */
   label?: string;
 }
@@ -104,8 +111,15 @@ export interface TransitionOpts {
 /** A move's two halves as the library has them (its keyframes' name and body, how long, its easing). */
 export interface CutPreset { name: string; body: string; secs: number; ease: string }
 
-/** `lapMs`: how long an overlap's clips overlap now (a move's two halves are as long). */
-export type TransitionPlan = { ops: Op[]; shortMs: number; lapMs?: number } | { error: 'locked' | 'none' | 'short' };
+/**
+ * `lapMs`: how long an overlap's clips overlap now (a move's two halves are as long); `pieces`: each incoming clip cut
+ * for it, its head (the clip's own id, over the cut) and its rest (a new id, on its track).
+ */
+export type TransitionPlan = {
+  ops: Op[]; shortMs: number; lapMs?: number; pieces?: { head: string; rest: string }[];
+  /** the transition that was on the cut, taken off or made this one (its clips' moves are the editor's to take off) */
+  replaced?: { a: string; b: string };
+} | { error: 'locked' | 'none' | 'short' };
 
 /* ── finding them again ── */
 
@@ -143,7 +157,12 @@ export function findTransitions(model: EditModel, facts: FactsOf): FilmTransitio
       }
       used.add(`a:${a.id}`);
       used.add(`b:${b.id}`);
-      out.push({ key: `${a.id}|${b.id}`, kind, a: a.id, b: b.id, startMs, endMs, on: overlap ? b.id : a.id, cutMs: a.endMs, ...(white ? { white } : {}), ...(moved ? { move: fb.moveIn!.slug } : {}) });
+      /* on one track: the incoming shot's rest against the cut, the mark drawn on the outgoing clip's track */
+      const rest = overlap ? restOf(model, facts, b)?.clip.id : undefined;
+      out.push({
+        key: `${a.id}|${b.id}`, kind, a: a.id, b: b.id, startMs, endMs, on: rest ? a.id : overlap ? b.id : a.id, cutMs: a.endMs,
+        ...(white ? { white } : {}), ...(moved ? { move: fb.moveIn!.slug } : {}), ...(rest ? { rest } : {}),
+      });
       break;
     }
   }
@@ -160,8 +179,61 @@ export function findTransitions(model: EditModel, facts: FactsOf): FilmTransitio
  */
 function across(model: EditModel, track: EditTrack, c: EditClip, edge: 'in' | 'out'): EditClip | undefined {
   const sound = track.role === 'audio';
+  /* not one linked to it: a shot's head over a cut and its rest are one shot */
   return model.filter((t) => t.index !== track.index && !t.locked && (t.role === 'audio') === sound).flatMap((t) => t.clips)
-    .find((x) => (edge === 'in' ? Math.abs(x.endMs - c.startMs) : Math.abs(x.startMs - c.endMs)) <= TOUCH_MS);
+    .find((x) => !(c.link && x.link === c.link) && (edge === 'in' ? Math.abs(x.endMs - c.startMs) : Math.abs(x.startMs - c.endMs)) <= TOUCH_MS);
+}
+
+/** The least of an incoming clip left against the cut when its head goes over it (ms): a sliver is no shot. */
+const REST_MIN_MS = 40;
+
+/**
+ * The clip that carries on from `h` where it ends, cut from the same shot: on another track, starting where `h` ends,
+ * of its kind and file, linked to it, its source going on from `h`'s (a still: any). The rest of a one-track
+ * transition's incoming clip, `h` its head.
+ */
+function restOf(model: EditModel, facts: FactsOf, h: EditClip): { clip: EditClip; track: EditTrack } | undefined {
+  const fh = facts(h.id);
+  if (!fh || !h.link) return undefined;
+  const home = model.find((t) => t.clips.some((c) => c.id === h.id))?.index;
+  return allClips(model).find(({ clip: r, track }) => {
+    if (r.id === h.id || track.index === home || r.link !== h.link || Math.abs(r.startMs - h.endMs) > EPS) return false;
+    const fr = facts(r.id);
+    if (!fr || fr.picture !== fh.picture || (fh.src != null && fr.src !== fh.src)) return false;
+    if (h.still || r.still) return Boolean(h.still && r.still);
+    return r.speed === h.speed && Math.abs(r.inMs - (h.inMs + (h.endMs - h.startMs) * h.speed)) <= EPS * Math.max(1, h.speed);
+  });
+}
+
+/**
+ * The heads of the transitions on one track, and the clips going with each at that edge (their sounds' heads): what
+ * the timeline folds away (foldHeads).
+ */
+export function headsOf(model: EditModel, transitions: readonly FilmTransition[]): Set<string> {
+  const clips = allClips(model).map(({ clip }) => clip);
+  const out = new Set<string>();
+  for (const tr of transitions) {
+    if (!tr.rest) continue;
+    out.add(tr.b);
+    const link = clips.find((c) => c.id === tr.b)?.link;
+    if (link) for (const c of clips) if (c.link === link && Math.abs(c.startMs - tr.startMs) <= EPS) out.add(c.id);
+  }
+  return out;
+}
+
+/**
+ * The timeline's rows with the heads of the transitions on one track folded away: a row holding nothing but heads is
+ * drawn as none (each transition shown by its mark on the track it comes in over), the rows numbered as if it were
+ * not there.
+ */
+export function foldHeads<T extends { role: string; captions?: unknown; badge?: string; blocks: readonly { clipId?: string | undefined }[] }>(
+  rows: readonly T[], heads: ReadonlySet<string>,
+): (T & { folded?: boolean })[] {
+  const folded = rows.map((r) => heads.size > 0 && r.blocks.length > 0 && r.blocks.every((b) => b.clipId != null && heads.has(b.clipId)));
+  if (!folded.some(Boolean)) return rows as (T & { folded?: boolean })[];
+  const badges = filmTrackBadges(rows.filter((_, i) => !folded[i]).map((r) => ({ kind: r.captions ? 'video' : r.role })));
+  let k = 0;
+  return rows.map((r, i) => (folded[i] ? { ...r, folded: true } : { ...r, badge: badges[k++]! }));
 }
 
 /** The cut on track `track` at `ms` (within `tolMs`): the clip ending there and the one starting there (on this track,
@@ -282,22 +354,6 @@ function moveTo(clip: EditClip, from: EditTrack, to: EditTrack) {
   to.clips.sort((x, y) => x.startMs - y.startMs);
 }
 
-/**
- * Where a clip moved to `[startMs, endMs)` goes: its own track when it has room there (for a picture, one above
- * `against`'s, so it comes in over the outgoing one), else the track right beside `against` (above for a picture,
- * below for a sound) when that is free and of its kind, else a new one there.
- */
-function landing(d: Draft, clip: EditClip, picture: boolean, against: number, skip: ReadonlySet<string>): void {
-  const here = findInDraft(d, clip.id)!;
-  if ((!picture || here.track.index < against) && free(here.track, clip.startMs, clip.endMs, new Set([...skip, clip.id]))) return;
-  const side = trackAt(d, picture ? against - 1 : against + 1);
-  if (side && !side.locked && (picture ? side.role !== 'audio' : side.role === 'audio') && free(side, clip.startMs, clip.endMs, skip)) {
-    moveTo(clip, here.track, side);
-    return;
-  }
-  openTrack(d, clip, here.track, picture ? against : against + 1);
-}
-
 /** The clip on another track that `x` is cut against: one ending where `x` started (+ `shiftMs`), of its kind. */
 function partnerTrack(d: Draft, facts: FactsOf, x: EditClip, at: number, skip: ReadonlySet<string>): number | null {
   const picture = facts(x.id)?.picture;
@@ -314,6 +370,18 @@ function partnerTrack(d: Draft, facts: FactsOf, x: EditClip, at: number, skip: R
 export function planTransition(model: EditModel, facts: FactsOf, kind: TransitionKind, cut: CutRef, durationMs: number, opts: TransitionOpts): TransitionPlan {
   const d = draftOf(model);
   const fades: Fades = new Map();
+  /* a cut with a transition on one track already: an overlap made this one in its place (its length and fades), else
+     that one taken off first, in the same write */
+  const there = cut.a && cut.b ? findTransitions(model, facts).find((x) => x.rest && x.a === cut.a && (x.rest === cut.b || x.b === cut.b)) : undefined;
+  if (there && (kind === 'dissolve' || kind === 'move' || kind === 'crossfade')) {
+    const plan = resizeOneTrack(model, facts, there, durationMs, opts, kind);
+    return 'error' in plan ? plan : { ...plan, pieces: [], replaced: { a: there.a, b: there.b } };
+  }
+  if (there) {
+    const off = takeOff(d, model, facts, there, opts, fades);
+    if (off) return off;
+    cut = { a: there.a, b: there.b };
+  }
   const a = cut.a ? findInDraft(d, cut.a) : null;
   const b = cut.b ? findInDraft(d, cut.b) : null;
   if (!a && !b) return { error: 'none' };
@@ -331,10 +399,11 @@ export function planTransition(model: EditModel, facts: FactsOf, kind: Transitio
   };
   /* a move wants two pictures */
   if (kind === 'move' && (!a || !b || !facts(a.clip.id)?.picture || !facts(b.clip.id)?.picture)) return { error: 'none' };
-  if (kind === 'fade-in') return fadeEdge((b ?? a)!, 'in', ms);
-  if (kind === 'fade-out') return fadeEdge((a ?? b)!, 'out', ms);
-  if (!a) return fadeEdge(b!, 'in', ms);
-  if (!b) return fadeEdge(a, 'out', ms);
+  const said = (plan: TransitionPlan): TransitionPlan => ('error' in plan || !there ? plan : { ...plan, replaced: { a: there.a, b: there.b } });
+  if (kind === 'fade-in') return said(fadeEdge((b ?? a)!, 'in', ms));
+  if (kind === 'fade-out') return said(fadeEdge((a ?? b)!, 'out', ms));
+  if (!a) return said(fadeEdge(b!, 'in', ms));
+  if (!b) return said(fadeEdge(a, 'out', ms));
 
   if (kind === 'dip-black' || kind === 'dip-white') {
     /* half each side of the cut, as far as each clip has room */
@@ -343,37 +412,124 @@ export function planTransition(model: EditModel, facts: FactsOf, kind: Transitio
     if (lockedIn(d, touched.map((c) => c.id))) return { error: 'locked' };
     for (const c of atEdge(d, model, a.clip.id, 'out', opts)) setFade(fades, facts, c, 'out', half);
     for (const c of atEdge(d, model, b.clip.id, 'in', opts)) setFade(fades, facts, c, 'in', half);
-    if (kind === 'dip-black' || !opts.whiteSrc) return opsOf(d, fades);
+    if (kind === 'dip-black' || !opts.whiteSrc) return said(opsOf(d, fades));
     const lowest = Math.max(a.track.index, b.track.index);
-    return opsOf(d, fades, [whiteInsert(d, opts.whiteSrc, { startMs: a.clip.endMs - half, endMs: b.clip.startMs + half }, lowest)]);
+    return said(opsOf(d, fades, [whiteInsert(d, opts.whiteSrc, { startMs: a.clip.endMs - half, endMs: b.clip.startMs + half }, lowest)]));
   }
 
-  /* an overlap: the incoming clip and those linked to it move d earlier */
-  const overlap = Math.min(ms, lengthOf(a.clip), lengthOf(b.clip));
-  if (overlap < 1) return { error: 'short' };
-  const moving = groupOf(model, b.clip.id, opts).map((id) => findInDraft(d, id)).filter((x): x is { track: EditTrack; clip: EditClip } => Boolean(x));
-  const outgoing = atEdge(d, model, a.clip.id, 'out', opts);
-  if (lockedIn(d, [...moving.map((m) => m.clip.id), ...outgoing.map((c) => c.id)])) return { error: 'locked' };
-  const skip = new Set(moving.map((m) => m.clip.id));
-  const cutMs = a.clip.endMs;
-  /* each one's track before it moves: what follows the cut on it closes up after it */
-  const homes = new Set([a.track.index, ...moving.map((m) => m.track.index), ...chainedTracks(model, facts, skip)]);
+  /* an overlap on one track (see the top): each incoming clip cut d into it, its head over the outgoing one's last d
+     on a track beside, its rest against the cut, d shorter; with `ripple`, what follows closes up by d */
   const incoming = atEdge(d, model, b.clip.id, 'in', opts);
-  /* the clip each is cut against (its track is where it overlaps from), then taken off while what follows closes up,
-     then put down d earlier where there is room (see landing) */
-  const against = new Map(moving.map((m) => [m.clip.id, partnerTrack(d, facts, m.clip, m.clip.startMs, skip) ?? m.track.index]));
-  for (const m of moving) m.track.clips = m.track.clips.filter((c) => c.id !== m.clip.id);
-  if (opts.ripple) rippleThrough(d, cutMs, -overlap, homes);
-  for (const m of moving) {
-    m.clip.startMs -= overlap;
-    m.clip.endMs -= overlap;
-    m.track.clips.push(m.clip);
-    m.track.clips.sort((x, y) => x.startMs - y.startMs);
-    landing(d, m.clip, facts(m.clip.id)?.picture ?? true, against.get(m.clip.id)!, skip);
+  const outgoing = atEdge(d, model, a.clip.id, 'out', opts);
+  if (lockedIn(d, [...incoming, ...outgoing].map((c) => c.id))) return { error: 'locked' };
+  const cutMs = b.clip.startMs;
+  const overlap = Math.min(ms, lengthOf(a.clip), ...incoming.map((c) => lengthOf(c) - REST_MIN_MS));
+  if (overlap < 1) return { error: 'short' };
+  const ids = new Set(incoming.map((c) => c.id));
+  if (opts.ripple) {
+    const tracks = [a.track.index, ...incoming.map((c) => findInDraft(d, c.id)!.track.index)];
+    closeAfter(d, b.clip.endMs, -overlap, [...tracks, ...chainedTracks(model, facts, ids)], tracks, ids, headsAfter(d, model, facts, ids, opts));
+  }
+  const taken = new Set(allClips(model).map(({ clip }) => clip.id));
+  const splits: Op[] = [];
+  const pieces: { head: string; rest: string }[] = [];
+  for (const x of incoming) {
+    const home = findInDraft(d, x.id)!.track;
+    const picture = facts(x.id)?.picture ?? true;
+    let n = 2;
+    while (taken.has(`${x.id}-${n}`)) n++;
+    const restId = `${x.id}-${n}`;
+    taken.add(restId);
+    /* head and rest one shot: linked (as the clip was, else to each other) */
+    const link = x.link ?? x.id;
+    const rest: EditClip = { ...x, id: restId, startMs: cutMs, endMs: x.endMs - overlap, link, ...(x.still ? {} : { inMs: x.inMs + overlap * x.speed }) };
+    splits.push({
+      op: 'split', clip: x.id, left: {}, rightId: restId,
+      right: { at: secs(cutMs), ...(x.still ? { end: secs(lengthOf(rest)) } : { start: secs(rest.inMs) }), ...(x.link ? {} : { link }) },
+    });
+    pieces.push({ head: x.id, rest: restId });
+    x.startMs = cutMs - overlap;
+    x.endMs = cutMs;
+    x.link = link;
+    home.clips.push(rest);
+    home.clips.sort((p, q) => p.startMs - q.startMs);
+    /* the head beside the clip it comes in over: a picture's above it, a sound's below */
+    const against = partnerTrack(d, facts, x, cutMs, ids) ?? home.index;
+    const side = trackAt(d, picture ? against - 1 : against + 1);
+    if (side && side !== home && !side.locked && !side.captions && (picture ? side.role !== 'audio' : side.role === 'audio') && free(side, x.startMs, x.endMs, ids)) moveTo(x, home, side);
+    else openTrack(d, x, home, picture ? against : against + 1);
   }
   for (const c of outgoing) if (fadesIn(kind, facts, c.id)) setFade(fades, facts, c, 'out', holds(d, facts, c.id, b.clip.id) ? 0 : overlap);
   for (const c of incoming) if (fadesIn(kind, facts, c.id)) setFade(fades, facts, c, 'in', overlap);
-  return opsOf(d, fades, [], overlap);
+  /* the cuts first (each half a copy of the clip), then the heads moved and what follows closed up */
+  const plan = opsOf(d, fades, [], overlap);
+  return { ...plan, ops: [...splits, ...plan.ops], pieces };
+}
+
+/**
+ * The heads of the one-track transitions that come in after clips `ids` (each of `ids` their outgoing clip), with the
+ * clips going with them at that edge: they lie across those clips' ends, before where a ripple from there starts.
+ */
+function headsAfter(d: Draft, model: EditModel, facts: FactsOf, ids: ReadonlySet<string>, opts: TransitionOpts): EditClip[] {
+  return findTransitions(model, facts).filter((tr) => tr.rest && ids.has(tr.a)).flatMap((tr) => atEdge(d, model, tr.b, 'in', opts));
+}
+
+/**
+ * What follows `point` closed up (`deltaMs` below 0) or opened (above) on `tracks`, as far as `bound` has room, `skip`
+ * staying; the next transitions' heads across the point (`heads`) moved by as much.
+ */
+function closeAfter(d: Draft, point: number, deltaMs: number, tracks: readonly number[], bound: readonly number[], skip: ReadonlySet<string>, heads: readonly EditClip[]): void {
+  const lanes = heads.map((h) => findInDraft(d, h.id)?.track.index).filter((i): i is number => i != null);
+  const moved = rippleAt(d, point, deltaMs, [...new Set([...tracks, ...lanes])], new Set([...skip, ...heads.map((h) => h.id)]), bound);
+  for (const h of heads) {
+    h.startMs += moved;
+    h.endMs += moved;
+  }
+}
+
+/**
+ * A one-track transition taken off in a draft: each head back in its rest's place, as long as both, the rest gone,
+ * the fades it made gone; what follows opens up again by its length. Null when done, else why not.
+ */
+function takeOff(d: Draft, model: EditModel, facts: FactsOf, tr: FilmTransition, opts: TransitionOpts, fades: Fades): { error: 'locked' | 'none' } | null {
+  const pairs = piecesOf(d, model, facts, tr, opts);
+  const outgoing = atEdge(d, model, tr.a, 'out', opts);
+  const a = findInDraft(d, tr.a);
+  if (!pairs.length || !a) return { error: 'none' };
+  if (lockedIn(d, [...pairs.flatMap(({ h, r }) => [h.id, r.id]), ...outgoing.map((c) => c.id)])) return { error: 'locked' };
+  const lap = tr.endMs - tr.startMs;
+  const rests = new Set(pairs.map(({ r }) => r.id));
+  if (opts.ripple) {
+    const tracks = [a.track.index, ...pairs.map(({ r }) => findInDraft(d, r.id)!.track.index)];
+    closeAfter(d, Math.max(...pairs.map(({ r }) => r.endMs)), lap, [...tracks, ...chainedTracks(model, facts, rests)], tracks,
+      new Set([...rests, ...pairs.map(({ h }) => h.id)]), headsAfter(d, model, facts, rests, opts));
+  }
+  const links = new Map<string, number>();
+  for (const { clip } of allClips(model)) if (clip.link) links.set(clip.link, (links.get(clip.link) ?? 0) + 1);
+  for (const { h, r } of pairs) {
+    const home = findInDraft(d, r.id)!.track;
+    home.clips = home.clips.filter((c) => c.id !== r.id);
+    const hl = lengthOf(h);
+    h.startMs = r.startMs;
+    h.endMs = r.endMs + hl;
+    moveTo(h, findInDraft(d, h.id)!.track, home);
+    /* linked only to its rest: alone again */
+    if (h.link === h.id && (links.get(h.id) ?? 0) <= 2) delete h.link;
+    const fh = facts(h.id)?.fade ?? [0, 0];
+    fades.set(h.id, [fadesIn(tr.kind, facts, h.id) ? 0 : fh[0], facts(r.id)?.fade[1] ?? 0]);
+  }
+  for (const c of outgoing) if (fadesIn(tr.kind, facts, c.id)) setFade(fades, facts, c, 'out', 0);
+  return null;
+}
+
+/** A one-track transition's heads (its incoming clip's and those going with it) and each one's rest. */
+function piecesOf(d: Draft, model: EditModel, facts: FactsOf, tr: FilmTransition, opts: TransitionOpts): { h: EditClip; r: EditClip }[] {
+  return atEdge(d, model, tr.b, 'in', opts).flatMap((h) => {
+    const mh = allClips(model).find(({ clip }) => clip.id === h.id)?.clip;
+    const rid = mh ? restOf(model, facts, mh)?.clip.id : undefined;
+    const r = rid ? findInDraft(d, rid)?.clip : undefined;
+    return r ? [{ h, r }] : [];
+  });
 }
 
 /**
@@ -425,6 +581,7 @@ export function planRemoveTransition(model: EditModel, facts: FactsOf, tr: FilmT
   const outgoing = atEdge(d, model, tr.a, 'out', opts);
   const incoming = atEdge(d, model, tr.b, 'in', opts);
   const extra: Op[] = [];
+  if (tr.rest) return takeOff(d, model, facts, tr, opts, fades) ?? opsOf(d, fades);
   if (tr.kind === 'dip-black' || tr.kind === 'dip-white') {
     if (lockedIn(d, [...outgoing, ...incoming].map((c) => c.id)) || (tr.white && lockedIn(d, [tr.white]))) return { error: 'locked' };
     if (tr.white) extra.push({ op: 'remove', clip: tr.white });
@@ -455,6 +612,43 @@ export function planRemoveTransition(model: EditModel, facts: FactsOf, tr: FilmT
 }
 
 /**
+ * A one-track transition made `durationMs` long and of `kind`: its heads start earlier (or later) by the difference,
+ * their rests that much further into the shot, what follows closes up (or opens) by it; the fades of `kind`.
+ */
+function resizeOneTrack(model: EditModel, facts: FactsOf, tr: FilmTransition, durationMs: number, opts: TransitionOpts, kind: TransitionKind | FoundKind): TransitionPlan {
+  const d = draftOf(model);
+  const fades: Fades = new Map();
+  const a = findInDraft(d, tr.a);
+  const pairs = piecesOf(d, model, facts, tr, opts);
+  if (!a || !pairs.length) return { error: 'none' };
+  const outgoing = atEdge(d, model, tr.a, 'out', opts);
+  if (lockedIn(d, [...pairs.flatMap(({ h, r }) => [h.id, r.id]), ...outgoing.map((c) => c.id)])) return { error: 'locked' };
+  const fa = facts(tr.a)?.fade ?? [0, 0];
+  const lap = tr.endMs - tr.startMs;
+  const most = Math.min(lengthOf(a.clip) - (kind === 'move' ? 0 : fa[0]), ...pairs.map(({ r }) => lap + lengthOf(r) - REST_MIN_MS));
+  const want = Math.max(1, Math.min(Math.round(durationMs), most));
+  const delta = Math.abs(want - lap) < 0.5 ? 0 : want - lap;
+  const rests = new Set(pairs.map(({ r }) => r.id));
+  if (delta && opts.ripple) {
+    const tracks = [a.track.index, ...pairs.map(({ r }) => findInDraft(d, r.id)!.track.index)];
+    closeAfter(d, Math.max(...pairs.map(({ r }) => r.endMs)), -delta, [...tracks, ...chainedTracks(model, facts, rests)], tracks,
+      new Set([...rests, ...pairs.map(({ h }) => h.id)]), headsAfter(d, model, facts, rests, opts));
+  }
+  for (const { h, r } of pairs) {
+    h.startMs -= delta;
+    r.endMs -= delta;
+    if (!r.still) r.inMs += delta * r.speed;
+  }
+  for (const c of outgoing) if (fadesIn(kind, facts, c.id)) setFade(fades, facts, c, 'out', holds(d, facts, c.id, tr.b) ? 0 : want);
+  for (const { h } of pairs) {
+    if (fadesIn(kind, facts, h.id)) setFade(fades, facts, h, 'in', want);
+    /* a dissolve made a move: its picture no longer fades in */
+    else if (tr.kind !== kind) setFade(fades, facts, h, 'in', 0);
+  }
+  return opsOf(d, fades, [], want);
+}
+
+/**
  * A transition made `durationMs` long: an overlap's incoming clips move by the difference (what follows with them,
  * with `ripple`), a dip's fades and white page change; each as far as its clips have room.
  */
@@ -478,6 +672,7 @@ export function planResizeTransition(model: EditModel, facts: FactsOf, tr: FilmT
     }
     return opsOf(d, fades, extra);
   }
+  if (tr.rest) return resizeOneTrack(model, facts, tr, durationMs, opts, tr.kind);
   const moving = groupOf(model, tr.b, opts).map((id) => findInDraft(d, id)).filter((x): x is { track: EditTrack; clip: EditClip } => Boolean(x));
   if (lockedIn(d, [...moving.map((m) => m.clip.id), ...outgoing.map((c) => c.id)])) return { error: 'locked' };
   const skip = new Set(moving.map((m) => m.clip.id));

@@ -413,13 +413,13 @@
    "motion": {
     "in": {
      "name": "motion-cut-in-flip",
-     "body": "0%, 50% { rotate: y -90deg; opacity: 0 } 50.1% { rotate: y -90deg; opacity: 1 } 100% { rotate: y 0deg }",
+     "body": "0%, 50% { rotate: y -90deg } 100% { rotate: y 0deg }",
      "secs": 0.7,
      "ease": "cubic-bezier(0.45, 0, 0.55, 1)"
     },
     "out": {
      "name": "motion-cut-out-flip",
-     "body": "0% { rotate: y 0deg } 50%, 100% { rotate: y 90deg; opacity: 0 }",
+     "body": "0% { rotate: y 0deg } 50%, 100% { rotate: y 90deg }",
      "secs": 0.7,
      "ease": "cubic-bezier(0.45, 0, 0.55, 1)"
     }
