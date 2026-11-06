@@ -154,7 +154,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
   /* what a sound or a piece of music plays in, under the list */
   const player = usePlayer();
   closePlayer.current = player.close;
-  const dragProps = (item: LibraryItem) => ({ onDragStart: dragOf(item, nameOf(item.name, lang), lang), onDragEnd: () => clearResourceDrag() });
+  const dragProps = (item: LibraryItem) => ({ onDragStart: dragOf(item, nameOf(item.name, lang)), onDragEnd: () => clearResourceDrag() });
   /* a long list (thousands of sounds) is drawn a page at a time, from its top again when what it lists changes */
   const [drawn, setDrawn] = React.useState(PAGE);
   React.useEffect(() => setDrawn(PAGE), [cat, group, query, source]);
@@ -402,8 +402,8 @@ function addTip(item: LibraryItem, t: (path: string) => string): string {
 }
 
 /** What a drag of `item` carries to the timeline (or the chat). */
-function dragOf(item: LibraryItem, name: string, lang: Parameters<typeof libraryDragItem>[2]) {
-  const drag = libraryDragItem(item, name, lang);
+function dragOf(item: LibraryItem, name: string) {
+  const drag = libraryDragItem(item, name);
   return drag ? (e: React.DragEvent) => { setResourceDragData(e.dataTransfer, drag); dragPicture(e); e.dataTransfer.effectAllowed = 'copyMove'; } : undefined;
 }
 
@@ -486,14 +486,14 @@ function Card({ item, lang, picked, kept, square, onPick, onAdd }: {
   /* a text style, a text motion (played under the pointer) and the line of words in the page's own: drawn as it is,
      its words large, in the app's language */
   const drawn = item.kind === 'textstyle' || item.kind === 'textmotion' || item.id === TEXT_COMPONENT;
-  /* a moving sticker drawn by its own page in its own box, filling the card as it fills its box when put in (its
-     poster is a small picture of it in a wide frame); loaded as it comes into view */
-  const live = item.cat === 'sticker' && !item.still && item.kind === 'page' && Boolean(item.w && item.h && item.src);
+  /* a moving sticker or a text template with a box of its own, drawn by its own page in that box, filling the card as
+     it fills its box when put in (its poster is a small picture of it in a wide frame); loaded as it comes into view */
+  const live = !drawn && !item.still && item.kind === 'page' && (item.cat === 'sticker' || item.cat === 'text') && Boolean(item.w && item.h && item.src);
   return (
     <div
       className="group relative min-w-0 cursor-default select-none"
       draggable
-      onDragStart={dragOf(item, name, lang)}
+      onDragStart={dragOf(item, name)}
       onDragEnd={() => clearResourceDrag()}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}

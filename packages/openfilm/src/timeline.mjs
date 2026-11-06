@@ -1217,6 +1217,28 @@ async function drawClip(c, t, live, play, turn, coming, going) {
   c.drawn = true;
   override(c, c.preview ?? c.overrides);
   held(c, local);
+  /* drawn again once they are in: the page laid its frame out without them */
+  if (!live && await overrideFonts(c)) {
+    await c.child.frame(local);
+    c.win.filmHost?.settle?.(local);
+    held(c, local);
+  }
+}
+
+/**
+ * For an exact frame, wait for the fonts a page's overrides name (a font picked in Studio for a line of words): the page
+ * has loaded before they were put on, and such a font starts loading only once it is named, so the frame would be drawn
+ * without its words. Laid out first, so that what they name starts loading; given up after PAGE_LOAD_MS. Whether it
+ * waited.
+ */
+async function overrideFonts(c) {
+  const doc = c.win.document;
+  void doc.body?.offsetWidth;
+  if (doc.fonts.status === 'loaded') return false;
+  let timer;
+  await Promise.race([doc.fonts.ready, new Promise((done) => { timer = setTimeout(done, PAGE_LOAD_MS); })]);
+  clearTimeout(timer);
+  return true;
 }
 
 /**

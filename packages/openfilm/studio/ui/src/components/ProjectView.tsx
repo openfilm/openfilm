@@ -1542,7 +1542,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       const stageNow = stageRef.current ?? { w: 1920, h: 1080 };
       const shaped = libraryBox(shape, stageNow);
       /* a line of words says the default words, in a box that hugs them */
-      const words = own?.id === TEXT_COMPONENT ? defaultTextWords(language) : undefined;
+      const words = own?.id === TEXT_COMPONENT ? defaultTextWords() : undefined;
       const vars = textStyle?.vars;
       const box = shaped && own && words != null ? await hugText(pageUrl(own), shaped, stageNow.w, vars, words) : shaped;
       const overrides = words != null ? withWords(vars ? withRootVars((taken.clip as { overrides?: unknown[] }).overrides, vars) : (taken.clip as { overrides?: unknown[] }).overrides, words) : undefined;
@@ -1784,7 +1784,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       const stageNow = stageRef.current ?? { w: 1920, h: 1080 };
       const shaped = libraryBox(shape, stageNow);
       /* a line of words says the default words, in a box that hugs them */
-      const words = item.id === TEXT_COMPONENT ? defaultTextWords(language) : undefined;
+      const words = item.id === TEXT_COMPONENT ? defaultTextWords() : undefined;
       const box = shaped && words != null ? await hugText(pageUrl(item), shaped, stageNow.w, vars, words) : shaped;
       const own = (taken.clip as { overrides?: unknown[] }).overrides;
       const overrides = words != null ? withWords(vars ? withRootVars(own, vars) : own, words) : vars ? withRootVars(own, vars) : undefined;

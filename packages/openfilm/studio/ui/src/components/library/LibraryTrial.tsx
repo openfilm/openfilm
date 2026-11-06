@@ -13,7 +13,8 @@ const MOTION_SECONDS = 2.6;
 
 export function LibraryTrial({ item, onLetGo }: { item: LibraryItem; onLetGo: () => void }) {
   const lang = useLanguage();
-  const text = item.kind === 'textstyle' || item.kind === 'textmotion';
+  /* a line of words in a look or a motion, or in the page's own */
+  const text = item.kind === 'textstyle' || item.kind === 'textmotion' || item.id === TEXT_COMPONENT;
   const page = (item.kind === 'page' && item.cat !== 'transition') || text;
   const component = text ? builtInItem(`${BUILT_IN}/${TEXT_COMPONENT}`) : null;
   /* a sticker or a line of words has a shape of its own: shown in the box a drop gives it (a style without one in the
@@ -38,7 +39,7 @@ export function LibraryTrial({ item, onLetGo }: { item: LibraryItem; onLetGo: ()
     return () => window.clearInterval(timer);
   }, [item]);
   const src = text && component
-    ? `${pageUrl(component)}?vars=${encodeURIComponent(JSON.stringify({ '--clip-length': `${MOTION_SECONDS}s`, ...(item.vars ?? {}) }))}&words=${encodeURIComponent(defaultTextWords(lang))}`
+    ? `${pageUrl(component)}?vars=${encodeURIComponent(JSON.stringify({ '--clip-length': `${MOTION_SECONDS}s`, ...(item.vars ?? {}) }))}&words=${encodeURIComponent(defaultTextWords())}`
     : page ? pageUrl(item) : null;
   return (
     <div ref={measure} data-library-trial="" className="absolute inset-0 z-[6] cursor-default overflow-hidden" onPointerDown={(e) => { e.stopPropagation(); onLetGo(); }}>

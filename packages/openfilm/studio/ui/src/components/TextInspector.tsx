@@ -5,7 +5,7 @@
  * Every field paints the picture while dragged or picked and writes when let go, as the inspector's fields do.
  */
 import * as React from 'react';
-import { Ban } from 'lucide-react';
+import { Ban, Plus } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { joinFontFamily, splitFontFamily } from '@/lib/font-styles';
 import { nameOf, posterUrl, useLibraryIndex, type LibraryItem } from '@/lib/library';
@@ -15,6 +15,8 @@ import {
 } from '@/lib/text-look';
 import { ColorField, FIELD, NumField, Row, Section, Segmented, SelectField } from './inspector-fields';
 import { FontFamilyPicker } from './FontFamilyPicker';
+import { Tooltip } from './Tooltip';
+import { FontScopeContext } from '@/lib/use-fonts';
 import { SavedLookTiles, useSavedLooks } from './CaptionPresets';
 import { TextStyleSample } from './library/TextStyleSample';
 import type { PropsHost } from './PropertiesSection';
@@ -60,6 +62,22 @@ export function TextInspector({ host, boxH, commit }: { host: PropsHost; boxH?: 
   const family = splitFontFamily(vars['--font'] ?? '')[0];
   /* a font picked keeps the page's fallbacks after it */
   const withFont = (f: string) => joinFontFamily(f, splitFontFamily(TEXT_DEFAULTS['--font']!)[1]);
+  /* a font file of the person's own: put in the project for its lines of words (POST fonts), then on this line */
+  const scope = React.useContext(FontScopeContext);
+  const fontFile = React.useRef<HTMLInputElement>(null);
+  const [fontProblem, setFontProblem] = React.useState<string | null>(null);
+  const addFont = async (file: File) => {
+    if (!scope) return;
+    setFontProblem(null);
+    const answer = await fetch(`/api/projects/${encodeURIComponent(scope.projectId)}/fonts?name=${encodeURIComponent(file.name)}`, { method: 'POST', body: file })
+      .catch((e: unknown) => e as Error);
+    const body = answer instanceof Response ? await answer.json().catch(() => ({})) as { family?: string; error?: string } : {};
+    if (!(answer instanceof Response) || !answer.ok || !body.family) {
+      setFontProblem(t('textInspector.addFontFailed').replace('{why}', body.error ?? (answer instanceof Error ? answer.message : String(answer.status))));
+      return;
+    }
+    await setVar('--font', withFont(body.family));
+  };
 
   return (
     <>
@@ -73,16 +91,31 @@ export function TextInspector({ host, boxH, commit }: { host: PropsHost; boxH?: 
           className="w-full resize-none rounded-[5px] bg-[var(--bg-field)] px-2 py-1.5 text-[12px] leading-[1.5] text-[var(--text)] outline-none ring-1 ring-inset ring-transparent focus:ring-[var(--accent)]"
         />
         <Line label={t('textInspector.font')}>
-          <FontFamilyPicker
-            label={t('textInspector.font')}
-            value={family}
-            sample={words || 'Aa'}
-            onPreview={(f) => paint('--font', withFont(f))}
-            onRevert={revert}
-            onCommit={(f) => setVar('--font', withFont(f))}
-            className={FIELD}
-          />
+          <div className="flex gap-1">
+            <div className="min-w-0 flex-1">
+              <FontFamilyPicker
+                label={t('textInspector.font')}
+                value={family}
+                sample={words || 'Aa'}
+                onPreview={(f) => paint('--font', withFont(f))}
+                onRevert={revert}
+                onCommit={(f) => setVar('--font', withFont(f))}
+                className={FIELD}
+              />
+            </div>
+            {scope ? (
+              <Tooltip label={t('textInspector.addFont')}>
+                <button type="button" aria-label={t('textInspector.addFont')} data-text-add-font="" onClick={() => fontFile.current?.click()}
+                  className="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-[5px] bg-[var(--bg-field)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+                  <Plus size={13} />
+                </button>
+              </Tooltip>
+            ) : null}
+            <input ref={fontFile} type="file" accept=".ttf,.otf,.woff,.woff2" hidden
+              onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void addFont(file); }} />
+          </div>
         </Line>
+        {fontProblem ? <div role="alert" className="text-[11px] leading-[1.4] text-[var(--danger,#e5484d)]">{fontProblem}</div> : null}
         <Line label={t('textInspector.size')}>
           <Row>
             {/* the words' size in the film's pixels (the page keeps it as a share of its box's height, `--size` in vh,

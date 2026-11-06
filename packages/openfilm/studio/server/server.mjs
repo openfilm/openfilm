@@ -50,11 +50,11 @@ import { npmOpenfilm, olderThanThis } from '../client.mjs';
 import { createWatchers } from './watch.mjs';
 import { projectMissing } from './project-presence.mjs';
 import { installedFonts } from './fonts.mjs';
-import { projectFonts, resolveIn } from './project-fonts.mjs';
+import { addTextFont, isFontFile, projectFonts, resolveIn } from './project-fonts.mjs';
 import { FILM_PAGE, PageFrameError, closePageFrames, filmPoster, pageFacts, pageFrame, warmFilmPoster } from './pageframes.mjs';
 import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCover, setCoverFromFile } from './cover.mjs';
-import { libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, setLibraryFavorites } from './library.mjs';
-import { SavedError, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
+import { BUILT_IN, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, setLibraryFavorites } from './library.mjs';
+import { SavedError, TEXT_COMPONENT, TEXT_OWN_FONTS, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
 import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listenLocal } from '../../src/host.mjs';
 import { captionTrackRoutes } from './caption-tracks.mjs';
@@ -749,6 +749,18 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (rest === 'fonts' && req.method === 'GET') {
       const page = url.searchParams.get('page');
       return json(res, 200, await projectFonts(project.path, page ? resolveIn('', page) : null));
+    }
+    /* a font file the person adds for the lines of words (`?name=` its file's name, the body the file): put in the text
+       component's folder in the project (brought in first when it is not there), declared in its fonts/own.css, which
+       its page loads; so it goes with the project. → { family, path } */
+    if (rest === 'fonts' && req.method === 'POST') {
+      const name = basename(url.searchParams.get('name') ?? '');
+      if (!isFontFile(name)) throw new HttpError(400, 'a font file, please (.ttf, .otf, .woff or .woff2)');
+      const taken = /** @type {{ path?: string, clip?: { src: string } }} */ (await takeSaved(project.path, `${BUILT_IN}/${TEXT_COMPONENT}`));
+      const folder = dirname(taken.clip?.src ?? taken.path ?? '');
+      const { path } = await importFile(project.path, `${folder}/fonts/${name}`, req);
+      const family = await addTextFont(project.path, `${folder}/${TEXT_OWN_FONTS}`, path);
+      return json(res, 200, { family, path });
     }
     /* ── version history (history.mjs) ──
          GET    history[?limit=n]                → { status, versions, more }: the version checked out and the changes

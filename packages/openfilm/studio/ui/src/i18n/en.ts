@@ -891,6 +891,8 @@ export const en = {
   textInspector: {
     text: 'Text',
     wordsHint: 'Your words here',
+    addFont: 'Add a font file',
+    addFontFailed: 'That font could not be added: {why}',
     font: 'Font',
     size: 'Size',
     weight: 'Weight',

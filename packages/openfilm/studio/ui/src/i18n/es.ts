@@ -890,6 +890,8 @@ export const es: Words = {
   textInspector: {
     text: 'Texto',
     wordsHint: 'Escribe aquí',
+    addFont: 'Añadir un archivo de fuente',
+    addFontFailed: 'No se pudo añadir la fuente: {why}',
     font: 'Fuente',
     size: 'Tamaño',
     weight: 'Grosor',

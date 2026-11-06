@@ -38,7 +38,9 @@ export class SavedError extends Error {
 }
 
 /** OpenFilm's line of words, in its library (the studio's lib/library TEXT_COMPONENT). */
-const TEXT_COMPONENT = 'text/text';
+export const TEXT_COMPONENT = 'text/text';
+/** The fonts a person added to a project for its lines of words (project-fonts addTextFont): its own, never the library's. */
+export const TEXT_OWN_FONTS = 'fonts/own.css';
 const VERSION = 2;
 /** What the API calls the library's top folder: its paths are `saved/<place in the library>`. */
 export const LIBRARY = 'saved';
@@ -307,8 +309,8 @@ async function copyIn(from, files, to, fresh = false) {
   for (const rel of files) {
     const dest = join(to, rel);
     const there = (await stat(dest).catch(() => null))?.isFile();
-    /* `fresh`: one there that is not the library's as it is now is written again */
-    if (there && (!fresh || (await readFile(dest)).equals(await readFile(join(from, rel))))) continue;
+    /* `fresh`: one there that is not the library's as it is now is written again, but the project's own fonts */
+    if (there && (!fresh || rel === TEXT_OWN_FONTS || (await readFile(dest)).equals(await readFile(join(from, rel))))) continue;
     await mkdir(dirname(dest), { recursive: true });
     await copyFile(join(from, rel), dest);
   }

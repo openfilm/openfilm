@@ -891,6 +891,8 @@ export const zhCN: Words = {
   textInspector: {
     text: '文本',
     wordsHint: '输入文字',
+    addFont: '添加字体文件',
+    addFontFailed: '这个字体没能添加：{why}',
     font: '字体',
     size: '字号',
     weight: '粗细',

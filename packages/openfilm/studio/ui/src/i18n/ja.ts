@@ -890,6 +890,8 @@ export const ja: Words = {
   textInspector: {
     text: 'テキスト',
     wordsHint: '文字を入力',
+    addFont: 'フォントファイルを追加',
+    addFontFailed: 'フォントを追加できませんでした：{why}',
     font: 'フォント',
     size: 'サイズ',
     weight: '太さ',

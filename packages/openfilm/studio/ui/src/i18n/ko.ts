@@ -887,6 +887,8 @@ export const ko: Words = {
   textInspector: {
     text: '텍스트',
     wordsHint: '글자 입력',
+    addFont: '글꼴 파일 추가',
+    addFontFailed: '글꼴을 추가하지 못했습니다: {why}',
     font: '글꼴',
     size: '크기',
     weight: '굵기',

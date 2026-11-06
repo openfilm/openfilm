@@ -131,10 +131,12 @@ export function fromLibrary(path: string, items: readonly LibraryItem[] | null =
 /** Its name in `lang`, else English. */
 export const nameOf = (names: LibraryNames, lang: Language): string => names[lang] ?? names.en;
 
-/** What a new line of words says until it is typed in: the library's line of words' own name ("Default text"), in `lang`. */
-export function defaultTextWords(lang: Language): string {
-  const text = builtInItem(`${BUILT_IN}/${TEXT_COMPONENT}`);
-  return text ? nameOf(text.name, lang) : 'Default text';
+/**
+ * What a new line of words says until it is typed in: "Default text", in English whatever the app's language, as every
+ * thing of the library says its own words in English.
+ */
+export function defaultTextWords(): string {
+  return builtInItem(`${BUILT_IN}/${TEXT_COMPONENT}`)?.name.en ?? 'Default text';
 }
 
 /** A file of the library by its place there. */
@@ -152,8 +154,7 @@ export const waveUrl = (item: LibraryItem): string => libraryUrl(item.id.replace
  * preview's length, and its `openfilm/` path to be taken into the project as it lands; a look or a fade what it goes
  * on (`apply`: a clip, a cut), being no clip itself.
  */
-/** `lang`: the app's language, for the words a line of words says (defaultTextWords). */
-export function libraryDragItem(item: LibraryItem, name: string, lang?: Language): ResourceDragItem | null {
+export function libraryDragItem(item: LibraryItem, name: string): ResourceDragItem | null {
   const saved = `${BUILT_IN}/${item.id}`;
   if (item.kind === 'look' || item.kind === 'fade') return { path: saved, name, kind: 'other', saved, apply: item.kind };
   if (item.kind === 'sound') return { path: saved, name, kind: 'audio', ...(item.durationMs ? { durationMs: item.durationMs } : {}), saved };
@@ -161,12 +162,12 @@ export function libraryDragItem(item: LibraryItem, name: string, lang?: Language
   /* a text style: a new line of words in it (the drop takes the text component with its variables) */
   if (item.kind === 'textstyle') {
     const text = builtInItem(`${BUILT_IN}/${TEXT_COMPONENT}`);
-    const drag = text ? libraryDragItem(text, name, lang) : null;
+    const drag = text ? libraryDragItem(text, name) : null;
     return drag ? { ...drag, ...(item.w && item.h ? { w: item.w, h: item.h } : {}), saved } : null;
   }
   if (item.kind !== 'page' || !item.src) return null;
   return {
-    ...(item.id === TEXT_COMPONENT ? { words: lang ? defaultTextWords(lang) : name } : {}),
+    ...(item.id === TEXT_COMPONENT ? { words: defaultTextWords() } : {}),
     path: `${saved}/files/${item.src.split('#')[0]}`,
     name,
     kind: 'mg',
