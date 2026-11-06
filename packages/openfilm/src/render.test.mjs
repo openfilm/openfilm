@@ -9,7 +9,7 @@ import { BrowserPool } from './browser-pool.mjs';
 import { encoders, hardwareEncoder } from './encoders.mjs';
 import { filmHtml } from './film-doc.mjs';
 import { launch } from './host.mjs';
-import { defaultWorkers, machine, outOfMemory, render } from './render.mjs';
+import { bitrateOf, defaultWorkers, machine, outOfMemory, pictureQuality, render } from './render.mjs';
 
 const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })();
 
@@ -296,4 +296,75 @@ test('--loudness brings the sound to the target with true peaks under -1 dBTP, t
   /* a render without sound (silent) has nothing to bring there, and says nothing of it */
   const mute = await render([dir], { ...quiet, loudness: -16, out: join(dir, 'mute.mp4') });
   assert.ok(!mute.lines.some((l) => /loudness/.test(l)), 'a silent render (no sound asked) says nothing of it');
+});
+
+test('--crf and --bitrate: a CRF for x264 or VP9, a bitrate in bits per second; both, a .mov, or a value out of range refused (#303)', () => {
+  assert.deepEqual(['8M', '2500k', '2.5m', '8000000', ' 100k '].map(bitrateOf), [8e6, 2.5e6, 2.5e6, 8e6, 1e5]);
+  assert.deepEqual(['99k', '501M', '8 M', 'fast', '-2M', '', '1e7'].map(bitrateOf), [null, null, null, null, null, null, null]);
+  assert.equal(pictureQuality('.mp4', {}), null);
+  const crf = pictureQuality('.mp4', { crf: '20' });
+  assert.deepEqual(crf?.video.slice(0, 6), ['-c:v', 'libx264', '-preset', 'medium', '-crf', '20']);
+  assert.equal(crf?.bits, undefined, 'a CRF is never the chip\'s');
+  assert.equal(crf?.said, 'crf 20');
+  assert.deepEqual(pictureQuality('.webm', { crf: 63 })?.video.slice(0, 6), ['-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', '63']);
+  const rate = pictureQuality('.mp4', { bitrate: '8M' });
+  assert.deepEqual(rate?.video.slice(0, 10), ['-c:v', 'libx264', '-preset', 'medium', '-b:v', '8000k', '-maxrate', '12000k', '-bufsize', '16000k']);
+  assert.equal(rate?.bits, 8e6);
+  assert.equal(rate?.said, '8 Mb/s');
+  assert.deepEqual(pictureQuality('.webm', { bitrate: '2500k' })?.video.slice(0, 4), ['-c:v', 'libvpx-vp9', '-b:v', '2500k']);
+  assert.throws(() => pictureQuality('.mp4', { crf: '20', bitrate: '8M' }), /choose --crf or --bitrate, not both/);
+  assert.throws(() => pictureQuality('.mov', { crf: '20' }), /\.mov is ProRes/);
+  assert.throws(() => pictureQuality('.mov', { bitrate: '8M' }), /\.mov is ProRes/);
+  for (const v of ['52', '0', '-1', '18.5', 'high', '', '0x10', '1e1', '+20']) assert.throws(() => pictureQuality('.mp4', { crf: v }), new RegExp(`--crf for an MP4 \\(H\\.264\\) is a whole number from 1 to 51.*not ${v.replace(/[.+]/g, '\\$&')}$`), `--crf ${v}`);
+  assert.equal(pictureQuality('.mp4', { crf: ' 20 ' })?.said, 'crf 20');
+  assert.equal(pictureQuality('.webm', { crf: '0' })?.said, 'crf 0', 'VP9\'s lossless plays');
+  assert.throws(() => pictureQuality('.webm', { crf: '64' }), /--crf for a WebM \(VP9\) is a whole number from 0 to 63/);
+  assert.throws(() => pictureQuality('.mp4', { bitrate: 'fast' }), /--bitrate is bits per second from 100k to 500M, such as 8M or 2500k, not fast/);
+});
+
+test('the render command refuses a wrong --crf or --bitrate before a browser starts, as a wrong command (2)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-render-quality-options-'));
+  try {
+    writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [] }));
+    mkdirSync(join(dir, '.film'));
+    writeFileSync(join(dir, '.film', 'opened'), '');
+    const cli = fileURLToPath(new URL('../bin/openfilm.mjs', import.meta.url));
+    for (const [args, said] of [[['--crf', '60'], /--crf for an MP4 \(H\.264\) is a whole number from 1 to 51/], [['--bitrate', 'fast'], /--bitrate is bits per second/],
+      [['--crf', '20', '--bitrate', '8M'], /choose --crf or --bitrate, not both/], [['--crf', '20', '--out', 'a.mov'], /\.mov is ProRes/]]) {
+      const result = spawnSync(process.execPath, [cli, 'render', ...args], { cwd: dir, encoding: 'utf8', timeout: 30_000 });
+      assert.equal(result.status, 2, result.stderr);
+      assert.match(result.stderr, said);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('--crf and --bitrate are the processor\'s x264, chip or not, at that CRF or near that rate; with a bitrate each browser draws 5 s at least (#303)', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 180_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-render-quality-'));
+  try {
+    /* noise, new each frame: what an encoder cannot squeeze, so its rate is the one asked */
+    writeFileSync(join(dir, 'index.html'), '<!doctype html><body style="margin:0"><canvas id="c" width="320" height="180"></canvas><script>'
+      + 'const c = document.getElementById("c").getContext("2d"); const img = c.createImageData(320, 180);'
+      + 'window.film = { duration: 2, width: 320, height: 180, frame(t) { let s = Math.round(t * 30) * 7919 + 1;'
+      + 'for (let i = 0; i < img.data.length; i += 4) { s = (Math.imul(s, 1103515245) + 12345) >>> 0; img.data[i] = s >>> 24; img.data[i + 1] = (s >>> 16) & 255; img.data[i + 2] = (s >>> 8) & 255; img.data[i + 3] = 255; }'
+      + 'c.putImageData(img, 0, 0); } };</script>');
+    const quiet = { workers: 1, silent: true, onProgress() {} };
+    const bitrate = (/** @type {string} */ file) => Number(execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'format=bit_rate', '-of', 'csv=p=0', file]).toString().trim());
+    const fine = await render([dir], { ...quiet, out: join(dir, 'crf10.mp4'), crf: '10' });
+    const coarse = await render([dir], { ...quiet, out: join(dir, 'crf45.mp4'), crf: '45' });
+    assert.deepEqual([fine.encoder, coarse.encoder], ['libx264', 'libx264'], 'a CRF is never the chip\'s');
+    assert.match(coarse.lines[1], / · libx264 · crf 45 · /);
+    assert.ok(statSync(coarse.out).size * 4 < statSync(fine.out).size, `crf 45 (${statSync(coarse.out).size} B) is far smaller than crf 10 (${statSync(fine.out).size} B)`);
+    const soft = await render([dir], { ...quiet, out: join(dir, 'soft.mp4'), bitrate: '600k', hardware: false });
+    assert.equal(soft.encoder, 'libx264');
+    assert.match(soft.lines[1], / · libx264 · 0\.6 Mb\/s · /);
+    const rate = bitrate(soft.out);
+    assert.ok(rate > 600e3 * 0.6 && rate < 600e3 * 1.5, `x264 at 600k wrote ${rate} b/s`);
+    const parted = await render([dir], { ...quiet, workers: 4, out: join(dir, 'parted.mp4'), bitrate: '600k' });
+    assert.equal(parted.encoder, 'libx264', 'a bitrate is never the chip\'s');
+    assert.match(parted.lines[1], / · 1 worker · libx264 · 0\.6 Mb\/s · /, 'a 2 s film is one browser\'s 5 s at least');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

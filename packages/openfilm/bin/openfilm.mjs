@@ -87,6 +87,11 @@ openfilm skill remove <name>
   --blur          motion blur (8 samples)   --samples <n>   --shutter <0..1>
   --alpha         transparent background    --workers <n>   parallel browsers
   --subtitles     burn the project's subtitles in, in their own style
+  --crf <n>       the picture at this CRF, lower is better: 1-51 for an MP4 (16 unless asked), 0-63 for a
+                  WebM (20)
+  --bitrate <r>   the picture at r bits per second on average (8M, 2500k), each browser drawing 5 s at
+                  least. Either is encoded by the processor, not the graphics chip; not both together; a
+                  .mov (ProRes) takes neither
   --loudness=<n>  the sound at n LUFS (-70 to -5; -14 for online video), true peaks under -1 dBTP; the
                   picture is not touched. Write it with = so the minus sign is read as the value`,
 };
@@ -147,7 +152,7 @@ if (RAW[0] === 'get') {
       options: {
         count: { type: 'string' }, full: { type: 'boolean' }, out: { type: 'string', short: 'o' }, '4k': { type: 'boolean' }, scale: { type: 'string' },
         blur: { type: 'boolean' }, samples: { type: 'string' }, shutter: { type: 'string' }, alpha: { type: 'boolean' }, subtitles: { type: 'boolean' },
-        fps: { type: 'string' }, workers: { type: 'string' }, loudness: { type: 'string' }, help: { type: 'boolean', short: 'h' },
+        fps: { type: 'string' }, workers: { type: 'string' }, loudness: { type: 'string' }, crf: { type: 'string' }, bitrate: { type: 'string' }, help: { type: 'boolean', short: 'h' },
       },
     });
   } catch (e) {

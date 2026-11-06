@@ -27,6 +27,65 @@ const FORMATS = {
 /** Bits per pixel per frame for the chip's H.264: Studio's "high", with room for screen text (exports.mjs). */
 const CHIP_BPP = 0.165;
 
+/** The CRFs --crf takes, by container: x264's for an MP4, VP9's for a WebM. Lower is better. x264's 0 is lossless in
+ * a profile (High 4:4:4 Predictive) that browsers, phones and QuickTime do not play, so an MP4's start at 1. */
+const CRF_RANGE = { '.mp4': [1, 51], '.webm': [0, 63] };
+/** The seconds each browser draws at least with --bitrate: its part is an encode of its own, and x264's rate control
+ * takes a few seconds to land on its rate (a 4 s film in four parts of 1 s came out a quarter over; in one, on it). */
+const BITRATE_PART = 5;
+/** --bitrate's range, bits per second: 100k to 500M. */
+const BITRATE_RANGE = [1e5, 5e8];
+
+/**
+ * --bitrate's value in bits per second: 8M, 2500k, 2.5M or 8000000. Null when it is none of those, or out of range.
+ * @param {string | number} v
+ */
+export function bitrateOf(v) {
+  const m = /^(\d+(?:\.\d+)?)([km]?)$/i.exec(String(v).trim());
+  if (!m) return null;
+  const bits = Number(m[1]) * ({ k: 1e3, m: 1e6 }[m[2].toLowerCase()] ?? 1);
+  return bits >= BITRATE_RANGE[0] && bits <= BITRATE_RANGE[1] ? bits : null;
+}
+
+/** A bitrate as ffmpeg takes it, in kilobits. @param {number} bits */
+const kbits = (bits) => `${Math.round(bits / 1000)}k`;
+
+/**
+ * --crf or --bitrate: the picture encoded as a delivery asks, for the container of `ext`; null with neither. Either
+ * is the processor's encoder's (x264, VP9), never the chip's: the chip's take no CRF, and the Mac's lets a busy
+ * picture run far over a bitrate (asked 3 Mb/s, it wrote 8.6). A bitrate (`bits`) is an average, its peaks kept
+ * near half again over it. ProRes (.mov) has a quality of its own, so it takes neither. `said`: the quality as the
+ * summary says it.
+ * @param {string} ext @param {{ crf?: string | number, bitrate?: string | number }} opts
+ * @returns {{ video: string[], bits?: number, said: string } | null}
+ */
+export function pictureQuality(ext, { crf, bitrate } = {}) {
+  if (crf == null && bitrate == null) return null;
+  if (crf != null && bitrate != null) throw new UsageError('choose --crf or --bitrate, not both');
+  if (ext === '.mov') throw new UsageError('a .mov is ProRes, whose quality is its own: --crf and --bitrate are for .mp4 and .webm');
+  const range = CRF_RANGE[/** @type {keyof typeof CRF_RANGE} */ (ext)];
+  if (!range) return null; // a container render does not write: refused as such
+  const mp4 = ext === '.mp4';
+  if (crf != null) {
+    const n = /^\d+$/.test(String(crf).trim()) ? Number(crf) : NaN;
+    if (!(n >= range[0] && n <= range[1])) {
+      throw new UsageError(`--crf for ${mp4 ? 'an MP4 (H.264)' : 'a WebM (VP9)'} is a whole number from ${range[0]} to ${range[1]}, lower is better (${mp4 ? '16' : '20'} unless asked), not ${crf}`);
+    }
+    return {
+      video: mp4 ? ['-c:v', 'libx264', '-preset', 'medium', '-crf', String(n), ...BT709] : ['-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', String(n), '-row-mt', '1', ...BT709],
+      said: `crf ${n}`,
+    };
+  }
+  const bits = bitrateOf(bitrate);
+  if (bits == null) throw new UsageError(`--bitrate is bits per second from 100k to 500M, such as 8M or 2500k, not ${bitrate}`);
+  const peaks = ['-maxrate', kbits(bits * 1.5), '-bufsize', kbits(bits * 2)];
+  return {
+    video: mp4 ? ['-c:v', 'libx264', '-preset', 'medium', '-b:v', kbits(bits), ...peaks, ...BT709] : ['-c:v', 'libvpx-vp9', '-b:v', kbits(bits), ...peaks, '-row-mt', '1', ...BT709],
+    bits,
+    said: `${Number((bits / 1e6).toFixed(2))} Mb/s`,
+  };
+}
+
 /**
  * The container's picture through the graphics chip, when it has an encoder that works and takes the picture's size:
  * H.264 for an MP4, a key frame every two seconds; ProRes 4444 for a MOV. Null otherwise: the container's own.
@@ -81,6 +140,9 @@ export async function render(args, opts = {}) {
   const { film: target, at, range } = parseTarget(args);
   if (range && opts.ranges) throw new UsageError('choose a range or ranges, not both');
   if (opts.loudness != null && !isLoudness(opts.loudness)) throw new UsageError(`--loudness is a target from ${LOUDNESS_RANGE[0]} to ${LOUDNESS_RANGE[1]} LUFS, e.g. --loudness=-14 for online video`);
+  /* --crf, --bitrate: said wrong before a browser starts. The container is the one written: --out's, else an MP4
+     (a WebM with --alpha) */
+  const quality = pictureQuality(extname(opts.out ?? (opts.alpha ? 'film.webm' : 'film.mp4')).toLowerCase(), opts);
   if (at != null) throw new UsageError(`render takes a range (for example ${at}-${at + 2}), not one time; for one frame use openfilm look ${at}`);
   /* --subtitles: the project's film drawn around by a page that burns its subtitles in (the export's own, burn.mjs),
      rendered in its place, from the project's folder, named as the film's own render is. Studio burns only the
@@ -154,8 +216,9 @@ export async function render(args, opts = {}) {
   if (!container) { await probe.close(); await pool?.give(lent); throw new UsageError(`can't write ${extname(out)}: use .mp4, .webm or .mov`); }
   if (alpha && extname(out).toLowerCase() === '.mp4') { await probe.close(); await pool?.give(lent); throw new UsageError('mp4 has no transparency: write .webm or .mov with --alpha'); }
   /* a host may encode the container its own way (Studio's export: another codec, a quality, a frame around the film),
-     and gets exactly that; else the picture goes through the graphics chip when it can */
-  const own = { ...container, ...opts.format };
+     and gets exactly that; else the picture goes through the graphics chip when it can. A quality asked (--crf,
+     --bitrate) is the processor's encoder's */
+  const own = { ...container, ...(quality ? { video: quality.video } : {}), ...opts.format };
   /* `clear` (with `alpha`): the format for a page that lets anything through. The page is drawn with `format` while
      every frame is opaque, each frame's alpha read as it is drawn; at the first pixel that shows through it is drawn
      again with `clear`, in the same tabs (an editing project's page: H.264 when it can, PNG with its alpha when not).
@@ -163,10 +226,11 @@ export async function render(args, opts = {}) {
   const clearFormat = alpha && opts.clear ? { ...container, ...opts.clear } : null;
   let clear = false;
   const size = { w: Math.round(meta.width * scale), h: Math.round(meta.height * scale) };
-  const chip = opts.format || opts.hardware === false ? null : await chipFormat(extname(out).toLowerCase(), size, fps);
+  const chip = opts.format || opts.hardware === false || quality ? null : await chipFormat(extname(out).toLowerCase(), size, fps);
   let format = chip ? { ...own, ...chip.format } : own;
   let encoder = chip?.encoder ?? encoderOf(own.video);
-  const workers = Math.max(1, Math.min(pool ? lent.length : Number(opts.workers ?? defaultWorkers(machine(), total)), total));
+  const workers = Math.max(1, Math.min(pool ? lent.length : Number(opts.workers ?? defaultWorkers(machine(), total)), total,
+    quality?.bits ? Math.floor(total / (fps * BITRATE_PART)) : Infinity));
   /** @type {string[]} videos whose copy could not be made: drawn as they are, said as it happens and in the result */
   const uncopied = [];
   /* the videos get copies this browser plays: those it does not decode here (ProRes; HEVC without a chip for it), and
@@ -339,7 +403,7 @@ export async function render(args, opts = {}) {
     ...(clearFormat ? { clear } : {}),
     lines: [
       `→ ${shown(out)}`,
-      `  ${total} frames · ${fmt(to - from)} at ${Number(fps.toFixed(3))} fps · ${Math.round(meta.width * scale)}×${Math.round(meta.height * scale)}${samples > 1 ? ` · ${samples} samples/frame` : ''}${alpha ? ' · alpha' : ''} · ${workers} worker${workers > 1 ? 's' : ''} · ${encoder} · ${seconds.toFixed(1)} s`,
+      `  ${total} frames · ${fmt(to - from)} at ${Number(fps.toFixed(3))} fps · ${Math.round(meta.width * scale)}×${Math.round(meta.height * scale)}${samples > 1 ? ` · ${samples} samples/frame` : ''}${alpha ? ' · alpha' : ''} · ${workers} worker${workers > 1 ? 's' : ''} · ${encoder}${quality && !opts.format ? ` · ${quality.said}` : ''} · ${seconds.toFixed(1)} s`,
       ...loudnessLines(opts.loudness, loud, opts.silent),
       ...uncopied.map((file) => `✗ copy: ${shown(file)}: could not be made, drawn as it is`),
       ...problems.map((p) => `✗ ${p.kind === 'request' ? 'request' : 'page'}: ${p.message}`),
