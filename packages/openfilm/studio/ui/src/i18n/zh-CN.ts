@@ -1020,6 +1020,7 @@ export const zhCN: Words = {
     source: '来源',
     source_official: '官方',
     source_community: '社区',
+    contributeAssets: '投稿素材',
     source_mine: '我的',
     slots: '{n} 段',
     mediaImport: '导入',

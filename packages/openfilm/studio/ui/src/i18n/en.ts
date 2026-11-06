@@ -1020,6 +1020,7 @@ export const en = {
     source: 'Source',
     source_official: 'Official',
     source_community: 'Community',
+    contributeAssets: 'Contribute assets',
     source_mine: 'Mine',
     slots: '{n} clips',
     mediaImport: 'Imported',

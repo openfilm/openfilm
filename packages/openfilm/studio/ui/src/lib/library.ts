@@ -92,7 +92,7 @@ function readIndex(): Promise<LibraryIndex | null> {
 }
 
 /** The library's index, once read (null before). */
-export function useLibraryIndex(): LibraryIndex | null {
+export function useLibraryIndex(refresh = false): LibraryIndex | null {
   const seen = React.useSyncExternalStore(
     (fn) => { listeners.add(fn); return () => { listeners.delete(fn); }; },
     () => index,
@@ -100,9 +100,10 @@ export function useLibraryIndex(): LibraryIndex | null {
   );
   React.useEffect(() => {
     void readIndex();
+    if (!refresh) return;
     const timer = window.setInterval(() => { if (!document.hidden) void readIndex(); }, 60_000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [refresh]);
   return seen;
 }
 
@@ -289,7 +290,7 @@ export function useLibraryFavorites(): readonly string[] {
 /* ── what of the library is here: a sound, a piece of music, a template's music are fetched before they go in ── */
 
 /** Whether a thing may need fetching before it goes in (a published part of the library, or a template's music). */
-export const mayNeedFetch = (item: Pick<LibraryItem, 'id' | 'music'>): boolean => item.id.startsWith('audio/') || Boolean(item.music);
+export const mayNeedFetch = (item: Pick<LibraryItem, 'id' | 'music'>): boolean => item.id.startsWith('audio/') || item.id.startsWith('community/') || Boolean(item.music);
 const asked = new Set<string>();
 /** asked, not answered yet: shown as to be fetched, never as one to put in that is not here */
 const asking = new Set<string>();
