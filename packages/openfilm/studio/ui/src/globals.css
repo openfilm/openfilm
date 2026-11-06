@@ -49,7 +49,7 @@
   --bg-field: rgba(16, 16, 24, 0.055);
   --bg-hover: rgba(16, 16, 24, 0.05);
   --bg-pressed: rgba(16, 16, 24, 0.09);
-  --bg-selected: rgba(0, 150, 136, 0.13);
+  --bg-selected: rgba(0, 163, 174, 0.13);
 
   --text: #161619;
   --text-muted: #5d5d63;
@@ -62,16 +62,16 @@
   --primary-hover: #2e2e33;
   --on-primary: #ffffff;
 
-  --accent: #00897b;
-  --accent-soft: rgba(0, 150, 136, 0.12);
+  --accent: #0098a3;
+  --accent-soft: rgba(0, 163, 174, 0.12);
   --on-accent: #ffffff;
   /* a switch turned on: the accent a step quieter, so a page of them does not glare */
-  --switch-on: #26a69a;
+  --switch-on: #26b0ba;
   /* what is picked among choices (tabs, a rail, a list): the accent's words on the accent's own tint, never a grey
      that reads as merely pointed at */
-  --bg-picked: rgba(0, 150, 136, 0.14);
+  --bg-picked: rgba(0, 163, 174, 0.14);
   /* words selected in a field */
-  --text-selection: rgba(0, 150, 136, 0.24);
+  --text-selection: rgba(0, 163, 174, 0.24);
 
   --ok: #1f8a4c;
   --warn: #b25e00;
@@ -115,17 +115,19 @@
 [data-theme='dark'] {
   color-scheme: dark;
 
-  --bg-app: #0b0b0d;
-  --bg-panel: #19191c;
-  --bg-raised: #252529;
-  --bg-viewer: #111113;
-  --bg-field: rgba(240, 240, 255, 0.07);
-  --bg-hover: rgba(240, 240, 255, 0.065);
-  --bg-pressed: rgba(240, 240, 255, 0.11);
-  --bg-selected: rgba(38, 222, 196, 0.17);
+  /* the window's ground: its top bars, the viewer round the picture and the canvas, one grey (rgb 20) under the
+     panels' (rgb 24) */
+  --bg-app: #141414;
+  --bg-panel: #181818;
+  --bg-raised: #242424;
+  --bg-viewer: #141414;
+  --bg-field: rgba(255, 255, 255, 0.08);
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-pressed: rgba(255, 255, 255, 0.12);
+  --bg-selected: rgba(0, 193, 205, 0.16);
 
-  --text: #f0f0f2;
-  --text-muted: #a8a8ae;
+  --text: #e6e6e6;
+  --text-muted: #a3a3a3;
   --text-faint: #717177;
 
   --border: rgba(240, 240, 255, 0.075);
@@ -135,12 +137,13 @@
   --primary-hover: #ffffff;
   --on-primary: #0a0a0c;
 
-  --accent: #26dec4;
-  --accent-soft: rgba(38, 222, 196, 0.14);
-  --on-accent: #03241f;
-  --switch-on: #1f9f8d;
-  --bg-picked: rgba(38, 222, 196, 0.17);
-  --text-selection: rgba(38, 222, 196, 0.32);
+  /* what is picked: words in this cyan, plainly apart from the others' white */
+  --accent: #00c1cd;
+  --accent-soft: rgba(0, 193, 205, 0.14);
+  --on-accent: #00262a;
+  --switch-on: #009aa4;
+  --bg-picked: rgba(0, 193, 205, 0.16);
+  --text-selection: rgba(0, 193, 205, 0.3);
 
   --ok: #4cc27a;
   --warn: #f0b03c;
@@ -599,7 +602,7 @@ html[data-file-drag] iframe { pointer-events: none; }
   --cv-float-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06), 0 16px 24px -8px rgba(0, 0, 0, 0.1), 0 4px 8px -4px rgba(0, 0, 0, 0.06);
 }
 [data-theme='dark'] {
-  --cv-bg: #1a1a1a;
+  --cv-bg: #141414;
   --cv-dot: #474747;
   --cv-card: #262626;
   --cv-card-2: #1f1f1f;
