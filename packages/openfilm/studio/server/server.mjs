@@ -119,6 +119,7 @@ export function desktopInstaller(os, arch, base = DESKTOP_FILES) {
  * @param {{ port?: number, key?: string, openBrowser?: (url: string) => void, advertise?: boolean, onQuit?: () => void, stays?: boolean, editorDir?: string, working?: () => string[], askAgent?: import('./get.mjs').AskAgent }} [options]
  */
 export async function startStudio({ port = 4747, key, openBrowser = systemBrowser, advertise = false, onQuit, stays = false, editorDir = EDITOR_DIR, working = () => [], askAgent } = {}) {
+  void refreshCommunity();
   let COOKIE = cookieName(port);
   let FRAMED = framedCookieName(port);
   /** The key from either session cookie. */
