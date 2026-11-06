@@ -132,7 +132,7 @@ test('a search prints each match\'s id to take, what it is like and where to see
   assert.match(text, /^3 in OpenFilm's library for “glitch”, the best first/);
   assert.match(text, /^ {4}openfilm\/transitions\/glitch$/m);
   assert.match(text, /over a cut/);
-  assert.match(text, /see it: .*transitions\/glitch\/preview\.mp4/);
+  assert.match(text, /see it: .*transitions[\\/]glitch[\\/]preview\.mp4/);
   assert.match(text, /`openfilm get transition --take <id>`/);
   assert.equal((await libraryGet('transition', { prompt: 'glitch', n: '2' })).lines.filter((l) => /^ {4}openfilm\//.test(l)).length, 2, '--n is --limit');
   const music = (await libraryGet('music-search', { prompt: 'calm piano', sec: '50' })).lines.join('\n');
