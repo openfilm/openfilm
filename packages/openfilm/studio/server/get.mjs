@@ -361,6 +361,10 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     return [...said, show(await receiptFor(root, verb, args, result.receipt))].join('\n');
   } catch (e) {
     if (clock.timedOut()) throw new GetError(`${provider.name} did not finish within ${spec.timeoutSec + 60} s, so Studio stopped waiting. Nothing landed in the project; try again later.`);
+    if (/** @type {{ code?: string, limit?: boolean }} */ (e)?.code === 'balance' && /** @type {{ limit?: boolean }} */ (e).limit) {
+      throw new GetError(`This did not run: the ${provider.name} key reached the spending limit set on it. The person can raise or remove that limit where `
+        + `the key was made (${provider.keysUrl}), or use another key. Nothing was made. Stop and tell them; do not run it again until they say so.`, 1, 'balance');
+    }
     if (/** @type {{ code?: string }} */ (e)?.code === 'balance') {
       tell?.({ kind: 'balance', provider: provider.name, providerId: provider.id });
       throw new GetError(`This did not run: ${provider.name} doesn't have enough balance. The person can top it up at ${provider.billingUrl}, `
@@ -629,6 +633,7 @@ async function providerTranslator(root) {
       key, model: modelFor(settings, provider, 'translate'), root, signal, say: () => {}, read: (path) => readInput(root, path, false, signal),
     }).catch((e) => {
       /* the person asked for it in Studio: said to them, with where to top it up */
+      if (e?.code === 'balance' && e.limit) throw new Error(`The ${provider.name} key reached the spending limit set on it. Raise or remove that limit at ${provider.keysUrl}, or use another key, then try again.`);
       if (e?.code === 'balance') throw new Error(`${provider.name} doesn't have enough balance for this. Top it up at ${provider.billingUrl}, or switch to another service, then try again.`);
       throw e;
     });

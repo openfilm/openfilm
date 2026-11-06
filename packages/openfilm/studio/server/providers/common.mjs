@@ -26,6 +26,7 @@ export async function call(service, url, init, ctx) {
   }
   if (res.ok) return res;
   const text = await res.text().catch(() => '');
+  if (KEY_LIMIT.test(text)) throw keyLimit(service);
   if (outOfBalance(res.status, text)) throw noBalance(service);
   /* with no key (a keyless provider) there is nothing to blank out */
   const reason = (ctx.key ? reasonOf(text).split(ctx.key).join('•••') : reasonOf(text)).slice(0, 500);
@@ -62,6 +63,16 @@ export function outOfBalance(status, text) {
  * @param {string} service
  */
 export const noBalance = (service) => Object.assign(new Error(`${service} doesn't have enough balance for this.`), { code: 'balance' });
+
+/** A key that reached the spending limit set on the key itself (OpenRouter: "Key limit exceeded"), money left or not. */
+const KEY_LIMIT = /key limit exceeded/i;
+
+/**
+ * What a provider throws when its key reached the spending limit set on it: like a balance used up (`code: 'balance'`,
+ * nothing more runs until the person acts), but what to change is the key's limit (`limit`), not the balance.
+ * @param {string} service
+ */
+export const keyLimit = (service) => Object.assign(new Error(`${service}: this key reached the spending limit set on it.`), { code: 'balance', limit: true });
 
 /** The human part of a service's error body (each service nests it its own way). */
 function reasonOf(/** @type {string} */ text) {

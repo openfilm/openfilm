@@ -102,6 +102,18 @@ test('translation: one string per line asked, in order; anything else is refused
   assert.throws(() => translationAsk(['x'], ''), /language/);
 });
 
+test('a key that reached the spending limit set on it is told apart from a wrong key and from no balance', async () => {
+  const body = JSON.stringify({ error: { message: 'Key limit exceeded (total limit). Manage it using https://openrouter.ai/settings/keys $200.03 of $200.00 used; does not reset.', code: 403 } });
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(body, { status: 403 });
+  try {
+    await assert.rejects(call('OpenRouter', 'https://x.test', {}, { key: 'k', signal: new AbortController().signal }),
+      (/** @type {any} */ e) => e.code === 'balance' && e.limit === true && /spending limit set on it/.test(e.message) && !/did not accept your key/.test(e.message));
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
 test('no balance, as each service says it, is one error for all; a plain rate limit is not one', async () => {
   /* OpenAI, ElevenLabs, fal, Gemini, Tavily, and any 402 */
   assert.ok(outOfBalance(429, JSON.stringify({ error: { message: 'You exceeded your current quota, please check your plan and billing details.', type: 'insufficient_quota', code: 'insufficient_quota' } })));
