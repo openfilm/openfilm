@@ -130,6 +130,15 @@ test('what is wired into a node comes in its edges\' order; words and pictures, 
     { out: 'cut', prompt: 'a slow push in', ratio: '16:9', size: '2k', transparent: 'true' });
   assert.equal(makeRequest({ ...v, make: 'image', opts: { size: '4k', transparent: true } }, [], 'cut', { sizes: ['1k'] }).args.size, undefined, 'only what the model makes');
   assert.equal(makeRequest({ ...v, opts: { size: '1080p' } }, [], 'push', { sizes: ['720p', '1080p'] }).args.resolution, '1080p');
+  /* a GIF of so many frames, an SVG, and a picture redrawn where a mask or a markup says, as the model makes them */
+  const gpt = { formats: ['png', 'gif', 'svg'], mask: true, markup: true };
+  const still = [{ from: 'p', path: 'assets/a.png', media: 'image' as const }];
+  assert.deepEqual(makeRequest({ ...v, make: 'image', opts: { format: 'gif', gifFrames: 6, frameMs: 120 } }, [], 'g', gpt).args, { out: 'g', prompt: 'a slow push in', ratio: '16:9', format: 'gif', frames: '6', 'frame-ms': '120' });
+  assert.equal(makeRequest({ ...v, make: 'image', opts: { format: 'gif' } }, [], 'g', { refs: 4 }).args.format, undefined, 'only a model that makes GIFs');
+  assert.equal(makeRequest({ ...v, make: 'image', opts: { mask: 'assets/mask.png' } }, still, 'r', gpt).args.mask, 'assets/mask.png');
+  assert.equal(makeRequest({ ...v, make: 'image', opts: { mask: 'assets/mask.png' } }, [], 'r', gpt).args.mask, undefined, 'a mask goes with the picture it redraws');
+  assert.equal(makeRequest({ ...v, make: 'image', opts: { markup: 'assets/m.png' } }, still, 'r', gpt).args.markup, 'assets/m.png');
+  assert.deepEqual(readCanvasDoc({ nodes: [{ id: 'n', x: 0, y: 0, make: 'image', opts: { format: 'gif', gifFrames: 6, mask: 'assets/mask.png' } }], edges: [] }).nodes[0]!.opts, { format: 'gif', gifFrames: 6, mask: 'assets/mask.png' });
   assert.match(makeName({ ...v, prompt: 'A slow push-in, at dawn!' }, 36), /^a-slow-push-in-10$/);
   assert.match(makeName({ ...v, prompt: '黎明' }, 1296), /^video-100$/);
   /* two made in the same moment never share a name (a file each); a preset names it when its words do not */

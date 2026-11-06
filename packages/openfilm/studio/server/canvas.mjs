@@ -143,6 +143,11 @@ function readMake(n) {
     ...(['text', 'omni', 'first', 'firstLast', 'refs'].includes(/** @type {string} */ (o.mode)) ? { mode: o.mode } : {}),
     ...(short(o.size) ? { size: o.size } : {}),
     ...(o.transparent === true ? { transparent: true } : {}),
+    ...(o.format === 'gif' || o.format === 'svg' ? { format: o.format } : {}),
+    ...(typeof o.gifFrames === 'number' && o.gifFrames >= 2 && o.gifFrames <= 16 ? { gifFrames: Math.round(o.gifFrames) } : {}),
+    ...(typeof o.frameMs === 'number' && o.frameMs >= 20 && o.frameMs <= 2000 ? { frameMs: Math.round(o.frameMs) } : {}),
+    ...(projectPath(o.mask) ? { mask: o.mask } : {}),
+    ...(projectPath(o.markup) ? { markup: o.markup } : {}),
     ...(o.count === 2 || o.count === 4 ? { count: o.count } : {}),
   };
   const versions = (Array.isArray(n.versions) ? n.versions : []).filter(projectPath).slice(-VERSIONS_MAX);

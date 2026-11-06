@@ -80,7 +80,9 @@
  * last) frame; `qualities`, a picture's `--quality`, the finest last; `needs`, a clip made only from another clip
  * (`--video`) or a recording spoken (`--audio`); `voice`, a clip that also takes a recording of whose voice speaks in it
  * (`--voice`); `clip`, one that also takes a clip to continue or change (`--video`); `sizes`, a picture's `--size` or
- * a clip's `--resolution`, as it makes them; `transparent`, a picture with no background (`--transparent`).
+ * a clip's `--resolution`, as it makes them; `transparent`, a picture with no background (`--transparent`); `formats`,
+ * a picture's `--format` beyond PNG (gif, svg); `mask` and `markup`, a picture redrawn where a mask leaves it clear
+ * (`--mask`) or where changes are drawn on it (`--markup`).
  * @typedef {{
  *   ratios?: string[],
  *   seconds?: [number, number],
@@ -93,6 +95,9 @@
  *   clip?: boolean,
  *   sizes?: string[],
  *   transparent?: boolean,
+ *   formats?: string[],
+ *   mask?: boolean,
+ *   markup?: boolean,
  * }} ModelSpec
  */
 

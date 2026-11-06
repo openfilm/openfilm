@@ -7,10 +7,10 @@
 import React from 'react';
 import { NodeToolbar, Position } from '@xyflow/react';
 import {
-  AlignLeft, ArrowUp, Camera, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, Download, FolderSearch, Images, LayoutGrid, Maximize2, Minimize2, Music, Plus, Search, Sparkles, Square, Video, X,
+  AlignLeft, ArrowUp, Brush, Camera, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, Download, FolderSearch, Images, LayoutGrid, Maximize2, Minimize2, Music, Plus, Search, Sparkles, Square, Video, X,
 } from 'lucide-react';
 import { useT } from '@/i18n';
-import { IMAGE_RATIOS, MAKE_COUNTS, MAKE_MEDIA, VIDEO_MODES, VIDEO_RATIOS, frameRatio, lengthOf, lengthRange, modeOf, modesFor, ratioOf, type ModelSpec, type VideoMode } from '@/lib/canvas';
+import { GIF_FRAMES, GIF_FRAME_MS, IMAGE_RATIOS, MAKE_COUNTS, MAKE_MEDIA, VIDEO_MODES, VIDEO_RATIOS, frameRatio, lengthOf, lengthRange, modeOf, modesFor, ratioOf, type ModelSpec, type VideoMode } from '@/lib/canvas';
 import { PRESETS, PRESET_GROUPS, presetOf, type CanvasPreset } from '@/lib/canvas-presets';
 import type { WorkspaceResource } from '@/lib/workspace-resources';
 import { Popover } from '../Popover';
@@ -24,6 +24,11 @@ const MOD = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform) 
 const MAKE_LENGTHS: Partial<Record<MakeData['make'], number[]>> = { video: [4, 5, 6, 8, 10, 15], sfx: [1, 2, 3, 5, 10], music: [15, 30, 60, 120] };
 const CARD = 'cv-pop rounded-[12px] bg-[var(--cv-float)] shadow-[var(--cv-float-shadow)]';
 const CHIP = 'flex h-6 items-center gap-1 rounded-[8px] bg-[var(--cv-chip)] px-2 text-[12px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]';
+/** a choice in a settings popover: a soft cell, the one in use lit with a hairline round it */
+const OPTION = 'rounded-[8px] text-[12px] transition';
+const OPTION_ON = 'bg-[var(--cv-float-hover)] text-[var(--cv-ink)] ring-1 ring-inset ring-[color-mix(in_srgb,var(--cv-ink)_28%,transparent)]';
+const OPTION_OFF = 'bg-[var(--cv-chip)] text-[var(--cv-ink-2)] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]';
+const OPTION_TITLE = 'mb-1.5 text-[11.5px] text-[var(--cv-ink-3)]';
 const PICK = 'flex h-8 min-w-0 items-center gap-1.5 rounded-[8px] px-2 text-[13px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
 /** the panel under a selected node: wider and rounder than the menus, a hairline round it */
 const PANEL = 'cv-pop relative rounded-[20px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] shadow-[var(--cv-float-shadow)]';
@@ -65,6 +70,7 @@ export function ActionBar({ id, file }: { id: string; file: WorkspaceResource | 
                 ))}
               </div>
             </Popover>
+            <button type="button" className={btn} onClick={() => board.redraw(id, file.path)}><Brush size={14} />{t('canvas.actions.redraw')}</button>
             <button type="button" className={btn} onClick={() => board.cutout(id, file.path)}><Eraser size={14} />{t('canvas.actions.cutout')}</button>
           </>
         ) : null}
@@ -120,15 +126,26 @@ function useThumb() {
     : file.kind === 'image' ? board.sources.file(file) : file.kind === 'video' ? board.sources.poster?.(file) : file.kind === 'mg' ? board.sources.pagePoster?.(file) : undefined);
 }
 
+/** A titled slider of a node's settings (a clip's length, a GIF's frames), what it is set to at its right. */
+function Slider({ label, value, min, max, step, shown, onChange }: { label: string; value: number; min: number; max: number; step: number; shown: string; onChange: (n: number) => void }) {
+  return (
+    <div>
+      <div className={`flex items-center justify-between ${OPTION_TITLE}`}><span>{label}</span><span className="tabular-nums text-[var(--cv-ink-2)]">{shown}</span></div>
+      <input type="range" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))}
+        className="nodrag h-1 w-full cursor-pointer accent-[var(--cv-ink)]" />
+    </div>
+  );
+}
+
 /** A titled row of choices, the one in use lit (a node's spec: its quality, size, background, length, count). */
 function Choices({ title, items, columns }: { title: string; columns: number; items: Array<{ key: string; label: string; on: boolean; pick: () => void }> }) {
   return (
     <div>
-      <div className="mb-2 text-[12px] font-medium text-[var(--cv-ink-2)]">{title}</div>
-      <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
+      <div className={OPTION_TITLE}>{title}</div>
+      <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
         {items.map((item) => (
           <button key={item.key} type="button" onClick={item.pick}
-            className={`h-8 truncate rounded-[8px] border px-2 text-[12.5px] transition ${item.on ? '!border-[var(--cv-ring)] bg-[var(--cv-float-hover)] text-[var(--cv-ink)]' : '!border-[var(--cv-float-line)] text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]'}`}>
+            className={`h-8 truncate px-2 ${OPTION} ${item.on ? OPTION_ON : OPTION_OFF}`}>
             {item.label}
           </button>
         ))}
@@ -150,6 +167,8 @@ function specLine(spec: ModelSpec | undefined, t: (key: string) => string): stri
     spec.voice ? t('canvas.spec.voice') : '',
     spec.clip ? t('canvas.spec.clip') : '',
     spec.transparent ? t('canvas.spec.transparent') : '',
+    spec.formats?.some((f) => f !== 'png') ? spec.formats.filter((f) => f !== 'png').map((f) => f.toUpperCase()).join(' / ') : '',
+    spec.mask || spec.markup ? t('canvas.spec.redraw') : '',
   ].filter(Boolean).join(' · ');
 }
 
@@ -275,7 +294,7 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
   const sizes = model?.sizes?.length ? model.sizes : null;
   const size = sizes ? (data.opts?.size && sizes.includes(data.opts.size) ? data.opts.size : sizes.find((z) => z === '1k' || z === '720p') ?? sizes.find((z) => z === '768p') ?? sizes[0]!) : null;
   const count = data.opts?.count ?? 1;
-  const spec = [ratios ? ratio : null, quality ? t(`canvas.make.qualities.${quality}`) : null, size ? size.toUpperCase() : null,
+  const spec = [data.opts?.format && model?.formats?.includes(data.opts.format) ? data.opts.format.toUpperCase() : null, ratios ? ratio : null, quality ? t(`canvas.make.qualities.${quality}`) : null, size ? size.toUpperCase() : null,
     lengths && sec !== null ? t('canvas.make.seconds').replace('{n}', String(sec)) : null,
     t(data.make === 'image' ? 'canvas.make.countPictures' : 'canvas.make.countOthers').replace('{n}', String(count))].filter(Boolean).join(' · ');
   const assetRows = board.files.filter((f) => (f.kind === 'image' || (data.make === 'video' && f.kind === 'video')) && !inputs.some((i) => i.path === f.path))
@@ -349,6 +368,16 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
                 </div>
               );
             })}
+          </div>
+        ) : null}
+        {data.make === 'image' && (data.opts?.mask || data.opts?.markup) ? (
+          <div className="mt-2.5 flex items-center gap-1">
+            {/* what of the first picture is redrawn: a mask or the changes drawn on it, kept with the node */}
+            <span className="group/redraw flex h-6 items-center gap-1 rounded-[8px] bg-[color-mix(in_srgb,var(--cv-edge-lit)_18%,transparent)] px-2 text-[12.5px] text-[var(--cv-ink)]">
+              <button type="button" aria-label={t('canvas.redraw.remove')} onClick={() => setOpts({ mask: undefined, markup: undefined })}
+                className="-ml-0.5 hidden h-4 w-4 items-center justify-center rounded text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)] group-hover/redraw:flex"><X size={12} /></button>
+              <Brush size={13} className="group-hover/redraw:hidden" />{t(data.opts?.mask ? 'canvas.redraw.withMask' : 'canvas.redraw.withMarkup')}
+            </span>
           </div>
         ) : null}
         {preset ? (
@@ -426,15 +455,15 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
                   </button>
                 )}>
                 {/* as the node canvases people know lay it out: each part titled, its choices in a row */}
-                <div className={`w-[360px] space-y-3 p-3 ${CARD}`}>
+                <div className={`w-[340px] space-y-3.5 p-3.5 ${CARD}`}>
                   {ratios && data.make === 'video' ? (
                     <div>
-                      <div className="mb-2 text-[12px] font-medium text-[var(--cv-ink-2)]">{t('canvas.make.ratio')}</div>
-                      <div className="grid grid-cols-5 gap-1.5">
+                      <div className={OPTION_TITLE}>{t('canvas.make.ratio')}</div>
+                      <div className="grid grid-cols-5 gap-1">
                         {ratios.map((r) => (
                           <button key={r} type="button" onClick={() => setOpts({ ratio: r })}
-                            className={`flex h-14 flex-col items-center justify-center gap-1 rounded-[8px] border text-[11.5px] transition ${r === ratio ? '!border-[var(--cv-ring)] bg-[var(--cv-float-hover)] text-[var(--cv-ink)]' : '!border-[var(--cv-float-line)] text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]'}`}>
-                            <RatioIcon ratio={r} size={18} />{r}
+                            className={`flex h-[50px] flex-col items-center justify-center gap-1 ${OPTION} ${r === ratio ? OPTION_ON : OPTION_OFF}`}>
+                            <RatioIcon ratio={r} size={16} />{r}
                           </button>
                         ))}
                       </div>
@@ -452,14 +481,30 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
                       { key: 'none', label: t('canvas.make.backgroundNone'), on: Boolean(data.opts?.transparent), pick: () => setOpts({ transparent: true }) },
                     ]} />
                   ) : null}
+                  {data.make === 'image' && model?.formats?.length ? (
+                    <>
+                      <Choices title={t('canvas.make.format')} columns={3} items={(['png', 'gif', 'svg'] as const).filter((f) => f === 'png' || model.formats!.includes(f)).map((f) => ({
+                        key: f, label: t(`canvas.make.formats.${f}`), on: (data.opts?.format ?? 'png') === f, pick: () => setOpts({ format: f === 'png' ? undefined : f }),
+                      }))} />
+                      {data.opts?.format === 'gif' ? (
+                        <div className="space-y-2.5">
+                          <Slider label={t('canvas.make.gifFrames')} value={data.opts.gifFrames ?? GIF_FRAMES} min={2} max={16} step={1}
+                            shown={t('canvas.make.gifFramesN').replace('{n}', String(data.opts.gifFrames ?? GIF_FRAMES))} onChange={(n) => setOpts({ gifFrames: n })} />
+                          <Slider label={t('canvas.make.frameMs')} value={data.opts.frameMs ?? GIF_FRAME_MS} min={60} max={1000} step={20}
+                            shown={t('canvas.make.gifLoop').replace('{ms}', String(data.opts.frameMs ?? GIF_FRAME_MS)).replace('{s}', (((data.opts.gifFrames ?? GIF_FRAMES) * (data.opts.frameMs ?? GIF_FRAME_MS)) / 1000).toFixed(1))}
+                            onChange={(n) => setOpts({ frameMs: n })} />
+                        </div>
+                      ) : null}
+                    </>
+                  ) : null}
                   {ratios && data.make !== 'video' ? (
                     <div>
-                      <div className="mb-2 text-[12px] font-medium text-[var(--cv-ink-2)]">{t('canvas.make.ratio')}</div>
-                      <div className="grid grid-cols-5 gap-1.5">
+                      <div className={OPTION_TITLE}>{t('canvas.make.ratio')}</div>
+                      <div className="grid grid-cols-5 gap-1">
                         {ratios.map((r) => (
                           <button key={r} type="button" onClick={() => setOpts({ ratio: r })}
-                            className={`flex h-14 flex-col items-center justify-center gap-1 rounded-[8px] border text-[11.5px] transition ${r === ratio ? '!border-[var(--cv-ring)] bg-[var(--cv-float-hover)] text-[var(--cv-ink)]' : '!border-[var(--cv-float-line)] text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]'}`}>
-                            <RatioIcon ratio={r} size={18} />{r}
+                            className={`flex h-[50px] flex-col items-center justify-center gap-1 ${OPTION} ${r === ratio ? OPTION_ON : OPTION_OFF}`}>
+                            <RatioIcon ratio={r} size={16} />{r}
                           </button>
                         ))}
                       </div>
@@ -469,13 +514,8 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
                     model?.only?.length || data.make !== 'video' ? (
                       <Choices title={t('canvas.make.length')} columns={Math.min(6, lengths.length)} items={lengths.map((n) => ({ key: String(n), label: t('canvas.make.seconds').replace('{n}', String(n)), on: n === sec, pick: () => setOpts({ sec: n }) }))} />
                     ) : (
-                      <div>
-                        <div className="mb-2 flex items-center justify-between text-[12px] font-medium text-[var(--cv-ink-2)]">
-                          <span>{t('canvas.make.length')}</span><span className="tabular-nums text-[var(--cv-ink)]">{t('canvas.make.seconds').replace('{n}', String(sec))}</span>
-                        </div>
-                        <input type="range" min={range[0]} max={range[1]} step={1} value={sec} onChange={(event) => setOpts({ sec: Number(event.target.value) })}
-                          className="nodrag h-1.5 w-full cursor-pointer accent-[var(--cv-ink)]" />
-                      </div>
+                      <Slider label={t('canvas.make.length')} value={sec} min={range[0]} max={range[1]} step={1}
+                        shown={t('canvas.make.seconds').replace('{n}', String(sec))} onChange={(n) => setOpts({ sec: n })} />
                     )
                   ) : null}
                   <Choices title={t('canvas.make.count')} columns={3} items={MAKE_COUNTS.map((c) => ({ key: String(c), label: t(data.make === 'image' ? 'canvas.make.countPictures' : 'canvas.make.countOthers').replace('{n}', String(c)), on: c === count, pick: () => setOpts({ count: c > 1 ? c : undefined }) }))} />

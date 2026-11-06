@@ -189,3 +189,10 @@ test('a project has as many canvases as are made: named, copied, renamed, the fi
     rmSync(trash, { recursive: true, force: true });
   }
 });
+
+test('a picture node keeps its GIF, its SVG and what of its picture it redraws', () => {
+  const [n] = parseCanvas({ nodes: [{ id: 'p', x: 0, y: 0, make: 'image', opts: { format: 'gif', gifFrames: 6, frameMs: 120, mask: 'assets/mask.png', markup: '../out.png' } }], edges: [] }).nodes;
+  assert.deepEqual(/** @type {any} */ (n).opts, { format: 'gif', gifFrames: 6, frameMs: 120, mask: 'assets/mask.png' });
+  const [odd] = parseCanvas({ nodes: [{ id: 'q', x: 0, y: 0, make: 'image', opts: { format: 'jpg', gifFrames: 40, frameMs: 5 } }], edges: [] }).nodes;
+  assert.equal(/** @type {any} */ (odd).opts, undefined, 'what the format does not take is left out');
+});

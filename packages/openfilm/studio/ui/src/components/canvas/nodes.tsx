@@ -183,23 +183,26 @@ function boxStyle(sized: boolean, file: WorkspaceResource | null, ratio?: string
 function TryLine({ icon: Icon, label, onClick }: { icon: React.ComponentType<{ size?: number }>; label: string; onClick: () => void }) {
   return (
     <button type="button" onClick={(event) => { event.stopPropagation(); onClick(); }}
-      className="nodrag flex h-7 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]">
-      <Icon size={14} />{label}
+      className="nodrag flex h-8 items-center gap-1.5 rounded-full border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-chip)] px-3.5 text-[12.5px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">
+      <Icon size={13} />{label}
     </button>
   );
 }
 
-/** An empty card: its kind drawn large and faint in the middle, and under it what to start with. */
+/**
+ * An empty card: one composition in its middle — its kind drawn faint, and under it what to start with, as pills —
+ * whatever the card's shape.
+ */
 function Empty({ icon: Icon, tries }: { icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; tries?: React.ReactNode }) {
   const t = useT();
   const board = useBoard();
   return (
-    <div className="flex h-full w-full flex-col items-center px-6 pb-6 pt-7">
-      <div className={`flex items-center justify-center text-[var(--cv-ghost)] ${tries && !board.readOnly ? 'mb-4' : 'flex-1'}`}><Icon size={64} strokeWidth={1.4} /></div>
+    <div className="flex h-full w-full flex-col items-center justify-center gap-5 overflow-hidden p-6">
+      <span className="text-[var(--cv-ghost)]"><Icon size={44} strokeWidth={1.25} /></span>
       {tries && !board.readOnly ? (
-        <div className="mt-auto w-full">
-          <div className="mb-2 text-[14px] text-[var(--cv-label)]">{t('canvas.try.title')}</div>
-          <div className="flex flex-col items-start gap-1">{tries}</div>
+        <div className="flex max-w-full flex-col items-center gap-2.5">
+          <div className="text-[12px] text-[var(--cv-ink-3)]">{t('canvas.try.title')}</div>
+          <div className="flex max-w-[420px] flex-wrap justify-center gap-2">{tries}</div>
         </div>
       ) : null}
     </div>
@@ -405,7 +408,7 @@ export function MakeNodeView({ id, data, selected }: NodeProps<MakeNode>) {
           {far ? <Outline icon={Icon} />
             : file ? <Shown file={file} play={over || selected} />
               : (
-                <Empty icon={Icon} tries={fed ? undefined : media === 'image' ? (
+                <Empty icon={Icon} tries={fed || run ? undefined : media === 'image' ? (
                   <>
                     <TryLine icon={ImageIcon} label={t('canvas.try.fromPicture')} onClick={() => board.upload(id, 'input')} />
                     <TryLine icon={Upload} label={t('canvas.try.upload.image')} onClick={() => board.upload(id, 'version')} />

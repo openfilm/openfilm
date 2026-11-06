@@ -263,6 +263,8 @@ export interface Board {
   keepCharacter: (id: string) => void;
   openLibrary: (which: 'characters' | 'styles' | 'effects', node?: string) => void;
   openSettings: () => void;
+  /** a picture changed in part (brushed or drawn on, then said what to): the editor opened on it */
+  redraw: (id: string, path: string) => void;
   /** a text node's words written by the person's agent from what they ask and what is wired in (in the app with a chat); why not, if not */
   write?: (id: string, ask: string) => Promise<string | null>;
   /** a board only looked at (an example's): nothing on it is changed, made or wired */

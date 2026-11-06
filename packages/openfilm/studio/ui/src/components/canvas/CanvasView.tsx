@@ -28,7 +28,7 @@ import { useT } from '@/i18n';
 import { ApiError, api, projectEvents, type CanvasBoard, type CanvasCharacter } from '@/api';
 import { BoardSwitcher, boardName, nextBoardName } from './boards';
 import {
-  CARD_H, CUT_W, FILE_W, GROUP_COLORS, MAKE_MEDIA, MAKE_W, NOTE_H, NOTE_W, canvasId, cardWidth, makeSize, canvasKey, copyOf, emptyHistory, inputsKey, inputsOf, isStale, makeName, makeRequest, modeOf, frameRatio,
+  CARD_H, CUT_W, FILE_W, GROUP_COLORS, MAKE_MEDIA, MAKE_W, NOTE_H, NOTE_W, canvasId, cardWidth, makeSize, canvasKey, copyOf, emptyHistory, inputsKey, inputsOf, isStale, makeName, makeRequest, modeOf, frameRatio, ratioOf,
   nextOrder, readCanvasDoc, redo, remember, reorder, undo, withVersion,
   type CanvasDoc, type CanvasHistory, type MediaOf,
 } from '@/lib/canvas';
@@ -46,6 +46,7 @@ import {
 import { BottomToolbar, LeftBar, Outline, Viewer } from './chrome';
 import { AddMenu, type MenuAt } from './menus';
 import { CHARACTER_PARTS, CharacterLibrary, HistoryModal, MaterialLibrary } from './libraries';
+import { RedrawEditor, type RedrawWay } from './redraw';
 import { presetOf } from '@/lib/canvas-presets';
 import { FRAME_COLOR, NODE_TYPES } from './nodes';
 
@@ -101,6 +102,8 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
   const [boardId, setBoardId] = React.useState(() => new URLSearchParams(window.location.search).get('canvas') ?? lastBoard(projectId));
   /* a window over the board: what was made, the characters, the styles, the effects */
   const [modal, setModal] = React.useState<null | 'history' | 'characters' | 'styles' | 'effects'>(null);
+  /* a picture being changed in part: the node it is on and its file */
+  const [redraw, setRedraw] = React.useState<{ id: string; path: string } | null>(null);
   /* the node a library was opened for (its panel's chip): what is picked goes into it */
   const [modalFor, setModalFor] = React.useState<string | null>(null);
   const openLibrary = (which: 'characters' | 'styles' | 'effects', node?: string) => { setModalFor(node ?? null); setModal(which); };
@@ -618,6 +621,30 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
     });
     requestAnimationFrame(() => requestAnimationFrame(() => { void flow.fitView({ nodes: [{ id: group }], padding: 0.15, maxZoom: 1, duration: 300 }); void makeAll(group); }));
   };
+  /**
+   * A picture changed in part: what was drawn kept in the project (a mask or a markup), and a new picture made from it
+   * beside it, by a model that redraws so, at once.
+   */
+  const redrawMake = async (way: RedrawWay, drawn: Blob, prompt: string) => {
+    const source = redraw;
+    if (!source) return;
+    const choice = choicesFor(providers, 'image').find((c) => c.spec?.[way]);
+    if (!choice) { onError(t('canvas.redraw.noModel')); return; }
+    try {
+      const [kept] = await onImportFiles([new File([drawn], `${way}-${Date.now().toString(36)}.png`, { type: 'image/png' })]);
+      if (!kept) return;
+      const picture = byPath.get(source.path);
+      const ratio = picture?.w && picture.h ? ratioOf(`${picture.w}:${picture.h}`, choice.spec) : undefined;
+      const size = makeSize('image', ratio);
+      const id = canvasId('n');
+      place({ id, type: 'make', position: spotBeside(source.id, 'source', size.w), width: size.w, height: size.h,
+        data: { make: 'image', prompt, via: choice.via, ...(choice.model ? { model: choice.model } : {}), opts: { ...(ratio ? { ratio } : {}), [way]: kept } } },
+      { node: source.id, side: 'source' });
+      setRedraw(null);
+      requestAnimationFrame(() => requestAnimationFrame(() => { void makeNow(id); }));
+    } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+  };
+
   /** a group's pictures (or one picture) kept as a character, named as the group is, its words what it is about */
   const keepCharacter = async (id: string) => {
     const nodesNow = now.current.nodes;
@@ -778,6 +805,7 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
     keepTemplate: (groupId) => { void keepTemplate(groupId); },
     keepCharacter: (id) => { void keepCharacter(id); },
     openLibrary,
+    redraw: (id, path) => setRedraw({ id, path }),
     openSettings: onOpenSettings,
     ...(chat ? { write } : {}),
   }), [chat, boardId, files, byPath, sources, onAddToFilm, setNodes, editing, single, providers, runsSeen, making, projectId, folder, onOpenSettings, nodes, edges, onReveal]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1123,6 +1151,9 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
           onTemplates={(from) => { setContext(null); setMenu({ screen: { x: from.left, y: from.top }, above: true, at: middle(), view: 'templates' }); }}
           onLibrary={(which) => openLibrary(which)} onCharacters={() => openLibrary('characters')} onHistory={() => setModal('history')}
         />}
+        {redraw && byPath.get(redraw.path) ? (
+          <RedrawEditor src={sources.file(byPath.get(redraw.path)!)} onClose={() => setRedraw(null)} onMake={redrawMake} />
+        ) : null}
         {modal === 'styles' || modal === 'effects' ? (
           <MaterialLibrary kind={modal} onClose={() => setModal(null)} onPick={(item) => { placeMaterial(modal, item); setModal(null); }} />
         ) : null}
@@ -1263,7 +1294,7 @@ function Preview({ doc, fileUrl }: { doc: CanvasDoc; fileUrl: (path: string) => 
       choices: () => [], allChoices: () => [], fallback: () => null, run: () => undefined, error: () => undefined, stale: NOTHING, unused: NONE,
       make: nothing, stop: nothing, inputs: (id) => inputViews(drawn.nodes, drawn.edges, id, mediaOf), unwire: nothing, sideMenu: nothing,
       upload: nothing, wireIn: nothing, sendToFilm: nothing, view: nothing,
-      makesIn: () => 0, busyIn: () => false, makeAll: nothing, ungroup: nothing, keepTemplate: nothing, keepCharacter: nothing, openLibrary: nothing, pick: nothing, openSettings: nothing, readOnly: true,
+      makesIn: () => 0, busyIn: () => false, makeAll: nothing, ungroup: nothing, keepTemplate: nothing, keepCharacter: nothing, openLibrary: nothing, redraw: nothing, pick: nothing, openSettings: nothing, readOnly: true,
     };
   }, [doc, fileUrl, drawn]);
   return (

@@ -53,10 +53,16 @@ export interface MakeOptions {
   ratio?: string; sec?: number; frames?: boolean; quality?: string; mode?: VideoMode;
   /** a picture's size (1k, 2k, 4k) or a clip's resolution (720p…); a picture with no background; how many are made at once */
   size?: string; transparent?: boolean; count?: number;
+  /** a picture made as a GIF (its frames and each one's length) or an SVG; one redrawn from the first picture wired in,
+      where a mask (a PNG, clear where it is redrawn) or a markup (changes drawn on a clear PNG) says */
+  format?: 'gif' | 'svg'; gifFrames?: number; frameMs?: number; mask?: string; markup?: string;
 }
 
 /** how many a node makes at once */
 export const MAKE_COUNTS = [1, 2, 4] as const;
+/** a GIF's frames and each frame's length, unless asked otherwise (`openfilm get image --format gif`) */
+export const GIF_FRAMES = 9;
+export const GIF_FRAME_MS = 200;
 
 /**
  * How a clip is made from what is wired in: from the words alone; from everything wired in as references (pictures,
@@ -77,6 +83,8 @@ export interface ModelSpec {
   voice?: boolean; clip?: boolean;
   /** a picture's sizes (1k, 2k, 4k) or a clip's resolutions (480p…), as it makes them; a picture with no background */
   sizes?: string[]; transparent?: boolean;
+  /** a picture's formats beyond PNG (gif, svg); one redrawn where a mask leaves it clear, or where changes are drawn on it */
+  formats?: string[]; mask?: boolean; markup?: boolean;
 }
 
 /** What each kind makes, as the board shows it. */
@@ -165,6 +173,11 @@ function readMake(n: Record<string, unknown>): Omit<CanvasNode, 'id' | 'x' | 'y'
     ...(str(o.size) ? { size: o.size as string } : {}),
     ...(o.transparent === true ? { transparent: true } : {}),
     ...(MAKE_COUNTS.find((c) => c === o.count && c > 1) ? { count: o.count as number } : {}),
+    ...(o.format === 'gif' || o.format === 'svg' ? { format: o.format } : {}),
+    ...(num(o.gifFrames) ? { gifFrames: o.gifFrames } : {}),
+    ...(num(o.frameMs) ? { frameMs: o.frameMs } : {}),
+    ...(str(o.mask) ? { mask: o.mask as string } : {}),
+    ...(str(o.markup) ? { markup: o.markup as string } : {}),
   };
   const versions = Array.isArray(n.versions) ? n.versions.filter((v): v is string => typeof v === 'string' && v.length > 0) : [];
   const fields = {
@@ -363,8 +376,16 @@ export function makeRequest(node: CanvasNode & { make: MakeKind }, inputs: reado
     if (opts.quality && spec?.qualities?.includes(opts.quality)) args.quality = opts.quality;
     if (opts.size && spec?.sizes?.includes(opts.size)) args.size = opts.size;
     if (opts.transparent && spec?.transparent) args.transparent = 'true';
+    /* a GIF (its frames, each so long) or an SVG, as the model makes them */
+    if (opts.format && spec?.formats?.includes(opts.format)) {
+      args.format = opts.format;
+      if (opts.format === 'gif') { args.frames = String(opts.gifFrames ?? GIF_FRAMES); args['frame-ms'] = String(opts.frameMs ?? GIF_FRAME_MS); }
+    }
     const refs = pictures.slice(0, spec?.refs ?? pictures.length);
     if (refs.length) { args.ref = refs; used = refs.length; }
+    /* the first picture wired in redrawn where the mask leaves it clear, or where the changes are drawn on it */
+    if (refs.length && opts.mask && spec?.mask && args.format !== 'gif' && args.format !== 'svg') args.mask = opts.mask;
+    else if (refs.length && opts.markup && spec?.markup && args.format !== 'svg') args.markup = opts.markup;
   }
   if (node.make === 'video') {
     const fromClip = spec?.needs === 'clip';
