@@ -115,7 +115,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, tried,
 }) {
   const t = useT();
   const lang = useLanguage();
-  const index = useLibraryIndex();
+  const index = useLibraryIndex(true);
   const favorites = useLibraryFavorites();
   const voices = useLibraryVoices();
   /* the categories shown, in the person's order */
@@ -399,7 +399,9 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, tried,
                 {folded ? null : (
                   <div className="flex flex-col pb-1">
                     <SideLine on={!group && !q} onClick={() => pickGroup('')}>{t('assetDrawer.all')}</SideLine>
-                    {own.map((g) => <SideLine key={g.id} on={group === g.id && !q} onClick={() => pickGroup(g.id)}>{g.name}</SideLine>)}
+                    {own.map((g) => <SideLine key={g.id} on={group === g.id && !q} onClick={() => pickGroup(g.id)}>{g.id === 'community' ? t('assetDrawer.source_community') : g.name}</SideLine>)}
+                    {group === 'community' && !q ? <a href="https://github.com/openfilm/library/blob/main/CONTRIBUTING.md" target="_blank" rel="noreferrer"
+                      className="px-2.5 py-1 text-xs text-[var(--text-muted)] underline hover:text-[var(--text)]">{t('assetDrawer.contributeAssets')}</a> : null}
                   </div>
                 )}
               </>
