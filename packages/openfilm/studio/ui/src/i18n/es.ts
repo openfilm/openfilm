@@ -2539,7 +2539,7 @@ export const es: Words = {
         elevenlabs: 'Líder en audio con IA: voz en off realista en decenas de idiomas, música, efectos de sonido y transcripciones con cada palabra en su tiempo.',
         inworld: 'Las voces en tiempo real de Inworld: voz en off expresiva con cada palabra en su tiempo, en cientos de idiomas.',
         cartesia: 'Las voces Sonic de Cartesia: voz en off rápida y natural con cada palabra en su tiempo, en más de cuarenta idiomas.',
-        openrouter: 'Una clave para modelos de muchos creadores: imágenes y vídeo de Google, OpenAI, ByteDance, Kuaishou y otros, facturados por OpenRouter.',
+        openrouter: 'Una clave para modelos de muchos creadores: imágenes y vídeo de Google, OpenAI, ByteDance, Kuaishou y otros, facturados por OpenRouter. Con tu propia clave, Seedance no puede recibir una grabación de voz ni un clip de referencia: OpenRouter solo los toma de una dirección web y OpenFilm no tiene dónde guardar tus archivos. Para eso, usa fal o el servicio de OpenFilm.',
         fal: 'Una plataforma rápida de medios generativos: vídeo de Seedance y Kling, imágenes FLUX, música y efectos de sonido.',
         groq: 'Inferencia muy rápida en sus propios chips: transcripción con Whisper y voces de Orpheus en segundos.',
         mimo: 'Los modelos MiMo de Xiaomi: voz natural y transcripción precisa, sobre todo en chino.',

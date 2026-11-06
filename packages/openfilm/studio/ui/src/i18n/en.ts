@@ -2540,7 +2540,7 @@ export const en = {
         elevenlabs: 'A leader in AI audio: lifelike voice-over in dozens of languages, music, sound effects and transcripts timed word by word.',
         inworld: 'Inworld\'s realtime voices: expressive speech timed word by word, in hundreds of languages.',
         cartesia: 'Cartesia\'s Sonic voices: fast, natural speech timed word by word, in over forty languages.',
-        openrouter: 'One key for many makers\' models: pictures and video from Google, OpenAI, ByteDance, Kuaishou and others, billed by OpenRouter.',
+        openrouter: 'One key for many makers\' models: pictures and video from Google, OpenAI, ByteDance, Kuaishou and others, billed by OpenRouter. With your own key, Seedance can\'t take a voice recording or a reference clip: OpenRouter fetches them only from a web address, and OpenFilm has nowhere to put your files. Use fal or OpenFilm\'s service for those.',
         fal: 'A fast platform for generative media: Seedance and Kling video, FLUX pictures, music and sound effects.',
         groq: 'Very fast inference on its own chips: Whisper transcription and Orpheus voices, in seconds.',
         mimo: 'Xiaomi\'s MiMo models: natural speech and accurate transcription, at their best in Chinese.',

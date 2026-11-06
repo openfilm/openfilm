@@ -2535,7 +2535,7 @@ export const ko: Words = {
         elevenlabs: 'AI 오디오의 선두 주자: 수십 개 언어의 생생한 내레이션, 음악, 효과음, 단어 단위 타이밍이 있는 대본.',
         inworld: 'Inworld의 실시간 음성: 표현력 있고 단어 단위 타이밍이 있는 내레이션, 수백 개 언어 지원.',
         cartesia: 'Cartesia의 Sonic 음성: 빠르고 자연스러우며 단어 단위 타이밍이 있는 내레이션, 40개 이상 언어 지원.',
-        openrouter: '키 하나로 여러 회사의 모델을: Google, OpenAI, ByteDance, Kuaishou 등의 이미지와 비디오를 OpenRouter가 청구합니다.',
+        openrouter: '키 하나로 여러 회사의 모델을: Google, OpenAI, ByteDance, Kuaishou 등의 이미지와 비디오를 OpenRouter가 청구합니다. 자신의 키로는 Seedance에 목소리 녹음이나 참고 클립을 줄 수 없습니다. OpenRouter는 이를 웹 주소에서만 받는데, OpenFilm에는 파일을 둘 곳이 없기 때문입니다. 필요하면 fal이나 OpenFilm 서비스를 쓰세요.',
         fal: '빠른 생성형 미디어 플랫폼: Seedance와 Kling 비디오, FLUX 이미지, 음악, 효과음.',
         groq: '자체 칩으로 하는 초고속 추론: Whisper 받아쓰기와 Orpheus 음성을 몇 초 만에.',
         mimo: 'Xiaomi의 MiMo 모델: 자연스러운 음성 합성과 정확한 받아쓰기, 특히 중국어에 강합니다.',

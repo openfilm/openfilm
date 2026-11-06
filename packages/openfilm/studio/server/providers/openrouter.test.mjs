@@ -179,7 +179,7 @@ test('a person speaks the words of the prompt with the clip\'s own sound: --voic
   assert.equal(result.index[0].from.voice, 'assets/audio/vo/voice.wav');
   /* with your own key there is no such address: said, and nothing is sent */
   seen.length = 0;
-  await assert.rejects(openrouter.run('video', { prompt: 'p', voice: 'assets/audio/vo/voice.wav', out: 'x' }, ctx(files)), /--voice: Seedance at OpenRouter takes a recording only from a web address/);
+  await assert.rejects(openrouter.run('video', { prompt: 'p', voice: 'assets/audio/vo/voice.wav', out: 'x' }, ctx(files)), /--voice: Seedance at OpenRouter takes a recording only from a web address.*can't be done here.*pull request/);
   assert.equal(seen.length, 0);
   await assert.rejects(openrouter.run('video', { prompt: 'p', voice: 'assets/audio/vo/voice.wav', out: 'x' }, ctx(files, 'kwaivgi/kling-v3.0-pro')), /Seedance takes one/);
   await assert.rejects(openrouter.run('video', { prompt: 'p', audio: 'assets/audio/vo/voice.wav', out: 'x' }, ctx(files)), /fal's \(OmniHuman, Kling Avatar\)/);

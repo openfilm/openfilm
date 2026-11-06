@@ -112,7 +112,7 @@ function length(/** @type {{ seconds?: [number, number], only?: number[] }} */ s
 async function addressOf(path, flag, spec, ctx) {
   if (ctx.link) return ctx.link(path);
   if (spec.inline) return dataUri(path, ctx);
-  throw new Error(`--${flag}: ${spec.name} at OpenRouter takes a ${flag === 'voice' ? 'recording' : 'clip'} only from a web address, which a run with your own key cannot give it. fal takes it from the project (connect fal and choose its model), and so does OpenFilm's own service.`);
+  throw new Error(`--${flag}: ${spec.name} at OpenRouter takes a ${flag === 'voice' ? 'recording' : 'clip'} only from a web address, and with your own key OpenFilm has nowhere to put your file for it, so this can't be done here. fal takes it straight from the project, and OpenFilm's own service gives it an address. Anyone who needs it with their own key can add their own storage in providers/openrouter.mjs, for themselves or in a pull request.`);
 }
 
 /** What OpenRouter reported a run cost, when it did. */
