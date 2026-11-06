@@ -191,3 +191,131 @@ export function filmTemplate(tracks: readonly { clips: readonly FilmClip[] }[]):
   }
   return out;
 }
+
+/* ── a place's picture framed: how it fills the picture, where it is looked at, how near ── */
+
+/** How a place shows its picture: filling the picture or whole in it, the point looked at (0–1), how near (1: as it is). */
+export interface PlaceFrame { fit: 'cover' | 'contain'; x: number; y: number; zoom: number }
+
+const decls = (style: string | undefined): [string, string][] => (style ?? '').split(';').map((d) => d.trim()).filter(Boolean)
+  .map((d) => { const i = d.indexOf(':'); return [d.slice(0, i).trim().toLowerCase(), d.slice(i + 1).trim()] as [string, string]; })
+  .filter(([k]) => k);
+const pctOf = (v: string | undefined, fallback: number) => { const n = Number.parseFloat(v ?? ''); return Number.isFinite(n) ? n / 100 : fallback; };
+const r3 = (n: number) => Math.round(n * 1000) / 1000;
+
+/** A place's framing as its style says (`object-fit`, `object-position`, `object-view-box: inset(…)`). */
+export function placeFrame(style: string | undefined): PlaceFrame {
+  const d = new Map(decls(style));
+  const [px, py] = (d.get('object-position') ?? '50% 50%').split(/\s+/);
+  const inset = /^inset\(([^)]*)\)$/.exec(d.get('object-view-box') ?? '')?.[1]?.split(/\s+/).map((v) => pctOf(v, 0));
+  /* inset(top right bottom left): what is left of the picture's width is 1/zoom */
+  const zoom = inset && inset.length === 4 ? 1 / Math.max(0.05, 1 - inset[1]! - inset[3]!) : 1;
+  return { fit: d.get('object-fit') === 'contain' ? 'contain' : 'cover', x: pctOf(px, 0.5), y: pctOf(py ?? px, 0.5), zoom: r3(zoom) };
+}
+
+/** The style with a place framed so (its other declarations as they were). */
+export function withPlaceFrame(style: string | undefined, f: PlaceFrame): string {
+  const kept = decls(style).filter(([k]) => !['object-fit', 'object-position', 'object-view-box'].includes(k));
+  const zoom = Math.max(1, f.zoom);
+  const x = Math.min(1, Math.max(0, f.x)), y = Math.min(1, Math.max(0, f.y));
+  const cut = 1 - 1 / zoom;
+  const pct = (n: number) => `${r3(n * 100)}%`;
+  const own: [string, string][] = [['object-fit', f.fit]];
+  if (x !== 0.5 || y !== 0.5) own.push(['object-position', `${pct(x)} ${pct(y)}`]);
+  if (zoom > 1.0005) own.push(['object-view-box', `inset(${pct(y * cut)} ${pct((1 - x) * cut)} ${pct((1 - y) * cut)} ${pct(x * cut)})`]);
+  return [...own, ...kept].map(([k, v]) => `${k}: ${v}`).join('; ');
+}
+
+/* ── a template made longer or shorter: its places stretch, its opening and its end keep their time ── */
+
+const endOf = (c: FilmClip) => (c.at ?? 0) + ((c.time?.[1] ?? 0) - (c.time?.[0] ?? 0));
+
+/** How long a template's film runs: to its last clip's end. */
+export function filmLength(tracks: readonly { clips: readonly FilmClip[] }[]): number {
+  return r3(Math.max(0, ...tracks.flatMap((tr) => tr.clips.map(endOf))));
+}
+
+/** Within this many seconds of a place's start, a clip keeps its time there (an opening title), else it moves with the place. */
+const HELD = 1;
+
+/**
+ * A template's film made `total` seconds long, as a timeline stretches a template: its places (in the order they play)
+ * each longer or shorter in proportion; a clip on a cut between two (a transition) kept as long, its middle on the cut;
+ * one over all of it (a grain, a light leak, the music) as long as all of it; one that ends with it (a closing title)
+ * ending with it; any other (a title, a sticker) as long as it was, from where it was in its place (its first second
+ * there kept as it is: an opening is never slowed). Unchanged when there is nothing to stretch.
+ */
+export function retimedTemplate<F extends { tracks: { clips: FilmClip[] }[] }>(film: F, total: number): F {
+  const all = film.tracks.flatMap((tr) => tr.clips);
+  const length = filmLength(film.tracks);
+  const places = filmTemplate(film.tracks).places.map((p) => all.find((c) => c.id === p.clip)!).sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
+  if (!(total > 0) || Math.abs(total - length) < 0.001 || !places.length || !(length > 0)) return film;
+  const k = total / length;
+  /* the places, one after another as they were, each k times as long */
+  const starts = new Map<FilmClip, number>();
+  for (const p of places) starts.set(p, r3((p.at ?? 0) * k));
+  const cuts = places.slice(1).map((p) => ({ was: p.at ?? 0, now: starts.get(p)! }));
+  const placeAt = (t: number) => [...places].reverse().find((p) => (p.at ?? 0) <= t + 1e-6) ?? places[0]!;
+  const moved = (c: FilmClip): FilmClip => {
+    const at = c.at ?? 0;
+    const len = (c.time?.[1] ?? 0) - (c.time?.[0] ?? 0);
+    const t0 = c.time?.[0] ?? 0;
+    const timed = (start: number, lasts: number) => ({ ...c, ...(start > 0 ? { at: r3(start) } : { at: undefined }), time: [t0, r3(t0 + lasts)] as [number, number] });
+    if (starts.has(c)) return timed(starts.get(c)!, len * k);
+    /* over all of it */
+    if (at <= 0.05 && endOf(c) >= length - 0.05) return timed(0, total);
+    /* on a cut */
+    const cut = cuts.find((x) => Math.abs(at + len / 2 - x.was) < 0.15);
+    if (cut) return timed(Math.max(0, cut.now - len / 2), len);
+    /* ending with it */
+    if (endOf(c) >= length - 0.05) return timed(Math.max(0, total - len), len);
+    const p = placeAt(at);
+    const into = at - (p.at ?? 0);
+    return timed(starts.get(p)! + (into <= HELD ? into : HELD + (into - HELD) * k), len);
+  };
+  const tracks = film.tracks.map((tr) => ({ ...tr, clips: tr.clips.map((c) => { const m = moved(c); if (m.at === undefined) delete (m as { at?: number }).at; return m; }) }));
+  return { ...film, tracks };
+}
+
+/* ── its colors all at once: a scheme ── */
+
+export type ColorScheme = 'warm' | 'cool' | 'mono' | 'neon' | 'muted';
+export const COLOR_SCHEMES: readonly ColorScheme[] = ['warm', 'cool', 'mono', 'neon', 'muted'];
+
+const hexOf = (h: number, s: number, l: number): string => {
+  const f = (n: number) => { const kk = (n + h / 30) % 12; const a = s * Math.min(l, 1 - l); return Math.round(255 * (l - a * Math.max(-1, Math.min(kk - 3, 9 - kk, 1)))).toString(16).padStart(2, '0'); };
+  return `#${f(0)}${f(8)}${f(4)}`;
+};
+
+/** A color (#rgb, #rrggbb, #rrggbbaa, rgb()) as hue, saturation and lightness, else null. */
+export function hslOf(color: string): { h: number; s: number; l: number; a: string } | null {
+  let r: number, g: number, b: number, a = '';
+  const hex = /^#([0-9a-f]{3,8})$/i.exec(color.trim());
+  const rgb = /^rgba?\(\s*(\d+)[ ,]+(\d+)[ ,]+(\d+)/i.exec(color.trim());
+  if (hex) {
+    const x = hex[1]!.length <= 4 ? hex[1]!.split('').map((c) => c + c).join('') : hex[1]!;
+    [r, g, b] = [0, 2, 4].map((i) => parseInt(x.slice(i, i + 2), 16) / 255) as [number, number, number];
+    a = x.length === 8 ? x.slice(6) : '';
+  } else if (rgb) {
+    [r, g, b] = [rgb[1], rgb[2], rgb[3]].map((v) => Number(v) / 255) as [number, number, number];
+  } else return null;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
+  const d = max - min;
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  let h = 0;
+  if (d) h = max === r ? 60 * (((g - b) / d) % 6) : max === g ? 60 * ((b - r) / d + 2) : 60 * ((r - g) / d + 4);
+  return { h: (h + 360) % 360, s, l, a };
+}
+
+/** A color in a scheme: warm (toward orange), cool (toward blue), mono (no hue), neon (full, bright), muted (soft, grey). */
+export function schemeColor(scheme: ColorScheme, color: string): string | null {
+  const c = hslOf(color);
+  if (!c) return null;
+  const toward = (target: number, by: number) => { let d = ((target - c.h + 540) % 360) - 180; return (c.h + d * by + 360) % 360; };
+  const next = scheme === 'warm' ? { h: toward(28, 0.75), s: Math.max(c.s, 0.55), l: c.l }
+    : scheme === 'cool' ? { h: toward(205, 0.75), s: Math.max(c.s, 0.45), l: c.l }
+      : scheme === 'mono' ? { h: c.h, s: 0, l: c.l }
+        : scheme === 'neon' ? { h: (c.h + 300) % 360, s: 1, l: Math.min(0.62, Math.max(0.5, c.l)) }
+          : { h: c.h, s: c.s * 0.35, l: c.l * 0.6 + 0.3 };
+  return hexOf(next.h, Math.min(1, next.s), Math.min(1, Math.max(0, next.l))) + c.a;
+}

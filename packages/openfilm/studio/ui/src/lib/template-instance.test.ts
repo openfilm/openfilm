@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { filledTemplate, fillFor, filmTemplate, isSlotSrc, markedClips, templateFolderOf, templateMark, templateMarks, templateOf, templateOfFolder, templateSlots, TEMPLATE_ATTR } from './template-instance.ts';
+import { filledTemplate, fillFor, filmLength, filmTemplate, isSlotSrc, markedClips, placeFrame, retimedTemplate, schemeColor, templateFolderOf, templateMark, templateMarks, templateOf, templateOfFolder, templateSlots, TEMPLATE_ATTR, withPlaceFrame } from './template-instance.ts';
 
 const mark = (m: string, extra: Record<string, string> = {}) => ({ [TEMPLATE_ATTR]: m, ...extra });
 const tracks = [
@@ -88,4 +88,51 @@ test("a template put in as one compound clip: what its film offers, places, word
   assert.deepEqual(t.switches.map((s) => [s.clip, s.prop.name, s.on]), [['title', 'Ribbon', false]]);
   assert.deepEqual(t.pictures.map((p) => [p.clip, p.prop.name, p.value]), [['pin', 'Logo', null]]);
   assert.deepEqual(t.sounds, [{ clip: 'tune', src: '../../saved/openfilm/music-x.mp3' }]);
+});
+
+test("a place's picture framed: filling or whole, the point looked at, how near; read back as written", () => {
+  assert.deepEqual(placeFrame('object-fit: cover'), { fit: 'cover', x: 0.5, y: 0.5, zoom: 1 });
+  const style = withPlaceFrame('object-fit: cover; animation: kb 8s infinite', { fit: 'cover', x: 0.25, y: 0.5, zoom: 2 });
+  assert.equal(style, 'object-fit: cover; object-position: 25% 50%; object-view-box: inset(25% 37.5% 25% 12.5%); animation: kb 8s infinite');
+  assert.deepEqual(placeFrame(style), { fit: 'cover', x: 0.25, y: 0.5, zoom: 2 });
+  assert.equal(withPlaceFrame(style, { fit: 'contain', x: 0.5, y: 0.5, zoom: 1 }), 'object-fit: contain; animation: kb 8s infinite');
+});
+
+test('a template stretched: its places in proportion, a transition on its cut, its opening held, its end with it', () => {
+  const film = { tracks: [
+    { clips: [
+      { id: 'title', src: 't.html', at: 0.3, time: [0, 2.5] },
+      { id: 'pin', src: 'p.html', at: 5.6, time: [0, 2.6] },
+      { id: 'end', src: 'e.html', at: 8.6, time: [0, 2.4] },
+    ] },
+    { clips: [{ id: 'flash', src: 'f.html', at: 2.6, time: [0, 0.8] }] },
+    { clips: [{ id: 'leak', src: 'l.html', time: [0, 11] }] },
+    { clips: [
+      { id: 'a', src: 'a.jpg', time: [0, 3], attrs: { 'data-slot': '1' } },
+      { id: 'b', src: 'b.mp4', at: 3, time: [2, 4.4], attrs: { 'data-slot': '2' } },
+      { id: 'c', src: 'c.jpg', at: 5.4, time: [0, 5.6], attrs: { 'data-slot': '3' } },
+    ] },
+    { clips: [{ id: 'tune', src: 'music.mp3', time: [0, 11] }] },
+  ] };
+  assert.equal(filmLength(film.tracks), 11);
+  const long = retimedTemplate(film, 22);
+  const of = (id: string) => long.tracks.flatMap((t) => t.clips).find((c) => c.id === id)!;
+  assert.deepEqual([of('a').at, of('a').time], [undefined, [0, 6]]);
+  assert.deepEqual([of('b').at, of('b').time], [6, [2, 6.8]], "a video's own start stays");
+  assert.deepEqual([of('c').at, of('c').time], [10.8, [0, 11.2]]);
+  assert.deepEqual([of('flash').at, of('flash').time], [5.6, [0, 0.8]], 'as long, its middle on the cut');
+  assert.deepEqual([of('title').at, of('title').time], [0.3, [0, 2.5]], 'the opening held');
+  assert.deepEqual([of('end').at, of('end').time], [19.6, [0, 2.4]], 'ending with it');
+  assert.deepEqual([of('pin').at, of('pin').time], [11, [0, 2.6]], 'a moment into its place: as far into it');
+  assert.deepEqual(of('leak').time, [0, 22]);
+  assert.deepEqual(of('tune').time, [0, 22]);
+  assert.equal(filmLength(long.tracks), 22);
+  assert.equal(retimedTemplate(film, 11), film, 'as long: as it is');
+});
+
+test('a color in a scheme', () => {
+  assert.equal(schemeColor('mono', '#ff0000'), '#808080');
+  assert.equal(schemeColor('mono', '#ff000080'), '#80808080', 'its alpha kept');
+  assert.equal(schemeColor('warm', 'not a color'), null);
+  assert.match(schemeColor('cool', '#ff9a3c')!, /^#[0-9a-f]{6}$/);
 });

@@ -10,11 +10,13 @@
 import * as React from 'react';
 import { useT } from '@/i18n';
 import { readResourceDragData, RESOURCE_DRAG_TYPE, type ResourceDragItem } from '@/lib/resource-drag';
-import type { TemplateInstance, TemplateWord } from '@/lib/template-instance';
+import { COLOR_SCHEMES, schemeColor, type ColorScheme, type PlaceFrame, type TemplateInstance, type TemplateWord } from '@/lib/template-instance';
 import { Music } from 'lucide-react';
-import { fieldOf } from '@/lib/template-controls';
+import { fieldOf, isFontVar } from '@/lib/template-controls';
+import { joinFontFamily, splitFontFamily } from '@/lib/font-styles';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
-import { ColorField, INPUT, Section } from './inspector-fields';
+import { FontFamilyPicker } from './FontFamilyPicker';
+import { ColorField, FIELD, INPUT, NumField, Section, Segmented, SelectField, SliderField } from './inspector-fields';
 
 export interface TemplateHost {
   instance: TemplateInstance;
@@ -47,6 +49,18 @@ export interface TemplateHost {
   /** its sound, each with its menu (another, or none) */
   sounds?: { key: string; name: string }[];
   soundEntries?: (key: string) => ContextMenuEntry[];
+  /** a place's framing, and for a video which part plays: from `inSec`, at most `maxIn` (null: a picture) */
+  frameOf?: (clip: string) => { frame: PlaceFrame; inSec: number | null; maxIn: number } | null;
+  setFrame?: (clip: string, frame: PlaceFrame) => void;
+  setIn?: (clip: string, sec: number) => void;
+  /** several looks at once, by key (null: its page's own) */
+  setLooks?: (values: [string, string | null][]) => void;
+  /** how long it runs, s: longer or shorter, its places stretch, its opening and its end keep their time */
+  length?: number;
+  setLength?: (sec: number) => void;
+  /** another template of the library in its place, the person's clips and words kept */
+  swapOptions?: { id: string; name: string }[];
+  swapTo?: (id: string) => void;
 }
 
 /* the words a page says of its own, read once a page */
@@ -66,6 +80,8 @@ export function TemplateSection({ host }: { host: TemplateHost }) {
   const waiting = instance.slots.filter((s) => s.empty).length;
   const [menu, setMenu] = React.useState<{ x: number; y: number; top: number; items: ContextMenuEntry[] } | null>(null);
   const [over, setOver] = React.useState<string | null>(null);
+  /* the place whose framing shows (a clip of the template's film) */
+  const [picked, setPicked] = React.useState<string | null>(null);
   const secs = (ms: number) => `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)}s`;
   return (
     <Section id="template" title={host.name}>
@@ -95,6 +111,8 @@ export function TemplateSection({ host }: { host: TemplateHost }) {
             return (
               <button key={slot.clip} type="button" data-template-slot={i + 1} title={t('template.pick')}
                 onClick={(e) => {
+                  /* a click picks the place (its framing under the places); one on the place picked chooses what goes there */
+                  if (picked !== slot.clip && host.frameOf) { setPicked(slot.clip); return; }
                   const r = e.currentTarget.getBoundingClientRect();
                   setMenu({ x: r.left, y: r.bottom + 4, top: r.top - 4, items: host.pickEntries(slot.clip) });
                 }}
@@ -106,11 +124,13 @@ export function TemplateSection({ host }: { host: TemplateHost }) {
                 {slot.empty ? <span className="absolute inset-0 grid place-items-center text-[18px] font-semibold text-[var(--text-muted)]">{i + 1}</span>
                   : <span className="absolute left-1 top-1 rounded-[3px] bg-black/60 px-1 text-[10px] font-semibold leading-[14px] text-white">{i + 1}</span>}
                 <span className="absolute bottom-1 right-1 rounded-[3px] bg-black/60 px-1 text-[10px] tabular-nums leading-[14px] text-white">{secs(durMs)}</span>
+                {picked === slot.clip ? <span aria-hidden className="pointer-events-none absolute inset-0 rounded-[6px] ring-2 ring-inset ring-[var(--accent)]" /> : null}
               </button>
             );
           })}
         </div>
       ) : null}
+      {picked && host.frameOf ? <PlaceFrameFields key={picked} clip={picked} host={host} onReplace={(r) => setMenu({ x: r.left, y: r.bottom + 4, top: r.top - 4, items: host.pickEntries(picked) })} /> : null}
       {instance.words.length ? (
         <div className="flex flex-col gap-1.5">
           <span className="text-[11px] text-[var(--text-muted)]">{t('template.words')}</span>
@@ -120,6 +140,7 @@ export function TemplateSection({ host }: { host: TemplateHost }) {
       {host.looks?.length ? (
         <div className="flex flex-col gap-1.5">
           <span className="text-[11px] text-[var(--text-muted)]">{t('template.looks')}</span>
+          {host.setLooks ? <SchemeField host={host} /> : null}
           {host.looks.map((look) => <LookField key={look.key} look={look} onCommit={(v) => host.setLook?.(look.key, v)} />)}
         </div>
       ) : null}
@@ -160,6 +181,20 @@ export function TemplateSection({ host }: { host: TemplateHost }) {
               <span className="truncate">{snd.name}</span>
             </button>
           ))}
+        </div>
+      ) : null}
+      {host.setLength && host.length ? (
+        <div data-template-length="" className="grid grid-cols-[64px_minmax(0,1fr)] items-center gap-2">
+          <span className="truncate text-[11px] text-[var(--text-muted)]">{t('template.length')}</span>
+          <NumField label={t('template.length')} value={Math.round(host.length * 10) / 10} unit="s" step={0.1} min={0.5} max={600}
+            onCommit={(n) => { if (Math.abs(n - host.length!) > 0.01) host.setLength!(n); }} />
+        </div>
+      ) : null}
+      {host.swapOptions?.length && host.swapTo ? (
+        <div data-template-swap="" className="grid grid-cols-[64px_minmax(0,1fr)] items-center gap-2">
+          <span className="truncate text-[11px] text-[var(--text-muted)]">{t('template.swap')}</span>
+          <SelectField label={t('template.swap')} value={instance.id} options={host.swapOptions.map((o) => ({ value: o.id, label: o.name }))}
+            onCommit={(id) => { if (id !== instance.id) host.swapTo!(id); }} />
         </div>
       ) : null}
       {host.pickAll ? (
@@ -218,6 +253,16 @@ function LookField({ look, onCommit }: { look: NonNullable<TemplateHost['looks']
   }, [look.value, look.page, look.var]);
   const now = look.value ?? own ?? '';
   const color = now ? fieldOf(now, (v) => CSS.supports('color', v)).kind === 'color' : false;
+  if (now && isFontVar(look.var, now)) {
+    const [family, rest] = splitFontFamily(now);
+    return (
+      <div data-template-look={look.key} className="grid grid-cols-[64px_minmax(0,1fr)] items-center gap-2">
+        <span className="truncate text-[11px] text-[var(--text-muted)]" title={look.name}>{look.name}</span>
+        {/* written when picked: the template's film is another page's, not one this panel can preview */}
+        <FontFamilyPicker label={look.name} value={family} sample="Aa" onPreview={() => {}} onRevert={() => {}} onCommit={(f) => onCommit(joinFontFamily(f, rest))} className={FIELD} />
+      </div>
+    );
+  }
   if (color) {
     return (
       <div data-template-look={look.key} className="grid grid-cols-[64px_minmax(0,1fr)] items-center gap-2">
@@ -254,4 +299,54 @@ export function TemplateFilmSection<F>({ folder, load, hostOf }: { folder: strin
 /** A template's film just written: kept, so its section shows at once. */
 export function keepTemplateFilm(folder: string, film: unknown): void {
   films.set(folder, film);
+}
+
+/** A place's framing: what goes there, filling the picture or whole in it, how near, the point looked at; a video, from where. */
+function PlaceFrameFields({ clip, host, onReplace }: { clip: string; host: TemplateHost; onReplace: (r: DOMRect) => void }) {
+  const t = useT();
+  const at = host.frameOf?.(clip);
+  if (!at) return null;
+  const { frame } = at;
+  const set = (patch: Partial<PlaceFrame>) => host.setFrame?.(clip, { ...frame, ...patch });
+  return (
+    <div data-template-frame={clip} className="flex flex-col gap-1.5 rounded-[6px] bg-[var(--bg-field)]/40 p-2">
+      <div className="flex items-center gap-1.5">
+        <button type="button" data-template-replace="" onClick={(e) => onReplace(e.currentTarget.getBoundingClientRect())}
+          className="h-[26px] shrink-0 rounded-[5px] bg-[var(--bg-field)] px-2.5 text-[11px] font-medium text-[var(--text)] hover:bg-[var(--bg-pressed)]">{t('template.replace')}</button>
+        <Segmented label={t('template.frame')} value={frame.fit} small
+          options={[{ value: 'cover', label: t('template.cover') }, { value: 'contain', label: t('template.contain') }]}
+          onChange={(v) => set({ fit: v as PlaceFrame['fit'] })} />
+      </div>
+      <SliderField label={t('template.zoom')} value={Math.round(frame.zoom * 100)} min={100} max={300} neutral={100} unit="%" onCommit={(n) => set({ zoom: n / 100 })} />
+      <SliderField label={t('template.posX')} value={Math.round(frame.x * 100)} min={0} max={100} neutral={50} unit="%" onCommit={(n) => set({ x: n / 100 })} />
+      <SliderField label={t('template.posY')} value={Math.round(frame.y * 100)} min={0} max={100} neutral={50} unit="%" onCommit={(n) => set({ y: n / 100 })} />
+      {at.inSec != null && at.maxIn > 0.05 ? (
+        <SliderField label={t('template.inPoint')} value={Math.round(at.inSec * 10) / 10} min={0} max={Math.round(at.maxIn * 10) / 10} step={0.1} unit="s"
+          onCommit={(n) => host.setIn?.(clip, n)} />
+      ) : null}
+    </div>
+  );
+}
+
+/** Every color of the template at once in a scheme, from the colors its pages have of their own (never one on another). */
+function SchemeField({ host }: { host: TemplateHost }) {
+  const t = useT();
+  const apply = async (scheme: ColorScheme | 'original') => {
+    const values: [string, string | null][] = [];
+    for (const look of host.looks ?? []) {
+      const own = look.page ? await ownVar(look.page, look.var) : null;
+      const base = own ?? look.value;
+      if (!base || fieldOf(base, (v) => CSS.supports('color', v)).kind !== 'color') continue;
+      values.push([look.key, scheme === 'original' ? null : schemeColor(scheme, base)]);
+    }
+    if (values.length) host.setLooks?.(values);
+  };
+  return (
+    <div data-template-scheme="" className="grid grid-cols-[64px_minmax(0,1fr)] items-center gap-2">
+      <span className="truncate text-[11px] text-[var(--text-muted)]">{t('template.scheme')}</span>
+      <SelectField label={t('template.scheme')} value=""
+        options={[{ value: 'original', label: t('template.schemeOriginal') }, ...COLOR_SCHEMES.map((c) => ({ value: c, label: t(`template.schemes.${c}`) }))]}
+        onCommit={(v) => { void apply(v as ColorScheme | 'original'); }} />
+    </div>
+  );
 }
