@@ -1,17 +1,14 @@
 /**
- * The board's top left: which of the project's canvases is shown (a project has as many as are made), and whether the
- * board is drawn as the board itself or as its storyboard. The list adds one (named at once), and each row, on its
+ * The board's top left: which of the project's canvases is shown (a project has as many as are made). The list adds one (named at once), and each row, on its
  * ···, is opened in a new window (in a browser), renamed, copied or deleted (into the trash, after asking).
  */
 import React from 'react';
-import { Check, ChevronDown, Clapperboard, MoreHorizontal, Plus, Workflow } from 'lucide-react';
+import { Check, ChevronDown, MoreHorizontal, Plus } from 'lucide-react';
 import { useT } from '@/i18n';
 import type { CanvasBoard } from '@/api';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { Popover } from '../Popover';
 import { Tooltip } from '../Tooltip';
-
-export type BoardMode = 'board' | 'storyboard';
 
 /** a board's name as shown: its own, or "Canvas n" by its place */
 export function boardName(boards: readonly CanvasBoard[], id: string, t: (key: string) => string): string {
@@ -30,12 +27,10 @@ export function nextBoardName(boards: readonly CanvasBoard[], t: (key: string) =
 /** the top left's two pills: 32 high, 8 round, the bar's color a little see-through, a hairline round them */
 const PILL = 'flex h-8 items-center rounded-[8px] border-[0.5px] !border-[var(--cv-bar-line)] bg-[color-mix(in_srgb,var(--cv-bar)_80%,transparent)] backdrop-blur-md';
 const ROW = 'group/row flex h-8 w-full min-w-0 items-center gap-2 rounded-[8px] px-2 text-left text-[13px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
-const ICON = 'flex h-8 w-8 items-center justify-center rounded-[8px] p-1 transition';
 
-export function BoardSwitcher({ boards, current, mode, onPick, onAdd, onRename, onCopy, onRemove, onOpenApart, onMode }: {
+export function BoardSwitcher({ boards, current, onPick, onAdd, onRename, onCopy, onRemove, onOpenApart }: {
   boards: readonly CanvasBoard[];
   current: string;
-  mode: BoardMode;
   onPick: (id: string) => void;
   /** a new board, named; it is shown */
   onAdd: () => Promise<string | null>;
@@ -44,7 +39,6 @@ export function BoardSwitcher({ boards, current, mode, onPick, onAdd, onRename, 
   onRemove: (id: string) => void;
   /** in a browser: the board in a tab of its own */
   onOpenApart?: (id: string) => void;
-  onMode: (mode: BoardMode) => void;
 }) {
   const t = useT();
   const [open, setOpen] = React.useState(false);
@@ -117,17 +111,6 @@ export function BoardSwitcher({ boards, current, mode, onPick, onAdd, onRename, 
           ) : null}
         </div>
       </Popover>
-      {/* the board itself, or its storyboard */}
-      <div className={PILL}>
-        <Tooltip label={t('canvas.boards.board')}>
-          <button type="button" aria-label={t('canvas.boards.board')} aria-pressed={mode === 'board'} onClick={() => onMode('board')}
-            className={`${ICON} ${mode === 'board' ? 'bg-[var(--cv-bar-line)] text-[var(--cv-ink)]' : 'text-[var(--cv-label)] hover:text-[var(--cv-ink)]'}`}><Workflow size={14} /></button>
-        </Tooltip>
-        <Tooltip label={t('canvas.boards.storyboard')}>
-          <button type="button" aria-label={t('canvas.boards.storyboard')} aria-pressed={mode === 'storyboard'} onClick={() => onMode('storyboard')}
-            className={`${ICON} ${mode === 'storyboard' ? 'bg-[var(--cv-bar-line)] text-[var(--cv-ink)]' : 'text-[var(--cv-label)] hover:text-[var(--cv-ink)]'}`}><Clapperboard size={14} /></button>
-        </Tooltip>
-      </div>
       <ConfirmDialog open={removing !== null} danger title={t('canvas.boards.removeTitle')}
         description={removing ? t('canvas.boards.removeAsk').replace('{name}', boardName(boards, removing, t)) : ''}
         confirmLabel={t('canvas.boards.removeYes')}

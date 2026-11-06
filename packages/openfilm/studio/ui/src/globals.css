@@ -608,12 +608,14 @@ html[data-file-drag] iframe { pointer-events: none; }
   --cv-shadow: none;
   --cv-float-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06), 0 16px 24px -8px rgba(0, 0, 0, 0.1), 0 4px 8px -4px rgba(0, 0, 0, 0.06);
   --cv-modal: #ffffff;
+  --cv-group: rgba(0, 0, 0, 0.03);
 }
 [data-theme='dark'] {
+  /* the board is the window's grey (rgb 20); everything on it and over it, the panels' (rgb 24) */
   --cv-bg: #141414;
   --cv-dot: #474747;
-  --cv-card: #262626;
-  --cv-card-2: #1f1f1f;
+  --cv-card: #181818;
+  --cv-card-2: #181818;
   --cv-line: #525252;
   --cv-line-hover: #6b6b6b;
   --cv-ring: #a8a8a8;
@@ -624,17 +626,18 @@ html[data-file-drag] iframe { pointer-events: none; }
   --cv-ink-3: rgba(255, 255, 255, 0.3);
   --cv-edge: #6b6b6b;
   --cv-edge-lit: #3b82f6;
-  --cv-float: #1f1f1f;
+  --cv-float: #181818;
   --cv-float-line: rgba(255, 255, 255, 0.08);
   --cv-float-hover: rgba(255, 255, 255, 0.07);
   --cv-chip: rgba(255, 255, 255, 0.05);
-  --cv-bar: #262626;
+  --cv-bar: #181818;
   --cv-bar-line: #363636;
   --cv-invert: #ffffff;
   --cv-on-invert: #000000;
   --cv-shadow: none;
   --cv-float-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 16px 24px -8px rgba(0, 0, 0, 0.06), 0 4px 8px -4px rgba(0, 0, 0, 0.04);
-  --cv-modal: #161616;
+  --cv-modal: #181818;
+  --cv-group: #181818;
 }
 .openfilm-canvas {
   --xy-background-color: var(--cv-bg);

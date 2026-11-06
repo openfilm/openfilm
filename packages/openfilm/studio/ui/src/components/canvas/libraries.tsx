@@ -192,7 +192,7 @@ function EffectScene({ look }: { look: string }) {
   const dots = { backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.32) 1.4px, transparent 1.8px)', backgroundSize: '14px 14px', backgroundPosition: 'center' };
   const subject = look === 'slow' ? { animation: 'cvfx-slow 4s ease-in-out infinite alternate' } : look === 'focus' ? { animation: 'cvfx-focus-b 2.4s ease-in-out infinite alternate' } : undefined;
   return (
-    <span className="relative block h-full w-full overflow-hidden bg-[#161616]">
+    <span className="relative block h-full w-full overflow-hidden bg-[#181818]">
       <span className="absolute inset-[-40%]" style={{ animation: MOVES[look] || undefined, transformOrigin: '50% 50%' }}>
         <span className="absolute inset-0" style={{ ...dots, ...(look === 'focus' ? { animation: 'cvfx-focus-a 2.4s ease-in-out infinite alternate' } : look === 'lapse' ? { animation: 'cvfx-lapse 2s linear infinite' } : {}) }} />
         <span className="absolute left-1/2 top-1/2 aspect-square w-[11%] -translate-x-1/2 -translate-y-1/2">

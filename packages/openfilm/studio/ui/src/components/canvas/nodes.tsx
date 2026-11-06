@@ -31,7 +31,7 @@ const RESIZE_HANDLE = '!h-2 !w-2 !rounded-[2px] !border-0 !bg-[var(--cv-ring)]';
 
 /** A group's tint: its frame's fill and line, its name's chip, by its color (muted, so what is in it leads). */
 export const FRAME_COLOR: Record<GroupColor, { line: string; fill: string; dot: string }> = {
-  gray: { line: 'rgba(160,160,170,0.18)', fill: 'rgba(160,160,170,0.07)', dot: '#8a8a90' },
+  gray: { line: 'rgba(160,160,170,0.18)', fill: 'var(--cv-group)', dot: '#8a8a90' },
   red: { line: 'rgba(214,92,84,0.28)', fill: 'rgba(214,92,84,0.07)', dot: '#d65c54' },
   orange: { line: 'rgba(214,140,80,0.28)', fill: 'rgba(214,140,80,0.07)', dot: '#d68c50' },
   yellow: { line: 'rgba(200,170,80,0.28)', fill: 'rgba(200,170,80,0.07)', dot: '#c8aa50' },

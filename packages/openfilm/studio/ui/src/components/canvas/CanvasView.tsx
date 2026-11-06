@@ -26,7 +26,7 @@ import '@xyflow/react/dist/style.css';
 import { AudioLines, Clapperboard, Download, Film, FolderSearch, Image as ImageIcon, LayoutTemplate, Maximize2, MousePointerClick, Play, Plus, Scissors, ScrollText, Sparkles, Square, Upload, UserRound } from 'lucide-react';
 import { useT } from '@/i18n';
 import { ApiError, api, projectEvents, type CanvasBoard, type CanvasCharacter } from '@/api';
-import { BoardSwitcher, boardName, nextBoardName, type BoardMode } from './boards';
+import { BoardSwitcher, boardName, nextBoardName } from './boards';
 import {
   CARD_H, CUT_W, FILE_W, GROUP_COLORS, MAKE_MEDIA, MAKE_W, NOTE_H, NOTE_W, canvasId, cardWidth, makeSize, canvasKey, copyOf, emptyHistory, inputsKey, inputsOf, isStale, makeName, makeRequest, modeOf, frameRatio,
   nextOrder, readCanvasDoc, redo, remember, reorder, undo, withVersion,
@@ -46,7 +46,6 @@ import {
 import { BottomToolbar, LeftBar, Outline, Viewer } from './chrome';
 import { AddMenu, type MenuAt } from './menus';
 import { CHARACTER_PARTS, CharacterLibrary, HistoryModal, MaterialLibrary } from './libraries';
-import { Storyboard } from './storyboard';
 import { presetOf } from '@/lib/canvas-presets';
 import { FRAME_COLOR, NODE_TYPES } from './nodes';
 
@@ -100,7 +99,6 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
   /* which of the project's boards is shown (a link's ?canvas=, else the one shown last here), and how */
   const [boards, setBoards] = React.useState<CanvasBoard[]>([{ id: MAIN_BOARD, nodes: 0 }]);
   const [boardId, setBoardId] = React.useState(() => new URLSearchParams(window.location.search).get('canvas') ?? lastBoard(projectId));
-  const [mode, setMode] = React.useState<BoardMode>('board');
   /* a window over the board: what was made, the characters, the styles, the effects */
   const [modal, setModal] = React.useState<null | 'history' | 'characters' | 'styles' | 'effects'>(null);
   /* the node a library was opened for (its panel's chip): what is picked goes into it */
@@ -1113,7 +1111,7 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
             <button type="button" onClick={() => setPicking(null)} className="flex h-7 items-center gap-1 rounded-full bg-white/20 px-3 text-[12.5px] hover:bg-white/30">{t('canvas.pick.done')}<kbd className="font-sans text-[11px] opacity-80">Esc</kbd></button>
           </div>
         ) : null}
-        {picking || mode === 'storyboard' ? null : <BottomToolbar
+        {picking ? null : <BottomToolbar
           adding={Boolean(menu && !menu.from && menu.above)}
           onAdd={(from) => {
             if (menu) { setMenu(null); return; }
@@ -1142,28 +1140,16 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
               return [{ path, media: file.kind, url: file.kind === 'image' ? sources.file(file) : file.kind === 'video' ? sources.file(file) : undefined }];
             })} />
         ) : null}
-        <BoardSwitcher boards={boards} current={boardId} mode={mode} onMode={setMode}
+        <BoardSwitcher boards={boards} current={boardId}
           onPick={(id) => { void showBoard(id); }} onAdd={() => addBoard()} onRename={renameBoard} onCopy={(id) => { void addBoard(id); }}
           onRemove={(id) => { void removeBoard(id); }}
           {...(studioHost ? {} : { onOpenApart: (id: string) => { const url = new URL(window.location.href); url.searchParams.set('canvas', id); window.open(url.toString(), '_blank'); } })} />
-        {mode === 'storyboard' ? (
-          <Storyboard nodes={nodes} edges={edges} fileOf={board.fileOf} sources={sources}
-            onShowOnBoard={(id) => { setMode('board'); requestAnimationFrame(() => showNode(id)); }}
-            onMake={async (ids) => { for (const id of ids) { if (!(await makeNow(id))) break; } }}
-            onToTimeline={(clips) => onSendToFilm(clips)}
-            onTemplate={() => {
-              const episode = builtIns.find((tp) => tp.id === 'builtin:episode');
-              setMode('board');
-              if (episode) requestAnimationFrame(() => { void layTemplate(episode, middle()); });
-            }}
-            {...(studioHost?.ask ? { onAskAgent: () => { studioHost!.ask!({ text: t('canvas.storyboard.askText'), refs: [] }); } } : {})} />
-        ) : null}
-        {mode === 'storyboard' ? null : <LeftBar {...(chat ? { chat } : {})} outline={outline} onOutline={() => setOutline((v) => !v)} map={map} onMap={() => setMap((v) => !v)}
-          wires={wires} onWires={() => setWires((v) => !v)} snap={snap} onSnap={() => setSnap((v) => !v)} />}
+        <LeftBar {...(chat ? { chat } : {})} outline={outline} onOutline={() => setOutline((v) => !v)} map={map} onMap={() => setMap((v) => !v)}
+          wires={wires} onWires={() => setWires((v) => !v)} snap={snap} onSnap={() => setSnap((v) => !v)} />
         {outline ? (
           <Outline nodes={nodes} fileOf={board.fileOf} sources={sources} onShow={showNode} onClose={() => setOutline(false)} />
         ) : null}
-        {ready && mode === 'board' && nodes.length === 0 && !board.readOnly ? (
+        {ready && nodes.length === 0 && !board.readOnly ? (
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-5 px-6">
             <div className="flex items-center gap-2 text-[13px] text-[var(--cv-label)]"><MousePointerClick size={16} />{t('canvas.empty')}</div>
             {/* to start: a node of each kind in the middle of the view, or the agent asked for a script */}
