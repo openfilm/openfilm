@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { call, imageSize, landing, outOfBalance, translatedLines, translationAsk, wav, wavSeconds, wordsFromCharacters } from './common.mjs';
+import { call, imageSize, landing, mp4Seconds, outOfBalance, translatedLines, translationAsk, wav, wavSeconds, wordsFromCharacters } from './common.mjs';
 
 test('words from character timings: spaces split, punctuation stays, each Chinese character is a word, times clamped', () => {
   const said = 'Hi, there 你好';
@@ -37,6 +37,36 @@ test('WAV duration excludes trailing metadata and is capped by the available sam
   file.writeUInt32LE(file.length - 8, 4);
   assert.equal(wavSeconds(file), 1);
   assert.equal(wavSeconds(audio.subarray(0, 44 + 24000)), 0.5);
+});
+
+/** An MP4 box: its size, its type, what is in it. */
+const box = (type, ...contents) => {
+  const inside = Buffer.concat(contents);
+  const head = Buffer.alloc(8);
+  head.writeUInt32BE(8 + inside.length, 0);
+  head.write(type, 4, 'ascii');
+  return Buffer.concat([head, inside]);
+};
+
+test('an MP4 plays as long as its movie header says, after whatever comes before it', () => {
+  const v0 = Buffer.alloc(100);
+  v0.writeUInt32BE(1000, 12);
+  v0.writeUInt32BE(8040, 16);
+  const v1 = Buffer.alloc(112);
+  v1[0] = 1;
+  v1.writeUInt32BE(24000, 20);
+  v1.writeBigUInt64BE(240000n, 24);
+  assert.equal(mp4Seconds(Buffer.concat([box('ftyp', Buffer.from('isom')), box('mdat', Buffer.alloc(64)), box('moov', box('trak'), box('mvhd', v0))])), 8.04);
+  assert.equal(mp4Seconds(Buffer.concat([box('ftyp'), box('moov', box('mvhd', v1))])), 10);
+  /* a box sized in 64 bits */
+  const large = Buffer.alloc(32);
+  large.writeUInt32BE(1, 0);
+  large.write('mdat', 4, 'ascii');
+  large.writeBigUInt64BE(32n, 8);
+  assert.equal(mp4Seconds(Buffer.concat([large, box('moov', box('mvhd', v0))])), 8.04);
+  assert.equal(mp4Seconds(box('ftyp')), null);
+  assert.equal(mp4Seconds(new Uint8Array(10)), null);
+  assert.equal(mp4Seconds(Buffer.concat([box('moov', box('mvhd', Buffer.alloc(4)))])), null);
 });
 
 test('picture sizes from PNG and JPEG headers', () => {

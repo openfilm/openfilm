@@ -7,7 +7,7 @@
 import React from 'react';
 import { Check, ChevronDown, ChevronRight } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
-import { USE_VERBS, couldMake, offered, useProviders, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
+import { USE_VERBS, chosenModel, couldMake, offered, useProviders, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
 import { Popover } from '@/components/Popover';
 import { ProviderMark } from './ProviderMark';
 import { SettingsButton, SettingsGroup, SettingsItem, SettingsPage, settingsError } from './ui';
@@ -62,8 +62,7 @@ function ModelRow({ verb, hook, onConnect }: { verb: ProviderVerb; hook: Provide
   }
   /* by the providers' names; each provider's models stay in its own order (the sort is stable) */
   choices.sort((a, b) => a.providerName.localeCompare(b.providerName));
-  const firstOf = (id: string) => state.providers.find((p) => p.id === id)?.models[verb]?.[0]?.id;
-  const value = chosen ? `${chosen}:${state.model[verb] ?? firstOf(chosen) ?? ''}` : '';
+  const value = chosen ? `${chosen}:${chosenModel(state, verb) ?? ''}` : '';
   const current = choices.find((c) => c.value === value);
   /* nothing connected makes it: the providers that would, once connected */
   const could = couldMake(state, verb);
