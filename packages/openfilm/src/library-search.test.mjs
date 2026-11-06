@@ -138,8 +138,11 @@ test('a search prints each match\'s id to take, what it is like and where to see
   const music = (await libraryGet('music-search', { prompt: 'calm piano', sec: '50' })).lines.join('\n');
   assert.match(music, /^ {4}has: calm, piano$/m, 'what of the prompt each has');
   assert.match(music, /None fits well enough, or the film needs its own\? Make one with `openfilm get music`, made to the prompt \(it costs\)\./);
-  const roar = (await libraryGet('sfx-search', { prompt: 'dragon roar in a cave', limit: '1' })).lines.join('\n');
-  assert.match(roar, /^ {4}has: cave · lacks: dragon, roar$/m, 'and what it lacks');
+  /* by meaning, the cave comes first though no dragon roars in it; by words alone, a roar would */
+  if (semantic) {
+    const roar = (await libraryGet('sfx-search', { prompt: 'dragon roar in a cave', limit: '1' })).lines.join('\n');
+    assert.match(roar, /^ {4}has: cave · lacks: dragon, roar$/m, 'and what it lacks');
+  }
   const zh = (await libraryGet('sfx-search', { prompt: '雨声' })).lines.join('\n');
   assert.match(zh, /雨声 \(Rain\)/);
   for (const [flags, said] of [[{}, /what to look for, please: `openfilm get music-search --prompt "/], [{ prompt: 'calm', limit: '0' }, /--limit is a whole number/],
