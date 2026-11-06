@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Letterbox</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+.l { position: fixed; inset: 0; pointer-events: none; }
+:root { --color: #000000; }
+.l::before, .l::after { content: ''; position: absolute; left: 0; right: 0; height: 12%; background: var(--color); }
+.l::before { top: 0; } .l::after { bottom: 0; }
+</style>
+</head>
+<body>
+<div class="l"></div>
+<script>
+/*
+ * Black bars at the top and bottom, for a wide cinema frame. A page of OpenFilm's library (CC0): what it shows at
+ * t comes from t alone; its CSS animations are held at t by the host.
+ */
+window.film = { frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

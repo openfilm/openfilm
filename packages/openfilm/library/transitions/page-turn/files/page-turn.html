@@ -1,0 +1,97 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Page turn</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+:root { --color: #f4efe4; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * A page is laid over the picture from the right, its curl and shadow running ahead, and covers the cut; then it
+ * turns away to the left the same way onto the next shot. It lasts 1 s and covers the cut at its middle: put its
+ * middle on the cut. A page of OpenFilm's library (CC0): what it shows at t comes from t alone, drawn in parts of
+ * the frame so it fits a stage of any shape.
+ */
+const D = 1;
+const DEFAULT = '#f4efe4';
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+/* how far u is through [a, b], from 0 to 1 */
+const seg = (u, a, b) => clamp((u - a) / (b - a));
+const mix = (a, b, x) => a + (b - a) * x;
+const inOut = (x) => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2);
+/* the colour the page is given (its --color), read on each frame */
+const color = () => getComputedStyle(document.documentElement).getPropertyValue('--color').trim() || DEFAULT;
+const rgbOf = (c) => { g.fillStyle = '#000'; g.fillStyle = c; const s = String(g.fillStyle); return s[0] === '#' ? [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number); };
+/* a colour made lighter (k > 0, toward white) or darker (k < 0, toward black), at an opacity */
+const tone = (c, k, a = 1) => `rgba(${rgbOf(c).map((x) => Math.round(k > 0 ? x + (255 - x) * k : x * (1 + k))).join(', ')}, ${a})`;
+
+function draw(u) {
+  const c = color(), L = Math.hypot(W, H), cw = W * 0.14;
+  g.save();
+  g.translate(W / 2, H / 2);
+  g.rotate(0.12);
+  /* the fold: in, the page covers what is right of it; out, what is left of it */
+  const fin = mix(L / 2 + cw, -L / 2 - cw * 1.5, inOut(seg(u, 0.02, 0.42)));
+  const fout = mix(L / 2 + cw * 1.5, -L / 2 - cw, inOut(seg(u, 0.58, 0.98)));
+  const before = u < 0.5, f = before ? fin : fout;
+  /* the shadow it casts on the picture */
+  const sx = before ? f - cw : f + cw, sd = before ? -1 : 1;
+  const sh = g.createLinearGradient(sx, 0, sx + sd * W * 0.2, 0);
+  sh.addColorStop(0, 'rgba(0, 0, 0, 0.45)');
+  sh.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  g.fillStyle = sh;
+  g.fillRect(Math.min(sx, sx + sd * W * 0.2), -L, W * 0.2, 2 * L);
+  /* the flat page, a little shaded toward the fold */
+  const page = before ? [f, L] : [-L, f];
+  const pg = g.createLinearGradient(f, 0, f + (before ? 1 : -1) * W * 0.5, 0);
+  pg.addColorStop(0, tone(c, -0.12));
+  pg.addColorStop(1, c);
+  g.fillStyle = pg;
+  g.fillRect(page[0], -L, page[1] - page[0], 2 * L);
+  /* the curl: the back of the page, lit on its round */
+  const x0 = before ? f - cw : f, x1 = before ? f : f + cw;
+  const cl = g.createLinearGradient(x0, 0, x1, 0);
+  const stops = before ? [tone(c, 0.5), tone(c, -0.05), tone(c, -0.3)] : [tone(c, -0.3), tone(c, -0.05), tone(c, 0.5)];
+  cl.addColorStop(0, stops[0]);
+  cl.addColorStop(0.55, stops[1]);
+  cl.addColorStop(1, stops[2]);
+  g.fillStyle = cl;
+  g.fillRect(x0, -L, cw, 2 * L);
+  g.restore();
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

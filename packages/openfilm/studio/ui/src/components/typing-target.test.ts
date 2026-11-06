@@ -27,6 +27,12 @@ test('anything in an app\'s own panel is the app\'s: not a field, not editable, 
   assert.equal(inHostPanel({ nodeType: 3, parentElement: element({ above: panel }) } as unknown as EventTarget), true);
 });
 
+test('the canvas\'s keys are its own: Delete removes what is on it, not a clip of the timeline', () => {
+  const canvas = ['[data-studio-canvas]'];
+  assert.equal(isTypingTarget(element({ above: canvas })), true);
+  assert.equal(isTypingTarget(element({ tag: 'BUTTON', above: canvas })), true);
+});
+
 test('Studio\'s own page is not the panel', () => {
   assert.equal(inHostPanel(element()), false);
   assert.equal(inHostPanel(null), false);

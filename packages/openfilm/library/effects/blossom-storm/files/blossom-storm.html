@@ -1,0 +1,110 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Blossom storm</title>
+<style>
+  /* what a clip of it may change: the petals' color, how many fly (0 to 1), how hard the wind blows */
+  :root { --color: #ffc2d6; --amount: 1; --speed: 1; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * A storm of cherry blossom: petals swept across the frame by a gusting wind, tumbling over as they fly, the near
+ * ones large and out of focus. A page of OpenFilm's library (CC0): every petal's place comes from t alone; the wind
+ * is a sum of waves whose push is integrated exactly, so gusts carry the petals on without any history.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const probe = document.createElement('canvas').getContext('2d');
+const rgb = (name, fallback) => {
+  probe.fillStyle = fallback; probe.fillStyle = css(name) || fallback;
+  const s = probe.fillStyle;
+  return s[0] === '#' ? [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number);
+};
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+// a notched petal, deeper at its base, at three amounts of blur
+const petals = new Map();
+function petal(c) {
+  const key = c.join();
+  if (petals.has(key)) return petals.get(key);
+  const deep = c.map((v, k) => Math.round(v * [0.93, 0.62, 0.74][k])), pale = c.map((v) => Math.round(v + (255 - v) * 0.75));
+  const set = [0, 1.6, 4.5].map((blur) => {
+    const g = document.createElement('canvas'); g.width = g.height = 96;
+    const x = g.getContext('2d');
+    x.filter = blur ? `blur(${blur}px)` : 'none';
+    x.translate(48, 48); x.scale(0.62, 0.62);
+    const fill = x.createLinearGradient(0, 40, 0, -40);
+    fill.addColorStop(0, `rgb(${deep})`); fill.addColorStop(0.45, `rgb(${c})`); fill.addColorStop(1, `rgb(${pale})`);
+    x.fillStyle = fill;
+    x.beginPath();
+    x.moveTo(0, 42); x.bezierCurveTo(-34, 22, -34, -26, -12, -40); x.quadraticCurveTo(-5, -38, 0, -30);
+    x.quadraticCurveTo(5, -38, 12, -40); x.bezierCurveTo(34, -26, 34, 22, 0, 42); x.fill();
+    x.strokeStyle = `rgba(${deep},0.35)`; x.lineWidth = 1.5;
+    x.beginPath(); x.moveTo(0, 38); x.quadraticCurveTo(2, 0, 0, -24); x.stroke();
+    return g;
+  });
+  petals.set(key, set);
+  return set;
+}
+// how far the wind has carried things by time t: the integral of 1 + 0.55 sin(0.8 t) + 0.3 sin(1.9 t + 1)
+const carried = (t) => t + 0.55 * (1 - Math.cos(0.8 * t)) / 0.8 + 0.3 * (Math.cos(1) - Math.cos(1.9 * t + 1)) / 1.9;
+const gust = (t) => 1 + 0.55 * Math.sin(0.8 * t) + 0.3 * Math.sin(1.9 * t + 1);
+const N = 190;
+const flying = Array.from({ length: N }, (_, i) => {
+  const r = (k) => hash(i * 4.31 + k);
+  const depth = Math.pow(r(1), 1.6);
+  return {
+    x: r(2), y: r(3), depth, order: r(4),
+    size: 1.8 + depth * depth * 9,                     // vmin
+    vx: 0.1 + depth * 0.16 + r(5) * 0.05, vy: 0.05 + depth * 0.07 + r(6) * 0.04,
+    spin: (r(7) - 0.5) * 6, flip: 1.5 + r(8) * 4, phase: r(9) * 6.283, wob: r(10) * 6.283, hue: r(11),
+  };
+}).sort((a, b) => a.depth - b.depth);
+const wrap = (v) => ((v % 1.3) + 1.3) % 1.3 - 0.15;
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, u = Math.min(w, h) / 100;
+    const amount = num('--amount', 1), speed = num('--speed', 1), base = rgb('--color', '#ffc2d6');
+    const tt = t * speed, D = carried(tt), G = gust(tt);
+    for (const p of flying) {
+      if (p.order > amount) continue;
+      const set = petal(base.map((v, k) => Math.max(0, Math.min(255, Math.round(v + (p.hue - 0.5) * [6, 40, 30][k])))));
+      const x = wrap(p.x + p.vx * D * (w > h ? 1 : h / w) + 0.012 * Math.sin(tt * 1.7 + p.wob)) * w;
+      const y = wrap(p.y + p.vy * tt + 0.02 * p.vy * D + 0.015 * Math.sin(tt * 1.3 + p.wob)) * h;
+      const turn = Math.cos(tt * p.flip * (0.7 + 0.3 * G) + p.phase);
+      const s = p.size * u;
+      const img = p.depth > 0.82 ? set[2] : p.depth > 0.6 ? set[1] : set[0];
+      ctx.globalAlpha = (0.55 + 0.45 * p.depth) * (0.65 + 0.35 * Math.abs(turn)) * (p.depth > 0.82 ? 0.75 : 1);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      const d = devicePixelRatio || 1;
+      ctx.translate(x * d, y * d);
+      ctx.rotate(p.phase + tt * p.spin * 0.4 - 0.5);
+      ctx.scale(d * s / 60, d * s / 60 * Math.max(0.12, Math.abs(turn)));
+      ctx.drawImage(img, -48, -48);
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

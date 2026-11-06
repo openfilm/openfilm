@@ -1,7 +1,7 @@
 // @ts-check
 /**
  * The person's own services: any HTTP service, on this computer or elsewhere (a transcription server they run, their
- * own voice, a cloud API OpenFilm has no provider for), added in Settings → Providers with its address, a key when it
+ * own voice, a cloud API OpenFilm has no provider for), added in Settings → Services with its address, a key when it
  * takes one, where the key goes, and a few words about what it does.
  *
  * `openfilm get call` sends a request to one through Studio, which adds the key (the agent never sees it) and lands

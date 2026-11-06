@@ -53,12 +53,12 @@ async function withCard(name, run, { chat = false, again = false } = {}) {
     const on = (x, y) => ({ x: box.x + x * scale, y: box.y + y * scale });
     const until = async (check, what) => {
       for (let i = 0; i < 60; i += 1) { if (await check()) return; await page.waitForTimeout(100); }
-      assert.fail(what);
+      assert.fail(`${what}; selection: ${JSON.stringify(await selection())}`);
     };
     /** What is selected on the picture: how many layers together (null: not several), the Layers rows selected, and
         the blue boxes drawn over the picture (their left tops, film px). */
     const selection = () => page.evaluate(({ x, y, scale: k }) => {
-      const many = /(\d+) layers selected/.exec(document.querySelector('[data-film-inspector]')?.textContent ?? '');
+      const many = /(\d+) layers selected/.exec(document.querySelector('[data-inspector-workspace]')?.getAttribute('aria-label') ?? '');
       const boxes = [...document.querySelectorAll('[data-film-select] div')].filter((d) => /solid/.test(d.style.border));
       return {
         many: many ? Number(many[1]) : null,

@@ -112,14 +112,11 @@ export function planNudge(model: EditModel, ids: readonly string[], frames: numb
   return plan?.ops.length ? plan : null;
 }
 
-/** A track's name as Studio keeps it (`.film/settings.json`): the clips it had when it was named find it again. */
-export type SavedTrackName = { name: string; index: number; clips: string[] };
-
 export type ClipsOf = readonly { clips: readonly { id: string }[] }[];
 
 /**
  * Which track each thing kept about a track (a name, a height) is on now: the track holding the most of the clips it
- * had then, else its place (see trackNamesOf).
+ * had then, else its place.
  */
 export function placeSaved<T extends { index: number; clips: readonly string[] }>(saved: readonly T[], tracks: ClipsOf): Map<T, number> {
   const out = new Map<T, number>();
@@ -139,22 +136,4 @@ export function placeSaved<T extends { index: number; clips: readonly string[] }
     if (entry.index < tracks.length && !taken.has(entry.index)) { out.set(entry, entry.index); taken.add(entry.index); }
   }
   return out;
-}
-
-/**
- * The names kept for tracks, by film.html track index now. A track is found by the clips it had when named (tracks
- * move, and open and close above it, so its place changes; film.html gives a track no id of its own), the one holding
- * the most of them; a track named while empty, or whose clips are all gone, by its place, when no other name took it.
- */
-export function trackNamesOf(saved: readonly SavedTrackName[], tracks: ClipsOf): Map<number, string> {
-  return new Map([...placeSaved(saved, tracks)].map(([entry, i]) => [i, entry.name]));
-}
-
-/** The names to keep once track `index` is named `name` (an empty name takes its name away); names found nowhere go. */
-export function namedTrack(saved: readonly SavedTrackName[], tracks: ClipsOf, index: number, name: string): SavedTrackName[] {
-  const placed = placeSaved(saved, tracks);
-  const kept = saved.filter((entry) => placed.has(entry) && placed.get(entry) !== index)
-    .map((entry) => ({ ...entry, index: placed.get(entry)!, clips: (tracks[placed.get(entry)!]?.clips ?? []).map((c) => c.id) }));
-  const clean = name.trim().slice(0, 40);
-  return clean ? [...kept, { name: clean, index, clips: (tracks[index]?.clips ?? []).map((c) => c.id) }] : kept;
 }

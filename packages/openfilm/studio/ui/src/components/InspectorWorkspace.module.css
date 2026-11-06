@@ -1,0 +1,20 @@
+.workspace { display:flex; flex:1; flex-direction:column; min-width:0; min-height:0; color:var(--text); }
+/* Categories as the library's beside them (LibraryDrawer): its 40 px height and line, the one shown in its color,
+   bolder, on the same raised fill. */
+.tabs { background:var(--bg-panel); display:flex; flex-shrink:0; align-items:stretch; gap:4px; height:40px; padding:0 8px; border-bottom:1px solid var(--border); overflow-x:auto; scrollbar-width:none; }
+.tabs button { position:relative; flex:none; margin:6px 0; padding:0 10px; border-radius:6px; color:var(--text); font-size:11.5px; font-weight:500; white-space:nowrap; outline:none; transition:color .12s, background-color .12s; }
+.tabs button:hover { color:var(--accent); }
+.tabs button:focus-visible { box-shadow:inset 0 0 0 1.5px var(--accent); }
+.tabs .selectedTab, .tabs .selectedTab:hover { color:var(--accent); font-weight:600; }
+.scroll { min-height:0; flex:1; overflow-y:auto; overscroll-behavior:contain; padding:0 0 20px; scrollbar-width:none; }
+.scroll::-webkit-scrollbar { display:none; width:0; height:0; }
+.scroll section[data-section] { margin:0 10px; padding:13px 5px 12px; border-top:0; border-bottom:1px solid var(--border); }
+.scroll section[data-section][hidden] { display:none; }
+/* the one section of its category (Section bare): the category names it; no line under it */
+.scroll section[data-section][data-bare] { padding-top:12px; border-bottom:0; }
+.scroll section[data-section]>div:first-child { min-height:25px; }
+.scroll section[data-section]>div:first-child>button { font-size:12px; font-weight:600; }
+.scroll input[data-insp-field] { font-size:11.5px; }
+.scroll fieldset:disabled { opacity:.6; }
+.locked { display:flex; flex-shrink:0; align-items:flex-start; gap:6px; padding:9px 15px; font-size:11px; line-height:1.5; color:var(--text-muted); background:var(--accent-soft); }
+.locked svg { flex-shrink:0; margin-top:2px; }

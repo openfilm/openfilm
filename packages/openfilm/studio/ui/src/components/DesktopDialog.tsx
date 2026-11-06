@@ -47,16 +47,20 @@ const SYSTEM_NAMES = { mac: 'macOS', win: 'Windows' } as const;
  * window and the agents' marks read the same in a light Studio.
  */
 const DARK: React.CSSProperties = {
-  '--text': '#ededed',
-  '--text-muted': '#a3a3a3',
-  '--text-faint': '#6f6f6f',
-  '--surface': '#1d1f1f',
-  '--surface-2': '#272a2a',
-  '--border': 'rgba(255, 255, 255, 0.08)',
-  '--dock-shell': '#121414',
+  '--text': '#ebebed',
+  '--text-muted': '#a4a4a9',
+  '--text-faint': '#717177',
+  '--bg-raised': '#242427',
+  '--bg-field': 'rgba(240, 240, 255, 0.06)',
+  '--border': 'rgba(240, 240, 255, 0.075)',
+  '--bg-app': '#111114',
+  '--primary': '#ebebed',
+  '--primary-hover': '#ffffff',
+  '--on-primary': '#0a0a0c',
+  '--accent': '#45cfb5',
+  '--on-accent': '#04221d',
   '--tl-playhead': '#ffffff',
-  '--tl-accent': '#45c2b4',
-  '--tl-wave': 'rgba(12, 168, 164, 0.9)',
+  '--clip-audio': '#1c5757',
   background: [
     'radial-gradient(90% 70% at 0% 0%, color-mix(in srgb, #5ecb92 34%, transparent), transparent 70%)',
     'radial-gradient(80% 60% at 100% 100%, color-mix(in srgb, #7fd3e4 26%, transparent), transparent 70%)',
@@ -125,7 +129,7 @@ export function DesktopDialog({ open, onClose }: { open: boolean; onClose: () =>
         role="dialog"
         aria-modal="true"
         aria-labelledby="desktop-title"
-        className="relative grid max-h-[calc(100vh-32px)] w-full max-w-[1040px] overflow-hidden rounded-[18px] border border-[var(--card-border)] bg-[var(--card-bg)] shadow-[0_32px_80px_-24px_rgba(0,0,0,0.6)] md:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)]"
+        className="relative grid max-h-[calc(100vh-32px)] w-full max-w-[1040px] overflow-hidden rounded-[18px] border border-[var(--border)] bg-[var(--bg-raised)] shadow-[0_32px_80px_-24px_rgba(0,0,0,0.6)] md:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)]"
       >
         <button
           type="button"
@@ -194,7 +198,7 @@ export function DesktopDialog({ open, onClose }: { open: boolean; onClose: () =>
               ref={download}
               type="button"
               onClick={() => void openDownload()}
-              className="inline-flex h-10 items-center gap-2 rounded-full bg-[var(--text)] px-5 text-[13.5px] font-medium text-[var(--card-bg)] transition hover:opacity-90"
+              className="inline-flex h-10 items-center gap-2 rounded-full bg-[var(--primary)] px-5 text-[13.5px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)]"
             >
               {system ? (
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d={system === 'mac' ? APPLE : WINDOWS} /></svg>
@@ -217,7 +221,7 @@ export function DesktopDialog({ open, onClose }: { open: boolean; onClose: () =>
 function AppPicture() {
   const t = useT();
   return (
-    <div aria-hidden className="w-full overflow-hidden rounded-[12px] border border-white/10 bg-[var(--dock-shell)] shadow-[0_24px_48px_-20px_rgba(0,0,0,0.7)]">
+    <div aria-hidden className="w-full overflow-hidden rounded-[12px] border border-white/10 bg-[var(--bg-app)] shadow-[0_24px_48px_-20px_rgba(0,0,0,0.7)]">
       {/* the window's top bar */}
       <div className="flex h-[22px] items-center gap-[5px] border-b border-[var(--border)] px-2.5">
         <span className="h-[7px] w-[7px] rounded-full bg-[#ff5f57]" />
@@ -227,7 +231,7 @@ function AppPicture() {
       <div className="grid grid-cols-[1fr_40%] gap-[5px] p-[5px]">
         {/* Studio: the picture, then the timeline */}
         <div className="flex min-w-0 flex-col gap-[5px]">
-          <div className="flex aspect-[16/10] items-center justify-center rounded-[6px] bg-[var(--surface)]">
+          <div className="flex aspect-[16/10] items-center justify-center rounded-[6px] bg-[var(--bg-raised)]">
             <div
               className="flex aspect-video w-[78%] flex-col justify-end rounded-[4px] p-[8%]"
               style={{ background: 'linear-gradient(135deg, #5ecb92, #7fd3e4)' }}
@@ -236,34 +240,34 @@ function AppPicture() {
               <span className="mt-[4px] h-[4px] w-[36%] rounded-full bg-white/60" />
             </div>
           </div>
-          <div className="relative rounded-[6px] bg-[var(--surface)] px-[6px] py-[7px]">
+          <div className="relative rounded-[6px] bg-[var(--bg-raised)] px-[6px] py-[7px]">
             <div className="flex flex-col gap-[4px]">
               <div className="flex gap-[3px]">
                 <span className="h-[10px] w-[30%] rounded-[2px] bg-white/[0.13]" />
-                <span className="openfilm-desktop-pulse h-[10px] w-[28%] rounded-[2px] outline outline-[1.5px] outline-offset-[1px]" style={{ background: 'color-mix(in srgb, var(--tl-accent) 45%, transparent)', outlineColor: 'var(--tl-accent)' }} />
+                <span className="openfilm-desktop-pulse h-[10px] w-[28%] rounded-[2px] outline outline-[1.5px] outline-offset-[1px]" style={{ background: 'color-mix(in srgb, var(--accent) 45%, transparent)', outlineColor: 'var(--accent)' }} />
                 <span className="h-[10px] w-[34%] rounded-[2px] bg-white/[0.13]" />
               </div>
               <div className="flex gap-[3px] pl-[18%]">
                 <span className="h-[10px] w-[48%] rounded-[2px] bg-[color-mix(in_srgb,#66d8b8_40%,transparent)]" />
               </div>
-              <span className="h-[8px] w-[92%] rounded-[2px] bg-[color-mix(in_srgb,var(--tl-wave)_55%,transparent)]" />
+              <span className="h-[8px] w-[92%] rounded-[2px] bg-[color-mix(in_srgb,var(--clip-audio)_90%,transparent)]" />
             </div>
             <span className="openfilm-desktop-playhead absolute bottom-[4px] top-[3px] w-[1.5px] rounded-full bg-[var(--tl-playhead)]" />
           </div>
         </div>
         {/* the chat beside it */}
-        <div className="flex min-w-0 flex-col gap-[6px] rounded-[6px] bg-[var(--surface)] p-[6px]">
-          <div className="ml-auto max-w-[96%] rounded-[6px] bg-[var(--surface-2)] px-[6px] py-[5px]">
+        <div className="flex min-w-0 flex-col gap-[6px] rounded-[6px] bg-[var(--bg-raised)] p-[6px]">
+          <div className="ml-auto max-w-[96%] rounded-[6px] bg-[var(--bg-field)] px-[6px] py-[5px]">
             <span
               className="openfilm-desktop-pulse mb-[4px] inline-flex max-w-full items-center truncate rounded-[3px] px-[4px] py-[1px] text-[7.5px] font-medium leading-tight"
-              style={{ background: 'color-mix(in srgb, var(--tl-accent) 18%, transparent)', color: 'var(--tl-accent)', boxShadow: 'inset 0 0 0 1px var(--tl-accent)' }}
+              style={{ background: 'color-mix(in srgb, var(--accent) 18%, transparent)', color: 'var(--accent)', boxShadow: 'inset 0 0 0 1px var(--accent)' }}
             >
               {t('desktop.picture.clip')}
             </span>
             <span className="block text-[8px] leading-snug text-[var(--text)]">{t('desktop.picture.ask')}</span>
           </div>
           <div className="max-w-[96%] text-[8px] leading-snug text-[var(--text-muted)]">{t('desktop.picture.reply')}</div>
-          <div className="mt-auto h-[18px] rounded-[5px] border border-[var(--border)] bg-[var(--surface-2)]" />
+          <div className="mt-auto h-[18px] rounded-[5px] border border-[var(--border)] bg-[var(--bg-field)]" />
         </div>
       </div>
     </div>

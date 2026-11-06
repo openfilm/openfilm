@@ -1,0 +1,135 @@
+{
+ "version": 2,
+ "kind": "group",
+ "clips": [
+  {
+   "track": 0,
+   "at": 6.6,
+   "clip": {
+    "src": "title-serif.html",
+    "time": [
+     0,
+     3.4
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Title\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Label\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Credit\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}]",
+     "data-place": "{\"x\":0.5,\"y\":0.5,\"fit\":0.3}"
+    },
+    "size": {
+     "w": 1000,
+     "h": 400
+    },
+    "overrides": [
+     {
+      "at": ".t1",
+      "text": "The Long Summer"
+     },
+     {
+      "at": ".t2",
+      "text": "A SHORT FILM"
+     },
+     {
+      "at": ".t3",
+      "text": "written and directed by you"
+     }
+    ]
+   }
+  },
+  {
+   "track": 1,
+   "at": 2.9,
+   "clip": {
+    "src": "burn-through.html",
+    "time": [
+     0,
+     1
+    ]
+   }
+  },
+  {
+   "track": 1,
+   "at": 5.9,
+   "clip": {
+    "src": "projector.html",
+    "time": [
+     0,
+     1
+    ]
+   }
+  },
+  {
+   "track": 2,
+   "at": 0,
+   "clip": {
+    "src": "letterbox.html",
+    "time": [
+     0,
+     10
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    }
+   }
+  },
+  {
+   "track": 3,
+   "at": 0,
+   "clip": {
+    "src": "grain.html",
+    "time": [
+     0,
+     10
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Amount\", \"type\": \"var\", \"var\": \"--amount\"}]"
+    }
+   }
+  },
+  {
+   "track": 4,
+   "at": 0,
+   "clip": {
+    "src": "example-1.jpg",
+    "time": [
+     0,
+     3.4
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "1"
+    }
+   }
+  },
+  {
+   "track": 4,
+   "at": 3.4,
+   "clip": {
+    "src": "example-2.jpg",
+    "time": [
+     0,
+     3
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "2"
+    }
+   }
+  },
+  {
+   "track": 4,
+   "at": 6.4,
+   "clip": {
+    "src": "example-3.jpg",
+    "time": [
+     0,
+     3.6
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "3"
+    }
+   }
+  }
+ ],
+ "durationMs": 10000
+}

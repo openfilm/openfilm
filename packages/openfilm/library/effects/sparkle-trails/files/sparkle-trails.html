@@ -1,0 +1,136 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Sparkle trails</title>
+<style>
+  /* what a clip of it may change: the sparkles' color, how many trails fly (0 to 1), how fast */
+  :root { --color: #ffe3a3; --amount: 1; --speed: 1; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Sparkle trails: bright little comets swooping across the picture on curving paths, each leaving a ribbon of light
+ * and a wake of glitter that drifts down, twinkles and fades. A page of OpenFilm's library (CC0): every spark is
+ * worked out from t alone, from when it was shed and how long ago.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const probe = document.createElement('canvas').getContext('2d');
+const rgb = (name, fallback) => {
+  probe.fillStyle = fallback; probe.fillStyle = css(name) || fallback;
+  const s = probe.fillStyle;
+  return s[0] === '#' ? [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number);
+};
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+// a soft round glow, drawn once for each color: a hot white core fading out through the color
+const sprites = new Map();
+function sprite(c) {
+  const key = c.join();
+  if (sprites.has(key)) return sprites.get(key);
+  const g = document.createElement('canvas'); g.width = g.height = 128;
+  const x = g.getContext('2d'), r = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+  const hot = c.map((v) => Math.round(v + (255 - v) * 0.7));
+  r.addColorStop(0, `rgba(${hot},1)`); r.addColorStop(0.18, `rgba(${c},0.85)`); r.addColorStop(0.45, `rgba(${c},0.22)`); r.addColorStop(1, `rgba(${c},0)`);
+  x.fillStyle = r; x.fillRect(0, 0, 128, 128);
+  sprites.set(key, g);
+  return g;
+}
+const SLOTS = 7, FLY = 1.5, LIFE = 1.8, SPARKS = 190;
+const ease = (p) => (p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2);
+// a curving path across the frame, different for every flight
+function path(c, k) {
+  const r = (q) => hash(c * 71.3 + k * 13.9 + q);
+  const flip = r(1) < 0.5, y0 = 0.15 + r(2) * 0.7, y3 = 0.15 + r(3) * 0.7;
+  const pts = [[-0.08, y0], [0.3, y0 + (r(4) - 0.5) * 1.4], [0.7, y3 + (r(5) - 0.5) * 1.4], [1.08, y3]];
+  return flip ? pts.map(([x, y]) => [1 - x, y]).reverse() : pts;
+}
+const bez = (p, e) => {
+  const m = 1 - e;
+  return [0, 1].map((i) => m * m * m * p[0][i] + 3 * m * m * e * p[1][i] + 3 * m * e * e * p[2][i] + e * e * e * p[3][i]);
+};
+function star(x, y, L, th) {
+  ctx.beginPath();
+  ctx.moveTo(x - L, y); ctx.lineTo(x, y - th); ctx.lineTo(x + L, y); ctx.lineTo(x, y + th); ctx.closePath();
+  ctx.moveTo(x, y - L); ctx.lineTo(x + th, y); ctx.lineTo(x, y + L); ctx.lineTo(x - th, y); ctx.closePath();
+  ctx.fill();
+}
+function flight(c, k, s, w, h, u, base, t) {
+  if (s < 0 || s > FLY + LIFE) return;
+  const p = path(c, k), at = (e) => { const [x, y] = bez(p, e); return [x * w, y * h]; };
+  const tints = [base, base.map((v) => Math.round(v + (255 - v) * 0.7)), base.map((v, i) => Math.round(v * 0.55 + [255, 170, 220][i] * 0.45))];
+  // the wake: sparks shed along the way, drifting down and out as they age
+  for (let j = 0; j < SPARKS; j++) {
+    const born = (j / SPARKS) * FLY, age = s - born;
+    if (age < 0 || age > LIFE) continue;
+    const r = (q) => hash(c * 977 + k * 131 + j * 3.3 + q);
+    const [x0, y0] = at(ease(born / FLY));
+    const a = r(1) * 6.283, v = (1 + r(2) * 7) * u;
+    const x = x0 + Math.cos(a) * v * age, y = y0 + Math.sin(a) * v * age + 6 * u * age * age;
+    const life = 1 - age / LIFE, tw = 0.55 + 0.45 * Math.sin(t * (8 + r(3) * 10) + r(4) * 6);
+    const tint = tints[Math.floor(r(5) * 3)], d = (0.7 + Math.pow(r(6), 2) * 2.6) * u * (0.4 + 0.6 * life);
+    ctx.globalAlpha = Math.pow(life, 1.3) * tw;
+    ctx.drawImage(sprite(tint), x - d, y - d, d * 2, d * 2);
+    if (r(7) < 0.18 && tw > 0.8) {
+      ctx.fillStyle = `rgb(${tints[1]})`;
+      star(x, y, d * 1.6, d * 0.12);
+    }
+  }
+  if (s > FLY) return;
+  // the ribbon of light right behind the head
+  const e = ease(s / FLY);
+  ctx.lineCap = 'round';
+  const STEPS = 24;
+  for (let i = 0; i < STEPS; i++) {
+    const s0 = Math.max(0, s - 0.3 * (i + 1) / STEPS), s1 = Math.max(0, s - 0.3 * i / STEPS);
+    const [x0, y0] = at(ease(s0 / FLY)), [x1, y1] = at(ease(s1 / FLY));
+    const f = 1 - i / STEPS;
+    ctx.globalAlpha = 0.75 * f;
+    ctx.strokeStyle = `rgb(${tints[1]})`; ctx.lineWidth = 1.4 * u * f;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+  }
+  // the head
+  const [hx, hy] = at(e);
+  ctx.globalAlpha = 1;
+  ctx.drawImage(sprite(base), hx - 10 * u, hy - 10 * u, 20 * u, 20 * u);
+  ctx.fillStyle = '#ffffff';
+  const pulse = 0.8 + 0.2 * Math.sin(t * 20);
+  star(hx, hy, 4.5 * u * pulse, 0.25 * u);
+}
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, u = Math.min(w, h) / 100;
+    const amount = num('--amount', 1), base = rgb('--color', '#ffe3a3'), tt = t * num('--speed', 1);
+    ctx.globalCompositeOperation = 'lighter';
+    for (let c = 0; c < SLOTS; c++) {
+      if (c / SLOTS >= amount) continue;
+      const period = 2.2 + hash(c * 3.1) * 1.2, offset = hash(c * 5.9) * period + 0.6;
+      const k = Math.floor((tt + offset) / period), s = tt + offset - k * period;
+      flight(c, k, s, w, h, u, base, t);
+      flight(c, k - 1, s + period, w, h, u, base, t);
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Film strip</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+.l { position: fixed; inset: 0; pointer-events: none; }
+.l { border-left: 5vw solid #111; border-right: 5vw solid #111; }
+.l::before, .l::after { content: ''; position: absolute; top: 0; bottom: 0; width: 2.6vw; background: repeating-linear-gradient(180deg, #e9e6df 0 2vw, transparent 2vw 4.4vw); }
+.l::before { left: -3.8vw; } .l::after { right: -3.8vw; }
+</style>
+</head>
+<body>
+<div class="l"></div>
+<script>
+/*
+ * The edges of a film strip, with its sprocket holes. A page of OpenFilm's library (CC0): what it shows at t comes
+ * from t alone; its CSS animations are held at t by the host.
+ */
+window.film = { frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "story-bars.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Name\", \"type\": \"text\", \"at\": \".name\"}, {\"name\": \"Speed\", \"type\": \"var\", \"var\": \"--speed\"}, {\"name\": \"Amount\", \"type\": \"var\", \"var\": \"--amount\"}]"
+    }
+  },
+  "durationMs": 4000
+}

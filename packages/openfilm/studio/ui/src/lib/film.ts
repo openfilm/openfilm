@@ -15,6 +15,11 @@ export const FILM_SPEED_MAX = SPEED_MAX;
 export const FILM_DEFAULT_STAGE = DEFAULT_STAGE;
 
 export const filmSrcIsStill: (src: string) => boolean = isStill;
+/**
+ * A thing of OpenFilm's library taken into the project (`saved/openfilm/…`: a sticker, a text, an effect): a page with
+ * no source of its own to trim into. As a still's, its left edge changes its length (its way in stays at its start).
+ */
+export const filmSrcIsLibrary = (src: string | undefined): boolean => Boolean(src?.split('#')[0]?.startsWith('saved/openfilm/'));
 export const filmSrcIsPage: (src: string) => boolean = isPage;
 /** What a clip is, as film.html says it (a page, a video, a still, a sound). */
 export const filmSrcKind = clipKind;
@@ -31,21 +36,25 @@ export function filmClipKind(of: string | { src: string; sound?: boolean }): Fil
 /** How Studio shows a track, from what is on it: all sound → audio, all pages → mg, anything else → video. */
 export const filmTrackKind = trackKind;
 
-/** A file's name without its folder or extension (`assets/intro.html` → `intro`). */
+/**
+ * A file's name without its folder or extension (`assets/intro.html` → `intro`); a film in a folder of its own (a
+ * compound clip's) is called by its folder (`parts/intro/film.html` → `intro`).
+ */
 export function fileStem(path: string): string {
+  const parts = path.replace(/[#?].*$/, '').split('/');
+  if (parts.length > 1 && parts[parts.length - 1] === 'film.html') return parts[parts.length - 2]!;
   const base = path.split('/').pop() ?? path;
   return base.replace(/\.[a-z0-9]{1,5}$/i, '') || base;
 }
 
-/** A track's badge letter, by what it holds: P pages, V pictures (video and stills), A sound. */
+/** A track's badge letter, by what it holds: V pictures (footage, stills, pages), A sound. */
 export function filmTrackPrefix(kind: string): string {
-  return kind === 'mg' ? 'P' : kind === 'video' ? 'V' : 'A';
+  return kind === 'audio' ? 'A' : 'V';
 }
 
 /**
- * Each track's name on the timeline (P1, V2, A1), worked out from position and kind, never stored: picture tracks
- * (P, V) counted from the bottom up, so V1 is the lowest and V2 covers it, and sound tracks (A) from the top down.
- * Each prefix on its own. It names a track a person can point at; stacking is the position itself.
+ * Each track's name on the timeline (V2, V1, A1), worked out from position and kind, never stored: picture tracks
+ * (V) counted from the bottom up, so V1 is the lowest and V2 covers it, and sound tracks (A) from the top down. It names a track a person can point at; stacking is the position itself.
  */
 export function filmTrackBadges(tracks: readonly ({ kind: string } | { clips: readonly { src: string }[] })[]): string[] {
   return rowBadges(tracks.map((track) => 'kind' in track ? track.kind : filmTrackKind(track)));

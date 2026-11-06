@@ -34,7 +34,7 @@ export function BrandLoadingScreen({
          which is worse than having no loading screen. */
       /* The background is --panel, the same as the workspace's when it lands, so when the loading
          screen gives way the content just grows in and the base color never moves. */
-      className="workspace-shell z-[9000] flex flex-col items-center justify-center bg-[var(--panel)]"
+      className="workspace-shell z-[9000] flex flex-col items-center justify-center bg-[var(--bg-raised)]"
     >
       {/* Kept small: an enlarged logo in the middle of the screen looks like a splash ad, while
           this screen only means "one moment". The bar below is what moves. */}
@@ -49,7 +49,7 @@ export function BrandLoadingScreen({
       {/* The bar is fake: opening a project cannot report a percentage. It only says one thing
           here: something is still moving. A line frozen in one place would look stuck. */}
       <div className="mt-5 h-[3px] w-[180px] overflow-hidden rounded-full bg-[var(--border)]">
-        <div className="openfilm-loading-bar h-full w-1/3 rounded-full bg-[var(--text)]/60" />
+        <div className="openfilm-loading-bar h-full w-1/3 rounded-full bg-[var(--accent)]" />
       </div>
     </div>
   );

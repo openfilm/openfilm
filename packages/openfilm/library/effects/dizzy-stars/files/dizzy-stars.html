@@ -1,0 +1,109 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Dizzy stars</title>
+<style>
+  /* what a clip of it may change: the stars' color, how fast they circle, how big the ring is,
+     and where it sits (0 to 1 across and down the picture) */
+  :root { --color: #ffd21f; --speed: 1; --size: 1; --x: 0.5; --y: 0.22; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Seeing stars: five plump stars circling on a tilted ring, growing as they swing to the front and dimming behind,
+ * each spinning as it goes and shedding little twinkles. A page of OpenFilm's library (CC0): every star's place
+ * comes from t alone.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const probe = document.createElement('canvas').getContext('2d');
+const rgb = (name, fallback) => {
+  probe.fillStyle = fallback; probe.fillStyle = css(name) || fallback;
+  const s = probe.fillStyle;
+  return s[0] === '#' ? [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number);
+};
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+function star(x, y, r, turn) {
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = turn + (i / 10) * 6.283 - Math.PI / 2, rr = i % 2 ? r * 0.48 : r;
+    i ? ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr) : ctx.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+  }
+  ctx.closePath();
+}
+function twinkle(x, y, L, a) {
+  ctx.globalAlpha = a;
+  ctx.beginPath();
+  ctx.moveTo(x - L, y); ctx.quadraticCurveTo(x, y, x, y - L); ctx.quadraticCurveTo(x, y, x + L, y);
+  ctx.quadraticCurveTo(x, y, x, y + L); ctx.quadraticCurveTo(x, y, x - L, y);
+  ctx.fill();
+}
+const N = 5;
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, u = Math.min(w, h) / 100;
+    const speed = num('--speed', 1), size = num('--size', 1), c = rgb('--color', '#ffd21f');
+    const cx = w * num('--x', 0.5), cy = h * num('--y', 0.22);
+    const rx = 24 * u * size, ry = 7 * u * size, spin = t * speed * 2.6;
+    const light = c.map((v) => Math.round(v + (255 - v) * 0.75)), deep = c.map((v, i) => Math.round(v * [1, 0.62, 0.2][i]));
+    // the ring they ride on, faint
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.lineWidth = 0.45 * u;
+    ctx.setLineDash([1.2 * u, 1.4 * u]); ctx.lineDashOffset = -spin * 6 * u;
+    ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, -0.08, 0, 6.283); ctx.stroke();
+    ctx.setLineDash([]);
+    const stars = [];
+    for (let i = 0; i < N; i++) {
+      const a = spin + (i / N) * 6.283;
+      stars.push({ i, a, depth: Math.sin(a) });
+    }
+    stars.sort((p, q) => p.depth - q.depth);
+    const rot = (x, y) => [cx + x * Math.cos(-0.08) - y * Math.sin(-0.08), cy + x * Math.sin(-0.08) + y * Math.cos(-0.08)];
+    for (const s of stars) {
+      const [x, y] = rot(Math.cos(s.a) * rx, Math.sin(s.a) * ry);
+      const k = 0.68 + 0.32 * (s.depth + 1) / 2, r = 5.2 * u * size * k;
+      // twinkles shed behind it along the ring
+      ctx.fillStyle = `rgb(${light})`;
+      for (let j = 1; j <= 3; j++) {
+        const b = s.a - j * 0.32, [tx, ty] = rot(Math.cos(b) * rx, Math.sin(b) * ry);
+        const tw = 0.5 + 0.5 * Math.sin(t * 9 + s.i * 2 + j);
+        twinkle(tx + (hash(s.i * 3 + j) - 0.5) * 2 * u, ty + (hash(s.i * 5 + j) - 0.5) * 2 * u, (2.4 - j * 0.45) * u * size * (0.6 + tw * 0.6), (0.9 - j * 0.22) * k);
+      }
+      ctx.globalAlpha = 0.55 + 0.45 * (s.depth + 1) / 2;
+      // glow, body, ink line and a shine
+      const glow = ctx.createRadialGradient(x, y, 0, x, y, r * 2.2);
+      glow.addColorStop(0, `rgba(${c},0.55)`); glow.addColorStop(1, `rgba(${c},0)`);
+      ctx.fillStyle = glow; ctx.fillRect(x - r * 2.2, y - r * 2.2, r * 4.4, r * 4.4);
+      const turn = t * speed * 3.5 + s.i;
+      star(x, y, r, turn);
+      const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.35, 0, x, y, r);
+      g.addColorStop(0, `rgb(${light})`); g.addColorStop(0.55, `rgb(${c})`); g.addColorStop(1, `rgb(${deep})`);
+      ctx.fillStyle = g; ctx.fill();
+      ctx.lineJoin = 'round'; ctx.lineWidth = 0.6 * u * size; ctx.strokeStyle = 'rgba(120,52,0,0.9)'; ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.beginPath(); ctx.ellipse(x - r * 0.22, y - r * 0.3, r * 0.16, r * 0.09, -0.6, 0, 6.283); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

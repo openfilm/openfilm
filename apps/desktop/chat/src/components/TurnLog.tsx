@@ -10,17 +10,19 @@
  * the ones carried over from before, and the system prompt, are one line each until opened.
  * Sent to the agent: what the app started and opened the agent with (every word it adds to the agent's own, the
  * variables it set), and each message exactly as the agent got it.
- * Events: every event the agent sent, each a line opening to the event exactly as it was.
+ * Events: every event the agent sent, each a line opening to the event exactly as it was; only the lines in view are
+ * drawn, however long the log. A picture is shown as its type, size and file (the log keeps it as a file).
  *
- * Opened while the turn runs, it reads the log again every moment until the turn ends, so it shows the turn so far.
+ * Opened while the turn runs, it asks every moment for what was written since, until the turn ends, so it shows the
+ * turn so far; a very long log is shown as its first event and its last EVENTS_KEPT.
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, ChevronRight, ClipboardCopy, FolderOpen, RefreshCw, ScrollText, X } from 'lucide-react';
+import { AlertTriangle, ChevronRight, ClipboardCopy, FolderOpen, KeyRound, RefreshCw, ScrollText, X } from 'lucide-react';
 import { useT } from '@/i18n';
 import { chatLayer } from '@/lib/chat-layer';
 import { modelCalls, textOf, usageOf, type ModelCall, type RawCall } from '@/lib/model-calls';
-import { app, type TurnLog as TurnLogData } from '../app-bridge';
+import { app, type TurnLog as TurnLogData, type TurnLogAt } from '../app-bridge';
 import { AgentIcon, hasAgentIcon } from './AgentIcons';
 import { BrandLogo } from './BrandLogo';
 
@@ -34,7 +36,7 @@ export function TurnLogButton({ project, turnId, live = false }: { project: stri
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} title={t('turnLog.title')}
-        className="flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 transition hover:bg-[var(--bg-hover)] hover:text-[var(--chat-text)]">
+        className="flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
         <ScrollText size={12} aria-hidden />
         {t('turnLog.open')}
       </button>
@@ -57,20 +59,46 @@ const seconds = (ms: number | null) => (ms === null ? '—' : ms < 60_000 ? `${(
 const fill = (template: string, values: Record<string, string | number>) => template.replace(/\{(\w+)\}/g, (_, k) => String(values[k] ?? ''));
 const k = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 100_000 ? 0 : 1)}k` : String(n));
 
-/** how often a running turn's log is read again */
+/** how often a running turn's log is asked for what is new */
 const LIVE_READ_MS = 1500;
+/** the most events held at once: past it the oldest go (the prompt stays), as a long turn's end explains how it ended */
+const EVENTS_KEPT = 100_000;
+
+/** A log as shown: what was read so far, and where the reading stopped. */
+interface Shown { file: string; cut: boolean; callsCut: boolean; events: LogEvent[]; calls: RawCall[]; at: TurnLogAt }
+
+/** What was shown, with a read's new events and requests after it (or in its place, when the read was whole). */
+function merged(prev: Shown | null, next: TurnLogData): Shown {
+  const after = !next.whole && prev;
+  let events = after ? (next.events.length ? [...prev.events, ...next.events] : prev.events) : next.events;
+  let cut = after ? prev.cut || next.cut : next.cut;
+  if (events.length > EVENTS_KEPT) {
+    const head = events[0]?.kind === 'prompt' ? [events[0]] : [];
+    events = [...head, ...events.slice(events.length - EVENTS_KEPT + head.length)];
+    cut = true;
+  }
+  const callsAfter = !next.callsWhole && prev;
+  const calls = callsAfter ? (next.calls.length ? [...prev.calls, ...(next.calls as RawCall[])] : prev.calls) : next.calls as RawCall[];
+  return { file: next.file, cut, callsCut: next.callsCut || Boolean(callsAfter && prev.callsCut), events, calls, at: next.at };
+}
 
 function TurnLogViewer({ project, turnId, live, onClose }: { project: string; turnId: string; live: boolean; onClose: () => void }) {
   const t = useT();
-  const [log, setLog] = React.useState<TurnLogData | null | undefined>(undefined);
+  const [log, setLog] = React.useState<Shown | null | undefined>(undefined);
   const [tab, setTab] = React.useState<Tab | null>(null);
   const [copied, setCopied] = React.useState(false);
+  /* what is shown, for a read to add to; `reads`: a read whole again makes any read asked before it stale */
+  const shown = React.useRef<Shown | null>(null);
+  const reads = React.useRef(0);
   const load = React.useCallback(() => {
-    void app.chat.log(project, turnId).then((next) => setLog(next && 'same' in next ? undefined : next)).catch(() => setLog(null));
+    const read = ++reads.current;
+    void app.chat.log(project, turnId).then((next) => {
+      if (read !== reads.current) return;
+      shown.current = next && !('same' in next) ? merged(null, next) : null;
+      setLog(shown.current);
+    }).catch(() => setLog(null));
   }, [project, turnId]);
-  const known = React.useRef<{ size: number; callsSize: number } | null>(null);
-  known.current = log ? { size: log.size, callsSize: log.callsSize ?? 0 } : null;
-  /* read on opening and once more as the turn ends (its last events); while it runs, again and again, one read at a time */
+  /* read on opening and once more as the turn ends (its last events); while it runs, what is new, one read at a time */
   React.useEffect(load, [load, live]);
   React.useEffect(() => {
     if (!live) return undefined;
@@ -78,9 +106,13 @@ function TurnLogViewer({ project, turnId, live, onClose }: { project: string; tu
     const timer = window.setInterval(() => {
       if (reading) return;
       reading = true;
-      /* read again only once it has grown */
-      void app.chat.log(project, turnId, known.current ?? undefined)
-        .then((next) => { if (next && !('same' in next)) setLog(next); }).catch(() => {}).finally(() => { reading = false; });
+      const read = reads.current;
+      void app.chat.log(project, turnId, shown.current?.at)
+        .then((next) => {
+          if (!next || 'same' in next || read !== reads.current) return;
+          shown.current = merged(shown.current, next);
+          setLog(shown.current);
+        }).catch(() => {}).finally(() => { reading = false; });
     }, LIVE_READ_MS);
     return () => window.clearInterval(timer);
   }, [live, project, turnId]);
@@ -90,12 +122,16 @@ function TurnLogViewer({ project, turnId, live, onClose }: { project: string; tu
     return () => window.removeEventListener('keydown', onKey, true);
   }, [onClose]);
 
-  const events = log?.events ?? [];
-  const calls = React.useMemo(() => modelCalls((log?.calls ?? []) as RawCall[]), [log]);
-  const sent = events.filter((e) => e.kind === 'prompt' || e.kind === 'sent' || e.kind === 'steer');
+  const events = React.useMemo(() => log?.events ?? [], [log?.events]);
+  const calls = React.useMemo(() => modelCalls(log?.calls ?? []), [log?.calls]);
+  const sent = React.useMemo(() => events.filter((e) => e.kind === 'prompt' || e.kind === 'sent' || e.kind === 'steer'), [events]);
   const shownTab = tab ?? (calls.length ? 'calls' : 'sent');
   const prompt = events.find((e) => e.kind === 'prompt') as Record<string, any> | undefined;
-  const done = [...events].reverse().find((e) => e.kind === 'done') as Record<string, any> | undefined;
+  const done = React.useMemo(() => {
+    for (let i = events.length - 1; i >= 0; i -= 1) if (events[i]!.kind === 'done') return events[i] as Record<string, any>;
+    return undefined;
+  }, [events]);
+  const updatesCut = React.useMemo(() => events.some((e) => e.kind === 'cut'), [events]);
   const agent = typeof prompt?.agent === 'string' ? prompt.agent : null;
   const model = prompt?.meta?.turn?.localAgent?.model ?? null;
   const took = prompt && done ? seconds(done.t - prompt.t) : null;
@@ -107,10 +143,10 @@ function TurnLogViewer({ project, turnId, live, onClose }: { project: string; tu
   const copy = () => {
     void navigator.clipboard?.writeText(JSON.stringify(shownTab === 'calls' ? calls : shownTab === 'sent' ? sent : events, null, 2)).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
   };
-  const button = 'flex h-8 items-center gap-1.5 rounded-[8px] border border-[var(--border)] px-2.5 text-[12.5px] text-[var(--chat-text)] transition hover:bg-[var(--bg-hover)]';
+  const button = 'flex h-8 items-center gap-1.5 rounded-[8px] border border-[var(--border)] px-2.5 text-[12.5px] text-[var(--text)] transition hover:bg-[var(--bg-hover)]';
   const tabButton = (id: Tab, label: string) => (
     <button type="button" onClick={() => setTab(id)}
-      className={`h-9 border-b-2 px-1 text-[13px] transition ${shownTab === id ? 'border-[var(--chat-text)] text-[var(--chat-text)]' : 'border-transparent text-[var(--chat-hint)] hover:text-[var(--chat-text)]'}`}>
+      className={`h-9 border-b-2 px-1 text-[13px] transition ${shownTab === id ? 'border-[var(--text)] text-[var(--text)]' : 'border-transparent text-[var(--text-faint)] hover:text-[var(--text)]'}`}>
       {label}
     </button>
   );
@@ -118,23 +154,23 @@ function TurnLogViewer({ project, turnId, live, onClose }: { project: string; tu
   return createPortal(
     <div className="fixed inset-0 z-[10045] grid place-items-center bg-black/40 p-6" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div role="dialog" aria-modal="true" aria-label={t('turnLog.title')}
-        className="flex h-[min(940px,94vh)] w-[min(1320px,96vw)] flex-col overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--dock-pane)] shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5)]">
+        className="flex h-[min(940px,94vh)] w-[min(1320px,96vw)] flex-col overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--bg-panel)] shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5)]">
         <div className="flex shrink-0 items-start gap-3 border-b border-[var(--border)] px-5 py-4">
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 text-[15px] font-semibold text-[var(--chat-text)]">
+            <div className="flex items-center gap-2 text-[15px] font-semibold text-[var(--text)]">
               {t('turnLog.title')}
               {done ? (
-                <span className={`rounded-[6px] px-1.5 py-0.5 text-[11.5px] font-medium ${done.ok ? 'bg-[var(--bg-hover)] text-[var(--chat-hint)]' : 'bg-[var(--err)]/15 text-[var(--err)]'}`}>
+                <span className={`rounded-[6px] px-1.5 py-0.5 text-[11.5px] font-medium ${done.ok ? 'bg-[var(--bg-hover)] text-[var(--text-faint)]' : 'bg-[var(--err)]/15 text-[var(--err)]'}`}>
                   {done.ok ? String(done.stopReason ?? t('turnLog.ended')) : t('turnLog.failed')}
                 </span>
               ) : live ? (
                 <span className="rounded-[6px] bg-[var(--bg-hover)] px-1.5 py-0.5 text-[11.5px] font-medium"><span className="text-sweep">{t('turnLog.running')}</span></span>
               ) : null}
             </div>
-            <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[12.5px] text-[var(--chat-hint)]">
+            <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[12.5px] text-[var(--text-faint)]">
               {agent ? (
                 <span className="flex w-3.5 shrink-0 justify-center opacity-80">
-                  {hasAgentIcon(agent) ? <AgentIcon id={agent} size={12} /> : <BrandLogo size={11} />}
+                  {agent === 'byok' ? <KeyRound size={12} /> : hasAgentIcon(agent) ? <AgentIcon id={agent} size={12} /> : <BrandLogo size={11} />}
                 </span>
               ) : null}
               <span className="truncate">
@@ -150,19 +186,21 @@ function TurnLogViewer({ project, turnId, live, onClose }: { project: string; tu
           <button type="button" className={button} onClick={copy} disabled={!events.length}><ClipboardCopy size={13} />{copied ? t('turnLog.copied') : t('turnLog.copy')}</button>
           <button type="button" className={button} onClick={() => void app.chat.reveal(project, turnId)}><FolderOpen size={13} />{t('turnLog.reveal')}</button>
           <button type="button" aria-label={t('turnLog.close')} onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-[8px] text-[var(--chat-hint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--chat-text)]"><X size={16} /></button>
+            className="flex h-8 w-8 items-center justify-center rounded-[8px] text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"><X size={16} /></button>
         </div>
-        {log === undefined || (log === null && live) ? <p className="px-5 py-4 text-[13px] text-[var(--chat-hint)]">{t('turnLog.loading')}</p>
-          : log === null ? <p className="px-5 py-4 text-[13px] text-[var(--chat-hint)]">{t('turnLog.none')}</p> : (
+        {log === undefined || (log === null && live) ? <p className="px-5 py-4 text-[13px] text-[var(--text-faint)]">{t('turnLog.loading')}</p>
+          : log === null ? <p className="px-5 py-4 text-[13px] text-[var(--text-faint)]">{t('turnLog.none')}</p> : (
             <>
               <div className="flex shrink-0 items-center gap-4 border-b border-[var(--border)] px-5">
                 {tabButton('calls', fill(t('turnLog.calls'), { n: calls.length }))}
                 {tabButton('sent', t('turnLog.sentTab'))}
                 {tabButton('events', fill(t('turnLog.events'), { n: events.length }))}
-                {log.cut ? <span className="text-[12px] text-[var(--warn)]">{t('turnLog.cut')}</span> : null}
+                {[log.cut ? 'turnLog.cut' : null, updatesCut ? 'turnLog.updatesCut' : null, log.callsCut ? 'turnLog.callsCut' : null].filter(Boolean).map((key) => (
+                  <span key={key} className="text-[12px] text-[var(--warn)]">{t(key!)}</span>
+                ))}
               </div>
               {shownTab === 'calls'
-                ? (calls.length ? <Calls calls={calls} start={prompt?.t ?? calls[0]!.startedAt} t={t} /> : <p className="px-5 py-4 text-[13px] text-[var(--chat-hint)]">{t(noCallsReason(agent, prompt?.opened?.log))}</p>)
+                ? (calls.length ? <Calls calls={calls} start={prompt?.t ?? calls[0]!.startedAt} t={t} /> : <p className="px-5 py-4 text-[13px] text-[var(--text-faint)]">{t(noCallsReason(agent, prompt?.opened?.log))}</p>)
                 : shownTab === 'sent' ? <Sent events={sent} t={t} /> : <Events events={events} t={t} />}
             </>
           )}
@@ -184,7 +222,7 @@ const ROLE_COLOR: Record<string, string> = {
   context: 'text-[#c0603a]',
 };
 
-const block = 'whitespace-pre-wrap break-words font-mono text-[12px] leading-[1.55] text-[var(--chat-text)]';
+const block = 'whitespace-pre-wrap break-words font-mono text-[12px] leading-[1.55] text-[var(--text)]';
 const pretty = (raw: unknown) => {
   if (typeof raw !== 'string') return JSON.stringify(raw, null, 2);
   try { return JSON.stringify(JSON.parse(raw), null, 2); } catch { return raw; }
@@ -197,7 +235,7 @@ function Clamped({ text, max = 6000, t }: { text: string; max?: number; t: T }) 
   return (
     <div className={block}>
       {text.slice(0, max)}…
-      <button type="button" onClick={() => setAll(true)} className="ml-1 font-sans text-[12px] text-[var(--chat-hint)] underline">{fill(t('turnLog.showAll'), { n: text.length.toLocaleString() })}</button>
+      <button type="button" onClick={() => setAll(true)} className="ml-1 font-sans text-[12px] text-[var(--text-faint)] underline">{fill(t('turnLog.showAll'), { n: text.length.toLocaleString() })}</button>
     </div>
   );
 }
@@ -213,20 +251,23 @@ function Parts({ message, t }: { message: Item; t: T }) {
         if (part.type === 'thinking') {
           return (
             <details key={i}>
-              <summary className="cursor-pointer text-[12px] text-[var(--chat-hint)]">{t('turnLog.thought')} · {part.thinking ? fill(t('turnLog.chars'), { n: String(part.thinking).length.toLocaleString() }) : t('turnLog.thoughtNotKept')}</summary>
+              <summary className="cursor-pointer text-[12px] text-[var(--text-faint)]">{t('turnLog.thought')} · {part.thinking ? fill(t('turnLog.chars'), { n: String(part.thinking).length.toLocaleString() }) : t('turnLog.thoughtNotKept')}</summary>
               <div className="mt-1 italic"><Clamped text={String(part.thinking ?? '')} t={t} /></div>
             </details>
           );
         }
         if (part.type === 'toolCall') {
           return (
-            <div key={i} className="rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-2">
-              <div className="mb-1 flex gap-2 font-mono text-[12px]"><b className="text-[var(--chat-text)]">{String(part.name ?? '')}</b><span className="text-[var(--text-faint)]">{String(part.id ?? '')}</span></div>
+            <div key={i} className="rounded-[8px] border border-[var(--border)] bg-[var(--bg-field)] px-2.5 py-2">
+              <div className="mb-1 flex gap-2 font-mono text-[12px]"><b className="text-[var(--text)]">{String(part.name ?? '')}</b><span className="text-[var(--text-faint)]">{String(part.id ?? '')}</span></div>
               <Clamped text={pretty(part.arguments ?? {})} t={t} />
             </div>
           );
         }
-        if (part.type === 'image') return <img key={i} src={`data:${part.mimeType ?? 'image/png'};base64,${part.data}`} alt="" className="max-h-[220px] max-w-[360px] rounded-[6px] border border-[var(--border)] object-contain" />;
+        if (part.type === 'image') {
+          return part.data ? <img key={i} src={`data:${part.mimeType ?? 'image/png'};base64,${part.data}`} alt="" className="max-h-[220px] max-w-[360px] rounded-[6px] border border-[var(--border)] object-contain" />
+            : <div key={i} className="font-mono text-[12px] text-[var(--text-faint)]">{fill(t('turnLog.picture'), { type: String(part.mimeType ?? ''), size: k(Number(part.bytes) || 0) })}{part.file ? ` · ${String(part.file)}` : ''}</div>;
+        }
         return <Clamped key={i} text={pretty(part)} t={t} />;
       })}
     </div>
@@ -243,12 +284,12 @@ function MessageRow({ message, index, fresh, open: initial, t }: { message: Item
       <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[12px] hover:bg-[var(--bg-hover)]">
         <ChevronRight size={12} className={`shrink-0 text-[var(--text-faint)] transition-transform ${open ? 'rotate-90' : ''}`} />
         <span className="w-6 shrink-0 tabular-nums text-[var(--text-faint)]">{index}</span>
-        <b className={`shrink-0 font-semibold ${failed ? 'text-[var(--err)]' : ROLE_COLOR[role] ?? 'text-[var(--chat-hint)]'}`}>{role === 'toolResult' ? String(message.toolName ?? 'tool') : role}</b>
-        {role === 'context' || message.label ? <span className="shrink-0 font-mono text-[11px] text-[var(--chat-hint)]" title={t('turnLog.contextHint')}>{[message.label, message.as ? `as ${message.as}` : null].filter(Boolean).join(' · ')}</span> : null}
-        {message.meta ? <span className="shrink-0 font-mono text-[11px] text-[var(--chat-hint)]">meta</span> : null}
-        {fresh ? <span className="shrink-0 rounded-[4px] bg-[var(--bg-hover)] px-1 text-[10.5px] text-[var(--chat-text)]">{t('turnLog.fresh')}</span> : null}
+        <b className={`shrink-0 font-semibold ${failed ? 'text-[var(--err)]' : ROLE_COLOR[role] ?? 'text-[var(--text-faint)]'}`}>{role === 'toolResult' ? String(message.toolName ?? 'tool') : role}</b>
+        {role === 'context' || message.label ? <span className="shrink-0 font-mono text-[11px] text-[var(--text-faint)]" title={t('turnLog.contextHint')}>{[message.label, message.as ? `as ${message.as}` : null].filter(Boolean).join(' · ')}</span> : null}
+        {message.meta ? <span className="shrink-0 font-mono text-[11px] text-[var(--text-faint)]">meta</span> : null}
+        {fresh ? <span className="shrink-0 rounded-[4px] bg-[var(--bg-hover)] px-1 text-[10.5px] text-[var(--text)]">{t('turnLog.fresh')}</span> : null}
         {message.toolCallId ? <span className="shrink-0 font-mono text-[11px] text-[var(--text-faint)]">{String(message.toolCallId)}</span> : null}
-        <span className={`min-w-0 flex-1 truncate ${open ? 'invisible' : 'text-[var(--chat-hint)]'}`}>{text.replace(/\s+/g, ' ').slice(0, 200)}</span>
+        <span className={`min-w-0 flex-1 truncate ${open ? 'invisible' : 'text-[var(--text-faint)]'}`}>{text.replace(/\s+/g, ' ').slice(0, 200)}</span>
         <span className="shrink-0 tabular-nums text-[11px] text-[var(--text-faint)]">{fill(t('turnLog.chars'), { n: text.length.toLocaleString() })}</span>
       </button>
       {open ? <div className="border-t border-[var(--border)] px-3 py-2"><Parts message={message} t={t} /></div> : null}
@@ -266,8 +307,8 @@ function Calls({ calls, start, t }: { calls: ModelCall[]; start: number; t: T })
   const answer = call.answer;
   const failed = answer?.stopReason === 'error';
   const tools = call.tools ?? [];
-  const heading = 'mb-2 flex items-center gap-2 text-[12.5px] font-semibold text-[var(--chat-text)]';
-  const small = 'h-7 rounded-[7px] px-2.5 text-[12px] text-[var(--chat-hint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--chat-text)]';
+  const heading = 'mb-2 flex items-center gap-2 text-[12.5px] font-semibold text-[var(--text)]';
+  const small = 'h-7 rounded-[7px] px-2.5 text-[12px] text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]';
   const facts = [answer?.responseModel ?? answer?.model, answer?.provider, answer?.providerThinkingLevel ?? answer?.thinkingLevel, answer?.stopReason].filter(Boolean).map(String);
   return (
     <div className="flex min-h-0 flex-1">
@@ -281,11 +322,11 @@ function Calls({ calls, start, t }: { calls: ModelCall[]; start: number; t: T })
             <button key={c.no} type="button" onClick={() => setPicked(c.no === calls.length ? null : c.no)}
               className={`block w-full px-4 py-2 text-left text-[12px] ${c.no === call.no ? 'bg-[var(--bg-hover)]' : 'hover:bg-[var(--bg-hover)]'}`}>
               <div className="flex items-baseline gap-2">
-                <b className={`text-[12.5px] ${error ? 'text-[var(--err)]' : 'text-[var(--chat-text)]'}`}>#{c.no}</b>
+                <b className={`text-[12.5px] ${error ? 'text-[var(--err)]' : 'text-[var(--text)]'}`}>#{c.no}</b>
                 <span className="tabular-nums text-[var(--text-faint)]">+{seconds(c.startedAt - start)} · {seconds(c.ms)}</span>
               </div>
               {c.thread ? <div className="mt-0.5 truncate text-[11px] text-[#c0603a]">{c.thread.label}</div> : null}
-              <div className="mt-0.5 truncate text-[var(--chat-hint)]">
+              <div className="mt-0.5 truncate text-[var(--text-faint)]">
                 {error ? <span className="text-[var(--err)]">{String(c.answer?.errorMessage ?? '')}</span>
                   : asked.length ? `→ ${asked.join(', ')}` : t('turnLog.answered')}
               </div>
@@ -295,8 +336,8 @@ function Calls({ calls, start, t }: { calls: ModelCall[]; start: number; t: T })
         })}
       </div>
       <div className="min-w-0 flex-1 overflow-y-auto px-5 py-3">
-        <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[var(--chat-hint)]">
-          <b className="text-[13px] text-[var(--chat-text)]">#{call.no}</b>
+        <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[var(--text-faint)]">
+          <b className="text-[13px] text-[var(--text)]">#{call.no}</b>
           {call.thread ? <span className="text-[#c0603a]">{call.thread.label}</span> : null}
           {facts.map((f, i) => <span key={i}>{f}</span>)}
           <span className="tabular-nums">{fill(t('turnLog.tokens'), { input: u.input.toLocaleString(), cached: u.cached.toLocaleString(), output: u.output.toLocaleString() })}{u.reasoning ? ` (${fill(t('turnLog.reasoningTokens'), { n: u.reasoning.toLocaleString() })})` : ''}</span>
@@ -309,9 +350,9 @@ function Calls({ calls, start, t }: { calls: ModelCall[]; start: number; t: T })
             {fill(t('turnLog.fromRecord'), { file: call.source.file })}
           </div>
         ) : null}
-        {call.lacks.map((name) => <p key={name} className="-mt-1.5 mb-3 text-[12px] text-[var(--chat-hint)]">{t(`turnLog.lacks.${name}`)}</p>)}
+        {call.lacks.map((name) => <p key={name} className="-mt-1.5 mb-3 text-[12px] text-[var(--text-faint)]">{t(`turnLog.lacks.${name}`)}</p>)}
         {raw ? (
-          <pre className={`${block} rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] p-3`}>
+          <pre className={`${block} rounded-[8px] border border-[var(--border)] bg-[var(--bg-field)] p-3`}>
             {JSON.stringify({ request: { systemPrompt: call.systemPrompt, messages: call.messages, tools: call.tools, ...(call.settings ? { settings: call.settings } : {}) }, answer: call.answer }, null, 2)}
           </pre>
         ) : (
@@ -326,7 +367,7 @@ function Calls({ calls, start, t }: { calls: ModelCall[]; start: number; t: T })
                 </div>
               ) : answer ? (
                 <div className="rounded-[8px] border border-[var(--border)] px-3 py-2"><Parts message={answer} t={t} /></div>
-              ) : <p className="text-[12.5px] text-[var(--chat-hint)]">—</p>}
+              ) : <p className="text-[12.5px] text-[var(--text-faint)]">—</p>}
             </section>
             {/* everything the model got */}
             <section>
@@ -346,21 +387,21 @@ function Calls({ calls, start, t }: { calls: ModelCall[]; start: number; t: T })
             <section>
               {call.tools ? (
                 <details>
-                  <summary className="cursor-pointer text-[12.5px] font-semibold text-[var(--chat-text)]">{fill(t('turnLog.rest'), { n: tools.length })}</summary>
+                  <summary className="cursor-pointer text-[12.5px] font-semibold text-[var(--text)]">{fill(t('turnLog.rest'), { n: tools.length })}</summary>
                   <div className="mt-2 space-y-2">
-                    <div className="text-[12px] text-[var(--chat-hint)]">{tools.map((tool) => tool.name).join(', ')}</div>
-                    <pre className={`${block} max-h-[480px] overflow-auto rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] p-3`}>{JSON.stringify(call.tools, null, 2)}</pre>
+                    <div className="text-[12px] text-[var(--text-faint)]">{tools.map((tool) => tool.name).join(', ')}</div>
+                    <pre className={`${block} max-h-[480px] overflow-auto rounded-[8px] border border-[var(--border)] bg-[var(--bg-field)] p-3`}>{JSON.stringify(call.tools, null, 2)}</pre>
                   </div>
                 </details>
               ) : (
-                <p className="text-[12.5px] text-[var(--chat-hint)]">{t(call.toolsUnknown ? 'turnLog.toolsUnknown' : 'turnLog.toolsMissing')}</p>
+                <p className="text-[12.5px] text-[var(--text-faint)]">{t(call.toolsUnknown ? 'turnLog.toolsUnknown' : 'turnLog.toolsMissing')}</p>
               )}
             </section>
             {call.settings ? (
               <section>
                 <details>
-                  <summary className="cursor-pointer text-[12.5px] font-semibold text-[var(--chat-text)]">{t('turnLog.settings')}</summary>
-                  <pre className={`${block} mt-2 max-h-[480px] overflow-auto rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] p-3`}>{JSON.stringify(call.settings, null, 2)}</pre>
+                  <summary className="cursor-pointer text-[12.5px] font-semibold text-[var(--text)]">{t('turnLog.settings')}</summary>
+                  <pre className={`${block} mt-2 max-h-[480px] overflow-auto rounded-[8px] border border-[var(--border)] bg-[var(--bg-field)] p-3`}>{JSON.stringify(call.settings, null, 2)}</pre>
                 </details>
               </section>
             ) : null}
@@ -379,7 +420,7 @@ function SentBlocks({ blocks, t }: { blocks: Item[]; t: T }) {
     <div className="space-y-2">
       {blocks.map((b, i) => (b?.type === 'text' ? <Clamped key={i} text={String(b.text ?? '')} max={20000} t={t} />
         : b?.type === 'image' ? (
-          <div key={i} className="font-mono text-[12px] text-[var(--chat-hint)]">
+          <div key={i} className="font-mono text-[12px] text-[var(--text-faint)]">
             {fill(t('turnLog.picture'), { type: String(b.mimeType ?? ''), size: k(Number(b.bytes) || 0) })}{b.file ? ` · ${String(b.file)}` : ''}
           </div>
         ) : <Clamped key={i} text={pretty(b)} t={t} />))}
@@ -401,7 +442,7 @@ function skillsLines(skills: Item, t: T): string[] {
 function Labeled({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="grid grid-cols-[180px_minmax(0,1fr)] gap-3 border-t border-[var(--border)] py-2 first:border-t-0">
-      <div className="text-[12px] text-[var(--chat-hint)]">{label}</div>
+      <div className="text-[12px] text-[var(--text-faint)]">{label}</div>
       <div className="min-w-0">{children}</div>
     </div>
   );
@@ -412,14 +453,14 @@ function Sent({ events, t }: { events: LogEvent[]; t: T }) {
   const opened = prompt?.opened as Item | null | undefined;
   const messages = events.filter((e) => e.kind === 'sent' || e.kind === 'steer') as Item[];
   const start = prompt?.t ?? 0;
-  const heading = 'mb-2 text-[12.5px] font-semibold text-[var(--chat-text)]';
+  const heading = 'mb-2 text-[12.5px] font-semibold text-[var(--text)]';
   const appended = opened?.session?.params?._meta?.systemPrompt?.append;
   const developer = opened?.codexConfig?.developer_instructions;
   return (
     <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-4">
       <section>
         <div className={heading}>{t('turnLog.opened')}</div>
-        {!opened ? <p className="text-[12.5px] text-[var(--chat-hint)]">{t('turnLog.noOpened')}</p> : (
+        {!opened ? <p className="text-[12.5px] text-[var(--text-faint)]">{t('turnLog.noOpened')}</p> : (
           <div className="rounded-[8px] border border-[var(--border)] px-3">
             <Labeled label={t('turnLog.program')}>
               <div className={block}>{(opened.command ?? [opened.program]).join(' ')}{opened.adapter ? `\n${fill(t('turnLog.through'), { adapter: String(opened.adapter) })}` : ''}</div>
@@ -432,7 +473,7 @@ function Sent({ events, t }: { events: LogEvent[]; t: T }) {
             <Labeled label={t('turnLog.env')}><Clamped text={pretty({ ...opened.env, PATH: opened.path, fromShell: opened.fromShell })} t={t} /></Labeled>
             <Labeled label={t('turnLog.handshake')}>
               <details>
-                <summary className="cursor-pointer text-[12px] text-[var(--chat-hint)]">initialize</summary>
+                <summary className="cursor-pointer text-[12px] text-[var(--text-faint)]">initialize</summary>
                 <div className="mt-1"><Clamped text={pretty(opened.initialize ?? null)} t={t} /></div>
               </details>
             </Labeled>
@@ -441,12 +482,12 @@ function Sent({ events, t }: { events: LogEvent[]; t: T }) {
       </section>
       <section>
         <div className={heading}>{fill(t('turnLog.messages'), { n: messages.length })}</div>
-        {messages.length === 0 ? <p className="text-[12.5px] text-[var(--chat-hint)]">{t('turnLog.noSent')}</p> : (
+        {messages.length === 0 ? <p className="text-[12.5px] text-[var(--text-faint)]">{t('turnLog.noSent')}</p> : (
           <div className="space-y-2">
             {messages.map((m, i) => (
               <div key={i} className="rounded-[8px] border border-[var(--border)] px-3 py-2">
-                <div className="mb-1.5 flex gap-2 text-[12px] text-[var(--chat-hint)]">
-                  <b className="text-[var(--chat-text)]">{t(m.kind === 'steer' ? 'turnLog.steered' : 'turnLog.message')}</b>
+                <div className="mb-1.5 flex gap-2 text-[12px] text-[var(--text-faint)]">
+                  <b className="text-[var(--text)]">{t(m.kind === 'steer' ? 'turnLog.steered' : 'turnLog.message')}</b>
                   <span className="tabular-nums">+{seconds(m.t - start)}</span>
                   {m._meta ? <span className="font-mono">_meta {JSON.stringify(m._meta)}</span> : null}
                 </div>
@@ -531,52 +572,150 @@ function rowsOf(events: LogEvent[], joined: boolean): Row[] {
 }
 
 const KIND_COLOR: Record<string, string> = {
-  prompt: 'text-[var(--chat-text)]',
-  message: 'text-[var(--chat-text)]',
-  thought: 'text-[var(--chat-hint)]',
+  prompt: 'text-[var(--text)]',
+  message: 'text-[var(--text)]',
+  thought: 'text-[var(--text-faint)]',
   tool: 'text-[#3f8fd0]',
   ask: 'text-[#b07a1f]',
-  end: 'text-[var(--chat-text)]',
+  end: 'text-[var(--text)]',
 };
+
+/** a collapsed line's height (px), and how many lines past the view are drawn each way */
+const ROW_HEIGHT = 26;
+const OVERSCAN = 30;
+
+/** A stable key for a line: its first event's, given as it is first seen. */
+const rowKeys = new WeakMap<LogEvent, number>();
+let lastRowKey = 0;
+const rowKey = (event: LogEvent) => {
+  let key = rowKeys.get(event);
+  if (key === undefined) { key = ++lastRowKey; rowKeys.set(event, key); }
+  return key;
+};
+
+/** The first line whose bottom is below `y`, in `offsets` (each line's top, and the end). */
+function lineAt(offsets: Float64Array, y: number): number {
+  let lo = 0;
+  let hi = offsets.length - 2;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (offsets[mid + 1]! <= y) lo = mid + 1;
+    else hi = mid;
+  }
+  return Math.max(0, lo);
+}
+
+/** An opened line, telling its height as it changes. */
+function Measured({ onHeight, children }: { onHeight: (px: number) => void; children: React.ReactNode }) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  React.useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    onHeight(el.offsetHeight);
+    const observer = new ResizeObserver(() => onHeight(el.offsetHeight));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [onHeight]);
+  return <div ref={ref}>{children}</div>;
+}
 
 function Events({ events, t }: { events: LogEvent[]; t: T }) {
   const [joined, setJoined] = React.useState(true);
   const [filter, setFilter] = React.useState('');
-  const [openRows, setOpenRows] = React.useState<Set<number>>(() => new Set());
+  const needle = React.useDeferredValue(filter).trim().toLowerCase();
+  /* the opened lines, by their first event (a line keeps it as the log grows and older events go) */
+  const [openRows, setOpenRows] = React.useState<Set<LogEvent>>(() => new Set());
+  const heights = React.useRef(new Map<LogEvent, number>());
+  const [measured, setMeasured] = React.useState(0);
   const start = events[0]?.t ?? 0;
   const rows = React.useMemo(() => rowsOf(events, joined), [events, joined]);
-  const needle = filter.trim().toLowerCase();
-  const shown = needle ? rows.filter((row) => `${row.label} ${row.summary}`.toLowerCase().includes(needle)) : rows;
-  const toggle = (index: number) => setOpenRows((set) => { const next = new Set(set); if (next.has(index)) next.delete(index); else next.add(index); return next; });
+  const shown = React.useMemo(() => (needle ? rows.filter((row) => `${row.label} ${row.summary}`.toLowerCase().includes(needle)) : rows), [rows, needle]);
+  const toggle = (event: LogEvent) => setOpenRows((set) => { const next = new Set(set); if (next.has(event)) next.delete(event); else next.add(event); return next; });
+
+  /* each line's top: a collapsed one ROW_HEIGHT, an opened one as measured */
+  const offsets = React.useMemo(() => {
+    const out = new Float64Array(shown.length + 1);
+    for (let i = 0; i < shown.length; i += 1) {
+      const first = shown[i]!.events[0]!;
+      out[i + 1] = out[i]! + (openRows.has(first) ? heights.current.get(first) ?? ROW_HEIGHT : ROW_HEIGHT);
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `measured` says the heights changed
+  }, [shown, openRows, measured]);
+  const heightOf = React.useCallback((event: LogEvent) => (px: number) => {
+    if (heights.current.get(event) === px) return;
+    heights.current.set(event, px);
+    setMeasured((n) => n + 1);
+  }, []);
+  const onHeight = React.useRef(new Map<LogEvent, (px: number) => void>());
+  const measure = (event: LogEvent) => {
+    let fn = onHeight.current.get(event);
+    if (!fn) { fn = heightOf(event); onHeight.current.set(event, fn); }
+    return fn;
+  };
+
+  /* the view: where it is scrolled and how tall; at the end it stays at the end as lines come */
+  const scroller = React.useRef<HTMLDivElement>(null);
+  const [view, setView] = React.useState({ top: 0, height: 800 });
+  const atEnd = React.useRef(false);
+  React.useLayoutEffect(() => {
+    const el = scroller.current;
+    if (!el) return undefined;
+    const observer = new ResizeObserver(() => setView({ top: el.scrollTop, height: el.clientHeight }));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const total = offsets[shown.length] ?? 0;
+  React.useLayoutEffect(() => {
+    const el = scroller.current;
+    if (el && atEnd.current && el.scrollTop + el.clientHeight < el.scrollHeight - 1) el.scrollTop = el.scrollHeight;
+  }, [total]);
+  const onScroll = () => {
+    const el = scroller.current;
+    if (!el) return;
+    atEnd.current = el.scrollTop > 0 && el.scrollTop + el.clientHeight >= el.scrollHeight - 4;
+    setView({ top: el.scrollTop, height: el.clientHeight });
+  };
+  const first = shown.length ? Math.max(0, lineAt(offsets, view.top) - OVERSCAN) : 0;
+  const last = shown.length ? Math.min(shown.length, lineAt(offsets, view.top + view.height) + 1 + OVERSCAN) : 0;
+
   return (
     <>
       <div className="flex shrink-0 items-center gap-3 border-b border-[var(--border)] px-5 py-2">
         <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder={t('turnLog.filter')}
-          className="h-7 w-64 rounded-[7px] border border-[var(--border)] bg-transparent px-2.5 text-[12.5px] text-[var(--chat-text)] outline-none placeholder:text-[var(--text-faint)] focus:border-[var(--text-muted)]" />
-        <label className="flex items-center gap-1.5 text-[12.5px] text-[var(--chat-hint)]">
+          className="h-7 w-64 rounded-[7px] border border-[var(--border)] bg-transparent px-2.5 text-[12.5px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)] focus:border-[var(--text-muted)]" />
+        <label className="flex items-center gap-1.5 text-[12.5px] text-[var(--text-faint)]">
           <input type="checkbox" checked={joined} onChange={(e) => setJoined(e.target.checked)} />
           {t('turnLog.joined')}
         </label>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2 font-mono text-[12px] leading-[1.55]">
-        {shown.length === 0 ? <p className="px-3 py-2 font-sans text-[13px] text-[var(--chat-hint)]">{t('turnLog.noMatch')}</p> : shown.map((row, index) => {
-          const open = openRows.has(index);
-          return (
-            <div key={`${row.at}-${index}`} className="rounded-[6px] hover:bg-[var(--bg-hover)]">
-              <button type="button" onClick={() => toggle(index)} className="flex w-full items-start gap-3 px-3 py-1 text-left">
-                <ChevronRight size={12} className={`mt-[3px] shrink-0 text-[var(--text-faint)] transition-transform ${open ? 'rotate-90' : ''}`} />
-                <span className="w-[68px] shrink-0 text-right tabular-nums text-[var(--text-faint)]">+{((row.at - start) / 1000).toFixed(2)}s</span>
-                <span className={`w-[150px] shrink-0 truncate ${KIND_COLOR[row.kind] ?? 'text-[var(--chat-hint)]'}`}>{row.label}{row.events.length > 1 ? ` ×${row.events.length}` : ''}</span>
-                <span className={`min-w-0 flex-1 ${open ? 'whitespace-pre-wrap break-words' : 'truncate'} ${row.tone === 'error' ? 'text-[var(--err)]' : row.tone === 'quiet' ? 'text-[var(--chat-hint)]' : 'text-[var(--chat-text)]'}`}>{row.summary}</span>
-              </button>
-              {open ? (
-                <pre className="mx-3 mb-2 ml-[100px] max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] p-3 text-[11.5px] text-[var(--chat-text)]">
-                  {JSON.stringify(row.events.length === 1 ? row.events[0] : row.events, null, 2)}
-                </pre>
-              ) : null}
+      <div ref={scroller} onScroll={onScroll} data-turn-log-events="" className="min-h-0 flex-1 overflow-y-auto px-2 py-2 font-mono text-[12px] leading-[1.55]">
+        {shown.length === 0 ? <p className="px-3 py-2 font-sans text-[13px] text-[var(--text-faint)]">{t('turnLog.noMatch')}</p> : (
+          <div className="relative" style={{ height: total }}>
+            <div className="absolute inset-x-0" style={{ top: offsets[first] }}>
+              {shown.slice(first, last).map((row) => {
+                const key = row.events[0]!;
+                const open = openRows.has(key);
+                const line = (
+                  <div className="rounded-[6px] hover:bg-[var(--bg-hover)]" style={open ? undefined : { height: ROW_HEIGHT }}>
+                    <button type="button" onClick={() => toggle(key)} className="flex w-full items-start gap-3 px-3 py-1 text-left">
+                      <ChevronRight size={12} className={`mt-[3px] shrink-0 text-[var(--text-faint)] transition-transform ${open ? 'rotate-90' : ''}`} />
+                      <span className="w-[68px] shrink-0 text-right tabular-nums text-[var(--text-faint)]">+{((row.at - start) / 1000).toFixed(2)}s</span>
+                      <span className={`w-[150px] shrink-0 truncate ${KIND_COLOR[row.kind] ?? 'text-[var(--text-faint)]'}`}>{row.label}{row.events.length > 1 ? ` ×${row.events.length}` : ''}</span>
+                      <span className={`min-w-0 flex-1 ${open ? 'whitespace-pre-wrap break-words' : 'truncate'} ${row.tone === 'error' ? 'text-[var(--err)]' : row.tone === 'quiet' ? 'text-[var(--text-faint)]' : 'text-[var(--text)]'}`}>{open ? row.summary : row.summary.slice(0, 1000)}</span>
+                    </button>
+                    {open ? (
+                      <pre className="mx-3 mb-2 ml-[100px] max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded-[8px] border border-[var(--border)] bg-[var(--bg-field)] p-3 text-[11.5px] text-[var(--text)]">
+                        {JSON.stringify(row.events.length === 1 ? row.events[0] : row.events, null, 2)}
+                      </pre>
+                    ) : null}
+                  </div>
+                );
+                return open ? <Measured key={rowKey(key)} onHeight={measure(key)}>{line}</Measured> : <React.Fragment key={rowKey(key)}>{line}</React.Fragment>;
+              })}
             </div>
-          );
-        })}
+          </div>
+        )}
       </div>
     </>
   );

@@ -86,13 +86,19 @@ export function useFilm(projectId: string, initial: FilmState | null, onChange: 
     return true;
   }, [projectId]);
 
-  /* the agent's writes: the film becomes the folder's (an edit of ours still on its way is applied on top by the server) */
+  /* the agent's writes: the film becomes the folder's. Judged once the writes sent before it are answered: the folder
+     can tell of a write of ours before its answer comes, and read then, it is the film without the edits here still on
+     their way (shown as if a write from outside took them back). While one is on its way, its answer brings the
+     folder's film itself (the server applies it on top of any write in between), so nothing is read here */
   useEffect(() => projectEvents(projectId, (event) => {
-    if (event.type !== 'film' || echoOf(event.rev)) return;
-    /* the same text as here is news only after the file could not be read (written whole again) */
-    if (event.rev === ref.current?.rev && !brokenRev.current) return;
+    if (event.type !== 'film') return;
+    void queue.current.then(() => {
+      if (echoOf(event.rev) || pending.current > 0) return undefined;
+      /* the same text as here is news only after the file could not be read (written whole again) */
+      if (event.rev === ref.current?.rev && !brokenRev.current) return undefined;
+      return fromServer();
     /* not read: Studio went away (it was stopping) — it tells again when it is back */
-    void queue.current.then(fromServer).catch(() => {});
+    }).catch(() => {});
   }), [projectId, fromServer]);
 
   /**

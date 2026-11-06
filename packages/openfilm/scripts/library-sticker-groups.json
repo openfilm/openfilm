@@ -1,0 +1,90 @@
+[
+ {
+  "fluent": "Smileys & Emotion",
+  "id": "faces",
+  "name": {
+   "en": "Faces",
+   "zh-CN": "表情",
+   "ja": "顔",
+   "ko": "얼굴",
+   "es": "Caras"
+  }
+ },
+ {
+  "fluent": "People & Body",
+  "id": "people",
+  "name": {
+   "en": "People",
+   "zh-CN": "手势人物",
+   "ja": "人・手",
+   "ko": "사람",
+   "es": "Personas"
+  }
+ },
+ {
+  "fluent": "Animals & Nature",
+  "id": "nature",
+  "name": {
+   "en": "Animals & nature",
+   "zh-CN": "动物自然",
+   "ja": "動物・自然",
+   "ko": "동물·자연",
+   "es": "Animales"
+  }
+ },
+ {
+  "fluent": "Food & Drink",
+  "id": "food",
+  "name": {
+   "en": "Food",
+   "zh-CN": "美食",
+   "ja": "食べ物",
+   "ko": "음식",
+   "es": "Comida"
+  }
+ },
+ {
+  "fluent": "Activities",
+  "id": "activities",
+  "name": {
+   "en": "Activities",
+   "zh-CN": "活动",
+   "ja": "アクティビティ",
+   "ko": "활동",
+   "es": "Actividades"
+  }
+ },
+ {
+  "fluent": "Travel & Places",
+  "id": "travel",
+  "name": {
+   "en": "Travel",
+   "zh-CN": "旅行地点",
+   "ja": "旅行・場所",
+   "ko": "여행",
+   "es": "Viajes"
+  }
+ },
+ {
+  "fluent": "Objects",
+  "id": "objects",
+  "name": {
+   "en": "Objects",
+   "zh-CN": "物品",
+   "ja": "もの",
+   "ko": "사물",
+   "es": "Objetos"
+  }
+ },
+ {
+  "fluent": "Symbols",
+  "id": "symbols",
+  "name": {
+   "en": "Symbols",
+   "zh-CN": "符号",
+   "ja": "記号",
+   "ko": "기호",
+   "es": "Símbolos"
+  }
+ }
+]

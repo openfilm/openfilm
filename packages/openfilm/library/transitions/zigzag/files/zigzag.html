@@ -1,0 +1,84 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Zigzag</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+:root { --color: #22223b; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Layers with zigzag edges rise from the bottom one after another, yellow, rose, then your colour over the cut,
+ * and rise on off the top. It lasts 0.8 s and covers the cut at its middle: put its middle on the cut. A page of
+ * OpenFilm's library (CC0): what it shows at t comes from t alone, drawn in parts of the frame so it fits a stage
+ * of any shape.
+ */
+const D = 0.8;
+const DEFAULT = '#22223b';
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+/* how far u is through [a, b], from 0 to 1 */
+const seg = (u, a, b) => clamp((u - a) / (b - a));
+const mix = (a, b, x) => a + (b - a) * x;
+const inOutQuart = (x) => (x < 0.5 ? 8 * x ** 4 : 1 - (-2 * x + 2) ** 4 / 2);
+/* the colour the page is given (its --color), read on each frame */
+const color = () => getComputedStyle(document.documentElement).getPropertyValue('--color').trim() || DEFAULT;
+
+const LAYERS = ['#ffcf3f', '#ff4f6d'];
+/* a zigzag edge across the frame at height y, its teeth shifted by ph */
+const teeth = (y, amp, ph, back) => {
+  const n = 9, step = W / n, xs = [];
+  for (let i = -1; i <= n + 1; i++) xs.push(i * step + ((ph % 1) * step));
+  if (back) xs.reverse();
+  xs.forEach((x, i) => g.lineTo(x, y + (((back ? xs.length - 1 - i : i) % 2) ? -amp : amp)));
+};
+
+function draw(u) {
+  const list = [...LAYERS, color()], n = list.length, amp = H * 0.06;
+  list.forEach((c, i) => {
+    const a = i * 0.07, b = 0.56 + (n - 1 - i) * 0.07;
+    const top = mix(H + amp * 2, -amp * 2, inOutQuart(seg(u, a, a + 0.28)));
+    const bottom = mix(H + amp * 2, -amp * 2, inOutQuart(seg(u, b, b + 0.28)));
+    if (top >= bottom) return;
+    g.fillStyle = c;
+    g.beginPath();
+    teeth(top, amp, u * 1.5 + i * 0.3, false);
+    teeth(bottom, amp, u * 1.5 + i * 0.3, true);
+    g.closePath();
+    g.fill();
+  });
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

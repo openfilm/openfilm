@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Star rating</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+:root { --color: #ffc800; --stars: 4.5; }
+svg { width: 100vw; height: 100vh; display: block; overflow: visible; }
+svg { filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
+.o { fill: rgba(255, 255, 255, 0.22); stroke: #ffffff; stroke-width: 6; stroke-linejoin: round; }
+.o, .f { animation: in 0.4s cubic-bezier(.34, 1.56, .64, 1) var(--d) both; }
+.f { fill: var(--color); stroke: var(--color); stroke-width: 6; stroke-linejoin: round; }
+@keyframes in { from { transform: scale(0) rotate(-72deg); } }
+.f { animation: in 0.45s cubic-bezier(.34, 1.56, .64, 1) calc(var(--d) + 0.12s) both, sh 2.2s ease-in-out calc(var(--d) + 0.9s) infinite; }
+@keyframes sh { 0%, 20%, 100% { transform: none; filter: none; } 10% { transform: scale(1.12); filter: brightness(1.25); } }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 600 160"><defs><clipPath id="c0"><rect class="cr" x="10" y="10" width="120" height="140"/></clipPath><clipPath id="c1"><rect class="cr" x="125" y="10" width="120" height="140"/></clipPath><clipPath id="c2"><rect class="cr" x="240" y="10" width="120" height="140"/></clipPath><clipPath id="c3"><rect class="cr" x="355" y="10" width="120" height="140"/></clipPath><clipPath id="c4"><rect class="cr" x="470" y="10" width="120" height="140"/></clipPath></defs>
+<g transform="translate(70 82)"><g style="--d: 0.00s"><polygon class="o" style="--d: 0.00s" points="0.0,-50.0 12.9,-17.8 47.6,-15.5 20.9,6.8 29.4,40.5 0.0,22.0 -29.4,40.5 -20.9,6.8 -47.6,-15.5 -12.9,-17.8"/></g></g>
+<g clip-path="url(#c0)"><g transform="translate(70 82)"><polygon class="f" style="--d: 0.00s" points="0.0,-50.0 12.9,-17.8 47.6,-15.5 20.9,6.8 29.4,40.5 0.0,22.0 -29.4,40.5 -20.9,6.8 -47.6,-15.5 -12.9,-17.8"/></g></g>
+<g transform="translate(185 82)"><g style="--d: 0.09s"><polygon class="o" style="--d: 0.05s" points="0.0,-50.0 12.9,-17.8 47.6,-15.5 20.9,6.8 29.4,40.5 0.0,22.0 -29.4,40.5 -20.9,6.8 -47.6,-15.5 -12.9,-17.8"/></g></g>
+<g clip-path="url(#c1)"><g transform="translate(185 82)"><polygon class="f" style="--d: 0.09s" points="0.0,-50.0 12.9,-17.8 47.6,-15.5 20.9,6.8 29.4,40.5 0.0,22.0 -29.4,40.5 -20.9,6.8 -47.6,-15.5 -12.9,-17.8"/></g></g>
+<g transform="translate(300 82)"><g style="--d: 0.18s"><polygon class="o" style="--d: 0.10s" points="0.0,-50.0 12.9,-17.8 47.6,-15.5 20.9,6.8 29.4,40.5 0.0,22.0 -29.4,40.5 -20.9,6.8 -47.6,-15.5 -12.9,-17.8"/></g></g>
+<g clip-path="url(#c2)"><g transform="translate(300 82)"><polygon class="f" style="--d: 0.18s" points="0.0,-50.0 12.9,-17.8 47.6,-15.5 20.9,6.8 29.4,40.5 0.0,22.0 -29.4,40.5 -20.9,6.8 -47.6,-15.5 -12.9,-17.8"/></g></g>
+<g transform="translate(415 82)"><g style="--d: 0.27s"><polygon class="o" style="--d: 0.15s" points="0.0,-50.0 12.9,-17.8 47.6,-15.5 20.9,6.8 29.4,40.5 0.0,22.0 -29.4,40.5 -20.9,6.8 -47.6,-15.5 -12.9,-17.8"/></g></g>
+<g clip-path="url(#c3)"><g transform="translate(415 82)"><polygon class="f" style="--d: 0.27s" points="0.0,-50.0 12.9,-17.8 47.6,-15.5 20.9,6.8 29.4,40.5 0.0,22.0 -29.4,40.5 -20.9,6.8 -47.6,-15.5 -12.9,-17.8"/></g></g>
+<g transform="translate(530 82)"><g style="--d: 0.36s"><polygon class="o" style="--d: 0.20s" points="0.0,-50.0 12.9,-17.8 47.6,-15.5 20.9,6.8 29.4,40.5 0.0,22.0 -29.4,40.5 -20.9,6.8 -47.6,-15.5 -12.9,-17.8"/></g></g>
+<g clip-path="url(#c4)"><g transform="translate(530 82)"><polygon class="f" style="--d: 0.36s" points="0.0,-50.0 12.9,-17.8 47.6,-15.5 20.9,6.8 29.4,40.5 0.0,22.0 -29.4,40.5 -20.9,6.8 -47.6,-15.5 -12.9,-17.8"/></g></g>
+</svg>
+<script>
+/*
+ * Five stars that fill in one after another, each with a pop and a glint, then shimmer in turn; how many are filled
+ * (halves too) is the clip's to change, and so is their color. A page of OpenFilm's library (CC0): what it shows at
+ * t comes from t alone; its CSS animations are held at t by the host.
+ */
+const cuts = [...document.querySelectorAll('.cr')];
+window.film = {
+  width: 600,
+  height: 160,
+  frame(t) {
+    const n = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--stars'));
+    const stars = Number.isFinite(n) ? n : 5;
+    cuts.forEach((r, i) => r.setAttribute('width', String(120 * Math.min(Math.max(stars - i, 0), 1))));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

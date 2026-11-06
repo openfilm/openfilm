@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "shop-strike.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Label\", \"type\": \"text\", \"at\": \".t4\"}, {\"name\": \"Price\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Old price\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Tag\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Price\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Tag\", \"type\": \"var\", \"var\": \"--tag\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    }
+  },
+  "durationMs": 4000
+}

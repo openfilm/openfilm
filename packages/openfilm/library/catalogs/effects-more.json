@@ -1,0 +1,1145 @@
+{
+ "version": 1,
+ "groups": {
+  "effect": [
+   {
+    "id": "variety",
+    "name": {
+     "en": "Variety",
+     "zh-CN": "综艺",
+     "ja": "バラエティ",
+     "ko": "예능",
+     "es": "Variedades"
+    }
+   },
+   {
+    "id": "dreamy",
+    "name": {
+     "en": "Dreamy",
+     "zh-CN": "梦幻",
+     "ja": "ゆめかわ",
+     "ko": "몽환",
+     "es": "Ensueño"
+    }
+   },
+   {
+    "id": "party",
+    "name": {
+     "en": "Party",
+     "zh-CN": "派对",
+     "ja": "パーティー",
+     "ko": "파티",
+     "es": "Fiesta"
+    }
+   }
+  ]
+ },
+ "items": [
+  {
+   "id": "effects/gold-dust",
+   "cat": "effect",
+   "group": "ambience",
+   "name": {
+    "en": "Gold dust",
+    "zh-CN": "金粉飘落",
+    "ja": "金粉",
+    "ko": "금가루",
+    "es": "Polvo dorado"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "gold-dust.html",
+   "about": "Fine gold specks drift down and twinkle, a few with four-point glints, plus large soft flecks near the lens. For warm, magical or luxury scenes.",
+   "tags": [
+    "particles",
+    "warm-tone",
+    "dreamy",
+    "elegant"
+   ]
+  },
+  {
+   "id": "effects/fireflies",
+   "cat": "effect",
+   "group": "ambience",
+   "name": {
+    "en": "Fireflies",
+    "zh-CN": "萤火虫",
+    "ja": "ホタル",
+    "ko": "반딧불이",
+    "es": "Luciérnagas"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "fireflies.html",
+   "about": "Small glowing lights wander on lazy curves, mostly low in the frame, each fading up and out in its own rhythm. For dusk scenes.",
+   "tags": [
+    "particles",
+    "dreamy",
+    "wonder",
+    "night",
+    "nature"
+   ]
+  },
+  {
+   "id": "effects/bokeh",
+   "cat": "effect",
+   "group": "ambience",
+   "name": {
+    "en": "Bokeh lights",
+    "zh-CN": "光斑飘浮",
+    "ja": "玉ボケ",
+    "ko": "보케 조명",
+    "es": "Luces bokeh"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "bokeh.html",
+   "about": "Out-of-focus round light discs with bright rims drift slowly across the lens, swelling and fading, mostly warm. For city nights, dreamy backgrounds and romantic scenes.",
+   "tags": [
+    "blur",
+    "particles",
+    "dreamy",
+    "night",
+    "romantic"
+   ]
+  },
+  {
+   "id": "effects/blossom-storm",
+   "cat": "effect",
+   "group": "ambience",
+   "name": {
+    "en": "Blossom storm",
+    "zh-CN": "樱花飞舞",
+    "ja": "桜吹雪",
+    "ko": "벚꽃 바람",
+    "es": "Lluvia de cerezos"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "blossom-storm.html",
+   "about": "Cherry blossom petals are swept across the frame by gusting wind, tumbling, near ones large and blurred. For spring, romance and Japan-style scenes.",
+   "tags": [
+    "particles",
+    "weather-fx",
+    "romantic",
+    "dreamy",
+    "nature"
+   ]
+  },
+  {
+   "id": "effects/autumn-leaves",
+   "cat": "effect",
+   "group": "ambience",
+   "name": {
+    "en": "Autumn leaves",
+    "zh-CN": "秋日落叶",
+    "ja": "落ち葉",
+    "ko": "낙엽",
+    "es": "Hojas de otoño"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "autumn-leaves.html",
+   "about": "Red, orange and gold leaves rock down like pendulums and turn over, near ones big and soft. For autumn, nostalgic or calm scenes.",
+   "tags": [
+    "particles",
+    "warm-tone",
+    "nostalgic",
+    "calm",
+    "nature"
+   ]
+  },
+  {
+   "id": "effects/smoke-haze",
+   "cat": "effect",
+   "group": "ambience",
+   "name": {
+    "en": "Smoke",
+    "zh-CN": "烟雾弥漫",
+    "ja": "煙",
+    "ko": "연기",
+    "es": "Humo"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "smoke-haze.html",
+   "about": "Wisps of smoke drift low across the frame and curl as they rise, thick near the ground and thin above. For moody, mysterious scenes.",
+   "tags": [
+    "weather-fx",
+    "mysterious",
+    "dark",
+    "scary",
+    "cinematic-look"
+   ]
+  },
+  {
+   "id": "effects/dust-beam",
+   "cat": "effect",
+   "group": "ambience",
+   "name": {
+    "en": "Dust in the light",
+    "zh-CN": "光束浮尘",
+    "ja": "光の中のほこり",
+    "ko": "빛 속 먼지",
+    "es": "Polvo en la luz"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "dust-beam.html",
+   "about": "Sunlight slants in as a fan of shimmering shafts, dust glittering where the beam catches it, dark outside. For cinematic, warm or sacred scenes.",
+   "tags": [
+    "light",
+    "particles",
+    "cinematic-look",
+    "warm",
+    "solemn"
+   ]
+  },
+  {
+   "id": "effects/embers",
+   "cat": "effect",
+   "group": "ambience",
+   "name": {
+    "en": "Embers",
+    "zh-CN": "火星飞舞",
+    "ja": "火の粉",
+    "ko": "불티",
+    "es": "Brasas"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "embers.html",
+   "about": "Sparks rise from a fire below the frame, cooling from white-hot to orange and red, over a flickering glow. For fire, epic or dramatic scenes.",
+   "tags": [
+    "fire",
+    "particles",
+    "warm-tone",
+    "epic",
+    "dark"
+   ]
+  },
+  {
+   "id": "effects/caustics",
+   "cat": "effect",
+   "group": "ambience",
+   "name": {
+    "en": "Underwater light",
+    "zh-CN": "水下光影",
+    "ja": "水中の光",
+    "ko": "수중 빛",
+    "es": "Luz submarina"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "caustics.html",
+   "about": "Moving nets of light and swaying sun shafts over a blue-green tint, with specks drifting like underwater. For ocean, pool and dreamy calm scenes.",
+   "tags": [
+    "light",
+    "cool-tone",
+    "calm",
+    "dreamy",
+    "nature"
+   ]
+  },
+  {
+   "id": "effects/aurora",
+   "cat": "effect",
+   "group": "ambience",
+   "name": {
+    "en": "Aurora",
+    "zh-CN": "极光",
+    "ja": "オーロラ",
+    "ko": "오로라",
+    "es": "Aurora"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "aurora.html",
+   "about": "Green and violet northern-light curtains ripple sideways across the top of the frame with fine rays rising. For night, nature, fantasy and space scenes.",
+   "tags": [
+    "light",
+    "cool-tone",
+    "dreamy",
+    "wonder",
+    "night",
+    "space"
+   ]
+  },
+  {
+   "id": "effects/blizzard",
+   "cat": "effect",
+   "group": "ambience",
+   "name": {
+    "en": "Blizzard",
+    "zh-CN": "暴风雪",
+    "ja": "吹雪",
+    "ko": "눈보라",
+    "es": "Ventisca"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "blizzard.html",
+   "about": "Snow is driven sideways by gusting wind, near flakes streaking past, and the light goes white with each gust. For winter, storm and survival scenes.",
+   "tags": [
+    "weather-fx",
+    "particles",
+    "cool-tone",
+    "intense",
+    "weather"
+   ]
+  },
+  {
+   "id": "effects/raindrops-lens",
+   "cat": "effect",
+   "group": "ambience",
+   "name": {
+    "en": "Rain on the lens",
+    "zh-CN": "镜头雨滴",
+    "ja": "レンズの雨粒",
+    "ko": "렌즈 빗방울",
+    "es": "Lluvia en la lente"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "raindrops-lens.html",
+   "about": "Raindrops land on the glass in front of the lens with dark rims and catch-lights, some running down leaving trails. For rainy, moody scenes.",
+   "tags": [
+    "weather-fx",
+    "blur",
+    "sad",
+    "calm",
+    "weather"
+   ]
+  },
+  {
+   "id": "effects/rainbow-leak",
+   "cat": "effect",
+   "group": "light",
+   "name": {
+    "en": "Rainbow leak",
+    "zh-CN": "彩虹漏光",
+    "ja": "レインボーリーク",
+    "ko": "무지개 빛샘",
+    "es": "Fuga arcoíris"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "rainbow-leak.html",
+   "about": "A tall slanted band of light splitting into rainbow colours sweeps across the picture with warm light from the side. For dreamy, happy, celebratory scenes.",
+   "tags": [
+    "light",
+    "vivid",
+    "dreamy",
+    "happy",
+    "vlog"
+   ]
+  },
+  {
+   "id": "effects/anamorphic-flare",
+   "cat": "effect",
+   "group": "light",
+   "name": {
+    "en": "Anamorphic flare",
+    "zh-CN": "电影光晕",
+    "ja": "アナモフィックフレア",
+    "ko": "아나모픽 플레어",
+    "es": "Destello anamórfico"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "anamorphic-flare.html",
+   "about": "A bright light drifts across the top while a long thin blue streak crosses the whole frame with lens ghosts. For cinematic or sci-fi scenes.",
+   "tags": [
+    "light",
+    "cinematic-look",
+    "cool-tone",
+    "cinematic",
+    "tech"
+   ]
+  },
+  {
+   "id": "effects/sunburst",
+   "cat": "effect",
+   "group": "light",
+   "name": {
+    "en": "Sunburst",
+    "zh-CN": "旋转光芒",
+    "ja": "サンバースト",
+    "ko": "햇살 광선",
+    "es": "Rayos de sol"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "sunburst.html",
+   "about": "Soft warm rays fan down from a sun above the top corner and turn slowly, each breathing, over a glow. For sunny, hopeful, morning scenes.",
+   "tags": [
+    "light",
+    "warm-tone",
+    "uplifting",
+    "morning",
+    "happy"
+   ]
+  },
+  {
+   "id": "effects/prism",
+   "cat": "effect",
+   "group": "light",
+   "name": {
+    "en": "Prism",
+    "zh-CN": "棱镜色散",
+    "ja": "プリズム",
+    "ko": "프리즘",
+    "es": "Prisma"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "prism.html",
+   "about": "Light split into colours fans across the frame in soft spectral beams with crisp rainbow slivers, drifting. For dreamy, creative scenes.",
+   "tags": [
+    "light",
+    "vivid",
+    "dreamy",
+    "wonder",
+    "fashion"
+   ]
+  },
+  {
+   "id": "effects/spotlight",
+   "cat": "effect",
+   "group": "light",
+   "name": {
+    "en": "Spotlight",
+    "zh-CN": "聚光灯",
+    "ja": "スポットライト",
+    "ko": "스포트라이트",
+    "es": "Foco"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "spotlight.html",
+   "about": "The frame goes dark except a soft round spot that glides from place to place, resting at each. For reveals, mystery and highlighting.",
+   "tags": [
+    "light",
+    "dark",
+    "mysterious",
+    "focused",
+    "tense"
+   ]
+  },
+  {
+   "id": "effects/bloom",
+   "cat": "effect",
+   "group": "light",
+   "name": {
+    "en": "Soft bloom",
+    "zh-CN": "柔光晕",
+    "ja": "ソフトグロー",
+    "ko": "소프트 글로우",
+    "es": "Resplandor suave"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "bloom.html",
+   "about": "The frame edges melt into a bright breathing haze, like a smeared filter, with glow pools drifting round the rim. For dreamy, romantic scenes.",
+   "tags": [
+    "blur",
+    "light",
+    "dreamy",
+    "soft",
+    "romantic"
+   ]
+  },
+  {
+   "id": "effects/film-8mm",
+   "cat": "effect",
+   "group": "retro",
+   "name": {
+    "en": "8mm film",
+    "zh-CN": "8毫米胶片",
+    "ja": "8ミリフィルム",
+    "ko": "8mm 필름",
+    "es": "Película de 8 mm"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "film-8mm.html",
+   "about": "Home-movie 8mm look: dark rounded gate edges, sprocket hole, warm burnt edges, heavy grain, dust, scratches, flickering exposure. For memories and vintage scenes.",
+   "tags": [
+    "film",
+    "retro",
+    "warm-tone",
+    "nostalgic",
+    "documentary"
+   ]
+  },
+  {
+   "id": "effects/tv-static",
+   "cat": "effect",
+   "group": "retro",
+   "name": {
+    "en": "TV static",
+    "zh-CN": "老电视雪花",
+    "ja": "テレビの砂嵐",
+    "ko": "TV 노이즈",
+    "es": "Estática de TV"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "tv-static.html",
+   "about": "Poor-reception TV: snow, scan lines, a rolling bright bar, tearing lines, dark curved corners and bursts of static. For retro, glitch and horror scenes.",
+   "tags": [
+    "retro",
+    "film",
+    "scary",
+    "nostalgic",
+    "tech"
+   ]
+  },
+  {
+   "id": "effects/sepia-paper",
+   "cat": "effect",
+   "group": "retro",
+   "name": {
+    "en": "Old paper",
+    "zh-CN": "泛黄旧纸",
+    "ja": "古い紙",
+    "ko": "빛바랜 종이",
+    "es": "Papel antiguo"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "sepia-paper.html",
+   "about": "An old yellowed photograph: sepia wash, paper fibers, brown spots, a cup ring, a fold and dark aged edges. For history and memories.",
+   "tags": [
+    "retro",
+    "film",
+    "warm-tone",
+    "nostalgic",
+    "documentary"
+   ]
+  },
+  {
+   "id": "effects/dv-camcorder",
+   "cat": "effect",
+   "group": "retro",
+   "name": {
+    "en": "Camcorder",
+    "zh-CN": "DV录像",
+    "ja": "ビデオカメラ",
+    "ko": "캠코더",
+    "es": "Videocámara"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "dv-camcorder.html",
+   "about": "A DV camcorder screen: blinking red REC, running timecode, date, battery, zoom bar and corner marks over scan lines. For home-video and vlog scenes.",
+   "tags": [
+    "retro",
+    "hud",
+    "frame",
+    "vlog",
+    "nostalgic"
+   ]
+  },
+  {
+   "id": "effects/halftone",
+   "cat": "effect",
+   "group": "retro",
+   "name": {
+    "en": "Halftone",
+    "zh-CN": "网点印刷",
+    "ja": "ハーフトーン",
+    "ko": "하프톤",
+    "es": "Semitono"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "halftone.html",
+   "about": "Pop-art halftone dots in bold inks wash in from the corners, big at the edges and shrinking toward the middle. For comic and pop-art styles.",
+   "tags": [
+    "comic",
+    "shapes",
+    "vivid",
+    "playful",
+    "fashion"
+   ]
+  },
+  {
+   "id": "effects/cinema-guides",
+   "cat": "effect",
+   "group": "frame",
+   "name": {
+    "en": "Director's monitor",
+    "zh-CN": "电影取景框",
+    "ja": "監督モニター",
+    "ko": "감독 모니터",
+    "es": "Monitor de rodaje"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "cinema-guides.html",
+   "about": "Director's monitor overlay: a 2.39:1 mask, safe-area guides, corner marks, a center cross, running timecode and a blinking REC. For behind-the-scenes and film-making content.",
+   "tags": [
+    "hud",
+    "frame",
+    "cinematic-look",
+    "drama",
+    "documentary"
+   ]
+  },
+  {
+   "id": "effects/phone-frame",
+   "cat": "effect",
+   "group": "frame",
+   "name": {
+    "en": "Phone frame",
+    "zh-CN": "手机边框",
+    "ja": "スマホフレーム",
+    "ko": "휴대폰 프레임",
+    "es": "Marco de móvil"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "phone-frame.html",
+   "about": "The picture in a modern phone screen on a soft backdrop with shadow and passing glare; lies sideways on wide stages. For app demos.",
+   "tags": [
+    "frame",
+    "hud",
+    "tech",
+    "ui",
+    "social"
+   ]
+  },
+  {
+   "id": "effects/vlog-frame",
+   "cat": "effect",
+   "group": "frame",
+   "name": {
+    "en": "Vlog frame",
+    "zh-CN": "圆角Vlog框",
+    "ja": "Vlogフレーム",
+    "ko": "브이로그 프레임",
+    "es": "Marco vlog"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "vlog-frame.html",
+   "about": "A paper matte round a rounded window, with washi tape, a handwritten line and date, a beating heart and a twinkling sparkle. For scrapbook-style vlogs.",
+   "tags": [
+    "frame",
+    "handdrawn",
+    "cute",
+    "vlog",
+    "travel"
+   ]
+  },
+  {
+   "id": "effects/doodle-border",
+   "cat": "effect",
+   "group": "frame",
+   "name": {
+    "en": "Doodle border",
+    "zh-CN": "手绘涂鸦框",
+    "ja": "手描きフレーム",
+    "ko": "낙서 테두리",
+    "es": "Borde garabato"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "doodle-border.html",
+   "about": "A wobbly marker double line round the picture with star, swirl, heart and spark doodles, redrawn eight times a second. For playful vlogs.",
+   "tags": [
+    "frame",
+    "handdrawn",
+    "playful",
+    "kids",
+    "vlog"
+   ]
+  },
+  {
+   "id": "effects/comic-panel",
+   "cat": "effect",
+   "group": "frame",
+   "name": {
+    "en": "Comic panel",
+    "zh-CN": "漫画分格框",
+    "ja": "漫画コマ",
+    "ko": "만화 칸",
+    "es": "Viñeta de cómic"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "comic-panel.html",
+   "about": "The picture as a comic panel: inked border, halftone dots, a yellow caption box and a jolting WOW! burst. For comic-style and funny scenes.",
+   "tags": [
+    "frame",
+    "comic",
+    "playful",
+    "comedy",
+    "vivid"
+   ]
+  },
+  {
+   "id": "effects/gold-frame",
+   "cat": "effect",
+   "group": "frame",
+   "name": {
+    "en": "Gold frame",
+    "zh-CN": "金色画框",
+    "ja": "金の額縁",
+    "ko": "금색 액자",
+    "es": "Marco dorado"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "gold-frame.html",
+   "about": "An ornate gilded gallery frame with beads, embossed vines and corner rosettes, a glint crossing the gold now and then. For art and portraits.",
+   "tags": [
+    "frame",
+    "elegant",
+    "solemn",
+    "documentary",
+    "warm-tone"
+   ]
+  },
+  {
+   "id": "effects/story-bars",
+   "cat": "effect",
+   "group": "frame",
+   "name": {
+    "en": "Story bars",
+    "zh-CN": "故事进度条",
+    "ja": "ストーリーバー",
+    "ko": "스토리 바",
+    "es": "Barras de historia"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "story-bars.html",
+   "about": "Social story bars along the top fill one after another, with an avatar ring, name, buttons and a message field below. For social-media mockups.",
+   "tags": [
+    "frame",
+    "hud",
+    "social",
+    "ui",
+    "vlog"
+   ]
+  },
+  {
+   "id": "effects/speed-lines",
+   "cat": "effect",
+   "group": "variety",
+   "name": {
+    "en": "Speed lines",
+    "zh-CN": "综艺速度线",
+    "ja": "スピード線",
+    "ko": "스피드 라인",
+    "es": "Líneas de velocidad"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "speed-lines.html",
+   "about": "Long tapered comic streaks cross the top and bottom of the picture, light and dark, redrawn twelve times a second. For fast motion and chases.",
+   "tags": [
+    "comic",
+    "handdrawn",
+    "intense",
+    "action"
+   ]
+  },
+  {
+   "id": "effects/focus-lines",
+   "cat": "effect",
+   "group": "variety",
+   "name": {
+    "en": "Focus lines",
+    "zh-CN": "集中线",
+    "ja": "集中線",
+    "ko": "집중선",
+    "es": "Líneas de enfoque"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "focus-lines.html",
+   "about": "Sharp ink wedges rush in from every edge toward the middle and stop short, redrawn a dozen times a second. For comic emphasis and surprise.",
+   "tags": [
+    "comic",
+    "handdrawn",
+    "tense",
+    "comedy",
+    "intense"
+   ]
+  },
+  {
+   "id": "effects/shock-burst",
+   "cat": "effect",
+   "group": "variety",
+   "name": {
+    "en": "Shock burst",
+    "zh-CN": "震惊放射",
+    "ja": "衝撃",
+    "ko": "충격 폭발",
+    "es": "Impacto"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "shock-burst.html",
+   "about": "Each beat a flash at the middle, two-colour rays burst out and white streaks rush to the edges, then ease to flickers. For impacts.",
+   "tags": [
+    "comic",
+    "light",
+    "shake",
+    "intense",
+    "action"
+   ]
+  },
+  {
+   "id": "effects/impact-marks",
+   "cat": "effect",
+   "group": "variety",
+   "name": {
+    "en": "Exclamation pop",
+    "zh-CN": "感叹号冲击",
+    "ja": "びっくりマーク",
+    "ko": "느낌표 팝",
+    "es": "Exclamaciones"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "impact-marks.html",
+   "about": "A bold !!! or !? slams in on a spiky burst, overshoots, shakes and settles, then flies off as the next lands. For comic surprise.",
+   "tags": [
+    "comic",
+    "speech",
+    "shake",
+    "comedy",
+    "playful"
+   ]
+  },
+  {
+   "id": "effects/dizzy-stars",
+   "cat": "effect",
+   "group": "variety",
+   "name": {
+    "en": "Seeing stars",
+    "zh-CN": "眼冒金星",
+    "ja": "目が回る",
+    "ko": "별이 빙글빙글",
+    "es": "Ver estrellas"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "dizzy-stars.html",
+   "about": "Five plump stars circle on a tilted ring, growing at the front and dimming behind, shedding twinkles. For cartoon dizziness and funny reactions.",
+   "tags": [
+    "comic",
+    "particles",
+    "spin",
+    "comedy",
+    "playful"
+   ]
+  },
+  {
+   "id": "effects/emotion-marks",
+   "cat": "effect",
+   "group": "variety",
+   "name": {
+    "en": "Anger and sweat",
+    "zh-CN": "汗滴怒气",
+    "ja": "怒りと汗",
+    "ko": "분노와 땀",
+    "es": "Enojo y sudor"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "emotion-marks.html",
+   "about": "A throbbing anger mark at the right, sweat drops sliding down at the left and a small spiral of confusion between. For anime-style comic reactions.",
+   "tags": [
+    "comic",
+    "handdrawn",
+    "playful",
+    "comedy",
+    "bounce"
+   ]
+  },
+  {
+   "id": "effects/heart-burst",
+   "cat": "effect",
+   "group": "variety",
+   "name": {
+    "en": "Heart burst",
+    "zh-CN": "爱心爆发",
+    "ja": "ハートあふれる",
+    "ko": "하트 팡팡",
+    "es": "Explosión de corazones"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "heart-burst.html",
+   "about": "Every beat a pop of light low in the frame flings glossy hearts up and out; they float up wobbling and shrink. For love scenes.",
+   "tags": [
+    "cute",
+    "particles",
+    "romantic",
+    "happy",
+    "celebration"
+   ]
+  },
+  {
+   "id": "effects/blush-glow",
+   "cat": "effect",
+   "group": "variety",
+   "name": {
+    "en": "Blush",
+    "zh-CN": "害羞红晕",
+    "ja": "照れ",
+    "ko": "부끄부끄",
+    "es": "Sonrojo"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "blush-glow.html",
+   "about": "A warm pink glow creeps in from the edges and pulses like a heartbeat, with blush marks and small rising hearts. For shy, romantic moments.",
+   "tags": [
+    "cute",
+    "warm-tone",
+    "romantic",
+    "playful",
+    "soft"
+   ]
+  },
+  {
+   "id": "effects/heart-bokeh",
+   "cat": "effect",
+   "group": "dreamy",
+   "name": {
+    "en": "Heart bokeh",
+    "zh-CN": "爱心光斑",
+    "ja": "ハートのボケ",
+    "ko": "하트 보케",
+    "es": "Bokeh de corazones"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "heart-bokeh.html",
+   "about": "Heart-shaped out-of-focus lights in pink and gold drift slowly up and breathe, with small round lights behind. For romantic, wedding and Valentine scenes.",
+   "tags": [
+    "cute",
+    "blur",
+    "particles",
+    "romantic",
+    "dreamy",
+    "pastel"
+   ]
+  },
+  {
+   "id": "effects/glitter",
+   "cat": "effect",
+   "group": "dreamy",
+   "name": {
+    "en": "Glitter",
+    "zh-CN": "闪粉",
+    "ja": "グリッター",
+    "ko": "글리터",
+    "es": "Purpurina"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "glitter.html",
+   "about": "Fine glitter flakes drift down, each flashing a rainbow colour for a moment, the brightest throwing a star. For glamour, party and magical scenes.",
+   "tags": [
+    "particles",
+    "vivid",
+    "celebration",
+    "dreamy",
+    "fashion"
+   ]
+  },
+  {
+   "id": "effects/pastel-wash",
+   "cat": "effect",
+   "group": "dreamy",
+   "name": {
+    "en": "Pastel wash",
+    "zh-CN": "马卡龙渐变",
+    "ja": "パステル",
+    "ko": "파스텔 물결",
+    "es": "Pastel"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "pastel-wash.html",
+   "about": "Big soft clouds of candy colours (pink, lilac, sky, mint, peach) wander round the edges, mixing, under a milky haze. For soft, dreamy scenes.",
+   "tags": [
+    "pastel",
+    "blur",
+    "dreamy",
+    "soft",
+    "playful"
+   ]
+  },
+  {
+   "id": "effects/cloud-float",
+   "cat": "effect",
+   "group": "dreamy",
+   "name": {
+    "en": "Dreamy clouds",
+    "zh-CN": "梦幻云朵",
+    "ja": "ゆめ雲",
+    "ko": "몽환 구름",
+    "es": "Nubes de ensueño"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "cloud-float.html",
+   "about": "Soft candy-tinted round clouds drift along the bottom in two layers, one in each top corner, with haze and twinkles. For dreamy, cute, kids scenes.",
+   "tags": [
+    "pastel",
+    "cute",
+    "weather-fx",
+    "dreamy",
+    "kids"
+   ]
+  },
+  {
+   "id": "effects/sparkle-trails",
+   "cat": "effect",
+   "group": "dreamy",
+   "name": {
+    "en": "Sparkle trails",
+    "zh-CN": "星光拖尾",
+    "ja": "きらめく軌跡",
+    "ko": "반짝이 꼬리",
+    "es": "Estelas brillantes"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "sparkle-trails.html",
+   "about": "Bright little comets swoop across the picture on curves, each leaving a light ribbon and a wake of glitter that fades. For magic and glamour.",
+   "tags": [
+    "particles",
+    "light",
+    "dreamy",
+    "wonder",
+    "celebration"
+   ]
+  },
+  {
+   "id": "effects/confetti-cannon",
+   "cat": "effect",
+   "group": "party",
+   "name": {
+    "en": "Confetti cannon",
+    "zh-CN": "彩纸礼炮",
+    "ja": "紙吹雪クラッカー",
+    "ko": "꽃가루 대포",
+    "es": "Cañón de confeti"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "confetti-cannon.html",
+   "about": "Cannons in the bottom corners fire confetti squares, strips and dots up every few seconds; it slows, then flutters down. For celebrations and wins.",
+   "tags": [
+    "celebration",
+    "particles",
+    "happy",
+    "holiday",
+    "success"
+   ]
+  },
+  {
+   "id": "effects/fireworks",
+   "cat": "effect",
+   "group": "party",
+   "name": {
+    "en": "Fireworks",
+    "zh-CN": "烟花",
+    "ja": "花火",
+    "ko": "불꽃놀이",
+    "es": "Fuegos artificiales"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "fireworks.html",
+   "about": "Shells climb on sparking trails and burst into coloured stars that droop and trail light, each burst lighting the sky. For New Year and finales.",
+   "tags": [
+    "celebration",
+    "particles",
+    "light",
+    "holiday",
+    "epic",
+    "night"
+   ]
+  },
+  {
+   "id": "effects/balloons",
+   "cat": "effect",
+   "group": "party",
+   "name": {
+    "en": "Balloons",
+    "zh-CN": "气球升空",
+    "ja": "風船",
+    "ko": "풍선",
+    "es": "Globos"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "balloons.html",
+   "about": "Glossy party-coloured balloons rise through the picture with shine, knots and trailing strings, far ones small, near ones large. For birthdays and parties.",
+   "tags": [
+    "celebration",
+    "vivid",
+    "happy",
+    "holiday",
+    "kids"
+   ]
+  },
+  {
+   "id": "effects/disco-ball",
+   "cat": "effect",
+   "group": "party",
+   "name": {
+    "en": "Disco ball",
+    "zh-CN": "迪斯科光点",
+    "ja": "ミラーボール",
+    "ko": "미러볼",
+    "es": "Bola de discoteca"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "disco-ball.html",
+   "about": "A mirror ball turns at the top, coloured beams sweep through haze and light spots slide across the dimmed frame. For parties and clubs.",
+   "tags": [
+    "celebration",
+    "light",
+    "vivid",
+    "electronic",
+    "funk",
+    "night"
+   ]
+  },
+  {
+   "id": "effects/streamers",
+   "cat": "effect",
+   "group": "party",
+   "name": {
+    "en": "Streamers",
+    "zh-CN": "彩带飘落",
+    "ja": "紙テープ",
+    "ko": "색종이 테이프",
+    "es": "Serpentinas"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "streamers.html",
+   "about": "Curly party ribbons twist as they fall, showing bright face and darker back, with a little confetti among them. For birthdays, parties and celebrations.",
+   "tags": [
+    "celebration",
+    "particles",
+    "happy",
+    "holiday",
+    "kids"
+   ]
+  }
+ ]
+}

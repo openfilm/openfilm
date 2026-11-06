@@ -1,0 +1,207 @@
+{
+ "version": 2,
+ "kind": "group",
+ "clips": [
+  {
+   "track": 0,
+   "at": 0.3,
+   "clip": {
+    "src": "title-script.html",
+    "time": [
+     0,
+     2.6
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Title\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Label\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}]",
+     "data-place": "{\"x\":0.5,\"y\":0.5,\"fit\":0.34}"
+    },
+    "size": {
+     "w": 1000,
+     "h": 400
+    },
+    "overrides": [
+     {
+      "at": ".t1",
+      "text": "Love Story"
+     },
+     {
+      "at": ".t2",
+      "text": "YOU AND ME"
+     },
+     {
+      "fade": [
+       0,
+       0.3
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "track": 0,
+   "at": 5.6,
+   "clip": {
+    "src": "floating-hearts.html",
+    "time": [
+     0,
+     3
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]",
+     "data-place": "{\"x\":0.82,\"y\":0.6,\"fit\":0.4}"
+    },
+    "size": {
+     "w": 300,
+     "h": 500
+    }
+   }
+  },
+  {
+   "track": 1,
+   "at": 8.4,
+   "clip": {
+    "src": "info-quote.html",
+    "time": [
+     0,
+     3.2
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Line 1\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Line 2\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Author\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Card\", \"type\": \"var\", \"var\": \"--card\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]",
+     "data-place": "{\"x\":0.5,\"y\":0.5,\"fit\":0.32}"
+    },
+    "size": {
+     "w": 1000,
+     "h": 450
+    },
+    "overrides": [
+     {
+      "at": ".t1",
+      "text": "Every day with you"
+     },
+     {
+      "at": ".t2",
+      "text": "is my favorite day."
+     },
+     {
+      "at": ".t3",
+      "text": "US"
+     }
+    ]
+   }
+  },
+  {
+   "track": 2,
+   "at": 2.6,
+   "clip": {
+    "src": "heart.html",
+    "attrs": {
+     "data-props": "[{\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    },
+    "time": [
+     0,
+     0.8
+    ]
+   }
+  },
+  {
+   "track": 2,
+   "at": 5.15,
+   "clip": {
+    "src": "sparkle.html",
+    "time": [
+     0,
+     0.9
+    ]
+   }
+  },
+  {
+   "track": 2,
+   "at": 7.8,
+   "clip": {
+    "src": "heart.html",
+    "attrs": {
+     "data-props": "[{\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    },
+    "time": [
+     0,
+     0.8
+    ]
+   }
+  },
+  {
+   "track": 3,
+   "at": 0,
+   "clip": {
+    "src": "petals.html",
+    "time": [
+     0,
+     11.6
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    }
+   }
+  },
+  {
+   "track": 4,
+   "at": 0,
+   "clip": {
+    "src": "example-1.jpg",
+    "time": [
+     0,
+     3
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "1"
+    }
+   }
+  },
+  {
+   "track": 4,
+   "at": 3,
+   "clip": {
+    "src": "example-2.jpg",
+    "time": [
+     0,
+     2.6
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "2"
+    }
+   }
+  },
+  {
+   "track": 4,
+   "at": 5.6,
+   "clip": {
+    "src": "example-3.jpg",
+    "time": [
+     0,
+     2.6
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "3"
+    }
+   }
+  },
+  {
+   "track": 4,
+   "at": 8.2,
+   "clip": {
+    "src": "example-4.jpg",
+    "time": [
+     0,
+     3.4
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "4"
+    }
+   }
+  }
+ ],
+ "durationMs": 11600
+}

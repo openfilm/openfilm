@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Typing</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+:root { --color: #ffffff; }
+svg { width: 100vw; height: 100vh; display: block; overflow: visible; }
+svg { filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
+.in { transform-origin: 84px 290px; animation: in 0.5s cubic-bezier(.34, 1.56, .64, 1) both; }
+@keyframes in { from { transform: scale(0); } }
+.dot { fill: #8e8e93; animation: d0 0.3s cubic-bezier(.34, 1.56, .64, 1) var(--d) both, d 1.1s ease-in-out calc(var(--d) + 0.3s) infinite; }
+@keyframes d0 { from { transform: scale(0); } }
+@keyframes d { 0%, 60%, 100% { transform: none; fill: #aeaeb2; } 25% { transform: translateY(-18px); fill: #48484a; } }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 400 320"><g class="in">
+<path d="M100 30 L300 30 Q370 30 370 100 L370 170 Q370 240 300 240 L150 240 L84 292 L96 240 Q30 236 30 170 L30 100 Q30 30 100 30 Z" fill="var(--color)" stroke="var(--color)" stroke-width="6" stroke-linejoin="round"/>
+<g transform="translate(130 136)"><circle class="dot" r="22" style="--d: 0.2s"/></g>
+<g transform="translate(200 136)"><circle class="dot" r="22" style="--d: 0.32s"/></g>
+<g transform="translate(270 136)"><circle class="dot" r="22" style="--d: 0.44s"/></g>
+</g></svg>
+<script>
+/*
+ * A speech bubble that pops out of its tail, three dots in it bouncing as someone types. The bubble's color is the
+ * clip's to change. A page of OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS animations
+ * are held at t by the host.
+ */
+window.film = { width: 400, height: 320, frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

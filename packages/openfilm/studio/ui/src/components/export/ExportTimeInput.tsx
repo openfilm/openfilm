@@ -23,7 +23,7 @@ export function ExportTimeInput({ label, boundaryLabel, value, fps, marks, inval
     <div className={`flex max-w-full flex-col gap-1.5 ${compact ? 'w-full' : 'w-[220px]'}`}>
       <div className="flex flex-col gap-1.5">
         <label htmlFor={inputId} className="text-[11.5px] text-[var(--text-faint)]">{label}</label>
-        <span className={`flex h-9 items-center overflow-hidden rounded-lg border bg-[var(--fill-tsp)] focus-within:border-[var(--accent)] ${invalid ? 'border-[var(--warn)]' : 'border-[var(--border)]'}`}>
+        <span className={`flex h-9 items-center overflow-hidden rounded-lg border bg-[var(--bg-field)] focus-within:border-[var(--accent)] ${invalid ? 'border-[var(--warn)]' : 'border-[var(--border)]'}`}>
           <input
             id={inputId}
             type="text"

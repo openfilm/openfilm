@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Tips</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+:root { --font: 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; --color: #ffc800; }
+.w { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
+.ic { position: relative; z-index: 1; width: 70vh; height: 70vh; border-radius: 50%; background: var(--color); border: 1.8vh solid #ffffff; box-sizing: border-box; animation: pop 0.45s cubic-bezier(.34, 1.56, .64, 1) both; }
+@keyframes pop { from { transform: scale(0) rotate(-60deg); } }
+.ic svg { position: absolute; inset: -25%; width: 150%; height: 150%; overflow: visible; }
+.ray { stroke: #ffffff; stroke-width: 4.5; stroke-linecap: round; animation: ray 1.4s ease-in-out 0.5s infinite; transform-origin: 50px 46px; opacity: 0; }
+@keyframes ray { 0%, 100% { opacity: 0; transform: scale(0.85); } 40% { opacity: 1; transform: scale(1.05); } }
+.bulb { animation: bulb 1.4s ease-in-out 0.5s infinite; }
+@keyframes bulb { 40% { filter: drop-shadow(0 0 3px #ffffff); } }
+.pill { display: flex; align-items: center; height: 46vh; margin-left: -10vh; padding: 0 6vw 0 calc(10vh + 3.5vw); border-radius: 0 23vh 23vh 0; background: #ffffff; animation: slide 0.4s cubic-bezier(.2, .8, .2, 1) 0.2s both; clip-path: inset(0 -10% 0 0); }
+@keyframes slide { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 -10% 0 0); } }
+.label { color: #16161a; font: 800 26vh var(--font); white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="w"><div class="ic"><svg viewBox="0 0 100 100">
+<g class="ray"><path d="M50 4 L50 10"/><path d="M80 16 L76 21"/><path d="M20 16 L24 21"/><path d="M92 44 L86 44"/><path d="M8 44 L14 44"/></g>
+<g class="bulb" fill="#ffffff"><path d="M50 22 C38 22 30 31 30 42 C30 49 34 54 38 58 C40 60 42 63 42 66 L58 66 C58 63 60 60 62 58 C66 54 70 49 70 42 C70 31 62 22 50 22 Z"/><rect x="42" y="69" width="16" height="5" rx="2.5"/><rect x="44" y="76" width="12" height="5" rx="2.5"/></g>
+</svg></div><div class="pill"><div class="label">Tips</div></div></div>
+<script>
+/*
+ * A tips label: a round light bulb pops in, a label slides out of it, and the bulb keeps glowing with rays. Its
+ * words and color are the clip's to change. A page of OpenFilm's library (CC0): what it shows at t comes from t
+ * alone; its CSS animations are held at t by the host.
+ */
+window.film = { width: 400, height: 160, frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

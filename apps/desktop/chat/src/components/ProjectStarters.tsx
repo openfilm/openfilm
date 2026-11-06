@@ -1,118 +1,85 @@
 'use client';
 
 /**
- * The conversation column of an empty project, before anything has been said.
- *
- * It is for anyone, not people who write briefs, so it doesn't teach how to write a prompt: it offers complete
- * sentences. One click puts a sentence in the composer, Enter starts it, nothing to fill in. They are everyday
- * things (a shop promo, a birthday wish, a trip, a pet, a bedtime story…), not jargon. "Shuffle" shows another
- * group.
- *
- * The line below says files can simply be added: not only photos and videos, but audio, slides, PDFs, sheets, any
- * file. That is the one other way in besides typing.
+ * The conversation column of an empty project, before anything has been said: the question, then the skills as
+ * cards, each its cover and its name, two to a row. A card names its skill in the message being written (Enter
+ * starts it, or a few words more say what to make with it), installed or not: as the library's Try now, the skill is
+ * given to that conversation, nothing installed. Under them, "More skills" opens the library's skills on Discover, all
+ * of OpenFilm's, and "Start from an example" the projects window's examples: one copied into a new project, or followed
+ * by the agent here.
  */
 import React from 'react';
-import {
-  ArrowUpRight, Atom, Briefcase, Cake, Cat, ChartColumn, ChefHat, Dumbbell, Flower2, Heart, Images,
-  Mic, Moon, Orbit, PartyPopper, Plane, Presentation, RefreshCw, Rocket, Scissors, ShoppingBag, Sparkles,
-  Upload, type LucideIcon,
-} from 'lucide-react';
-import { useT } from '@/i18n';
+import { ChevronRight } from 'lucide-react';
+import { useT, useUiLocale } from '@/i18n';
+import { app, type StarterSkill } from '../app-bridge';
 import { BrandLogo } from './BrandLogo';
 
-/**
- * Four groups of five, most common first (a promo, an explainer, a social ad, cutting your own footage, slides to
- * video); later groups are smaller everyday moments. Together they cover every kind of film the app makes.
- */
-const GROUPS = [
-  ['s1', 's2', 's3', 's4', 's5'],
-  ['s6', 's7', 's8', 's9', 's10'],
-  ['s11', 's12', 's13', 's14', 's15'],
-  ['s16', 's17', 's18', 's19', 's20'],
-] as const;
+/** Three rows of two: the most used skills, in their order; the rest are a click away in the library. */
+const SHOWN = 6;
+/** the cards as read last: another empty conversation shows them at once, read again behind them */
+let lastRead: StarterSkill[] | null = null;
 
-/**
- * A line icon before each sentence, so it is recognized at a glance before it is read.
- * Same color as the text, no backing: a signpost should not outshine the sentence.
- */
-const ICONS: Record<string, LucideIcon> = {
-  s1: Rocket, s2: Orbit, s3: ShoppingBag, s4: Scissors, s5: Presentation,
-  s6: Sparkles, s7: Moon, s8: Flower2, s9: ChartColumn, s10: Atom,
-  s11: Plane, s12: Cake, s13: Dumbbell, s14: Mic, s15: PartyPopper,
-  s16: Cat, s17: Heart, s18: Briefcase, s19: ChefHat, s20: Images,
-};
-
-export function ProjectStarters({
-  onPick,
-  onAttach,
-}: {
-  /** Puts the sentence in the composer (unsent) and focuses it; Enter starts it. */
-  onPick: (text: string) => void;
-  onAttach: () => void;
+export function ProjectStarters({ onSkill }: {
+  /** Names the skill in the composer (unsent) and focuses it. */
+  onSkill: (skill: { name: string; description: string; title: string }) => void;
 }) {
   const t = useT();
-  const [group, setGroup] = React.useState(0);
+  const locale = useUiLocale();
+  /* null until read: the cards' places are kept meanwhile, so nothing below them moves when they arrive */
+  const [skills, setSkills] = React.useState<StarterSkill[] | null>(lastRead);
+  React.useEffect(() => {
+    let live = true;
+    void app.starterSkills().then((list) => {
+      lastRead = list.slice(0, SHOWN);
+      if (live) setSkills(lastRead);
+    }, () => { if (live) setSkills((was) => was ?? []); });
+    return () => { live = false; };
+  }, []);
+  const titleOf = (skill: StarterSkill) => {
+    const words = skill.title;
+    return (words ? words[locale] ?? words[locale.split('-')[0]!] ?? words.en : undefined) ?? skill.name;
+  };
+
   return (
-    <div className="mx-auto w-full max-w-[400px] py-2">
-      <BrandLogo size={26} />
-      <h2 className="mt-4 text-[20px] font-semibold tracking-[-0.02em] text-[var(--text)]">{t('starter.title')}</h2>
-      <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--text-muted)]">{t('starter.hint')}</p>
-
-      <div className="mt-5 flex items-center justify-between">
-        <span className="text-[12px] text-[var(--text-faint)]">{t('starter.tryLabel')}</span>
-        <button
-          type="button"
-          onClick={() => setGroup((g) => (g + 1) % GROUPS.length)}
-          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[12px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
-        >
-          <RefreshCw size={11} />
-          {t('starter.shuffle')}
-        </button>
+    <div className="mx-auto w-full max-w-[420px] py-2">
+      <div className="flex items-center justify-center gap-2.5">
+        <BrandLogo size={22} />
+        <h2 className="text-[19px] font-semibold tracking-[-0.02em] text-[var(--text)]">{t('starter.title')}</h2>
       </div>
-      {/* All four groups stack in one grid cell, only the current one visible, so the height is always the tallest
-          group's. Otherwise lines wrapping differently per group would change the height, and the centered title and
-          "Shuffle" would jump out from under the pointer. */}
-      <div className="mt-2 grid">
-        {GROUPS.map((ids, gi) => {
-          const on = gi === group;
-          return (
-            <ul
-              key={on ? `on-${gi}` : gi}
-              aria-hidden={!on}
-              inert={!on}
-              className={`col-start-1 row-start-1 flex flex-col gap-1.5 ${on ? '' : 'invisible'}`}
-              style={on ? { animation: 'openfilm-rise 0.2s ease-out both' } : undefined}
+
+      <ul className="mt-6 grid grid-cols-2 gap-2">
+        {skills
+          ? skills.map((skill) => (
+            <li key={skill.name} className="min-w-0">
+              <button
+                type="button"
+                title={skill.description}
+                onClick={() => onSkill({ name: skill.name, description: skill.description, title: titleOf(skill) })}
+                className="flex h-14 w-full min-w-0 items-center gap-2.5 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] p-2 text-left transition hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)]"
+              >
+                <img src={skill.cover} alt="" loading="lazy" draggable={false} className="h-10 w-10 shrink-0 rounded-md bg-[var(--bg-hover)] object-cover" />
+                <span className="line-clamp-2 min-w-0 flex-1 text-[13px] leading-snug text-[var(--text)]">{titleOf(skill)}</span>
+              </button>
+            </li>
+          ))
+          : Array.from({ length: SHOWN }, (_, i) => <li key={i} aria-hidden className="skeleton h-14 rounded-lg" />)}
+      </ul>
+
+      {app.showExamples ? (
+        <div className="mt-4 flex justify-center gap-2">
+          {([['discover', 'starter.more'], ['examples', 'starter.examples']] as const).map(([kind, label]) => (
+            <button
+              key={kind}
+              type="button"
+              onClick={() => app.showExamples?.({ kind })}
+              className="inline-flex items-center gap-0.5 rounded-md px-2 py-1 text-[13px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
             >
-              {ids.map((id) => {
-                const text = t(`starter.${id}`);
-                const Icon = ICONS[id]!;
-                return (
-                  <li key={id}>
-                    <button
-                      type="button"
-                      onClick={() => onPick(text)}
-                      className="group flex w-full items-center gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3.5 py-2.5 text-left text-[13.5px] leading-snug text-[var(--text)] transition hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)]"
-                    >
-                      <Icon aria-hidden size={15} strokeWidth={1.8} className="shrink-0" />
-                      <span className="min-w-0 flex-1">{text}</span>
-                      <ArrowUpRight size={14} className="shrink-0 text-[var(--text-faint)] transition group-hover:text-[var(--text)]" />
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          );
-        })}
-      </div>
-
-      <button
-        type="button"
-        onClick={onAttach}
-        className="mt-4 inline-flex items-center gap-1.5 rounded-lg px-1 py-1 text-[12.5px] text-[var(--text-muted)] transition hover:text-[var(--text)]"
-      >
-        <Upload size={14} />
-        {t('starter.attach')}
-      </button>
+              {t(label)}
+              <ChevronRight size={14} />
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

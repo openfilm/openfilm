@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Subscribe and bell</title>
+<style>
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --accent: #ff1f2d; --done: #3a3b40; --color: #ffffff; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+* { box-sizing: border-box; }
+.ln { position: relative; display: inline-block; white-space: pre; }
+.fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
+.fx .ch { display: inline-block; will-change: transform; }
+.src { -webkit-text-fill-color: transparent; }
+.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; gap: 9vh; font-family: var(--font); color: var(--color); }
+.bt { position: relative; display: grid; animation: pop 0.55s cubic-bezier(0.3, 1.6, 0.5, 1) both, press 0.35s 1.05s ease-out both; }
+.bt span { grid-area: 1 / 1; display: flex; align-items: center; justify-content: center; border-radius: 12vh; padding: 12vh 17vh; font-size: 32vh; font-weight: 800; letter-spacing: 0.02em; white-space: pre; box-shadow: 0 2.4vh 6vh rgba(0, 0, 0, 0.35); }
+.t1 { background: var(--accent); animation: gone 0.01s 1.12s forwards; }
+.t2 { background: var(--done); animation: swap 0.01s 1.12s both; }
+.rip { position: absolute; left: 60%; top: 55%; width: 30vh; height: 30vh; margin: -15vh; border-radius: 50%; background: rgba(255, 255, 255, 0.5); animation: rip 0.6s 1.08s ease-out both; }
+.bell { position: relative; width: 72vh; height: 72vh; border-radius: 50%; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; animation: pop 0.55s 0.12s cubic-bezier(0.3, 1.6, 0.5, 1) both; }
+.bell svg { width: 38vh; height: 38vh; transform-origin: 50% 12%; animation: ring 1s 1.4s ease-out both, ring 1s 3.4s ease-out; }
+.bell path, .bell circle { fill: var(--color); }
+.bell b { position: absolute; right: 9vh; top: 9vh; width: 15vh; height: 15vh; border-radius: 50%; background: var(--accent); border: 2.4vh solid #222; animation: pop 0.4s 1.45s cubic-bezier(0.3, 1.8, 0.5, 1) both; }
+.cur { position: absolute; left: 62%; top: 52%; width: 22vh; height: 33vh; filter: drop-shadow(0 1vh 1.6vh rgba(0, 0, 0, 0.5)); animation: move 0.6s 0.45s cubic-bezier(0.3, 0.7, 0.3, 1) both, click 0.3s 1.02s ease-in-out both, away 0.6s 1.8s ease-in both; }
+.cur path { fill: #fff; stroke: #111; stroke-width: 1; stroke-linejoin: round; }
+@keyframes pop { from { transform: scale(0); opacity: 0; } }
+@keyframes press { 40% { transform: scale(0.9); } }
+@keyframes swap { from { opacity: 0; } }
+@keyframes gone { to { opacity: 0; } }
+@keyframes rip { from { transform: scale(0); opacity: 1; } to { transform: scale(4); opacity: 0; } }
+@keyframes ring { 0% { rotate: 0deg; } 15% { rotate: 22deg; } 30% { rotate: -18deg; } 45% { rotate: 12deg; } 60% { rotate: -8deg; } 75% { rotate: 4deg; } 100% { rotate: 0deg; } }
+@keyframes move { from { opacity: 0; transform: translate(70vh, 50vh); } }
+@keyframes click { 50% { scale: 0.82; } }
+@keyframes away { to { opacity: 0; transform: translate(40vh, 40vh); } }
+</style>
+</head>
+<body>
+<div class="w">
+  <div class="bt"><span class="t1">SUBSCRIBE</span><span class="t2">SUBSCRIBED</span><i class="rip"></i><svg class="cur" viewBox="0 0 14 21"><path d="M1 1 L1 17 L5 13.4 L8 20 L10.6 18.9 L7.7 12.4 L13 12.4 Z"/></svg></div>
+  <div class="bell"><svg viewBox="0 0 24 24"><path d="M12 2.5c-3.6 0-6.2 2.8-6.2 6.4v4.3L3.8 16.6c-.4.7.1 1.4.9 1.4h14.6c.8 0 1.3-.7.9-1.4l-2-3.4V8.9c0-3.6-2.6-6.4-6.2-6.4z"/><circle cx="12" cy="20.3" r="2.2"/></svg><b></b></div>
+</div>
+<script>
+/*
+ * A subscribe button that a pointer clicks: it turns to subscribed, and the bell beside it rings. A page of
+ * OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS animations are held at t by the host.
+ */
+window.film = { frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

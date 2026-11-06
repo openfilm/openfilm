@@ -1,0 +1,153 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Limited time</title>
+<style>
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --accent: #ff2d3a; --timer: #ffd23f; --pill: rgba(16, 16, 20, 0.86); }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+* { box-sizing: border-box; }
+.ln { position: relative; display: inline-block; white-space: pre; }
+.fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
+.fx .ch { display: inline-block; will-change: transform; }
+.src { -webkit-text-fill-color: transparent; }
+.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--font); color: #fff; }
+.p { display: flex; align-items: center; background: var(--pill); border-radius: 50vh; padding: 0 6vh 0 0; height: 74vh; overflow: hidden; box-shadow: 0 3vh 6vh rgba(0, 0, 0, 0.35); clip-path: inset(0 100% 0 0 round 50vh); animation: open 0.7s cubic-bezier(0.7, 0, 0.2, 1) forwards; }
+.a { height: 100%; display: flex; align-items: center; gap: 4vh; background: var(--accent); padding: 0 9vh 0 8vh; border-radius: 50vh; }
+.a svg { width: 26vh; height: 40vh; animation: flash 1s 0.8s steps(1) infinite; }
+.a path { fill: #ffd23f; }
+.t1 { font-size: 22vh; font-weight: 800; letter-spacing: 0.06em; white-space: pre; font-style: italic; }
+.t2 { margin: 0 4vh 0 8vh; font-size: 13vh; font-weight: 600; opacity: 0.7; white-space: pre; }
+.tm { font: 700 28vh/1 'DIN Alternate', 'Bahnschrift', 'Avenir Next', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; font-variant-numeric: tabular-nums; color: var(--timer); letter-spacing: 0.04em; }
+@keyframes open { to { clip-path: inset(0 0 0 0 round 50vh); } }
+@keyframes flash { 50% { opacity: 0.35; } }
+</style>
+</head>
+<body>
+<div class="w"><div class="p">
+  <div class="a"><svg viewBox="0 0 16 24"><path d="M10 0 L1 14 H7 L5 24 L15 9 H9 Z"/></svg><span class="t1">LIMITED TIME</span></div>
+  <span class="t2">ENDS IN</span><span class="ln tm"><span class="t3 src">02:45:30</span></span>
+</div></div>
+<script>
+/*
+ * A pill for a limited time offer: a flashing bolt, its words, and a timer that counts down a second at a time. A
+ * page of OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS animations are held at t by the
+ * host.
+ */
+/* moves drawn from t: each layer's place at t comes from t alone */
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const prog = (t, at, len) => clamp((t - at) / len);
+const easeOut = (x) => 1 - (1 - x) ** 3;
+const easeBack = (x, s = 1.9) => (x <= 0 ? 0 : x >= 1 ? 1 : 1 + (s + 1) * (x - 1) ** 3 + s * (x - 1) ** 2);
+const hash = (i) => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const draws = [];
+let now = 0;
+/* an element's words, a line break for each <br> (as the editor writes them) */
+const linesOf = (el) => [...el.childNodes].map((n) => (n.nodeType === 3 ? n.data : n.localName === 'br' ? '\n' : '')).join('');
+/*
+ * An editable layer drawn again on a copy over it (letter by letter, a number counting): the layer itself stays, its
+ * words see-through, so the editor still finds, moves and changes it; the copy follows its words and its tweaks.
+ */
+function overlay(sel, build, paint) {
+  const src = document.querySelector(sel);
+  const fx = document.createElement('span');
+  fx.className = 'fx';
+  fx.setAttribute('aria-hidden', 'true');
+  src.after(fx);
+  let text = null;
+  let state = null;
+  const sync = () => {
+    fx.style.cssText = src.style.cssText;
+    const words = linesOf(src);
+    if (words !== text) { text = words; state = build(fx, words); }
+    paint(state, now);
+  };
+  new MutationObserver(sync).observe(src, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['style'] });
+  sync();
+  draws.push((t) => paint(state, t));
+}
+/* the layer's letters, each moved by `move(letter, t, i, n)` */
+function letters(sel, move) {
+  overlay(sel, (fx, words) => {
+    const out = [];
+    fx.replaceChildren();
+    words.split('\n').forEach((line, k) => {
+      if (k) fx.append(document.createElement('br'));
+      for (const ch of Array.from(line)) {
+        const c = document.createElement('span');
+        c.className = 'ch';
+        c.textContent = ch;
+        fx.append(c);
+        out.push(c);
+      }
+    });
+    return out;
+  }, (out, t) => out.forEach((c, i) => move(c, t, i, out.length)));
+}
+/* the number in the layer's words, counted up from 0 between `at` and `at + len` seconds (its words around it kept) */
+function countUp(sel, at, len) {
+  overlay(sel, (fx, words) => {
+    const m = words.match(/^([^\d]*?)(\d[\d,]*(?:\.\d+)?)([\s\S]*)$/);
+    if (!m) { fx.textContent = words; return null; }
+    const [, pre, num, post] = m;
+    return { fx, pre, post, value: Number(num.replace(/,/g, '')), places: (num.split('.')[1] ?? '').length, commas: num.includes(',') };
+  }, (s, t) => {
+    if (!s) return;
+    const v = s.value * easeOut(prog(t, at, len));
+    let str = v.toFixed(s.places);
+    if (s.commas) { const [a, b] = str.split('.'); str = a.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (b ? '.' + b : ''); }
+    s.fx.textContent = s.pre + str + s.post;
+  });
+}
+/* the layer's words typed from `at`, `cps` letters a second, a cursor after them blinking once they are all there */
+function typed(sel, at, cps) {
+  overlay(sel, (fx, words) => {
+    fx.replaceChildren();
+    const out = [];
+    words.split('\n').forEach((line, k) => {
+      if (k) { const br = document.createElement('br'); fx.append(br); out.push(br); }
+      for (const ch of Array.from(line)) { const c = document.createElement('span'); c.textContent = ch; fx.append(c); out.push(c); }
+    });
+    const cur = document.createElement('span');
+    cur.className = 'cur';
+    fx.append(cur);
+    return { out, cur };
+  }, ({ out, cur }, t) => {
+    const n = Math.floor((t - at) * cps);
+    out.forEach((c, i) => { c.style.display = i < n ? '' : 'none'; });
+    cur.style.opacity = t < at || (n >= out.length && (t * 1.8) % 1 > 0.5) ? 0 : 1;
+  });
+}
+/* a layer made smaller when its words grow wider than `room` (an element, or a share of the page's width): its --k */
+function autofit(sel, room) {
+  const el = document.querySelector(sel);
+  const box = typeof room === 'string' ? document.querySelector(room) : null;
+  const fit = () => {
+    el.style.setProperty('--k', '1');
+    const w = el.scrollWidth;
+    const limit = box ? box.clientWidth : innerWidth * room;
+    if (w > limit) el.style.setProperty('--k', (limit / w).toFixed(3));
+  };
+  new MutationObserver(fit).observe(el, { childList: true, characterData: true, subtree: true });
+  fit();
+}
+/* the timer's start, hh:mm:ss as written, a second less each second */
+overlay('.t3', (fx, words) => {
+  const m = words.match(/^(\d+):(\d{2}):(\d{2})$/);
+  fx.textContent = words;
+  return m ? { fx, from: +m[1] * 3600 + +m[2] * 60 + +m[3], w: m[1].length } : null;
+}, (s, t) => {
+  if (!s) return;
+  const left = Math.max(0, s.from - Math.floor(t));
+  const two = (n) => String(n).padStart(2, '0');
+  s.fx.textContent = `${String(Math.floor(left / 3600)).padStart(s.w, '0')}:${two(Math.floor(left / 60) % 60)}:${two(left % 60)}`;
+});
+window.film = { frame(t) { now = t; for (const d of draws) d(t); } };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

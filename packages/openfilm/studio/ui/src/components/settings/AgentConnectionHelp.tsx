@@ -39,7 +39,7 @@ export function AgentConnectionHelp({ agent, status, report, checking, hint, err
 
   return createPortal(
     <dialog ref={dialog} aria-labelledby={titleId} aria-modal="true"
-      className="m-auto max-h-[85vh] overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--dock-pane)] p-0 text-[var(--text)] shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5)] backdrop:bg-black/50 open:flex open:flex-col"
+      className="m-auto max-h-[85vh] overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--bg-panel)] p-0 text-[var(--text)] shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5)] backdrop:bg-black/50 open:flex open:flex-col"
       style={{ width: 'min(640px, calc(100vw - 32px))' }}
       onCancel={(event) => { event.preventDefault(); onClose(); }}
       onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); } }}
@@ -77,7 +77,7 @@ export function AgentConnectionHelp({ agent, status, report, checking, hint, err
           {hint ? <p role="status" className="mt-2">{hint}</p> : null}
           {raw ? <details className="mt-3 text-[13px]">
             <summary className="cursor-pointer py-1">{words('technicalDetails')}</summary>
-            <pre className="mt-1 max-h-52 overflow-auto whitespace-pre-wrap break-words rounded-[6px] bg-[var(--fill-tsp)] p-3 font-mono text-[12px]">{raw}</pre>
+            <pre className="mt-1 max-h-52 overflow-auto whitespace-pre-wrap break-words rounded-[6px] bg-[var(--bg-field)] p-3 font-mono text-[12px]">{raw}</pre>
           </details> : null}
           {report && onCopy ? <div className="mt-3 flex flex-col gap-2 text-[12px]">
             <p>{words('reportNote')}</p>
