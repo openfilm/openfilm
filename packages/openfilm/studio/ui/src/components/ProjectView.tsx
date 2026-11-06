@@ -38,7 +38,7 @@ import { LibraryDrawer, type LibraryActions, type SkillsRequest } from '@/compon
 import type { CaptionsMake } from '@/components/library/CaptionsPane';
 import { LibraryTrial } from '@/components/library/LibraryTrial';
 import { hugText } from '@/lib/text-box';
-import { textVars, withLook as withTextLook, withMotion, withWords } from '@/lib/text-look';
+import { textVars, withMotion, withWords } from '@/lib/text-look';
 import { apartOnTracks, type ClipEdit } from '@/lib/film-clip-edits';
 import { mediaFetch, useMediaImages } from '@/lib/media-queue';
 import { clipboardItemsOf, clipboardNow, laneOfBlock, pasteEdit, type TimelineClipboardItem } from '@/lib/timeline-clipboard';
@@ -1723,7 +1723,13 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       const clip = b.clipId && b.loc ? filmClipOf(b.clipId) : null;
       return clip && b.loc && isTextClip(clip.src) ? [{ loc: b.loc, overrides: clip.overrides }] : [];
     });
-    /* a text style or motion: on the words picked; none picked, a new line of words with it at the playhead */
+    /* a text style (or a look of one's own): a new line of words in it at the playhead, as its "+" says, whatever is
+       picked (a look goes on picked words from the Text inspector's word art) */
+    const textLine = (item: LibraryItem) => {
+      const text = builtInItem(`${BUILT_IN}/${TEXT_COMPONENT}`);
+      if (text) void place(text, item.vars ?? {}, nameOf(item.name, language), item.w ? item : text);
+    };
+    /* a text motion: on the words picked; none picked, a new line of words with it at the playhead */
     const textLook = (item: LibraryItem) => {
       const vars = item.vars ?? {};
       const on = textTargets();
@@ -1736,7 +1742,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       /* as the Text inspector puts them on: a look in place of the last one, a motion in its slot; one line of words
          refitted to its new look (editClips), several each as they are */
       const slot = item.kind === 'textmotion' && (item.group === 'in' || item.group === 'loop' || item.group === 'out') ? item.group : null;
-      const next = (own: unknown[] | undefined) => (slot ? withMotion(own, slot, vars) : item.kind === 'textstyle' ? withTextLook(own, vars) : withRootVars(own, vars));
+      const next = (own: unknown[] | undefined) => (slot ? withMotion(own, slot, vars) : withRootVars(own, vars));
       const edits = on.map((c) => ({ loc: c.loc, prop: 'overrides' as const, value: next(c.overrides as unknown[] | undefined) as never }));
       void (on.length === 1 ? editClips(edits as never) : editBlocks(edits as never)).then((err) => {
         if (err) { toast.showError(err); return; }
@@ -1800,7 +1806,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         if (item.kind === 'look') look(item, lookTargets());
         else if (item.kind === 'fade') fade(item, cutHere()?.cut ?? null);
         else if (item.kind === 'motion') motion(item);
-        else if (item.kind === 'textstyle' || item.kind === 'textmotion') textLook(item);
+        else if (item.kind === 'textstyle') textLine(item);
+        else if (item.kind === 'textmotion') textLook(item);
         else void place(item);
       },
       tryOut: (item) => setLibraryTrial(item),
@@ -3950,7 +3957,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 </>
               ) : null}
 
-              <div className={`${PANE} min-w-0 flex-1 bg-[var(--bg-panel)]`} data-viewer-pane="">
+              <div className={`${PANE} min-w-0 flex-1 bg-[var(--bg-viewer)]`} data-viewer-pane="">
                 <div className={PANE_BAR}>
                   {hostAssets ? null : (
                   <Tooltip label={t(assetsPaneOpen && assetsFit ? 'assetsPane.hide' : 'assetsPane.show')} side="bottom">

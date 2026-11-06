@@ -627,7 +627,7 @@ export function Segmented({
             onClick={() => { if (!on) onChange(opt.value); }}
             className={`flex h-6 min-w-0 flex-1 items-center justify-center truncate rounded-[4px] px-1 font-medium transition ${small ? 'text-[10.5px]' : 'text-[11px]'} ${
               on
-                ? 'bg-[var(--bg-panel)] text-[var(--text)] shadow-[0_0_0_0.5px_var(--border-strong),0_1px_2px_rgba(0,0,0,0.06)]'
+                ? 'bg-[var(--bg-picked)] font-semibold text-[var(--accent)]'
                 : 'text-[var(--text-muted)] hover:text-[var(--text)]'
             }`}
           >

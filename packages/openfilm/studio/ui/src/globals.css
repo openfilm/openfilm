@@ -41,13 +41,15 @@
 [data-theme='light'] {
   color-scheme: light;
 
-  --bg-app: #e9e9eb;
-  --bg-panel: #fafafb;
+  --bg-app: #e4e4e8;
+  --bg-panel: #fbfbfc;
   --bg-raised: #ffffff;
-  --bg-field: rgba(16, 16, 24, 0.05);
-  --bg-hover: rgba(16, 16, 24, 0.045);
-  --bg-pressed: rgba(16, 16, 24, 0.08);
-  --bg-selected: rgba(0, 125, 114, 0.11);
+  /* the viewer's pane, round the picture: a step under the panels, so the picture stands out of them */
+  --bg-viewer: #ececf0;
+  --bg-field: rgba(16, 16, 24, 0.055);
+  --bg-hover: rgba(16, 16, 24, 0.05);
+  --bg-pressed: rgba(16, 16, 24, 0.09);
+  --bg-selected: rgba(0, 150, 136, 0.13);
 
   --text: #161619;
   --text-muted: #5d5d63;
@@ -60,15 +62,16 @@
   --primary-hover: #2e2e33;
   --on-primary: #ffffff;
 
-  --accent: #007d72;
-  --accent-soft: rgba(0, 125, 114, 0.1);
+  --accent: #00897b;
+  --accent-soft: rgba(0, 150, 136, 0.12);
   --on-accent: #ffffff;
   /* a switch turned on: the accent a step quieter, so a page of them does not glare */
-  --switch-on: #3f978d;
-  /* what is picked among choices (tabs, a rail): the accent's words on this raised fill */
-  --bg-picked: rgba(16, 16, 24, 0.075);
+  --switch-on: #26a69a;
+  /* what is picked among choices (tabs, a rail, a list): the accent's words on the accent's own tint, never a grey
+     that reads as merely pointed at */
+  --bg-picked: rgba(0, 150, 136, 0.14);
   /* words selected in a field */
-  --text-selection: rgba(0, 125, 114, 0.22);
+  --text-selection: rgba(0, 150, 136, 0.24);
 
   --ok: #1f8a4c;
   --warn: #b25e00;
@@ -112,16 +115,17 @@
 [data-theme='dark'] {
   color-scheme: dark;
 
-  --bg-app: #111114;
-  --bg-panel: #1a1a1d;
-  --bg-raised: #242427;
-  --bg-field: rgba(240, 240, 255, 0.06);
-  --bg-hover: rgba(240, 240, 255, 0.055);
-  --bg-pressed: rgba(240, 240, 255, 0.1);
-  --bg-selected: rgba(69, 207, 181, 0.15);
+  --bg-app: #0b0b0d;
+  --bg-panel: #19191c;
+  --bg-raised: #252529;
+  --bg-viewer: #111113;
+  --bg-field: rgba(240, 240, 255, 0.07);
+  --bg-hover: rgba(240, 240, 255, 0.065);
+  --bg-pressed: rgba(240, 240, 255, 0.11);
+  --bg-selected: rgba(38, 222, 196, 0.17);
 
-  --text: #ebebed;
-  --text-muted: #a4a4a9;
+  --text: #f0f0f2;
+  --text-muted: #a8a8ae;
   --text-faint: #717177;
 
   --border: rgba(240, 240, 255, 0.075);
@@ -131,12 +135,12 @@
   --primary-hover: #ffffff;
   --on-primary: #0a0a0c;
 
-  --accent: #45cfb5;
-  --accent-soft: rgba(69, 207, 181, 0.12);
-  --on-accent: #04221d;
-  --switch-on: #2a7a6e;
-  --bg-picked: rgba(240, 240, 255, 0.1);
-  --text-selection: rgba(69, 207, 181, 0.3);
+  --accent: #26dec4;
+  --accent-soft: rgba(38, 222, 196, 0.14);
+  --on-accent: #03241f;
+  --switch-on: #1f9f8d;
+  --bg-picked: rgba(38, 222, 196, 0.17);
+  --text-selection: rgba(38, 222, 196, 0.32);
 
   --ok: #4cc27a;
   --warn: #f0b03c;

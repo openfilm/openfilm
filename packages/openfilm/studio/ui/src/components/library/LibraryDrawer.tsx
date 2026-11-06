@@ -285,11 +285,12 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
               type="button"
               onClick={() => show(id)}
               aria-pressed={cat === id}
-              className={`relative my-1 flex min-w-[46px] shrink-0 flex-col items-center justify-center gap-px whitespace-nowrap rounded-md px-2 text-[10.5px] leading-[13px] ${cat === id ? 'font-semibold text-[var(--accent)]' : 'font-medium text-[var(--text-muted)] hover:text-[var(--text)]'}`}
+              className={`relative my-1 flex min-w-[46px] shrink-0 flex-col items-center justify-center gap-px whitespace-nowrap rounded-md px-2 text-[10.5px] leading-[13px] ${cat === id ? 'font-semibold text-[var(--accent)]' : 'font-medium text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}`}
             >
-              {/* the one shown: in the accent, its icon filled */}
+              {/* the one shown: in the accent, its icon filled, a bar of the accent under it on the bar's line */}
               <CategoryIcon id={id} on={cat === id} size={18} />
               {t(`assetDrawer.cat_${id}`)}
+              {cat === id ? <span aria-hidden className="absolute inset-x-2 -bottom-1 h-[2px] rounded-full bg-[var(--accent)]" /> : null}
             </button>
           ))}
         </nav>
@@ -517,8 +518,9 @@ function SideBox({ on, holds = false, open, onClick, children }: {
       aria-pressed={open === undefined ? on : undefined}
       aria-expanded={open}
       title={typeof children === 'string' ? children : undefined}
-      /* each a box on its own fill; the one shown, or the heading whose line is, in the accent */
-      className={`flex h-8 shrink-0 items-center justify-between gap-1 rounded-md bg-[var(--bg-hover)] px-2.5 text-left text-[12px] font-semibold hover:bg-[var(--bg-pressed)] ${on || holds ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}
+      /* each a box on its own fill; the one shown on the accent's tint in the accent, the heading whose line is shown in
+         the accent on its own fill */
+      className={`flex h-8 shrink-0 items-center justify-between gap-1 rounded-md px-2.5 text-left text-[12px] font-semibold ${on ? 'bg-[var(--bg-picked)] text-[var(--accent)]' : holds ? 'bg-[var(--bg-hover)] text-[var(--accent)] hover:bg-[var(--bg-pressed)]' : 'bg-[var(--bg-hover)] text-[var(--text)] hover:bg-[var(--bg-pressed)]'}`}
     >
       <span className="truncate whitespace-nowrap">{children}</span>
       {open === undefined ? null : <ChevronDown size={13} className={`shrink-0 transition-transform ${on || holds ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'} ${open ? 'rotate-180' : ''}`} />}
@@ -534,8 +536,8 @@ function SideLine({ on, onClick, children }: { on: boolean; onClick: () => void;
       onClick={onClick}
       aria-pressed={on}
       title={typeof children === 'string' ? children : undefined}
-      /* the one shown in the accent, no fill */
-      className={`truncate whitespace-nowrap rounded-md px-2.5 py-1.5 text-left text-[12px] font-medium ${on ? 'text-[var(--accent)]' : 'text-[var(--text)] hover:bg-[var(--bg-hover)]'}`}
+      /* the one shown in the accent on its tint */
+      className={`truncate whitespace-nowrap rounded-md px-2.5 py-1.5 text-left text-[12px] ${on ? 'bg-[var(--bg-picked)] font-semibold text-[var(--accent)]' : 'font-medium text-[var(--text)] hover:bg-[var(--bg-hover)]'}`}
     >
       {children}
     </button>
