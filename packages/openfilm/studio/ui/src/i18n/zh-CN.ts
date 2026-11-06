@@ -1834,6 +1834,7 @@ export const zhCN: Words = {
       switchWhere: {
         codex: 'Codex 应用，或在终端运行 codex login',
         copilot: 'Copilot 本身：在终端运行 copilot，然后用 /user',
+        antigravity: 'Google Antigravity 本身：在终端运行 agy，然后用 /logout',
         opencode: 'OpenCode 应用，或在终端运行 opencode auth switch',
         codebuddy: 'CodeBuddy 本身：在终端运行 codebuddy',
         qwen: 'Qwen Code 本身：在终端运行 qwen，然后用 /auth',

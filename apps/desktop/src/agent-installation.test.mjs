@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AGENT_INSTALLERS, chosenProgram, claudeAppCli, claudeUpdate, codexAppCopies, claudeVersion, cmdTarget, codexVersion, consoleProgram, desktopApp, detectAgentInstallation, findExecutable, installCommand, laterVersion, notTheAgent, opencodeVersion, searchReport, windowsBinDirs } from './agent-installation.mjs';
+import { AGENT_INSTALLERS, antigravityVersion, chosenProgram, claudeAppCli, claudeUpdate, codexAppCopies, claudeVersion, cmdTarget, codexVersion, consoleProgram, desktopApp, detectAgentInstallation, findExecutable, installCommand, laterVersion, notTheAgent, opencodeVersion, searchReport, windowsBinDirs } from './agent-installation.mjs';
 
 test("an npm .cmd shim (Windows) runs its package's script: that is what gets started", () => {
   const npm = mkdtempSync(join(tmpdir(), 'of-npm-'));
@@ -393,6 +393,20 @@ test('on Windows a window program (a desktop app) is never an agent; one whose h
   /* a Store app's command cannot be read as a file: it is not refused for that */
   writeFileSync(join(dir, 'codex.exe'), '');
   assert.equal(notTheAgent('codex', join(dir, 'codex.exe'), { win: true }), null);
+});
+
+test('Antigravity version is read from agy --version; an older copy is detected as installed', () => {
+  const home = mkdtempSync(join(tmpdir(), 'of-home-'));
+  const bin = join(home, 'AppData', 'Local', 'agy', 'bin');
+  mkdirSync(bin, { recursive: true });
+  const exe = put(join(bin, 'agy.exe'), peProgram(3));
+  let asked = 0;
+  const ask = () => { asked += 1; return '1.4.2'; };
+  assert.equal(antigravityVersion(exe, { ask }), '1.4.2');
+  assert.equal(antigravityVersion(exe, { ask }), '1.4.2');
+  assert.equal(asked, 1, 'asked once while the program is the same');
+  assert.equal(notTheAgent('antigravity', exe, { win: true }), null);
+  assert.equal(detectAgentInstallation('antigravity', { home, win: true, env: { LOCALAPPDATA: join(home, 'AppData', 'Local') }, pathDirs: [] }).cli, exe);
 });
 
 test("Cursor's agent counts only in its own folder (or Homebrew's cursor-cli), whatever it is called", () => {
