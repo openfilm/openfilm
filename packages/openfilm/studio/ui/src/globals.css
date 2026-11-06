@@ -563,45 +563,69 @@ html[data-file-drag] iframe { pointer-events: none; }
 /* a clip about to be replaced by the file dragged over it with ⇧ (components/replace-drop) */
 [data-replace-over] { outline: 2px solid var(--accent); outline-offset: -2px; }
 
-/* the canvas (components/canvas): the app's layers, named for what they are on the canvas. The board is the app's
-   bottom layer, its cards and floating parts (toolbar, panels, menus) raised over it; a wire being made, the one
-   selected and a selected card are the accent. */
-:root,
-[data-theme='light'],
-[data-theme='dark'] {
-  --cv-bg: var(--bg-app);
-  --cv-card: var(--bg-raised);
-  --cv-card-2: var(--bg-field);
-  --cv-line: var(--border);
-  --cv-line-hover: var(--border-strong);
-  --cv-ring: var(--accent);
-  --cv-label: var(--text-faint);
-  --cv-ink: var(--text);
-  --cv-ghost: var(--border-strong);
-  --cv-edge-lit: var(--accent);
-  --cv-float: var(--bg-raised);
-  --cv-float-line: var(--border);
-  --cv-float-hover: var(--bg-hover);
-}
+/* the canvas (components/canvas), drawn as the node canvases people know draw theirs: a near-black board with a fine
+   dot grid; cards one step lighter with a grey line, a light grey line when selected; names in grey above them;
+   floating parts (toolbars, panels, menus) a step darker than the cards with a hairline; chips a white wash; the
+   main button white. A wire is grey, and blue and moving while it is the selected node's. */
 :root,
 [data-theme='light'] {
-  --cv-dot: rgba(0, 0, 0, 0.12);
-  --cv-edge: rgba(0, 0, 0, 0.22);
-  --cv-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
-  --cv-float-shadow: 0 2px 6px rgba(0, 0, 0, 0.05), 0 16px 40px rgba(0, 0, 0, 0.12);
+  --cv-bg: #f4f4f5;
+  --cv-dot: #c9c9cd;
+  --cv-card: #ffffff;
+  --cv-card-2: #f1f1f2;
+  --cv-line: #d4d4d8;
+  --cv-line-hover: #b4b4ba;
+  --cv-ring: #5c5c62;
+  --cv-label: #77777d;
+  --cv-ghost: #c4c4c8;
+  --cv-ink: #111113;
+  --cv-ink-2: rgba(17, 17, 19, 0.6);
+  --cv-ink-3: rgba(17, 17, 19, 0.32);
+  --cv-edge: #b4b4ba;
+  --cv-edge-lit: #3b82f6;
+  --cv-float: #ffffff;
+  --cv-float-line: rgba(0, 0, 0, 0.08);
+  --cv-float-hover: rgba(0, 0, 0, 0.05);
+  --cv-chip: rgba(0, 0, 0, 0.05);
+  --cv-bar: #ffffff;
+  --cv-bar-line: #e4e4e7;
+  --cv-invert: #111113;
+  --cv-on-invert: #ffffff;
+  --cv-shadow: none;
+  --cv-float-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06), 0 16px 24px -8px rgba(0, 0, 0, 0.1), 0 4px 8px -4px rgba(0, 0, 0, 0.06);
 }
 [data-theme='dark'] {
-  --cv-dot: rgba(255, 255, 255, 0.08);
-  --cv-edge: rgba(255, 255, 255, 0.22);
-  --cv-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 10px 30px rgba(0, 0, 0, 0.35);
-  --cv-float-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 18px 48px rgba(0, 0, 0, 0.55);
+  --cv-bg: #1a1a1a;
+  --cv-dot: #474747;
+  --cv-card: #262626;
+  --cv-card-2: #1f1f1f;
+  --cv-line: #525252;
+  --cv-line-hover: #6b6b6b;
+  --cv-ring: #a8a8a8;
+  --cv-label: #919191;
+  --cv-ghost: #525252;
+  --cv-ink: #ffffff;
+  --cv-ink-2: rgba(255, 255, 255, 0.6);
+  --cv-ink-3: rgba(255, 255, 255, 0.3);
+  --cv-edge: #6b6b6b;
+  --cv-edge-lit: #3b82f6;
+  --cv-float: #1f1f1f;
+  --cv-float-line: rgba(255, 255, 255, 0.08);
+  --cv-float-hover: rgba(255, 255, 255, 0.07);
+  --cv-chip: rgba(255, 255, 255, 0.05);
+  --cv-bar: #262626;
+  --cv-bar-line: #363636;
+  --cv-invert: #ffffff;
+  --cv-on-invert: #000000;
+  --cv-shadow: none;
+  --cv-float-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 16px 24px -8px rgba(0, 0, 0, 0.06), 0 4px 8px -4px rgba(0, 0, 0, 0.04);
 }
 .openfilm-canvas {
   --xy-background-color: var(--cv-bg);
   --xy-background-pattern-color: var(--cv-dot);
   --xy-edge-stroke: var(--cv-edge);
   --xy-edge-stroke-selected: var(--cv-edge-lit);
-  --xy-edge-stroke-width: 1.75;
+  --xy-edge-stroke-width: 1.5;
   --xy-connectionline-stroke: var(--cv-edge-lit);
   --xy-connectionline-stroke-width: 2;
   --xy-minimap-background-color: var(--cv-float);
@@ -610,9 +634,15 @@ html[data-file-drag] iframe { pointer-events: none; }
   --xy-selection-background-color: color-mix(in srgb, var(--cv-edge-lit) 8%, transparent);
   --xy-selection-border: 1px solid color-mix(in srgb, var(--cv-edge-lit) 55%, transparent);
   background: var(--cv-bg);
+  font-family: -apple-system, system-ui, 'PingFang SC', Inter, 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
 }
 .openfilm-canvas .react-flow__edge-path { stroke-linecap: round; }
-.openfilm-canvas .react-flow__minimap { overflow: hidden; border: 1px solid var(--cv-float-line); border-radius: 12px; box-shadow: var(--cv-float-shadow); }
-/* a node's own frame: what is drawn round it is ours */
-.openfilm-canvas .react-flow__node { border-radius: 14px; }
+/* the selected node's wires: blue, glowing, flowing towards what they feed */
+.openfilm-canvas .react-flow__edge.lit .react-flow__edge-path {
+  stroke: var(--cv-edge-lit); stroke-width: 2; stroke-dasharray: 10 6; animation: cv-flow 0.6s linear infinite;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--cv-edge-lit) 70%, transparent));
+}
+@keyframes cv-flow { to { stroke-dashoffset: -16; } }
+.openfilm-canvas .react-flow__minimap { overflow: hidden; border-radius: 12px; box-shadow: var(--cv-float-shadow); }
+.openfilm-canvas .react-flow__node { border-radius: 12px; }
 .openfilm-canvas .react-flow__edge-textbg { rx: 6; }

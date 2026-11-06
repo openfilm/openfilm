@@ -1,12 +1,13 @@
 /**
- * What is round the board: the toolbar at its foot (add, select or move, templates, undo and redo, the keys, the
- * agent), the bar at its bottom left (every node in a list, the overview map, how far it is zoomed), the list itself,
- * and a file seen whole over the board.
+ * What is round the board, as the node canvases people know lay theirs out: the toolbar at its foot (add, move,
+ * templates, the keys), the bar at its bottom left (the chat beside it, every node in a list, the overview map, the
+ * wires shown or not, snapping to the grid, how far it is zoomed), the list itself, and a file seen whole over the board.
  */
 import React from 'react';
 import { useReactFlow, useStore } from '@xyflow/react';
 import {
-  Hand, Keyboard, LayoutTemplate, ListTree, Map as MapIcon, MousePointer2, PanelLeftClose, PanelLeftOpen, Plus, Redo2, Scissors, Search, Type as TypeIcon, Undo2, X,
+  Grid3x3, Hand, Keyboard, LayoutTemplate, ListTree, Map as MapIcon, MousePointer2, PanelLeftClose, PanelLeftOpen, Plus, Scissors, Search, Spline,
+  Type as TypeIcon, X,
 } from 'lucide-react';
 import { useT } from '@/i18n';
 import type { MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
@@ -16,66 +17,72 @@ import type { BoardNode, MakeData } from './board';
 import { KIND_ICON, MAKE_ICON } from './nodes';
 
 const MOD = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform) ? '⌘' : 'Ctrl+';
-const BAR = 'flex items-center rounded-[14px] border border-[var(--cv-float-line)] bg-[var(--cv-float)] p-1 shadow-[var(--cv-float-shadow)]';
-const TOOL = 'flex h-9 w-9 items-center justify-center rounded-[10px] text-[var(--cv-label)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]';
-const ON = '!bg-[var(--cv-float-hover)] !text-[var(--cv-ink)]';
+const OPT = MOD === '⌘' ? '⌥' : 'Alt+';
+/** a toolbar's button, and one switched on */
+const TOOL = 'flex h-8 w-8 items-center justify-center rounded-[8px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
+const ON = '!bg-[var(--cv-float-hover)]';
+/** the bottom left bar's smaller ones */
+const SMALL = 'flex h-7 min-w-7 items-center justify-center rounded-[8px] px-1 text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
 
-/** The toolbar at the board's foot: what is added and how the board is moved. */
-export function BottomToolbar({ adding, onAdd, tool, onTool, onTemplates, onUndo, onRedo }: {
+/** The toolbar at the board's foot: what is added, how the board is moved, the templates, the keys. */
+export function BottomToolbar({ adding, onAdd, tool, onTool, onTemplates }: {
   adding: boolean;
   onAdd: (from: DOMRect) => void;
   tool: 'select' | 'hand';
   onTool: (tool: 'select' | 'hand') => void;
   onTemplates: (from: DOMRect) => void;
-  onUndo: () => void;
-  onRedo: () => void;
 }) {
   const t = useT();
   const [keys, setKeys] = React.useState(false);
-  const rows: Array<[string, string]> = [
-    [t('canvas.keys.add'), '/'], [t('canvas.keys.select'), 'V'], [t('canvas.keys.hand'), `H · ${t('canvas.keys.space')}`],
-    [t('canvas.keys.undo'), `${MOD}Z`], [t('canvas.keys.redo'), `⇧${MOD}Z`], [t('canvas.copy'), `${MOD}C`], [t('canvas.paste'), `${MOD}V`],
-    [t('canvas.duplicate'), `${MOD}D`], [t('canvas.groupThem'), `${MOD}G`], [t('canvas.ungroup'), `⇧${MOD}G`], [t('canvas.selectAll'), `${MOD}A`],
-    [t('host.refer'), `${MOD}L`], [t('canvas.make.run'), `${MOD}↵`], [t('canvas.remove'), '⌫'],
+  /* the keys, in four columns: making, zooming, moving the board, and the rest */
+  const columns: Array<[string, Array<[string, string]>]> = [
+    [t('canvas.keys.make'), [
+      [t('canvas.groupThem'), `${MOD} G`], [t('canvas.ungroup'), `${MOD} ⇧ G`], [t('canvas.keys.wire'), `${MOD} L`], [t('canvas.duplicate'), `${MOD} D`],
+      [t('canvas.make.run'), `${MOD} Enter`], [t('canvas.keys.add'), 'Tab · /'], [t('host.refer'), `${MOD} L`],
+    ]],
+    [t('canvas.keys.zoom'), [[t('canvas.zoom.in'), `${MOD} +`], [t('canvas.zoom.out'), `${MOD} −`], [t('canvas.fit'), `${MOD} 0`], [t('canvas.keys.pinch'), '⌘ + scroll']]],
+    [t('canvas.keys.move'), [[t('canvas.keys.space'), 'Space'], [t('canvas.keys.scroll'), '↕ ↔'], [t('canvas.keys.select'), 'V'], [t('canvas.keys.hand'), 'H']]],
+    [t('canvas.keys.other'), [
+      [t('canvas.keys.undo'), `${MOD} Z`], [t('canvas.keys.redo'), `${MOD} ⇧ Z`], [t('canvas.copy'), `${MOD} C`], [t('canvas.paste'), `${MOD} V`],
+      [t('canvas.selectAll'), `${MOD} A`], [t('canvas.keys.find'), `${MOD} F`], [t('canvas.remove'), '⌫'],
+    ]],
   ];
   return (
-    <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2">
-      <div className={`pointer-events-auto ${BAR}`}>
+    <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2">
+      <div className="pointer-events-auto flex items-center gap-2 rounded-[12px] border-[0.5px] !border-[var(--cv-bar-line)] bg-[var(--cv-bar)] p-2">
         <Tooltip label={`${t('canvas.toolbar.add')} · /`} side="top">
           <button type="button" aria-label={t('canvas.toolbar.add')} onClick={(event) => onAdd(event.currentTarget.getBoundingClientRect())}
-            className={`${TOOL} ${adding ? ON : '!bg-[var(--primary)] !text-[var(--on-primary)] hover:bg-[var(--primary-hover)]'}`}>
-            {adding ? <X size={18} /> : <Plus size={18} />}
+            className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-[var(--cv-invert)] text-[var(--cv-on-invert)] transition hover:opacity-90">
+            {adding ? <X size={17} /> : <Plus size={18} />}
           </button>
         </Tooltip>
-        <span className="mx-1 h-5 w-px bg-[var(--cv-float-line)]" />
-        <Tooltip label={`${t('canvas.keys.select')} · V`} side="top">
-          <button type="button" aria-label={t('canvas.keys.select')} onClick={() => onTool('select')} className={`${TOOL} ${tool === 'select' ? ON : ''}`}><MousePointer2 size={17} /></button>
-        </Tooltip>
-        <Tooltip label={`${t('canvas.keys.hand')} · H`} side="top">
-          <button type="button" aria-label={t('canvas.keys.hand')} onClick={() => onTool('hand')} className={`${TOOL} ${tool === 'hand' ? ON : ''}`}><Hand size={17} /></button>
+        {/* select (V) and the hand (H): one button, the one in use */}
+        <Tooltip label={tool === 'select' ? `${t('canvas.keys.select')} · V` : `${t('canvas.keys.hand')} · H`} side="top">
+          <button type="button" aria-label={t(tool === 'select' ? 'canvas.keys.select' : 'canvas.keys.hand')} onClick={() => onTool(tool === 'select' ? 'hand' : 'select')} className={TOOL}>
+            {tool === 'select' ? <MousePointer2 size={17} /> : <Hand size={17} />}
+          </button>
         </Tooltip>
         <Tooltip label={t('canvas.menu.templates')} side="top">
           <button type="button" aria-label={t('canvas.menu.templates')} onClick={(event) => onTemplates(event.currentTarget.getBoundingClientRect())} className={TOOL}><LayoutTemplate size={17} /></button>
         </Tooltip>
-        <span className="mx-1 h-5 w-px bg-[var(--cv-float-line)]" />
-        <Tooltip label={`${t('canvas.keys.undo')} · ${MOD}Z`} side="top">
-          <button type="button" aria-label={t('canvas.keys.undo')} onClick={onUndo} className={TOOL}><Undo2 size={17} /></button>
-        </Tooltip>
-        <Tooltip label={`${t('canvas.keys.redo')} · ⇧${MOD}Z`} side="top">
-          <button type="button" aria-label={t('canvas.keys.redo')} onClick={onRedo} className={TOOL}><Redo2 size={17} /></button>
-        </Tooltip>
+        <span className="h-4 w-px bg-[var(--cv-bar-line)]" />
         <Popover open={keys} onOpenChange={setKeys} placement="top" align="center"
           trigger={(
             <Tooltip label={t('canvas.keys.title')} side="top">
               <button type="button" aria-label={t('canvas.keys.title')} onClick={() => setKeys((v) => !v)} className={`${TOOL} ${keys ? ON : ''}`}><Keyboard size={17} /></button>
             </Tooltip>
           )}>
-          <div className="w-[280px] rounded-[14px] border border-[var(--cv-float-line)] bg-[var(--cv-float)] p-3 shadow-[var(--cv-float-shadow)]">
-            <div className="mb-2 text-[12.5px] font-medium text-[var(--cv-ink)]">{t('canvas.keys.title')}</div>
-            {rows.map(([what, key]) => (
-              <div key={what} className="flex h-7 items-center justify-between text-[12.5px]">
-                <span className="text-[var(--cv-label)]">{what}</span>
-                <kbd className="rounded bg-[var(--cv-float-hover)] px-1.5 font-sans text-[11.5px] text-[var(--cv-ink)]">{key}</kbd>
+          <div className="relative grid w-[min(860px,92vw)] grid-cols-4 gap-6 rounded-[12px] bg-[var(--cv-float)] p-5 shadow-[var(--cv-float-shadow)]">
+            <button type="button" aria-label={t('canvas.outline.close')} onClick={() => setKeys(false)} className="absolute right-3 top-3 text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]"><X size={15} /></button>
+            {columns.map(([title, rows]) => (
+              <div key={title}>
+                <div className="mb-2 text-[12.5px] font-medium text-[var(--cv-edge-lit)]">{title}</div>
+                {rows.map(([what, key]) => (
+                  <div key={what} className="flex h-8 items-center justify-between gap-2 text-[12.5px]">
+                    <span className="truncate text-[var(--cv-ink-2)]">{what}</span>
+                    <kbd className="shrink-0 rounded-[6px] bg-[var(--cv-chip)] px-1.5 py-0.5 font-sans text-[11.5px] text-[var(--cv-ink)]">{key}</kbd>
+                  </div>
+                ))}
               </div>
             ))}
           </div>
@@ -85,49 +92,56 @@ export function BottomToolbar({ adding, onAdd, tool, onTool, onTemplates, onUndo
   );
 }
 
-/** The chat beside the board, folded away or back, from the board's bottom left. */
-export function ChatToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
-  const t = useT();
-  const label = t(open ? 'canvas.toolbar.chatHide' : 'canvas.toolbar.chatShow');
-  return (
-    <div className="pointer-events-auto absolute bottom-4 left-4 z-20 flex items-center rounded-[12px] border border-[var(--cv-float-line)] bg-[var(--cv-float)] p-0.5 shadow-[var(--cv-float-shadow)]">
-      <Tooltip label={label} side="top">
-        <button type="button" aria-label={label} aria-pressed={open} onClick={onToggle} className={`${TOOL} !h-8 !w-8`}>
-          {open ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
-        </button>
-      </Tooltip>
-    </div>
-  );
-}
-
-/** The bar at the board's bottom right: the list of what is on the board, the overview map, and how far it is zoomed. */
-export function ZoomBar({ outline, onOutline, map, onMap }: { outline: boolean; onOutline: () => void; map: boolean; onMap: () => void }) {
+/**
+ * The bar at the board's bottom left: the chat beside the board folded away or back (in an app with one), the list
+ * of what is on the board, the overview map, the wires shown or hidden, snapping to the grid, how far it is zoomed.
+ */
+export function LeftBar({ chat, outline, onOutline, map, onMap, wires, onWires, snap, onSnap }: {
+  chat?: { open: boolean; toggle: () => void };
+  outline: boolean; onOutline: () => void;
+  map: boolean; onMap: () => void;
+  wires: boolean; onWires: () => void;
+  snap: boolean; onSnap: () => void;
+}) {
   const t = useT();
   const flow = useReactFlow();
   const zoom = useStore((s) => s.transform[2]);
   const [open, setOpen] = React.useState(false);
-  const row = 'flex h-8 w-full items-center justify-between rounded-lg px-2 text-[12.5px] text-[var(--cv-ink)] hover:bg-[var(--cv-float-hover)]';
+  const row = 'flex h-8 w-full items-center justify-between rounded-[8px] px-2 text-[13px] text-[var(--cv-ink)] hover:bg-[var(--cv-float-hover)]';
   const act = (run: () => void) => () => { run(); setOpen(false); };
+  const chatLabel = chat ? t(chat.open ? 'canvas.toolbar.chatHide' : 'canvas.toolbar.chatShow') : '';
   return (
-    <div className="pointer-events-auto absolute bottom-4 right-4 z-20 flex items-center gap-0.5 rounded-[12px] border border-[var(--cv-float-line)] bg-[var(--cv-float)] p-0.5 shadow-[var(--cv-float-shadow)]">
+    <div className="pointer-events-auto absolute bottom-3 left-2 z-20 flex h-10 items-center gap-1 rounded-[12px] bg-[color-mix(in_srgb,var(--cv-bg)_70%,transparent)] px-1.5 backdrop-blur-[16px]">
+      {chat ? (
+        <Tooltip label={chatLabel} side="top">
+          <button type="button" aria-label={chatLabel} aria-pressed={chat.open} onClick={chat.toggle} className={SMALL}>
+            {chat.open ? <PanelLeftClose size={15} /> : <PanelLeftOpen size={15} />}
+          </button>
+        </Tooltip>
+      ) : null}
       <Tooltip label={t('canvas.outline.title')} side="top">
-        <button type="button" aria-label={t('canvas.outline.title')} onClick={onOutline} className={`${TOOL} !h-8 !w-8 ${outline ? ON : ''}`}><ListTree size={16} /></button>
+        <button type="button" aria-label={t('canvas.outline.title')} onClick={onOutline} className={`${SMALL} ${outline ? ON : ''}`}><ListTree size={15} /></button>
       </Tooltip>
       <Tooltip label={t('canvas.toolbar.map')} side="top">
-        <button type="button" aria-label={t('canvas.toolbar.map')} onClick={onMap} className={`${TOOL} !h-8 !w-8 ${map ? ON : ''}`}><MapIcon size={16} /></button>
+        <button type="button" aria-label={t('canvas.toolbar.map')} onClick={onMap} className={`${SMALL} ${map ? ON : ''}`}><MapIcon size={15} /></button>
       </Tooltip>
-      <Popover open={open} onOpenChange={setOpen} placement="top" align="end"
+      <Tooltip label={t(wires ? 'canvas.toolbar.hideWires' : 'canvas.toolbar.showWires')} side="top">
+        <button type="button" aria-label={t(wires ? 'canvas.toolbar.hideWires' : 'canvas.toolbar.showWires')} onClick={onWires} className={`${SMALL} ${wires ? '' : ON}`}><Spline size={15} /></button>
+      </Tooltip>
+      <Tooltip label={t('canvas.toolbar.snap')} side="top">
+        <button type="button" aria-label={t('canvas.toolbar.snap')} aria-pressed={snap} onClick={onSnap} className={`${SMALL} ${snap ? ON : ''}`}><Grid3x3 size={15} /></button>
+      </Tooltip>
+      <Popover open={open} onOpenChange={setOpen} placement="top" align="start"
         trigger={(
-          <button type="button" onClick={() => setOpen((v) => !v)}
-            className="h-8 min-w-[52px] rounded-[10px] px-2 text-[12.5px] tabular-nums text-[var(--cv-label)] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">
+          <button type="button" onClick={() => setOpen((v) => !v)} className={`${SMALL} !px-1.5 text-[12.5px] tabular-nums`}>
             {Math.round(zoom * 100)}%
           </button>
         )}>
-        <div className="w-[200px] rounded-[12px] border border-[var(--cv-float-line)] bg-[var(--cv-float)] p-1 shadow-[var(--cv-float-shadow)]">
-          <button type="button" className={row} onClick={act(() => { void flow.zoomIn({ duration: 150 }); })}>{t('canvas.zoom.in')}<kbd className="font-sans text-[11px] text-[var(--cv-label)]">{MOD}+</kbd></button>
-          <button type="button" className={row} onClick={act(() => { void flow.zoomOut({ duration: 150 }); })}>{t('canvas.zoom.out')}<kbd className="font-sans text-[11px] text-[var(--cv-label)]">{MOD}-</kbd></button>
-          <button type="button" className={row} onClick={act(() => { void flow.fitView({ padding: 0.2, maxZoom: 1, duration: 200 }); })}>{t('canvas.fit')}<kbd className="font-sans text-[11px] text-[var(--cv-label)]">⇧1</kbd></button>
-          <button type="button" className={row} onClick={act(() => { void flow.zoomTo(1, { duration: 150 }); })}>{t('canvas.zoom.actual')}<kbd className="font-sans text-[11px] text-[var(--cv-label)]">⇧0</kbd></button>
+        <div className="w-[200px] rounded-[12px] bg-[var(--cv-float)] p-1 shadow-[var(--cv-float-shadow)]">
+          <button type="button" className={row} onClick={act(() => { void flow.zoomIn({ duration: 150 }); })}>{t('canvas.zoom.in')}<kbd className="font-sans text-[11px] text-[var(--cv-ink-3)]">{MOD}+</kbd></button>
+          <button type="button" className={row} onClick={act(() => { void flow.zoomOut({ duration: 150 }); })}>{t('canvas.zoom.out')}<kbd className="font-sans text-[11px] text-[var(--cv-ink-3)]">{MOD}−</kbd></button>
+          <button type="button" className={row} onClick={act(() => { void flow.fitView({ padding: 0.2, maxZoom: 1, duration: 200 }); })}>{t('canvas.fit')}<kbd className="font-sans text-[11px] text-[var(--cv-ink-3)]">{MOD}0</kbd></button>
+          <button type="button" className={row} onClick={act(() => { void flow.zoomTo(1, { duration: 150 }); })}>{t('canvas.zoom.actual')}<kbd className="font-sans text-[11px] text-[var(--cv-ink-3)]">{OPT}0</kbd></button>
         </div>
       </Popover>
     </div>
@@ -164,7 +178,7 @@ export function Outline({ nodes, fileOf, sources, onShow, onClose }: {
   const needle = query.trim().toLowerCase();
   const rows = nodes.map((n) => ({ id: n.id, ...nodeRow(n, fileOf, sources, t) })).filter((r) => !needle || r.label.toLowerCase().includes(needle) || r.kind.toLowerCase().includes(needle));
   return (
-    <div className="pointer-events-auto absolute bottom-[68px] right-4 top-4 z-20 flex w-[272px] flex-col overflow-hidden rounded-[14px] border border-[var(--cv-float-line)] bg-[var(--cv-float)] shadow-[var(--cv-float-shadow)]">
+    <div className="pointer-events-auto absolute bottom-[60px] left-2 top-3 z-20 flex w-[320px] flex-col overflow-hidden rounded-[12px] bg-[var(--cv-float)] shadow-[var(--cv-float-shadow)]">
       <div className="flex items-center gap-1 py-2 pl-3.5 pr-2">
         <span className="text-[13px] font-medium text-[var(--cv-ink)]">{t('canvas.outline.title')}</span>
         <span className="flex-1" />
@@ -187,7 +201,7 @@ export function Outline({ nodes, fileOf, sources, onShow, onClose }: {
           </button>
         ))}
       </div>
-      <div className="border-t border-[var(--cv-float-line)] px-3.5 py-2 text-[11.5px] text-[var(--cv-label)]">{t('canvas.outline.count').replace('{n}', String(nodes.length))}</div>
+      <div className="border-t !border-[var(--cv-float-line)] px-3.5 py-2 text-[11.5px] text-[var(--cv-label)]">{t('canvas.outline.count').replace('{n}', String(nodes.length))}</div>
     </div>
   );
 }

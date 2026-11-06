@@ -1,8 +1,9 @@
 /**
  * The menu of what to add, opened by the toolbar's +, a double click or `/` on the board, a node's ⊕ or a wire let go
- * on the board. Out on the board it has two parts, nodes (words, a picture, a clip, a sound, music, a cut) and what
- * there is already (a file of the computer, of the Assets, a template); from a node's right ⊕, what to make from it;
- * from its left ⊕, what to bring into it. A search finds any of them and the project's files.
+ * on the board, drawn as the node canvases people know draw theirs: a narrow card headed by what it adds, which typed
+ * into searches. Out on the board it has two parts, nodes (words, a picture, a clip, a cut, a sound, music) and what
+ * there is already (a file of the computer, of the Assets); from a node's right ⊕, what to make from it; from its left
+ * ⊕, what to bring into it. The toolbar's templates button opens it on the templates.
  */
 import React from 'react';
 import { ChevronRight, Images, LayoutTemplate, Scissors, Search, Type as TypeIcon, Upload, X } from 'lucide-react';
@@ -53,11 +54,10 @@ export function AddMenu({ menu, files, templates, onKind, onUpload, onFile, onTe
   const kind = (k: SpawnKind): Row => {
     const Icon = k === 'note' ? TypeIcon : k === 'cut' ? Scissors : MAKE_ICON[k];
     const label = k === 'note' ? t('canvas.kinds.note') : k === 'cut' ? t('canvas.kinds.cut') : t(`canvas.make.${k}`);
-    return { key: `kind:${k}`, label, icon: <Icon size={16} />, run: () => onKind(k) };
+    return { key: `kind:${k}`, label, icon: <Icon size={15} />, run: () => onKind(k) };
   };
-  const upload: Row = { key: 'upload', label: t('canvas.menu.upload'), icon: <Upload size={16} />, run: onUpload };
-  const fromAssets: Row = { key: 'assets', label: t('canvas.menu.fromAssets'), icon: <Images size={16} />, run: () => { setView('files'); setActive(0); }, more: true };
-  const fromTemplates: Row = { key: 'templates', label: t('canvas.menu.templates'), icon: <LayoutTemplate size={16} />, run: () => { setView('templates'); setActive(0); }, more: true };
+  const upload: Row = { key: 'upload', label: t('canvas.menu.upload'), icon: <Upload size={15} />, run: onUpload };
+  const fromAssets: Row = { key: 'assets', label: t('canvas.menu.fromAssets'), icon: <Images size={15} />, run: () => { setView('files'); setActive(0); }, more: true };
   const fileRows: Row[] = files.filter((f) => f.kind !== 'other' && (match(f.name) || match(f.path))).slice(0, MENU_FILES).map((f) => {
     const Icon = KIND_ICON[f.kind];
     return { key: `file:${f.path}`, label: f.name, icon: <Icon size={16} />, run: () => onFile(f) };
@@ -68,11 +68,11 @@ export function AddMenu({ menu, files, templates, onKind, onUpload, onFile, onTe
   }));
   const sections: Array<{ title: string; rows: Row[] }> = view === 'files' ? [{ title: t('canvas.menu.fromAssets'), rows: fileRows }]
     : view === 'templates' ? [{ title: t('canvas.menu.templates'), rows: templateRows }]
-      : menu.from?.side === 'source' ? [{ title: t('canvas.menu.fromNode'), rows: (['note', 'image', 'video', 'sfx', 'music', 'cut'] as const).map(kind).filter((r) => match(r.label)) }]
+      : menu.from?.side === 'source' ? [{ title: t('canvas.menu.fromNode'), rows: (['note', 'image', 'video', 'cut', 'sfx', 'music'] as const).map(kind).filter((r) => match(r.label)) }]
         : menu.from?.side === 'target' ? [{ title: t('canvas.menu.intoNode'), rows: [upload, fromAssets, kind('note'), kind('image')].filter((r) => match(r.label)) }]
           : [
-            { title: t('canvas.menu.nodes'), rows: (['note', 'image', 'video', 'sfx', 'music', 'cut'] as const).map(kind).filter((r) => match(r.label)) },
-            { title: t('canvas.menu.resources'), rows: [upload, fromAssets, fromTemplates].filter((r) => match(r.label)) },
+            { title: t('canvas.menu.nodes'), rows: (['note', 'image', 'video', 'cut', 'sfx', 'music'] as const).map(kind).filter((r) => match(r.label)) },
+            { title: t('canvas.menu.resources'), rows: [upload, fromAssets].filter((r) => match(r.label)) },
             /* searching: the project's files and the templates too */
             ...(needle ? [{ title: t('canvas.menu.fromAssets'), rows: fileRows.slice(0, 8) }, { title: t('canvas.menu.templates'), rows: templateRows }] : []),
           ];
@@ -92,18 +92,20 @@ export function AddMenu({ menu, files, templates, onKind, onUpload, onFile, onTe
     return () => window.removeEventListener('pointerdown', away, true);
   }, [onClose]);
   /* kept on the screen */
-  const left = Math.min(menu.screen.x, window.innerWidth - 300);
+  const left = Math.min(menu.screen.x, window.innerWidth - 236);
   const place: React.CSSProperties = menu.above
     ? { left, bottom: Math.max(8, window.innerHeight - menu.screen.y + 10) }
     : { left, top: Math.min(menu.screen.y, window.innerHeight - 440) };
   let n = -1;
+  /* the first part's title heads the menu, and typed into searches */
+  const head = sections[0]?.title ?? t('canvas.menu.nodes');
   return (
-    <div ref={ref} className="fixed z-[200] w-[264px] overflow-hidden rounded-[14px] border border-[var(--cv-float-line)] bg-[var(--cv-float)] p-1.5 shadow-[var(--cv-float-shadow)]" style={place}>
-      <label className="flex h-8 items-center gap-2 px-2 text-[13px]">
+    <div ref={ref} className="fixed z-[200] w-[220px] overflow-hidden rounded-[12px] bg-[var(--cv-float)] p-1 shadow-[var(--cv-float-shadow)]" style={place}>
+      <label className="flex h-7 items-center gap-1.5 px-2">
         {view === 'kinds' ? null : (
           <button type="button" aria-label={t('canvas.menu.back')} onClick={() => { setView('kinds'); setActive(0); }}
-            className="-ml-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded text-[var(--cv-label)] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">
-            <ChevronRight size={14} className="rotate-180" />
+            className="-ml-1 flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--cv-ink-3)] hover:text-[var(--cv-ink)]">
+            <ChevronRight size={13} className="rotate-180" />
           </button>
         )}
         <input
@@ -116,29 +118,29 @@ export function AddMenu({ menu, files, templates, onKind, onUpload, onFile, onTe
             else if (event.key === 'ArrowUp') { event.preventDefault(); setActive((i) => Math.max(0, i - 1)); }
             else if (event.key === 'Enter') flat[active]?.run();
           }}
-          placeholder={t(menu.from ? 'canvas.menu.searchHere' : 'canvas.menu.search')}
-          className="min-w-0 flex-1 bg-transparent text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-label)]"
+          placeholder={head}
+          className="min-w-0 flex-1 bg-transparent text-[12px] font-medium text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-ink-3)]"
         />
-        <Search size={14} className="shrink-0 text-[var(--cv-label)]" />
+        <Search size={13} className="shrink-0 text-[var(--cv-ink-3)]" />
       </label>
       <div className="max-h-[380px] overflow-y-auto">
-        {sections.filter((s) => s.rows.length).map((section) => (
-          <div key={section.title} className="pt-1">
-            <div className="px-2 pb-1 pt-1.5 text-[11.5px] text-[var(--cv-label)]">{section.title}</div>
+        {sections.filter((sec) => sec.rows.length).map((section, si) => (
+          <div key={section.title} className={si ? 'mt-1 border-t !border-[var(--cv-float-line)] pt-1' : ''}>
+            {si ? <div className="flex h-7 items-center px-2 text-[12px] font-medium text-[var(--cv-ink-3)]">{section.title}</div> : null}
             {section.rows.map((row) => {
               n += 1;
               const i = n;
               return (
                 <button key={row.key} type="button" onMouseEnter={() => setActive(i)} onClick={row.run}
-                  className={`flex h-9 w-full min-w-0 items-center gap-2.5 rounded-lg px-2 text-left text-[13.5px] ${i === active ? 'bg-[var(--cv-float-hover)] text-[var(--cv-ink)]' : 'text-[var(--cv-ink)]'}`}>
-                  <span className="shrink-0 text-[var(--cv-label)]">{row.icon}</span>
+                  className={`flex h-8 w-full min-w-0 items-center gap-2 rounded-[8px] px-2 text-left text-[13px] text-[var(--cv-ink)] ${i === active ? 'bg-[var(--cv-float-hover)]' : ''}`}>
+                  <span className="shrink-0">{row.icon}</span>
                   <span className="min-w-0 flex-1 truncate">{row.label}</span>
-                  {row.badge ? <span className="shrink-0 rounded bg-[var(--cv-float-hover)] px-1.5 text-[10.5px] text-[var(--cv-label)]">{row.badge}</span> : null}
-                  {row.more ? <ChevronRight size={14} className="shrink-0 text-[var(--cv-label)]" /> : null}
+                  {row.badge ? <span className="shrink-0 rounded bg-[var(--cv-chip)] px-1.5 text-[10.5px] text-[var(--cv-ink-2)]">{row.badge}</span> : null}
+                  {row.more ? <ChevronRight size={14} className="shrink-0 text-[var(--cv-ink-3)]" /> : null}
                   {row.remove && i === active ? (
                     <span role="button" tabIndex={-1} aria-label={t('canvas.removeTemplate')} title={t('canvas.removeTemplate')}
                       onClick={(event) => { event.stopPropagation(); row.remove!(); }}
-                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--cv-label)] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--cv-ink-3)] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">
                       <X size={12} />
                     </span>
                   ) : null}
@@ -147,7 +149,7 @@ export function AddMenu({ menu, files, templates, onKind, onUpload, onFile, onTe
             })}
           </div>
         ))}
-        {flat.length ? null : <div className="flex h-9 items-center px-2 text-[12.5px] text-[var(--cv-label)]">{t('canvas.nothing')}</div>}
+        {flat.length ? null : <div className="flex h-8 items-center px-2 text-[12.5px] text-[var(--cv-ink-3)]">{t('canvas.nothing')}</div>}
       </div>
     </div>
   );

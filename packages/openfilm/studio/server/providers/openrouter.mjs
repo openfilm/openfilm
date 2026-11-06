@@ -82,7 +82,7 @@ const VIDEO = {
 for (const model of MODELS.image) Object.assign(model, { spec: { ratios: RATIOS, refs: MAX_REFS, ...(QUALITY[model.id] ? { qualities: QUALITY[model.id] } : {}) } });
 for (const model of MODELS.video) {
   const v = VIDEO[model.id];
-  if (v) Object.assign(model, { spec: { ratios: v.ratios, ...(v.only ? { only: v.only } : v.seconds ? { seconds: v.seconds } : {}), refs: v.refs, frames: true } });
+  if (v) Object.assign(model, { spec: { ratios: v.ratios, ...(v.only ? { only: v.only } : v.seconds ? { seconds: v.seconds } : {}), refs: v.refs, frames: true, ...(v.voice ? { voice: true } : {}), ...(v.clip ? { clip: true } : {}) } });
 }
 const RESOLUTION = '720p';
 /** Each size's lines of picture, to find the nearest a model makes. */

@@ -3,14 +3,14 @@
  * being made laid out on a board, in groups or not, and edges between them; what an undo goes back to, what a copy
  * makes, and what a node that makes something asks `get` for. The board itself is components/canvas.
  */
+import { presetOf } from './canvas-presets.ts';
 
 export interface CanvasNode {
   id: string;
   x: number;
   y: number;
-  /** its width on the board (a file's height follows its picture) */
+  /** its card's size on the board, once sized (a file's follows its picture until resized) */
   w?: number;
-  /** a note's height */
   h?: number;
   /** a note: what it says */
   text?: string;
@@ -35,6 +35,8 @@ export interface CanvasNode {
   via?: string;
   model?: string;
   opts?: MakeOptions;
+  /** a way to ask for a picture that came with the canvas (lib/canvas-presets), its words put before the node's */
+  preset?: string;
   versions?: string[];
   /** what it was asked when it last made one (inputsKey): when that is not what it would be asked now, it is stale */
   made?: string;
@@ -47,7 +49,15 @@ export type MakeKind = typeof MAKE_KINDS[number];
  * a picture's shape and quality, a clip's length or a sound's, and whether the pictures wired into a video are its first
  * and last frames
  */
-export interface MakeOptions { ratio?: string; sec?: number; frames?: boolean; quality?: string }
+export interface MakeOptions { ratio?: string; sec?: number; frames?: boolean; quality?: string; mode?: VideoMode }
+
+/**
+ * How a clip is made from what is wired in: from the words alone; from everything wired in as references (pictures,
+ * a clip, a voice: `omni`); from a picture as its first frame; between a first and a last frame; from pictures as
+ * references.
+ */
+export const VIDEO_MODES = ['text', 'omni', 'first', 'firstLast', 'refs'] as const;
+export type VideoMode = typeof VIDEO_MODES[number];
 
 /**
  * What a model makes, as its provider says (studio/server/providers/contract.mjs ModelSpec): its shapes, a clip's
@@ -56,6 +66,8 @@ export interface MakeOptions { ratio?: string; sec?: number; frames?: boolean; q
  */
 export interface ModelSpec {
   ratios?: string[]; seconds?: [number, number]; only?: number[]; refs?: number; frames?: boolean; qualities?: string[]; needs?: 'clip' | 'audio';
+  /** a clip that takes a recording of whose voice speaks in it, a clip of its own to continue or change */
+  voice?: boolean; clip?: boolean;
 }
 
 /** What each kind makes, as the board shows it. */
@@ -75,10 +87,28 @@ export interface CanvasEdge { id: string; from: string; to: string; order?: numb
 
 export interface CanvasDoc { nodes: CanvasNode[]; edges: CanvasEdge[] }
 
-export const NOTE_W = 240;
-export const NOTE_H = 140;
-export const FILE_W = 280;
-export const MAKE_W = 320;
+/**
+ * How big a card is drawn, at 100%: a picture's or a clip's is CARD_H high and as wide as its shape makes it (16:9,
+ * MAKE_W); words, a sound and a cut are a box of their own. A new text is square until written in.
+ */
+export const CARD_H = 350;
+export const NOTE_W = 350;
+export const NOTE_H = 200;
+export const AUDIO_W = 320;
+export const CUT_W = 350;
+export const MAKE_W = 622;
+export const FILE_W = MAKE_W;
+
+/** A card's width at CARD_H high for a shape ('16:9'). */
+export function cardWidth(ratio: string | undefined, h = CARD_H): number {
+  const [w, hh] = (ratio ?? '16:9').split(':').map(Number);
+  return w && hh ? Math.round((h * w) / hh) : MAKE_W;
+}
+
+/** A making node's card, as it is drawn until resized: a sound's box, else its shape at CARD_H high. */
+export function makeSize(make: MakeKind, ratio?: string): { w: number; h: number } {
+  return MAKE_MEDIA[make] === 'audio' ? { w: AUDIO_W, h: CARD_H } : { w: cardWidth(ratio), h: CARD_H };
+}
 
 const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
@@ -122,11 +152,12 @@ function readMake(n: Record<string, unknown>): Omit<CanvasNode, 'id' | 'x' | 'y'
     ...(num(o.sec) ? { sec: o.sec } : {}),
     ...(o.frames === true ? { frames: true } : {}),
     ...(str(o.quality) ? { quality: o.quality as string } : {}),
+    ...(VIDEO_MODES.find((m) => m === o.mode) ? { mode: o.mode as VideoMode } : {}),
   };
   const versions = Array.isArray(n.versions) ? n.versions.filter((v): v is string => typeof v === 'string' && v.length > 0) : [];
   const fields = {
     prompt: typeof n.prompt === 'string' ? n.prompt : '',
-    via: str(n.via), model: str(n.model),
+    via: str(n.via), model: str(n.model), preset: str(n.preset),
     opts: Object.keys(opts).length ? opts : undefined,
     versions: versions.length ? versions : undefined,
     path: str(n.path) && versions.includes(n.path as string) ? n.path as string : versions.at(-1),
@@ -228,7 +259,7 @@ export function inputsOf(doc: CanvasDoc, id: string, mediaOf: MediaOf): MakeInpu
 /** What a node is asked, in a few characters: the same when nothing it is asked has changed. */
 export function inputsKey(node: CanvasNode, inputs: readonly MakeInput[]): string {
   const said = JSON.stringify([node.make, node.prompt ?? '', node.via ?? '', node.model ?? '', node.opts ?? {},
-    inputs.map((i) => ('text' in i ? ['t', i.text] : ['f', i.path]))]);
+    inputs.map((i) => ('text' in i ? ['t', i.text] : ['f', i.path])), ...(node.preset ? [node.preset] : [])]);
   let hash = 0x811c9dc5;
   for (let i = 0; i < said.length; i++) hash = Math.imul(hash ^ said.charCodeAt(i), 0x01000193);
   return (hash >>> 0).toString(36);
@@ -271,14 +302,24 @@ export function ratioOf(asked: string | undefined, spec?: ModelSpec): string {
   });
 }
 
+/** The ways a model makes a clip (VIDEO_MODES): from words always; from frames, references, or everything, as it takes them. */
+export function modesFor(spec?: ModelSpec): VideoMode[] {
+  if (spec?.needs) return [];
+  const frames = spec?.frames !== false;
+  const refs = spec?.refs !== 0;
+  return VIDEO_MODES.filter((m) => m === 'text' || (m === 'first' || m === 'firstLast' ? frames : m === 'refs' ? refs : refs && Boolean(spec?.voice || spec?.clip)));
+}
+
 /**
- * Whether the pictures wired into a clip are its first and last frames (else references): what the node says, when its
- * model takes both; frames when it takes no references, references when it takes no frames.
+ * How a node's clip is made: the way it names, when its model makes clips so; else (a board from before, `frames`)
+ * between frames; else from the pictures wired in as its model takes them (references, or a first frame), else words.
  */
-export function usesFrames(opts: MakeOptions | undefined, spec?: ModelSpec): boolean {
-  if (spec?.refs === 0) return spec.frames !== false;
-  if (spec?.frames === false) return false;
-  return Boolean(opts?.frames);
+export function modeOf(opts: MakeOptions | undefined, spec: ModelSpec | undefined, pictures: number): VideoMode {
+  const can = modesFor(spec);
+  if (opts?.mode && can.includes(opts.mode)) return opts.mode;
+  if (opts?.frames && can.includes('firstLast')) return pictures > 1 ? 'firstLast' : 'first';
+  if (!pictures) return 'text';
+  return can.includes('refs') ? 'refs' : can.includes('first') ? 'first' : 'text';
 }
 
 /**
@@ -289,7 +330,8 @@ export function usesFrames(opts: MakeOptions | undefined, spec?: ModelSpec): boo
  */
 export function makeRequest(node: CanvasNode & { make: MakeKind }, inputs: readonly MakeInput[], name: string, spec?: ModelSpec):
   { verb: MakeKind; args: Record<string, string | string[]>; unused: number } {
-  const words = [...inputs.flatMap((i) => ('text' in i ? [i.text] : [])), (node.prompt ?? '').trim()].filter(Boolean).join('\n\n');
+  /* a preset's words first, then the words wired in, then the node's own */
+  const words = [presetOf(node.preset)?.prompt ?? '', ...inputs.flatMap((i) => ('text' in i ? [i.text] : [])), (node.prompt ?? '').trim()].filter(Boolean).join('\n\n');
   const pictures = inputs.flatMap((i) => ('media' in i && i.media === 'image' ? [i.path] : []));
   const clips = inputs.flatMap((i) => ('media' in i && i.media === 'video' ? [i.path] : []));
   const sounds = inputs.flatMap((i) => ('media' in i && i.media === 'audio' ? [i.path] : []));
@@ -311,13 +353,22 @@ export function makeRequest(node: CanvasNode & { make: MakeKind }, inputs: reado
     /* a clip made from a clip or a recording is as long as it */
     if (seconds !== null && !used) args.duration = String(seconds);
     if (opts.ratio && !spec?.needs) args['aspect-ratio'] = ratioOf(opts.ratio, spec);
-    if (pictures.length && !fromClip && usesFrames(opts, spec)) {
-      args['first-frame'] = pictures[0]!;
-      if (pictures[1] && !spec?.needs) args['last-frame'] = pictures[1];
-      used += spec?.needs ? 1 : Math.min(2, pictures.length);
-    } else if (pictures.length) {
+    if (spec?.needs) {
+      /* a person speaking a recording: from a picture of them */
+      if (spec.needs === 'audio' && pictures[0]) { args['first-frame'] = pictures[0]; used += 1; }
+      else if (spec.refs && pictures.length) { const refs = pictures.slice(0, spec.refs); args['input-reference'] = refs; used += refs.length; }
+    } else {
+      const mode = modeOf(opts, spec, pictures.length);
       const refs = pictures.slice(0, spec?.refs ?? pictures.length);
-      if (refs.length) { args['input-reference'] = refs; used += refs.length; }
+      if ((mode === 'first' || mode === 'firstLast') && pictures[0]) {
+        args['first-frame'] = pictures[0];
+        used += 1;
+        if (mode === 'firstLast' && pictures[1]) { args['last-frame'] = pictures[1]; used += 1; }
+      } else if ((mode === 'refs' || mode === 'omni') && refs.length) { args['input-reference'] = refs; used += refs.length; }
+      if (mode === 'omni') {
+        if (spec?.voice && sounds[0]) { args.voice = sounds[0]; used += 1; }
+        if (spec?.clip && clips[0]) { args.video = clips[0]; used += 1; }
+      }
     }
   } else if (seconds !== null) args.sec = String(seconds);
   return { verb: node.make, args, unused: pictures.length + clips.length + sounds.length - used };

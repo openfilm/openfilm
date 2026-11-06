@@ -42,7 +42,7 @@ test('what it offers is what the service says now: the kinds it knows, voices wi
   assert.deepEqual(openfilm.verbs, ['tts', 'voice', 'video']);
   /* what a model makes is what the provider it is run at says */
   assert.deepEqual(openfilm.models.video, [{ id: 'openrouter/bytedance/seedance-2.0-fast', name: 'Seedance 2.0 Fast',
-    spec: { ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], seconds: [4, 15], refs: 9, frames: true } }]);
+    spec: { ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], seconds: [4, 15], refs: 9, frames: true, voice: true } }]);
   assert.equal(openfilm.models.tts[0].spec, undefined, 'a voice has none');
   await openfilm.refresh();
   assert.equal(seen.length, 1, 'asked again only after a while');

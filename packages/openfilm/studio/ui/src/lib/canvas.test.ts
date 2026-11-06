@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  canvasId, canvasKey, copyOf, emptyHistory, inputsKey, inputsOf, isStale, makeName, makeRequest, nextOrder, readCanvasDoc, redo, remember, reorder, undo, withVersion,
+  canvasId, canvasKey, copyOf, emptyHistory, inputsKey, inputsOf, isStale, makeName, makeRequest, modesFor, nextOrder, readCanvasDoc, redo, remember, reorder, undo, withVersion,
 } from './canvas.ts';
 
 test('a board as sent is read node by node: notes and files, and edges between nodes it has', () => {
@@ -115,8 +115,12 @@ test('what is wired into a node comes in its edges\' order; words and pictures, 
   /* within what the model makes */
   const heygen = { ratios: ['16:9', '9:16'], seconds: [5, 30] as [number, number], refs: 0, frames: true };
   assert.deepEqual(makeRequest({ ...v, opts: { sec: 4, ratio: '4:3' } }, inputs, 'push', heygen).args,
-    { out: 'push', prompt: 'cold blue dawn\n\na slow push in', duration: '5', 'aspect-ratio': '16:9', 'first-frame': 'assets/a.png', 'last-frame': 'assets/image/b.png' },
+    { out: 'push', prompt: 'cold blue dawn\n\na slow push in', duration: '5', 'aspect-ratio': '16:9', 'first-frame': 'assets/a.png' },
     'a model that takes no references starts from the first picture');
+  assert.deepEqual(makeRequest({ ...v, opts: { mode: 'firstLast' } }, inputs, 'push', heygen).args['last-frame'], 'assets/image/b.png', 'between two frames when asked');
+  assert.equal(makeRequest({ ...v, opts: { mode: 'text' } }, inputs, 'push').unused, 2, 'from the words alone, the pictures are left');
+  assert.deepEqual(modesFor(heygen), ['text', 'first', 'firstLast']);
+  assert.deepEqual(modesFor({ refs: 9, frames: true, voice: true }), ['text', 'omni', 'first', 'firstLast', 'refs']);
   assert.deepEqual(makeRequest({ ...v, opts: { frames: true } }, inputs, 'push', { refs: 1, frames: false }).args['input-reference'], ['assets/a.png'], 'one that takes no frames, references, as many as it takes');
   assert.equal(makeRequest({ ...v, opts: { sec: 7 } }, inputs, 'push', { only: [5, 10] }).args.duration, '5');
   assert.deepEqual(makeRequest({ ...v, make: 'image', opts: { quality: 'high' } }, inputs, 'still', { refs: 1, qualities: ['low', 'high'] }).args,

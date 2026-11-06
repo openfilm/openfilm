@@ -75,7 +75,8 @@
  * `ratios`, its shapes; `seconds`, a clip's lengths (a range in whole seconds) or `only` some; `refs`, the most pictures
  * it is made from (`--ref` for a picture, `--input-reference` for a clip; 0: none); `frames`, a clip from a first (and
  * last) frame; `qualities`, a picture's `--quality`, the finest last; `needs`, a clip made only from another clip
- * (`--video`) or a recording spoken (`--audio`).
+ * (`--video`) or a recording spoken (`--audio`); `voice`, a clip that also takes a recording of whose voice speaks in it
+ * (`--voice`); `clip`, one that also takes a clip to continue or change (`--video`).
  * @typedef {{
  *   ratios?: string[],
  *   seconds?: [number, number],
@@ -84,6 +85,8 @@
  *   frames?: boolean,
  *   qualities?: string[],
  *   needs?: 'clip' | 'audio',
+ *   voice?: boolean,
+ *   clip?: boolean,
  * }} ModelSpec
  */
 

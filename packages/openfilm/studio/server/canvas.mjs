@@ -122,11 +122,13 @@ function readMake(n) {
     ...(short(o.ratio) ? { ratio: o.ratio } : {}),
     ...(typeof o.sec === 'number' && Number.isFinite(o.sec) && o.sec > 0 && o.sec <= 600 ? { sec: o.sec } : {}),
     ...(o.frames === true ? { frames: true } : {}),
+    ...(short(o.quality) ? { quality: o.quality } : {}),
+    ...(['text', 'omni', 'first', 'firstLast', 'refs'].includes(/** @type {string} */ (o.mode)) ? { mode: o.mode } : {}),
   };
   const versions = (Array.isArray(n.versions) ? n.versions : []).filter(projectPath).slice(-VERSIONS_MAX);
   const fields = {
     prompt: typeof n.prompt === 'string' ? n.prompt.slice(0, TEXT_MAX) : '',
-    via: short(n.via), model: short(n.model),
+    via: short(n.via), model: short(n.model), preset: short(n.preset),
     opts: Object.keys(opts).length ? opts : undefined,
     versions: versions.length ? versions : undefined,
     path: versions.includes(n.path) ? n.path : versions.at(-1),

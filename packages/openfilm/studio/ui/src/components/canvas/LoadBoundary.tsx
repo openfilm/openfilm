@@ -15,7 +15,7 @@ export class LoadBoundary extends React.Component<{ children: React.ReactNode; t
       <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-[var(--cv-bg)] text-[13px] text-[var(--cv-label)]">
         {this.props.title}
         <button type="button" onClick={() => window.location.reload()}
-          className="flex h-8 items-center gap-1.5 rounded-lg border border-[var(--cv-float-line)] bg-[var(--cv-float)] px-3 text-[12.5px] text-[var(--cv-ink)] hover:bg-[var(--cv-float-hover)]">
+          className="flex h-8 items-center gap-1.5 rounded-lg border !border-[var(--cv-float-line)] bg-[var(--cv-float)] px-3 text-[12.5px] text-[var(--cv-ink)] hover:bg-[var(--cv-float-hover)]">
           <RotateCw size={13} />{this.props.action}
         </button>
       </div>

@@ -6,14 +6,14 @@
 import React from 'react';
 import type { Edge, Node } from '@xyflow/react';
 import { api } from '@/api';
-import { FILE_W, MAKE_MEDIA, MAKE_W, NOTE_H, NOTE_W, readCanvasDoc, withVersion, type CanvasDoc, type CanvasNode, type GroupColor, type MakeKind, type MediaOf, type ModelSpec, makeRequest } from '@/lib/canvas';
+import { CARD_H, CUT_W, FILE_W, MAKE_MEDIA, NOTE_H, NOTE_W, makeSize, readCanvasDoc, withVersion, type CanvasDoc, type CanvasNode, type GroupColor, type MakeKind, type MediaOf, type ModelSpec, makeRequest } from '@/lib/canvas';
 import type { ProvidersState } from '@/lib/providers';
 import type { MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
 
 export type FileData = { path: string; by?: CanvasNode['by'] };
 export type NoteData = { text: string; by?: CanvasNode['by'] };
 export type FrameData = { label: string; color: GroupColor };
-export type MakeData = Pick<CanvasNode, 'prompt' | 'via' | 'model' | 'opts' | 'versions' | 'path' | 'made' | 'by'> & { make: MakeKind };
+export type MakeData = Pick<CanvasNode, 'prompt' | 'via' | 'model' | 'opts' | 'preset' | 'versions' | 'path' | 'made' | 'by'> & { make: MakeKind };
 export type CutData = { by?: CanvasNode['by'] };
 export type FileNode = Node<FileData, 'file'>;
 export type NoteNode = Node<NoteData, 'note'>;
@@ -22,9 +22,6 @@ export type MakeNode = Node<MakeData, 'make'>;
 export type CutNode = Node<CutData, 'cut'>;
 export type BoardNode = FileNode | NoteNode | FrameNode | MakeNode | CutNode;
 export type MakingNode = CanvasNode & { make: MakeKind };
-
-/** a cut's width on the board */
-export const CUT_W = 320;
 
 /** The board as React Flow draws it: groups before what is in them, as it needs them. */
 export function toFlow(doc: CanvasDoc): { nodes: BoardNode[]; edges: Edge[] } {
@@ -36,10 +33,13 @@ export function toFlow(doc: CanvasDoc): { nodes: BoardNode[]; edges: Edge[] } {
       if (n.group != null) return { ...base, type: 'frame', width: n.w ?? 480, height: n.h ?? 320, zIndex: -1, data: { label: n.group, color: n.color ?? 'gray' } };
       if (n.make) {
         const { id: _id, x: _x, y: _y, w: _w, h: _h, parent: _parent, text: _text, group: _group, color: _color, cut: _cut, ...data } = n;
-        return { ...base, type: 'make', width: n.w ?? MAKE_W, data: { ...data, make: n.make } };
+        /* sized as resized; else (and on a board from before cards had a height) as its shape draws it */
+        const size = n.w != null && n.h != null ? { w: n.w, h: n.h } : makeSize(n.make, n.opts?.ratio);
+        return { ...base, type: 'make', width: size.w, height: size.h, data: { ...data, make: n.make } };
       }
-      if (n.cut) return { ...base, type: 'cut', width: n.w ?? CUT_W, data: { ...by } };
-      if (n.path != null) return { ...base, type: 'file', width: n.w ?? FILE_W, data: { path: n.path, ...by } };
+      if (n.cut) return { ...base, type: 'cut', width: n.w ?? CUT_W, height: n.h ?? CARD_H, data: { ...by } };
+      /* a file is as its picture draws it until resized */
+      if (n.path != null) return { ...base, type: 'file', ...(n.w != null && n.h != null ? { width: n.w, height: n.h } : {}), data: { path: n.path, ...by } };
       return { ...base, type: 'note', width: n.w ?? NOTE_W, height: n.h ?? NOTE_H, data: { text: n.text ?? '', ...by } };
     }),
     edges: doc.edges.map((e) => ({ id: e.id, source: e.from, target: e.to, ...(e.order != null ? { data: { order: e.order } } : {}) })),
@@ -50,12 +50,12 @@ export function fromFlow(nodes: readonly BoardNode[], edges: readonly Edge[]): C
   return {
     nodes: nodes.map((n) => {
       const box = { id: n.id, x: Math.round(n.position.x), y: Math.round(n.position.y), ...(n.parentId ? { parent: n.parentId } : {}) };
-      const w = Math.round(n.width ?? n.measured?.width ?? (n.type === 'note' ? NOTE_W : n.type === 'make' ? MAKE_W : n.type === 'cut' ? CUT_W : FILE_W));
-      const h = () => Math.round(n.height ?? n.measured?.height ?? NOTE_H);
+      const w = Math.round(n.width ?? n.measured?.width ?? (n.type === 'note' ? NOTE_W : n.type === 'cut' ? CUT_W : FILE_W));
+      const h = () => Math.round(n.height ?? n.measured?.height ?? (n.type === 'note' ? NOTE_H : CARD_H));
       const by = 'by' in n.data && n.data.by ? { by: n.data.by } : {};
-      if (n.type === 'file') return { ...box, ...by, w, path: n.data.path };
-      if (n.type === 'make') return { ...box, w, ...n.data };
-      if (n.type === 'cut') return { ...box, ...by, w, cut: true as const };
+      if (n.type === 'file') return { ...box, ...by, ...(n.width != null && n.height != null ? { w, h: h() } : {}), path: n.data.path };
+      if (n.type === 'make') return { ...box, w, h: h(), ...n.data };
+      if (n.type === 'cut') return { ...box, ...by, w, h: h(), cut: true as const };
       if (n.type === 'frame') return { id: n.id, x: box.x, y: box.y, w, h: h(), group: n.data.label, color: n.data.color };
       return { ...box, ...by, w, h: h(), text: n.data.text };
     }),
@@ -67,7 +67,7 @@ export function fromFlow(nodes: readonly BoardNode[], edges: readonly Edge[]): C
 export function boxOf(node: BoardNode, byId: ReadonlyMap<string, BoardNode>): { x: number; y: number; w: number; h: number } {
   const parent = node.parentId ? byId.get(node.parentId) : undefined;
   const at = parent ? { x: parent.position.x + node.position.x, y: parent.position.y + node.position.y } : node.position;
-  return { ...at, w: node.measured?.width ?? node.width ?? FILE_W, h: node.measured?.height ?? node.height ?? NOTE_H };
+  return { ...at, w: node.measured?.width ?? node.width ?? FILE_W, h: node.measured?.height ?? node.height ?? CARD_H };
 }
 
 /* ── the services a node makes with ── */
@@ -184,6 +184,14 @@ export interface Board {
   sources: MediaSources;
   addToFilm: (file: WorkspaceResource) => void;
   setData: (id: string, data: Partial<FileData & NoteData & FrameData & MakeData>) => void;
+  /** a node's card drawn this big */
+  resize: (id: string, size: { w: number; h: number }) => void;
+  /** a node of a kind made from this one: beside it on the right, wired from it (with what it starts with) */
+  spawn: (id: string, kind: SpawnKind, data?: Partial<MakeData>) => void;
+  /** files made from a node on this computer (its picture's cells, a frame of its clip): into the project, beside it */
+  bring: (id: string, files: File[]) => void;
+  /** a picture's background taken out by the person's service: a new picture beside it */
+  cutout: (id: string, path: string) => void;
   remove: (ids: string[]) => void;
   /** the board as it is now kept to go back to: called before a change made in a node (a resize, words written) */
   willChange: () => void;
@@ -221,6 +229,11 @@ export interface Board {
   makesIn: (group: string) => number;
   busyIn: (group: string) => boolean;
   makeAll: (group: string) => void;
+  /** what goes into a node picked on the board itself, a click a node (its panel's "From the canvas") */
+  pick: (id: string) => void;
+  /** a group taken apart (what was in it stays where it is), or kept as a template */
+  ungroup: (group: string) => void;
+  keepTemplate: (group: string) => void;
   openSettings: () => void;
   /** a board only looked at (an example's): nothing on it is changed, made or wired */
   readOnly?: boolean;
