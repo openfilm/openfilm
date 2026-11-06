@@ -72,20 +72,22 @@ export interface LibraryIndex {
 
 let index: LibraryIndex | null = null;
 let reading: Promise<LibraryIndex | null> | null = null;
+let readAt = 0;
 const listeners = new Set<() => void>();
 
 function readIndex(): Promise<LibraryIndex | null> {
+  if (index && Date.now() - readAt < 60_000) return Promise.resolve(index);
   reading ??= fetch('/api/library', { cache: 'no-store' })
-    .then((r) => (r.ok ? r.json() : null), () => null)
+    .then((r) => (r.ok ? r.json() : null))
     .then((body: LibraryIndex | null) => {
       if (body && Array.isArray(body.items)) {
         for (const item of body.items) if (item.grade && !item.filter) item.filter = gradeFilter(item.id, item.grade);
         index = body;
+        readAt = Date.now();
         for (const fn of listeners) fn();
       }
-      else reading = null;
       return index;
-    });
+    }).catch(() => index).finally(() => { reading = null; });
   return reading;
 }
 
@@ -96,7 +98,11 @@ export function useLibraryIndex(): LibraryIndex | null {
     () => index,
     () => index,
   );
-  React.useEffect(() => { if (!index) void readIndex(); }, []);
+  React.useEffect(() => {
+    void readIndex();
+    const timer = window.setInterval(() => { if (!document.hidden) void readIndex(); }, 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
   return seen;
 }
 
@@ -300,7 +306,7 @@ export function askHere(ids: readonly string[]): void {
   if (!fresh.length) return;
   for (const id of fresh) { asked.add(id); asking.add(id); }
   void fetch('/api/library/missing', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids: fresh }) })
-    .then((r) => (r.ok ? r.json() : null), () => null)
+    .then((r) => (r.ok ? r.json() : null))
     .then((body: { ids?: string[] } | null) => {
       for (const id of fresh) asking.delete(id);
       if (!body) { for (const id of fresh) asked.delete(id); tellHere(); return; }
@@ -349,7 +355,7 @@ export function toggleFavorite(id: string): void {
   favorites = had.includes(id) ? had.filter((x) => x !== id) : [...had, id];
   tellStarred();
   void fetch('/api/library/favorites', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids: favorites }) })
-    .then((r) => (r.ok ? r.json() : null), () => null)
+    .then((r) => (r.ok ? r.json() : null))
     .then((body: { ids?: string[] } | null) => { if (body && Array.isArray(body.ids)) { favorites = body.ids; tellStarred(); } });
 }
 

@@ -14,7 +14,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import { BUILT_IN, builtInRoot, catalogFiles, fetchLibrary, libraryIndex } from '../studio/server/library.mjs';
+import { BUILT_IN, builtInRoot, catalogFiles, fetchLibrary, libraryIndex, refreshCommunity } from '../studio/server/library.mjs';
 import { CJK, fold, readText, stem, tagsIn, vocabulary, wordsOf } from './library-words.mjs';
 
 /** What can be looked for, and the library's category of each. */
@@ -90,7 +90,8 @@ function library() {
     const file = JSON.parse(readFileSync(join(builtInRoot(), 'search.json'), 'utf8'));
     if (file.inputs === searchInputs()) rows = file.rows;
   } catch { /* none: worked out here */ }
-  rows ??= searchRows(library, vocab);
+  if (rows) rows = [...rows, ...searchRows({ ...library, items: library.items.filter((item) => item.id.startsWith('community/')) }, vocab)];
+  else rows = searchRows(library, vocab);
   const made = { index, vocab, items: new Map(library.items.map((item) => [item.id, item])), rows: new Map(rows.map((r) => [r[0], r])), docs: new Map() };
   kept = made;
   return made;
@@ -264,6 +265,7 @@ const RRF_K = 60;
  * @returns {Promise<{ found: Found[], worded: boolean }>}
  */
 export async function searchLibrary(kind, query, o = {}) {
+  await refreshCommunity();
   const words = findInLibrary(kind, query, { ...o, limit: DEPTH });
   const at = library();
   const { nearest } = await import('./library-semantic.mjs');
@@ -357,7 +359,10 @@ export async function libraryGet(verb, flags) {
   if (unknown) return wrong(`there is no --${unknown}; it takes ${Object.keys(spec.options).map((o) => `--${o}`).join(', ')}`);
   for (const [name, value] of Object.entries(given)) if (typeof value !== 'string') return wrong(`--${name} takes a value, once`);
   const { prompt, sec, limit, take } = /** @type {Record<string, string | undefined>} */ (given);
-  if (take !== undefined) return takeOne(verb, take);
+  if (take !== undefined) {
+    if (take.startsWith('community/') || take.startsWith(`${BUILT_IN}/community/`)) await refreshCommunity();
+    return takeOne(verb, take);
+  }
   if (!prompt?.trim()) return wrong(`what to look for, please: \`openfilm get ${verb} --prompt "${EXAMPLES[verb]}"\``);
   const seconds = sec === undefined ? undefined : Number(sec);
   if (seconds !== undefined && !(seconds > 0 && seconds <= 3600)) return wrong(`--sec is seconds, from 0 to 3600, not ${sec}`);
