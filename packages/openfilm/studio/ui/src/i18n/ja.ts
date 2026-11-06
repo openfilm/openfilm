@@ -887,6 +887,8 @@ export const ja: Words = {
   },
   /* アセットドロワーの OpenFilm ライブラリ（components/library/LibraryDrawer、lib/library） */
   /** the inspector of a line of words of the library's text component (TextInspector) */
+  /** a filter on a track of its own (FilterLayerSection) */
+  filterLayer: { title: 'フィルター', hint: '表示中は下のすべてのレイヤーに効きます。クリップにドロップするとそのクリップだけに効きます。', strength: '強さ' },
   textInspector: {
     text: 'テキスト',
     wordsHint: '文字を入力',

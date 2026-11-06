@@ -888,6 +888,8 @@ export const zhCN: Words = {
   },
   /* 素材抽屉里的 OpenFilm 资源库（components/library/LibraryDrawer、lib/library） */
   /** the inspector of a line of words of the library's text component (TextInspector) */
+  /** a filter on a track of its own (FilterLayerSection) */
+  filterLayer: { title: '滤镜', hint: '在它的时间段内作用于下面所有画面层。拖到某个片段上则只作用于该片段。', strength: '强度' },
   textInspector: {
     text: '文本',
     wordsHint: '输入文字',

@@ -888,6 +888,8 @@ export const en = {
   },
   /* OpenFilm's library in the assets drawer (components/library/LibraryDrawer, lib/library) */
   /** the inspector of a line of words of the library's text component (TextInspector) */
+  /** a filter on a track of its own (FilterLayerSection) */
+  filterLayer: { title: 'Filter', hint: 'Grades every layer under it while it is on. Dropped on a clip, a filter grades that clip alone.', strength: 'Strength' },
   textInspector: {
     text: 'Text',
     wordsHint: 'Your words here',

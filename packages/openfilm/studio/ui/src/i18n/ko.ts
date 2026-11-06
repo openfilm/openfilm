@@ -884,6 +884,8 @@ export const ko: Words = {
   },
   /* 에셋 서랍의 OpenFilm 라이브러리 (components/library/LibraryDrawer, lib/library) */
   /** the inspector of a line of words of the library's text component (TextInspector) */
+  /** a filter on a track of its own (FilterLayerSection) */
+  filterLayer: { title: '필터', hint: '표시되는 동안 아래의 모든 레이어에 적용됩니다. 클립에 놓으면 그 클립에만 적용됩니다.', strength: '강도' },
   textInspector: {
     text: '텍스트',
     wordsHint: '글자 입력',

@@ -887,6 +887,8 @@ export const es: Words = {
   },
   /* La biblioteca de OpenFilm en el cajón de recursos (components/library/LibraryDrawer, lib/library) */
   /** the inspector of a line of words of the library's text component (TextInspector) */
+  /** a filter on a track of its own (FilterLayerSection) */
+  filterLayer: { title: 'Filtro', hint: 'Afecta a todas las capas de debajo mientras está activo. Soltado sobre un clip, solo afecta a ese clip.', strength: 'Intensidad' },
   textInspector: {
     text: 'Texto',
     wordsHint: 'Escribe aquí',

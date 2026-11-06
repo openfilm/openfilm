@@ -65,6 +65,8 @@ import type { MaskShape } from '@/lib/clip-mask';
 import type { FadeMs } from '@/lib/clip-fade';
 import type { FoundKind } from '@/lib/transitions';
 import { PictureInput, PropertiesSection, type PropsHost } from './PropertiesSection';
+import { FilterLayerSection } from './FilterLayerSection';
+import { isFilterLayer } from '@/lib/library';
 import { propOf, withProp, withoutProp, type ComponentProp } from '@/lib/component-props';
 import { layerTarget } from '@/lib/stage-layers';
 import type { StagePictureActions } from './stage-menu';
@@ -1541,7 +1543,8 @@ function ClipPanel({
   const own = block.size ?? null;
   const geo = geometry ?? (own ? computedGeometry(block, own, stage) : null);
   const lookOf = picture && clipLookOf && loc ? clipLookOf(loc) : null;
-  const target: ClipTarget | null = lookOf && loc ? { loc, css: lookOf.css, look: lookOf.look } : null;
+  /* a filter on a track of its own grades what is under it (FilterLayerSection): no look of its own */
+  const target: ClipTarget | null = lookOf && loc && !isFilterLayer(block.src) ? { loc, css: lookOf.css, look: lookOf.look } : null;
   const look = target ? clipsLook([target], commit, onPreviewLook) : null;
   const at = parseFilmDocLoc(loc ?? '');
   const badge = at ? badges?.[at.track] : undefined;
@@ -1571,6 +1574,10 @@ function ClipPanel({
         </p>
       ) : (
         <>
+          {isFilterLayer(block.src) && lookOf && loc ? (
+            <FilterLayerSection css={lookOf.css} onPreview={(css) => onPreviewLook?.(loc, css)}
+              onCommit={(css) => commit([{ loc, prop: 'style', value: css }])} />
+          ) : null}
           {/* a page's properties first: what it offers to change */}
           {propsHost ? (
             <PropertiesSection host={propsHost} commit={(next) => commit([{ loc: loc!, prop: 'overrides', value: next as unknown as Record<string, unknown> | null }])} />
