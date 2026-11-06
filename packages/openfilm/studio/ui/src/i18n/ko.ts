@@ -1651,6 +1651,7 @@ export const ko: Words = {
       moveNo: '그대로 두기',
       moved: '프로젝트 {count}개를 옮겼습니다.',
       moveFailed: '옮기지 못해 원래 위치에 남은 프로젝트: {names}',
+      moveLeft: `원래 폴더는 휴지통에 넣을 수 없어 원래 디스크에 남아 있습니다. ${FILES}에서 완전히 삭제할 수 있습니다: {paths}`,
     },
     playback: {
       group: "재생",
