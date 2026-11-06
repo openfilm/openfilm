@@ -1,7 +1,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startStudio } from './server.mjs';
@@ -658,4 +658,15 @@ test('a clip a write would leave unreadable: the writer is told of a whole field
   await settleProjectFilm(two);
   assert.deepEqual(clip(read(two), 'v'), { id: 'v', src: 'v.mp4', time: [0, 6], at: 10, speed: 2 });
   assert.equal(tell(two, 'pid:B'), null);
+});
+
+test('a write over a file that still holds what it was made from is in place when it says so, and leaves no bytes beside it; one over a file changed meanwhile is not made', async () => {
+  const dir = mkdtempSync(join(scratch, 'replace-'));
+  const path = join(dir, 'film.html');
+  writeFileSync(path, 'old');
+  assert.equal(await personEdits.replaceIfStill(path, 'old', 'new'), true);
+  assert.equal(readFileSync(path, 'utf8'), 'new');
+  assert.equal(await personEdits.replaceIfStill(path, 'old', 'newer'), false, 'written meanwhile: not written over');
+  assert.equal(readFileSync(path, 'utf8'), 'new');
+  assert.deepEqual(readdirSync(dir), ['film.html'], 'no bytes on their way left beside it, written or not');
 });
