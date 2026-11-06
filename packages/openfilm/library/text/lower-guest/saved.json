@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "lower-guest.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Number\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Label\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Name\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Role\", \"type\": \"text\", \"at\": \".t4\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}]"
+    }
+  },
+  "durationMs": 4000
+}

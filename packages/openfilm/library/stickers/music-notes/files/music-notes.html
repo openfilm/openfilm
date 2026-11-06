@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Music notes</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+:root { --color: #ffffff; }
+svg { width: 100vw; height: 100vh; display: block; overflow: visible; }
+svg { filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
+g.n { transform-box: fill-box; transform-origin: center; fill: var(--color); opacity: 0; animation: up 2.45s cubic-bezier(.3, .5, .5, 1) var(--d) infinite; }
+@keyframes up {
+  0% { transform: translate(0, 0) scale(0) rotate(0deg); opacity: 0; }
+  12% { transform: translate(0, -30px) scale(1.15) rotate(calc(var(--r) * 0.2)); opacity: 1; }
+  20% { transform: translate(calc(var(--x) * 0.2), -60px) scale(1) rotate(calc(var(--r) * 0.3)); }
+  75% { opacity: 1; }
+  100% { transform: translate(var(--x), -300px) scale(0.85) rotate(var(--r)); opacity: 0; }
+}
+.sw { animation: sw 1.2s ease-in-out infinite alternate; }
+@keyframes sw { from { transform: translateX(-10px); } to { transform: translateX(10px); } }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 300 400">
+<g transform="translate(30 330) scale(1)"><g class="sw" style="animation-delay: 0.00s"><g class="n" style="--d: 0s; --x: -30px; --r: 18deg"><ellipse cx="18" cy="48" rx="13" ry="10" transform="rotate(-20 18 48)"/><rect x="26" y="6" width="6" height="44" rx="2"/><path d="M28 4 C36 18 54 22 50 42 C47 32 40 26 30 24 Z"/></g></g></g>
+<g transform="translate(163 333) scale(0.9)"><g class="sw" style="animation-delay: -0.35s"><g class="n" style="--d: 0.35s; --x: 40px; --r: -22deg"><ellipse cx="14" cy="50" rx="12" ry="9" transform="rotate(-20 14 50)"/><ellipse cx="48" cy="44" rx="12" ry="9" transform="rotate(-20 48 44)"/><rect x="21" y="10" width="6" height="42" rx="2"/><rect x="55" y="4" width="6" height="42" rx="2"/><polygon points="21,10 61,2 61,12 21,20"/></g></g></g>
+<g transform="translate(97.5 337.5) scale(0.75)"><g class="sw" style="animation-delay: -0.70s"><g class="n" style="--d: 0.7s; --x: 20px; --r: 25deg"><ellipse cx="18" cy="48" rx="13" ry="10" transform="rotate(-20 18 48)"/><rect x="26" y="6" width="6" height="44" rx="2"/><path d="M28 4 C36 18 54 22 50 42 C47 32 40 26 30 24 Z"/></g></g></g>
+<g transform="translate(188.5 328.5) scale(1.05)"><g class="sw" style="animation-delay: -1.05s"><g class="n" style="--d: 1.05s; --x: -40px; --r: -15deg"><ellipse cx="18" cy="48" rx="13" ry="10" transform="rotate(-20 18 48)"/><rect x="26" y="6" width="6" height="44" rx="2"/><path d="M28 4 C36 18 54 22 50 42 C47 32 40 26 30 24 Z"/></g></g></g>
+<g transform="translate(56 336) scale(0.8)"><g class="sw" style="animation-delay: -1.40s"><g class="n" style="--d: 1.4s; --x: 30px; --r: 20deg"><ellipse cx="14" cy="50" rx="12" ry="9" transform="rotate(-20 14 50)"/><ellipse cx="48" cy="44" rx="12" ry="9" transform="rotate(-20 48 44)"/><rect x="21" y="10" width="6" height="42" rx="2"/><rect x="55" y="4" width="6" height="42" rx="2"/><polygon points="21,10 61,2 61,12 21,20"/></g></g></g>
+<g transform="translate(149 339) scale(0.7)"><g class="sw" style="animation-delay: -1.75s"><g class="n" style="--d: 1.75s; --x: -20px; --r: -25deg"><ellipse cx="18" cy="48" rx="13" ry="10" transform="rotate(-20 18 48)"/><rect x="26" y="6" width="6" height="44" rx="2"/><path d="M28 4 C36 18 54 22 50 42 C47 32 40 26 30 24 Z"/></g></g></g>
+<g transform="translate(217.5 337.5) scale(0.75)"><g class="sw" style="animation-delay: -2.10s"><g class="n" style="--d: 2.1s; --x: -30px; --r: 15deg"><ellipse cx="14" cy="50" rx="12" ry="9" transform="rotate(-20 14 50)"/><ellipse cx="48" cy="44" rx="12" ry="9" transform="rotate(-20 48 44)"/><rect x="21" y="10" width="6" height="42" rx="2"/><rect x="55" y="4" width="6" height="42" rx="2"/><polygon points="21,10 61,2 61,12 21,20"/></g></g></g>
+</svg>
+<script>
+/*
+ * Music notes that pop up one after another and drift away, swaying and turning as they fade. Its color is the
+ * clip's to change. A page of OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS animations
+ * are held at t by the host.
+ */
+window.film = { width: 300, height: 400, frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

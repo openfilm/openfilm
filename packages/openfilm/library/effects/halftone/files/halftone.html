@@ -1,0 +1,80 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Halftone</title>
+<style>
+  /* what a clip of it may change: how far the dots reach in from the edges (0 to 1), their size, how fast they move */
+  :root { --amount: 1; --size: 1; --speed: 1; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Pop-art print: Ben-Day dots in bold inks washing in from the corners of the frame, big where the ink is heavy and
+ * shrinking to nothing toward the middle, on a cream paper tone. The screens drift slowly and the inks breathe in and
+ * out. A page of OpenFilm's library (CC0): what it shows at t comes from t alone.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+// the inks: color, the corner they wash in from, the screen's angle, and their own breathing
+const INKS = [
+  { c: 'rgba(236,40,110,0.8)', from: [0, 0], angle: 45, phase: 0, shift: 0 },
+  { c: 'rgba(20,160,230,0.78)', from: [1, 1], angle: 45, phase: 2.2, shift: 0.5 },
+  { c: 'rgba(255,205,0,0.75)', from: [1, 0], angle: 15, phase: 4.1, shift: 0.25 },
+];
+const smooth = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, u = Math.min(w, h) / 100, D = Math.hypot(w, h);
+    const reach = num('--amount', 1), size = num('--size', 1), tt = t * num('--speed', 1);
+    // cream paper
+    ctx.fillStyle = 'rgba(250,238,210,0.13)'; ctx.fillRect(0, 0, w, h);
+    const cell = 2.6 * u * size, R = D / 2 + cell, cx = w / 2, cy = h / 2;
+    ctx.globalCompositeOperation = 'multiply';
+    for (const ink of INKS) {
+      const a = (ink.angle * Math.PI) / 180, ca = Math.cos(a), sa = Math.sin(a);
+      // the screen drifts along its own diagonal
+      const drift = ((tt * 0.12 + ink.shift) % 1) * cell;
+      const fx = ink.from[0] * w, fy = ink.from[1] * h;
+      const spread = (0.42 + 0.07 * Math.sin(tt * 0.8 + ink.phase)) * D * (0.4 + 0.6 * reach);
+      ctx.fillStyle = ink.c;
+      ctx.beginPath();
+      const steps = Math.ceil(R / cell);
+      for (let i = -steps; i <= steps; i++) {
+        for (let j = -steps; j <= steps; j++) {
+          const gx = (i + ink.shift) * cell + drift, gy = (j + ink.shift) * cell;
+          const x = cx + gx * ca - gy * sa, y = cy + gx * sa + gy * ca;
+          if (x < -cell || y < -cell || x > w + cell || y > h + cell) continue;
+          const k = 1 - smooth(Math.hypot(x - fx, y - fy) / spread);
+          if (k < 0.03) continue;
+          const r = cell * 0.55 * Math.sqrt(k);
+          ctx.moveTo(x + r, y); ctx.arc(x, y, r, 0, 6.283);
+        }
+      }
+      ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

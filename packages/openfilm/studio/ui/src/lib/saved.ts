@@ -33,10 +33,13 @@ const media = (what: string, path: string, v: number) => `/api/saved/media?what=
 /** A page of the library, at its place there (from its top), on the film's origin; none before the listing is read. */
 const pageAt = (rel: string) => (folder ? `${folder}${rel.split('/').map(encodeURIComponent).join('/')}` : undefined);
 
+/* a bundle with a file of its own (a clip of a sound, a video or a picture) is heard, played and pictured as that file */
+const own = (f: { path: string; bundle?: { file?: string } }) => f.bundle?.file ?? f.path;
+
 export const savedSources: MediaSources = {
-  file: (f) => (f.bundle ? `/api/saved/poster?path=${enc(f.path)}&v=${Math.round(f.mtimeMs)}` : `/api/saved/file?path=${enc(f.path)}&v=${Math.round(f.mtimeMs)}`),
-  poster: (f) => (f.bundle ? `/api/saved/poster?path=${enc(f.path)}&v=${Math.round(f.mtimeMs)}` : f.kind === 'video' ? media('poster', f.path, Math.round(f.mtimeMs)) : undefined),
-  wave: (f) => media('wave', f.path, Math.round(f.mtimeMs)),
+  file: (f) => (f.bundle && !f.bundle.file ? `/api/saved/poster?path=${enc(f.path)}&v=${Math.round(f.mtimeMs)}` : `/api/saved/file?path=${enc(own(f))}&v=${Math.round(f.mtimeMs)}`),
+  poster: (f) => (f.bundle && (!f.bundle.file || f.kind !== 'video') ? `/api/saved/poster?path=${enc(f.path)}&v=${Math.round(f.mtimeMs)}` : f.kind === 'video' ? media('poster', own(f), Math.round(f.mtimeMs)) : undefined),
+  wave: (f) => media('wave', own(f), Math.round(f.mtimeMs)),
   pagePoster: (f) => (f.bundle ? `/api/saved/poster?path=${enc(f.path)}&v=${Math.round(f.mtimeMs)}` : undefined),
   /* a page saved, or a page clip: its page, played as a project's is; a page put in the library as a file: itself */
   pageSurface: (f) => (f.bundle ? (f.bundle.page ? pageAt(f.bundle.page) : undefined) : pageAt(f.path.slice(SAVED.length + 1))),

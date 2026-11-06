@@ -1,20 +1,38 @@
 /**
  * The preview's frames (editor/Preview.tsx), each a load of the film: the one shown, and at most one loading behind
- * it, which replaces it once its first picture is drawn. Pure, so the order of things is tested apart from React.
+ * it, which replaces it once its first picture is drawn. The one replaced stays over it (`leaving`) until the new one
+ * has been put on screen: a frame all but transparent until then is blank for a moment as it comes up. Pure, so the
+ * order of things is tested apart from React.
  */
-export type Frame = { key: number; ready: boolean; error?: string };
+export type Frame = { key: number; ready: boolean; error?: string; leaving?: true };
 
-/** A new load behind the picture: the frame shown stays until it is drawn; one loading already is let go for it. */
+/** The frame shown: drawn, and not one going. */
+export const shownOf = (list: readonly Frame[]): Frame | null => list.find((f) => f.ready && !f.leaving) ?? null;
+
+/**
+ * A new load behind the picture: the frame shown stays until it is drawn (and one going, over it, until it goes); one
+ * loading already is let go for it. The frames keep their order: an iframe moved in the page loads again.
+ */
 export function reloaded(list: readonly Frame[]): Frame[] {
   const key = Math.max(0, ...list.map((f) => f.key)) + 1;
-  return [...list.filter((f) => f.ready).slice(-1), { key, ready: false }];
+  const shown = list.filter((f) => f.ready && !f.leaving).slice(-1)[0];
+  return [...list.filter((f) => f.leaving || f === shown), { key, ready: false }];
 }
 
-/** Frame `key` drew its picture: it is the one shown, and the one it replaces goes. Unchanged when it was shown already. */
+/**
+ * Frame `key` drew its picture: it is the one shown, and the one it replaces stays over it, going (`left` takes it
+ * away once the new one is on screen); one going already goes now. Unchanged when it was shown already.
+ */
 export function shownAfter(list: readonly Frame[], key: number): Frame[] {
   const i = list.findIndex((f) => f.key === key);
   if (i < 0 || list[i].ready) return list as Frame[];
-  return [{ ...list[i], ready: true }, ...list.slice(i + 1)];
+  const was = shownOf(list);
+  return list.flatMap((f): Frame[] => (f === list[i] ? [{ ...f, ready: true }] : f === was ? [{ ...f, leaving: true }] : []));
+}
+
+/** The frame shown is on screen: the one it replaced goes. */
+export function left(list: readonly Frame[]): Frame[] {
+  return list.some((f) => f.leaving) ? list.filter((f) => !f.leaving) : list as Frame[];
 }
 
 /**

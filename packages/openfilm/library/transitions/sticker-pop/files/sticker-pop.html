@@ -1,0 +1,113 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Sticker pop</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+:root { --color: #ff5d8f; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Stars, hearts, sparkles and dots burst out of the middle on a disc of your colour that fills the frame over the
+ * cut; then a hole opens in it as the pieces fly on out. It lasts 0.9 s and covers the cut at its middle: put its
+ * middle on the cut. A page of OpenFilm's library (CC0): what it shows at t comes from t alone, drawn in parts of
+ * the frame so it fits a stage of any shape.
+ */
+const D = 0.9;
+const DEFAULT = '#ff5d8f';
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+const TAU = Math.PI * 2;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+/* how far u is through [a, b], from 0 to 1 */
+const seg = (u, a, b) => clamp((u - a) / (b - a));
+const outCubic = (x) => 1 - (1 - x) ** 3;
+const inOut = (x) => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2);
+const outBack = (x) => 1 + 2.70158 * (x - 1) ** 3 + 1.70158 * (x - 1) ** 2;
+/* a fixed random number in [0, 1) for each n: the same on every frame */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+/* the colour the page is given (its --color), read on each frame */
+const color = () => getComputedStyle(document.documentElement).getPropertyValue('--color').trim() || DEFAULT;
+/* a heart s wide, its middle at x, y */
+const heart = (x, y, s, rot = 0) => {
+  g.save(); g.translate(x, y); g.rotate(rot); g.scale(s / 2, s / 2);
+  g.beginPath(); g.moveTo(0, 0.95);
+  g.bezierCurveTo(-0.55, 0.55, -1, 0.15, -1, -0.3); g.bezierCurveTo(-1, -0.75, -0.6, -1, -0.5, -1);
+  g.bezierCurveTo(-0.2, -1, 0, -0.8, 0, -0.55); g.bezierCurveTo(0, -0.8, 0.2, -1, 0.5, -1);
+  g.bezierCurveTo(0.6, -1, 1, -0.75, 1, -0.3); g.bezierCurveTo(1, 0.15, 0.55, 0.55, 0, 0.95);
+  g.closePath(); g.restore();
+};
+/* a star of n points, radii ro and ri, its middle at x, y */
+const star = (x, y, ro, ri, n = 5, rot = 0) => {
+  g.beginPath();
+  for (let i = 0; i < n * 2; i++) { const a = rot - Math.PI / 2 + (i * Math.PI) / n, r = i % 2 ? ri : ro; g.lineTo(x + r * Math.cos(a), y + r * Math.sin(a)); }
+  g.closePath();
+};
+
+const PIECES = ['#ffd23f', '#3ec1ff', '#7cf29c', '#ffffff', '#b28dff', '#ff8a3d'];
+/* one piece: a star, heart, sparkle, dot or ring, s across */
+const piece = (kind, x, y, s, rot, c) => {
+  g.fillStyle = c;
+  g.strokeStyle = c;
+  if (kind === 0) { star(x, y, s / 2, s / 4.5, 5, rot); g.fill(); }
+  else if (kind === 1) { heart(x, y, s, rot); g.fill(); }
+  else if (kind === 2) { star(x, y, s / 2, s / 10, 4, rot); g.fill(); }
+  else if (kind === 3) { g.beginPath(); g.arc(x, y, s / 3, 0, TAU); g.fill(); }
+  else { g.lineWidth = s / 8; g.beginPath(); g.arc(x, y, s / 3, 0, TAU); g.stroke(); }
+};
+
+function draw(u) {
+  const c = color(), cx = W / 2, cy = H / 2, R = Math.hypot(W, H) / 2 + 2;
+  /* the disc behind, and the hole that opens in it */
+  const disc = R * inOut(seg(u, 0.08, 0.42)), hole = R * inOut(seg(u, 0.56, 0.94));
+  if (disc > hole) {
+    g.fillStyle = c;
+    g.beginPath();
+    g.arc(cx, cy, disc, 0, TAU);
+    if (hole > 0) g.arc(cx, cy, hole, 0, TAU, true);
+    g.fill('evenodd');
+  }
+  /* the pieces fly out from the middle in two bursts */
+  for (let i = 0; i < 70; i++) {
+    const born = i < 46 ? hash(i) * 0.3 : 0.5 + hash(i) * 0.12, life = 0.4 + hash(i + 1) * 0.3;
+    const p = seg(u, born, born + life);
+    if (p <= 0 || p >= 1) continue;
+    const a = hash(i + 2) * TAU, dist = R * (0.25 + 1.1 * hash(i + 3)) * outCubic(p);
+    const s = H * (0.07 + 0.12 * hash(i + 4)) * outBack(seg(p, 0, 0.25)) * (1 - seg(p, 0.85, 1));
+    if (s <= 0) continue;
+    piece(Math.floor(hash(i + 5) * 5), cx + dist * Math.cos(a), cy + dist * Math.sin(a), s, (hash(i + 6) - 0.5) * 6 * p, PIECES[i % PIECES.length]);
+  }
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

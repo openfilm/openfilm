@@ -1,7 +1,7 @@
 import { test as it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { FilmOverride } from './film.ts';
-import { changedImage, changedText, changedVar, cssUrl, fieldOf, isFontVar, labelOf, pictureStyle, relativeTo, urlOf, valueOf, withImage, withText, withVar } from './template-controls.ts';
+import { changedImage, changedText, changedVar, cssUrl, fieldOf, isFontVar, labelOf, pathIsAt, pictureStyle, relativeTo, urlOf, valueOf, withImage, withText, withVar } from './template-controls.ts';
 
 it('a custom property is changed as a color, a number with its unit, words, or as typed', () => {
   assert.deepEqual(fieldOf('#ff5746'), { kind: 'color', value: '#ff5746' });
@@ -104,4 +104,14 @@ it('a picture on the picture is replaced by the same style the Content section w
   assert.deepEqual(pictureStyle('img', null), { content: null }, 'its own again');
   const logo = { at: '#logo', kind: 'img' as const };
   assert.equal(changedImage([{ at: '#logo', style: pictureStyle('img', 'x.png') as Record<string, string> }], logo), 'x.png');
+});
+
+it('a page\'s words named by their path are what a property names by its tags and classes', () => {
+  assert.equal(pathIsAt('body > div.w > div.t', '.t'), true);
+  assert.equal(pathIsAt('body > div.w.low > div.t > span.x', '.t > .x'), true);
+  assert.equal(pathIsAt('body > div.w > div.t > span.s', '.t > .x'), false);
+  assert.equal(pathIsAt('body > div.w > p.t1:nth-of-type(2)', 'p.t1'), true);
+  assert.equal(pathIsAt('body > div.w > div.t', 'span.t'), false);
+  assert.equal(pathIsAt('#title', '.t'), false);
+  assert.equal(pathIsAt('body > div.w > div.t', '[data-x]'), false);
 });

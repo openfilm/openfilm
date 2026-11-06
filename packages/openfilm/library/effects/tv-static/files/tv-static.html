@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>TV static</title>
+<style>
+  /* what a clip of it may change: how much snow shows over the picture (0 to 1) */
+  :root { --amount: 1; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * An old TV with poor reception: snow over the picture, scan lines, a brighter bar rolling down, lines tearing
+ * sideways, the curved glass darkening at its corners, and now and then a burst of pure static as if someone
+ * flicked the channel. A page of OpenFilm's library (CC0): what it shows at t comes from t alone.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+// eight tiles of snow, made once, each speck a little wider than tall like a TV's
+const SNOW = Array.from({ length: 8 }, (_, k) => {
+  const W = 160, H = 120, c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d'), img = x.createImageData(W, H);
+  for (let i = 0; i < W * H; i++) {
+    const v = Math.round(Math.pow(hash(i * 0.917 + k * 57.3), 1.4) * 255);
+    img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v; img.data[i * 4 + 3] = 255;
+  }
+  x.putImageData(img, 0, 0);
+  return c;
+});
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, u = Math.min(w, h) / 100;
+    const amount = num('--amount', 1);
+    const f = Math.floor(t * 30), r = (k) => hash(f * 7.77 + k);
+    // a channel flick every few seconds: a quarter second of nothing but static
+    const slot = Math.floor(t / 2.6), into = t - slot * 2.6, burst = hash(slot + 0.5) * 1.8 + 0.6;
+    const flick = into > burst && into < burst + 0.22 ? Math.sin(Math.PI * (into - burst) / 0.22) : 0;
+    // the snow, a new tile and offset each frame, specks stretched sideways
+    const level = Math.min(1, (0.26 + 0.08 * Math.sin(t * 2.1)) * amount + flick);
+    ctx.save();
+    ctx.globalAlpha = level;
+    const sx = Math.max(1.6, u / 2.2), sy = sx * 0.8;
+    ctx.scale(sx, sy); ctx.translate(-r(1) * 160, -r(2) * 120);
+    ctx.fillStyle = ctx.createPattern(SNOW[f % 8], 'repeat'); ctx.fillRect(0, 0, w / sx + 160, h / sy + 120);
+    ctx.restore();
+    // a few lines torn sideways: bright streaks of snow
+    const tears = Math.floor(r(3) * 4 * amount) + (flick > 0 ? 8 : 0);
+    for (let i = 0; i < tears; i++) {
+      const y = r(10 + i) * h, th = (0.3 + r(20 + i) * 1.2) * u;
+      ctx.fillStyle = `rgba(255,255,255,${0.08 + r(30 + i) * 0.18})`; ctx.fillRect(r(40 + i) * w * 0.5, y, w * (0.3 + r(50 + i) * 0.7), th);
+    }
+    // the rolling bar: a soft brighter band, with a dark one just behind it
+    const by = ((t * 0.32) % 1.4 - 0.2) * h, bh = 0.22 * h;
+    const g = ctx.createLinearGradient(0, by - bh, 0, by + bh);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.35, `rgba(0,0,0,${0.18 * amount})`);
+    g.addColorStop(0.6, `rgba(255,255,255,${0.12 * amount})`); g.addColorStop(0.72, `rgba(255,255,255,${0.16 * amount})`); g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, by - bh, w, 2 * bh);
+    // scan lines
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    const pitch = Math.max(2, u * 0.75);
+    for (let y = 0; y < h; y += pitch) ctx.fillRect(0, y, w, pitch * 0.45);
+    // the curved glass: dark at the corners, a faint sheen at the top
+    ctx.save(); ctx.translate(w / 2, h / 2); ctx.scale(w / Math.max(w, h), h / Math.max(w, h));
+    const M = Math.max(w, h), v = ctx.createRadialGradient(0, 0, M * 0.3, 0, 0, M * 0.72);
+    v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(0.65, 'rgba(0,0,0,0.45)'); v.addColorStop(1, 'rgba(0,0,0,0.95)');
+    ctx.fillStyle = v; ctx.fillRect(-M, -M, 2 * M, 2 * M);
+    ctx.restore();
+    const sheen = ctx.createRadialGradient(w * 0.3, -h * 0.2, 0, w * 0.3, -h * 0.2, h * 0.9);
+    sheen.addColorStop(0, 'rgba(255,255,255,0.08)'); sheen.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = sheen; ctx.fillRect(0, 0, w, h);
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,34 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Petals</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+.l { position: fixed; inset: 0; pointer-events: none; }
+:root { --color: #ffc4d8; }
+i { position: fixed; top: -6vh; width: 1.6vw; height: 1.1vw; border-radius: 80% 0; background: var(--color); animation: p linear infinite; }
+@keyframes p { to { transform: translate(var(--dx), 112vh) rotate(var(--rot)); } }
+</style>
+</head>
+<body>
+
+<script>
+/*
+ * Cherry blossom petals drifting down and across. A page of OpenFilm's library (CC0): what it shows at t comes
+ * from t alone; its CSS animations are held at t by the host.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+function scatter(n, make) {
+  for (let i = 0; i < n; i++) { const el = document.createElement('i'); make(el, (k) => hash(i * 7.31 + k)); document.body.append(el); }
+}
+scatter(40, (el, r) => { el.style.left = `${r(1) * 100 - 10}%`; el.style.animationDuration = `${5 + r(2) * 4}s`; el.style.animationDelay = `${-r(3) * 9}s`; el.style.opacity = String(0.6 + r(4) * 0.4); el.style.setProperty('--dx', `${10 + r(5) * 20}vw`); el.style.setProperty('--rot', `${Math.round(r(6) * 540)}deg`); });
+window.film = { frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

@@ -130,9 +130,10 @@ async function open(client, cwd, resumeId) {
   let imagesSent = 0;
   const resourceLoader = new DefaultResourceLoader({
     cwd, agentDir: config.agentDir, settingsManager, noExtensions: true, noPromptTemplates: true, noThemes: true,
-    /* OpenFilm's skills, and no other Pi would find (in the project, or its own folders) */
+    /* OpenFilm's skills, and no other Pi would find (in the project, or its own folders), listed in the order named */
     noSkills: !ownSkills.names.length, additionalSkillPaths: ownSkills.paths,
-    skillsOverride: (base) => ({ ...base, skills: base.skills.filter((skill) => ownSkills.names.includes(skill.name)) }),
+    skillsOverride: (base) => ({ ...base, skills: base.skills.filter((skill) => ownSkills.names.includes(skill.name))
+      .sort((a, b) => ownSkills.names.indexOf(a.name) - ownSkills.names.indexOf(b.name)) }),
     systemPromptOverride: () => config.systemPrompt,
     appendSystemPromptOverride: () => [],
     agentsFilesOverride: ({ agentsFiles }) => ({ agentsFiles: agentsFiles.filter((f) => dirname(resolve(f.path)) === resolve(cwd)) }),

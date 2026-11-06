@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Discount</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+:root { --font: 'Arial Black', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; --color: #ffd60a; }
+svg { width: 100vw; height: 100vh; display: block; overflow: visible; }
+svg { filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
+.in { transform-origin: 170px 170px; animation: in 0.6s cubic-bezier(.34, 1.56, .64, 1) both; }
+@keyframes in { from { transform: scale(0) rotate(-200deg); } }
+.p { transform-origin: 170px 170px; animation: p 1.2s ease-in-out 0.6s infinite; }
+@keyframes p { 50% { transform: scale(1.05); } }
+.spin { transform-origin: 170px 170px; animation: spin 14s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.label { font: 400 70px var(--font); fill: #e3001b; letter-spacing: -2px; }
+.label2 { font: 900 34px 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; fill: #e3001b; letter-spacing: 8px; }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 340 340"><g class="in"><g class="p">
+<g class="spin"><polygon points="170.0,10.0 189.4,35.4 215.1,16.5 226.5,46.3 256.5,35.4 259.1,67.2 290.9,65.2 284.4,96.5 315.5,103.5 300.5,131.7 328.4,147.2 306.0,170.0 328.4,192.8 300.5,208.3 315.5,236.5 284.4,243.5 290.9,274.8 259.1,272.8 256.5,304.6 226.5,293.7 215.1,323.5 189.4,304.6 170.0,330.0 150.6,304.6 124.9,323.5 113.5,293.7 83.5,304.6 80.9,272.8 49.1,274.8 55.6,243.5 24.5,236.5 39.5,208.3 11.6,192.8 34.0,170.0 11.6,147.2 39.5,131.7 24.5,103.5 55.6,96.5 49.1,65.2 80.9,67.2 83.5,35.4 113.5,46.3 124.9,16.5 150.6,35.4" fill="var(--color)" stroke="#ffffff" stroke-width="8" stroke-linejoin="round"/>
+<circle cx="170" cy="170" r="118" fill="none" stroke="#e3001b" stroke-width="3" stroke-dasharray="6 8"/></g>
+<text class="label" x="170" y="186" text-anchor="middle">-50%</text>
+<text class="label2" x="174" y="232" text-anchor="middle">OFF</text>
+</g></g></svg>
+<script>
+/*
+ * A starburst price badge that spins in with a discount on it, its burst slowly turning and the badge pulsing. Its
+ * words and color are the clip's to change. A page of OpenFilm's library (CC0): what it shows at t comes from t
+ * alone; its CSS animations are held at t by the host.
+ */
+window.film = { width: 340, height: 340, frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

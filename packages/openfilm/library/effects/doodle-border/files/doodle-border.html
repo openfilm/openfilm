@@ -1,0 +1,150 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Doodle border</title>
+<style>
+  /* what a clip of it may change: the marker's color, how fast the lines boil (redraws a second) */
+  :root { --color: #ffffff; --speed: 8; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * A border drawn by hand with a marker: a wobbly double line round the picture and doodles in the corners (a star,
+ * a swirl, a heart, a zigzag with dots, little sparks), all redrawn a little differently eight times a second the way
+ * hand-drawn animation boils. A page of OpenFilm's library (CC0): what it shows at t comes from t alone.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+let boil = 0, u = 1;
+// a hand's wobble: smooth along the line, a little different at every redraw
+const j = (i, k) => (hash(i * 13.17 + boil * 71.31 + k * 3.7) - 0.5);
+// a smooth line through points
+function through(pts) {
+  ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length - 1; i++) { const mx = (pts[i][0] + pts[i + 1][0]) / 2, my = (pts[i][1] + pts[i + 1][1]) / 2; ctx.quadraticCurveTo(pts[i][0], pts[i][1], mx, my); }
+  const e = pts[pts.length - 1]; ctx.lineTo(e[0], e[1]);
+}
+// a wobbly stroke from a to b: the hand drifts off the line and back, and overshoots a little at the ends
+function wobble(ax, ay, bx, by, seed, amp) {
+  const len = Math.hypot(bx - ax, by - ay), n = Math.max(6, Math.round(len / (6 * u)));
+  const nx = -(by - ay) / len, ny = (bx - ax) / len, dx = (bx - ax) / len, dy = (by - ay) / len;
+  const over = (0.8 + j(seed, 1)) * 1.6 * u;
+  const pts = [];
+  for (let i = 0; i <= n; i++) {
+    const s = i / n;
+    const drift = (Math.sin(s * 3.1 + seed) * 0.6 + Math.sin(s * 7.3 + seed * 2.1) * 0.25) * amp * u + j(seed + i, 2) * 0.5 * u;
+    const ext = i === 0 ? -over : i === n ? over : 0;
+    pts.push([ax + (bx - ax) * s + dx * ext + nx * drift, ay + (by - ay) * s + dy * ext + ny * drift]);
+  }
+  through(pts); ctx.stroke();
+}
+// a shape given as points on a closed loop, wobbled
+function loop(pts, seed, amp) {
+  const p = pts.map(([x, y], i) => [x + j(seed + i, 5) * amp * u, y + j(seed + i, 6) * amp * u]);
+  p.push(p[0], p[1]);
+  through(p); ctx.stroke();
+}
+function star(cx, cy, r, rot, seed) {
+  const pts = [];
+  for (let i = 0; i < 10; i++) { const a = rot + i * Math.PI / 5 - Math.PI / 2, rr = i % 2 ? r * 0.45 : r; pts.push([cx + Math.cos(a) * rr, cy + Math.sin(a) * rr]); }
+  const p = pts.map(([x, y], i) => [x + j(seed + i, 5) * 0.6 * u, y + j(seed + i, 6) * 0.6 * u]);
+  ctx.beginPath(); p.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath();
+  ctx.save(); ctx.globalAlpha = 0.35; ctx.fillStyle = ctx.strokeStyle; ctx.fill(); ctx.restore(); ctx.stroke();
+}
+function heart(cx, cy, s, rot, seed) {
+  const pts = [];
+  for (let i = 0; i < 28; i++) {
+    const a = i / 28 * Math.PI * 2;
+    const x = 16 * Math.pow(Math.sin(a), 3), y = -(13 * Math.cos(a) - 5 * Math.cos(2 * a) - 2 * Math.cos(3 * a) - Math.cos(4 * a));
+    const c = Math.cos(rot), sn = Math.sin(rot);
+    pts.push([cx + (x * c - y * sn) * s / 32, cy + (x * sn + y * c) * s / 32]);
+  }
+  loop(pts, seed, 0.35);
+}
+function swirl(cx, cy, r, seed) {
+  const pts = [];
+  for (let i = 0; i <= 40; i++) { const s = i / 40, a = s * Math.PI * 4.2, rr = r * (0.12 + s * 0.88); pts.push([cx + Math.cos(a) * rr + j(seed + i, 7) * 0.4 * u, cy + Math.sin(a) * rr + j(seed + i, 8) * 0.4 * u]); }
+  through(pts); ctx.stroke();
+}
+function sparks(cx, cy, r, a0, seed) {
+  for (let i = 0; i < 3; i++) { const a = a0 + (i - 1) * 0.55; wobble(cx + Math.cos(a) * r, cy + Math.sin(a) * r, cx + Math.cos(a) * r * 1.8, cy + Math.sin(a) * r * 1.8, seed + i * 3, 0.15); }
+}
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight;
+    u = Math.min(w, h) / 100;
+    boil = Math.floor(t * Math.max(1, num('--speed', 8)));
+    const ink = css('--color') || '#ffffff';
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.shadowColor = 'rgba(0,0,0,0.35)'; ctx.shadowBlur = 0.9 * u; ctx.shadowOffsetY = 0.2 * u;
+    const m = 4 * u;
+    // the border: each side drawn as its own stroke, then a second thinner pass a hair off
+    ctx.strokeStyle = ink;
+    for (const pass of [0, 1]) {
+      ctx.lineWidth = (pass ? 0.4 : 0.9) * u;
+      ctx.globalAlpha = pass ? 0.8 : 1;
+      const o = pass ? 0.9 * u : 0;
+      wobble(m + o, m - o * 0.5, w - m - o, m + o * 0.3, 1 + pass * 40, 0.7);
+      wobble(w - m + o * 0.4, m + o, w - m - o * 0.3, h - m - o, 11 + pass * 40, 0.7);
+      wobble(w - m - o, h - m + o * 0.4, m + o, h - m - o * 0.2, 21 + pass * 40, 0.7);
+      wobble(m - o * 0.3, h - m - o, m + o * 0.5, m + o, 31 + pass * 40, 0.7);
+    }
+    ctx.globalAlpha = 1;
+    // the corner doodles, bobbing a little
+    const bob = (k) => Math.sin(t * 2.2 + k) * 0.6 * u;
+    const D = Math.max(5, 8.5 * u);
+    ctx.lineWidth = 0.75 * u;
+    ctx.strokeStyle = '#ffd43b';
+    star(m + D * 1.15, m + D * 1.1 + bob(0), D * 0.75, Math.sin(t * 1.3) * 0.15, 101);
+    ctx.strokeStyle = ink; ctx.lineWidth = 0.45 * u;
+    sparks(m + D * 1.15, m + D * 1.1 + bob(0), D * 0.95, -0.2, 121);
+    ctx.strokeStyle = '#4cc9f0'; ctx.lineWidth = 0.75 * u;
+    swirl(w - m - D * 1.2, m + D * 1.1 + bob(1), D * 0.75, 201);
+    ctx.strokeStyle = ink; ctx.lineWidth = 0.45 * u;
+    ctx.beginPath(); ctx.arc(w - m - D * 2.6, m + D * 0.7 + bob(1.5), D * 0.16, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = '#ff6b9d'; ctx.lineWidth = 0.75 * u;
+    const beat = 1 + 0.12 * Math.pow(Math.max(0, Math.sin(t * Math.PI * 1.6)), 4);
+    heart(m + D * 1.2, h - m - D * 1.15 + bob(2), D * 1.6 * beat, -0.18, 301);
+    ctx.lineWidth = 0.4 * u;
+    heart(m + D * 2.55, h - m - D * 1.9 + bob(2.6), D * 0.7, 0.25, 331);
+    // bottom right: a zigzag and three dots
+    ctx.strokeStyle = '#ffd43b'; ctx.lineWidth = 0.75 * u;
+    const zx = w - m - D * 2.4, zy = h - m - D * 0.95 + bob(3);
+    const zz = [];
+    for (let i = 0; i <= 6; i++) zz.push([zx + i * D * 0.3 + j(400 + i, 1) * 0.5 * u, zy + (i % 2 ? -1 : 1) * D * 0.3 + j(400 + i, 2) * 0.5 * u]);
+    ctx.beginPath(); zz.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke();
+    ctx.fillStyle = ink; ctx.shadowBlur = 0.6 * u;
+    for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(zx + D * 0.5 + i * D * 0.5 + j(420 + i, 1) * 0.4 * u, zy - D * 0.85 + j(420 + i, 2) * 0.4 * u, 0.55 * u, 0, Math.PI * 2); ctx.fill(); }
+    // a few small crosses along the edges
+    ctx.strokeStyle = ink; ctx.lineWidth = 0.4 * u;
+    for (const [fx, fy, k] of [[0.5, 0, 1], [1, 0.5, 2], [0.42, 1, 3], [0, 0.5, 4]]) {
+      const x = m + (w - 2 * m) * fx + (fy === 0.5 ? (fx ? -2.2 : 2.2) * u : 0), y = m + (h - 2 * m) * fy + (fx === 0.5 || fx === 0.42 ? (fy ? -2.2 : 2.2) * u : 0);
+      const s = 0.9 * u;
+      wobble(x - s, y - s, x + s, y + s, 500 + k * 7, 0.1); wobble(x + s, y - s, x - s, y + s, 503 + k * 7, 0.1);
+    }
+    ctx.shadowColor = 'transparent';
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop2 = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop2); };
+  loop2();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "callout-proscons.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Left heading\", \"type\": \"text\", \"at\": \".h1\"}, {\"name\": \"Left 1\", \"type\": \"text\", \"at\": \".p1\"}, {\"name\": \"Left 2\", \"type\": \"text\", \"at\": \".p2\"}, {\"name\": \"Left 3\", \"type\": \"text\", \"at\": \".p3\"}, {\"name\": \"Right heading\", \"type\": \"text\", \"at\": \".h2\"}, {\"name\": \"Right 1\", \"type\": \"text\", \"at\": \".c1\"}, {\"name\": \"Right 2\", \"type\": \"text\", \"at\": \".c2\"}, {\"name\": \"Right 3\", \"type\": \"text\", \"at\": \".c3\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Good\", \"type\": \"var\", \"var\": \"--good\"}, {\"name\": \"Bad\", \"type\": \"var\", \"var\": \"--bad\"}, {\"name\": \"Card\", \"type\": \"var\", \"var\": \"--card\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    }
+  },
+  "durationMs": 4000
+}

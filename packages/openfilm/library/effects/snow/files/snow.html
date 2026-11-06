@@ -1,0 +1,52 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Snow</title>
+<style>
+  /* what a clip of it may change: the flakes' color, how many show (0 to 1), how fast they fall */
+  :root { --color: #ffffff; --amount: 1; --speed: 1; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  i { position: absolute; left: 0; top: 0; border-radius: 50%; background: var(--color); will-change: transform; }
+</style>
+</head>
+<body>
+<script>
+/*
+ * Snow over the picture: flakes of three sizes falling at their own speed, swaying as they go, the near ones larger
+ * and blurred. A page of OpenFilm's library (MIT): every flake's place is worked out from t alone.
+ */
+const N = 140;
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const flakes = Array.from({ length: N }, (_, i) => {
+  const el = document.createElement('i');
+  const near = hash(i + 0.3);
+  const size = 2 + near * near * 9;
+  el.style.width = el.style.height = `${size}px`;
+  el.style.opacity = String(0.45 + near * 0.55);
+  if (size > 7) el.style.filter = `blur(${(size - 7) / 2}px)`;
+  document.body.append(el);
+  return { el, x: hash(i + 0.7), y: hash(i + 0.9), fall: 0.06 + near * 0.12, sway: 8 + hash(i + 0.5) * 22, phase: hash(i + 0.1) * 6.283, size, order: hash(i + 0.2) };
+});
+const read = (name, fallback) => { const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name)); return Number.isFinite(v) ? v : fallback; };
+window.film = {
+  frame(t) {
+    const w = innerWidth, h = innerHeight;
+    const amount = read('--amount', 1), speed = read('--speed', 1);
+    for (const f of flakes) {
+      if (f.order > amount) { f.el.style.display = 'none'; continue; }
+      f.el.style.display = '';
+      const y = ((f.y + t * f.fall * speed) % 1) * (h + 40) - 20;
+      const x = f.x * w + Math.sin(t * 1.3 + f.phase) * f.sway;
+      f.el.style.transform = `translate(${x}px, ${y}px)`;
+    }
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

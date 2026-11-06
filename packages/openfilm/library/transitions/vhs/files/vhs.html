@@ -1,0 +1,108 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>VHS</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * A blue tape screen rolls down over the picture with a noisy black bar on its edge and tracking lines, says PLAY
+ * over the cut, and rolls on down to show the next shot. It lasts 0.9 s and covers the cut at its middle: put its
+ * middle on the cut. A page of OpenFilm's library (CC0): what it shows at t comes from t alone, drawn in parts of
+ * the frame so it fits a stage of any shape.
+ */
+const D = 0.9;
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+/* how far u is through [a, b], from 0 to 1 */
+const seg = (u, a, b) => clamp((u - a) / (b - a));
+const mix = (a, b, x) => a + (b - a) * x;
+const inOut = (x) => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2);
+/* a fixed random number in [0, 1) for each n: the same on every frame */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+/* smooth noise in [0, 1] along x */
+const noise = (x, seed = 0) => { const i = Math.floor(x), f = x - i; return mix(hash(i + seed * 57), hash(i + 1 + seed * 57), f * f * (3 - 2 * f)); };
+
+function draw(u) {
+  const n = Math.floor(u * D * 30), bar = H * 0.1;
+  /* the screen's lower edge rolls down, then its upper edge follows */
+  const bottom = mix(-bar, H + bar, inOut(seg(u, 0.05, 0.42)));
+  const top = mix(-bar, H + bar, inOut(seg(u, 0.58, 0.95)));
+  if (bottom > top) {
+    g.fillStyle = '#1f3fd1';
+    g.fillRect(0, Math.max(0, top), W, Math.min(H, bottom) - Math.max(0, top));
+    /* scanlines */
+    g.fillStyle = 'rgba(0, 0, 30, 0.18)';
+    for (let y = Math.max(0, top); y < Math.min(H, bottom); y += 3) g.fillRect(0, y, W, 1);
+    /* the tape's words, in the corners */
+    const fs = Math.round(H * 0.075);
+    g.font = `bold ${fs}px ui-monospace, Menlo, Consolas, monospace`;
+    g.fillStyle = '#fff';
+    g.textBaseline = 'top';
+    g.save();
+    g.beginPath();
+    g.rect(0, top, W, bottom - top);
+    g.clip();
+    const jx = (hash(n) - 0.5) * H * 0.006;
+    g.fillText('PLAY ▶', W * 0.06 + jx, H * 0.08);
+    g.textAlign = 'right';
+    g.fillText(`SP 0:00:${String(10 + Math.floor(u * 9)).padStart(2, '0')}`, W * 0.94 + jx, H * 0.84);
+    g.restore();
+  }
+  /* the black bar between the frames, full of noise, on each moving edge */
+  for (const y of [bottom, top]) {
+    if (y <= -bar || y >= H + bar) continue;
+    g.fillStyle = '#060606';
+    g.fillRect(0, y - bar / 2, W, bar);
+    for (let i = 0; i < 40; i++) {
+      const ly = y - bar / 2 + hash(n * 41 + i) * bar;
+      g.fillStyle = `rgba(255, 255, 255, ${0.2 + 0.6 * hash(n * 43 + i)})`;
+      g.fillRect(hash(n * 47 + i) * W, ly, W * (0.05 + 0.3 * hash(n * 53 + i)), 1 + hash(i + n) * 2);
+    }
+  }
+  /* tracking lines across the picture */
+  const k = Math.sin(Math.PI * u);
+  for (let i = 0; i < 6; i++) {
+    if (hash(n * 61 + i) > k) continue;
+    const y = hash(n * 67 + i) * H;
+    g.fillStyle = `rgba(255, 255, 255, ${0.25 + 0.5 * hash(n * 71 + i)})`;
+    g.fillRect(0, y, W, 1 + hash(n * 73 + i) * 2);
+    g.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    g.fillRect(0, y + 2, W, H * 0.01);
+  }
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>
