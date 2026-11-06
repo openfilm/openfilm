@@ -58,6 +58,13 @@ export type PropValue = number | string | boolean | readonly number[] | Record<s
 /** One property of one clip, by the clip's id (see studio/server/ops.mjs). */
 export type PropEdit = { clip: string; prop: string; value: PropValue };
 
+/** one of a project's canvases: the first is `main`; `nodes`, how many it has */
+export interface CanvasBoard { id: string; name?: string; nodes: number }
+/** one of the person's characters: its pictures by what they show */
+export interface CanvasCharacter { id: string; name: string; about?: string; created: number; pictures: Array<{ role: 'face' | 'body' | 'expressions' | 'turnaround' | 'other'; url: string }> }
+/** one thing a canvas made: in this project, or (`project`) another */
+export interface CanvasMade { path: string; make: 'image' | 'video' | 'sfx' | 'music'; prompt?: string; via?: string; model?: string; at: number; project?: string; projectName?: string }
+
 export class ApiError extends Error {
   constructor(message: string, readonly status: number, readonly body: Record<string, unknown>) {
     super(message);
@@ -176,8 +183,25 @@ export const api = {
   markers: (id: string) => call<{ markers: unknown }>(`${p(id)}/markers`).then((r) => r.markers),
   putMarkers: (id: string, markers: unknown[]) => call<{ markers: unknown }>(`${p(id)}/markers`, { method: 'PUT', json: { markers } }).then((r) => r.markers),
   /** its canvas (`.film/canvas.json`, components/canvas): the whole board, read and written */
-  canvas: (id: string) => call<{ nodes: unknown; edges: unknown }>(`${p(id)}/canvas`),
-  putCanvas: (id: string, canvas: { nodes: unknown[]; edges: unknown[] }) => call<{ nodes: unknown; edges: unknown }>(`${p(id)}/canvas`, { method: 'PUT', json: canvas }),
+  canvas: (id: string, board = 'main') => call<{ nodes: unknown; edges: unknown }>(`${p(id)}/canvas${board === 'main' ? '' : `/${encodeURIComponent(board)}`}`),
+  putCanvas: (id: string, canvas: { nodes: unknown[]; edges: unknown[] }, board = 'main') =>
+    call<{ nodes: unknown; edges: unknown }>(`${p(id)}/canvas${board === 'main' ? '' : `/${encodeURIComponent(board)}`}`, { method: 'PUT', json: canvas }),
+  /** a project's boards (studio/server/canvas.mjs): listed, made (empty or a copy), renamed, deleted into the trash */
+  canvasBoards: (id: string) => call<{ boards: CanvasBoard[] }>(`${p(id)}/canvases`).then((r) => r.boards),
+  newCanvasBoard: (id: string, body: { name?: string; from?: string }) => call<{ id: string; name?: string }>(`${p(id)}/canvases`, { method: 'POST', json: body }),
+  renameCanvasBoard: (id: string, board: string, name: string) => call<{ id: string; name?: string }>(`${p(id)}/canvases/${encodeURIComponent(board)}`, { method: 'PATCH', json: { name } }),
+  /** what the project's canvases made (studio/server/canvas-history.mjs), or every project's; one brought over from another */
+  canvasMade: (id: string, all = false) => call<{ made: CanvasMade[] }>(`${p(id)}/canvas-made${all ? '?all=1' : ''}`).then((r) => r.made),
+  canvasMadeFile: (id: string, made: CanvasMade) => `/api/${p(id)}/canvas-made/file?path=${encodeURIComponent(made.path)}${made.project ? `&project=${encodeURIComponent(made.project)}` : ''}`,
+  bringMade: (id: string, made: CanvasMade) => call<{ path: string }>(`${p(id)}/canvas-made/bring`, { method: 'POST', json: { project: made.project, path: made.path } }).then((r) => r.path),
+  /** the person's characters (studio/server/canvas-characters.mjs): listed, kept from this project's pictures, changed, removed, brought in */
+  canvasCharacters: () => call<{ characters: CanvasCharacter[] }>('canvas-characters').then((r) => r.characters),
+  saveCanvasCharacter: (id: string, body: { name: string; about?: string; pictures: Array<{ role: string; path: string }> }) =>
+    call<{ character: CanvasCharacter }>(`${p(id)}/canvas-characters`, { method: 'POST', json: body }).then((r) => r.character),
+  updateCanvasCharacter: (id: string, body: { name?: string; about?: string }) => call<{ character: CanvasCharacter }>(`canvas-characters/${encodeURIComponent(id)}`, { method: 'PATCH', json: body }),
+  removeCanvasCharacter: (id: string) => call<Record<string, never>>(`canvas-characters/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  useCanvasCharacter: (project: string, id: string) => call<{ name: string; about?: string; pictures: Array<{ role: string; path: string }> }>(`${p(project)}/canvas-characters/${encodeURIComponent(id)}`, { method: 'POST' }),
+  removeCanvasBoard: (id: string, board: string) => call<{ boards: CanvasBoard[] }>(`${p(id)}/canvases/${encodeURIComponent(board)}`, { method: 'DELETE' }).then((r) => r.boards),
   /** a text node's words written by the person's own agent (studio/server/canvas.mjs canvasWriteRoute); 409 without one */
   canvasWrite: (id: string, prompt: string, inputs: string[]) => call<{ text: string }>(`${p(id)}/canvas-write`, { method: 'POST', json: { prompt, inputs } }),
   /** the person's canvas templates (studio/server/canvas-templates.mjs): listed, kept from a project's board, laid down on one, removed */

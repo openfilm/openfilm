@@ -6,8 +6,8 @@
 import React from 'react';
 import { useReactFlow, useStore } from '@xyflow/react';
 import {
-  Grid3x3, Hand, Keyboard, LayoutTemplate, ListTree, Map as MapIcon, MousePointer2, PanelLeftClose, PanelLeftOpen, Plus, Scissors, Search, Spline,
-  Type as TypeIcon, X,
+  Clapperboard, Grid3x3, Hand, History, Keyboard, LayoutTemplate, ListTree, Map as MapIcon, MousePointer2, Palette, PanelLeftClose, PanelLeftOpen, Plus, Scissors, Search, Shapes, Spline,
+  Type as TypeIcon, UserRound, X,
 } from 'lucide-react';
 import { useT } from '@/i18n';
 import type { MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
@@ -25,15 +25,20 @@ const ON = '!bg-[var(--cv-float-hover)]';
 const SMALL = 'flex h-7 min-w-7 items-center justify-center rounded-[8px] px-1 text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
 
 /** The toolbar at the board's foot: what is added, how the board is moved, the templates, the keys. */
-export function BottomToolbar({ adding, onAdd, tool, onTool, onTemplates }: {
+export function BottomToolbar({ adding, onAdd, tool, onTool, onTemplates, onLibrary, onCharacters, onHistory }: {
   adding: boolean;
   onAdd: (from: DOMRect) => void;
   tool: 'select' | 'hand';
   onTool: (tool: 'select' | 'hand') => void;
   onTemplates: (from: DOMRect) => void;
+  /** the material libraries (styles, effects), the characters, what was made */
+  onLibrary: (which: 'styles' | 'effects') => void;
+  onCharacters: () => void;
+  onHistory: () => void;
 }) {
   const t = useT();
   const [keys, setKeys] = React.useState(false);
+  const [library, setLibrary] = React.useState(false);
   /* the keys, in four columns: making, zooming, moving the board, and the rest */
   const columns: Array<[string, Array<[string, string]>]> = [
     [t('canvas.keys.make'), [
@@ -64,6 +69,29 @@ export function BottomToolbar({ adding, onAdd, tool, onTool, onTemplates }: {
         </Tooltip>
         <Tooltip label={t('canvas.menu.templates')} side="top">
           <button type="button" aria-label={t('canvas.menu.templates')} onClick={(event) => onTemplates(event.currentTarget.getBoundingClientRect())} className={TOOL}><LayoutTemplate size={17} /></button>
+        </Tooltip>
+        {/* the material libraries: styles for pictures, effects (camera moves) for clips */}
+        <Popover open={library} onOpenChange={setLibrary} placement="top" align="center"
+          trigger={(
+            <Tooltip label={t('canvas.library.title')} side="top">
+              <button type="button" aria-label={t('canvas.library.title')} onClick={() => setLibrary((v) => !v)} className={`${TOOL} ${library ? ON : ''}`}><Shapes size={17} /></button>
+            </Tooltip>
+          )}>
+          <div className="w-[154px] rounded-[12px] bg-[var(--cv-float)] p-1 shadow-[var(--cv-float-shadow)]">
+            <div className="flex h-7 items-center px-2 text-[12px] font-medium text-[var(--cv-ink-3)]">{t('canvas.library.title')}</div>
+            {(['styles', 'effects'] as const).map((which) => (
+              <button key={which} type="button" onClick={() => { setLibrary(false); onLibrary(which); }}
+                className="flex h-9 w-full items-center gap-2 rounded-[8px] px-2 text-left text-[13px] text-[var(--cv-ink)] hover:bg-[var(--cv-float-hover)]">
+                {which === 'styles' ? <Palette size={15} /> : <Clapperboard size={15} />}{t(`canvas.library.${which}`)}
+              </button>
+            ))}
+          </div>
+        </Popover>
+        <Tooltip label={t('canvas.characters.title')} side="top">
+          <button type="button" aria-label={t('canvas.characters.title')} onClick={onCharacters} className={TOOL}><UserRound size={17} /></button>
+        </Tooltip>
+        <Tooltip label={t('canvas.history.title')} side="top">
+          <button type="button" aria-label={t('canvas.history.title')} onClick={onHistory} className={TOOL}><History size={17} /></button>
         </Tooltip>
         <span className="h-4 w-px bg-[var(--cv-bar-line)]" />
         <Popover open={keys} onOpenChange={setKeys} placement="top" align="center"

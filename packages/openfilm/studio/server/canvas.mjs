@@ -12,22 +12,38 @@
  * cut (`cut`) is the order what is wired into it goes onto the timeline in. An
  * edge goes from one node to another, `order` its place among those into that node.
  *
- *   GET canvas                    → { nodes, edges }
- *   PUT canvas { nodes, edges }   → { nodes, edges }: the whole board, as kept (the board in Studio writes it)
+ *   GET canvas                    → { nodes, edges, name? }
+ *   PUT canvas { nodes, edges }   → { nodes, edges, name? }: the whole board, as kept (the board in Studio writes it)
+ *
+ * A project can have more boards than one: the first is `.film/canvas.json` (`main`), the others
+ * `.film/canvases/<id>.json`, each with its `name` (none: "Canvas 1"…, as Studio numbers them).
+ *
+ *   GET canvas/<id>, PUT canvas/<id>  → one of the others, as above
+ *   GET canvases                      → { boards: [{ id, name?, nodes }] }, the first first, then as made
+ *   POST canvases { name?, from? }    → { id, name? }: a new board, empty or a copy of `from`
+ *   PATCH canvases/<id> { name }      → { id, name }
+ *   DELETE canvases/<id>              → { boards }: into the trash; the first gone, the next one made first
  *
  * An agent changes it a step at a time (`openfilm canvas`, studio/client.mjs), each step checked and all of them kept
  * or none (applyCanvasOps): the board shown in Studio takes them at once (a `canvas` event).
  *
  *   POST /api/canvas { folder, ops?, by? } → { ok: true, canvas, added } or { ok: false, text }
  */
-import { mkdir, readFile, stat } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rename, stat } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { FILM_FILE } from '../../src/film-doc.mjs';
 import { writeAtomic } from './atomic.mjs';
 import { HttpError, json, readJson } from './http.mjs';
 import { TOOL_DIR } from './projects.mjs';
+import { moveToTrash } from './trash.mjs';
+import { noteMade } from './canvas-history.mjs';
 
 export const CANVAS_FILE = `${TOOL_DIR}/canvas.json`;
+/** the project's other boards, and the first one's id */
+export const BOARDS_DIR = `${TOOL_DIR}/canvases`;
+export const MAIN_BOARD = 'main';
+const BOARD_ID = /^[a-z0-9]{1,32}$/;
+const BOARDS_MAX = 100;
 const MAX_NODES = 2000;
 const MAX_EDGES = 4000;
 const TEXT_MAX = 20000;
@@ -48,7 +64,7 @@ const SHORT_MAX = 120;
 /**
  * @typedef {{ id: string, x: number, y: number, w?: number, h?: number, parent?: string, by?: { agent: string, session?: string } } & ({ text: string } | { path: string } | { group: string, color: string } | { make: string } | { cut: true })} CanvasNode
  * @typedef {{ id: string, from: string, to: string, order?: number }} CanvasEdge
- * @typedef {{ nodes: CanvasNode[], edges: CanvasEdge[] }} Canvas
+ * @typedef {{ nodes: CanvasNode[], edges: CanvasEdge[], name?: string }} Canvas
  */
 
 /** @param {unknown} v @returns {v is Record<string, unknown>} */
@@ -102,6 +118,7 @@ export function parseCanvas(raw) {
     const order = typeof e.order === 'number' && Number.isInteger(e.order) && e.order >= 0 && e.order < MAX_EDGES ? { order: e.order } : {};
     out.edges.push({ id: /** @type {string} */ (e.id), from: /** @type {string} */ (e.from), to: /** @type {string} */ (e.to), ...order });
   }
+  if (typeof raw.name === 'string' && raw.name.trim()) out.name = raw.name.trim().slice(0, NAME_MAX);
   return out;
 }
 
@@ -140,30 +157,99 @@ function readMake(n) {
   return Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
 }
 
-/** @param {string} root @returns {Promise<Canvas>} */
-export async function readCanvas(root) {
+/** where a board is kept. @param {string} root @param {string} board */
+const boardFile = (root, board) => (board === MAIN_BOARD ? join(root, CANVAS_FILE) : join(root, BOARDS_DIR, `${board}.json`));
+/** @param {string} root @param {string} board */
+const isBoard = async (root, board) => board === MAIN_BOARD || (BOARD_ID.test(board) && Boolean((await stat(boardFile(root, board)).catch(() => null))?.isFile()));
+
+/** @param {string} root @param {string} [board] @returns {Promise<Canvas>} */
+export async function readCanvas(root, board = MAIN_BOARD) {
   try {
-    return parseCanvas(JSON.parse(await readFile(join(root, CANVAS_FILE), 'utf8')));
+    return parseCanvas(JSON.parse(await readFile(boardFile(root, board), 'utf8')));
   } catch { return { nodes: [], edges: [] }; }
 }
 
-/** @param {string} root @param {unknown} canvas @returns {Promise<Canvas>} */
-export async function writeCanvas(root, canvas) {
+/** The board kept; written without a name, it keeps the one it has. @param {string} root @param {unknown} canvas @param {string} [board] @returns {Promise<Canvas>} */
+export async function writeCanvas(root, canvas, board = MAIN_BOARD) {
   if (!isRecord(canvas) || !Array.isArray(canvas.nodes)) throw new HttpError(400, 'canvas: { nodes: [{ id, x, y, text | path }], edges: [{ id, from, to }] }');
   const kept = parseCanvas(canvas);
-  await mkdir(dirname(join(root, CANVAS_FILE)), { recursive: true });
-  await writeAtomic(join(root, CANVAS_FILE), `${JSON.stringify(kept, null, 1)}\n`);
+  if (!('name' in canvas)) {
+    const { name } = await readCanvas(root, board);
+    if (name) kept.name = name;
+  }
+  await mkdir(dirname(boardFile(root, board)), { recursive: true });
+  await writeAtomic(boardFile(root, board), `${JSON.stringify(kept, null, 1)}\n`);
+  /* what it was given to show, noted for its history (canvas-history.mjs) */
+  await noteMade(root, /** @type {{ nodes: Array<Record<string, unknown>> }} */ (/** @type {unknown} */ (kept)));
   return kept;
 }
 
+/** The project's boards: the first, then the others as they were made (their ids go up). @param {string} root */
+export async function listBoards(root) {
+  const others = (await readdir(join(root, BOARDS_DIR)).catch(() => /** @type {string[]} */ ([])))
+    .flatMap((f) => (f.endsWith('.json') && BOARD_ID.test(f.slice(0, -5)) ? [f.slice(0, -5)] : [])).sort((a, b) => a.length - b.length || (a < b ? -1 : 1));
+  return Promise.all([MAIN_BOARD, ...others].map(async (id) => {
+    const { name, nodes } = await readCanvas(root, id);
+    return { id, ...(name ? { name } : {}), nodes: nodes.length };
+  }));
+}
+
+/** when the last board was made (ms): the next is made later, even within a millisecond */
+let lastMade = 0;
+
+/** the board each project shows in Studio now, which an agent's steps go to */
+const shown = new Map();
+
 /**
- * `canvas` of a project. True when it was this route.
+ * A project's `canvas[/<board>]` and `canvases[/<board>]`. True when it was this route.
  * @param {import('./http.mjs').Req} req @param {import('./http.mjs').Res} res @param {string} root @param {string} rest
  */
 export async function canvasRoute(req, res, root, rest) {
-  if (rest !== 'canvas') return false;
-  if (req.method === 'GET') { json(res, 200, await readCanvas(root)); return true; }
-  if (req.method === 'PUT') { json(res, 200, await writeCanvas(root, await readJson(req))); return true; }
+  const [head, id, more] = rest.split('/');
+  if ((head !== 'canvas' && head !== 'canvases') || more !== undefined) return false;
+  if (head === 'canvas') {
+    const board = id === undefined ? MAIN_BOARD : decodeURIComponent(id);
+    if (!(await isBoard(root, board))) throw new HttpError(404, 'no such canvas');
+    if (req.method === 'GET') { shown.set(root, board); json(res, 200, await readCanvas(root, board)); return true; }
+    if (req.method === 'PUT') { json(res, 200, await writeCanvas(root, await readJson(req), board)); return true; }
+    return false;
+  }
+  if (id === undefined) {
+    if (req.method === 'GET') { json(res, 200, { boards: await listBoards(root) }); return true; }
+    if (req.method !== 'POST') return false;
+    const body = /** @type {{ name?: unknown, from?: unknown }} */ (await readJson(req));
+    if ((await listBoards(root)).length >= BOARDS_MAX) throw new HttpError(409, `a project has at most ${BOARDS_MAX} canvases`);
+    const from = typeof body.from === 'string' && (await isBoard(root, body.from)) ? await readCanvas(root, body.from) : { nodes: [], edges: [] };
+    /* its id goes up with each made, so the list is in the order they were made */
+    lastMade = Math.max(Date.now(), lastMade + 1);
+    const made = `${lastMade.toString(36)}${Math.random().toString(36).slice(2, 6).padEnd(4, '0')}`;
+    const name = typeof body.name === 'string' ? body.name.trim().slice(0, NAME_MAX) : '';
+    await writeCanvas(root, { nodes: from.nodes, edges: from.edges, ...(name ? { name } : {}) }, made);
+    json(res, 200, { id: made, ...(name ? { name } : {}) });
+    return true;
+  }
+  const board = decodeURIComponent(id);
+  if (!(await isBoard(root, board))) throw new HttpError(404, 'no such canvas');
+  if (req.method === 'PATCH') {
+    const body = /** @type {{ name?: unknown }} */ (await readJson(req));
+    const name = typeof body.name === 'string' ? body.name.trim().slice(0, NAME_MAX) : '';
+    const now = await readCanvas(root, board);
+    const { name: _old, ...rest } = now;
+    await writeCanvas(root, name ? { ...rest, name } : rest, board);
+    json(res, 200, { id: board, ...(name ? { name } : {}) });
+    return true;
+  }
+  if (req.method === 'DELETE') {
+    const boards = await listBoards(root);
+    if (boards.length < 2) throw new HttpError(409, 'the only canvas stays');
+    const file = boardFile(root, board);
+    if ((await stat(file).catch(() => null))?.isFile()) await moveToTrash(file);
+    /* the first gone: the next one is made the first */
+    if (board === MAIN_BOARD) await rename(boardFile(root, /** @type {string} */ (boards[1]?.id)), file);
+    if (shown.get(root) === board) shown.delete(root);
+    json(res, 200, { boards: await listBoards(root) });
+    return true;
+  }
   return false;
 }
 
@@ -374,12 +460,15 @@ export async function agentCanvasRoute(req, res, changed) {
   const body = /** @type {{ folder?: unknown, ops?: unknown, by?: unknown }} */ (await readJson(req));
   const root = resolve(String(body.folder ?? ''));
   if (!(await stat(join(root, FILM_FILE)).catch(() => null))?.isFile()) return json(res, 200, { ok: false, code: 2, text: `${root} is not a project; \`openfilm open\` makes one` });
-  const canvas = await readCanvas(root);
+  /* the board the person has in front of them */
+  const showing = shown.get(root);
+  const board = showing && (await isBoard(root, showing)) ? showing : MAIN_BOARD;
+  const canvas = await readCanvas(root, board);
   if (body.ops === undefined) return json(res, 200, { ok: true, canvas, added: [] });
   try {
     const exists = async (/** @type {string} */ path) => Boolean((await stat(join(root, path)).catch(() => null))?.isFile());
     const after = await applyCanvasOps(canvas, body.ops, { by: body.by, exists });
-    const kept = await writeCanvas(root, after.canvas);
+    const kept = await writeCanvas(root, after.canvas, board);
     changed(root);
     return json(res, 200, { ok: true, canvas: kept, added: after.added });
   } catch (e) {

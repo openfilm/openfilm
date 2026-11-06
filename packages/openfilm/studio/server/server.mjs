@@ -68,6 +68,8 @@ import { projectSettingsRoute } from './project-settings.mjs';
 import { markersRoute } from './markers.mjs';
 import { CANVAS_FILE, agentCanvasRoute, canvasRoute, canvasWriteRoute, readCanvas } from './canvas.mjs';
 import { copyBoardInto, projectTemplatesRoute, templatesRoute } from './canvas-templates.mjs';
+import { canvasMadeRoute } from './canvas-history.mjs';
+import { charactersRoute, projectCharactersRoute } from './canvas-characters.mjs';
 import { transitionPageRoutes } from './transition-pages.mjs';
 import { createAsks, getRoute, subtitleTranscriber, subtitleTranslator } from './get.mjs';
 import { LOCATION_KEYS, chooseFolder, locations, usableFolder } from '../../src/locations.mjs';
@@ -352,6 +354,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (parts[0] === 'canvas' && parts.length === 1) return agentCanvasRoute(req, res, (root) => watchers.emit(root, { type: 'canvas' }));
     /* the person's canvas templates, the same for every project (canvas-templates.mjs) */
     if (parts[0] === 'canvas-templates') return templatesRoute(req, res, parts.slice(1));
+    /* the person's characters, the same for every project (canvas-characters.mjs) */
+    if (parts[0] === 'canvas-characters') return charactersRoute(req, res, parts.slice(1));
 
     /* the system's folder dialog, opened here for a page in a browser (folder-picker.mjs): { path } (null: cancelled);
        501 when this system has none Studio can open */
@@ -689,6 +693,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* its canvas (canvas.mjs): Studio's own board beside the edit */
     if (await canvasRoute(req, res, project.path, rest)) return;
     if (await canvasWriteRoute(req, res, rest, askAgent)) return;
+    if (await canvasMadeRoute(req, res, project.path, rest, url)) return;
+    if (await projectCharactersRoute(req, res, project.path, rest)) return;
     if (await projectTemplatesRoute(req, res, project.path, rest)) return;
     /* an example's canvas laid down on this one: its files copied into assets/examples/<id>/ (canvas-templates.mjs) */
     if (rest.startsWith('example-canvas/') && req.method === 'POST') {

@@ -600,6 +600,7 @@ html[data-file-drag] iframe { pointer-events: none; }
   --cv-on-invert: #ffffff;
   --cv-shadow: none;
   --cv-float-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06), 0 16px 24px -8px rgba(0, 0, 0, 0.1), 0 4px 8px -4px rgba(0, 0, 0, 0.06);
+  --cv-modal: #ffffff;
 }
 [data-theme='dark'] {
   --cv-bg: #141414;
@@ -626,6 +627,7 @@ html[data-file-drag] iframe { pointer-events: none; }
   --cv-on-invert: #000000;
   --cv-shadow: none;
   --cv-float-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 16px 24px -8px rgba(0, 0, 0, 0.06), 0 4px 8px -4px rgba(0, 0, 0, 0.04);
+  --cv-modal: #161616;
 }
 .openfilm-canvas {
   --xy-background-color: var(--cv-bg);

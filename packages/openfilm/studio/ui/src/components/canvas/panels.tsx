@@ -7,7 +7,7 @@
 import React from 'react';
 import { NodeToolbar, Position } from '@xyflow/react';
 import {
-  AlignLeft, ArrowUp, Camera, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, Download, FolderSearch, Images, LayoutGrid, Maximize2, Minimize2, Music, Plus, Search, Sparkles, Square, Video, X,
+  AlignLeft, ArrowUp, Camera, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, Download, FolderSearch, Images, LayoutGrid, Maximize2, Minimize2, Music, Plus, Search, Sparkles, Square, Video, X,
 } from 'lucide-react';
 import { useT } from '@/i18n';
 import { IMAGE_RATIOS, MAKE_COUNTS, MAKE_MEDIA, VIDEO_MODES, VIDEO_RATIOS, lengthOf, lengthRange, modeOf, modesFor, ratioOf, type ModelSpec, type VideoMode } from '@/lib/canvas';
@@ -15,7 +15,7 @@ import { PRESETS, PRESET_GROUPS, presetOf, type CanvasPreset } from '@/lib/canva
 import type { WorkspaceResource } from '@/lib/workspace-resources';
 import { Popover } from '../Popover';
 import { Tooltip } from '../Tooltip';
-import { useBoard, type Choice, type MakeData } from './board';
+import { modelTime, timeLabel, useBoard, type Choice, type MakeData } from './board';
 import { frameOf, splitGrid } from './pixels';
 import { ProviderMark } from '../settings/ProviderMark';
 
@@ -146,6 +146,10 @@ function specLine(spec: ModelSpec | undefined, t: (key: string) => string): stri
     range ? t('canvas.spec.seconds').replace('{a}', String(range[0])).replace('{b}', String(range[1])) : '',
     spec.refs ? t('canvas.spec.refs').replace('{n}', String(spec.refs)) : '',
     spec.refs === 0 && spec.frames ? t('canvas.spec.frames') : '',
+    spec.sizes?.length ? (spec.sizes.length > 1 ? t('canvas.spec.sizes').replace('{a}', spec.sizes[0]!.toUpperCase()).replace('{b}', spec.sizes[spec.sizes.length - 1]!.toUpperCase()) : spec.sizes[0]!.toUpperCase()) : '',
+    spec.voice ? t('canvas.spec.voice') : '',
+    spec.clip ? t('canvas.spec.clip') : '',
+    spec.transparent ? t('canvas.spec.transparent') : '',
   ].filter(Boolean).join(' · ');
 }
 
@@ -163,16 +167,24 @@ function ModelPicker({ choices, picked, fallback, onPick, onConnect }: {
   const row = (c: Choice) => {
     const line = specLine(c.spec, t);
     const on = picked?.via === c.via && picked?.model === c.model;
+    /* how long it takes, as this person's runs with it took */
+    const took = modelTime(c.via, c.model);
     return (
       <button key={`${c.via}|${c.model ?? ''}`} type="button" onClick={() => (c.connected ? onPick(c) : onConnect())}
-        className={`flex w-full min-w-0 items-center gap-2.5 rounded-[8px] px-2 py-1.5 text-left text-[13px] hover:bg-[var(--cv-float-hover)] ${c.connected ? 'text-[var(--cv-ink)]' : 'text-[var(--cv-ink-3)]'}`}>
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-[var(--cv-chip)]"><ProviderMark id={c.via} size={15} /></span>
+        className={`group/model flex w-full min-w-0 items-start gap-2.5 rounded-[8px] px-2 py-1.5 text-left text-[13px] hover:bg-[var(--cv-float-hover)] ${on ? 'bg-[var(--cv-float-hover)]' : ''} ${c.connected ? 'text-[var(--cv-ink)]' : 'text-[var(--cv-ink-3)]'}`}>
+        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] bg-[var(--cv-chip)]"><ProviderMark id={c.via} size={13} /></span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate">{c.name}</span>
-          <span className="block truncate text-[11.5px] text-[var(--cv-label)]">{[c.provider, c.kind === 'sfx' || c.kind === 'music' ? t(`canvas.make.${c.kind}`) : '', line].filter(Boolean).join(' · ')}</span>
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="min-w-0 flex-1 truncate leading-5">{c.name}</span>
+            {took !== null ? <span className="shrink-0 rounded-[6px] bg-[var(--cv-chip)] px-1.5 text-[11px] leading-[18px] text-[var(--cv-ink-2)]" title={t('canvas.panel.models.took')}>{timeLabel(took)}</span> : null}
+            {on ? <Check size={14} className="shrink-0 text-[var(--cv-label)]" />
+              : !c.connected ? <span className="shrink-0 rounded-md border !border-[var(--cv-float-line)] px-1.5 text-[11px] leading-[18px] text-[var(--cv-label)]">{t('canvas.panel.models.connect')}</span> : null}
+          </span>
+          {/* what it is and what it takes, said when pointed at (or picked) */}
+          <span className={`text-[11.5px] leading-snug text-[var(--cv-label)] ${on ? 'block' : 'hidden group-hover/model:block'}`}>
+            {[c.provider, c.kind === 'sfx' || c.kind === 'music' ? t(`canvas.make.${c.kind}`) : '', line].filter(Boolean).join(' · ')}
+          </span>
         </span>
-        {on ? <Check size={14} className="shrink-0 text-[var(--cv-label)]" />
-          : !c.connected ? <span className="shrink-0 rounded-md border !border-[var(--cv-float-line)] px-1.5 py-0.5 text-[11px] text-[var(--cv-label)]">{t('canvas.panel.models.connect')}</span> : null}
       </button>
     );
   };
@@ -278,6 +290,10 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
               trigger={<button type="button" className={CHIP} onClick={() => setOpen(open === 'assets' ? null : 'assets')}><Images size={13} />{t('canvas.panel.fromAssets')}</button>}>
               <Listing rows={assetRows} empty={t('canvas.panel.nothingInAssets')} onPick={(path) => { board.wireIn(id, { path }); setOpen(null); }} />
             </Popover>
+            {/* the libraries, for this node: a character's portrait, a style (a picture), an effect (a clip) */}
+            <button type="button" className={CHIP} onClick={() => board.openLibrary('characters', id)}><UserRound size={13} />{t('canvas.characters.chip')}</button>
+            {data.make === 'image' ? <button type="button" className={CHIP} onClick={() => board.openLibrary('styles', id)}><Palette size={13} />{t('canvas.library.styleChip')}</button> : null}
+            {data.make === 'video' ? <button type="button" className={CHIP} onClick={() => board.openLibrary('effects', id)}><Clapperboard size={13} />{t('canvas.library.effectChip')}</button> : null}
           </div>
         ) : null}
         {inputs.length ? (

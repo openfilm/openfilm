@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
-import { CANVAS_FILE, CanvasOpError, applyCanvasOps, canvasWriteRoute, parseCanvas, readCanvas, writeCanvas } from './canvas.mjs';
+import { CANVAS_FILE, CanvasOpError, agentCanvasRoute, applyCanvasOps, canvasRoute, canvasWriteRoute, parseCanvas, readCanvas, writeCanvas } from './canvas.mjs';
 
 test('a canvas keeps notes and project files as nodes, and edges between nodes it has', () => {
   assert.deepEqual(parseCanvas({
@@ -143,4 +143,49 @@ test("a text node's words are written by the person's agent, from what they ask 
     (e) => e.status === 409 && e.extra?.code === 'no-agent');
   await assert.rejects(canvasWriteRoute(/** @type {any} */ (post({})), /** @type {any} */ (answer()), 'canvas-write', async () => ''), (e) => e.status === 400);
   assert.equal(await canvasWriteRoute(/** @type {any} */ ({ method: 'GET' }), /** @type {any} */ (answer()), 'canvas-write', undefined), false);
+});
+
+test('a project has as many canvases as are made: named, copied, renamed, the first one stays first, deleted into the trash', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-boards-'));
+  const trash = mkdtempSync(join(tmpdir(), 'of-trash-'));
+  const before = process.env.OPENFILM_TRASH_DIR;
+  process.env.OPENFILM_TRASH_DIR = trash;
+  const call = async (method, rest, body) => {
+    const req = Object.assign(Readable.from(body === undefined ? [] : [Buffer.from(JSON.stringify(body))]), { method });
+    const res = { status: 0, body: '', writeHead(s) { res.status = s; }, end(b) { res.body = b; } };
+    const was = await canvasRoute(/** @type {any} */ (req), /** @type {any} */ (res), root, rest);
+    return was ? JSON.parse(res.body) : null;
+  };
+  try {
+    writeFileSync(join(root, 'film.html'), '<!doctype html>');
+    await writeCanvas(root, { nodes: [{ id: 'n', x: 0, y: 0, text: 'first' }], edges: [] });
+    assert.deepEqual(await call('GET', 'canvases'), { boards: [{ id: 'main', nodes: 1 }] });
+    const copy = await call('POST', 'canvases', { name: 'Shots', from: 'main' });
+    assert.equal(copy.name, 'Shots');
+    const empty = await call('POST', 'canvases', {});
+    assert.deepEqual((await call('GET', 'canvases')).boards, [{ id: 'main', nodes: 1 }, { id: copy.id, name: 'Shots', nodes: 1 }, { id: empty.id, nodes: 0 }]);
+    /* written without a name, a board keeps its name */
+    await call('PUT', `canvas/${copy.id}`, { nodes: [], edges: [] });
+    assert.deepEqual(await call('GET', `canvas/${copy.id}`), { nodes: [], edges: [], name: 'Shots' });
+    assert.deepEqual(await call('PATCH', `canvases/${copy.id}`, { name: 'Storyboard' }), { id: copy.id, name: 'Storyboard' });
+    await assert.rejects(call('GET', 'canvas/nope'), (e) => e.status === 404);
+    /* an agent's steps go to the board shown */
+    let changed = '';
+    const ask = Object.assign(Readable.from([Buffer.from(JSON.stringify({ folder: root, ops: [{ op: 'add', kind: 'note', text: 'from the agent' }] }))]), { method: 'POST' });
+    const res = { body: '', writeHead() {}, end(b) { res.body = b; } };
+    await agentCanvasRoute(/** @type {any} */ (ask), /** @type {any} */ (res), (r) => { changed = r; });
+    assert.equal(changed, root);
+    assert.deepEqual((await readCanvas(root, copy.id)).nodes.map((n) => n.text), ['from the agent']);
+    assert.equal((await readCanvas(root)).nodes.length, 1);
+    /* the first deleted: the next is made the first; the last one stays */
+    const after = await call('DELETE', 'canvases/main');
+    assert.deepEqual(after.boards, [{ id: 'main', name: 'Storyboard', nodes: 1 }, { id: empty.id, nodes: 0 }]);
+    assert.equal(readFileSync(join(trash, 'canvas.json'), 'utf8').includes('first'), true);
+    await call('DELETE', `canvases/${empty.id}`);
+    await assert.rejects(call('DELETE', 'canvases/main'), (e) => e.status === 409);
+  } finally {
+    if (before === undefined) delete process.env.OPENFILM_TRASH_DIR; else process.env.OPENFILM_TRASH_DIR = before;
+    rmSync(root, { recursive: true, force: true });
+    rmSync(trash, { recursive: true, force: true });
+  }
 });

@@ -4,7 +4,8 @@
  * is best made at, and whether it is made from a picture wired in. Picked in a picture node's panel, it shows as a tag
  * before its words and names the node. Their words are OpenFilm's own, in English: every picture model reads it.
  */
-export type PresetGroup = 'story' | 'texture' | 'camera' | 'design';
+/** `character`: the pictures a new character is made of (canvas libraries), not offered in the presets' list */
+export type PresetGroup = 'story' | 'texture' | 'camera' | 'design' | 'character';
 
 export interface CanvasPreset {
   id: string;
@@ -32,6 +33,10 @@ export const PRESETS: CanvasPreset[] = [
   { id: 'faces', group: 'design', ratio: '21:9', quality: 'high', prompt: 'A head turnaround of the same person on a plain white background: front, three-quarter and profile close-ups side by side, neutral expression, the same face, hair and skin in every view, even studio light, no text.' },
   { id: 'character', group: 'design', ratio: '16:9', quality: 'high', prompt: 'A character design sheet: a full-body front view, four expression close-ups, details of the outfit, shoes and props, and a small color palette, neatly laid out on a light background, the same person throughout.' },
   { id: 'scene', group: 'design', ratio: '16:9', quality: 'high', prompt: 'An environment design sheet of this place: one wide establishing view and three detail views of its key spots, consistent architecture, materials and light, neatly laid out on a light background.' },
+  { id: 'portrait', group: 'character', ratio: '1:1', quality: 'high', prompt: 'A head-and-shoulders portrait of this character facing the camera on a plain white background, neutral expression, even studio light, sharp detail, no text.' },
+  { id: 'fullBody', group: 'character', ratio: '9:16', quality: 'high', prompt: 'A full-body picture of this character standing facing the camera on a plain white background, relaxed pose, the whole outfit and shoes visible, even studio light, no text.' },
+  { id: 'expressions', group: 'character', ratio: '1:1', quality: 'high', prompt: 'A 3×3 grid of close-ups of this character showing nine expressions — calm, happy, laughing, sad, angry, surprised, scared, thinking, tired — the same face, hair and light in every panel, plain white background, thin white gutters, no text.' },
+  { id: 'turnaround16', group: 'character', ratio: '16:9', quality: 'high', prompt: 'A turnaround sheet of this character on a plain white background: full-body front, three-quarter, side and back views in a row and three head close-ups from different angles, the same face, hair and outfit in every view, even studio light, no text.' },
   { id: 'product', group: 'design', ratio: '16:9', quality: 'high', prompt: 'A product design sheet on a plain white background: front, side, back and three-quarter views of the same product, even studio light, accurate proportions and materials, no text.' },
 ];
 

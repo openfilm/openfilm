@@ -114,7 +114,32 @@ type Made = { path: string; made: string };
 export const runs = new Map<string, Run>();
 export const runErrors = new Map<string, string>();
 /** the board shown for each project, to take what was made */
-export const shownBoards = new Map<string, (node: string, made: Made) => void>();
+/**
+ * How long a model takes, as this person's own runs with it took (the middle of the last few that made something):
+ * kept in this browser, shown by the model in the panel's list. None run yet: nothing said.
+ */
+const TIMES_KEY = 'openfilm.canvas.times';
+const TIMES_KEPT = 5;
+const readTimes = (): Record<string, number[]> => { try { return JSON.parse(localStorage.getItem(TIMES_KEY) ?? '{}') as Record<string, number[]>; } catch { return {}; } };
+export function modelTime(via: string, model?: string): number | null {
+  const list = readTimes()[`${via}|${model ?? ''}`];
+  if (!Array.isArray(list) || !list.length) return null;
+  const sorted = [...list].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)]!;
+}
+export function keepModelTime(via: string, model: string | undefined, seconds: number) {
+  const all = readTimes();
+  const key = `${via}|${model ?? ''}`;
+  all[key] = [...(all[key] ?? []), Math.round(seconds)].slice(-TIMES_KEPT);
+  try { localStorage.setItem(TIMES_KEY, JSON.stringify(all)); } catch { /* not kept */ }
+}
+/** "15s", "2min" */
+export function timeLabel(seconds: number): string {
+  return seconds < 90 ? `${Math.max(1, Math.round(seconds))}s` : `${Math.round(seconds / 60)}min`;
+}
+
+/** each project's board shown now (which of its boards, and how what is made comes onto it) */
+export const shownBoards = new Map<string, { board: string; take: (node: string, made: Made) => void }>();
 let runsVersion = 0;
 const runWatchers = new Set<() => void>();
 export const runsChanged = () => { runsVersion += 1; for (const watch of runWatchers) watch(); };
@@ -122,7 +147,7 @@ export const useRuns = () => React.useSyncExternalStore((watch) => { runWatchers
 
 /** Whether it made one (false: it failed, was stopped, or was being made already). */
 export async function startRun(project: string, folder: string, node: string, request: ReturnType<typeof makeRequest>, pick: { via?: string; model?: string }, key: string,
-  say: { nothing: string; balance: string }): Promise<boolean> {
+  say: { nothing: string; balance: string }, board = 'main'): Promise<boolean> {
   const id = `${project}/${node}`;
   if (runs.has(id)) return false;
   const abort = new AbortController();
@@ -136,11 +161,11 @@ export async function startRun(project: string, folder: string, node: string, re
     if (!path) throw new Error(say.nothing);
     const made = { path, made: key };
     const shown = shownBoards.get(project);
-    if (shown) shown(node, made);
+    if (shown?.board === board) shown.take(node, made);
     else {
-      /* the board closed meanwhile: written into it as kept */
-      const doc = readCanvasDoc(await api.canvas(project));
-      await api.putCanvas(project, { ...doc, nodes: doc.nodes.map((n) => (n.id === node ? withVersion(n, made) : n)) });
+      /* the board closed, or another shown, meanwhile: written into it as kept */
+      const doc = readCanvasDoc(await api.canvas(project, board));
+      await api.putCanvas(project, { ...doc, nodes: doc.nodes.map((n) => (n.id === node ? withVersion(n, made) : n)) }, board);
     }
     return true;
   } catch (e) {
@@ -234,6 +259,9 @@ export interface Board {
   /** a group taken apart (what was in it stays where it is), or kept as a template */
   ungroup: (group: string) => void;
   keepTemplate: (group: string) => void;
+  /** a group's pictures, or a picture, kept as a character; a library opened (for a node: what is picked goes into it) */
+  keepCharacter: (id: string) => void;
+  openLibrary: (which: 'characters' | 'styles' | 'effects', node?: string) => void;
   openSettings: () => void;
   /** a text node's words written by the person's agent from what they ask and what is wired in (in the app with a chat); why not, if not */
   write?: (id: string, ask: string) => Promise<string | null>;

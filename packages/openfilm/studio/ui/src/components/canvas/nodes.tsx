@@ -11,7 +11,7 @@ import React from 'react';
 import { Handle, NodeResizer, NodeToolbar, Position, useStore, type NodeProps } from '@xyflow/react';
 import {
   AlignLeft, AudioLines, BookmarkPlus, Bot, Clapperboard, FileQuestion, Film, Image as ImageIcon, Layers, Loader2, Music, PenLine, Play, Plus, Scissors,
-  Square, Type as TypeIcon, Ungroup, Upload, Video,
+  Square, Type as TypeIcon, Ungroup, Upload, UserRound, Video,
 } from 'lucide-react';
 import { useT } from '@/i18n';
 import { CARD_H, MAKE_MEDIA, NOTE_H, NOTE_W, type CanvasNode, type GroupColor } from '@/lib/canvas';
@@ -350,6 +350,7 @@ export function FrameNodeView({ id, data, selected }: NodeProps<FrameNode>) {
               </Tooltip>
             ) : null}
             <button type="button" onClick={() => board.keepTemplate(id)} className={bar}><BookmarkPlus size={14} />{t('canvas.keepTemplate')}</button>
+            <button type="button" onClick={() => board.keepCharacter(id)} className={bar}><UserRound size={14} />{t('canvas.characters.keep')}</button>
             <button type="button" onClick={() => board.ungroup(id)} className={bar}><Ungroup size={14} />{t('canvas.ungroup')}</button>
           </div>
         </NodeToolbar>
