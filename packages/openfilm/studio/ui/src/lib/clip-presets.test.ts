@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { withPreset } from '../../../../src/clip-motion.mjs';
-import { cardBody, clipMotions, cutCardKeyframes, presetsOn, takesMotion } from './clip-presets.ts';
+import { cardBody, clipMotions, cutCardKeyframes, cutMovesOn, presetsOn, takesMotion, withCutMove } from './clip-presets.ts';
 
 const fade = { name: 'motion-in-fade', body: 'from { opacity: 0 }', secs: 0.5, ease: 'ease-out' };
 const sink = { name: 'motion-out-sink', body: 'to { translate: 0 30vh; opacity: 0 }', secs: 0.5, ease: 'ease-in' };
@@ -57,4 +57,27 @@ test("a cut's camera move on a card: out, then in, from rest to rest, each part 
   const shakeIn = { name: 'i', body: '0% { translate: -2vw 1vh } 100% { translate: 0 0 }', secs: 0.75, ease: 'linear' };
   assert.equal(cutCardKeyframes(shakeOut, shakeIn, 1),
     '0% { translate: 0 0; animation-timing-function: linear } 12.5% { translate: -3% 2%; animation-timing-function: linear } 24.9% { translate: 2% 0 } 25% { translate: -2% 1%; animation-timing-function: linear } 100% { translate: 0 0 }');
+});
+
+test('a cut move: each edge written apart from the clip\'s own in and out, read back, made another length, taken off', () => {
+  const ease = 'cubic-bezier(0.65, 0, 0.35, 1)';
+  const own = withPreset('object-fit: cover', 'in', { name: 'motion-in-fade', body: 'from { opacity: 0 }', secs: 0.5, ease: 'ease-out' });
+  const inn = withCutMove(own, 'in', { name: 'motion-cut-in-push-left', secs: 0.6, ease });
+  assert.equal(inn, `object-fit: cover; animation: motion-in-fade 0.5s ease-out backwards, motion-cut-in-push-left 0.6s ${ease} backwards`);
+  const both = withCutMove(inn, 'out', { name: 'motion-cut-out-push-left', secs: 0.6, ease });
+  assert.match(both, /motion-cut-out-push-left 0\.6s cubic-bezier\(0\.65, 0, 0\.35, 1\) calc\(var\(--clip-length\) - 0\.6s\) forwards/);
+  assert.deepEqual(cutMovesOn(both), {
+    in: { name: 'motion-cut-in-push-left', slug: 'push-left', secs: 0.6, ease },
+    out: { name: 'motion-cut-out-push-left', slug: 'push-left', secs: 0.6, ease },
+  });
+  /* the clip's own way in is its own still */
+  assert.deepEqual(Object.keys(presetsOn(both)), ['in']);
+  assert.equal(presetsOn(both).in?.name, 'motion-in-fade');
+  /* another length: in its place */
+  assert.equal(cutMovesOn(withCutMove(both, 'in', { name: 'motion-cut-in-push-left', secs: 1, ease })).in?.secs, 1);
+  /* taken off: the other edge and the clip's own stay */
+  const off = withCutMove(both, 'in', null);
+  assert.deepEqual(Object.keys(cutMovesOn(off)), ['out']);
+  assert.match(off, /motion-in-fade/);
+  assert.equal(withCutMove(withCutMove(off, 'out', null), 'in', null), 'object-fit: cover; animation: motion-in-fade 0.5s ease-out backwards');
 });

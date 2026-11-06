@@ -44,11 +44,11 @@ export const builtInRoot = () => process.env.OPENFILM_BUILT_IN_LIBRARY || fileUR
 /**
  * The library's parts too big to come with the package (git-ignored, left out of npm): its sounds and music (`audio/`),
  * its voices' samples (`voices/`), its emoji stickers (`stickers/emoji/`), the models Local services runs (`models/`,
- * src/local-models.mjs). Each is fetched on first use from the library's host and kept in the shared home, once for
- * every OpenFilm on this computer; a bundle (a sticker) comes with the list of its files, `files.json` beside it there,
- * written when the library is published.
+ * src/local-models.mjs), each template's example with its music (`examples/`). Each is fetched on first use from the
+ * library's host and kept in the shared home, once for every OpenFilm on this computer; a bundle (a sticker) comes
+ * with the list of its files, `files.json` beside it there, written when the library is published.
  */
-const PUBLISHED = ['audio/', 'voices/', 'stickers/emoji/', 'models/'];
+const PUBLISHED = ['audio/', 'voices/', 'stickers/emoji/', 'models/', 'examples/'];
 
 /** Where the published parts come from: openfilm.dev's library, which sends each person to the copy nearest them. */
 const libraryHost = () => (process.env.OPENFILM_LIBRARY_URL || 'https://openfilm.dev/library').replace(/\/+$/, '');
@@ -131,6 +131,30 @@ export function fetchLibrary(/** @type {unknown} */ rel) {
   })();
   fetching.set(rel, job);
   return job;
+}
+
+/**
+ * What of the library a thing needs here before it can be put in: its own file or bundle when that is a published part
+ * (a sound, a piece of music, an emoji), and a template's music. None for what comes with the package.
+ * @param {{ id: string, music?: string }} item
+ */
+export function partsOf(item) {
+  return [...(PUBLISHED.some((part) => item.id.startsWith(part)) ? [item.id] : []), ...(typeof item.music === 'string' ? [item.music] : [])];
+}
+
+/** Of the things `ids`, those not all here yet (to be fetched before they are put in). @param {unknown} ids */
+export function notHere(ids) {
+  if (!Array.isArray(ids)) return [];
+  const byId = new Map((/** @type {{ items: { id: string, music?: string }[] }} */ (libraryIndex())).items.map((i) => [i.id, i]));
+  return ids.filter((id) => { const item = typeof id === 'string' ? byId.get(id) : undefined; return Boolean(item && partsOf(item).some((rel) => !located(rel))); });
+}
+
+/** Fetch what a thing of the library needs (partsOf); whether it is all here now. @param {unknown} id */
+export async function fetchItem(id) {
+  const item = (/** @type {{ items: { id: string, music?: string }[] }} */ (libraryIndex())).items.find((i) => i.id === id);
+  if (!item) return false;
+  for (const rel of partsOf(item)) if (!(await fetchLibrary(rel))) return false;
+  return true;
 }
 
 /** @type {Map<string, { mtime: number, value: unknown }>} */

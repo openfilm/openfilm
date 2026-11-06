@@ -3469,7 +3469,7 @@ export const Timeline = React.memo(function Timeline({
           const top = Math.max(INFO_H + 1, Math.round(h / 2) - 8);
           return (
             <div key={`tr:${tr.key}`} role="button" tabIndex={-1} data-transition={tr.kind} data-transition-picked={on ? '1' : '0'}
-              title={t('transitions.mark').replace('{kind}', t(`transitions.${tr.kind}`)).replace('{s}', len)}
+              title={t('transitions.mark').replace('{kind}', tr.label ?? t(`transitions.${tr.kind}`)).replace('{s}', len)}
               className="absolute z-[13] flex items-center justify-center overflow-hidden rounded-[4px] text-[10px] font-medium leading-none"
               style={{
                 left: x, width: w, top, height: 16,
@@ -3491,7 +3491,7 @@ export const Timeline = React.memo(function Timeline({
                 <path d="M0 15 L100 1" stroke="currentColor" strokeOpacity="0.45" strokeWidth="1.2" vectorEffect="non-scaling-stroke" fill="none" />
                 <path d="M0 1 L100 15" stroke="currentColor" strokeOpacity="0.45" strokeWidth="1.2" vectorEffect="non-scaling-stroke" fill="none" />
               </svg>
-              {w > 70 ? <span className="relative truncate px-1.5">{t(`transitions.${tr.kind}`)}</span> : null}
+              {w > 70 ? <span className="relative truncate px-1.5">{tr.label ?? t(`transitions.${tr.kind}`)}</span> : null}
               {!track.locked && onTransition ? (['start', 'end'] as const).map((side) => (
                 <span key={side} role="presentation" data-transition-edge={side}
                   className="absolute inset-y-0 w-[6px] cursor-ew-resize"

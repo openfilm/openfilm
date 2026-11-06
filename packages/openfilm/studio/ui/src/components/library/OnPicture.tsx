@@ -1,13 +1,15 @@
 /**
  * A transition of the library played on a picture: the person's own (the film's at the playhead, else theirs in the
  * project), else a plain one, never the library's sample. A dissolve into the picture turned round, a dip to black or
- * white and back, a cut's camera move (out, then in: lib/clip-presets cutCardKeyframes), a transition's page over it.
+ * white and back, a cut's camera move (out, then in: lib/clip-presets cutCardKeyframes), two shots moving at once (a
+ * push, a wipe: the picture going out by the move's `out` while the picture turned round comes in by its `in`, over
+ * black), a transition's page over it.
  * On a card (LibraryDrawer) the picture is drawn under it; over the viewer (LibraryTrial, `live`) the film is, and only
  * what moves is drawn. Played again and again while `playing`, a moment between.
  */
 import * as React from 'react';
 import { pageUrl, type LibraryItem } from '@/lib/library';
-import { cutCardKeyframes } from '@/lib/clip-presets';
+import { cardBody, cutCardKeyframes } from '@/lib/clip-presets';
 
 /** The picture with none of the person's own: a quiet light on a gradient. */
 export const PLAIN = `data:image/svg+xml,${encodeURIComponent(
@@ -22,7 +24,11 @@ const STYLE = `
 @keyframes of-dip { 0%, 10% { opacity: 0 } 50% { opacity: 1 } 90%, 100% { opacity: 0 } }`;
 
 /** How long one round of it takes, s. */
+/** How long a two-shot move waits before it starts and after it ends, s. */
+const LAP_HOLD = 0.35;
+
 function secsOf(item: LibraryItem): number {
+  if (item.kind === 'motion' && item.lap) return (item.motion?.in?.secs ?? 0.6) + 2 * LAP_HOLD;
   if (item.kind === 'motion') return (item.motion?.out?.secs ?? 0.35) + (item.motion?.in?.secs ?? 0.35);
   if (item.kind === 'fade') return 1.2;
   return (item.durationMs ?? 1000) / 1000;
@@ -53,6 +59,25 @@ export function TransitionOnPicture({ item, picture, playing, live = false, blur
     if (item.kind === 'fade') {
       if (item.fade === 'dissolve') return img({ transform: 'scaleX(-1)', animation: `of-dissolve ${secs}s ease-in-out both` });
       return <span className="pointer-events-none absolute inset-0" style={{ background: item.fade === 'dip-white' ? '#fff' : '#000', animation: `of-dip ${secs}s ease-in-out both` }} />;
+    }
+    if (item.kind === 'motion' && item.lap && item.motion?.in) {
+      const into = item.motion.in;
+      const out = item.motion.out;
+      /* each picture in a box that moves (the move's own transform in the screen's directions), the one coming in
+         turned round inside its box */
+      const box = (anim: string | undefined, turned: boolean) => (
+        <span className="pointer-events-none absolute inset-0 overflow-hidden" style={anim ? { animation: anim } : undefined}>
+          {img(turned ? { transform: 'scaleX(-1)' } : undefined)}
+        </span>
+      );
+      return (
+        <>
+          <style>{`@keyframes ${name}-in { ${cardBody(into.body, blur)} }${out ? ` @keyframes ${name}-out { ${cardBody(out.body, blur)} }` : ''}`}</style>
+          <span className="pointer-events-none absolute inset-0 bg-black" />
+          {box(out ? `${name}-out ${out.secs}s ${out.ease} ${LAP_HOLD}s both` : undefined, false)}
+          {box(`${name}-in ${into.secs}s ${into.ease} ${LAP_HOLD}s both`, true)}
+        </>
+      );
     }
     if (item.kind === 'motion' && item.motion?.out && item.motion.in) {
       return (

@@ -8,11 +8,11 @@
  */
 import React from 'react';
 import {
-  AudioWaveform, Bell, Car, Cat, Cpu, Footprints, Laugh, Leaf, MousePointerClick, Pause, Play, Plus, Star, Users, Wind, X, Zap,
+  AudioWaveform, Bell, Car, Cat, Cpu, Download, Footprints, Laugh, Leaf, Loader2, MousePointerClick, Pause, Play, Plus, Star, Users, Wind, X, Zap,
   type LucideIcon,
 } from 'lucide-react';
 import { useT } from '@/i18n';
-import { coverLook, libraryUrl, soundLook, toggleFavorite, waveUrl, type LibraryItem } from '@/lib/library';
+import { coverLook, heardHere, libraryUrl, soundLook, toggleFavorite, waveUrl, type HereState, type LibraryItem } from '@/lib/library';
 
 /** each group of sounds its mark on its tile */
 const MARKS: Record<string, LucideIcon> = {
@@ -73,7 +73,7 @@ export function usePlayer<T extends Playable = LibraryItem>(): Player<T> {
     setItem(next);
     setTime(0);
     setDuration((next.durationMs ?? 0) / 1000);
-    a.onloadedmetadata = () => { if (Number.isFinite(a.duration)) setDuration(a.duration); };
+    a.onloadedmetadata = () => { heardHere(next.id); if (Number.isFinite(a.duration)) setDuration(a.duration); };
     a.onplay = () => setPlaying(true);
     a.onpause = () => setPlaying(false);
     a.onended = () => { setPlaying(false); setTime(0); };
@@ -97,7 +97,33 @@ export const PANEL_ROUND = `${ROUND} bg-[var(--bg-pressed)]`;
 export const ON_PANEL = `grid ${PANEL_ROUND}`;
 export const ADD_HOVER = 'hover:bg-[var(--accent)] hover:text-[var(--on-accent)]';
 
-function Buttons({ item, kept, addTip, onAdd, always }: { item: LibraryItem; kept: boolean; addTip: string; onAdd: () => void; always?: boolean }) {
+/**
+ * The way a thing of the library goes in: "+" when it is here; one still to be fetched (a sound, a piece of music, a
+ * template's music) shows its download instead, always, turning while it comes, and "+" once it is here.
+ */
+export function HereButton({ here, addTip, onAdd, onFetch, className, show = '' }: {
+  here: HereState; addTip: string; onAdd: () => void; onFetch: () => void; className: string; show?: string;
+}) {
+  const t = useT();
+  if (here === 'here') {
+    return (
+      <button type="button" title={addTip} aria-label={addTip} {...own} onClick={(e) => { e.stopPropagation(); onAdd(); }} className={`${className} ${ADD_HOVER} ${show}`}>
+        <Plus size={12} strokeWidth={2.6} />
+      </button>
+    );
+  }
+  const label = t(here === 'fetching' ? 'assetDrawer.downloading' : here === 'failed' ? 'assetDrawer.downloadFailed' : 'assetDrawer.download');
+  return (
+    <button type="button" title={label} aria-label={label} data-library-download={here} disabled={here === 'fetching'} {...own}
+      onClick={(e) => { e.stopPropagation(); onFetch(); }} className={`${className} ${here === 'failed' ? 'text-[#ff8a80]' : ''} ${ADD_HOVER}`}>
+      {here === 'fetching' ? <Loader2 size={12} strokeWidth={2.6} className="animate-spin" /> : <Download size={12} strokeWidth={2.6} />}
+    </button>
+  );
+}
+
+function Buttons({ item, kept, addTip, onAdd, always, here = 'here', onFetch }: {
+  item: LibraryItem; kept: boolean; addTip: string; onAdd: () => void; always?: boolean; here?: HereState; onFetch?: () => void;
+}) {
   const t = useT();
   const show = always ? '' : 'invisible group-hover:visible';
   return (
@@ -107,10 +133,7 @@ function Buttons({ item, kept, addTip, onAdd, always }: { item: LibraryItem; kep
         className={`${ON_PANEL} ${kept ? 'visible text-[#ffd35a]' : `${show} text-[var(--text)]`}`}>
         <Star size={11} fill={kept ? 'currentColor' : 'none'} strokeWidth={kept ? 0 : 2.2} />
       </button>
-      <button type="button" title={addTip} aria-label={addTip} {...own} onClick={(e) => { e.stopPropagation(); onAdd(); }}
-        className={`${ON_PANEL} ${ADD_HOVER} ${show} text-[var(--text)]`}>
-        <Plus size={12} strokeWidth={2.6} />
-      </button>
+      <HereButton here={here} addTip={addTip} onAdd={onAdd} onFetch={onFetch ?? onAdd} className={`${ON_PANEL} text-[var(--text)]`} show={here === 'here' ? show : ''} />
     </span>
   );
 }
@@ -144,7 +167,8 @@ function Wave({ item, played }: { item: LibraryItem; played: number }) {
   );
 }
 
-export function SoundRow({ item, name, group, picked, player, kept, addTip, onPick, onAdd, drag }: {
+export function SoundRow({ item, name, group, picked, player, kept, addTip, onPick, onAdd, drag, here, onFetch }: {
+  here?: HereState; onFetch?: () => void;
   item: LibraryItem; name: string; group: string; picked: boolean; player: Player; kept: boolean; addTip: string;
   onPick: () => void; onAdd: () => void; drag: React.HTMLAttributes<HTMLDivElement>;
 }) {
@@ -165,7 +189,7 @@ export function SoundRow({ item, name, group, picked, player, kept, addTip, onPi
           <span className={`truncate text-[12.5px] font-medium ${picked || mine ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>{name}</span>
           <span className="shrink-0 text-[11px] text-[var(--text-faint)]">{group}</span>
           <span className="ml-auto shrink-0 text-[11px] tabular-nums text-[var(--text-faint)]">{lengthOf(item.durationMs ?? 0, t)}</span>
-          <Buttons item={item} kept={kept} addTip={addTip} onAdd={onAdd} />
+          <Buttons item={item} kept={kept} addTip={addTip} onAdd={onAdd} {...(here ? { here } : {})} {...(onFetch ? { onFetch } : {})} />
         </span>
         <Wave item={item} played={mine && player.duration ? player.time / player.duration : 0} />
       </span>
@@ -173,7 +197,8 @@ export function SoundRow({ item, name, group, picked, player, kept, addTip, onPi
   );
 }
 
-export function MusicCard({ item, name, group, picked, player, kept, addTip, onPick, onAdd, drag }: {
+export function MusicCard({ item, name, group, picked, player, kept, addTip, onPick, onAdd, drag, here, onFetch }: {
+  here?: HereState; onFetch?: () => void;
   item: LibraryItem; name: string; group: string; picked: boolean; player: Player; kept: boolean; addTip: string;
   onPick: () => void; onAdd: () => void; drag: React.HTMLAttributes<HTMLDivElement>;
 }) {
@@ -192,7 +217,7 @@ export function MusicCard({ item, name, group, picked, player, kept, addTip, onP
       <span className="flex min-w-0 flex-1 flex-col">
         <span className={`line-clamp-2 text-[12.5px] font-medium leading-[17px] ${picked || mine ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>{name}</span>
         <span className="mt-0.5 truncate text-[11px] text-[var(--text-faint)]">{group} · {lengthOf(item.durationMs ?? 0, t)}</span>
-        <span className="mt-auto flex justify-end"><Buttons item={item} kept={kept} addTip={addTip} onAdd={onAdd} always /></span>
+        <span className="mt-auto flex justify-end"><Buttons item={item} kept={kept} addTip={addTip} onAdd={onAdd} always {...(here ? { here } : {})} {...(onFetch ? { onFetch } : {})} /></span>
       </span>
     </div>
   );

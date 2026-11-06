@@ -14,6 +14,10 @@
  *                    to what is under them: the stage's black where nothing is.
  *   Dip to white     the same, over a white page (`transitions/white.html`) cut in under the dip, on the track below.
  *   Fade in / out    one clip's fade.
+ *   A move           the overlap of a cross dissolve, with no fade on the pictures: the incoming clip comes in by a
+ *                    move of its own over d (a push, a wipe, an iris; its style's `motion-cut-in-<name>`, see
+ *                    lib/clip-presets withCutMove) while the outgoing one goes out by its pair; the editor writes
+ *                    those two with the plan (its `lapMs`). Their sounds cross-fade as a dissolve's do.
  * Dropped on a clip's edge with no clip against it, a cross dissolve or a dip is that clip's fade (a dip to white
  * with its white page under it).
  *
@@ -33,9 +37,9 @@ import {
   type Draft, type EditClip, type EditModel, type EditTrack, type TrackDest,
 } from './timeline-edit.ts';
 
-export type TransitionKind = 'dissolve' | 'crossfade' | 'dip-black' | 'dip-white' | 'fade-in' | 'fade-out';
+export type TransitionKind = 'dissolve' | 'crossfade' | 'dip-black' | 'dip-white' | 'fade-in' | 'fade-out' | 'move';
 /** The kinds that are found again on the timeline (a fade alone is a fade). */
-export type FoundKind = 'dissolve' | 'crossfade' | 'dip-black' | 'dip-white';
+export type FoundKind = 'dissolve' | 'crossfade' | 'dip-black' | 'dip-white' | 'move';
 
 /** The default length of a transition (ms). */
 export const TRANSITION_MS = 500;
@@ -48,6 +52,8 @@ export interface ClipFacts {
   fade: readonly [number, number];
   /** It is the white page under a dip to white. */
   white?: boolean;
+  /** The move it comes in by on a cut (its name, how long, ms): the incoming clip of a move. */
+  moveIn?: { slug: string; ms: number };
 }
 export type FactsOf = (id: string) => ClipFacts | undefined;
 
@@ -68,11 +74,15 @@ export interface FilmTransition {
   white?: string;
   /** Where the cut is: the outgoing clip's end. */
   cutMs: number;
+  /** A move's name (its library transition's, `motions/move-<it>`). */
+  move?: string;
+  /** What it is called, when not its kind's name (a move's). */
+  label?: string;
 }
 
 /** What the timeline asks of the editor: a transition put on a cut, made longer or shorter, or taken away. */
 export type TransitionAsk =
-  | { kind: 'add'; type: TransitionKind; cut: CutRef }
+  | { kind: 'add'; type: TransitionKind; cut: CutRef; move?: { in: CutPreset; out?: CutPreset } }
   | { kind: 'resize'; key: string; durationMs: number }
   | { kind: 'remove'; key: string };
 
@@ -91,7 +101,11 @@ export interface TransitionOpts {
   whiteSrc?: string;
 }
 
-export type TransitionPlan = { ops: Op[]; shortMs: number } | { error: 'locked' | 'none' | 'short' };
+/** A move's two halves as the library has them (its keyframes' name and body, how long, its easing). */
+export interface CutPreset { name: string; body: string; secs: number; ease: string }
+
+/** `lapMs`: how long an overlap's clips overlap now (a move's two halves are as long). */
+export type TransitionPlan = { ops: Op[]; shortMs: number; lapMs?: number } | { error: 'locked' | 'none' | 'short' };
 
 /* ── finding them again ── */
 
@@ -110,14 +124,16 @@ export function findTransitions(model: EditModel, facts: FactsOf): FilmTransitio
     if (!fa || fa.white || used.has(`a:${a.id}`)) continue;
     for (const { clip: b, track: tb } of clips) {
       const fb = facts(b.id);
-      if (!fb || b.id === a.id || fb.white || fb.picture !== fa.picture || !(fb.fade[0] > 0) || used.has(`b:${b.id}`)) continue;
+      if (!fb || b.id === a.id || fb.white || fb.picture !== fa.picture || (!(fb.fade[0] > 0) && !fb.moveIn) || used.has(`b:${b.id}`)) continue;
       /* an overlap the incoming clip fades in over: the outgoing one fades out with it, or (a picture under it) stays whole */
       const lap = a.endMs - b.startMs;
-      const overlap = lap > EPS && tb.index !== ta.index && Math.abs(fb.fade[0] - lap) <= EPS
-        && (Math.abs(fa.fade[1] - lap) <= EPS || (fa.picture && fa.fade[1] <= EPS && tb.index < ta.index));
+      /* or one it comes in over by a move of its own, above the outgoing one */
+      const moved = Boolean(fa.picture && fb.moveIn && lap > EPS && tb.index < ta.index && Math.abs(fb.moveIn.ms - lap) <= EPS);
+      const overlap = moved || (lap > EPS && tb.index !== ta.index && Math.abs(fb.fade[0] - lap) <= EPS
+        && (Math.abs(fa.fade[1] - lap) <= EPS || (fa.picture && fa.fade[1] <= EPS && tb.index < ta.index)));
       const touch = fa.fade[1] > 0 && Math.abs(b.startMs - a.endMs) <= EPS && tb.index === ta.index;
       if (!overlap && !touch) continue;
-      let kind: FoundKind = overlap ? (fa.picture ? 'dissolve' : 'crossfade') : 'dip-black';
+      let kind: FoundKind = moved ? 'move' : overlap ? (fa.picture ? 'dissolve' : 'crossfade') : 'dip-black';
       const startMs = overlap ? b.startMs : a.endMs - fa.fade[1];
       const endMs = overlap ? a.endMs : b.startMs + fb.fade[0];
       let white: string | undefined;
@@ -127,7 +143,7 @@ export function findTransitions(model: EditModel, facts: FactsOf): FilmTransitio
       }
       used.add(`a:${a.id}`);
       used.add(`b:${b.id}`);
-      out.push({ key: `${a.id}|${b.id}`, kind, a: a.id, b: b.id, startMs, endMs, on: overlap ? b.id : a.id, cutMs: a.endMs, ...(white ? { white } : {}) });
+      out.push({ key: `${a.id}|${b.id}`, kind, a: a.id, b: b.id, startMs, endMs, on: overlap ? b.id : a.id, cutMs: a.endMs, ...(white ? { white } : {}), ...(moved ? { move: fb.moveIn!.slug } : {}) });
       break;
     }
   }
@@ -137,15 +153,28 @@ export function findTransitions(model: EditModel, facts: FactsOf): FilmTransitio
   return out.filter((x) => facts(x.a)?.picture || !pictures.some((p) => linkOf.get(p.a) && linkOf.get(p.a) === linkOf.get(x.a) && linkOf.get(p.b) && linkOf.get(p.b) === linkOf.get(x.b)));
 }
 
-/** The cut on track `track` at `ms` (within `tolMs`): the clip ending there and the one starting there, either alone. */
+/**
+ * The clip on another track of the same kind (pictures, sounds) against a clip's edge: one ending where `c` starts
+ * (`edge` 'in'), or starting where it ends ('out'). After a transition moved a clip to the track above, its cut with
+ * the next one is across two tracks.
+ */
+function across(model: EditModel, track: EditTrack, c: EditClip, edge: 'in' | 'out'): EditClip | undefined {
+  const sound = track.role === 'audio';
+  return model.filter((t) => t.index !== track.index && !t.locked && (t.role === 'audio') === sound).flatMap((t) => t.clips)
+    .find((x) => (edge === 'in' ? Math.abs(x.endMs - c.startMs) : Math.abs(x.startMs - c.endMs)) <= TOUCH_MS);
+}
+
+/** The cut on track `track` at `ms` (within `tolMs`): the clip ending there and the one starting there (on this track,
+    else across tracks), either alone. */
 export function cutNear(model: EditModel, track: number, ms: number, tolMs: number): (CutRef & { atMs: number }) | null {
-  const clips = model.find((t) => t.index === track)?.clips ?? [];
+  const row = model.find((t) => t.index === track);
+  const clips = row?.clips ?? [];
   const ends = clips.filter((c) => Math.abs(c.endMs - ms) <= tolMs).sort((x, y) => Math.abs(x.endMs - ms) - Math.abs(y.endMs - ms));
   const starts = clips.filter((c) => Math.abs(c.startMs - ms) <= tolMs).sort((x, y) => Math.abs(x.startMs - ms) - Math.abs(y.startMs - ms));
   const a = ends[0], b = starts[0];
   if (a && b && Math.abs(a.endMs - b.startMs) <= TOUCH_MS) return { a: a.id, b: b.id, atMs: b.startMs };
-  if (a && (!b || Math.abs(a.endMs - ms) <= Math.abs(b.startMs - ms))) return { a: a.id, b: null, atMs: a.endMs };
-  if (b) return { a: null, b: b.id, atMs: b.startMs };
+  if (a && (!b || Math.abs(a.endMs - ms) <= Math.abs(b.startMs - ms))) return { a: a.id, b: (row && across(model, row, a, 'out')?.id) ?? null, atMs: a.endMs };
+  if (b) return { a: (row && across(model, row, b, 'in')?.id) ?? null, b: b.id, atMs: b.startMs };
   return null;
 }
 
@@ -163,8 +192,8 @@ export function cutForClick(model: EditModel, kind: TransitionKind, selected: re
   for (const t of tracks) {
     for (const c of t.clips) {
       if (pick.size && !pick.has(c.id)) continue;
-      const before = t.clips.find((x) => x.id !== c.id && Math.abs(x.endMs - c.startMs) <= TOUCH_MS);
-      const after = t.clips.find((x) => x.id !== c.id && Math.abs(x.startMs - c.endMs) <= TOUCH_MS);
+      const before = t.clips.find((x) => x.id !== c.id && Math.abs(x.endMs - c.startMs) <= TOUCH_MS) ?? across(model, t, c, 'in');
+      const after = t.clips.find((x) => x.id !== c.id && Math.abs(x.startMs - c.endMs) <= TOUCH_MS) ?? across(model, t, c, 'out');
       if (kind !== 'fade-out') edges.push({ a: before?.id ?? null, b: c.id, atMs: c.startMs, both: Boolean(before && pick.has(before.id)) });
       if (kind !== 'fade-in') edges.push({ a: c.id, b: after?.id ?? null, atMs: c.endMs, both: Boolean(after && pick.has(after.id)) });
     }
@@ -229,11 +258,14 @@ function atEdge(d: Draft, model: EditModel, id: string, edge: 'in' | 'out', opts
 const lockedIn = (d: Draft, ids: Iterable<string>) => [...ids].some((id) => findInDraft(d, id)?.track.locked);
 
 /** The plan's operations: the moves (planOf), then the fades, then what it adds. */
-function opsOf(d: Draft, fades: Fades, extra: Op[] = []): { ops: Op[]; shortMs: number } {
+function opsOf(d: Draft, fades: Fades, extra: Op[] = [], lapMs?: number): { ops: Op[]; shortMs: number; lapMs?: number } {
   const plan = planOf(d);
   const edits = [...fades].map(([clip, [fin, fout]]) => ({ clip, prop: 'fade', value: [secs(fin), secs(fout)] as PropValue }));
-  return { ops: [...plan.ops, ...(edits.length ? [{ op: 'props' as const, edits }] : []), ...extra], shortMs: plan.shortMs };
+  return { ops: [...plan.ops, ...(edits.length ? [{ op: 'props' as const, edits }] : []), ...extra], shortMs: plan.shortMs, ...(lapMs != null ? { lapMs } : {}) };
 }
+
+/** A move fades none of its pictures: only the sounds going with them cross-fade. */
+const fadesIn = (kind: TransitionKind | FoundKind, facts: FactsOf, id: string) => kind !== 'move' || !facts(id)?.picture;
 const secs = (ms: number) => Math.round(ms) / 1000;
 
 /** Synthetic tracks for clips going to a new one: their index is out of film.html's range (planOf writes the insert). */
@@ -251,12 +283,13 @@ function moveTo(clip: EditClip, from: EditTrack, to: EditTrack) {
 }
 
 /**
- * Where a clip moved to `[startMs, endMs)` goes: its own track when it has room there, else the track right beside
- * `against` (above for a picture, below for a sound) when that is free and of its kind, else a new one there.
+ * Where a clip moved to `[startMs, endMs)` goes: its own track when it has room there (for a picture, one above
+ * `against`'s, so it comes in over the outgoing one), else the track right beside `against` (above for a picture,
+ * below for a sound) when that is free and of its kind, else a new one there.
  */
 function landing(d: Draft, clip: EditClip, picture: boolean, against: number, skip: ReadonlySet<string>): void {
   const here = findInDraft(d, clip.id)!;
-  if (free(here.track, clip.startMs, clip.endMs, new Set([...skip, clip.id]))) return;
+  if ((!picture || here.track.index < against) && free(here.track, clip.startMs, clip.endMs, new Set([...skip, clip.id]))) return;
   const side = trackAt(d, picture ? against - 1 : against + 1);
   if (side && !side.locked && (picture ? side.role !== 'audio' : side.role === 'audio') && free(side, clip.startMs, clip.endMs, skip)) {
     moveTo(clip, here.track, side);
@@ -296,6 +329,8 @@ export function planTransition(model: EditModel, facts: FactsOf, kind: Transitio
     const span = edge === 'in' ? { startMs: one.clip.startMs, endMs: one.clip.startMs + len2 } : { startMs: one.clip.endMs - len2, endMs: one.clip.endMs };
     return opsOf(d, fades, [whiteInsert(d, opts.whiteSrc, span, findInDraft(d, one.clip.id)!.track.index)]);
   };
+  /* a move wants two pictures */
+  if (kind === 'move' && (!a || !b || !facts(a.clip.id)?.picture || !facts(b.clip.id)?.picture)) return { error: 'none' };
   if (kind === 'fade-in') return fadeEdge((b ?? a)!, 'in', ms);
   if (kind === 'fade-out') return fadeEdge((a ?? b)!, 'out', ms);
   if (!a) return fadeEdge(b!, 'in', ms);
@@ -322,7 +357,7 @@ export function planTransition(model: EditModel, facts: FactsOf, kind: Transitio
   const skip = new Set(moving.map((m) => m.clip.id));
   const cutMs = a.clip.endMs;
   /* each one's track before it moves: what follows the cut on it closes up after it */
-  const homes = new Set([a.track.index, ...moving.map((m) => m.track.index)]);
+  const homes = new Set([a.track.index, ...moving.map((m) => m.track.index), ...chainedTracks(model, facts, skip)]);
   const incoming = atEdge(d, model, b.clip.id, 'in', opts);
   /* the clip each is cut against (its track is where it overlaps from), then taken off while what follows closes up,
      then put down d earlier where there is room (see landing) */
@@ -336,9 +371,31 @@ export function planTransition(model: EditModel, facts: FactsOf, kind: Transitio
     m.track.clips.sort((x, y) => x.startMs - y.startMs);
     landing(d, m.clip, facts(m.clip.id)?.picture ?? true, against.get(m.clip.id)!, skip);
   }
-  for (const c of outgoing) setFade(fades, facts, c, 'out', holds(d, facts, c.id, b.clip.id) ? 0 : overlap);
-  for (const c of incoming) setFade(fades, facts, c, 'in', overlap);
-  return opsOf(d, fades);
+  for (const c of outgoing) if (fadesIn(kind, facts, c.id)) setFade(fades, facts, c, 'out', holds(d, facts, c.id, b.clip.id) ? 0 : overlap);
+  for (const c of incoming) if (fadesIn(kind, facts, c.id)) setFade(fades, facts, c, 'in', overlap);
+  return opsOf(d, fades, [], overlap);
+}
+
+/**
+ * The tracks of the clips that come in over `ids` by transitions of their own, and over those in turn (a chain of
+ * transitions, each incoming clip a track above the last): what follows a cut closes up or opens on them too, so the
+ * next transition keeps its overlap.
+ */
+function chainedTracks(model: EditModel, facts: FactsOf, ids: ReadonlySet<string>): number[] {
+  const all = findTransitions(model, facts);
+  const seen = new Set(ids);
+  const out = new Set<number>();
+  let frontier = [...ids];
+  while (frontier.length) {
+    const next = all.filter((tr) => frontier.includes(tr.a) && !seen.has(tr.b)).map((tr) => tr.b);
+    for (const id of next) {
+      seen.add(id);
+      const t = model.find((x) => x.clips.some((c) => c.id === id));
+      if (t) out.add(t.index);
+    }
+    frontier = next;
+  }
+  return [...out];
 }
 
 /** Where a clip's track is, top to bottom (a track this edit opens goes in just above the one at its place). */
@@ -378,7 +435,7 @@ export function planRemoveTransition(model: EditModel, facts: FactsOf, tr: FilmT
     const back = a.clip.endMs - b.clip.startMs;
     /* where each goes back to: against the clip it overlaps, on that one's track */
     const homes = moving.map((m) => ({ m, home: partnerTrack(d, facts, m.clip, m.clip.startMs + back, skip) }));
-    const reached = new Set([a.track.index, ...homes.flatMap((h) => (h.home != null ? [h.home] : []))]);
+    const reached = new Set([a.track.index, ...homes.flatMap((h) => (h.home != null ? [h.home] : [])), ...chainedTracks(model, facts, skip)]);
     if (opts.ripple) rippleThrough(d, a.clip.endMs, back, reached, skip);
     for (const { m, home } of homes) {
       m.clip.startMs += back;
@@ -392,8 +449,8 @@ export function planRemoveTransition(model: EditModel, facts: FactsOf, tr: FilmT
       }
     }
   }
-  for (const c of outgoing) setFade(fades, facts, c, 'out', 0);
-  for (const c of incoming) setFade(fades, facts, c, 'in', 0);
+  for (const c of outgoing) if (fadesIn(tr.kind, facts, c.id)) setFade(fades, facts, c, 'out', 0);
+  for (const c of incoming) if (fadesIn(tr.kind, facts, c.id)) setFade(fades, facts, c, 'in', 0);
   return opsOf(d, fades, extra);
 }
 
@@ -435,10 +492,10 @@ export function planResizeTransition(model: EditModel, facts: FactsOf, tr: FilmT
   const delta = want - now;
   if (Math.abs(delta) < 0.5) return { ops: [], shortMs: 0 };
   for (const m of moving) { m.clip.startMs -= delta; m.clip.endMs -= delta; }
-  if (opts.ripple) rippleThrough(d, a.clip.endMs, -delta, [a.track.index], skip);
-  for (const c of outgoing) setFade(fades, facts, c, 'out', holds(d, facts, c.id, tr.b) ? 0 : want);
-  for (const c of incoming) setFade(fades, facts, c, 'in', want);
-  return opsOf(d, fades);
+  if (opts.ripple) rippleThrough(d, a.clip.endMs, -delta, [a.track.index, ...chainedTracks(model, facts, skip)], skip);
+  for (const c of outgoing) if (fadesIn(tr.kind, facts, c.id)) setFade(fades, facts, c, 'out', holds(d, facts, c.id, tr.b) ? 0 : want);
+  for (const c of incoming) if (fadesIn(tr.kind, facts, c.id)) setFade(fades, facts, c, 'in', want);
+  return opsOf(d, fades, [], want);
 }
 
 /** The white page under a dip to white: white, the stage's size, still. */

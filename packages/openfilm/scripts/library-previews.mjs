@@ -5,8 +5,10 @@
  * over its scene (library/effects/samples/<name>.jpg), a transition on a cut from one picture to another, a pair of its
  * own from the effects' scenes and the filters' photos (library/filters/samples), its middle on the cut, and so each of
  * the timeline's fades and a cut's camera move; a template whole, its example pictures in its places; a sticker in the
- * middle of a plain ground. Never all of them over the same stills. And the picture the looks are shown on
- * (library/filters/sample.jpg), and each sound's waveform (library/sounds/waves/).
+ * middle of a plain ground. Never all of them over the same stills. A template's poster and preview are drawn larger
+ * (its card is wider), and it gets its example too: the whole of it at 1280×720 with its music, what a click on it plays
+ * in the viewer (library/examples/<its id>.mp4, a published part: studio/server/library.mjs). And the picture the looks
+ * are shown on (library/filters/sample.jpg), and each sound's waveform (library/sounds/waves/).
  *
  *   node scripts/library-previews.mjs [id …]
  */
@@ -26,6 +28,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const LIB = join(HERE, '..', 'library');
 const SAMPLES = join(HERE, 'library-samples');
 const W = 640, H = 360;
+/* a template's film, drawn for its example */
+const TW = 1280, TH = 720;
 
 /* every thing of the library: its index and its other catalogs, as Studio shows them */
 const index = /** @type {{ items: any[] }} */ (libraryIndex());
@@ -97,7 +101,7 @@ function fadeFilm(item) {
 }
 
 /** A template (a group): its clips laid out on the preview's picture, its example pictures in its places, all of its length. */
-function groupFilm(item, about) {
+function groupFilm(item, about, W = TW, H = TH) {
   const tracks = [];
   for (const { track, at, clip } of about.clips) {
     let c = { ...clip, at, src: `item/${clip.src}` };
@@ -119,13 +123,20 @@ function groupFilm(item, about) {
 }
 
 /**
- * A motion preset (library/catalogs/motions.json) on the stills: a camera move across a cut from one to the other, else
- * the way in, out or the loop of one still two seconds long.
+ * A motion preset (library/catalogs/motions.json, transitions-move.json) on the stills: a camera move across a cut from
+ * one to the other, two shots moving at once over it, else the way in, out or the loop of one still two seconds long.
  */
 function motionFilm(item) {
   const m = item.motion;
   const style = (slots) => slots.reduce((s, slot) => (m[slot] ? withPreset(s, slot, m[slot]) : s), 'object-fit: cover');
   const keyframes = Object.fromEntries(Object.values(m).map((p) => [p.name, p.body]));
+  /* two shots moving at once (a push, a wipe): the next one over the last, overlapping it by the move's length around 1 s */
+  if (item.lap) {
+    const d = m.in.secs;
+    const tracks = [{ clips: [{ id: 'b', src: 'b.jpg', at: 1 - d / 2, time: [0, 1 + d / 2], style: style(['in']) }] }, { clips: [{ id: 'a', src: 'a.jpg', time: [0, 1 + d / 2], style: style(['out']) }] }];
+    /* a little before the middle: a flip is edge on there */
+    return { html: filmHtml({ stage: { w: W, h: H }, tracks, keyframes }), posterAt: 1 - d * 0.15 };
+  }
   const clips = item.place === 'cut'
     ? [{ id: 'a', src: 'a.jpg', time: [0, 1], style: style(['out']) }, { id: 'b', src: 'b.jpg', at: 1, time: [0, 1], style: style(['in']) }]
     : [{ id: 'a', src: 'b.jpg', time: [0, 2], style: style(['in', 'out', 'loop']) }];
@@ -162,8 +173,15 @@ for (const item of index.items) {
       writeFileSync(join(work, 'film.html'), html);
       const out = join(work, 'out.mp4');
       await render([work, `0-${length}`], { out, fps: 30, quiet: true });
-      ffmpeg('-i', out, '-vf', 'scale=320:180', '-c:v', 'libx264', '-crf', '30', '-preset', 'slow', '-pix_fmt', 'yuv420p', '-an', '-movflags', '+faststart', join(dir, 'preview.mp4'));
-      ffmpeg('-ss', String(posterAt), '-i', out, '-frames:v', '1', '-vf', 'scale=320:180', '-q:v', '5', join(dir, 'poster.jpg'));
+      ffmpeg('-i', out, '-vf', 'scale=480:270', '-c:v', 'libx264', '-crf', '28', '-preset', 'slow', '-pix_fmt', 'yuv420p', '-an', '-movflags', '+faststart', join(dir, 'preview.mp4'));
+      ffmpeg('-ss', String(posterAt), '-i', out, '-frames:v', '1', '-vf', 'scale=480:270', '-q:v', '4', join(dir, 'poster.jpg'));
+      /* its example: all of it, with its music fading out at its end as it does put in */
+      const example = join(LIB, 'examples', `${item.id}.mp4`);
+      mkdirSync(dirname(example), { recursive: true });
+      const music = item.music ? join(LIB, item.music) : null;
+      const fadeAt = Math.max(0, length - 1.5).toFixed(2);
+      ffmpeg('-i', out, ...(music && existsSync(music) ? ['-i', music, '-map', '0:v', '-map', '1:a', '-af', `afade=t=out:st=${fadeAt}:d=1.5`, '-c:a', 'aac', '-b:a', '128k'] : ['-an']),
+        '-t', String(length), '-c:v', 'libx264', '-crf', '23', '-preset', 'slow', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', example);
       console.log(`→ library/${item.id}`);
     } finally {
       rmSync(work, { recursive: true, force: true });

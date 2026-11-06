@@ -24,7 +24,7 @@ import { SPEED_MAX } from '@/lib/playback-speed';
 import { replaceClip, type ReplaceFamily } from '@/lib/clip-replace';
 import { fillFor, filmLength, filmTemplate, isSlotSrc, markedClips, placeFrame, retimedTemplate, templateFolderOf, templateMark, templateMarks, templateOf, templateOfFolder, withPlaceFrame } from '@/lib/template-instance';
 import { keepTemplateFilm, TemplateFilmSection, TemplateSection, type TemplateHost } from '@/components/TemplateSection';
-import { presetsOn, takesMotion, type Preset, type PresetSlot } from '@/lib/clip-presets';
+import { cutMovesOn, presetsOn, takesMotion, withCutMove, type Preset, type PresetSlot } from '@/lib/clip-presets';
 import { ClipMotionSection, type ClipMotionHost } from '@/components/ClipMotionSection';
 import { TemplatePicker } from '@/components/TemplatePicker';
 import { isLibraryText, layoutTracks, type TimelineBlock, type TimelineTrack } from '@/lib/timeline-layout';
@@ -982,12 +982,21 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const facts = new Map<string, ClipFacts>();
     for (const tr of film.film?.tracks ?? []) {
       for (const c of tr.clips) {
-        facts.set(c.id, { picture: filmClipKind(c) !== 'audio', fade: fadeMsOf(c), ...(c.src === WHITE_SRC ? { white: true } : {}) });
+        const moveIn = cutMovesOn(c.style).in;
+        facts.set(c.id, {
+          picture: filmClipKind(c) !== 'audio', fade: fadeMsOf(c), ...(c.src === WHITE_SRC ? { white: true } : {}),
+          ...(moveIn ? { moveIn: { slug: moveIn.slug, ms: Math.round(moveIn.secs * 1000) } } : {}),
+        });
       }
     }
     return (id: string) => facts.get(id);
   }, [film.film]);
-  const filmTransitions = React.useMemo(() => findTransitions(editModelOf(timelineTracks, clipLinks), clipFacts), [timelineTracks, clipLinks, clipFacts]);
+  /* a move is called by its library transition's name */
+  const moveLanguage = useLanguage();
+  const filmTransitions = React.useMemo(() => findTransitions(editModelOf(timelineTracks, clipLinks), clipFacts).map((tr) => {
+    const item = tr.move ? builtInItem(`${BUILT_IN}/motions/move-${tr.move}`) : null;
+    return item ? { ...tr, label: nameOf(item.name, moveLanguage) } : tr;
+  }), [timelineTracks, clipLinks, clipFacts, moveLanguage]);
   const [pickedTransition, setPickedTransition] = React.useState<string | null>(null);
   const pickTransition = React.useCallback((key: string | null) => {
     setPickedTransition(key);
@@ -1010,7 +1019,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (ask.kind === 'add') {
       /* the default length, on the frame grid */
       const frame = frameMs(1);
-      plan = planTransition(model, clipFacts, ask.type, ask.cut, Math.round(TRANSITION_MS / frame) * frame, opts);
+      /* a move as long as the library has it */
+      const ms = ask.move ? ask.move.in.secs * 1000 : TRANSITION_MS;
+      plan = planTransition(model, clipFacts, ask.type, ask.cut, Math.round(ms / frame) * frame, opts);
       label = 'history.stepTransition';
     } else {
       const tr = filmTransitions.find((x) => x.key === ask.key);
@@ -1019,8 +1030,29 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       label = ask.kind === 'remove' ? 'history.stepTransitionRemove' : 'history.stepTransitionResize';
     }
     if ('error' in plan) return t(plan.error === 'locked' ? 'transitions.locked' : plan.error === 'short' ? 'transitions.short' : 'transitions.none');
-    return plan.ops.length ? edit(plan.ops, label) : null;
-  }, [editModel, clipFacts, filmTransitions, edit, t]);
+    /* a move's two halves (lib/clip-presets withCutMove), in the same write: put on, made as long as the overlap now,
+       or taken off */
+    const pair = ask.kind === 'add' ? (ask.move ? { a: ask.cut.a, b: ask.cut.b } : null) : (() => {
+      const tr = filmTransitions.find((x) => x.key === ask.key);
+      return tr?.kind === 'move' ? { a: tr.a, b: tr.b } : null;
+    })();
+    const moveOps: Op[] = [];
+    if (pair?.a && pair.b) {
+      const ca = filmClipOf(pair.a), cb = filmClipOf(pair.b);
+      const secs = (plan.lapMs ?? 0) / 1000;
+      const styled = ([[ca, 'out'], [cb, 'in']] as const).flatMap(([clip, edge]) => {
+        if (!clip) return [];
+        const had = cutMovesOn(clip.style)[edge];
+        const preset = ask.kind === 'add' ? ask.move?.[edge] : had;
+        const value = ask.kind === 'remove' || !preset || !(secs > 0) ? withCutMove(clip.style, edge, null) : withCutMove(clip.style, edge, { name: preset.name, secs, ease: preset.ease });
+        return value === (clip.style ?? '') ? [] : [{ clip: clip.id, prop: 'style', value: value || null }];
+      });
+      if (ask.kind === 'add' && ask.move) moveOps.push({ op: 'keyframes', set: Object.fromEntries(Object.values(ask.move).map((p) => [p.name, p.body])) } as Op);
+      if (styled.length) moveOps.push({ op: 'props', edits: styled } as Op);
+    }
+    const ops = [...plan.ops, ...moveOps];
+    return ops.length ? edit(ops, label) : null;
+  }, [editModel, clipFacts, filmTransitions, filmClipOf, edit, t]);
   /**
    * The inspector's edits (its refusals it says beside its field). A new speed goes to the clips linked to the clip
    * too. On the main track with the magnet (the timeline's switch) a speed or a length that makes the clip longer or
@@ -1753,12 +1785,22 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     };
     /* a motion preset (src/clip-motion.mjs withPreset): on the picked clips, in its slots; a camera move on the cut
        nearest, the clip before it going out and the one after it coming in. Its keyframes go in the film's style */
-    const motion = (item: LibraryItem) => {
+    const motion = (item: LibraryItem, on?: { a: string | null; b: string | null }) => {
       const presets = item.motion ?? {};
+      /* two shots moving at once: the next one overlapping the last, as a transition of the timeline's */
+      if (item.place === 'cut' && item.lap && presets.in) {
+        const cut = on ?? cutHere()?.cut ?? null;
+        if (!cut?.a || !cut.b) { toast.show(t('assetDrawer.noCut')); return; }
+        void askTransition({ kind: 'add', type: 'move', cut, move: { in: presets.in, ...(presets.out ? { out: presets.out } : {}) } }).then((err) => {
+          if (err) toast.show(err);
+          else toast.show(t('assetDrawer.added').replace('{name}', nameOf(item.name, language)));
+        });
+        return;
+      }
       const keyframes = Object.fromEntries(Object.values(presets).map((p) => [p!.name, p!.body]));
       const styled: { clip: string; prop: string; value: string | null }[] = [];
       if (item.place === 'cut') {
-        const cut = cutHere()?.cut ?? null;
+        const cut = on ?? cutHere()?.cut ?? null;
         if (!cut) { toast.show(t('assetDrawer.noCut')); return; }
         for (const [id, slot] of [[cut.a, 'out'], [cut.b, 'in']] as const) {
           const clip = id ? filmClipOf(id) : null;
@@ -1899,7 +1941,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       const item = builtInItem(file.saved);
       if (!item) return null;
       setLibraryTrial(null);
-      if ('cut' in at) { fade(item, at.cut); return null; }
+      if ('cut' in at) { if (item.kind === 'motion') motion(item, at.cut); else fade(item, at.cut); return null; }
       const block = blocksRef.current.find((b) => b.id === at.blockId);
       const clip = block?.clipId ? filmClipOf(block.clipId) : null;
       look(item, block?.loc && clip ? [{ loc: block.loc, style: clip.style }] : []);
@@ -4810,7 +4852,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         <div className="fixed z-30 flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--dock-line)] pt-px"
           style={{ top: HOST_PANEL_TOP, left: 0, bottom: 0, width: HOST_PANEL_WIDTH }}>
           <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--bg-panel)]">
-          <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} actions={library.actions} under={hostAssets.bottom}
+          <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} actions={library.actions} tried={libraryTrial?.id ?? null} under={hostAssets.bottom}
             captions={{
               heard: heardClips, making: captionsMaking || subs.transcribing, problem: subtitleProblem,
               picked: captionPicked, pick: pickCaptionClip, choosing: setCaptionChoosing,

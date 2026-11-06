@@ -16,12 +16,12 @@ import { ChevronDown, ChevronsLeft, ChevronsRight, Plus, Search, Star, X } from 
 import { useLanguage, useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import {
-  BUILT_IN, TEXT_COMPONENT, builtInItem, libraryDragItem, libraryUrl, nameOf, pageUrl, posterUrl, previewUrl, toggleFavorite, useLibraryFavorites, useLibraryIndex,
-  type LibraryCategory, type LibraryItem,
+  BUILT_IN, TEXT_COMPONENT, askHere, builtInItem, fetchLibraryItem, libraryDragItem, libraryUrl, mayNeedFetch, nameOf, pageUrl, posterUrl, previewUrl, toggleFavorite,
+  useLibraryFavorites, useLibraryHere, useLibraryIndex, type HereState, type LibraryCategory, type LibraryItem,
 } from '@/lib/library';
 import { clearResourceDrag, dragPicture, setResourceDragData } from '@/lib/resource-drag';
 import { useLibraryVoices, type LibraryVoice, type VoiceAccess } from '@/lib/library-voices';
-import { ADD_HOVER, FOOT_ROOM, MiniPlayer, MusicCard, ROUND, SoundRow, libraryArt, usePlayer } from './AudioList';
+import { ADD_HOVER, FOOT_ROOM, HereButton, MiniPlayer, MusicCard, ROUND, SoundRow, libraryArt, usePlayer } from './AudioList';
 import { CaptionsPane, type CaptionsActions } from './CaptionsPane';
 import { CategoryIcon, Empty } from './icons';
 import { FEATURED, STARRED, VoicesPane } from './VoicesPane';
@@ -92,12 +92,14 @@ export interface LibraryActions {
 /** The skills shown from outside the drawer (the app's chat): Discover, or one skill's page; `n` tells one request from the next. */
 export type SkillsRequest = { name?: string; n: number };
 
-export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captions, speak, onServices, projectId = null, showSkills, under = 0 }: {
+export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, tried, captions, speak, onServices, projectId = null, showSkills, under = 0 }: {
   media: React.ReactNode;
   /** the project's own media, or Saved */
   mediaScope: 'project' | 'saved';
   onMediaScope: (next: 'project' | 'saved') => void;
   actions: LibraryActions;
+  /** what is tried in the viewer now: let go there (Esc, its close), it is picked no longer */
+  tried?: string | null;
   /** where a caption track comes from: what is said, a file, or new */
   captions: CaptionsActions;
   /** words spoken in a voice of the library, put on the film at the playhead (VoicesPane): null, or why not */
@@ -140,6 +142,12 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
     setPicked(item?.id ?? null);
     if (item?.kind !== 'sound') tryOut.current(item);
   };
+  const triedBefore = React.useRef(tried);
+  React.useEffect(() => {
+    const was = triedBefore.current;
+    triedBefore.current = tried;
+    if (was && tried === null) setPicked((p) => (p === was ? null : p));
+  }, [tried]);
   /* another category: what played in the last one stops and its player goes */
   const closePlayer = React.useRef<() => void>(() => {});
   const show = (next: Category) => { SHOWN.cat = next; setCat(next); setGroup(firstLine(next)); setQuery(''); setSource(''); setSkillOpen(null); pick(null); closePlayer.current(); };
@@ -222,6 +230,14 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
   const sources = sourcesIn(shown.map(sourceOf));
   const items = source && sources.includes(source) ? shown.filter((item) => sourceOf(item) === source) : shown;
   const pickedItem = picked ? index?.items.find((i) => i.id === picked) ?? null : null;
+  /* what of it still needs fetching (a sound, a piece of music, a template's music): its download shown first, then "+" */
+  const hereOf = useLibraryHere();
+  /* put in: fetched first when it is not here (a double click on one still to fetch fetches it, then puts it in) */
+  const addWhenHere = (it: LibraryItem) => {
+    const state = hereOf(it.id);
+    if (state === 'here') { actions.add(it); return; }
+    if (state !== 'fetching') void fetchLibraryItem(it.id).then((ok) => { if (ok) actions.add(it); });
+  };
 
   const onKey = (e: React.KeyboardEvent) => {
     if ((e.target as HTMLElement).tagName === 'INPUT' || !pickedItem) return;
@@ -285,6 +301,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
   /* a long list (thousands of sounds) is drawn a page at a time, from its top again when what it lists changes */
   const [drawn, setDrawn] = React.useState(PAGE);
   React.useEffect(() => setDrawn(PAGE), [cat, group, query, source]);
+  React.useEffect(() => { askHere(items.slice(0, drawn).filter(mayNeedFetch).map((i) => i.id)); }, [items, drawn]);
 
   /* the bars and the library's things are the app's panel's (data-studio-host-panel): a press there keeps what is
      picked on the timeline and the picture, which a look or a transition goes on */
@@ -446,22 +463,27 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
                   <div className="flex flex-col gap-0.5">
                     {items.slice(0, drawn).map((it) => (
                       <SoundRow key={it.id} item={it} name={nameOf(it.name, lang)} group={groupName(it.group)} picked={picked === it.id} player={player}
-                        kept={favorites.includes(it.id)} addTip={addTip(it, t)} onPick={() => pick(it)} onAdd={() => actions.add(it)} drag={dragProps(it)} />
+                        kept={favorites.includes(it.id)} addTip={addTip(it, t)} onPick={() => pick(it)} onAdd={() => addWhenHere(it)} drag={dragProps(it)}
+                        here={hereOf(it.id)} onFetch={() => void fetchLibraryItem(it.id)} />
                     ))}
                   </div>
                 ) : cat === 'music' ? (
                   <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2">
                     {items.slice(0, drawn).map((it) => (
                       <MusicCard key={it.id} item={it} name={nameOf(it.name, lang)} group={groupName(it.group)} picked={picked === it.id} player={player}
-                        kept={favorites.includes(it.id)} addTip={addTip(it, t)} onPick={() => pick(it)} onAdd={() => actions.add(it)} drag={dragProps(it)} />
+                        kept={favorites.includes(it.id)} addTip={addTip(it, t)} onPick={() => pick(it)} onAdd={() => addWhenHere(it)} drag={dragProps(it)}
+                        here={hereOf(it.id)} onFetch={() => void fetchLibraryItem(it.id)} />
                     ))}
                   </div>
                 ) : (
-                  <div className={`grid gap-x-2.5 gap-y-3 ${cat === 'sticker' ? 'grid-cols-[repeat(auto-fill,minmax(68px,1fr))]' : textSquare || ON_FILM.has(cat) ? 'grid-cols-[repeat(auto-fill,minmax(84px,1fr))]' : cat === 'text' ? 'grid-cols-[repeat(auto-fill,minmax(120px,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(96px,1fr))]'}`}>
+                  <div className={`grid gap-x-2.5 gap-y-3 ${cat === 'sticker' ? 'grid-cols-[repeat(auto-fill,minmax(68px,1fr))]' : cat === 'template' ? 'grid-cols-[repeat(auto-fill,minmax(150px,1fr))]' : textSquare || ON_FILM.has(cat) ? 'grid-cols-[repeat(auto-fill,minmax(84px,1fr))]' : cat === 'text' ? 'grid-cols-[repeat(auto-fill,minmax(120px,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(96px,1fr))]'}`}>
                     {/* a page at a time as it is scrolled, as the sounds are (the emoji alone are some 1,600) */}
                     {items.slice(0, drawn).map((it) => (
-                      <Card key={it.id} item={it} lang={lang} picked={picked === it.id} kept={favorites.includes(it.id)} square={cat === 'sticker' || textSquare || ON_FILM.has(cat)}
-                        onPick={() => pick(picked === it.id ? null : it)} onAdd={() => actions.add(it)} />
+                      <Card key={it.id} item={it} lang={lang} picked={picked === it.id} kept={favorites.includes(it.id)}
+                        /* a template as wide as its film (16:9, two a row: its places, length and buttons side by side) */
+                        square={cat === 'sticker' || textSquare || (ON_FILM.has(cat) && cat !== 'template')}
+                        here={hereOf(it.id)} onFetch={() => void fetchLibraryItem(it.id)}
+                        onPick={() => pick(picked === it.id ? null : it)} onAdd={() => addWhenHere(it)} />
                     ))}
                   </div>
                 )}
@@ -626,6 +648,7 @@ function StarButton({ item, kept, className }: { item: LibraryItem; kept: boolea
   );
 }
 
+
 function AddButton({ item, onAdd, className }: { item: LibraryItem; onAdd: () => void; className: string }) {
   const t = useT();
   return (
@@ -679,9 +702,11 @@ function useSideways() {
    own picture where they can be */
 const ON_FILM = new Set<Category>(['filter', 'effect', 'transition', 'template']);
 
-function Card({ item, lang, picked, kept, square, onPick, onAdd }: {
-  item: LibraryItem; lang: ReturnType<typeof useLanguage>; picked: boolean; kept: boolean; square: boolean; onPick: () => void; onAdd: () => void;
+function Card({ item, lang, picked, kept, square, here, onFetch, onPick, onAdd }: {
+  item: LibraryItem; lang: ReturnType<typeof useLanguage>; picked: boolean; kept: boolean; square: boolean; here: HereState; onFetch: () => void;
+  onPick: () => void; onAdd: () => void;
 }) {
+  const t = useT();
   const [hover, setHover] = React.useState(false);
   /* every card its own example: a filter on its own photo, an effect, a transition and a template on their own
      pictures, played under the pointer (library-previews.mjs). Tried in the viewer, or put in, they act on the film */
@@ -721,7 +746,8 @@ function Card({ item, lang, picked, kept, square, onPick, onAdd }: {
         {/* the star and the "+" side by side, of one size, dark glass over the picture */}
         <span className="absolute bottom-1 right-1 flex items-center gap-1">
           <StarButton item={item} kept={kept} className={`${ROUND} bg-black/55 ${kept ? 'grid text-[#ffd35a]' : 'hidden text-white group-hover:grid'}`} />
-          <AddButton item={item} onAdd={onAdd} className={`${ROUND} ${ADD_HOVER} hidden bg-black/55 text-white group-hover:grid`} />
+          {/* to be fetched first: its download, always shown; here: "+" under the pointer */}
+          <HereButton here={here} addTip={addTip(item, t)} onAdd={onAdd} onFetch={onFetch} className={`${ROUND} bg-black/55 text-white`} show={here === 'here' ? 'hidden group-hover:grid' : 'grid'} />
         </span>
         {item.kind === 'group' ? <TemplateBadge item={item} /> : null}
         <SourceBadge source={sourceOf(item)} />

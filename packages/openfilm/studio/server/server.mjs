@@ -53,7 +53,7 @@ import { installedFonts } from './fonts.mjs';
 import { addTextFont, isFontFile, projectFonts, resolveIn } from './project-fonts.mjs';
 import { FILM_PAGE, PageFrameError, closePageFrames, filmPoster, pageFacts, pageFrame, warmFilmPoster } from './pageframes.mjs';
 import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCover, setCoverFromFile } from './cover.mjs';
-import { BUILT_IN, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, setLibraryFavorites } from './library.mjs';
+import { BUILT_IN, fetchItem, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, notHere, setLibraryFavorites } from './library.mjs';
 import { SavedError, TEXT_COMPONENT, TEXT_OWN_FONTS, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
 import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listenLocal } from '../../src/host.mjs';
@@ -425,6 +425,10 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       if (parts.length === 1 && req.method === 'GET') return json(res, 200, libraryIndex());
       if (parts[1] === 'voices' && parts.length === 2 && req.method === 'GET') return json(res, 200, libraryVoices());
       if (parts[1] === 'file' && parts.length === 2 && req.method === 'GET') return sendMedia(req, res, await libraryFileFetched(url.searchParams.get('path')), { check: true });
+      /* which of these things still need fetching before they go in (a sound, an emoji, a template's music): { ids } */
+      if (parts[1] === 'missing' && parts.length === 2 && req.method === 'POST') return json(res, 200, { ids: notHere((/** @type {{ ids?: unknown }} */ (await readJson(req) ?? {})).ids) });
+      /* one of them fetched now: { ok } */
+      if (parts[1] === 'fetch' && parts.length === 2 && req.method === 'POST') return json(res, 200, { ok: await fetchItem((/** @type {{ id?: unknown }} */ (await readJson(req) ?? {})).id) });
       /* a page of it, as a page: what a click tries over the viewer's picture */
       if (parts[1] === 'pages' && parts.length > 2 && req.method === 'GET') {
         /* a page of it, as a page, and what it loads beside it by its own place (its fonts, its pictures): what a click

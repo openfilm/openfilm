@@ -5,7 +5,7 @@
  *
  * Pure: no React, no DOM, so `node --test` runs it.
  */
-import { animationsOf } from '../../../../src/clip-motion.mjs';
+import { animationsOf, withAnimations } from '../../../../src/clip-motion.mjs';
 
 export type PresetSlot = 'in' | 'out' | 'loop';
 export const PRESET_SLOTS: readonly PresetSlot[] = ['in', 'out', 'loop'];
@@ -88,4 +88,41 @@ export function cutCardKeyframes(out: Preset, into: Preset, blur: number): strin
   if (!ins.length || ins[0]![0] !== 0) frames.push(`${pct(split)} { animation-timing-function: ${into.ease} }`);
   for (const [at, decl] of ins) frames.push(`${pct(split + (at * (100 - split)) / 100)} { ${decl}${at === 100 ? '' : `; animation-timing-function: ${into.ease}`} }`);
   return frames.join(' ');
+}
+
+/**
+ * A transition of two shots moving at once (a library transition with `lap`, library/catalogs/transitions-move.json):
+ * on a cut whose incoming clip overlaps the outgoing one, the incoming clip's way in (`motion-cut-in-<name>`, from its
+ * start, filling backwards) and the outgoing one's way out (`motion-cut-out-<name>`, to its end, filling forwards),
+ * each as long as the overlap. Apart from the clip's own in and out (presetsOn), which they leave as they are.
+ */
+export type CutEdge = 'in' | 'out';
+export interface CutMove { name: string; secs: number; ease: string }
+
+const CUT_ENTRY = /^(motion-cut-(in|out)-(\S+))\s+(\d*\.?\d+)(m?s)\s+(.*?)\s+(?:calc\(.*\)\s+forwards|backwards)$/;
+
+/** The cut moves a clip's style has: each edge's keyframes' name, the transition's own name, its length and easing. */
+export function cutMovesOn(style: string | undefined): Partial<Record<CutEdge, CutMove & { slug: string }>> {
+  const out: Partial<Record<CutEdge, CutMove & { slug: string }>> = {};
+  for (const entry of animationsOf(style)) {
+    const m = CUT_ENTRY.exec(entry.trim());
+    if (!m) continue;
+    const edge = m[2] as CutEdge;
+    if (!out[edge]) out[edge] = { name: m[1]!, slug: m[3]!, secs: Number(m[4]) / (m[5] === 'ms' ? 1000 : 1), ease: m[6]! };
+  }
+  return out;
+}
+
+const r3 = (n: number) => Math.round(n * 1000) / 1000;
+
+/** A style with a cut move at its edge, the one there before taken off (null: just taken off). */
+export function withCutMove(style: string | undefined, edge: CutEdge, move: CutMove | null): string {
+  const kept = animationsOf(style).filter((e) => !e.trim().startsWith(`motion-cut-${edge}-`));
+  if (!move) return withAnimations(style, kept);
+  const s = `${r3(move.secs)}s`;
+  const entry = edge === 'in' ? `${move.name} ${s} ${move.ease} backwards` : `${move.name} ${s} ${move.ease} calc(var(--clip-length) - ${s}) forwards`;
+  /* before the clip's own keyframes, so a property it keys itself is the one that shows */
+  const own = kept.findIndex((e) => /--(translate|scale|rotate|opacity)$/.test(e.split(/\s+/)[0]!));
+  kept.splice(own < 0 ? kept.length : own, 0, entry);
+  return withAnimations(style, kept);
 }

@@ -101,6 +101,72 @@ test('cross dissolve: the incoming clip goes above, d earlier, and fades in over
   assert.deepEqual(fades(back), {});
 });
 
+test('a move: the incoming clip overlaps above with no fade on the pictures, their sounds cross-fade; found again by its way in, resized, removed', () => {
+  const value = film(
+    [['a', 0, 4, { link: 'la' }], ['b', 4, 8, { link: 'lb' }], ['c', 8, 10]],
+    [['as', 0, 4, { sound: true, link: 'la' }], ['bs', 4, 8, { sound: true, link: 'lb' }]],
+  );
+  const { model, facts } = read(value);
+  const plan = planTransition(model, facts, 'move', { a: 'a', b: 'b' }, 600, opts());
+  assert.equal('lapMs' in plan ? plan.lapMs : null, 600, 'the overlap its two halves are as long as');
+  const next = apply(value, plan);
+  assert.deepEqual(layout(next), [[['b', 3.4, 7.4]], [['a', 0, 4], ['c', 7.4, 9.4]], [['as', 0, 4]], [['bs', 3.4, 7.4]]]);
+  assert.deepEqual(fades(next), { as: [0, 0.6], bs: [0.6, 0] });
+  /* found by the move the incoming clip comes in by (its style's, lib/clip-presets withCutMove), its sounds' part of it */
+  const moving = (f: FactsOf, ms: number): FactsOf => (id) => (id === 'b' ? { ...f(id)!, moveIn: { slug: 'push-left', ms } } : f(id));
+  const found = read(next);
+  const all = findTransitions(found.model, moving(found.facts, 600));
+  assert.deepEqual(all.map((x) => [x.kind, x.a, x.b, x.startMs, x.endMs, x.on, x.move]), [['move', 'a', 'b', 3400, 4000, 'b', 'push-left']]);
+  /* its way in another length than the overlap: not this move */
+  assert.deepEqual(findTransitions(found.model, moving(found.facts, 300)).map((x) => x.kind), ['crossfade']);
+  /* longer: the incoming clips go 400 ms further, the sounds' fades with them */
+  const resized = planResizeTransition(found.model, moving(found.facts, 600), all[0]!, 1000, opts());
+  assert.equal('lapMs' in resized ? resized.lapMs : null, 1000);
+  const longer = apply(next, resized);
+  assert.deepEqual(layout(longer), [[['b', 3, 7]], [['a', 0, 4], ['c', 7, 9]], [['as', 0, 4]], [['bs', 3, 7]]]);
+  assert.deepEqual(fades(longer), { as: [0, 1], bs: [1, 0] });
+  /* removed: as it was cut */
+  const again = read(longer);
+  const tr = findTransitions(again.model, moving(again.facts, 1000))[0]!;
+  const back = apply(longer, planRemoveTransition(again.model, moving(again.facts, 1000), tr, opts()));
+  assert.deepEqual(layout(back), layout(value));
+  assert.deepEqual(fades(back), {});
+  /* a move wants two pictures on a cut */
+  assert.deepEqual(planTransition(model, facts, 'move', { a: 'c', b: null }, 600, opts()), { error: 'none' });
+  assert.deepEqual(planTransition(model, facts, 'move', { a: 'as', b: 'bs' }, 600, opts()), { error: 'none' });
+});
+
+test('a transition after another: the next cut is across two tracks, found there, and its incoming clip goes above', () => {
+  const value = film([['a', 0, 4], ['b', 4, 8], ['c', 8, 12]]);
+  const first = read(value);
+  const once = apply(value, planTransition(first.model, first.facts, 'move', { a: 'a', b: 'b' }, 600, opts()));
+  assert.deepEqual(layout(once), [[['b', 3.4, 7.4]], [['a', 0, 4], ['c', 7.4, 11.4]]]);
+  const { model, facts } = read(once);
+  /* b ends where c starts, a track above it: dropped on c's start, or on b's end, the cut is b's and c's */
+  const c = model[1]!.clips.find((x) => x.id === 'c')!;
+  assert.deepEqual(cutNear(model, 1, c.startMs + 5, 50), { a: 'b', b: 'c', atMs: 7400 });
+  assert.deepEqual(cutNear(model, 0, 7400 - 5, 50), { a: 'b', b: 'c', atMs: 7400 });
+  /* clicked with the playhead near it */
+  assert.deepEqual(cutForClick(model, 'move', [], 7300, null), { a: 'b', b: 'c' });
+  /* c comes in over b: on a new track above it, though its own (below b) had room */
+  const twice = apply(once, planTransition(model, facts, 'move', { a: 'b', b: 'c' }, 600, opts()));
+  assert.deepEqual(layout(twice), [[['c', 6.8, 10.8]], [['b', 3.4, 7.4]], [['a', 0, 4]]]);
+  const moving: FactsOf = (id) => (id === 'b' || id === 'c' ? { ...read(twice).facts(id)!, moveIn: { slug: 'push-left', ms: 600 } } : read(twice).facts(id));
+  assert.deepEqual(findTransitions(read(twice).model, moving).map((x) => [x.kind, x.a, x.b]).sort(), [['move', 'a', 'b'], ['move', 'b', 'c']]);
+  /* the first one made longer, then taken away: c goes with b each time, the second one stays as it was */
+  const chain = read(twice);
+  const firstOf = (m: EditModel) => findTransitions(m, moving).find((x) => x.a === 'a')!;
+  const longer = apply(twice, planResizeTransition(chain.model, moving, firstOf(chain.model), 1000, opts()));
+  assert.deepEqual(layout(longer), [[['c', 6.4, 10.4]], [['b', 3, 7]], [['a', 0, 4]]]);
+  const after = read(longer);
+  const movingAfter: FactsOf = (id) => (id === 'b' || id === 'c' ? { ...after.facts(id)!, moveIn: { slug: 'push-left', ms: id === 'b' ? 1000 : 600 } } : after.facts(id));
+  const gone = apply(longer, planRemoveTransition(after.model, movingAfter, findTransitions(after.model, movingAfter).find((x) => x.a === 'a')!, opts()));
+  assert.deepEqual(layout(gone), [[['c', 7.4, 11.4]], [['a', 0, 4], ['b', 4, 8]]]);
+  const left = read(gone);
+  const movingLeft: FactsOf = (id) => (id === 'c' ? { ...left.facts(id)!, moveIn: { slug: 'push-left', ms: 600 } } : left.facts(id));
+  assert.deepEqual(findTransitions(left.model, movingLeft).map((x) => [x.kind, x.a, x.b, x.startMs, x.endMs]), [['move', 'b', 'c', 7400, 8000]]);
+});
+
 test('cross dissolve without a ripple leaves what follows where it is; with one the cut\'s track closes up', () => {
   const value = film([['a', 0, 4], ['b', 4, 8], ['c', 8, 10]], [['m', 0, 3], ['n', 9, 10]]);
   const { model, facts } = read(value);

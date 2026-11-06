@@ -58,3 +58,19 @@ test('nothing is fetched for what is not published, missing, or outside the libr
   assert.equal(await fetchLibrary('audio/../../outside.mp3'), null);
   assert.equal(await fetchLibrary(''), null);
 });
+
+test('which things still need fetching before they go in (a sound, a template\'s music), and fetching one', async () => {
+  const { notHere, fetchItem } = await import('./library.mjs');
+  writeFileSync(join(/** @type {string} */ (process.env.OPENFILM_BUILT_IN_LIBRARY), 'index.json'), JSON.stringify({ version: 1, groups: {}, items: [
+    { id: 'templates/trip', cat: 'template', kind: 'group', music: 'audio/music/tune-9f9f9f.mp3' },
+    { id: 'effects/snow', cat: 'effect', kind: 'page' },
+    { id: 'audio/music/calm-piano-1a2b3c.mp3', cat: 'music', kind: 'sound' },
+  ] }));
+  put('audio/music/tune-9f9f9f.mp3', 'tune bytes');
+  /* the piano was fetched above; the snow comes with the package; nothing is no thing */
+  assert.deepEqual(notHere(['templates/trip', 'effects/snow', 'audio/music/calm-piano-1a2b3c.mp3', 'nothing']), ['templates/trip']);
+  assert.equal(await fetchItem('templates/trip'), true);
+  assert.deepEqual(notHere(['templates/trip']), [], 'here now');
+  assert.equal(await fetchItem('nothing'), false);
+  assert.deepEqual(notHere('not a list'), []);
+});

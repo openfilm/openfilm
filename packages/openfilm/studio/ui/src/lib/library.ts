@@ -57,6 +57,9 @@ export interface LibraryItem {
   /** A motion preset (src/clip-motion.mjs withPreset): how a clip comes in, goes out, moves while shown; on a cut, the
    *  clip before it goes out and the one after comes in. */
   motion?: Partial<Record<'in' | 'out' | 'loop', { name: string; body: string; secs: number; ease: string }>>;
+  /** A transition of two shots moving at once (a push, a wipe): the incoming clip overlaps the outgoing one by its
+      length, coming in by `motion.in` while that one goes out by `motion.out` (lib/clip-presets withCutMove). */
+  lap?: boolean;
   /** A fade: which of the timeline's transitions. */
   fade?: Extract<TransitionKind, 'dissolve' | 'dip-black' | 'dip-white'>;
 }
@@ -159,6 +162,8 @@ export const waveUrl = (item: LibraryItem): string => libraryUrl(item.id.replace
 export function libraryDragItem(item: LibraryItem, name: string): ResourceDragItem | null {
   const saved = `${BUILT_IN}/${item.id}`;
   if (item.kind === 'look' || item.kind === 'fade') return { path: saved, name, kind: 'other', saved, apply: item.kind };
+  /* a transition that moves the two shots: onto a cut, as a fade goes */
+  if (item.kind === 'motion' && item.place === 'cut') return { path: saved, name, kind: 'other', saved, apply: 'fade' };
   if (item.kind === 'sound') return { path: saved, name, kind: 'audio', ...(item.durationMs ? { durationMs: item.durationMs } : {}), saved };
   if (item.kind === 'group') return { path: saved, name, kind: 'mg', ...(item.durationMs ? { durationMs: item.durationMs } : {}), saved };
   /* a text style: a new line of words in it (the drop takes the text component with its variables) */
@@ -273,6 +278,69 @@ export function useLibraryFavorites(): readonly string[] {
     });
   }, []);
   return seen ?? [];
+}
+
+/* ── what of the library is here: a sound, a piece of music, a template's music are fetched before they go in ── */
+
+/** Whether a thing may need fetching before it goes in (a published part of the library, or a template's music). */
+export const mayNeedFetch = (item: Pick<LibraryItem, 'id' | 'music'>): boolean => item.id.startsWith('audio/') || Boolean(item.music);
+const asked = new Set<string>();
+/** asked, not answered yet: shown as to be fetched, never as one to put in that is not here */
+const asking = new Set<string>();
+const missing = new Set<string>();
+const fetching = new Set<string>();
+const failed = new Set<string>();
+let hereTick = 0;
+const hereSeen = new Set<() => void>();
+const tellHere = () => { hereTick += 1; for (const fn of hereSeen) fn(); };
+
+/** Ask, once each, which of these things need fetching before they go in (the server says). */
+export function askHere(ids: readonly string[]): void {
+  const fresh = ids.filter((id) => !asked.has(id));
+  if (!fresh.length) return;
+  for (const id of fresh) { asked.add(id); asking.add(id); }
+  void fetch('/api/library/missing', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids: fresh }) })
+    .then((r) => (r.ok ? r.json() : null), () => null)
+    .then((body: { ids?: string[] } | null) => {
+      for (const id of fresh) asking.delete(id);
+      if (!body) { for (const id of fresh) asked.delete(id); tellHere(); return; }
+      for (const id of body.ids ?? []) missing.add(id);
+      tellHere();
+    });
+}
+
+/** Fetch what a thing needs (its sound, a template's music); whether it is here now. */
+export async function fetchLibraryItem(id: string): Promise<boolean> {
+  fetching.add(id);
+  failed.delete(id);
+  tellHere();
+  try {
+    const r = await fetch('/api/library/fetch', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id }) });
+    const ok = r.ok && Boolean(((await r.json()) as { ok?: boolean }).ok);
+    if (ok) missing.delete(id); else failed.add(id);
+    return ok;
+  } catch {
+    failed.add(id);
+    return false;
+  } finally {
+    fetching.delete(id);
+    tellHere();
+  }
+}
+
+/** A thing heard in full (a sound played): here now. */
+export function heardHere(id: string): void {
+  const was = missing.delete(id);
+  if (failed.delete(id) || was) tellHere();
+}
+
+/** Where a thing is: here, to be fetched, being fetched, or its fetch failed. */
+export type HereState = 'here' | 'missing' | 'fetching' | 'failed';
+
+/** What of the library is here, kept current as things are fetched. */
+export function useLibraryHere(): (id: string) => HereState {
+  React.useSyncExternalStore((fn) => { hereSeen.add(fn); return () => { hereSeen.delete(fn); }; }, () => hereTick, () => hereTick);
+  return (id) => (fetching.has(id) ? 'fetching' : failed.has(id) ? 'failed' : missing.has(id) || asking.has(id) ? 'missing' : 'here');
 }
 
 /** Star a thing, or take its star away: shown at once, then kept. */

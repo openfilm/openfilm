@@ -3,7 +3,8 @@
 /**
  * The library's published parts, ready to upload: its sounds and music (`library/audio/`), its voices' samples
  * (`library/voices/`), its emoji stickers (`library/stickers/emoji/`), the model semantic search runs and its runtime
- * (`library/models/`, listed with their checksums in library/models.json), none of them in git or the npm package. OpenFilm
+ * (`library/models/`, listed with their checksums in library/models.json), each template's example with its music
+ * (`library/examples/`), none of them in git or the npm package. OpenFilm
  * fetches each on first use from openfilm.dev/library/<its place> (studio/server/library.mjs fetchLibrary).
  *
  *   node scripts/library-publish.mjs
@@ -16,7 +17,7 @@ import { readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { builtInRoot } from '../studio/server/library.mjs';
 
-const PARTS = ['audio', 'voices', 'stickers/emoji', 'models'];
+const PARTS = ['audio', 'voices', 'stickers/emoji', 'models', 'examples'];
 const root = builtInRoot();
 let files = 0;
 let bytes = 0;

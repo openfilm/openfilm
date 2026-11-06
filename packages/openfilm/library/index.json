@@ -13,6 +13,46 @@
     }
    },
    {
+    "id": "camera",
+    "name": {
+     "en": "Camera moves",
+     "zh-CN": "运镜",
+     "ja": "カメラワーク",
+     "ko": "카메라 무브",
+     "es": "Movimientos de cámara"
+    }
+   },
+   {
+    "id": "slide",
+    "name": {
+     "en": "Slides",
+     "zh-CN": "幻灯片",
+     "ja": "スライド",
+     "ko": "슬라이드",
+     "es": "Diapositivas"
+    }
+   },
+   {
+    "id": "mask",
+    "name": {
+     "en": "Masks",
+     "zh-CN": "遮罩",
+     "ja": "マスク",
+     "ko": "마스크",
+     "es": "Máscaras"
+    }
+   },
+   {
+    "id": "blur",
+    "name": {
+     "en": "Blur",
+     "zh-CN": "模糊",
+     "ja": "ブラー",
+     "ko": "블러",
+     "es": "Desenfoque"
+    }
+   },
+   {
     "id": "light",
     "name": {
      "en": "Light",

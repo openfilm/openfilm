@@ -49,6 +49,7 @@
     "!library/audio",
     "!library/stickers/emoji",
     "!library/models",
+    "!library/examples",
     "!library/vectors.i8",
     "!library/vectors.json",
     "examples-index",

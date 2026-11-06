@@ -38,11 +38,14 @@ test('every thing of the library is there, named in each language, in a group of
       for (const c of ['all', 'r', 'g', 'b']) if (item.grade[c]) assert.ok(item.grade[c].every((v) => v >= 0 && v <= 1), `${item.id}: ${c} within 0–1`);
       if (item.sample) assert.ok(libraryFile(item.sample), `${item.id}: its sample`);
     }
-    /* a motion preset: each slot's keyframes named for it, read as CSS, drawn */
+    /* a motion preset: each slot's keyframes named for it, read as CSS, drawn; a move of two shots at once (`lap`) its
+       halves named for the cut's edges, the way in at least (a wipe leaves the last shot as it is) */
     if (item.kind === 'motion') {
       const slots = Object.entries(item.motion ?? {});
-      assert.ok(slots.length && slots.every(([slot, p]) => ['in', 'out', 'loop'].includes(slot) && p.name.startsWith(`motion-${slot}-`) && /\{[^}]*:[^}]*\}/.test(p.body) && p.secs > 0), `${item.id}: its motion`);
-      if (item.place === 'cut') assert.ok(item.motion.in && item.motion.out, `${item.id}: a camera move goes out of one clip and into the next`);
+      const named = (slot, name) => name.startsWith(item.lap ? `motion-cut-${slot}-` : `motion-${slot}-`);
+      assert.ok(slots.length && slots.every(([slot, p]) => (item.lap ? ['in', 'out'] : ['in', 'out', 'loop']).includes(slot) && named(slot, p.name) && /\{[^}]*:[^}]*\}/.test(p.body) && p.secs > 0), `${item.id}: its motion`);
+      if (item.lap) assert.ok(item.place === 'cut' && item.motion.in, `${item.id}: a move of two shots comes in on a cut`);
+      else if (item.place === 'cut') assert.ok(item.motion.in && item.motion.out, `${item.id}: a camera move goes out of one clip and into the next`);
       for (const f of ['poster.jpg', 'preview.mp4']) assert.ok(libraryFile(`${item.id}/${f}`), `${item.id}: ${f}`);
     }
     /* a template: its clips' pages there, its places for pictures counted, its music one of the library's */
