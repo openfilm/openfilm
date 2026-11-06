@@ -88,7 +88,7 @@ export interface LibraryActions {
 /** The skills shown from outside the drawer (the app's chat): Discover, or one skill's page; `n` tells one request from the next. */
 export type SkillsRequest = { name?: string; n: number };
 
-export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captions, speak, onServices, projectId = null, showSkills, under = 0 }: {
+export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captions, speak, onServices, projectId = null, showSkills, under = 0, frame = null }: {
   media: React.ReactNode;
   /** the project's own media, or Saved */
   mediaScope: 'project' | 'saved';
@@ -106,6 +106,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
   /** how much of its foot the app's composer floats over: the lists run on under it, their ends scrolled clear of it
       (--drawer-under) */
   under?: number;
+  /** the film's picture at the playhead (a frame's address), which a filter's or an effect's card shows itself on */
+  frame?: string | null;
 }) {
   const t = useT();
   const lang = useLanguage();
@@ -442,10 +444,10 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
                     ))}
                   </div>
                 ) : (
-                  <div className={`grid gap-x-2.5 gap-y-3 ${cat === 'sticker' ? 'grid-cols-[repeat(auto-fill,minmax(68px,1fr))]' : textSquare ? 'grid-cols-[repeat(auto-fill,minmax(84px,1fr))]' : cat === 'template' || cat === 'text' ? 'grid-cols-[repeat(auto-fill,minmax(120px,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(96px,1fr))]'}`}>
+                  <div className={`grid gap-x-2.5 gap-y-3 ${cat === 'sticker' ? 'grid-cols-[repeat(auto-fill,minmax(68px,1fr))]' : textSquare || ON_FILM.has(cat) ? 'grid-cols-[repeat(auto-fill,minmax(84px,1fr))]' : cat === 'text' ? 'grid-cols-[repeat(auto-fill,minmax(120px,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(96px,1fr))]'}`}>
                     {/* a page at a time as it is scrolled, as the sounds are (the emoji alone are some 1,600) */}
                     {items.slice(0, drawn).map((it) => (
-                      <Card key={it.id} item={it} lang={lang} picked={picked === it.id} kept={favorites.includes(it.id)} square={cat === 'sticker' || textSquare}
+                      <Card key={it.id} item={it} lang={lang} picked={picked === it.id} kept={favorites.includes(it.id)} square={cat === 'sticker' || textSquare || ON_FILM.has(cat)} frame={frame}
                         onPick={() => pick(picked === it.id ? null : it)} onAdd={() => actions.add(it)} />
                     ))}
                   </div>
@@ -662,10 +664,26 @@ function useSideways() {
   return { ref, read, toggle, ...state };
 }
 
-function Card({ item, lang, picked, kept, square, onPick, onAdd }: {
-  item: LibraryItem; lang: ReturnType<typeof useLanguage>; picked: boolean; kept: boolean; square: boolean; onPick: () => void; onAdd: () => void;
+/* what is put on the film itself (a filter, an effect, a transition, a template): square cards, shown on the film's
+   own picture where they can be */
+const ON_FILM = new Set<Category>(['filter', 'effect', 'transition', 'template']);
+
+function Card({ item, lang, picked, kept, square, frame = null, onPick, onAdd }: {
+  item: LibraryItem; lang: ReturnType<typeof useLanguage>; picked: boolean; kept: boolean; square: boolean; frame?: string | null; onPick: () => void; onAdd: () => void;
 }) {
   const [hover, setHover] = React.useState(false);
+  /* on the film's own picture at the playhead (`frame`): a filter graded on it; an effect's page laid over it; a
+     transition's page played over it under the pointer, again each time it ends; a motion's card the picture */
+  const page = item.kind === 'page' && !item.w && Boolean(item.src);
+  const overFilm = frame && page && (item.cat === 'effect' || item.cat === 'transition') ? item.cat : null;
+  const onFrame = Boolean(frame) && (overFilm != null || item.kind === 'motion');
+  const [round, setRound] = React.useState(0);
+  React.useEffect(() => {
+    if (!(hover && overFilm === 'transition')) return undefined;
+    const timer = window.setInterval(() => setRound((r) => r + 1), (item.durationMs ?? 1000) + 500);
+    return () => window.clearInterval(timer);
+  }, [hover, overFilm, item.durationMs]);
+  const fit = item.cat === 'sticker' ? 'object-contain' : 'object-cover';
   const name = nameOf(item.name, lang);
   /* a text style, a text motion (played under the pointer) and the line of words in the page's own: drawn as it is,
      its words large, in the app's language */
@@ -687,7 +705,15 @@ function Card({ item, lang, picked, kept, square, onPick, onAdd }: {
     >
       <div className={`relative overflow-hidden rounded-md bg-[var(--bg-field)] ${square ? 'aspect-square' : 'aspect-video'} ${picked ? 'ring-2 ring-[var(--accent)]' : 'ring-1 ring-transparent group-hover:ring-[var(--text-faint)]'}`}>
         {item.kind === 'look'
-          ? <img src={item.sample ? libraryUrl(item.sample) : SAMPLE} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" style={{ filter: item.filter }} />
+          ? <img src={frame ?? (item.sample ? libraryUrl(item.sample) : SAMPLE)} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" style={{ filter: item.filter }} />
+          : onFrame ? (
+            <>
+              <img src={frame!} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />
+              {overFilm === 'effect' || (overFilm === 'transition' && hover) ? (
+                <iframe key={round} title="" src={pageUrl(item)} loading="lazy" tabIndex={-1} className="pointer-events-none absolute inset-0 h-full w-full border-0" style={{ colorScheme: 'normal' }} />
+              ) : null}
+            </>
+          )
           /* a sticker whole in its square card (a wide one is not cut at its ends); loaded as it comes into view */
           : drawn ? <TextStyleSample lang={lang} {...(item.kind === 'textmotion' ? { moving: item.vars, playing: hover } : { vars: item.vars })} {...(item.id === TEXT_COMPONENT ? { words: name } : {})} />
           : live ? (
@@ -696,8 +722,8 @@ function Card({ item, lang, picked, kept, square, onPick, onAdd }: {
                 style={{ aspectRatio: `${item.w} / ${item.h}`, width: item.w! >= item.h! ? '100%' : 'auto', height: item.w! >= item.h! ? 'auto' : '100%', colorScheme: 'normal' }} />
             </span>
           )
-          : <img src={posterUrl(item)} alt="" draggable={false} loading="lazy" decoding="async" className={`absolute inset-0 h-full w-full ${square ? 'object-contain' : 'object-cover'}`} />}
-        {hover && item.kind !== 'look' && !item.still && !drawn && !live ? <video src={previewUrl(item)} autoPlay loop muted playsInline className={`absolute inset-0 h-full w-full ${square ? 'object-contain' : 'object-cover'}`} /> : null}
+          : <img src={posterUrl(item)} alt="" draggable={false} loading="lazy" decoding="async" className={`absolute inset-0 h-full w-full ${fit}`} />}
+        {hover && item.kind !== 'look' && !item.still && !drawn && !live && !overFilm ? <video src={previewUrl(item)} autoPlay loop muted playsInline className={`absolute inset-0 h-full w-full ${fit}`} /> : null}
         {/* the star and the "+" side by side, of one size, dark glass over the picture */}
         <span className="absolute bottom-1 right-1 flex items-center gap-1">
           <StarButton item={item} kept={kept} className={`${ROUND} bg-black/55 ${kept ? 'grid text-[#ffd35a]' : 'hidden text-white group-hover:grid'}`} />

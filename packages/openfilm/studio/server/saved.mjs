@@ -41,6 +41,12 @@ export class SavedError extends Error {
 export const TEXT_COMPONENT = 'text/text';
 /** The fonts a person added to a project for its lines of words (project-fonts addTextFont): its own, never the library's. */
 export const TEXT_OWN_FONTS = 'fonts/own.css';
+/**
+ * A filter of the library on a track of its own (the studio's lib/library FILTER_LAYER): its see-through page, taken
+ * into a project under the filter's own name (`saved/openfilm/filters-warm-film/`), the clip's style grading what is
+ * under it.
+ */
+export const FILTER_LAYER = 'filters/layer';
 const VERSION = 2;
 /** What the API calls the library's top folder: its paths are `saved/<place in the library>`. */
 export const LIBRARY = 'saved';
@@ -329,8 +335,10 @@ export async function takeSaved(root, path) {
   const lib = builtIn ? builtInRoot() : await libraryRoot();
   const rel = builtIn ? /** @type {string} */ (path).slice(BUILT_IN.length + 1) : libraryRel(path);
   if (!rel) throw new SavedError('a thing in Saved, please', 400);
+  /* a filter (a look, no page of its own): the filter layer's page, under the filter's name */
+  const filter = builtIn && rel !== FILTER_LAYER && /^filters\/[\w-]+$/.test(rel) && !existsSync(inside(lib, rel));
   /* OpenFilm's own: in the package, or a published part fetched now (library.mjs) */
-  const at = (builtIn ? await fetchLibrary(rel) : null) ?? inside(lib, rel);
+  const at = filter ? inside(lib, FILTER_LAYER) : (builtIn ? await fetchLibrary(rel) : null) ?? inside(lib, rel);
   const info = await stat(at).catch(() => null);
   if (!info) throw new SavedError('That is not in Saved any more.', 404);
   if (info.isFile()) return { path: (await importFile(root, `assets/${basename(rel)}`, createReadStream(at))).path };

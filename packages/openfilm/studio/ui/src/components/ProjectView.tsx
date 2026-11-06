@@ -1800,10 +1800,26 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       toast.show(t('assetDrawer.added').replace('{name}', name));
       pickAdded(before);
     };
+    /* a filter on a track of its own over the film, from the playhead, its own length: a see-through page whose
+       backdrop-filter grades every layer under it (lib/library isFilterLayer); dropped on a clip, that clip alone */
+    const filterLayer = async (item: LibraryItem) => {
+      if (!item.filter) return;
+      const name = nameOf(item.name, language);
+      let taken: Awaited<ReturnType<typeof api.takeSaved>>;
+      try { taken = await api.takeSaved(projectId, `${BUILT_IN}/${item.id}`); } catch (e) { toast.show(e instanceof Error ? e.message : String(e)); return; }
+      if (!('clip' in taken)) return;
+      const before = clipIds();
+      const at = snapToFrame(timeRef.current) / 1000;
+      const clip = { ...taken.clip, style: `backdrop-filter: ${item.filter}` };
+      const failed = await edit([{ op: 'insert', clip: clip as never, at, track: { insert: 0 } }], 'history.stepDrop');
+      if (failed) { toast.show(failed); return; }
+      toast.show(t('assetDrawer.added').replace('{name}', name));
+      pickAdded(before);
+    };
     const actions: LibraryActions = {
       add: (item) => {
         setLibraryTrial(null);
-        if (item.kind === 'look') look(item, lookTargets());
+        if (item.kind === 'look') void filterLayer(item);
         else if (item.kind === 'fade') fade(item, cutHere()?.cut ?? null);
         else if (item.kind === 'motion') motion(item);
         else if (item.kind === 'textstyle') textLine(item);
@@ -1825,13 +1841,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     };
     return { actions, applyDrop, lookTargets };
   }, [language, selectedClips, editModel, projectId, addMedia, timelineTracks, edit, filmClipOf, editBlocks, editClips, playTextMotion, askTransition, t, toast]);
-  /* a look tried: shown on the clips it would go on, taken off when the try ends */
-  React.useEffect(() => {
-    if (libraryTrial?.kind !== 'look') return undefined;
-    const on = library.lookTargets();
-    for (const c of on) previewLook(c.loc, withLook(c.style, libraryTrial.filter ?? null) ?? '');
-    return () => { for (const c of on) previewLook(c.loc, null); };
-  }, [libraryTrial]); // eslint-disable-line react-hooks/exhaustive-deps
   /* clips (and files) kept to use again in any project (lib/saved, studio/server/saved.mjs): the timeline's, the
      picture's and the media pane's "Add to Saved" */
   const saveThings = React.useCallback(async (what: Parameters<typeof api.save>[1], n: number) => {
@@ -3026,6 +3035,24 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   }, [timelineTracks, projectId, mtimeOf]);
   /* each drawn once it has had its turn among Studio's media requests (lib/media-queue) */
   const shownPosters = useMediaImages(posters);
+  /* the film's picture at the playhead, for the library's filter and effect cards to show themselves on: the frame of
+     the video or picture there (the main track's first), else of the film's first; none without one. Kept while it
+     plays, read again a second at a time once it stands */
+  const frameSecRef = React.useRef(0);
+  if (!playing) frameSecRef.current = Math.floor(timeMs / 1000);
+  const frameSec = frameSecRef.current;
+  const libraryFrame = React.useMemo(() => {
+    const film = blocksRef.current.filter((b) => b.kind === 'video' && b.src && !isLibraryClip(b.src));
+    if (!film.length) return null;
+    const at = frameSec * 1000;
+    const here = film.filter((b) => b.startMs <= at && at < b.endMs);
+    const main = timelineTracks.find((tr) => tr.main);
+    const b = here.find((x) => main?.blocks.some((m) => m.id === x.id)) ?? here[0] ?? film[0]!;
+    const into = here.includes(b) ? (at - b.startMs) * (b.speed && b.speed > 0 ? b.speed : 1) : 0;
+    const ms = Math.round((b.inMs ?? 0) + into);
+    return `/api/projects/${encodeURIComponent(projectId)}/media?what=frame&path=${encodeURIComponent(b.src!)}&ms=${ms}&w=360&v=${mtimeOf.get(b.src!) ?? 0}`;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frameSec, timelineTracks, projectId, mtimeOf]);
   const waveUrl = React.useCallback((src: string) => `/api/projects/${encodeURIComponent(projectId)}/media?what=wave&path=${encodeURIComponent(src)}&v=${mtimeOf.get(src) ?? 0}`, [projectId, mtimeOf]);
   /* clips whose files are gone, and where the same name may be now. A file a clip names that the listing does not have
      is gone only once a listing read after it was first named still lacks it: one just brought in as its clip was put
@@ -4360,7 +4387,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         <div className="fixed z-30 flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--dock-line)] pt-px"
           style={{ top: HOST_PANEL_TOP, left: 0, bottom: 0, width: HOST_PANEL_WIDTH }}>
           <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--bg-panel)]">
-          <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} actions={library.actions} under={hostAssets.bottom}
+          <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} actions={library.actions} under={hostAssets.bottom} frame={libraryFrame}
             captions={{
               heard: heardClips, making: captionsMaking || subs.transcribing, problem: subtitleProblem,
               picked: captionPicked, pick: pickCaptionClip, choosing: setCaptionChoosing,

@@ -169,7 +169,8 @@ import { fadeEdits, fadeFromPointer, fadeHandleX, type FadeEdge, type FadeMs } f
 import { canChangeSpeed, roundSpeed } from '@/lib/clip-speed';
 import { hasVolume, volumeAtLineY, volumeEdit, volumeLineY, volumeOf, volumeText } from '@/lib/clip-volume';
 import { speedText } from '@/lib/playback-speed';
-import { isLibrarySticker, libraryItemOfClip, nameOf, useLibraryIndex } from '@/lib/library';
+import { isFilterLayer, isLibraryEffect, isLibrarySticker, libraryItemOfClip, nameOf, useLibraryIndex } from '@/lib/library';
+import { CategoryIcon } from './library/icons';
 import { cutNear, transitionSpan, type CutRef, type FilmTransition, type TransitionAsk, type TransitionKind } from '@/lib/transitions';
 
 /** Track head column: kind badge + lock + hide + original sound. */
@@ -3076,7 +3077,10 @@ export const Timeline = React.memo(function Timeline({
             const textRow = Boolean(track.text) || block.words != null;
             /* a sticker of the library: a block of its own color with its picture at its start, no filmstrip */
             const sticker = !textRow && isLibrarySticker(block.src);
-            const color = textRow ? 'var(--clip-text)' : sticker ? 'var(--clip-sticker)'
+            /* a filter or an effect of the library over the film: a block of its kind's color, its mark and name, no
+               pictures (a filter's page is see-through, an effect's says nothing at a glance) */
+            const laid = textRow || sticker ? null : isFilterLayer(block.src) ? 'filter' as const : isLibraryEffect(block.src) ? 'effect' as const : null;
+            const color = textRow ? 'var(--clip-text)' : sticker ? 'var(--clip-sticker)' : laid ? `var(--clip-${laid})`
               : block.kind === 'video' && block.src && filmSrcIsStill(block.src) ? 'var(--clip-image)' : KIND_COLOR[block.kind];
             const able = drag.can(block);
             const strip = clipThumbs.get(clipThumbId(block));
@@ -3223,11 +3227,12 @@ export const Timeline = React.memo(function Timeline({
                 {/* info strip: name and length side by side (one statement), not at opposite ends of a wide clip */}
                 <div
                   className="pointer-events-none absolute inset-x-0 top-0 flex items-center overflow-hidden px-1.5"
-                  style={{ height: textRow || sticker ? '100%' : INFO_H }}
+                  style={{ height: textRow || sticker || laid ? '100%' : INFO_H }}
                 >
                   {/* pinned to the left of the view so a clip wider than the screen still says what it is (pinLabels,
                       on scroll: scrolling rebuilds nothing) */}
                   <span className="flex min-w-0 items-center gap-1" data-pin={left} data-pin-max={width - 48}>
+                    {laid && width > 14 ? <span aria-hidden className="flex shrink-0 text-white/85"><CategoryIcon id={laid} on={false} size={12} /></span> : null}
                     {sticker && width > 14 ? (() => {
                       const shot = stickerShot(strip, poster);
                       return (
@@ -3269,7 +3274,7 @@ export const Timeline = React.memo(function Timeline({
                 ) : null}
                 {/* preview band: thumbnails by the clip's own time (a move keeps them, a left trim seeks deeper).
                     Before thumbnails exist, one poster at the left — tiling it would fake a filmstrip. */}
-                {strip?.size && visual && !textRow && !sticker && width > 8 ? (
+                {strip?.size && visual && !textRow && !sticker && !laid && width > 8 ? (
                   <BlockThumbs
                     thumbs={strip}
                     startMs={intoOrigin}
@@ -3280,7 +3285,7 @@ export const Timeline = React.memo(function Timeline({
                     thumbWidthPx={THUMB_CELL_PX}
                     visiblePx={{ from: thumbWindow.from - left, to: thumbWindow.to - left }}
                   />
-                ) : poster && visual && !textRow && !sticker && width > 8 ? (
+                ) : poster && visual && !textRow && !sticker && !laid && width > 8 ? (
                   <span
                     aria-hidden
                     className="pointer-events-none absolute left-0 opacity-90"

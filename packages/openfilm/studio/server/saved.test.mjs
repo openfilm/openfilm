@@ -169,3 +169,12 @@ test('the clips of two pages brought from one project: the files of each, under 
   assert.deepEqual([one.clip.src, two.clip.src], ['pasted/Launch/pages/title.html', 'pasted/Launch/pages/other.html']);
   for (const f of ['assets/logo.png', 'assets/v.mp4', 'pages/other.html']) assert.ok(existsSync(join(root, 'pasted/Launch', f)), f);
 });
+
+test('a filter of OpenFilm\'s library is taken as its layer page under the filter\'s own name', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-saved-filter-'));
+  const taken = /** @type {{ clip: { src: string } }} */ (await takeSaved(root, 'openfilm/filters/bw'));
+  assert.equal(taken.clip.src, 'saved/openfilm/filters-bw/layer.html');
+  assert.ok(existsSync(join(root, 'saved/openfilm/filters-bw/layer.html')));
+  /* the layer itself, and a folder of the filters' pictures, are what they are */
+  await assert.rejects(takeSaved(root, 'openfilm/filters/nothing-here/deeper'));
+});

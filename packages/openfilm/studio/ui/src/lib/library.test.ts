@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { coverLook, libraryBox, cutTrack, cutsOf, fromLibrary, isTextClip, withRootVars, libraryDragItem, lookOf, onCut, placedGroup, soundLook, waveUrl, withLook, type LibraryItem } from './library.ts';
+import { coverLook, libraryBox, cutTrack, cutsOf, fromLibrary, isFilterLayer, isLibraryEffect, isTextClip, withRootVars, libraryDragItem, lookOf, onCut, placedGroup, soundLook, waveUrl, withLook, type LibraryItem } from './library.ts';
 import { gradeFilter } from './grade.ts';
 
 const page: LibraryItem = { id: 'effects/snow', cat: 'effect', group: 'ambience', name: { en: 'Snow' }, kind: 'page', durationMs: 4000, src: 'snow.html' };
@@ -103,4 +103,11 @@ test('a template\'s clip with a place of its own is laid out for the picture, wi
   /* tall: no wider than the picture */
   const tall = placedGroup(clips, { w: 1080, h: 1920 });
   assert.deepEqual(tall[0]!.clip.box, { x: 43, y: 1412, w: 994, h: 249 });
+});
+
+test('a filter on a track of its own is its layer page under the filter\'s name; an effect its own page', () => {
+  assert.equal(isFilterLayer('saved/openfilm/filters-warm-film/layer.html#t=0,3'), true);
+  assert.equal(isFilterLayer('saved/openfilm/filters-warm-film/other.html'), false);
+  assert.equal(isFilterLayer('saved/openfilm/effects-grain/grain.html'), false);
+  assert.equal(isLibraryEffect('saved/openfilm/effects-grain/grain.html#t=0,4'), true);
 });

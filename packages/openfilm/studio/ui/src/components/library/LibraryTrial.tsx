@@ -1,8 +1,8 @@
 /**
  * A thing of the library tried in the viewer (a click in the assets drawer, LibraryDrawer), over the picture there and
  * nothing written: a page laid over it; a sticker, and a text look or motion on the words a new line says, in the box
- * it gets when put in (libraryBox), so the try looks as the drop will; a transition's preview. A look is tried on the clip itself, through
- * the stage's look preview. A click on it lets it go.
+ * it gets when put in (libraryBox), so the try looks as the drop will; a transition's preview; a filter grading the whole
+ * picture through a backdrop-filter, as it will on its own track. A click on it lets it go.
  */
 import * as React from 'react';
 import { useLanguage } from '@/i18n';
@@ -43,6 +43,8 @@ export function LibraryTrial({ item, onLetGo }: { item: LibraryItem; onLetGo: ()
     : page ? pageUrl(item) : null;
   return (
     <div ref={measure} data-library-trial="" className="absolute inset-0 z-[6] cursor-default overflow-hidden" onPointerDown={(e) => { e.stopPropagation(); onLetGo(); }}>
+      {/* a filter: over the whole picture, grading every layer of it, as it will on its own track */}
+      {item.kind === 'look' && item.filter ? <div aria-hidden className="pointer-events-none absolute inset-0" style={{ backdropFilter: item.filter }} /> : null}
       {src && (!shape || box) ? (
         <iframe
           key={round}

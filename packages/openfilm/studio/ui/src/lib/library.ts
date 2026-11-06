@@ -350,6 +350,16 @@ export const isLibraryClip = (src: string | undefined): boolean => Boolean(src?.
 /** Whether a clip is one of the library's stickers: drawn on the timeline by its picture. */
 export const isLibrarySticker = (src: string | undefined): boolean => Boolean(src?.split('#')[0]?.startsWith(`saved/${BUILT_IN}/stickers-`));
 
+/**
+ * A filter of the library on a track of its own: its see-through page, taken into the project under the filter's name
+ * (`saved/openfilm/filters-warm-film/layer.html`, studio/server saved.mjs FILTER_LAYER), the clip's `backdrop-filter`
+ * grading every layer under it while it is on.
+ */
+export const isFilterLayer = (src: string | undefined): boolean => /^saved\/openfilm\/filters-[^/]+\/layer\.html$/.test(src?.split('#')[0] ?? '');
+
+/** An effect of the library (its page laid over the whole picture). */
+export const isLibraryEffect = (src: string | undefined): boolean => Boolean(src?.split('#')[0]?.startsWith(`saved/${BUILT_IN}/effects-`));
+
 /** Whether a clip is the text component, which a text style or motion goes on. */
 export const isTextClip = (src: string | undefined): boolean => Boolean(src?.split('#')[0]?.startsWith(TEXT_IN_PROJECT));
 
