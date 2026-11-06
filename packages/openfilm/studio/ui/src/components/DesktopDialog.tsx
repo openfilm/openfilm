@@ -31,7 +31,6 @@ const FEATURES: { key: string; icon: React.ReactNode }[] = [
 const AGENTS: { id: string; name: string }[] = [
   { id: 'claude', name: 'Claude Code' },
   { id: 'openai', name: 'Codex' },
-  { id: 'antigravity', name: 'Google Antigravity' },
   { id: 'copilot', name: 'GitHub Copilot' },
   { id: 'cursor', name: 'Cursor' },
   { id: 'opencode', name: 'OpenCode' },
@@ -39,6 +38,7 @@ const AGENTS: { id: string; name: string }[] = [
   { id: 'kimi', name: 'Kimi' },
   { id: 'minimax', name: 'MiniMax Code' },
   { id: 'deepseek', name: 'DeepSeek Harness' },
+  { id: 'antigravity', name: 'Google Antigravity' },
 ];
 
 const SYSTEM_NAMES = { mac: 'macOS', win: 'Windows' } as const;

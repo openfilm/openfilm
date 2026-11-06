@@ -96,10 +96,6 @@ export function notTheAgent(id, file, { chosen = null, win = windows } = {}) {
   if ([file, chosen].some((p) => p && STORE_PACKAGE.test(p))) return 'app';
   if (win && /\.exe$/i.test(file) && exeSubsystem(real(file)) === WINDOW_SUBSYSTEM) return 'app';
   if (id === 'cursor' && !inCursorFolder(file)) return 'not-cursor-agent';
-  if (id === 'antigravity') {
-    const version = antigravityVersion(real(file));
-    if (version && laterVersion('1.5.0', version)) return 'too-old';
-  }
   return null;
 }
 
@@ -286,9 +282,14 @@ export function copilotVersion(file, { ask = askVersion } = {}) {
   return programVersion(file, { ours: (name) => name === '@github/copilot', ask });
 }
 
-/** The Antigravity CLI (`agy`). */
+/** The Antigravity CLI (`agy`), read from `agy --version`. */
 export function antigravityVersion(file, { ask = askVersion } = {}) {
-  return programVersion(file, { ours: (name) => name === '@google/antigravity' || name === 'agy', ask });
+  let real;
+  try { real = realpathSync(file); } catch { return null; }
+  let key;
+  try { key = `${real}\0${statSync(real).mtimeMs}`; } catch { return null; }
+  if (!versionsAsked.has(key)) versionsAsked.set(key, ask(real));
+  return versionsAsked.get(key) ?? null;
 }
 
 /** Whether version `a` is later than `b` (dotted numbers); false when either is unknown. */

@@ -319,7 +319,6 @@ function starting(cliPath, args) {
 const NOT_THE_AGENT = Object.freeze({
   app: 'This is an editor or a desktop app, not the agent\'s command-line program.',
   'not-cursor-agent': 'This is not Cursor\'s command-line agent, which installs in a cursor-agent folder.',
-  'too-old': 'This program is older than OpenFilm needs (Google Antigravity needs 1.5.0 or later, which introduced ACP): update it, then try again.',
 });
 
 /**
