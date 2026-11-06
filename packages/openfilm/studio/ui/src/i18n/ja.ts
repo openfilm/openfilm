@@ -384,6 +384,8 @@ export const ja: Words = {
     subtitles: '字幕',
     burnIn: '字幕を映像に焼き込む',
     noSidecar: 'ファイルなし',
+    loudnessAsMixed: 'ミックスのまま',
+    loudnessHint: '作品全体をこのラウドネスにそろえ、トゥルーピークは -1 dBTP 以下に抑えます。YouTube や配信には -14、ポッドキャストには -16、放送には -23。',
     gifWidth: 'サイズ',
     gifHint: 'ヒント：数秒の範囲を選んでください。640px で 10 秒の GIF は通常数 MB になります。',
     format: 'フォーマット',
@@ -606,6 +608,16 @@ export const ja: Words = {
     speed: '再生速度',
     speedNormal: '標準',
     seek: 'シーク',
+  },
+  recycle: {
+    refused: `「{name}」はそのまま残しました：{why}。${FILES}で完全に削除できます。`,
+    network: 'ネットワークドライブ上にあり、ごみ箱がありません',
+    removable: 'リムーバブルドライブ上にあり、ごみ箱がありません',
+    noBin: 'ドライブ {drive} にはごみ箱がありません',
+    noVolume: 'ドライブ {drive} がどのボリュームか Windows が示さず、ごみ箱の設定を確認できませんでした',
+    policy: 'ここのポリシーで、ごみ箱はファイルをすぐに削除します',
+    nuke: 'ドライブ {drive} のごみ箱は、ファイルをすぐに削除する設定です',
+    tooBig: 'サイズが {size} で、ドライブ {drive} のごみ箱の容量（{holds}）を超えています',
   },
   project: {
     projects: 'プロジェクト',
@@ -2234,6 +2246,7 @@ export const ja: Words = {
       moveNo: '元の場所に残す',
       moved: '{count} 個のプロジェクトを移動しました。',
       moveFailed: '移動できず元の場所に残ったプロジェクト：{names}',
+      moveLeft: `元のフォルダーは${TRASH}に入れられなかったため元のディスクに残っています。${FILES}で完全に削除できます：{paths}`,
     },
     playback: {
       group: "再生",
@@ -2660,6 +2673,8 @@ export const ja: Words = {
       useEnv: '環境変数 ${env} のキーを使う',
       signingIn: 'ブラウザでサインインを完了してください…',
       keyless: 'キーなしで使えます。エージェントの検索内容と読み込むアドレスは {name} に送られます。キーを追加すると上限が上がります。',
+      pricing: '料金',
+      pricingOf: '{name} の料金（公式サイト）',
       addKey: 'キーを追加',
       own: {
       account: 'アカウントを見る',

@@ -109,6 +109,8 @@ type Props = {
   onSpans?(spans: ClipSpan[]): void;
   /** A video this browser could not play (its src as film.html writes it): it shows nothing until it has a copy that plays. */
   onUndecoded?(src: string): void;
+  /** A page that came on is shown (its first frame drawn): it is in the picture, and in the stage's tree, only now. */
+  onShown?(): void;
   children?: ReactNode;
 };
 
@@ -119,7 +121,7 @@ const RESCALE_MS = 600;
 /** How often a load held back for a drag or a line typed in place looks whether it may be shown, ms. */
 const HOLD_POLL_MS = 100;
 
-export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folder, stage, time, fps, onInfo, onKey, onError, onPlayed, onSpans, onUndecoded, waiting = false, children }, ref) {
+export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folder, stage, time, fps, onInfo, onKey, onError, onPlayed, onSpans, onUndecoded, onShown, waiting = false, children }, ref) {
   const t = useT();
   const origin = new URL(folder).origin;
   const [frames, setFrames] = useState<Frame[]>([{ key: 1, ready: false }]);
@@ -164,6 +166,8 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
   onSpansRef.current = onSpans;
   const onUndecodedRef = useRef(onUndecoded);
   onUndecodedRef.current = onUndecoded;
+  const onShownRef = useRef(onShown);
+  onShownRef.current = onShown;
   /* the stretches rendered to play in the film's place: told to each load of the film once it is up */
   const rendered = useRef<PreviewRender[]>([]);
   useEffect(() => { onErrorRef.current?.(failed); }, [failed]);
@@ -424,6 +428,8 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
         if (key === shownRef.current?.key && Array.isArray(m.spans)) onSpansRef.current?.(m.spans);
       } else if (m.type === 'undecoded') {
         if (typeof m.src === 'string' && m.src) onUndecodedRef.current?.(m.src);
+      } else if (m.type === 'shown') {
+        if (key === shownRef.current?.key) onShownRef.current?.();
       } else if (m.type === 'picked') {
         const resolve = picks.current.get(m.seq);
         picks.current.delete(m.seq);

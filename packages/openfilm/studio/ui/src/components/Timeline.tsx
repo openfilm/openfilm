@@ -167,7 +167,7 @@ import { Tooltip } from './Tooltip';
 import { useBlockDrag, type GestureTip } from './useBlockDrag';
 import { fadeEdits, fadeFromPointer, fadeHandleX, type FadeEdge, type FadeMs } from '@/lib/clip-fade';
 import { canChangeSpeed, roundSpeed } from '@/lib/clip-speed';
-import { hasVolume, volumeAtLineY, volumeEdit, volumeLineY, volumeOf, volumeText } from '@/lib/clip-volume';
+import { canDetachAudio, hasSoundToDetach, hasVolume, volumeAtLineY, volumeEdit, volumeLineY, volumeOf, volumeText } from '@/lib/clip-volume';
 import { speedText } from '@/lib/playback-speed';
 import { isFilterLayer, isLibraryEffect, isLibrarySticker, libraryItemOfClip, nameOf, useLibraryIndex } from '@/lib/library';
 import { CategoryIcon } from './library/icons';
@@ -656,8 +656,8 @@ export interface TimelineProps {
    * Without it there is no split tool.
    */
   onSplit?: (blocks: readonly TimelineBlock[], atMs: number) => Promise<string | null>;
-  /** Take a video's sound apart from its picture, onto a track of its own (an editor's unlink). */
-  onDetachAudio?: (block: TimelineBlock) => Promise<string | null>;
+  /** Take the videos' sounds apart from their pictures, each onto a sound track with room for it (an editor's unlink). */
+  onDetachAudio?: (blocks: readonly TimelineBlock[]) => Promise<string | null>;
   /** The picked clips made one compound clip; a compound clip taken apart (studio/server/compound.mjs). */
   onCompound?: (blocks: readonly TimelineBlock[]) => void;
   onUncompound?: (block: TimelineBlock) => void;
@@ -3881,16 +3881,16 @@ export const Timeline = React.memo(function Timeline({
         disabled: pickedLocked, hint: t('timeline.trackLocked'), onSelect: () => { onUncompound(one); },
       });
     }
-    /* a video's sound onto a track of its own: its picture and sound edited apart from then on */
-    if (one && onDetachAudio && one.kind === 'video' && one.clipId && !(one.src && filmSrcIsStill(one.src))) {
-      const heard = Boolean(one.ownAudio) && !one.silent;
+    /* the videos' sounds onto tracks of their own: their pictures and sounds edited apart from then on */
+    if (onDetachAudio && picked.some(canDetachAudio)) {
+      const heard = picked.filter(hasSoundToDetach);
       out.push({
         id: 'detach-audio',
         label: t('timeline.menuDetachAudio'),
         icon: <Waves size={14} />,
-        disabled: !heard || pickedLocked,
+        disabled: !heard.length || pickedLocked,
         hint: pickedLocked ? t('timeline.trackLocked') : t('timeline.menuDetachAudioNone'),
-        onSelect: () => { void onDetachAudio(one); },
+        onSelect: () => { void onDetachAudio(heard); },
       });
     }
     /* a clip's own sound: film.html's `volume` 0 is silent; unmuted it plays as is (the inspector sets a level) */

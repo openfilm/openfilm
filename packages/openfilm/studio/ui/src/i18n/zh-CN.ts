@@ -385,6 +385,8 @@ export const zhCN: Words = {
     subtitles: '字幕',
     burnIn: '将字幕烧录到画面中',
     noSidecar: '不导出文件',
+    loudnessAsMixed: '按混音原样',
+    loudnessHint: '整片调到这个响度，真峰值不超过 -1 dBTP。-14 适合 YouTube 和各视频平台，-16 适合播客，-23 适合电视广播。',
     gifWidth: '尺寸',
     gifHint: '提示：选取几秒钟的范围即可。一段 10 秒、640px 的 GIF 通常只有几 MB。',
     format: '格式',
@@ -607,6 +609,16 @@ export const zhCN: Words = {
     speed: '播放速度',
     speedNormal: '正常',
     seek: '播放进度',
+  },
+  recycle: {
+    refused: `“{name}”留在原处：{why}。可在${FILES}中永久删除。`,
+    network: '它在网络驱动器上，没有回收站',
+    removable: '它在可移动驱动器上，没有回收站',
+    noBin: '驱动器 {drive} 没有回收站',
+    noVolume: 'Windows 没有说明驱动器 {drive} 是哪个卷，无法检查其回收站设置',
+    policy: '系统策略设为直接删除文件，不放入回收站',
+    nuke: '驱动器 {drive} 的回收站被设为直接删除文件',
+    tooBig: '它大小为 {size}，超过了驱动器 {drive} 回收站的容量（{holds}）',
   },
   project: {
     projects: '项目',
@@ -2235,6 +2247,7 @@ export const zhCN: Words = {
       moveNo: '留在原处',
       moved: '已移动 {count} 个项目。',
       moveFailed: '这些项目没能移动，仍在原处：{names}',
+      moveLeft: `旧文件夹仍留在原来的磁盘上（${TRASH}无法接收），可在${FILES}中永久删除：{paths}`,
     },
     playback: {
       group: "播放",
@@ -2661,6 +2674,8 @@ export const zhCN: Words = {
       useEnv: '使用环境变量 ${env} 里的密钥',
       signingIn: '请在浏览器里完成登录…',
       keyless: '无需密钥即可使用：你的智能体搜索的内容和读取的网址会发送给 {name}。添加密钥可提高用量上限。',
+      pricing: '价格',
+      pricingOf: '{name} 的价格（官网）',
       addKey: '添加密钥',
       own: {
       account: '查看账户',

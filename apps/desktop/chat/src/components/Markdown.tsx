@@ -8,9 +8,11 @@ import {
   type MarkdownScan,
 } from '@openfilm/shared/markdown';
 import type { StudioRef } from '../app-bridge';
+import { audioLinkPath, projectAudioUrl } from '@/lib/audio-link';
+import { AttachmentPreview } from './AttachmentPreview';
 import { useT } from '@/i18n';
 import { agentRefPill, parseAgentRefs } from '@/lib/agent-refs';
-import { useClipSrc } from '@/lib/studio-film';
+import { ProjectFolderContext, useClipSrc } from '@/lib/studio-film';
 import { PromptPill, PromptPillRevealContext } from './prompt-editor';
 
 /**
@@ -139,6 +141,7 @@ function inline(text: string): React.ReactNode[] {
     }
     if (piece.kind === 'strong') return <strong key={index} className="font-semibold">{withRefs(piece.text)}</strong>;
     if (piece.kind === 'em') return <em key={index} className="italic">{withRefs(piece.text)}</em>;
+    if (piece.kind === 'link' && audioLinkPath(piece.href)) return <AudioLink key={index} href={piece.href} text={piece.text} />;
     if (piece.kind === 'link') {
       return (
         <a
@@ -195,4 +198,20 @@ function AgentRefPill({ studioRef }: { studioRef: StudioRef }) {
       } : {})}
     />
   );
+}
+
+/** A local audition is streamed by Studio, with its existing project and real-file boundary checks. */
+function AudioLink({ href, text }: { href: string; text: string }) {
+  const folder = React.useContext(ProjectFolderContext);
+  const t = useT();
+  const [open, setOpen] = React.useState(false);
+  React.useEffect(() => { setOpen(false); }, [folder, href]);
+  const url = projectAudioUrl(href, folder);
+  const name = audioLinkPath(href)?.split(/[\\/]/).pop() ?? text;
+  return <>
+    <button type="button" onClick={() => setOpen(true)}
+      className="break-all text-[var(--accent)] underline underline-offset-2 hover:opacity-80">{text}</button>
+    {open && !url ? <span role="alert" className="ml-1 text-[var(--err)]">{t('assets.previewFailed')}</span> : null}
+    {open && url ? <AttachmentPreview item={{ name, kind: 'document', url }} onClose={() => setOpen(false)} /> : null}
+  </>;
 }

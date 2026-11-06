@@ -31,6 +31,7 @@ export default {
   name: NAME,
   env: 'CARTESIA_API_KEY',
   keysUrl: 'https://play.cartesia.ai/keys',
+  pricingUrl: 'https://cartesia.ai/pricing',
   billingUrl: 'https://play.cartesia.ai/subscription',
   verbs: ['voice', 'tts'],
   models: MODELS,

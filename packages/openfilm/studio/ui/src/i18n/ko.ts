@@ -381,6 +381,8 @@ export const ko: Words = {
     subtitles: '자막',
     burnIn: '자막을 화면에 입히기',
     noSidecar: '파일 없음',
+    loudnessAsMixed: '믹스 그대로',
+    loudnessHint: '영상 전체를 이 라우드니스로 맞추고 트루 피크는 -1 dBTP 아래로 둡니다. YouTube와 스트리밍은 -14, 팟캐스트는 -16, 방송은 -23.',
     gifWidth: '크기',
     gifHint: '팁: 몇 초 정도의 구간을 선택하세요. 640px의 10초 GIF는 보통 몇 MB입니다.',
     format: '형식',
@@ -603,6 +605,16 @@ export const ko: Words = {
     speed: '재생 속도',
     speedNormal: '보통',
     seek: '탐색',
+  },
+  recycle: {
+    refused: `“{name}”은(는) 그대로 두었습니다: {why}. ${FILES}에서 완전히 삭제할 수 있습니다.`,
+    network: '네트워크 드라이브에 있어 휴지통이 없습니다',
+    removable: '이동식 드라이브에 있어 휴지통이 없습니다',
+    noBin: '드라이브 {drive}에는 휴지통이 없습니다',
+    noVolume: 'Windows가 드라이브 {drive}이(가) 어떤 볼륨인지 알려주지 않아 휴지통 설정을 확인할 수 없습니다',
+    policy: '이곳의 정책이 휴지통에서 파일을 바로 삭제하게 합니다',
+    nuke: '드라이브 {drive}의 휴지통이 파일을 바로 삭제하도록 설정되어 있습니다',
+    tooBig: '크기가 {size}로, 드라이브 {drive}의 휴지통 용량({holds})을 넘습니다',
   },
   project: {
     projects: '프로젝트',
@@ -2230,6 +2242,7 @@ export const ko: Words = {
       moveNo: '그대로 두기',
       moved: '프로젝트 {count}개를 옮겼습니다.',
       moveFailed: '옮기지 못해 원래 위치에 남은 프로젝트: {names}',
+      moveLeft: `원래 폴더는 휴지통에 넣을 수 없어 원래 디스크에 남아 있습니다. ${FILES}에서 완전히 삭제할 수 있습니다: {paths}`,
     },
     playback: {
       group: "재생",
@@ -2656,6 +2669,8 @@ export const ko: Words = {
       useEnv: '환경 변수 ${env}의 키 사용',
       signingIn: '브라우저에서 로그인을 완료하세요…',
       keyless: '키 없이 사용할 수 있습니다. 에이전트의 검색어와 읽는 주소는 {name}(으)로 전송됩니다. 키를 추가하면 한도가 늘어납니다.',
+      pricing: '요금',
+      pricingOf: '{name} 요금(공식 사이트)',
       addKey: '키 추가',
       own: {
       account: '계정 보기',

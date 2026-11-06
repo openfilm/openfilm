@@ -329,3 +329,25 @@ test('a layer dragged again and again is drawn every frame on its way, and no ot
     assert.equal(outlines.filter((n) => n !== 1).length, 0, `the selection's outline alone, every frame (${outlines.filter((n) => n !== 1).length} of ${outlines.length} frames had another or none)`);
   });
 });
+
+test('a color typed and then Add stroke clicked: the words keep the color and get the stroke, in the film and on the picture', { timeout: 120_000 }, async () => {
+  await withCard('Stroke', async ({ page, on, until, click, overrides }) => {
+    const inspector = page.locator('[data-film-inspector]');
+    await click(on(300, 240));
+    await inspector.getByRole('button', { name: 'Add stroke' }).waitFor({ state: 'visible' });
+    /* the color is written as the field is left: by the same click that adds the stroke, so the two edits are made
+       together */
+    await inspector.locator('input[aria-label="Color"]').fill('ff0000');
+    await inspector.getByRole('button', { name: 'Add stroke' }).click();
+    await until(async () => (await overrides()).some((o) => o.style?.outline), 'the stroke is written');
+    await page.waitForTimeout(500);
+    const [title] = await overrides();
+    assert.equal(title.at, '#title');
+    assert.equal(title.style.color, '#ff0000', 'the color is kept in film.html');
+    assert.equal(title.style.outline, '2px solid #ffffff');
+    /* the page may be drawn again as the film is written: asked of the frame there is now */
+    const drawn = () => page.frames().find((f) => f.url().endsWith('/card.html'))
+      ?.evaluate(() => getComputedStyle(document.getElementById('title')).color).catch(() => null);
+    await until(async () => (await drawn()) === 'rgb(255, 0, 0)', 'and on the picture');
+  });
+});

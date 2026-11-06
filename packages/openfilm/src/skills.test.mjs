@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync, symlinkSync, lstatSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { addSkills, asRun, coreSkills, findSkill, skillsNamed, agentName, listSkills, migrateMySkills, mySkillsDir, parseSkillFile, readSkill, removeSkill, setSkillCover, setSkillOn, SKILL_UID, skillOrigins, skillText, skillUid, agentNames, SKILL_PLATFORMS, thisPlatform } from './skills.mjs';
+import { addSkills, asRun, coreSkills, findSkill, skillsNamed, agentName, listSkills, migrateMySkills, mySkillsDir, parseSkillFile, readSkill, removeSkill, setSkillCover, setSkillOn, SKILL_UID, skillOrigins, skillText, skillUid, agentNames, SKILL_PLATFORMS, thisPlatform, folderSize, folderSizeAsync } from './skills.mjs';
 import { commitSkills, discardSkills, previewFolder, previewSkills, skillCommand, skillsCommand } from './skills-cli.mjs';
 
 const skill = (dir, name, description, body = 'How to make it.', extra = {}) => {
@@ -438,4 +438,28 @@ test('an installed skill is its repository\'s account\'s: OpenFilm\'s own is ope
   const theirs = skill(join(root, 'ana-lyrics'), 'lyrics', 'Theirs');
   writeFileSync(join(theirs, '.source.json'), JSON.stringify({ repo: 'https://github.com/Ana/lyric-skills', path: 'skills/lyrics', commit: 'b'.repeat(40), version: '1.0.0' }));
   assert.deepEqual([readSkill(ours, 'official').uid, readSkill(theirs, 'official').uid], ['openfilm/replicate', 'ana/lyrics']);
+});
+
+test('the folder walk reads asynchronously: same bytes, and Studio still runs while the disk is read', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-skill-size-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, '.git'));
+  writeFileSync(join(dir, '.git', 'objects'), Buffer.alloc(1000));
+  mkdirSync(join(dir, 'nested'));
+  writeFileSync(join(dir, 'nested', 'part'), '12345');
+  writeFileSync(join(dir, 'top'), 'abc');
+
+  const same = folderSize(dir);
+  assert.equal(same, 8, '.git is left out, files in a folder inside it counted');
+  assert.equal(await folderSizeAsync(dir), same, 'the asynchronous walk reads the same bytes');
+  assert.equal(await folderSizeAsync(join(dir, 'gone')), 0, 'a folder that is not there holds nothing');
+
+  /* a synchronous walk ends inside one tick: nothing else in Studio gets to run while a slow disk is read */
+  let turns = 0;
+  let walking = true;
+  const turn = () => { if (walking) { turns++; setImmediate(turn); } };
+  setImmediate(turn);
+  await folderSizeAsync(dir);
+  walking = false;
+  assert.ok(turns > 0, 'the event loop turned while the walk waited for the disk');
 });

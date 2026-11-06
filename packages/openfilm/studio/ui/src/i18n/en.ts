@@ -385,6 +385,8 @@ export const en = {
     subtitles: 'Subtitles',
     burnIn: 'Burn subtitles into the picture',
     noSidecar: 'No file',
+    loudnessAsMixed: 'As mixed',
+    loudnessHint: 'The whole film brought to this loudness, true peaks under -1 dBTP. -14 for YouTube and streaming, -16 for podcasts, -23 for broadcast.',
     gifWidth: 'Size',
     gifHint: 'Tip: pick a range of a few seconds. A 10-second GIF at 640px is usually a few MB.',
     format: 'Format',
@@ -607,6 +609,16 @@ export const en = {
     speed: 'Playback speed',
     speedNormal: 'Normal',
     seek: 'Seek',
+  },
+  recycle: {
+    refused: `“{name}” stays where it is: {why}. ${FILES} can delete it for good.`,
+    network: 'it is on a network drive, which has no Recycle Bin',
+    removable: 'it is on a removable drive, which has no Recycle Bin',
+    noBin: 'drive {drive} has no Recycle Bin',
+    noVolume: 'Windows did not say which volume drive {drive} is, so its Recycle Bin’s settings could not be checked',
+    policy: 'a policy here has the Recycle Bin delete files right away',
+    nuke: 'the Recycle Bin of drive {drive} is set to delete files right away',
+    tooBig: 'it is {size}, more than the Recycle Bin of drive {drive} holds ({holds})',
   },
   project: {
     projects: 'Projects',
@@ -2235,6 +2247,7 @@ export const en = {
       moveNo: 'Leave them',
       moved: 'Moved {count} projects.',
       moveFailed: 'These could not move and stay where they were: {names}',
+      moveLeft: `Their old folders stay on the old disk, as ${TRASH} would not take them; ${FILES} can delete them for good: {paths}`,
     },
     playback: {
       group: "Playback",
@@ -2661,6 +2674,8 @@ export const en = {
       useEnv: 'Use the key in ${env}',
       signingIn: 'Finish signing in in your browser…',
       keyless: "Works without a key: your agent's searches and the addresses it reads go to {name}. A key lifts its limits.",
+      pricing: 'Pricing',
+      pricingOf: "{name}'s prices, on its own site",
       addKey: 'Add a key',
       own: {
       account: 'View account',

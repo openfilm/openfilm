@@ -54,6 +54,7 @@ export default {
   keysUrl: 'https://aistudio.google.com/apikey',
   /* AI Studio's keys page is where a key's project shows its billing */
   billingUrl: 'https://aistudio.google.com/apikey',
+  pricingUrl: 'https://aistudio.google.com/docs/pricing',
   verbs: ['voice', 'tts', 'image', 'video', 'asr', 'translate'],
   models: MODELS,
   async run(verb, args, ctx) {

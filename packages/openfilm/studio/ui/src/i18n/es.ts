@@ -384,6 +384,8 @@ export const es: Words = {
     subtitles: 'Subtítulos',
     burnIn: 'Incrustar los subtítulos en la imagen',
     noSidecar: 'Sin archivo',
+    loudnessAsMixed: 'Como está mezclado',
+    loudnessHint: 'Toda la película a esta sonoridad, con picos reales por debajo de -1 dBTP. -14 para YouTube y streaming, -16 para pódcast, -23 para televisión.',
     gifWidth: 'Tamaño',
     gifHint: 'Consejo: elige un intervalo de pocos segundos. Un GIF de 10 segundos a 640 px suele ocupar unos pocos MB.',
     format: 'Formato',
@@ -606,6 +608,16 @@ export const es: Words = {
     speed: 'Velocidad de reproducción',
     speedNormal: 'Normal',
     seek: 'Buscar',
+  },
+  recycle: {
+    refused: `“{name}” se queda donde está: {why}. ${FILES} puede eliminarlo definitivamente.`,
+    network: 'está en una unidad de red, que no tiene Papelera de reciclaje',
+    removable: 'está en una unidad extraíble, que no tiene Papelera de reciclaje',
+    noBin: 'la unidad {drive} no tiene Papelera de reciclaje',
+    noVolume: 'Windows no indicó qué volumen es la unidad {drive}, así que no se pudo comprobar la configuración de su Papelera',
+    policy: 'una directiva aquí hace que la Papelera de reciclaje elimine los archivos de inmediato',
+    nuke: 'la Papelera de reciclaje de la unidad {drive} está configurada para eliminar los archivos de inmediato',
+    tooBig: 'ocupa {size}, más de lo que admite la Papelera de reciclaje de la unidad {drive} ({holds})',
   },
   project: {
     projects: 'Proyectos',
@@ -2234,6 +2246,7 @@ export const es: Words = {
       moveNo: 'Dejarlos',
       moved: 'Se movieron {count} proyectos.',
       moveFailed: 'No se pudieron mover y siguen donde estaban: {names}',
+      moveLeft: `Sus carpetas antiguas se quedan en el disco anterior, porque ${TRASH} no las aceptó; ${FILES} puede borrarlas definitivamente: {paths}`,
     },
     playback: {
       group: "Reproducción",
@@ -2660,6 +2673,8 @@ export const es: Words = {
       useEnv: 'Usar la clave de ${env}',
       signingIn: 'Termina de iniciar sesión en tu navegador…',
       keyless: 'Funciona sin clave: las búsquedas de tu agente y las direcciones que lee se envían a {name}. Una clave amplía sus límites.',
+      pricing: 'Precios',
+      pricingOf: 'Los precios de {name}, en su propio sitio',
       addKey: 'Añadir una clave',
       own: {
       account: 'Ver cuenta',

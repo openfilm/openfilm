@@ -58,8 +58,9 @@ openfilm skill remove <name>
 
   Checks what OpenFilm needs here and prints a report to paste into an issue: OpenFilm's and Node's versions, the
   system, which agent ran the command, Studio, ffmpeg, the browser films are drawn in and its graphics, the data and
-  projects folders, npm, and the last errors in Studio's log. Paths under your home folder read ~; no keys, accounts
-  or projects are in it. Exit status 1 when something needs fixing; the report says what.`,
+  projects folders, how much the projects' .film folders hold, npm, and the last errors in Studio's log. Paths under
+  your home folder read ~; no keys, accounts or projects are in it. Exit status 1 when something needs fixing; the
+  report says what.`,
   look: `openfilm look [what] [t | a-b]
 
   what   the project (default), a web page (.html), or a media file (video, image, sound)
@@ -71,7 +72,11 @@ openfilm skill remove <name>
   Writes PNGs under .film/cache/look/ of the project and prints their paths. A project Studio has not shown yet is
   opened in Studio first, so the person watches it.
 
-  --count <n>     frames in a sheet (12)`,
+  --count <n>     frames in a sheet (12)
+  --full          watch every frame of the rendered film (what render wrote beside film.html), or of a video
+                  given: white flashes, frames unlike those on both sides, still pictures (6 s or more) and
+                  black, each with its time
+  --loudness=<n>  say how far the mix is from n LUFS and -1 dBTP, the target render --loudness brings it to`,
   canvas: `openfilm canvas [apply <steps>]
 
   The project's canvas: a board beside the edit where the person lays out notes, the project's files and nodes that
@@ -108,7 +113,9 @@ openfilm skill remove <name>
   --4k            3840 px wide              --scale <n>     any device pixel ratio
   --blur          motion blur (8 samples)   --samples <n>   --shutter <0..1>
   --alpha         transparent background    --workers <n>   parallel browsers
-  --subtitles     burn in a project's subtitles from before caption tracks`,
+  --subtitles     burn in a project's subtitles from before caption tracks
+  --loudness=<n>  the sound at n LUFS (-70 to -5; -14 for online video), true peaks under -1 dBTP; the
+                  picture is not touched. Write it with = so the minus sign is read as the value`,
 };
 
 /* `openfilm` alone: the manual, the whole of what an agent needs to know. `get` takes any options its verb has,
@@ -166,9 +173,9 @@ if (RAW[0] === 'get') {
     parsed = parseArgs({
       allowPositionals: true,
       options: {
-        count: { type: 'string' }, out: { type: 'string', short: 'o' }, '4k': { type: 'boolean' }, scale: { type: 'string' },
+        count: { type: 'string' }, full: { type: 'boolean' }, out: { type: 'string', short: 'o' }, '4k': { type: 'boolean' }, scale: { type: 'string' },
         blur: { type: 'boolean' }, samples: { type: 'string' }, shutter: { type: 'string' }, alpha: { type: 'boolean' }, subtitles: { type: 'boolean' },
-        fps: { type: 'string' }, workers: { type: 'string' }, help: { type: 'boolean', short: 'h' },
+        fps: { type: 'string' }, workers: { type: 'string' }, loudness: { type: 'string' }, help: { type: 'boolean', short: 'h' },
       },
     });
   } catch (e) {
@@ -182,9 +189,9 @@ if (RAW[0] === 'get') {
   if (o.help && COMMAND_HELP[cmd]) { console.log(named(COMMAND_HELP[cmd])); process.exit(0); }
   if (o.help || !cmd) { console.log(HELP); process.exit(0); }
   const num = (v) => (v == null ? undefined : Number(v));
-  const opts = { ...o, count: num(o.count), scale: num(o.scale), samples: num(o.samples), shutter: num(o.shutter), fps: num(o.fps), workers: num(o.workers) };
+  const opts = { ...o, loudness: num(o.loudness), count: num(o.count), scale: num(o.scale), samples: num(o.samples), shutter: num(o.shutter), fps: num(o.fps), workers: num(o.workers) };
   /* a number option out of its range is a wrong command (2), said before anything starts */
-  const RANGES = { count: [1, 200, true], fps: [1, 240, false], scale: [0.1, 8, false], samples: [1, 64, true], shutter: [0, 1, false], workers: [1, 64, true] };
+  const RANGES = { count: [1, 200, true], fps: [1, 240, false], scale: [0.1, 8, false], samples: [1, 64, true], shutter: [0, 1, false], workers: [1, 64, true], loudness: [-70, -5, false] };
   for (const [name, [lo, hi, whole]] of Object.entries(RANGES)) {
     const v = opts[name];
     if (v === undefined || (Number.isFinite(v) && v >= lo && v <= hi && (!whole || Number.isInteger(v)))) continue;

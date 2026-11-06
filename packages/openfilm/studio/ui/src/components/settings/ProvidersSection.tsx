@@ -10,6 +10,7 @@
  * take the person's own key, which pays that service directly (a key in the environment shows as such and stays
  * there); OpenFilm signs in to the person's OpenFilm account in their browser; Keenable connects at once and takes a
  * key afterwards, for higher limits.
+ * Each links its own pricing page; what is free and what is paid is the service's to say.
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
@@ -114,6 +115,20 @@ export function Card({ label, onClose, children }: { label: string; onClose: () 
   );
 }
 
+/** The provider's own pricing page, a link after how it is paid. */
+function PricingLink({ provider }: { provider: OwnProvider }) {
+  const t = useT();
+  return (
+    <>
+      <span aria-hidden className="text-[var(--text-faint)]">·</span>
+      <a href={provider.pricingUrl} target="_blank" rel="noreferrer" className={settingsLink}
+        aria-label={t('settings.providers.pricingOf').replaceAll('{name}', provider.name)}>
+        {t('settings.providers.pricing')}
+      </a>
+    </>
+  );
+}
+
 /**
  * A service's card: its mark, name and website, with Connect (or how it is connected, and Disconnect); who it is; and
  * every kind it could make, with its models or a dash; at the foot, how it is paid.
@@ -163,7 +178,7 @@ export function ProviderDialog({ provider, hook, onClose }: { provider: OwnProvi
           );
         })}
       </div>
-      <p className="mt-5 text-[13px] leading-relaxed text-[var(--text-faint)]">{paid}</p>
+      <p className="mt-5 inline-flex flex-wrap items-center gap-x-1.5 text-[13px] leading-relaxed text-[var(--text-faint)]">{paid}{provider.pricingUrl ? <PricingLink provider={provider} /> : null}</p>
     </Card>
   );
 }

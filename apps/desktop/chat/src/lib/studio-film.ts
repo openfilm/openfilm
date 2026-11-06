@@ -12,20 +12,23 @@ const READ_WAIT_MS = 4000;
 let clipSrc = new Map<string, string>();
 const listeners = new Set<() => void>();
 
-/** The project's film as Studio reads it from its folder; null when it cannot say (no film, one with problems, no answer). */
-export async function readStudioFilm(projectId: string): Promise<FilmDoc | null> {
+/** The current project's file-serving URL, passed down by ChatPane after reading Studio's project API. */
+export const ProjectFolderContext = React.createContext<string | null>(null);
+
+/** Read the project's clip references and return its file-serving URL, including when film.html is missing. */
+export async function readStudioProject(projectId: string): Promise<string | null> {
   const stop = new AbortController();
   const timer = setTimeout(() => stop.abort(), READ_WAIT_MS);
   try {
     const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}`, { signal: stop.signal });
     if (!res.ok) return null;
-    const { doc } = await res.json() as { doc?: FilmDoc | null };
-    if (!doc || !Array.isArray(doc.tracks)) return null;
+    const { doc, folder } = await res.json() as { doc?: FilmDoc | null; folder?: string };
+    const tracks = doc && Array.isArray(doc.tracks) ? doc.tracks : [];
     const next = new Map<string, string>();
-    for (const track of doc.tracks) for (const clip of track.clips) if (clip?.id && clip.src) next.set(clip.id, clip.src);
+    for (const track of tracks) for (const clip of track.clips) if (clip?.id && clip.src) next.set(clip.id, clip.src);
     clipSrc = next;
     for (const listener of listeners) listener();
-    return doc;
+    return typeof folder === 'string' ? folder : null;
   } catch {
     return null;
   } finally {

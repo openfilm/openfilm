@@ -63,7 +63,7 @@ import { CopyDiagnostics } from '@/components/CopyDiagnostics';
 import { Notice, type NoticeTone } from '@/components/NoticeCard';
 import { accountName, accountTrouble } from '@/lib/account-trouble';
 import { accountModel, accountModelOf, routeWithoutKey } from '@/lib/route-without-key';
-import { keptNote, readStudioFilm } from '@/lib/studio-film';
+import { keptNote, ProjectFolderContext, readStudioProject } from '@/lib/studio-film';
 import { studioRefsFromTransfer, transferHasStudioRefs } from '@/lib/studio-transfer';
 import { agentModelSummary, agentOptions, currentAgent, effectivePrefs, offeredOption, useLocalAgents } from '@/state/local-agent-store';
 import { useLiveActivityFromStore } from '@/lib/live-activity';
@@ -241,8 +241,14 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     return done;
   }
 
-  /* the clips' files, so a clip an agent names in its reply gets its icon (lib/studio-film) */
-  React.useEffect(() => { void readStudioFilm(project.id); }, [project.id]);
+  /* The clips' files and the project's serving URL for audio links in replies (lib/studio-film). */
+  const [projectFolder, setProjectFolder] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    let current = true;
+    setProjectFolder(null);
+    void readStudioProject(project.id).then((folder) => { if (current) setProjectFolder(folder); });
+    return () => { current = false; };
+  }, [project.id]);
 
   /* the page was reloaded while a turn ran (the window, its session and the agent stayed): put it back */
   React.useEffect(() => {
@@ -1141,6 +1147,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
                       <div ref={thread.contentRef} className="min-w-0 shrink-0">
                         <PromptPillRevealContext.Provider value={sentPills}>
                           <TurnUndoContext.Provider value={onUndo}>
+                          <ProjectFolderContext.Provider value={projectFolder}>
                             <LiveConversation
                               store={liveStore}
                               turns={opLog}
@@ -1149,6 +1156,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
                               liveActivity={activity}
                               lastTurnRef={tail.lastTurnRef}
                             />
+                          </ProjectFolderContext.Provider>
                           </TurnUndoContext.Provider>
                         </PromptPillRevealContext.Provider>
                       </div>

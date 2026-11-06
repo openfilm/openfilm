@@ -328,8 +328,11 @@ export function mixGraph(clips, duration) {
     const mono = c.channels === 1 ? ',pan=stereo|c0=c0|c1=c0' : '';
     return `${source[i]}${trim},volume=${c.volume},adelay=${delay}:all=1${mono},aresample=48000,aformat=channel_layouts=stereo[a${i}]`;
   });
-  /* padded to the film's length and no further, and cut there: the mix always ends */
-  const sum = `${clips.map((_, i) => `[a${i}]`).join('')}amix=inputs=${clips.length}:normalize=0:dropout_transition=0,apad=whole_dur=${duration},atrim=0:${duration}[out]`;
+  /* padded to the film's length and no further, and cut there: the mix always ends. The mix is given its timestamps
+     first, from its samples (it starts at 0 and has no gaps): at times amix's frames come without any (ffmpeg 8 on
+     Linux, about one mix in 25 with three inputs), and apad, which pads by them, then padded nothing and a film whose
+     last sound ended before it did got a mix that ended there */
+  const sum = `${clips.map((_, i) => `[a${i}]`).join('')}amix=inputs=${clips.length}:normalize=0:dropout_transition=0,asetpts=N/SR/TB,apad=whole_dur=${duration},atrim=0:${duration}[out]`;
   return { inputs, filter: [...splits, ...chains, sum].join(';') };
 }
 

@@ -21,6 +21,7 @@ export default {
   env: 'KEENABLE_API_KEY',
   keysUrl: 'https://app.keenable.ai/console',
   billingUrl: 'https://app.keenable.ai/console',
+  pricingUrl: 'https://keenable.ai/pricing',
   verbs: ['web-search', 'web-fetch'],
   models: MODELS,
   keyless: true,

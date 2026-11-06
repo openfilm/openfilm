@@ -30,9 +30,9 @@ export const MEDIA_RATE_MAX = 16;
 /** Whether a browser plays media at `rate`. @param {number} rate */
 export const mediaPlays = (rate) => rate >= MEDIA_RATE_MIN - 1e-9 && rate <= MEDIA_RATE_MAX + 1e-9;
 const TRIM_EPS = 1e-6;
-/* A time to the millisecond can end up to one past the file's length (an 8.063991 s file ends at #t=…,8.064, and a
-   length counted in whole milliseconds is 8.063): that is the file's end, not past it. */
-const PAST_END = 0.001 + TRIM_EPS;
+/* film.html's seconds are written to the millisecond, and Studio's timeline counts a file's length in whole
+   milliseconds rounded down: a trim one millisecond past a file's length is its end */
+const PAST_END_EPS = 0.001 + TRIM_EPS;
 
 const STILL_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp', 'avif', 'gif', 'bmp', 'svg']);
 
@@ -444,8 +444,8 @@ export function clipSpan(clip, native, where = 'clip') {
   if (from < -TRIM_EPS) throw new Error(`${where}: #t=${from},… starts below 0 (#t= is a part of the file, within [0, its length]).`);
   if (to + TRIM_EPS < from) throw new Error(`${where}: #t=${from},${to} has to end after it starts.`);
   if (kind !== 'page' && isFinite(native) && native > 0) {
-    if (to > native + PAST_END) throw new Error(`${where}: #t=${from},${to} ends past the file's length of ${native} s (#t= is a part of the file, within [0, its length]).`);
-    if (from > native + PAST_END) throw new Error(`${where}: #t=${from},${to} starts past the file's length of ${native} s (#t= is a part of the file, within [0, its length]).`);
+    if (to > native + PAST_END_EPS) throw new Error(`${where}: #t=${from},${to} ends past the file's length of ${native} s (#t= is a part of the file, within [0, its length]).`);
+    if (from > native + PAST_END_EPS) throw new Error(`${where}: #t=${from},${to} starts past the file's length of ${native} s (#t= is a part of the file, within [0, its length]).`);
   }
   const speed = clipSpeed(clip);
   return { from, to, speed, length: (to - from) / speed };

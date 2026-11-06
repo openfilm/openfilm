@@ -124,6 +124,7 @@ export default {
   name: NAME,
   env: 'OPENROUTER_API_KEY',
   keysUrl: 'https://openrouter.ai/settings/keys',
+  pricingUrl: 'https://openrouter.ai/pricing',
   billingUrl: 'https://openrouter.ai/settings/credits',
   verbs: ['image', 'video'],
   models: MODELS,

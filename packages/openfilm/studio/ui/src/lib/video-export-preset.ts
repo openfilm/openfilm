@@ -14,6 +14,8 @@ export interface VideoExportSettings {
   audio: boolean;
   burn: boolean;
   sidecar: 'none' | 'srt' | 'vtt';
+  /** The whole film's loudness in LUFS, true peaks under -1 dBTP; null: as mixed. */
+  loudness: number | null;
 }
 
 export const DEFAULT_VIDEO_EXPORT: VideoExportSettings = {
@@ -27,6 +29,7 @@ export const DEFAULT_VIDEO_EXPORT: VideoExportSettings = {
   audio: true,
   burn: true,
   sidecar: 'none',
+  loudness: null,
 };
 
 export function videoExportPreset(id: string, projectFps: number): VideoExportSettings {

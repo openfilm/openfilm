@@ -27,6 +27,7 @@ export default {
   /* the key is shown on its API page once signed in */
   keysUrl: 'https://pixabay.com/api/docs/',
   billingUrl: 'https://pixabay.com/api/docs/',
+  pricingUrl: 'https://pixabay.com/api/docs/',
   verbs: ['image-search', 'video-search'],
   models: MODELS,
   async run(verb, args, ctx) {

@@ -48,11 +48,12 @@ import { apartOnTracks, type ClipEdit } from '@/lib/film-clip-edits';
 import { mediaFetch, useMediaImages } from '@/lib/media-queue';
 import { clipboardItemsOf, clipboardNow, laneOfBlock, pasteEdit, type TimelineClipboardItem } from '@/lib/timeline-clipboard';
 import {
-  editModelOf, freshLink, linkedIds, magnetOn, mainTrackOf, planMove, planRippleTrim, planRoom, planSpeed, slowestSpeed, soundTrackFor, type EditMode,
+  editModelOf, freshLink, linkedIds, magnetOn, mainTrackOf, planDetachAudio, planMove, planRippleTrim, planRoom, planSpeed, slowestSpeed, type EditMode,
   planCutRange,
 } from '@/lib/timeline-edit';
 import { readTimelinePrefs, switchesOf } from '@/lib/timeline-prefs';
 import { fadeMsOf, type FadeMs } from '@/lib/clip-fade';
+import { hasSoundToDetach } from '@/lib/clip-volume';
 import {
   cutForClick, findTransitions, foldHeads, headsOf, planRemoveTransition, planResizeTransition, planTransition, TRANSITION_MS,
   type ClipFacts, type TransitionAsk, type TransitionPlan,
@@ -69,9 +70,11 @@ import { useLoadedThumbs } from '@/lib/use-loaded-thumbs';
 import { droppedOverrides, overrideTarget, undoneFields, type DroppedEdits, type PersonEdit } from '@/lib/dropped-overrides';
 import { filmFrameBox, type FilmFrameId } from '@/lib/film-frame';
 import { canvasFor, firstPictureSize, fitToCanvas } from '@/lib/canvas-fit';
+import { positionOf } from '@/lib/stage-crop';
 import { createViewerZoom } from '@/lib/viewer-zoom';
 import { decodes, type PlayCheck } from '@/lib/decodes';
 import { factsOfProbe, mediaListingOf, resourceKindOf, srcHitsAsset, warmProjectMedia, type MediaListing, type MediaProxy, type MediaResult, type MediaSources, type WorkspaceResource } from '@/lib/workspace-resources';
+import { recycleRefusalOf } from '@/lib/recycle';
 import { BrandLoadingScreen } from './BrandLoadingScreen';
 import { SettingsModal } from './settings/SettingsModal';
 import { useSettings } from './settings/use-settings';
@@ -312,7 +315,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* the film as loaded: a new project name (a rename, or the snapshot a reconnecting page is sent) leaves it as it is */
   const initial = React.useMemo(() => (loaded?.doc && loaded.value ? { value: loaded.value, rev: loaded.rev } : null), [loaded?.doc, loaded?.value, loaded?.rev]);
   React.useEffect(() => { if (initial) lastServerDoc.current = initial.value; }, [initial]);
+  /* the film with every edit made here, at once: an edit begun before the one before it was drawn (a color typed,
+     then a stroke added with the same click) starts from it, not from the film before it */
+  const filmRef = React.useRef<Film | null>(initial?.value ?? null);
   const film = useFilm(projectId, initial, React.useCallback((value: Film, kind: 'edit' | 'server', head?: string) => {
+    filmRef.current = value;
     preview.current?.update(value, head);
     if (kind === 'server') {
       const found = droppedOverrides(lastServerDoc.current as unknown as FilmDoc, value as unknown as FilmDoc);
@@ -332,7 +339,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     }
   }, []));
   personSteps.current = film.steps.done;
-  const filmRef = React.useRef(film.film);
   filmRef.current = film.film;
   /* on `showError`, which stays the same: `toast` is new with every message, so showing it would run this again, and
      again (the editor gone) */
@@ -674,9 +680,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
 
   /* ── the timeline: film.html + where the preview placed each clip ── */
   const spans = React.useMemo(() => info?.spans ?? [], [info]);
-  /* the Layers panel reads its tree again when film.html changes, and when the preview drew the film anew (a page
-     written: a layer pasted into it, or the agent's edit) */
-  const layersKey = React.useMemo(() => ({}), [film.film, info]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* the Layers panel reads its tree again when film.html changes, when the preview drew the film anew (a page
+     written: a layer pasted into it, or the agent's edit), and when a page that came on is shown (it is in the tree
+     only once drawn; the picture says so, and nothing else is rebuilt for it) */
+  const [pageShown, setPageShown] = React.useState(0);
+  const layersKey = React.useMemo(() => ({}), [film.film, info, pageShown]); // eslint-disable-line react-hooks/exhaustive-deps
   /* a file's length draws a clip that plays to its end before the preview places it (a split's second half, a drop) */
   const mediaFacts = React.useMemo<MediaFacts>(() => new Map([...facts].map(([path, f]) => [path, { audio: f.audio, ...(f.durationMs ? { duration: f.durationMs / 1000 } : {}) }])), [facts]);
   const [pendingDrops, setPendingDrops] = React.useState<PendingDrop[]>([]);
@@ -1207,31 +1215,20 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     });
   }, [edit, editModel, t]);
   /**
-   * A video's sound taken apart from its picture, as an editor unlinks them: the same file's sound alone, at the same
-   * seconds and speed, on a sound track that has room for it (a new one under the sound tracks only when none has),
-   * linked to the video (`data-link`) so they still move, trim, split and delete together; the video silent from then on.
+   * Videos' sounds taken apart from their pictures, as an editor unlinks them (lib/timeline-edit planDetachAudio): each
+   * the same file's sound alone, at the same seconds and speed, on a sound track that has room for it (a new one under
+   * the sound tracks only when none has), linked to its video (`data-link`) so they still move, trim, split and delete
+   * together; the videos silent from then on. One edit, one step to undo.
    */
-  const detachAudio = React.useCallback((block: TimelineBlock): Promise<string | null> => {
-    const current = filmRef.current;
-    const ti = current?.tracks.findIndex((tr) => tr.clips.some((c) => c.id === block.clipId)) ?? -1;
-    const clip = ti >= 0 ? current!.tracks[ti]!.clips.find((c) => c.id === block.clipId) : undefined;
-    if (!clip || !block.clipId) return Promise.resolve(t('timeline.detachFail'));
-    const model = editModel();
-    const link = clip.attrs?.['data-link'] ?? freshLink(model, clip.id);
-    const sound = {
-      src: clip.src,
-      sound: true as const,
-      ...(clip.at != null ? { at: clip.at } : {}),
-      ...(clip.time ? { time: clip.time } : {}),
-      ...(clip.speed != null ? { speed: clip.speed } : {}),
-      ...(clip.volume != null && clip.volume !== 0 ? { volume: clip.volume } : {}),
-      attrs: { 'data-link': link },
-    };
-    const track = soundTrackFor(model, { startMs: block.startMs, endMs: block.endMs }, ti);
-    return edit([
-      { op: 'props', edits: [{ clip: block.clipId, prop: 'volume', value: 0 }, { clip: block.clipId, prop: 'link', value: link }] },
-      { op: 'insert', clip: sound, track },
-    ], clipStep('history.stepDetachAudio', [block.clipId]));
+  const detachAudio = React.useCallback((blocks: readonly TimelineBlock[]): Promise<string | null> => {
+    const clips = new Map((filmRef.current?.tracks ?? []).flatMap((tr) => tr.clips.map((c) => [c.id, c] as const)));
+    const videos = blocks.flatMap((b) => {
+      const clip = b.clipId ? clips.get(b.clipId) : undefined;
+      return clip ? [clip] : [];
+    });
+    const ops = videos.length ? planDetachAudio(editModel(), videos) : [];
+    if (!ops.length) return Promise.resolve(t('timeline.detachFail'));
+    return edit(ops, clipStep('history.stepDetachAudio', videos.slice(0, 2).map((c) => c.id)));
   }, [edit, editModel, t]);
   /**
    * Clips made one compound clip (studio/server/compound.mjs): their own film written under parts/, then one edit puts
@@ -2833,15 +2830,15 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     element: StageElement, rawPatch: OverrideGeometry | null, allCopies = false, pivot?: OverridePivot,
   ): Promise<string | null> => {
     const patch = rawPatch && pivot && stageControl.current ? await stageControl.current.previewOverride(element, rawPatch, pivot) : rawPatch;
+    /* the blocks written inside a line keep their place and look: their overrides go with it, one edit */
+    const riders = await stageControl.current?.riders(element, patch) ?? [];
+    /* the film read after the last wait and written with nothing between: an edit made meanwhile is in it, and kept */
     const doc = filmRef.current as unknown as FilmDoc | null;
     const found = doc ? pageClipOf(doc, element) : null;
     const target = layerTarget(element, allCopies);
     if (!found || !target) return t('timeline.editFail');
     let next = nextOverrides(found.clip.overrides, target, patch);
-    /* the blocks written inside a line keep their place and look: their overrides go with it, one edit */
-    for (const r of await stageControl.current?.riders(element, patch) ?? []) {
-      next = nextOverrides(next ?? undefined, { at: r.at, ...(r.n != null ? { n: r.n } : {}) }, r.patch);
-    }
+    for (const r of riders) next = nextOverrides(next ?? undefined, { at: r.at, ...(r.n != null ? { n: r.n } : {}) }, r.patch);
     /* the panel shows the new numbers at once; refused, they go back */
     const now = next ? overrideOf(next, target) : null;
     const before = element.override ?? null;
@@ -2868,18 +2865,19 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   editStageOverrideRef.current = editStageOverride;
   /* several layers at once (moved, hidden, aligned together): one write, one undo step */
   const editStageOverrides = React.useCallback(async (list: ReadonlyArray<{ element: StageElement; patch: OverrideGeometry | null }>): Promise<string | null> => {
+    const riders: Awaited<ReturnType<FilmStageControl['riders']>>[] = [];
+    for (const { element, patch } of list) riders.push(await stageControl.current?.riders(element, patch) ?? []);
+    /* read after the waits, as for one layer (editStageOverride) */
     const doc = filmRef.current as unknown as FilmDoc | null;
     if (!doc || !list.length) return t('timeline.editFail');
     const byClip = new Map<string, ReturnType<typeof nextOverrides>>();
-    for (const { element, patch } of list) {
+    for (const [i, { element, patch }] of list.entries()) {
       const found = pageClipOf(doc, element);
       const target = layerTarget(element);
       if (!found || !target) continue;
       const prev = byClip.has(found.loc) ? byClip.get(found.loc) ?? undefined : found.clip.overrides;
       let next = nextOverrides(prev, target, patch);
-      for (const r of await stageControl.current?.riders(element, patch) ?? []) {
-        next = nextOverrides(next ?? undefined, { at: r.at, ...(r.n != null ? { n: r.n } : {}) }, r.patch);
-      }
+      for (const r of riders[i]!) next = nextOverrides(next ?? undefined, { at: r.at, ...(r.n != null ? { n: r.n } : {}) }, r.patch);
       byClip.set(found.loc, next);
     }
     if (!byClip.size) return t('timeline.editFail');
@@ -3539,7 +3537,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
 
   /* ── media pane actions ── */
   const projectApi = `/api/projects/${encodeURIComponent(projectId)}`;
-  const mediaResult = async (res: Response): Promise<MediaResult> => (res.ok ? 'ok' : res.status === 409 ? 'taken' : 'failed');
+  const mediaResult = async (res: Response): Promise<MediaResult> => (res.ok ? 'ok' : res.status === 409 ? recycleRefusalOf(await res.json().catch(() => null)) ?? 'taken' : 'failed');
   /* media kept on this computer (files.mjs bringIn): picked in the system's dialog (the app's own for a folder, when
      it has one; 'no-dialog' where there is none), copied in (cloned where the disk can) or linked where it is kept (a
      NAS). A link pointed elsewhere, or copied into the project in its place */
@@ -3831,6 +3829,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const canvasOps = React.useCallback((size: { w: number; h: number }): Op[] => {
     const own = new Map(spans.map((span) => [span.id, span.w && span.h ? { w: span.w, h: span.h } : null]));
     const reflows = new Set(spans.filter((span) => span.reflows).map((span) => span.id));
+    const looks = new Map(spans.map((span) => [span.id, span.look]));
     const clips = (film.film?.tracks ?? []).flatMap((track) => track.clips.map((clip) => ({
       id: clip.id,
       kind: clip.sound ? 'sound' as const : filmSrcKind(clip.src),
@@ -3838,6 +3837,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       box: (clip.box as FilmBox | undefined) ?? null,
       reflows: reflows.has(clip.id),
       size: clip.size ?? null,
+      fit: looks.get(clip.id)?.fit ?? null,
+      position: positionOf(looks.get(clip.id)?.position),
     })));
     return [
       { op: 'stage', w: size.w, h: size.h },
@@ -4080,11 +4081,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         return;
       }
       case 'detach-audio': {
-        /* ⇧⌃S: the selected video's sound on a track of its own */
-        const video = selectedBlocks.find((b) => b.kind === 'video' && b.clipId);
-        if (!video || !once) return;
+        /* ⇧⌃S: the selected videos' sounds, each on a track of its own */
+        const videos = selectedBlocks.filter(hasSoundToDetach);
+        if (!videos.length || !once) return;
         take();
-        void detachAudio(video).then((err) => { if (err) toast.showError(err); });
+        void detachAudio(videos).then((err) => { if (err) toast.showError(err); });
         return;
       }
       default:
@@ -4567,7 +4568,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                         }}>
                           <Preview ref={preview} folder={folder} stage={shownStage} time={() => player.current.time()} fps={exactRate(projectFps)}
                             onInfo={onInfo} onKey={previewKey} onError={setPreviewError} onPlayed={onPlayed} onUndecoded={onUndecoded} waiting={agentWorking}
-                            onSpans={(next) => setInfo((had) => (had ? { ...had, spans: next } : had))}>
+                            onSpans={(next) => setInfo((had) => (had ? { ...had, spans: next } : had))}
+                            onShown={() => setPageShown((n) => n + 1)}>
                             {!fullscreen ? (
                               <FilmStageSelect
                                 previewRef={preview}

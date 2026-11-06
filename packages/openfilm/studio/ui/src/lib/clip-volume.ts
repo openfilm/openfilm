@@ -8,7 +8,7 @@
  *
  * Pure: the timeline draws a drag's line from here while the hand is on it, and writes it on release.
  */
-import { filmGainDbToVolume, filmVolumeToGainDb, parseFilmDocLoc } from './film.ts';
+import { filmGainDbToVolume, filmSrcIsStill, filmVolumeToGainDb, parseFilmDocLoc } from './film.ts';
 import type { ClipEdit } from './film-clip-edits.ts';
 import { dbToVolume, VOLUME_MAX, volumeToDb } from './loudness.ts';
 
@@ -22,6 +22,16 @@ export interface VolumeClip {
   volume?: number;
   gainDb?: number;
   ownAudio?: boolean;
+}
+
+/** A video clip whose sound can be taken off it onto a track of its own: footage in film.html, not a picture. */
+export function canDetachAudio(block: { kind: string; clipId?: string; src?: string }): boolean {
+  return block.kind === 'video' && Boolean(block.clipId) && !(block.src && filmSrcIsStill(block.src));
+}
+
+/** One of those with a sound to take off: its own, not muted. */
+export function hasSoundToDetach(block: { kind: string; clipId?: string; src?: string; ownAudio?: boolean; silent?: boolean }): boolean {
+  return canDetachAudio(block) && Boolean(block.ownAudio) && !block.silent;
 }
 
 /** Whether a clip has a volume: sounds always, a video when it carries its own sound (a page has none). */
