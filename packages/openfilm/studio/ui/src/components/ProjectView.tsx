@@ -51,6 +51,7 @@ import { useLoadedThumbs } from '@/lib/use-loaded-thumbs';
 import { droppedOverrides, overrideTarget, undoneFields, type DroppedEdits, type PersonEdit } from '@/lib/dropped-overrides';
 import { filmFrameBox, type FilmFrameId } from '@/lib/film-frame';
 import { canvasFor, firstPictureSize, fitToCanvas } from '@/lib/canvas-fit';
+import { positionOf } from '@/lib/stage-crop';
 import { createViewerZoom } from '@/lib/viewer-zoom';
 import { decodes, type PlayCheck } from '@/lib/decodes';
 import { factsOfProbe, mediaListingOf, resourceKindOf, srcHitsAsset, warmProjectMedia, type MediaListing, type MediaProxy, type MediaResult, type MediaSources, type WorkspaceResource } from '@/lib/workspace-resources';
@@ -2624,6 +2625,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const canvasOps = React.useCallback((size: { w: number; h: number }): Op[] => {
     const own = new Map(spans.map((span) => [span.id, span.w && span.h ? { w: span.w, h: span.h } : null]));
     const reflows = new Set(spans.filter((span) => span.reflows).map((span) => span.id));
+    const looks = new Map(spans.map((span) => [span.id, span.look]));
     const clips = (film.film?.tracks ?? []).flatMap((track) => track.clips.map((clip) => ({
       id: clip.id,
       kind: clip.sound ? 'sound' as const : filmSrcKind(clip.src),
@@ -2631,6 +2633,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       box: (clip.box as FilmBox | undefined) ?? null,
       reflows: reflows.has(clip.id),
       size: clip.size ?? null,
+      fit: looks.get(clip.id)?.fit ?? null,
+      position: positionOf(looks.get(clip.id)?.position),
     })));
     return [
       { op: 'stage', w: size.w, h: size.h },
