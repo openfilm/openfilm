@@ -12,11 +12,11 @@
  * it among the favorites, for every project.
  */
 import React from 'react';
-import { ChevronDown, ChevronsLeft, ChevronsRight, Plus, Search, Star } from 'lucide-react';
+import { ChevronDown, ChevronsLeft, ChevronsRight, Plus, Search, Star, X } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import {
-  TEXT_COMPONENT, libraryDragItem, libraryUrl, nameOf, pageUrl, posterUrl, previewUrl, toggleFavorite, useLibraryFavorites, useLibraryIndex,
+  BUILT_IN, TEXT_COMPONENT, builtInItem, libraryDragItem, libraryUrl, nameOf, pageUrl, posterUrl, previewUrl, toggleFavorite, useLibraryFavorites, useLibraryIndex,
   type LibraryCategory, type LibraryItem,
 } from '@/lib/library';
 import { clearResourceDrag, dragPicture, setResourceDragData } from '@/lib/resource-drag';
@@ -28,6 +28,7 @@ import { FEATURED, STARRED, VoicesPane } from './VoicesPane';
 import { ImportButton, SkillsPane, type SkillsLine } from './SkillsPane';
 import { SourceBadge, SourceChips, sourcesIn, type Source } from './SourceChips';
 import { TextStyleSample } from './TextStyleSample';
+import { useSavedLooks } from '../CaptionPresets';
 
 type Category = 'media' | 'skill' | 'voice' | 'captions' | LibraryCategory;
 const CATEGORIES: Category[] = ['media', 'skill', 'captions', 'voice', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition', 'template'];
@@ -38,10 +39,31 @@ const FAVORITES = STARRED;
 /* rows of a long list drawn at first, and more each time it is scrolled near its end */
 const PAGE = 80;
 
+/* the text category's lines: a new line of words; the person's own (starred, presets); the library's looks (word art,
+   `art:<group>` one of its groups) and its templates (`tpl:<group>`). Its motions are not here: they go on a line of
+   words in the timeline, from the Text inspector */
+const NEW_TEXT = 'new';
+const PRESETS = 'presets';
+const ART = 'art';
+const TEMPLATES = 'tpl';
+type TextSection = 'mine' | typeof ART | typeof TEMPLATES;
+/** What a thing of the text category is to its lines: the new line, a look, a template, or none (a motion). */
+const textKind = (item: LibraryItem): 'new' | typeof ART | typeof TEMPLATES | null =>
+  item.id === TEXT_COMPONENT ? 'new' : item.kind === 'textstyle' ? ART : item.kind === 'page' ? TEMPLATES : null;
+/** The section a line of the text category is under. */
+const sectionOf = (line: string): TextSection | null =>
+  line === FAVORITES || line === PRESETS ? 'mine' : line === ART || line.startsWith(`${ART}:`) ? ART : line === TEMPLATES || line.startsWith(`${TEMPLATES}:`) ? TEMPLATES : null;
+
 /* the category shown, the line picked in each, and whether the library's own groups are folded, kept while the
    drawer closes and opens again; and the last skills request (`showSkills`) followed, so a drawer opened again later
    does not follow it twice */
-const SHOWN = { cat: 'media' as Category, group: {} as Partial<Record<Category, string>>, folded: false, request: 0 };
+const SHOWN = {
+  cat: 'media' as Category, group: {} as Partial<Record<Category, string>>, folded: false, request: 0,
+  /* the text category's sections opened, and which of the person's starred things are shown (looks or templates) */
+  textOpen: { mine: false, art: true, tpl: false } as Record<TextSection, boolean>, starredText: ART as typeof ART | typeof TEMPLATES,
+};
+/* the line a category opens on the first time: a new line of words for the text */
+const firstLine = (cat: Category) => SHOWN.group[cat] ?? (cat === 'text' ? NEW_TEXT : '');
 
 export interface LibraryActions {
   /** A double click, Enter or "+": a page or a sound at the playhead (a transition on the cut), a look on the clip. */
@@ -78,7 +100,10 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
   const favorites = useLibraryFavorites();
   const voices = useLibraryVoices();
   const [cat, setCat] = React.useState<Category>(SHOWN.cat);
-  const [group, setGroup] = React.useState<string>(SHOWN.group[SHOWN.cat] ?? '');
+  const [group, setGroup] = React.useState<string>(firstLine(SHOWN.cat));
+  const [textOpen, setTextOpen] = React.useState(SHOWN.textOpen);
+  const [starredText, setStarredText] = React.useState(SHOWN.starredText);
+  const [presets, , dropPreset] = useSavedLooks();
   const [folded, setFolded] = React.useState(SHOWN.folded);
   const [query, setQuery] = React.useState('');
   /* the skill whose page is shown in place of the skills' tiles */
@@ -94,8 +119,16 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
   };
   /* another category: what played in the last one stops and its player goes */
   const closePlayer = React.useRef<() => void>(() => {});
-  const show = (next: Category) => { SHOWN.cat = next; setCat(next); setGroup(SHOWN.group[next] ?? ''); setQuery(''); setSource(''); setSkillOpen(null); pick(null); closePlayer.current(); };
+  const show = (next: Category) => { SHOWN.cat = next; setCat(next); setGroup(firstLine(next)); setQuery(''); setSource(''); setSkillOpen(null); pick(null); closePlayer.current(); };
   const pickGroup = (next: string) => { SHOWN.group[cat] = next; setGroup(next); setQuery(''); setSkillOpen(null); };
+  /* a section of the text category opened or closed; opened, it shows its first line unless one of its lines is shown */
+  const toggleText = (section: TextSection) => {
+    const open = !textOpen[section];
+    SHOWN.textOpen = { ...textOpen, [section]: open };
+    setTextOpen(SHOWN.textOpen);
+    if (open && sectionOf(group) !== section) pickGroup(section === 'mine' ? FAVORITES : section);
+  };
+  const showStarred = (kind: typeof ART | typeof TEMPLATES) => { SHOWN.starredText = kind; setStarredText(kind); };
   /* a request from outside: the skills, on Discover or on one's page (followed once, by its `n`) */
   React.useEffect(() => {
     if (!showSkills || showSkills.n === SHOWN.request) return;
@@ -129,9 +162,17 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
   }, [index, cat]);
   const stillGroup = (id: string) => stillGroups.has(id);
   /* what moves before what stands still (animated stickers before the emoji), each in the library's own order */
-  const shown = (index?.items ?? []).filter((item) => item.cat === cat && (q
+  /* a thing of the text category on the line shown */
+  const onTextLine = (item: LibraryItem) => {
+    const kind = textKind(item);
+    if (group === NEW_TEXT) return kind === 'new';
+    if (group === FAVORITES) return kind === starredText && favorites.includes(item.id);
+    const [section, of] = group.split(':');
+    return kind === section && (!of || item.group === of);
+  };
+  const shown = (index?.items ?? []).filter((item) => item.cat === cat && (cat !== 'text' || textKind(item)) && (q
     ? [...Object.values(item.name), ...(item.tags ?? [])].some((n) => n?.toLowerCase().includes(q))
-    : group === FAVORITES ? favorites.includes(item.id) : !group || item.group === group))
+    : cat === 'text' ? onTextLine(item) : group === FAVORITES ? favorites.includes(item.id) : !group || item.group === group))
     .sort((a, b) => Number(Boolean(a.still)) - Number(Boolean(b.still)));
   const sources = sourcesIn(shown.map(sourceOf));
   const items = source && sources.includes(source) ? shown.filter((item) => sourceOf(item) === source) : shown;
@@ -149,6 +190,32 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
     : (index?.groups[cat as LibraryCategory] ?? []).map((g) => ({ id: g.id, name: nameOf(g.name, lang) }))
       /* the groups of what moves first, those of stills (the emoji's) after them */
       .sort((a, b) => Number(stillGroup(a.id)) - Number(stillGroup(b.id)));
+  /* the text category's groups, under Word art or Templates by what they hold */
+  const textGroups = React.useMemo(() => {
+    const of = { [ART]: new Set<string>(), [TEMPLATES]: new Set<string>() };
+    for (const item of index?.items ?? []) {
+      const kind = item.cat === 'text' ? textKind(item) : null;
+      if (kind === ART || kind === TEMPLATES) of[kind].add(item.group);
+    }
+    const named = (ids: Set<string>) => (index?.groups.text ?? []).filter((g) => ids.has(g.id)).map((g) => ({ id: g.id, name: nameOf(g.name, lang) }));
+    return { [ART]: named(of[ART]), [TEMPLATES]: named(of[TEMPLATES]) };
+  }, [index, lang]);
+  const textSection = (section: typeof ART | typeof TEMPLATES, label: string) => {
+    const inIt = sectionOf(group) === section && !q;
+    return (
+      <>
+        <SideBox on={inIt && !textOpen[section]} holds={inIt && textOpen[section]} open={textOpen[section]} onClick={() => toggleText(section)}>{label}</SideBox>
+        {textOpen[section] ? (
+          <div className="flex flex-col pb-1">
+            <SideLine on={group === section && !q} onClick={() => pickGroup(section)}>{t('assetDrawer.all')}</SideLine>
+            {textGroups[section].map((g) => <SideLine key={g.id} on={group === `${section}:${g.id}` && !q} onClick={() => pickGroup(`${section}:${g.id}`)}>{g.name}</SideLine>)}
+          </div>
+        ) : null}
+      </>
+    );
+  };
+  /* square cards for the looks (and the person's), wide ones for the templates */
+  const textSquare = cat === 'text' && (sectionOf(group) === ART || group === PRESETS || group === NEW_TEXT || (group === FAVORITES && starredText === ART));
   const askMusic = studioHost?.ask;
   const groupName = (id: string) => own.find((g) => g.id === id)?.name ?? '';
   /* what a sound or a piece of music plays in, under the list */
@@ -217,6 +284,22 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
                 <SideBox on={skillLine === 'favorites'} onClick={() => pickGroup(FAVORITES)}>{t('assetDrawer.favorites')}</SideBox>
                 <SideBox on={skillLine === 'discover'} onClick={() => pickGroup('discover')}>{t('assetDrawer.skillsDiscover')}</SideBox>
               </>
+            ) : cat === 'text' ? (
+              <>
+                {/* a new line of words; the person's own; the library's looks and its templates */}
+                <SideBox on={group === NEW_TEXT && !q} onClick={() => pickGroup(NEW_TEXT)}>{t('assetDrawer.textNew')}</SideBox>
+                <SideBox on={sectionOf(group) === 'mine' && !textOpen.mine && !q} holds={sectionOf(group) === 'mine' && textOpen.mine && !q} open={textOpen.mine} onClick={() => toggleText('mine')}>
+                  {t('assetDrawer.textMine')}
+                </SideBox>
+                {textOpen.mine ? (
+                  <div className="flex flex-col pb-1">
+                    <SideLine on={group === FAVORITES && !q} onClick={() => pickGroup(FAVORITES)}>{t('assetDrawer.favorites')}</SideLine>
+                    <SideLine on={group === PRESETS && !q} onClick={() => pickGroup(PRESETS)}>{t('assetDrawer.textPresets')}</SideLine>
+                  </div>
+                ) : null}
+                {textSection(ART, t('assetDrawer.textArt'))}
+                {textSection(TEMPLATES, t('assetDrawer.textTemplates'))}
+              </>
             ) : cat === 'captions' ? (
               <>
                 {/* caption tracks made here; their look is the caption inspector's */}
@@ -256,7 +339,18 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
                 {/* the person's own skills come in here, the app's way (a link or a folder) */}
                 {cat === 'skill' && skillLine === 'installed' && studioHost?.skills?.add ? <ImportButton onClick={studioHost.skills.add} /> : null}
               </div>
-              {cat !== 'skill' && cat !== 'voice' ? <SourceChips sources={sources} value={source} onChange={setSource} /> : null}
+              {cat !== 'skill' && cat !== 'voice' && !(cat === 'text' && (group === NEW_TEXT || group === PRESETS)) ? <SourceChips sources={sources} value={source} onChange={setSource} /> : null}
+              {/* the starred things of the text category: its looks, or its templates */}
+              {cat === 'text' && group === FAVORITES && !q ? (
+                <div className="flex gap-1.5 px-3 pb-2">
+                  {([ART, TEMPLATES] as const).map((kind) => (
+                    <button key={kind} type="button" aria-pressed={starredText === kind} onClick={() => showStarred(kind)}
+                      className={`h-7 rounded-full px-3 text-[12px] font-medium ${starredText === kind ? 'bg-[var(--bg-pressed)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}`}>
+                      {t(kind === ART ? 'assetDrawer.textStarredArt' : 'assetDrawer.textStarredTemplates')}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               {cat === 'skill' ? <SkillsPane line={skillLine} query={query} projectId={projectId} opened={skillOpen} onOpen={setSkillOpen} onDiscover={() => pickGroup('discover')} />
                 : cat === 'voice' ? <VoicesPane group={group} query={query} favorites={favorites} onServices={onServices} onAll={() => pickGroup('')} speak={speak} /> : (
               <>
@@ -266,8 +360,17 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
                 onClick={(e) => { if (e.target === e.currentTarget) pick(null); }}
                 onScroll={(e) => { const el = e.currentTarget; if (el.scrollTop + el.clientHeight > el.scrollHeight - 800 && drawn < items.length) setDrawn(drawn + PAGE); }}
               >
-                {!items.length ? (
+                {cat === 'text' && group === PRESETS && !q ? (
+                  presets.length ? (
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(84px,1fr))] gap-x-2.5 gap-y-3">
+                      {presets.map((p, i) => <PresetCard key={p.id} id={p.id} vars={p.vars} name={t('assetDrawer.textPreset').replace('{n}', String(i + 1))} lang={lang}
+                        onAdd={(item) => actions.add(item)} onDrop={() => dropPreset(p.id)} />)}
+                    </div>
+                  ) : <Empty icon="star" text={t('assetDrawer.textNoPresets')} />
+                ) : !items.length ? (
                   q ? <Empty icon="search" text={t('assetDrawer.nothing').replace('{q}', query.trim())} />
+                    : cat === 'text' && group === FAVORITES ? <Empty icon="star" text={t('assetDrawer.noFavorites')}
+                      action={t(starredText === ART ? 'assetDrawer.textGoArt' : 'assetDrawer.textGoTemplates')} onAction={() => { if (!textOpen[starredText]) toggleText(starredText); else pickGroup(starredText); }} />
                     : group === FAVORITES ? <Empty icon="star" text={t('assetDrawer.noFavorites')} action={t('assetDrawer.seeAll')} onAction={() => pickGroup('')} />
                       : cat === 'music' ? <Empty icon="music" text={t('assetDrawer.musicSoon')} action={askMusic ? t('assetDrawer.musicMake') : undefined}
                         onAction={() => askMusic?.({ text: t('assetDrawer.musicAsk'), refs: [] })} />
@@ -287,10 +390,10 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
                     ))}
                   </div>
                 ) : (
-                  <div className={`grid gap-x-2.5 gap-y-3 ${cat === 'sticker' ? 'grid-cols-[repeat(auto-fill,minmax(68px,1fr))]' : cat === 'template' ? 'grid-cols-[repeat(auto-fill,minmax(140px,1fr))]' : cat === 'text' ? 'grid-cols-[repeat(auto-fill,minmax(120px,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(96px,1fr))]'}`}>
+                  <div className={`grid gap-x-2.5 gap-y-3 ${cat === 'sticker' ? 'grid-cols-[repeat(auto-fill,minmax(68px,1fr))]' : textSquare ? 'grid-cols-[repeat(auto-fill,minmax(84px,1fr))]' : cat === 'template' || cat === 'text' ? 'grid-cols-[repeat(auto-fill,minmax(120px,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(96px,1fr))]'}`}>
                     {/* a page at a time as it is scrolled, as the sounds are (the emoji alone are some 1,600) */}
                     {items.slice(0, drawn).map((it) => (
-                      <Card key={it.id} item={it} lang={lang} picked={picked === it.id} kept={favorites.includes(it.id)} square={cat === 'sticker'}
+                      <Card key={it.id} item={it} lang={lang} picked={picked === it.id} kept={favorites.includes(it.id)} square={cat === 'sticker' || textSquare}
                         onPick={() => pick(picked === it.id ? null : it)} onAdd={() => actions.add(it)} />
                     ))}
                   </div>
@@ -410,6 +513,35 @@ function dragOf(item: LibraryItem, name: string) {
 /** A press on a card's own button: not a pick, nor a double click's add. */
 const own = { onDoubleClick: (e: React.MouseEvent) => e.stopPropagation() };
 
+/**
+ * A look the person saved (in the Text inspector's word art, or a caption's): drawn as it is; a drag or a double click
+ * puts a new line of words in it (`onAdd` with it as a text style), "×" lets it go.
+ */
+function PresetCard({ id, vars, name, lang, onAdd, onDrop }: {
+  id: string; vars: Record<string, string>; name: string; lang: ReturnType<typeof useLanguage>;
+  onAdd: (item: LibraryItem) => void; onDrop: () => void;
+}) {
+  const t = useT();
+  const item = { id: `presets/${id}`, cat: 'text', group: PRESETS, name: { en: name }, kind: 'textstyle', vars } as LibraryItem;
+  const text = builtInItem(`${BUILT_IN}/${TEXT_COMPONENT}`);
+  const drag = text ? libraryDragItem(text, name) : null;
+  return (
+    <div className="group relative min-w-0 cursor-default select-none" title={name} draggable={Boolean(drag)}
+      onDragStart={drag ? (e) => { setResourceDragData(e.dataTransfer, { ...drag, vars }); dragPicture(e); e.dataTransfer.effectAllowed = 'copyMove'; } : undefined}
+      onDragEnd={() => clearResourceDrag()} onDoubleClick={() => onAdd(item)}>
+      <div className="relative aspect-square overflow-hidden rounded-md ring-1 ring-transparent group-hover:ring-[var(--text-faint)]">
+        <TextStyleSample vars={vars} lang={lang} />
+        <span className="absolute bottom-1 right-1 flex items-center gap-1">
+          <button type="button" aria-label={t('assetDrawer.textDropPreset')} title={t('assetDrawer.textDropPreset')} onClick={(e) => { e.stopPropagation(); onDrop(); }} {...own}
+            className={`${ROUND} hidden bg-black/55 text-white group-hover:grid`}><X size={11} strokeWidth={2.6} /></button>
+          <AddButton item={item} onAdd={() => onAdd(item)} className={`${ROUND} ${ADD_HOVER} hidden bg-black/55 text-white group-hover:grid`} />
+        </span>
+      </div>
+      <div className="mt-1.5 truncate px-0.5 text-[11.5px] text-[var(--text-muted)] group-hover:text-[var(--text)]">{name}</div>
+    </div>
+  );
+}
+
 function StarButton({ item, kept, className }: { item: LibraryItem; kept: boolean; className: string }) {
   const t = useT();
   return (
@@ -505,7 +637,7 @@ function Card({ item, lang, picked, kept, square, onPick, onAdd }: {
         {item.kind === 'look'
           ? <img src={item.sample ? libraryUrl(item.sample) : SAMPLE} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" style={{ filter: item.filter }} />
           /* a sticker whole in its square card (a wide one is not cut at its ends); loaded as it comes into view */
-          : drawn ? <TextStyleSample lang={lang} {...(item.kind === 'textmotion' ? { moving: item.vars, playing: hover } : { vars: item.vars })} />
+          : drawn ? <TextStyleSample lang={lang} {...(item.kind === 'textmotion' ? { moving: item.vars, playing: hover } : { vars: item.vars })} {...(item.id === TEXT_COMPONENT ? { words: name } : {})} />
           : live ? (
             <span className="pointer-events-none absolute inset-[8%] grid place-items-center">
               <iframe title="" src={pageUrl(item)} loading="lazy" tabIndex={-1} className="max-h-full max-w-full border-0"
@@ -522,7 +654,8 @@ function Card({ item, lang, picked, kept, square, onPick, onAdd }: {
         {item.kind === 'group' ? <TemplateBadge item={item} /> : null}
         <SourceBadge source={sourceOf(item)} />
       </div>
-      <div className={`mt-1.5 truncate px-0.5 text-[11.5px] ${picked ? 'text-[var(--accent)]' : 'text-[var(--text-muted)] group-hover:text-[var(--text)]'}`}>{name}</div>
+      {/* the new line's card says its name itself */}
+      {item.id === TEXT_COMPONENT ? null : <div className={`mt-1.5 truncate px-0.5 text-[11.5px] ${picked ? 'text-[var(--accent)]' : 'text-[var(--text-muted)] group-hover:text-[var(--text)]'}`}>{name}</div>}
     </div>
   );
 }

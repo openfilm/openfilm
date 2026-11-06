@@ -41,6 +41,8 @@ export interface ResourceDragItem {
   apply?: 'look' | 'fade';
   /** A line of the library's words: what it says once put in (the timeline's preview of it says it too). */
   words?: string;
+  /** A line of the library's words in a look of the person's own (a saved preset): its CSS variables. */
+  vars?: Record<string, string>;
 }
 
 const KINDS: readonly ResourceKind[] = ['video', 'image', 'audio', 'mg', 'other'];
@@ -173,6 +175,7 @@ function normalizeResourceDragItem(value: unknown): ResourceDragItem | null {
     ...(typeof item.saved === 'string' && item.saved ? { saved: item.saved } : {}),
     ...(item.apply === 'look' || item.apply === 'fade' ? { apply: item.apply } : {}),
     ...(typeof item.words === 'string' && item.words ? { words: item.words } : {}),
+    ...(item.vars && typeof item.vars === 'object' && Object.values(item.vars).every((v) => typeof v === 'string') ? { vars: item.vars } : {}),
   };
 }
 

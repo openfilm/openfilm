@@ -23,7 +23,7 @@ function putFontsIn(): void {
 const fontOf = (font: string) => FONTS.reduce((f, [family]) => f.replaceAll(`'${family}'`, `'${OWN}${family}'`), font);
 
 /** The words a style is shown with, in the app's language. */
-export const sampleWords = (lang: Language): string => (lang === 'zh-CN' || lang === 'ja' ? '文字' : lang === 'ko' ? '글자' : 'Aa');
+export const sampleWords = (lang: Language): string => (lang === 'zh-CN' ? '花字' : lang === 'ja' ? '文字' : lang === 'ko' ? '글자' : 'Aa');
 
 const CARD = 'radial-gradient(120% 95% at 50% 30%, #3b3c40 0%, #222326 75%)';
 
@@ -44,12 +44,13 @@ const ROUND = 2.2;
  * A text style (`vars`: its variables, none for the page's own) on a dark card, the words filling it; a motion
  * (`moving`: its variables) played on them by the text component itself while `playing`. Fills its parent.
  */
-export function TextStyleSample({ vars, lang, moving, playing }: {
+export function TextStyleSample({ vars, lang, moving, playing, words = sampleWords(lang) }: {
   vars?: Record<string, string> | undefined; lang: Language; moving?: Record<string, string> | undefined; playing?: boolean;
+  /** what it says (the style's sample words by default) */
+  words?: string;
 }) {
   putFontsIn();
   const v = { ...TEXT_DEFAULTS, ...vars };
-  const words = sampleWords(lang);
   const pad = padOf(v['--box-pad']!);
   /* the words as large as the card's height and width let them be, with their box and a little room for an edge, a
      shadow or a glow */

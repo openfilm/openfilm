@@ -1543,7 +1543,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       const shaped = libraryBox(shape, stageNow);
       /* a line of words says the default words, in a box that hugs them */
       const words = own?.id === TEXT_COMPONENT ? defaultTextWords() : undefined;
-      const vars = textStyle?.vars;
+      const vars = textStyle?.vars ?? file.vars;
       const box = shaped && own && words != null ? await hugText(pageUrl(own), shaped, stageNow.w, vars, words) : shaped;
       const overrides = words != null ? withWords(vars ? withRootVars((taken.clip as { overrides?: unknown[] }).overrides, vars) : (taken.clip as { overrides?: unknown[] }).overrides, words) : undefined;
       const clip = { ...taken.clip, ...(box ? { box, size: { w: box.w, h: box.h } } : {}), ...(overrides ? { overrides } : {}) };
