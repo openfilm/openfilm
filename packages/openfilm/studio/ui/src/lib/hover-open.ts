@@ -26,6 +26,14 @@ export function useHoverOpen() {
     pinned.current = next;
     setOpenState(next);
   }, []);
+  /** Actions, outside clicks and Esc close even while the pointer is still on the trigger. */
+  const dismiss = React.useCallback(() => {
+    clear(); pinned.current = false; over.current = false; setOpenState(false);
+  }, []);
+  const toggle = () => {
+    if (open && pinned.current) dismiss();
+    else { clear(); pinned.current = true; setOpenState(true); }
+  };
   const enter = () => {
     over.current = true;
     clear();
@@ -40,6 +48,8 @@ export function useHoverOpen() {
   return {
     open,
     setOpen,
+    dismiss,
+    toggle,
     trigger: { onMouseEnter: enter, onMouseLeave: leave },
     card: { onMouseEnter: () => clear(), onMouseLeave: () => { clear(); if (!pinned.current) timer.current = setTimeout(() => setOpenState(false), CLOSE_MS); } },
   };

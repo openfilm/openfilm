@@ -1,15 +1,15 @@
 /**
  * The project in front, named in the middle of the top bar, and its card, which opens while the pointer rests on the
- * name (lib/hover-open: a click keeps it): the film's picture, its name and folder, what it is (its length, frame,
+ * name (lib/hover-open: its arrow keeps it): the film's picture, its name and folder, what it is (its length, frame,
  * rate, clips), what can be done to it (rename, cover from this frame, show its folder), then the other projects. In an
  * app that keeps several open (lib/host.ts `tabs`) they come first, each with its light while it has something to
  * say: breathing while its agent works, amber while it waits for an answer, its percent while it exports; the name has
- * a dot while another one waits or works. Then the recent ones, and All projects (`onAll`).
+ * a dot while another one waits or works. All projects (`onAll`) keeps the recent projects.
  *
- * A double click on the name renames the project (`actions.onRename`).
+ * Rename stays in the card's actions; the title opens Projects without a double-click delay.
  */
 import React from 'react';
-import { ChevronDown, FolderOpen, Image as ImageIcon, Pencil, X } from 'lucide-react';
+import { ArrowUpRight, ChevronDown, Clapperboard, FolderOpen, Image as ImageIcon, LayoutGrid, Pencil, X } from 'lucide-react';
 import { api, type Project } from '@/api';
 import { useT } from '@/i18n';
 import { formatDuration } from '@/lib/export-jobs';
@@ -18,9 +18,7 @@ import { studioHost, type HostTab } from '@/lib/host';
 import { Popover } from './Popover';
 import { posterUrl } from './ProjectCover';
 import { Tooltip } from './Tooltip';
-
-/** how many recent projects the card shows (the rest are in All projects) */
-const RECENT = 6;
+import menu from './WorkspaceMenu.module.css';
 
 /** The app's open projects, live, and which is this page's. */
 export function useHostTabs() {
@@ -61,22 +59,23 @@ export interface ProjectActions {
   onReveal?: () => void;
 }
 
-const ROW = 'group flex h-8 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left text-[13px] transition';
-const ACTION = 'flex h-7 items-center gap-1.5 rounded-md px-2 text-[12px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]';
-
-export function ProjectCard({ name, facts, actions = {}, onOpen, onAll }: {
+export function ProjectCard({ name, facts, actions = {}, onAll, trigger, disabled = false }: {
   /** the project in front (none: the window with no project) */
   name?: string;
+  trigger?: (hover: ReturnType<typeof useHoverOpen>, activity: 'asking' | 'working' | null) => React.ReactNode;
+  disabled?: boolean;
   facts?: ProjectFacts;
   actions?: ProjectActions;
-  /** a recent project opened (in its tab, where there are tabs) */
-  onOpen: (projectId: string) => void;
   onAll: () => void;
 }) {
   const t = useT();
   const host = studioHost?.tabs;
   const { tabs, self } = useHostTabs();
   const hover = useHoverOpen();
+  React.useEffect(() => { if (disabled) hover.dismiss(); }, [disabled, hover.dismiss]);
+  const cover = facts ? posterUrl(facts.project) : null;
+  const [coverFailed, setCoverFailed] = React.useState(false);
+  React.useEffect(() => setCoverFailed(false), [cover]);
   const [projects, setProjects] = React.useState<Project[] | null>(null);
   React.useEffect(() => {
     if (!hover.open) return;
@@ -86,31 +85,24 @@ export function ProjectCard({ name, facts, actions = {}, onOpen, onAll }: {
   const names = new Map((projects ?? []).map((p) => [p.id, p.name]));
   const titleOf = (tab: HostTab) => tab.title || names.get(tab.projectId) || t('project.untitled');
   const others = tabs.filter((tab) => tab.id !== self);
-  const openIds = new Set(tabs.map((tab) => tab.projectId));
-  const recent = (projects ?? [])
-    .filter((p) => !openIds.has(p.id) && p.id !== facts?.project.id && !p.missing)
-    .sort((a, b) => b.openedAt - a.openedAt)
-    .slice(0, RECENT);
   /* another open project waits for the person, or works: said on the name, so it is seen without opening the card */
   const waiting = others.some((tab) => tab.asking);
   const working = others.some((tab) => tab.working);
-  const go = (run: () => void) => { hover.setOpen(false); run(); };
-  const heading = (words: string) => <div className="px-2 pb-1 pt-2 text-[11.5px] text-[var(--text-faint)]">{words}</div>;
-  const facet = (words: string) => <span className="rounded-md bg-[var(--bg-hover)] px-1.5 py-0.5 text-[11px] text-[var(--text-muted)]">{words}</span>;
+  const go = (run: () => void) => { hover.dismiss(); run(); };
 
   return (
     <Popover
-      open={hover.open}
-      onOpenChange={hover.setOpen}
+      open={hover.open && !disabled}
+      onOpenChange={(next) => { if (next) hover.setOpen(true); else hover.dismiss(); }}
       align="center"
-      trigger={(
+      trigger={trigger ? trigger(hover, waiting ? 'asking' : working ? 'working' : null) : (
         <button
           type="button"
           aria-label={t('switcher.label')}
           aria-haspopup="dialog"
           aria-expanded={hover.open}
           {...hover.trigger}
-          onDoubleClick={() => { if (actions.onRename) { hover.setOpen(false); actions.onRename(); } }}
+          onClick={(event) => { event.stopPropagation(); hover.toggle(); }}
           className={`flex h-[26px] min-w-0 max-w-[28ch] items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] ${hover.open ? 'bg-[var(--bg-hover)] text-[var(--text)]' : ''}`}
         >
           <span className="min-w-0 truncate">{name || t('switcher.label')}</span>
@@ -120,56 +112,51 @@ export function ProjectCard({ name, facts, actions = {}, onOpen, onAll }: {
         </button>
       )}
     >
-      <div {...hover.card} className="flex w-[340px] flex-col overflow-hidden rounded-[12px] border border-[var(--border)] bg-[var(--bg-raised)] shadow-[var(--shadow-lg)]">
+      <div {...hover.card} data-project-card role="dialog" aria-label={t('switcher.label')} className={menu.menu}>
         {facts ? (
-          <div className="flex flex-col gap-2.5 p-3">
-            <img src={posterUrl(facts.project)} alt="" draggable={false}
-              className="aspect-video w-full rounded-lg bg-black object-cover" />
-            <div className="min-w-0">
-              <div className="truncate text-[14px] font-semibold text-[var(--text)]" title={facts.project.name}>{facts.project.name || t('project.untitled')}</div>
-              {/* cut at its start: its last folders, the project's own, are what tell it apart */}
-              <div dir="rtl" className="truncate text-left text-[11.5px] text-[var(--text-faint)]" title={facts.project.path}><bdi dir="ltr">{facts.project.path}</bdi></div>
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {facet(formatDuration(facts.durationMs))}
-              {facet(`${facts.stage.w} × ${facts.stage.h}`)}
-              {facet(`${Math.round(facts.fps * 100) / 100} fps`)}
-              {facet(facts.clips === 1 ? t('selectionBar.oneClip') : t('selectionBar.clips').replace('{n}', String(facts.clips)))}
-            </div>
-            <div className="-mx-1 flex flex-wrap gap-0.5">
-              {actions.onRename ? <button type="button" className={ACTION} onClick={() => go(actions.onRename!)}><Pencil size={13} />{t('projectMenu.rename')}</button> : null}
-              {actions.onCoverFromFrame ? <button type="button" className={ACTION} onClick={() => go(actions.onCoverFromFrame!)}><ImageIcon size={13} />{t('switcher.cover')}</button> : null}
-              {actions.onReveal ? <button type="button" className={ACTION} onClick={() => go(actions.onReveal!)}><FolderOpen size={13} />{t('switcher.reveal')}</button> : null}
-            </div>
-          </div>
-        ) : null}
-        <div className={`flex flex-col p-1 ${facts ? 'border-t border-[var(--border)]' : ''}`}>
-          <div className="max-h-[300px] overflow-y-auto">
-            {host && others.length ? heading(t('switcher.open')) : null}
-            {host ? others.map((tab) => (
-              <div key={tab.id} className={`${ROW} text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]`}>
-                <button type="button" onClick={() => go(() => host.show(tab.id))} className="flex h-full min-w-0 flex-1 items-center gap-2 text-left">
-                  <span className="min-w-0 flex-1 truncate">{titleOf(tab)}</span>
-                  <Light tab={tab} />
-                </button>
-                <Tooltip label={t('switcher.close')}>
-                  <button type="button" aria-label={t('switcher.close')} onClick={() => host.close(tab.id)}
-                    className="hidden h-6 w-6 shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] transition hover:bg-[var(--bg-pressed)] hover:text-[var(--text)] group-hover:flex">
-                    <X size={13} />
-                  </button>
-                </Tooltip>
+          <>
+            <div className={menu.summary}>
+              <div className={menu.thumbnail} style={{ width: Math.min(72, 64 * facts.stage.w / facts.stage.h), height: Math.min(64, 72 * facts.stage.h / facts.stage.w) }}>
+                {(facts.project.cover != null || (facts.clips > 0 && facts.durationMs > 0)) && !coverFailed
+                  ? <img src={cover!} alt="" draggable={false} onError={() => setCoverFailed(true)} />
+                  : <Clapperboard size={22} strokeWidth={1.5} />}
               </div>
-            )) : null}
-            {recent.length ? heading(t('switcher.recent')) : null}
-            {recent.map((p) => (
-              <button key={p.id} type="button" onClick={() => go(() => onOpen(p.id))}
-                className={`${ROW} text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]`}>
-                <span className="min-w-0 flex-1 truncate">{p.name}</span>
+              <div className={menu.summaryText}>
+                <div className={menu.title} title={facts.project.name}>{facts.project.name || t('project.untitled')}</div>
+                <div className={menu.metadata}>
+                  <span>{formatDuration(facts.durationMs)}</span><span aria-hidden className={menu.separator}>·</span>
+                  <span>{facts.stage.w} × {facts.stage.h}</span><span aria-hidden className={menu.separator}>·</span>
+                  <span>{Math.round(facts.fps * 100) / 100} fps</span><span aria-hidden className={menu.separator}>·</span>
+                  <span>{facts.clips === 1 ? t('switcher.oneClip') : t('switcher.clips').replace('{n}', String(facts.clips))}</span>
+                </div>
+                <div className={menu.path} title={facts.project.path}><bdi dir="ltr">{facts.project.path}</bdi></div>
+              </div>
+            </div>
+            <div className={`${menu.actions} ${menu.projectActions}`}>
+              {actions.onRename ? <button type="button" className={menu.action} onClick={() => go(actions.onRename!)}><Pencil size={12} /><span>{t('projectMenu.rename')}</span></button> : null}
+              {actions.onCoverFromFrame ? <button type="button" className={menu.action} onClick={() => go(actions.onCoverFromFrame!)}><ImageIcon size={12} /><span>{t('switcher.cover')}</span></button> : null}
+              {actions.onReveal ? <button type="button" className={menu.action} onClick={() => go(actions.onReveal!)}><FolderOpen size={12} /><span>{t('switcher.reveal')}</span></button> : null}
+            </div>
+          </>
+        ) : null}
+        {host && others.length ? <div className={menu.projectList}>
+          <div className={menu.section}><span>{t('switcher.open')}</span><span>{others.length}</span></div>
+          {others.map((tab) => (
+            <div key={tab.id} className={menu.row}>
+              <button type="button" onClick={() => go(() => host.show(tab.id))} className={menu.primary}>
+                <Clapperboard size={13} className={menu.rowIcon} />
+                <span className={menu.rowName}>{titleOf(tab)}</span>
+                <Light tab={tab} />
               </button>
-            ))}
-          </div>
-          <button type="button" onClick={() => go(onAll)} className={`${ROW} mt-0.5 text-[var(--text)] hover:bg-[var(--bg-hover)]`}>
-            {t('switcher.all')}
+              <Tooltip label={t('switcher.close')}>
+                <button type="button" aria-label={t('switcher.close')} onClick={() => host.close(tab.id)} className={`${menu.iconButton} ${menu.close}`}><X size={12} /></button>
+              </Tooltip>
+            </div>
+          ))}
+        </div> : null}
+        <div className={menu.footer}>
+          <button type="button" onClick={() => go(onAll)} className={`${menu.row} ${menu.all}`}>
+            <LayoutGrid size={14} className={menu.rowIcon} /><span className={menu.rowName}>{t('switcher.all')}</span><ArrowUpRight size={13} className={menu.rowIcon} />
           </button>
         </div>
       </div>

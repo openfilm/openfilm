@@ -81,7 +81,8 @@ export function TextInspector({ host, boxH, commit }: { host: PropsHost; boxH?: 
 
   return (
     <>
-      <Section id="text" title={t('textInspector.text')}>
+      {/* each its own category, which names it: no title of its own (Section bare) */}
+      <Section id="text" title={t('textInspector.text')} bare>
         <textarea
           key={words}
           defaultValue={words}
@@ -160,7 +161,7 @@ export function TextInspector({ host, boxH, commit }: { host: PropsHost; boxH?: 
         </Line>
       </Section>
 
-      <Section id="wordart" title={t('textInspector.wordart')}>
+      <Section id="wordart" title={t('textInspector.wordart')} bare>
         {/* the person's own first (and saving its look as one), then the library's */}
         <div className="flex h-6 items-center justify-between gap-2">
           <span className="truncate text-[11px] text-[var(--text-muted)]">{t('captionTrack.savedLook')}</span>
@@ -183,7 +184,7 @@ export function TextInspector({ host, boxH, commit }: { host: PropsHost; boxH?: 
         />
       </Section>
 
-      <Section id="motion" title={t('textInspector.motion')}>
+      <Section id="motion" title={t('textInspector.motion')} bare>
         {MOTION_SLOTS.map((slot) => {
           const [nameKey, timeKey] = MOTION_VARS[slot];
           const items = motions(slot).filter((i) => i.vars?.[nameKey] !== 'none');

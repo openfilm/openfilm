@@ -1436,7 +1436,7 @@ function PosterMedia({ project, shade = false }: { project: LibraryProject; shad
         draggable={false}
         onLoad={() => setLoadedUrl(src)}
         onError={() => setAttempt({ url: tried.url, n: tried.n, failed: true })}
-        className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-200 ${ready ? 'opacity-100' : 'opacity-0'}`}
+        className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-200 ${ready ? 'opacity-100' : 'opacity-0'}`}
       />
       {ready ? shadow : null}
     </>
