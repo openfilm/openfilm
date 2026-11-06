@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>Happy New Year</title>
 <style>
-:root { --color: #ffffff; --gold: #ffd36b; --c1: #ffd36b; --c2: #ff6f91; }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --color: #ffffff; --gold: #ffd36b; --c1: #ffd36b; --c2: #ff6f91; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; color: var(--color); }
+.w { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: var(--font); color: var(--color); }
 .fw { position: absolute; width: 0; height: 0; scale: var(--s); animation: fw 1.6s ease-out infinite backwards; }
 .fw i { position: absolute; left: -0.8vh; top: 0; width: 1.6vh; height: 20vh; border-radius: 1vh; background: linear-gradient(var(--c), transparent); transform-origin: 50% 0; transform: translateY(5vh); }
 .fw i::after { content: ""; position: absolute; left: -0.9vh; bottom: -3.4vh; width: 3.4vh; height: 3.4vh; border-radius: 50%; background: var(--c); }

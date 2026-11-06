@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>Sale price</title>
 <style>
-:root { --accent: #ffd23f; --tag: #ff3b30; --color: #ffffff; }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --accent: #ffd23f; --tag: #ff3b30; --color: #ffffff; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; color: var(--color); }
+.w { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: var(--font); color: var(--color); }
 .t4 { font-size: 9vh; font-weight: 800; letter-spacing: 0.3em; padding: 1.4vh 3vh 1.4vh 3.6vh; border: 0.8vh solid var(--color); border-radius: 6vh; white-space: pre; animation: drop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both; }
 .r { display: flex; align-items: flex-end; gap: 6vh; margin-top: 3vh; }
 .pr { position: relative; }

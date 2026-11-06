@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>Chapter title</title>
 <style>
-:root { --accent: #ffcc33; --color: #ffffff; }
+:root { --font: 'DIN Alternate', 'Bahnschrift', 'Avenir Next', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --accent: #ffcc33; --color: #ffffff; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
@@ -12,7 +12,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: transparent;
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
 .w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8vh; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; color: var(--color); }
-.t1 { font: 800 64vh/0.9 'DIN Alternate', 'Bahnschrift', 'Avenir Next', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; color: transparent; -webkit-text-stroke: 1vh var(--accent); white-space: pre; letter-spacing: -0.02em;
+.t1 { font: 800 64vh/0.9 var(--font); color: transparent; -webkit-text-stroke: 1vh var(--accent); white-space: pre; letter-spacing: -0.02em;
   background: linear-gradient(0deg, var(--accent) 50%, transparent 50%) no-repeat; background-size: 100% 200%; background-position: 0 0; -webkit-background-clip: text; background-clip: text;
   animation: num 0.6s cubic-bezier(0.3, 1.5, 0.5, 1) both, fill 0.9s 0.45s cubic-bezier(0.5, 0, 0.3, 1) forwards; }
 .v { width: 1.2vh; height: 66vh; background: var(--color); opacity: 0.85; transform-origin: top; animation: tall 0.5s 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both; }

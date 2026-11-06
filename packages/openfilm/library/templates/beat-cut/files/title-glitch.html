@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>Glitch title</title>
 <style>
-:root { --color: #effcff; --accent: #00e5ff; --accent2: #ff2bd6; }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --color: #effcff; --accent: #00e5ff; --accent2: #ff2bd6; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
@@ -18,7 +18,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: transparent;
 .frame b:nth-child(2) { right: 0; top: 0; border-width: 0.7vh 0.7vh 0 0; --x: -8vh; --y: 6vh; }
 .frame b:nth-child(3) { left: 0; bottom: 0; border-width: 0 0 0.7vh 0.7vh; --x: 8vh; --y: -6vh; }
 .frame b:nth-child(4) { right: 0; bottom: 0; border-width: 0 0.7vh 0.7vh 0; --x: -8vh; --y: -6vh; }
-.k { font: 800 calc(18vh * var(--k, 1))/1 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; letter-spacing: 0.02em; }
+.k { font: 800 calc(18vh * var(--k, 1))/1 var(--font); letter-spacing: 0.02em; }
 .k .fx { -webkit-text-fill-color: transparent; }
 .k .fx span { position: absolute; left: 0; top: 0; -webkit-text-fill-color: currentColor; }
 .k .fx .r { color: var(--accent2); mix-blend-mode: screen; }

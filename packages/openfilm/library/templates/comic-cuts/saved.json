@@ -12,7 +12,7 @@
      1.2
     ],
     "attrs": {
-     "data-props": "[{\"name\": \"Word\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Fill\", \"type\": \"var\", \"var\": \"--fill\"}, {\"name\": \"Rays\", \"type\": \"var\", \"var\": \"--rays\"}]",
+     "data-props": "[{\"name\": \"Word\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Fill\", \"type\": \"var\", \"var\": \"--fill\"}, {\"name\": \"Rays\", \"type\": \"var\", \"var\": \"--rays\"}]",
      "data-place": "{\"x\":0.5,\"y\":0.42,\"fit\":0.34}"
     },
     "size": {
@@ -31,7 +31,7 @@
      1.2
     ],
     "attrs": {
-     "data-props": "[{\"name\": \"Word\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Fill\", \"type\": \"var\", \"var\": \"--fill\"}, {\"name\": \"Stroke\", \"type\": \"var\", \"var\": \"--stroke\"}, {\"name\": \"Speed lines\", \"type\": \"var\", \"var\": \"--lines\"}]",
+     "data-props": "[{\"name\": \"Word\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Fill\", \"type\": \"var\", \"var\": \"--fill\"}, {\"name\": \"Stroke\", \"type\": \"var\", \"var\": \"--stroke\"}, {\"name\": \"Speed lines\", \"type\": \"var\", \"var\": \"--lines\"}]",
      "data-place": "{\"x\":0.5,\"y\":0.5,\"fit\":0.3}"
     },
     "size": {
@@ -50,7 +50,7 @@
      1.2
     ],
     "attrs": {
-     "data-props": "[{\"name\": \"Word\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"First color\", \"type\": \"var\", \"var\": \"--c1\"}, {\"name\": \"Second color\", \"type\": \"var\", \"var\": \"--c2\"}, {\"name\": \"Third color\", \"type\": \"var\", \"var\": \"--c3\"}]",
+     "data-props": "[{\"name\": \"Word\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"First color\", \"type\": \"var\", \"var\": \"--c1\"}, {\"name\": \"Second color\", \"type\": \"var\", \"var\": \"--c2\"}, {\"name\": \"Third color\", \"type\": \"var\", \"var\": \"--c3\"}]",
      "data-place": "{\"x\":0.5,\"y\":0.5,\"fit\":0.3}"
     },
     "size": {
@@ -69,7 +69,7 @@
      1.1
     ],
     "attrs": {
-     "data-props": "[{\"name\": \"Word\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Gradient top\", \"type\": \"var\", \"var\": \"--from\"}, {\"name\": \"Gradient bottom\", \"type\": \"var\", \"var\": \"--to\"}, {\"name\": \"Marks\", \"type\": \"var\", \"var\": \"--marks\"}]",
+     "data-props": "[{\"name\": \"Word\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Gradient top\", \"type\": \"var\", \"var\": \"--from\"}, {\"name\": \"Gradient bottom\", \"type\": \"var\", \"var\": \"--to\"}, {\"name\": \"Marks\", \"type\": \"var\", \"var\": \"--marks\"}]",
      "data-place": "{\"x\":0.5,\"y\":0.45,\"fit\":0.34}"
     },
     "size": {
@@ -118,84 +118,60 @@
    "track": 2,
    "at": 0,
    "clip": {
-    "src": "slot.html",
+    "src": "example-1.jpg",
     "time": [
      0,
      1.4
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'1'",
-       "--tone": "#4a2a1c"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "1"
+    }
    }
   },
   {
    "track": 2,
    "at": 1.4,
    "clip": {
-    "src": "slot.html",
+    "src": "example-2.jpg",
     "time": [
      0,
      1.2
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'2'",
-       "--tone": "#4a2a1c"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "2"
+    }
    }
   },
   {
    "track": 2,
    "at": 2.6,
    "clip": {
-    "src": "slot.html",
+    "src": "example-3.jpg",
     "time": [
      0,
      1.2
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'3'",
-       "--tone": "#4a2a1c"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "3"
+    }
    }
   },
   {
    "track": 2,
    "at": 3.8,
    "clip": {
-    "src": "slot.html",
+    "src": "example-4.jpg",
     "time": [
      0,
      1.4
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'4'",
-       "--tone": "#4a2a1c"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "4"
+    }
    }
   }
  ],

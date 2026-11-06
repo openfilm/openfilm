@@ -730,7 +730,9 @@ export interface TimelineProps {
   /** A track's head edge dragged (a height, `done` at the end) or double-clicked (null: its own height). */
   onResizeTrack?: (track: TimelineTrack, height: number | null, done: boolean) => void;
   /** A file from the media pane dropped with ⇧ on a clip: it takes the clip's place (lib/clip-replace). */
-  onReplaceDrop?: (block: TimelineBlock, file: ResourceDragItem) => void;
+  onReplaceDrop?: (block: TimelineBlock, file: ResourceDragItem, atMs?: number) => void;
+  /** Clips a file dropped on takes the place of something in, without ⇧ (a template's: its place there), told where. */
+  dropInto?: (block: TimelineBlock) => boolean;
   /**
    * Each clip's fades, ms (clip id → [in, out]; lib/clip-fade): a handle at each end of the clip under the pointer, at
    * the bottom of its picture (a sound's: the top of its waveform), that is dragged inward to set them (written through
@@ -1017,6 +1019,7 @@ export const Timeline = React.memo(function Timeline({
   snapPointsMs,
   onResizeTrack,
   onReplaceDrop,
+  dropInto,
   fades,
   transitions,
   onTransition,
@@ -2373,6 +2376,13 @@ export const Timeline = React.memo(function Timeline({
     };
   }, [allBlocks, dropAt, dropMsAtClientX, laneHitAtY, onEditOps, tracks]);
 
+  /* the clip a file let go here takes the place of something in: with ⇧ any, else one that takes a file in (dropInto) */
+  const replaceTargetAt = React.useCallback((clientX: number, clientY: number, shift: boolean): string | null => {
+    const id = clipAtPoint(clientX, clientY);
+    if (!id || shift) return id;
+    const block = dropInto ? tracks.flatMap((tr) => tr.blocks).find((b) => b.id === id) : undefined;
+    return block && dropInto!(block) ? id : null;
+  }, [dropInto, tracks]);
   const onAssetDragOver = React.useCallback((e: React.DragEvent) => {
     if (!acceptAssetDrag(e)) return;
     e.preventDefault();
@@ -2388,14 +2398,15 @@ export const Timeline = React.memo(function Timeline({
       e.dataTransfer.dropEffect = at ? 'copy' : 'none';
       return;
     }
-    /* ⇧ over a clip: the file takes its place (onReplaceDrop), shown by a ring round it, not by a landing */
-    const over = onReplaceDrop && e.shiftKey && !isComputerFileDrag(e.dataTransfer) ? clipAtPoint(e.clientX, e.clientY) : null;
+    /* ⇧ over a clip, or over one that takes a file in (dropInto): the file takes its place (onReplaceDrop), shown by a
+       ring round it, not by a landing */
+    const over = onReplaceDrop && !isComputerFileDrag(e.dataTransfer) ? replaceTargetAt(e.clientX, e.clientY, e.shiftKey) : null;
     markReplaceTarget(over);
     if (over) { e.dataTransfer.dropEffect = 'copy'; setAssetHint(null); return; }
     const next = file ? assetLanding(file, e.clientX, e.clientY, e.altKey) : null;
     e.dataTransfer.dropEffect = next && !next.error ? 'copy' : 'none';
     setAssetHint((cur) => (sameAssetHint(cur, next) ? cur : next));
-  }, [acceptAssetDrag, assetLanding, t, onReplaceDrop, onApplyDrop, applyTarget]);
+  }, [acceptAssetDrag, assetLanding, t, onReplaceDrop, onApplyDrop, applyTarget, replaceTargetAt]);
 
   const onAssetDragLeave = React.useCallback((e: React.DragEvent) => {
     if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
@@ -2418,10 +2429,10 @@ export const Timeline = React.memo(function Timeline({
       void onApplyDrop(applying, 'cut' in at ? { cut: { a: at.cut.a, b: at.cut.b } } : at).then((err) => { if (err) setDropError(err); });
       return;
     }
-    const replaced = onReplaceDrop && e.shiftKey && !isComputerFileDrag(e.dataTransfer) ? clipAtPoint(e.clientX, e.clientY) : null;
+    const replaced = onReplaceDrop && !isComputerFileDrag(e.dataTransfer) ? replaceTargetAt(e.clientX, e.clientY, e.shiftKey) : null;
     const replacing = replaced ? tracks.flatMap((tr) => tr.blocks).find((b) => b.id === replaced && b.clipId) : undefined;
     const dragged = replacing ? readResourceDragData(e.dataTransfer) ?? peekResourceDrag() : null;
-    if (replacing && dragged) { onReplaceDrop!(replacing, dragged); return; }
+    if (replacing && dragged) { onReplaceDrop!(replacing, dragged, dropMsAtClientX(e.clientX)); return; }
     const editMode = dropModeAt(laneHitAtY(e.clientY), e.altKey, applying);
     if (isComputerFileDrag(e.dataTransfer)) {
       const files = [...e.dataTransfer.files];
@@ -2451,7 +2462,7 @@ export const Timeline = React.memo(function Timeline({
       },
       () => { setDropBusy(false); },
     );
-  }, [acceptAssetDrag, assetLanding, dropAt, dropMsAtClientX, laneHitAtY, onDropAsset, onDropFiles, onEditOps, tracks, onReplaceDrop, onApplyDrop, applyTarget]);
+  }, [acceptAssetDrag, assetLanding, dropAt, dropMsAtClientX, laneHitAtY, onDropAsset, onDropFiles, onEditOps, tracks, onReplaceDrop, onApplyDrop, applyTarget, replaceTargetAt]);
 
   /**
    * Split clips at a time (the playhead by default), in one edit: those it is not inside, or on a locked track, are

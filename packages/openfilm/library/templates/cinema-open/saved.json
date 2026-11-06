@@ -12,7 +12,7 @@
      3.4
     ],
     "attrs": {
-     "data-props": "[{\"name\": \"Title\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Label\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Credit\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}]",
+     "data-props": "[{\"name\": \"Title\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Label\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Credit\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}]",
      "data-place": "{\"x\":0.5,\"y\":0.5,\"fit\":0.3}"
     },
     "size": {
@@ -89,63 +89,45 @@
    "track": 4,
    "at": 0,
    "clip": {
-    "src": "slot.html",
+    "src": "example-1.jpg",
     "time": [
      0,
      3.4
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'1'",
-       "--tone": "#24262c"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "1"
+    }
    }
   },
   {
    "track": 4,
    "at": 3.4,
    "clip": {
-    "src": "slot.html",
+    "src": "example-2.jpg",
     "time": [
      0,
      3
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'2'",
-       "--tone": "#24262c"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "2"
+    }
    }
   },
   {
    "track": 4,
    "at": 6.4,
    "clip": {
-    "src": "slot.html",
+    "src": "example-3.jpg",
     "time": [
      0,
      3.6
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'3'",
-       "--tone": "#24262c"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "3"
+    }
    }
   }
  ],

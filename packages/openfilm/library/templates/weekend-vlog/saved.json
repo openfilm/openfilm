@@ -12,7 +12,7 @@
      2.6
     ],
     "attrs": {
-     "data-props": "[{\"name\": \"Month\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Day\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Weekday\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Year\", \"type\": \"text\", \"at\": \".t4\"}, {\"name\": \"Band\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Paper\", \"type\": \"var\", \"var\": \"--paper\"}, {\"name\": \"Text\", \"type\": \"var\", \"var\": \"--ink\"}]",
+     "data-props": "[{\"name\": \"Month\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Day\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Weekday\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Year\", \"type\": \"text\", \"at\": \".t4\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Band\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Paper\", \"type\": \"var\", \"var\": \"--paper\"}, {\"name\": \"Text\", \"type\": \"var\", \"var\": \"--ink\"}]",
      "data-place": "{\"x\":0.82,\"y\":0.28,\"fit\":0.3}"
     },
     "size": {
@@ -39,7 +39,7 @@
      2.2
     ],
     "attrs": {
-     "data-props": "[{\"name\": \"Title\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Tag\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Dots\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Tag\", \"type\": \"var\", \"var\": \"--tag\"}]",
+     "data-props": "[{\"name\": \"Title\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Tag\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Dots\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Tag\", \"type\": \"var\", \"var\": \"--tag\"}]",
      "data-place": "{\"x\":0.5,\"y\":0.5,\"fit\":0.3}"
     },
     "size": {
@@ -64,7 +64,7 @@
      3
     ],
     "attrs": {
-     "data-props": "[{\"name\": \"Name\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Tag\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Pill\", \"type\": \"var\", \"var\": \"--pill\"}]",
+     "data-props": "[{\"name\": \"Name\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Tag\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Pill\", \"type\": \"var\", \"var\": \"--pill\"}]",
      "data-place": "{\"x\":0.34,\"y\":0.84,\"fit\":0.18}"
     },
     "size": {
@@ -159,105 +159,75 @@
    "track": 4,
    "at": 0,
    "clip": {
-    "src": "slot.html",
+    "src": "example-1.jpg",
     "time": [
      0,
      2.2
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'1'",
-       "--tone": "#5a4a3e"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "1"
+    }
    }
   },
   {
    "track": 4,
    "at": 2.2,
    "clip": {
-    "src": "slot.html",
+    "src": "example-2.jpg",
     "time": [
      0,
      2
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'2'",
-       "--tone": "#5a4a3e"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "2"
+    }
    }
   },
   {
    "track": 4,
    "at": 4.2,
    "clip": {
-    "src": "slot.html",
+    "src": "example-3.jpg",
     "time": [
      0,
      2
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'3'",
-       "--tone": "#5a4a3e"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "3"
+    }
    }
   },
   {
    "track": 4,
    "at": 6.2,
    "clip": {
-    "src": "slot.html",
+    "src": "example-4.jpg",
     "time": [
      0,
      2
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'4'",
-       "--tone": "#5a4a3e"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "4"
+    }
    }
   },
   {
    "track": 4,
    "at": 8.2,
    "clip": {
-    "src": "slot.html",
+    "src": "example-5.jpg",
     "time": [
      0,
      2.4
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'5'",
-       "--tone": "#5a4a3e"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "5"
+    }
    }
   }
  ],

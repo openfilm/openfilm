@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>Minimal serif title</title>
 <style>
-:root { --color: #f6f1e7; --accent: #dcbd84; }
+:root { --font: Didot, 'Bodoni 72', Georgia, 'Songti SC', 'Noto Serif SC', serif; --color: #f6f1e7; --accent: #dcbd84; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
@@ -17,7 +17,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: transparent;
 .eb::before, .eb::after { content: ""; flex: 1; height: 0.45vh; background: linear-gradient(90deg, transparent, var(--accent)); animation: draw 1s 0.1s cubic-bezier(0.2, 0.8, 0.2, 1) both; transform-origin: right; }
 .eb::after { background: linear-gradient(270deg, transparent, var(--accent)); transform-origin: left; }
 .row { width: 92vw; display: flex; justify-content: center; margin: 3vh 0 2.4vh; }
-.k { font: 400 calc(20vh * var(--k, 1))/1.05 Didot, 'Bodoni 72', Georgia, 'Songti SC', 'Noto Serif SC', serif; letter-spacing: 0.04em; }
+.k { font: 400 calc(20vh * var(--k, 1))/1.05 var(--font); letter-spacing: 0.04em; }
 .dia { width: 1.8vh; height: 1.8vh; border: 0.35vh solid var(--accent); transform: rotate(45deg); animation: spin 0.9s 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .t3 { font: italic 400 5vh/1 Georgia, 'Songti SC', 'Noto Serif SC', serif; margin-top: 2.6vh; opacity: 0.85; letter-spacing: 0.06em; white-space: pre; animation: fade 1s 0.9s both; }
 @keyframes fade { from { opacity: 0; } }

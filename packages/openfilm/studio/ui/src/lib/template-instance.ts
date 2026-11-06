@@ -9,6 +9,8 @@
  */
 import type { Clip } from '../api.ts';
 import { replaceClip, type ReplaceFile } from './clip-replace.ts';
+import { propsOf, propValue, type ComponentProp } from './component-props.ts';
+import type { FilmOverride } from './film.ts';
 
 /** The attribute that says which template a clip came from. */
 export const TEMPLATE_ATTR = 'data-template';
@@ -93,8 +95,11 @@ export function templateOf(tracks: readonly { clips: readonly TemplateClip[] }[]
   return { mark, id, clips: mine.map((c) => c.id), slots, words };
 }
 
-/** A place of a template's group as the library has it (`slot.html` in its bundle) or as taken into a project. */
-const isSlotClipSrc = (src: string | undefined): boolean => isSlotSrc(src) || /^slot\.html$/.test(src?.split('#')[0] ?? '');
+/** A place of a template's group as the library has it (`slot.html` in its bundle), as taken into a project, or named from a template's film. */
+const isSlotClipSrc = (src: string | undefined): boolean => isSlotSrc(src) || /(^|\/)slot\.html$/.test(src?.split('#')[0] ?? '');
+
+/** A template's own example picture in one of its places (its bundle's `example-<n>.jpg`): waiting for the person's own. */
+const isExampleSrc = (src: string | undefined): boolean => /(^|\/)templates-[^/]+\/example-\d+\.(jpe?g|png|webp)$/i.test(src?.split('#')[0] ?? '');
 
 /** A clip of a template's group (lib/saved-insert): its track, where it starts, the clip. */
 export interface GroupClip { track: number; at: number; clip: Record<string, unknown> & { src?: string; time?: readonly number[] } }
@@ -134,4 +139,55 @@ export function filledTemplate<G extends GroupClip>(clips: readonly G[], files: 
 export function fillFor<F extends { path: string }>(empty: number, media: readonly F[], used: ReadonlySet<string>): F[] {
   const fresh = media.filter((f) => !used.has(f.path));
   return [...fresh, ...media.filter((f) => used.has(f.path))].slice(0, empty);
+}
+
+/** A template put in as one compound clip: its film's folder (`parts/templates-<id>`, `-2`… for another), else null. */
+export const templateFolderOf = (src: string | undefined): string | null => /^(parts\/templates-[^/]+)\/film\.html$/.exec(src?.split('#')[0] ?? '')?.[1] ?? null;
+
+/** The library's template a template's folder is (`parts/templates-travel-vlog-3` → `templates/travel-vlog`). */
+export const templateOfFolder = (folder: string): string => `templates/${folder.replace(/^parts\/templates-/, '').replace(/-\d+$/, '')}`;
+
+/** What a template's film offers, its every clip being the template's (a compound clip's, templateFolderOf). */
+export interface FilmTemplate {
+  /** its places for the person's videos and pictures, in the order they play, and whether each still waits for one
+      (its example picture, or none) */
+  places: { clip: string; empty: boolean }[];
+  /** the words its pages offer */
+  words: TemplateWord[];
+  /** its looks: a CSS variable its pages offer, one control for every page offering it under that name */
+  looks: { name: string; var: string; clips: string[]; value: string | null }[];
+  /** layers its pages offer to show or hide */
+  switches: { clip: string; prop: ComponentProp & { type: 'boolean' }; on: boolean }[];
+  /** pictures inside its pages (a logo, a photo in a frame) */
+  pictures: { clip: string; prop: ComponentProp & { type: 'image' }; value: string | null }[];
+  /** its sound: music and effects under the picture */
+  sounds: { clip: string; src: string }[];
+}
+
+type FilmClip = TemplateClip & { time?: readonly number[] | undefined };
+
+/** A template's film read for what it offers (its tracks in film order). */
+export function filmTemplate(tracks: readonly { clips: readonly FilmClip[] }[]): FilmTemplate {
+  const all = tracks.flatMap((tr) => tr.clips);
+  const byTime = [...all].sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
+  const isPlace = (c: FilmClip) => isSlotClipSrc(c.src) || c.attrs?.['data-slot'] != null
+    || (c.src != null && !PAGE.test(c.src.split('#')[0]!) && !SOUND.test(c.src.split('#')[0]!));
+  const out: FilmTemplate = { places: [], words: [], looks: [], switches: [], pictures: [], sounds: [] };
+  for (const c of byTime) {
+    const src = c.src?.split('#')[0] ?? '';
+    if (SOUND.test(src)) { out.sounds.push({ clip: c.id, src }); continue; }
+    if (isPlace(c)) { out.places.push({ clip: c.id, empty: isSlotClipSrc(c.src) || isExampleSrc(c.src) }); continue; }
+    const overrides = c.overrides as readonly FilmOverride[] | undefined;
+    for (const prop of propsOf(c)) {
+      if (prop.type === 'text') out.words.push({ clip: c.id, name: prop.name, at: prop.at, ...(prop.n != null ? { n: prop.n } : {}), text: textOf(c.overrides, prop.at, prop.n) });
+      else if (prop.type === 'boolean') out.switches.push({ clip: c.id, prop, on: propValue(overrides, prop) !== false });
+      else if (prop.type === 'image') out.pictures.push({ clip: c.id, prop, value: (propValue(overrides, prop) as string | null) ?? null });
+      else {
+        const look = out.looks.find((l) => l.var === prop.var && l.name === prop.name);
+        const value = (propValue(overrides, prop) as string | null) ?? null;
+        if (look) { look.clips.push(c.id); look.value ??= value; } else out.looks.push({ name: prop.name, var: prop.var, clips: [c.id], value });
+      }
+    }
+  }
+  return out;
 }

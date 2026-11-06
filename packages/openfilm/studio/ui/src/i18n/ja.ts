@@ -901,7 +901,7 @@ export const ja: Words = {
   /** a clip's animation: how it comes in, goes out, moves while shown (ClipMotionSection) */
   clipMotion: { title: 'アニメーション', in: 'イン', out: 'アウト', loop: 'ループ', none: 'なし', time: '長さ' },
   /** a template of the library put in the film (TemplateSection) */
-  template: { waiting: '{n} 個の素材を差し替え', allIn: 'すべて差し替え済み', fill: '自動で埋める', pick: 'ここに入れる動画や画像を選ぶか、素材をドロップ', words: '文字', pickAll: 'テンプレート全体を選択', pickTitle: '{n} 個の素材を選ぶ', pickHint: '素材をクリックすると、選択中の枠に入ります', import: 'このコンピュータから', use: 'テンプレートを使う', cancel: 'キャンセル', clear: 'この枠を空にする', noMedia: '自分の動画や画像がまだありません。このコンピュータから読み込んでください' },
+  template: { waiting: '{n} 個の素材を差し替え', allIn: 'すべて差し替え済み', fill: '自動で埋める', pick: 'ここに入れる動画や画像を選ぶか、素材をドロップ', words: '文字', pickAll: 'テンプレート全体を選択', pickTitle: '{n} 個の素材を選ぶ', pickHint: '素材をクリックすると、選択中の枠に入ります', import: 'このコンピュータから', use: 'テンプレートを使う', cancel: 'キャンセル', clear: 'この枠を空にする', noMedia: '自分の動画や画像がまだありません。このコンピュータから読み込んでください', pickMany: '素材を選ぶ', looks: 'スタイル', switches: '要素', pictures: '画像', sound: '音楽' },
   /** a filter on a track of its own (FilterLayerSection) */
   filterLayer: { title: 'フィルター', hint: '表示中は下のすべてのレイヤーに効きます。クリップにドロップするとそのクリップだけに効きます。', strength: '強さ' },
   textInspector: {

@@ -50,7 +50,8 @@ test('every thing of the library is there, named in each language, in a group of
       const about = JSON.parse(readFileSync(join(builtInRoot(), item.id, 'saved.json'), 'utf8'));
       assert.equal(about.kind, 'group');
       for (const c of about.clips) assert.ok(existsSync(join(builtInRoot(), item.id, 'files', c.clip.src)), `${item.id}: ${c.clip.src}`);
-      assert.equal(about.clips.filter((c) => c.clip.src === 'slot.html').length, item.slots);
+      /* its places, each its example picture, for the person's own */
+      assert.equal(about.clips.filter((c) => c.clip.attrs?.['data-slot']).length, item.slots);
       if (item.music) assert.equal(index.items.find((i) => i.id === item.music)?.cat, 'music', `${item.id}: its music`);
       for (const f of ['poster.jpg', 'preview.mp4']) assert.ok(libraryFile(`${item.id}/${f}`), `${item.id}: ${f}`);
     }

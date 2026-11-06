@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>Quote card</title>
 <style>
-:root { --accent: #ff8a5b; --card: rgba(14, 14, 18, 0.78); --color: #ffffff; }
+:root { --font: Georgia, 'Songti SC', 'Noto Serif SC', serif; --accent: #ff8a5b; --card: rgba(14, 14, 18, 0.78); --color: #ffffff; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
@@ -13,9 +13,9 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: transparent;
 .src { -webkit-text-fill-color: transparent; }
 .w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--color); }
 .c { position: relative; width: 196vh; background: var(--card); border-radius: 5vh; padding: 16vh 14vh 13vh 16vh; box-shadow: 0 3vh 8vh rgba(0, 0, 0, 0.35); animation: in 0.6s cubic-bezier(0.3, 1.3, 0.5, 1) both; }
-.q { position: absolute; left: 9vh; top: -12vh; font: 700 64vh/1 Georgia, 'Songti SC', 'Noto Serif SC', serif; color: var(--accent); height: 40vh; transform-origin: 30% 30%; animation: q 0.7s 0.15s cubic-bezier(0.3, 1.7, 0.5, 1) both; }
+.q { position: absolute; left: 9vh; top: -12vh; font: 700 64vh/1 var(--font); color: var(--accent); height: 40vh; transform-origin: 30% 30%; animation: q 0.7s 0.15s cubic-bezier(0.3, 1.7, 0.5, 1) both; }
 .ln2 { overflow: hidden; }
-.ln2 span { display: block; font: italic 400 15vh/1.25 Georgia, 'Songti SC', 'Noto Serif SC', serif; white-space: pre; animation: up 0.7s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.ln2 span { display: block; font: italic 400 15vh/1.25 var(--font); white-space: pre; animation: up 0.7s cubic-bezier(0.16, 1, 0.3, 1) both; }
 .ln2.a span { animation-delay: 0.35s; } .ln2.b span { animation-delay: 0.5s; }
 .by { display: flex; align-items: center; gap: 3vh; margin-top: 6vh; font: 600 8vh/1 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; letter-spacing: 0.12em; white-space: pre; animation: fade 0.6s 0.8s both; }
 .by::before { content: ""; width: 12vh; height: 0.8vh; background: var(--accent); transform-origin: left; animation: grow 0.6s 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both; }

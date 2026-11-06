@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { filledTemplate, fillFor, isSlotSrc, markedClips, templateMark, templateMarks, templateOf, templateSlots, TEMPLATE_ATTR } from './template-instance.ts';
+import { filledTemplate, fillFor, filmTemplate, isSlotSrc, markedClips, templateFolderOf, templateMark, templateMarks, templateOf, templateOfFolder, templateSlots, TEMPLATE_ATTR } from './template-instance.ts';
 
 const mark = (m: string, extra: Record<string, string> = {}) => ({ [TEMPLATE_ATTR]: m, ...extra });
 const tracks = [
@@ -59,4 +59,33 @@ test("a template's places in the order they play, and its clips with the person'
   assert.equal(filled[3], clips[3]);
   /* a place with no file stays a place */
   assert.equal(filledTemplate(clips, [null, { path: 'assets/sea.jpg', kind: 'image' }])[2], clips[2]);
+});
+
+test("a template put in as one compound clip: what its film offers, places, words, looks, switches, pictures and sound", () => {
+  assert.equal(templateFolderOf('parts/templates-travel-vlog-2/film.html'), 'parts/templates-travel-vlog-2');
+  assert.equal(templateFolderOf('parts/compound/film.html'), null);
+  assert.equal(templateOfFolder('parts/templates-new-year-3'), 'templates/new-year');
+  assert.equal(templateOfFolder('parts/templates-new-year'), 'templates/new-year');
+  const props = (list: unknown[]) => ({ 'data-props': JSON.stringify(list) });
+  const film = [
+    { clips: [
+      { id: 'title', src: '../../saved/openfilm/templates-trip/title.html', at: 0.3, attrs: props([{ name: 'Title', type: 'text', at: '.t1' }, { name: 'Color', type: 'var', var: '--color' }, { name: 'Ribbon', type: 'boolean', at: '.ribbon' }]),
+        overrides: [{ at: '.t1', text: 'Summer' }, { at: ':root', style: { '--color': '#ff0' } }, { at: '.ribbon', style: { visibility: 'hidden' } }] },
+      { id: 'pin', src: '../../saved/openfilm/templates-trip/pin.html', at: 5, attrs: props([{ name: 'Color', type: 'var', var: '--color' }, { name: 'Logo', type: 'image', kind: 'img', at: 'img.logo' }]) },
+    ] },
+    { clips: [
+      { id: 'one', src: '../../saved/openfilm/templates-trip/example-1.jpg', attrs: { 'data-slot': '1' } },
+      { id: 'two', src: '../../saved/openfilm/templates-trip/slot.html', at: 3 },
+      { id: 'mine', src: '../../assets/beach.mp4', at: 6 },
+    ] },
+    { clips: [{ id: 'tune', src: '../../saved/openfilm/music-x.mp3' }] },
+  ];
+  const t = filmTemplate(film);
+  /* the template's own example picture waits for the person's own, as an empty place does */
+  assert.deepEqual(t.places, [{ clip: 'one', empty: true }, { clip: 'two', empty: true }, { clip: 'mine', empty: false }]);
+  assert.deepEqual(t.words, [{ clip: 'title', name: 'Title', at: '.t1', text: 'Summer' }]);
+  assert.deepEqual(t.looks, [{ name: 'Color', var: '--color', clips: ['title', 'pin'], value: '#ff0' }], 'one control for every page offering it');
+  assert.deepEqual(t.switches.map((s) => [s.clip, s.prop.name, s.on]), [['title', 'Ribbon', false]]);
+  assert.deepEqual(t.pictures.map((p) => [p.clip, p.prop.name, p.value]), [['pin', 'Logo', null]]);
+  assert.deepEqual(t.sounds, [{ clip: 'tune', src: '../../saved/openfilm/music-x.mp3' }]);
 });

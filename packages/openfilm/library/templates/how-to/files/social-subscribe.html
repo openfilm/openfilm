@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>Subscribe and bell</title>
 <style>
-:root { --accent: #ff1f2d; --done: #3a3b40; --color: #ffffff; }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --accent: #ff1f2d; --done: #3a3b40; --color: #ffffff; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; gap: 9vh; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; color: var(--color); }
+.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; gap: 9vh; font-family: var(--font); color: var(--color); }
 .bt { position: relative; display: grid; animation: pop 0.55s cubic-bezier(0.3, 1.6, 0.5, 1) both, press 0.35s 1.05s ease-out both; }
 .bt span { grid-area: 1 / 1; display: flex; align-items: center; justify-content: center; border-radius: 12vh; padding: 12vh 17vh; font-size: 32vh; font-weight: 800; letter-spacing: 0.02em; white-space: pre; box-shadow: 0 2.4vh 6vh rgba(0, 0, 0, 0.35); }
 .t1 { background: var(--accent); animation: gone 0.01s 1.12s forwards; }

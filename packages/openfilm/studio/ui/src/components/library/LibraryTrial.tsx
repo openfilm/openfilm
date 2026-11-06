@@ -3,13 +3,13 @@
  * nothing written: a page laid over it; a sticker, and a text look or motion on the words a new line says, in the box
  * it gets when put in (libraryBox), so the try looks as the drop will; a transition played on the film's own picture
  * (OnPicture: its page over it, its dip or dissolve, its camera move), never on the library's sample; a template's
- * title over it; a filter grading the whole picture through a backdrop-filter, as it will on its own track. A click
+ * example; a filter grading the whole picture through a backdrop-filter, as it will on its own track. A click
  * on it lets it go.
  */
 import * as React from 'react';
 import { useLanguage } from '@/i18n';
-import { TEXT_COMPONENT, builtInItem, BUILT_IN, defaultTextWords, libraryBox, nameOf, pageUrl, type LibraryItem } from '@/lib/library';
-import { TemplateOnPicture, TransitionOnPicture } from './OnPicture';
+import { TEXT_COMPONENT, builtInItem, BUILT_IN, defaultTextWords, libraryBox, nameOf, pageUrl, previewUrl, type LibraryItem } from '@/lib/library';
+import { TransitionOnPicture } from './OnPicture';
 
 /* a motion tried again and again: in, a while shown, out */
 const MOTION_SECONDS = 2.6;
@@ -64,8 +64,8 @@ export function LibraryTrial({ item, frame = null, onLetGo }: {
       ) : null}
       {/* a transition: on the film's own picture */}
       {item.cat === 'transition' ? <TransitionOnPicture item={item} picture={frame} playing live blur={0.35} /> : null}
-      {/* a template: its title over the film, where it puts it */}
-      {item.kind === 'group' ? <TemplateOnPicture item={item} picture={frame} playing live /> : null}
+      {/* a template: its example, as it plays put in */}
+      {item.kind === 'group' ? <video src={previewUrl(item)} autoPlay loop muted playsInline className="pointer-events-none absolute inset-0 h-full w-full object-cover" /> : null}
     </div>
   );
 }

@@ -3,11 +3,10 @@
  * project), else a plain one, never the library's sample. A dissolve into the picture turned round, a dip to black or
  * white and back, a cut's camera move (out, then in: lib/clip-presets cutCardKeyframes), a transition's page over it.
  * On a card (LibraryDrawer) the picture is drawn under it; over the viewer (LibraryTrial, `live`) the film is, and only
- * what moves is drawn. Played again and again while `playing`, a moment between. A template the same way: its title
- * page where the template puts it, on the picture.
+ * what moves is drawn. Played again and again while `playing`, a moment between.
  */
 import * as React from 'react';
-import { libraryUrl, pageUrl, placedGroup, type LibraryItem } from '@/lib/library';
+import { pageUrl, type LibraryItem } from '@/lib/library';
 import { cutCardKeyframes } from '@/lib/clip-presets';
 
 /** The picture with none of the person's own: a quiet light on a gradient. */
@@ -78,64 +77,3 @@ export function TransitionOnPicture({ item, picture, playing, live = false, blur
   );
 }
 
-type GroupClip = { track: number; at: number; clip: Record<string, unknown> & { src?: string; attrs?: Record<string, string>; size?: { w: number; h: number } } };
-/* each template's group as the library has it, read once */
-const groups = new Map<string, Promise<GroupClip[]>>();
-const groupOf = (id: string) => {
-  let read = groups.get(id);
-  if (!read) {
-    read = fetch(libraryUrl(`${id}/saved.json`)).then((r) => (r.ok ? r.json() : null)).then((g: { clips?: GroupClip[] } | null) => g?.clips ?? [], () => []);
-    groups.set(id, read);
-  }
-  return read;
-};
-
-/**
- * A template of the library on a picture: the person's own (else a plain one), with its title, the first page of it
- * that says words of its own, drawn where the template puts it for a picture of this shape; played again while
- * `playing`. Over the viewer (`live`), the title alone.
- */
-export function TemplateOnPicture({ item, picture, playing, live = false }: { item: LibraryItem; picture: string | null; playing: boolean; live?: boolean }) {
-  const [title, setTitle] = React.useState<GroupClip | null>(null);
-  React.useEffect(() => {
-    let alive = true;
-    void groupOf(item.id).then((clips) => {
-      const first = clips
-        .filter((c) => c.clip.attrs?.['data-place'] && c.clip.size?.w && /"type":\s*"text"/.test(c.clip.attrs?.['data-props'] ?? ''))
-        .sort((a, b) => a.at - b.at)[0];
-      if (alive) setTitle(first ?? null);
-    });
-    return () => { alive = false; };
-  }, [item.id]);
-  const [size, setSize] = React.useState<{ w: number; h: number } | null>(null);
-  const seen = React.useRef<ResizeObserver | null>(null);
-  const measure = React.useCallback((el: HTMLDivElement | null) => {
-    seen.current?.disconnect();
-    if (!el) return;
-    const read = () => setSize((s) => (s && s.w === el.clientWidth && s.h === el.clientHeight ? s : { w: el.clientWidth, h: el.clientHeight }));
-    read();
-    seen.current = new ResizeObserver(read);
-    seen.current.observe(el);
-  }, []);
-  const [round, setRound] = React.useState(0);
-  React.useEffect(() => {
-    if (!playing) return undefined;
-    setRound((r) => r + 1);
-    const timer = window.setInterval(() => setRound((r) => r + 1), 3200);
-    return () => window.clearInterval(timer);
-  }, [playing]);
-  const own = title?.clip.size;
-  const box = title && size && own ? (placedGroup([title as never], size)[0] as unknown as GroupClip).clip.box as { x: number; y: number; w: number; h: number } | undefined : undefined;
-  const src = title?.clip.src ? `/api/library/pages/${`${item.id}/files/${title.clip.src}`.split('/').map(encodeURIComponent).join('/')}` : null;
-  return (
-    <div ref={measure} className="pointer-events-none absolute inset-0 overflow-hidden">
-      {live ? null : <img src={picture ?? PLAIN} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />}
-      {box && own && src ? (
-        <div className="absolute overflow-hidden" style={{ left: box.x, top: box.y, width: box.w, height: box.h }}>
-          <iframe key={round} title="" src={src} loading="lazy" tabIndex={-1} className="absolute left-0 top-0 border-0"
-            style={{ width: own.w, height: own.h, transform: `scale(${box.w / own.w})`, transformOrigin: '0 0', colorScheme: 'normal' }} />
-        </div>
-      ) : null}
-    </div>
-  );
-}

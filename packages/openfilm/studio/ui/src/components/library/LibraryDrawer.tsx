@@ -16,7 +16,7 @@ import { ChevronDown, ChevronsLeft, ChevronsRight, Plus, Search, Star, X } from 
 import { useLanguage, useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import {
-  BUILT_IN, TEXT_COMPONENT, builtInItem, libraryDragItem, nameOf, pageUrl, posterUrl, previewUrl, toggleFavorite, useLibraryFavorites, useLibraryIndex,
+  BUILT_IN, TEXT_COMPONENT, builtInItem, libraryDragItem, libraryUrl, nameOf, pageUrl, posterUrl, previewUrl, toggleFavorite, useLibraryFavorites, useLibraryIndex,
   type LibraryCategory, type LibraryItem,
 } from '@/lib/library';
 import { clearResourceDrag, dragPicture, setResourceDragData } from '@/lib/resource-drag';
@@ -30,7 +30,7 @@ import { SourceBadge, SourceChips, sourcesIn, type Source } from './SourceChips'
 import { TextStyleSample } from './TextStyleSample';
 import { useSavedLooks } from '../CaptionPresets';
 import { arrangedCategories } from '@/lib/library-categories';
-import { PLAIN, TemplateOnPicture, TransitionOnPicture } from './OnPicture';
+import { PLAIN } from './OnPicture';
 import { isClipMotion } from '@/lib/clip-presets';
 import { useLibraryArrangement } from './arrangement';
 
@@ -92,7 +92,7 @@ export interface LibraryActions {
 /** The skills shown from outside the drawer (the app's chat): Discover, or one skill's page; `n` tells one request from the next. */
 export type SkillsRequest = { name?: string; n: number };
 
-export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captions, speak, onServices, projectId = null, showSkills, under = 0, frame = null }: {
+export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captions, speak, onServices, projectId = null, showSkills, under = 0 }: {
   media: React.ReactNode;
   /** the project's own media, or Saved */
   mediaScope: 'project' | 'saved';
@@ -110,8 +110,6 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
   /** how much of its foot the app's composer floats over: the lists run on under it, their ends scrolled clear of it
       (--drawer-under) */
   under?: number;
-  /** the film's picture at the playhead (a frame's address), which a filter's or an effect's card shows itself on */
-  frame?: string | null;
 }) {
   const t = useT();
   const lang = useLanguage();
@@ -462,7 +460,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
                   <div className={`grid gap-x-2.5 gap-y-3 ${cat === 'sticker' ? 'grid-cols-[repeat(auto-fill,minmax(68px,1fr))]' : textSquare || ON_FILM.has(cat) ? 'grid-cols-[repeat(auto-fill,minmax(84px,1fr))]' : cat === 'text' ? 'grid-cols-[repeat(auto-fill,minmax(120px,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(96px,1fr))]'}`}>
                     {/* a page at a time as it is scrolled, as the sounds are (the emoji alone are some 1,600) */}
                     {items.slice(0, drawn).map((it) => (
-                      <Card key={it.id} item={it} lang={lang} picked={picked === it.id} kept={favorites.includes(it.id)} square={cat === 'sticker' || textSquare || ON_FILM.has(cat)} frame={frame}
+                      <Card key={it.id} item={it} lang={lang} picked={picked === it.id} kept={favorites.includes(it.id)} square={cat === 'sticker' || textSquare || ON_FILM.has(cat)}
                         onPick={() => pick(picked === it.id ? null : it)} onAdd={() => actions.add(it)} />
                     ))}
                   </div>
@@ -681,16 +679,12 @@ function useSideways() {
    own picture where they can be */
 const ON_FILM = new Set<Category>(['filter', 'effect', 'transition', 'template']);
 
-function Card({ item, lang, picked, kept, square, frame = null, onPick, onAdd }: {
-  item: LibraryItem; lang: ReturnType<typeof useLanguage>; picked: boolean; kept: boolean; square: boolean; frame?: string | null; onPick: () => void; onAdd: () => void;
+function Card({ item, lang, picked, kept, square, onPick, onAdd }: {
+  item: LibraryItem; lang: ReturnType<typeof useLanguage>; picked: boolean; kept: boolean; square: boolean; onPick: () => void; onAdd: () => void;
 }) {
   const [hover, setHover] = React.useState(false);
-  /* a filter, an effect, a transition, a template: on the person's own picture (`frame`: the film's at the playhead,
-     else theirs in the project), else a plain one, never the library's sample. A filter graded on it; an effect's page
-     laid over it; a transition played on it under the pointer, a template's title drawn on it (OnPicture) */
-  const page = item.kind === 'page' && !item.w && Boolean(item.src);
-  const onPicture = item.cat === 'filter' || item.cat === 'effect' || item.cat === 'transition' || item.kind === 'group';
-  const picture = frame ?? PLAIN;
+  /* every card its own example: a filter on its own photo, an effect, a transition and a template on their own
+     pictures, played under the pointer (library-previews.mjs). Tried in the viewer, or put in, they act on the film */
   const fit = item.cat === 'sticker' ? 'object-contain' : 'object-cover';
   const name = nameOf(item.name, lang);
   /* a text style, a text motion (played under the pointer) and the line of words in the page's own: drawn as it is,
@@ -713,15 +707,7 @@ function Card({ item, lang, picked, kept, square, frame = null, onPick, onAdd }:
     >
       <div className={`relative overflow-hidden rounded-md bg-[var(--bg-field)] ${square ? 'aspect-square' : 'aspect-video'} ${picked ? 'ring-2 ring-[var(--accent)]' : 'ring-1 ring-transparent group-hover:ring-[var(--text-faint)]'}`}>
         {item.kind === 'look'
-          ? <img src={picture} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" style={{ filter: item.filter }} />
-          : item.cat === 'transition' ? <TransitionOnPicture item={item} picture={frame} playing={hover} />
-          : item.kind === 'group' ? <TemplateOnPicture item={item} picture={frame} playing={hover} />
-          : item.cat === 'effect' && page ? (
-            <>
-              <img src={picture} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />
-              <iframe title="" src={pageUrl(item)} loading="lazy" tabIndex={-1} className="pointer-events-none absolute inset-0 h-full w-full border-0" style={{ colorScheme: 'normal' }} />
-            </>
-          )
+          ? <img src={item.sample ? libraryUrl(item.sample) : PLAIN} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" style={{ filter: item.filter }} />
           /* a sticker whole in its square card (a wide one is not cut at its ends); loaded as it comes into view */
           : drawn ? <TextStyleSample lang={lang} {...(item.kind === 'textmotion' ? { moving: item.vars, playing: hover } : { vars: item.vars })} {...(item.id === TEXT_COMPONENT ? { words: name } : {})} />
           : live ? (
@@ -731,7 +717,7 @@ function Card({ item, lang, picked, kept, square, frame = null, onPick, onAdd }:
             </span>
           )
           : <img src={posterUrl(item)} alt="" draggable={false} loading="lazy" decoding="async" className={`absolute inset-0 h-full w-full ${fit}`} />}
-        {hover && item.kind !== 'look' && !item.still && !drawn && !live && !onPicture ? <video src={previewUrl(item)} autoPlay loop muted playsInline className={`absolute inset-0 h-full w-full ${fit}`} /> : null}
+        {hover && item.kind !== 'look' && !item.still && !drawn && !live ? <video src={previewUrl(item)} autoPlay loop muted playsInline className={`absolute inset-0 h-full w-full ${fit}`} /> : null}
         {/* the star and the "+" side by side, of one size, dark glass over the picture */}
         <span className="absolute bottom-1 right-1 flex items-center gap-1">
           <StarButton item={item} kept={kept} className={`${ROUND} bg-black/55 ${kept ? 'grid text-[#ffd35a]' : 'hidden text-white group-hover:grid'}`} />

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>Handwritten title</title>
 <style>
-:root { --color: #ffffff; --accent: #ffb4a2; }
+:root { --font: 'Snell Roundhand', 'Segoe Script', 'Brush Script MT', 'Kaiti SC', 'STKaiti', 'KaiTi', cursive; --color: #ffffff; --accent: #ffb4a2; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
@@ -14,7 +14,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: transparent;
 .w { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: var(--color); }
 .box { position: relative; display: inline-block; }
 .row { width: 92vw; display: flex; justify-content: center; }
-.t1 { display: inline-block; white-space: pre; font: 400 calc(24vh * var(--k, 1))/1.15 'Snell Roundhand', 'Segoe Script', 'Brush Script MT', 'Kaiti SC', 'STKaiti', 'KaiTi', cursive; padding: 0 4vh; text-shadow: 0 0.6vh 2vh rgba(0, 0, 0, 0.3);
+.t1 { display: inline-block; white-space: pre; font: 400 calc(24vh * var(--k, 1))/1.15 var(--font); padding: 0 4vh; text-shadow: 0 0.6vh 2vh rgba(0, 0, 0, 0.3);
   -webkit-mask-image: linear-gradient(90deg, #000 45%, transparent 55%); mask-image: linear-gradient(90deg, #000 45%, transparent 55%);
   -webkit-mask-size: 220% 100%; mask-size: 220% 100%; animation: write 1.3s cubic-bezier(0.45, 0.1, 0.4, 1) both; }
 svg { position: absolute; left: 6%; right: 6%; width: 88%; bottom: -3.5vh; height: 9vh; overflow: visible; }

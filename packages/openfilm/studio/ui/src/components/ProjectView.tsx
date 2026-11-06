@@ -10,7 +10,7 @@ import * as React from 'react';
 import { BookmarkPlus, ClipboardCopy, ClipboardPaste, Layers, LibraryBig, MessageSquarePlus, MonitorDown, Scissors, Settings2, TriangleAlert, Upload, Workflow } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
 import { withPreset } from '../../../../src/clip-motion.mjs';
-import { PARTS, compoundOf, dissolvedOf } from '../../../server/compound.mjs';
+import { PARTS, compoundOf, dissolvedOf, srcInto, srcOutOf } from '../../../server/compound.mjs';
 import type { FilmValue } from '../../../server/ops.mjs';
 import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type Op, type ProjectFilm, type ProjectSettings, type SavedGroupClip } from '@/api';
 import { useLanguage, useT } from '@/i18n';
@@ -22,8 +22,8 @@ import { filmShape, type MediaFacts } from '@/lib/film-shape';
 import { changesPicture } from '@/lib/picture-files';
 import { SPEED_MAX } from '@/lib/playback-speed';
 import { replaceClip, type ReplaceFamily } from '@/lib/clip-replace';
-import { filledTemplate, fillFor, isSlotSrc, markedClips, templateMark, templateMarks, templateOf, templateSlots } from '@/lib/template-instance';
-import { TemplateSection, type TemplateHost } from '@/components/TemplateSection';
+import { fillFor, filmTemplate, isSlotSrc, markedClips, templateFolderOf, templateMark, templateMarks, templateOf, templateOfFolder } from '@/lib/template-instance';
+import { keepTemplateFilm, TemplateFilmSection, TemplateSection, type TemplateHost } from '@/components/TemplateSection';
 import { presetsOn, takesMotion, type Preset, type PresetSlot } from '@/lib/clip-presets';
 import { ClipMotionSection, type ClipMotionHost } from '@/components/ClipMotionSection';
 import { TemplatePicker } from '@/components/TemplatePicker';
@@ -38,7 +38,7 @@ import { attrsOf, pasteAttrs, type AttrGroup, type CopiedAttrs } from '@/lib/cli
 import { cutPoints, nextCut } from '@/lib/timeline-nav';
 import { anyLocked, lockedEdits } from '@/lib/track-lock';
 import { placeMedia, type SourceRange } from '@/lib/media-place';
-import { BUILT_IN, TEXT_COMPONENT, builtInItem, cutTrack, cutsOf, defaultTextWords, fromLibrary, isLibraryClip, isTextClip, libraryItemOfClip, libraryBox, libraryDragItem, libraryUrl, nameOf, onCut, pageUrl, placedGroup, useLibraryIndex, withLook, withRootVars, type LibraryItem } from '@/lib/library';
+import { BUILT_IN, TEXT_COMPONENT, builtInItem, cutTrack, cutsOf, defaultTextWords, fromLibrary, isLibraryClip, isTextClip, libraryItemOfClip, libraryBox, libraryDragItem, nameOf, onCut, pageUrl, placedGroup, useLibraryIndex, withLook, withRootVars, type LibraryItem } from '@/lib/library';
 import { LibraryDrawer, type LibraryActions, type SkillsRequest } from '@/components/library/LibraryDrawer';
 import type { CaptionsMake } from '@/components/library/CaptionsPane';
 import { LibraryTrial } from '@/components/library/LibraryTrial';
@@ -128,8 +128,8 @@ import { FontScopeContext, type FontScope } from '@/lib/use-fonts';
 import { stageMenu, stageRecoveryMenu, type StageArrangeResult, type StageMenuContext, type StagePictureActions } from './stage-menu';
 import type { StageEditFailure, StageTextEdit } from './FilmInspector';
 import { layerTarget, pageClipOf, recoverLayer } from '@/lib/stage-layers';
-import { pictureStyle, relativeTo, withText, type TemplateControls } from '@/lib/template-controls';
-import { propsAttr, propsOf, type ComponentProp } from '@/lib/component-props';
+import { pictureStyle, relativeTo, withText, withVar, type TemplateControls } from '@/lib/template-controls';
+import { propsAttr, propsOf, withPropValue, type ComponentProp } from '@/lib/component-props';
 import { pointersOf, propsWithoutDeleted, withDeleted } from '@/lib/layer-delete';
 import {
   isLayerClipboardKey, PASTE_OFFSET, pasteGoals, pasteOffset, readLayerClipboard, whyNowhere, writeLayerClipboard, type CopiedLayers,
@@ -1515,12 +1515,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   }, [editModel]);
   /* a group of Saved or the library, laid out for this picture (lib/library placedGroup); a template of the library has
      its music (one of the library's) taken in too, on a track of its own under it, fading out at its end */
-  const templateClips = React.useCallback(async (saved: string | undefined, clips: SavedGroupClip[]): Promise<SavedGroupClip[]> => {
+  const templateClips = React.useCallback(async (saved: string | undefined, clips: SavedGroupClip[], marked = true): Promise<SavedGroupClip[]> => {
     const item = builtInItem(saved);
     /* a template of the library: each of its clips marked as this time's of it (lib/template-instance), so it is one
        template in the inspector (TemplateSection) */
     const laid = placedGroup(clips, stageRef.current ?? { w: 1920, h: 1080 });
-    const mark = item?.cat === 'template' ? templateMark(item.id, templateMarks(filmRef.current?.tracks ?? [])) : null;
+    const mark = marked && item?.cat === 'template' ? templateMark(item.id, templateMarks(filmRef.current?.tracks ?? [])) : null;
     const placed = mark ? markedClips(laid, mark) : laid;
     const music = item?.music ? builtInItem(`${BUILT_IN}/${item.music}`) : null;
     if (!item?.music || !music) return placed;
@@ -1544,34 +1544,34 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     };
     requestAnimationFrame(find);
   }, []);
-  /* a template of the library asked for: the person's own videos and pictures for its places first (TemplatePicker),
-     then it goes in with them where it was asked (at the playhead, or where it was dropped). Nothing is copied into
-     the project before */
-  const [templateAsk, setTemplateAsk] = React.useState<{ item: LibraryItem; slots: number[]; at: number; track: Parameters<typeof groupInsertAt>[0] } | null>(null);
-  const askTemplate = React.useCallback(async (item: LibraryItem, at: number, track: Parameters<typeof groupInsertAt>[0]) => {
-    let clips: SavedGroupClip[] = [];
-    try { clips = ((await (await fetch(libraryUrl(`${item.id}/saved.json`))).json()) as { clips?: SavedGroupClip[] }).clips ?? []; } catch { /* its places not read: none asked for */ }
-    setTemplateAsk({ item, slots: templateSlots(clips as never).map((s) => s.durMs), at, track });
-  }, []);
-  const useTemplate = React.useCallback(async (paths: string[]) => {
-    const ask = templateAsk;
-    setTemplateAsk(null);
-    if (!ask) return;
+  /* the person's own chosen for a template's places at once (TemplatePicker): its places' lengths, and what it does with them */
+  const [templateAsk, setTemplateAsk] = React.useState<{ name: string; slots: number[]; use: (paths: string[]) => void } | null>(null);
+  /*
+   * A template of the library: one compound clip, from where it was asked (the playhead, or where it was dropped), its
+   * film of its own (parts/templates-<id>) the template's clips laid out for this picture, its example pictures in its
+   * places and its music under them: it plays as the template's example until the person's own go in its places
+   * (TemplateSection, or a file dropped on it on the timeline), its words and looks changed there too.
+   */
+  const insertTemplate = React.useCallback(async (item: LibraryItem, at: number, track: Parameters<typeof groupInsertAt>[0]) => {
     let taken: Awaited<ReturnType<typeof api.takeSaved>>;
-    try { taken = await api.takeSaved(projectId, `${BUILT_IN}/${ask.item.id}`); } catch (e) { toast.show(e instanceof Error ? e.message : String(e)); return; }
+    try { taken = await api.takeSaved(projectId, `${BUILT_IN}/${item.id}`); } catch (e) { toast.show(e instanceof Error ? e.message : String(e)); return; }
     if (!('clips' in taken)) return;
-    /* each as the media pane lists it (its length); one just brought in, by its name */
-    const files = paths.map((path) => {
-      const f = listing?.files.find((x) => x.path === path);
-      return { path, kind: f?.kind ?? (PICTURE_FILE.test(path) ? 'image' : 'video'), ...(f?.durationMs ? { durationMs: f.durationMs } : {}) };
-    });
+    const name = item.id.replace(/\//g, '-');
+    /* its clips named from a folder under parts/ (any: they are all as deep) */
+    const clips = (await templateClips(`${BUILT_IN}/${item.id}`, taken.clips, false))
+      .map((c) => ({ ...c, clip: { ...c.clip, src: srcInto(String(c.clip.src), `${PARTS}/${name}`) } }));
+    const inner = applyOps({ stage: { ...(stageRef.current ?? { w: 1920, h: 1080 }) }, tracks: [] } as unknown as FilmValue, groupInsertOps(clips, 0, 0, []) as never) as FilmValue;
+    let folder: string;
+    try { ({ folder } = await api.writePartFilm(projectId, name, inner as unknown as Film)); } catch (e) { toast.showError(e instanceof Error ? e.message : String(e)); return; }
+    keepTemplateFilm(folder, inner);
+    const span = (c: SavedGroupClip) => { const tm = c.clip.time as number[] | undefined; return c.at + (tm ? (tm[1] ?? 0) - (tm[0] ?? 0) : 0); };
+    const len = Math.round(Math.max(0.1, ...clips.map(span)) * 1000) / 1000;
     const before = new Set(blocksRef.current.flatMap((b) => (b.clipId ? [b.clipId] : [])));
-    const clips = filledTemplate(await templateClips(`${BUILT_IN}/${ask.item.id}`, taken.clips) as never, files);
-    const failed = await edit(groupInsertOps(clips as never, ask.at, groupInsertAt(ask.track), editModel()), 'history.stepDrop');
+    const failed = await edit([{ op: 'insert', clip: { src: `${folder}/film.html`, time: [0, len] } as never, at, track: track ?? { insert: 0 } }] as never, 'history.stepDrop');
     if (failed) { toast.show(failed); return; }
-    toast.show(t('assetDrawer.added').replace('{name}', nameOf(ask.item.name, language)));
+    toast.show(t('assetDrawer.added').replace('{name}', nameOf(item.name, language)));
     pickNewClip(before);
-  }, [templateAsk, projectId, listing, templateClips, edit, editModel, toast, t, language, pickNewClip]);
+  }, [projectId, templateClips, edit, toast, t, language, pickNewClip]);
   const dropAsset = React.useCallback(async (file: ResourceDragItem, target: AssetDropTarget, atMs: number): Promise<string | null> => {
     const plan = assetDropInsert(file, timelineTracks, target, atMs, stageRef.current);
     if ('error' in plan) return plan.error === 'locked' ? t('timeline.trackLocked') : t('timeline.dropNotClip');
@@ -1580,7 +1580,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (file.saved) {
       /* a template: the person's own for its places first */
       const asked = builtInItem(file.saved);
-      if (asked?.kind === 'group') { void askTemplate(asked, plan.at, plan.track); return null; }
+      if (asked?.kind === 'group') { void insertTemplate(asked, plan.at, plan.track); return null; }
       /* a text style: a new line of words in it, in its box (a title's taller) */
       const style = builtInItem(file.saved);
       const textStyle = style?.kind === 'textstyle' ? style : null;
@@ -1631,7 +1631,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     } finally {
       if (pending) setPendingDrops((all) => all.filter((d) => d.id !== pending.id));
     }
-  }, [timelineTracks, edit, roomFor, t, projectId, editModel, language, pickNewClip, askTemplate]);
+  }, [timelineTracks, edit, roomFor, t, projectId, editModel, language, pickNewClip, insertTemplate]);
   const dropAssetRef = React.useRef(dropAsset);
   dropAssetRef.current = dropAsset;
   /**
@@ -1880,7 +1880,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         if (item.kind === 'look') void filterLayer(item);
         else if (item.kind === 'fade') fade(item, cutHere()?.cut ?? null);
         else if (item.kind === 'motion') motion(item);
-        else if (item.kind === 'group') void askTemplate(item, snapToFrame(timeRef.current) / 1000, { insert: 0 });
+        else if (item.kind === 'group') void insertTemplate(item, snapToFrame(timeRef.current) / 1000, { insert: 0 });
         else if (item.kind === 'textstyle') textLine(item);
         else if (item.kind === 'textmotion') textLook(item);
         else void place(item);
@@ -1899,7 +1899,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       return null;
     };
     return { actions, applyDrop, lookTargets };
-  }, [language, selectedClips, editModel, projectId, addMedia, timelineTracks, edit, filmClipOf, editBlocks, editClips, playTextMotion, askTransition, t, toast, askTemplate]);
+  }, [language, selectedClips, editModel, projectId, addMedia, timelineTracks, edit, filmClipOf, editBlocks, editClips, playTextMotion, askTransition, t, toast, insertTemplate]);
   /* clips (and files) kept to use again in any project (lib/saved, studio/server/saved.mjs): the timeline's, the
      picture's and the media pane's "Add to Saved" */
   const saveThings = React.useCallback(async (what: Parameters<typeof api.save>[1], n: number) => {
@@ -2175,9 +2175,133 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     projectId, tracks: timelineTracks, film: film.film, settings, patchSettings, player, timeRef, seek, edit: editOps, record: film.record,
     editModel, selectedClipIds: selectedKeys, listing, toast, pickFile: pickReplacement,
   });
+  /* a template put in as one compound clip: its film read from its folder (TemplateFilmSection keeps each) */
+  const loadTemplateFilm = React.useCallback(async (dir: string) => (await api.readPartFilm(projectId, dir)).film as unknown as FilmValue, [projectId]);
+  /*
+   * What the inspector offers of a template put in as one compound clip (`block`, its film `film` in `dir`): its places,
+   * words, looks, switches, pictures and sound (lib/template-instance filmTemplate). A change writes its film again in a
+   * folder of its own and shows the clip from there: one step, undone as any other, the film before kept as it was.
+   */
+  const templateFilmHost = React.useCallback((block: TimelineBlock, dir: string, film: FilmValue): TemplateHost => {
+    const offered = filmTemplate(film.tracks as never);
+    const item = builtInItem(`${BUILT_IN}/${templateOfFolder(dir)}`);
+    const clipOf = (id: string) => film.tracks.flatMap((tr) => tr.clips).find((c) => c.id === id) as unknown as Clip | undefined;
+    /* a file of its film as the project names it */
+    const outer = (src: string) => srcOutOf(src.split('#')[0]!, dir);
+    const lenOf = (c: Clip) => Math.round(((c.time?.[1] ?? 0) - (c.time?.[0] ?? 0)) * 1000);
+    const own = (kind: 'picture' | 'sound') => (listing?.files ?? []).filter((f) => (kind === 'sound' ? f.kind === 'audio' : f.kind === 'video' || f.kind === 'image') && !fromLibrary(f.path));
+    const rewrite = async (ops: Op[], label: string) => {
+      const next = applyOps(film, ops as never) as FilmValue;
+      let made: string;
+      try { ({ folder: made } = await api.writePartFilm(projectId, dir.split('/').pop()!.replace(/-\d+$/, ''), next as unknown as Film)); } catch (e) { toast.showError(e instanceof Error ? e.message : String(e)); return; }
+      keepTemplateFilm(made, next);
+      const err = await edit([{ op: 'props', edits: [{ clip: block.clipId!, prop: 'src', value: `${made}/film.html` }] }] as never, label);
+      if (err) toast.showError(err);
+    };
+    const step = `history.stepReplaced|${block.clipId}`;
+    /* a file of the project in a place (or the sound's): its edits */
+    const putEdits = (id: string, file: { path: string; kind: string; durationMs?: number }) => {
+      const c = clipOf(id);
+      const plan = c ? replaceClip(c, lenOf(c), { ...file, path: srcInto(file.path, dir) }) : null;
+      return plan && !('error' in plan) ? plan.edits.map((e) => ({ clip: id, ...e })) : [];
+    };
+    const put = (id: string, file: { path: string; kind: string; durationMs?: number }) => {
+      const edits = putEdits(id, file);
+      if (edits.length) void rewrite([{ op: 'props', edits }] as never, step);
+    };
+    const fileEntries = (id: string, kind: 'picture' | 'sound'): ContextMenuEntry[] => [
+      ...own(kind).map((f) => ({ id: `use:${f.path}`, label: f.name, onSelect: () => put(id, f) })),
+      ...(own(kind).length ? [{ id: 'sep', separator: true as const }] : []),
+      { id: 'computer', label: t('template.import'), onSelect: () => { void pickReplacement(kind).then((path) => { if (path) put(id, { path, kind: kind === 'sound' ? 'audio' : PICTURE_FILE.test(path) ? 'image' : 'video' }); }); } },
+    ];
+    const setOverrides = (pairsOf: { clip: string; value: unknown }[], label: string) => {
+      if (pairsOf.length) void rewrite([{ op: 'props', edits: pairsOf.map((x) => ({ clip: x.clip, prop: 'overrides', value: x.value })) }] as never, label);
+    };
+    const switchOf = (key: string) => offered.switches.find((s) => `${s.clip} ${s.prop.name}` === key);
+    const pictureOf = (key: string) => offered.pictures.find((s) => `${s.clip} ${s.prop.name}` === key);
+    const thumbOf = (src: string, ms = 0) => {
+      const path = outer(src);
+      return PICTURE_FILE.test(path) ? `${folder}${path.split('/').map(encodeURIComponent).join('/')}`
+        : /\.html?$/i.test(path) ? null : `/api/projects/${encodeURIComponent(projectId)}/media?what=frame&path=${encodeURIComponent(path)}&ms=${ms}&w=200`;
+    };
+    const empty = offered.places.filter((s) => s.empty).map((s) => s.clip);
+    const placeFiles = (paths: string[], ids: string[]) => ids.flatMap((id, i) => {
+      const path = paths[i];
+      if (!path) return [];
+      const f = listing?.files.find((x) => x.path === path);
+      return putEdits(id, { path, kind: f?.kind ?? (PICTURE_FILE.test(path) ? 'image' : 'video'), ...(f?.durationMs ? { durationMs: f.durationMs } : {}) });
+    });
+    return {
+      instance: { mark: dir, id: templateOfFolder(dir), clips: film.tracks.flatMap((tr) => tr.clips.map((c) => c.id)), slots: offered.places, words: offered.words },
+      name: item ? nameOf(item.name, language) : dir,
+      slotOf: (id) => { const c = clipOf(id); return { durMs: c ? lenOf(c) : 0, thumb: c ? thumbOf(c.src, Math.round((c.time?.[0] ?? 0) * 1000)) : null }; },
+      pickEntries: (id) => fileEntries(id, 'picture'),
+      put: (id, file) => put(id, file),
+      fill: own('picture').length && empty.length ? () => {
+        const used = new Set(filmRef.current?.tracks.flatMap((tr) => tr.clips.map((c) => c.src.split('#')[0]!)) ?? []);
+        const picks = fillFor(empty.length, own('picture'), used);
+        const edits = placeFiles(picks.map((f) => f.path), empty);
+        if (edits.length) void rewrite([{ op: 'props', edits }] as never, step);
+      } : null,
+      pickMany: () => setTemplateAsk({
+        name: item ? nameOf(item.name, language) : dir,
+        slots: offered.places.map((s) => { const c = clipOf(s.clip); return c ? lenOf(c) : 0; }),
+        use: (paths) => { const edits = placeFiles(paths, offered.places.map((s) => s.clip)); if (edits.length) void rewrite([{ op: 'props', edits }] as never, step); },
+      }),
+      setWord: (w, text) => { const c = clipOf(w.clip); if (c) setOverrides([{ clip: w.clip, value: withText(c.overrides as never, w.at, w.n, text) }], 'history.stepEdit'); },
+      pageUrl: (id) => { const c = clipOf(id); return c && folder ? `${folder}${outer(c.src)}` : null; },
+      pickAll: null,
+      looks: offered.looks.map((l) => { const c = clipOf(l.clips[0]!); return { key: `${l.var} ${l.name}`, name: l.name, var: l.var, value: l.value, page: c && folder ? `${folder}${outer(c.src)}` : null }; }),
+      setLook: (key, value) => {
+        const look = offered.looks.find((l) => `${l.var} ${l.name}` === key);
+        if (look) setOverrides(look.clips.flatMap((id) => { const c = clipOf(id); return c ? [{ clip: id, value: withVar(c.overrides as never, look.var, value) }] : []; }), 'history.stepStyle');
+      },
+      switches: offered.switches.map((s) => ({ key: `${s.clip} ${s.prop.name}`, name: s.prop.name, on: s.on })),
+      setSwitch: (key, on) => { const s = switchOf(key); const c = s ? clipOf(s.clip) : null; if (s && c) setOverrides([{ clip: s.clip, value: withPropValue(c.overrides as never, s.prop, on ? null : false) }], 'history.stepStyle'); },
+      pictures: offered.pictures.map((s) => {
+        const c = clipOf(s.clip);
+        const page = c ? outer(c.src) : '';
+        const at = s.value ? new URL(s.value, `http://x/${page}`).pathname.slice(1) : null;
+        return { key: `${s.clip} ${s.prop.name}`, name: s.prop.name, thumb: at && folder ? `${folder}${at}` : null };
+      }),
+      pictureEntries: (key) => {
+        const s = pictureOf(key);
+        const c = s ? clipOf(s.clip) : null;
+        if (!s || !c) return [];
+        const set = (path: string) => setOverrides([{ clip: s.clip, value: withPropValue(c.overrides as never, s.prop, relativeTo(outer(c.src), path)) }], 'history.stepEdit');
+        return [
+          ...own('picture').filter((f) => f.kind === 'image').map((f) => ({ id: `use:${f.path}`, label: f.name, onSelect: () => set(f.path) })),
+          { id: 'computer', label: t('template.import'), onSelect: () => { void pickReplacement('picture').then((path) => { if (path) set(path); }); } },
+        ];
+      },
+      sounds: offered.sounds.map((s) => ({ key: s.clip, name: outer(s.src).split('/').pop() ?? s.src })),
+      soundEntries: (key) => [
+        ...fileEntries(key, 'sound'),
+        { id: 'sep-off', separator: true as const },
+        { id: 'remove', label: t('timeline.menuDelete'), danger: true, onSelect: () => { void rewrite([{ op: 'remove', clip: key }] as never, 'history.stepRemove'); } },
+      ],
+    };
+  }, [listing, language, projectId, edit, toast, folder, t, pickReplacement]);
+  /* a file dropped on a template's clip on the timeline: in the place playing where it was dropped (else the nearest) */
+  const dropOnTemplate = React.useCallback(async (block: TimelineBlock, file: ResourceDragItem, atMs: number) => {
+    const dir = templateFolderOf(block.src);
+    if (!dir) return;
+    const film = await loadTemplateFilm(dir).catch(() => null);
+    if (!film) return;
+    const at = (atMs - block.startMs) / 1000 + (block.inMs ?? 0) / 1000;
+    const places = filmTemplate(film.tracks as never).places.map((s) => film.tracks.flatMap((tr) => tr.clips).find((c) => c.id === s.clip)!) as unknown as { id: string; at?: number; time?: readonly number[] }[];
+    const span = (c: { at?: number; time?: readonly number[] }) => [c.at ?? 0, (c.at ?? 0) + ((c.time?.[1] ?? 0) - (c.time?.[0] ?? 0))] as const;
+    const here = places.find((c) => { const [a, b] = span(c); return at >= a && at < b; })
+      ?? [...places].sort((p, q) => Math.abs(span(p)[0] - at) - Math.abs(span(q)[0] - at))[0];
+    if (here) templateFilmHost(block, dir, film).put(here.id, file);
+  }, [loadTemplateFilm, templateFilmHost]);
   /* a template of the library the picked clip belongs to: its places for pictures, its words, picked whole
      (TemplateSection, lib/template-instance) */
   const templateSection = React.useCallback((blocks: readonly TimelineBlock[]): React.ReactNode => {
+    /* put in as one compound clip: its film's */
+    const one = blocks.length === 1 ? blocks[0]! : null;
+    const dir = one ? templateFolderOf(one.src) : null;
+    if (one && dir) return <TemplateFilmSection key={dir} folder={dir} load={loadTemplateFilm} hostOf={(film) => templateFilmHost(one, dir, film)} />;
     const value = filmRef.current;
     const first = blocks[0]?.clipId;
     const instance = first && value ? templateOf(value.tracks, first) : null;
@@ -2228,7 +2352,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       pickAll: blocks.length < instance.clips.length ? () => { setStageElement(null); setSelectedKeys(instance.clips); } : null,
     };
     return <TemplateSection host={host} />;
-  }, [listing, language, projectId, tools, edit, editBlocks, toast, folder]);
+  }, [listing, language, projectId, tools, edit, editBlocks, toast, folder, loadTemplateFilm, templateFilmHost]);
   /* a clip's animation (ClipMotionSection, lib/clip-presets): one of the library's motions in its In, Out or Loop, drawn
      on the clip's own picture, written into its style with the motion's keyframes and played once put on */
   const motionSection = React.useCallback((block: TimelineBlock): React.ReactNode => {
@@ -4504,6 +4628,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     history={timelineHistory}
                     recorder={recorder}
                     {...tools.timeline}
+                    /* a file dropped on a template's clip goes in its place there, without ⇧ */
+                    dropInto={(b) => templateFolderOf(b.src) != null}
+                    onReplaceDrop={(b, f, atMs) => { if (templateFolderOf(b.src) && atMs != null) void dropOnTemplate(b, f, atMs); else tools.timeline.onReplaceDrop(b, f as never); }}
                   />
                 </div>
                 {/* the audio meters, beside the timeline */}
@@ -4550,7 +4677,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       <SettingsModal open={settingsOpen !== null} section={settingsOpen ?? undefined} onClose={() => setSettingsOpen(null)} />
       {templateAsk ? (
         <TemplatePicker
-          name={nameOf(templateAsk.item.name, language)}
+          name={templateAsk.name}
           slots={templateAsk.slots}
           media={(listing?.files ?? []).filter((f) => (f.kind === 'video' || f.kind === 'image') && !fromLibrary(f.path)).map((f) => ({
             path: f.path, name: f.name, kind: f.kind as 'video' | 'image', ...(f.durationMs ? { durationMs: f.durationMs } : {}),
@@ -4558,7 +4685,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
           }))}
           used={new Set(blocksRef.current.flatMap((b) => (b.src ? [b.src.split('#')[0]!] : [])))}
           onImport={importOwn}
-          onUse={(paths) => void useTemplate(paths)}
+          onUse={(paths) => { const ask = templateAsk; setTemplateAsk(null); ask.use(paths); }}
           onClose={() => setTemplateAsk(null)}
         />
       ) : null}
@@ -4571,7 +4698,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         <div className="fixed z-30 flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--dock-line)] pt-px"
           style={{ top: HOST_PANEL_TOP, left: 0, bottom: 0, width: HOST_PANEL_WIDTH }}>
           <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--bg-panel)]">
-          <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} actions={library.actions} under={hostAssets.bottom} frame={libraryFrame}
+          <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} actions={library.actions} under={hostAssets.bottom}
             captions={{
               heard: heardClips, making: captionsMaking || subs.transcribing, problem: subtitleProblem,
               picked: captionPicked, pick: pickCaptionClip, choosing: setCaptionChoosing,

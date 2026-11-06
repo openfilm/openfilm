@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>WOW</title>
 <style>
-:root { --fill: #ffd400; --rays: #ff4f7a; }
+:root { --font: Impact, 'Haettenschweiler', 'Arial Black', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --fill: #ffd400; --rays: #ff4f7a; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font-family: Impact, 'Haettenschweiler', 'Arial Black', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; }
+.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--font); }
 .rays { position: absolute; left: 50%; top: 50%; width: 130vh; height: 130vh; margin: -65vh; border-radius: 50%;
   background: repeating-conic-gradient(var(--rays) 0 7deg, transparent 7deg 20deg);
   -webkit-mask-image: radial-gradient(circle, transparent 22%, #000 24%, #000 52%, transparent 70%); mask-image: radial-gradient(circle, transparent 22%, #000 24%, #000 52%, transparent 70%);
