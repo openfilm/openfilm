@@ -58,6 +58,8 @@
 
 /**
  * `read`: a project file's bytes (for `asr`, the speech alone: a small mono copy, in `speechFormat` when requested).
+ * `link`: a temporary web (https) address of a project file, for a service that fetches what it is given from an
+ * address only; there only when the run can make one (OpenFilm's service: kept until the run ends, then deleted).
  * `model`: the id of the model, one of the provider's `models` for the verb, the person chose (a provider uses its first
  * when there is none).
  * @typedef {{
@@ -67,6 +69,7 @@
  *   signal: AbortSignal,
  *   say: (line: string) => void,
  *   read: (path: string) => Promise<Uint8Array>,
+ *   link?: (path: string) => Promise<string>,
  * }} RunContext
  */
 

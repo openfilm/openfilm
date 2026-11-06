@@ -165,13 +165,22 @@ test('a person speaks the words of the prompt with the clip\'s own sound: --voic
   seen.length = 0;
   reply = clip();
   const files = { 'assets/image/host.png': new Uint8Array([1, 2, 3]), 'assets/audio/vo/voice.wav': new Uint8Array([4, 5, 6]) };
-  const result = await openrouter.run('video', { prompt: 'He says: "此刻海上有多少艘船？"', 'first-frame': 'assets/image/host.png', voice: 'assets/audio/vo/voice.wav', out: 'host' }, ctx(files));
+  /* Seedance fetches a recording from a web address only: the run's own temporary one */
+  const linked = [];
+  const withLink = { ...ctx(files), link: async (/** @type {string} */ path) => { linked.push(path); return `https://relay.example/${path}?sig=1`; } };
+  const result = await openrouter.run('video', { prompt: 'He says: "此刻海上有多少艘船？"', 'first-frame': 'assets/image/host.png', voice: 'assets/audio/vo/voice.wav', out: 'host' }, withLink);
   const body = JSON.parse(seen[0].body);
   assert.equal(body.generate_audio, true);
   assert.equal(body.frame_images, undefined, 'with a voice, the clip is made from references');
   assert.deepEqual(body.input_references.map((r) => r.type), ['image_url', 'audio_url']);
-  assert.match(body.input_references[1].audio_url.url, /^data:audio\/wav;base64,/);
+  assert.equal(body.input_references[1].audio_url.url, 'https://relay.example/assets/audio/vo/voice.wav?sig=1');
+  assert.match(body.input_references[0].image_url.url, /^data:image\/png;base64,/, 'a picture still goes inline');
+  assert.deepEqual(linked, ['assets/audio/vo/voice.wav']);
   assert.equal(result.index[0].from.voice, 'assets/audio/vo/voice.wav');
+  /* with your own key there is no such address: said, and nothing is sent */
+  seen.length = 0;
+  await assert.rejects(openrouter.run('video', { prompt: 'p', voice: 'assets/audio/vo/voice.wav', out: 'x' }, ctx(files)), /--voice: Seedance at OpenRouter takes a recording only from a web address/);
+  assert.equal(seen.length, 0);
   await assert.rejects(openrouter.run('video', { prompt: 'p', voice: 'assets/audio/vo/voice.wav', out: 'x' }, ctx(files, 'kwaivgi/kling-v3.0-pro')), /Seedance takes one/);
   await assert.rejects(openrouter.run('video', { prompt: 'p', audio: 'assets/audio/vo/voice.wav', out: 'x' }, ctx(files)), /fal's \(OmniHuman, Kling Avatar\)/);
 });

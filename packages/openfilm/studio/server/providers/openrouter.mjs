@@ -58,10 +58,11 @@ const MAX_REFS = 16;
 /**
  * Each video model's lengths (`seconds`, a range in whole seconds, or `only` some; `framed`, the longest between a
  * first and a last frame), shapes, the most reference pictures it takes (`refs`, 0 for none), whether it takes a voice
- * (`voice`) or a clip to edit or continue (`clip`), and its sizes (`sizes`, as OpenRouter lists them): --resolution, else 720p, else the nearest it
+ * (`voice`) or a clip to edit or continue (`clip`), whether it takes a recording or a clip inline (`inline`; else only
+ * from a web address), and its sizes (`sizes`, as OpenRouter lists them): --resolution, else 720p, else the nearest it
  * makes (`resolution`, its own default when it makes no 720p). Every clip has sound: asked for, or (`audio: false`) made
  * with it unasked.
- * @type {Record<string, { name: string, seconds?: [number, number], only?: number[], framed?: number, ratios: string[], refs: number, voice?: true, clip?: true, sizes?: string[], resolution?: string, audio?: false }>}
+ * @type {Record<string, { name: string, seconds?: [number, number], only?: number[], framed?: number, ratios: string[], refs: number, voice?: true, clip?: true, inline?: true, sizes?: string[], resolution?: string, audio?: false }>}
  */
 const VIDEO = {
   'bytedance/seedance-2.0-mini': { name: 'Seedance', seconds: [4, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], refs: 9, voice: true, sizes: ['480p', '720p'] },
@@ -76,7 +77,7 @@ const VIDEO = {
   'heygen/heygen-video-1': { name: 'HeyGen', seconds: [5, 30], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], refs: 0, sizes: ['480p', '768p', '1080p', '2K'], resolution: '768p', audio: false },
   'kwaivgi/kling-v3.0-std': { name: 'Kling', seconds: [3, 15], ratios: ['16:9', '9:16', '1:1'], refs: 0 },
   'kwaivgi/kling-v3.0-pro': { name: 'Kling', seconds: [3, 15], ratios: ['16:9', '9:16', '1:1'], refs: 0 },
-  'google/gemini-omni-1.2-flash': { name: 'Gemini Omni', seconds: [3, 15], framed: 10, ratios: ['16:9', '9:16'], refs: 6, clip: true, sizes: ['360p', '720p', '1080p', '4K'] },
+  'google/gemini-omni-1.2-flash': { name: 'Gemini Omni', seconds: [3, 15], framed: 10, ratios: ['16:9', '9:16'], refs: 6, clip: true, inline: true, sizes: ['360p', '720p', '1080p', '4K'] },
 };
 /* what each model makes, as the canvas offers it (contract.mjs ModelSpec) */
 for (const model of MODELS.image) Object.assign(model, { spec: { ratios: RATIOS, refs: MAX_REFS, ...(QUALITY[model.id] ? { qualities: QUALITY[model.id] } : {}) } });
@@ -100,6 +101,18 @@ function sizeOf(/** @type {{ sizes?: string[], resolution?: string }} */ spec, /
 function length(/** @type {{ seconds?: [number, number], only?: number[] }} */ spec, /** @type {number} */ asked) {
   if (spec.seconds) return clamp(Math.round(asked), ...spec.seconds);
   return (spec.only ?? []).reduce((best, s) => (Math.abs(s - asked) < Math.abs(best - asked) || (Math.abs(s - asked) === Math.abs(best - asked) && s > best) ? s : best));
+}
+
+/**
+ * A recording or a clip as an address the model fetches it from: a temporary web address when the run can make one
+ * (`ctx.link`, as OpenFilm's service does), else the file inline for a model that takes it so; Seedance takes them from
+ * a web address only.
+ * @param {string} path @param {'voice' | 'video'} flag @param {{ name: string, inline?: true }} spec @param {RunContext} ctx
+ */
+async function addressOf(path, flag, spec, ctx) {
+  if (ctx.link) return ctx.link(path);
+  if (spec.inline) return dataUri(path, ctx);
+  throw new Error(`--${flag}: ${spec.name} at OpenRouter takes a ${flag === 'voice' ? 'recording' : 'clip'} only from a web address, which a run with your own key cannot give it. fal takes it from the project (connect fal and choose its model), and so does OpenFilm's own service.`);
 }
 
 /** What OpenRouter reported a run cost, when it did. */
@@ -221,9 +234,9 @@ async function video(args, ctx) {
   const frame = async (/** @type {string} */ src, /** @type {'first_frame' | 'last_frame'} */ type) => ({ type: 'image_url', image_url: { url: await dataUri(src, ctx) }, frame_type: type });
   const frames = voice ? [] : [...(first ? [await frame(first, 'first_frame')] : []), ...(last ? [await frame(last, 'last_frame')] : [])];
   const references = [
-    ...(clip ? [{ type: 'video_url', video_url: { url: await dataUri(clip, ctx) } }] : []),
+    ...(clip ? [{ type: 'video_url', video_url: { url: await addressOf(clip, 'video', spec, ctx) } }] : []),
     ...(await Promise.all(refs.map(async (r) => ({ type: 'image_url', image_url: { url: await dataUri(r, ctx) } })))),
-    ...(voice ? [{ type: 'audio_url', audio_url: { url: await dataUri(voice, ctx) } }] : []),
+    ...(voice ? [{ type: 'audio_url', audio_url: { url: await addressOf(voice, 'voice', spec, ctx) } }] : []),
   ];
   const body = {
     model, prompt, duration: seconds, resolution, ...(spec.audio === false ? {} : { generate_audio: true }),
