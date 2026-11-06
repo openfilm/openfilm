@@ -62,7 +62,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.signing == 'true'
     name: build (${{ matrix.target }})
-    runs-on: macos-14
+    runs-on: macos-15
     environment: desktop-release
     strategy:
       fail-fast: true
