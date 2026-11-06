@@ -26,7 +26,7 @@ export type ComponentProp =
   | ({ name: string; type: 'text' } & Target)
   | ({ name: string; type: 'image'; kind: 'img' | 'bg' } & Target)
   | ({ name: string; type: 'boolean' } & Target)
-  | { name: string; type: 'var'; var: string };
+  | { name: string; type: 'var'; var: string; advanced?: true };
 
 export type ComponentPropType = ComponentProp['type'];
 
@@ -50,7 +50,9 @@ export function propsOf(clip: { attrs?: Record<string, string> } | null | undefi
     const at = { at: o.at as string, ...(o.n !== undefined ? { n: o.n as number } : {}) };
     if ((o.type === 'text' || o.type === 'boolean') && isTarget(o)) out.push({ name: o.name, type: o.type, ...at });
     else if (o.type === 'image' && isTarget(o) && (o.kind === 'img' || o.kind === 'bg')) out.push({ name: o.name, type: 'image', kind: o.kind, ...at });
-    else if (o.type === 'var' && typeof o.var === 'string' && o.var.startsWith('--')) out.push({ name: o.name, type: 'var', var: o.var });
+    else if (o.type === 'var' && typeof o.var === 'string' && o.var.startsWith('--')) {
+      out.push({ name: o.name, type: 'var', var: o.var, ...(o.advanced === true ? { advanced: true } : {}) });
+    }
   }
   return out;
 }

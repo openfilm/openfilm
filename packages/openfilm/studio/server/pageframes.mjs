@@ -277,16 +277,27 @@ function draw(/** @type {string} */ url, /** @type {number} */ ms, /** @type {nu
     const moments = ms < 0 ? POSTER_AT.map((f) => Math.min(end, (duration ?? NO_END_SPAN) * f)) : [Math.min(ms / 1000, end)];
     let jpeg = null;
     for (const t of moments) {
-      await page.seek(Math.max(0, t), { timeoutMs: FRAME_MS });
-      /* the clip's tweaks, as the film's timeline applies them after each frame (src/overrides.mjs) */
-      if (overrides) {
-        await page.page.evaluate(async (list) => {
-          const { override } = await import(new URL('__film/overrides.mjs', location.href).href);
-          override({ win: window, touched: new Map(), found: [] }, list);
-        }, overrides);
+      const apply = (/** @type {boolean} */ before) => page.page.evaluate(async ({ list, before }) => {
+        if (Boolean(Reflect.get(window, 'film')?.frameReadsOverrides) !== before) return false;
+        const { override, restore } = await import(new URL('__film/overrides.mjs', location.href).href);
+        const clip = { win: window, touched: new Map(), found: [] };
+        override(clip, list);
+        if (before) Reflect.set(window, '__filmRestoreFrameOverrides', () => restore(clip));
+        return true;
+      }, { list: overrides, before });
+      const before = overrides ? await apply(true) : false;
+      try {
+        await page.seek(Math.max(0, t), { timeoutMs: FRAME_MS });
+        if (overrides && !before) await apply(false);
+        const shot = clear ? await clearShot(page) : await page.capture({ format: 'jpeg', quality: 70 });
+        if (!jpeg || shot.length > jpeg.length) jpeg = shot;
+      } finally {
+        /* the same page can next draw another clip, whose controls can be different */
+        if (before) await page.page.evaluate(() => {
+          Reflect.get(window, '__filmRestoreFrameOverrides')?.();
+          Reflect.deleteProperty(window, '__filmRestoreFrameOverrides');
+        }).catch(() => {});
       }
-      const shot = clear ? await clearShot(page) : await page.capture({ format: 'jpeg', quality: 70 });
-      if (!jpeg || shot.length > jpeg.length) jpeg = shot;
     }
     return { jpeg: /** @type {Buffer} */ (jpeg), duration, loaded: await loadedFiles(page, base) };
   });

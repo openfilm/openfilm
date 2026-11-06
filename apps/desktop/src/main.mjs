@@ -46,9 +46,17 @@ const overlayColours = (t) => ({ color: t === 'dark' ? '#111114' : '#e9e9eb', sy
 
 /* HTML-in-Canvas in Studio's viewer, as in the renderer (the `openfilm` package's src/host.mjs) */
 app.commandLine.appendSwitch('enable-blink-features', 'CanvasDrawElement');
-/* no Skia Graphite, as in the renderer (host.mjs launch): with it, a film's page drawing a 2D canvas through
-   `ctx.filter = 'blur(…)'` stroke by stroke took over 5 GB in a moment in the viewer; without it, under 200 MB */
-app.commandLine.appendSwitch('disable-skia-graphite');
+if (mac) {
+  /* Flush small Canvas2D batches: blur on hundreds of strokes otherwise queues gigabytes of intermediate
+     textures. Keep GPU canvas-to-WebGL uploads fast without changing the rest of Graphite's batching. */
+  const features = app.commandLine.getSwitchValue('enable-features');
+  app.commandLine.appendSwitch('enable-features', [
+    features,
+    'Canvas2DAutoFlushParams:max_recorded_op_graphite_kb/4',
+  ].filter(Boolean).join(','));
+} else {
+  app.commandLine.appendSwitch('disable-skia-graphite');
+}
 
 /* each flavour its own name, data folder and single-instance lock (flavor.mjs) */
 app.setName(PRODUCT_NAME);

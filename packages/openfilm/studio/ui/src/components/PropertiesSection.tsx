@@ -79,6 +79,8 @@ export function PropertiesSection({ host, commit }: {
   const props = host.props();
   /* a clip's length is Studio's to keep (studio/server/ops.mjs), not the person's to set: not shown */
   const shown = props.filter((p) => !(p.type === 'var' && p.var === '--clip-length'));
+  const advanced = shown.filter((p) => p.type === 'var' && p.advanced);
+  const ordinary = shown.filter((p) => !(p.type === 'var' && p.advanced));
   const kept = JSON.stringify(overrides ?? []);
   React.useEffect(() => {
     let live = true;
@@ -98,7 +100,6 @@ export function PropertiesSection({ host, commit }: {
   React.useEffect(() => () => { host.point?.(null); }, [host]);
 
   const set = (prop: ComponentProp, value: PropValue | null) => commit(withPropValue(overrides, prop, value));
-  const changed = props.filter((p) => propValue(overrides, p) != null);
   /* the page's variables not offered yet: what the + offers */
   const vars = (controls?.vars ?? []).filter((v) => !propOf(props, 'var', v.name));
   const add = (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -157,7 +158,9 @@ export function PropertiesSection({ host, commit }: {
       case 'var': {
         const own = controls?.vars.find((v) => v.name === prop.var)?.value ?? '';
         const now = typeof value === 'string' ? value : own;
-        const paint = (next: string | null) => host.preview({ at: ROOT }, next == null ? null : { style: { [prop.var]: next } });
+        const paint = (next: string | null) => {
+          if (!prop.advanced) host.preview({ at: ROOT }, next == null ? null : { style: { [prop.var]: next } });
+        };
         return isFontVar(prop.var, now)
           ? <FontInput label={prop.name} value={now} onCommit={(next) => set(prop, next)} onPreview={paint} />
           : <VarInput name={prop.name} field={fieldOf(now, isNamedColor)} onCommit={(next) => set(prop, next)} onPreview={paint} />;
@@ -169,26 +172,26 @@ export function PropertiesSection({ host, commit }: {
      telling how to make a property of a layer of it */
   if (!shown.length && isLibraryClip(host.page)) return null;
 
-  return (
+  const section = (list: ComponentProp[], isAdvanced: boolean) => (
     <Section
-      id="properties"
-      title={t('inspector.props')}
+      id={isAdvanced ? 'advanced-properties' : 'properties'}
+      title={t(isAdvanced ? 'inspector.advancedProperties' : 'inspector.props')}
       aside={(
         <span className="flex items-center">
-          {changed.length ? (
-            <SectionAction label={t('inspector.propsResetAll')} onClick={() => commit(withPropsReset(overrides, props))}><RotateCcw size={11} /></SectionAction>
+          {list.some((p) => propValue(overrides, p) != null) ? (
+            <SectionAction label={t('inspector.propsResetAll')} onClick={() => commit(withPropsReset(overrides, list))}><RotateCcw size={11} /></SectionAction>
           ) : null}
-          <Tooltip label={t('inspector.propsAdd')}>
+          {!isAdvanced ? <Tooltip label={t('inspector.propsAdd')}>
             <button type="button" aria-label={t('inspector.propsAdd')} onClick={add} className="flex h-5 w-5 items-center justify-center rounded-[4px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
               <Plus size={12} />
             </button>
-          </Tooltip>
+          </Tooltip> : null}
         </span>
       )}
     >
-      {!shown.length ? (
+      {!list.length ? (
         <p className="text-[10.5px] leading-[15px] text-[var(--text-faint)]">{t('inspector.propsEmpty')}</p>
-      ) : shown.map((prop) => (
+      ) : list.map((prop) => (
         <div key={prop.name} {...pointing(prop)} onContextMenu={(e) => rowMenu(e, prop)}>
           <Line
             label={renaming === prop.name ? (
@@ -208,12 +211,16 @@ export function PropertiesSection({ host, commit }: {
           </Line>
         </div>
       ))}
-      {!controls && shown.length ? (
+      {!controls && list.length ? (
         <p className="text-[10.5px] leading-[15px] text-[var(--text-faint)]">{t('inspector.templateOffPicture')}</p>
       ) : null}
-      {menu ? <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} /> : null}
     </Section>
   );
+  return <>
+    {ordinary.length || !isLibraryClip(host.page) ? section(ordinary, false) : null}
+    {advanced.length ? section(advanced, true) : null}
+    {menu ? <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} /> : null}
+  </>;
 }
 
 /** A property's name typed anew: kept on Enter or when left, Esc gives up. */

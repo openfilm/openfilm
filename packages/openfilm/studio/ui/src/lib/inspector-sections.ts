@@ -17,6 +17,8 @@ const categories: Readonly<Record<string, InspectorTab>> = {
   advanced: 'advanced',
   source: 'advanced',
   'page-changes': 'advanced',
+  'export-motion-blur': 'advanced',
+  'advanced-properties': 'advanced',
   'film-info': 'info',
 };
 

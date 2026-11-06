@@ -103,7 +103,8 @@ export { exportsRoot };
  * @typedef {'standard' | 'high' | 'master'} Quality
  * @typedef {{ frame?: FrameId, fill?: 'contain' | 'cover', burnSubtitles?: boolean }} Framing
  * @typedef {Framing & { kind: 'video', codec?: VideoCodec, shortEdge?: number, scale?: number,
- *   fps?: number, quality?: Quality, audio?: boolean, clip?: string, preset?: string, sidecar?: 'srt' | 'vtt', hardware?: boolean, loudness?: number }} VideoAsk
+ *   fps?: number, quality?: Quality, audio?: boolean, clip?: string, preset?: string, sidecar?: 'srt' | 'vtt', hardware?: boolean, loudness?: number,
+ *   samples?: number, shutter?: number }} VideoAsk
  * @typedef {Framing & { kind: 'gif', width?: number, fps?: number }} GifAsk
  * @typedef {{ kind: 'audio', format?: 'wav' | 'm4a' | 'mp3', mix?: boolean, stems?: boolean }} AudioAsk
  * @typedef {Framing & { kind: 'stills', as?: 'files' | 'zip', format?: 'png' | 'jpg', shortEdge?: number, at?: number[] }} StillsAsk
@@ -339,6 +340,8 @@ function checked(/** @type {ExportAsk} */ ask) {
       if (ask.codec !== undefined && !CODECS.includes(ask.codec)) throw new ExportError(`codec: ${CODECS.join(', ')}`);
       if (!between(ask.fps, 1, 120)) throw new ExportError('fps: 1 to 120');
       if (!between(ask.scale, 0.25, 4)) throw new ExportError('scale: 0.25 to 4');
+      if (ask.samples !== undefined && (!Number.isInteger(ask.samples) || !between(ask.samples, 1, 64))) throw new ExportError('samples: 1 to 64 whole samples');
+      if (!between(ask.shutter, 0, 1)) throw new ExportError('shutter: 0 to 1');
       if (ask.quality !== undefined && !['standard', 'high', 'master'].includes(ask.quality)) throw new ExportError('quality: standard, high or master');
       if (ask.hardware !== undefined && typeof ask.hardware !== 'boolean') throw new ExportError('hardware: true or false');
       if (ask.clip !== undefined && (typeof ask.clip !== 'string' || !ask.clip || ask.clip.length > 200)) throw new ExportError(`clip: a clip id of ${FILM_FILE}`);
@@ -877,7 +880,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
         const { encoder, format } = encoding(codec, quality, size, fps ?? 30, have, chip);
         const container = /** @type {{ pix?: string }} */ (format).pix ?? (codec === 'h264' || codec === 'hevc' ? YUV_709('yuv420p') : codec === 'vp9' ? YUV_709('yuva420p') : 'format=yuva444p10le');
         /* master: frames taken as PNG and footage read from copies near the file (`fine`), so nothing on the way bands */
-        return { encoder, opts: { fps, scale: place.scale, alpha, silent: ask.audio === false || codec === 'png', ...(ask.loudness != null ? { loudness: ask.loudness } : {}), format: { ...format, pix: `${place.vf},${container}` }, ...(quality === 'master' ? { fine: true } : {}), ...(clip || burn ? { root } : {}) } };
+        return { encoder, opts: { fps, samples: ask.samples, shutter: ask.shutter, scale: place.scale, alpha, silent: ask.audio === false || codec === 'png', ...(ask.loudness != null ? { loudness: ask.loudness } : {}), format: { ...format, pix: `${place.vf},${container}` }, ...(quality === 'master' ? { fine: true } : {}), ...(clip || burn ? { root } : {}) } };
       };
       let { encoder, opts } = how(hw);
       update(job, { encoder });

@@ -1225,6 +1225,7 @@ async function drawClip(c, t, live, play, turn, coming, going) {
   if (!live) await pageLoaded(c);
   const local = sourceAt(c.span, t - c.at, c.row, c.native);
   c.win.filmHost?.time?.(local);
+  if (c.child.frameReadsOverrides) override(c, c.preview ?? c.overrides);
   /* a page's error says which clip and which of its own seconds, not only the film's t */
   try { await c.child.frame(local); }
   catch (e) { throw new Error(`clip "${c.id}" (${c.src}) at its ${Number(local.toFixed(3))}s: ${e?.message ?? e}`); }
@@ -1585,6 +1586,7 @@ async function cue(c, row, track, t, fresh) {
     if (!c.child) return;
     const local = sourceAt(span, t - at, row, c.native);
     c.win.filmHost?.time?.(local);
+    if (c.child.frameReadsOverrides) override(c, c.overrides);
     await c.child.frame(local);
     c.win.filmHost?.settle?.(local);
     c.drawn = true;

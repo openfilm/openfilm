@@ -71,6 +71,7 @@ import { propOf, withProp, withoutProp, type ComponentProp } from '@/lib/compone
 import { layerTarget } from '@/lib/stage-layers';
 import type { StagePictureActions } from './stage-menu';
 import { InspectorCategory, InspectorEditable, InspectorReadOnly, InspectorWorkspace } from './InspectorWorkspace';
+import type { MotionBlur } from '@/api';
 
 /** A change of a layer's words (kept as its `text` override). `expect` is what it said before: painted back on refusal. */
 export type StageTextEdit = {
@@ -145,6 +146,8 @@ function useCommitBeforeLeaving(): void {
   }, []);
 }
 
+type MotionBlurControls = { value?: MotionBlur; onChange: (value: MotionBlur) => Promise<void> };
+
 export const FilmInspector = React.memo(function FilmInspector({
   element,
   clips,
@@ -186,6 +189,7 @@ export const FilmInspector = React.memo(function FilmInspector({
   onPlaceLayers,
   locked = false,
   rate,
+  exportMotionBlur,
   fades,
   transition,
   propsHostOf,
@@ -206,6 +210,7 @@ export const FilmInspector = React.memo(function FilmInspector({
   onEditClips?: (edits: ClipEdit[]) => Promise<string | null>;
   /** The pane's width (dragged at the divider beside the viewer). */
   width: number;
+  exportMotionBlur?: MotionBlurControls | null;
   /** Writes a style. Resolves to an error when refused (the panel then paints the old value back). */
   onEditStyle: (loc: string, patch: StageElementStyle) => Promise<string | null>;
   /** A style for every layer like this one (its tag and classes) in the film's pages: "All like it". */
@@ -360,7 +365,7 @@ export const FilmInspector = React.memo(function FilmInspector({
         ) : geometry?.kind === 'group' && geometry.group ? (
           <GroupPanel geometry={geometry} group={geometry.group} layers={layers} onEditLayers={onEditLayers} {...(onPlaceLayers ? { onPlace: onPlaceLayers } : {})} t={t} />
         ) : (
-          <FilmPanel t={t} stage={stageSize} draft={canvasDraft} film={film ?? null} onCanvas={onCanvas} onCanvasPreview={onCanvasPreview} original={canvasOriginal ?? null} rate={rate ?? null} />
+          <FilmPanel t={t} stage={stageSize} draft={canvasDraft} film={film ?? null} onCanvas={onCanvas} onCanvasPreview={onCanvasPreview} original={canvasOriginal ?? null} rate={rate ?? null} exportMotionBlur={exportMotionBlur} />
         )}
       </div>
     </InspectorReadOnly.Provider>
@@ -411,7 +416,7 @@ function RedesignHint({ t, stage }: { t: T; stage: { w: number; h: number } }) {
  * out again for it is the agent's (RedesignHint). "Original" takes the shape of the first picture.
  */
 function FilmPanel({
-  t, stage: kept, draft, film, onCanvas, onCanvasPreview, original, rate,
+  t, stage: kept, draft, film, onCanvas, onCanvasPreview, original, rate, exportMotionBlur,
 }: {
   t: T;
   stage: { w: number; h: number };
@@ -422,6 +427,7 @@ function FilmPanel({
   onCanvasPreview?: (size: { w: number; h: number } | null) => void;
   original: { w: number; h: number } | null;
   rate: { fps: number; fromFootage: boolean; onChange: (fps: number) => void } | null;
+  exportMotionBlur?: MotionBlurControls | null;
 }) {
   const canvas = Boolean(onCanvas);
   /* what the picture shows: the size being dragged, else the film's */
@@ -429,6 +435,13 @@ function FilmPanel({
   const placed = Boolean(film && !film.empty);
   const preset = CANVAS_RATIOS.find((r) => shaped(stage, filmFrameRatio(r.id, stage)));
   const { frame: fit, current: isFit } = originalShape(stage, original);
+  const [savingSampling, setSavingSampling] = React.useState<MotionBlur | null>(null);
+  const sampling = savingSampling ?? exportMotionBlur?.value ?? { enabled: false, samples: 8, shutter: 0.5 };
+  const saveSampling = (value: MotionBlur) => {
+    if (!exportMotionBlur || savingSampling) return;
+    setSavingSampling(value);
+    void exportMotionBlur.onChange(value).finally(() => setSavingSampling(null));
+  };
   const setSize = (w: number, h: number) => {
     const size = { w, h };
     if (size.w === kept.w && size.h === kept.h) { onCanvasPreview?.(null); return; }
@@ -481,6 +494,25 @@ function FilmPanel({
             onPick={(v) => rate.onChange(Number(v))}
           />
           <p className="text-[10.5px] leading-[15px] text-[var(--text-faint)]">{t(rate.fromFootage ? 'inspector.frameRateFootage' : 'inspector.frameRateNote')}</p>
+        </Section>
+      ) : null}
+      {exportMotionBlur ? (
+        <Section id="export-motion-blur" title={t('inspector.exportMotionBlur')}>
+          <button type="button" role="switch" aria-checked={sampling.enabled} disabled={Boolean(savingSampling)}
+            className="flex items-center justify-between gap-2 text-[11px] text-[var(--text)]"
+            onClick={() => saveSampling({ ...sampling, enabled: !sampling.enabled })}>
+            {t('inspector.motionBlurEnabled')}
+            <span aria-hidden className={`relative h-4 w-7 rounded-full ${sampling.enabled ? 'bg-[var(--switch-on)]' : 'bg-[var(--bg-field)] ring-1 ring-inset ring-[var(--border)]'}`}>
+              <span className={`absolute top-[3px] h-2.5 w-2.5 rounded-full transition-all ${sampling.enabled ? 'left-[15px] bg-white' : 'left-[3px] bg-[var(--text-faint)]'}`} />
+            </span>
+          </button>
+          {sampling.enabled ? <>
+            <NumField word label={t('inspector.motionSamples')} value={sampling.samples} min={2} max={64} disabled={Boolean(savingSampling)}
+              onCommit={(samples) => saveSampling({ ...sampling, samples: Math.round(samples) })} />
+            <NumField word label={t('inspector.motionShutter')} value={sampling.shutter} min={0} max={1} step={0.05} disabled={Boolean(savingSampling)}
+              onCommit={(shutter) => saveSampling({ ...sampling, shutter })} />
+          </> : null}
+          <p className="text-[10.5px] leading-[15px] text-[var(--text-faint)]">{t('inspector.exportMotionBlurNote')}</p>
         </Section>
       ) : null}
       {film ? (

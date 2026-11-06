@@ -64,7 +64,7 @@ import { catalogSkills, installSkill, installedStanding, readCatalog, readDiscov
 import { freshProviders, providersRoute } from './providers/index.mjs';
 import { localModelsRoute } from './local-models.mjs';
 import { captionRoutes, writeSubtitleStyle } from './captions.mjs';
-import { projectSettingsRoute } from './project-settings.mjs';
+import { projectSettingsRoute, readProjectSettings } from './project-settings.mjs';
 import { markersRoute } from './markers.mjs';
 import { CANVAS_FILE, agentCanvasRoute, canvasRoute, canvasWriteRoute, readCanvas } from './canvas.mjs';
 import { copyBoardInto, projectTemplatesRoute, templatesRoute } from './canvas-templates.mjs';
@@ -1079,9 +1079,16 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       if (req.method === 'POST') {
         exportRoots.set(project.id, project.path);
         const body = /** @type {any} */ (await readJson(req));
+        const blur = (await readProjectSettings(project.path)).motionBlur;
+        const withSampling = (/** @type {any} */ ask) => blur?.enabled && ask?.kind === 'video' && !ask.clip && ask.samples === undefined
+          ? { ...ask, samples: blur.samples, shutter: ask.shutter ?? blur.shutter }
+          : ask;
         /* several at once: `{ jobs: [ask…], folder? }` → `{ exports }`; one: the ask itself → `{ export }` */
-        if (body && typeof body === 'object' && 'jobs' in body) return json(res, 200, { exports: exports.startAll(project, body) });
-        return json(res, 200, { export: exports.start(project, body) });
+        if (body && typeof body === 'object' && 'jobs' in body) {
+          const request = Array.isArray(body.jobs) ? { ...body, jobs: body.jobs.map(withSampling) } : body;
+          return json(res, 200, { exports: exports.startAll(project, request) });
+        }
+        return json(res, 200, { export: exports.start(project, withSampling(body)) });
       }
     }
     if (parts[2] === 'exports' && parts[3] && req.method === 'DELETE') {

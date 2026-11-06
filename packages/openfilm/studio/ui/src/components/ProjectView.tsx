@@ -755,9 +755,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     setSettings(null);
     void api.settings(projectId).then(setSettings, () => setSettings({}));
   }, [projectId]);
-  const patchSettings = React.useCallback((patch: Parameters<typeof api.patchSettings>[1]) => {
-    void api.patchSettings(projectId, patch).then(setSettings, (e: Error) => toast.showError(e.message));
-  }, [projectId, toast]);
+  const patchSettings = React.useCallback((patch: Parameters<typeof api.patchSettings>[1]) =>
+    api.patchSettings(projectId, patch).then(setSettings, (e: Error) => { toast.showError(e.message); }), [projectId, toast]);
   /* the rate frames are counted in: the project's own, else its first footage's (on the film by time, then the
      project's other videos), else 30 */
   const footageRate = React.useMemo(() => footageFps([
@@ -4720,6 +4719,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                       onPlaceLayers={(to) => stageControl.current?.placeLayers(to)}
                       locked={inspectorLocked}
                       rate={frameRate}
+                      exportMotionBlur={settings && (settings.motionBlur?.enabled || film.film?.tracks.some((track) => !track.hidden && track.clips.some((clip) => filmSrcIsPage(clip.src))))
+                        ? { value: settings.motionBlur, onChange: (motionBlur) => patchSettings({ motionBlur }) }
+                        : null}
                       fades={clipFades}
                       transition={pickedTr && !selectedBlocks.length ? {
                         kind: pickedTr.kind,

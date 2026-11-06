@@ -9,10 +9,11 @@ const title: ComponentProp = { name: 'Title', type: 'text', at: '#title' };
 const photo: ComponentProp = { name: 'Photo', type: 'image', at: '.picture > img', kind: 'img' };
 const logo: ComponentProp = { name: 'Show logo', type: 'boolean', at: '#logo' };
 const accent: ComponentProp = { name: 'Accent', type: 'var', var: '--accent' };
+const bloom: ComponentProp = { name: 'Bloom', type: 'var', var: '--post-bloom', advanced: true };
 
 it('a clip\'s properties are read from its data-props, anything not one left out', () => {
-  const attrs = { 'data-props': JSON.stringify([title, photo, { name: 'Bad', type: 'image', at: '#x' }, { name: 'Title', type: 'text', at: '#again' }, logo, accent, 'no']) };
-  assert.deepEqual(propsOf({ attrs }), [title, photo, logo, accent]);
+  const attrs = { 'data-props': JSON.stringify([title, photo, { name: 'Bad', type: 'image', at: '#x' }, { name: 'Title', type: 'text', at: '#again' }, logo, accent, bloom, 'no']) };
+  assert.deepEqual(propsOf({ attrs }), [title, photo, logo, accent, bloom]);
   assert.deepEqual(propsOf({ attrs: { 'data-props': '{oops' } }), []);
   assert.deepEqual(propsOf({}), []);
   assert.equal(propsAttr([]), null, 'none left: the attribute goes');
