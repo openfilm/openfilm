@@ -118,7 +118,8 @@ export function Storyboard({ nodes, edges, fileOf, sources, onShowOnBoard, onMak
           {shots.map((shot, i) => {
             const left = toMake(shot);
             const run = [shot.picture, shot.clip].find((n) => n && board.run(n.id));
-            const error = [shot.picture, shot.clip].map((n) => (n ? board.error(n.id) : undefined)).find(Boolean);
+            /* what failed last, until it is made again */
+            const error = run ? undefined : [shot.picture, shot.clip].map((n) => (n ? board.error(n.id) : undefined)).find(Boolean);
             const clipPath = pathOf(shot.clip);
             const clipFile = clipPath ? fileOf(clipPath) : null;
             return (
