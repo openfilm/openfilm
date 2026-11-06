@@ -1,180 +1,180 @@
 /**
- * The board seen as its storyboard: what is on it as the project's material, by kind — words (scripts and the rest),
- * pictures (characters, places, things and the rest), clips, sounds — each a row of cards; one picked is shown large
- * beside them with what it was asked and with which model, made (again) from there, found on the board or put on
- * the timeline. In the app with a chat, the chat stands beside it: where the agent is asked for a script or shots.
+ * The board as its storyboard: the film's shots in order, a row each — what it is (the words wired in), its picture,
+ * its clip, how long — so the whole film is read at a glance, each shot made where it stands (its picture, then its
+ * clip from it), all of them made in order, and their clips put on the timeline in that order at once.
+ *
+ * A shot is a node that makes a clip (or a clip on the board), or a picture that no clip is made from yet; its order
+ * is a cut's, when the board has one (what is wired into it, in order), else where it stands (top to bottom, then
+ * left to right).
  */
 import React from 'react';
-import { AlignLeft, AudioLines, Clapperboard, Film, Image as ImageIcon, LocateFixed, Play, RotateCcw, Square } from 'lucide-react';
+import type { Edge } from '@xyflow/react';
+import { Clapperboard, Film, Image as ImageIcon, LayoutTemplate, LocateFixed, MessageSquare, Play, Square } from 'lucide-react';
 import { useT } from '@/i18n';
-import { presetOf } from '@/lib/canvas-presets';
+import { lengthOf } from '@/lib/canvas';
 import type { MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
 import { useBoard, type BoardNode } from './board';
 import { Words } from './words';
-import { Chip } from './libraries';
 
-type Section = 'text' | 'image' | 'video' | 'audio';
-/** what a picture is of, as the board says it: its preset, or a character's folder */
-const CHARACTER_PRESETS = new Set(['portrait', 'fullBody', 'expressions', 'turnaround16', 'turnaround', 'faces', 'character']);
-
-interface Item {
-  id: string;
-  section: Section;
-  /** its group in the section ('script' | 'other'; 'character' | 'scene' | 'thing' | 'other'; 'clip') */
-  kind: string;
-  title: string;
-  file: WorkspaceResource | null;
-  text?: string;
-  /** a making node's: what it is asked, and whether it can make one */
-  prompt?: string;
-  makes: boolean;
+interface Shot {
+  key: string;
+  /** the node that makes (or is) its picture, and its clip */
+  picture: BoardNode | null;
+  clip: BoardNode | null;
+  words: string[];
+  seconds: number | null;
 }
 
-export function Storyboard({ nodes, fileOf, sources, chat, onShowOnBoard }: {
+/** a character's pictures (lib/canvas-presets): sheets to make shots with, not shots */
+const CHARACTER_SHEETS = new Set(['portrait', 'fullBody', 'expressions', 'turnaround16', 'turnaround', 'faces', 'character']);
+const pathOf = (n: BoardNode | null) => (!n ? undefined : n.type === 'file' ? n.data.path : n.type === 'make' ? n.data.path : undefined);
+const isClip = (n: BoardNode, fileOf: (p: string) => WorkspaceResource | null) => (n.type === 'make' && n.data.make === 'video') || (n.type === 'file' && fileOf(n.data.path)?.kind === 'video');
+const isPicture = (n: BoardNode, fileOf: (p: string) => WorkspaceResource | null) => (n.type === 'make' && n.data.make === 'image') || (n.type === 'file' && fileOf(n.data.path)?.kind === 'image');
+
+/** the board's shots, in the film's order */
+export function shotsOf(nodes: readonly BoardNode[], edges: readonly Edge[], fileOf: (p: string) => WorkspaceResource | null): Shot[] {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const into = (id: string) => edges.filter((e) => e.target === id).map((e) => byId.get(e.source)).filter((n): n is BoardNode => Boolean(n));
+  const out = (id: string) => edges.filter((e) => e.source === id).map((e) => byId.get(e.target)).filter((n): n is BoardNode => Boolean(n));
+  /* where a node is on the board: a group's own corner added */
+  const at = (n: BoardNode) => { const g = n.parentId ? byId.get(n.parentId) : undefined; return { x: n.position.x + (g?.position.x ?? 0), y: n.position.y + (g?.position.y ?? 0) }; };
+  const wordsOf = (n: BoardNode | null) => (n ? into(n.id).flatMap((i) => (i.type === 'note' && i.data.text.trim() ? [i.data.text.trim()] : [])) : []);
+  /* a cut on the board says what the film's shots are, in its order; else each clip, and each picture made for a shot
+     that no clip is made from yet (not a character's sheets, not pictures brought in), where they stand */
+  const cut = nodes.find((n) => n.type === 'cut' && edges.some((e) => e.target === n.id));
+  const cutOrder = cut ? edges.filter((e) => e.target === cut.id).sort((a, b) => ((a.data?.order as number) ?? 0) - ((b.data?.order as number) ?? 0)).map((e) => e.source) : [];
+  const heads = cut ? cutOrder.map((id) => byId.get(id)).filter((n): n is BoardNode => Boolean(n) && (isClip(n!, fileOf) || isPicture(n!, fileOf)))
+    : nodes.filter((n) => isClip(n, fileOf)
+      || (n.type === 'make' && n.data.make === 'image' && !CHARACTER_SHEETS.has(n.data.preset ?? '') && !out(n.id).some((o) => isClip(o, fileOf))));
+  const sorted = cut ? heads : [...heads].sort((a, b) => (Math.abs(at(a).y - at(b).y) > 120 ? at(a).y - at(b).y : at(a).x - at(b).x));
+  return sorted.map((head) => {
+    const clip = isClip(head, fileOf) ? head : null;
+    const picture = clip ? into(clip.id).find((i) => isPicture(i, fileOf)) ?? null : head;
+    const words = [...new Set([...wordsOf(picture), ...wordsOf(clip)])];
+    const own = (n: BoardNode | null) => (n?.type === 'make' && n.data.prompt?.trim() ? [n.data.prompt.trim()] : []);
+    const seconds = clip?.type === 'make' ? lengthOf('video', clip.data.opts?.sec, undefined) : clip?.type === 'file' ? (fileOf(clip.data.path)?.durationMs ?? 0) / 1000 || null : null;
+    return { key: head.id, picture, clip, words: words.length ? words : [...own(picture), ...own(clip)], seconds };
+  });
+}
+
+export function Storyboard({ nodes, edges, fileOf, sources, onShowOnBoard, onMake, onToTimeline, onTemplate, onAskAgent }: {
   nodes: readonly BoardNode[];
+  edges: readonly Edge[];
   fileOf: (path: string) => WorkspaceResource | null;
   sources: MediaSources;
-  /** in the app with a chat: whether it is open beside the board */
-  chat?: { open: boolean; toggle: () => void };
   onShowOnBoard: (id: string) => void;
+  /** the nodes made one after another (a shot's picture, then its clip) */
+  onMake: (ids: string[]) => Promise<void>;
+  onToTimeline: (files: WorkspaceResource[]) => void;
+  /** a storyboard laid down to start from; the agent asked to write one (in the app with a chat) */
+  onTemplate: () => void;
+  onAskAgent?: () => void;
 }) {
   const t = useT();
   const board = useBoard();
-  const [picked, setPicked] = React.useState<string | null>(null);
-  const [kinds, setKinds] = React.useState<Record<Section, string>>({ text: 'all', image: 'all', video: 'all', audio: 'all' });
-  /* the chat beside it, as the storyboard is worked with the agent */
-  React.useEffect(() => { if (chat && !chat.open) chat.toggle(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const [busy, setBusy] = React.useState(false);
+  const shots = shotsOf(nodes, edges, fileOf);
+  const thumb = (n: BoardNode | null) => {
+    const path = pathOf(n);
+    const file = path ? fileOf(path) : null;
+    return !file ? undefined : file.kind === 'image' ? sources.file(file) : file.kind === 'video' ? sources.poster?.(file) : undefined;
+  };
+  /* what a shot still has to make: its picture when it has none, then its clip */
+  const toMake = (shot: Shot) => [shot.picture, shot.clip].filter((n): n is BoardNode => n?.type === 'make' && (!n.data.path || board.stale.has(n.id))).map((n) => n.id);
+  const clips = shots.flatMap((s) => { const path = pathOf(s.clip); const file = path ? fileOf(path) : null; return file ? [file] : []; });
+  const running = shots.some((s) => [s.picture, s.clip].some((n) => n && board.run(n.id)));
+  const total = shots.reduce((sum, s) => sum + (s.seconds ?? 0), 0);
+  const makeAll = async () => { setBusy(true); try { await onMake(shots.flatMap(toMake)); } finally { setBusy(false); } };
 
-  let n = 0;
-  const items: Item[] = nodes.flatMap((node): Item[] => {
-    if (node.type === 'frame') return [];
-    n += 1;
-    if (node.type === 'note') {
-      if (!node.data.text.trim()) return [];
-      const script = /^#{1,3}\s/m.test(node.data.text) || node.data.text.split('\n').filter((l) => l.trim()).length >= 4;
-      return [{ id: node.id, section: 'text', kind: script ? 'script' : 'other', title: t('canvas.titles.note').replace('{n}', String(n)), file: null, text: node.data.text, makes: false }];
-    }
-    if (node.type === 'make') {
-      const file = node.data.path ? fileOf(node.data.path) : null;
-      const section: Section = node.data.make === 'image' ? 'image' : node.data.make === 'video' ? 'video' : 'audio';
-      const preset = node.data.preset;
-      const kind = section !== 'image' ? (section === 'video' ? 'clip' : 'other')
-        : preset && CHARACTER_PRESETS.has(preset) ? 'character' : preset === 'scene' || preset === 'panorama' ? 'scene' : preset === 'product' ? 'thing' : 'other';
-      const title = preset ? t(`canvas.presets.names.${preset}`) : t(`canvas.titles.${node.data.make}`).replace('{n}', String(n));
-      return [{ id: node.id, section, kind, title, file, prompt: node.data.prompt, makes: true }];
-    }
-    if (node.type === 'file') {
-      const file = fileOf(node.data.path);
-      if (!file || (file.kind !== 'image' && file.kind !== 'video' && file.kind !== 'audio')) return [];
-      const kind = file.kind === 'image' ? (file.path.startsWith('assets/characters/') ? 'character' : 'other') : file.kind === 'video' ? 'clip' : 'other';
-      return [{ id: node.id, section: file.kind, kind, title: file.name, file, makes: false }];
-    }
-    return [];
-  });
-  const sections: Array<{ key: Section; icon: React.ReactNode; kinds: string[] }> = [
-    { key: 'text', icon: <AlignLeft size={15} />, kinds: ['script', 'other'] },
-    { key: 'image', icon: <ImageIcon size={15} />, kinds: ['character', 'scene', 'thing', 'other'] },
-    { key: 'video', icon: <Film size={15} />, kinds: [] },
-    { key: 'audio', icon: <AudioLines size={15} />, kinds: [] },
-  ];
-  const current = items.find((i) => i.id === picked) ?? null;
-  const thumb = (file: WorkspaceResource | null) => (!file ? undefined : file.kind === 'image' ? sources.file(file) : file.kind === 'video' ? sources.poster?.(file) : undefined);
-  const run = current ? board.run(current.id) : undefined;
-  const error = current ? board.error(current.id) : undefined;
+  const cell = 'relative block aspect-video w-full overflow-hidden rounded-[10px] bg-[var(--cv-card)] ring-1 ring-[var(--cv-float-line)]';
   return (
-    <div className="absolute inset-0 z-10 flex bg-[var(--cv-bg)] pt-14">
-      <div className="min-w-0 flex-1 overflow-y-auto px-6 pb-24">
-        <div className="mb-4 text-[15px] font-semibold text-[var(--cv-ink)]">{t('canvas.storyboard.title')}</div>
-        {items.length ? sections.map((section) => {
-          const all = items.filter((i) => i.section === section.key);
-          if (!all.length) return null;
-          const on = kinds[section.key];
-          const shown = all.filter((i) => on === 'all' || i.kind === on);
-          return (
-            <div key={section.key} className="mb-6">
-              <div className="mb-2 flex items-center gap-2">
-                <span className="flex items-center gap-1.5 text-[13px] font-medium text-[var(--cv-ink)]">{section.icon}{t(`canvas.storyboard.sections.${section.key}`)}</span>
-                <span className="text-[12px] text-[var(--cv-ink-3)]">{all.length}</span>
-                {section.kinds.length ? (
-                  <span className="ml-2 flex items-center gap-0.5">
-                    <Chip label={t('canvas.history.kinds.all')} count={all.length} on={on === 'all'} onClick={() => setKinds((k) => ({ ...k, [section.key]: 'all' }))} />
-                    {section.kinds.map((kind) => (
-                      <Chip key={kind} label={t(`canvas.storyboard.kinds.${kind}`)} count={all.filter((i) => i.kind === kind).length} on={on === kind}
-                        onClick={() => setKinds((k) => ({ ...k, [section.key]: kind }))} />
-                    ))}
-                  </span>
-                ) : null}
-              </div>
-              <div className="flex gap-3 overflow-x-auto pb-2">
-                {shown.map((item) => {
-                  const src = thumb(item.file);
-                  return (
-                    <button key={item.id} type="button" onClick={() => setPicked(item.id)} onDoubleClick={() => onShowOnBoard(item.id)}
-                      className="group/sb flex w-[176px] shrink-0 flex-col gap-1.5 text-left">
-                      <span className={`relative block h-[132px] w-full overflow-hidden rounded-[12px] bg-[var(--cv-card)] ring-2 transition ${picked === item.id ? 'ring-[var(--cv-edge-lit)]' : 'ring-transparent group-hover/sb:ring-[var(--cv-ring)]'}`}>
-                        {item.text != null ? <span className="block h-full overflow-hidden p-2.5 text-[11.5px] leading-snug text-[var(--cv-ink-2)]"><Words text={item.text} /></span>
-                          : src ? <img src={src} alt="" loading="lazy" className="h-full w-full object-cover" />
-                            : <span className="flex h-full w-full items-center justify-center text-[var(--cv-ghost)]">{section.icon}</span>}
-                        {board.run(item.id) ? <span className="absolute bottom-1.5 right-1.5 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> : null}
-                      </span>
-                      <span className="truncate px-0.5 text-[12px] text-[var(--cv-ink-2)]">{item.title}</span>
-                    </button>
-                  );
-                })}
-                {!shown.length ? <span className="py-6 text-[12.5px] text-[var(--cv-ink-3)]">{t('canvas.nothing')}</span> : null}
-              </div>
-            </div>
-          );
-        }) : (
-          <div className="flex h-[60%] flex-col items-center justify-center gap-3 text-center text-[13px] text-[var(--cv-ink-2)]">
-            <Clapperboard size={28} className="text-[var(--cv-ink-3)]" />
-            <span className="max-w-[380px] leading-relaxed">{t(chat ? 'canvas.storyboard.emptyChat' : 'canvas.storyboard.empty')}</span>
+    <div className="absolute inset-0 z-10 flex flex-col bg-[var(--cv-bg)] pt-14">
+      <div className="flex items-center gap-3 px-6 pb-3">
+        <div className="min-w-0">
+          <div className="text-[15px] font-semibold text-[var(--cv-ink)]">{t('canvas.storyboard.title')}</div>
+          <div className="text-[12px] text-[var(--cv-ink-3)]">
+            {shots.length ? t('canvas.storyboard.count').replace('{n}', String(shots.length)).replace('{s}', String(Math.round(total))) : t('canvas.storyboard.what')}
           </div>
-        )}
+        </div>
+        <span className="flex-1" />
+        {shots.length ? (
+          <>
+            <button type="button" disabled={busy || running || !shots.some((s) => toMake(s).length)} onClick={() => { void makeAll(); }}
+              className="flex h-9 items-center gap-1.5 rounded-full bg-[var(--cv-chip)] px-4 text-[13px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)] disabled:opacity-40">
+              <Play size={12} />{t('canvas.storyboard.makeAll')}
+            </button>
+            <button type="button" disabled={!clips.length} onClick={() => onToTimeline(clips)}
+              className="flex h-9 items-center gap-1.5 rounded-full bg-[var(--cv-invert)] px-4 text-[13px] font-medium text-[var(--cv-on-invert)] transition hover:opacity-90 disabled:opacity-40">
+              <Clapperboard size={13} />{t('canvas.storyboard.toTimeline').replace('{n}', String(clips.length))}
+            </button>
+          </>
+        ) : null}
       </div>
-      {/* the one picked, large, with what it was asked */}
-      <aside className="flex w-[min(420px,40%)] shrink-0 flex-col border-l !border-[var(--cv-float-line)] bg-[var(--cv-card-2)]">
-        {current ? (
-          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
-            <div className="text-[13px] font-medium text-[var(--cv-ink)]">{current.title}</div>
-            <div className="overflow-hidden rounded-[12px] bg-[var(--cv-card)]">
-              {current.text != null ? <div className="max-h-[50vh] overflow-y-auto p-4 text-[13px] leading-relaxed text-[var(--cv-ink)]"><Words text={current.text} /></div>
-                : current.file?.kind === 'image' ? <img src={sources.file(current.file)} alt="" className="max-h-[50vh] w-full object-contain" />
-                  : current.file?.kind === 'video' ? <video src={sources.file(current.file)} controls className="max-h-[50vh] w-full" />
-                    : current.file?.kind === 'audio' ? <audio src={sources.file(current.file)} controls className="w-full p-3" />
-                      : <div className="flex h-40 items-center justify-center text-[12.5px] text-[var(--cv-ink-3)]">{t('canvas.storyboard.notMade')}</div>}
-            </div>
-            {current.makes ? (
-              <>
-                <div className="text-[12px] text-[var(--cv-label)]">{t('canvas.storyboard.asked')}</div>
-                <textarea value={current.prompt ?? ''} rows={4} onFocus={board.willChange} onChange={(event) => board.setData(current.id, { prompt: event.target.value })}
-                  placeholder={presetOf((nodes.find((x) => x.id === current.id)?.data as { preset?: string } | undefined)?.preset) ? t('canvas.presets.hint') : t('canvas.storyboard.askHint')}
-                  className="w-full resize-none rounded-[10px] bg-[var(--cv-chip)] px-3 py-2 text-[13px] leading-relaxed text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-ink-3)]" />
-                {error ? <div className="select-text text-[12px] text-red-500">{error}</div> : null}
-              </>
-            ) : null}
-            <div className="flex flex-wrap items-center gap-2">
-              {current.makes ? (run ? (
-                <button type="button" onClick={() => board.stop(current.id)} className="flex h-9 items-center gap-1.5 rounded-full bg-[var(--cv-invert)] px-4 text-[13px] font-medium text-[var(--cv-on-invert)]"><Square size={11} fill="currentColor" />{t('canvas.make.stop')}</button>
-              ) : (
-                <button type="button" onClick={() => board.make(current.id)} className="flex h-9 items-center gap-1.5 rounded-full bg-[var(--cv-invert)] px-4 text-[13px] font-medium text-[var(--cv-on-invert)] transition hover:opacity-90">
-                  {current.file ? <RotateCcw size={13} /> : <Play size={12} />}{t(current.file ? 'canvas.make.again' : 'canvas.make.run')}
-                </button>
-              )) : null}
-              <button type="button" onClick={() => onShowOnBoard(current.id)} className="flex h-9 items-center gap-1.5 rounded-full bg-[var(--cv-chip)] px-4 text-[13px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]">
-                <LocateFixed size={13} />{t('canvas.storyboard.showOnBoard')}
-              </button>
-              {current.file && (current.file.kind === 'video' || current.file.kind === 'image' || current.file.kind === 'audio') ? (
-                <button type="button" onClick={() => board.addToFilm(current.file!)} className="flex h-9 items-center gap-1.5 rounded-full bg-[var(--cv-chip)] px-4 text-[13px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]">
-                  <Clapperboard size={13} />{t('canvas.storyboard.toTimeline')}
-                </button>
-              ) : null}
-            </div>
+      {shots.length ? (
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-24">
+          <div className="grid grid-cols-[56px_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_120px] gap-x-4 border-b !border-[var(--cv-float-line)] pb-2 text-[11.5px] text-[var(--cv-ink-3)]">
+            <span>{t('canvas.storyboard.cols.shot')}</span><span>{t('canvas.storyboard.cols.words')}</span><span>{t('canvas.storyboard.cols.picture')}</span><span>{t('canvas.storyboard.cols.clip')}</span><span />
           </div>
-        ) : (
-          <div className="flex flex-1 items-center justify-center px-8 text-center text-[12.5px] leading-relaxed text-[var(--cv-ink-3)]">{t('canvas.storyboard.pick')}</div>
-        )}
-      </aside>
+          {shots.map((shot, i) => {
+            const left = toMake(shot);
+            const run = [shot.picture, shot.clip].find((n) => n && board.run(n.id));
+            const error = [shot.picture, shot.clip].map((n) => (n ? board.error(n.id) : undefined)).find(Boolean);
+            const clipPath = pathOf(shot.clip);
+            const clipFile = clipPath ? fileOf(clipPath) : null;
+            return (
+              <div key={shot.key} className="grid grid-cols-[56px_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_120px] items-start gap-x-4 border-b !border-[var(--cv-float-line)] py-4">
+                <div className="pt-1">
+                  <div className="text-[20px] font-semibold leading-none text-[var(--cv-ink)]">{String(i + 1).padStart(2, '0')}</div>
+                  {shot.seconds ? <div className="mt-1.5 text-[11.5px] text-[var(--cv-ink-3)]">{t('canvas.make.seconds').replace('{n}', String(Math.round(shot.seconds)))}</div> : null}
+                </div>
+                <div className="max-h-[132px] overflow-hidden text-[12.5px] leading-relaxed text-[var(--cv-ink-2)]">
+                  {shot.words.length ? <Words text={shot.words.join('\n\n')} /> : <span className="text-[var(--cv-ink-3)]">{t('canvas.storyboard.noWords')}</span>}
+                </div>
+                <button type="button" onClick={() => shot.picture && onShowOnBoard(shot.picture.id)} className={cell} title={t('canvas.storyboard.showOnBoard')}>
+                  {thumb(shot.picture) ? <img src={thumb(shot.picture)} alt="" className="h-full w-full object-cover" />
+                    : <span className="flex h-full w-full items-center justify-center text-[var(--cv-ghost)]"><ImageIcon size={20} /></span>}
+                  {shot.picture && board.run(shot.picture.id) ? <span className="absolute inset-0 flex items-center justify-center bg-black/40"><span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" /></span> : null}
+                </button>
+                <div className={cell}>
+                  {clipFile ? <video src={sources.file(clipFile)} poster={sources.poster?.(clipFile)} controls preload="metadata" className="h-full w-full object-cover" />
+                    : <span className="flex h-full w-full items-center justify-center text-[var(--cv-ghost)]"><Film size={20} /></span>}
+                  {shot.clip && board.run(shot.clip.id) ? <span className="absolute inset-0 flex items-center justify-center bg-black/40"><span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" /></span> : null}
+                </div>
+                <div className="flex flex-col items-stretch gap-1.5">
+                  {run ? (
+                    <button type="button" onClick={() => board.stop(run.id)} className="flex h-8 items-center justify-center gap-1.5 rounded-full bg-[var(--cv-chip)] text-[12.5px] text-[var(--cv-ink)]"><Square size={10} fill="currentColor" />{t('canvas.make.stop')}</button>
+                  ) : (
+                    <button type="button" disabled={!left.length || busy} onClick={() => { void onMake(left); }}
+                      className="flex h-8 items-center justify-center gap-1.5 rounded-full bg-[var(--cv-chip)] text-[12.5px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)] disabled:opacity-35">
+                      <Play size={11} />{t(left.length ? 'canvas.storyboard.make' : 'canvas.storyboard.made')}
+                    </button>
+                  )}
+                  <button type="button" onClick={() => onShowOnBoard((shot.clip ?? shot.picture)!.id)}
+                    className="flex h-8 items-center justify-center gap-1.5 rounded-full text-[12.5px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">
+                    <LocateFixed size={12} />{t('canvas.storyboard.showOnBoard')}
+                  </button>
+                  {error ? <div className="select-text text-[11.5px] leading-snug text-red-500">{error}</div> : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 pb-24 text-center">
+          <Clapperboard size={30} className="text-[var(--cv-ink-3)]" />
+          <div className="max-w-[440px] text-[13px] leading-relaxed text-[var(--cv-ink-2)]">{t('canvas.storyboard.empty')}</div>
+          <div className="flex items-center gap-2">
+            {onAskAgent ? (
+              <button type="button" onClick={onAskAgent} className="flex h-9 items-center gap-1.5 rounded-full bg-[var(--cv-invert)] px-4 text-[13px] font-medium text-[var(--cv-on-invert)] transition hover:opacity-90">
+                <MessageSquare size={13} />{t('canvas.storyboard.askAgent')}
+              </button>
+            ) : null}
+            <button type="button" onClick={onTemplate} className="flex h-9 items-center gap-1.5 rounded-full bg-[var(--cv-chip)] px-4 text-[13px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]">
+              <LayoutTemplate size={13} />{t('canvas.storyboard.fromTemplate')}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

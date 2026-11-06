@@ -77,7 +77,7 @@ export function BottomToolbar({ adding, onAdd, tool, onTool, onTemplates, onLibr
               <button type="button" aria-label={t('canvas.library.title')} onClick={() => setLibrary((v) => !v)} className={`${TOOL} ${library ? ON : ''}`}><Shapes size={17} /></button>
             </Tooltip>
           )}>
-          <div className="w-[154px] rounded-[12px] bg-[var(--cv-float)] p-1 shadow-[var(--cv-float-shadow)]">
+          <div className="cv-pop w-[154px] rounded-[12px] bg-[var(--cv-float)] p-1 shadow-[var(--cv-float-shadow)]">
             <div className="flex h-7 items-center px-2 text-[12px] font-medium text-[var(--cv-ink-3)]">{t('canvas.library.title')}</div>
             {(['styles', 'effects'] as const).map((which) => (
               <button key={which} type="button" onClick={() => { setLibrary(false); onLibrary(which); }}
@@ -100,7 +100,7 @@ export function BottomToolbar({ adding, onAdd, tool, onTool, onTemplates, onLibr
               <button type="button" aria-label={t('canvas.keys.title')} onClick={() => setKeys((v) => !v)} className={`${TOOL} ${keys ? ON : ''}`}><Keyboard size={17} /></button>
             </Tooltip>
           )}>
-          <div className="relative grid w-[min(860px,92vw)] grid-cols-4 gap-6 rounded-[12px] bg-[var(--cv-float)] p-5 shadow-[var(--cv-float-shadow)]">
+          <div className="cv-pop relative grid w-[min(860px,92vw)] grid-cols-4 gap-6 rounded-[12px] bg-[var(--cv-float)] p-5 shadow-[var(--cv-float-shadow)]">
             <button type="button" aria-label={t('canvas.outline.close')} onClick={() => setKeys(false)} className="absolute right-3 top-3 text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]"><X size={15} /></button>
             {columns.map(([title, rows]) => (
               <div key={title}>

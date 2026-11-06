@@ -82,16 +82,20 @@ openfilm skill remove <name>
                          (from, to, order: what goes into a node, in that order)
   canvas apply <steps>   steps on it, all taken or none: a JSON list, a .json file, or - to read it
     {"op":"add","kind":"note|file|image|video|sfx|music|cut|group","id":"…", text | path | prompt, via, model,
-      opts: {ratio, sec, frames}, name, color, x, y, w, h, group: "<group id>", inputs: ["<id>", …], around: ["<id>", …]}
+      preset, opts: {ratio, sec, mode, quality, size, count}, name, color, x, y, w, h, group: "<group id>",
+      inputs: ["<id>", …], around: ["<id>", …]}
                          a node; its id names it for later steps. Without x, y it goes right of its inputs (wired into
                          it in that order), else below the rest. A group made around nodes holds them. A cut is
                          the order what is wired into it goes onto the timeline in, when the person sends it there.
     {"op":"set","id":"…", …}   {"op":"remove","id":"…"}   {"op":"wire","from":"…","to":"…"}   {"op":"unwire",…}
     {"op":"version","id":"…","path":"assets/…"}   a file made with \`openfilm get\` as a making node's newest version
 
-  A making node is asked its prompt with the notes wired into it first; pictures wired into a video are its references
-  (or, with opts.frames, its first and last frames). The person presses Make, or you make it with \`openfilm get\` and
-  add the file as a version. The person sees each change on the board at once.`,
+  A making node is asked its prompt with the notes wired into it first. How a video uses the pictures wired in is its
+  opts.mode: text, first (the first picture is its first frame), firstLast (first and last frame), refs (references
+  for people and places) or omni (pictures, a voice or a clip). A picture's preset puts ready words first: portrait,
+  fullBody, expressions, turnaround16 (a character), storyboard, cameras9, scene, product… The person presses Make (a
+  group's Make all makes it in wire order), or you make it with \`openfilm get\` and add the file as a version. The
+  person sees each change on the board at once.`,
   render: `openfilm render [a-b]
 
   Render the project around the current folder to video.

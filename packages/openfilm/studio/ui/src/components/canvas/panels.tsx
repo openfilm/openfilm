@@ -10,7 +10,7 @@ import {
   AlignLeft, ArrowUp, Camera, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, Download, FolderSearch, Images, LayoutGrid, Maximize2, Minimize2, Music, Plus, Search, Sparkles, Square, Video, X,
 } from 'lucide-react';
 import { useT } from '@/i18n';
-import { IMAGE_RATIOS, MAKE_COUNTS, MAKE_MEDIA, VIDEO_MODES, VIDEO_RATIOS, lengthOf, lengthRange, modeOf, modesFor, ratioOf, type ModelSpec, type VideoMode } from '@/lib/canvas';
+import { IMAGE_RATIOS, MAKE_COUNTS, MAKE_MEDIA, VIDEO_MODES, VIDEO_RATIOS, frameRatio, lengthOf, lengthRange, modeOf, modesFor, ratioOf, type ModelSpec, type VideoMode } from '@/lib/canvas';
 import { PRESETS, PRESET_GROUPS, presetOf, type CanvasPreset } from '@/lib/canvas-presets';
 import type { WorkspaceResource } from '@/lib/workspace-resources';
 import { Popover } from '../Popover';
@@ -22,11 +22,11 @@ import { ProviderMark } from '../settings/ProviderMark';
 const MOD = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform) ? '⌘' : 'Ctrl+';
 /** the lengths offered for each kind, in seconds */
 const MAKE_LENGTHS: Partial<Record<MakeData['make'], number[]>> = { video: [4, 5, 6, 8, 10, 15], sfx: [1, 2, 3, 5, 10], music: [15, 30, 60, 120] };
-const CARD = 'rounded-[12px] bg-[var(--cv-float)] shadow-[var(--cv-float-shadow)]';
+const CARD = 'cv-pop rounded-[12px] bg-[var(--cv-float)] shadow-[var(--cv-float-shadow)]';
 const CHIP = 'flex h-6 items-center gap-1 rounded-[8px] bg-[var(--cv-chip)] px-2 text-[12px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]';
 const PICK = 'flex h-8 min-w-0 items-center gap-1.5 rounded-[8px] px-2 text-[13px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
 /** the panel under a selected node: wider and rounder than the menus, a hairline round it */
-const PANEL = 'relative rounded-[20px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] shadow-[var(--cv-float-shadow)]';
+const PANEL = 'cv-pop relative rounded-[20px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] shadow-[var(--cv-float-shadow)]';
 
 /** A shape as a little frame of it (16:9 wide, 9:16 tall). */
 function RatioIcon({ ratio, size = 16 }: { ratio: string; size?: number }) {
@@ -227,7 +227,7 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
   const t = useT();
   const board = useBoard();
   const thumb = useThumb();
-  const [open, setOpen] = React.useState<'board' | 'assets' | 'model' | 'spec' | 'presets' | 'mode' | null>(null);
+  const [open, setOpen] = React.useState<string | null>(null);
   /* the words written in a taller box (the panel's ↗) */
   const [expanded, setExpanded] = React.useState(false);
   const shown = board.single === id && !board.readOnly;
@@ -250,12 +250,19 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
   const range = lengthRange(data.make, model);
   const lengths = model?.only?.length ? model.only
     : range ? [...new Set([range[0], ...(MAKE_LENGTHS[data.make] ?? []).filter((n) => n > range[0] && n < range[1]), range[1]])] : null;
-  const ratio = ratioOf(data.opts?.ratio, model);
+  /* a clip from a first frame is its shape, unless one is picked (computed below, once the frames are known) */
+  let ratio = ratioOf(data.opts?.ratio, model);
   const sec = lengthOf(data.make, data.opts?.sec, model);
   /* how a clip is made from what is wired in (its mode), of the ways its model makes them */
   const pictureCount = inputs.filter((i) => i.media === 'image').length;
   const modes = data.make === 'video' ? modesFor(model) : [];
   const mode = data.make === 'video' ? modeOf(data.opts, model, pictureCount) : null;
+  /* a clip made from frames: its first (and last) frame as slots, the pictures wired in filling them in order */
+  const pictureInputs = inputs.filter((i) => i.media === 'image');
+  const slots: Array<{ label: 'first' | 'last'; input: (typeof inputs)[number] | undefined }> = mode === 'first' ? [{ label: 'first', input: pictureInputs[0] }]
+    : mode === 'firstLast' ? [{ label: 'first', input: pictureInputs[0] }, { label: 'last', input: pictureInputs[1] }] : [];
+  const firstFrame = slots[0]?.input?.path ? board.fileOf(slots[0].input.path) : null;
+  if (!data.opts?.ratio && firstFrame) ratio = frameRatio(firstFrame.w, firstFrame.h, model) ?? ratio;
   const qualities = data.make === 'image' ? model?.qualities ?? null : null;
   const preset = presetOf(data.preset);
   const hasPicture = inputs.some((i) => i.media === 'image');
@@ -266,7 +273,7 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
   };
   const quality = qualities ? (data.opts?.quality && qualities.includes(data.opts.quality) ? data.opts.quality : qualities[0]) : null;
   const sizes = model?.sizes?.length ? model.sizes : null;
-  const size = sizes ? (data.opts?.size && sizes.includes(data.opts.size) ? data.opts.size : sizes.find((z) => z === '1k' || z === '720p') ?? sizes[0]!) : null;
+  const size = sizes ? (data.opts?.size && sizes.includes(data.opts.size) ? data.opts.size : sizes.find((z) => z === '1k' || z === '720p') ?? sizes.find((z) => z === '768p') ?? sizes[0]!) : null;
   const count = data.opts?.count ?? 1;
   const spec = [ratios ? ratio : null, quality ? t(`canvas.make.qualities.${quality}`) : null, size ? size.toUpperCase() : null,
     lengths && sec !== null ? t('canvas.make.seconds').replace('{n}', String(sec)) : null,
@@ -296,9 +303,38 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
             {data.make === 'video' ? <button type="button" className={CHIP} onClick={() => board.openLibrary('effects', id)}><Clapperboard size={13} />{t('canvas.library.effectChip')}</button> : null}
           </div>
         ) : null}
-        {inputs.length ? (
+        {inputs.length || slots.length ? (
           <div className="mt-2.5 flex flex-wrap gap-1.5">
-            {inputs.map((input, i) => {
+            {/* the frames a clip is made between, each a slot: filled by what is wired in, in order, or empty to fill */}
+            {slots.map((slot, i) => {
+              const input = slot.input;
+              const file = input?.path ? board.fileOf(input.path) : null;
+              const src = thumb(file);
+              return input ? (
+                <div key={input.edge} className="group/input relative h-12 w-12 overflow-hidden rounded-[8px] bg-[var(--cv-chip)] ring-1 ring-[var(--cv-float-line)]" title={file?.name ?? input.path}>
+                  {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : <span className="flex h-full w-full items-center justify-center text-[var(--cv-label)]"><Images size={16} /></span>}
+                  <span className="absolute inset-x-0 top-0 bg-black/60 py-px text-center text-[10px] font-medium text-white">{t(`canvas.slots.${slot.label}`)}</span>
+                  <button type="button" aria-label={t('canvas.removeWire')} onClick={() => board.unwire(input.edge)}
+                    className="absolute bottom-0.5 right-0.5 hidden h-4 w-4 items-center justify-center rounded bg-black/70 text-white group-hover/input:flex"><X size={10} /></button>
+                </div>
+              ) : (
+                <Popover key={`slot-${i}`} open={open === `slot-${i}`} onOpenChange={(v) => setOpen(v ? `slot-${i}` : null)} placement="auto"
+                  trigger={(
+                    <button type="button" onClick={() => setOpen(open === `slot-${i}` ? null : `slot-${i}`)}
+                      className="flex h-12 w-12 flex-col items-center justify-center gap-0.5 rounded-[8px] border border-dashed !border-[var(--cv-line)] text-[var(--cv-ink-2)] transition hover:!border-[var(--cv-ring)] hover:text-[var(--cv-ink)]">
+                      <Plus size={14} /><span className="text-[10px] leading-none">{t(`canvas.slots.${slot.label}`)}</span>
+                    </button>
+                  )}>
+                  <div className={`w-[176px] p-1 ${CARD}`}>
+                    <button type="button" className={`${PICK} w-full`} onClick={() => { setOpen(null); board.upload(id, 'input'); }}><Plus size={14} />{t('canvas.panel.upload')}</button>
+                    <button type="button" className={`${PICK} w-full`} onClick={() => { setOpen(null); board.pick(id); }}><LayoutGrid size={14} />{t('canvas.panel.fromBoard')}</button>
+                    <button type="button" className={`${PICK} w-full`} onClick={() => setOpen('assets')}><Images size={14} />{t('canvas.panel.fromAssets')}</button>
+                  </div>
+                </Popover>
+              );
+            })}
+            {inputs.filter((input) => !slots.some((s) => s.input?.edge === input.edge)).map((input) => {
+              const i = inputs.indexOf(input);
               const file = input.path ? board.fileOf(input.path) : null;
               const src = thumb(file);
               return (
@@ -360,15 +396,20 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
                   <Film size={14} /><span className="truncate">{t(`canvas.modes.${mode}`)}</span><ChevronDown size={13} />
                 </button>
               )}>
-              <div className={`w-[200px] p-1 ${CARD}`}>
+              <div className={`w-[248px] p-1 ${CARD}`}>
                 <div className="flex h-7 items-center px-2 text-[12px] font-medium text-[var(--cv-ink-3)]">{t('canvas.modes.title')}</div>
+                {/* every way its model makes a clip: one that needs pictures shows where they go once picked */}
                 {VIDEO_MODES.map((m: VideoMode) => {
-                  const off = !modes.includes(m) || (m !== 'text' && !pictureCount);
+                  const off = !modes.includes(m);
                   return (
                     <button key={m} type="button" disabled={off} onClick={() => { setOpts({ mode: m, frames: undefined }); setOpen(null); }}
-                      title={off ? t(modes.includes(m) ? 'canvas.modes.needsPicture' : 'canvas.modes.notThisModel') : undefined}
-                      className={`flex h-8 w-full items-center gap-2 rounded-[8px] px-2 text-left text-[13px] ${off ? 'text-[var(--cv-ink-3)]' : 'text-[var(--cv-ink)] hover:bg-[var(--cv-float-hover)]'} ${m === mode ? 'bg-[var(--cv-float-hover)]' : ''}`}>
-                      {t(`canvas.modes.${m}`)}
+                      title={off ? t('canvas.modes.notThisModel') : undefined}
+                      className={`flex w-full items-start gap-2 rounded-[8px] px-2 py-1.5 text-left ${off ? 'text-[var(--cv-ink-3)]' : 'text-[var(--cv-ink)] hover:bg-[var(--cv-float-hover)]'} ${m === mode ? 'bg-[var(--cv-float-hover)]' : ''}`}>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[13px] leading-5">{t(`canvas.modes.${m}`)}</span>
+                        <span className="block text-[11.5px] leading-snug text-[var(--cv-ink-3)]">{t(off ? 'canvas.modes.notThisModel' : `canvas.modes.about.${m}`)}</span>
+                      </span>
+                      {m === mode ? <Check size={14} className="mt-0.5 shrink-0 text-[var(--cv-ink-2)]" /> : null}
                     </button>
                   );
                 })}

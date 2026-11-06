@@ -28,7 +28,7 @@ import { useT } from '@/i18n';
 import { ApiError, api, projectEvents, type CanvasBoard, type CanvasCharacter } from '@/api';
 import { BoardSwitcher, boardName, nextBoardName, type BoardMode } from './boards';
 import {
-  CARD_H, CUT_W, FILE_W, GROUP_COLORS, MAKE_MEDIA, MAKE_W, NOTE_H, NOTE_W, canvasId, cardWidth, makeSize, canvasKey, copyOf, emptyHistory, inputsKey, inputsOf, isStale, makeName, makeRequest,
+  CARD_H, CUT_W, FILE_W, GROUP_COLORS, MAKE_MEDIA, MAKE_W, NOTE_H, NOTE_W, canvasId, cardWidth, makeSize, canvasKey, copyOf, emptyHistory, inputsKey, inputsOf, isStale, makeName, makeRequest, modeOf, frameRatio,
   nextOrder, readCanvasDoc, redo, remember, reorder, undo, withVersion,
   type CanvasDoc, type CanvasHistory, type MediaOf,
 } from '@/lib/canvas';
@@ -216,7 +216,11 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
       saved.current = key;
       if (key === canvasKey(docNow())) return;
       willChange();
+      const before = new Set(now.current.nodes.map((n) => n.id));
       show(doc, selectedIds());
+      /* what it added, brought into view */
+      const added = doc.nodes.filter((n) => !before.has(n.id) && !n.parent).map((n) => ({ id: n.id }));
+      if (added.length) requestAnimationFrame(() => requestAnimationFrame(() => { void flow.fitView({ nodes: added, padding: 0.15, maxZoom: 1, duration: 300 }); }));
     }, () => {});
   }), [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -419,6 +423,21 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
     if (wired.some((n) => n && n.text != null && n.group == null && !n.text.trim())) return fail('canvas.make.emptyNote');
     if (wired.some((n) => n?.make && !n.path)) return fail('canvas.make.unmadeInput');
     const inputs = inputsOf(doc, id, mediaOf);
+    /* a clip made from frames or references: they are there first */
+    if (node.make === 'video') {
+      const pictures = inputs.filter((i) => 'media' in i && i.media === 'image').length;
+      const way = modeOf(node.opts, choiceOf(providers, node.make, node.via, node.model)?.spec, pictures);
+      if (way === 'first' && pictures < 1) return fail('canvas.makeNeeds.first');
+      if (way === 'firstLast' && pictures < 2) return fail('canvas.makeNeeds.firstLast');
+      if ((way === 'refs' || way === 'omni') && pictures < 1) return fail('canvas.makeNeeds.refs');
+      /* from a first frame: its shape, unless one was picked */
+      const first = inputs.find((i) => 'media' in i && i.media === 'image');
+      const frame = first && 'path' in first ? byPath.get(first.path) : undefined;
+      if ((way === 'first' || way === 'firstLast') && !node.opts?.ratio && frame) {
+        const shape = frameRatio(frame.w, frame.h, choiceOf(providers, node.make, node.via, node.model)?.spec);
+        if (shape) node.opts = { ...node.opts, ratio: shape };
+      }
+    }
     const request = makeRequest(node as MakingNode, inputs, makeName(node as MakingNode), choiceOf(providers, node.make, node.via, node.model)?.spec);
     if (!String(request.args.prompt).trim()) { runErrors.set(`${projectId}/${id}`, t('canvas.make.noWords')); runsChanged(); return Promise.resolve(false); }
     const pick = node.via ? { via: node.via, ...(node.model ? { model: node.model } : {}) } : {};
@@ -1128,8 +1147,16 @@ function BoardView({ projectId, folder, files, sources, onAddToFilm, onSendToFil
           onRemove={(id) => { void removeBoard(id); }}
           {...(studioHost ? {} : { onOpenApart: (id: string) => { const url = new URL(window.location.href); url.searchParams.set('canvas', id); window.open(url.toString(), '_blank'); } })} />
         {mode === 'storyboard' ? (
-          <Storyboard nodes={nodes} fileOf={board.fileOf} sources={sources} {...(chat ? { chat } : {})}
-            onShowOnBoard={(id) => { setMode('board'); requestAnimationFrame(() => showNode(id)); }} />
+          <Storyboard nodes={nodes} edges={edges} fileOf={board.fileOf} sources={sources}
+            onShowOnBoard={(id) => { setMode('board'); requestAnimationFrame(() => showNode(id)); }}
+            onMake={async (ids) => { for (const id of ids) { if (!(await makeNow(id))) break; } }}
+            onToTimeline={(clips) => onSendToFilm(clips)}
+            onTemplate={() => {
+              const episode = builtIns.find((tp) => tp.id === 'builtin:episode');
+              setMode('board');
+              if (episode) requestAnimationFrame(() => { void layTemplate(episode, middle()); });
+            }}
+            {...(studioHost?.ask ? { onAskAgent: () => { studioHost!.ask!({ text: t('canvas.storyboard.askText'), refs: [] }); } } : {})} />
         ) : null}
         {mode === 'storyboard' ? null : <LeftBar {...(chat ? { chat } : {})} outline={outline} onOutline={() => setOutline((v) => !v)} map={map} onMap={() => setMap((v) => !v)}
           wires={wires} onWires={() => setWires((v) => !v)} snap={snap} onSnap={() => setSnap((v) => !v)} />}

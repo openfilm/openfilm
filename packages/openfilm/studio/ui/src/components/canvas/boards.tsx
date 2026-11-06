@@ -27,8 +27,10 @@ export function nextBoardName(boards: readonly CanvasBoard[], t: (key: string) =
   return t('canvas.boards.numbered').replace('{n}', String(n));
 }
 
+/** the top left's two pills: 32 high, 8 round, the bar's color a little see-through, a hairline round them */
+const PILL = 'flex h-8 items-center rounded-[8px] border-[0.5px] !border-[var(--cv-bar-line)] bg-[color-mix(in_srgb,var(--cv-bar)_80%,transparent)] backdrop-blur-md';
 const ROW = 'group/row flex h-8 w-full min-w-0 items-center gap-2 rounded-[8px] px-2 text-left text-[13px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
-const ICON = 'flex h-8 w-8 items-center justify-center rounded-[8px] transition';
+const ICON = 'flex h-8 w-8 items-center justify-center rounded-[8px] p-1 transition';
 
 export function BoardSwitcher({ boards, current, mode, onPick, onAdd, onRename, onCopy, onRemove, onOpenApart, onMode }: {
   boards: readonly CanvasBoard[];
@@ -62,15 +64,17 @@ export function BoardSwitcher({ boards, current, mode, onPick, onAdd, onRename, 
     setRenaming(null);
   };
   return (
-    <div className="pointer-events-auto absolute left-3 top-3 z-20 flex items-center gap-2">
+    <div className="pointer-events-auto absolute left-2 top-2 z-20 flex items-center gap-2">
       <Popover open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setMore(null); done(); } }}
         trigger={(
-          <button type="button" onClick={() => setOpen((v) => !v)}
-            className={`flex h-8 max-w-[220px] items-center gap-1 rounded-[8px] px-2 text-[13px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)] ${open ? 'bg-[var(--cv-float-hover)]' : ''}`}>
-            <span className="truncate">{boardName(boards, current, t)}</span><ChevronDown size={13} className={`shrink-0 transition ${open ? 'rotate-180' : ''}`} />
-          </button>
+          <span className={PILL}>
+            <button type="button" onClick={() => setOpen((v) => !v)}
+              className={`flex h-8 max-w-[220px] items-center gap-1 rounded-[8px] px-2 text-[13px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)] ${open ? 'bg-[var(--cv-float-hover)]' : ''}`}>
+              <span className="truncate">{boardName(boards, current, t)}</span><ChevronDown size={12} className={`shrink-0 text-[var(--cv-ink-2)] transition ${open ? 'rotate-180' : ''}`} />
+            </button>
+          </span>
         )}>
-        <div ref={panel} className="relative w-[220px] rounded-[12px] bg-[var(--cv-float)] p-1 shadow-[var(--cv-float-shadow)]">
+        <div ref={panel} className="cv-pop relative w-[220px] rounded-[12px] bg-[var(--cv-float)] p-1 shadow-[var(--cv-float-shadow)]">
           <div className="flex h-8 items-center justify-between px-2">
             <span className="text-[12px] font-medium text-[var(--cv-ink-3)]">{t('canvas.boards.title')}</span>
             <Tooltip label={t('canvas.boards.add')}>
@@ -103,7 +107,7 @@ export function BoardSwitcher({ boards, current, mode, onPick, onAdd, onRename, 
             )))}
           </div>
           {more ? (
-            <div className="absolute left-[148px] z-10 w-[168px] rounded-[12px] bg-[var(--cv-float)] p-1 shadow-[var(--cv-float-shadow)] ring-1 ring-[var(--cv-float-line)]" style={{ top: moreTop }}>
+            <div className="cv-pop absolute left-[148px] z-10 w-[168px] rounded-[12px] bg-[var(--cv-float)] p-1 shadow-[var(--cv-float-shadow)] ring-1 ring-[var(--cv-float-line)]" style={{ top: moreTop }}>
               {onOpenApart ? <button type="button" className={ROW} onClick={() => { setMore(null); onOpenApart(more); }}>{t('canvas.boards.openApart')}</button> : null}
               <button type="button" className={ROW} onClick={() => rename(more)}>{t('canvas.boards.rename')}</button>
               <button type="button" className={ROW} onClick={() => { setMore(null); setOpen(false); onCopy(more); }}>{t('canvas.boards.copy')}</button>
@@ -114,14 +118,14 @@ export function BoardSwitcher({ boards, current, mode, onPick, onAdd, onRename, 
         </div>
       </Popover>
       {/* the board itself, or its storyboard */}
-      <div className="flex items-center gap-0.5 rounded-[10px] bg-[var(--cv-bar)] p-0.5">
+      <div className={PILL}>
         <Tooltip label={t('canvas.boards.board')}>
           <button type="button" aria-label={t('canvas.boards.board')} aria-pressed={mode === 'board'} onClick={() => onMode('board')}
-            className={`${ICON} ${mode === 'board' ? 'bg-[var(--cv-bar-line)] text-[var(--cv-ink)]' : 'text-[var(--cv-label)] hover:text-[var(--cv-ink)]'}`}><Workflow size={15} /></button>
+            className={`${ICON} ${mode === 'board' ? 'bg-[var(--cv-bar-line)] text-[var(--cv-ink)]' : 'text-[var(--cv-label)] hover:text-[var(--cv-ink)]'}`}><Workflow size={14} /></button>
         </Tooltip>
         <Tooltip label={t('canvas.boards.storyboard')}>
           <button type="button" aria-label={t('canvas.boards.storyboard')} aria-pressed={mode === 'storyboard'} onClick={() => onMode('storyboard')}
-            className={`${ICON} ${mode === 'storyboard' ? 'bg-[var(--cv-bar-line)] text-[var(--cv-ink)]' : 'text-[var(--cv-label)] hover:text-[var(--cv-ink)]'}`}><Clapperboard size={15} /></button>
+            className={`${ICON} ${mode === 'storyboard' ? 'bg-[var(--cv-bar-line)] text-[var(--cv-ink)]' : 'text-[var(--cv-label)] hover:text-[var(--cv-ink)]'}`}><Clapperboard size={14} /></button>
         </Tooltip>
       </div>
       <ConfirmDialog open={removing !== null} danger title={t('canvas.boards.removeTitle')}

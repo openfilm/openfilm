@@ -460,6 +460,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     setCanvasOpenState(open);
     try { localStorage.setItem(`${CANVAS_KEY}:${projectId}`, open ? '1' : '0'); } catch { /* for this launch only */ }
   }, [projectId]);
+  /* what an agent lays out on the canvas (`openfilm canvas apply`) is shown: the canvas opens on it */
+  React.useEffect(() => projectEvents(projectId, (event) => { if (event.type === 'canvas') setCanvasOpen(true); }), [projectId, setCanvasOpen]);
   const canvasFiles = React.useMemo(() => (listing ? [...listing.files, ...listing.pages] : []), [listing]);
   /* a file of the media pane as a reference: shown by its poster (a video, a page) or itself (a still, on Studio's
      origin: see stillUrl) */

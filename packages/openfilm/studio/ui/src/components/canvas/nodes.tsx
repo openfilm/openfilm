@@ -412,8 +412,8 @@ export function MakeNodeView({ id, data, selected }: NodeProps<MakeNode>) {
                   </>
                 ) : media === 'video' ? (
                   <>
-                    <TryLine icon={Layers} label={t('canvas.try.firstLast')} onClick={() => { board.setData(id, { opts: { ...data.opts, mode: 'firstLast' } }); board.upload(id, 'input'); }} />
-                    <TryLine icon={ImageIcon} label={t('canvas.try.firstFrame')} onClick={() => { board.setData(id, { opts: { ...data.opts, mode: 'first' } }); board.upload(id, 'input'); }} />
+                    <TryLine icon={Layers} label={t('canvas.try.firstLast')} onClick={() => { board.willChange(); board.setData(id, { opts: { ...data.opts, mode: 'firstLast' } }); }} />
+                    <TryLine icon={ImageIcon} label={t('canvas.try.firstFrame')} onClick={() => { board.willChange(); board.setData(id, { opts: { ...data.opts, mode: 'first' } }); }} />
                     <TryLine icon={Upload} label={t('canvas.try.upload.video')} onClick={() => board.upload(id, 'version')} />
                   </>
                 ) : (

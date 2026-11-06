@@ -131,7 +131,10 @@ test('what is wired into a node comes in its edges\' order; words and pictures, 
   assert.equal(makeRequest({ ...v, make: 'image', opts: { size: '4k', transparent: true } }, [], 'cut', { sizes: ['1k'] }).args.size, undefined, 'only what the model makes');
   assert.equal(makeRequest({ ...v, opts: { size: '1080p' } }, [], 'push', { sizes: ['720p', '1080p'] }).args.resolution, '1080p');
   assert.match(makeName({ ...v, prompt: 'A slow push-in, at dawn!' }, 36), /^a-slow-push-in-10$/);
-  assert.match(makeName({ ...v, prompt: '黎明' }, 36), /^video-10$/);
+  assert.match(makeName({ ...v, prompt: '黎明' }, 1296), /^video-100$/);
+  /* two made in the same moment never share a name (a file each); a preset names it when its words do not */
+  assert.notEqual(makeName({ ...v, prompt: '' }, 1296), makeName({ ...v, prompt: '' }, 1296));
+  assert.match(makeName({ ...v, prompt: '', preset: 'fullBody' }, 46656), /^full-body-1000$/);
 });
 
 test('a node is stale when what it would be asked is not what it made the one shown from', () => {

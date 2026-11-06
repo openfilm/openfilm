@@ -301,6 +301,12 @@ export function lengthOf(kind: MakeKind, asked: number | undefined, spec?: Model
 }
 
 /** The shape a node's media is asked for: what it asks when its model makes it, else the nearest of the model's. */
+/** A clip made from a picture is its shape unless asked otherwise: the nearest the model makes (or the usual ones) to it. */
+export function frameRatio(w: number | undefined, h: number | undefined, spec?: ModelSpec): string | undefined {
+  if (!w || !h) return undefined;
+  return ratioOf(`${w}:${h}`, { ...spec, ratios: spec?.ratios?.length ? spec.ratios : [...VIDEO_RATIOS] });
+}
+
 export function ratioOf(asked: string | undefined, spec?: ModelSpec): string {
   const want = asked ?? '16:9';
   const ratios = spec?.ratios;
@@ -389,10 +395,15 @@ export function makeRequest(node: CanvasNode & { make: MakeKind }, inputs: reado
   return { verb: node.make, args, unused: pictures.length + clips.length + sounds.length - used };
 }
 
-/** A name for what a node makes next: from its words, and when, so no two are the same. */
+/** when the last name was given: the next is later, so nodes made in the same moment never share a file */
+let lastNamed = 0;
+
+/** A name for what a node makes next: from its words (or its preset's name), and when, so no two are the same. */
 export function makeName(node: CanvasNode & { make: MakeKind }, now = Date.now()): string {
   const words = (node.prompt ?? '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean).slice(0, 4);
-  return `${words.length ? words.join('-') : node.make}-${now.toString(36)}`;
+  const preset = (node.preset ?? '').replace(/([a-z])([A-Z0-9])/g, '$1-$2').toLowerCase();
+  lastNamed = Math.max(now, lastNamed + 1);
+  return `${words.length ? words.join('-') : preset || node.make}-${lastNamed.toString(36)}`;
 }
 
 /** The edge's place among what goes into its node: after every other one there. */

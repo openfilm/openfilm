@@ -104,7 +104,7 @@ test("an agent's steps: added where they go, wired in order, kept as its", async
   assert.equal(by('mood').parent, 'g');
   assert.deepEqual(by('mood').by, { agent: 'codex', session: 's1' });
   assert.equal(by('n0').by, undefined, 'what was there is as it was');
-  assert.equal(by('shot').x, 400 + 280 + 80, 'right of its inputs');
+  assert.equal(by('shot').x, 400 + 622 + 80, 'right of its inputs: a picture is 622 wide (350 high, 16:9) until resized');
   assert.deepEqual(by('shot').versions, ['assets/image/b.png']);
   assert.deepEqual(canvas.edges.map((e) => [e.from, e.to, e.order]), [['ref', 'shot', 0], ['mood', 'shot', 1]]);
 });

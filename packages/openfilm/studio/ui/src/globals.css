@@ -659,6 +659,14 @@ html[data-file-drag] iframe { pointer-events: none; }
   filter: drop-shadow(0 0 3px color-mix(in srgb, var(--cv-edge-lit) 70%, transparent));
 }
 @keyframes cv-flow { to { stroke-dashoffset: -16; } }
+/* the canvas's menus, panels and windows come in: a short rise and fade, a window a slight grow */
+@keyframes cv-pop { from { opacity: 0; transform: translateY(4px) scale(0.98); } }
+@keyframes cv-fade { from { opacity: 0; } }
+@keyframes cv-grow { from { opacity: 0; transform: scale(0.97); } }
+.cv-pop { animation: cv-pop 140ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+.cv-fade { animation: cv-fade 160ms ease-out; }
+.cv-grow { animation: cv-grow 180ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+@media (prefers-reduced-motion: reduce) { .cv-pop, .cv-fade, .cv-grow { animation: none; } }
 .openfilm-canvas .react-flow__minimap { overflow: hidden; border-radius: 12px; box-shadow: var(--cv-float-shadow); }
 .openfilm-canvas .react-flow__node { border-radius: 12px; }
 .openfilm-canvas .react-flow__edge-textbg { rx: 6; }

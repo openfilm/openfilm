@@ -287,6 +287,8 @@ const KIND_SIZE = /** @type {Record<string, { w: number, h: number }>} */ ({
 });
 /** the room left between what an agent adds and what is there */
 const GAP = 80;
+/** a card's height on the board (studio/ui lib/canvas CARD_H) */
+const CARD_H = 350;
 const GROUP_PAD = 32;
 
 /** An agent's step that cannot be taken: which, and why. */
@@ -296,10 +298,13 @@ export class CanvasOpError extends Error {}
 const kindOf = (n) => ('group' in n ? 'group' : 'make' in n || 'cut' in n ? 'make' : 'path' in n ? 'file' : 'note');
 /** a node's box on the board (in a group: the group's corner added) @param {CanvasNode} n @param {Map<string, CanvasNode>} byId */
 function boxOf(n, byId) {
-  const size = KIND_SIZE[kindOf(n)];
-  const w = n.w ?? size.w;
-  /* a file's picture and its name above it; a making node's, under it its words, options and what it says */
-  const h = n.h ?? (kindOf(n) === 'file' ? Math.round(w * 9 / 16) + 24 : kindOf(n) === 'make' ? Math.round(w * 9 / 16) + 260 : size.h);
+  /* as the board draws a card until it is resized: 350 high, as wide as its shape (a sound 320, a note or a cut 350
+     square); its name row above it */
+  const kind = kindOf(n);
+  const m = /** @type {{ make?: string, opts?: { ratio?: string } }} */ (n);
+  const shaped = (/** @type {string | undefined} */ ratio) => { const [a, b] = String(ratio ?? '16:9').split(':').map(Number); return a && b ? Math.round(CARD_H * a / b) : 622; };
+  const w = n.w ?? (kind === 'make' ? (m.make === 'sfx' || m.make === 'music' ? 320 : shaped(m.opts?.ratio)) : kind === 'file' ? 622 : kind === 'group' ? KIND_SIZE.group.w : CARD_H);
+  const h = n.h ?? (kind === 'group' ? KIND_SIZE.group.h : CARD_H);
   const parent = n.parent ? byId.get(n.parent) : undefined;
   return { x: n.x + (parent?.x ?? 0), y: n.y + (parent?.y ?? 0), w, h };
 }
@@ -366,7 +371,7 @@ export async function applyCanvasOps(canvas, ops, { by, exists }) {
       else if (kind === 'cut') fields = { cut: true };
       else if (MAKE_KINDS.includes(kind)) {
         const path = op.path === undefined ? undefined : await file(op.path, 'path');
-        fields = { make: kind, prompt: op.prompt, via: op.via, model: op.model, opts: op.opts, ...(path ? { versions: [path], path } : {}) };
+        fields = { make: kind, prompt: op.prompt, via: op.via, model: op.model, preset: op.preset, opts: op.opts, ...(path ? { versions: [path], path } : {}) };
       } else throw new CanvasOpError(`${step}: kind is one of note, file, image, video, sfx, music, cut, group`);
       const inputs = Array.isArray(op.inputs) ? op.inputs.map((input) => node(input).id) : [];
       const around = kind === 'group' && Array.isArray(op.around) ? op.around.map((a) => node(a)) : [];
@@ -417,7 +422,7 @@ export async function applyCanvasOps(canvas, ops, { by, exists }) {
       const parent = n.parent ? byId().get(n.parent) : undefined;
       if (parent && Number.isFinite(change.x)) change.x -= parent.x;
       if (parent && Number.isFinite(change.y)) change.y -= parent.y;
-      const allowed = new Set(['x', 'y', 'w', 'h', ...('text' in n ? ['text'] : []), ...('make' in n ? ['prompt', 'via', 'model', 'opts', 'path'] : []),
+      const allowed = new Set(['x', 'y', 'w', 'h', ...('text' in n ? ['text'] : []), ...('make' in n ? ['prompt', 'via', 'model', 'preset', 'opts', 'path'] : []),
         ...('group' in n ? ['group', 'color'] : []), ...('path' in n && !('make' in n) ? ['path'] : [])]);
       const odd = Object.keys(change).filter((k) => !allowed.has(k));
       if (odd.length) throw new CanvasOpError(`${step}: a ${kindOf(n)} node has no ${odd.join(', ')}; it has ${[...allowed].join(', ')}`);
