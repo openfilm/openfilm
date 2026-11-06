@@ -33,10 +33,11 @@ import { apartOnTracks, type ClipEdit } from '@/lib/film-clip-edits';
 import { mediaFetch, useMediaImages } from '@/lib/media-queue';
 import { clipboardItemsOf, clipboardNow, laneOfBlock, pasteEdit, type TimelineClipboardItem } from '@/lib/timeline-clipboard';
 import {
-  editModelOf, freshLink, linkedIds, magnetOn, mainTrackOf, planMove, planRippleTrim, planRoom, planSpeed, slowestSpeed, soundTrackFor, type EditMode,
+  editModelOf, freshLink, linkedIds, magnetOn, mainTrackOf, planDetachAudio, planMove, planRippleTrim, planRoom, planSpeed, slowestSpeed, type EditMode,
 } from '@/lib/timeline-edit';
 import { readTimelinePrefs, switchesOf } from '@/lib/timeline-prefs';
 import { fadeMsOf, type FadeMs } from '@/lib/clip-fade';
+import { hasSoundToDetach } from '@/lib/clip-volume';
 import {
   findTransitions, planRemoveTransition, planResizeTransition, planTransition, TRANSITION_MS,
   type ClipFacts, type TransitionAsk, type TransitionPlan,
@@ -1015,31 +1016,20 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     });
   }, [edit, editModel, t]);
   /**
-   * A video's sound taken apart from its picture, as an editor unlinks them: the same file's sound alone, at the same
-   * seconds and speed, on a sound track that has room for it (a new one under the sound tracks only when none has),
-   * linked to the video (`data-link`) so they still move, trim, split and delete together; the video silent from then on.
+   * Videos' sounds taken apart from their pictures, as an editor unlinks them (lib/timeline-edit planDetachAudio): each
+   * the same file's sound alone, at the same seconds and speed, on a sound track that has room for it (a new one under
+   * the sound tracks only when none has), linked to its video (`data-link`) so they still move, trim, split and delete
+   * together; the videos silent from then on. One edit, one step to undo.
    */
-  const detachAudio = React.useCallback((block: TimelineBlock): Promise<string | null> => {
-    const current = filmRef.current;
-    const ti = current?.tracks.findIndex((tr) => tr.clips.some((c) => c.id === block.clipId)) ?? -1;
-    const clip = ti >= 0 ? current!.tracks[ti]!.clips.find((c) => c.id === block.clipId) : undefined;
-    if (!clip || !block.clipId) return Promise.resolve(t('timeline.detachFail'));
-    const model = editModel();
-    const link = clip.attrs?.['data-link'] ?? freshLink(model, clip.id);
-    const sound = {
-      src: clip.src,
-      sound: true as const,
-      ...(clip.at != null ? { at: clip.at } : {}),
-      ...(clip.time ? { time: clip.time } : {}),
-      ...(clip.speed != null ? { speed: clip.speed } : {}),
-      ...(clip.volume != null && clip.volume !== 0 ? { volume: clip.volume } : {}),
-      attrs: { 'data-link': link },
-    };
-    const track = soundTrackFor(model, { startMs: block.startMs, endMs: block.endMs }, ti);
-    return edit([
-      { op: 'props', edits: [{ clip: block.clipId, prop: 'volume', value: 0 }, { clip: block.clipId, prop: 'link', value: link }] },
-      { op: 'insert', clip: sound, track },
-    ], clipStep('history.stepDetachAudio', [block.clipId]));
+  const detachAudio = React.useCallback((blocks: readonly TimelineBlock[]): Promise<string | null> => {
+    const clips = new Map((filmRef.current?.tracks ?? []).flatMap((tr) => tr.clips.map((c) => [c.id, c] as const)));
+    const videos = blocks.flatMap((b) => {
+      const clip = b.clipId ? clips.get(b.clipId) : undefined;
+      return clip ? [clip] : [];
+    });
+    const ops = videos.length ? planDetachAudio(editModel(), videos) : [];
+    if (!ops.length) return Promise.resolve(t('timeline.detachFail'));
+    return edit(ops, clipStep('history.stepDetachAudio', videos.slice(0, 2).map((c) => c.id)));
   }, [edit, editModel, t]);
   const [clipboard, setClipboard] = React.useState<readonly TimelineClipboardItem[]>([]);
   /* layers copied (lib/layer-clipboard): kept in the browser, so another window or project pastes them too; the
@@ -2859,11 +2849,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         return;
       }
       case 'detach-audio': {
-        /* ⇧⌃S: the selected video's sound on a track of its own */
-        const video = selectedBlocks.find((b) => b.kind === 'video' && b.clipId);
-        if (!video || !once) return;
+        /* ⇧⌃S: the selected videos' sounds, each on a track of its own */
+        const videos = selectedBlocks.filter(hasSoundToDetach);
+        if (!videos.length || !once) return;
         take();
-        void detachAudio(video).then((err) => { if (err) toast.showError(err); });
+        void detachAudio(videos).then((err) => { if (err) toast.showError(err); });
         return;
       }
       default:

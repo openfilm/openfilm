@@ -17,7 +17,7 @@
  *
  * Pure: the timeline draws a plan's `placed` while the hand is still on a clip, and sends its `ops` on release.
  */
-import type { Op, PropValue } from '../api.ts';
+import type { Clip, Op, PropEdit, PropValue } from '../api.ts';
 import type { TimelineTrack } from './timeline-layout';
 import { MIN_BLOCK_MS, newTrackSide } from './timeline-drag.ts';
 import { frameMs } from './timecode.ts';
@@ -1166,4 +1166,48 @@ export function soundTrackFor(model: EditModel, range: { startMs: number; endMs:
   const sounds = model.filter((t) => t.role === 'audio');
   const last = Math.max(-1, ...model.map((t) => t.index));
   return { insert: sounds.length ? Math.max(...sounds.map((t) => t.index)) + 1 : last + 1 };
+}
+
+/**
+ * Videos' sounds taken apart from their pictures in one edit: each video silent and linked (`data-link`) to its own
+ * sound, the same file's sound alone at the same seconds and speed, on a sound track with room for it. The sounds
+ * placed earlier in the edit count, so two that overlap don't land on one track, and a track opened for one is there
+ * for the next. Videos not in `model` are left as they are.
+ */
+export function planDetachAudio(model: EditModel, videos: readonly Clip[]): Op[] {
+  let tracks: EditTrack[] = model.map((t) => ({ ...t, clips: [...t.clips] }));
+  const links = new Set<string>();
+  const edits: PropEdit[] = [];
+  const inserts: Op[] = [];
+  for (const video of videos) {
+    const from = tracks.find((t) => t.clips.some((c) => c.id === video.id));
+    const placed = from?.clips.find((c) => c.id === video.id);
+    if (!from || !placed) continue;
+    const link = video.attrs?.['data-link'] ?? freshLink(model, video.id, links);
+    links.add(link);
+    edits.push({ clip: video.id, prop: 'volume', value: 0 }, { clip: video.id, prop: 'link', value: link });
+    const track = soundTrackFor(tracks, placed, from.index);
+    inserts.push({
+      op: 'insert',
+      clip: {
+        src: video.src,
+        sound: true,
+        ...(video.at != null ? { at: video.at } : {}),
+        ...(video.time ? { time: video.time } : {}),
+        ...(video.speed != null ? { speed: video.speed } : {}),
+        ...(video.volume != null && video.volume !== 0 ? { volume: video.volume } : {}),
+        attrs: { 'data-link': link },
+      },
+      track,
+    });
+    /* the sound as the next one sees it: on its track, or on a track opened for it (those after it one further down) */
+    const sound: EditClip = { ...placed, id: `${video.id}~sound`, link };
+    if (typeof track === 'number') tracks.find((t) => t.index === track)!.clips.push(sound);
+    else {
+      tracks = tracks.map((t) => (t.index >= track.insert ? { ...t, index: t.index + 1 } : t));
+      tracks.push({ index: track.insert, role: 'audio', clips: [sound] });
+      tracks.sort((a, b) => a.index - b.index);
+    }
+  }
+  return edits.length ? [{ op: 'props', edits }, ...inserts] : [];
 }
