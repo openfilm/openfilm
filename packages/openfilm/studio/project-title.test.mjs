@@ -103,7 +103,8 @@ test('the project title opens Projects immediately, keeps its hover card, and re
     await button.click();
     assert.equal(await projects.isVisible(), true, 'the click opens Projects without waiting to distinguish a double click');
     assert.equal(await card.count(), 0, 'opening Projects dismisses the hover card');
-    assert.ok(await projects.getByRole('button', { name: 'Recent only', exact: true }).count() > 0, 'recent projects remain available in All projects');
+    /* recent projects stay reachable in All projects: its Sort has Recently opened */
+    await projects.getByRole('button', { name: 'Sort', exact: true }).waitFor();
     await page.keyboard.press('Escape');
     await projects.waitFor({ state: 'detached' });
 
