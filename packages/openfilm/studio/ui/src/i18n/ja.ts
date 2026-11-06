@@ -1019,6 +1019,7 @@ export const ja: Words = {
     source: '提供元',
     source_official: '公式',
     source_community: 'コミュニティ',
+    contributeAssets: '素材を投稿',
     source_mine: '自分の',
     slots: '{n} 素材',
     mediaImport: '読み込み',

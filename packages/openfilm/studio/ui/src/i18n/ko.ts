@@ -1016,6 +1016,7 @@ export const ko: Words = {
     source: '출처',
     source_official: '공식',
     source_community: '커뮤니티',
+    contributeAssets: '소재 기여하기',
     source_mine: '내 것',
     slots: '{n}개 클립',
     mediaImport: '가져오기',

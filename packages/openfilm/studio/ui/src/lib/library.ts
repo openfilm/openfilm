@@ -72,31 +72,38 @@ export interface LibraryIndex {
 
 let index: LibraryIndex | null = null;
 let reading: Promise<LibraryIndex | null> | null = null;
+let readAt = 0;
 const listeners = new Set<() => void>();
 
 function readIndex(): Promise<LibraryIndex | null> {
+  if (index && Date.now() - readAt < 60_000) return Promise.resolve(index);
   reading ??= fetch('/api/library', { cache: 'no-store' })
-    .then((r) => (r.ok ? r.json() : null), () => null)
+    .then((r) => (r.ok ? r.json() : null))
     .then((body: LibraryIndex | null) => {
       if (body && Array.isArray(body.items)) {
         for (const item of body.items) if (item.grade && !item.filter) item.filter = gradeFilter(item.id, item.grade);
         index = body;
+        readAt = Date.now();
         for (const fn of listeners) fn();
       }
-      else reading = null;
       return index;
-    });
+    }).catch(() => index).finally(() => { reading = null; });
   return reading;
 }
 
 /** The library's index, once read (null before). */
-export function useLibraryIndex(): LibraryIndex | null {
+export function useLibraryIndex(refresh = false): LibraryIndex | null {
   const seen = React.useSyncExternalStore(
     (fn) => { listeners.add(fn); return () => { listeners.delete(fn); }; },
     () => index,
     () => index,
   );
-  React.useEffect(() => { if (!index) void readIndex(); }, []);
+  React.useEffect(() => {
+    void readIndex();
+    if (!refresh) return;
+    const timer = window.setInterval(() => { if (!document.hidden) void readIndex(); }, 60_000);
+    return () => window.clearInterval(timer);
+  }, [refresh]);
   return seen;
 }
 
@@ -283,7 +290,7 @@ export function useLibraryFavorites(): readonly string[] {
 /* ── what of the library is here: a sound, a piece of music, a template's music are fetched before they go in ── */
 
 /** Whether a thing may need fetching before it goes in (a published part of the library, or a template's music). */
-export const mayNeedFetch = (item: Pick<LibraryItem, 'id' | 'music'>): boolean => item.id.startsWith('audio/') || Boolean(item.music);
+export const mayNeedFetch = (item: Pick<LibraryItem, 'id' | 'music'>): boolean => item.id.startsWith('audio/') || item.id.startsWith('community/') || Boolean(item.music);
 const asked = new Set<string>();
 /** asked, not answered yet: shown as to be fetched, never as one to put in that is not here */
 const asking = new Set<string>();
@@ -300,7 +307,7 @@ export function askHere(ids: readonly string[]): void {
   if (!fresh.length) return;
   for (const id of fresh) { asked.add(id); asking.add(id); }
   void fetch('/api/library/missing', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids: fresh }) })
-    .then((r) => (r.ok ? r.json() : null), () => null)
+    .then((r) => (r.ok ? r.json() : null))
     .then((body: { ids?: string[] } | null) => {
       for (const id of fresh) asking.delete(id);
       if (!body) { for (const id of fresh) asked.delete(id); tellHere(); return; }
@@ -349,7 +356,7 @@ export function toggleFavorite(id: string): void {
   favorites = had.includes(id) ? had.filter((x) => x !== id) : [...had, id];
   tellStarred();
   void fetch('/api/library/favorites', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids: favorites }) })
-    .then((r) => (r.ok ? r.json() : null), () => null)
+    .then((r) => (r.ok ? r.json() : null))
     .then((body: { ids?: string[] } | null) => { if (body && Array.isArray(body.ids)) { favorites = body.ids; tellStarred(); } });
 }
 
