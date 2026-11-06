@@ -205,7 +205,9 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
       /* once the cards are measured: every group round what is in it (a board an agent laid out loosely), then all in view */
       requestAnimationFrame(() => requestAnimationFrame(() => {
         setNodes((list) => fitGroups(unstack(list)));
-        void flow.fitView({ padding: 0.2, maxZoom: 1 }).finally(() => { if (live) setFitted(true); });
+        /* an empty board's fit never settles: seen within a moment whatever it does */
+        const seen = () => { if (live) setFitted(true); };
+        void Promise.race([flow.fitView({ padding: 0.2, maxZoom: 1 }), new Promise((done) => { window.setTimeout(done, 300); })]).then(seen, seen);
       }));
     }, (e: unknown) => {
       if (!live) return;
@@ -1082,7 +1084,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
         ref={rootRef}
         data-studio-canvas=""
         tabIndex={-1}
-        className={`relative h-full w-full outline-none transition-opacity duration-150 ${fitted ? 'opacity-100' : 'opacity-0'}`}
+        className="relative h-full w-full outline-none"
         onPointerDown={(event) => { if (!(event.target as HTMLElement).closest('input, textarea')) rootRef.current?.focus({ preventScroll: true }); }}
         onDragOver={(event) => {
           if (!event.dataTransfer.types.includes(RESOURCE_DRAG_TYPE) && !isComputerFileDrag(event.dataTransfer)) return;
@@ -1168,7 +1170,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
           minZoom={0.1}
           maxZoom={4}
           proOptions={{ hideAttribution: true }}
-          className={`openfilm-canvas ${tool === 'hand' ? 'cursor-grab' : ''}`}
+          className={`openfilm-canvas transition-opacity duration-150 ${fitted ? 'opacity-100' : 'opacity-0'} ${tool === 'hand' ? 'cursor-grab' : ''}`}
         >
           <Dots />
           {map ? (
