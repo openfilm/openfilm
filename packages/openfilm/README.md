@@ -21,7 +21,7 @@ manual it prints."
 ## Commands
 
 ```sh
-openfilm                          # the manual: all an agent needs to know
+openfilm                          # the manual, and the skills it names: all an agent needs to know
 openfilm open   [folder | url]    # show a film in Studio (a GitHub address fetches it first)
 openfilm look   [what] [t | a-b]  # check the film, a page or a media file
 openfilm render [a-b]             # the MP4; --4k, --blur, --alpha

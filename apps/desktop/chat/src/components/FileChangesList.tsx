@@ -40,7 +40,7 @@ export function FileChangesList({ changes }: { changes: FileChange[] }) {
         <button
           type="button"
           onClick={() => { keepPlace(); setAll((value) => !value); }}
-          className="flex h-9 w-full items-center border-t border-[var(--border)] px-3 text-left text-[12.5px] text-[var(--chat-hint)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--chat-text)]"
+          className="flex h-9 w-full items-center border-t border-[var(--border)] px-3 text-left text-[12.5px] text-[var(--text-faint)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
         >
           {hidden > 0 ? t('fileChanges.more').replace('{n}', String(hidden)) : t('fileChanges.fewer')}
         </button>
@@ -60,10 +60,10 @@ function FileRow({ change, first, onToggle }: { change: FileChange; first: boole
   const canOpen = Boolean(change.hunks?.length);
   const row = (
     <>
-      <Icon size={14} aria-hidden className="shrink-0 text-[var(--chat-hint)]" />
-      <span className={`min-w-0 truncate text-[13px] text-[var(--chat-text)] ${change.change === 'removed' ? 'line-through opacity-70' : ''}`} title={change.path}>
+      <Icon size={14} aria-hidden className="shrink-0 text-[var(--text-faint)]" />
+      <span className={`min-w-0 truncate text-[13px] text-[var(--text)] ${change.change === 'removed' ? 'line-through opacity-70' : ''}`} title={change.path}>
         {name}
-        {folder ? <span className="ml-1.5 text-[12px] text-[var(--chat-hint)]">{folder}</span> : null}
+        {folder ? <span className="ml-1.5 text-[12px] text-[var(--text-faint)]">{folder}</span> : null}
       </span>
       <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-3 font-mono text-[12px] tabular-nums">
         {lines ? (
@@ -72,10 +72,10 @@ function FileRow({ change, first, onToggle }: { change: FileChange; first: boole
             {change.removed ? <span className="text-[var(--err)]">−{change.removed}</span> : null}
           </>
         ) : (
-          <span className="font-sans text-[var(--chat-hint)]">{t(`fileChanges.${change.change}`)}</span>
+          <span className="font-sans text-[var(--text-faint)]">{t(`fileChanges.${change.change}`)}</span>
         )}
       </span>
-      <ChevronRight size={13} aria-hidden className={`shrink-0 text-[var(--chat-hint)] transition-transform ${open ? 'rotate-90' : ''} ${canOpen ? '' : 'invisible'}`} />
+      <ChevronRight size={13} aria-hidden className={`shrink-0 text-[var(--text-faint)] transition-transform ${open ? 'rotate-90' : ''} ${canOpen ? '' : 'invisible'}`} />
     </>
   );
   const shell = `flex h-9 w-full min-w-0 items-center gap-2 px-3 text-left ${first ? '' : 'border-t border-[var(--border)]'}`;
@@ -99,13 +99,13 @@ function Hunks({ hunks, cut }: { hunks: FileHunk[]; cut: boolean }) {
     <div className="max-h-[360px] min-w-0 overflow-auto border-t border-[var(--border)] font-mono text-[11.5px] leading-[18px]">
       {hunks.map((hunk, i) => (
         <React.Fragment key={i}>
-          <div className="w-max min-w-full whitespace-pre px-3 text-[var(--chat-hint)] opacity-80">
+          <div className="w-max min-w-full whitespace-pre px-3 text-[var(--text-faint)] opacity-80">
             @@ −{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@
           </div>
           {hunk.lines.map((line, j) => {
             const sign = line[0];
             return (
-              <div key={j} className={`flex w-max min-w-full whitespace-pre pr-3 ${sign === '-' ? 'bg-[rgba(229,83,75,0.13)] text-[#e5534b]' : sign === '+' ? 'bg-[rgba(63,185,80,0.13)] text-[#3fb950]' : 'text-[var(--chat-hint)]'}`}>
+              <div key={j} className={`flex w-max min-w-full whitespace-pre pr-3 ${sign === '-' ? 'bg-[var(--err)]/15 text-[var(--err)]' : sign === '+' ? 'bg-[var(--ok)]/15 text-[var(--ok)]' : 'text-[var(--text-faint)]'}`}>
                 <span aria-hidden className="w-6 shrink-0 select-none text-center opacity-80">{sign === '-' ? '−' : sign === '+' ? '+' : ''}</span>
                 <span>{line.slice(1)}</span>
               </div>
@@ -113,7 +113,7 @@ function Hunks({ hunks, cut }: { hunks: FileHunk[]; cut: boolean }) {
           })}
         </React.Fragment>
       ))}
-      {cut ? <div className="px-3 py-1 font-sans text-[12px] text-[var(--chat-hint)]">{t('fileChanges.cut')}</div> : null}
+      {cut ? <div className="px-3 py-1 font-sans text-[12px] text-[var(--text-faint)]">{t('fileChanges.cut')}</div> : null}
     </div>
   );
 }

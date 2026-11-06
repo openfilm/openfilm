@@ -1,0 +1,5 @@
+---
+"openfilm": patch
+---
+
+A template goes in as one clip on the timeline and plays as its example: its places hold example pictures made for that template, under its titles, transitions, effects and music. Picked, the inspector shows everything it offers: its places (click one to choose your video or picture, drop one on it, Choose clips for all of them, or Fill), every word, its style (one color for every part that shares it), layers to show or hide, pictures inside its pages, and its music. Each change is one step, undone as any other. A video or picture dropped on the template's clip on the timeline goes in the place playing there. Double-click still opens it to edit inside, and it can be taken apart. Every template, filter, effect and transition in the library has its own example now: each template its own story, each filter its own photo, each effect its own scene, each transition its own pair of pictures. Tried in the viewer or put in, filters, effects and transitions act on your film.

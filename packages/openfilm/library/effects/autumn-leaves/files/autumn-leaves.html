@@ -1,0 +1,126 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Autumn leaves</title>
+<style>
+  /* what a clip of it may change: how many leaves fall (0 to 1), how fast */
+  :root { --amount: 1; --speed: 1; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Autumn leaves: maple, elm and birch leaves in reds, oranges and golds, rocking down like pendulums the way real
+ * leaves fall, turning over as they go; the near ones big and soft. A page of OpenFilm's library (CC0): every
+ * leaf's place comes from t alone.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+const COLORS = [[196, 52, 28], [222, 104, 30], [236, 164, 44], [150, 78, 34], [208, 70, 36], [230, 136, 40]];
+// the outline of each kind of leaf, around (0, 0), about 80 units long, stem at the bottom
+function outline(x, kind) {
+  x.beginPath();
+  if (kind === 0) {
+    // maple: five pointed lobes
+    for (let a = 0; a <= 360; a += 3) {
+      const th = (a - 90) * Math.PI / 180, lobe = Math.abs(Math.cos(((a) * Math.PI / 180) * 2.5));
+      const tooth = 0.07 * Math.abs(Math.sin((a * Math.PI / 180) * 15));
+      const down = Math.sin(th) > 0.55 ? 0.45 : 1;
+      const rr = 38 * (0.48 + 0.52 * Math.pow(lobe, 1.6) - tooth) * down;
+      const px = Math.cos(th) * rr, py = -Math.sin(-th) * rr;
+      a ? x.lineTo(px, py - 2) : x.moveTo(px, py - 2);
+    }
+  } else if (kind === 1) {
+    // elm: a pointed oval with a fine saw edge
+    for (let a = 0; a <= 360; a += 3) {
+      const th = a * Math.PI / 180, sx = Math.sin(th), cy = Math.cos(th);
+      const rr = 1 + 0.05 * Math.abs(Math.sin(th * 18));
+      x.lineTo(sx * 20 * rr * Math.pow(Math.abs(sx), 0.15), -cy * 40 * rr);
+    }
+  } else {
+    // birch: a round leaf with a short point
+    for (let a = 0; a <= 360; a += 3) {
+      const th = a * Math.PI / 180, rr = 26 * (1 + 0.04 * Math.abs(Math.sin(th * 12))) * (1 + 0.35 * Math.max(0, Math.cos(th)) ** 6);
+      x.lineTo(Math.sin(th) * rr * 0.92, -Math.cos(th) * rr + 4);
+    }
+  }
+  x.closePath();
+}
+// a leaf drawn once for each kind, color and blur: shaded from its middle, with a midrib and veins
+const leaves = [];
+for (let kind = 0; kind < 3; kind++) for (let ci = 0; ci < COLORS.length; ci++) {
+  const c = COLORS[ci], dark = c.map((v) => Math.round(v * 0.55)), light = c.map((v) => Math.min(255, Math.round(v * 1.18 + 20)));
+  leaves.push([0, 1.8, 5].map((blur) => {
+    const g = document.createElement('canvas'); g.width = g.height = 120;
+    const x = g.getContext('2d');
+    x.filter = blur ? `blur(${blur}px)` : 'none';
+    x.translate(60, 56);
+    outline(x, kind);
+    const fill = x.createRadialGradient(-6, -8, 2, 0, 0, 44);
+    fill.addColorStop(0, `rgb(${light})`); fill.addColorStop(0.6, `rgb(${c})`); fill.addColorStop(1, `rgb(${dark})`);
+    x.fillStyle = fill; x.fill();
+    x.strokeStyle = `rgba(${dark},0.75)`; x.lineWidth = 1.6; x.lineCap = 'round';
+    x.beginPath(); x.moveTo(0, 46); x.lineTo(0, kind === 0 ? -30 : -34);
+    const veins = kind === 0 ? [[-30, -14], [30, -14], [-26, 12], [26, 12]] : [[-14, -22], [14, -22], [-17, -6], [17, -6], [-15, 10], [15, 10]];
+    for (const [vx, vy] of veins) { x.moveTo(0, vy * 0.4 + (kind === 0 ? 4 : 8)); x.lineTo(vx * 0.85, vy); }
+    x.stroke();
+    return g;
+  }));
+}
+const N = 38;
+const falling = Array.from({ length: N }, (_, i) => {
+  const r = (k) => hash(i * 6.13 + k);
+  const depth = Math.pow(r(1), 1.4);
+  return {
+    x: r(2), y: r(3), depth, order: r(4), look: Math.floor(r(5) * leaves.length),
+    size: 6 + depth * 11, fall: 0.06 + depth * 0.07 + r(6) * 0.03, drift: 0.01 + r(7) * 0.03,
+    swing: 1.2 + r(8) * 1.2, reach: 0.025 + r(9) * 0.04, phase: r(10) * 6.283, flip: 0.6 + r(11) * 1.6, tilt: (r(12) - 0.5) * 1.2,
+  };
+}).sort((a, b) => a.depth - b.depth);
+const wrap = (v, m) => ((v % m) + m) % m;
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, u = Math.min(w, h) / 100, d = devicePixelRatio || 1;
+    const amount = num('--amount', 1), speed = num('--speed', 1), tt = t * speed;
+    for (const l of falling) {
+      if (l.order > amount) continue;
+      const a = tt * l.swing + l.phase;
+      // a pendulum: it swings side to side, sinks fastest at the bottom of each swing, and tilts with the swing
+      const x = (wrap(l.x + l.drift * tt + l.reach * Math.sin(a) + 0.1, 1.2) - 0.1) * w;
+      const y = (wrap(l.y + l.fall * tt + 0.012 * Math.abs(Math.cos(a)), 1.3) - 0.15) * h;
+      const turn = Math.cos(tt * l.flip + l.phase * 2);
+      const s = l.size * u / 80;
+      const img = leaves[l.look][l.depth > 0.85 ? 2 : l.depth > 0.62 ? 1 : 0];
+      ctx.setTransform(d, 0, 0, d, 0, 0);
+      ctx.translate(x, y);
+      ctx.rotate(l.tilt + 0.7 * Math.cos(a));
+      ctx.scale(s * Math.max(0.15, Math.abs(turn)), s);
+      ctx.globalAlpha = (0.8 + 0.2 * l.depth) * (turn < 0 ? 0.82 : 1) * (l.depth > 0.85 ? 0.85 : 1);
+      ctx.drawImage(img, -60, -56);
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

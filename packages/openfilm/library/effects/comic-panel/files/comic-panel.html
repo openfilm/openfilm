@@ -1,0 +1,114 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Comic panel</title>
+<style>
+  /* what a clip of it may change: the paper's color, the caption box's color, the dots' color */
+  :root { --color: #fbf7ec; --caption: #ffe14d; --dots: #e8336d; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * The picture as a comic book panel: a paper gutter, a thick inked border, printed halftone dots fading in from two
+ * corners, a yellow caption box and a "WOW!" burst that jolts every couple of seconds, its jagged edge redrawn six
+ * times a second like hand-drawn animation. A page of OpenFilm's library (CC0): what it shows at t comes from t alone.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+const LETTER = '"Comic Sans MS", "Chalkboard SE", "Marker Felt", "Arial Black", sans-serif';
+// halftone: dots on a 45° grid, larger toward the corner (cx, cy), fading out by radius R
+function halftone(cx, cy, R, step, color) {
+  ctx.fillStyle = color;
+  const c = Math.SQRT1_2;
+  for (let a = -R * 1.5; a <= R * 1.5; a += step) {
+    for (let b = -R * 1.5; b <= R * 1.5; b += step) {
+      const x = cx + (a - b) * c, y = cy + (a + b) * c, d = Math.hypot(x - cx, y - cy) / R;
+      if (d >= 1) continue;
+      const r = step * 0.48 * Math.pow(1 - d, 1.2);
+      if (r < 0.3) continue;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+}
+function burst(cx, cy, rx, ry, spikes, seed) {
+  ctx.beginPath();
+  for (let i = 0; i < spikes * 2; i++) {
+    const a = i / (spikes * 2) * Math.PI * 2 + 0.1;
+    const k = i % 2 ? 0.66 + hash(seed + i) * 0.08 : 1 + (hash(seed + i * 1.7) - 0.4) * 0.28;
+    const x = cx + Math.cos(a) * rx * k, y = cy + Math.sin(a) * ry * k;
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  }
+  ctx.closePath();
+}
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, u = Math.min(w, h) / 100;
+    const paper = css('--color') || '#fbf7ec', capColor = css('--caption') || '#ffe14d', dots = css('--dots') || '#e8336d';
+    const g = 2.8 * u, ink = 1.3 * u;
+    const px = g, py = g, pw = w - 2 * g, ph = h - 2 * g;
+    // halftone in two corners of the panel, printed over the picture
+    ctx.save();
+    ctx.beginPath(); ctx.rect(px, py, pw, ph); ctx.clip();
+    ctx.globalCompositeOperation = 'multiply';
+    halftone(px + pw, py, Math.min(pw, ph) * 0.62, 1.55 * u, dots);
+    halftone(px, py + ph, Math.min(pw, ph) * 0.5, 1.4 * u, 'rgba(30,30,40,0.85)');
+    ctx.restore();
+    // the paper gutter and the inked border
+    ctx.fillStyle = paper;
+    ctx.beginPath(); ctx.rect(0, 0, w, h); ctx.rect(px, py, pw, ph); ctx.fill('evenodd');
+    ctx.strokeStyle = '#111'; ctx.lineWidth = ink; ctx.lineJoin = 'miter';
+    ctx.strokeRect(px + ink / 2, py + ink / 2, pw - ink, ph - ink);
+    // the caption box, top left, with a hard drop shadow
+    const fs = Math.max(9, 3.3 * u);
+    ctx.font = `italic 900 ${fs}px ${LETTER}`;
+    const cap = 'MEANWHILE…';
+    const cw = ctx.measureText(cap).width + fs * 1.3, ch = fs * 1.75;
+    const cx = px + ink * 0.5, cy = py + ink * 0.5;
+    ctx.fillStyle = '#111'; ctx.fillRect(cx + 0.7 * u, cy + 0.7 * u, cw, ch);
+    ctx.fillStyle = capColor; ctx.fillRect(cx, cy, cw, ch);
+    ctx.lineWidth = 0.55 * u; ctx.strokeRect(cx, cy, cw, ch);
+    ctx.fillStyle = '#111'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+    ctx.fillText(cap, cx + fs * 0.65, cy + ch / 2 + fs * 0.05);
+    // the WOW! burst, bottom right: a jolt every 2.4 seconds, the edge boiling at 6 a second
+    const boil = Math.floor(t * 6) % 3;
+    const since = t % 2.4, jolt = 1 + 0.16 * Math.exp(-since * 7) * Math.cos(since * 30);
+    const shake = Math.exp(-since * 6) * 0.8 * u;
+    const R = Math.min(pw, ph) * 0.2;
+    const bx = px + pw - R * 1.25 + Math.sin(t * 60) * shake, by = py + ph - R * 0.95;
+    ctx.save();
+    ctx.translate(bx, by); ctx.rotate(-0.1); ctx.scale(jolt, jolt);
+    burst(0.05 * R, 0.08 * R, R * 1.18, R * 0.9, 13, 50 + boil * 31);
+    ctx.fillStyle = '#ff3b30'; ctx.fill(); ctx.lineWidth = 0.5 * u; ctx.strokeStyle = '#111'; ctx.stroke();
+    burst(0, 0, R * 1.0, R * 0.74, 11, 10 + boil * 17);
+    ctx.fillStyle = '#ffe14d'; ctx.fill(); ctx.lineWidth = 0.6 * u; ctx.stroke();
+    const ws = R * 0.56;
+    ctx.font = `italic 900 ${ws}px ${LETTER}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = ws * 0.2; ctx.strokeStyle = '#111'; ctx.strokeText('WOW!', R * 0.04, R * 0.08);
+    ctx.fillStyle = '#ff3b30'; ctx.fillText('WOW!', 0, R * 0.04);
+    ctx.restore();
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

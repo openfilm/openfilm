@@ -1,0 +1,91 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Exposure</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * A quick pre-flash, then the frame blows out to white from a blooming core, and the light ebbs away in a halo
+ * ring. It lasts 0.8 s and covers the cut at its middle: put its middle on the cut. A page of OpenFilm's library
+ * (CC0): what it shows at t comes from t alone, drawn in parts of the frame so it fits a stage of any shape.
+ */
+const D = 0.8;
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+/* how far u is through [a, b], from 0 to 1 */
+const seg = (u, a, b) => clamp((u - a) / (b - a));
+/* 0 at a, 1 at b, 0 again at c */
+const tri = (u, a, b, c) => (u < b ? seg(u, a, b) : 1 - seg(u, b, c));
+const mix = (a, b, x) => a + (b - a) * x;
+const outQuad = (x) => 1 - (1 - x) * (1 - x);
+const outCubic = (x) => 1 - (1 - x) ** 3;
+const inExpo = (x) => (x <= 0 ? 0 : 2 ** (10 * x - 10));
+
+function draw(u) {
+  const cx = W / 2, cy = H / 2, R = Math.hypot(W, H) / 2;
+  /* a pre-flash, the way a flashgun fires twice */
+  const pre = tri(u, 0.1, 0.16, 0.26) * 0.55;
+  /* the blow-out swells, holds over the cut, then ebbs with a long tail */
+  const ebb = (1 - seg(u, 0.56, 1)) ** 2.2;
+  const wash = u < 0.5 ? inExpo(seg(u, 0.2, 0.42)) : ebb;
+  /* a hot core that blooms ahead of it */
+  const bloom = u < 0.5 ? outQuad(seg(u, 0.12, 0.4)) : ebb;
+  const r = R * mix(0.2, 2.4, outCubic(seg(u, 0.12, 0.5)));
+  const core = g.createRadialGradient(cx, cy, 0, cx, cy, r);
+  core.addColorStop(0, `rgba(255, 255, 255, ${bloom})`);
+  core.addColorStop(0.35, `rgba(255, 246, 228, ${bloom * 0.75})`);
+  core.addColorStop(1, 'rgba(255, 236, 205, 0)');
+  g.fillStyle = core;
+  g.fillRect(0, 0, W, H);
+  g.fillStyle = `rgba(255, 255, 255, ${Math.max(pre, wash)})`;
+  g.fillRect(0, 0, W, H);
+  /* as it ebbs, a halo spreads out with a warm inside and a cool outside */
+  const h = seg(u, 0.5, 1);
+  if (h > 0 && h < 1) {
+    const rr = R * mix(0.15, 1.5, outCubic(h)), w = R * 0.35, a = (1 - h) * 0.6;
+    const ring = g.createRadialGradient(cx, cy, Math.max(0, rr - w), cx, cy, rr + w);
+    ring.addColorStop(0, 'rgba(255, 220, 180, 0)');
+    ring.addColorStop(0.4, `rgba(255, 214, 170, ${a})`);
+    ring.addColorStop(0.5, `rgba(255, 255, 255, ${a})`);
+    ring.addColorStop(0.6, `rgba(170, 220, 255, ${a})`);
+    ring.addColorStop(1, 'rgba(170, 220, 255, 0)');
+    g.fillStyle = ring;
+    g.fillRect(0, 0, W, H);
+  }
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

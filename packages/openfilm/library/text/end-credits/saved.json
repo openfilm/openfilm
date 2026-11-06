@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "end-credits.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Heading\", \"type\": \"text\", \"at\": \".t0\"}, {\"name\": \"Role 1\", \"type\": \"text\", \"at\": \".r1\"}, {\"name\": \"Name 1\", \"type\": \"text\", \"at\": \".n1\"}, {\"name\": \"Role 2\", \"type\": \"text\", \"at\": \".r2\"}, {\"name\": \"Name 2\", \"type\": \"text\", \"at\": \".n2\"}, {\"name\": \"Role 3\", \"type\": \"text\", \"at\": \".r3\"}, {\"name\": \"Name 3\", \"type\": \"text\", \"at\": \".n3\"}, {\"name\": \"Role 4\", \"type\": \"text\", \"at\": \".r4\"}, {\"name\": \"Name 4\", \"type\": \"text\", \"at\": \".n4\"}, {\"name\": \"Role 5\", \"type\": \"text\", \"at\": \".r5\"}, {\"name\": \"Name 5\", \"type\": \"text\", \"at\": \".n5\"}, {\"name\": \"Role 6\", \"type\": \"text\", \"at\": \".r6\"}, {\"name\": \"Name 6\", \"type\": \"text\", \"at\": \".n6\"}, {\"name\": \"Last line\", \"type\": \"text\", \"at\": \".t9\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Roles\", \"type\": \"var\", \"var\": \"--accent\"}]"
+    }
+  },
+  "durationMs": 4000
+}

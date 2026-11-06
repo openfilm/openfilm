@@ -1,0 +1,125 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Vlog frame</title>
+<style>
+  /* what a clip of it may change: the matte's color, the color of the writing and the tape */
+  :root { --color: #f5eee4; --accent: #e07a5f; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * A vlog's frame: a soft paper matte around a rounded window, the matte casting a soft shadow into the picture, a
+ * strip of washi tape across one corner, a handwritten line and a date, a small heart that beats and a sparkle that
+ * twinkles. A page of OpenFilm's library (CC0): what it shows at t comes from t alone.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const probe = document.createElement('canvas').getContext('2d');
+const rgb = (name, fallback) => {
+  probe.fillStyle = fallback; probe.fillStyle = css(name) || fallback;
+  const s = probe.fillStyle;
+  return s[0] === '#' ? [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number);
+};
+const shade = (c, k) => c.map((v) => Math.round(k < 0 ? v * (1 + k) : v + (255 - v) * k));
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+// paper fibre: a small tile of soft noise, drawn once
+const paper = document.createElement('canvas'); paper.width = paper.height = 160;
+{
+  const p = paper.getContext('2d'), img = p.createImageData(160, 160);
+  for (let i = 0; i < 160 * 160; i++) { const v = hash(i * 0.731) * 255; img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v; img.data[i * 4 + 3] = 18; }
+  p.putImageData(img, 0, 0);
+}
+const HAND = '"Bradley Hand", "Segoe Print", "Chalkboard SE", "Comic Sans MS", cursive';
+function heart(x, y, s) {
+  ctx.beginPath();
+  ctx.moveTo(x, y + s * 0.35);
+  ctx.bezierCurveTo(x - s * 0.05, y + s * 0.1, x - s * 0.55, y + s * 0.05, x - s * 0.5, y - s * 0.25);
+  ctx.bezierCurveTo(x - s * 0.45, y - s * 0.55, x - s * 0.08, y - s * 0.5, x, y - s * 0.22);
+  ctx.bezierCurveTo(x + s * 0.08, y - s * 0.5, x + s * 0.45, y - s * 0.55, x + s * 0.5, y - s * 0.25);
+  ctx.bezierCurveTo(x + s * 0.55, y + s * 0.05, x + s * 0.05, y + s * 0.1, x, y + s * 0.35);
+  ctx.closePath();
+}
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, u = Math.min(w, h) / 100;
+    const matte = rgb('--color', '#f5eee4'), accent = rgb('--accent', '#e07a5f');
+    const m = 4.8 * u, mb = 8.6 * u, r = 4.5 * u;
+    const wx = m, wy = m, ww = w - 2 * m, wh = h - m - mb;
+    // the matte, faintly lit from the top
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, `rgb(${shade(matte, 0.25)})`); g.addColorStop(1, `rgb(${shade(matte, -0.06)})`);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = ctx.createPattern(paper, 'repeat'); ctx.fillRect(0, 0, w, h);
+    // the window
+    ctx.save(); ctx.globalCompositeOperation = 'destination-out'; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.roundRect(wx, wy, ww, wh, r); ctx.fill(); ctx.restore();
+    // the matte's soft shadow falling into the picture, deeper at the top
+    ctx.save();
+    ctx.beginPath(); ctx.roundRect(wx, wy, ww, wh, r); ctx.clip();
+    ctx.shadowColor = 'rgba(40,25,10,0.45)'; ctx.shadowBlur = 2.6 * u; ctx.shadowOffsetY = 0.6 * u;
+    ctx.beginPath(); ctx.rect(-w, -h, w * 3, h * 3); ctx.roundRect(wx, wy, ww, wh, r);
+    ctx.fillStyle = '#000'; ctx.fill('evenodd');
+    ctx.restore();
+    // a fine bright edge on the matte's lip
+    ctx.beginPath(); ctx.roundRect(wx - 0.15 * u, wy - 0.15 * u, ww + 0.3 * u, wh + 0.3 * u, r + 0.15 * u);
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 0.3 * u; ctx.stroke();
+    // washi tape across the top left corner, a little translucent, with its torn ends
+    ctx.save();
+    ctx.translate(wx + 5 * u, wy + 2.6 * u); ctx.rotate(-0.62);
+    const tw = 17 * u, th = 4.4 * u;
+    ctx.beginPath();
+    ctx.moveTo(-tw / 2, -th / 2);
+    for (let i = 0; i <= 8; i++) ctx.lineTo(-tw / 2 + tw * i / 8, -th / 2);
+    for (let i = 0; i <= 6; i++) ctx.lineTo(tw / 2 + (hash(i + 3) - 0.5) * 0.9 * u, -th / 2 + th * i / 6);
+    for (let i = 8; i >= 0; i--) ctx.lineTo(-tw / 2 + tw * i / 8, th / 2);
+    for (let i = 6; i >= 0; i--) ctx.lineTo(-tw / 2 + (hash(i + 9) - 0.5) * 0.9 * u, -th / 2 + th * i / 6);
+    ctx.closePath();
+    ctx.shadowColor = 'rgba(0,0,0,0.18)'; ctx.shadowBlur = 0.8 * u; ctx.shadowOffsetY = 0.3 * u;
+    ctx.fillStyle = `rgba(${shade(accent, 0.35)},0.88)`; ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1.1 * u;
+    for (let x = -tw; x < tw; x += 2.6 * u) { ctx.beginPath(); ctx.moveTo(x, -th); ctx.lineTo(x + th * 1.4, th); ctx.stroke(); }
+    ctx.restore();
+    // the handwriting, bottom left, and the date, top right, sitting in the matte
+    const fs = 4.3 * u;
+    ctx.textBaseline = 'middle';
+    ctx.font = `700 ${fs}px ${HAND}`;
+    ctx.fillStyle = `rgb(${accent})`;
+    ctx.textAlign = 'left';
+    const line = 'today’s little vlog';
+    ctx.fillText(line, wx + 1.5 * u, h - mb / 2 + 0.1 * u);
+    const lw = ctx.measureText(line).width;
+    // the heart after it, beating twice a second-and-a-half
+    const beat = 1 + 0.18 * Math.pow(Math.max(0, Math.sin(t * Math.PI * 1.4)), 6);
+    heart(wx + 1.5 * u + lw + fs * 0.9, h - mb / 2, fs * 0.95 * beat); ctx.fill();
+    ctx.font = `600 ${fs * 0.5}px ui-monospace, Menlo, Consolas, monospace`;
+    ctx.textAlign = 'right'; ctx.fillStyle = `rgba(${shade(matte, -0.55)},0.9)`;
+    ctx.fillText('2026 . 10 . 31', w - m - 1.5 * u, h - mb / 2 + 0.1 * u);
+    // a four-point sparkle by the date, twinkling
+    const tw2 = 0.5 + 0.5 * Math.sin(t * 3.1), sx = w - m - 1.5 * u - ctx.measureText('2026 . 10 . 31').width - 2.2 * u, sy = h - mb / 2, L = fs * (0.25 + 0.2 * tw2);
+    ctx.fillStyle = `rgb(${accent})`;
+    ctx.beginPath(); ctx.moveTo(sx - L, sy); ctx.quadraticCurveTo(sx, sy, sx, sy - L); ctx.quadraticCurveTo(sx, sy, sx + L, sy); ctx.quadraticCurveTo(sx, sy, sx, sy + L); ctx.quadraticCurveTo(sx, sy, sx - L, sy); ctx.fill();
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

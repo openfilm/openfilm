@@ -1,0 +1,103 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Cue dot</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * A projectionist's cue dot flashes twice in the corner, then the changeover flares to a warm white over the cut
+ * and fades with a flicker onto the next reel. It lasts 1 s and covers the cut at its middle: put its middle on
+ * the cut. A page of OpenFilm's library (CC0): what it shows at t comes from t alone, drawn in parts of the frame
+ * so it fits a stage of any shape.
+ */
+const D = 1;
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+const TAU = Math.PI * 2;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+/* how far u is through [a, b], from 0 to 1 */
+const seg = (u, a, b) => clamp((u - a) / (b - a));
+/* 0 at a, 1 at b, 0 again at c */
+const tri = (u, a, b, c) => (u < b ? seg(u, a, b) : 1 - seg(u, b, c));
+const inCubic = (x) => x * x * x;
+const inOut = (x) => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2);
+/* a fixed random number in [0, 1) for each n: the same on every frame */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+
+/* the round cue mark scratched into the film: dark, with a ragged bright edge */
+const cue = (x, y, r, n) => {
+  g.beginPath();
+  for (let i = 0; i <= 40; i++) {
+    const a = (i / 40) * TAU, rr = r * (0.9 + 0.2 * hash((i % 40) + n * 41));
+    g.lineTo(x + rr * Math.cos(a), y + rr * Math.sin(a));
+  }
+  g.closePath();
+  g.fillStyle = 'rgba(12, 8, 5, 0.95)';
+  g.fill();
+  g.strokeStyle = 'rgba(255, 225, 170, 0.7)';
+  g.lineWidth = Math.max(1, r * 0.12);
+  g.stroke();
+};
+
+function draw(u) {
+  const n = Math.floor(u * D * 24), x = W * 0.86, y = H * 0.17;
+  /* two cues, each a few frames long */
+  if ((u > 0.06 && u < 0.14) || (u > 0.22 && u < 0.3)) cue(x, y, H * 0.075, n);
+  /* the changeover: the light flares from the corner to the whole frame */
+  const flare = u < 0.5 ? inCubic(seg(u, 0.28, 0.42)) : 1;
+  const fade = u < 0.5 ? 1 : 1 - inOut(seg(u, 0.56, 0.92)) * (1 - 0.15 * hash(n));
+  const a = clamp(flare * fade);
+  if (a > 0) {
+    const R = Math.hypot(W, H) * 1.2;
+    const fl = g.createRadialGradient(x, y, 0, x, y, R * Math.max(0.05, flare));
+    fl.addColorStop(0, `rgba(255, 252, 240, ${a})`);
+    fl.addColorStop(0.7, `rgba(255, 236, 200, ${a})`);
+    fl.addColorStop(1, `rgba(255, 210, 150, ${u < 0.5 ? 0 : a})`);
+    g.fillStyle = fl;
+    g.fillRect(0, 0, W, H);
+  }
+  /* a warm leak on the edge as the light fades */
+  const leak = tri(u, 0.5, 0.65, 0.95);
+  if (leak > 0) {
+    const lk = g.createLinearGradient(0, 0, W * 0.5, 0);
+    lk.addColorStop(0, `rgba(255, 110, 30, ${0.55 * leak})`);
+    lk.addColorStop(1, 'rgba(255, 110, 30, 0)');
+    g.fillStyle = lk;
+    g.fillRect(0, 0, W, H);
+  }
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

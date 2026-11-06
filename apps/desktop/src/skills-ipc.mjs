@@ -7,7 +7,8 @@
  *                           own skills with whether each is let in (`filtered` false: it has them all, as in its own
  *                           terminal). OpenFilm's own skill for terminal agents is never among them (agent-skills isOurs).
  *   desktop:skills:texts    { project, agent, names } → [{ name, text }]   skills named in a message, as the agent reads
- *                           each (its folder and its SKILL.md whole)
+ *                           each (its folder and its SKILL.md whole): any of OpenFilm's but those turned off, an official one
+ *                           installed or not (Try now, a skill to start from)
  *   desktop:skills:preview  { url } | { folder } → { ok, id, skills: [{ name, description, scripts, size, replaces }] }
  *                           | { ok: false, error } | { ok: false, cancelled }   a GitHub or GitLab address fetched beside
  *                           the person's skills, or a folder on this computer (one dropped, or `folder` null: picked
@@ -40,8 +41,8 @@ const require = createRequire(import.meta.url);
 const lib = () => import(pathToFileURL(require.resolve('openfilm/skills')).href);
 const cli = () => import(pathToFileURL(require.resolve('openfilm/skills-cli')).href);
 
-/** A skill as the page shows it. */
-const shown = (s) => ({ name: s.name, description: s.description, source: s.source, folder: s.folder, scripts: s.scripts ?? [], ...(s.over ? { over: s.over } : {}), ...(s.shown ? { shown: s.shown } : {}) });
+/** A skill as the page shows it: by the name the agent is given it by (`as`, agentNames), and its uid. */
+const shown = (s) => ({ name: s.as ?? s.name, uid: s.uid, description: s.description, source: s.source, folder: s.folder, scripts: s.scripts ?? [], ...(s.over ? { over: s.over } : {}), ...(s.shown ? { shown: s.shown } : {}) });
 
 /**
  * @param {import('electron').IpcMain} ipcMain
@@ -78,13 +79,15 @@ export function registerSkillsIpc(ipcMain, { trusted, projects, dataDir, mine, p
   const agentOwn = async (agent, cwd) => (agent && agent !== 'byok'
     ? (await ownSkills(agent, { cwd: cwd ?? '', env: await loginShellVariables({ staleOk: true }) })).filter((s) => !s.ours) : []);
 
+  /* OpenFilm's skills for a project as agents are offered them, each by the name it is given by (openfilm/skills offeredSkills) */
+  const offered = async (cwd) => (await lib()).offeredSkills({ project: cwd, mine, ...(prefsHome ? { home: prefsHome } : {}) });
+
   handle('desktop:skills:list', async ({ project: path, agent }) => {
     const cwd = await project(path);
-    const { usableSkills } = await lib();
     const allowed = new Set(store.allowed(agent));
     return {
       /* installed and on (Studio's Skills) */
-      openfilm: usableSkills({ project: cwd, mine, ...(prefsHome ? { home: prefsHome } : {}) }).map(shown),
+      openfilm: (await offered(cwd)).usable.map(shown),
       own: { agent, filtered: FILTERED_AGENTS.includes(agent), skills: (await agentOwn(agent, cwd)).map((s) => ({ name: s.name, description: s.description, folder: s.folder, allowed: allowed.has(s.name) })) },
       mine,
     };
@@ -92,9 +95,11 @@ export function registerSkillsIpc(ipcMain, { trusted, projects, dataDir, mine, p
 
   handle('desktop:skills:texts', async ({ project: path, agent, names }) => {
     const cwd = await project(path);
-    const { readSkill, skillText, usableSkills } = await lib();
+    const { readSkill, skillText } = await lib();
     const wanted = Array.isArray(names) ? names.filter((n) => typeof n === 'string') : [];
-    const openfilm = new Map(usableSkills({ project: cwd, mine, ...(prefsHome ? { home: prefsHome } : {}) }).map((s) => [s.name, s]));
+    /* named in the message: any of OpenFilm's but those turned off, an official one installed or not (Try now), by
+       the name the agent knows it by */
+    const openfilm = new Map((await offered(cwd)).named.map((s) => [s.as, s]));
     const own = new Map((await agentOwn(agent, cwd)).map((s) => [s.name, s]));
     return wanted.flatMap((name) => {
       const skill = openfilm.get(name) ?? (own.has(name) ? readSkill(own.get(name).folder, 'mine') : null);

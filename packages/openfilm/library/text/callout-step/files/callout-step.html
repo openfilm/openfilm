@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Step callout</title>
+<style>
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --color: #ffffff; --accent: #4f7cff; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+* { box-sizing: border-box; }
+.ln { position: relative; display: inline-block; white-space: pre; }
+.fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
+.fx .ch { display: inline-block; will-change: transform; }
+.src { -webkit-text-fill-color: transparent; }
+.w { position: fixed; inset: 0; display: flex; align-items: center; gap: 7vh; padding-left: 6vh; font-family: var(--font); color: var(--color); }
+.n { position: relative; width: 70vh; height: 70vh; flex: none; display: flex; align-items: center; justify-content: center; }
+.n i { position: absolute; inset: 9vh; border-radius: 50%; background: var(--accent); box-shadow: 0 2vh 6vh rgba(0, 0, 0, 0.35); animation: pop 0.55s cubic-bezier(0.3, 1.7, 0.5, 1) both; }
+.t1 { position: relative; font-size: 30vh; font-weight: 800; animation: pop 0.5s 0.15s cubic-bezier(0.3, 1.7, 0.5, 1) both; }
+svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+circle { fill: none; stroke: var(--color); stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 0.9s 0.25s cubic-bezier(0.5, 0, 0.2, 1) forwards, spin 6s 1.2s linear infinite; opacity: 0.85; transform-origin: 50% 50%; }
+.tx { display: flex; flex-direction: column; gap: 2vh; }
+.t2 { font-size: 13vh; font-weight: 800; letter-spacing: 0.24em; color: var(--accent); white-space: pre; animation: side 0.5s 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both; filter: brightness(1.35); }
+.t3 { font-size: 30vh; font-weight: 700; line-height: 1.05; white-space: pre; text-shadow: 0 0.8vh 3vh rgba(0, 0, 0, 0.45); animation: side 0.6s 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes pop { from { transform: scale(0); } }
+@keyframes draw { to { stroke-dashoffset: 0.28; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes side { from { opacity: 0; transform: translateX(-6vh); } }
+</style>
+</head>
+<body>
+<div class="w">
+  <div class="n"><i></i><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="18.6" pathLength="1"/></svg><span class="t1">1</span></div>
+  <div class="tx"><span class="t2">STEP ONE</span><span class="t3">Preheat the pan</span></div>
+</div>
+<script>
+/*
+ * A numbered step: a ring drawn around a round number that pops in, a small step label and the step in bold. A page
+ * of OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS animations are held at t by the host.
+ */
+window.film = { frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

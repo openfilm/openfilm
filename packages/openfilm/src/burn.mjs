@@ -125,7 +125,8 @@ export async function burned(root, ask, captions, transparent = false) {
   if (!ask.burnSubtitles) return null;
   /* the cues as stored: the page picks the shown language itself (filmSubtitleFrameHtml), and picking it twice
      puts a bilingual line's translation under it twice */
-  const { cues, style } = await captions(root);
-  if (!filmSubtitleShown(cues, style).some((c) => c.durMs > 0 && c.text.trim())) return null;
+  const { cues, style, tracks } = /** @type {{ cues: Cue[], style: SubtitleStyle, tracks?: boolean }} */ (await captions(root));
+  /* caption tracks are the film's own picture: drawn as it is, never burned in again */
+  if (tracks || !filmSubtitleShown(cues, style).some((c) => c.durMs > 0 && c.text.trim())) return null;
   return burnFilm(root, await stageOf(root), ask.frame ?? 'native', ask.fill ?? 'contain', cues, style, transparent);
 }

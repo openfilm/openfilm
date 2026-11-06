@@ -23,8 +23,8 @@ import { createHash, createHmac } from 'node:crypto';
 import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { mkdir, rename } from 'node:fs/promises';
 import { createServer } from 'node:http';
-import { basename, dirname, isAbsolute, join, normalize, relative, sep } from 'node:path';
-import { HOST_FLAG, folderFiles } from '../../src/host.mjs';
+import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
+import { HOST_FLAG, folderFiles, listenLocal } from '../../src/host.mjs';
 import { readableLink } from '../../src/media-links.mjs';
 import { clipKind } from '../../src/film-doc.mjs';
 import { readPrefs } from './prefs.mjs';
@@ -32,6 +32,7 @@ import { readyProxy, undecodable } from './proxies.mjs';
 import { madeCopy } from '../../src/seekable.mjs';
 import { isPreviewKey, previewDir } from './preview-cache.mjs';
 import { soundOf } from './derived.mjs';
+import { compoundOuter } from './parts.mjs';
 
 const BRIDGE = readFileSync(new URL('./bridge.js', import.meta.url), 'utf8');
 
@@ -149,11 +150,20 @@ export async function startPages({ port, editorOrigin, secret, projects }) {
   /** @type {Map<string, { root: string, files: ReturnType<typeof folderFiles> }>} */
   const byToken = new Map();
   const tokenOf = (/** @type {string} */ id) => createHmac('sha256', secret).update(`film origin\0${id}`).digest().subarray(0, 18).toString('base64url');
-  /** The project's token, pointing at its folder as it is now (a renamed folder keeps its token). */
+  /**
+   * The project's token, pointing at its folder as it is now (a renamed folder keeps its token). A compound clip's film
+   * (parts.mjs) is served from the project it is in, whose files it names (`../../assets/a.mp4`).
+   */
   const serve = (/** @type {{ id: string, path: string }} */ project) => {
     const token = tokenOf(project.id);
-    if (byToken.get(token)?.root !== project.path) byToken.set(token, { root: project.path, files: filesOf(project.path) });
+    const root = compoundOuter(project.path);
+    if (byToken.get(token)?.root !== root) byToken.set(token, { root, files: filesOf(root) });
     return token;
+  };
+  /** Where the project's folder is in what its token serves: nothing, or a compound clip's `parts/<name>/`. */
+  const within = (/** @type {string} */ path) => {
+    const sub = relative(compoundOuter(path), resolve(path)).split(sep).join('/');
+    return sub ? `${sub}/` : '';
   };
   /** The folder a token reaches: one served since this launch, else the listed project it is the token of. */
   const entryOf = async (/** @type {string} */ token) => {
@@ -201,7 +211,7 @@ export async function startPages({ port, editorOrigin, secret, projects }) {
     }
     if (!entry.files(req, res, path, url.searchParams)) res.writeHead(403, headers).end();
   });
-  await new Promise((done, fail) => { server.once('error', fail); server.listen(port, '127.0.0.1', () => done(undefined)); });
+  await listenLocal(server, port);
   /* named `localhost`, not 127.0.0.1 as the editor is: another site to the browser, not only another origin, so it puts
      the film (footage decoding, pages drawing) in a process of its own, away from the editor's */
   const origin = `http://localhost:${/** @type {import('node:net').AddressInfo} */ (server.address()).port}`;
@@ -209,7 +219,7 @@ export async function startPages({ port, editorOrigin, secret, projects }) {
   return {
     origin,
     /** The address of a project's folder on the film's origin; a renamed folder keeps it (pass the project as it is now). */
-    folderUrl: (/** @type {{ id: string, path: string }} */ project) => `${origin}/p/${serve(project)}/`,
+    folderUrl: (/** @type {{ id: string, path: string }} */ project) => `${origin}/p/${serve(project)}/${within(project.path)}`,
     close: () => new Promise((done) => { server.closeAllConnections(); server.close(() => done(undefined)); }),
   };
 }

@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AgentSession, INSTRUCTIONS, setChosenPaths } from './agents.mjs';
+import { AgentSession, agentInstructions, setChosenPaths } from './agents.mjs';
+import { openfilmCommand } from './openfilm-command.mjs';
 import { loggedBlocks, readLog, writeModelLog } from './chat-store.mjs';
 
 /** An agent speaking ACP that keeps every prompt it is sent in `out`, one JSON line each. */
@@ -40,11 +41,13 @@ test('the turn log has what the agent was started with and each message as it go
     env: { OPENFILM_HOME: '/data', SOME_API_KEY: 'sk-secret' },
     onSend: (message) => sent.push(message),
   });
+  const told = agentInstructions(openfilmCommand('/app/bin'));
   try {
     await session.start();
     const opened = session.opened;
     assert.deepEqual(opened.command.slice(-3), ['--acp', '--approval-mode', 'yolo'], 'started as the registry starts it');
-    assert.equal(opened.firstMessage, INSTRUCTIONS, 'an agent with no place for them is told in its first message');
+    assert.equal(opened.firstMessage, told, 'an agent with no place for them is told in its first message');
+    if (process.platform !== 'win32') assert.ok(told.includes("`'/app/bin/openfilm' look`"), "the app's openfilm by its whole path");
     assert.equal(opened.env.OPENFILM_HOME, '/data');
     assert.equal(opened.env.SOME_API_KEY, '(hidden)', 'a key is named, never its value');
     assert.ok(!JSON.stringify(opened).includes('sk-secret'));
@@ -57,7 +60,7 @@ test('the turn log has what the agent was started with and each message as it go
     await session.prompt([{ type: 'text', text: 'Shorter' }]);
     const got = readFileSync(out, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
     assert.deepEqual(sent.map((m) => m.prompt), got.map((g) => g.prompt), 'logged exactly as the agent got it');
-    assert.deepEqual(got[0].prompt, [{ type: 'text', text: INSTRUCTIONS }, { type: 'text', text: 'Make a title' }]);
+    assert.deepEqual(got[0].prompt, [{ type: 'text', text: told }, { type: 'text', text: 'Make a title' }]);
     assert.deepEqual(got[1].prompt, [{ type: 'text', text: 'Shorter' }], 'told once');
   } finally {
     session.close();

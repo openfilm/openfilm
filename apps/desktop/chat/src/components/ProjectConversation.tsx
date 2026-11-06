@@ -3,7 +3,7 @@
 import React from 'react';
 import { AGENT_DEFINITIONS, isAgentId } from '../../../src/agent-definitions.mjs';
 import type { PublicProgressSnapshot, TurnAttachment } from '@openfilm/shared';
-import { BellRing, Check, ChevronRight, Copy } from 'lucide-react';
+import { BellRing, Check, ChevronRight, Copy, KeyRound, Undo2 } from 'lucide-react';
 import { AgentActivityList, formatWorkDuration, StatusLine, type AgentActivityItem } from './AgentActivityRow';
 import { AgentIcon, hasAgentIcon } from './AgentIcons';
 import { BrandLogo } from './BrandLogo';
@@ -27,7 +27,6 @@ import { relativeTime, useMinuteTick } from '@/lib/relative-time';
 import { isPendingAssetId } from '@/lib/asset-lists';
 import { TurnLogButton } from './TurnLog';
 import { FileChangesList } from './FileChangesList';
-import { FilmRestoreOffer } from './FilmRestoreOffer';
 import { ChatProjectContext, useDeveloperMode, useShowChanges } from '@/lib/developer';
 import { isVideoAttachment } from '@/lib/composer-attachments';
 import { desktopBridge } from '@/lib/desktop-bridge';
@@ -354,14 +353,14 @@ const ConversationTurn = React.memo(function ConversationTurn({
           only a sentence. */}
       {/* A turn the agent started by itself (a background task of its own came back): no message, a line saying so */}
       {entry.origin === 'background' ? (
-        <div className="flex items-center gap-2 text-[12px] text-[var(--chat-hint)]">
+        <div className="flex items-center gap-2 text-[12px] text-[var(--text-faint)]">
           <BellRing size={12} aria-hidden className="shrink-0" />
           <span>{t('turnFrame.background')}</span>
         </div>
       ) : (
       <div className="group/ask flex min-w-0 flex-col gap-1">
       <div className="flex justify-end">
-        <div className="flex max-w-[88%] flex-col gap-1.5 rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2">
+        <div className="flex max-w-[88%] flex-col gap-1.5 rounded-[12px] border border-[var(--border)] bg-[var(--bg-field)] px-3 py-2">
           {/* files brought in are pills in the sentence, with their thumbnails; a message from before that shows
               them in a row of their own */}
           {entry.attachments.length > 0 && !pillPictures && <TurnAttachments items={entry.attachments} />}
@@ -370,7 +369,7 @@ const ConversationTurn = React.memo(function ConversationTurn({
               render the pills; otherwise the expanded prompt, which is the same for plain text and is all that
               older messages have. */}
           {entry.promptDisplay || entry.prompt.trim() ? (
-            <p className="whitespace-pre-wrap break-words text-[14px] leading-[1.65] text-[var(--chat-text)]">
+            <p className="whitespace-pre-wrap break-words text-[14px] leading-[1.65] text-[var(--text)]">
               {entry.promptDisplay
                 ? <PromptWithPills display={entry.promptDisplay} {...(pillPictures ? { pictures: pillPictures } : {})} />
                 : entry.prompt}
@@ -402,8 +401,8 @@ const ConversationTurn = React.memo(function ConversationTurn({
             <div role="status">
               <span>{t('project.loadingMessages')}</span>
               <div aria-hidden className="mt-3 space-y-2 motion-safe:animate-pulse">
-                <div className="h-2 w-4/5 rounded bg-[var(--surface-2)]" />
-                <div className="h-2 w-3/5 rounded bg-[var(--surface-2)]" />
+                <div className="h-2 w-4/5 rounded bg-[var(--bg-field)]" />
+                <div className="h-2 w-3/5 rounded bg-[var(--bg-field)]" />
               </div>
             </div>
           )}
@@ -412,7 +411,6 @@ const ConversationTurn = React.memo(function ConversationTurn({
 
       {/* What this turn changed in the project's files, as a coding agent's app lists them (Settings → Developer
           turns it off). No "version N · switch to it" link: going back belongs to the top bar's history. */}
-      {settled && entry.filmLost ? <FilmRestoreOffer turnId={entry.assetId} /> : null}
       {settled && showChanges && entry.fileChanges?.length ? <FileChangesList changes={entry.fileChanges} /> : null}
 
       {/* The status and hover actions occupy separate rows. An empty status takes no room; a visible status
@@ -421,7 +419,7 @@ const ConversationTurn = React.memo(function ConversationTurn({
           show Failed here: the reason and Resume appear above the composer (the last turn's, even after a
           restart); an older one's reason is on its footer's Interrupted, on hover. */}
       {running ? <StatusLine items={rows ?? NO_ROWS} fallback={liveActivity} ownAgent={entry.agent === 'byok'} /> : null}
-      <TurnFooter entry={entry} items={items} running={running} />
+      <TurnFooter entry={entry} items={items} running={running} last={isLast} />
       </div>
     </div>
   );
@@ -615,7 +613,7 @@ function WorkSummary({ items, durationMs }: { items: AgentActivityItem[]; durati
         type="button"
         aria-expanded={open}
         onClick={toggle}
-        className="flex items-center gap-1 text-[14px] leading-relaxed text-[var(--chat-hint)] transition-colors hover:text-[var(--chat-text)]"
+        className="flex items-center gap-1 text-[14px] leading-relaxed text-[var(--text-faint)] transition-colors hover:text-[var(--text)]"
       >
         <span>{label}</span>
         <ChevronRight size={14} aria-hidden className={`transition-transform ${open ? 'rotate-90' : ''}`} />
@@ -650,7 +648,7 @@ function CopyButton({ text }: { text: string }) {
       onClick={copy}
       aria-label={copied ? t('turnFrame.copied') : t('turnFrame.copy')}
       title={copied ? t('turnFrame.copied') : t('turnFrame.copy')}
-      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition hover:bg-[var(--bg-hover)] hover:text-[var(--chat-text)]"
+      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
     >
       {copied ? <Check size={13} /> : <Copy size={13} />}
     </button>
@@ -667,7 +665,7 @@ function CopyButton({ text }: { text: string }) {
  * It appears on hover over the reply and keeps its space (h-6), independently of the status above it.
  * The time is how long ago; how long it worked is in the "Worked …" line.
  */
-function TurnFooter({ entry, items, running = false }: { entry: ProjectVersion; items: TranscriptItem[] | null; running?: boolean }) {
+function TurnFooter({ entry, items, running = false, last = false }: { entry: ProjectVersion; items: TranscriptItem[] | null; running?: boolean; last?: boolean }) {
   const t = useT();
   const locale = useUiLocale();
   const now = useMinuteTick();
@@ -686,7 +684,7 @@ function TurnFooter({ entry, items, running = false }: { entry: ProjectVersion; 
   const project = React.useContext(ChatProjectContext);
 
   return (
-    <div data-turn-footer="" className={`-mt-1.5 flex h-6 min-w-0 items-center gap-1.5 text-[11.5px] text-[var(--chat-hint)] group-hover/reply:opacity-100 ${HOVER_LINE}`}>
+    <div data-turn-footer="" className={`-mt-1.5 flex h-6 min-w-0 items-center gap-1.5 text-[11.5px] text-[var(--text-faint)] group-hover/reply:opacity-100 ${HOVER_LINE}`}>
       {answer ? <CopyButton text={answer} /> : null}
       {/* developer mode (Settings → Developer): the turn as it happened, every event; while it runs, as it goes */}
       {developer && project && !isPendingAssetId(entry.assetId) ? <TurnLogButton project={project} turnId={entry.assetId} live={running} /> : null}
@@ -694,9 +692,9 @@ function TurnFooter({ entry, items, running = false }: { entry: ProjectVersion; 
         <span className="flex min-w-0 items-center gap-1.5">
           {/* the icon says which agent (its name on hover); written out it would only repeat it */}
           <span className="flex w-3.5 shrink-0 justify-center opacity-80" title={entry.agent === 'byok' ? t('composer.agentOwnKey') : isAgentId(entry.agent) ? AGENT_DEFINITIONS[entry.agent].name : entry.agent}>
-            {hasAgentIcon(entry.agent)
-              ? <AgentIcon id={entry.agent} size={12} />
-              : <BrandLogo size={11} />}
+            {entry.agent === 'byok' ? <KeyRound size={12} />
+              : hasAgentIcon(entry.agent) ? <AgentIcon id={entry.agent} size={12} />
+                : <BrandLogo size={11} />}
           </span>
           <span className="truncate">{[entry.model, when].filter(Boolean).join(' · ')}</span>
         </span>
@@ -708,9 +706,34 @@ function TurnFooter({ entry, items, running = false }: { entry: ProjectVersion; 
       ) : null}
       {/* no balance left: the service's own page to top it up */}
       {entry.outcome === 'balance' && entry.balance?.url ? (
-        <a href={entry.balance.url} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-[var(--chat-text)]">{t('balance.manage')}</a>
+        <a href={entry.balance.url} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-[var(--text)]">{t('balance.manage')}</a>
       ) : null}
+      {last && !running && entry.undoable ? <UndoButton entry={entry} /> : null}
     </div>
+  );
+}
+
+/**
+ * The conversation's way to undo its last turn (App: asked on the composer, then the files as it found them, its
+ * message back in the composer); none while one runs.
+ */
+export const TurnUndoContext = React.createContext<((entry: ProjectVersion) => void) | null>(null);
+
+/** At the footer's end: undo this turn, once confirmed on the composer. */
+function UndoButton({ entry }: { entry: ProjectVersion }) {
+  const t = useT();
+  const undo = React.useContext(TurnUndoContext);
+  if (!undo) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => undo(entry)}
+      aria-label={t('undo.button')}
+      title={t('undo.button')}
+      className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
+    >
+      <Undo2 size={13} />
+    </button>
   );
 }
 
@@ -721,7 +744,7 @@ function PromptFooter({ entry }: { entry: ProjectVersion }) {
   const when = relativeTime(entry.createdAt, locale, now);
   const text = entry.prompt.trim();
   return (
-    <div className={`flex h-6 min-w-0 items-center justify-end gap-1 text-[11.5px] text-[var(--chat-hint)] group-hover/ask:opacity-100 ${HOVER_LINE}`}>
+    <div className={`flex h-6 min-w-0 items-center justify-end gap-1 text-[11.5px] text-[var(--text-faint)] group-hover/ask:opacity-100 ${HOVER_LINE}`}>
       {when ? <span className="px-1">{when}</span> : null}
       {text ? <CopyButton text={text} /> : null}
     </div>

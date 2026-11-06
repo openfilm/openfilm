@@ -41,6 +41,25 @@ test('a video with key frames far apart gets a copy with the same frames at the 
   }
 });
 
+test('a master export\'s copy is kept apart from the preview\'s, with the same frames at the same times', ffmpeg, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-seekable-'));
+  try {
+    clip(join(dir, 'slow.mp4'), 120);
+    const file = join(dir, 'slow.mp4');
+    const fine = /** @type {string} */ ((await seekableCopies([file], dir, { fine: true })).get(file));
+    assert.match(fine, /-fine\.mp4$/);
+    assert.deepEqual(times(fine), times(file));
+    assert.equal(await slowSeeking(fine), null, 'the copy seeks fast');
+    /* the preview neither finds nor uses it: its own copy is another file */
+    assert.equal(madeCopy(file, dir), null);
+    const preview = /** @type {string} */ ((await seekableCopies([file], dir)).get(file));
+    assert.notEqual(preview, fine);
+    assert.equal((await seekableCopies([file], dir, { fine: true })).get(file), fine, 'kept for the next master export');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('an alpha is seen in a pixel format, beside a VP9\'s picture, and as an HEVC\'s second layer', () => {
   /* as ffprobe 8.1 tells them */
   assert.equal(hasAlpha({ pix_fmt: 'yuva444p12le' }), true, 'ProRes 4444');

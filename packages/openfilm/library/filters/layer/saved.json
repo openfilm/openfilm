@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "layer.html",
+    "time": [
+      0,
+      3
+    ]
+  },
+  "durationMs": 3000
+}

@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "film-slip.html"
+  },
+  "durationMs": 700
+}

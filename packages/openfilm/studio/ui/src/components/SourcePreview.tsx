@@ -13,10 +13,11 @@ import { useT } from '@/i18n';
 import { STILL_DROP_MS } from '@/lib/asset-timeline';
 import type { SourceRange } from '@/lib/media-place';
 import { exactRate, formatTimecode, snapToFrame, useTimecodeFps } from '@/lib/timecode';
+import { cuePlain, readVtt } from '../../../../src/captions.mjs';
 import { type MediaSources, type WorkspaceResource } from '@/lib/workspace-resources';
 import { keyAction } from '@/lib/keymap-store';
 import { isTypingTarget } from './typing-target';
-import { KIND_ICON, MediaPreview } from './MediaPreview';
+import { CLEAR, KIND_ICON, MediaPreview } from './MediaPreview';
 import { PANE_BTN, PANE_ICON } from './dock-pane-bar';
 import { Tooltip } from './Tooltip';
 import { ViewerBar } from './ViewerBar';
@@ -97,7 +98,7 @@ function Scrubber({ time, duration, onSeek, label, marks }: { time: number; dura
       onPointerCancel={() => setDragging(false)}
     >
       <div className={`relative w-full overflow-hidden rounded-full bg-white/15 transition-[height] ${dragging ? 'h-1' : 'h-0.5 group-hover:h-1'}`}>
-        <div className="absolute inset-y-0 left-0 bg-[var(--text)]" style={{ width: `${part * 100}%` }} />
+        <div className="absolute inset-y-0 left-0 bg-[var(--accent)]" style={{ width: `${part * 100}%` }} />
       </div>
       {/* the part marked with I and O: a band over the line, its ends standing up from it */}
       {marks && duration > 0 && (marks.in != null || marks.out != null) ? (() => {
@@ -112,7 +113,7 @@ function Scrubber({ time, duration, onSeek, label, marks }: { time: number; dura
         );
       })() : null}
       <span
-        className={`pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 rounded-full bg-[var(--text)] shadow transition-opacity ${dragging ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+        className={`pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 rounded-full bg-[var(--accent)] shadow transition-opacity ${dragging ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
         style={{ left: `${part * 100}%` }}
       />
     </div>
@@ -158,6 +159,42 @@ export interface SourcePreviewProps {
   /** Put the file on the film at its playhead: the part marked (null: all of it), inserted or over what is there. */
   onPlace?: (mode: 'insert' | 'overwrite', range: SourceRange | null) => void;
 }
+
+/** A WebVTT's lines as they read (a transcript, a subtitle file): each one's time, and what it says. */
+function VttLines({ url }: { url: string }) {
+  const t = useT();
+  const [lines, setLines] = React.useState<{ start: number; text: string }[] | null>(null);
+  React.useEffect(() => {
+    let current = true;
+    setLines(null);
+    fetch(url).then((r) => (r.ok ? r.text() : '')).then(
+      (text) => { if (current) setLines(readVtt(text).cues.map((c) => ({ start: c.start, text: cuePlain(c.text) }))); },
+      () => { if (current) setLines([]); },
+    );
+    return () => { current = false; };
+  }, [url]);
+  if (!lines) return null;
+  if (!lines.length) return <p className="text-[11.5px] text-[var(--text-faint)]">{t('media.transcriptEmpty')}</p>;
+  return (
+    <ol className="flex flex-col gap-1.5">
+      {lines.map((line, i) => (
+        <li key={i} className="flex gap-2 text-[12px] leading-[17px]">
+          <span className="shrink-0 tabular-nums text-[var(--text-faint)]">{clockOf(line.start)}</span>
+          <span className="min-w-0 break-words text-[var(--text)]">{line.text}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** Seconds as a line's time: 0:04, 1:12. */
+const clockOf = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+
+/** A picture or a video laid out at its own shape (`fitted`), as large as the room around it allows (its cq units). */
+const FIT = 'block shrink-0 object-contain';
+const fitted = (shape: number | null): React.CSSProperties => (shape
+  ? { ...CLEAR, aspectRatio: String(shape), width: `min(100cqw, calc(100cqh * ${shape}))`, height: 'auto' }
+  : { width: '100%', height: '100%' });
 
 export function SourcePreview(props: SourcePreviewProps) {
   /* a web page is previewed on its own: its own timeline from 0, driven here through Studio's bridge. Each file is a
@@ -210,6 +247,10 @@ function MediaPreviewPane({ file, sources, onClose, onPlace }: SourcePreviewProp
     return () => cancelAnimationFrame(raf);
   }, [playing]);
 
+  /* the picture's shape once known: it is then laid out at it (fitted), its clear ground on it alone */
+  const [shape, setShape] = React.useState<number | null>(null);
+  React.useEffect(() => setShape(null), [file.path]);
+  const shapeOf = (w: number, h: number) => { if (w > 0 && h > 0) setShape(w / h); };
   const mediaEvents = {
     onPlay: () => setPlaying(true),
     onPause: () => setPlaying(false),
@@ -220,8 +261,8 @@ function MediaPreviewPane({ file, sources, onClose, onPlace }: SourcePreviewProp
   };
 
   return (
-    <div ref={rootRef} className="absolute inset-0 z-20 flex flex-col bg-[var(--dock-pane)]">
-      <div className="relative flex min-h-0 flex-1 items-center justify-center px-3 py-2.5" onClick={timed ? toggle : undefined}>
+    <div ref={rootRef} className="absolute inset-0 z-20 flex flex-col bg-[var(--bg-panel)]">
+      <div className="relative flex min-h-0 flex-1 items-center justify-center px-3 py-2.5 [container-type:size]" onClick={timed ? toggle : undefined}>
         {failed ? (
           <p className="text-[12.5px] text-[var(--text-muted)]">{t('media.cannotPreview')}</p>
         ) : file.kind === 'video' ? (
@@ -235,16 +276,25 @@ function MediaPreviewPane({ file, sources, onClose, onPlace }: SourcePreviewProp
             /* picked to be seen: it plays from the start at once (the click that picked it lets the sound play) */
             autoPlay
             preload="auto"
-            className="h-full w-full object-contain"
+            className={FIT}
+            style={fitted(shape)}
             {...mediaEvents}
+            onLoadedMetadata={(e) => { shapeOf(e.currentTarget.videoWidth, e.currentTarget.videoHeight); mediaEvents.onLoadedMetadata?.(e); }}
           />
         ) : file.kind === 'image' ? (
-          <img src={src} alt={file.name} className="h-full w-full object-contain" onError={() => setFailed(true)} />
+          <img src={src} alt={file.name} className={FIT} style={fitted(shape)} onError={() => setFailed(true)}
+            onLoad={(e) => shapeOf(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight)} />
         ) : file.kind === 'audio' ? (
           <div className="relative h-[42%] w-full max-w-[920px] overflow-hidden rounded-md">
             <MediaPreview file={file} sources={sources} />
             {duration > 0 ? <span className="pointer-events-none absolute inset-y-0 w-px bg-white/90" style={{ left: `${(time / duration) * 100}%` }} /> : null}
             <audio key={file.path} ref={mediaRef} src={src} preload="auto" autoPlay {...mediaEvents} />
+          </div>
+        ) : /\.vtt$/i.test(file.name) ? (
+          /* a subtitle or transcript file: its lines, as they read */
+          <div className="h-full w-full max-w-[640px] overflow-y-auto py-2">
+            <p className="mb-3 truncate text-[13px] font-medium text-[var(--text)]">{file.name}</p>
+            <VttLines url={src} />
           </div>
         ) : (
           /* a file Studio does not play: what it is, by its icon and name */
@@ -433,18 +483,20 @@ function PagePreview({ file, sources, onClose, onPlace }: SourcePreviewProps) {
   }, [onClose, toggle]);
 
   return (
-    <div ref={rootRef} className="absolute inset-0 z-20 flex flex-col bg-[var(--dock-pane)]">
+    <div ref={rootRef} className="absolute inset-0 z-20 flex flex-col bg-[var(--bg-panel)]">
       <div ref={boxRef} className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-3 py-2.5" onClick={toggle}>
         {/* nothing to play it on (no surface for this page) is the same as a page that failed */}
         {failed || !surface ? <p className="text-[12.5px] text-[var(--text-muted)]">{t('media.cannotPreview')}</p> : (
-          <div className="relative shrink-0 overflow-hidden bg-black" style={size ? { width: size.w * scale, height: size.h * scale } : { width: 1, height: 1, opacity: 0 }}>
+          /* on a checkerboard: what the page leaves clear is seen to be clear (a page made to go over others) */
+          <div className="relative shrink-0 overflow-hidden" style={size ? { width: size.w * scale, height: size.h * scale, ...CLEAR } : { width: 1, height: 1, opacity: 0 }}>
             <iframe
               ref={frameRef}
               key={file.path}
               src={surface}
               title={file.name}
               className="pointer-events-none absolute left-0 top-0 origin-top-left border-0"
-              style={{ width: size?.w ?? laid.w, height: size?.h ?? laid.h, transform: `scale(${scale})` }}
+              /* the page's own color scheme, so the browser lays no opaque ground of its own under it */
+              style={{ width: size?.w ?? laid.w, height: size?.h ?? laid.h, transform: `scale(${scale})`, colorScheme: 'normal' }}
             />
           </div>
         )}

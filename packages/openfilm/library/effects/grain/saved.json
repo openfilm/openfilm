@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "grain.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Amount\", \"type\": \"var\", \"var\": \"--amount\"}]"
+    }
+  },
+  "durationMs": 4000
+}

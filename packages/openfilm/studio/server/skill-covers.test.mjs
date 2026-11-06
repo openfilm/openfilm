@@ -7,12 +7,23 @@ import { addSkills } from '../../src/skills.mjs';
 import { skillsCommand } from '../../src/skills-cli.mjs';
 import { startStudio } from './server.mjs';
 
+/** Discover as last read (skill-catalog.mjs): the index naming one skill of OpenFilm's, kept at its commit. */
+function discover(/** @type {string} */ home) {
+  const entry = { name: 'replicate', repo: 'https://github.com/openfilm/skill-replicate', path: 'skills/replicate', version: '0.1.0', commit: 'a'.repeat(40) };
+  const folder = join(home, 'skill-catalog', 'openfilm', `replicate@${entry.commit}`);
+  mkdirSync(folder, { recursive: true });
+  writeFileSync(join(folder, 'SKILL.md'), '---\nname: replicate\ndescription: Remake a video\n---\nSteps.');
+  writeFileSync(join(folder, '.source.json'), JSON.stringify(entry));
+  writeFileSync(join(home, 'skill-catalog', 'index.json'), JSON.stringify({ read: new Date().toISOString(), entries: [entry] }));
+}
+
 test('a replacement skill cover has a new gallery URL and serves the chosen bytes', async (t) => {
   const root = mkdtempSync(join(tmpdir(), 'of-skill-gallery-'));
-  const variables = { OPENFILM_HOME: join(root, 'home'), OPENFILM_LIBRARY: join(root, 'library'), OPENFILM_SKILLS: join(root, 'mine'), OPENFILM_TRASH_DIR: join(root, 'trash') };
+  const variables = { OPENFILM_HOME: join(root, 'home'), OPENFILM_LIBRARY: join(root, 'library'), OPENFILM_SKILLS: join(root, 'mine'), OPENFILM_TRASH_DIR: join(root, 'trash'), OPENFILM_SHARED_HOME: join(root, 'home') };
   const previous = Object.fromEntries(Object.keys(variables).map((key) => [key, process.env[key]]));
   Object.assign(process.env, variables);
   mkdirSync(variables.OPENFILM_TRASH_DIR);
+  discover(variables.OPENFILM_SHARED_HOME);
   t.after(() => {
     for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
     rmSync(root, { recursive: true, force: true });
@@ -44,7 +55,7 @@ test('a replacement skill cover has a new gallery URL and serves the chosen byte
     assert.deepEqual(Buffer.from(await response.arrayBuffer()), Buffer.from(picture, 'base64'));
   }
   assert.notEqual(urls[0], urls[1], 'the browser must not reuse its cached previous cover');
-  const endpoint = '/api/skills/covered/cover';
+  const endpoint = '/api/skills/local%2Fcovered/cover';
   const replacement = await api(endpoint, { method: 'PUT', body: { cover: `data:image/png;base64,${covers[0]}` } });
   assert.equal(replacement.status, 200);
   const changed = await replacement.json();
@@ -64,23 +75,23 @@ test('a replacement skill cover has a new gallery URL and serves the chosen byte
   assert.equal(readFileSync(join(installed, 'SKILL.md'), 'utf8'), readFileSync(join(source, 'SKILL.md'), 'utf8'));
   const { skills } = await (await api('/api/skills')).json();
   assert.equal(skills.find((s) => s.name === 'covered').cover, undefined, 'removal persists when listed again');
-  const official = skills.find((s) => s.source === 'official');
+  const official = skills.find((s) => s.source === 'official' && !s.core);
   assert.ok(official);
-  assert.equal((await api(`/api/skills/${official.name}/cover`, { method: 'DELETE' })).status, 403);
-  assert.equal((await api('/api/skills/missing-skill/cover', { method: 'DELETE' })).status, 404);
+  assert.equal((await api(`/api/skills/${encodeURIComponent(official.uid)}/cover`, { method: 'DELETE' })).status, 403);
+  assert.equal((await api('/api/skills/local%2Fmissing-skill/cover', { method: 'DELETE' })).status, 404);
   const project = (await (await api('/api/projects', { method: 'POST', body: { name: 'Override' } })).json()).project;
   mkdirSync(join(project.path, 'skills', 'covered'), { recursive: true });
   writeFileSync(join(project.path, 'skills', 'covered', 'SKILL.md'), '---\nname: covered\n---\nProject steps.');
-  assert.equal((await api(`${endpoint}?project=${project.id}`, { method: 'DELETE' })).status, 403);
+  assert.equal((await api(`/api/skills/project%2Fcovered/cover?project=${project.id}`, { method: 'DELETE' })).status, 403, 'a project\'s own is not the person\'s');
 });
 
 test('skills: turned off and on, an official one installed and uninstalled, one of the person\'s removed to the trash', async (t) => {
   const root = mkdtempSync(join(tmpdir(), 'of-skill-off-'));
-  const variables = { OPENFILM_HOME: join(root, 'home'), OPENFILM_LIBRARY: join(root, 'library'), OPENFILM_SKILLS: join(root, 'mine'), OPENFILM_TRASH_DIR: join(root, 'trash') };
-  const previous = Object.fromEntries([...Object.keys(variables), 'OPENFILM_SHARED_HOME'].map((key) => [key, process.env[key]]));
+  const variables = { OPENFILM_HOME: join(root, 'home'), OPENFILM_LIBRARY: join(root, 'library'), OPENFILM_SKILLS: join(root, 'mine'), OPENFILM_TRASH_DIR: join(root, 'trash'), OPENFILM_SHARED_HOME: join(root, 'home') };
+  const previous = Object.fromEntries(Object.keys(variables).map((key) => [key, process.env[key]]));
   Object.assign(process.env, variables);
-  delete process.env.OPENFILM_SHARED_HOME;
   mkdirSync(variables.OPENFILM_TRASH_DIR);
+  discover(variables.OPENFILM_SHARED_HOME);
   t.after(() => {
     for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
     rmSync(root, { recursive: true, force: true });
@@ -102,32 +113,32 @@ test('skills: turned off and on, an official one installed and uninstalled, one 
   assert.equal((await listed()).off, undefined);
   assert.match(command(), /quiet/);
 
-  assert.equal((await api('/api/skills/quiet/on', { method: 'PUT', body: { on: false } })).status, 200);
+  assert.equal((await api('/api/skills/local%2Fquiet/on', { method: 'PUT', body: { on: false } })).status, 200);
   assert.equal((await listed()).off, true, 'still in the gallery, to turn on again');
   assert.doesNotMatch(command(), /quiet/, 'offered to no agent');
   assert.equal(JSON.parse(readFileSync(join(variables.OPENFILM_HOME, 'prefs.json'), 'utf8')).kept, 'as it was', 'the rest of prefs.json kept');
 
-  assert.equal((await api('/api/skills/quiet/on', { method: 'PUT', body: { on: true } })).status, 200);
+  assert.equal((await api('/api/skills/local%2Fquiet/on', { method: 'PUT', body: { on: true } })).status, 200);
   assert.equal((await listed()).off, undefined);
   assert.match(command(), /quiet/);
-  assert.equal((await api('/api/skills/quiet/on', { method: 'PUT', body: { on: 'yes' } })).status, 400);
-  assert.equal((await api('/api/skills/..%2Fx/on', { method: 'PUT', body: { on: false } })).status, 400);
+  assert.equal((await api('/api/skills/local%2Fquiet/on', { method: 'PUT', body: { on: 'yes' } })).status, 400);
+  assert.equal((await api('/api/skills/..%2Fx/on', { method: 'PUT', body: { on: false } })).status, 404);
   assert.equal((await listed()).installed, true, 'the person\'s own is theirs already');
 
   /* an official one: in the catalog, used once installed */
   const replicate = async () => (await (await api('/api/skills')).json()).skills.find((s) => s.name === 'replicate');
   assert.equal((await replicate()).installed, false);
   assert.doesNotMatch(command(), /replicate/);
-  assert.equal((await api('/api/skills/replicate/installed', { method: 'PUT', body: { installed: true } })).status, 200);
+  assert.equal((await api('/api/skills/openfilm%2Freplicate/installed', { method: 'PUT', body: { installed: true } })).status, 200);
   assert.equal((await replicate()).installed, true);
   assert.match(command(), /replicate/);
-  assert.equal((await api('/api/skills/replicate', { method: 'DELETE' })).status, 400, 'uninstalled, not removed');
-  assert.equal((await api('/api/skills/replicate/installed', { method: 'PUT', body: { installed: false } })).status, 200);
+  assert.equal((await api('/api/skills/openfilm%2Freplicate', { method: 'DELETE' })).status, 400, 'uninstalled, not removed');
+  assert.equal((await api('/api/skills/openfilm%2Freplicate/installed', { method: 'PUT', body: { installed: false } })).status, 200);
   assert.doesNotMatch(command(), /replicate/);
-  assert.equal((await api('/api/skills/quiet/installed', { method: 'PUT', body: { installed: false } })).status, 404, 'only an official one');
+  assert.equal((await api('/api/skills/local%2Fquiet/installed', { method: 'PUT', body: { installed: false } })).status, 404, 'only an official one');
 
   /* one of the person's own removed: to the trash */
-  assert.equal((await api('/api/skills/quiet', { method: 'DELETE' })).status, 200);
+  assert.equal((await api('/api/skills/local%2Fquiet', { method: 'DELETE' })).status, 200);
   assert.equal(await listed(), undefined);
   assert.ok(existsSync(join(variables.OPENFILM_TRASH_DIR, 'quiet')) || readdirSync(variables.OPENFILM_TRASH_DIR).length > 0, 'in the trash');
 });

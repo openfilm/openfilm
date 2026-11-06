@@ -35,10 +35,6 @@ test('with the app\'s chat, a ruler click moves the playhead and a ⌘-click (Ct
         onCommand: (receive) => { window.studioCommand = receive; },
       };
     });
-    await page.route(`**/api/projects/${project.id}/captions`, (route) => route.fulfill({ json: {
-      cues: [{ startMs: 2000, durMs: 500, text: 'Subtitle cue', clip: 'card', src: 'assets/card.svg', line: 0 }],
-      sourceLanguage: null, languages: [], untranscribed: [],
-    } }));
     await page.goto(`${studio.origin}/projects/${project.id}?key=${studio.key}`);
     await page.locator('[data-block-id]').first().waitFor({ state: 'visible' });
     const slider = page.locator('[data-timeline] [role="slider"]').first();
@@ -74,23 +70,8 @@ test('with the app\'s chat, a ruler click moves the playhead and a ⌘-click (Ct
     await page.waitForFunction((before) => Number(document.querySelector('[data-timeline] [role="slider"]')?.getAttribute('aria-valuenow')) > before, clicked);
     assert.deepEqual(await referred(), []);
 
-    /* blank subtitle space follows the ruler's seeking gesture; a cue itself still selects and edits */
-    const subtitleRow = page.locator('[data-subtitle-row]');
-    await subtitleRow.waitFor({ state: 'visible' });
-    const row = await subtitleRow.boundingBox();
-    const beforeBlank = await playhead();
-    await page.mouse.click(ruler.x + 60, row.y + row.height / 2);
-    await page.waitForFunction((before) => Number(document.querySelector('[data-timeline] [role="slider"]')?.getAttribute('aria-valuenow')) < before, beforeBlank);
-    const blankClicked = await playhead();
-    await page.mouse.move(ruler.x + 60, row.y + row.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(ruler.x + 180, row.y + row.height / 2, { steps: 5 });
-    await page.mouse.up();
-    await page.waitForFunction((before) => Number(document.querySelector('[data-timeline] [role="slider"]')?.getAttribute('aria-valuenow')) > before, blankClicked);
-    const dragged = await playhead();
-    await page.locator('[data-subtitle-cue]').first().click();
-    assert.equal(await playhead(), dragged, 'clicking a subtitle cue does not also seek');
     assert.equal(await page.getByRole('button', { name: 'Add to chat', exact: true }).count(), 0, 'the floating reference button is absent');
+    const dragged = await playhead();
 
     /* the moment a click would refer is drawn only while the key is held, with a crosshair */
     await page.mouse.move(ruler.x + 60, y);
@@ -127,8 +108,8 @@ test('with the app\'s chat, a ruler click moves the playhead and a ⌘-click (Ct
     await page.evaluate(() => window.studioCommand({ type: 'show-range', start: 0.1, end: 0.6 }));
     await flash.waitFor({ state: 'visible' });
     const flashed = await flash.boundingBox();
-    const subtitleBounds = await subtitleRow.boundingBox();
-    assert.ok(flashed.y + flashed.height <= subtitleBounds.y + 0.5, 'the highlight ends above the subtitle and clip rows');
+    const clipBounds = await page.locator('[data-block-id]').first().boundingBox();
+    assert.ok(flashed.y + flashed.height <= clipBounds.y + 0.5, 'the highlight ends above the clip rows');
     assert.equal(await page.locator('[data-timeline-range]').count(), 0, 'no persistent range or its label is created');
     await page.waitForFunction(() => Math.abs(Number(document.querySelector('[data-timeline] [role="slider"]')?.getAttribute('aria-valuenow')) - 100) <= 40);
     assert.equal(await page.getByRole('button', { name: 'Add to chat', exact: true }).count(), 0);

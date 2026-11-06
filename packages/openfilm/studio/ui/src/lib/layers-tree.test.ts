@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  clipKey, layerKey, layerLines, movedOrder, moverFor, openTo, rowsBetween, selectionTones, type LayerClip, type LayerRow,
+  clipKey, layerKey, layerLines, movedOrder, moverFor, openTo, rowsBetween, selectionTones, withCaptions, type LayerClip, type LayerRow,
 } from './layers-tree.ts';
 
 const row = (loc: string, branch: number, children: LayerRow[] = []): LayerRow => ({
@@ -98,4 +98,13 @@ test('the rows selected are \'on\', what a selected one holds is \'in\', the res
   ]);
   /* a selected row inside a selected one is 'on', and what follows the inner one is still inside the outer */
   assert.deepEqual(tones(['#card', '#logo']).slice(1, 6), ['#card:on', '#title:in', '#logo:on', '#mark:in', '#bg:in']);
+});
+
+test('the captions shown are listed with the clips, each where its caption track is drawn', () => {
+  const shown: LayerClip[] = [{ clip: 'title', kind: 'page', layers: [] }, { clip: 'shot', kind: 'video', layers: [] }];
+  const trackOf = (id: string) => ({ title: 1, shot: 3 } as Record<string, number>)[id] ?? null;
+  const cue = (clip: string, track: number) => ({ clip, track, selected: false });
+  assert.deepEqual(withCaptions(shown, [cue('b', 2), cue('top', 0), cue('under', 4)], trackOf).map((c) => `${c.clip}:${c.kind}`),
+    ['top:caption', 'title:page', 'b:caption', 'shot:video', 'under:caption']);
+  assert.deepEqual(withCaptions(shown, [], trackOf), shown);
 });

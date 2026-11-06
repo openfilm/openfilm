@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "var-noway.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Word\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Fill\", \"type\": \"var\", \"var\": \"--fill\"}, {\"name\": \"Stroke\", \"type\": \"var\", \"var\": \"--stroke\"}, {\"name\": \"Speed lines\", \"type\": \"var\", \"var\": \"--lines\"}]"
+    }
+  },
+  "durationMs": 4000
+}

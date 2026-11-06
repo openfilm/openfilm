@@ -1,0 +1,26 @@
+{
+  "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/manual/edit",
+  "order": 1,
+  "icon": "scissors",
+  "title": {
+    "en": "Editing",
+    "zh-CN": "剪辑",
+    "ja": "編集",
+    "ko": "편집",
+    "es": "Edición"
+  },
+  "summary": {
+    "en": "How a film is made: the project, film.html, its pages and captions, and how to look at it.",
+    "zh-CN": "怎么做一部片子：项目、film.html、页面和字幕，以及怎么检查画面。",
+    "ja": "映画の作り方：プロジェクト、film.html、ページと字幕、そして画面の確かめ方。",
+    "ko": "영상을 만드는 법: 프로젝트, film.html, 페이지와 자막, 그리고 화면을 확인하는 법.",
+    "es": "Cómo se hace un vídeo: el proyecto, film.html, sus páginas y subtítulos, y cómo revisarlo."
+  },
+  "details": {
+    "zh-CN": "什么时候用：智能体做新片子、改已有的片子、检查画面之前，都会先读它。\n它教什么：项目文件夹怎么放；film.html 怎么把页面、视频、图片和声音剪在一起；页面怎么写，字幕怎么做；做完用 openfilm look 截下画面检查，看过没问题才告诉你做好了。\n关掉后：智能体不再拿到这份说明，只能自己猜 OpenFilm 的格式，很容易做错。一般不要关。",
+    "en": "When it is used: before an agent makes a film, changes one, or looks at one.\nWhat it teaches: how the project folder is laid out; how film.html cuts pages, footage, pictures and sound together; how a page is written and captions are made; and to look at the result with openfilm look before saying it is done.\nTurned off: agents no longer get it and have to guess OpenFilm's format, which goes wrong easily. Best left on.",
+    "ja": "使うとき：エージェントが映画を作る前、手を加える前、画面を確かめる前に、まずこれを読みます。\n教えること：プロジェクトフォルダの置き方、film.html でページ・映像・画像・音をつなぐ方法、ページの書き方と字幕の作り方、そして仕上げに openfilm look で画面を確かめてから完成と伝えること。\nオフにすると：エージェントはこの説明を受け取れず、OpenFilm の形式を推測するしかなく、間違えやすくなります。オンのままがおすすめです。",
+    "ko": "언제 쓰나요: 에이전트가 영상을 새로 만들거나, 고치거나, 화면을 확인하기 전에 먼저 읽습니다.\n무엇을 알려 주나요: 프로젝트 폴더 구성, film.html로 페이지·영상·이미지·소리를 이어 붙이는 법, 페이지 작성과 자막 만드는 법, 그리고 openfilm look으로 화면을 확인한 뒤에야 완성이라고 말하는 것.\n끄면: 에이전트가 이 설명을 받지 못해 OpenFilm 형식을 추측해야 하고, 틀리기 쉽습니다. 켜 두는 것을 권합니다.",
+    "es": "Cuándo se usa: antes de que un agente haga un vídeo, lo cambie o lo revise.\nQué enseña: cómo se organiza la carpeta del proyecto; cómo film.html une páginas, vídeo, imágenes y sonido; cómo se escribe una página y se hacen los subtítulos; y a revisar el resultado con openfilm look antes de decir que está hecho.\nSi se desactiva: los agentes ya no la reciben y tienen que adivinar el formato de OpenFilm, lo que falla con facilidad. Mejor dejarla activada."
+  }
+}

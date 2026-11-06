@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "price-tag.html",
+    "time": [
+      0,
+      3
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Price\", \"type\": \"text\", \"at\": \".label\"}, {\"name\": \"Word\", \"type\": \"text\", \"at\": \".label2\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    }
+  },
+  "durationMs": 3000,
+  "w": 300,
+  "h": 400
+}

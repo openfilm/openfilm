@@ -8,7 +8,7 @@ import { useT } from '@/i18n';
 
 /** The shell of things that float up (menus, dropdowns): the card's shadow on the floating surface. */
 export const POPOVER_CHROME: React.CSSProperties = {
-  background: 'var(--bg-surface)',
+  background: 'var(--bg-raised)',
   border: '1px solid var(--border-strong)',
   borderRadius: 12,
   boxShadow: '0 16px 40px -8px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.18)',
@@ -35,7 +35,7 @@ export function Card({
   return (
     <div
       {...(role ? { role } : {})}
-      className={`relative rounded-[12px] border border-[var(--card-border)] bg-[var(--card-bg)] px-3.5 pb-3 pt-3 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.35)] ${className}`}
+      className={`relative rounded-[12px] border border-[var(--border)] bg-[var(--bg-raised)] px-3.5 pb-3 pt-3 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.35)] ${className}`}
     >
       {onClose ? (
         <div className="absolute right-2 top-2 flex items-center gap-0.5">
@@ -68,7 +68,7 @@ export function CardActions({ children, className = '' }: { children: React.Reac
 type Weight = 'primary' | 'secondary' | 'quiet' | 'danger';
 
 const WEIGHT: Record<Weight, string> = {
-  primary: 'bg-[var(--text)] text-[var(--panel)] hover:opacity-90',
+  primary: 'bg-[var(--primary)] text-[var(--on-primary)] hover:bg-[var(--primary-hover)]',
   secondary: 'text-[var(--text)] ring-1 ring-inset ring-[var(--border-strong)] hover:bg-[var(--bg-hover)]',
   quiet: 'text-[var(--text-muted)] hover:text-[var(--text)]',
   danger: 'bg-[var(--err)] text-white hover:brightness-110',

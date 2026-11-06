@@ -5,7 +5,22 @@
    directly: when the two differ, a system-driven `dark:` would paint the wrong side. */
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
-/* ── Design system: restrained, light by default ─────────────────────────────────────────────────────────────── */
+/* ── Design system ───────────────────────────────────────────────────────────────────────────────────────────────
+
+   One set of names, a light and a dark value for each. Components use these names and no colors of their own.
+
+   Neutrals are a cool gray, and color is kept for meaning. Backgrounds, from the bottom up: the app (the window, the
+   top bar and the seams between panes), a panel, what is raised over a panel (cards, menus, popovers, dialogs,
+   tooltips). On any of them: a field (inputs, wells, chips), hover, pressed, and selected. Fields, hover and pressed
+   are translucent, so they read the same on every layer. Text: primary, muted (secondary), faint (hints, placeholders,
+   idle icons). Lines: a hairline and a stronger one.
+
+   The main action is ink: near black in light, near white in dark. One accent, the brand teal, for what is selected,
+   current or focused (switches, progress, tabs, the frame on the picture); ok, warn and err for states. The timeline
+   keeps to white (ink in light) for its playhead and a picked clip's frame.
+
+   Clips on the timeline by kind, one quiet color each at one lightness, under white words; their waveforms are drawn
+   lighter over it. Sounds of all kinds are one color. */
 
 :root {
   --font-cjk-sans: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', 'Source Han Sans SC',
@@ -16,153 +31,150 @@
 
   --radius-lg: 16px;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.05);
-
   /* a host window's controls (lib/host.ts); nothing to make room for in a browser */
   --titlebar-logo-x: 6px;
   --titlebar-right-x: 0px;
 }
 
-/* ── Light (default): paper is 252, the board panes sit on is 242, every other gray lies between ── */
+/* ── Light (default) ── */
 :root,
 [data-theme='light'] {
   color-scheme: light;
 
-  --bg: #fcfcfc;
-  --canvas: #f2f2f2;
-  --panel: #fcfcfc;
-  --surface: #fcfcfc;
-  --surface-2: #f2f2f2;
-  --surface-3: #e8e8e8;
-  --bg-surface: var(--surface);
+  --bg-app: #e4e4e8;
+  --bg-panel: #fbfbfc;
+  --bg-raised: #ffffff;
+  /* the viewer's pane, round the picture: the panels' own white (rgb 251, 251, 252) */
+  --bg-viewer: #fbfbfc;
+  /* the one-pixel lines between the panes and under the top bar (the board under them showing through) */
+  --dock-line: #d2d2d8;
+  --bg-field: rgba(16, 16, 24, 0.055);
+  --bg-hover: rgba(16, 16, 24, 0.05);
+  --bg-pressed: rgba(16, 16, 24, 0.09);
+  --bg-selected: rgba(0, 163, 174, 0.13);
 
-  --border: rgba(0, 0, 0, 0.08);
-  --border-soft: rgba(0, 0, 0, 0.05);
-  --border-strong: rgba(0, 0, 0, 0.16);
+  --text: #161619;
+  --text-muted: #5d5d63;
+  --text-faint: #8b8b92;
 
-  --text: #1f1f1f;
-  --text-dim: #4b4b4b;
-  --text-muted: #666666;
-  --text-faint: #a9a9a9;
+  --border: rgba(16, 16, 24, 0.085);
+  --border-strong: rgba(16, 16, 24, 0.16);
 
-  --card-bg: #fcfcfc;
-  --card-border: rgba(0, 0, 0, 0.08);
-  --fill-tsp: rgba(0, 0, 0, 0.05);
+  --primary: #161619;
+  --primary-hover: #2e2e33;
+  --on-primary: #ffffff;
 
-  --tooltip-bg: #ffffff;
-  --tooltip-text: #1f1f1f;
-  --tooltip-border: rgba(0, 0, 0, 0.14);
-
-  /* the main action is ink, not a color; selected and hover are neutral grays */
-  --accent: #1a1a1a;
-  --accent-soft: rgba(26, 26, 26, 0.06);
+  --accent: #0098a3;
+  --accent-soft: rgba(0, 163, 174, 0.12);
   --on-accent: #ffffff;
-  /* selected words being edited (a tab's name): plainly seen, as the system's text selection */
-  --text-selection: rgba(26, 147, 254, 0.3);
+  /* a switch turned on: the accent a step quieter, so a page of them does not glare */
+  --switch-on: #26b0ba;
+  /* what is picked among choices (tabs, a rail, a list): the accent's words on the accent's own tint, never a grey
+     that reads as merely pointed at */
+  --bg-picked: rgba(0, 163, 174, 0.14);
+  /* words selected in a field */
+  --text-selection: rgba(0, 163, 174, 0.24);
 
-  --ok: #16a34a;
-  --warn: #d97706;
-  --err: #dc2626;
+  --ok: #1f8a4c;
+  --warn: #b25e00;
+  --err: #d1342f;
 
-  --bg-hover: rgba(0, 0, 0, 0.045);
-  --bg-active: rgba(0, 0, 0, 0.08);
-  /* the layers selected in the Layers panel: a muted blue, the picture's selection hue; what a selected layer holds
-     is a paler one, and the hovered row is lined */
-  --layer-selected: #dce9fb;
-  --layer-selected-in: #eff5fd;
-  --layer-hover-line: rgba(13, 153, 255, 0.45);
+  --shadow-sm: 0 1px 2px rgba(16, 16, 24, 0.05), 0 1px 3px rgba(16, 16, 24, 0.05);
+  --shadow-lg: 0 12px 32px rgba(16, 16, 24, 0.1), 0 4px 8px rgba(16, 16, 24, 0.05);
 
-  --app-content-bg: #fcfcfc;
+  --clip-video: #54789d;
+  --clip-image: #497c93;
+  --clip-page: #7968a8;
+  --clip-text: #b5703d;
+  --clip-sticker: #3d8a5c;
+  --clip-filter: #6a5bbf;
+  --clip-effect: #a8538a;
+  --clip-audio: #318383;
 
-  /* the docked layout: panes float on a board one step darker; the seams are that board showing through */
-  --dock-shell: #f2f2f2;
-  --dock-pane: #fcfcfc;
+  /* the timeline's own: a well (meters), the playhead and the frame of a picked clip, and waveforms drawn lighter
+     over a clip's own color (canvas reads these back from the element) */
+  --tl-lane: #f1f1f3;
+  /* a track's band, the ground seen in the gaps between two (the panel itself), and the track of a picked clip: the
+     panel a quiet step darker (lighter in dark), the picked one a step further */
+  --tl-row: rgba(16, 16, 24, 0.03);
+  --tl-gap: var(--bg-panel);
+  --tl-lane-on: rgba(16, 16, 24, 0.07);
+  --tl-playhead: #161619;
+  --tl-select: #161619;
+  --tl-wave: rgba(255, 255, 255, 0.5);
+  --tl-wave-band: rgba(255, 255, 255, 0.4);
+  /* the part of a waveform a clip's volume pushes past full scale: it will distort */
+  --tl-wave-clip: var(--err);
 
-  --folder-back: #cbcbcb;
-  --folder-front: #e0e0e0;
-  --folder-front-hi: #ededed;
+  --folder-back: #c9c9c9;
+  --folder-front: #dedede;
+  --folder-front-hi: #ececec;
 
   --brand-wind-from: #2f9e63;
   --brand-wind-mid: #3cbc93;
   --brand-wind-to: #55bfd0;
-
-  /* The timeline. The track area is light like the rest of the screen, but blocks are dark enough to carry white
-     text and waveforms. Toolbar, track heads and ruler are the pane's own color (its rounded corners show through
-     that); only the lanes step half a shade darker. */
-  --tl-lane: #efefef;
-  --tl-lane-on: #f5f5f5;
-  --tl-head: #fcfcfc;
-  --tl-ruler: #fcfcfc;
-  --tl-line: #e2e2e2;
-  --tl-text: #4a4a4a;
-  --tl-faint: #8a8a8a;
-  /* playhead, selection and the zoom slider's traveled part: the brand teal, "the thing you are moving" */
-  --tl-playhead: #1f8a86;
-  --tl-accent: #1f8a86;
-  --tl-select: var(--tl-accent);
-  --tl-tick: rgba(0, 0, 0, 0.16);
-  /* waveforms on blocks (canvas reads these back from the element) */
-  --tl-wave: rgba(0, 110, 108, 0.82);
-  --tl-wave-band: rgba(0, 96, 102, 0.8);
-  /* the part of a waveform a clip's volume pushes past full scale: it will distort */
-  --tl-wave-clip: #f2711c;
-  --tl-scene: #3f9b9b;
-  --tl-video: #5385bd;
-  --tl-voice: #6f62b0;
-  --tl-sfx: #5192c4;
-  --tl-music: #3f9a90;
-  --tl-caption: #7c8797;
 }
 
 /* ── Dark ── */
 [data-theme='dark'] {
   color-scheme: dark;
 
-  --bg: #1a1a1a;
-  --canvas: #1f1f1f;
-  --panel: #181818;
-  --surface: #202020;
-  --surface-2: #2a2a2a;
-  --surface-3: #313131;
-
-  --border: rgba(255, 255, 255, 0.06);
-  --border-soft: rgba(255, 255, 255, 0.04);
-  --border-strong: rgba(255, 255, 255, 0.12);
-
-  --text: #dadada;
-  --text-dim: #b0b0b0;
-  --text-muted: #959595;
-  --text-faint: #646464;
-
-  --card-bg: #202020;
-  --card-border: rgba(255, 255, 255, 0.06);
-  --fill-tsp: rgba(255, 255, 255, 0.06);
-
-  --tooltip-bg: rgb(20, 20, 20);
-  --tooltip-text: rgb(240, 240, 240);
-  --tooltip-border: rgba(255, 255, 255, 0.16);
-
-  --accent: #1a93fe;
-  --accent-soft: rgba(26, 147, 254, 0.12);
-  --on-accent: #ffffff;
-  --text-selection: rgba(26, 147, 254, 0.45);
-
-  --ok: #5eb92d;
-  --warn: #ffbf36;
-  --err: #eb4d4d;
-
+  /* the window's ground (rgb 20): what shows between the panes; every pane's inside, its top bars, the viewer round
+     the picture and the canvas's board among them, the panels' (rgb 24) */
+  --bg-app: #141414;
+  --bg-panel: #181818;
+  --bg-raised: #242424;
+  --bg-viewer: #181818;
+  --dock-line: #000000;
+  --bg-field: rgba(255, 255, 255, 0.08);
   --bg-hover: rgba(255, 255, 255, 0.06);
-  --bg-active: rgba(255, 255, 255, 0.1);
-  --layer-selected: #333c58;
-  --layer-selected-in: #23283a;
-  --layer-hover-line: rgba(116, 146, 230, 0.55);
+  --bg-pressed: rgba(255, 255, 255, 0.12);
+  --bg-selected: rgba(0, 193, 205, 0.16);
 
-  --app-content-bg: rgb(17, 17, 17);
+  --text: #e6e6e6;
+  --text-muted: #a3a3a3;
+  --text-faint: #717177;
 
-  /* panes one step lighter than the near-black board, so they read as boards laid on it */
-  --dock-shell: #111111;
-  --dock-pane: #181818;
+  --border: rgba(240, 240, 255, 0.075);
+  --border-strong: rgba(240, 240, 255, 0.15);
+
+  --primary: #ebebed;
+  --primary-hover: #ffffff;
+  --on-primary: #0a0a0c;
+
+  /* what is picked: words in this cyan, plainly apart from the others' white */
+  --accent: #00c1cd;
+  --accent-soft: rgba(0, 193, 205, 0.14);
+  --on-accent: #00262a;
+  --switch-on: #009aa4;
+  --bg-picked: rgba(0, 193, 205, 0.16);
+  --text-selection: rgba(0, 193, 205, 0.3);
+
+  --ok: #4cc27a;
+  --warn: #f0b03c;
+  --err: #f2665f;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.5), 0 4px 10px rgba(0, 0, 0, 0.3);
+
+  --clip-video: #354f6a;
+  --clip-image: #2e5363;
+  --clip-page: #504472;
+  --clip-text: #7f4d28;
+  --clip-sticker: #24603e;
+  --clip-filter: #4b3f96;
+  --clip-effect: #74365f;
+  --clip-audio: #1c5757;
+
+  --tl-lane: #151518;
+  --tl-row: rgba(240, 240, 255, 0.035);
+  --tl-gap: var(--bg-panel);
+  --tl-lane-on: rgba(240, 240, 255, 0.085);
+  --tl-playhead: #ffffff;
+  --tl-select: #ffffff;
+  --tl-wave: rgba(255, 255, 255, 0.4);
+  --tl-wave-band: rgba(255, 255, 255, 0.32);
+  --tl-wave-clip: var(--err);
 
   --folder-back: #3a3a3a;
   --folder-front: #4d4d4d;
@@ -171,33 +183,12 @@
   --brand-wind-from: #5ecb92;
   --brand-wind-mid: #66d8b8;
   --brand-wind-to: #7fd3e4;
-
-  --tl-lane: #1e1e1e;
-  --tl-lane-on: #272727;
-  --tl-head: #181818;
-  --tl-ruler: #181818;
-  --tl-line: #252525;
-  --tl-text: rgba(255, 255, 255, 0.7);
-  --tl-faint: rgba(255, 255, 255, 0.4);
-  /* white playhead on near black; selection white too (teal disappears on the darkened blocks) */
-  --tl-playhead: #ffffff;
-  --tl-accent: #45c2b4;
-  --tl-select: #ffffff;
-  --tl-wave: rgba(12, 168, 164, 0.9);
-  --tl-wave-band: rgba(0, 119, 125, 0.85);
-  --tl-wave-clip: #ff8a3d;
-  --tl-tick: rgba(255, 255, 255, 0.12);
-  --tl-scene: #1d5c60;
-  --tl-video: #2d4f7c;
-  --tl-voice: #003a4c;
-  --tl-sfx: #084254;
-  --tl-music: #00323f;
-  --tl-caption: #434a55;
 }
 
 * {
   border-color: var(--border);
 }
+
 
 html,
 body {
@@ -205,15 +196,12 @@ body {
 }
 
 html {
-  background: #f2f2f2;
-}
-html[data-theme='dark'] {
-  background: #141414;
+  background: var(--bg-app);
 }
 
 body {
   color: var(--text);
-  background: var(--canvas);
+  background: var(--bg-app);
   font-family: var(--font-sans);
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   letter-spacing: -0.006em;
@@ -230,6 +218,13 @@ body {
 
 /* in the base layer, so a field's own selection color (a tab's name being edited) wins over it */
 @layer base {
+  /* a button that cannot be used now reads so at a glance, beside one that can: dimmed, wherever it does not dim
+     itself (a utility's own disabled look wins) */
+  button:disabled,
+  button[aria-disabled='true'] {
+    opacity: 0.38;
+  }
+
   ::selection {
     background: var(--accent-soft);
   }
@@ -265,7 +260,7 @@ body {
 /* the selected clip and its reference in the chat glow together: the one is the other */
 @keyframes openfilm-desktop-pulse {
   0%, 100% { filter: none; }
-  50% { filter: drop-shadow(0 0 5px var(--tl-accent)); }
+  50% { filter: drop-shadow(0 0 5px var(--accent)); }
 }
 .openfilm-desktop-pulse {
   animation: openfilm-desktop-pulse 2.4s ease-in-out infinite;
@@ -275,6 +270,13 @@ body {
   .openfilm-desktop-pulse { animation: none; }
 }
 
+/* an open project at work: its light breathes (ProjectSwitcher) */
+@keyframes openfilm-breathe {
+  0%, 100% { opacity: 0.35; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+.status-breathe { animation: openfilm-breathe 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .status-breathe { animation: none; } }
 @keyframes openfilm-rise {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
@@ -332,7 +334,7 @@ html[data-focus-nav='tab'] :where(a, button, [role='button'], select, summary):f
 }
 
 .skeleton {
-  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 37%, var(--surface) 63%);
+  background: linear-gradient(90deg, var(--bg-raised) 25%, var(--bg-field) 37%, var(--bg-raised) 63%);
   background-size: 200% 100%;
   animation: openfilm-shimmer 1.4s ease-in-out infinite;
 }
@@ -365,7 +367,7 @@ html[data-focus-nav='tab'] :where(a, button, [role='button'], select, summary):f
 /* Only the range bar under the tracks scrolls sideways; the lanes hide their horizontal scrollbar. */
 .tl-scroll {
   scrollbar-width: thin;
-  scrollbar-color: var(--tl-faint) transparent;
+  scrollbar-color: var(--text-faint) transparent;
 }
 .tl-scroll::-webkit-scrollbar {
   width: 8px;
@@ -383,13 +385,13 @@ html[data-focus-nav='tab'] :where(a, button, [role='button'], select, summary):f
   background: transparent;
 }
 .tl-scroll::-webkit-scrollbar-thumb {
-  background: var(--tl-faint);
+  background: var(--text-faint);
   border: 2px solid transparent;
   border-radius: 4px;
   background-clip: content-box;
 }
 .tl-scroll::-webkit-scrollbar-thumb:hover {
-  background: var(--tl-text);
+  background: var(--text-muted);
   background-clip: content-box;
 }
 .tl-scroll::-webkit-scrollbar-corner {
@@ -448,10 +450,10 @@ body.tl-pinning, body.tl-pinning * { cursor: crosshair !important; }
   border-radius: 999px;
   background: linear-gradient(
     to right,
-    var(--tl-accent) 0,
-    var(--tl-accent) calc(var(--pos, 0) * 100%),
-    var(--tl-line) calc(var(--pos, 0) * 100%),
-    var(--tl-line) 100%
+    var(--accent) 0,
+    var(--accent) calc(var(--pos, 0) * 100%),
+    var(--border) calc(var(--pos, 0) * 100%),
+    var(--border) 100%
   );
 }
 .tl-zoom::-webkit-slider-thumb {
@@ -461,7 +463,7 @@ body.tl-pinning, body.tl-pinning * { cursor: crosshair !important; }
   height: 13px;
   margin-top: -5px;
   border-radius: 2px;
-  background: var(--tl-accent);
+  background: var(--accent);
   cursor: pointer;
 }
 .tl-zoom::-moz-range-track {
@@ -469,10 +471,10 @@ body.tl-pinning, body.tl-pinning * { cursor: crosshair !important; }
   border-radius: 999px;
   background: linear-gradient(
     to right,
-    var(--tl-accent) 0,
-    var(--tl-accent) calc(var(--pos, 0) * 100%),
-    var(--tl-line) calc(var(--pos, 0) * 100%),
-    var(--tl-line) 100%
+    var(--accent) 0,
+    var(--accent) calc(var(--pos, 0) * 100%),
+    var(--border) calc(var(--pos, 0) * 100%),
+    var(--border) 100%
   );
 }
 .tl-zoom::-moz-range-thumb {
@@ -480,7 +482,7 @@ body.tl-pinning, body.tl-pinning * { cursor: crosshair !important; }
   height: 12px;
   border: 0;
   border-radius: 2px;
-  background: var(--tl-text);
+  background: var(--text-muted);
   cursor: pointer;
 }
 
@@ -510,6 +512,9 @@ body.tl-pinning, body.tl-pinning * { cursor: crosshair !important; }
   content: '⟳';
   background: var(--warn);
 }
+/* gone while an agent changes the film (Timeline `waiting`): no edge, no badge; the block's stripes say it */
+[data-media-trouble='waiting'] > :first-child { box-shadow: none; }
+[data-media-trouble='waiting']::after { content: none; }
 
 /* ── The picture (editor/Preview): the film's page, scaled into the delivery frame's box ── */
 .stage-box {
@@ -570,4 +575,106 @@ body.tl-pinning, body.tl-pinning * { cursor: crosshair !important; }
 html[data-file-drag] iframe { pointer-events: none; }
 
 /* a clip about to be replaced by the file dragged over it with ⇧ (components/replace-drop) */
-[data-replace-over] { outline: 2px solid var(--tl-accent); outline-offset: -2px; }
+[data-replace-over] { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* the canvas (components/canvas), drawn as the node canvases people know draw theirs: a near-black board with a fine
+   dot grid; cards one step lighter with a grey line, a light grey line when selected; names in grey above them;
+   floating parts (toolbars, panels, menus) a step darker than the cards with a hairline; chips a white wash; the
+   main button white. A wire is grey, and blue and moving while it is the selected node's. */
+:root,
+[data-theme='light'] {
+  --cv-bg: #f4f4f5;
+  --cv-dot: #c9c9cd;
+  --cv-card: #ffffff;
+  --cv-card-2: #f1f1f2;
+  --cv-line: #d4d4d8;
+  --cv-line-hover: #b4b4ba;
+  --cv-ring: #5c5c62;
+  --cv-label: #77777d;
+  --cv-ghost: #c4c4c8;
+  --cv-ink: #111113;
+  --cv-ink-2: rgba(17, 17, 19, 0.6);
+  --cv-ink-3: rgba(17, 17, 19, 0.32);
+  --cv-edge: #b4b4ba;
+  --cv-edge-lit: #3b82f6;
+  --cv-float: #ffffff;
+  --cv-float-line: rgba(0, 0, 0, 0.08);
+  --cv-float-hover: rgba(0, 0, 0, 0.05);
+  --cv-chip: rgba(0, 0, 0, 0.05);
+  --cv-bar: #ffffff;
+  --cv-bar-line: #e4e4e7;
+  --cv-invert: #111113;
+  --cv-on-invert: #ffffff;
+  --cv-shadow: none;
+  --cv-float-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06), 0 16px 24px -8px rgba(0, 0, 0, 0.1), 0 4px 8px -4px rgba(0, 0, 0, 0.06);
+  --cv-modal: #ffffff;
+  --cv-group: rgba(0, 0, 0, 0.03);
+}
+[data-theme='dark'] {
+  /* the board is a pane's inside, the panels' grey (rgb 24), as everything on it and over it; a group a step up */
+  --cv-bg: #181818;
+  --cv-dot: #474747;
+  --cv-card: #181818;
+  --cv-card-2: #181818;
+  --cv-line: #525252;
+  --cv-line-hover: #6b6b6b;
+  --cv-ring: #a8a8a8;
+  --cv-label: #919191;
+  --cv-ghost: #525252;
+  --cv-ink: #ffffff;
+  --cv-ink-2: rgba(255, 255, 255, 0.6);
+  --cv-ink-3: rgba(255, 255, 255, 0.3);
+  --cv-edge: #6b6b6b;
+  --cv-edge-lit: #3b82f6;
+  --cv-float: #181818;
+  --cv-float-line: rgba(255, 255, 255, 0.08);
+  --cv-float-hover: rgba(255, 255, 255, 0.07);
+  --cv-chip: rgba(255, 255, 255, 0.05);
+  --cv-bar: #181818;
+  --cv-bar-line: #363636;
+  --cv-invert: #ffffff;
+  --cv-on-invert: #000000;
+  --cv-shadow: none;
+  --cv-float-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 16px 24px -8px rgba(0, 0, 0, 0.06), 0 4px 8px -4px rgba(0, 0, 0, 0.04);
+  --cv-modal: #181818;
+  --cv-group: rgba(255, 255, 255, 0.03);
+}
+.openfilm-canvas {
+  --xy-background-color: var(--cv-bg);
+  --xy-background-pattern-color: var(--cv-dot);
+  --xy-edge-stroke: var(--cv-edge);
+  --xy-edge-stroke-selected: var(--cv-edge-lit);
+  --xy-edge-stroke-width: 1.5;
+  --xy-connectionline-stroke: var(--cv-edge-lit);
+  --xy-connectionline-stroke-width: 2;
+  --xy-minimap-background-color: var(--cv-float);
+  --xy-minimap-mask-background-color: rgba(0, 0, 0, 0.35);
+  --xy-minimap-mask-stroke-color: var(--cv-float-line);
+  --xy-selection-background-color: color-mix(in srgb, var(--cv-edge-lit) 8%, transparent);
+  --xy-selection-border: 1px solid color-mix(in srgb, var(--cv-edge-lit) 55%, transparent);
+  background: var(--cv-bg);
+  font-family: -apple-system, system-ui, 'PingFang SC', Inter, 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+}
+.openfilm-canvas .react-flow__edge-path { stroke-linecap: round; }
+/* the selected node's wires: blue, glowing, flowing towards what they feed */
+.openfilm-canvas .react-flow__edge.lit .react-flow__edge-path {
+  stroke: var(--cv-edge-lit); stroke-width: 2; stroke-dasharray: 10 6; animation: cv-flow 0.6s linear infinite;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--cv-edge-lit) 70%, transparent));
+}
+@keyframes cv-flow { to { stroke-dashoffset: -16; } }
+/* the canvas's menus, panels and windows come in: a short rise and fade, a window a slight grow */
+@keyframes cv-pop { from { opacity: 0; transform: translateY(4px) scale(0.98); } }
+@keyframes cv-fade { from { opacity: 0; } }
+@keyframes cv-grow { from { opacity: 0; transform: scale(0.97); } }
+.cv-pop { animation: cv-pop 140ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+.cv-fade { animation: cv-fade 160ms ease-out; }
+.cv-grow { animation: cv-grow 180ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+@media (prefers-reduced-motion: reduce) { .cv-pop, .cv-fade, .cv-grow { animation: none; } }
+.openfilm-canvas .react-flow__minimap { overflow: hidden; border-radius: 12px; box-shadow: var(--cv-float-shadow); }
+.openfilm-canvas .react-flow__node { border-radius: 12px; }
+/* a group is held by its title bar (and its resize handles once selected): inside it the board is the board, so a drag
+   there draws a selection box and what is in it is reached as anywhere else */
+.openfilm-canvas .react-flow__node-frame { pointer-events: none !important; }
+.openfilm-canvas .react-flow__node-frame .cv-group-head,
+.openfilm-canvas .react-flow__node-frame .react-flow__resize-control { pointer-events: auto; }
+.openfilm-canvas .react-flow__edge-textbg { rx: 6; }

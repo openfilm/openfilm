@@ -4,6 +4,8 @@ export declare const SEEK_INSIDE_FRAME: string;
 export declare const FILM_CLOCK: string;
 export declare function injectFirst(html: string, tag: string): string;
 export declare function serve(root: string, opts?: { port?: number }): Promise<{ url: string; close(): Promise<void> }>;
+/** Listen on 127.0.0.1 at `port`; for port 0, never at a port browsers refuse to open. The port it listens on. */
+export declare function listenLocal(server: import('node:net').Server, port?: number): Promise<number>;
 export interface LaunchOptions { headed?: boolean; channel?: string | null; args?: string[]; env?: Record<string, string | undefined> }
 export declare function launch(opts?: LaunchOptions): Promise<Browser>;
 /** A renderer string that is not a GPU: WebGL drawn on the CPU. */
@@ -32,7 +34,9 @@ export declare class FilmPage {
   meta: FilmMeta;
   problems: Array<{ kind: string; message: string }>;
   seek(t: number, opts?: { timeoutMs?: number }): Promise<void>;
-  capture(opts?: { format?: 'png' | 'jpeg'; quality?: number }): Promise<Buffer>;
+  capture(opts?: { format?: 'png' | 'jpeg' | 'webp'; quality?: number }): Promise<Buffer>;
+  /** What the page leaves unpainted from now on: clear (a capture keeps it transparent), else black. */
+  ground(clear: boolean): Promise<void>;
   close(): Promise<void>;
 }
 /** Serves one request for the files of `root` at `path`; false when the path leaves the folder. */

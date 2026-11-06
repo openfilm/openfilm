@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "highlight.html",
+    "time": [
+      0,
+      3
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    }
+  },
+  "durationMs": 3000,
+  "w": 600,
+  "h": 160
+}

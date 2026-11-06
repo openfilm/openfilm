@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Floating hearts</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+:root { --color: #ff2d55; }
+svg { width: 100vw; height: 100vh; display: block; overflow: visible; }
+svg { filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
+path { fill: var(--color); }
+path.l { fill: color-mix(in srgb, var(--color), #ffffff 40%); }
+path.k { fill: color-mix(in srgb, var(--color), #ff9ec0 50%); }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 300 500"></svg>
+<script>
+/*
+ * Hearts that pop up from below one after another and float away, swaying and fading, in shades of their color;
+ * every heart is worked out from t alone. Its color is the clip's to change. A page of OpenFilm's library (CC0):
+ * what it shows at t comes from t alone; its CSS animations are held at t by the host.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const svg = document.querySelector('svg');
+const ns = 'http://www.w3.org/2000/svg';
+const N = 12, T = 2.6;
+const shape = (r) => { const s = r / 40; const p = (x, y) => (x * s).toFixed(1) + ' ' + (y * s).toFixed(1); return 'M' + p(0, 34) + ' C' + p(-30, 14) + ' ' + p(-42, 0) + ' ' + p(-42, -14) + ' C' + p(-42, -28) + ' ' + p(-31, -38) + ' ' + p(-19, -38) + ' C' + p(-10, -38) + ' ' + p(-3, -33) + ' ' + p(0, -26) + ' C' + p(3, -33) + ' ' + p(10, -38) + ' ' + p(19, -38) + ' C' + p(31, -38) + ' ' + p(42, -28) + ' ' + p(42, -14) + ' C' + p(42, 0) + ' ' + p(30, 14) + ' ' + p(0, 34) + ' Z'; };
+const hearts = Array.from({ length: N }, (_, i) => {
+  const el = document.createElementNS(ns, 'path');
+  el.setAttribute('d', shape(24 + hash(i + 0.4) * 26));
+  el.setAttribute('class', i % 3 === 1 ? 'l' : i % 3 === 2 ? 'k' : '');
+  svg.appendChild(el);
+  return { el, delay: i * (T / N), x: 50 + ((i * 0.618) % 1) * 200, sway: 14 + hash(i + 0.2) * 22, ph: hash(i + 0.3) * 6.28, rise: 380 + hash(i + 0.5) * 80 };
+});
+const back = (k) => { const c = 1.70158; return 1 + (c + 1) * Math.pow(k - 1, 3) + c * Math.pow(k - 1, 2); };
+window.film = {
+  width: 300,
+  height: 500,
+  frame(t) {
+    for (const hh of hearts) {
+      const since = t - hh.delay * 0.55;
+      if (since < 0) { hh.el.style.display = 'none'; continue; }
+      hh.el.style.display = '';
+      const age = since % T, k = age / T;
+      const y = 460 - hh.rise * (1 - Math.pow(1 - k, 1.6));
+      const x = hh.x + Math.sin(age * 2.4 + hh.ph) * hh.sway * Math.min(k * 3, 1);
+      const s = age < 0.32 ? back(age / 0.32) : 1 - k * 0.25;
+      const rot = Math.sin(age * 2.4 + hh.ph + 1) * 14;
+      hh.el.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${rot.toFixed(1)}) scale(${Math.max(s, 0).toFixed(3)})`);
+      hh.el.style.opacity = String(Math.min(1, (1 - k) / 0.35));
+    }
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

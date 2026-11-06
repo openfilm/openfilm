@@ -1,0 +1,179 @@
+{
+ "version": 2,
+ "kind": "group",
+ "clips": [
+  {
+   "track": 0,
+   "at": 0.2,
+   "clip": {
+    "src": "var-wow.html",
+    "time": [
+     0,
+     1.2
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Word\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Fill\", \"type\": \"var\", \"var\": \"--fill\"}, {\"name\": \"Rays\", \"type\": \"var\", \"var\": \"--rays\"}]",
+     "data-place": "{\"x\":0.5,\"y\":0.42,\"fit\":0.34}"
+    },
+    "size": {
+     "w": 600,
+     "h": 400
+    }
+   }
+  },
+  {
+   "track": 0,
+   "at": 2.7,
+   "clip": {
+    "src": "var-noway.html",
+    "time": [
+     0,
+     1.2
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Word\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Fill\", \"type\": \"var\", \"var\": \"--fill\"}, {\"name\": \"Stroke\", \"type\": \"var\", \"var\": \"--stroke\"}, {\"name\": \"Speed lines\", \"type\": \"var\", \"var\": \"--lines\"}]",
+     "data-place": "{\"x\":0.5,\"y\":0.5,\"fit\":0.3}"
+    },
+    "size": {
+     "w": 700,
+     "h": 350
+    }
+   }
+  },
+  {
+   "track": 0,
+   "at": 3.9,
+   "clip": {
+    "src": "var-lol.html",
+    "time": [
+     0,
+     1.2
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Word\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"First color\", \"type\": \"var\", \"var\": \"--c1\"}, {\"name\": \"Second color\", \"type\": \"var\", \"var\": \"--c2\"}, {\"name\": \"Third color\", \"type\": \"var\", \"var\": \"--c3\"}]",
+     "data-place": "{\"x\":0.5,\"y\":0.5,\"fit\":0.3}"
+    },
+    "size": {
+     "w": 600,
+     "h": 350
+    }
+   }
+  },
+  {
+   "track": 0,
+   "at": 5.1,
+   "clip": {
+    "src": "var-omg.html",
+    "time": [
+     0,
+     1.1
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Word\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Gradient top\", \"type\": \"var\", \"var\": \"--from\"}, {\"name\": \"Gradient bottom\", \"type\": \"var\", \"var\": \"--to\"}, {\"name\": \"Marks\", \"type\": \"var\", \"var\": \"--marks\"}]",
+     "data-place": "{\"x\":0.5,\"y\":0.45,\"fit\":0.34}"
+    },
+    "size": {
+     "w": 600,
+     "h": 400
+    }
+   }
+  },
+  {
+   "track": 1,
+   "at": 0.95,
+   "clip": {
+    "src": "comic-bam.html",
+    "time": [
+     0,
+     0.9
+    ]
+   }
+  },
+  {
+   "track": 1,
+   "at": 2.2,
+   "clip": {
+    "src": "speed-lines.html",
+    "attrs": {
+     "data-props": "[{\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    },
+    "time": [
+     0,
+     0.8
+    ]
+   }
+  },
+  {
+   "track": 1,
+   "at": 3.35,
+   "clip": {
+    "src": "comic-bam.html",
+    "time": [
+     0,
+     0.9
+    ]
+   }
+  },
+  {
+   "track": 2,
+   "at": 0,
+   "clip": {
+    "src": "example-1.jpg",
+    "time": [
+     0,
+     1.4
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "1"
+    }
+   }
+  },
+  {
+   "track": 2,
+   "at": 1.4,
+   "clip": {
+    "src": "example-2.jpg",
+    "time": [
+     0,
+     1.2
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "2"
+    }
+   }
+  },
+  {
+   "track": 2,
+   "at": 2.6,
+   "clip": {
+    "src": "example-3.jpg",
+    "time": [
+     0,
+     1.2
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "3"
+    }
+   }
+  },
+  {
+   "track": 2,
+   "at": 3.8,
+   "clip": {
+    "src": "example-4.jpg",
+    "time": [
+     0,
+     1.4
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "4"
+    }
+   }
+  }
+ ],
+ "durationMs": 5200
+}
