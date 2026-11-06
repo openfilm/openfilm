@@ -119,12 +119,12 @@
 [data-theme='dark'] {
   color-scheme: dark;
 
-  /* the window's ground: its top bars, the viewer round the picture and the canvas, one grey (rgb 20) under the
-     panels' (rgb 24) */
+  /* the window's ground (rgb 20): what shows between the panes and the canvas's board; every pane's inside, its top
+     bars and the viewer round the picture among them, the panels' (rgb 24) */
   --bg-app: #141414;
   --bg-panel: #181818;
   --bg-raised: #242424;
-  --bg-viewer: #141414;
+  --bg-viewer: #181818;
   --dock-line: #000000;
   --bg-field: rgba(255, 255, 255, 0.08);
   --bg-hover: rgba(255, 255, 255, 0.06);

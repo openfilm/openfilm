@@ -283,7 +283,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, captio
           spacing however wide the panel is, and more than fit scroll sideways (a wheel too), fading at the edge while
           the line under them runs whole; a button at the end takes them to their last (») and back to their first («),
           for a mouse without a sideways wheel */}
-      <div className="flex h-10 shrink-0 border-b border-[var(--border)] bg-[var(--bg-app)]" data-studio-host-panel="">
+      <div className="flex h-10 shrink-0 border-b border-[var(--border)] bg-[var(--bg-panel)]" data-studio-host-panel="">
         <nav
           ref={bar.ref}
           onScroll={bar.read}

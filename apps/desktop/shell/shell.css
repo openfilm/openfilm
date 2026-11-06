@@ -5,7 +5,8 @@
 
 /* the chat's column: left of Studio, under its top bar (bridge.ts places and sizes it); over Studio's panes and its
    assets drawer, under its menus and dialogs */
-#of-chat { position: fixed; left: 0; bottom: 0; height: auto; z-index: 40; background: transparent; }
+/* the line between the window's top bar and the panes runs over the chat too, as it does over Studio's panes */
+#of-chat { position: fixed; left: 0; bottom: 0; height: auto; z-index: 40; background: transparent; box-sizing: border-box; border-top: 1px solid var(--dock-line, #000); }
 #of-chat[hidden] { display: none; }
 /* the assets open: Studio's drawer fills the column, the composer floating over its foot; only the composer and the
    cards on it take the pointer, the rest of the column (around them too) is the drawer's */
