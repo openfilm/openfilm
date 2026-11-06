@@ -17,10 +17,11 @@ import { ChevronDown, Compass, FolderDown, Plus, Star } from 'lucide-react';
 import { useT } from '@/i18n';
 import { studioHost, type HostAgentId } from '@/lib/host';
 import { toggleFavorite, useLibraryFavorites } from '@/lib/library';
-import { seenCatalog, seenSkills, sourcesApi, watchSkills, type SkillEntry } from '@/lib/project-sources';
+import { communityOf, makerOf, seenCatalog, seenSkills, sourcesApi, watchSkills, type SkillEntry } from '@/lib/project-sources';
 import { byOrder, SkillCover, SkillMark, SkillPage, useSkillWords } from '../SkillPage';
 import { SettingsSwitch } from '../settings/ui';
 import { ADD_HOVER, PANEL_ROUND, ROUND } from './AudioList';
+import { SourceBadge, SourceChips, sourcesIn, type Source } from './SourceChips';
 
 /** One of Discover's not installed is there only; the person's own and a project's are installed already. */
 const installedOf = (skill: SkillEntry) => skill.installed !== false;
@@ -88,9 +89,17 @@ export function SkillsPane({ line, query, projectId, opened, onOpen, onDiscover 
     .sort(byOrder);
   /* OpenFilm's own in the order agents are given them, as the API lists them */
   const system = installed ? skills.filter((k) => k.core && found.includes(k)) : [];
-  const community = installed ? found.filter((k) => !k.core && k.source === 'official' && installedOf(k)) : [];
+  /* Discover's installed: OpenFilm's own, then the community's (each made by someone else, under their name) */
+  const listed = installed ? found.filter((k) => !k.core && k.source === 'official' && installedOf(k)) : [];
+  const official = listed.filter((k) => !communityOf(k));
+  const community = listed.filter(communityOf);
   const mine = installed ? found.filter((k) => k.source !== 'official') : [];
-  const toInstall = line === 'discover' ? found.filter((k) => k.source === 'official' && !installedOf(k)) : [];
+  const offered = line === 'discover' ? found.filter((k) => k.source === 'official' && !installedOf(k)) : [];
+  /* Discover by whose: OpenFilm's own, the community's, or all (chips only when both are there) */
+  const [whose, setWhose] = React.useState<Source | ''>('');
+  const sourceOf = (k: SkillEntry): Source => (communityOf(k) ? 'community' : 'official');
+  const whoseThere = sourcesIn(offered.map(sourceOf));
+  const toInstall = whose && whoseThere.includes(whose) ? offered.filter((k) => sourceOf(k) === whose) : offered;
   const own = agents.groups
     .map((g) => ({ ...g, skills: g.skills.filter((k) => !q || [k.name, k.description].some((w) => w.toLowerCase().includes(q))) }))
     .filter((g) => g.skills.length);
@@ -99,10 +108,10 @@ export function SkillsPane({ line, query, projectId, opened, onOpen, onDiscover 
     void sourcesApi.setSkillOn(skill.uid, on).catch(() => { void sourcesApi.skills(projectId).then(setSkills); });
   };
   /* named in the message as agents know it (`as`: another of its name is beside it) */
-  const tryIt = (skill: SkillEntry) => studioHost?.useSkill?.({ name: skill.as ?? skill.name, description: skill.description, title: words(skill).title, newConversation: true });
+  const tryIt = (skill: SkillEntry) => studioHost?.useSkill?.({ name: skill.as ?? skill.uid.replace('/', '-'), description: skill.description, title: words(skill).title, newConversation: true });
   /* "+": named in the message being written, in this conversation */
   const addIt = studioHost?.useSkill
-    ? (skill: SkillEntry) => studioHost?.useSkill?.({ name: skill.as ?? skill.name, description: skill.description, title: words(skill).title })
+    ? (skill: SkillEntry) => studioHost?.useSkill?.({ name: skill.as ?? skill.uid.replace('/', '-'), description: skill.description, title: words(skill).title })
     : undefined;
   const tileOf = (skill: SkillEntry) => (
     <SkillTile key={skill.uid} skill={skill} kept={starred(skill)} onOpen={() => onOpen(skill.uid)} {...(addIt ? { onAdd: () => addIt(skill) } : {})} />
@@ -125,6 +134,7 @@ export function SkillsPane({ line, query, projectId, opened, onOpen, onDiscover 
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         {note ? <p role="status" className="shrink-0 px-3 pb-2 text-[12px] leading-[18px] text-[var(--text-muted)]">{note}</p> : null}
+        <SourceChips sources={whoseThere} value={whose} onChange={setWhose} />
         {toInstall.length || waiting ? (
           <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[calc(var(--drawer-under,0px)+12px)] pt-0.5">
             <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-x-2.5 gap-y-3.5" {...(waiting ? { role: 'status', 'aria-label': t('assetDrawer.discoverReading') } : {})}>
@@ -168,7 +178,8 @@ export function SkillsPane({ line, query, projectId, opened, onOpen, onDiscover 
         {...(importSkill ? { action: { label: t('assetDrawer.mineImport'), run: importSkill } } : {})} />,
     }) },
     { key: 'system', title: t('assetDrawer.skillsSystem'), lines: system.map(lineOf) },
-    { key: 'community', title: t('assetDrawer.skillsCommunity'), lines: community.map(lineOf), ...(q ? {} : {
+    { key: 'official', title: t('assetDrawer.skillsOfficial'), lines: official.map(lineOf) },
+    { key: 'community', title: t('assetDrawer.skillsCommunity'), lines: community.map(lineOf), ...(q || official.length ? {} : {
       empty: <Invitation icon={<Compass size={16} strokeWidth={1.75} />} title={t('assetDrawer.communityEmptyTitle')}
         text={t('assetDrawer.communityEmpty')} action={{ label: t('assetDrawer.communityBrowse'), run: onDiscover }} />,
     }) },
@@ -299,6 +310,8 @@ function SkillTile({ skill, kept, onOpen, onAdd }: { skill: SkillEntry; kept: bo
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} className="group min-w-0 cursor-pointer select-none outline-none">
       <div className="relative aspect-video overflow-hidden rounded-md bg-[var(--bg-field)] ring-1 ring-transparent group-hover:ring-[var(--text-faint)] group-focus-visible:ring-[var(--accent)]">
         <SkillCover key={skill.cover ?? ''} skill={skill} title={title} small playing={hover} />
+        {/* the community's wear who made it on the corner */}
+        {communityOf(skill) ? <SourceBadge source="community" by={makerOf(skill)} /> : null}
         <span className="absolute bottom-1 right-1 flex items-center gap-1">
           <button type="button" aria-label={t(kept ? 'assetDrawer.unstar' : 'assetDrawer.star')} aria-pressed={kept}
             onClick={(e) => { e.stopPropagation(); toggleFavorite(starOf(skill)); }}
@@ -314,7 +327,10 @@ function SkillTile({ skill, kept, onOpen, onAdd }: { skill: SkillEntry; kept: bo
         </span>
       </div>
       <div className="mt-1.5 truncate px-0.5 text-[12px] font-medium text-[var(--text-muted)] group-hover:text-[var(--text)]">{title}</div>
-      <div className="truncate px-0.5 text-[10.5px] text-[var(--text-faint)]" title={summary}>{summary}</div>
+      {/* one this computer cannot run says so where its summary is */}
+      {skill.elsewhere && skill.platforms ? (
+        <div className="truncate px-0.5 text-[10.5px] text-[var(--warn)]">{t('gallery.onlyOnShort').replace('{where}', skill.platforms.map((p) => t(`gallery.platform_${p}`)).join(' / '))}</div>
+      ) : <div className="truncate px-0.5 text-[10.5px] text-[var(--text-faint)]" title={summary}>{summary}</div>}
     </div>
   );
 }

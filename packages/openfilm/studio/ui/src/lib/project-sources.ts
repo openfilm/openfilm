@@ -38,6 +38,13 @@ export type FetchJob = {
   code?: string;
   project?: { id: string };
 };
+/** Whose a skill is: its uid's owner (`openfilm` for OpenFilm's own, else the account its repository is under). */
+export const ownerOf = (skill: { uid: string }) => skill.uid.split('/')[0] ?? '';
+/** Who made it, as they write their name: its repository's account (GitHub keeps its case there), else its uid's owner. */
+export const makerOf = (skill: { uid: string; repository?: string }) => /^https:\/\/github\.com\/([\w.-]+)\//i.exec(skill.repository ?? '')?.[1] ?? ownerOf(skill);
+/** One of Discover's, installed or not, made by someone other than OpenFilm: the community's, under its owner's name. */
+export const communityOf = (skill: { uid: string; source: string; core?: true }) => skill.source === 'official' && !skill.core && ownerOf(skill) !== 'openfilm';
+
 /** a skill a project can be made with (openfilm/src/skills.mjs): the project's own, the person's, or official */
 export type SkillEntry = {
   /** whose it is and its name, `owner/name` (openfilm/src/skills.mjs SKILL_UID): how it is told apart, shared and searched */
@@ -57,6 +64,8 @@ export type SkillEntry = {
   cover?: string; preview?: string;
   /** where its source can be read (a repository's address) */
   repository?: string;
+  /** what it needs beyond OpenFilm, by language; the computers it runs on (none: every one), and whether this one is not among them */
+  needs?: Record<string, string>; platforms?: Array<'macos' | 'windows' | 'linux'>; elsewhere?: true;
   /** the person's own: where it came from (a link, a folder), or made where it is */
   origin?: { from: 'link' | 'folder'; address: string } | { from: 'made' };
   /** one of Discover's: installed to be used (the person's own and a project's are installed already) */

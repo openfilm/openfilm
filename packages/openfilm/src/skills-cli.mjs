@@ -13,7 +13,7 @@ import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from '
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { FILM_FILE } from './film-doc.mjs';
-import { addSkills, asRun, findSkill, folderSize, holdsSkills, migrateMySkills, mySkillsDir, readSkill, removeSkill, skillText, skillUid, skillsIn, usableSkills, PROJECT_SKILLS } from './skills.mjs';
+import { addSkills, asRun, folderSize, skillsNamed, holdsSkills, migrateMySkills, mySkillsDir, readSkill, removeSkill, skillText, skillUid, skillsIn, usableSkills, PROJECT_SKILLS } from './skills.mjs';
 
 /** The project around a folder (the nearest film.html above), or null. @param {string} from */
 export function projectAround(from) {
@@ -22,6 +22,8 @@ export function projectAround(from) {
 }
 
 const SOURCE = { project: 'this project', mine: 'yours', official: 'installed' };
+/** where one came from, for the list: OpenFilm's own, the community's (by whose it is), yours, or this project's */
+const sourceOf = (/** @type {{ uid: string, source: keyof typeof SOURCE }} */ s) => (s.source !== 'official' ? SOURCE[s.source] : s.uid.startsWith('openfilm/') ? 'installed, OpenFilm\'s' : 'installed, community');
 /** a path as the person reads it: from the current folder when it is under it */
 const shown = (/** @type {string} */ p) => { const r = relative(process.cwd(), p); return r && !r.startsWith('..') ? r : p; };
 
@@ -45,7 +47,7 @@ export function skillsCommand(run, { cwd = process.cwd() } = {}) {
       `Skills${project ? ' for this film' : ''}. \`${run} skill <owner/name>\` prints one: read it whole before you follow it.`,
       '',
       ...skills.flatMap((s) => [
-        `  ${s.uid.padEnd(width)}  ${SOURCE[s.source]}${s.over ? ` (in place of the ${s.over.map((o) => SOURCE[o]).join(' and ')} one)` : ''} · ${shown(s.folder)}`,
+        `  ${s.uid.padEnd(width)}  ${sourceOf(s)}${s.over ? ` (in place of the ${s.over.map((o) => SOURCE[o]).join(' and ')} one)` : ''} · ${shown(s.folder)}`,
         ...(s.description ? [`  ${' '.repeat(width)}  ${s.description}`] : []),
       ]),
     ],
@@ -147,7 +149,7 @@ export async function addSkillFrom(from, { cwd = process.cwd(), mine = mySkillsD
 export async function skillCommand(args, run, opts = {}) {
   migrateMySkills();
   const [first, second] = args;
-  if (!first) return { ok: false, usage: true, lines: [`${run} skill <name or owner/name> prints a skill; ${run} skill add <GitHub address or folder> adds one. ${run} skills lists them.`] };
+  if (!first) return { ok: false, usage: true, lines: [`${run} skill <owner/name> prints a skill (a name alone when one skill has it); ${run} skill add <GitHub address or folder> adds one. ${run} skills lists them.`] };
   if (first === 'add') {
     if (!second) return { ok: false, usage: true, lines: [`${run} skill add <GitHub address or folder>`] };
     try {
@@ -171,7 +173,12 @@ export async function skillCommand(args, run, opts = {}) {
     return gone ? { ok: true, lines: [`Moved ${second} to the trash: you can take it back from there.`] }
       : { ok: false, usage: true, lines: [`${run} skill remove: ${second} is not one of yours (${shown(opts.mine ?? mySkillsDir())}).`] };
   }
-  const skill = findSkill(first, { project: projectAround(opts.cwd ?? process.cwd()), ...(opts.mine ? { mine: opts.mine } : {}) });
+  /* by its full name (owner/name); a name alone only when one skill has it */
+  const named = skillsNamed(first, { project: projectAround(opts.cwd ?? process.cwd()), ...(opts.mine ? { mine: opts.mine } : {}) });
+  if (named.length > 1) {
+    return { ok: false, usage: true, lines: [`${run} skill: ${named.length} skills are named ${first}. Name one by its full name:`, ...named.map((s) => `  ${run} skill ${s.uid}`)] };
+  }
+  const skill = named[0];
   if (!skill) return { ok: false, usage: true, lines: [`${run} skill: no skill ${first}. \`${run} skills\` lists them.`] };
   /* its commands as the agent can type them here, as the manual's are */
   return { ok: true, lines: [asRun(skillText(skill), run)] };

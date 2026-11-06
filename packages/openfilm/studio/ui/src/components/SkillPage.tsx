@@ -13,11 +13,16 @@ import {
   PictureInPicture2, Plus, Presentation, RefreshCw, Scissors, Shapes, Sparkles, Trash2, Wand2, type LucideIcon,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
-import { sourcesApi, type SkillEntry } from '@/lib/project-sources';
+import { communityOf, makerOf, sourcesApi, type SkillEntry } from '@/lib/project-sources';
 import { ConfirmDialog } from './ConfirmDialog';
 import { SettingsSwitch } from './settings/ui';
 
-export const byOrder = (a: SkillEntry, b: SkillEntry) => (a.order ?? 999) - (b.order ?? 999) || a.name.localeCompare(b.name);
+/** OpenFilm's own by their order, then the community's as Discover's index lists them (an author's own order is not theirs to set). */
+export const byOrder = (a: SkillEntry, b: SkillEntry) => {
+  const ca = communityOf(a), cb = communityOf(b);
+  if (ca !== cb) return ca ? 1 : -1;
+  return ca ? 0 : (a.order ?? 999) - (b.order ?? 999) || a.name.localeCompare(b.name);
+};
 /** words in the language shown, else its family's, else English, else any */
 export const inLanguage = (words: Record<string, string> | undefined, lang: string) =>
   (words ? words[lang] ?? words[lang.split('-')[0]!] ?? words.en ?? Object.values(words)[0] : undefined);
@@ -47,6 +52,7 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
   const lang = useLanguage();
   const words = useSkillWords()(skill);
   const details = inLanguage(skill.shown?.details, lang);
+  const needs = inLanguage(skill.needs, lang);
   const installed = installedOf(skill);
   const group = skill.core ? 'assetDrawer.skillsSystem' : skill.source === 'official' ? (skill.kind === 'style' ? 'gallery.style' : 'gallery.workflow') : skill.source === 'mine' ? 'gallery.mine' : 'gallery.project';
   const source = skill.repository ?? (skill.origin?.from === 'link' ? skill.origin.address : undefined);
@@ -139,7 +145,11 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
       {skill.off ? <p className="mt-1.5 text-[12px] text-[var(--text-muted)]">{t('gallery.skillOff')}</p> : null}
       {skill.retired ? <p className="mt-1.5 text-[12px] text-[var(--text-muted)]">{t('gallery.retired')}</p> : null}
       <div className="mt-2 flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
-        <span>{t(group)}</span>
+        {/* the community's: whose it is, their account a link; OpenFilm's own: its kind */}
+        {communityOf(skill) ? (
+          <span>{t('gallery.byCommunity').split('{owner}')[0]}<a href={`https://github.com/${makerOf(skill)}`} target="_blank" rel="noreferrer"
+            className="text-[var(--text)] underline-offset-2 hover:underline">{makerOf(skill)}</a>{t('gallery.byCommunity').split('{owner}')[1]}</span>
+        ) : <span>{t(group)}</span>}
         {/* its uid, owner/name: how it is told apart, shared and searched */}
         <span className="min-w-0 truncate font-mono text-[11px] text-[var(--text-faint)]" title={skill.uid}>{skill.uid}</span>
         {skill.version ? <span className="rounded-[5px] border border-[var(--border)] px-1.5 py-[1px] font-mono text-[10.5px] text-[var(--text-muted)]">v{skill.version}</span> : null}
@@ -151,6 +161,16 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
       </div>
       <Origin skill={skill} />
       {words.summary ? <p className="mt-4 text-[13px] leading-[20px] text-[var(--text)]">{words.summary}</p> : null}
+      {/* the computers it runs on, when this one is not among them; what it needs beyond OpenFilm */}
+      {skill.elsewhere && skill.platforms ? (
+        <p role="note" className="mt-2.5 text-[12.5px] leading-[20px] text-[var(--warn)]">
+          {t('gallery.onlyOn').replace('{where}', skill.platforms.map((p) => t(`gallery.platform_${p}`)).join(' / '))}</p>
+      ) : null}
+      {needs ? <p className="mt-2.5 text-[12.5px] leading-[20px] text-[var(--text-muted)]"><span className="font-medium text-[var(--text)]">{t('gallery.needs')}</span> {needs}</p> : null}
+      {/* scripts it brings run on this computer, with the agent's access */}
+      {skill.scripts > 0 && !skill.core ? (
+        <p className="mt-2.5 text-[12.5px] leading-[20px] text-[var(--text-muted)]">{t(skill.scripts === 1 ? 'gallery.scriptsOne' : 'gallery.scriptsMany').replace('{n}', String(skill.scripts))}</p>
+      ) : null}
       {/* each line of its details; a line's lead ("When it is used:") a shade brighter, to find at a glance */}
       {details ? details.split('\n').map((line) => {
         const lead = /^(.{1,24}?[：:])\s*(.+)$/.exec(line);
@@ -172,7 +192,7 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
             <RefreshCw size={14} />{working === 'updating' ? t('gallery.updating') : t('gallery.update').replace('{version}', skill.update.version)}</button>
         ) : null}
         {skill.core ? null : !installed ? (
-          <button type="button" onClick={() => install(true)} disabled={working !== null}
+          <button type="button" onClick={() => install(true)} disabled={working !== null || skill.elsewhere === true}
             className={onTry
               ? 'flex h-9 w-full items-center justify-center gap-1.5 rounded-[10px] border border-[var(--border-strong)] text-[13px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)] disabled:opacity-50'
               : 'flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--primary)] text-[13px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:opacity-50'}><Plus size={15} />{t(working === 'installing' ? 'gallery.installing' : 'gallery.install')}</button>
@@ -221,7 +241,13 @@ function Origin({ skill }: { skill: SkillEntry }) {
     icon = <Folder size={12} />;
     text = `${t('gallery.fromFolder')} · ${o.address.split(/[\\/]/).filter(Boolean).pop() ?? o.address}`;
   }
-  return <div title={o.from === 'made' ? undefined : o.address} className="mt-2 flex min-w-0 items-center gap-1.5 text-[11.5px] text-[var(--text-faint)]">{icon}<span className="truncate">{text}</span></div>;
+  return (
+    <>
+      <div title={o.from === 'made' ? undefined : o.address} className="mt-2 flex min-w-0 items-center gap-1.5 text-[11.5px] text-[var(--text-faint)]">{icon}<span className="truncate">{text}</span></div>
+      {/* added from an address, not from Discover: OpenFilm has not looked at it */}
+      {o.from === 'link' ? <p className="mt-1 text-[11.5px] leading-[17px] text-[var(--text-muted)]">{t('gallery.unlisted')}</p> : null}
+    </>
+  );
 }
 
 const ICONS: Record<string, LucideIcon> = {

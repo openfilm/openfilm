@@ -24,7 +24,7 @@ test("Studio lists OpenFilm's own skills first, in their order, installed, and o
   const listed = async () => (await (await api('/api/skills')).json()).skills;
   const core = (await listed()).slice(0, 3);
   assert.deepEqual(core.map((s) => [s.uid, s.as, s.core, s.installed]), [
-    ['openfilm/edit', 'edit', true, true], ['openfilm/media', 'media', true, true], ['openfilm/canvas', 'canvas', true, true],
+    ['openfilm/edit', 'openfilm-edit', true, true], ['openfilm/media', 'openfilm-media', true, true], ['openfilm/canvas', 'openfilm-canvas', true, true],
   ]);
   assert.equal(core[0].shown.title['zh-CN'], '剪辑');
   assert.ok((await listed()).slice(3).every((s) => !s.core), 'the library\'s are not');

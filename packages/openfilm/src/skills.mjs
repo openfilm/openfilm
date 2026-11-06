@@ -144,6 +144,14 @@ export const SKILL_NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
  */
 export const SKILL_UID = /^[a-z0-9][a-z0-9-]{0,63}\/[a-z0-9][a-z0-9-]{0,63}$/;
 
+/**
+ * Namespaces that are never a GitHub account's: `openfilm` (OpenFilm's own, github.com/openfilm), `local` (the
+ * person's own, made or added from a folder here) and `project` (a project's). An account of one of those names is
+ * `github-<name>`, so it is never taken for them.
+ */
+export const RESERVED_NAMESPACES = Object.freeze(['local', 'project']);
+const accountSpace = (/** @type {string} */ account) => (RESERVED_NAMESPACES.includes(account) ? `github-${account}` : account);
+
 /** A name as a uid holds it: lowercase letters, digits and dashes. @param {string} name */
 const uidPart = (name) => name.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64) || 'skill';
 
@@ -155,14 +163,14 @@ export function skillOwner(source, origin) {
   /* an installed one is its repository's account's (OpenFilm's own, openfilm); OpenFilm's own skills, openfilm */
   if (source === 'official') {
     const account = origin?.address ? /^https:\/\/github\.com\/([\w.-]+)\//.exec(`${origin.address}/`)?.[1] : null;
-    return account ? uidPart(account) : 'openfilm';
+    return account ? accountSpace(uidPart(account)) : 'openfilm';
   }
   if (source === 'project') return 'project';
   if (origin?.from === 'link') {
     try {
       const repo = parseRepoUrl(origin.address);
       const account = uidPart(new URL(repo.web).pathname.split('/')[1] ?? '');
-      return repo.host === 'github' ? account : `gitlab-${account}`.slice(0, 64);
+      return repo.host === 'github' ? accountSpace(account) : `gitlab-${account}`.slice(0, 64);
     } catch { /* not an address: the person's alone */ }
   }
   return 'local';
@@ -215,9 +223,10 @@ export function parseSkillFile(text) {
  * @typedef {{ title: Record<string, string>, summary: Record<string, string>, details?: Record<string, string> }} SkillShown
  *   how people see it in an app (openfilm.json beside SKILL.md, optional): a title, a one-line summary and a few lines
  *   on who it is for and what it does, by language (`en`, `zh-CN`…); the SKILL.md's description is for the agent
- * @typedef {{ kind?: 'workflow' | 'style', order?: number, icon?: string, cover?: string, preview?: string, repository?: string }} SkillLook
+ * @typedef {{ kind?: 'workflow' | 'style', order?: number, icon?: string, cover?: string, preview?: string, repository?: string, needs?: Record<string, string>, platforms?: SkillPlatform[] }} SkillLook
  *   where an app shows it (openfilm.json, each optional): `kind` a way of working or a look, `order` among its kind,
- *   `icon` a mark's name, `cover` a picture and `preview` a video in its folder, `repository` where its source is read
+ *   `icon` a mark's name, `cover` a picture and `preview` a video in its folder, `repository` where its source is read,
+ *   `needs` what it needs beyond OpenFilm (by language), `platforms` the computers it runs on (none: every one)
  */
 
 /** The words of an openfilm.json field: a string (any language), or one per language; anything else is none. */
@@ -246,6 +255,10 @@ function openfilmJson(folder) {
   if (Number.isFinite(raw?.order)) out.order = raw.order;
   if (typeof raw?.icon === 'string' && /^[a-z][a-z0-9-]{0,23}$/.test(raw.icon)) out.icon = raw.icon;
   if (typeof raw?.repository === 'string' && /^https:\/\/[^\s]{4,300}$/.test(raw.repository)) out.repository = raw.repository;
+  const needs = byLanguage(raw?.needs, 300);
+  if (Object.keys(needs).length) out.needs = needs;
+  const platforms = Array.isArray(raw?.platforms) ? SKILL_PLATFORMS.filter((p) => raw.platforms.includes(p)) : [];
+  if (platforms.length) out.platforms = platforms;
   const cover = fileIn(folder, raw?.cover), preview = fileIn(folder, raw?.preview);
   if (cover) out.cover = cover;
   if (preview) out.preview = preview;
@@ -253,6 +266,12 @@ function openfilmJson(folder) {
 }
 
 const VERSION = /^\d+\.\d+(\.\d+)?([-+][\w.]+)?$/;
+
+/** The computers a skill can say it runs on (openfilm.json `platforms`). @typedef {'macos' | 'windows' | 'linux'} SkillPlatform */
+export const SKILL_PLATFORMS = /** @type {const} */ (['macos', 'windows', 'linux']);
+
+/** This computer, as a skill's `platforms` names it. @returns {SkillPlatform} */
+export const thisPlatform = () => (process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos' : 'linux');
 
 /**
  * The skill in one folder, or null when it has no SKILL.md. Its name is the front matter's, else the folder's.
@@ -373,22 +392,46 @@ export function coreSkills() {
  * @param {string} key @param {Parameters<typeof listSkills>[0]} [where]
  */
 export function findSkill(key, where) {
-  const is = (/** @type {Skill} */ s) => (key.includes('/') ? s.uid === key.toLowerCase() : s.name === key);
-  /* one of Discover's not installed, last: tried in a conversation before it is installed */
-  return [...coreSkills(), ...listSkills(where)].find(is) ?? discoverSkills().find(is) ?? null;
+  const found = skillsNamed(key, where);
+  return found.length === 1 ? found[0] : null;
 }
 
 /**
- * The name each skill is given to an agent by, which reads skills by name alone: its own, but a second of the same
- * name (in the order given) is told apart by whose it is, `owner-name` (`river-keynote` beside OpenFilm's `keynote`).
+ * Every skill a key names, one each: by its full name (`owner/name`, or as an agent is given it, `owner:name` in a
+ * Claude Code plugin or `owner-name` elsewhere), else by its name alone, which two owners may share. OpenFilm's own and
+ * the library's first, then Discover's not installed (tried in a conversation before it is installed).
+ * @param {string} key @param {Parameters<typeof listSkills>[0]} [where] @returns {Skill[]}
+ */
+export function skillsNamed(key, where) {
+  const k = key.trim().toLowerCase();
+  const had = [...coreSkills(), ...listSkills(where)];
+  const all = [...had, ...discoverSkills().filter((d) => !had.some((s) => s.uid === d.uid))];
+  const full = /^[a-z0-9-]+[/:][a-z0-9-]+$/.test(k) ? k.replace(':', '/') : null;
+  if (full) return all.filter((s) => s.uid === full).slice(0, 1);
+  const asGiven = all.filter((s) => agentName(s) === k);
+  if (asGiven.length) return asGiven.slice(0, 1);
+  return all.filter((s) => s.name === k);
+}
+
+/**
+ * The name an agent reading a skills folder knows a skill by: whose it is and its name, `owner-name`
+ * (`openfilm-replicate`, `webgrs-borrow-style`, `local-my-brand`), as Agent Skills names go (lowercase letters, digits,
+ * single dashes, 64 at most). A Claude Code plugin names it `owner:name` itself (one plugin for each owner).
+ * @param {{ uid: string }} skill
+ */
+export const agentName = (skill) => skill.uid.replace('/', '-').replace(/-+/g, '-').slice(0, 64).replace(/-$/, '');
+
+/**
+ * The name each skill is given to an agent by: always its full name (agentName), never its name alone, so it is the
+ * same in every session and two of a name are both there; one that would still meet another (a long one cut at 64) is
+ * told apart by a number.
  * @template {{ uid: string, name: string }} T @param {T[]} skills @returns {Array<T & { as: string }>}
  */
 export function agentNames(skills) {
   const taken = new Set();
   return skills.map((s) => {
-    let as = s.name;
-    if (taken.has(as)) as = s.uid.replace('/', '-').slice(0, 64);
-    for (let n = 2; taken.has(as); n++) as = `${s.uid.replace('/', '-').slice(0, 60)}-${n}`;
+    let as = agentName(s);
+    for (let n = 2; taken.has(as); n++) as = `${agentName(s).slice(0, 60)}-${n}`;
     taken.add(as);
     return { ...s, as };
   });
@@ -427,7 +470,7 @@ export const asRun = (text, run) => text.replaceAll('npx openfilm', run).replace
  * @param {Skill} skill
  */
 export function skillText(skill) {
-  return `<skill name="${/** @type {Skill & { as?: string }} */ (skill).as ?? skill.name}" folder="${skill.folder}">\n${readFileSync(skill.file, 'utf8').trim()}\n</skill>`;
+  return `<skill name="${/** @type {Skill & { as?: string }} */ (skill).as ?? agentName(skill)}" full-name="${skill.uid}" folder="${skill.folder}">\n${readFileSync(skill.file, 'utf8').trim()}\n</skill>`;
 }
 
 /**

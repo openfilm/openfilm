@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync, symlinkSync, lstatSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { addSkills, asRun, coreSkills, findSkill, listSkills, migrateMySkills, mySkillsDir, parseSkillFile, readSkill, removeSkill, setSkillCover, setSkillOn, SKILL_UID, skillOrigins, skillText, skillUid, agentNames } from './skills.mjs';
+import { addSkills, asRun, coreSkills, findSkill, skillsNamed, agentName, listSkills, migrateMySkills, mySkillsDir, parseSkillFile, readSkill, removeSkill, setSkillCover, setSkillOn, SKILL_UID, skillOrigins, skillText, skillUid, agentNames, SKILL_PLATFORMS, thisPlatform } from './skills.mjs';
 import { commitSkills, discardSkills, previewFolder, previewSkills, skillCommand, skillsCommand } from './skills-cli.mjs';
 
 const skill = (dir, name, description, body = 'How to make it.', extra = {}) => {
@@ -123,12 +123,46 @@ test('skills are listed from the project, yours and the official ones, each by i
   assert.deepEqual(all[3].over, ['official']);
   const lyric = all[4];
   assert.deepEqual(lyric.scripts, ['lib/engine.js', 'scripts/build.sh'], 'what an agent could run, for the person to see');
-  assert.equal(findSkill('brand', { mine, official }).uid, 'local/brand', 'by name: the first of it');
+  /* by its name alone, two owners have one: none chosen, both named */
+  assert.equal(findSkill('brand', { mine, official }), null, 'two of the name: none chosen for the agent');
+  assert.deepEqual(skillsNamed('brand', { mine, official }).map((s) => s.uid).sort(), ['local/brand', 'openfilm/brand']);
+  assert.equal(findSkill('local-brand', { mine, official }).uid, 'local/brand', 'as an agent is given it');
+  assert.equal(findSkill('openfilm:brand', { mine, official }).uid, 'openfilm/brand', 'as Claude Code names it in a plugin');
   assert.equal(findSkill('openfilm/brand', { mine, official }).description, 'Official brand', 'by uid: that one');
   assert.equal(findSkill('nothing', { mine, official }), null);
   const text = skillText(lyric);
-  assert.match(text, /^<skill name="lyric-pv" folder=".*mine[\\/]lyric-pv">\n---/);
+  assert.match(text, /^<skill name="local-lyric-pv" full-name="local\/lyric-pv" folder=".*mine[\\/]lyric-pv">\n---/);
   assert.match(text, /Use the engine\.\n<\/skill>$/);
+});
+
+test('openfilm.json says what a skill needs and the computers it runs on; anything else there is left out', () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-skill-needs-'));
+  const folder = skill(join(root, 'demo'), 'app-demo', 'Films a program', 'Steps', { 'openfilm.json': JSON.stringify({
+    needs: { en: 'Windows 10 or 11, FFmpeg 8', 'zh-CN': 'Windows 10 或 11，FFmpeg 8', 'x y': 'not a language' },
+    platforms: ['windows', 'amiga'],
+  }) });
+  const read = readSkill(folder, 'mine');
+  assert.deepEqual(read.needs, { en: 'Windows 10 or 11, FFmpeg 8', 'zh-CN': 'Windows 10 或 11，FFmpeg 8' });
+  assert.deepEqual(read.platforms, ['windows']);
+  const plain = readSkill(skill(join(root, 'plain'), 'plain', 'Plain', 'Steps', { 'openfilm.json': JSON.stringify({ platforms: ['amiga'], needs: 7 }) }), 'mine');
+  assert.equal(plain.platforms, undefined, 'no computer it names is one: none said, so every one');
+  assert.equal(plain.needs, undefined);
+  assert.ok(SKILL_PLATFORMS.includes(thisPlatform()));
+});
+
+test('openfilm skill by a name two owners share names neither, and lists each by its full name', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-skill-two-'));
+  const mine = join(root, 'mine');
+  skill(join(mine, 'brand'), 'brand', 'Mine');
+  const film = join(root, 'film');
+  mkdirSync(film);
+  writeFileSync(join(film, 'film.html'), '<!doctype html>');
+  skill(join(film, 'skills', 'brand'), 'brand', 'This film\'s');
+  const both = await skillCommand(['brand'], 'openfilm', { cwd: film, mine });
+  assert.equal(both.ok, false);
+  assert.deepEqual(both.lines.slice(1), ['  openfilm skill project/brand', '  openfilm skill local/brand']);
+  const one = await skillCommand(['local/brand'], 'openfilm', { cwd: film, mine });
+  assert.ok(one.ok && /full-name="local\/brand"/.test(one.lines[0]));
 });
 
 test('a skill is named by its front matter, else its folder', () => {
@@ -257,7 +291,7 @@ test('openfilm skills and skill: the list, one printed whole, one added from an 
 
     const printed = await skillCommand(['brand'], 'openfilm', { cwd: film });
     assert.ok(printed.ok);
-    assert.match(printed.lines[0], /^<skill name="brand"/);
+    assert.match(printed.lines[0], /^<skill name="project-brand" full-name="project\/brand"/);
     const missing = await skillCommand(['nope'], 'openfilm', { cwd: film });
     assert.deepEqual([missing.ok, missing.usage], [false, true]);
 
@@ -357,7 +391,8 @@ test("OpenFilm's own skills: in order, each named by the manual, printed with th
   const printed = await skillCommand(['openfilm/edit'], 'npx -y openfilm@latest', { cwd: tmpdir() });
   assert.ok(printed.ok);
   assert.ok(printed.lines[0].includes('`npx -y openfilm@latest look`') && !/npx openfilm /.test(printed.lines[0]));
-  assert.equal(findSkill('openfilm-media')?.folder, core.find((s) => s.name === 'openfilm-media')?.folder);
+  assert.equal(findSkill('openfilm-media')?.uid, 'openfilm/media', 'as an agent is given it');
+  assert.equal(agentName(core[0]), 'openfilm-edit');
   assert.ok(!listSkills().some((s) => core.some((c) => c.name === s.name)), 'in no library');
 });
 
@@ -392,7 +427,7 @@ test('two skills of a name are both had, each by its uid; an agent is given the 
   assert.equal(again.length, 1);
   assert.equal(again[0].description, 'River, again');
   assert.equal(findSkill('ana/keynote', { project, mine, official }).description, 'Ana');
-  assert.deepEqual(agentNames(listed).map((s) => s.as), ['keynote', 'ana-keynote', 'river-keynote', 'openfilm-keynote']);
+  assert.deepEqual(agentNames(listed).map((s) => s.as), ['project-keynote', 'ana-keynote', 'river-keynote', 'openfilm-keynote'], 'every one by whose it is, not only the second');
   rmSync(root, { recursive: true, force: true });
 });
 
