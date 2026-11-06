@@ -238,6 +238,12 @@ test('clipSpan: trims, speed, stills and pages', () => {
   assert.deepEqual(clipSpan({ src: 'a.png', time: [1, 5] }, undefined), { from: 1, to: 5, speed: 1, length: 4 });
   assert.throws(() => clipSpan({ src: 'a.png', time: [4] }, undefined, 'w'), /a still has no length of its own/);
   assert.throws(() => clipSpan({ src: 'a.mp4', time: [2, 12] }, 10, 'w'), /#t=2,12 ends past the file's length of 10 s/);
+  /* a trim to the end, written to the millisecond (65 frames at 30 fps): the file's end, not past it */
+  assert.deepEqual(clipSpan({ src: 'a.mp4', time: [0, 2.167] }, 65 / 30), { from: 0, to: 2.167, speed: 1, length: 2.167 });
+  assert.equal(clipSpan({ src: 'a.mp4', time: [2.167, 2.167] }, 65 / 30).length, 0);
+  assert.throws(() => clipSpan({ src: 'a.mp4', time: [0, 2.168] }, 65 / 30, 'w'), /#t=0,2.168 ends past the file's length/);
+  /* a length the timeline reads as 8.063 (whole milliseconds, rounded down), its end written 8.064: 0.8 ms past, the file's end */
+  assert.equal(clipSpan({ src: 'a.mp4', time: [0, 8.064] }, 8.0632).to, 8.064);
   /* a page without a duration has no end: its #t= is its length, and without one it is said */
   assert.deepEqual(clipSpan({ src: 'p.html', time: [1, 5] }, undefined), { from: 1, to: 5, speed: 1, length: 4 });
   assert.throws(() => clipSpan({ src: 'p.html', time: [1] }, undefined, 'clip "p" (p.html)'), /clip "p" \(p\.html\): this page has no duration, so it has no end of its own/);
