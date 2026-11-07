@@ -27,10 +27,14 @@ test('back on the edit, nothing of the canvas shows over the panes, and it comes
     const mode = (name) => page.locator(`[data-work-mode="${name}"]`);
     const node = page.locator('.react-flow__node').filter({ hasText: 'A note on the board' });
     const shows = () => node.evaluate((el) => el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }));
+    /* Attached is earlier than measured and fitted: wait for the canvas to have actually painted its note. */
+    const waitShown = () => page.waitForFunction(() => [...document.querySelectorAll('.react-flow__node')].some((el) =>
+      el.textContent.includes('A note on the board') && el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })));
 
     await mode('edit').click();
     await node.waitFor({ state: 'attached', timeout: 30_000 });
     await mode('canvas').waitFor();
+    await waitShown();
     assert.equal(await shows(), true, 'on the canvas');
 
     await mode('canvas').click();
@@ -40,6 +44,7 @@ test('back on the edit, nothing of the canvas shows over the panes, and it comes
 
     await mode('edit').click();
     await mode('canvas').waitFor();
+    await waitShown();
     assert.equal(await shows(), true, 'on the canvas again');
   } finally {
     await browser?.close();
