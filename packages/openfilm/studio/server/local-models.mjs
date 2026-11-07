@@ -55,9 +55,12 @@ export function localModels() {
  */
 export async function localModelsRoute(req, res, parts) {
   if (!parts.length && req.method === 'GET') {
+    /* Capture readiness first: a download can finish while provider settings are read. Never report a model as
+       installed before the provider refresh below has had a chance to select it for its kind. */
+    const models = localModels();
     /* one that finished coming since: its kind may go to it now */
     await localModelsChanged();
-    return json(res, 200, { models: localModels() });
+    return json(res, 200, { models });
   }
   const m = ABOUT[parts[0]] ? modelEntry(parts[0]) : null;
   if (!m) throw new HttpError(404, 'no such model');
@@ -71,6 +74,7 @@ export async function localModelsRoute(req, res, parts) {
     if (modelBuiltIn(m)) throw new HttpError(409, 'it is part of this checkout');
     removeModel(m);
   } else throw new HttpError(404, 'no such thing');
+  const models = localModels();
   await localModelsChanged();
-  return json(res, 200, { models: localModels() });
+  return json(res, 200, { models });
 }
